@@ -4,6 +4,31 @@ import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
 
+function authTokenStorageKey(): string {
+  return `mammoth:spacetimedb:token:${spacetimeUri()}:${spacetimeDatabase()}`;
+}
+
+function readStoredAuthToken(): string | undefined {
+  try {
+    const t = localStorage.getItem(authTokenStorageKey());
+    return t && t.length > 0 ? t : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistAuthToken(token: string | undefined): void {
+  try {
+    if (token && token.length > 0) {
+      localStorage.setItem(authTokenStorageKey(), token);
+    } else {
+      localStorage.removeItem(authTokenStorageKey());
+    }
+  } catch {
+    /* private mode / quota */
+  }
+}
+
 /** SpacetimeDB passes the browser `WebSocket` `error` event here, not an `Error` — avoid `[object Event]`. */
 function formatSpacetimeConnectError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -69,11 +94,17 @@ export function useSpacetimeConnection(): SpacetimeSession {
   useEffect(() => {
     /** In dev, React Strict Mode mounts → unmounts → remounts once; ignore callbacks from the aborted attempt. */
     let active = true;
-    const c = DbConnectionClass.builder()
+    const storedToken = readStoredAuthToken();
+    const builder = DbConnectionClass.builder()
       .withUri(spacetimeUri())
-      .withDatabaseName(spacetimeDatabase())
-      .onConnect((cc) => {
+      .withDatabaseName(spacetimeDatabase());
+    if (storedToken) {
+      builder.withToken(storedToken);
+    }
+    const c = builder
+      .onConnect((cc, _identity, token) => {
         if (!active) return;
+        persistAuthToken(token);
         setConn(cc);
         setErrorMsg(null);
         const bump = () => {
@@ -88,7 +119,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
               bump();
             });
           })
-          .subscribe(["SELECT * FROM user", "SELECT * FROM player_pose"]);
+          .subscribe(["SELECT * FROM user"]);
         cc.db.user.onInsert((_ctx, row) => {
           if (cc.identity?.isEqual(row.identity)) bump();
         });

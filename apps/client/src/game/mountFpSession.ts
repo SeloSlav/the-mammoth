@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import type { DbConnection } from "../module_bindings";
+import { and, or } from "spacetimedb";
+import type { DbConnection, SubscriptionHandle } from "../module_bindings";
+import { tables } from "../module_bindings";
 import type { PlayerPose } from "../module_bindings/types";
 import {
   createFPRig,
@@ -20,8 +22,16 @@ import cellDoc from "../../../../content/cells/cell_0_0.json";
 import { encodeMoveIntentBits } from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 
-/** Intent publish cadence (aligned with ~20 Hz server tick feel). */
+/**
+ * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
+ * (`TimeDuration::from_micros(50_000)` ≈ 20 Hz) so prediction and authority stay aligned.
+ */
 const NET_INTERVAL_MS = 50;
+
+/** Horizontal half-extent (m) of the replicated `player_pose` box (XZ). */
+const POSE_AOI_HALF = 42;
+/** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
+const POSE_AOI_RECENTER = 14;
 const MOUSE_SENS = 0.0022;
 const PITCH_LIMIT = 1.38;
 
@@ -147,7 +157,38 @@ export function mountFpSession(
 
   conn.db.player_pose.onInsert(onPoseInsert);
   conn.db.player_pose.onUpdate(onPoseUpdate);
-  syncAllPoses();
+
+  let poseAoiSub: SubscriptionHandle | null = null;
+  let poseAoiAnchorX = pos.x;
+  let poseAoiAnchorZ = pos.z;
+
+  const subscribePoseAoi = (cx: number, cz: number) => {
+    const selfId = conn.identity;
+    if (!selfId) return;
+    if (poseAoiSub?.isActive()) {
+      poseAoiSub.unsubscribe();
+    }
+    const x0 = cx - POSE_AOI_HALF;
+    const x1 = cx + POSE_AOI_HALF;
+    const z0 = cz - POSE_AOI_HALF;
+    const z1 = cz + POSE_AOI_HALF;
+    const query = tables.player_pose.where((r) =>
+      or(
+        r.identity.eq(selfId),
+        and(r.x.gte(x0), r.x.lte(x1), r.z.gte(z0), r.z.lte(z1)),
+      ),
+    );
+    poseAoiSub = conn
+      .subscriptionBuilder()
+      .onApplied(() => {
+        syncAllPoses();
+      })
+      .subscribe(query);
+    poseAoiAnchorX = cx;
+    poseAoiAnchorZ = cz;
+  };
+
+  subscribePoseAoi(poseAoiAnchorX, poseAoiAnchorZ);
 
   const setSize = () => {
     const w = canvas.clientWidth;
@@ -251,6 +292,13 @@ export function mountFpSession(
       sendMoveIntent(input, jumpQueuedBeforeStep);
     }
 
+    if (conn.identity) {
+      const drift = Math.hypot(pos.x - poseAoiAnchorX, pos.z - poseAoiAnchorZ);
+      if (drift > POSE_AOI_RECENTER) {
+        subscribePoseAoi(pos.x, pos.z);
+      }
+    }
+
     const keep = new Set<string>();
     if (conn.identity) keep.add(conn.identity.toHexString());
     for (const row of conn.db.player_pose) {
@@ -284,6 +332,10 @@ export function mountFpSession(
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("mousemove", onMouseMove);
     canvas.removeEventListener("click", onClick);
+    if (poseAoiSub?.isActive()) {
+      poseAoiSub.unsubscribe();
+    }
+    poseAoiSub = null;
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     renderer.dispose();
