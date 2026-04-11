@@ -17,9 +17,10 @@ import {
 } from "@the-mammoth/world";
 import floorDoc from "../../../../content/building/floors/floor_01_east.json";
 import cellDoc from "../../../../content/cells/cell_0_0.json";
+import { encodeMoveIntentBits } from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 
-/** Pose publish cadence — trade bandwidth vs how far client and server rows diverge between acks. */
+/** Intent publish cadence (aligned with ~20 Hz server tick feel). */
 const NET_INTERVAL_MS = 50;
 const MOUSE_SENS = 0.0022;
 const PITCH_LIMIT = 1.38;
@@ -90,7 +91,8 @@ export function mountFpSession(
   const pos = new THREE.Vector3(0, 1, 6);
   let yaw = 0;
   let pitch = 0;
-  let seq = 0n;
+  /** Monotonic intent id; server rejects non-increasing `intent_seq`. */
+  let intentSeq = 0n;
   let lastNet = 0;
 
   const keys = new Set<string>();
@@ -115,7 +117,7 @@ export function mountFpSession(
         spawnSynced = true;
       }
       const serverSeq = poseSeqAsBigint(row.seq);
-      if (serverSeq > seq) seq = serverSeq;
+      if (serverSeq > intentSeq) intentSeq = serverSeq;
       return;
     }
     feedRemote(interp, id, row, lastRemote);
@@ -159,11 +161,33 @@ export function mountFpSession(
   const ro = new ResizeObserver(setSize);
   ro.observe(canvas);
 
+  const sendMoveIntent = (input: FpLocomotionInput, jump: boolean) => {
+    if (!conn.identity) return;
+    intentSeq += 1n;
+    const bits = encodeMoveIntentBits(input, jump);
+    void conn.reducers.submitMoveIntent({
+      intentSeq,
+      bits,
+      aimYaw: yaw,
+    });
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
     if (e.code === "Escape") void document.exitPointerLock();
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
-    if (e.code === "Space" && !e.repeat) queueFpJump(loco);
+    if (e.code === "Space" && !e.repeat) {
+      queueFpJump(loco);
+      const input: FpLocomotionInput = {
+        forward: keys.has("KeyW"),
+        backward: keys.has("KeyS"),
+        left: keys.has("KeyA"),
+        right: keys.has("KeyD"),
+        sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
+        crouch: crouchToggle,
+      };
+      sendMoveIntent(input, true);
+    }
   };
   const onKeyUp = (e: KeyboardEvent) => {
     keys.delete(e.code);
@@ -202,6 +226,7 @@ export function mountFpSession(
       sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
       crouch: crouchToggle,
     };
+    const jumpQueuedBeforeStep = loco.jumpQueued;
     const headY = stepFpLocomotion(loco, pos, yaw, input, dt);
 
     const desync = Math.hypot(
@@ -223,14 +248,7 @@ export function mountFpSession(
     const now = performance.now();
     if (now - lastNet >= NET_INTERVAL_MS && conn.identity) {
       lastNet = now;
-      seq += 1n;
-      void conn.reducers.updatePlayerPose({
-        seq,
-        x: pos.x,
-        y: pos.y,
-        z: pos.z,
-        yaw,
-      });
+      sendMoveIntent(input, jumpQueuedBeforeStep);
     }
 
     const keep = new Set<string>();
