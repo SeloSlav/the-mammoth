@@ -1,7 +1,14 @@
 import * as THREE from "three";
 import type { DbConnection } from "../module_bindings";
 import type { PlayerPose } from "../module_bindings/types";
-import { createFPCamera } from "@the-mammoth/engine";
+import {
+  createFPRig,
+  createFpLocomotionState,
+  fpLocomotionConstants,
+  queueFpJump,
+  stepFpLocomotion,
+  type FpLocomotionInput,
+} from "@the-mammoth/engine";
 import {
   buildCellMeshes,
   buildFloorMeshes,
@@ -12,13 +19,16 @@ import floorDoc from "../../../../content/building/floors/floor_01_east.json";
 import cellDoc from "../../../../content/cells/cell_0_0.json";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 
-const MOVE_SPEED = 4.25;
-const EYE_OFFSET = 1.55;
-const NET_INTERVAL_MS = 45;
+/** Pose publish cadence — trade bandwidth vs how far client and server rows diverge between acks. */
+const NET_INTERVAL_MS = 50;
 const MOUSE_SENS = 0.0022;
 const PITCH_LIMIT = 1.38;
 
 type LastXZ = { x: number; z: number; t: number };
+
+function poseSeqAsBigint(seq: PlayerPose["seq"]): bigint {
+  return typeof seq === "bigint" ? seq : BigInt(seq as number);
+}
 
 function feedRemote(
   interp: PoseInterpBuffer,
@@ -37,16 +47,25 @@ function feedRemote(
 
 /**
  * First-person session: authored floor + sample cell, SpaceTimeDB `player_pose` sync,
- * capsule proxies for other players (selo-style interpolation buffer on remotes).
+ * capsule proxies for other players (interpolation buffer on remotes).
+ *
+ * **Local player (prototype):** client sim is **display authority**; we publish poses for
+ * persistence and for **other clients**. We do **not** blend toward our own replica every
+ * frame (that fights prediction). We only **rubber-band** if we are meters out of sync
+ * (teleport / bad connection). Production MMORPG path: intent reducers + server sim tick
+ * + shared constants (see team docs / chat).
  */
 export function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
 ): () => void {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a22);
+  scene.background = new THREE.Color(0x3d4455);
 
-  const camera = createFPCamera();
+  const { rig: playerRig, headPivot, camera } = createFPRig(
+    fpLocomotionConstants.eyeStand,
+  );
+  scene.add(playerRig);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 
   const floorRoot = buildFloorMeshes(parseFloorDoc(floorDoc));
@@ -54,11 +73,13 @@ export function mountFpSession(
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
   scene.add(cellRoot);
 
-  const hemi = new THREE.HemisphereLight(0x9aa0c8, 0x2a2a30, 0.85);
+  const hemi = new THREE.HemisphereLight(0xc8d4f0, 0x5a5e68, 1.05);
   scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.4);
-  dir.position.set(6, 14, 4);
+  const dir = new THREE.DirectionalLight(0xfff5e6, 0.72);
+  dir.position.set(8, 18, 6);
   scene.add(dir);
+  const fill = new THREE.AmbientLight(0xa8b4d0, 0.42);
+  scene.add(fill);
 
   const interp = new PoseInterpBuffer();
   const lastRemote = new Map<string, LastXZ>();
@@ -73,13 +94,28 @@ export function mountFpSession(
   let lastNet = 0;
 
   const keys = new Set<string>();
+  let crouchToggle = false;
+  const loco = createFpLocomotionState();
+
+  /** Replicated pose for rubber-banding (local display does not follow this each frame). */
+  const serverPose = { x: 0, y: 1, z: 6 };
+  let spawnSynced = false;
+  const RUBBER_BAND_SNAP_M = 2.8;
 
   const ingestPose = (row: PlayerPose) => {
     const id = row.identity.toHexString();
     const self = conn.identity?.isEqual(row.identity) ?? false;
     if (self) {
-      pos.set(row.x, row.y, row.z);
-      yaw = row.yaw;
+      serverPose.x = row.x;
+      serverPose.y = row.y;
+      serverPose.z = row.z;
+      if (!spawnSynced) {
+        pos.set(row.x, row.y, row.z);
+        yaw = row.yaw;
+        spawnSynced = true;
+      }
+      const serverSeq = poseSeqAsBigint(row.seq);
+      if (serverSeq > seq) seq = serverSeq;
       return;
     }
     feedRemote(interp, id, row, lastRemote);
@@ -126,6 +162,8 @@ export function mountFpSession(
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
     if (e.code === "Escape") void document.exitPointerLock();
+    if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
+    if (e.code === "Space" && !e.repeat) queueFpJump(loco);
   };
   const onKeyUp = (e: KeyboardEvent) => {
     keys.delete(e.code);
@@ -147,45 +185,40 @@ export function mountFpSession(
   window.addEventListener("mousemove", onMouseMove);
   canvas.addEventListener("click", onClick);
 
-  const clock = new THREE.Clock();
   let raf = 0;
+  let lastFrameMs = performance.now();
 
   const tick = () => {
     raf = requestAnimationFrame(tick);
-    const dt = Math.min(clock.getDelta(), 0.05);
+    const nowMs = performance.now();
+    const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
+    lastFrameMs = nowMs;
 
-    let mx = 0;
-    let mz = 0;
-    const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-    if (keys.has("KeyW")) {
-      mx += forward.x;
-      mz += forward.z;
-    }
-    if (keys.has("KeyS")) {
-      mx -= forward.x;
-      mz -= forward.z;
-    }
-    if (keys.has("KeyA")) {
-      mx -= right.x;
-      mz -= right.z;
-    }
-    if (keys.has("KeyD")) {
-      mx += right.x;
-      mz += right.z;
-    }
-    const len = Math.hypot(mx, mz);
-    if (len > 1e-6) {
-      mx = (mx / len) * MOVE_SPEED * dt;
-      mz = (mz / len) * MOVE_SPEED * dt;
-      pos.x += mx;
-      pos.z += mz;
+    const input: FpLocomotionInput = {
+      forward: keys.has("KeyW"),
+      backward: keys.has("KeyS"),
+      left: keys.has("KeyA"),
+      right: keys.has("KeyD"),
+      sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
+      crouch: crouchToggle,
+    };
+    const headY = stepFpLocomotion(loco, pos, yaw, input, dt);
+
+    const desync = Math.hypot(
+      pos.x - serverPose.x,
+      pos.y - serverPose.y,
+      pos.z - serverPose.z,
+    );
+    if (desync > RUBBER_BAND_SNAP_M) {
+      pos.set(serverPose.x, serverPose.y, serverPose.z);
+      loco.velocity.set(0, 0, 0);
     }
 
-    camera.position.set(pos.x, pos.y + EYE_OFFSET, pos.z);
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
+    playerRig.position.set(pos.x, pos.y, pos.z);
+    playerRig.rotation.y = yaw;
+    headPivot.position.y = headY;
+    headPivot.rotation.x = pitch;
+    headPivot.rotation.y = 0;
 
     const now = performance.now();
     if (now - lastNet >= NET_INTERVAL_MS && conn.identity) {

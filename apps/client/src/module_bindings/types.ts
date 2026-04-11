@@ -10,6 +10,20 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const PhysicsTick = __t.object("PhysicsTick", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type PhysicsTick = __Infer<typeof PhysicsTick>;
+
+export const PlayerInput = __t.object("PlayerInput", {
+  identity: __t.identity(),
+  intentSeq: __t.u64(),
+  bits: __t.u8(),
+  aimYaw: __t.f32(),
+});
+export type PlayerInput = __Infer<typeof PlayerInput>;
+
 export const PlayerPose = __t.object("PlayerPose", {
   identity: __t.identity(),
   x: __t.f32(),
@@ -17,6 +31,10 @@ export const PlayerPose = __t.object("PlayerPose", {
   z: __t.f32(),
   yaw: __t.f32(),
   seq: __t.u64(),
+  velX: __t.f32(),
+  velY: __t.f32(),
+  velZ: __t.f32(),
+  grounded: __t.u8(),
 });
 export type PlayerPose = __Infer<typeof PlayerPose>;
 

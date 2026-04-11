@@ -10,15 +10,8 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default __t.row({
-  identity: __t.identity().primaryKey(),
-  x: __t.f32(),
-  y: __t.f32(),
-  z: __t.f32(),
-  yaw: __t.f32(),
-  seq: __t.u64(),
-  velX: __t.f32().name("vel_x"),
-  velY: __t.f32().name("vel_y"),
-  velZ: __t.f32().name("vel_z"),
-  grounded: __t.u8(),
-});
+export default {
+  intentSeq: __t.u64(),
+  bits: __t.u8(),
+  aimYaw: __t.f32(),
+};

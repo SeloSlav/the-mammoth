@@ -19,6 +19,9 @@ export function HudShell({ displayName }: HudProps) {
       }}
     >
       The Mammoth — <strong>{displayName}</strong>
+      <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
+        WASD move · Shift sprint · C crouch · Space jump · click canvas to look
+      </div>
     </div>
   );
 }

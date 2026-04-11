@@ -2,11 +2,11 @@ import { useEffect, useRef } from "react";
 import { mountFpSession } from "./game/mountFpSession";
 import { HudShell } from "./ui/HudShell";
 import { LoginGate } from "./ui/LoginGate";
-import { useSpacetimeConnection } from "./spacetime/useSpacetimeConnection";
+import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const session = useSpacetimeConnection();
+  const session = useSpacetimeSession();
 
   useEffect(() => {
     if (session.phase !== "ready" || !session.conn || !session.displayName) {

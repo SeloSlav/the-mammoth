@@ -1,8 +1,9 @@
-//! SpaceTimeDB module — live persistence (presence, auth, player poses, …).
+//! SpaceTimeDB module — live persistence (presence, auth, intent-driven movement, …).
 //! Run `pnpm client:generate` from the repo root to refresh TypeScript bindings.
 
 mod accounts;
 mod auth;
+mod movement;
 mod pose;
 
 use spacetimedb::{ReducerContext, Table};
@@ -10,11 +11,12 @@ use accounts::{user, User};
 use pose::{player_pose, PlayerPose};
 
 #[spacetimedb::reducer(init)]
-pub fn init(_ctx: &ReducerContext) {
+pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
+    movement::start_physics_schedule(ctx);
 }
 
-/// Ensure `user` and `player_pose` rows exist (pose is used after username gate for movement).
+/// Ensure `user`, `player_pose`, and `player_input` rows exist.
 #[spacetimedb::reducer(client_connected)]
 pub fn on_connect(ctx: &ReducerContext) {
     let id = ctx.sender();
@@ -32,8 +34,13 @@ pub fn on_connect(ctx: &ReducerContext) {
             z: 6.0,
             yaw: 0.0,
             seq: 0,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
         });
     }
+    movement::ensure_player_input_row(ctx, id, 0.0);
 }
 
 #[spacetimedb::reducer(client_disconnected)]
@@ -53,32 +60,6 @@ pub fn set_username(ctx: &ReducerContext, name: String) {
     };
     row.username = Some(name);
     ctx.db.user().identity().update(row);
-}
-
-/// Client-authoritative pose with light server-side clamping (anti-grief / glitch).
-#[spacetimedb::reducer]
-pub fn update_player_pose(ctx: &ReducerContext, seq: u64, x: f32, y: f32, z: f32, yaw: f32) {
-    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
-        log::debug!("update_player_pose blocked: {e}");
-        return;
-    }
-    let id = ctx.sender();
-    let Some(prev) = ctx.db.player_pose().identity().find(&id) else {
-        log::warn!("update_player_pose: no row for {id}");
-        return;
-    };
-    if seq <= prev.seq {
-        return;
-    }
-    let (cx, cy, cz) = pose::clamp_pose_step(&prev, x, y, z);
-    ctx.db.player_pose().identity().update(PlayerPose {
-        identity: id,
-        x: cx,
-        y: cy,
-        z: cz,
-        yaw,
-        seq,
-    });
 }
 
 /// Example gated reducer — extend for claim apartment, etc.

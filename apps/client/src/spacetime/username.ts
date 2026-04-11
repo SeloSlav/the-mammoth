@@ -2,9 +2,15 @@
 export function readOptionalString(value: unknown): string | undefined {
   if (value == null) return undefined;
   if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && "tag" in value) {
-    const v = value as { tag: string; value?: unknown };
-    if (v.tag === "some" && typeof v.value === "string") return v.value;
+  if (typeof value === "object" && value !== null) {
+    if ("tag" in value) {
+      const v = value as { tag: string; value?: unknown };
+      const tag = String(v.tag).toLowerCase();
+      if (tag === "some" && typeof v.value === "string") return v.value;
+      if (tag === "none") return undefined;
+    }
+    const rec = value as Record<string, unknown>;
+    if (typeof rec.some === "string") return rec.some;
   }
   return undefined;
 }

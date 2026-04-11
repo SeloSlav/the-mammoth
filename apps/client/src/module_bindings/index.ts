@@ -34,13 +34,16 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import SetUsernameReducer from "./set_username_reducer";
-import UpdatePlayerPoseReducer from "./update_player_pose_reducer";
+import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import PhysicsTickRow from "./physics_tick_table";
+import PlayerInputRow from "./player_input_table";
 import PlayerPoseRow from "./player_pose_table";
 import UserRow from "./user_table";
 
@@ -48,6 +51,28 @@ import UserRow from "./user_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  physics_tick: __table({
+    name: 'physics_tick',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'physics_tick_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, PhysicsTickRow),
+  player_input: __table({
+    name: 'player_input',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_input_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerInputRow),
   player_pose: __table({
     name: 'player_pose',
     indexes: [
@@ -74,9 +99,10 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("set_username", SetUsernameReducer),
-  __reducerSchema("update_player_pose", UpdatePlayerPoseReducer),
+  __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

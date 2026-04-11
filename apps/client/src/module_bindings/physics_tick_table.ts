@@ -10,10 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  seq: __t.u64(),
-  x: __t.f32(),
-  y: __t.f32(),
-  z: __t.f32(),
-  yaw: __t.f32(),
-};
+export default __t.row({
+  scheduledId: __t.u64().primaryKey().name("scheduled_id"),
+  scheduledAt: __t.scheduleAt().name("scheduled_at"),
+});

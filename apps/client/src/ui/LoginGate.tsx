@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import type { SpacetimeSession } from "../spacetime/useSpacetimeConnection";
+import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
 import { spacetimeDatabase, spacetimeUri } from "../spacetime/env";
 
 type Props = {

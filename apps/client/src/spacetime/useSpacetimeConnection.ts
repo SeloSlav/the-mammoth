@@ -51,7 +51,12 @@ export function useSpacetimeConnection(): SpacetimeSession {
     const id = c.identity;
     if (!id) return;
     const row = c.db.user.identity.find(id);
-    const uname = readOptionalString(row?.username);
+    if (!row) {
+      // Subscription snapshot may not have landed in the table cache yet; do not
+      // assume "needs name" (that flashes the form for returning players on refresh).
+      return;
+    }
+    const uname = readOptionalString(row.username);
     if (uname) {
       setDisplayName(uname);
       setPhase("ready");
@@ -78,6 +83,10 @@ export function useSpacetimeConnection(): SpacetimeSession {
         cc.subscriptionBuilder()
           .onApplied(() => {
             bump();
+            queueMicrotask(() => {
+              if (!active) return;
+              bump();
+            });
           })
           .subscribe(["SELECT * FROM user", "SELECT * FROM player_pose"]);
         cc.db.user.onInsert((_ctx, row) => {
