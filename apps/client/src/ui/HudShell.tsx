@@ -21,7 +21,9 @@ export function HudShell({ displayName, onSignOut }: HudProps) {
     >
       The Mammoth — <strong>{displayName}</strong>
       <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
-        WASD move · Shift sprint · C crouch · Space jump · click canvas to look
+        {
+          "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look"
+        }
       </div>
       <div style={{ marginTop: 8, pointerEvents: "auto" }}>
         <button

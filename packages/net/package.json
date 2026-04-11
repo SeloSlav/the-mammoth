@@ -11,6 +11,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@the-mammoth/game": "workspace:*",
     "spacetimedb": "2.0.1"
   },
   "devDependencies": {

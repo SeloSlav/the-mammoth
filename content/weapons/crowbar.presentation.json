@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "firstPerson": {
+    "mount": {
+      "positionM": { "x": 0.32, "y": -0.22, "z": -0.58 },
+      "eulerRad": { "x": 0.15, "y": 0.55, "z": 0.2 }
+    },
+    "meleeSwing": [
+      { "t": 0, "rotationRad": { "x": 0, "y": 0, "z": 0 }, "translationM": { "x": 0, "y": 0, "z": 0 } },
+      {
+        "t": 0.12,
+        "rotationRad": { "x": 0.18, "y": 0, "z": 0.02 },
+        "translationM": { "x": 0, "y": 0.02, "z": 0.05 }
+      },
+      {
+        "t": 0.38,
+        "rotationRad": { "x": -1.55, "y": -0.04, "z": -0.06 },
+        "translationM": { "x": 0.05, "y": -0.34, "z": -0.58 }
+      },
+      {
+        "t": 0.62,
+        "rotationRad": { "x": -0.45, "y": 0, "z": -0.02 },
+        "translationM": { "x": 0.02, "y": -0.14, "z": -0.22 }
+      },
+      { "t": 1, "rotationRad": { "x": 0, "y": 0, "z": 0 }, "translationM": { "x": 0, "y": 0, "z": 0 } }
+    ]
+  },
+  "thirdPerson": {
+    "mount": {
+      "positionM": { "x": 0.08, "y": 0.02, "z": 0.06 },
+      "eulerRad": { "x": 0, "y": 0, "z": -0.35 }
+    },
+    "meleeSwing": [
+      { "t": 0, "rotationRad": { "x": 0, "y": 0, "z": 0 }, "translationM": { "x": 0, "y": 0, "z": 0 } },
+      {
+        "t": 0.45,
+        "rotationRad": { "x": -1.2, "y": 0.05, "z": -0.08 },
+        "translationM": { "x": 0.05, "y": -0.14, "z": 0.14 }
+      },
+      { "t": 1, "rotationRad": { "x": 0, "y": 0, "z": 0 }, "translationM": { "x": 0, "y": 0, "z": 0 } }
+    ]
+  }
+}

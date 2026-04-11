@@ -8,3 +8,9 @@ export const defaultSpacetimeUri = "http://127.0.0.1:3000" as const;
 
 /** Default published database name (override with `VITE_SPACETIME_DATABASE`). */
 export const defaultSpacetimeDatabase = "mammoth-local" as const;
+
+export {
+  locomotionFromHorizontalSpeed,
+  replicatedPlayerSnapshotFromPlainPose,
+  type PlainPoseFields,
+} from "./replicatedPlayerSnapshot.js";

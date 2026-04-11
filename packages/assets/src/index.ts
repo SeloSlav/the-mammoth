@@ -6,3 +6,11 @@ export const placeholderPrefabs = [
   "lobby_entry_a",
   "kiosk_a",
 ] as const;
+
+export type { ModelAssetKey, ModelRef } from "./modelRef.js";
+export type {
+  IModelLoadRegistry,
+  LoadedModelHandle,
+  ModelInstantiationResult,
+} from "./modelLoadRegistry.js";
+export { NoopModelLoadRegistry } from "./modelLoadRegistry.js";

@@ -9,13 +9,16 @@ export default function App() {
   const session = useSpacetimeSession();
 
   useEffect(() => {
-    if (session.phase !== "ready" || !session.conn || !session.displayName) {
+    if (session.phase !== "ready" || !session.displayName) {
       return;
     }
     const canvas = canvasRef.current;
     if (!canvas) return;
-    return mountFpSession(canvas, session.conn);
-  }, [session.phase, session.conn, session.displayName]);
+    const conn = session.conn;
+    if (!conn) return;
+    return mountFpSession(canvas, conn);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- omit `session.conn`: identity churn remounts the FP session while phase+name unchanged
+  }, [session.phase, session.displayName]);
 
   if (session.phase !== "ready" || !session.displayName) {
     return <LoginGate session={session} />;
