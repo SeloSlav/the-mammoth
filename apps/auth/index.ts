@@ -29,7 +29,7 @@ const config = {
   issuerUrl: normalizeHttpOrigin(
     process.env.ISSUER_URL ||
       (process.env.NODE_ENV === 'production'
-        ? 'https://selo-empire-production.up.railway.app'
+        ? 'https://the-mammoth-production.up.railway.app'
         : 'http://localhost:4001'),
   ),
   databaseUrl: process.env.DATABASE_URL,
@@ -47,8 +47,8 @@ const defaultCorsAllowedOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:5176',
   'http://127.0.0.1:5176',
-  'https://selo-empire-production.up.railway.app',
-  'https://seloempire.com',
+  'https://the-mammoth-production.up.railway.app',
+  'https://themammoth.com',
 ];
 /** In dev, union env origins with defaults so a prod-only CORS_ALLOWED_ORIGINS does not break local Vite. */
 const corsAllowedOrigins = config.isDevelopment
@@ -246,7 +246,7 @@ function renderForgotPasswordPage(opts: { error?: string; success?: string } = {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link rel="icon" type="image/png" href="/favicon.png">
-      <title>Forgot Password - Selo Empire</title>
+      <title>Forgot Password - The Mammoth</title>
       <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
@@ -365,7 +365,7 @@ function renderForgotPasswordPage(opts: { error?: string; success?: string } = {
   <body>
       <div class="container">
           <div class="game-title">
-              <img src="/logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+              <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
           </div>
           <h1 class="form-title">Forgot Password</h1>
           ${success ? `<div class="success-message">${success}</div>` : `
@@ -398,7 +398,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <link rel="icon" type="image/png" href="/favicon.png">
-      <title>Reset Password - Selo Empire</title>
+      <title>Reset Password - The Mammoth</title>
       <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
@@ -510,7 +510,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
   <body>
       <div class="container">
           <div class="game-title">
-              <img src="/logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+              <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
           </div>
           <h1 class="form-title">Reset Password</h1>
           ${error ? `<div class="error-message">${error}</div>` : ''}
@@ -664,27 +664,27 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <title>Selo Empire - 3D Balkan Farming Game</title>
-  <meta name="description" content="Selo Empire is a 3D multiplayer farming game built with Three.js and SpacetimeDB. Like Farmville meets Balkan village life. Till your land, plant crops, and build your homestead in a shared persistent world." />
-  <meta name="keywords" content="Selo Empire, farming game, Balkan, multiplayer, 3D, Three.js, SpacetimeDB, village simulation, Farmville" />
-  <meta name="author" content="Selo Empire" />
+  <title>The Mammoth - 3D Balkan Farming Game</title>
+  <meta name="description" content="The Mammoth is a 3D multiplayer farming game built with Three.js and SpacetimeDB. Like Farmville meets Balkan village life. Till your land, plant crops, and build your homestead in a shared persistent world." />
+  <meta name="keywords" content="The Mammoth, farming game, Balkan, multiplayer, 3D, Three.js, SpacetimeDB, village simulation, Farmville" />
+  <meta name="author" content="The Mammoth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="${baseUrl}/document" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Selo Empire - 3D Balkan Farming Game" />
+  <meta property="og:title" content="The Mammoth - 3D Balkan Farming Game" />
   <meta property="og:description" content="A 3D multiplayer farming game. Like Farmville meets Balkan village life. Till your land, plant crops, and build your homestead in a shared persistent world." />
   <meta property="og:image" content="${ogImage}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:url" content="${baseUrl}/document" />
-  <meta property="og:site_name" content="Selo Empire" />
+  <meta property="og:site_name" content="The Mammoth" />
   <meta property="og:locale" content="en_US" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Selo Empire - 3D Balkan Farming Game" />
+  <meta name="twitter:title" content="The Mammoth - 3D Balkan Farming Game" />
   <meta name="twitter:description" content="A 3D multiplayer farming game. Like Farmville meets Balkan village life." />
   <meta name="twitter:image" content="${ogImage}" />
-  <meta name="twitter:image:alt" content="Selo Empire - 3D Balkan farming game logo" />
+  <meta name="twitter:image:alt" content="The Mammoth - 3D Balkan farming game logo" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
@@ -695,7 +695,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
   </style>
 </head>
 <body>
-  <h1>Selo Empire</h1>
+  <h1>The Mammoth</h1>
   <p>A 3D multiplayer farming game built with Three.js and SpacetimeDB. Like Farmville meets Balkan village life.</p>
   <p>Till your land, plant crops, and build your homestead in a shared persistent world.</p>
   <a href="https://github.com/SeloSlav/selo-empire">GitHub</a>
@@ -777,7 +777,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Create Account - Selo Empire</title>
+        <title>Create Account - The Mammoth</title>
         <style>
             * {
                 margin: 0;
@@ -965,7 +965,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     <body>
         <div class="container">
             <div class="game-title">
-                <img src="logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
             </div>
             
             <h1 class="form-title">Create Account</h1>
@@ -1091,7 +1091,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Sign In - Selo Empire</title>
+        <title>Sign In - The Mammoth</title>
         <style>
             * {
                 margin: 0;
@@ -1269,7 +1269,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     <body>
         <div class="container">
             <div class="game-title">
-                <img src="logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
             </div>
             
             <h1 class="form-title">Sign In</h1>
@@ -1360,7 +1360,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link rel="icon" type="image/png" href="/favicon.png">
-                <title>Sign In - Selo Empire</title>
+                <title>Sign In - The Mammoth</title>
                 <style>
                     * {
                         margin: 0;
@@ -1538,7 +1538,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
             <body>
                 <div class="container">
                     <div class="game-title">
-                        <img src="logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+                        <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
                     </div>
                     <h1 class="form-title">Sign In</h1>
                     <p class="error-message">Invalid email or password. Please try again.</p>
@@ -1578,7 +1578,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Forgot Password - Selo Empire</title>
+        <title>Forgot Password - The Mammoth</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -1706,7 +1706,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     <body>
         <div class="container">
             <div class="game-title">
-                <img src="logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
             </div>
             <h1 class="form-title">Forgot Password</h1>
             <p class="form-description">Enter your email address and we'll send you a link to reset your password.</p>
@@ -1760,9 +1760,9 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     if (resend) {
       try {
         await resend.emails.send({
-          from: 'Selo Empire <noreply@brothandbullets.com>',
+          from: 'The Mammoth <noreply@brothandbullets.com>',
           to: email,
-          subject: 'Reset your Selo Empire password',
+          subject: 'Reset your The Mammoth password',
           html: `
             <!DOCTYPE html>
             <html>
@@ -1774,7 +1774,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
               <div style="max-width: 500px; margin: 0 auto; background: rgba(40, 40, 60, 0.95); border-radius: 16px; padding: 40px; border: 2px solid rgba(255, 140, 0, 0.3);">
                 <h1 style="color: #ff8c00; margin-bottom: 20px; font-size: 24px;">Reset Your Password</h1>
                 <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; margin-bottom: 30px;">
-                  You requested a password reset for your Selo Empire account. Click the button below to set a new password:
+                  You requested a password reset for your The Mammoth account. Click the button below to set a new password:
                 </p>
                 <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
                   Reset Password
@@ -1785,7 +1785,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
                 </p>
                 <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 30px 0;">
                 <p style="color: rgba(255, 255, 255, 0.4); font-size: 12px;">
-                  Selo Empire - Balkan Farming Sim
+                  The Mammoth - Balkan Farming Sim
                 </p>
               </div>
             </body>
@@ -1889,7 +1889,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Password Reset - Selo Empire</title>
+        <title>Password Reset - The Mammoth</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -1948,7 +1948,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     <body>
         <div class="container">
             <div class="game-title">
-                <img src="/logo_alt.png" alt="Selo Empire Logo" style="height: 100%; width: auto;">
+                <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
             </div>
             <div class="success-icon">✓</div>
             <h1 class="form-title">Password Reset Successful!</h1>
