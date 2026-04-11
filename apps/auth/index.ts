@@ -99,7 +99,7 @@ import { Resend } from 'resend';
 const PORT        = config.port;
 const ISSUER_URL  = config.issuerUrl;
 const SALT_ROUNDS = config.saltRounds;
-const CLIENT_ID   = 'vibe-survival-game-client';
+const CLIENT_ID = process.env.OIDC_CLIENT_ID || 'the-mammoth-client';
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 
 // Initialize Resend for email sending

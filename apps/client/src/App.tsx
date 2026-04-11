@@ -24,7 +24,7 @@ export default function App() {
   return (
     <>
       <canvas ref={canvasRef} style={{ position: "fixed", inset: 0 }} />
-      <HudShell displayName={session.displayName} />
+      <HudShell displayName={session.displayName} onSignOut={session.signOut} />
     </>
   );
 }

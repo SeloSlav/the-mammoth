@@ -1,32 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
+import { clearOidcAccessToken, readOidcAccessToken } from "../auth/env";
+import {
+  completeOidcCallbackFromCurrentUrl,
+  startPasswordOidcRedirect,
+  stripAuthCallbackFromUrl,
+} from "../auth/pkceOidc";
 import type { DbConnection } from "../module_bindings";
 import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
 
-function authTokenStorageKey(): string {
-  return `mammoth:spacetimedb:token:${spacetimeUri()}:${spacetimeDatabase()}`;
-}
-
-function readStoredAuthToken(): string | undefined {
-  try {
-    const t = localStorage.getItem(authTokenStorageKey());
-    return t && t.length > 0 ? t : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function persistAuthToken(token: string | undefined): void {
-  try {
-    if (token && token.length > 0) {
-      localStorage.setItem(authTokenStorageKey(), token);
-    } else {
-      localStorage.removeItem(authTokenStorageKey());
-    }
-  } catch {
-    /* private mode / quota */
-  }
+function isOidcCallbackPath(): boolean {
+  const p = window.location.pathname;
+  return p === "/auth/callback" || p.endsWith("/auth/callback");
 }
 
 /** SpacetimeDB passes the browser `WebSocket` `error` event here, not an `Error` — avoid `[object Event]`. */
@@ -42,7 +28,7 @@ function formatSpacetimeConnectError(err: unknown): string {
       "Most often: nothing is listening on the host/port above.",
       "1) Run `spacetime start` in a terminal and leave it running.",
       "2) Publish: `spacetime publish mammoth-local --project-path apps/server`",
-      "3) Confirm the node prints HTTP on port 3000 (or set VITE_SPACETIME_URI to match).",
+      "3) Configure the node to accept JWTs from your auth issuer (see apps/client/.env.example).",
     ].join("\n");
   }
   if (err && typeof err === "object" && "message" in err) {
@@ -52,33 +38,46 @@ function formatSpacetimeConnectError(err: unknown): string {
   return String(err);
 }
 
-export type SpacetimePhase = "connecting" | "needs_name" | "ready" | "error";
+export type SpacetimePhase =
+  | "needs_auth"
+  | "connecting"
+  | "needs_name"
+  | "ready"
+  | "error";
 
 export type SpacetimeSession = {
   phase: SpacetimePhase;
   conn: DbConnection | null;
   displayName: string | null;
   errorMsg: string | null;
+  /** OpenAuth password flow (redirects away to `apps/auth`). */
+  startPasswordSignIn: () => Promise<void>;
+  /** Clear OIDC session and disconnect from SpacetimeDB. */
+  signOut: () => void;
   submitUsername: (raw: string) => Promise<void>;
 };
 
 /**
- * One long-lived SpaceTimeDB connection (login + in-world). Matches the selo-empire pattern:
- * subscriptions feed client caches; game loop reads replicated tables.
+ * SpacetimeDB over OIDC: obtain a JWT from `apps/auth` (PKCE), then `withToken(jwt)` so the
+ * node maps a stable identity from `sub` — no anonymous browser profiles.
  */
 export function useSpacetimeConnection(): SpacetimeSession {
-  const [phase, setPhase] = useState<SpacetimePhase>("connecting");
+  const [phase, setPhase] = useState<SpacetimePhase>(() => {
+    if (typeof window !== "undefined" && isOidcCallbackPath()) {
+      return "connecting";
+    }
+    return readOidcAccessToken() ? "connecting" : "needs_auth";
+  });
   const [conn, setConn] = useState<DbConnection | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [connEpoch, setConnEpoch] = useState(0);
 
   const refreshRegistration = useCallback((c: DbConnection) => {
     const id = c.identity;
     if (!id) return;
     const row = c.db.user.identity.find(id);
     if (!row) {
-      // Subscription snapshot may not have landed in the table cache yet; do not
-      // assume "needs name" (that flashes the form for returning players on refresh).
       return;
     }
     const uname = readOptionalString(row.username);
@@ -92,55 +91,93 @@ export function useSpacetimeConnection(): SpacetimeSession {
   }, []);
 
   useEffect(() => {
-    /** In dev, React Strict Mode mounts → unmounts → remounts once; ignore callbacks from the aborted attempt. */
     let active = true;
-    const storedToken = readStoredAuthToken();
-    const builder = DbConnectionClass.builder()
-      .withUri(spacetimeUri())
-      .withDatabaseName(spacetimeDatabase());
-    if (storedToken) {
-      builder.withToken(storedToken);
-    }
-    const c = builder
-      .onConnect((cc, _identity, token) => {
-        if (!active) return;
-        persistAuthToken(token);
-        setConn(cc);
+    let connection: DbConnection | null = null;
+
+    void (async () => {
+      if (isOidcCallbackPath()) {
+        setPhase("connecting");
         setErrorMsg(null);
-        const bump = () => {
+        try {
+          await completeOidcCallbackFromCurrentUrl();
+          stripAuthCallbackFromUrl();
+        } catch (e) {
           if (!active) return;
-          refreshRegistration(cc);
-        };
-        cc.subscriptionBuilder()
-          .onApplied(() => {
-            bump();
-            queueMicrotask(() => {
-              if (!active) return;
-              bump();
-            });
-          })
-          .subscribe(["SELECT * FROM user"]);
-        cc.db.user.onInsert((_ctx, row) => {
-          if (cc.identity?.isEqual(row.identity)) bump();
-        });
-        cc.db.user.onUpdate((_ctx, _old, row) => {
-          if (cc.identity?.isEqual(row.identity)) bump();
-        });
-      })
-      .onConnectError((_ctx, err) => {
-        if (!active) return;
-        setPhase("error");
-        setErrorMsg(formatSpacetimeConnectError(err));
+          setErrorMsg(e instanceof Error ? e.message : String(e));
+          setPhase("needs_auth");
+          stripAuthCallbackFromUrl();
+          return;
+        }
+      }
+
+      if (!active) return;
+
+      const jwt = readOidcAccessToken();
+      if (!jwt) {
         setConn(null);
-      })
-      .build();
+        setPhase("needs_auth");
+        return;
+      }
+
+      if (!active) return;
+
+      connection = DbConnectionClass.builder()
+        .withUri(spacetimeUri())
+        .withDatabaseName(spacetimeDatabase())
+        .withToken(jwt)
+        .onConnect((cc) => {
+          if (!active) return;
+          setConn(cc);
+          setErrorMsg(null);
+          const bump = () => {
+            if (!active) return;
+            refreshRegistration(cc);
+          };
+          cc.subscriptionBuilder()
+            .onApplied(() => {
+              bump();
+              queueMicrotask(() => {
+                if (!active) return;
+                bump();
+              });
+            })
+            .subscribe(["SELECT * FROM user"]);
+          cc.db.user.onInsert((_ctx, row) => {
+            if (cc.identity?.isEqual(row.identity)) bump();
+          });
+          cc.db.user.onUpdate((_ctx, _old, row) => {
+            if (cc.identity?.isEqual(row.identity)) bump();
+          });
+        })
+        .onConnectError((_ctx, err) => {
+          if (!active) return;
+          setPhase("error");
+          setErrorMsg(formatSpacetimeConnectError(err));
+          setConn(null);
+        })
+        .build();
+    })();
 
     return () => {
       active = false;
-      c.disconnect();
+      connection?.disconnect();
       setConn(null);
     };
-  }, [refreshRegistration]);
+  }, [connEpoch, refreshRegistration]);
+
+  const startPasswordSignIn = useCallback(async () => {
+    setErrorMsg(null);
+    await startPasswordOidcRedirect();
+  }, []);
+
+  const signOut = useCallback(() => {
+    clearOidcAccessToken();
+    setConn(null);
+    setDisplayName(null);
+    setErrorMsg(null);
+    setPhase("needs_auth");
+    setConnEpoch((e) => e + 1);
+  }, []);
 
   const submitUsername = useCallback(
     async (raw: string) => {
@@ -161,6 +198,8 @@ export function useSpacetimeConnection(): SpacetimeSession {
     conn,
     displayName,
     errorMsg,
+    startPasswordSignIn,
+    signOut,
     submitUsername,
   };
 }

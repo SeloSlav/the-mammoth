@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
+import { authIssuerUrl } from "../auth/env";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
 import { spacetimeDatabase, spacetimeUri } from "../spacetime/env";
 
@@ -7,10 +8,17 @@ type Props = {
 };
 
 /**
- * Login / register username (SpaceTimeDB connection is owned by `useSpacetimeConnection` in App).
+ * Account gate: OpenAuth (`apps/auth`) first, then in-game display name on SpacetimeDB.
  */
 export function LoginGate({ session }: Props) {
-  const { phase, conn, errorMsg, submitUsername } = session;
+  const {
+    phase,
+    conn,
+    errorMsg,
+    submitUsername,
+    startPasswordSignIn,
+    signOut,
+  } = session;
   const [nameInput, setNameInput] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -24,6 +32,39 @@ export function LoginGate({ session }: Props) {
       setBusy(false);
     }
   };
+
+  if (phase === "needs_auth") {
+    return (
+      <div style={overlayStyle}>
+        <div style={cardStyle}>
+          <h1 style={{ marginTop: 0 }}>The Mammoth</h1>
+          <p style={{ lineHeight: 1.5 }}>
+            Sign in with your account (email + password). The game uses your auth server —
+            not anonymous browser profiles.
+          </p>
+          {errorMsg ? <p style={{ color: "#f88", marginTop: 12 }}>{errorMsg}</p> : null}
+          <p style={hintStyle}>
+            Auth issuer: <strong>{authIssuerUrl()}</strong>
+          </p>
+          <button
+            type="button"
+            style={buttonStyle}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await startPasswordSignIn();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Redirecting…" : "Sign in"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (phase === "connecting" && !errorMsg) {
     return (
@@ -44,28 +85,20 @@ export function LoginGate({ session }: Props) {
       <div style={overlayStyle}>
         <div style={cardStyle}>
           <h1 style={{ marginTop: 0 }}>The Mammoth</h1>
-          <p>Could not reach SpaceTimeDB.</p>
+          <p>Could not connect to SpaceTimeDB with your login.</p>
           <p style={hintStyle}>
             Trying <strong>{spacetimeUri()}</strong> · database{" "}
             <strong>{spacetimeDatabase()}</strong>
           </p>
           <pre style={preStyle}>{errorMsg}</pre>
           <p style={hintStyle}>
-            The local node must be running (publishing the module does not start
-            it). In one terminal:
+            Ensure <code>spacetime start</code> is running, the module is published, and the
+            node trusts JWTs from <strong>{authIssuerUrl()}</strong> (see{" "}
+            <code>apps/client/.env.example</code>).
           </p>
-          <pre style={preStyle}>spacetime start</pre>
-          <p style={hintStyle}>
-            Then publish (name must match the database above), for example:
-          </p>
-          <pre style={preStyle}>
-            spacetime publish mammoth-local --project-path apps/server
-          </pre>
-          <p style={hintStyle}>
-            Dev defaults live in <code>apps/client/.env.development</code>; override
-            with <code>apps/client/.env</code> or{" "}
-            <code>apps/client/.env.development.local</code> if needed.
-          </p>
+          <button type="button" style={buttonStyle} onClick={() => signOut()}>
+            Back to sign in
+          </button>
         </div>
       </div>
     );
@@ -94,6 +127,13 @@ export function LoginGate({ session }: Props) {
             {busy ? "Saving…" : "Enter"}
           </button>
         </form>
+        <button
+          type="button"
+          style={{ ...buttonStyle, marginTop: 10, background: "#4a4a58", color: "#ddd" }}
+          onClick={() => signOut()}
+        >
+          Use a different account
+        </button>
       </div>
     </div>
   );

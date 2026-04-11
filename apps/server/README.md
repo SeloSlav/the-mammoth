@@ -27,6 +27,8 @@ Rust module (`mammoth-module`) published as a database on your SpacetimeDB host.
 
 ## Auth
 
+The browser connects to SpacetimeDB **only with a JWT** from `apps/auth` (OpenAuth). Configure your SpacetimeDB node to trust that issuer’s JWKS (`/.well-known/jwks.json`) so `POST /v1/identity/websocket-token` succeeds. Anonymous connections are not used by the client.
+
 - **`user` table** — one row per `Identity`; `username` is `None` until the client calls `set_username`.
 - **`client_connected`** — inserts a `user` row if missing.
 - **`set_username`** — validates with `auth::is_valid_username` (same rules as the client copy).
