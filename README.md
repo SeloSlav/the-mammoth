@@ -1,3 +1,9 @@
+# The Mammoth
+
+Game monorepo (Three.js engine, React UI, SpaceTimeDB). **Docs:** [docs/README.md](docs/README.md) · [docs/PROJECT.md](docs/PROJECT.md). **Run the game client:** `pnpm client:dev` (Vite + Three.js + React HUD shell). **Editor:** `pnpm editor:dev`. **SpaceTimeDB:** `pnpm server:build` and `pnpm client:generate` (CLI required). Starter `web` / `docs` Turborepo apps remain for reference.
+
+---
+
 # Turborepo starter
 
 This Turborepo starter is maintained by the Turborepo core team.

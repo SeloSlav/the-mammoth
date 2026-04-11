@@ -3,7 +3,12 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=@the-mammoth/client",
+    "dev:all": "turbo run dev",
+    "client:dev": "turbo run dev --filter=@the-mammoth/client",
+    "editor:dev": "pnpm --filter @the-mammoth/editor dev",
+    "client:generate": "spacetime generate --lang typescript --out-dir apps/client/src/module_bindings --module-path apps/server -y",
+    "server:build": "spacetime build --module-path apps/server",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
@@ -11,7 +16,7 @@
   "devDependencies": {
     "prettier": "^3.7.4",
     "turbo": "^2.9.6",
-    "typescript": "5.9.2"
+    "typescript": "~6.0.2"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {

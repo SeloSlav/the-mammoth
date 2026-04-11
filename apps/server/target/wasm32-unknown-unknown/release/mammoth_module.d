@@ -1,0 +1,1 @@
+C:\WebProjects\the-mammoth\apps\server\target\wasm32-unknown-unknown\release\mammoth_module.wasm: C:\WebProjects\the-mammoth\apps\server\src\accounts.rs C:\WebProjects\the-mammoth\apps\server\src\auth.rs C:\WebProjects\the-mammoth\apps\server\src\lib.rs C:\WebProjects\the-mammoth\apps\server\src\pose.rs

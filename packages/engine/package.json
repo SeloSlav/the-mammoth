@@ -1,0 +1,24 @@
+{
+  "name": "@the-mammoth/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/three": "^0.183.1",
+    "eslint": "^9.39.4",
+    "three": "^0.183.2",
+    "typescript": "~6.0.2"
+  }
+}

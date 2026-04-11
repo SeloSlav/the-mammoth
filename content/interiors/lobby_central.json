@@ -1,0 +1,27 @@
+{
+  "id": "lobby_central",
+  "version": 1,
+  "displayName": "Central lobby (placeholder)",
+  "linkedCellId": "cell_0_0",
+  "placements": [
+    {
+      "entityId": "e_lobby_blockout",
+      "prefabId": "lobby_entry_a",
+      "position": [45.2, 0.5, 14],
+      "rotation": [0, 0, 0, 1],
+      "scale": [6, 2, 4]
+    }
+  ],
+  "portals": [
+    {
+      "id": "exit_to_courtyard",
+      "position": [44.5, 0, 12],
+      "targetCellId": "cell_0_0",
+      "targetPortalId": "portal_lobby_main"
+    }
+  ],
+  "decals": [],
+  "metadata": {
+    "notes": "World-space placements; same frame as exterior cells."
+  }
+}
