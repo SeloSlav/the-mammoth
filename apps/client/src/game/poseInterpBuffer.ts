@@ -1,5 +1,5 @@
 /**
- * Lightweight pose interpolation (selo-empire `EntityInterpolationBuffer` ideas, trimmed for MVP).
+ * Lightweight pose interpolation (entity buffer–style snapshots, trimmed for MVP).
  * Fixed synthetic timestep between samples reduces velocity hitching when subscription batches vary.
  */
 const BUFFER_SIZE = 12;

@@ -664,15 +664,15 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <title>The Mammoth - 3D Balkan Farming Game</title>
-  <meta name="description" content="The Mammoth is a 3D multiplayer farming game built with Three.js and SpacetimeDB. Like Farmville meets Balkan village life. Till your land, plant crops, and build your homestead in a shared persistent world." />
-  <meta name="keywords" content="The Mammoth, farming game, Balkan, multiplayer, 3D, Three.js, SpacetimeDB, village simulation, Farmville" />
+  <title>The Mammoth</title>
+  <meta name="description" content="The Mammoth — a multiplayer game built with Three.js and SpacetimeDB." />
+  <meta name="keywords" content="The Mammoth, multiplayer, 3D, Three.js, SpacetimeDB" />
   <meta name="author" content="The Mammoth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="${baseUrl}/document" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="The Mammoth - 3D Balkan Farming Game" />
-  <meta property="og:description" content="A 3D multiplayer farming game. Like Farmville meets Balkan village life. Till your land, plant crops, and build your homestead in a shared persistent world." />
+  <meta property="og:title" content="The Mammoth" />
+  <meta property="og:description" content="Multiplayer game built with Three.js and SpacetimeDB." />
   <meta property="og:image" content="${ogImage}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -681,10 +681,10 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
   <meta property="og:site_name" content="The Mammoth" />
   <meta property="og:locale" content="en_US" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="The Mammoth - 3D Balkan Farming Game" />
-  <meta name="twitter:description" content="A 3D multiplayer farming game. Like Farmville meets Balkan village life." />
+  <meta name="twitter:title" content="The Mammoth" />
+  <meta name="twitter:description" content="Multiplayer game built with Three.js and SpacetimeDB." />
   <meta name="twitter:image" content="${ogImage}" />
-  <meta name="twitter:image:alt" content="The Mammoth - 3D Balkan farming game logo" />
+  <meta name="twitter:image:alt" content="The Mammoth" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
@@ -696,9 +696,8 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
 </head>
 <body>
   <h1>The Mammoth</h1>
-  <p>A 3D multiplayer farming game built with Three.js and SpacetimeDB. Like Farmville meets Balkan village life.</p>
-  <p>Till your land, plant crops, and build your homestead in a shared persistent world.</p>
-  <a href="https://github.com/SeloSlav/selo-empire">GitHub</a>
+  <p>A multiplayer game built with Three.js and SpacetimeDB.</p>
+  <a href="https://github.com/the-mammoth/the-mammoth">GitHub</a>
 </body>
 </html>
     `);
@@ -1760,7 +1759,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     if (resend) {
       try {
         await resend.emails.send({
-          from: 'The Mammoth <noreply@brothandbullets.com>',
+          from: 'The Mammoth <noreply@themammoth.com>',
           to: email,
           subject: 'Reset your The Mammoth password',
           html: `
@@ -1785,7 +1784,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
                 </p>
                 <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 30px 0;">
                 <p style="color: rgba(255, 255, 255, 0.4); font-size: 12px;">
-                  The Mammoth - Balkan Farming Sim
+                  The Mammoth
                 </p>
               </div>
             </body>
