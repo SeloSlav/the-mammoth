@@ -6,6 +6,7 @@ import {
   pickStairShaftGroundDoorPlacement,
   shiftStairDoorTangentViewerRightFromInside,
   snapStairDoorTangentAlongWallToLanding,
+  stairCorridorDoorTangentAtStairOppositeCorner,
   STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M,
   STOREY_SPACING_M,
   type StairSwitchbackLayout,
@@ -782,6 +783,65 @@ export function elevatorGroundDoorOpeningLocals(
   };
 }
 
+/**
+ * Shaft-interior Y extent for a **full-height** traversing door cut (matches {@link addShaftShell}
+ * stair shells with default `openTopWallExtend`).
+ */
+export function shaftFullInteriorVerticalOpeningYLocals(
+  sy: number,
+  opts?: { openTopWallExtend?: number },
+): { y0: number; y1: number } {
+  const wt = 0.11;
+  const hy = sy * 0.5;
+  const topExtend = Math.max(0, opts?.openTopWallExtend ?? 0);
+  const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
+  const wallCenterY = (-hy + wt) + innerWallH * 0.5;
+  const yWallBottom = wallCenterY - innerWallH * 0.5;
+  const yWallTop = wallCenterY + innerWallH * 0.5;
+  return { y0: yWallBottom + 0.03, y1: yWallTop - 0.04 };
+}
+
+/**
+ * Corridor-facing traversing door: tangent at the stair-opposite inner corner; one-storey band or
+ * full shaft height for mega columns.
+ */
+export function traversingStairGroundDoorOpts(
+  sx: number,
+  sy: number,
+  sz: number,
+  face: CardinalFace,
+  layoutOpts?: SwitchbackStairOpts,
+  fullHeight = false,
+): ShaftGroundDoorOpts {
+  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts ?? {});
+  const tang = stairCorridorDoorTangentAtStairOppositeCorner(
+    sx,
+    sy,
+    sz,
+    face,
+    layoutOpts,
+    L,
+  );
+  if (fullHeight) {
+    const { y0, y1 } = shaftFullInteriorVerticalOpeningYLocals(sy);
+    return {
+      bandHeightM: sy,
+      face,
+      tangentOffsetAlongWall: tang,
+      doorHoleY0Local: y0,
+      doorHoleY1Local: y1,
+    };
+  }
+  const loc = elevatorGroundDoorOpeningLocals(sx, sy, sz, face, tang);
+  return {
+    bandHeightM: sy,
+    face: loc.face,
+    tangentOffsetAlongWall: loc.tangentOffsetAlongWall,
+    doorHoleY0Local: loc.y0Local,
+    doorHoleY1Local: loc.y1Local,
+  };
+}
+
 export function addElevatorShaftPlaceholder(
   group: THREE.Group,
   sx: number,
@@ -826,6 +886,13 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
    * Mega: lowest pad among those with `y` in the bottom ~`STOREY_SPACING_M` of the shaft.
    */
   omitGroundStoreyCornerLandings?: boolean;
+  /**
+   * When set, fixed corridor-facing traversing door (corner opposite tread mass, no snap heuristics).
+   * Ignores {@link groundDoor}. Pair with {@link traversingCorridorDoorFullHeight} on mega shafts.
+   */
+  traversingCorridorDoorFace?: CardinalFace;
+  /** True = one continuous vertical slot on mega stacked shafts; false = one-storey door band. */
+  traversingCorridorDoorFullHeight?: boolean;
 };
 
 export type ResolvedStairDoorCutoutMeta = {
@@ -1039,12 +1106,26 @@ export function addStairWellPlaceholder(
     omitGroundStoreyCornerLandings,
     doorBandTargetYForLandingPick,
     padAlignTowardPlateXZ,
+    traversingCorridorDoorFace,
+    traversingCorridorDoorFullHeight,
     ...layoutOpts
   } = opts ?? {};
 
   let L: StairSwitchbackLayout;
   let resolvedShellDoor: ShaftGroundDoorOpts | null = null;
-  if (groundDoor) {
+  if (traversingCorridorDoorFace != null) {
+    const climb = opts?.climbFullShaft ?? false;
+    const full = traversingCorridorDoorFullHeight === true;
+    resolvedShellDoor = traversingStairGroundDoorOpts(
+      sx,
+      sy,
+      sz,
+      traversingCorridorDoorFace,
+      { climbFullShaft: climb },
+      full,
+    );
+    L = computeSwitchbackStairLayout(sx, sy, sz, { climbFullShaft: climb });
+  } else if (groundDoor) {
     const snap = computeStairDoorSnapForPlaceholder(sx, sy, sz, groundDoor, {
       ...layoutOpts,
       doorBandTargetYForLandingPick,

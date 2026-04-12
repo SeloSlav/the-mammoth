@@ -1,12 +1,17 @@
 import * as THREE from "three";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
-import { shaftPlanKey } from "./buildingStairShafts.js";
+import {
+  shaftPlanKey,
+  STOREY_SPACING_M,
+  type BuildingStairShaftSpec,
+} from "./buildingStairShafts.js";
 import {
   addElevatorShaftPlaceholder,
   addStairWellPlaceholder,
   elevatorGroundDoorOpeningLocals,
   stairShaftDoorTangentSpanShaftLocal,
+  traversingStairGroundDoorOpts,
 } from "./stairElevatorPlaceholders.js";
 import {
   addDoorFrameTrimConstantX,
@@ -188,7 +193,7 @@ type HollowShellOpts = {
   storyLevelIndex?: number;
   /** Elevator-only union (plate-space); second cut on shell floor/ceiling so flanking plates do not cap hoistways. */
   shaftElevatorsMerged?: readonly ShaftSlabHole[];
-  /** Cuts through corridor walls opposite elevator doors (room-local coordinates). */
+  /** Cuts through corridor walls opposite elevator / stair traversing doors (room-local). */
   corridorWallHoles?: CorridorShellWallHoles;
   /** Elevator door heads on this corridor shell — room-local; used for manufacturer signage. */
   elevatorSignPlacements?: readonly ElevatorCorridorSignPlacement[];
@@ -1321,7 +1326,58 @@ export type BuildFloorMeshesOptions = {
    * Passed from {@link instantiateBuildingFloorStack} so upper storeys match the ground door side.
    */
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
+  /**
+   * Per {@link shaftPlanKey}, stair traversing door wall on **story 1** (same corridor heuristic as elevators).
+   */
+  stairDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
+  /** Corridor punches when per-plate stairs are merged into {@link addBuildingStairShaftColumnsToRoot}. */
+  megaStairCorridorPunchContext?: {
+    specs: readonly BuildingStairShaftSpec[];
+    sortedRefs: readonly { levelIndex: number; floorDocId: string }[];
+    getFloorDoc: (floorDocId: string) => FloorDoc;
+  };
 };
+
+function isStairWellPrefabId(prefabId: string): boolean {
+  const p = prefabId.toLowerCase();
+  return p.includes("stair_well") || p.includes("stairwell");
+}
+
+/**
+ * Ground-storey stair traversing door faces (plate-space), keyed by {@link shaftPlanKey}.
+ * Same corridor-facing rule as elevators so the opening lines up with circulation.
+ */
+export function stairDoorFacesFromGroundFloorDoc(doc: FloorDoc): Map<string, CardinalFace> {
+  const floor = withoutElevatorsInStairwells(doc);
+  let plateCx = 0;
+  let plateCz = 0;
+  let plateN = 0;
+  for (const o of floor.objects) {
+    plateCx += o.position[0];
+    plateCz += o.position[2];
+    plateN += 1;
+  }
+  if (plateN > 0) {
+    plateCx /= plateN;
+    plateCz /= plateN;
+  }
+  const out = new Map<string, CardinalFace>();
+  for (const o of floor.objects) {
+    if (!isStairWellPrefabId(o.prefabId)) continue;
+    const k = shaftPlanKey(o.position[0], o.position[2]);
+    out.set(
+      k,
+      elevatorDoorFaceFromFloorCorridors(
+        o.position[0],
+        o.position[2],
+        floor,
+        plateCx,
+        plateCz,
+      ),
+    );
+  }
+  return out;
+}
 
 /**
  * Ground-storey elevator door faces (plate-space), keyed by {@link shaftPlanKey} at each car’s XZ.
@@ -1395,6 +1451,129 @@ export function buildFloorMeshes(
   const story = opts?.storyLevelIndex ?? 99;
   const corridorFootprint = firstCorridorOrLobbyFromFloor(floor);
 
+  const stairFlushByPlanKey = new Map<string, number | undefined>();
+  const stairDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
+  for (const o of floor.objects) {
+    const pid0 = o.prefabId.toLowerCase();
+    if (!(pid0.includes("stair_well") || pid0.includes("stairwell"))) continue;
+    const sxi = o.scale?.[0] ?? 1;
+    const syi = o.scale?.[1] ?? 1;
+    const szi = o.scale?.[2] ?? 1;
+    const sk0 = shaftPlanKey(o.position[0], o.position[2]);
+    if (opts?.stairShaftSkipKeys?.has(sk0)) continue;
+
+    const staircaseFace =
+      opts?.stairDoorFaceByShaftKey?.get(sk0) ??
+      elevatorDoorFaceFromFloorCorridors(
+        o.position[0],
+        o.position[2],
+        floor,
+        plateCx,
+        plateCz,
+      );
+    const doorOpts = traversingStairGroundDoorOpts(
+      sxi,
+      syi,
+      szi,
+      staircaseFace,
+      { climbFullShaft: false },
+      false,
+    );
+    const loc = elevatorGroundDoorOpeningLocals(
+      sxi,
+      syi,
+      szi,
+      staircaseFace,
+      doorOpts.tangentOffsetAlongWall ?? 0,
+    );
+    let stairFlush: number | undefined;
+    if (corridorFootprint) {
+      const g = corridorFlushGapForShaftDoor(
+        loc.face,
+        o.position[0],
+        o.position[2],
+        sxi * 0.5,
+        szi * 0.5,
+        corridorFootprint,
+      );
+      if (g > 1e-4) stairFlush = Math.min(0.35, g);
+    }
+    stairFlushByPlanKey.set(sk0, stairFlush);
+    const y0 = doorOpts.doorHoleY0Local ?? loc.y0Local;
+    const y1 = doorOpts.doorHoleY1Local ?? loc.y1Local;
+    if (y0 == null || y1 == null) continue;
+    stairDoorPunchesPlate.push({
+      stairFace: loc.face,
+      tangentLocal: loc.tangentOffsetAlongWall,
+      doorHalfW: loc.doorHalfW,
+      y0Local: y0,
+      y1Local: y1,
+      spx: o.position[0],
+      spz: o.position[2],
+      spy: o.position[1],
+      shx: sxi * 0.5,
+      shz: szi * 0.5,
+    });
+  }
+
+  const megaCtx = opts?.megaStairCorridorPunchContext;
+  if (megaCtx && opts?.stairShaftSkipKeys && opts.storyLevelIndex != null) {
+    const levelIndex = opts.storyLevelIndex;
+    for (const spec of megaCtx.specs) {
+      if (!opts.stairShaftSkipKeys.has(spec.planKey)) continue;
+      const ref = megaCtx.sortedRefs.find((r) => r.levelIndex === levelIndex);
+      if (!ref) continue;
+      const fdoc = megaCtx.getFloorDoc(ref.floorDocId);
+      const stair = fdoc.objects.find(
+        (ob) =>
+          isStairWellPrefabId(ob.prefabId) &&
+          shaftPlanKey(ob.position[0], ob.position[2]) === spec.planKey,
+      );
+      if (!stair) continue;
+      const staircaseFace =
+        opts?.stairDoorFaceByShaftKey?.get(spec.planKey) ??
+        elevatorDoorFaceFromFloorCorridors(
+          spec.px,
+          spec.pz,
+          floor,
+          plateCx,
+          plateCz,
+        );
+      const climbFull = spec.megaSy > STOREY_SPACING_M * 1.25;
+      const doorMega = traversingStairGroundDoorOpts(
+        spec.sx,
+        spec.megaSy,
+        spec.sz,
+        staircaseFace,
+        { climbFullShaft: climbFull },
+        true,
+      );
+      const locPlate = elevatorGroundDoorOpeningLocals(
+        spec.sx,
+        spec.syPlate,
+        spec.sz,
+        staircaseFace,
+        doorMega.tangentOffsetAlongWall ?? 0,
+      );
+      /** Corridor shells are one storey tall; the mega shaft mesh still uses a full-height cut. */
+      const y0 = locPlate.y0Local;
+      const y1 = locPlate.y1Local;
+      if (y0 == null || y1 == null) continue;
+      stairDoorPunchesPlate.push({
+        stairFace: locPlate.face,
+        tangentLocal: locPlate.tangentOffsetAlongWall,
+        doorHalfW: locPlate.doorHalfW,
+        y0Local: y0,
+        y1Local: y1,
+        spx: spec.px,
+        spz: spec.pz,
+        spy: stair.position[1],
+        shx: spec.sx * 0.5,
+        shz: spec.sz * 0.5,
+      });
+    }
+  }
+
   const elevatorDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
   for (const o of floor.objects) {
     if (!o.prefabId.toLowerCase().includes("elevator")) continue;
@@ -1428,7 +1607,7 @@ export function buildFloorMeshes(
   }
 
   const corridorShaftDoorPunchesPlate: readonly PlateStairCorridorDoorPunch[] =
-    elevatorDoorPunchesPlate;
+    [...stairDoorPunchesPlate, ...elevatorDoorPunchesPlate];
 
   for (const obj of floor.objects) {
     expandBoxForPlacedObject(min, max, obj);
@@ -1486,8 +1665,19 @@ export function buildFloorMeshes(
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
       if (!opts?.stairShaftSkipKeys?.has(sk)) {
-        /** No `groundDoor`: no stair–corridor shaft wall cutouts (solid shell). */
+        const staircaseFace =
+          opts?.stairDoorFaceByShaftKey?.get(sk) ??
+          elevatorDoorFaceFromFloorCorridors(
+            obj.position[0],
+            obj.position[2],
+            floor,
+            plateCx,
+            plateCz,
+          );
         addStairWellPlaceholder(room, sx, sy, sz, {
+          traversingCorridorDoorFace: staircaseFace,
+          traversingCorridorDoorFullHeight: false,
+          corridorFlushGapM: stairFlushByPlanKey.get(sk),
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
         });
       }

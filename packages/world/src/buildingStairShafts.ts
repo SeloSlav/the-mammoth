@@ -1,6 +1,13 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
+import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
+import {
+  corridorFlushGapForShaftDoor,
+  elevatorDoorFaceFromFloorCorridors,
+  firstCorridorOrLobbyFromFloor,
+} from "./shaftCorridorFlush.js";
+import type { CardinalFace } from "./wallWithDoorCutout.js";
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
@@ -102,20 +109,70 @@ export function getBuildingStairShaftSpecs(
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
-  _sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
-  _getFloorDoc: (floorDocId: string) => FloorDoc,
+  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
+  getFloorDoc: (floorDocId: string) => FloorDoc,
   _spacing: number,
+  stairDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>,
 ): void {
   if (specs.length === 0) return;
+
+  const groundRef = sortedRefs.find((r) => r.levelIndex === 1);
+  let plateCx = 0;
+  let plateCz = 0;
+  let gfloor: FloorDoc | undefined;
+  if (groundRef) {
+    gfloor = withoutElevatorsInStairwells(getFloorDoc(groundRef.floorDocId));
+    let n = 0;
+    for (const o of gfloor.objects) {
+      plateCx += o.position[0];
+      plateCz += o.position[2];
+      n += 1;
+    }
+    if (n > 0) {
+      plateCx /= n;
+      plateCz /= n;
+    }
+  }
+  const corridorFootprint = gfloor ? firstCorridorOrLobbyFromFloor(gfloor) : undefined;
+
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
     col.position.set(s.px, s.centerY, s.pz);
     const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
-    /** No `groundDoor`: stair–corridor wall cutouts disabled (solid shaft shell). */
+    const staircaseFace =
+      stairDoorFaceByShaftKey?.get(s.planKey) ??
+      (gfloor
+        ? elevatorDoorFaceFromFloorCorridors(s.px, s.pz, gfloor, plateCx, plateCz)
+        : undefined);
+    if (staircaseFace == null) {
+      addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
+        climbFullShaft: climbFull,
+        omitGroundStoreyCornerLandings: true,
+      });
+      root.add(col);
+      continue;
+    }
+    let stairFlush: number | undefined;
+    if (corridorFootprint) {
+      const shx = s.sx * 0.5;
+      const shz = s.sz * 0.5;
+      const g = corridorFlushGapForShaftDoor(
+        staircaseFace,
+        s.px,
+        s.pz,
+        shx,
+        shz,
+        corridorFootprint,
+      );
+      if (g > 1e-4) stairFlush = Math.min(0.35, g);
+    }
     addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
       climbFullShaft: climbFull,
       omitGroundStoreyCornerLandings: true,
+      traversingCorridorDoorFace: staircaseFace,
+      traversingCorridorDoorFullHeight: true,
+      corridorFlushGapM: stairFlush,
     });
     root.add(col);
   }

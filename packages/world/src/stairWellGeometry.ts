@@ -274,6 +274,56 @@ export function pickStairShaftGroundDoorPlacement(
   return { face: pick.face, tangentOffsetM: pick.along };
 }
 
+/** Matches `SHAFT_DOUBLE_DOOR_W` in `stairElevatorPlaceholders.ts` — keep in sync (no import cycle). */
+const TRAVERSING_STAIR_DOOR_CLEAR_W = 1.86;
+
+/**
+ * Along-wall centre for a corridor door on `doorFace`, at the inner-corner **farther from the tread
+ * footprint** (XZ centroid of run boards), so the opening sits on the shaft corner opposite the
+ * circulating stair mass.
+ */
+export function stairCorridorDoorTangentAtStairOppositeCorner(
+  sx: number,
+  sy: number,
+  sz: number,
+  doorFace: StairShaftCardinalFace,
+  layoutOpts?: SwitchbackStairOpts,
+  existingLayout?: StairSwitchbackLayout,
+): number {
+  const L = existingLayout ?? computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
+  const wt = STAIR_WT;
+  const vlenX = Math.max(sx - 2 * wt, 0.05);
+  const vlenZ = Math.max(sz - 2 * wt, 0.05);
+  const doorHalfW = Math.min(
+    TRAVERSING_STAIR_DOOR_CLEAR_W * 0.5,
+    vlenZ * 0.5 - 0.06,
+    vlenX * 0.5 - 0.06,
+  );
+  const m = 0.02;
+  let cx = 0;
+  let cz = 0;
+  let n = 0;
+  for (const tr of L.treads) {
+    cx += tr.x;
+    cz += tr.z;
+    n += 1;
+  }
+  if (n > 0) {
+    cx /= n;
+    cz /= n;
+  }
+  if (doorFace === "e" || doorFace === "w") {
+    const lo = -vlenZ * 0.5 + doorHalfW + m;
+    const hi = vlenZ * 0.5 - doorHalfW - m;
+    if (hi <= lo + 1e-4) return 0;
+    return Math.abs(lo - cz) >= Math.abs(hi - cz) ? lo : hi;
+  }
+  const lo = -vlenX * 0.5 + doorHalfW + m;
+  const hi = vlenX * 0.5 - doorHalfW - m;
+  if (hi <= lo + 1e-4) return 0;
+  return Math.abs(lo - cx) >= Math.abs(hi - cx) ? lo : hi;
+}
+
 type Leg = { ax: number; az: number; bx: number; bz: number; count: number };
 
 function buildLegTreads(
