@@ -2,8 +2,15 @@ import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import {
   addStairWellPlaceholder,
-  SHAFT_GROUND_DOOR_BAND_M,
+  computeStairDoorSnapForPlaceholder,
+  resolveStairGroundDoorCutoutMeta,
+  SHAFT_DOUBLE_DOOR_H,
 } from "./stairElevatorPlaceholders.js";
+import {
+  corridorFlushGapForShaftDoor,
+  firstCorridorOrLobbyFromFloor,
+} from "./shaftCorridorFlush.js";
+import { pickCornerLandingNearDoorBand } from "./stairWellGeometry.js";
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
@@ -35,6 +42,53 @@ export function shaftPlanKey(px: number, pz: number): string {
 function isStairPrefab(prefabId: string): boolean {
   const p = prefabId.toLowerCase();
   return p.includes("stair_well") || p.includes("stairwell");
+}
+
+/** Wall-local Y bands for each stacked storey (mega column), aligned to corner landings at the door face. */
+function collectCorridorDoorBandsLocalY(
+  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  s: BuildingStairShaftSpec,
+  acx: number,
+  acz: number,
+  spacing: number,
+): { y0: number; y1: number }[] {
+  const key = shaftPlanKey(s.px, s.pz);
+  const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
+  const meta = resolveStairGroundDoorCutoutMeta(
+    s.sx,
+    s.megaSy,
+    s.sz,
+    {
+      bandHeightM: s.megaSy,
+      towardPlateXZ: [acx, acz],
+      shaftPlateXZ: [s.px, s.pz],
+    },
+    { climbFullShaft: climbFull },
+  );
+  const out: { y0: number; y1: number }[] = [];
+  const halfOpen = SHAFT_DOUBLE_DOOR_H * 0.5 + 0.12;
+  for (const ref of sortedRefs) {
+    const doc = getFloorDoc(ref.floorDocId);
+    const stair = doc.objects.find(
+      (o) =>
+        isStairPrefab(o.prefabId) &&
+        shaftPlanKey(o.position[0], o.position[2]) === key,
+    );
+    if (!stair) continue;
+    const plateY = (ref.levelIndex - 1) * spacing;
+    const targetY = plateY + stair.position[1] - s.centerY;
+    const land = pickCornerLandingNearDoorBand(
+      meta.L,
+      meta.face,
+      meta.tangentOffsetAlongWall,
+      meta.doorHalfW,
+      targetY,
+    );
+    const mid = land ? land.y : targetY;
+    out.push({ y0: mid - halfOpen, y1: mid + halfOpen });
+  }
+  return out;
 }
 
 /**
@@ -105,22 +159,67 @@ export function getBuildingStairShaftSpecs(
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
+  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  spacing: number,
 ): void {
   if (specs.length === 0) return;
   const acx = specs.reduce((a, s) => a + s.px, 0) / specs.length;
   const acz = specs.reduce((a, s) => a + s.pz, 0) / specs.length;
 
+  let corridorFp = undefined as
+    | ReturnType<typeof firstCorridorOrLobbyFromFloor>
+    | undefined;
+  for (const ref of sortedRefs) {
+    corridorFp = firstCorridorOrLobbyFromFloor(getFloorDoc(ref.floorDocId));
+    if (corridorFp) break;
+  }
+
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
     col.position.set(s.px, s.centerY, s.pz);
-    addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
-      climbFullShaft: s.megaSy > STOREY_SPACING_M * 1.25,
-      groundDoor: {
-        bandHeightM: SHAFT_GROUND_DOOR_BAND_M,
+    const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
+    const stairSnap = computeStairDoorSnapForPlaceholder(
+      s.sx,
+      s.megaSy,
+      s.sz,
+      {
+        bandHeightM: s.megaSy,
         towardPlateXZ: [acx, acz],
         shaftPlateXZ: [s.px, s.pz],
       },
+      { climbFullShaft: climbFull },
+    );
+    let stairFlush: number | undefined;
+    if (corridorFp) {
+      const g = corridorFlushGapForShaftDoor(
+        stairSnap.face,
+        s.px,
+        s.pz,
+        s.sx * 0.5,
+        s.sz * 0.5,
+        corridorFp,
+      );
+      if (g > 1e-4) stairFlush = Math.min(0.35, g);
+    }
+    addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
+      climbFullShaft: climbFull,
+      groundDoor: {
+        bandHeightM: s.megaSy,
+        towardPlateXZ: [acx, acz],
+        shaftPlateXZ: [s.px, s.pz],
+      },
+      corridorDoorBandsLocalY: collectCorridorDoorBandsLocalY(
+        sortedRefs,
+        getFloorDoc,
+        s,
+        acx,
+        acz,
+        spacing,
+      ),
+      corridorFlushGapM: stairFlush,
+      omitGroundStoreyCornerLandings: true,
     });
     root.add(col);
   }

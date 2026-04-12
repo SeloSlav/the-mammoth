@@ -152,7 +152,8 @@ function writeTypicalFloor() {
 }
 
 function writeGroundFloor() {
-  const lobbyLen = Math.min(corridorLen, 210);
+  /** Match typical plate Z extent so storey-2+ shells do not overhang the podium footprint. */
+  const lobbyLen = corridorLen;
   /**
    * Wide enough that hub stairs (past the residential stack) + lifts sit **inside** one hollow
    * lobby shell so spawn at the centre can see them without a wall in the way.

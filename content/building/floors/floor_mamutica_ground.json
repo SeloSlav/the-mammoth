@@ -4,7 +4,7 @@
   "displayName": "Mamutica ground / podium (generated)",
   "metadata": {
     "note": "Hub at z=0; satellite lifts share Z (and west X) with typical-floor hoistways so stacked slabs stay open.",
-    "lobby_length_m": 210,
+    "lobby_length_m": 237.6,
     "lobby_width_m": 31.5,
     "recommended_spawn_xz_m": [
       0,
@@ -23,7 +23,7 @@
       "scale": [
         31.5,
         3.05,
-        210
+        237.6
       ],
       "metadata": {
         "note": "Single podium hall: elevators + stairs all inside this shell so they are visible from x=z=0."

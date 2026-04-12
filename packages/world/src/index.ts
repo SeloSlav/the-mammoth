@@ -129,6 +129,15 @@ export function instantiateBuildingFloorStack(
       shaftElevatorsMerged,
       plateWorldOriginY,
       elevatorDoorFaceByShaftKey,
+      megaStairCorridorPunchContext:
+        stairShaftSpecs.length > 0
+          ? {
+              specs: stairShaftSpecs,
+              sortedRefs: sorted,
+              getFloorDoc,
+              spacing,
+            }
+          : undefined,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;
@@ -136,7 +145,13 @@ export function instantiateBuildingFloorStack(
   }
 
   if (stairShaftSpecs.length > 0) {
-    addBuildingStairShaftColumnsToRoot(root, stairShaftSpecs);
+    addBuildingStairShaftColumnsToRoot(
+      root,
+      stairShaftSpecs,
+      sorted,
+      getFloorDoc,
+      spacing,
+    );
   }
 
   return root;

@@ -21,7 +21,7 @@ export function attachFpSessionEnvironment(
   sky.scale.setScalar(450000);
   const skyU = sky.material.uniforms;
   skyU["turbidity"]!.value = 8;
-  skyU["rayleigh"]!.value = 2.35;
+  skyU["rayleigh"]!.value = 1.65;
   skyU["mieCoefficient"]!.value = 0.0045;
   skyU["mieDirectionalG"]!.value = 0.86;
   const sunDir = new THREE.Vector3();
@@ -35,7 +35,11 @@ export function attachFpSessionEnvironment(
   (skyU["sunPosition"]!.value as THREE.Vector3).copy(sunDir);
   scene.add(sky);
 
-  scene.fog = new THREE.Fog(0xb8d4f0, 45, 520);
+  /**
+   * Neutral warm atmospheric perspective. Must stay **darker than the lightest façade albedo**
+   * (~#eae8e4): if fog matches panel white, linear fog erases long-range mass and walls “vanish”.
+   */
+  scene.fog = new THREE.Fog(0xb8b3ad, 55, 780);
 
   const groundPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(6000, 6000),
@@ -47,7 +51,7 @@ export function attachFpSessionEnvironment(
   scene.add(groundPlane);
 
   /** Single outdoor rig: sky fill + sun key (no extra ambient layer). */
-  const hemi = new THREE.HemisphereLight(0x9ec8f5, 0x4a5a48, 0.78);
+  const hemi = new THREE.HemisphereLight(0xf2f0ec, 0x5a5854, 0.72);
   const dir = new THREE.DirectionalLight(0xfff5ea, 1.22);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
   scene.add(hemi, dir);

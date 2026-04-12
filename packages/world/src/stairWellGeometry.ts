@@ -49,6 +49,8 @@ export type StairSwitchbackLayout = {
   iz1: number;
   innerWallH: number;
   wallCenterY: number;
+  /** Inner racetrack anchors (same frame as corner landings on E/W/N/S runs). */
+  racetrack: { xE: number; xW: number; zN: number; zS: number };
 };
 
 /** Local +X / −X / +Z / −Z wall of the shaft (same convention as `wallWithDoorCutout`). */
@@ -588,7 +590,70 @@ export function computeSwitchbackStairLayout(
     iz1,
     innerWallH,
     wallCenterY,
+    racetrack: { xE, xW, zN, zS },
   };
+}
+
+const FACE_ANCHOR_TOL = 0.42;
+
+function landingNearRacetrackAnchor(
+  L: StairSwitchbackLayout,
+  cl: StairCornerLanding,
+  face: StairShaftCardinalFace,
+): boolean {
+  const { xE, xW, zN, zS } = L.racetrack;
+  switch (face) {
+    case "e":
+      return Math.abs(cl.x - xE) < FACE_ANCHOR_TOL;
+    case "w":
+      return Math.abs(cl.x - xW) < FACE_ANCHOR_TOL;
+    case "n":
+      return Math.abs(cl.z - zN) < FACE_ANCHOR_TOL;
+    case "s":
+      return Math.abs(cl.z - zS) < FACE_ANCHOR_TOL;
+    default:
+      return false;
+  }
+}
+
+/** Along-wall span: +Z for E/W faces, +X for N/S (shaft interior convention). */
+function landingAlongSpan(
+  cl: StairCornerLanding,
+  face: StairShaftCardinalFace,
+): readonly [number, number] {
+  if (face === "e" || face === "w") {
+    return [cl.z - cl.halfD, cl.z + cl.halfD];
+  }
+  return [cl.x - cl.halfW, cl.x + cl.halfW];
+}
+
+/**
+ * Corner landing that hosts a corridor door on `face` near `tangentAlongWall`, closest in Y to
+ * `targetY` among pads whose along-wall footprint overlaps the door width.
+ */
+export function pickCornerLandingNearDoorBand(
+  L: StairSwitchbackLayout,
+  face: StairShaftCardinalFace,
+  tangentAlongWall: number,
+  doorHalfWidthM: number,
+  targetY: number,
+): StairCornerLanding | undefined {
+  const margin = 0.1;
+  const t0 = tangentAlongWall - doorHalfWidthM - margin;
+  const t1 = tangentAlongWall + doorHalfWidthM + margin;
+  let best: StairCornerLanding | undefined;
+  let bestDy = Infinity;
+  for (const cl of L.cornerLandings) {
+    if (!landingNearRacetrackAnchor(L, cl, face)) continue;
+    const [a0, a1] = landingAlongSpan(cl, face);
+    if (Math.min(t1, a1) - Math.max(t0, a0) < 0.06) continue;
+    const dy = Math.abs(cl.y - targetY);
+    if (dy < bestDy) {
+      bestDy = dy;
+      best = cl;
+    }
+  }
+  return best;
 }
 
 export function shaftFloorLocalTopY(sy: number): number {
