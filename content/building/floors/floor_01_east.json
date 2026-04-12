@@ -1,25 +1,69 @@
 {
   "id": "floor_01_east",
   "version": 1,
-  "displayName": "Prvi kat (istok)",
+  "displayName": "Prvi kat (istok) — double-loaded corridor blockout",
   "objects": [
     {
-      "id": "lobby_segment",
+      "id": "corridor_main",
       "prefabId": "corridor_segment_a",
-      "position": [0, 0.5, 0],
-      "scale": [8, 1, 3]
+      "position": [0, 1.22, 0],
+      "scale": [2.35, 2.35, 17.5],
+      "metadata": { "note": "Spine along Z; units face ±X." }
     },
     {
-      "id": "unit_01_01_shell",
-      "prefabId": "apartment_unit_small_a",
-      "position": [-3, 1.5, -4],
-      "scale": [2.5, 2, 2.5]
+      "id": "stair_core_stub",
+      "prefabId": "stair_core_placeholder",
+      "position": [0, 1.22, 7.85],
+      "scale": [1.55, 2.35, 2.35],
+      "metadata": { "note": "Vertical core until stair module is modeled." }
     },
     {
-      "id": "unit_01_02_shell",
+      "id": "unit_e_01",
       "prefabId": "apartment_unit_small_a",
-      "position": [3, 1.5, -4],
-      "scale": [2.5, 2, 2.5]
+      "position": [4.35, 1.12, -6.25],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_e_02",
+      "prefabId": "apartment_unit_small_a",
+      "position": [4.35, 1.12, -2.08],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_e_03",
+      "prefabId": "apartment_unit_small_a",
+      "position": [4.35, 1.12, 2.08],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_e_04",
+      "prefabId": "apartment_unit_small_a",
+      "position": [4.35, 1.12, 6.25],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_w_01",
+      "prefabId": "apartment_unit_small_a",
+      "position": [-4.35, 1.12, -6.25],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_w_02",
+      "prefabId": "apartment_unit_small_a",
+      "position": [-4.35, 1.12, -2.08],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_w_03",
+      "prefabId": "apartment_unit_small_a",
+      "position": [-4.35, 1.12, 2.08],
+      "scale": [2.85, 2.05, 3.05]
+    },
+    {
+      "id": "unit_w_04",
+      "prefabId": "apartment_unit_small_a",
+      "position": [-4.35, 1.12, 6.25],
+      "scale": [2.85, 2.05, 3.05]
     }
   ]
 }

@@ -1,0 +1,69 @@
+{
+  "id": "mammoth_main",
+  "version": 1,
+  "displayName": "The Mammoth (Mamutica-scale target)",
+  "exteriorCellId": "cell_0_0",
+  "cores": [
+    {
+      "id": "core_stair_east",
+      "kind": "stair",
+      "interiorDocId": "lobby_central",
+      "notes": "Placeholder until dedicated stair/interior docs exist."
+    }
+  ],
+  "floorRefs": [
+    { "levelIndex": 1, "floorDocId": "floor_mamutica_ground", "displayLabel": "Ground / podium" },
+    { "levelIndex": 2, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 2" },
+    { "levelIndex": 3, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 3" },
+    { "levelIndex": 4, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 4" },
+    { "levelIndex": 5, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 5" },
+    { "levelIndex": 6, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 6" },
+    { "levelIndex": 7, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 7" },
+    { "levelIndex": 8, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 8" },
+    { "levelIndex": 9, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 9" },
+    { "levelIndex": 10, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 10" },
+    { "levelIndex": 11, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 11" },
+    { "levelIndex": 12, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 12" },
+    { "levelIndex": 13, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 13" },
+    { "levelIndex": 14, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 14" },
+    { "levelIndex": 15, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 15" },
+    { "levelIndex": 16, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 16" },
+    { "levelIndex": 17, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 17" },
+    { "levelIndex": 18, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 18" },
+    { "levelIndex": 19, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 19" }
+  ],
+  "units": [
+    {
+      "address": { "wingId": "E", "floorIndex": 1, "unitIndex": 1 },
+      "interiorTemplateId": "lobby_central",
+      "notes": "Dev slice until per-bay interiors exist."
+    },
+    {
+      "address": { "wingId": "E", "floorIndex": 1, "unitIndex": 2 },
+      "interiorTemplateId": "lobby_central",
+      "notes": "Second slot."
+    }
+  ],
+  "slotTemplates": [
+    {
+      "wingId": "E",
+      "floorRange": [2, 19],
+      "unitIndexRange": [1, 40],
+      "interiorTemplateId": "lobby_central"
+    }
+  ],
+  "metadata": {
+    "mamutica_reference": {
+      "source": "https://hr.wikipedia.org/wiki/Mamutica (infobox)",
+      "length_m_about": 240,
+      "height_m_about": 60,
+      "inhabited_floors": 19,
+      "apartments_total": 1169,
+      "gross_floor_area_m2_about": 100000,
+      "cross_section_note": "Wikipedia cites length/height/apartment count, not slab width. Generated floors use inferred dimensions; cores are schematic."
+    },
+    "authored_floor_note": "Run `pnpm content:gen-mamutica-floor` for floor JSON; then `pnpm content:gen-walk-aabbs` so `apps/server/src/generated_walk_surfaces.rs` matches.",
+    "building_access_note": "Hub stairs ~±13 m X; upper stories repeat cores. Placeholder hollow shells punch floor+ceiling plates at every elevator/stair footprint so shafts read as continuous vertical cuts. Walk AABBs: `pnpm content:gen-walk-aabbs` after floor edits.",
+    "targetResidentialUnits": 1169
+  }
+}

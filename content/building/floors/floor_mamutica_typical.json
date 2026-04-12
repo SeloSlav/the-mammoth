@@ -1,0 +1,837 @@
+{
+  "id": "floor_mamutica_typical",
+  "version": 1,
+  "displayName": "Mamutica typical residential plate (generated)",
+  "metadata": {
+    "mamutica_reference": "Zagreb Mamutica: ~240 m length, ~60 m height, 19 inhabited floors, 1169 apartments (hr.wikipedia).",
+    "generated_corridor_length_m": 237.6,
+    "inferred_double_loaded_bar_width_m": 21.85,
+    "unit_bay_footprint_about_m2": 63.9,
+    "core_station_centers_z_m": [
+      -92,
+      -46,
+      0,
+      46,
+      92
+    ],
+    "core_spacing_m": 46,
+    "stair_prefab": "stair_well_a",
+    "elevator_prefab": "elevator_shaft_a",
+    "symmetry": "Each station: stair east (+X), elevator west (−X); stations mirrored in ±Z from centre."
+  },
+  "objects": [
+    {
+      "id": "corridor_main",
+      "prefabId": "corridor_segment_a",
+      "position": [
+        0,
+        1.605,
+        0
+      ],
+      "scale": [
+        3.85,
+        3.05,
+        237.6
+      ],
+      "metadata": {
+        "note": "Residential corridor; vertical cores offset in unit bays."
+      }
+    },
+    {
+      "id": "unit_e_001",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -115.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_002",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -108
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_003",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -100.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_006",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -79.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_007",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -72
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_008",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -64.80000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_009",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -57.6
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_012",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -36
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_013",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -28.799999999999997
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_014",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -21.599999999999994
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_015",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        -14.400000000000006
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_019",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        14.399999999999991
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_020",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        21.60000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_021",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        28.799999999999997
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_022",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        36.000000000000014
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_025",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        57.60000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_026",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        64.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_027",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        72.00000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_028",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        79.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_031",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        100.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_032",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        108.00000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_e_033",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        6.425,
+        1.605,
+        115.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_001",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -115.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_002",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -108
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_003",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -100.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_006",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -79.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_007",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -72
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_008",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -64.80000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_009",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -57.6
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_012",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -36
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_013",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -28.799999999999997
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_014",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -21.599999999999994
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_015",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        -14.400000000000006
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_019",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        14.399999999999991
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_020",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        21.60000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_021",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        28.799999999999997
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_022",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        36.000000000000014
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_025",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        57.60000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_026",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        64.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_027",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        72.00000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_028",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        79.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_031",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        100.8
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_032",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        108.00000000000001
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "unit_w_033",
+      "prefabId": "apartment_unit_small_a",
+      "position": [
+        -6.425,
+        1.605,
+        115.2
+      ],
+      "scale": [
+        9,
+        3.05,
+        7.1000000000000005
+      ]
+    },
+    {
+      "id": "stair_well_01_e",
+      "prefabId": "stair_well_a",
+      "position": [
+        6.159999999999999,
+        1.6589473684210527,
+        -92
+      ],
+      "scale": [
+        8.35,
+        3.1578947368421053,
+        13.950000000000001
+      ],
+      "metadata": {
+        "coreZ": -92,
+        "side": "east"
+      }
+    },
+    {
+      "id": "elevator_shaft_01_w",
+      "prefabId": "elevator_shaft_a",
+      "position": [
+        -3.1750000000000003,
+        1.6589473684210527,
+        -92
+      ],
+      "scale": [
+        2.38,
+        3.1578947368421053,
+        2.82
+      ],
+      "metadata": {
+        "coreZ": -92,
+        "side": "west"
+      }
+    },
+    {
+      "id": "stair_well_02_e",
+      "prefabId": "stair_well_a",
+      "position": [
+        6.159999999999999,
+        1.6589473684210527,
+        -46
+      ],
+      "scale": [
+        8.35,
+        3.1578947368421053,
+        13.950000000000001
+      ],
+      "metadata": {
+        "coreZ": -46,
+        "side": "east"
+      }
+    },
+    {
+      "id": "elevator_shaft_02_w",
+      "prefabId": "elevator_shaft_a",
+      "position": [
+        -3.1750000000000003,
+        1.6589473684210527,
+        -46
+      ],
+      "scale": [
+        2.38,
+        3.1578947368421053,
+        2.82
+      ],
+      "metadata": {
+        "coreZ": -46,
+        "side": "west"
+      }
+    },
+    {
+      "id": "stair_well_03_e",
+      "prefabId": "stair_well_a",
+      "position": [
+        6.159999999999999,
+        1.6589473684210527,
+        0
+      ],
+      "scale": [
+        8.35,
+        3.1578947368421053,
+        13.950000000000001
+      ],
+      "metadata": {
+        "coreZ": 0,
+        "side": "east"
+      }
+    },
+    {
+      "id": "elevator_shaft_03_w",
+      "prefabId": "elevator_shaft_a",
+      "position": [
+        -3.1750000000000003,
+        1.6589473684210527,
+        0
+      ],
+      "scale": [
+        2.38,
+        3.1578947368421053,
+        2.82
+      ],
+      "metadata": {
+        "coreZ": 0,
+        "side": "west"
+      }
+    },
+    {
+      "id": "stair_well_04_e",
+      "prefabId": "stair_well_a",
+      "position": [
+        6.159999999999999,
+        1.6589473684210527,
+        46
+      ],
+      "scale": [
+        8.35,
+        3.1578947368421053,
+        13.950000000000001
+      ],
+      "metadata": {
+        "coreZ": 46,
+        "side": "east"
+      }
+    },
+    {
+      "id": "elevator_shaft_04_w",
+      "prefabId": "elevator_shaft_a",
+      "position": [
+        -3.1750000000000003,
+        1.6589473684210527,
+        46
+      ],
+      "scale": [
+        2.38,
+        3.1578947368421053,
+        2.82
+      ],
+      "metadata": {
+        "coreZ": 46,
+        "side": "west"
+      }
+    },
+    {
+      "id": "stair_well_05_e",
+      "prefabId": "stair_well_a",
+      "position": [
+        6.159999999999999,
+        1.6589473684210527,
+        92
+      ],
+      "scale": [
+        8.35,
+        3.1578947368421053,
+        13.950000000000001
+      ],
+      "metadata": {
+        "coreZ": 92,
+        "side": "east"
+      }
+    },
+    {
+      "id": "elevator_shaft_05_w",
+      "prefabId": "elevator_shaft_a",
+      "position": [
+        -3.1750000000000003,
+        1.6589473684210527,
+        92
+      ],
+      "scale": [
+        2.38,
+        3.1578947368421053,
+        2.82
+      ],
+      "metadata": {
+        "coreZ": 92,
+        "side": "west"
+      }
+    }
+  ]
+}

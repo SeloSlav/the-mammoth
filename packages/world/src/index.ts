@@ -1,14 +1,52 @@
 import * as THREE from "three";
 import {
+  BuildingDocSchema,
   CellDocSchema,
   FloorDocSchema,
   InteriorDocSchema,
+  type BuildingDoc,
   type CellDoc,
   type CellPlacement,
   type DecalInstance,
   type FloorDoc,
   type InteriorDoc,
 } from "@the-mammoth/schemas";
+import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
+import {
+  addBuildingStairShaftColumnsToRoot,
+  getBuildingStairShaftSpecs,
+} from "./buildingStairShafts.js";
+
+export { buildFloorMeshes };
+export {
+  addBuildingStairShaftColumnsToRoot,
+  getBuildingStairShaftSpecs,
+  shaftPlanKey,
+  TYPICAL_FLOOR_DOC_ID,
+  type BuildingStairShaftSpec,
+} from "./buildingStairShafts.js";
+export {
+  sampleWalkGroundTopY,
+  sampleWalkGroundTopYWithExteriorGround,
+  walkSurfaceAabbXZFootprint,
+  walkSurfaceAABBsForBuilding,
+  walkSurfaceAABBsForFloorDoc,
+  WALK_FALLBACK_FLOOR_TOP_Y,
+  type ExteriorWalkGroundOpts,
+  type SampleWalkGroundOpts,
+  type WalkSurfaceAabb,
+  type WalkSurfaceXzFootprint,
+} from "./walkSurfaceAABBs.js";
+
+/**
+ * Vertical spacing between stacked `BuildingFloorRef` plates (meters).
+ * Mamutica (~60 m / 19 inhabited stories) ≈ 3.16 m per story (hr.wikipedia).
+ */
+export const DEFAULT_BUILDING_FLOOR_SPACING_M = 60 / 19;
+
+export type InstantiateBuildingFloorStackOptions = {
+  floorSpacingM?: number;
+};
 
 export function parseFloorDoc(raw: unknown): FloorDoc {
   return FloorDocSchema.parse(raw);
@@ -20,6 +58,54 @@ export function parseCellDoc(raw: unknown): CellDoc {
 
 export function parseInteriorDoc(raw: unknown): InteriorDoc {
   return InteriorDocSchema.parse(raw);
+}
+
+export function parseBuildingDoc(raw: unknown): BuildingDoc {
+  return BuildingDocSchema.parse(raw);
+}
+
+/**
+ * Stacks authored floor plates from a `BuildingDoc` into one group (placeholder boxes).
+ * `getFloorDoc` must return the `FloorDoc` for each referenced `floorDocId`.
+ * Vertical position uses 1-based `BuildingFloorRef.levelIndex` (story 1 sits at y=0).
+ */
+export function instantiateBuildingFloorStack(
+  building: BuildingDoc,
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  options?: InstantiateBuildingFloorStackOptions,
+): THREE.Group {
+  const spacing = options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
+  const root = new THREE.Group();
+  root.name = `building:${building.id}`;
+  const o = building.worldOrigin;
+  if (o) root.position.set(o[0], o[1], o[2]);
+
+  const sorted = [...building.floorRefs].sort(
+    (a, b) => a.levelIndex - b.levelIndex,
+  );
+  const stairShaftSpecs = getBuildingStairShaftSpecs(
+    building,
+    getFloorDoc,
+    sorted,
+    spacing,
+  );
+  const stairShaftSkipKeys = new Set(stairShaftSpecs.map((s) => s.planKey));
+
+  for (const ref of sorted) {
+    const doc = getFloorDoc(ref.floorDocId);
+    const plate = buildFloorMeshes(doc, {
+      stairShaftSkipKeys,
+    });
+    plate.position.y = (ref.levelIndex - 1) * spacing;
+    plate.name = `${plate.name}:L${ref.levelIndex}`;
+    root.add(plate);
+  }
+
+  if (stairShaftSpecs.length > 0) {
+    addBuildingStairShaftColumnsToRoot(root, stairShaftSpecs);
+  }
+
+  return root;
 }
 
 function addPlacementMeshes(
@@ -58,23 +144,6 @@ function addDecalMeshes(
       plane.scale.set(decal.scale[0], decal.scale[2], decal.scale[1]);
     root.add(plane);
   }
-}
-
-/** Instantiate placeholder boxes from a floor document (baseline authoring). */
-export function buildFloorMeshes(doc: FloorDoc): THREE.Group {
-  const root = new THREE.Group();
-  root.name = `floor:${doc.id}`;
-  const mat = new THREE.MeshStandardMaterial({ color: 0x8a8a8a });
-
-  for (const obj of doc.objects) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
-    mesh.name = obj.id;
-    mesh.position.set(obj.position[0], obj.position[1], obj.position[2]);
-    if (obj.scale) mesh.scale.set(obj.scale[0], obj.scale[1], obj.scale[2]);
-    root.add(mesh);
-  }
-
-  return root;
 }
 
 /** Placeholder geometry for one exterior cell (placements + markers for portals/decals). */

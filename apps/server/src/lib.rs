@@ -3,6 +3,7 @@
 
 mod accounts;
 mod auth;
+mod generated_walk_surfaces;
 mod movement;
 mod pose;
 
@@ -30,8 +31,8 @@ pub fn on_connect(ctx: &ReducerContext) {
         let _ = ctx.db.player_pose().insert(PlayerPose {
             identity: id,
             x: 0.0,
-            y: 1.0,
-            z: 6.0,
+            y: 1.35,
+            z: 0.0,
             yaw: 0.0,
             seq: 0,
             vel_x: 0.0,

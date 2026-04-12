@@ -1,9 +1,26 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { createFPCamera } from "@the-mammoth/engine";
-import { buildFloorMeshes, parseFloorDoc } from "@the-mammoth/world";
-import floorDoc from "../../../content/building/floors/floor_01_east.json";
+import {
+  instantiateBuildingFloorStack,
+  parseBuildingDoc,
+  parseFloorDoc,
+} from "@the-mammoth/world";
+import buildingDoc from "../../../content/building/mammoth.json";
 import { EditorChrome } from "./ui/EditorChrome";
+
+const floorJsonModules = import.meta.glob<{ default: unknown }>(
+  "../../../content/building/floors/*.json",
+  { eager: true },
+);
+
+function floorPayloadByDocId(floorDocId: string): unknown {
+  const suffix = `/${floorDocId}.json`.replaceAll("\\", "/");
+  for (const [path, mod] of Object.entries(floorJsonModules)) {
+    if (path.replaceAll("\\", "/").endsWith(suffix)) return mod.default;
+  }
+  throw new Error(`Missing floor JSON for id "${floorDocId}"`);
+}
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -12,12 +29,15 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const doc = parseFloorDoc(floorDoc);
+    const building = parseBuildingDoc(buildingDoc);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x222228);
 
     const camera = createFPCamera();
-    scene.add(buildFloorMeshes(doc));
+    const buildingRoot = instantiateBuildingFloorStack(building, (id) =>
+      parseFloorDoc(floorPayloadByDocId(id)),
+    );
+    scene.add(buildingRoot);
 
     const hemi = new THREE.HemisphereLight(0xa0a8d8, 0x303038, 0.9);
     scene.add(hemi);
@@ -35,8 +55,8 @@ export default function App() {
     const ro = new ResizeObserver(setSize);
     ro.observe(canvas);
 
-    camera.position.set(2, 2.5, 10);
-    camera.lookAt(0, 1, 0);
+    camera.position.set(-38, 28, 22);
+    camera.lookAt(2, 18, 0);
 
     let raf = 0;
     const tick = () => {

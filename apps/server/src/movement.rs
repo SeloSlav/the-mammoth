@@ -18,16 +18,31 @@ pub const BIT_CROUCH: u8 = 1 << 6;
 
 // --- Physics (keep aligned with fpLocomotion.ts) ---
 const FLOOR_Y: f32 = 0.35;
-const SKIN: f32 = 0.02;
+const SKIN: f32 = 0.034;
 const GRAVITY: f32 = 18.0;
 const JUMP_SPEED: f32 = 5.4;
-const WALK_SPEED: f32 = 2.9;
-const SPRINT_SPEED: f32 = 5.0;
-const CROUCH_SPEED: f32 = 1.35;
+// Indoor-ish profile — keep in sync with `packages/engine/src/fpLocomotion.ts`.
+const WALK_SPEED: f32 = 1.65;
+const SPRINT_SPEED: f32 = 3.35;
+const CROUCH_SPEED: f32 = 1.05;
 const GROUND_ACCEL: f32 = 19.0;
 const AIR_ACCEL: f32 = 4.2;
 const DRAG: f32 = 10.0;
 const TICK_DT: f32 = 0.05; // 20 Hz; matches 50_000 µs schedule
+/// Keep in sync with `FP_WALK_PROBE_DY` (`packages/engine/src/fpLocomotion.ts`).
+const WALK_PROBE_DY: f32 = 1.05;
+/// Keep in sync with `FP_WALK_STEP_UP_MARGIN` / `sampleWalkGroundTopY` in world.
+const WALK_STEP_UP_MARGIN: f32 = 0.82;
+/// Keep in sync with `FP_WALK_FOOT_RADIUS_XZ`.
+const FOOT_RADIUS_XZ: f32 = 0.22;
+/// Match client: `round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * dt)` per integration step.
+const LOCOMOTION_SUBSTEPS_PER_SECOND: f32 = 200.0;
+/// Keep in sync with `stepFpLocomotion` integration substeps (max bound).
+const PHYS_SUBSTEPS_MAX: u32 = 50;
+/// Ignore ground farther below the feet than this (m); avoids snapping to lobby slab in a shaft.
+/// Keep in sync with `FP_WALK_MAX_SUPPORT_DROP_M`.
+const MAX_SUPPORT_DROP_M: f32 = 3.1;
+const SNAP_EPS: f32 = 0.006;
 
 #[inline]
 fn damp(current: f32, target: f32, lambda: f32, dt: f32) -> f32 {
@@ -127,6 +142,46 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
     }
 }
 
+#[inline]
+/// `NAN` means no walk AABB overlapped the foot (do not treat as `FLOOR_Y` support).
+fn sample_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
+    let mut best = f32::NAN;
+    let fr = FOOT_RADIUS_XZ;
+    let fx0 = x - fr;
+    let fx1 = x + fr;
+    let fz0 = z - fr;
+    let fz1 = z + fr;
+    for (mn, mx) in crate::generated_walk_surfaces::WALK_SURFACE_AABBS {
+        if fx1 < mn[0] || fx0 > mx[0] || fz1 < mn[2] || fz0 > mx[2] {
+            continue;
+        }
+        let top = mx[1];
+        if top <= probe_top_y + WALK_STEP_UP_MARGIN {
+            best = if best.is_nan() {
+                top
+            } else {
+                best.max(top)
+            };
+        }
+    }
+    if best.is_nan() {
+        // Keep in sync with `sampleWalkGroundTopYWithExteriorGround` (`packages/world`).
+        const FP_MARGIN: f32 = 2.0;
+        let outside = x < crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MIN_X - FP_MARGIN
+            || x > crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MAX_X + FP_MARGIN
+            || z < crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MIN_Z - FP_MARGIN
+            || z > crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MAX_Z + FP_MARGIN;
+        let exterior_probe_max_y = FLOOR_Y + 8.0;
+        if outside && probe_top_y <= exterior_probe_max_y {
+            FLOOR_Y
+        } else {
+            f32::NAN
+        }
+    } else {
+        best.max(FLOOR_Y)
+    }
+}
+
 fn integrate_one(input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
     let h = dt.clamp(0.0, 0.05);
     let bits = input.bits;
@@ -181,16 +236,33 @@ fn integrate_one(input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
         p.grounded = 0;
     }
 
-    p.vel_y -= GRAVITY * h;
-
-    p.x += p.vel_x * h;
-    p.z += p.vel_z * h;
-    p.y += p.vel_y * h;
-
-    if p.y <= FLOOR_Y + SKIN {
-        p.y = FLOOR_Y + SKIN;
-        p.vel_y = 0.0;
-        p.grounded = 1;
+    let n_sub = (LOCOMOTION_SUBSTEPS_PER_SECOND * h).round() as i32;
+    let n_sub = n_sub.clamp(1, PHYS_SUBSTEPS_MAX as i32) as u32;
+    let sh = h / n_sub as f32;
+    for _ in 0..n_sub {
+        let x0 = p.x;
+        let z0 = p.z;
+        p.vel_y -= GRAVITY * sh;
+        p.x += p.vel_x * sh;
+        p.z += p.vel_z * sh;
+        p.y += p.vel_y * sh;
+        let probe_y = p.y + WALK_PROBE_DY;
+        let w0 = sample_walk_ground_top_y(x0, z0, probe_y);
+        let w1 = sample_walk_ground_top_y(p.x, p.z, probe_y);
+        let mut walk_top = w0;
+        if w1.is_finite() {
+            walk_top = if w0.is_finite() { w0.max(w1) } else { w1 };
+        }
+        if walk_top.is_finite()
+            && walk_top > p.y - MAX_SUPPORT_DROP_M
+            && p.y <= walk_top + SKIN + SNAP_EPS
+        {
+            p.y = walk_top + SKIN;
+            p.vel_y = 0.0;
+            p.grounded = 1;
+        } else if !walk_top.is_finite() || walk_top <= p.y - MAX_SUPPORT_DROP_M {
+            p.grounded = 0;
+        }
     }
 
     // Anti-grief: clamp insane horizontal velocity from bad clients / float blowup

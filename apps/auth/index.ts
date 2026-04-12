@@ -568,9 +568,12 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     try {
       const imagePath = path.join(process.cwd(), 'favicon.png');
       const imageBuffer = fs.readFileSync(imagePath);
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=86400');
-      return c.body(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
     } catch (error) {
       console.error('[Static] Failed to serve favicon.png:', error);
       return c.text('Not found', 404);
@@ -581,9 +584,12 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     try {
       const imagePath = path.join(process.cwd(), 'favicon.png');
       const imageBuffer = fs.readFileSync(imagePath);
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=86400');
-      return c.body(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
     } catch (error) {
       return c.text('Not found', 404);
     }
@@ -593,9 +599,12 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     try {
       const imagePath = path.join(process.cwd(), 'og-social.png');
       const imageBuffer = fs.readFileSync(imagePath);
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=86400');
-      return c.body(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=86400',
+        },
+      });
     } catch (error) {
       console.error('[Static] Failed to serve og-social.png:', error);
       return c.text('Not found', 404);
@@ -630,9 +639,12 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     try {
       const imagePath = path.join(process.cwd(), 'login_background.png');
       const imageBuffer = fs.readFileSync(imagePath);
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=3600');
-      return c.body(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
     } catch (error) {
       console.error('[Static] Failed to serve login_background.png:', error);
       return c.text('Image not found', 404);
@@ -644,9 +656,12 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     try {
       const imagePath = path.join(process.cwd(), 'login_background.png');
       const imageBuffer = fs.readFileSync(imagePath);
-      c.header('Content-Type', 'image/png');
-      c.header('Cache-Control', 'public, max-age=3600');
-      return c.body(imageBuffer);
+      return new Response(new Uint8Array(imageBuffer), {
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
     } catch (error) {
       console.error('[Static] Failed to serve login_background.png:', error);
       return c.text('Image not found', 404);

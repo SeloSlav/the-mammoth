@@ -14,16 +14,35 @@ import {
 } from "@the-mammoth/engine";
 import {
   buildCellMeshes,
-  buildFloorMeshes,
+  DEFAULT_BUILDING_FLOOR_SPACING_M,
+  instantiateBuildingFloorStack,
+  parseBuildingDoc,
   parseCellDoc,
   parseFloorDoc,
+  sampleWalkGroundTopYWithExteriorGround,
+  walkSurfaceAabbXZFootprint,
+  walkSurfaceAABBsForBuilding,
 } from "@the-mammoth/world";
-import floorDoc from "../../../../content/building/floors/floor_01_east.json";
+import buildingDoc from "../../../../content/building/mammoth.json";
 import cellDoc from "../../../../content/cells/cell_0_0.json";
+
+const floorJsonModules = import.meta.glob<{ default: unknown }>(
+  "../../../../content/building/floors/*.json",
+  { eager: true },
+);
+
+function floorPayloadByDocId(floorDocId: string): unknown {
+  const suffix = `/${floorDocId}.json`.replaceAll("\\", "/");
+  for (const [path, mod] of Object.entries(floorJsonModules)) {
+    if (path.replaceAll("\\", "/").endsWith(suffix)) return mod.default;
+  }
+  throw new Error(`Missing floor JSON for id "${floorDocId}"`);
+}
 import { encodeMoveIntentBits } from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
+import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 
 /**
@@ -69,7 +88,7 @@ function feedRemote(
 }
 
 /**
- * First-person session: authored floor + sample cell, SpaceTimeDB `player_pose` sync,
+ * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
  * capsule proxies for other players (interpolation buffer on remotes).
  *
  * **Local player (prototype):** client sim is **display authority**; we publish poses for
@@ -83,26 +102,43 @@ export function mountFpSession(
   conn: DbConnection,
 ): () => void {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x3d4455);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
   const { rig: playerRig, headPivot, headPitch, headFreeLook, camera } = createFPRig(
     fpLocomotionConstants.eyeStand,
   );
   scene.add(playerRig);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 
-  const floorRoot = buildFloorMeshes(parseFloorDoc(floorDoc));
-  scene.add(floorRoot);
+  const building = parseBuildingDoc(buildingDoc);
+  const walkAABBs = walkSurfaceAABBsForBuilding(
+    building,
+    (id) => parseFloorDoc(floorPayloadByDocId(id)),
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const walkFootprint =
+    walkSurfaceAabbXZFootprint(walkAABBs) ??
+    ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
+  const sampleWalkTop = (worldX: number, worldZ: number, probeTopY: number) =>
+    sampleWalkGroundTopYWithExteriorGround(
+      walkAABBs,
+      worldX,
+      worldZ,
+      probeTopY,
+      walkFootprint,
+      {
+        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      },
+    );
+
+  const buildingRoot = instantiateBuildingFloorStack(building, (id) =>
+    parseFloorDoc(floorPayloadByDocId(id)),
+  );
+  scene.add(buildingRoot);
+
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
   scene.add(cellRoot);
-
-  const hemi = new THREE.HemisphereLight(0xc8d4f0, 0x5a5e68, 1.05);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xfff5e6, 0.72);
-  dir.position.set(8, 18, 6);
-  scene.add(dir);
-  const fill = new THREE.AmbientLight(0xa8b4d0, 0.42);
-  scene.add(fill);
 
   const presentation = new PlayerPresentationManager({
     scene,
@@ -123,7 +159,8 @@ export function mountFpSession(
   const interp = new PoseInterpBuffer();
   const lastRemote = new Map<string, LastXZ>();
 
-  const pos = new THREE.Vector3(0, 1, 6);
+  /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
+  const pos = new THREE.Vector3(0, 1.35, 0);
   /** Feet / capsule yaw — sent as `aimYaw` to the server and used for locomotion. */
   let bodyYaw = 0;
   /** Mouse look pitch (head pivot X). */
@@ -138,10 +175,37 @@ export function mountFpSession(
   let crouchToggle = false;
   const loco = createFpLocomotionState();
 
+  /**
+   * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
+   * `keys`, so free-look stays latched and mouse X only drives `headLookYaw` until Alt “releases”.
+   */
+  const resetTransientInputState = () => {
+    keys.clear();
+    bodyYaw += headLookYaw;
+    headLookYaw = 0;
+  };
+
+  const onWindowBlur = () => {
+    resetTransientInputState();
+  };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      resetTransientInputState();
+    }
+  };
+
+  const onPointerLockChange = () => {
+    if (document.pointerLockElement !== canvas) {
+      resetTransientInputState();
+    }
+  };
+
   /** Replicated pose for rubber-banding (local display does not follow this each frame). */
-  const serverPose = { x: 0, y: 1, z: 6 };
+  const serverPose = { x: 0, y: 1.35, z: 0 };
   let spawnSynced = false;
-  const RUBBER_BAND_SNAP_M = 2.8;
+  /** Only snap on true teleports — tiny client/server drift must not yank the view. */
+  const RUBBER_BAND_SNAP_M = 220;
 
   let meleeAttackSeq = 0;
   let lastMeleeMs = 0;
@@ -296,6 +360,9 @@ export function mountFpSession(
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("blur", onWindowBlur);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  document.addEventListener("pointerlockchange", onPointerLockChange);
   canvas.addEventListener("click", onClick);
   canvas.addEventListener("pointerdown", onPointerDown);
 
@@ -326,7 +393,11 @@ export function mountFpSession(
       crouch: crouchToggle,
     };
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt);
+    const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt, {
+      sampleWalkGroundTopY: sampleWalkTop,
+      probeDy: fpLocomotionConstants.walkProbeDy,
+      maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
+    });
 
     const desync = Math.hypot(
       pos.x - serverPose.x,
@@ -347,7 +418,11 @@ export function mountFpSession(
 
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
-    const walkStrength = THREE.MathUtils.clamp(hs / 5.0, 0, 1);
+    const walkStrength = THREE.MathUtils.clamp(
+      hs / fpLocomotionConstants.sprintSpeedMps,
+      0,
+      1,
+    );
     if (loco.grounded && !crouchToggle && !freeLook && hs > 0.12) {
       const roll = Math.sin(loco.headBobPhase * 2) * CAM_BOB_ROLL * walkStrength;
       const sway = Math.cos(loco.headBobPhase) * CAM_BOB_SWAY_X * walkStrength;
@@ -427,6 +502,9 @@ export function mountFpSession(
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("blur", onWindowBlur);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    document.removeEventListener("pointerlockchange", onPointerLockChange);
     canvas.removeEventListener("click", onClick);
     canvas.removeEventListener("pointerdown", onPointerDown);
     if (poseAoiSub?.isActive()) {
@@ -435,6 +513,7 @@ export function mountFpSession(
     poseAoiSub = null;
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
+    disposeFpEnvironment();
     presentation.dispose();
     renderer.dispose();
     scene.clear();

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fpLocomotionConstants } from "./fpLocomotion.js";
 
 export {
   createFpLocomotionState,
@@ -7,11 +8,18 @@ export {
   stepFpLocomotion,
   type FpLocomotionInput,
   type FpLocomotionState,
+  type FpLocomotionWalkOptions,
+  type WalkGroundSampler,
 } from "./fpLocomotion.js";
 
 /** @deprecated Prefer {@link createFPRig} — keeps camera parented to the body. */
 export function createFPCamera(): THREE.PerspectiveCamera {
-  const cam = new THREE.PerspectiveCamera(75, 1, 0.05, 500);
+  const cam = new THREE.PerspectiveCamera(
+    fpLocomotionConstants.cameraFovDeg,
+    1,
+    0.05,
+    900,
+  );
   cam.rotation.order = "YXZ";
   return cam;
 }
@@ -37,7 +45,12 @@ export function createFPRig(eyeHeight = 1.55): {
   headPitch.name = "fp_head_pitch";
   const headFreeLook = new THREE.Group();
   headFreeLook.name = "fp_head_free_look";
-  const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 500);
+  const camera = new THREE.PerspectiveCamera(
+    fpLocomotionConstants.cameraFovDeg,
+    1,
+    0.05,
+    900,
+  );
   camera.rotation.order = "YXZ";
   headPivot.add(headPitch);
   headPitch.add(headFreeLook);
