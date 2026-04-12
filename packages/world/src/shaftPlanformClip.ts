@@ -68,6 +68,24 @@ export function subtractHolesFromRect(
 /** Extra half-width on slab cutouts so corridor plates do not leave thin caps over hoistways. */
 const SHAFT_PAD = 0.2;
 
+export function collectElevatorSlabHoles(doc: FloorDoc): ShaftSlabHole[] {
+  const holes: ShaftSlabHole[] = [];
+  for (const obj of doc.objects) {
+    const pid = obj.prefabId.toLowerCase();
+    if (!pid.includes("elevator")) continue;
+    const [px, , pz] = obj.position;
+    const sx = obj.scale?.[0] ?? 1;
+    const sz = obj.scale?.[2] ?? 1;
+    holes.push({
+      cx: px,
+      cz: pz,
+      hx: sx * 0.5 + SHAFT_PAD,
+      hz: sz * 0.5 + SHAFT_PAD,
+    });
+  }
+  return holes;
+}
+
 export function collectShaftSlabHoles(doc: FloorDoc): ShaftSlabHole[] {
   const holes: ShaftSlabHole[] = [];
   for (const obj of doc.objects) {
@@ -113,6 +131,54 @@ export function mergeShaftSlabHolesFromFloorDocs(
     }
   }
   return [...byKey.values()];
+}
+
+/** Union of elevator footprints only (plate-space), for extra punch-through on shell plates. */
+export function mergeElevatorShaftSlabHolesFromFloorDocs(
+  docs: readonly FloorDoc[],
+): ShaftSlabHole[] {
+  const byKey = new Map<string, ShaftSlabHole>();
+  for (const doc of docs) {
+    for (const h of collectElevatorSlabHoles(doc)) {
+      const key = `${Math.round(h.cx * 100)}_${Math.round(h.cz * 100)}`;
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { cx: h.cx, cz: h.cz, hx: h.hx, hz: h.hz });
+      } else {
+        byKey.set(key, {
+          cx: h.cx,
+          cz: h.cz,
+          hx: Math.max(prev.hx, h.hx),
+          hz: Math.max(prev.hz, h.hz),
+        });
+      }
+    }
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Second pass: subtract merged **elevator** holes (room-local) so unit/corridor floor+ceiling
+ * plates cannot leave slivers over hoistways (stair holes alone may not intersect a flanking unit).
+ */
+export function punchElevatorHolesInShellRects(
+  rects: readonly RectXZ[],
+  roomPx: number,
+  roomPz: number,
+  elevMerged: readonly ShaftSlabHole[],
+  /** Extra half-width on elevator holes for this pass (m). */
+  holeTrimM = 0.12,
+  minFragment = 0.05,
+): RectXZ[] {
+  if (elevMerged.length === 0 || rects.length === 0) return [...rects];
+  const local = elevMerged.map((h) => ({
+    cx: h.cx - roomPx,
+    cz: h.cz - roomPz,
+    hx: h.hx + holeTrimM,
+    hz: h.hz + holeTrimM,
+  }));
+  const out = rects.flatMap((r) => subtractHolesFromRect(r, local, minFragment));
+  return out.length > 0 ? out : [...rects];
 }
 
 /**

@@ -17,7 +17,10 @@ import {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
 } from "./buildingStairShafts.js";
-import { mergeShaftSlabHolesFromFloorDocs } from "./shaftPlanformClip.js";
+import {
+  mergeElevatorShaftSlabHolesFromFloorDocs,
+  mergeShaftSlabHolesFromFloorDocs,
+} from "./shaftPlanformClip.js";
 
 export { buildFloorMeshes };
 export {
@@ -39,7 +42,14 @@ export {
   type WalkSurfaceAabb,
   type WalkSurfaceXzFootprint,
 } from "./walkSurfaceAABBs.js";
-export { withoutElevatorsInStairwells, mergeShaftSlabHolesFromFloorDocs };
+export { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
+export {
+  collectElevatorSlabHoles,
+  mergeElevatorShaftSlabHolesFromFloorDocs,
+  mergeShaftSlabHolesFromFloorDocs,
+  punchElevatorHolesInShellRects,
+} from "./shaftPlanformClip.js";
+export { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 
 /**
  * Vertical spacing between stacked `BuildingFloorRef` plates (meters).
@@ -94,16 +104,22 @@ export function instantiateBuildingFloorStack(
   );
   const stairShaftSkipKeys = new Set(stairShaftSpecs.map((s) => s.planKey));
 
-  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(
-    sorted.map((r) => withoutElevatorsInStairwells(getFloorDoc(r.floorDocId))),
+  const docsForShaftMerge = sorted.map((r) =>
+    withoutElevatorsInStairwells(getFloorDoc(r.floorDocId)),
   );
+  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+  const shaftElevatorsMerged =
+    mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
 
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
+    const plateWorldOriginY = (o?.[1] ?? 0) + (ref.levelIndex - 1) * spacing;
     const plate = buildFloorMeshes(doc, {
       stairShaftSkipKeys,
       storyLevelIndex: ref.levelIndex,
       shaftHolesPlateMerged,
+      shaftElevatorsMerged,
+      plateWorldOriginY,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;

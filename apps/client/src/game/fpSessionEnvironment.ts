@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Sky } from "three/addons/objects/Sky.js";
+import { FP_OUTDOOR_GROUND_VISUAL_Y } from "@the-mammoth/world";
 
 /**
  * Outdoor FP backdrop: procedural sky, horizon fog, infinite ground plane, and sun-matched lights.
@@ -9,13 +10,7 @@ export function attachFpSessionEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
 ): () => void {
-  /** Hoistways / cutouts must not reveal the GL clear (default black). Match fog so shafts read as open air. */
-  const voidFill = new THREE.Color(0xd8ecff);
-  const prevClear = new THREE.Color();
-  const prevClearA = renderer.getClearAlpha();
-  renderer.getClearColor(prevClear);
-  renderer.setClearColor(voidFill, 1);
-  scene.background = voidFill.clone();
+  scene.background = null;
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -48,15 +43,14 @@ export function attachFpSessionEnvironment(
   );
   groundPlane.name = "fp_session_ground_plane";
   groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.position.y = -0.02;
+  groundPlane.position.y = FP_OUTDOOR_GROUND_VISUAL_Y;
   scene.add(groundPlane);
 
-  /** Sky fill + sun key; low ambient lifts vertical shafts / undersides so they are not ACES-crushed to black. */
-  const hemi = new THREE.HemisphereLight(0x9ec8f5, 0x4a5a48, 0.82);
-  const fill = new THREE.AmbientLight(0xc8d8ec, 0.34);
+  /** Single outdoor rig: sky fill + sun key (no extra ambient layer). */
+  const hemi = new THREE.HemisphereLight(0x9ec8f5, 0x4a5a48, 0.78);
   const dir = new THREE.DirectionalLight(0xfff5ea, 1.22);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
-  scene.add(hemi, fill, dir);
+  scene.add(hemi, dir);
 
   const disposeMaterial = (m: THREE.Material | THREE.Material[]) => {
     if (Array.isArray(m)) m.forEach((x) => x.dispose());
@@ -72,13 +66,9 @@ export function attachFpSessionEnvironment(
     groundPlane.geometry.dispose();
     disposeMaterial(groundPlane.material);
 
-    scene.remove(hemi, fill, dir);
+    scene.remove(hemi, dir);
     hemi.dispose();
-    fill.dispose();
     dir.dispose();
-
-    scene.background = null;
-    renderer.setClearColor(prevClear, prevClearA);
 
     scene.fog = null;
   };

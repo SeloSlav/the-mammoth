@@ -8,6 +8,9 @@ import {
 import {
   collectShaftSlabHoles,
   hollowShellXZRectsWithShaftCutouts,
+  mergeElevatorShaftSlabHolesFromFloorDocs,
+  mergeShaftSlabHolesFromFloorDocs,
+  punchElevatorHolesInShellRects,
   subtractHolesFromRect,
   type RectXZ,
   type ShaftSlabHole,
@@ -190,7 +193,6 @@ function appendConcreteSlabWalkAABBs(
   if (pieces.length === 0 && docHoles.length > 0) {
     pieces = subtractHolesFromRect(slabRect, docHoles, 0.001);
   }
-  if (pieces.length === 0) pieces = [slabRect];
   const thin = thickness;
   for (const p of pieces) {
     const w = p.x1 - p.x0;
@@ -221,6 +223,7 @@ function appendHollowShellFloorWalkAABBs(
   wy: number,
   pz: number,
   docHoles: readonly ShaftSlabHole[],
+  elevMerged: readonly ShaftSlabHole[],
   skipShaftCutouts: boolean,
 ): void {
   const wt = 0.12;
@@ -228,9 +231,12 @@ function appendHollowShellFloorWalkAABBs(
   const thin = wt;
   const hx = sx * 0.5;
   const hz = sz * 0.5;
-  const rects = skipShaftCutouts
-    ? ([{ x0: -hx, x1: hx, z0: -hz, z1: hz }] as const)
+  let rects: RectXZ[] = skipShaftCutouts
+    ? [{ x0: -hx, x1: hx, z0: -hz, z1: hz }]
     : hollowShellXZRectsWithShaftCutouts(sx, sz, px, pz, docHoles);
+  if (!skipShaftCutouts && elevMerged.length > 0) {
+    rects = punchElevatorHolesInShellRects(rects, px, pz, elevMerged);
+  }
   for (const r of rects) {
     const w = r.x1 - r.x0;
     const d = r.z1 - r.z0;
@@ -247,6 +253,10 @@ function appendHollowShellFloorWalkAABBs(
 export type WalkSurfaceFloorOpts = {
   /** Omit per-plate stair AABBs for shafts drawn as full-height columns. */
   omitStairWalkPlanKeys?: ReadonlySet<string>;
+  /** When stacking a building, union of all stair/elevator holes (plate-space); matches `buildFloorMeshes`. */
+  shaftHolesPlateMerged?: readonly ShaftSlabHole[];
+  /** Elevator-only merged holes (plate-space); matches shell elevator punch in `buildFloorMeshes`. */
+  shaftElevatorsMerged?: readonly ShaftSlabHole[];
 };
 
 export function walkSurfaceAABBsForFloorDoc(
@@ -256,7 +266,11 @@ export function walkSurfaceAABBsForFloorDoc(
 ): WalkSurfaceAabb[] {
   const clean = withoutElevatorsInStairwells(doc);
   const out: WalkSurfaceAabb[] = [];
-  const docHoles = collectShaftSlabHoles(clean);
+  const docHoles =
+    opts?.shaftHolesPlateMerged ?? collectShaftSlabHoles(clean);
+  const elevMerged =
+    opts?.shaftElevatorsMerged ??
+    mergeElevatorShaftSlabHolesFromFloorDocs([clean]);
   for (const obj of clean.objects) {
     const [px, py, pz] = obj.position;
     const sx = obj.scale?.[0] ?? 1;
@@ -294,6 +308,7 @@ export function walkSurfaceAABBsForFloorDoc(
         wy,
         pz,
         docHoles,
+        elevMerged,
         Boolean(obj.rotation),
       );
     }
@@ -344,12 +359,21 @@ export function walkSurfaceAABBsForBuilding(
   );
   const omitStairKeys = new Set(shaftSpecs.map((s) => s.planKey));
 
+  const docsForShaftMerge = sorted.map((r) =>
+    withoutElevatorsInStairwells(getFloorDoc(r.floorDocId)),
+  );
+  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+  const shaftElevatorsMerged =
+    mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+
   const merged: WalkSurfaceAabb[] = [];
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
     const plateY = oy + (ref.levelIndex - 1) * floorSpacingM;
     for (const b of walkSurfaceAABBsForFloorDoc(doc, plateY, {
       omitStairWalkPlanKeys: omitStairKeys,
+      shaftHolesPlateMerged,
+      shaftElevatorsMerged,
     })) {
       merged.push({
         min: [b.min[0] + ox, b.min[1], b.min[2] + oz],
@@ -371,7 +395,7 @@ export function walkSurfaceAABBsForBuilding(
     lowPlateY,
     0.8 + GROUND_STORY_GRASS_PAD_EXTRA_MARGIN_M,
     0.16,
-    collectShaftSlabHoles(lowDoc),
+    shaftHolesPlateMerged,
   );
   for (const b of grassPad) {
     merged.push({

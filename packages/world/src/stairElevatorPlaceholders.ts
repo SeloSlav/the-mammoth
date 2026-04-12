@@ -166,8 +166,8 @@ function addShaftShell(
   );
   const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
   const yDoor1 = yDoor0 + Math.max(0.55, doorH);
-  const doorTz = door?.tangentOffsetAlongWall ?? 0;
-  const doorTx = door?.tangentOffsetAlongWall ?? 0;
+  /** Along-wall shift: +Z for E/W door walls, +X for N/S (matches stair placement). */
+  const doorTangent = door?.tangentOffsetAlongWall ?? 0;
 
   const addEastWest = (
     face: "e" | "w",
@@ -180,8 +180,8 @@ function addShaftShell(
     const zMin = -vlenZ * 0.5;
     const zMax = vlenZ * 0.5;
     if (withDoor && door && yDoor1 <= y1 + 1e-3 && yDoor0 >= y0 - 1e-3) {
-      const z0 = Math.max(zMin, doorTz - doorHalfW);
-      const z1 = Math.min(zMax, doorTz + doorHalfW);
+      const z0 = Math.max(zMin, doorTangent - doorHalfW);
+      const z1 = Math.min(zMax, doorTangent + doorHalfW);
       const holes: WallHoleYZ[] =
         z1 > z0 + 0.08
           ? [
@@ -247,8 +247,8 @@ function addShaftShell(
     const xMin = -vlenX * 0.5;
     const xMax = vlenX * 0.5;
     if (withDoor && door && yDoor1 <= y1 + 1e-3 && yDoor0 >= y0 - 1e-3) {
-      const x0 = Math.max(xMin, doorTx - doorHalfW);
-      const x1 = Math.min(xMax, doorTx + doorHalfW);
+      const x0 = Math.max(xMin, doorTangent - doorHalfW);
+      const x1 = Math.min(xMax, doorTangent + doorHalfW);
       const holes: WallHoleXY[] =
         x1 > x0 + 0.08
           ? [
@@ -274,17 +274,19 @@ function addShaftShell(
       );
       const zInner = face === "n" ? hz - wt : -hz + wt;
       const inwardZ = face === "n" ? -1 : 1;
-      addDoorFrameTrimConstantZ(
-        group,
-        doorFrameMat,
-        zInner,
-        inwardZ,
-        -doorHalfW,
-        doorHalfW,
-        yDoor0,
-        Math.min(yDoor1, y1),
-        `${name}_frame`,
-      );
+      if (holes.length > 0) {
+        addDoorFrameTrimConstantZ(
+          group,
+          doorFrameMat,
+          zInner,
+          inwardZ,
+          x0,
+          x1,
+          yDoor0,
+          Math.min(yDoor1, y1),
+          `${name}_frame`,
+        );
+      }
     } else {
       addWallConstantZWithHoles(
         group,
@@ -330,10 +332,16 @@ function addShaftShell(
 
 /**
  * Open-top hoistway (no ceiling) so stacked floors read as one continuous shaft.
- * Includes a **concrete pit floor** so the structural slab hole does not expose the outdoor ground.
+ * Optional **concrete pit floor** at the hoistway bottom (use on ground storey only): when every
+ * stacked plate adds a slab, each reads as a ceiling to the storey below.
  */
 export type ElevatorShaftPlaceholderOpts = {
   groundDoor?: ShaftGroundDoorOpts | null;
+  /**
+   * Bottom concrete slab inside the shaft. False on upper stacked storeys so the hoistway is
+   * open through; true on story 1 (pit over structural hole). Defaults to true when omitted.
+   */
+  includePitFloor?: boolean;
 };
 
 export function addElevatorShaftPlaceholder(
@@ -343,8 +351,9 @@ export function addElevatorShaftPlaceholder(
   sz: number,
   opts?: ElevatorShaftPlaceholderOpts | null,
 ): void {
+  const includePitFloor = opts?.includePitFloor !== false;
   addShaftShell(group, sx, sy, sz, shaftWall, shaftCeil, {
-    includeFloor: true,
+    includeFloor: includePitFloor,
     includeCeiling: false,
     floorMat: hoistwayFloor,
     openTopWallExtend: 0.06,
@@ -394,10 +403,11 @@ export function addStairWellPlaceholder(
     const yHoleTop = Math.min(doorInnerTop, splitShaft ? ySplit : yWallTop);
 
     let face: CardinalFace;
+    let tangentOffsetAlongWall = groundDoor.tangentOffsetAlongWall ?? 0;
     if (groundDoor.face != null) {
       face = groundDoor.face;
     } else if (groundDoor.towardPlateXZ && groundDoor.shaftPlateXZ) {
-      face = pickStairShaftDoorFaceAvoidingTreads(L, {
+      const placement = pickStairShaftGroundDoorPlacement(L, {
         sx,
         sz,
         wallThickness: wt,
@@ -410,6 +420,8 @@ export function addStairWellPlaceholder(
         shaftPx: groundDoor.shaftPlateXZ[0],
         shaftPz: groundDoor.shaftPlateXZ[1],
       });
+      face = placement.face;
+      tangentOffsetAlongWall = placement.tangentOffsetM;
     } else {
       face = pickFaceTowardPoint(0, 0, 1, 0);
     }
@@ -417,6 +429,7 @@ export function addStairWellPlaceholder(
     resolvedShellDoor = {
       bandHeightM: groundDoor.bandHeightM,
       face,
+      tangentOffsetAlongWall,
     };
   }
 
