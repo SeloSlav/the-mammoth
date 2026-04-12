@@ -59,7 +59,7 @@ const FP_RIGHT_ARM_BIND_EULER = mirrorEulerAcrossYz(_eLeftBind);
 /**
  * First-person-only presentation (never reuse remote body meshes).
  * Parents a viewmodel root to **`headPitch`** (via `viewModelParent`) so it does not inherit Alt
- * **free-look yaw** (that lives under `headFreeLook` → camera). **`fpRoot` is always counter-pitched**
+ * **free-look yaw** (camera: `headFreeLook` → `headCameraPitch`). **`fpRoot` is always counter-pitched**
  * against `headPitch` so look up/down moves only the camera (“head”), never arms/legs/weapon.
  *
  * **Crowbar:** parented under a placeholder **forearm rig** (shoulder group + forearm mesh) so the

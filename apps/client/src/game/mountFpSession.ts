@@ -56,9 +56,10 @@ const POSE_AOI_HALF = 42;
 /** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
 const POSE_AOI_RECENTER = 14;
 const MOUSE_SENS = 0.0022;
-const PITCH_LIMIT = 1.38;
-/** Rust-style head turn relative to feet (radians, total left+right span ~±66°). */
-const FREE_LOOK_YAW_MAX = 1.15;
+/** ~88° — enough to scan hoistway tops without going full flip. */
+const PITCH_LIMIT = 1.53;
+/** Alt free-look: head yaw relative to body (radians, clamped per side; ~±115°, not full rear). */
+const FREE_LOOK_YAW_MAX = 2.0;
 /** Extra camera bob on top of eye-height bob from `stepFpLocomotion` (radians / meters). */
 const CAM_BOB_ROLL = 0.016;
 const CAM_BOB_SWAY_X = 0.012;
@@ -105,9 +106,8 @@ export function mountFpSession(
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
-  const { rig: playerRig, headPivot, headPitch, headFreeLook, camera } = createFPRig(
-    fpLocomotionConstants.eyeStand,
-  );
+  const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
+    createFPRig(fpLocomotionConstants.eyeStand);
   scene.add(playerRig);
 
   const building = parseBuildingDoc(buildingDoc);
@@ -414,6 +414,7 @@ export function mountFpSession(
     headPivot.position.y = headY;
     headPivot.rotation.set(0, 0, 0);
     headPitch.rotation.x = pitch;
+    headCameraPitch.rotation.x = pitch;
     headFreeLook.rotation.y = headLookYaw;
 
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");

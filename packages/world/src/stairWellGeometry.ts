@@ -5,7 +5,8 @@
  *
  * Must match `DEFAULT_BUILDING_FLOOR_SPACING_M` / `STOREY_SPACING_M` in generator.
  */
-const STOREY_SPACING_M = 60 / 19;
+/** Matches `DEFAULT_BUILDING_FLOOR_SPACING_M` / building stack spacing. */
+export const STOREY_SPACING_M = 60 / 19;
 
 export const STAIR_RUN = 0.28;
 export const STAIR_RISE = 0.165;
@@ -47,6 +48,227 @@ export type StairSwitchbackLayout = {
   innerWallH: number;
   wallCenterY: number;
 };
+
+/** Local +X / −X / +Z / −Z wall of the shaft (same convention as `wallWithDoorCutout`). */
+export type StairShaftCardinalFace = "e" | "w" | "n" | "s";
+
+type Vec3Box = {
+  min: readonly [number, number, number];
+  max: readonly [number, number, number];
+};
+
+function treadAabb3(tr: StairTreadSpec): Vec3Box {
+  const cos = Math.cos(tr.yaw);
+  const sin = Math.sin(tr.yaw);
+  const ha = tr.halfAlong;
+  const hac = tr.halfAcross;
+  const hy = tr.riseHalf;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const lx of [-ha, ha]) {
+    for (const lz of [-hac, hac]) {
+      for (const ly of [-hy, hy]) {
+        const wx = tr.x + lx * cos - lz * sin;
+        const wz = tr.z + lx * sin + lz * cos;
+        const wy = tr.y + ly;
+        minX = Math.min(minX, wx);
+        maxX = Math.max(maxX, wx);
+        minY = Math.min(minY, wy);
+        maxY = Math.max(maxY, wy);
+        minZ = Math.min(minZ, wz);
+        maxZ = Math.max(maxZ, wz);
+      }
+    }
+  }
+  return {
+    min: [minX, minY, minZ],
+    max: [maxX, maxY, maxZ],
+  };
+}
+
+function landingAabb3(cl: StairCornerLanding): Vec3Box {
+  return {
+    min: [
+      cl.x - cl.halfW,
+      cl.y - cl.thicknessHalf,
+      cl.z - cl.halfD,
+    ],
+    max: [
+      cl.x + cl.halfW,
+      cl.y + cl.thicknessHalf,
+      cl.z + cl.halfD,
+    ],
+  };
+}
+
+function aabbIntersects3(a: Vec3Box, b: Vec3Box): boolean {
+  return (
+    a.max[0] >= b.min[0] &&
+    a.min[0] <= b.max[0] &&
+    a.max[1] >= b.min[1] &&
+    a.min[1] <= b.max[1] &&
+    a.max[2] >= b.min[2] &&
+    a.min[2] <= b.max[2]
+  );
+}
+
+function countHits(slab: Vec3Box, boxes: readonly Vec3Box[]): number {
+  let n = 0;
+  for (const b of boxes) {
+    if (aabbIntersects3(b, slab)) n += 1;
+  }
+  return n;
+}
+
+export type StairGroundDoorPlacement = {
+  face: StairShaftCardinalFace;
+  /**
+   * E/W walls: added to the door hole centre along **+Z**. N/S walls: added along **+X**.
+   * Must stay inside inner wall extents so the cutout stays on the plate.
+   */
+  tangentOffsetM: number;
+};
+
+/**
+ * Picks wall face + along-wall offset for a ground stair entry by **3D** intersection tests between
+ * tread / landing volumes and a thin slab extruded inward from the door opening (avoids stairs
+ * visually clipping through the frame).
+ */
+export function pickStairShaftGroundDoorPlacement(
+  L: StairSwitchbackLayout,
+  params: {
+    sx: number;
+    sz: number;
+    wallThickness: number;
+    doorHalfWidthM: number;
+    doorY0Local: number;
+    doorY1Local: number;
+    collisionYMaxLocal?: number;
+    towardX: number;
+    towardZ: number;
+    shaftPx: number;
+    shaftPz: number;
+  },
+): StairGroundDoorPlacement {
+  const hx = params.sx * 0.5;
+  const hz = params.sz * 0.5;
+  const wt = params.wallThickness;
+  const dw = params.doorHalfWidthM;
+  const y0 = params.doorY0Local;
+  const y1 = params.doorY1Local;
+  const yMax = params.collisionYMaxLocal ?? Infinity;
+  const pad = 0.07;
+  const inward = Math.min(2.55, Math.max(hx, hz) * 0.92);
+
+  const boxes: Vec3Box[] = [];
+  for (const tr of L.treads) {
+    if (tr.y - tr.riseHalf > yMax + 0.02) continue;
+    if (tr.y + tr.riseHalf < y0 - 0.02 || tr.y - tr.riseHalf > y1 + 0.02) continue;
+    boxes.push(treadAabb3(tr));
+  }
+  for (const cl of L.cornerLandings) {
+    const lo = cl.y - cl.thicknessHalf;
+    const hi = cl.y + cl.thicknessHalf;
+    if (lo > yMax + 0.02) continue;
+    if (hi < y0 - 0.02 || lo > y1 + 0.02) continue;
+    boxes.push(landingAabb3(cl));
+  }
+
+  const vlenX = Math.max(params.sx - 2 * wt, 0.05);
+  const vlenZ = Math.max(params.sz - 2 * wt, 0.05);
+  const zHalf = Math.max(0, vlenZ * 0.5 - dw - 0.05);
+  const xHalf = Math.max(0, vlenX * 0.5 - dw - 0.05);
+  const zLo = -zHalf;
+  const zHi = zHalf;
+  const xLo = -xHalf;
+  const xHi = xHalf;
+
+  const samplesAlong = (lo: number, hi: number): number[] => {
+    if (hi - lo < 1e-4) return [0];
+    const steps = 23;
+    const out: number[] = [];
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      out.push(lo + (hi - lo) * t);
+    }
+    return out;
+  };
+
+  const slabEast = (tz: number): Vec3Box => {
+    const xi = hx - wt;
+    return {
+      min: [xi - inward, y0, tz - dw - pad],
+      max: [xi + 0.04, y1, tz + dw + pad],
+    };
+  };
+  const slabWest = (tz: number): Vec3Box => {
+    const xi = -hx + wt;
+    return {
+      min: [xi - 0.04, y0, tz - dw - pad],
+      max: [xi + inward, y1, tz + dw + pad],
+    };
+  };
+  const slabNorth = (tx: number): Vec3Box => {
+    const zi = hz - wt;
+    return {
+      min: [tx - dw - pad, y0, zi - inward],
+      max: [tx + dw + pad, y1, zi + 0.04],
+    };
+  };
+  const slabSouth = (tx: number): Vec3Box => {
+    const zi = -hz + wt;
+    return {
+      min: [tx - dw - pad, y0, zi - 0.04],
+      max: [tx + dw + pad, y1, zi + inward],
+    };
+  };
+
+  type Cand = { face: StairShaftCardinalFace; along: number; hits: number };
+  const cands: Cand[] = [];
+
+  for (const tz of samplesAlong(zLo, zHi)) {
+    cands.push({ face: "e", along: tz, hits: countHits(slabEast(tz), boxes) });
+    cands.push({ face: "w", along: tz, hits: countHits(slabWest(tz), boxes) });
+  }
+  for (const tx of samplesAlong(xLo, xHi)) {
+    cands.push({ face: "n", along: tx, hits: countHits(slabNorth(tx), boxes) });
+    cands.push({ face: "s", along: tx, hits: countHits(slabSouth(tx), boxes) });
+  }
+
+  const bestHits = Math.min(...cands.map((c) => c.hits));
+  const tier0 = cands.filter((c) => c.hits === bestHits);
+
+  const tx = params.towardX - params.shaftPx;
+  const tz = params.towardZ - params.shaftPz;
+  const len = Math.hypot(tx, tz);
+  const ux = len > 1e-6 ? tx / len : 0;
+  const uz = len > 1e-6 ? tz / len : 1;
+  const faceDot = (f: StairShaftCardinalFace): number => {
+    if (f === "e") return ux;
+    if (f === "w") return -ux;
+    if (f === "n") return uz;
+    return -uz;
+  };
+
+  let pick = tier0[0]!;
+  let bestDot = -Infinity;
+  let bestAbsAlong = Infinity;
+  for (const c of tier0) {
+    const d = faceDot(c.face);
+    const a = Math.abs(c.along);
+    if (d > bestDot + 1e-6 || (Math.abs(d - bestDot) < 1e-6 && a < bestAbsAlong)) {
+      bestDot = d;
+      bestAbsAlong = a;
+      pick = c;
+    }
+  }
+
+  return { face: pick.face, tangentOffsetM: pick.along };
+}
 
 type Leg = { ax: number; az: number; bx: number; bz: number; count: number };
 

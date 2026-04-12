@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
-import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
+import {
+  addStairWellPlaceholder,
+  SHAFT_GROUND_DOOR_BAND_M,
+} from "./stairElevatorPlaceholders.js";
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
@@ -103,12 +106,21 @@ export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
 ): void {
+  if (specs.length === 0) return;
+  const acx = specs.reduce((a, s) => a + s.px, 0) / specs.length;
+  const acz = specs.reduce((a, s) => a + s.pz, 0) / specs.length;
+
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
     col.position.set(s.px, s.centerY, s.pz);
     addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
       climbFullShaft: s.megaSy > STOREY_SPACING_M * 1.25,
+      groundDoor: {
+        bandHeightM: SHAFT_GROUND_DOOR_BAND_M,
+        towardPlateXZ: [acx, acz],
+        shaftPlateXZ: [s.px, s.pz],
+      },
     });
     root.add(col);
   }

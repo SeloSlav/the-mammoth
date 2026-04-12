@@ -1,4 +1,5 @@
 import type { BuildingDoc, FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
   getBuildingStairShaftSpecs,
   type BuildingStairShaftSpec,
@@ -184,8 +185,12 @@ function appendConcreteSlabWalkAABBs(
   /** Matches `addConcreteSlabWithOptionalShaftHoles`: slab top in plate space is `min.y`. */
   const slabTop = min[1] + floorWorldY;
   const slabRect: RectXZ = { x0, x1, z0, z1 };
-  const pieces =
+  let pieces =
     docHoles.length > 0 ? subtractHolesFromRect(slabRect, docHoles) : [slabRect];
+  if (pieces.length === 0 && docHoles.length > 0) {
+    pieces = subtractHolesFromRect(slabRect, docHoles, 0.001);
+  }
+  if (pieces.length === 0) pieces = [slabRect];
   const thin = thickness;
   for (const p of pieces) {
     const w = p.x1 - p.x0;
@@ -249,9 +254,10 @@ export function walkSurfaceAABBsForFloorDoc(
   floorWorldY: number,
   opts?: WalkSurfaceFloorOpts,
 ): WalkSurfaceAabb[] {
+  const clean = withoutElevatorsInStairwells(doc);
   const out: WalkSurfaceAabb[] = [];
-  const docHoles = collectShaftSlabHoles(doc);
-  for (const obj of doc.objects) {
+  const docHoles = collectShaftSlabHoles(clean);
+  for (const obj of clean.objects) {
     const [px, py, pz] = obj.position;
     const sx = obj.scale?.[0] ?? 1;
     const sy = obj.scale?.[1] ?? 1;
@@ -292,7 +298,7 @@ export function walkSurfaceAABBsForFloorDoc(
       );
     }
   }
-  appendConcreteSlabWalkAABBs(out, doc, floorWorldY, 0.8, 0.16, docHoles);
+  appendConcreteSlabWalkAABBs(out, clean, floorWorldY, 0.8, 0.16, docHoles);
   return out;
 }
 

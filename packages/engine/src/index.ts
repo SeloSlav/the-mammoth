@@ -26,14 +26,16 @@ export function createFPCamera(): THREE.PerspectiveCamera {
 
 /**
  * First-person rig:
- * - `headPitch`: mouse look **up/down** (applies to viewmodel limbs/feet parented here too).
- * - `headFreeLook`: Alt **yaw only on the camera** so arms/feet stay body-forward and do not
- *   vanish when peeking sideways (viewmodel must not be parented under `headFreeLook`).
+ * - `headPitch`: mouse **pitch only** for the viewmodel (sibling of free-look); no Alt yaw.
+ * - `headFreeLook` → `headCameraPitch` → `camera`: Alt **yaw before pitch** so horizontal look
+ *   stays around **world up** (horizon stays level when looking up/down). If yaw were under pitch,
+ *   mouse X would bank the view. Viewmodel must not be under `headFreeLook`.
  */
 export function createFPRig(eyeHeight = 1.55): {
   rig: THREE.Group;
   headPivot: THREE.Group;
   headPitch: THREE.Group;
+  headCameraPitch: THREE.Group;
   headFreeLook: THREE.Group;
   camera: THREE.PerspectiveCamera;
 } {
@@ -45,6 +47,8 @@ export function createFPRig(eyeHeight = 1.55): {
   headPitch.name = "fp_head_pitch";
   const headFreeLook = new THREE.Group();
   headFreeLook.name = "fp_head_free_look";
+  const headCameraPitch = new THREE.Group();
+  headCameraPitch.name = "fp_head_camera_pitch";
   const camera = new THREE.PerspectiveCamera(
     fpLocomotionConstants.cameraFovDeg,
     1,
@@ -52,11 +56,12 @@ export function createFPRig(eyeHeight = 1.55): {
     900,
   );
   camera.rotation.order = "YXZ";
+  headPivot.add(headFreeLook);
+  headFreeLook.add(headCameraPitch);
+  headCameraPitch.add(camera);
   headPivot.add(headPitch);
-  headPitch.add(headFreeLook);
-  headFreeLook.add(camera);
   rig.add(headPivot);
-  return { rig, headPivot, headPitch, headFreeLook, camera };
+  return { rig, headPivot, headPitch, headCameraPitch, headFreeLook, camera };
 }
 
 export type {

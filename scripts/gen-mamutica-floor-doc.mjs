@@ -170,27 +170,22 @@ function writeGroundFloor() {
     },
   });
 
-  /** Same ±X as typical cores so full-height stair shafts stack with upper storeys. */
+  /** Same X/Z grid as `writeTypicalFloor` cores so podium hoistways stack with slab + shell holes. */
+  const coreZs = collectCoreCentersZ();
   const stairXHub = CORRIDOR_WIDTH_M * 0.5 + STAIR_SX * 0.5 + 0.06;
-  const elevXFromCenter = 3.35;
-  const elevScale = [2.35, STOREY_SPACING_M, 2.75];
+  const elevX = -(CORRIDOR_WIDTH_M * 0.5 + ELEV_SX * 0.5 + 0.06);
+  const elevScale = [ELEV_SX, STOREY_SPACING_M, ELEV_SZ];
   const stairScale = [STAIR_SX, STOREY_SPACING_M, STAIR_SZ];
   const hubZ = 0;
 
+  /** West bank only at z=0 — east bank would overlap the hub stair footprint (same X band). */
   objects.push(
     {
       id: "elev_hub_w",
       prefabId: "elevator_shaft_a",
-      position: [-elevXFromCenter, CORE_PY, hubZ],
+      position: [elevX, CORE_PY, hubZ],
       scale: elevScale,
       metadata: { role: "primary_bank", side: "west" },
-    },
-    {
-      id: "elev_hub_e",
-      prefabId: "elevator_shaft_a",
-      position: [elevXFromCenter, CORE_PY, hubZ],
-      scale: elevScale,
-      metadata: { role: "primary_bank", side: "east" },
     },
     {
       id: "stair_hub_e",
@@ -201,20 +196,21 @@ function writeGroundFloor() {
     },
   );
 
-  /** Satellite hoistways along the long lobby (elevators only — stairs stay at the hub). */
-  const remoteZ = [-76, 76];
+  /**
+   * Peripheral west-bank hoistways at every residential core Z **except** z=0 (hub).
+   * Must match typical `elevator_shaft_*` stations or upper slabs cap the shaft (solid underside).
+   */
   let rid = 0;
-  for (const z of remoteZ) {
-    for (const x of [-elevXFromCenter, elevXFromCenter]) {
-      rid += 1;
-      objects.push({
-        id: `elev_remote_${String(rid).padStart(2, "0")}`,
-        prefabId: "elevator_shaft_a",
-        position: [x, CORE_PY, z],
-        scale: elevScale,
-        metadata: { role: "peripheral_bank" },
-      });
-    }
+  for (const cz of coreZs) {
+    if (cz === hubZ) continue;
+    rid += 1;
+    objects.push({
+      id: `elev_remote_${String(rid).padStart(2, "0")}`,
+      prefabId: "elevator_shaft_a",
+      position: [elevX, CORE_PY, cz],
+      scale: elevScale,
+      metadata: { role: "peripheral_bank", coreZ: cz },
+    });
   }
 
   const doc = {
@@ -222,7 +218,7 @@ function writeGroundFloor() {
     version: 1,
     displayName: "Mamutica ground / podium (generated)",
     metadata: {
-      note: "Hub at z=0: east stair aligns with typical cores (full-height shaft). West stair omitted so upper slabs keep cutouts from floor JSON only.",
+      note: "Hub at z=0; satellite lifts share Z (and west X) with typical-floor hoistways so stacked slabs stay open.",
       lobby_length_m: lobbyLen,
       lobby_width_m: lobbyWide,
       recommended_spawn_xz_m: [0, 0],

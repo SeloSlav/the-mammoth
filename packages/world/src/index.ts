@@ -11,11 +11,13 @@ import {
   type FloorDoc,
   type InteriorDoc,
 } from "@the-mammoth/schemas";
+import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
 } from "./buildingStairShafts.js";
+import { mergeShaftSlabHolesFromFloorDocs } from "./shaftPlanformClip.js";
 
 export { buildFloorMeshes };
 export {
@@ -37,6 +39,7 @@ export {
   type WalkSurfaceAabb,
   type WalkSurfaceXzFootprint,
 } from "./walkSurfaceAABBs.js";
+export { withoutElevatorsInStairwells, mergeShaftSlabHolesFromFloorDocs };
 
 /**
  * Vertical spacing between stacked `BuildingFloorRef` plates (meters).
@@ -91,10 +94,16 @@ export function instantiateBuildingFloorStack(
   );
   const stairShaftSkipKeys = new Set(stairShaftSpecs.map((s) => s.planKey));
 
+  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(
+    sorted.map((r) => withoutElevatorsInStairwells(getFloorDoc(r.floorDocId))),
+  );
+
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
     const plate = buildFloorMeshes(doc, {
       stairShaftSkipKeys,
+      storyLevelIndex: ref.levelIndex,
+      shaftHolesPlateMerged,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;

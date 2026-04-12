@@ -3,7 +3,7 @@
   "version": 1,
   "displayName": "Mamutica ground / podium (generated)",
   "metadata": {
-    "note": "Hub at z=0: east stair aligns with typical cores (full-height shaft). West stair omitted so upper slabs keep cutouts from floor JSON only.",
+    "note": "Hub at z=0; satellite lifts share Z (and west X) with typical-floor hoistways so stacked slabs stay open.",
     "lobby_length_m": 210,
     "lobby_width_m": 31.5,
     "recommended_spawn_xz_m": [
@@ -33,36 +33,18 @@
       "id": "elev_hub_w",
       "prefabId": "elevator_shaft_a",
       "position": [
-        -3.35,
+        -3.1750000000000003,
         1.6589473684210527,
         0
       ],
       "scale": [
-        2.35,
+        2.38,
         3.1578947368421053,
-        2.75
+        2.82
       ],
       "metadata": {
         "role": "primary_bank",
         "side": "west"
-      }
-    },
-    {
-      "id": "elev_hub_e",
-      "prefabId": "elevator_shaft_a",
-      "position": [
-        3.35,
-        1.6589473684210527,
-        0
-      ],
-      "scale": [
-        2.35,
-        3.1578947368421053,
-        2.75
-      ],
-      "metadata": {
-        "role": "primary_bank",
-        "side": "east"
       }
     },
     {
@@ -87,68 +69,72 @@
       "id": "elev_remote_01",
       "prefabId": "elevator_shaft_a",
       "position": [
-        -3.35,
+        -3.1750000000000003,
         1.6589473684210527,
-        -76
+        -92
       ],
       "scale": [
-        2.35,
+        2.38,
         3.1578947368421053,
-        2.75
+        2.82
       ],
       "metadata": {
-        "role": "peripheral_bank"
+        "role": "peripheral_bank",
+        "coreZ": -92
       }
     },
     {
       "id": "elev_remote_02",
       "prefabId": "elevator_shaft_a",
       "position": [
-        3.35,
+        -3.1750000000000003,
         1.6589473684210527,
-        -76
+        -46
       ],
       "scale": [
-        2.35,
+        2.38,
         3.1578947368421053,
-        2.75
+        2.82
       ],
       "metadata": {
-        "role": "peripheral_bank"
+        "role": "peripheral_bank",
+        "coreZ": -46
       }
     },
     {
       "id": "elev_remote_03",
       "prefabId": "elevator_shaft_a",
       "position": [
-        -3.35,
+        -3.1750000000000003,
         1.6589473684210527,
-        76
+        46
       ],
       "scale": [
-        2.35,
+        2.38,
         3.1578947368421053,
-        2.75
+        2.82
       ],
       "metadata": {
-        "role": "peripheral_bank"
+        "role": "peripheral_bank",
+        "coreZ": 46
       }
     },
     {
       "id": "elev_remote_04",
       "prefabId": "elevator_shaft_a",
       "position": [
-        3.35,
+        -3.1750000000000003,
         1.6589473684210527,
-        76
+        92
       ],
       "scale": [
-        2.35,
+        2.38,
         3.1578947368421053,
-        2.75
+        2.82
       ],
       "metadata": {
-        "role": "peripheral_bank"
+        "role": "peripheral_bank",
+        "coreZ": 92
       }
     }
   ]

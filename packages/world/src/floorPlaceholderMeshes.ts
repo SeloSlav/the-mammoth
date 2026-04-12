@@ -1,10 +1,20 @@
 import * as THREE from "three";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { shaftPlanKey } from "./buildingStairShafts.js";
 import {
   addElevatorShaftPlaceholder,
   addStairWellPlaceholder,
 } from "./stairElevatorPlaceholders.js";
+import {
+  addDoorFrameTrimConstantX,
+  addDoorFrameTrimConstantZ,
+  addWallConstantXWithHoles,
+  addWallConstantZWithHoles,
+  pickFaceTowardPoint,
+  type WallHoleXY,
+  type WallHoleYZ,
+} from "./wallWithDoorCutout.js";
 import {
   collectShaftSlabHoles,
   hollowShellXZRectsWithShaftCutouts,
@@ -36,6 +46,7 @@ const mat = {
     color: 0xcfc5b8,
     roughness: 0.88,
     metalness: 0.02,
+    side: THREE.DoubleSide,
   }),
   corridorWall: new THREE.MeshStandardMaterial({
     color: 0xc2b6a6,
@@ -51,6 +62,7 @@ const mat = {
     color: 0xb5aa9e,
     roughness: 0.88,
     metalness: 0.03,
+    side: THREE.DoubleSide,
   }),
   unitWall: new THREE.MeshStandardMaterial({
     color: 0xae9f92,
@@ -66,6 +78,7 @@ const mat = {
     color: 0x9a9590,
     roughness: 0.88,
     metalness: 0.06,
+    side: THREE.DoubleSide,
   }),
   coreWall: new THREE.MeshStandardMaterial({
     color: 0x928d87,
@@ -81,6 +94,7 @@ const mat = {
     color: 0xbab2aa,
     roughness: 0.88,
     metalness: 0.03,
+    side: THREE.DoubleSide,
   }),
   miscWall: new THREE.MeshStandardMaterial({
     color: 0xb0a89e,
@@ -91,8 +105,24 @@ const mat = {
     color: 0x6a6460,
     roughness: 0.93,
     metalness: 0.02,
+    side: THREE.DoubleSide,
+  }),
+  lobbyDoorFrame: new THREE.MeshStandardMaterial({
+    color: 0x4d4a48,
+    roughness: 0.45,
+    metalness: 0.48,
   }),
 };
+
+/**
+ * Ground storey corridor / lobby: **double-door frame bays** (m clear).
+ * Panels/doors are not modeled yet — openings + trim only.
+ */
+const LOBBY_DOUBLE_DOOR_W = 1.84;
+const LOBBY_DOUBLE_DOOR_H = 2.16;
+const LOBBY_DOOR_SILL = 0.04;
+/** Minimum centre-to-centre spacing so adjacent double frames read as separate bays. */
+const LOBBY_DOUBLE_DOOR_BAY_SPACING = LOBBY_DOUBLE_DOOR_W + 0.56;
 
 function matsFor(kind: PlaceholderKind): {
   floor: THREE.MeshStandardMaterial;
@@ -117,6 +147,8 @@ type HollowShellOpts = {
   roomPz: number;
   /** When set (e.g. room has rotation), use solid floor/ceiling plates — cutouts are axis-only. */
   skipShaftCutouts: boolean;
+  /** 1-based storey; level 1 gets lobby-style openings on corridor shells. */
+  storyLevelIndex?: number;
 };
 
 function addShellFloorCeilingPieces(
@@ -148,8 +180,23 @@ function addShellFloorCeilingPieces(
   }
 }
 
+function lobbyDoorCentersAlong(usableSpan: number): number[] {
+  if (usableSpan < LOBBY_DOUBLE_DOOR_W + 0.28) return [0];
+  const n = Math.max(
+    1,
+    Math.min(4, Math.floor(usableSpan / LOBBY_DOUBLE_DOOR_BAY_SPACING)),
+  );
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i + 1) / (n + 1);
+    out.push((t - 0.5) * usableSpan * 0.94);
+  }
+  return out;
+}
+
 /**
  * Hollow shell: floor + ceiling plates (with shaft cutouts when `opts` provided), four thin walls.
+ * Same on every storey, including the ground floor perimeter.
  */
 function addHollowRoomShell(
   group: THREE.Group,
@@ -163,15 +210,183 @@ function addHollowRoomShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const { floor: floorM, ceil: ceilM } = matsFor(kind);
+  const { floor: floorM, ceil: ceilM, wall: wallM } = matsFor(kind);
+  const vh = Math.max(sy - 2 * wt, 0.05);
+  const vlenX = Math.max(sx - 2 * wt, 0.05);
+  const vlenZ = Math.max(sz - 2 * wt, 0.05);
 
   const rects = opts.skipShaftCutouts
     ? ([{ x0: -hx, x1: hx, z0: -hz, z1: hz }] as const)
     : hollowShellXZRectsWithShaftCutouts(sx, sz, opts.roomPx, opts.roomPz, opts.shaftHolesPlate);
   addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM);
 
-  // No perimeter placeholder walls — they read as an unwanted low curb around the exterior;
-  // stairs / elevator shafts still get their own shells in `stairElevatorPlaceholders`.
+  const yLo = -vh * 0.5;
+  const yHi = vh * 0.5;
+  const yDoor0 = yLo + LOBBY_DOOR_SILL;
+  const yDoor1 = Math.min(yHi - 0.05, yDoor0 + LOBBY_DOUBLE_DOOR_H);
+  const halfDoor = LOBBY_DOUBLE_DOOR_W * 0.5;
+
+  const groundLobby =
+    (opts.storyLevelIndex ?? 99) === 1 &&
+    kind === "corridor" &&
+    !opts.skipShaftCutouts;
+
+  if (!groundLobby) {
+    const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
+    east.name = "shell_wall_e";
+    east.position.set(hx - wt * 0.5, 0, 0);
+    group.add(east);
+
+    const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
+    west.name = "shell_wall_w";
+    west.position.set(-hx + wt * 0.5, 0, 0);
+    group.add(west);
+
+    const north = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
+    north.name = "shell_wall_n";
+    north.position.set(0, 0, hz - wt * 0.5);
+    group.add(north);
+
+    const south = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
+    south.name = "shell_wall_s";
+    south.position.set(0, 0, -hz + wt * 0.5);
+    group.add(south);
+    return;
+  }
+
+  const usableZ = vlenZ - 0.14;
+  const usableX = vlenX - 0.14;
+  const czList = lobbyDoorCentersAlong(usableZ);
+  const cxList = lobbyDoorCentersAlong(usableX);
+
+  const holesEw: WallHoleYZ[] = czList.map((zc) => ({
+    z0: zc - halfDoor,
+    z1: zc + halfDoor,
+    y0: yDoor0,
+    y1: yDoor1,
+  }));
+  const holesNs: WallHoleXY[] = cxList.map((xc) => ({
+    x0: xc - halfDoor,
+    x1: xc + halfDoor,
+    y0: yDoor0,
+    y1: yDoor1,
+  }));
+
+  const xE = hx - wt * 0.5;
+  const xW = -hx + wt * 0.5;
+  const zN = hz - wt * 0.5;
+  const zS = -hz + wt * 0.5;
+  const zMin = -vlenZ * 0.5;
+  const zMax = vlenZ * 0.5;
+  const xMin = -vlenX * 0.5;
+  const xMax = vlenX * 0.5;
+
+  addWallConstantXWithHoles(
+    group,
+    wallM,
+    xE,
+    wt,
+    zMin,
+    zMax,
+    yLo,
+    yHi,
+    holesEw,
+    "shell_wall_e",
+  );
+  addWallConstantXWithHoles(
+    group,
+    wallM,
+    xW,
+    wt,
+    zMin,
+    zMax,
+    yLo,
+    yHi,
+    holesEw,
+    "shell_wall_w",
+  );
+  addWallConstantZWithHoles(
+    group,
+    wallM,
+    zN,
+    wt,
+    xMin,
+    xMax,
+    yLo,
+    yHi,
+    holesNs,
+    "shell_wall_n",
+  );
+  addWallConstantZWithHoles(
+    group,
+    wallM,
+    zS,
+    wt,
+    xMin,
+    xMax,
+    yLo,
+    yHi,
+    holesNs,
+    "shell_wall_s",
+  );
+
+  const frameM = mat.lobbyDoorFrame;
+  let fi = 0;
+  for (const zc of czList) {
+    const z0 = zc - halfDoor;
+    const z1 = zc + halfDoor;
+    addDoorFrameTrimConstantX(
+      group,
+      frameM,
+      hx - wt,
+      -1,
+      z0,
+      z1,
+      yDoor0,
+      yDoor1,
+      `shell_lobby_frame_e_${fi}`,
+    );
+    addDoorFrameTrimConstantX(
+      group,
+      frameM,
+      -hx + wt,
+      1,
+      z0,
+      z1,
+      yDoor0,
+      yDoor1,
+      `shell_lobby_frame_w_${fi}`,
+    );
+    fi += 1;
+  }
+  let fj = 0;
+  for (const xc of cxList) {
+    const x0 = xc - halfDoor;
+    const x1 = xc + halfDoor;
+    addDoorFrameTrimConstantZ(
+      group,
+      frameM,
+      hz - wt,
+      -1,
+      x0,
+      x1,
+      yDoor0,
+      yDoor1,
+      `shell_lobby_frame_n_${fj}`,
+    );
+    addDoorFrameTrimConstantZ(
+      group,
+      frameM,
+      -hz + wt,
+      1,
+      x0,
+      x1,
+      yDoor0,
+      yDoor1,
+      `shell_lobby_frame_s_${fj}`,
+    );
+    fj += 1;
+  }
 }
 
 function expandBoxForPlacedObject(
@@ -208,8 +423,12 @@ function addConcreteSlabWithOptionalShaftHoles(
   const z1 = max.z + marginXZ;
   const bottom = min.y - thickness * 0.5;
   const slabRect: RectXZ = { x0, x1, z0, z1 };
-  const pieces =
+  let pieces =
     holes.length > 0 ? subtractHolesFromRect(slabRect, holes) : [slabRect];
+  if (pieces.length === 0 && holes.length > 0) {
+    pieces = subtractHolesFromRect(slabRect, holes, 0.001);
+  }
+  if (pieces.length === 0) pieces = [slabRect];
   let i = 0;
   for (const p of pieces) {
     const w = p.x1 - p.x0;
@@ -233,6 +452,13 @@ export type BuildFloorMeshesOptions = {
    * (`shaftPlanKey` from `obj.position` XZ).
    */
   stairShaftSkipKeys?: ReadonlySet<string>;
+  /** 1-based; level 1 enables ground shaft doors + lobby corridor openings. */
+  storyLevelIndex?: number;
+  /**
+   * When stacking plates, union of all shaft/stair holes (plate-space XZ). Passed from
+   * {@link instantiateBuildingFloorStack} so upper slabs/shells never cap another storey’s hoistway.
+   */
+  shaftHolesPlateMerged?: readonly ShaftSlabHole[];
 };
 
 /**
@@ -242,16 +468,34 @@ export function buildFloorMeshes(
   doc: FloorDoc,
   opts?: BuildFloorMeshesOptions,
 ): THREE.Group {
+  const floor = withoutElevatorsInStairwells(doc);
   const root = new THREE.Group();
-  root.name = `floor:${doc.id}`;
+  root.name = `floor:${floor.id}`;
 
-  const shaftHolesPlate = collectShaftSlabHoles(doc);
+  const shaftHolesPlate =
+    opts?.shaftHolesPlateMerged ?? collectShaftSlabHoles(floor);
 
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
   let hasBounds = false;
 
-  for (const obj of doc.objects) {
+  let plateCx = 0;
+  let plateCz = 0;
+  let plateN = 0;
+  for (const o of floor.objects) {
+    plateCx += o.position[0];
+    plateCz += o.position[2];
+    plateN += 1;
+  }
+  if (plateN > 0) {
+    plateCx /= plateN;
+    plateCz /= plateN;
+  }
+
+  const story = opts?.storyLevelIndex ?? 99;
+  const groundShaftDoors = story === 1;
+
+  for (const obj of floor.objects) {
     expandBoxForPlacedObject(min, max, obj);
     hasBounds = true;
 
@@ -273,11 +517,29 @@ export function buildFloorMeshes(
 
     const pid = obj.prefabId.toLowerCase();
     if (pid.includes("elevator")) {
-      addElevatorShaftPlaceholder(room, sx, sy, sz);
+      const doorFace = pickFaceTowardPoint(
+        obj.position[0],
+        obj.position[2],
+        plateCx,
+        plateCz,
+      );
+      addElevatorShaftPlaceholder(room, sx, sy, sz, {
+        groundDoor: groundShaftDoors
+          ? { face: doorFace, bandHeightM: sy }
+          : null,
+      });
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
       if (!opts?.stairShaftSkipKeys?.has(sk)) {
-        addStairWellPlaceholder(room, sx, sy, sz);
+        addStairWellPlaceholder(room, sx, sy, sz, {
+          groundDoor: groundShaftDoors
+            ? {
+                bandHeightM: sy,
+                towardPlateXZ: [plateCx, plateCz],
+                shaftPlateXZ: [obj.position[0], obj.position[2]],
+              }
+            : null,
+        });
       }
     } else {
       const skipShaftCutouts = Boolean(obj.rotation);
@@ -286,6 +548,7 @@ export function buildFloorMeshes(
         roomPx: obj.position[0],
         roomPz: obj.position[2],
         skipShaftCutouts,
+        storyLevelIndex: opts?.storyLevelIndex,
       });
     }
     root.add(room);

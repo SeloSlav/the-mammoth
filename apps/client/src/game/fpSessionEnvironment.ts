@@ -9,7 +9,13 @@ export function attachFpSessionEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGLRenderer,
 ): () => void {
-  scene.background = null;
+  /** Hoistways / cutouts must not reveal the GL clear (default black). Match fog so shafts read as open air. */
+  const voidFill = new THREE.Color(0xd8ecff);
+  const prevClear = new THREE.Color();
+  const prevClearA = renderer.getClearAlpha();
+  renderer.getClearColor(prevClear);
+  renderer.setClearColor(voidFill, 1);
+  scene.background = voidFill.clone();
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -45,11 +51,12 @@ export function attachFpSessionEnvironment(
   groundPlane.position.y = -0.02;
   scene.add(groundPlane);
 
-  const hemi = new THREE.HemisphereLight(0x9ec8f5, 0x4a5a48, 0.95);
-  const dir = new THREE.DirectionalLight(0xfff2dd, 1.05);
+  /** Sky fill + sun key; low ambient lifts vertical shafts / undersides so they are not ACES-crushed to black. */
+  const hemi = new THREE.HemisphereLight(0x9ec8f5, 0x4a5a48, 0.82);
+  const fill = new THREE.AmbientLight(0xc8d8ec, 0.34);
+  const dir = new THREE.DirectionalLight(0xfff5ea, 1.22);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
-  const fill = new THREE.AmbientLight(0x9eb8d8, 0.38);
-  scene.add(hemi, dir, fill);
+  scene.add(hemi, fill, dir);
 
   const disposeMaterial = (m: THREE.Material | THREE.Material[]) => {
     if (Array.isArray(m)) m.forEach((x) => x.dispose());
@@ -65,10 +72,13 @@ export function attachFpSessionEnvironment(
     groundPlane.geometry.dispose();
     disposeMaterial(groundPlane.material);
 
-    scene.remove(hemi, dir, fill);
+    scene.remove(hemi, fill, dir);
     hemi.dispose();
-    dir.dispose();
     fill.dispose();
+    dir.dispose();
+
+    scene.background = null;
+    renderer.setClearColor(prevClear, prevClearA);
 
     scene.fog = null;
   };

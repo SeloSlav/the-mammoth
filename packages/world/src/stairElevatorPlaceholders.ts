@@ -1,8 +1,20 @@
 import * as THREE from "three";
 import {
   computeSwitchbackStairLayout,
+  pickStairShaftGroundDoorPlacement,
+  STOREY_SPACING_M,
   type SwitchbackStairOpts,
 } from "./stairWellGeometry.js";
+import {
+  addDoorFrameTrimConstantX,
+  addDoorFrameTrimConstantZ,
+  addWallConstantXWithHoles,
+  addWallConstantZWithHoles,
+  pickFaceTowardPoint,
+  type CardinalFace,
+  type WallHoleXY,
+  type WallHoleYZ,
+} from "./wallWithDoorCutout.js";
 
 const stairTread = new THREE.MeshStandardMaterial({
   color: 0xc8c0b4,
@@ -27,6 +39,14 @@ const shaftWall = new THREE.MeshStandardMaterial({
   color: 0x7a7d82,
   roughness: 0.55,
   metalness: 0.25,
+  emissive: 0x252830,
+  emissiveIntensity: 0.09,
+});
+/** Pit / landing slab at hoistway bottom (world slab is open here — must not read as outdoor grass). */
+const hoistwayFloor = new THREE.MeshStandardMaterial({
+  color: 0x5c5a58,
+  roughness: 0.94,
+  metalness: 0.03,
 });
 /** Slightly brighter than hoistways so stair volumes read in dim lobby light. */
 const stairShaftWall = new THREE.MeshStandardMaterial({
@@ -41,15 +61,56 @@ const shaftCeil = new THREE.MeshStandardMaterial({
   roughness: 0.5,
   metalness: 0.2,
 });
-
-type ShaftShellOpts = {
-  /** If false, top stays open so you can see through stacked storeys. */
-  includeCeiling: boolean;
-};
+const doorFrameMat = new THREE.MeshStandardMaterial({
+  color: 0x4a4846,
+  roughness: 0.42,
+  metalness: 0.55,
+});
 
 /**
- * Hoistway / stair shaft: floor slab + four walls to full interior height; optional ceiling.
+ * Ground-level hoistway / stair entry: **double-door clear width** (m).
+ * Leaf geometry comes later — opening + frame trim only for now.
  */
+const SHAFT_DOUBLE_DOOR_W = 1.86;
+const SHAFT_DOUBLE_DOOR_H = 2.2;
+const SHAFT_DOOR_SILL = 0.05;
+/** Ground-level door cutout only reaches this high on mega stair shafts (m). */
+export const SHAFT_GROUND_DOOR_BAND_M = STOREY_SPACING_M - 0.38;
+
+export type ShaftGroundDoorOpts = {
+  /**
+   * Elevators: set explicitly. Stair wells: omit and provide `towardPlateXZ` + `shaftPlateXZ`
+   * so a face is chosen away from circulating treads / corner landings.
+   */
+  face?: CardinalFace;
+  /**
+   * Vertical band from interior floor where a door opening may be cut (m).
+   * Full-height shells use the whole wall; mega shafts use ~one storey.
+   */
+  bandHeightM: number;
+  /** Plate-space XZ (e.g. floor centroid) for stair door tie-break / fallback. */
+  towardPlateXZ?: readonly [number, number];
+  /** Plate-space XZ of this shaft’s column (stair auto door only). */
+  shaftPlateXZ?: readonly [number, number];
+  /**
+   * Hole centre offset along wall tangent (+Z for E/W, +X for N/S). Stairs: set by auto placement.
+   */
+  tangentOffsetAlongWall?: number;
+};
+
+type ShaftShellOpts = {
+  /** If false, no bottom slab (hoistway stays open through stacked floors). */
+  includeFloor: boolean;
+  /** If false, top stays open so you can see through stacked storeys. */
+  includeCeiling: boolean;
+  /** Bottom slab mat when `includeFloor`; defaults to wall mat. */
+  floorMat?: THREE.MeshStandardMaterial;
+  /** When no ceiling: lengthen interior walls slightly to tuck past storey plate seams. */
+  openTopWallExtend?: number;
+  /** Single ground-level opening (toward lobby / building core). */
+  groundDoor?: ShaftGroundDoorOpts | null;
+};
+
 function addShaftShell(
   group: THREE.Group,
   sx: number,
@@ -63,15 +124,22 @@ function addShaftShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const innerWallH = Math.max(sy - 2 * wt, 0.08);
+  const topExtend =
+    opts.includeCeiling ? 0 : Math.max(0, opts.openTopWallExtend ?? 0);
+  const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
   const wallCenterY = (-hy + wt) + innerWallH * 0.5;
   const vlenX = Math.max(sx - 2 * wt, 0.05);
   const vlenZ = Math.max(sz - 2 * wt, 0.05);
+  const yWallBottom = wallCenterY - innerWallH * 0.5;
+  const yWallTop = wallCenterY + innerWallH * 0.5;
 
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(sx, wt, sz), wallM);
-  floor.name = "shaft_floor";
-  floor.position.set(0, -hy + wt * 0.5, 0);
-  group.add(floor);
+  if (opts.includeFloor) {
+    const floorMat = opts.floorMat ?? wallM;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(sx, wt, sz), floorMat);
+    floor.name = "shaft_floor";
+    floor.position.set(0, -hy + wt * 0.5, 0);
+    group.add(floor);
+  }
 
   if (opts.includeCeiling) {
     const ceiling = new THREE.Mesh(new THREE.BoxGeometry(sx, wt, sz), ceilM);
@@ -80,55 +148,284 @@ function addShaftShell(
     group.add(ceiling);
   }
 
-  const east = new THREE.Mesh(new THREE.BoxGeometry(wt, innerWallH, vlenZ), wallM);
-  east.name = "shaft_wall_e";
-  east.position.set(hx - wt * 0.5, wallCenterY, 0);
-  group.add(east);
+  const door = opts.groundDoor ?? null;
+  const bandCap = door
+    ? Math.max(0.55, Math.min(door.bandHeightM, innerWallH))
+    : innerWallH;
+  const splitShaft = Boolean(door && bandCap < innerWallH - 0.08);
+  const ySplit = yWallBottom + bandCap;
 
-  const west = new THREE.Mesh(new THREE.BoxGeometry(wt, innerWallH, vlenZ), wallM);
-  west.name = "shaft_wall_w";
-  west.position.set(-hx + wt * 0.5, wallCenterY, 0);
-  group.add(west);
+  const doorHalfW = Math.min(
+    SHAFT_DOUBLE_DOOR_W * 0.5,
+    vlenZ * 0.5 - 0.06,
+    vlenX * 0.5 - 0.06,
+  );
+  const doorH = Math.min(
+    SHAFT_DOUBLE_DOOR_H,
+    bandCap - SHAFT_DOOR_SILL - 0.06,
+  );
+  const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  const yDoor1 = yDoor0 + Math.max(0.55, doorH);
+  const doorTz = door?.tangentOffsetAlongWall ?? 0;
+  const doorTx = door?.tangentOffsetAlongWall ?? 0;
 
-  const north = new THREE.Mesh(new THREE.BoxGeometry(vlenX, innerWallH, wt), wallM);
-  north.name = "shaft_wall_n";
-  north.position.set(0, wallCenterY, hz - wt * 0.5);
-  group.add(north);
+  const addEastWest = (
+    face: "e" | "w",
+    xCenter: number,
+    withDoor: boolean,
+    y0: number,
+    y1: number,
+    name: string,
+  ): void => {
+    const zMin = -vlenZ * 0.5;
+    const zMax = vlenZ * 0.5;
+    if (withDoor && door && yDoor1 <= y1 + 1e-3 && yDoor0 >= y0 - 1e-3) {
+      const z0 = Math.max(zMin, doorTz - doorHalfW);
+      const z1 = Math.min(zMax, doorTz + doorHalfW);
+      const holes: WallHoleYZ[] =
+        z1 > z0 + 0.08
+          ? [
+              {
+                z0,
+                z1,
+                y0: yDoor0,
+                y1: Math.min(yDoor1, y1),
+              },
+            ]
+          : [];
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xCenter,
+        wt,
+        zMin,
+        zMax,
+        y0,
+        y1,
+        holes,
+        name,
+      );
+      const xInner = face === "e" ? hx - wt : -hx + wt;
+      const inwardX = face === "e" ? -1 : 1;
+      if (holes.length > 0) {
+        addDoorFrameTrimConstantX(
+          group,
+          doorFrameMat,
+          xInner,
+          inwardX,
+          z0,
+          z1,
+          yDoor0,
+          Math.min(yDoor1, y1),
+          `${name}_frame`,
+        );
+      }
+    } else {
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xCenter,
+        wt,
+        zMin,
+        zMax,
+        y0,
+        y1,
+        [],
+        name,
+      );
+    }
+  };
 
-  const south = new THREE.Mesh(new THREE.BoxGeometry(vlenX, innerWallH, wt), wallM);
-  south.name = "shaft_wall_s";
-  south.position.set(0, wallCenterY, -hz + wt * 0.5);
-  group.add(south);
+  const addNorthSouth = (
+    face: "n" | "s",
+    zCenter: number,
+    withDoor: boolean,
+    y0: number,
+    y1: number,
+    name: string,
+  ): void => {
+    const xMin = -vlenX * 0.5;
+    const xMax = vlenX * 0.5;
+    if (withDoor && door && yDoor1 <= y1 + 1e-3 && yDoor0 >= y0 - 1e-3) {
+      const x0 = Math.max(xMin, doorTx - doorHalfW);
+      const x1 = Math.min(xMax, doorTx + doorHalfW);
+      const holes: WallHoleXY[] =
+        x1 > x0 + 0.08
+          ? [
+              {
+                x0,
+                x1,
+                y0: yDoor0,
+                y1: Math.min(yDoor1, y1),
+              },
+            ]
+          : [];
+      addWallConstantZWithHoles(
+        group,
+        wallM,
+        zCenter,
+        wt,
+        xMin,
+        xMax,
+        y0,
+        y1,
+        holes,
+        name,
+      );
+      const zInner = face === "n" ? hz - wt : -hz + wt;
+      const inwardZ = face === "n" ? -1 : 1;
+      addDoorFrameTrimConstantZ(
+        group,
+        doorFrameMat,
+        zInner,
+        inwardZ,
+        -doorHalfW,
+        doorHalfW,
+        yDoor0,
+        Math.min(yDoor1, y1),
+        `${name}_frame`,
+      );
+    } else {
+      addWallConstantZWithHoles(
+        group,
+        wallM,
+        zCenter,
+        wt,
+        xMin,
+        xMax,
+        y0,
+        y1,
+        [],
+        name,
+      );
+    }
+  };
+
+  if (!door) {
+    addEastWest("e", hx - wt * 0.5, false, yWallBottom, yWallTop, "shaft_wall_e");
+    addEastWest("w", -hx + wt * 0.5, false, yWallBottom, yWallTop, "shaft_wall_w");
+    addNorthSouth("n", hz - wt * 0.5, false, yWallBottom, yWallTop, "shaft_wall_n");
+    addNorthSouth("s", -hz + wt * 0.5, false, yWallBottom, yWallTop, "shaft_wall_s");
+    return;
+  }
+
+  const face = door.face!;
+  if (!splitShaft) {
+    addEastWest("e", hx - wt * 0.5, face === "e", yWallBottom, yWallTop, "shaft_wall_e");
+    addEastWest("w", -hx + wt * 0.5, face === "w", yWallBottom, yWallTop, "shaft_wall_w");
+    addNorthSouth("n", hz - wt * 0.5, face === "n", yWallBottom, yWallTop, "shaft_wall_n");
+    addNorthSouth("s", -hz + wt * 0.5, face === "s", yWallBottom, yWallTop, "shaft_wall_s");
+    return;
+  }
+
+  addEastWest("e", hx - wt * 0.5, face === "e", yWallBottom, ySplit, "shaft_wall_e_lo");
+  addEastWest("e", hx - wt * 0.5, false, ySplit, yWallTop, "shaft_wall_e_hi");
+  addEastWest("w", -hx + wt * 0.5, face === "w", yWallBottom, ySplit, "shaft_wall_w_lo");
+  addEastWest("w", -hx + wt * 0.5, false, ySplit, yWallTop, "shaft_wall_w_hi");
+  addNorthSouth("n", hz - wt * 0.5, face === "n", yWallBottom, ySplit, "shaft_wall_n_lo");
+  addNorthSouth("n", hz - wt * 0.5, false, ySplit, yWallTop, "shaft_wall_n_hi");
+  addNorthSouth("s", -hz + wt * 0.5, face === "s", yWallBottom, ySplit, "shaft_wall_s_lo");
+  addNorthSouth("s", -hz + wt * 0.5, false, ySplit, yWallTop, "shaft_wall_s_hi");
 }
 
 /**
  * Open-top hoistway (no ceiling) so stacked floors read as one continuous shaft.
+ * Includes a **concrete pit floor** so the structural slab hole does not expose the outdoor ground.
  */
+export type ElevatorShaftPlaceholderOpts = {
+  groundDoor?: ShaftGroundDoorOpts | null;
+};
+
 export function addElevatorShaftPlaceholder(
   group: THREE.Group,
   sx: number,
   sy: number,
   sz: number,
+  opts?: ElevatorShaftPlaceholderOpts | null,
 ): void {
-  addShaftShell(group, sx, sy, sz, shaftWall, shaftCeil, { includeCeiling: false });
+  addShaftShell(group, sx, sy, sz, shaftWall, shaftCeil, {
+    includeFloor: true,
+    includeCeiling: false,
+    floorMat: hoistwayFloor,
+    openTopWallExtend: 0.06,
+    groundDoor: opts?.groundDoor ?? null,
+  });
 }
 
 /**
  * Circulating stair in a rectangular shaft (open top): perimeter runs + corner landings, stacked
  * per storey on tall shafts.
  */
+export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
+  groundDoor?: ShaftGroundDoorOpts | null;
+};
+
 export function addStairWellPlaceholder(
   group: THREE.Group,
   sx: number,
   sy: number,
   sz: number,
-  layoutOpts?: SwitchbackStairOpts,
+  opts?: StairWellPlaceholderOpts,
 ): void {
+  const { groundDoor, ...layoutOpts } = opts ?? {};
+  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
+
+  let resolvedShellDoor: ShaftGroundDoorOpts | null = null;
+  if (groundDoor) {
+    const wt = 0.11;
+    const hy = sy * 0.5;
+    const innerWallH = Math.max(sy - 2 * wt, 0.08);
+    const wallCenterY = (-hy + wt) + innerWallH * 0.5;
+    const yWallBottom = wallCenterY - innerWallH * 0.5;
+    const yWallTop = wallCenterY + innerWallH * 0.5;
+    const bandCap = Math.max(0.55, Math.min(groundDoor.bandHeightM, innerWallH));
+    const splitShaft = bandCap < innerWallH - 0.08;
+    const ySplit = yWallBottom + bandCap;
+    const vlenX = Math.max(sx - 2 * wt, 0.05);
+    const vlenZ = Math.max(sz - 2 * wt, 0.05);
+    const doorHalfW = Math.min(
+      SHAFT_DOUBLE_DOOR_W * 0.5,
+      vlenZ * 0.5 - 0.06,
+      vlenX * 0.5 - 0.06,
+    );
+    const doorH = Math.min(SHAFT_DOUBLE_DOOR_H, bandCap - SHAFT_DOOR_SILL - 0.06);
+    const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+    const doorInnerTop = yDoor0 + Math.max(0.55, doorH);
+    const yHoleTop = Math.min(doorInnerTop, splitShaft ? ySplit : yWallTop);
+
+    let face: CardinalFace;
+    if (groundDoor.face != null) {
+      face = groundDoor.face;
+    } else if (groundDoor.towardPlateXZ && groundDoor.shaftPlateXZ) {
+      face = pickStairShaftDoorFaceAvoidingTreads(L, {
+        sx,
+        sz,
+        wallThickness: wt,
+        doorHalfWidthM: doorHalfW,
+        doorY0Local: yDoor0,
+        doorY1Local: yHoleTop,
+        collisionYMaxLocal: splitShaft ? ySplit + 0.06 : undefined,
+        towardX: groundDoor.towardPlateXZ[0],
+        towardZ: groundDoor.towardPlateXZ[1],
+        shaftPx: groundDoor.shaftPlateXZ[0],
+        shaftPz: groundDoor.shaftPlateXZ[1],
+      });
+    } else {
+      face = pickFaceTowardPoint(0, 0, 1, 0);
+    }
+
+    resolvedShellDoor = {
+      bandHeightM: groundDoor.bandHeightM,
+      face,
+    };
+  }
+
   addShaftShell(group, sx, sy, sz, stairShaftWall, shaftCeil, {
+    includeFloor: true,
     includeCeiling: false,
+    groundDoor: resolvedShellDoor,
   });
 
-  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
   const { innerWallH, wallCenterY, ix0, ix1, iz0, iz1 } = L;
 
   let ti = 0;

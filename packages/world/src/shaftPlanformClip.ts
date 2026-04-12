@@ -5,7 +5,11 @@ export type RectXZ = { x0: number; x1: number; z0: number; z1: number };
 /** Shaft footprint in floor plate XZ (half-extents), same convention as slab holes. */
 export type ShaftSlabHole = { cx: number; cz: number; hx: number; hz: number };
 
-export function clipRectMinusHole(r: RectXZ, hole: ShaftSlabHole): RectXZ[] {
+export function clipRectMinusHole(
+  r: RectXZ,
+  hole: ShaftSlabHole,
+  minFragment = 0.08,
+): RectXZ[] {
   const ix0 = hole.cx - hole.hx;
   const ix1 = hole.cx + hole.hx;
   const iz0 = hole.cz - hole.hz;
@@ -44,21 +48,25 @@ export function clipRectMinusHole(r: RectXZ, hole: ShaftSlabHole): RectXZ[] {
         z1: mz1,
       });
   }
-  return out.filter((q) => q.x1 - q.x0 > 0.08 && q.z1 - q.z0 > 0.08);
+  return out.filter(
+    (q) => q.x1 - q.x0 > minFragment && q.z1 - q.z0 > minFragment,
+  );
 }
 
 export function subtractHolesFromRect(
   rect: RectXZ,
   holes: readonly ShaftSlabHole[],
+  minFragment = 0.08,
 ): RectXZ[] {
   let parts: RectXZ[] = [rect];
   for (const h of holes) {
-    parts = parts.flatMap((p) => clipRectMinusHole(p, h));
+    parts = parts.flatMap((p) => clipRectMinusHole(p, h, minFragment));
   }
   return parts;
 }
 
-const SHAFT_PAD = 0.12;
+/** Extra half-width on slab cutouts so corridor plates do not leave thin caps over hoistways. */
+const SHAFT_PAD = 0.2;
 
 export function collectShaftSlabHoles(doc: FloorDoc): ShaftSlabHole[] {
   const holes: ShaftSlabHole[] = [];
@@ -77,6 +85,34 @@ export function collectShaftSlabHoles(doc: FloorDoc): ShaftSlabHole[] {
     });
   }
   return holes;
+}
+
+/**
+ * Union of all stair/elevator footprints across stacked floor docs (plate-space XZ).
+ * Use for every storey’s hollow shells + structural slabs so upper plates do not cap shafts
+ * that exist on another level’s authored layout.
+ */
+export function mergeShaftSlabHolesFromFloorDocs(
+  docs: readonly FloorDoc[],
+): ShaftSlabHole[] {
+  const byKey = new Map<string, ShaftSlabHole>();
+  for (const doc of docs) {
+    for (const h of collectShaftSlabHoles(doc)) {
+      const key = `${Math.round(h.cx * 100)}_${Math.round(h.cz * 100)}`;
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { cx: h.cx, cz: h.cz, hx: h.hx, hz: h.hz });
+      } else {
+        byKey.set(key, {
+          cx: h.cx,
+          cz: h.cz,
+          hx: Math.max(prev.hx, h.hx),
+          hz: Math.max(prev.hz, h.hz),
+        });
+      }
+    }
+  }
+  return [...byKey.values()];
 }
 
 /**
@@ -101,6 +137,12 @@ export function hollowShellXZRectsWithShaftCutouts(
     hx: h.hx,
     hz: h.hz,
   }));
-  const parts = subtractHolesFromRect(shell, localHoles);
+  let parts = subtractHolesFromRect(shell, localHoles, 0.08);
+  if (parts.length === 0 && localHoles.length > 0) {
+    parts = subtractHolesFromRect(shell, localHoles, 0.001);
+  }
+  if (parts.length === 0 && localHoles.length > 0) {
+    return [];
+  }
   return parts.length > 0 ? parts : [shell];
 }
