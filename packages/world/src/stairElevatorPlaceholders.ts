@@ -705,6 +705,62 @@ export type ElevatorShaftPlaceholderOpts = {
   corridorFlushGapM?: number;
 };
 
+/**
+ * Ground-door opening in **shaft-interior local Y** and tangent, matching
+ * {@link addElevatorShaftPlaceholder} / {@link addShaftShell} (`openTopWallExtend` 0.06,
+ * `bandHeightM === sy`). Used to punch matching holes in adjacent corridor shells.
+ */
+export function elevatorGroundDoorOpeningLocals(
+  sx: number,
+  sy: number,
+  sz: number,
+  face: CardinalFace,
+  tangentOffsetAlongWall = 0,
+): {
+  face: CardinalFace;
+  tangentOffsetAlongWall: number;
+  doorHalfW: number;
+  y0Local: number;
+  y1Local: number;
+} {
+  const wt = 0.11;
+  const hy = sy * 0.5;
+  const topExtend = 0.06;
+  const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
+  const wallCenterY = (-hy + wt) + innerWallH * 0.5;
+  const yWallBottom = wallCenterY - innerWallH * 0.5;
+  const yWallTop = wallCenterY + innerWallH * 0.5;
+  const vlenX = Math.max(sx - 2 * wt, 0.05);
+  const vlenZ = Math.max(sz - 2 * wt, 0.05);
+
+  const bandHeightM = sy;
+  const bandCap = Math.max(0.55, Math.min(bandHeightM, innerWallH));
+  const splitShaft = bandCap < innerWallH - 0.08;
+  const ySplit = yWallBottom + bandCap;
+
+  const doorHalfW = Math.min(
+    SHAFT_DOUBLE_DOOR_W * 0.5,
+    vlenZ * 0.5 - 0.06,
+    vlenX * 0.5 - 0.06,
+  );
+  const doorH = Math.min(
+    SHAFT_DOUBLE_DOOR_H,
+    bandCap - SHAFT_DOOR_SILL - 0.06,
+  );
+  const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  let yDoor1 = yDoor0 + Math.max(0.55, doorH);
+  const yCap = splitShaft ? ySplit : yWallTop;
+  yDoor1 = Math.min(yDoor1, yCap);
+
+  return {
+    face,
+    tangentOffsetAlongWall: tangentOffsetAlongWall,
+    doorHalfW,
+    y0Local: yDoor0,
+    y1Local: yDoor1,
+  };
+}
+
 export function addElevatorShaftPlaceholder(
   group: THREE.Group,
   sx: number,

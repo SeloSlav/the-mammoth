@@ -10,6 +10,7 @@ import {
   addElevatorShaftPlaceholder,
   addStairWellPlaceholder,
   computeStairDoorSnapForPlaceholder,
+  elevatorGroundDoorOpeningLocals,
   resolveStairGroundDoorCutoutMeta,
   SHAFT_DOUBLE_DOOR_H,
   stairShaftDoorTangentSpanShaftLocal,
@@ -161,7 +162,7 @@ function matsFor(kind: PlaceholderKind): {
   }
 }
 
-/** Room-local holes on corridor perimeter walls (aligned with adjacent stair shaft doors). */
+/** Room-local holes on corridor perimeter walls (aligned with adjacent stair / elevator doors). */
 type CorridorShellWallHoles = {
   e: WallHoleYZ[];
   w: WallHoleYZ[];
@@ -184,6 +185,7 @@ type HollowShellOpts = {
 };
 
 type PlateStairCorridorDoorPunch = {
+  /** Door wall on the stair/elevator shaft (same convention as {@link addShaftShell}). */
   stairFace: CardinalFace;
   tangentLocal: number;
   doorHalfW: number;
@@ -1023,6 +1025,40 @@ export function buildFloorMeshes(
     }
   }
 
+  const elevatorDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
+  for (const o of floor.objects) {
+    if (!o.prefabId.toLowerCase().includes("elevator")) continue;
+    const ex = o.scale?.[0] ?? 1;
+    const ey = o.scale?.[1] ?? 1;
+    const ez = o.scale?.[2] ?? 1;
+    const skE = shaftPlanKey(o.position[0], o.position[2]);
+    const elevFace =
+      opts?.elevatorDoorFaceByShaftKey?.get(skE) ??
+      elevatorDoorFaceFromFloorCorridors(
+        o.position[0],
+        o.position[2],
+        floor,
+        plateCx,
+        plateCz,
+      );
+    const loc = elevatorGroundDoorOpeningLocals(ex, ey, ez, elevFace, 0);
+    elevatorDoorPunchesPlate.push({
+      stairFace: loc.face,
+      tangentLocal: loc.tangentOffsetAlongWall,
+      doorHalfW: loc.doorHalfW,
+      y0Local: loc.y0Local,
+      y1Local: loc.y1Local,
+      spx: o.position[0],
+      spz: o.position[2],
+      spy: o.position[1],
+      shx: ex * 0.5,
+      shz: ez * 0.5,
+    });
+  }
+
+  const corridorShaftDoorPunchesPlate: readonly PlateStairCorridorDoorPunch[] =
+    [...stairDoorPunchesPlate, ...elevatorDoorPunchesPlate];
+
   for (const obj of floor.objects) {
     expandBoxForPlacedObject(min, max, obj);
     hasBounds = true;
@@ -1099,7 +1135,7 @@ export function buildFloorMeshes(
             sy,
             sz,
             kind,
-            stairDoorPunchesPlate,
+            corridorShaftDoorPunchesPlate,
           );
       addHollowRoomShell(room, sx, sy, sz, kind, {
         shaftHolesPlate: shaftHolesPlate,
