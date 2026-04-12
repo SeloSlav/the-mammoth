@@ -1,15 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
-import {
-  addStairWellPlaceholder,
-  computeStairDoorSnapForPlaceholder,
-  SHAFT_DOUBLE_DOOR_H,
-} from "./stairElevatorPlaceholders.js";
-import {
-  corridorFlushGapForShaftDoor,
-  firstCorridorOrLobbyFromFloor,
-} from "./shaftCorridorFlush.js";
-import { pickCornerLandingNearDoorBand } from "./stairWellGeometry.js";
+import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
@@ -41,92 +32,6 @@ export function shaftPlanKey(px: number, pz: number): string {
 function isStairPrefab(prefabId: string): boolean {
   const p = prefabId.toLowerCase();
   return p.includes("stair_well") || p.includes("stairwell");
-}
-
-/**
- * First authored stair on this shaft: plate-aligned Y in mega-column local space (landing pick
- * for {@link computeStairDoorSnapForPlaceholder}). Exported so mega **corridor punches** use the
- * same hint as {@link addBuildingStairShaftColumnsToRoot} (one tangent for the full-height shell).
- */
-export function firstStairDoorBandTargetYLocal(
-  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
-  getFloorDoc: (floorDocId: string) => FloorDoc,
-  s: BuildingStairShaftSpec,
-  spacing: number,
-): number | undefined {
-  const key = shaftPlanKey(s.px, s.pz);
-  for (const ref of sortedRefs) {
-    const doc = getFloorDoc(ref.floorDocId);
-    const stair = doc.objects.find(
-      (o) =>
-        isStairPrefab(o.prefabId) &&
-        shaftPlanKey(o.position[0], o.position[2]) === key,
-    );
-    if (!stair) continue;
-    const plateY = (ref.levelIndex - 1) * spacing;
-    return plateY + stair.position[1] - s.centerY;
-  }
-  return undefined;
-}
-
-/** Wall-local Y bands for each stacked storey (mega column), aligned to corner landings at the door face. */
-function collectCorridorDoorBandsLocalY(
-  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
-  getFloorDoc: (floorDocId: string) => FloorDoc,
-  s: BuildingStairShaftSpec,
-  acx: number,
-  acz: number,
-  spacing: number,
-  padAlignTowardPlateXZ?: readonly [number, number],
-): { y0: number; y1: number }[] {
-  const key = shaftPlanKey(s.px, s.pz);
-  const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
-  const groundDoor = {
-    bandHeightM: s.megaSy,
-    towardPlateXZ: [acx, acz] as const,
-    shaftPlateXZ: [s.px, s.pz] as const,
-  };
-  const doorBandTargetYForLandingPick = firstStairDoorBandTargetYLocal(
-    sortedRefs,
-    getFloorDoc,
-    s,
-    spacing,
-  );
-  const snap = computeStairDoorSnapForPlaceholder(
-    s.sx,
-    s.megaSy,
-    s.sz,
-    groundDoor,
-    {
-      climbFullShaft: climbFull,
-      doorBandTargetYForLandingPick,
-      padAlignTowardPlateXZ,
-    },
-  );
-  const tangSnap = snap.tangentOffsetAlongWall;
-  const out: { y0: number; y1: number }[] = [];
-  const halfOpen = SHAFT_DOUBLE_DOOR_H * 0.5 + 0.12;
-  for (const ref of sortedRefs) {
-    const doc = getFloorDoc(ref.floorDocId);
-    const stair = doc.objects.find(
-      (o) =>
-        isStairPrefab(o.prefabId) &&
-        shaftPlanKey(o.position[0], o.position[2]) === key,
-    );
-    if (!stair) continue;
-    const plateY = (ref.levelIndex - 1) * spacing;
-    const targetY = plateY + stair.position[1] - s.centerY;
-    const land = pickCornerLandingNearDoorBand(
-      snap.L,
-      snap.face,
-      tangSnap,
-      snap.doorHalfW,
-      targetY,
-    );
-    const mid = land ? land.y : targetY;
-    out.push({ y0: mid - halfOpen, y1: mid + halfOpen });
-  }
-  return out;
 }
 
 /**
@@ -197,80 +102,19 @@ export function getBuildingStairShaftSpecs(
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
-  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
-  getFloorDoc: (floorDocId: string) => FloorDoc,
-  spacing: number,
-  padAlignTowardPlateXZ?: readonly [number, number],
+  _sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
+  _getFloorDoc: (floorDocId: string) => FloorDoc,
+  _spacing: number,
 ): void {
   if (specs.length === 0) return;
-  const acx = specs.reduce((a, s) => a + s.px, 0) / specs.length;
-  const acz = specs.reduce((a, s) => a + s.pz, 0) / specs.length;
-
-  let corridorFp = undefined as
-    | ReturnType<typeof firstCorridorOrLobbyFromFloor>
-    | undefined;
-  for (const ref of sortedRefs) {
-    corridorFp = firstCorridorOrLobbyFromFloor(getFloorDoc(ref.floorDocId));
-    if (corridorFp) break;
-  }
-
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
     col.position.set(s.px, s.centerY, s.pz);
     const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
-    const doorBandTargetYForLandingPick = firstStairDoorBandTargetYLocal(
-      sortedRefs,
-      getFloorDoc,
-      s,
-      spacing,
-    );
-    const stairSnap = computeStairDoorSnapForPlaceholder(
-      s.sx,
-      s.megaSy,
-      s.sz,
-      {
-        bandHeightM: s.megaSy,
-        towardPlateXZ: [acx, acz],
-        shaftPlateXZ: [s.px, s.pz],
-      },
-      {
-        climbFullShaft: climbFull,
-        doorBandTargetYForLandingPick,
-        padAlignTowardPlateXZ,
-      },
-    );
-    let stairFlush: number | undefined;
-    if (corridorFp) {
-      const g = corridorFlushGapForShaftDoor(
-        stairSnap.face,
-        s.px,
-        s.pz,
-        s.sx * 0.5,
-        s.sz * 0.5,
-        corridorFp,
-      );
-      if (g > 1e-4) stairFlush = Math.min(0.35, g);
-    }
+    /** No `groundDoor`: stair–corridor wall cutouts disabled (solid shaft shell). */
     addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
       climbFullShaft: climbFull,
-      groundDoor: {
-        bandHeightM: s.megaSy,
-        towardPlateXZ: [acx, acz],
-        shaftPlateXZ: [s.px, s.pz],
-      },
-      doorBandTargetYForLandingPick,
-      padAlignTowardPlateXZ,
-      corridorDoorBandsLocalY: collectCorridorDoorBandsLocalY(
-        sortedRefs,
-        getFloorDoc,
-        s,
-        acx,
-        acz,
-        spacing,
-        padAlignTowardPlateXZ,
-      ),
-      corridorFlushGapM: stairFlush,
       omitGroundStoreyCornerLandings: true,
     });
     root.add(col);

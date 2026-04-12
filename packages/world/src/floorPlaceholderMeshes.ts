@@ -1,21 +1,13 @@
 import * as THREE from "three";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
-import {
-  firstStairDoorBandTargetYLocal,
-  shaftPlanKey,
-  STOREY_SPACING_M,
-  type BuildingStairShaftSpec,
-} from "./buildingStairShafts.js";
+import { shaftPlanKey } from "./buildingStairShafts.js";
 import {
   addElevatorShaftPlaceholder,
   addStairWellPlaceholder,
-  computeStairDoorSnapForPlaceholder,
   elevatorGroundDoorOpeningLocals,
-  SHAFT_DOUBLE_DOOR_H,
   stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
-import { pickCornerLandingNearDoorBand } from "./stairWellGeometry.js";
 import {
   addDoorFrameTrimConstantX,
   addDoorFrameTrimConstantZ,
@@ -196,7 +188,7 @@ type HollowShellOpts = {
   storyLevelIndex?: number;
   /** Elevator-only union (plate-space); second cut on shell floor/ceiling so flanking plates do not cap hoistways. */
   shaftElevatorsMerged?: readonly ShaftSlabHole[];
-  /** Cuts through corridor walls opposite stair doors (room-local coordinates). */
+  /** Cuts through corridor walls opposite elevator doors (room-local coordinates). */
   corridorWallHoles?: CorridorShellWallHoles;
   /** Elevator door heads on this corridor shell — room-local; used for manufacturer signage. */
   elevatorSignPlacements?: readonly ElevatorCorridorSignPlacement[];
@@ -214,117 +206,11 @@ type PlateStairCorridorDoorPunch = {
   spy: number;
   shx: number;
   shz: number;
-  /**
-   * Mega stacked shaft: door band Y in **floor-doc / plate layout space** (same axis as
-   * `corridor.position[1]`). When set, overrides `spy + y*Local` so holes match
-   * {@link addBuildingStairShaftColumnsToRoot}.
-   */
-  yDoorPlateFrame0?: number;
-  yDoorPlateFrame1?: number;
   /** When true, a manufacturer sign is placed on the adjacent corridor wall above this door. */
   isElevator?: boolean;
 };
 
 const STAIR_CORRIDOR_TOUCH_M = 0.55;
-
-function isStairWellPrefabId(prefabId: string): boolean {
-  const p = prefabId.toLowerCase();
-  return p.includes("stair_well") || p.includes("stairwell");
-}
-
-/**
- * Corridor punch aligned with the full-height stair column for this storey (not per-plate `sy`).
- */
-function buildMegaStairCorridorDoorPunchForPlate(
-  spec: BuildingStairShaftSpec,
-  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
-  getFloorDoc: (floorDocId: string) => FloorDoc,
-  spacing: number,
-  levelIndex: number,
-  plateCx: number,
-  plateCz: number,
-  padAlignTowardPlateXZ?: readonly [number, number],
-): PlateStairCorridorDoorPunch | undefined {
-  const ref = sortedRefs.find((r) => r.levelIndex === levelIndex);
-  if (!ref) return undefined;
-  const doc = getFloorDoc(ref.floorDocId);
-  const stair = doc.objects.find(
-    (o) =>
-      isStairWellPrefabId(o.prefabId) &&
-      shaftPlanKey(o.position[0], o.position[2]) === spec.planKey,
-  );
-  if (!stair) return undefined;
-
-  const climbFull = spec.megaSy > STOREY_SPACING_M * 1.25;
-  const groundDoor = {
-    bandHeightM: spec.megaSy,
-    towardPlateXZ: [plateCx, plateCz] as const,
-    shaftPlateXZ: [spec.px, spec.pz] as const,
-  };
-  /**
-   * Tangent / face / doorHalfW must match the **single** mega column mesh
-   * (`addBuildingStairShaftColumnsToRoot` → same `doorBandTargetYForLandingPick` as first stair).
-   * Per-storey Y below only chooses the **vertical** door band on this plate — not a second snap.
-   */
-  const landingPickY = firstStairDoorBandTargetYLocal(
-    sortedRefs,
-    getFloorDoc,
-    spec,
-    spacing,
-  );
-  const columnSnap = computeStairDoorSnapForPlaceholder(
-    spec.sx,
-    spec.megaSy,
-    spec.sz,
-    groundDoor,
-    {
-      climbFullShaft: climbFull,
-      doorBandTargetYForLandingPick: landingPickY,
-      padAlignTowardPlateXZ,
-    },
-  );
-  const plateY = (ref.levelIndex - 1) * spacing;
-  const targetY = plateY + stair.position[1] - spec.centerY;
-  const land = pickCornerLandingNearDoorBand(
-    columnSnap.L,
-    columnSnap.face,
-    columnSnap.tangentOffsetAlongWall,
-    columnSnap.doorHalfW,
-    targetY,
-  );
-  const mid = land ? land.y : targetY;
-  const halfOpen = SHAFT_DOUBLE_DOOR_H * 0.5 + 0.12;
-  const bandY0 = mid - halfOpen;
-  const bandY1 = mid + halfOpen;
-
-  const wt = 0.11;
-  const hy = spec.megaSy * 0.5;
-  const innerWallH = Math.max(spec.megaSy - 2 * wt, 0.08);
-  const wallCenterY = (-hy + wt) + innerWallH * 0.5;
-  const yWB = wallCenterY - innerWallH * 0.5;
-  const yWT = wallCenterY + innerWallH * 0.5;
-  const y0c = Math.max(yWB + 0.03, Math.min(bandY0, bandY1));
-  const y1c = Math.min(yWT - 0.04, Math.max(bandY0, bandY1));
-
-  const plateOffsetY = (levelIndex - 1) * spacing;
-  const yDoorPlateFrame0 = spec.centerY - plateOffsetY + y0c;
-  const yDoorPlateFrame1 = spec.centerY - plateOffsetY + y1c;
-
-  return {
-    stairFace: columnSnap.face,
-    tangentLocal: columnSnap.tangentOffsetAlongWall,
-    doorHalfW: columnSnap.doorHalfW,
-    y0Local: columnSnap.resolvedShellDoor.doorHoleY0Local!,
-    y1Local: columnSnap.resolvedShellDoor.doorHoleY1Local!,
-    spx: spec.px,
-    spz: spec.pz,
-    spy: stair.position[1],
-    shx: spec.sx * 0.5,
-    shz: spec.sz * 0.5,
-    yDoorPlateFrame0,
-    yDoorPlateFrame1,
-  };
-}
 
 function corridorWallReceivingStairDoor(stairFace: CardinalFace): CardinalFace {
   switch (stairFace) {
@@ -432,29 +318,13 @@ function resolveCorridorShaftDoorContacts(
         : Math.min(cpx + chx, x1p) - Math.max(cpx - chx, x0p);
     if (overlap < 0.14) continue;
 
-    let y0r: number;
-    let y1r: number;
-    if (
-      p.yDoorPlateFrame0 != null &&
-      p.yDoorPlateFrame1 != null &&
-      Number.isFinite(p.yDoorPlateFrame0) &&
-      Number.isFinite(p.yDoorPlateFrame1)
-    ) {
-      const y0w =
-        Math.min(p.yDoorPlateFrame0, p.yDoorPlateFrame1) - cpy;
-      const y1w =
-        Math.max(p.yDoorPlateFrame0, p.yDoorPlateFrame1) - cpy;
-      y0r = Math.min(y0w, y1w);
-      y1r = Math.max(y0w, y1w);
-    } else {
-      const ya = Math.min(p.y0Local, p.y1Local);
-      const yb = Math.max(p.y0Local, p.y1Local);
-      /** Stair door Y is shaft-interior local; convert to corridor room-local Y (same as lobby holes). */
-      const y0w = spy + ya - cpy;
-      const y1w = spy + yb - cpy;
-      y0r = Math.min(y0w, y1w);
-      y1r = Math.max(y0w, y1w);
-    }
+    const ya = Math.min(p.y0Local, p.y1Local);
+    const yb = Math.max(p.y0Local, p.y1Local);
+    /** Shaft door Y is interior-local; convert to corridor room-local Y (same as lobby holes). */
+    const y0w = spy + ya - cpy;
+    const y1w = spy + yb - cpy;
+    let y0r = Math.min(y0w, y1w);
+    let y1r = Math.max(y0w, y1w);
     /** Light clamp only — avoid lifting the sill above the stair opening (was yLo+0.04 and caused a lip). */
     y0r = Math.max(yLo + 0.008, y0r);
     y1r = Math.min(yHi - 0.008, y1r);
@@ -1451,20 +1321,6 @@ export type BuildFloorMeshesOptions = {
    * Passed from {@link instantiateBuildingFloorStack} so upper storeys match the ground door side.
    */
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
-  /**
-   * When {@link stairShaftSkipKeys} replaces per-plate shafts with {@link addBuildingStairShaftColumnsToRoot},
-   * corridor wall holes must use the same mega-shaft door bands and tangent math as that column.
-   */
-  megaStairCorridorPunchContext?: {
-    specs: readonly BuildingStairShaftSpec[];
-    sortedRefs: readonly { levelIndex: number; floorDocId: string }[];
-    getFloorDoc: (floorDocId: string) => FloorDoc;
-    spacing: number;
-    /** Corridor shell centre (plate XZ); same pad pull as mega column. */
-    padAlignTowardPlateXZ?: readonly [number, number];
-  };
-  /** Corridor / lobby centre (plate XZ) for stair door pad pull on per-plate shafts. */
-  padAlignTowardPlateXZ?: readonly [number, number];
 };
 
 /**
@@ -1539,84 +1395,6 @@ export function buildFloorMeshes(
   const story = opts?.storyLevelIndex ?? 99;
   const corridorFootprint = firstCorridorOrLobbyFromFloor(floor);
 
-  /** Same flush gap as {@link addStairWellPlaceholder} so corridor punches align with the shaft opening. */
-  const stairFlushByPlanKey = new Map<string, number | undefined>();
-  const stairDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
-  for (const o of floor.objects) {
-    const pid0 = o.prefabId.toLowerCase();
-    if (!(pid0.includes("stair_well") || pid0.includes("stairwell"))) continue;
-    const sxi = o.scale?.[0] ?? 1;
-    const syi = o.scale?.[1] ?? 1;
-    const szi = o.scale?.[2] ?? 1;
-    const sk0 = shaftPlanKey(o.position[0], o.position[2]);
-    if (opts?.stairShaftSkipKeys?.has(sk0)) {
-      /** Per-plate stair mesh is skipped; punches come from {@link megaStairCorridorPunchContext}. */
-      continue;
-    }
-    const snap = computeStairDoorSnapForPlaceholder(
-      sxi,
-      syi,
-      szi,
-      {
-        bandHeightM: syi,
-        towardPlateXZ: [plateCx, plateCz],
-        shaftPlateXZ: [o.position[0], o.position[2]],
-      },
-      {
-        climbFullShaft: false,
-        padAlignTowardPlateXZ: opts?.padAlignTowardPlateXZ,
-      },
-    );
-    let stairFlush: number | undefined;
-    if (corridorFootprint) {
-      const shx0 = sxi * 0.5;
-      const shz0 = szi * 0.5;
-      const g = corridorFlushGapForShaftDoor(
-        snap.face,
-        o.position[0],
-        o.position[2],
-        shx0,
-        shz0,
-        corridorFootprint,
-      );
-      if (g > 1e-4) stairFlush = Math.min(0.35, g);
-    }
-    stairFlushByPlanKey.set(sk0, stairFlush);
-    const y0 = snap.resolvedShellDoor.doorHoleY0Local;
-    const y1 = snap.resolvedShellDoor.doorHoleY1Local;
-    if (y0 == null || y1 == null) continue;
-    stairDoorPunchesPlate.push({
-      stairFace: snap.face,
-      tangentLocal: snap.tangentOffsetAlongWall,
-      doorHalfW: snap.doorHalfW,
-      y0Local: y0,
-      y1Local: y1,
-      spx: o.position[0],
-      spz: o.position[2],
-      spy: o.position[1],
-      shx: sxi * 0.5,
-      shz: szi * 0.5,
-    });
-  }
-
-  const megaCtx = opts?.megaStairCorridorPunchContext;
-  if (megaCtx && opts?.stairShaftSkipKeys && opts.storyLevelIndex != null) {
-    for (const spec of megaCtx.specs) {
-      if (!opts.stairShaftSkipKeys.has(spec.planKey)) continue;
-      const megaPunch = buildMegaStairCorridorDoorPunchForPlate(
-        spec,
-        megaCtx.sortedRefs,
-        megaCtx.getFloorDoc,
-        megaCtx.spacing,
-        opts.storyLevelIndex,
-        plateCx,
-        plateCz,
-        megaCtx.padAlignTowardPlateXZ,
-      );
-      if (megaPunch) stairDoorPunchesPlate.push(megaPunch);
-    }
-  }
-
   const elevatorDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
   for (const o of floor.objects) {
     if (!o.prefabId.toLowerCase().includes("elevator")) continue;
@@ -1650,7 +1428,7 @@ export function buildFloorMeshes(
   }
 
   const corridorShaftDoorPunchesPlate: readonly PlateStairCorridorDoorPunch[] =
-    [...stairDoorPunchesPlate, ...elevatorDoorPunchesPlate];
+    elevatorDoorPunchesPlate;
 
   for (const obj of floor.objects) {
     expandBoxForPlacedObject(min, max, obj);
@@ -1708,13 +1486,8 @@ export function buildFloorMeshes(
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
       if (!opts?.stairShaftSkipKeys?.has(sk)) {
+        /** No `groundDoor`: no stair–corridor shaft wall cutouts (solid shell). */
         addStairWellPlaceholder(room, sx, sy, sz, {
-          groundDoor: {
-            bandHeightM: sy,
-            towardPlateXZ: [plateCx, plateCz],
-            shaftPlateXZ: [obj.position[0], obj.position[2]],
-          },
-          corridorFlushGapM: stairFlushByPlanKey.get(sk),
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
         });
       }
