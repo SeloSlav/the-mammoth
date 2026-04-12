@@ -1,5 +1,7 @@
 /**
- * **Rectangular stair shaft** — racetrack: four wall runs + **four corner landings** every lap.
+ * **Rectangular stair shaft** — racetrack: four wall runs + corner landings every lap.
+ * Short perimeter runs (few treads) fold into the next leg in climb order with **one** continuous
+ * landing slab on that wall (east/west and south/north), so stub flights do not sit between pads.
  * Mega shafts use **the same lap** (same tread count, rise, corners) repeated **floor-by-floor**
  * so the climb reads as one orderly system.
  *
@@ -371,6 +373,9 @@ export function computeSwitchbackStairLayout(
   }
   rise = Math.max(riseMin, Math.min(riseMax, rise));
 
+  const landTh = Math.max(0.085, Math.min(rise * 0.92, 0.15));
+  const lh = strip * 0.5;
+
   let n1 = Math.max(2, Math.round((nTotal * southLen) / per));
   let n2 = Math.max(2, Math.round((nTotal * eastLen) / per));
   let n3 = Math.max(2, Math.round((nTotal * northLen) / per));
@@ -385,20 +390,88 @@ export function computeSwitchbackStairLayout(
     n4 = nTotal - n1 - n2 - n3;
   }
 
+  /**
+   * Short runs (few treads) read as two corner pads + a stub flight. Fold into the **next** leg
+   * in climb order and replace with one flat landing along that wall. Wide shallow shafts (large
+   * `sz`) often clamp `southLen`/`northLen` → tiny `n1`/`n3`; long narrow shafts clamp `eastLen` →
+   * tiny `n2`/`n4`.
+   */
+  const SHORT_LEG_MERGE_MAX = 3;
+  let eastRunMerged = false;
+  let westRunMerged = false;
+  let southRunMerged = false;
+  let northRunMerged = false;
+  let southAbsorbed = 0;
+  let northAbsorbed = 0;
+
+  if (n2 <= SHORT_LEG_MERGE_MAX) {
+    n1 += n2;
+    n2 = 0;
+    eastRunMerged = true;
+  }
+  if (n4 <= SHORT_LEG_MERGE_MAX) {
+    n3 += n4;
+    n4 = 0;
+    westRunMerged = true;
+  }
+  if (n1 <= SHORT_LEG_MERGE_MAX) {
+    southAbsorbed = n1;
+    n2 += n1;
+    n1 = 0;
+    southRunMerged = true;
+  }
+  if (n3 <= SHORT_LEG_MERGE_MAX) {
+    northAbsorbed = n3;
+    n4 += n3;
+    n3 = 0;
+    northRunMerged = true;
+  }
+
+  const sxLo = ix0 + strip;
+  const sxHi = ix1 - strip;
+  const sxHalfW = Math.max(lh, (sxHi - sxLo) * 0.5 + 0.02);
+
+  const ezLo = iz0 + strip;
+  const ezHi = iz1 - strip;
+  const ezMid = (ezLo + ezHi) * 0.5;
+  const ezHalfD = Math.max(lh, (ezHi - ezLo) * 0.5 + 0.02);
+
+  const wzHi = iz1 - strip;
+  const wzLo = iz0 + strip;
+  const wzMid = (wzLo + wzHi) * 0.5;
+  const wzHalfD = Math.max(lh, Math.abs(wzHi - wzLo) * 0.5 + 0.02);
+
+  /**
+   * Merged pads: **long axis along the wall** (halfW on south/north = X; halfD on east/west = Z),
+   * **short axis** `BoxGeometry` half into the racetrack void so they slot against the wall like a
+   * board turned 90° from “deep plate” into “strip along the run”.
+   */
+  const xRunGap = xE - xW;
+  const racetrackXMid = (sxLo + sxHi) * 0.5;
+  /** South/north wall runs ±X: long in X (`halfW`), thin hugging zS/zN (`halfD`). */
+  const southNorthAlongWall = Math.min(
+    (ix1 - ix0) * 0.5 - STAIR_WT - 0.012,
+    Math.max(sxHalfW + strip * 0.42, xRunGap * 0.56 + lh * 0.34),
+  );
+  const southNorthWallHug = Math.max(lh * 1.08, strip * 0.48);
+  /** East/west wall runs ±Z: long in Z (`halfD`), thin hugging xE/xW (`halfW`). */
+  const eastWestAlongWall = Math.min(
+    (iz1 - iz0) * 0.5 - STAIR_WT - 0.012,
+    Math.max(ezHalfD + strip * 0.34, (ezHi - ezLo) * 0.5 + 0.08),
+  );
+  const eastWestWallHug = Math.max(lh * 1.14, xRunGap * 0.3);
+
   const legs: Leg[] = [
     { ax: ix0 + strip, az: zS, bx: ix1 - strip, bz: zS, count: n1 },
-    { ax: xE, az: iz0 + strip, bx: xE, bz: iz1 - strip, count: n2 },
+    { ax: xE, az: ezLo, bx: xE, bz: ezHi, count: n2 },
     { ax: ix1 - strip, az: zN, bx: ix0 + strip, bz: zN, count: n3 },
-    { ax: xW, az: iz1 - strip, bx: xW, bz: iz0 + strip, count: n4 },
+    { ax: xW, az: wzHi, bx: xW, bz: wzLo, count: n4 },
   ];
 
   const advance = nTotal * rise;
   const numLaps = climbFull
     ? Math.max(1, Math.min(120, Math.floor(fullClimb / advance)))
     : 1;
-
-  const landTh = Math.max(0.085, Math.min(rise * 0.92, 0.15));
-  const lh = strip * 0.5;
 
   const treads: StairTreadSpec[] = [];
   const cornerLandings: StairCornerLanding[] = [];
@@ -410,41 +483,94 @@ export function computeSwitchbackStairLayout(
       idx = buildLegTreads(leg, runBase, rise, idx, treads, halfAcross);
     }
 
-    /** Four corners every lap (SW was missing before). */
-    cornerLandings.push(
-      {
-        x: xE,
+    const th = landTh * 0.5;
+
+    if (southRunMerged) {
+      cornerLandings.push({
+        x: racetrackXMid,
+        y: runBase + southAbsorbed * 0.5 * rise,
+        z: zS,
+        halfW: southNorthAlongWall,
+        halfD: southNorthWallHug,
+        thicknessHalf: th,
+      });
+    }
+
+    if (eastRunMerged) {
+      cornerLandings.push({
+        x: xE - eastWestWallHug,
         y: runBase + n1 * rise,
-        z: zS,
-        halfW: lh,
-        halfD: lh,
-        thicknessHalf: landTh * 0.5,
-      },
-      {
-        x: xE,
-        y: runBase + (n1 + n2) * rise,
+        z: ezMid,
+        halfW: eastWestWallHug,
+        halfD: eastWestAlongWall,
+        thicknessHalf: th,
+      });
+    } else {
+      if (!southRunMerged) {
+        cornerLandings.push({
+          x: xE,
+          y: runBase + n1 * rise,
+          z: zS,
+          halfW: lh,
+          halfD: lh,
+          thicknessHalf: th,
+        });
+      }
+      if (!northRunMerged) {
+        cornerLandings.push({
+          x: xE,
+          y: runBase + (n1 + n2) * rise,
+          z: zN,
+          halfW: lh,
+          halfD: lh,
+          thicknessHalf: th,
+        });
+      }
+    }
+
+    if (northRunMerged) {
+      const yNorth = runBase + (n1 + n2 + northAbsorbed * 0.5) * rise;
+      cornerLandings.push({
+        x: racetrackXMid,
+        y: yNorth,
         z: zN,
-        halfW: lh,
-        halfD: lh,
-        thicknessHalf: landTh * 0.5,
-      },
-      {
-        x: xW,
-        y: runBase + (n1 + n2 + n3) * rise,
-        z: zN,
-        halfW: lh,
-        halfD: lh,
-        thicknessHalf: landTh * 0.5,
-      },
-      {
-        x: xW,
-        y: runBase + nTotal * rise,
-        z: zS,
-        halfW: lh,
-        halfD: lh,
-        thicknessHalf: landTh * 0.5,
-      },
-    );
+        halfW: southNorthAlongWall,
+        halfD: southNorthWallHug,
+        thicknessHalf: th,
+      });
+    }
+
+    if (westRunMerged) {
+      cornerLandings.push({
+        x: xW + eastWestWallHug,
+        y: runBase + (n1 + n3) * rise,
+        z: ezMid,
+        halfW: eastWestWallHug,
+        halfD: eastWestAlongWall,
+        thicknessHalf: th,
+      });
+    } else {
+      if (!northRunMerged) {
+        cornerLandings.push({
+          x: xW,
+          y: runBase + (n1 + n2 + n3) * rise,
+          z: zN,
+          halfW: lh,
+          halfD: lh,
+          thicknessHalf: th,
+        });
+      }
+      if (!southRunMerged) {
+        cornerLandings.push({
+          x: xW,
+          y: runBase + nTotal * rise,
+          z: zS,
+          halfW: lh,
+          halfD: lh,
+          thicknessHalf: th,
+        });
+      }
+    }
   }
 
   const innerWallH = Math.max(sy - 2 * STAIR_WT, 0.08);

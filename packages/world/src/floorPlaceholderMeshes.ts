@@ -12,6 +12,7 @@ import {
   addWallConstantXWithHoles,
   addWallConstantZWithHoles,
   pickFaceTowardPoint,
+  type CardinalFace,
   type WallHoleXY,
   type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
@@ -500,7 +501,7 @@ export type BuildFloorMeshesOptions = {
    * (`shaftPlanKey` from `obj.position` XZ).
    */
   stairShaftSkipKeys?: ReadonlySet<string>;
-  /** 1-based; level 1 enables ground shaft doors + lobby corridor openings. */
+  /** 1-based; level 1 enables ground-only stair shaft doors + lobby corridor openings. */
   storyLevelIndex?: number;
   /**
    * When stacking plates, union of all shaft/stair holes (plate-space XZ). Passed from
@@ -514,7 +515,41 @@ export type BuildFloorMeshesOptions = {
    * the ground-storey grass occluder lines up with {@link FP_OUTDOOR_GROUND_VISUAL_Y}.
    */
   plateWorldOriginY?: number;
+  /**
+   * Per {@link shaftPlanKey}, door wall face chosen on **story 1** of a stacked building.
+   * Passed from {@link instantiateBuildingFloorStack} so upper storeys match the ground door side.
+   */
+  elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
 };
+
+/**
+ * Ground-storey elevator door faces (plate-space), keyed by {@link shaftPlanKey} at each car’s XZ.
+ */
+export function elevatorDoorFacesFromGroundFloorDoc(doc: FloorDoc): Map<string, CardinalFace> {
+  const floor = withoutElevatorsInStairwells(doc);
+  let plateCx = 0;
+  let plateCz = 0;
+  let plateN = 0;
+  for (const o of floor.objects) {
+    plateCx += o.position[0];
+    plateCz += o.position[2];
+    plateN += 1;
+  }
+  if (plateN > 0) {
+    plateCx /= plateN;
+    plateCz /= plateN;
+  }
+  const out = new Map<string, CardinalFace>();
+  for (const o of floor.objects) {
+    if (!o.prefabId.toLowerCase().includes("elevator")) continue;
+    const k = shaftPlanKey(o.position[0], o.position[2]);
+    out.set(
+      k,
+      pickFaceTowardPoint(o.position[0], o.position[2], plateCx, plateCz),
+    );
+  }
+  return out;
+}
 
 /**
  * Turns each `FloorDoc` volume into a hollow shell (floor + ceiling + four walls).
@@ -575,18 +610,14 @@ export function buildFloorMeshes(
 
     const pid = obj.prefabId.toLowerCase();
     if (pid.includes("elevator")) {
-      const doorFace = pickFaceTowardPoint(
-        obj.position[0],
-        obj.position[2],
-        plateCx,
-        plateCz,
-      );
+      const sk = shaftPlanKey(obj.position[0], obj.position[2]);
+      const doorFace =
+        opts?.elevatorDoorFaceByShaftKey?.get(sk) ??
+        pickFaceTowardPoint(obj.position[0], obj.position[2], plateCx, plateCz);
       /** Pit slab only on ground plate; `99` = legacy default when no `storyLevelIndex` (single-plate). */
       const elevatorPitSlab = story === 1 || story === 99;
       addElevatorShaftPlaceholder(room, sx, sy, sz, {
-        groundDoor: groundShaftDoors
-          ? { face: doorFace, bandHeightM: sy }
-          : null,
+        groundDoor: { face: doorFace, bandHeightM: sy },
         includePitFloor: elevatorPitSlab,
       });
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {

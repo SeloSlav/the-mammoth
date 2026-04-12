@@ -12,7 +12,10 @@ import {
   type InteriorDoc,
 } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
-import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
+import {
+  buildFloorMeshes,
+  elevatorDoorFacesFromGroundFloorDoc,
+} from "./floorPlaceholderMeshes.js";
 import {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
@@ -22,7 +25,7 @@ import {
   mergeShaftSlabHolesFromFloorDocs,
 } from "./shaftPlanformClip.js";
 
-export { buildFloorMeshes };
+export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc };
 export {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
@@ -111,6 +114,11 @@ export function instantiateBuildingFloorStack(
   const shaftElevatorsMerged =
     mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
 
+  const groundRef = sorted.find((r) => r.levelIndex === 1);
+  const elevatorDoorFaceByShaftKey = groundRef
+    ? elevatorDoorFacesFromGroundFloorDoc(getFloorDoc(groundRef.floorDocId))
+    : undefined;
+
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
     const plateWorldOriginY = (o?.[1] ?? 0) + (ref.levelIndex - 1) * spacing;
@@ -120,6 +128,7 @@ export function instantiateBuildingFloorStack(
       shaftHolesPlateMerged,
       shaftElevatorsMerged,
       plateWorldOriginY,
+      elevatorDoorFaceByShaftKey,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;

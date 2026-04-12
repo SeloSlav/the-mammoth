@@ -257,6 +257,11 @@ export type WalkSurfaceFloorOpts = {
   shaftHolesPlateMerged?: readonly ShaftSlabHole[];
   /** Elevator-only merged holes (plate-space); matches shell elevator punch in `buildFloorMeshes`. */
   shaftElevatorsMerged?: readonly ShaftSlabHole[];
+  /**
+   * 1-based storey index when plates are stacked (`BuildingFloorRef.levelIndex`).
+   * Used so elevator hoistways stay open except for the L1 pit slab walk surface.
+   */
+  storyLevelIndex?: number;
 };
 
 export function walkSurfaceAABBsForFloorDoc(
@@ -280,17 +285,22 @@ export function walkSurfaceAABBsForFloorDoc(
     const wy = py + floorWorldY;
 
     if (pid.includes("elevator")) {
-      const top = shaftFloorLocalTopY(sy) + wy;
-      const thin = 0.06;
-      pushBox(
-        out,
-        px - sx * 0.5,
-        top - thin,
-        pz - sz * 0.5,
-        px + sx * 0.5,
-        top,
-        pz + sz * 0.5,
-      );
+      const story = opts?.storyLevelIndex ?? 99;
+      /** Pit walk only (matches `includePitFloor` in elevator placeholder); upper storeys stay open. */
+      const elevatorPitWalk = story === 1 || story === 99;
+      if (elevatorPitWalk) {
+        const top = shaftFloorLocalTopY(sy) + wy;
+        const thin = 0.06;
+        pushBox(
+          out,
+          px - sx * 0.5,
+          top - thin,
+          pz - sz * 0.5,
+          px + sx * 0.5,
+          top,
+          pz + sz * 0.5,
+        );
+      }
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const pk = shaftPlanKey(px, pz);
       if (!opts?.omitStairWalkPlanKeys?.has(pk)) {
@@ -374,6 +384,7 @@ export function walkSurfaceAABBsForBuilding(
       omitStairWalkPlanKeys: omitStairKeys,
       shaftHolesPlateMerged,
       shaftElevatorsMerged,
+      storyLevelIndex: ref.levelIndex,
     })) {
       merged.push({
         min: [b.min[0] + ox, b.min[1], b.min[2] + oz],
