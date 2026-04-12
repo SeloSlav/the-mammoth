@@ -163,35 +163,15 @@ function addHollowRoomShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const { floor: floorM, ceil: ceilM, wall: wallM } = matsFor(kind);
-  const vh = Math.max(sy - 2 * wt, 0.05);
-  const vlenX = Math.max(sx - 2 * wt, 0.05);
-  const vlenZ = Math.max(sz - 2 * wt, 0.05);
+  const { floor: floorM, ceil: ceilM } = matsFor(kind);
 
   const rects = opts.skipShaftCutouts
     ? ([{ x0: -hx, x1: hx, z0: -hz, z1: hz }] as const)
     : hollowShellXZRectsWithShaftCutouts(sx, sz, opts.roomPx, opts.roomPz, opts.shaftHolesPlate);
   addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM);
 
-  const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
-  east.name = "shell_wall_e";
-  east.position.set(hx - wt * 0.5, 0, 0);
-  group.add(east);
-
-  const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
-  west.name = "shell_wall_w";
-  west.position.set(-hx + wt * 0.5, 0, 0);
-  group.add(west);
-
-  const north = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
-  north.name = "shell_wall_n";
-  north.position.set(0, 0, hz - wt * 0.5);
-  group.add(north);
-
-  const south = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
-  south.name = "shell_wall_s";
-  south.position.set(0, 0, -hz + wt * 0.5);
-  group.add(south);
+  // No perimeter placeholder walls — they read as an unwanted low curb around the exterior;
+  // stairs / elevator shafts still get their own shells in `stairElevatorPlaceholders`.
 }
 
 function expandBoxForPlacedObject(

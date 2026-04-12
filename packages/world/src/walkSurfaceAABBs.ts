@@ -31,6 +31,9 @@ export type WalkSurfaceAabb = {
 /** Infinite prototype slab used outside authored geometry (sync with `fpLocomotion` FLOOR_Y). */
 export const WALK_FALLBACK_FLOOR_TOP_Y = 0.35;
 
+/** Extra XZ margin on the lowest storey concrete pad so grass around the shell is walkable. */
+const GROUND_STORY_GRASS_PAD_EXTRA_MARGIN_M = 28;
+
 function pushBox(
   out: WalkSurfaceAabb[],
   minx: number,
@@ -351,6 +354,26 @@ export function walkSurfaceAABBsForBuilding(
   if (shaftSpecs.length > 0) {
     appendBuildingStairShaftWalkAABBs(merged, shaftSpecs, ox, oy, oz);
   }
+
+  const lowest = sorted.reduce((a, b) => (a.levelIndex < b.levelIndex ? a : b));
+  const lowDoc = getFloorDoc(lowest.floorDocId);
+  const lowPlateY = oy + (lowest.levelIndex - 1) * floorSpacingM;
+  const grassPad: WalkSurfaceAabb[] = [];
+  appendConcreteSlabWalkAABBs(
+    grassPad,
+    lowDoc,
+    lowPlateY,
+    0.8 + GROUND_STORY_GRASS_PAD_EXTRA_MARGIN_M,
+    0.16,
+    collectShaftSlabHoles(lowDoc),
+  );
+  for (const b of grassPad) {
+    merged.push({
+      min: [b.min[0] + ox, b.min[1], b.min[2] + oz],
+      max: [b.max[0] + ox, b.max[1], b.max[2] + oz],
+    });
+  }
+
   return merged;
 }
 

@@ -265,6 +265,12 @@ fn integrate_one(input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
         }
     }
 
+    if p.y < FLOOR_Y + SKIN - 1e-4 {
+        p.y = FLOOR_Y + SKIN;
+        p.vel_y = p.vel_y.max(0.0);
+        p.grounded = 1;
+    }
+
     // Anti-grief: clamp insane horizontal velocity from bad clients / float blowup
     let (vx, vz) = clamp_len2(p.vel_x, p.vel_z, 24.0);
     p.vel_x = vx;

@@ -195,6 +195,12 @@ export function stepFpLocomotion(
     }
   }
 
+  if (walk?.sampleWalkGroundTopY && pos.y < FLOOR_Y + SKIN - 1e-4) {
+    pos.y = FLOOR_Y + SKIN;
+    state.velocity.y = Math.max(0, state.velocity.y);
+    state.grounded = true;
+  }
+
   const horizontalSpeed = Math.hypot(state.velocity.x, state.velocity.z);
   const targetEye = input.crouch ? EYE_CROUCH : EYE_STAND;
   state.eyeSmoothed = THREE.MathUtils.damp(
