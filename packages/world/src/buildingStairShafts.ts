@@ -3,7 +3,6 @@ import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import {
   addStairWellPlaceholder,
   computeStairDoorSnapForPlaceholder,
-  resolveStairGroundDoorCutoutMeta,
   SHAFT_DOUBLE_DOOR_H,
 } from "./stairElevatorPlaceholders.js";
 import {
@@ -44,6 +43,32 @@ function isStairPrefab(prefabId: string): boolean {
   return p.includes("stair_well") || p.includes("stairwell");
 }
 
+/**
+ * First authored stair on this shaft: plate-aligned Y in mega-column local space (landing pick
+ * for {@link computeStairDoorSnapForPlaceholder}). Exported so mega **corridor punches** use the
+ * same hint as {@link addBuildingStairShaftColumnsToRoot} (one tangent for the full-height shell).
+ */
+export function firstStairDoorBandTargetYLocal(
+  sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  s: BuildingStairShaftSpec,
+  spacing: number,
+): number | undefined {
+  const key = shaftPlanKey(s.px, s.pz);
+  for (const ref of sortedRefs) {
+    const doc = getFloorDoc(ref.floorDocId);
+    const stair = doc.objects.find(
+      (o) =>
+        isStairPrefab(o.prefabId) &&
+        shaftPlanKey(o.position[0], o.position[2]) === key,
+    );
+    if (!stair) continue;
+    const plateY = (ref.levelIndex - 1) * spacing;
+    return plateY + stair.position[1] - s.centerY;
+  }
+  return undefined;
+}
+
 /** Wall-local Y bands for each stacked storey (mega column), aligned to corner landings at the door face. */
 function collectCorridorDoorBandsLocalY(
   sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
@@ -55,17 +80,25 @@ function collectCorridorDoorBandsLocalY(
 ): { y0: number; y1: number }[] {
   const key = shaftPlanKey(s.px, s.pz);
   const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
-  const meta = resolveStairGroundDoorCutoutMeta(
+  const groundDoor = {
+    bandHeightM: s.megaSy,
+    towardPlateXZ: [acx, acz] as const,
+    shaftPlateXZ: [s.px, s.pz] as const,
+  };
+  const doorBandTargetYForLandingPick = firstStairDoorBandTargetYLocal(
+    sortedRefs,
+    getFloorDoc,
+    s,
+    spacing,
+  );
+  const snap = computeStairDoorSnapForPlaceholder(
     s.sx,
     s.megaSy,
     s.sz,
-    {
-      bandHeightM: s.megaSy,
-      towardPlateXZ: [acx, acz],
-      shaftPlateXZ: [s.px, s.pz],
-    },
-    { climbFullShaft: climbFull },
+    groundDoor,
+    { climbFullShaft: climbFull, doorBandTargetYForLandingPick },
   );
+  const tangSnap = snap.tangentOffsetAlongWall;
   const out: { y0: number; y1: number }[] = [];
   const halfOpen = SHAFT_DOUBLE_DOOR_H * 0.5 + 0.12;
   for (const ref of sortedRefs) {
@@ -79,10 +112,10 @@ function collectCorridorDoorBandsLocalY(
     const plateY = (ref.levelIndex - 1) * spacing;
     const targetY = plateY + stair.position[1] - s.centerY;
     const land = pickCornerLandingNearDoorBand(
-      meta.L,
-      meta.face,
-      meta.tangentOffsetAlongWall,
-      meta.doorHalfW,
+      snap.L,
+      snap.face,
+      tangSnap,
+      snap.doorHalfW,
       targetY,
     );
     const mid = land ? land.y : targetY;
@@ -180,6 +213,12 @@ export function addBuildingStairShaftColumnsToRoot(
     col.name = `stair_shaft:${s.id}`;
     col.position.set(s.px, s.centerY, s.pz);
     const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
+    const doorBandTargetYForLandingPick = firstStairDoorBandTargetYLocal(
+      sortedRefs,
+      getFloorDoc,
+      s,
+      spacing,
+    );
     const stairSnap = computeStairDoorSnapForPlaceholder(
       s.sx,
       s.megaSy,
@@ -189,7 +228,7 @@ export function addBuildingStairShaftColumnsToRoot(
         towardPlateXZ: [acx, acz],
         shaftPlateXZ: [s.px, s.pz],
       },
-      { climbFullShaft: climbFull },
+      { climbFullShaft: climbFull, doorBandTargetYForLandingPick },
     );
     let stairFlush: number | undefined;
     if (corridorFp) {
@@ -210,6 +249,7 @@ export function addBuildingStairShaftColumnsToRoot(
         towardPlateXZ: [acx, acz],
         shaftPlateXZ: [s.px, s.pz],
       },
+      doorBandTargetYForLandingPick,
       corridorDoorBandsLocalY: collectCorridorDoorBandsLocalY(
         sortedRefs,
         getFloorDoc,

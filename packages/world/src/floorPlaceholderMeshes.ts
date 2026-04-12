@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
+  firstStairDoorBandTargetYLocal,
   shaftPlanKey,
   STOREY_SPACING_M,
   type BuildingStairShaftSpec,
@@ -11,7 +12,6 @@ import {
   addStairWellPlaceholder,
   computeStairDoorSnapForPlaceholder,
   elevatorGroundDoorOpeningLocals,
-  resolveStairGroundDoorCutoutMeta,
   SHAFT_DOUBLE_DOOR_H,
   stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
@@ -248,26 +248,36 @@ function buildMegaStairCorridorDoorPunchForPlate(
   if (!stair) return undefined;
 
   const climbFull = spec.megaSy > STOREY_SPACING_M * 1.25;
-  const layoutOpts = { climbFullShaft: climbFull };
   const groundDoor = {
     bandHeightM: spec.megaSy,
     towardPlateXZ: [plateCx, plateCz] as const,
     shaftPlateXZ: [spec.px, spec.pz] as const,
   };
-  const meta = resolveStairGroundDoorCutoutMeta(
+  /**
+   * Tangent / face / doorHalfW must match the **single** mega column mesh
+   * (`addBuildingStairShaftColumnsToRoot` → same `doorBandTargetYForLandingPick` as first stair).
+   * Per-storey Y below only chooses the **vertical** door band on this plate — not a second snap.
+   */
+  const landingPickY = firstStairDoorBandTargetYLocal(
+    sortedRefs,
+    getFloorDoc,
+    spec,
+    spacing,
+  );
+  const columnSnap = computeStairDoorSnapForPlaceholder(
     spec.sx,
     spec.megaSy,
     spec.sz,
     groundDoor,
-    layoutOpts,
+    { climbFullShaft: climbFull, doorBandTargetYForLandingPick: landingPickY },
   );
   const plateY = (ref.levelIndex - 1) * spacing;
   const targetY = plateY + stair.position[1] - spec.centerY;
   const land = pickCornerLandingNearDoorBand(
-    meta.L,
-    meta.face,
-    meta.tangentOffsetAlongWall,
-    meta.doorHalfW,
+    columnSnap.L,
+    columnSnap.face,
+    columnSnap.tangentOffsetAlongWall,
+    columnSnap.doorHalfW,
     targetY,
   );
   const mid = land ? land.y : targetY;
@@ -289,11 +299,11 @@ function buildMegaStairCorridorDoorPunchForPlate(
   const yDoorPlateFrame1 = spec.centerY - plateOffsetY + y1c;
 
   return {
-    stairFace: meta.face,
-    tangentLocal: meta.tangentOffsetAlongWall,
-    doorHalfW: meta.doorHalfW,
-    y0Local: meta.yDoor0,
-    y1Local: meta.yHoleTop,
+    stairFace: columnSnap.face,
+    tangentLocal: columnSnap.tangentOffsetAlongWall,
+    doorHalfW: columnSnap.doorHalfW,
+    y0Local: columnSnap.resolvedShellDoor.doorHoleY0Local!,
+    y1Local: columnSnap.resolvedShellDoor.doorHoleY1Local!,
     spx: spec.px,
     spz: spec.pz,
     spy: stair.position[1],

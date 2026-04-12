@@ -656,6 +656,109 @@ export function pickCornerLandingNearDoorBand(
   return best;
 }
 
+/**
+ * Recentres the door along the wall tangent so the opening sits on the **corner landing pad**
+ * (not only collision-free from treads), clamped to both shaft interior and landing along-wall
+ * extents — keeps corridor and stairwell cutouts aligned on the same landing plane.
+ */
+export function snapStairDoorTangentAlongWallToLanding(
+  land: StairCornerLanding,
+  face: StairShaftCardinalFace,
+  doorHalfWidthM: number,
+  sx: number,
+  sz: number,
+  wallThickness = 0.11,
+): number {
+  const vlenZ = Math.max(sz - 2 * wallThickness, 0.05);
+  const vlenX = Math.max(sx - 2 * wallThickness, 0.05);
+  const m = 0.02;
+  const dw = doorHalfWidthM;
+  if (face === "e" || face === "w") {
+    const hzIn = vlenZ * 0.5;
+    const shaftLo = -hzIn + dw + m;
+    const shaftHi = hzIn - dw - m;
+    const landLo = land.z - land.halfD + dw + m;
+    const landHi = land.z + land.halfD - dw - m;
+    const cMin = Math.max(shaftLo, landLo);
+    const cMax = Math.min(shaftHi, landHi);
+    if (cMax >= cMin - 1e-5) {
+      return Math.min(Math.max(land.z, cMin), cMax);
+    }
+    return Math.min(Math.max(land.z, shaftLo), shaftHi);
+  }
+  const hxIn = vlenX * 0.5;
+  const shaftLo = -hxIn + dw + m;
+  const shaftHi = hxIn - dw - m;
+  const landLo = land.x - land.halfW + dw + m;
+  const landHi = land.x + land.halfW - dw - m;
+  const cMin = Math.max(shaftLo, landLo);
+  const cMax = Math.min(shaftHi, landHi);
+  if (cMax >= cMin - 1e-5) {
+    return Math.min(Math.max(land.x, cMin), cMax);
+  }
+  return Math.min(Math.max(land.x, shaftLo), shaftHi);
+}
+
+/**
+ * Along-wall shift (m) so the door moves **to the viewer’s right** when standing inside the shaft
+ * facing the opening (Y up, +X/+Z “out” conventions match {@link pickStairShaftGroundDoorPlacement}).
+ */
+export const STAIR_DOOR_VIEWER_RIGHT_BIAS_M = 0.52;
+
+function clampStairDoorTangentAlongInnerWall(
+  face: StairShaftCardinalFace,
+  tang: number,
+  doorHalfWidthM: number,
+  sx: number,
+  sz: number,
+  wallThickness: number,
+): number {
+  const vlenZ = Math.max(sz - 2 * wallThickness, 0.05);
+  const vlenX = Math.max(sx - 2 * wallThickness, 0.05);
+  const m = 0.02;
+  const dw = doorHalfWidthM;
+  if (face === "e" || face === "w") {
+    const lo = -vlenZ * 0.5 + dw + m;
+    const hi = vlenZ * 0.5 - dw - m;
+    return Math.min(Math.max(tang, lo), hi);
+  }
+  const lo = -vlenX * 0.5 + dw + m;
+  const hi = vlenX * 0.5 - dw - m;
+  return Math.min(Math.max(tang, lo), hi);
+}
+
+/**
+ * Nudges the door along the wall tangent **viewer-right from inside the shaft** (Y up). If that
+ * direction is already hard against the inner-wall clamp (common on **west** doors at −Z),
+ * nudges the **opposite** way so the opening still shifts on the pad instead of appearing frozen.
+ */
+export function shiftStairDoorTangentViewerRightFromInside(
+  face: StairShaftCardinalFace,
+  tang: number,
+  doorHalfWidthM: number,
+  sx: number,
+  sz: number,
+  wallThickness = 0.11,
+): number {
+  const b = STAIR_DOOR_VIEWER_RIGHT_BIAS_M;
+  /** +Z when facing out +X (e); −Z when facing −X (w); −X when facing +Z (n); +X when facing −Z (s). */
+  const sign = face === "e" || face === "s" ? 1 : -1;
+  const tryShift = (delta: number): number =>
+    clampStairDoorTangentAlongInnerWall(
+      face,
+      tang + delta,
+      doorHalfWidthM,
+      sx,
+      sz,
+      wallThickness,
+    );
+  const primary = tryShift(sign * b);
+  if (Math.abs(primary - tang) > 1e-3) return primary;
+  const fallback = tryShift(-sign * b);
+  if (Math.abs(fallback - tang) > 1e-3) return fallback;
+  return tang;
+}
+
 export function shaftFloorLocalTopY(sy: number): number {
   const hy = sy * 0.5;
   return -hy + STAIR_WT;

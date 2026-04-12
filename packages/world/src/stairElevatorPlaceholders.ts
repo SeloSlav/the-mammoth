@@ -3,10 +3,23 @@ import {
   computeSwitchbackStairLayout,
   pickCornerLandingNearDoorBand,
   pickStairShaftGroundDoorPlacement,
+  shiftStairDoorTangentViewerRightFromInside,
+  snapStairDoorTangentAlongWallToLanding,
   STOREY_SPACING_M,
   type StairSwitchbackLayout,
   type SwitchbackStairOpts,
 } from "./stairWellGeometry.js";
+
+/** Options for {@link computeStairDoorSnapForPlaceholder} (layout + optional landing Y hint). */
+export type ComputeStairDoorSnapOpts = SwitchbackStairOpts & {
+  /**
+   * Shaft-local Y anchor for {@link pickCornerLandingNearDoorBand}. When omitted, the mid-point of
+   * the default door band is used (fine for per-plate shafts). Mega columns should pass a value
+   * aligned to the stair prefab on the plate (e.g. `plateY + stairY - shaftCenterY`) so the same
+   * landing lap is chosen as corridor punches / stacked door bands.
+   */
+  doorBandTargetYForLandingPick?: number;
+};
 import {
   addDoorFrameTrimConstantX,
   addDoorFrameTrimConstantZ,
@@ -786,6 +799,11 @@ export function addElevatorShaftPlaceholder(
 export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   groundDoor?: ShaftGroundDoorOpts | null;
   /**
+   * When set, passed through to {@link computeStairDoorSnapForPlaceholder} so mega stacked shafts
+   * pick the same corner landing as plate-space corridor tooling (see {@link ComputeStairDoorSnapOpts}).
+   */
+  doorBandTargetYForLandingPick?: number;
+  /**
    * Wall-local **Y** intervals for extra corridor openings (mega shaft: one band per storey).
    * Same door face + tangent as {@link groundDoor}; converted to YZ or XY wall holes in shell space.
    */
@@ -902,17 +920,37 @@ export function computeStairDoorSnapForPlaceholder(
   sy: number,
   sz: number,
   groundDoor: NonNullable<StairWellPlaceholderOpts["groundDoor"]>,
-  layoutOpts?: SwitchbackStairOpts,
+  layoutOpts?: ComputeStairDoorSnapOpts,
 ): StairDoorSnapResult {
-  const meta = resolveStairGroundDoorCutoutMeta(sx, sy, sz, groundDoor, layoutOpts);
+  const { doorBandTargetYForLandingPick, ...switchbackOnly } = layoutOpts ?? {};
+  const meta = resolveStairGroundDoorCutoutMeta(sx, sy, sz, groundDoor, switchbackOnly);
   let y0snap = meta.yDoor0;
   let y1snap = meta.yHoleTop;
+  const landingPickY =
+    doorBandTargetYForLandingPick ?? (y0snap + y1snap) * 0.5;
   const land = pickCornerLandingNearDoorBand(
     meta.L,
     meta.face,
     meta.tangentOffsetAlongWall,
     meta.doorHalfW,
-    (y0snap + y1snap) * 0.5,
+    landingPickY,
+  );
+  let tangSnap = meta.tangentOffsetAlongWall;
+  if (land) {
+    tangSnap = snapStairDoorTangentAlongWallToLanding(
+      land,
+      meta.face,
+      meta.doorHalfW,
+      sx,
+      sz,
+    );
+  }
+  tangSnap = shiftStairDoorTangentViewerRightFromInside(
+    meta.face,
+    tangSnap,
+    meta.doorHalfW,
+    sx,
+    sz,
   );
   if (land) {
     /** Walk-through sill aligns to landing **deck top**, not slab centroid (avoids a high “window lip”). */
@@ -939,7 +977,7 @@ export function computeStairDoorSnapForPlaceholder(
   const resolvedShellDoor: ShaftGroundDoorOpts = {
     bandHeightM: groundDoor.bandHeightM,
     face: meta.face,
-    tangentOffsetAlongWall: meta.tangentOffsetAlongWall,
+    tangentOffsetAlongWall: tangSnap,
     doorHoleY0Local: y0snap,
     doorHoleY1Local: y1snap,
   };
@@ -947,7 +985,7 @@ export function computeStairDoorSnapForPlaceholder(
     L: meta.L,
     resolvedShellDoor,
     face: meta.face,
-    tangentOffsetAlongWall: meta.tangentOffsetAlongWall,
+    tangentOffsetAlongWall: tangSnap,
     doorHalfW: meta.doorHalfW,
   };
 }
@@ -963,13 +1001,17 @@ export function addStairWellPlaceholder(
     groundDoor,
     corridorDoorBandsLocalY,
     omitGroundStoreyCornerLandings,
+    doorBandTargetYForLandingPick,
     ...layoutOpts
   } = opts ?? {};
 
   let L: StairSwitchbackLayout;
   let resolvedShellDoor: ShaftGroundDoorOpts | null = null;
   if (groundDoor) {
-    const snap = computeStairDoorSnapForPlaceholder(sx, sy, sz, groundDoor, layoutOpts);
+    const snap = computeStairDoorSnapForPlaceholder(sx, sy, sz, groundDoor, {
+      ...layoutOpts,
+      doorBandTargetYForLandingPick,
+    });
     L = snap.L;
     resolvedShellDoor = snap.resolvedShellDoor;
   } else {
