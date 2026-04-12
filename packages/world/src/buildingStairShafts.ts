@@ -77,6 +77,7 @@ function collectCorridorDoorBandsLocalY(
   acx: number,
   acz: number,
   spacing: number,
+  padAlignTowardPlateXZ?: readonly [number, number],
 ): { y0: number; y1: number }[] {
   const key = shaftPlanKey(s.px, s.pz);
   const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
@@ -96,7 +97,11 @@ function collectCorridorDoorBandsLocalY(
     s.megaSy,
     s.sz,
     groundDoor,
-    { climbFullShaft: climbFull, doorBandTargetYForLandingPick },
+    {
+      climbFullShaft: climbFull,
+      doorBandTargetYForLandingPick,
+      padAlignTowardPlateXZ,
+    },
   );
   const tangSnap = snap.tangentOffsetAlongWall;
   const out: { y0: number; y1: number }[] = [];
@@ -195,6 +200,7 @@ export function addBuildingStairShaftColumnsToRoot(
   sortedRefs: readonly { levelIndex: number; floorDocId: string }[],
   getFloorDoc: (floorDocId: string) => FloorDoc,
   spacing: number,
+  padAlignTowardPlateXZ?: readonly [number, number],
 ): void {
   if (specs.length === 0) return;
   const acx = specs.reduce((a, s) => a + s.px, 0) / specs.length;
@@ -228,7 +234,11 @@ export function addBuildingStairShaftColumnsToRoot(
         towardPlateXZ: [acx, acz],
         shaftPlateXZ: [s.px, s.pz],
       },
-      { climbFullShaft: climbFull, doorBandTargetYForLandingPick },
+      {
+        climbFullShaft: climbFull,
+        doorBandTargetYForLandingPick,
+        padAlignTowardPlateXZ,
+      },
     );
     let stairFlush: number | undefined;
     if (corridorFp) {
@@ -250,6 +260,7 @@ export function addBuildingStairShaftColumnsToRoot(
         shaftPlateXZ: [s.px, s.pz],
       },
       doorBandTargetYForLandingPick,
+      padAlignTowardPlateXZ,
       corridorDoorBandsLocalY: collectCorridorDoorBandsLocalY(
         sortedRefs,
         getFloorDoc,
@@ -257,6 +268,7 @@ export function addBuildingStairShaftColumnsToRoot(
         acx,
         acz,
         spacing,
+        padAlignTowardPlateXZ,
       ),
       corridorFlushGapM: stairFlush,
       omitGroundStoreyCornerLandings: true,

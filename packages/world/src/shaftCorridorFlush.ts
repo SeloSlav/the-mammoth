@@ -37,6 +37,18 @@ export function firstCorridorOrLobbyFromFloor(
   return collectCorridorOrLobbyFootprintsFromFloor(doc)[0];
 }
 
+/** First plate that defines a corridor/lobby: returns its XZ centre (plate-space). */
+export function firstCorridorPlateXZFromFloorRefs(
+  sortedRefs: readonly { floorDocId: string }[],
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+): readonly [number, number] | undefined {
+  for (const ref of sortedRefs) {
+    const c = firstCorridorOrLobbyFromFloor(getFloorDoc(ref.floorDocId));
+    if (c) return [c.px, c.pz] as const;
+  }
+  return undefined;
+}
+
 function footprintAreaSq(c: CorridorFootprint): number {
   return c.hx * c.hz;
 }

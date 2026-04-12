@@ -36,6 +36,7 @@ import {
 } from "./shaftPlanformClip.js";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 import {
+  collectCorridorOrLobbyFootprintsFromFloor,
   corridorFlushGapForShaftDoor,
   elevatorDoorFaceFromFloorCorridors,
   firstCorridorOrLobbyFromFloor,
@@ -145,6 +146,12 @@ const LOBBY_DOOR_SILL = 0.04;
 /** Minimum centre-to-centre spacing so adjacent double frames read as separate bays. */
 const LOBBY_DOUBLE_DOOR_BAY_SPACING = LOBBY_DOUBLE_DOOR_W + 0.56;
 
+/** Typical residential entry clear width — aligned opening on both unit and corridor shells. */
+const UNIT_CORRIDOR_TOUCH_M = 0.55;
+const UNIT_ENTRY_DOOR_W = 1.26;
+const UNIT_ENTRY_DOOR_H = 2.06;
+const UNIT_ENTRY_DOOR_SILL = 0.04;
+
 function matsFor(kind: PlaceholderKind): {
   floor: THREE.MeshStandardMaterial;
   ceil: THREE.MeshStandardMaterial;
@@ -236,6 +243,7 @@ function buildMegaStairCorridorDoorPunchForPlate(
   levelIndex: number,
   plateCx: number,
   plateCz: number,
+  padAlignTowardPlateXZ?: readonly [number, number],
 ): PlateStairCorridorDoorPunch | undefined {
   const ref = sortedRefs.find((r) => r.levelIndex === levelIndex);
   if (!ref) return undefined;
@@ -269,7 +277,11 @@ function buildMegaStairCorridorDoorPunchForPlate(
     spec.megaSy,
     spec.sz,
     groundDoor,
-    { climbFullShaft: climbFull, doorBandTargetYForLandingPick: landingPickY },
+    {
+      climbFullShaft: climbFull,
+      doorBandTargetYForLandingPick: landingPickY,
+      padAlignTowardPlateXZ,
+    },
   );
   const plateY = (ref.levelIndex - 1) * spacing;
   const targetY = plateY + stair.position[1] - spec.centerY;
@@ -524,6 +536,263 @@ function corridorShellHolesFromStairPunches(
   return out;
 }
 
+function mergeCorridorShellWallHoles(
+  a: CorridorShellWallHoles | undefined,
+  b: CorridorShellWallHoles | undefined,
+): CorridorShellWallHoles | undefined {
+  if (!a && !b) return undefined;
+  const out: CorridorShellWallHoles = {
+    e: [...(a?.e ?? []), ...(b?.e ?? [])],
+    w: [...(a?.w ?? []), ...(b?.w ?? [])],
+    n: [...(a?.n ?? []), ...(b?.n ?? [])],
+    s: [...(a?.s ?? []), ...(b?.s ?? [])],
+  };
+  const n = out.e.length + out.w.length + out.n.length + out.s.length;
+  return n > 0 ? out : undefined;
+}
+
+function entryDoorYRangeForShell(sy: number): { yDoor0: number; yDoor1: number } {
+  const wt = 0.11;
+  const vh = Math.max(sy - 2 * wt, 0.05);
+  const yLo = -vh * 0.5;
+  const yHi = vh * 0.5;
+  const yDoor0 = yLo + UNIT_ENTRY_DOOR_SILL;
+  const yDoor1 = Math.min(yHi - 0.05, yDoor0 + UNIT_ENTRY_DOOR_H);
+  return { yDoor0, yDoor1 };
+}
+
+/**
+ * Half-width along wall tangent for a door centred in `[t0,t1]` (world-line overlap).
+ */
+function entryDoorTangentHalfFromOverlap(t0: number, t1: number): number | undefined {
+  const lo = Math.min(t0, t1);
+  const hi = Math.max(t0, t1);
+  const span = hi - lo;
+  if (span < 0.34) return undefined;
+  const avail = span * 0.5 - 0.08;
+  if (avail < 0.22) return undefined;
+  return Math.min(UNIT_ENTRY_DOOR_W * 0.5, avail);
+}
+
+/**
+ * Door cut on the **unit** wall shared with a corridor / lobby volume.
+ */
+function unitEntryWallHolesFromFloorAdjacency(
+  unit: PlacedObject,
+  sx: number,
+  sy: number,
+  sz: number,
+  kind: PlaceholderKind,
+  floor: FloorDoc,
+): CorridorShellWallHoles | undefined {
+  if (kind !== "unit") return undefined;
+  const corridors = collectCorridorOrLobbyFootprintsFromFloor(floor);
+  if (corridors.length === 0) return undefined;
+
+  const upx = unit.position[0];
+  const upz = unit.position[2];
+  const uhx = sx * 0.5;
+  const uhz = sz * 0.5;
+  const ux0 = upx - uhx;
+  const ux1 = upx + uhx;
+  const uz0 = upz - uhz;
+  const uz1 = upz + uhz;
+
+  const wt = 0.11;
+  const vlenZ = Math.max(sz - 2 * wt, 0.05);
+  const vlenX = Math.max(sx - 2 * wt, 0.05);
+  const zMin = -vlenZ * 0.5 + 0.05;
+  const zMax = vlenZ * 0.5 - 0.05;
+  const xMin = -vlenX * 0.5 + 0.05;
+  const xMax = vlenX * 0.5 - 0.05;
+
+  const { yDoor0, yDoor1 } = entryDoorYRangeForShell(sy);
+  if (yDoor1 < yDoor0 + 0.4) return undefined;
+
+  type Cand = { face: CardinalFace; span: number; tMid: number };
+  let best: Cand | null = null;
+
+  for (const c of corridors) {
+    const cx0 = c.px - c.hx;
+    const cx1 = c.px + c.hx;
+    const cz0 = c.pz - c.hz;
+    const cz1 = c.pz + c.hz;
+
+    if (Math.abs(ux0 - cx1) < UNIT_CORRIDOR_TOUCH_M && upx > c.px - 0.02) {
+      const z0 = Math.max(uz0, cz0);
+      const z1 = Math.min(uz1, cz1);
+      const span = z1 - z0;
+      if (!best || span > best.span)
+        best = { face: "w", span, tMid: (z0 + z1) * 0.5 };
+    }
+    if (Math.abs(ux1 - cx0) < UNIT_CORRIDOR_TOUCH_M && upx < c.px + 0.02) {
+      const z0 = Math.max(uz0, cz0);
+      const z1 = Math.min(uz1, cz1);
+      const span = z1 - z0;
+      if (!best || span > best.span)
+        best = { face: "e", span, tMid: (z0 + z1) * 0.5 };
+    }
+    if (Math.abs(uz0 - cz1) < UNIT_CORRIDOR_TOUCH_M && upz > c.pz - 0.02) {
+      const x0 = Math.max(ux0, cx0);
+      const x1 = Math.min(ux1, cx1);
+      const span = x1 - x0;
+      if (!best || span > best.span)
+        best = { face: "s", span, tMid: (x0 + x1) * 0.5 };
+    }
+    if (Math.abs(uz1 - cz0) < UNIT_CORRIDOR_TOUCH_M && upz < c.pz + 0.02) {
+      const x0 = Math.max(ux0, cx0);
+      const x1 = Math.min(ux1, cx1);
+      const span = x1 - x0;
+      if (!best || span > best.span)
+        best = { face: "n", span, tMid: (x0 + x1) * 0.5 };
+    }
+  }
+
+  if (!best) return undefined;
+  const half = entryDoorTangentHalfFromOverlap(
+    best.tMid - best.span * 0.5,
+    best.tMid + best.span * 0.5,
+  );
+  if (half == null) return undefined;
+
+  const out: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+  if (best.face === "e" || best.face === "w") {
+    const zMidLocal = best.tMid - upz;
+    let z0r = zMidLocal - half;
+    let z1r = zMidLocal + half;
+    z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));
+    z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
+    if (z1r < z0r + 0.28) return undefined;
+    (out[best.face] as WallHoleYZ[]).push({
+      z0: z0r,
+      z1: z1r,
+      y0: yDoor0,
+      y1: yDoor1,
+    });
+  } else {
+    const xMidLocal = best.tMid - upx;
+    let x0r = xMidLocal - half;
+    let x1r = xMidLocal + half;
+    x0r = Math.max(xMin, Math.min(x0r, xMax - 0.28));
+    x1r = Math.min(xMax, Math.max(x1r, xMin + 0.28));
+    if (x1r < x0r + 0.28) return undefined;
+    (out[best.face] as WallHoleXY[]).push({
+      x0: x0r,
+      x1: x1r,
+      y0: yDoor0,
+      y1: yDoor1,
+    });
+  }
+  return out;
+}
+
+/**
+ * Matching door cuts on the **corridor** shell for every adjacent apartment unit.
+ */
+function corridorShellHolesFromAdjacentUnitEntries(
+  corridor: PlacedObject,
+  sx: number,
+  sy: number,
+  sz: number,
+  floor: FloorDoc,
+): CorridorShellWallHoles | undefined {
+  const cpx = corridor.position[0];
+  const cpz = corridor.position[2];
+  const chx = sx * 0.5;
+  const chz = sz * 0.5;
+  const cx0 = cpx - chx;
+  const cx1 = cpx + chx;
+  const cz0 = cpz - chz;
+  const cz1 = cpz + chz;
+
+  const wt = 0.11;
+  const vlenZ = Math.max(sz - 2 * wt, 0.05);
+  const vlenX = Math.max(sx - 2 * wt, 0.05);
+  const zMin = -vlenZ * 0.5 + 0.05;
+  const zMax = vlenZ * 0.5 - 0.05;
+  const xMin = -vlenX * 0.5 + 0.05;
+  const xMax = vlenX * 0.5 - 0.05;
+
+  const { yDoor0, yDoor1 } = entryDoorYRangeForShell(sy);
+  if (yDoor1 < yDoor0 + 0.4) return undefined;
+
+  const out: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+
+  for (const o of floor.objects) {
+    if (classifyPrefab(o.prefabId) !== "unit") continue;
+    const usx = o.scale?.[0] ?? 1;
+    const usz = o.scale?.[2] ?? 1;
+    const upx = o.position[0];
+    const upz = o.position[2];
+    const uhx = usx * 0.5;
+    const uhz = usz * 0.5;
+    const ux0 = upx - uhx;
+    const ux1 = upx + uhx;
+    const uz0 = upz - uhz;
+    const uz1 = upz + uhz;
+
+    if (Math.abs(cx1 - ux0) < UNIT_CORRIDOR_TOUCH_M && upx > cpx - 0.02) {
+      const z0 = Math.max(uz0, cz0);
+      const z1 = Math.min(uz1, cz1);
+      const half = entryDoorTangentHalfFromOverlap(z0, z1);
+      if (half == null) continue;
+      const zMid = (z0 + z1) * 0.5;
+      const zMidLocal = zMid - cpz;
+      let z0r = zMidLocal - half;
+      let z1r = zMidLocal + half;
+      z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));
+      z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
+      if (z1r < z0r + 0.28) continue;
+      out.e.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
+    }
+    if (Math.abs(cx0 - ux1) < UNIT_CORRIDOR_TOUCH_M && upx < cpx + 0.02) {
+      const z0 = Math.max(uz0, cz0);
+      const z1 = Math.min(uz1, cz1);
+      const half = entryDoorTangentHalfFromOverlap(z0, z1);
+      if (half == null) continue;
+      const zMid = (z0 + z1) * 0.5;
+      const zMidLocal = zMid - cpz;
+      let z0r = zMidLocal - half;
+      let z1r = zMidLocal + half;
+      z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));
+      z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
+      if (z1r < z0r + 0.28) continue;
+      out.w.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
+    }
+    if (Math.abs(cz1 - uz0) < UNIT_CORRIDOR_TOUCH_M && upz > cpz - 0.02) {
+      const x0 = Math.max(ux0, cx0);
+      const x1 = Math.min(ux1, cx1);
+      const half = entryDoorTangentHalfFromOverlap(x0, x1);
+      if (half == null) continue;
+      const xMid = (x0 + x1) * 0.5;
+      const xMidLocal = xMid - cpx;
+      let x0r = xMidLocal - half;
+      let x1r = xMidLocal + half;
+      x0r = Math.max(xMin, Math.min(x0r, xMax - 0.28));
+      x1r = Math.min(xMax, Math.max(x1r, xMin + 0.28));
+      if (x1r < x0r + 0.28) continue;
+      out.n.push({ x0: x0r, x1: x1r, y0: yDoor0, y1: yDoor1 });
+    }
+    if (Math.abs(cz0 - uz1) < UNIT_CORRIDOR_TOUCH_M && upz < cpz + 0.02) {
+      const x0 = Math.max(ux0, cx0);
+      const x1 = Math.min(ux1, cx1);
+      const half = entryDoorTangentHalfFromOverlap(x0, x1);
+      if (half == null) continue;
+      const xMid = (x0 + x1) * 0.5;
+      const xMidLocal = xMid - cpx;
+      let x0r = xMidLocal - half;
+      let x1r = xMidLocal + half;
+      x0r = Math.max(xMin, Math.min(x0r, xMax - 0.28));
+      x1r = Math.min(xMax, Math.max(x1r, xMin + 0.28));
+      if (x1r < x0r + 0.28) continue;
+      out.s.push({ x0: x0r, x1: x1r, y0: yDoor0, y1: yDoor1 });
+    }
+  }
+
+  const n = out.e.length + out.w.length + out.n.length + out.s.length;
+  return n > 0 ? out : undefined;
+}
+
 function elevatorCorridorSignPlacementsFromPunches(
   corridor: PlacedObject,
   sx: number,
@@ -664,6 +933,88 @@ function addShellFloorCeilingPieces(
     ci += 1;
     ceiling.position.set(cx, hy - wt * 0.5, cz);
     group.add(ceiling);
+  }
+}
+
+function addResidenceEntryDoorFrameTrimsForUnit(
+  group: THREE.Group,
+  hx: number,
+  hz: number,
+  wt: number,
+  cw: CorridorShellWallHoles,
+  frameM: THREE.MeshStandardMaterial,
+): void {
+  let fe = 0;
+  for (const h of cw.e) {
+    const z0 = Math.min(h.z0, h.z1);
+    const z1 = Math.max(h.z0, h.z1);
+    const y0 = Math.min(h.y0, h.y1);
+    const y1 = Math.max(h.y0, h.y1);
+    addDoorFrameTrimConstantX(
+      group,
+      frameM,
+      hx - wt,
+      -1,
+      z0,
+      z1,
+      y0,
+      y1,
+      `unit_entry_frame_e_${fe++}`,
+    );
+  }
+  let fw = 0;
+  for (const h of cw.w) {
+    const z0 = Math.min(h.z0, h.z1);
+    const z1 = Math.max(h.z0, h.z1);
+    const y0 = Math.min(h.y0, h.y1);
+    const y1 = Math.max(h.y0, h.y1);
+    addDoorFrameTrimConstantX(
+      group,
+      frameM,
+      -hx + wt,
+      1,
+      z0,
+      z1,
+      y0,
+      y1,
+      `unit_entry_frame_w_${fw++}`,
+    );
+  }
+  let fn = 0;
+  for (const h of cw.n) {
+    const x0 = Math.min(h.x0, h.x1);
+    const x1 = Math.max(h.x0, h.x1);
+    const y0 = Math.min(h.y0, h.y1);
+    const y1 = Math.max(h.y0, h.y1);
+    addDoorFrameTrimConstantZ(
+      group,
+      frameM,
+      hz - wt,
+      -1,
+      x0,
+      x1,
+      y0,
+      y1,
+      `unit_entry_frame_n_${fn++}`,
+    );
+  }
+  let fs = 0;
+  for (const h of cw.s) {
+    const x0 = Math.min(h.x0, h.x1);
+    const x1 = Math.max(h.x0, h.x1);
+    const y0 = Math.min(h.y0, h.y1);
+    const y1 = Math.max(h.y0, h.y1);
+    addDoorFrameTrimConstantZ(
+      group,
+      frameM,
+      -hz + wt,
+      1,
+      x0,
+      x1,
+      y0,
+      y1,
+      `unit_entry_frame_s_${fs++}`,
+    );
   }
 }
 
@@ -815,6 +1166,16 @@ function addHollowRoomShell(
       cw?.s ?? [],
       "shell_wall_s",
     );
+    if (kind === "unit" && cw) {
+      addResidenceEntryDoorFrameTrimsForUnit(
+        group,
+        hx,
+        hz,
+        wt,
+        cw,
+        mat.lobbyDoorFrame,
+      );
+    }
     addKoncarElevatorSignMeshes(
       group,
       sx,
@@ -1099,7 +1460,11 @@ export type BuildFloorMeshesOptions = {
     sortedRefs: readonly { levelIndex: number; floorDocId: string }[];
     getFloorDoc: (floorDocId: string) => FloorDoc;
     spacing: number;
+    /** Corridor shell centre (plate XZ); same pad pull as mega column. */
+    padAlignTowardPlateXZ?: readonly [number, number];
   };
+  /** Corridor / lobby centre (plate XZ) for stair door pad pull on per-plate shafts. */
+  padAlignTowardPlateXZ?: readonly [number, number];
 };
 
 /**
@@ -1197,7 +1562,10 @@ export function buildFloorMeshes(
         towardPlateXZ: [plateCx, plateCz],
         shaftPlateXZ: [o.position[0], o.position[2]],
       },
-      { climbFullShaft: false },
+      {
+        climbFullShaft: false,
+        padAlignTowardPlateXZ: opts?.padAlignTowardPlateXZ,
+      },
     );
     let stairFlush: number | undefined;
     if (corridorFootprint) {
@@ -1243,6 +1611,7 @@ export function buildFloorMeshes(
         opts.storyLevelIndex,
         plateCx,
         plateCz,
+        megaCtx.padAlignTowardPlateXZ,
       );
       if (megaPunch) stairDoorPunchesPlate.push(megaPunch);
     }
@@ -1353,13 +1722,38 @@ export function buildFloorMeshes(
       const skipShaftCutouts = Boolean(obj.rotation);
       const corridorWallHoles = skipShaftCutouts
         ? undefined
-        : corridorShellHolesFromStairPunches(
-            obj,
-            sx,
-            sy,
-            sz,
-            kind,
-            corridorShaftDoorPunchesPlate,
+        : mergeCorridorShellWallHoles(
+            mergeCorridorShellWallHoles(
+              kind === "corridor"
+                ? corridorShellHolesFromStairPunches(
+                    obj,
+                    sx,
+                    sy,
+                    sz,
+                    kind,
+                    corridorShaftDoorPunchesPlate,
+                  )
+                : undefined,
+              kind === "corridor"
+                ? corridorShellHolesFromAdjacentUnitEntries(
+                    obj,
+                    sx,
+                    sy,
+                    sz,
+                    floor,
+                  )
+                : undefined,
+            ),
+            kind === "unit"
+              ? unitEntryWallHolesFromFloorAdjacency(
+                  obj,
+                  sx,
+                  sy,
+                  sz,
+                  kind,
+                  floor,
+                )
+              : undefined,
           );
       const elevatorSignPlacements =
         kind === "corridor" && !skipShaftCutouts

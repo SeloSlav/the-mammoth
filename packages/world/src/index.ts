@@ -24,6 +24,7 @@ import {
   mergeElevatorShaftSlabHolesFromFloorDocs,
   mergeShaftSlabHolesFromFloorDocs,
 } from "./shaftPlanformClip.js";
+import { firstCorridorPlateXZFromFloorRefs } from "./shaftCorridorFlush.js";
 
 export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc };
 export {
@@ -119,6 +120,11 @@ export function instantiateBuildingFloorStack(
     ? elevatorDoorFacesFromGroundFloorDoc(getFloorDoc(groundRef.floorDocId))
     : undefined;
 
+  const padAlignTowardPlateXZ = firstCorridorPlateXZFromFloorRefs(
+    sorted,
+    getFloorDoc,
+  );
+
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
     const plateWorldOriginY = (o?.[1] ?? 0) + (ref.levelIndex - 1) * spacing;
@@ -129,6 +135,7 @@ export function instantiateBuildingFloorStack(
       shaftElevatorsMerged,
       plateWorldOriginY,
       elevatorDoorFaceByShaftKey,
+      padAlignTowardPlateXZ,
       megaStairCorridorPunchContext:
         stairShaftSpecs.length > 0
           ? {
@@ -136,6 +143,7 @@ export function instantiateBuildingFloorStack(
               sortedRefs: sorted,
               getFloorDoc,
               spacing,
+              padAlignTowardPlateXZ,
             }
           : undefined,
     });
@@ -151,6 +159,7 @@ export function instantiateBuildingFloorStack(
       sorted,
       getFloorDoc,
       spacing,
+      padAlignTowardPlateXZ,
     );
   }
 

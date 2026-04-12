@@ -656,6 +656,17 @@ export function pickCornerLandingNearDoorBand(
   return best;
 }
 
+export type SnapStairDoorTangentAlongWallOpts = {
+  wallThickness?: number;
+  /**
+   * With {@link shaftPlateXZForAlign}: door centre along the wall tangent targets this plate-space
+   * XZ (e.g. corridor / plate centroid), clamped to landing ∩ shaft — pulls the opening onto the
+   * **corridor side** of the pad instead of sitting on `land.z` / `land.x`.
+   */
+  alignTowardPlateXZ?: readonly [number, number];
+  shaftPlateXZForAlign?: readonly [number, number];
+};
+
 /**
  * Recentres the door along the wall tangent so the opening sits on the **corner landing pad**
  * (not only collision-free from treads), clamped to both shaft interior and landing along-wall
@@ -667,12 +678,19 @@ export function snapStairDoorTangentAlongWallToLanding(
   doorHalfWidthM: number,
   sx: number,
   sz: number,
-  wallThickness = 0.11,
+  opts?: SnapStairDoorTangentAlongWallOpts,
 ): number {
+  const wallThickness = opts?.wallThickness ?? 0.11;
   const vlenZ = Math.max(sz - 2 * wallThickness, 0.05);
   const vlenX = Math.max(sx - 2 * wallThickness, 0.05);
   const m = 0.02;
   const dw = doorHalfWidthM;
+  const align = opts?.alignTowardPlateXZ;
+  const shaftPl = opts?.shaftPlateXZForAlign;
+  const tangIdealEw =
+    align && shaftPl ? align[1] - shaftPl[1] : undefined;
+  const tangIdealNs =
+    align && shaftPl ? align[0] - shaftPl[0] : undefined;
   if (face === "e" || face === "w") {
     const hzIn = vlenZ * 0.5;
     const shaftLo = -hzIn + dw + m;
@@ -682,7 +700,13 @@ export function snapStairDoorTangentAlongWallToLanding(
     const cMin = Math.max(shaftLo, landLo);
     const cMax = Math.min(shaftHi, landHi);
     if (cMax >= cMin - 1e-5) {
+      if (tangIdealEw != null) {
+        return Math.min(Math.max(tangIdealEw, cMin), cMax);
+      }
       return Math.min(Math.max(land.z, cMin), cMax);
+    }
+    if (tangIdealEw != null) {
+      return Math.min(Math.max(tangIdealEw, shaftLo), shaftHi);
     }
     return Math.min(Math.max(land.z, shaftLo), shaftHi);
   }
@@ -694,7 +718,13 @@ export function snapStairDoorTangentAlongWallToLanding(
   const cMin = Math.max(shaftLo, landLo);
   const cMax = Math.min(shaftHi, landHi);
   if (cMax >= cMin - 1e-5) {
+    if (tangIdealNs != null) {
+      return Math.min(Math.max(tangIdealNs, cMin), cMax);
+    }
     return Math.min(Math.max(land.x, cMin), cMax);
+  }
+  if (tangIdealNs != null) {
+    return Math.min(Math.max(tangIdealNs, shaftLo), shaftHi);
   }
   return Math.min(Math.max(land.x, shaftLo), shaftHi);
 }
@@ -703,9 +733,17 @@ export function snapStairDoorTangentAlongWallToLanding(
  * Along-wall shift (m) so the door moves **to the viewer’s right** when standing inside the shaft
  * facing the opening (Y up, +X/+Z “out” conventions match {@link pickStairShaftGroundDoorPlacement}).
  */
-export const STAIR_DOOR_VIEWER_RIGHT_BIAS_M = 0.52;
+export const STAIR_DOOR_VIEWER_RIGHT_BIAS_M = 0.78;
 
-function clampStairDoorTangentAlongInnerWall(
+/**
+ * Second along-wall slide (m), **same sign** as the viewer-right primary direction, applied after
+ * {@link STAIR_DOOR_VIEWER_RIGHT_BIAS_M}. Pad-align often clamps to a corridor-side edge first; an
+ * extra clamped offset guarantees a visible shift on long double-loaded bars where the first bias
+ * alone still reads as “stuck”.
+ */
+export const STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M = 0.72;
+
+export function clampStairDoorTangentAlongInnerWall(
   face: StairShaftCardinalFace,
   tang: number,
   doorHalfWidthM: number,
