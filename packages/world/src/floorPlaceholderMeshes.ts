@@ -170,6 +170,15 @@ type CorridorShellWallHoles = {
   s: WallHoleXY[];
 };
 
+/** Room-local data to place a sign above an elevator door on a corridor wall. */
+type ElevatorCorridorSignPlacement = {
+  corridorWall: CardinalFace;
+  /** Top of door opening (room-local Y). */
+  yDoorTop: number;
+  zMid: number;
+  xMid: number;
+};
+
 type HollowShellOpts = {
   shaftHolesPlate: readonly ShaftSlabHole[];
   roomPx: number;
@@ -182,6 +191,8 @@ type HollowShellOpts = {
   shaftElevatorsMerged?: readonly ShaftSlabHole[];
   /** Cuts through corridor walls opposite stair doors (room-local coordinates). */
   corridorWallHoles?: CorridorShellWallHoles;
+  /** Elevator door heads on this corridor shell — room-local; used for manufacturer signage. */
+  elevatorSignPlacements?: readonly ElevatorCorridorSignPlacement[];
 };
 
 type PlateStairCorridorDoorPunch = {
@@ -203,6 +214,8 @@ type PlateStairCorridorDoorPunch = {
    */
   yDoorPlateFrame0?: number;
   yDoorPlateFrame1?: number;
+  /** When true, a manufacturer sign is placed on the adjacent corridor wall above this door. */
+  isElevator?: boolean;
 };
 
 const STAIR_CORRIDOR_TOUCH_M = 0.55;
@@ -304,15 +317,27 @@ function corridorWallReceivingStairDoor(stairFace: CardinalFace): CardinalFace {
   }
 }
 
-function corridorShellHolesFromStairPunches(
+type CorridorShaftDoorContact = {
+  punch: PlateStairCorridorDoorPunch;
+  corridorWall: CardinalFace;
+  y0r: number;
+  y1r: number;
+  z0r: number;
+  z1r: number;
+  x0r: number;
+  x1r: number;
+  holeAlongZ: boolean;
+};
+
+function resolveCorridorShaftDoorContacts(
   corridor: PlacedObject,
   sx: number,
   sy: number,
   sz: number,
   kind: PlaceholderKind,
   punches: readonly PlateStairCorridorDoorPunch[],
-): CorridorShellWallHoles | undefined {
-  if (kind !== "corridor" || punches.length === 0) return undefined;
+): CorridorShaftDoorContact[] {
+  if (kind !== "corridor" || punches.length === 0) return [];
 
   const cpx = corridor.position[0];
   const cpz = corridor.position[2];
@@ -331,7 +356,7 @@ function corridorShellHolesFromStairPunches(
   const xMin = -vlenX * 0.5;
   const xMax = vlenX * 0.5;
 
-  const out: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+  const contacts: CorridorShaftDoorContact[] = [];
 
   for (const p of punches) {
     const cw = corridorWallReceivingStairDoor(p.stairFace);
@@ -416,18 +441,191 @@ function corridorShellHolesFromStairPunches(
       const z0r = Math.max(zMin, Math.min(z0p, z1p) - cpz);
       const z1r = Math.min(zMax, Math.max(z0p, z1p) - cpz);
       if (z1r < z0r + 0.1 || y1r < y0r + 0.45) continue;
-      out[cw].push({ z0: z0r, z1: z1r, y0: y0r, y1: y1r });
+      contacts.push({
+        punch: p,
+        corridorWall: cw,
+        y0r,
+        y1r,
+        z0r,
+        z1r,
+        x0r: 0,
+        x1r: 0,
+        holeAlongZ: true,
+      });
     } else {
       const x0r = Math.max(xMin, Math.min(x0p, x1p) - cpx);
       const x1r = Math.min(xMax, Math.max(x0p, x1p) - cpx);
       if (x1r < x0r + 0.1 || y1r < y0r + 0.45) continue;
-      out[cw].push({ x0: x0r, x1: x1r, y0: y0r, y1: y1r });
+      contacts.push({
+        punch: p,
+        corridorWall: cw,
+        y0r,
+        y1r,
+        z0r: 0,
+        z1r: 0,
+        x0r,
+        x1r,
+        holeAlongZ: false,
+      });
     }
   }
 
-  const any =
-    out.e.length + out.w.length + out.n.length + out.s.length > 0;
-  return any ? out : undefined;
+  return contacts;
+}
+
+function corridorShellHolesFromStairPunches(
+  corridor: PlacedObject,
+  sx: number,
+  sy: number,
+  sz: number,
+  kind: PlaceholderKind,
+  punches: readonly PlateStairCorridorDoorPunch[],
+): CorridorShellWallHoles | undefined {
+  const contacts = resolveCorridorShaftDoorContacts(
+    corridor,
+    sx,
+    sy,
+    sz,
+    kind,
+    punches,
+  );
+  if (contacts.length === 0) return undefined;
+
+  const out: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+  for (const c of contacts) {
+    const cw = c.corridorWall;
+    if (c.holeAlongZ) {
+      (out[cw] as WallHoleYZ[]).push({
+        z0: c.z0r,
+        z1: c.z1r,
+        y0: c.y0r,
+        y1: c.y1r,
+      });
+    } else {
+      (out[cw] as WallHoleXY[]).push({
+        x0: c.x0r,
+        x1: c.x1r,
+        y0: c.y0r,
+        y1: c.y1r,
+      });
+    }
+  }
+
+  return out;
+}
+
+function elevatorCorridorSignPlacementsFromPunches(
+  corridor: PlacedObject,
+  sx: number,
+  sy: number,
+  sz: number,
+  elevatorPunches: readonly PlateStairCorridorDoorPunch[],
+): ElevatorCorridorSignPlacement[] {
+  const contacts = resolveCorridorShaftDoorContacts(
+    corridor,
+    sx,
+    sy,
+    sz,
+    "corridor",
+    elevatorPunches,
+  );
+  const out: ElevatorCorridorSignPlacement[] = [];
+  for (const c of contacts) {
+    if (!c.punch.isElevator) continue;
+    out.push({
+      corridorWall: c.corridorWall,
+      yDoorTop: Math.max(c.y0r, c.y1r),
+      zMid: (c.z0r + c.z1r) * 0.5,
+      xMid: (c.x0r + c.x1r) * 0.5,
+    });
+  }
+  return out;
+}
+
+const KONCAR_SIGN_W = 1.32;
+const KONCAR_SIGN_H = 0.24;
+const KONCAR_SIGN_TEXT = "KONČAR 300kg 4 👤";
+
+function createKoncarElevatorSignMaterial(): THREE.MeshBasicMaterial | null {
+  let canvas: HTMLCanvasElement | OffscreenCanvas | null = null;
+  if (typeof document !== "undefined") {
+    const c = document.createElement("canvas");
+    c.width = 896;
+    c.height = 176;
+    canvas = c;
+  } else if (typeof OffscreenCanvas !== "undefined") {
+    canvas = new OffscreenCanvas(896, 176);
+  }
+  if (!canvas) return null;
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !("fillRect" in ctx)) return null;
+
+  ctx.fillStyle = "#f2f0ec";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#2a2826";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+  ctx.fillStyle = "#1a1918";
+  ctx.font =
+    '600 52px system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(KONCAR_SIGN_TEXT, canvas.width * 0.5, canvas.height * 0.5);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: true,
+    side: THREE.DoubleSide,
+  });
+}
+
+function addKoncarElevatorSignMeshes(
+  group: THREE.Group,
+  sx: number,
+  sy: number,
+  sz: number,
+  placements: readonly ElevatorCorridorSignPlacement[],
+): void {
+  if (placements.length === 0) return;
+  const mat = createKoncarElevatorSignMaterial();
+  if (!mat) return;
+
+  const wt = 0.11;
+  const hx = sx * 0.5;
+  const hz = sz * 0.5;
+  const geo = new THREE.PlaneGeometry(KONCAR_SIGN_W, KONCAR_SIGN_H);
+  const inset = 0.014;
+  const lookDepth = 2.5;
+
+  let i = 0;
+  for (const pl of placements) {
+    const y = pl.yDoorTop + 0.07 + KONCAR_SIGN_H * 0.5;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `elevator_sign_koncar_${i++}`;
+
+    if (pl.corridorWall === "e") {
+      const x = hx - wt - inset;
+      mesh.position.set(x, y, pl.zMid);
+      mesh.lookAt(x - lookDepth, y, pl.zMid);
+    } else if (pl.corridorWall === "w") {
+      const x = -hx + wt + inset;
+      mesh.position.set(x, y, pl.zMid);
+      mesh.lookAt(x + lookDepth, y, pl.zMid);
+    } else if (pl.corridorWall === "n") {
+      const z = hz - wt - inset;
+      mesh.position.set(pl.xMid, y, z);
+      mesh.lookAt(pl.xMid, y, z - lookDepth);
+    } else {
+      const z = -hz + wt + inset;
+      mesh.position.set(pl.xMid, y, z);
+      mesh.lookAt(pl.xMid, y, z + lookDepth);
+    }
+    group.add(mesh);
+  }
 }
 
 function addShellFloorCeilingPieces(
@@ -607,6 +805,13 @@ function addHollowRoomShell(
       cw?.s ?? [],
       "shell_wall_s",
     );
+    addKoncarElevatorSignMeshes(
+      group,
+      sx,
+      sy,
+      sz,
+      opts.elevatorSignPlacements ?? [],
+    );
     return;
   }
 
@@ -748,6 +953,14 @@ function addHollowRoomShell(
     );
     fj += 1;
   }
+
+  addKoncarElevatorSignMeshes(
+    group,
+    sx,
+    sy,
+    sz,
+    opts.elevatorSignPlacements ?? [],
+  );
 }
 
 function expandBoxForPlacedObject(
@@ -1053,6 +1266,7 @@ export function buildFloorMeshes(
       spy: o.position[1],
       shx: ex * 0.5,
       shz: ez * 0.5,
+      isElevator: true,
     });
   }
 
@@ -1137,6 +1351,16 @@ export function buildFloorMeshes(
             kind,
             corridorShaftDoorPunchesPlate,
           );
+      const elevatorSignPlacements =
+        kind === "corridor" && !skipShaftCutouts
+          ? elevatorCorridorSignPlacementsFromPunches(
+              obj,
+              sx,
+              sy,
+              sz,
+              elevatorDoorPunchesPlate,
+            )
+          : [];
       addHollowRoomShell(room, sx, sy, sz, kind, {
         shaftHolesPlate: shaftHolesPlate,
         roomPx: obj.position[0],
@@ -1145,6 +1369,7 @@ export function buildFloorMeshes(
         storyLevelIndex: opts?.storyLevelIndex,
         shaftElevatorsMerged,
         corridorWallHoles,
+        elevatorSignPlacements,
       });
     }
     root.add(room);
