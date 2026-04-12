@@ -274,56 +274,6 @@ export function pickStairShaftGroundDoorPlacement(
   return { face: pick.face, tangentOffsetM: pick.along };
 }
 
-/** Matches `SHAFT_DOUBLE_DOOR_W` in `stairElevatorPlaceholders.ts` — keep in sync (no import cycle). */
-const TRAVERSING_STAIR_DOOR_CLEAR_W = 1.86;
-
-/**
- * Along-wall centre for a corridor door on `doorFace`, at the inner-corner **farther from the tread
- * footprint** (XZ centroid of run boards), so the opening sits on the shaft corner opposite the
- * circulating stair mass.
- */
-export function stairCorridorDoorTangentAtStairOppositeCorner(
-  sx: number,
-  sy: number,
-  sz: number,
-  doorFace: StairShaftCardinalFace,
-  layoutOpts?: SwitchbackStairOpts,
-  existingLayout?: StairSwitchbackLayout,
-): number {
-  const L = existingLayout ?? computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
-  const wt = STAIR_WT;
-  const vlenX = Math.max(sx - 2 * wt, 0.05);
-  const vlenZ = Math.max(sz - 2 * wt, 0.05);
-  const doorHalfW = Math.min(
-    TRAVERSING_STAIR_DOOR_CLEAR_W * 0.5,
-    vlenZ * 0.5 - 0.06,
-    vlenX * 0.5 - 0.06,
-  );
-  const m = 0.02;
-  let cx = 0;
-  let cz = 0;
-  let n = 0;
-  for (const tr of L.treads) {
-    cx += tr.x;
-    cz += tr.z;
-    n += 1;
-  }
-  if (n > 0) {
-    cx /= n;
-    cz /= n;
-  }
-  if (doorFace === "e" || doorFace === "w") {
-    const lo = -vlenZ * 0.5 + doorHalfW + m;
-    const hi = vlenZ * 0.5 - doorHalfW - m;
-    if (hi <= lo + 1e-4) return 0;
-    return Math.abs(lo - cz) >= Math.abs(hi - cz) ? lo : hi;
-  }
-  const lo = -vlenX * 0.5 + doorHalfW + m;
-  const hi = vlenX * 0.5 - doorHalfW - m;
-  if (hi <= lo + 1e-4) return 0;
-  return Math.abs(lo - cx) >= Math.abs(hi - cx) ? lo : hi;
-}
-
 type Leg = { ax: number; az: number; bx: number; bz: number; count: number };
 
 function buildLegTreads(
@@ -646,21 +596,30 @@ export function computeSwitchbackStairLayout(
 
 const FACE_ANCHOR_TOL = 0.42;
 
+/**
+ * True when a corner pad belongs on the corridor-door **wall** for `face`.
+ * Merged E/W pads sit inboard of `xE`/`xW` by `eastWestWallHug` (often >0.42 m), so a symmetric
+ * tolerance on the racetrack corner would miss them; use a one-sided band from the anchor instead.
+ */
 function landingNearRacetrackAnchor(
   L: StairSwitchbackLayout,
   cl: StairCornerLanding,
   face: StairShaftCardinalFace,
 ): boolean {
   const { xE, xW, zN, zS } = L.racetrack;
+  const t = Math.max(
+    FACE_ANCHOR_TOL,
+    Math.min(L.hx, L.hz) * 0.34 + 0.52,
+  );
   switch (face) {
     case "e":
-      return Math.abs(cl.x - xE) < FACE_ANCHOR_TOL;
+      return cl.x >= xE - t;
     case "w":
-      return Math.abs(cl.x - xW) < FACE_ANCHOR_TOL;
+      return cl.x <= xW + t;
     case "n":
-      return Math.abs(cl.z - zN) < FACE_ANCHOR_TOL;
+      return cl.z >= zN - t;
     case "s":
-      return Math.abs(cl.z - zS) < FACE_ANCHOR_TOL;
+      return cl.z <= zS + t;
     default:
       return false;
   }
@@ -696,7 +655,7 @@ export function pickCornerLandingNearDoorBand(
   for (const cl of L.cornerLandings) {
     if (!landingNearRacetrackAnchor(L, cl, face)) continue;
     const [a0, a1] = landingAlongSpan(cl, face);
-    if (Math.min(t1, a1) - Math.max(t0, a0) < 0.06) continue;
+    if (Math.min(t1, a1) - Math.max(t0, a0) < 0.03) continue;
     const dy = Math.abs(cl.y - targetY);
     if (dy < bestDy) {
       bestDy = dy;

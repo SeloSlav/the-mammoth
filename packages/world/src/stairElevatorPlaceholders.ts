@@ -1,34 +1,10 @@
 import * as THREE from "three";
 import {
-  clampStairDoorTangentAlongInnerWall,
   computeSwitchbackStairLayout,
-  pickCornerLandingNearDoorBand,
-  pickStairShaftGroundDoorPlacement,
-  shiftStairDoorTangentViewerRightFromInside,
-  snapStairDoorTangentAlongWallToLanding,
-  stairCorridorDoorTangentAtStairOppositeCorner,
-  STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M,
   STOREY_SPACING_M,
   type StairSwitchbackLayout,
   type SwitchbackStairOpts,
 } from "./stairWellGeometry.js";
-
-/** Options for {@link computeStairDoorSnapForPlaceholder} (layout + optional landing Y hint). */
-export type ComputeStairDoorSnapOpts = SwitchbackStairOpts & {
-  /**
-   * Shaft-local Y anchor for {@link pickCornerLandingNearDoorBand}. When omitted, the mid-point of
-   * the default door band is used (fine for per-plate shafts). Mega columns should pass a value
-   * aligned to the stair prefab on the plate (e.g. `plateY + stairY - shaftCenterY`) so the same
-   * landing lap is chosen as corridor punches / stacked door bands.
-   */
-  doorBandTargetYForLandingPick?: number;
-  /**
-   * Overrides plate XZ used only for **along-wall pad pull** (see {@link snapStairDoorTangentAlongWallToLanding}).
-   * Prefer the **corridor shell centre** so the opening hugs the circulation side of the pad; when
-   * omitted, `groundDoor.towardPlateXZ` is used if present.
-   */
-  padAlignTowardPlateXZ?: readonly [number, number];
-};
 import {
   addDoorFrameTrimConstantX,
   addDoorFrameTrimConstantZ,
@@ -88,6 +64,7 @@ const doorFrameMat = new THREE.MeshStandardMaterial({
  * Leaf geometry comes later — opening + frame trim only for now.
  */
 export const SHAFT_DOUBLE_DOOR_W = 1.86;
+
 /** Exported for mega-shaft corridor door band spacing (m). */
 export const SHAFT_DOUBLE_DOOR_H = 2.2;
 const SHAFT_DOOR_SILL = 0.05;
@@ -783,65 +760,6 @@ export function elevatorGroundDoorOpeningLocals(
   };
 }
 
-/**
- * Shaft-interior Y extent for a **full-height** traversing door cut (matches {@link addShaftShell}
- * stair shells with default `openTopWallExtend`).
- */
-export function shaftFullInteriorVerticalOpeningYLocals(
-  sy: number,
-  opts?: { openTopWallExtend?: number },
-): { y0: number; y1: number } {
-  const wt = 0.11;
-  const hy = sy * 0.5;
-  const topExtend = Math.max(0, opts?.openTopWallExtend ?? 0);
-  const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
-  const wallCenterY = (-hy + wt) + innerWallH * 0.5;
-  const yWallBottom = wallCenterY - innerWallH * 0.5;
-  const yWallTop = wallCenterY + innerWallH * 0.5;
-  return { y0: yWallBottom + 0.03, y1: yWallTop - 0.04 };
-}
-
-/**
- * Corridor-facing traversing door: tangent at the stair-opposite inner corner; one-storey band or
- * full shaft height for mega columns.
- */
-export function traversingStairGroundDoorOpts(
-  sx: number,
-  sy: number,
-  sz: number,
-  face: CardinalFace,
-  layoutOpts?: SwitchbackStairOpts,
-  fullHeight = false,
-): ShaftGroundDoorOpts {
-  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts ?? {});
-  const tang = stairCorridorDoorTangentAtStairOppositeCorner(
-    sx,
-    sy,
-    sz,
-    face,
-    layoutOpts,
-    L,
-  );
-  if (fullHeight) {
-    const { y0, y1 } = shaftFullInteriorVerticalOpeningYLocals(sy);
-    return {
-      bandHeightM: sy,
-      face,
-      tangentOffsetAlongWall: tang,
-      doorHoleY0Local: y0,
-      doorHoleY1Local: y1,
-    };
-  }
-  const loc = elevatorGroundDoorOpeningLocals(sx, sy, sz, face, tang);
-  return {
-    bandHeightM: sy,
-    face: loc.face,
-    tangentOffsetAlongWall: loc.tangentOffsetAlongWall,
-    doorHoleY0Local: loc.y0Local,
-    doorHoleY1Local: loc.y1Local,
-  };
-}
-
 export function addElevatorShaftPlaceholder(
   group: THREE.Group,
   sx: number,
@@ -865,233 +783,13 @@ export function addElevatorShaftPlaceholder(
  * per storey on tall shafts.
  */
 export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
-  groundDoor?: ShaftGroundDoorOpts | null;
-  /**
-   * When set, passed through to {@link computeStairDoorSnapForPlaceholder} so mega stacked shafts
-   * pick the same corner landing as plate-space corridor tooling (see {@link ComputeStairDoorSnapOpts}).
-   */
-  doorBandTargetYForLandingPick?: number;
-  /** Passed to {@link computeStairDoorSnapForPlaceholder} (corridor-centre pad pull). */
-  padAlignTowardPlateXZ?: readonly [number, number];
-  /**
-   * Wall-local **Y** intervals for extra corridor openings (mega shaft: one band per storey).
-   * Same door face + tangent as {@link groundDoor}; converted to YZ or XY wall holes in shell space.
-   */
-  corridorDoorBandsLocalY?: readonly { readonly y0: number; readonly y1: number }[];
-  /** See {@link ShaftShellOpts.corridorFlushGapM}. */
-  corridorFlushGapM?: number;
   /**
    * When true: skip exactly **one** interior corner pad — the lowest deck in the bottom storey
    * (building base / first plate). Other corner landings on that storey stay. Per-plate: story 1.
    * Mega: lowest pad among those with `y` in the bottom ~`STOREY_SPACING_M` of the shaft.
    */
   omitGroundStoreyCornerLandings?: boolean;
-  /**
-   * When set, fixed corridor-facing traversing door (corner opposite tread mass, no snap heuristics).
-   * Ignores {@link groundDoor}. Pair with {@link traversingCorridorDoorFullHeight} on mega shafts.
-   */
-  traversingCorridorDoorFace?: CardinalFace;
-  /** True = one continuous vertical slot on mega stacked shafts; false = one-storey door band. */
-  traversingCorridorDoorFullHeight?: boolean;
 };
-
-export type ResolvedStairDoorCutoutMeta = {
-  L: StairSwitchbackLayout;
-  face: CardinalFace;
-  tangentOffsetAlongWall: number;
-  doorHalfW: number;
-  yWallBottom: number;
-  yWallTop: number;
-  yDoor0: number;
-  yHoleTop: number;
-  splitShaft: boolean;
-};
-
-/**
- * Stair shaft door face, along-wall tangent, and default vertical opening (before landing snap).
- * Used by mega-shaft corridor bands and by the client when cutting matching holes in corridor shells.
- */
-export function resolveStairGroundDoorCutoutMeta(
-  sx: number,
-  sy: number,
-  sz: number,
-  groundDoor: {
-    bandHeightM: number;
-    face?: CardinalFace | null;
-    towardPlateXZ?: readonly [number, number];
-    shaftPlateXZ?: readonly [number, number];
-    tangentOffsetAlongWall?: number;
-  },
-  layoutOpts?: SwitchbackStairOpts,
-): ResolvedStairDoorCutoutMeta {
-  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
-  const wt = 0.11;
-  const hy = sy * 0.5;
-  const innerWallH = Math.max(sy - 2 * wt, 0.08);
-  const wallCenterY = (-hy + wt) + innerWallH * 0.5;
-  const yWallBottom = wallCenterY - innerWallH * 0.5;
-  const yWallTop = wallCenterY + innerWallH * 0.5;
-  const bandCap = Math.max(0.55, Math.min(groundDoor.bandHeightM, innerWallH));
-  const splitShaft = bandCap < innerWallH - 0.08;
-  const ySplit = yWallBottom + bandCap;
-  const vlenX = Math.max(sx - 2 * wt, 0.05);
-  const vlenZ = Math.max(sz - 2 * wt, 0.05);
-  const doorHalfW = Math.min(
-    SHAFT_DOUBLE_DOOR_W * 0.5,
-    vlenZ * 0.5 - 0.06,
-    vlenX * 0.5 - 0.06,
-  );
-  const doorH = Math.min(SHAFT_DOUBLE_DOOR_H, bandCap - SHAFT_DOOR_SILL - 0.06);
-  const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
-  const doorInnerTop = yDoor0 + Math.max(0.55, doorH);
-  const yHoleTop = Math.min(doorInnerTop, splitShaft ? ySplit : yWallTop);
-
-  let face: CardinalFace;
-  let tangentOffsetAlongWall = groundDoor.tangentOffsetAlongWall ?? 0;
-  if (groundDoor.face != null) {
-    face = groundDoor.face;
-  } else if (groundDoor.towardPlateXZ && groundDoor.shaftPlateXZ) {
-    const placement = pickStairShaftGroundDoorPlacement(L, {
-      sx,
-      sz,
-      wallThickness: wt,
-      doorHalfWidthM: doorHalfW,
-      doorY0Local: yDoor0,
-      doorY1Local: yHoleTop,
-      collisionYMaxLocal: splitShaft ? ySplit + 0.06 : undefined,
-      towardX: groundDoor.towardPlateXZ[0],
-      towardZ: groundDoor.towardPlateXZ[1],
-      shaftPx: groundDoor.shaftPlateXZ[0],
-      shaftPz: groundDoor.shaftPlateXZ[1],
-    });
-    face = placement.face;
-    tangentOffsetAlongWall = placement.tangentOffsetM;
-  } else {
-    face = pickFaceTowardPoint(0, 0, 1, 0);
-  }
-
-  return {
-    L,
-    face,
-    tangentOffsetAlongWall,
-    doorHalfW,
-    yWallBottom,
-    yWallTop,
-    yDoor0,
-    yHoleTop,
-    splitShaft,
-  };
-}
-
-export type StairDoorSnapResult = {
-  L: StairSwitchbackLayout;
-  resolvedShellDoor: ShaftGroundDoorOpts;
-  face: CardinalFace;
-  tangentOffsetAlongWall: number;
-  doorHalfW: number;
-};
-
-/** Resolves stair door face/tangent and snaps the vertical opening onto the best corner landing pad. */
-export function computeStairDoorSnapForPlaceholder(
-  sx: number,
-  sy: number,
-  sz: number,
-  groundDoor: NonNullable<StairWellPlaceholderOpts["groundDoor"]>,
-  layoutOpts?: ComputeStairDoorSnapOpts,
-): StairDoorSnapResult {
-  const doorBandTargetYForLandingPick = layoutOpts?.doorBandTargetYForLandingPick;
-  const padAlignTowardPlateXZ = layoutOpts?.padAlignTowardPlateXZ;
-  const meta = resolveStairGroundDoorCutoutMeta(sx, sy, sz, groundDoor, {
-    climbFullShaft: layoutOpts?.climbFullShaft,
-  });
-  let y0snap = meta.yDoor0;
-  let y1snap = meta.yHoleTop;
-  const landingPickY =
-    doorBandTargetYForLandingPick ?? (y0snap + y1snap) * 0.5;
-  const land = pickCornerLandingNearDoorBand(
-    meta.L,
-    meta.face,
-    meta.tangentOffsetAlongWall,
-    meta.doorHalfW,
-    landingPickY,
-  );
-  let tangSnap = meta.tangentOffsetAlongWall;
-  if (land) {
-    const alignXZ =
-      padAlignTowardPlateXZ ??
-      (groundDoor.towardPlateXZ && groundDoor.shaftPlateXZ
-        ? groundDoor.towardPlateXZ
-        : undefined);
-    const padAlign =
-      alignXZ && groundDoor.shaftPlateXZ
-        ? {
-            alignTowardPlateXZ: alignXZ,
-            shaftPlateXZForAlign: groundDoor.shaftPlateXZ,
-          }
-        : undefined;
-    tangSnap = snapStairDoorTangentAlongWallToLanding(
-      land,
-      meta.face,
-      meta.doorHalfW,
-      sx,
-      sz,
-      padAlign,
-    );
-  }
-  tangSnap = shiftStairDoorTangentViewerRightFromInside(
-    meta.face,
-    tangSnap,
-    meta.doorHalfW,
-    sx,
-    sz,
-  );
-  /** Same axis as {@link shiftStairDoorTangentViewerRightFromInside} primary — extra clamped slide so openings don’t sit at an awkward pad clamp. */
-  const exitAlongSign = meta.face === "e" || meta.face === "s" ? 1 : -1;
-  tangSnap = clampStairDoorTangentAlongInnerWall(
-    meta.face,
-    tangSnap + exitAlongSign * STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M,
-    meta.doorHalfW,
-    sx,
-    sz,
-    0.11,
-  );
-  if (land) {
-    /** Walk-through sill aligns to landing **deck top**, not slab centroid (avoids a high “window lip”). */
-    const deckTop = land.y + land.thicknessHalf;
-    const sill = SHAFT_DOOR_SILL;
-    const headRoom = meta.yWallTop - deckTop - 0.1;
-    const span = Math.min(
-      SHAFT_DOUBLE_DOOR_H,
-      Math.max(1.72, headRoom - sill * 0.5),
-      (meta.yWallTop - meta.yWallBottom) * 0.5,
-    );
-    y0snap = Math.max(meta.yWallBottom + 0.02, deckTop + sill * 0.35);
-    y1snap = Math.min(meta.yWallTop - 0.04, y0snap + span);
-    if (y1snap < y0snap + 1.55) {
-      const halfH = Math.min(
-        SHAFT_DOUBLE_DOOR_H * 0.5,
-        (meta.yWallTop - meta.yWallBottom) * 0.45 - 0.06,
-      );
-      const mid = land.y;
-      y0snap = Math.max(meta.yWallBottom + 0.03, mid - halfH);
-      y1snap = Math.min(meta.yWallTop - 0.04, mid + halfH);
-    }
-  }
-  const resolvedShellDoor: ShaftGroundDoorOpts = {
-    bandHeightM: groundDoor.bandHeightM,
-    face: meta.face,
-    tangentOffsetAlongWall: tangSnap,
-    doorHoleY0Local: y0snap,
-    doorHoleY1Local: y1snap,
-  };
-  return {
-    L: meta.L,
-    resolvedShellDoor,
-    face: meta.face,
-    tangentOffsetAlongWall: tangSnap,
-    doorHalfW: meta.doorHalfW,
-  };
-}
 
 export function addStairWellPlaceholder(
   group: THREE.Group,
@@ -1100,93 +798,13 @@ export function addStairWellPlaceholder(
   sz: number,
   opts?: StairWellPlaceholderOpts,
 ): void {
-  const {
-    groundDoor,
-    corridorDoorBandsLocalY,
-    omitGroundStoreyCornerLandings,
-    doorBandTargetYForLandingPick,
-    padAlignTowardPlateXZ,
-    traversingCorridorDoorFace,
-    traversingCorridorDoorFullHeight,
-    ...layoutOpts
-  } = opts ?? {};
-
-  let L: StairSwitchbackLayout;
-  let resolvedShellDoor: ShaftGroundDoorOpts | null = null;
-  if (traversingCorridorDoorFace != null) {
-    const climb = opts?.climbFullShaft ?? false;
-    const full = traversingCorridorDoorFullHeight === true;
-    resolvedShellDoor = traversingStairGroundDoorOpts(
-      sx,
-      sy,
-      sz,
-      traversingCorridorDoorFace,
-      { climbFullShaft: climb },
-      full,
-    );
-    L = computeSwitchbackStairLayout(sx, sy, sz, { climbFullShaft: climb });
-  } else if (groundDoor) {
-    const snap = computeStairDoorSnapForPlaceholder(sx, sy, sz, groundDoor, {
-      ...layoutOpts,
-      doorBandTargetYForLandingPick,
-      padAlignTowardPlateXZ,
-    });
-    L = snap.L;
-    resolvedShellDoor = snap.resolvedShellDoor;
-  } else {
-    L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
-  }
-
-  let corridorDoorExtraHolesYZ: WallHoleYZ[] | undefined;
-  let corridorDoorExtraHolesXY: WallHoleXY[] | undefined;
-  if (resolvedShellDoor && corridorDoorBandsLocalY && corridorDoorBandsLocalY.length > 0) {
-    const wt = 0.11;
-    const hy = sy * 0.5;
-    const innerWallH = Math.max(sy - 2 * wt, 0.08);
-    const wallCenterY = (-hy + wt) + innerWallH * 0.5;
-    const yWB = wallCenterY - innerWallH * 0.5;
-    const yWT = wallCenterY + innerWallH * 0.5;
-    const vlenX = Math.max(sx - 2 * wt, 0.05);
-    const vlenZ = Math.max(sz - 2 * wt, 0.05);
-    const zMin = -vlenZ * 0.5;
-    const zMax = vlenZ * 0.5;
-    const xMin = -vlenX * 0.5;
-    const xMax = vlenX * 0.5;
-    const doorHalfW = Math.min(
-      SHAFT_DOUBLE_DOOR_W * 0.5,
-      vlenZ * 0.5 - 0.06,
-      vlenX * 0.5 - 0.06,
-    );
-    const tang = resolvedShellDoor.tangentOffsetAlongWall ?? 0;
-    const fc = resolvedShellDoor.face;
-    if (fc === "e" || fc === "w") {
-      const z0 = Math.max(zMin, tang - doorHalfW);
-      const z1 = Math.min(zMax, tang + doorHalfW);
-      corridorDoorExtraHolesYZ = corridorDoorBandsLocalY.map((b) => ({
-        z0,
-        z1,
-        y0: Math.max(yWB + 0.03, Math.min(b.y0, b.y1)),
-        y1: Math.min(yWT - 0.04, Math.max(b.y0, b.y1)),
-      }));
-    } else {
-      const x0 = Math.max(xMin, tang - doorHalfW);
-      const x1 = Math.min(xMax, tang + doorHalfW);
-      corridorDoorExtraHolesXY = corridorDoorBandsLocalY.map((b) => ({
-        x0,
-        x1,
-        y0: Math.max(yWB + 0.03, Math.min(b.y0, b.y1)),
-        y1: Math.min(yWT - 0.04, Math.max(b.y0, b.y1)),
-      }));
-    }
-  }
+  const { omitGroundStoreyCornerLandings, ...layoutOpts } = opts ?? {};
+  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
 
   addShaftShell(group, sx, sy, sz, stairShaftWall, shaftCeil, {
     includeFloor: true,
     includeCeiling: false,
-    groundDoor: resolvedShellDoor,
-    corridorDoorExtraHolesYZ,
-    corridorDoorExtraHolesXY,
-    corridorFlushGapM: opts?.corridorFlushGapM,
+    groundDoor: null,
   });
 
   const { innerWallH, wallCenterY, ix0, ix1, iz0, iz1 } = L;

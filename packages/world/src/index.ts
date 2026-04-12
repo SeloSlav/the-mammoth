@@ -15,7 +15,6 @@ import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
   buildFloorMeshes,
   elevatorDoorFacesFromGroundFloorDoc,
-  stairDoorFacesFromGroundFloorDoc,
 } from "./floorPlaceholderMeshes.js";
 import {
   addBuildingStairShaftColumnsToRoot,
@@ -29,7 +28,6 @@ import {
 export {
   buildFloorMeshes,
   elevatorDoorFacesFromGroundFloorDoc,
-  stairDoorFacesFromGroundFloorDoc,
 };
 export {
   addBuildingStairShaftColumnsToRoot,
@@ -124,10 +122,6 @@ export function instantiateBuildingFloorStack(
   const elevatorDoorFaceByShaftKey = groundDoc
     ? elevatorDoorFacesFromGroundFloorDoc(groundDoc)
     : undefined;
-  const stairDoorFaceByShaftKey = groundDoc
-    ? stairDoorFacesFromGroundFloorDoc(groundDoc)
-    : undefined;
-
   for (const ref of sorted) {
     const doc = getFloorDoc(ref.floorDocId);
     const plateWorldOriginY = (o?.[1] ?? 0) + (ref.levelIndex - 1) * spacing;
@@ -138,15 +132,6 @@ export function instantiateBuildingFloorStack(
       shaftElevatorsMerged,
       plateWorldOriginY,
       elevatorDoorFaceByShaftKey,
-      stairDoorFaceByShaftKey,
-      megaStairCorridorPunchContext:
-        stairShaftSpecs.length > 0
-          ? {
-              specs: stairShaftSpecs,
-              sortedRefs: sorted,
-              getFloorDoc,
-            }
-          : undefined,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;
@@ -154,14 +139,7 @@ export function instantiateBuildingFloorStack(
   }
 
   if (stairShaftSpecs.length > 0) {
-    addBuildingStairShaftColumnsToRoot(
-      root,
-      stairShaftSpecs,
-      sorted,
-      getFloorDoc,
-      spacing,
-      stairDoorFaceByShaftKey,
-    );
+    addBuildingStairShaftColumnsToRoot(root, stairShaftSpecs);
   }
 
   return root;
