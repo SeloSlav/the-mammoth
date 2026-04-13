@@ -630,6 +630,7 @@ export async function mountFpSession(
       probeDy: fpLocomotionConstants.walkProbeDy,
       maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
       jumpKinematicPlatformVyMps: elevatorJumpVy,
+      integrationEvalEndWallClockMs: frameNowMs,
     });
 
     fpElevators.snapLocalRiderFeetToAuthoritativeCabIfNeeded(
@@ -638,6 +639,7 @@ export async function mountFpSession(
       frameNowMs,
       jumpQueuedBeforeStep,
     );
+    fpElevators.clampLocalRiderXZToAuthoritativeCabIfNeeded(pos, loco, frameNowMs);
 
     fpElevators.tick(dt, frameNowMs, pos);
 

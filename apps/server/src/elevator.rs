@@ -12,6 +12,14 @@ use crate::pose::{player_pose, PlayerPose};
 
 /// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
 const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
+/// Must match client `ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M` (walk merge uses the same vertical band).
+const RIDER_SNAP_FEET_BELOW_CAB_M: f32 = 1.25;
+/// Must match client `ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M`.
+const RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M: f32 = 0.95;
+/// Non-door cab walls as fraction of inner half — stay inside rider XZ (0.97). Sync client `ELEVATOR_CLAMP_NON_DOOR_FRAC`.
+const CAB_CLAMP_NON_DOOR_FRAC: f32 = 0.965;
+/// Door-axis inner edge before slack. Sync client `ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC`.
+const CAB_CLAMP_DOOR_AXIS_INNER_FRAC: f32 = 0.92;
 
 const PH_IDLE: u8 = 0;
 const PH_CLOSING: u8 = 1;
@@ -226,9 +234,11 @@ pub fn merge_elevator_walk_top_lerped(
             Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
             None => car.cab_floor_y,
         };
-        // Match `player_inside_cab` vertical slab — do not snap to a car many floors away in the
-        // same XZ column (was read as hitching / “jumping while falling”).
-        if feet_y < cab_y - 0.2 || feet_y > cab_y + iy + 0.35 {
+        // Match client `mergeWalkTop` vertical band (wider than `player_inside_cab`) so a rising
+        // car / substep lag does not drop merge for one frame (fall-through).
+        if feet_y < cab_y - RIDER_SNAP_FEET_BELOW_CAB_M
+            || feet_y > cab_y + iy + RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M
+        {
             continue;
         }
         let geom_top = cab_y - SKIN;
@@ -257,6 +267,23 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
     true
 }
 
+/// Looser vertical envelope than `player_inside_cab` — matches client `fpElevatorRiderSnapContainsLocalPoint`.
+fn player_rider_snap_grip(p: &PlayerPose, car: &ElevatorCar) -> bool {
+    let lx = p.x - car.plate_x;
+    let lz = p.z - car.plate_z;
+    let (hx, hz) = elevator_layout::inner_half_xz();
+    let iy = elevator_layout::inner_height();
+    if lx.abs() > hx * 0.97 || lz.abs() > hz * 0.97 {
+        return false;
+    }
+    if p.y < car.cab_floor_y - RIDER_SNAP_FEET_BELOW_CAB_M
+        || p.y > car.cab_floor_y + iy + RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M
+    {
+        return false;
+    }
+    true
+}
+
 /// Hard-attach feet to the authoritative cab floor when inside the riding volume.
 ///
 /// Walk merge + probe sampling can still miss for a tick (shaft geometry, long drops); this is the
@@ -267,7 +294,7 @@ pub fn snap_inside_cab_feet_to_floor(ctx: &ReducerContext, p: &mut PlayerPose) {
         return;
     }
     for car in ctx.db.elevator_car().iter() {
-        if !player_inside_cab(p, &car) {
+        if !player_rider_snap_grip(p, &car) {
             continue;
         }
         p.y = car.cab_floor_y;
@@ -349,32 +376,68 @@ fn door_side_slack_m(door_open_01: f32) -> f32 {
 }
 
 /// Keep players from walking through cab shells; relax door side while doors are opening.
+///
+/// Uses `player_rider_snap_grip` (same envelope as post-tick foot snap / client merge widened band),
+/// not `player_inside_cab` — otherwise the player can stand between 0.9× and 0.97× half extents with
+/// **no** XZ clamp and walk off the car sides.
 pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
     let (ihx, ihz) = elevator_layout::inner_half_xz();
     let ox = 0.0_f32;
     let oz = 0.0_f32;
 
     for car in ctx.db.elevator_car().iter() {
-        if !player_inside_cab(p, &car) {
+        if !player_rider_snap_grip(p, &car) {
             continue;
         }
         let face = door_face_from_u8(car.door_face);
         let cx = ox + car.plate_x;
         let cz = oz + car.plate_z;
         let ext = door_side_slack_m(car.door_open_01);
+        let nx = CAB_CLAMP_NON_DOOR_FRAC;
+        let di = CAB_CLAMP_DOOR_AXIS_INNER_FRAC;
 
-        let mut xmin = cx - ihx * 0.92;
-        let mut xmax = cx + ihx * 0.92;
-        let mut zmin = cz - ihz * 0.92;
-        let mut zmax = cz + ihz * 0.92;
-        match face {
-            DoorFace::E => xmax += ext,
-            DoorFace::W => xmin -= ext,
-            DoorFace::N => zmax += ext,
-            DoorFace::S => zmin -= ext,
-        }
+        let (xmin, xmax, zmin, zmax) = match face {
+            DoorFace::E => (
+                cx - ihx * nx,
+                cx + ihx * di + ext,
+                cz - ihz * nx,
+                cz + ihz * nx,
+            ),
+            DoorFace::W => (
+                cx - ihx * di - ext,
+                cx + ihx * nx,
+                cz - ihz * nx,
+                cz + ihz * nx,
+            ),
+            DoorFace::N => (
+                cx - ihx * nx,
+                cx + ihx * nx,
+                cz - ihz * nx,
+                cz + ihz * di + ext,
+            ),
+            DoorFace::S => (
+                cx - ihx * nx,
+                cx + ihx * nx,
+                cz - ihz * di - ext,
+                cz + ihz * nx,
+            ),
+        };
+        let px = p.x;
+        let pz = p.z;
         p.x = p.x.clamp(xmin, xmax);
         p.z = p.z.clamp(zmin, zmax);
+        if p.x > px && p.vel_x < 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.x < px && p.vel_x > 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.z > pz && p.vel_z < 0.0 {
+            p.vel_z = 0.0;
+        }
+        if p.z < pz && p.vel_z > 0.0 {
+            p.vel_z = 0.0;
+        }
     }
 }
 

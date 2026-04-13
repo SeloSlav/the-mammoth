@@ -20,6 +20,30 @@ export const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M = 0.5;
  * Must match server `elevator::RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
  */
 export const ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS = 0.85;
+/**
+ * Rider foot snap: allow feet this far below cab support (m) — rising car / physics timestep lag.
+ * Must match server `elevator::RIDER_SNAP_FEET_BELOW_CAB_M`.
+ */
+export const ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M = 1.25;
+/**
+ * Rider snap: clearance above cab ceiling line `cabFeetY + innerH` (m). Must match server
+ * `elevator::RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M`.
+ */
+export const ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M = 0.95;
+/**
+ * Cab wall clamp: back + side half extents as a fraction of inner half (must stay ≤ rider XZ
+ * 0.97 so snap/merge keep working). Match server `elevator::CAB_CLAMP_NON_DOOR_FRAC`.
+ */
+export const ELEVATOR_CLAMP_NON_DOOR_FRAC = 0.965;
+/**
+ * Door-axis inner edge (fraction of half extent) before door slack — match server
+ * `elevator::CAB_CLAMP_DOOR_AXIS_INNER_FRAC`.
+ */
+export const ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC = 0.92;
+/** Match server `elevator::DOOR_SLACK_FULL_M` / `DOOR_SLACK_START` / `DOOR_SLACK_FULL_OPEN`. */
+export const ELEVATOR_CLAMP_DOOR_SLACK_FULL_M = 0.85;
+export const ELEVATOR_CLAMP_DOOR_SLACK_START = 0.45;
+export const ELEVATOR_CLAMP_DOOR_SLACK_FULL_OPEN = 0.85;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
 

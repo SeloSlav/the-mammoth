@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fpElevFeetInHoistwayColumnForFloorStack } from "./fpElevatorVolumes.js";
+import {
+  fpElevFeetInHoistwayColumnForFloorStack,
+  fpElevatorClampWorldXZToCabIfRider,
+} from "./fpElevatorVolumes.js";
 
 describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
   const base = {
@@ -32,5 +35,42 @@ describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
         buildingWorldOriginZ: 20,
       }),
     ).toBe(true);
+  });
+});
+
+describe("fpElevatorClampWorldXZToCabIfRider", () => {
+  const inner = { halfX: 2, halfZ: 2, innerH: 2.5 };
+  const cabFeetY = 10;
+  const py = cabFeetY + 0.4;
+
+  it("pulls the player back from beyond the door-axis inner edge when doors are closed (E face)", () => {
+    const cx = 100;
+    const cz = 200;
+    const wx = cx + inner.halfX * 0.96;
+    const wz = cz;
+    const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
+    expect(r.didClamp).toBe(true);
+    expect(r.x).toBeCloseTo(cx + inner.halfX * 0.92, 5);
+    expect(r.z).toBeCloseTo(wz, 5);
+  });
+
+  it("clamps Z when too far toward a side wall (E door: sides are ±Z)", () => {
+    const cx = 0;
+    const cz = 0;
+    const wx = cx;
+    const wz = cz + inner.halfZ * 0.969;
+    const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
+    expect(r.didClamp).toBe(true);
+    expect(r.z).toBeCloseTo(cz + inner.halfZ * 0.965, 5);
+  });
+
+  it("no-ops when feet are outside the rider envelope", () => {
+    const cx = 0;
+    const cz = 0;
+    const wx = cx + inner.halfX * 2;
+    const wz = cz;
+    const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
+    expect(r.didClamp).toBe(false);
+    expect(r.x).toBe(wx);
   });
 });

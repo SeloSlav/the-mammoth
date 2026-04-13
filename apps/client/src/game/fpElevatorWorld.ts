@@ -18,6 +18,8 @@ import {
   CALL_Y_HALF_WINDOW,
   ELEVATOR_PHASE_MOVING,
   ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+  ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M,
+  ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
   type FpElevFloorPickUserData,
@@ -33,7 +35,9 @@ import {
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevFloorPickMeshesShouldShow,
   fpElevFloorPickRaycastShouldProceed,
+  fpElevatorClampWorldXZToCabIfRider,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 import { setFpElevatorHudView } from "./fpElevatorHud.js";
 import { fpElevSuppressLandingHailBecauseCabAtLandingSupport } from "./fpElevatorLandingHailSuppress.js";
@@ -48,7 +52,10 @@ export {
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevFloorPickMeshesShouldShow,
   fpElevFloorPickRaycastShouldProceed,
+  fpElevatorClampWorldXZToCabIfRider,
+  fpElevatorDoorSideSlackM,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 
 export type MountFpElevatorWorldOpts = {
@@ -99,6 +106,15 @@ export type MountFpElevatorWorldResult = {
     loco: FpLocomotionState,
     evalWallClockMs: number,
     jumpPressedThisFrame: boolean,
+  ): void;
+  /**
+   * When feet are in the rider envelope, clamp world X/Z to cab inner walls (matches server
+   * `clamp_player_to_elevators`) so merge/snap widened volumes cannot be walked off the sides.
+   */
+  clampLocalRiderXZToAuthoritativeCabIfNeeded(
+    pos: THREE.Vector3,
+    loco: FpLocomotionState,
+    evalWallClockMs: number,
   ): void;
   tryRaycastFloorPick(
     camera: THREE.PerspectiveCamera,
@@ -267,12 +283,15 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         continue;
       }
       const cabFeet = getCabY(key, evalWallClockMs);
+      if (!Number.isFinite(cabFeet)) continue;
       const feetY = probeTopY - fpLocomotionConstants.walkProbeDy;
-      if (feetY < cabFeet - 0.2 || feetY > cabFeet + vis.inner.innerH + 0.35) {
+      const yLo = cabFeet - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
+      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+      if (feetY < yLo || feetY > yHi) {
         continue;
       }
       const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
-      /** Match `elevator::merge_elevator_walk_top` inclusion (no dead band above the probe). */
+      /** Match `elevator::merge_elevator_walk_top_lerped` inclusion (no dead band above the probe). */
       if (geomTop <= probeTopY + stepUpMargin) {
         if (!Number.isFinite(best)) best = geomTop;
         else best = Math.max(best, geomTop);
@@ -312,7 +331,10 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         continue;
       }
       const cabFeet = getCabY(key, opts.evalWallClockMs);
-      if (feetY < cabFeet - 0.2 || feetY > cabFeet + vis.inner.innerH + 0.35) {
+      if (!Number.isFinite(cabFeet)) continue;
+      const yLo = cabFeet - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
+      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+      if (feetY < yLo || feetY > yHi) {
         continue;
       }
       const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
@@ -570,10 +592,49 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const cabFeet = getCabY(key, evalWallClockMs);
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
-      if (!fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabFeet, vis.inner)) continue;
+      if (!fpElevatorRiderSnapContainsLocalPoint(lx, lz, py, cabFeet, vis.inner)) continue;
       pos.y = cabFeet;
       loco.velocity.y = 0;
       loco.grounded = true;
+      return;
+    }
+  };
+
+  const clampLocalRiderXZToAuthoritativeCabIfNeeded = (
+    pos: THREE.Vector3,
+    loco: FpLocomotionState,
+    evalWallClockMs: number,
+  ) => {
+    const px = pos.x;
+    const py = pos.y;
+    const pz = pos.z;
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      const cabFeet = getCabY(key, evalWallClockMs);
+      if (!Number.isFinite(cabFeet)) continue;
+      const plateX = ox + row.plateX;
+      const plateZ = oz + row.plateZ;
+      const doorOpen = getDoor(key, evalWallClockMs);
+      const { x, z, didClamp } = fpElevatorClampWorldXZToCabIfRider(
+        px,
+        pz,
+        py,
+        cabFeet,
+        plateX,
+        plateZ,
+        vis.layout.doorFace,
+        doorOpen,
+        vis.inner,
+      );
+      if (!didClamp) continue;
+      pos.x = x;
+      pos.z = z;
+      if (x > px && loco.velocity.x < 0) loco.velocity.x = 0;
+      if (x < px && loco.velocity.x > 0) loco.velocity.x = 0;
+      if (z > pz && loco.velocity.z < 0) loco.velocity.z = 0;
+      if (z < pz && loco.velocity.z > 0) loco.velocity.z = 0;
       return;
     }
   };
@@ -596,6 +657,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     mergeWalkTop,
     getElevatorKinematicSupportVyMps,
     snapLocalRiderFeetToAuthoritativeCabIfNeeded,
+    clampLocalRiderXZToAuthoritativeCabIfNeeded,
     tryRaycastFloorPick,
     consumeInteractKey,
     shouldSuppressEpickup,
