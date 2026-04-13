@@ -173,9 +173,17 @@ export async function mountFpSession(
 
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
+  const _floorVisCamWorld = new THREE.Vector3();
 
   const syncBuildingFloorPlateVisibility = () => {
-    const band = fpElevators.getFloorVisibilityBand(pos.x, pos.y, pos.z, performance.now());
+    camera.getWorldPosition(_floorVisCamWorld);
+    const band = fpElevators.getFloorVisibilityBand(
+      pos.x,
+      pos.y,
+      pos.z,
+      performance.now(),
+      _floorVisCamWorld.y,
+    );
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothAlwaysVisible === true) {
         ch.visible = true;
@@ -604,6 +612,7 @@ export async function mountFpSession(
     const probeTopForElev = pos.y + fpLocomotionConstants.walkProbeDy;
     const baseForElev = sampleWalkTopBase(pos.x, pos.z, probeTopForElev);
     const elevatorJumpVy =
+      !loco.grounded ||
       loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
         ? 0
         : fpElevators.getElevatorKinematicSupportVyMps({

@@ -209,7 +209,9 @@ pub fn merge_elevator_walk_top_lerped(
     let fz0 = z - FOOT_R;
     let fz1 = z + FOOT_R;
     let (ihx, ihz) = elevator_layout::inner_half_xz();
+    let iy = elevator_layout::inner_height();
     let a = alpha.clamp(0.0, 1.0);
+    let feet_y = probe_top_y - WALK_PROBE_DY;
 
     for car in ctx.db.elevator_car().iter() {
         let cx = car.plate_x;
@@ -221,6 +223,11 @@ pub fn merge_elevator_walk_top_lerped(
             Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
             None => car.cab_floor_y,
         };
+        // Match `player_inside_cab` vertical slab — do not snap to a car many floors away in the
+        // same XZ column (was read as hitching / “jumping while falling”).
+        if feet_y < cab_y - 0.2 || feet_y > cab_y + iy + 0.35 {
+            continue;
+        }
         let geom_top = cab_y - SKIN;
         if geom_top <= probe_top_y + step_up_margin {
             if best.is_nan() {

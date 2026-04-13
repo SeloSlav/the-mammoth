@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
+import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   elevatorSupportFeetWorldY,
@@ -95,7 +96,14 @@ export type MountFpElevatorWorldResult = {
   ): boolean;
   consumeInteractKey(playerPos: THREE.Vector3): boolean;
   shouldSuppressEpickup(playerPos: THREE.Vector3): boolean;
-  getFloorVisibilityBand(px: number, py: number, pz: number, nowMs: number): {
+  getFloorVisibilityBand(
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+    /** Camera / eye world Y — widens visible storeys above the feet when looking up. */
+    bandEyeWorldY?: number,
+  ): {
     lo: number;
     hi: number;
   };
@@ -248,6 +256,10 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         continue;
       }
       const cabFeet = getCabY(key, evalWallClockMs);
+      const feetY = probeTopY - fpLocomotionConstants.walkProbeDy;
+      if (feetY < cabFeet - 0.2 || feetY > cabFeet + vis.inner.innerH + 0.35) {
+        continue;
+      }
       const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
       /** Match `elevator::merge_elevator_walk_top` inclusion (no dead band above the probe). */
       if (geomTop <= probeTopY + stepUpMargin) {
@@ -270,6 +282,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     );
     let bestVy = 0;
     let bestCabGeom = -Infinity;
+    const feetY = opts.probeTopY - fpLocomotionConstants.walkProbeDy;
     const fx0 = opts.worldX - opts.footRadiusXZ;
     const fx1 = opts.worldX + opts.footRadiusXZ;
     const fz0 = opts.worldZ - opts.footRadiusXZ;
@@ -288,6 +301,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         continue;
       }
       const cabFeet = getCabY(key, opts.evalWallClockMs);
+      if (feetY < cabFeet - 0.2 || feetY > cabFeet + vis.inner.innerH + 0.35) {
+        continue;
+      }
       const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
       if (geomTop > opts.probeTopY + opts.stepUpMargin) continue;
       if (geomTop > bestCabGeom + 1e-5) {
@@ -399,8 +415,19 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return false;
   };
 
-  const getFloorVisibilityBand = (px: number, py: number, pz: number, nowMs: number) => {
-    const sPlayer = estimateStoreyFromFeetY(py, storeyOpts);
+  const getFloorVisibilityBand = (
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+    bandEyeWorldY?: number,
+  ) => {
+    const sFeet = estimateStoreyFromFeetY(py, storeyOpts);
+    const sEye =
+      bandEyeWorldY === undefined
+        ? sFeet
+        : estimateStoreyFromFeetY(bandEyeWorldY, storeyOpts);
+    const playerStorey = Math.max(sFeet, sEye);
     let revealFullStack = false;
     for (const vis of visuals.values()) {
       if (
@@ -439,7 +466,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     }
     return fpBuildingFloorPlateVisibilityBand({
       maxLevel,
-      playerStorey: sPlayer,
+      playerStorey,
       revealFullStack,
     });
   };

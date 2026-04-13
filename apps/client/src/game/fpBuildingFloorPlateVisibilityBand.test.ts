@@ -12,14 +12,14 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 19 });
   });
 
-  it("uses player storey ±1 when not in shaft context", () => {
+  it("uses a wide storey band when not in shaft context", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 19,
         playerStorey: 10,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 9, hi: 11 });
+    ).toEqual({ lo: 6, hi: 14 });
   });
 
   it("clamps to maxLevel at the top", () => {
@@ -29,7 +29,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 5,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 4, hi: 5 });
+    ).toEqual({ lo: 1, hi: 5 });
   });
 
   it("clamps at ground", () => {
@@ -39,7 +39,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 2 });
+    ).toEqual({ lo: 1, hi: 5 });
   });
 
   it("normalizes maxLevel when below 1", () => {
