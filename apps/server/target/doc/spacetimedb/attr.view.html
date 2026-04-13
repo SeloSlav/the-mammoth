@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks a function as a spacetimedb view."><title>view in spacetimedb - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="spacetimedb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">view</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../spacetimedb/index.html">spacetimedb</a><span class="version">2.1.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">spacetimedb</a></div><h1>Attribute Macro <span class="attr">view</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>#[view]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks a function as a spacetimedb view.</p>
+<p>A view is a function with read-only access to the database.</p>
+<p>The first argument of a view is always a <a href="struct.ViewContext.html" title="struct spacetimedb::ViewContext"><code>&amp;ViewContext</code></a> or <a href="struct.AnonymousViewContext.html" title="struct spacetimedb::AnonymousViewContext"><code>&amp;AnonymousViewContext</code></a>.
+The former can only read from the database whereas latter can also access info about the caller.</p>
+<p>After this, a view can take any number of arguments just like reducers.
+These arguments must implement the <a href="trait.SpacetimeType.html" title="trait spacetimedb::SpacetimeType"><code>SpacetimeType</code></a>, <a href="trait.Serialize.html" title="trait spacetimedb::Serialize"><code>Serialize</code></a>, and <a href="trait.Deserialize.html" title="trait spacetimedb::Deserialize"><code>Deserialize</code></a> traits.
+All of these traits can be derived at once by marking a type with <code>#[derive(SpacetimeType)]</code>.</p>
+<p>Views return <code>Vec&lt;T&gt;</code> or <code>Option&lt;T&gt;</code> where <code>T</code> is a <code>SpacetimeType</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{view, table, AnonymousViewContext, SpacetimeType, ViewContext};
+<span class="kw">use </span>spacetimedb_lib::Identity;
+
+<span class="attr">#[table(accessor = player)]
+</span><span class="kw">struct </span>Player {
+    <span class="attr">#[auto_inc]
+    #[primary_key]
+    </span>id: u64,
+
+    <span class="attr">#[unique]
+    </span>identity: Identity,
+
+    <span class="attr">#[index(btree)]
+    </span>level: u32,
+}
+
+<span class="kw">impl </span>Player {
+    <span class="kw">fn </span>merge(<span class="self">self</span>, location: Location) -&gt; PlayerAndLocation {
+        PlayerAndLocation {
+            player_id: <span class="self">self</span>.id,
+            level: <span class="self">self</span>.level,
+            x: location.x,
+            y: location.y,
+        }
+    }
+}
+
+<span class="attr">#[derive(SpacetimeType)]
+</span><span class="kw">struct </span>PlayerId {
+    id: u64,
+}
+
+<span class="attr">#[derive(SpacetimeType)]
+</span><span class="kw">struct </span>PlayerCount {
+    count: u64,
+}
+
+<span class="attr">#[table(accessor = location, index(accessor = coordinates, btree(columns = [x, y]</span>)))]
+<span class="kw">struct </span>Location {
+    <span class="attr">#[unique]
+    </span>player_id: u64,
+    x: u64,
+    y: u64,
+}
+
+<span class="attr">#[derive(SpacetimeType)]
+</span><span class="kw">struct </span>PlayerAndLocation {
+    player_id: u64,
+    level: u32,
+    x: u64,
+    y: u64,
+}
+
+<span class="comment">// A view that selects at most one row from a table
+</span><span class="attr">#[view(accessor = my_player, public)]
+</span><span class="kw">fn </span>my_player(ctx: <span class="kw-2">&amp;</span>ViewContext) -&gt; <span class="prelude-ty">Option</span>&lt;Player&gt; {
+    ctx.db.player().identity().find(ctx.sender())
+}
+
+<span class="comment">// An example of column projection
+</span><span class="attr">#[view(accessor = my_player_id, public)]
+</span><span class="kw">fn </span>my_player_id(ctx: <span class="kw-2">&amp;</span>ViewContext) -&gt; <span class="prelude-ty">Option</span>&lt;PlayerId&gt; {
+    ctx.db.player().identity().find(ctx.sender()).map(|Player { id, .. }| PlayerId { id })
+}
+
+<span class="comment">// A view that counts the number of rows in a table
+</span><span class="attr">#[view(accessor = player_count, public)]
+</span><span class="kw">fn </span>player_count(ctx: <span class="kw-2">&amp;</span>AnonymousViewContext) -&gt; <span class="prelude-ty">Option</span>&lt;PlayerCount&gt; {
+    <span class="prelude-val">Some</span>(PlayerCount {
+        count: ctx.db.player().count(),
+    })
+}
+
+<span class="comment">// An example that is analogous to a semijoin in sql
+</span><span class="attr">#[view(accessor = players_at_coordinates, public)]
+</span><span class="kw">fn </span>players_at_coordinates(ctx: <span class="kw-2">&amp;</span>AnonymousViewContext) -&gt; Vec&lt;Player&gt; {
+    ctx
+        .db
+        .location()
+        .coordinates()
+        .filter((<span class="number">3u64</span>, <span class="number">5u64</span>))
+        .filter_map(|location| ctx.db.player().id().find(location.player_id))
+        .collect()
+}
+
+<span class="comment">// An example of a join that combines fields from two different tables
+</span><span class="attr">#[view(accessor = players_with_coordinates, public)]
+</span><span class="kw">fn </span>players_with_coordinates(ctx: <span class="kw-2">&amp;</span>AnonymousViewContext) -&gt; Vec&lt;PlayerAndLocation&gt; {
+    ctx
+        .db
+        .location()
+        .coordinates()
+        .filter((<span class="number">3u64</span>, <span class="number">5u64</span>))
+        .filter_map(|location| ctx
+            .db
+            .player()
+            .id()
+            .find(location.player_id)
+            .map(|player| player.merge(location))
+        )
+        .collect()
+}</code></pre></div>
+<p>Just like reducers, views are limited in their ability to interact with the outside world.
+They have no access to any network or filesystem interfaces.
+Calling methods from <a href="https://doc.rust-lang.org/1.93.0/std/io/index.html" title="mod std::io"><code>std::io</code></a>, <a href="https://doc.rust-lang.org/1.93.0/std/net/index.html" title="mod std::net"><code>std::net</code></a>, or <a href="https://doc.rust-lang.org/1.93.0/std/fs/index.html" title="mod std::fs"><code>std::fs</code></a> will result in runtime errors.</p>
+<p>Views are callable by reducers and other views simply by passing their <code>ViewContext</code>..
+This is a regular function call.
+The callee will run within the caller’s transaction.</p>
+</div></details></section></div></main></body></html>

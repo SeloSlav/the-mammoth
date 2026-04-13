@@ -17,6 +17,11 @@
  */
 
 import { fpLocomotionConstants } from "@the-mammoth/engine";
+import {
+  CONSUME_DRINK_STEM,
+  CONSUME_EAT_STEM,
+  CONSUME_STEM_MEDIA_EXTENSIONS,
+} from "./consumeUiSound";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
 
 const AUDIO_ROOT =
@@ -90,6 +95,8 @@ export class LocalGameAudio {
   private meleeSwingBuffersByProfile = new Map<number, AudioBuffer[]>();
   private meleeSwingRR = 0;
   private itemPickBuffer: AudioBuffer | null = null;
+  private consumeEatBuffer: AudioBuffer | null = null;
+  private consumeDrinkBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -144,6 +151,22 @@ export class LocalGameAudio {
       );
     }
 
+    const eatUrl = await this.resolveSource(CONSUME_EAT_STEM, CONSUME_STEM_MEDIA_EXTENSIONS);
+    const drinkUrl = await this.resolveSource(CONSUME_DRINK_STEM, CONSUME_STEM_MEDIA_EXTENSIONS);
+    if (eatUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [eatUrl]);
+      this.consumeEatBuffer = decoded[0] ?? null;
+    }
+    if (drinkUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [drinkUrl]);
+      this.consumeDrinkBuffer = decoded[0] ?? null;
+    }
+    if (!this.consumeEatBuffer || !this.consumeDrinkBuffer) {
+      console.warn(
+        "[LocalGameAudio] Missing consume UI assets: consume-eat.* / consume-drink.* under public/audio/ui/ (mp3 preferred).",
+      );
+    }
+
     if (this.impactBuffers.length === 0) {
       console.warn("[LocalGameAudio] Failed to decode footstep assets.");
       void ctx.close();
@@ -182,6 +205,8 @@ export class LocalGameAudio {
     this.impactBuffers = [];
     this.meleeSwingBuffersByProfile.clear();
     this.itemPickBuffer = null;
+    this.consumeEatBuffer = null;
+    this.consumeDrinkBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
@@ -240,6 +265,26 @@ export class LocalGameAudio {
 
     const hitGain = ctx.createGain();
     hitGain.gain.value = 0.44 * (0.94 + Math.random() * 0.12);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.99 + Math.random() * 0.04;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
+  }
+
+  /** Immediate hotbar consume feedback (local client); others hear replicated `world_sound_event`. */
+  playHotbarConsumeLocal(profile: "eat" | "drink"): void {
+    const buf = profile === "drink" ? this.consumeDrinkBuffer : this.consumeEatBuffer;
+    if (!this.unlocked || !this.ctx || !this.footstepBus || !buf) {
+      return;
+    }
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 0.5 * (0.92 + Math.random() * 0.14);
 
     const src = ctx.createBufferSource();
     src.buffer = buf;

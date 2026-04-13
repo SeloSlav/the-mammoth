@@ -6,7 +6,6 @@ export type SwingStrokeClientPoint = { clientX: number; clientY: number };
 const _plane = new THREE.Plane();
 const _hit = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
-const _q = new THREE.Quaternion();
 
 function r4(n: number): number {
   return Math.round(n * 10000) / 10000;
@@ -33,10 +32,10 @@ function clientToRay(
 }
 
 /**
- * Intersect each screen ray with the plane through `rigWorld` (normal = camera forward).
- * Returns **world-space** hit points (meters).
+ * Project each screen point onto the plane through `rigWorld` with normal = camera forward
+ * (screen-parallel at the hand). Returns positions in **fpRoot local space**.
  */
-export function projectViewportStrokeToWorldHits(opts: {
+export function projectViewportStrokeToFpRootLocals(opts: {
   clientPoints: readonly SwingStrokeClientPoint[];
   canvasRect: DOMRectReadOnly;
   pickCamera: THREE.Camera;
@@ -53,39 +52,32 @@ export function projectViewportStrokeToWorldHits(opts: {
   opts.pickCamera.getWorldDirection(_fwd);
 
   const raycaster = new THREE.Raycaster();
-  const hits: THREE.Vector3[] = [];
+  const locals: THREE.Vector3[] = [];
 
   for (const p of pts) {
     clientToRay(p, opts.canvasRect, raycaster, opts.pickCamera);
     _plane.setFromNormalAndCoplanarPoint(_fwd, rigWorld);
     const ok = raycaster.ray.intersectPlane(_plane, _hit);
     if (ok === null) continue;
-    hits.push(_hit.clone());
+    const local = _hit.clone();
+    opts.fpRoot.worldToLocal(local);
+    locals.push(local);
   }
 
-  if (hits.length < 2) {
+  if (locals.length < 2) {
     throw new Error("Could not project the stroke — try Gameplay camera or a longer drag.");
   }
-  return hits;
+  return locals;
 }
 
-/**
- * Map world-space deltas along the view plane into **fpRoot-local** swing translation offsets
- * (same space as `firstPerson.meleeSwing[].translationM`). Uses only world rotation of `fpRoot`
- * so the on-screen stroke shape matches the additive path under head pitch.
- */
-export function worldPlaneDeltasToFpRootSwingOffsets(
-  hitWorlds: readonly THREE.Vector3[],
-  fpRoot: THREE.Object3D,
+/** Offsets from rig rest: first sample is zeroed so t=0 matches rest pose. */
+export function offsetsFromStrokeLocals(
+  locals: readonly THREE.Vector3[],
+  rigRestPositionLocal: THREE.Vector3,
 ): THREE.Vector3[] {
-  if (hitWorlds.length < 2) {
-    throw new Error("Stroke too short — need at least two projected points.");
-  }
-  fpRoot.updateMatrixWorld(true);
-  fpRoot.getWorldQuaternion(_q);
-  const inv = _q.clone().invert();
-  const base = hitWorlds[0]!.clone();
-  return hitWorlds.map((h) => h.clone().sub(base).applyQuaternion(inv));
+  const off = locals.map((h) => h.clone().sub(rigRestPositionLocal));
+  const base = off[0]!.clone();
+  return off.map((v) => v.sub(base));
 }
 
 export function scaleOffsetsToMaxTranslationM(
@@ -134,12 +126,22 @@ export function resamplePolylineByArcLength(
   return out;
 }
 
-const zeroRot = { x: 0, y: 0, z: 0 };
+/** Yaw (Y) + pitch (X) in fpRoot-local space so the rig tends to "face" along motion. */
+export function eulerRadFromTangentLocal(tan: THREE.Vector3): {
+  x: number;
+  y: number;
+  z: number;
+} {
+  if (tan.lengthSq() < 1e-10) {
+    return { x: 0, y: 0, z: 0 };
+  }
+  tan.normalize();
+  const xz = Math.hypot(tan.x, tan.z);
+  const yaw = Math.atan2(tan.x, tan.z);
+  const pitch = Math.atan2(-tan.y, xz);
+  return { x: r4(pitch), y: r4(yaw), z: 0 };
+}
 
-/**
- * Builds keyframes from an offset polyline in fpRoot space. **Rotation is always zero** so the
- * painted path reads as pure motion; tune twist with the gizmo + Capture at a scrub time.
- */
 export function swingKeyframesFromOffsetPolyline(
   relativeOffsets: readonly THREE.Vector3[],
   opts?: { sampleCount?: number; approachT?: number; maxTranslationAbsM?: number },
@@ -155,18 +157,22 @@ export function swingKeyframesFromOffsetPolyline(
   const n = resampled.length;
   for (let k = 0; k < n; k++) {
     const t = n > 1 ? (k / (n - 1)) * approachT : 0;
+    const prev = resampled[Math.max(0, k - 1)]!;
+    const next = resampled[Math.min(n - 1, k + 1)]!;
+    const tan = new THREE.Vector3().subVectors(next, prev);
+    const rot = k === 0 ? { x: 0, y: 0, z: 0 } : eulerRadFromTangentLocal(tan);
     const tr = resampled[k]!;
     keys.push({
       t: r4(t),
       translationM: { x: r4(tr.x), y: r4(tr.y), z: r4(tr.z) },
-      rotationRad: { ...zeroRot },
+      rotationRad: rot,
     });
   }
 
   keys.push({
     t: 1,
     translationM: { x: 0, y: 0, z: 0 },
-    rotationRad: { ...zeroRot },
+    rotationRad: { x: 0, y: 0, z: 0 },
   });
 
   return keys;
@@ -180,13 +186,13 @@ export function buildMeleeSwingKeyframesFromViewportStroke(opts: {
   rigRestPositionLocal: THREE.Vector3;
   sampleCount?: number;
 }): PrimitiveSwingKeyframe[] {
-  const hitsW = projectViewportStrokeToWorldHits({
+  const locals = projectViewportStrokeToFpRootLocals({
     clientPoints: opts.clientPoints,
     canvasRect: opts.canvasRect,
     pickCamera: opts.pickCamera,
     fpRoot: opts.fpRoot,
     rigRestPositionLocal: opts.rigRestPositionLocal,
   });
-  const rel = worldPlaneDeltasToFpRootSwingOffsets(hitsW, opts.fpRoot);
+  const rel = offsetsFromStrokeLocals(locals, opts.rigRestPositionLocal);
   return swingKeyframesFromOffsetPolyline(rel, { sampleCount: opts.sampleCount });
 }

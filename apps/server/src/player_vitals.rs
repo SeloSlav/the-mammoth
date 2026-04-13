@@ -1,7 +1,7 @@
 //! Authoritative survival vitals (health, hunger, hydration) with a low-rate server tick.
 //! Design goals: gradual drain (minutes-scale), optional sprint load, minimal DB churn.
 
-use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
+use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::accounts::user;
 use crate::auth;
@@ -23,6 +23,9 @@ const HEALTH_LOSS_PER_SEC_DEHYDRATED: f32 = 0.48;
 /// Process vitals on this wall-clock interval (µs). 2s is plenty for slow bars + cuts reducer load.
 const TICK_INTERVAL_MICROS: i64 = 2_000_000;
 
+/// Hotbar instant-use consumable spacing (matches client HUD cooldown; broth-style 1s gate).
+pub(crate) const HOTBAR_INSTANT_CONSUME_COOLDOWN_MICROS: i64 = 1_000_000;
+
 #[spacetimedb::table(public, accessor = player_vitals)]
 pub struct PlayerVitals {
     #[primary_key]
@@ -30,6 +33,9 @@ pub struct PlayerVitals {
     pub health: f32,
     pub hunger: f32,
     pub hydration: f32,
+    /// Last successful `consume_hotbar_item` (instant vitals use). `None` = never.
+    #[default(Option::<Timestamp>::None)]
+    pub last_hotbar_consume_at: Option<Timestamp>,
 }
 
 #[spacetimedb::table(
@@ -87,6 +93,24 @@ pub(crate) fn step_vitals_once(
     (h, hu, hy)
 }
 
+#[inline]
+pub(crate) fn hotbar_instant_consume_elapsed_micros(now_us: i64, last_us: i64) -> i64 {
+    now_us.saturating_sub(last_us)
+}
+
+/// Authoritative spacing for [`crate::inventory::consume_hotbar_item`] (instant vitals use).
+pub(crate) fn hotbar_instant_consume_on_cooldown(ctx: &ReducerContext, owner: Identity) -> bool {
+    let Some(v) = ctx.db.player_vitals().identity().find(&owner) else {
+        return false;
+    };
+    let Some(last) = v.last_hotbar_consume_at else {
+        return false;
+    };
+    let now_us = ctx.timestamp.to_micros_since_unix_epoch();
+    let last_us = last.to_micros_since_unix_epoch();
+    hotbar_instant_consume_elapsed_micros(now_us, last_us) < HOTBAR_INSTANT_CONSUME_COOLDOWN_MICROS
+}
+
 /// Immediate vitals change (consumables, medkits later, etc.).
 pub fn apply_instant_vital_deltas(
     ctx: &ReducerContext,
@@ -94,6 +118,7 @@ pub fn apply_instant_vital_deltas(
     d_health: f32,
     d_hunger: f32,
     d_hydration: f32,
+    record_hotbar_instant_consume_at: bool,
 ) {
     let Some(mut v) = ctx.db.player_vitals().identity().find(&owner) else {
         log::warn!("apply_instant_vital_deltas: no player_vitals row for {owner}");
@@ -102,6 +127,9 @@ pub fn apply_instant_vital_deltas(
     v.health = clamp_vital(v.health + d_health);
     v.hunger = clamp_vital(v.hunger + d_hunger);
     v.hydration = clamp_vital(v.hydration + d_hydration);
+    if record_hotbar_instant_consume_at {
+        v.last_hotbar_consume_at = Some(ctx.timestamp);
+    }
     ctx.db.player_vitals().identity().update(v);
 }
 
@@ -116,6 +144,7 @@ pub fn ensure_player_vitals_row(ctx: &ReducerContext, id: Identity) {
         health: VITAL_MAX,
         hunger: start_hunger,
         hydration: start_hydration,
+        last_hotbar_consume_at: None,
     });
 }
 

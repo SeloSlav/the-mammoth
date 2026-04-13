@@ -115,6 +115,7 @@ export const PlayerVitals = __t.object("PlayerVitals", {
   health: __t.f32(),
   hunger: __t.f32(),
   hydration: __t.f32(),
+  lastHotbarConsumeAt: __t.option(__t.timestamp()),
 });
 export type PlayerVitals = __Infer<typeof PlayerVitals>;
 

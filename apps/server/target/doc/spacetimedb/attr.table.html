@@ -1,0 +1,246 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Declares a table with a particular row type."><title>table in spacetimedb - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="spacetimedb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">table</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../spacetimedb/index.html">spacetimedb</a><span class="version">2.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">table</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#example" title="Example">Example</a></li><li><a href="#browsing-generated-documentation" title="Browsing generated documentation">Browsing generated documentation</a></li><li><a href="#macro-arguments" title="Macro arguments">Macro arguments</a><ul><li><a href="#name" title="`name`"><code>name</code></a></li><li><a href="#public-and-private" title="`public` and `private`"><code>public</code> and <code>private</code></a></li><li><a href="#index" title="`index(...)`"><code>index(...)</code></a></li><li><a href="#scheduledreducer_name" title="`scheduled(reducer_name)`"><code>scheduled(reducer_name)</code></a></li></ul></li><li><a href="#column-field-attributes" title="Column (field) attributes">Column (field) attributes</a><ul><li><a href="#auto_inc" title="`#[auto_inc]`"><code>#[auto_inc]</code></a></li><li><a href="#unique" title="`#[unique]`"><code>#[unique]</code></a></li><li><a href="#primary_key" title="`#[primary_key]`"><code>#[primary_key]</code></a></li><li><a href="#indexbtree" title="`#[index(btree)]`"><code>#[index(btree)]</code></a></li></ul></li><li><a href="#generated-code" title="Generated code">Generated code</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate spacetimedb</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">spacetimedb</a></div><h1>Attribute Macro <span class="attr">table</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>#[table]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Declares a table with a particular row type.</p>
+<p>This attribute is applied to a struct type with named fields.
+This derives <a href="trait.Serialize.html" title="trait spacetimedb::Serialize"><code>Serialize</code></a>, <a href="trait.Deserialize.html" title="trait spacetimedb::Deserialize"><code>Deserialize</code></a>, <a href="trait.SpacetimeType.html" title="trait spacetimedb::SpacetimeType"><code>SpacetimeType</code></a>, and <a href="https://doc.rust-lang.org/1.93.0/core/fmt/macros/derive.Debug.html" title="derive core::fmt::macros::Debug"><code>Debug</code></a> for the annotated struct.</p>
+<p>Elements of the struct type are NOT automatically inserted into any global table.
+They are regular structs, with no special behavior.
+In particular, modifying them does not automatically modify the database!</p>
+<p>Instead, a type implementing <a href="trait.Table.html" title="trait spacetimedb::Table"><code>Table&lt;Row = Self&gt;</code></a> is generated. This can be looked up in a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>
+using <code>ctx.db.{table_name}()</code>. This type represents a handle to a database table, and can be used to
+iterate and modify the table’s elements. It is a view of the entire table – the entire set of rows at the time of the reducer call.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{table, ReducerContext};
+
+<span class="attr">#[table(accessor = user, public,
+        index(accessor = popularity_and_username, btree(columns = [popularity, username]</span>)),
+)]
+<span class="kw">pub struct </span>User {
+    <span class="attr">#[auto_inc]
+    #[primary_key]
+    </span><span class="kw">pub </span>id: u32,
+    <span class="attr">#[unique]
+    </span><span class="kw">pub </span>username: String,
+    <span class="attr">#[index(btree)]
+    </span><span class="kw">pub </span>popularity: u32,
+}
+
+<span class="kw">fn </span>demo(ctx: <span class="kw-2">&amp;</span>ReducerContext) {
+    <span class="comment">// Use the name of the table to get a struct
+    // implementing `spacetimedb::Table&lt;Row = User&gt;`.
+    </span><span class="kw">let </span>user: user__TableHandle = ctx.db.user();
+
+    <span class="comment">// You can use methods from `spacetimedb::Table`
+    // on the table.
+    </span><span class="macro">log::debug!</span>(<span class="string">"User count: {}"</span>, user.count());
+    <span class="kw">for </span>user <span class="kw">in </span>user.iter() {
+        <span class="macro">log::debug!</span>(<span class="string">"{:?}"</span>, user);
+    }
+
+    <span class="comment">// For every `#[index(btree)]`, the table has an extra method
+    // for getting a corresponding `spacetimedb::BTreeIndex`.
+    </span><span class="kw">let </span>by_popularity: RangedIndex&lt;<span class="kw">_</span>, (u32,), <span class="kw">_</span>&gt; =
+        user.popularity();
+    <span class="kw">for </span>popular_user <span class="kw">in </span>by_popularity.filter(<span class="number">95</span>..) {
+        <span class="macro">log::debug!</span>(<span class="string">"Popular user: {:?}"</span>, popular_user);
+    }
+
+    <span class="comment">// There are similar methods for multi-column indexes.
+    </span><span class="kw">let </span>by_popularity_and_username: RangedIndex&lt;<span class="kw">_</span>, (u32, String), <span class="kw">_</span>&gt; = user.popularity_and_username();
+    <span class="kw">for </span>popular_user <span class="kw">in </span>by_popularity.filter((<span class="number">100</span>, <span class="string">"a"</span>..)) {
+        <span class="macro">log::debug!</span>(<span class="string">"Popular user whose name starts with 'a': {:?}"</span>, popular_user);
+    }
+
+    <span class="comment">// For every `#[unique]` or `#[primary_key]` field,
+    // the table has an extra method that allows getting a
+    // corresponding `spacetimedb::UniqueColumn`.
+    </span><span class="kw">let </span>by_username: spacetimedb::UniqueColumn&lt;<span class="kw">_</span>, String, <span class="kw">_</span>&gt; = user.id();
+    by_username.delete(<span class="kw-2">&amp;</span><span class="string">"test_user"</span>.to_string());
+}</code></pre></div>
+<p>See <a href="trait.Table.html" title="trait spacetimedb::Table"><code>Table</code></a>, <a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a>, and <a href="struct.UniqueColumn.html" title="struct spacetimedb::UniqueColumn"><code>UniqueColumn</code></a> for more information on the methods available on these types.</p>
+<h2 id="browsing-generated-documentation"><a class="doc-anchor" href="#browsing-generated-documentation">§</a>Browsing generated documentation</h2>
+<p>The <code>#[table]</code> macro generates different APIs depending on the contents of your table.</p>
+<p>To browse the complete generated API for your tables, run <code>cargo doc</code> in your SpacetimeDB module project. Navigate to <code>[YOUR PROJECT/target/doc/spacetime_module/index.html</code> in your file explorer, and right click -&gt; open it in a web browser.</p>
+<p>For the example above, we would see three items:</p>
+<ul>
+<li>A struct <code>User</code>. This is the struct you declared. It stores rows of the table <code>user</code>.</li>
+<li>A struct <code>user__TableHandle</code>. This is an opaque handle that allows you to interact with the table <code>user</code>.</li>
+<li>A trait <code>user</code> containing a single <code>fn user(&amp;self) -&gt; user__TableHandle</code>.
+This trait is implemented for the <code>db</code> field of a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>, allowing you to get a
+<code>user__TableHandle</code> using <code>ctx.db.user()</code>.</li>
+</ul>
+<h2 id="macro-arguments"><a class="doc-anchor" href="#macro-arguments">§</a>Macro arguments</h2>
+<p>The <code>#[table(...)]</code> attribute accepts any number of the following arguments, separated by commas.</p>
+<p>Multiple <code>table</code> annotations can be present on the same type. This will generate
+multiple tables of the same row type, but with different names.</p>
+<h4 id="name"><a class="doc-anchor" href="#name">§</a><code>name</code></h4>
+<p>Specify the name of the table in the database. The name can be any valid Rust identifier.</p>
+<p>The table name is used to get a handle to the table from a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>.
+For a table <em>table</em>, use <code>ctx.db.{table}()</code> to do this.
+For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code> <span class="attr">#[table(accessor = user)]
+ </span><span class="kw">pub struct </span>User {
+     <span class="attr">#[auto_inc]
+     #[primary_key]
+     </span><span class="kw">pub </span>id: u32,
+     <span class="attr">#[unique]
+     </span><span class="kw">pub </span>username: String,
+     <span class="attr">#[index(btree)]
+     </span><span class="kw">pub </span>popularity: u32,
+ }
+ <span class="attr">#[reducer]
+ </span><span class="kw">fn </span>demo(ctx: <span class="kw-2">&amp;</span>ReducerContext) {
+     <span class="kw">let </span>user: user__TableHandle = ctx.db.user();
+ }</code></pre></div><h4 id="public-and-private"><a class="doc-anchor" href="#public-and-private">§</a><code>public</code> and <code>private</code></h4>
+<p>Tables are private by default. This means that clients cannot read their contents
+or see that they exist.</p>
+<p>If you’d like to make your table publicly accessible by clients,
+put <code>public</code> in the macro arguments (e.g.
+<code>#[spacetimedb::table(public)]</code>). You can also specify <code>private</code> if
+you’d like to be specific.</p>
+<p>This is fully separate from Rust’s module visibility
+system; <code>pub struct</code> or <code>pub(crate) struct</code> do not affect the table visibility, only
+the visibility of the items in your own source code.</p>
+<h4 id="index"><a class="doc-anchor" href="#index">§</a><code>index(...)</code></h4>
+<p>You can specify an index on one or more of the table’s columns with the syntax:
+<code>index(accessor = my_index, btree(columns = [a, b, c]))</code></p>
+<p>You can also just put <code>#[index(btree)]</code> on the field itself if you only need
+a single-column index; see column attributes below.</p>
+<p>A table may declare any number of indexes.</p>
+<p>You can use indexes to efficiently <a href="struct.RangedIndex.html#method.filter" title="method spacetimedb::RangedIndex::filter"><code>filter</code></a> and
+<a href="struct.RangedIndex.html#method.delete" title="method spacetimedb::RangedIndex::delete"><code>delete</code></a> rows. This is encapsulated in the struct <a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a>.</p>
+<p>For a table <em>table</em> and an index <em>index</em>, use:</p>
+<div class="example-wrap"><pre class="language-text"><code>ctx.db.{table}().{index}()</code></pre></div>
+<p>to get a <a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a> for a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>.</p>
+<p>For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>by_id_and_username: spacetimedb::RangedIndex&lt;<span class="kw">_</span>, (u32, String), <span class="kw">_</span>&gt; =
+    ctx.db.user().by_id_and_username();</code></pre></div><h4 id="scheduledreducer_name"><a class="doc-anchor" href="#scheduledreducer_name">§</a><code>scheduled(reducer_name)</code></h4>
+<p>Used to declare a <a href="attr.reducer.html#scheduled-reducers" title="attr spacetimedb::reducer">scheduled reducer</a>.</p>
+<p>The annotated struct type must have at least the following fields:</p>
+<ul>
+<li><code>scheduled_id: u64</code></li>
+<li><a href="enum.ScheduleAt.html" title="enum spacetimedb::ScheduleAt"><code>scheduled_at: ScheduleAt</code></a></li>
+</ul>
+<h2 id="column-field-attributes"><a class="doc-anchor" href="#column-field-attributes">§</a>Column (field) attributes</h2><h4 id="auto_inc"><a class="doc-anchor" href="#auto_inc">§</a><code>#[auto_inc]</code></h4>
+<p>Creates an auto-increment constraint.</p>
+<p>When a row is inserted with the annotated field set to <code>0</code> (zero),
+the sequence is incremented, and this value is used instead.</p>
+<p>Can only be used on numeric types.</p>
+<p>May be combined with indexes or unique constraints.</p>
+<p>Note that using <code>#[auto_inc]</code> on a field does not also imply <code>#[primary_key]</code> or <code>#[unique]</code>.
+If those semantics are desired, those attributes should also be used.</p>
+<p>When <code>#[auto_inc]</code> is combined with a unique key,
+be wary not to manually insert values larger than the allocated sequence value.
+In this case, the sequence will eventually catch up, allocate a value that’s already present,
+and cause a unique constraint violation.</p>
+<h4 id="unique"><a class="doc-anchor" href="#unique">§</a><code>#[unique]</code></h4>
+<p>Creates an unique constraint and index for the annotated field.</p>
+<p>You can <a href="struct.UniqueColumn.html#method.find" title="method spacetimedb::UniqueColumn::find"><code>find</code></a>, <a href="struct.UniqueColumn.html#method.update" title="method spacetimedb::UniqueColumn::update"><code>update</code></a>,
+and <a href="struct.UniqueColumn.html#method.delete" title="method spacetimedb::UniqueColumn::delete"><code>delete</code></a> rows by their unique columns.
+This is encapsulated in the struct <a href="struct.UniqueColumn.html" title="struct spacetimedb::UniqueColumn"><code>UniqueColumn</code></a>.</p>
+<p>For a table <em>table</em> and a column <em>column</em>, use:</p>
+<div class="example-wrap"><pre class="language-text"><code>ctx.db.{table}().{column}()`</code></pre></div>
+<p>to get a <a href="struct.UniqueColumn.html" title="struct spacetimedb::UniqueColumn"><code>UniqueColumn</code></a> from a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>.</p>
+<p>For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>by_username: spacetimedb::UniqueColumn&lt;<span class="kw">_</span>, String, <span class="kw">_</span>&gt; = ctx.db.user().username();</code></pre></div>
+<p>When there is a unique column constraint on the table, insertion can fail if a uniqueness constraint is violated.
+If we insert two rows which have the same value of a unique column, the second will fail.
+This will be via a panic with <a href="trait.Table.html#method.insert" title="method spacetimedb::Table::insert"><code>Table::insert</code></a> or via a <code>Result::Err</code> with <a href="trait.Table.html#method.try_insert" title="method spacetimedb::Table::try_insert"><code>Table::try_insert</code></a>.</p>
+<p>For example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{
+    table,
+    reducer,
+    ReducerContext,
+    <span class="comment">// Make sure to import the `Table` trait to use `insert` or `try_insert`.
+    </span>Table
+};
+
+<span class="kw">type </span>CountryCode = String;
+
+<span class="attr">#[table(accessor = country)]
+</span><span class="kw">struct </span>Country {
+    <span class="attr">#[unique]
+    </span>code: CountryCode,
+    national_bird: String
+}
+
+<span class="attr">#[reducer]
+</span><span class="kw">fn </span>insert_unique_demo(ctx: <span class="kw-2">&amp;</span>ReducerContext) {
+    <span class="kw">let </span>result = ctx.db.country().try_insert(Country {
+        code: <span class="string">"AU"</span>.into(), national_bird: <span class="string">"Emu"</span>.into()
+    });
+    <span class="macro">assert!</span>(result.is_ok());
+
+    <span class="kw">let </span>result = ctx.db.country().try_insert(Country {
+        code: <span class="string">"AU"</span>.into(), national_bird: <span class="string">"Great Egret"</span>.into()
+        <span class="comment">// Whoops, this was Austria's national bird, not Australia's.
+        // We should have used the country code "AT", not "AU".
+    </span>});
+    <span class="comment">// since there's already a country in the database with the code "AU",
+    // SpacetimeDB gives us an error.
+    </span><span class="macro">assert!</span>(result.is_err());
+
+    <span class="comment">// The following line would panic, since we use `insert` rather than `try_insert`.
+    // let result = ctx.db.country().insert(Country { code: "CN".into(), national_bird: "Blue Magpie".into() });
+
+    // If we wanted to *update* the row for Australia, we can use the `update` method of `UniqueIndex`.
+    // The following line will succeed:
+    </span>ctx.db.country().code().update(Country {
+        code: <span class="string">"AU"</span>.into(), national_bird: <span class="string">"Australian Emu"</span>.into()
+    });
+}</code></pre></div><h4 id="primary_key"><a class="doc-anchor" href="#primary_key">§</a><code>#[primary_key]</code></h4>
+<p>Implies <code>#[unique]</code>. Also generates additional methods client-side for handling updates to the table.</p>
+<!-- TODO: link to client-side documentation. -->
+<h4 id="indexbtree"><a class="doc-anchor" href="#indexbtree">§</a><code>#[index(btree)]</code></h4>
+<p>Creates a single-column index with the specified algorithm.</p>
+<p>It is an error to specify this attribute together with <code>#[unique]</code>.
+Unique constraints implicitly create a unique index, which is accessed using the <a href="struct.UniqueColumn.html" title="struct spacetimedb::UniqueColumn"><code>UniqueColumn</code></a> struct instead of the
+<a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a> struct.</p>
+<p>The created index has the same name as the column.</p>
+<p>For a table <em>table</em> and an indexed <em>column</em>, use:</p>
+<div class="example-wrap"><pre class="language-text"><code>ctx.db.{table}().{column}()</code></pre></div>
+<p>to get a <a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a> from a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>.</p>
+<p>For example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>ctx.db.cities().latitude()</code></pre></div><h2 id="generated-code"><a class="doc-anchor" href="#generated-code">§</a>Generated code</h2>
+<p>For each <code>[table(accessor = {name})]</code> annotation on a type <code>{T}</code>, generates a struct
+<code>{name}__TableHandle</code> implementing <a href="trait.Table.html" title="trait spacetimedb::Table"><code>Table&lt;Row={T}&gt;</code></a>, and a trait that allows looking up such a
+<code>{name}Handle</code> in a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>ReducerContext</code></a>.</p>
+<p>The struct <code>{name}__TableHandle</code> is public and lives next to the row struct.
+Users are encouraged not to write the name of this table handle struct,
+or to store table handles in variables; operate through a <code>ReducerContext</code> instead.</p>
+<p>For each named index declaration, add a method to <code>{name}__TableHandle</code> for getting a corresponding
+<a href="struct.RangedIndex.html" title="struct spacetimedb::RangedIndex"><code>RangedIndex</code></a>.</p>
+<p>For each field  with a <code>#[unique]</code> or <code>#[primary_key]</code> annotation,
+add a method to <code>{name}Handle</code> for getting a corresponding <a href="struct.UniqueColumn.html" title="struct spacetimedb::UniqueColumn"><code>UniqueColumn</code></a>.</p>
+<p>The following pseudocode illustrates the general idea. Curly braces are used to indicate templated
+names.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{RangedIndex, UniqueColumn, Table, DbView};
+
+<span class="comment">// This generated struct is hidden and cannot be directly accessed.
+</span><span class="kw">struct </span>{name}__TableHandle { <span class="comment">/* ... */ </span>};
+
+<span class="comment">// It is a table handle.
+</span><span class="kw">impl </span>Table <span class="kw">for </span>{name}__TableHandle {
+    <span class="kw">type </span>Row = {T};
+    <span class="comment">/* ... */
+</span>}
+
+<span class="comment">// It can be looked up in a `ReducerContext`,
+// using `ctx.db().{name}()`.
+</span><span class="kw">trait </span>{name} {
+    <span class="kw">fn </span>{name}(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Row = {T}&gt;;
+}
+<span class="kw">impl </span>{name} <span class="kw">for </span>&lt;ReducerContext <span class="kw">as </span>DbContext&gt;::DbView { <span class="comment">/* ... */ </span>}
+
+<span class="comment">// Once looked up, it can be used to look up indexes.
+</span><span class="kw">impl </span>{name}Handle {
+    <span class="comment">// For each `#[unique]` or `#[primary_key]` field `{field}` of type `{F}`:
+    </span><span class="kw">fn </span>{field}(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; UniqueColumn&lt;<span class="kw">_</span>, {F}, <span class="kw">_</span>&gt; { <span class="comment">/* ... */ </span>};
+
+    <span class="comment">// For each named index `{index}` on fields of type `{(F1, ..., FN)}`:
+    </span><span class="kw">fn </span>{index}(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RangedIndex&lt;<span class="kw">_</span>, {(F1, ..., FN)}, <span class="kw">_</span>&gt;;
+}</code></pre></div></div></details></section></div></main></body></html>

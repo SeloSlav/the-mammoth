@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { resamplePolylineByArcLength, swingKeyframesFromOffsetPolyline } from "./fpSwingViewportStroke.js";
+import {
+  eulerRadFromTangentLocal,
+  resamplePolylineByArcLength,
+  swingKeyframesFromOffsetPolyline,
+} from "./fpSwingViewportStroke.js";
 
 describe("fpSwingViewportStroke", () => {
   it("resamplePolylineByArcLength places endpoints", () => {
@@ -12,7 +16,15 @@ describe("fpSwingViewportStroke", () => {
     expect(r[2]!.y).toBeCloseTo(1, 5);
   });
 
-  it("swingKeyframesFromOffsetPolyline uses translation only (no tangent rotation)", () => {
+  it("eulerRadFromTangentLocal handles forward-ish tangents", () => {
+    const e = eulerRadFromTangentLocal(new THREE.Vector3(0, 0, -1));
+    expect(Math.abs(e.x)).toBeLessThan(0.01);
+    expect(Math.abs(Math.sin(e.y))).toBeLessThan(1e-4);
+    const eSide = eulerRadFromTangentLocal(new THREE.Vector3(1, 0, 0));
+    expect(eSide.y).toBeCloseTo(Math.PI / 2, 4);
+  });
+
+  it("swingKeyframesFromOffsetPolyline ends at rest", () => {
     const rel = [
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0.1, -0.2, -0.3),
@@ -20,11 +32,6 @@ describe("fpSwingViewportStroke", () => {
     ];
     const keys = swingKeyframesFromOffsetPolyline(rel, { sampleCount: 5 });
     expect(keys.length).toBeGreaterThanOrEqual(3);
-    for (const k of keys) {
-      expect(k.rotationRad.x).toBe(0);
-      expect(k.rotationRad.y).toBe(0);
-      expect(k.rotationRad.z).toBe(0);
-    }
     const last = keys[keys.length - 1]!;
     expect(last.t).toBe(1);
     expect(last.translationM.x).toBe(0);

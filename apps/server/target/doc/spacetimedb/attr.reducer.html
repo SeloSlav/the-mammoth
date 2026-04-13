@@ -1,0 +1,201 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Marks a function as a spacetimedb reducer."><title>reducer in spacetimedb - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="spacetimedb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc attr"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">reducer</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../spacetimedb/index.html">spacetimedb</a><span class="version">2.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">reducer</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#lifecycle-reducers" title="Lifecycle Reducers">Lifecycle Reducers</a><ul><li><a href="#the-init-reducer" title="The `init` reducer">The <code>init</code> reducer</a></li><li><a href="#the-client_connected-reducer" title="The `client_connected` reducer">The <code>client_connected</code> reducer</a></li><li><a href="#the-client_disconnected-reducer" title="The `client_disconnected` reducer">The <code>client_disconnected</code> reducer</a></li></ul></li><li><a href="#scheduled-reducers" title="Scheduled reducers">Scheduled reducers</a><ul><li><a href="#restricting-scheduled-reducers" title="Restricting scheduled reducers">Restricting scheduled reducers</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate spacetimedb</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">spacetimedb</a></div><h1>Attribute Macro <span class="attr">reducer</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>#[reducer]</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Marks a function as a spacetimedb reducer.</p>
+<p>A reducer is a function with read/write access to the database
+that can be invoked remotely by <a href="https://spacetimedb.com/docs/#client">clients</a>.</p>
+<p>Each reducer call runs in its own database transaction,
+and its updates to the database are only committed if the reducer returns successfully.</p>
+<p>The first argument of a reducer is always a <a href="struct.ReducerContext.html" title="struct spacetimedb::ReducerContext"><code>&amp;ReducerContext</code></a>. This context object
+allows accessing the database and viewing information about the caller, among other things.</p>
+<p>After this, a reducer can take any number of arguments.
+These arguments must implement the <a href="trait.SpacetimeType.html" title="trait spacetimedb::SpacetimeType"><code>SpacetimeType</code></a>, <a href="trait.Serialize.html" title="trait spacetimedb::Serialize"><code>Serialize</code></a>, and <a href="trait.Deserialize.html" title="trait spacetimedb::Deserialize"><code>Deserialize</code></a> traits.
+All of these traits can be derived at once by marking a type with <code>#[derive(SpacetimeType)]</code>.</p>
+<p>Reducers may return either <code>()</code> or <code>Result&lt;(), E&gt;</code> where <a href="https://doc.rust-lang.org/1.93.0/core/fmt/trait.Display.html" title="trait core::fmt::Display"><code>E: std::fmt::Display</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{reducer, SpacetimeType, ReducerContext};
+<span class="kw">use </span>log::info;
+<span class="kw">use </span>std::fmt;
+
+<span class="attr">#[reducer]
+</span><span class="kw">pub fn </span>hello_world(context: <span class="kw-2">&amp;</span>ReducerContext) {
+    <span class="macro">info!</span>(<span class="string">"Hello, World!"</span>);
+}
+
+<span class="attr">#[reducer]
+</span><span class="kw">pub fn </span>add_person(context: <span class="kw-2">&amp;</span>ReducerContext, name: String, age: u16) {
+    <span class="comment">// add a "person" to the database.
+</span>}
+
+<span class="attr">#[derive(SpacetimeType, Debug)]
+</span><span class="kw">struct </span>Coordinates {
+    x: f32,
+    y: f32,
+}
+
+<span class="kw">enum </span>AddPlaceError {
+    InvalidCoordinates(Coordinates),
+    InvalidName(String),
+}
+
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>AddPlaceError {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), fmt::Error&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            AddPlaceError::InvalidCoordinates(coords) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">"invalid coordinates: {coords:?}"</span>)
+            },
+            AddPlaceError::InvalidName(name) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">"invalid name: {name:?}"</span>)
+            },
+        }
+    }
+}
+
+<span class="attr">#[reducer]
+</span><span class="kw">pub fn </span>add_place(
+    context: <span class="kw-2">&amp;</span>ReducerContext,
+    name: String,
+    x: f32,
+    y: f32,
+    area: f32,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), AddPlaceError&gt; {
+    <span class="comment">// ... add a place to the database...
+</span>}</code></pre></div>
+<p>Reducers may fail by returning a <a href="https://doc.rust-lang.org/1.93.0/core/result/enum.Result.html" title="enum core::result::Result"><code>Result::Err</code></a> or by <a href="https://doc.rust-lang.org/1.93.0/std/macro.panic.html" title="macro std::panic">panicking</a>.
+Failures will abort the active database transaction.
+Any changes to the database made by the failed reducer call will be rolled back.</p>
+<p>Reducers are limited in their ability to interact with the outside world.
+They do not directly return data aside from errors, and have no access to any
+network or filesystem interfaces.
+Calling methods from <a href="https://doc.rust-lang.org/1.93.0/std/io/index.html" title="mod std::io"><code>std::io</code></a>, <a href="https://doc.rust-lang.org/1.93.0/std/net/index.html" title="mod std::net"><code>std::net</code></a>, or <a href="https://doc.rust-lang.org/1.93.0/std/fs/index.html" title="mod std::fs"><code>std::fs</code></a>
+inside a reducer will result in runtime errors.</p>
+<p>Reducers can communicate information to the outside world in two ways:</p>
+<ul>
+<li>They can modify tables in the database.
+See the <code>#[table]</code>(#table) macro documentation for information on how to declare and use tables.</li>
+<li>They can call logging macros from the <a href="https://docs.rs/log/0.4.29/log/index.html" title="mod log"><code>log</code></a> crate.
+This writes to a private debug log attached to the database.
+Run <code>spacetime logs &lt;DATABASE_IDENTITY&gt;</code> to browse these.</li>
+</ul>
+<p>Reducers are permitted to call other reducers, simply by passing their <code>ReducerContext</code> as the first argument.
+This is a regular function call, and does not involve any network communication. The callee will run within the
+caller’s transaction, and any changes made by the callee will be committed or rolled back with the caller.</p>
+<h2 id="lifecycle-reducers"><a class="doc-anchor" href="#lifecycle-reducers">§</a>Lifecycle Reducers</h2>
+<p>You can specify special lifecycle reducers that are run at set points in
+the module’s lifecycle. You can have one of each per module.</p>
+<p>These reducers cannot be called manually
+and may not have any parameters except for <code>ReducerContext</code>.</p>
+<h4 id="the-init-reducer"><a class="doc-anchor" href="#the-init-reducer">§</a>The <code>init</code> reducer</h4>
+<p>This reducer is marked with <code>#[spacetimedb::reducer(init)]</code>. It is run the first time a module is published
+and any time the database is cleared. (It does not have to be named <code>init</code>.)</p>
+<p>If an error occurs when initializing, the module will not be published.</p>
+<p>This reducer can be used to configure any static data tables used by your module. It can also be used to start running <a href="#scheduled-reducers">scheduled reducers</a>.</p>
+<h4 id="the-client_connected-reducer"><a class="doc-anchor" href="#the-client_connected-reducer">§</a>The <code>client_connected</code> reducer</h4>
+<p>This reducer is marked with <code>#[spacetimedb::reducer(client_connected)]</code>. It is run when a client connects to the SpacetimeDB module.
+Their identity can be found in the sender value of the <code>ReducerContext</code>.</p>
+<p>If an error occurs in the reducer, the client will be disconnected.</p>
+<h4 id="the-client_disconnected-reducer"><a class="doc-anchor" href="#the-client_disconnected-reducer">§</a>The <code>client_disconnected</code> reducer</h4>
+<p>This reducer is marked with <code>#[spacetimedb::reducer(client_disconnected)]</code>. It is run when a client disconnects from the SpacetimeDB module.
+Their identity can be found in the sender value of the <code>ReducerContext</code>.</p>
+<p>If an error occurs in the disconnect reducer,
+the client is still recorded as disconnected.</p>
+<h2 id="scheduled-reducers"><a class="doc-anchor" href="#scheduled-reducers">§</a>Scheduled reducers</h2>
+<p>In addition to life cycle annotations, reducers can be made <strong>scheduled</strong>.
+This allows calling the reducers at a particular time, or in a loop.
+This can be used for game loops.</p>
+<p>The scheduling information for a reducer is stored in a table.
+This table has two mandatory fields:</p>
+<ul>
+<li>A primary key that identifies scheduled reducer calls.</li>
+<li>A <a href="enum.ScheduleAt.html" title="enum spacetimedb::ScheduleAt"><code>ScheduleAt</code></a> field that says when to call the reducer.</li>
+</ul>
+<p>Managing timers with a scheduled table is as simple as inserting or deleting rows from the table.
+This makes scheduling transactional in SpacetimeDB. If a reducer A first schedules B but then errors for some other reason, B will not be scheduled to run.</p>
+<p>A <a href="enum.ScheduleAt.html" title="enum spacetimedb::ScheduleAt"><code>ScheduleAt</code></a> can be created from a <a href="struct.Timestamp.html" title="struct spacetimedb::Timestamp"><code>spacetimedb::Timestamp</code></a>, in which case the reducer will be scheduled once,
+or from a <a href="https://doc.rust-lang.org/1.93.0/core/time/struct.Duration.html" title="struct core::time::Duration"><code>std::time::Duration</code></a>, in which case the reducer will be scheduled in a loop. In either case the conversion can be performed using <a href="https://doc.rust-lang.org/1.93.0/core/convert/trait.Into.html#tymethod.into" title="method core::convert::Into::into"><code>Into::into</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{table, reducer, ReducerContext, Timestamp, TimeDuration, ScheduleAt, Table};
+<span class="kw">use </span>log::debug;
+
+<span class="comment">// First, we declare the table with scheduling information.
+
+</span><span class="attr">#[table(accessor = send_message_schedule, scheduled(send_message))]
+</span><span class="kw">struct </span>SendMessageSchedule {
+    <span class="comment">// Mandatory fields:
+    // ============================
+
+    </span><span class="doccomment">/// An identifier for the scheduled reducer call.
+    </span><span class="attr">#[primary_key]
+    #[auto_inc]
+    </span>scheduled_id: u64,
+
+    <span class="doccomment">/// Information about when the reducer should be called.
+    </span>scheduled_at: ScheduleAt,
+
+    <span class="comment">// In addition to the mandatory fields, any number of fields can be added.
+    // These can be used to provide extra information to the scheduled reducer.
+
+    // Custom fields:
+    // ============================
+
+    </span><span class="doccomment">/// The text of the scheduled message to send.
+    </span>text: String,
+}
+
+<span class="comment">// Then, we declare the scheduled reducer.
+// The first argument of the reducer should be, as always, a `&amp;ReducerContext`.
+// The second argument should be a row of the scheduling information table.
+
+</span><span class="attr">#[reducer]
+</span><span class="kw">fn </span>send_message(ctx: <span class="kw-2">&amp;</span>ReducerContext, arg: SendMessageSchedule) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+    <span class="kw">let </span>message_to_send = arg.text;
+
+    <span class="comment">// ... send the message ...
+
+    </span><span class="prelude-val">Ok</span>(())
+}
+
+<span class="comment">// Now, we want to actually start scheduling reducers.
+// It's convenient to do this inside the `init` reducer.
+</span><span class="attr">#[reducer(init)]
+</span><span class="kw">fn </span>init(ctx: <span class="kw-2">&amp;</span>ReducerContext) {
+
+    <span class="kw">let </span>current_time = ctx.timestamp;
+
+    <span class="kw">let </span>ten_seconds = TimeDuration::from_micros(<span class="number">10_000_000</span>);
+
+    <span class="kw">let </span>future_timestamp: Timestamp = ctx.timestamp + ten_seconds;
+    ctx.db.send_message_schedule().insert(SendMessageSchedule {
+        scheduled_id: <span class="number">1</span>,
+        text:<span class="string">"I'm a bot sending a message one time"</span>.to_string(),
+
+        <span class="comment">// Creating a `ScheduleAt` from a `Timestamp` results in the reducer
+        // being called once, at exactly the time `future_timestamp`.
+        </span>scheduled_at: future_timestamp.into()
+    });
+
+    <span class="kw">let </span>loop_duration: TimeDuration = ten_seconds;
+    ctx.db.send_message_schedule().insert(SendMessageSchedule {
+        scheduled_id: <span class="number">0</span>,
+        text:<span class="string">"I'm a bot sending a message every 10 seconds"</span>.to_string(),
+
+        <span class="comment">// Creating a `ScheduleAt` from a `Duration` results in the reducer
+        // being called in a loop, once every `loop_duration`.
+        </span>scheduled_at: loop_duration.into()
+    });
+}</code></pre></div>
+<p>Scheduled reducers are called on a best-effort basis and may be slightly delayed in their execution
+when a database is under heavy load.</p>
+<h4 id="restricting-scheduled-reducers"><a class="doc-anchor" href="#restricting-scheduled-reducers">§</a>Restricting scheduled reducers</h4>
+<p>Scheduled reducers are normal reducers, and may still be called by clients.
+If a scheduled reducer should only be called by the scheduler,
+consider beginning it with a check that the caller <code>Identity</code> is the module:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>spacetimedb::{reducer, ReducerContext};
+
+
+<span class="attr">#[reducer]
+</span><span class="kw">fn </span>scheduled(ctx: <span class="kw-2">&amp;</span>ReducerContext, args: ScheduledArgs) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+    <span class="kw">if </span>ctx.sender() != ctx.identity() {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Reducer `scheduled` may not be invoked by clients, only via scheduling."</span>.into());
+    }
+    <span class="comment">// Reducer body...
+</span>}</code></pre></div><!-- TODO: SLAs? -->
+</div></details></section></div></main></body></html>

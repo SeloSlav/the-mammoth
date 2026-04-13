@@ -4,8 +4,9 @@
 **Shipped assets:** copy Broth `public/sounds/eating_food.mp3` →
 `apps/client/public/audio/ui/consume-eat.mp3` and `drinking_water.mp3` → `consume-drink.mp3`.
 
-The client resolves `consume-eat` / `consume-drink` stems in order **wav → ogg → mp3**; if a
-`.wav` exists beside the `.mp3`, the WAV wins — remove placeholders when using MP3."""
+For **consume** stems the client tries **mp3 → ogg → wav** (authored clips first). Other UI
+stems (e.g. item-pick) still use **wav → ogg → mp3**; remove stray `.wav` placeholders beside MP3
+consume assets or the WAV can win on those code paths that use the default order."""
 
 from __future__ import annotations
 

@@ -244,9 +244,8 @@ export function EditorChromeFpViewmodel({
       <p style={{ fontSize: 10, opacity: 0.78, margin: "0 0 6px", lineHeight: 1.4 }}>
         <strong>Paint swing</strong> (below): arm, then drag in the <strong>3D view left of this panel</strong>.
         A <strong style={{ color: "#50ffc8" }}>bright green line</strong> traces your pointer. The gizmo is
-        disabled for that drag. Paint records a <strong>position path</strong> in head-pitch space (no
-        auto-twist). Use <strong>Hand + weapon rig</strong> + Capture to add rotation at a scrub time.{" "}
-        <strong>Scrub + Capture</strong> still edits keyframes.{" "}
+        disabled for that drag. Motion is projected through the hand; yaw/pitch follow the path.{" "}
+        <strong>Scrub + Hand + weapon rig + Capture</strong> still edits keyframes.{" "}
         <strong>Play</strong> loops preview (hand + weapon stay parented).
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>

@@ -95,7 +95,8 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   const transformControls = new TransformControls(camera, canvas);
   transformControls.setSize(0.78);
   transformControls.setSpace("world");
-  scene.add(transformControls as unknown as THREE.Object3D);
+  const transformHelper = transformControls.getHelper();
+  scene.add(transformHelper);
 
   let panelVisible = new URLSearchParams(location.search).has("fpAuthor");
   activeRef.active = panelVisible;
@@ -278,7 +279,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
     window.removeEventListener("keydown", onWinKeydown);
     transformControls.removeEventListener("dragging-changed", onDraggingChanged);
     transformControls.removeEventListener("change", refreshExport);
-    scene.remove(transformControls as unknown as THREE.Object3D);
+    scene.remove(transformHelper);
     transformControls.dispose();
     shell.remove();
     activeRef.active = false;

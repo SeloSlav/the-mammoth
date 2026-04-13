@@ -53,8 +53,7 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
-import { getHotbarSlotInventoryItem, resolveHeldItemFromHotbar } from "./fpHotbarResolve";
-import { meleeWeaponSwingSoundProfileFromDefId } from "./meleeSwingSound";
+import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
@@ -62,12 +61,18 @@ import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./localGameAudio";
 import {
+  primeHotbarConsumeAudio,
+  registerHotbarConsumeLocalPlayback,
+  registerHotbarConsumePrimeAudio,
+  unregisterHotbarConsumeLocalAudio,
+} from "./hotbarConsumeLocalAudio";
+import { runFpHotbarInstantConsume } from "./fpHotbarConsume";
+import {
   findNearestDroppedPickup,
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./droppedItemWorldRuntime";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
-import { registerGameAudioPrime } from "./gameAudioPrime";
 import { WorldProximityAudio } from "./worldProximityAudio";
 
 /**
@@ -235,38 +240,15 @@ export async function mountFpSession(
   const loco = createFpLocomotionState();
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
+  registerHotbarConsumePrimeAudio(() => localAudio.unlock());
+  registerHotbarConsumeLocalPlayback((profile) => localAudio.playHotbarConsumeLocal(profile));
   const worldAudio = new WorldProximityAudio(conn, () => camera);
   let worldAudioReady = false;
-  let primingGameAudio: Promise<void> | null = null;
 
   const refreshWorldSoundSubscription = () => {
     if (!worldAudioReady) return;
     worldAudio.subscribeAoi(poseAoiAnchorX, poseAoiAnchorZ, WORLD_SOUND_AOI_HALF);
   };
-
-  /**
-   * Unlocks Web Audio + attaches proximity one-shots (consume, others’ swings, etc.). Browsers only
-   * allow `AudioContext` resume after a user gesture — we used to do this **only** on canvas click,
-   * so Tab→inventory consume or double-digit hotbar use never subscribed to `world_sound_event`.
-   */
-  const primeGameAudio = (): Promise<void> => {
-    if (worldAudioReady) return Promise.resolve();
-    if (primingGameAudio) return primingGameAudio;
-    primingGameAudio = (async () => {
-      await localAudio.unlock();
-      const actx = localAudio.getAudioContext();
-      if (actx) {
-        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
-        worldAudioReady = true;
-        refreshWorldSoundSubscription();
-      }
-    })().finally(() => {
-      primingGameAudio = null;
-    });
-    return primingGameAudio;
-  };
-
-  registerGameAudioPrime(primeGameAudio);
 
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
@@ -357,7 +339,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF, {
     onPickupRemoved: async () => {
-      await primeGameAudio();
+      await localAudio.unlock();
       localAudio.playItemPickLocal();
     },
   });
@@ -428,7 +410,6 @@ export async function mountFpSession(
   const onWheelHotbar = (e: WheelEvent) => {
     if (mammothInventoryOpen() || isTextInputFocused()) return;
     if (document.pointerLockElement !== canvas) return;
-    void primeGameAudio();
     if (e.deltaY === 0) return;
     const target = e.target;
     if (target instanceof Element && target.closest("[data-mammoth-no-hotbar-wheel='true']")) {
@@ -453,23 +434,6 @@ export async function mountFpSession(
 
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
-    if (!worldAudioReady && !isTextInputFocused()) {
-      const primesAudio =
-        e.code === "Tab" ||
-        e.code.startsWith("Digit") ||
-        (e.code.startsWith("Numpad") && e.code.length === 7) ||
-        e.code === "KeyW" ||
-        e.code === "KeyA" ||
-        e.code === "KeyS" ||
-        e.code === "KeyD" ||
-        e.code === "Space" ||
-        e.code === "KeyE" ||
-        e.code === "KeyC" ||
-        e.code === "KeyV";
-      if (primesAudio) {
-        void primeGameAudio();
-      }
-    }
     if (e.code === "AltLeft" || e.code === "AltRight") {
       e.preventDefault();
     }
@@ -512,15 +476,13 @@ export async function mountFpSession(
         digitKeyDebounce.slot = newSlot;
 
         if (willConsume) {
-          void (async () => {
-            try {
-              await primeGameAudio();
-              await conn.reducers.consumeHotbarItem({ hotbarSlot: newSlot });
-              setFpHotbarSelectedSlot(null);
-            } catch (err) {
-              console.warn("[mountFpSession] consumeHotbarItem failed", err);
-            }
-          })();
+          void runFpHotbarInstantConsume(
+            conn,
+            conn.identity,
+            newSlot,
+            primeHotbarConsumeAudio,
+            "mountFpSession",
+          );
           return;
         }
         setFpHotbarSelectedSlot(newSlot);
@@ -575,7 +537,15 @@ export async function mountFpSession(
   };
 
   const onClick = () => {
-    void primeGameAudio();
+    void (async () => {
+      await localAudio.unlock();
+      const actx = localAudio.getAudioContext();
+      if (actx) {
+        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
+        worldAudioReady = true;
+        refreshWorldSoundSubscription();
+      }
+    })();
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
@@ -592,7 +562,6 @@ export async function mountFpSession(
     if (!e.isPrimary || e.button !== 0) return;
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
-    void primeGameAudio();
     meleePressPending = true;
   };
 
@@ -622,15 +591,7 @@ export async function mountFpSession(
       if (tMelee - lastMeleeMs >= MELEE_COOLDOWN_MS) {
         lastMeleeMs = tMelee;
         meleeAttackSeq += 1;
-        let meleeSoundProfile = 0;
-        if (conn.identity) {
-          const slot = getFpHotbarSelectedSlot();
-          if (slot != null) {
-            const row = getHotbarSlotInventoryItem(conn, conn.identity, slot);
-            if (row) meleeSoundProfile = meleeWeaponSwingSoundProfileFromDefId(row.defId);
-          }
-        }
-        localAudio.playMeleeWeaponSwingLocal(meleeSoundProfile);
+        localAudio.playMeleeWeaponSwingLocal();
         if (conn.identity) void conn.reducers.submitMeleeSwing({});
       }
     }
@@ -812,9 +773,9 @@ export async function mountFpSession(
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     unsubHotbarRail();
-    registerGameAudioPrime(null);
     worldAudio.dispose();
     worldAudioReady = false;
+    unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
     presentation.dispose();
     renderer.dispose();

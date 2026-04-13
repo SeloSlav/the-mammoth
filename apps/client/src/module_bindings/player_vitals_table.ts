@@ -15,4 +15,5 @@ export default __t.row({
   health: __t.f32(),
   hunger: __t.f32(),
   hydration: __t.f32(),
+  lastHotbarConsumeAt: __t.option(__t.timestamp()).name("last_hotbar_consume_at"),
 });

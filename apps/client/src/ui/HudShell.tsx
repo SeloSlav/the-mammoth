@@ -33,7 +33,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         The Mammoth — <strong>{displayName}</strong>
         <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
           {
-            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory · 1–6 / wheel (pointer-lock) cycle hotbar · double same key or double-click slot: use consumable (if catalog instant use) or clear weapon · E pick up nearby drops"
+            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory · 1–6 / wheel (pointer-lock) cycle hotbar · double same key or double-click slot: use consumable (if catalog instant use) or clear weapon — 1s use cooldown (shown on slot) · E pick up nearby drops"
           }
         </div>
         <div style={{ marginTop: 8, pointerEvents: "auto" }}>

@@ -386,6 +386,11 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
         return;
     }
 
+    if player_vitals::hotbar_instant_consume_on_cooldown(ctx, sender) {
+        log::debug!("consume_hotbar_item: instant consume cooldown active");
+        return;
+    }
+
     if let Some(mut rail) = ctx.db.player_active_hotbar().identity().find(&sender) {
         if rail.slot_index != ACTIVE_HOTBAR_SLOT_CLEARED {
             rail.slot_index = ACTIVE_HOTBAR_SLOT_CLEARED;
@@ -411,7 +416,7 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
         return;
     }
 
-    player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy);
+    player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy, true);
 
     let kind = world_sound::hotbar_consume_sound_kind(dh, dy);
     if let Some(pose) = ctx.db.player_pose().identity().find(&sender) {
@@ -419,8 +424,8 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
     }
 }
 
-/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3,
-/// stackable `apple` / `water_bottle` in slots 4–5, and `rakija` in backpack slot 0.
+/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3
+/// plus stackable `apple` / `water_bottle` in slots 4–5.
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
     if player_item_count(ctx, owner) > 0 {
         return;
@@ -432,7 +437,6 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         "baseball_bat",
         "apple",
         "water_bottle",
-        "rakija",
     ] {
         if !items_catalog::is_known_def(def) {
             log::error!("starter loadout: catalog missing {def}");
@@ -492,15 +496,6 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         location: ItemLocation::Hotbar(HotbarLocationData {
             owner_id: owner,
             slot_index: 5,
-        }),
-    });
-    let _ = ctx.db.inventory_item().insert(InventoryItem {
-        instance_id: 0,
-        def_id: "rakija".to_string(),
-        quantity: 4,
-        location: ItemLocation::Inventory(InventoryLocationData {
-            owner_id: owner,
-            slot_index: 0,
         }),
     });
 }

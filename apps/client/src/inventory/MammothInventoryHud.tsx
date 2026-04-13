@@ -8,8 +8,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { DbConnection } from "../module_bindings";
-import { requestGameAudioPrime } from "../game/gameAudioPrime";
 import { hotbarSlotHasInstantConsume } from "../game/fpHotbarActivate";
+import { runFpHotbarInstantConsume } from "../game/fpHotbarConsume";
+import { primeHotbarConsumeAudio } from "../game/hotbarConsumeLocalAudio";
 import { getHotbarSlotInventoryItem } from "../game/fpHotbarResolve";
 import {
   getFpHotbarSelectedSlot,
@@ -194,21 +195,18 @@ export function MammothInventoryHud({ conn }: Props) {
   const onHotbarSlotClick = useCallback(
     (index: number) => {
       if (!conn.identity) return;
-      void requestGameAudioPrime();
       const prevSel = getFpHotbarSelectedSlot();
 
       // Broth-style: second activation on the same slot while it holds an instant-use consumable → consume.
       if (prevSel === index && hotbarSlotHasInstantConsume(conn, conn.identity, index)) {
         lastHotbarClickRef.current = null;
-        void (async () => {
-          try {
-            await requestGameAudioPrime();
-            await conn.reducers.consumeHotbarItem({ hotbarSlot: index });
-            setFpHotbarSelectedSlot(null);
-          } catch (err) {
-            console.warn("[MammothInventoryHud] consumeHotbarItem failed", err);
-          }
-        })();
+        void runFpHotbarInstantConsume(
+          conn,
+          conn.identity,
+          index,
+          primeHotbarConsumeAudio,
+          "MammothInventoryHud",
+        );
         return;
       }
 

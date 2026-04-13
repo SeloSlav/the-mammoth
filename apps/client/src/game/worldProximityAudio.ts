@@ -1,8 +1,8 @@
 /**
  * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for footsteps, melee weapon swings,
- * pickups, and hotbar consume (eat / drink). The local player skips their own foot / swing /
- * pickup rows (those are immediate via `LocalGameAudio` where applicable). Consume eat/drink
- * rows **do** play for the emitter too so hotbar use has one spatialized path.
+ * pickups, and hotbar consume (eat / drink). The emitter skips **all** of their own rows here
+ * (footsteps / swings / pickup / consume have immediate or local paths in {@link LocalGameAudio}).
+ * Nearby players still hear spatialized consume via this subscription.
  */
 
 import * as THREE from "three";
@@ -14,6 +14,11 @@ import {
   meleeSwingProfileFromVariation,
   meleeSwingStemIndexFromVariation,
 } from "./meleeSwingSound";
+import {
+  CONSUME_DRINK_STEM,
+  CONSUME_EAT_STEM,
+  CONSUME_STEM_MEDIA_EXTENSIONS,
+} from "./consumeUiSound";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
 
 export const WORLD_SOUND_KIND_FOOTSTEP = 0;
@@ -30,8 +35,6 @@ const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
 const UI_STEM = `${AUDIO_ROOT}/ui`;
 const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
-const CONSUME_EAT_STEM = `${UI_STEM}/consume-eat` as const;
-const CONSUME_DRINK_STEM = `${UI_STEM}/consume-drink` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -81,8 +84,12 @@ export class WorldProximityAudio {
       },
     );
     this.itemPickBuffer = await this.decodeItemPickBuffer(ctx);
-    this.consumeEatBuffer = await this.decodeSingleStem(ctx, CONSUME_EAT_STEM);
-    this.consumeDrinkBuffer = await this.decodeSingleStem(ctx, CONSUME_DRINK_STEM);
+    this.consumeEatBuffer = await this.decodeSingleStem(ctx, CONSUME_EAT_STEM, CONSUME_STEM_MEDIA_EXTENSIONS);
+    this.consumeDrinkBuffer = await this.decodeSingleStem(
+      ctx,
+      CONSUME_DRINK_STEM,
+      CONSUME_STEM_MEDIA_EXTENSIONS,
+    );
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -174,11 +181,7 @@ export class WorldProximityAudio {
     const out = this.worldGain;
     const selfId = this.conn.identity;
     if (!ctx || !out || !selfId) return;
-    const skipSelf =
-      selfId.isEqual(row.emitter) &&
-      row.kind !== WORLD_SOUND_KIND_CONSUME_EAT &&
-      row.kind !== WORLD_SOUND_KIND_CONSUME_DRINK;
-    if (skipSelf) return;
+    if (selfId.isEqual(row.emitter)) return;
 
     let buf: AudioBuffer | null = null;
     if (row.kind === WORLD_SOUND_KIND_FOOTSTEP) {
@@ -250,8 +253,12 @@ export class WorldProximityAudio {
     return this.decodeSingleStem(ctx, ITEM_PICK_STEM);
   }
 
-  private async decodeSingleStem(ctx: AudioContext, stem: string): Promise<AudioBuffer | null> {
-    const url = await this.resolveSource(stem);
+  private async decodeSingleStem(
+    ctx: AudioContext,
+    stem: string,
+    extensions: readonly string[] = AUDIO_EXTENSIONS,
+  ): Promise<AudioBuffer | null> {
+    const url = await this.resolveSource(stem, extensions);
     if (!url) return null;
     try {
       const res = await fetch(url);
