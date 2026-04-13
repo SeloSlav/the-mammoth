@@ -11,11 +11,13 @@
  * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset); footsteps
  * are **~1.00 s** each (hit early, tail pad OK). **Batch-normalize** after changing assets:
  * `pnpm content:normalize-footsteps` (RMS-match the set + shared peak ceiling; `--dry-run` first).
- * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Call {@link LocalGameAudio.unlock}
- * from a **user gesture**.
+ * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Melee swing: default
+ * `weapon-melee-swing*.wav` with legacy fallback to `weapon-crowbar-swing*.wav` (see
+ * `meleeSwingSound.ts`). Call {@link LocalGameAudio.unlock} from a **user gesture**.
  */
 
 import { fpLocomotionConstants } from "@the-mammoth/engine";
+import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -32,11 +34,6 @@ const IMPACT_STEMS = [
   `${UI_STEM}/footstep-4`,
   `${UI_STEM}/footstep-5`,
   `${UI_STEM}/footstep-6`,
-] as const;
-
-const CROWBAR_SWING_STEMS = [
-  `${UI_STEM}/weapon-crowbar-swing`,
-  `${UI_STEM}/weapon-crowbar-swing-2`,
 ] as const;
 
 const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
@@ -90,8 +87,8 @@ export class LocalGameAudio {
   private ctx: AudioContext | null = null;
   private footstepBus: GainNode | null = null;
   private impactBuffers: AudioBuffer[] = [];
-  private crowbarSwingBuffers: AudioBuffer[] = [];
-  private crowbarSwingRR = 0;
+  private meleeSwingBuffersByProfile = new Map<number, AudioBuffer[]>();
+  private meleeSwingRR = 0;
   private itemPickBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
@@ -125,11 +122,14 @@ export class LocalGameAudio {
     const buffers = await this.decodeImpactBuffers(ctx, this.impactUrls);
     this.impactBuffers = buffers;
 
-    const crowbarUrls = await this.resolveCrowbarSwingUrls();
-    this.crowbarSwingBuffers = await this.decodeImpactBuffers(ctx, crowbarUrls);
-    if (this.crowbarSwingBuffers.length === 0) {
+    this.meleeSwingBuffersByProfile = await loadMeleeWeaponSwingBuffersByProfile(
+      ctx,
+      (stem) => this.resolveSource(stem),
+      (c, urls) => this.decodeImpactBuffers(c, [...urls]),
+    );
+    if (!this.meleeSwingBuffersByProfile.has(0) || this.meleeSwingBuffersByProfile.get(0)!.length === 0) {
       console.warn(
-        "[LocalGameAudio] Missing crowbar swing assets: weapon-crowbar-swing.wav / weapon-crowbar-swing-2.wav under public/audio/ui/",
+        "[LocalGameAudio] Missing melee swing assets: add weapon-melee-swing.wav + weapon-melee-swing-2.wav (or legacy weapon-crowbar-swing*.wav) under public/audio/ui/",
       );
     }
 
@@ -180,14 +180,14 @@ export class LocalGameAudio {
     this.ctx = null;
     this.footstepBus = null;
     this.impactBuffers = [];
-    this.crowbarSwingBuffers = [];
+    this.meleeSwingBuffersByProfile.clear();
     this.itemPickBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
     this.lastStrideStepCell = Number.NEGATIVE_INFINITY;
     this.impactRR = 0;
-    this.crowbarSwingRR = 0;
+    this.meleeSwingRR = 0;
   }
 
   /** Shared Web Audio context after {@link LocalGameAudio.unlock} (for 3D world one-shots). */
@@ -201,18 +201,22 @@ export class LocalGameAudio {
   }
 
   /**
-   * First-person crowbar swing — **local only** (immediate feedback). Other players hear the
-   * server-emitted `world_sound_event` (proximity playback on their clients).
+   * First-person melee weapon swing — **local only** (immediate feedback). Other players hear the
+   * server-emitted `world_sound_event` kind `MELEE_WEAPON_SWING` (proximity playback).
+   *
+   * @param soundProfile Upper bits sent in `variation` on the server — keep in sync with
+   *        `meleeWeaponSwingSoundProfileFromDefId` for the active hotbar `def_id`.
    */
-  playCrowbarSwingLocal(): void {
-    if (!this.unlocked || !this.ctx || !this.footstepBus || this.crowbarSwingBuffers.length === 0) {
+  playMeleeWeaponSwingLocal(soundProfile = 0): void {
+    const buffers =
+      this.meleeSwingBuffersByProfile.get(soundProfile) ?? this.meleeSwingBuffersByProfile.get(0);
+    if (!this.unlocked || !this.ctx || !this.footstepBus || !buffers || buffers.length === 0) {
       return;
     }
     const ctx = this.ctx;
     const bus = this.footstepBus;
-    const buf =
-      this.crowbarSwingBuffers[this.crowbarSwingRR % this.crowbarSwingBuffers.length]!;
-    this.crowbarSwingRR += 1;
+    const buf = buffers[this.meleeSwingRR % buffers.length]!;
+    this.meleeSwingRR += 1;
 
     const hitGain = ctx.createGain();
     hitGain.gain.value = 0.52 * (0.92 + Math.random() * 0.16);
@@ -324,13 +328,6 @@ export class LocalGameAudio {
       }
     }
     return out;
-  }
-
-  private async resolveCrowbarSwingUrls(): Promise<string[]> {
-    const resolved = await Promise.all(
-      CROWBAR_SWING_STEMS.map((stem) => this.resolveSource(stem)),
-    );
-    return resolved.filter((u): u is string => u != null);
   }
 
   private async resolveFootstepUrlsInBackground(): Promise<void> {

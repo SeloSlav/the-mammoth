@@ -33,7 +33,16 @@ export default function App() {
 
   return (
     <>
-      <canvas ref={canvasRef} style={{ position: "fixed", inset: 0 }} />
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          overflow: "hidden",
+        }}
+      >
+        <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
+      </div>
       {loadError ? (
         <div
           style={{

@@ -1,4 +1,4 @@
-//! Replicated one-shot sounds (footsteps, melee swings, world item pickup) for nearby players.
+//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup) for nearby players.
 //! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
 use spacetimedb::{
@@ -19,9 +19,14 @@ const BIT_CROUCH: u8 = 1 << 6;
 
 /// `world_sound_event.kind` — client maps to assets / mix.
 pub const KIND_FOOTSTEP: u8 = 0;
-pub const KIND_CROWBAR_SWING: u8 = 1;
+/// Melee weapon swing whoosh — default + optional per-profile stems on client (see `variation`).
+pub const KIND_MELEE_WEAPON_SWING: u8 = 1;
 /// Successful `pickup_dropped_item` — one-shot at the drop’s world position (`variation` unused).
 pub const KIND_ITEM_PICKUP: u8 = 2;
+/// Hotbar instant consume — solid-ish food (`variation` 0 → `consume-eat` stem on client).
+pub const KIND_CONSUME_EAT: u8 = 3;
+/// Hotbar instant consume — drink / hydration-first (`variation` 0 → `consume-drink` stem).
+pub const KIND_CONSUME_DRINK: u8 = 4;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -36,7 +41,8 @@ pub struct WorldSoundEvent {
     pub id: u64,
     /// See `KIND_*`.
     pub kind: u8,
-    /// Footsteps: stem index mod 6. Crowbar: 0 = swing-1, 1 = swing-2 WAV. Item pickup: 0.
+    /// Footsteps: stem index mod 6. Melee swing: low bits = stem A/B; upper bits = sound profile
+    /// (see [`melee_weapon_swing_variation`]). Item pickup / consume: see module docs.
     pub variation: u8,
     pub x: f32,
     pub y: f32,
@@ -148,6 +154,49 @@ pub fn emit_item_pickup_at(
     );
 }
 
+/// Broth-style: hydration-led consumables use drink stem; everything else uses eat.
+#[inline]
+pub fn hotbar_consume_sound_kind(hunger_delta: f32, hydration_delta: f32) -> u8 {
+    if hydration_delta > hunger_delta {
+        KIND_CONSUME_DRINK
+    } else {
+        KIND_CONSUME_EAT
+    }
+}
+
+/// One-shot at the consumer’s mouth height (`y` should already be biased, e.g. pose + 0.9).
+pub fn emit_hotbar_consume_at(
+    ctx: &ReducerContext,
+    kind: u8,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    if kind != KIND_CONSUME_EAT && kind != KIND_CONSUME_DRINK {
+        log::warn!("emit_hotbar_consume_at: unexpected kind {kind}");
+        return;
+    }
+    emit_world_sound(ctx, kind, 0, x, y, z, 0.66, 16.0, emitter);
+}
+
+#[cfg(test)]
+mod consume_kind_tests {
+    use super::*;
+
+    #[test]
+    fn hotbar_consume_kind_prefers_hydration_when_strictly_greater() {
+        assert_eq!(hotbar_consume_sound_kind(0.0, 1.0), KIND_CONSUME_DRINK);
+        assert_eq!(hotbar_consume_sound_kind(10.0, 32.0), KIND_CONSUME_DRINK);
+    }
+
+    #[test]
+    fn hotbar_consume_kind_eat_when_hunger_dominates_or_tie() {
+        assert_eq!(hotbar_consume_sound_kind(24.0, 0.0), KIND_CONSUME_EAT);
+        assert_eq!(hotbar_consume_sound_kind(24.0, 24.0), KIND_CONSUME_EAT);
+    }
+}
+
 /// Per-connection rows used by footsteps + melee cooldown.
 pub fn ensure_player_audio_rows(ctx: &ReducerContext, id: Identity) {
     if ctx.db.player_foot_cadence().identity().find(&id).is_none() {
@@ -238,6 +287,26 @@ pub fn sync_footsteps_for_tick(
 
 const MELEE_COOLDOWN_MICROS: i64 = 480_000;
 
+/// Low bits of melee swing `variation` — stem index (A/B alternation). Sync with
+/// `apps/client/src/game/meleeSwingSound.ts` `MELEE_SWING_VARIATION_STEM_MASK`.
+pub const MELEE_SWING_VARIATION_STEM_MASK: u8 = 0b11;
+
+/// Catalog `def_id` → client sound profile (upper bits of `variation`). Keep aligned with
+/// `meleeWeaponSwingSoundProfileFromDefId` in `meleeSwingSound.ts`.
+#[inline]
+pub fn melee_weapon_swing_sound_profile_for_def_id(def_id: &str) -> u8 {
+    match def_id {
+        // Example when assets exist: "knife" => 1,
+        _ => 0,
+    }
+}
+
+#[inline]
+pub fn melee_weapon_swing_variation(profile: u8, stem_jitter: u8) -> u8 {
+    let profile = profile.min(63);
+    (profile << 2) | (stem_jitter & MELEE_SWING_VARIATION_STEM_MASK)
+}
+
 #[spacetimedb::reducer]
 pub fn submit_melee_swing(ctx: &ReducerContext) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -270,10 +339,15 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
         stub_damage
     );
 
-    let v = ((now_us >> 7) as u8) & 1;
+    let profile = combat_stub::active_hotbar_weapon_def_id(ctx, id)
+        .as_deref()
+        .map(melee_weapon_swing_sound_profile_for_def_id)
+        .unwrap_or(0);
+    let stem = ((now_us >> 7) as u8) & MELEE_SWING_VARIATION_STEM_MASK;
+    let v = melee_weapon_swing_variation(profile, stem);
     emit_world_sound(
         ctx,
-        KIND_CROWBAR_SWING,
+        KIND_MELEE_WEAPON_SWING,
         v,
         pose.x,
         pose.y + 0.95,
@@ -282,4 +356,16 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
         20.0,
         id,
     );
+}
+
+#[cfg(test)]
+mod melee_swing_variation_tests {
+    use super::*;
+
+    #[test]
+    fn melee_weapon_swing_variation_layout_matches_client() {
+        let v = melee_weapon_swing_variation(7, 1);
+        assert_eq!(v & MELEE_SWING_VARIATION_STEM_MASK, 1);
+        assert_eq!((v >> 2) & 0x3f, 7);
+    }
 }

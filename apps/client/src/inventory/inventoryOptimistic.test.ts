@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
-import { predictSlotMove, predictWorldDrop } from "./inventoryOptimistic";
+import { inventorySlotGridsMatch, predictSlotMove, predictWorldDrop } from "./inventoryOptimistic";
 
 function item(instanceNum: number, defId: string, qty: number, max: number): MammothPopulatedItem {
   return {
@@ -59,5 +59,56 @@ describe("inventoryOptimistic", () => {
     };
     const next = predictWorldDrop(grids, { type: "hotbar", index: 0 }, 1);
     expect(next?.hotbar[0]).toBeNull();
+  });
+});
+
+describe("inventorySlotGridsMatch", () => {
+  const emptyInv = () => Array.from({ length: 24 }, () => null);
+
+  it("returns true for identical slot populations", () => {
+    const a = {
+      hotbar: [item(401, "knife", 1, 1), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    const b = {
+      hotbar: [item(401, "knife", 1, 1), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    expect(inventorySlotGridsMatch(a, b)).toBe(true);
+  });
+
+  it("returns false when an instance id differs", () => {
+    const a = {
+      hotbar: [item(501, "knife", 1, 1), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    const b = {
+      hotbar: [item(502, "knife", 1, 1), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    expect(inventorySlotGridsMatch(a, b)).toBe(false);
+  });
+
+  it("returns false when quantity differs", () => {
+    const a = {
+      hotbar: [item(601, "bandage", 3, 10), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    const b = {
+      hotbar: [item(601, "bandage", 2, 10), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    expect(inventorySlotGridsMatch(a, b)).toBe(false);
+  });
+
+  it("returns true when predicted move matches replicated outcome", () => {
+    const before = {
+      hotbar: [item(701, "knife", 1, 1), null, null, null, null, null],
+      inventory: emptyInv(),
+    };
+    const predicted = predictSlotMove(before, { type: "hotbar", index: 0 }, { type: "hotbar", index: 2 });
+    expect(predicted).not.toBeNull();
+    expect(inventorySlotGridsMatch(predicted!, predicted!)).toBe(true);
+    expect(inventorySlotGridsMatch(predicted!, before)).toBe(false);
   });
 });

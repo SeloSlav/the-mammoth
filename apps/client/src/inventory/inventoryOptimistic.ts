@@ -1,3 +1,4 @@
+import type { InventoryItem } from "../module_bindings/types";
 import type { MammothDragSourceSlotInfo, MammothPopulatedItem } from "./inventoryDragDropTypes";
 
 export type SlotGrids = {
@@ -25,6 +26,31 @@ function sameInstance(a: MammothPopulatedItem, b: MammothPopulatedItem): boolean
   const ia = a.instance.instanceId;
   const ib = b.instance.instanceId;
   return (typeof ia === "bigint" ? ia : BigInt(ia as number)) === (typeof ib === "bigint" ? ib : BigInt(ib as number));
+}
+
+function instanceIdKey(id: InventoryItem["instanceId"]): string {
+  return typeof id === "bigint" ? id.toString() : BigInt(id as number).toString();
+}
+
+function slotPopulationMatch(a: MammothPopulatedItem | null, b: MammothPopulatedItem | null): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return (
+    instanceIdKey(a.instance.instanceId) === instanceIdKey(b.instance.instanceId) &&
+    a.instance.quantity === b.instance.quantity
+  );
+}
+
+/** True when replicated grids match an optimistic snapshot (clears client overlay without flicker). */
+export function inventorySlotGridsMatch(a: SlotGrids, b: SlotGrids): boolean {
+  if (a.hotbar.length !== b.hotbar.length || a.inventory.length !== b.inventory.length) return false;
+  for (let i = 0; i < a.hotbar.length; i++) {
+    if (!slotPopulationMatch(a.hotbar[i] ?? null, b.hotbar[i] ?? null)) return false;
+  }
+  for (let i = 0; i < a.inventory.length; i++) {
+    if (!slotPopulationMatch(a.inventory[i] ?? null, b.inventory[i] ?? null)) return false;
+  }
+  return true;
 }
 
 /**

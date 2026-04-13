@@ -44,6 +44,14 @@
       "category": "consumable",
       "maxStack": 20,
       "consumeOnUse": { "hydrationDelta": 32 }
+    },
+    {
+      "id": "rakija",
+      "displayName": "Rakija",
+      "description": "Fruit brandy in a dusty bottle. Quenches thirst; best not to ask which fruit.",
+      "category": "consumable",
+      "maxStack": 12,
+      "consumeOnUse": { "hydrationDelta": 26 }
     }
   ]
 }

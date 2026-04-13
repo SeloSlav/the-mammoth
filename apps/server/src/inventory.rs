@@ -8,6 +8,8 @@ use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLoc
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
 use crate::player_vitals;
+use crate::pose::player_pose;
+use crate::world_sound;
 
 pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
 pub(crate) const NUM_PLAYER_HOTBAR_SLOTS: u8 = 6;
@@ -410,10 +412,15 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
     }
 
     player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy);
+
+    let kind = world_sound::hotbar_consume_sound_kind(dh, dy);
+    if let Some(pose) = ctx.db.player_pose().identity().find(&sender) {
+        world_sound::emit_hotbar_consume_at(ctx, kind, pose.x, pose.y + 0.92, pose.z, sender);
+    }
 }
 
-/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3
-/// plus stackable `apple` / `water_bottle` in slots 4–5.
+/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3,
+/// stackable `apple` / `water_bottle` in slots 4–5, and `rakija` in backpack slot 0.
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
     if player_item_count(ctx, owner) > 0 {
         return;
@@ -425,6 +432,7 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         "baseball_bat",
         "apple",
         "water_bottle",
+        "rakija",
     ] {
         if !items_catalog::is_known_def(def) {
             log::error!("starter loadout: catalog missing {def}");
@@ -484,6 +492,15 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         location: ItemLocation::Hotbar(HotbarLocationData {
             owner_id: owner,
             slot_index: 5,
+        }),
+    });
+    let _ = ctx.db.inventory_item().insert(InventoryItem {
+        instance_id: 0,
+        def_id: "rakija".to_string(),
+        quantity: 4,
+        location: ItemLocation::Inventory(InventoryLocationData {
+            owner_id: owner,
+            slot_index: 0,
         }),
     });
 }

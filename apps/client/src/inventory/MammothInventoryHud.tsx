@@ -1,20 +1,22 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import {
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
-  useOptimistic,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import type { DbConnection } from "../module_bindings";
+import { requestGameAudioPrime } from "../game/gameAudioPrime";
+import { hotbarSlotHasInstantConsume } from "../game/fpHotbarActivate";
+import { getHotbarSlotInventoryItem } from "../game/fpHotbarResolve";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "../game/fpHotbarSelection";
+import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "./mammothItemCatalog";
 import type {
   MammothDraggedItemInfo,
   MammothDropResult,
@@ -23,7 +25,11 @@ import type {
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
-import { predictSlotMove, predictWorldDrop } from "./inventoryOptimistic";
+import {
+  inventorySlotGridsMatch,
+  predictSlotMove,
+  predictWorldDrop,
+} from "./inventoryOptimistic";
 import { useMammothInventory } from "./useMammothInventory";
 
 const INV_COLS = 6;
@@ -50,10 +56,21 @@ type Props = {
 export function MammothInventoryHud({ conn }: Props) {
   const { hotbar, inventory } = useMammothInventory(conn);
   const baseSlots = useMemo(() => ({ hotbar, inventory }), [hotbar, inventory]);
-  const [displaySlots, applyOptimisticSlots] = useOptimistic(
-    baseSlots,
-    (_current, pending: typeof baseSlots) => pending,
-  );
+  const [optimisticSlots, setOptimisticSlots] = useState<typeof baseSlots | null>(null);
+  const displaySlots = optimisticSlots ?? baseSlots;
+  const baseSlotsRef = useRef(baseSlots);
+  const optimisticSlotsRef = useRef<typeof baseSlots | null>(null);
+  baseSlotsRef.current = baseSlots;
+  optimisticSlotsRef.current = optimisticSlots;
+
+  const gridsForPrediction = useCallback(() => optimisticSlotsRef.current ?? baseSlotsRef.current, []);
+
+  useEffect(() => {
+    if (!optimisticSlots) return;
+    if (inventorySlotGridsMatch(optimisticSlots, baseSlots)) {
+      setOptimisticSlots(null);
+    }
+  }, [baseSlots, optimisticSlots]);
   const [invOpen, setInvOpen] = useState(false);
   const dragRef = useRef<MammothDraggedItemInfo | null>(null);
   const selectedSlot = useSyncExternalStore(
@@ -92,14 +109,13 @@ export function MammothInventoryHud({ conn }: Props) {
   const quickMoveInventoryToHotbar = useCallback(
     (pop: MammothPopulatedItem, fromInventoryIndex: number) => {
       if (document.body.classList.contains("item-dragging")) return;
-      const destIndex = destIndexForQuickTransfer(baseSlots.hotbar, pop);
-      const predicted = predictSlotMove(baseSlots, { type: "inventory", index: fromInventoryIndex }, {
+      const g = gridsForPrediction();
+      const destIndex = destIndexForQuickTransfer(g.hotbar, pop);
+      const predicted = predictSlotMove(g, { type: "inventory", index: fromInventoryIndex }, {
         type: "hotbar",
         index: destIndex,
       });
-      startTransition(() => {
-        if (predicted) applyOptimisticSlots(predicted);
-      });
+      if (predicted) setOptimisticSlots(predicted);
       try {
         void conn.reducers.moveItemToHotbar({
           itemInstanceId: toInstanceId(pop),
@@ -109,20 +125,19 @@ export function MammothInventoryHud({ conn }: Props) {
         console.warn("[MammothInventoryHud] quick move to hotbar failed", err);
       }
     },
-    [conn, baseSlots, applyOptimisticSlots, toInstanceId],
+    [conn, gridsForPrediction, toInstanceId],
   );
 
   const quickMoveHotbarToInventory = useCallback(
     (pop: MammothPopulatedItem, fromHotbarIndex: number) => {
       if (document.body.classList.contains("item-dragging")) return;
-      const destIndex = destIndexForQuickTransfer(baseSlots.inventory, pop);
-      const predicted = predictSlotMove(baseSlots, { type: "hotbar", index: fromHotbarIndex }, {
+      const g = gridsForPrediction();
+      const destIndex = destIndexForQuickTransfer(g.inventory, pop);
+      const predicted = predictSlotMove(g, { type: "hotbar", index: fromHotbarIndex }, {
         type: "inventory",
         index: destIndex,
       });
-      startTransition(() => {
-        if (predicted) applyOptimisticSlots(predicted);
-      });
+      if (predicted) setOptimisticSlots(predicted);
       try {
         void conn.reducers.moveItemToInventory({
           itemInstanceId: toInstanceId(pop),
@@ -132,7 +147,7 @@ export function MammothInventoryHud({ conn }: Props) {
         console.warn("[MammothInventoryHud] quick move to inventory failed", err);
       }
     },
-    [conn, baseSlots, applyOptimisticSlots, toInstanceId],
+    [conn, gridsForPrediction, toInstanceId],
   );
 
   const handleDrop = useCallback(
@@ -147,10 +162,8 @@ export function MammothInventoryHud({ conn }: Props) {
       try {
         if (result.kind === "cancel") return;
         if (result.kind === "world") {
-          const predicted = predictWorldDrop(baseSlots, src.sourceSlot, qty);
-          startTransition(() => {
-            if (predicted) applyOptimisticSlots(predicted);
-          });
+          const predicted = predictWorldDrop(gridsForPrediction(), src.sourceSlot, qty);
+          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.dropItem({
             itemInstanceId: instanceId,
             quantityToDrop: qty,
@@ -158,10 +171,8 @@ export function MammothInventoryHud({ conn }: Props) {
           return;
         }
         const target = result.slot;
-        const predicted = predictSlotMove(baseSlots, src.sourceSlot, target);
-        startTransition(() => {
-          if (predicted) applyOptimisticSlots(predicted);
-        });
+        const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
+        if (predicted) setOptimisticSlots(predicted);
         if (target.type === "inventory") {
           void conn.reducers.moveItemToInventory({
             itemInstanceId: instanceId,
@@ -177,20 +188,50 @@ export function MammothInventoryHud({ conn }: Props) {
         console.warn("[MammothInventoryHud] drop/move failed", err);
       }
     },
-    [conn, baseSlots, applyOptimisticSlots],
+    [conn, gridsForPrediction],
   );
 
-  const onHotbarSlotClick = useCallback((index: number) => {
-    const now = performance.now();
-    const prev = lastHotbarClickRef.current;
-    if (prev && prev.slot === index && now - prev.t < 380) {
-      setFpHotbarSelectedSlot(null);
-      lastHotbarClickRef.current = null;
-      return;
-    }
-    lastHotbarClickRef.current = { slot: index, t: now };
-    setFpHotbarSelectedSlot(index);
-  }, []);
+  const onHotbarSlotClick = useCallback(
+    (index: number) => {
+      if (!conn.identity) return;
+      void requestGameAudioPrime();
+      const prevSel = getFpHotbarSelectedSlot();
+
+      // Broth-style: second activation on the same slot while it holds an instant-use consumable → consume.
+      if (prevSel === index && hotbarSlotHasInstantConsume(conn, conn.identity, index)) {
+        lastHotbarClickRef.current = null;
+        void (async () => {
+          try {
+            await requestGameAudioPrime();
+            await conn.reducers.consumeHotbarItem({ hotbarSlot: index });
+            setFpHotbarSelectedSlot(null);
+          } catch (err) {
+            console.warn("[MammothInventoryHud] consumeHotbarItem failed", err);
+          }
+        })();
+        return;
+      }
+
+      const netRow = getHotbarSlotInventoryItem(conn, conn.identity, index);
+      const def = netRow ? getMammothItemDef(netRow.defId) : undefined;
+      if (netRow && mammothItemDefSupportsHotbarInstantConsume(def)) {
+        lastHotbarClickRef.current = { slot: index, t: performance.now() };
+        setFpHotbarSelectedSlot(index);
+        return;
+      }
+
+      const now = performance.now();
+      const prev = lastHotbarClickRef.current;
+      if (prev && prev.slot === index && now - prev.t < 380) {
+        setFpHotbarSelectedSlot(null);
+        lastHotbarClickRef.current = null;
+        return;
+      }
+      lastHotbarClickRef.current = { slot: index, t: now };
+      setFpHotbarSelectedSlot(index);
+    },
+    [conn],
+  );
 
   const slotInner = (pop: MammothDraggedItemInfo["item"] | null) => {
     if (!pop) return null;
@@ -266,6 +307,7 @@ export function MammothInventoryHud({ conn }: Props) {
                 <MammothDroppableSlot key={`inv-${i}`} slotInfo={slotInfo}>
                   {pop ? (
                     <MammothDraggableItem
+                      key={String(toInstanceId(pop))}
                       item={pop}
                       sourceSlot={slotInfo}
                       onDragStart={handleDragStart}
@@ -325,7 +367,7 @@ export function MammothInventoryHud({ conn }: Props) {
               <MammothDroppableSlot
                 slotInfo={slotInfo}
                 isDraggingOver={false}
-                onClick={() => onHotbarSlotClick(index)}
+                onClick={pop ? undefined : () => onHotbarSlotClick(index)}
                 style={{
                   outline: sel ? "2px solid #5cf" : undefined,
                   outlineOffset: 1,
@@ -333,6 +375,7 @@ export function MammothInventoryHud({ conn }: Props) {
               >
                 {pop ? (
                   <MammothDraggableItem
+                    key={String(toInstanceId(pop))}
                     item={pop}
                     sourceSlot={slotInfo}
                     onDragStart={handleDragStart}

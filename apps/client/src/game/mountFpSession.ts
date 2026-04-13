@@ -43,13 +43,18 @@ import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
-import { itemDefIdSupportsHotbarInstantConsume } from "./fpConsumableUse";
+import {
+  HOTBAR_DIGIT_DEBOUNCE_MS,
+  HOTBAR_SLOT_COUNT,
+  hotbarSlotHasInstantConsume,
+} from "./fpHotbarActivate";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
 import { getHotbarSlotInventoryItem, resolveHeldItemFromHotbar } from "./fpHotbarResolve";
+import { meleeWeaponSwingSoundProfileFromDefId } from "./meleeSwingSound";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
@@ -62,6 +67,7 @@ import {
   mountDroppedItemsWorld,
 } from "./droppedItemWorldRuntime";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
+import { registerGameAudioPrime } from "./gameAudioPrime";
 import { WorldProximityAudio } from "./worldProximityAudio";
 
 /**
@@ -231,11 +237,36 @@ export async function mountFpSession(
   const localAudio = new LocalGameAudio();
   const worldAudio = new WorldProximityAudio(conn, () => camera);
   let worldAudioReady = false;
+  let primingGameAudio: Promise<void> | null = null;
 
   const refreshWorldSoundSubscription = () => {
     if (!worldAudioReady) return;
     worldAudio.subscribeAoi(poseAoiAnchorX, poseAoiAnchorZ, WORLD_SOUND_AOI_HALF);
   };
+
+  /**
+   * Unlocks Web Audio + attaches proximity one-shots (consume, others’ swings, etc.). Browsers only
+   * allow `AudioContext` resume after a user gesture — we used to do this **only** on canvas click,
+   * so Tab→inventory consume or double-digit hotbar use never subscribed to `world_sound_event`.
+   */
+  const primeGameAudio = (): Promise<void> => {
+    if (worldAudioReady) return Promise.resolve();
+    if (primingGameAudio) return primingGameAudio;
+    primingGameAudio = (async () => {
+      await localAudio.unlock();
+      const actx = localAudio.getAudioContext();
+      if (actx) {
+        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
+        worldAudioReady = true;
+        refreshWorldSoundSubscription();
+      }
+    })().finally(() => {
+      primingGameAudio = null;
+    });
+    return primingGameAudio;
+  };
+
+  registerGameAudioPrime(primeGameAudio);
 
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
@@ -326,7 +357,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF, {
     onPickupRemoved: async () => {
-      await localAudio.unlock();
+      await primeGameAudio();
       localAudio.playItemPickLocal();
     },
   });
@@ -391,6 +422,28 @@ export async function mountFpSession(
   const mammothInventoryOpen = () =>
     document.querySelector('[data-mammoth-inventory="open"]') !== null;
 
+  /** Same `DigitN` / slot within {@link HOTBAR_DIGIT_DEBOUNCE_MS} — ignored unless it would consume. */
+  const digitKeyDebounce = { code: "", at: 0, slot: -1 };
+
+  const onWheelHotbar = (e: WheelEvent) => {
+    if (mammothInventoryOpen() || isTextInputFocused()) return;
+    if (document.pointerLockElement !== canvas) return;
+    void primeGameAudio();
+    if (e.deltaY === 0) return;
+    const target = e.target;
+    if (target instanceof Element && target.closest("[data-mammoth-no-hotbar-wheel='true']")) {
+      return;
+    }
+    e.preventDefault();
+    const prev = getFpHotbarSelectedSlot();
+    const cur = prev === null ? 0 : prev;
+    const next =
+      e.deltaY < 0
+        ? (cur - 1 + HOTBAR_SLOT_COUNT) % HOTBAR_SLOT_COUNT
+        : (cur + 1) % HOTBAR_SLOT_COUNT;
+    setFpHotbarSelectedSlot(next);
+  };
+
   const isTextInputFocused = () => {
     const el = document.activeElement;
     if (!el || !(el instanceof HTMLElement)) return false;
@@ -400,19 +453,77 @@ export async function mountFpSession(
 
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
+    if (!worldAudioReady && !isTextInputFocused()) {
+      const primesAudio =
+        e.code === "Tab" ||
+        e.code.startsWith("Digit") ||
+        (e.code.startsWith("Numpad") && e.code.length === 7) ||
+        e.code === "KeyW" ||
+        e.code === "KeyA" ||
+        e.code === "KeyS" ||
+        e.code === "KeyD" ||
+        e.code === "Space" ||
+        e.code === "KeyE" ||
+        e.code === "KeyC" ||
+        e.code === "KeyV";
+      if (primesAudio) {
+        void primeGameAudio();
+      }
+    }
     if (e.code === "AltLeft" || e.code === "AltRight") {
       e.preventDefault();
     }
-    if (!e.repeat && !isTextInputFocused() && !mammothInventoryOpen()) {
+    if (!isTextInputFocused() && !mammothInventoryOpen()) {
       let n = -1;
       if (e.code.startsWith("Digit")) {
         n = Number.parseInt(e.code.slice(5), 10);
       } else if (e.code.startsWith("Numpad") && e.code.length === 7) {
         n = Number.parseInt(e.code.slice(6), 10);
       }
-      if (n >= 1 && n <= 6) {
+      if (n >= 1 && n <= HOTBAR_SLOT_COUNT) {
         e.preventDefault();
-        setFpHotbarSelectedSlot(n - 1);
+        if (e.repeat) return;
+        const newSlot = n - 1;
+        const keyCode = e.code;
+        const now = performance.now();
+        if (!conn.identity) {
+          setFpHotbarSelectedSlot(newSlot);
+          digitKeyDebounce.code = keyCode;
+          digitKeyDebounce.at = now;
+          digitKeyDebounce.slot = newSlot;
+          return;
+        }
+        const prevSel = getFpHotbarSelectedSlot();
+        const willConsume =
+          prevSel === newSlot && hotbarSlotHasInstantConsume(conn, conn.identity, newSlot);
+
+        if (!willConsume) {
+          if (
+            digitKeyDebounce.code === keyCode &&
+            digitKeyDebounce.slot === newSlot &&
+            now - digitKeyDebounce.at < HOTBAR_DIGIT_DEBOUNCE_MS
+          ) {
+            return;
+          }
+        }
+
+        digitKeyDebounce.code = keyCode;
+        digitKeyDebounce.at = now;
+        digitKeyDebounce.slot = newSlot;
+
+        if (willConsume) {
+          void (async () => {
+            try {
+              await primeGameAudio();
+              await conn.reducers.consumeHotbarItem({ hotbarSlot: newSlot });
+              setFpHotbarSelectedSlot(null);
+            } catch (err) {
+              console.warn("[mountFpSession] consumeHotbarItem failed", err);
+            }
+          })();
+          return;
+        }
+        setFpHotbarSelectedSlot(newSlot);
       }
     }
     if (e.code === "Escape") void document.exitPointerLock();
@@ -424,29 +535,6 @@ export async function mountFpSession(
     ) {
       e.preventDefault();
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
-    }
-    if (
-      e.code === "KeyV" &&
-      !e.repeat &&
-      !mammothInventoryOpen() &&
-      !isTextInputFocused()
-    ) {
-      e.preventDefault();
-      if (!conn.identity) return;
-      const slot = getFpHotbarSelectedSlot();
-      if (slot === null) return;
-      const stack = getHotbarSlotInventoryItem(conn, conn.identity, slot);
-      if (!stack || !itemDefIdSupportsHotbarInstantConsume(stack.defId)) return;
-      void (async () => {
-        try {
-          await conn.reducers.consumeHotbarItem({ hotbarSlot: slot });
-          setFpHotbarSelectedSlot(null);
-          lastSentHotbarRail = undefined;
-          syncActiveHotbarSlotToServer();
-        } catch (err) {
-          console.warn("[mountFpSession] consumeHotbarItem failed", err);
-        }
-      })();
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {
@@ -487,17 +575,14 @@ export async function mountFpSession(
   };
 
   const onClick = () => {
-    void (async () => {
-      await localAudio.unlock();
-      const actx = localAudio.getAudioContext();
-      if (actx) {
-        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
-        worldAudioReady = true;
-        refreshWorldSoundSubscription();
-      }
-    })();
+    void primeGameAudio();
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
+  };
+
+  /** HUD layers use `pointer-events: none` in gaps; suppress the browser menu on the world view. */
+  const onCanvasContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
   };
 
   /** Latched here, consumed once per sim tick — collapses duplicate `pointerdown` bursts. */
@@ -507,10 +592,12 @@ export async function mountFpSession(
     if (!e.isPrimary || e.button !== 0) return;
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
+    void primeGameAudio();
     meleePressPending = true;
   };
 
   window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("wheel", onWheelHotbar, { passive: false });
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("blur", onWindowBlur);
@@ -518,6 +605,7 @@ export async function mountFpSession(
   document.addEventListener("pointerlockchange", onPointerLockChange);
   canvas.addEventListener("click", onClick);
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
   let raf = 0;
   let lastFrameMs = performance.now();
@@ -534,7 +622,15 @@ export async function mountFpSession(
       if (tMelee - lastMeleeMs >= MELEE_COOLDOWN_MS) {
         lastMeleeMs = tMelee;
         meleeAttackSeq += 1;
-        localAudio.playCrowbarSwingLocal();
+        let meleeSoundProfile = 0;
+        if (conn.identity) {
+          const slot = getFpHotbarSelectedSlot();
+          if (slot != null) {
+            const row = getHotbarSlotInventoryItem(conn, conn.identity, slot);
+            if (row) meleeSoundProfile = meleeWeaponSwingSoundProfileFromDefId(row.defId);
+          }
+        }
+        localAudio.playMeleeWeaponSwingLocal(meleeSoundProfile);
         if (conn.identity) void conn.reducers.submitMeleeSwing({});
       }
     }
@@ -695,6 +791,7 @@ export async function mountFpSession(
     cancelAnimationFrame(raf);
     ro.disconnect();
     window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("wheel", onWheelHotbar);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("blur", onWindowBlur);
@@ -702,6 +799,7 @@ export async function mountFpSession(
     document.removeEventListener("pointerlockchange", onPointerLockChange);
     canvas.removeEventListener("click", onClick);
     canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("contextmenu", onCanvasContextMenu);
     if (poseAoiSub?.isActive()) {
       poseAoiSub.unsubscribe();
     }
@@ -714,6 +812,7 @@ export async function mountFpSession(
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     unsubHotbarRail();
+    registerGameAudioPrime(null);
     worldAudio.dispose();
     worldAudioReady = false;
     localAudio.dispose();

@@ -1,8 +1,8 @@
 /**
- * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for other players’ footsteps,
- * crowbar swings, and world item pickups. The local player uses `LocalGameAudio` for immediate
- * feedback where applicable and skips their own replicated rows here (no double foot / swing /
- * pickup blip for the actor).
+ * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for footsteps, melee weapon swings,
+ * pickups, and hotbar consume (eat / drink). The local player skips their own foot / swing /
+ * pickup rows (those are immediate via `LocalGameAudio` where applicable). Consume eat/drink
+ * rows **do** play for the emitter too so hotbar use has one spatialized path.
  */
 
 import * as THREE from "three";
@@ -10,20 +10,28 @@ import { and } from "spacetimedb";
 import type { DbConnection, SubscriptionHandle } from "../module_bindings";
 import { tables } from "../module_bindings";
 import type { WorldSoundEvent } from "../module_bindings/types";
+import {
+  meleeSwingProfileFromVariation,
+  meleeSwingStemIndexFromVariation,
+} from "./meleeSwingSound";
+import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
 
 export const WORLD_SOUND_KIND_FOOTSTEP = 0;
-export const WORLD_SOUND_KIND_CROWBAR_SWING = 1;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_MELEE_WEAPON_SWING`. */
+export const WORLD_SOUND_KIND_MELEE_WEAPON_SWING = 1;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ITEM_PICKUP`. */
 export const WORLD_SOUND_KIND_ITEM_PICKUP = 2;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_CONSUME_EAT`. */
+export const WORLD_SOUND_KIND_CONSUME_EAT = 3;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_CONSUME_DRINK`. */
+export const WORLD_SOUND_KIND_CONSUME_DRINK = 4;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
 const UI_STEM = `${AUDIO_ROOT}/ui`;
-const CROWBAR_STEMS = [
-  `${UI_STEM}/weapon-crowbar-swing`,
-  `${UI_STEM}/weapon-crowbar-swing-2`,
-] as const;
 const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
+const CONSUME_EAT_STEM = `${UI_STEM}/consume-eat` as const;
+const CONSUME_DRINK_STEM = `${UI_STEM}/consume-drink` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -32,8 +40,10 @@ export class WorldProximityAudio {
   private ctx: AudioContext | null = null;
   private worldGain: GainNode | null = null;
   private footBuffers: readonly AudioBuffer[] = [];
-  private crowbarBuffers: AudioBuffer[] = [];
+  private meleeSwingBuffersByProfile = new Map<number, AudioBuffer[]>();
   private itemPickBuffer: AudioBuffer | null = null;
+  private consumeEatBuffer: AudioBuffer | null = null;
+  private consumeDrinkBuffer: AudioBuffer | null = null;
   private soundSub: SubscriptionHandle | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
 
@@ -43,8 +53,8 @@ export class WorldProximityAudio {
   ) {}
 
   /**
-   * Wire into the same `AudioContext` as {@link LocalGameAudio} after unlock; decodes crowbar
-   * stems and item-pick for replicated one-shots.
+   * Wire into the same `AudioContext` as {@link LocalGameAudio} after unlock; decodes melee swing,
+   * item-pick, and consume stems for replicated one-shots.
    */
   async attachSharedContext(
     ctx: AudioContext,
@@ -52,8 +62,27 @@ export class WorldProximityAudio {
   ): Promise<void> {
     this.ctx = ctx;
     this.footBuffers = footstepBuffers;
-    this.crowbarBuffers = await this.decodeCrowbarBuffers(ctx);
+    this.meleeSwingBuffersByProfile = await loadMeleeWeaponSwingBuffersByProfile(
+      ctx,
+      (stem) => this.resolveSource(stem),
+      async (c, urls) => {
+        const out: AudioBuffer[] = [];
+        for (const url of urls) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            const ab = await res.arrayBuffer();
+            out.push(await c.decodeAudioData(ab.slice(0)));
+          } catch {
+            // skip
+          }
+        }
+        return out;
+      },
+    );
     this.itemPickBuffer = await this.decodeItemPickBuffer(ctx);
+    this.consumeEatBuffer = await this.decodeSingleStem(ctx, CONSUME_EAT_STEM);
+    this.consumeDrinkBuffer = await this.decodeSingleStem(ctx, CONSUME_DRINK_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -129,8 +158,10 @@ export class WorldProximityAudio {
     this.ctx = null;
     this.worldGain = null;
     this.footBuffers = [];
-    this.crowbarBuffers = [];
+    this.meleeSwingBuffersByProfile.clear();
     this.itemPickBuffer = null;
+    this.consumeEatBuffer = null;
+    this.consumeDrinkBuffer = null;
     this.sourceCache.clear();
   }
 
@@ -143,18 +174,33 @@ export class WorldProximityAudio {
     const out = this.worldGain;
     const selfId = this.conn.identity;
     if (!ctx || !out || !selfId) return;
-    if (selfId.isEqual(row.emitter)) return;
+    const skipSelf =
+      selfId.isEqual(row.emitter) &&
+      row.kind !== WORLD_SOUND_KIND_CONSUME_EAT &&
+      row.kind !== WORLD_SOUND_KIND_CONSUME_DRINK;
+    if (skipSelf) return;
 
     let buf: AudioBuffer | null = null;
     if (row.kind === WORLD_SOUND_KIND_FOOTSTEP) {
       if (this.footBuffers.length === 0) return;
       buf = this.footBuffers[row.variation % this.footBuffers.length]!;
-    } else if (row.kind === WORLD_SOUND_KIND_CROWBAR_SWING) {
-      if (this.crowbarBuffers.length === 0) return;
-      buf = this.crowbarBuffers[row.variation & 1]!;
+    } else if (row.kind === WORLD_SOUND_KIND_MELEE_WEAPON_SWING) {
+      const profile = meleeSwingProfileFromVariation(row.variation);
+      const stemIdx = meleeSwingStemIndexFromVariation(row.variation);
+      const list =
+        this.meleeSwingBuffersByProfile.get(profile) ??
+        this.meleeSwingBuffersByProfile.get(0);
+      if (!list || list.length === 0) return;
+      buf = list[stemIdx % list.length]!;
     } else if (row.kind === WORLD_SOUND_KIND_ITEM_PICKUP) {
       if (!this.itemPickBuffer) return;
       buf = this.itemPickBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_CONSUME_EAT) {
+      if (!this.consumeEatBuffer) return;
+      buf = this.consumeEatBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_CONSUME_DRINK) {
+      if (!this.consumeDrinkBuffer) return;
+      buf = this.consumeDrinkBuffer;
     } else {
       return;
     }
@@ -186,7 +232,12 @@ export class WorldProximityAudio {
 
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    if (row.kind === WORLD_SOUND_KIND_ITEM_PICKUP) {
+    if (
+      row.kind === WORLD_SOUND_KIND_ITEM_PICKUP ||
+      row.kind === WORLD_SOUND_KIND_MELEE_WEAPON_SWING ||
+      row.kind === WORLD_SOUND_KIND_CONSUME_EAT ||
+      row.kind === WORLD_SOUND_KIND_CONSUME_DRINK
+    ) {
       src.playbackRate.value = 0.99 + Math.random() * 0.04;
     }
     src.connect(dry);
@@ -196,7 +247,11 @@ export class WorldProximityAudio {
   }
 
   private async decodeItemPickBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
-    const url = await this.resolveSource(ITEM_PICK_STEM);
+    return this.decodeSingleStem(ctx, ITEM_PICK_STEM);
+  }
+
+  private async decodeSingleStem(ctx: AudioContext, stem: string): Promise<AudioBuffer | null> {
+    const url = await this.resolveSource(stem);
     if (!url) return null;
     try {
       const res = await fetch(url);
@@ -206,25 +261,6 @@ export class WorldProximityAudio {
     } catch {
       return null;
     }
-  }
-
-  private async decodeCrowbarBuffers(ctx: AudioContext): Promise<AudioBuffer[]> {
-    const urls = await Promise.all(
-      CROWBAR_STEMS.map((stem) => this.resolveSource(stem)),
-    );
-    const resolved = urls.filter((u): u is string => u != null);
-    const out: AudioBuffer[] = [];
-    for (const url of resolved) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const ab = await res.arrayBuffer();
-        out.push(await ctx.decodeAudioData(ab.slice(0)));
-      } catch {
-        // skip
-      }
-    }
-    return out;
   }
 
   private resolveSource(

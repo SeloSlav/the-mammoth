@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { ALL_WEAPON_DEFINITIONS } from "@the-mammoth/engine";
+import { ALL_WEAPON_DEFINITIONS, cloneDefaultFpMeleeSwingKeyframes } from "@the-mammoth/engine";
 import type { FpAuthorCameraKind, TransformMode } from "../state/editorStore.js";
 import { useEditorStore } from "../state/editorStore.js";
 import { getFpViewmodelPresenterForAuthoring } from "../editor/fpViewmodelAuthoringBridge.js";
@@ -242,9 +242,11 @@ export function EditorChromeFpViewmodel({
 
       <span style={label}>Melee swing (first person)</span>
       <p style={{ fontSize: 10, opacity: 0.78, margin: "0 0 6px", lineHeight: 1.4 }}>
-        <strong>Paint swing</strong> (below): arm, then drag an arc on the canvas (not on transform
-        handles). The stroke is projected through the hand onto the view plane; yaw/pitch follow the
-        motion. <strong>Scrub + Hand + weapon rig + Capture</strong> still edits individual keyframes.{" "}
+        <strong>Paint swing</strong> (below): arm, then drag in the <strong>3D view left of this panel</strong>.
+        A <strong style={{ color: "#50ffc8" }}>bright green line</strong> traces your pointer. The gizmo is
+        disabled for that drag. Paint records a <strong>position path</strong> in head-pitch space (no
+        auto-twist). Use <strong>Hand + weapon rig</strong> + Capture to add rotation at a scrub time.{" "}
+        <strong>Scrub + Capture</strong> still edits keyframes.{" "}
         <strong>Play</strong> loops preview (hand + weapon stay parented).
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
@@ -341,6 +343,29 @@ export function EditorChromeFpViewmodel({
           }}
         >
           Reset swing edits
+        </button>
+        <button
+          type="button"
+          style={{ ...rowBtn, flex: "1 1 100%", background: "#2a3a4a", border: "1px solid #4a6a8a" }}
+          onClick={() => {
+            const pres = getFpViewmodelPresenterForAuthoring();
+            if (!pres) {
+              showFpAuthorToast("Presenter not ready yet.", 4000);
+              return;
+            }
+            const keys = cloneDefaultFpMeleeSwingKeyframes();
+            setFpSwingKeyframesDraft(keys);
+            pres.setFpSwingAuthoringOverlay({
+              previewPhase01: fpSwingPreviewPhase01,
+              keyframes: keys,
+            });
+            showFpAuthorToast(
+              "Swing set to the shared engine default (crowbar-style track). Save layout to write JSON.",
+              6200,
+            );
+          }}
+        >
+          Reset swing to shared default
         </button>
       </div>
       {fpSwingKeyframesDraft ? (

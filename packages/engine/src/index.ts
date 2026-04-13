@@ -91,6 +91,8 @@ export {
 } from "./weapons/weaponRegistry.js";
 export { WeaponPresenter, type WeaponPresenterConfig } from "./weapons/WeaponPresenter.js";
 export {
+  cloneDefaultFpMeleeSwingKeyframes,
+  DEFAULT_FP_MELEE_SWING_KEYFRAMES,
   FP_GRIP_ANCHOR_MAX_ABS_M,
   FP_RIG_ROOT_MAX_ABS_M,
   FP_RIG_ROOT_XZ_MAX_ABS_M,

@@ -271,6 +271,105 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   let fpClickCandidate: { x: number; y: number } | null = null;
   let swingStrokeDragging = false;
   let swingStrokeBuf: { clientX: number; clientY: number }[] = [];
+  /** 2D stroke preview while painting a swing (sits above the WebGL canvas, below the tools panel). */
+  let swingStrokeOverlayEl: HTMLCanvasElement | null = null;
+
+  function onSwingStrokeOverlayWindowResize(): void {
+    if (!swingStrokeOverlayEl) return;
+    if (swingStrokeDragging && swingStrokeBuf.length > 0) {
+      redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
+    } else {
+      resizeSwingStrokeOverlayOnly();
+    }
+  }
+
+  function canvasHostCssSize(): { w: number; h: number } {
+    const parent = canvas.parentElement;
+    if (parent) {
+      return { w: Math.max(1, parent.clientWidth), h: Math.max(1, parent.clientHeight) };
+    }
+    return { w: Math.max(1, window.innerWidth), h: Math.max(1, window.innerHeight) };
+  }
+
+  function ensureSwingStrokeOverlayMounted(): void {
+    if (swingStrokeOverlayEl) return;
+    const el = document.createElement("canvas");
+    el.dataset.editorFpSwingStroke = "1";
+    el.style.position = "absolute";
+    el.style.left = "0";
+    el.style.top = "0";
+    el.style.width = "100%";
+    el.style.height = "100%";
+    el.style.pointerEvents = "none";
+    el.style.zIndex = "1";
+    const parent = canvas.parentElement;
+    if (parent) parent.appendChild(el);
+    else document.body.appendChild(el);
+    swingStrokeOverlayEl = el;
+    window.addEventListener("resize", onSwingStrokeOverlayWindowResize);
+  }
+
+  function resizeSwingStrokeOverlayOnly(): void {
+    if (!swingStrokeOverlayEl) return;
+    const { w, h } = canvasHostCssSize();
+    const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+    swingStrokeOverlayEl.width = Math.floor(w * dpr);
+    swingStrokeOverlayEl.height = Math.floor(h * dpr);
+    swingStrokeOverlayEl.style.width = `${w}px`;
+    swingStrokeOverlayEl.style.height = `${h}px`;
+  }
+
+  function redrawSwingStrokeOverlayFromBuf(buf: { clientX: number; clientY: number }[]): void {
+    ensureSwingStrokeOverlayMounted();
+    if (!swingStrokeOverlayEl) return;
+    resizeSwingStrokeOverlayOnly();
+    const ctx = swingStrokeOverlayEl.getContext("2d");
+    if (!ctx) return;
+    const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, swingStrokeOverlayEl.width, swingStrokeOverlayEl.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (buf.length === 0) return;
+    const r = canvas.getBoundingClientRect();
+    const lx = (cx: number) => cx - r.left;
+    const ly = (cy: number) => cy - r.top;
+    const p0 = buf[0]!;
+    const x0 = lx(p0.clientX);
+    const y0 = ly(p0.clientY);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(64, 255, 180, 1)";
+    ctx.lineWidth = 5;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.92)";
+    ctx.shadowBlur = 14;
+    if (buf.length === 1) {
+      ctx.fillStyle = "rgba(64, 255, 180, 0.95)";
+      ctx.beginPath();
+      ctx.arc(x0, y0, 8, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    for (let i = 1; i < buf.length; i++) {
+      ctx.lineTo(lx(buf[i]!.clientX), ly(buf[i]!.clientY));
+    }
+    ctx.stroke();
+  }
+
+  function clearSwingStrokeOverlay(): void {
+    if (!swingStrokeOverlayEl) return;
+    const ctx = swingStrokeOverlayEl.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, swingStrokeOverlayEl.width, swingStrokeOverlayEl.height);
+  }
+
+  function disposeSwingStrokeOverlay(): void {
+    window.removeEventListener("resize", onSwingStrokeOverlayWindowResize);
+    swingStrokeOverlayEl?.remove();
+    swingStrokeOverlayEl = null;
+  }
 
   let buildingRoot: THREE.Group | null = null;
   let lastBuiltContentEpoch = -1;
@@ -351,6 +450,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   function disposeFpViewmodelRuntimeOnly() {
     swingStrokeDragging = false;
     swingStrokeBuf = [];
+    clearSwingStrokeOverlay();
+    transformControls.enabled = true;
     resetWeaponPresentationEditorSyncStateForTeardown();
     disposeFpDefaultRigAnchor();
     registerFpViewmodelAuthoringBridge(null);
@@ -764,7 +865,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   const onPointerDown = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
-    if ((ev.target as HTMLElement) !== canvas) return;
+    if (ev.currentTarget !== canvas) return;
     const st = useEditorStore.getState();
     const pickCam =
       st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
@@ -778,17 +879,31 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
     const gizmoHits = raycaster.intersectObjects([transformRoot], true);
 
-    if (st.mode === "fp_viewmodel" && st.fpSwingStrokeArmed && fpSession?.getPresenter()) {
-      if (gizmoHits.length > 0) {
+    /**
+     * Paint swing: do **not** gate on gizmo ray hits. In FP gameplay the transform helper fills
+     * most rays through the lens, so intersectObjects would almost always “hit” and block strokes.
+     * Disable TransformControls for the drag so it does not compete for the same pointer.
+     */
+    if (st.mode === "fp_viewmodel" && st.fpSwingStrokeArmed) {
+      if (!fpSession?.getPresenter()) {
         useEditorStore.getState().setFpSwingStrokeArmed(false);
-        useEditorStore.getState().showFpAuthorToast("Paint swing disarmed (clicked transform gizmo).", 3200);
+        useEditorStore
+          .getState()
+          .showFpAuthorToast("FP viewmodel is still loading — wait for the hand/weapon, then arm paint again.", 5200);
         return;
       }
       swingStrokeDragging = true;
       swingStrokeBuf = [{ clientX: ev.clientX, clientY: ev.clientY }];
       useEditorStore.getState().setFpSwingStrokeArmed(false);
+      transformControls.enabled = false;
       canvas.setPointerCapture(ev.pointerId);
-      useEditorStore.getState().showFpAuthorToast("Swing stroke — drag, release to apply.", 3200);
+      redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
+      useEditorStore
+        .getState()
+        .showFpAuthorToast(
+          "Swing stroke — drag; a bright green line follows the pointer. Release to apply.",
+          4200,
+        );
       fpClickCandidate = null;
       return;
     }
@@ -826,6 +941,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     const last = swingStrokeBuf[swingStrokeBuf.length - 1];
     if (last && Math.hypot(ev.clientX - last.clientX, ev.clientY - last.clientY) < 2) return;
     swingStrokeBuf.push({ clientX: ev.clientX, clientY: ev.clientY });
+    redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
   };
   canvas.addEventListener("pointermove", onSwingStrokeMove);
 
@@ -833,6 +949,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     if (!swingStrokeDragging) return;
     swingStrokeDragging = false;
     swingStrokeBuf = [];
+    clearSwingStrokeOverlay();
+    transformControls.enabled = true;
     try {
       canvas.releasePointerCapture(ev.pointerId);
     } catch {
@@ -844,7 +962,6 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   const onPointerUp = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
-    if ((ev.target as HTMLElement) !== canvas) return;
     const st = useEditorStore.getState();
 
     if (swingStrokeDragging) {
@@ -896,6 +1013,9 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         useEditorStore
           .getState()
           .showFpAuthorToast(e instanceof Error ? e.message : String(e), 6800);
+      } finally {
+        transformControls.enabled = true;
+        clearSwingStrokeOverlay();
       }
       swingStrokeBuf = [];
       try {
@@ -905,6 +1025,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       }
       return;
     }
+
+    if (ev.currentTarget !== canvas) return;
 
     if (st.mode !== "fp_viewmodel") {
       fpClickCandidate = null;
@@ -1023,6 +1145,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   return () => {
     registerEditorSpawnCalculator(null);
     teardownFpSession();
+    disposeSwingStrokeOverlay();
     orbitControls.dispose();
     cancelAnimationFrame(raf);
     canvas.removeEventListener("pointerdown", onPointerDown);

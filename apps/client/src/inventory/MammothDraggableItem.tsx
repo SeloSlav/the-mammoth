@@ -5,6 +5,7 @@ import type {
   MammothDragSourceSlotInfo,
   MammothDropResult,
 } from "./inventoryDragDropTypes";
+import { mammothShowStackQuantityOnSlotIcon } from "./inventoryStackBadge";
 
 type Props = {
   item: MammothDraggedItemInfo["item"];
@@ -55,7 +56,7 @@ export function MammothDraggableItem({
           if (ref.current) ref.current.style.opacity = "0.45";
           onDragStartRef.current({ item, sourceSlot });
           const g = document.createElement("div");
-          g.style.cssText = `position:fixed;left:${ev.clientX + 8}px;top:${ev.clientY + 8}px;z-index:100000;pointer-events:none;padding:4px;background:rgba(0,0,0,0.75);border-radius:6px;border:1px solid rgba(120,200,255,0.5)`;
+          g.style.cssText = `position:fixed;left:${ev.clientX + 8}px;top:${ev.clientY + 8}px;z-index:100000;pointer-events:none;padding:4px;background:rgba(0,0,0,0.75);border-radius:6px;border:1px solid rgba(120,200,255,0.5);box-sizing:border-box;min-width:48px;min-height:48px`;
           const img = document.createElement("img");
           img.src = item.def.iconUrl;
           img.alt = item.def.displayName;
@@ -63,6 +64,13 @@ export function MammothDraggableItem({
           img.height = 40;
           img.style.objectFit = "contain";
           g.appendChild(img);
+          if (mammothShowStackQuantityOnSlotIcon(item.def, item.instance.quantity)) {
+            const q = document.createElement("div");
+            q.textContent = String(item.instance.quantity);
+            q.style.cssText =
+              "position:absolute;bottom:0;right:0;font-size:10px;font-weight:700;color:rgba(255,255,255,0.95);background:rgba(0,0,0,0.72);padding:1px 4px;border-radius:3px;line-height:1;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace";
+            g.appendChild(q);
+          }
           document.body.appendChild(g);
           ghostRef.current = g;
         }
@@ -131,6 +139,28 @@ export function MammothDraggableItem({
       }}
     >
       {children}
+      {mammothShowStackQuantityOnSlotIcon(item.def, item.instance.quantity) ? (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 2,
+            right: 3,
+            fontSize: 10,
+            fontWeight: 700,
+            lineHeight: 1,
+            color: "rgba(255,255,255,0.95)",
+            backgroundColor: "rgba(0,0,0,0.72)",
+            padding: "1px 4px",
+            borderRadius: 3,
+            userSelect: "none",
+            pointerEvents: "none",
+            zIndex: 2,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          }}
+        >
+          {item.instance.quantity}
+        </div>
+      ) : null}
     </div>
   );
 }

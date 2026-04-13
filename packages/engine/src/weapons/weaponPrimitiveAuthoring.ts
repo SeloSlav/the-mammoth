@@ -242,6 +242,46 @@ export function samplePrimitiveMeleeSwing(
   };
 }
 
+/**
+ * Canonical first-person melee swing used as the shared baseline (crowbar / baseball bat JSON;
+ * unarmed fallback in {@link LocalFirstPersonPresenter}). Editor “reset to default” clones this.
+ */
+export const DEFAULT_FP_MELEE_SWING_KEYFRAMES: readonly PrimitiveSwingKeyframe[] = [
+  {
+    t: 0,
+    rotationRad: { x: 0, y: 0, z: 0 },
+    translationM: { x: 0, y: 0, z: 0 },
+  },
+  {
+    t: 0.12,
+    rotationRad: { x: 0.18, y: 0, z: 0.02 },
+    translationM: { x: 0, y: 0.02, z: 0.05 },
+  },
+  {
+    t: 0.38,
+    rotationRad: { x: -1.55, y: -0.04, z: -0.06 },
+    translationM: { x: 0.05, y: -0.34, z: -0.58 },
+  },
+  {
+    t: 0.62,
+    rotationRad: { x: -0.45, y: 0, z: -0.02 },
+    translationM: { x: 0.02, y: -0.14, z: -0.22 },
+  },
+  {
+    t: 1,
+    rotationRad: { x: 0, y: 0, z: 0 },
+    translationM: { x: 0, y: 0, z: 0 },
+  },
+];
+
+export function cloneDefaultFpMeleeSwingKeyframes(): PrimitiveSwingKeyframe[] {
+  return DEFAULT_FP_MELEE_SWING_KEYFRAMES.map((k) => ({
+    t: k.t,
+    rotationRad: { ...k.rotationRad },
+    translationM: { ...k.translationM },
+  }));
+}
+
 function assertMountScaleMComponents(label: string, v: WeaponAuthorVec3): void {
   const lim = WEAPON_MOUNT_SCALE_MAX_ABS;
   if (Math.abs(v.x) > lim || Math.abs(v.y) > lim || Math.abs(v.z) > lim) {

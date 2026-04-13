@@ -23,15 +23,19 @@ describe("mammothItemCatalog", () => {
     }
   });
 
-  it("exposes starter consumables with stack metadata and placeholder icons", () => {
+  it("exposes starter consumables with stack metadata and HUD icon URLs", () => {
     const apple = getMammothItemDef("apple");
     const water = getMammothItemDef("water_bottle");
+    const rakija = getMammothItemDef("rakija");
     expect(apple?.maxStack).toBe(24);
     expect(water?.maxStack).toBe(20);
+    expect(rakija?.maxStack).toBe(12);
     expect(apple?.iconUrl?.length).toBeGreaterThan(8);
     expect(water?.iconUrl?.length).toBeGreaterThan(8);
+    expect(rakija?.iconUrl?.length).toBeGreaterThan(8);
     expect(getMammothDroppedWorldModelUrl("apple")).toBeUndefined();
     expect(getMammothDroppedWorldModelUrl("water_bottle")).toBeUndefined();
+    expect(getMammothDroppedWorldModelUrl("rakija")).toBeUndefined();
   });
 
   it("treats instant hotbar consume as catalog-driven (consumable + consumeOnUse), not id lists", () => {
@@ -48,5 +52,9 @@ describe("mammothItemCatalog", () => {
     const water = getMammothItemDef("water_bottle");
     expect(water?.consumeOnUse?.hydrationDelta).toBe(32);
     expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(true);
+
+    const rakija = getMammothItemDef("rakija");
+    expect(rakija?.consumeOnUse?.hydrationDelta).toBe(26);
+    expect(mammothItemDefSupportsHotbarInstantConsume(rakija)).toBe(true);
   });
 });
