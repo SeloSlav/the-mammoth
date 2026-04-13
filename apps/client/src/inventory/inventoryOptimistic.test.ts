@@ -17,6 +17,7 @@ function item(instanceNum: number, defId: string, qty: number, max: number): Mam
       category: "weapon",
       maxStack: max,
       construction: null,
+      consumeOnUse: null,
       iconUrl: "",
     },
   };

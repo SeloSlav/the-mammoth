@@ -110,6 +110,20 @@ export const PlayerPose = __t.object("PlayerPose", {
 });
 export type PlayerPose = __Infer<typeof PlayerPose>;
 
+export const PlayerVitals = __t.object("PlayerVitals", {
+  identity: __t.identity(),
+  health: __t.f32(),
+  hunger: __t.f32(),
+  hydration: __t.f32(),
+});
+export type PlayerVitals = __Infer<typeof PlayerVitals>;
+
+export const PlayerVitalsSchedule = __t.object("PlayerVitalsSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type PlayerVitalsSchedule = __Infer<typeof PlayerVitalsSchedule>;
+
 export const User = __t.object("User", {
   identity: __t.identity(),
   username: __t.option(__t.string()),

@@ -8,6 +8,7 @@ import {
   type PlacedObject,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
+import type { PrimitiveSwingKeyframe } from "@the-mammoth/engine";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
 
 /**
@@ -88,6 +89,17 @@ export interface EditorState {
   fpAuthorPickList: readonly FpAuthorPickMeta[];
   /** Which weapon’s `content/weapons/<id>.presentation.json` the FP tools edit / save. */
   fpAuthorWeaponId: FpAuthorWeaponId;
+  /** 0–1 along `firstPerson.meleeSwing` while authoring (head-pitch / fpRoot space). */
+  fpSwingPreviewPhase01: number;
+  /** In-memory swing track edits; `null` = follow weapon definition / disk until next capture. */
+  fpSwingKeyframesDraft: PrimitiveSwingKeyframe[] | null;
+  /** When true, the scene tick advances {@link fpSwingPreviewPhase01} for a looping preview. */
+  fpSwingPlayActive: boolean;
+  /**
+   * When true, the next left-button drag on the FP canvas (not on the transform gizmo) becomes a
+   * viewport swing stroke and builds {@link fpSwingKeyframesDraft}.
+   */
+  fpSwingStrokeArmed: boolean;
   /** Incremented only when 3D mesh regen is required (not on pure transform edits). */
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
@@ -121,6 +133,10 @@ export interface EditorState {
   bumpFpAuthorLive: () => void;
   setFpAuthorPickList: (list: readonly FpAuthorPickMeta[]) => void;
   setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
+  setFpSwingPreviewPhase01: (t: number) => void;
+  setFpSwingKeyframesDraft: (keys: PrimitiveSwingKeyframe[] | null) => void;
+  setFpSwingPlayActive: (on: boolean) => void;
+  setFpSwingStrokeArmed: (on: boolean) => void;
   /** FP disk save / frame result; clears after `ttlMs` unless replaced. */
   showFpAuthorToast: (message: string, ttlMs?: number) => void;
 
@@ -182,6 +198,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorToast: null,
   fpAuthorPickList: [],
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
+  fpSwingPreviewPhase01: 0,
+  fpSwingKeyframesDraft: null,
+  fpSwingPlayActive: false,
+  fpSwingStrokeArmed: false,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -247,6 +267,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         mode,
         ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(exitFp ? { fpSwingStrokeArmed: false } : {}),
       };
     }),
   setBuilding: (building) =>
@@ -309,8 +330,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setFpAuthorWeaponId: (fpAuthorWeaponId) =>
     set((s) => {
       if (s.fpAuthorWeaponId === fpAuthorWeaponId) return {};
-      return { fpAuthorWeaponId, fpAuthorLive: s.fpAuthorLive + 1 };
+      return {
+        fpAuthorWeaponId,
+        fpAuthorLive: s.fpAuthorLive + 1,
+        fpSwingPreviewPhase01: 0,
+        fpSwingKeyframesDraft: null,
+        fpSwingPlayActive: false,
+        fpSwingStrokeArmed: false,
+      };
     }),
+  setFpSwingPreviewPhase01: (fpSwingPreviewPhase01) =>
+    set({
+      fpSwingPreviewPhase01: Math.max(0, Math.min(1, fpSwingPreviewPhase01)),
+    }),
+  setFpSwingKeyframesDraft: (fpSwingKeyframesDraft) =>
+    set((s) => ({ fpSwingKeyframesDraft, fpAuthorLive: s.fpAuthorLive + 1 })),
+  setFpSwingPlayActive: (fpSwingPlayActive) => set({ fpSwingPlayActive }),
+  setFpSwingStrokeArmed: (fpSwingStrokeArmed) => set({ fpSwingStrokeArmed }),
   setFpAuthorPickList: (next) =>
     set((s) => {
       const same =

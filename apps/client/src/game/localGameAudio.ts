@@ -8,10 +8,11 @@
  * skipped. **Quality and loudness-matching beat raw count** — ten mismatched clips will always sound
  * worse than six mastered as a set.
  *
- * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset). Clips
+ * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset); footsteps
  * are **~1.00 s** each (hit early, tail pad OK). **Batch-normalize** after changing assets:
  * `pnpm content:normalize-footsteps` (RMS-match the set + shared peak ceiling; `--dry-run` first).
- * Stride-locked to `headBobPhase`. Call {@link LocalGameAudio.unlock} from a **user gesture**.
+ * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Call {@link LocalGameAudio.unlock}
+ * from a **user gesture**.
  */
 
 import { fpLocomotionConstants } from "@the-mammoth/engine";
@@ -37,6 +38,8 @@ const CROWBAR_SWING_STEMS = [
   `${UI_STEM}/weapon-crowbar-swing`,
   `${UI_STEM}/weapon-crowbar-swing-2`,
 ] as const;
+
+const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
 
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
@@ -89,6 +92,7 @@ export class LocalGameAudio {
   private impactBuffers: AudioBuffer[] = [];
   private crowbarSwingBuffers: AudioBuffer[] = [];
   private crowbarSwingRR = 0;
+  private itemPickBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -129,6 +133,17 @@ export class LocalGameAudio {
       );
     }
 
+    const itemPickUrl = await this.resolveSource(ITEM_PICK_STEM);
+    if (itemPickUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [itemPickUrl]);
+      this.itemPickBuffer = decoded[0] ?? null;
+    }
+    if (!this.itemPickBuffer) {
+      console.warn(
+        "[LocalGameAudio] Missing pickup UI asset: item-pick.wav under public/audio/ui/",
+      );
+    }
+
     if (this.impactBuffers.length === 0) {
       console.warn("[LocalGameAudio] Failed to decode footstep assets.");
       void ctx.close();
@@ -166,6 +181,7 @@ export class LocalGameAudio {
     this.footstepBus = null;
     this.impactBuffers = [];
     this.crowbarSwingBuffers = [];
+    this.itemPickBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
@@ -204,6 +220,26 @@ export class LocalGameAudio {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = 0.98 + Math.random() * 0.05;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
+  }
+
+  /** Short UI blip when a world drop is successfully granted to inventory (local client). */
+  playItemPickLocal(): void {
+    if (!this.unlocked || !this.ctx || !this.footstepBus || !this.itemPickBuffer) {
+      return;
+    }
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+    const buf = this.itemPickBuffer;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 0.44 * (0.94 + Math.random() * 0.12);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.99 + Math.random() * 0.04;
     src.connect(hitGain);
     hitGain.connect(bus);
     src.start(ctx.currentTime);

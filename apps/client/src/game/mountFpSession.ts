@@ -43,12 +43,13 @@ import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
+import { itemDefIdSupportsHotbarInstantConsume } from "./fpConsumableUse";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
-import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
+import { getHotbarSlotInventoryItem, resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
@@ -323,7 +324,12 @@ export async function mountFpSession(
   conn.db.player_pose.onInsert(onPoseInsert);
   conn.db.player_pose.onUpdate(onPoseUpdate);
 
-  const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF);
+  const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF, {
+    onPickupRemoved: async () => {
+      await localAudio.unlock();
+      localAudio.playItemPickLocal();
+    },
+  });
 
   let poseAoiSub: SubscriptionHandle | null = null;
   let poseAoiAnchorX = pos.x;
@@ -418,6 +424,29 @@ export async function mountFpSession(
     ) {
       e.preventDefault();
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
+    }
+    if (
+      e.code === "KeyV" &&
+      !e.repeat &&
+      !mammothInventoryOpen() &&
+      !isTextInputFocused()
+    ) {
+      e.preventDefault();
+      if (!conn.identity) return;
+      const slot = getFpHotbarSelectedSlot();
+      if (slot === null) return;
+      const stack = getHotbarSlotInventoryItem(conn, conn.identity, slot);
+      if (!stack || !itemDefIdSupportsHotbarInstantConsume(stack.defId)) return;
+      void (async () => {
+        try {
+          await conn.reducers.consumeHotbarItem({ hotbarSlot: slot });
+          setFpHotbarSelectedSlot(null);
+          lastSentHotbarRail = undefined;
+          syncActiveHotbarSlotToServer();
+        } catch (err) {
+          console.warn("[mountFpSession] consumeHotbarItem failed", err);
+        }
+      })();
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {

@@ -1,7 +1,8 @@
 /**
- * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for other players’ footsteps and
- * crowbar swings. The local player uses `LocalGameAudio` for immediate feedback and skips their
- * own replicated rows here (no double foot / swing).
+ * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for other players’ footsteps,
+ * crowbar swings, and world item pickups. The local player uses `LocalGameAudio` for immediate
+ * feedback where applicable and skips their own replicated rows here (no double foot / swing /
+ * pickup blip for the actor).
  */
 
 import * as THREE from "three";
@@ -12,6 +13,8 @@ import type { WorldSoundEvent } from "../module_bindings/types";
 
 export const WORLD_SOUND_KIND_FOOTSTEP = 0;
 export const WORLD_SOUND_KIND_CROWBAR_SWING = 1;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ITEM_PICKUP`. */
+export const WORLD_SOUND_KIND_ITEM_PICKUP = 2;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -20,6 +23,7 @@ const CROWBAR_STEMS = [
   `${UI_STEM}/weapon-crowbar-swing`,
   `${UI_STEM}/weapon-crowbar-swing-2`,
 ] as const;
+const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -29,6 +33,7 @@ export class WorldProximityAudio {
   private worldGain: GainNode | null = null;
   private footBuffers: readonly AudioBuffer[] = [];
   private crowbarBuffers: AudioBuffer[] = [];
+  private itemPickBuffer: AudioBuffer | null = null;
   private soundSub: SubscriptionHandle | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
 
@@ -39,7 +44,7 @@ export class WorldProximityAudio {
 
   /**
    * Wire into the same `AudioContext` as {@link LocalGameAudio} after unlock; decodes crowbar
-   * stems for replicated swings.
+   * stems and item-pick for replicated one-shots.
    */
   async attachSharedContext(
     ctx: AudioContext,
@@ -48,6 +53,7 @@ export class WorldProximityAudio {
     this.ctx = ctx;
     this.footBuffers = footstepBuffers;
     this.crowbarBuffers = await this.decodeCrowbarBuffers(ctx);
+    this.itemPickBuffer = await this.decodeItemPickBuffer(ctx);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -124,6 +130,7 @@ export class WorldProximityAudio {
     this.worldGain = null;
     this.footBuffers = [];
     this.crowbarBuffers = [];
+    this.itemPickBuffer = null;
     this.sourceCache.clear();
   }
 
@@ -145,6 +152,9 @@ export class WorldProximityAudio {
     } else if (row.kind === WORLD_SOUND_KIND_CROWBAR_SWING) {
       if (this.crowbarBuffers.length === 0) return;
       buf = this.crowbarBuffers[row.variation & 1]!;
+    } else if (row.kind === WORLD_SOUND_KIND_ITEM_PICKUP) {
+      if (!this.itemPickBuffer) return;
+      buf = this.itemPickBuffer;
     } else {
       return;
     }
@@ -176,10 +186,26 @@ export class WorldProximityAudio {
 
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    if (row.kind === WORLD_SOUND_KIND_ITEM_PICKUP) {
+      src.playbackRate.value = 0.99 + Math.random() * 0.04;
+    }
     src.connect(dry);
     dry.connect(panner);
     panner.connect(out);
     src.start(t);
+  }
+
+  private async decodeItemPickBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {
+    const url = await this.resolveSource(ITEM_PICK_STEM);
+    if (!url) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const ab = await res.arrayBuffer();
+      return await ctx.decodeAudioData(ab.slice(0));
+    } catch {
+      return null;
+    }
   }
 
   private async decodeCrowbarBuffers(ctx: AudioContext): Promise<AudioBuffer[]> {

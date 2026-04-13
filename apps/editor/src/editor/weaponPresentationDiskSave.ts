@@ -1,4 +1,4 @@
-import { ALL_WEAPON_DEFINITIONS, type WeaponDefinition } from "@the-mammoth/engine";
+import { ALL_WEAPON_DEFINITIONS, type PrimitiveSwingKeyframe, type WeaponDefinition } from "@the-mammoth/engine";
 import {
   buildWeaponFirstPersonMergeFromPicks,
   mergeWeaponFpViewmodelForSave,
@@ -21,11 +21,15 @@ export function isFpAuthorWeaponId(id: string): id is FpAuthorWeaponId {
  * Reads the live FP picks, merges into `content/weapons/<weaponId>.presentation.json`, validates,
  * POSTs to the editor middleware — same contract as the Save layout button.
  */
-export async function saveWeaponPresentationFromEditor(weaponId: FpAuthorWeaponId): Promise<void> {
+export async function saveWeaponPresentationFromEditor(
+  weaponId: FpAuthorWeaponId,
+  opts?: { meleeSwingDraft?: PrimitiveSwingKeyframe[] | null },
+): Promise<void> {
   const picks = getFpViewmodelAuthoringPicks();
   if (picks.length === 0) {
     throw new Error("Models are still loading — wait for the hand and weapon, then try again.");
   }
+  const swingDraft = opts?.meleeSwingDraft ?? null;
   const merge = buildWeaponFirstPersonMergeFromPicks(picks);
   const hasMount = merge.mount != null;
   const hasFp = merge.fpViewmodel != null;
@@ -48,6 +52,7 @@ export async function saveWeaponPresentationFromEditor(weaponId: FpAuthorWeaponI
       prev.fpViewmodel,
       merge.fpViewmodel as Record<string, unknown> | null,
     ),
+    ...(swingDraft && swingDraft.length > 0 ? { meleeSwing: swingDraft } : {}),
   };
   const json = JSON.stringify(cur, null, 2);
   assertValidWeaponPresentationJson(JSON.parse(json));

@@ -6,6 +6,8 @@ use log;
 use crate::auth;
 use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
 use crate::items_catalog;
+use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
+use crate::player_vitals;
 
 pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
 pub(crate) const NUM_PLAYER_HOTBAR_SLOTS: u8 = 6;
@@ -119,6 +121,7 @@ fn first_empty_hotbar_slot(ctx: &ReducerContext, owner: Identity) -> Option<u8> 
 }
 
 /// Add [`quantity`] of [`def_id`] into the player's inventory/hotbar (merge into stacks, then empty slots).
+/// New stacks use the lowest-index empty **hotbar** slot before any empty inventory slot (world pickups rely on this).
 pub(crate) fn try_grant_stack_to_player(
     ctx: &ReducerContext,
     owner: Identity,
@@ -165,12 +168,12 @@ pub(crate) fn try_grant_stack_to_player(
 
     while quantity > 0 {
         let take = quantity.min(max_stack);
-        if let Some(slot) = first_empty_inventory_slot(ctx, owner) {
+        if let Some(slot) = first_empty_hotbar_slot(ctx, owner) {
             let _ = inv.insert(InventoryItem {
                 instance_id: 0,
                 def_id: def_id.clone(),
                 quantity: take,
-                location: ItemLocation::Inventory(InventoryLocationData {
+                location: ItemLocation::Hotbar(HotbarLocationData {
                     owner_id: owner,
                     slot_index: slot,
                 }),
@@ -178,12 +181,12 @@ pub(crate) fn try_grant_stack_to_player(
             quantity -= take;
             continue;
         }
-        if let Some(slot) = first_empty_hotbar_slot(ctx, owner) {
+        if let Some(slot) = first_empty_inventory_slot(ctx, owner) {
             let _ = inv.insert(InventoryItem {
                 instance_id: 0,
                 def_id: def_id.clone(),
                 quantity: take,
-                location: ItemLocation::Hotbar(HotbarLocationData {
+                location: ItemLocation::Inventory(InventoryLocationData {
                     owner_id: owner,
                     slot_index: slot,
                 }),
@@ -366,12 +369,63 @@ pub fn move_item_to_hotbar(ctx: &ReducerContext, item_instance_id: u64, target_h
     }
 }
 
-/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3.
+/// Use one consumable from a hotbar slot: clears the combat rail (see `player_active_hotbar`), then
+/// removes one item and applies vitals from catalog [`items_catalog::instant_hotbar_consume_vital_deltas`].
+/// Caller should select that slot client-side before invoking.
+#[spacetimedb::reducer]
+pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("consume_hotbar_item blocked: {e}");
+        return;
+    }
+    let sender = ctx.sender();
+    if hotbar_slot >= NUM_PLAYER_HOTBAR_SLOTS {
+        log::warn!("consume_hotbar_item: invalid hotbar_slot {hotbar_slot}");
+        return;
+    }
+
+    if let Some(mut rail) = ctx.db.player_active_hotbar().identity().find(&sender) {
+        if rail.slot_index != ACTIVE_HOTBAR_SLOT_CLEARED {
+            rail.slot_index = ACTIVE_HOTBAR_SLOT_CLEARED;
+            ctx.db.player_active_hotbar().identity().update(rail);
+        }
+    }
+
+    let Some(item) = find_item_in_hotbar_slot(ctx, sender, hotbar_slot) else {
+        log::debug!("consume_hotbar_item: empty hotbar slot {hotbar_slot}");
+        return;
+    };
+    let Some((dhp, dh, dy)) = items_catalog::instant_hotbar_consume_vital_deltas(&item.def_id) else {
+        log::debug!(
+            "consume_hotbar_item: no instant use for {} (need category consumable + consumeOnUse vitals)",
+            item.def_id
+        );
+        return;
+    };
+
+    let instance_id = item.instance_id;
+    if let Err(e) = remove_player_item_quantity(ctx, instance_id, 1) {
+        log::warn!("consume_hotbar_item: remove failed: {e}");
+        return;
+    }
+
+    player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy);
+}
+
+/// Brand-new players (no inventory rows yet) spawn with melee tools in hotbar 0–3
+/// plus stackable `apple` / `water_bottle` in slots 4–5.
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
     if player_item_count(ctx, owner) > 0 {
         return;
     }
-    for def in ["knife", "crowbar", "srbosjek", "baseball_bat"] {
+    for def in [
+        "knife",
+        "crowbar",
+        "srbosjek",
+        "baseball_bat",
+        "apple",
+        "water_bottle",
+    ] {
         if !items_catalog::is_known_def(def) {
             log::error!("starter loadout: catalog missing {def}");
             return;
@@ -412,6 +466,24 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
         location: ItemLocation::Hotbar(HotbarLocationData {
             owner_id: owner,
             slot_index: 3,
+        }),
+    });
+    let _ = ctx.db.inventory_item().insert(InventoryItem {
+        instance_id: 0,
+        def_id: "apple".to_string(),
+        quantity: 8,
+        location: ItemLocation::Hotbar(HotbarLocationData {
+            owner_id: owner,
+            slot_index: 4,
+        }),
+    });
+    let _ = ctx.db.inventory_item().insert(InventoryItem {
+        instance_id: 0,
+        def_id: "water_bottle".to_string(),
+        quantity: 6,
+        location: ItemLocation::Hotbar(HotbarLocationData {
+            owner_id: owner,
+            slot_index: 5,
         }),
     });
 }

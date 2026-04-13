@@ -28,6 +28,22 @@
       "description": "Keeps you sharp for short sprints. Mild stamina buff placeholder (effect hook TBD).",
       "category": "consumable",
       "maxStack": 40
+    },
+    {
+      "id": "apple",
+      "displayName": "Apple",
+      "description": "Fresh fruit. Restores hunger when consumed (use hook TBD).",
+      "category": "consumable",
+      "maxStack": 24,
+      "consumeOnUse": { "hungerDelta": 24 }
+    },
+    {
+      "id": "water_bottle",
+      "displayName": "Water bottle",
+      "description": "Clear bottle. Restores hydration when consumed (use hook TBD).",
+      "category": "consumable",
+      "maxStack": 20,
+      "consumeOnUse": { "hydrationDelta": 32 }
     }
   ]
 }

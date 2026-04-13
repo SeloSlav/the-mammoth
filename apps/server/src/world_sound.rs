@@ -1,4 +1,4 @@
-//! Replicated one-shot sounds (footsteps, melee swings) for nearby players.
+//! Replicated one-shot sounds (footsteps, melee swings, world item pickup) for nearby players.
 //! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
 use spacetimedb::{
@@ -20,6 +20,8 @@ const BIT_CROUCH: u8 = 1 << 6;
 /// `world_sound_event.kind` — client maps to assets / mix.
 pub const KIND_FOOTSTEP: u8 = 0;
 pub const KIND_CROWBAR_SWING: u8 = 1;
+/// Successful `pickup_dropped_item` — one-shot at the drop’s world position (`variation` unused).
+pub const KIND_ITEM_PICKUP: u8 = 2;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -34,7 +36,7 @@ pub struct WorldSoundEvent {
     pub id: u64,
     /// See `KIND_*`.
     pub kind: u8,
-    /// Footsteps: stem index mod 6. Crowbar: 0 = swing-1, 1 = swing-2 WAV.
+    /// Footsteps: stem index mod 6. Crowbar: 0 = swing-1, 1 = swing-2 WAV. Item pickup: 0.
     pub variation: u8,
     pub x: f32,
     pub y: f32,
@@ -123,6 +125,27 @@ fn emit_world_sound(
         created_at: ctx.timestamp,
     };
     let _ = ctx.db.world_sound_event().insert(row);
+}
+
+/// One-shot at the drop position so nearby players hear the pickup (`emitter` = picker).
+pub fn emit_item_pickup_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_ITEM_PICKUP,
+        0,
+        x,
+        y,
+        z,
+        0.58,
+        18.0,
+        emitter,
+    );
 }
 
 /// Per-connection rows used by footsteps + melee cooldown.

@@ -34,6 +34,7 @@ import {
   resetWeaponPresentationEditorSyncStateForTeardown,
 } from "./weaponPresentationEditorSync.js";
 import { objectLivesUnderScene } from "./sceneGraphUtils.js";
+import { buildMeleeSwingKeyframesFromViewportStroke } from "./fpSwingViewportStroke.js";
 
 function emptyFloorDoc(floorDocId: string) {
   return FloorDocSchema.parse({ id: floorDocId, version: 1, objects: [] });
@@ -268,6 +269,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   scene.add(fpSelectionOutline);
 
   let fpClickCandidate: { x: number; y: number } | null = null;
+  let swingStrokeDragging = false;
+  let swingStrokeBuf: { clientX: number; clientY: number }[] = [];
 
   let buildingRoot: THREE.Group | null = null;
   let lastBuiltContentEpoch = -1;
@@ -346,6 +349,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   }
 
   function disposeFpViewmodelRuntimeOnly() {
+    swingStrokeDragging = false;
+    swingStrokeBuf = [];
     resetWeaponPresentationEditorSyncStateForTeardown();
     disposeFpDefaultRigAnchor();
     registerFpViewmodelAuthoringBridge(null);
@@ -477,6 +482,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         })();
         registerFpViewmodelAuthoringBridge({
           getPicks: () => fpSession?.getPresenter()?.getAuthoringPickList() ?? [],
+          getPresenter: () => fpSession?.getPresenter(),
           frameOrbitOnViewmodel: frameOrbitOnFpViewmodel,
           frameMountIntoGameplayView,
         });
@@ -771,6 +777,22 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     raycaster.setFromCamera(pointer, pickCam);
 
     const gizmoHits = raycaster.intersectObjects([transformRoot], true);
+
+    if (st.mode === "fp_viewmodel" && st.fpSwingStrokeArmed && fpSession?.getPresenter()) {
+      if (gizmoHits.length > 0) {
+        useEditorStore.getState().setFpSwingStrokeArmed(false);
+        useEditorStore.getState().showFpAuthorToast("Paint swing disarmed (clicked transform gizmo).", 3200);
+        return;
+      }
+      swingStrokeDragging = true;
+      swingStrokeBuf = [{ clientX: ev.clientX, clientY: ev.clientY }];
+      useEditorStore.getState().setFpSwingStrokeArmed(false);
+      canvas.setPointerCapture(ev.pointerId);
+      useEditorStore.getState().showFpAuthorToast("Swing stroke — drag, release to apply.", 3200);
+      fpClickCandidate = null;
+      return;
+    }
+
     if (gizmoHits.length > 0) {
       fpClickCandidate = null;
       return;
@@ -799,10 +821,91 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   canvas.addEventListener("pointerdown", onPointerDown);
 
+  const onSwingStrokeMove = (ev: PointerEvent) => {
+    if (!swingStrokeDragging) return;
+    const last = swingStrokeBuf[swingStrokeBuf.length - 1];
+    if (last && Math.hypot(ev.clientX - last.clientX, ev.clientY - last.clientY) < 2) return;
+    swingStrokeBuf.push({ clientX: ev.clientX, clientY: ev.clientY });
+  };
+  canvas.addEventListener("pointermove", onSwingStrokeMove);
+
+  const onSwingStrokeCancel = (ev: PointerEvent) => {
+    if (!swingStrokeDragging) return;
+    swingStrokeDragging = false;
+    swingStrokeBuf = [];
+    try {
+      canvas.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* not captured */
+    }
+    useEditorStore.getState().showFpAuthorToast("Swing stroke cancelled.", 2800);
+  };
+  canvas.addEventListener("pointercancel", onSwingStrokeCancel);
+
   const onPointerUp = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
     if ((ev.target as HTMLElement) !== canvas) return;
     const st = useEditorStore.getState();
+
+    if (swingStrokeDragging) {
+      swingStrokeDragging = false;
+      const lastPt = { clientX: ev.clientX, clientY: ev.clientY };
+      const lastPrev = swingStrokeBuf[swingStrokeBuf.length - 1];
+      if (!lastPrev || lastPrev.clientX !== lastPt.clientX || lastPrev.clientY !== lastPt.clientY) {
+        swingStrokeBuf.push(lastPt);
+      }
+
+      let pxLen = 0;
+      for (let i = 1; i < swingStrokeBuf.length; i++) {
+        const a = swingStrokeBuf[i - 1]!;
+        const b = swingStrokeBuf[i]!;
+        pxLen += Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+      }
+
+      try {
+        if (swingStrokeBuf.length < 3 || pxLen < 28) {
+          throw new Error("Stroke too short — drag a longer arc in the view.");
+        }
+        const pres = fpSession?.getPresenter();
+        if (!pres) throw new Error("Presenter not ready yet.");
+        fpSession?.syncWorldMatrices();
+        const pickCamUp =
+          st.fpAuthorCamera === "gameplay" && fpSession
+            ? fpSession.getGameplayCamera()
+            : camera;
+        const rectUp = canvas.getBoundingClientRect();
+        const rigRest = pres.getFpRigRestLocal();
+        const keys = buildMeleeSwingKeyframesFromViewportStroke({
+          clientPoints: swingStrokeBuf,
+          canvasRect: rectUp,
+          pickCamera: pickCamUp,
+          fpRoot: pres.getFpViewmodelAuthoringRoot(),
+          rigRestPositionLocal: rigRest.position,
+        });
+        const store = useEditorStore.getState();
+        store.setFpSwingKeyframesDraft(keys);
+        pres.setFpSwingAuthoringOverlay({
+          previewPhase01: store.fpSwingPreviewPhase01,
+          keyframes: keys,
+        });
+        store.showFpAuthorToast(
+          `Painted swing: ${keys.length} keyframes (motion in head-pitch space). Play or Save layout.`,
+          6200,
+        );
+      } catch (e) {
+        useEditorStore
+          .getState()
+          .showFpAuthorToast(e instanceof Error ? e.message : String(e), 6800);
+      }
+      swingStrokeBuf = [];
+      try {
+        canvas.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* not captured */
+      }
+      return;
+    }
+
     if (st.mode !== "fp_viewmodel") {
       fpClickCandidate = null;
       return;
@@ -843,6 +946,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   let raf = 0;
   let lastTickMs = performance.now();
   let lastWeaponPresentationPollMs = 0;
+  let fpSwingPlayStartMs = 0;
   const tick = () => {
     raf = requestAnimationFrame(tick);
     const now = performance.now();
@@ -851,6 +955,19 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     const st = useEditorStore.getState();
     if (st.mode === "fp_viewmodel" && fpSession?.getPresenter()) {
       const pres = fpSession.getPresenter()!;
+      if (st.fpSwingPlayActive) {
+        if (fpSwingPlayStartMs <= 0) fpSwingPlayStartMs = now;
+      } else {
+        fpSwingPlayStartMs = 0;
+      }
+      const swingDur = pres.getWeaponDefinition()?.primitiveSwingDurationS ?? 0.55;
+      const swingPhase = st.fpSwingPlayActive
+        ? (((now - fpSwingPlayStartMs) / 1000 / swingDur) % 1 + 1) % 1
+        : st.fpSwingPreviewPhase01;
+      pres.setFpSwingAuthoringOverlay({
+        previewPhase01: swingPhase,
+        keyframes: st.fpSwingKeyframesDraft,
+      });
       const tPoll = performance.now();
       if (tPoll - lastWeaponPresentationPollMs >= 600) {
         lastWeaponPresentationPollMs = tPoll;
@@ -909,6 +1026,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     orbitControls.dispose();
     cancelAnimationFrame(raf);
     canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onSwingStrokeMove);
+    canvas.removeEventListener("pointercancel", onSwingStrokeCancel);
     canvas.removeEventListener("pointerup", onPointerUp);
     unsub();
     ro.disconnect();

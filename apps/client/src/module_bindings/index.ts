@@ -36,12 +36,14 @@ import {
 // Import all reducer arg schemas
 import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
 import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
+import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DropItemReducer from "./drop_item_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
+import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
@@ -59,6 +61,8 @@ import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerInputRow from "./player_input_table";
 import PlayerMeleeCooldownRow from "./player_melee_cooldown_table";
 import PlayerPoseRow from "./player_pose_table";
+import PlayerVitalsRow from "./player_vitals_table";
+import PlayerVitalsScheduleRow from "./player_vitals_schedule_table";
 import UserRow from "./user_table";
 import WorldSoundEventRow from "./world_sound_event_table";
 import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
@@ -166,6 +170,28 @@ const tablesSchema = __schema({
       { name: 'player_pose_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, PlayerPoseRow),
+  player_vitals: __table({
+    name: 'player_vitals',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_vitals_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerVitalsRow),
+  player_vitals_schedule: __table({
+    name: 'player_vitals_schedule',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_vitals_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, PlayerVitalsScheduleRow),
   user: __table({
     name: 'user',
     indexes: [
@@ -205,12 +231,14 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
   __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
+  __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("drop_item", DropItemReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
+  __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),

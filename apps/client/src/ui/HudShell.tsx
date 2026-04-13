@@ -1,6 +1,7 @@
 import type { DbConnection } from "../module_bindings";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
+import { PlayerVitalsHud } from "./PlayerVitalsHud";
 
 type HudProps = {
   displayName: string;
@@ -32,7 +33,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         The Mammoth — <strong>{displayName}</strong>
         <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
           {
-            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory · 1–6 hotbar · E pick up nearby drops"
+            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory · 1–6 hotbar · V use selected stack if catalog defines instant consumeOnUse · E pick up nearby drops"
           }
         </div>
         <div style={{ marginTop: 8, pointerEvents: "auto" }}>
@@ -54,6 +55,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         </div>
       </div>
       {conn ? <MammothInventoryHud conn={conn} /> : null}
+      {conn ? <PlayerVitalsHud conn={conn} /> : null}
       <MammothPickupPromptHud />
     </>
   );

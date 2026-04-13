@@ -16,6 +16,13 @@ export type MammothConstruction = {
   materials: MammothConstructionIngredient[];
 };
 
+/** Matches catalog `consumeOnUse` — hotbar instant use (see server `instant_hotbar_consume_vital_deltas`). */
+export type MammothConsumeOnUse = {
+  healthDelta?: number;
+  hungerDelta?: number;
+  hydrationDelta?: number;
+};
+
 export type MammothItemDef = {
   id: string;
   displayName: string;
@@ -23,5 +30,7 @@ export type MammothItemDef = {
   category: ItemCategory;
   maxStack: number;
   construction: MammothConstruction | null;
+  /** Present when this def supports hotbar instant consume (V key). */
+  consumeOnUse: MammothConsumeOnUse | null;
   iconUrl: string;
 };

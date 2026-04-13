@@ -6,6 +6,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Tim
 use crate::auth;
 use crate::inventory::{get_player_item, remove_player_item_quantity, try_grant_stack_to_player};
 use crate::pose::{player_pose, PlayerPose};
+use crate::world_sound;
 
 /// Squared max distance (m²) from player feet to allow pickup.
 const PICKUP_RADIUS_SQ: f32 = 2.75 * 2.75;
@@ -184,7 +185,11 @@ fn pickup_dropped_item_inner(
 
     let def_id = dropped.def_id.clone();
     let qty = dropped.quantity;
+    let px = dropped.x;
+    let py = dropped.y;
+    let pz = dropped.z;
     try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
+    world_sound::emit_item_pickup_at(ctx, px, py, pz, sender);
     ctx.db.dropped_item().id().delete(dropped_item_id);
     log::info!(
         "pickup_dropped_item: {:?} picked up {}×{} (id {})",

@@ -141,7 +141,11 @@ export function useSpacetimeConnection(): SpacetimeSession {
                 bump();
               });
             })
-            .subscribe(["SELECT * FROM user", "SELECT * FROM inventory_item"]);
+            .subscribe([
+              "SELECT * FROM user",
+              "SELECT * FROM inventory_item",
+              "SELECT * FROM player_vitals",
+            ]);
           cc.db.user.onInsert((_ctx, row) => {
             if (cc.identity?.isEqual(row.identity)) bump();
           });

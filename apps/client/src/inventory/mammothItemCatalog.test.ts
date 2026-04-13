@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getMammothDroppedWorldModelUrl, getMammothItemDef } from "./mammothItemCatalog";
+import {
+  getMammothDroppedWorldModelUrl,
+  getMammothItemDef,
+  mammothItemDefSupportsHotbarInstantConsume,
+} from "./mammothItemCatalog";
+import { itemDefIdSupportsHotbarInstantConsume } from "../game/fpConsumableUse";
 
 describe("mammothItemCatalog", () => {
   it("exposes world model URLs for shipped melee defs", () => {
@@ -16,5 +21,32 @@ describe("mammothItemCatalog", () => {
       // Vite resolves `?url` imports to dev `/@fs/...` paths or build `/assets/...` URLs.
       expect(def?.iconUrl?.length).toBeGreaterThan(8);
     }
+  });
+
+  it("exposes starter consumables with stack metadata and placeholder icons", () => {
+    const apple = getMammothItemDef("apple");
+    const water = getMammothItemDef("water_bottle");
+    expect(apple?.maxStack).toBe(24);
+    expect(water?.maxStack).toBe(20);
+    expect(apple?.iconUrl?.length).toBeGreaterThan(8);
+    expect(water?.iconUrl?.length).toBeGreaterThan(8);
+    expect(getMammothDroppedWorldModelUrl("apple")).toBeUndefined();
+    expect(getMammothDroppedWorldModelUrl("water_bottle")).toBeUndefined();
+  });
+
+  it("treats instant hotbar consume as catalog-driven (consumable + consumeOnUse), not id lists", () => {
+    const rations = getMammothItemDef("field_rations");
+    expect(rations?.category).toBe("consumable");
+    expect(mammothItemDefSupportsHotbarInstantConsume(rations)).toBe(false);
+    expect(itemDefIdSupportsHotbarInstantConsume("field_rations")).toBe(false);
+
+    const apple = getMammothItemDef("apple");
+    expect(apple?.consumeOnUse?.hungerDelta).toBe(24);
+    expect(mammothItemDefSupportsHotbarInstantConsume(apple)).toBe(true);
+    expect(itemDefIdSupportsHotbarInstantConsume("apple")).toBe(true);
+
+    const water = getMammothItemDef("water_bottle");
+    expect(water?.consumeOnUse?.hydrationDelta).toBe(32);
+    expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(true);
   });
 });

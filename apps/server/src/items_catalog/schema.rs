@@ -10,6 +10,19 @@ pub struct CatalogShard {
     pub items: Vec<CatalogItem>,
 }
 
+/// Optional one-shot vitals when using a consumable from the hotbar (`consume_hotbar_item`).
+/// Omitted or all-zero/empty means the item is consumable in catalog only (no instant use yet).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsumeOnUseSpec {
+    #[serde(default)]
+    pub health_delta: Option<f32>,
+    #[serde(default)]
+    pub hunger_delta: Option<f32>,
+    #[serde(default)]
+    pub hydration_delta: Option<f32>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -21,6 +34,8 @@ pub struct CatalogItem {
     pub max_stack: u32,
     #[serde(default)]
     pub construction: Option<ConstructionSpec>,
+    #[serde(default)]
+    pub consume_on_use: Option<ConsumeOnUseSpec>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

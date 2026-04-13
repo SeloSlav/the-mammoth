@@ -11,9 +11,11 @@ import {
   FP_RIG_ROOT_Y_MIN_M,
   isFpRigRootPositionAuthorable,
   samplePrimitiveMeleeSwing,
+  type PrimitiveSwingKeyframe,
   type WeaponAuthorVec3,
 } from "../../weapons/weaponPrimitiveAuthoring.js";
 import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
+import { crowbarWeaponDefinition } from "../../weapons/sampleDefinitions.js";
 import type { MeleeCombatVisualSink } from "../combatVisuals.js";
 import { FP_MELEE_HAND_RIGHT } from "../fpViewmodelRefs.js";
 import {
@@ -142,6 +144,13 @@ export class LocalFirstPersonPresenter {
   private handScene?: THREE.Object3D;
   private weaponGripAnchor?: THREE.Group;
   private authoringFrozen = false;
+  /**
+   * Editor / tools: preview normalized swing phase on the frozen viewmodel (same space as
+   * `firstPerson.meleeSwing` — additive on {@link rigRestPos} under `fpRoot` / head pitch).
+   */
+  private swingAuthoringPreviewPhase: number | null = null;
+  /** When set, sampled instead of `weaponDefinition` track for swing preview + capture. */
+  private swingAuthoringKeyframes: PrimitiveSwingKeyframe[] | null = null;
   /** Scratch for {@link frameWeaponMountIntoGameplayCamera}. */
   private readonly _vmMountBox = new THREE.Box3();
   private readonly _vmMountCur = new THREE.Vector3();
@@ -160,12 +169,41 @@ export class LocalFirstPersonPresenter {
     this.driver = opts.animationDriver ?? new PrimitiveAnimationDriver();
     this.onMeleeVisual = opts.onMeleeVisual;
     this.fpRoot.name = "local_fp_viewmodel_root";
+    this.fpRoot.frustumCulled = false;
     this.viewModelParent.add(this.fpRoot);
 
     this.rightHandRig.name = "local_fp_right_hand_rig";
+    this.rightHandRig.frustumCulled = false;
     this.fpRoot.add(this.rightHandRig);
     this.refreshRigRestFromDefinition();
     this.applyRigRestToRightHandRig();
+  }
+
+  /**
+   * FP hand + rig framing when no weapon is equipped: reuse the shipped crowbar `fpViewmodel`
+   * authoring so the hand stays in the same camera volume as melee weapons (the generic
+   * shoulder defaults were only a legacy fallback and sit off-frustum vs gameplay pitch).
+   */
+  private fpLayoutDefinition(): WeaponDefinition {
+    return this.weaponDefinition ?? crowbarWeaponDefinition;
+  }
+
+  /**
+   * First-person melee swing keyframes: active weapon when present; otherwise crowbar’s track so
+   * unarmed punches use the same motion pipeline as equipped melee (rig additive on {@link rightHandRig}).
+   */
+  private resolveFpMeleeSwingTrack(): PrimitiveSwingKeyframe[] | undefined {
+    if (this.swingAuthoringKeyframes && this.swingAuthoringKeyframes.length > 0) {
+      return this.swingAuthoringKeyframes;
+    }
+    const fromEquipped = this.weaponDefinition?.primitivePresentation?.firstPerson?.meleeSwing;
+    if (fromEquipped && fromEquipped.length > 0) return fromEquipped;
+    if (!this.weaponDefinition) {
+      const fromUnarmedFallback =
+        crowbarWeaponDefinition.primitivePresentation?.firstPerson?.meleeSwing;
+      if (fromUnarmedFallback && fromUnarmedFallback.length > 0) return fromUnarmedFallback;
+    }
+    return undefined;
   }
 
   private resolveFpViewmodelLayout(): {
@@ -175,7 +213,7 @@ export class LocalFirstPersonPresenter {
     handScale: THREE.Vector3;
     weaponVisualScale: THREE.Vector3;
   } {
-    const fp = this.weaponDefinition?.primitivePresentation?.firstPerson?.fpViewmodel;
+    const fp = this.fpLayoutDefinition().primitivePresentation?.firstPerson?.fpViewmodel;
     return {
       gripPosition: vec3FromAuthorOr(fp?.gripAnchorPositionM, DEFAULT_FP_GRIP),
       handPosition: vec3FromAuthorOr(fp?.hand?.positionM, DEFAULT_FP_HAND_POS),
@@ -188,9 +226,41 @@ export class LocalFirstPersonPresenter {
   /** Runtime / editor: swap weapon mesh + authoring data (caller preloads `modelRef`). */
   setWeaponDefinition(def: WeaponDefinition | null): void {
     this.weaponDefinition = def;
+    this.swingAuthoringPreviewPhase = null;
+    this.swingAuthoringKeyframes = null;
     if (this.viewmodelReady && this.handScene && this.weaponGripAnchor) {
       this.reloadWeaponPresentationLayout();
     }
+  }
+
+  /**
+   * Editor: drive first-person swing preview while {@link setAuthoringFrozen} is true.
+   * `keyframes: null` uses the weapon definition’s track; a non-empty array overrides in-memory only.
+   */
+  setFpSwingAuthoringOverlay(opts: {
+    previewPhase01: number | null;
+    keyframes: PrimitiveSwingKeyframe[] | null;
+  }): void {
+    this.swingAuthoringPreviewPhase = opts.previewPhase01;
+    this.swingAuthoringKeyframes = opts.keyframes;
+  }
+
+  /** Same object as the `rigRoot` authoring pick — hand + weapon move together (additive swing in JSON). */
+  getFpSwingRigObject(): THREE.Object3D {
+    return this.rightHandRig;
+  }
+
+  /** Rest pose used before swing offsets (`fpViewmodel.rigRoot` + clamps). */
+  getFpRigRestLocal(): {
+    position: THREE.Vector3;
+    euler: THREE.Euler;
+    scale: THREE.Vector3;
+  } {
+    return {
+      position: this.rigRestPos.clone(),
+      euler: this.rigRestEuler.clone(),
+      scale: this.rigRestScale.clone(),
+    };
   }
 
   getWeaponDefinition(): WeaponDefinition | null {
@@ -198,7 +268,7 @@ export class LocalFirstPersonPresenter {
   }
 
   private refreshRigRestFromDefinition(): void {
-    const rr = this.weaponDefinition?.primitivePresentation?.firstPerson?.fpViewmodel?.rigRoot;
+    const rr = this.fpLayoutDefinition().primitivePresentation?.firstPerson?.fpViewmodel?.rigRoot;
     if (rr?.positionM && isFpRigRootPositionAuthorable(rr.positionM)) {
       this.rigRestPos.set(rr.positionM.x, rr.positionM.y, rr.positionM.z);
     } else {
@@ -226,15 +296,25 @@ export class LocalFirstPersonPresenter {
   /**
    * Toggle visibility of the stock FP hand GLB drawables only (not the weapon under
    * {@link weaponGripAnchor}), driven by {@link WeaponDefinition.fpHidesHandMesh}.
+   *
+   * GLTFs often ship helper groups or even the scene root with `visible: false`; that suppresses
+   * the whole subtree regardless of mesh flags, so we first force the hand branch (excluding the
+   * equipped weapon under the grip anchor) back to visible, then optionally hide drawables only.
    */
   private applyFpHandMeshVisibility(): void {
     const hide = this.weaponDefinition?.fpHidesHandMesh === true;
     if (!this.handScene || !this.weaponGripAnchor) return;
     const grip = this.weaponGripAnchor;
+    this.handScene.visible = true;
+    this.handScene.traverse((o) => {
+      if (isDescendantOfGrip(grip, o)) return;
+      o.visible = true;
+    });
+    if (!hide) return;
     this.handScene.traverse((o) => {
       if (isDescendantOfGrip(grip, o)) return;
       if (!FP_DRAWABLE_TYPES.has(o.type)) return;
-      o.visible = !hide;
+      o.visible = false;
     });
   }
 
@@ -251,6 +331,7 @@ export class LocalFirstPersonPresenter {
     this.handScene.scale.copy(fpLayout.handScale);
     this.handScene.traverse((o) => {
       o.castShadow = false;
+      o.frustumCulled = false;
     });
     this.rightHandRig.add(this.handScene);
 
@@ -279,7 +360,7 @@ export class LocalFirstPersonPresenter {
     const list: FpAuthoringPick[] = [];
     list.push({
       id: "rigRoot",
-      label: "Hand + weapon (camera / view offset)",
+      label: "Hand + weapon rig (rest pose + swing arc — same root)",
       object: this.rightHandRig,
     });
     if (this.handScene) {
@@ -521,6 +602,9 @@ export class LocalFirstPersonPresenter {
     if (!anchor) throw new Error("[LocalFirstPersonPresenter] grip anchor missing");
     const { pos, euler, scale } = this.computeWeaponGripMount();
     this.weapon.attachToFpHand(anchor, pos, euler, scale);
+    this.weapon.root.traverse((o) => {
+      o.frustumCulled = false;
+    });
   }
 
   update(state: LocalPlayerGameplayState, dt: number): void {
@@ -528,6 +612,26 @@ export class LocalFirstPersonPresenter {
     if (this.authoringFrozen) {
       this.fpRoot.rotation.set(-state.pitchRad, 0, 0);
       this.applyRigRestToRightHandRig();
+      const swingTrack = this.resolveFpMeleeSwingTrack();
+      const ph = this.swingAuthoringPreviewPhase;
+      if (ph !== null && swingTrack && swingTrack.length > 0) {
+        const u = THREE.MathUtils.clamp(ph, 0, 1);
+        const p = samplePrimitiveMeleeSwing(swingTrack, u);
+        this.rightHandRig.position.set(
+          this.rigRestPos.x + p.translationM.x,
+          this.rigRestPos.y + p.translationM.y,
+          this.rigRestPos.z + p.translationM.z,
+        );
+        this.rightHandRig.rotation.set(
+          this.rigRestEuler.x + p.rotationRad.x,
+          this.rigRestEuler.y + p.rotationRad.y,
+          this.rigRestEuler.z + p.rotationRad.z,
+        );
+        this.rightHandRig.scale.copy(this.rigRestScale);
+        this.weapon?.updateMeleeSwing(u);
+      } else {
+        this.weapon?.resetPose();
+      }
       return;
     }
     this.driver.setDesired({
@@ -559,7 +663,7 @@ export class LocalFirstPersonPresenter {
     const armSwing = moving ? sin2 * 0.1 * runMul : 0;
     const armSway = moving ? cos2 * 0.045 * runMul : 0;
 
-    const fpSwing = this.weaponDefinition?.primitivePresentation?.firstPerson?.meleeSwing;
+    const fpSwing = this.resolveFpMeleeSwingTrack();
     if (fpSwing && phase > 0) {
       const p = samplePrimitiveMeleeSwing(fpSwing, phase);
       this.rightHandRig.position.set(

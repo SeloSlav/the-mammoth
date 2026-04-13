@@ -4,7 +4,7 @@ import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import type { InventoryItem } from "../module_bindings/types";
 
-function itemInHotbarSlot(
+export function getHotbarSlotInventoryItem(
   conn: DbConnection,
   owner: Identity,
   slotIndex: number,
@@ -29,7 +29,7 @@ export function resolveHeldItemFromHotbar(
   selectedSlot: number | null,
 ): HeldItemId {
   if (selectedSlot === null) return "unarmed";
-  const row = itemInHotbarSlot(conn, owner, selectedSlot);
+  const row = getHotbarSlotInventoryItem(conn, owner, selectedSlot);
   if (!row) return "unarmed";
   return equippedHeldItemIdFromDefId(row.defId);
 }

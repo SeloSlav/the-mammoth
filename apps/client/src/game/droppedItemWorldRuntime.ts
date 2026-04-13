@@ -46,6 +46,23 @@ function droppedIdKey(id: DroppedItem["id"]): string {
   return typeof id === "bigint" ? id.toString() : String(id);
 }
 
+function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolean {
+  for (const r of conn.db.dropped_item) {
+    const row = r as DroppedItem;
+    const id = typeof row.id === "bigint" ? row.id : BigInt(row.id as number);
+    if (id === droppedItemId) return true;
+  }
+  return false;
+}
+
+export type MountDroppedItemsWorldOptions = {
+  /**
+   * Called after `pickup_dropped_item` settles and the dropped row is gone from the local cache
+   * (server granted the stack). Not called when pickup is a no-op (too far, inventory full, etc.).
+   */
+  onPickupRemoved?: () => void | Promise<void>;
+};
+
 /**
  * Subscribes to dropped items in an XZ AOI, renders GLB (or fallback box), and supports E pickup.
  */
@@ -53,6 +70,7 @@ export function mountDroppedItemsWorld(
   scene: THREE.Scene,
   conn: DbConnection,
   aoiHalfM: number,
+  options?: MountDroppedItemsWorldOptions,
 ): {
   subscribeAoi: (cx: number, cz: number) => void;
   tryPickupNearest: (x: number, y: number, z: number) => void;
@@ -173,9 +191,18 @@ export function mountDroppedItemsWorld(
   const tryPickupNearest = (x: number, y: number, z: number) => {
     if (!conn.identity) return;
     const hit = findNearestDroppedPickup(conn, x, y, z, MAMMOTH_PICKUP_RADIUS_M);
-    if (hit) {
-      void conn.reducers.pickupDroppedItem({ droppedItemId: hit.droppedItemId });
-    }
+    if (!hit) return;
+    const droppedItemId = hit.droppedItemId;
+    void (async () => {
+      try {
+        await conn.reducers.pickupDroppedItem({ droppedItemId });
+      } catch {
+        return;
+      }
+      if (!droppedItemRowExists(conn, droppedItemId)) {
+        await options?.onPickupRemoved?.();
+      }
+    })();
   };
 
   const dispose = () => {

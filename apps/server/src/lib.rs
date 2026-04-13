@@ -11,6 +11,7 @@ mod inventory_models;
 mod items_catalog;
 mod loadout;
 mod movement;
+mod player_vitals;
 mod pose;
 mod world_sound;
 
@@ -22,6 +23,7 @@ use pose::{player_pose, PlayerPose};
 pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
     movement::start_physics_schedule(ctx);
+    player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
     dropped_item::start_dropped_item_cleanup_schedule(ctx);
 }
@@ -52,6 +54,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     }
     movement::ensure_player_input_row(ctx, id, 0.0);
     world_sound::ensure_player_audio_rows(ctx, id);
+    player_vitals::ensure_player_vitals_row(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
