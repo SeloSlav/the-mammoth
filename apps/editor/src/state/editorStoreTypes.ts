@@ -1,4 +1,3 @@
-import type { PrimitiveSwingKeyframe } from "@the-mammoth/engine";
 import type {
   BuildingDoc,
   FloorDoc,
@@ -52,11 +51,6 @@ export interface EditorState {
   fpAuthorToast: string | null;
   fpAuthorPickList: readonly FpAuthorPickMeta[];
   fpAuthorWeaponId: FpAuthorWeaponId;
-  fpSwingPreviewPhase01: number;
-  fpSwingKeyframesDraft: PrimitiveSwingKeyframe[] | null;
-  fpSwingPlayActive: boolean;
-  fpSwingStrokeArmed: boolean;
-  fpSwingStrokeReviewActive: boolean;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -88,11 +82,6 @@ export interface EditorState {
   bumpFpAuthorLive: () => void;
   setFpAuthorPickList: (list: readonly FpAuthorPickMeta[]) => void;
   setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
-  setFpSwingPreviewPhase01: (t: number) => void;
-  setFpSwingKeyframesDraft: (keys: PrimitiveSwingKeyframe[] | null) => void;
-  setFpSwingPlayActive: (on: boolean) => void;
-  setFpSwingStrokeArmed: (on: boolean) => void;
-  setFpSwingStrokeReviewActive: (on: boolean) => void;
   showFpAuthorToast: (message: string, ttlMs?: number) => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;

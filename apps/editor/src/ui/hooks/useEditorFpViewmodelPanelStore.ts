@@ -17,15 +17,6 @@ export function useEditorFpViewmodelPanelStore() {
       setFpAuthorPitchRad: s.setFpAuthorPitchRad,
       fpAuthorToast: s.fpAuthorToast,
       showFpAuthorToast: s.showFpAuthorToast,
-      fpSwingPreviewPhase01: s.fpSwingPreviewPhase01,
-      setFpSwingPreviewPhase01: s.setFpSwingPreviewPhase01,
-      fpSwingKeyframesDraft: s.fpSwingKeyframesDraft,
-      setFpSwingKeyframesDraft: s.setFpSwingKeyframesDraft,
-      fpSwingPlayActive: s.fpSwingPlayActive,
-      setFpSwingPlayActive: s.setFpSwingPlayActive,
-      fpSwingStrokeArmed: s.fpSwingStrokeArmed,
-      setFpSwingStrokeArmed: s.setFpSwingStrokeArmed,
-      fpSwingStrokeReviewActive: s.fpSwingStrokeReviewActive,
     })),
   );
 }

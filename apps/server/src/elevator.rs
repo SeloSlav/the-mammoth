@@ -7,21 +7,24 @@ use spacetimedb::{ReducerContext, Table};
 use crate::auth;
 use crate::elevator_layout::{
     self, DoorFace, ElevShaftSpec, BUILDING_ORIGIN_Y, MAMUTH_ELEVATOR_SPECS, SKIN,
+    STOREY_SPACING_M,
 };
 use crate::pose::{player_pose, PlayerPose};
 
 /// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
 const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
-/// Must match client `ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M` (walk merge uses the same vertical band).
-const RIDER_SNAP_FEET_BELOW_CAB_M: f32 = 1.25;
-/// Must match client `ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M`.
-const RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M: f32 = 0.95;
+/// Same formula as client `ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M` (`DEFAULT_BUILDING_FLOOR_SPACING_M * 0.92`).
+const RIDER_SNAP_FEET_BELOW_CAB_M: f32 = STOREY_SPACING_M * 0.92;
+/// Same as client `ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M` (`STOREY_SPACING_M * 0.58`).
+const RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M: f32 = STOREY_SPACING_M * 0.58;
 /// Foot-center inset from inner half so walk merge foot circle stays valid (`FOOT_R` + 2cm). Sync client `ELEVATOR_CLAMP_FOOT_CLEARANCE_M`.
 const CAB_CLAMP_FOOT_CLEAR_M: f32 = 0.24;
 /// Door-axis inner edge before slack. Sync client `ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC`.
 const CAB_CLAMP_DOOR_AXIS_INNER_FRAC: f32 = 0.92;
 /// Pad around clamp AABB for rider snap / clamp **gate** (m). Sync client `ELEVATOR_CAB_PHYS_GATE_PAD_M`.
 const RIDER_PHYS_GATE_PAD_M: f32 = 0.26;
+/// Sync client `ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN`.
+const DOOR_EXIT_CLAMP_MIN_OPEN: f32 = 0.22;
 
 const PH_IDLE: u8 = 0;
 const PH_CLOSING: u8 = 1;
@@ -421,6 +424,26 @@ fn near_call_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
     true
 }
 
+/// Plate-local: in padded rider volume but only past the hard AABB on the door-outward face.
+/// See client `fpElevatorInDoorOutwardPadShellOnly`.
+fn in_door_outward_pad_shell_only(
+    door: DoorFace,
+    lx: f32,
+    lz: f32,
+    lx_min: f32,
+    lx_max: f32,
+    lz_min: f32,
+    lz_max: f32,
+    pad: f32,
+) -> bool {
+    match door {
+        DoorFace::E => lx > lx_max && lx <= lx_max + pad && lz >= lz_min && lz <= lz_max,
+        DoorFace::W => lx < lx_min && lx >= lx_min - pad && lz >= lz_min && lz <= lz_max,
+        DoorFace::N => lz > lz_max && lz <= lz_max + pad && lx >= lx_min && lx <= lx_max,
+        DoorFace::S => lz < lz_min && lz >= lz_min - pad && lx >= lx_min && lx <= lx_max,
+    }
+}
+
 /// Keep players from walking through cab shells; relax door side while doors are opening.
 ///
 /// Volume matches `player_rider_snap_grip` / client `fpElevatorPlateLocalInCabPhysicsVolume`.
@@ -430,6 +453,25 @@ pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
             continue;
         }
         let (lx_min, lx_max, lz_min, lz_max) = cab_plate_local_clamp_bounds(&car);
+        let lx = p.x - car.plate_x;
+        let lz = p.z - car.plate_z;
+        let pad = RIDER_PHYS_GATE_PAD_M;
+        let in_hard = lx >= lx_min && lx <= lx_max && lz >= lz_min && lz <= lz_max;
+        if !in_hard
+            && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
+            && in_door_outward_pad_shell_only(
+                door_face_from_u8(car.door_face),
+                lx,
+                lz,
+                lx_min,
+                lx_max,
+                lz_min,
+                lz_max,
+                pad,
+            )
+        {
+            continue;
+        }
         let xmin = car.plate_x + lx_min;
         let xmax = car.plate_x + lx_max;
         let zmin = car.plate_z + lz_min;

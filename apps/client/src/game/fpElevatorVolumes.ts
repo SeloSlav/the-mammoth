@@ -11,8 +11,9 @@ import {
   ELEVATOR_CLAMP_DOOR_SLACK_START,
   ELEVATOR_CLAMP_FOOT_CLEARANCE_M,
   ELEVATOR_CAB_PHYS_GATE_PAD_M,
-  ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M,
-  ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M,
+  ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
+  ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+  ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
 } from "./fpElevatorConstants.js";
 
 export type FpElevatorInnerExtents = { halfX: number; halfZ: number; innerH: number };
@@ -136,8 +137,8 @@ export function fpElevatorPlateLocalInCabPhysicsVolume(
   doorOpen01: number,
   inner: FpElevatorInnerExtents,
 ): boolean {
-  const yLo = cabFeetY - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
-  const yHi = cabFeetY + inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+  const yLo = cabFeetY - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
+  const yHi = cabFeetY + inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
   if (py < yLo || py > yHi) return false;
   const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
   const pad = ELEVATOR_CAB_PHYS_GATE_PAD_M;
@@ -165,6 +166,50 @@ export function fpElevatorRiderSnapContainsLocalPoint(
 }
 
 /**
+ * Rider is in the **padded** physics volume but only past the hard AABB on the **door-outward**
+ * face (not side walls / corners). There we must **not** XZ-clamp or the player can never cross
+ * `hard + pad` in finite steps (one-way sill). Matches server `elevator::in_door_outward_pad_shell`.
+ */
+export function fpElevatorInDoorOutwardPadShellOnly(
+  lx: number,
+  lz: number,
+  doorFace: ElevatorDoorFace,
+  b: { lxMin: number; lxMax: number; lzMin: number; lzMax: number },
+  pad: number,
+): boolean {
+  switch (doorFace) {
+    case "e":
+      return (
+        lx > b.lxMax &&
+        lx <= b.lxMax + pad &&
+        lz >= b.lzMin &&
+        lz <= b.lzMax
+      );
+    case "w":
+      return (
+        lx < b.lxMin &&
+        lx >= b.lxMin - pad &&
+        lz >= b.lzMin &&
+        lz <= b.lzMax
+      );
+    case "n":
+      return (
+        lz > b.lzMax &&
+        lz <= b.lzMax + pad &&
+        lx >= b.lxMin &&
+        lx <= b.lxMax
+      );
+    case "s":
+      return (
+        lz < b.lzMin &&
+        lz >= b.lzMin - pad &&
+        lx >= b.lxMin &&
+        lx <= b.lxMax
+      );
+  }
+}
+
+/**
  * Hard XZ box when feet are in the cab physics volume (door-aware, matches server clamp).
  */
 export function fpElevatorClampWorldXZToCabIfRider(
@@ -184,6 +229,15 @@ export function fpElevatorClampWorldXZToCabIfRider(
     return { x: wx, z: wz, didClamp: false };
   }
   const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
+  const pad = ELEVATOR_CAB_PHYS_GATE_PAD_M;
+  const inHard = lx >= b.lxMin && lx <= b.lxMax && lz >= b.lzMin && lz <= b.lzMax;
+  if (
+    !inHard &&
+    doorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN &&
+    fpElevatorInDoorOutwardPadShellOnly(lx, lz, doorFace, b, pad)
+  ) {
+    return { x: wx, z: wz, didClamp: false };
+  }
   const xmin = plateWorldX + b.lxMin;
   const xmax = plateWorldX + b.lxMax;
   const zmin = plateWorldZ + b.lzMin;

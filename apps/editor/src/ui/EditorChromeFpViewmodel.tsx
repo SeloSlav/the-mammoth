@@ -1,18 +1,9 @@
 import { useEffect, useState } from "react";
-import { ALL_WEAPON_DEFINITIONS, cloneDefaultFpMeleeSwingKeyframes } from "@the-mammoth/engine";
+import { ALL_WEAPON_DEFINITIONS } from "@the-mammoth/engine";
 import type { FpAuthorCameraKind, TransformMode } from "../state/editorStore.js";
-import { useEditorStore } from "../state/editorStore.js";
 import { useEditorFpViewmodelPanelStore } from "./hooks/useEditorFpViewmodelPanelStore.js";
-import { getFpViewmodelPresenterForAuthoring } from "../editor/fpViewmodelAuthoringBridge.js";
-import {
-  buildNextSwingKeyframesAfterCapture,
-} from "../editor/fpSwingAuthoring.js";
 import { isFpAuthorWeaponId, saveWeaponPresentationFromEditor } from "../editor/weaponPresentationDiskSave.js";
 import { frameFpMountIntoGameplayView } from "../editor/fpViewmodelAuthoringBridge.js";
-import {
-  cancelEditorSwingStrokeReview,
-  confirmEditorSwingStrokeReview,
-} from "../editor/editorSwingStrokeReviewBridge.js";
 import { editorChromeInput, editorChromeLabel, editorChromeRowBtn } from "./editorChromeStyles.js";
 
 type WeaponAssetSurvey = {
@@ -59,15 +50,6 @@ export function EditorChromeFpViewmodel({
     setFpAuthorPitchRad,
     fpAuthorToast,
     showFpAuthorToast,
-    fpSwingPreviewPhase01,
-    setFpSwingPreviewPhase01,
-    fpSwingKeyframesDraft,
-    setFpSwingKeyframesDraft,
-    fpSwingPlayActive,
-    setFpSwingPlayActive,
-    fpSwingStrokeArmed,
-    setFpSwingStrokeArmed,
-    fpSwingStrokeReviewActive,
   } = useEditorFpViewmodelPanelStore();
 
   const gizmoTargetValue =
@@ -82,11 +64,7 @@ export function EditorChromeFpViewmodel({
   const saveLayout = () => {
     void (async () => {
       try {
-        const meleeSwingDraft = useEditorStore.getState().fpSwingKeyframesDraft;
-        await saveWeaponPresentationFromEditor(fpAuthorWeaponId, { meleeSwingDraft });
-        if (meleeSwingDraft && meleeSwingDraft.length > 0) {
-          useEditorStore.getState().setFpSwingKeyframesDraft(null);
-        }
+        await saveWeaponPresentationFromEditor(fpAuthorWeaponId);
         showFpAuthorToast(
           "Saved. This preview is updated; the game dev client picks up the same layout automatically.",
         );
@@ -221,181 +199,6 @@ export function EditorChromeFpViewmodel({
           Fit in gameplay camera
         </button>
       </div>
-
-      <span style={label}>Melee swing (first person)</span>
-      <p style={{ fontSize: 10, opacity: 0.78, margin: "0 0 6px", lineHeight: 1.4 }}>
-        <strong>Paint swing</strong>: arm, then drag in the <strong>3D view</strong>. Your stroke is projected
-        onto a plane through the hand (camera-facing), so the path lives in <strong>real viewmodel space</strong>.
-        After release, <strong>white handles</strong> follow that 3D path on screen — drag them on the view
-        (left button; middle-drag still orbits in <strong>Orbit</strong> mode). Then <strong>Confirm</strong> to
-        write keyframes (yaw/pitch from tangent, roll from path bend). <strong>Esc</strong> cancels.{" "}
-        <strong>Play</strong> previews while you tune.
-      </p>
-      {fpSwingStrokeReviewActive ? (
-        <div
-          style={{
-            marginBottom: 10,
-            padding: "10px 10px",
-            background: "#2a3228",
-            border: "1px solid #4a6a4a",
-            borderRadius: 4,
-          }}
-        >
-          <p style={{ margin: "0 0 8px", fontSize: 11, lineHeight: 1.45, opacity: 0.92 }}>
-            <strong>Swing path review</strong> — drag handles on the 3D view (handles use the same sweep plane as
-            the stroke). Confirm to save this track to the layout (in memory), or cancel to discard this paint.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <button
-              type="button"
-              style={{ ...rowBtn, flex: 1, background: "#2a5a3a", border: "1px solid #3d8a55" }}
-              onClick={() => confirmEditorSwingStrokeReview()}
-            >
-              Confirm swing
-            </button>
-            <button
-              type="button"
-              style={{ ...rowBtn, flex: 1, background: "#4a2a2a", border: "1px solid #6a3a3a" }}
-              onClick={() => cancelEditorSwingStrokeReview()}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        <button
-          type="button"
-          disabled={fpSwingStrokeReviewActive}
-          style={{
-            ...rowBtn,
-            flex: "1 1 100%",
-            background: fpSwingStrokeArmed ? "#4a3a2a" : "#2a3a4a",
-            border: "1px solid #555",
-            opacity: fpSwingStrokeReviewActive ? 0.45 : 1,
-            cursor: fpSwingStrokeReviewActive ? "not-allowed" : "pointer",
-          }}
-          onClick={() => {
-            if (fpSwingStrokeReviewActive) return;
-            const next = !fpSwingStrokeArmed;
-            setFpSwingStrokeArmed(next);
-            if (next) {
-              showFpAuthorToast(
-                "Paint swing armed: drag on the 3D view (avoid gizmo handles). Release opens path review.",
-                5600,
-              );
-            }
-          }}
-        >
-          {fpSwingStrokeArmed ? "Cancel paint swing" : "Paint swing from viewport drag"}
-        </button>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 11, opacity: 0.85, minWidth: 52 }}>Scrub</span>
-        <input
-          style={{ flex: 1, ...input }}
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={fpSwingPreviewPhase01}
-          onChange={(e) => setFpSwingPreviewPhase01(Number(e.target.value))}
-        />
-        <span style={{ fontSize: 11, opacity: 0.85, width: 40, textAlign: "right" }}>
-          {fpSwingPreviewPhase01.toFixed(2)}
-        </span>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            flex: 1,
-            background: fpSwingPlayActive ? "#5a2a2a" : "#2a4a3a",
-            border: "1px solid #444",
-          }}
-          onClick={() => setFpSwingPlayActive(!fpSwingPlayActive)}
-        >
-          {fpSwingPlayActive ? "Stop swing" : "Play swing"}
-        </button>
-        <button
-          type="button"
-          style={{ ...rowBtn, flex: 1, background: "#3a3a5a", border: "1px solid #555" }}
-          onClick={() => {
-            const pres = getFpViewmodelPresenterForAuthoring();
-            if (!pres) {
-              showFpAuthorToast("Presenter not ready yet.", 4000);
-              return;
-            }
-            try {
-              const next = buildNextSwingKeyframesAfterCapture(
-                pres,
-                fpAuthorWeaponId,
-                fpSwingPreviewPhase01,
-                fpSwingKeyframesDraft,
-              );
-              setFpSwingKeyframesDraft(next);
-              pres.setFpSwingAuthoringOverlay({
-                previewPhase01: fpSwingPreviewPhase01,
-                keyframes: next,
-              });
-              showFpAuthorToast(`Keyframe at t≈${fpSwingPreviewPhase01.toFixed(2)} updated (${next.length} keys).`);
-            } catch (e) {
-              showFpAuthorToast(e instanceof Error ? e.message : String(e), 6000);
-            }
-          }}
-        >
-          Capture at scrub
-        </button>
-        <button
-          type="button"
-          style={{ ...rowBtn, flex: "1 1 100%", background: "#2a2a34", border: "1px solid #444" }}
-          onClick={() => {
-            setFpSwingKeyframesDraft(null);
-            const pres = getFpViewmodelPresenterForAuthoring();
-            pres?.setFpSwingAuthoringOverlay({
-              previewPhase01: fpSwingPreviewPhase01,
-              keyframes: null,
-            });
-            showFpAuthorToast("Swing edits cleared (using file / definition again).");
-          }}
-        >
-          Reset swing edits
-        </button>
-        <button
-          type="button"
-          style={{ ...rowBtn, flex: "1 1 100%", background: "#2a3a4a", border: "1px solid #4a6a8a" }}
-          onClick={() => {
-            const pres = getFpViewmodelPresenterForAuthoring();
-            if (!pres) {
-              showFpAuthorToast("Presenter not ready yet.", 4000);
-              return;
-            }
-            const keys = cloneDefaultFpMeleeSwingKeyframes();
-            setFpSwingKeyframesDraft(keys);
-            pres.setFpSwingAuthoringOverlay({
-              previewPhase01: fpSwingPreviewPhase01,
-              keyframes: keys,
-            });
-            showFpAuthorToast(
-              "Swing set to the shared engine default (crowbar-style track). Save layout to write JSON.",
-              6200,
-            );
-          }}
-        >
-          Reset swing to shared default
-        </button>
-      </div>
-      {fpSwingKeyframesDraft ? (
-        <p style={{ fontSize: 10, opacity: 0.75, margin: "0 0 10px" }}>
-          Unsaved swing keyframes: <strong>{fpSwingKeyframesDraft.length}</strong> — include in{" "}
-          <strong>Save layout</strong>.
-        </p>
-      ) : (
-        <p style={{ fontSize: 10, opacity: 0.65, margin: "0 0 10px" }}>
-          No in-memory swing override (disk track + scrub preview).
-        </p>
-      )}
 
       <span style={label}>Look pitch (rad)</span>
       <input

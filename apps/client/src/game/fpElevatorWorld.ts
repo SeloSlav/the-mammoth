@@ -18,8 +18,8 @@ import {
   CALL_Y_HALF_WINDOW,
   ELEVATOR_PHASE_MOVING,
   ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
-  ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M,
-  ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M,
+  ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+  ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
   type FpElevFloorPickUserData,
@@ -54,6 +54,7 @@ export {
   fpElevFloorPickRaycastShouldProceed,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorDoorSideSlackM,
+  fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorHudCarContainsLocalPoint,
   fpElevatorPlateLocalClampBounds,
   fpElevatorPlateLocalInCabPhysicsVolume,
@@ -222,7 +223,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const getCabY = (key: string, evalWallClockMs?: number): number => {
     const row = latest.get(key);
-    if (!row) return 0;
+    if (!row) return Number.NaN;
     if (row.phase !== ELEVATOR_PHASE_MOVING) {
       return row.cabFloorY;
     }
@@ -287,8 +288,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const cabFeet = getCabY(key, evalWallClockMs);
       if (!Number.isFinite(cabFeet)) continue;
       const feetY = probeTopY - fpLocomotionConstants.walkProbeDy;
-      const yLo = cabFeet - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
-      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+      const yLo = cabFeet - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
+      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
       if (feetY < yLo || feetY > yHi) {
         continue;
       }
@@ -334,8 +335,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       }
       const cabFeet = getCabY(key, opts.evalWallClockMs);
       if (!Number.isFinite(cabFeet)) continue;
-      const yLo = cabFeet - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
-      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+      const yLo = cabFeet - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
+      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
       if (feetY < yLo || feetY > yHi) {
         continue;
       }
@@ -359,6 +360,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const lx = px - (ox + row.plateX);
     const lz = pz - (oz + row.plateZ);
     const cabY = getCabY(key);
+    if (!Number.isFinite(cabY)) return false;
     return fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabY, vis.inner);
   };
 
@@ -393,6 +395,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (landingLevel === null) continue;
       const landingSupportY = feetYForLayout(layout, landingLevel);
       const cabY = getCabY(key);
+      if (!Number.isFinite(cabY)) continue;
       if (fpElevSuppressLandingHailBecauseCabAtLandingSupport(cabY, landingSupportY)) {
         continue;
       }
@@ -423,6 +426,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const vis = visuals.get(pick.shaftKey);
       if (!row || !layout || !vis) return false;
       const cabY = getCabY(pick.shaftKey);
+      if (!Number.isFinite(cabY)) return false;
       const lx = playerPos.x - (ox + row.plateX);
       const lz = playerPos.z - (oz + row.plateZ);
       const py = playerPos.y;
@@ -489,6 +493,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const vis = visuals.get(key);
       if (!row || !vis) continue;
       const cabY = getCabY(key);
+      if (!Number.isFinite(cabY)) continue;
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
       if (
@@ -513,10 +518,12 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const pz = playerPos.z;
 
     for (const [key, vis] of visuals) {
-      const cabY = getCabY(key);
-      const d = getDoor(key, nowMs);
-      vis.updateFromServer(cabY, d);
       const row = latest.get(key);
+      const cabY = row != null ? getCabY(key, nowMs) : Number.NaN;
+      const d = getDoor(key, nowMs);
+      if (Number.isFinite(cabY)) {
+        vis.updateFromServer(cabY, d);
+      }
       const flashActive = pickFlash.untilMs > nowMs && pickFlash.shaftKey === key;
       vis.updateFloorPickMaterials(
         Number(row?.currentLevel ?? 1),
@@ -524,7 +531,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         pickFlash.untilMs,
         nowMs,
       );
-      if (!row) {
+      if (!row || !Number.isFinite(cabY)) {
         vis.setFloorPickRootVisible(false);
         continue;
       }

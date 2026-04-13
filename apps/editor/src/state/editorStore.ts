@@ -67,11 +67,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorToast: null,
   fpAuthorPickList: [],
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
-  fpSwingPreviewPhase01: 0,
-  fpSwingKeyframesDraft: null,
-  fpSwingPlayActive: false,
-  fpSwingStrokeArmed: false,
-  fpSwingStrokeReviewActive: false,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -130,7 +125,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         mode,
         ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
-        ...(exitFp ? { fpSwingStrokeArmed: false, fpSwingStrokeReviewActive: false } : {}),
       };
     }),
   setBuilding: (building) =>
@@ -196,22 +190,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         fpAuthorWeaponId,
         fpAuthorLive: s.fpAuthorLive + 1,
-        fpSwingPreviewPhase01: 0,
-        fpSwingKeyframesDraft: null,
-        fpSwingPlayActive: false,
-        fpSwingStrokeArmed: false,
-        fpSwingStrokeReviewActive: false,
       };
     }),
-  setFpSwingPreviewPhase01: (fpSwingPreviewPhase01) =>
-    set({
-      fpSwingPreviewPhase01: Math.max(0, Math.min(1, fpSwingPreviewPhase01)),
-    }),
-  setFpSwingKeyframesDraft: (fpSwingKeyframesDraft) =>
-    set((s) => ({ fpSwingKeyframesDraft, fpAuthorLive: s.fpAuthorLive + 1 })),
-  setFpSwingPlayActive: (fpSwingPlayActive) => set({ fpSwingPlayActive }),
-  setFpSwingStrokeArmed: (fpSwingStrokeArmed) => set({ fpSwingStrokeArmed }),
-  setFpSwingStrokeReviewActive: (fpSwingStrokeReviewActive) => set({ fpSwingStrokeReviewActive }),
   setFpAuthorPickList: (next) =>
     set((s) => {
       const same =

@@ -118,8 +118,7 @@ export class FpViewmodelEditorSession {
 
   /**
    * Editor: advance head-pitch only (no {@link LocalFirstPersonPresenter#update}) while the
-   * transform gizmo is dragging. A full tick would re-apply the frozen swing preview and erase
-   * live edits on `rightHandRig` every frame.
+   * transform gizmo is dragging so gizmo-driven rig edits are not overwritten each frame.
    */
   applyAuthoringPitchOnly(pitchRad: number): void {
     if (this.disposed) return;

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevatorClampWorldXZToCabIfRider,
+  fpElevatorInDoorOutwardPadShellOnly,
+  fpElevatorPlateLocalClampBounds,
 } from "./fpElevatorVolumes.js";
 
 describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
@@ -73,5 +75,56 @@ describe("fpElevatorClampWorldXZToCabIfRider", () => {
     const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
     expect(r.didClamp).toBe(false);
     expect(r.x).toBe(wx);
+  });
+
+  it("does not clamp on the door-outward pad shell when the door is open (player can walk off)", () => {
+    const cx = 100;
+    const cz = 200;
+    const b = fpElevatorPlateLocalClampBounds("e", 1, inner);
+    const pad = 0.26;
+    const lx = b.lxMax + 0.12;
+    const lz = 0;
+    expect(fpElevatorInDoorOutwardPadShellOnly(lx, lz, "e", b, pad)).toBe(true);
+    const wx = cx + lx;
+    const wz = cz + lz;
+    const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 1, inner);
+    expect(r.didClamp).toBe(false);
+    expect(r.x).toBeCloseTo(wx, 5);
+  });
+
+  it("still clamps that shell when the door is closed (no popping through the sill)", () => {
+    const cx = 100;
+    const cz = 200;
+    const b = fpElevatorPlateLocalClampBounds("e", 0, inner);
+    const pad = 0.26;
+    const lx = b.lxMax + 0.12;
+    expect(fpElevatorInDoorOutwardPadShellOnly(lx, 0, "e", b, pad)).toBe(true);
+    const wx = cx + lx;
+    const wz = cz;
+    const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
+    expect(r.didClamp).toBe(true);
+    expect(r.x).toBeCloseTo(cx + b.lxMax, 5);
+  });
+
+  it("still clamps diagonal pad corners (not door-only outward)", () => {
+    const cx = 0;
+    const cz = 0;
+    const b = fpElevatorPlateLocalClampBounds("e", 1, inner);
+    const pad = 0.26;
+    const lx = b.lxMax + 0.1;
+    const lz = b.lzMax + 0.1;
+    expect(fpElevatorInDoorOutwardPadShellOnly(lx, lz, "e", b, pad)).toBe(false);
+    const r = fpElevatorClampWorldXZToCabIfRider(
+      cx + lx,
+      cz + lz,
+      py,
+      cabFeetY,
+      cx,
+      cz,
+      "e",
+      1,
+      inner,
+    );
+    expect(r.didClamp).toBe(true);
   });
 });

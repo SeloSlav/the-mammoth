@@ -1,5 +1,7 @@
 /** Shared dimensions / tuning for FP elevator cab + HUD (client + tests). */
 
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
+
 export const DOOR_W = 1.86;
 export const DOOR_H = 2.05;
 export const DOOR_TH = 0.07;
@@ -21,15 +23,24 @@ export const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M = 0.5;
  */
 export const ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS = 0.85;
 /**
- * Rider foot snap: allow feet this far below cab support (m) — rising car / physics timestep lag.
- * Must match server `elevator::RIDER_SNAP_FEET_BELOW_CAB_M`.
+ * Max distance **below** authoritative cab feet support (m) while still counting as “on this car”
+ * for walk merge, kinematic vy inheritance, rider snap/clamp, and server `player_rider_snap_grip`.
+ *
+ * **Derived from {@link DEFAULT_BUILDING_FLOOR_SPACING_M}** so fast vertical motion + net/replica
+ * lag cannot drop merge for a whole frame (fall-through), while the fraction stays **&lt; 1 storey**
+ * so another car one full level away is not pulled in by Y alone (XZ + `geom_top` vs probe still
+ * arbitrate walk).
+ *
+ * Must match server `elevator::RIDER_SNAP_FEET_BELOW_CAB_M` (= `STOREY_SPACING_M * 0.92`).
  */
-export const ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M = 1.25;
+export const ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.92;
 /**
- * Rider snap: clearance above cab ceiling line `cabFeetY + innerH` (m). Must match server
- * `elevator::RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M`.
+ * Clearance above inner cab top line `cabFeetY + innerH` (m) for the same predicates.
+ * Scales slightly with storey spacing for jump / substep slack.
+ *
+ * Must match server `elevator::RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M` (= `STOREY_SPACING_M * 0.58`).
  */
-export const ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M = 0.95;
+export const ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.58;
 /**
  * Foot-center clearance from hoistway inner half extents so the **walk foot circle** stays inside
  * the same XZ box as `mergeWalkTop` (`half − walkFootRadius − ε`). Match server
@@ -51,6 +62,12 @@ export const ELEVATOR_CLAMP_DOOR_SLACK_FULL_OPEN = 0.85;
  * Match server `elevator::RIDER_PHYS_GATE_PAD_M` (~foot radius so one sprint frame still arms clamp).
  */
 export const ELEVATOR_CAB_PHYS_GATE_PAD_M = 0.26;
+/**
+ * Below this door opening (0..1), cab XZ clamp still pulls the rider box closed — avoids popping
+ * through a shut door. When open past this, the **door-side pad shell** does not clamp so you can
+ * walk off the car through the opening (must match server `elevator::DOOR_EXIT_CLAMP_MIN_OPEN`).
+ */
+export const ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN = 0.22;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
 
