@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
 import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
-import { getWeaponDefinitionForEquippedPrimary } from "../../weapons/weaponRegistry.js";
+import { getWeaponDefinition } from "../../weapons/weaponRegistry.js";
 import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
 import { TP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
 
@@ -21,7 +21,7 @@ export class RemotePlayerPresenter {
   readonly root: THREE.Group;
   private humanoid: ReturnType<typeof buildPrimitiveHumanoid>;
   private weapon?: WeaponPresenter;
-  private equippedPrimary: HeldItemId = "crowbar";
+  private equippedPrimary: HeldItemId = "unarmed";
   private readonly modelRegistry: IModelLoadRegistry;
 
   constructor(scene: THREE.Scene, tint: number, modelRegistry: IModelLoadRegistry) {
@@ -31,7 +31,7 @@ export class RemotePlayerPresenter {
     this.humanoid = buildPrimitiveHumanoid({ tint });
     this.root.add(this.humanoid.root);
     scene.add(this.root);
-    this.syncWeapon("crowbar");
+    this.syncWeapon("unarmed");
   }
 
   private syncWeapon(equipped: ReplicatedPlayerSnapshot["equippedPrimary"]): void {
@@ -41,7 +41,11 @@ export class RemotePlayerPresenter {
     this.weapon = undefined;
     if (equipped === "unarmed") return;
 
-    const def = getWeaponDefinitionForEquippedPrimary(equipped);
+    const def = getWeaponDefinition(equipped);
+    if (!def) {
+      console.warn(`[RemotePlayerPresenter] no definition for equipped id "${equipped}"`);
+      return;
+    }
     const res = this.modelRegistry.instantiateLoaded(asGltf(def.modelRef));
     if (!res.ok) {
       console.error(`[RemotePlayerPresenter] weapon GLB (${def.id}): ${res.error}`);

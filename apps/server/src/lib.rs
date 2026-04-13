@@ -3,11 +3,13 @@
 
 mod accounts;
 mod auth;
+mod combat_stub;
 mod dropped_item;
 mod generated_walk_surfaces;
 mod inventory;
 mod inventory_models;
 mod items_catalog;
+mod loadout;
 mod movement;
 mod pose;
 mod world_sound;
@@ -51,6 +53,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     movement::ensure_player_input_row(ctx, id, 0.0);
     world_sound::ensure_player_audio_rows(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);
+    loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 
 #[spacetimedb::reducer(client_disconnected)]

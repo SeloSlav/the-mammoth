@@ -67,6 +67,8 @@ export const knifeWeaponDefinition: WeaponDefinition = {
 export const srbosjekWeaponDefinition: WeaponDefinition = {
   id: "srbosjek",
   displayName: "Šrbosjek",
+  /** Gloved weapon mesh replaces the FP stock hand. */
+  fpHidesHandMesh: true,
   primitivePresentation: srbosjekPrimitivePresentationBundled,
   modelRef: {
     kind: "gltf",

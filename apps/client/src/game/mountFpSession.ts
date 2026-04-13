@@ -43,7 +43,11 @@ import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
-import { getFpHotbarSelectedSlot, setFpHotbarSelectedSlot } from "./fpHotbarSelection";
+import {
+  getFpHotbarSelectedSlot,
+  setFpHotbarSelectedSlot,
+  subscribeFpHotbarSelection,
+} from "./fpHotbarSelection";
 import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
@@ -186,6 +190,23 @@ export async function mountFpSession(
   });
 
   const disposeWeaponPresentationHotReload = mountWeaponPresentationDevHotReload(presentation);
+
+  /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
+  const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
+  let lastSentHotbarRail: number | null | undefined = undefined;
+  const syncActiveHotbarSlotToServer = () => {
+    if (!conn.identity) return;
+    const slot = getFpHotbarSelectedSlot();
+    if (slot === lastSentHotbarRail) return;
+    lastSentHotbarRail = slot;
+    const slotIndex = slot === null ? ACTIVE_HOTBAR_SLOT_CLEARED : slot;
+    try {
+      void conn.reducers.setActiveHotbarSlot({ slotIndex });
+    } catch (err) {
+      console.warn("[mountFpSession] setActiveHotbarSlot failed", err);
+    }
+  };
+  const unsubHotbarRail = subscribeFpHotbarSelection(syncActiveHotbarSlotToServer);
 
   const interp = new PoseInterpBuffer();
   const lastRemote = new Map<string, LastXZ>();
@@ -553,6 +574,8 @@ export async function mountFpSession(
       camera.position.y = THREE.MathUtils.damp(camera.position.y, 0, 10, dt);
     }
 
+    syncActiveHotbarSlotToServer();
+
     const now = performance.now();
     if (now - lastNet >= NET_INTERVAL_MS && conn.identity) {
       lastNet = now;
@@ -661,6 +684,7 @@ export async function mountFpSession(
     disposeFpEnvironment();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
+    unsubHotbarRail();
     worldAudio.dispose();
     worldAudioReady = false;
     localAudio.dispose();

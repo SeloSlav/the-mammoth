@@ -50,11 +50,12 @@ export function equippedHeldItemIdFromDefId(defId: string): HeldItemId {
 }
 
 /**
- * Maps gameplay equip id → definition. Unknown ids fall back to crowbar until definitions exist.
+ * Maps gameplay equip id → definition for **active** weapon mesh + authoring.
+ * `"unarmed"` and unknown ids → `undefined` (first person shows hands only).
  */
-export function getWeaponDefinitionForEquippedPrimary(id: HeldItemId): WeaponDefinition {
-  if (id === "unarmed") return crowbarWeaponDefinition;
-  return getWeaponDefinition(id) ?? crowbarWeaponDefinition;
+export function getWeaponDefinitionForEquippedPrimary(id: HeldItemId): WeaponDefinition | undefined {
+  if (id === "unarmed") return undefined;
+  return getWeaponDefinition(id);
 }
 
 /**

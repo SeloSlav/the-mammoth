@@ -19,7 +19,7 @@ export type PlayerPresentationManagerOptions = {
   /** When omitted, a {@link createGltfModelLoadRegistry} is created for the session. */
   modelRegistry?: IModelLoadRegistry;
   onMeleeVisual?: MeleeCombatVisualSink;
-  /** First equipped weapon for FP viewmodel (defaults to crowbar). */
+  /** First equipped weapon for FP viewmodel (defaults to unarmed / hands only). */
   initialEquippedPrimary?: HeldItemId;
 };
 
@@ -52,8 +52,8 @@ export class PlayerPresentationManager {
    */
   static async create(opts: PlayerPresentationManagerOptions): Promise<PlayerPresentationManager> {
     const modelRegistry = opts.modelRegistry ?? createGltfModelLoadRegistry();
-    const initialEquipped = opts.initialEquippedPrimary ?? "crowbar";
-    const initialDef = getWeaponDefinitionForEquippedPrimary(initialEquipped);
+    const initialEquipped = opts.initialEquippedPrimary ?? "unarmed";
+    const initialDef = getWeaponDefinitionForEquippedPrimary(initialEquipped) ?? null;
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
       ...ALL_WEAPON_DEFINITIONS.map((d) => modelRegistry.preload(d.modelRef)),
@@ -76,7 +76,9 @@ export class PlayerPresentationManager {
   ): void {
     if (localState.equippedPrimary !== this.lastLocalEquipped) {
       this.lastLocalEquipped = localState.equippedPrimary;
-      this.local.setWeaponDefinition(getWeaponDefinitionForEquippedPrimary(localState.equippedPrimary));
+      this.local.setWeaponDefinition(
+        getWeaponDefinitionForEquippedPrimary(localState.equippedPrimary) ?? null,
+      );
     }
     this.local.update(localState, dt);
     const keep = new Set<string>();
@@ -129,7 +131,8 @@ export class PlayerPresentationManager {
    * No-op if the local viewmodel is showing a different weapon id.
    */
   reloadLocalWeaponPresentationLayoutForWeapon(weaponId: WeaponDefinition["id"]): void {
-    if (this.local.getWeaponDefinition().id === weaponId) {
+    const cur = this.local.getWeaponDefinition();
+    if (cur?.id === weaponId) {
       this.local.reloadWeaponPresentationLayout();
     }
   }

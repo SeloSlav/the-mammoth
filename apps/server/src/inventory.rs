@@ -45,7 +45,11 @@ fn find_item_in_inventory_slot(ctx: &ReducerContext, owner: Identity, slot: u16)
     })
 }
 
-fn find_item_in_hotbar_slot(ctx: &ReducerContext, owner: Identity, slot: u8) -> Option<InventoryItem> {
+pub(crate) fn find_item_in_hotbar_slot(
+    ctx: &ReducerContext,
+    owner: Identity,
+    slot: u8,
+) -> Option<InventoryItem> {
     ctx.db.inventory_item().iter().find(|i| {
         matches!(
             &i.location,

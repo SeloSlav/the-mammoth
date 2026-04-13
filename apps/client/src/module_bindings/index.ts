@@ -42,6 +42,7 @@ import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
+import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
@@ -53,6 +54,7 @@ import DroppedItemRow from "./dropped_item_table";
 import DroppedItemCleanupRow from "./dropped_item_cleanup_table";
 import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
+import PlayerActiveHotbarRow from "./player_active_hotbar_table";
 import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerInputRow from "./player_input_table";
 import PlayerMeleeCooldownRow from "./player_melee_cooldown_table";
@@ -109,6 +111,17 @@ const tablesSchema = __schema({
       { name: 'physics_tick_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
     ],
   }, PhysicsTickRow),
+  player_active_hotbar: __table({
+    name: 'player_active_hotbar',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_active_hotbar_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerActiveHotbarRow),
   player_foot_cadence: __table({
     name: 'player_foot_cadence',
     indexes: [
@@ -198,6 +211,7 @@ const reducersSchema = __reducers(
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
+  __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),

@@ -24,4 +24,9 @@ export type WeaponDefinition = {
    * When omitted, `WeaponPresenter` uses built-in defaults for the role.
    */
   primitivePresentation?: WeaponPrimitivePresentationDoc;
+  /**
+   * First-person only: the stock hand GLB is hidden so a “gloved” / hand-replacement weapon mesh
+   * can stand in (e.g. srbosjek). Weapon stays parented under the usual grip anchor.
+   */
+  fpHidesHandMesh?: boolean;
 };

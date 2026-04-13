@@ -1,6 +1,11 @@
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import type { CellPlacement, PlacedObject } from "@the-mammoth/schemas";
 import type { EditorState } from "../state/editorStore.js";
+
+function readScale(s: [number, number, number] | undefined): [number, number, number] {
+  return [s?.[0] ?? 1, s?.[1] ?? 1, s?.[2] ?? 1];
+}
 
 export function EditorChromeInspector(props: {
   selectedId: string | null;
@@ -36,6 +41,8 @@ export function EditorChromeInspector(props: {
     label,
     input,
   } = props;
+
+  const [uniformScale, setUniformScale] = useState(false);
 
   return (
     <>
@@ -81,6 +88,23 @@ export function EditorChromeInspector(props: {
             ))}
           </div>
           <label style={label}>scale</label>
+          <label
+            style={{
+              ...label,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              marginBottom: 4,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={uniformScale}
+              onChange={(e) => setUniformScale(e.target.checked)}
+            />
+            Uniform (lock X/Y/Z)
+          </label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {([0, 1, 2] as const).map((i) => (
               <input
@@ -88,15 +112,15 @@ export function EditorChromeInspector(props: {
                 style={input}
                 type="number"
                 step={0.05}
-                value={selectedFloorObj.scale?.[i] ?? 1}
+                value={readScale(selectedFloorObj.scale)[i]}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  const p = [
-                    selectedFloorObj.scale?.[0] ?? 1,
-                    selectedFloorObj.scale?.[1] ?? 1,
-                    selectedFloorObj.scale?.[2] ?? 1,
-                  ] as [number, number, number];
-                  p[i] = Number.isFinite(v) ? v : 1;
+                  const t = Number.isFinite(v) ? v : 1;
+                  const prev = readScale(selectedFloorObj.scale);
+                  const p = uniformScale
+                    ? ([t, t, t] as [number, number, number])
+                    : ([...prev] as [number, number, number]);
+                  if (!uniformScale) p[i] = t;
                   updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
                     scale: p,
                   });
@@ -190,6 +214,23 @@ export function EditorChromeInspector(props: {
             ))}
           </div>
           <label style={label}>scale</label>
+          <label
+            style={{
+              ...label,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              marginBottom: 4,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={uniformScale}
+              onChange={(e) => setUniformScale(e.target.checked)}
+            />
+            Uniform (lock X/Y/Z)
+          </label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {([0, 1, 2] as const).map((i) => (
               <input
@@ -197,15 +238,15 @@ export function EditorChromeInspector(props: {
                 style={input}
                 type="number"
                 step={0.05}
-                value={selectedInteriorPl.scale?.[i] ?? 1}
+                value={readScale(selectedInteriorPl.scale)[i]}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  const p = [
-                    selectedInteriorPl.scale?.[0] ?? 1,
-                    selectedInteriorPl.scale?.[1] ?? 1,
-                    selectedInteriorPl.scale?.[2] ?? 1,
-                  ] as [number, number, number];
-                  p[i] = Number.isFinite(v) ? v : 1;
+                  const t = Number.isFinite(v) ? v : 1;
+                  const prev = readScale(selectedInteriorPl.scale);
+                  const p = uniformScale
+                    ? ([t, t, t] as [number, number, number])
+                    : ([...prev] as [number, number, number]);
+                  if (!uniformScale) p[i] = t;
                   updateInteriorPlacement(
                     activeInteriorDocId,
                     selectedInteriorPl.entityId,

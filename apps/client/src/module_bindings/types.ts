@@ -68,6 +68,12 @@ export const PhysicsTick = __t.object("PhysicsTick", {
 });
 export type PhysicsTick = __Infer<typeof PhysicsTick>;
 
+export const PlayerActiveHotbar = __t.object("PlayerActiveHotbar", {
+  identity: __t.identity(),
+  slotIndex: __t.u8(),
+});
+export type PlayerActiveHotbar = __Infer<typeof PlayerActiveHotbar>;
+
 export const PlayerFootCadence = __t.object("PlayerFootCadence", {
   identity: __t.identity(),
   stridePhase: __t.f32(),

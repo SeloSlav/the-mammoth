@@ -6,6 +6,7 @@ use spacetimedb::{
 };
 
 use crate::auth;
+use crate::combat_stub;
 use crate::movement::PlayerInput;
 use crate::pose::{player_pose, PlayerPose};
 
@@ -239,6 +240,12 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
     }
     cd.last_swing_micros = now_us;
     ctx.db.player_melee_cooldown().identity().update(cd);
+
+    let stub_damage = combat_stub::stub_melee_damage_for_active_loadout(ctx, id);
+    log::debug!(
+        "submit_melee_swing: stub base damage {:.2} (active hotbar; hit validation not implemented)",
+        stub_damage
+    );
 
     let v = ((now_us >> 7) as u8) & 1;
     emit_world_sound(

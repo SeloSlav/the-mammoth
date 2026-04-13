@@ -23,7 +23,7 @@ export function applyWeaponPresentationFileTextToPresenter(
 ): void {
   const doc = parseWeaponPrimitivePresentationDoc(JSON.parse(text));
   applyWeaponPrimitivePresentationDoc(weaponId, doc);
-  if (presenter.getWeaponDefinition().id === weaponId) {
+  if (presenter.getWeaponDefinition()?.id === weaponId) {
     presenter.reloadWeaponPresentationLayout();
   }
 }

@@ -318,6 +318,12 @@ export function EditorChrome() {
           </button>
         ))}
       </div>
+      {transformMode === "scale" ? (
+        <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+          Viewport: drag the <strong>center</strong> scale handle (white cube) for uniform scale. Axis
+          handles change one dimension only.
+        </p>
+      ) : null}
       <span style={label}>Grid snap (m / deg-ish for rotate)</span>
       <input
         style={input}

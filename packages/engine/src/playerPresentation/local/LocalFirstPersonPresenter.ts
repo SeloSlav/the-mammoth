@@ -26,8 +26,8 @@ export type LocalFirstPersonPresenterOptions = {
   /** Where `fpRoot` attaches — use `headPitch` from {@link createFPRig}, not the camera. */
   viewModelParent: THREE.Object3D;
   modelRegistry: IModelLoadRegistry;
-  /** Active weapon (mount + swing + FP layout read from `primitivePresentation`). */
-  weaponDefinition: WeaponDefinition;
+  /** Active weapon, or `null` for hands-only (no weapon mesh). */
+  weaponDefinition: WeaponDefinition | null;
   /** Optional injection for tests / GLTF path later. */
   animationDriver?: IAnimationDriver;
   onMeleeVisual?: MeleeCombatVisualSink;
@@ -99,6 +99,25 @@ function asGltf(ref: ModelRef): GltfRef {
   return ref;
 }
 
+const FP_DRAWABLE_TYPES = new Set([
+  "Mesh",
+  "SkinnedMesh",
+  "InstancedMesh",
+  "Line",
+  "LineSegments",
+  "LineLoop",
+  "Points",
+]);
+
+function isDescendantOfGrip(ancestor: THREE.Object3D, o: THREE.Object3D): boolean {
+  let p: THREE.Object3D | null = o;
+  while (p) {
+    if (p === ancestor) return true;
+    p = p.parent;
+  }
+  return false;
+}
+
 export type FpAuthoringPick = { id: string; label: string; object: THREE.Object3D };
 
 /**
@@ -106,7 +125,7 @@ export type FpAuthoringPick = { id: string; label: string; object: THREE.Object3
  * GLB right hand + GLB weapon; swing keyframes drive {@link rightHandRig}.
  */
 export class LocalFirstPersonPresenter {
-  private weaponDefinition: WeaponDefinition;
+  private weaponDefinition: WeaponDefinition | null;
   private readonly viewModelParent: THREE.Object3D;
   private readonly modelRegistry: IModelLoadRegistry;
   private readonly fpRoot = new THREE.Group();
@@ -156,7 +175,7 @@ export class LocalFirstPersonPresenter {
     handScale: THREE.Vector3;
     weaponVisualScale: THREE.Vector3;
   } {
-    const fp = this.weaponDefinition.primitivePresentation?.firstPerson?.fpViewmodel;
+    const fp = this.weaponDefinition?.primitivePresentation?.firstPerson?.fpViewmodel;
     return {
       gripPosition: vec3FromAuthorOr(fp?.gripAnchorPositionM, DEFAULT_FP_GRIP),
       handPosition: vec3FromAuthorOr(fp?.hand?.positionM, DEFAULT_FP_HAND_POS),
@@ -167,19 +186,19 @@ export class LocalFirstPersonPresenter {
   }
 
   /** Runtime / editor: swap weapon mesh + authoring data (caller preloads `modelRef`). */
-  setWeaponDefinition(def: WeaponDefinition): void {
+  setWeaponDefinition(def: WeaponDefinition | null): void {
     this.weaponDefinition = def;
     if (this.viewmodelReady && this.handScene && this.weaponGripAnchor) {
       this.reloadWeaponPresentationLayout();
     }
   }
 
-  getWeaponDefinition(): WeaponDefinition {
+  getWeaponDefinition(): WeaponDefinition | null {
     return this.weaponDefinition;
   }
 
   private refreshRigRestFromDefinition(): void {
-    const rr = this.weaponDefinition.primitivePresentation?.firstPerson?.fpViewmodel?.rigRoot;
+    const rr = this.weaponDefinition?.primitivePresentation?.firstPerson?.fpViewmodel?.rigRoot;
     if (rr?.positionM && isFpRigRootPositionAuthorable(rr.positionM)) {
       this.rigRestPos.set(rr.positionM.x, rr.positionM.y, rr.positionM.z);
     } else {
@@ -204,6 +223,21 @@ export class LocalFirstPersonPresenter {
     this.rightHandRig.scale.copy(this.rigRestScale);
   }
 
+  /**
+   * Toggle visibility of the stock FP hand GLB drawables only (not the weapon under
+   * {@link weaponGripAnchor}), driven by {@link WeaponDefinition.fpHidesHandMesh}.
+   */
+  private applyFpHandMeshVisibility(): void {
+    const hide = this.weaponDefinition?.fpHidesHandMesh === true;
+    if (!this.handScene || !this.weaponGripAnchor) return;
+    const grip = this.weaponGripAnchor;
+    this.handScene.traverse((o) => {
+      if (isDescendantOfGrip(grip, o)) return;
+      if (!FP_DRAWABLE_TYPES.has(o.type)) return;
+      o.visible = !hide;
+    });
+  }
+
   async initViewmodel(): Promise<void> {
     if (this.viewmodelReady) return;
     const hand = this.modelRegistry.instantiateLoaded(FP_MELEE_HAND_RIGHT);
@@ -225,7 +259,10 @@ export class LocalFirstPersonPresenter {
     this.weaponGripAnchor.position.copy(fpLayout.gripPosition);
     this.handScene.add(this.weaponGripAnchor);
 
-    this.equipWeaponFromDefinition();
+    if (this.weaponDefinition) {
+      this.equipWeaponFromDefinition();
+    }
+    this.applyFpHandMeshVisibility();
     this.viewmodelReady = true;
   }
 
@@ -251,7 +288,7 @@ export class LocalFirstPersonPresenter {
     if (this.weaponGripAnchor) {
       list.push({ id: "gripAnchor", label: "Weapon grip anchor (socket on hand)", object: this.weaponGripAnchor });
     }
-    if (this.weapon) {
+    if (this.weapon && this.weaponDefinition) {
       const dn = this.weaponDefinition.displayName;
       list.push({
         id: "weaponRoot",
@@ -420,7 +457,7 @@ export class LocalFirstPersonPresenter {
     euler: THREE.Euler;
     scale: THREE.Vector3;
   } {
-    const pres = this.weaponDefinition.primitivePresentation?.firstPerson;
+    const pres = this.weaponDefinition?.primitivePresentation?.firstPerson;
     if (!pres) {
       return {
         pos: new THREE.Vector3(),
@@ -459,10 +496,16 @@ export class LocalFirstPersonPresenter {
     this.handScene.scale.copy(lay.handScale);
     this.weaponGripAnchor.position.copy(lay.gripPosition);
     this.equipWeaponFromDefinition();
+    this.applyFpHandMeshVisibility();
   }
 
   private equipWeaponFromDefinition(): void {
     this.weapon?.dispose(this.fpRoot);
+    this.weapon = undefined;
+    if (!this.weaponDefinition) {
+      this.applyFpHandMeshVisibility();
+      return;
+    }
     const res = this.modelRegistry.instantiateLoaded(asGltf(this.weaponDefinition.modelRef));
     if (!res.ok) {
       throw new Error(`[LocalFirstPersonPresenter] weapon GLB (${this.weaponDefinition.id}): ${res.error}`);
@@ -516,7 +559,7 @@ export class LocalFirstPersonPresenter {
     const armSwing = moving ? sin2 * 0.1 * runMul : 0;
     const armSway = moving ? cos2 * 0.045 * runMul : 0;
 
-    const fpSwing = this.weaponDefinition.primitivePresentation?.firstPerson?.meleeSwing;
+    const fpSwing = this.weaponDefinition?.primitivePresentation?.firstPerson?.meleeSwing;
     if (fpSwing && phase > 0) {
       const p = samplePrimitiveMeleeSwing(fpSwing, phase);
       this.rightHandRig.position.set(
