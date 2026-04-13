@@ -85,6 +85,13 @@ export type LocalGameAudioMovement = {
 
 export class LocalGameAudio {
   private unlocked = false;
+  /**
+   * Concurrent `unlock()` (canvas click + pickup prime, double-click, etc.) must not interleave —
+   * each run used to assign `this.ctx` early then `await` decode; a second run could overwrite
+   * `this.ctx` while the first still wired `footstepBus` / buffers to the first context →
+   * `InvalidAccessError` on `connect` and a tight exception loop in `requestAnimationFrame`.
+   */
+  private unlockInFlight: Promise<void> | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
   private impactUrls: string[] = [];
   private readonly urlResolvePromise: Promise<void>;
@@ -108,6 +115,17 @@ export class LocalGameAudio {
 
   async unlock(): Promise<void> {
     if (this.unlocked) return;
+    if (!this.unlockInFlight) {
+      this.unlockInFlight = this.runUnlock();
+    }
+    try {
+      await this.unlockInFlight;
+    } finally {
+      this.unlockInFlight = null;
+    }
+  }
+
+  private async runUnlock(): Promise<void> {
     await this.urlResolvePromise;
 
     if (this.impactUrls.length === 0) {

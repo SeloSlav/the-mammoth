@@ -22,7 +22,7 @@ import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
 import {
-  HOTBAR_DIGIT_DEBOUNCE_MS,
+  fpHotbarDigitKeySuppressedByDebounce,
   HOTBAR_SLOT_COUNT,
   hotbarSlotHasInstantConsume,
 } from "./fpHotbarActivate";
@@ -402,7 +402,7 @@ export async function mountFpSession(
   const mammothInventoryOpen = () =>
     document.querySelector('[data-mammoth-inventory="open"]') !== null;
 
-  /** Same `DigitN` / slot within {@link HOTBAR_DIGIT_DEBOUNCE_MS} — ignored unless it would consume. */
+  /** Same `DigitN` / slot within debounce window — ignored unless instant-consume or same-slot unequip. */
   const digitKeyDebounce = { code: "", at: 0, slot: -1 };
 
   const onWheelHotbar = (e: WheelEvent) => {
@@ -449,24 +449,44 @@ export async function mountFpSession(
         const keyCode = e.code;
         const now = performance.now();
         if (!conn.identity) {
-          setFpHotbarSelectedSlot(newSlot);
+          const prev = getFpHotbarSelectedSlot();
+          if (
+            fpHotbarDigitKeySuppressedByDebounce({
+              prevSel: prev,
+              newSlot,
+              willConsume: false,
+              keyCode,
+              lastCode: digitKeyDebounce.code,
+              lastSlot: digitKeyDebounce.slot,
+              lastAtMs: digitKeyDebounce.at,
+              nowMs: now,
+            })
+          ) {
+            return;
+          }
           digitKeyDebounce.code = keyCode;
           digitKeyDebounce.at = now;
           digitKeyDebounce.slot = newSlot;
+          setFpHotbarSelectedSlot(prev === newSlot ? null : newSlot);
           return;
         }
         const prevSel = getFpHotbarSelectedSlot();
         const willConsume =
           prevSel === newSlot && hotbarSlotHasInstantConsume(conn, conn.identity, newSlot);
 
-        if (!willConsume) {
-          if (
-            digitKeyDebounce.code === keyCode &&
-            digitKeyDebounce.slot === newSlot &&
-            now - digitKeyDebounce.at < HOTBAR_DIGIT_DEBOUNCE_MS
-          ) {
-            return;
-          }
+        if (
+          fpHotbarDigitKeySuppressedByDebounce({
+            prevSel,
+            newSlot,
+            willConsume,
+            keyCode,
+            lastCode: digitKeyDebounce.code,
+            lastSlot: digitKeyDebounce.slot,
+            lastAtMs: digitKeyDebounce.at,
+            nowMs: now,
+          })
+        ) {
+          return;
         }
 
         digitKeyDebounce.code = keyCode;
@@ -483,7 +503,7 @@ export async function mountFpSession(
           );
           return;
         }
-        setFpHotbarSelectedSlot(newSlot);
+        setFpHotbarSelectedSlot(prevSel === newSlot ? null : newSlot);
       }
     }
     if (e.code === "Escape") void document.exitPointerLock();
