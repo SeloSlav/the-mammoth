@@ -1,5 +1,7 @@
 //! Authoritative elevator cars (shared state) + walk/collision hooks for the movement tick.
 
+use std::collections::HashMap;
+
 use spacetimedb::{ReducerContext, Table};
 
 use crate::auth;
@@ -17,8 +19,20 @@ const DOOR_ANIM_SPEED: f32 = 2.35;
 const MOVE_SPEED_MPS: f32 = 3.15;
 pub const MAX_LEVEL: u32 = 19;
 const FOOT_R: f32 = 0.22;
-const CALL_R_XZ: f32 = 1.55;
+/// Must match `WALK_PROBE_DY` in `movement.rs` — used to recover feet Y from the walk probe.
+const WALK_PROBE_DY: f32 = 1.05;
+/// Keep in sync with `apps/client/src/game/fpElevatorConstants.ts` `CALL_RADIUS_XZ`.
+const CALL_R_XZ: f32 = 1.78;
 const CALL_Y_HALF: f32 = 2.2;
+/// Keep in sync with client `LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M`.
+const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M: f32 = 0.5;
+
+/// True when a landing hail to `lv` would be redundant (cab already docked at that support height).
+/// While `PH_MOVING`, cab Y passes intermediate floors so we only suppress on non-moving phases.
+fn landing_hail_redundant_for_cab_pose(row: &ElevatorCar, lv: u32) -> bool {
+    row.phase != PH_MOVING
+        && (row.cab_floor_y - support_y(lv)).abs() < LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M
+}
 
 #[spacetimedb::table(public, accessor = elevator_car)]
 pub struct ElevatorCar {
@@ -106,6 +120,10 @@ fn step_one_row(row: &mut ElevatorCar, dt: f32) {
         if dest.is_some_and(|d| d != row.current_level) && row.door_open_01 > 0.98 {
             row.phase = PH_CLOSING;
         } else if dest == Some(row.current_level) {
+            // Rider hailed the floor we're already on (e.g. lobby) — open doors, don't no-op behind closed doors.
+            if row.door_open_01 < 0.92 {
+                row.phase = PH_OPENING;
+            }
             consume_head_if_at(row);
         }
     }
@@ -171,19 +189,27 @@ pub fn tick_all_elevators(ctx: &ReducerContext, dt: f32) {
 }
 
 /// Merge moving cab floors into walk sampling (geometry top = feet support − skin).
-pub fn merge_elevator_walk_top(
+///
+/// When `prev_cars` is `Some`, cab support Y is linearly interpolated per car between the
+/// tick-start snapshot and the current DB row (integration substeps). `alpha` in `(0, 1]` is
+/// the fractional time through the tick (`(i + 1) / n_substeps`). When `prev_cars` is `None`,
+/// uses end-of-tick cab positions only (`alpha` ignored).
+pub fn merge_elevator_walk_top_lerped(
     ctx: &ReducerContext,
     x: f32,
     z: f32,
     probe_top_y: f32,
     step_up_margin: f32,
     mut best: f32,
+    prev_cars: Option<&HashMap<String, ElevatorCar>>,
+    alpha: f32,
 ) -> f32 {
     let fx0 = x - FOOT_R;
     let fx1 = x + FOOT_R;
     let fz0 = z - FOOT_R;
     let fz1 = z + FOOT_R;
     let (ihx, ihz) = elevator_layout::inner_half_xz();
+    let a = alpha.clamp(0.0, 1.0);
 
     for car in ctx.db.elevator_car().iter() {
         let cx = car.plate_x;
@@ -191,7 +217,11 @@ pub fn merge_elevator_walk_top(
         if fx1 < cx - ihx || fx0 > cx + ihx || fz1 < cz - ihz || fz0 > cz + ihz {
             continue;
         }
-        let geom_top = car.cab_floor_y - SKIN;
+        let cab_y = match prev_cars.and_then(|m| m.get(&car.shaft_key)) {
+            Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
+            None => car.cab_floor_y,
+        };
+        let geom_top = cab_y - SKIN;
         if geom_top <= probe_top_y + step_up_margin {
             if best.is_nan() {
                 best = geom_top;
@@ -215,6 +245,29 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
         return false;
     }
     true
+}
+
+/// World-space vertical cab velocity (m/s) to add on jump when grounded inside a moving car
+/// (matches client `jumpKinematicPlatformVyMps` intent).
+pub fn elevator_jump_vertical_boost_mps(
+    ctx: &ReducerContext,
+    prev_by_key: &HashMap<String, ElevatorCar>,
+    p: &PlayerPose,
+    dt: f32,
+) -> f32 {
+    let h = dt.max(1e-4);
+    let mut best = 0.0_f32;
+    for car in ctx.db.elevator_car().iter() {
+        if !player_inside_cab(p, &car) {
+            continue;
+        }
+        let prev_y = prev_by_key
+            .get(&car.shaft_key)
+            .map(|c| c.cab_floor_y)
+            .unwrap_or(car.cab_floor_y);
+        best = best.max((car.cab_floor_y - prev_y) / h);
+    }
+    best
 }
 
 fn call_center_y(level: u32) -> f32 {
@@ -296,6 +349,55 @@ pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
 }
 
 #[cfg(test)]
+mod landing_hail_redundant_tests {
+    use super::{landing_hail_redundant_for_cab_pose, support_y, ElevatorCar, PH_IDLE, PH_MOVING};
+
+    fn sample_row(phase: u8, cab_floor_y: f32) -> ElevatorCar {
+        ElevatorCar {
+            shaft_key: "test_shaft".into(),
+            current_level: 1,
+            door_open_01: 1.0,
+            phase,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y,
+            door_face: 0,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        }
+    }
+
+    #[test]
+    fn redundant_when_idle_and_cab_y_matches_level_support() {
+        let y1 = support_y(1);
+        assert!(landing_hail_redundant_for_cab_pose(
+            &sample_row(PH_IDLE, y1 + 0.1),
+            1
+        ));
+    }
+
+    #[test]
+    fn not_redundant_while_moving_even_if_current_level_matches() {
+        let y1 = support_y(1);
+        assert!(!landing_hail_redundant_for_cab_pose(
+            &sample_row(PH_MOVING, y1 + 0.1),
+            1
+        ));
+    }
+
+    #[test]
+    fn not_redundant_when_cab_vertically_far_from_that_landing() {
+        let y1 = support_y(1);
+        assert!(!landing_hail_redundant_for_cab_pose(
+            &sample_row(PH_IDLE, y1 + 3.0),
+            1
+        ));
+    }
+}
+
+#[cfg(test)]
 mod door_slack_tests {
     use super::door_side_slack_m;
 
@@ -338,6 +440,9 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
     let Some(mut row) = ctx.db.elevator_car().shaft_key().find(&shaft_key) else {
         return;
     };
+    if landing_hail_redundant_for_cab_pose(&row, lv) {
+        return;
+    }
     enqueue_dest(&mut row, lv);
     ctx.db.elevator_car().shaft_key().update(row);
 }

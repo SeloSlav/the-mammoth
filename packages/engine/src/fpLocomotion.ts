@@ -43,6 +43,8 @@ export type WalkGroundSampler = (
   worldX: number,
   worldZ: number,
   probeTopY: number,
+  /** Monotonic wall-clock (ms) for moving walk surfaces (elevators); omit for static-only. */
+  evalWallClockMs?: number,
 ) => number;
 
 export type FpLocomotionWalkOptions = {
@@ -54,6 +56,17 @@ export type FpLocomotionWalkOptions = {
    * does not snap you to the lobby `FLOOR_Y` slab.
    */
   maxSupportDropM?: number;
+  /**
+   * When set, each walk probe passes a clock that advances linearly across integration substeps
+   * from roughly `(endMs − dt·1000)` to `endMs`, so kinematic elevator floors are sampled through
+   * the whole frame (matches server substep lerp between tick-start and tick-end cab Y).
+   */
+  integrationEvalEndWallClockMs?: number;
+  /**
+   * World-space vertical velocity (m/s) of the kinematic surface underfoot when grounded; added
+   * to {@link JUMP_SPEED} on jump for elevator jump inherit.
+   */
+  jumpKinematicPlatformVyMps?: number;
 };
 
 export type FpLocomotionInput = {
@@ -143,7 +156,8 @@ export function stepFpLocomotion(
   }
 
   if (state.grounded && state.jumpQueued) {
-    state.velocity.y = JUMP_SPEED;
+    const platVy = walk?.jumpKinematicPlatformVyMps ?? 0;
+    state.velocity.y = JUMP_SPEED + platVy;
     state.grounded = false;
   }
   state.jumpQueued = false;
@@ -158,6 +172,7 @@ export function stepFpLocomotion(
     ? Math.max(1, Math.min(50, Math.round(FP_LOCOMOTION_SUBSTEPS_PER_SECOND * h)))
     : 1;
   const sh = h / substeps;
+  const endWallMs = walk?.integrationEvalEndWallClockMs;
   for (let i = 0; i < substeps; i++) {
     const x0 = pos.x;
     const z0 = pos.z;
@@ -167,8 +182,12 @@ export function stepFpLocomotion(
     pos.y += state.velocity.y * sh;
     if (walk?.sampleWalkGroundTopY) {
       const probeY = pos.y + probeDy;
-      const w0 = walk.sampleWalkGroundTopY(x0, z0, probeY);
-      const w1 = walk.sampleWalkGroundTopY(pos.x, pos.z, probeY);
+      const probeClockMs =
+        endWallMs === undefined
+          ? undefined
+          : endWallMs - 1000 * h + (1000 * h * (i + 1)) / substeps;
+      const w0 = walk.sampleWalkGroundTopY(x0, z0, probeY, probeClockMs);
+      const w1 = walk.sampleWalkGroundTopY(pos.x, pos.z, probeY, probeClockMs);
       let walkTop = w0;
       if (Number.isFinite(w1)) {
         walkTop = Number.isFinite(w0) ? Math.max(w0, w1) : w1;

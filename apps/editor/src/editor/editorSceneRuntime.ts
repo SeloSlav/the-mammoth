@@ -34,7 +34,11 @@ import {
   projectViewportStrokeToFpRootLocals,
 } from "./fpSwingViewportStroke.js";
 import { registerEditorSwingStrokeReview } from "./editorSwingStrokeReviewBridge.js";
-import { resolvePlacedId } from "./editorPlacementKeys.js";
+import {
+  resolveGizmoFloorDocId,
+  resolveGizmoInteriorDocId,
+  resolvePlacedId,
+} from "./editorPlacementKeys.js";
 import { emptyFloorDoc } from "./editorEmptyFloorDoc.js";
 import {
   syncDuplicateFloorGroups,
@@ -86,30 +90,18 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     }
   }
 
-  transformControls.addEventListener("dragging-changed", (ev) => {
-    const raw = ev as unknown as { value?: boolean };
-    const active = raw.value === true;
-    const st = useEditorStore.getState();
-    if (st.mode === "fp_viewmodel") {
-      orbitControls.enabled = !active && st.fpAuthorCamera === "orbit";
-      return;
-    }
-    if (active) useEditorStore.getState().beginTransaction();
-    else useEditorStore.getState().commitTransaction();
-  });
-  transformControls.addEventListener("change", () => {
+  /**
+   * True while a floor/interior gizmo drag is in progress (TransformControls `mouseDown`…`mouseUp`).
+   * Used with {@link TransformControls#dragging} so we never run {@link syncTransformsFromStore}
+   * mid-gesture: generic `change` events (camera, mode, etc.) must not pull stale doc data onto the
+   * mesh while Zustand is catching up.
+   */
+  let levelEditorTransformGesture = false;
+
+  function commitLevelEditorAttachedTransformToStore(): void {
     if (programmaticTransformControlsDepth > 0) return;
     const store = useEditorStore.getState();
-    if (store.mode === "fp_viewmodel") {
-      const pres = fpSession?.getPresenter();
-      const attached = transformControls.object as THREE.Object3D | undefined;
-      if (pres && attached) {
-        const pid = pres.getAuthoringPickList().find((p) => p.object === attached)?.id;
-        if (pid === "rigRoot") pres.syncAuthoringRigRestFromAttachedRig();
-      }
-      store.bumpFpAuthorLive();
-      return;
-    }
+    if (store.mode !== "floor" && store.mode !== "interior") return;
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (!attached) return;
     const id = attached.userData.placedObjectId as string | undefined;
@@ -131,18 +123,66 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       attached.scale.z,
     ];
     if (store.mode === "floor") {
-      store.updatePlacedObject(store.activeFloorDocId, id, {
-        position: pos,
-        rotation: rot,
-        scale: sc,
-      });
+      store.updatePlacedObject(
+        resolveGizmoFloorDocId(attached, store.activeFloorDocId),
+        id,
+        {
+          position: pos,
+          rotation: rot,
+          scale: sc,
+        },
+      );
       syncDuplicateFloorGroups(contentRoot, id, attached);
     } else {
-      store.updateInteriorPlacement(store.activeInteriorDocId, id, {
-        position: pos,
-        rotation: rot,
-        scale: sc,
-      });
+      store.updateInteriorPlacement(
+        resolveGizmoInteriorDocId(attached, store.activeInteriorDocId),
+        id,
+        {
+          position: pos,
+          rotation: rot,
+          scale: sc,
+        },
+      );
+    }
+  }
+
+  transformControls.addEventListener("mouseDown", () => {
+    if (useEditorStore.getState().mode === "fp_viewmodel") return;
+    levelEditorTransformGesture = true;
+  });
+  transformControls.addEventListener("mouseUp", () => {
+    if (useEditorStore.getState().mode === "fp_viewmodel") return;
+    levelEditorTransformGesture = false;
+    /** No `objectChange` if the pointer never moved; still persist rest pose. */
+    commitLevelEditorAttachedTransformToStore();
+  });
+
+  transformControls.addEventListener("dragging-changed", (ev) => {
+    const raw = ev as unknown as { value?: boolean };
+    const active = raw.value === true;
+    const st = useEditorStore.getState();
+    if (st.mode === "fp_viewmodel") {
+      orbitControls.enabled = !active && st.fpAuthorCamera === "orbit";
+      return;
+    }
+    if (!active) levelEditorTransformGesture = false;
+    if (active) useEditorStore.getState().beginTransaction();
+    else useEditorStore.getState().commitTransaction();
+  });
+  transformControls.addEventListener("objectChange", () => {
+    commitLevelEditorAttachedTransformToStore();
+  });
+  transformControls.addEventListener("change", () => {
+    if (programmaticTransformControlsDepth > 0) return;
+    const store = useEditorStore.getState();
+    if (store.mode === "fp_viewmodel") {
+      const pres = fpSession?.getPresenter();
+      const attached = transformControls.object as THREE.Object3D | undefined;
+      if (pres && attached) {
+        const pid = pres.getAuthoringPickList().find((p) => p.object === attached)?.id;
+        if (pid === "rigRoot") pres.syncAuthoringRigRestFromAttachedRig();
+      }
+      store.bumpFpAuthorLive();
     }
   });
   const transformHelper = transformControls.getHelper();
@@ -372,6 +412,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   function attachSwingReviewCanvasListeners(): void {
     if (swingReviewCanvasListenersAttached) return;
+    if (useEditorStore.getState().mode !== "fp_viewmodel") return;
     canvas.addEventListener("pointerdown", onSwingReviewCanvasPointerDownCapture, { capture: true });
     canvas.addEventListener("pointermove", onSwingReviewPointerMove);
     canvas.addEventListener("pointerup", onSwingReviewPointerUp);
@@ -386,6 +427,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   function onSwingReviewCanvasPointerDownCapture(ev: PointerEvent): void {
     if (ev.button !== 0) return;
     if (ev.currentTarget !== canvas) return;
+    if (useEditorStore.getState().mode !== "fp_viewmodel") return;
     if (!swingReviewLocals || swingReviewLocals.length < 2) return;
     const pres = fpSession?.getPresenter();
     if (!pres) return;
@@ -461,6 +503,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     swingReviewLocals = null;
     swingReviewDragIdx = null;
     swingReviewPreviewKeys = null;
+    levelEditorTransformGesture = false;
     useEditorStore.getState().setFpSwingStrokeReviewActive(false);
     setSwingStrokeOverlayPointerInteractive(false);
     clearSwingStrokeOverlay();
@@ -575,6 +618,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   }
 
   function disposeFpViewmodelRuntimeOnly() {
+    levelEditorTransformGesture = false;
     swingStrokeDragging = false;
     swingStrokeCapturePointerId = null;
     swingStrokeBuf = [];
@@ -884,7 +928,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       if (s.mode !== "fp_viewmodel") {
         if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
           rebuildStructural();
-        } else if (!transformControls.dragging) {
+        } else if (!transformControls.dragging && !levelEditorTransformGesture) {
           syncTransformsFromStore();
         }
       }

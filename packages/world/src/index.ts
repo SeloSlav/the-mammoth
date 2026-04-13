@@ -61,6 +61,7 @@ export {
 } from "./shaftPlanformClip.js";
 export { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 export {
+  elevatorCabGameplayHalfExtentsM,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
   FP_LOCOMOTION_SKIN,
@@ -68,6 +69,15 @@ export {
   maxBuildingLevelIndex,
   type ElevatorShaftLayout,
 } from "./elevatorShaftLayout.js";
+export {
+  ELEVATOR_LANDING_CALL_CENTER_Y_OFFSET_M,
+  resolveLandingHailLevel,
+} from "./elevatorLandingHailLevel.js";
+export {
+  addOppositeCorridorKatSignMeshes,
+  landingKatSignTextForStory,
+  oppositeCardinalFace,
+} from "./elevatorLandingKatSign.js";
 
 /**
  * Vertical spacing between stacked `BuildingFloorRef` plates (meters).

@@ -1,11 +1,16 @@
 //! Intent-driven movement + fixed-rate server integration.
 //! Constants mirror `packages/engine/src/fpLocomotion.ts` — keep in sync when tuning.
+//!
+//! Elevator cab floors are snapshotted at tick start and lerped across player integration substeps
+//! so vertical motion is not quantized to one 20 Hz sample per tick (see `merge_elevator_walk_top_lerped`).
+
+use std::collections::HashMap;
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::accounts::user;
 use crate::auth;
-use crate::elevator;
+use crate::elevator::{self, elevator_car, ElevatorCar};
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
@@ -117,6 +122,12 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         return;
     }
 
+    let prev_elevators: HashMap<String, ElevatorCar> = ctx
+        .db
+        .elevator_car()
+        .iter()
+        .map(|c| (c.shaft_key.clone(), c))
+        .collect();
     elevator::tick_all_elevators(ctx, TICK_DT);
 
     for pose in ctx.db.player_pose().iter() {
@@ -142,16 +153,22 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
         let grounded_before = pose.grounded;
         let mut p = pose;
-        integrate_one(ctx, &input, &mut p, TICK_DT);
+        integrate_one(ctx, &input, &mut p, TICK_DT, &prev_elevators);
         elevator::clamp_player_to_elevators(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);
     }
 }
 
-#[inline]
-/// `NAN` means no walk AABB overlapped the foot (do not treat as `FLOOR_Y` support).
-fn sample_walk_ground_top_y(ctx: &ReducerContext, x: f32, z: f32, probe_top_y: f32) -> f32 {
+/// Walk top sampling with elevator cab Y interpolated between tick-start and tick-end snapshots.
+fn sample_walk_ground_top_y_lerped(
+    ctx: &ReducerContext,
+    x: f32,
+    z: f32,
+    probe_top_y: f32,
+    prev_elevators: &HashMap<String, ElevatorCar>,
+    alpha: f32,
+) -> f32 {
     let mut best = f32::NAN;
     let fr = FOOT_RADIUS_XZ;
     let fx0 = x - fr;
@@ -173,9 +190,17 @@ fn sample_walk_ground_top_y(ctx: &ReducerContext, x: f32, z: f32, probe_top_y: f
             }
         }
     }
-    best = elevator::merge_elevator_walk_top(ctx, x, z, probe_top_y, WALK_STEP_UP_MARGIN, best);
+    best = elevator::merge_elevator_walk_top_lerped(
+        ctx,
+        x,
+        z,
+        probe_top_y,
+        WALK_STEP_UP_MARGIN,
+        best,
+        Some(prev_elevators),
+        alpha,
+    );
     if best.is_nan() {
-        // Keep in sync with `sampleWalkGroundTopYWithExteriorGround` (`packages/world`).
         const FP_MARGIN: f32 = 2.0;
         let outside = x < crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MIN_X - FP_MARGIN
             || x > crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MAX_X + FP_MARGIN
@@ -192,7 +217,13 @@ fn sample_walk_ground_top_y(ctx: &ReducerContext, x: f32, z: f32, probe_top_y: f
     }
 }
 
-fn integrate_one(ctx: &ReducerContext, input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
+fn integrate_one(
+    ctx: &ReducerContext,
+    input: &PlayerInput,
+    p: &mut PlayerPose,
+    dt: f32,
+    prev_elevators: &HashMap<String, ElevatorCar>,
+) {
     let h = dt.clamp(0.0, 0.05);
     let bits = input.bits;
     let yaw = input.aim_yaw;
@@ -242,14 +273,16 @@ fn integrate_one(ctx: &ReducerContext, input: &PlayerInput, p: &mut PlayerPose, 
     }
 
     if p.grounded != 0 && (bits & BIT_JUMP != 0) {
-        p.vel_y = JUMP_SPEED;
+        let boost = elevator::elevator_jump_vertical_boost_mps(ctx, prev_elevators, p, h);
+        p.vel_y = JUMP_SPEED + boost;
         p.grounded = 0;
     }
 
     let n_sub = (LOCOMOTION_SUBSTEPS_PER_SECOND * h).round() as i32;
     let n_sub = n_sub.clamp(1, PHYS_SUBSTEPS_MAX as i32) as u32;
     let sh = h / n_sub as f32;
-    for _ in 0..n_sub {
+    for i in 0..n_sub {
+        let alpha = (i + 1) as f32 / n_sub as f32;
         let x0 = p.x;
         let z0 = p.z;
         p.vel_y -= GRAVITY * sh;
@@ -257,8 +290,8 @@ fn integrate_one(ctx: &ReducerContext, input: &PlayerInput, p: &mut PlayerPose, 
         p.z += p.vel_z * sh;
         p.y += p.vel_y * sh;
         let probe_y = p.y + WALK_PROBE_DY;
-        let w0 = sample_walk_ground_top_y(ctx, x0, z0, probe_y);
-        let w1 = sample_walk_ground_top_y(ctx, p.x, p.z, probe_y);
+        let w0 = sample_walk_ground_top_y_lerped(ctx, x0, z0, probe_y, prev_elevators, alpha);
+        let w1 = sample_walk_ground_top_y_lerped(ctx, p.x, p.z, probe_y, prev_elevators, alpha);
         let mut walk_top = w0;
         if w1.is_finite() {
             walk_top = if w0.is_finite() { w0.max(w1) } else { w1 };

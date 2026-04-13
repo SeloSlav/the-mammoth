@@ -40,7 +40,7 @@
       "scale": [
         2.38,
         3.1578947368421053,
-        2.82
+        4.0
       ],
       "metadata": {
         "role": "primary_bank",
@@ -76,7 +76,7 @@
       "scale": [
         2.38,
         3.1578947368421053,
-        2.82
+        4.0
       ],
       "metadata": {
         "role": "peripheral_bank",
@@ -94,7 +94,7 @@
       "scale": [
         2.38,
         3.1578947368421053,
-        2.82
+        4.0
       ],
       "metadata": {
         "role": "peripheral_bank",
@@ -112,7 +112,7 @@
       "scale": [
         2.38,
         3.1578947368421053,
-        2.82
+        4.0
       ],
       "metadata": {
         "role": "peripheral_bank",
@@ -130,7 +130,7 @@
       "scale": [
         2.38,
         3.1578947368421053,
-        2.82
+        4.0
       ],
       "metadata": {
         "role": "peripheral_bank",

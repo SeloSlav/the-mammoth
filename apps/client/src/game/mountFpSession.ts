@@ -33,6 +33,10 @@ import {
 } from "./fpHotbarSelection";
 import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
+import {
+  onFpSessionPostRenderFrame,
+  resetFpSessionFpsDisplay,
+} from "./fpSessionFpsDisplay";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
 import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
@@ -94,6 +98,7 @@ export async function mountFpSession(
 ): Promise<() => void> {
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  resetFpSessionFpsDisplay();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
@@ -201,7 +206,12 @@ export async function mountFpSession(
    * cab as the highest support and locomotion snaps feet back to the floor every substep.
    */
   const ELEVATOR_WALK_MERGE_SKIP_VY = 0.35;
-  const sampleWalkTop = (worldX: number, worldZ: number, probeTopY: number) => {
+  const sampleWalkTop = (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    evalWallClockMs?: number,
+  ) => {
     const base = sampleWalkTopBase(worldX, worldZ, probeTopY);
     if (loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY) {
       return base;
@@ -213,6 +223,7 @@ export async function mountFpSession(
       fpLocomotionConstants.walkFootRadiusXZ,
       fpLocomotionConstants.walkStepUpMargin,
       base,
+      evalWallClockMs,
     );
   };
 
@@ -475,7 +486,7 @@ export async function mountFpSession(
     ) {
       e.preventDefault();
       if (fpElevators.consumeInteractKey(pos)) return;
-      if (fpElevators.shouldSuppressEpickup()) return;
+      if (fpElevators.shouldSuppressEpickup(pos)) return;
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -587,13 +598,33 @@ export async function mountFpSession(
       crouch: crouchToggle,
     };
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    fpElevators.tick(dt, performance.now(), pos);
+    const frameNowMs = performance.now();
+    fpElevators.syncCabEvalClock(frameNowMs);
+
+    const probeTopForElev = pos.y + fpLocomotionConstants.walkProbeDy;
+    const baseForElev = sampleWalkTopBase(pos.x, pos.z, probeTopForElev);
+    const elevatorJumpVy =
+      loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
+        ? 0
+        : fpElevators.getElevatorKinematicSupportVyMps({
+            worldX: pos.x,
+            worldZ: pos.z,
+            probeTopY: probeTopForElev,
+            footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+            stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+            baseTop: baseForElev,
+            evalWallClockMs: frameNowMs,
+          });
 
     const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt, {
       sampleWalkGroundTopY: sampleWalkTop,
       probeDy: fpLocomotionConstants.walkProbeDy,
       maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
+      integrationEvalEndWallClockMs: frameNowMs,
+      jumpKinematicPlatformVyMps: elevatorJumpVy,
     });
+
+    fpElevators.tick(dt, frameNowMs, pos);
 
     const desync = Math.hypot(
       pos.x - serverPose.x,
@@ -730,6 +761,7 @@ export async function mountFpSession(
 
     syncBuildingFloorPlateVisibility();
     renderer.render(scene, camera);
+    onFpSessionPostRenderFrame(performance.now());
     logFpPerf();
   };
   tick();
@@ -767,6 +799,7 @@ export async function mountFpSession(
     presentation.dispose();
     renderer.dispose();
     scene.clear();
+    resetFpSessionFpsDisplay();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };
 }

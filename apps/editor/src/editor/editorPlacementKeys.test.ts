@@ -1,7 +1,13 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { FloorDoc } from "@the-mammoth/schemas";
-import { placementKey, PLACEMENT_KEY_SEP, resolvePlacedId } from "./editorPlacementKeys.js";
+import {
+  placementKey,
+  PLACEMENT_KEY_SEP,
+  resolveGizmoFloorDocId,
+  resolveGizmoInteriorDocId,
+  resolvePlacedId,
+} from "./editorPlacementKeys.js";
 
 describe("placementKey", () => {
   it("joins floor and object ids with a separator that cannot appear in ids", () => {
@@ -37,5 +43,36 @@ describe("resolvePlacedId", () => {
 
   it("returns null when nothing matches", () => {
     expect(resolvePlacedId(new THREE.Mesh(), floorDocs)).toBe(null);
+  });
+});
+
+describe("resolveGizmoFloorDocId", () => {
+  it("uses mesh floorDocId instead of a mismatched active floor doc", () => {
+    const g = new THREE.Group();
+    g.userData.floorDocId = "plate_doc";
+    expect(resolveGizmoFloorDocId(g, "wrong_active")).toBe("plate_doc");
+  });
+
+  it("walks ancestors for floorDocId when the gizmo attaches to a child", () => {
+    const parent = new THREE.Group();
+    parent.userData.floorDocId = "from_parent";
+    const child = new THREE.Mesh();
+    parent.add(child);
+    expect(resolveGizmoFloorDocId(child, "other")).toBe("from_parent");
+  });
+
+  it("falls back to active floor doc when no floorDocId is present", () => {
+    const g = new THREE.Group();
+    expect(resolveGizmoFloorDocId(g, "fallback")).toBe("fallback");
+  });
+});
+
+describe("resolveGizmoInteriorDocId", () => {
+  it("uses streamDocId from ancestors", () => {
+    const root = new THREE.Group();
+    root.userData.streamDocId = "stream_a";
+    const mesh = new THREE.Mesh();
+    root.add(mesh);
+    expect(resolveGizmoInteriorDocId(mesh, "wrong_active")).toBe("stream_a");
   });
 });

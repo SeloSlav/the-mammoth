@@ -29,6 +29,21 @@ export function elevatorHoistwayInnerHalfExtents(sx: number, sz: number): {
   return { halfX: sx * 0.5 - WT, halfZ: sz * 0.5 - WT };
 }
 
+const CAR_INNER_MARGIN_M = 0.07;
+
+/**
+ * Cab / gameplay inner half-extents (plate-local), matching `apps/server/src/elevator_layout.rs`
+ * `inner_half_xz()` — used for landing-call pads so client `near_call` matches server `near_call_pose`.
+ */
+export function elevatorCabGameplayHalfExtentsM(sx: number, sz: number): {
+  halfX: number;
+  halfZ: number;
+} {
+  const hx = Math.max(0.12, sx * 0.5 - WT - CAR_INNER_MARGIN_M);
+  const hz = Math.max(0.12, sz * 0.5 - WT - CAR_INNER_MARGIN_M);
+  return { halfX: hx, halfZ: hz };
+}
+
 /**
  * World-space Y where FP feet should snap on this level (matches walk AABB top +
  * {@link FP_LOCOMOTION_SKIN} used in `@the-mammoth/engine` `fpLocomotion`).

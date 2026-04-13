@@ -5,6 +5,8 @@ export type FpElevatorHudView =
   | {
       kind: "call";
       shaftPlanKey: string;
+      /** 1-based landing level sent to `elevatorHail` (matches server `near_call_pose`). */
+      callLevel: number;
       /** e.g. "Story 5" */
       floorLabel: string;
     };
@@ -17,7 +19,11 @@ function same(a: FpElevatorHudView, b: FpElevatorHudView): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "hidden" && b.kind === "hidden") return true;
   if (a.kind === "call" && b.kind === "call") {
-    return a.shaftPlanKey === b.shaftPlanKey && a.floorLabel === b.floorLabel;
+    return (
+      a.shaftPlanKey === b.shaftPlanKey &&
+      a.callLevel === b.callLevel &&
+      a.floorLabel === b.floorLabel
+    );
   }
   return false;
 }

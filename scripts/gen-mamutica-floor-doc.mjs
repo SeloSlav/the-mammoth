@@ -54,7 +54,8 @@ const STAIR_SZ = Math.min(STAIR_SZ_RAW, CORE_STATION_SPACING_M - 1.45);
 const CORE_EXCLUSION_HALF_Z = Math.max(2.85, STAIR_SZ * 0.5 + 0.45);
 /** Elevator hoistway (m). */
 const ELEV_SX = 2.38;
-const ELEV_SZ = 2.82;
+/** Along Z for west-bank E-facing doors: must clear FP door slide (see `DOOR_SLIDE_M` + `DOOR_W`). */
+const ELEV_SZ = 4.0;
 
 function collectCoreCentersZ() {
   const centers = [0];

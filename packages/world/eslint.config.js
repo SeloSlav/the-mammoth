@@ -9,4 +9,8 @@ export default [
       "max-lines": ["warn", { max: 900, skipBlankLines: true, skipComments: true }],
     },
   },
+  {
+    files: ["src/floorPlaceholderMeshes.ts"],
+    rules: { "max-lines": "off" },
+  },
 ];

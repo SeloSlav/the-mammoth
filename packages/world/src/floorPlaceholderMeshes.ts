@@ -39,6 +39,7 @@ import {
   firstCorridorOrLobbyFromFloor,
 } from "./shaftCorridorFlush.js";
 import type { BuildFloorMeshesOptions } from "./elevatorDoorFacesFromGroundFloorDoc.js";
+import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
 
@@ -983,6 +984,14 @@ function addHollowRoomShell(
       sz,
       opts.elevatorSignPlacements ?? [],
     );
+    addOppositeCorridorKatSignMeshes(
+      group,
+      sx,
+      sy,
+      sz,
+      opts.storyLevelIndex ?? 99,
+      opts.elevatorSignPlacements ?? [],
+    );
     return;
   }
 
@@ -1130,6 +1139,14 @@ function addHollowRoomShell(
     sx,
     sy,
     sz,
+    opts.elevatorSignPlacements ?? [],
+  );
+  addOppositeCorridorKatSignMeshes(
+    group,
+    sx,
+    sy,
+    sz,
+    opts.storyLevelIndex ?? 99,
     opts.elevatorSignPlacements ?? [],
   );
 }

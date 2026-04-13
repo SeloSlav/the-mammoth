@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import { shaftFloorLocalTopY } from "./stairWellGeometry.js";
 import {
+  elevatorCabGameplayHalfExtentsM,
   elevatorSupportFeetWorldY,
   FP_LOCOMOTION_SKIN,
   listElevatorShaftLayouts,
@@ -22,6 +23,14 @@ describe("elevatorSupportFeetWorldY", () => {
     const want =
       plateWorldY + plateLocalY + shaftFloorLocalTopY(shaftSy) + FP_LOCOMOTION_SKIN;
     expect(y).toBeCloseTo(want, 8);
+  });
+});
+
+describe("elevatorCabGameplayHalfExtentsM", () => {
+  it("matches server elevator_layout inner_half for default shaft scale", () => {
+    const { halfX, halfZ } = elevatorCabGameplayHalfExtentsM(2.38, 4.0);
+    expect(halfX).toBeCloseTo(1.01, 5);
+    expect(halfZ).toBeCloseTo(1.82, 5);
   });
 });
 

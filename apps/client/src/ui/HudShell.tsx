@@ -2,6 +2,7 @@ import type { DbConnection } from "../module_bindings";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
+import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
 
@@ -35,7 +36,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         The Mammoth — <strong>{displayName}</strong>
         <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
           {
-            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory · 1–6 / wheel hotbar · E pick up drops · elevators: shared server cars (E hails landing); in-car floors = wall buttons + center-screen click raycast; cab in walk merge + server clamp"
+            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory"
           }
         </div>
         <div style={{ marginTop: 8, pointerEvents: "auto" }}>
@@ -58,6 +59,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
       </div>
       {conn ? <MammothInventoryHud conn={conn} /> : null}
       {conn ? <PlayerVitalsHud conn={conn} /> : null}
+      <MammothFpsHud />
       <MammothPickupPromptHud />
       <MammothElevatorHud />
       <MammothFpReticule />
