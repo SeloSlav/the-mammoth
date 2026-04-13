@@ -4,28 +4,28 @@ overview: "Turn `apps/editor` from a passive viewer into a minimal authoring too
 todos:
   - id: scene-refactor
     content: "Refactor apps/editor App.tsx: scene host + rebuildFromFloorDoc + userData id mapping"
-    status: pending
+    status: completed
   - id: editor-state
     content: Add editor state (active floor, FloorDoc map, selectedId, dirty) + wire to UI
-    status: pending
+    status: completed
   - id: select-inspector
     content: Raycast selection + EditorChrome inspector fields (position/scale/rotation/prefabId)
-    status: pending
+    status: completed
   - id: save-persist
     content: Serialize FloorDoc; download button + optional Vite POST save to content/building/floors
-    status: pending
+    status: completed
   - id: fetch-hot-reload
     content: Switch active floor load to fetch + reload button / watch-friendly flow
-    status: pending
+    status: completed
   - id: transform-gizmos
     content: Add TransformControls sync to PlacedObject transforms
-    status: pending
+    status: completed
   - id: prefab-palette
     content: Add object / duplicate / delete + prefab id palette + free-text
-    status: pending
+    status: completed
   - id: lighting-textures
     content: Editor-only env map + optional metadata-driven texture overrides on meshes
-    status: pending
+    status: completed
 isProject: false
 ---
 

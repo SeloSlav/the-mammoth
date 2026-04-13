@@ -174,6 +174,7 @@ export function mountFpSession(
   const keys = new Set<string>();
   let crouchToggle = false;
   const loco = createFpLocomotionState();
+  /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
 
   /**
@@ -421,6 +422,7 @@ export function mountFpSession(
     const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
     localAudio.update(dt, {
       horizontalSpeed: hs,
+      stridePhaseRad: loco.headBobPhase,
       grounded: loco.grounded,
       crouch: crouchToggle,
       sprint: input.sprint,

@@ -1,18 +1,16 @@
 /**
- * Browser-local one-shot audio (no server). Pattern adapted from
- * `cyberpunk-apartment/src/game/runtime/AudioSystem.ts`: resolve stems by probing extensions,
- * cache URLs, random variant pick, lightweight footstep cadence from horizontal speed + grounded.
+ * FP footstep audio — **Web Audio** path (decoded `AudioBuffer`s, light bus processing). Sounds more
+ * controlled than spawning `HTMLAudioElement` every step (no per-hit element churn, stable gain).
  *
- * **Realism (design targets):**
- * - **How many sounds:** 6–12 *dry* impacts per surface class beats 2–4; split **L/R** (or phase) so
- *   the same file is not heard twice in a row at identical pitch. Later: separate pools per material
- *   (concrete / metal / carpet) from a short ground raycast.
- * - **Overlapping:** one **short transient** (~50–120 ms) per foot; avoid stacking long tails (mud /
- *   reverb). Optional **second layer** at −12 to −18 dB: cloth / scuff, 2–3 variants, triggered with
- *   the same cadence — subtle, not a second “stomp.”
- * - **Pitch / rate:** keep `playbackRate` within ~**0.92–1.08** for walk/run on one surface; big shifts
- *   read as wrong acoustics. Map rate **lightly** to planar speed + tiny jitter; use **lower** rate
- *   and **slightly higher** gain on landing for a heavier thud.
+ * **Why not “only 4”?** Four was never a magic HL number — it was the minimum *coherent* set for
+ * one surface. Big-budget first-person games more often ship **6–8** *matched* variants (same mic,
+ * same shoe, same room, same peak/RMS). We load **up to six** stems if present; missing files are
+ * skipped. **Quality and loudness-matching beat raw count** — ten mismatched clips will always sound
+ * worse than six mastered as a set.
+ *
+ * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset). Export
+ * mono or centered stereo, **match peak/RMS** across variants, trim trailing silence. Stride-locked
+ * to `headBobPhase` (same as view bob). Call {@link LocalGameAudio.unlock} from a **user gesture**.
  */
 
 import { fpLocomotionConstants } from "@the-mammoth/engine";
@@ -22,6 +20,31 @@ const AUDIO_ROOT =
 
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
+const UI_STEM = `${AUDIO_ROOT}/ui`;
+
+/** Up to six impacts; fewer files on disk is fine. */
+const IMPACT_STEMS = [
+  `${UI_STEM}/footstep`,
+  `${UI_STEM}/footstep-2`,
+  `${UI_STEM}/footstep-3`,
+  `${UI_STEM}/footstep-4`,
+  `${UI_STEM}/footstep-5`,
+  `${UI_STEM}/footstep-6`,
+] as const;
+
+const STRIDE_PHASE_PER_STEP = Math.PI;
+
+/** Post-compressor; per-hit gain also applied. */
+const BUS_GAIN = 0.42;
+const HIT_GAIN_BASE = 0.55;
+const HIT_GAIN_JITTER = 0.08;
+
+const PLAYBACK_JITTER = 0.018;
+const PLAYBACK_MIN = 0.97;
+const PLAYBACK_MAX = 1.045;
+
+const V0_AUDIO = 0.15;
+
 function clamp01(t: number): number {
   return Math.max(0, Math.min(1, t));
 }
@@ -30,171 +53,194 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-const FOOTSTEP_STEM = `${AUDIO_ROOT}/ui/footstep`;
+function getAudioContextCtor(): typeof AudioContext | null {
+  const g = globalThis as typeof globalThis & {
+    AudioContext?: typeof AudioContext;
+    webkitAudioContext?: typeof AudioContext;
+  };
+  return g.AudioContext ?? g.webkitAudioContext ?? null;
+}
 
-/** Match footstep gate in `update` (m/s). */
-const V0_AUDIO = 0.25;
-
+/** Per-frame snapshot from the FP locomotion tick (see `mountFpSession`). */
 export type LocalGameAudioMovement = {
-  /** Planar speed from locomotion (m/s). */
   horizontalSpeed: number;
+  stridePhaseRad: number;
   grounded: boolean;
-  /** Skip footsteps while crouched (stealth / different gait — not authored yet). */
   crouch: boolean;
-  /** Faster cadence when sprinting. */
   sprint: boolean;
-  /** Alt look: no footsteps (matches camera bob suppression). */
   freeLook: boolean;
 };
 
 export class LocalGameAudio {
   private unlocked = false;
-  private prepared = false;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
-  private footstepSources: string[] = [];
-  private readonly preparePromise: Promise<void>;
+  private impactUrls: string[] = [];
+  private readonly urlResolvePromise: Promise<void>;
+
+  private ctx: AudioContext | null = null;
+  private footstepBus: GainNode | null = null;
+  private impactBuffers: AudioBuffer[] = [];
 
   private wasGrounded = true;
-  private footstepCooldown = 0;
-  /** Avoid the same variant twice in a row when multiple files exist. */
-  private lastFootstepVariant = -1;
+  private lastStrideStepCell = Number.NEGATIVE_INFINITY;
+  private impactRR = 0;
 
   constructor() {
-    this.preparePromise = this.resolveFootstepsInBackground();
+    this.urlResolvePromise = this.resolveFootstepUrlsInBackground();
   }
 
-  /**
-   * Call from a **user gesture** (e.g. canvas click) so `HTMLAudioElement.play()` is allowed.
-   */
   async unlock(): Promise<void> {
     if (this.unlocked) return;
-    await this.prepare();
+    await this.urlResolvePromise;
+
+    if (this.impactUrls.length === 0) {
+      console.warn(
+        "[LocalGameAudio] No footstep URLs resolved. Add footstep.wav … footstep-6.wav under apps/client/public/audio/ui/",
+      );
+      return;
+    }
+
+    const Ctor = getAudioContextCtor();
+    if (!Ctor) {
+      console.warn("[LocalGameAudio] Web Audio API not available.");
+      return;
+    }
+
+    const ctx = new Ctor({ latencyHint: "interactive" });
+    this.ctx = ctx;
+
+    const buffers = await this.decodeImpactBuffers(ctx, this.impactUrls);
+    this.impactBuffers = buffers;
+
+    if (this.impactBuffers.length === 0) {
+      console.warn("[LocalGameAudio] Failed to decode footstep assets.");
+      void ctx.close();
+      this.ctx = null;
+      return;
+    }
+
+    const bus = ctx.createGain();
+    bus.gain.value = BUS_GAIN;
+    this.footstepBus = bus;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 85;
+    hp.Q.value = 0.707;
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -22;
+    comp.knee.value = 18;
+    comp.ratio.value = 2.8;
+    comp.attack.value = 0.002;
+    comp.release.value = 0.11;
+
+    bus.connect(hp);
+    hp.connect(comp);
+    comp.connect(ctx.destination);
+
+    await ctx.resume().catch(() => undefined);
     this.unlocked = true;
   }
 
   dispose(): void {
+    void this.ctx?.close();
+    this.ctx = null;
+    this.footstepBus = null;
+    this.impactBuffers = [];
     this.sourceCache.clear();
-    this.footstepSources = [];
+    this.impactUrls = [];
     this.unlocked = false;
-    this.prepared = false;
+    this.lastStrideStepCell = Number.NEGATIVE_INFINITY;
+    this.impactRR = 0;
   }
 
-  /**
-   * Drive footstep cadence once per frame after locomotion is integrated.
-   */
-  update(dtSeconds: number, m: LocalGameAudioMovement): void {
-    if (!this.unlocked || this.footstepSources.length === 0) return;
+  update(_dtSeconds: number, m: LocalGameAudioMovement): void {
+    if (!this.unlocked || !this.ctx || !this.footstepBus || this.impactBuffers.length === 0) {
+      return;
+    }
 
-    const { horizontalSpeed, grounded, crouch, sprint, freeLook } = m;
+    const { horizontalSpeed, stridePhaseRad, grounded, crouch, sprint, freeLook } = m;
+
+    const strideCell = Math.floor((2 * stridePhaseRad) / STRIDE_PHASE_PER_STEP);
 
     const justLanded = grounded && !this.wasGrounded && !crouch;
     this.wasGrounded = grounded;
 
     if (justLanded) {
-      this.playFootstep({
-        horizontalSpeed,
-        sprint,
-        kind: "land",
-      });
-      this.footstepCooldown = this.stepIntervalSeconds(horizontalSpeed, sprint);
+      this.lastStrideStepCell = strideCell;
       return;
     }
 
     const canStep =
-      grounded && !crouch && !freeLook && horizontalSpeed > 0.25;
+      grounded && !crouch && !freeLook && horizontalSpeed > V0_AUDIO;
 
-    if (canStep) {
-      const interval = this.stepIntervalSeconds(horizontalSpeed, sprint);
-      this.footstepCooldown -= dtSeconds;
-      if (this.footstepCooldown <= 0) {
-        this.playFootstep({
-          horizontalSpeed,
-          sprint,
-          kind: "step",
-        });
-        this.footstepCooldown = interval;
-      }
-    } else {
-      this.footstepCooldown = 0;
+    if (!canStep) {
+      this.lastStrideStepCell = strideCell;
+      return;
+    }
+
+    if (strideCell > this.lastStrideStepCell) {
+      this.playStep({ horizontalSpeed, sprint });
+      this.lastStrideStepCell = strideCell;
     }
   }
 
-  /**
-   * Cadence tightens with speed; sprint forces a faster floor than a slow walk.
-   */
-  private stepIntervalSeconds(horizontalSpeed: number, sprint: boolean): number {
-    const walk = fpLocomotionConstants.walkSpeedMps;
-    const run = fpLocomotionConstants.sprintSpeedMps;
-    if (sprint) {
-      const t = clamp01((horizontalSpeed - walk) / (run - walk));
-      return lerp(0.38, 0.28, t);
-    }
-    const t = clamp01((horizontalSpeed - V0_AUDIO) / (walk - V0_AUDIO));
-    return lerp(0.55, 0.44, t);
-  }
+  private playStep(opts: { horizontalSpeed: number; sprint: boolean }): void {
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+    const buffers = this.impactBuffers;
+    if (!ctx || !bus || buffers.length === 0) return;
 
-  private pickFootstepSrc(): string | undefined {
-    const sources = this.footstepSources;
-    const n = sources.length;
-    if (n === 0) return undefined;
-    if (n === 1) return sources[0];
-    let i = Math.floor(Math.random() * n);
-    if (i === this.lastFootstepVariant) i = (i + 1) % n;
-    this.lastFootstepVariant = i;
-    return sources[i];
-  }
-
-  /**
-   * Subtle speed → playbackRate; landings slightly lower pitch + more body.
-   */
-  private playFootstep(opts: {
-    horizontalSpeed: number;
-    sprint: boolean;
-    kind: "step" | "land";
-  }): void {
-    const src = this.pickFootstepSrc();
-    if (!src) return;
-    const walk = fpLocomotionConstants.walkSpeedMps;
     const run = fpLocomotionConstants.sprintSpeedMps;
     const speedT = clamp01((opts.horizontalSpeed - V0_AUDIO) / (run - V0_AUDIO));
-    const baseBySpeed = lerp(0.97, 1.05, speedT);
-    const sprintBump = opts.sprint && opts.kind === "step" ? 0.02 : 0;
-    const jitter = (Math.random() - 0.5) * 0.05;
-    const landMul = opts.kind === "land" ? 0.94 : 1;
-    const rate = (baseBySpeed + sprintBump + jitter) * landMul;
-    const clampedRate = Math.max(0.9, Math.min(1.12, rate));
+    const baseBySpeed = lerp(0.997, 1.018, speedT);
+    const sprintBump = opts.sprint ? 0.006 : 0;
+    const jitter = (Math.random() - 0.5) * PLAYBACK_JITTER;
+    const rate = Math.max(
+      PLAYBACK_MIN,
+      Math.min(PLAYBACK_MAX, baseBySpeed + sprintBump + jitter),
+    );
 
-    const audio = new Audio();
-    audio.volume = opts.kind === "land" ? 0.32 : 0.24;
-    audio.playbackRate = clampedRate;
-    audio.src = src;
-    void audio.play().catch(() => undefined);
+    const buf = buffers[this.impactRR % buffers.length]!;
+    this.impactRR += 1;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value =
+      HIT_GAIN_BASE * (1 - HIT_GAIN_JITTER + Math.random() * (2 * HIT_GAIN_JITTER));
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
   }
 
-  private async prepare(): Promise<void> {
-    if (this.prepared) return;
-    this.prepared = true;
-    await this.preparePromise;
-  }
-
-  private async resolveFootstepsInBackground(): Promise<void> {
-    const [s1, s2, s3, s4] = await Promise.all([
-      this.resolveSource(FOOTSTEP_STEM),
-      this.resolveSource(`${FOOTSTEP_STEM}-2`),
-      this.resolveSource(`${FOOTSTEP_STEM}-3`),
-      this.resolveSource(`${FOOTSTEP_STEM}-4`),
-    ]);
-    const out: string[] = [];
-    if (s1) out.push(s1);
-    if (s2) out.push(s2);
-    if (s3) out.push(s3);
-    if (s4) out.push(s4);
-    this.footstepSources = out;
-    if (out.length === 0) {
-      console.warn(
-        `[LocalGameAudio] No footstep files under ${FOOTSTEP_STEM}.* — add wav/ogg/mp3 to public/audio/ui/`,
-      );
+  private async decodeImpactBuffers(
+    ctx: AudioContext,
+    urls: readonly string[],
+  ): Promise<AudioBuffer[]> {
+    const out: AudioBuffer[] = [];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const ab = await res.arrayBuffer();
+        const buf = await ctx.decodeAudioData(ab.slice(0));
+        out.push(buf);
+      } catch {
+        // skip bad or unsupported decode
+      }
     }
+    return out;
+  }
+
+  private async resolveFootstepUrlsInBackground(): Promise<void> {
+    const resolved = await Promise.all(
+      IMPACT_STEMS.map((stem) => this.resolveSource(stem)),
+    );
+    this.impactUrls = resolved.filter((u): u is string => u != null);
   }
 
   private resolveSource(
