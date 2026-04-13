@@ -8,8 +8,7 @@ import type { MeleeCombatVisualSink } from "./combatVisuals.js";
 
 export type PlayerPresentationManagerOptions = {
   scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  /** Arms / feet: pitch on `headPitch`, not Alt yaw (camera uses `headFreeLook` → `headCameraPitch`). */
+  /** Viewmodel root: pitch on `headPitch`, not Alt yaw (camera uses `headFreeLook` → `headCameraPitch`). */
   fpViewModelParent: THREE.Object3D;
   modelRegistry?: IModelLoadRegistry;
   onMeleeVisual?: MeleeCombatVisualSink;
@@ -31,7 +30,6 @@ export class PlayerPresentationManager {
     this.modelRegistry = opts.modelRegistry ?? new NoopModelLoadRegistry();
     void this.modelRegistry.preload({ kind: "primitive_fallback" });
     this.local = new LocalFirstPersonPresenter({
-      camera: opts.camera,
       viewModelParent: opts.fpViewModelParent,
       onMeleeVisual: opts.onMeleeVisual,
     });

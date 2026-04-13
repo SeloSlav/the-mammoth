@@ -44,6 +44,7 @@ import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
+import { LocalGameAudio } from "./localGameAudio";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -58,12 +59,12 @@ const POSE_AOI_RECENTER = 14;
 const MOUSE_SENS = 0.0022;
 /** ~88° — enough to scan hoistway tops without going full flip. */
 const PITCH_LIMIT = 1.53;
-/** Alt free-look: head yaw relative to body (radians, clamped per side; ~±115°, not full rear). */
-const FREE_LOOK_YAW_MAX = 2.0;
+/** Alt free-look: head yaw relative to body (radians, clamped per side; ~±135°, not full 180°). */
+const FREE_LOOK_YAW_MAX = 2.35;
 /** Extra camera bob on top of eye-height bob from `stepFpLocomotion` (radians / meters). */
-const CAM_BOB_ROLL = 0.016;
-const CAM_BOB_SWAY_X = 0.012;
-const CAM_BOB_DIP_Y = 0.018;
+const CAM_BOB_ROLL = 0.008;
+const CAM_BOB_SWAY_X = 0.005;
+const CAM_BOB_DIP_Y = 0.009;
 
 const MELEE_COOLDOWN_MS = 480;
 
@@ -142,7 +143,6 @@ export function mountFpSession(
 
   const presentation = new PlayerPresentationManager({
     scene,
-    camera,
     fpViewModelParent: headPitch,
     onMeleeVisual: (evt) => {
       const dir = new THREE.Vector3();
@@ -165,7 +165,7 @@ export function mountFpSession(
   let bodyYaw = 0;
   /** Mouse look pitch (head pivot X). */
   let pitch = 0;
-  /** Alt free-look yaw on `headFreeLook` only (radians); merged into `bodyYaw` on Alt release. */
+  /** Alt free-look yaw on `headFreeLook` only (radians); cleared on Alt release (body yaw unchanged). */
   let headLookYaw = 0;
   /** Monotonic intent id; server rejects non-increasing `intent_seq`. */
   let intentSeq = 0n;
@@ -174,6 +174,7 @@ export function mountFpSession(
   const keys = new Set<string>();
   let crouchToggle = false;
   const loco = createFpLocomotionState();
+  const localAudio = new LocalGameAudio();
 
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
@@ -181,7 +182,6 @@ export function mountFpSession(
    */
   const resetTransientInputState = () => {
     keys.clear();
-    bodyYaw += headLookYaw;
     headLookYaw = 0;
   };
 
@@ -323,7 +323,6 @@ export function mountFpSession(
   const onKeyUp = (e: KeyboardEvent) => {
     keys.delete(e.code);
     if (e.code === "AltLeft" || e.code === "AltRight") {
-      bodyYaw += headLookYaw;
       headLookYaw = 0;
     }
   };
@@ -345,6 +344,7 @@ export function mountFpSession(
   };
 
   const onClick = () => {
+    void localAudio.unlock();
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
 
@@ -419,6 +419,13 @@ export function mountFpSession(
 
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
+    localAudio.update(dt, {
+      horizontalSpeed: hs,
+      grounded: loco.grounded,
+      crouch: crouchToggle,
+      sprint: input.sprint,
+      freeLook,
+    });
     const walkStrength = THREE.MathUtils.clamp(
       hs / fpLocomotionConstants.sprintSpeedMps,
       0,
@@ -515,6 +522,7 @@ export function mountFpSession(
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     disposeFpEnvironment();
+    localAudio.dispose();
     presentation.dispose();
     renderer.dispose();
     scene.clear();
