@@ -9,82 +9,71 @@ import {
 import { FloorDocSchema } from "@the-mammoth/schemas";
 import { useEditorStore, type EditorState } from "../state/editorStore.js";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
+import {
+  disposeSceneEnvironment,
+  disposeSubtreeGpuAssets,
+} from "./disposeSubtree.js";
 import { registerEditorSpawnCalculator } from "./spawnBridge.js";
 
 function emptyFloorDoc(floorDocId: string) {
   return FloorDocSchema.parse({ id: floorDocId, version: 1, objects: [] });
 }
 
-function tagFloorPlacementsFromDocs(
-  root: THREE.Object3D,
+const PLACEMENT_KEY_SEP = "\u0000";
+
+function placementKey(floorDocId: string, objectId: string): string {
+  return `${floorDocId}${PLACEMENT_KEY_SEP}${objectId}`;
+}
+
+function resolvePlacedId(
+  hit: THREE.Object3D | null,
   floorDocs: Record<string, import("@the-mammoth/schemas").FloorDoc>,
-): void {
-  for (const doc of Object.values(floorDocs)) {
-    for (const obj of doc.objects) {
-      root.traverse((o) => {
-        if (o.name === obj.id && o instanceof THREE.Group) {
-          o.userData.placedObjectId = obj.id;
-        }
-      });
-    }
-  }
-}
-
-function tagInteriorPlacements(
-  root: THREE.Object3D,
-  placements: readonly { entityId: string }[],
-): void {
-  for (const p of placements) {
-    const o = root.getObjectByName(p.entityId);
-    if (o) o.userData.placedObjectId = p.entityId;
-  }
-}
-
-function resolvePlacedId(hit: THREE.Object3D | null): string | null {
+): string | null {
   let cur: THREE.Object3D | null = hit;
   while (cur) {
     const id = cur.userData.placedObjectId;
     if (typeof id === "string" && id.length > 0) return id;
+    if (cur instanceof THREE.Group && typeof cur.name === "string" && cur.name) {
+      for (const d of Object.values(floorDocs)) {
+        if (d.objects.some((o) => o.id === cur!.name)) return cur.name;
+      }
+    }
     cur = cur.parent;
   }
   return null;
 }
 
-/** Mesh regen: prefab / metadata only — not transforms. */
-function structuralKeyFloor(s: EditorState): string {
-  const slim: unknown[] = [];
-  for (const [fid, d] of Object.entries(s.floorDocs)) {
-    slim.push([
-      fid,
-      d.objects.map((o) => ({ id: o.id, prefabId: o.prefabId, metadata: o.metadata })),
-    ]);
-  }
-  return `F:${JSON.stringify(s.building)}:${JSON.stringify(slim)}`;
-}
-
-function structuralKeyInterior(s: EditorState): string {
-  const d = s.interiorDocs[s.activeInteriorDocId];
-  if (!d) return "I:null";
-  return `I:${d.id}:${JSON.stringify(d.placements.map((p) => ({ entityId: p.entityId, prefabId: p.prefabId, assetId: p.assetId, overrides: p.overrides })))}:${JSON.stringify(d.portals)}:${JSON.stringify(d.decals)}`;
-}
-
-function structuralKey(s: EditorState): string {
-  return s.mode === "floor" ? structuralKeyFloor(s) : structuralKeyInterior(s);
-}
-
-function syncFloorTransforms(root: THREE.Object3D, floorDocs: EditorState["floorDocs"]) {
-  const byId = new Map<string, import("@the-mammoth/schemas").PlacedObject>();
-  for (const d of Object.values(floorDocs)) {
-    for (const o of d.objects) byId.set(o.id, o);
+function syncFloorTransforms(
+  root: THREE.Object3D,
+  floorDocs: EditorState["floorDocs"],
+) {
+  const byKey = new Map<string, import("@the-mammoth/schemas").PlacedObject>();
+  for (const [fid, d] of Object.entries(floorDocs)) {
+    for (const o of d.objects) byKey.set(placementKey(fid, o.id), o);
   }
   root.traverse((o) => {
     const id = o.userData.placedObjectId as string | undefined;
     if (!id || !(o instanceof THREE.Object3D)) return;
-    const pl = byId.get(id);
+    const fid = o.userData.floorDocId as string | undefined;
+    let pl = fid ? byKey.get(placementKey(fid, id)) : undefined;
+    if (!pl) {
+      for (const d of Object.values(floorDocs)) {
+        const hit = d.objects.find((ob) => ob.id === id);
+        if (hit) {
+          pl = hit;
+          break;
+        }
+      }
+    }
     if (!pl) return;
     o.position.set(pl.position[0], pl.position[1], pl.position[2]);
     if (pl.rotation)
-      o.quaternion.set(pl.rotation[0], pl.rotation[1], pl.rotation[2], pl.rotation[3]);
+      o.quaternion.set(
+        pl.rotation[0],
+        pl.rotation[1],
+        pl.rotation[2],
+        pl.rotation[3],
+      );
     else o.quaternion.identity();
     const sx = pl.scale?.[0] ?? 1;
     const sy = pl.scale?.[1] ?? 1;
@@ -100,6 +89,12 @@ function syncInteriorTransforms(
   for (const p of doc.placements) {
     const o = root.getObjectByName(p.entityId);
     if (!o) continue;
+    if (
+      typeof o.userData.streamDocId === "string" &&
+      o.userData.streamDocId !== doc.id
+    ) {
+      continue;
+    }
     o.position.set(p.position[0], p.position[1], p.position[2]);
     if (p.rotation)
       o.quaternion.set(p.rotation[0], p.rotation[1], p.rotation[2], p.rotation[3]);
@@ -145,6 +140,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   let envRt: THREE.WebGLRenderTarget | null = null;
 
   const applyEnvironment = (on: boolean) => {
+    scene.environment = null;
     if (envRt) {
       envRt.dispose();
       envRt = null;
@@ -152,8 +148,6 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     if (on) {
       envRt = pmrem.fromScene(new RoomEnvironment(), 0.04);
       scene.environment = envRt.texture;
-    } else {
-      scene.environment = null;
     }
   };
 
@@ -196,7 +190,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         rotation: rot,
         scale: sc,
       });
-      syncDuplicateFloorGroups(contentRoot, store.activeFloorDocId, id, attached);
+      syncDuplicateFloorGroups(contentRoot, id, attached);
     } else {
       store.updateInteriorPlacement(store.activeInteriorDocId, id, {
         position: pos,
@@ -211,24 +205,17 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   const pointer = new THREE.Vector2();
 
   let buildingRoot: THREE.Group | null = null;
-  let lastStructuralKey = "";
+  let lastBuiltContentEpoch = -1;
 
   const rebuildStructural = () => {
     const s = useEditorStore.getState();
-    const key = structuralKey(s);
-    if (key === lastStructuralKey) return;
-    lastStructuralKey = key;
+    const ep = s.contentStructureEpoch;
+    if (ep === lastBuiltContentEpoch) return;
+    lastBuiltContentEpoch = ep;
 
     if (buildingRoot) {
       contentRoot.remove(buildingRoot);
-      buildingRoot.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.geometry?.dispose();
-          const m = o.material;
-          if (Array.isArray(m)) m.forEach((x) => x.dispose());
-          else m?.dispose();
-        }
-      });
+      disposeSubtreeGpuAssets(buildingRoot);
       buildingRoot = null;
     }
 
@@ -236,16 +223,19 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       buildingRoot = instantiateBuildingFloorStack(s.building, (floorDocId) => {
         return s.floorDocs[floorDocId] ?? emptyFloorDoc(floorDocId);
       });
-      tagFloorPlacementsFromDocs(buildingRoot, s.floorDocs);
       for (const doc of Object.values(s.floorDocs)) {
         for (const obj of doc.objects) {
-          applyEditorMaterialsToFloorPlacement(buildingRoot, obj, textureLoader);
+          applyEditorMaterialsToFloorPlacement(
+            buildingRoot,
+            doc.id,
+            obj,
+            textureLoader,
+          );
         }
       }
     } else {
       const doc = s.interiorDocs[s.activeInteriorDocId];
       buildingRoot = doc ? buildInteriorMeshes(doc) : new THREE.Group();
-      if (doc) tagInteriorPlacements(buildingRoot, doc.placements);
     }
 
     contentRoot.add(buildingRoot);
@@ -265,17 +255,27 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   function syncDuplicateFloorGroups(
     root: THREE.Object3D,
-    floorDocId: string,
     sourceId: string,
     source: THREE.Object3D,
   ) {
-    const doc = useEditorStore.getState().floorDocs[floorDocId];
+    const store = useEditorStore.getState();
+    const fid = source.userData.floorDocId as string | undefined;
+    const doc = fid
+      ? store.floorDocs[fid]
+      : store.floorDocs[store.activeFloorDocId];
     if (!doc) return;
     const obj = doc.objects.find((o) => o.id === sourceId);
     if (!obj) return;
     root.traverse((o) => {
       if (!(o instanceof THREE.Group)) return;
       if (o.userData.placedObjectId !== sourceId || o === source) return;
+      if (
+        typeof source.userData.floorDocId === "string" &&
+        typeof o.userData.floorDocId === "string" &&
+        o.userData.floorDocId !== source.userData.floorDocId
+      ) {
+        return;
+      }
       o.position.copy(source.position);
       o.quaternion.copy(source.quaternion);
       o.scale.copy(source.scale);
@@ -336,10 +336,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   let prev = useEditorStore.getState();
   const unsub = useEditorStore.subscribe((s) => {
-    const sk = structuralKey(s);
-    const psk = structuralKey(prev);
-    if (sk !== psk) rebuildStructural();
-    else syncTransformsFromStore();
+    if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
+      rebuildStructural();
+    } else {
+      syncTransformsFromStore();
+    }
 
     if (
       s.selectedId !== prev.selectedId ||
@@ -367,6 +368,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   applyEnvironment(useEditorStore.getState().useHdriEnvironment);
   syncTransformAttachment();
 
+  const transformRoot = transformControls as unknown as THREE.Object3D;
+
   const onPointerDown = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
     if ((ev.target as HTMLElement) !== canvas) return;
@@ -374,6 +377,10 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);
+
+    const gizmoHits = raycaster.intersectObjects([transformRoot], true);
+    if (gizmoHits.length > 0) return;
+
     const targets: THREE.Object3D[] = [];
     if (buildingRoot) targets.push(buildingRoot);
     const intersects = raycaster.intersectObjects(targets, true);
@@ -382,7 +389,10 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       return;
     }
     const hit = intersects[0];
-    const id = hit ? resolvePlacedId(hit.object) : null;
+    const store = useEditorStore.getState();
+    const id = hit
+      ? resolvePlacedId(hit.object, store.floorDocs)
+      : null;
     useEditorStore.getState().setSelectedId(id);
   };
 
@@ -402,8 +412,14 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     unsub();
     ro.disconnect();
     transformControls.dispose();
+    if (buildingRoot) {
+      contentRoot.remove(buildingRoot);
+      disposeSubtreeGpuAssets(buildingRoot);
+      buildingRoot = null;
+    }
     pmrem.dispose();
     applyEnvironment(false);
+    disposeSceneEnvironment(scene);
     renderer.dispose();
     scene.clear();
   };

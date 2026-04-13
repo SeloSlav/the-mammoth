@@ -440,8 +440,6 @@ export function computeSwitchbackStairLayout(
 
   const wzHi = iz1 - strip;
   const wzLo = iz0 + strip;
-  const wzMid = (wzLo + wzHi) * 0.5;
-  const wzHalfD = Math.max(lh, Math.abs(wzHi - wzLo) * 0.5 + 0.02);
 
   /**
    * Merged pads: **long axis along the wall** (halfW on south/north = X; halfD on east/west = Z),

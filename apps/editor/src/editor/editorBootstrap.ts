@@ -54,7 +54,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
   );
   const first = sorted[0];
 
-  useEditorStore.setState({
+  useEditorStore.setState((s) => ({
     building,
     floorDocs,
     interiorDocs,
@@ -65,7 +65,8 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     dirty: false,
     historyPast: [],
     historyFuture: [],
-  });
+    contentStructureEpoch: s.contentStructureEpoch + 1,
+  }));
 }
 
 export async function reloadEditorFromContent(): Promise<void> {

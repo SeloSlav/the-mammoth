@@ -8,9 +8,10 @@
  * skipped. **Quality and loudness-matching beat raw count** — ten mismatched clips will always sound
  * worse than six mastered as a set.
  *
- * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset). Export
- * mono or centered stereo, **match peak/RMS** across variants, trim trailing silence. Stride-locked
- * to `headBobPhase` (same as view bob). Call {@link LocalGameAudio.unlock} from a **user gesture**.
+ * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset). Clips
+ * are **~1.00 s** each (hit early, tail pad OK). **Batch-normalize** after changing assets:
+ * `pnpm content:normalize-footsteps` (RMS-match the set + shared peak ceiling; `--dry-run` first).
+ * Stride-locked to `headBobPhase`. Call {@link LocalGameAudio.unlock} from a **user gesture**.
  */
 
 import { fpLocomotionConstants } from "@the-mammoth/engine";
@@ -34,9 +35,9 @@ const IMPACT_STEMS = [
 
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
-/** Post-compressor; per-hit gain also applied. */
-const BUS_GAIN = 0.42;
-const HIT_GAIN_BASE = 0.55;
+/** Post-compressor; per-hit gain also applied (tune here for overall footstep loudness). */
+const BUS_GAIN = 0.28;
+const HIT_GAIN_BASE = 0.4;
 const HIT_GAIN_JITTER = 0.08;
 
 const PLAYBACK_JITTER = 0.018;

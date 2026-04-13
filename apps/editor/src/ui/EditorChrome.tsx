@@ -1,14 +1,12 @@
-import * as THREE from "three";
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type CSSProperties,
 } from "react";
-import type { PlacedObject } from "@the-mammoth/schemas";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
 import { spawnInFrontOfCamera } from "../editor/spawnBridge.js";
+import { useShallow } from "zustand/react/shallow";
 import {
   collectPrefabIdsFromFloors,
   collectPrefabIdsFromInteriors,
@@ -17,153 +15,61 @@ import {
   serializeInteriorDocPretty,
   useEditorStore,
 } from "../state/editorStore.js";
-
-function downloadText(filename: string, text: string) {
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function postSaveFloor(floorDocId: string, json: string): Promise<string> {
-  const res = await fetch("/__editor/save-floor", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ floorDocId, json }),
-  });
-  const t = await res.text();
-  if (!res.ok) throw new Error(t || res.statusText);
-  return t;
-}
-
-async function postSaveInterior(interiorDocId: string, json: string): Promise<string> {
-  const res = await fetch("/__editor/save-interior", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ interiorDocId, json }),
-  });
-  const t = await res.text();
-  if (!res.ok) throw new Error(t || res.statusText);
-  return t;
-}
-
-async function postSaveBuilding(json: string): Promise<string> {
-  const res = await fetch("/__editor/save-building", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ json }),
-  });
-  const t = await res.text();
-  if (!res.ok) throw new Error(t || res.statusText);
-  return t;
-}
-
-function quatToEulerDeg(rot: PlacedObject["rotation"]): [number, number, number] {
-  const q = rot
-    ? new THREE.Quaternion(rot[0], rot[1], rot[2], rot[3])
-    : new THREE.Quaternion();
-  const e = new THREE.Euler().setFromQuaternion(q, "YXZ");
-  return [
-    THREE.MathUtils.radToDeg(e.x),
-    THREE.MathUtils.radToDeg(e.y),
-    THREE.MathUtils.radToDeg(e.z),
-  ];
-}
-
-function eulerDegToQuat(rx: number, ry: number, rz: number): PlacedObject["rotation"] {
-  const e = new THREE.Euler(
-    THREE.MathUtils.degToRad(rx),
-    THREE.MathUtils.degToRad(ry),
-    THREE.MathUtils.degToRad(rz),
-    "YXZ",
-  );
-  const q = new THREE.Quaternion().setFromEuler(e);
-  return [q.x, q.y, q.z, q.w];
-}
-
-const panel: React.CSSProperties = {
-  position: "fixed",
-  right: 0,
-  top: 0,
-  bottom: 0,
-  width: 300,
-  background: "rgba(12,12,18,0.94)",
-  color: "#ddd",
-  padding: 12,
-  fontSize: 13,
-  boxSizing: "border-box",
-  overflowY: "auto",
-  zIndex: 2,
-  fontFamily: "system-ui, sans-serif",
-};
-
-const label: CSSProperties = {
-  display: "block",
-  marginTop: 10,
-  marginBottom: 4,
-  opacity: 0.9,
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const input: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  background: "#1e1e28",
-  border: "1px solid #333",
-  color: "#eee",
-  padding: "4px 6px",
-  borderRadius: 4,
-};
-
-const rowBtn: CSSProperties = {
-  marginRight: 6,
-  marginTop: 6,
-  padding: "4px 8px",
-  cursor: "pointer",
-};
+import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
+import {
+  downloadText,
+  postSaveBuilding,
+  postSaveFloor,
+  postSaveInterior,
+} from "./editorChromeNetwork.js";
+import { selectEditorChromeStore } from "./editorChromeSelectors.js";
+import {
+  editorChromeInput,
+  editorChromeLabel,
+  editorChromePanel,
+  editorChromeRowBtn,
+} from "./editorChromeStyles.js";
+import { EditorChromeInspector } from "./EditorChromeInspector.js";
+import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 
 export function EditorChrome() {
-  const mode = useEditorStore((s) => s.mode);
-  const building = useEditorStore((s) => s.building);
-  const floorDocs = useEditorStore((s) => s.floorDocs);
-  const interiorDocs = useEditorStore((s) => s.interiorDocs);
-  const activeFloorDocId = useEditorStore((s) => s.activeFloorDocId);
-  const activeInteriorDocId = useEditorStore((s) => s.activeInteriorDocId);
-  const focusedStoryLevelIndex = useEditorStore((s) => s.focusedStoryLevelIndex);
-  const selectedId = useEditorStore((s) => s.selectedId);
-  const dirty = useEditorStore((s) => s.dirty);
-  const transformMode = useEditorStore((s) => s.transformMode);
-  const gridSnapM = useEditorStore((s) => s.gridSnapM);
-  const shadowsEnabled = useEditorStore((s) => s.shadowsEnabled);
-  const useHdriEnvironment = useEditorStore((s) => s.useHdriEnvironment);
-  const historyPast = useEditorStore((s) => s.historyPast);
-  const historyFuture = useEditorStore((s) => s.historyFuture);
-
-  const setMode = useEditorStore((s) => s.setMode);
-  const setActiveFloorDocId = useEditorStore((s) => s.setActiveFloorDocId);
-  const setActiveInteriorDocId = useEditorStore((s) => s.setActiveInteriorDocId);
-  const setFocusedStoryLevelIndex = useEditorStore((s) => s.setFocusedStoryLevelIndex);
-  const setTransformMode = useEditorStore((s) => s.setTransformMode);
-  const setGridSnapM = useEditorStore((s) => s.setGridSnapM);
-  const setShadowsEnabled = useEditorStore((s) => s.setShadowsEnabled);
-  const setUseHdriEnvironment = useEditorStore((s) => s.setUseHdriEnvironment);
-  const undo = useEditorStore((s) => s.undo);
-  const redo = useEditorStore((s) => s.redo);
-  const updatePlacedObject = useEditorStore((s) => s.updatePlacedObject);
-  const updateInteriorPlacement = useEditorStore((s) => s.updateInteriorPlacement);
-  const addFloorObject = useEditorStore((s) => s.addFloorObject);
-  const deleteFloorObject = useEditorStore((s) => s.deleteFloorObject);
-  const duplicateFloorObject = useEditorStore((s) => s.duplicateFloorObject);
-  const addInteriorPlacement = useEditorStore((s) => s.addInteriorPlacement);
-  const deleteInteriorPlacement = useEditorStore((s) => s.deleteInteriorPlacement);
-  const duplicateInteriorPlacement = useEditorStore((s) => s.duplicateInteriorPlacement);
-  const patchBuilding = useEditorStore((s) => s.patchBuilding);
-  const setSelectedId = useEditorStore((s) => s.setSelectedId);
+  const {
+    mode,
+    building,
+    floorDocs,
+    interiorDocs,
+    activeFloorDocId,
+    activeInteriorDocId,
+    focusedStoryLevelIndex,
+    selectedId,
+    dirty,
+    transformMode,
+    gridSnapM,
+    shadowsEnabled,
+    useHdriEnvironment,
+    historyPast,
+    historyFuture,
+    setMode,
+    setActiveFloorDocId,
+    setActiveInteriorDocId,
+    setFocusedStoryLevelIndex,
+    setTransformMode,
+    setGridSnapM,
+    setShadowsEnabled,
+    setUseHdriEnvironment,
+    undo,
+    redo,
+    updatePlacedObject,
+    updateInteriorPlacement,
+    addFloorObject,
+    deleteFloorObject,
+    duplicateFloorObject,
+    addInteriorPlacement,
+    deleteInteriorPlacement,
+    duplicateInteriorPlacement,
+    patchBuilding,
+    setSelectedId,
+  } = useEditorStore(useShallow(selectEditorChromeStore));
 
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [metaText, setMetaText] = useState("");
@@ -271,9 +177,12 @@ export function EditorChrome() {
   };
 
   const wo = building.worldOrigin ?? [0, 0, 0];
+  const label = editorChromeLabel;
+  const input = editorChromeInput;
+  const rowBtn = editorChromeRowBtn;
 
   return (
-    <div style={panel}>
+    <div style={editorChromePanel}>
       <strong style={{ fontSize: 15 }}>Level editor</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
         <strong>FloorDoc</strong> is one horizontal plate (objects = corridor / shafts / unit
@@ -497,69 +406,14 @@ export function EditorChrome() {
         ))}
       </div>
 
-      <span style={label}>Outliner</span>
-      <div
-        style={{
-          maxHeight: 160,
-          overflowY: "auto",
-          border: "1px solid #333",
-          borderRadius: 4,
-          background: "#16161c",
-        }}
-      >
-        {mode === "floor" && activeFloorDoc
-          ? activeFloorDoc.objects.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => setSelectedId(o.id)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "6px 8px",
-                  border: "none",
-                  borderBottom: "1px solid #282830",
-                  background:
-                    selectedId === o.id ? "rgba(60,90,140,0.35)" : "transparent",
-                  color: "#ddd",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                {o.id}{" "}
-                <span style={{ opacity: 0.65 }}>({o.prefabId})</span>
-              </button>
-            ))
-          : null}
-        {mode === "interior" && activeInteriorDoc
-          ? activeInteriorDoc.placements.map((p) => (
-              <button
-                key={p.entityId}
-                type="button"
-                onClick={() => setSelectedId(p.entityId)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "6px 8px",
-                  border: "none",
-                  borderBottom: "1px solid #282830",
-                  background:
-                    selectedId === p.entityId ? "rgba(60,90,140,0.35)" : "transparent",
-                  color: "#ddd",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                {p.entityId}{" "}
-                <span style={{ opacity: 0.65 }}>
-                  ({p.prefabId ?? p.assetId ?? "?"})
-                </span>
-              </button>
-            ))
-          : null}
-      </div>
+      <EditorChromeOutliner
+        mode={mode}
+        activeFloorDoc={activeFloorDoc}
+        activeInteriorDoc={activeInteriorDoc}
+        selectedId={selectedId}
+        setSelectedId={setSelectedId}
+        label={label}
+      />
 
       <span style={label}>Prefab palette</span>
       <select
@@ -636,231 +490,23 @@ export function EditorChrome() {
         </button>
       </div>
 
-      <span style={label}>Inspector</span>
-      {!selectedId ? (
-        <p style={{ opacity: 0.7 }}>Click a volume in the 3D view or outliner.</p>
-      ) : null}
-
-      {selectedFloorObj ? (
-        <>
-          <label style={label}>prefabId</label>
-          <input
-            style={input}
-            value={selectedFloorObj.prefabId}
-            onChange={(e) =>
-              updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
-                prefabId: e.target.value,
-              })
-            }
-          />
-          <label style={label}>position</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={0.1}
-                value={selectedFloorObj.position[i]}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  const p = [...selectedFloorObj.position] as [
-                    number,
-                    number,
-                    number,
-                  ];
-                  p[i] = Number.isFinite(v) ? v : 0;
-                  updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
-                    position: p,
-                  });
-                }}
-              />
-            ))}
-          </div>
-          <label style={label}>scale</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={0.05}
-                value={selectedFloorObj.scale?.[i] ?? 1}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  const p = [
-                    selectedFloorObj.scale?.[0] ?? 1,
-                    selectedFloorObj.scale?.[1] ?? 1,
-                    selectedFloorObj.scale?.[2] ?? 1,
-                  ] as [number, number, number];
-                  p[i] = Number.isFinite(v) ? v : 1;
-                  updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
-                    scale: p,
-                  });
-                }}
-              />
-            ))}
-          </div>
-          <label style={label}>rotation (Euler °, YXZ)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={1}
-                value={euler[i].toFixed(2)}
-                onChange={(e) =>
-                  updateEuler(i, Number(e.target.value) || 0)
-                }
-              />
-            ))}
-          </div>
-          <label style={label}>metadata (JSON) — use editorMaterial.mapUrl etc.</label>
-          <textarea
-            style={{ ...input, minHeight: 100, fontFamily: "monospace", fontSize: 11 }}
-            value={metaText}
-            onChange={(e) => setMetaText(e.target.value)}
-            onBlur={() => {
-              const t = metaText.trim();
-              if (!t) {
-                updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
-                  metadata: undefined,
-                });
-                setMetaErr(null);
-                return;
-              }
-              try {
-                const parsed = JSON.parse(t) as Record<string, unknown>;
-                updatePlacedObject(activeFloorDocId, selectedFloorObj.id, {
-                  metadata: parsed,
-                });
-                setMetaErr(null);
-              } catch {
-                setMetaErr("Invalid JSON");
-              }
-            }}
-          />
-          {metaErr ? <p style={{ color: "#f66", fontSize: 12 }}>{metaErr}</p> : null}
-        </>
-      ) : null}
-
-      {selectedInteriorPl ? (
-        <>
-          <label style={label}>prefabId</label>
-          <input
-            style={input}
-            value={selectedInteriorPl.prefabId ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              updateInteriorPlacement(
-                activeInteriorDocId,
-                selectedInteriorPl.entityId,
-                {
-                  prefabId: v.length > 0 ? v : selectedInteriorPl.prefabId,
-                },
-              );
-            }}
-          />
-          <label style={label}>position</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={0.1}
-                value={selectedInteriorPl.position[i]}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  const p = [...selectedInteriorPl.position] as [
-                    number,
-                    number,
-                    number,
-                  ];
-                  p[i] = Number.isFinite(v) ? v : 0;
-                  updateInteriorPlacement(
-                    activeInteriorDocId,
-                    selectedInteriorPl.entityId,
-                    { position: p },
-                  );
-                }}
-              />
-            ))}
-          </div>
-          <label style={label}>scale</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={0.05}
-                value={selectedInteriorPl.scale?.[i] ?? 1}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  const p = [
-                    selectedInteriorPl.scale?.[0] ?? 1,
-                    selectedInteriorPl.scale?.[1] ?? 1,
-                    selectedInteriorPl.scale?.[2] ?? 1,
-                  ] as [number, number, number];
-                  p[i] = Number.isFinite(v) ? v : 1;
-                  updateInteriorPlacement(
-                    activeInteriorDocId,
-                    selectedInteriorPl.entityId,
-                    { scale: p },
-                  );
-                }}
-              />
-            ))}
-          </div>
-          <label style={label}>rotation (Euler °, YXZ)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {([0, 1, 2] as const).map((i) => (
-              <input
-                key={i}
-                style={input}
-                type="number"
-                step={1}
-                value={euler[i].toFixed(2)}
-                onChange={(e) =>
-                  updateEuler(i, Number(e.target.value) || 0)
-                }
-              />
-            ))}
-          </div>
-          <label style={label}>overrides (JSON)</label>
-          <textarea
-            style={{ ...input, minHeight: 80, fontFamily: "monospace", fontSize: 11 }}
-            value={metaText}
-            onChange={(e) => setMetaText(e.target.value)}
-            onBlur={() => {
-              const t = metaText.trim();
-              if (!t) {
-                updateInteriorPlacement(
-                  activeInteriorDocId,
-                  selectedInteriorPl.entityId,
-                  { overrides: undefined },
-                );
-                setMetaErr(null);
-                return;
-              }
-              try {
-                const parsed = JSON.parse(t) as Record<string, unknown>;
-                updateInteriorPlacement(
-                  activeInteriorDocId,
-                  selectedInteriorPl.entityId,
-                  { overrides: parsed },
-                );
-                setMetaErr(null);
-              } catch {
-                setMetaErr("Invalid JSON");
-              }
-            }}
-          />
-          {metaErr ? <p style={{ color: "#f66", fontSize: 12 }}>{metaErr}</p> : null}
-        </>
-      ) : null}
+      <EditorChromeInspector
+        selectedId={selectedId}
+        selectedFloorObj={selectedFloorObj}
+        selectedInteriorPl={selectedInteriorPl}
+        activeFloorDocId={activeFloorDocId}
+        activeInteriorDocId={activeInteriorDocId}
+        metaText={metaText}
+        setMetaText={setMetaText}
+        metaErr={metaErr}
+        setMetaErr={setMetaErr}
+        euler={euler}
+        updateEuler={updateEuler}
+        updatePlacedObject={updatePlacedObject}
+        updateInteriorPlacement={updateInteriorPlacement}
+        label={label}
+        input={input}
+      />
     </div>
   );
 }

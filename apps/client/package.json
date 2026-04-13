@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "check-types": "tsc --noEmit",
-    "test": "vitest",
-    "test:run": "vitest run"
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@the-mammoth/assets": "workspace:*",

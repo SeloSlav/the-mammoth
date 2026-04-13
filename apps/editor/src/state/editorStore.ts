@@ -19,6 +19,7 @@ type HistoryEntry = {
   building: BuildingDoc;
   selectedId: string | null;
   dirty: boolean;
+  contentStructureEpoch: number;
 };
 
 function cloneHistorySlice(state: EditorState): HistoryEntry {
@@ -28,6 +29,7 @@ function cloneHistorySlice(state: EditorState): HistoryEntry {
     building: structuredClone(state.building),
     selectedId: state.selectedId,
     dirty: state.dirty,
+    contentStructureEpoch: state.contentStructureEpoch ?? 0,
   };
 }
 
@@ -53,6 +55,8 @@ export interface EditorState {
   gridSnapM: number;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
+  /** Incremented only when 3D mesh regen is required (not on pure transform edits). */
+  contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
 
@@ -127,6 +131,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   useHdriEnvironment: true,
   historyPast: [],
   historyFuture: [],
+  contentStructureEpoch: 0,
 
   beginTransaction: () => {
     transactionDepth += 1;
@@ -157,6 +162,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: prev.building,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
+      contentStructureEpoch: prev.contentStructureEpoch ?? 0,
     });
   },
 
@@ -174,19 +180,49 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: next.building,
       selectedId: next.selectedId,
       dirty: next.dirty,
+      contentStructureEpoch: next.contentStructureEpoch ?? 0,
     });
   },
 
-  setMode: (mode) => set({ mode }),
-  setBuilding: (building) => set({ building }),
+  setMode: (mode) =>
+    set((s) =>
+      s.mode === mode
+        ? { mode }
+        : { mode, contentStructureEpoch: s.contentStructureEpoch + 1 },
+    ),
+  setBuilding: (building) =>
+    set((s) => ({
+      building,
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
   patchBuilding: (fn) => {
     maybePushHistory(get, set);
-    set((s) => ({ building: fn(s.building), dirty: true }));
+    set((s) => ({
+      building: fn(s.building),
+      dirty: true,
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    }));
   },
-  setFloorDoc: (id, doc) => set((s) => ({ floorDocs: { ...s.floorDocs, [id]: doc } })),
-  setInteriorDoc: (id, doc) => set((s) => ({ interiorDocs: { ...s.interiorDocs, [id]: doc } })),
+  setFloorDoc: (id, doc) =>
+    set((s) => ({
+      floorDocs: { ...s.floorDocs, [id]: doc },
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+  setInteriorDoc: (id, doc) =>
+    set((s) => ({
+      interiorDocs: { ...s.interiorDocs, [id]: doc },
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
   setActiveFloorDocId: (activeFloorDocId) => set({ activeFloorDocId }),
-  setActiveInteriorDocId: (activeInteriorDocId) => set({ activeInteriorDocId }),
+  setActiveInteriorDocId: (activeInteriorDocId) =>
+    set((s) =>
+      s.activeInteriorDocId === activeInteriorDocId
+        ? { activeInteriorDocId }
+        : {
+            activeInteriorDocId,
+            contentStructureEpoch: s.contentStructureEpoch + 1,
+          },
+    ),
   setFocusedStoryLevelIndex: (focusedStoryLevelIndex) => set({ focusedStoryLevelIndex }),
   setSelectedId: (selectedId) => set({ selectedId }),
   setDirty: (dirty) => set({ dirty }),
@@ -200,6 +236,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updatePlacedObject: (floorDocId, objectId, patch) => {
     maybePushHistory(get, set);
+    const structural = "prefabId" in patch || "metadata" in patch;
     set((s) => {
       const cur = s.floorDocs[floorDocId];
       if (!cur) return s;
@@ -209,12 +246,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         floorDocs: { ...s.floorDocs, [floorDocId]: { ...cur, objects } },
         dirty: true,
+        ...(structural
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     });
   },
 
   updateInteriorPlacement: (interiorDocId, entityId, patch) => {
     maybePushHistory(get, set);
+    const structural =
+      "prefabId" in patch ||
+      "assetId" in patch ||
+      "overrides" in patch;
     set((s) => {
       const cur = s.interiorDocs[interiorDocId];
       if (!cur) return s;
@@ -227,6 +271,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           [interiorDocId]: { ...cur, placements },
         },
         dirty: true,
+        ...(structural
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     });
   },
@@ -243,6 +290,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: obj.id,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -262,6 +310,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: s.selectedId === objectId ? null : s.selectedId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -289,6 +338,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: copy.id,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -305,6 +355,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: row.entityId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -324,6 +375,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: s.selectedId === entityId ? null : s.selectedId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -351,6 +403,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
         dirty: true,
         selectedId: copy.entityId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -361,6 +414,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       historyPast: [],
       historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
 
   replaceInteriorDocFromRemote: (id, doc) =>
@@ -369,15 +423,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       historyPast: [],
       historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
 
   replaceBuildingFromRemote: (doc) =>
-    set({
+    set((s) => ({
       building: BuildingDocSchema.parse(doc),
       dirty: false,
       historyPast: [],
       historyFuture: [],
-    }),
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
 }));
 
 function maybePushHistory(

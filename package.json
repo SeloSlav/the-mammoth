@@ -14,14 +14,18 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "test": "turbo run test",
     "content:gen-mamutica-floor": "node scripts/gen-mamutica-floor-doc.mjs",
-    "content:gen-walk-aabbs": "tsx scripts/gen-walk-aabbs.ts"
+    "content:gen-walk-aabbs": "tsx scripts/gen-walk-aabbs.ts",
+    "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",
+    "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run"
   },
   "devDependencies": {
-    "tsx": "^4.19.3",
     "prettier": "^3.7.4",
+    "tsx": "^4.19.3",
     "turbo": "^2.9.6",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "wavefile": "^11.0.0"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {

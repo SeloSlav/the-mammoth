@@ -2,7 +2,6 @@ import * as THREE from "three";
 import {
   computeSwitchbackStairLayout,
   STOREY_SPACING_M,
-  type StairSwitchbackLayout,
   type SwitchbackStairOpts,
 } from "./stairWellGeometry.js";
 import {

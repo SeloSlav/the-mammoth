@@ -22,17 +22,22 @@ import {
   hollowShellXZRectsWithShaftCutouts,
   mergeElevatorShaftSlabHolesFromFloorDocs,
   punchElevatorHolesInShellRects,
-  subtractHolesFromRect,
   type RectXZ,
   type ShaftSlabHole,
 } from "./shaftPlanformClip.js";
-import { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
+import {
+  GROUND_SLAB_MARGIN_XZ,
+  GROUND_SLAB_THICKNESS_M,
+  addConcreteSlabWithOptionalShaftHoles,
+  addGroundFootprintGrassOccluder,
+} from "./floorSlabPlaceholder.js";
 import {
   collectCorridorOrLobbyFootprintsFromFloor,
   corridorFlushGapForShaftDoor,
   elevatorDoorFaceFromFloorCorridors,
   firstCorridorOrLobbyFromFloor,
 } from "./shaftCorridorFlush.js";
+import type { BuildFloorMeshesOptions } from "./elevatorDoorFacesFromGroundFloorDoc.js";
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
 
@@ -1229,140 +1234,6 @@ function expandBoxForPlacedObject(
   max.z = Math.max(max.z, pz + hz);
 }
 
-/** Matches {@link addConcreteSlabWithOptionalShaftHoles} call on the ground storey. */
-const GROUND_SLAB_MARGIN_XZ = 0.8;
-const GROUND_SLAB_THICKNESS_M = 0.16;
-
-/**
- * Solid slab under the holed structural pad so shaft / lobby cutouts do not show the outdoor
- * grass plane (`FP_OUTDOOR_GROUND_VISUAL_Y` in world space). Skipped when the plate sits far
- * above ground (no sensible column to the backdrop plane).
- */
-function addGroundFootprintGrassOccluder(
-  root: THREE.Group,
-  min: THREE.Vector3,
-  max: THREE.Vector3,
-  plateWorldOriginY: number,
-): void {
-  const x0 = min.x - GROUND_SLAB_MARGIN_XZ;
-  const x1 = max.x + GROUND_SLAB_MARGIN_XZ;
-  const z0 = min.z - GROUND_SLAB_MARGIN_XZ;
-  const z1 = max.z + GROUND_SLAB_MARGIN_XZ;
-  const w = x1 - x0;
-  const d = z1 - z0;
-  const cx = (x0 + x1) * 0.5;
-  const cz = (z0 + z1) * 0.5;
-
-  const yLow = min.y - GROUND_SLAB_THICKNESS_M - 0.006;
-  const yHigh =
-    FP_OUTDOOR_GROUND_VISUAL_Y + 0.012 - plateWorldOriginY;
-  if (yHigh <= yLow + 1e-4) return;
-
-  const h = yHigh - yLow;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat.slab);
-  mesh.name = "ground_footprint_grass_occluder";
-  mesh.position.set(cx, yLow + h * 0.5, cz);
-  root.add(mesh);
-}
-
-function addConcreteSlabWithOptionalShaftHoles(
-  root: THREE.Group,
-  min: THREE.Vector3,
-  max: THREE.Vector3,
-  marginXZ: number,
-  thickness: number,
-  holes: readonly ShaftSlabHole[],
-): void {
-  const x0 = min.x - marginXZ;
-  const x1 = max.x + marginXZ;
-  const z0 = min.z - marginXZ;
-  const z1 = max.z + marginXZ;
-  const bottom = min.y - thickness * 0.5;
-  const slabRect: RectXZ = { x0, x1, z0, z1 };
-  let pieces =
-    holes.length > 0 ? subtractHolesFromRect(slabRect, holes) : [slabRect];
-  if (pieces.length === 0 && holes.length > 0) {
-    pieces = subtractHolesFromRect(slabRect, holes, 0.001);
-  }
-  let i = 0;
-  for (const p of pieces) {
-    const w = p.x1 - p.x0;
-    const d = p.z1 - p.z0;
-    const cx = (p.x0 + p.x1) * 0.5;
-    const cz = (p.z0 + p.z1) * 0.5;
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(w, thickness, d),
-      mat.slab,
-    );
-    slab.name = holes.length > 0 ? `floor_slab_piece_${i}` : "floor_slab_placeholder";
-    i += 1;
-    slab.position.set(cx, bottom, cz);
-    root.add(slab);
-  }
-}
-
-export type BuildFloorMeshesOptions = {
-  /**
-   * Skip per-plate stair geometry for columns that are drawn once as full-height shafts
-   * (`shaftPlanKey` from `obj.position` XZ).
-   */
-  stairShaftSkipKeys?: ReadonlySet<string>;
-  /** 1-based storey index (elevator pit / grass occluder / lobby shell use this). */
-  storyLevelIndex?: number;
-  /**
-   * When stacking plates, union of all shaft/stair holes (plate-space XZ). Passed from
-   * {@link instantiateBuildingFloorStack} so upper slabs/shells never cap another storey’s hoistway.
-   */
-  shaftHolesPlateMerged?: readonly ShaftSlabHole[];
-  /** Elevator-only merged holes (plate-space); extra punch on hollow shell floor/ceiling. */
-  shaftElevatorsMerged?: readonly ShaftSlabHole[];
-  /**
-   * World-space Y of this plate’s origin (building `worldOrigin[1]` + storey offset). Used so
-   * the ground-storey grass occluder lines up with {@link FP_OUTDOOR_GROUND_VISUAL_Y}.
-   */
-  plateWorldOriginY?: number;
-  /**
-   * Per {@link shaftPlanKey}, door wall face chosen on **story 1** of a stacked building.
-   * Passed from {@link instantiateBuildingFloorStack} so upper storeys match the ground door side.
-   */
-  elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
-};
-
-/**
- * Ground-storey elevator door faces (plate-space), keyed by {@link shaftPlanKey} at each car’s XZ.
- */
-export function elevatorDoorFacesFromGroundFloorDoc(doc: FloorDoc): Map<string, CardinalFace> {
-  const floor = withoutElevatorsInStairwells(doc);
-  let plateCx = 0;
-  let plateCz = 0;
-  let plateN = 0;
-  for (const o of floor.objects) {
-    plateCx += o.position[0];
-    plateCz += o.position[2];
-    plateN += 1;
-  }
-  if (plateN > 0) {
-    plateCx /= plateN;
-    plateCz /= plateN;
-  }
-  const out = new Map<string, CardinalFace>();
-  for (const o of floor.objects) {
-    if (!o.prefabId.toLowerCase().includes("elevator")) continue;
-    const k = shaftPlanKey(o.position[0], o.position[2]);
-    out.set(
-      k,
-      elevatorDoorFaceFromFloorCorridors(
-        o.position[0],
-        o.position[2],
-        floor,
-        plateCx,
-        plateCz,
-      ),
-    );
-  }
-  return out;
-}
-
 /**
  * Turns each `FloorDoc` volume into a hollow shell (floor + ceiling + four walls).
  */
@@ -1446,6 +1317,8 @@ export function buildFloorMeshes(
 
     const room = new THREE.Group();
     room.name = obj.id;
+    room.userData.placedObjectId = obj.id;
+    room.userData.floorDocId = floor.id;
     room.position.set(obj.position[0], obj.position[1], obj.position[2]);
     if (obj.rotation)
       room.quaternion.set(
@@ -1564,10 +1437,11 @@ export function buildFloorMeshes(
       GROUND_SLAB_MARGIN_XZ,
       GROUND_SLAB_THICKNESS_M,
       shaftHolesPlate,
+      mat.slab,
     );
     const plateWy = opts?.plateWorldOriginY ?? 0;
     if (story === 1 || story === 99) {
-      addGroundFootprintGrassOccluder(root, min, max, plateWy);
+      addGroundFootprintGrassOccluder(root, min, max, plateWy, mat.slab);
     }
   }
 

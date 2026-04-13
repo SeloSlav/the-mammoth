@@ -16,16 +16,16 @@ function readEditorMaterial(meta: Record<string, unknown> | undefined): EditorMa
 
 /**
  * Applies `metadata.editorMaterial` to meshes under one placement group (floor mode).
+ * Targets every plate copy with matching `floorDocId` + `placedObjectId` (not only the first by name).
  */
 export function applyEditorMaterialsToFloorPlacement(
   root: THREE.Object3D,
+  floorDocId: string,
   obj: PlacedObject,
   textureLoader: THREE.TextureLoader,
 ): void {
   const em = readEditorMaterial(obj.metadata as Record<string, unknown> | undefined);
   if (!em?.mapUrl) return;
-  const group = root.getObjectByName(obj.id);
-  if (!group) return;
 
   const tex = textureLoader.load(
     em.mapUrl,
@@ -40,16 +40,25 @@ export function applyEditorMaterialsToFloorPlacement(
     },
   );
 
-  group.traverse((ch) => {
-    if (!(ch instanceof THREE.Mesh)) return;
-    const prev = ch.material;
-    const baseColor =
-      prev instanceof THREE.MeshStandardMaterial ? prev.color.getHex() : 0xaaaaaa;
-    ch.material = new THREE.MeshStandardMaterial({
-      map: tex,
-      color: baseColor,
-      roughness: em.roughness ?? 0.65,
-      metalness: em.metalness ?? 0,
+  root.traverse((ch) => {
+    if (!(ch instanceof THREE.Group)) return;
+    if (
+      ch.userData.placedObjectId !== obj.id ||
+      ch.userData.floorDocId !== floorDocId
+    ) {
+      return;
+    }
+    ch.traverse((mesh) => {
+      if (!(mesh instanceof THREE.Mesh)) return;
+      const prev = mesh.material;
+      const baseColor =
+        prev instanceof THREE.MeshStandardMaterial ? prev.color.getHex() : 0xaaaaaa;
+      mesh.material = new THREE.MeshStandardMaterial({
+        map: tex,
+        color: baseColor,
+        roughness: em.roughness ?? 0.65,
+        metalness: em.metalness ?? 0,
+      });
     });
   });
 }

@@ -12,10 +12,11 @@ import {
   type InteriorDoc,
 } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
+import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import {
-  buildFloorMeshes,
   elevatorDoorFacesFromGroundFloorDoc,
-} from "./floorPlaceholderMeshes.js";
+  type BuildFloorMeshesOptions,
+} from "./elevatorDoorFacesFromGroundFloorDoc.js";
 import {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
@@ -25,10 +26,8 @@ import {
   mergeShaftSlabHolesFromFloorDocs,
 } from "./shaftPlanformClip.js";
 
-export {
-  buildFloorMeshes,
-  elevatorDoorFacesFromGroundFloorDoc,
-};
+export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc };
+export type { BuildFloorMeshesOptions };
 export {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
@@ -149,10 +148,13 @@ function addPlacementMeshes(
   root: THREE.Group,
   placements: readonly CellPlacement[],
   material: THREE.MeshStandardMaterial,
+  streamDocId?: string,
 ): void {
   for (const p of placements) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     mesh.name = p.entityId;
+    mesh.userData.placedObjectId = p.entityId;
+    if (streamDocId) mesh.userData.streamDocId = streamDocId;
     mesh.position.set(p.position[0], p.position[1], p.position[2]);
     if (p.rotation)
       mesh.quaternion.set(
@@ -198,7 +200,7 @@ export function buildCellMeshes(doc: CellDoc): THREE.Group {
     opacity: 0.85,
   });
 
-  addPlacementMeshes(root, doc.placements, propMat);
+  addPlacementMeshes(root, doc.placements, propMat, doc.id);
 
   for (const portal of doc.portals) {
     const marker = new THREE.Mesh(
@@ -234,7 +236,7 @@ export function buildInteriorMeshes(doc: InteriorDoc): THREE.Group {
     opacity: 0.85,
   });
 
-  addPlacementMeshes(root, doc.placements, propMat);
+  addPlacementMeshes(root, doc.placements, propMat, doc.id);
 
   for (const portal of doc.portals) {
     const marker = new THREE.Mesh(

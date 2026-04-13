@@ -7,8 +7,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "dev": "cross-env NODE_ENV=development tsx watch index.ts",
     "build": "tsc",
-    "keys": "node generate-keys.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "keys": "node generate-keys.js"
   },
   "keywords": [],
   "author": "",
