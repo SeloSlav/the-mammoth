@@ -6,6 +6,7 @@ mod auth;
 mod generated_walk_surfaces;
 mod movement;
 mod pose;
+mod world_sound;
 
 use spacetimedb::{ReducerContext, Table};
 use accounts::{user, User};
@@ -15,6 +16,7 @@ use pose::{player_pose, PlayerPose};
 pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
     movement::start_physics_schedule(ctx);
+    world_sound::start_cleanup_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -42,6 +44,7 @@ pub fn on_connect(ctx: &ReducerContext) {
         });
     }
     movement::ensure_player_input_row(ctx, id, 0.0);
+    world_sound::ensure_player_audio_rows(ctx, id);
 }
 
 #[spacetimedb::reducer(client_disconnected)]

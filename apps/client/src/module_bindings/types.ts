@@ -16,6 +16,14 @@ export const PhysicsTick = __t.object("PhysicsTick", {
 });
 export type PhysicsTick = __Infer<typeof PhysicsTick>;
 
+export const PlayerFootCadence = __t.object("PlayerFootCadence", {
+  identity: __t.identity(),
+  stridePhase: __t.f32(),
+  lastStrideCell: __t.i32(),
+  footRr: __t.u8(),
+});
+export type PlayerFootCadence = __Infer<typeof PlayerFootCadence>;
+
 export const PlayerInput = __t.object("PlayerInput", {
   identity: __t.identity(),
   intentSeq: __t.u64(),
@@ -23,6 +31,12 @@ export const PlayerInput = __t.object("PlayerInput", {
   aimYaw: __t.f32(),
 });
 export type PlayerInput = __Infer<typeof PlayerInput>;
+
+export const PlayerMeleeCooldown = __t.object("PlayerMeleeCooldown", {
+  identity: __t.identity(),
+  lastSwingMicros: __t.i64(),
+});
+export type PlayerMeleeCooldown = __Infer<typeof PlayerMeleeCooldown>;
 
 export const PlayerPose = __t.object("PlayerPose", {
   identity: __t.identity(),
@@ -43,4 +57,24 @@ export const User = __t.object("User", {
   username: __t.option(__t.string()),
 });
 export type User = __Infer<typeof User>;
+
+export const WorldSoundEvent = __t.object("WorldSoundEvent", {
+  id: __t.u64(),
+  kind: __t.u8(),
+  variation: __t.u8(),
+  x: __t.f32(),
+  y: __t.f32(),
+  z: __t.f32(),
+  volume: __t.f32(),
+  maxDistanceM: __t.f32(),
+  emitter: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type WorldSoundEvent = __Infer<typeof WorldSoundEvent>;
+
+export const WorldSoundEventCleanup = __t.object("WorldSoundEventCleanup", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type WorldSoundEventCleanup = __Infer<typeof WorldSoundEventCleanup>;
 

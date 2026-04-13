@@ -6,6 +6,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 use crate::accounts::user;
 use crate::auth;
 use crate::pose::{player_pose, PlayerPose};
+use crate::world_sound;
 
 // --- Bit layout (must match `apps/client/src/game/moveIntentCodec.ts`) ---
 pub const BIT_FORWARD: u8 = 1 << 0;
@@ -136,8 +137,10 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
                 aim_yaw: pose.yaw,
             });
 
+        let grounded_before = pose.grounded;
         let mut p = pose;
         integrate_one(&input, &mut p, TICK_DT);
+        world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);
     }
 }

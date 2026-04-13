@@ -34,18 +34,22 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
-import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import SetUsernameReducer from "./set_username_reducer";
+import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import PhysicsTickRow from "./physics_tick_table";
+import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerInputRow from "./player_input_table";
+import PlayerMeleeCooldownRow from "./player_melee_cooldown_table";
 import PlayerPoseRow from "./player_pose_table";
 import UserRow from "./user_table";
+import WorldSoundEventRow from "./world_sound_event_table";
+import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -62,6 +66,17 @@ const tablesSchema = __schema({
       { name: 'physics_tick_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
     ],
   }, PhysicsTickRow),
+  player_foot_cadence: __table({
+    name: 'player_foot_cadence',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_foot_cadence_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerFootCadenceRow),
   player_input: __table({
     name: 'player_input',
     indexes: [
@@ -73,6 +88,17 @@ const tablesSchema = __schema({
       { name: 'player_input_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, PlayerInputRow),
+  player_melee_cooldown: __table({
+    name: 'player_melee_cooldown',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_melee_cooldown_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerMeleeCooldownRow),
   player_pose: __table({
     name: 'player_pose',
     indexes: [
@@ -95,13 +121,35 @@ const tablesSchema = __schema({
       { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, UserRow),
+  world_sound_event: __table({
+    name: 'world_sound_event',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'world_sound_event_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, WorldSoundEventRow),
+  world_sound_event_cleanup: __table({
+    name: 'world_sound_event_cleanup',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'world_sound_event_cleanup_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, WorldSoundEventCleanupRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
-  __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("set_username", SetUsernameReducer),
+  __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),
 );
 

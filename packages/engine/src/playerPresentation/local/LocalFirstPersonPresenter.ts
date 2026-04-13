@@ -44,6 +44,11 @@ const _eLeftBind = new THREE.Euler(
 );
 const FP_RIGHT_ARM_BIND_EULER = mirrorEulerAcrossYz(_eLeftBind);
 
+const _qForearmBind = new THREE.Quaternion().setFromEuler(FP_RIGHT_ARM_BIND_EULER);
+
+/** Forearm-local: distal end of the proxy box, centered on cross-section (middle of fist). */
+const FP_RIGHT_FIST_FOREARM = new THREE.Vector3(0, 0, -0.38);
+
 /**
  * First-person-only presentation (never reuse remote body meshes).
  * Parents a viewmodel root to **`headPitch`** (via `viewModelParent`) so it does not inherit Alt
@@ -81,8 +86,8 @@ export class LocalFirstPersonPresenter {
   }
 
   /**
-   * Grip pose for `WeaponPresenter.root` **relative to `rightArmRig`**, so the on-screen layout
-   * matches the old fpRoot mount when the arm is at rest.
+   * Grip pose for `WeaponPresenter.root` **relative to `rightArmRig`**: weapon origin is the crowbar
+   * grip anchor; position targets the distal forearm proxy (fist center on cross-section).
    */
   private computeWeaponHandLocalMount(): { pos: THREE.Vector3; euler: THREE.Euler } {
     const pres = crowbarWeaponDefinition.primitivePresentation?.firstPerson;
@@ -92,18 +97,8 @@ export class LocalFirstPersonPresenter {
         euler: new THREE.Euler(0.1, 0.4, 0.12, "XYZ"),
       };
     }
-    const armPos = new THREE.Vector3(
-      this.rightShoulderRest.px,
-      this.rightShoulderRest.py,
-      this.rightShoulderRest.pz,
-    );
     /** At rest the rig has identity rotation; the forearm uses the YZ-mirrored bind of the left arm. */
     const armEuler = FP_RIGHT_ARM_BIND_EULER.clone();
-    const weaponW = new THREE.Vector3(
-      pres.mount.positionM.x,
-      pres.mount.positionM.y,
-      pres.mount.positionM.z,
-    );
     const weaponE = new THREE.Euler(
       pres.mount.eulerRad.x,
       pres.mount.eulerRad.y,
@@ -111,13 +106,12 @@ export class LocalFirstPersonPresenter {
       "XYZ",
     );
     const qArm = new THREE.Quaternion().setFromEuler(armEuler);
-    const localPos = weaponW.clone().sub(armPos).applyQuaternion(qArm.clone().invert());
+    const localPos = FP_RIGHT_FIST_FOREARM.clone()
+      .applyQuaternion(_qForearmBind)
+      .add(new THREE.Vector3(0, 0.04, -0.16));
     const qW = new THREE.Quaternion().setFromEuler(weaponE);
     const qLocal = qW.clone().multiply(qArm.clone().invert());
     const localEuler = new THREE.Euler().setFromQuaternion(qLocal, "XYZ");
-    // Grip on the bar: slight +Y; +Z pulls the tool inward vs pure authored mount.
-    localPos.z += 0.08;
-    localPos.y += 0.03;
     return { pos: localPos, euler: localEuler };
   }
 

@@ -33,6 +33,11 @@ const IMPACT_STEMS = [
   `${UI_STEM}/footstep-6`,
 ] as const;
 
+const CROWBAR_SWING_STEMS = [
+  `${UI_STEM}/weapon-crowbar-swing`,
+  `${UI_STEM}/weapon-crowbar-swing-2`,
+] as const;
+
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
 /** Post-compressor; per-hit gain also applied (tune here for overall footstep loudness). */
@@ -81,6 +86,8 @@ export class LocalGameAudio {
   private ctx: AudioContext | null = null;
   private footstepBus: GainNode | null = null;
   private impactBuffers: AudioBuffer[] = [];
+  private crowbarSwingBuffers: AudioBuffer[] = [];
+  private crowbarSwingRR = 0;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -112,6 +119,14 @@ export class LocalGameAudio {
 
     const buffers = await this.decodeImpactBuffers(ctx, this.impactUrls);
     this.impactBuffers = buffers;
+
+    const crowbarUrls = await this.resolveCrowbarSwingUrls();
+    this.crowbarSwingBuffers = await this.decodeImpactBuffers(ctx, crowbarUrls);
+    if (this.crowbarSwingBuffers.length === 0) {
+      console.warn(
+        "[LocalGameAudio] Missing crowbar swing assets: weapon-crowbar-swing.wav / weapon-crowbar-swing-2.wav under public/audio/ui/",
+      );
+    }
 
     if (this.impactBuffers.length === 0) {
       console.warn("[LocalGameAudio] Failed to decode footstep assets.");
@@ -149,11 +164,48 @@ export class LocalGameAudio {
     this.ctx = null;
     this.footstepBus = null;
     this.impactBuffers = [];
+    this.crowbarSwingBuffers = [];
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
     this.lastStrideStepCell = Number.NEGATIVE_INFINITY;
     this.impactRR = 0;
+    this.crowbarSwingRR = 0;
+  }
+
+  /** Shared Web Audio context after {@link LocalGameAudio.unlock} (for 3D world one-shots). */
+  getAudioContext(): AudioContext | null {
+    return this.ctx;
+  }
+
+  /** Decoded footstep stems — same order as on disk; for replicated footstep events. */
+  getFootstepBuffers(): readonly AudioBuffer[] {
+    return this.impactBuffers;
+  }
+
+  /**
+   * First-person crowbar swing — **local only** (immediate feedback). Other players hear the
+   * server-emitted `world_sound_event` (proximity playback on their clients).
+   */
+  playCrowbarSwingLocal(): void {
+    if (!this.unlocked || !this.ctx || !this.footstepBus || this.crowbarSwingBuffers.length === 0) {
+      return;
+    }
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+    const buf =
+      this.crowbarSwingBuffers[this.crowbarSwingRR % this.crowbarSwingBuffers.length]!;
+    this.crowbarSwingRR += 1;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 0.52 * (0.92 + Math.random() * 0.16);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.98 + Math.random() * 0.05;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
   }
 
   update(_dtSeconds: number, m: LocalGameAudioMovement): void {
@@ -235,6 +287,13 @@ export class LocalGameAudio {
       }
     }
     return out;
+  }
+
+  private async resolveCrowbarSwingUrls(): Promise<string[]> {
+    const resolved = await Promise.all(
+      CROWBAR_SWING_STEMS.map((stem) => this.resolveSource(stem)),
+    );
+    return resolved.filter((u): u is string => u != null);
   }
 
   private async resolveFootstepUrlsInBackground(): Promise<void> {

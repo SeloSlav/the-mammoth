@@ -45,6 +45,7 @@ import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 import { LocalGameAudio } from "./localGameAudio";
+import { WorldProximityAudio } from "./worldProximityAudio";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -54,6 +55,8 @@ const NET_INTERVAL_MS = 50;
 
 /** Horizontal half-extent (m) of the replicated `player_pose` box (XZ). */
 const POSE_AOI_HALF = 42;
+/** Slightly wider than pose AOI so swing/foot events at the edge are still subscribed. */
+const WORLD_SOUND_AOI_HALF = POSE_AOI_HALF + 8;
 /** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
 const POSE_AOI_RECENTER = 14;
 const MOUSE_SENS = 0.0022;
@@ -176,6 +179,13 @@ export function mountFpSession(
   const loco = createFpLocomotionState();
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
+  const worldAudio = new WorldProximityAudio(conn, () => camera);
+  let worldAudioReady = false;
+
+  const refreshWorldSoundSubscription = () => {
+    if (!worldAudioReady) return;
+    worldAudio.subscribeAoi(poseAoiAnchorX, poseAoiAnchorZ, WORLD_SOUND_AOI_HALF);
+  };
 
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
@@ -274,6 +284,7 @@ export function mountFpSession(
       .subscribe(query);
     poseAoiAnchorX = cx;
     poseAoiAnchorZ = cz;
+    refreshWorldSoundSubscription();
   };
 
   subscribePoseAoi(poseAoiAnchorX, poseAoiAnchorZ);
@@ -345,7 +356,15 @@ export function mountFpSession(
   };
 
   const onClick = () => {
-    void localAudio.unlock();
+    void (async () => {
+      await localAudio.unlock();
+      const actx = localAudio.getAudioContext();
+      if (actx) {
+        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
+        worldAudioReady = true;
+        refreshWorldSoundSubscription();
+      }
+    })();
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
 
@@ -382,6 +401,8 @@ export function mountFpSession(
       if (tMelee - lastMeleeMs >= MELEE_COOLDOWN_MS) {
         lastMeleeMs = tMelee;
         meleeAttackSeq += 1;
+        localAudio.playCrowbarSwingLocal();
+        if (conn.identity) void conn.reducers.submitMeleeSwing({});
       }
     }
 
@@ -420,6 +441,10 @@ export function mountFpSession(
 
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
+    if (worldAudioReady) {
+      worldAudio.syncListener();
+    }
+
     localAudio.update(dt, {
       horizontalSpeed: hs,
       stridePhaseRad: loco.headBobPhase,
@@ -524,6 +549,8 @@ export function mountFpSession(
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     disposeFpEnvironment();
+    worldAudio.dispose();
+    worldAudioReady = false;
     localAudio.dispose();
     presentation.dispose();
     renderer.dispose();

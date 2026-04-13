@@ -6,17 +6,13 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import OnConnectReducer from "../on_connect_reducer";
-import OnDisconnectReducer from "../on_disconnect_reducer";
-import PhysicsTickStepReducer from "../physics_tick_step_reducer";
 import PingWorldReducer from "../ping_world_reducer";
 import SetUsernameReducer from "../set_username_reducer";
+import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "../submit_move_intent_reducer";
 
-export type OnConnectParams = __Infer<typeof OnConnectReducer>;
-export type OnDisconnectParams = __Infer<typeof OnDisconnectReducer>;
-export type PhysicsTickStepParams = __Infer<typeof PhysicsTickStepReducer>;
 export type PingWorldParams = __Infer<typeof PingWorldReducer>;
 export type SetUsernameParams = __Infer<typeof SetUsernameReducer>;
+export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
 export type SubmitMoveIntentParams = __Infer<typeof SubmitMoveIntentReducer>;
 
