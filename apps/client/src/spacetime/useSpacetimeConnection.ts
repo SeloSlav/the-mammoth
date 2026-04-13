@@ -141,7 +141,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
                 bump();
               });
             })
-            .subscribe(["SELECT * FROM user"]);
+            .subscribe(["SELECT * FROM user", "SELECT * FROM inventory_item"]);
           cc.db.user.onInsert((_ctx, row) => {
             if (cc.identity?.isEqual(row.identity)) bump();
           });

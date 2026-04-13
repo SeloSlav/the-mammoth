@@ -34,6 +34,13 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
+import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
+import DropItemReducer from "./drop_item_reducer";
+import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
+import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
+import PhysicsTickStepReducer from "./physics_tick_step_reducer";
+import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
@@ -42,6 +49,9 @@ import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import DroppedItemRow from "./dropped_item_table";
+import DroppedItemCleanupRow from "./dropped_item_cleanup_table";
+import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
 import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerInputRow from "./player_input_table";
@@ -55,6 +65,39 @@ import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  dropped_item: __table({
+    name: 'dropped_item',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'dropped_item_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DroppedItemRow),
+  dropped_item_cleanup: __table({
+    name: 'dropped_item_cleanup',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'dropped_item_cleanup_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, DroppedItemCleanupRow),
+  inventory_item: __table({
+    name: 'inventory_item',
+    indexes: [
+      { name: 'instance_id', algorithm: 'btree', columns: [
+        'instanceId',
+      ] },
+    ],
+    constraints: [
+      { name: 'inventory_item_instance_id_key', constraint: 'unique', columns: ['instanceId'] },
+    ],
+  }, InventoryItemRow),
   physics_tick: __table({
     name: 'physics_tick',
     indexes: [
@@ -147,6 +190,13 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
+  __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
+  __reducerSchema("drop_item", DropItemReducer),
+  __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
+  __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
+  __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
+  __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),

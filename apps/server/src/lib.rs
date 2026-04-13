@@ -3,7 +3,11 @@
 
 mod accounts;
 mod auth;
+mod dropped_item;
 mod generated_walk_surfaces;
+mod inventory;
+mod inventory_models;
+mod items_catalog;
 mod movement;
 mod pose;
 mod world_sound;
@@ -17,6 +21,7 @@ pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
     movement::start_physics_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
+    dropped_item::start_dropped_item_cleanup_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -45,6 +50,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     }
     movement::ensure_player_input_row(ctx, id, 0.0);
     world_sound::ensure_player_audio_rows(ctx, id);
+    inventory::ensure_starter_loadout(ctx, id);
 }
 
 #[spacetimedb::reducer(client_disconnected)]

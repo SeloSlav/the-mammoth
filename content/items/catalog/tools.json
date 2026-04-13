@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "pipe_wrench",
+      "displayName": "Pipe wrench",
+      "description": "Adjustable jaw for seized fittings. Utility tool (interaction hook TBD).",
+      "category": "tool",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 14,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 5 },
+          { "itemId": "duct_tape", "quantity": 1 }
+        ]
+      }
+    },
+    {
+      "id": "claw_hammer",
+      "displayName": "Claw hammer",
+      "description": "Drive nails, pry panels, persuade latches. Utility tool (interaction hook TBD).",
+      "category": "tool",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 12,
+        "materials": [
+          { "itemId": "wood_scraps", "quantity": 4 },
+          { "itemId": "scrap_metal", "quantity": 3 }
+        ]
+      }
+    },
+    {
+      "id": "multimeter",
+      "displayName": "Multimeter",
+      "description": "Continuity and voltage checks for jury-rigged circuits. Utility tool (interaction hook TBD).",
+      "category": "tool",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 20,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 2 },
+          { "itemId": "wire_spool", "quantity": 2 },
+          { "itemId": "synthetic_polymer", "quantity": 2 }
+        ]
+      }
+    },
+    {
+      "id": "prybar_light",
+      "displayName": "Light pry bar",
+      "description": "Thin blade for gaps and seams. Not a weapon profile — utility only (interaction hook TBD).",
+      "category": "tool",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 10,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 4 }
+        ]
+      }
+    }
+  ]
+}

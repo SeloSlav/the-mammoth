@@ -1,6 +1,7 @@
 ---
 alwaysApply: false
 ---
+
 # Complexity Optimization
 
 When writing or reviewing code, identify and fix O(n) scans that run frequently or on large collections.

@@ -16,12 +16,12 @@ import {
 } from "./wallWithDoorCutout.js";
 
 const stairTread = new THREE.MeshStandardMaterial({
-  color: 0xc5c2bd,
+  color: 0xc5cad2,
   roughness: 0.92,
   metalness: 0.025,
 });
 const landingMat = new THREE.MeshStandardMaterial({
-  color: 0xb8b5b0,
+  color: 0xb8c0ca,
   roughness: 0.92,
   metalness: 0.025,
 });
@@ -32,9 +32,9 @@ const railMat = new THREE.MeshStandardMaterial({
 });
 /** Same chalky panel read as hollow shells — reads as exterior mass, not interior metal shaft. */
 const shaftWall = new THREE.MeshStandardMaterial({
-  color: 0xe1dfdb,
-  roughness: 0.96,
-  metalness: 0.018,
+  color: 0xedf1f6,
+  roughness: 0.9,
+  metalness: 0.015,
 });
 /** Pit / landing slab at hoistway bottom (world slab is open here — must not read as outdoor grass). */
 const hoistwayFloor = new THREE.MeshStandardMaterial({
@@ -43,13 +43,13 @@ const hoistwayFloor = new THREE.MeshStandardMaterial({
   metalness: 0.025,
 });
 const stairShaftWall = new THREE.MeshStandardMaterial({
-  color: 0xdddad6,
-  roughness: 0.96,
-  metalness: 0.018,
+  color: 0xe9eef4,
+  roughness: 0.9,
+  metalness: 0.015,
 });
 const shaftCeil = new THREE.MeshStandardMaterial({
-  color: 0xd0ceca,
-  roughness: 0.9,
+  color: 0xe0e6ee,
+  roughness: 0.88,
   metalness: 0.03,
 });
 const doorFrameMat = new THREE.MeshStandardMaterial({

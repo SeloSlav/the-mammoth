@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "knife",
+      "displayName": "Knife",
+      "description": "Compact blade for close work. Fast swings, low reach.",
+      "category": "weapon",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 10,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 2 },
+          { "itemId": "duct_tape", "quantity": 1 }
+        ]
+      }
+    },
+    {
+      "id": "crowbar",
+      "displayName": "Crowbar",
+      "description": "Heavy pry bar. Slower swings, high impact.",
+      "category": "weapon",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 18,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 4 },
+          { "itemId": "synthetic_polymer", "quantity": 1 }
+        ]
+      }
+    },
+    {
+      "id": "srbosjek",
+      "displayName": "Šrbosjek",
+      "description": "Regional improvised cutting tool. Balanced between speed and heft.",
+      "category": "weapon",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 22,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 3 },
+          { "itemId": "wire_spool", "quantity": 1 },
+          { "itemId": "chemical_reagent", "quantity": 1 }
+        ]
+      }
+    },
+    {
+      "id": "baseball_bat",
+      "displayName": "Baseball bat",
+      "description": "Wooden club. Wide swing arc, blunt trauma.",
+      "category": "weapon",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 8,
+        "materials": [
+          { "itemId": "wood_scraps", "quantity": 6 },
+          { "itemId": "duct_tape", "quantity": 2 }
+        ]
+      }
+    }
+  ]
+}

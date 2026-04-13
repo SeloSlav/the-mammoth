@@ -8,9 +8,5 @@ export const placeholderPrefabs = [
 ] as const;
 
 export type { ModelAssetKey, ModelRef } from "./modelRef.js";
-export type {
-  IModelLoadRegistry,
-  LoadedModelHandle,
-  ModelInstantiationResult,
-} from "./modelLoadRegistry.js";
+export type { IModelLoadRegistry, ModelInstantiationResult } from "./modelLoadRegistry.js";
 export { NoopModelLoadRegistry } from "./modelLoadRegistry.js";

@@ -218,9 +218,7 @@ export function stepFpLocomotion(
       1,
     );
     state.headBobPhase += h * THREE.MathUtils.lerp(0, 6.5, walkStrength);
-    bob =
-      Math.sin(state.headBobPhase * 2) * 0.0024 * walkStrength +
-      Math.sin(state.headBobPhase * 0.5) * 0.0013 * walkStrength;
+    bob = Math.sin(state.headBobPhase * 2) * 0.0011 * walkStrength;
   }
 
   return state.eyeSmoothed + bob;

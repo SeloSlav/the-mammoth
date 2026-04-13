@@ -3,6 +3,7 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import checker from "vite-plugin-checker";
+import { contentDevStaticGetMiddleware } from "./src/vite/contentDevMiddleware.js";
 
 /**
  * Vite’s default watcher can miss edits under pnpm’s symlinked `node_modules` layout (especially on
@@ -19,9 +20,17 @@ function watchWorkspaceWorldSrc(): Plugin {
   };
 }
 
+const repoRoot = path.resolve(__dirname, "../..");
+
 export default defineConfig({
   plugins: [
     watchWorkspaceWorldSrc(),
+    {
+      name: "content-dev-static-get",
+      configureServer(server) {
+        server.middlewares.use(contentDevStaticGetMiddleware(repoRoot));
+      },
+    },
     react(),
     checker({ typescript: { tsconfigPath: "tsconfig.json" } }),
   ],

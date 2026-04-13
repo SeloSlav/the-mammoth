@@ -1,18 +1,39 @@
 import type { WeaponDefinition } from "./weaponTypes.js";
+import type { WeaponPrimitivePresentationDoc } from "./weaponPrimitiveAuthoring.js";
 import crowbarPresentationJson from "../../../../content/weapons/crowbar.presentation.json" with {
+  type: "json",
+};
+import knifePresentationJson from "../../../../content/weapons/knife.presentation.json" with {
+  type: "json",
+};
+import srbosjekPresentationJson from "../../../../content/weapons/srbosjek.presentation.json" with {
+  type: "json",
+};
+import baseballBatPresentationJson from "../../../../content/weapons/baseball_bat.presentation.json" with {
   type: "json",
 };
 import { parseWeaponPrimitivePresentationDoc } from "./weaponPrimitiveAuthoring.js";
 
-const crowbarPrimitivePresentation = parseWeaponPrimitivePresentationDoc(
+const crowbarPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
   crowbarPresentationJson,
 );
 
-/** Sample melee — placeholder geometry + future GLB key. */
+const knifePrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
+  knifePresentationJson,
+);
+
+const srbosjekPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
+  srbosjekPresentationJson,
+);
+
+const baseballBatPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
+  baseballBatPresentationJson,
+);
+
 export const crowbarWeaponDefinition: WeaponDefinition = {
   id: "crowbar",
   displayName: "Crowbar",
-  primitivePresentation: crowbarPrimitivePresentation,
+  primitivePresentation: crowbarPrimitivePresentationBundled,
   modelRef: {
     kind: "gltf",
     key: "weapons/crowbar",
@@ -30,6 +51,7 @@ export const crowbarWeaponDefinition: WeaponDefinition = {
 export const knifeWeaponDefinition: WeaponDefinition = {
   id: "knife",
   displayName: "Knife",
+  primitivePresentation: knifePrimitivePresentationBundled,
   modelRef: {
     kind: "gltf",
     key: "weapons/knife",
@@ -42,19 +64,38 @@ export const knifeWeaponDefinition: WeaponDefinition = {
   primitiveSwingDurationS: 0.28,
 };
 
-export const pistolWeaponDefinition: WeaponDefinition = {
-  id: "pistol",
-  displayName: "Pistol",
+export const srbosjekWeaponDefinition: WeaponDefinition = {
+  id: "srbosjek",
+  displayName: "Šrbosjek",
+  primitivePresentation: srbosjekPrimitivePresentationBundled,
   modelRef: {
     kind: "gltf",
-    key: "weapons/pistol",
-    uri: "/static/models/weapons/pistol.glb",
+    key: "weapons/srbosjek",
+    uri: "/static/models/weapons/srbosjek.glb",
   },
   animationSet: {
-    idle: "pistol_idle",
-    aim: "pistol_aim",
-    reload: "pistol_reload",
-    attack_light: "pistol_fire",
+    idle: "srbosjek_idle",
+    attack_light: "srbosjek_swing_light",
+    attack_heavy: "srbosjek_swing_heavy",
+    inspect: "srbosjek_inspect",
   },
-  primitiveSwingDurationS: 0.12,
+  primitiveSwingDurationS: 0.48,
+};
+
+export const baseballBatWeaponDefinition: WeaponDefinition = {
+  id: "baseball_bat",
+  displayName: "Baseball bat",
+  primitivePresentation: baseballBatPrimitivePresentationBundled,
+  modelRef: {
+    kind: "gltf",
+    key: "weapons/baseball_bat",
+    uri: "/static/models/weapons/baseball_bat.glb",
+  },
+  animationSet: {
+    idle: "baseball_bat_idle",
+    attack_light: "baseball_bat_swing_light",
+    attack_heavy: "baseball_bat_swing_heavy",
+    inspect: "baseball_bat_inspect",
+  },
+  primitiveSwingDurationS: 0.5,
 };

@@ -76,15 +76,32 @@ export type {
   WeaponPresentationRole,
 } from "./weapons/weaponTypes.js";
 export {
+  baseballBatWeaponDefinition,
   crowbarWeaponDefinition,
   knifeWeaponDefinition,
-  pistolWeaponDefinition,
+  srbosjekWeaponDefinition,
 } from "./weapons/sampleDefinitions.js";
+export {
+  ALL_WEAPON_DEFINITIONS,
+  WEAPON_DEFINITION_ID_SET,
+  applyWeaponPrimitivePresentationDoc,
+  equippedHeldItemIdFromDefId,
+  getWeaponDefinition,
+  getWeaponDefinitionForEquippedPrimary,
+} from "./weapons/weaponRegistry.js";
 export { WeaponPresenter, type WeaponPresenterConfig } from "./weapons/WeaponPresenter.js";
 export {
+  FP_GRIP_ANCHOR_MAX_ABS_M,
+  FP_RIG_ROOT_MAX_ABS_M,
+  FP_RIG_ROOT_XZ_MAX_ABS_M,
+  FP_RIG_ROOT_Y_MAX_M,
+  FP_RIG_ROOT_Y_MIN_M,
+  clampFpRigRootPositionInPlace,
+  isFpRigRootPositionAuthorable,
   parseWeaponPrimitivePresentationDoc,
   primitiveMeleeSwingTrackT,
   samplePrimitiveMeleeSwing,
+  type FpViewmodelAuthoringDoc,
   type PrimitiveRolePresentation,
   type PrimitiveSwingKeyframe,
   type WeaponAuthorVec3,
@@ -93,13 +110,17 @@ export {
 
 export {
   PlayerPresentationManager,
+  FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
   LocalFirstPersonPresenter,
   RemotePlayerPresenter,
   buildPrimitiveHumanoid,
+  FP_MELEE_HAND_RIGHT,
   type PlayerPresentationManagerOptions,
   type LocalFirstPersonPresenterOptions,
+  type FpAuthoringPick,
   type PrimitiveHumanoidParts,
   type MeleeCombatVisualEvent,
   type MeleeCombatVisualSink,
   type HitTracePlaceholder,
 } from "./playerPresentation/index.js";
+export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";

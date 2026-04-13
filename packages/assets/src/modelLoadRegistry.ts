@@ -1,36 +1,33 @@
 import type { ModelRef } from "./modelRef.js";
 
 /**
- * Async model pipeline — implemented in the client/engine with THREE.GLTFLoader later.
- * Keeps `@the-mammoth/assets` free of three.js while giving a single injection point.
+ * Successful GLB clone for scene attachment. Callers own `root` and must dispose GPU resources
+ * (e.g. traverse meshes) when removing the instance — registries do not retain per-instance handles.
  */
-export type LoadedModelHandle = {
-  dispose: () => void;
-};
-
 export type ModelInstantiationResult =
-  | { ok: true; handle: LoadedModelHandle }
+  | { ok: true; root: object }
   | { ok: false; error: string };
 
 export interface IModelLoadRegistry {
-  /** Cache + instantiate clone for a scene attachment. */
-  instantiate(ref: ModelRef): Promise<ModelInstantiationResult>;
+  /** Load and cache template for `ref` (required before {@link instantiateLoaded}). */
   preload(ref: ModelRef): Promise<void>;
+  /**
+   * Clone a previously preloaded GLTF template. **Sync** after successful `preload`.
+   * @throws Never — returns `{ ok: false }` if the template is missing or `ref` is not GLTF.
+   */
+  instantiateLoaded(ref: Extract<ModelRef, { kind: "gltf" }>): ModelInstantiationResult;
 }
 
-/** Default until GLB pipeline lands — callers keep primitive visuals. */
+/** Used in tests or headless tooling where no GLB pipeline is wired. */
 export class NoopModelLoadRegistry implements IModelLoadRegistry {
-  async instantiate(ref: ModelRef): Promise<ModelInstantiationResult> {
-    if (ref.kind === "gltf") {
-      return {
-        ok: false,
-        error: `GLTF load not wired for ${ref.key} (${ref.uri})`,
-      };
-    }
-    return { ok: false, error: "primitive_fallback — no GLB instance" };
-  }
-
   async preload(ref: ModelRef): Promise<void> {
     void ref;
+  }
+
+  instantiateLoaded(ref: Extract<ModelRef, { kind: "gltf" }>): ModelInstantiationResult {
+    return {
+      ok: false,
+      error: `NoopModelLoadRegistry: GLB not available (${ref.key} → ${ref.uri})`,
+    };
   }
 }

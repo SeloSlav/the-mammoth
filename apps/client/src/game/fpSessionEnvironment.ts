@@ -14,7 +14,7 @@ export function attachFpSessionEnvironment(
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.92;
+  renderer.toneMappingExposure = 1.02;
 
   const sky = new Sky();
   sky.name = "fp_session_sky";
@@ -36,10 +36,9 @@ export function attachFpSessionEnvironment(
   scene.add(sky);
 
   /**
-   * Neutral warm atmospheric perspective. Must stay **darker than the lightest façade albedo**
-   * (~#eae8e4): if fog matches panel white, linear fog erases long-range mass and walls “vanish”.
+   * Hazy horizon — pastel blue-gray, slightly below shell ceilings (~#f1f4f8) so mass still reads.
    */
-  scene.fog = new THREE.Fog(0xb8b3ad, 55, 780);
+  scene.fog = new THREE.Fog(0xe4eaf0, 95, 920);
 
   const groundPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(6000, 6000),
@@ -50,11 +49,15 @@ export function attachFpSessionEnvironment(
   groundPlane.position.y = FP_OUTDOOR_GROUND_VISUAL_Y;
   scene.add(groundPlane);
 
-  /** Single outdoor rig: sky fill + sun key (no extra ambient layer). */
-  const hemi = new THREE.HemisphereLight(0xf2f0ec, 0x5a5854, 0.72);
-  const dir = new THREE.DirectionalLight(0xfff5ea, 1.22);
+  /**
+   * Vertical shells sit at ~0.5 sky + 0.5 ground in hemisphere diffuse — keep both in the pastel
+   * blue-gray band so façades stay airy (not brown/warm mud) at a distance.
+   */
+  const hemi = new THREE.HemisphereLight(0xf2f6fb, 0xd0d8e2, 0.88);
+  const fill = new THREE.AmbientLight(0xe8eef4, 0.14);
+  const dir = new THREE.DirectionalLight(0xfff8f2, 1.42);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
-  scene.add(hemi, dir);
+  scene.add(hemi, fill, dir);
 
   const disposeMaterial = (m: THREE.Material | THREE.Material[]) => {
     if (Array.isArray(m)) m.forEach((x) => x.dispose());
@@ -70,8 +73,9 @@ export function attachFpSessionEnvironment(
     groundPlane.geometry.dispose();
     disposeMaterial(groundPlane.material);
 
-    scene.remove(hemi, dir);
+    scene.remove(hemi, fill, dir);
     hemi.dispose();
+    fill.dispose();
     dir.dispose();
 
     scene.fog = null;

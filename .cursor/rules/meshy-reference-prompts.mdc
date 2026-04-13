@@ -1,0 +1,31 @@
+---
+description: >-
+  When the user asks for a new Meshy / reference-image prompt (same style as
+  fist, crowbar, knife white-background refs), read the meshy README and output
+  a full prompt (shared prefix + subject) tailored to their request.
+alwaysApply: false
+---
+
+# Meshy reference image prompts
+
+## When this applies
+
+If the user wants:
+
+- A **new reference image prompt** like the Mammoth `*-lowpoly-reference.png` set  
+- **Meshy** (or similar text/image-to-3D) prompt text for a **prop, hand, or weapon**  
+- Help **wording the subject line** while keeping the house style  
+
+then follow this workflow **before** answering.
+
+## Required step
+
+1. **Read** `content/references/meshy/README.md` (use the Read tool if not already in context).
+2. Treat the **shared style prefix** in that README as **fixed**: reproduce it **verbatim** in your answer (do not shorten or paraphrase unless the user explicitly asks to iterate on style).
+3. Write a **new subject line** only (second paragraph) that matches what the user asked for: object, era, materials, wear, silhouette, game-ready / low-poly cues, **“centered and fully visible”**, and anything specific they mentioned. Do **not** duplicate the full environment/UI/watermark list from the prefix unless they want a one-off variant.
+4. Deliver the **full paste-ready prompt**: prefix, blank line, then subject. Optionally suggest a filename like `content/references/meshy/<slug>-lowpoly-reference.png` and remind them to append the new subject block to the README’s section 2 when the asset is finalized.
+
+## Do not
+
+- Invent a different house style without user approval.  
+- Omit the shared prefix when they asked for a “reference prompt like the others.”

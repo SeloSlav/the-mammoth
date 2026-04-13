@@ -1,7 +1,8 @@
-import type { LocalPlayerGameplayState, LocomotionPresentation } from "@the-mammoth/game";
+import type { HeldItemId, LocalPlayerGameplayState, LocomotionPresentation } from "@the-mammoth/game";
 import { derivePlayerAnimationIntent } from "@the-mammoth/game";
 import * as THREE from "three";
 import { locomotionFromHorizontalSpeed } from "@the-mammoth/net";
+import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
 
 export function buildLocalPlayerGameplayState(args: {
   playerIdHex: string;
@@ -14,6 +15,8 @@ export function buildLocalPlayerGameplayState(args: {
   grounded: boolean;
   crouch: boolean;
   meleeAttackSeq: number;
+  /** From hotbar + item `defId` (before dev-only override). */
+  equippedPrimaryFromHotbar: HeldItemId;
 }): LocalPlayerGameplayState {
   const stance = args.crouch ? "crouch" : "stand";
   const locomotion: LocomotionPresentation = locomotionFromHorizontalSpeed(
@@ -37,7 +40,7 @@ export function buildLocalPlayerGameplayState(args: {
     grounded: args.grounded,
     stance,
     locomotion,
-    equippedPrimary: "crowbar",
+    equippedPrimary: effectiveDevGameplayEquippedPrimary(args.equippedPrimaryFromHotbar),
     meleeAttackSeq: args.meleeAttackSeq,
     primaryAction: "none",
     life: "alive",

@@ -189,7 +189,11 @@ function addDecalMeshes(
 export function buildCellMeshes(doc: CellDoc): THREE.Group {
   const root = new THREE.Group();
   root.name = `cell:${doc.id}`;
-  const propMat = new THREE.MeshStandardMaterial({ color: 0x6b8cae });
+  const propMat = new THREE.MeshStandardMaterial({
+    color: 0xedf1f6,
+    roughness: 0.88,
+    metalness: 0.02,
+  });
   const portalMat = new THREE.MeshStandardMaterial({
     color: 0xc9a227,
     emissive: 0x332200,

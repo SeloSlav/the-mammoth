@@ -2,4 +2,9 @@
 export type PlayerIdHex = string;
 
 /** Item / weapon archetype id (authoring + runtime). Not a unique instance id. */
-export type HeldItemId = "unarmed" | "crowbar" | "knife" | "pistol" | "rifle";
+export type HeldItemId =
+  | "unarmed"
+  | "crowbar"
+  | "knife"
+  | "srbosjek"
+  | "baseball_bat";

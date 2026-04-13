@@ -31,6 +31,7 @@ import {
 } from "./editorChromeStyles.js";
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
+import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 
 export function EditorChrome() {
   const {
@@ -187,11 +188,13 @@ export function EditorChrome() {
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
         <strong>FloorDoc</strong> is one horizontal plate (objects = corridor / shafts / unit
         shells). <strong>Storey</strong> is a row in mammoth.json: same plate doc can repeat at
-        many levels. <strong>InteriorDoc</strong> is lobby / unit stream geometry (placements).
+        many levels. <strong>InteriorDoc</strong> is lobby / unit stream geometry (placements).{" "}
+        <strong>FP viewmodel</strong> uses the gameplay hand + crowbar rig for layout (port{" "}
+        <code>5174</code>).
       </p>
 
       <span style={label}>Mode</span>
-      <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         <button
           type="button"
           style={{
@@ -218,7 +221,29 @@ export function EditorChrome() {
         >
           Interior
         </button>
+        <button
+          type="button"
+          style={{
+            ...rowBtn,
+            fontWeight: mode === "fp_viewmodel" ? 700 : 400,
+            background: mode === "fp_viewmodel" ? "#3a4a7a" : "#2a2a34",
+            border: "1px solid #444",
+            color: "#fff",
+          }}
+          onClick={() => setMode("fp_viewmodel")}
+        >
+          FP viewmodel
+        </button>
       </div>
+
+      {mode === "fp_viewmodel" ? (
+        <EditorChromeFpViewmodel
+          transformMode={transformMode}
+          setTransformMode={setTransformMode}
+          gridSnapM={gridSnapM}
+          setGridSnapM={setGridSnapM}
+        />
+      ) : null}
 
       {mode === "floor" ? (
         <>
@@ -256,7 +281,7 @@ export function EditorChrome() {
             ))}
           </select>
         </>
-      ) : (
+      ) : mode === "interior" ? (
         <>
           <span style={label}>Interior document</span>
           <select
@@ -271,8 +296,10 @@ export function EditorChrome() {
             ))}
           </select>
         </>
-      )}
+      ) : null}
 
+      {mode !== "fp_viewmodel" ? (
+        <>
       <span style={label}>Scene / gizmo</span>
       <div>
         {(["translate", "rotate", "scale"] as const).map((m) => (
@@ -301,6 +328,8 @@ export function EditorChrome() {
         placeholder="0 = off"
         onChange={(e) => setGridSnapM(Number(e.target.value) || 0)}
       />
+        </>
+      ) : null}
       <label style={{ ...label, textTransform: "none", cursor: "pointer" }}>
         <input
           type="checkbox"
@@ -343,9 +372,12 @@ export function EditorChrome() {
         <button type="button" style={rowBtn} onClick={() => onReload()}>
           Reload
         </button>
-        <button type="button" style={rowBtn} onClick={() => onSaveDisk()}>
-          Save to disk
-        </button>
+        {mode !== "fp_viewmodel" ? (
+          <button type="button" style={rowBtn} onClick={() => onSaveDisk()}>
+            Save to disk
+          </button>
+        ) : null}
+        {mode !== "fp_viewmodel" ? (
         <button
           type="button"
           style={rowBtn}
@@ -365,6 +397,7 @@ export function EditorChrome() {
         >
           Download JSON
         </button>
+        ) : null}
         <button
           type="button"
           style={rowBtn}
@@ -385,6 +418,8 @@ export function EditorChrome() {
         <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>{saveMsg}</p>
       ) : null}
 
+      {mode !== "fp_viewmodel" ? (
+        <>
       <span style={label}>Building origin (world)</span>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
         {(["X", "Y", "Z"] as const).map((axis, i) => (
@@ -507,6 +542,8 @@ export function EditorChrome() {
         label={label}
         input={input}
       />
+        </>
+      ) : null}
     </div>
   );
 }

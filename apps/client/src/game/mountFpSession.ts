@@ -42,9 +42,15 @@ import { encodeMoveIntentBits } from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
+import { effectiveDevGameplayEquippedPrimary } from "./devGameplayWeaponOverride";
+import { getFpHotbarSelectedSlot, setFpHotbarSelectedSlot } from "./fpHotbarSelection";
+import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
+import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
+import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 import { LocalGameAudio } from "./localGameAudio";
+import { mountDroppedItemsWorld } from "./droppedItemWorldRuntime";
 import { WorldProximityAudio } from "./worldProximityAudio";
 
 /**
@@ -64,10 +70,8 @@ const MOUSE_SENS = 0.0022;
 const PITCH_LIMIT = 1.53;
 /** Alt free-look: head yaw relative to body (radians, clamped per side; ~±135°, not full 180°). */
 const FREE_LOOK_YAW_MAX = 2.35;
-/** Extra camera bob on top of eye-height bob from `stepFpLocomotion` (radians / meters). */
-const CAM_BOB_ROLL = 0.008;
-const CAM_BOB_SWAY_X = 0.005;
-const CAM_BOB_DIP_Y = 0.009;
+/** Extra camera bob on top of eye-height bob from `stepFpLocomotion` (meters, local space). */
+const CAM_BOB_DIP_Y = 0.004;
 
 const MELEE_COOLDOWN_MS = 480;
 
@@ -102,10 +106,10 @@ function feedRemote(
  * (teleport / bad connection). Production MMORPG path: intent reducers + server sim tick
  * + shared constants (see team docs / chat).
  */
-export function mountFpSession(
+export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
-): () => void {
+): Promise<() => void> {
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
@@ -144,9 +148,16 @@ export function mountFpSession(
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
   scene.add(cellRoot);
 
-  const presentation = new PlayerPresentationManager({
+  const initialHeld = conn.identity
+    ? effectiveDevGameplayEquippedPrimary(
+        resolveHeldItemFromHotbar(conn, conn.identity, getFpHotbarSelectedSlot()),
+      )
+    : effectiveDevGameplayEquippedPrimary("crowbar");
+
+  const presentation = await PlayerPresentationManager.create({
     scene,
     fpViewModelParent: headPitch,
+    initialEquippedPrimary: initialHeld,
     onMeleeVisual: (evt) => {
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
@@ -158,6 +169,17 @@ export function mountFpSession(
       // TODO: hand off to gameplay hit-scan / server validation — placeholder trace only.
     },
   });
+
+  const fpAuthoringActiveRef = { active: false };
+  const disposeFpAuthoring = mountFpViewmodelAuthoringDevOnly({
+    scene,
+    camera,
+    canvas,
+    presentation,
+    activeRef: fpAuthoringActiveRef,
+  });
+
+  const disposeWeaponPresentationHotReload = mountWeaponPresentationDevHotReload(presentation);
 
   const interp = new PoseInterpBuffer();
   const lastRemote = new Map<string, LastXZ>();
@@ -190,10 +212,18 @@ export function mountFpSession(
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
    * `keys`, so free-look stays latched and mouse X only drives `headLookYaw` until Alt “releases”.
+   *
+   * Before clearing keys, **bake** `headLookYaw` into `bodyYaw` so the horizontal view direction
+   * (body + free-look) does not jump when we drop Alt from `keys` or zero out free-look. Intentional
+   * Alt key-up still clears head offset without merging — see `onKeyUp`.
    */
   const resetTransientInputState = () => {
+    if (headLookYaw !== 0) {
+      bodyYaw += headLookYaw;
+      headLookYaw = 0;
+      bodyYaw = Math.atan2(Math.sin(bodyYaw), Math.cos(bodyYaw));
+    }
     keys.clear();
-    headLookYaw = 0;
   };
 
   const onWindowBlur = () => {
@@ -256,6 +286,8 @@ export function mountFpSession(
   conn.db.player_pose.onInsert(onPoseInsert);
   conn.db.player_pose.onUpdate(onPoseUpdate);
 
+  const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF);
+
   let poseAoiSub: SubscriptionHandle | null = null;
   let poseAoiAnchorX = pos.x;
   let poseAoiAnchorZ = pos.z;
@@ -285,6 +317,7 @@ export function mountFpSession(
     poseAoiAnchorX = cx;
     poseAoiAnchorZ = cz;
     refreshWorldSoundSubscription();
+    droppedWorld.subscribeAoi(cx, cz);
   };
 
   subscribePoseAoi(poseAoiAnchorX, poseAoiAnchorZ);
@@ -312,12 +345,43 @@ export function mountFpSession(
     });
   };
 
+  const mammothInventoryOpen = () =>
+    document.querySelector('[data-mammoth-inventory="open"]') !== null;
+
+  const isTextInputFocused = () => {
+    const el = document.activeElement;
+    if (!el || !(el instanceof HTMLElement)) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     keys.add(e.code);
     if (e.code === "AltLeft" || e.code === "AltRight") {
       e.preventDefault();
     }
+    if (!e.repeat && !isTextInputFocused() && !mammothInventoryOpen()) {
+      let n = -1;
+      if (e.code.startsWith("Digit")) {
+        n = Number.parseInt(e.code.slice(5), 10);
+      } else if (e.code.startsWith("Numpad") && e.code.length === 7) {
+        n = Number.parseInt(e.code.slice(6), 10);
+      }
+      if (n >= 1 && n <= 6) {
+        e.preventDefault();
+        setFpHotbarSelectedSlot(n - 1);
+      }
+    }
     if (e.code === "Escape") void document.exitPointerLock();
+    if (
+      e.code === "KeyE" &&
+      !e.repeat &&
+      document.pointerLockElement === canvas &&
+      !mammothInventoryOpen() &&
+      !isTextInputFocused()
+    ) {
+      droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
+    }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {
       queueFpJump(loco);
@@ -340,6 +404,7 @@ export function mountFpSession(
   };
 
   const onMouseMove = (e: MouseEvent) => {
+    if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     if (freeLook) {
@@ -365,6 +430,7 @@ export function mountFpSession(
         refreshWorldSoundSubscription();
       }
     })();
+    if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
 
@@ -373,6 +439,7 @@ export function mountFpSession(
 
   const onPointerDown = (e: PointerEvent) => {
     if (!e.isPrimary || e.button !== 0) return;
+    if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
     meleePressPending = true;
   };
@@ -459,11 +526,10 @@ export function mountFpSession(
       1,
     );
     if (loco.grounded && !crouchToggle && !freeLook && hs > 0.12) {
-      const roll = Math.sin(loco.headBobPhase * 2) * CAM_BOB_ROLL * walkStrength;
-      const sway = Math.cos(loco.headBobPhase) * CAM_BOB_SWAY_X * walkStrength;
+      // Stride-locked vertical bob only (roll / lateral sway read as side-to-side rocking).
       const dip = Math.sin(loco.headBobPhase * 2) * CAM_BOB_DIP_Y * walkStrength;
-      camera.rotation.z = roll;
-      camera.position.x = sway;
+      camera.rotation.z = 0;
+      camera.position.x = 0;
       camera.position.y = dip;
     } else {
       camera.rotation.z = THREE.MathUtils.damp(camera.rotation.z, 0, 10, dt);
@@ -513,6 +579,10 @@ export function mountFpSession(
     }
 
     const localId = conn.identity?.toHexString() ?? "local-unknown";
+    const hotbarHeld = conn.identity
+      ? resolveHeldItemFromHotbar(conn, conn.identity, getFpHotbarSelectedSlot())
+      : ("unarmed" as const);
+
     const localState = buildLocalPlayerGameplayState({
       playerIdHex: localId,
       pos,
@@ -524,6 +594,7 @@ export function mountFpSession(
       grounded: loco.grounded,
       crouch: crouchToggle,
       meleeAttackSeq,
+      equippedPrimaryFromHotbar: hotbarHeld,
     });
     presentation.update(dt, localState, remoteSnapshots, nowMs);
 
@@ -546,9 +617,12 @@ export function mountFpSession(
       poseAoiSub.unsubscribe();
     }
     poseAoiSub = null;
+    droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     disposeFpEnvironment();
+    disposeFpAuthoring();
+    disposeWeaponPresentationHotReload();
     worldAudio.dispose();
     worldAudioReady = false;
     localAudio.dispose();

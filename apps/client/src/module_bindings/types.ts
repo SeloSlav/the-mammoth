@@ -10,6 +10,58 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const DroppedItem = __t.object("DroppedItem", {
+  id: __t.u64(),
+  defId: __t.string(),
+  quantity: __t.u32(),
+  x: __t.f32(),
+  y: __t.f32(),
+  z: __t.f32(),
+  yaw: __t.f32(),
+  createdAt: __t.timestamp(),
+});
+export type DroppedItem = __Infer<typeof DroppedItem>;
+
+export const DroppedItemCleanup = __t.object("DroppedItemCleanup", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type DroppedItemCleanup = __Infer<typeof DroppedItemCleanup>;
+
+export const HotbarLocationData = __t.object("HotbarLocationData", {
+  ownerId: __t.identity(),
+  slotIndex: __t.u8(),
+});
+export type HotbarLocationData = __Infer<typeof HotbarLocationData>;
+
+export const InventoryItem = __t.object("InventoryItem", {
+  instanceId: __t.u64(),
+  defId: __t.string(),
+  quantity: __t.u32(),
+  get location() {
+    return ItemLocation;
+  },
+});
+export type InventoryItem = __Infer<typeof InventoryItem>;
+
+export const InventoryLocationData = __t.object("InventoryLocationData", {
+  ownerId: __t.identity(),
+  slotIndex: __t.u16(),
+});
+export type InventoryLocationData = __Infer<typeof InventoryLocationData>;
+
+// The tagged union or sum type for the algebraic type `ItemLocation`.
+export const ItemLocation = __t.enum("ItemLocation", {
+  get Inventory() {
+    return InventoryLocationData;
+  },
+  get Hotbar() {
+    return HotbarLocationData;
+  },
+  Unknown: __t.unit(),
+});
+export type ItemLocation = __Infer<typeof ItemLocation>;
+
 export const PhysicsTick = __t.object("PhysicsTick", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),

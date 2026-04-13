@@ -8,10 +8,27 @@ import {
   type PlacedObject,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
+import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
 
-export type EditorMode = "floor" | "interior";
+/**
+ * Dev-only: set to any {@link FpAuthorWeaponId} (`ALL_WEAPON_DEFINITIONS` in engine) so the editor
+ * opens FP authoring on that weapon. `null` = use `DEFAULT_FP_AUTHOR_WEAPON_ID` (crowbar).
+ */
+const FP_AUTHOR_DEV_DEFAULT_WEAPON: FpAuthorWeaponId | null = null;
+
+const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
+
+export type EditorMode = "floor" | "interior" | "fp_viewmodel";
+
+export type FpAuthorCameraKind = "gameplay" | "orbit";
+
+/** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
+export const FP_AUTHOR_PREFERRED_TARGET_ID = "weaponRoot";
 
 export type TransformMode = "translate" | "rotate" | "scale";
+
+/** FP gizmo dropdown only — object refs stay in the Three runtime. */
+export type FpAuthorPickMeta = { id: string; label: string };
 
 type HistoryEntry = {
   floorDocs: Record<string, FloorDoc>;
@@ -55,6 +72,22 @@ export interface EditorState {
   gridSnapM: number;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
+  /** First-person viewmodel layout (same GLBs as gameplay; dev tooling). */
+  fpAuthorCamera: FpAuthorCameraKind;
+  /** Matches {@link LocalFirstPersonPresenter.getAuthoringPickList} ids. */
+  fpAuthorTargetId: string;
+  /** Look pitch (rad) into {@link LocalFirstPersonPresenter} `fpRoot` when using gameplay camera. */
+  fpAuthorPitchRad: number;
+  /** Set when FP session fails to load GLBs (e.g. `/static` not served). */
+  fpAuthorInitMessage: string | null;
+  /** Incremented when FP gizmo moves so React panels can refresh export JSON. */
+  fpAuthorLive: number;
+  /** Save / frame feedback (shown under FP tools; auto-clears). */
+  fpAuthorToast: string | null;
+  /** Mirrors LocalFirstPersonPresenter authoring pick ids/labels (updated from the scene tick). */
+  fpAuthorPickList: readonly FpAuthorPickMeta[];
+  /** Which weapon’s `content/weapons/<id>.presentation.json` the FP tools edit / save. */
+  fpAuthorWeaponId: FpAuthorWeaponId;
   /** Incremented only when 3D mesh regen is required (not on pure transform edits). */
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
@@ -79,6 +112,17 @@ export interface EditorState {
   setGridSnapM: (m: number) => void;
   setShadowsEnabled: (on: boolean) => void;
   setUseHdriEnvironment: (on: boolean) => void;
+  setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
+  setFpAuthorTargetId: (id: string) => void;
+  /** Atomically select an FP authoring part and bump live counter (React + scene stay aligned). */
+  pickFpAuthorTarget: (id: string) => void;
+  setFpAuthorPitchRad: (r: number) => void;
+  setFpAuthorInitMessage: (m: string | null) => void;
+  bumpFpAuthorLive: () => void;
+  setFpAuthorPickList: (list: readonly FpAuthorPickMeta[]) => void;
+  setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
+  /** FP disk save / frame result; clears after `ttlMs` unless replaced. */
+  showFpAuthorToast: (message: string, ttlMs?: number) => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;
   getActiveInteriorDoc: () => InteriorDoc | undefined;
@@ -116,7 +160,7 @@ export interface EditorState {
 let transactionDepth = 0;
 
 export const useEditorStore = create<EditorState>((set, get) => ({
-  mode: "floor",
+  mode: "fp_viewmodel",
   building: BuildingDocSchema.parse({ id: "mammoth_main", version: 1, floorRefs: [] }),
   floorDocs: {},
   interiorDocs: {},
@@ -129,6 +173,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   shadowsEnabled: false,
   useHdriEnvironment: true,
+  fpAuthorCamera: "orbit",
+  fpAuthorTargetId: FP_AUTHOR_PREFERRED_TARGET_ID,
+  /** 0 = same as client before mouse look (`mountFpSession` initial pitch). */
+  fpAuthorPitchRad: 0,
+  fpAuthorInitMessage: null,
+  fpAuthorLive: 0,
+  fpAuthorToast: null,
+  fpAuthorPickList: [],
+  fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -185,11 +238,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setMode: (mode) =>
-    set((s) =>
-      s.mode === mode
-        ? { mode }
-        : { mode, contentStructureEpoch: s.contentStructureEpoch + 1 },
-    ),
+    set((s) => {
+      if (s.mode === mode) return { mode };
+      const touchesFp = s.mode === "fp_viewmodel" || mode === "fp_viewmodel";
+      const exitFp = s.mode === "fp_viewmodel" && mode !== "fp_viewmodel";
+      /** Entering/leaving FP must not rebuild; leaving FP must rebuild so floor/interior mesh matches mode. */
+      const bumpEpoch = !touchesFp || exitFp;
+      return {
+        mode,
+        ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    }),
   setBuilding: (building) =>
     set((s) => ({
       building,
@@ -230,6 +289,47 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
   setShadowsEnabled: (shadowsEnabled) => set({ shadowsEnabled }),
   setUseHdriEnvironment: (useHdriEnvironment) => set({ useHdriEnvironment }),
+  setFpAuthorCamera: (fpAuthorCamera) => set({ fpAuthorCamera }),
+  setFpAuthorTargetId: (fpAuthorTargetId) => set({ fpAuthorTargetId }),
+  pickFpAuthorTarget: (fpAuthorTargetId) =>
+    set((s) => ({
+      fpAuthorTargetId,
+      fpAuthorLive: s.fpAuthorLive + 1,
+    })),
+  setFpAuthorPitchRad: (fpAuthorPitchRad) => set({ fpAuthorPitchRad }),
+  setFpAuthorInitMessage: (fpAuthorInitMessage) => set({ fpAuthorInitMessage }),
+  bumpFpAuthorLive: () => set((s) => ({ fpAuthorLive: s.fpAuthorLive + 1 })),
+  showFpAuthorToast: (message, ttlMs = 5200) => {
+    set({ fpAuthorToast: message });
+    setTimeout(() => {
+      const cur = get().fpAuthorToast;
+      if (cur === message) set({ fpAuthorToast: null });
+    }, ttlMs);
+  },
+  setFpAuthorWeaponId: (fpAuthorWeaponId) =>
+    set((s) => {
+      if (s.fpAuthorWeaponId === fpAuthorWeaponId) return {};
+      return { fpAuthorWeaponId, fpAuthorLive: s.fpAuthorLive + 1 };
+    }),
+  setFpAuthorPickList: (next) =>
+    set((s) => {
+      const same =
+        s.fpAuthorPickList.length === next.length &&
+        next.every(
+          (p, i) =>
+            p.id === s.fpAuthorPickList[i]?.id && p.label === s.fpAuthorPickList[i]?.label,
+        );
+      if (same) return {};
+      let fpAuthorTargetId = s.fpAuthorTargetId;
+      if (next.length > 0 && !next.some((p) => p.id === fpAuthorTargetId)) {
+        fpAuthorTargetId =
+          next.find((p) => p.id === FP_AUTHOR_PREFERRED_TARGET_ID)?.id ?? next[0]!.id;
+      }
+      return {
+        fpAuthorPickList: [...next],
+        ...(fpAuthorTargetId !== s.fpAuthorTargetId ? { fpAuthorTargetId } : {}),
+      };
+    }),
 
   getActiveFloorDoc: () => get().floorDocs[get().activeFloorDocId],
   getActiveInteriorDoc: () => get().interiorDocs[get().activeInteriorDocId],

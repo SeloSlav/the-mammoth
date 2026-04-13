@@ -74,6 +74,7 @@ export type LocalGameAudioMovement = {
   grounded: boolean;
   crouch: boolean;
   sprint: boolean;
+  /** Passed for future use (e.g. view-only ducking); footsteps are not muted while free-looking. */
   freeLook: boolean;
 };
 
@@ -213,7 +214,7 @@ export class LocalGameAudio {
       return;
     }
 
-    const { horizontalSpeed, stridePhaseRad, grounded, crouch, sprint, freeLook } = m;
+    const { horizontalSpeed, stridePhaseRad, grounded, crouch, sprint } = m;
 
     const strideCell = Math.floor((2 * stridePhaseRad) / STRIDE_PHASE_PER_STEP);
 
@@ -221,12 +222,12 @@ export class LocalGameAudio {
     this.wasGrounded = grounded;
 
     if (justLanded) {
+      this.playStep({ horizontalSpeed, sprint });
       this.lastStrideStepCell = strideCell;
       return;
     }
 
-    const canStep =
-      grounded && !crouch && !freeLook && horizontalSpeed > V0_AUDIO;
+    const canStep = grounded && !crouch && horizontalSpeed > V0_AUDIO;
 
     if (!canStep) {
       this.lastStrideStepCell = strideCell;

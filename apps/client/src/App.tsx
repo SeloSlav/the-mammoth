@@ -16,7 +16,19 @@ export default function App() {
     if (!canvas) return;
     const conn = session.conn;
     if (!conn) return;
-    return mountFpSession(canvas, conn);
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+    void mountFpSession(canvas, conn).then((d) => {
+      if (cancelled) {
+        d();
+        return;
+      }
+      dispose = d;
+    });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- omit `session.conn`: identity churn remounts the FP session while phase+name unchanged
   }, [session.phase, session.displayName]);
 
@@ -27,7 +39,11 @@ export default function App() {
   return (
     <>
       <canvas ref={canvasRef} style={{ position: "fixed", inset: 0 }} />
-      <HudShell displayName={session.displayName} onSignOut={session.signOut} />
+      <HudShell
+        displayName={session.displayName}
+        onSignOut={session.signOut}
+        conn={session.conn}
+      />
     </>
   );
 }

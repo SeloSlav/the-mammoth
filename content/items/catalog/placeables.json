@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "campfire",
+      "displayName": "Campfire kit",
+      "description": "Portable ring and grate. Place to cook simple meals and dry gear (world hook TBD).",
+      "category": "placeable",
+      "maxStack": 5,
+      "construction": {
+        "buildTimeSecs": 6,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 2 },
+          { "itemId": "wood_scraps", "quantity": 8 }
+        ]
+      }
+    },
+    {
+      "id": "brick_oven",
+      "displayName": "Brick oven",
+      "description": "Heavy shell for retained heat. For baking and slow roasts once placed (world hook TBD).",
+      "category": "placeable",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 45,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 12 },
+          { "itemId": "duct_tape", "quantity": 4 },
+          { "itemId": "synthetic_polymer", "quantity": 3 }
+        ]
+      }
+    },
+    {
+      "id": "reloading_press",
+      "displayName": "Reloading press",
+      "description": "Bench-mounted press for sizing brass, seating bullets, and crimping. Anchor near a sturdy surface (crafting hook TBD).",
+      "category": "placeable",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 60,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 20 },
+          { "itemId": "wire_spool", "quantity": 4 },
+          { "itemId": "synthetic_polymer", "quantity": 6 },
+          { "itemId": "duct_tape", "quantity": 3 }
+        ]
+      }
+    },
+    {
+      "id": "gunsmith_workbench",
+      "displayName": "Gunsmith workbench",
+      "description": "Vise, pin punches, and reference gauges for stripping receivers and aligning optics. Pairs with the reloading press for a full ballistic pipeline (crafting hook TBD).",
+      "category": "placeable",
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 90,
+        "materials": [
+          { "itemId": "scrap_metal", "quantity": 25 },
+          { "itemId": "chemical_reagent", "quantity": 4 },
+          { "itemId": "wire_spool", "quantity": 3 },
+          { "itemId": "duct_tape", "quantity": 5 }
+        ]
+      }
+    }
+  ]
+}

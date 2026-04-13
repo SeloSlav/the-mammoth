@@ -53,76 +53,77 @@ function classifyPrefab(prefabId: string): PlaceholderKind {
 
 /**
  * Shared materials so massive generated floors do not allocate thousands of materials.
- * Palette: matte off-white / cast-in-place concrete (mass-panel housing), not warm plaster beige.
+ * Palette: very light pastel blue-gray (mass-panel / cast shell), B slightly above R≈G.
  */
 const mat = {
   corridorFloor: new THREE.MeshStandardMaterial({
-    color: 0xc4c1bc,
-    roughness: 0.93,
+    color: 0xe2e7ee,
+    roughness: 0.92,
     metalness: 0.02,
   }),
   corridorCeil: new THREE.MeshStandardMaterial({
-    color: 0xe6e4e0,
-    roughness: 0.9,
+    color: 0xf1f4f8,
+    roughness: 0.88,
     metalness: 0.02,
     side: THREE.DoubleSide,
   }),
+  /** Shell walls: high albedo + slightly lower roughness so sun side picks up a hint of key. */
   corridorWall: new THREE.MeshStandardMaterial({
-    color: 0xeae8e4,
-    roughness: 0.96,
-    metalness: 0.015,
+    color: 0xedf1f6,
+    roughness: 0.88,
+    metalness: 0.012,
   }),
   unitFloor: new THREE.MeshStandardMaterial({
-    color: 0xb9b6b1,
-    roughness: 0.93,
+    color: 0xdee5ec,
+    roughness: 0.92,
     metalness: 0.025,
   }),
   unitCeil: new THREE.MeshStandardMaterial({
-    color: 0xe4e2de,
-    roughness: 0.9,
+    color: 0xf0f3f7,
+    roughness: 0.88,
     metalness: 0.025,
     side: THREE.DoubleSide,
   }),
   unitWall: new THREE.MeshStandardMaterial({
-    color: 0xe6e4e0,
-    roughness: 0.96,
+    color: 0xebf0f5,
+    roughness: 0.88,
     metalness: 0.02,
   }),
   coreFloor: new THREE.MeshStandardMaterial({
-    color: 0xaeaba8,
-    roughness: 0.93,
+    color: 0xd4dce4,
+    roughness: 0.92,
     metalness: 0.04,
   }),
   coreCeil: new THREE.MeshStandardMaterial({
-    color: 0xdad8d4,
-    roughness: 0.9,
+    color: 0xe8edf3,
+    roughness: 0.88,
     metalness: 0.04,
     side: THREE.DoubleSide,
   }),
   coreWall: new THREE.MeshStandardMaterial({
-    color: 0xdad8d4,
-    roughness: 0.96,
+    color: 0xeef2f7,
+    roughness: 0.88,
     metalness: 0.03,
   }),
   miscFloor: new THREE.MeshStandardMaterial({
-    color: 0xbfbcb7,
-    roughness: 0.93,
+    color: 0xe0e6ed,
+    roughness: 0.92,
     metalness: 0.025,
   }),
   miscCeil: new THREE.MeshStandardMaterial({
-    color: 0xe2e0dc,
-    roughness: 0.9,
+    color: 0xedf1f6,
+    roughness: 0.88,
     metalness: 0.025,
     side: THREE.DoubleSide,
   }),
   miscWall: new THREE.MeshStandardMaterial({
-    color: 0xe4e2de,
-    roughness: 0.96,
+    color: 0xebeef4,
+    roughness: 0.88,
     metalness: 0.02,
   }),
   slab: new THREE.MeshStandardMaterial({
-    color: 0xa5a29e,
-    roughness: 0.95,
+    color: 0xdde5ee,
+    roughness: 0.92,
     metalness: 0.02,
     side: THREE.DoubleSide,
   }),

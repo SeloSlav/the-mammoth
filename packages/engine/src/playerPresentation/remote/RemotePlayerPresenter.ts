@@ -1,8 +1,17 @@
 import * as THREE from "three";
-import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
+import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
-import { crowbarWeaponDefinition } from "../../weapons/sampleDefinitions.js";
+import { getWeaponDefinitionForEquippedPrimary } from "../../weapons/weaponRegistry.js";
 import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
+import { TP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
+
+type GltfRef = Extract<ModelRef, { kind: "gltf" }>;
+
+function asGltf(ref: ModelRef): GltfRef {
+  if (ref.kind !== "gltf") throw new Error(`Expected gltf ModelRef, got ${ref.kind}`);
+  return ref;
+}
 
 /**
  * Third-person-only body + held item visuals for other players.
@@ -12,8 +21,11 @@ export class RemotePlayerPresenter {
   readonly root: THREE.Group;
   private humanoid: ReturnType<typeof buildPrimitiveHumanoid>;
   private weapon?: WeaponPresenter;
+  private equippedPrimary: HeldItemId = "crowbar";
+  private readonly modelRegistry: IModelLoadRegistry;
 
-  constructor(scene: THREE.Scene, tint: number) {
+  constructor(scene: THREE.Scene, tint: number, modelRegistry: IModelLoadRegistry) {
+    this.modelRegistry = modelRegistry;
     this.root = new THREE.Group();
     this.root.name = "remote_player_body";
     this.humanoid = buildPrimitiveHumanoid({ tint });
@@ -23,17 +35,24 @@ export class RemotePlayerPresenter {
   }
 
   private syncWeapon(equipped: ReplicatedPlayerSnapshot["equippedPrimary"]): void {
-    if (equipped === "unarmed") {
-      this.weapon?.dispose(this.humanoid.handAttachRight);
-      this.weapon = undefined;
+    if (equipped === this.equippedPrimary && (equipped === "unarmed" || this.weapon)) return;
+    this.equippedPrimary = equipped;
+    this.weapon?.dispose(this.humanoid.handAttachRight);
+    this.weapon = undefined;
+    if (equipped === "unarmed") return;
+
+    const def = getWeaponDefinitionForEquippedPrimary(equipped);
+    const res = this.modelRegistry.instantiateLoaded(asGltf(def.modelRef));
+    if (!res.ok) {
+      console.error(`[RemotePlayerPresenter] weapon GLB (${def.id}): ${res.error}`);
       return;
     }
-    if (this.weapon) return;
     this.weapon = new WeaponPresenter({
-      definition: crowbarWeaponDefinition,
+      definition: def,
       role: "remote_third_person",
-      color: 0x7c8aa0,
+      visual: res.root as THREE.Object3D,
     });
+    this.weapon.normalizeVisualToMaxEdgeMeters(TP_CROWBAR_GLTF_MAX_EDGE_M);
     this.humanoid.handAttachRight.add(this.weapon.root);
   }
 

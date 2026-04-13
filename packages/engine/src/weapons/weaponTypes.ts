@@ -7,7 +7,7 @@ export type WeaponPresentationRole = "local_first_person" | "remote_third_person
 
 /**
  * Maps logical gameplay actions to clip identifiers for GLTF pipelines.
- * Primitive drivers ignore this; GLTF drivers resolve clip names per skeleton.
+ * `PrimitiveAnimationDriver` ignores this; future GLTF drivers resolve clip names per skeleton.
  */
 export type WeaponAnimationSet = Partial<Record<AnimationActionName, string>>;
 
