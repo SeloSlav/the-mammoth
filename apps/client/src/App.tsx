@@ -38,7 +38,11 @@ export default function App() {
 
   return (
     <>
-      <canvas ref={canvasRef} style={{ position: "fixed", inset: 0 }} />
+      <canvas
+        ref={canvasRef}
+        data-mammoth-fp-canvas="1"
+        style={{ position: "fixed", inset: 0 }}
+      />
       <HudShell
         displayName={session.displayName}
         onSignOut={session.signOut}

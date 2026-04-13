@@ -7,5 +7,6 @@
 | [architecture/editor.md](architecture/editor.md) | Editor role, loading policy, workflows, save behavior |
 | [architecture/persistence.md](architecture/persistence.md) | Disk vs SpaceTimeDB; baseline vs dynamic; document types |
 | [architecture/monorepo.md](architecture/monorepo.md) | Where code, authored data, and binaries belong |
+| [content-building.md](content-building.md) | After floor/building JSON edits: run `pnpm content:gen-walk-aabbs` so server walk collision stays in sync |
 
 Start with **PROJECT.md**, then read **world-streaming** and **persistence** if you are touching world data or the database.

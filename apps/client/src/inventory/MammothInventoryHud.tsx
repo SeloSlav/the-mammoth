@@ -13,6 +13,11 @@ import { runFpHotbarInstantConsume } from "../game/fpHotbarConsume";
 import { primeHotbarConsumeAudio } from "../game/hotbarConsumeLocalAudio";
 import { getHotbarSlotInventoryItem } from "../game/fpHotbarResolve";
 import {
+  getHotbarInstantConsumeCooldownVersion,
+  hotbarInstantConsumeCooldownProgress,
+  subscribeHotbarInstantConsumeCooldown,
+} from "../game/fpHotbarInstantConsumeCooldown";
+import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
@@ -78,6 +83,12 @@ export function MammothInventoryHud({ conn }: Props) {
     subscribeFpHotbarSelection,
     getFpHotbarSelectedSlot,
     getFpHotbarSelectedSlot,
+  );
+  /** Re-render while instant-consume cooldown animates (RAF-driven version bumps). */
+  useSyncExternalStore(
+    subscribeHotbarInstantConsumeCooldown,
+    getHotbarInstantConsumeCooldownVersion,
+    getHotbarInstantConsumeCooldownVersion,
   );
   const lastHotbarClickRef = useRef<{ slot: number; t: number } | null>(null);
 
@@ -345,6 +356,10 @@ export function MammothInventoryHud({ conn }: Props) {
         {hb.map((pop, index) => {
           const slotInfo = { type: "hotbar" as const, index };
           const sel = selectedSlot === index;
+          const consumeCd =
+            pop && mammothItemDefSupportsHotbarInstantConsume(pop.def)
+              ? hotbarInstantConsumeCooldownProgress(index)
+              : null;
           return (
             <div key={`hb-${index}`} style={{ position: "relative" }}>
               <div
@@ -366,6 +381,7 @@ export function MammothInventoryHud({ conn }: Props) {
                 slotInfo={slotInfo}
                 isDraggingOver={false}
                 onClick={pop ? undefined : () => onHotbarSlotClick(index)}
+                overlayProgress={consumeCd ?? undefined}
                 style={{
                   outline: sel ? "2px solid #5cf" : undefined,
                   outlineOffset: 1,

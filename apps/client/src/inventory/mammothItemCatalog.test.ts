@@ -54,7 +54,7 @@ describe("mammothItemCatalog", () => {
     expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(true);
 
     const rakija = getMammothItemDef("rakija");
-    expect(rakija?.consumeOnUse?.hydrationDelta).toBe(26);
+    expect(rakija?.consumeOnUse?.hydrationDelta).toBe(-24);
     expect(mammothItemDefSupportsHotbarInstantConsume(rakija)).toBe(true);
   });
 });

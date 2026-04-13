@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
+  buildMeleeSwingKeyframesFromFpRootAbsLocals,
   eulerRadFromTangentLocal,
   resamplePolylineByArcLength,
+  rollRadFromPathCurvatureLocal,
   swingKeyframesFromOffsetPolyline,
 } from "./fpSwingViewportStroke.js";
 
@@ -38,5 +40,31 @@ describe("fpSwingViewportStroke", () => {
     expect(last.translationM.y).toBe(0);
     expect(last.translationM.z).toBe(0);
     expect(keys[0]!.t).toBe(0);
+  });
+
+  it("rollRadFromPathCurvatureLocal is zero for straight segments and non-zero on bends", () => {
+    const straight = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(2, 0, 0),
+    ];
+    expect(rollRadFromPathCurvatureLocal(straight, 1, 3)).toBe(0);
+    const bent = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(1, 1, 0),
+      new THREE.Vector3(2, 0, 0),
+    ];
+    expect(Math.abs(rollRadFromPathCurvatureLocal(bent, 1, 3))).toBeGreaterThan(0.05);
+  });
+
+  it("buildMeleeSwingKeyframesFromFpRootAbsLocals matches stroke pipeline for a simple path", () => {
+    const rig = new THREE.Vector3(0.1, 0.2, 0.3);
+    const abs = [rig.clone(), rig.clone().add(new THREE.Vector3(0.2, -0.1, -0.2))];
+    const keys = buildMeleeSwingKeyframesFromFpRootAbsLocals({
+      absLocals: abs,
+      rigRestPositionLocal: rig,
+    });
+    expect(keys.length).toBeGreaterThanOrEqual(2);
+    expect(keys[keys.length - 1]!.t).toBe(1);
   });
 });

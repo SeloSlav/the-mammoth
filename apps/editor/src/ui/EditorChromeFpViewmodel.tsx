@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { ALL_WEAPON_DEFINITIONS, cloneDefaultFpMeleeSwingKeyframes } from "@the-mammoth/engine";
 import type { FpAuthorCameraKind, TransformMode } from "../state/editorStore.js";
 import { useEditorStore } from "../state/editorStore.js";
+import { useEditorFpViewmodelPanelStore } from "./hooks/useEditorFpViewmodelPanelStore.js";
 import { getFpViewmodelPresenterForAuthoring } from "../editor/fpViewmodelAuthoringBridge.js";
 import {
   buildNextSwingKeyframesAfterCapture,
 } from "../editor/fpSwingAuthoring.js";
 import { isFpAuthorWeaponId, saveWeaponPresentationFromEditor } from "../editor/weaponPresentationDiskSave.js";
 import { frameFpMountIntoGameplayView } from "../editor/fpViewmodelAuthoringBridge.js";
+import {
+  cancelEditorSwingStrokeReview,
+  confirmEditorSwingStrokeReview,
+} from "../editor/editorSwingStrokeReviewBridge.js";
 import { editorChromeInput, editorChromeLabel, editorChromeRowBtn } from "./editorChromeStyles.js";
 
 type WeaponAssetSurvey = {
@@ -63,30 +67,8 @@ export function EditorChromeFpViewmodel({
     setFpSwingPlayActive,
     fpSwingStrokeArmed,
     setFpSwingStrokeArmed,
-  } = useEditorStore(
-    useShallow((s) => ({
-      fpAuthorCamera: s.fpAuthorCamera,
-      fpAuthorTargetId: s.fpAuthorTargetId,
-      fpAuthorPitchRad: s.fpAuthorPitchRad,
-      fpAuthorInitMessage: s.fpAuthorInitMessage,
-      fpAuthorPickList: s.fpAuthorPickList,
-      fpAuthorWeaponId: s.fpAuthorWeaponId,
-      setFpAuthorWeaponId: s.setFpAuthorWeaponId,
-      setFpAuthorCamera: s.setFpAuthorCamera,
-      pickFpAuthorTarget: s.pickFpAuthorTarget,
-      setFpAuthorPitchRad: s.setFpAuthorPitchRad,
-      fpAuthorToast: s.fpAuthorToast,
-      showFpAuthorToast: s.showFpAuthorToast,
-      fpSwingPreviewPhase01: s.fpSwingPreviewPhase01,
-      setFpSwingPreviewPhase01: s.setFpSwingPreviewPhase01,
-      fpSwingKeyframesDraft: s.fpSwingKeyframesDraft,
-      setFpSwingKeyframesDraft: s.setFpSwingKeyframesDraft,
-      fpSwingPlayActive: s.fpSwingPlayActive,
-      setFpSwingPlayActive: s.setFpSwingPlayActive,
-      fpSwingStrokeArmed: s.fpSwingStrokeArmed,
-      setFpSwingStrokeArmed: s.setFpSwingStrokeArmed,
-    })),
-  );
+    fpSwingStrokeReviewActive,
+  } = useEditorFpViewmodelPanelStore();
 
   const gizmoTargetValue =
     fpAuthorPickList.length === 0 ? "" : fpAuthorPickList.some((p) => p.id === fpAuthorTargetId)
@@ -242,28 +224,65 @@ export function EditorChromeFpViewmodel({
 
       <span style={label}>Melee swing (first person)</span>
       <p style={{ fontSize: 10, opacity: 0.78, margin: "0 0 6px", lineHeight: 1.4 }}>
-        <strong>Paint swing</strong> (below): arm, then drag in the <strong>3D view left of this panel</strong>.
-        A <strong style={{ color: "#50ffc8" }}>bright green line</strong> traces your pointer. The gizmo is
-        disabled for that drag. Motion is projected through the hand; yaw/pitch follow the path.{" "}
-        <strong>Scrub + Hand + weapon rig + Capture</strong> still edits keyframes.{" "}
-        <strong>Play</strong> loops preview (hand + weapon stay parented).
+        <strong>Paint swing</strong>: arm, then drag in the <strong>3D view</strong>. Your stroke is projected
+        onto a plane through the hand (camera-facing), so the path lives in <strong>real viewmodel space</strong>.
+        After release, <strong>white handles</strong> follow that 3D path on screen — drag them on the view
+        (left button; middle-drag still orbits in <strong>Orbit</strong> mode). Then <strong>Confirm</strong> to
+        write keyframes (yaw/pitch from tangent, roll from path bend). <strong>Esc</strong> cancels.{" "}
+        <strong>Play</strong> previews while you tune.
       </p>
+      {fpSwingStrokeReviewActive ? (
+        <div
+          style={{
+            marginBottom: 10,
+            padding: "10px 10px",
+            background: "#2a3228",
+            border: "1px solid #4a6a4a",
+            borderRadius: 4,
+          }}
+        >
+          <p style={{ margin: "0 0 8px", fontSize: 11, lineHeight: 1.45, opacity: 0.92 }}>
+            <strong>Swing path review</strong> — drag handles on the 3D view (handles use the same sweep plane as
+            the stroke). Confirm to save this track to the layout (in memory), or cancel to discard this paint.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <button
+              type="button"
+              style={{ ...rowBtn, flex: 1, background: "#2a5a3a", border: "1px solid #3d8a55" }}
+              onClick={() => confirmEditorSwingStrokeReview()}
+            >
+              Confirm swing
+            </button>
+            <button
+              type="button"
+              style={{ ...rowBtn, flex: 1, background: "#4a2a2a", border: "1px solid #6a3a3a" }}
+              onClick={() => cancelEditorSwingStrokeReview()}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
         <button
           type="button"
+          disabled={fpSwingStrokeReviewActive}
           style={{
             ...rowBtn,
             flex: "1 1 100%",
             background: fpSwingStrokeArmed ? "#4a3a2a" : "#2a3a4a",
             border: "1px solid #555",
+            opacity: fpSwingStrokeReviewActive ? 0.45 : 1,
+            cursor: fpSwingStrokeReviewActive ? "not-allowed" : "pointer",
           }}
           onClick={() => {
+            if (fpSwingStrokeReviewActive) return;
             const next = !fpSwingStrokeArmed;
             setFpSwingStrokeArmed(next);
             if (next) {
               showFpAuthorToast(
-                "Paint swing armed: drag on the 3D view (avoid gizmo handles). Release to build keyframes.",
-                5200,
+                "Paint swing armed: drag on the 3D view (avoid gizmo handles). Release opens path review.",
+                5600,
               );
             }
           }}

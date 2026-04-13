@@ -7,6 +7,9 @@ type Props = {
   onClick?: () => void;
   children?: ReactNode;
   style?: CSSProperties;
+  /** 0 = full dim, 1 = clear; same semantics as vibe Hotbar `overlayProgress`. */
+  overlayProgress?: number;
+  overlayColor?: string;
 };
 
 export function MammothDroppableSlot({
@@ -15,7 +18,11 @@ export function MammothDroppableSlot({
   onClick,
   children,
   style,
+  overlayProgress,
+  overlayColor = "rgba(0, 0, 0, 0.42)",
 }: Props) {
+  const showOverlay = overlayProgress !== undefined && overlayProgress < 1;
+
   return (
     <div
       role="presentation"
@@ -34,10 +41,35 @@ export function MammothDroppableSlot({
         cursor: onClick ? "pointer" : "default",
         userSelect: "none",
         WebkitUserSelect: "none",
+        overflow: "hidden",
         ...style,
       }}
     >
       {children}
+      {showOverlay && overlayProgress !== undefined ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 5,
+            pointerEvents: "none",
+            isolation: "isolate",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: `${(1 - overlayProgress) * 100}%`,
+              backgroundColor: overlayColor,
+              borderRadius: 4,
+            }}
+            title={`Use cooldown: ${Math.round((1 - overlayProgress) * 100)}% remaining`}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

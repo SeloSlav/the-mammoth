@@ -47,6 +47,11 @@ export {
   type WalkSurfaceAabb,
   type WalkSurfaceXzFootprint,
 } from "./walkSurfaceAABBs.js";
+export {
+  buildWalkSurfaceSpatialIndex,
+  type WalkSurfaceSpatialIndex,
+} from "./walkSurfaceSpatialIndex.js";
+export { estimateStoreyFromFeetY } from "./buildingStory.js";
 export { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 export {
   collectElevatorSlabHoles,
@@ -55,6 +60,14 @@ export {
   punchElevatorHolesInShellRects,
 } from "./shaftPlanformClip.js";
 export { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
+export {
+  elevatorHoistwayInnerHalfExtents,
+  elevatorSupportFeetWorldY,
+  FP_LOCOMOTION_SKIN,
+  listElevatorShaftLayouts,
+  maxBuildingLevelIndex,
+  type ElevatorShaftLayout,
+} from "./elevatorShaftLayout.js";
 
 /**
  * Vertical spacing between stacked `BuildingFloorRef` plates (meters).
@@ -134,6 +147,7 @@ export function instantiateBuildingFloorStack(
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;
+    plate.userData.mammothPlateLevelIndex = ref.levelIndex;
     root.add(plate);
   }
 

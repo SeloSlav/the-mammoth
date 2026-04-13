@@ -25,6 +25,14 @@ Rust module (`mammoth-module`) published as a database on your SpacetimeDB host.
    pnpm client:generate
    ```
 
+5. **Walk / floor content:** if you (or another workflow) changed `content/building/` floor JSON, `mammoth.json`, or walk-surface logic in `@the-mammoth/world`, regenerate server grounding data:
+
+   ```bash
+   pnpm content:gen-walk-aabbs
+   ```
+
+   See [docs/content-building.md](../../docs/content-building.md).
+
 ## Auth
 
 The browser connects to SpacetimeDB **only with a JWT** from `apps/auth` (OpenAuth). Configure your SpacetimeDB node to trust that issuer’s JWKS (`/.well-known/jwks.json`) so `POST /v1/identity/websocket-token` succeeds. Anonymous connections are not used by the client.

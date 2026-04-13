@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useMemo, useState } from "react";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
 import { spawnInFrontOfCamera } from "../editor/spawnBridge.js";
 import { useShallow } from "zustand/react/shallow";
@@ -32,6 +27,7 @@ import {
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
+import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
 
 export function EditorChrome() {
   const {
@@ -73,8 +69,6 @@ export function EditorChrome() {
   } = useEditorStore(useShallow(selectEditorChromeStore));
 
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [metaText, setMetaText] = useState("");
-  const [metaErr, setMetaErr] = useState<string | null>(null);
 
   const sortedRefs = useMemo(
     () => [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex),
@@ -84,35 +78,8 @@ export function EditorChrome() {
   const activeFloorDoc = floorDocs[activeFloorDocId];
   const activeInteriorDoc = interiorDocs[activeInteriorDocId];
 
-  const selectedFloorObj = useMemo(() => {
-    if (!activeFloorDoc || !selectedId) return null;
-    return activeFloorDoc.objects.find((o) => o.id === selectedId) ?? null;
-  }, [activeFloorDoc, selectedId]);
-
-  const selectedInteriorPl = useMemo(() => {
-    if (!activeInteriorDoc || !selectedId) return null;
-    return activeInteriorDoc.placements.find((p) => p.entityId === selectedId) ?? null;
-  }, [activeInteriorDoc, selectedId]);
-
-  useEffect(() => {
-    if (selectedFloorObj) {
-      setMetaText(
-        selectedFloorObj.metadata
-          ? JSON.stringify(selectedFloorObj.metadata, null, 2)
-          : "",
-      );
-      setMetaErr(null);
-    } else if (selectedInteriorPl) {
-      setMetaText(
-        selectedInteriorPl.overrides
-          ? JSON.stringify(selectedInteriorPl.overrides, null, 2)
-          : "",
-      );
-      setMetaErr(null);
-    } else {
-      setMetaText("");
-    }
-  }, [selectedFloorObj, selectedInteriorPl]);
+  const { selectedFloorObj, selectedInteriorPl, metaText, setMetaText, metaErr, setMetaErr } =
+    useEditorChromeSelectionMeta(activeFloorDoc, activeInteriorDoc, selectedId);
 
   const floorPrefabIds = useMemo(() => collectPrefabIdsFromFloors(floorDocs), [floorDocs]);
   const interiorPrefabIds = useMemo(

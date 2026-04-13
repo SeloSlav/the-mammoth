@@ -6,9 +6,6 @@ import { PrimitiveAnimationDriver } from "../../animation/PrimitiveAnimationDriv
 import type { WeaponDefinition } from "../../weapons/weaponTypes.js";
 import {
   clampFpRigRootPositionInPlace,
-  FP_RIG_ROOT_XZ_MAX_ABS_M,
-  FP_RIG_ROOT_Y_MAX_M,
-  FP_RIG_ROOT_Y_MIN_M,
   isFpRigRootPositionAuthorable,
   samplePrimitiveMeleeSwing,
   type PrimitiveSwingKeyframe,
@@ -23,6 +20,9 @@ import {
   forceDoubleSidedMeshes,
 } from "../viewModelNormalize.js";
 import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
+import { resolveAuthoringOrbitTargetWorld } from "./localFirstPersonAuthoringOrbit.js";
+import { largestValidAuthoringRigRestStep } from "./localFirstPersonRigAuthoringClamp.js";
+import { computeWeaponGripMountFromDefinition } from "./localFirstPersonWeaponGripLayout.js";
 
 export type LocalFirstPersonPresenterOptions = {
   /** Where `fpRoot` attaches — use `headPitch` from {@link createFPRig}, not the camera. */
@@ -36,7 +36,8 @@ export type LocalFirstPersonPresenterOptions = {
 };
 
 /**
- * Rest offset of the right-hand rig under `fpRoot` (local meters; `fpRoot` counter-pitches with look).
+ * Rest offset of the right-hand rig under `fpRoot` (local meters). `fpRoot` stays at identity;
+ * look pitch comes from the parent (`headPitch` from {@link createFPRig}) so the weapon tilts with the view.
  * Tuned vs the **gameplay** frustum (not head origin): higher and farther into the lens than a pure
  * “shoulder from ear” guess so hand + crowbar stay clearly in view at level pitch.
  */
@@ -349,7 +350,7 @@ export class LocalFirstPersonPresenter {
 
   /**
    * When true, viewmodel stays at rest (no walk sway / swing) so TransformControls edits stick.
-   * Head pitch on `fpRoot` still follows look — matches the gameplay camera framing.
+   * Look pitch still comes from the parent rig (same as gameplay).
    */
   setAuthoringFrozen(frozen: boolean): void {
     this.authoringFrozen = frozen;
@@ -418,59 +419,17 @@ export class LocalFirstPersonPresenter {
   }
 
   getAuthoringOrbitTargetWorld(out: THREE.Vector3): boolean {
-    const picks = this.getAuthoringPickList();
-    if (picks.length === 0) return false;
-    const box = new THREE.Box3();
-    const weaponMount = picks.find((p) => p.id === "weaponRoot");
-    const gripSocket = picks.find((p) => p.id === "gripAnchor");
-    if (weaponMount) {
-      box.setFromObject(weaponMount.object);
-      if (gripSocket) {
-        const gripBox = new THREE.Box3().setFromObject(gripSocket.object);
-        box.union(gripBox);
-      }
-    } else {
-      for (const p of picks) {
-        box.expandByObject(p.object);
-      }
-    }
-    if (box.isEmpty() || !Number.isFinite(box.min.x)) {
-      this.fpRoot.getWorldPosition(out);
-      out.add(_AUTHOR_ORBIT_FALLBACK_OFFSET);
-      return true;
-    }
-    box.getCenter(out);
-    return true;
+    return resolveAuthoringOrbitTargetWorld(
+      this.fpRoot,
+      this.getAuthoringPickList(),
+      _AUTHOR_ORBIT_FALLBACK_OFFSET,
+      out,
+    );
   }
 
   /** Persist current weapon root local pose into the presenter baseline (call after authoring). */
   syncFpWeaponMountBaselineFromRoot(): void {
     this.weapon?.syncFpMountBaselineFromRoot();
-  }
-
-  /**
-   * Max α∈(0,1] so `rest + α·delta` stays inside the FP rig authoring box (asymmetric on Y).
-   */
-  private static largestValidAuthoringRigRestStep(rest: THREE.Vector3, delta: THREE.Vector3): number {
-    const capXz = FP_RIG_ROOT_XZ_MAX_ABS_M * 0.999;
-    const yLo = FP_RIG_ROOT_Y_MIN_M;
-    const yHi = FP_RIG_ROOT_Y_MAX_M;
-    let t = 1;
-    for (let k = 0; k < 28; k++) {
-      const nx = rest.x + t * delta.x;
-      const ny = rest.y + t * delta.y;
-      const nz = rest.z + t * delta.z;
-      if (
-        Math.abs(nx) <= capXz &&
-        Math.abs(nz) <= capXz &&
-        ny >= yLo &&
-        ny <= yHi
-      ) {
-        return t;
-      }
-      t *= 0.5;
-    }
-    return 0;
   }
 
   /**
@@ -483,7 +442,6 @@ export class LocalFirstPersonPresenter {
   frameWeaponMountIntoGameplayCamera(
     rootForWorldUpdate: THREE.Object3D,
     gameplayCamera: THREE.PerspectiveCamera,
-    pitchRad: number,
     options?: { aheadM?: number; rightM?: number; lowerM?: number },
   ): boolean {
     if (!this.viewmodelReady || !this.weapon) return false;
@@ -507,7 +465,7 @@ export class LocalFirstPersonPresenter {
     const maxIters = 20;
 
     for (let iter = 0; iter < maxIters; iter++) {
-      this.fpRoot.rotation.set(-pitchRad, 0, 0);
+      this.fpRoot.rotation.set(0, 0, 0);
       this.applyRigRestToRightHandRig();
       rootForWorldUpdate.updateMatrixWorld(true);
 
@@ -522,45 +480,15 @@ export class LocalFirstPersonPresenter {
       this.fpRoot.getWorldQuaternion(this._vmMountQ);
       this._vmMountQ.invert();
       this._vmMountDl.copy(this._vmMountDw).applyQuaternion(this._vmMountQ);
-      const step = LocalFirstPersonPresenter.largestValidAuthoringRigRestStep(this.rigRestPos, this._vmMountDl);
+      const step = largestValidAuthoringRigRestStep(this.rigRestPos, this._vmMountDl);
       if (step < 1e-9) break;
       this.rigRestPos.addScaledVector(this._vmMountDl, step);
     }
 
-    this.fpRoot.rotation.set(-pitchRad, 0, 0);
+    this.fpRoot.rotation.set(0, 0, 0);
     clampFpRigRootPositionInPlace(this.rigRestPos);
     this.applyRigRestToRightHandRig();
     return true;
-  }
-
-  private computeWeaponGripMount(): {
-    pos: THREE.Vector3;
-    euler: THREE.Euler;
-    scale: THREE.Vector3;
-  } {
-    const pres = this.weaponDefinition?.primitivePresentation?.firstPerson;
-    if (!pres) {
-      return {
-        pos: new THREE.Vector3(),
-        euler: new THREE.Euler(0, 0, 0, "XYZ"),
-        scale: new THREE.Vector3(1, 1, 1),
-      };
-    }
-    const sm = pres.mount.scaleM;
-    return {
-      pos: new THREE.Vector3(
-        pres.mount.positionM.x,
-        pres.mount.positionM.y,
-        pres.mount.positionM.z,
-      ),
-      euler: new THREE.Euler(
-        pres.mount.eulerRad.x,
-        pres.mount.eulerRad.y,
-        pres.mount.eulerRad.z,
-        "XYZ",
-      ),
-      scale: sm ? new THREE.Vector3(sm.x, sm.y, sm.z) : new THREE.Vector3(1, 1, 1),
-    };
   }
 
   /**
@@ -600,7 +528,7 @@ export class LocalFirstPersonPresenter {
     this.weapon.getVisual().scale.copy(this.resolveFpViewmodelLayout().weaponVisualScale);
     const anchor = this.weaponGripAnchor;
     if (!anchor) throw new Error("[LocalFirstPersonPresenter] grip anchor missing");
-    const { pos, euler, scale } = this.computeWeaponGripMount();
+    const { pos, euler, scale } = computeWeaponGripMountFromDefinition(this.weaponDefinition);
     this.weapon.attachToFpHand(anchor, pos, euler, scale);
     this.weapon.root.traverse((o) => {
       o.frustumCulled = false;
@@ -609,8 +537,8 @@ export class LocalFirstPersonPresenter {
 
   update(state: LocalPlayerGameplayState, dt: number): void {
     if (!this.viewmodelReady) return;
+    this.fpRoot.rotation.set(0, 0, 0);
     if (this.authoringFrozen) {
-      this.fpRoot.rotation.set(-state.pitchRad, 0, 0);
       this.applyRigRestToRightHandRig();
       const swingTrack = this.resolveFpMeleeSwingTrack();
       const ph = this.swingAuthoringPreviewPhase;
@@ -690,8 +618,6 @@ export class LocalFirstPersonPresenter {
       );
       this.rightHandRig.scale.copy(this.rigRestScale);
     }
-
-    this.fpRoot.rotation.set(-state.pitchRad, 0, 0);
   }
 
   dispose(): void {

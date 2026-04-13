@@ -31,6 +31,7 @@ import {
   addConcreteSlabWithOptionalShaftHoles,
   addGroundFootprintGrassOccluder,
 } from "./floorSlabPlaceholder.js";
+import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMaterials.js";
 import {
   collectCorridorOrLobbyFootprintsFromFloor,
   corridorFlushGapForShaftDoor,
@@ -41,7 +42,8 @@ import type { BuildFloorMeshesOptions } from "./elevatorDoorFacesFromGroundFloor
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
 
-function classifyPrefab(prefabId: string): PlaceholderKind {
+/** Exported for unit tests / tooling; drives corridor vs unit mesh routing. */
+export function classifyPrefab(prefabId: string): PlaceholderKind {
   const p = prefabId.toLowerCase();
   if (p.includes("corridor") || p.includes("lobby") || p.includes("hall"))
     return "corridor";
@@ -50,89 +52,6 @@ function classifyPrefab(prefabId: string): PlaceholderKind {
     return "core";
   return "misc";
 }
-
-/**
- * Shared materials so massive generated floors do not allocate thousands of materials.
- * Palette: very light pastel blue-gray (mass-panel / cast shell), B slightly above R≈G.
- */
-const mat = {
-  corridorFloor: new THREE.MeshStandardMaterial({
-    color: 0xe2e7ee,
-    roughness: 0.92,
-    metalness: 0.02,
-  }),
-  corridorCeil: new THREE.MeshStandardMaterial({
-    color: 0xf1f4f8,
-    roughness: 0.88,
-    metalness: 0.02,
-    side: THREE.DoubleSide,
-  }),
-  /** Shell walls: high albedo + slightly lower roughness so sun side picks up a hint of key. */
-  corridorWall: new THREE.MeshStandardMaterial({
-    color: 0xedf1f6,
-    roughness: 0.88,
-    metalness: 0.012,
-  }),
-  unitFloor: new THREE.MeshStandardMaterial({
-    color: 0xdee5ec,
-    roughness: 0.92,
-    metalness: 0.025,
-  }),
-  unitCeil: new THREE.MeshStandardMaterial({
-    color: 0xf0f3f7,
-    roughness: 0.88,
-    metalness: 0.025,
-    side: THREE.DoubleSide,
-  }),
-  unitWall: new THREE.MeshStandardMaterial({
-    color: 0xebf0f5,
-    roughness: 0.88,
-    metalness: 0.02,
-  }),
-  coreFloor: new THREE.MeshStandardMaterial({
-    color: 0xd4dce4,
-    roughness: 0.92,
-    metalness: 0.04,
-  }),
-  coreCeil: new THREE.MeshStandardMaterial({
-    color: 0xe8edf3,
-    roughness: 0.88,
-    metalness: 0.04,
-    side: THREE.DoubleSide,
-  }),
-  coreWall: new THREE.MeshStandardMaterial({
-    color: 0xeef2f7,
-    roughness: 0.88,
-    metalness: 0.03,
-  }),
-  miscFloor: new THREE.MeshStandardMaterial({
-    color: 0xe0e6ed,
-    roughness: 0.92,
-    metalness: 0.025,
-  }),
-  miscCeil: new THREE.MeshStandardMaterial({
-    color: 0xedf1f6,
-    roughness: 0.88,
-    metalness: 0.025,
-    side: THREE.DoubleSide,
-  }),
-  miscWall: new THREE.MeshStandardMaterial({
-    color: 0xebeef4,
-    roughness: 0.88,
-    metalness: 0.02,
-  }),
-  slab: new THREE.MeshStandardMaterial({
-    color: 0xdde5ee,
-    roughness: 0.92,
-    metalness: 0.02,
-    side: THREE.DoubleSide,
-  }),
-  lobbyDoorFrame: new THREE.MeshStandardMaterial({
-    color: 0x5a5856,
-    roughness: 0.5,
-    metalness: 0.42,
-  }),
-};
 
 /**
  * Ground storey corridor / lobby: **double-door frame bays** (m clear).

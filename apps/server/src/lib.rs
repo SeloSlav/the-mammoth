@@ -5,6 +5,8 @@ mod accounts;
 mod auth;
 mod combat_stub;
 mod dropped_item;
+mod elevator;
+mod elevator_layout;
 mod generated_walk_surfaces;
 mod inventory;
 mod inventory_models;
@@ -22,6 +24,7 @@ use pose::{player_pose, PlayerPose};
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
+    elevator::seed_elevators(ctx);
     movement::start_physics_schedule(ctx);
     player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);

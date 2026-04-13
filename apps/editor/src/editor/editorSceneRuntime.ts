@@ -2,19 +2,13 @@ import * as THREE from "three";
 import { MOUSE } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import {
   createFPCamera,
   FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
   type LocalFirstPersonPresenter,
+  type PrimitiveSwingKeyframe,
 } from "@the-mammoth/engine";
-import {
-  instantiateBuildingFloorStack,
-  buildInteriorMeshes,
-} from "@the-mammoth/world";
-import { FloorDocSchema } from "@the-mammoth/schemas";
-import { useEditorStore, type EditorState } from "../state/editorStore.js";
-import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
+import { useEditorStore } from "../state/editorStore.js";
 import {
   disposeSceneEnvironment,
   disposeSubtreeGpuAssets,
@@ -34,98 +28,22 @@ import {
   resetWeaponPresentationEditorSyncStateForTeardown,
 } from "./weaponPresentationEditorSync.js";
 import { objectLivesUnderScene } from "./sceneGraphUtils.js";
-import { buildMeleeSwingKeyframesFromViewportStroke } from "./fpSwingViewportStroke.js";
-
-function emptyFloorDoc(floorDocId: string) {
-  return FloorDocSchema.parse({ id: floorDocId, version: 1, objects: [] });
-}
-
-const PLACEMENT_KEY_SEP = "\u0000";
-
-function placementKey(floorDocId: string, objectId: string): string {
-  return `${floorDocId}${PLACEMENT_KEY_SEP}${objectId}`;
-}
-
-function resolvePlacedId(
-  hit: THREE.Object3D | null,
-  floorDocs: Record<string, import("@the-mammoth/schemas").FloorDoc>,
-): string | null {
-  let cur: THREE.Object3D | null = hit;
-  while (cur) {
-    const id = cur.userData.placedObjectId;
-    if (typeof id === "string" && id.length > 0) return id;
-    if (cur instanceof THREE.Group && typeof cur.name === "string" && cur.name) {
-      for (const d of Object.values(floorDocs)) {
-        if (d.objects.some((o) => o.id === cur!.name)) return cur.name;
-      }
-    }
-    cur = cur.parent;
-  }
-  return null;
-}
-
-function syncFloorTransforms(
-  root: THREE.Object3D,
-  floorDocs: EditorState["floorDocs"],
-) {
-  const byKey = new Map<string, import("@the-mammoth/schemas").PlacedObject>();
-  for (const [fid, d] of Object.entries(floorDocs)) {
-    for (const o of d.objects) byKey.set(placementKey(fid, o.id), o);
-  }
-  root.traverse((o) => {
-    const id = o.userData.placedObjectId as string | undefined;
-    if (!id || !(o instanceof THREE.Object3D)) return;
-    const fid = o.userData.floorDocId as string | undefined;
-    let pl = fid ? byKey.get(placementKey(fid, id)) : undefined;
-    if (!pl) {
-      for (const d of Object.values(floorDocs)) {
-        const hit = d.objects.find((ob) => ob.id === id);
-        if (hit) {
-          pl = hit;
-          break;
-        }
-      }
-    }
-    if (!pl) return;
-    o.position.set(pl.position[0], pl.position[1], pl.position[2]);
-    if (pl.rotation)
-      o.quaternion.set(
-        pl.rotation[0],
-        pl.rotation[1],
-        pl.rotation[2],
-        pl.rotation[3],
-      );
-    else o.quaternion.identity();
-    const sx = pl.scale?.[0] ?? 1;
-    const sy = pl.scale?.[1] ?? 1;
-    const sz = pl.scale?.[2] ?? 1;
-    o.scale.set(sx, sy, sz);
-  });
-}
-
-function syncInteriorTransforms(
-  root: THREE.Object3D,
-  doc: import("@the-mammoth/schemas").InteriorDoc,
-) {
-  for (const p of doc.placements) {
-    const o = root.getObjectByName(p.entityId);
-    if (!o) continue;
-    if (
-      typeof o.userData.streamDocId === "string" &&
-      o.userData.streamDocId !== doc.id
-    ) {
-      continue;
-    }
-    o.position.set(p.position[0], p.position[1], p.position[2]);
-    if (p.rotation)
-      o.quaternion.set(p.rotation[0], p.rotation[1], p.rotation[2], p.rotation[3]);
-    else o.quaternion.identity();
-    const sx = p.scale?.[0] ?? 1;
-    const sy = p.scale?.[1] ?? 1;
-    const sz = p.scale?.[2] ?? 1;
-    o.scale.set(sx, sy, sz);
-  }
-}
+import {
+  buildMeleeSwingKeyframesFromFpRootAbsLocals,
+  intersectViewportRayWithSwingSweepPlaneFpRootLocal,
+  projectViewportStrokeToFpRootLocals,
+} from "./fpSwingViewportStroke.js";
+import { registerEditorSwingStrokeReview } from "./editorSwingStrokeReviewBridge.js";
+import { resolvePlacedId } from "./editorPlacementKeys.js";
+import { emptyFloorDoc } from "./editorEmptyFloorDoc.js";
+import {
+  syncDuplicateFloorGroups,
+  syncFloorTransforms,
+  syncInteriorTransforms,
+} from "./editorFloorTransformSync.js";
+import { addEditorSceneLighting } from "./editorSceneLighting.js";
+import { createEditorPmremEnvironment } from "./editorSceneEnvironment.js";
+import { buildEditorStructuralRoot } from "./editorBuildingContentMount.js";
 
 export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   const scene = new THREE.Scene();
@@ -137,46 +55,22 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  const hemi = new THREE.HemisphereLight(0xb8c4ff, 0x2a2a30, 0.55);
-  scene.add(hemi);
-
-  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-  dir.position.set(40, 80, 30);
-  dir.castShadow = true;
-  dir.shadow.mapSize.set(2048, 2048);
-  dir.shadow.camera.near = 0.5;
-  dir.shadow.camera.far = 400;
-  dir.shadow.camera.left = -120;
-  dir.shadow.camera.right = 120;
-  dir.shadow.camera.top = 120;
-  dir.shadow.camera.bottom = -120;
-  scene.add(dir);
-
-  const grid = new THREE.GridHelper(400, 80, 0x444455, 0x33333d);
-  grid.position.y = 0;
-  scene.add(grid);
+  const { dir, grid } = addEditorSceneLighting(scene);
 
   const textureLoader = new THREE.TextureLoader();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  let envRt: THREE.WebGLRenderTarget | null = null;
-
-  const applyEnvironment = (on: boolean) => {
-    scene.environment = null;
-    if (envRt) {
-      envRt.dispose();
-      envRt = null;
-    }
-    if (on) {
-      envRt = pmrem.fromScene(new RoomEnvironment(), 0.04);
-      scene.environment = envRt.texture;
-    }
-  };
+  const { pmrem, applyEnvironment } = createEditorPmremEnvironment(scene, renderer);
 
   const contentRoot = new THREE.Group();
   contentRoot.name = "editorContentRoot";
   scene.add(contentRoot);
 
-  const transformControls = new TransformControls(camera, canvas);
+  /**
+   * Defer {@link TransformControls#connect} until after our capture listener is registered so
+   * "paint swing" can `stopImmediatePropagation` before Three's `pointerdown` runs. Otherwise TC
+   * always captures first, then `enabled = false` makes its `pointerup` no-op — leaving orphan
+   * `pointermove` listeners and a wedged gizmo.
+   */
+  const transformControls = new TransformControls(camera, null);
   /**
    * {@link TransformControls} dispatches `change` when `object`/camera/mode/etc. are set.
    * Our listener calls into Zustand; a nested subscribe can still see stale `prev` and think
@@ -254,7 +148,8 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   const transformHelper = transformControls.getHelper();
   scene.add(transformHelper);
 
-  const orbitControls = new OrbitControls(camera, canvas);
+  /** Defer {@link OrbitControls#connect} until after {@link TransformControls#connect} (see `rewireCanvasPrimaryPointerListeners`). */
+  const orbitControls = new OrbitControls(camera, null);
   orbitControls.enableDamping = true;
   orbitControls.target.set(0, 1.45, 0);
   orbitControls.minDistance = 0.22;
@@ -270,14 +165,25 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   let fpClickCandidate: { x: number; y: number } | null = null;
   let swingStrokeDragging = false;
+  let swingStrokeCapturePointerId: number | null = null;
   let swingStrokeBuf: { clientX: number; clientY: number }[] = [];
   /** 2D stroke preview while painting a swing (sits above the WebGL canvas, below the tools panel). */
   let swingStrokeOverlayEl: HTMLCanvasElement | null = null;
+  /** Editable 3D path (fpRoot-local) after a stroke, before Confirm. */
+  let swingReviewLocals: THREE.Vector3[] | null = null;
+  let swingReviewDragIdx: number | null = null;
+  /** Preview track while reviewing; overrides store draft in the scene tick until Confirm. */
+  let swingReviewPreviewKeys: PrimitiveSwingKeyframe[] | null = null;
+  let swingReviewCanvasListenersAttached = false;
+  const _swingProj = new THREE.Vector3();
+  const _swingProjOut = { x: 0, y: 0 };
 
   function onSwingStrokeOverlayWindowResize(): void {
     if (!swingStrokeOverlayEl) return;
     if (swingStrokeDragging && swingStrokeBuf.length > 0) {
       redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
+    } else if (swingReviewLocals && swingReviewLocals.length > 0) {
+      redrawSwingReviewOverlay();
     } else {
       resizeSwingStrokeOverlayOnly();
     }
@@ -365,7 +271,229 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     ctx.clearRect(0, 0, swingStrokeOverlayEl.width, swingStrokeOverlayEl.height);
   }
 
+  function setSwingStrokeOverlayPointerInteractive(on: boolean): void {
+    if (!swingStrokeOverlayEl) return;
+    swingStrokeOverlayEl.style.pointerEvents = on ? "auto" : "none";
+    swingStrokeOverlayEl.style.cursor = on ? "crosshair" : "default";
+  }
+
+  function projectSwingLocalToCanvasCss(
+    local: THREE.Vector3,
+    fpRoot: THREE.Object3D,
+    pickCam: THREE.Camera,
+    canvasRect: DOMRect,
+    out: { x: number; y: number },
+  ): boolean {
+    _swingProj.copy(local).applyMatrix4(fpRoot.matrixWorld);
+    _swingProj.project(pickCam);
+    if (!Number.isFinite(_swingProj.x) || !Number.isFinite(_swingProj.y)) return false;
+    out.x = (_swingProj.x * 0.5 + 0.5) * canvasRect.width;
+    out.y = (-_swingProj.y * 0.5 + 0.5) * canvasRect.height;
+    return true;
+  }
+
+  function rebuildSwingReviewPreview(): void {
+    if (!swingReviewLocals || swingReviewLocals.length < 2 || !fpSession?.getPresenter()) {
+      swingReviewPreviewKeys = null;
+      return;
+    }
+    const pres = fpSession.getPresenter()!;
+    fpSession.syncWorldMatrices();
+    const rig = pres.getFpRigRestLocal();
+    try {
+      swingReviewPreviewKeys = buildMeleeSwingKeyframesFromFpRootAbsLocals({
+        absLocals: swingReviewLocals,
+        rigRestPositionLocal: rig.position,
+      });
+    } catch {
+      swingReviewPreviewKeys = null;
+    }
+  }
+
+  function redrawSwingReviewOverlay(): void {
+    ensureSwingStrokeOverlayMounted();
+    if (!swingStrokeOverlayEl || !swingReviewLocals || swingReviewLocals.length === 0) return;
+    const pres = fpSession?.getPresenter();
+    if (!pres) return;
+    fpSession?.syncWorldMatrices();
+    const st = useEditorStore.getState();
+    const pickCam =
+      st.fpAuthorCamera === "gameplay" && fpSession ? fpSession.getGameplayCamera() : camera;
+    const r = canvas.getBoundingClientRect();
+    const fpRoot = pres.getFpViewmodelAuthoringRoot();
+    resizeSwingStrokeOverlayOnly();
+    const ctx = swingStrokeOverlayEl.getContext("2d");
+    if (!ctx) return;
+    const dpr = Math.min(window.devicePixelRatio ?? 1, 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, swingStrokeOverlayEl.width, swingStrokeOverlayEl.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cssPts: { x: number; y: number }[] = [];
+    for (const loc of swingReviewLocals) {
+      if (!projectSwingLocalToCanvasCss(loc, fpRoot, pickCam, r, _swingProjOut)) continue;
+      cssPts.push({ x: _swingProjOut.x, y: _swingProjOut.y });
+    }
+    if (cssPts.length < 2) return;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(64, 255, 200, 0.95)";
+    ctx.lineWidth = 4;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(cssPts[0]!.x, cssPts[0]!.y);
+    for (let i = 1; i < cssPts.length; i++) {
+      ctx.lineTo(cssPts[i]!.x, cssPts[i]!.y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const handleR = 9;
+    for (let i = 0; i < cssPts.length; i++) {
+      const p = cssPts[i]!;
+      const active = swingReviewDragIdx === i;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, handleR, 0, Math.PI * 2);
+      ctx.fillStyle = active ? "rgba(255, 220, 120, 0.98)" : "rgba(255, 255, 255, 0.92)";
+      ctx.fill();
+      ctx.strokeStyle = active ? "rgba(255, 160, 40, 1)" : "rgba(40, 200, 140, 1)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  function detachSwingReviewCanvasListeners(): void {
+    if (!swingReviewCanvasListenersAttached) return;
+    canvas.removeEventListener("pointerdown", onSwingReviewCanvasPointerDownCapture, { capture: true });
+    canvas.removeEventListener("pointermove", onSwingReviewPointerMove);
+    canvas.removeEventListener("pointerup", onSwingReviewPointerUp);
+    canvas.removeEventListener("pointercancel", onSwingReviewPointerCancel);
+    swingReviewCanvasListenersAttached = false;
+  }
+
+  function attachSwingReviewCanvasListeners(): void {
+    if (swingReviewCanvasListenersAttached) return;
+    canvas.addEventListener("pointerdown", onSwingReviewCanvasPointerDownCapture, { capture: true });
+    canvas.addEventListener("pointermove", onSwingReviewPointerMove);
+    canvas.addEventListener("pointerup", onSwingReviewPointerUp);
+    canvas.addEventListener("pointercancel", onSwingReviewPointerCancel);
+    swingReviewCanvasListenersAttached = true;
+  }
+
+  /**
+   * Capture phase: when a handle is hit, block orbit / transform from seeing this gesture (same
+   * idea as paint swing). Misses fall through so middle-drag orbit still works.
+   */
+  function onSwingReviewCanvasPointerDownCapture(ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    if (ev.currentTarget !== canvas) return;
+    if (!swingReviewLocals || swingReviewLocals.length < 2) return;
+    const pres = fpSession?.getPresenter();
+    if (!pres) return;
+    fpSession?.syncWorldMatrices();
+    const st = useEditorStore.getState();
+    const pickCam =
+      st.fpAuthorCamera === "gameplay" && fpSession ? fpSession.getGameplayCamera() : camera;
+    const r = canvas.getBoundingClientRect();
+    const fpRoot = pres.getFpViewmodelAuthoringRoot();
+    const lx = ev.clientX - r.left;
+    const ly = ev.clientY - r.top;
+    let best = -1;
+    let bestD = 1e9;
+    for (let i = 0; i < swingReviewLocals.length; i++) {
+      if (!projectSwingLocalToCanvasCss(swingReviewLocals[i]!, fpRoot, pickCam, r, _swingProjOut))
+        continue;
+      const d = Math.hypot(_swingProjOut.x - lx, _swingProjOut.y - ly);
+      if (d < bestD && d < 16) {
+        bestD = d;
+        best = i;
+      }
+    }
+    if (best < 0) return;
+    swingReviewDragIdx = best;
+    canvas.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    redrawSwingReviewOverlay();
+  }
+
+  function onSwingReviewPointerMove(ev: PointerEvent): void {
+    if (swingReviewDragIdx === null || !swingReviewLocals) return;
+    const pres = fpSession?.getPresenter();
+    if (!pres) return;
+    fpSession?.syncWorldMatrices();
+    const st = useEditorStore.getState();
+    const pickCam =
+      st.fpAuthorCamera === "gameplay" && fpSession ? fpSession.getGameplayCamera() : camera;
+    const r = canvas.getBoundingClientRect();
+    const fpRoot = pres.getFpViewmodelAuthoringRoot();
+    const rig = pres.getFpRigRestLocal();
+    const hit = intersectViewportRayWithSwingSweepPlaneFpRootLocal({
+      clientPoint: { clientX: ev.clientX, clientY: ev.clientY },
+      canvasRect: r,
+      pickCamera: pickCam,
+      fpRoot,
+      rigRestPositionLocal: rig.position,
+    });
+    if (hit) {
+      swingReviewLocals[swingReviewDragIdx]!.copy(hit);
+      rebuildSwingReviewPreview();
+      redrawSwingReviewOverlay();
+    }
+  }
+
+  function onSwingReviewPointerUp(ev: PointerEvent): void {
+    if (swingReviewDragIdx === null) return;
+    swingReviewDragIdx = null;
+    try {
+      canvas.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* not captured */
+    }
+    redrawSwingReviewOverlay();
+  }
+
+  function onSwingReviewPointerCancel(ev: PointerEvent): void {
+    onSwingReviewPointerUp(ev);
+  }
+
+  function endSwingStrokeReviewSession(): void {
+    detachSwingReviewCanvasListeners();
+    swingReviewLocals = null;
+    swingReviewDragIdx = null;
+    swingReviewPreviewKeys = null;
+    useEditorStore.getState().setFpSwingStrokeReviewActive(false);
+    setSwingStrokeOverlayPointerInteractive(false);
+    clearSwingStrokeOverlay();
+    transformControls.enabled = true;
+    rewireCanvasPrimaryPointerListeners();
+  }
+
+  function confirmSwingReviewFromUser(): void {
+    const keys = swingReviewPreviewKeys;
+    if (!keys?.length) {
+      useEditorStore
+        .getState()
+        .showFpAuthorToast("Path invalid — adjust handles or cancel and paint again.", 5600);
+      return;
+    }
+    const n = keys.length;
+    const store = useEditorStore.getState();
+    store.setFpSwingKeyframesDraft(keys);
+    endSwingStrokeReviewSession();
+    store.showFpAuthorToast(
+      `Swing confirmed: ${n} keyframes (motion in head-pitch space). Play or Save layout.`,
+      6200,
+    );
+  }
+
+  function cancelSwingReviewFromUser(): void {
+    if (!useEditorStore.getState().fpSwingStrokeReviewActive) return;
+    endSwingStrokeReviewSession();
+    useEditorStore.getState().showFpAuthorToast("Swing path edit cancelled.", 3200);
+  }
+
   function disposeSwingStrokeOverlay(): void {
+    detachSwingReviewCanvasListeners();
     window.removeEventListener("resize", onSwingStrokeOverlayWindowResize);
     swingStrokeOverlayEl?.remove();
     swingStrokeOverlayEl = null;
@@ -432,8 +560,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     const cam = fpSession?.getGameplayCamera();
     if (!pres || !cam) return;
     pres.snapRigRootToAuthoringDefaults();
-    const pitch = useEditorStore.getState().fpAuthorPitchRad;
-    if (!pres.frameWeaponMountIntoGameplayCamera(scene, cam, pitch)) {
+    if (!pres.frameWeaponMountIntoGameplayCamera(scene, cam)) {
       useEditorStore.getState().showFpAuthorToast("Could not align mount to gameplay camera (mesh not ready).", 6500);
       return;
     }
@@ -449,9 +576,17 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   function disposeFpViewmodelRuntimeOnly() {
     swingStrokeDragging = false;
+    swingStrokeCapturePointerId = null;
     swingStrokeBuf = [];
+    swingReviewDragIdx = null;
+    swingReviewLocals = null;
+    swingReviewPreviewKeys = null;
+    detachSwingReviewCanvasListeners();
+    useEditorStore.getState().setFpSwingStrokeReviewActive(false);
+    setSwingStrokeOverlayPointerInteractive(false);
     clearSwingStrokeOverlay();
     transformControls.enabled = true;
+    rewireCanvasPrimaryPointerListeners();
     resetWeaponPresentationEditorSyncStateForTeardown();
     disposeFpDefaultRigAnchor();
     registerFpViewmodelAuthoringBridge(null);
@@ -486,6 +621,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   }
 
   function syncFpTransformAttachment() {
+    /** Paint swing / path review disables the gizmo; detach-only sync paths must not leave it stuck off. */
+    const restoreGizmoEnabledIfNotPainting = () => {
+      const z = useEditorStore.getState();
+      if (!swingStrokeDragging && !z.fpSwingStrokeReviewActive) transformControls.enabled = true;
+    };
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
       const pres = fpSession?.getPresenter();
@@ -497,6 +637,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       if (picks.length === 0) {
         transformControls.detach();
         lastFpGizmoAttachKey = "";
+        restoreGizmoEnabledIfNotPainting();
         return;
       }
       const hit = picks.find((p) => p.id === s.fpAuthorTargetId) ?? picks[0];
@@ -518,6 +659,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         lastFpGizmoAttachKey = `${s.fpAuthorTargetId}\0${s.transformMode}\0${s.gridSnapM}\0${s.fpAuthorCamera}`;
       } else {
         lastFpGizmoAttachKey = "";
+        restoreGizmoEnabledIfNotPainting();
       }
     });
   }
@@ -620,24 +762,15 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       buildingRoot = null;
     }
 
-    if (s.mode === "floor") {
-      buildingRoot = instantiateBuildingFloorStack(s.building, (floorDocId) => {
-        return s.floorDocs[floorDocId] ?? emptyFloorDoc(floorDocId);
-      });
-      for (const doc of Object.values(s.floorDocs)) {
-        for (const obj of doc.objects) {
-          applyEditorMaterialsToFloorPlacement(
-            buildingRoot,
-            doc.id,
-            obj,
-            textureLoader,
-          );
-        }
-      }
-    } else {
-      const doc = s.interiorDocs[s.activeInteriorDocId];
-      buildingRoot = doc ? buildInteriorMeshes(doc) : new THREE.Group();
-    }
+    buildingRoot = buildEditorStructuralRoot({
+      mode: s.mode,
+      building: s.building,
+      floorDocs: s.floorDocs,
+      activeInteriorDocId: s.activeInteriorDocId,
+      interiorDocs: s.interiorDocs,
+      textureLoader,
+      emptyFloorDoc,
+    });
 
     contentRoot.add(buildingRoot);
     syncTransformsFromStore();
@@ -652,35 +785,6 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       const doc = s.interiorDocs[s.activeInteriorDocId];
       if (doc) syncInteriorTransforms(buildingRoot, doc);
     }
-  }
-
-  function syncDuplicateFloorGroups(
-    root: THREE.Object3D,
-    sourceId: string,
-    source: THREE.Object3D,
-  ) {
-    const store = useEditorStore.getState();
-    const fid = source.userData.floorDocId as string | undefined;
-    const doc = fid
-      ? store.floorDocs[fid]
-      : store.floorDocs[store.activeFloorDocId];
-    if (!doc) return;
-    const obj = doc.objects.find((o) => o.id === sourceId);
-    if (!obj) return;
-    root.traverse((o) => {
-      if (!(o instanceof THREE.Group)) return;
-      if (o.userData.placedObjectId !== sourceId || o === source) return;
-      if (
-        typeof source.userData.floorDocId === "string" &&
-        typeof o.userData.floorDocId === "string" &&
-        o.userData.floorDocId !== source.userData.floorDocId
-      ) {
-        return;
-      }
-      o.position.copy(source.position);
-      o.quaternion.copy(source.quaternion);
-      o.scale.copy(source.scale);
-    });
   }
 
   function syncTransformAttachment() {
@@ -780,7 +884,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       if (s.mode !== "fp_viewmodel") {
         if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
           rebuildStructural();
-        } else {
+        } else if (!transformControls.dragging) {
           syncTransformsFromStore();
         }
       }
@@ -863,6 +967,41 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   const transformRoot = transformHelper;
 
+  /**
+   * Paint swing must not reach {@link TransformControls} `pointerdown` (see class comment above).
+   * Capture phase + `stopImmediatePropagation` keeps Three from attaching its per-gesture listeners.
+   */
+  const onPaintSwingPointerDownCapture = (ev: PointerEvent) => {
+    if (ev.button !== 0) return;
+    if (ev.currentTarget !== canvas) return;
+    const st = useEditorStore.getState();
+    if (st.mode !== "fp_viewmodel" || !st.fpSwingStrokeArmed) return;
+    if (st.fpSwingStrokeReviewActive) return;
+    if (!fpSession?.getPresenter()) {
+      useEditorStore.getState().setFpSwingStrokeArmed(false);
+      useEditorStore
+        .getState()
+        .showFpAuthorToast("FP viewmodel is still loading — wait for the hand/weapon, then arm paint again.", 5200);
+      return;
+    }
+    swingStrokeDragging = true;
+    swingStrokeCapturePointerId = ev.pointerId;
+    swingStrokeBuf = [{ clientX: ev.clientX, clientY: ev.clientY }];
+    useEditorStore.getState().setFpSwingStrokeArmed(false);
+    transformControls.enabled = false;
+    canvas.setPointerCapture(ev.pointerId);
+    redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
+    useEditorStore
+      .getState()
+      .showFpAuthorToast(
+        "Swing stroke — drag in the view; release to edit the 3D path, then Confirm in the panel.",
+        5200,
+      );
+    fpClickCandidate = null;
+    ev.stopImmediatePropagation();
+  };
+  canvas.addEventListener("pointerdown", onPaintSwingPointerDownCapture, { capture: true });
+
   const onPointerDown = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
     if (ev.currentTarget !== canvas) return;
@@ -878,35 +1017,6 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     raycaster.setFromCamera(pointer, pickCam);
 
     const gizmoHits = raycaster.intersectObjects([transformRoot], true);
-
-    /**
-     * Paint swing: do **not** gate on gizmo ray hits. In FP gameplay the transform helper fills
-     * most rays through the lens, so intersectObjects would almost always “hit” and block strokes.
-     * Disable TransformControls for the drag so it does not compete for the same pointer.
-     */
-    if (st.mode === "fp_viewmodel" && st.fpSwingStrokeArmed) {
-      if (!fpSession?.getPresenter()) {
-        useEditorStore.getState().setFpSwingStrokeArmed(false);
-        useEditorStore
-          .getState()
-          .showFpAuthorToast("FP viewmodel is still loading — wait for the hand/weapon, then arm paint again.", 5200);
-        return;
-      }
-      swingStrokeDragging = true;
-      swingStrokeBuf = [{ clientX: ev.clientX, clientY: ev.clientY }];
-      useEditorStore.getState().setFpSwingStrokeArmed(false);
-      transformControls.enabled = false;
-      canvas.setPointerCapture(ev.pointerId);
-      redrawSwingStrokeOverlayFromBuf(swingStrokeBuf);
-      useEditorStore
-        .getState()
-        .showFpAuthorToast(
-          "Swing stroke — drag; a bright green line follows the pointer. Release to apply.",
-          4200,
-        );
-      fpClickCandidate = null;
-      return;
-    }
 
     if (gizmoHits.length > 0) {
       fpClickCandidate = null;
@@ -934,7 +1044,19 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     useEditorStore.getState().setSelectedId(id);
   };
 
-  canvas.addEventListener("pointerdown", onPointerDown);
+  function rewireCanvasPrimaryPointerListeners(): void {
+    if (transformControls.domElement) {
+      withProgrammaticTransformControls(() => transformControls.disconnect());
+    }
+    if (orbitControls.domElement) {
+      orbitControls.disconnect();
+    }
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    withProgrammaticTransformControls(() => transformControls.connect(canvas));
+    orbitControls.connect(canvas);
+    canvas.addEventListener("pointerdown", onPointerDown);
+  }
+  rewireCanvasPrimaryPointerListeners();
 
   const onSwingStrokeMove = (ev: PointerEvent) => {
     if (!swingStrokeDragging) return;
@@ -948,9 +1070,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   const onSwingStrokeCancel = (ev: PointerEvent) => {
     if (!swingStrokeDragging) return;
     swingStrokeDragging = false;
+    swingStrokeCapturePointerId = null;
     swingStrokeBuf = [];
     clearSwingStrokeOverlay();
     transformControls.enabled = true;
+    rewireCanvasPrimaryPointerListeners();
     try {
       canvas.releasePointerCapture(ev.pointerId);
     } catch {
@@ -959,6 +1083,29 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     useEditorStore.getState().showFpAuthorToast("Swing stroke cancelled.", 2800);
   };
   canvas.addEventListener("pointercancel", onSwingStrokeCancel);
+
+  const onLostPointerCapture = (ev: PointerEvent) => {
+    if (!swingStrokeDragging) return;
+    if (
+      swingStrokeCapturePointerId !== null &&
+      ev.pointerId !== swingStrokeCapturePointerId
+    ) {
+      return;
+    }
+    swingStrokeDragging = false;
+    swingStrokeCapturePointerId = null;
+    swingStrokeBuf = [];
+    clearSwingStrokeOverlay();
+    transformControls.enabled = true;
+    rewireCanvasPrimaryPointerListeners();
+    useEditorStore
+      .getState()
+      .showFpAuthorToast(
+        "Swing stroke interrupted (pointer capture ended). Transform tools are active again.",
+        4200,
+      );
+  };
+  canvas.addEventListener("lostpointercapture", onLostPointerCapture);
 
   const onPointerUp = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
@@ -979,6 +1126,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         pxLen += Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
       }
 
+      let strokeEnteredReview = false;
       try {
         if (swingStrokeBuf.length < 3 || pxLen < 28) {
           throw new Error("Stroke too short — drag a longer arc in the view.");
@@ -992,32 +1140,44 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
             : camera;
         const rectUp = canvas.getBoundingClientRect();
         const rigRest = pres.getFpRigRestLocal();
-        const keys = buildMeleeSwingKeyframesFromViewportStroke({
+        const locals = projectViewportStrokeToFpRootLocals({
           clientPoints: swingStrokeBuf,
           canvasRect: rectUp,
           pickCamera: pickCamUp,
           fpRoot: pres.getFpViewmodelAuthoringRoot(),
           rigRestPositionLocal: rigRest.position,
         });
+        swingReviewLocals = locals.map((v) => v.clone());
+        rebuildSwingReviewPreview();
+        if (!swingReviewPreviewKeys?.length) {
+          throw new Error("Could not build preview from path — try a longer stroke.");
+        }
         const store = useEditorStore.getState();
-        store.setFpSwingKeyframesDraft(keys);
-        pres.setFpSwingAuthoringOverlay({
-          previewPhase01: store.fpSwingPreviewPhase01,
-          keyframes: keys,
-        });
+        store.setFpSwingStrokeReviewActive(true);
+        attachSwingReviewCanvasListeners();
+        setSwingStrokeOverlayPointerInteractive(false);
+        clearSwingStrokeOverlay();
+        redrawSwingReviewOverlay();
+        strokeEnteredReview = true;
         store.showFpAuthorToast(
-          `Painted swing: ${keys.length} keyframes (motion in head-pitch space). Play or Save layout.`,
-          6200,
+          "Drag the bright handles to tune the 3D swing path, then Confirm (or Esc to cancel).",
+          8200,
         );
       } catch (e) {
         useEditorStore
           .getState()
           .showFpAuthorToast(e instanceof Error ? e.message : String(e), 6800);
       } finally {
-        transformControls.enabled = true;
-        clearSwingStrokeOverlay();
+        if (strokeEnteredReview) {
+          transformControls.enabled = false;
+        } else {
+          transformControls.enabled = true;
+          clearSwingStrokeOverlay();
+        }
+        rewireCanvasPrimaryPointerListeners();
       }
       swingStrokeBuf = [];
+      swingStrokeCapturePointerId = null;
       try {
         canvas.releasePointerCapture(ev.pointerId);
       } catch {
@@ -1065,6 +1225,19 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   };
   canvas.addEventListener("pointerup", onPointerUp);
 
+  registerEditorSwingStrokeReview({
+    confirm: confirmSwingReviewFromUser,
+    cancel: cancelSwingReviewFromUser,
+  });
+
+  const onWindowKeyDownSwingReview = (ev: KeyboardEvent) => {
+    if (ev.key !== "Escape") return;
+    if (!useEditorStore.getState().fpSwingStrokeReviewActive) return;
+    ev.preventDefault();
+    cancelSwingReviewFromUser();
+  };
+  window.addEventListener("keydown", onWindowKeyDownSwingReview);
+
   let raf = 0;
   let lastTickMs = performance.now();
   let lastWeaponPresentationPollMs = 0;
@@ -1075,44 +1248,58 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     const dt = Math.min((now - lastTickMs) / 1000, 0.05);
     lastTickMs = now;
     const st = useEditorStore.getState();
+    const tcDragging = transformControls.dragging === true;
     if (st.mode === "fp_viewmodel" && fpSession?.getPresenter()) {
       const pres = fpSession.getPresenter()!;
-      if (st.fpSwingPlayActive) {
-        if (fpSwingPlayStartMs <= 0) fpSwingPlayStartMs = now;
-      } else {
-        fpSwingPlayStartMs = 0;
-      }
-      const swingDur = pres.getWeaponDefinition()?.primitiveSwingDurationS ?? 0.55;
-      const swingPhase = st.fpSwingPlayActive
-        ? (((now - fpSwingPlayStartMs) / 1000 / swingDur) % 1 + 1) % 1
-        : st.fpSwingPreviewPhase01;
-      pres.setFpSwingAuthoringOverlay({
-        previewPhase01: swingPhase,
-        keyframes: st.fpSwingKeyframesDraft,
-      });
-      const tPoll = performance.now();
-      if (tPoll - lastWeaponPresentationPollMs >= 600) {
-        lastWeaponPresentationPollMs = tPoll;
-        const weaponId = st.fpAuthorWeaponId;
-        void (async () => {
-          try {
-            const r = await fetch(`/content/weapons/${weaponId}.presentation.json`, {
-              cache: "no-store",
-            });
-            if (!r.ok) return;
-            const text = await r.text();
-            if (text === getLastWeaponPresentationFileText(weaponId)) return;
-            adoptWeaponPresentationFileText(pres, weaponId, text);
-            maybeSyncFpGizmoFromStore();
-          } catch {
-            /* ignore */
-          }
-        })();
+      if (!tcDragging) {
+        if (st.fpSwingPlayActive) {
+          if (fpSwingPlayStartMs <= 0) fpSwingPlayStartMs = now;
+        } else {
+          fpSwingPlayStartMs = 0;
+        }
+        const swingDur = pres.getWeaponDefinition()?.primitiveSwingDurationS ?? 0.55;
+        const swingPhase = st.fpSwingPlayActive
+          ? (((now - fpSwingPlayStartMs) / 1000 / swingDur) % 1 + 1) % 1
+          : st.fpSwingPreviewPhase01;
+        const swingOverlayKeys =
+          st.fpSwingStrokeReviewActive && swingReviewPreviewKeys?.length
+            ? swingReviewPreviewKeys
+            : st.fpSwingKeyframesDraft;
+        pres.setFpSwingAuthoringOverlay({
+          previewPhase01: swingPhase,
+          keyframes: swingOverlayKeys,
+        });
+        if (st.fpSwingStrokeReviewActive && swingReviewLocals) {
+          redrawSwingReviewOverlay();
+        }
+        const tPoll = performance.now();
+        if (tPoll - lastWeaponPresentationPollMs >= 600) {
+          lastWeaponPresentationPollMs = tPoll;
+          const weaponId = st.fpAuthorWeaponId;
+          void (async () => {
+            try {
+              const r = await fetch(`/content/weapons/${weaponId}.presentation.json`, {
+                cache: "no-store",
+              });
+              if (!r.ok) return;
+              const text = await r.text();
+              if (text === getLastWeaponPresentationFileText(weaponId)) return;
+              adoptWeaponPresentationFileText(pres, weaponId, text);
+              maybeSyncFpGizmoFromStore();
+            } catch {
+              /* ignore */
+            }
+          })();
+        }
       }
       const picksMeta = pres.getAuthoringPickList().map((p) => ({ id: p.id, label: p.label }));
       useEditorStore.getState().setFpAuthorPickList(picksMeta);
-      fpSession.tick(dt, st.fpAuthorPitchRad);
-      maybeSyncFpGizmoFromStore();
+      if (tcDragging) {
+        fpSession.applyAuthoringPitchOnly(st.fpAuthorPitchRad);
+      } else {
+        fpSession.tick(dt, st.fpAuthorPitchRad);
+        maybeSyncFpGizmoFromStore();
+      }
       const picksAfter = pres.getAuthoringPickList();
       const sel = picksAfter.find(
         (p) => p.id === useEditorStore.getState().fpAuthorTargetId,
@@ -1144,13 +1331,17 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   return () => {
     registerEditorSpawnCalculator(null);
+    registerEditorSwingStrokeReview(null);
+    window.removeEventListener("keydown", onWindowKeyDownSwingReview);
     teardownFpSession();
     disposeSwingStrokeOverlay();
     orbitControls.dispose();
     cancelAnimationFrame(raf);
+    canvas.removeEventListener("pointerdown", onPaintSwingPointerDownCapture, { capture: true });
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("pointermove", onSwingStrokeMove);
     canvas.removeEventListener("pointercancel", onSwingStrokeCancel);
+    canvas.removeEventListener("lostpointercapture", onLostPointerCapture);
     canvas.removeEventListener("pointerup", onPointerUp);
     unsub();
     ro.disconnect();

@@ -109,6 +109,7 @@ export function addBuildingStairShaftColumnsToRoot(
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
+    col.userData.mammothAlwaysVisible = true;
     col.position.set(s.px, s.centerY, s.pz);
     const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
     addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {

@@ -38,6 +38,8 @@ import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
 import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DropItemReducer from "./drop_item_reducer";
+import ElevatorHailReducer from "./elevator_hail_reducer";
+import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
@@ -54,6 +56,7 @@ import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 // Import all table schema definitions
 import DroppedItemRow from "./dropped_item_table";
 import DroppedItemCleanupRow from "./dropped_item_cleanup_table";
+import ElevatorCarRow from "./elevator_car_table";
 import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
 import PlayerActiveHotbarRow from "./player_active_hotbar_table";
@@ -93,6 +96,17 @@ const tablesSchema = __schema({
       { name: 'dropped_item_cleanup_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
     ],
   }, DroppedItemCleanupRow),
+  elevator_car: __table({
+    name: 'elevator_car',
+    indexes: [
+      { name: 'shaft_key', algorithm: 'btree', columns: [
+        'shaftKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'elevator_car_shaft_key_key', constraint: 'unique', columns: ['shaftKey'] },
+    ],
+  }, ElevatorCarRow),
   inventory_item: __table({
     name: 'inventory_item',
     indexes: [
@@ -233,6 +247,8 @@ const reducersSchema = __reducers(
   __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("drop_item", DropItemReducer),
+  __reducerSchema("elevator_hail", ElevatorHailReducer),
+  __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),

@@ -53,6 +53,12 @@ wood baseball bat, faceted low-poly barrel tapering to a tape-wrapped handle and
 right-hand heavy leather work glove with palm open toward camera, thick weathered brown leather, dull olive drab metal palm and wrist plate bolted flat to the glove, rusty L-shaped outer bracket on the pinky side, short thick single-edged blade mounted vertical along the outer edge parallel to the fingers, curved cutting edge and flat spine, blade and bracket show rust and scuffs, grounded industrial improvised look, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
 ```
 
+### Male body A-pose (`male-body-apose-lowpoly-reference.png`)
+
+```
+adult Slavic male character in neutral A-pose, average build with slight softness and natural proportions, not athletic or exaggerated, subtle asymmetry in posture, light body hair on arms and chest, slightly tired facial features, short practical haircut, wearing simple worn boxer briefs in muted color, no branding, relaxed hands and neutral expression, clean topology suitable for rigging, evenly distributed edge flow, realistic human proportions adapted to slightly stylized form, no extreme detail, centered and fully visible
+```
+
 ---
 
 ## 3. Adding a new reference

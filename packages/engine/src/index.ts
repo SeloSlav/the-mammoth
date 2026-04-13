@@ -26,7 +26,8 @@ export function createFPCamera(): THREE.PerspectiveCamera {
 
 /**
  * First-person rig:
- * - `headPitch`: mouse **pitch only** for the viewmodel (sibling of free-look); no Alt yaw.
+ * - `headPitch`: **viewmodel** pitch (sibling of free-look); no Alt yaw. Gameplay may zero this
+ *   while Alt free-look is held so vertical look moves only the camera (`headCameraPitch`), not the gun.
  * - `headFreeLook` → `headCameraPitch` → `camera`: Alt **yaw before pitch** so horizontal look
  *   stays around **world up** (horizon stays level when looking up/down). If yaw were under pitch,
  *   mouse X would bank the view. Viewmodel must not be under `headFreeLook`.

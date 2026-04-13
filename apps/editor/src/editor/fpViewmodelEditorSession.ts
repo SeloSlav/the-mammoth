@@ -116,6 +116,17 @@ export class FpViewmodelEditorSession {
     this.presenter.update(idleGameplayState(pitchRad, this.weaponId), dt);
   }
 
+  /**
+   * Editor: advance head-pitch only (no {@link LocalFirstPersonPresenter#update}) while the
+   * transform gizmo is dragging. A full tick would re-apply the frozen swing preview and erase
+   * live edits on `rightHandRig` every frame.
+   */
+  applyAuthoringPitchOnly(pitchRad: number): void {
+    if (this.disposed) return;
+    this.headPitch.rotation.x = pitchRad;
+    this.headCameraPitch.rotation.x = pitchRad;
+  }
+
   /** Call before gameplay-camera picking so world matrices match the live rig. */
   syncWorldMatrices(): void {
     if (this.disposed) return;

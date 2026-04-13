@@ -142,6 +142,33 @@ export function eulerRadFromTangentLocal(tan: THREE.Vector3): {
   return { x: r4(pitch), y: r4(yaw), z: 0 };
 }
 
+const _segA = new THREE.Vector3();
+const _segB = new THREE.Vector3();
+const _bend = new THREE.Vector3();
+
+/**
+ * Roll (Z) from 3D path curvature: where the arc bends in fpRoot space, add wrist twist so
+ * diagonal slashes read less "flat camera slide" and more like a committed cut.
+ */
+export function rollRadFromPathCurvatureLocal(
+  poly: readonly THREE.Vector3[],
+  k: number,
+  n: number,
+): number {
+  if (k <= 0 || k >= n - 1) return 0;
+  _segA.subVectors(poly[k]!, poly[k - 1]!);
+  _segB.subVectors(poly[k + 1]!, poly[k]!);
+  if (_segA.lengthSq() < 1e-12 || _segB.lengthSq() < 1e-12) return 0;
+  _segA.normalize();
+  _segB.normalize();
+  _bend.crossVectors(_segA, _segB);
+  if (_bend.lengthSq() < 1e-14) return 0;
+  _bend.normalize();
+  // atan2 on horizontal plane of fpRoot: slash arcs that bend sideways get roll.
+  const roll = Math.atan2(_bend.x, _bend.z) * 0.48;
+  return r4(THREE.MathUtils.clamp(roll, -0.62, 0.62));
+}
+
 export function swingKeyframesFromOffsetPolyline(
   relativeOffsets: readonly THREE.Vector3[],
   opts?: { sampleCount?: number; approachT?: number; maxTranslationAbsM?: number },
@@ -160,7 +187,10 @@ export function swingKeyframesFromOffsetPolyline(
     const prev = resampled[Math.max(0, k - 1)]!;
     const next = resampled[Math.min(n - 1, k + 1)]!;
     const tan = new THREE.Vector3().subVectors(next, prev);
-    const rot = k === 0 ? { x: 0, y: 0, z: 0 } : eulerRadFromTangentLocal(tan);
+    const baseRot = k === 0 ? { x: 0, y: 0, z: 0 } : eulerRadFromTangentLocal(tan);
+    const rollZ = k === 0 ? 0 : rollRadFromPathCurvatureLocal(resampled, k, n);
+    const rot =
+      k === 0 ? baseRot : { x: baseRot.x, y: baseRot.y, z: r4(baseRot.z + rollZ) };
     const tr = resampled[k]!;
     keys.push({
       t: r4(t),
@@ -193,6 +223,47 @@ export function buildMeleeSwingKeyframesFromViewportStroke(opts: {
     fpRoot: opts.fpRoot,
     rigRestPositionLocal: opts.rigRestPositionLocal,
   });
-  const rel = offsetsFromStrokeLocals(locals, opts.rigRestPositionLocal);
+  return buildMeleeSwingKeyframesFromFpRootAbsLocals({
+    absLocals: locals,
+    rigRestPositionLocal: opts.rigRestPositionLocal,
+    sampleCount: opts.sampleCount,
+  });
+}
+
+/** Build swing keyframes from an edited 3D path (fpRoot-local world positions along the stroke). */
+export function buildMeleeSwingKeyframesFromFpRootAbsLocals(opts: {
+  absLocals: readonly THREE.Vector3[];
+  rigRestPositionLocal: THREE.Vector3;
+  sampleCount?: number;
+}): PrimitiveSwingKeyframe[] {
+  if (opts.absLocals.length < 2) {
+    throw new Error("Swing path needs at least two points.");
+  }
+  const rel = offsetsFromStrokeLocals(opts.absLocals, opts.rigRestPositionLocal);
   return swingKeyframesFromOffsetPolyline(rel, { sampleCount: opts.sampleCount });
+}
+
+const _rayDrag = new THREE.Raycaster();
+
+/**
+ * Intersect a viewport ray with the same sweep plane used for stroke painting (through rig rest,
+ * normal = camera forward). Returns fpRoot-local position or null if parallel / behind camera.
+ */
+export function intersectViewportRayWithSwingSweepPlaneFpRootLocal(opts: {
+  clientPoint: SwingStrokeClientPoint;
+  canvasRect: DOMRectReadOnly;
+  pickCamera: THREE.Camera;
+  fpRoot: THREE.Object3D;
+  rigRestPositionLocal: THREE.Vector3;
+}): THREE.Vector3 | null {
+  opts.fpRoot.updateMatrixWorld(true);
+  const rigWorld = opts.rigRestPositionLocal.clone().applyMatrix4(opts.fpRoot.matrixWorld);
+  opts.pickCamera.getWorldDirection(_fwd);
+  clientToRay(opts.clientPoint, opts.canvasRect, _rayDrag, opts.pickCamera);
+  _plane.setFromNormalAndCoplanarPoint(_fwd, rigWorld);
+  const hit = _rayDrag.ray.intersectPlane(_plane, _hit);
+  if (hit === null) return null;
+  const local = _hit.clone();
+  opts.fpRoot.worldToLocal(local);
+  return local;
 }

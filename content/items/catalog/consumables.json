@@ -48,10 +48,10 @@
     {
       "id": "rakija",
       "displayName": "Rakija",
-      "description": "Fruit brandy in a dusty bottle. Quenches thirst; best not to ask which fruit.",
+      "description": "Fruit brandy in a dusty bottle. Warms the chest and dries you out; best not to ask which fruit.",
       "category": "consumable",
       "maxStack": 12,
-      "consumeOnUse": { "hydrationDelta": 26 }
+      "consumeOnUse": { "hydrationDelta": -24 }
     }
   ]
 }

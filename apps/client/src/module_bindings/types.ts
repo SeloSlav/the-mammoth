@@ -28,6 +28,22 @@ export const DroppedItemCleanup = __t.object("DroppedItemCleanup", {
 });
 export type DroppedItemCleanup = __Infer<typeof DroppedItemCleanup>;
 
+export const ElevatorCar = __t.object("ElevatorCar", {
+  shaftKey: __t.string(),
+  currentLevel: __t.u32(),
+  doorOpen01: __t.f32(),
+  phase: __t.u8(),
+  moveFromLevel: __t.u32(),
+  moveToLevel: __t.u32(),
+  moveU: __t.f32(),
+  destQueue: __t.array(__t.u32()),
+  cabFloorY: __t.f32(),
+  doorFace: __t.u8(),
+  plateX: __t.f32(),
+  plateZ: __t.f32(),
+});
+export type ElevatorCar = __Infer<typeof ElevatorCar>;
+
 export const HotbarLocationData = __t.object("HotbarLocationData", {
   ownerId: __t.identity(),
   slotIndex: __t.u8(),

@@ -8,8 +8,30 @@ import {
   type PlacedObject,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
-import type { PrimitiveSwingKeyframe } from "@the-mammoth/engine";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import {
+  beginEditorTransactionGroup,
+  cloneHistorySlice,
+  commitEditorTransactionGroup,
+  maybePushHistory,
+} from "./editorStoreHistory.js";
+import type {
+  EditorMode,
+  EditorState,
+  FpAuthorCameraKind,
+  FpAuthorPickMeta,
+  TransformMode,
+} from "./editorStoreTypes.js";
+
+export type {
+  EditorMaterialMeta,
+  EditorMode,
+  EditorState,
+  FpAuthorCameraKind,
+  FpAuthorPickMeta,
+  HistoryEntry,
+  TransformMode,
+} from "./editorStoreTypes.js";
 
 /**
  * Dev-only: set to any {@link FpAuthorWeaponId} (`ALL_WEAPON_DEFINITIONS` in engine) so the editor
@@ -19,161 +41,8 @@ const FP_AUTHOR_DEV_DEFAULT_WEAPON: FpAuthorWeaponId | null = null;
 
 const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 
-export type EditorMode = "floor" | "interior" | "fp_viewmodel";
-
-export type FpAuthorCameraKind = "gameplay" | "orbit";
-
 /** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
 export const FP_AUTHOR_PREFERRED_TARGET_ID = "weaponRoot";
-
-export type TransformMode = "translate" | "rotate" | "scale";
-
-/** FP gizmo dropdown only — object refs stay in the Three runtime. */
-export type FpAuthorPickMeta = { id: string; label: string };
-
-type HistoryEntry = {
-  floorDocs: Record<string, FloorDoc>;
-  interiorDocs: Record<string, InteriorDoc>;
-  building: BuildingDoc;
-  selectedId: string | null;
-  dirty: boolean;
-  contentStructureEpoch: number;
-};
-
-function cloneHistorySlice(state: EditorState): HistoryEntry {
-  return {
-    floorDocs: structuredClone(state.floorDocs),
-    interiorDocs: structuredClone(state.interiorDocs),
-    building: structuredClone(state.building),
-    selectedId: state.selectedId,
-    dirty: state.dirty,
-    contentStructureEpoch: state.contentStructureEpoch ?? 0,
-  };
-}
-
-export type EditorMaterialMeta = {
-  mapUrl?: string;
-  roughness?: number;
-  metalness?: number;
-};
-
-export interface EditorState {
-  mode: EditorMode;
-  building: BuildingDoc;
-  floorDocs: Record<string, FloorDoc>;
-  interiorDocs: Record<string, InteriorDoc>;
-  activeFloorDocId: string;
-  activeInteriorDocId: string;
-  /** 1-based storey row from mammoth `floorRefs` (drives `storyLevelIndex` in mesh build). */
-  focusedStoryLevelIndex: number;
-  selectedId: string | null;
-  dirty: boolean;
-  transformMode: TransformMode;
-  /** 0 = disabled */
-  gridSnapM: number;
-  shadowsEnabled: boolean;
-  useHdriEnvironment: boolean;
-  /** First-person viewmodel layout (same GLBs as gameplay; dev tooling). */
-  fpAuthorCamera: FpAuthorCameraKind;
-  /** Matches {@link LocalFirstPersonPresenter.getAuthoringPickList} ids. */
-  fpAuthorTargetId: string;
-  /** Look pitch (rad) into {@link LocalFirstPersonPresenter} `fpRoot` when using gameplay camera. */
-  fpAuthorPitchRad: number;
-  /** Set when FP session fails to load GLBs (e.g. `/static` not served). */
-  fpAuthorInitMessage: string | null;
-  /** Incremented when FP gizmo moves so React panels can refresh export JSON. */
-  fpAuthorLive: number;
-  /** Save / frame feedback (shown under FP tools; auto-clears). */
-  fpAuthorToast: string | null;
-  /** Mirrors LocalFirstPersonPresenter authoring pick ids/labels (updated from the scene tick). */
-  fpAuthorPickList: readonly FpAuthorPickMeta[];
-  /** Which weapon’s `content/weapons/<id>.presentation.json` the FP tools edit / save. */
-  fpAuthorWeaponId: FpAuthorWeaponId;
-  /** 0–1 along `firstPerson.meleeSwing` while authoring (head-pitch / fpRoot space). */
-  fpSwingPreviewPhase01: number;
-  /** In-memory swing track edits; `null` = follow weapon definition / disk until next capture. */
-  fpSwingKeyframesDraft: PrimitiveSwingKeyframe[] | null;
-  /** When true, the scene tick advances {@link fpSwingPreviewPhase01} for a looping preview. */
-  fpSwingPlayActive: boolean;
-  /**
-   * When true, the next left-button drag on the FP canvas (not on the transform gizmo) becomes a
-   * viewport swing stroke and builds {@link fpSwingKeyframesDraft}.
-   */
-  fpSwingStrokeArmed: boolean;
-  /** Incremented only when 3D mesh regen is required (not on pure transform edits). */
-  contentStructureEpoch: number;
-  historyPast: HistoryEntry[];
-  historyFuture: HistoryEntry[];
-
-  beginTransaction: () => void;
-  commitTransaction: () => void;
-  undo: () => void;
-  redo: () => void;
-
-  setMode: (mode: EditorMode) => void;
-  setBuilding: (doc: BuildingDoc) => void;
-  patchBuilding: (fn: (b: BuildingDoc) => BuildingDoc) => void;
-  setFloorDoc: (id: string, doc: FloorDoc) => void;
-  setInteriorDoc: (id: string, doc: InteriorDoc) => void;
-  setActiveFloorDocId: (id: string) => void;
-  setActiveInteriorDocId: (id: string) => void;
-  setFocusedStoryLevelIndex: (level: number) => void;
-  setSelectedId: (id: string | null) => void;
-  setDirty: (dirty: boolean) => void;
-  setTransformMode: (m: TransformMode) => void;
-  setGridSnapM: (m: number) => void;
-  setShadowsEnabled: (on: boolean) => void;
-  setUseHdriEnvironment: (on: boolean) => void;
-  setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
-  setFpAuthorTargetId: (id: string) => void;
-  /** Atomically select an FP authoring part and bump live counter (React + scene stay aligned). */
-  pickFpAuthorTarget: (id: string) => void;
-  setFpAuthorPitchRad: (r: number) => void;
-  setFpAuthorInitMessage: (m: string | null) => void;
-  bumpFpAuthorLive: () => void;
-  setFpAuthorPickList: (list: readonly FpAuthorPickMeta[]) => void;
-  setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
-  setFpSwingPreviewPhase01: (t: number) => void;
-  setFpSwingKeyframesDraft: (keys: PrimitiveSwingKeyframe[] | null) => void;
-  setFpSwingPlayActive: (on: boolean) => void;
-  setFpSwingStrokeArmed: (on: boolean) => void;
-  /** FP disk save / frame result; clears after `ttlMs` unless replaced. */
-  showFpAuthorToast: (message: string, ttlMs?: number) => void;
-
-  getActiveFloorDoc: () => FloorDoc | undefined;
-  getActiveInteriorDoc: () => InteriorDoc | undefined;
-
-  updatePlacedObject: (
-    floorDocId: string,
-    objectId: string,
-    patch: Partial<Pick<PlacedObject, "position" | "rotation" | "scale" | "prefabId" | "metadata">>,
-  ) => void;
-  updateInteriorPlacement: (
-    interiorDocId: string,
-    entityId: string,
-    patch: Partial<{
-      position: PlacedObject["position"];
-      rotation: NonNullable<PlacedObject["rotation"]>;
-      scale: NonNullable<PlacedObject["scale"]>;
-      prefabId: string;
-      overrides: Record<string, unknown> | undefined;
-    }>,
-  ) => void;
-
-  addFloorObject: (floorDocId: string, obj: PlacedObject) => void;
-  deleteFloorObject: (floorDocId: string, objectId: string) => void;
-  duplicateFloorObject: (floorDocId: string, objectId: string) => void;
-
-  addInteriorPlacement: (interiorDocId: string, row: InteriorDoc["placements"][number]) => void;
-  deleteInteriorPlacement: (interiorDocId: string, entityId: string) => void;
-  duplicateInteriorPlacement: (interiorDocId: string, entityId: string) => void;
-
-  replaceFloorDocFromRemote: (id: string, doc: FloorDoc) => void;
-  replaceInteriorDocFromRemote: (id: string, doc: InteriorDoc) => void;
-  replaceBuildingFromRemote: (doc: BuildingDoc) => void;
-}
-
-let transactionDepth = 0;
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   mode: "fp_viewmodel",
@@ -202,23 +71,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpSwingKeyframesDraft: null,
   fpSwingPlayActive: false,
   fpSwingStrokeArmed: false,
+  fpSwingStrokeReviewActive: false,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
 
   beginTransaction: () => {
-    transactionDepth += 1;
-    if (transactionDepth === 1) {
-      const snap = cloneHistorySlice(get());
-      set((s) => ({
-        historyPast: [...s.historyPast.slice(-49), snap],
-        historyFuture: [],
-      }));
-    }
+    beginEditorTransactionGroup(get, set);
   },
 
   commitTransaction: () => {
-    transactionDepth = Math.max(0, transactionDepth - 1);
+    commitEditorTransactionGroup();
   },
 
   undo: () => {
@@ -267,7 +130,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         mode,
         ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
-        ...(exitFp ? { fpSwingStrokeArmed: false } : {}),
+        ...(exitFp ? { fpSwingStrokeArmed: false, fpSwingStrokeReviewActive: false } : {}),
       };
     }),
   setBuilding: (building) =>
@@ -337,6 +200,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         fpSwingKeyframesDraft: null,
         fpSwingPlayActive: false,
         fpSwingStrokeArmed: false,
+        fpSwingStrokeReviewActive: false,
       };
     }),
   setFpSwingPreviewPhase01: (fpSwingPreviewPhase01) =>
@@ -347,6 +211,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({ fpSwingKeyframesDraft, fpAuthorLive: s.fpAuthorLive + 1 })),
   setFpSwingPlayActive: (fpSwingPlayActive) => set({ fpSwingPlayActive }),
   setFpSwingStrokeArmed: (fpSwingStrokeArmed) => set({ fpSwingStrokeArmed }),
+  setFpSwingStrokeReviewActive: (fpSwingStrokeReviewActive) => set({ fpSwingStrokeReviewActive }),
   setFpAuthorPickList: (next) =>
     set((s) => {
       const same =
@@ -571,18 +436,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
 }));
-
-function maybePushHistory(
-  get: () => EditorState,
-  set: (partial: Partial<EditorState> | ((s: EditorState) => Partial<EditorState>)) => void,
-) {
-  if (transactionDepth > 0) return;
-  const snap = cloneHistorySlice(get());
-  set((s) => ({
-    historyPast: [...s.historyPast.slice(-49), snap],
-    historyFuture: [],
-  }));
-}
 
 export function collectPrefabIdsFromFloors(floorDocs: Record<string, FloorDoc>): string[] {
   const s = new Set<string>();

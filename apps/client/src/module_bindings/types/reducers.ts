@@ -10,6 +10,8 @@ import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer"
 import CleanupOldWorldSoundEventsReducer from "../cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "../consume_hotbar_item_reducer";
 import DropItemReducer from "../drop_item_reducer";
+import ElevatorHailReducer from "../elevator_hail_reducer";
+import ElevatorSelectFloorReducer from "../elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "../move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "../move_item_to_inventory_reducer";
 import OnConnectReducer from "../on_connect_reducer";
@@ -27,6 +29,8 @@ export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItems
 export type CleanupOldWorldSoundEventsParams = __Infer<typeof CleanupOldWorldSoundEventsReducer>;
 export type ConsumeHotbarItemParams = __Infer<typeof ConsumeHotbarItemReducer>;
 export type DropItemParams = __Infer<typeof DropItemReducer>;
+export type ElevatorHailParams = __Infer<typeof ElevatorHailReducer>;
+export type ElevatorSelectFloorParams = __Infer<typeof ElevatorSelectFloorReducer>;
 export type MoveItemToHotbarParams = __Infer<typeof MoveItemToHotbarReducer>;
 export type MoveItemToInventoryParams = __Infer<typeof MoveItemToInventoryReducer>;
 export type OnConnectParams = __Infer<typeof OnConnectReducer>;

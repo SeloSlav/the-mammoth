@@ -12,32 +12,10 @@ import {
   PlayerPresentationManager,
   type FpLocomotionInput,
 } from "@the-mammoth/engine";
-import {
-  buildCellMeshes,
-  DEFAULT_BUILDING_FLOOR_SPACING_M,
-  instantiateBuildingFloorStack,
-  parseBuildingDoc,
-  parseCellDoc,
-  parseFloorDoc,
-  sampleWalkGroundTopYWithExteriorGround,
-  walkSurfaceAabbXZFootprint,
-  walkSurfaceAABBsForBuilding,
-} from "@the-mammoth/world";
-import buildingDoc from "../../../../content/building/mammoth.json";
-import cellDoc from "../../../../content/cells/cell_0_0.json";
-
-const floorJsonModules = import.meta.glob<{ default: unknown }>(
-  "../../../../content/building/floors/*.json",
-  { eager: true },
-);
-
-function floorPayloadByDocId(floorDocId: string): unknown {
-  const suffix = `/${floorDocId}.json`.replaceAll("\\", "/");
-  for (const [path, mod] of Object.entries(floorJsonModules)) {
-    if (path.replaceAll("\\", "/").endsWith(suffix)) return mod.default;
-  }
-  throw new Error(`Missing floor JSON for id "${floorDocId}"`);
-}
+import { parseFloorDoc } from "@the-mammoth/world";
+import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
+import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
+import { floorPayloadByDocId } from "./fpSessionContentLoad";
 import { encodeMoveIntentBits } from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
@@ -55,6 +33,8 @@ import {
 } from "./fpHotbarSelection";
 import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
+import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
+import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
@@ -74,6 +54,7 @@ import {
 } from "./droppedItemWorldRuntime";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
+import { poseSeqAsBigint } from "./fpSessionPoseSeq";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -97,27 +78,6 @@ const CAM_BOB_DIP_Y = 0.004;
 
 const MELEE_COOLDOWN_MS = 480;
 
-type LastXZ = { x: number; z: number; t: number };
-
-function poseSeqAsBigint(seq: PlayerPose["seq"]): bigint {
-  return typeof seq === "bigint" ? seq : BigInt(seq as number);
-}
-
-function feedRemote(
-  interp: PoseInterpBuffer,
-  id: string,
-  row: PlayerPose,
-  last: Map<string, LastXZ>,
-): void {
-  const prev = last.get(id);
-  const now = performance.now();
-  const dt = prev ? Math.max((now - prev.t) / 1000, 0.016) : 0.034;
-  const vx = prev ? (row.x - prev.x) / dt : 0;
-  const vz = prev ? (row.z - prev.z) / dt : 0;
-  last.set(id, { x: row.x, z: row.z, t: now });
-  interp.push(id, row.x, row.y, row.z, vx, vz);
-}
-
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
  * capsule proxies for other players (interpolation buffer on remotes).
@@ -134,40 +94,23 @@ export async function mountFpSession(
 ): Promise<() => void> {
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
   scene.add(playerRig);
 
-  const building = parseBuildingDoc(buildingDoc);
-  const walkAABBs = walkSurfaceAABBsForBuilding(
-    building,
-    (id) => parseFloorDoc(floorPayloadByDocId(id)),
-    DEFAULT_BUILDING_FLOOR_SPACING_M,
-  );
-  const walkFootprint =
-    walkSurfaceAabbXZFootprint(walkAABBs) ??
-    ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
-  const sampleWalkTop = (worldX: number, worldZ: number, probeTopY: number) =>
-    sampleWalkGroundTopYWithExteriorGround(
-      walkAABBs,
-      worldX,
-      worldZ,
-      probeTopY,
-      walkFootprint,
-      {
-        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      },
-    );
-
-  const buildingRoot = instantiateBuildingFloorStack(building, (id) =>
-    parseFloorDoc(floorPayloadByDocId(id)),
-  );
+  const { building, buildingRoot, cellRoot, sampleWalkTopBase } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
 
-  const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
+  const fpElevators = mountFpElevatorWorld({
+    conn,
+    buildingRoot,
+    building,
+    getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+  });
+
   scene.add(cellRoot);
 
   const initialHeld = conn.identity
@@ -221,10 +164,24 @@ export async function mountFpSession(
   const unsubHotbarRail = subscribeFpHotbarSelection(syncActiveHotbarSlotToServer);
 
   const interp = new PoseInterpBuffer();
-  const lastRemote = new Map<string, LastXZ>();
+  const lastRemote = new Map<string, FpRemotePoseLastXZ>();
 
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
+
+  const syncBuildingFloorPlateVisibility = () => {
+    const band = fpElevators.getFloorVisibilityBand(pos.x, pos.y, pos.z, performance.now());
+    for (const ch of buildingRoot.children) {
+      if (ch.userData.mammothAlwaysVisible === true) {
+        ch.visible = true;
+        continue;
+      }
+      const li = ch.userData.mammothPlateLevelIndex;
+      if (typeof li === "number") {
+        ch.visible = li >= band.lo && li <= band.hi;
+      }
+    }
+  };
   /** Feet / capsule yaw — sent as `aimYaw` to the server and used for locomotion. */
   let bodyYaw = 0;
   /** Mouse look pitch (head pivot X). */
@@ -238,6 +195,27 @@ export async function mountFpSession(
   const keys = new Set<string>();
   let crouchToggle = false;
   const loco = createFpLocomotionState();
+
+  /**
+   * While rising from a jump, skip elevator cab walk merge — otherwise `mergeWalkTop` keeps the
+   * cab as the highest support and locomotion snaps feet back to the floor every substep.
+   */
+  const ELEVATOR_WALK_MERGE_SKIP_VY = 0.35;
+  const sampleWalkTop = (worldX: number, worldZ: number, probeTopY: number) => {
+    const base = sampleWalkTopBase(worldX, worldZ, probeTopY);
+    if (loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY) {
+      return base;
+    }
+    return fpElevators.mergeWalkTop(
+      worldX,
+      worldZ,
+      probeTopY,
+      fpLocomotionConstants.walkFootRadiusXZ,
+      fpLocomotionConstants.walkStepUpMargin,
+      base,
+    );
+  };
+
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
   registerHotbarConsumePrimeAudio(() => localAudio.unlock());
@@ -318,7 +296,7 @@ export async function mountFpSession(
       if (serverSeq > intentSeq) intentSeq = serverSeq;
       return;
     }
-    feedRemote(interp, id, row, lastRemote);
+    feedRemotePoseSample(interp, id, row, lastRemote);
   };
 
   const syncAllPoses = () => {
@@ -496,6 +474,8 @@ export async function mountFpSession(
       !isTextInputFocused()
     ) {
       e.preventDefault();
+      if (fpElevators.consumeInteractKey(pos)) return;
+      if (fpElevators.shouldSuppressEpickup()) return;
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -562,6 +542,8 @@ export async function mountFpSession(
     if (!e.isPrimary || e.button !== 0) return;
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
+    const nowMs = performance.now();
+    if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
     meleePressPending = true;
   };
 
@@ -605,6 +587,8 @@ export async function mountFpSession(
       crouch: crouchToggle,
     };
     const jumpQueuedBeforeStep = loco.jumpQueued;
+    fpElevators.tick(dt, performance.now(), pos);
+
     const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt, {
       sampleWalkGroundTopY: sampleWalkTop,
       probeDy: fpLocomotionConstants.walkProbeDy,
@@ -625,11 +609,11 @@ export async function mountFpSession(
     playerRig.rotation.y = bodyYaw;
     headPivot.position.y = headY;
     headPivot.rotation.set(0, 0, 0);
-    headPitch.rotation.x = pitch;
+    const freeLook = keys.has("AltLeft") || keys.has("AltRight");
+    // Alt: yaw + pitch on the camera chain only — weapon stays body-level on pitch (neck look).
+    headPitch.rotation.x = freeLook ? 0 : pitch;
     headCameraPitch.rotation.x = pitch;
     headFreeLook.rotation.y = headLookYaw;
-
-    const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
     if (worldAudioReady) {
       worldAudio.syncListener();
@@ -744,7 +728,9 @@ export async function mountFpSession(
       setFpPickupPrompt(null);
     }
 
+    syncBuildingFloorPlateVisibility();
     renderer.render(scene, camera);
+    logFpPerf();
   };
   tick();
 
@@ -766,6 +752,7 @@ export async function mountFpSession(
     }
     poseAoiSub = null;
     setFpPickupPrompt(null);
+    fpElevators.dispose();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

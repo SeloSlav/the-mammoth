@@ -5,6 +5,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::accounts::user;
 use crate::auth;
+use crate::elevator;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
@@ -116,6 +117,8 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         return;
     }
 
+    elevator::tick_all_elevators(ctx, TICK_DT);
+
     for pose in ctx.db.player_pose().iter() {
         let id = pose.identity;
         let Some(u) = ctx.db.user().identity().find(&id) else {
@@ -139,7 +142,8 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
         let grounded_before = pose.grounded;
         let mut p = pose;
-        integrate_one(&input, &mut p, TICK_DT);
+        integrate_one(ctx, &input, &mut p, TICK_DT);
+        elevator::clamp_player_to_elevators(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);
     }
@@ -147,26 +151,29 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
 #[inline]
 /// `NAN` means no walk AABB overlapped the foot (do not treat as `FLOOR_Y` support).
-fn sample_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
+fn sample_walk_ground_top_y(ctx: &ReducerContext, x: f32, z: f32, probe_top_y: f32) -> f32 {
     let mut best = f32::NAN;
     let fr = FOOT_RADIUS_XZ;
     let fx0 = x - fr;
     let fx1 = x + fr;
     let fz0 = z - fr;
     let fz1 = z + fr;
-    for (mn, mx) in crate::generated_walk_surfaces::WALK_SURFACE_AABBS {
-        if fx1 < mn[0] || fx0 > mx[0] || fz1 < mn[2] || fz0 > mx[2] {
-            continue;
-        }
-        let top = mx[1];
-        if top <= probe_top_y + WALK_STEP_UP_MARGIN {
-            best = if best.is_nan() {
-                top
-            } else {
-                best.max(top)
-            };
+    for shard in crate::generated_walk_surfaces::WALK_SURFACE_AABB_SHARDS {
+        for (mn, mx) in *shard {
+            if fx1 < mn[0] || fx0 > mx[0] || fz1 < mn[2] || fz0 > mx[2] {
+                continue;
+            }
+            let top = mx[1];
+            if top <= probe_top_y + WALK_STEP_UP_MARGIN {
+                best = if best.is_nan() {
+                    top
+                } else {
+                    best.max(top)
+                };
+            }
         }
     }
+    best = elevator::merge_elevator_walk_top(ctx, x, z, probe_top_y, WALK_STEP_UP_MARGIN, best);
     if best.is_nan() {
         // Keep in sync with `sampleWalkGroundTopYWithExteriorGround` (`packages/world`).
         const FP_MARGIN: f32 = 2.0;
@@ -185,7 +192,7 @@ fn sample_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
     }
 }
 
-fn integrate_one(input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
+fn integrate_one(ctx: &ReducerContext, input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
     let h = dt.clamp(0.0, 0.05);
     let bits = input.bits;
     let yaw = input.aim_yaw;
@@ -250,8 +257,8 @@ fn integrate_one(input: &PlayerInput, p: &mut PlayerPose, dt: f32) {
         p.z += p.vel_z * sh;
         p.y += p.vel_y * sh;
         let probe_y = p.y + WALK_PROBE_DY;
-        let w0 = sample_walk_ground_top_y(x0, z0, probe_y);
-        let w1 = sample_walk_ground_top_y(p.x, p.z, probe_y);
+        let w0 = sample_walk_ground_top_y(ctx, x0, z0, probe_y);
+        let w1 = sample_walk_ground_top_y(ctx, p.x, p.z, probe_y);
         let mut walk_top = w0;
         if w1.is_finite() {
             walk_top = if w0.is_finite() { w0.max(w1) } else { w1 };
