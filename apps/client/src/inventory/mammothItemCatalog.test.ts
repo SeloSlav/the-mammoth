@@ -9,4 +9,12 @@ describe("mammothItemCatalog", () => {
       expect(url).toMatch(/^\/static\/models\/weapons\/.+\.glb$/);
     }
   });
+
+  it("exposes HUD icon URLs for shipped melee defs", () => {
+    for (const id of ["knife", "crowbar", "srbosjek", "baseball_bat"]) {
+      const def = getMammothItemDef(id);
+      // Vite resolves `?url` imports to dev `/@fs/...` paths or build `/assets/...` URLs.
+      expect(def?.iconUrl?.length).toBeGreaterThan(8);
+    }
+  });
 });

@@ -49,8 +49,14 @@ import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
+import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./localGameAudio";
-import { mountDroppedItemsWorld } from "./droppedItemWorldRuntime";
+import {
+  findNearestDroppedPickup,
+  MAMMOTH_PICKUP_RADIUS_M,
+  mountDroppedItemsWorld,
+} from "./droppedItemWorldRuntime";
+import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
 
 /**
@@ -152,7 +158,7 @@ export async function mountFpSession(
     ? effectiveDevGameplayEquippedPrimary(
         resolveHeldItemFromHotbar(conn, conn.identity, getFpHotbarSelectedSlot()),
       )
-    : effectiveDevGameplayEquippedPrimary("crowbar");
+    : ("unarmed" as const);
 
   const presentation = await PlayerPresentationManager.create({
     scene,
@@ -217,12 +223,17 @@ export async function mountFpSession(
    * (body + free-look) does not jump when we drop Alt from `keys` or zero out free-look. Intentional
    * Alt key-up still clears head offset without merging — see `onKeyUp`.
    */
-  const resetTransientInputState = () => {
+  const commitFreeLookIntoBodyYaw = () => {
     if (headLookYaw !== 0) {
       bodyYaw += headLookYaw;
       headLookYaw = 0;
       bodyYaw = Math.atan2(Math.sin(bodyYaw), Math.cos(bodyYaw));
     }
+  };
+
+  /** Window hidden / defocused: browsers may omit `keyup` — drop all latched keys. */
+  const resetTransientInputState = () => {
+    commitFreeLookIntoBodyYaw();
     keys.clear();
   };
 
@@ -236,9 +247,14 @@ export async function mountFpSession(
     }
   };
 
+  /**
+   * Pointer lock ends while the document can still be focused (Tab inventory, Esc, etc.).
+   * Do **not** clear `keys` here — that would cancel held WASD until keys are pressed again.
+   * Still fold Alt free-look into body yaw so view direction stays consistent when mouse stops.
+   */
   const onPointerLockChange = () => {
     if (document.pointerLockElement !== canvas) {
-      resetTransientInputState();
+      commitFreeLookIntoBodyYaw();
     }
   };
 
@@ -376,10 +392,10 @@ export async function mountFpSession(
     if (
       e.code === "KeyE" &&
       !e.repeat &&
-      document.pointerLockElement === canvas &&
       !mammothInventoryOpen() &&
       !isTextInputFocused()
     ) {
+      e.preventDefault();
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -571,7 +587,7 @@ export async function mountFpSession(
           {
             observedTimeMs: nowMs,
             worldPositionOverride: p ?? undefined,
-            equippedPrimary: "crowbar",
+            equippedPrimary: "unarmed",
           },
         );
         remoteSnapshots.set(id, snap);
@@ -598,6 +614,27 @@ export async function mountFpSession(
     });
     presentation.update(dt, localState, remoteSnapshots, nowMs);
 
+    if (conn.identity) {
+      const hit = findNearestDroppedPickup(
+        conn,
+        pos.x,
+        pos.y,
+        pos.z,
+        MAMMOTH_PICKUP_RADIUS_M,
+      );
+      if (hit) {
+        const def = getMammothItemDef(hit.defId);
+        setFpPickupPrompt({
+          droppedItemIdStr: hit.droppedItemId.toString(),
+          displayName: def?.displayName ?? hit.defId,
+        });
+      } else {
+        setFpPickupPrompt(null);
+      }
+    } else {
+      setFpPickupPrompt(null);
+    }
+
     renderer.render(scene, camera);
   };
   tick();
@@ -617,6 +654,7 @@ export async function mountFpSession(
       poseAoiSub.unsubscribe();
     }
     poseAoiSub = null;
+    setFpPickupPrompt(null);
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

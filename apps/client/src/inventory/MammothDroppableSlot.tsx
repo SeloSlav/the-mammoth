@@ -22,6 +22,7 @@ export function MammothDroppableSlot({
       data-slot-type={slotInfo.type}
       data-slot-index={String(slotInfo.index)}
       onClick={onClick}
+      onDragStart={(e) => e.preventDefault()}
       style={{
         position: "relative",
         width: 52,
@@ -31,6 +32,8 @@ export function MammothDroppableSlot({
         background: "rgba(0,0,0,0.5)",
         boxSizing: "border-box",
         cursor: onClick ? "pointer" : "default",
+        userSelect: "none",
+        WebkitUserSelect: "none",
         ...style,
       }}
     >

@@ -1,17 +1,40 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { DbConnection } from "../module_bindings";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "../game/fpHotbarSelection";
-import type { MammothDraggedItemInfo, MammothDropResult } from "./inventoryDragDropTypes";
+import type {
+  MammothDraggedItemInfo,
+  MammothDropResult,
+  MammothPopulatedItem,
+} from "./inventoryDragDropTypes";
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
+import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
+import { predictSlotMove, predictWorldDrop } from "./inventoryOptimistic";
 import { useMammothInventory } from "./useMammothInventory";
 
 const INV_COLS = 6;
 const INV_ROWS = 4;
+
+const NO_SELECT: CSSProperties = {
+  userSelect: "none",
+  WebkitUserSelect: "none",
+  MozUserSelect: "none",
+  msUserSelect: "none",
+};
 
 function isTextInputFocused(): boolean {
   const el = document.activeElement;
@@ -26,6 +49,11 @@ type Props = {
 
 export function MammothInventoryHud({ conn }: Props) {
   const { hotbar, inventory } = useMammothInventory(conn);
+  const baseSlots = useMemo(() => ({ hotbar, inventory }), [hotbar, inventory]);
+  const [displaySlots, applyOptimisticSlots] = useOptimistic(
+    baseSlots,
+    (_current, pending: typeof baseSlots) => pending,
+  );
   const [invOpen, setInvOpen] = useState(false);
   const dragRef = useRef<MammothDraggedItemInfo | null>(null);
   const selectedSlot = useSyncExternalStore(
@@ -52,6 +80,61 @@ export function MammothInventoryHud({ conn }: Props) {
     dragRef.current = info;
   }, []);
 
+  const blockBrowserContextMenu = useCallback((e: ReactMouseEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const toInstanceId = useCallback((pop: MammothPopulatedItem) => {
+    const id = pop.instance.instanceId;
+    return typeof id === "bigint" ? id : BigInt(id as number);
+  }, []);
+
+  const quickMoveInventoryToHotbar = useCallback(
+    (pop: MammothPopulatedItem, fromInventoryIndex: number) => {
+      if (document.body.classList.contains("item-dragging")) return;
+      const destIndex = destIndexForQuickTransfer(baseSlots.hotbar, pop);
+      const predicted = predictSlotMove(baseSlots, { type: "inventory", index: fromInventoryIndex }, {
+        type: "hotbar",
+        index: destIndex,
+      });
+      startTransition(() => {
+        if (predicted) applyOptimisticSlots(predicted);
+      });
+      try {
+        void conn.reducers.moveItemToHotbar({
+          itemInstanceId: toInstanceId(pop),
+          targetHotbarSlot: destIndex,
+        });
+      } catch (err) {
+        console.warn("[MammothInventoryHud] quick move to hotbar failed", err);
+      }
+    },
+    [conn, baseSlots, applyOptimisticSlots, toInstanceId],
+  );
+
+  const quickMoveHotbarToInventory = useCallback(
+    (pop: MammothPopulatedItem, fromHotbarIndex: number) => {
+      if (document.body.classList.contains("item-dragging")) return;
+      const destIndex = destIndexForQuickTransfer(baseSlots.inventory, pop);
+      const predicted = predictSlotMove(baseSlots, { type: "hotbar", index: fromHotbarIndex }, {
+        type: "inventory",
+        index: destIndex,
+      });
+      startTransition(() => {
+        if (predicted) applyOptimisticSlots(predicted);
+      });
+      try {
+        void conn.reducers.moveItemToInventory({
+          itemInstanceId: toInstanceId(pop),
+          targetInventorySlot: destIndex,
+        });
+      } catch (err) {
+        console.warn("[MammothInventoryHud] quick move to inventory failed", err);
+      }
+    },
+    [conn, baseSlots, applyOptimisticSlots, toInstanceId],
+  );
+
   const handleDrop = useCallback(
     (result: MammothDropResult) => {
       const src = dragRef.current;
@@ -64,6 +147,10 @@ export function MammothInventoryHud({ conn }: Props) {
       try {
         if (result.kind === "cancel") return;
         if (result.kind === "world") {
+          const predicted = predictWorldDrop(baseSlots, src.sourceSlot, qty);
+          startTransition(() => {
+            if (predicted) applyOptimisticSlots(predicted);
+          });
           void conn.reducers.dropItem({
             itemInstanceId: instanceId,
             quantityToDrop: qty,
@@ -71,6 +158,10 @@ export function MammothInventoryHud({ conn }: Props) {
           return;
         }
         const target = result.slot;
+        const predicted = predictSlotMove(baseSlots, src.sourceSlot, target);
+        startTransition(() => {
+          if (predicted) applyOptimisticSlots(predicted);
+        });
         if (target.type === "inventory") {
           void conn.reducers.moveItemToInventory({
             itemInstanceId: instanceId,
@@ -86,7 +177,7 @@ export function MammothInventoryHud({ conn }: Props) {
         console.warn("[MammothInventoryHud] drop/move failed", err);
       }
     },
-    [conn],
+    [conn, baseSlots, applyOptimisticSlots],
   );
 
   const onHotbarSlotClick = useCallback((index: number) => {
@@ -116,6 +207,7 @@ export function MammothInventoryHud({ conn }: Props) {
           display: "block",
           margin: "auto",
           pointerEvents: "none",
+          ...NO_SELECT,
         }}
       />
     );
@@ -123,18 +215,24 @@ export function MammothInventoryHud({ conn }: Props) {
 
   const hotbarBottom = "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))";
 
+  const { hotbar: hb, inventory: inv } = displaySlots;
+
   return (
     <div
       data-mammoth-inventory={invOpen ? "open" : "closed"}
+      onDragStart={(e) => e.preventDefault()}
       style={{
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
         zIndex: 120,
+        ...NO_SELECT,
       }}
     >
       {invOpen && (
         <div
+          onContextMenu={blockBrowserContextMenu}
+          onDragStart={(e) => e.preventDefault()}
           style={{
             pointerEvents: "auto",
             position: "fixed",
@@ -148,9 +246,12 @@ export function MammothInventoryHud({ conn }: Props) {
             boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
             minWidth: 360,
             zIndex: 121,
+            ...NO_SELECT,
           }}
         >
-          <div style={{ color: "#b8c4d8", fontSize: 12, marginBottom: 8 }}>Inventory — Tab to close</div>
+          <div style={{ color: "#b8c4d8", fontSize: 12, marginBottom: 8 }}>
+            Inventory — Tab to close
+          </div>
           <div
             style={{
               display: "grid",
@@ -159,7 +260,7 @@ export function MammothInventoryHud({ conn }: Props) {
             }}
           >
             {Array.from({ length: INV_ROWS * INV_COLS }, (_, i) => {
-              const pop = inventory[i] ?? null;
+              const pop = inv[i] ?? null;
               const slotInfo = { type: "inventory" as const, index: i };
               return (
                 <MammothDroppableSlot key={`inv-${i}`} slotInfo={slotInfo}>
@@ -169,6 +270,7 @@ export function MammothInventoryHud({ conn }: Props) {
                       sourceSlot={slotInfo}
                       onDragStart={handleDragStart}
                       onDrop={handleDrop}
+                      onItemContextMenu={() => quickMoveInventoryToHotbar(pop, i)}
                     >
                       {slotInner(pop)}
                     </MammothDraggableItem>
@@ -181,6 +283,8 @@ export function MammothInventoryHud({ conn }: Props) {
       )}
 
       <div
+        onContextMenu={blockBrowserContextMenu}
+        onDragStart={(e) => e.preventDefault()}
         style={{
           pointerEvents: "auto",
           position: "fixed",
@@ -195,9 +299,10 @@ export function MammothInventoryHud({ conn }: Props) {
           border: "1px solid rgba(120,200,255,0.28)",
           zIndex: 122,
           boxShadow: "0 -4px 24px rgba(0,0,0,0.45)",
+          ...NO_SELECT,
         }}
       >
-        {hotbar.map((pop, index) => {
+        {hb.map((pop, index) => {
           const slotInfo = { type: "hotbar" as const, index };
           const sel = selectedSlot === index;
           return (
@@ -212,6 +317,7 @@ export function MammothInventoryHud({ conn }: Props) {
                   color: "rgba(200,210,230,0.75)",
                   width: 52,
                   textAlign: "center",
+                  ...NO_SELECT,
                 }}
               >
                 {index + 1}
@@ -232,6 +338,7 @@ export function MammothInventoryHud({ conn }: Props) {
                     onDragStart={handleDragStart}
                     onDrop={handleDrop}
                     onActivate={() => onHotbarSlotClick(index)}
+                    onItemContextMenu={() => quickMoveHotbarToInventory(pop, index)}
                   >
                     {slotInner(pop)}
                   </MammothDraggableItem>

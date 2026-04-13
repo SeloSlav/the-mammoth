@@ -12,6 +12,8 @@ type Props = {
   onDragStart: (info: MammothDraggedItemInfo) => void;
   onDrop: (result: MammothDropResult) => void;
   onActivate?: () => void;
+  /** Right-click: browser menu suppressed; used for quick move (inventory ↔ hotbar). */
+  onItemContextMenu?: () => void;
   children: ReactNode;
 };
 
@@ -21,6 +23,7 @@ export function MammothDraggableItem({
   onDragStart,
   onDrop,
   onActivate,
+  onItemContextMenu,
   children,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -30,11 +33,13 @@ export function MammothDraggableItem({
   const onDropRef = useRef(onDrop);
   const onDragStartRef = useRef(onDragStart);
   const onActivateRef = useRef(onActivate);
+  const onItemContextMenuRef = useRef(onItemContextMenu);
   useEffect(() => {
     onDropRef.current = onDrop;
     onDragStartRef.current = onDragStart;
     onActivateRef.current = onActivate;
-  }, [onDrop, onDragStart, onActivate]);
+    onItemContextMenuRef.current = onItemContextMenu;
+  }, [onDrop, onDragStart, onActivate, onItemContextMenu]);
 
   const onMouseDown = (e: React.MouseEvent) => {
       if (e.button !== 0) return;
@@ -103,12 +108,27 @@ export function MammothDraggableItem({
       document.addEventListener("mouseup", onMouseUp);
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (document.body.classList.contains("item-dragging")) return;
+    onItemContextMenuRef.current?.();
+  };
+
   return (
     <div
       ref={ref}
       role="presentation"
       onMouseDown={onMouseDown}
-      style={{ width: "100%", height: "100%", position: "relative" }}
+      onContextMenu={onItemContextMenu ? handleContextMenu : undefined}
+      onDragStart={(e) => e.preventDefault()}
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+      }}
     >
       {children}
     </div>

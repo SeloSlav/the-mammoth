@@ -4,8 +4,10 @@ import meleeWeapons from "../../../../content/items/catalog/melee_weapons.json";
 import placeableItems from "../../../../content/items/catalog/placeables.json";
 import rangedWeapons from "../../../../content/items/catalog/ranged_weapons.json";
 import toolItems from "../../../../content/items/catalog/tools.json";
+import baseballBatIcon from "../../../../content/references/meshy/baseball-bat-lowpoly-reference.png?url";
 import crowbarIcon from "../../../../content/references/meshy/crowbar-lowpoly-reference.png?url";
 import knifeIcon from "../../../../content/references/meshy/knife-lowpoly-reference.png?url";
+import srbosjekIcon from "../../../../content/references/meshy/srbosjek-lowpoly-reference.png?url";
 
 import type { ItemCategory, MammothConstruction, MammothItemDef } from "./mammothItemCatalogTypes";
 
@@ -43,6 +45,8 @@ type RawShard = {
 const ICONS: Record<string, string> = {
   knife: knifeIcon,
   crowbar: crowbarIcon,
+  srbosjek: srbosjekIcon,
+  baseball_bat: baseballBatIcon,
 };
 
 /** World pickup mesh (under `apps/client/public`). Keep aligned with weapon GLBs + catalog ids. */
