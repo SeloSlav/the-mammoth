@@ -1,11 +1,15 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import type { FloorDoc } from "@the-mammoth/schemas";
+import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
 import {
+  floorPlacedObjectIdForTransformRoot,
+  interiorEntityIdForTransformRoot,
   placementKey,
   PLACEMENT_KEY_SEP,
+  resolveFloorPlacementTransformRoot,
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
+  resolveInteriorPlacementTransformRoot,
   resolvePlacedId,
 } from "./editorPlacementKeys.js";
 
@@ -74,5 +78,49 @@ describe("resolveGizmoInteriorDocId", () => {
     const mesh = new THREE.Mesh();
     root.add(mesh);
     expect(resolveGizmoInteriorDocId(mesh, "wrong_active")).toBe("stream_a");
+  });
+});
+
+describe("resolveFloorPlacementTransformRoot", () => {
+  const floorDocs: Record<string, FloorDoc> = {
+    f1: {
+      id: "f1",
+      version: 1,
+      objects: [{ id: "roomA", prefabId: "corridor", position: [1, 2, 3] }],
+    },
+  };
+
+  it("returns the placement group when the gizmo is on a child mesh without userData", () => {
+    const room = new THREE.Group();
+    room.name = "roomA";
+    room.userData.placedObjectId = "roomA";
+    room.userData.floorDocId = "f1";
+    const shell = new THREE.Mesh();
+    room.add(shell);
+    expect(resolveFloorPlacementTransformRoot(shell, floorDocs)).toBe(room);
+    expect(floorPlacedObjectIdForTransformRoot(room, floorDocs)).toBe("roomA");
+  });
+});
+
+describe("resolveInteriorPlacementTransformRoot", () => {
+  const doc: InteriorDoc = {
+    id: "lobby",
+    version: 1,
+    placements: [{ entityId: "ent1", prefabId: "box", position: [0, 0, 0] }],
+    portals: [],
+    decals: [],
+  };
+
+  it("returns the mesh from a deeper descendant if ids match on an ancestor", () => {
+    const mesh = new THREE.Mesh();
+    mesh.name = "ent1";
+    mesh.userData.placedObjectId = "ent1";
+    mesh.userData.streamDocId = "lobby";
+    const sub = new THREE.Group();
+    mesh.add(sub);
+    const deep = new THREE.Mesh();
+    sub.add(deep);
+    expect(resolveInteriorPlacementTransformRoot(deep, doc)).toBe(mesh);
+    expect(interiorEntityIdForTransformRoot(mesh)).toBe("ent1");
   });
 });

@@ -3,6 +3,8 @@
 //!
 //! Elevator cab floors are snapshotted at tick start and lerped across player integration substeps
 //! so vertical motion is not quantized to one 20 Hz sample per tick (see `merge_elevator_walk_top_lerped`).
+//! After integration, `elevator::snap_inside_cab_feet_to_floor` re-attaches riders inside the cab
+//! volume so probe/walk gaps cannot drop them through a moving car.
 
 use std::collections::HashMap;
 
@@ -154,6 +156,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         let grounded_before = pose.grounded;
         let mut p = pose;
         integrate_one(ctx, &input, &mut p, TICK_DT, &prev_elevators);
+        elevator::snap_inside_cab_feet_to_floor(ctx, &mut p);
         elevator::clamp_player_to_elevators(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);

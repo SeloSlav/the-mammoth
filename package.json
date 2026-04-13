@@ -21,6 +21,7 @@
     "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run"
   },
   "devDependencies": {
+    "@types/node": "^24.12.2",
     "prettier": "^3.7.4",
     "tsx": "^4.19.3",
     "turbo": "^2.9.6",

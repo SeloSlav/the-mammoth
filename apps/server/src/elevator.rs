@@ -10,6 +10,9 @@ use crate::elevator_layout::{
 };
 use crate::pose::{player_pose, PlayerPose};
 
+/// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
+const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
+
 const PH_IDLE: u8 = 0;
 const PH_CLOSING: u8 = 1;
 const PH_MOVING: u8 = 2;
@@ -252,6 +255,26 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
         return false;
     }
     true
+}
+
+/// Hard-attach feet to the authoritative cab floor when inside the riding volume.
+///
+/// Walk merge + probe sampling can still miss for a tick (shaft geometry, long drops); this is the
+/// safety net that prevents long falls through a moving car. Skipped while the player is clearly
+/// jumping upward so we do not cancel `JUMP_SPEED`.
+pub fn snap_inside_cab_feet_to_floor(ctx: &ReducerContext, p: &mut PlayerPose) {
+    if p.vel_y > RIDER_LOCK_SKIP_UPWARD_VY_MPS {
+        return;
+    }
+    for car in ctx.db.elevator_car().iter() {
+        if !player_inside_cab(p, &car) {
+            continue;
+        }
+        p.y = car.cab_floor_y;
+        p.vel_y = 0.0;
+        p.grounded = 1;
+        return;
+    }
 }
 
 /// World-space vertical cab velocity (m/s) to add on jump when grounded inside a moving car

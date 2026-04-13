@@ -629,9 +629,15 @@ export async function mountFpSession(
       sampleWalkGroundTopY: sampleWalkTop,
       probeDy: fpLocomotionConstants.walkProbeDy,
       maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
-      integrationEvalEndWallClockMs: frameNowMs,
       jumpKinematicPlatformVyMps: elevatorJumpVy,
     });
+
+    fpElevators.snapLocalRiderFeetToAuthoritativeCabIfNeeded(
+      pos,
+      loco,
+      frameNowMs,
+      jumpQueuedBeforeStep,
+    );
 
     fpElevators.tick(dt, frameNowMs, pos);
 

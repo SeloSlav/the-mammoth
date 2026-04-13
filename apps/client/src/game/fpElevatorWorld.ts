@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
-import { fpLocomotionConstants } from "@the-mammoth/engine";
+import { fpLocomotionConstants, type FpLocomotionState } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   elevatorSupportFeetWorldY,
@@ -17,6 +17,7 @@ import {
   CALL_RADIUS_XZ,
   CALL_Y_HALF_WINDOW,
   ELEVATOR_PHASE_MOVING,
+  ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
   type FpElevFloorPickUserData,
@@ -89,6 +90,16 @@ export type MountFpElevatorWorldResult = {
    * probe (0 if static geometry wins or no overlapping cab).
    */
   getElevatorKinematicSupportVyMps(opts: FpElevatorKinematicSupportVyOpts): number;
+  /**
+   * After locomotion: if feet are in the in-car HUD volume, snap `pos.y` to the predicted
+   * authoritative cab feet Y and zero vertical velocity — prevents fall-through and micro-seams.
+   */
+  snapLocalRiderFeetToAuthoritativeCabIfNeeded(
+    pos: THREE.Vector3,
+    loco: FpLocomotionState,
+    evalWallClockMs: number,
+    jumpPressedThisFrame: boolean,
+  ): void;
   tryRaycastFloorPick(
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
@@ -542,6 +553,31 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     cabEvalNowMs = nowMs;
   };
 
+  const snapLocalRiderFeetToAuthoritativeCabIfNeeded = (
+    pos: THREE.Vector3,
+    loco: FpLocomotionState,
+    evalWallClockMs: number,
+    jumpPressedThisFrame: boolean,
+  ) => {
+    if (jumpPressedThisFrame || loco.velocity.y > ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS) return;
+    const px = pos.x;
+    const py = pos.y;
+    const pz = pos.z;
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      const cabFeet = getCabY(key, evalWallClockMs);
+      const lx = px - (ox + row.plateX);
+      const lz = pz - (oz + row.plateZ);
+      if (!fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabFeet, vis.inner)) continue;
+      pos.y = cabFeet;
+      loco.velocity.y = 0;
+      loco.grounded = true;
+      return;
+    }
+  };
+
   return {
     dispose: () => {
       opts.conn.db.elevator_car.removeOnInsert(onElevRow);
@@ -559,6 +595,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     tick,
     mergeWalkTop,
     getElevatorKinematicSupportVyMps,
+    snapLocalRiderFeetToAuthoritativeCabIfNeeded,
     tryRaycastFloorPick,
     consumeInteractKey,
     shouldSuppressEpickup,

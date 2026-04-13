@@ -35,8 +35,12 @@ import {
 } from "./fpSwingViewportStroke.js";
 import { registerEditorSwingStrokeReview } from "./editorSwingStrokeReviewBridge.js";
 import {
+  floorPlacedObjectIdForTransformRoot,
+  interiorEntityIdForTransformRoot,
+  resolveFloorPlacementTransformRoot,
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
+  resolveInteriorPlacementTransformRoot,
   resolvePlacedId,
 } from "./editorPlacementKeys.js";
 import { emptyFloorDoc } from "./editorEmptyFloorDoc.js";
@@ -104,45 +108,61 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     if (store.mode !== "floor" && store.mode !== "interior") return;
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (!attached) return;
-    const id = attached.userData.placedObjectId as string | undefined;
-    if (!id) return;
-    const pos: [number, number, number] = [
-      attached.position.x,
-      attached.position.y,
-      attached.position.z,
-    ];
-    const rot: [number, number, number, number] = [
-      attached.quaternion.x,
-      attached.quaternion.y,
-      attached.quaternion.z,
-      attached.quaternion.w,
-    ];
-    const sc: [number, number, number] = [
-      attached.scale.x,
-      attached.scale.y,
-      attached.scale.z,
-    ];
     if (store.mode === "floor") {
-      store.updatePlacedObject(
-        resolveGizmoFloorDocId(attached, store.activeFloorDocId),
-        id,
-        {
-          position: pos,
-          rotation: rot,
-          scale: sc,
-        },
-      );
-      syncDuplicateFloorGroups(contentRoot, id, attached);
+      const root = resolveFloorPlacementTransformRoot(attached, store.floorDocs);
+      if (!root) return;
+      const id = floorPlacedObjectIdForTransformRoot(root, store.floorDocs);
+      if (!id) return;
+      const pos: [number, number, number] = [
+        root.position.x,
+        root.position.y,
+        root.position.z,
+      ];
+      const rot: [number, number, number, number] = [
+        root.quaternion.x,
+        root.quaternion.y,
+        root.quaternion.z,
+        root.quaternion.w,
+      ];
+      const sc: [number, number, number] = [
+        root.scale.x,
+        root.scale.y,
+        root.scale.z,
+      ];
+      store.updatePlacedObject(resolveGizmoFloorDocId(root, store.activeFloorDocId), id, {
+        position: pos,
+        rotation: rot,
+        scale: sc,
+      });
+      syncDuplicateFloorGroups(contentRoot, id, root);
     } else {
-      store.updateInteriorPlacement(
-        resolveGizmoInteriorDocId(attached, store.activeInteriorDocId),
-        id,
-        {
-          position: pos,
-          rotation: rot,
-          scale: sc,
-        },
-      );
+      const intDocId = resolveGizmoInteriorDocId(attached, store.activeInteriorDocId);
+      const doc = store.interiorDocs[intDocId];
+      const root = resolveInteriorPlacementTransformRoot(attached, doc);
+      if (!root) return;
+      const id = interiorEntityIdForTransformRoot(root);
+      if (!id) return;
+      const pos: [number, number, number] = [
+        root.position.x,
+        root.position.y,
+        root.position.z,
+      ];
+      const rot: [number, number, number, number] = [
+        root.quaternion.x,
+        root.quaternion.y,
+        root.quaternion.z,
+        root.quaternion.w,
+      ];
+      const sc: [number, number, number] = [
+        root.scale.x,
+        root.scale.y,
+        root.scale.z,
+      ];
+      store.updateInteriorPlacement(intDocId, id, {
+        position: pos,
+        rotation: rot,
+        scale: sc,
+      });
     }
   }
 
@@ -843,16 +863,36 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
       let target: THREE.Object3D | null = null;
       let bestD = Infinity;
-      buildingRoot.traverse((o) => {
-        if (o.userData.placedObjectId !== s.selectedId) return;
-        const wp = new THREE.Vector3();
-        o.getWorldPosition(wp);
-        const d = wp.distanceToSquared(camera.position);
-        if (d < bestD) {
-          bestD = d;
-          target = o;
-        }
-      });
+      if (s.mode === "floor") {
+        buildingRoot.traverse((o) => {
+          const root = resolveFloorPlacementTransformRoot(o, s.floorDocs);
+          if (root !== o) return;
+          const id = floorPlacedObjectIdForTransformRoot(o, s.floorDocs);
+          if (id !== s.selectedId) return;
+          const wp = new THREE.Vector3();
+          o.getWorldPosition(wp);
+          const d = wp.distanceToSquared(camera.position);
+          if (d < bestD) {
+            bestD = d;
+            target = o;
+          }
+        });
+      } else {
+        const intDoc = s.interiorDocs[s.activeInteriorDocId];
+        buildingRoot.traverse((o) => {
+          const root = resolveInteriorPlacementTransformRoot(o, intDoc);
+          if (root !== o) return;
+          const eid = interiorEntityIdForTransformRoot(o);
+          if (eid !== s.selectedId) return;
+          const wp = new THREE.Vector3();
+          o.getWorldPosition(wp);
+          const d = wp.distanceToSquared(camera.position);
+          if (d < bestD) {
+            bestD = d;
+            target = o;
+          }
+        });
+      }
       if (target) {
         transformControls.attach(target);
         transformControls.setMode(s.transformMode);

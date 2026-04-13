@@ -15,6 +15,11 @@ export const CALL_Y_HALF_WINDOW = 2.2;
  * Must match server `elevator::LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M`.
  */
 export const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M = 0.5;
+/**
+ * Above this upward vertical speed (m/s), do not hard-lock feet to the cab (jump must not be eaten).
+ * Must match server `elevator::RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
+ */
+export const ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS = 0.85;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
 
