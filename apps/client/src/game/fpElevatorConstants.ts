@@ -31,10 +31,11 @@ export const ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M = 1.25;
  */
 export const ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M = 0.95;
 /**
- * Cab wall clamp: back + side half extents as a fraction of inner half (must stay ≤ rider XZ
- * 0.97 so snap/merge keep working). Match server `elevator::CAB_CLAMP_NON_DOOR_FRAC`.
+ * Foot-center clearance from hoistway inner half extents so the **walk foot circle** stays inside
+ * the same XZ box as `mergeWalkTop` (`half − walkFootRadius − ε`). Match server
+ * `elevator::CAB_CLAMP_FOOT_CLEAR_M` (= `FOOT_R` + 2cm).
  */
-export const ELEVATOR_CLAMP_NON_DOOR_FRAC = 0.965;
+export const ELEVATOR_CLAMP_FOOT_CLEARANCE_M = 0.24;
 /**
  * Door-axis inner edge (fraction of half extent) before door slack — match server
  * `elevator::CAB_CLAMP_DOOR_AXIS_INNER_FRAC`.
@@ -44,6 +45,12 @@ export const ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC = 0.92;
 export const ELEVATOR_CLAMP_DOOR_SLACK_FULL_M = 0.85;
 export const ELEVATOR_CLAMP_DOOR_SLACK_START = 0.45;
 export const ELEVATOR_CLAMP_DOOR_SLACK_FULL_OPEN = 0.85;
+/**
+ * Pad (m) around the cab clamp AABB for “still in cab” snap / clamp **gate** — one locomotion step
+ * can overshoot slightly; gate must stay true so we still pull back into the hard box.
+ * Match server `elevator::RIDER_PHYS_GATE_PAD_M` (~foot radius so one sprint frame still arms clamp).
+ */
+export const ELEVATOR_CAB_PHYS_GATE_PAD_M = 0.26;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
 

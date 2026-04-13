@@ -210,10 +210,11 @@ export async function mountFpSession(
   const loco = createFpLocomotionState();
 
   /**
-   * While rising from a jump, skip elevator cab walk merge — otherwise `mergeWalkTop` keeps the
+   * While rising from a real jump, skip elevator cab walk merge — otherwise `mergeWalkTop` keeps the
    * cab as the highest support and locomotion snaps feet back to the floor every substep.
+   * Must stay **well above** upward velocity from a rising cab (~3 m/s) or merge drops for whole frames.
    */
-  const ELEVATOR_WALK_MERGE_SKIP_VY = 0.35;
+  const ELEVATOR_WALK_MERGE_SKIP_VY = 2.0;
   const sampleWalkTop = (
     worldX: number,
     worldZ: number,

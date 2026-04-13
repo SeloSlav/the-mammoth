@@ -9,7 +9,8 @@ import {
   ELEVATOR_CLAMP_DOOR_SLACK_FULL_M,
   ELEVATOR_CLAMP_DOOR_SLACK_FULL_OPEN,
   ELEVATOR_CLAMP_DOOR_SLACK_START,
-  ELEVATOR_CLAMP_NON_DOOR_FRAC,
+  ELEVATOR_CLAMP_FOOT_CLEARANCE_M,
+  ELEVATOR_CAB_PHYS_GATE_PAD_M,
   ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M,
   ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M,
 } from "./fpElevatorConstants.js";
@@ -66,23 +67,6 @@ export function fpElevatorHudCarContainsLocalPoint(
   return true;
 }
 
-/**
- * Loose plate-local volume for post-locomotion rider foot snap (same XZ as HUD, relaxed vertical).
- * Tight HUD bounds would miss valid frames while the cab moves, so the player loses merge + snap and falls.
- */
-export function fpElevatorRiderSnapContainsLocalPoint(
-  lx: number,
-  lz: number,
-  py: number,
-  cabFeetY: number,
-  inner: FpElevatorInnerExtents,
-): boolean {
-  if (Math.abs(lx) > inner.halfX * 0.97 || Math.abs(lz) > inner.halfZ * 0.97) return false;
-  const yLo = cabFeetY - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
-  const yHi = cabFeetY + inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
-  return py >= yLo && py <= yHi;
-}
-
 /** Match server `door_side_slack_m` — extra meters past the inner sill on the door side. */
 export function fpElevatorDoorSideSlackM(doorOpen01: number): number {
   const o = doorOpen01;
@@ -98,8 +82,90 @@ export function fpElevatorDoorSideSlackM(doorOpen01: number): number {
 }
 
 /**
- * Hard XZ box when feet are in the rider envelope (same predicate as snap/merge vertical band).
- * Mirrors server `clamp_player_to_elevators`: tight back + sides, door side + slack when opening.
+ * Plate-local AABB used for cab XZ clamp (and physics containment), in meters from hoistway plate center.
+ * Must stay aligned with `apps/server/src/elevator.rs` `clamp_player_to_elevators`.
+ */
+export function fpElevatorPlateLocalClampBounds(
+  doorFace: ElevatorDoorFace,
+  doorOpen01: number,
+  inner: FpElevatorInnerExtents,
+): { lxMin: number; lxMax: number; lzMin: number; lzMax: number } {
+  const ihx = inner.halfX;
+  const ihz = inner.halfZ;
+  const ext = fpElevatorDoorSideSlackM(doorOpen01);
+  const di = ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC;
+  const fc = ELEVATOR_CLAMP_FOOT_CLEARANCE_M;
+  const lxSpan = Math.max(1e-4, ihx - fc);
+  const lzSpan = Math.max(1e-4, ihz - fc);
+  const doorGivingSlack = ext > ELEVATOR_CLAMP_DOOR_SLACK_START + 1e-6;
+
+  switch (doorFace) {
+    case "e": {
+      const doorCap = ihx * di + ext;
+      const lxMax = doorGivingSlack ? doorCap : Math.min(doorCap, lxSpan);
+      return { lxMin: -lxSpan, lxMax, lzMin: -lzSpan, lzMax: lzSpan };
+    }
+    case "w": {
+      const doorCap = ihx * di + ext;
+      const lxMin = doorGivingSlack ? -doorCap : Math.max(-doorCap, -lxSpan);
+      return { lxMin, lxMax: lxSpan, lzMin: -lzSpan, lzMax: lzSpan };
+    }
+    case "n": {
+      const doorCap = ihz * di + ext;
+      const lzMax = doorGivingSlack ? doorCap : Math.min(doorCap, lzSpan);
+      return { lxMin: -lxSpan, lxMax: lxSpan, lzMin: -lzSpan, lzMax };
+    }
+    case "s": {
+      const doorCap = ihz * di + ext;
+      const lzMin = doorGivingSlack ? -doorCap : Math.max(-doorCap, -lzSpan);
+      return { lxMin: -lxSpan, lxMax: lxSpan, lzMin, lzMax: lzSpan };
+    }
+  }
+}
+
+/**
+ * True when feet are in the cab **physics** volume: rider vertical band + door-aware clamp box
+ * (NOT the old symmetric 0.97× slab — that missed the door-slack region so clamp/snap never armed).
+ */
+export function fpElevatorPlateLocalInCabPhysicsVolume(
+  lx: number,
+  lz: number,
+  py: number,
+  cabFeetY: number,
+  doorFace: ElevatorDoorFace,
+  doorOpen01: number,
+  inner: FpElevatorInnerExtents,
+): boolean {
+  const yLo = cabFeetY - ELEVATOR_RIDER_SNAP_FEET_BELOW_CAB_M;
+  const yHi = cabFeetY + inner.innerH + ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M;
+  if (py < yLo || py > yHi) return false;
+  const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
+  const pad = ELEVATOR_CAB_PHYS_GATE_PAD_M;
+  return (
+    lx >= b.lxMin - pad &&
+    lx <= b.lxMax + pad &&
+    lz >= b.lzMin - pad &&
+    lz <= b.lzMax + pad
+  );
+}
+
+/**
+ * Rider foot snap / server `player_rider_snap_grip`: same predicate as {@link fpElevatorPlateLocalInCabPhysicsVolume}.
+ */
+export function fpElevatorRiderSnapContainsLocalPoint(
+  lx: number,
+  lz: number,
+  py: number,
+  cabFeetY: number,
+  inner: FpElevatorInnerExtents,
+  doorFace: ElevatorDoorFace,
+  doorOpen01: number,
+): boolean {
+  return fpElevatorPlateLocalInCabPhysicsVolume(lx, lz, py, cabFeetY, doorFace, doorOpen01, inner);
+}
+
+/**
+ * Hard XZ box when feet are in the cab physics volume (door-aware, matches server clamp).
  */
 export function fpElevatorClampWorldXZToCabIfRider(
   wx: number,
@@ -114,47 +180,14 @@ export function fpElevatorClampWorldXZToCabIfRider(
 ): { x: number; z: number; didClamp: boolean } {
   const lx = wx - plateWorldX;
   const lz = wz - plateWorldZ;
-  if (!fpElevatorRiderSnapContainsLocalPoint(lx, lz, py, cabFeetY, inner)) {
+  if (!fpElevatorPlateLocalInCabPhysicsVolume(lx, lz, py, cabFeetY, doorFace, doorOpen01, inner)) {
     return { x: wx, z: wz, didClamp: false };
   }
-  const ihx = inner.halfX;
-  const ihz = inner.halfZ;
-  const ext = fpElevatorDoorSideSlackM(doorOpen01);
-  const nx = ELEVATOR_CLAMP_NON_DOOR_FRAC;
-  const di = ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC;
-  const cx = plateWorldX;
-  const cz = plateWorldZ;
-
-  let xmin: number;
-  let xmax: number;
-  let zmin: number;
-  let zmax: number;
-  switch (doorFace) {
-    case "e":
-      xmin = cx - ihx * nx;
-      xmax = cx + ihx * di + ext;
-      zmin = cz - ihz * nx;
-      zmax = cz + ihz * nx;
-      break;
-    case "w":
-      xmin = cx - ihx * di - ext;
-      xmax = cx + ihx * nx;
-      zmin = cz - ihz * nx;
-      zmax = cz + ihz * nx;
-      break;
-    case "n":
-      xmin = cx - ihx * nx;
-      xmax = cx + ihx * nx;
-      zmin = cz - ihz * nx;
-      zmax = cz + ihz * di + ext;
-      break;
-    case "s":
-      xmin = cx - ihx * nx;
-      xmax = cx + ihx * nx;
-      zmin = cz - ihz * di - ext;
-      zmax = cz + ihz * nx;
-      break;
-  }
+  const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
+  const xmin = plateWorldX + b.lxMin;
+  const xmax = plateWorldX + b.lxMax;
+  const zmin = plateWorldZ + b.lzMin;
+  const zmax = plateWorldZ + b.lzMax;
 
   const x = Math.min(Math.max(wx, xmin), xmax);
   const z = Math.min(Math.max(wz, zmin), zmax);

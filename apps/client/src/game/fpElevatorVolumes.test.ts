@@ -43,14 +43,15 @@ describe("fpElevatorClampWorldXZToCabIfRider", () => {
   const cabFeetY = 10;
   const py = cabFeetY + 0.4;
 
-  it("pulls the player back from beyond the door-axis inner edge when doors are closed (E face)", () => {
+  it("pulls the player back so the walk foot circle stays inside merge XZ (E face, doors closed)", () => {
     const cx = 100;
     const cz = 200;
     const wx = cx + inner.halfX * 0.96;
     const wz = cz;
     const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
     expect(r.didClamp).toBe(true);
-    expect(r.x).toBeCloseTo(cx + inner.halfX * 0.92, 5);
+    const lxSpan = inner.halfX - 0.24;
+    expect(r.x).toBeCloseTo(cx + lxSpan, 5);
     expect(r.z).toBeCloseTo(wz, 5);
   });
 
@@ -61,7 +62,7 @@ describe("fpElevatorClampWorldXZToCabIfRider", () => {
     const wz = cz + inner.halfZ * 0.969;
     const r = fpElevatorClampWorldXZToCabIfRider(wx, wz, py, cabFeetY, cx, cz, "e", 0, inner);
     expect(r.didClamp).toBe(true);
-    expect(r.z).toBeCloseTo(cz + inner.halfZ * 0.965, 5);
+    expect(r.z).toBeCloseTo(cz + (inner.halfZ - 0.24), 5);
   });
 
   it("no-ops when feet are outside the rider envelope", () => {

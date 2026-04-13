@@ -30,10 +30,20 @@ describe("fpElevatorRiderSnapContainsLocalPoint", () => {
   it("accepts feet modestly below cab support while HUD would reject (rising-car / timestep lag)", () => {
     const py = carFeetY - 0.55;
     expect(fpElevatorHudCarContainsLocalPoint(0, 0, py, carFeetY, inner)).toBe(false);
-    expect(fpElevatorRiderSnapContainsLocalPoint(0, 0, py, carFeetY, inner)).toBe(true);
+    expect(fpElevatorRiderSnapContainsLocalPoint(0, 0, py, carFeetY, inner, "e", 0)).toBe(true);
   });
 
   it("still rejects feet far below the cab (other storey / shaft gap)", () => {
-    expect(fpElevatorRiderSnapContainsLocalPoint(0, 0, carFeetY - 6, carFeetY, inner)).toBe(false);
+    expect(
+      fpElevatorRiderSnapContainsLocalPoint(0, 0, carFeetY - 6, carFeetY, inner, "e", 0),
+    ).toBe(false);
+  });
+
+  it("with doors open, includes door-slack region past the closed-door clamp + gate pad", () => {
+    const py = carFeetY + 0.4;
+    /** Past merge-safe lx (~1.76) + gate pad (~0.26) — still outside closed-door volume. */
+    const lx = 2.15;
+    expect(fpElevatorRiderSnapContainsLocalPoint(lx, 0, py, carFeetY, inner, "e", 0)).toBe(false);
+    expect(fpElevatorRiderSnapContainsLocalPoint(lx, 0, py, carFeetY, inner, "e", 1)).toBe(true);
   });
 });

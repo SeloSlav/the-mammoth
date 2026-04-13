@@ -80,6 +80,23 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
    */
   const transformControls = new TransformControls(camera, null);
   /**
+   * `TransformControls.pointerMove` ignores moves unless `getPointer().button === -1` (see three
+   * `TransformControls.js`). Some browsers send `button: 0` on captured `pointermove` while the
+   * primary button is held, so drags never apply → nothing commits and the next sync snaps back.
+   */
+  {
+    type TcPriv = { _getPointer: (e: PointerEvent) => { x: number; y: number; button: number } };
+    const tc = transformControls as unknown as TcPriv;
+    const orig = tc._getPointer.bind(transformControls);
+    tc._getPointer = function (this: TransformControls, event: PointerEvent) {
+      const out = orig(event);
+      if (this.dragging === true && event.type === "pointermove") {
+        return { ...out, button: -1 };
+      }
+      return out;
+    };
+  }
+  /**
    * {@link TransformControls} dispatches `change` when `object`/camera/mode/etc. are set.
    * Our listener calls into Zustand; a nested subscribe can still see stale `prev` and think
    * the FP gizmo must re-sync → infinite recursion. Ignore `change` during programmatic sync.
@@ -175,6 +192,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     levelEditorTransformGesture = false;
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
+    /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
+    queueMicrotask(() => {
+      const m = useEditorStore.getState().mode;
+      if (m === "floor" || m === "interior") syncTransformsFromStore();
+    });
   });
 
   transformControls.addEventListener("dragging-changed", (ev) => {
@@ -966,10 +988,39 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
       }
 
       if (s.mode !== "fp_viewmodel") {
+        if (prev.mode === "fp_viewmodel") {
+          /** FP paint/review must never leave the canvas wedged when returning to floor/interior. */
+          swingStrokeDragging = false;
+          swingStrokeCapturePointerId = null;
+          swingStrokeBuf = [];
+          swingReviewDragIdx = null;
+          swingReviewLocals = null;
+          swingReviewPreviewKeys = null;
+          detachSwingReviewCanvasListeners();
+          clearSwingStrokeOverlay();
+          levelEditorTransformGesture = false;
+          transformControls.enabled = true;
+        }
         if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
           rebuildStructural();
-        } else if (!transformControls.dragging && !levelEditorTransformGesture) {
-          syncTransformsFromStore();
+        } else {
+          const placementDataChanged =
+            s.floorDocs !== prev.floorDocs ||
+            s.interiorDocs !== prev.interiorDocs ||
+            s.building !== prev.building ||
+            s.activeInteriorDocId !== prev.activeInteriorDocId;
+          /**
+           * Never sync meshes from store on unrelated updates (FP swing scrub, `fpAuthorLive`,
+           * pick list, dirty flag, …). Those used to fire every RAF / UI tick and overwrote the
+           * gizmo mid-edit — felt like snapping to a preset.
+           */
+          if (
+            placementDataChanged &&
+            !transformControls.dragging &&
+            !levelEditorTransformGesture
+          ) {
+            syncTransformsFromStore();
+          }
         }
       }
 

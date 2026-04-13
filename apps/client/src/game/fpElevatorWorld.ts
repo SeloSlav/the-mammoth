@@ -55,6 +55,8 @@ export {
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorDoorSideSlackM,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevatorPlateLocalClampBounds,
+  fpElevatorPlateLocalInCabPhysicsVolume,
   fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 
@@ -592,7 +594,19 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const cabFeet = getCabY(key, evalWallClockMs);
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
-      if (!fpElevatorRiderSnapContainsLocalPoint(lx, lz, py, cabFeet, vis.inner)) continue;
+      const doorOpen = getDoor(key, evalWallClockMs);
+      if (
+        !fpElevatorRiderSnapContainsLocalPoint(
+          lx,
+          lz,
+          py,
+          cabFeet,
+          vis.inner,
+          vis.layout.doorFace,
+          doorOpen,
+        )
+      )
+        continue;
       pos.y = cabFeet;
       loco.velocity.y = 0;
       loco.grounded = true;

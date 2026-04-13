@@ -16,10 +16,12 @@ const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
 const RIDER_SNAP_FEET_BELOW_CAB_M: f32 = 1.25;
 /// Must match client `ELEVATOR_RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M`.
 const RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M: f32 = 0.95;
-/// Non-door cab walls as fraction of inner half — stay inside rider XZ (0.97). Sync client `ELEVATOR_CLAMP_NON_DOOR_FRAC`.
-const CAB_CLAMP_NON_DOOR_FRAC: f32 = 0.965;
+/// Foot-center inset from inner half so walk merge foot circle stays valid (`FOOT_R` + 2cm). Sync client `ELEVATOR_CLAMP_FOOT_CLEARANCE_M`.
+const CAB_CLAMP_FOOT_CLEAR_M: f32 = 0.24;
 /// Door-axis inner edge before slack. Sync client `ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC`.
 const CAB_CLAMP_DOOR_AXIS_INNER_FRAC: f32 = 0.92;
+/// Pad around clamp AABB for rider snap / clamp **gate** (m). Sync client `ELEVATOR_CAB_PHYS_GATE_PAD_M`.
+const RIDER_PHYS_GATE_PAD_M: f32 = 0.26;
 
 const PH_IDLE: u8 = 0;
 const PH_CLOSING: u8 = 1;
@@ -267,21 +269,84 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
     true
 }
 
-/// Looser vertical envelope than `player_inside_cab` — matches client `fpElevatorRiderSnapContainsLocalPoint`.
+/// Extra meters past the inner cab AABB on the **door** side (matches client `fpElevatorDoorSideSlackM`).
+const DOOR_SLACK_FULL_M: f32 = 0.85;
+const DOOR_SLACK_START: f32 = 0.45;
+const DOOR_SLACK_FULL_OPEN: f32 = 0.85;
+
+#[inline]
+fn door_side_slack_m(door_open_01: f32) -> f32 {
+    if door_open_01 >= DOOR_SLACK_FULL_OPEN {
+        DOOR_SLACK_FULL_M
+    } else if door_open_01 > DOOR_SLACK_START {
+        DOOR_SLACK_FULL_M * ((door_open_01 - DOOR_SLACK_START) / (DOOR_SLACK_FULL_OPEN - DOOR_SLACK_START))
+    } else {
+        0.0
+    }
+}
+
+/// Plate-local clamp AABB `(lx_min, lx_max, lz_min, lz_max)` — sync `fpElevatorPlateLocalClampBounds`.
+fn cab_plate_local_clamp_bounds(car: &ElevatorCar) -> (f32, f32, f32, f32) {
+    let (ihx, ihz) = elevator_layout::inner_half_xz();
+    let ext = door_side_slack_m(car.door_open_01);
+    let di = CAB_CLAMP_DOOR_AXIS_INNER_FRAC;
+    let fc = CAB_CLAMP_FOOT_CLEAR_M;
+    let lx_span = (ihx - fc).max(1e-4);
+    let lz_span = (ihz - fc).max(1e-4);
+    let door_giving_slack = ext > DOOR_SLACK_START + 1e-6;
+    match door_face_from_u8(car.door_face) {
+        DoorFace::E => {
+            let door_cap = ihx * di + ext;
+            let lx_max = if door_giving_slack {
+                door_cap
+            } else {
+                door_cap.min(lx_span)
+            };
+            (-lx_span, lx_max, -lz_span, lz_span)
+        }
+        DoorFace::W => {
+            let door_cap = ihx * di + ext;
+            let lx_min = if door_giving_slack {
+                -door_cap
+            } else {
+                (-door_cap).max(-lx_span)
+            };
+            (lx_min, lx_span, -lz_span, lz_span)
+        }
+        DoorFace::N => {
+            let door_cap = ihz * di + ext;
+            let lz_max = if door_giving_slack {
+                door_cap
+            } else {
+                door_cap.min(lz_span)
+            };
+            (-lx_span, lx_span, -lz_span, lz_max)
+        }
+        DoorFace::S => {
+            let door_cap = ihz * di + ext;
+            let lz_min = if door_giving_slack {
+                -door_cap
+            } else {
+                (-door_cap).max(-lz_span)
+            };
+            (-lx_span, lx_span, lz_min, lz_span)
+        }
+    }
+}
+
+/// Rider / clamp physics volume — matches client `fpElevatorPlateLocalInCabPhysicsVolume`.
 fn player_rider_snap_grip(p: &PlayerPose, car: &ElevatorCar) -> bool {
     let lx = p.x - car.plate_x;
     let lz = p.z - car.plate_z;
-    let (hx, hz) = elevator_layout::inner_half_xz();
     let iy = elevator_layout::inner_height();
-    if lx.abs() > hx * 0.97 || lz.abs() > hz * 0.97 {
-        return false;
-    }
     if p.y < car.cab_floor_y - RIDER_SNAP_FEET_BELOW_CAB_M
         || p.y > car.cab_floor_y + iy + RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M
     {
         return false;
     }
-    true
+    let (lx_min, lx_max, lz_min, lz_max) = cab_plate_local_clamp_bounds(car);
+    let pad = RIDER_PHYS_GATE_PAD_M;
+    lx >= lx_min - pad && lx <= lx_max + pad && lz >= lz_min - pad && lz <= lz_max + pad
 }
 
 /// Hard-attach feet to the authoritative cab floor when inside the riding volume.
@@ -356,72 +421,19 @@ fn near_call_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
     true
 }
 
-/// Extra meters allowed past the inner cab AABB on the **door** side so players can step out
-/// while doors are opening (matches client `mergeWalkTop` / gameplay feel).
-///
-/// Ramps from 0 below `DOOR_SLACK_START` to `DOOR_SLACK_FULL_M` at `DOOR_SLACK_FULL_OPEN`.
-const DOOR_SLACK_FULL_M: f32 = 0.85;
-const DOOR_SLACK_START: f32 = 0.45;
-const DOOR_SLACK_FULL_OPEN: f32 = 0.85;
-
-#[inline]
-fn door_side_slack_m(door_open_01: f32) -> f32 {
-    if door_open_01 >= DOOR_SLACK_FULL_OPEN {
-        DOOR_SLACK_FULL_M
-    } else if door_open_01 > DOOR_SLACK_START {
-        DOOR_SLACK_FULL_M * ((door_open_01 - DOOR_SLACK_START) / (DOOR_SLACK_FULL_OPEN - DOOR_SLACK_START))
-    } else {
-        0.0
-    }
-}
-
 /// Keep players from walking through cab shells; relax door side while doors are opening.
 ///
-/// Uses `player_rider_snap_grip` (same envelope as post-tick foot snap / client merge widened band),
-/// not `player_inside_cab` — otherwise the player can stand between 0.9× and 0.97× half extents with
-/// **no** XZ clamp and walk off the car sides.
+/// Volume matches `player_rider_snap_grip` / client `fpElevatorPlateLocalInCabPhysicsVolume`.
 pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
-    let (ihx, ihz) = elevator_layout::inner_half_xz();
-    let ox = 0.0_f32;
-    let oz = 0.0_f32;
-
     for car in ctx.db.elevator_car().iter() {
         if !player_rider_snap_grip(p, &car) {
             continue;
         }
-        let face = door_face_from_u8(car.door_face);
-        let cx = ox + car.plate_x;
-        let cz = oz + car.plate_z;
-        let ext = door_side_slack_m(car.door_open_01);
-        let nx = CAB_CLAMP_NON_DOOR_FRAC;
-        let di = CAB_CLAMP_DOOR_AXIS_INNER_FRAC;
-
-        let (xmin, xmax, zmin, zmax) = match face {
-            DoorFace::E => (
-                cx - ihx * nx,
-                cx + ihx * di + ext,
-                cz - ihz * nx,
-                cz + ihz * nx,
-            ),
-            DoorFace::W => (
-                cx - ihx * di - ext,
-                cx + ihx * nx,
-                cz - ihz * nx,
-                cz + ihz * nx,
-            ),
-            DoorFace::N => (
-                cx - ihx * nx,
-                cx + ihx * nx,
-                cz - ihz * nx,
-                cz + ihz * di + ext,
-            ),
-            DoorFace::S => (
-                cx - ihx * nx,
-                cx + ihx * nx,
-                cz - ihz * di - ext,
-                cz + ihz * nx,
-            ),
-        };
+        let (lx_min, lx_max, lz_min, lz_max) = cab_plate_local_clamp_bounds(&car);
+        let xmin = car.plate_x + lx_min;
+        let xmax = car.plate_x + lx_max;
+        let zmin = car.plate_z + lz_min;
+        let zmax = car.plate_z + lz_max;
         let px = p.x;
         let pz = p.z;
         p.x = p.x.clamp(xmin, xmax);

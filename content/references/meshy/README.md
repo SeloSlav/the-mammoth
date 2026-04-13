@@ -59,6 +59,12 @@ right-hand heavy leather work glove with palm open toward camera, thick weathere
 adult Slavic male character in neutral A-pose, average build with slight softness and natural proportions, not athletic or exaggerated, subtle asymmetry in posture, light body hair on arms and chest, slightly tired facial features, short practical haircut, wearing simple worn boxer briefs in muted color, no branding, relaxed hands and neutral expression, clean topology suitable for rigging, evenly distributed edge flow, realistic human proportions adapted to slightly stylized form, no extreme detail, centered and fully visible
 ```
 
+### Female body A-pose (`female-body-apose-lowpoly-reference.png`)
+
+```
+adult Slavic female character in neutral A-pose, average build with natural proportions and slight softness, not exaggerated or stylized, subtle asymmetry in posture, realistic anatomy with modest curves, short or tied-back practical hairstyle, slightly tired facial features, wearing simple sports bra and basic underwear in muted color, no branding, practical everyday appearance, relaxed hands and neutral expression, clean topology suitable for rigging, evenly distributed edge flow, realistic human proportions adapted to slightly stylized form, no extreme detail, centered and fully visible
+```
+
 ---
 
 ## 3. Adding a new reference
