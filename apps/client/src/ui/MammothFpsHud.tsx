@@ -5,7 +5,7 @@ import {
 } from "../game/fpSessionFpsDisplay";
 
 /**
- * Rolling FPS from the FP WebGL render loop (see `mountFpSession` + `fpSessionFpsDisplay`).
+ * Rolling FPS from the FP GPU render loop (see `mountFpSession` + `fpSessionFpsDisplay`).
  */
 export function MammothFpsHud() {
   const fps = useSyncExternalStore(

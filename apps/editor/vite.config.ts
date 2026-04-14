@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { Connect } from "vite";
 import { defineConfig } from "vite";
@@ -8,6 +9,9 @@ import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware";
 
 const repoRoot = path.resolve(__dirname, "../..");
 const clientPublicRoot = path.resolve(repoRoot, "apps/client/public");
+
+const require = createRequire(import.meta.url);
+const threeWebgpu = require.resolve("three/webgpu");
 
 function staticMime(filePath: string): string {
   if (filePath.endsWith(".glb")) return "model/gltf-binary";
@@ -97,5 +101,8 @@ export default defineConfig({
   preview: {
     port: 5174,
     strictPort: true,
+  },
+  resolve: {
+    alias: [{ find: /^three$/, replacement: threeWebgpu }],
   },
 });

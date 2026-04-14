@@ -19,7 +19,7 @@ export function isFpSessionPerfDebugEnabled(): boolean {
  * **after** `renderer.render` so `renderer.info` reflects that frame.
  */
 export function createFpSessionPerfDebugPostRenderHook(
-  renderer: THREE.WebGLRenderer,
+  renderer: THREE.WebGPURenderer,
 ): () => void {
   if (!isFpSessionPerfDebugEnabled()) return () => {};
   let frames = 0;

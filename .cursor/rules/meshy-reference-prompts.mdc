@@ -1,11 +1,7 @@
 ---
-description: >-
-  When the user asks for a new Meshy / reference-image prompt (same style as
-  fist, crowbar, knife white-background refs), read the meshy README and output
-  a full prompt (shared prefix + subject) tailored to their request.
+description: When the user asks for a new Meshy / reference-image prompt (same style as   fist, crowbar, knife white-background refs), read the meshy README and output   a full prompt (shared prefix + subject) tailored to their request.
 alwaysApply: false
 ---
-
 # Meshy reference image prompts
 
 ## When this applies

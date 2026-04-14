@@ -1,6 +1,9 @@
 {
   "extends": "@repo/typescript-config/vite-app.json",
   "compilerOptions": {
+    "paths": {
+      "three": ["./node_modules/@types/three/src/Three.WebGPU.d.ts"]
+    },
     "types": ["vite/client"],
     "declaration": false,
     "declarationMap": false,

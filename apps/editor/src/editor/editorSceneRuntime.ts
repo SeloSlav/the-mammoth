@@ -4,6 +4,8 @@ import { FlyControls } from "three/addons/controls/FlyControls.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
+  assertWebGpuAdapterOrThrow,
+  assertWebGpuRendererBackend,
   createFPCamera,
   FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
   type LocalFirstPersonPresenter,
@@ -58,12 +60,15 @@ import { addEditorSceneLighting } from "./editorSceneLighting.js";
 import { createEditorPmremEnvironment } from "./editorSceneEnvironment.js";
 import { buildEditorStructuralRoot } from "./editorBuildingContentMount.js";
 
-export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
+export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() => void> {
+  await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a22);
 
   const camera = createFPCamera();
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
+  await renderer.init();
+  assertWebGpuRendererBackend(renderer);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;

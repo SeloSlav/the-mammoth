@@ -1,29 +1,19 @@
 import * as THREE from "three";
-import { Sky } from "three/addons/objects/Sky.js";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "@the-mammoth/world";
 
 /**
- * Outdoor FP backdrop: procedural sky, horizon fog, infinite ground plane, and sun-matched lights.
+ * Outdoor FP backdrop: solid zenith color (WebGPU build has no `Sky` addon — it depends on legacy
+ * `UniformsUtils`), horizon fog, infinite ground plane, and sun-matched lights.
  * Keeps {@link mountFpSession} focused on session lifecycle (net, input, sim) vs scene authoring.
  */
 export function attachFpSessionEnvironment(
   scene: THREE.Scene,
-  renderer: THREE.WebGLRenderer,
+  renderer: THREE.WebGPURenderer,
 ): () => void {
-  scene.background = null;
-
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
 
-  const sky = new Sky();
-  sky.name = "fp_session_sky";
-  sky.scale.setScalar(450000);
-  const skyU = sky.material.uniforms;
-  skyU["turbidity"]!.value = 8;
-  skyU["rayleigh"]!.value = 1.65;
-  skyU["mieCoefficient"]!.value = 0.0045;
-  skyU["mieDirectionalG"]!.value = 0.86;
   const sunDir = new THREE.Vector3();
   const sunElevationDeg = 58;
   const sunAzimuthDeg = 218;
@@ -32,8 +22,9 @@ export function attachFpSessionEnvironment(
     THREE.MathUtils.degToRad(90 - sunElevationDeg),
     THREE.MathUtils.degToRad(sunAzimuthDeg),
   );
-  (skyU["sunPosition"]!.value as THREE.Vector3).copy(sunDir);
-  scene.add(sky);
+
+  /** Pastel blue-gray zenith — pairs with fog and hemisphere key (see below). */
+  scene.background = new THREE.Color(0xe8edf4);
 
   /**
    * Hazy horizon — pastel blue-gray, slightly below shell ceilings (~#f1f4f8) so mass still reads.
@@ -42,7 +33,11 @@ export function attachFpSessionEnvironment(
 
   const groundPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(6000, 6000),
-    new THREE.MeshLambertMaterial({ color: 0x4d5f4a }),
+    new THREE.MeshStandardMaterial({
+      color: 0x4d5f4a,
+      roughness: 1,
+      metalness: 0,
+    }),
   );
   groundPlane.name = "fp_session_ground_plane";
   groundPlane.rotation.x = -Math.PI / 2;
@@ -65,9 +60,7 @@ export function attachFpSessionEnvironment(
   };
 
   return () => {
-    scene.remove(sky);
-    sky.geometry.dispose();
-    disposeMaterial(sky.material);
+    scene.background = null;
 
     scene.remove(groundPlane);
     groundPlane.geometry.dispose();

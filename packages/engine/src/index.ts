@@ -127,3 +127,7 @@ export {
   type HitTracePlaceholder,
 } from "./playerPresentation/index.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
+export {
+  assertWebGpuAdapterOrThrow,
+  assertWebGpuRendererBackend,
+} from "./webGpuGate.js";

@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { createRequire } from "node:module";
 import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -33,6 +34,10 @@ function watchWorkspaceUiThemeSrc(): Plugin {
 const repoRoot = path.resolve(__dirname, "../..");
 const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
 
+const require = createRequire(import.meta.url);
+/** Resolved path to `build/three.webgpu.js` via package export `three/webgpu`. */
+const threeWebgpu = require.resolve("three/webgpu");
+
 export default defineConfig({
   plugins: [
     watchWorkspaceWorldSrc(),
@@ -54,6 +59,8 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      /** Runtime + types: use the WebGPU Three build only (no `three.module.js` + `three.webgpu.js` in one bundle). */
+      { find: /^three$/, replacement: threeWebgpu },
       /** Explicit paths: avoids dev-server resolve failures when pnpm symlinks are missing or stale. */
       {
         find: /^@the-mammoth\/ui-theme\/uiTheme\.css$/,

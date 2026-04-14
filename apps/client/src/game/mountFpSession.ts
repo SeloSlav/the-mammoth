@@ -4,6 +4,8 @@ import type { DbConnection, SubscriptionHandle } from "../module_bindings";
 import { tables } from "../module_bindings";
 import type { PlayerPose } from "../module_bindings/types";
 import {
+  assertWebGpuAdapterOrThrow,
+  assertWebGpuRendererBackend,
   createFPRig,
   createFpLocomotionState,
   fpLocomotionConstants,
@@ -106,8 +108,11 @@ export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
 ): Promise<() => void> {
+  await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
+  await renderer.init();
+  assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);

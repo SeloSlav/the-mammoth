@@ -8,10 +8,10 @@ export type EditorPmremEnvironment = {
 
 export function createEditorPmremEnvironment(
   scene: THREE.Scene,
-  renderer: THREE.WebGLRenderer,
+  renderer: THREE.WebGPURenderer,
 ): EditorPmremEnvironment {
   const pmrem = new THREE.PMREMGenerator(renderer);
-  let envRt: THREE.WebGLRenderTarget | null = null;
+  let envRt: THREE.RenderTarget | null = null;
 
   const applyEnvironment = (on: boolean) => {
     scene.environment = null;

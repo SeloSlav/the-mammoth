@@ -1,9 +1,6 @@
 ---
-description: Mixing custom WGSL code into Three.js TSL shaders via wgslFn(). Use when integrating raw WGSL functions, porting existing WGSL, or optimizing hot paths that need hand-written shader code.
-globs: **/*.wgsl,**/*wgsl*.{js,ts,jsx,tsx}
-alwaysApply: false
+alwaysApply: true
 ---
-
 # TSL + WGSL Integration
 
 `wgslFn()` lets you embed raw WGSL functions inside a TSL node graph. Inputs and outputs are declared in the WGSL signature and bound from TSL-side nodes at call time.

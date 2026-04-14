@@ -1,9 +1,6 @@
 ---
-description: WebGPU device loss handling, recovery strategies, and device limits/optional features. Use when adding robustness to a WebGPU app, handling GPU crashes, requesting non-default limits, or enabling optional features like timestamp queries or float32-filterable.
-globs: **/*renderer*.{js,ts,jsx,tsx},**/*webgpu*.{js,ts,jsx,tsx}
-alwaysApply: false
+alwaysApply: true
 ---
-
 # WebGPU Device Loss & Limits
 
 ## Device loss

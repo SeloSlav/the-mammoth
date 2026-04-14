@@ -7,6 +7,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [gpuError, setGpuError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +29,20 @@ export default function App() {
     if (!ready) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    return mountEditorScene(canvas);
+    let dispose: (() => void) | undefined;
+    let cancelled = false;
+    setGpuError(null);
+    void mountEditorScene(canvas)
+      .then((d) => {
+        if (!cancelled) dispose = d;
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setGpuError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
   }, [ready]);
 
   return (
@@ -63,6 +77,30 @@ export default function App() {
             Ensure the dev server is running so `/content/**` is served from the repo
             (see Vite plugin in apps/editor/vite.config.ts).
           </p>
+        </div>
+      ) : null}
+      {gpuError ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            background: "#0f1118",
+            color: "#e8ecf4",
+            fontFamily: "system-ui, sans-serif",
+            fontSize: 15,
+            lineHeight: 1.5,
+            textAlign: "center",
+          }}
+        >
+          <div style={{ maxWidth: 520 }}>
+            <strong style={{ display: "block", marginBottom: 12 }}>WebGPU required</strong>
+            {gpuError}
+          </div>
         </div>
       ) : null}
       {ready ? <EditorChrome /> : null}

@@ -1,10 +1,6 @@
 ---
 alwaysApply: true
-description: Post-processing effects for Three.js WebGPU via the TSL node-based pipeline. Covers PostProcessing class, built-in passes (bloom, blur, FXAA, DOF), custom effects with Fn(), and effect chaining. Use when building render pipelines with post effects.
-globs: **/*post*.{js,ts,jsx,tsx},**/*effect*.{js,ts,jsx,tsx},**/*bloom*.{js,ts,jsx,tsx}
-alwaysApply: false
 ---
-
 # Three.js WebGPU Post-Processing (TSL)
 
 Post-processing uses the `PostProcessing` class from `three/webgpu` with node-based effect composition. Effects chain via TSL nodes rather than EffectComposer passes.

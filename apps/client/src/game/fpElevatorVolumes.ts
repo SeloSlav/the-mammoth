@@ -70,7 +70,9 @@ export function fpElevatorHudCarContainsLocalPoint(
 
 /**
  * Plate-local “inside cab” for gameplay reducers — matches
- * `apps/server/src/elevator/mod.rs` `player_inside_cab` (XZ 0.9 of gameplay inner half, vertical band).
+ * `apps/server/src/elevator/mod.rs` `player_inside_cab` (XZ 0.9 of gameplay inner half, vertical band;
+ * upper slack uses {@link ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M} so story N+1 feet do not
+ * read as inside a docked car at N).
  */
 export function fpElevPlayerInsideCabAuthoritativePlateLocal(
   lx: number,
@@ -81,7 +83,12 @@ export function fpElevPlayerInsideCabAuthoritativePlateLocal(
 ): boolean {
   const { halfX: hx, halfZ: hz, innerH: iy } = inner;
   if (Math.abs(lx) > hx * 0.9 || Math.abs(lz) > hz * 0.9) return false;
-  if (py < cabFeetY - 0.2 || py > cabFeetY + iy + 0.35) return false;
+  if (
+    py < cabFeetY - 0.2 ||
+    py > cabFeetY + iy + ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M
+  ) {
+    return false;
+  }
   return true;
 }
 

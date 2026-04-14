@@ -1,6 +1,9 @@
 {
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
+    "paths": {
+      "three": ["./node_modules/@types/three/src/Three.WebGPU.d.ts"]
+    },
     "outDir": "dist",
     "rootDir": "src"
   },

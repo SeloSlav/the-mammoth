@@ -373,7 +373,11 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
     if lx.abs() > hx * 0.9 || lz.abs() > hz * 0.9 {
         return false;
     }
-    if p.y < car.cab_floor_y - 0.2 || p.y > car.cab_floor_y + iy + 0.35 {
+    // Upper slack must stay **below** the next landing feet Y in this XZ column, or players on
+    // story N+1 false-count as "in cab" for a car docked at N and exterior-door reducers no-op.
+    if p.y < car.cab_floor_y - 0.2
+        || p.y > car.cab_floor_y + iy + RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M
+    {
         return false;
     }
     true
@@ -1181,7 +1185,7 @@ mod exterior_interact_tests {
 
 #[cfg(test)]
 mod rider_snap_grip_tests {
-    use super::{player_rider_snap_grip, support_y, ElevatorCar, PH_IDLE};
+    use super::{player_inside_cab, player_rider_snap_grip, support_y, ElevatorCar, PH_IDLE};
 
     fn dummy_car_at_level_1() -> ElevatorCar {
         let fy = support_y(1);
@@ -1219,6 +1223,27 @@ mod rider_snap_grip_tests {
         assert!(
             !player_rider_snap_grip(&p, &car),
             "feet on level-2 landing must not match rider snap for level-1 cab (same shaft XZ)"
+        );
+    }
+
+    #[test]
+    fn inside_cab_predicate_does_not_span_next_storey_for_exterior_door_reducers() {
+        let car = dummy_car_at_level_1();
+        let p = crate::pose::PlayerPose {
+            identity: spacetimedb::Identity::from_byte_array([2; 32]),
+            x: car.plate_x,
+            y: support_y(2),
+            z: car.plate_z,
+            yaw: 0.0,
+            seq: 0,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+        };
+        assert!(
+            !player_inside_cab(&p, &car),
+            "player_inside_cab must align with rider snap: upper landing same XZ must not count as in cab below"
         );
     }
 

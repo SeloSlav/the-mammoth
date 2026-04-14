@@ -6,6 +6,7 @@ import {
   fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorPlateLocalClampBounds,
   fpElevatorPlateLocalInCabPhysicsVolume,
+  fpElevPlayerInsideCabAuthoritativePlateLocal,
 } from "./fpElevatorVolumes.js";
 
 describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
@@ -51,6 +52,18 @@ describe("fpElevatorPlateLocalInCabPhysicsVolume", () => {
     expect(
       fpElevatorPlateLocalInCabPhysicsVolume(0, 0, py, cabFeetY, "e", 1, inner),
     ).toBe(false);
+  });
+});
+
+describe("fpElevPlayerInsideCabAuthoritativePlateLocal", () => {
+  it("does not treat feet on the next storey as inside a docked cab (same shaft XZ)", () => {
+    const innerH = Math.max(1.8, DEFAULT_BUILDING_FLOOR_SPACING_M - 2 * 0.11 - 0.14);
+    const inner = { halfX: 1.05, halfZ: 1.86, innerH };
+    const cabFeetY = 0.22;
+    const py = cabFeetY + DEFAULT_BUILDING_FLOOR_SPACING_M * 0.99;
+    expect(fpElevPlayerInsideCabAuthoritativePlateLocal(0, 0, py, cabFeetY, inner)).toBe(
+      false,
+    );
   });
 });
 
