@@ -44,6 +44,15 @@ export const ElevatorCar = __t.object("ElevatorCar", {
 });
 export type ElevatorCar = __Infer<typeof ElevatorCar>;
 
+export const ElevatorLandingDoor = __t.object("ElevatorLandingDoor", {
+  rowKey: __t.string(),
+  shaftKey: __t.string(),
+  level: __t.u32(),
+  desiredOpen: __t.u8(),
+  swingOpen01: __t.f32(),
+});
+export type ElevatorLandingDoor = __Infer<typeof ElevatorLandingDoor>;
+
 export const HotbarLocationData = __t.object("HotbarLocationData", {
   ownerId: __t.identity(),
   slotIndex: __t.u8(),

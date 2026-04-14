@@ -146,6 +146,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
               "SELECT * FROM inventory_item",
               "SELECT * FROM player_vitals",
               "SELECT * FROM elevator_car",
+              "SELECT * FROM elevator_landing_door",
             ]);
           cc.db.user.onInsert((_ctx, row) => {
             if (cc.identity?.isEqual(row.identity)) bump();

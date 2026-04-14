@@ -39,6 +39,7 @@ import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DropItemReducer from "./drop_item_reducer";
 import ElevatorHailReducer from "./elevator_hail_reducer";
+import ElevatorLandingExteriorDoorToggleReducer from "./elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
@@ -57,6 +58,7 @@ import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 import DroppedItemRow from "./dropped_item_table";
 import DroppedItemCleanupRow from "./dropped_item_cleanup_table";
 import ElevatorCarRow from "./elevator_car_table";
+import ElevatorLandingDoorRow from "./elevator_landing_door_table";
 import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
 import PlayerActiveHotbarRow from "./player_active_hotbar_table";
@@ -107,6 +109,17 @@ const tablesSchema = __schema({
       { name: 'elevator_car_shaft_key_key', constraint: 'unique', columns: ['shaftKey'] },
     ],
   }, ElevatorCarRow),
+  elevator_landing_door: __table({
+    name: 'elevator_landing_door',
+    indexes: [
+      { name: 'row_key', algorithm: 'btree', columns: [
+        'rowKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'elevator_landing_door_row_key_key', constraint: 'unique', columns: ['rowKey'] },
+    ],
+  }, ElevatorLandingDoorRow),
   inventory_item: __table({
     name: 'inventory_item',
     indexes: [
@@ -248,6 +261,7 @@ const reducersSchema = __reducers(
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("drop_item", DropItemReducer),
   __reducerSchema("elevator_hail", ElevatorHailReducer),
+  __reducerSchema("elevator_landing_exterior_door_toggle", ElevatorLandingExteriorDoorToggleReducer),
   __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),

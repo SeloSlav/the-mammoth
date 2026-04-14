@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
-import { elevatorHoistwayInnerHalfExtents } from "@the-mammoth/world";
+import {
+  elevatorHoistwayInnerHalfExtents,
+  elevatorSupportFeetWorldY,
+} from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
   CAR_CEIL_BELOW_SHAFT_TOP,
@@ -20,6 +23,10 @@ import {
 import { applyAtlasUvToPlaneGeometry, buildElevFloorAtlas } from "./fpElevFloorButtonAtlas.js";
 import { doorSlideAxis, type ElevatorDoorFace } from "./fpElevatorLabels.js";
 import type { FpElevatorInnerExtents } from "./fpElevatorVolumes.js";
+import {
+  createExteriorLandingDoorPivot,
+  EXTERIOR_DOOR_SWING_MAX_RAD,
+} from "./fpElevatorLandingDoorVisual.js";
 
 type DoorFace = ElevatorDoorFace;
 
@@ -60,11 +67,24 @@ export class FpElevatorShaftVisual {
   private readonly matHighlight: THREE.MeshStandardMaterial;
   private readonly matPickFlash: THREE.MeshStandardMaterial;
   private lastMatSig = "";
+  private readonly landingRoot: THREE.Group;
+  private readonly landingDoorSwings: {
+    level: number;
+    swing: THREE.Group;
+    swingSign: number;
+  }[] = [];
+  private readonly extRedMat: THREE.MeshStandardMaterial;
+  private readonly extGlassMat: THREE.MeshStandardMaterial;
 
   constructor(
     layout: ElevatorShaftLayout,
     buildingWorldOrigin: readonly [number, number, number],
-    pick: { shaftKey: string; maxLevel: number },
+    pick: {
+      shaftKey: string;
+      maxLevel: number;
+      floorSpacingM: number;
+      buildingWorldOriginY: number;
+    },
   ) {
     this.layout = layout;
     this.ox = buildingWorldOrigin[0];
@@ -79,6 +99,23 @@ export class FpElevatorShaftVisual {
 
     this.root = new THREE.Group();
     this.root.name = `fp_elevator:${layout.planKey}`;
+    this.extRedMat = new THREE.MeshStandardMaterial({
+      color: 0xc42b2b,
+      roughness: 0.52,
+      metalness: 0.12,
+    });
+    this.extGlassMat = new THREE.MeshStandardMaterial({
+      color: 0xb5d4ea,
+      metalness: 0.22,
+      roughness: 0.14,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+    });
+    this.landingRoot = new THREE.Group();
+    this.landingRoot.name = "elev_landing_exterior_doors";
+    this.root.add(this.landingRoot);
+
     this.carRoot = new THREE.Group();
     this.carRoot.name = "elevator_car";
 
@@ -221,6 +258,28 @@ export class FpElevatorShaftVisual {
     this.buildCarFloorPickPlanes(face, hx, hz, wallT, floorT, pick.shaftKey, pick.maxLevel);
     this.carRoot.add(this.floorPickRoot);
 
+    for (let level = 1; level <= pick.maxLevel; level++) {
+      const feetY = elevatorSupportFeetWorldY({
+        buildingWorldOriginY: pick.buildingWorldOriginY,
+        levelIndex: level,
+        floorSpacingM: pick.floorSpacingM,
+        shaftPlateLocalY: layout.plateLocalY,
+        shaftSy: layout.sy,
+      });
+      const wrap = new THREE.Group();
+      wrap.position.set(0, feetY, 0);
+      const { structure, swing, swingSign } = createExteriorLandingDoorPivot(
+        face,
+        hx,
+        hz,
+        this.extRedMat,
+        this.extGlassMat,
+      );
+      wrap.add(structure);
+      this.landingRoot.add(wrap);
+      this.landingDoorSwings.push({ level, swing, swingSign });
+    }
+
     this.root.add(this.carRoot);
     this.root.position.set(this.ox + layout.plateX, 0, this.oz + layout.plateZ);
   }
@@ -301,11 +360,23 @@ export class FpElevatorShaftVisual {
     this.doorR.children[0]!.position.set(t.x * slide, 0, t.z * slide);
   }
 
+  updateLandingExteriorDoorSwings(swingByLevel: ReadonlyMap<number, number>): void {
+    for (const e of this.landingDoorSwings) {
+      const u = swingByLevel.get(e.level) ?? 0;
+      e.swing.rotation.y = e.swingSign * u * EXTERIOR_DOOR_SWING_MAX_RAD;
+    }
+  }
+
   dispose(): void {
     for (const m of this.floorPickMeshes) {
       m.geometry.dispose();
     }
     this.floorPickMeshes.length = 0;
+    this.landingRoot.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
+    this.extRedMat.dispose();
+    this.extGlassMat.dispose();
     this.matNormal.map = null;
     this.matHighlight.map = null;
     this.matPickFlash.map = null;
@@ -314,6 +385,7 @@ export class FpElevatorShaftVisual {
     this.matPickFlash.dispose();
     this.atlas.dispose();
     this.carRoot.clear();
+    this.landingRoot.clear();
     this.root.clear();
   }
 }

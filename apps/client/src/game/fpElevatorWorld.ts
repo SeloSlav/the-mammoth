@@ -3,6 +3,7 @@ import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import { fpLocomotionConstants, type FpLocomotionState } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  elevatorCabGameplayHalfExtentsM,
   elevatorSupportFeetWorldY,
   estimateStoreyFromFeetY,
   FP_LOCOMOTION_SKIN,
@@ -12,7 +13,7 @@ import {
   type ElevatorShaftLayout,
 } from "@the-mammoth/world";
 import type { DbConnection } from "../module_bindings";
-import type { ElevatorCar } from "../module_bindings/types";
+import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
 import {
   CALL_RADIUS_XZ,
   CALL_Y_HALF_WINDOW,
@@ -41,6 +42,10 @@ import {
 } from "./fpElevatorVolumes.js";
 import { setFpElevatorHudView } from "./fpElevatorHud.js";
 import { fpElevSuppressLandingHailBecauseCabAtLandingSupport } from "./fpElevatorLandingHailSuppress.js";
+import {
+  fpElevLandingExteriorDoorInteractPlateLocal,
+  landingExteriorDoorRowKey,
+} from "./fpElevatorLandingExteriorDoor.js";
 
 export { floorButtonLabel } from "./fpElevatorLabels.js";
 export {
@@ -159,6 +164,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const v = new FpElevatorShaftVisual(layout, [ox, oy, oz], {
       shaftKey: layout.planKey,
       maxLevel,
+      floorSpacingM,
+      buildingWorldOriginY: oy,
     });
     visuals.set(layout.planKey, v);
     opts.buildingRoot.add(v.root);
@@ -171,6 +178,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const pickFlash = { shaftKey: "", level: 0, untilMs: 0 };
 
   const latest = new Map<string, ElevatorCar>();
+  const landingByRowKey = new Map<string, ElevatorLandingDoor>();
   /** Monotonic clock sample when `elevator_car` row last arrived (moving phase only). */
   const moveReplicaAtMs = new Map<string, number>();
   const doorInterp = new Map<string, FpElevatorCabInterpScalar>();
@@ -215,11 +223,31 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     ingest(row as ElevatorCar);
   }
 
+  const ingestLanding = (row: ElevatorLandingDoor) => {
+    landingByRowKey.set(row.rowKey, row);
+  };
+  for (const row of opts.conn.db.elevator_landing_door) {
+    ingestLanding(row as ElevatorLandingDoor);
+  }
+
   const onElevRow = (_ctx: unknown, row: ElevatorCar) => {
     ingest(row);
   };
   opts.conn.db.elevator_car.onInsert(onElevRow);
   opts.conn.db.elevator_car.onUpdate(onElevRow);
+
+  const onLandingInsert = (_ctx: unknown, row: ElevatorLandingDoor) => {
+    ingestLanding(row);
+  };
+  const onLandingUpdate = (_ctx: unknown, _old: ElevatorLandingDoor, row: ElevatorLandingDoor) => {
+    ingestLanding(row);
+  };
+  const onLandingDelete = (_ctx: unknown, row: ElevatorLandingDoor) => {
+    landingByRowKey.delete(row.rowKey);
+  };
+  opts.conn.db.elevator_landing_door.onInsert(onLandingInsert);
+  opts.conn.db.elevator_landing_door.onUpdate(onLandingUpdate);
+  opts.conn.db.elevator_landing_door.onDelete(onLandingDelete);
 
   const getCabY = (key: string, evalWallClockMs?: number): number => {
     const row = latest.get(key);
@@ -404,6 +432,39 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return null;
   };
 
+  const resolveExteriorDoorInteractAtPose = (
+    px: number,
+    py: number,
+    pz: number,
+  ): { shaftKey: string; level: number } | null => {
+    for (const layout of layouts) {
+      const rowCar = latest.get(layout.planKey);
+      if (!rowCar) continue;
+      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
+      const plateX = ox + rowCar.plateX;
+      const plateZ = oz + rowCar.plateZ;
+      const lx = px - plateX;
+      const lz = pz - plateZ;
+      for (let level = 1; level <= maxLevel; level++) {
+        const fy = feetYForLayout(layout, level);
+        if (
+          fpElevLandingExteriorDoorInteractPlateLocal(
+            layout.doorFace,
+            hx,
+            hz,
+            lx,
+            lz,
+            py,
+            fy,
+          )
+        ) {
+          return { shaftKey: layout.planKey, level };
+        }
+      }
+    }
+    return null;
+  };
+
   const tryRaycastFloorPick = (
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
@@ -524,6 +585,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (Number.isFinite(cabY)) {
         vis.updateFromServer(cabY, d);
       }
+      const swingByLevel = new Map<number, number>();
+      for (const row of landingByRowKey.values()) {
+        if (row.shaftKey === key) swingByLevel.set(row.level, row.swingOpen01);
+      }
+      vis.updateLandingExteriorDoorSwings(swingByLevel);
       const flashActive = pickFlash.untilMs > nowMs && pickFlash.shaftKey === key;
       vis.updateFloorPickMaterials(
         Number(row?.currentLevel ?? 1),
@@ -549,21 +615,50 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       vis.setFloorPickRootVisible(fpElevFloorPickMeshesShouldShow(insideThis, doorwayView, d));
     }
 
-    const hail = resolveLandingCallAtPose(px, py, pz);
-    if (hail) {
-      const label = hail.level <= 1 ? "Ground" : `Story ${hail.level}`;
+    const exterior = resolveExteriorDoorInteractAtPose(px, py, pz);
+    if (exterior) {
+      const rk = landingExteriorDoorRowKey(exterior.shaftKey, exterior.level);
+      const ld = landingByRowKey.get(rk);
+      const willClose = (ld?.desiredOpen ?? 0) !== 0;
       setFpElevatorHudView({
-        kind: "call",
-        shaftPlanKey: hail.shaftKey,
-        callLevel: hail.level,
-        floorLabel: label,
+        kind: "exterior_door",
+        shaftPlanKey: exterior.shaftKey,
+        landingLevel: exterior.level,
+        willClose,
       });
     } else {
-      setFpElevatorHudView({ kind: "hidden" });
+      const hail = resolveLandingCallAtPose(px, py, pz);
+      if (hail) {
+        const label = hail.level <= 1 ? "Ground" : `Story ${hail.level}`;
+        setFpElevatorHudView({
+          kind: "call",
+          shaftPlanKey: hail.shaftKey,
+          callLevel: hail.level,
+          floorLabel: label,
+        });
+      } else {
+        setFpElevatorHudView({ kind: "hidden" });
+      }
     }
   };
 
   const consumeInteractKey = (playerPos: THREE.Vector3): boolean => {
+    const exterior = resolveExteriorDoorInteractAtPose(
+      playerPos.x,
+      playerPos.y,
+      playerPos.z,
+    );
+    if (exterior) {
+      try {
+        void opts.conn.reducers.elevatorLandingExteriorDoorToggle({
+          shaftKey: exterior.shaftKey,
+          level: exterior.level >>> 0,
+        });
+      } catch (e) {
+        console.warn("[fpElevatorWorld] elevatorLandingExteriorDoorToggle", e);
+      }
+      return true;
+    }
     const hail = resolveLandingCallAtPose(playerPos.x, playerPos.y, playerPos.z);
     if (!hail) return false;
     try {
@@ -578,6 +673,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
 
   const shouldSuppressEpickup = (playerPos: THREE.Vector3): boolean =>
+    resolveExteriorDoorInteractAtPose(playerPos.x, playerPos.y, playerPos.z) !== null ||
     resolveLandingCallAtPose(playerPos.x, playerPos.y, playerPos.z) !== null;
 
   const syncCabEvalClock = (nowMs: number) => {
@@ -664,11 +760,15 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     dispose: () => {
       opts.conn.db.elevator_car.removeOnInsert(onElevRow);
       opts.conn.db.elevator_car.removeOnUpdate(onElevRow);
+      opts.conn.db.elevator_landing_door.removeOnInsert(onLandingInsert);
+      opts.conn.db.elevator_landing_door.removeOnUpdate(onLandingUpdate);
+      opts.conn.db.elevator_landing_door.removeOnDelete(onLandingDelete);
       for (const vis of visuals.values()) {
         opts.buildingRoot.remove(vis.root);
         vis.dispose();
       }
       latest.clear();
+      landingByRowKey.clear();
       moveReplicaAtMs.clear();
       doorInterp.clear();
       setFpElevatorHudView({ kind: "hidden" });
