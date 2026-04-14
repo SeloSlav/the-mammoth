@@ -428,7 +428,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       feetYForLayout,
     };
     const hits = collectHits(auth, 0.7, 2.4, -0.8, 0.8).filter(
-      (b) => b.min[1] < cabFloorY + 1.4,
+      (b) => b.max[1] - b.min[1] > 1.5,
     );
     const riderHits: CollisionAabb[] = [];
     visitFpElevatorWorldCollisionAabbsInXZ(
@@ -440,7 +440,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       (aabb) => riderHits.push(aabb),
       { bodyX: 0, bodyFeetY: cabFloorY + 0.45, bodyZ: 0 },
     );
-    const riderLowBand = riderHits.filter((b) => b.min[1] < cabFloorY + 1.4);
+    const riderLowBand = riderHits.filter((b) => b.max[1] - b.min[1] > 1.5);
     expect(hits.length).toBeGreaterThan(0);
     expect(riderLowBand.length).toBe(0);
   });
@@ -494,7 +494,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       (aabb) => hits.push(aabb),
       { bodyX: 0, bodyFeetY: cabFloorY + 3.0, bodyZ: 0 },
     );
-    const lowBand = hits.filter((b) => b.min[1] < cabFloorY + 1.4);
+    const lowBand = hits.filter((b) => b.max[1] - b.min[1] > 1.5);
     expect(lowBand.length).toBeGreaterThan(0);
   });
 });

@@ -76,7 +76,7 @@ fn suppress_moving_cab_generated_collision_for_pose(
     px: f32,
     py: f32,
     pz: f32,
-    car: &elevator_car::Row,
+    car: &super::ElevatorCar,
 ) -> bool {
     if car.phase != super::PH_MOVING {
         return false;
