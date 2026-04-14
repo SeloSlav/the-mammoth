@@ -713,6 +713,31 @@ fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u
         && (p.y - cy).abs() <= EXT_INTERACT_WORLD_Y_HALF_M
 }
 
+/// Like [`near_exterior_door_toggle_pose`], but suppresses hallway volumes while **in cab** and the
+/// car is **moving** (matches client prompt / E so UI never offers a no-op).
+fn near_exterior_door_toggle_pose_for_player(
+    ctx: &ReducerContext,
+    p: &PlayerPose,
+    spec: &'static ElevShaftSpec,
+    level: u32,
+) -> bool {
+    if !near_exterior_door_toggle_pose(p, spec, level) {
+        return false;
+    }
+    let Some(car) = ctx
+        .db
+        .elevator_car()
+        .shaft_key()
+        .find(&spec.shaft_key.to_string())
+    else {
+        return true;
+    };
+    if car.phase != PH_MOVING {
+        return true;
+    }
+    !player_inside_cab(p, &car)
+}
+
 fn exterior_door_toggle_pose_score(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> f32 {
     let (hx, hz) = elevator_layout::inner_half_xz();
     let fy = support_y(level);
@@ -787,7 +812,7 @@ fn exterior_door_toggle_eligible_score(
     if in_cab_docked_at_landing_for_spec(ctx, p, spec, level) {
         return Some(-1_000_000.0);
     }
-    if near_exterior_door_toggle_pose(p, spec, level) {
+    if near_exterior_door_toggle_pose_for_player(ctx, p, spec, level) {
         return Some(exterior_door_toggle_pose_score(p, spec, level));
     }
     None
@@ -804,7 +829,7 @@ fn resolve_exterior_door_toggle_target(
         if in_cab_docked_at_landing_for_spec(ctx, p, spec, requested_level) {
             return Some((spec, requested_level));
         }
-        if near_exterior_door_toggle_pose(p, spec, requested_level) {
+        if near_exterior_door_toggle_pose_for_player(ctx, p, spec, requested_level) {
             return Some((spec, requested_level));
         }
     }

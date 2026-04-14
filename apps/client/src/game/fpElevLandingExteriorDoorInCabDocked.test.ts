@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fpElevLandingExteriorDoorInCabDockedInteract,
+  fpElevLandingExteriorDoorNearWhileShaftAuthorized,
   LANDING_PASSAGE_DOCK_Y_TOL_M,
 } from "./fpElevatorLandingExteriorDoor.js";
 
@@ -61,6 +62,38 @@ describe("fpElevLandingExteriorDoorInCabDockedInteract", () => {
         inner,
         phaseMoving: false,
         dockYTolM: LANDING_PASSAGE_DOCK_Y_TOL_M,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("fpElevLandingExteriorDoorNearWhileShaftAuthorized", () => {
+  it("allows raw near when not moving", () => {
+    expect(
+      fpElevLandingExteriorDoorNearWhileShaftAuthorized({
+        rawNear: true,
+        phaseMoving: false,
+        inAuthoritativeCab: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("allows raw near while moving only from the hallway (not in authoritative cab)", () => {
+    expect(
+      fpElevLandingExteriorDoorNearWhileShaftAuthorized({
+        rawNear: true,
+        phaseMoving: true,
+        inAuthoritativeCab: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("blocks raw near while moving when inside authoritative cab", () => {
+    expect(
+      fpElevLandingExteriorDoorNearWhileShaftAuthorized({
+        rawNear: true,
+        phaseMoving: true,
+        inAuthoritativeCab: true,
       }),
     ).toBe(false);
   });

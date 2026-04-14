@@ -40,12 +40,14 @@ import {
   fpElevFloorPickRaycastShouldProceed,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevPlayerInsideCabAuthoritativePlateLocal,
   fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 import {
   fpElevLandingExteriorDoorAimTargetWorld,
   fpElevLandingExteriorDoorInCabDockedInteract,
   fpElevLandingExteriorDoorInteractPlateLocal,
+  fpElevLandingExteriorDoorNearWhileShaftAuthorized,
   advanceExteriorDoorVisSwingTowardAuth,
   EXTERIOR_DOOR_ANIM_SPEED,
   fpElevLandingExteriorDoorNearWorldPose,
@@ -384,7 +386,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         const fy = feetYForLayout(layout, level);
         const lx = px - plateX;
         const lz = pz - plateZ;
-        const nearDoor =
+        const rawNearDoor =
           fpElevLandingExteriorDoorNearWorldPose(
             layout.doorFace,
             plateX,
@@ -405,6 +407,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
             py,
             fy,
           );
+        const inAuthoritativeCab =
+          Number.isFinite(cabY) &&
+          fpElevPlayerInsideCabAuthoritativePlateLocal(lx, lz, py, cabY, vis.inner);
+        const nearDoor = fpElevLandingExteriorDoorNearWhileShaftAuthorized({
+          rawNear: rawNearDoor,
+          phaseMoving,
+          inAuthoritativeCab,
+        });
         const inCabDocked =
           Number.isFinite(cabY) &&
           fpElevLandingExteriorDoorInCabDockedInteract({

@@ -230,6 +230,22 @@ export function fpElevLandingExteriorDoorInCabDockedInteract(opts: {
 }
 
 /**
+ * Corridor / doorway “near” volumes stay on while the cab moves (hallway use). If the player is
+ * **inside** the authoritative cab volume and the shaft is **moving**, those overlaps are ignored
+ * so HUD / E never imply a working toggle until the car is idle (sync server
+ * `near_exterior_door_toggle_pose_for_player`).
+ */
+export function fpElevLandingExteriorDoorNearWhileShaftAuthorized(opts: {
+  rawNear: boolean;
+  phaseMoving: boolean;
+  inAuthoritativeCab: boolean;
+}): boolean {
+  if (!opts.rawNear) return false;
+  if (!opts.phaseMoving) return true;
+  return !opts.inAuthoritativeCab;
+}
+
+/**
  * World-space point near the center of the exterior door opening, used as an aim target for
  * fallback interaction selection when the raycast misses the dedicated pick mesh.
  */
