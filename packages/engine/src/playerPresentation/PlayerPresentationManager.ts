@@ -123,6 +123,11 @@ export class PlayerPresentationManager {
     return this.local.getAuthoringPickList();
   }
 
+  /** Local gameplay: shared hand socket used by weapons and hotbar consumables. */
+  getLocalFpGripAnchorObject(): THREE.Object3D | undefined {
+    return this.local.getFpGripAnchorObject();
+  }
+
   /** After moving the weapon root in authoring, sync baseline so gameplay matches. */
   syncLocalFpWeaponMountBaselineFromRoot(): void {
     this.local.syncFpWeaponMountBaselineFromRoot();

@@ -8,6 +8,7 @@ import {
   assertWebGpuRendererBackend,
   createFPRig,
   createFpLocomotionState,
+  equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
   queueFpJump,
   stepFpLocomotion,
@@ -35,7 +36,7 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
-import { resolveHeldItemFromHotbar } from "./fpHotbarResolve";
+import { getHotbarSlotInventoryItem } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import {
   onFpSessionPostRenderFrame,
@@ -80,6 +81,7 @@ import {
 } from "./fpKinematicSupport.js";
 import { resolveAuthoritativeInteractionPose } from "./fpInteractionAuthority";
 import { pushFpPerfFrame, resetFpPerfStore } from "./fpSessionPerfStore";
+import { FpHotbarConsumableVisual } from "./fpHotbarConsumableVisual";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -147,9 +149,15 @@ export async function mountFpSession(
 
   scene.add(cellRoot);
 
+  const selectedHotbarRow = () => {
+    const slot = getFpHotbarSelectedSlot();
+    return conn.identity && slot !== null
+      ? getHotbarSlotInventoryItem(conn, conn.identity, slot)
+      : undefined;
+  };
   const initialHeld = conn.identity
     ? effectiveDevGameplayEquippedPrimary(
-        resolveHeldItemFromHotbar(conn, conn.identity, getFpHotbarSelectedSlot()),
+        equippedHeldItemIdFromDefId(selectedHotbarRow()?.defId ?? "unarmed"),
       )
     : ("unarmed" as const);
 
@@ -182,6 +190,7 @@ export async function mountFpSession(
   const disposeWorldContentHotReload = mountWorldContentDevReload(() => {
     window.location.reload();
   });
+  const hotbarConsumableVisual = new FpHotbarConsumableVisual();
 
   /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
   const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
@@ -1140,9 +1149,12 @@ export async function mountFpSession(
     }
 
     const localId = conn.identity?.toHexString() ?? "local-unknown";
-    const hotbarHeld = conn.identity
-      ? resolveHeldItemFromHotbar(conn, conn.identity, getFpHotbarSelectedSlot())
-      : ("unarmed" as const);
+    const hotbarRow = selectedHotbarRow();
+    const hotbarHeld = hotbarRow ? equippedHeldItemIdFromDefId(hotbarRow.defId) : ("unarmed" as const);
+    const hotbarConsumableDefId =
+      hotbarRow && getMammothItemDef(hotbarRow.defId)?.category === "consumable"
+        ? hotbarRow.defId
+        : null;
 
     const localState = buildLocalPlayerGameplayState({
       playerIdHex: localId,
@@ -1159,6 +1171,10 @@ export async function mountFpSession(
     });
     // --- Presentation section timing ---
     presentation.update(dt, localState, _remoteSnapshots, nowMs);
+    hotbarConsumableVisual.syncSelected(
+      hotbarConsumableDefId,
+      presentation.getLocalFpGripAnchorObject(),
+    );
     const _t_presentEnd = performance.now();
 
     if (conn.identity) {
@@ -1247,6 +1263,7 @@ export async function mountFpSession(
     worldAudioReady = false;
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
+    hotbarConsumableVisual.dispose();
     presentation.dispose();
     renderer.dispose();
     scene.clear();
