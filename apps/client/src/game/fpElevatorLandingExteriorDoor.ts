@@ -173,6 +173,79 @@ export function fpElevExteriorDoorBlocksPassage(swingOpen01: number): boolean {
 const CLOSED_CAB_OUTSIDE_SLAB_IN = 0.28;
 const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;
 const CLOSED_CAB_OUTSIDE_WIDTH_PAD = 0.32;
+const LANDING_FRONT_WALL_SLAB_IN = 0.2;
+const LANDING_FRONT_WALL_SLAB_OUT = 0.34;
+const LANDING_FRONT_WALL_PUSH_OUT = 0.08;
+const LANDING_FRONT_PASSAGE_HALF_W_M = EXTERIOR_DOOR_W_M * 0.5 + 0.04;
+const LANDING_PASSAGE_DOCK_Y_TOL_M = 0.5;
+
+function innerCabHeightM(layout: ElevatorShaftLayout): number {
+  return Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+}
+
+function landingFrontFaceLocal(
+  face: ElevatorDoorFace,
+  outerHx: number,
+  outerHz: number,
+  lx: number,
+  lz: number,
+): boolean {
+  switch (face) {
+    case "e":
+      return (
+        lx >= outerHx - LANDING_FRONT_WALL_SLAB_IN &&
+        lx <= outerHx + LANDING_FRONT_WALL_SLAB_OUT &&
+        Math.abs(lz) <= outerHz
+      );
+    case "w":
+      return (
+        lx <= -outerHx + LANDING_FRONT_WALL_SLAB_IN &&
+        lx >= -outerHx - LANDING_FRONT_WALL_SLAB_OUT &&
+        Math.abs(lz) <= outerHz
+      );
+    case "n":
+      return (
+        lz >= outerHz - LANDING_FRONT_WALL_SLAB_IN &&
+        lz <= outerHz + LANDING_FRONT_WALL_SLAB_OUT &&
+        Math.abs(lx) <= outerHx
+      );
+    case "s":
+      return (
+        lz <= -outerHz + LANDING_FRONT_WALL_SLAB_IN &&
+        lz >= -outerHz - LANDING_FRONT_WALL_SLAB_OUT &&
+        Math.abs(lx) <= outerHx
+      );
+  }
+}
+
+function landingFrontDoorLaneLocal(
+  face: ElevatorDoorFace,
+  outerHx: number,
+  outerHz: number,
+  lx: number,
+  lz: number,
+): boolean {
+  if (!landingFrontFaceLocal(face, outerHx, outerHz, lx, lz)) return false;
+  return face === "e" || face === "w"
+    ? Math.abs(lz) <= LANDING_FRONT_PASSAGE_HALF_W_M
+    : Math.abs(lx) <= LANDING_FRONT_PASSAGE_HALF_W_M;
+}
+
+function landingFrontPassageOpen(opts: {
+  swingOpen01: number;
+  currentLevel: number;
+  level: number;
+  cabFloorY: number;
+  landingFeetY: number;
+  cabDoorOpen01: number;
+}): boolean {
+  return (
+    !fpElevExteriorDoorBlocksPassage(opts.swingOpen01) &&
+    opts.currentLevel === opts.level &&
+    Math.abs(opts.cabFloorY - opts.landingFeetY) <= LANDING_PASSAGE_DOCK_Y_TOL_M &&
+    opts.cabDoorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN
+  );
+}
 
 function inClosedCabOutsideDoorSlab(
   face: ElevatorDoorFace,
@@ -307,6 +380,83 @@ export function fpElevApplyClosedCabDoorOutsideClamp(
         break;
       case "s":
         pos.z = plateZ - hz - CLOSED_CAB_OUTSIDE_SLAB_OUT - 0.08;
+        break;
+    }
+    if (pos.x > px && vel.x < 0) vel.x = 0;
+    if (pos.x < px && vel.x > 0) vel.x = 0;
+    if (pos.z > pz && vel.z < 0) vel.z = 0;
+    if (pos.z < pz && vel.z > 0) vel.z = 0;
+  }
+}
+
+/** Hallway-side hoistway front wall / doorway blocker. Prevents entering shaft through solid walls. */
+export function fpElevApplyLandingHoistwayFrontWallClamp(
+  pos: { x: number; y: number; z: number },
+  vel: Vector3,
+  opts: {
+    ox: number;
+    oz: number;
+    landingRows: Iterable<{
+      shaftKey: string;
+      level: number;
+      swingOpen01: number;
+    }>;
+    carsByShaft: Map<
+      string,
+      {
+        currentLevel: number;
+        doorOpen01: number;
+        cabFloorY: number;
+        plateX: number;
+        plateZ: number;
+      }
+    >;
+    layoutByKey: Map<string, ElevatorShaftLayout>;
+    feetYForLayout: (layout: ElevatorShaftLayout, level: number) => number;
+  },
+): void {
+  for (const row of opts.landingRows) {
+    const layout = opts.layoutByKey.get(row.shaftKey);
+    const car = opts.carsByShaft.get(row.shaftKey);
+    if (!layout || !car) continue;
+    const fy = opts.feetYForLayout(layout, row.level);
+    const innerH = innerCabHeightM(layout);
+    if (pos.y < fy - 0.22 || pos.y > fy + innerH + 0.38) continue;
+    const plateX = opts.ox + car.plateX;
+    const plateZ = opts.oz + car.plateZ;
+    const lx = pos.x - plateX;
+    const lz = pos.z - plateZ;
+    const outerHx = layout.sx * 0.5;
+    const outerHz = layout.sz * 0.5;
+    if (!landingFrontFaceLocal(layout.doorFace, outerHx, outerHz, lx, lz)) continue;
+    const inDoorLane = landingFrontDoorLaneLocal(layout.doorFace, outerHx, outerHz, lx, lz);
+    if (
+      inDoorLane &&
+      landingFrontPassageOpen({
+        swingOpen01: row.swingOpen01,
+        currentLevel: car.currentLevel,
+        level: row.level,
+        cabFloorY: car.cabFloorY,
+        landingFeetY: fy,
+        cabDoorOpen01: car.doorOpen01,
+      })
+    ) {
+      continue;
+    }
+    const px = pos.x;
+    const pz = pos.z;
+    switch (layout.doorFace) {
+      case "e":
+        pos.x = plateX + outerHx + LANDING_FRONT_WALL_SLAB_OUT + LANDING_FRONT_WALL_PUSH_OUT;
+        break;
+      case "w":
+        pos.x = plateX - outerHx - LANDING_FRONT_WALL_SLAB_OUT - LANDING_FRONT_WALL_PUSH_OUT;
+        break;
+      case "n":
+        pos.z = plateZ + outerHz + LANDING_FRONT_WALL_SLAB_OUT + LANDING_FRONT_WALL_PUSH_OUT;
+        break;
+      case "s":
+        pos.z = plateZ - outerHz - LANDING_FRONT_WALL_SLAB_OUT - LANDING_FRONT_WALL_PUSH_OUT;
         break;
     }
     if (pos.x > px && vel.x < 0) vel.x = 0;

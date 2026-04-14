@@ -96,7 +96,7 @@ export class FpElevatorShaftVisual {
   private readonly matHighlight: THREE.MeshStandardMaterial;
   private readonly matPickFlash: THREE.MeshStandardMaterial;
   private lastMatSig = "";
-  private readonly landingRoot: THREE.Group;
+  readonly landingRoot: THREE.Group;
   readonly landingDoorPickRoot: THREE.Group;
   readonly landingHailPickRoot: THREE.Group;
   private readonly landingDoorSwings: {
@@ -329,6 +329,7 @@ export class FpElevatorShaftVisual {
         this.extRedMat,
         this.extGlassMat,
       );
+      this.tagLandingDoorInteractMeshes(structure, pick.shaftKey, level);
       wrap.add(structure);
       this.landingRoot.add(wrap);
       this.landingDoorSwings.push({ level, swing, swingSign });
@@ -420,6 +421,20 @@ export class FpElevatorShaftVisual {
       pick.rotation.y = Math.PI * 0.5;
     }
     return pick;
+  }
+
+  private tagLandingDoorInteractMeshes(
+    root: THREE.Object3D,
+    shaftKey: string,
+    level: number,
+  ): void {
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      (obj.userData as FpElevExteriorDoorPickUserData)[FP_ELEV_EXTERIOR_DOOR_PICK_UD] = {
+        shaftKey,
+        level,
+      };
+    });
   }
 
   private createLandingHailButtonMesh(

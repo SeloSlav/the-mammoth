@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   fpElevApplyClosedCabDoorOutsideClamp,
   fpElevApplyClosedExteriorDoorCollisionClamp,
+  fpElevApplyLandingHoistwayFrontWallClamp,
   fpElevLandingExteriorDoorCollisionPlateLocal,
   EXTERIOR_INTERACT_L0,
   EXTERIOR_INTERACT_L1,
@@ -110,5 +111,45 @@ describe("closed elevator frontage clamps", () => {
     });
     expect(pos.x).toBeGreaterThan(1.18);
     expect(vel.x).toBe(0);
+  });
+
+  it("blocks the solid front wall segment outside the door lane", () => {
+    const pos = { x: 1.24, y: 11, z: 1.6 };
+    const vel = new Vector3(-1, 0, 0);
+    fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      landingRows: [{ shaftKey: "shaft", level: 1, swingOpen01: 0 }],
+      carsByShaft: new Map([
+        [
+          "shaft",
+          { currentLevel: 1, doorOpen01: 0, cabFloorY: 10, plateX: 0, plateZ: 0 },
+        ],
+      ]),
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+      feetYForLayout: () => 10,
+    });
+    expect(pos.x).toBeGreaterThan(1.24);
+    expect(vel.x).toBe(0);
+  });
+
+  it("allows the doorway lane only when both landing and cab doors are open", () => {
+    const pos = { x: 1.24, y: 11, z: 0 };
+    const vel = new Vector3(-1, 0, 0);
+    fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      landingRows: [{ shaftKey: "shaft", level: 1, swingOpen01: 1 }],
+      carsByShaft: new Map([
+        [
+          "shaft",
+          { currentLevel: 1, doorOpen01: 1, cabFloorY: 10, plateX: 0, plateZ: 0 },
+        ],
+      ]),
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+      feetYForLayout: () => 10,
+    });
+    expect(pos.x).toBe(1.24);
+    expect(vel.x).toBe(-1);
   });
 });

@@ -44,6 +44,7 @@ import {
 import {
   fpElevApplyClosedCabDoorOutsideClamp,
   fpElevApplyClosedExteriorDoorCollisionClamp,
+  fpElevApplyLandingHoistwayFrontWallClamp,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
 } from "./fpElevatorLandingExteriorDoor.js";
@@ -410,50 +411,17 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabY, vis.inner);
   };
 
-  const resolveExteriorDoorInteractAtPose = (
+  const resolveExteriorDoorInteractByRay = (
+    camera: THREE.PerspectiveCamera,
     px: number,
     py: number,
     pz: number,
-  ): { shaftKey: string; level: number } | null => {
-    for (const layout of layouts) {
-      const rowCar = latest.get(layout.planKey);
-      if (!rowCar) continue;
-      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
-      const plateX = ox + rowCar.plateX;
-      const plateZ = oz + rowCar.plateZ;
-      const insideThis = isInsideCarHud(px, py, pz, layout.planKey);
-      if (insideThis && rowCar.phase === ELEVATOR_PHASE_MOVING) continue;
-      const levels = insideThis ? [Number(rowCar.currentLevel ?? 1)] : Array.from({ length: maxLevel }, (_v, i) => i + 1);
-      for (const level of levels) {
-        const fy = feetYForLayout(layout, level);
-        if (
-          fpElevLandingExteriorDoorNearWorldPose(
-            layout.doorFace,
-            plateX,
-            plateZ,
-            hx,
-            hz,
-            px,
-            py,
-            pz,
-            fy,
-          )
-        ) {
-          return { shaftKey: layout.planKey, level };
-        }
-      }
-    }
-    return null;
-  };
-
-  const resolveExteriorDoorInteractByRay = (
-    camera: THREE.PerspectiveCamera,
   ): { shaftKey: string; level: number } | null => {
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = 4.8;
     const roots: THREE.Object3D[] = [];
     for (const v of visuals.values()) {
-      roots.push(v.landingDoorPickRoot);
+      roots.push(v.landingRoot);
     }
     const hits = raycaster.intersectObjects(roots, true);
     for (const h of hits) {
@@ -461,6 +429,28 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const pick =
         (mesh.userData as Partial<FpElevExteriorDoorPickUserData>)[FP_ELEV_EXTERIOR_DOOR_PICK_UD];
       if (!pick) continue;
+      const layout = layoutByKey.get(pick.shaftKey);
+      const rowCar = latest.get(pick.shaftKey);
+      if (!layout || !rowCar) continue;
+      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
+      const plateX = ox + rowCar.plateX;
+      const plateZ = oz + rowCar.plateZ;
+      const fy = feetYForLayout(layout, pick.level);
+      if (
+        !fpElevLandingExteriorDoorNearWorldPose(
+          layout.doorFace,
+          plateX,
+          plateZ,
+          hx,
+          hz,
+          px,
+          py,
+          pz,
+          fy,
+        )
+      ) {
+        continue;
+      }
       return { shaftKey: pick.shaftKey, level: pick.level };
     }
     return null;
@@ -471,8 +461,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     px: number,
     py: number,
     pz: number,
-  ): { shaftKey: string; level: number } | null =>
-    resolveExteriorDoorInteractByRay(camera) ?? resolveExteriorDoorInteractAtPose(px, py, pz);
+  ): { shaftKey: string; level: number } | null => resolveExteriorDoorInteractByRay(camera, px, py, pz);
 
   const tryRaycastLandingHail = (
     camera: THREE.PerspectiveCamera,
@@ -692,7 +681,16 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   ): boolean => resolveExteriorDoorInteract(camera, playerPos.x, playerPos.y, playerPos.z) !== null;
 
   const clampLocalClosedExteriorLandingDoors = (pos: THREE.Vector3, vel: THREE.Vector3) => {
-    const carByShaft = new Map<string, { plateX: number; plateZ: number }>();
+    const carByShaft = new Map<
+      string,
+      {
+        currentLevel: number;
+        doorOpen01: number;
+        cabFloorY: number;
+        plateX: number;
+        plateZ: number;
+      }
+    >();
     const carsForDoorClamp: {
       shaftKey: string;
       doorOpen01: number;
@@ -701,7 +699,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       plateZ: number;
     }[] = [];
     for (const [k, row] of latest) {
-      carByShaft.set(k, { plateX: row.plateX, plateZ: row.plateZ });
+      carByShaft.set(k, {
+        currentLevel: Number(row.currentLevel ?? 1),
+        doorOpen01: getDoor(k, cabEvalNowMs),
+        cabFloorY: getCabY(k, cabEvalNowMs),
+        plateX: row.plateX,
+        plateZ: row.plateZ,
+      });
       carsForDoorClamp.push({
         shaftKey: k,
         doorOpen01: getDoor(k, cabEvalNowMs),
@@ -725,8 +729,16 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       ox,
       oz,
       landingRows,
-      layoutByKey,
       carByShaft,
+      layoutByKey,
+      feetYForLayout,
+    });
+    fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
+      ox,
+      oz,
+      landingRows,
+      carsByShaft: carByShaft,
+      layoutByKey,
       feetYForLayout,
     });
     fpElevApplyClosedCabDoorOutsideClamp(pos, vel, {

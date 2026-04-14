@@ -71,6 +71,11 @@ const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.3;
 const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.28;
 const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;
 const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.32;
+const LANDING_FRONT_WALL_SLAB_IN: f32 = 0.2;
+const LANDING_FRONT_WALL_SLAB_OUT: f32 = 0.34;
+const LANDING_FRONT_WALL_PUSH_OUT: f32 = 0.08;
+const LANDING_FRONT_PASSAGE_HALF_W: f32 = EXT_DOOR_W * 0.5 + 0.04;
+const LANDING_PASSAGE_DOCK_Y_TOL_M: f32 = 0.5;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {
@@ -720,6 +725,61 @@ fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u
         && (p.y - cy).abs() <= EXT_INTERACT_WORLD_Y_HALF_M
 }
 
+#[inline]
+fn landing_front_face_local_ok(door: DoorFace, outer_hx: f32, outer_hz: f32, lx: f32, lz: f32) -> bool {
+    match door {
+        DoorFace::E => {
+            lx >= outer_hx - LANDING_FRONT_WALL_SLAB_IN
+                && lx <= outer_hx + LANDING_FRONT_WALL_SLAB_OUT
+                && lz.abs() <= outer_hz
+        }
+        DoorFace::W => {
+            lx <= -outer_hx + LANDING_FRONT_WALL_SLAB_IN
+                && lx >= -outer_hx - LANDING_FRONT_WALL_SLAB_OUT
+                && lz.abs() <= outer_hz
+        }
+        DoorFace::N => {
+            lz >= outer_hz - LANDING_FRONT_WALL_SLAB_IN
+                && lz <= outer_hz + LANDING_FRONT_WALL_SLAB_OUT
+                && lx.abs() <= outer_hx
+        }
+        DoorFace::S => {
+            lz <= -outer_hz + LANDING_FRONT_WALL_SLAB_IN
+                && lz >= -outer_hz - LANDING_FRONT_WALL_SLAB_OUT
+                && lx.abs() <= outer_hx
+        }
+    }
+}
+
+#[inline]
+fn landing_front_door_lane_local_ok(
+    door: DoorFace,
+    outer_hx: f32,
+    outer_hz: f32,
+    lx: f32,
+    lz: f32,
+) -> bool {
+    if !landing_front_face_local_ok(door, outer_hx, outer_hz, lx, lz) {
+        return false;
+    }
+    match door {
+        DoorFace::E | DoorFace::W => lz.abs() <= LANDING_FRONT_PASSAGE_HALF_W,
+        DoorFace::N | DoorFace::S => lx.abs() <= LANDING_FRONT_PASSAGE_HALF_W,
+    }
+}
+
+#[inline]
+fn landing_front_passage_open(
+    landing: &ElevatorLandingDoor,
+    car: &ElevatorCar,
+    landing_feet_y: f32,
+) -> bool {
+    landing.swing_open_01 >= EXT_DOOR_COLLISION_OPEN_THRESH
+        && car.current_level == landing.level
+        && (car.cab_floor_y - landing_feet_y).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
+        && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
+}
+
 fn in_closed_cab_outside_door_slab(door: DoorFace, hx: f32, hz: f32, lx: f32, lz: f32) -> bool {
     let door_half = face_lateral_half(door, hx, hz) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
     match door {
@@ -793,6 +853,57 @@ pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerP
                 let hi = spec.plate_z - hz - EXT_COLLISION_L0;
                 p.z = if p.z >= spec.plate_z - hz - mid { hi + 0.07 } else { lo - 0.08 };
             }
+        }
+        if p.x > px && p.vel_x < 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.x < px && p.vel_x > 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.z > pz && p.vel_z < 0.0 {
+            p.vel_z = 0.0;
+        }
+        if p.z < pz && p.vel_z > 0.0 {
+            p.vel_z = 0.0;
+        }
+    }
+}
+
+/// Hallway-side blocker for the hoistway front wall and doorway. Prevents entering the shaft
+/// through solid wall segments and only allows the doorway lane when both landing and cab doors
+/// are open at the docked level.
+pub fn clamp_player_landing_hoistway_front_walls(ctx: &ReducerContext, p: &mut PlayerPose) {
+    let outer_hx = elevator_layout::SHAFT_SX * 0.5;
+    let outer_hz = elevator_layout::SHAFT_SZ * 0.5;
+    let iy = elevator_layout::inner_height();
+    for landing in ctx.db.elevator_landing_door().iter() {
+        let Some(spec) = spec_for_key(&landing.shaft_key) else {
+            continue;
+        };
+        let Some(car) = ctx.db.elevator_car().shaft_key().find(&landing.shaft_key) else {
+            continue;
+        };
+        let fy = support_y(landing.level);
+        if p.y < fy - 0.22 || p.y > fy + iy + 0.38 {
+            continue;
+        }
+        let lx = p.x - spec.plate_x;
+        let lz = p.z - spec.plate_z;
+        if !landing_front_face_local_ok(spec.door, outer_hx, outer_hz, lx, lz) {
+            continue;
+        }
+        if landing_front_door_lane_local_ok(spec.door, outer_hx, outer_hz, lx, lz)
+            && landing_front_passage_open(&landing, &car, fy)
+        {
+            continue;
+        }
+        let px = p.x;
+        let pz = p.z;
+        match spec.door {
+            DoorFace::E => p.x = spec.plate_x + outer_hx + LANDING_FRONT_WALL_SLAB_OUT + LANDING_FRONT_WALL_PUSH_OUT,
+            DoorFace::W => p.x = spec.plate_x - outer_hx - LANDING_FRONT_WALL_SLAB_OUT - LANDING_FRONT_WALL_PUSH_OUT,
+            DoorFace::N => p.z = spec.plate_z + outer_hz + LANDING_FRONT_WALL_SLAB_OUT + LANDING_FRONT_WALL_PUSH_OUT,
+            DoorFace::S => p.z = spec.plate_z - outer_hz - LANDING_FRONT_WALL_SLAB_OUT - LANDING_FRONT_WALL_PUSH_OUT,
         }
         if p.x > px && p.vel_x < 0.0 {
             p.vel_x = 0.0;
@@ -904,8 +1015,9 @@ mod landing_hail_redundant_tests {
 mod exterior_interact_tests {
     use super::{
         exterior_collision_plate_local_ok, exterior_interact_plate_local_ok,
-        in_closed_cab_outside_door_slab, near_exterior_door_toggle_pose, support_y,
-        EXT_INTERACT_L0, EXT_INTERACT_L1,
+        in_closed_cab_outside_door_slab, landing_front_door_lane_local_ok,
+        landing_front_face_local_ok, landing_front_passage_open, near_exterior_door_toggle_pose,
+        support_y, ElevatorCar, ElevatorLandingDoor, EXT_INTERACT_L0, EXT_INTERACT_L1, PH_IDLE,
     };
     use crate::elevator_layout::{inner_half_xz, DoorFace};
     use crate::elevator_layout::ElevShaftSpec;
@@ -980,6 +1092,39 @@ mod exterior_interact_tests {
             hx + 0.12,
             hz - 0.06,
         ));
+    }
+
+    #[test]
+    fn landing_front_face_blocks_side_wall_segment() {
+        assert!(landing_front_face_local_ok(DoorFace::E, 1.19, 2.0, 1.22, 1.6));
+        assert!(!landing_front_door_lane_local_ok(DoorFace::E, 1.19, 2.0, 1.22, 1.6));
+    }
+
+    #[test]
+    fn landing_front_passage_only_opens_when_both_doors_are_open_and_docked() {
+        let fy = support_y(1);
+        let landing = ElevatorLandingDoor {
+            row_key: "shaft|1".into(),
+            shaft_key: "shaft".into(),
+            level: 1,
+            desired_open: 1,
+            swing_open_01: 1.0,
+        };
+        let car = ElevatorCar {
+            shaft_key: "shaft".into(),
+            current_level: 1,
+            door_open_01: 1.0,
+            phase: PH_IDLE,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y: fy,
+            door_face: DoorFace::E as u8,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        };
+        assert!(landing_front_passage_open(&landing, &car, fy));
     }
 }
 
