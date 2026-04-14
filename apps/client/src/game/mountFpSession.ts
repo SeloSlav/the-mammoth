@@ -103,11 +103,9 @@ const MELEE_COOLDOWN_MS = 480;
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
  * capsule proxies for other players (interpolation buffer on remotes).
  *
- * **Local player (prototype):** client sim is **display authority**; we publish poses for
- * persistence and for **other clients**. We do **not** blend toward our own replica every
- * frame (that fights prediction). We only **rubber-band** if we are meters out of sync
- * (teleport / bad connection). Production MMORPG path: intent reducers + server sim tick
- * + shared constants (see team docs / chat).
+ * **Local player:** client prediction drives immediate feel, but the server remains authoritative.
+ * We spawn from the replicated `player_pose`, simulate locally between ticks, then continuously
+ * reconcile back toward the server so interact volumes / elevators / reconnect state stay honest.
  */
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
@@ -322,11 +320,13 @@ export async function mountFpSession(
     }
   };
 
-  /** Replicated pose for rubber-banding (local display does not follow this each frame). */
-  const serverPose = { x: 0, y: 1.35, z: 0 };
+  /** Latest authoritative self pose from `player_pose`. */
+  const serverPose = { x: 0, y: 1.35, z: 0, grounded: true };
   let spawnSynced = false;
-  /** Only snap on true teleports — tiny client/server drift must not yank the view. */
-  const RUBBER_BAND_SNAP_M = 220;
+  /** Small drift gets damped; bigger divergence snaps so client never lives on the wrong floor. */
+  const SERVER_RECONCILE_SOFT_START_M = 0.16;
+  const SERVER_RECONCILE_SOFT_RATE = 14;
+  const SERVER_RECONCILE_HARD_SNAP_M = 1.35;
 
   let meleeAttackSeq = 0;
   let lastMeleeMs = 0;
@@ -338,6 +338,7 @@ export async function mountFpSession(
       serverPose.x = row.x;
       serverPose.y = row.y;
       serverPose.z = row.z;
+      serverPose.grounded = row.grounded !== 0;
       if (!spawnSynced) {
         pos.set(row.x, row.y, row.z);
         bodyYaw = row.yaw;
@@ -729,16 +730,21 @@ export async function mountFpSession(
     );
 
     fpElevators.tick(dt, frameNowMs, pos);
-    fpElevators.syncLandingHailUi(camera, frameNowMs);
+    fpElevators.syncLandingHailUi(camera, pos, frameNowMs);
 
-    const desync = Math.hypot(
-      pos.x - serverPose.x,
-      pos.y - serverPose.y,
-      pos.z - serverPose.z,
-    );
-    if (desync > RUBBER_BAND_SNAP_M) {
+    const dx = serverPose.x - pos.x;
+    const dy = serverPose.y - pos.y;
+    const dz = serverPose.z - pos.z;
+    const desync = Math.hypot(dx, dy, dz);
+    if (desync > SERVER_RECONCILE_HARD_SNAP_M) {
       pos.set(serverPose.x, serverPose.y, serverPose.z);
       loco.velocity.set(0, 0, 0);
+      loco.grounded = serverPose.grounded;
+    } else if (desync > SERVER_RECONCILE_SOFT_START_M) {
+      const a = 1 - Math.exp(-SERVER_RECONCILE_SOFT_RATE * dt);
+      pos.x += dx * a;
+      pos.y += dy * a;
+      pos.z += dz * a;
     }
 
     playerRig.position.set(pos.x, pos.y, pos.z);

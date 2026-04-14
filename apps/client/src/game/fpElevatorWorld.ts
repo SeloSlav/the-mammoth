@@ -48,7 +48,6 @@ import {
   fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 import {
-  fpElevLandingExteriorDoorAimTargetWorld,
   fpElevLandingExteriorDoorInCabDockedInteract,
   fpElevLandingExteriorDoorInteractPlateLocal,
   fpElevLandingExteriorDoorNearWhileShaftAuthorized,
@@ -56,6 +55,7 @@ import {
   EXTERIOR_DOOR_ANIM_SPEED,
   EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
+  EXTERIOR_INTERACT_WORLD_RADIUS_M,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
   LANDING_PASSAGE_DOCK_Y_TOL_M,
@@ -103,7 +103,7 @@ export type MountFpElevatorWorldResult = {
   syncCabEvalClock(nowMs: number): void;
   tick(dt: number, nowMs: number, playerPos: THREE.Vector3): void;
   /** Crosshair hover + click flash for per-landing hail meshes (no reducer). */
-  syncLandingHailUi(camera: THREE.PerspectiveCamera, nowMs: number): void;
+  syncLandingHailUi(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3, nowMs: number): void;
   readonly kinematicSupport: FpKinematicSupportProvider;
   tryRaycastFloorPick(
     camera: THREE.PerspectiveCamera,
@@ -163,6 +163,9 @@ function parseElevatorVisualDefs():
 
 const elevatorVisualAuthoring = parseElevatorVisualDefs();
 
+const EXTERIOR_INTERACT_SHAFT_CENTER_PAD_M = EXTERIOR_INTERACT_WORLD_RADIUS_M + 0.45;
+const LANDING_HAIL_PICK_SHAFT_CENTER_PAD_M = 9.0;
+
 export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpElevatorWorldResult {
   const floorSpacingM = opts.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
   const ox = opts.building.worldOrigin?.[0] ?? 0;
@@ -171,6 +174,19 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const maxLevel = maxBuildingLevelIndex(opts.building);
   const layouts = listElevatorShaftLayouts(opts.building, opts.getFloorDoc);
   const layoutByKey = new Map(layouts.map((l) => [l.planKey, l] as const));
+  const shaftSpatialByKey = new Map(
+    layouts.map((layout) => {
+      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
+      const halfSpan = Math.max(hx, hz);
+      return [
+        layout.planKey,
+        {
+          exteriorInteractMaxCenterDistSq: (halfSpan + EXTERIOR_INTERACT_SHAFT_CENTER_PAD_M) ** 2,
+          hailPickMaxCenterDistSq: (halfSpan + LANDING_HAIL_PICK_SHAFT_CENTER_PAD_M) ** 2,
+        },
+      ] as const;
+    }),
+  );
 
   const storeyOpts = {
     buildingWorldOriginY: oy,
@@ -409,6 +425,29 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabY, vis.inner);
   };
 
+  const candidateLandingLevelRangeForFeetY = (py: number): [number, number] => {
+    const storey = estimateStoreyFromFeetY(py, storeyOpts);
+    return [Math.max(1, storey - 1), Math.min(maxLevel, storey + 1)];
+  };
+
+  const collectNearbyLandingHailPickRoots = (playerPos: THREE.Vector3): THREE.Object3D[] => {
+    const roots: THREE.Object3D[] = [];
+    const [levelLo, levelHi] = candidateLandingLevelRangeForFeetY(playerPos.y);
+    for (const [key, vis] of visuals) {
+      const row = latest.get(key);
+      const spatial = shaftSpatialByKey.get(key);
+      if (!row || !spatial) continue;
+      const dx = playerPos.x - (ox + row.plateX);
+      const dz = playerPos.z - (oz + row.plateZ);
+      if (dx * dx + dz * dz > spatial.hailPickMaxCenterDistSq) continue;
+      for (let level = levelLo; level <= levelHi; level++) {
+        const pick = vis.getLandingHailPickForLevel(level);
+        if (pick) roots.push(pick);
+      }
+    }
+    return roots;
+  };
+
   const resolveExteriorDoorInteractByPose = (
     px: number,
     py: number,
@@ -421,19 +460,22 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           score: number;
         }
       | null = null;
+    const [levelLo, levelHi] = candidateLandingLevelRangeForFeetY(py);
     for (const [shaftKey, rowCar] of latest) {
       const layout = layoutByKey.get(shaftKey);
       const vis = visuals.get(shaftKey);
-      if (!layout || !vis) continue;
+      const spatial = shaftSpatialByKey.get(shaftKey);
+      if (!layout || !vis || !spatial) continue;
       const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
       const plateX = ox + rowCar.plateX;
       const plateZ = oz + rowCar.plateZ;
+      const lx = px - plateX;
+      const lz = pz - plateZ;
+      if (lx * lx + lz * lz > spatial.exteriorInteractMaxCenterDistSq) continue;
       const cabY = getCabY(shaftKey);
       const phaseMoving = rowCar.phase === ELEVATOR_PHASE_MOVING;
-      for (let level = 1; level <= maxLevel; level++) {
+      for (let level = levelLo; level <= levelHi; level++) {
         const fy = feetYForLayout(layout, level);
-        const lx = px - plateX;
-        const lz = pz - plateZ;
         const rawNearDoor =
           fpElevLandingExteriorDoorNearWorldPose(
             layout.doorFace,
@@ -480,15 +522,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         if (!nearDoor && !inCabDocked) {
           continue;
         }
-        const aim = fpElevLandingExteriorDoorAimTargetWorld(
-          layout.doorFace,
-          plateX,
-          plateZ,
-          hx,
-          hz,
-          fy,
-        );
-        const dist = Math.hypot(px - aim.x, py - aim.y, pz - aim.z);
+        const aimY = fy + 1.1;
+        let aimX = plateX;
+        let aimZ = plateZ;
+        if (layout.doorFace === "e") aimX += hx;
+        else if (layout.doorFace === "w") aimX -= hx;
+        else if (layout.doorFace === "n") aimZ += hz;
+        else aimZ -= hz;
+        const dist = Math.hypot(px - aimX, py - aimY, pz - aimZ);
         const score = inCabDocked ? 1_000_000 - dist : -dist;
         if (best == null || score > best.score) {
           best = { shaftKey, level, score };
@@ -613,15 +654,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const tryRaycastLandingHail = (
     camera: THREE.PerspectiveCamera,
-    _playerPos: THREE.Vector3,
+    playerPos: THREE.Vector3,
     nowMs: number,
   ): boolean => {
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = 8.5;
-    const roots: THREE.Object3D[] = [];
-    for (const v of visuals.values()) {
-      roots.push(v.landingHailPickRoot);
-    }
+    const roots = collectNearbyLandingHailPickRoots(playerPos);
+    if (roots.length === 0) return false;
     const hits = raycaster.intersectObjects(roots, true);
     for (const h of hits) {
       const mesh = h.object as THREE.Mesh;
@@ -645,12 +684,24 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return false;
   };
 
-  const syncLandingHailUi = (camera: THREE.PerspectiveCamera, nowMs: number) => {
+  const syncLandingHailUi = (
+    camera: THREE.PerspectiveCamera,
+    playerPos: THREE.Vector3,
+    nowMs: number,
+  ) => {
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = 8.5;
-    const roots: THREE.Object3D[] = [];
-    for (const v of visuals.values()) {
-      roots.push(v.landingHailPickRoot);
+    const roots = collectNearbyLandingHailPickRoots(playerPos);
+    if (roots.length === 0) {
+      for (const [key, vis] of visuals) {
+        vis.setLandingHailHighlight({
+          hoverLevel: 0,
+          flashLevel: hailPickFlash.shaftKey === key ? hailPickFlash.level : 0,
+          flashUntilMs: hailPickFlash.untilMs,
+          nowMs,
+        });
+      }
+      return;
     }
     const hits = raycaster.intersectObjects(roots, true);
     let best: { shaftKey: string; level: number; d: number } | null = null;

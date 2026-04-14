@@ -904,6 +904,38 @@ fn exterior_door_toggle_eligible_score(
     None
 }
 
+#[inline]
+fn exterior_door_toggle_pose_matches_target(
+    ctx: &ReducerContext,
+    p: &PlayerPose,
+    spec: &'static ElevShaftSpec,
+    level: u32,
+) -> bool {
+    in_cab_docked_at_landing_for_spec(ctx, p, spec, level)
+        || near_exterior_door_toggle_pose_for_player(ctx, p, spec, level)
+}
+
+fn effective_exterior_door_pose_for_target(
+    ctx: &ReducerContext,
+    auth_pose: &PlayerPose,
+    spec: &'static ElevShaftSpec,
+    level: u32,
+    client_feet_hint: Option<(f32, f32, f32)>,
+) -> PlayerPose {
+    if exterior_door_toggle_pose_matches_target(ctx, auth_pose, spec, level) {
+        return pose_with_feet_xyz(auth_pose, auth_pose.x, auth_pose.y, auth_pose.z);
+    }
+    if let Some((hx, hy, hz)) = client_feet_hint {
+        if pose_client_feet_hint_plausible(auth_pose, hx, hy, hz) {
+            let hinted = pose_with_feet_xyz(auth_pose, hx, hy, hz);
+            if exterior_door_toggle_pose_matches_target(ctx, &hinted, spec, level) {
+                return hinted;
+            }
+        }
+    }
+    pose_with_feet_xyz(auth_pose, auth_pose.x, auth_pose.y, auth_pose.z)
+}
+
 fn resolve_exterior_door_toggle_target(
     ctx: &ReducerContext,
     p: &PlayerPose,
@@ -913,15 +945,7 @@ fn resolve_exterior_door_toggle_target(
 ) -> Option<(&'static ElevShaftSpec, u32)> {
     let requested_level = requested_level.clamp(1, MAX_LEVEL);
     if let Some(spec) = spec_for_key(requested_shaft_key) {
-        let try_pose = |pose: &PlayerPose| {
-            if in_cab_docked_at_landing_for_spec(ctx, pose, spec, requested_level) {
-                return true;
-            }
-            if near_exterior_door_toggle_pose_for_player(ctx, pose, spec, requested_level) {
-                return true;
-            }
-            false
-        };
+        let try_pose = |pose: &PlayerPose| exterior_door_toggle_pose_matches_target(ctx, pose, spec, requested_level);
         if try_pose(p) {
             return Some((spec, requested_level));
         }
@@ -977,6 +1001,8 @@ fn set_landing_exterior_door_desired_open(
         );
         return;
     };
+    let effective_pose =
+        effective_exterior_door_pose_for_target(ctx, pose, spec, lv, client_feet_hint);
     let target_shaft_key = spec.shaft_key.to_string();
     let Some(car) = ctx.db.elevator_car().shaft_key().find(&target_shaft_key) else {
         log::info!(
@@ -985,7 +1011,7 @@ fn set_landing_exterior_door_desired_open(
         );
         return;
     };
-    if player_inside_cab(pose, &car) && car.phase == PH_MOVING {
+    if player_inside_cab(&effective_pose, &car) && car.phase == PH_MOVING {
         log::info!(
             "elevator_landing_exterior_door: reject inside_cab_while_moving shaft_key={target_shaft_key:?} level={lv} identity={}",
             ctx.sender(),
@@ -994,7 +1020,7 @@ fn set_landing_exterior_door_desired_open(
     }
     // Do not use `current_level` alone: it can desync from `cab_floor_y` while the car is still
     // physically docked at this landing. Require cab feet alignment to the resolved landing.
-    if player_inside_cab(pose, &car)
+    if player_inside_cab(&effective_pose, &car)
         && (car.cab_floor_y - support_y(lv)).abs() > LANDING_PASSAGE_DOCK_Y_TOL_M
     {
         log::info!(

@@ -104,6 +104,7 @@ export class FpElevatorShaftVisual {
   readonly landingRoot: THREE.Group;
   readonly landingDoorPickRoot: THREE.Group;
   readonly landingHailPickRoot: THREE.Group;
+  private readonly landingHailPickByLevel = new Map<number, THREE.Object3D>();
   private readonly landingDoorSwings: {
     level: number;
     swing: THREE.Group;
@@ -380,6 +381,7 @@ export class FpElevatorShaftVisual {
       const hailBtn = this.createLandingHailButtonMesh(face, hx, hz, level, pick.shaftKey);
       hailWrap.add(hailBtn);
       this.landingHailPickRoot.add(hailWrap);
+      this.landingHailPickByLevel.set(level, hailWrap);
     }
 
     this.root.add(this.carRoot);
@@ -532,6 +534,10 @@ export class FpElevatorShaftVisual {
     this.floorPickRoot.visible = visible;
   }
 
+  getLandingHailPickForLevel(level: number): THREE.Object3D | undefined {
+    return this.landingHailPickByLevel.get(level);
+  }
+
   /**
    * Hover / click feedback for landing hail buttons (per-level materials).
    */
@@ -629,6 +635,7 @@ export class FpElevatorShaftVisual {
     this.landingRoot.clear();
     this.landingDoorPickRoot.clear();
     this.landingHailPickRoot.clear();
+    this.landingHailPickByLevel.clear();
     this.root.clear();
   }
 }
