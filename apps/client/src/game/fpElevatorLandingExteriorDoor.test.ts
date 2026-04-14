@@ -99,13 +99,15 @@ describe("fpElevLandingExteriorDoorInteractPlateLocal", () => {
 
 describe("advanceExteriorDoorVisSwingTowardAuth", () => {
   it("caps step rate to match authoritative animation speed", () => {
+    const dtSec = 0.05;
     const next = advanceExteriorDoorVisSwingTowardAuth({
       current: 0,
       authoritative: 1,
-      dtSec: 0.05,
+      dtSec,
       animSpeedPerSec: EXTERIOR_DOOR_ANIM_SPEED,
     });
-    expect(next).toBeCloseTo(0.1025, 5);
+    // Expected advance is exactly one frame-worth of animation at the current speed constant.
+    expect(next).toBeCloseTo(EXTERIOR_DOOR_ANIM_SPEED * dtSec, 5);
   });
 
   it("snaps when within one step of the target", () => {

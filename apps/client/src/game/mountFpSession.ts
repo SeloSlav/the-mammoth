@@ -13,7 +13,9 @@ import {
   stepFpLocomotion,
   PlayerPresentationManager,
   type FpLocomotionInput,
+  type FpLocomotionWalkOptions,
 } from "@the-mammoth/engine";
+import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { parseFloorDoc } from "@the-mammoth/world";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
@@ -44,7 +46,6 @@ import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
 import { mountWorldContentDevReload } from "./fpWorldContentDevReload.js";
-import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./localGameAudio";
 import {
@@ -247,11 +248,76 @@ export async function mountFpSession(
     aimYaw: number;
   };
   const pendingMoveIntents: PendingMoveIntent[] = [];
+  /** Head index into `pendingMoveIntents` — acked entries are skipped without shifting the array. */
+  let intentsHead = 0;
+  /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
+  const MAX_PENDING_INTENTS = 30;
   let lastNet = 0;
 
   const keys = new Set<string>();
   let crouchToggle = false;
   const loco = createFpLocomotionState();
+
+  // ---------------------------------------------------------------------------
+  // Object pools — pre-allocated once, mutated in place every frame/tick.
+  // Eliminates the GC pressure that causes frame-time spikes near busy geometry.
+  // ---------------------------------------------------------------------------
+
+  /** Reused inside every sampleWalkTopForVelocityY call (called ~2× per substep). */
+  const _walkSupportEval: FpKinematicSupportSampleOpts = {
+    worldX: 0,
+    worldZ: 0,
+    probeTopY: 0,
+    footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+    stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+    baseTop: 0,
+  };
+
+  /** Reused for the single kinematic-velocity query inside simulatePredictedPlayerStep. */
+  const _elevSupportEval: FpKinematicSupportSampleOpts = {
+    worldX: 0,
+    worldZ: 0,
+    probeTopY: 0,
+    footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+    stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+    baseTop: 0,
+  };
+
+  /** Pre-allocated input state — mutated in the main tick loop (no object literal per frame). */
+  const _input: FpLocomotionInput = {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+    crouch: false,
+  };
+
+  /** Pre-allocated input for reconcile replay (avoid allocating inside the replay loop). */
+  const _replayInput: FpLocomotionInput = {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+    crouch: false,
+  };
+
+  /** Pre-allocated remote snapshot map — cleared each frame instead of constructed anew. */
+  const _remoteSnapshots = new Map<string, ReplicatedPlayerSnapshot>();
+
+  /** Reconcile replay pools — reset in place on every server update (20 Hz); avoid 3× Vec3. */
+  const _replayPos = new THREE.Vector3();
+  const _replayPrevPos = new THREE.Vector3();
+  const _replayLoco = createFpLocomotionState();
+
+  /**
+   * Live locomotion state reference set immediately before each `stepFpLocomotion` call.
+   * `_walkOpts.sampleWalkGroundTopY` reads `.velocity.y` through this reference so that
+   * gravity-modified velocity is visible to the sampler at each substep (same as the old
+   * per-call closure that captured `opts.locoState`).
+   */
+  let _stepLocoStateRef: ReturnType<typeof createFpLocomotionState> | null = null;
 
   /**
    * While rising from a real jump, skip elevator cab walk merge — otherwise `mergeWalkTop` keeps the
@@ -270,16 +336,13 @@ export async function mountFpSession(
     if (velocityY > ELEVATOR_WALK_MERGE_SKIP_VY) {
       return base;
     }
-    const supportEval: FpKinematicSupportSampleOpts = {
-      worldX,
-      worldZ,
-      probeTopY,
-      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      baseTop: base,
-      evalWallClockMs,
-    };
-    return mergeKinematicSupportTop(fpElevators.kinematicSupport, supportEval);
+    // Mutate pooled opts — no allocation inside substep hot-path.
+    _walkSupportEval.worldX = worldX;
+    _walkSupportEval.worldZ = worldZ;
+    _walkSupportEval.probeTopY = probeTopY;
+    _walkSupportEval.baseTop = base;
+    _walkSupportEval.evalWallClockMs = evalWallClockMs;
+    return mergeKinematicSupportTop(fpElevators.kinematicSupport, _walkSupportEval);
   };
   const sampleWalkTop = (
     worldX: number,
@@ -287,6 +350,27 @@ export async function mountFpSession(
     probeTopY: number,
     evalWallClockMs?: number,
   ) => sampleWalkTopForVelocityY(loco.velocity.y, worldX, worldZ, probeTopY, evalWallClockMs);
+
+  /**
+   * Pre-allocated walk options passed to `stepFpLocomotion` — avoids creating a new object +
+   * closure on every call.  `sampleWalkGroundTopY` reads `_stepLocoStateRef!.velocity.y` live
+   * (the reference is set before each `stepFpLocomotion` call) so gravity-modified velocity
+   * is visible at every substep, identical to the old per-call closure.
+   */
+  const _walkOpts: FpLocomotionWalkOptions = {
+    sampleWalkGroundTopY: (worldX, worldZ, probeTopY, evalWallClockMs) =>
+      sampleWalkTopForVelocityY(
+        _stepLocoStateRef!.velocity.y,
+        worldX,
+        worldZ,
+        probeTopY,
+        evalWallClockMs,
+      ),
+    probeDy: fpLocomotionConstants.walkProbeDy,
+    maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
+    jumpKinematicPlatformVyMps: 0,
+    integrationEvalEndWallClockMs: undefined,
+  };
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
@@ -346,14 +430,6 @@ export async function mountFpSession(
   /** Latest authoritative self pose from `player_pose`. */
   const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
-  const inputFromBits = (bits: number): FpLocomotionInput => ({
-    forward: (bits & 1) !== 0,
-    backward: (bits & 2) !== 0,
-    left: (bits & 4) !== 0,
-    right: (bits & 8) !== 0,
-    sprint: (bits & 32) !== 0,
-    crouch: (bits & 64) !== 0,
-  });
 
   const simulatePredictedPlayerStep = (opts: {
     pos: THREE.Vector3;
@@ -370,34 +446,30 @@ export async function mountFpSession(
     opts.prevPos.copy(opts.pos);
     const probeTopForElev = opts.pos.y + fpLocomotionConstants.walkProbeDy;
     const baseForElev = sampleWalkTopBase(opts.pos.x, opts.pos.z, probeTopForElev);
-    const supportEval: FpKinematicSupportSampleOpts = {
-      worldX: opts.pos.x,
-      worldZ: opts.pos.z,
-      probeTopY: probeTopForElev,
-      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      baseTop: baseForElev,
-      evalWallClockMs: opts.evalWallClockMs,
-    };
+    // Mutate pooled opts — no allocation here.
+    _elevSupportEval.worldX = opts.pos.x;
+    _elevSupportEval.worldZ = opts.pos.z;
+    _elevSupportEval.probeTopY = probeTopForElev;
+    _elevSupportEval.baseTop = baseForElev;
+    _elevSupportEval.evalWallClockMs = opts.evalWallClockMs;
     const elevatorJumpVy =
       !opts.locoState.grounded || opts.locoState.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
         ? 0
-        : getKinematicSupportVerticalVelocityMps(opts.kinematicSupport, supportEval);
+        : getKinematicSupportVerticalVelocityMps(opts.kinematicSupport, _elevSupportEval);
 
-    const headY = stepFpLocomotion(opts.locoState, opts.pos, opts.bodyYawRad, opts.input, opts.dtSec, {
-      sampleWalkGroundTopY: (worldX, worldZ, probeTopY, evalWallClockMs) =>
-        sampleWalkTopForVelocityY(
-          opts.locoState.velocity.y,
-          worldX,
-          worldZ,
-          probeTopY,
-          evalWallClockMs,
-        ),
-      probeDy: fpLocomotionConstants.walkProbeDy,
-      maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
-      jumpKinematicPlatformVyMps: elevatorJumpVy,
-      integrationEvalEndWallClockMs: opts.evalWallClockMs,
-    });
+    // Wire live locoState reference so the walk sampler reads velocity.y correctly per substep.
+    _stepLocoStateRef = opts.locoState;
+    _walkOpts.jumpKinematicPlatformVyMps = elevatorJumpVy;
+    _walkOpts.integrationEvalEndWallClockMs = opts.evalWallClockMs;
+    const headY = stepFpLocomotion(
+      opts.locoState,
+      opts.pos,
+      opts.bodyYawRad,
+      opts.input,
+      opts.dtSec,
+      _walkOpts,
+    );
+    _stepLocoStateRef = null;
 
     resolvePlayerCollisions(
       opts.pos,
@@ -442,28 +514,71 @@ export async function mountFpSession(
     return headY;
   };
 
+  /**
+   * Mutates `bits` into `out` without allocating a new FpLocomotionInput object.
+   * Used inside the reconcile replay loop to avoid per-step allocations.
+   */
+  const inputFromBitsInto = (bits: number, out: FpLocomotionInput): void => {
+    out.forward = (bits & 1) !== 0;
+    out.backward = (bits & 2) !== 0;
+    out.left = (bits & 4) !== 0;
+    out.right = (bits & 8) !== 0;
+    out.sprint = (bits & 32) !== 0;
+    out.crouch = (bits & 64) !== 0;
+  };
+
   const reconcileLocalPredictionToServer = (serverRow: PlayerPose) => {
     const serverSeq = poseSeqAsBigint(serverRow.seq);
-    while (pendingMoveIntents.length > 0 && pendingMoveIntents[0]!.seq <= serverSeq) {
-      pendingMoveIntents.shift();
+
+    // Advance head past acknowledged intents — O(1) per step, no array copies.
+    while (
+      intentsHead < pendingMoveIntents.length &&
+      pendingMoveIntents[intentsHead]!.seq <= serverSeq
+    ) {
+      intentsHead++;
     }
-    const replayPos = new THREE.Vector3(serverRow.x, serverRow.y, serverRow.z);
-    const replayPrevPos = new THREE.Vector3(serverRow.x, serverRow.y, serverRow.z);
-    const replayLoco = createFpLocomotionState();
-    replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
-    replayLoco.grounded = serverRow.grounded !== 0;
-    replayLoco.headBobPhase = loco.headBobPhase;
-    replayLoco.eyeSmoothed = loco.eyeSmoothed;
+    // Compact: splice only when the dead prefix is large enough to matter.
+    if (intentsHead >= pendingMoveIntents.length) {
+      pendingMoveIntents.length = 0;
+      intentsHead = 0;
+    } else if (intentsHead >= 16) {
+      pendingMoveIntents.splice(0, intentsHead);
+      intentsHead = 0;
+    }
+
+    const pendingCount = pendingMoveIntents.length - intentsHead;
+    if (pendingCount === 0) return;
+
+    // Early-exit: if the server confirms we're already at the predicted position, no
+    // physics replay is needed.  On localhost (< 1 ms RTT) this is almost always true.
+    if (
+      Math.abs(serverRow.x - pos.x) < 0.006 &&
+      Math.abs(serverRow.y - pos.y) < 0.006 &&
+      Math.abs(serverRow.z - pos.z) < 0.006
+    ) {
+      return;
+    }
+
+    // Reset pooled replay state — no Vec3 / LocoState allocation.
+    _replayPos.set(serverRow.x, serverRow.y, serverRow.z);
+    _replayPrevPos.copy(_replayPos);
+    _replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
+    _replayLoco.grounded = serverRow.grounded !== 0;
+    _replayLoco.jumpQueued = false;
+    _replayLoco.headBobPhase = loco.headBobPhase;
+    _replayLoco.eyeSmoothed = loco.eyeSmoothed;
+
     const replayStartMs = performance.now();
-    for (let i = 0; i < pendingMoveIntents.length; i++) {
+    for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
-      const stepNowMs = replayStartMs + i * NET_INTERVAL_MS;
+      const stepNowMs = replayStartMs + (i - intentsHead) * NET_INTERVAL_MS;
       fpElevators.syncCabEvalClock(stepNowMs);
+      inputFromBitsInto(sample.bits, _replayInput);
       simulatePredictedPlayerStep({
-        pos: replayPos,
-        prevPos: replayPrevPos,
-        locoState: replayLoco,
-        input: inputFromBits(sample.bits),
+        pos: _replayPos,
+        prevPos: _replayPrevPos,
+        locoState: _replayLoco,
+        input: _replayInput,
         dtSec: NET_DT_SEC,
         evalWallClockMs: stepNowMs,
         crouch: (sample.bits & 64) !== 0,
@@ -472,11 +587,11 @@ export async function mountFpSession(
         kinematicSupport: fpElevators.kinematicSupport,
       });
     }
-    pos.copy(replayPos);
-    loco.velocity.copy(replayLoco.velocity);
-    loco.grounded = replayLoco.grounded;
-    loco.headBobPhase = replayLoco.headBobPhase;
-    loco.eyeSmoothed = replayLoco.eyeSmoothed;
+    pos.copy(_replayPos);
+    loco.velocity.copy(_replayLoco.velocity);
+    loco.grounded = _replayLoco.grounded;
+    loco.headBobPhase = _replayLoco.headBobPhase;
+    loco.eyeSmoothed = _replayLoco.eyeSmoothed;
   };
 
   let meleeAttackSeq = 0;
@@ -580,16 +695,14 @@ export async function mountFpSession(
     if (!conn.identity) return;
     intentSeq += 1n;
     const bits = encodeMoveIntentBits(input, jump);
-    pendingMoveIntents.push({
-      seq: intentSeq,
-      bits,
-      aimYaw: bodyYaw,
-    });
-    void conn.reducers.submitMoveIntent({
-      intentSeq,
-      bits,
-      aimYaw: bodyYaw,
-    });
+    pendingMoveIntents.push({ seq: intentSeq, bits, aimYaw: bodyYaw });
+    // Guard against runaway growth if the server stops acking (e.g. network drop).
+    if (pendingMoveIntents.length - intentsHead > MAX_PENDING_INTENTS) {
+      // Drop the oldest un-acked intents; replay will still be correct from the retained window.
+      const excess = pendingMoveIntents.length - intentsHead - MAX_PENDING_INTENTS;
+      intentsHead += excess;
+    }
+    void conn.reducers.submitMoveIntent({ intentSeq, bits, aimYaw: bodyYaw });
   };
 
   const mammothInventoryOpen = () =>
@@ -715,7 +828,9 @@ export async function mountFpSession(
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {
       queueFpJump(loco);
-      const input: FpLocomotionInput = {
+      // Build a one-shot input snapshot for the jump intent; _input may not be current yet
+      // (tick hasn't run), so read keys directly here.
+      const jumpInput: FpLocomotionInput = {
         forward: keys.has("KeyW"),
         backward: keys.has("KeyS"),
         left: keys.has("KeyA"),
@@ -723,7 +838,7 @@ export async function mountFpSession(
         sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
         crouch: crouchToggle,
       };
-      sendMoveIntent(input, true);
+      sendMoveIntent(jumpInput, true);
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
@@ -797,49 +912,49 @@ export async function mountFpSession(
 
   const tick = () => {
     raf = requestAnimationFrame(tick);
+    // Single performance.now() for the whole tick — avoids redundant syscalls and keeps
+    // sub-systems consistent with the same timestamp.
     const nowMs = performance.now();
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
 
     if (meleePressPending) {
       meleePressPending = false;
-      const tMelee = performance.now();
-      if (tMelee - lastMeleeMs >= MELEE_COOLDOWN_MS) {
-        lastMeleeMs = tMelee;
+      if (nowMs - lastMeleeMs >= MELEE_COOLDOWN_MS) {
+        lastMeleeMs = nowMs;
         meleeAttackSeq += 1;
         localAudio.playMeleeWeaponSwingLocal();
         if (conn.identity) void conn.reducers.submitMeleeSwing({});
       }
     }
 
-    const input: FpLocomotionInput = {
-      forward: keys.has("KeyW"),
-      backward: keys.has("KeyS"),
-      left: keys.has("KeyA"),
-      right: keys.has("KeyD"),
-      sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
-      crouch: crouchToggle,
-    };
+    // Mutate pooled input in place — no object literal allocation per frame.
+    _input.forward = keys.has("KeyW");
+    _input.backward = keys.has("KeyS");
+    _input.left = keys.has("KeyA");
+    _input.right = keys.has("KeyD");
+    _input.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    _input.crouch = crouchToggle;
+
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    const frameNowMs = performance.now();
-    fpElevators.syncCabEvalClock(frameNowMs);
+    fpElevators.syncCabEvalClock(nowMs);
     prevPos.copy(pos);
 
     const headY = simulatePredictedPlayerStep({
       pos,
       prevPos,
       locoState: loco,
-      input,
+      input: _input,
       dtSec: dt,
-      evalWallClockMs: frameNowMs,
+      evalWallClockMs: nowMs,
       crouch: crouchToggle,
       jumpPressedThisFrame: jumpQueuedBeforeStep,
       bodyYawRad: bodyYaw,
       kinematicSupport: fpElevators.kinematicSupport,
     });
 
-    fpElevators.tick(dt, frameNowMs, pos);
-    fpElevators.syncLandingHailUi(camera, pos, frameNowMs);
+    fpElevators.tick(dt, nowMs, pos);
+    fpElevators.syncLandingHailUi(camera, pos, nowMs);
 
     playerRig.position.set(pos.x, pos.y, pos.z);
     playerRig.rotation.y = bodyYaw;
@@ -860,7 +975,7 @@ export async function mountFpSession(
       stridePhaseRad: loco.headBobPhase,
       grounded: loco.grounded,
       crouch: crouchToggle,
-      sprint: input.sprint,
+      sprint: _input.sprint,
       freeLook,
     });
     const walkStrength = THREE.MathUtils.clamp(
@@ -882,10 +997,9 @@ export async function mountFpSession(
 
     syncActiveHotbarSlotToServer();
 
-    const now = performance.now();
-    if (now - lastNet >= NET_INTERVAL_MS && conn.identity) {
-      lastNet = now;
-      sendMoveIntent(input, jumpQueuedBeforeStep);
+    if (nowMs - lastNet >= NET_INTERVAL_MS && conn.identity) {
+      lastNet = nowMs;
+      sendMoveIntent(_input, jumpQueuedBeforeStep);
     }
 
     if (conn.identity) {
@@ -895,7 +1009,8 @@ export async function mountFpSession(
       }
     }
 
-    const remoteSnapshots = new Map(buildMockRemoteSnapshots(nowMs));
+    // Reuse pre-allocated map — clear is O(n remote players), no Map construction cost.
+    _remoteSnapshots.clear();
     if (conn.identity) {
       for (const row of conn.db.player_pose) {
         const id = row.identity.toHexString();
@@ -919,7 +1034,7 @@ export async function mountFpSession(
             equippedPrimary: "unarmed",
           },
         );
-        remoteSnapshots.set(id, snap);
+        _remoteSnapshots.set(id, snap);
       }
     }
 
@@ -941,7 +1056,7 @@ export async function mountFpSession(
       meleeAttackSeq,
       equippedPrimaryFromHotbar: hotbarHeld,
     });
-    presentation.update(dt, localState, remoteSnapshots, nowMs);
+    presentation.update(dt, localState, _remoteSnapshots, nowMs);
 
     if (conn.identity) {
       const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(getInteractionPos(), camera);
@@ -976,7 +1091,7 @@ export async function mountFpSession(
 
     syncBuildingFloorPlateVisibility();
     renderer.render(scene, camera);
-    onFpSessionPostRenderFrame(performance.now());
+    onFpSessionPostRenderFrame(nowMs);
     logFpPerf();
   };
   tick();

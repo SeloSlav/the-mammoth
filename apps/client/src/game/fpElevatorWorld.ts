@@ -236,6 +236,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const landingDoorVisSwing = new Map<string, number>();
   /** Evaluation time for cab Y this frame (set at start of `tick` so walk merge matches visuals). */
   let cabEvalNowMs = performance.now();
+  /** Pre-allocated map reused each tick to pass swing values to per-shaft visuals — no allocation per shaft per frame. */
+  const _swingByLevel = new Map<number, number>();
 
   const ensureInterp = (key: string) => {
     if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
@@ -860,16 +862,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (Number.isFinite(cabY)) {
         vis.updateFromServer(cabY, d);
       }
-      const swingByLevel = new Map<number, number>();
+      _swingByLevel.clear();
       for (const row of landingByRowKey.values()) {
         if (row.shaftKey === key) {
-          swingByLevel.set(
-            row.level,
-            landingDoorVisSwing.get(row.rowKey) ?? row.swingOpen01,
-          );
+          _swingByLevel.set(row.level, landingDoorVisSwing.get(row.rowKey) ?? row.swingOpen01);
         }
       }
-      vis.updateLandingExteriorDoorSwings(swingByLevel);
+      vis.updateLandingExteriorDoorSwings(_swingByLevel);
       const flashActive = pickFlash.untilMs > nowMs && pickFlash.shaftKey === key;
       vis.updateFloorPickMaterials(
         Number(row?.currentLevel ?? 1),
