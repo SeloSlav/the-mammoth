@@ -20,7 +20,7 @@ export function buildCollisionSpatialIndex(
 ): CollisionSpatialIndex {
   if (aabbs.length === 0) {
     return {
-      visitAabbsInXZ: (_x0, _x1, _z0, _z1, _visit) => {},
+      visitAabbsInXZ: () => {},
     };
   }
 

@@ -8,7 +8,6 @@ import {
   EXTERIOR_DOOR_H,
   EXTERIOR_DOOR_PANEL_W_M,
   LANDING_DOOR_GLASS_PART_ID,
-  LANDING_DOOR_OPENING_PROXY_ID,
   populateExteriorLandingDoorSwing,
   resolveGlassOpening,
 } from "./exteriorLandingDoorSwing.js";

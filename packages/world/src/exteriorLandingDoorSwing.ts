@@ -173,8 +173,8 @@ export function glassOpeningFromProxyMesh(
   const base = clampOpening(resolveGlassOpening(kit));
   const innerW = Math.max(0.05, base.widthM - 0.02);
   const innerH = Math.max(0.05, base.heightM - 0.02);
-  let widthM = innerW * Math.abs(proxy.scale.z) + 0.02;
-  let heightM = innerH * Math.abs(proxy.scale.y) + 0.02;
+  const widthM = innerW * Math.abs(proxy.scale.z) + 0.02;
+  const heightM = innerH * Math.abs(proxy.scale.y) + 0.02;
   const centerYM = proxy.position.y;
   return clampOpening({ widthM, heightM, centerYM });
 }
