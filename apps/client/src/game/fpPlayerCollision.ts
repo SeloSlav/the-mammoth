@@ -9,6 +9,12 @@ const COLLISION_EPS = 0.0015;
 const STEP_IGNORE_BELOW_FEET_M = 0.2;
 const MAX_HORIZONTAL_COLLISION_SUBSTEP_M = 0.18;
 
+export type DynamicCollisionQueryPose = {
+  bodyX: number;
+  bodyFeetY: number;
+  bodyZ: number;
+};
+
 export type DynamicCollisionAabbSource = {
   visitAabbsInXZ(
     x0: number,
@@ -16,6 +22,7 @@ export type DynamicCollisionAabbSource = {
     z0: number,
     z1: number,
     visit: (aabb: CollisionAabb) => void,
+    queryPose?: DynamicCollisionQueryPose,
   ): void;
 };
 
@@ -47,10 +54,11 @@ function visitCandidateAabbs(
   x1: number,
   z0: number,
   z1: number,
+  queryPose: DynamicCollisionQueryPose,
   visit: (aabb: CollisionAabb) => void,
 ): void {
   staticIndex.visitAabbsInXZ(x0, x1, z0, z1, (aabb) => visit(aabb));
-  dynamicSource?.visitAabbsInXZ(x0, x1, z0, z1, visit);
+  dynamicSource?.visitAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
 }
 
 function resolveHorizontalCollisionStep(
@@ -71,7 +79,11 @@ function resolveHorizontalCollisionStep(
     const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
     const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedX = pos.x;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
+      bodyX: resolvedX,
+      bodyFeetY: pos.y,
+      bodyZ: pos.z,
+    }, (b) => {
       if (!verticalOverlap(pos.y, height, b)) return;
       if (z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
@@ -109,7 +121,11 @@ function resolveHorizontalCollisionStep(
     const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
     const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedZ = pos.z;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
+      bodyX: pos.x,
+      bodyFeetY: pos.y,
+      bodyZ: resolvedZ,
+    }, (b) => {
       if (!verticalOverlap(pos.y, height, b)) return;
       if (x1 <= b.min[0] || x0 >= b.max[0]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
@@ -194,7 +210,11 @@ export function resolvePlayerCollisions(
     const z1 = pos.z + radius + COLLISION_EPS;
     const head = pos.y + height;
     let bestFeet = pos.y;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
+      bodyX: pos.x,
+      bodyFeetY: pos.y,
+      bodyZ: pos.z,
+    }, (b) => {
       if (x1 <= b.min[0] || x0 >= b.max[0] || z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (head <= b.min[1] + COLLISION_EPS) return;
       if (pos.y >= b.min[1]) return;

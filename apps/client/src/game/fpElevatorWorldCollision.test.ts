@@ -7,7 +7,10 @@ import {
   type ElevatorShaftLayout,
 } from "@the-mammoth/world";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types.js";
-import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
+import {
+  ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
+  ELEVATOR_PHASE_MOVING,
+} from "./fpElevatorConstants.js";
 import { landingExteriorDoorRowKey } from "./fpElevatorLandingExteriorDoor.js";
 import {
   type FpElevatorWorldCollisionAuth,
@@ -383,5 +386,115 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
         b.max[0] - b.min[0] < 0.8,
     );
     expect(landingSlabs.length).toBe(0);
+  });
+
+  it("suppresses passing landing blockers for a rider inside a moving cab", () => {
+    const movingShaftKey = "moving-cab-test-shaft";
+    const movingLayout = testLayout(0, 0, "e");
+    const cabFloorY =
+      feetYForLayout(movingLayout, 1) +
+      (feetYForLayout(movingLayout, 2) - feetYForLayout(movingLayout, 1)) * 0.55;
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(movingShaftKey, 2),
+      shaftKey: movingShaftKey,
+      level: 2,
+      desiredOpen: 0,
+      swingOpen01: 0,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 2,
+      latestCars: new Map([
+        [
+          movingShaftKey,
+          car({
+            shaftKey: movingShaftKey,
+            plateX: 0,
+            plateZ: 0,
+            cabFloorY,
+            currentLevel: 1,
+            moveFromLevel: 1,
+            moveToLevel: 2,
+            moveU: 0.55,
+            phase: ELEVATOR_PHASE_MOVING,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[movingShaftKey, movingLayout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+    };
+    const hits = collectHits(auth, 0.7, 2.4, -0.8, 0.8).filter(
+      (b) => b.min[1] < cabFloorY + 1.4,
+    );
+    const riderHits: CollisionAabb[] = [];
+    visitFpElevatorWorldCollisionAabbsInXZ(
+      auth,
+      0.7,
+      2.4,
+      -0.8,
+      0.8,
+      (aabb) => riderHits.push(aabb),
+      { bodyX: 0, bodyFeetY: cabFloorY + 0.45, bodyZ: 0 },
+    );
+    const riderLowBand = riderHits.filter((b) => b.min[1] < cabFloorY + 1.4);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(riderLowBand.length).toBe(0);
+  });
+
+  it("keeps those blockers for non-riders in the same shaft xz column", () => {
+    const movingShaftKey = "moving-cab-test-shaft";
+    const movingLayout = testLayout(0, 0, "e");
+    const cabFloorY =
+      feetYForLayout(movingLayout, 1) +
+      (feetYForLayout(movingLayout, 2) - feetYForLayout(movingLayout, 1)) * 0.55;
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(movingShaftKey, 2),
+      shaftKey: movingShaftKey,
+      level: 2,
+      desiredOpen: 0,
+      swingOpen01: 0,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 2,
+      latestCars: new Map([
+        [
+          movingShaftKey,
+          car({
+            shaftKey: movingShaftKey,
+            plateX: 0,
+            plateZ: 0,
+            cabFloorY,
+            currentLevel: 1,
+            moveFromLevel: 1,
+            moveToLevel: 2,
+            moveU: 0.55,
+            phase: ELEVATOR_PHASE_MOVING,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[movingShaftKey, movingLayout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+    };
+    const hits: CollisionAabb[] = [];
+    visitFpElevatorWorldCollisionAabbsInXZ(
+      auth,
+      0.7,
+      2.4,
+      -0.8,
+      0.8,
+      (aabb) => hits.push(aabb),
+      { bodyX: 0, bodyFeetY: cabFloorY + 3.0, bodyZ: 0 },
+    );
+    const lowBand = hits.filter((b) => b.min[1] < cabFloorY + 1.4);
+    expect(lowBand.length).toBeGreaterThan(0);
   });
 });

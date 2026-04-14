@@ -562,8 +562,8 @@ export async function mountFpSession(
       fpLocomotionConstants.walkStepUpMargin,
       staticCollisionIndex,
       {
-        visitAabbsInXZ: (x0, x1, z0, z1, visit) =>
-          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit),
+        visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) =>
+          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
       },
     );
 

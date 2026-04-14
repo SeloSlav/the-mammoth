@@ -71,18 +71,39 @@ fn push_query_overlapping_aabb(
     out.push(CollisionAabb { min, max });
 }
 
+#[inline]
+fn suppress_moving_cab_generated_collision_for_pose(
+    px: f32,
+    py: f32,
+    pz: f32,
+    car: &elevator_car::Row,
+) -> bool {
+    if car.phase != super::PH_MOVING {
+        return false;
+    }
+    let lx = px - car.plate_x;
+    let lz = pz - car.plate_z;
+    super::player_inside_cab_at_feet(lx, lz, py, car)
+}
+
 fn collect_generated_collision_aabbs(
     ctx: &ReducerContext,
     x0: f32,
     x1: f32,
     z0: f32,
     z1: f32,
+    query_pose: Option<(f32, f32, f32)>,
     out: &mut Vec<CollisionAabb>,
 ) {
     let (hx, hz) = elevator_layout::inner_half_xz();
     let iy = elevator_layout::inner_height();
 
     for car in ctx.db.elevator_car().iter() {
+        if let Some((px, py, pz)) = query_pose {
+            if suppress_moving_cab_generated_collision_for_pose(px, py, pz, &car) {
+                continue;
+            }
+        }
         if car.door_open_01 >= super::DOOR_EXIT_CLAMP_MIN_OPEN {
             continue;
         }
@@ -152,6 +173,11 @@ fn collect_generated_collision_aabbs(
         let Some(car) = ctx.db.elevator_car().shaft_key().find(&landing.shaft_key) else {
             continue;
         };
+        if let Some((px, py, pz)) = query_pose {
+            if suppress_moving_cab_generated_collision_for_pose(px, py, pz, &car) {
+                continue;
+            }
+        }
         let fy = support_y(landing.level);
 
         // When the cab door is closed its slab already blocks the doorway at the cab's
@@ -427,6 +453,7 @@ fn resolve_generated_horizontal_collision_step(
             prev_x.max(p.x) + r + super::COLLISION_EPS,
             prev_z.min(p.z) - r - super::COLLISION_EPS,
             prev_z.max(p.z) + r + super::COLLISION_EPS,
+            Some((resolved_x, p.y, p.z)),
             aabbs,
         );
         for aabb in aabbs.iter() {
@@ -480,6 +507,7 @@ fn resolve_generated_horizontal_collision_step(
             prev_x.max(p.x) + r + super::COLLISION_EPS,
             prev_z.min(p.z) - r - super::COLLISION_EPS,
             prev_z.max(p.z) + r + super::COLLISION_EPS,
+            Some((p.x, p.y, resolved_z)),
             aabbs,
         );
         for aabb in aabbs.iter() {
@@ -569,6 +597,7 @@ pub fn resolve_player_generated_collision_aabbs(
             p.x + r + super::COLLISION_EPS,
             p.z - r - super::COLLISION_EPS,
             p.z + r + super::COLLISION_EPS,
+            Some((p.x, p.y, p.z)),
             &mut aabbs,
         );
         let head = p.y + body_h;
@@ -619,5 +648,61 @@ pub fn resolve_player_generated_collision_aabbs(
             p.grounded = 1;
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::suppress_moving_cab_generated_collision_for_pose;
+    use crate::elevator::ElevatorCar;
+
+    fn sample_car(phase: u8) -> ElevatorCar {
+        ElevatorCar {
+            shaft_key: "test_shaft".into(),
+            current_level: 1,
+            door_open_01: 0.0,
+            phase,
+            move_from_level: 1,
+            move_to_level: 2,
+            move_u: 0.5,
+            dest_queue: Vec::new(),
+            cab_floor_y: 10.0,
+            door_face: 0,
+            plate_x: 20.0,
+            plate_z: -5.0,
+        }
+    }
+
+    #[test]
+    fn moving_rider_suppresses_same_shaft_generated_collision() {
+        let car = sample_car(crate::elevator::PH_MOVING);
+        assert!(suppress_moving_cab_generated_collision_for_pose(
+            car.plate_x,
+            car.cab_floor_y + 0.5,
+            car.plate_z,
+            &car,
+        ));
+    }
+
+    #[test]
+    fn idle_cab_does_not_suppress_same_shaft_generated_collision() {
+        let car = sample_car(crate::elevator::PH_IDLE);
+        assert!(!suppress_moving_cab_generated_collision_for_pose(
+            car.plate_x,
+            car.cab_floor_y + 0.5,
+            car.plate_z,
+            &car,
+        ));
+    }
+
+    #[test]
+    fn upper_landing_same_xz_does_not_count_as_riding_moving_cab() {
+        let car = sample_car(crate::elevator::PH_MOVING);
+        assert!(!suppress_moving_cab_generated_collision_for_pose(
+            car.plate_x,
+            car.cab_floor_y + 3.0,
+            car.plate_z,
+            &car,
+        ));
     }
 }

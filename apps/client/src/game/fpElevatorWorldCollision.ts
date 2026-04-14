@@ -25,11 +25,16 @@ import {
   type ElevatorShaftLayout,
 } from "@the-mammoth/world";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
-import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
+import type { DynamicCollisionQueryPose } from "./fpPlayerCollision.js";
+import {
+  ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
+  ELEVATOR_PHASE_MOVING,
+} from "./fpElevatorConstants.js";
 import {
   landingExteriorDoorRowKey,
   landingFrontPassageOpen,
 } from "./fpElevatorLandingExteriorDoor.js";
+import { fpElevPlayerInsideCabAuthoritativePlateLocal } from "./fpElevatorVolumes.js";
 
 export type FpElevatorWorldCollisionAuth = {
   buildingOriginX: number;
@@ -49,6 +54,27 @@ export type FpElevatorWorldCollisionAuth = {
   getCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
 };
 
+function shouldSuppressMovingCabGeneratedCollisionForQuery(opts: {
+  row: ElevatorCar;
+  layout: ElevatorShaftLayout;
+  plateX: number;
+  plateZ: number;
+  cabFloorY: number;
+  innerH: number;
+  queryPose?: DynamicCollisionQueryPose;
+}): boolean {
+  const { row, layout, plateX, plateZ, cabFloorY, innerH, queryPose } = opts;
+  if (!queryPose || row.phase !== ELEVATOR_PHASE_MOVING) return false;
+  const { halfX, halfZ } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
+  return fpElevPlayerInsideCabAuthoritativePlateLocal(
+    queryPose.bodyX - plateX,
+    queryPose.bodyZ - plateZ,
+    queryPose.bodyFeetY,
+    cabFloorY,
+    { halfX, halfZ, innerH },
+  );
+}
+
 export function visitFpElevatorWorldCollisionAabbsInXZ(
   auth: FpElevatorWorldCollisionAuth,
   x0: number,
@@ -56,6 +82,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
   z0: number,
   z1: number,
   visit: (aabb: CollisionAabb) => void,
+  queryPose?: DynamicCollisionQueryPose,
 ): void {
   const { buildingOriginX: ox, buildingOriginZ: oz, maxLevel, latestCars, layoutByKey, landingByRowKey, feetYForLayout } =
     auth;
@@ -85,8 +112,17 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
     const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
 
     const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+    const suppressMovingCabGeneratedCollision = shouldSuppressMovingCabGeneratedCollisionForQuery({
+      row,
+      layout,
+      plateX,
+      plateZ,
+      cabFloorY,
+      innerH,
+      queryPose,
+    });
 
-    if (cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
+    if (!suppressMovingCabGeneratedCollision && cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
       const y0 = cabFloorY - 0.22;
       const y1 = cabFloorY + innerH + 0.38;
       const doorHalf =
@@ -144,6 +180,8 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
     const cabDoorClosed = cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
     const cabCollisionY0 = cabFloorY - 0.22;
     const cabCollisionY1 = cabFloorY + innerH + 0.38;
+
+    if (suppressMovingCabGeneratedCollision) continue;
 
     for (let level = 1; level <= maxLevel; level++) {
       const fy = feetYForLayout(layout, level);

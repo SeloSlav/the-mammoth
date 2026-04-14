@@ -67,6 +67,7 @@ import type {
   FpKinematicSupportSampleOpts,
   FpKinematicSupportSurface,
 } from "./fpKinematicSupport.js";
+import type { DynamicCollisionQueryPose } from "./fpPlayerCollision.js";
 
 export { floorButtonLabel } from "./fpElevatorLabels.js";
 export {
@@ -126,6 +127,7 @@ export type MountFpElevatorWorldResult = {
     z0: number,
     z1: number,
     visit: (aabb: CollisionAabb) => void,
+    queryPose?: DynamicCollisionQueryPose,
   ): void;
   /**
    * After horizontal collision resolution, snap feet onto a cab roof if the body crossed down
@@ -965,6 +967,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     z0: number,
     z1: number,
     visit: (aabb: CollisionAabb) => void,
+    queryPose?: DynamicCollisionQueryPose,
   ) =>
     visitFpElevatorWorldCollisionAabbsInXZ(
       {
@@ -983,6 +986,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       z0,
       z1,
       visit,
+      queryPose,
     );
 
   const syncCabEvalClock = (nowMs: number) => {
