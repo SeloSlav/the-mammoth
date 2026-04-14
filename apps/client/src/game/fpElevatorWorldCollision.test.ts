@@ -484,6 +484,9 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       landingByRowKey: new Map([[landing.rowKey, landing]]),
       feetYForLayout,
     };
+    const baseline = collectHits(auth, 0.7, 2.4, -0.8, 0.8).filter(
+      (b) => b.max[1] - b.min[1] > 1.5,
+    );
     const hits: CollisionAabb[] = [];
     visitFpElevatorWorldCollisionAabbsInXZ(
       auth,
@@ -492,9 +495,11 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       -0.8,
       0.8,
       (aabb) => hits.push(aabb),
-      { bodyX: 0, bodyFeetY: cabFloorY + 3.0, bodyZ: 0 },
+      { bodyX: 0, bodyFeetY: cabFloorY + 3.4, bodyZ: 0 },
     );
     const lowBand = hits.filter((b) => b.max[1] - b.min[1] > 1.5);
+    expect(baseline.length).toBeGreaterThan(0);
+    expect(lowBand.length).toBe(baseline.length);
     expect(lowBand.length).toBeGreaterThan(0);
   });
 });

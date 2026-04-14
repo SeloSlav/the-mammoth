@@ -700,7 +700,7 @@ mod tests {
         let car = sample_car(crate::elevator::PH_MOVING);
         assert!(!suppress_moving_cab_generated_collision_for_pose(
             car.plate_x,
-            car.cab_floor_y + 3.0,
+            car.cab_floor_y + 3.4,
             car.plate_z,
             &car,
         ));
