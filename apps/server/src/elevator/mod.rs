@@ -27,6 +27,18 @@ const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;
 const RIDER_SNAP_FEET_BELOW_CAB_M: f32 = STOREY_SPACING_M * 0.92;
 /// Same as client `ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M` (`STOREY_SPACING_M * 0.58`).
 const RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M: f32 = STOREY_SPACING_M * 0.58;
+/// Hard cap (m) **above `cab_y`** for walk / kinematic **support merge** only. Inner+headroom can
+/// still reach the next landing’s feet Y in the same shaft column; without this cap, players in
+/// an empty hoistway one storey up snap onto the cabin below. Sync client
+/// `ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M`.
+const WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M: f32 = STOREY_SPACING_M * 0.82;
+/// Extra slack when matching probe feet Y to a landing slab for walk-merge (crouch / probe). Sync
+/// client `ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M`.
+const WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M: f32 = 0.12;
+/// Feet may merge onto the cab **roof** walk surface this far below / above inner ceiling line.
+/// Sync client `ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M` / `ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M`.
+const CAB_ROOF_WALK_MERGE_FEET_BELOW_M: f32 = 0.65;
+const CAB_ROOF_WALK_MERGE_FEET_ABOVE_M: f32 = 0.45;
 /// Same formula as `elevator_layout::inner_height()` — used only so this module can derive a `const`
 /// rider snap cap without calling a non-const fn.
 const INNER_HEIGHT_FOR_GRIP_CONST: f32 =
@@ -42,6 +54,9 @@ const INNER_HEIGHT_FOR_GRIP_CONST: f32 =
  */
 const RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M: f32 =
     (STOREY_SPACING_M - INNER_HEIGHT_FOR_GRIP_CONST - 0.1).max(0.15);
+/// Feet at or above `cab + inner_h - this` do not hard-snap to the cab floor (roof stance).
+/// Sync client `ELEVATOR_RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M`.
+const RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M: f32 = 0.1;
 /// Foot-center inset from inner half so walk merge foot circle stays valid (`FOOT_R` + 2cm). Sync client `ELEVATOR_CLAMP_FOOT_CLEARANCE_M`.
 const CAB_CLAMP_FOOT_CLEAR_M: f32 = 0.24;
 /// Door-axis inner edge before slack. Sync client `ELEVATOR_CLAMP_DOOR_AXIS_INNER_FRAC`.
@@ -341,17 +356,33 @@ pub fn sample_elevator_kinematic_support_surface_lerped(
             .map(|prev| prev.cab_floor_y)
             .unwrap_or(car.cab_floor_y);
         // Match client `mergeWalkTop` vertical band (wider than `player_inside_cab`) so a rising
-        // car / substep lag does not drop merge for one frame (fall-through).
-        if feet_y < cab_y - RIDER_SNAP_FEET_BELOW_CAB_M
-            || feet_y > cab_y + iy + RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M
+        // car / substep lag does not drop merge for one frame (fall-through). Cap how far above
+        // `cab_y` feet may sit — otherwise the inner+headroom band overlaps the next landing in
+        // the same XZ column and walkers “teleport” onto the car below.
+        let vy = (car.cab_floor_y - prev_y) / h;
+
+        let upper_merge_y = (cab_y + iy + RIDER_SNAP_HEADROOM_ABOVE_CAB_TOP_M)
+            .min(cab_y + WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M);
+        if feet_y >= cab_y - RIDER_SNAP_FEET_BELOW_CAB_M
+            && feet_y <= upper_merge_y
+            && cab_walk_merge_support_feet_allowed(x, z, feet_y, &car)
         {
-            continue;
-        }
-        let geom_top = cab_y - SKIN;
-        if geom_top <= probe_top_y + step_up_margin {
-            if geom_top > best_top + 1e-5 {
+            let geom_top = cab_y - SKIN;
+            if geom_top <= probe_top_y + step_up_margin && geom_top > best_top + 1e-5 {
                 best_top = geom_top;
-                best_vy = (car.cab_floor_y - prev_y) / h;
+                best_vy = vy;
+            }
+        }
+
+        // Cab roof: falling / standing on the car top (no dock gate — car may be mid-shaft).
+        let roof_feet_y = cab_y + iy;
+        if feet_y >= roof_feet_y - CAB_ROOF_WALK_MERGE_FEET_BELOW_M
+            && feet_y <= roof_feet_y + CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
+        {
+            let geom_top = roof_feet_y - SKIN;
+            if geom_top <= probe_top_y + step_up_margin && geom_top > best_top + 1e-5 {
+                best_top = geom_top;
+                best_vy = vy;
             }
         }
     }
@@ -365,9 +396,7 @@ pub fn sample_elevator_kinematic_support_surface_lerped(
     }
 }
 
-fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
-    let lx = p.x - car.plate_x;
-    let lz = p.z - car.plate_z;
+fn player_inside_cab_at_feet(lx: f32, lz: f32, feet_y: f32, car: &ElevatorCar) -> bool {
     let (hx, hz) = elevator_layout::inner_half_xz();
     let iy = elevator_layout::inner_height();
     if lx.abs() > hx * 0.9 || lz.abs() > hz * 0.9 {
@@ -375,12 +404,39 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
     }
     // Upper slack must stay **below** the next landing feet Y in this XZ column, or players on
     // story N+1 false-count as "in cab" for a car docked at N and exterior-door reducers no-op.
-    if p.y < car.cab_floor_y - 0.2
-        || p.y > car.cab_floor_y + iy + RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M
+    if feet_y < car.cab_floor_y - 0.2
+        || feet_y > car.cab_floor_y + iy + RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M
     {
         return false;
     }
     true
+}
+
+fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
+    let lx = p.x - car.plate_x;
+    let lz = p.z - car.plate_z;
+    player_inside_cab_at_feet(lx, lz, p.y, car)
+}
+
+/// Cab floor may merge into walk sampling only when the car is a real support: rider inside the
+/// cab volume, or the car is **docked** at a landing whose slab matches the probe feet height.
+/// Otherwise empty hoistways (no static floor) would still snap onto a distant cab in the column.
+fn cab_walk_merge_support_feet_allowed(px: f32, pz: f32, feet_y: f32, car: &ElevatorCar) -> bool {
+    let lx = px - car.plate_x;
+    let lz = pz - car.plate_z;
+    if player_inside_cab_at_feet(lx, lz, feet_y, car) {
+        return true;
+    }
+    let land_tol = LANDING_PASSAGE_DOCK_Y_TOL_M + WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M;
+    for lv in 1..=MAX_LEVEL {
+        let fy = support_y(lv);
+        if (car.cab_floor_y - fy).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
+            && (feet_y - fy).abs() <= land_tol
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Extra meters past the inner cab AABB on the **door** side (matches client `fpElevatorDoorSideSlackM`).
@@ -454,7 +510,7 @@ fn player_rider_snap_grip(p: &PlayerPose, car: &ElevatorCar) -> bool {
     let lz = p.z - car.plate_z;
     let iy = elevator_layout::inner_height();
     if p.y < car.cab_floor_y - RIDER_SNAP_FEET_BELOW_CAB_M
-        || p.y > car.cab_floor_y + iy + RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M
+        || p.y > car.cab_floor_y + iy - RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M
     {
         return false;
     }
@@ -978,10 +1034,16 @@ fn landing_front_passage_open(
     car: &ElevatorCar,
     landing_feet_y: f32,
 ) -> bool {
-    landing.swing_open_01 >= EXT_DOOR_COLLISION_OPEN_THRESH
-        && car.current_level == landing.level
-        && (car.cab_floor_y - landing_feet_y).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
-        && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
+    if landing.swing_open_01 < EXT_DOOR_COLLISION_OPEN_THRESH {
+        return false;
+    }
+    let docked_here = (car.cab_floor_y - landing_feet_y).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M;
+    if !docked_here {
+        // Corridor door is clear and the car is not at this landing — no interior cab door to
+        // interlock; allow walking into the hoistway column (empty shaft / car elsewhere).
+        return true;
+    }
+    car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
 }
 
 #[cfg(test)]
@@ -1181,7 +1243,7 @@ mod exterior_interact_tests {
     }
 
     #[test]
-    fn landing_front_passage_only_opens_when_both_doors_are_open_and_docked() {
+    fn landing_front_passage_opens_when_docked_and_interior_clear() {
         let fy = support_y(1);
         let landing = ElevatorLandingDoor {
             row_key: "shaft|1".into(),
@@ -1205,6 +1267,61 @@ mod exterior_interact_tests {
             plate_z: 0.0,
         };
         assert!(landing_front_passage_open(&landing, &car, fy));
+    }
+
+    #[test]
+    fn landing_front_passage_opens_with_exterior_only_when_car_not_docked_at_that_landing() {
+        let fy1 = support_y(1);
+        let fy2 = support_y(2);
+        let landing = ElevatorLandingDoor {
+            row_key: "shaft|2".into(),
+            shaft_key: "shaft".into(),
+            level: 2,
+            desired_open: 1,
+            swing_open_01: 1.0,
+        };
+        let car = ElevatorCar {
+            shaft_key: "shaft".into(),
+            current_level: 1,
+            door_open_01: 0.0,
+            phase: PH_IDLE,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y: fy1,
+            door_face: DoorFace::E as u8,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        };
+        assert!(landing_front_passage_open(&landing, &car, fy2));
+    }
+
+    #[test]
+    fn landing_front_passage_closed_when_docked_but_interior_doors_shut() {
+        let fy = support_y(1);
+        let landing = ElevatorLandingDoor {
+            row_key: "shaft|1".into(),
+            shaft_key: "shaft".into(),
+            level: 1,
+            desired_open: 1,
+            swing_open_01: 1.0,
+        };
+        let car = ElevatorCar {
+            shaft_key: "shaft".into(),
+            current_level: 1,
+            door_open_01: 0.0,
+            phase: PH_IDLE,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y: fy,
+            door_face: DoorFace::E as u8,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        };
+        assert!(!landing_front_passage_open(&landing, &car, fy));
     }
 }
 
@@ -1311,6 +1428,53 @@ mod door_slack_tests {
     fn door_slack_ramps_mid_range() {
         let mid = door_side_slack_m(0.65);
         assert!(mid > 0.2 && mid < 0.85);
+    }
+}
+
+#[cfg(test)]
+mod cab_walk_merge_support_tests {
+    use super::{cab_walk_merge_support_feet_allowed, support_y, ElevatorCar, PH_IDLE, PH_MOVING};
+
+    fn car_docked_level1() -> ElevatorCar {
+        let fy = support_y(1);
+        ElevatorCar {
+            shaft_key: "t".into(),
+            current_level: 1,
+            door_open_01: 1.0,
+            phase: PH_IDLE,
+            move_from_level: 1,
+            move_to_level: 1,
+            move_u: 0.0,
+            dest_queue: Vec::new(),
+            cab_floor_y: fy,
+            door_face: 0,
+            plate_x: 0.0,
+            plate_z: 0.0,
+        }
+    }
+
+    #[test]
+    fn rejects_probe_feet_on_upper_landing_when_cab_docked_elsewhere_same_column() {
+        let car = car_docked_level1();
+        let feet_y = support_y(5);
+        assert!(!cab_walk_merge_support_feet_allowed(0.0, 0.0, feet_y, &car));
+    }
+
+    #[test]
+    fn allows_when_cab_and_feet_align_on_same_docked_landing() {
+        let mut car = car_docked_level1();
+        let fy = support_y(4);
+        car.cab_floor_y = fy;
+        car.current_level = 4;
+        assert!(cab_walk_merge_support_feet_allowed(0.0, 0.0, fy + 0.02, &car));
+    }
+
+    #[test]
+    fn allows_rider_feet_on_car_mid_travel_inside_cab_column() {
+        let mut car = car_docked_level1();
+        car.phase = PH_MOVING;
+        car.cab_floor_y = (support_y(1) + support_y(2)) * 0.5;
+        assert!(cab_walk_merge_support_feet_allowed(0.0, 0.0, car.cab_floor_y + 0.04, &car));
     }
 }
 

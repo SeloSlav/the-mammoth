@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
+  DEFAULT_BUILDING_FLOOR_SPACING_M,
+  elevatorSupportFeetWorldY,
+} from "@the-mammoth/world";
+import {
+  fpElevCabWalkMergeSupportFeetAllowed,
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorInDoorOutwardPadShellOnly,
@@ -64,6 +68,68 @@ describe("fpElevPlayerInsideCabAuthoritativePlateLocal", () => {
     expect(fpElevPlayerInsideCabAuthoritativePlateLocal(0, 0, py, cabFeetY, inner)).toBe(
       false,
     );
+  });
+});
+
+describe("fpElevCabWalkMergeSupportFeetAllowed", () => {
+  const floorSpacingM = 3.16;
+  const shaftPlateLocalY = 1.66;
+  const shaftSy = 3.16;
+  const innerH = Math.max(1.8, floorSpacingM - 2 * 0.11 - 0.14);
+  const inner = { halfX: 1.05, halfZ: 1.86, innerH };
+  const feetYForLevel = (level: number) =>
+    elevatorSupportFeetWorldY({
+      buildingWorldOriginY: 0,
+      levelIndex: level,
+      floorSpacingM,
+      shaftPlateLocalY,
+      shaftSy,
+    });
+
+  it("denies walk merge feet on an upper landing when the cab is docked at ground", () => {
+    const cabFeet = feetYForLevel(1);
+    const probeFeet = feetYForLevel(5);
+    expect(
+      fpElevCabWalkMergeSupportFeetAllowed({
+        plateLocalX: 0,
+        plateLocalZ: 0,
+        feetWorldY: probeFeet,
+        cabFeetWorldY: cabFeet,
+        inner,
+        maxLevel: 19,
+        feetYForLevel,
+      }),
+    ).toBe(false);
+  });
+
+  it("allows walk merge when cab and probe feet share a docked landing", () => {
+    const fy = feetYForLevel(4);
+    expect(
+      fpElevCabWalkMergeSupportFeetAllowed({
+        plateLocalX: 0,
+        plateLocalZ: 0,
+        feetWorldY: fy + 0.02,
+        cabFeetWorldY: fy,
+        inner,
+        maxLevel: 19,
+        feetYForLevel,
+      }),
+    ).toBe(true);
+  });
+
+  it("allows merge for a rider standing on the car between landings", () => {
+    const cabFeet = (feetYForLevel(2) + feetYForLevel(3)) * 0.5;
+    expect(
+      fpElevCabWalkMergeSupportFeetAllowed({
+        plateLocalX: 0,
+        plateLocalZ: 0,
+        feetWorldY: cabFeet + 0.04,
+        cabFeetWorldY: cabFeet,
+        inner,
+        maxLevel: 19,
+        feetYForLevel,
+      }),
+    ).toBe(true);
   });
 });
 

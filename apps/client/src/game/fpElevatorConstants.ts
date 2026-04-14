@@ -18,6 +18,15 @@ export const CALL_Y_HALF_WINDOW = 2.2;
  */
 export const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M = 0.5;
 /**
+ * Extra slack (m) when matching **feet Y** to a landing’s support for cab walk-merge gating (crouch /
+ * probe noise). Must match server `elevator::WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M`.
+ */
+export const ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M = 0.12;
+/** Match server `elevator::CAB_ROOF_WALK_MERGE_FEET_BELOW_M`. */
+export const ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M = 0.65;
+/** Match server `elevator::CAB_ROOF_WALK_MERGE_FEET_ABOVE_M`. */
+export const ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M = 0.45;
+/**
  * Above this upward vertical speed (m/s), do not hard-lock feet to the cab (jump must not be eaten).
  * Must match server `elevator::RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
  */
@@ -42,6 +51,14 @@ export const ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M = DEFAULT_BUILDING_FLOOR_SPACIN
  */
 export const ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.58;
 /**
+ * Hard cap (m) **above authoritative cab feet Y** for walk / kinematic support merge. Must stay
+ * **below** the next landing’s feet height in the same shaft column or players in an empty
+ * hoistway snap onto the cabin one level down. Must match server
+ * `elevator::WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M` (= `STOREY_SPACING_M * 0.82`).
+ */
+export const ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M =
+  DEFAULT_BUILDING_FLOOR_SPACING_M * 0.82;
+/**
  * Cab interior upright span (m) for default Mamuthica geometry where shaft `sy` equals
  * {@link DEFAULT_BUILDING_FLOOR_SPACING_M}. Matches server `elevator_layout::inner_height()`.
  */
@@ -59,6 +76,12 @@ export const ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M = Math.max(
   0.15,
   DEFAULT_BUILDING_FLOOR_SPACING_M - ELEVATOR_GAMEPLAY_INNER_HEIGHT_M - 0.1,
 );
+/**
+ * Rider floor-snap / XZ clamp **never** arms when feet are this close to the inner ceiling line
+ * (`cabFeetY + innerH`) or above — avoids snapping roof standers through to the cab floor.
+ * Must match server `elevator::RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M`.
+ */
+export const ELEVATOR_RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M = 0.1;
 /**
  * Foot-center clearance from hoistway inner half extents so the **walk foot circle** stays inside
  * the same XZ box as `mergeWalkTop` (`half − walkFootRadius − ε`). Match server

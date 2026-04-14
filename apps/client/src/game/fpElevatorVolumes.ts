@@ -1,5 +1,8 @@
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
-import { elevatorHoistwayInnerHalfExtents } from "@the-mammoth/world";
+import {
+  elevatorHoistwayInnerHalfExtents,
+  LANDING_PASSAGE_DOCK_Y_TOL_M,
+} from "@the-mammoth/world";
 import type { ElevatorDoorFace } from "./fpElevatorLabels.js";
 import {
   DOOR_W,
@@ -12,8 +15,10 @@ import {
   ELEVATOR_CLAMP_FOOT_CLEARANCE_M,
   ELEVATOR_CAB_PHYS_GATE_PAD_M,
   ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
+  ELEVATOR_RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M,
   ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
+  ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M,
 } from "./fpElevatorConstants.js";
 
 export type FpElevatorInnerExtents = { halfX: number; halfZ: number; innerH: number };
@@ -92,6 +97,38 @@ export function fpElevPlayerInsideCabAuthoritativePlateLocal(
   return true;
 }
 
+/**
+ * Cab floor may participate in FP walk / kinematic merge only as a real support: rider inside the
+ * cab volume, or the car is **docked** at a landing whose feet Y matches the probe (same rule as
+ * server `cab_walk_merge_support_feet_allowed`).
+ */
+export function fpElevCabWalkMergeSupportFeetAllowed(opts: {
+  plateLocalX: number;
+  plateLocalZ: number;
+  feetWorldY: number;
+  cabFeetWorldY: number;
+  inner: FpElevatorInnerExtents;
+  maxLevel: number;
+  feetYForLevel: (level: number) => number;
+}): boolean {
+  const { plateLocalX: lx, plateLocalZ: lz, feetWorldY, cabFeetWorldY, inner, maxLevel, feetYForLevel } =
+    opts;
+  if (fpElevPlayerInsideCabAuthoritativePlateLocal(lx, lz, feetWorldY, cabFeetWorldY, inner)) {
+    return true;
+  }
+  const landTol = LANDING_PASSAGE_DOCK_Y_TOL_M + ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M;
+  for (let level = 1; level <= maxLevel; level++) {
+    const fy = feetYForLevel(level);
+    if (
+      Math.abs(cabFeetWorldY - fy) <= LANDING_PASSAGE_DOCK_Y_TOL_M &&
+      Math.abs(feetWorldY - fy) <= landTol
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Match server `door_side_slack_m` — extra meters past the inner sill on the door side. */
 export function fpElevatorDoorSideSlackM(doorOpen01: number): number {
   const o = doorOpen01;
@@ -150,7 +187,7 @@ export function fpElevatorPlateLocalClampBounds(
 
 /**
  * True when feet are in the cab **physics** volume for rider snap / XZ clamp arming: a **tight**
- * upper vertical bound (walk merge still uses the wider shaft band in `fpElevatorWorld.mergeWalkTop`)
+ * upper vertical bound (walk merge is additionally gated by {@link fpElevCabWalkMergeSupportFeetAllowed})
  * plus the door-aware clamp box.
  */
 export function fpElevatorPlateLocalInCabPhysicsVolume(
@@ -163,7 +200,8 @@ export function fpElevatorPlateLocalInCabPhysicsVolume(
   inner: FpElevatorInnerExtents,
 ): boolean {
   const yLo = cabFeetY - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
-  const yHi = cabFeetY + inner.innerH + ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M;
+  const yHi =
+    cabFeetY + inner.innerH - ELEVATOR_RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M;
   if (py < yLo || py > yHi) return false;
   const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
   const pad = ELEVATOR_CAB_PHYS_GATE_PAD_M;

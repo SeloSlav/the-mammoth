@@ -20,7 +20,10 @@ import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types"
 import {
   ELEVATOR_PHASE_MOVING,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+  ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M,
+  ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
+  ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
   FP_ELEV_LANDING_HAIL_PICK_UD,
@@ -40,6 +43,7 @@ import {
   fpElevFloorPickRaycastShouldProceed,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevCabWalkMergeSupportFeetAllowed,
   fpElevPlayerInsideCabAuthoritativePlateLocal,
   fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
@@ -50,6 +54,8 @@ import {
   fpElevLandingExteriorDoorNearWhileShaftAuthorized,
   advanceExteriorDoorVisSwingTowardAuth,
   EXTERIOR_DOOR_ANIM_SPEED,
+  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
+  EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
   LANDING_PASSAGE_DOCK_Y_TOL_M,
@@ -76,6 +82,7 @@ export {
   fpElevatorDoorSideSlackM,
   fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevCabWalkMergeSupportFeetAllowed,
   fpElevPlayerInsideCabAuthoritativePlateLocal,
   fpElevatorPlateLocalClampBounds,
   fpElevatorPlateLocalInCabPhysicsVolume,
@@ -118,6 +125,16 @@ export type MountFpElevatorWorldResult = {
     z1: number,
     visit: (aabb: CollisionAabb) => void,
   ): void;
+  /**
+   * After horizontal collision resolution, snap feet onto a cab roof if the body crossed down
+   * onto it (client mirrors server `resolve_player_generated_collision_aabbs` roof landing).
+   */
+  applyCabRoofFeetSnap(
+    pos: { x: number; y: number; z: number },
+    prevPos: { y: number },
+    bodyHeightM: number,
+    footRadiusM: number,
+  ): boolean;
   getFloorVisibilityBand(
     px: number,
     py: number,
@@ -330,16 +347,43 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       }
       const cabFeet = getCabY(key, opts.evalWallClockMs);
       if (!Number.isFinite(cabFeet)) continue;
+      const vy = getCabVerticalVelocityMps(key, opts.evalWallClockMs);
+
       const yLo = cabFeet - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
-      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
-      if (feetY < yLo || feetY > yHi) {
-        continue;
+      const yHi = Math.min(
+        cabFeet + vis.inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+        cabFeet + ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M,
+      );
+      if (
+        feetY >= yLo &&
+        feetY <= yHi &&
+        fpElevCabWalkMergeSupportFeetAllowed({
+          plateLocalX: opts.worldX - wx,
+          plateLocalZ: opts.worldZ - wz,
+          feetWorldY: feetY,
+          cabFeetWorldY: cabFeet,
+          inner: vis.inner,
+          maxLevel,
+          feetYForLevel: (level) => feetYForLayout(layout, level),
+        })
+      ) {
+        const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
+        if (geomTop <= opts.probeTopY + opts.stepUpMargin && geomTop > bestCabGeom + 1e-5) {
+          bestCabGeom = geomTop;
+          bestVy = vy;
+        }
       }
-      const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
-      if (geomTop > opts.probeTopY + opts.stepUpMargin) continue;
-      if (geomTop > bestCabGeom + 1e-5) {
-        bestCabGeom = geomTop;
-        bestVy = getCabVerticalVelocityMps(key, opts.evalWallClockMs);
+
+      const roofFeetY = cabFeet + vis.inner.innerH;
+      if (
+        feetY >= roofFeetY - ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M &&
+        feetY <= roofFeetY + ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
+      ) {
+        const geomTop = roofFeetY - FP_LOCOMOTION_SKIN;
+        if (geomTop <= opts.probeTopY + opts.stepUpMargin && geomTop > bestCabGeom + 1e-5) {
+          bestCabGeom = geomTop;
+          bestVy = vy;
+        }
       }
     }
     if (bestCabGeom === -Infinity) return null;
@@ -458,6 +502,29 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   ): { shaftKey: string; level: number } | null =>
     resolveExteriorDoorInteractByPose(px, py, pz);
 
+  const landingDoorPendingSatisfied = (
+    row: ElevatorLandingDoor | undefined,
+    expectedDesiredOpen: 0 | 1,
+  ): boolean => {
+    if (!row) return false;
+    const desired = (row.desiredOpen ?? 0) !== 0 ? 1 : 0;
+    if (desired === expectedDesiredOpen) return true;
+    // Rows often show `swingOpen01` before `desiredOpen` on the subscription; treat as acked.
+    if (
+      expectedDesiredOpen === 1 &&
+      row.swingOpen01 >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH - 0.05
+    ) {
+      return true;
+    }
+    if (
+      expectedDesiredOpen === 0 &&
+      row.swingOpen01 <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING + 0.08
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   const queueExteriorDoorToggleAttempt = (shaftKey: string, level: number, nowMs: number) => {
     const rowKey = landingExteriorDoorRowKey(shaftKey, level);
     const currentDesired = (landingByRowKey.get(rowKey)?.desiredOpen ?? 0) !== 0 ? 1 : 0;
@@ -466,17 +533,28 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     pendingExteriorDoorToggle.expectedDesiredOpen = currentDesired === 0 ? 1 : 0;
     pendingExteriorDoorToggle.retryCount = 0;
     pendingExteriorDoorToggle.nextRetryAtMs = nowMs;
-    pendingExteriorDoorToggle.expireAtMs = nowMs + 420;
+    pendingExteriorDoorToggle.expireAtMs = nowMs + 1200;
   };
 
   const flushPendingExteriorDoorToggle = (nowMs: number, px: number, py: number, pz: number) => {
     if (!pendingExteriorDoorToggle.shaftKey) return;
+    const pendingHit = resolveExteriorDoorInteractByPose(px, py, pz);
+    const stillSameTarget =
+      pendingHit != null &&
+      pendingHit.shaftKey === pendingExteriorDoorToggle.shaftKey &&
+      pendingHit.level === pendingExteriorDoorToggle.level;
+    if (!stillSameTarget) {
+      pendingExteriorDoorToggle.shaftKey = "";
+      return;
+    }
     const rowKey = landingExteriorDoorRowKey(
       pendingExteriorDoorToggle.shaftKey,
       pendingExteriorDoorToggle.level,
     );
-    const desired = (landingByRowKey.get(rowKey)?.desiredOpen ?? 0) !== 0 ? 1 : 0;
-    if (desired === pendingExteriorDoorToggle.expectedDesiredOpen) {
+    const landingRow = landingByRowKey.get(rowKey);
+    if (
+      landingDoorPendingSatisfied(landingRow, pendingExteriorDoorToggle.expectedDesiredOpen)
+    ) {
       pendingExteriorDoorToggle.shaftKey = "";
       return;
     }
@@ -484,11 +562,30 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const sk = pendingExteriorDoorToggle.shaftKey;
       const lv = pendingExteriorDoorToggle.level;
       const want = pendingExteriorDoorToggle.expectedDesiredOpen;
-      const got = (landingByRowKey.get(landingExteriorDoorRowKey(sk, lv))?.desiredOpen ?? 0) !== 0 ? 1 : 0;
-      console.warn(
-        "[fpElevatorWorld] exterior door replica did not reach desiredOpen — server likely rejected the reducer (see module logs: elevator_landing_exterior_door*)",
-        { shaftKey: sk, level: lv, expectedDesiredOpen: want, replicatedDesiredOpen: got, player: { x: px, y: py, z: pz } },
-      );
+      if (!landingDoorPendingSatisfied(landingByRowKey.get(rowKey), want)) {
+        const hit = resolveExteriorDoorInteractByPose(px, py, pz);
+        const stillEligible =
+          hit != null && hit.shaftKey === sk && hit.level === lv;
+        if (stillEligible) {
+          const got =
+            (landingByRowKey.get(landingExteriorDoorRowKey(sk, lv))?.desiredOpen ?? 0) !== 0
+              ? 1
+              : 0;
+          const swing =
+            landingByRowKey.get(landingExteriorDoorRowKey(sk, lv))?.swingOpen01 ?? Number.NaN;
+          console.warn(
+            "[fpElevatorWorld] exterior door toggle not confirmed on replica (server may have rejected; see elevator_landing_exterior_door* module logs)",
+            {
+              shaftKey: sk,
+              level: lv,
+              expectedDesiredOpen: want,
+              replicatedDesiredOpen: got,
+              swingOpen01: swing,
+              player: { x: px, y: py, z: pz },
+            },
+          );
+        }
+      }
       pendingExteriorDoorToggle.shaftKey = "";
       return;
     }
@@ -512,7 +609,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     _playerPos: THREE.Vector3,
   ): boolean => {
     raycaster.setFromCamera(screenCenterNdc, camera);
-    raycaster.far = 4.8;
+    raycaster.far = 8.5;
     const roots: THREE.Object3D[] = [];
     for (const v of visuals.values()) {
       roots.push(v.landingHailPickRoot);
@@ -841,6 +938,43 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     resolveAttachment,
   };
 
+  const applyCabRoofFeetSnap = (
+    pos: { x: number; y: number; z: number },
+    prevPos: { y: number },
+    bodyHeightM: number,
+    footRadiusM: number,
+  ): boolean => {
+    const head = pos.y + bodyHeightM;
+    const prevHead = prevPos.y + bodyHeightM;
+    const r = footRadiusM;
+    const tEval = cabEvalNowMs;
+    for (const [key, row] of latest) {
+      const layout = layoutByKey.get(key);
+      const vis = visuals.get(key);
+      if (!layout || !vis) continue;
+      const { halfX: hx, halfZ: hz } = vis.inner;
+      const innerH = vis.inner.innerH;
+      const plateX = ox + row.plateX;
+      const plateZ = oz + row.plateZ;
+      const cabFeet = getCabY(key, tEval);
+      if (!Number.isFinite(cabFeet)) continue;
+      const roofTop = cabFeet + innerH;
+      const minX = plateX - hx * 0.92;
+      const maxX = plateX + hx * 0.92;
+      const minZ = plateZ - hz * 0.92;
+      const maxZ = plateZ + hz * 0.92;
+      if (pos.x + r <= minX || pos.x - r >= maxX || pos.z + r <= minZ || pos.z - r >= maxZ) {
+        continue;
+      }
+      if (prevHead <= roofTop + 0.04) continue;
+      if (head < roofTop - 0.05) continue;
+      if (pos.y > roofTop + 0.35) continue;
+      pos.y = roofTop + FP_LOCOMOTION_SKIN;
+      return true;
+    }
+    return false;
+  };
+
   return {
     dispose: () => {
       opts.conn.db.elevator_car.removeOnInsert(onElevRow);
@@ -866,6 +1000,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     shouldSuppressEpickup,
     getExteriorDoorInteractPrompt,
     visitCollisionAabbsInXZ,
+    applyCabRoofFeetSnap,
     getFloorVisibilityBand,
   };
 }

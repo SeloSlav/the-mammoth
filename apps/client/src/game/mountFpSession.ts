@@ -63,7 +63,12 @@ import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevatorConstants.js";
 import { poseSeqAsBigint } from "./fpSessionPoseSeq";
-import { resolvePlayerCollisions } from "./fpPlayerCollision.js";
+import {
+  FP_PLAYER_COLLISION_HEIGHT_CROUCH_M,
+  FP_PLAYER_COLLISION_HEIGHT_STAND_M,
+  FP_PLAYER_COLLISION_RADIUS_M,
+  resolvePlayerCollisions,
+} from "./fpPlayerCollision.js";
 import {
   clampAttachedBodyXZToKinematicSupportIfNeeded,
   getKinematicSupportVerticalVelocityMps,
@@ -697,6 +702,14 @@ export async function mountFpSession(
           fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit),
       },
     );
+
+    const bodyH = crouchToggle
+      ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M
+      : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
+    if (fpElevators.applyCabRoofFeetSnap(pos, { y: prevPos.y }, bodyH, FP_PLAYER_COLLISION_RADIUS_M)) {
+      loco.velocity.y = 0;
+      loco.grounded = true;
+    }
 
     snapAttachedFeetToKinematicSupportIfNeeded(
       fpElevators.kinematicSupport,

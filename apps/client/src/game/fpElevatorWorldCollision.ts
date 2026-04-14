@@ -12,19 +12,20 @@ import {
   EXTERIOR_COLLISION_L0,
   EXTERIOR_COLLISION_L1,
   EXTERIOR_COLLISION_LZ_PAD,
-  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
   EXTERIOR_STRIP_Y0,
   EXTERIOR_STRIP_Y1,
   LANDING_FRONT_PASSAGE_HALF_W_M,
   LANDING_FRONT_WALL_SLAB_IN,
   LANDING_FRONT_WALL_SLAB_OUT,
-  LANDING_PASSAGE_DOCK_Y_TOL_M,
   type ElevatorShaftLayout,
 } from "@the-mammoth/world";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
 import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
-import { landingExteriorDoorRowKey } from "./fpElevatorLandingExteriorDoor.js";
+import {
+  landingExteriorDoorRowKey,
+  landingFrontPassageOpen,
+} from "./fpElevatorLandingExteriorDoor.js";
 
 export type FpElevatorWorldCollisionAuth = {
   buildingOriginX: number;
@@ -118,6 +119,13 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
       }
     }
 
+    {
+      const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+      const roofY0 = row.cabFloorY + innerH - 0.08;
+      const roofY1 = row.cabFloorY + innerH + 0.16;
+      emit(plateX - hx, roofY0, plateZ - hz, plateX + hx, roofY1, plateZ + hz);
+    }
+
     for (let level = 1; level <= maxLevel; level++) {
       const fy = feetYForLayout(layout, level);
       const landingRow = landingByRowKey.get(landingExteriorDoorRowKey(shaftKey, level));
@@ -170,11 +178,12 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
         }
       }
 
-      const passageOpen =
-        authSwing >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH &&
-        Number(row.currentLevel ?? 1) === level &&
-        Math.abs(row.cabFloorY - fy) <= LANDING_PASSAGE_DOCK_Y_TOL_M &&
-        row.doorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
+      const passageOpen = landingFrontPassageOpen({
+        swingOpen01: authSwing,
+        cabFloorY: row.cabFloorY,
+        landingFeetY: fy,
+        cabDoorOpen01: row.doorOpen01,
+      });
       const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
       const y0w = fy - 0.22;
       const y1w = fy + innerH + 0.38;

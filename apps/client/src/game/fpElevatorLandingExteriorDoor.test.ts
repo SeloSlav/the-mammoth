@@ -1,6 +1,8 @@
 import { Vector3 } from "three";
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import { describe, expect, it } from "vitest";
+import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
 import {
   advanceExteriorDoorVisSwingTowardAuth,
   fpElevLandingExteriorDoorAimTargetWorld,
@@ -13,6 +15,7 @@ import {
   EXTERIOR_INTERACT_L1,
   fpElevLandingExteriorDoorInteractPlateLocal,
   fpElevLandingExteriorDoorNearWorldPose,
+  landingFrontPassageOpen,
 } from "./fpElevatorLandingExteriorDoor.js";
 
 const shaftLayout: ElevatorShaftLayout = {
@@ -180,7 +183,7 @@ describe("closed elevator frontage clamps", () => {
     expect(vel.x).toBe(0);
   });
 
-  it("allows the doorway lane only when both landing and cab doors are open", () => {
+  it("allows the doorway lane when landing swing and interior cab doors are open at that storey", () => {
     const pos = { x: 1.24, y: 11, z: 0 };
     const vel = new Vector3(-1, 0, 0);
     fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
@@ -198,5 +201,73 @@ describe("closed elevator frontage clamps", () => {
     });
     expect(pos.x).toBe(1.24);
     expect(vel.x).toBe(-1);
+  });
+
+  it("allows the doorway lane when exterior opens and the cab is docked on another storey", () => {
+    const feetStory1 = 10;
+    const feetStory2 = feetStory1 + DEFAULT_BUILDING_FLOOR_SPACING_M;
+    const innerH = Math.max(1.8, shaftLayout.sy - 2 * 0.11 - 0.14);
+    const pos = { x: 1.24, y: feetStory2 + innerH * 0.35, z: 0 };
+    const vel = new Vector3(-1, 0, 0);
+    fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      landingRows: [{ shaftKey: "shaft", level: 2, swingOpen01: 1 }],
+      carsByShaft: new Map([
+        [
+          "shaft",
+          {
+            currentLevel: 1,
+            doorOpen01: 0,
+            cabFloorY: feetStory1,
+            plateX: 0,
+            plateZ: 0,
+          },
+        ],
+      ]),
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+      feetYForLayout: (_layout, level) =>
+        level === 1 ? feetStory1 : level === 2 ? feetStory2 : 0,
+    });
+    expect(pos.x).toBe(1.24);
+    expect(vel.x).toBe(-1);
+  });
+});
+
+describe("landingFrontPassageOpen", () => {
+  const fy1 = 5.2;
+  const fy2 = fy1 + DEFAULT_BUILDING_FLOOR_SPACING_M;
+
+  it("is true when the swing is clear and the car is not vertically docked at this landing", () => {
+    expect(
+      landingFrontPassageOpen({
+        swingOpen01: 0.9,
+        cabFloorY: fy1,
+        landingFeetY: fy2,
+        cabDoorOpen01: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when docked and interior doors are still shut", () => {
+    expect(
+      landingFrontPassageOpen({
+        swingOpen01: 0.9,
+        cabFloorY: fy1,
+        landingFeetY: fy1,
+        cabDoorOpen01: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it("is true when docked and interior doors meet the exit-open threshold", () => {
+    expect(
+      landingFrontPassageOpen({
+        swingOpen01: 0.9,
+        cabFloorY: fy1,
+        landingFeetY: fy1,
+        cabDoorOpen01: ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
+      }),
+    ).toBe(true);
   });
 });

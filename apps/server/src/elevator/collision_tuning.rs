@@ -19,7 +19,7 @@ pub(super) const EXT_COLLISION_L0: f32 = -0.55;
 pub(super) const EXT_COLLISION_L1: f32 = 0.92;
 pub(super) const EXT_COLLISION_LZ_PAD: f32 = 0.18;
 pub(super) const EXT_INTERACT_WORLD_RADIUS_M: f32 = 1.6;
-pub(super) const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.3;
+pub(super) const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.42;
 
 pub(super) const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.28;
 pub(super) const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;

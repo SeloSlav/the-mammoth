@@ -4,6 +4,7 @@ import {
   ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
+  ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M,
 } from "./fpElevatorConstants.js";
 
 describe("elevator shaft vertical rider band", () => {
@@ -24,6 +25,16 @@ describe("elevator shaft vertical rider band", () => {
     const innerH = Math.max(1.8, DEFAULT_BUILDING_FLOOR_SPACING_M - 2 * 0.11 - 0.14);
     expect(ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M).toBeLessThan(
       DEFAULT_BUILDING_FLOOR_SPACING_M - innerH,
+    );
+  });
+
+  it("keeps walk-merge max above cab below one storey (empty hoistway must not merge to car below)", () => {
+    expect(ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M).toBeLessThan(
+      DEFAULT_BUILDING_FLOOR_SPACING_M,
+    );
+    expect(ELEVATOR_WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M).toBeCloseTo(
+      DEFAULT_BUILDING_FLOOR_SPACING_M * 0.82,
+      5,
     );
   });
 });

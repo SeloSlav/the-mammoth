@@ -492,31 +492,31 @@ export class FpElevatorShaftVisual {
       this.hailBtnIconMat,
     );
     const y = 1.34;
-    const outerHx = this.layout.sx * 0.5;
-    const outerHz = this.layout.sz * 0.5;
     const wallSurfaceOffset = 0.034;
+    /** Corridor-side jamb (inner sill + margin). Outer shaft shell is often buried in building mass on upper storeys. */
+    const faceOut = 0.22 + wallSurfaceOffset;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);
     if (face === "e") {
-      group.position.set(outerHx + wallSurfaceOffset, y, -doorSideOffset);
+      group.position.set(hx + faceOut, y, -doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
       button.position.set(0.045, 0, 0);
       icon.position.set(0.069, 0, 0);
       icon.rotation.y = Math.PI * 0.5;
     } else if (face === "w") {
-      group.position.set(-outerHx - wallSurfaceOffset, y, doorSideOffset);
+      group.position.set(-hx - faceOut, y, doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
       button.position.set(-0.045, 0, 0);
       icon.position.set(-0.069, 0, 0);
       icon.rotation.y = -Math.PI * 0.5;
     } else if (face === "n") {
-      group.position.set(doorSideOffset, y, outerHz + wallSurfaceOffset);
+      group.position.set(doorSideOffset, y, hz + faceOut);
       button.rotation.x = Math.PI * 0.5;
       button.position.set(0, 0, 0.045);
       icon.position.set(0, 0, 0.069);
     } else {
-      group.position.set(-doorSideOffset, y, -outerHz - wallSurfaceOffset);
+      group.position.set(-doorSideOffset, y, -hz - faceOut);
       button.rotation.x = Math.PI * 0.5;
       button.position.set(0, 0, -0.045);
       icon.position.set(0, 0, -0.069);

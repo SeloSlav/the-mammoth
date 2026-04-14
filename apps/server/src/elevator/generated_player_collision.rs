@@ -3,7 +3,8 @@
 //! The unified collision pipeline bakes **static** solids into `generated_collision_solids`
 //! (from `buildStaticCollisionSceneForBuilding` via `scripts/gen-walk-aabbs.ts`). Those AABBs
 //! cannot track live `elevator_car` / `elevator_landing_door` rows: cab door open fraction,
-//! exterior swing, or “passage open only when docked + both doors clear”.
+//! exterior swing, or “passage open when the corridor swing clears; if the car is docked here,
+//! interior cab doors must also be clear”.
 //!
 //! This module is therefore the server-side **dynamic half** of the same design: it emits
 //! query-local AABBs from current DB state and resolves them with the same axis-sweep rules as
@@ -20,7 +21,7 @@
 use spacetimedb::{ReducerContext, Table};
 
 use super::{elevator_car, elevator_landing_door};
-use crate::elevator_layout::{self, DoorFace};
+use crate::elevator_layout::{self, DoorFace, SKIN};
 use crate::pose::PlayerPose;
 
 use super::{door_face_from_u8, face_lateral_half, landing_front_passage_open, spec_for_key, support_y};
@@ -125,6 +126,21 @@ fn collect_generated_collision_aabbs(
                 [car.plate_x + door_half, y1, car.plate_z - hz + super::CLOSED_CAB_OUTSIDE_SLAB_IN],
             ),
         }
+    }
+
+    // Cab roof slab (always): shaft falls must not phase through the car top.
+    for car in ctx.db.elevator_car().iter() {
+        let roof_y0 = car.cab_floor_y + iy - 0.08;
+        let roof_y1 = car.cab_floor_y + iy + 0.16;
+        push_query_overlapping_aabb(
+            out,
+            x0,
+            x1,
+            z0,
+            z1,
+            [car.plate_x - hx, roof_y0, car.plate_z - hz],
+            [car.plate_x + hx, roof_y1, car.plate_z + hz],
+        );
     }
 
     for landing in ctx.db.elevator_landing_door().iter() {
@@ -328,7 +344,7 @@ pub fn resolve_player_generated_collision_aabbs(
     ctx: &ReducerContext,
     p: &mut PlayerPose,
     prev_x: f32,
-    _prev_y: f32,
+    prev_y: f32,
     prev_z: f32,
     crouch: bool,
 ) {
@@ -465,6 +481,39 @@ pub fn resolve_player_generated_collision_aabbs(
             if p.vel_y > 0.0 {
                 p.vel_y = 0.0;
             }
+        }
+    }
+
+    // Land on cab roof when falling from above (walk merge alone can miss one substep).
+    {
+        let (hx, hz) = elevator_layout::inner_half_xz();
+        let iy = elevator_layout::inner_height();
+        let head = p.y + body_h;
+        let prev_head = prev_y + body_h;
+        for car in ctx.db.elevator_car().iter() {
+            let roof_top = car.cab_floor_y + iy;
+            let min_x = car.plate_x - hx * 0.92;
+            let max_x = car.plate_x + hx * 0.92;
+            let min_z = car.plate_z - hz * 0.92;
+            let max_z = car.plate_z + hz * 0.92;
+            if p.x + r <= min_x || p.x - r >= max_x || p.z + r <= min_z || p.z - r >= max_z {
+                continue;
+            }
+            if prev_head <= roof_top + 0.04 {
+                continue;
+            }
+            if head < roof_top - 0.05 {
+                continue;
+            }
+            if p.y > roof_top + 0.35 {
+                continue;
+            }
+            p.y = roof_top + SKIN;
+            if p.vel_y < 0.0 {
+                p.vel_y = 0.0;
+            }
+            p.grounded = 1;
+            break;
         }
     }
 }

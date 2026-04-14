@@ -350,20 +350,22 @@ function landingFrontDoorLaneLocal(
     : Math.abs(lx) <= LANDING_FRONT_PASSAGE_HALF_W_M;
 }
 
-function landingFrontPassageOpen(opts: {
+/**
+ * Hoistway front “passage” for collision: when the corridor swing is clear, allow entry unless the
+ * car is **docked at this landing** with interior doors still shut. Matches server
+ * `elevator::landing_front_passage_open`.
+ */
+export function landingFrontPassageOpen(opts: {
   swingOpen01: number;
-  currentLevel: number;
-  level: number;
   cabFloorY: number;
   landingFeetY: number;
   cabDoorOpen01: number;
 }): boolean {
-  return (
-    !fpElevExteriorDoorBlocksPassage(opts.swingOpen01) &&
-    opts.currentLevel === opts.level &&
-    Math.abs(opts.cabFloorY - opts.landingFeetY) <= LANDING_PASSAGE_DOCK_Y_TOL_M &&
-    opts.cabDoorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN
-  );
+  if (fpElevExteriorDoorBlocksPassage(opts.swingOpen01)) return false;
+  const dockedHere =
+    Math.abs(opts.cabFloorY - opts.landingFeetY) <= LANDING_PASSAGE_DOCK_Y_TOL_M;
+  if (!dockedHere) return true;
+  return opts.cabDoorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
 }
 
 function inClosedCabOutsideDoorSlab(
@@ -554,8 +556,6 @@ export function fpElevApplyLandingHoistwayFrontWallClamp(
       inDoorLane &&
       landingFrontPassageOpen({
         swingOpen01: row.swingOpen01,
-        currentLevel: car.currentLevel,
-        level: row.level,
         cabFloorY: car.cabFloorY,
         landingFeetY: fy,
         cabDoorOpen01: car.doorOpen01,

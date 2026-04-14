@@ -108,7 +108,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     expect(spansDoor).toBe(true);
   });
 
-  it("does not emit the closed-cab slab when doors are past exit clamp (maxLevel=0 isolates cab path)", () => {
+  it("does not emit the closed-cab slab when doors are past exit clamp (roof cap still emits)", () => {
     const fy1 = feetYForLayout(layout, 1);
     const auth: FpElevatorWorldCollisionAuth = {
       buildingOriginX: 0,
@@ -136,7 +136,11 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     const x1 = plateX + hx + 1.2;
     const z0 = -0.5;
     const z1 = 0.5;
-    expect(collectHits(auth, x0, x1, z0, z1)).toHaveLength(0);
+    const hits = collectHits(auth, x0, x1, z0, z1);
+    const tallCabSlab = hits.some((b) => b.max[1] - b.min[1] > 1.5);
+    expect(tallCabSlab).toBe(false);
+    expect(hits.length).toBe(1);
+    expect(hits[0]!.max[1] - hits[0]!.min[1]).toBeLessThan(0.35);
   });
 
   it("splits hoistway front wall into two AABBs when passage is open (E door)", () => {
