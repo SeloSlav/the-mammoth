@@ -915,6 +915,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         layoutByKey,
         landingByRowKey,
         feetYForLayout,
+        getCabFloorY: (shaftKey) => getCabY(shaftKey, cabEvalNowMs),
+        getCabDoorOpen01: (shaftKey) => getDoor(shaftKey, cabEvalNowMs),
       },
       x0,
       x1,

@@ -6,6 +6,8 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer";
+import CleanupOldWorldSoundEventsReducer from "../cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "../consume_hotbar_item_reducer";
 import DropItemReducer from "../drop_item_reducer";
 import ElevatorHailReducer from "../elevator_hail_reducer";
@@ -14,13 +16,19 @@ import ElevatorLandingExteriorDoorToggleReducer from "../elevator_landing_exteri
 import ElevatorSelectFloorReducer from "../elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "../move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "../move_item_to_inventory_reducer";
+import OnConnectReducer from "../on_connect_reducer";
+import OnDisconnectReducer from "../on_disconnect_reducer";
+import PhysicsTickStepReducer from "../physics_tick_step_reducer";
 import PickupDroppedItemReducer from "../pickup_dropped_item_reducer";
 import PingWorldReducer from "../ping_world_reducer";
+import PlayerVitalsTickStepReducer from "../player_vitals_tick_step_reducer";
 import SetActiveHotbarSlotReducer from "../set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "../set_username_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "../submit_move_intent_reducer";
 
+export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItemsReducer>;
+export type CleanupOldWorldSoundEventsParams = __Infer<typeof CleanupOldWorldSoundEventsReducer>;
 export type ConsumeHotbarItemParams = __Infer<typeof ConsumeHotbarItemReducer>;
 export type DropItemParams = __Infer<typeof DropItemReducer>;
 export type ElevatorHailParams = __Infer<typeof ElevatorHailReducer>;
@@ -29,8 +37,12 @@ export type ElevatorLandingExteriorDoorToggleParams = __Infer<typeof ElevatorLan
 export type ElevatorSelectFloorParams = __Infer<typeof ElevatorSelectFloorReducer>;
 export type MoveItemToHotbarParams = __Infer<typeof MoveItemToHotbarReducer>;
 export type MoveItemToInventoryParams = __Infer<typeof MoveItemToInventoryReducer>;
+export type OnConnectParams = __Infer<typeof OnConnectReducer>;
+export type OnDisconnectParams = __Infer<typeof OnDisconnectReducer>;
+export type PhysicsTickStepParams = __Infer<typeof PhysicsTickStepReducer>;
 export type PickupDroppedItemParams = __Infer<typeof PickupDroppedItemReducer>;
 export type PingWorldParams = __Infer<typeof PingWorldReducer>;
+export type PlayerVitalsTickStepParams = __Infer<typeof PlayerVitalsTickStepReducer>;
 export type SetActiveHotbarSlotParams = __Infer<typeof SetActiveHotbarSlotReducer>;
 export type SetUsernameParams = __Infer<typeof SetUsernameReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;

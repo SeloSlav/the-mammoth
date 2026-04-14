@@ -35,6 +35,14 @@ export type FpElevatorWorldCollisionAuth = {
   layoutByKey: ReadonlyMap<string, ElevatorShaftLayout>;
   landingByRowKey: ReadonlyMap<string, ElevatorLandingDoor>;
   feetYForLayout: (layout: ElevatorShaftLayout, level: number) => number;
+  /**
+   * Optional evaluated cab feet Y for this frame. When omitted, raw replicated `cabFloorY` is used.
+   * Supplying this keeps dynamic collision aligned with the same predicted cab pose used by support
+   * sampling and visuals.
+   */
+  getCabFloorY?: (shaftKey: string, row: ElevatorCar) => number;
+  /** Optional evaluated interior door openness for this frame. Defaults to replicated `doorOpen01`. */
+  getCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
 };
 
 export function visitFpElevatorWorldCollisionAabbsInXZ(
@@ -66,13 +74,15 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
   for (const [shaftKey, row] of latestCars) {
     const layout = layoutByKey.get(shaftKey);
     if (!layout) continue;
+    const cabFloorY = auth.getCabFloorY?.(shaftKey, row) ?? row.cabFloorY;
+    const cabDoorOpen01 = auth.getCabDoorOpen01?.(shaftKey, row) ?? row.doorOpen01;
     const plateX = ox + row.plateX;
     const plateZ = oz + row.plateZ;
     const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
 
-    if (row.doorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
-      const y0 = row.cabFloorY - 0.22;
-      const y1 = row.cabFloorY + Math.max(1.8, layout.sy - 2 * 0.11 - 0.14) + 0.38;
+    if (cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
+      const y0 = cabFloorY - 0.22;
+      const y1 = cabFloorY + Math.max(1.8, layout.sy - 2 * 0.11 - 0.14) + 0.38;
       const doorHalf =
         (layout.doorFace === "e" || layout.doorFace === "w" ? hz : hx) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
       switch (layout.doorFace) {
@@ -121,8 +131,8 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
 
     {
       const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
-      const roofY0 = row.cabFloorY + innerH - 0.08;
-      const roofY1 = row.cabFloorY + innerH + 0.16;
+      const roofY0 = cabFloorY + innerH - 0.08;
+      const roofY1 = cabFloorY + innerH + 0.16;
       emit(plateX - hx, roofY0, plateZ - hz, plateX + hx, roofY1, plateZ + hz);
     }
 
@@ -180,9 +190,9 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
 
       const passageOpen = landingFrontPassageOpen({
         swingOpen01: authSwing,
-        cabFloorY: row.cabFloorY,
+        cabFloorY,
         landingFeetY: fy,
-        cabDoorOpen01: row.doorOpen01,
+        cabDoorOpen01,
       });
       const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
       const y0w = fy - 0.22;

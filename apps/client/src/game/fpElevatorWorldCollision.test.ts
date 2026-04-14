@@ -143,6 +143,76 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     expect(hits[0]!.max[1] - hits[0]!.min[1]).toBeLessThan(0.35);
   });
 
+  it("uses evaluated cab feet Y for roof collision instead of stale replicated cabFloorY", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const fy2 = feetYForLayout(layout, 2);
+    const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 0,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            currentLevel: 1,
+            moveFromLevel: 1,
+            moveToLevel: 2,
+            phase: 2,
+            cabFloorY: fy1,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map(),
+      feetYForLayout,
+      getCabFloorY: () => fy2,
+    };
+    const hits = collectHits(auth, -2, 2, -2, 2);
+    const roofY0 = fy2 + innerH - 0.08;
+    const roofY1 = fy2 + innerH + 0.16;
+    const roofAtEvaluatedY = hits.some(
+      (b) =>
+        Math.abs(b.min[1] - roofY0) < 1e-4 &&
+        Math.abs(b.max[1] - roofY1) < 1e-4,
+    );
+    expect(roofAtEvaluatedY).toBe(true);
+  });
+
+  it("uses evaluated door openness so closed-cab slab disappears once the evaluated door is open", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 0,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            cabFloorY: fy1,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map(),
+      feetYForLayout,
+      getCabDoorOpen01: () => Math.max(ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN, 0.99),
+    };
+    const hits = collectHits(auth, hx - 0.05, hx + 1.2, -0.5, 0.5);
+    const tallCabSlab = hits.some((b) => b.max[1] - b.min[1] > 1.5);
+    expect(tallCabSlab).toBe(false);
+  });
+
   it("splits hoistway front wall into two AABBs when passage is open (E door)", () => {
     const fy1 = feetYForLayout(layout, 1);
     const landing: ElevatorLandingDoor = {
@@ -189,6 +259,50 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       .sort((a, b) => a.z0 - b.z0);
     expect(zGaps.length).toBeGreaterThanOrEqual(2);
     expect(zGaps[0]!.z1).toBeLessThan(zGaps[1]!.z0 + 1e-3);
+  });
+
+  it("uses evaluated cab docking + door state when deciding whether the landing passage is open", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const fy2 = feetYForLayout(layout, 2);
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(shaftKey, 2),
+      shaftKey,
+      level: 2,
+      desiredOpen: 1,
+      swingOpen01: 0.95,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 2,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            currentLevel: 1,
+            cabFloorY: fy1,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+      getCabFloorY: () => fy2,
+      getCabDoorOpen01: () => 1,
+    };
+    const outerHz = layout.sz * 0.5;
+    const hits = collectHits(auth, -2, 2, -outerHz, outerHz).filter(
+      (b) => b.min[1] <= fy2 + 1.0 && b.max[1] >= fy2 + 1.0,
+    );
+    const wallSlabs = hits.filter(
+      (b) => b.max[1] - b.min[1] > 1.5 && b.max[0] - b.min[0] < 1.5,
+    );
+    expect(wallSlabs.length).toBeGreaterThanOrEqual(2);
   });
 
   it("emits exterior collision slab when swing is essentially closed", () => {
