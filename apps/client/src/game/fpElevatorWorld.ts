@@ -481,6 +481,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       return;
     }
     if (nowMs >= pendingExteriorDoorToggle.expireAtMs) {
+      const sk = pendingExteriorDoorToggle.shaftKey;
+      const lv = pendingExteriorDoorToggle.level;
+      const want = pendingExteriorDoorToggle.expectedDesiredOpen;
+      const got = (landingByRowKey.get(landingExteriorDoorRowKey(sk, lv))?.desiredOpen ?? 0) !== 0 ? 1 : 0;
+      console.warn(
+        "[fpElevatorWorld] exterior door replica did not reach desiredOpen — server likely rejected the reducer (see module logs: elevator_landing_exterior_door*)",
+        { shaftKey: sk, level: lv, expectedDesiredOpen: want, replicatedDesiredOpen: got, player: { x: px, y: py, z: pz } },
+      );
       pendingExteriorDoorToggle.shaftKey = "";
       return;
     }

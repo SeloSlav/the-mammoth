@@ -836,6 +836,10 @@ fn resolve_exterior_door_toggle_target(
         if near_exterior_door_toggle_pose_for_player(ctx, p, spec, requested_level) {
             return Some((spec, requested_level));
         }
+        // Client always sends a real `shaftPlanKey` for this module. Do **not** fall back to other
+        // shafts/levels: a near-miss on the requested landing was updating a different row’s
+        // `desired_open`, so the door the player is looking at never moved (silent failure).
+        return None;
     }
 
     let mut best: Option<(&'static ElevShaftSpec, u32, f32)> = None;
@@ -865,13 +869,28 @@ fn set_landing_exterior_door_desired_open(
         requested_shaft_key,
         requested_level,
     ) else {
+        log::info!(
+            "elevator_landing_exterior_door: reject not_eligible shaft_key={requested_shaft_key:?} level={requested_level} desired_open={desired_open} identity={} pose=({:.3},{:.3},{:.3})",
+            ctx.sender(),
+            pose.x,
+            pose.y,
+            pose.z,
+        );
         return;
     };
     let target_shaft_key = spec.shaft_key.to_string();
     let Some(car) = ctx.db.elevator_car().shaft_key().find(&target_shaft_key) else {
+        log::info!(
+            "elevator_landing_exterior_door: reject no_car row_shaft={target_shaft_key:?} level={lv} identity={}",
+            ctx.sender(),
+        );
         return;
     };
     if player_inside_cab(pose, &car) && car.phase == PH_MOVING {
+        log::info!(
+            "elevator_landing_exterior_door: reject inside_cab_while_moving shaft_key={target_shaft_key:?} level={lv} identity={}",
+            ctx.sender(),
+        );
         return;
     }
     // Do not use `current_level` alone: it can desync from `cab_floor_y` while the car is still
@@ -879,6 +898,12 @@ fn set_landing_exterior_door_desired_open(
     if player_inside_cab(pose, &car)
         && (car.cab_floor_y - support_y(lv)).abs() > LANDING_PASSAGE_DOCK_Y_TOL_M
     {
+        log::info!(
+            "elevator_landing_exterior_door: reject inside_cab_not_docked_here shaft_key={target_shaft_key:?} level={lv} identity={} cab_floor_y={:.3} support_y={:.3}",
+            ctx.sender(),
+            car.cab_floor_y,
+            support_y(lv),
+        );
         return;
     }
     let rk = landing_door_row_key(&target_shaft_key, lv);
@@ -1319,14 +1344,24 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
 #[spacetimedb::reducer]
 pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: String, level: u32) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
-        log::debug!("elevator_landing_exterior_door_toggle blocked: {e}");
+        log::info!(
+            "elevator_landing_exterior_door_toggle: reject gameplay_locked identity={} ({e})",
+            ctx.sender(),
+        );
         return;
     }
     let id = ctx.sender();
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
+        log::info!("elevator_landing_exterior_door_toggle: reject no_player_pose identity={id}");
         return;
     };
     let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level) else {
+        log::info!(
+            "elevator_landing_exterior_door_toggle: reject not_eligible shaft_key={shaft_key:?} level={level} identity={id} pose=({:.3},{:.3},{:.3})",
+            pose.x,
+            pose.y,
+            pose.z,
+        );
         return;
     };
     let target_shaft_key = spec.shaft_key.to_string();
@@ -1350,11 +1385,15 @@ pub fn elevator_landing_exterior_door_set(
     desired_open: u8,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
-        log::debug!("elevator_landing_exterior_door_set blocked: {e}");
+        log::info!(
+            "elevator_landing_exterior_door_set: reject gameplay_locked identity={} ({e})",
+            ctx.sender(),
+        );
         return;
     }
     let id = ctx.sender();
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
+        log::info!("elevator_landing_exterior_door_set: reject no_player_pose identity={id}");
         return;
     };
     set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, desired_open);
