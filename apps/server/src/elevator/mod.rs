@@ -11,6 +11,7 @@ use crate::elevator_layout::{
 };
 use crate::kinematic_support::{self, KinematicAttachment, KinematicSupportSurface};
 use crate::pose::{player_pose, PlayerPose};
+use crate::world_sound;
 
 mod collision_tuning;
 use collision_tuning::*;
@@ -150,12 +151,14 @@ fn support_y(level: u32) -> f32 {
     elevator_layout::support_feet_y_for_level(level, BUILDING_ORIGIN_Y)
 }
 
-fn enqueue_dest(row: &mut ElevatorCar, level: u32) {
+/// Returns `true` if a new destination was appended (duplicate tail is ignored).
+fn enqueue_dest(row: &mut ElevatorCar, level: u32) -> bool {
     let lv = level.clamp(1, MAX_LEVEL);
     if row.dest_queue.last() == Some(&lv) {
-        return;
+        return false;
     }
     row.dest_queue.push(lv);
+    true
 }
 
 fn peek_dest(row: &ElevatorCar) -> Option<u32> {
@@ -593,7 +596,23 @@ fn call_center_y(level: u32) -> f32 {
     support_y(level.max(1)) + 1.1
 }
 
-fn near_call_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
+/// World point at the corridor-side exterior door pick (matches client `createLandingDoorPickMesh`).
+/// `DOOR_H` must stay aligned with `apps/client/src/game/fpElevatorConstants.ts` `DOOR_H`.
+fn landing_exterior_corridor_door_sound_xyz(spec: &ElevShaftSpec, level: u32) -> (f32, f32, f32) {
+    const DOOR_H: f32 = 2.05;
+    const PICK_OUT: f32 = 0.06;
+    let (hx, hz) = elevator_layout::inner_half_xz();
+    let fy = support_y(level.max(1));
+    let y = fy + DOOR_H * 0.5 + 0.1;
+    match spec.door {
+        DoorFace::E => (spec.plate_x + hx + PICK_OUT, y, spec.plate_z),
+        DoorFace::W => (spec.plate_x - hx - PICK_OUT, y, spec.plate_z),
+        DoorFace::N => (spec.plate_x, y, spec.plate_z + hz + PICK_OUT),
+        DoorFace::S => (spec.plate_x, y, spec.plate_z - hz - PICK_OUT),
+    }
+}
+
+fn call_panel_xz(spec: &ElevShaftSpec) -> (f32, f32) {
     let n = match spec.door {
         DoorFace::E => (1.0_f32, 0.0_f32),
         DoorFace::W => (-1.0, 0.0),
@@ -606,8 +625,14 @@ fn near_call_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
         DoorFace::N | DoorFace::S => ihz,
     };
     let pad = 0.52_f32;
-    let cx = spec.plate_x + n.0 * (outward + pad);
-    let cz = spec.plate_z + n.1 * (outward + pad);
+    (
+        spec.plate_x + n.0 * (outward + pad),
+        spec.plate_z + n.1 * (outward + pad),
+    )
+}
+
+fn near_call_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
+    let (cx, cz) = call_panel_xz(spec);
     let cy = call_center_y(level);
     if (p.x - cx).hypot(p.z - cz) > CALL_R_XZ {
         return false;
@@ -1044,11 +1069,22 @@ fn set_landing_exterior_door_desired_open(
             desired_open: 0,
             swing_open_01: 0.0,
         });
+    let prev_desired = row.desired_open;
     row.desired_open = if desired_open != 0 { 1 } else { 0 };
+    let new_desired = row.desired_open;
     if ctx.db.elevator_landing_door().row_key().find(&rk).is_some() {
         ctx.db.elevator_landing_door().row_key().update(row);
     } else {
         let _ = ctx.db.elevator_landing_door().insert(row);
+    }
+    if prev_desired != new_desired {
+        let (sx, sy, sz) = landing_exterior_corridor_door_sound_xyz(spec, lv);
+        let id = ctx.sender();
+        if new_desired != 0 {
+            world_sound::emit_landing_exterior_door_open_at(ctx, sx, sy, sz, id);
+        } else {
+            world_sound::emit_landing_exterior_door_close_at(ctx, sx, sy, sz, id);
+        }
     }
 }
 
@@ -1570,8 +1606,13 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
     if landing_hail_redundant_for_cab_pose(&row, lv) {
         return;
     }
-    enqueue_dest(&mut row, lv);
+    if !enqueue_dest(&mut row, lv) {
+        return;
+    }
     ctx.db.elevator_car().shaft_key().update(row);
+    let (cx, cz) = call_panel_xz(spec);
+    let cy = call_center_y(lv);
+    world_sound::emit_elevator_landing_hail_at(ctx, cx, cy, cz, id);
 }
 
 #[spacetimedb::reducer]
@@ -1671,6 +1712,9 @@ pub fn elevator_select_floor(ctx: &ReducerContext, shaft_key: String, level: u32
         return;
     }
     let mut row = row;
-    enqueue_dest(&mut row, lv);
+    if !enqueue_dest(&mut row, lv) {
+        return;
+    }
     ctx.db.elevator_car().shaft_key().update(row);
+    world_sound::emit_elevator_floor_button_at(ctx, pose.x, pose.y + 0.95, pose.z, id);
 }

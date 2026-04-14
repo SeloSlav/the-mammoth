@@ -74,14 +74,17 @@ import {
   getKinematicSupportVerticalVelocityMps,
   mergeKinematicSupportTop,
   snapAttachedFeetToKinematicSupportIfNeeded,
+  type FpKinematicSupportProvider,
   type FpKinematicSupportSampleOpts,
 } from "./fpKinematicSupport.js";
+import { resolveAuthoritativeInteractionPose } from "./fpInteractionAuthority";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
  * (`TimeDuration::from_micros(50_000)` ≈ 20 Hz) so prediction and authority stay aligned.
  */
 const NET_INTERVAL_MS = 50;
+const NET_DT_SEC = NET_INTERVAL_MS * 0.001;
 
 /** Horizontal half-extent (m) of the replicated `player_pose` box (XZ). */
 const POSE_AOI_HALF = 42;
@@ -201,7 +204,14 @@ export async function mountFpSession(
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
   const _floorVisCamWorld = new THREE.Vector3();
+  const _interactionPos = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
+
+  const getInteractionPos = () => {
+    const p = resolveAuthoritativeInteractionPose(pos, serverPose);
+    _interactionPos.set(p.x, p.y, p.z);
+    return _interactionPos;
+  };
 
   const syncBuildingFloorPlateVisibility = () => {
     camera.getWorldPosition(_floorVisCamWorld);
@@ -231,6 +241,12 @@ export async function mountFpSession(
   let headLookYaw = 0;
   /** Monotonic intent id; server rejects non-increasing `intent_seq`. */
   let intentSeq = 0n;
+  type PendingMoveIntent = {
+    seq: bigint;
+    bits: number;
+    aimYaw: number;
+  };
+  const pendingMoveIntents: PendingMoveIntent[] = [];
   let lastNet = 0;
 
   const keys = new Set<string>();
@@ -243,14 +259,15 @@ export async function mountFpSession(
    * Must stay **well above** upward velocity from a rising cab (~3 m/s) or merge drops for whole frames.
    */
   const ELEVATOR_WALK_MERGE_SKIP_VY = 2.0;
-  const sampleWalkTop = (
+  const sampleWalkTopForVelocityY = (
+    velocityY: number,
     worldX: number,
     worldZ: number,
     probeTopY: number,
     evalWallClockMs?: number,
   ) => {
     const base = sampleWalkTopBase(worldX, worldZ, probeTopY);
-    if (loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY) {
+    if (velocityY > ELEVATOR_WALK_MERGE_SKIP_VY) {
       return base;
     }
     const supportEval: FpKinematicSupportSampleOpts = {
@@ -264,6 +281,12 @@ export async function mountFpSession(
     };
     return mergeKinematicSupportTop(fpElevators.kinematicSupport, supportEval);
   };
+  const sampleWalkTop = (
+    worldX: number,
+    worldZ: number,
+    probeTopY: number,
+    evalWallClockMs?: number,
+  ) => sampleWalkTopForVelocityY(loco.velocity.y, worldX, worldZ, probeTopY, evalWallClockMs);
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
@@ -321,12 +344,140 @@ export async function mountFpSession(
   };
 
   /** Latest authoritative self pose from `player_pose`. */
-  const serverPose = { x: 0, y: 1.35, z: 0, grounded: true };
+  const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
-  /** Small drift gets damped; bigger divergence snaps so client never lives on the wrong floor. */
-  const SERVER_RECONCILE_SOFT_START_M = 0.16;
-  const SERVER_RECONCILE_SOFT_RATE = 14;
-  const SERVER_RECONCILE_HARD_SNAP_M = 1.35;
+  const inputFromBits = (bits: number): FpLocomotionInput => ({
+    forward: (bits & 1) !== 0,
+    backward: (bits & 2) !== 0,
+    left: (bits & 4) !== 0,
+    right: (bits & 8) !== 0,
+    sprint: (bits & 32) !== 0,
+    crouch: (bits & 64) !== 0,
+  });
+
+  const simulatePredictedPlayerStep = (opts: {
+    pos: THREE.Vector3;
+    prevPos: THREE.Vector3;
+    locoState: ReturnType<typeof createFpLocomotionState>;
+    input: FpLocomotionInput;
+    dtSec: number;
+    evalWallClockMs: number;
+    crouch: boolean;
+    jumpPressedThisFrame: boolean;
+    bodyYawRad: number;
+    kinematicSupport: FpKinematicSupportProvider;
+  }): number => {
+    opts.prevPos.copy(opts.pos);
+    const probeTopForElev = opts.pos.y + fpLocomotionConstants.walkProbeDy;
+    const baseForElev = sampleWalkTopBase(opts.pos.x, opts.pos.z, probeTopForElev);
+    const supportEval: FpKinematicSupportSampleOpts = {
+      worldX: opts.pos.x,
+      worldZ: opts.pos.z,
+      probeTopY: probeTopForElev,
+      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      baseTop: baseForElev,
+      evalWallClockMs: opts.evalWallClockMs,
+    };
+    const elevatorJumpVy =
+      !opts.locoState.grounded || opts.locoState.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
+        ? 0
+        : getKinematicSupportVerticalVelocityMps(opts.kinematicSupport, supportEval);
+
+    const headY = stepFpLocomotion(opts.locoState, opts.pos, opts.bodyYawRad, opts.input, opts.dtSec, {
+      sampleWalkGroundTopY: (worldX, worldZ, probeTopY, evalWallClockMs) =>
+        sampleWalkTopForVelocityY(
+          opts.locoState.velocity.y,
+          worldX,
+          worldZ,
+          probeTopY,
+          evalWallClockMs,
+        ),
+      probeDy: fpLocomotionConstants.walkProbeDy,
+      maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
+      jumpKinematicPlatformVyMps: elevatorJumpVy,
+      integrationEvalEndWallClockMs: opts.evalWallClockMs,
+    });
+
+    resolvePlayerCollisions(
+      opts.pos,
+      opts.prevPos,
+      opts.locoState.velocity,
+      opts.crouch,
+      fpLocomotionConstants.walkStepUpMargin,
+      staticCollisionIndex,
+      {
+        visitAabbsInXZ: (x0, x1, z0, z1, visit) =>
+          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit),
+      },
+    );
+
+    const bodyH = opts.crouch
+      ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M
+      : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
+    if (
+      fpElevators.applyCabRoofFeetSnap(
+        opts.pos,
+        { y: opts.prevPos.y },
+        bodyH,
+        FP_PLAYER_COLLISION_RADIUS_M,
+      )
+    ) {
+      opts.locoState.velocity.y = 0;
+      opts.locoState.grounded = true;
+    }
+
+    snapAttachedFeetToKinematicSupportIfNeeded(opts.kinematicSupport, opts.pos, opts.locoState, {
+      evalWallClockMs: opts.evalWallClockMs,
+      jumpPressedThisFrame: opts.jumpPressedThisFrame,
+      skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+    });
+    clampAttachedBodyXZToKinematicSupportIfNeeded(
+      opts.kinematicSupport,
+      opts.pos,
+      opts.locoState,
+      opts.evalWallClockMs,
+    );
+
+    return headY;
+  };
+
+  const reconcileLocalPredictionToServer = (serverRow: PlayerPose) => {
+    const serverSeq = poseSeqAsBigint(serverRow.seq);
+    while (pendingMoveIntents.length > 0 && pendingMoveIntents[0]!.seq <= serverSeq) {
+      pendingMoveIntents.shift();
+    }
+    const replayPos = new THREE.Vector3(serverRow.x, serverRow.y, serverRow.z);
+    const replayPrevPos = new THREE.Vector3(serverRow.x, serverRow.y, serverRow.z);
+    const replayLoco = createFpLocomotionState();
+    replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
+    replayLoco.grounded = serverRow.grounded !== 0;
+    replayLoco.headBobPhase = loco.headBobPhase;
+    replayLoco.eyeSmoothed = loco.eyeSmoothed;
+    const replayStartMs = performance.now();
+    for (let i = 0; i < pendingMoveIntents.length; i++) {
+      const sample = pendingMoveIntents[i]!;
+      const stepNowMs = replayStartMs + i * NET_INTERVAL_MS;
+      fpElevators.syncCabEvalClock(stepNowMs);
+      simulatePredictedPlayerStep({
+        pos: replayPos,
+        prevPos: replayPrevPos,
+        locoState: replayLoco,
+        input: inputFromBits(sample.bits),
+        dtSec: NET_DT_SEC,
+        evalWallClockMs: stepNowMs,
+        crouch: (sample.bits & 64) !== 0,
+        jumpPressedThisFrame: (sample.bits & 16) !== 0,
+        bodyYawRad: sample.aimYaw,
+        kinematicSupport: fpElevators.kinematicSupport,
+      });
+    }
+    pos.copy(replayPos);
+    loco.velocity.copy(replayLoco.velocity);
+    loco.grounded = replayLoco.grounded;
+    loco.headBobPhase = replayLoco.headBobPhase;
+    loco.eyeSmoothed = replayLoco.eyeSmoothed;
+  };
 
   let meleeAttackSeq = 0;
   let lastMeleeMs = 0;
@@ -339,10 +490,15 @@ export async function mountFpSession(
       serverPose.y = row.y;
       serverPose.z = row.z;
       serverPose.grounded = row.grounded !== 0;
+      serverPose.velX = row.velX;
+      serverPose.velY = row.velY;
+      serverPose.velZ = row.velZ;
       if (!spawnSynced) {
         pos.set(row.x, row.y, row.z);
         bodyYaw = row.yaw;
         spawnSynced = true;
+      } else {
+        reconcileLocalPredictionToServer(row);
       }
       const serverSeq = poseSeqAsBigint(row.seq);
       if (serverSeq > intentSeq) intentSeq = serverSeq;
@@ -424,6 +580,11 @@ export async function mountFpSession(
     if (!conn.identity) return;
     intentSeq += 1n;
     const bits = encodeMoveIntentBits(input, jump);
+    pendingMoveIntents.push({
+      seq: intentSeq,
+      bits,
+      aimYaw: bodyYaw,
+    });
     void conn.reducers.submitMoveIntent({
       intentSeq,
       bits,
@@ -546,8 +707,9 @@ export async function mountFpSession(
       !isTextInputFocused()
     ) {
       e.preventDefault();
-      if (fpElevators.consumeInteractKey(pos, camera)) return;
-      if (fpElevators.shouldSuppressEpickup(pos, camera)) return;
+      const interactionPos = getInteractionPos();
+      if (fpElevators.consumeInteractKey(interactionPos, camera)) return;
+      if (fpElevators.shouldSuppressEpickup(interactionPos, camera)) return;
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -663,89 +825,21 @@ export async function mountFpSession(
     fpElevators.syncCabEvalClock(frameNowMs);
     prevPos.copy(pos);
 
-    const probeTopForElev = pos.y + fpLocomotionConstants.walkProbeDy;
-    const baseForElev = sampleWalkTopBase(pos.x, pos.z, probeTopForElev);
-    const supportEval: FpKinematicSupportSampleOpts = {
-      worldX: pos.x,
-      worldZ: pos.z,
-      probeTopY: probeTopForElev,
-      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-      baseTop: baseForElev,
-      evalWallClockMs: frameNowMs,
-    };
-    const elevatorJumpVy =
-      !loco.grounded ||
-      loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
-        ? 0
-        : getKinematicSupportVerticalVelocityMps(
-            fpElevators.kinematicSupport,
-            supportEval,
-          );
-
-    const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt, {
-      sampleWalkGroundTopY: sampleWalkTop,
-      probeDy: fpLocomotionConstants.walkProbeDy,
-      maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
-      jumpKinematicPlatformVyMps: elevatorJumpVy,
-      integrationEvalEndWallClockMs: frameNowMs,
-    });
-
-    resolvePlayerCollisions(
+    const headY = simulatePredictedPlayerStep({
       pos,
       prevPos,
-      loco.velocity,
-      crouchToggle,
-      fpLocomotionConstants.walkStepUpMargin,
-      staticCollisionIndex,
-      {
-        visitAabbsInXZ: (x0, x1, z0, z1, visit) =>
-          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit),
-      },
-    );
-
-    const bodyH = crouchToggle
-      ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M
-      : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
-    if (fpElevators.applyCabRoofFeetSnap(pos, { y: prevPos.y }, bodyH, FP_PLAYER_COLLISION_RADIUS_M)) {
-      loco.velocity.y = 0;
-      loco.grounded = true;
-    }
-
-    snapAttachedFeetToKinematicSupportIfNeeded(
-      fpElevators.kinematicSupport,
-      pos,
-      loco,
-      {
-        evalWallClockMs: frameNowMs,
-        jumpPressedThisFrame: jumpQueuedBeforeStep,
-        skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
-      },
-    );
-    clampAttachedBodyXZToKinematicSupportIfNeeded(
-      fpElevators.kinematicSupport,
-      pos,
-      loco,
-      frameNowMs,
-    );
+      locoState: loco,
+      input,
+      dtSec: dt,
+      evalWallClockMs: frameNowMs,
+      crouch: crouchToggle,
+      jumpPressedThisFrame: jumpQueuedBeforeStep,
+      bodyYawRad: bodyYaw,
+      kinematicSupport: fpElevators.kinematicSupport,
+    });
 
     fpElevators.tick(dt, frameNowMs, pos);
     fpElevators.syncLandingHailUi(camera, pos, frameNowMs);
-
-    const dx = serverPose.x - pos.x;
-    const dy = serverPose.y - pos.y;
-    const dz = serverPose.z - pos.z;
-    const desync = Math.hypot(dx, dy, dz);
-    if (desync > SERVER_RECONCILE_HARD_SNAP_M) {
-      pos.set(serverPose.x, serverPose.y, serverPose.z);
-      loco.velocity.set(0, 0, 0);
-      loco.grounded = serverPose.grounded;
-    } else if (desync > SERVER_RECONCILE_SOFT_START_M) {
-      const a = 1 - Math.exp(-SERVER_RECONCILE_SOFT_RATE * dt);
-      pos.x += dx * a;
-      pos.y += dy * a;
-      pos.z += dz * a;
-    }
 
     playerRig.position.set(pos.x, pos.y, pos.z);
     playerRig.rotation.y = bodyYaw;
@@ -850,7 +944,7 @@ export async function mountFpSession(
     presentation.update(dt, localState, remoteSnapshots, nowMs);
 
     if (conn.identity) {
-      const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(pos, camera);
+      const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(getInteractionPos(), camera);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",

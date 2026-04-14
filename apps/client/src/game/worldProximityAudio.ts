@@ -1,8 +1,9 @@
 /**
  * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for footsteps, melee weapon swings,
- * pickups, and hotbar consume (eat / drink). The emitter skips **all** of their own rows here
+ * pickups, hotbar consume (eat / drink), and elevator UI. The emitter skips **most** of their own rows
  * (footsteps / swings / pickup / consume have immediate or local paths in {@link LocalGameAudio}).
- * Nearby players still hear spatialized consume via this subscription.
+ * Elevator floor / hail presses and landing corridor door toggles use **only** this path so the
+ * actor hears the same spatial cue as observers.
  */
 
 import * as THREE from "three";
@@ -30,11 +31,23 @@ export const WORLD_SOUND_KIND_ITEM_PICKUP = 2;
 export const WORLD_SOUND_KIND_CONSUME_EAT = 3;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_CONSUME_DRINK`. */
 export const WORLD_SOUND_KIND_CONSUME_DRINK = 4;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_FLOOR_BUTTON`. */
+export const WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON = 5;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_LANDING_HAIL`. */
+export const WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL = 6;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_LANDING_EXTERIOR_DOOR_OPEN`. */
+export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN = 7;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_LANDING_EXTERIOR_DOOR_CLOSE`. */
+export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE = 8;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
 const UI_STEM = `${AUDIO_ROOT}/ui`;
 const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
+const ELEVATOR_FLOOR_BUTTON_STEM = `${UI_STEM}/elevator-floor-button` as const;
+const ELEVATOR_LANDING_HAIL_STEM = `${UI_STEM}/elevator-hail` as const;
+const DOOR_OPEN_STEM = `${UI_STEM}/door-open` as const;
+const DOOR_CLOSE_STEM = `${UI_STEM}/door-close` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -47,6 +60,10 @@ export class WorldProximityAudio {
   private itemPickBuffer: AudioBuffer | null = null;
   private consumeEatBuffer: AudioBuffer | null = null;
   private consumeDrinkBuffer: AudioBuffer | null = null;
+  private elevatorFloorButtonBuffer: AudioBuffer | null = null;
+  private elevatorLandingHailBuffer: AudioBuffer | null = null;
+  private doorOpenBuffer: AudioBuffer | null = null;
+  private doorCloseBuffer: AudioBuffer | null = null;
   private soundSub: SubscriptionHandle | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
 
@@ -90,6 +107,10 @@ export class WorldProximityAudio {
       CONSUME_DRINK_STEM,
       CONSUME_STEM_MEDIA_EXTENSIONS,
     );
+    this.elevatorFloorButtonBuffer = await this.decodeSingleStem(ctx, ELEVATOR_FLOOR_BUTTON_STEM);
+    this.elevatorLandingHailBuffer = await this.decodeSingleStem(ctx, ELEVATOR_LANDING_HAIL_STEM);
+    this.doorOpenBuffer = await this.decodeSingleStem(ctx, DOOR_OPEN_STEM);
+    this.doorCloseBuffer = await this.decodeSingleStem(ctx, DOOR_CLOSE_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -169,6 +190,10 @@ export class WorldProximityAudio {
     this.itemPickBuffer = null;
     this.consumeEatBuffer = null;
     this.consumeDrinkBuffer = null;
+    this.elevatorFloorButtonBuffer = null;
+    this.elevatorLandingHailBuffer = null;
+    this.doorOpenBuffer = null;
+    this.doorCloseBuffer = null;
     this.sourceCache.clear();
   }
 
@@ -181,7 +206,14 @@ export class WorldProximityAudio {
     const out = this.worldGain;
     const selfId = this.conn.identity;
     if (!ctx || !out || !selfId) return;
-    if (selfId.isEqual(row.emitter)) return;
+    if (selfId.isEqual(row.emitter)) {
+      const hearOwnSpatial =
+        row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||
+        row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
+        row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
+        row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE;
+      if (!hearOwnSpatial) return;
+    }
 
     let buf: AudioBuffer | null = null;
     if (row.kind === WORLD_SOUND_KIND_FOOTSTEP) {
@@ -204,6 +236,18 @@ export class WorldProximityAudio {
     } else if (row.kind === WORLD_SOUND_KIND_CONSUME_DRINK) {
       if (!this.consumeDrinkBuffer) return;
       buf = this.consumeDrinkBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON) {
+      if (!this.elevatorFloorButtonBuffer) return;
+      buf = this.elevatorFloorButtonBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL) {
+      if (!this.elevatorLandingHailBuffer) return;
+      buf = this.elevatorLandingHailBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN) {
+      if (!this.doorOpenBuffer) return;
+      buf = this.doorOpenBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE) {
+      if (!this.doorCloseBuffer) return;
+      buf = this.doorCloseBuffer;
     } else {
       return;
     }
@@ -239,7 +283,11 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_ITEM_PICKUP ||
       row.kind === WORLD_SOUND_KIND_MELEE_WEAPON_SWING ||
       row.kind === WORLD_SOUND_KIND_CONSUME_EAT ||
-      row.kind === WORLD_SOUND_KIND_CONSUME_DRINK
+      row.kind === WORLD_SOUND_KIND_CONSUME_DRINK ||
+      row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||
+      row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
+      row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
+      row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE
     ) {
       src.playbackRate.value = 0.99 + Math.random() * 0.04;
     }

@@ -1,4 +1,4 @@
-//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup) for nearby players.
+//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup, elevator / landing-door UI) for nearby players.
 //! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
 use spacetimedb::{
@@ -27,6 +27,14 @@ pub const KIND_ITEM_PICKUP: u8 = 2;
 pub const KIND_CONSUME_EAT: u8 = 3;
 /// Hotbar instant consume — drink / hydration-first (`variation` 0 → `consume-drink` stem).
 pub const KIND_CONSUME_DRINK: u8 = 4;
+/// In-cab floor selector (`elevator_select_floor`); `variation` unused.
+pub const KIND_ELEVATOR_FLOOR_BUTTON: u8 = 5;
+/// Landing hail / call panel (`elevator_hail`); `variation` unused.
+pub const KIND_ELEVATOR_LANDING_HAIL: u8 = 6;
+/// Corridor swing door opening (`elevator_landing_exterior_door_*`, desired_open 0→1); `variation` unused.
+pub const KIND_LANDING_EXTERIOR_DOOR_OPEN: u8 = 7;
+/// Corridor swing door closing (desired_open 1→0); `variation` unused.
+pub const KIND_LANDING_EXTERIOR_DOOR_CLOSE: u8 = 8;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -168,6 +176,90 @@ pub fn emit_hotbar_consume_at(
         return;
     }
     emit_world_sound(ctx, kind, 0, x, y, z, 0.66, 16.0, emitter);
+}
+
+/// Chest-height point by the in-cab panel (`emitter` = rider who pressed).
+pub fn emit_elevator_floor_button_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_ELEVATOR_FLOOR_BUTTON,
+        0,
+        x,
+        y,
+        z,
+        0.52,
+        14.0,
+        emitter,
+    );
+}
+
+/// Landing call panel center (`emitter` = player who hailed).
+pub fn emit_elevator_landing_hail_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_ELEVATOR_LANDING_HAIL,
+        0,
+        x,
+        y,
+        z,
+        0.55,
+        16.0,
+        emitter,
+    );
+}
+
+/// Landing corridor swing door — opening motion starts (`emitter` = player who toggled).
+pub fn emit_landing_exterior_door_open_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_LANDING_EXTERIOR_DOOR_OPEN,
+        0,
+        x,
+        y,
+        z,
+        0.58,
+        20.0,
+        emitter,
+    );
+}
+
+/// Landing corridor swing door — closing motion starts.
+pub fn emit_landing_exterior_door_close_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_LANDING_EXTERIOR_DOOR_CLOSE,
+        0,
+        x,
+        y,
+        z,
+        0.58,
+        20.0,
+        emitter,
+    );
 }
 
 /// Per-connection rows used by footsteps + melee cooldown.
