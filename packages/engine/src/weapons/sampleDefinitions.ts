@@ -1,5 +1,4 @@
 import type { WeaponDefinition } from "./weaponTypes.js";
-import type { WeaponPrimitivePresentationDoc } from "./weaponPrimitiveAuthoring.js";
 import crowbarPresentationJson from "../../../../content/weapons/crowbar.presentation.json" with {
   type: "json",
 };

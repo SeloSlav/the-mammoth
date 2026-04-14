@@ -79,6 +79,7 @@ import {
   type FpKinematicSupportSampleOpts,
 } from "./fpKinematicSupport.js";
 import { resolveAuthoritativeInteractionPose } from "./fpInteractionAuthority";
+import { pushFpPerfFrame, resetFpPerfStore } from "./fpSessionPerfStore";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -1025,15 +1026,19 @@ export async function mountFpSession(
     fpElevators.syncCabEvalClock(nowMs);
     prevPos.copy(pos);
 
+    // --- Physics section timing ---
     _mainStepOpts.dtSec = dt;
     _mainStepOpts.evalWallClockMs = nowMs;
     _mainStepOpts.crouch = crouchToggle;
     _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep;
     _mainStepOpts.bodyYawRad = bodyYaw;
     const headY = simulatePredictedPlayerStep(_mainStepOpts);
+    const _t_physicsEnd = performance.now();
 
+    // --- Elevator section timing ---
     fpElevators.tick(dt, nowMs, pos);
     fpElevators.syncLandingHailUi(camera, pos, nowMs);
+    const _t_elevEnd = performance.now();
 
     // Decay the display offset — exponential approach to zero each frame.
     // Any server correction applied this frame (or earlier) smoothly blends out.
@@ -1152,7 +1157,9 @@ export async function mountFpSession(
       meleeAttackSeq,
       equippedPrimaryFromHotbar: hotbarHeld,
     });
+    // --- Presentation section timing ---
     presentation.update(dt, localState, _remoteSnapshots, nowMs);
+    const _t_presentEnd = performance.now();
 
     if (conn.identity) {
       const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(getInteractionPos(), camera);
@@ -1185,10 +1192,19 @@ export async function mountFpSession(
       setFpPickupPrompt(null);
     }
 
+    // --- Render section timing ---
     syncBuildingFloorPlateVisibility(nowMs);
     renderer.render(scene, camera);
+    const _t_renderEnd = performance.now();
+
     onFpSessionPostRenderFrame(nowMs);
     logFpPerf();
+    pushFpPerfFrame(nowMs, _t_renderEnd - nowMs, {
+      physicsMs: _t_physicsEnd - nowMs,
+      elevatorMs: _t_elevEnd - _t_physicsEnd,
+      presentMs: _t_presentEnd - _t_elevEnd,
+      renderMs: _t_renderEnd - _t_presentEnd,
+    });
   };
   tick();
 
@@ -1227,6 +1243,7 @@ export async function mountFpSession(
     renderer.dispose();
     scene.clear();
     resetFpSessionFpsDisplay();
+    resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };
 }
