@@ -5,10 +5,11 @@ alwaysApply: false
 
 # Shared UI Theme Consistency
 
-Use the shared theme files as the single source of truth for frontend styling:
+Use the shared theme package as the single source of truth for styling anywhere in the monorepo:
 
-- TypeScript tokens: `client/src/theme/uiTheme.ts`
-- CSS custom properties: `client/src/theme/uiTheme.css`
+- Package: `@the-mammoth/ui-theme` (`packages/ui-theme`)
+- TypeScript tokens: `packages/ui-theme/src/uiTheme.ts`
+- CSS custom properties: `packages/ui-theme/src/uiTheme.css` (import as `@the-mammoth/ui-theme/uiTheme.css`)
 
 ## Rules
 
@@ -21,7 +22,7 @@ Use the shared theme files as the single source of truth for frontend styling:
 ## Implementation Pattern
 
 - TSX:
-  - `import { THEME_ACCENT, UI_FONT_MONO } from '../theme/uiTheme';`
+  - `import { THEME_ACCENT, UI_FONT_MONO } from '@the-mammoth/ui-theme';`
   - Use these constants in inline styles and dynamic states.
 - CSS:
   - Use `var(--ui-accent)`, `var(--ui-text-primary)`, etc.

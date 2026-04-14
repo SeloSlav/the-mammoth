@@ -52,12 +52,20 @@ const EXT_DOOR_H: f32 = 2.05;
 const EXT_DOOR_ANIM_SPEED: f32 = 2.05;
 /// Collision / block disabled above this swing (0..1).
 const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
-/// Plate-local strip: inside edge from inner sill (m), along door normal.
-const EXT_STRIP_L0: f32 = -0.35;
-const EXT_STRIP_L1: f32 = 0.36;
-const EXT_STRIP_LZ_PAD: f32 = 0.06;
+/// **E** interact strip (plate-local, door normal). Must extend past the closed-door push-out. Sync client `EXTERIOR_INTERACT_*`.
+const EXT_INTERACT_L0: f32 = -0.28;
+const EXT_INTERACT_L1: f32 = 0.82;
+const EXT_INTERACT_LZ_PAD: f32 = 0.08;
+/// Closed-door **physics** slab. Sync client `EXTERIOR_COLLISION_*`.
+const EXT_COLLISION_L0: f32 = -0.45;
+const EXT_COLLISION_L1: f32 = 0.62;
+const EXT_COLLISION_LZ_PAD: f32 = 0.08;
 const EXT_STRIP_Y0: f32 = 0.05;
 const EXT_STRIP_Y1: f32 = 2.25;
+/// Hallway-side blocker for a mostly closed automatic cab door.
+const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.18;
+const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 0.72;
+const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.18;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {
@@ -241,6 +249,7 @@ fn step_one_row(row: &mut ElevatorCar, dt: f32) {
 
 /// Advance all cars once per physics tick (call **before** player integration).
 pub fn tick_all_elevators(ctx: &ReducerContext, dt: f32) {
+    seed_elevator_landing_doors(ctx);
     let keys: Vec<String> = ctx
         .db
         .elevator_car()
@@ -572,7 +581,50 @@ pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
     }
 }
 
-fn exterior_toggle_plate_local_ok(
+fn exterior_plate_local_in_slab(
+    door: DoorFace,
+    hx: f32,
+    hz: f32,
+    lx: f32,
+    lz: f32,
+    py: f32,
+    landing_feet_y: f32,
+    l0: f32,
+    l1: f32,
+    lz_pad: f32,
+) -> bool {
+    let y0 = landing_feet_y + EXT_STRIP_Y0;
+    let y1 = landing_feet_y + EXT_STRIP_Y1;
+    if py < y0 || py > y1 {
+        return false;
+    }
+    let zspan = EXT_DOOR_W * 0.5 + lz_pad;
+    match door {
+        DoorFace::E => {
+            let lo = hx + l0;
+            let hi = hx + l1;
+            lx >= lo && lx <= hi && lz.abs() <= zspan
+        }
+        DoorFace::W => {
+            let lo = -hx - l1;
+            let hi = -hx - l0;
+            lx >= lo && lx <= hi && lz.abs() <= zspan
+        }
+        DoorFace::N => {
+            let lo = hz + l0;
+            let hi = hz + l1;
+            lz >= lo && lz <= hi && lx.abs() <= zspan
+        }
+        DoorFace::S => {
+            let lo = -hz - l1;
+            let hi = -hz - l0;
+            lz >= lo && lz <= hi && lx.abs() <= zspan
+        }
+    }
+}
+
+#[inline]
+fn exterior_interact_plate_local_ok(
     door: DoorFace,
     hx: f32,
     hz: f32,
@@ -581,34 +633,42 @@ fn exterior_toggle_plate_local_ok(
     py: f32,
     landing_feet_y: f32,
 ) -> bool {
-    let y0 = landing_feet_y + EXT_STRIP_Y0;
-    let y1 = landing_feet_y + EXT_STRIP_Y1;
-    if py < y0 || py > y1 {
-        return false;
-    }
-    let zspan = EXT_DOOR_W * 0.5 + EXT_STRIP_LZ_PAD;
-    match door {
-        DoorFace::E => {
-            let lo = hx + EXT_STRIP_L0;
-            let hi = hx + EXT_STRIP_L1;
-            lx >= lo && lx <= hi && lz.abs() <= zspan
-        }
-        DoorFace::W => {
-            let lo = -hx - EXT_STRIP_L1;
-            let hi = -hx - EXT_STRIP_L0;
-            lx >= lo && lx <= hi && lz.abs() <= zspan
-        }
-        DoorFace::N => {
-            let lo = hz + EXT_STRIP_L0;
-            let hi = hz + EXT_STRIP_L1;
-            lz >= lo && lz <= hi && lx.abs() <= zspan
-        }
-        DoorFace::S => {
-            let lo = -hz - EXT_STRIP_L1;
-            let hi = -hz - EXT_STRIP_L0;
-            lz >= lo && lz <= hi && lx.abs() <= zspan
-        }
-    }
+    exterior_plate_local_in_slab(
+        door,
+        hx,
+        hz,
+        lx,
+        lz,
+        py,
+        landing_feet_y,
+        EXT_INTERACT_L0,
+        EXT_INTERACT_L1,
+        EXT_INTERACT_LZ_PAD,
+    )
+}
+
+#[inline]
+fn exterior_collision_plate_local_ok(
+    door: DoorFace,
+    hx: f32,
+    hz: f32,
+    lx: f32,
+    lz: f32,
+    py: f32,
+    landing_feet_y: f32,
+) -> bool {
+    exterior_plate_local_in_slab(
+        door,
+        hx,
+        hz,
+        lx,
+        lz,
+        py,
+        landing_feet_y,
+        EXT_COLLISION_L0,
+        EXT_COLLISION_L1,
+        EXT_COLLISION_LZ_PAD,
+    )
 }
 
 fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
@@ -616,7 +676,33 @@ fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u
     let lx = p.x - spec.plate_x;
     let lz = p.z - spec.plate_z;
     let fy = support_y(level);
-    exterior_toggle_plate_local_ok(spec.door, hx, hz, lx, lz, p.y, fy)
+    exterior_interact_plate_local_ok(spec.door, hx, hz, lx, lz, p.y, fy)
+}
+
+fn in_closed_cab_outside_door_slab(door: DoorFace, hx: f32, hz: f32, lx: f32, lz: f32) -> bool {
+    let door_half = EXT_DOOR_W * 0.5 + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
+    match door {
+        DoorFace::E => {
+            lx >= hx - CLOSED_CAB_OUTSIDE_SLAB_IN
+                && lx <= hx + CLOSED_CAB_OUTSIDE_SLAB_OUT
+                && lz.abs() <= door_half
+        }
+        DoorFace::W => {
+            lx <= -hx + CLOSED_CAB_OUTSIDE_SLAB_IN
+                && lx >= -hx - CLOSED_CAB_OUTSIDE_SLAB_OUT
+                && lz.abs() <= door_half
+        }
+        DoorFace::N => {
+            lz >= hz - CLOSED_CAB_OUTSIDE_SLAB_IN
+                && lz <= hz + CLOSED_CAB_OUTSIDE_SLAB_OUT
+                && lx.abs() <= door_half
+        }
+        DoorFace::S => {
+            lz <= -hz + CLOSED_CAB_OUTSIDE_SLAB_IN
+                && lz >= -hz - CLOSED_CAB_OUTSIDE_SLAB_OUT
+                && lx.abs() <= door_half
+        }
+    }
 }
 
 /// Solid threshold while the swing door is mostly closed — sync client `fpElevExteriorDoorBlocksAtPose`.
@@ -638,7 +724,7 @@ pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerP
         let lx = p.x - spec.plate_x;
         let lz = p.z - spec.plate_z;
         let door = spec.door;
-        let in_slab = exterior_toggle_plate_local_ok(door, hx, hz, lx, lz, p.y, fy);
+        let in_slab = exterior_collision_plate_local_ok(door, hx, hz, lx, lz, p.y, fy);
         if !in_slab {
             continue;
         }
@@ -646,33 +732,75 @@ pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerP
         let pz = p.z;
         match door {
             DoorFace::E => {
-                let lo = spec.plate_x + hx + EXT_STRIP_L0;
-                let hi = spec.plate_x + hx + EXT_STRIP_L1;
+                let lo = spec.plate_x + hx + EXT_COLLISION_L0;
+                let hi = spec.plate_x + hx + EXT_COLLISION_L1;
                 let dl = p.x - lo;
                 let dr = hi - p.x;
                 p.x = if dl < dr { lo - 0.07 } else { hi + 0.08 };
             }
             DoorFace::W => {
-                let lo = spec.plate_x - hx - EXT_STRIP_L1;
-                let hi = spec.plate_x - hx - EXT_STRIP_L0;
+                let lo = spec.plate_x - hx - EXT_COLLISION_L1;
+                let hi = spec.plate_x - hx - EXT_COLLISION_L0;
                 let dl = p.x - lo;
                 let dr = hi - p.x;
                 p.x = if dl < dr { lo - 0.08 } else { hi + 0.07 };
             }
             DoorFace::N => {
-                let lo = spec.plate_z + hz + EXT_STRIP_L0;
-                let hi = spec.plate_z + hz + EXT_STRIP_L1;
+                let lo = spec.plate_z + hz + EXT_COLLISION_L0;
+                let hi = spec.plate_z + hz + EXT_COLLISION_L1;
                 let dl = p.z - lo;
                 let dr = hi - p.z;
                 p.z = if dl < dr { lo - 0.07 } else { hi + 0.08 };
             }
             DoorFace::S => {
-                let lo = spec.plate_z - hz - EXT_STRIP_L1;
-                let hi = spec.plate_z - hz - EXT_STRIP_L0;
+                let lo = spec.plate_z - hz - EXT_COLLISION_L1;
+                let hi = spec.plate_z - hz - EXT_COLLISION_L0;
                 let dl = p.z - lo;
                 let dr = hi - p.z;
                 p.z = if dl < dr { lo - 0.08 } else { hi + 0.07 };
             }
+        }
+        if p.x > px && p.vel_x < 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.x < px && p.vel_x > 0.0 {
+            p.vel_x = 0.0;
+        }
+        if p.z > pz && p.vel_z < 0.0 {
+            p.vel_z = 0.0;
+        }
+        if p.z < pz && p.vel_z > 0.0 {
+            p.vel_z = 0.0;
+        }
+    }
+}
+
+/// Closed automatic cab doors block hallway-side entry as well as rider-side exit.
+pub fn clamp_player_against_closed_cab_doors_from_outside(ctx: &ReducerContext, p: &mut PlayerPose) {
+    let (hx, hz) = elevator_layout::inner_half_xz();
+    let iy = elevator_layout::inner_height();
+    for car in ctx.db.elevator_car().iter() {
+        if car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN {
+            continue;
+        }
+        let y0 = car.cab_floor_y - 0.22;
+        let y1 = car.cab_floor_y + iy + 0.38;
+        if p.y < y0 || p.y > y1 {
+            continue;
+        }
+        let lx = p.x - car.plate_x;
+        let lz = p.z - car.plate_z;
+        let door = door_face_from_u8(car.door_face);
+        if !in_closed_cab_outside_door_slab(door, hx, hz, lx, lz) {
+            continue;
+        }
+        let px = p.x;
+        let pz = p.z;
+        match door {
+            DoorFace::E => p.x = car.plate_x + hx + CLOSED_CAB_OUTSIDE_SLAB_OUT + 0.08,
+            DoorFace::W => p.x = car.plate_x - hx - CLOSED_CAB_OUTSIDE_SLAB_OUT - 0.08,
+            DoorFace::N => p.z = car.plate_z + hz + CLOSED_CAB_OUTSIDE_SLAB_OUT + 0.08,
+            DoorFace::S => p.z = car.plate_z - hz - CLOSED_CAB_OUTSIDE_SLAB_OUT - 0.08,
         }
         if p.x > px && p.vel_x < 0.0 {
             p.vel_x = 0.0;
@@ -739,8 +867,8 @@ mod landing_hail_redundant_tests {
 }
 
 #[cfg(test)]
-mod exterior_toggle_tests {
-    use super::{exterior_toggle_plate_local_ok, support_y};
+mod exterior_interact_tests {
+    use super::{exterior_interact_plate_local_ok, support_y, EXT_INTERACT_L0, EXT_INTERACT_L1};
     use crate::elevator_layout::{inner_half_xz, DoorFace};
 
     #[test]
@@ -748,8 +876,8 @@ mod exterior_toggle_tests {
         let (hx, hz) = inner_half_xz();
         let fy = support_y(1);
         let py = fy + 1.0;
-        let lx = hx;
-        assert!(exterior_toggle_plate_local_ok(
+        let lx = hx + (EXT_INTERACT_L0 + EXT_INTERACT_L1) * 0.5;
+        assert!(exterior_interact_plate_local_ok(
             DoorFace::E, hx, hz, lx, 0.0, py, fy
         ));
     }
@@ -760,7 +888,7 @@ mod exterior_toggle_tests {
         let fy = support_y(1);
         let py = fy + 1.0;
         let lx = hx;
-        assert!(!exterior_toggle_plate_local_ok(DoorFace::E, hx, hz, lx, 2.0, py, fy));
+        assert!(!exterior_interact_plate_local_ok(DoorFace::E, hx, hz, lx, 2.0, py, fy));
     }
 }
 
@@ -832,11 +960,24 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
         return;
     }
     let rk = landing_door_row_key(&shaft_key, lv);
-    let Some(mut row) = ctx.db.elevator_landing_door().row_key().find(&rk) else {
-        return;
-    };
+    let mut row = ctx
+        .db
+        .elevator_landing_door()
+        .row_key()
+        .find(&rk)
+        .unwrap_or(ElevatorLandingDoor {
+            row_key: rk.clone(),
+            shaft_key: shaft_key.clone(),
+            level: lv,
+            desired_open: 0,
+            swing_open_01: 0.0,
+        });
     row.desired_open = if row.desired_open != 0 { 0 } else { 1 };
-    ctx.db.elevator_landing_door().row_key().update(row);
+    if ctx.db.elevator_landing_door().row_key().find(&rk).is_some() {
+        ctx.db.elevator_landing_door().row_key().update(row);
+    } else {
+        let _ = ctx.db.elevator_landing_door().insert(row);
+    }
 }
 
 #[spacetimedb::reducer]

@@ -23,6 +23,13 @@ pub struct ConsumeOnUseSpec {
     pub hydration_delta: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HotbarConsumeSound {
+    Eat,
+    Drink,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -36,6 +43,9 @@ pub struct CatalogItem {
     pub construction: Option<ConstructionSpec>,
     #[serde(default)]
     pub consume_on_use: Option<ConsumeOnUseSpec>,
+    /// Authored eat-vs-drink one-shot for `consume_hotbar_item`.
+    #[serde(default)]
+    pub hotbar_consume_sound: Option<HotbarConsumeSound>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

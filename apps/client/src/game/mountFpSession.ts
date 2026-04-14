@@ -514,8 +514,8 @@ export async function mountFpSession(
       !isTextInputFocused()
     ) {
       e.preventDefault();
-      if (fpElevators.consumeInteractKey(pos)) return;
-      if (fpElevators.shouldSuppressEpickup(pos)) return;
+      if (fpElevators.consumeInteractKey(pos, camera)) return;
+      if (fpElevators.shouldSuppressEpickup(pos, camera)) return;
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -661,6 +661,7 @@ export async function mountFpSession(
       jumpQueuedBeforeStep,
     );
     fpElevators.clampLocalRiderXZToAuthoritativeCabIfNeeded(pos, loco, frameNowMs);
+    fpElevators.clampLocalClosedExteriorLandingDoors(pos, loco.velocity);
 
     fpElevators.tick(dt, frameNowMs, pos);
 
@@ -777,21 +778,31 @@ export async function mountFpSession(
     presentation.update(dt, localState, remoteSnapshots, nowMs);
 
     if (conn.identity) {
-      const hit = findNearestDroppedPickup(
-        conn,
-        pos.x,
-        pos.y,
-        pos.z,
-        MAMMOTH_PICKUP_RADIUS_M,
-      );
-      if (hit) {
-        const def = getMammothItemDef(hit.defId);
+      const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(pos, camera);
+      if (doorPrompt) {
         setFpPickupPrompt({
-          droppedItemIdStr: hit.droppedItemId.toString(),
-          displayName: def?.displayName ?? hit.defId,
+          kind: "elevator_exterior_door",
+          willClose: doorPrompt.willClose,
+          floorLabel: doorPrompt.floorLabel,
         });
       } else {
-        setFpPickupPrompt(null);
+        const hit = findNearestDroppedPickup(
+          conn,
+          pos.x,
+          pos.y,
+          pos.z,
+          MAMMOTH_PICKUP_RADIUS_M,
+        );
+        if (hit) {
+          const def = getMammothItemDef(hit.defId);
+          setFpPickupPrompt({
+            kind: "dropped_item",
+            droppedItemIdStr: hit.droppedItemId.toString(),
+            displayName: def?.displayName ?? hit.defId,
+          });
+        } else {
+          setFpPickupPrompt(null);
+        }
       }
     } else {
       setFpPickupPrompt(null);

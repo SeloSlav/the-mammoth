@@ -1,0 +1,23 @@
+/*
+  Mirrors :root from uiTheme.ts `uiRootStyleBlock()` — keep in sync when changing tokens.
+*/
+:root {
+  color-scheme: dark;
+  --ui-text-primary: #e8e8ee;
+  --ui-text-muted: rgba(232, 232, 238, 0.75);
+  --ui-text-faint: rgba(232, 232, 238, 0.52);
+  --ui-accent: #6b8cae;
+  --ui-accent-hover: #7c9cbb;
+  --ui-accent-on: #0f1218;
+  --ui-page-bg-mid: #2a2a38;
+  --ui-page-bg-edge: #121218;
+  --ui-card-bg: rgba(0, 0, 0, 0.55);
+  --ui-card-border: rgba(255, 255, 255, 0.08);
+  --ui-input-bg: #1a1a22;
+  --ui-input-border: #3a3a48;
+  --ui-error: #e87878;
+  --ui-success: #7bcf9a;
+  --ui-secondary-bg: #4a4a58;
+  --ui-secondary-text: #dddddd;
+  --ui-focus-ring: rgba(107, 140, 174, 0.35);
+}

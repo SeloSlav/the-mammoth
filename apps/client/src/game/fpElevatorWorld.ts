@@ -19,11 +19,15 @@ import {
   CALL_Y_HALF_WINDOW,
   ELEVATOR_PHASE_MOVING,
   ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+  FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
+  FP_ELEV_LANDING_HAIL_PICK_UD,
+  type FpElevExteriorDoorPickUserData,
   type FpElevFloorPickUserData,
+  type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
 import { fpBuildingFloorPlateVisibilityBand } from "./fpBuildingFloorPlateVisibilityBand.js";
 import {
@@ -43,6 +47,8 @@ import {
 import { setFpElevatorHudView } from "./fpElevatorHud.js";
 import { fpElevSuppressLandingHailBecauseCabAtLandingSupport } from "./fpElevatorLandingHailSuppress.js";
 import {
+  fpElevApplyClosedCabDoorOutsideClamp,
+  fpElevApplyClosedExteriorDoorCollisionClamp,
   fpElevLandingExteriorDoorInteractPlateLocal,
   landingExteriorDoorRowKey,
 } from "./fpElevatorLandingExteriorDoor.js";
@@ -129,8 +135,18 @@ export type MountFpElevatorWorldResult = {
     playerPos: THREE.Vector3,
     nowMs: number,
   ): boolean;
-  consumeInteractKey(playerPos: THREE.Vector3): boolean;
-  shouldSuppressEpickup(playerPos: THREE.Vector3): boolean;
+  consumeInteractKey(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
+  shouldSuppressEpickup(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
+  /** Client-side closed-door block so FP prediction matches server before rubber-band. */
+  clampLocalClosedExteriorLandingDoors(pos: THREE.Vector3, vel: THREE.Vector3): void;
+  /** When in the narrow sill strip, drive the shared bottom interact prompt (see `fpPickupPrompt`). */
+  getExteriorDoorInteractPrompt(
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ): {
+    willClose: boolean;
+    floorLabel: string;
+  } | null;
   getFloorVisibilityBand(
     px: number,
     py: number,
@@ -465,11 +481,79 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return null;
   };
 
+  const resolveExteriorDoorInteractByRay = (
+    camera: THREE.PerspectiveCamera,
+  ): { shaftKey: string; level: number } | null => {
+    raycaster.setFromCamera(screenCenterNdc, camera);
+    raycaster.far = 4.8;
+    const roots: THREE.Object3D[] = [];
+    for (const v of visuals.values()) {
+      roots.push(v.landingDoorPickRoot);
+    }
+    const hits = raycaster.intersectObjects(roots, true);
+    for (const h of hits) {
+      const mesh = h.object as THREE.Mesh;
+      const pick =
+        (mesh.userData as Partial<FpElevExteriorDoorPickUserData>)[FP_ELEV_EXTERIOR_DOOR_PICK_UD];
+      if (!pick) continue;
+      return { shaftKey: pick.shaftKey, level: pick.level };
+    }
+    return null;
+  };
+
+  const resolveExteriorDoorInteract = (
+    camera: THREE.PerspectiveCamera,
+    px: number,
+    py: number,
+    pz: number,
+  ): { shaftKey: string; level: number } | null =>
+    resolveExteriorDoorInteractByRay(camera) ?? resolveExteriorDoorInteractAtPose(px, py, pz);
+
+  const tryRaycastLandingHail = (
+    camera: THREE.PerspectiveCamera,
+    _playerPos: THREE.Vector3,
+  ): boolean => {
+    raycaster.setFromCamera(screenCenterNdc, camera);
+    raycaster.far = 4.8;
+    const roots: THREE.Object3D[] = [];
+    for (const v of visuals.values()) {
+      roots.push(v.landingHailPickRoot);
+    }
+    const hits = raycaster.intersectObjects(roots, true);
+    for (const h of hits) {
+      const mesh = h.object as THREE.Mesh;
+      const pick =
+        (mesh.userData as Partial<FpElevLandingHailPickUserData>)[FP_ELEV_LANDING_HAIL_PICK_UD];
+      if (!pick) continue;
+      const layout = layoutByKey.get(pick.shaftKey);
+      const row = latest.get(pick.shaftKey);
+      if (!layout || !row) return false;
+      const landingSupportY = feetYForLayout(layout, pick.level);
+      const cabY = getCabY(pick.shaftKey);
+      if (!Number.isFinite(cabY)) return false;
+      if (fpElevSuppressLandingHailBecauseCabAtLandingSupport(cabY, landingSupportY)) {
+        return false;
+      }
+      try {
+        void opts.conn.reducers.elevatorHail({
+          shaftKey: pick.shaftKey,
+          level: pick.level >>> 0,
+        });
+      } catch (e) {
+        console.warn("[fpElevatorWorld] elevatorHail ray", e);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
   const tryRaycastFloorPick = (
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
     nowMs: number,
   ): boolean => {
+    if (tryRaycastLandingHail(camera, playerPos)) return true;
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = FLOOR_PICK_MAX_RAY_M;
     const roots: THREE.Object3D[] = [];
@@ -617,33 +701,29 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
     const exterior = resolveExteriorDoorInteractAtPose(px, py, pz);
     if (exterior) {
-      const rk = landingExteriorDoorRowKey(exterior.shaftKey, exterior.level);
-      const ld = landingByRowKey.get(rk);
-      const willClose = (ld?.desiredOpen ?? 0) !== 0;
-      setFpElevatorHudView({
-        kind: "exterior_door",
-        shaftPlanKey: exterior.shaftKey,
-        landingLevel: exterior.level,
-        willClose,
-      });
+      setFpElevatorHudView({ kind: "hidden" });
     } else {
       const hail = resolveLandingCallAtPose(px, py, pz);
       if (hail) {
-        const label = hail.level <= 1 ? "Ground" : `Story ${hail.level}`;
-        setFpElevatorHudView({
-          kind: "call",
-          shaftPlanKey: hail.shaftKey,
-          callLevel: hail.level,
-          floorLabel: label,
-        });
+      const label = hail.level <= 1 ? "Ground" : `Story ${hail.level}`;
+      setFpElevatorHudView({
+        kind: "call",
+        shaftPlanKey: hail.shaftKey,
+        callLevel: hail.level,
+        floorLabel: label,
+      });
       } else {
         setFpElevatorHudView({ kind: "hidden" });
       }
     }
   };
 
-  const consumeInteractKey = (playerPos: THREE.Vector3): boolean => {
-    const exterior = resolveExteriorDoorInteractAtPose(
+  const consumeInteractKey = (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ): boolean => {
+    const exterior = resolveExteriorDoorInteract(
+      camera,
       playerPos.x,
       playerPos.y,
       playerPos.z,
@@ -672,9 +752,62 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return true;
   };
 
-  const shouldSuppressEpickup = (playerPos: THREE.Vector3): boolean =>
-    resolveExteriorDoorInteractAtPose(playerPos.x, playerPos.y, playerPos.z) !== null ||
+  const shouldSuppressEpickup = (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ): boolean =>
+    resolveExteriorDoorInteract(camera, playerPos.x, playerPos.y, playerPos.z) !== null ||
     resolveLandingCallAtPose(playerPos.x, playerPos.y, playerPos.z) !== null;
+
+  const clampLocalClosedExteriorLandingDoors = (pos: THREE.Vector3, vel: THREE.Vector3) => {
+    const carByShaft = new Map<string, { plateX: number; plateZ: number }>();
+    for (const [k, row] of latest) {
+      carByShaft.set(k, { plateX: row.plateX, plateZ: row.plateZ });
+    }
+    const landingRows = layouts.flatMap((layout) =>
+      Array.from({ length: maxLevel }, (_v, i) => {
+        const level = i + 1;
+        const row = landingByRowKey.get(landingExteriorDoorRowKey(layout.planKey, level));
+        return {
+          shaftKey: layout.planKey,
+          level,
+          swingOpen01: row?.swingOpen01 ?? 0,
+        };
+      }),
+    );
+    fpElevApplyClosedExteriorDoorCollisionClamp(pos, vel, {
+      ox,
+      oz,
+      landingRows,
+      layoutByKey,
+      carByShaft,
+      feetYForLayout,
+    });
+    fpElevApplyClosedCabDoorOutsideClamp(pos, vel, {
+      ox,
+      oz,
+      cars: latest.values(),
+      layoutByKey,
+    });
+  };
+
+  const getExteriorDoorInteractPrompt = (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ) => {
+    const ext = resolveExteriorDoorInteract(
+      camera,
+      playerPos.x,
+      playerPos.y,
+      playerPos.z,
+    );
+    if (!ext) return null;
+    const rk = landingExteriorDoorRowKey(ext.shaftKey, ext.level);
+    const ld = landingByRowKey.get(rk);
+    const willClose = (ld?.desiredOpen ?? 0) !== 0;
+    const floorLabel = ext.level <= 1 ? "Ground" : `Story ${ext.level}`;
+    return { willClose, floorLabel };
+  };
 
   const syncCabEvalClock = (nowMs: number) => {
     cabEvalNowMs = nowMs;
@@ -782,6 +915,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     tryRaycastFloorPick,
     consumeInteractKey,
     shouldSuppressEpickup,
+    clampLocalClosedExteriorLandingDoors,
+    getExteriorDoorInteractPrompt,
     getFloorVisibilityBand,
   };
 }

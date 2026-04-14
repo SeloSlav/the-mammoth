@@ -422,7 +422,10 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
 
     player_vitals::apply_instant_vital_deltas(ctx, sender, dhp, dh, dy, true);
 
-    let kind = world_sound::hotbar_consume_sound_kind(dh, dy);
+    let kind = match items_catalog::hotbar_consume_sound(&item.def_id) {
+        items_catalog::HotbarConsumeSound::Eat => world_sound::KIND_CONSUME_EAT,
+        items_catalog::HotbarConsumeSound::Drink => world_sound::KIND_CONSUME_DRINK,
+    };
     if let Some(pose) = ctx.db.player_pose().identity().find(&sender) {
         world_sound::emit_hotbar_consume_at(ctx, kind, pose.x, pose.y + 0.92, pose.z, sender);
     }

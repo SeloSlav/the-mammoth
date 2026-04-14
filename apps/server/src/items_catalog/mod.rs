@@ -12,12 +12,13 @@
 //! 2. Add its `include_str!` to [`load::SHARD_SOURCES`](load.rs).
 //! 3. Import the same shard in `apps/client/src/inventory/mammothItemCatalog.ts`.
 //! 4. For hotbar **V** instant consume: `category: "consumable"` plus optional `consumeOnUse` vitals in JSON
-//!    (see [`instant_hotbar_consume_vital_deltas`]).
+//!    (see [`instant_hotbar_consume_vital_deltas`]). Author `hotbarConsumeSound` when local / world
+//!    consume SFX should be `eat` vs `drink`.
 
 mod load;
 mod schema;
 
-pub use schema::{CatalogItem, ItemCategory};
+pub use schema::{CatalogItem, HotbarConsumeSound, ItemCategory};
 
 pub fn catalog() -> &'static load::ItemCatalog {
     load::catalog()
@@ -49,6 +50,14 @@ pub fn instant_hotbar_consume_vital_deltas(def_id: &str) -> Option<(f32, f32, f3
     (dhp != 0.0 || dh != 0.0 || dy != 0.0).then_some((dhp, dh, dy))
 }
 
+/// Authored hotbar consume mouth SFX (`eat` / `drink`), defaulting to `eat`.
+#[inline]
+pub fn hotbar_consume_sound(def_id: &str) -> HotbarConsumeSound {
+    get(def_id)
+        .and_then(|c| c.hotbar_consume_sound)
+        .unwrap_or(HotbarConsumeSound::Eat)
+}
+
 /// `true` when this catalog id is a stackable **material** (not a weapon / tool equip archetype).
 #[allow(dead_code)]
 pub fn is_material_def_id(def_id: &str) -> bool {
@@ -56,4 +65,21 @@ pub fn is_material_def_id(def_id: &str) -> bool {
         get(def_id).map(|c| c.category),
         Some(ItemCategory::Material)
     )
+}
+
+#[cfg(test)]
+mod hotbar_consume_sound_tests {
+    use super::{hotbar_consume_sound, HotbarConsumeSound};
+
+    #[test]
+    fn authored_consume_sounds_match_item_type() {
+        assert_eq!(hotbar_consume_sound("apple"), HotbarConsumeSound::Eat);
+        assert_eq!(hotbar_consume_sound("water_bottle"), HotbarConsumeSound::Drink);
+        assert_eq!(hotbar_consume_sound("rakija"), HotbarConsumeSound::Drink);
+    }
+
+    #[test]
+    fn missing_sound_defaults_to_eat() {
+        assert_eq!(hotbar_consume_sound("field_rations"), HotbarConsumeSound::Eat);
+    }
 }

@@ -154,16 +154,6 @@ pub fn emit_item_pickup_at(
     );
 }
 
-/// Broth-style: hydration-led consumables use drink stem; everything else uses eat.
-#[inline]
-pub fn hotbar_consume_sound_kind(hunger_delta: f32, hydration_delta: f32) -> u8 {
-    if hydration_delta > hunger_delta {
-        KIND_CONSUME_DRINK
-    } else {
-        KIND_CONSUME_EAT
-    }
-}
-
 /// One-shot at the consumer’s mouth height (`y` should already be biased, e.g. pose + 0.9).
 pub fn emit_hotbar_consume_at(
     ctx: &ReducerContext,
@@ -178,23 +168,6 @@ pub fn emit_hotbar_consume_at(
         return;
     }
     emit_world_sound(ctx, kind, 0, x, y, z, 0.66, 16.0, emitter);
-}
-
-#[cfg(test)]
-mod consume_kind_tests {
-    use super::*;
-
-    #[test]
-    fn hotbar_consume_kind_prefers_hydration_when_strictly_greater() {
-        assert_eq!(hotbar_consume_sound_kind(0.0, 1.0), KIND_CONSUME_DRINK);
-        assert_eq!(hotbar_consume_sound_kind(10.0, 32.0), KIND_CONSUME_DRINK);
-    }
-
-    #[test]
-    fn hotbar_consume_kind_eat_when_hunger_dominates_or_tie() {
-        assert_eq!(hotbar_consume_sound_kind(24.0, 0.0), KIND_CONSUME_EAT);
-        assert_eq!(hotbar_consume_sound_kind(24.0, 24.0), KIND_CONSUME_EAT);
-    }
 }
 
 /// Per-connection rows used by footsteps + melee cooldown.

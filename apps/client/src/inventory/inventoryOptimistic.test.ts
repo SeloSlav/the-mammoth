@@ -18,6 +18,7 @@ function item(instanceNum: number, defId: string, qty: number, max: number): Mam
       maxStack: max,
       construction: null,
       consumeOnUse: null,
+      hotbarConsumeSound: null,
       iconUrl: "",
     },
   };

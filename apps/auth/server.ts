@@ -21,6 +21,17 @@ import { initializeKeys, getPublicJWK, keyId } from './jwt-keys.js';
 import { Resend } from 'resend';
 import { mountStaticImageRoutes } from './routes/staticAssets.js';
 import { mountTokenEndpoint } from './routes/tokenEndpoint.js';
+import { mammothAuthPage } from './mammothAuthHtml.js';
+import {
+  THEME_ACCENT,
+  THEME_ACCENT_ON,
+  THEME_CARD_BG,
+  THEME_PAGE_BG_EDGE,
+  THEME_PAGE_BG_MID,
+  THEME_TEXT_FAINT,
+  THEME_TEXT_MUTED,
+  THEME_TEXT_PRIMARY,
+} from '@the-mammoth/ui-theme';
 
 const CLIENT_ID = process.env.OIDC_CLIENT_ID || 'the-mammoth-client';
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
@@ -162,138 +173,15 @@ async function success(ctx: any, value: any): Promise<Response> {
 /* -------------------------------------------------------------------------- */
 function renderForgotPasswordPage(opts: { error?: string; success?: string } = {}): string {
   const { error, success } = opts;
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link rel="icon" type="image/png" href="/favicon.png">
-      <title>Forgot Password - The Mammoth</title>
-      <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-              min-height: 100vh;
-              background-image: url('/login_background.png');
-              background-size: cover;
-              background-position: top center;
-              background-repeat: no-repeat;
-              font-family: system-ui, -apple-system, sans-serif;
-              color: white;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-          }
-          .container {
-              background: rgba(0, 0, 0, 0.75);
-              backdrop-filter: blur(12px);
-              border: 2px solid rgba(255, 255, 255, 0.3);
-              border-radius: 16px;
-              padding: 60px 40px;
-              width: 90%;
-              max-width: 450px;
-              text-align: center;
-          }
-          .game-title { height: 90px; margin-bottom: 20px; }
-          .game-subtitle {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.8);
-              margin-bottom: 40px;
-              letter-spacing: 2px;
-              text-transform: uppercase;
-          }
-          .form-title { font-size: 24px; font-weight: 600; margin-bottom: 15px; }
-          .form-description {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.7);
-              margin-bottom: 30px;
-              line-height: 1.5;
-          }
-          .form-group { margin-bottom: 25px; text-align: left; }
-          label {
-              display: block;
-              margin-bottom: 8px;
-              font-size: 13px;
-              color: rgba(255, 255, 255, 0.9);
-              font-weight: 500;
-          }
-          input[type="email"] {
-              width: 100%;
-              padding: 16px 20px;
-              background: rgba(255, 255, 255, 0.1);
-              border: 2px solid rgba(255, 255, 255, 0.3);
-              border-radius: 12px;
-              color: white;
-              font-size: 16px;
-          }
-          input[type="email"]:focus {
-              outline: none;
-              border-color: #ff8c00;
-              background: rgba(255, 255, 255, 0.15);
-          }
-          input[type="email"]::placeholder { color: rgba(255, 255, 255, 0.5); }
-          .submit-button {
-              width: 100%;
-              padding: 18px 20px;
-              background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-              border: none;
-              border-radius: 12px;
-              color: white;
-              font-size: 16px;
-              font-weight: 600;
-              cursor: pointer;
-              margin-bottom: 30px;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-          }
-          .submit-button:hover {
-              background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-          }
-          .divider {
-              height: 1px;
-              background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-              margin: 30px 0;
-          }
-          .form-link {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.8);
-          }
-          .form-link a {
-              color: #ff8c00;
-              text-decoration: none;
-              font-weight: 500;
-          }
-          .form-link a:hover { color: #ffaa33; text-decoration: underline; }
-          .error-message {
-              background: rgba(220, 53, 69, 0.15);
-              border: 1px solid rgba(220, 53, 69, 0.4);
-              border-radius: 8px;
-              padding: 12px;
-              margin-bottom: 20px;
-              font-size: 14px;
-              color: #ff6b6b;
-          }
-          .success-message {
-              background: rgba(40, 167, 69, 0.15);
-              border: 1px solid rgba(40, 167, 69, 0.4);
-              border-radius: 8px;
-              padding: 12px;
-              margin-bottom: 20px;
-              font-size: 14px;
-              color: #5cb85c;
-              line-height: 1.5;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <div class="game-title">
-              <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-          </div>
+  const main = success
+    ? `
           <h1 class="form-title">Forgot Password</h1>
-          ${success ? `<div class="success-message">${success}</div>` : `
+          <div class="success-message">${success}</div>
+          `
+    : `
+          <h1 class="form-title">Forgot Password</h1>
           <p class="form-description">Enter your email address and we'll send you a link to reset your password.</p>
-          ${error ? `<div class="error-message">${error}</div>` : ''}
+          ${error ? `<div class="error-message">${error}</div>` : ""}
           <form method="post">
               <div class="form-group">
                   <label for="email">Email Address</label>
@@ -301,144 +189,25 @@ function renderForgotPasswordPage(opts: { error?: string; success?: string } = {
               </div>
               <button type="submit" class="submit-button">Send Reset Link</button>
           </form>
-          `}
+          `;
+  const footer = `
           <div class="divider"></div>
-          <p class="form-link">Remember your password? <a href="/auth/password/login">Sign In</a></p>
-      </div>
-  </body>
-  </html>
-  `;
+          <p class="form-link">Remember your password? <a href="/auth/password/login">Sign In</a></p>`;
+  return mammothAuthPage("Forgot Password - The Mammoth", main + footer);
 }
 
 function renderResetPasswordPage(opts: { token?: string; email?: string; error?: string } = {}): string {
   const { token, email, error } = opts;
-  const showForm = token && !error?.includes('Invalid') && !error?.includes('expired') && !error?.includes('already been used');
-  
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link rel="icon" type="image/png" href="/favicon.png">
-      <title>Reset Password - The Mammoth</title>
-      <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-              min-height: 100vh;
-              background-image: url('/login_background.png');
-              background-size: cover;
-              background-position: top center;
-              font-family: system-ui, -apple-system, sans-serif;
-              color: white;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-          }
-          .container {
-              background: rgba(0, 0, 0, 0.75);
-              backdrop-filter: blur(12px);
-              border: 2px solid rgba(255, 255, 255, 0.3);
-              border-radius: 16px;
-              padding: 60px 40px;
-              width: 90%;
-              max-width: 450px;
-              text-align: center;
-          }
-          .game-title { height: 90px; margin-bottom: 20px; }
-          .game-subtitle {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.8);
-              margin-bottom: 40px;
-              letter-spacing: 2px;
-              text-transform: uppercase;
-          }
-          .form-title { font-size: 24px; font-weight: 600; margin-bottom: 15px; }
-          .form-description {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.7);
-              margin-bottom: 30px;
-              line-height: 1.5;
-          }
-          .form-group { margin-bottom: 25px; text-align: left; }
-          label {
-              display: block;
-              margin-bottom: 8px;
-              font-size: 13px;
-              color: rgba(255, 255, 255, 0.9);
-              font-weight: 500;
-          }
-          input[type="password"], input[type="email"] {
-              width: 100%;
-              padding: 16px 20px;
-              background: rgba(255, 255, 255, 0.1);
-              border: 2px solid rgba(255, 255, 255, 0.3);
-              border-radius: 12px;
-              color: white;
-              font-size: 16px;
-          }
-          input:focus {
-              outline: none;
-              border-color: #ff8c00;
-              background: rgba(255, 255, 255, 0.15);
-          }
-          input::placeholder { color: rgba(255, 255, 255, 0.5); }
-          input:disabled {
-              background: rgba(255, 255, 255, 0.05);
-              color: rgba(255, 255, 255, 0.5);
-          }
-          .submit-button {
-              width: 100%;
-              padding: 18px 20px;
-              background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-              border: none;
-              border-radius: 12px;
-              color: white;
-              font-size: 16px;
-              font-weight: 600;
-              cursor: pointer;
-              margin-bottom: 30px;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-          }
-          .submit-button:hover {
-              background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-          }
-          .divider {
-              height: 1px;
-              background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-              margin: 30px 0;
-          }
-          .form-link {
-              font-size: 14px;
-              color: rgba(255, 255, 255, 0.8);
-          }
-          .form-link a {
-              color: #ff8c00;
-              text-decoration: none;
-              font-weight: 500;
-          }
-          .form-link a:hover { color: #ffaa33; text-decoration: underline; }
-          .error-message {
-              background: rgba(220, 53, 69, 0.15);
-              border: 1px solid rgba(220, 53, 69, 0.4);
-              border-radius: 8px;
-              padding: 12px;
-              margin-bottom: 20px;
-              font-size: 14px;
-              color: #ff6b6b;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <div class="game-title">
-              <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-          </div>
-          <h1 class="form-title">Reset Password</h1>
-          ${error ? `<div class="error-message">${error}</div>` : ''}
-          ${showForm ? `
-          <p class="form-description">Enter a new password for <strong>${email}</strong></p>
+  const showForm =
+    Boolean(token) &&
+    !error?.includes("Invalid") &&
+    !error?.includes("expired") &&
+    !error?.includes("already been used");
+
+  const formBlock =
+    showForm && token
+      ? `
+          <p class="form-description">Enter a new password for <strong>${email ?? ""}</strong></p>
           <form method="post">
               <input type="hidden" name="token" value="${token}">
               <div class="form-group">
@@ -451,13 +220,17 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
               </div>
               <button type="submit" class="submit-button">Reset Password</button>
           </form>
-          ` : ''}
-          <div class="divider"></div>
-          <p class="form-link"><a href="/auth/password/forgot">Request New Reset Link</a> | <a href="/auth/password/login">Sign In</a></p>
-      </div>
-  </body>
-  </html>
-  `;
+          `
+      : "";
+
+  const inner = `
+    <h1 class="form-title">Reset Password</h1>
+    ${error ? `<div class="error-message">${error}</div>` : ""}
+    ${formBlock}
+    <div class="divider"></div>
+    <p class="form-link"><a href="/auth/password/forgot">Request New Reset Link</a> · <a href="/auth/password/login">Sign In</a></p>`;
+
+  return mammothAuthPage("Reset Password - The Mammoth", inner);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -500,14 +273,14 @@ export async function startAuthServer(): Promise<void> {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/favicon.png" />
   <title>The Mammoth</title>
-  <meta name="description" content="The Mammoth — a multiplayer game built with Three.js and SpacetimeDB." />
-  <meta name="keywords" content="The Mammoth, multiplayer, 3D, Three.js, SpacetimeDB" />
+  <meta name="description" content="The Mammoth — multiplayer survival in a frozen megastructure." />
+  <meta name="keywords" content="The Mammoth, multiplayer, survival game, 3D" />
   <meta name="author" content="The Mammoth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="${baseUrl}/document" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="The Mammoth" />
-  <meta property="og:description" content="Multiplayer game built with Three.js and SpacetimeDB." />
+  <meta property="og:description" content="Multiplayer survival in a frozen megastructure." />
   <meta property="og:image" content="${ogImage}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
@@ -517,21 +290,41 @@ export async function startAuthServer(): Promise<void> {
   <meta property="og:locale" content="en_US" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="The Mammoth" />
-  <meta name="twitter:description" content="Multiplayer game built with Three.js and SpacetimeDB." />
+  <meta name="twitter:description" content="Multiplayer survival in a frozen megastructure." />
   <meta name="twitter:image" content="${ogImage}" />
   <meta name="twitter:image:alt" content="The Mammoth" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
-    h1 { font-size: 2rem; margin-bottom: 1rem; color: #ff8c00; }
-    p { max-width: 500px; line-height: 1.6; margin-bottom: 1.5rem; color: rgba(255,255,255,0.9); }
-    a { color: #ff8c00; text-decoration: none; font-weight: 600; padding: 0.5rem 1rem; border: 2px solid #ff8c00; border-radius: 8px; display: inline-block; margin-top: 1rem; }
-    a:hover { background: rgba(255,140,0,0.2); }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      color: ${THEME_TEXT_PRIMARY};
+      background: radial-gradient(ellipse at center, ${THEME_PAGE_BG_MID} 0%, ${THEME_PAGE_BG_EDGE} 72%);
+    }
+    h1 { font-size: 2rem; margin-bottom: 1rem; color: ${THEME_ACCENT}; letter-spacing: 0.02em; }
+    p { max-width: 500px; line-height: 1.6; margin-bottom: 1.5rem; color: ${THEME_TEXT_MUTED}; }
+    a {
+      color: ${THEME_ACCENT_ON};
+      background: ${THEME_ACCENT};
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.55rem 1.25rem;
+      border-radius: 8px;
+      display: inline-block;
+      margin-top: 0.5rem;
+    }
+    a:hover { filter: brightness(1.08); }
   </style>
 </head>
 <body>
   <h1>The Mammoth</h1>
-  <p>A multiplayer game built with Three.js and SpacetimeDB.</p>
+  <p>Multiplayer survival in a frozen megastructure.</p>
   <a href="https://github.com/the-mammoth/the-mammoth">GitHub</a>
 </body>
 </html>
@@ -604,233 +397,32 @@ export async function startAuthServer(): Promise<void> {
     const code_challenge_method = query['code_challenge_method'] || 'S256';
     const client_id = query['client_id'] || CLIENT_ID; 
 
-    return c.html(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Create Account - The Mammoth</title>
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            
-            body {
-                min-height: 100vh;
-                width: 100%;
-                background-image: url('login_background.png');
-                background-size: cover;
-                background-position: top center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                color: white;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                position: relative;
-                overflow-x: hidden;
-            }
-            
-            .container {
-                background: rgba(0, 0, 0, 0.75);
-                backdrop-filter: blur(12px);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                padding: 60px 40px;
-                width: 90%;
-                max-width: 450px;
-                position: relative;
-                z-index: 2;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-                text-align: center;
-            }
-            
-            .game-title {
-                height: 90px;
-                margin-bottom: 20px;
-                object-fit: contain;
-                filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8));
-            }
-            
-            .game-subtitle {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-                margin-bottom: 40px;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                font-weight: 400;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-            }
-            
-            .form-title {
-                font-size: 24px;
-                font-weight: 600;
-                color: white;
-                margin-bottom: 30px;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            }
-            
-            .form-group {
-                margin-bottom: 25px;
-                text-align: left;
-            }
-            
-            label {
-                display: block;
-                margin-bottom: 8px;
-                font-size: 13px;
-                color: rgba(255, 255, 255, 0.9);
-                font-weight: 500;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                letter-spacing: 0.5px;
-            }
-            
-            input[type="email"], 
-            input[type="password"] {
-                width: 100%;
-                padding: 16px 20px;
-                background: rgba(255, 255, 255, 0.1);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-family: inherit;
-                backdrop-filter: blur(8px);
-                transition: all 0.3s ease;
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-            }
-            
-            input[type="email"]:focus, 
-            input[type="password"]:focus {
-                outline: none;
-                border-color: #ff8c00;
-                background: rgba(255, 255, 255, 0.15);
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(255, 140, 0, 0.2);
-            }
-            
-            input[type="email"]::placeholder,
-            input[type="password"]::placeholder {
-                color: rgba(255, 255, 255, 0.5);
-            }
-            
-            .submit-button {
-                width: 100%;
-                padding: 18px 20px;
-                background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-weight: 600;
-                font-family: inherit;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                margin-bottom: 30px;
-                box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            
-            .submit-button:hover {
-                background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(255, 140, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            }
-            
-            .submit-button:active {
-                transform: translateY(0);
-                box-shadow: 0 2px 8px rgba(255, 140, 0, 0.3);
-            }
-            
-            .divider {
-                height: 1px;
-                background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-                margin: 30px 0;
-            }
-            
-            .form-link {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-                line-height: 1.6;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            }
-            
-            .form-link a {
-                color: #ff8c00;
-                text-decoration: none;
-                font-weight: 500;
-                transition: color 0.3s ease;
-            }
-            
-            .form-link a:hover {
-                color: #ffaa33;
-                text-decoration: underline;
-            }
-            
-            .error-message {
-                background: rgba(220, 53, 69, 0.15);
-                border: 1px solid rgba(220, 53, 69, 0.4);
-                border-radius: 8px;
-                padding: 12px;
-                margin-bottom: 20px;
-                font-size: 14px;
-                color: #ff6b6b;
-                backdrop-filter: blur(8px);
-                text-shadow: none;
-            }
-            
-            @media (max-width: 480px) {
-                .container {
-                    padding: 40px 30px;
-                    margin: 20px;
-                }
-                
-                .game-title {
-                    height: 60px;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="game-title">
-                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-            </div>
-            
+    return c.html(
+      mammothAuthPage(
+        "Create Account - The Mammoth",
+        `
             <h1 class="form-title">Create Account</h1>
-            
             <form method="post">
                 <input type="hidden" name="redirect_uri" value="${encodeURIComponent(redirect_uri)}">
-                <input type="hidden" name="state" value="${state || ''}">
+                <input type="hidden" name="state" value="${state || ""}">
                 <input type="hidden" name="code_challenge" value="${code_challenge}">
                 <input type="hidden" name="code_challenge_method" value="${code_challenge_method}">
                 <input type="hidden" name="client_id" value="${client_id}">
-                
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <input id="email" name="email" type="email" autocomplete="email" required placeholder="Enter your email">
                 </div>
-                
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input id="password" name="password" type="password" autocomplete="new-password" required placeholder="Create a password">
                 </div>
-                
                 <button type="submit" class="submit-button">Create Account</button>
             </form>
-            
             <div class="divider"></div>
-            
             <p class="form-link">Already have an account? <a href="/auth/password/login?${queryString}">Sign In</a></p>
-        </div>
-    </body>
-    </html>
-    `);
+        `,
+      ),
+    );
   });
 
   app.post('/auth/password/register', async (c) => {
@@ -875,34 +467,31 @@ export async function startAuthServer(): Promise<void> {
         }
     } else {
         console.warn(`[AuthServer] POST Register Failed for email: ${email} (Email likely taken)`);
-        // Return error page with form
-        return c.html(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Register</title>
-            <style>/* Same styles as GET */</style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="logo-text">Vibe Survival</div>
-                <h1>Create Account</h1>
-                <p style="color: red; margin-bottom: 15px;">Registration failed. That email might already be taken.</p>
-                <form method="post">
-                     <input type="hidden" name="redirect_uri" value="${redirect_uri_from_form}">
-                     <input type="hidden" name="state" value="${state || ''}">
-                     <input type="hidden" name="code_challenge" value="${code_challenge}">
-                     <input type="hidden" name="code_challenge_method" value="${code_challenge_method}">
-                     <input type="hidden" name="client_id" value="${client_id}">
-                     <div><label for="email">Email:</label><input id="email" name="email" type="email" value="${email || ''}" required></div>
-                     <div><label for="password">Password:</label><input id="password" name="password" type="password" autocomplete="new-password" required></div>
-                     <button type="submit">Register</button>
-                </form>
-            </div>
-        </body>
-        </html>
-        `);
+        return c.html(
+          mammothAuthPage(
+            "Create Account - The Mammoth",
+            `
+            <h1 class="form-title">Create Account</h1>
+            <div class="error-message">Registration failed. That email might already be taken.</div>
+            <form method="post">
+                <input type="hidden" name="redirect_uri" value="${redirect_uri_from_form}">
+                <input type="hidden" name="state" value="${state || ""}">
+                <input type="hidden" name="code_challenge" value="${code_challenge}">
+                <input type="hidden" name="code_challenge_method" value="${code_challenge_method}">
+                <input type="hidden" name="client_id" value="${client_id}">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input id="email" name="email" type="email" value="${email || ""}" autocomplete="email" required placeholder="Enter your email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" required placeholder="Create a password">
+                </div>
+                <button type="submit" class="submit-button">Create Account</button>
+            </form>
+            `,
+          ),
+        );
     }
   });
 
@@ -918,225 +507,33 @@ export async function startAuthServer(): Promise<void> {
     const code_challenge_method = query['code_challenge_method'] || 'S256';
     const client_id = query['client_id'] || CLIENT_ID; 
 
-    return c.html(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Sign In - The Mammoth</title>
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            
-            body {
-                min-height: 100vh;
-                width: 100%;
-                background-image: url('login_background.png');
-                background-size: cover;
-                background-position: top center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                color: white;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                position: relative;
-                overflow-x: hidden;
-            }
-            
-            .container {
-                background: rgba(0, 0, 0, 0.75);
-                backdrop-filter: blur(12px);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                padding: 60px 40px;
-                width: 90%;
-                max-width: 450px;
-                position: relative;
-                z-index: 2;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-                text-align: center;
-            }
-            
-            .game-title {
-                height: 90px;
-                margin-bottom: 20px;
-                object-fit: contain;
-                filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8));
-            }
-            
-            .game-subtitle {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-                margin-bottom: 40px;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                font-weight: 400;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-            }
-            
-            .form-title {
-                font-size: 24px;
-                font-weight: 600;
-                color: white;
-                margin-bottom: 20px;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            }
-            
-            .error-message {
-                background: rgba(220, 53, 69, 0.15);
-                border: 1px solid rgba(220, 53, 69, 0.4);
-                border-radius: 8px;
-                padding: 12px;
-                margin-bottom: 25px;
-                font-size: 14px;
-                color: #ff6b6b;
-                backdrop-filter: blur(8px);
-                text-shadow: none;
-            }
-            
-            .form-group {
-                margin-bottom: 25px;
-                text-align: left;
-            }
-            
-            label {
-                display: block;
-                margin-bottom: 8px;
-                font-size: 13px;
-                color: rgba(255, 255, 255, 0.9);
-                font-weight: 500;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                letter-spacing: 0.5px;
-            }
-            
-            input[type="email"], 
-            input[type="password"] {
-                width: 100%;
-                padding: 16px 20px;
-                background: rgba(255, 255, 255, 0.1);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-family: inherit;
-                backdrop-filter: blur(8px);
-                transition: all 0.3s ease;
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-            }
-            
-            input[type="email"]:focus, 
-            input[type="password"]:focus {
-                outline: none;
-                border-color: #ff8c00;
-                background: rgba(255, 255, 255, 0.15);
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(255, 140, 0, 0.2);
-            }
-            
-            .submit-button {
-                width: 100%;
-                padding: 18px 20px;
-                background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-weight: 600;
-                font-family: inherit;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                margin-bottom: 30px;
-                box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            
-            .submit-button:hover {
-                background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(255, 140, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            }
-            
-            .divider {
-                height: 1px;
-                background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-                margin: 30px 0;
-            }
-            
-            .form-link {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-                line-height: 1.6;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            }
-            
-            .form-link a {
-                color: #ff8c00;
-                text-decoration: none;
-                font-weight: 500;
-                transition: color 0.3s ease;
-            }
-            
-            .form-link a:hover {
-                color: #ffaa33;
-                text-decoration: underline;
-            }
-            
-            @media (max-width: 480px) {
-                .container {
-                    padding: 40px 30px;
-                    margin: 20px;
-                }
-                
-                .game-title {
-                    height: 40px;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="game-title">
-                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-            </div>
-            
+    return c.html(
+      mammothAuthPage(
+        "Sign In - The Mammoth",
+        `
             <h1 class="form-title">Sign In</h1>
-            
             <form method="post">
                 <input type="hidden" name="redirect_uri" value="${encodeURIComponent(redirect_uri)}">
-                <input type="hidden" name="state" value="${state || ''}">
+                <input type="hidden" name="state" value="${state || ""}">
                 <input type="hidden" name="code_challenge" value="${code_challenge}">
                 <input type="hidden" name="code_challenge_method" value="${code_challenge_method}">
                 <input type="hidden" name="client_id" value="${client_id}">
-                
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <input id="email" name="email" type="email" autocomplete="email" required placeholder="Enter your email">
                 </div>
-                
                 <div class="form-group">
                     <label for="password">Password</label>
                     <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
                 </div>
-                
                 <button type="submit" class="submit-button">Sign In</button>
-                
-                <p class="form-link" style="margin-top: -15px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot Password?</a></p>
+                <p class="form-link" style="margin-top: -8px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot password?</a></p>
             </form>
-            
             <div class="divider"></div>
-            
-            <p class="form-link">Don't have an account? <a href="/auth/password/register?${queryString}">Create Account</a></p>
-        </div>
-    </body>
-    </html>
-    `);
+            <p class="form-link">Need an account? <a href="/auth/password/register?${queryString}">Create account</a></p>
+        `,
+      ),
+    );
   });
 
   app.post('/auth/password/login', async (c) => {
@@ -1187,376 +584,40 @@ export async function startAuthServer(): Promise<void> {
               .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
               .join('&');
               
-          return c.html(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link rel="icon" type="image/png" href="/favicon.png">
-                <title>Sign In - The Mammoth</title>
-                <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    body {
-                        min-height: 100vh;
-                        width: 100%;
-                        background-image: url('login_background.png');
-                        background-size: cover;
-                        background-position: top center;
-                        background-repeat: no-repeat;
-                        background-attachment: fixed;
-                        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                        color: white;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        position: relative;
-                        overflow-x: hidden;
-                    }
-                    
-                    .container {
-                        background: rgba(0, 0, 0, 0.75);
-                        backdrop-filter: blur(12px);
-                        border: 2px solid rgba(255, 255, 255, 0.3);
-                        border-radius: 16px;
-                        padding: 60px 40px;
-                        width: 90%;
-                        max-width: 450px;
-                        position: relative;
-                        z-index: 2;
-                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-                        text-align: center;
-                    }
-                    
-                    .game-title {
-                        height: 60px;
-                        margin-bottom: 15px;
-                        object-fit: contain;
-                        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8));
-                    }
-                    
-                    .game-subtitle {
-                        font-size: 14px;
-                        color: rgba(255, 255, 255, 0.8);
-                        margin-bottom: 40px;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                        font-weight: 400;
-                        letter-spacing: 2px;
-                        text-transform: uppercase;
-                    }
-                    
-                    .form-title {
-                        font-size: 24px;
-                        font-weight: 600;
-                        color: white;
-                        margin-bottom: 20px;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                    }
-                    
-                    .error-message {
-                        background: rgba(220, 53, 69, 0.15);
-                        border: 1px solid rgba(220, 53, 69, 0.4);
-                        border-radius: 8px;
-                        padding: 12px;
-                        margin-bottom: 25px;
-                        font-size: 14px;
-                        color: #ff6b6b;
-                        backdrop-filter: blur(8px);
-                        text-shadow: none;
-                    }
-                    
-                    .form-group {
-                        margin-bottom: 25px;
-                        text-align: left;
-                    }
-                    
-                    label {
-                        display: block;
-                        margin-bottom: 8px;
-                        font-size: 13px;
-                        color: rgba(255, 255, 255, 0.9);
-                        font-weight: 500;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    input[type="email"], 
-                    input[type="password"] {
-                        width: 100%;
-                        padding: 16px 20px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border: 2px solid rgba(255, 255, 255, 0.3);
-                        border-radius: 12px;
-                        color: white;
-                        font-size: 16px;
-                        font-family: inherit;
-                        backdrop-filter: blur(8px);
-                        transition: all 0.3s ease;
-                        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-                    }
-                    
-                    input[type="email"]:focus, 
-                    input[type="password"]:focus {
-                        outline: none;
-                        border-color: #ff8c00;
-                        background: rgba(255, 255, 255, 0.15);
-                        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(255, 140, 0, 0.2);
-                    }
-                    
-                    .submit-button {
-                        width: 100%;
-                        padding: 18px 20px;
-                        background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-                        border: none;
-                        border-radius: 12px;
-                        color: white;
-                        font-size: 16px;
-                        font-weight: 600;
-                        font-family: inherit;
-                        cursor: pointer;
-                        transition: all 0.3s ease;
-                        margin-bottom: 30px;
-                        box-shadow: 0 4px 15px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-                        text-transform: uppercase;
-                        letter-spacing: 1px;
-                    }
-                    
-                    .submit-button:hover {
-                        background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-                        transform: translateY(-2px);
-                        box-shadow: 0 6px 20px rgba(255, 140, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-                    }
-                    
-                    .divider {
-                        height: 1px;
-                        background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-                        margin: 30px 0;
-                    }
-                    
-                    .form-link {
-                        font-size: 14px;
-                        color: rgba(255, 255, 255, 0.8);
-                        line-height: 1.6;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-                    }
-                    
-                    .form-link a {
-                        color: #ff8c00;
-                        text-decoration: none;
-                        font-weight: 500;
-                        transition: color 0.3s ease;
-                    }
-                    
-                    .form-link a:hover {
-                        color: #ffaa33;
-                        text-decoration: underline;
-                    }
-                    
-                    @media (max-width: 480px) {
-                        .container {
-                            padding: 40px 30px;
-                            margin: 20px;
-                        }
-                        
-                        .game-title {
-                            height: 40px;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="game-title">
-                        <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-                    </div>
+          return c.html(
+            mammothAuthPage(
+              "Sign In - The Mammoth",
+              `
                     <h1 class="form-title">Sign In</h1>
-                    <p class="error-message">Invalid email or password. Please try again.</p>
+                    <div class="error-message">Invalid email or password. Please try again.</div>
                     <form method="post">
                         <input type="hidden" name="redirect_uri" value="${redirect_uri_from_form}">
-                        <input type="hidden" name="state" value="${state || ''}">
+                        <input type="hidden" name="state" value="${state || ""}">
                         <input type="hidden" name="code_challenge" value="${code_challenge}">
                         <input type="hidden" name="code_challenge_method" value="${code_challenge_method}">
                         <input type="hidden" name="client_id" value="${client_id}">
                         <div class="form-group">
                             <label for="email">Email Address</label>
-                            <input id="email" name="email" type="email" value="${email || ''}" required placeholder="Enter your email">
+                            <input id="email" name="email" type="email" value="${email || ""}" autocomplete="email" required placeholder="Enter your email">
                         </div>
                         <div class="form-group">
                             <label for="password">Password</label>
                             <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
                         </div>
                         <button type="submit" class="submit-button">Sign In</button>
-                        
-                        <p class="form-link" style="margin-top: -15px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot Password?</a></p>
+                        <p class="form-link" style="margin-top: -8px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot password?</a></p>
                     </form>
                     <div class="divider"></div>
-                    <p class="form-link">Don't have an account? <a href="/auth/password/register?${queryString}">Create Account</a></p>
-                </div>
-            </body>
-            </html>
-          `);
+                    <p class="form-link">Need an account? <a href="/auth/password/register?${queryString}">Create account</a></p>
+              `,
+            ),
+          );
       }
   });
 
   // --- Forgot Password Flow ---
-  app.get('/auth/password/forgot', (c) => {
-    return c.html(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Forgot Password - The Mammoth</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-                min-height: 100vh;
-                width: 100%;
-                background-image: url('login_background.png');
-                background-size: cover;
-                background-position: top center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                color: white;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            .container {
-                background: rgba(0, 0, 0, 0.75);
-                backdrop-filter: blur(12px);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                padding: 60px 40px;
-                width: 90%;
-                max-width: 450px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-                text-align: center;
-            }
-            .game-title { height: 90px; margin-bottom: 20px; }
-            .game-subtitle {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-                margin-bottom: 40px;
-                letter-spacing: 2px;
-                text-transform: uppercase;
-            }
-            .form-title {
-                font-size: 24px;
-                font-weight: 600;
-                margin-bottom: 15px;
-            }
-            .form-description {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.7);
-                margin-bottom: 30px;
-                line-height: 1.5;
-            }
-            .form-group { margin-bottom: 25px; text-align: left; }
-            label {
-                display: block;
-                margin-bottom: 8px;
-                font-size: 13px;
-                color: rgba(255, 255, 255, 0.9);
-                font-weight: 500;
-            }
-            input[type="email"] {
-                width: 100%;
-                padding: 16px 20px;
-                background: rgba(255, 255, 255, 0.1);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                transition: all 0.3s ease;
-            }
-            input[type="email"]:focus {
-                outline: none;
-                border-color: #ff8c00;
-                background: rgba(255, 255, 255, 0.15);
-            }
-            input[type="email"]::placeholder { color: rgba(255, 255, 255, 0.5); }
-            .submit-button {
-                width: 100%;
-                padding: 18px 20px;
-                background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                margin-bottom: 30px;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-            }
-            .submit-button:hover {
-                background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-                transform: translateY(-2px);
-            }
-            .divider {
-                height: 1px;
-                background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
-                margin: 30px 0;
-            }
-            .form-link {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.8);
-            }
-            .form-link a {
-                color: #ff8c00;
-                text-decoration: none;
-                font-weight: 500;
-            }
-            .form-link a:hover { color: #ffaa33; text-decoration: underline; }
-            .error-message {
-                background: rgba(220, 53, 69, 0.15);
-                border: 1px solid rgba(220, 53, 69, 0.4);
-                border-radius: 8px;
-                padding: 12px;
-                margin-bottom: 20px;
-                font-size: 14px;
-                color: #ff6b6b;
-            }
-            .success-message {
-                background: rgba(40, 167, 69, 0.15);
-                border: 1px solid rgba(40, 167, 69, 0.4);
-                border-radius: 8px;
-                padding: 12px;
-                margin-bottom: 20px;
-                font-size: 14px;
-                color: #5cb85c;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="game-title">
-                <img src="logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-            </div>
-            <h1 class="form-title">Forgot Password</h1>
-            <p class="form-description">Enter your email address and we'll send you a link to reset your password.</p>
-            <form method="post">
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <input id="email" name="email" type="email" autocomplete="email" required placeholder="Enter your email">
-                </div>
-                <button type="submit" class="submit-button">Send Reset Link</button>
-            </form>
-            <div class="divider"></div>
-            <p class="form-link">Remember your password? <a href="/auth/password/login">Sign In</a></p>
-        </div>
-    </body>
-    </html>
-    `);
+  app.get("/auth/password/forgot", (c) => {
+    return c.html(renderForgotPasswordPage());
   });
 
   app.post('/auth/password/forgot', async (c) => {
@@ -1604,21 +665,21 @@ export async function startAuthServer(): Promise<void> {
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
-            <body style="font-family: system-ui, -apple-system, sans-serif; background-color: #1a1a2e; color: #ffffff; padding: 40px 20px; margin: 0;">
-              <div style="max-width: 500px; margin: 0 auto; background: rgba(40, 40, 60, 0.95); border-radius: 16px; padding: 40px; border: 2px solid rgba(255, 140, 0, 0.3);">
-                <h1 style="color: #ff8c00; margin-bottom: 20px; font-size: 24px;">Reset Your Password</h1>
-                <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; margin-bottom: 30px;">
-                  You requested a password reset for your The Mammoth account. Click the button below to set a new password:
+            <body style="font-family: system-ui, -apple-system, sans-serif; background: radial-gradient(ellipse at center, ${THEME_PAGE_BG_MID} 0%, ${THEME_PAGE_BG_EDGE} 72%); color: ${THEME_TEXT_PRIMARY}; padding: 40px 20px; margin: 0;">
+              <div style="max-width: 500px; margin: 0 auto; background: ${THEME_CARD_BG}; border-radius: 14px; padding: 36px 28px; border: 1px solid rgba(255,255,255,0.1);">
+                <h1 style="color: ${THEME_ACCENT}; margin-bottom: 18px; font-size: 22px;">Reset your password</h1>
+                <p style="color: ${THEME_TEXT_MUTED}; line-height: 1.6; margin-bottom: 26px;">
+                  You requested a password reset for your The Mammoth account. Use the button below to choose a new password.
                 </p>
-                <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
-                  Reset Password
+                <a href="${resetLink}" style="display: inline-block; background: ${THEME_ACCENT}; color: ${THEME_ACCENT_ON}; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                  Reset password
                 </a>
-                <p style="color: rgba(255, 255, 255, 0.5); font-size: 13px; margin-top: 30px; line-height: 1.5;">
+                <p style="color: ${THEME_TEXT_MUTED}; font-size: 13px; margin-top: 28px; line-height: 1.5;">
                   This link will expire in ${PASSWORD_RESET_EXPIRY_MINUTES} minutes.<br><br>
                   If you didn't request this reset, you can safely ignore this email.
                 </p>
-                <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 30px 0;">
-                <p style="color: rgba(255, 255, 255, 0.4); font-size: 12px;">
+                <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 28px 0;">
+                <p style="color: ${THEME_TEXT_FAINT}; font-size: 12px;">
                   The Mammoth
                 </p>
               </div>
@@ -1715,83 +776,17 @@ export async function startAuthServer(): Promise<void> {
 
     console.log(`[ResetPassword] Password successfully reset for user: ${resetToken.userId}`);
 
-    // Show success page
-    return c.html(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/png" href="/favicon.png">
-        <title>Password Reset - The Mammoth</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-                min-height: 100vh;
-                background-image: url('/login_background.png');
-                background-size: cover;
-                background-position: top center;
-                font-family: system-ui, -apple-system, sans-serif;
-                color: white;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            .container {
-                background: rgba(0, 0, 0, 0.75);
-                backdrop-filter: blur(12px);
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                padding: 60px 40px;
-                width: 90%;
-                max-width: 450px;
-                text-align: center;
-            }
-            .game-title { height: 90px; margin-bottom: 20px; }
-            .success-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            .form-title { font-size: 24px; font-weight: 600; margin-bottom: 15px; color: #5cb85c; }
-            .form-description {
-                font-size: 14px;
-                color: rgba(255, 255, 255, 0.7);
-                margin-bottom: 30px;
-                line-height: 1.5;
-            }
-            .submit-button {
-                display: inline-block;
-                padding: 18px 40px;
-                background: linear-gradient(135deg, #ff8c00 0%, #e67700 100%);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                font-size: 16px;
-                font-weight: 600;
-                text-decoration: none;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                transition: all 0.3s ease;
-            }
-            .submit-button:hover {
-                background: linear-gradient(135deg, #ffaa33 0%, #ff8c00 100%);
-                transform: translateY(-2px);
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="game-title">
-                <img src="/logo_alt.png" alt="The Mammoth Logo" style="height: 100%; width: auto;">
-            </div>
+    return c.html(
+      mammothAuthPage(
+        "Password updated - The Mammoth",
+        `
             <div class="success-icon">✓</div>
-            <h1 class="form-title">Password Reset Successful!</h1>
-            <p class="form-description">Your password has been successfully updated. You can now sign in with your new password.</p>
-            <a href="/auth/password/login" class="submit-button">Sign In</a>
-        </div>
-    </body>
-    </html>
-    `);
+            <h1 class="form-title success-title">Password updated</h1>
+            <p class="form-description">Your password was saved. You can sign in with your new password.</p>
+            <a href="/auth/password/login" class="submit-button">Sign in</a>
+        `,
+      ),
+    );
   });
 
   mountTokenEndpoint(app);

@@ -3,13 +3,6 @@
 export type FpElevatorHudView =
   | { kind: "hidden" }
   | {
-      kind: "exterior_door";
-      shaftPlanKey: string;
-      landingLevel: number;
-      /** Next toggle will drive toward closed. */
-      willClose: boolean;
-    }
-  | {
       kind: "call";
       shaftPlanKey: string;
       /** 1-based landing level sent to `elevatorHail` (matches server `near_call_pose`). */
@@ -25,13 +18,6 @@ let view: FpElevatorHudView = { kind: "hidden" };
 function same(a: FpElevatorHudView, b: FpElevatorHudView): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "hidden" && b.kind === "hidden") return true;
-  if (a.kind === "exterior_door" && b.kind === "exterior_door") {
-    return (
-      a.shaftPlanKey === b.shaftPlanKey &&
-      a.landingLevel === b.landingLevel &&
-      a.willClose === b.willClose
-    );
-  }
   if (a.kind === "call" && b.kind === "call") {
     return (
       a.shaftPlanKey === b.shaftPlanKey &&

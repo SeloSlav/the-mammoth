@@ -8,46 +8,69 @@ const FLOOR_T = 0.08;
 export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.08;
 
 export type ExteriorLandingDoorPivot = {
-  /** Fixed placement + base yaw for this face. */
   structure: THREE.Group;
-  /** Child of `structure`; only this group's Y-rotation is driven by `swingOpen01`. */
   swing: THREE.Group;
-  /** Multiply `swingOpen01 * EXTERIOR_DOOR_SWING_MAX_RAD` for `swing.rotation.y`. */
   swingSign: number;
 };
 
+/**
+ * Single swing door with a centered square glass lite at eye level.
+ */
 function addEastStyleDoorMeshes(
   swing: THREE.Group,
   redMat: THREE.MeshStandardMaterial,
-  glassMat: THREE.MeshStandardMaterial,
+  glassMat: THREE.MeshPhysicalMaterial,
 ): void {
   const panelH = DOOR_H - 0.12;
   const panelW = EXTERIOR_DOOR_W_M - 0.1;
   const panelT = 0.056;
+  const centerZ = -panelW * 0.5;
+  const windowSide = 0.46;
+  const windowCenterY = 0.46;
+  const railTopH = Math.max(0.12, panelH * 0.5 - (windowCenterY + windowSide * 0.5));
+  const railBotH = Math.max(0.12, windowCenterY - windowSide * 0.5 + panelH * 0.5);
+  const stileW = Math.max(0.12, (panelW - windowSide) * 0.5);
 
-  const g = new THREE.BoxGeometry(panelT, panelH, panelW);
-  const panel = new THREE.Mesh(g, redMat);
-  panel.position.set(panelT * 0.5, 0, -(EXTERIOR_DOOR_W_M * 0.5 - 0.08));
-  panel.castShadow = false;
-  swing.add(panel);
+  const addRed = (sx: number, sy: number, sz: number, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), redMat);
+    m.position.set(x, y, z);
+    m.castShadow = false;
+    swing.add(m);
+  };
 
-  const glassGeom = new THREE.BoxGeometry(0.038, 0.44, 0.5);
+  addRed(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
+  addRed(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
+  addRed(
+    panelT,
+    windowSide,
+    stileW,
+    panelT * 0.5,
+    windowCenterY,
+    -stileW * 0.5,
+  );
+  addRed(
+    panelT,
+    windowSide,
+    stileW,
+    panelT * 0.5,
+    windowCenterY,
+    -panelW + stileW * 0.5,
+  );
+
+  const glassGeom = new THREE.BoxGeometry(0.046, windowSide - 0.02, windowSide - 0.02);
   const glassMesh = new THREE.Mesh(glassGeom, glassMat);
-  glassMesh.position.set(panelT * 0.5 + 0.008, 0.33, -(EXTERIOR_DOOR_W_M * 0.5 - 0.28));
+  glassMesh.position.set(panelT * 0.5 + 0.014, windowCenterY, centerZ);
   glassMesh.castShadow = false;
-  glassMesh.renderOrder = 1;
+  glassMesh.renderOrder = 2;
   swing.add(glassMesh);
 }
 
-/**
- * Red corridor swing door + translucent upper window; hinge swings **out** from cab.
- */
 export function createExteriorLandingDoorPivot(
   face: ElevatorDoorFace,
   hx: number,
   hz: number,
   redMat: THREE.MeshStandardMaterial,
-  glassMat: THREE.MeshStandardMaterial,
+  glassMat: THREE.MeshPhysicalMaterial,
 ): ExteriorLandingDoorPivot {
   const doorY = FLOOR_T + DOOR_H * 0.5 + 0.06;
   const structure = new THREE.Group();
@@ -58,21 +81,19 @@ export function createExteriorLandingDoorPivot(
   addEastStyleDoorMeshes(swing, redMat, glassMat);
 
   const jambZ = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
-  let swingSign = 1;
+  const swingSign = -1;
 
   if (face === "e") {
     structure.position.set(hx + 0.048, doorY, jambZ);
   } else if (face === "w") {
     structure.position.set(-hx - 0.048, doorY, jambZ);
     structure.rotation.y = Math.PI;
-    swingSign = -1;
   } else if (face === "n") {
     structure.position.set(-jambZ, doorY, hz + 0.048);
     structure.rotation.y = -Math.PI * 0.5;
   } else {
     structure.position.set(jambZ, doorY, -hz - 0.048);
     structure.rotation.y = Math.PI * 0.5;
-    swingSign = -1;
   }
 
   return { structure, swing, swingSign };

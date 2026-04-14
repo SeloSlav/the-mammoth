@@ -18,6 +18,7 @@
     "@the-mammoth/game": "workspace:*",
     "@the-mammoth/net": "workspace:*",
     "@the-mammoth/schemas": "workspace:*",
+    "@the-mammoth/ui-theme": "workspace:*",
     "@the-mammoth/world": "workspace:*",
     "idb-keyval": "^6.2.2",
     "react": "^19.2.4",

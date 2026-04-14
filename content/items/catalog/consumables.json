@@ -35,6 +35,7 @@
       "description": "Fresh fruit. Restores hunger when consumed (use hook TBD).",
       "category": "consumable",
       "maxStack": 24,
+      "hotbarConsumeSound": "eat",
       "consumeOnUse": { "hungerDelta": 24 }
     },
     {
@@ -43,6 +44,7 @@
       "description": "Clear bottle. Restores hydration when consumed (use hook TBD).",
       "category": "consumable",
       "maxStack": 20,
+      "hotbarConsumeSound": "drink",
       "consumeOnUse": { "hydrationDelta": 32 }
     },
     {
@@ -51,6 +53,7 @@
       "description": "Fruit brandy in a dusty bottle. Warms the chest and dries you out; best not to ask which fruit.",
       "category": "consumable",
       "maxStack": 12,
+      "hotbarConsumeSound": "drink",
       "consumeOnUse": { "hydrationDelta": -24 }
     }
   ]

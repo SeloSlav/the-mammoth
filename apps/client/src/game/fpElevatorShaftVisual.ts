@@ -17,8 +17,12 @@ import {
   FLOOR_BTN_W,
   FLOOR_COLS,
   FLOOR_GAP,
+  FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   FP_ELEV_FLOOR_PICK_UD,
+  FP_ELEV_LANDING_HAIL_PICK_UD,
+  type FpElevExteriorDoorPickUserData,
   type FpElevFloorPickUserData,
+  type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
 import { applyAtlasUvToPlaneGeometry, buildElevFloorAtlas } from "./fpElevFloorButtonAtlas.js";
 import { doorSlideAxis, type ElevatorDoorFace } from "./fpElevatorLabels.js";
@@ -68,13 +72,16 @@ export class FpElevatorShaftVisual {
   private readonly matPickFlash: THREE.MeshStandardMaterial;
   private lastMatSig = "";
   private readonly landingRoot: THREE.Group;
+  readonly landingDoorPickRoot: THREE.Group;
+  readonly landingHailPickRoot: THREE.Group;
   private readonly landingDoorSwings: {
     level: number;
     swing: THREE.Group;
     swingSign: number;
   }[] = [];
   private readonly extRedMat: THREE.MeshStandardMaterial;
-  private readonly extGlassMat: THREE.MeshStandardMaterial;
+  private readonly extGlassMat: THREE.MeshPhysicalMaterial;
+  private readonly hailBtnMat: THREE.MeshStandardMaterial;
 
   constructor(
     layout: ElevatorShaftLayout,
@@ -104,17 +111,33 @@ export class FpElevatorShaftVisual {
       roughness: 0.52,
       metalness: 0.12,
     });
-    this.extGlassMat = new THREE.MeshStandardMaterial({
-      color: 0xb5d4ea,
-      metalness: 0.22,
-      roughness: 0.14,
+    this.extGlassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      metalness: 0,
+      roughness: 0.06,
+      transmission: 0.92,
+      thickness: 0.09,
+      ior: 1.45,
       transparent: true,
-      opacity: 0.38,
+      opacity: 1,
       depthWrite: false,
     });
     this.landingRoot = new THREE.Group();
     this.landingRoot.name = "elev_landing_exterior_doors";
+    this.landingDoorPickRoot = new THREE.Group();
+    this.landingDoorPickRoot.name = "elev_exterior_door_pick";
+    this.landingHailPickRoot = new THREE.Group();
+    this.landingHailPickRoot.name = "elev_landing_hail_pick";
+    this.hailBtnMat = new THREE.MeshStandardMaterial({
+      color: 0xc8d6e6,
+      roughness: 0.34,
+      metalness: 0.2,
+      emissive: 0x2a3848,
+      emissiveIntensity: 0.55,
+    });
     this.root.add(this.landingRoot);
+    this.root.add(this.landingDoorPickRoot);
+    this.root.add(this.landingHailPickRoot);
 
     this.carRoot = new THREE.Group();
     this.carRoot.name = "elevator_car";
@@ -278,6 +301,18 @@ export class FpElevatorShaftVisual {
       wrap.add(structure);
       this.landingRoot.add(wrap);
       this.landingDoorSwings.push({ level, swing, swingSign });
+
+      const doorPickWrap = new THREE.Group();
+      doorPickWrap.position.set(0, feetY, 0);
+      const doorPick = this.createLandingDoorPickMesh(face, hx, hz, level, pick.shaftKey);
+      doorPickWrap.add(doorPick);
+      this.landingDoorPickRoot.add(doorPickWrap);
+
+      const hailWrap = new THREE.Group();
+      hailWrap.position.set(0, feetY, 0);
+      const hailBtn = this.createLandingHailButtonMesh(face, hx, hz, level, pick.shaftKey);
+      hailWrap.add(hailBtn);
+      this.landingHailPickRoot.add(hailWrap);
     }
 
     this.root.add(this.carRoot);
@@ -328,6 +363,56 @@ export class FpElevatorShaftVisual {
     }
   }
 
+  private createLandingDoorPickMesh(
+    face: DoorFace,
+    hx: number,
+    hz: number,
+    level: number,
+    shaftKey: string,
+  ): THREE.Mesh {
+    const pick = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, DOOR_H, DOOR_W),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+    );
+    pick.name = `elev_exterior_door_pick_${level}`;
+    (pick.userData as FpElevExteriorDoorPickUserData)[FP_ELEV_EXTERIOR_DOOR_PICK_UD] = {
+      shaftKey,
+      level,
+    };
+    if (face === "e") pick.position.set(hx + 0.06, DOOR_H * 0.5 + 0.1, 0);
+    else if (face === "w") pick.position.set(-hx - 0.06, DOOR_H * 0.5 + 0.1, 0);
+    else if (face === "n") {
+      pick.position.set(0, DOOR_H * 0.5 + 0.1, hz + 0.06);
+      pick.rotation.y = Math.PI * 0.5;
+    } else {
+      pick.position.set(0, DOOR_H * 0.5 + 0.1, -hz - 0.06);
+      pick.rotation.y = Math.PI * 0.5;
+    }
+    return pick;
+  }
+
+  private createLandingHailButtonMesh(
+    face: DoorFace,
+    hx: number,
+    hz: number,
+    level: number,
+    shaftKey: string,
+  ): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.16), this.hailBtnMat);
+    mesh.name = `elev_landing_hail_btn_${level}`;
+    (mesh.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
+      shaftKey,
+      level,
+    };
+    const y = 1.28;
+    if (face === "e") mesh.position.set(hx + 0.035, y, -0.92);
+    else if (face === "w") mesh.position.set(-hx - 0.035, y, 0.92);
+    else if (face === "n") mesh.position.set(0.92, y, hz + 0.035);
+    else mesh.position.set(-0.92, y, -hz - 0.035);
+    if (face === "e" || face === "w") mesh.rotation.y = Math.PI * 0.5;
+    return mesh;
+  }
+
   setFloorPickRootVisible(visible: boolean): void {
     this.floorPickRoot.visible = visible;
   }
@@ -375,8 +460,15 @@ export class FpElevatorShaftVisual {
     this.landingRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
+    this.landingDoorPickRoot.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
+    this.landingHailPickRoot.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
+    this.hailBtnMat.dispose();
     this.matNormal.map = null;
     this.matHighlight.map = null;
     this.matPickFlash.map = null;
@@ -386,6 +478,8 @@ export class FpElevatorShaftVisual {
     this.atlas.dispose();
     this.carRoot.clear();
     this.landingRoot.clear();
+    this.landingDoorPickRoot.clear();
+    this.landingHailPickRoot.clear();
     this.root.clear();
   }
 }

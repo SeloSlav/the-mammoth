@@ -84,6 +84,20 @@ export type FpElevFloorPickUserData = {
   [FP_ELEV_FLOOR_PICK_UD]: { shaftKey: string; level: number };
 };
 
+/** Raycast / userData tag for exterior landing swing door interaction. */
+export const FP_ELEV_EXTERIOR_DOOR_PICK_UD = "fpElevExteriorDoorPick" as const;
+
+export type FpElevExteriorDoorPickUserData = {
+  [FP_ELEV_EXTERIOR_DOOR_PICK_UD]: { shaftKey: string; level: number };
+};
+
+/** Raycast / userData tag for landing hail buttons outside the cab. */
+export const FP_ELEV_LANDING_HAIL_PICK_UD = "fpElevLandingHailPick" as const;
+
+export type FpElevLandingHailPickUserData = {
+  [FP_ELEV_LANDING_HAIL_PICK_UD]: { shaftKey: string; level: number };
+};
+
 export const FLOOR_BTN_W = 0.12;
 export const FLOOR_BTN_H = 0.092;
 export const FLOOR_BTN_D = 0.014;

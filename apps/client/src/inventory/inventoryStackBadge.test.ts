@@ -11,6 +11,7 @@ function def(maxStack: number): MammothItemDef {
     maxStack,
     construction: null,
     consumeOnUse: null,
+    hotbarConsumeSound: null,
     iconUrl: "",
   };
 }

@@ -23,6 +23,9 @@ export type MammothConsumeOnUse = {
   hydrationDelta?: number;
 };
 
+/** Authored SFX for hotbar instant consume. */
+export type MammothHotbarConsumeSound = "eat" | "drink";
+
 export type MammothItemDef = {
   id: string;
   displayName: string;
@@ -32,5 +35,7 @@ export type MammothItemDef = {
   construction: MammothConstruction | null;
   /** Present when this def supports hotbar instant consume (V key). */
   consumeOnUse: MammothConsumeOnUse | null;
+  /** Authored consume one-shot for this item. */
+  hotbarConsumeSound: MammothHotbarConsumeSound | null;
   iconUrl: string;
 };

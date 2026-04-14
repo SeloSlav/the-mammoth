@@ -20,11 +20,23 @@ function watchWorkspaceWorldSrc(): Plugin {
   };
 }
 
+function watchWorkspaceUiThemeSrc(): Plugin {
+  const dir = path.resolve(__dirname, "../../packages/ui-theme/src");
+  return {
+    name: "watch-workspace-ui-theme-src",
+    configureServer(server) {
+      server.watcher.add(dir);
+    },
+  };
+}
+
 const repoRoot = path.resolve(__dirname, "../..");
+const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
 
 export default defineConfig({
   plugins: [
     watchWorkspaceWorldSrc(),
+    watchWorkspaceUiThemeSrc(),
     {
       name: "content-dev-static-get",
       configureServer(server) {
@@ -41,13 +53,22 @@ export default defineConfig({
     fs: { allow: [path.resolve(__dirname, "../..")] },
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-    },
+    alias: [
+      /** Explicit paths: avoids dev-server resolve failures when pnpm symlinks are missing or stale. */
+      {
+        find: /^@the-mammoth\/ui-theme\/uiTheme\.css$/,
+        replacement: path.join(uiThemeSrc, "uiTheme.css"),
+      },
+      {
+        find: /^@the-mammoth\/ui-theme$/,
+        replacement: path.join(uiThemeSrc, "index.ts"),
+      },
+      { find: "@", replacement: path.resolve(__dirname, "src") },
+    ],
   },
-  /** Linked workspace package: skip dep pre-bundle so edits always resolve from `packages/world/src`. */
+  // Linked workspace packages: skip pre-bundle so edits resolve from packages/{name}/src.
   optimizeDeps: {
-    exclude: ["@the-mammoth/world"],
+    exclude: ["@the-mammoth/world", "@the-mammoth/ui-theme"],
   },
   test: {
     environment: "node",

@@ -1,5 +1,6 @@
+@import "@the-mammoth/ui-theme/uiTheme.css";
+
 :root {
-  color-scheme: dark;
   font-family: system-ui, sans-serif;
 }
 

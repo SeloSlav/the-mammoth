@@ -46,15 +46,18 @@ describe("mammothItemCatalog", () => {
 
     const apple = getMammothItemDef("apple");
     expect(apple?.consumeOnUse?.hungerDelta).toBe(24);
+    expect(apple?.hotbarConsumeSound).toBe("eat");
     expect(mammothItemDefSupportsHotbarInstantConsume(apple)).toBe(true);
     expect(itemDefIdSupportsHotbarInstantConsume("apple")).toBe(true);
 
     const water = getMammothItemDef("water_bottle");
     expect(water?.consumeOnUse?.hydrationDelta).toBe(32);
+    expect(water?.hotbarConsumeSound).toBe("drink");
     expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(true);
 
     const rakija = getMammothItemDef("rakija");
     expect(rakija?.consumeOnUse?.hydrationDelta).toBe(-24);
+    expect(rakija?.hotbarConsumeSound).toBe("drink");
     expect(mammothItemDefSupportsHotbarInstantConsume(rakija)).toBe(true);
   });
 });

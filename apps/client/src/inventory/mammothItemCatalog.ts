@@ -16,6 +16,7 @@ import type {
   ItemCategory,
   MammothConstruction,
   MammothConsumeOnUse,
+  MammothHotbarConsumeSound,
   MammothItemDef,
 } from "./mammothItemCatalogTypes";
 
@@ -45,6 +46,7 @@ type RawItem = {
   maxStack: number;
   construction?: MammothConstruction;
   consumeOnUse?: MammothConsumeOnUse;
+  hotbarConsumeSound?: MammothHotbarConsumeSound;
 };
 
 type RawShard = {
@@ -84,6 +86,10 @@ function normalizeConsumeOnUse(raw?: MammothConsumeOnUse): MammothConsumeOnUse |
   return { ...raw };
 }
 
+function normalizeHotbarConsumeSound(raw?: MammothHotbarConsumeSound): MammothHotbarConsumeSound | null {
+  return raw === "eat" || raw === "drink" ? raw : null;
+}
+
 /** `true` when catalog says instant hotbar consume is defined (category consumable + non-zero `consumeOnUse`). */
 export function mammothItemDefSupportsHotbarInstantConsume(def: MammothItemDef | undefined): boolean {
   if (!def || def.category !== "consumable") return false;
@@ -109,6 +115,7 @@ for (const it of mergeRawItems()) {
     maxStack: it.maxStack,
     construction: it.construction ?? null,
     consumeOnUse: normalizeConsumeOnUse(it.consumeOnUse),
+    hotbarConsumeSound: normalizeHotbarConsumeSound(it.hotbarConsumeSound),
     iconUrl: ICONS[it.id] ?? "",
   });
 }

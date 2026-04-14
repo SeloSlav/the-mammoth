@@ -158,6 +158,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         integrate_one(ctx, &input, &mut p, TICK_DT, &prev_elevators);
         elevator::snap_inside_cab_feet_to_floor(ctx, &mut p);
         elevator::clamp_player_to_elevators(ctx, &mut p);
+        elevator::clamp_player_against_closed_cab_doors_from_outside(ctx, &mut p);
         elevator::clamp_player_exterior_landing_doors(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);
