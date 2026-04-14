@@ -55,40 +55,40 @@ async function loadConsumableMount(defId: string): Promise<ConsumableMount> {
 
 export class FpHotbarConsumableVisual {
   private readonly loader = new GLTFLoader();
+  private readonly templateByDefId = new Map<string, THREE.Object3D>();
+  private readonly mountByDefId = new Map<string, ConsumableMount>();
+  private readonly preloadPromiseByDefId = new Map<string, Promise<void>>();
   private currentDefId: string | null = null;
   private currentRoot: THREE.Group | null = null;
-  private pendingDefId: string | null = null;
-  private pendingGripAnchor: THREE.Object3D | null = null;
-  private loadToken = 0;
+
+  async preload(defIds: readonly string[]): Promise<void> {
+    await Promise.all(defIds.map((defId) => this.ensurePreloaded(defId)));
+  }
 
   syncSelected(defId: string | null, gripAnchor: THREE.Object3D | undefined): void {
     if (!gripAnchor) {
       this.dispose();
       return;
     }
-    const samePending =
-      defId !== null && defId === this.pendingDefId && this.pendingGripAnchor === gripAnchor;
     if (defId === this.currentDefId && this.currentRoot?.parent === gripAnchor) return;
-    if (samePending) return;
-    this.loadToken++;
     this.clearCurrent();
     this.currentDefId = defId;
-    if (!defId) {
-      this.pendingDefId = null;
-      this.pendingGripAnchor = null;
-      return;
-    }
-    this.pendingDefId = defId;
-    this.pendingGripAnchor = gripAnchor;
-    const token = this.loadToken;
-    void this.loadAndAttach(defId, gripAnchor, token);
+    if (!defId) return;
+    const template = this.templateByDefId.get(defId);
+    if (!template) return;
+    const mount = this.mountByDefId.get(defId) ?? DEFAULT_CONSUMABLE_MOUNT;
+    const root = new THREE.Group();
+    root.name = `fp_hotbar_consumable_${defId}`;
+    root.position.set(mount.positionM.x, mount.positionM.y, mount.positionM.z);
+    root.rotation.set(mount.eulerRad.x, mount.eulerRad.y, mount.eulerRad.z, "XYZ");
+    root.scale.set(mount.scaleM.x, mount.scaleM.y, mount.scaleM.z);
+    root.add(template.clone(true));
+    gripAnchor.add(root);
+    this.currentRoot = root;
   }
 
   dispose(): void {
-    this.loadToken++;
     this.currentDefId = null;
-    this.pendingDefId = null;
-    this.pendingGripAnchor = null;
     this.clearCurrent();
   }
 
@@ -100,40 +100,26 @@ export class FpHotbarConsumableVisual {
     this.currentRoot = null;
   }
 
-  private async loadAndAttach(
-    defId: string,
-    gripAnchor: THREE.Object3D,
-    token: number,
-  ): Promise<void> {
-    try {
-      const [gltf, mount] = await Promise.all([
-        this.loader.loadAsync(consumableGltfUri(defId)),
-        loadConsumableMount(defId),
-      ]);
-      if (token !== this.loadToken || this.currentDefId !== defId) {
-        deepDisposeObject3D(gltf.scene);
-        return;
-      }
-      const root = new THREE.Group();
-      root.name = `fp_hotbar_consumable_${defId}`;
-      root.position.set(mount.positionM.x, mount.positionM.y, mount.positionM.z);
-      root.rotation.set(mount.eulerRad.x, mount.eulerRad.y, mount.eulerRad.z, "XYZ");
-      root.scale.set(mount.scaleM.x, mount.scaleM.y, mount.scaleM.z);
-      gltf.scene.traverse((obj) => {
-        obj.castShadow = false;
-        obj.frustumCulled = false;
+  private ensurePreloaded(defId: string): Promise<void> {
+    const existing = this.preloadPromiseByDefId.get(defId);
+    if (existing) return existing;
+    const promise = Promise.all([
+      this.loader.loadAsync(consumableGltfUri(defId)),
+      loadConsumableMount(defId),
+    ])
+      .then(([gltf, mount]) => {
+        gltf.scene.traverse((obj) => {
+          obj.castShadow = false;
+          obj.frustumCulled = false;
+        });
+        this.templateByDefId.set(defId, gltf.scene);
+        this.mountByDefId.set(defId, mount);
+      })
+      .catch((error) => {
+        this.mountByDefId.set(defId, DEFAULT_CONSUMABLE_MOUNT);
+        console.warn(`[FpHotbarConsumableVisual] preload failed for ${defId}`, error);
       });
-      root.add(gltf.scene);
-      gripAnchor.add(root);
-      this.currentRoot = root;
-      this.pendingDefId = null;
-      this.pendingGripAnchor = null;
-    } catch {
-      if (token === this.loadToken && this.currentDefId === defId) {
-        this.currentRoot = null;
-        this.pendingDefId = null;
-        this.pendingGripAnchor = null;
-      }
-    }
+    this.preloadPromiseByDefId.set(defId, promise);
+    return promise;
   }
 }

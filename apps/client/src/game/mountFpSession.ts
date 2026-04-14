@@ -47,7 +47,10 @@ import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
 import { mountWorldContentDevReload } from "./fpWorldContentDevReload.js";
-import { getMammothItemDef } from "../inventory/mammothItemCatalog";
+import {
+  getMammothHotbarInstantConsumeDefIds,
+  getMammothItemDef,
+} from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./localGameAudio";
 import {
   primeHotbarConsumeAudio,
@@ -191,6 +194,7 @@ export async function mountFpSession(
     window.location.reload();
   });
   const hotbarConsumableVisual = new FpHotbarConsumableVisual();
+  await hotbarConsumableVisual.preload(getMammothHotbarInstantConsumeDefIds());
 
   /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
   const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
@@ -988,6 +992,21 @@ export async function mountFpSession(
     if (document.pointerLockElement !== canvas) return;
     const nowMs = performance.now();
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
+    const selectedHotbarSlot = getFpHotbarSelectedSlot();
+    if (
+      conn.identity &&
+      selectedHotbarSlot !== null &&
+      hotbarSlotHasInstantConsume(conn, conn.identity, selectedHotbarSlot)
+    ) {
+      void runFpHotbarInstantConsume(
+        conn,
+        conn.identity,
+        selectedHotbarSlot,
+        primeHotbarConsumeAudio,
+        "mountFpSession",
+      );
+      return;
+    }
     meleePressPending = true;
   };
 

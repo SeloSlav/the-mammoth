@@ -124,6 +124,13 @@ export function getMammothItemDef(defId: string): MammothItemDef | undefined {
   return byId.get(defId);
 }
 
+export function getMammothHotbarInstantConsumeDefIds(): string[] {
+  return [...byId.values()]
+    .filter((def) => mammothItemDefSupportsHotbarInstantConsume(def))
+    .map((def) => def.id)
+    .sort();
+}
+
 export function isMaterialDefId(defId: string): boolean {
   return getMammothItemDef(defId)?.category === "material";
 }
