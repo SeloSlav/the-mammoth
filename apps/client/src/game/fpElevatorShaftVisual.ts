@@ -111,7 +111,8 @@ export class FpElevatorShaftVisual {
   }[] = [];
   private readonly extRedMat: THREE.MeshStandardMaterial;
   private readonly extGlassMat: THREE.MeshPhysicalMaterial;
-  private readonly hailBtnMat: THREE.MeshStandardMaterial;
+  private readonly hailBtnMatTemplate: THREE.MeshStandardMaterial;
+  private readonly hailBtnMaterials = new Map<number, THREE.MeshStandardMaterial>();
   private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
   private readonly hailBtnIconTex: THREE.CanvasTexture;
   private readonly exteriorSwingMaxRad: number;
@@ -169,10 +170,12 @@ export class FpElevatorShaftVisual {
     this.landingDoorPickRoot.name = "elev_exterior_door_pick";
     this.landingHailPickRoot = new THREE.Group();
     this.landingHailPickRoot.name = "elev_landing_hail_pick";
-    this.hailBtnMat = new THREE.MeshStandardMaterial({
-      color: 0x101010,
+    this.hailBtnMatTemplate = new THREE.MeshStandardMaterial({
+      color: 0x2a4a5c,
       roughness: 0.36,
-      metalness: 0.08,
+      metalness: 0.16,
+      emissive: new THREE.Color(0x143040),
+      emissiveIntensity: 0.28,
     });
     this.hailBtnIconTex = buildLandingHailIconTexture();
     this.hailBtnIconMat = new THREE.MeshBasicMaterial({
@@ -478,10 +481,10 @@ export class FpElevatorShaftVisual {
   ): THREE.Group {
     const group = new THREE.Group();
     group.name = `elev_landing_hail_panel_${level}`;
-    const button = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.12, 0.045, 32),
-      this.hailBtnMat,
-    );
+    const btnMat = this.hailBtnMatTemplate.clone();
+    btnMat.name = `elev_hail_btn_mat_${level}`;
+    this.hailBtnMaterials.set(level, btnMat);
+    const button = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.045, 32), btnMat);
     button.name = `elev_landing_hail_btn_${level}`;
     (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
       shaftKey,
@@ -527,6 +530,33 @@ export class FpElevatorShaftVisual {
 
   setFloorPickRootVisible(visible: boolean): void {
     this.floorPickRoot.visible = visible;
+  }
+
+  /**
+   * Hover / click feedback for landing hail buttons (per-level materials).
+   */
+  setLandingHailHighlight(opts: {
+    hoverLevel: number;
+    flashLevel: number;
+    flashUntilMs: number;
+    nowMs: number;
+  }): void {
+    const flashOn =
+      opts.flashLevel > 0 && opts.nowMs < opts.flashUntilMs && opts.flashUntilMs > 0;
+    for (const [lv, mat] of this.hailBtnMaterials) {
+      const hover = opts.hoverLevel > 0 && lv === opts.hoverLevel;
+      const flash = flashOn && lv === opts.flashLevel;
+      if (flash) {
+        mat.emissive.setHex(0x66ffff);
+        mat.emissiveIntensity = 1.05;
+      } else if (hover) {
+        mat.emissive.setHex(0x55aaff);
+        mat.emissiveIntensity = 0.62;
+      } else {
+        mat.emissive.setHex(0x143040);
+        mat.emissiveIntensity = 0.28;
+      }
+    }
   }
 
   updateFloorPickMaterials(
@@ -578,10 +608,14 @@ export class FpElevatorShaftVisual {
     this.landingHailPickRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
+    for (const mat of this.hailBtnMaterials.values()) {
+      mat.dispose();
+    }
+    this.hailBtnMaterials.clear();
     this.ceilMat.dispose();
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
-    this.hailBtnMat.dispose();
+    this.hailBtnMatTemplate.dispose();
     this.hailBtnIconMat.dispose();
     this.hailBtnIconTex.dispose();
     this.matNormal.map = null;

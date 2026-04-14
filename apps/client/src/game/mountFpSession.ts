@@ -729,6 +729,7 @@ export async function mountFpSession(
     );
 
     fpElevators.tick(dt, frameNowMs, pos);
+    fpElevators.syncLandingHailUi(camera, frameNowMs);
 
     const desync = Math.hypot(
       pos.x - serverPose.x,

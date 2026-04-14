@@ -13,4 +13,7 @@ import {
 export default {
   shaftKey: __t.string(),
   level: __t.u32(),
+  clientFeetX: __t.f32(),
+  clientFeetY: __t.f32(),
+  clientFeetZ: __t.f32(),
 };

@@ -14,4 +14,7 @@ export default {
   shaftKey: __t.string(),
   level: __t.u32(),
   desiredOpen: __t.u8(),
+  clientFeetX: __t.f32(),
+  clientFeetY: __t.f32(),
+  clientFeetZ: __t.f32(),
 };

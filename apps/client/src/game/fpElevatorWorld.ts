@@ -102,6 +102,8 @@ export type MountFpElevatorWorldResult = {
   /** Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned. */
   syncCabEvalClock(nowMs: number): void;
   tick(dt: number, nowMs: number, playerPos: THREE.Vector3): void;
+  /** Crosshair hover + click flash for per-landing hail meshes (no reducer). */
+  syncLandingHailUi(camera: THREE.PerspectiveCamera, nowMs: number): void;
   readonly kinematicSupport: FpKinematicSupportProvider;
   tryRaycastFloorPick(
     camera: THREE.PerspectiveCamera,
@@ -206,6 +208,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   /** Brief glow on the button that accepted a floor request (client-only). */
   const pickFlash = { shaftKey: "", level: 0, untilMs: 0 };
+  /** Brief glow on the landing hail mesh that accepted a hail (client-only). */
+  const hailPickFlash = { shaftKey: "", level: 0, untilMs: 0 };
 
   const latest = new Map<string, ElevatorCar>();
   const landingByRowKey = new Map<string, ElevatorLandingDoor>();
@@ -595,6 +599,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         shaftKey: pendingExteriorDoorToggle.shaftKey,
         level: pendingExteriorDoorToggle.level >>> 0,
         desiredOpen: pendingExteriorDoorToggle.expectedDesiredOpen,
+        clientFeetX: px,
+        clientFeetY: py,
+        clientFeetZ: pz,
       });
       pendingExteriorDoorToggle.retryCount += 1;
       pendingExteriorDoorToggle.nextRetryAtMs = nowMs + 90;
@@ -607,6 +614,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const tryRaycastLandingHail = (
     camera: THREE.PerspectiveCamera,
     _playerPos: THREE.Vector3,
+    nowMs: number,
   ): boolean => {
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = 8.5;
@@ -629,9 +637,41 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         console.warn("[fpElevatorWorld] elevatorHail ray", e);
         return false;
       }
+      hailPickFlash.shaftKey = pick.shaftKey;
+      hailPickFlash.level = pick.level;
+      hailPickFlash.untilMs = nowMs + 520;
       return true;
     }
     return false;
+  };
+
+  const syncLandingHailUi = (camera: THREE.PerspectiveCamera, nowMs: number) => {
+    raycaster.setFromCamera(screenCenterNdc, camera);
+    raycaster.far = 8.5;
+    const roots: THREE.Object3D[] = [];
+    for (const v of visuals.values()) {
+      roots.push(v.landingHailPickRoot);
+    }
+    const hits = raycaster.intersectObjects(roots, true);
+    let best: { shaftKey: string; level: number; d: number } | null = null;
+    for (const h of hits) {
+      const mesh = h.object as THREE.Mesh;
+      const pick =
+        (mesh.userData as Partial<FpElevLandingHailPickUserData>)[FP_ELEV_LANDING_HAIL_PICK_UD];
+      if (!pick) continue;
+      const d = h.distance;
+      if (best == null || d < best.d) {
+        best = { shaftKey: pick.shaftKey, level: pick.level, d };
+      }
+    }
+    for (const [key, vis] of visuals) {
+      vis.setLandingHailHighlight({
+        hoverLevel: best != null && best.shaftKey === key ? best.level : 0,
+        flashLevel: hailPickFlash.shaftKey === key ? hailPickFlash.level : 0,
+        flashUntilMs: hailPickFlash.untilMs,
+        nowMs,
+      });
+    }
   };
 
   const tryRaycastFloorPick = (
@@ -639,7 +679,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     playerPos: THREE.Vector3,
     nowMs: number,
   ): boolean => {
-    if (tryRaycastLandingHail(camera, playerPos)) return true;
+    if (tryRaycastLandingHail(camera, playerPos, nowMs)) return true;
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = FLOOR_PICK_MAX_RAY_M;
     const roots: THREE.Object3D[] = [];
@@ -824,6 +864,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           shaftKey: exterior.shaftKey,
           level: exterior.level >>> 0,
           desiredOpen: pendingExteriorDoorToggle.expectedDesiredOpen,
+          clientFeetX: playerPos.x,
+          clientFeetY: playerPos.y,
+          clientFeetZ: playerPos.z,
         });
       } catch (e) {
         console.warn("[fpElevatorWorld] elevatorLandingExteriorDoorSet", e);
@@ -994,6 +1037,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     },
     syncCabEvalClock,
     tick,
+    syncLandingHailUi,
     kinematicSupport,
     tryRaycastFloorPick,
     consumeInteractKey,

@@ -75,6 +75,9 @@ const DOOR_ANIM_SPEED: f32 = 2.35;
 const MOVE_SPEED_MPS: f32 = 3.15;
 pub const MAX_LEVEL: u32 = 19;
 const FOOT_R: f32 = 0.22;
+/// Client-predicted feet may lead replicated `player_pose` by several ticks; allow door eligibility
+/// to consider the client's reported feet when it stays near the authoritative pose.
+const EXTERIOR_DOOR_CLIENT_FEET_HINT_MAX_SEP_M: f32 = 2.8;
 /// Must match `WALK_PROBE_DY` in `movement.rs` — used to recover feet Y from the walk probe.
 const WALK_PROBE_DY: f32 = 1.05;
 /// Keep in sync with `apps/client/src/game/fpElevatorConstants.ts` `CALL_RADIUS_XZ`.
@@ -862,6 +865,29 @@ fn in_cab_docked_at_landing_for_spec(
     (car.cab_floor_y - support_y(level)).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
 }
 
+#[inline]
+fn pose_client_feet_hint_plausible(auth: &PlayerPose, hx: f32, hy: f32, hz: f32) -> bool {
+    let dx = auth.x - hx;
+    let dy = auth.y - hy;
+    let dz = auth.z - hz;
+    (dx * dx + dy * dy + dz * dz).sqrt() <= EXTERIOR_DOOR_CLIENT_FEET_HINT_MAX_SEP_M
+}
+
+fn pose_with_feet_xyz(auth: &PlayerPose, x: f32, y: f32, z: f32) -> PlayerPose {
+    PlayerPose {
+        identity: auth.identity,
+        x,
+        y,
+        z,
+        yaw: auth.yaw,
+        seq: auth.seq,
+        vel_x: auth.vel_x,
+        vel_y: auth.vel_y,
+        vel_z: auth.vel_z,
+        grounded: auth.grounded,
+    }
+}
+
 fn exterior_door_toggle_eligible_score(
     ctx: &ReducerContext,
     p: &PlayerPose,
@@ -883,14 +909,29 @@ fn resolve_exterior_door_toggle_target(
     p: &PlayerPose,
     requested_shaft_key: &str,
     requested_level: u32,
+    client_feet_hint: Option<(f32, f32, f32)>,
 ) -> Option<(&'static ElevShaftSpec, u32)> {
     let requested_level = requested_level.clamp(1, MAX_LEVEL);
     if let Some(spec) = spec_for_key(requested_shaft_key) {
-        if in_cab_docked_at_landing_for_spec(ctx, p, spec, requested_level) {
+        let try_pose = |pose: &PlayerPose| {
+            if in_cab_docked_at_landing_for_spec(ctx, pose, spec, requested_level) {
+                return true;
+            }
+            if near_exterior_door_toggle_pose_for_player(ctx, pose, spec, requested_level) {
+                return true;
+            }
+            false
+        };
+        if try_pose(p) {
             return Some((spec, requested_level));
         }
-        if near_exterior_door_toggle_pose_for_player(ctx, p, spec, requested_level) {
-            return Some((spec, requested_level));
+        if let Some((hx, hy, hz)) = client_feet_hint {
+            if pose_client_feet_hint_plausible(p, hx, hy, hz) {
+                let hinted = pose_with_feet_xyz(p, hx, hy, hz);
+                if try_pose(&hinted) {
+                    return Some((spec, requested_level));
+                }
+            }
         }
         // Client always sends a real `shaftPlanKey` for this module. Do **not** fall back to other
         // shafts/levels: a near-miss on the requested landing was updating a different row’s
@@ -918,12 +959,14 @@ fn set_landing_exterior_door_desired_open(
     requested_shaft_key: &str,
     requested_level: u32,
     desired_open: u8,
+    client_feet_hint: Option<(f32, f32, f32)>,
 ) {
     let Some((spec, lv)) = resolve_exterior_door_toggle_target(
         ctx,
         pose,
         requested_shaft_key,
         requested_level,
+        client_feet_hint,
     ) else {
         log::info!(
             "elevator_landing_exterior_door: reject not_eligible shaft_key={requested_shaft_key:?} level={requested_level} desired_open={desired_open} identity={} pose=({:.3},{:.3},{:.3})",
@@ -1506,7 +1549,14 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
 }
 
 #[spacetimedb::reducer]
-pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: String, level: u32) {
+pub fn elevator_landing_exterior_door_toggle(
+    ctx: &ReducerContext,
+    shaft_key: String,
+    level: u32,
+    client_feet_x: f32,
+    client_feet_y: f32,
+    client_feet_z: f32,
+) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::info!(
             "elevator_landing_exterior_door_toggle: reject gameplay_locked identity={} ({e})",
@@ -1519,7 +1569,8 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
         log::info!("elevator_landing_exterior_door_toggle: reject no_player_pose identity={id}");
         return;
     };
-    let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level) else {
+    let hint = Some((client_feet_x, client_feet_y, client_feet_z));
+    let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level, hint) else {
         log::info!(
             "elevator_landing_exterior_door_toggle: reject not_eligible shaft_key={shaft_key:?} level={level} identity={id} pose=({:.3},{:.3},{:.3})",
             pose.x,
@@ -1538,7 +1589,7 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
         .map(|row| row.desired_open)
         .unwrap_or(0);
     let next_desired = if current_desired != 0 { 0 } else { 1 };
-    set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, next_desired);
+    set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, next_desired, hint);
 }
 
 #[spacetimedb::reducer]
@@ -1547,6 +1598,9 @@ pub fn elevator_landing_exterior_door_set(
     shaft_key: String,
     level: u32,
     desired_open: u8,
+    client_feet_x: f32,
+    client_feet_y: f32,
+    client_feet_z: f32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::info!(
@@ -1560,7 +1614,14 @@ pub fn elevator_landing_exterior_door_set(
         log::info!("elevator_landing_exterior_door_set: reject no_player_pose identity={id}");
         return;
     };
-    set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, desired_open);
+    set_landing_exterior_door_desired_open(
+        ctx,
+        &pose,
+        &shaft_key,
+        level,
+        desired_open,
+        Some((client_feet_x, client_feet_y, client_feet_z)),
+    );
 }
 
 #[spacetimedb::reducer]
