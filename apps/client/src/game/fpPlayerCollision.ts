@@ -7,6 +7,7 @@ export const FP_PLAYER_COLLISION_HEIGHT_CROUCH_M = 1.2;
 
 const COLLISION_EPS = 0.0015;
 const STEP_IGNORE_BELOW_FEET_M = 0.2;
+const MAX_HORIZONTAL_COLLISION_SUBSTEP_M = 0.18;
 
 export type DynamicCollisionAabbSource = {
   visitAabbsInXZ(
@@ -52,23 +53,23 @@ function visitCandidateAabbs(
   dynamicSource?.visitAabbsInXZ(x0, x1, z0, z1, visit);
 }
 
-export function resolvePlayerCollisions(
+function resolveHorizontalCollisionStep(
   pos: Vector3,
-  prevPos: Readonly<Vector3>,
+  prevX: number,
+  prevZ: number,
   vel: Vector3,
-  crouch: boolean,
+  height: number,
   stepUpMargin: number,
   staticIndex: CollisionSpatialIndex,
-  dynamicSource?: DynamicCollisionAabbSource,
+  dynamicSource: DynamicCollisionAabbSource | undefined,
 ): void {
   const radius = FP_PLAYER_COLLISION_RADIUS_M;
-  const height = bodyHeight(crouch);
 
   const resolveX = () => {
-    const x0 = Math.min(prevPos.x, pos.x) - radius - COLLISION_EPS;
-    const x1 = Math.max(prevPos.x, pos.x) + radius + COLLISION_EPS;
-    const z0 = pos.z - radius - COLLISION_EPS;
-    const z1 = pos.z + radius + COLLISION_EPS;
+    const x0 = Math.min(prevX, pos.x) - radius - COLLISION_EPS;
+    const x1 = Math.max(prevX, pos.x) + radius + COLLISION_EPS;
+    const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
+    const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedX = pos.x;
     visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, (b) => {
       if (!verticalOverlap(pos.y, height, b)) return;
@@ -77,8 +78,8 @@ export function resolvePlayerCollisions(
       const bodyMin = resolvedX - radius;
       const bodyMax = resolvedX + radius;
       if (bodyMax <= b.min[0] || bodyMin >= b.max[0]) return;
-      const prevMax = prevPos.x + radius;
-      const prevMin = prevPos.x - radius;
+      const prevMax = prevX + radius;
+      const prevMin = prevX - radius;
       if (prevMax <= b.min[0] + COLLISION_EPS) {
         resolvedX = Math.min(resolvedX, b.min[0] - radius - COLLISION_EPS);
         if (vel.x > 0) vel.x = 0;
@@ -103,10 +104,10 @@ export function resolvePlayerCollisions(
   };
 
   const resolveZ = () => {
-    const x0 = pos.x - radius - COLLISION_EPS;
-    const x1 = pos.x + radius + COLLISION_EPS;
-    const z0 = Math.min(prevPos.z, pos.z) - radius - COLLISION_EPS;
-    const z1 = Math.max(prevPos.z, pos.z) + radius + COLLISION_EPS;
+    const x0 = Math.min(prevX, pos.x) - radius - COLLISION_EPS;
+    const x1 = Math.max(prevX, pos.x) + radius + COLLISION_EPS;
+    const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
+    const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedZ = pos.z;
     visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, (b) => {
       if (!verticalOverlap(pos.y, height, b)) return;
@@ -115,8 +116,8 @@ export function resolvePlayerCollisions(
       const bodyMin = resolvedZ - radius;
       const bodyMax = resolvedZ + radius;
       if (bodyMax <= b.min[2] || bodyMin >= b.max[2]) return;
-      const prevMax = prevPos.z + radius;
-      const prevMin = prevPos.z - radius;
+      const prevMax = prevZ + radius;
+      const prevMin = prevZ - radius;
       if (prevMax <= b.min[2] + COLLISION_EPS) {
         resolvedZ = Math.min(resolvedZ, b.min[2] - radius - COLLISION_EPS);
         if (vel.z > 0) vel.z = 0;
@@ -140,7 +141,52 @@ export function resolvePlayerCollisions(
     pos.z = resolvedZ;
   };
 
+  resolveX();
+  resolveZ();
+}
+
+export function resolvePlayerCollisions(
+  pos: Vector3,
+  prevPos: Readonly<Vector3>,
+  vel: Vector3,
+  crouch: boolean,
+  stepUpMargin: number,
+  staticIndex: CollisionSpatialIndex,
+  dynamicSource?: DynamicCollisionAabbSource,
+): void {
+  const height = bodyHeight(crouch);
+  const startX = prevPos.x;
+  const startZ = prevPos.z;
+  const targetX = pos.x;
+  const targetZ = pos.z;
+  const maxAxisDelta = Math.max(Math.abs(targetX - startX), Math.abs(targetZ - startZ));
+  const stepCount = Math.max(
+    1,
+    Math.ceil(maxAxisDelta / MAX_HORIZONTAL_COLLISION_SUBSTEP_M),
+  );
+
+  let stepPrevX = startX;
+  let stepPrevZ = startZ;
+  for (let step = 1; step <= stepCount; step++) {
+    const u = step / stepCount;
+    pos.x = startX + (targetX - startX) * u;
+    pos.z = startZ + (targetZ - startZ) * u;
+    resolveHorizontalCollisionStep(
+      pos,
+      stepPrevX,
+      stepPrevZ,
+      vel,
+      height,
+      stepUpMargin,
+      staticIndex,
+      dynamicSource,
+    );
+    stepPrevX = pos.x;
+    stepPrevZ = pos.z;
+  }
+
   const resolveCeiling = () => {
+    const radius = FP_PLAYER_COLLISION_RADIUS_M;
     if (vel.y <= 0) return;
     const x0 = pos.x - radius - COLLISION_EPS;
     const x1 = pos.x + radius + COLLISION_EPS;
@@ -160,7 +206,5 @@ export function resolvePlayerCollisions(
     }
   };
 
-  resolveX();
-  resolveZ();
   resolveCeiling();
 }

@@ -6,13 +6,17 @@ export function useEditorFpViewmodelPanelStore() {
   return useEditorStore(
     useShallow((s) => ({
       fpAuthorCamera: s.fpAuthorCamera,
+      fpAuthorSubjectKind: s.fpAuthorSubjectKind,
       fpAuthorTargetId: s.fpAuthorTargetId,
       fpAuthorPitchRad: s.fpAuthorPitchRad,
       fpAuthorInitMessage: s.fpAuthorInitMessage,
       fpAuthorPickList: s.fpAuthorPickList,
       fpAuthorWeaponId: s.fpAuthorWeaponId,
+      fpAuthorConsumableId: s.fpAuthorConsumableId,
       setFpAuthorWeaponId: s.setFpAuthorWeaponId,
+      setFpAuthorConsumableId: s.setFpAuthorConsumableId,
       setFpAuthorCamera: s.setFpAuthorCamera,
+      setFpAuthorSubjectKind: s.setFpAuthorSubjectKind,
       pickFpAuthorTarget: s.pickFpAuthorTarget,
       setFpAuthorPitchRad: s.setFpAuthorPitchRad,
       fpAuthorToast: s.fpAuthorToast,

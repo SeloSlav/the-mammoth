@@ -358,18 +358,18 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   }
 
   transformControls.addEventListener("mouseDown", () => {
-    if (useEditorStore.getState().mode === "fp_viewmodel") return;
+    if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = true;
   });
   transformControls.addEventListener("mouseUp", () => {
-    if (useEditorStore.getState().mode === "fp_viewmodel") return;
+    if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = false;
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
-      if (m !== "fp_viewmodel") {
+      if (!isFpMode(m)) {
         syncTransformsFromStore();
         /** Landing swing rebuild replaces the mesh under the gizmo; re-attach to the new proxy. */
         syncTransformAttachment();
@@ -381,7 +381,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const raw = ev as unknown as { value?: boolean };
     const active = raw.value === true;
     const st = useEditorStore.getState();
-    if (st.mode === "fp_viewmodel") {
+    if (isFpMode(st.mode)) {
       orbitControls.enabled = !active && st.fpAuthorCamera === "orbit";
       return;
     }
@@ -403,7 +403,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   transformControls.addEventListener("change", () => {
     if (programmaticTransformControlsDepth > 0) return;
     const store = useEditorStore.getState();
-    if (store.mode === "fp_viewmodel") {
+    if (isWeaponFpAuthoringState(store)) {
       const pres = fpSession?.getPresenter();
       const attached = transformControls.object as THREE.Object3D | undefined;
         if (pres && attached) {
@@ -453,6 +453,16 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   let fpDefaultRigAnchor: THREE.LineSegments | null = null;
   /** Last FP gizmo attach signature from store (refreshed in syncFpTransformAttachment). */
   let lastFpGizmoAttachKey = "";
+
+  type EditorStoreSnapshot = ReturnType<typeof useEditorStore.getState>;
+  const isFpMode = (mode: EditorStoreSnapshot["mode"]) =>
+    mode === "fp_viewmodel" || mode === "fp_consumable";
+  const getFpAuthorSubjectKind = (s: EditorStoreSnapshot) =>
+    s.fpAuthorSubjectKind === "consumable" ? "consumable" : "weapon";
+  const isWeaponFpAuthoringState = (s: EditorStoreSnapshot) =>
+    s.mode === "fp_viewmodel" && getFpAuthorSubjectKind(s) === "weapon";
+  const isConsumableFpAuthoringState = (s: EditorStoreSnapshot) =>
+    s.mode === "fp_consumable" || (s.mode === "fp_viewmodel" && getFpAuthorSubjectKind(s) === "consumable");
 
   function ancestorLevelIndex(obj: THREE.Object3D | null): number | null {
     let cur = obj;
@@ -628,9 +638,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const t = new THREE.Vector3();
     const st = useEditorStore.getState();
     let hit = false;
-    if (st.mode === "fp_viewmodel") {
+    if (isWeaponFpAuthoringState(st)) {
       hit = fpSession?.getPresenter()?.getAuthoringOrbitTargetWorld(t) ?? false;
-    } else if (st.mode === "fp_consumable") {
+    } else if (isConsumableFpAuthoringState(st)) {
       hit = fpConsumableSession?.getAuthoringOrbitTarget(t) ?? false;
     }
     if (!hit) return;
@@ -736,9 +746,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
       const picks =
-        s.mode === "fp_viewmodel"
+        isWeaponFpAuthoringState(s)
           ? (fpSession?.getPresenter()?.getAuthoringPickList() ?? [])
-          : s.mode === "fp_consumable"
+          : isConsumableFpAuthoringState(s)
             ? (fpConsumableSession?.getPickList() ?? [])
             : [];
       if (picks.length === 0) {
@@ -775,8 +785,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   function maybeSyncFpGizmoFromStore() {
     const s = useEditorStore.getState();
     const hasFpPicks =
-      (s.mode === "fp_viewmodel" && fpSession?.getPresenter() != null) ||
-      (s.mode === "fp_consumable" && fpConsumableSession?.isReady());
+      (isWeaponFpAuthoringState(s) && fpSession?.getPresenter() != null) ||
+      (isConsumableFpAuthoringState(s) && fpConsumableSession?.isReady());
     if (!hasFpPicks) {
       lastFpGizmoAttachKey = "";
       return;
@@ -795,9 +805,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       .then((s) => {
         fpSessionLoading = false;
         const store = useEditorStore.getState();
-        if (store.mode !== "fp_viewmodel" || store.fpAuthorWeaponId !== requestedWeaponId) {
+        if (!isWeaponFpAuthoringState(store) || store.fpAuthorWeaponId !== requestedWeaponId) {
           s.dispose();
-          if (store.mode === "fp_viewmodel") ensureFpSession();
+          if (isWeaponFpAuthoringState(store)) ensureFpSession();
           else useEditorStore.getState().setFpAuthorInitMessage(null);
           return;
         }
@@ -824,7 +834,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
             });
             if (!r.ok) return;
             const text = await r.text();
-            if (useEditorStore.getState().mode !== "fp_viewmodel") return;
+            if (!isWeaponFpAuthoringState(useEditorStore.getState())) return;
             const pres = fpSession?.getPresenter();
             if (!pres) return;
             adoptWeaponPresentationFileText(pres, wid, text);
@@ -849,8 +859,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       .catch((e) => {
         fpSessionLoading = false;
         const store = useEditorStore.getState();
-        if (store.mode !== "fp_viewmodel" || store.fpAuthorWeaponId !== requestedWeaponId) {
-          if (store.mode === "fp_viewmodel") ensureFpSession();
+        if (!isWeaponFpAuthoringState(store) || store.fpAuthorWeaponId !== requestedWeaponId) {
+          if (isWeaponFpAuthoringState(store)) ensureFpSession();
           return;
         }
         useEditorStore
@@ -868,12 +878,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       .then((s) => {
         fpConsumableSessionLoading = false;
         const store = useEditorStore.getState();
-        if (
-          store.mode !== "fp_consumable" ||
-          store.fpAuthorConsumableId !== requestedConsumableId
-        ) {
+        if (!isConsumableFpAuthoringState(store) || store.fpAuthorConsumableId !== requestedConsumableId) {
           s.dispose();
-          if (store.mode === "fp_consumable") ensureFpConsumableSession();
+          if (isConsumableFpAuthoringState(store)) ensureFpConsumableSession();
           else useEditorStore.getState().setFpAuthorInitMessage(null);
           return;
         }
@@ -920,11 +927,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       .catch((e) => {
         fpConsumableSessionLoading = false;
         const store = useEditorStore.getState();
-        if (
-          store.mode !== "fp_consumable" ||
-          store.fpAuthorConsumableId !== requestedConsumableId
-        ) {
-          if (store.mode === "fp_consumable") ensureFpConsumableSession();
+        if (!isConsumableFpAuthoringState(store) || store.fpAuthorConsumableId !== requestedConsumableId) {
+          if (isConsumableFpAuthoringState(store)) ensureFpConsumableSession();
           return;
         }
         useEditorStore
@@ -935,7 +939,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
   const rebuildStructural = () => {
     const s = useEditorStore.getState();
-    if (s.mode === "fp_viewmodel" || s.mode === "fp_consumable") return;
+    if (isFpMode(s.mode)) return;
     const ep = s.contentStructureEpoch;
     if (ep === lastBuiltContentEpoch) return;
     lastBuiltContentEpoch = ep;
@@ -1021,7 +1025,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
       transformControls.detach();
-      if (s.mode === "fp_viewmodel") {
+      if (isFpMode(s.mode)) {
         syncFpTransformAttachment();
         return;
       }
@@ -1076,9 +1080,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   registerEditorSpawnCalculator(() => {
     const st = useEditorStore.getState();
     const cam =
-      st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
+      isWeaponFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+        : isConsumableFpAuthoringState(st) &&
+            st.fpAuthorCamera === "gameplay" &&
+            fpConsumableSession
           ? fpConsumableSession.getGameplayCamera()
           : camera;
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
@@ -1095,31 +1101,34 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   const unsub = useEditorStore.subscribe((s) => {
     editorStoreSyncDepth++;
     try {
-      const isFpMode = (m: typeof s.mode) =>
-        m === "fp_viewmodel" || m === "fp_consumable";
       if (s.mode !== prev.mode && !isFpMode(s.mode)) {
         shouldFrameAfterRebuild = true;
       }
       if (isFpMode(s.mode) && !isFpMode(prev.mode)) {
         document.exitPointerLock?.();
       }
+      const wantsWeapon = isWeaponFpAuthoringState(s);
+      const hadWeapon = isWeaponFpAuthoringState(prev);
+      const wantsConsumable = isConsumableFpAuthoringState(s);
+      const hadConsumable = isConsumableFpAuthoringState(prev);
 
-      // ── Weapon FP viewmodel ──────────────────────────────────────────────────
-      if (s.mode === "fp_viewmodel") {
+      if (wantsWeapon) {
         if (
           editorStoreSyncDepth === 1 &&
-          prev.mode === "fp_viewmodel" &&
-          s.fpAuthorWeaponId !== prev.fpAuthorWeaponId &&
+          ((hadWeapon && s.fpAuthorWeaponId !== prev.fpAuthorWeaponId) || hadConsumable) &&
           (fpSession || fpSessionLoading)
         ) {
           disposeFpViewmodelRuntimeOnly();
+        }
+        if (hadConsumable && (fpConsumableSession || fpConsumableSessionLoading)) {
+          disposeFpConsumableRuntimeOnly();
         }
         ensureFpSession();
         if (fpSession?.getPresenter()) {
           contentRoot.visible = false;
           grid.visible = false;
         }
-      } else if (prev.mode === "fp_viewmodel" && !fpTeardownInProgress) {
+      } else if (hadWeapon && !wantsConsumable && !fpTeardownInProgress) {
         disposeFpViewmodelRuntimeOnly();
         if (!isFpMode(s.mode)) {
           contentRoot.visible = true;
@@ -1137,22 +1146,23 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         }
       }
 
-      // ── Consumable FP viewer ─────────────────────────────────────────────────
-      if (s.mode === "fp_consumable") {
+      if (wantsConsumable) {
         if (
           editorStoreSyncDepth === 1 &&
-          prev.mode === "fp_consumable" &&
-          s.fpAuthorConsumableId !== prev.fpAuthorConsumableId &&
+          ((hadConsumable && s.fpAuthorConsumableId !== prev.fpAuthorConsumableId) || hadWeapon) &&
           (fpConsumableSession || fpConsumableSessionLoading)
         ) {
           disposeFpConsumableRuntimeOnly();
+        }
+        if (hadWeapon && (fpSession || fpSessionLoading)) {
+          disposeFpViewmodelRuntimeOnly();
         }
         ensureFpConsumableSession();
         if (fpConsumableSession?.isReady()) {
           contentRoot.visible = false;
           grid.visible = false;
         }
-      } else if (prev.mode === "fp_consumable" && !fpTeardownInProgress) {
+      } else if (hadConsumable && !wantsWeapon && !fpTeardownInProgress) {
         disposeFpConsumableRuntimeOnly();
         if (!isFpMode(s.mode)) {
           contentRoot.visible = true;
@@ -1204,10 +1214,13 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
       const tcFp =
         isFpMode(s.mode) &&
-        (s.mode === "fp_viewmodel"
+        (wantsWeapon
           ? Boolean(fpSession?.getPresenter())
-          : fpConsumableSession?.isReady() === true) &&
+          : wantsConsumable
+            ? fpConsumableSession?.isReady() === true
+            : false) &&
         (s.fpAuthorTargetId !== prev.fpAuthorTargetId ||
+          s.fpAuthorSubjectKind !== prev.fpAuthorSubjectKind ||
           s.fpAuthorWeaponId !== prev.fpAuthorWeaponId ||
           s.fpAuthorConsumableId !== prev.fpAuthorConsumableId ||
           s.fpAuthorCamera !== prev.fpAuthorCamera ||
@@ -1274,12 +1287,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   // Subscribers are not invoked on register — cold-start default FP modes must bootstrap here.
   {
     const st = useEditorStore.getState();
-    if (st.mode === "fp_viewmodel") {
+    if (isWeaponFpAuthoringState(st)) {
       ensureFpSession();
-    } else if (st.mode === "fp_consumable") {
+    } else if (isConsumableFpAuthoringState(st)) {
       ensureFpConsumableSession();
     }
-    if (st.mode === "fp_viewmodel" || st.mode === "fp_consumable") {
+    if (isFpMode(st.mode)) {
       orbitControls.enabled = st.fpAuthorCamera === "orbit";
       if (st.fpAuthorCamera === "orbit") {
         orbitControls.mouseButtons = {
@@ -1308,9 +1321,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (ev.currentTarget !== canvas) return;
     const st = useEditorStore.getState();
     const pickCam =
-      st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
+      isWeaponFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+        : isConsumableFpAuthoringState(st) &&
+            st.fpAuthorCamera === "gameplay" &&
+            fpConsumableSession
           ? fpConsumableSession.getGameplayCamera()
           : camera;
     const rect = canvas.getBoundingClientRect();
@@ -1326,7 +1341,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       return;
     }
 
-    if (st.mode === "fp_viewmodel" || st.mode === "fp_consumable") {
+    if (isFpMode(st.mode)) {
       fpClickCandidate = { x: ev.clientX, y: ev.clientY };
       return;
     }
@@ -1386,7 +1401,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (ev.currentTarget !== canvas) return;
 
-    if (st.mode !== "fp_viewmodel" && st.mode !== "fp_consumable") {
+    if (!isFpMode(st.mode)) {
       fpClickCandidate = null;
       return;
     }
@@ -1397,9 +1412,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (Math.hypot(dx, dy) > 5) return;
 
     const pickCam =
-      st.fpAuthorCamera === "gameplay" && st.mode === "fp_viewmodel" && fpSession
+      st.fpAuthorCamera === "gameplay" && isWeaponFpAuthoringState(st) && fpSession
         ? fpSession.getGameplayCamera()
-        : st.fpAuthorCamera === "gameplay" && st.mode === "fp_consumable" && fpConsumableSession
+        : st.fpAuthorCamera === "gameplay" &&
+            isConsumableFpAuthoringState(st) &&
+            fpConsumableSession
           ? fpConsumableSession.getGameplayCamera()
           : camera;
     const rect = canvas.getBoundingClientRect();
@@ -1435,8 +1452,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     lastTickMs = now;
     const st = useEditorStore.getState();
     const tcDragging = transformControls.dragging === true;
-    const inFpMode = st.mode === "fp_viewmodel" || st.mode === "fp_consumable";
-    if (st.mode === "fp_viewmodel" && fpSession?.getPresenter()) {
+    const inFpMode = isFpMode(st.mode);
+    if (isWeaponFpAuthoringState(st) && fpSession?.getPresenter()) {
       const pres = fpSession.getPresenter()!;
       if (!tcDragging) {
         pres.setFpSwingAuthoringOverlay({ previewPhase01: null, keyframes: null });
@@ -1473,7 +1490,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         (p) => p.id === useEditorStore.getState().fpAuthorTargetId,
       )?.object;
       fpSelectionOutline.setFromObject(sel ?? null);
-    } else if (st.mode === "fp_consumable" && fpConsumableSession?.isReady()) {
+    } else if (isConsumableFpAuthoringState(st) && fpConsumableSession?.isReady()) {
       const picksMeta = fpConsumableSession
         .getPickList()
         .map((p) => ({ id: p.id, label: p.label }));
@@ -1493,18 +1510,16 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       fpSelectionOutline.setFromObject(null);
     }
     const renderCam =
-      st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
+      isWeaponFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+        : isConsumableFpAuthoringState(st) &&
+            st.fpAuthorCamera === "gameplay" &&
+            fpConsumableSession
           ? fpConsumableSession.getGameplayCamera()
           : camera;
-    if (st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession) {
+    if (isWeaponFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpSession) {
       fpSession.syncWorldMatrices();
-    } else if (
-      st.mode === "fp_consumable" &&
-      st.fpAuthorCamera === "gameplay" &&
-      fpConsumableSession
-    ) {
+    } else if (isConsumableFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpConsumableSession) {
       fpConsumableSession.syncWorldMatrices();
     }
     renderCam.aspect = canvas.clientWidth / canvas.clientHeight;

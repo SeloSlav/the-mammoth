@@ -32,6 +32,8 @@ struct CollisionAabb {
     max: [f32; 3],
 }
 
+const MAX_HORIZONTAL_COLLISION_SUBSTEP_M: f32 = 0.18;
+
 #[inline]
 fn player_body_height(crouch: bool) -> f32 {
     if crouch {
@@ -406,17 +408,15 @@ fn collect_generated_collision_aabbs(
     }
 }
 
-pub fn resolve_player_generated_collision_aabbs(
+fn resolve_generated_horizontal_collision_step(
     ctx: &ReducerContext,
     p: &mut PlayerPose,
     prev_x: f32,
-    prev_y: f32,
     prev_z: f32,
-    crouch: bool,
+    body_h: f32,
+    aabbs: &mut Vec<CollisionAabb>,
 ) {
     let r = super::FOOT_R;
-    let body_h = player_body_height(crouch);
-    let mut aabbs = Vec::<CollisionAabb>::new();
 
     {
         let mut resolved_x = p.x;
@@ -425,11 +425,11 @@ pub fn resolve_player_generated_collision_aabbs(
             ctx,
             prev_x.min(p.x) - r - super::COLLISION_EPS,
             prev_x.max(p.x) + r + super::COLLISION_EPS,
-            p.z - r - super::COLLISION_EPS,
-            p.z + r + super::COLLISION_EPS,
-            &mut aabbs,
+            prev_z.min(p.z) - r - super::COLLISION_EPS,
+            prev_z.max(p.z) + r + super::COLLISION_EPS,
+            aabbs,
         );
-        for aabb in &aabbs {
+        for aabb in aabbs.iter() {
             if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
                 continue;
             }
@@ -476,13 +476,13 @@ pub fn resolve_player_generated_collision_aabbs(
         aabbs.clear();
         collect_generated_collision_aabbs(
             ctx,
-            p.x - r - super::COLLISION_EPS,
-            p.x + r + super::COLLISION_EPS,
+            prev_x.min(p.x) - r - super::COLLISION_EPS,
+            prev_x.max(p.x) + r + super::COLLISION_EPS,
             prev_z.min(p.z) - r - super::COLLISION_EPS,
             prev_z.max(p.z) + r + super::COLLISION_EPS,
-            &mut aabbs,
+            aabbs,
         );
-        for aabb in &aabbs {
+        for aabb in aabbs.iter() {
             if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
                 continue;
             }
@@ -523,8 +523,45 @@ pub fn resolve_player_generated_collision_aabbs(
         }
         p.z = resolved_z;
     }
+}
+
+pub fn resolve_player_generated_collision_aabbs(
+    ctx: &ReducerContext,
+    p: &mut PlayerPose,
+    prev_x: f32,
+    prev_y: f32,
+    prev_z: f32,
+    crouch: bool,
+) {
+    let body_h = player_body_height(crouch);
+    let mut aabbs = Vec::<CollisionAabb>::new();
+    let start_x = prev_x;
+    let start_z = prev_z;
+    let target_x = p.x;
+    let target_z = p.z;
+    let max_axis_delta = (target_x - start_x).abs().max((target_z - start_z).abs());
+    let step_count =
+        ((max_axis_delta / MAX_HORIZONTAL_COLLISION_SUBSTEP_M).ceil() as u32).max(1);
+    let mut step_prev_x = start_x;
+    let mut step_prev_z = start_z;
+    for step in 1..=step_count {
+        let u = step as f32 / step_count as f32;
+        p.x = start_x + (target_x - start_x) * u;
+        p.z = start_z + (target_z - start_z) * u;
+        resolve_generated_horizontal_collision_step(
+            ctx,
+            p,
+            step_prev_x,
+            step_prev_z,
+            body_h,
+            &mut aabbs,
+        );
+        step_prev_x = p.x;
+        step_prev_z = p.z;
+    }
 
     if p.vel_y > 0.0 {
+        let r = super::FOOT_R;
         aabbs.clear();
         collect_generated_collision_aabbs(
             ctx,
@@ -554,6 +591,7 @@ pub fn resolve_player_generated_collision_aabbs(
     {
         let (hx, hz) = elevator_layout::inner_half_xz();
         let iy = elevator_layout::inner_height();
+        let r = super::FOOT_R;
         let head = p.y + body_h;
         let prev_head = prev_y + body_h;
         for car in ctx.db.elevator_car().iter() {

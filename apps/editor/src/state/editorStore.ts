@@ -37,6 +37,7 @@ import type {
   EditorWorkspace,
   FpAuthorCameraKind,
   FpAuthorPickMeta,
+  FpAuthorSubjectKind,
   LandingDocKind,
   TransformMode,
 } from "./editorStoreTypes.js";
@@ -50,6 +51,7 @@ export type {
   EditorWorkspace,
   FpAuthorCameraKind,
   FpAuthorPickMeta,
+  FpAuthorSubjectKind,
   HistoryEntry,
   LandingDocKind,
   TransformMode,
@@ -116,6 +118,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cameraMode: "fly",
   flySpeedMps: 18,
   fpAuthorCamera: "orbit",
+  fpAuthorSubjectKind: "weapon",
   fpAuthorTargetId: FP_AUTHOR_PREFERRED_TARGET_ID,
   /** 0 = same as client before mouse look (`mountFpSession` initial pitch). */
   fpAuthorPitchRad: 0,
@@ -341,6 +344,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setCameraMode: (cameraMode) => set({ cameraMode }),
   setFlySpeedMps: (flySpeedMps) => set({ flySpeedMps }),
   setFpAuthorCamera: (fpAuthorCamera) => set({ fpAuthorCamera }),
+  setFpAuthorSubjectKind: (fpAuthorSubjectKind: FpAuthorSubjectKind) =>
+    set((s) => {
+      if (s.fpAuthorSubjectKind === fpAuthorSubjectKind) return {};
+      return {
+        fpAuthorSubjectKind,
+        fpAuthorLive: s.fpAuthorLive + 1,
+      };
+    }),
   setFpAuthorTargetId: (fpAuthorTargetId) => set({ fpAuthorTargetId }),
   pickFpAuthorTarget: (fpAuthorTargetId) =>
     set((s) => ({

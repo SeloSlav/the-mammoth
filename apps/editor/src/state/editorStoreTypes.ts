@@ -37,6 +37,8 @@ export type EditorCameraMode = "orbit" | "fly";
 
 export type FpAuthorCameraKind = "gameplay" | "orbit";
 
+export type FpAuthorSubjectKind = "weapon" | "consumable";
+
 export type TransformMode = "translate" | "rotate" | "scale";
 
 export type FpAuthorPickMeta = { id: string; label: string };
@@ -90,6 +92,7 @@ export interface EditorState {
   cameraMode: EditorCameraMode;
   flySpeedMps: number;
   fpAuthorCamera: FpAuthorCameraKind;
+  fpAuthorSubjectKind: FpAuthorSubjectKind;
   fpAuthorTargetId: string;
   fpAuthorPitchRad: number;
   fpAuthorInitMessage: string | null;
@@ -135,6 +138,7 @@ export interface EditorState {
   setCameraMode: (mode: EditorCameraMode) => void;
   setFlySpeedMps: (speed: number) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
+  setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;
   setFpAuthorTargetId: (id: string) => void;
   pickFpAuthorTarget: (id: string) => void;
   setFpAuthorPitchRad: (r: number) => void;

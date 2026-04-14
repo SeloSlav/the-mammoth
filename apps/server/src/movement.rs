@@ -57,6 +57,7 @@ const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
 const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
 const COLLISION_EPS: f32 = 0.0015;
 const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
+const MAX_HORIZONTAL_COLLISION_SUBSTEP_M: f32 = 0.18;
 
 #[inline]
 fn damp(current: f32, target: f32, lambda: f32, dt: f32) -> f32 {
@@ -383,22 +384,20 @@ fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
     top_y <= feet_y + WALK_STEP_UP_MARGIN + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
 }
 
-fn resolve_player_static_collisions(
+fn resolve_player_static_horizontal_collision_step(
     p: &mut PlayerPose,
     prev_x: f32,
-    _prev_y: f32,
     prev_z: f32,
-    bits: u8,
+    body_h: f32,
 ) {
     let r = FOOT_RADIUS_XZ;
-    let body_h = player_body_height(bits);
 
     {
         let mut resolved_x = p.x;
         let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
         let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
-        let z0 = p.z - r - COLLISION_EPS;
-        let z1 = p.z + r + COLLISION_EPS;
+        let z0 = (prev_z.min(p.z)) - r - COLLISION_EPS;
+        let z1 = (prev_z.max(p.z)) + r + COLLISION_EPS;
         for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
             for (mn, mx) in *shard {
                 if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
@@ -451,8 +450,8 @@ fn resolve_player_static_collisions(
 
     {
         let mut resolved_z = p.z;
-        let x0 = p.x - r - COLLISION_EPS;
-        let x1 = p.x + r + COLLISION_EPS;
+        let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
+        let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
         let z0 = (prev_z.min(p.z)) - r - COLLISION_EPS;
         let z1 = (prev_z.max(p.z)) + r + COLLISION_EPS;
         for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
@@ -504,8 +503,36 @@ fn resolve_player_static_collisions(
         }
         p.z = resolved_z;
     }
+}
+
+fn resolve_player_static_collisions(
+    p: &mut PlayerPose,
+    prev_x: f32,
+    _prev_y: f32,
+    prev_z: f32,
+    bits: u8,
+) {
+    let body_h = player_body_height(bits);
+    let start_x = prev_x;
+    let start_z = prev_z;
+    let target_x = p.x;
+    let target_z = p.z;
+    let max_axis_delta = (target_x - start_x).abs().max((target_z - start_z).abs());
+    let step_count =
+        ((max_axis_delta / MAX_HORIZONTAL_COLLISION_SUBSTEP_M).ceil() as u32).max(1);
+    let mut step_prev_x = start_x;
+    let mut step_prev_z = start_z;
+    for step in 1..=step_count {
+        let u = step as f32 / step_count as f32;
+        p.x = start_x + (target_x - start_x) * u;
+        p.z = start_z + (target_z - start_z) * u;
+        resolve_player_static_horizontal_collision_step(p, step_prev_x, step_prev_z, body_h);
+        step_prev_x = p.x;
+        step_prev_z = p.z;
+    }
 
     if p.vel_y > 0.0 {
+        let r = FOOT_RADIUS_XZ;
         let x0 = p.x - r - COLLISION_EPS;
         let x1 = p.x + r + COLLISION_EPS;
         let z0 = p.z - r - COLLISION_EPS;
