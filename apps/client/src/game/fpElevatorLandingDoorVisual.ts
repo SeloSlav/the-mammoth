@@ -10,7 +10,7 @@ import { EXTERIOR_DOOR_W_M } from "./fpElevatorLandingExteriorDoor.js";
 
 const FLOOR_T = 0.08;
 /** Max swing (rad) at `swingOpen01 === 1`. */
-export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.08;
+export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.55;
 
 export type ExteriorLandingDoorPivot = {
   structure: THREE.Group;

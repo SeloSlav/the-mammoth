@@ -404,9 +404,10 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (store.mode === "fp_viewmodel") {
       const pres = fpSession?.getPresenter();
       const attached = transformControls.object as THREE.Object3D | undefined;
-      if (pres && attached) {
+        if (pres && attached) {
         const pid = pres.getAuthoringPickList().find((p) => p.object === attached)?.id;
         if (pid === "rigRoot") pres.syncAuthoringRigRestFromAttachedRig();
+        else if (pid === "weaponRoot") pres.syncFpWeaponMountBaselineFromRoot();
       }
       store.bumpFpAuthorLive();
     }

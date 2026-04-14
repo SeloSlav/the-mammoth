@@ -79,66 +79,83 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
 // ---------------------------------------------------------------------------
 
 /**
- * For each floor plate group (direct child of buildingRoot that carries
- * `mammothPlateLevelIndex`), collapse all descendant meshes that share the same
- * material into a single merged `Mesh`.  This reduces per-floor draw calls from
- * ~100+ down to ~13 (one per material variant), dramatically lowering the CPU
- * overhead of `renderer.render()`.
+ * For each static geometry group that is a direct child of `buildingRoot`,
+ * collapse all descendant meshes that share the same material into a single
+ * merged `Mesh`.
  *
- * The group itself is preserved so the existing floor-plate visibility band system
- * (`syncBuildingFloorPlateVisibility`) continues to work unchanged.
+ * This covers two categories:
+ *
+ * 1. **Floor plates** (`mammothPlateLevelIndex` set) — per-floor rooms. Reduces
+ *    ~100+ draw calls/floor to ~13 (one per material), for a 19-floor building
+ *    that is ~1,900 → 247 draw calls.
+ *
+ * 2. **Stair shaft columns** (`mammothAlwaysVisible` set) — full-height stairwells
+ *    with hundreds of individual tread/landing/railing meshes. After merging,
+ *    each shaft reduces from ~500 → ~7 draw calls.
+ *
+ * The group nodes themselves are preserved so the floor-plate visibility band
+ * (`syncBuildingFloorPlateVisibility`) and always-visible logic continue to
+ * work unchanged.
  */
 function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
-  // We need world matrices to compute floor-group-local transforms for each mesh.
-  // updateMatrixWorld works even before the group is in a scene.
+  // updateMatrixWorld propagates transforms through the full hierarchy even
+  // before the root is attached to a scene.
   buildingRoot.updateMatrixWorld(true);
 
   for (const child of buildingRoot.children) {
-    if (typeof child.userData.mammothPlateLevelIndex !== "number") continue;
-    const floorGroup = child as THREE.Group;
-    const floorWorldInv = new THREE.Matrix4()
-      .copy(floorGroup.matrixWorld)
-      .invert();
+    const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
+    const isStairColumn = child.userData.mammothAlwaysVisible === true;
+    if (!isFloorPlate && !isStairColumn) continue;
 
-    // Collect geometries keyed by material UUID.
-    const geosByMat = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
+    mergeGroupDescendantsByMaterial(child as THREE.Group);
+  }
+}
 
-    floorGroup.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return;
-      const material = obj.material as THREE.Material;
-      // Clone the geometry and transform it into floor-group-local space so all
-      // geometries for this floor share the same coordinate frame when merged.
-      obj.updateWorldMatrix(true, false);
-      const geo = (obj.geometry as THREE.BufferGeometry).clone();
-      geo.applyMatrix4(
-        new THREE.Matrix4().multiplyMatrices(floorWorldInv, obj.matrixWorld),
-      );
-      const key = material.uuid;
-      if (!geosByMat.has(key)) {
-        geosByMat.set(key, { mat: material, geos: [] });
-      }
-      geosByMat.get(key)!.geos.push(geo);
-    });
+/**
+ * Merge all descendant `Mesh` objects inside `group` by material, replacing the
+ * group's full subtree with one merged `Mesh` per unique material.
+ * All geometry is transformed to group-local space before merging so the
+ * replacement meshes sit at local origin.
+ */
+function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
+  const groupWorldInv = new THREE.Matrix4()
+    .copy(group.matrixWorld)
+    .invert();
 
-    if (geosByMat.size === 0) continue;
+  // Collect geometry clones keyed by material UUID.
+  const geosByMat = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
 
-    // Remove all existing children from the floor group.
-    while (floorGroup.children.length > 0) {
-      floorGroup.remove(floorGroup.children[0]!);
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const material = obj.material as THREE.Material;
+    obj.updateWorldMatrix(true, false);
+    // Transform to group-local space so all merged verts share the same frame.
+    const geo = (obj.geometry as THREE.BufferGeometry).clone();
+    geo.applyMatrix4(
+      new THREE.Matrix4().multiplyMatrices(groupWorldInv, obj.matrixWorld),
+    );
+    const key = material.uuid;
+    if (!geosByMat.has(key)) {
+      geosByMat.set(key, { mat: material, geos: [] });
     }
+    geosByMat.get(key)!.geos.push(geo);
+  });
 
-    // Add one merged mesh per material.
-    for (const { mat, geos } of geosByMat.values()) {
-      const merged = mergeGeometries(geos, false);
-      // Dispose the per-piece clones — merged holds a copy of the data.
-      for (const g of geos) g.dispose();
-      if (!merged) continue;
-      merged.computeBoundingSphere();
-      merged.computeBoundingBox();
-      const mesh = new THREE.Mesh(merged, mat);
-      mesh.frustumCulled = true;
-      // Transfer matrix frustum culling will use the floor group's bounding sphere.
-      floorGroup.add(mesh);
-    }
+  if (geosByMat.size === 0) return;
+
+  // Swap out all children for the smaller set of merged meshes.
+  while (group.children.length > 0) {
+    group.remove(group.children[0]!);
+  }
+
+  for (const { mat, geos } of geosByMat.values()) {
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    merged.computeBoundingSphere();
+    merged.computeBoundingBox();
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.frustumCulled = true;
+    group.add(mesh);
   }
 }

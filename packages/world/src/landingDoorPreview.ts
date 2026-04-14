@@ -63,7 +63,7 @@ export function buildLandingDoorPreviewRoot(args: {
 
   const jambZ = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
   const swingSign = -1;
-  const maxRad = def?.exteriorSwingMaxRad ?? 1.08;
+  const maxRad = def?.exteriorSwingMaxRad ?? 1.55;
 
   if (face === "e") structure.position.set(hx + 0.048, doorY, jambZ);
   else if (face === "w") {

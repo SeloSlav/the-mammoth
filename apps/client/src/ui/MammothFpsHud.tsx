@@ -217,6 +217,14 @@ export function MammothFpsHud() {
         >
           {fps === null ? "…" : `${fps} FPS`}
         </span>
+        {!open && (() => {
+          const ri = getLastRendererInfo();
+          return ri.drawCalls > 0 ? (
+            <span style={{ ...monoStyle, fontSize: 10, color: THEME_TEXT_FAINT }}>
+              {ri.drawCalls}dc
+            </span>
+          ) : null;
+        })()}
         <span style={{ color: THEME_TEXT_FAINT, fontSize: 10 }}>
           {open ? "▲" : "▼"}
         </span>

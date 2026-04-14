@@ -8,6 +8,7 @@ import {
   applyLandingKitPartTransforms,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
+  LANDING_FRONT_WALL_SLAB_OUT,
 } from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
@@ -378,7 +379,9 @@ export class FpElevatorShaftVisual {
 
       const hailWrap = new THREE.Group();
       hailWrap.position.set(0, feetY, 0);
-      const hailBtn = this.createLandingHailButtonMesh(face, hx, hz, level, pick.shaftKey);
+      const outerHx = this.layout.sx * 0.5;
+      const outerHz = this.layout.sz * 0.5;
+      const hailBtn = this.createLandingHailButtonMesh(face, outerHx, outerHz, level, pick.shaftKey);
       hailWrap.add(hailBtn);
       this.landingHailPickRoot.add(hailWrap);
       this.landingHailPickByLevel.set(level, hailWrap);
@@ -497,9 +500,17 @@ export class FpElevatorShaftVisual {
       this.hailBtnIconMat,
     );
     const y = 1.34;
-    const wallSurfaceOffset = 0.034;
-    /** Corridor-side jamb (inner sill + margin). Outer shaft shell is often buried in building mass on upper storeys. */
-    const faceOut = 0.22 + wallSurfaceOffset;
+    /**
+     * `LANDING_FRONT_WALL_SLAB_OUT` is how far the corridor-facing wall surface sits past the
+     * outer hoistway face. Subtracting a small offset leaves the button panel slightly proud of
+     * that surface so it is visible from the hallway on every storey.
+     */
+    // Button cylinder center is 0.045 from group origin; half-height is 0.0225.
+    // Total protrusion of button face from group = 0.045 + 0.0225 = 0.0675 m.
+    // Setting faceOut = LANDING_FRONT_WALL_SLAB_OUT - 0.0675 makes the button face flush
+    // with the corridor-facing wall surface on every storey.
+    const wallSurfaceOffset = 0.20;
+    const faceOut = LANDING_FRONT_WALL_SLAB_OUT - wallSurfaceOffset;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);
