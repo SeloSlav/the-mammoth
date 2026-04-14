@@ -1,15 +1,17 @@
 import type { BuildingDoc, FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import {
+  buildStaticCollisionSceneForBuilding,
+  type CollisionAabb,
+} from "./collisionScene.js";
+import type { GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
-  getBuildingStairShaftSpecs,
-  type BuildingStairShaftSpec,
   shaftPlanKey,
 } from "./buildingStairShafts.js";
 import {
   collectShaftSlabHoles,
   hollowShellXZRectsWithShaftCutouts,
   mergeElevatorShaftSlabHolesFromFloorDocs,
-  mergeShaftSlabHolesFromFloorDocs,
   punchElevatorHolesInShellRects,
   subtractHolesFromRect,
   type RectXZ,
@@ -27,16 +29,10 @@ import {
  * Axis-aligned walk volume in **world** metres. `max[1]` is the top of the walk surface
  * (feet stand at `max[1]` before `SKIN` in locomotion).
  */
-export type WalkSurfaceAabb = {
-  min: readonly [number, number, number];
-  max: readonly [number, number, number];
-};
+export type WalkSurfaceAabb = CollisionAabb;
 
 /** Infinite prototype slab used outside authored geometry (sync with `fpLocomotion` FLOOR_Y). */
 export const WALK_FALLBACK_FLOOR_TOP_Y = 0.35;
-
-/** Extra XZ margin on the lowest storey concrete pad so grass around the shell is walkable. */
-const GROUND_STORY_GRASS_PAD_EXTRA_MARGIN_M = 28;
 
 function pushBox(
   out: WalkSurfaceAabb[],
@@ -327,95 +323,20 @@ export function walkSurfaceAABBsForFloorDoc(
   return out;
 }
 
-function appendBuildingStairShaftWalkAABBs(
-  merged: WalkSurfaceAabb[],
-  specs: readonly BuildingStairShaftSpec[],
-  ox: number,
-  oy: number,
-  oz: number,
-): void {
-  for (const s of specs) {
-    for (const b of stairWellWalkLocalAABBs(s.sx, s.megaSy, s.sz, true)) {
-      merged.push({
-        min: [
-          b.min[0] + ox + s.px,
-          b.min[1] + oy + s.centerY,
-          b.min[2] + oz + s.pz,
-        ],
-        max: [
-          b.max[0] + ox + s.px,
-          b.max[1] + oy + s.centerY,
-          b.max[2] + oz + s.pz,
-        ],
-      });
-    }
-  }
-}
-
 export function walkSurfaceAABBsForBuilding(
   building: BuildingDoc,
   getFloorDoc: (floorDocId: string) => FloorDoc,
   floorSpacingM: number,
+  options?: {
+    getFloorOverrideDoc?: GetFloorOverrideDoc;
+  },
 ): WalkSurfaceAabb[] {
-  const ox = building.worldOrigin?.[0] ?? 0;
-  const oy = building.worldOrigin?.[1] ?? 0;
-  const oz = building.worldOrigin?.[2] ?? 0;
-  const sorted = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
-  const shaftSpecs = getBuildingStairShaftSpecs(
-    building,
-    getFloorDoc,
-    sorted,
-    floorSpacingM,
-  );
-  const omitStairKeys = new Set(shaftSpecs.map((s) => s.planKey));
-
-  const docsForShaftMerge = sorted.map((r) =>
-    withoutElevatorsInStairwells(getFloorDoc(r.floorDocId)),
-  );
-  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(docsForShaftMerge);
-  const shaftElevatorsMerged =
-    mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
-
-  const merged: WalkSurfaceAabb[] = [];
-  for (const ref of sorted) {
-    const doc = getFloorDoc(ref.floorDocId);
-    const plateY = oy + (ref.levelIndex - 1) * floorSpacingM;
-    for (const b of walkSurfaceAABBsForFloorDoc(doc, plateY, {
-      omitStairWalkPlanKeys: omitStairKeys,
-      shaftHolesPlateMerged,
-      shaftElevatorsMerged,
-      storyLevelIndex: ref.levelIndex,
-    })) {
-      merged.push({
-        min: [b.min[0] + ox, b.min[1], b.min[2] + oz],
-        max: [b.max[0] + ox, b.max[1], b.max[2] + oz],
-      });
-    }
-  }
-  if (shaftSpecs.length > 0) {
-    appendBuildingStairShaftWalkAABBs(merged, shaftSpecs, ox, oy, oz);
-  }
-
-  const lowest = sorted.reduce((a, b) => (a.levelIndex < b.levelIndex ? a : b));
-  const lowDoc = getFloorDoc(lowest.floorDocId);
-  const lowPlateY = oy + (lowest.levelIndex - 1) * floorSpacingM;
-  const grassPad: WalkSurfaceAabb[] = [];
-  appendConcreteSlabWalkAABBs(
-    grassPad,
-    lowDoc,
-    lowPlateY,
-    0.8 + GROUND_STORY_GRASS_PAD_EXTRA_MARGIN_M,
-    0.16,
-    shaftHolesPlateMerged,
-  );
-  for (const b of grassPad) {
-    merged.push({
-      min: [b.min[0] + ox, b.min[1], b.min[2] + oz],
-      max: [b.max[0] + ox, b.max[1], b.max[2] + oz],
-    });
-  }
-
-  return merged;
+  return [
+    ...buildStaticCollisionSceneForBuilding(building, getFloorDoc, {
+      floorSpacingM,
+      getFloorOverrideDoc: options?.getFloorOverrideDoc,
+    }).walkables,
+  ];
 }
 
 export type SampleWalkGroundOpts = {

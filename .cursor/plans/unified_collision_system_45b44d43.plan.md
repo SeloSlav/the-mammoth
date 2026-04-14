@@ -4,19 +4,19 @@ overview: Replace the current walk-top-only model with a shared collision scene 
 todos:
   - id: define-collision-scene
     content: Add a shared `CollisionScene` representation in `packages/world` derived from authored building/floor/elevator data.
-    status: pending
+    status: completed
   - id: refactor-world-bake
     content: Refactor world baking so walk-top AABBs become a derived view of the shared collision scene instead of separate geometry logic.
-    status: pending
+    status: completed
   - id: build-collision-solver
     content: Implement client and server collision resolution against static solids plus generated kinematic elevator/door colliders.
-    status: pending
+    status: completed
   - id: replace-elevator-clamps
     content: Remove bespoke elevator/door push-out code in favor of generated kinematic colliders driven by elevator state.
-    status: pending
+    status: completed
   - id: add-parity-tests
     content: Add client, server, and shared fixture tests for walls, ceilings, stairs, door openings, and elevator interactions.
-    status: pending
+    status: completed
 isProject: false
 ---
 

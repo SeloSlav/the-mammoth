@@ -17,6 +17,7 @@ export const FloorDocSchema = z.object({
   id: z.string(),
   version: z.number().default(1),
   displayName: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   objects: z.array(PlacedObjectSchema).default([]),
 });
 

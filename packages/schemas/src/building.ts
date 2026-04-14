@@ -27,6 +27,7 @@ export type BuildingCoreRef = z.infer<typeof BuildingCoreRefSchema>;
 export const BuildingFloorRefSchema = z.object({
   levelIndex: z.number().int(),
   floorDocId: z.string(),
+  floorOverrideDocId: z.string().optional(),
   displayLabel: z.string().optional(),
 });
 

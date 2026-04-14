@@ -1,12 +1,27 @@
 import type {
   BuildingDoc,
+  CellDoc,
   FloorDoc,
+  FloorOverrideDoc,
   InteriorDoc,
+  PrefabDef,
   PlacedObject,
 } from "@the-mammoth/schemas";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import type {
+  CollisionArtifactsStatus,
+  EditorContentIndex,
+} from "../editor/editorContentDiscovery.js";
 
-export type EditorMode = "floor" | "interior" | "fp_viewmodel";
+export type EditorMode =
+  | "floor"
+  | "interior"
+  | "cell"
+  | "prefab"
+  | "floor_override"
+  | "fp_viewmodel";
+
+export type EditorCameraMode = "orbit" | "fly" | "top";
 
 export type FpAuthorCameraKind = "gameplay" | "orbit";
 
@@ -23,6 +38,9 @@ export type EditorMaterialMeta = {
 export type HistoryEntry = {
   floorDocs: Record<string, FloorDoc>;
   interiorDocs: Record<string, InteriorDoc>;
+  cellDocs: Record<string, CellDoc>;
+  prefabDefs: Record<string, PrefabDef>;
+  floorOverrideDocs: Record<string, FloorOverrideDoc>;
   building: BuildingDoc;
   selectedId: string | null;
   dirty: boolean;
@@ -34,15 +52,25 @@ export interface EditorState {
   building: BuildingDoc;
   floorDocs: Record<string, FloorDoc>;
   interiorDocs: Record<string, InteriorDoc>;
+  cellDocs: Record<string, CellDoc>;
+  prefabDefs: Record<string, PrefabDef>;
+  floorOverrideDocs: Record<string, FloorOverrideDoc>;
+  contentIndex: EditorContentIndex;
   activeFloorDocId: string;
   activeInteriorDocId: string;
+  activeCellDocId: string;
+  activePrefabDefId: string | null;
+  activeFloorOverrideDocId: string | null;
   focusedStoryLevelIndex: number;
   selectedId: string | null;
   dirty: boolean;
+  collisionArtifactsStatus: CollisionArtifactsStatus | null;
   transformMode: TransformMode;
   gridSnapM: number;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
+  cameraMode: EditorCameraMode;
+  flySpeedMps: number;
   fpAuthorCamera: FpAuthorCameraKind;
   fpAuthorTargetId: string;
   fpAuthorPitchRad: number;
@@ -65,15 +93,24 @@ export interface EditorState {
   patchBuilding: (fn: (b: BuildingDoc) => BuildingDoc) => void;
   setFloorDoc: (id: string, doc: FloorDoc) => void;
   setInteriorDoc: (id: string, doc: InteriorDoc) => void;
+  setCellDoc: (id: string, doc: CellDoc) => void;
+  setPrefabDef: (id: string, doc: PrefabDef) => void;
+  setFloorOverrideDoc: (id: string, doc: FloorOverrideDoc) => void;
   setActiveFloorDocId: (id: string) => void;
   setActiveInteriorDocId: (id: string) => void;
+  setActiveCellDocId: (id: string) => void;
+  setActivePrefabDefId: (id: string | null) => void;
+  setActiveFloorOverrideDocId: (id: string | null) => void;
   setFocusedStoryLevelIndex: (level: number) => void;
   setSelectedId: (id: string | null) => void;
   setDirty: (dirty: boolean) => void;
+  setCollisionArtifactsStatus: (status: CollisionArtifactsStatus | null) => void;
   setTransformMode: (m: TransformMode) => void;
   setGridSnapM: (m: number) => void;
   setShadowsEnabled: (on: boolean) => void;
   setUseHdriEnvironment: (on: boolean) => void;
+  setCameraMode: (mode: EditorCameraMode) => void;
+  setFlySpeedMps: (speed: number) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorTargetId: (id: string) => void;
   pickFpAuthorTarget: (id: string) => void;
@@ -86,6 +123,9 @@ export interface EditorState {
 
   getActiveFloorDoc: () => FloorDoc | undefined;
   getActiveInteriorDoc: () => InteriorDoc | undefined;
+  getActiveCellDoc: () => CellDoc | undefined;
+  getActivePrefabDef: () => PrefabDef | undefined;
+  getActiveFloorOverrideDoc: () => FloorOverrideDoc | undefined;
 
   updatePlacedObject: (
     floorDocId: string,
@@ -103,6 +143,40 @@ export interface EditorState {
       overrides: Record<string, unknown> | undefined;
     }>,
   ) => void;
+  updateCellPlacement: (
+    cellDocId: string,
+    entityId: string,
+    patch: Partial<{
+      position: PlacedObject["position"];
+      rotation: NonNullable<PlacedObject["rotation"]>;
+      scale: NonNullable<PlacedObject["scale"]>;
+      prefabId: string;
+      overrides: Record<string, unknown> | undefined;
+    }>,
+  ) => void;
+  updatePrefabComponent: (
+    prefabDefId: string,
+    componentId: string,
+    patch: Partial<{
+      position: PlacedObject["position"];
+      rotation: NonNullable<PlacedObject["rotation"]>;
+      scale: NonNullable<PlacedObject["scale"]>;
+      prefabId: string;
+      assetId: string;
+      metadata: Record<string, unknown> | undefined;
+    }>,
+  ) => void;
+  updateFloorOverrideObjectPatch: (
+    overrideDocId: string,
+    targetObjectId: string,
+    patch: Partial<{
+      prefabId: string;
+      position: PlacedObject["position"];
+      rotation: NonNullable<PlacedObject["rotation"]>;
+      scale: NonNullable<PlacedObject["scale"]>;
+      metadata: Record<string, unknown> | undefined;
+    }>,
+  ) => void;
 
   addFloorObject: (floorDocId: string, obj: PlacedObject) => void;
   deleteFloorObject: (floorDocId: string, objectId: string) => void;
@@ -111,8 +185,17 @@ export interface EditorState {
   addInteriorPlacement: (interiorDocId: string, row: InteriorDoc["placements"][number]) => void;
   deleteInteriorPlacement: (interiorDocId: string, entityId: string) => void;
   duplicateInteriorPlacement: (interiorDocId: string, entityId: string) => void;
+  addCellPlacement: (cellDocId: string, row: CellDoc["placements"][number]) => void;
+  deleteCellPlacement: (cellDocId: string, entityId: string) => void;
+  duplicateCellPlacement: (cellDocId: string, entityId: string) => void;
+  addPrefabComponent: (prefabDefId: string, row: PrefabDef["components"][number]) => void;
+  deletePrefabComponent: (prefabDefId: string, componentId: string) => void;
+  duplicatePrefabComponent: (prefabDefId: string, componentId: string) => void;
 
   replaceFloorDocFromRemote: (id: string, doc: FloorDoc) => void;
   replaceInteriorDocFromRemote: (id: string, doc: InteriorDoc) => void;
+  replaceCellDocFromRemote: (id: string, doc: CellDoc) => void;
+  replacePrefabDefFromRemote: (id: string, doc: PrefabDef) => void;
+  replaceFloorOverrideDocFromRemote: (id: string, doc: FloorOverrideDoc) => void;
   replaceBuildingFromRemote: (doc: BuildingDoc) => void;
 }

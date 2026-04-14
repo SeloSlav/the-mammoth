@@ -170,14 +170,14 @@ export function fpElevExteriorDoorBlocksPassage(swingOpen01: number): boolean {
   return swingOpen01 < EXTERIOR_DOOR_COLLISION_OPEN_THRESH;
 }
 
-const CLOSED_CAB_OUTSIDE_SLAB_IN = 0.28;
-const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;
-const CLOSED_CAB_OUTSIDE_WIDTH_PAD = 0.32;
-const LANDING_FRONT_WALL_SLAB_IN = 0.2;
-const LANDING_FRONT_WALL_SLAB_OUT = 0.34;
-const LANDING_FRONT_WALL_PUSH_OUT = 0.08;
-const LANDING_FRONT_PASSAGE_HALF_W_M = EXTERIOR_DOOR_W_M * 0.5 + 0.04;
-const LANDING_PASSAGE_DOCK_Y_TOL_M = 0.5;
+export const CLOSED_CAB_OUTSIDE_SLAB_IN = 0.28;
+export const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;
+export const CLOSED_CAB_OUTSIDE_WIDTH_PAD = 0.32;
+export const LANDING_FRONT_WALL_SLAB_IN = 0.2;
+export const LANDING_FRONT_WALL_SLAB_OUT = 0.34;
+export const LANDING_FRONT_WALL_PUSH_OUT = 0.08;
+export const LANDING_FRONT_PASSAGE_HALF_W_M = EXTERIOR_DOOR_W_M * 0.5 + 0.04;
+export const LANDING_PASSAGE_DOCK_Y_TOL_M = 0.5;
 
 function innerCabHeightM(layout: ElevatorShaftLayout): number {
   return Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);

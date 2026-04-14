@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --filter=@the-mammoth/client --filter=auth-server-openauth",
+    "dev": "turbo run dev --filter=@the-mammoth/client --filter=@the-mammoth/editor --filter=auth-server-openauth",
     "dev:client": "turbo run dev --filter=@the-mammoth/client",
     "dev:all": "turbo run dev",
     "client:dev": "turbo run dev --filter=@the-mammoth/client",

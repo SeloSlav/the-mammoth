@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
-import { fpLocomotionConstants, type FpLocomotionState } from "@the-mammoth/engine";
+import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  type CollisionAabb,
   elevatorCabGameplayHalfExtentsM,
   elevatorSupportFeetWorldY,
   estimateStoreyFromFeetY,
@@ -14,8 +15,8 @@ import {
 import type { DbConnection } from "../module_bindings";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
 import {
+  ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
   ELEVATOR_PHASE_MOVING,
-  ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
   FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
@@ -42,12 +43,27 @@ import {
   fpElevatorRiderSnapContainsLocalPoint,
 } from "./fpElevatorVolumes.js";
 import {
-  fpElevApplyClosedCabDoorOutsideClamp,
-  fpElevApplyClosedExteriorDoorCollisionClamp,
-  fpElevApplyLandingHoistwayFrontWallClamp,
+  CLOSED_CAB_OUTSIDE_SLAB_IN,
+  CLOSED_CAB_OUTSIDE_SLAB_OUT,
+  CLOSED_CAB_OUTSIDE_WIDTH_PAD,
+  EXTERIOR_COLLISION_L0,
+  EXTERIOR_COLLISION_L1,
+  EXTERIOR_COLLISION_LZ_PAD,
+  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
+  EXTERIOR_STRIP_Y0,
+  EXTERIOR_STRIP_Y1,
+  LANDING_FRONT_PASSAGE_HALF_W_M,
+  LANDING_FRONT_WALL_SLAB_IN,
+  LANDING_FRONT_WALL_SLAB_OUT,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
 } from "./fpElevatorLandingExteriorDoor.js";
+import type {
+  FpKinematicAttachment,
+  FpKinematicSupportProvider,
+  FpKinematicSupportSampleOpts,
+  FpKinematicSupportSurface,
+} from "./fpKinematicSupport.js";
 
 export { floorButtonLabel } from "./fpElevatorLabels.js";
 export {
@@ -76,56 +92,12 @@ export type MountFpElevatorWorldOpts = {
   floorSpacingM?: number;
 };
 
-/** Arguments for {@link MountFpElevatorWorldResult.getElevatorKinematicSupportVyMps}. */
-export type FpElevatorKinematicSupportVyOpts = {
-  worldX: number;
-  worldZ: number;
-  probeTopY: number;
-  footRadiusXZ: number;
-  stepUpMargin: number;
-  baseTop: number;
-  /** Same monotonic clock as {@link mountFpElevatorWorld} `syncCabEvalClock` / locomotion end. */
-  evalWallClockMs: number;
-};
-
 export type MountFpElevatorWorldResult = {
   dispose(): void;
-  /** Advance replicated cab evaluation time before `stepFpLocomotion` so `mergeWalkTop` matches this frame. */
+  /** Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned. */
   syncCabEvalClock(nowMs: number): void;
   tick(dt: number, nowMs: number, playerPos: THREE.Vector3): void;
-  mergeWalkTop(
-    worldX: number,
-    worldZ: number,
-    probeTopY: number,
-    footRadiusXZ: number,
-    stepUpMargin: number,
-    baseTop: number,
-    evalWallClockMs?: number,
-  ): number;
-  /**
-   * Vertical velocity (m/s) of the elevator walk surface that wins {@link mergeWalkTop} for this
-   * probe (0 if static geometry wins or no overlapping cab).
-   */
-  getElevatorKinematicSupportVyMps(opts: FpElevatorKinematicSupportVyOpts): number;
-  /**
-   * After locomotion: if feet are in the in-car HUD volume, snap `pos.y` to the predicted
-   * authoritative cab feet Y and zero vertical velocity — prevents fall-through and micro-seams.
-   */
-  snapLocalRiderFeetToAuthoritativeCabIfNeeded(
-    pos: THREE.Vector3,
-    loco: FpLocomotionState,
-    evalWallClockMs: number,
-    jumpPressedThisFrame: boolean,
-  ): void;
-  /**
-   * When feet are in the rider envelope, clamp world X/Z to cab inner walls (matches server
-   * `clamp_player_to_elevators`) so merge/snap widened volumes cannot be walked off the sides.
-   */
-  clampLocalRiderXZToAuthoritativeCabIfNeeded(
-    pos: THREE.Vector3,
-    loco: FpLocomotionState,
-    evalWallClockMs: number,
-  ): void;
+  readonly kinematicSupport: FpKinematicSupportProvider;
   tryRaycastFloorPick(
     camera: THREE.PerspectiveCamera,
     playerPos: THREE.Vector3,
@@ -133,8 +105,6 @@ export type MountFpElevatorWorldResult = {
   ): boolean;
   consumeInteractKey(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
   shouldSuppressEpickup(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
-  /** Client-side closed-door block so FP prediction matches server before rubber-band. */
-  clampLocalClosedExteriorLandingDoors(pos: THREE.Vector3, vel: THREE.Vector3): void;
   /** When in the narrow sill strip, drive the shared bottom interact prompt (see `fpPickupPrompt`). */
   getExteriorDoorInteractPrompt(
     playerPos: THREE.Vector3,
@@ -143,6 +113,13 @@ export type MountFpElevatorWorldResult = {
     willClose: boolean;
     floorLabel: string;
   } | null;
+  visitCollisionAabbsInXZ(
+    x0: number,
+    x1: number,
+    z0: number,
+    z1: number,
+    visit: (aabb: CollisionAabb) => void,
+  ): void;
   getFloorVisibilityBand(
     px: number,
     py: number,
@@ -288,13 +265,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     });
   };
 
-  const getCabVerticalVelocityMps = (key: string, evalWallClockMs: number): number => {
+  const getCabVerticalVelocityMps = (key: string, evalWallClockMs?: number): number => {
     const row = latest.get(key);
     if (!row || row.phase !== ELEVATOR_PHASE_MOVING) return 0;
     const layout = layoutByKey.get(key);
     if (!layout) return 0;
-    const t0 = moveReplicaAtMs.get(key) ?? evalWallClockMs;
-    const elapsedSec = Math.max(0, (evalWallClockMs - t0) * 0.001);
+    const tEval = evalWallClockMs ?? cabEvalNowMs;
+    const t0 = moveReplicaAtMs.get(key) ?? tEval;
+    const elapsedSec = Math.max(0, (tEval - t0) * 0.001);
     return predictMovingCabFeetWorldYVelocityMps({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
@@ -307,59 +285,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const getDoor = (key: string, nowMs: number): number =>
     doorInterp.get(key)?.eval(nowMs) ?? latest.get(key)?.doorOpen01 ?? 1;
 
-  const mergeWalkTop = (
-    worldX: number,
-    worldZ: number,
-    probeTopY: number,
-    footRadiusXZ: number,
-    stepUpMargin: number,
-    baseTop: number,
-    evalWallClockMs?: number,
-  ): number => {
-    let best = baseTop;
-    const fx0 = worldX - footRadiusXZ;
-    const fx1 = worldX + footRadiusXZ;
-    const fz0 = worldZ - footRadiusXZ;
-    const fz1 = worldZ + footRadiusXZ;
-    for (const [key, row] of latest) {
-      const layout = layoutByKey.get(key);
-      if (!layout) continue;
-      const vis = visuals.get(key);
-      if (!vis) continue;
-      const { halfX: ihx, halfZ: ihz } = vis.inner;
-      const wx = ox + row.plateX;
-      const wz = oz + row.plateZ;
-      if (fx1 < wx - ihx || fx0 > wx + ihx || fz1 < wz - ihz || fz0 > wz + ihz) {
-        continue;
-      }
-      const cabFeet = getCabY(key, evalWallClockMs);
-      if (!Number.isFinite(cabFeet)) continue;
-      const feetY = probeTopY - fpLocomotionConstants.walkProbeDy;
-      const yLo = cabFeet - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
-      const yHi = cabFeet + vis.inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
-      if (feetY < yLo || feetY > yHi) {
-        continue;
-      }
-      const geomTop = cabFeet - FP_LOCOMOTION_SKIN;
-      /** Match `elevator::merge_elevator_walk_top_lerped` inclusion (no dead band above the probe). */
-      if (geomTop <= probeTopY + stepUpMargin) {
-        if (!Number.isFinite(best)) best = geomTop;
-        else best = Math.max(best, geomTop);
-      }
-    }
-    return best;
-  };
-
-  const getElevatorKinematicSupportVyMps = (opts: FpElevatorKinematicSupportVyOpts): number => {
-    const merged = mergeWalkTop(
-      opts.worldX,
-      opts.worldZ,
-      opts.probeTopY,
-      opts.footRadiusXZ,
-      opts.stepUpMargin,
-      opts.baseTop,
-      opts.evalWallClockMs,
-    );
+  const sampleSupportSurface = (
+    opts: FpKinematicSupportSampleOpts,
+  ): FpKinematicSupportSurface | null => {
     let bestVy = 0;
     let bestCabGeom = -Infinity;
     const feetY = opts.probeTopY - fpLocomotionConstants.walkProbeDy;
@@ -394,10 +322,12 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         bestVy = getCabVerticalVelocityMps(key, opts.evalWallClockMs);
       }
     }
-    if (!Number.isFinite(merged) || bestCabGeom === -Infinity) return 0;
-    // Only inherit cab motion when the merged walk top is the cab (not a higher static plate).
-    if (Math.abs(merged - bestCabGeom) > 0.05) return 0;
-    return bestVy;
+    if (bestCabGeom === -Infinity) return null;
+    if (Number.isFinite(opts.baseTop) && opts.baseTop > bestCabGeom + 0.05) return null;
+    return {
+      topY: bestCabGeom,
+      verticalVelocityMps: bestVy,
+    };
   };
 
   const isInsideCarHud = (px: number, py: number, pz: number, key: string): boolean => {
@@ -680,75 +610,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     camera: THREE.PerspectiveCamera,
   ): boolean => resolveExteriorDoorInteract(camera, playerPos.x, playerPos.y, playerPos.z) !== null;
 
-  const clampLocalClosedExteriorLandingDoors = (pos: THREE.Vector3, vel: THREE.Vector3) => {
-    const carByShaft = new Map<
-      string,
-      {
-        currentLevel: number;
-        doorOpen01: number;
-        cabFloorY: number;
-        plateX: number;
-        plateZ: number;
-      }
-    >();
-    const carsForDoorClamp: {
-      shaftKey: string;
-      doorOpen01: number;
-      cabFloorY: number;
-      plateX: number;
-      plateZ: number;
-    }[] = [];
-    for (const [k, row] of latest) {
-      carByShaft.set(k, {
-        currentLevel: Number(row.currentLevel ?? 1),
-        doorOpen01: getDoor(k, cabEvalNowMs),
-        cabFloorY: getCabY(k, cabEvalNowMs),
-        plateX: row.plateX,
-        plateZ: row.plateZ,
-      });
-      carsForDoorClamp.push({
-        shaftKey: k,
-        doorOpen01: getDoor(k, cabEvalNowMs),
-        cabFloorY: getCabY(k, cabEvalNowMs),
-        plateX: row.plateX,
-        plateZ: row.plateZ,
-      });
-    }
-    const landingRows = layouts.flatMap((layout) =>
-      Array.from({ length: maxLevel }, (_v, i) => {
-        const level = i + 1;
-        const row = landingByRowKey.get(landingExteriorDoorRowKey(layout.planKey, level));
-        return {
-          shaftKey: layout.planKey,
-          level,
-          swingOpen01: row ? (landingDoorInterp.get(row.rowKey)?.eval(cabEvalNowMs) ?? row.swingOpen01) : 0,
-        };
-      }),
-    );
-    fpElevApplyClosedExteriorDoorCollisionClamp(pos, vel, {
-      ox,
-      oz,
-      landingRows,
-      carByShaft,
-      layoutByKey,
-      feetYForLayout,
-    });
-    fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
-      ox,
-      oz,
-      landingRows,
-      carsByShaft: carByShaft,
-      layoutByKey,
-      feetYForLayout,
-    });
-    fpElevApplyClosedCabDoorOutsideClamp(pos, vel, {
-      ox,
-      oz,
-      cars: carsForDoorClamp,
-      layoutByKey,
-    });
-  };
-
   const getExteriorDoorInteractPrompt = (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
@@ -767,20 +628,267 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return { willClose, floorLabel };
   };
 
+  const visitCollisionAabbsInXZ = (
+    x0: number,
+    x1: number,
+    z0: number,
+    z1: number,
+    visit: (aabb: CollisionAabb) => void,
+  ) => {
+    const emit = (
+      minX: number,
+      minY: number,
+      minZ: number,
+      maxX: number,
+      maxY: number,
+      maxZ: number,
+    ) => {
+      if (x1 < minX || x0 > maxX || z1 < minZ || z0 > maxZ) return;
+      visit({
+        min: [minX, minY, minZ],
+        max: [maxX, maxY, maxZ],
+      });
+    };
+
+    for (const [shaftKey, row] of latest) {
+      const layout = layoutByKey.get(shaftKey);
+      if (!layout) continue;
+      const plateX = ox + row.plateX;
+      const plateZ = oz + row.plateZ;
+      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
+
+      if (row.doorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
+        const y0 = row.cabFloorY - 0.22;
+        const y1 = row.cabFloorY + Math.max(1.8, layout.sy - 2 * 0.11 - 0.14) + 0.38;
+        const doorHalf =
+          (layout.doorFace === "e" || layout.doorFace === "w" ? hz : hx) +
+          CLOSED_CAB_OUTSIDE_WIDTH_PAD;
+        switch (layout.doorFace) {
+          case "e":
+            emit(
+              plateX + hx - CLOSED_CAB_OUTSIDE_SLAB_IN,
+              y0,
+              plateZ - doorHalf,
+              plateX + hx + CLOSED_CAB_OUTSIDE_SLAB_OUT,
+              y1,
+              plateZ + doorHalf,
+            );
+            break;
+          case "w":
+            emit(
+              plateX - hx - CLOSED_CAB_OUTSIDE_SLAB_OUT,
+              y0,
+              plateZ - doorHalf,
+              plateX - hx + CLOSED_CAB_OUTSIDE_SLAB_IN,
+              y1,
+              plateZ + doorHalf,
+            );
+            break;
+          case "n":
+            emit(
+              plateX - doorHalf,
+              y0,
+              plateZ + hz - CLOSED_CAB_OUTSIDE_SLAB_IN,
+              plateX + doorHalf,
+              y1,
+              plateZ + hz + CLOSED_CAB_OUTSIDE_SLAB_OUT,
+            );
+            break;
+          case "s":
+            emit(
+              plateX - doorHalf,
+              y0,
+              plateZ - hz - CLOSED_CAB_OUTSIDE_SLAB_OUT,
+              plateX + doorHalf,
+              y1,
+              plateZ - hz + CLOSED_CAB_OUTSIDE_SLAB_IN,
+            );
+            break;
+        }
+      }
+
+      for (let level = 1; level <= maxLevel; level++) {
+        const fy = feetYForLayout(layout, level);
+        const landingRow = landingByRowKey.get(landingExteriorDoorRowKey(shaftKey, level));
+        const swingOpen01 =
+          landingRow == null
+            ? 0
+            : (landingDoorInterp.get(landingRow.rowKey)?.eval(cabEvalNowMs) ?? landingRow.swingOpen01);
+
+        if (swingOpen01 < EXTERIOR_DOOR_COLLISION_OPEN_THRESH) {
+          const y0 = fy + EXTERIOR_STRIP_Y0;
+          const y1 = fy + EXTERIOR_STRIP_Y1;
+          switch (layout.doorFace) {
+            case "e":
+              emit(
+                plateX + hx + EXTERIOR_COLLISION_L0,
+                y0,
+                plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
+                plateX + hx + EXTERIOR_COLLISION_L1,
+                y1,
+                plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
+              );
+              break;
+            case "w":
+              emit(
+                plateX - hx - EXTERIOR_COLLISION_L1,
+                y0,
+                plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
+                plateX - hx - EXTERIOR_COLLISION_L0,
+                y1,
+                plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
+              );
+              break;
+            case "n":
+              emit(
+                plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
+                y0,
+                plateZ + hz + EXTERIOR_COLLISION_L0,
+                plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
+                y1,
+                plateZ + hz + EXTERIOR_COLLISION_L1,
+              );
+              break;
+            case "s":
+              emit(
+                plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
+                y0,
+                plateZ - hz - EXTERIOR_COLLISION_L1,
+                plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
+                y1,
+                plateZ - hz - EXTERIOR_COLLISION_L0,
+              );
+              break;
+          }
+        }
+
+        const passageOpen =
+          swingOpen01 >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH &&
+          Number(row.currentLevel ?? 1) === level &&
+          Math.abs(row.cabFloorY - fy) <= 0.5 &&
+          row.doorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
+        const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+        const y0 = fy - 0.22;
+        const y1 = fy + innerH + 0.38;
+        const outerHx = layout.sx * 0.5;
+        const outerHz = layout.sz * 0.5;
+        switch (layout.doorFace) {
+          case "e": {
+            const slabMinX = plateX + outerHx - LANDING_FRONT_WALL_SLAB_IN;
+            const slabMaxX = plateX + outerHx + LANDING_FRONT_WALL_SLAB_OUT;
+            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHz) {
+              emit(slabMinX, y0, plateZ - outerHz, slabMaxX, y1, plateZ + outerHz);
+            } else {
+              emit(
+                slabMinX,
+                y0,
+                plateZ - outerHz,
+                slabMaxX,
+                y1,
+                plateZ - LANDING_FRONT_PASSAGE_HALF_W_M,
+              );
+              emit(
+                slabMinX,
+                y0,
+                plateZ + LANDING_FRONT_PASSAGE_HALF_W_M,
+                slabMaxX,
+                y1,
+                plateZ + outerHz,
+              );
+            }
+            break;
+          }
+          case "w": {
+            const slabMinX = plateX - outerHx - LANDING_FRONT_WALL_SLAB_OUT;
+            const slabMaxX = plateX - outerHx + LANDING_FRONT_WALL_SLAB_IN;
+            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHz) {
+              emit(slabMinX, y0, plateZ - outerHz, slabMaxX, y1, plateZ + outerHz);
+            } else {
+              emit(
+                slabMinX,
+                y0,
+                plateZ - outerHz,
+                slabMaxX,
+                y1,
+                plateZ - LANDING_FRONT_PASSAGE_HALF_W_M,
+              );
+              emit(
+                slabMinX,
+                y0,
+                plateZ + LANDING_FRONT_PASSAGE_HALF_W_M,
+                slabMaxX,
+                y1,
+                plateZ + outerHz,
+              );
+            }
+            break;
+          }
+          case "n": {
+            const slabMinZ = plateZ + outerHz - LANDING_FRONT_WALL_SLAB_IN;
+            const slabMaxZ = plateZ + outerHz + LANDING_FRONT_WALL_SLAB_OUT;
+            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHx) {
+              emit(plateX - outerHx, y0, slabMinZ, plateX + outerHx, y1, slabMaxZ);
+            } else {
+              emit(
+                plateX - outerHx,
+                y0,
+                slabMinZ,
+                plateX - LANDING_FRONT_PASSAGE_HALF_W_M,
+                y1,
+                slabMaxZ,
+              );
+              emit(
+                plateX + LANDING_FRONT_PASSAGE_HALF_W_M,
+                y0,
+                slabMinZ,
+                plateX + outerHx,
+                y1,
+                slabMaxZ,
+              );
+            }
+            break;
+          }
+          case "s": {
+            const slabMinZ = plateZ - outerHz - LANDING_FRONT_WALL_SLAB_OUT;
+            const slabMaxZ = plateZ - outerHz + LANDING_FRONT_WALL_SLAB_IN;
+            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHx) {
+              emit(plateX - outerHx, y0, slabMinZ, plateX + outerHx, y1, slabMaxZ);
+            } else {
+              emit(
+                plateX - outerHx,
+                y0,
+                slabMinZ,
+                plateX - LANDING_FRONT_PASSAGE_HALF_W_M,
+                y1,
+                slabMaxZ,
+              );
+              emit(
+                plateX + LANDING_FRONT_PASSAGE_HALF_W_M,
+                y0,
+                slabMinZ,
+                plateX + outerHx,
+                y1,
+                slabMaxZ,
+              );
+            }
+            break;
+          }
+        }
+      }
+    }
+  };
+
   const syncCabEvalClock = (nowMs: number) => {
     cabEvalNowMs = nowMs;
   };
 
-  const snapLocalRiderFeetToAuthoritativeCabIfNeeded = (
-    pos: THREE.Vector3,
-    loco: FpLocomotionState,
+  const resolveAttachment = (
+    worldPos: { x: number; y: number; z: number },
     evalWallClockMs: number,
-    jumpPressedThisFrame: boolean,
-  ) => {
-    if (jumpPressedThisFrame || loco.velocity.y > ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS) return;
-    const px = pos.x;
-    const py = pos.y;
-    const pz = pos.z;
+  ): FpKinematicAttachment | null => {
+    const px = worldPos.x;
+    const py = worldPos.y;
+    const pz = worldPos.z;
     for (const key of visuals.keys()) {
       const row = latest.get(key);
       const vis = visuals.get(key);
@@ -799,52 +907,33 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           vis.layout.doorFace,
           doorOpen,
         )
-      )
+      ) {
         continue;
-      pos.y = cabFeet;
-      loco.velocity.y = 0;
-      loco.grounded = true;
-      return;
-    }
-  };
-
-  const clampLocalRiderXZToAuthoritativeCabIfNeeded = (
-    pos: THREE.Vector3,
-    loco: FpLocomotionState,
-    evalWallClockMs: number,
-  ) => {
-    const px = pos.x;
-    const py = pos.y;
-    const pz = pos.z;
-    for (const key of visuals.keys()) {
-      const row = latest.get(key);
-      const vis = visuals.get(key);
-      if (!row || !vis) continue;
-      const cabFeet = getCabY(key, evalWallClockMs);
-      if (!Number.isFinite(cabFeet)) continue;
+      }
       const plateX = ox + row.plateX;
       const plateZ = oz + row.plateZ;
-      const doorOpen = getDoor(key, evalWallClockMs);
-      const { x, z, didClamp } = fpElevatorClampWorldXZToCabIfRider(
-        px,
-        pz,
-        py,
-        cabFeet,
-        plateX,
-        plateZ,
-        vis.layout.doorFace,
-        doorOpen,
-        vis.inner,
-      );
-      if (!didClamp) continue;
-      pos.x = x;
-      pos.z = z;
-      if (x > px && loco.velocity.x < 0) loco.velocity.x = 0;
-      if (x < px && loco.velocity.x > 0) loco.velocity.x = 0;
-      if (z > pz && loco.velocity.z < 0) loco.velocity.z = 0;
-      if (z < pz && loco.velocity.z > 0) loco.velocity.z = 0;
-      return;
+      return {
+        supportFeetY: cabFeet,
+        clampWorldXZ: (wx: number, wz: number) =>
+          fpElevatorClampWorldXZToCabIfRider(
+            wx,
+            wz,
+            py,
+            cabFeet,
+            plateX,
+            plateZ,
+            vis.layout.doorFace,
+            doorOpen,
+            vis.inner,
+          ),
+      };
     }
+    return null;
+  };
+
+  const kinematicSupport: FpKinematicSupportProvider = {
+    sampleSupportSurface,
+    resolveAttachment,
   };
 
   return {
@@ -866,15 +955,12 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     },
     syncCabEvalClock,
     tick,
-    mergeWalkTop,
-    getElevatorKinematicSupportVyMps,
-    snapLocalRiderFeetToAuthoritativeCabIfNeeded,
-    clampLocalRiderXZToAuthoritativeCabIfNeeded,
+    kinematicSupport,
     tryRaycastFloorPick,
     consumeInteractKey,
     shouldSuppressEpickup,
-    clampLocalClosedExteriorLandingDoors,
     getExteriorDoorInteractPrompt,
+    visitCollisionAabbsInXZ,
     getFloorVisibilityBand,
   };
 }

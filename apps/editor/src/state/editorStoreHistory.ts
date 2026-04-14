@@ -4,6 +4,9 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
   return {
     floorDocs: structuredClone(state.floorDocs),
     interiorDocs: structuredClone(state.interiorDocs),
+    cellDocs: structuredClone(state.cellDocs),
+    prefabDefs: structuredClone(state.prefabDefs),
+    floorOverrideDocs: structuredClone(state.floorOverrideDocs),
     building: structuredClone(state.building),
     selectedId: state.selectedId,
     dirty: state.dirty,

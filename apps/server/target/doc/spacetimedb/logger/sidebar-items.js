@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_BUF_SIZE"],"fn":["__preinit__00_panic_hook","__preinit__15_init_log","panic_hook"],"static":["LOGGER"],"struct":["Logger"]};

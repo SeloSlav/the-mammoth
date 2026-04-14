@@ -58,7 +58,16 @@ import {
 } from "./droppedItemWorldRuntime";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
+import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevatorConstants.js";
 import { poseSeqAsBigint } from "./fpSessionPoseSeq";
+import { resolvePlayerCollisions } from "./fpPlayerCollision.js";
+import {
+  clampAttachedBodyXZToKinematicSupportIfNeeded,
+  getKinematicSupportVerticalVelocityMps,
+  mergeKinematicSupportTop,
+  snapAttachedFeetToKinematicSupportIfNeeded,
+  type FpKinematicSupportSampleOpts,
+} from "./fpKinematicSupport.js";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -106,7 +115,13 @@ export async function mountFpSession(
     createFPRig(fpLocomotionConstants.eyeStand);
   scene.add(playerRig);
 
-  const { building, buildingRoot, cellRoot, sampleWalkTopBase } = createFpSessionStaticWorld();
+  const {
+    building,
+    buildingRoot,
+    cellRoot,
+    staticCollisionIndex,
+    sampleWalkTopBase,
+  } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
 
   const fpElevators = mountFpElevatorWorld({
@@ -174,6 +189,7 @@ export async function mountFpSession(
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
   const _floorVisCamWorld = new THREE.Vector3();
+  const prevPos = new THREE.Vector3();
 
   const syncBuildingFloorPlateVisibility = () => {
     camera.getWorldPosition(_floorVisCamWorld);
@@ -225,15 +241,16 @@ export async function mountFpSession(
     if (loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY) {
       return base;
     }
-    return fpElevators.mergeWalkTop(
+    const supportEval: FpKinematicSupportSampleOpts = {
       worldX,
       worldZ,
       probeTopY,
-      fpLocomotionConstants.walkFootRadiusXZ,
-      fpLocomotionConstants.walkStepUpMargin,
-      base,
+      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      baseTop: base,
       evalWallClockMs,
-    );
+    };
+    return mergeKinematicSupportTop(fpElevators.kinematicSupport, supportEval);
   };
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
@@ -629,22 +646,27 @@ export async function mountFpSession(
     const jumpQueuedBeforeStep = loco.jumpQueued;
     const frameNowMs = performance.now();
     fpElevators.syncCabEvalClock(frameNowMs);
+    prevPos.copy(pos);
 
     const probeTopForElev = pos.y + fpLocomotionConstants.walkProbeDy;
     const baseForElev = sampleWalkTopBase(pos.x, pos.z, probeTopForElev);
+    const supportEval: FpKinematicSupportSampleOpts = {
+      worldX: pos.x,
+      worldZ: pos.z,
+      probeTopY: probeTopForElev,
+      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      baseTop: baseForElev,
+      evalWallClockMs: frameNowMs,
+    };
     const elevatorJumpVy =
       !loco.grounded ||
       loco.velocity.y > ELEVATOR_WALK_MERGE_SKIP_VY
         ? 0
-        : fpElevators.getElevatorKinematicSupportVyMps({
-            worldX: pos.x,
-            worldZ: pos.z,
-            probeTopY: probeTopForElev,
-            footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-            stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-            baseTop: baseForElev,
-            evalWallClockMs: frameNowMs,
-          });
+        : getKinematicSupportVerticalVelocityMps(
+            fpElevators.kinematicSupport,
+            supportEval,
+          );
 
     const headY = stepFpLocomotion(loco, pos, bodyYaw, input, dt, {
       sampleWalkGroundTopY: sampleWalkTop,
@@ -654,14 +676,35 @@ export async function mountFpSession(
       integrationEvalEndWallClockMs: frameNowMs,
     });
 
-    fpElevators.snapLocalRiderFeetToAuthoritativeCabIfNeeded(
+    resolvePlayerCollisions(
+      pos,
+      prevPos,
+      loco.velocity,
+      crouchToggle,
+      fpLocomotionConstants.walkStepUpMargin,
+      staticCollisionIndex,
+      {
+        visitAabbsInXZ: (x0, x1, z0, z1, visit) =>
+          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit),
+      },
+    );
+
+    snapAttachedFeetToKinematicSupportIfNeeded(
+      fpElevators.kinematicSupport,
+      pos,
+      loco,
+      {
+        evalWallClockMs: frameNowMs,
+        jumpPressedThisFrame: jumpQueuedBeforeStep,
+        skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+      },
+    );
+    clampAttachedBodyXZToKinematicSupportIfNeeded(
+      fpElevators.kinematicSupport,
       pos,
       loco,
       frameNowMs,
-      jumpQueuedBeforeStep,
     );
-    fpElevators.clampLocalRiderXZToAuthoritativeCabIfNeeded(pos, loco, frameNowMs);
-    fpElevators.clampLocalClosedExteriorLandingDoors(pos, loco.velocity);
 
     fpElevators.tick(dt, frameNowMs, pos);
 

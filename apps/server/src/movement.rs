@@ -2,9 +2,9 @@
 //! Constants mirror `packages/engine/src/fpLocomotion.ts` — keep in sync when tuning.
 //!
 //! Elevator cab floors are snapshotted at tick start and lerped across player integration substeps
-//! so vertical motion is not quantized to one 20 Hz sample per tick (see `merge_elevator_walk_top_lerped`).
-//! After integration, `elevator::snap_inside_cab_feet_to_floor` re-attaches riders inside the cab
-//! volume so probe/walk gaps cannot drop them through a moving car.
+//! so vertical motion is not quantized to one 20 Hz sample per tick.
+//! After integration, the generic kinematic-support helpers re-attach riders inside the moving cab
+//! volume so probe/walk gaps cannot drop them through a moving platform.
 
 use std::collections::HashMap;
 
@@ -13,6 +13,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 use crate::accounts::user;
 use crate::auth;
 use crate::elevator::{self, elevator_car, ElevatorCar};
+use crate::kinematic_support;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
@@ -52,6 +53,10 @@ const PHYS_SUBSTEPS_MAX: u32 = 50;
 /// Keep in sync with `FP_WALK_MAX_SUPPORT_DROP_M`.
 const MAX_SUPPORT_DROP_M: f32 = 3.1;
 const SNAP_EPS: f32 = 0.006;
+const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
+const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
+const COLLISION_EPS: f32 = 0.0015;
+const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
 
 #[inline]
 fn damp(current: f32, target: f32, lambda: f32, dt: f32) -> f32 {
@@ -155,26 +160,27 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
         let grounded_before = pose.grounded;
         let mut p = pose;
+        let prev_x = p.x;
+        let prev_y = p.y;
+        let prev_z = p.z;
         integrate_one(ctx, &input, &mut p, TICK_DT, &prev_elevators);
-        elevator::snap_inside_cab_feet_to_floor(ctx, &mut p);
-        elevator::clamp_player_to_elevators(ctx, &mut p);
-        elevator::clamp_player_landing_hoistway_front_walls(ctx, &mut p);
-        elevator::clamp_player_against_closed_cab_doors_from_outside(ctx, &mut p);
-        elevator::clamp_player_exterior_landing_doors(ctx, &mut p);
+        resolve_player_static_collisions(&mut p, prev_x, prev_y, prev_z, input.bits);
+        elevator::resolve_player_generated_collision_aabbs(
+            ctx,
+            &mut p,
+            prev_x,
+            prev_y,
+            prev_z,
+            input.bits & BIT_CROUCH != 0,
+        );
+        elevator::snap_player_to_elevator_kinematic_support(ctx, &mut p);
+        elevator::clamp_player_to_elevator_kinematic_support(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);
     }
 }
 
-/// Walk top sampling with elevator cab Y interpolated between tick-start and tick-end snapshots.
-fn sample_walk_ground_top_y_lerped(
-    ctx: &ReducerContext,
-    x: f32,
-    z: f32,
-    probe_top_y: f32,
-    prev_elevators: &HashMap<String, ElevatorCar>,
-    alpha: f32,
-) -> f32 {
+fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
     let mut best = f32::NAN;
     let fr = FOOT_RADIUS_XZ;
     let fx0 = x - fr;
@@ -196,16 +202,30 @@ fn sample_walk_ground_top_y_lerped(
             }
         }
     }
-    best = elevator::merge_elevator_walk_top_lerped(
+    best
+}
+
+/// Walk top sampling with elevator cab Y interpolated between tick-start and tick-end snapshots.
+fn sample_walk_ground_top_y_lerped(
+    ctx: &ReducerContext,
+    x: f32,
+    z: f32,
+    probe_top_y: f32,
+    prev_elevators: &HashMap<String, ElevatorCar>,
+    alpha: f32,
+) -> f32 {
+    let mut best = sample_static_walk_ground_top_y(x, z, probe_top_y);
+    let elevator_surface = elevator::sample_elevator_kinematic_support_surface_lerped(
         ctx,
         x,
         z,
         probe_top_y,
         WALK_STEP_UP_MARGIN,
-        best,
         Some(prev_elevators),
         alpha,
+        TICK_DT,
     );
+    best = kinematic_support::merge_support_top(best, elevator_surface.as_ref());
     if best.is_nan() {
         const FP_MARGIN: f32 = 2.0;
         let outside = x < crate::generated_walk_surfaces::WALK_SURFACE_FOOTPRINT_MIN_X - FP_MARGIN
@@ -279,7 +299,20 @@ fn integrate_one(
     }
 
     if p.grounded != 0 && (bits & BIT_JUMP != 0) {
-        let boost = elevator::elevator_jump_vertical_boost_mps(ctx, prev_elevators, p, h);
+        let probe_top_y = p.y + WALK_PROBE_DY;
+        let base_top = sample_static_walk_ground_top_y(p.x, p.z, probe_top_y);
+        let elevator_surface = elevator::sample_elevator_kinematic_support_surface_lerped(
+            ctx,
+            p.x,
+            p.z,
+            probe_top_y,
+            WALK_STEP_UP_MARGIN,
+            Some(prev_elevators),
+            1.0,
+            h,
+        );
+        let boost =
+            kinematic_support::support_vertical_velocity_mps(base_top, elevator_surface.as_ref(), 0.05);
         p.vel_y = JUMP_SPEED + boost;
         p.grounded = 0;
     }
@@ -327,6 +360,179 @@ fn integrate_one(
 
     p.yaw = yaw;
     p.seq = input.intent_seq;
+}
+
+#[inline]
+fn player_body_height(bits: u8) -> f32 {
+    if bits & BIT_CROUCH != 0 {
+        PLAYER_HEIGHT_CROUCH_M
+    } else {
+        PLAYER_HEIGHT_STAND_M
+    }
+}
+
+#[inline]
+fn body_vertical_overlap(feet_y: f32, body_h: f32, mn: &[f32; 3], mx: &[f32; 3]) -> bool {
+    let y0 = feet_y;
+    let y1 = feet_y + body_h;
+    y1 > mn[1] + 1e-4 && y0 < mx[1] - 1e-4
+}
+
+#[inline]
+fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
+    top_y <= feet_y + WALK_STEP_UP_MARGIN + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
+}
+
+fn resolve_player_static_collisions(
+    p: &mut PlayerPose,
+    prev_x: f32,
+    _prev_y: f32,
+    prev_z: f32,
+    bits: u8,
+) {
+    let r = FOOT_RADIUS_XZ;
+    let body_h = player_body_height(bits);
+
+    {
+        let mut resolved_x = p.x;
+        let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
+        let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
+        let z0 = p.z - r - COLLISION_EPS;
+        let z1 = p.z + r + COLLISION_EPS;
+        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
+            for (mn, mx) in *shard {
+                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
+                    continue;
+                }
+                if !body_vertical_overlap(p.y, body_h, mn, mx) {
+                    continue;
+                }
+                if ignore_horizontal_block(p.y, mx[1]) {
+                    continue;
+                }
+                let body_min = resolved_x - r;
+                let body_max = resolved_x + r;
+                if body_max <= mn[0] || body_min >= mx[0] {
+                    continue;
+                }
+                let prev_max = prev_x + r;
+                let prev_min = prev_x - r;
+                if prev_max <= mn[0] + COLLISION_EPS {
+                    resolved_x = resolved_x.min(mn[0] - r - COLLISION_EPS);
+                    if p.vel_x > 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                    continue;
+                }
+                if prev_min >= mx[0] - COLLISION_EPS {
+                    resolved_x = resolved_x.max(mx[0] + r + COLLISION_EPS);
+                    if p.vel_x < 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                    continue;
+                }
+                let push_lo = (body_max - mn[0]).abs();
+                let push_hi = (mx[0] - body_min).abs();
+                if push_lo <= push_hi {
+                    resolved_x = resolved_x.min(mn[0] - r - COLLISION_EPS);
+                    if p.vel_x > 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                } else {
+                    resolved_x = resolved_x.max(mx[0] + r + COLLISION_EPS);
+                    if p.vel_x < 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                }
+            }
+        }
+        p.x = resolved_x;
+    }
+
+    {
+        let mut resolved_z = p.z;
+        let x0 = p.x - r - COLLISION_EPS;
+        let x1 = p.x + r + COLLISION_EPS;
+        let z0 = (prev_z.min(p.z)) - r - COLLISION_EPS;
+        let z1 = (prev_z.max(p.z)) + r + COLLISION_EPS;
+        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
+            for (mn, mx) in *shard {
+                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
+                    continue;
+                }
+                if !body_vertical_overlap(p.y, body_h, mn, mx) {
+                    continue;
+                }
+                if ignore_horizontal_block(p.y, mx[1]) {
+                    continue;
+                }
+                let body_min = resolved_z - r;
+                let body_max = resolved_z + r;
+                if body_max <= mn[2] || body_min >= mx[2] {
+                    continue;
+                }
+                let prev_max = prev_z + r;
+                let prev_min = prev_z - r;
+                if prev_max <= mn[2] + COLLISION_EPS {
+                    resolved_z = resolved_z.min(mn[2] - r - COLLISION_EPS);
+                    if p.vel_z > 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                    continue;
+                }
+                if prev_min >= mx[2] - COLLISION_EPS {
+                    resolved_z = resolved_z.max(mx[2] + r + COLLISION_EPS);
+                    if p.vel_z < 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                    continue;
+                }
+                let push_lo = (body_max - mn[2]).abs();
+                let push_hi = (mx[2] - body_min).abs();
+                if push_lo <= push_hi {
+                    resolved_z = resolved_z.min(mn[2] - r - COLLISION_EPS);
+                    if p.vel_z > 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                } else {
+                    resolved_z = resolved_z.max(mx[2] + r + COLLISION_EPS);
+                    if p.vel_z < 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                }
+            }
+        }
+        p.z = resolved_z;
+    }
+
+    if p.vel_y > 0.0 {
+        let x0 = p.x - r - COLLISION_EPS;
+        let x1 = p.x + r + COLLISION_EPS;
+        let z0 = p.z - r - COLLISION_EPS;
+        let z1 = p.z + r + COLLISION_EPS;
+        let head = p.y + body_h;
+        let mut best_feet = p.y;
+        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
+            for (mn, mx) in *shard {
+                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
+                    continue;
+                }
+                if head <= mn[1] + COLLISION_EPS {
+                    continue;
+                }
+                if p.y >= mn[1] {
+                    continue;
+                }
+                best_feet = best_feet.min(mn[1] - body_h - COLLISION_EPS);
+            }
+        }
+        if best_feet < p.y {
+            p.y = best_feet;
+            if p.vel_y > 0.0 {
+                p.vel_y = 0.0;
+            }
+        }
+    }
 }
 
 /// Insert repeating physics schedule (call from `init`).

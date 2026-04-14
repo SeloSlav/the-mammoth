@@ -9,6 +9,7 @@ use crate::elevator_layout::{
     self, DoorFace, ElevShaftSpec, BUILDING_ORIGIN_Y, MAMUTH_ELEVATOR_SPECS, SKIN,
     STOREY_SPACING_M,
 };
+use crate::kinematic_support::{self, KinematicAttachment, KinematicSupportSurface};
 use crate::pose::{player_pose, PlayerPose};
 
 /// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
@@ -73,9 +74,14 @@ const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;
 const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.32;
 const LANDING_FRONT_WALL_SLAB_IN: f32 = 0.2;
 const LANDING_FRONT_WALL_SLAB_OUT: f32 = 0.34;
+#[allow(dead_code)]
 const LANDING_FRONT_WALL_PUSH_OUT: f32 = 0.08;
 const LANDING_FRONT_PASSAGE_HALF_W: f32 = EXT_DOOR_W * 0.5 + 0.04;
 const LANDING_PASSAGE_DOCK_Y_TOL_M: f32 = 0.5;
+const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
+const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
+const COLLISION_EPS: f32 = 0.0015;
+const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {
@@ -307,16 +313,16 @@ fn tick_landing_exterior_doors(ctx: &ReducerContext, dt: f32) {
 /// tick-start snapshot and the current DB row (integration substeps). `alpha` in `(0, 1]` is
 /// the fractional time through the tick (`(i + 1) / n_substeps`). When `prev_cars` is `None`,
 /// uses end-of-tick cab positions only (`alpha` ignored).
-pub fn merge_elevator_walk_top_lerped(
+pub fn sample_elevator_kinematic_support_surface_lerped(
     ctx: &ReducerContext,
     x: f32,
     z: f32,
     probe_top_y: f32,
     step_up_margin: f32,
-    mut best: f32,
     prev_cars: Option<&HashMap<String, ElevatorCar>>,
     alpha: f32,
-) -> f32 {
+    tick_dt: f32,
+) -> Option<KinematicSupportSurface> {
     let fx0 = x - FOOT_R;
     let fx1 = x + FOOT_R;
     let fz0 = z - FOOT_R;
@@ -325,6 +331,9 @@ pub fn merge_elevator_walk_top_lerped(
     let iy = elevator_layout::inner_height();
     let a = alpha.clamp(0.0, 1.0);
     let feet_y = probe_top_y - WALK_PROBE_DY;
+    let mut best_top = f32::NEG_INFINITY;
+    let mut best_vy = 0.0_f32;
+    let h = tick_dt.max(1e-4);
 
     for car in ctx.db.elevator_car().iter() {
         let cx = car.plate_x;
@@ -336,6 +345,10 @@ pub fn merge_elevator_walk_top_lerped(
             Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
             None => car.cab_floor_y,
         };
+        let prev_y = prev_cars
+            .and_then(|m| m.get(&car.shaft_key))
+            .map(|prev| prev.cab_floor_y)
+            .unwrap_or(car.cab_floor_y);
         // Match client `mergeWalkTop` vertical band (wider than `player_inside_cab`) so a rising
         // car / substep lag does not drop merge for one frame (fall-through).
         if feet_y < cab_y - RIDER_SNAP_FEET_BELOW_CAB_M
@@ -345,14 +358,20 @@ pub fn merge_elevator_walk_top_lerped(
         }
         let geom_top = cab_y - SKIN;
         if geom_top <= probe_top_y + step_up_margin {
-            if best.is_nan() {
-                best = geom_top;
-            } else {
-                best = best.max(geom_top);
+            if geom_top > best_top + 1e-5 {
+                best_top = geom_top;
+                best_vy = (car.cab_floor_y - prev_y) / h;
             }
         }
     }
-    best
+    if best_top == f32::NEG_INFINITY {
+        None
+    } else {
+        Some(KinematicSupportSurface {
+            top_y: best_top,
+            vertical_velocity_mps: best_vy,
+        })
+    }
 }
 
 fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
@@ -449,47 +468,71 @@ fn player_rider_snap_grip(p: &PlayerPose, car: &ElevatorCar) -> bool {
     lx >= lx_min - pad && lx <= lx_max + pad && lz >= lz_min - pad && lz <= lz_max + pad
 }
 
-/// Hard-attach feet to the authoritative cab floor when inside the riding volume.
-///
-/// Walk merge + probe sampling can still miss for a tick (shaft geometry, long drops); this is the
-/// safety net that prevents long falls through a moving car. Skipped while the player is clearly
-/// jumping upward so we do not cancel `JUMP_SPEED`.
-pub fn snap_inside_cab_feet_to_floor(ctx: &ReducerContext, p: &mut PlayerPose) {
-    if p.vel_y > RIDER_LOCK_SKIP_UPWARD_VY_MPS {
-        return;
+fn resolve_elevator_kinematic_attachment(
+    p: &PlayerPose,
+    car: &ElevatorCar,
+) -> Option<KinematicAttachment> {
+    if !player_rider_snap_grip(p, car) {
+        return None;
     }
-    for car in ctx.db.elevator_car().iter() {
-        if !player_rider_snap_grip(p, &car) {
-            continue;
-        }
-        p.y = car.cab_floor_y;
-        p.vel_y = 0.0;
-        p.grounded = 1;
-        return;
-    }
+    let (lx_min, lx_max, lz_min, lz_max) = cab_plate_local_clamp_bounds(car);
+    let lx = p.x - car.plate_x;
+    let lz = p.z - car.plate_z;
+    let pad = RIDER_PHYS_GATE_PAD_M;
+    let in_hard = lx >= lx_min && lx <= lx_max && lz >= lz_min && lz <= lz_max;
+    let clamp_bounds_xz = if !in_hard
+        && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
+        && in_door_outward_pad_shell_only(
+            door_face_from_u8(car.door_face),
+            lx,
+            lz,
+            lx_min,
+            lx_max,
+            lz_min,
+            lz_max,
+            pad,
+        ) {
+        None
+    } else {
+        Some((
+            car.plate_x + lx_min,
+            car.plate_x + lx_max,
+            car.plate_z + lz_min,
+            car.plate_z + lz_max,
+        ))
+    };
+    Some(KinematicAttachment {
+        support_y: car.cab_floor_y,
+        clamp_bounds_xz,
+    })
 }
 
-/// World-space vertical cab velocity (m/s) to add on jump when grounded inside a moving car
-/// (matches client `jumpKinematicPlatformVyMps` intent).
-pub fn elevator_jump_vertical_boost_mps(
+fn find_elevator_kinematic_attachment(
     ctx: &ReducerContext,
-    prev_by_key: &HashMap<String, ElevatorCar>,
     p: &PlayerPose,
-    dt: f32,
-) -> f32 {
-    let h = dt.max(1e-4);
-    let mut best = 0.0_f32;
+) -> Option<KinematicAttachment> {
     for car in ctx.db.elevator_car().iter() {
-        if !player_inside_cab(p, &car) {
-            continue;
+        if let Some(attachment) = resolve_elevator_kinematic_attachment(p, &car) {
+            return Some(attachment);
         }
-        let prev_y = prev_by_key
-            .get(&car.shaft_key)
-            .map(|c| c.cab_floor_y)
-            .unwrap_or(car.cab_floor_y);
-        best = best.max((car.cab_floor_y - prev_y) / h);
     }
-    best
+    None
+}
+
+/// Hard-attach feet to the authoritative moving support when inside the elevator riding volume.
+pub fn snap_player_to_elevator_kinematic_support(ctx: &ReducerContext, p: &mut PlayerPose) {
+    let attachment = find_elevator_kinematic_attachment(ctx, p);
+    let _ = kinematic_support::snap_attached_feet_to_support(
+        p,
+        attachment.as_ref(),
+        RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+    );
+}
+
+/// Keep attached riders inside the hard cab bounds while still allowing clean doorway exits.
+pub fn clamp_player_to_elevator_kinematic_support(ctx: &ReducerContext, p: &mut PlayerPose) {
+    let attachment = find_elevator_kinematic_attachment(ctx, p);
+    let _ = kinematic_support::clamp_attached_body_xz(p, attachment.as_ref());
 }
 
 fn call_center_y(level: u32) -> f32 {
@@ -538,57 +581,6 @@ fn in_door_outward_pad_shell_only(
         DoorFace::W => lx < lx_min && lx >= lx_min - pad && lz >= lz_min && lz <= lz_max,
         DoorFace::N => lz > lz_max && lz <= lz_max + pad && lx >= lx_min && lx <= lx_max,
         DoorFace::S => lz < lz_min && lz >= lz_min - pad && lx >= lx_min && lx <= lx_max,
-    }
-}
-
-/// Keep players from walking through cab shells; relax door side while doors are opening.
-///
-/// Volume matches `player_rider_snap_grip` / client `fpElevatorPlateLocalInCabPhysicsVolume`.
-pub fn clamp_player_to_elevators(ctx: &ReducerContext, p: &mut PlayerPose) {
-    for car in ctx.db.elevator_car().iter() {
-        if !player_rider_snap_grip(p, &car) {
-            continue;
-        }
-        let (lx_min, lx_max, lz_min, lz_max) = cab_plate_local_clamp_bounds(&car);
-        let lx = p.x - car.plate_x;
-        let lz = p.z - car.plate_z;
-        let pad = RIDER_PHYS_GATE_PAD_M;
-        let in_hard = lx >= lx_min && lx <= lx_max && lz >= lz_min && lz <= lz_max;
-        if !in_hard
-            && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
-            && in_door_outward_pad_shell_only(
-                door_face_from_u8(car.door_face),
-                lx,
-                lz,
-                lx_min,
-                lx_max,
-                lz_min,
-                lz_max,
-                pad,
-            )
-        {
-            continue;
-        }
-        let xmin = car.plate_x + lx_min;
-        let xmax = car.plate_x + lx_max;
-        let zmin = car.plate_z + lz_min;
-        let zmax = car.plate_z + lz_max;
-        let px = p.x;
-        let pz = p.z;
-        p.x = p.x.clamp(xmin, xmax);
-        p.z = p.z.clamp(zmin, zmax);
-        if p.x > px && p.vel_x < 0.0 {
-            p.vel_x = 0.0;
-        }
-        if p.x < px && p.vel_x > 0.0 {
-            p.vel_x = 0.0;
-        }
-        if p.z > pz && p.vel_z < 0.0 {
-            p.vel_z = 0.0;
-        }
-        if p.z < pz && p.vel_z > 0.0 {
-            p.vel_z = 0.0;
-        }
     }
 }
 
@@ -667,6 +659,7 @@ fn exterior_interact_plate_local_ok(
 }
 
 #[inline]
+#[allow(dead_code)]
 fn exterior_collision_plate_local_ok(
     door: DoorFace,
     hx: f32,
@@ -726,6 +719,7 @@ fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u
 }
 
 #[inline]
+#[allow(dead_code)]
 fn landing_front_face_local_ok(door: DoorFace, outer_hx: f32, outer_hz: f32, lx: f32, lz: f32) -> bool {
     match door {
         DoorFace::E => {
@@ -752,6 +746,7 @@ fn landing_front_face_local_ok(door: DoorFace, outer_hx: f32, outer_hz: f32, lx:
 }
 
 #[inline]
+#[allow(dead_code)]
 fn landing_front_door_lane_local_ok(
     door: DoorFace,
     outer_hx: f32,
@@ -780,6 +775,7 @@ fn landing_front_passage_open(
         && car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN
 }
 
+#[allow(dead_code)]
 fn in_closed_cab_outside_door_slab(door: DoorFace, hx: f32, hz: f32, lx: f32, lz: f32) -> bool {
     let door_half = face_lateral_half(door, hx, hz) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
     match door {
@@ -806,7 +802,451 @@ fn in_closed_cab_outside_door_slab(door: DoorFace, hx: f32, hz: f32, lx: f32, lz
     }
 }
 
+#[derive(Clone, Copy)]
+struct CollisionAabb {
+    min: [f32; 3],
+    max: [f32; 3],
+}
+
+#[inline]
+fn player_body_height(crouch: bool) -> f32 {
+    if crouch {
+        PLAYER_HEIGHT_CROUCH_M
+    } else {
+        PLAYER_HEIGHT_STAND_M
+    }
+}
+
+#[inline]
+fn body_vertical_overlap(feet_y: f32, body_h: f32, aabb: &CollisionAabb) -> bool {
+    let y0 = feet_y;
+    let y1 = feet_y + body_h;
+    y1 > aabb.min[1] + 1e-4 && y0 < aabb.max[1] - 1e-4
+}
+
+#[inline]
+fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
+    top_y <= feet_y + 0.82 + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
+}
+
+#[inline]
+fn push_query_overlapping_aabb(
+    out: &mut Vec<CollisionAabb>,
+    qx0: f32,
+    qx1: f32,
+    qz0: f32,
+    qz1: f32,
+    min: [f32; 3],
+    max: [f32; 3],
+) {
+    if qx1 < min[0] || qx0 > max[0] || qz1 < min[2] || qz0 > max[2] {
+        return;
+    }
+    out.push(CollisionAabb { min, max });
+}
+
+fn collect_generated_collision_aabbs(
+    ctx: &ReducerContext,
+    x0: f32,
+    x1: f32,
+    z0: f32,
+    z1: f32,
+    out: &mut Vec<CollisionAabb>,
+) {
+    let (hx, hz) = elevator_layout::inner_half_xz();
+    let iy = elevator_layout::inner_height();
+
+    for car in ctx.db.elevator_car().iter() {
+        if car.door_open_01 >= DOOR_EXIT_CLAMP_MIN_OPEN {
+            continue;
+        }
+        let door_half = face_lateral_half(door_face_from_u8(car.door_face), hx, hz) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
+        let y0 = car.cab_floor_y - 0.22;
+        let y1 = car.cab_floor_y + iy + 0.38;
+        match door_face_from_u8(car.door_face) {
+            DoorFace::E => push_query_overlapping_aabb(
+                out,
+                x0,
+                x1,
+                z0,
+                z1,
+                [car.plate_x + hx - CLOSED_CAB_OUTSIDE_SLAB_IN, y0, car.plate_z - door_half],
+                [car.plate_x + hx + CLOSED_CAB_OUTSIDE_SLAB_OUT, y1, car.plate_z + door_half],
+            ),
+            DoorFace::W => push_query_overlapping_aabb(
+                out,
+                x0,
+                x1,
+                z0,
+                z1,
+                [car.plate_x - hx - CLOSED_CAB_OUTSIDE_SLAB_OUT, y0, car.plate_z - door_half],
+                [car.plate_x - hx + CLOSED_CAB_OUTSIDE_SLAB_IN, y1, car.plate_z + door_half],
+            ),
+            DoorFace::N => push_query_overlapping_aabb(
+                out,
+                x0,
+                x1,
+                z0,
+                z1,
+                [car.plate_x - door_half, y0, car.plate_z + hz - CLOSED_CAB_OUTSIDE_SLAB_IN],
+                [car.plate_x + door_half, y1, car.plate_z + hz + CLOSED_CAB_OUTSIDE_SLAB_OUT],
+            ),
+            DoorFace::S => push_query_overlapping_aabb(
+                out,
+                x0,
+                x1,
+                z0,
+                z1,
+                [car.plate_x - door_half, y0, car.plate_z - hz - CLOSED_CAB_OUTSIDE_SLAB_OUT],
+                [car.plate_x + door_half, y1, car.plate_z - hz + CLOSED_CAB_OUTSIDE_SLAB_IN],
+            ),
+        }
+    }
+
+    for landing in ctx.db.elevator_landing_door().iter() {
+        let Some(spec) = spec_for_key(&landing.shaft_key) else {
+            continue;
+        };
+        let Some(car) = ctx.db.elevator_car().shaft_key().find(&landing.shaft_key) else {
+            continue;
+        };
+        let fy = support_y(landing.level);
+        let y0 = fy + EXT_STRIP_Y0;
+        let y1 = fy + EXT_STRIP_Y1;
+        if landing.swing_open_01 < EXT_DOOR_COLLISION_OPEN_THRESH {
+            match spec.door {
+                DoorFace::E => push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
+                    [spec.plate_x + hx + EXT_COLLISION_L0, y0, spec.plate_z - (hz + EXT_COLLISION_LZ_PAD)],
+                    [spec.plate_x + hx + EXT_COLLISION_L1, y1, spec.plate_z + (hz + EXT_COLLISION_LZ_PAD)],
+                ),
+                DoorFace::W => push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
+                    [spec.plate_x - hx - EXT_COLLISION_L1, y0, spec.plate_z - (hz + EXT_COLLISION_LZ_PAD)],
+                    [spec.plate_x - hx - EXT_COLLISION_L0, y1, spec.plate_z + (hz + EXT_COLLISION_LZ_PAD)],
+                ),
+                DoorFace::N => push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
+                    [spec.plate_x - (hx + EXT_COLLISION_LZ_PAD), y0, spec.plate_z + hz + EXT_COLLISION_L0],
+                    [spec.plate_x + (hx + EXT_COLLISION_LZ_PAD), y1, spec.plate_z + hz + EXT_COLLISION_L1],
+                ),
+                DoorFace::S => push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
+                    [spec.plate_x - (hx + EXT_COLLISION_LZ_PAD), y0, spec.plate_z - hz - EXT_COLLISION_L1],
+                    [spec.plate_x + (hx + EXT_COLLISION_LZ_PAD), y1, spec.plate_z - hz - EXT_COLLISION_L0],
+                ),
+            }
+        }
+
+        let outer_hx = elevator_layout::SHAFT_SX * 0.5;
+        let outer_hz = elevator_layout::SHAFT_SZ * 0.5;
+        let wall_y0 = fy - 0.22;
+        let wall_y1 = fy + iy + 0.38;
+        let passage_open = landing_front_passage_open(&landing, &car, fy);
+        match spec.door {
+            DoorFace::E => {
+                let min_x = spec.plate_x + outer_hx - LANDING_FRONT_WALL_SLAB_IN;
+                let max_x = spec.plate_x + outer_hx + LANDING_FRONT_WALL_SLAB_OUT;
+                if !passage_open || LANDING_FRONT_PASSAGE_HALF_W >= outer_hz {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z - outer_hz],
+                        [max_x, wall_y1, spec.plate_z + outer_hz],
+                    );
+                } else {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z - outer_hz],
+                        [max_x, wall_y1, spec.plate_z - LANDING_FRONT_PASSAGE_HALF_W],
+                    );
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z + LANDING_FRONT_PASSAGE_HALF_W],
+                        [max_x, wall_y1, spec.plate_z + outer_hz],
+                    );
+                }
+            }
+            DoorFace::W => {
+                let min_x = spec.plate_x - outer_hx - LANDING_FRONT_WALL_SLAB_OUT;
+                let max_x = spec.plate_x - outer_hx + LANDING_FRONT_WALL_SLAB_IN;
+                if !passage_open || LANDING_FRONT_PASSAGE_HALF_W >= outer_hz {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z - outer_hz],
+                        [max_x, wall_y1, spec.plate_z + outer_hz],
+                    );
+                } else {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z - outer_hz],
+                        [max_x, wall_y1, spec.plate_z - LANDING_FRONT_PASSAGE_HALF_W],
+                    );
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [min_x, wall_y0, spec.plate_z + LANDING_FRONT_PASSAGE_HALF_W],
+                        [max_x, wall_y1, spec.plate_z + outer_hz],
+                    );
+                }
+            }
+            DoorFace::N => {
+                let min_z = spec.plate_z + outer_hz - LANDING_FRONT_WALL_SLAB_IN;
+                let max_z = spec.plate_z + outer_hz + LANDING_FRONT_WALL_SLAB_OUT;
+                if !passage_open || LANDING_FRONT_PASSAGE_HALF_W >= outer_hx {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x - outer_hx, wall_y0, min_z],
+                        [spec.plate_x + outer_hx, wall_y1, max_z],
+                    );
+                } else {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x - outer_hx, wall_y0, min_z],
+                        [spec.plate_x - LANDING_FRONT_PASSAGE_HALF_W, wall_y1, max_z],
+                    );
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x + LANDING_FRONT_PASSAGE_HALF_W, wall_y0, min_z],
+                        [spec.plate_x + outer_hx, wall_y1, max_z],
+                    );
+                }
+            }
+            DoorFace::S => {
+                let min_z = spec.plate_z - outer_hz - LANDING_FRONT_WALL_SLAB_OUT;
+                let max_z = spec.plate_z - outer_hz + LANDING_FRONT_WALL_SLAB_IN;
+                if !passage_open || LANDING_FRONT_PASSAGE_HALF_W >= outer_hx {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x - outer_hx, wall_y0, min_z],
+                        [spec.plate_x + outer_hx, wall_y1, max_z],
+                    );
+                } else {
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x - outer_hx, wall_y0, min_z],
+                        [spec.plate_x - LANDING_FRONT_PASSAGE_HALF_W, wall_y1, max_z],
+                    );
+                    push_query_overlapping_aabb(
+                        out,
+                        x0,
+                        x1,
+                        z0,
+                        z1,
+                        [spec.plate_x + LANDING_FRONT_PASSAGE_HALF_W, wall_y0, min_z],
+                        [spec.plate_x + outer_hx, wall_y1, max_z],
+                    );
+                }
+            }
+        }
+    }
+}
+
+pub fn resolve_player_generated_collision_aabbs(
+    ctx: &ReducerContext,
+    p: &mut PlayerPose,
+    prev_x: f32,
+    _prev_y: f32,
+    prev_z: f32,
+    crouch: bool,
+) {
+    let r = FOOT_R;
+    let body_h = player_body_height(crouch);
+    let mut aabbs = Vec::<CollisionAabb>::new();
+
+    {
+        let mut resolved_x = p.x;
+        aabbs.clear();
+        collect_generated_collision_aabbs(
+            ctx,
+            prev_x.min(p.x) - r - COLLISION_EPS,
+            prev_x.max(p.x) + r + COLLISION_EPS,
+            p.z - r - COLLISION_EPS,
+            p.z + r + COLLISION_EPS,
+            &mut aabbs,
+        );
+        for aabb in &aabbs {
+            if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
+                continue;
+            }
+            let body_min = resolved_x - r;
+            let body_max = resolved_x + r;
+            if body_max <= aabb.min[0] || body_min >= aabb.max[0] {
+                continue;
+            }
+            let prev_max = prev_x + r;
+            let prev_min = prev_x - r;
+            if prev_max <= aabb.min[0] + COLLISION_EPS {
+                resolved_x = resolved_x.min(aabb.min[0] - r - COLLISION_EPS);
+                if p.vel_x > 0.0 {
+                    p.vel_x = 0.0;
+                }
+                continue;
+            }
+            if prev_min >= aabb.max[0] - COLLISION_EPS {
+                resolved_x = resolved_x.max(aabb.max[0] + r + COLLISION_EPS);
+                if p.vel_x < 0.0 {
+                    p.vel_x = 0.0;
+                }
+                continue;
+            }
+            let push_lo = (body_max - aabb.min[0]).abs();
+            let push_hi = (aabb.max[0] - body_min).abs();
+            if push_lo <= push_hi {
+                resolved_x = resolved_x.min(aabb.min[0] - r - COLLISION_EPS);
+                if p.vel_x > 0.0 {
+                    p.vel_x = 0.0;
+                }
+            } else {
+                resolved_x = resolved_x.max(aabb.max[0] + r + COLLISION_EPS);
+                if p.vel_x < 0.0 {
+                    p.vel_x = 0.0;
+                }
+            }
+        }
+        p.x = resolved_x;
+    }
+
+    {
+        let mut resolved_z = p.z;
+        aabbs.clear();
+        collect_generated_collision_aabbs(
+            ctx,
+            p.x - r - COLLISION_EPS,
+            p.x + r + COLLISION_EPS,
+            prev_z.min(p.z) - r - COLLISION_EPS,
+            prev_z.max(p.z) + r + COLLISION_EPS,
+            &mut aabbs,
+        );
+        for aabb in &aabbs {
+            if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
+                continue;
+            }
+            let body_min = resolved_z - r;
+            let body_max = resolved_z + r;
+            if body_max <= aabb.min[2] || body_min >= aabb.max[2] {
+                continue;
+            }
+            let prev_max = prev_z + r;
+            let prev_min = prev_z - r;
+            if prev_max <= aabb.min[2] + COLLISION_EPS {
+                resolved_z = resolved_z.min(aabb.min[2] - r - COLLISION_EPS);
+                if p.vel_z > 0.0 {
+                    p.vel_z = 0.0;
+                }
+                continue;
+            }
+            if prev_min >= aabb.max[2] - COLLISION_EPS {
+                resolved_z = resolved_z.max(aabb.max[2] + r + COLLISION_EPS);
+                if p.vel_z < 0.0 {
+                    p.vel_z = 0.0;
+                }
+                continue;
+            }
+            let push_lo = (body_max - aabb.min[2]).abs();
+            let push_hi = (aabb.max[2] - body_min).abs();
+            if push_lo <= push_hi {
+                resolved_z = resolved_z.min(aabb.min[2] - r - COLLISION_EPS);
+                if p.vel_z > 0.0 {
+                    p.vel_z = 0.0;
+                }
+            } else {
+                resolved_z = resolved_z.max(aabb.max[2] + r + COLLISION_EPS);
+                if p.vel_z < 0.0 {
+                    p.vel_z = 0.0;
+                }
+            }
+        }
+        p.z = resolved_z;
+    }
+
+    if p.vel_y > 0.0 {
+        aabbs.clear();
+        collect_generated_collision_aabbs(
+            ctx,
+            p.x - r - COLLISION_EPS,
+            p.x + r + COLLISION_EPS,
+            p.z - r - COLLISION_EPS,
+            p.z + r + COLLISION_EPS,
+            &mut aabbs,
+        );
+        let head = p.y + body_h;
+        let mut best_feet = p.y;
+        for aabb in &aabbs {
+            if head <= aabb.min[1] + COLLISION_EPS {
+                continue;
+            }
+            best_feet = best_feet.min(aabb.min[1] - body_h - COLLISION_EPS);
+        }
+        if best_feet < p.y {
+            p.y = best_feet;
+            if p.vel_y > 0.0 {
+                p.vel_y = 0.0;
+            }
+        }
+    }
+}
+
 /// Solid threshold while the swing door is mostly closed — sync client `fpElevExteriorDoorBlocksAtPose`.
+#[allow(dead_code)]
 pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerPose) {
     let (hx, hz) = elevator_layout::inner_half_xz();
     for row in ctx.db.elevator_landing_door().iter() {
@@ -872,6 +1312,7 @@ pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerP
 /// Hallway-side blocker for the hoistway front wall and doorway. Prevents entering the shaft
 /// through solid wall segments and only allows the doorway lane when both landing and cab doors
 /// are open at the docked level.
+#[allow(dead_code)]
 pub fn clamp_player_landing_hoistway_front_walls(ctx: &ReducerContext, p: &mut PlayerPose) {
     let outer_hx = elevator_layout::SHAFT_SX * 0.5;
     let outer_hz = elevator_layout::SHAFT_SZ * 0.5;
@@ -921,6 +1362,7 @@ pub fn clamp_player_landing_hoistway_front_walls(ctx: &ReducerContext, p: &mut P
 }
 
 /// Closed automatic cab doors block hallway-side entry as well as rider-side exit.
+#[allow(dead_code)]
 pub fn clamp_player_against_closed_cab_doors_from_outside(ctx: &ReducerContext, p: &mut PlayerPose) {
     let (hx, hz) = elevator_layout::inner_half_xz();
     let iy = elevator_layout::inner_height();

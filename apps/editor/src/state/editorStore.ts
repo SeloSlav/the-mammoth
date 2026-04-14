@@ -1,14 +1,21 @@
 import {
   BuildingDocSchema,
+  CellDocSchema,
   FloorDocSchema,
+  FloorOverrideDocSchema,
   InteriorDocSchema,
+  PrefabDefSchema,
   type BuildingDoc,
+  type CellDoc,
   type FloorDoc,
+  type FloorOverrideDoc,
   type InteriorDoc,
   type PlacedObject,
+  type PrefabDef,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import type { EditorContentIndex } from "../editor/editorContentDiscovery.js";
 import {
   beginEditorTransactionGroup,
   cloneHistorySlice,
@@ -16,6 +23,7 @@ import {
   maybePushHistory,
 } from "./editorStoreHistory.js";
 import type {
+  EditorCameraMode,
   EditorMode,
   EditorState,
   FpAuthorCameraKind,
@@ -24,6 +32,7 @@ import type {
 } from "./editorStoreTypes.js";
 
 export type {
+  EditorCameraMode,
   EditorMaterialMeta,
   EditorMode,
   EditorState,
@@ -44,20 +53,39 @@ const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 /** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
 export const FP_AUTHOR_PREFERRED_TARGET_ID = "weaponRoot";
 
+const EMPTY_CONTENT_INDEX: EditorContentIndex = {
+  buildingPath: "building/mammoth.json",
+  floorDocIds: [],
+  interiorDocIds: [],
+  cellDocIds: [],
+  prefabDefIds: [],
+  floorOverrideDocIds: [],
+};
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   mode: "fp_viewmodel",
   building: BuildingDocSchema.parse({ id: "mammoth_main", version: 1, floorRefs: [] }),
   floorDocs: {},
   interiorDocs: {},
+  cellDocs: {},
+  prefabDefs: {},
+  floorOverrideDocs: {},
+  contentIndex: EMPTY_CONTENT_INDEX,
   activeFloorDocId: "floor_mamutica_ground",
   activeInteriorDocId: "lobby_central",
+  activeCellDocId: "cell_0_0",
+  activePrefabDefId: null,
+  activeFloorOverrideDocId: null,
   focusedStoryLevelIndex: 1,
   selectedId: null,
   dirty: false,
+  collisionArtifactsStatus: null,
   transformMode: "translate",
   gridSnapM: 0,
   shadowsEnabled: false,
   useHdriEnvironment: true,
+  cameraMode: "orbit",
+  flySpeedMps: 18,
   fpAuthorCamera: "orbit",
   fpAuthorTargetId: FP_AUTHOR_PREFERRED_TARGET_ID,
   /** 0 = same as client before mouse look (`mountFpSession` initial pitch). */
@@ -90,6 +118,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: [current, ...get().historyFuture],
       floorDocs: prev.floorDocs,
       interiorDocs: prev.interiorDocs,
+      cellDocs: prev.cellDocs,
+      prefabDefs: prev.prefabDefs,
+      floorOverrideDocs: prev.floorOverrideDocs,
       building: prev.building,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
@@ -108,6 +139,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyPast: [...get().historyPast, current],
       floorDocs: next.floorDocs,
       interiorDocs: next.interiorDocs,
+      cellDocs: next.cellDocs,
+      prefabDefs: next.prefabDefs,
+      floorOverrideDocs: next.floorOverrideDocs,
       building: next.building,
       selectedId: next.selectedId,
       dirty: next.dirty,
@@ -150,6 +184,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       interiorDocs: { ...s.interiorDocs, [id]: doc },
       contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
+  setCellDoc: (id, doc) =>
+    set((s) => ({
+      cellDocs: { ...s.cellDocs, [id]: doc },
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+  setPrefabDef: (id, doc) =>
+    set((s) => ({
+      prefabDefs: { ...s.prefabDefs, [id]: doc },
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+  setFloorOverrideDoc: (id, doc) =>
+    set((s) => ({
+      floorOverrideDocs: { ...s.floorOverrideDocs, [id]: doc },
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
   setActiveFloorDocId: (activeFloorDocId) => set({ activeFloorDocId }),
   setActiveInteriorDocId: (activeInteriorDocId) =>
     set((s) =>
@@ -160,13 +209,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             contentStructureEpoch: s.contentStructureEpoch + 1,
           },
     ),
+  setActiveCellDocId: (activeCellDocId) =>
+    set((s) =>
+      s.activeCellDocId === activeCellDocId
+        ? { activeCellDocId }
+        : { activeCellDocId, contentStructureEpoch: s.contentStructureEpoch + 1 },
+    ),
+  setActivePrefabDefId: (activePrefabDefId) =>
+    set((s) =>
+      s.activePrefabDefId === activePrefabDefId
+        ? { activePrefabDefId }
+        : { activePrefabDefId, contentStructureEpoch: s.contentStructureEpoch + 1 },
+    ),
+  setActiveFloorOverrideDocId: (activeFloorOverrideDocId) =>
+    set((s) =>
+      s.activeFloorOverrideDocId === activeFloorOverrideDocId
+        ? { activeFloorOverrideDocId }
+        : {
+            activeFloorOverrideDocId,
+            contentStructureEpoch: s.contentStructureEpoch + 1,
+          },
+    ),
   setFocusedStoryLevelIndex: (focusedStoryLevelIndex) => set({ focusedStoryLevelIndex }),
   setSelectedId: (selectedId) => set({ selectedId }),
   setDirty: (dirty) => set({ dirty }),
+  setCollisionArtifactsStatus: (collisionArtifactsStatus) => set({ collisionArtifactsStatus }),
   setTransformMode: (transformMode) => set({ transformMode }),
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
   setShadowsEnabled: (shadowsEnabled) => set({ shadowsEnabled }),
   setUseHdriEnvironment: (useHdriEnvironment) => set({ useHdriEnvironment }),
+  setCameraMode: (cameraMode) => set({ cameraMode }),
+  setFlySpeedMps: (flySpeedMps) => set({ flySpeedMps }),
   setFpAuthorCamera: (fpAuthorCamera) => set({ fpAuthorCamera }),
   setFpAuthorTargetId: (fpAuthorTargetId) => set({ fpAuthorTargetId }),
   pickFpAuthorTarget: (fpAuthorTargetId) =>
@@ -214,6 +287,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   getActiveFloorDoc: () => get().floorDocs[get().activeFloorDocId],
   getActiveInteriorDoc: () => get().interiorDocs[get().activeInteriorDocId],
+  getActiveCellDoc: () => get().cellDocs[get().activeCellDocId],
+  getActivePrefabDef: () => {
+    const id = get().activePrefabDefId;
+    return id ? get().prefabDefs[id] : undefined;
+  },
+  getActiveFloorOverrideDoc: () => {
+    const id = get().activeFloorOverrideDocId;
+    return id ? get().floorOverrideDocs[id] : undefined;
+  },
 
   updatePlacedObject: (floorDocId, objectId, patch) => {
     maybePushHistory(get, set);
@@ -255,6 +337,67 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...(structural
           ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
           : {}),
+      };
+    });
+  },
+
+  updateCellPlacement: (cellDocId, entityId, patch) => {
+    maybePushHistory(get, set);
+    const structural =
+      "prefabId" in patch ||
+      "assetId" in patch ||
+      "overrides" in patch;
+    set((s) => {
+      const cur = s.cellDocs[cellDocId];
+      if (!cur) return s;
+      const placements = cur.placements.map((p) =>
+        p.entityId === entityId ? { ...p, ...patch } : p,
+      );
+      return {
+        cellDocs: { ...s.cellDocs, [cellDocId]: { ...cur, placements } },
+        dirty: true,
+        ...(structural
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
+      };
+    });
+  },
+
+  updatePrefabComponent: (prefabDefId, componentId, patch) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.prefabDefs[prefabDefId];
+      if (!cur) return s;
+      const components = cur.components.map((p) =>
+        p.id === componentId ? { ...p, ...patch } : p,
+      );
+      return {
+        prefabDefs: { ...s.prefabDefs, [prefabDefId]: { ...cur, components } },
+        dirty: true,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  updateFloorOverrideObjectPatch: (overrideDocId, targetObjectId, patch) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.floorOverrideDocs[overrideDocId];
+      if (!cur) return s;
+      const existing = cur.objectPatches.find((row) => row.targetObjectId === targetObjectId);
+      const nextPatch = { ...(existing?.patch ?? {}), ...patch };
+      const objectPatches = existing
+        ? cur.objectPatches.map((row) =>
+            row.targetObjectId === targetObjectId ? { ...row, patch: nextPatch } : row,
+          )
+        : [...cur.objectPatches, { targetObjectId, patch: nextPatch }];
+      return {
+        floorOverrideDocs: {
+          ...s.floorOverrideDocs,
+          [overrideDocId]: { ...cur, objectPatches },
+        },
+        dirty: true,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     });
   },
@@ -389,6 +532,136 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
+  addCellPlacement: (cellDocId, row) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.cellDocs[cellDocId];
+      if (!cur) return s;
+      return {
+        cellDocs: {
+          ...s.cellDocs,
+          [cellDocId]: { ...cur, placements: [...cur.placements, row] },
+        },
+        dirty: true,
+        selectedId: row.entityId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  deleteCellPlacement: (cellDocId, entityId) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.cellDocs[cellDocId];
+      if (!cur) return s;
+      return {
+        cellDocs: {
+          ...s.cellDocs,
+          [cellDocId]: {
+            ...cur,
+            placements: cur.placements.filter((p) => p.entityId !== entityId),
+          },
+        },
+        dirty: true,
+        selectedId: s.selectedId === entityId ? null : s.selectedId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  duplicateCellPlacement: (cellDocId, entityId) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.cellDocs[cellDocId];
+      if (!cur) return s;
+      const src = cur.placements.find((p) => p.entityId === entityId);
+      if (!src) return s;
+      const copy = {
+        ...src,
+        entityId: crypto.randomUUID(),
+        position: [
+          src.position[0] + 1,
+          src.position[1],
+          src.position[2] + 1,
+        ] as PlacedObject["position"],
+      };
+      return {
+        cellDocs: {
+          ...s.cellDocs,
+          [cellDocId]: { ...cur, placements: [...cur.placements, copy] },
+        },
+        dirty: true,
+        selectedId: copy.entityId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  addPrefabComponent: (prefabDefId, row) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.prefabDefs[prefabDefId];
+      if (!cur) return s;
+      return {
+        prefabDefs: {
+          ...s.prefabDefs,
+          [prefabDefId]: { ...cur, components: [...cur.components, row] },
+        },
+        dirty: true,
+        selectedId: row.id,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  deletePrefabComponent: (prefabDefId, componentId) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.prefabDefs[prefabDefId];
+      if (!cur) return s;
+      return {
+        prefabDefs: {
+          ...s.prefabDefs,
+          [prefabDefId]: {
+            ...cur,
+            components: cur.components.filter((p) => p.id !== componentId),
+          },
+        },
+        dirty: true,
+        selectedId: s.selectedId === componentId ? null : s.selectedId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
+  duplicatePrefabComponent: (prefabDefId, componentId) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const cur = s.prefabDefs[prefabDefId];
+      if (!cur) return s;
+      const src = cur.components.find((p) => p.id === componentId);
+      if (!src) return s;
+      const copy = {
+        ...src,
+        id: crypto.randomUUID(),
+        position: [
+          src.position[0] + 1,
+          src.position[1],
+          src.position[2] + 1,
+        ] as PlacedObject["position"],
+      };
+      return {
+        prefabDefs: {
+          ...s.prefabDefs,
+          [prefabDefId]: { ...cur, components: [...cur.components, copy] },
+        },
+        dirty: true,
+        selectedId: copy.id,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    });
+  },
+
   replaceFloorDocFromRemote: (id, doc) =>
     set((s) => ({
       floorDocs: { ...s.floorDocs, [id]: FloorDocSchema.parse(doc) },
@@ -401,6 +674,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   replaceInteriorDocFromRemote: (id, doc) =>
     set((s) => ({
       interiorDocs: { ...s.interiorDocs, [id]: InteriorDocSchema.parse(doc) },
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+
+  replaceCellDocFromRemote: (id, doc) =>
+    set((s) => ({
+      cellDocs: { ...s.cellDocs, [id]: CellDocSchema.parse(doc) },
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+
+  replacePrefabDefFromRemote: (id, doc) =>
+    set((s) => ({
+      prefabDefs: { ...s.prefabDefs, [id]: PrefabDefSchema.parse(doc) },
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+
+  replaceFloorOverrideDocFromRemote: (id, doc) =>
+    set((s) => ({
+      floorOverrideDocs: {
+        ...s.floorOverrideDocs,
+        [id]: FloorOverrideDocSchema.parse(doc),
+      },
       dirty: false,
       historyPast: [],
       historyFuture: [],
@@ -437,12 +740,45 @@ export function collectPrefabIdsFromInteriors(
   return [...s].sort();
 }
 
+export function collectPrefabIdsFromCells(cellDocs: Record<string, CellDoc>): string[] {
+  const s = new Set<string>();
+  for (const d of Object.values(cellDocs)) {
+    for (const p of d.placements) {
+      if (p.prefabId) s.add(p.prefabId);
+    }
+  }
+  return [...s].sort();
+}
+
+export function collectPrefabIdsFromPrefabDefs(prefabDefs: Record<string, PrefabDef>): string[] {
+  const s = new Set<string>();
+  for (const d of Object.values(prefabDefs)) {
+    s.add(d.id);
+    for (const c of d.components) {
+      if (c.prefabId) s.add(c.prefabId);
+    }
+  }
+  return [...s].sort();
+}
+
 export function serializeFloorDocPretty(doc: FloorDoc): string {
   return `${JSON.stringify(FloorDocSchema.parse(doc), null, 2)}\n`;
 }
 
 export function serializeInteriorDocPretty(doc: InteriorDoc): string {
   return `${JSON.stringify(InteriorDocSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeCellDocPretty(doc: CellDoc): string {
+  return `${JSON.stringify(CellDocSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializePrefabDefPretty(doc: PrefabDef): string {
+  return `${JSON.stringify(PrefabDefSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeFloorOverrideDocPretty(doc: FloorOverrideDoc): string {
+  return `${JSON.stringify(FloorOverrideDocSchema.parse(doc), null, 2)}\n`;
 }
 
 export function serializeBuildingDocPretty(doc: BuildingDoc): string {
