@@ -103,6 +103,12 @@ export function buildWalkSurfaceSpatialIndex(
     }
   }
 
+  // Generation-counter visited array — avoids creating a new Set on every sample call.
+  // sampleSubsetRaw is called ~360 times/sec (2× per substep × 3 substeps × 60 fps);
+  // allocating a Set each time was the primary cause of GC-driven frame spikes.
+  const visitGen = new Uint32Array(aabbs.length);
+  let sampleGeneration = 0;
+
   const sampleSubsetRaw = (
     x: number,
     z: number,
@@ -119,14 +125,20 @@ export function buildWalkSurfaceSpatialIndex(
     const iz0 = Math.max(0, Math.floor((fz0 - minZ) / cell));
     const iz1 = Math.min(nz - 1, Math.floor((fz1 - minZ) / cell));
 
+    // Advance generation — wrapping at 2^32 is safe; would take >69 days at 360 calls/sec.
+    if (++sampleGeneration === 0) {
+      sampleGeneration = 1;
+      visitGen.fill(0);
+    }
+    const gen = sampleGeneration;
+
     let best = NaN;
-    const seen = new Set<number>();
     for (let iz = iz0; iz <= iz1; iz++) {
       for (let ix = ix0; ix <= ix1; ix++) {
         const list = cells[cellIndex(ix, iz)]!;
         for (const j of list) {
-          if (seen.has(j)) continue;
-          seen.add(j);
+          if (visitGen[j] === gen) continue;
+          visitGen[j] = gen;
           const b = aabbs[j]!;
           if (fx1 < b.min[0] || fx0 > b.max[0] || fz1 < b.min[2] || fz0 > b.max[2]) continue;
           const top = b.max[1];

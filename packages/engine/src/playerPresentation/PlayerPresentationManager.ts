@@ -34,6 +34,8 @@ export class PlayerPresentationManager {
   private readonly remotes = new Map<string, RemotePlayerPresenter>();
   private remoteTintCursor = 0;
   private lastLocalEquipped: HeldItemId;
+  /** Pooled set — cleared and reused each update() to avoid per-frame allocation. */
+  private readonly _keepIds = new Set<string>();
 
   private constructor(
     scene: THREE.Scene,
@@ -81,9 +83,9 @@ export class PlayerPresentationManager {
       );
     }
     this.local.update(localState, dt);
-    const keep = new Set<string>();
+    this._keepIds.clear();
     for (const [id, snap] of remoteSnapshots) {
-      keep.add(id);
+      this._keepIds.add(id);
       let rp = this.remotes.get(id);
       if (!rp) {
         rp = new RemotePlayerPresenter(this.scene, this.pickTint(), this.modelRegistry);
@@ -92,7 +94,7 @@ export class PlayerPresentationManager {
       rp.updateFromSnapshot(snap, dt, nowMs);
     }
     for (const [id, rp] of this.remotes) {
-      if (!keep.has(id)) {
+      if (!this._keepIds.has(id)) {
         rp.dispose(this.scene);
         this.remotes.delete(id);
       }

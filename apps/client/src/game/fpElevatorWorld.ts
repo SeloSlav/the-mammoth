@@ -213,6 +213,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const raycaster = new THREE.Raycaster();
   const screenCenterNdc = new THREE.Vector2(0, 0);
+  // Pooled roots array — reused every frame to avoid per-frame allocation in raycast queries.
+  const _hailPickRoots: THREE.Object3D[] = [];
+  // Throttle the hail-hover raycast to every 3rd render frame.  Hover state changes don't
+  // need 60 Hz resolution, and the raycast itself allocates internally in Three.js.
+  let _hailSyncFrameCounter = 0;
   const pendingExteriorDoorToggle = {
     shaftKey: "",
     level: 0,
@@ -433,7 +438,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
 
   const collectNearbyLandingHailPickRoots = (playerPos: THREE.Vector3): THREE.Object3D[] => {
-    const roots: THREE.Object3D[] = [];
+    _hailPickRoots.length = 0;
     const [levelLo, levelHi] = candidateLandingLevelRangeForFeetY(playerPos.y);
     for (const [key, vis] of visuals) {
       const row = latest.get(key);
@@ -444,10 +449,10 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (dx * dx + dz * dz > spatial.hailPickMaxCenterDistSq) continue;
       for (let level = levelLo; level <= levelHi; level++) {
         const pick = vis.getLandingHailPickForLevel(level);
-        if (pick) roots.push(pick);
+        if (pick) _hailPickRoots.push(pick);
       }
     }
-    return roots;
+    return _hailPickRoots;
   };
 
   const resolveExteriorDoorInteractByPose = (
@@ -691,6 +696,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     playerPos: THREE.Vector3,
     nowMs: number,
   ) => {
+    // Skip 2 out of every 3 frames — hover-highlight update doesn't need 60 Hz resolution
+    // and raycaster.intersectObjects() allocates internally every call.
+    _hailSyncFrameCounter = (_hailSyncFrameCounter + 1) % 3;
+    if (_hailSyncFrameCounter !== 0) return;
+
     raycaster.setFromCamera(screenCenterNdc, camera);
     raycaster.far = 8.5;
     const roots = collectNearbyLandingHailPickRoots(playerPos);

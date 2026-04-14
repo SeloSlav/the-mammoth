@@ -208,21 +208,55 @@ export async function mountFpSession(
   const _interactionPos = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
 
+  /** Pooled audio movement snapshot — mutated each frame, no object literal per frame. */
+  const _audioMovement = {
+    horizontalSpeed: 0,
+    stridePhaseRad: 0,
+    grounded: true,
+    crouch: false,
+    sprint: false,
+    freeLook: false,
+  };
+
+  /**
+   * Smooth display offset — applied to `playerRig.position` on top of the physics `pos`.
+   *
+   * When the server-authoritative reconcile corrects `pos`, we subtract the same correction
+   * from `_displayOffset` so the rendered position doesn't jump.  Each frame we decay
+   * `_displayOffset` toward zero, making corrections invisible to the player.  This is the
+   * same "prediction error smoothing" used by Valve Source Engine / CS:GO.
+   *
+   * Only the render position is offset — `pos` stays accurate so collision checks and
+   * interaction queries always use the physics-correct position.
+   */
+  const _displayOffset = new THREE.Vector3();
+  /** Exponential damp constant for display offset — ~80 ms to close half the gap. */
+  const DISPLAY_OFFSET_DAMP = 12;
+  /** Beyond this distance corrections hard-snap (teleport, cheat detection, etc.). */
+  const DISPLAY_HARD_SNAP_M = 3.0;
+
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
     _interactionPos.set(p.x, p.y, p.z);
     return _interactionPos;
   };
 
-  const syncBuildingFloorPlateVisibility = () => {
+  // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
+  let _lastBandLo = -999;
+  let _lastBandHi = -999;
+
+  const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
     const band = fpElevators.getFloorVisibilityBand(
       pos.x,
       pos.y,
       pos.z,
-      performance.now(),
+      nowMs,
       _floorVisCamWorld.y,
     );
+    if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
+    _lastBandLo = band.lo;
+    _lastBandHi = band.hi;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothAlwaysVisible === true) {
         ch.visible = true;
@@ -370,6 +404,41 @@ export async function mountFpSession(
     maxSupportDropM: fpLocomotionConstants.walkMaxSupportDropM,
     jumpKinematicPlatformVyMps: 0,
     integrationEvalEndWallClockMs: undefined,
+  };
+
+  /**
+   * Pre-allocated step-opts for the main tick loop — only scalar fields change each frame.
+   * Reference fields (pos, prevPos, locoState, input, kinematicSupport) are stable throughout
+   * the session, so we set them once here and mutate only the primitives before each call.
+   */
+  const _mainStepOpts = {
+    pos,
+    prevPos,
+    locoState: loco,
+    input: _input,
+    dtSec: 0,
+    evalWallClockMs: 0,
+    crouch: false,
+    jumpPressedThisFrame: false,
+    bodyYawRad: 0,
+    kinematicSupport: fpElevators.kinematicSupport,
+  };
+
+  /**
+   * Pre-allocated step-opts for the reconcile replay loop — same idea but points to the replay
+   * pool objects (_replayPos, _replayPrevPos, _replayLoco, _replayInput).
+   */
+  const _replayStepOpts = {
+    pos: _replayPos,
+    prevPos: _replayPrevPos,
+    locoState: _replayLoco,
+    input: _replayInput,
+    dtSec: NET_DT_SEC,
+    evalWallClockMs: 0,
+    crouch: false,
+    jumpPressedThisFrame: false,
+    bodyYawRad: 0,
+    kinematicSupport: fpElevators.kinematicSupport,
   };
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `localGameAudio.ts`. */
@@ -560,13 +629,14 @@ export async function mountFpSession(
     }
 
     // Reset pooled replay state — no Vec3 / LocoState allocation.
+    // Only physics state is initialised from the server row; visual state (headBobPhase,
+    // eyeSmoothed) is intentionally left at whatever the replay pool currently holds.
+    // We will NOT copy those back — see below.
     _replayPos.set(serverRow.x, serverRow.y, serverRow.z);
     _replayPrevPos.copy(_replayPos);
     _replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
     _replayLoco.grounded = serverRow.grounded !== 0;
     _replayLoco.jumpQueued = false;
-    _replayLoco.headBobPhase = loco.headBobPhase;
-    _replayLoco.eyeSmoothed = loco.eyeSmoothed;
 
     const replayStartMs = performance.now();
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
@@ -574,24 +644,38 @@ export async function mountFpSession(
       const stepNowMs = replayStartMs + (i - intentsHead) * NET_INTERVAL_MS;
       fpElevators.syncCabEvalClock(stepNowMs);
       inputFromBitsInto(sample.bits, _replayInput);
-      simulatePredictedPlayerStep({
-        pos: _replayPos,
-        prevPos: _replayPrevPos,
-        locoState: _replayLoco,
-        input: _replayInput,
-        dtSec: NET_DT_SEC,
-        evalWallClockMs: stepNowMs,
-        crouch: (sample.bits & 64) !== 0,
-        jumpPressedThisFrame: (sample.bits & 16) !== 0,
-        bodyYawRad: sample.aimYaw,
-        kinematicSupport: fpElevators.kinematicSupport,
-      });
+      _replayStepOpts.evalWallClockMs = stepNowMs;
+      _replayStepOpts.crouch = (sample.bits & 64) !== 0;
+      _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
+      _replayStepOpts.bodyYawRad = sample.aimYaw;
+      simulatePredictedPlayerStep(_replayStepOpts);
     }
-    pos.copy(_replayPos);
+    const corrX = _replayPos.x - pos.x;
+    const corrY = _replayPos.y - pos.y;
+    const corrZ = _replayPos.z - pos.z;
+    const corrDist = Math.hypot(corrX, corrY, corrZ);
+
+    if (corrDist > DISPLAY_HARD_SNAP_M) {
+      // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
+      pos.copy(_replayPos);
+      _displayOffset.set(0, 0, 0);
+    } else if (corrDist > 0.001) {
+      // Small correction: immediately fix physics position but let the visual catch up smoothly.
+      // The player never sees a snap — the render position is pos + _displayOffset, and the
+      // offset decays to zero every frame.
+      pos.copy(_replayPos);
+      _displayOffset.x -= corrX;
+      _displayOffset.y -= corrY;
+      _displayOffset.z -= corrZ;
+    }
+    // Correct physics state only.  Visual-only fields (headBobPhase, eyeSmoothed) are
+    // deliberately NOT overwritten: they belong exclusively to the main-loop timeline and must
+    // never be disturbed by the 20 Hz reconcile.  Touching them was the root cause of:
+    //   • audio hitching  (footstep strideCell jumping forward, firing spurious steps at 20 Hz)
+    //   • hand-animation resets  (viewmodel bob phase discontinuously jumping)
+    //   • perceived "rubber-band" stutter  (now handled by _displayOffset smooth correction)
     loco.velocity.copy(_replayLoco.velocity);
     loco.grounded = _replayLoco.grounded;
-    loco.headBobPhase = _replayLoco.headBobPhase;
-    loco.eyeSmoothed = _replayLoco.eyeSmoothed;
   };
 
   let meleeAttackSeq = 0;
@@ -611,6 +695,7 @@ export async function mountFpSession(
       if (!spawnSynced) {
         pos.set(row.x, row.y, row.z);
         bodyYaw = row.yaw;
+        _displayOffset.set(0, 0, 0);
         spawnSynced = true;
       } else {
         reconcileLocalPredictionToServer(row);
@@ -940,23 +1025,35 @@ export async function mountFpSession(
     fpElevators.syncCabEvalClock(nowMs);
     prevPos.copy(pos);
 
-    const headY = simulatePredictedPlayerStep({
-      pos,
-      prevPos,
-      locoState: loco,
-      input: _input,
-      dtSec: dt,
-      evalWallClockMs: nowMs,
-      crouch: crouchToggle,
-      jumpPressedThisFrame: jumpQueuedBeforeStep,
-      bodyYawRad: bodyYaw,
-      kinematicSupport: fpElevators.kinematicSupport,
-    });
+    _mainStepOpts.dtSec = dt;
+    _mainStepOpts.evalWallClockMs = nowMs;
+    _mainStepOpts.crouch = crouchToggle;
+    _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep;
+    _mainStepOpts.bodyYawRad = bodyYaw;
+    const headY = simulatePredictedPlayerStep(_mainStepOpts);
 
     fpElevators.tick(dt, nowMs, pos);
     fpElevators.syncLandingHailUi(camera, pos, nowMs);
 
-    playerRig.position.set(pos.x, pos.y, pos.z);
+    // Decay the display offset — exponential approach to zero each frame.
+    // Any server correction applied this frame (or earlier) smoothly blends out.
+    if (_displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0) {
+      const k = Math.exp(-DISPLAY_OFFSET_DAMP * dt);
+      _displayOffset.x *= k;
+      _displayOffset.y *= k;
+      _displayOffset.z *= k;
+      // Clamp tiny residuals to exact zero so the condition above short-circuits next frame.
+      if (Math.abs(_displayOffset.x) < 1e-5) _displayOffset.x = 0;
+      if (Math.abs(_displayOffset.y) < 1e-5) _displayOffset.y = 0;
+      if (Math.abs(_displayOffset.z) < 1e-5) _displayOffset.z = 0;
+    }
+
+    // Render at physics position + smooth display offset.
+    playerRig.position.set(
+      pos.x + _displayOffset.x,
+      pos.y + _displayOffset.y,
+      pos.z + _displayOffset.z,
+    );
     playerRig.rotation.y = bodyYaw;
     headPivot.position.y = headY;
     headPivot.rotation.set(0, 0, 0);
@@ -970,14 +1067,13 @@ export async function mountFpSession(
       worldAudio.syncListener();
     }
 
-    localAudio.update(dt, {
-      horizontalSpeed: hs,
-      stridePhaseRad: loco.headBobPhase,
-      grounded: loco.grounded,
-      crouch: crouchToggle,
-      sprint: _input.sprint,
-      freeLook,
-    });
+    _audioMovement.horizontalSpeed = hs;
+    _audioMovement.stridePhaseRad = loco.headBobPhase;
+    _audioMovement.grounded = loco.grounded;
+    _audioMovement.crouch = crouchToggle;
+    _audioMovement.sprint = _input.sprint;
+    _audioMovement.freeLook = freeLook;
+    localAudio.update(dt, _audioMovement);
     const walkStrength = THREE.MathUtils.clamp(
       hs / fpLocomotionConstants.sprintSpeedMps,
       0,
@@ -1089,7 +1185,7 @@ export async function mountFpSession(
       setFpPickupPrompt(null);
     }
 
-    syncBuildingFloorPlateVisibility();
+    syncBuildingFloorPlateVisibility(nowMs);
     renderer.render(scene, camera);
     onFpSessionPostRenderFrame(nowMs);
     logFpPerf();
