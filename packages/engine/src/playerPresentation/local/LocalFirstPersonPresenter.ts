@@ -251,6 +251,11 @@ export class LocalFirstPersonPresenter {
     return this.rightHandRig;
   }
 
+  /** Shared FP socket on the hand used by weapon roots; editor consumables attach here too. */
+  getFpGripAnchorObject(): THREE.Object3D | undefined {
+    return this.weaponGripAnchor;
+  }
+
   /** Rest pose used before swing offsets (`fpViewmodel.rigRoot` + clamps). */
   getFpRigRestLocal(): {
     position: THREE.Vector3;

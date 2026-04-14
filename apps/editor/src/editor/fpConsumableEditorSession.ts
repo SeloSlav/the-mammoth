@@ -5,15 +5,11 @@ import {
   createGltfModelLoadRegistry,
   fpLocomotionConstants,
   FP_MELEE_HAND_RIGHT,
+  LocalFirstPersonPresenter,
   type FpAuthoringPick,
 } from "@the-mammoth/engine";
 
-/** Mirrors the shoulder + lift defaults from LocalFirstPersonPresenter. */
-const HAND_RIG_DEFAULT_POS = new THREE.Vector3(0.34, -0.1, 0.08);
-/** Default hand rotation (matches default in LocalFirstPersonPresenter: Euler XYZ 1.5708, 0, π). */
-const HAND_EULER_DEFAULT = new THREE.Euler(1.5708, 0, Math.PI, "XYZ");
-
-/** Default consumable mount position in head-pitch space — near the grip, in front of the player. */
+/** Default consumable mount position relative to the shared hand grip anchor. */
 const CONSUMABLE_MOUNT_DEFAULT_POS = new THREE.Vector3(0.32, -0.18, 0.38);
 
 export type ConsumableMount = {
@@ -39,6 +35,7 @@ export class FpConsumableEditorSession {
   private readonly headCameraPitch: THREE.Object3D;
   private readonly fpCamera: THREE.PerspectiveCamera;
   private readonly rig: THREE.Group;
+  private presenter?: LocalFirstPersonPresenter;
   private consumableRoot: THREE.Group | null = null;
   private disposed = false;
   private initError: string | null = null;
@@ -78,25 +75,19 @@ export class FpConsumableEditorSession {
 
     try {
       const loader = new GLTFLoader();
-      // Hand — reuse the registry for the hand (it may already be cached by weapon session).
-      const handRegistry = createGltfModelLoadRegistry();
-      await handRegistry.preload(FP_MELEE_HAND_RIGHT);
-      const handResult = handRegistry.instantiateLoaded(FP_MELEE_HAND_RIGHT);
-      if (!handResult.ok) throw new Error(`Hand GLB failed: ${handResult.error}`);
-
-      const handRig = new THREE.Group();
-      handRig.name = "fp_consumable_hand_rig";
-      handRig.position.copy(HAND_RIG_DEFAULT_POS);
-      const handScene = handResult.root as THREE.Object3D;
-      handScene.rotation.copy(HAND_EULER_DEFAULT);
-      handScene.traverse((o) => {
-        o.castShadow = false;
-        o.frustumCulled = false;
+      const registry = createGltfModelLoadRegistry();
+      await registry.preload(FP_MELEE_HAND_RIGHT);
+      const presenter = new LocalFirstPersonPresenter({
+        viewModelParent: headPitch,
+        modelRegistry: registry,
+        weaponDefinition: null,
       });
-      handRig.add(handScene);
-      headPitch.add(handRig);
+      await presenter.initViewmodel();
+      presenter.setAuthoringFrozen(true);
+      session.presenter = presenter;
+      const gripAnchor = presenter.getFpGripAnchorObject();
+      if (!gripAnchor) throw new Error("FP grip anchor missing");
 
-      // Consumable mesh — loaded directly (not in the typed ModelAssetKey registry).
       const consumableGltf = await loader.loadAsync(consumableGltfUri(consumableId));
       const consumableRoot = new THREE.Group();
       consumableRoot.name = `fp_consumable_root_${consumableId}`;
@@ -106,10 +97,12 @@ export class FpConsumableEditorSession {
         o.frustumCulled = false;
       });
       consumableRoot.add(consumableGltf.scene);
-      headPitch.add(consumableRoot);
+      gripAnchor.add(consumableRoot);
       session.consumableRoot = consumableRoot;
     } catch (e) {
       session.initError = e instanceof Error ? e.message : String(e);
+      session.presenter?.dispose();
+      session.presenter = undefined;
       scene.remove(rig);
     }
 
@@ -185,6 +178,8 @@ export class FpConsumableEditorSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.presenter?.dispose();
+    this.presenter = undefined;
     this.scene.remove(this.rig);
     this.consumableRoot = null;
   }
