@@ -44,11 +44,13 @@ import {
 } from "./fpElevatorVolumes.js";
 import {
   fpElevLandingExteriorDoorAimTargetWorld,
+  fpElevLandingExteriorDoorInCabDockedInteract,
   fpElevLandingExteriorDoorInteractPlateLocal,
   advanceExteriorDoorVisSwingTowardAuth,
   EXTERIOR_DOOR_ANIM_SPEED,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
+  LANDING_PASSAGE_DOCK_Y_TOL_M,
 } from "./fpElevatorLandingExteriorDoor.js";
 import { visitFpElevatorWorldCollisionAabbsInXZ } from "./fpElevatorWorldCollision.js";
 import type {
@@ -72,6 +74,7 @@ export {
   fpElevatorDoorSideSlackM,
   fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorHudCarContainsLocalPoint,
+  fpElevPlayerInsideCabAuthoritativePlateLocal,
   fpElevatorPlateLocalClampBounds,
   fpElevatorPlateLocalInCabPhysicsVolume,
   fpElevatorRiderSnapContainsLocalPoint,
@@ -370,10 +373,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       | null = null;
     for (const [shaftKey, rowCar] of latest) {
       const layout = layoutByKey.get(shaftKey);
-      if (!layout) continue;
+      const vis = visuals.get(shaftKey);
+      if (!layout || !vis) continue;
       const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
       const plateX = ox + rowCar.plateX;
       const plateZ = oz + rowCar.plateZ;
+      const cabY = getCabY(shaftKey);
+      const phaseMoving = rowCar.phase === ELEVATOR_PHASE_MOVING;
       for (let level = 1; level <= maxLevel; level++) {
         const fy = feetYForLayout(layout, level);
         const lx = px - plateX;
@@ -399,7 +405,21 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
             py,
             fy,
           );
-        if (!nearDoor) {
+        const inCabDocked =
+          Number.isFinite(cabY) &&
+          fpElevLandingExteriorDoorInCabDockedInteract({
+            plateWorldX: plateX,
+            plateWorldZ: plateZ,
+            px,
+            py,
+            pz,
+            landingFeetWorldY: fy,
+            cabFeetWorldY: cabY,
+            inner: vis.inner,
+            phaseMoving,
+            dockYTolM: LANDING_PASSAGE_DOCK_Y_TOL_M,
+          });
+        if (!nearDoor && !inCabDocked) {
           continue;
         }
         const aim = fpElevLandingExteriorDoorAimTargetWorld(
@@ -411,7 +431,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           fy,
         );
         const dist = Math.hypot(px - aim.x, py - aim.y, pz - aim.z);
-        const score = -dist;
+        const score = inCabDocked ? 1_000_000 - dist : -dist;
         if (best == null || score > best.score) {
           best = { shaftKey, level, score };
         }

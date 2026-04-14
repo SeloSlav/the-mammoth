@@ -753,13 +753,57 @@ fn exterior_door_toggle_pose_score(p: &PlayerPose, spec: &ElevShaftSpec, level: 
     d_out.min(d_in) + (p.y - cy).abs() * 0.5
 }
 
+fn in_cab_docked_at_landing_for_spec(
+    ctx: &ReducerContext,
+    p: &PlayerPose,
+    spec: &'static ElevShaftSpec,
+    level: u32,
+) -> bool {
+    let level = level.clamp(1, MAX_LEVEL);
+    let Some(car) = ctx
+        .db
+        .elevator_car()
+        .shaft_key()
+        .find(&spec.shaft_key.to_string())
+    else {
+        return false;
+    };
+    if car.phase == PH_MOVING {
+        return false;
+    }
+    if !player_inside_cab(p, &car) {
+        return false;
+    }
+    (car.cab_floor_y - support_y(level)).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
+}
+
+fn exterior_door_toggle_eligible_score(
+    ctx: &ReducerContext,
+    p: &PlayerPose,
+    spec: &'static ElevShaftSpec,
+    level: u32,
+) -> Option<f32> {
+    let level = level.clamp(1, MAX_LEVEL);
+    if in_cab_docked_at_landing_for_spec(ctx, p, spec, level) {
+        return Some(-1_000_000.0);
+    }
+    if near_exterior_door_toggle_pose(p, spec, level) {
+        return Some(exterior_door_toggle_pose_score(p, spec, level));
+    }
+    None
+}
+
 fn resolve_exterior_door_toggle_target(
+    ctx: &ReducerContext,
     p: &PlayerPose,
     requested_shaft_key: &str,
     requested_level: u32,
 ) -> Option<(&'static ElevShaftSpec, u32)> {
     let requested_level = requested_level.clamp(1, MAX_LEVEL);
     if let Some(spec) = spec_for_key(requested_shaft_key) {
+        if in_cab_docked_at_landing_for_spec(ctx, p, spec, requested_level) {
+            return Some((spec, requested_level));
+        }
         if near_exterior_door_toggle_pose(p, spec, requested_level) {
             return Some((spec, requested_level));
         }
@@ -768,10 +812,9 @@ fn resolve_exterior_door_toggle_target(
     let mut best: Option<(&'static ElevShaftSpec, u32, f32)> = None;
     for spec in MAMUTH_ELEVATOR_SPECS {
         for level in 1..=MAX_LEVEL {
-            if !near_exterior_door_toggle_pose(p, spec, level) {
+            let Some(score) = exterior_door_toggle_eligible_score(ctx, p, spec, level) else {
                 continue;
-            }
-            let score = exterior_door_toggle_pose_score(p, spec, level);
+            };
             if best.is_none_or(|(_, _, best_score)| score < best_score) {
                 best = Some((spec, level, score));
             }
@@ -787,9 +830,12 @@ fn set_landing_exterior_door_desired_open(
     requested_level: u32,
     desired_open: u8,
 ) {
-    let Some((spec, lv)) =
-        resolve_exterior_door_toggle_target(pose, requested_shaft_key, requested_level)
-    else {
+    let Some((spec, lv)) = resolve_exterior_door_toggle_target(
+        ctx,
+        pose,
+        requested_shaft_key,
+        requested_level,
+    ) else {
         return;
     };
     let target_shaft_key = spec.shaft_key.to_string();
@@ -1230,7 +1276,7 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
     };
-    let Some((spec, lv)) = resolve_exterior_door_toggle_target(&pose, &shaft_key, level) else {
+    let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level) else {
         return;
     };
     let target_shaft_key = spec.shaft_key.to_string();

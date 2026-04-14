@@ -28,6 +28,8 @@ import {
 import type { ElevatorDoorFace } from "./fpElevatorLabels.js";
 import type { Vector3 } from "three";
 import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
+import type { FpElevatorInnerExtents } from "./fpElevatorVolumes.js";
+import { fpElevPlayerInsideCabAuthoritativePlateLocal } from "./fpElevatorVolumes.js";
 
 export {
   CLOSED_CAB_OUTSIDE_SLAB_IN,
@@ -195,6 +197,36 @@ export function fpElevLandingExteriorDoorNearWorldPose(
   if (!nearEither) return false;
   const cy = landingFeetWorldY + 1.1;
   return Math.abs(py - cy) <= EXTERIOR_INTERACT_WORLD_Y_HALF_M;
+}
+
+/**
+ * True when the player may toggle the corridor (landing exterior) door from inside the cab while
+ * the car is docked at that landing. Matches server `in_cab_docked_at_landing_for_spec` /
+ * `player_inside_cab`.
+ */
+export function fpElevLandingExteriorDoorInCabDockedInteract(opts: {
+  plateWorldX: number;
+  plateWorldZ: number;
+  px: number;
+  py: number;
+  pz: number;
+  landingFeetWorldY: number;
+  cabFeetWorldY: number;
+  inner: FpElevatorInnerExtents;
+  phaseMoving: boolean;
+  dockYTolM: number;
+}): boolean {
+  if (opts.phaseMoving) return false;
+  if (Math.abs(opts.cabFeetWorldY - opts.landingFeetWorldY) > opts.dockYTolM) return false;
+  const lx = opts.px - opts.plateWorldX;
+  const lz = opts.pz - opts.plateWorldZ;
+  return fpElevPlayerInsideCabAuthoritativePlateLocal(
+    lx,
+    lz,
+    opts.py,
+    opts.cabFeetWorldY,
+    opts.inner,
+  );
 }
 
 /**

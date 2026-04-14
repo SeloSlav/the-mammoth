@@ -68,6 +68,23 @@ export function fpElevatorHudCarContainsLocalPoint(
   return true;
 }
 
+/**
+ * Plate-local “inside cab” for gameplay reducers — matches
+ * `apps/server/src/elevator/mod.rs` `player_inside_cab` (XZ 0.9 of gameplay inner half, vertical band).
+ */
+export function fpElevPlayerInsideCabAuthoritativePlateLocal(
+  lx: number,
+  lz: number,
+  py: number,
+  cabFeetY: number,
+  inner: FpElevatorInnerExtents,
+): boolean {
+  const { halfX: hx, halfZ: hz, innerH: iy } = inner;
+  if (Math.abs(lx) > hx * 0.9 || Math.abs(lz) > hz * 0.9) return false;
+  if (py < cabFeetY - 0.2 || py > cabFeetY + iy + 0.35) return false;
+  return true;
+}
+
 /** Match server `door_side_slack_m` — extra meters past the inner sill on the door side. */
 export function fpElevatorDoorSideSlackM(doorOpen01: number): number {
   const o = doorOpen01;
