@@ -11,6 +11,9 @@ export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
 export const EXTERIOR_DOOR_ANIM_SPEED = 3.0;
 /** Closed swing: static slab only while essentially shut (matches server `EXT_DOOR_SOLID_SLAB_MAX_SWING`). */
 export const EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING = 0.025;
+export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.55;
+export const EXTERIOR_DOOR_HINGE_OUTSET = 0.048;
+export const EXTERIOR_DOOR_PANEL_HALF_THICK = 0.10;
 
 export const EXTERIOR_INTERACT_L0 = -0.28;
 export const EXTERIOR_INTERACT_L1 = 0.82;

@@ -34,6 +34,15 @@ import {
   computeWorldCollisionSourceFingerprint,
 } from "../../../../scripts/worldCollisionArtifacts";
 import { assertValidWeaponPresentationJson } from "./weaponPresentationSaveValidate.js";
+import { assertValidConsumablePresentationJson } from "./consumablePresentationSaveValidate.js";
+
+/**
+ * IDs accepted by the save-consumable-presentation endpoint.
+ * Mirrors {@link FP_AUTHORABLE_CONSUMABLE_IDS} in consumablePresentationDiskSave.ts —
+ * add new consumable IDs here when their GLB assets are committed.
+ */
+const FP_CONSUMABLE_AUTHORABLE_IDS: readonly string[] = ["water_bottle", "apple"];
+const FP_CONSUMABLE_AUTHORABLE_ID_SET = new Set<string>(FP_CONSUMABLE_AUTHORABLE_IDS);
 
 const FLOOR_DOC_ID_RE = /^floor_[a-z0-9_]+$/;
 const INTERIOR_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
@@ -228,6 +237,12 @@ export function editorDevMiddleware(
       }
       if (path === "/__editor/save-weapon-presentation" && req.method === "POST") {
         return void (await handleSaveWeaponPresentation(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/consumable-asset-survey" && req.method === "GET") {
+        return void (await handleConsumableAssetSurvey(repoRoot, res));
+      }
+      if (path === "/__editor/save-consumable-presentation" && req.method === "POST") {
+        return void (await handleSaveConsumablePresentation(repoRoot, req, res, next));
       }
     } catch (e) {
       res.statusCode = 500;
@@ -590,6 +605,78 @@ async function handleSaveFloorOverride(
     relPath: (id) => path.join(EDITOR_FLOOR_OVERRIDES_DIR, `${id}.json`),
     parseJson: (raw) => FloorOverrideDocSchema.parse(raw),
   });
+}
+
+async function handleConsumableAssetSurvey(repoRoot: string, res: ServerResponse): Promise<void> {
+  const consumablesModelDir = path.resolve(
+    repoRoot,
+    "apps/client/public/static/models/consumables",
+  );
+  const contentConsumablesDir = path.resolve(repoRoot, "content/consumables");
+
+  // GLBs: flat layout — consumables/{id}.glb
+  const glbIds = await readWeaponDirStems(consumablesModelDir, ".glb");
+
+  const presentationStems = await readPresentationStems(contentConsumablesDir);
+  const authorableSet = FP_CONSUMABLE_AUTHORABLE_ID_SET;
+  const glbSet = new Set(glbIds);
+
+  const glbWithoutAuthorable = glbIds.filter((id) => !authorableSet.has(id));
+  const authorableWithoutGlb = FP_CONSUMABLE_AUTHORABLE_IDS.filter((id) => !glbSet.has(id));
+  const presentationWithoutAuthorable = presentationStems.filter((id) => !authorableSet.has(id));
+
+  sendJson(res, {
+    authorableIds: [...FP_CONSUMABLE_AUTHORABLE_IDS],
+    glbIds,
+    presentationStems,
+    glbWithoutAuthorable,
+    authorableWithoutGlb,
+    presentationWithoutAuthorable,
+  });
+}
+
+async function handleSaveConsumablePresentation(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { consumableId?: string; json?: string };
+    if (
+      typeof body.consumableId !== "string" ||
+      !FP_CONSUMABLE_AUTHORABLE_ID_SET.has(body.consumableId)
+    ) {
+      res.statusCode = 400;
+      res.end("missing or invalid consumableId");
+      return;
+    }
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json");
+      return;
+    }
+    assertValidConsumablePresentationJson(JSON.parse(body.json));
+    const abs = safeContentFile(
+      repoRoot,
+      path.join("consumables", `${body.consumableId}.presentation.json`),
+    );
+    if (!abs) {
+      res.statusCode = 403;
+      res.end("bad path");
+      return;
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true }));
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
 }
 
 async function handleSaveBuilding(

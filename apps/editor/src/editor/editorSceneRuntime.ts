@@ -24,10 +24,12 @@ import {
 import { registerEditorSpawnCalculator } from "./spawnBridge.js";
 import { registerEditorNavigationBridge } from "./editorNavigationBridge.js";
 import { FpViewmodelEditorSession } from "./fpViewmodelEditorSession.js";
+import { FpConsumableEditorSession } from "./fpConsumableEditorSession.js";
 import {
   getFpViewmodelAuthoringPicks,
   registerFpViewmodelAuthoringBridge,
 } from "./fpViewmodelAuthoringBridge.js";
+import { registerFpConsumableAuthoringBridge } from "./fpConsumableAuthoringBridge.js";
 import { resolveFpAuthorPickId } from "./fpAuthorPickResolve.js";
 import { FpSelectionAabbOutline } from "./fpSelectionAabbOutline.js";
 import {
@@ -443,6 +445,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
   let fpSession: FpViewmodelEditorSession | null = null;
   let fpSessionLoading = false;
+  let fpConsumableSession: FpConsumableEditorSession | null = null;
+  let fpConsumableSessionLoading = false;
   /** Guards nested store updates during FP teardown (`setFpAuthorPickList([])`, etc.). */
   let fpTeardownInProgress = false;
   /** Wireframe at canonical rig rest (head-pitch space); editor-only. */
@@ -619,17 +623,27 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     fpDefaultRigAnchor = lines;
   }
 
-  function frameOrbitOnFpViewmodel(): void {
-    const pres = fpSession?.getPresenter();
-    if (!pres) return;
+  function frameOrbitOnActiveFpSession(): void {
     scene.updateMatrixWorld(true);
     const t = new THREE.Vector3();
-    if (!pres.getAuthoringOrbitTargetWorld(t)) return;
+    const st = useEditorStore.getState();
+    let hit = false;
+    if (st.mode === "fp_viewmodel") {
+      hit = fpSession?.getPresenter()?.getAuthoringOrbitTargetWorld(t) ?? false;
+    } else if (st.mode === "fp_consumable") {
+      hit = fpConsumableSession?.getAuthoringOrbitTarget(t) ?? false;
+    }
+    if (!hit) return;
     orbitControls.target.copy(t);
     const dir = new THREE.Vector3(0.58, 0.22, 0.78).normalize();
     const dist = Math.min(1.05, orbitControls.maxDistance * 0.35);
     camera.position.copy(t).addScaledVector(dir, dist);
     orbitControls.update();
+  }
+
+  /** Kept for compatibility with existing weapon authoring bridge registration. */
+  function frameOrbitOnFpViewmodel(): void {
+    frameOrbitOnActiveFpSession();
   }
 
   /**
@@ -678,11 +692,29 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     useEditorStore.getState().setFpAuthorPickList([]);
   }
 
+  function disposeFpConsumableRuntimeOnly() {
+    if (fpTeardownInProgress) return;
+    levelEditorTransformGesture = false;
+    transformControls.enabled = true;
+    rewireCanvasPrimaryPointerListeners();
+    registerFpConsumableAuthoringBridge(null);
+    registerFpViewmodelAuthoringBridge(null);
+    lastFpGizmoAttachKey = "";
+    fpClickCandidate = null;
+    fpSelectionOutline.setFromObject(null);
+    withProgrammaticTransformControls(() => transformControls.detach());
+    fpConsumableSession?.dispose();
+    fpConsumableSession = null;
+    fpConsumableSessionLoading = false;
+    useEditorStore.getState().setFpAuthorPickList([]);
+  }
+
   function teardownFpSession() {
     if (fpTeardownInProgress) return;
     fpTeardownInProgress = true;
     try {
       disposeFpViewmodelRuntimeOnly();
+      disposeFpConsumableRuntimeOnly();
       contentRoot.visible = true;
       grid.visible = true;
       shouldFrameAfterRebuild = true;
@@ -703,12 +735,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   function syncFpTransformAttachment() {
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
-      const pres = fpSession?.getPresenter();
-      if (!pres) {
-        lastFpGizmoAttachKey = "";
-        return;
-      }
-      const picks = pres.getAuthoringPickList();
+      const picks =
+        s.mode === "fp_viewmodel"
+          ? (fpSession?.getPresenter()?.getAuthoringPickList() ?? [])
+          : s.mode === "fp_consumable"
+            ? (fpConsumableSession?.getPickList() ?? [])
+            : [];
       if (picks.length === 0) {
         transformControls.detach();
         lastFpGizmoAttachKey = "";
@@ -742,7 +774,10 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   /** Re-attach gizmo when store-driven target/mode/snap changed (runs from RAF; avoids missed zustand subscribe edges). */
   function maybeSyncFpGizmoFromStore() {
     const s = useEditorStore.getState();
-    if (s.mode !== "fp_viewmodel" || !fpSession?.getPresenter()) {
+    const hasFpPicks =
+      (s.mode === "fp_viewmodel" && fpSession?.getPresenter() != null) ||
+      (s.mode === "fp_consumable" && fpConsumableSession?.isReady());
+    if (!hasFpPicks) {
       lastFpGizmoAttachKey = "";
       return;
     }
@@ -824,9 +859,83 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       });
   }
 
+  function ensureFpConsumableSession() {
+    if (fpConsumableSession || fpConsumableSessionLoading) return;
+    fpConsumableSessionLoading = true;
+    const requestedConsumableId = useEditorStore.getState().fpAuthorConsumableId;
+    useEditorStore.getState().setFpAuthorInitMessage("Loading FP consumable…");
+    void FpConsumableEditorSession.create(scene, requestedConsumableId)
+      .then((s) => {
+        fpConsumableSessionLoading = false;
+        const store = useEditorStore.getState();
+        if (
+          store.mode !== "fp_consumable" ||
+          store.fpAuthorConsumableId !== requestedConsumableId
+        ) {
+          s.dispose();
+          if (store.mode === "fp_consumable") ensureFpConsumableSession();
+          else useEditorStore.getState().setFpAuthorInitMessage(null);
+          return;
+        }
+        if (s.getInitError()) {
+          useEditorStore.getState().setFpAuthorInitMessage(s.getInitError());
+          s.dispose();
+          return;
+        }
+        fpConsumableSession = s;
+        useEditorStore.getState().setFpAuthorInitMessage(null);
+        useEditorStore.getState().bumpFpAuthorLive();
+
+        // Load authored presentation JSON and apply it to the session.
+        void (async () => {
+          try {
+            const r = await fetch(
+              `/content/consumables/${requestedConsumableId}.presentation.json`,
+              { cache: "no-store" },
+            );
+            if (!r.ok) return;
+            const doc = (await r.json()) as { firstPerson?: { mount?: unknown } };
+            const mount = doc?.firstPerson?.mount;
+            if (mount && typeof mount === "object") {
+              fpConsumableSession?.applyMount(mount as Parameters<typeof s.applyMount>[0]);
+            }
+          } catch {
+            /* ignore — session starts at default position */
+          }
+        })();
+
+        registerFpConsumableAuthoringBridge({
+          getSession: () => fpConsumableSession,
+        });
+        // Re-use the same picks bridge so the gizmo infra works.
+        registerFpViewmodelAuthoringBridge({
+          getPicks: () => fpConsumableSession?.getPickList() ?? [],
+          frameOrbitOnViewmodel: frameOrbitOnActiveFpSession,
+        });
+        contentRoot.visible = false;
+        grid.visible = false;
+        frameOrbitOnActiveFpSession();
+        syncTransformAttachment();
+      })
+      .catch((e) => {
+        fpConsumableSessionLoading = false;
+        const store = useEditorStore.getState();
+        if (
+          store.mode !== "fp_consumable" ||
+          store.fpAuthorConsumableId !== requestedConsumableId
+        ) {
+          if (store.mode === "fp_consumable") ensureFpConsumableSession();
+          return;
+        }
+        useEditorStore
+          .getState()
+          .setFpAuthorInitMessage(e instanceof Error ? e.message : String(e));
+      });
+  }
+
   const rebuildStructural = () => {
     const s = useEditorStore.getState();
-    if (s.mode === "fp_viewmodel") return;
+    if (s.mode === "fp_viewmodel" || s.mode === "fp_consumable") return;
     const ep = s.contentStructureEpoch;
     if (ep === lastBuiltContentEpoch) return;
     lastBuiltContentEpoch = ep;
@@ -951,6 +1060,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       g.aspect = w / h;
       g.updateProjectionMatrix();
     }
+    if (fpConsumableSession) {
+      const g = fpConsumableSession.getGameplayCamera();
+      g.aspect = w / h;
+      g.updateProjectionMatrix();
+    }
   };
   setSize();
   const ro = new ResizeObserver(setSize);
@@ -964,7 +1078,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const cam =
       st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : camera;
+        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+          ? fpConsumableSession.getGameplayCamera()
+          : camera;
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
     forward.normalize();
     return {
@@ -979,12 +1095,16 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   const unsub = useEditorStore.subscribe((s) => {
     editorStoreSyncDepth++;
     try {
-      if (s.mode !== prev.mode && s.mode !== "fp_viewmodel") {
+      const isFpMode = (m: typeof s.mode) =>
+        m === "fp_viewmodel" || m === "fp_consumable";
+      if (s.mode !== prev.mode && !isFpMode(s.mode)) {
         shouldFrameAfterRebuild = true;
       }
-      if (s.mode === "fp_viewmodel" && prev.mode !== "fp_viewmodel") {
+      if (isFpMode(s.mode) && !isFpMode(prev.mode)) {
         document.exitPointerLock?.();
       }
+
+      // ── Weapon FP viewmodel ──────────────────────────────────────────────────
       if (s.mode === "fp_viewmodel") {
         if (
           editorStoreSyncDepth === 1 &&
@@ -1000,11 +1120,58 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           grid.visible = false;
         }
       } else if (prev.mode === "fp_viewmodel" && !fpTeardownInProgress) {
-        teardownFpSession();
+        disposeFpViewmodelRuntimeOnly();
+        if (!isFpMode(s.mode)) {
+          contentRoot.visible = true;
+          grid.visible = true;
+          shouldFrameAfterRebuild = true;
+          camera.position.set(-38, 28, 22);
+          camera.lookAt(2, 18, 0);
+          orbitControls.target.set(0, 1.45, 0);
+          orbitControls.mouseButtons = {
+            LEFT: MOUSE.ROTATE,
+            MIDDLE: MOUSE.DOLLY,
+            RIGHT: MOUSE.PAN,
+          };
+          orbitControls.update();
+        }
       }
 
-      if (s.mode !== "fp_viewmodel") {
-        if (prev.mode === "fp_viewmodel") {
+      // ── Consumable FP viewer ─────────────────────────────────────────────────
+      if (s.mode === "fp_consumable") {
+        if (
+          editorStoreSyncDepth === 1 &&
+          prev.mode === "fp_consumable" &&
+          s.fpAuthorConsumableId !== prev.fpAuthorConsumableId &&
+          (fpConsumableSession || fpConsumableSessionLoading)
+        ) {
+          disposeFpConsumableRuntimeOnly();
+        }
+        ensureFpConsumableSession();
+        if (fpConsumableSession?.isReady()) {
+          contentRoot.visible = false;
+          grid.visible = false;
+        }
+      } else if (prev.mode === "fp_consumable" && !fpTeardownInProgress) {
+        disposeFpConsumableRuntimeOnly();
+        if (!isFpMode(s.mode)) {
+          contentRoot.visible = true;
+          grid.visible = true;
+          shouldFrameAfterRebuild = true;
+          camera.position.set(-38, 28, 22);
+          camera.lookAt(2, 18, 0);
+          orbitControls.target.set(0, 1.45, 0);
+          orbitControls.mouseButtons = {
+            LEFT: MOUSE.ROTATE,
+            MIDDLE: MOUSE.DOLLY,
+            RIGHT: MOUSE.PAN,
+          };
+          orbitControls.update();
+        }
+      }
+
+      if (!isFpMode(s.mode)) {
+        if (isFpMode(prev.mode)) {
           levelEditorTransformGesture = false;
           transformControls.enabled = true;
         }
@@ -1036,15 +1203,18 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       }
 
       const tcFp =
-        s.mode === "fp_viewmodel" &&
-        Boolean(fpSession?.getPresenter()) &&
+        isFpMode(s.mode) &&
+        (s.mode === "fp_viewmodel"
+          ? Boolean(fpSession?.getPresenter())
+          : fpConsumableSession?.isReady() === true) &&
         (s.fpAuthorTargetId !== prev.fpAuthorTargetId ||
           s.fpAuthorWeaponId !== prev.fpAuthorWeaponId ||
+          s.fpAuthorConsumableId !== prev.fpAuthorConsumableId ||
           s.fpAuthorCamera !== prev.fpAuthorCamera ||
           s.transformMode !== prev.transformMode ||
           s.gridSnapM !== prev.gridSnapM);
       const tcLevel =
-        s.mode !== "fp_viewmodel" &&
+        !isFpMode(s.mode) &&
         (s.selectedId !== prev.selectedId ||
           s.transformMode !== prev.transformMode ||
           s.gridSnapM !== prev.gridSnapM ||
@@ -1065,12 +1235,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
        */
       const gizmoDragging = transformControls.dragging === true;
       const wantOrbit =
-        (s.mode === "fp_viewmodel" && s.fpAuthorCamera === "orbit") ||
-        (s.mode !== "fp_viewmodel" && s.cameraMode !== "fly");
-      const wantFly = s.mode !== "fp_viewmodel" && s.cameraMode === "fly";
+        (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") ||
+        (!isFpMode(s.mode) && s.cameraMode !== "fly");
+      const wantFly = !isFpMode(s.mode) && s.cameraMode === "fly";
       orbitControls.enabled = !gizmoDragging && wantOrbit;
       flyControls.enabled = !gizmoDragging && wantFly;
-      if (s.mode === "fp_viewmodel" && s.fpAuthorCamera === "orbit") {
+      if (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") {
         orbitControls.mouseButtons = {
           LEFT: null,
           MIDDLE: MOUSE.ROTATE,
@@ -1101,11 +1271,15 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     }
   });
 
-  // Subscribers are not invoked on register — cold-start default `fp_viewmodel` must bootstrap here.
+  // Subscribers are not invoked on register — cold-start default FP modes must bootstrap here.
   {
     const st = useEditorStore.getState();
     if (st.mode === "fp_viewmodel") {
       ensureFpSession();
+    } else if (st.mode === "fp_consumable") {
+      ensureFpConsumableSession();
+    }
+    if (st.mode === "fp_viewmodel" || st.mode === "fp_consumable") {
       orbitControls.enabled = st.fpAuthorCamera === "orbit";
       if (st.fpAuthorCamera === "orbit") {
         orbitControls.mouseButtons = {
@@ -1136,7 +1310,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const pickCam =
       st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : camera;
+        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+          ? fpConsumableSession.getGameplayCamera()
+          : camera;
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1150,7 +1326,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       return;
     }
 
-    if (st.mode === "fp_viewmodel") {
+    if (st.mode === "fp_viewmodel" || st.mode === "fp_consumable") {
       fpClickCandidate = { x: ev.clientX, y: ev.clientY };
       return;
     }
@@ -1210,7 +1386,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (ev.currentTarget !== canvas) return;
 
-    if (st.mode !== "fp_viewmodel") {
+    if (st.mode !== "fp_viewmodel" && st.mode !== "fp_consumable") {
       fpClickCandidate = null;
       return;
     }
@@ -1221,9 +1397,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (Math.hypot(dx, dy) > 5) return;
 
     const pickCam =
-      st.fpAuthorCamera === "gameplay" && fpSession
+      st.fpAuthorCamera === "gameplay" && st.mode === "fp_viewmodel" && fpSession
         ? fpSession.getGameplayCamera()
-        : camera;
+        : st.fpAuthorCamera === "gameplay" && st.mode === "fp_consumable" && fpConsumableSession
+          ? fpConsumableSession.getGameplayCamera()
+          : camera;
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1257,6 +1435,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     lastTickMs = now;
     const st = useEditorStore.getState();
     const tcDragging = transformControls.dragging === true;
+    const inFpMode = st.mode === "fp_viewmodel" || st.mode === "fp_consumable";
     if (st.mode === "fp_viewmodel" && fpSession?.getPresenter()) {
       const pres = fpSession.getPresenter()!;
       if (!tcDragging) {
@@ -1294,25 +1473,49 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         (p) => p.id === useEditorStore.getState().fpAuthorTargetId,
       )?.object;
       fpSelectionOutline.setFromObject(sel ?? null);
+    } else if (st.mode === "fp_consumable" && fpConsumableSession?.isReady()) {
+      const picksMeta = fpConsumableSession
+        .getPickList()
+        .map((p) => ({ id: p.id, label: p.label }));
+      useEditorStore.getState().setFpAuthorPickList(picksMeta);
+      if (tcDragging) {
+        fpConsumableSession.applyAuthoringPitchOnly(st.fpAuthorPitchRad);
+      } else {
+        fpConsumableSession.tick(dt, st.fpAuthorPitchRad);
+        maybeSyncFpGizmoFromStore();
+      }
+      const picks = fpConsumableSession.getPickList();
+      const sel = picks.find(
+        (p) => p.id === useEditorStore.getState().fpAuthorTargetId,
+      )?.object;
+      fpSelectionOutline.setFromObject(sel ?? null);
     } else {
       fpSelectionOutline.setFromObject(null);
     }
     const renderCam =
       st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession
         ? fpSession.getGameplayCamera()
-        : camera;
+        : st.mode === "fp_consumable" && st.fpAuthorCamera === "gameplay" && fpConsumableSession
+          ? fpConsumableSession.getGameplayCamera()
+          : camera;
     if (st.mode === "fp_viewmodel" && st.fpAuthorCamera === "gameplay" && fpSession) {
       fpSession.syncWorldMatrices();
+    } else if (
+      st.mode === "fp_consumable" &&
+      st.fpAuthorCamera === "gameplay" &&
+      fpConsumableSession
+    ) {
+      fpConsumableSession.syncWorldMatrices();
     }
     renderCam.aspect = canvas.clientWidth / canvas.clientHeight;
     renderCam.updateProjectionMatrix();
     (transformControls as unknown as { camera: THREE.Camera }).camera = renderCam;
     if (!tcDragging) {
-      if (st.mode === "fp_viewmodel" && st.fpAuthorCamera === "orbit") {
+      if (inFpMode && st.fpAuthorCamera === "orbit") {
         orbitControls.update();
-      } else if (st.mode !== "fp_viewmodel" && st.cameraMode === "fly") {
+      } else if (!inFpMode && st.cameraMode === "fly") {
         flyControls.update(dt);
-      } else if (st.mode !== "fp_viewmodel") {
+      } else if (!inFpMode) {
         orbitControls.update();
       }
     }

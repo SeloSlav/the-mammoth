@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "firstPerson": {
+    "mount": {
+      "positionM": { "x": 0.32, "y": -0.18, "z": 0.38 },
+      "eulerRad": { "x": 0.0, "y": 0.0, "z": 0.0 },
+      "scaleM": { "x": 1.0, "y": 1.0, "z": 1.0 }
+    }
+  }
+}

@@ -13,6 +13,10 @@ import {
   EXTERIOR_COLLISION_L1,
   EXTERIOR_COLLISION_LZ_PAD,
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
+  EXTERIOR_DOOR_SWING_MAX_RAD,
+  EXTERIOR_DOOR_HINGE_OUTSET,
+  EXTERIOR_DOOR_PANEL_HALF_THICK,
+  EXTERIOR_DOOR_W_M,
   EXTERIOR_STRIP_Y0,
   EXTERIOR_STRIP_Y1,
   LANDING_FRONT_PASSAGE_HALF_W_M,
@@ -80,9 +84,11 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
     const plateZ = oz + row.plateZ;
     const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
 
+    const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
+
     if (cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
       const y0 = cabFloorY - 0.22;
-      const y1 = cabFloorY + Math.max(1.8, layout.sy - 2 * 0.11 - 0.14) + 0.38;
+      const y1 = cabFloorY + innerH + 0.38;
       const doorHalf =
         (layout.doorFace === "e" || layout.doorFace === "w" ? hz : hx) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
       switch (layout.doorFace) {
@@ -130,63 +136,128 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
     }
 
     {
-      const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
       const roofY0 = cabFloorY + innerH - 0.08;
       const roofY1 = cabFloorY + innerH + 0.16;
       emit(plateX - hx, roofY0, plateZ - hz, plateX + hx, roofY1, plateZ + hz);
     }
+
+    const cabDoorClosed = cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
+    const cabCollisionY0 = cabFloorY - 0.22;
+    const cabCollisionY1 = cabFloorY + innerH + 0.38;
 
     for (let level = 1; level <= maxLevel; level++) {
       const fy = feetYForLayout(layout, level);
       const landingRow = landingByRowKey.get(landingExteriorDoorRowKey(shaftKey, level));
       const authSwing = landingRow == null ? 0 : landingRow.swingOpen01;
 
-      if (authSwing <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING) {
-        const y0 = fy + EXTERIOR_STRIP_Y0;
-        const y1 = fy + EXTERIOR_STRIP_Y1;
+      const landingY0 = fy - 0.22;
+      const landingY1 = fy + innerH + 0.38;
+      const cabCoversLanding =
+        cabDoorClosed && cabCollisionY1 > landingY0 + 0.05 && cabCollisionY0 < landingY1 - 0.05;
+
+      const y0d = fy + EXTERIOR_STRIP_Y0;
+      const y1d = fy + EXTERIOR_STRIP_Y1;
+      if (authSwing <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING && !cabCoversLanding) {
         switch (layout.doorFace) {
           case "e":
             emit(
               plateX + hx + EXTERIOR_COLLISION_L0,
-              y0,
+              y0d,
               plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
               plateX + hx + EXTERIOR_COLLISION_L1,
-              y1,
+              y1d,
               plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
             );
             break;
           case "w":
             emit(
               plateX - hx - EXTERIOR_COLLISION_L1,
-              y0,
+              y0d,
               plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
               plateX - hx - EXTERIOR_COLLISION_L0,
-              y1,
+              y1d,
               plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
             );
             break;
           case "n":
             emit(
               plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
-              y0,
+              y0d,
               plateZ + hz + EXTERIOR_COLLISION_L0,
               plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
-              y1,
+              y1d,
               plateZ + hz + EXTERIOR_COLLISION_L1,
             );
             break;
           case "s":
             emit(
               plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
-              y0,
+              y0d,
               plateZ - hz - EXTERIOR_COLLISION_L1,
               plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
-              y1,
+              y1d,
               plateZ - hz - EXTERIOR_COLLISION_L0,
             );
             break;
         }
+      } else if (!cabCoversLanding) {
+        const theta = authSwing * EXTERIOR_DOOR_SWING_MAX_RAD;
+        const panelW = EXTERIOR_DOOR_W_M - 0.10;
+        const hingeLat = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
+        const o = EXTERIOR_DOOR_HINGE_OUTSET;
+        const pad = EXTERIOR_DOOR_PANEL_HALF_THICK;
+        const st = Math.sin(theta);
+        const ct = Math.cos(theta);
+
+        switch (layout.doorFace) {
+          case "e": {
+            const hxO = plateX + hx + o;
+            const hzL = plateZ + hingeLat;
+            const tipX = hxO + panelW * st;
+            const tipZ = hzL - panelW * ct;
+            emit(
+              hxO - pad, y0d, Math.min(tipZ, hzL) - pad,
+              tipX + pad, y1d, Math.max(tipZ, hzL) + pad,
+            );
+            break;
+          }
+          case "w": {
+            const hxO = plateX - hx - o;
+            const hzL = plateZ + hingeLat;
+            const tipX = hxO - panelW * st;
+            const tipZ = hzL + panelW * ct;
+            emit(
+              Math.min(tipX, hxO) - pad, y0d, Math.min(hzL, tipZ) - pad,
+              Math.max(tipX, hxO) + pad, y1d, Math.max(hzL, tipZ) + pad,
+            );
+            break;
+          }
+          case "n": {
+            const hxL = plateX - hingeLat;
+            const hzO = plateZ + hz + o;
+            const tipX = hxL + panelW * ct;
+            const tipZ = hzO + panelW * st;
+            emit(
+              Math.min(hxL, tipX) - pad, y0d, hzO - pad,
+              Math.max(hxL, tipX) + pad, y1d, tipZ + pad,
+            );
+            break;
+          }
+          case "s": {
+            const hxL = plateX + hingeLat;
+            const hzO = plateZ - hz - o;
+            const tipX = hxL - panelW * ct;
+            const tipZ = hzO - panelW * st;
+            emit(
+              Math.min(hxL, tipX) - pad, y0d, Math.min(tipZ, hzO) - pad,
+              Math.max(hxL, tipX) + pad, y1d, Math.max(tipZ, hzO) + pad,
+            );
+            break;
+          }
+        }
       }
+
+      if (cabCoversLanding) continue;
 
       const passageOpen = landingFrontPassageOpen({
         swingOpen01: authSwing,
@@ -194,9 +265,8 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
         landingFeetY: fy,
         cabDoorOpen01,
       });
-      const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
-      const y0w = fy - 0.22;
-      const y1w = fy + innerH + 0.38;
+      const y0w = landingY0;
+      const y1w = landingY1;
       const outerHx = layout.sx * 0.5;
       const outerHz = layout.sz * 0.5;
       switch (layout.doorFace) {

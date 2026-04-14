@@ -19,6 +19,10 @@ import {
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import {
+  FP_AUTHORABLE_CONSUMABLE_IDS,
+  type FpAuthorConsumableId,
+} from "../editor/consumablePresentationDiskSave.js";
 import type { EditorContentIndex } from "../editor/editorContentDiscovery.js";
 import {
   beginEditorTransactionGroup,
@@ -50,6 +54,7 @@ export type {
   LandingDocKind,
   TransformMode,
 } from "./editorStoreTypes.js";
+export type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
 
 /**
  * Dev-only: set to any {@link FpAuthorWeaponId} (`ALL_WEAPON_DEFINITIONS` in engine) so the editor
@@ -119,6 +124,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorToast: null,
   fpAuthorPickList: [],
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
+  fpAuthorConsumableId: FP_AUTHORABLE_CONSUMABLE_IDS[0] as FpAuthorConsumableId,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -180,8 +186,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMode: (mode) =>
     set((s) => {
       if (s.mode === mode) return { mode };
-      const touchesFp = s.mode === "fp_viewmodel" || mode === "fp_viewmodel";
-      const exitFp = s.mode === "fp_viewmodel" && mode !== "fp_viewmodel";
+      const isFpMode = (m: typeof mode) => m === "fp_viewmodel" || m === "fp_consumable";
+      const touchesFp = isFpMode(s.mode) || isFpMode(mode);
+      const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       /** Entering/leaving FP must not rebuild; leaving FP must rebuild so floor/interior mesh matches mode. */
       const bumpEpoch = !touchesFp || exitFp;
       return {
@@ -193,8 +200,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setWorkspace: (workspace: EditorWorkspace) =>
     set((s) => {
       const mode = workspaceToInitialMode(workspace, s.landingDocKind);
-      const touchesFp = s.mode === "fp_viewmodel" || mode === "fp_viewmodel";
-      const exitFp = s.mode === "fp_viewmodel" && mode !== "fp_viewmodel";
+      const isFpMode = (m: EditorMode) => m === "fp_viewmodel" || m === "fp_consumable";
+      const touchesFp = isFpMode(s.mode) || isFpMode(mode);
+      const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       const bumpEpoch = !touchesFp || exitFp;
       const cameraMode: EditorCameraMode = workspace === "world" ? "fly" : "orbit";
       return {
@@ -354,6 +362,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (s.fpAuthorWeaponId === fpAuthorWeaponId) return {};
       return {
         fpAuthorWeaponId,
+        fpAuthorLive: s.fpAuthorLive + 1,
+      };
+    }),
+  setFpAuthorConsumableId: (fpAuthorConsumableId) =>
+    set((s) => {
+      if (s.fpAuthorConsumableId === fpAuthorConsumableId) return {};
+      return {
+        fpAuthorConsumableId,
         fpAuthorLive: s.fpAuthorLive + 1,
       };
     }),

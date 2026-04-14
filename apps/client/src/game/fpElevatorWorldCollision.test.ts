@@ -305,7 +305,44 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     expect(wallSlabs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("emits exterior collision slab when swing is essentially closed", () => {
+  it("emits exterior collision slab when swing is essentially closed (cab at different floor)", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const fy5 = feetYForLayout(layout, 5);
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(shaftKey, 1),
+      shaftKey,
+      level: 1,
+      desiredOpen: 0,
+      swingOpen01: 0,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 1,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            cabFloorY: fy5,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+    };
+    const y0 = fy1 + 0.05;
+    const y1 = fy1 + 2.0;
+    const hits = collectHits(auth, -2, 2, -2, 2).filter((b) => b.min[1] <= y1 && b.max[1] >= y0);
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("suppresses exterior slab and front wall when cab door slab covers the landing", () => {
     const fy1 = feetYForLayout(layout, 1);
     const landing: ElevatorLandingDoor = {
       rowKey: landingExteriorDoorRowKey(shaftKey, 1),
@@ -335,9 +372,16 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       landingByRowKey: new Map([[landing.rowKey, landing]]),
       feetYForLayout,
     };
-    const y0 = fy1 + 0.05;
-    const y1 = fy1 + 2.0;
-    const hits = collectHits(auth, -2, 2, -2, 2).filter((b) => b.min[1] <= y1 && b.max[1] >= y0);
-    expect(hits.length).toBeGreaterThanOrEqual(1);
+    const outerHx = layout.sx * 0.5;
+    const hits = collectHits(auth, -2, 2, -2, 2);
+    const landingY = fy1 + 1.0;
+    const landingSlabs = hits.filter(
+      (b) =>
+        b.min[1] <= landingY &&
+        b.max[1] >= landingY &&
+        b.min[0] >= outerHx - 0.25 &&
+        b.max[0] - b.min[0] < 0.8,
+    );
+    expect(landingSlabs.length).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import type {
   PrefabDef,
 } from "@the-mammoth/schemas";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
 import type {
   CollisionArtifactsStatus,
   EditorContentIndex,
@@ -28,6 +29,7 @@ export type EditorMode =
   | "prefab"
   | "floor_override"
   | "fp_viewmodel"
+  | "fp_consumable"
   | "cab"
   | "landing_preview";
 
@@ -95,6 +97,7 @@ export interface EditorState {
   fpAuthorToast: string | null;
   fpAuthorPickList: readonly FpAuthorPickMeta[];
   fpAuthorWeaponId: FpAuthorWeaponId;
+  fpAuthorConsumableId: FpAuthorConsumableId;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -139,6 +142,7 @@ export interface EditorState {
   bumpFpAuthorLive: () => void;
   setFpAuthorPickList: (list: readonly FpAuthorPickMeta[]) => void;
   setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
+  setFpAuthorConsumableId: (id: FpAuthorConsumableId) => void;
   showFpAuthorToast: (message: string, ttlMs?: number) => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;

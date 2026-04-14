@@ -48,6 +48,7 @@ import {
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
+import { EditorChromeFpConsumable } from "./EditorChromeFpConsumable.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
 
 export function EditorChrome() {
@@ -393,7 +394,8 @@ export function EditorChrome() {
         <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
         <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>
         ). <strong>World</strong> is the building + streamed docs: fly the stack, pick placements,
-        and save local JSON. <strong>FP viewmodel</strong> is advanced first-person rig layout.
+        and save local JSON. <strong>FP viewmodel</strong> authors weapon rigs.{" "}
+        <strong>FP consumable</strong> authors held consumable positions.
       </p>
 
       <span style={label}>Workspace</span>
@@ -455,6 +457,19 @@ export function EditorChrome() {
           onClick={() => setMode("fp_viewmodel")}
         >
           FP viewmodel
+        </button>
+        <button
+          type="button"
+          style={{
+            ...rowBtn,
+            fontWeight: mode === "fp_consumable" ? 700 : 400,
+            background: mode === "fp_consumable" ? "#3a4a7a" : "#2a2a34",
+            border: "1px solid #444",
+            color: "#fff",
+          }}
+          onClick={() => setMode("fp_consumable")}
+        >
+          FP consumable
         </button>
       </div>
 
@@ -561,6 +576,15 @@ export function EditorChrome() {
 
       {mode === "fp_viewmodel" ? (
         <EditorChromeFpViewmodel
+          transformMode={transformMode}
+          setTransformMode={setTransformMode}
+          gridSnapM={gridSnapM}
+          setGridSnapM={setGridSnapM}
+        />
+      ) : null}
+
+      {mode === "fp_consumable" ? (
+        <EditorChromeFpConsumable
           transformMode={transformMode}
           setTransformMode={setTransformMode}
           gridSnapM={gridSnapM}
@@ -720,7 +744,7 @@ export function EditorChrome() {
         </>
       ) : null}
 
-      {mode !== "fp_viewmodel" ? (
+      {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
         <>
       <span style={label}>Camera</span>
       <div>
@@ -830,7 +854,7 @@ export function EditorChrome() {
         <button type="button" style={rowBtn} onClick={() => onReload()}>
           Reload
         </button>
-        {mode !== "fp_viewmodel" ? (
+        {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
           <button type="button" style={rowBtn} onClick={() => onSaveDisk()}>
             Save to disk
           </button>
@@ -838,7 +862,7 @@ export function EditorChrome() {
         <button type="button" style={rowBtn} onClick={() => onRebuildCollision()}>
           Save + rebuild collision
         </button>
-        {mode !== "fp_viewmodel" ? (
+        {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
         <button
           type="button"
           style={rowBtn}
@@ -904,7 +928,7 @@ export function EditorChrome() {
         </p>
       ) : null}
 
-      {mode !== "fp_viewmodel" ? (
+      {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
         <>
       <span style={label}>Building origin (world)</span>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>

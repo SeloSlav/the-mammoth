@@ -8,6 +8,9 @@ pub(super) const EXT_DOOR_H: f32 = 2.05;
 pub(super) const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
 pub(super) const EXT_DOOR_ANIM_SPEED: f32 = 3.0;
 pub(super) const EXT_DOOR_SOLID_SLAB_MAX_SWING: f32 = 0.025;
+pub(super) const EXT_DOOR_SWING_MAX_RAD: f32 = 1.55;
+pub(super) const EXT_DOOR_HINGE_OUTSET: f32 = 0.048;
+pub(super) const EXT_DOOR_PANEL_HALF_THICK: f32 = 0.10;
 
 pub(super) const EXT_INTERACT_L0: f32 = -0.28;
 pub(super) const EXT_INTERACT_L1: f32 = 0.82;

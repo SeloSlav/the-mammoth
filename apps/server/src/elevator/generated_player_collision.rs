@@ -151,6 +151,22 @@ fn collect_generated_collision_aabbs(
             continue;
         };
         let fy = support_y(landing.level);
+
+        // When the cab door is closed its slab already blocks the doorway at the cab's
+        // Y band. Skip per-landing exterior/front-wall AABBs for floors whose Y band
+        // overlaps the cab — prevents the landing collision from fighting with the cab's
+        // own containment and pushing riders out through the door opening.
+        let landing_y0 = fy - 0.22;
+        let landing_y1 = fy + iy + 0.38;
+        let cab_door_closed = car.door_open_01 < super::DOOR_EXIT_CLAMP_MIN_OPEN;
+        let cab_y0 = car.cab_floor_y - 0.22;
+        let cab_y1 = car.cab_floor_y + iy + 0.38;
+        let cab_covers_landing =
+            cab_door_closed && cab_y1 > landing_y0 + 0.05 && cab_y0 < landing_y1 - 0.05;
+        if cab_covers_landing {
+            continue;
+        }
+
         let y0 = fy + super::EXT_STRIP_Y0;
         let y1 = fy + super::EXT_STRIP_Y1;
         if landing.swing_open_01 <= super::EXT_DOOR_SOLID_SLAB_MAX_SWING {
@@ -191,6 +207,56 @@ fn collect_generated_collision_aabbs(
                     [spec.plate_x - (hx + super::EXT_COLLISION_LZ_PAD), y0, spec.plate_z - hz - super::EXT_COLLISION_L1],
                     [spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD), y1, spec.plate_z - hz - super::EXT_COLLISION_L0],
                 ),
+            }
+        } else {
+            let theta = landing.swing_open_01 * super::EXT_DOOR_SWING_MAX_RAD;
+            let panel_w = super::EXT_DOOR_W - 0.10;
+            let hinge_lat = super::EXT_DOOR_W * 0.5 - 0.06;
+            let o = super::EXT_DOOR_HINGE_OUTSET;
+            let pad = super::EXT_DOOR_PANEL_HALF_THICK;
+            let (st, ct) = (theta.sin(), theta.cos());
+
+            match spec.door {
+                DoorFace::E => {
+                    let hx_o = spec.plate_x + hx + o;
+                    let hz_l = spec.plate_z + hinge_lat;
+                    let tip_x = hx_o + panel_w * st;
+                    let tip_z = hz_l - panel_w * ct;
+                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                        [hx_o - pad, y0, tip_z.min(hz_l) - pad],
+                        [tip_x + pad, y1, tip_z.max(hz_l) + pad],
+                    );
+                }
+                DoorFace::W => {
+                    let hx_o = spec.plate_x - hx - o;
+                    let hz_l = spec.plate_z + hinge_lat;
+                    let tip_x = hx_o - panel_w * st;
+                    let tip_z = hz_l + panel_w * ct;
+                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                        [tip_x.min(hx_o) - pad, y0, hz_l.min(tip_z) - pad],
+                        [tip_x.max(hx_o) + pad, y1, hz_l.max(tip_z) + pad],
+                    );
+                }
+                DoorFace::N => {
+                    let hx_l = spec.plate_x - hinge_lat;
+                    let hz_o = spec.plate_z + hz + o;
+                    let tip_x = hx_l + panel_w * ct;
+                    let tip_z = hz_o + panel_w * st;
+                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                        [hx_l.min(tip_x) - pad, y0, hz_o - pad],
+                        [hx_l.max(tip_x) + pad, y1, tip_z + pad],
+                    );
+                }
+                DoorFace::S => {
+                    let hx_l = spec.plate_x + hinge_lat;
+                    let hz_o = spec.plate_z - hz - o;
+                    let tip_x = hx_l - panel_w * ct;
+                    let tip_z = hz_o - panel_w * st;
+                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                        [hx_l.min(tip_x) - pad, y0, tip_z.min(hz_o) - pad],
+                        [hx_l.max(tip_x) + pad, y1, tip_z.max(hz_o) + pad],
+                    );
+                }
             }
         }
 
