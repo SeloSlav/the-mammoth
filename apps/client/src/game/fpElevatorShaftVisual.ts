@@ -34,6 +34,31 @@ import {
 
 type DoorFace = ElevatorDoorFace;
 
+function buildLandingHailIconTexture(): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "900 44px sans-serif";
+  ctx.fillText("⬆", size * 0.5, 42);
+  ctx.fillText("⬇", size * 0.5, 86);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export class FpElevatorCabInterpScalar {
   private a = 0;
   private b = 0;
@@ -82,6 +107,8 @@ export class FpElevatorShaftVisual {
   private readonly extRedMat: THREE.MeshStandardMaterial;
   private readonly extGlassMat: THREE.MeshPhysicalMaterial;
   private readonly hailBtnMat: THREE.MeshStandardMaterial;
+  private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
+  private readonly hailBtnIconTex: THREE.CanvasTexture;
 
   constructor(
     layout: ElevatorShaftLayout,
@@ -129,11 +156,15 @@ export class FpElevatorShaftVisual {
     this.landingHailPickRoot = new THREE.Group();
     this.landingHailPickRoot.name = "elev_landing_hail_pick";
     this.hailBtnMat = new THREE.MeshStandardMaterial({
-      color: 0xc8d6e6,
-      roughness: 0.34,
-      metalness: 0.2,
-      emissive: 0x2a3848,
-      emissiveIntensity: 0.55,
+      color: 0x101010,
+      roughness: 0.36,
+      metalness: 0.08,
+    });
+    this.hailBtnIconTex = buildLandingHailIconTexture();
+    this.hailBtnIconMat = new THREE.MeshBasicMaterial({
+      map: this.hailBtnIconTex,
+      transparent: true,
+      depthWrite: false,
     });
     this.root.add(this.landingRoot);
     this.root.add(this.landingDoorPickRoot);
@@ -397,20 +428,54 @@ export class FpElevatorShaftVisual {
     hz: number,
     level: number,
     shaftKey: string,
-  ): THREE.Mesh {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.16), this.hailBtnMat);
-    mesh.name = `elev_landing_hail_btn_${level}`;
-    (mesh.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
+  ): THREE.Group {
+    const group = new THREE.Group();
+    group.name = `elev_landing_hail_panel_${level}`;
+    const button = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.045, 32),
+      this.hailBtnMat,
+    );
+    button.name = `elev_landing_hail_btn_${level}`;
+    (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
       shaftKey,
       level,
     };
-    const y = 1.28;
-    if (face === "e") mesh.position.set(hx + 0.035, y, -0.92);
-    else if (face === "w") mesh.position.set(-hx - 0.035, y, 0.92);
-    else if (face === "n") mesh.position.set(0.92, y, hz + 0.035);
-    else mesh.position.set(-0.92, y, -hz - 0.035);
-    if (face === "e" || face === "w") mesh.rotation.y = Math.PI * 0.5;
-    return mesh;
+    const icon = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.17, 0.17),
+      this.hailBtnIconMat,
+    );
+    const y = 1.34;
+    const outerHx = this.layout.sx * 0.5;
+    const outerHz = this.layout.sz * 0.5;
+    const wallSurfaceOffset = 0.034;
+    const doorSideOffset = DOOR_W * 0.5 + 0.32;
+    group.add(button);
+    group.add(icon);
+    if (face === "e") {
+      group.position.set(outerHx + wallSurfaceOffset, y, -doorSideOffset);
+      button.rotation.z = Math.PI * 0.5;
+      button.position.set(0.045, 0, 0);
+      icon.position.set(0.069, 0, 0);
+      icon.rotation.y = Math.PI * 0.5;
+    } else if (face === "w") {
+      group.position.set(-outerHx - wallSurfaceOffset, y, doorSideOffset);
+      button.rotation.z = Math.PI * 0.5;
+      button.position.set(-0.045, 0, 0);
+      icon.position.set(-0.069, 0, 0);
+      icon.rotation.y = -Math.PI * 0.5;
+    } else if (face === "n") {
+      group.position.set(doorSideOffset, y, outerHz + wallSurfaceOffset);
+      button.rotation.x = Math.PI * 0.5;
+      button.position.set(0, 0, 0.045);
+      icon.position.set(0, 0, 0.069);
+    } else {
+      group.position.set(-doorSideOffset, y, -outerHz - wallSurfaceOffset);
+      button.rotation.x = Math.PI * 0.5;
+      button.position.set(0, 0, -0.045);
+      icon.position.set(0, 0, -0.069);
+      icon.rotation.y = Math.PI;
+    }
+    return group;
   }
 
   setFloorPickRootVisible(visible: boolean): void {
@@ -469,6 +534,8 @@ export class FpElevatorShaftVisual {
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
     this.hailBtnMat.dispose();
+    this.hailBtnIconMat.dispose();
+    this.hailBtnIconTex.dispose();
     this.matNormal.map = null;
     this.matHighlight.map = null;
     this.matPickFlash.map = null;

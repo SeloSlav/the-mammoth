@@ -1,9 +1,26 @@
+import { Vector3 } from "three";
+import type { ElevatorShaftLayout } from "@the-mammoth/world";
 import { describe, expect, it } from "vitest";
 import {
+  fpElevApplyClosedCabDoorOutsideClamp,
+  fpElevApplyClosedExteriorDoorCollisionClamp,
+  fpElevLandingExteriorDoorCollisionPlateLocal,
   EXTERIOR_INTERACT_L0,
   EXTERIOR_INTERACT_L1,
   fpElevLandingExteriorDoorInteractPlateLocal,
+  fpElevLandingExteriorDoorNearWorldPose,
 } from "./fpElevatorLandingExteriorDoor.js";
+
+const shaftLayout: ElevatorShaftLayout = {
+  planKey: "shaft",
+  plateX: 0,
+  plateZ: 0,
+  plateLocalY: 0,
+  sx: 2.38,
+  sy: 3.1578947368421053,
+  sz: 4,
+  doorFace: "e",
+};
 
 describe("fpElevLandingExteriorDoorInteractPlateLocal", () => {
   const hx = 1.09;
@@ -26,5 +43,72 @@ describe("fpElevLandingExteriorDoorInteractPlateLocal", () => {
     const lx = -hx - (EXTERIOR_INTERACT_L0 + EXTERIOR_INTERACT_L1) * 0.5;
     const ok = fpElevLandingExteriorDoorInteractPlateLocal("w", hx, hz, lx, 0, fy + 1.0, fy);
     expect(ok).toBe(true);
+  });
+
+  it("blocks the full landing frontage, not just the leaf width", () => {
+    const lx = hx + 0.12;
+    const lz = hz - 0.06;
+    const ok = fpElevLandingExteriorDoorCollisionPlateLocal("e", hx, hz, lx, lz, fy + 1.0, fy);
+    expect(ok).toBe(true);
+  });
+
+  it("accepts a broad near-door world-space pose", () => {
+    const ok = fpElevLandingExteriorDoorNearWorldPose(
+      "e",
+      100,
+      200,
+      hx,
+      hz,
+      100 + hx + 0.55,
+      fy + 1.0,
+      200 + 0.2,
+      fy,
+    );
+    expect(ok).toBe(true);
+  });
+
+  it("accepts a broad near-door pose from the inside side too", () => {
+    const ok = fpElevLandingExteriorDoorNearWorldPose(
+      "e",
+      100,
+      200,
+      hx,
+      hz,
+      100 + hx - 0.32,
+      fy + 1.0,
+      200,
+      fy,
+    );
+    expect(ok).toBe(true);
+  });
+});
+
+describe("closed elevator frontage clamps", () => {
+  it("pushes the player back when slipping along the side of a closed landing face", () => {
+    const pos = { x: 1.18, y: 11, z: 1.75 };
+    const vel = new Vector3(1, 0, 0);
+    fpElevApplyClosedExteriorDoorCollisionClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      landingRows: [{ shaftKey: "shaft", level: 1, swingOpen01: 0 }],
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+      carByShaft: new Map([["shaft", { plateX: 0, plateZ: 0 }]]),
+      feetYForLayout: () => 10,
+    });
+    expect(pos.x).toBeLessThan(1.18);
+    expect(vel.x).toBe(0);
+  });
+
+  it("pushes the player out of a closed cab even near the side wall", () => {
+    const pos = { x: 1.18, y: 11, z: 1.72 };
+    const vel = new Vector3(-1, 0, 0);
+    fpElevApplyClosedCabDoorOutsideClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      cars: [{ shaftKey: "shaft", doorOpen01: 0, cabFloorY: 10, plateX: 0, plateZ: 0 }],
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+    });
+    expect(pos.x).toBeGreaterThan(1.18);
+    expect(vel.x).toBe(0);
   });
 });

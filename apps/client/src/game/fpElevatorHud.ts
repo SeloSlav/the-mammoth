@@ -1,15 +1,6 @@
-/** FP elevator landing call prompt — in-car floor control is world-space raycast buttons (see `fpElevatorWorld`). */
+/** Legacy landing-call prompt state removed; landing hails now come from blue-button raycasts only. */
 
-export type FpElevatorHudView =
-  | { kind: "hidden" }
-  | {
-      kind: "call";
-      shaftPlanKey: string;
-      /** 1-based landing level sent to `elevatorHail` (matches server `near_call_pose`). */
-      callLevel: number;
-      /** e.g. "Story 5" */
-      floorLabel: string;
-    };
+export type FpElevatorHudView = { kind: "hidden" };
 
 const listeners = new Set<() => void>();
 
@@ -17,15 +8,7 @@ let view: FpElevatorHudView = { kind: "hidden" };
 
 function same(a: FpElevatorHudView, b: FpElevatorHudView): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === "hidden" && b.kind === "hidden") return true;
-  if (a.kind === "call" && b.kind === "call") {
-    return (
-      a.shaftPlanKey === b.shaftPlanKey &&
-      a.callLevel === b.callLevel &&
-      a.floorLabel === b.floorLabel
-    );
-  }
-  return false;
+  return a.kind === "hidden" && b.kind === "hidden";
 }
 
 export function getFpElevatorHudView(): FpElevatorHudView {

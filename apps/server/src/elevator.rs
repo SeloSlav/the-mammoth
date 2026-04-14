@@ -53,19 +53,24 @@ const EXT_DOOR_ANIM_SPEED: f32 = 2.05;
 /// Collision / block disabled above this swing (0..1).
 const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
 /// **E** interact strip (plate-local, door normal). Must extend past the closed-door push-out. Sync client `EXTERIOR_INTERACT_*`.
+#[allow(dead_code)]
 const EXT_INTERACT_L0: f32 = -0.28;
+#[allow(dead_code)]
 const EXT_INTERACT_L1: f32 = 0.82;
+#[allow(dead_code)]
 const EXT_INTERACT_LZ_PAD: f32 = 0.08;
 /// Closed-door **physics** slab. Sync client `EXTERIOR_COLLISION_*`.
-const EXT_COLLISION_L0: f32 = -0.45;
-const EXT_COLLISION_L1: f32 = 0.62;
-const EXT_COLLISION_LZ_PAD: f32 = 0.08;
+const EXT_COLLISION_L0: f32 = -0.55;
+const EXT_COLLISION_L1: f32 = 0.92;
+const EXT_COLLISION_LZ_PAD: f32 = 0.18;
 const EXT_STRIP_Y0: f32 = 0.05;
 const EXT_STRIP_Y1: f32 = 2.25;
+const EXT_INTERACT_WORLD_RADIUS_M: f32 = 1.6;
+const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.3;
 /// Hallway-side blocker for a mostly closed automatic cab door.
-const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.18;
-const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 0.72;
-const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.18;
+const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.28;
+const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;
+const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.32;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {
@@ -86,6 +91,7 @@ fn landing_door_row_key(shaft_key: &str, level: u32) -> String {
 /// While `PH_MOVING`, cab Y passes intermediate floors so we only suppress on non-moving phases.
 fn landing_hail_redundant_for_cab_pose(row: &ElevatorCar, lv: u32) -> bool {
     row.phase != PH_MOVING
+        && row.door_open_01 >= 0.92
         && (row.cab_floor_y - support_y(lv)).abs() < LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M
 }
 
@@ -591,39 +597,47 @@ fn exterior_plate_local_in_slab(
     landing_feet_y: f32,
     l0: f32,
     l1: f32,
-    lz_pad: f32,
+    lateral_half: f32,
 ) -> bool {
     let y0 = landing_feet_y + EXT_STRIP_Y0;
     let y1 = landing_feet_y + EXT_STRIP_Y1;
     if py < y0 || py > y1 {
         return false;
     }
-    let zspan = EXT_DOOR_W * 0.5 + lz_pad;
     match door {
         DoorFace::E => {
             let lo = hx + l0;
             let hi = hx + l1;
-            lx >= lo && lx <= hi && lz.abs() <= zspan
+            lx >= lo && lx <= hi && lz.abs() <= lateral_half
         }
         DoorFace::W => {
             let lo = -hx - l1;
             let hi = -hx - l0;
-            lx >= lo && lx <= hi && lz.abs() <= zspan
+            lx >= lo && lx <= hi && lz.abs() <= lateral_half
         }
         DoorFace::N => {
             let lo = hz + l0;
             let hi = hz + l1;
-            lz >= lo && lz <= hi && lx.abs() <= zspan
+            lz >= lo && lz <= hi && lx.abs() <= lateral_half
         }
         DoorFace::S => {
             let lo = -hz - l1;
             let hi = -hz - l0;
-            lz >= lo && lz <= hi && lx.abs() <= zspan
+            lz >= lo && lz <= hi && lx.abs() <= lateral_half
         }
     }
 }
 
 #[inline]
+fn face_lateral_half(door: DoorFace, hx: f32, hz: f32) -> f32 {
+    match door {
+        DoorFace::E | DoorFace::W => hz,
+        DoorFace::N | DoorFace::S => hx,
+    }
+}
+
+#[inline]
+#[allow(dead_code)]
 fn exterior_interact_plate_local_ok(
     door: DoorFace,
     hx: f32,
@@ -643,7 +657,7 @@ fn exterior_interact_plate_local_ok(
         landing_feet_y,
         EXT_INTERACT_L0,
         EXT_INTERACT_L1,
-        EXT_INTERACT_LZ_PAD,
+        EXT_DOOR_W * 0.5 + EXT_INTERACT_LZ_PAD,
     )
 }
 
@@ -667,20 +681,47 @@ fn exterior_collision_plate_local_ok(
         landing_feet_y,
         EXT_COLLISION_L0,
         EXT_COLLISION_L1,
-        EXT_COLLISION_LZ_PAD,
+        face_lateral_half(door, hx, hz) + EXT_COLLISION_LZ_PAD,
     )
 }
 
 fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
     let (hx, hz) = elevator_layout::inner_half_xz();
-    let lx = p.x - spec.plate_x;
-    let lz = p.z - spec.plate_z;
     let fy = support_y(level);
-    exterior_interact_plate_local_ok(spec.door, hx, hz, lx, lz, p.y, fy)
+    let cy = fy + 1.1;
+    let (cx_out, cz_out, cx_in, cz_in) = match spec.door {
+        DoorFace::E => (
+            spec.plate_x + hx + 0.18,
+            spec.plate_z,
+            spec.plate_x + hx - 0.18,
+            spec.plate_z,
+        ),
+        DoorFace::W => (
+            spec.plate_x - hx - 0.18,
+            spec.plate_z,
+            spec.plate_x - hx + 0.18,
+            spec.plate_z,
+        ),
+        DoorFace::N => (
+            spec.plate_x,
+            spec.plate_z + hz + 0.18,
+            spec.plate_x,
+            spec.plate_z + hz - 0.18,
+        ),
+        DoorFace::S => (
+            spec.plate_x,
+            spec.plate_z - hz - 0.18,
+            spec.plate_x,
+            spec.plate_z - hz + 0.18,
+        ),
+    };
+    (((p.x - cx_out).hypot(p.z - cz_out) <= EXT_INTERACT_WORLD_RADIUS_M)
+        || ((p.x - cx_in).hypot(p.z - cz_in) <= EXT_INTERACT_WORLD_RADIUS_M))
+        && (p.y - cy).abs() <= EXT_INTERACT_WORLD_Y_HALF_M
 }
 
 fn in_closed_cab_outside_door_slab(door: DoorFace, hx: f32, hz: f32, lx: f32, lz: f32) -> bool {
-    let door_half = EXT_DOOR_W * 0.5 + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
+    let door_half = face_lateral_half(door, hx, hz) + CLOSED_CAB_OUTSIDE_WIDTH_PAD;
     match door {
         DoorFace::E => {
             lx >= hx - CLOSED_CAB_OUTSIDE_SLAB_IN
@@ -730,34 +771,27 @@ pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerP
         }
         let px = p.x;
         let pz = p.z;
+        let mid = (EXT_COLLISION_L0 + EXT_COLLISION_L1) * 0.5;
         match door {
             DoorFace::E => {
                 let lo = spec.plate_x + hx + EXT_COLLISION_L0;
                 let hi = spec.plate_x + hx + EXT_COLLISION_L1;
-                let dl = p.x - lo;
-                let dr = hi - p.x;
-                p.x = if dl < dr { lo - 0.07 } else { hi + 0.08 };
+                p.x = if p.x <= spec.plate_x + hx + mid { lo - 0.07 } else { hi + 0.08 };
             }
             DoorFace::W => {
                 let lo = spec.plate_x - hx - EXT_COLLISION_L1;
                 let hi = spec.plate_x - hx - EXT_COLLISION_L0;
-                let dl = p.x - lo;
-                let dr = hi - p.x;
-                p.x = if dl < dr { lo - 0.08 } else { hi + 0.07 };
+                p.x = if p.x >= spec.plate_x - hx - mid { hi + 0.07 } else { lo - 0.08 };
             }
             DoorFace::N => {
                 let lo = spec.plate_z + hz + EXT_COLLISION_L0;
                 let hi = spec.plate_z + hz + EXT_COLLISION_L1;
-                let dl = p.z - lo;
-                let dr = hi - p.z;
-                p.z = if dl < dr { lo - 0.07 } else { hi + 0.08 };
+                p.z = if p.z <= spec.plate_z + hz + mid { lo - 0.07 } else { hi + 0.08 };
             }
             DoorFace::S => {
                 let lo = spec.plate_z - hz - EXT_COLLISION_L1;
                 let hi = spec.plate_z - hz - EXT_COLLISION_L0;
-                let dl = p.z - lo;
-                let dr = hi - p.z;
-                p.z = if dl < dr { lo - 0.08 } else { hi + 0.07 };
+                p.z = if p.z >= spec.plate_z - hz - mid { hi + 0.07 } else { lo - 0.08 };
             }
         }
         if p.x > px && p.vel_x < 0.0 {
@@ -868,8 +902,13 @@ mod landing_hail_redundant_tests {
 
 #[cfg(test)]
 mod exterior_interact_tests {
-    use super::{exterior_interact_plate_local_ok, support_y, EXT_INTERACT_L0, EXT_INTERACT_L1};
+    use super::{
+        exterior_collision_plate_local_ok, exterior_interact_plate_local_ok,
+        in_closed_cab_outside_door_slab, near_exterior_door_toggle_pose, support_y,
+        EXT_INTERACT_L0, EXT_INTERACT_L1,
+    };
     use crate::elevator_layout::{inner_half_xz, DoorFace};
+    use crate::elevator_layout::ElevShaftSpec;
 
     #[test]
     fn east_mid_strip_accepted() {
@@ -889,6 +928,58 @@ mod exterior_interact_tests {
         let py = fy + 1.0;
         let lx = hx;
         assert!(!exterior_interact_plate_local_ok(DoorFace::E, hx, hz, lx, 2.0, py, fy));
+    }
+
+    #[test]
+    fn near_pose_accepts_inside_side_too() {
+        let (hx, _) = inner_half_xz();
+        let spec = ElevShaftSpec {
+            shaft_key: "test",
+            plate_x: 10.0,
+            plate_z: 20.0,
+            door: DoorFace::E,
+        };
+        let fy = support_y(1);
+        let pose = crate::pose::PlayerPose {
+            identity: spacetimedb::Identity::from_byte_array([0; 32]),
+            x: spec.plate_x + hx - 0.2,
+            y: fy + 1.0,
+            z: spec.plate_z,
+            yaw: 0.0,
+            seq: 0,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+        };
+        assert!(near_exterior_door_toggle_pose(&pose, &spec, 1));
+    }
+
+    #[test]
+    fn collision_blocks_full_frontage_not_only_leaf_width() {
+        let (hx, hz) = inner_half_xz();
+        let fy = support_y(1);
+        assert!(exterior_collision_plate_local_ok(
+            DoorFace::E,
+            hx,
+            hz,
+            hx + 0.12,
+            hz - 0.06,
+            fy + 1.0,
+            fy,
+        ));
+    }
+
+    #[test]
+    fn closed_cab_outside_slab_covers_side_lane_too() {
+        let (hx, hz) = inner_half_xz();
+        assert!(in_closed_cab_outside_door_slab(
+            DoorFace::E,
+            hx,
+            hz,
+            hx + 0.12,
+            hz - 0.06,
+        ));
     }
 }
 
@@ -956,6 +1047,15 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
     };
+    let Some(car) = ctx.db.elevator_car().shaft_key().find(&shaft_key) else {
+        return;
+    };
+    if player_inside_cab(&pose, &car) && car.phase == PH_MOVING {
+        return;
+    }
+    if player_inside_cab(&pose, &car) && car.current_level != lv {
+        return;
+    }
     if !near_exterior_door_toggle_pose(&pose, spec, lv) {
         return;
     }
