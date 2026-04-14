@@ -18,15 +18,12 @@ import {
 import type { DbConnection } from "../module_bindings";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
 import {
-  ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
   ELEVATOR_PHASE_MOVING,
-  FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
   FLOOR_PICK_MAX_RAY_M,
   FP_ELEV_FLOOR_PICK_UD,
   FP_ELEV_LANDING_HAIL_PICK_UD,
-  type FpElevExteriorDoorPickUserData,
   type FpElevFloorPickUserData,
   type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
@@ -48,24 +45,12 @@ import {
 import {
   fpElevLandingExteriorDoorAimTargetWorld,
   fpElevLandingExteriorDoorInteractPlateLocal,
-  CLOSED_CAB_OUTSIDE_SLAB_IN,
-  CLOSED_CAB_OUTSIDE_SLAB_OUT,
-  CLOSED_CAB_OUTSIDE_WIDTH_PAD,
-  EXTERIOR_COLLISION_L0,
-  EXTERIOR_COLLISION_L1,
-  EXTERIOR_COLLISION_LZ_PAD,
   advanceExteriorDoorVisSwingTowardAuth,
   EXTERIOR_DOOR_ANIM_SPEED,
-  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
-  EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
-  EXTERIOR_STRIP_Y0,
-  EXTERIOR_STRIP_Y1,
-  LANDING_FRONT_PASSAGE_HALF_W_M,
-  LANDING_FRONT_WALL_SLAB_IN,
-  LANDING_FRONT_WALL_SLAB_OUT,
   fpElevLandingExteriorDoorNearWorldPose,
   landingExteriorDoorRowKey,
 } from "./fpElevatorLandingExteriorDoor.js";
+import { visitFpElevatorWorldCollisionAabbsInXZ } from "./fpElevatorWorldCollision.js";
 import type {
   FpKinematicAttachment,
   FpKinematicSupportProvider,
@@ -742,246 +727,23 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     z0: number,
     z1: number,
     visit: (aabb: CollisionAabb) => void,
-  ) => {
-    const emit = (
-      minX: number,
-      minY: number,
-      minZ: number,
-      maxX: number,
-      maxY: number,
-      maxZ: number,
-    ) => {
-      if (x1 < minX || x0 > maxX || z1 < minZ || z0 > maxZ) return;
-      visit({
-        min: [minX, minY, minZ],
-        max: [maxX, maxY, maxZ],
-      });
-    };
-
-    for (const [shaftKey, row] of latest) {
-      const layout = layoutByKey.get(shaftKey);
-      if (!layout) continue;
-      const plateX = ox + row.plateX;
-      const plateZ = oz + row.plateZ;
-      const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
-
-      if (row.doorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
-        const y0 = row.cabFloorY - 0.22;
-        const y1 = row.cabFloorY + Math.max(1.8, layout.sy - 2 * 0.11 - 0.14) + 0.38;
-        const doorHalf =
-          (layout.doorFace === "e" || layout.doorFace === "w" ? hz : hx) +
-          CLOSED_CAB_OUTSIDE_WIDTH_PAD;
-        switch (layout.doorFace) {
-          case "e":
-            emit(
-              plateX + hx - CLOSED_CAB_OUTSIDE_SLAB_IN,
-              y0,
-              plateZ - doorHalf,
-              plateX + hx + CLOSED_CAB_OUTSIDE_SLAB_OUT,
-              y1,
-              plateZ + doorHalf,
-            );
-            break;
-          case "w":
-            emit(
-              plateX - hx - CLOSED_CAB_OUTSIDE_SLAB_OUT,
-              y0,
-              plateZ - doorHalf,
-              plateX - hx + CLOSED_CAB_OUTSIDE_SLAB_IN,
-              y1,
-              plateZ + doorHalf,
-            );
-            break;
-          case "n":
-            emit(
-              plateX - doorHalf,
-              y0,
-              plateZ + hz - CLOSED_CAB_OUTSIDE_SLAB_IN,
-              plateX + doorHalf,
-              y1,
-              plateZ + hz + CLOSED_CAB_OUTSIDE_SLAB_OUT,
-            );
-            break;
-          case "s":
-            emit(
-              plateX - doorHalf,
-              y0,
-              plateZ - hz - CLOSED_CAB_OUTSIDE_SLAB_OUT,
-              plateX + doorHalf,
-              y1,
-              plateZ - hz + CLOSED_CAB_OUTSIDE_SLAB_IN,
-            );
-            break;
-        }
-      }
-
-      for (let level = 1; level <= maxLevel; level++) {
-        const fy = feetYForLayout(layout, level);
-        const landingRow = landingByRowKey.get(landingExteriorDoorRowKey(shaftKey, level));
-        const authSwing = landingRow == null ? 0 : landingRow.swingOpen01;
-
-        if (authSwing <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING) {
-          const y0 = fy + EXTERIOR_STRIP_Y0;
-          const y1 = fy + EXTERIOR_STRIP_Y1;
-          switch (layout.doorFace) {
-            case "e":
-              emit(
-                plateX + hx + EXTERIOR_COLLISION_L0,
-                y0,
-                plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
-                plateX + hx + EXTERIOR_COLLISION_L1,
-                y1,
-                plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
-              );
-              break;
-            case "w":
-              emit(
-                plateX - hx - EXTERIOR_COLLISION_L1,
-                y0,
-                plateZ - (hz + EXTERIOR_COLLISION_LZ_PAD),
-                plateX - hx - EXTERIOR_COLLISION_L0,
-                y1,
-                plateZ + (hz + EXTERIOR_COLLISION_LZ_PAD),
-              );
-              break;
-            case "n":
-              emit(
-                plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
-                y0,
-                plateZ + hz + EXTERIOR_COLLISION_L0,
-                plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
-                y1,
-                plateZ + hz + EXTERIOR_COLLISION_L1,
-              );
-              break;
-            case "s":
-              emit(
-                plateX - (hx + EXTERIOR_COLLISION_LZ_PAD),
-                y0,
-                plateZ - hz - EXTERIOR_COLLISION_L1,
-                plateX + (hx + EXTERIOR_COLLISION_LZ_PAD),
-                y1,
-                plateZ - hz - EXTERIOR_COLLISION_L0,
-              );
-              break;
-          }
-        }
-
-        const passageOpen =
-          authSwing >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH &&
-          Number(row.currentLevel ?? 1) === level &&
-          Math.abs(row.cabFloorY - fy) <= 0.5 &&
-          row.doorOpen01 >= ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
-        const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
-        const y0 = fy - 0.22;
-        const y1 = fy + innerH + 0.38;
-        const outerHx = layout.sx * 0.5;
-        const outerHz = layout.sz * 0.5;
-        switch (layout.doorFace) {
-          case "e": {
-            const slabMinX = plateX + outerHx - LANDING_FRONT_WALL_SLAB_IN;
-            const slabMaxX = plateX + outerHx + LANDING_FRONT_WALL_SLAB_OUT;
-            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHz) {
-              emit(slabMinX, y0, plateZ - outerHz, slabMaxX, y1, plateZ + outerHz);
-            } else {
-              emit(
-                slabMinX,
-                y0,
-                plateZ - outerHz,
-                slabMaxX,
-                y1,
-                plateZ - LANDING_FRONT_PASSAGE_HALF_W_M,
-              );
-              emit(
-                slabMinX,
-                y0,
-                plateZ + LANDING_FRONT_PASSAGE_HALF_W_M,
-                slabMaxX,
-                y1,
-                plateZ + outerHz,
-              );
-            }
-            break;
-          }
-          case "w": {
-            const slabMinX = plateX - outerHx - LANDING_FRONT_WALL_SLAB_OUT;
-            const slabMaxX = plateX - outerHx + LANDING_FRONT_WALL_SLAB_IN;
-            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHz) {
-              emit(slabMinX, y0, plateZ - outerHz, slabMaxX, y1, plateZ + outerHz);
-            } else {
-              emit(
-                slabMinX,
-                y0,
-                plateZ - outerHz,
-                slabMaxX,
-                y1,
-                plateZ - LANDING_FRONT_PASSAGE_HALF_W_M,
-              );
-              emit(
-                slabMinX,
-                y0,
-                plateZ + LANDING_FRONT_PASSAGE_HALF_W_M,
-                slabMaxX,
-                y1,
-                plateZ + outerHz,
-              );
-            }
-            break;
-          }
-          case "n": {
-            const slabMinZ = plateZ + outerHz - LANDING_FRONT_WALL_SLAB_IN;
-            const slabMaxZ = plateZ + outerHz + LANDING_FRONT_WALL_SLAB_OUT;
-            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHx) {
-              emit(plateX - outerHx, y0, slabMinZ, plateX + outerHx, y1, slabMaxZ);
-            } else {
-              emit(
-                plateX - outerHx,
-                y0,
-                slabMinZ,
-                plateX - LANDING_FRONT_PASSAGE_HALF_W_M,
-                y1,
-                slabMaxZ,
-              );
-              emit(
-                plateX + LANDING_FRONT_PASSAGE_HALF_W_M,
-                y0,
-                slabMinZ,
-                plateX + outerHx,
-                y1,
-                slabMaxZ,
-              );
-            }
-            break;
-          }
-          case "s": {
-            const slabMinZ = plateZ - outerHz - LANDING_FRONT_WALL_SLAB_OUT;
-            const slabMaxZ = plateZ - outerHz + LANDING_FRONT_WALL_SLAB_IN;
-            if (!passageOpen || LANDING_FRONT_PASSAGE_HALF_W_M >= outerHx) {
-              emit(plateX - outerHx, y0, slabMinZ, plateX + outerHx, y1, slabMaxZ);
-            } else {
-              emit(
-                plateX - outerHx,
-                y0,
-                slabMinZ,
-                plateX - LANDING_FRONT_PASSAGE_HALF_W_M,
-                y1,
-                slabMaxZ,
-              );
-              emit(
-                plateX + LANDING_FRONT_PASSAGE_HALF_W_M,
-                y0,
-                slabMinZ,
-                plateX + outerHx,
-                y1,
-                slabMaxZ,
-              );
-            }
-            break;
-          }
-        }
-      }
-    }
-  };
+  ) =>
+    visitFpElevatorWorldCollisionAabbsInXZ(
+      {
+        buildingOriginX: ox,
+        buildingOriginZ: oz,
+        maxLevel,
+        latestCars: latest,
+        layoutByKey,
+        landingByRowKey,
+        feetYForLayout,
+      },
+      x0,
+      x1,
+      z0,
+      z1,
+      visit,
+    );
 
   const syncCabEvalClock = (nowMs: number) => {
     cabEvalNowMs = nowMs;

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorPlateLocalClampBounds,
+  fpElevatorPlateLocalInCabPhysicsVolume,
 } from "./fpElevatorVolumes.js";
 
 describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
@@ -37,6 +39,18 @@ describe("fpElevFeetInHoistwayColumnForFloorStack", () => {
         buildingWorldOriginZ: 20,
       }),
     ).toBe(true);
+  });
+});
+
+describe("fpElevatorPlateLocalInCabPhysicsVolume", () => {
+  it("does not treat feet one storey above the cab as inside the rider snap volume", () => {
+    const innerH = Math.max(1.8, DEFAULT_BUILDING_FLOOR_SPACING_M - 2 * 0.11 - 0.14);
+    const inner = { halfX: 1.05, halfZ: 1.86, innerH };
+    const cabFeetY = 0.22;
+    const py = cabFeetY + DEFAULT_BUILDING_FLOOR_SPACING_M * 0.99;
+    expect(
+      fpElevatorPlateLocalInCabPhysicsVolume(0, 0, py, cabFeetY, "e", 1, inner),
+    ).toBe(false);
   });
 });
 

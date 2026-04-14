@@ -1,6 +1,6 @@
 import { ELEVATOR_MOVE_SPEED_MPS } from "./fpElevatorConstants.js";
 
-/** Match `apps/server/src/elevator.rs` smoothstep on `move_u`. */
+/** Match `apps/server/src/elevator/mod.rs` smoothstep on `move_u`. */
 export function elevatorMoveSmoothstep01(u: number): number {
   const x = Math.min(1, Math.max(0, u));
   return x * x * (3 - 2 * x);

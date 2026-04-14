@@ -12,7 +12,7 @@ import {
   ELEVATOR_CLAMP_FOOT_CLEARANCE_M,
   ELEVATOR_CAB_PHYS_GATE_PAD_M,
   ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
-  ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+  ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
 } from "./fpElevatorConstants.js";
 
@@ -84,7 +84,7 @@ export function fpElevatorDoorSideSlackM(doorOpen01: number): number {
 
 /**
  * Plate-local AABB used for cab XZ clamp (and physics containment), in meters from hoistway plate center.
- * Must stay aligned with `apps/server/src/elevator.rs` `clamp_player_to_elevators`.
+ * Must stay aligned with `apps/server/src/elevator/mod.rs` `clamp_player_to_elevator_kinematic_support` / `cab_plate_local_clamp_bounds`.
  */
 export function fpElevatorPlateLocalClampBounds(
   doorFace: ElevatorDoorFace,
@@ -125,8 +125,9 @@ export function fpElevatorPlateLocalClampBounds(
 }
 
 /**
- * True when feet are in the cab **physics** volume: rider vertical band + door-aware clamp box
- * (NOT the old symmetric 0.97× slab — that missed the door-slack region so clamp/snap never armed).
+ * True when feet are in the cab **physics** volume for rider snap / XZ clamp arming: a **tight**
+ * upper vertical bound (walk merge still uses the wider shaft band in `fpElevatorWorld.mergeWalkTop`)
+ * plus the door-aware clamp box.
  */
 export function fpElevatorPlateLocalInCabPhysicsVolume(
   lx: number,
@@ -138,7 +139,7 @@ export function fpElevatorPlateLocalInCabPhysicsVolume(
   inner: FpElevatorInnerExtents,
 ): boolean {
   const yLo = cabFeetY - ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M;
-  const yHi = cabFeetY + inner.innerH + ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M;
+  const yHi = cabFeetY + inner.innerH + ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M;
   if (py < yLo || py > yHi) return false;
   const b = fpElevatorPlateLocalClampBounds(doorFace, doorOpen01, inner);
   const pad = ELEVATOR_CAB_PHYS_GATE_PAD_M;

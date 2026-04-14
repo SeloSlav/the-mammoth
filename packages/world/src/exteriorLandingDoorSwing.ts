@@ -5,10 +5,11 @@ import {
   applyLandingGlassSlot,
   parseAuthorColorHex,
 } from "./elevatorVisualMaterialUtils.js";
+import { EXTERIOR_DOOR_H_M, EXTERIOR_DOOR_W_M } from "./elevatorCollisionTuning.js";
 
 /** Match `fpElevatorLandingExteriorDoor` / editor preview. */
-export const EXTERIOR_DOOR_PANEL_W_M = 1.86 - 0.1;
-export const EXTERIOR_DOOR_H = 2.05;
+export const EXTERIOR_DOOR_PANEL_W_M = EXTERIOR_DOOR_W_M - 0.1;
+export const EXTERIOR_DOOR_H = EXTERIOR_DOOR_H_M;
 
 /** Glass mesh id; opening size is driven by {@link LandingKitDef.glassOpening}. */
 export const LANDING_DOOR_GLASS_PART_ID = "landing_glass_lite" as const;

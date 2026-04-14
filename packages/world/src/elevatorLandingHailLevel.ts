@@ -55,7 +55,7 @@ function callCenterWorldY(
  * level whose `call_center_y` is closest to the player — fixes storey labels vs
  * {@link estimateStoreyFromFeetY} drift.
  *
- * Matches server `near_call_pose` geometry (see `apps/server/src/elevator.rs`).
+ * Matches server `near_call_pose` geometry (see `apps/server/src/elevator/mod.rs`).
  */
 export function resolveLandingHailLevel(
   px: number,

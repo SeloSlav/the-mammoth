@@ -1,22 +1,59 @@
-import { elevatorCabGameplayHalfExtentsM, type ElevatorShaftLayout } from "@the-mammoth/world";
+import {
+  CLOSED_CAB_OUTSIDE_SLAB_IN,
+  CLOSED_CAB_OUTSIDE_SLAB_OUT,
+  CLOSED_CAB_OUTSIDE_WIDTH_PAD,
+  elevatorCabGameplayHalfExtentsM,
+  EXTERIOR_COLLISION_L0,
+  EXTERIOR_COLLISION_L1,
+  EXTERIOR_COLLISION_LZ_PAD,
+  EXTERIOR_DOOR_ANIM_SPEED,
+  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
+  EXTERIOR_DOOR_H_M,
+  EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
+  EXTERIOR_DOOR_W_M,
+  EXTERIOR_INTERACT_L0,
+  EXTERIOR_INTERACT_L1,
+  EXTERIOR_INTERACT_LZ_PAD,
+  EXTERIOR_INTERACT_WORLD_RADIUS_M,
+  EXTERIOR_INTERACT_WORLD_Y_HALF_M,
+  EXTERIOR_STRIP_Y0,
+  EXTERIOR_STRIP_Y1,
+  LANDING_FRONT_PASSAGE_HALF_W_M,
+  LANDING_FRONT_WALL_PUSH_OUT,
+  LANDING_FRONT_WALL_SLAB_IN,
+  LANDING_FRONT_WALL_SLAB_OUT,
+  LANDING_PASSAGE_DOCK_Y_TOL_M,
+  type ElevatorShaftLayout,
+} from "@the-mammoth/world";
 import type { ElevatorDoorFace } from "./fpElevatorLabels.js";
 import type { Vector3 } from "three";
 import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
 
-/** Match server `elevator::EXT_DOOR_W`. */
-export const EXTERIOR_DOOR_W_M = 1.86;
-/** Match server `elevator::EXT_DOOR_H`. */
-export const EXTERIOR_DOOR_H_M = 2.05;
-/** Match server `elevator::EXT_DOOR_COLLISION_OPEN_THRESH`. */
-export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
-/** Match server `elevator::EXT_DOOR_ANIM_SPEED` (swingOpen01 units per second). */
-export const EXTERIOR_DOOR_ANIM_SPEED = 2.05;
-/**
- * Emit the thick exterior collision slab / legacy push-out only when the swing is essentially
- * closed. Match server `elevator::EXT_DOOR_SOLID_SLAB_MAX_SWING`. Mid-swing, the slab does not
- * follow the mesh, so player collision is disabled to avoid jitter.
- */
-export const EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING = 0.025;
+export {
+  CLOSED_CAB_OUTSIDE_SLAB_IN,
+  CLOSED_CAB_OUTSIDE_SLAB_OUT,
+  CLOSED_CAB_OUTSIDE_WIDTH_PAD,
+  EXTERIOR_COLLISION_L0,
+  EXTERIOR_COLLISION_L1,
+  EXTERIOR_COLLISION_LZ_PAD,
+  EXTERIOR_DOOR_ANIM_SPEED,
+  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
+  EXTERIOR_DOOR_H_M,
+  EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
+  EXTERIOR_DOOR_W_M,
+  EXTERIOR_INTERACT_L0,
+  EXTERIOR_INTERACT_L1,
+  EXTERIOR_INTERACT_LZ_PAD,
+  EXTERIOR_INTERACT_WORLD_RADIUS_M,
+  EXTERIOR_INTERACT_WORLD_Y_HALF_M,
+  EXTERIOR_STRIP_Y0,
+  EXTERIOR_STRIP_Y1,
+  LANDING_FRONT_PASSAGE_HALF_W_M,
+  LANDING_FRONT_WALL_PUSH_OUT,
+  LANDING_FRONT_WALL_SLAB_IN,
+  LANDING_FRONT_WALL_SLAB_OUT,
+  LANDING_PASSAGE_DOCK_Y_TOL_M,
+};
 
 /** True when the static "closed door" collision slab should affect the player. */
 export function fpElevExteriorDoorSolidPlayerSlabActive(swingOpen01: number): boolean {
@@ -41,20 +78,6 @@ export function advanceExteriorDoorVisSwingTowardAuth(opts: {
   if (Math.abs(d) <= maxStep) return authoritative;
   return current + Math.sign(d) * maxStep;
 }
-
-/** Narrow-ish strip at the sill for **E**. Must extend past the closed-door push-out so the door stays usable. Sync server `EXT_INTERACT_*`. */
-export const EXTERIOR_INTERACT_L0 = -0.28;
-export const EXTERIOR_INTERACT_L1 = 0.82;
-export const EXTERIOR_INTERACT_LZ_PAD = 0.08;
-export const EXTERIOR_STRIP_Y0 = 0.05;
-export const EXTERIOR_STRIP_Y1 = 2.25;
-
-/** Wider slab for **physics** while the door is closed. Sync server `EXT_COLLISION_*`. */
-export const EXTERIOR_COLLISION_L0 = -0.55;
-export const EXTERIOR_COLLISION_L1 = 0.92;
-export const EXTERIOR_COLLISION_LZ_PAD = 0.18;
-export const EXTERIOR_INTERACT_WORLD_RADIUS_M = 1.6;
-export const EXTERIOR_INTERACT_WORLD_Y_HALF_M = 1.3;
 
 export function landingExteriorDoorRowKey(shaftKey: string, level: number): string {
   return `${shaftKey}|${level >>> 0}`;
@@ -227,15 +250,6 @@ export function fpElevExteriorDoorBlocksPassage(swingOpen01: number): boolean {
   return swingOpen01 < EXTERIOR_DOOR_COLLISION_OPEN_THRESH;
 }
 
-export const CLOSED_CAB_OUTSIDE_SLAB_IN = 0.28;
-export const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;
-export const CLOSED_CAB_OUTSIDE_WIDTH_PAD = 0.32;
-export const LANDING_FRONT_WALL_SLAB_IN = 0.2;
-export const LANDING_FRONT_WALL_SLAB_OUT = 0.34;
-export const LANDING_FRONT_WALL_PUSH_OUT = 0.08;
-export const LANDING_FRONT_PASSAGE_HALF_W_M = EXTERIOR_DOOR_W_M * 0.5 + 0.04;
-export const LANDING_PASSAGE_DOCK_Y_TOL_M = 0.5;
-
 function innerCabHeightM(layout: ElevatorShaftLayout): number {
   return Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
 }
@@ -325,9 +339,9 @@ function inClosedCabOutsideDoorSlab(
 }
 
 /**
- * Client-side block (FP prediction has no wall collision; server also clamps).
- * Mirrors `elevator::clamp_player_exterior_landing_doors` push-out logic (solid slab only while
- * nearly fully closed — see `fpElevExteriorDoorSolidPlayerSlabActive`).
+ * Client-side block (FP prediction does not run the full static solid sweep here).
+ * Geometry matches server `elevator::generated_player_collision` / exterior swing slab when
+ * `fpElevExteriorDoorSolidPlayerSlabActive` (nearly closed).
  */
 export function fpElevApplyClosedExteriorDoorCollisionClamp(
   pos: { x: number; y: number; z: number },

@@ -42,6 +42,24 @@ export const ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M = DEFAULT_BUILDING_FLOOR_SPACIN
  */
 export const ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.58;
 /**
+ * Cab interior upright span (m) for default Mamuthica geometry where shaft `sy` equals
+ * {@link DEFAULT_BUILDING_FLOOR_SPACING_M}. Matches server `elevator_layout::inner_height()`.
+ */
+const ELEVATOR_GAMEPLAY_INNER_HEIGHT_M = Math.max(
+  1.8,
+  DEFAULT_BUILDING_FLOOR_SPACING_M - 2 * 0.11 - 0.14,
+);
+/**
+ * Extra slack above inner cab top for **rider snap / XZ clamp arming** only (not walk merge).
+ * Must stay below the next landing so upper floors do not false-trigger on the cab beneath.
+ *
+ * Must match server `elevator::RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M`.
+ */
+export const ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M = Math.max(
+  0.15,
+  DEFAULT_BUILDING_FLOOR_SPACING_M - ELEVATOR_GAMEPLAY_INNER_HEIGHT_M - 0.1,
+);
+/**
  * Foot-center clearance from hoistway inner half extents so the **walk foot circle** stays inside
  * the same XZ box as `mergeWalkTop` (`half − walkFootRadius − ε`). Match server
  * `elevator::CAB_CLAMP_FOOT_CLEAR_M` (= `FOOT_R` + 2cm).
@@ -71,10 +89,10 @@ export const ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN = 0.22;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
 
-/** Match `apps/server/src/elevator.rs` `MOVE_SPEED_MPS`. */
+/** Match `apps/server/src/elevator/mod.rs` `MOVE_SPEED_MPS`. */
 export const ELEVATOR_MOVE_SPEED_MPS = 3.15;
 
-/** Match `apps/server/src/elevator.rs` `PH_MOVING`. */
+/** Match `apps/server/src/elevator/mod.rs` `PH_MOVING`. */
 export const ELEVATOR_PHASE_MOVING = 2;
 
 /** Raycast / userData tag for in-car floor selector meshes. */
