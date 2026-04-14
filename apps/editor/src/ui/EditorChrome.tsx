@@ -1,21 +1,42 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
+import {
+  frameEditorBuilding,
+  frameEditorSelection,
+  frameFocusedStory,
+} from "../editor/editorNavigationBridge.js";
 import { spawnInFrontOfCamera } from "../editor/spawnBridge.js";
 import { useShallow } from "zustand/react/shallow";
+import type { LandingDocKind } from "../state/editorStore.js";
 import {
+  collectPrefabIdsFromCells,
   collectPrefabIdsFromFloors,
   collectPrefabIdsFromInteriors,
+  collectPrefabIdsFromPrefabDefs,
   serializeBuildingDocPretty,
+  serializeCellDocPretty,
+  serializeElevatorCabDefPretty,
   serializeFloorDocPretty,
+  serializeFloorOverrideDocPretty,
   serializeInteriorDocPretty,
+  serializeLandingKitDefPretty,
+  serializePrefabDefPretty,
   useEditorStore,
 } from "../state/editorStore.js";
 import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
 import {
   downloadText,
+  fetchCollisionArtifactsStatus,
+  postRebuildServerCollision,
   postSaveBuilding,
+  postSaveCell,
+  postSaveElevatorCab,
   postSaveFloor,
+  postSaveFloorOverride,
   postSaveInterior,
+  postSaveLandingKit,
+  postSavePrefab,
 } from "./editorChromeNetwork.js";
 import { selectEditorChromeStore } from "./editorChromeSelectors.js";
 import {
@@ -31,39 +52,72 @@ import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMe
 
 export function EditorChrome() {
   const {
+    workspace,
+    landingDocKind,
     mode,
     building,
     floorDocs,
     interiorDocs,
+    cellDocs,
+    prefabDefs,
+    floorOverrideDocs,
+    elevatorCabDef,
+    landingKitDef,
+    contentIndex,
     activeFloorDocId,
     activeInteriorDocId,
+    activeCellDocId,
+    activePrefabDefId,
+    activeFloorOverrideDocId,
     focusedStoryLevelIndex,
     selectedId,
     dirty,
+    collisionArtifactsStatus,
     transformMode,
     gridSnapM,
     shadowsEnabled,
     useHdriEnvironment,
+    cameraMode,
+    flySpeedMps,
     historyPast,
     historyFuture,
     setMode,
+    setWorkspace,
+    setLandingDocKind,
+    patchElevatorCabDef,
+    patchLandingKitDef,
     setActiveFloorDocId,
     setActiveInteriorDocId,
+    setActiveCellDocId,
+    setActivePrefabDefId,
+    setActiveFloorOverrideDocId,
     setFocusedStoryLevelIndex,
     setTransformMode,
     setGridSnapM,
     setShadowsEnabled,
     setUseHdriEnvironment,
+    setCameraMode,
+    setFlySpeedMps,
+    setCollisionArtifactsStatus,
     undo,
     redo,
     updatePlacedObject,
     updateInteriorPlacement,
+    updateCellPlacement,
+    updatePrefabComponent,
+    updateFloorOverrideObjectPatch,
     addFloorObject,
     deleteFloorObject,
     duplicateFloorObject,
     addInteriorPlacement,
     deleteInteriorPlacement,
     duplicateInteriorPlacement,
+    addCellPlacement,
+    deleteCellPlacement,
+    duplicateCellPlacement,
+    addPrefabComponent,
+    deletePrefabComponent,
+    duplicatePrefabComponent,
     patchBuilding,
     setSelectedId,
   } = useEditorStore(useShallow(selectEditorChromeStore));
@@ -77,70 +131,224 @@ export function EditorChrome() {
 
   const activeFloorDoc = floorDocs[activeFloorDocId];
   const activeInteriorDoc = interiorDocs[activeInteriorDocId];
+  const activeCellDoc = cellDocs[activeCellDocId];
+  const activePrefabDef = activePrefabDefId ? prefabDefs[activePrefabDefId] : undefined;
+  const activeFloorOverrideDoc = activeFloorOverrideDocId
+    ? floorOverrideDocs[activeFloorOverrideDocId]
+    : undefined;
 
-  const { selectedFloorObj, selectedInteriorPl, metaText, setMetaText, metaErr, setMetaErr } =
-    useEditorChromeSelectionMeta(activeFloorDoc, activeInteriorDoc, selectedId);
+  const {
+    selectedFloorObj,
+    selectedInteriorPl,
+    selectedCellPl,
+    selectedPrefabComponent,
+    selectedFloorOverridePatch,
+    metaText,
+    setMetaText,
+    metaErr,
+    setMetaErr,
+  } = useEditorChromeSelectionMeta(
+    activeFloorDoc,
+    activeInteriorDoc,
+    activeCellDoc,
+    activePrefabDef,
+    activeFloorOverrideDoc,
+    selectedId,
+  );
 
   const floorPrefabIds = useMemo(() => collectPrefabIdsFromFloors(floorDocs), [floorDocs]);
   const interiorPrefabIds = useMemo(
     () => collectPrefabIdsFromInteriors(interiorDocs),
     [interiorDocs],
   );
+  const cellPrefabIds = useMemo(() => collectPrefabIdsFromCells(cellDocs), [cellDocs]);
+  const knownPrefabIds = useMemo(
+    () => collectPrefabIdsFromPrefabDefs(prefabDefs),
+    [prefabDefs],
+  );
+
+  const refreshCollisionStatus = useCallback(async () => {
+    try {
+      const next = (await fetchCollisionArtifactsStatus()) as typeof collisionArtifactsStatus;
+      setCollisionArtifactsStatus(next ?? null);
+    } catch {
+      /* ignore */
+    }
+  }, [collisionArtifactsStatus, setCollisionArtifactsStatus]);
+
+  useEffect(() => {
+    void refreshCollisionStatus();
+  }, [refreshCollisionStatus]);
 
   const onReload = useCallback(async () => {
     setSaveMsg(null);
     try {
       await reloadEditorFromContent();
+      await refreshCollisionStatus();
       setSaveMsg("Reloaded from disk.");
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [refreshCollisionStatus]);
 
   const onSaveDisk = useCallback(async () => {
     setSaveMsg(null);
     try {
-      if (mode === "floor") {
+      if (mode === "cab") {
+        await postSaveElevatorCab(serializeElevatorCabDefPretty(elevatorCabDef));
+      } else if (mode === "landing_preview") {
+        await postSaveLandingKit(serializeLandingKitDefPretty(landingKitDef));
+      } else if (mode === "floor") {
         const doc = floorDocs[activeFloorDocId];
         if (!doc) throw new Error("No active floor doc");
         await postSaveFloor(activeFloorDocId, serializeFloorDocPretty(doc));
-      } else {
+      } else if (mode === "interior") {
         const doc = interiorDocs[activeInteriorDocId];
         if (!doc) throw new Error("No active interior doc");
         await postSaveInterior(activeInteriorDocId, serializeInteriorDocPretty(doc));
+      } else if (mode === "cell") {
+        const doc = cellDocs[activeCellDocId];
+        if (!doc) throw new Error("No active cell doc");
+        await postSaveCell(activeCellDocId, serializeCellDocPretty(doc));
+      } else if (mode === "prefab") {
+        if (!activePrefabDefId || !activePrefabDef) throw new Error("No active prefab def");
+        await postSavePrefab(activePrefabDefId, serializePrefabDefPretty(activePrefabDef));
+      } else if (mode === "floor_override") {
+        if (!activeFloorOverrideDocId || !activeFloorOverrideDoc) {
+          throw new Error("No active floor override doc");
+        }
+        await postSaveFloorOverride(
+          activeFloorOverrideDocId,
+          serializeFloorOverrideDocPretty(activeFloorOverrideDoc),
+        );
       }
       useEditorStore.getState().setDirty(false);
-      setSaveMsg("Saved to content/ (EDITOR_SAVE=1).");
+      await refreshCollisionStatus();
+      setSaveMsg("Saved to content/ (disk write OK).");
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }
-  }, [mode, floorDocs, interiorDocs, activeFloorDocId, activeInteriorDocId]);
+  }, [
+    mode,
+    elevatorCabDef,
+    landingKitDef,
+    floorDocs,
+    interiorDocs,
+    cellDocs,
+    activeFloorDocId,
+    activeInteriorDocId,
+    activeCellDocId,
+    activePrefabDefId,
+    activePrefabDef,
+    activeFloorOverrideDocId,
+    activeFloorOverrideDoc,
+    refreshCollisionStatus,
+  ]);
 
   const onSaveBuilding = useCallback(async () => {
     setSaveMsg(null);
     try {
       await postSaveBuilding(serializeBuildingDocPretty(building));
+      useEditorStore.getState().setDirty(false);
+      await refreshCollisionStatus();
       setSaveMsg("Saved mammoth.json.");
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }
-  }, [building]);
+  }, [building, refreshCollisionStatus]);
+
+  const onRebuildCollision = useCallback(async () => {
+    setSaveMsg(null);
+    try {
+      const out = (await postRebuildServerCollision()) as {
+        stdout?: string;
+        status?: typeof collisionArtifactsStatus;
+      };
+      if (out.status) setCollisionArtifactsStatus(out.status);
+      setSaveMsg(out.stdout?.trim() || "Rebuilt walk/collision artifacts.");
+    } catch (e) {
+      setSaveMsg(e instanceof Error ? e.message : String(e));
+    }
+  }, [collisionArtifactsStatus, setCollisionArtifactsStatus]);
 
   const euler = useMemo(() => {
+    if (mode === "cab" && selectedId) {
+      const r = elevatorCabDef.partTransforms?.[selectedId]?.rotation;
+      if (r) return quatToEulerDeg(r);
+      return [0, 0, 0] as [number, number, number];
+    }
+    if (
+      mode === "landing_preview" &&
+      selectedId &&
+      selectedId !== "landing_door_kit" &&
+      selectedId !== LANDING_DOOR_OPENING_PROXY_ID
+    ) {
+      const r = landingKitDef.partTransforms?.[selectedId]?.rotation;
+      if (r) return quatToEulerDeg(r);
+      return [0, 0, 0] as [number, number, number];
+    }
     if (selectedFloorObj) return quatToEulerDeg(selectedFloorObj.rotation);
     if (selectedInteriorPl) return quatToEulerDeg(selectedInteriorPl.rotation);
+    if (selectedCellPl) return quatToEulerDeg(selectedCellPl.rotation);
+    if (selectedPrefabComponent) return quatToEulerDeg(selectedPrefabComponent.rotation);
     return [0, 0, 0] as [number, number, number];
-  }, [selectedFloorObj, selectedInteriorPl]);
+  }, [
+    mode,
+    selectedId,
+    elevatorCabDef,
+    landingKitDef,
+    selectedFloorObj,
+    selectedInteriorPl,
+    selectedCellPl,
+    selectedPrefabComponent,
+  ]);
 
   const updateEuler = (ix: 0 | 1 | 2, v: number) => {
     const base = euler;
     const next: [number, number, number] = [...base] as [number, number, number];
     next[ix] = v;
     const q = eulerDegToQuat(next[0], next[1], next[2]);
+    if (mode === "cab" && selectedId) {
+      patchElevatorCabDef((d) => ({
+        ...d,
+        partTransforms: {
+          ...d.partTransforms,
+          [selectedId]: {
+            ...d.partTransforms?.[selectedId],
+            rotation: q,
+          },
+        },
+      }));
+      return;
+    }
+    if (
+      mode === "landing_preview" &&
+      selectedId &&
+      selectedId !== "landing_door_kit" &&
+      selectedId !== LANDING_DOOR_OPENING_PROXY_ID
+    ) {
+      patchLandingKitDef((d) => ({
+        ...d,
+        partTransforms: {
+          ...d.partTransforms,
+          [selectedId]: {
+            ...d.partTransforms?.[selectedId],
+            rotation: q,
+          },
+        },
+      }));
+      return;
+    }
     if (mode === "floor" && selectedId) {
       updatePlacedObject(activeFloorDocId, selectedId, { rotation: q });
     } else if (mode === "interior" && selectedId) {
       updateInteriorPlacement(activeInteriorDocId, selectedId, { rotation: q });
+    } else if (mode === "cell" && selectedId) {
+      updateCellPlacement(activeCellDocId, selectedId, { rotation: q });
+    } else if (mode === "prefab" && selectedId && activePrefabDefId) {
+      updatePrefabComponent(activePrefabDefId, selectedId, { rotation: q });
+    } else if (mode === "floor_override" && selectedId && activeFloorOverrideDocId) {
+      updateFloorOverrideObjectPatch(activeFloorOverrideDocId, selectedId, { rotation: q });
     }
   };
 
@@ -148,45 +356,92 @@ export function EditorChrome() {
   const label = editorChromeLabel;
   const input = editorChromeInput;
   const rowBtn = editorChromeRowBtn;
+  const paletteIds =
+    mode === "floor"
+      ? floorPrefabIds
+      : mode === "interior"
+        ? interiorPrefabIds
+        : mode === "cell"
+          ? cellPrefabIds
+          : knownPrefabIds;
+
+  const landingKindBtn = (kind: LandingDocKind, title: string) => (
+    <button
+      key={kind}
+      type="button"
+      style={{
+        ...rowBtn,
+        fontWeight: landingDocKind === kind ? 700 : 400,
+        background: landingDocKind === kind ? "#3a4a7a" : "#2a2a34",
+        border: "1px solid #444",
+        color: "#fff",
+      }}
+      onClick={() => {
+        setLandingDocKind(kind);
+        setCameraMode("fly");
+      }}
+    >
+      {title}
+    </button>
+  );
 
   return (
     <div style={editorChromePanel}>
-      <strong style={{ fontSize: 15 }}>Level editor</strong>
+      <strong style={{ fontSize: 15 }}>Authoring</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
-        <strong>FloorDoc</strong> is one horizontal plate (objects = corridor / shafts / unit
-        shells). <strong>Storey</strong> is a row in mammoth.json: same plate doc can repeat at
-        many levels. <strong>InteriorDoc</strong> is lobby / unit stream geometry (placements).{" "}
-        <strong>FP viewmodel</strong> uses the gameplay hand + crowbar rig for layout (port{" "}
-        <code>5174</code>).
+        <strong>Cab</strong> and <strong>Landing</strong> edit shared elevator visuals (
+        <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
+        <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>
+        ). <strong>World</strong> is the building + streamed docs: fly the stack, pick placements,
+        and save local JSON. <strong>FP viewmodel</strong> is advanced first-person rig layout.
       </p>
 
-      <span style={label}>Mode</span>
+      <span style={label}>Workspace</span>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         <button
           type="button"
           style={{
             ...rowBtn,
-            fontWeight: mode === "floor" ? 700 : 400,
-            background: mode === "floor" ? "#3a4a7a" : "#2a2a34",
+            fontWeight: workspace === "cab" ? 700 : 400,
+            background: workspace === "cab" ? "#3a4a7a" : "#2a2a34",
             border: "1px solid #444",
             color: "#fff",
           }}
-          onClick={() => setMode("floor")}
+          onClick={() => setWorkspace("cab")}
         >
-          Floors (building stack)
+          Cab
         </button>
         <button
           type="button"
           style={{
             ...rowBtn,
-            fontWeight: mode === "interior" ? 700 : 400,
-            background: mode === "interior" ? "#3a4a7a" : "#2a2a34",
+            fontWeight: workspace === "landing" ? 700 : 400,
+            background: workspace === "landing" ? "#3a4a7a" : "#2a2a34",
             border: "1px solid #444",
             color: "#fff",
           }}
-          onClick={() => setMode("interior")}
+          onClick={() => {
+            setWorkspace("landing");
+            setCameraMode("fly");
+          }}
         >
-          Interior
+          Landing
+        </button>
+        <button
+          type="button"
+          style={{
+            ...rowBtn,
+            fontWeight: workspace === "world" ? 700 : 400,
+            background: workspace === "world" ? "#3a4a7a" : "#2a2a34",
+            border: "1px solid #444",
+            color: "#fff",
+          }}
+          onClick={() => {
+            setWorkspace("world");
+            setCameraMode("fly");
+          }}
+        >
+          World
         </button>
         <button
           type="button"
@@ -203,6 +458,107 @@ export function EditorChrome() {
         </button>
       </div>
 
+      {workspace === "landing" ? (
+        <>
+          <span style={label}>Landing target</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {landingKindBtn("kit", "Door kit (shared)")}
+            {landingKindBtn("interior", "Interior doc")}
+            {landingKindBtn("cell", "Cell doc")}
+            {landingKindBtn("prefab", "Prefab def")}
+            {landingKindBtn("floor_override", "Floor override")}
+          </div>
+        </>
+      ) : null}
+
+      {workspace === "world" ? (
+        <>
+          <span style={label}>World scope</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <button
+              type="button"
+              style={{
+                ...rowBtn,
+                fontWeight: mode === "floor" ? 700 : 400,
+                background: mode === "floor" ? "#3a4a7a" : "#2a2a34",
+                border: "1px solid #444",
+                color: "#fff",
+              }}
+              onClick={() => {
+                setMode("floor");
+                setCameraMode("fly");
+              }}
+            >
+              Building stack + cell
+            </button>
+            <button
+              type="button"
+              style={{
+                ...rowBtn,
+                fontWeight: mode === "interior" ? 700 : 400,
+                background: mode === "interior" ? "#3a4a7a" : "#2a2a34",
+                border: "1px solid #444",
+                color: "#fff",
+              }}
+              onClick={() => {
+                setMode("interior");
+                setCameraMode("fly");
+              }}
+            >
+              Interior
+            </button>
+            <button
+              type="button"
+              style={{
+                ...rowBtn,
+                fontWeight: mode === "cell" ? 700 : 400,
+                background: mode === "cell" ? "#3a4a7a" : "#2a2a34",
+                border: "1px solid #444",
+                color: "#fff",
+              }}
+              onClick={() => {
+                setMode("cell");
+                setCameraMode("fly");
+              }}
+            >
+              Cell
+            </button>
+            <button
+              type="button"
+              style={{
+                ...rowBtn,
+                fontWeight: mode === "prefab" ? 700 : 400,
+                background: mode === "prefab" ? "#3a4a7a" : "#2a2a34",
+                border: "1px solid #444",
+                color: "#fff",
+              }}
+              onClick={() => {
+                setMode("prefab");
+                setCameraMode("fly");
+              }}
+            >
+              Prefab
+            </button>
+            <button
+              type="button"
+              style={{
+                ...rowBtn,
+                fontWeight: mode === "floor_override" ? 700 : 400,
+                background: mode === "floor_override" ? "#3a4a7a" : "#2a2a34",
+                border: "1px solid #444",
+                color: "#fff",
+              }}
+              onClick={() => {
+                setMode("floor_override");
+                setCameraMode("fly");
+              }}
+            >
+              Floor override
+            </button>
+          </div>
+        </>
+      ) : null}
+
       {mode === "fp_viewmodel" ? (
         <EditorChromeFpViewmodel
           transformMode={transformMode}
@@ -212,7 +568,7 @@ export function EditorChrome() {
         />
       ) : null}
 
-      {mode === "floor" ? (
+      {mode === "floor" && workspace === "world" ? (
         <>
           <span style={label}>Storey (mammoth floorRefs)</span>
           <select
@@ -224,6 +580,7 @@ export function EditorChrome() {
               if (ref) {
                 setFocusedStoryLevelIndex(ref.levelIndex);
                 setActiveFloorDocId(ref.floorDocId);
+                requestAnimationFrame(() => frameFocusedStory());
               }
             }}
           >
@@ -247,6 +604,57 @@ export function EditorChrome() {
               </option>
             ))}
           </select>
+          <span style={label}>Quick picks</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <button type="button" style={rowBtn} onClick={() => frameEditorBuilding()}>
+              Frame building
+            </button>
+            <button type="button" style={rowBtn} onClick={() => frameFocusedStory()}>
+              Frame storey
+            </button>
+            <button
+              type="button"
+              style={rowBtn}
+              disabled={!selectedId}
+              onClick={() => frameEditorSelection()}
+            >
+              Frame selection
+            </button>
+            <button
+              type="button"
+              style={rowBtn}
+              disabled={!activeFloorDoc?.objects.some((o) =>
+                o.prefabId.toLowerCase().includes("elevator"),
+              )}
+              onClick={() => {
+                const firstElevator = activeFloorDoc?.objects.find((o) =>
+                  o.prefabId.toLowerCase().includes("elevator"),
+                );
+                if (!firstElevator) return;
+                setSelectedId(firstElevator.id);
+                requestAnimationFrame(() => frameEditorSelection());
+              }}
+            >
+              Pick elevator
+            </button>
+            <button
+              type="button"
+              style={rowBtn}
+              disabled={!activeFloorDoc?.objects.some((o) =>
+                o.prefabId.toLowerCase().includes("stair"),
+              )}
+              onClick={() => {
+                const firstStair = activeFloorDoc?.objects.find((o) =>
+                  o.prefabId.toLowerCase().includes("stair"),
+                );
+                if (!firstStair) return;
+                setSelectedId(firstStair.id);
+                requestAnimationFrame(() => frameEditorSelection());
+              }}
+            >
+              Pick stair
+            </button>
+          </div>
         </>
       ) : mode === "interior" ? (
         <>
@@ -263,10 +671,87 @@ export function EditorChrome() {
             ))}
           </select>
         </>
+      ) : mode === "cell" ? (
+        <>
+          <span style={label}>Cell document</span>
+          <select
+            style={input}
+            value={activeCellDocId}
+            onChange={(e) => setActiveCellDocId(e.target.value)}
+          >
+            {Object.keys(cellDocs).map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : mode === "prefab" ? (
+        <>
+          <span style={label}>Prefab definition</span>
+          <select
+            style={input}
+            value={activePrefabDefId ?? ""}
+            onChange={(e) => setActivePrefabDefId(e.target.value || null)}
+          >
+            <option value="">— pick prefab —</option>
+            {Object.keys(prefabDefs).map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </>
+      ) : mode === "floor_override" ? (
+        <>
+          <span style={label}>Floor override document</span>
+          <select
+            style={input}
+            value={activeFloorOverrideDocId ?? ""}
+            onChange={(e) => setActiveFloorOverrideDocId(e.target.value || null)}
+          >
+            <option value="">— pick override —</option>
+            {Object.keys(floorOverrideDocs).map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </>
       ) : null}
 
       {mode !== "fp_viewmodel" ? (
         <>
+      <span style={label}>Camera</span>
+      <div>
+        {(["orbit", "fly"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            style={{
+              ...rowBtn,
+              background: cameraMode === m ? "#5a3d2d" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => setCameraMode(m)}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      <span style={label}>Fly speed (m/s)</span>
+      <input
+        style={input}
+        type="number"
+        min={1}
+        step={1}
+        value={flySpeedMps}
+        onChange={(e) => setFlySpeedMps(Number(e.target.value) || 1)}
+      />
+      <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+        Fly camera: hold left mouse to look, then use <code>WASD</code> + <code>R</code>/<code>F</code>.
+      </p>
       <span style={label}>Scene / gizmo</span>
       <div>
         {(["translate", "rotate", "scale"] as const).map((m) => (
@@ -350,12 +835,19 @@ export function EditorChrome() {
             Save to disk
           </button>
         ) : null}
+        <button type="button" style={rowBtn} onClick={() => onRebuildCollision()}>
+          Save + rebuild collision
+        </button>
         {mode !== "fp_viewmodel" ? (
         <button
           type="button"
           style={rowBtn}
           onClick={() => {
-            if (mode === "floor" && activeFloorDoc) {
+            if (mode === "cab") {
+              downloadText("cab.json", serializeElevatorCabDefPretty(elevatorCabDef));
+            } else if (mode === "landing_preview") {
+              downloadText("landing_kit.json", serializeLandingKitDefPretty(landingKitDef));
+            } else if (mode === "floor" && activeFloorDoc) {
               downloadText(
                 `${activeFloorDocId}.json`,
                 serializeFloorDocPretty(activeFloorDoc),
@@ -364,6 +856,22 @@ export function EditorChrome() {
               downloadText(
                 `${activeInteriorDocId}.json`,
                 serializeInteriorDocPretty(activeInteriorDoc),
+              );
+            } else if (mode === "cell" && activeCellDoc) {
+              downloadText(`${activeCellDocId}.json`, serializeCellDocPretty(activeCellDoc));
+            } else if (mode === "prefab" && activePrefabDef && activePrefabDefId) {
+              downloadText(
+                `${activePrefabDefId}.json`,
+                serializePrefabDefPretty(activePrefabDef),
+              );
+            } else if (
+              mode === "floor_override" &&
+              activeFloorOverrideDoc &&
+              activeFloorOverrideDocId
+            ) {
+              downloadText(
+                `${activeFloorOverrideDocId}.json`,
+                serializeFloorOverrideDocPretty(activeFloorOverrideDoc),
               );
             }
           }}
@@ -389,6 +897,11 @@ export function EditorChrome() {
       ) : null}
       {saveMsg ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>{saveMsg}</p>
+      ) : null}
+      {collisionArtifactsStatus ? (
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8" }}>
+          Collision artifacts: {collisionArtifactsStatus.stale ? "stale" : "up to date"}
+        </p>
       ) : null}
 
       {mode !== "fp_viewmodel" ? (
@@ -418,12 +931,17 @@ export function EditorChrome() {
         mode={mode}
         activeFloorDoc={activeFloorDoc}
         activeInteriorDoc={activeInteriorDoc}
+        activeCellDoc={activeCellDoc}
+        activePrefabDef={activePrefabDef}
+        activeFloorOverrideDoc={activeFloorOverrideDoc}
         selectedId={selectedId}
         setSelectedId={setSelectedId}
         label={label}
       />
 
-      <span style={label}>Prefab palette</span>
+      {mode !== "cab" && mode !== "landing_preview" ? (
+        <>
+          <span style={label}>Prefab palette</span>
       <select
         style={{ ...input, marginBottom: 6 }}
         id="editor-prefab-palette"
@@ -431,7 +949,7 @@ export function EditorChrome() {
         onChange={() => {}}
       >
         <option value="">— pick prefab —</option>
-        {(mode === "floor" ? floorPrefabIds : interiorPrefabIds).map((id) => (
+        {paletteIds.map((id) => (
           <option key={id} value={id}>
             {id}
           </option>
@@ -448,7 +966,7 @@ export function EditorChrome() {
             ) as HTMLSelectElement | null;
             const prefabId =
               sel?.value ||
-              (mode === "floor" ? floorPrefabIds[0] : interiorPrefabIds[0]) ||
+              paletteIds[0] ||
               "corridor_segment_a";
             const pos = spawnInFrontOfCamera(16);
             if (mode === "floor") {
@@ -459,6 +977,26 @@ export function EditorChrome() {
                 scale: [1, 1, 1],
               });
             } else {
+              if (mode === "cell") {
+                addCellPlacement(activeCellDocId, {
+                  entityId: crypto.randomUUID(),
+                  prefabId,
+                  position: pos,
+                  scale: [1, 1, 1],
+                });
+                return;
+              }
+              if (mode === "prefab" && activePrefabDefId) {
+                addPrefabComponent(activePrefabDefId, {
+                  id: crypto.randomUUID(),
+                  prefabId,
+                  position: pos,
+                  scale: [1, 1, 1],
+                  sockets: [],
+                  tags: [],
+                });
+                return;
+              }
               addInteriorPlacement(activeInteriorDocId, {
                 entityId: crypto.randomUUID(),
                 prefabId,
@@ -478,7 +1016,12 @@ export function EditorChrome() {
             if (!selectedId) return;
             if (mode === "floor")
               duplicateFloorObject(activeFloorDocId, selectedId);
-            else duplicateInteriorPlacement(activeInteriorDocId, selectedId);
+            else if (mode === "interior")
+              duplicateInteriorPlacement(activeInteriorDocId, selectedId);
+            else if (mode === "cell")
+              duplicateCellPlacement(activeCellDocId, selectedId);
+            else if (mode === "prefab" && activePrefabDefId)
+              duplicatePrefabComponent(activePrefabDefId, selectedId);
           }}
         >
           Duplicate
@@ -491,19 +1034,38 @@ export function EditorChrome() {
             if (!selectedId) return;
             if (mode === "floor")
               deleteFloorObject(activeFloorDocId, selectedId);
-            else deleteInteriorPlacement(activeInteriorDocId, selectedId);
+            else if (mode === "interior")
+              deleteInteriorPlacement(activeInteriorDocId, selectedId);
+            else if (mode === "cell")
+              deleteCellPlacement(activeCellDocId, selectedId);
+            else if (mode === "prefab" && activePrefabDefId)
+              deletePrefabComponent(activePrefabDefId, selectedId);
           }}
         >
           Delete
         </button>
       </div>
+        </>
+      ) : null}
 
       <EditorChromeInspector
+        workspace={workspace}
+        mode={mode}
+        elevatorCabDef={elevatorCabDef}
+        landingKitDef={landingKitDef}
+        patchElevatorCabDef={patchElevatorCabDef}
+        patchLandingKitDef={patchLandingKitDef}
         selectedId={selectedId}
         selectedFloorObj={selectedFloorObj}
         selectedInteriorPl={selectedInteriorPl}
+        selectedCellPl={selectedCellPl}
+        selectedPrefabComponent={selectedPrefabComponent}
+        selectedFloorOverridePatch={selectedFloorOverridePatch}
         activeFloorDocId={activeFloorDocId}
         activeInteriorDocId={activeInteriorDocId}
+        activeCellDocId={activeCellDocId}
+        activePrefabDefId={activePrefabDefId}
+        activeFloorOverrideDocId={activeFloorOverrideDocId}
         metaText={metaText}
         setMetaText={setMetaText}
         metaErr={metaErr}
@@ -512,6 +1074,9 @@ export function EditorChrome() {
         updateEuler={updateEuler}
         updatePlacedObject={updatePlacedObject}
         updateInteriorPlacement={updateInteriorPlacement}
+        updateCellPlacement={updateCellPlacement}
+        updatePrefabComponent={updatePrefabComponent}
+        updateFloorOverrideObjectPatch={updateFloorOverrideObjectPatch}
         label={label}
         input={input}
       />

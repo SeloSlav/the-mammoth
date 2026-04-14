@@ -1,9 +1,11 @@
 import {
   BuildingDocSchema,
   CellDocSchema,
+  ElevatorCabDefSchema,
   FloorDocSchema,
   FloorOverrideDocSchema,
   InteriorDocSchema,
+  LandingKitDefSchema,
   PrefabDefSchema,
   type BuildingDoc,
   type CellDoc,
@@ -16,6 +18,7 @@ import { useEditorStore } from "../state/editorStore.js";
 import {
   type EditorContentIndex,
   EDITOR_BUILDING_FILE,
+  EDITOR_ELEVATOR_DIR,
 } from "./editorContentDiscovery.js";
 
 async function fetchJson(path: string): Promise<unknown> {
@@ -49,6 +52,8 @@ async function fetchEditorContentIndex(building: BuildingDoc): Promise<EditorCon
       cellDocIds: ["cell_0_0"],
       prefabDefIds: [],
       floorOverrideDocIds: [],
+      elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
+      landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
     };
   }
 }
@@ -96,6 +101,21 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     );
   }
 
+  let elevatorCabDef: import("@the-mammoth/schemas").ElevatorCabDef | undefined;
+  let landingKitDef: import("@the-mammoth/schemas").LandingKitDef | undefined;
+  try {
+    elevatorCabDef = ElevatorCabDefSchema.parse(await fetchJson(`/content/elevator/cab.json`));
+  } catch {
+    /* optional until first save */
+  }
+  try {
+    landingKitDef = LandingKitDefSchema.parse(
+      await fetchJson(`/content/elevator/landing_kit.json`),
+    );
+  } catch {
+    /* optional */
+  }
+
   const sorted = [...building.floorRefs].sort(
     (a, b) => a.levelIndex - b.levelIndex,
   );
@@ -105,10 +125,12 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     building,
     floorDocs,
     interiorDocs,
-      cellDocs,
-      prefabDefs,
-      floorOverrideDocs,
-      contentIndex,
+    cellDocs,
+    prefabDefs,
+    floorOverrideDocs,
+    contentIndex,
+    ...(elevatorCabDef ? { elevatorCabDef } : {}),
+    ...(landingKitDef ? { landingKitDef } : {}),
     activeFloorDocId: first?.floorDocId ?? floorIds[0] ?? "floor_mamutica_ground",
     focusedStoryLevelIndex: first?.levelIndex ?? 1,
     activeInteriorDocId: interiorIds[0] ?? "lobby_central",

@@ -2,26 +2,31 @@ import * as THREE from "three";
 import {
   BuildingDocSchema,
   CellDocSchema,
+  ElevatorCabDefSchema,
   FloorDocSchema,
   FloorOverrideDocSchema,
   InteriorDocSchema,
+  LandingKitDefSchema,
   PrefabDefSchema,
   type BuildingDoc,
   type CellDoc,
   type CellPlacement,
   type DecalInstance,
+  type ElevatorCabDef,
   type FloorDoc,
   type FloorOverrideDoc,
   type InteriorDoc,
+  type LandingKitDef,
   type PrefabDef,
 } from "@the-mammoth/schemas";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import {
   elevatorDoorFacesFromGroundFloorDoc,
+  readElevatorDoorFaceOverride,
   type BuildFloorMeshesOptions,
 } from "./elevatorDoorFacesFromGroundFloorDoc.js";
 
-export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc };
+export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc, readElevatorDoorFaceOverride };
 export type { BuildFloorMeshesOptions };
 export {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
@@ -97,6 +102,28 @@ export {
   landingKatSignTextForStory,
   oppositeCardinalFace,
 } from "./elevatorLandingKatSign.js";
+export {
+  applyCabMaterialSlot,
+  applyLandingFrameSlot,
+  applyLandingGlassSlot,
+  parseAuthorColorHex,
+} from "./elevatorVisualMaterialUtils.js";
+export {
+  applyElevatorCabPartTransforms,
+  buildElevatorCabCarPreviewRoot,
+} from "./elevatorCabPreview.js";
+export {
+  glassOpeningFromProxyMesh,
+  LANDING_DOOR_GLASS_PART_ID,
+  LANDING_DOOR_OPENING_PROXY_ID,
+  populateExteriorLandingDoorSwing,
+  resolveGlassOpening,
+} from "./exteriorLandingDoorSwing.js";
+export {
+  applyLandingKitPartTransforms,
+  buildLandingDoorPreviewRoot,
+  rebuildLandingDoorPreviewSwing,
+} from "./landingDoorPreview.js";
 
 export function parseFloorDoc(raw: unknown): FloorDoc {
   return FloorDocSchema.parse(raw);
@@ -120,6 +147,14 @@ export function parseBuildingDoc(raw: unknown): BuildingDoc {
 
 export function parsePrefabDef(raw: unknown): PrefabDef {
   return PrefabDefSchema.parse(raw);
+}
+
+export function parseElevatorCabDef(raw: unknown): ElevatorCabDef {
+  return ElevatorCabDefSchema.parse(raw);
+}
+
+export function parseLandingKitDef(raw: unknown): LandingKitDef {
+  return LandingKitDefSchema.parse(raw);
 }
 
 function addPlacementMeshes(

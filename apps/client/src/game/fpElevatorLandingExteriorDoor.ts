@@ -9,6 +9,38 @@ export const EXTERIOR_DOOR_W_M = 1.86;
 export const EXTERIOR_DOOR_H_M = 2.05;
 /** Match server `elevator::EXT_DOOR_COLLISION_OPEN_THRESH`. */
 export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
+/** Match server `elevator::EXT_DOOR_ANIM_SPEED` (swingOpen01 units per second). */
+export const EXTERIOR_DOOR_ANIM_SPEED = 2.05;
+/**
+ * Emit the thick exterior collision slab / legacy push-out only when the swing is essentially
+ * closed. Match server `elevator::EXT_DOOR_SOLID_SLAB_MAX_SWING`. Mid-swing, the slab does not
+ * follow the mesh, so player collision is disabled to avoid jitter.
+ */
+export const EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING = 0.025;
+
+/** True when the static "closed door" collision slab should affect the player. */
+export function fpElevExteriorDoorSolidPlayerSlabActive(swingOpen01: number): boolean {
+  return swingOpen01 <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING;
+}
+
+/**
+ * Smooth client visuals toward replicated `swingOpen01` without restarting a spline every tick.
+ * Caps step rate to match authoritative door animation speed.
+ */
+export function advanceExteriorDoorVisSwingTowardAuth(opts: {
+  current: number;
+  authoritative: number;
+  dtSec: number;
+  animSpeedPerSec: number;
+}): number {
+  const { current, authoritative, dtSec, animSpeedPerSec } = opts;
+  const dt = Math.max(0, dtSec);
+  const maxStep = Math.max(0, animSpeedPerSec * dt);
+  const d = authoritative - current;
+  if (Math.abs(d) <= 1e-6) return authoritative;
+  if (Math.abs(d) <= maxStep) return authoritative;
+  return current + Math.sign(d) * maxStep;
+}
 
 /** Narrow-ish strip at the sill for **E**. Must extend past the closed-door push-out so the door stays usable. Sync server `EXT_INTERACT_*`. */
 export const EXTERIOR_INTERACT_L0 = -0.28;
@@ -142,6 +174,31 @@ export function fpElevLandingExteriorDoorNearWorldPose(
   return Math.abs(py - cy) <= EXTERIOR_INTERACT_WORLD_Y_HALF_M;
 }
 
+/**
+ * World-space point near the center of the exterior door opening, used as an aim target for
+ * fallback interaction selection when the raycast misses the dedicated pick mesh.
+ */
+export function fpElevLandingExteriorDoorAimTargetWorld(
+  doorFace: ElevatorDoorFace,
+  plateWorldX: number,
+  plateWorldZ: number,
+  hx: number,
+  hz: number,
+  landingFeetWorldY: number,
+): { x: number; y: number; z: number } {
+  const y = landingFeetWorldY + 1.1;
+  switch (doorFace) {
+    case "e":
+      return { x: plateWorldX + hx, y, z: plateWorldZ };
+    case "w":
+      return { x: plateWorldX - hx, y, z: plateWorldZ };
+    case "n":
+      return { x: plateWorldX, y, z: plateWorldZ + hz };
+    case "s":
+      return { x: plateWorldX, y, z: plateWorldZ - hz };
+  }
+}
+
 /** Closed-door collision slab (plate-local). Sync server `exterior_collision_plate_local_ok`. */
 export function fpElevLandingExteriorDoorCollisionPlateLocal(
   doorFace: ElevatorDoorFace,
@@ -269,7 +326,8 @@ function inClosedCabOutsideDoorSlab(
 
 /**
  * Client-side block (FP prediction has no wall collision; server also clamps).
- * Mirrors `elevator::clamp_player_exterior_landing_doors` push-out logic.
+ * Mirrors `elevator::clamp_player_exterior_landing_doors` push-out logic (solid slab only while
+ * nearly fully closed — see `fpElevExteriorDoorSolidPlayerSlabActive`).
  */
 export function fpElevApplyClosedExteriorDoorCollisionClamp(
   pos: { x: number; y: number; z: number },
@@ -288,7 +346,7 @@ export function fpElevApplyClosedExteriorDoorCollisionClamp(
   },
 ): void {
   for (const row of opts.landingRows) {
-    if (!fpElevExteriorDoorBlocksPassage(row.swingOpen01)) continue;
+    if (!fpElevExteriorDoorSolidPlayerSlabActive(row.swingOpen01)) continue;
     const layout = opts.layoutByKey.get(row.shaftKey);
     const car = opts.carByShaft.get(row.shaftKey);
     if (!layout || !car) continue;

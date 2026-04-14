@@ -1,0 +1,24 @@
+{
+  "id": "default_landing_kit",
+  "version": 1,
+  "displayName": "Default landing door kit",
+  "materials": {
+    "frame": {
+      "colorHex": "0xc42b2b",
+      "roughness": 0.52,
+      "metalness": 0.12
+    },
+    "glass": {
+      "colorHex": "0xffffff",
+      "roughness": 0.06,
+      "metalness": 0,
+      "transmission": 0.92
+    }
+  },
+  "exteriorSwingMaxRad": 1.08,
+  "glassOpening": {
+    "widthM": 0.38,
+    "heightM": 1.06,
+    "centerYM": 0.1
+  }
+}

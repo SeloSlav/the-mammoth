@@ -11,6 +11,7 @@ import CleanupOldWorldSoundEventsReducer from "../cleanup_old_world_sound_events
 import ConsumeHotbarItemReducer from "../consume_hotbar_item_reducer";
 import DropItemReducer from "../drop_item_reducer";
 import ElevatorHailReducer from "../elevator_hail_reducer";
+import ElevatorLandingExteriorDoorSetReducer from "../elevator_landing_exterior_door_set_reducer";
 import ElevatorLandingExteriorDoorToggleReducer from "../elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "../elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "../move_item_to_hotbar_reducer";
@@ -31,6 +32,7 @@ export type CleanupOldWorldSoundEventsParams = __Infer<typeof CleanupOldWorldSou
 export type ConsumeHotbarItemParams = __Infer<typeof ConsumeHotbarItemReducer>;
 export type DropItemParams = __Infer<typeof DropItemReducer>;
 export type ElevatorHailParams = __Infer<typeof ElevatorHailReducer>;
+export type ElevatorLandingExteriorDoorSetParams = __Infer<typeof ElevatorLandingExteriorDoorSetReducer>;
 export type ElevatorLandingExteriorDoorToggleParams = __Infer<typeof ElevatorLandingExteriorDoorToggleReducer>;
 export type ElevatorSelectFloorParams = __Infer<typeof ElevatorSelectFloorReducer>;
 export type MoveItemToHotbarParams = __Infer<typeof MoveItemToHotbarReducer>;

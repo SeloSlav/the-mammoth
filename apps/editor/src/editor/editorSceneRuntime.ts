@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MOUSE } from "three";
+import { FlyControls } from "three/addons/controls/FlyControls.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
@@ -7,12 +8,19 @@ import {
   FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
   type LocalFirstPersonPresenter,
 } from "@the-mammoth/engine";
+import {
+  applyElevatorCabPartTransforms,
+  glassOpeningFromProxyMesh,
+  LANDING_DOOR_OPENING_PROXY_ID,
+  rebuildLandingDoorPreviewSwing,
+} from "@the-mammoth/world";
 import { useEditorStore } from "../state/editorStore.js";
 import {
   disposeSceneEnvironment,
   disposeSubtreeGpuAssets,
 } from "./disposeSubtree.js";
 import { registerEditorSpawnCalculator } from "./spawnBridge.js";
+import { registerEditorNavigationBridge } from "./editorNavigationBridge.js";
 import { FpViewmodelEditorSession } from "./fpViewmodelEditorSession.js";
 import {
   getFpViewmodelAuthoringPicks,
@@ -34,13 +42,17 @@ import {
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
   resolveInteriorPlacementTransformRoot,
+  resolveCabPartId,
+  resolveLandingKitPickId,
   resolvePlacedId,
 } from "./editorPlacementKeys.js";
 import { emptyFloorDoc } from "./editorEmptyFloorDoc.js";
 import {
+  syncCellTransforms,
   syncDuplicateFloorGroups,
   syncFloorTransforms,
   syncInteriorTransforms,
+  syncPrefabTransforms,
 } from "./editorFloorTransformSync.js";
 import { addEditorSceneLighting } from "./editorSceneLighting.js";
 import { createEditorPmremEnvironment } from "./editorSceneEnvironment.js";
@@ -109,9 +121,99 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   function commitLevelEditorAttachedTransformToStore(): void {
     if (programmaticTransformControlsDepth > 0) return;
     const store = useEditorStore.getState();
-    if (store.mode !== "floor" && store.mode !== "interior") return;
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (!attached) return;
+
+    if (store.mode === "cab") {
+      let o: THREE.Object3D | null = attached;
+      let partId: string | undefined;
+      while (o) {
+        partId = o.userData.editorCabPartId as string | undefined;
+        if (partId) break;
+        o = o.parent;
+      }
+      if (!partId || !o) return;
+      const pos: [number, number, number] = [o.position.x, o.position.y, o.position.z];
+      const rot: [number, number, number, number] = [
+        o.quaternion.x,
+        o.quaternion.y,
+        o.quaternion.z,
+        o.quaternion.w,
+      ];
+      const sc: [number, number, number] = [o.scale.x, o.scale.y, o.scale.z];
+      store.patchElevatorCabDef((d) => ({
+        ...d,
+        partTransforms: {
+          ...d.partTransforms,
+          [partId]: {
+            ...d.partTransforms?.[partId],
+            position: pos,
+            rotation: rot,
+            scale: sc,
+          },
+        },
+      }));
+      return;
+    }
+
+    if (store.mode === "landing_preview") {
+      let o: THREE.Object3D | null = attached;
+      while (o) {
+        if (o.userData.editorLandingOpeningProxy === true) {
+          const open = glassOpeningFromProxyMesh(o, store.landingKitDef);
+          store.patchLandingKitDef((d) => ({
+            ...d,
+            glassOpening: {
+              ...d.glassOpening,
+              widthM: open.widthM,
+              heightM: open.heightM,
+              centerYM: open.centerYM,
+            },
+          }));
+          return;
+        }
+        o = o.parent;
+      }
+      o = attached;
+      let partId: string | undefined;
+      while (o) {
+        partId = o.userData.editorLandingPartId as string | undefined;
+        if (partId) break;
+        o = o.parent;
+      }
+      if (!partId || !o) return;
+      const pos: [number, number, number] = [o.position.x, o.position.y, o.position.z];
+      const rot: [number, number, number, number] = [
+        o.quaternion.x,
+        o.quaternion.y,
+        o.quaternion.z,
+        o.quaternion.w,
+      ];
+      const sc: [number, number, number] = [o.scale.x, o.scale.y, o.scale.z];
+      store.patchLandingKitDef((d) => ({
+        ...d,
+        partTransforms: {
+          ...d.partTransforms,
+          [partId]: {
+            ...d.partTransforms?.[partId],
+            position: pos,
+            rotation: rot,
+            scale: sc,
+          },
+        },
+      }));
+      return;
+    }
+
+    if (
+      store.mode !== "floor" &&
+      store.mode !== "interior" &&
+      store.mode !== "cell" &&
+      store.mode !== "prefab" &&
+      store.mode !== "floor_override"
+    ) {
+      return;
+    }
     if (store.mode === "floor") {
       const root = resolveFloorPlacementTransformRoot(attached, store.floorDocs);
       if (!root) return;
@@ -139,7 +241,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         scale: sc,
       });
       syncDuplicateFloorGroups(contentRoot, id, root);
-    } else {
+    } else if (store.mode === "interior") {
       const intDocId = resolveGizmoInteriorDocId(attached, store.activeInteriorDocId);
       const doc = store.interiorDocs[intDocId];
       const root = resolveInteriorPlacementTransformRoot(attached, doc);
@@ -167,6 +269,84 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         rotation: rot,
         scale: sc,
       });
+    } else if (store.mode === "cell") {
+      const id =
+        (typeof attached.userData.placedObjectId === "string" && attached.userData.placedObjectId) ||
+        attached.name;
+      if (!id) return;
+      const pos: [number, number, number] = [
+        attached.position.x,
+        attached.position.y,
+        attached.position.z,
+      ];
+      const rot: [number, number, number, number] = [
+        attached.quaternion.x,
+        attached.quaternion.y,
+        attached.quaternion.z,
+        attached.quaternion.w,
+      ];
+      const sc: [number, number, number] = [
+        attached.scale.x,
+        attached.scale.y,
+        attached.scale.z,
+      ];
+      store.updateCellPlacement(store.activeCellDocId, id, {
+        position: pos,
+        rotation: rot,
+        scale: sc,
+      });
+    } else if (store.mode === "prefab") {
+      const id =
+        (typeof attached.userData.placedObjectId === "string" && attached.userData.placedObjectId) ||
+        attached.name;
+      if (!id || !store.activePrefabDefId) return;
+      const pos: [number, number, number] = [
+        attached.position.x,
+        attached.position.y,
+        attached.position.z,
+      ];
+      const rot: [number, number, number, number] = [
+        attached.quaternion.x,
+        attached.quaternion.y,
+        attached.quaternion.z,
+        attached.quaternion.w,
+      ];
+      const sc: [number, number, number] = [
+        attached.scale.x,
+        attached.scale.y,
+        attached.scale.z,
+      ];
+      store.updatePrefabComponent(store.activePrefabDefId, id, {
+        position: pos,
+        rotation: rot,
+        scale: sc,
+      });
+    } else if (store.activeFloorOverrideDocId) {
+      const root = resolveFloorPlacementTransformRoot(attached, store.floorDocs);
+      if (!root) return;
+      const id = floorPlacedObjectIdForTransformRoot(root, store.floorDocs);
+      if (!id) return;
+      const pos: [number, number, number] = [
+        root.position.x,
+        root.position.y,
+        root.position.z,
+      ];
+      const rot: [number, number, number, number] = [
+        root.quaternion.x,
+        root.quaternion.y,
+        root.quaternion.z,
+        root.quaternion.w,
+      ];
+      const sc: [number, number, number] = [
+        root.scale.x,
+        root.scale.y,
+        root.scale.z,
+      ];
+      store.updateFloorOverrideObjectPatch(store.activeFloorOverrideDocId, id, {
+        position: pos,
+        rotation: rot,
+        scale: sc,
+      });
     }
   }
 
@@ -182,7 +362,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
-      if (m === "floor" || m === "interior") syncTransformsFromStore();
+      if (m !== "fp_viewmodel") {
+        syncTransformsFromStore();
+        /** Landing swing rebuild replaces the mesh under the gizmo; re-attach to the new proxy. */
+        syncTransformAttachment();
+      }
     });
   });
 
@@ -193,6 +377,14 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     if (st.mode === "fp_viewmodel") {
       orbitControls.enabled = !active && st.fpAuthorCamera === "orbit";
       return;
+    }
+    /** Immediate camera off/on so fly/orbit release before the next Zustand tick. */
+    if (active) {
+      orbitControls.enabled = false;
+      flyControls.enabled = false;
+    } else {
+      orbitControls.enabled = st.cameraMode !== "fly";
+      flyControls.enabled = st.cameraMode === "fly";
     }
     if (!active) levelEditorTransformGesture = false;
     if (active) useEditorStore.getState().beginTransaction();
@@ -224,6 +416,11 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   orbitControls.minDistance = 0.22;
   orbitControls.maxDistance = 6;
   orbitControls.update();
+  const flyControls = new FlyControls(camera, canvas);
+  flyControls.movementSpeed = useEditorStore.getState().flySpeedMps;
+  flyControls.rollSpeed = 0.6;
+  flyControls.dragToLook = true;
+  flyControls.autoForward = false;
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -236,13 +433,156 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   let buildingRoot: THREE.Group | null = null;
   let lastBuiltContentEpoch = -1;
+  let shouldFrameAfterRebuild = true;
 
   let fpSession: FpViewmodelEditorSession | null = null;
   let fpSessionLoading = false;
+  /** Guards nested store updates during FP teardown (`setFpAuthorPickList([])`, etc.). */
+  let fpTeardownInProgress = false;
   /** Wireframe at canonical rig rest (head-pitch space); editor-only. */
   let fpDefaultRigAnchor: THREE.LineSegments | null = null;
   /** Last FP gizmo attach signature from store (refreshed in syncFpTransformAttachment). */
   let lastFpGizmoAttachKey = "";
+
+  function ancestorLevelIndex(obj: THREE.Object3D | null): number | null {
+    let cur = obj;
+    while (cur) {
+      const raw = cur.userData.mammothPlateLevelIndex;
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      cur = cur.parent;
+    }
+    return null;
+  }
+
+  function frameBox(box: THREE.Box3): void {
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const span = Math.max(size.x, size.y, size.z, 1);
+    camera.up.set(0, 1, 0);
+    orbitControls.target.copy(center);
+    camera.position
+      .copy(center)
+      .add(new THREE.Vector3(-0.82, 0.46, 0.68).normalize().multiplyScalar(Math.max(span * 1.5, 16)));
+    camera.lookAt(center);
+    orbitControls.update();
+  }
+
+  function frameObject(obj: THREE.Object3D | null): void {
+    if (!obj) return;
+    const box = new THREE.Box3().setFromObject(obj);
+    frameBox(box);
+  }
+
+  function frameFocusedStoryObject(): void {
+    if (!buildingRoot) return;
+    const focusedLevel = useEditorStore.getState().focusedStoryLevelIndex;
+    const levelNodes: THREE.Object3D[] = [];
+    buildingRoot.traverse((child) => {
+      if (child.userData.mammothPlateLevelIndex === focusedLevel) levelNodes.push(child);
+    });
+    const box = new THREE.Box3();
+    for (const node of levelNodes) {
+      box.expandByObject(node);
+    }
+    if (box.isEmpty()) {
+      frameObject(buildingRoot);
+      return;
+    }
+    frameBox(box);
+  }
+
+  function findBestSelectionTarget(): THREE.Object3D | null {
+    const s = useEditorStore.getState();
+    if (!buildingRoot || !s.selectedId) return null;
+    let target: THREE.Object3D | null = null;
+    let bestRank = -1;
+    let bestD = Infinity;
+    if (s.mode === "cab") {
+      buildingRoot.traverse((o) => {
+        const pid = o.userData.editorCabPartId as string | undefined;
+        if (pid !== s.selectedId) return;
+        target = o;
+      });
+      return target;
+    }
+    if (s.mode === "landing_preview") {
+      if (s.selectedId === "landing_door_kit") {
+        const door = buildingRoot.getObjectByName("editor_landing_door");
+        return door ?? null;
+      }
+      if (s.selectedId === LANDING_DOOR_OPENING_PROXY_ID) {
+        buildingRoot.traverse((o) => {
+          if (o.userData.editorLandingOpeningProxy === true) target = o;
+        });
+        return target;
+      }
+      buildingRoot.traverse((o) => {
+        const pid = o.userData.editorLandingPartId as string | undefined;
+        if (pid === s.selectedId) target = o;
+      });
+      return target;
+    }
+    if (s.mode === "floor") {
+      buildingRoot.traverse((o) => {
+        const root = resolveFloorPlacementTransformRoot(o, s.floorDocs);
+        if (root !== o) return;
+        const id = floorPlacedObjectIdForTransformRoot(o, s.floorDocs);
+        if (id !== s.selectedId) return;
+        if (resolveGizmoFloorDocId(o, s.activeFloorDocId) !== s.activeFloorDocId) return;
+        const levelIndex = ancestorLevelIndex(o);
+        const rank = levelIndex === s.focusedStoryLevelIndex ? 2 : 1;
+        const wp = new THREE.Vector3();
+        o.getWorldPosition(wp);
+        const d = wp.distanceToSquared(camera.position);
+        if (rank > bestRank || (rank === bestRank && d < bestD)) {
+          bestRank = rank;
+          bestD = d;
+          target = o;
+        }
+      });
+      return target;
+    }
+    if (s.mode === "interior") {
+      const intDoc = s.interiorDocs[s.activeInteriorDocId];
+      buildingRoot.traverse((o) => {
+        const root = resolveInteriorPlacementTransformRoot(o, intDoc);
+        if (root !== o) return;
+        const eid = interiorEntityIdForTransformRoot(o);
+        if (eid !== s.selectedId) return;
+        const wp = new THREE.Vector3();
+        o.getWorldPosition(wp);
+        const d = wp.distanceToSquared(camera.position);
+        if (d < bestD) {
+          bestD = d;
+          target = o;
+        }
+      });
+      return target;
+    }
+    buildingRoot.traverse((o) => {
+      const id =
+        (typeof o.userData.placedObjectId === "string" && o.userData.placedObjectId) || o.name;
+      if (id !== s.selectedId) return;
+      const levelIndex = ancestorLevelIndex(o);
+      const rank = levelIndex === s.focusedStoryLevelIndex ? 1 : 0;
+      const wp = new THREE.Vector3();
+      o.getWorldPosition(wp);
+      const d = wp.distanceToSquared(camera.position);
+      if (rank > bestRank || (rank === bestRank && d < bestD)) {
+        bestRank = rank;
+        bestD = d;
+        target = o;
+      }
+    });
+    return target;
+  }
+
+  registerEditorNavigationBridge({
+    frameEditorBuilding: () => frameObject(buildingRoot),
+    frameEditorSelection: () => frameObject(findBestSelectionTarget()),
+    frameFocusedStory: frameFocusedStoryObject,
+  });
 
   function disposeFpDefaultRigAnchor(): void {
     if (!fpDefaultRigAnchor) return;
@@ -310,6 +650,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   }
 
   function disposeFpViewmodelRuntimeOnly() {
+    if (fpTeardownInProgress) return;
     levelEditorTransformGesture = false;
     transformControls.enabled = true;
     rewireCanvasPrimaryPointerListeners();
@@ -332,18 +673,25 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   }
 
   function teardownFpSession() {
-    disposeFpViewmodelRuntimeOnly();
-    contentRoot.visible = true;
-    grid.visible = true;
-    camera.position.set(-38, 28, 22);
-    camera.lookAt(2, 18, 0);
-    orbitControls.target.set(0, 1.45, 0);
-    orbitControls.mouseButtons = {
-      LEFT: MOUSE.ROTATE,
-      MIDDLE: MOUSE.DOLLY,
-      RIGHT: MOUSE.PAN,
-    };
-    orbitControls.update();
+    if (fpTeardownInProgress) return;
+    fpTeardownInProgress = true;
+    try {
+      disposeFpViewmodelRuntimeOnly();
+      contentRoot.visible = true;
+      grid.visible = true;
+      shouldFrameAfterRebuild = true;
+      camera.position.set(-38, 28, 22);
+      camera.lookAt(2, 18, 0);
+      orbitControls.target.set(0, 1.45, 0);
+      orbitControls.mouseButtons = {
+        LEFT: MOUSE.ROTATE,
+        MIDDLE: MOUSE.DOLLY,
+        RIGHT: MOUSE.PAN,
+      };
+      orbitControls.update();
+    } finally {
+      fpTeardownInProgress = false;
+    }
   }
 
   function syncFpTransformAttachment() {
@@ -485,10 +833,19 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
     buildingRoot = buildEditorStructuralRoot({
       mode: s.mode,
+      workspace: s.workspace,
       building: s.building,
       floorDocs: s.floorDocs,
+      floorOverrideDocs: s.floorOverrideDocs,
       activeInteriorDocId: s.activeInteriorDocId,
       interiorDocs: s.interiorDocs,
+      activeCellDocId: s.activeCellDocId,
+      cellDocs: s.cellDocs,
+      activePrefabDefId: s.activePrefabDefId,
+      prefabDefs: s.prefabDefs,
+      activeFloorOverrideDocId: s.activeFloorOverrideDocId,
+      elevatorCabDef: s.elevatorCabDef,
+      landingKitDef: s.landingKitDef,
       textureLoader,
       emptyFloorDoc,
     });
@@ -496,15 +853,52 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     contentRoot.add(buildingRoot);
     syncTransformsFromStore();
     syncTransformAttachment();
+    if (shouldFrameAfterRebuild) {
+      shouldFrameAfterRebuild = false;
+      if (s.mode === "floor" || s.mode === "floor_override") frameFocusedStoryObject();
+      else if (s.mode === "cab" || s.mode === "landing_preview") frameObject(buildingRoot);
+      else frameObject(buildingRoot);
+    }
   };
 
   function syncTransformsFromStore() {
     if (!buildingRoot) return;
     const s = useEditorStore.getState();
-    if (s.mode === "floor") syncFloorTransforms(buildingRoot, s.floorDocs);
-    else {
+    if (s.mode === "floor") {
+      syncFloorTransforms(buildingRoot, s.floorDocs);
+      if (s.workspace === "world") {
+        const cellDoc = s.cellDocs[s.activeCellDocId];
+        if (cellDoc) {
+          const cellRoot = buildingRoot.getObjectByName(`cell:${cellDoc.id}`);
+          if (cellRoot) syncCellTransforms(cellRoot, cellDoc);
+        }
+      }
+    } else if (s.mode === "interior") {
       const doc = s.interiorDocs[s.activeInteriorDocId];
       if (doc) syncInteriorTransforms(buildingRoot, doc);
+    } else if (s.mode === "cell") {
+      const doc = s.cellDocs[s.activeCellDocId];
+      if (doc) syncCellTransforms(buildingRoot, doc);
+    } else if (s.mode === "prefab") {
+      const doc = s.activePrefabDefId ? s.prefabDefs[s.activePrefabDefId] : undefined;
+      if (doc) syncPrefabTransforms(buildingRoot, doc);
+    } else if (s.mode === "floor_override") {
+      syncFloorTransforms(buildingRoot, s.floorDocs);
+      if (s.workspace === "world") {
+        const cellDoc = s.cellDocs[s.activeCellDocId];
+        if (cellDoc) {
+          const cellRoot = buildingRoot.getObjectByName(`cell:${cellDoc.id}`);
+          if (cellRoot) syncCellTransforms(cellRoot, cellDoc);
+        }
+      }
+    } else if (s.mode === "cab") {
+      const cabPreview = buildingRoot.getObjectByName("editor_elevator_cab_preview");
+      if (cabPreview) applyElevatorCabPartTransforms(cabPreview, s.elevatorCabDef);
+    } else if (s.mode === "landing_preview") {
+      const door = buildingRoot.getObjectByName("editor_landing_door");
+      if (door instanceof THREE.Group) {
+        rebuildLandingDoorPreviewSwing(door, s.landingKitDef);
+      }
     }
   }
 
@@ -516,48 +910,26 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
         syncFpTransformAttachment();
         return;
       }
-      if (!buildingRoot || !s.selectedId) return;
-
-      let target: THREE.Object3D | null = null;
-      let bestD = Infinity;
-      if (s.mode === "floor") {
-        buildingRoot.traverse((o) => {
-          const root = resolveFloorPlacementTransformRoot(o, s.floorDocs);
-          if (root !== o) return;
-          const id = floorPlacedObjectIdForTransformRoot(o, s.floorDocs);
-          if (id !== s.selectedId) return;
-          const wp = new THREE.Vector3();
-          o.getWorldPosition(wp);
-          const d = wp.distanceToSquared(camera.position);
-          if (d < bestD) {
-            bestD = d;
-            target = o;
-          }
-        });
-      } else {
-        const intDoc = s.interiorDocs[s.activeInteriorDocId];
-        buildingRoot.traverse((o) => {
-          const root = resolveInteriorPlacementTransformRoot(o, intDoc);
-          if (root !== o) return;
-          const eid = interiorEntityIdForTransformRoot(o);
-          if (eid !== s.selectedId) return;
-          const wp = new THREE.Vector3();
-          o.getWorldPosition(wp);
-          const d = wp.distanceToSquared(camera.position);
-          if (d < bestD) {
-            bestD = d;
-            target = o;
-          }
-        });
+      if (s.mode === "landing_preview" && s.selectedId === "landing_door_kit") {
+        return;
       }
+      const target = findBestSelectionTarget();
       if (target) {
         transformControls.attach(target);
         transformControls.setMode(s.transformMode);
-        transformControls.setSize(1);
-        const snap = s.gridSnapM;
-        transformControls.setTranslationSnap(snap > 0 ? snap : null);
-        transformControls.setRotationSnap(snap > 0 ? THREE.MathUtils.degToRad(15) : null);
-        transformControls.setScaleSnap(snap > 0 ? snap : null);
+        const opening =
+          s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID;
+        transformControls.setSize(opening ? 1.35 : 1);
+        if (opening) {
+          transformControls.setTranslationSnap(null);
+          transformControls.setRotationSnap(null);
+          transformControls.setScaleSnap(null);
+        } else {
+          const snap = s.gridSnapM;
+          transformControls.setTranslationSnap(snap > 0 ? snap : null);
+          transformControls.setRotationSnap(snap > 0 ? THREE.MathUtils.degToRad(15) : null);
+          transformControls.setScaleSnap(snap > 0 ? snap : null);
+        }
       }
     });
   }
@@ -601,6 +973,9 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
   const unsub = useEditorStore.subscribe((s) => {
     editorStoreSyncDepth++;
     try {
+      if (s.mode !== prev.mode && s.mode !== "fp_viewmodel") {
+        shouldFrameAfterRebuild = true;
+      }
       if (s.mode === "fp_viewmodel" && prev.mode !== "fp_viewmodel") {
         document.exitPointerLock?.();
       }
@@ -618,7 +993,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
           contentRoot.visible = false;
           grid.visible = false;
         }
-      } else if (prev.mode === "fp_viewmodel") {
+      } else if (prev.mode === "fp_viewmodel" && !fpTeardownInProgress) {
         teardownFpSession();
       }
 
@@ -634,7 +1009,12 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
             s.floorDocs !== prev.floorDocs ||
             s.interiorDocs !== prev.interiorDocs ||
             s.building !== prev.building ||
-            s.activeInteriorDocId !== prev.activeInteriorDocId;
+            s.activeInteriorDocId !== prev.activeInteriorDocId ||
+            s.workspace !== prev.workspace ||
+            s.activeCellDocId !== prev.activeCellDocId ||
+            s.cellDocs !== prev.cellDocs ||
+            s.elevatorCabDef !== prev.elevatorCabDef ||
+            s.landingKitDef !== prev.landingKitDef;
           /**
            * Never sync meshes from store on unrelated updates (`fpAuthorLive`, pick list, dirty
            * flag, …). Those used to fire every RAF / UI tick and overwrote the gizmo mid-edit.
@@ -663,12 +1043,27 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
           s.transformMode !== prev.transformMode ||
           s.gridSnapM !== prev.gridSnapM ||
           s.mode !== prev.mode ||
-          s.activeInteriorDocId !== prev.activeInteriorDocId);
+          s.activeInteriorDocId !== prev.activeInteriorDocId ||
+          s.workspace !== prev.workspace ||
+          s.elevatorCabDef !== prev.elevatorCabDef ||
+          s.landingKitDef !== prev.landingKitDef);
       if (tcFp || tcLevel) {
         syncTransformAttachment();
       }
 
-      orbitControls.enabled = s.mode === "fp_viewmodel" && s.fpAuthorCamera === "orbit";
+      flyControls.movementSpeed = s.flySpeedMps;
+      /**
+       * While dragging the level-editor gizmo, Orbit + Fly must stay off — both use the primary
+       * button and would steal pointer capture from {@link TransformControls} (especially Fly
+       * `dragToLook` on LMB).
+       */
+      const gizmoDragging = transformControls.dragging === true;
+      const wantOrbit =
+        (s.mode === "fp_viewmodel" && s.fpAuthorCamera === "orbit") ||
+        (s.mode !== "fp_viewmodel" && s.cameraMode !== "fly");
+      const wantFly = s.mode !== "fp_viewmodel" && s.cameraMode === "fly";
+      orbitControls.enabled = !gizmoDragging && wantOrbit;
+      flyControls.enabled = !gizmoDragging && wantFly;
       if (s.mode === "fp_viewmodel" && s.fpAuthorCamera === "orbit") {
         orbitControls.mouseButtons = {
           LEFT: null,
@@ -681,6 +1076,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
           MIDDLE: MOUSE.DOLLY,
           RIGHT: MOUSE.PAN,
         };
+        camera.up.set(0, 1, 0);
       }
 
       if (s.shadowsEnabled !== prev.shadowsEnabled) {
@@ -764,8 +1160,27 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     const hit = intersects[0];
     const store = useEditorStore.getState();
     const id = hit
-      ? resolvePlacedId(hit.object, store.floorDocs)
+      ? store.mode === "cab"
+        ? resolveCabPartId(hit.object)
+        : store.mode === "landing_preview"
+          ? resolveLandingKitPickId(hit.object)
+          : resolvePlacedId(hit.object, store.floorDocs)
       : null;
+    if (hit && id && store.mode === "floor") {
+      const hitFloorDocId = resolveGizmoFloorDocId(hit.object, store.activeFloorDocId);
+      if (hitFloorDocId !== store.activeFloorDocId) {
+        useEditorStore.getState().setActiveFloorDocId(hitFloorDocId);
+      }
+      const hitLevelIndex = ancestorLevelIndex(hit.object);
+      if (hitLevelIndex !== null && hitLevelIndex !== store.focusedStoryLevelIndex) {
+        useEditorStore.getState().setFocusedStoryLevelIndex(hitLevelIndex);
+      }
+    } else if (hit && id && store.mode === "floor_override") {
+      const hitLevelIndex = ancestorLevelIndex(hit.object);
+      if (hitLevelIndex !== null && hitLevelIndex !== store.focusedStoryLevelIndex) {
+        useEditorStore.getState().setFocusedStoryLevelIndex(hitLevelIndex);
+      }
+    }
     useEditorStore.getState().setSelectedId(id);
   };
 
@@ -886,8 +1301,14 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
     renderCam.aspect = canvas.clientWidth / canvas.clientHeight;
     renderCam.updateProjectionMatrix();
     (transformControls as unknown as { camera: THREE.Camera }).camera = renderCam;
-    if (st.mode === "fp_viewmodel" && st.fpAuthorCamera === "orbit") {
-      orbitControls.update();
+    if (!tcDragging) {
+      if (st.mode === "fp_viewmodel" && st.fpAuthorCamera === "orbit") {
+        orbitControls.update();
+      } else if (st.mode !== "fp_viewmodel" && st.cameraMode === "fly") {
+        flyControls.update(dt);
+      } else if (st.mode !== "fp_viewmodel") {
+        orbitControls.update();
+      }
     }
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (attached && !objectLivesUnderScene(attached, scene)) {
@@ -899,6 +1320,7 @@ export function mountEditorScene(canvas: HTMLCanvasElement): () => void {
 
   return () => {
     registerEditorSpawnCalculator(null);
+    registerEditorNavigationBridge(null);
     teardownFpSession();
     orbitControls.dispose();
     cancelAnimationFrame(raf);

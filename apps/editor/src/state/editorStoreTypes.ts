@@ -1,11 +1,13 @@
 import type {
   BuildingDoc,
   CellDoc,
+  ElevatorCabDef,
   FloorDoc,
   FloorOverrideDoc,
   InteriorDoc,
-  PrefabDef,
+  LandingKitDef,
   PlacedObject,
+  PrefabDef,
 } from "@the-mammoth/schemas";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
 import type {
@@ -13,15 +15,23 @@ import type {
   EditorContentIndex,
 } from "../editor/editorContentDiscovery.js";
 
+/** Top-level authoring surface (3-button UX). */
+export type EditorWorkspace = "cab" | "landing" | "world";
+
+/** Landing workspace: shared door kit vs streamed documents. */
+export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
+
 export type EditorMode =
   | "floor"
   | "interior"
   | "cell"
   | "prefab"
   | "floor_override"
-  | "fp_viewmodel";
+  | "fp_viewmodel"
+  | "cab"
+  | "landing_preview";
 
-export type EditorCameraMode = "orbit" | "fly" | "top";
+export type EditorCameraMode = "orbit" | "fly";
 
 export type FpAuthorCameraKind = "gameplay" | "orbit";
 
@@ -42,12 +52,16 @@ export type HistoryEntry = {
   prefabDefs: Record<string, PrefabDef>;
   floorOverrideDocs: Record<string, FloorOverrideDoc>;
   building: BuildingDoc;
+  elevatorCabDef: ElevatorCabDef;
+  landingKitDef: LandingKitDef;
   selectedId: string | null;
   dirty: boolean;
   contentStructureEpoch: number;
 };
 
 export interface EditorState {
+  workspace: EditorWorkspace;
+  landingDocKind: LandingDocKind;
   mode: EditorMode;
   building: BuildingDoc;
   floorDocs: Record<string, FloorDoc>;
@@ -55,6 +69,8 @@ export interface EditorState {
   cellDocs: Record<string, CellDoc>;
   prefabDefs: Record<string, PrefabDef>;
   floorOverrideDocs: Record<string, FloorOverrideDoc>;
+  elevatorCabDef: ElevatorCabDef;
+  landingKitDef: LandingKitDef;
   contentIndex: EditorContentIndex;
   activeFloorDocId: string;
   activeInteriorDocId: string;
@@ -89,6 +105,10 @@ export interface EditorState {
   redo: () => void;
 
   setMode: (mode: EditorMode) => void;
+  setWorkspace: (workspace: EditorWorkspace) => void;
+  setLandingDocKind: (kind: LandingDocKind) => void;
+  patchElevatorCabDef: (fn: (d: ElevatorCabDef) => ElevatorCabDef) => void;
+  patchLandingKitDef: (fn: (d: LandingKitDef) => LandingKitDef) => void;
   setBuilding: (doc: BuildingDoc) => void;
   patchBuilding: (fn: (b: BuildingDoc) => BuildingDoc) => void;
   setFloorDoc: (id: string, doc: FloorDoc) => void;
@@ -198,4 +218,6 @@ export interface EditorState {
   replacePrefabDefFromRemote: (id: string, doc: PrefabDef) => void;
   replaceFloorOverrideDocFromRemote: (id: string, doc: FloorOverrideDoc) => void;
   replaceBuildingFromRemote: (doc: BuildingDoc) => void;
+  replaceElevatorCabDefFromRemote: (doc: ElevatorCabDef) => void;
+  replaceLandingKitDefFromRemote: (doc: LandingKitDef) => void;
 }

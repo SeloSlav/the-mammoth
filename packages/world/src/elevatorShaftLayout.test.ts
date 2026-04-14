@@ -78,4 +78,37 @@ describe("listElevatorShaftLayouts", () => {
     expect(layouts[0]!.plateX).toBe(-2);
     expect(layouts[0]!.plateZ).toBe(3);
   });
+
+  it("honors an authored elevator door face override", () => {
+    const ground: FloorDoc = {
+      id: "g",
+      version: 1,
+      objects: [
+        {
+          id: "lobby",
+          prefabId: "lobby_hall_a",
+          position: [0, 1.5, 0],
+          scale: [20, 3, 40],
+        },
+        {
+          id: "e1",
+          prefabId: "elevator_shaft_a",
+          position: [-2, 1.5, 3],
+          scale: [2.2, 3.1, 2.6],
+          metadata: { elevatorDoorFace: "n" },
+        },
+      ],
+    };
+    const building: BuildingDoc = {
+      id: "b",
+      version: 1,
+      floorRefs: [{ levelIndex: 1, floorDocId: "g" }],
+      cores: [],
+      units: [],
+      slotTemplates: [],
+    };
+    const layouts = listElevatorShaftLayouts(building, () => ground);
+    expect(layouts).toHaveLength(1);
+    expect(layouts[0]!.doorFace).toBe("n");
+  });
 });

@@ -1,5 +1,11 @@
 import * as THREE from "three";
-import type { FloorDoc, InteriorDoc, PlacedObject } from "@the-mammoth/schemas";
+import type {
+  CellDoc,
+  FloorDoc,
+  InteriorDoc,
+  PlacedObject,
+  PrefabDef,
+} from "@the-mammoth/schemas";
 import { useEditorStore } from "../state/editorStore.js";
 import { placementKey } from "./editorPlacementKeys.js";
 
@@ -49,6 +55,36 @@ export function syncInteriorTransforms(root: THREE.Object3D, doc: InteriorDoc) {
     ) {
       continue;
     }
+    o.position.set(p.position[0], p.position[1], p.position[2]);
+    if (p.rotation)
+      o.quaternion.set(p.rotation[0], p.rotation[1], p.rotation[2], p.rotation[3]);
+    else o.quaternion.identity();
+    const sx = p.scale?.[0] ?? 1;
+    const sy = p.scale?.[1] ?? 1;
+    const sz = p.scale?.[2] ?? 1;
+    o.scale.set(sx, sy, sz);
+  }
+}
+
+export function syncCellTransforms(root: THREE.Object3D, doc: CellDoc) {
+  for (const p of doc.placements) {
+    const o = root.getObjectByName(p.entityId);
+    if (!o) continue;
+    o.position.set(p.position[0], p.position[1], p.position[2]);
+    if (p.rotation)
+      o.quaternion.set(p.rotation[0], p.rotation[1], p.rotation[2], p.rotation[3]);
+    else o.quaternion.identity();
+    const sx = p.scale?.[0] ?? 1;
+    const sy = p.scale?.[1] ?? 1;
+    const sz = p.scale?.[2] ?? 1;
+    o.scale.set(sx, sy, sz);
+  }
+}
+
+export function syncPrefabTransforms(root: THREE.Object3D, doc: PrefabDef) {
+  for (const p of doc.components) {
+    const o = root.getObjectByName(p.id);
+    if (!o) continue;
     o.position.set(p.position[0], p.position[1], p.position[2]);
     if (p.rotation)
       o.quaternion.set(p.rotation[0], p.rotation[1], p.rotation[2], p.rotation[3]);

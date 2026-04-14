@@ -39,6 +39,7 @@ import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DropItemReducer from "./drop_item_reducer";
 import ElevatorHailReducer from "./elevator_hail_reducer";
+import ElevatorLandingExteriorDoorSetReducer from "./elevator_landing_exterior_door_set_reducer";
 import ElevatorLandingExteriorDoorToggleReducer from "./elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
@@ -261,6 +262,7 @@ const reducersSchema = __reducers(
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("drop_item", DropItemReducer),
   __reducerSchema("elevator_hail", ElevatorHailReducer),
+  __reducerSchema("elevator_landing_exterior_door_set", ElevatorLandingExteriorDoorSetReducer),
   __reducerSchema("elevator_landing_exterior_door_toggle", ElevatorLandingExteriorDoorToggleReducer),
   __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),

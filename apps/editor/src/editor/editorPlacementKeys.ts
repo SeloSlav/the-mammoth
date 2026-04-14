@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
+import {
+  LANDING_DOOR_GLASS_PART_ID,
+  LANDING_DOOR_OPENING_PROXY_ID,
+} from "@the-mammoth/world";
 
 export const PLACEMENT_KEY_SEP = "\u0000";
 
@@ -121,6 +125,44 @@ export function resolvePlacedId(
         if (d.objects.some((o) => o.id === cur!.name)) return cur.name;
       }
     }
+    cur = cur.parent;
+  }
+  return null;
+}
+
+/** Walks parents for `userData.editorCabPartId` (cab workspace picking). */
+export function resolveCabPartId(hit: THREE.Object3D | null): string | null {
+  let cur: THREE.Object3D | null = hit;
+  while (cur) {
+    const id = cur.userData.editorCabPartId;
+    if (typeof id === "string" && id.length > 0) return id;
+    cur = cur.parent;
+  }
+  return null;
+}
+
+/**
+ * Resolves landing workspace selection: opening proxy (framed hole), then other subparts; glass
+ * picks map to the opening proxy so the gizmo resizes the hole, not an isolated pane.
+ */
+export function resolveLandingKitPickId(hit: THREE.Object3D | null): string | null {
+  let cur: THREE.Object3D | null = hit;
+  while (cur) {
+    if (cur.userData.editorLandingOpeningProxy === true) return LANDING_DOOR_OPENING_PROXY_ID;
+    cur = cur.parent;
+  }
+  cur = hit;
+  while (cur) {
+    const part = cur.userData.editorLandingPartId;
+    if (typeof part === "string" && part.length > 0) {
+      if (part === LANDING_DOOR_GLASS_PART_ID) return LANDING_DOOR_OPENING_PROXY_ID;
+      return part;
+    }
+    cur = cur.parent;
+  }
+  cur = hit;
+  while (cur) {
+    if (cur.userData.editorLandingKitRoot === true) return "landing_door_kit";
     cur = cur.parent;
   }
   return null;

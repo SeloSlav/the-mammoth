@@ -4,7 +4,7 @@ import type { Connect } from "vite";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import checker from "vite-plugin-checker";
-import { editorDevMiddleware } from "./src/vite/editorDevMiddleware";
+import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware";
 
 const repoRoot = path.resolve(__dirname, "../..");
 const clientPublicRoot = path.resolve(repoRoot, "apps/client/public");
@@ -50,23 +50,52 @@ function editorClientPublicStaticMiddleware(): Connect.NextHandleFunction {
 
 export default defineConfig({
   plugins: [
-    react(),
-    checker({ typescript: { tsconfigPath: "tsconfig.json" } }),
+    /**
+     * `configureServer` + `order: "pre"` is not always enough: Vite’s own middleware can still sit
+     * earlier in Connect’s stack. We **prepend** so editor `/content` + `/__editor` handlers run
+     * before transforms / SPA fallback (fixes `POST /__editor/save-landing-kit` → 404).
+     */
     {
       name: "editor-dev-content",
-      configureServer(server) {
-        server.middlewares.use(editorClientPublicStaticMiddleware());
-        server.middlewares.use(editorDevMiddleware(repoRoot));
+      configureServer: {
+        order: "pre",
+        /**
+         * Lazy import keeps `vite.config` surface small; dev server is started with
+         * `node --import tsx` (see `package.json`) so workspace `.ts` packages resolve
+         * TypeScript-style `.js` import specifiers when Vite’s config bundle loads them as externals.
+         */
+        async handler(server) {
+          const { editorDevMiddleware } = await import("./src/vite/editorDevMiddleware");
+          prependConnectMiddleware(
+            server.middlewares,
+            editorDevMiddleware(repoRoot, { viteBase: server.config.base }),
+          );
+          prependConnectMiddleware(server.middlewares, editorClientPublicStaticMiddleware());
+        },
       },
-      configurePreviewServer(server) {
-        server.middlewares.use(editorClientPublicStaticMiddleware());
+      configurePreviewServer: {
+        order: "pre",
+        async handler(server) {
+          const { editorDevMiddleware } = await import("./src/vite/editorDevMiddleware");
+          prependConnectMiddleware(
+            server.middlewares,
+            editorDevMiddleware(repoRoot, { viteBase: server.config.base }),
+          );
+          prependConnectMiddleware(server.middlewares, editorClientPublicStaticMiddleware());
+        },
       },
     },
+    react(),
+    checker({ typescript: { tsconfigPath: "tsconfig.json" } }),
   ],
   server: {
     port: 5174,
-    /** If another editor instance holds 5174, pick the next free port instead of exiting. */
-    strictPort: false,
+    /** Fail fast if 5174 is taken so the app URL always matches `pnpm editor:dev` / docs (no silent5175 +404 confusion). */
+    strictPort: true,
     fs: { allow: [repoRoot] },
+  },
+  preview: {
+    port: 5174,
+    strictPort: true,
   },
 });

@@ -38,7 +38,10 @@ import {
   elevatorDoorFaceFromFloorCorridors,
   firstCorridorOrLobbyFromFloor,
 } from "./shaftCorridorFlush.js";
-import type { BuildFloorMeshesOptions } from "./elevatorDoorFacesFromGroundFloorDoc.js";
+import {
+  readElevatorDoorFaceOverride,
+  type BuildFloorMeshesOptions,
+} from "./elevatorDoorFacesFromGroundFloorDoc.js";
 import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
@@ -1215,8 +1218,10 @@ export function buildFloorMeshes(
     const ey = o.scale?.[1] ?? 1;
     const ez = o.scale?.[2] ?? 1;
     const skE = shaftPlanKey(o.position[0], o.position[2]);
+    const overrideFace = readElevatorDoorFaceOverride(o);
     const elevFace =
       opts?.elevatorDoorFaceByShaftKey?.get(skE) ??
+      overrideFace ??
       elevatorDoorFaceFromFloorCorridors(
         o.position[0],
         o.position[2],
@@ -1268,8 +1273,10 @@ export function buildFloorMeshes(
     const pid = obj.prefabId.toLowerCase();
     if (pid.includes("elevator")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
+      const overrideFace = readElevatorDoorFaceOverride(obj);
       const doorFace =
         opts?.elevatorDoorFaceByShaftKey?.get(sk) ??
+        overrideFace ??
         elevatorDoorFaceFromFloorCorridors(
           obj.position[0],
           obj.position[2],

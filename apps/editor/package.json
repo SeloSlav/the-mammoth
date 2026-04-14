@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "cross-env EDITOR_SAVE=1 node --import=tsx ./node_modules/vite/bin/vite.js",
+    "build": "tsc --noEmit && node --import=tsx ./node_modules/vite/bin/vite.js build",
+    "preview": "node --import=tsx ./node_modules/vite/bin/vite.js preview",
     "lint": "eslint .",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
@@ -30,7 +30,9 @@
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^7.0.3",
     "eslint": "^9.39.4",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.4",
     "vite-plugin-checker": "^0.12.0",

@@ -2,10 +2,13 @@ import { Vector3 } from "three";
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
 import { describe, expect, it } from "vitest";
 import {
+  advanceExteriorDoorVisSwingTowardAuth,
+  fpElevLandingExteriorDoorAimTargetWorld,
   fpElevApplyClosedCabDoorOutsideClamp,
   fpElevApplyClosedExteriorDoorCollisionClamp,
   fpElevApplyLandingHoistwayFrontWallClamp,
   fpElevLandingExteriorDoorCollisionPlateLocal,
+  EXTERIOR_DOOR_ANIM_SPEED,
   EXTERIOR_INTERACT_L0,
   EXTERIOR_INTERACT_L1,
   fpElevLandingExteriorDoorInteractPlateLocal,
@@ -82,6 +85,35 @@ describe("fpElevLandingExteriorDoorInteractPlateLocal", () => {
     );
     expect(ok).toBe(true);
   });
+
+  it("returns a sensible world aim target on the door face", () => {
+    const target = fpElevLandingExteriorDoorAimTargetWorld("e", 100, 200, hx, hz, fy);
+    expect(target.x).toBeCloseTo(100 + hx, 5);
+    expect(target.y).toBeCloseTo(fy + 1.1, 5);
+    expect(target.z).toBeCloseTo(200, 5);
+  });
+});
+
+describe("advanceExteriorDoorVisSwingTowardAuth", () => {
+  it("caps step rate to match authoritative animation speed", () => {
+    const next = advanceExteriorDoorVisSwingTowardAuth({
+      current: 0,
+      authoritative: 1,
+      dtSec: 0.05,
+      animSpeedPerSec: EXTERIOR_DOOR_ANIM_SPEED,
+    });
+    expect(next).toBeCloseTo(0.1025, 5);
+  });
+
+  it("snaps when within one step of the target", () => {
+    const next = advanceExteriorDoorVisSwingTowardAuth({
+      current: 0.99,
+      authoritative: 1,
+      dtSec: 0.05,
+      animSpeedPerSec: EXTERIOR_DOOR_ANIM_SPEED,
+    });
+    expect(next).toBe(1);
+  });
 });
 
 describe("closed elevator frontage clamps", () => {
@@ -98,6 +130,21 @@ describe("closed elevator frontage clamps", () => {
     });
     expect(pos.x).toBeLessThan(1.18);
     expect(vel.x).toBe(0);
+  });
+
+  it("does not apply the exterior slab clamp while the door is mid-swing", () => {
+    const pos = { x: 1.18, y: 11, z: 1.75 };
+    const vel = new Vector3(1, 0, 0);
+    fpElevApplyClosedExteriorDoorCollisionClamp(pos, vel, {
+      ox: 0,
+      oz: 0,
+      landingRows: [{ shaftKey: "shaft", level: 1, swingOpen01: 0.4 }],
+      layoutByKey: new Map([["shaft", shaftLayout]]),
+      carByShaft: new Map([["shaft", { plateX: 0, plateZ: 0 }]]),
+      feetYForLayout: () => 10,
+    });
+    expect(pos.x).toBe(1.18);
+    expect(vel.x).toBe(1);
   });
 
   it("pushes the player out of a closed cab even near the side wall", () => {

@@ -1,4 +1,4 @@
-import type { FloorDoc } from "@the-mammoth/schemas";
+import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { shaftPlanKey } from "./buildingStairShafts.js";
 import { elevatorDoorFaceFromFloorCorridors } from "./shaftCorridorFlush.js";
@@ -32,6 +32,17 @@ export type BuildFloorMeshesOptions = {
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
 };
 
+type ElevatorDoorFaceOverrideMeta = {
+  elevatorDoorFace?: unknown;
+};
+
+export function readElevatorDoorFaceOverride(
+  obj: Pick<PlacedObject, "metadata">,
+): CardinalFace | undefined {
+  const face = (obj.metadata as ElevatorDoorFaceOverrideMeta | undefined)?.elevatorDoorFace;
+  return face === "e" || face === "w" || face === "n" || face === "s" ? face : undefined;
+}
+
 /**
  * Ground-storey elevator door faces (plate-space), keyed by {@link shaftPlanKey} at each car’s XZ.
  */
@@ -55,15 +66,17 @@ export function elevatorDoorFacesFromGroundFloorDoc(
   for (const o of floor.objects) {
     if (!o.prefabId.toLowerCase().includes("elevator")) continue;
     const k = shaftPlanKey(o.position[0], o.position[2]);
+    const overrideFace = readElevatorDoorFaceOverride(o);
     out.set(
       k,
-      elevatorDoorFaceFromFloorCorridors(
-        o.position[0],
-        o.position[2],
-        floor,
-        plateCx,
-        plateCz,
-      ),
+      overrideFace ??
+        elevatorDoorFaceFromFloorCorridors(
+          o.position[0],
+          o.position[2],
+          floor,
+          plateCx,
+          plateCz,
+        ),
     );
   }
   return out;

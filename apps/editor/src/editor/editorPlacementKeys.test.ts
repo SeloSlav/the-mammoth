@@ -1,21 +1,64 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
+import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import {
   floorPlacedObjectIdForTransformRoot,
   interiorEntityIdForTransformRoot,
   placementKey,
   PLACEMENT_KEY_SEP,
+  resolveCabPartId,
   resolveFloorPlacementTransformRoot,
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
   resolveInteriorPlacementTransformRoot,
+  resolveLandingKitPickId,
   resolvePlacedId,
 } from "./editorPlacementKeys.js";
 
 describe("placementKey", () => {
   it("joins floor and object ids with a separator that cannot appear in ids", () => {
     expect(placementKey("floor_a", "obj_1")).toBe(`floor_a${PLACEMENT_KEY_SEP}obj_1`);
+  });
+});
+
+describe("resolveCabPartId", () => {
+  it("walks ancestors for editorCabPartId", () => {
+    const mesh = new THREE.Mesh();
+    mesh.userData.editorCabPartId = "cab_floor";
+    expect(resolveCabPartId(mesh)).toBe("cab_floor");
+    const parent = new THREE.Group();
+    parent.add(mesh);
+    mesh.userData.editorCabPartId = undefined;
+    parent.userData.editorCabPartId = "cab_ceiling";
+    expect(resolveCabPartId(mesh)).toBe("cab_ceiling");
+  });
+
+  it("returns null when absent", () => {
+    expect(resolveCabPartId(new THREE.Mesh())).toBe(null);
+  });
+});
+
+describe("resolveLandingKitPickId", () => {
+  it("detects editorLandingKitRoot on self or ancestor", () => {
+    const root = new THREE.Group();
+    root.userData.editorLandingKitRoot = true;
+    const mesh = new THREE.Mesh();
+    root.add(mesh);
+    expect(resolveLandingKitPickId(mesh)).toBe("landing_door_kit");
+  });
+
+  it("maps glass hits to the opening proxy (hole resize target)", () => {
+    const root = new THREE.Group();
+    root.userData.editorLandingKitRoot = true;
+    const glass = new THREE.Mesh();
+    glass.userData.editorLandingPartId = "landing_glass_lite";
+    root.add(glass);
+    expect(resolveLandingKitPickId(glass)).toBe(LANDING_DOOR_OPENING_PROXY_ID);
+  });
+
+  it("returns null when absent", () => {
+    expect(resolveLandingKitPickId(new THREE.Mesh())).toBe(null);
   });
 });
 

@@ -1,6 +1,11 @@
 import * as THREE from "three";
+import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
 import {
+  applyCabMaterialSlot,
+  applyLandingFrameSlot,
+  applyLandingGlassSlot,
+  applyLandingKitPartTransforms,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
 } from "@the-mammoth/world";
@@ -109,6 +114,8 @@ export class FpElevatorShaftVisual {
   private readonly hailBtnMat: THREE.MeshStandardMaterial;
   private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
   private readonly hailBtnIconTex: THREE.CanvasTexture;
+  private readonly exteriorSwingMaxRad: number;
+  private readonly ceilMat: THREE.MeshStandardMaterial;
 
   constructor(
     layout: ElevatorShaftLayout,
@@ -119,8 +126,11 @@ export class FpElevatorShaftVisual {
       floorSpacingM: number;
       buildingWorldOriginY: number;
     },
+    visualDefs?: { cabDef?: ElevatorCabDef; landingKitDef?: LandingKitDef },
   ) {
     this.layout = layout;
+    this.exteriorSwingMaxRad =
+      visualDefs?.landingKitDef?.exteriorSwingMaxRad ?? EXTERIOR_DOOR_SWING_MAX_RAD;
     this.ox = buildingWorldOrigin[0];
     this.oz = buildingWorldOrigin[2];
     const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
@@ -149,6 +159,10 @@ export class FpElevatorShaftVisual {
       opacity: 1,
       depthWrite: false,
     });
+    if (visualDefs?.landingKitDef?.materials) {
+      applyLandingFrameSlot(this.extRedMat, visualDefs.landingKitDef.materials.frame);
+      applyLandingGlassSlot(this.extGlassMat, visualDefs.landingKitDef.materials.glass);
+    }
     this.landingRoot = new THREE.Group();
     this.landingRoot.name = "elev_landing_exterior_doors";
     this.landingDoorPickRoot = new THREE.Group();
@@ -188,6 +202,20 @@ export class FpElevatorShaftVisual {
       roughness: 0.45,
       metalness: 0.35,
     });
+    this.ceilMat = new THREE.MeshStandardMaterial({
+      color: 0x6a6f78,
+      roughness: 0.72,
+      metalness: 0.08,
+    });
+    if (visualDefs?.cabDef?.materials) {
+      applyCabMaterialSlot(wallMat, visualDefs.cabDef.materials.wall);
+      applyCabMaterialSlot(floorMat, visualDefs.cabDef.materials.floor);
+      applyCabMaterialSlot(doorMat, visualDefs.cabDef.materials.door);
+      applyCabMaterialSlot(
+        this.ceilMat,
+        visualDefs.cabDef.materials.ceiling ?? visualDefs.cabDef.materials.wall,
+      );
+    }
 
     const cabinH = this.inner.innerH;
     const floorT = 0.08;
@@ -204,7 +232,7 @@ export class FpElevatorShaftVisual {
 
     const ceil = new THREE.Mesh(
       new THREE.BoxGeometry(hx * 2 - wallT * 2, 0.07, hz * 2 - wallT * 2),
-      wallMat,
+      this.ceilMat,
     );
     ceil.position.set(0, cabinH - 0.035, 0);
     this.carRoot.add(ceil);
@@ -328,9 +356,13 @@ export class FpElevatorShaftVisual {
         hz,
         this.extRedMat,
         this.extGlassMat,
+        visualDefs?.landingKitDef,
       );
       this.tagLandingDoorInteractMeshes(structure, pick.shaftKey, level);
       wrap.add(structure);
+      if (visualDefs?.landingKitDef) {
+        applyLandingKitPartTransforms(structure, visualDefs.landingKitDef);
+      }
       this.landingRoot.add(wrap);
       this.landingDoorSwings.push({ level, swing, swingSign });
 
@@ -528,7 +560,7 @@ export class FpElevatorShaftVisual {
   updateLandingExteriorDoorSwings(swingByLevel: ReadonlyMap<number, number>): void {
     for (const e of this.landingDoorSwings) {
       const u = swingByLevel.get(e.level) ?? 0;
-      e.swing.rotation.y = e.swingSign * u * EXTERIOR_DOOR_SWING_MAX_RAD;
+      e.swing.rotation.y = e.swingSign * u * this.exteriorSwingMaxRad;
     }
   }
 
@@ -546,6 +578,7 @@ export class FpElevatorShaftVisual {
     this.landingHailPickRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
+    this.ceilMat.dispose();
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
     this.hailBtnMat.dispose();

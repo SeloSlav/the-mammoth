@@ -53,6 +53,9 @@ const EXT_DOOR_H: f32 = 2.05;
 const EXT_DOOR_ANIM_SPEED: f32 = 2.05;
 /// Collision / block disabled above this swing (0..1).
 const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
+/// Static exterior collision slab + `clamp_player_exterior_landing_doors` only while the swing
+/// is essentially closed. Mid-swing the slab does not follow the mesh, so skip player collision.
+const EXT_DOOR_SOLID_SLAB_MAX_SWING: f32 = 0.025;
 /// **E** interact strip (plate-local, door normal). Must extend past the closed-door push-out. Sync client `EXTERIOR_INTERACT_*`.
 #[allow(dead_code)]
 const EXT_INTERACT_L0: f32 = -0.28;
@@ -634,7 +637,6 @@ fn face_lateral_half(door: DoorFace, hx: f32, hz: f32) -> f32 {
 }
 
 #[inline]
-#[allow(dead_code)]
 fn exterior_interact_plate_local_ok(
     door: DoorFace,
     hx: f32,
@@ -686,6 +688,11 @@ fn exterior_collision_plate_local_ok(
 fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> bool {
     let (hx, hz) = elevator_layout::inner_half_xz();
     let fy = support_y(level);
+    let lx = p.x - spec.plate_x;
+    let lz = p.z - spec.plate_z;
+    if exterior_interact_plate_local_ok(spec.door, hx, hz, lx, lz, p.y, fy) {
+        return true;
+    }
     let cy = fy + 1.1;
     let (cx_out, cz_out, cx_in, cz_in) = match spec.door {
         DoorFace::E => (
@@ -716,6 +723,120 @@ fn near_exterior_door_toggle_pose(p: &PlayerPose, spec: &ElevShaftSpec, level: u
     (((p.x - cx_out).hypot(p.z - cz_out) <= EXT_INTERACT_WORLD_RADIUS_M)
         || ((p.x - cx_in).hypot(p.z - cz_in) <= EXT_INTERACT_WORLD_RADIUS_M))
         && (p.y - cy).abs() <= EXT_INTERACT_WORLD_Y_HALF_M
+}
+
+fn exterior_door_toggle_pose_score(p: &PlayerPose, spec: &ElevShaftSpec, level: u32) -> f32 {
+    let (hx, hz) = elevator_layout::inner_half_xz();
+    let fy = support_y(level);
+    let lx = p.x - spec.plate_x;
+    let lz = p.z - spec.plate_z;
+    let (cx_out, cz_out, cx_in, cz_in) = match spec.door {
+        DoorFace::E => (
+            spec.plate_x + hx + 0.18,
+            spec.plate_z,
+            spec.plate_x + hx - 0.18,
+            spec.plate_z,
+        ),
+        DoorFace::W => (
+            spec.plate_x - hx - 0.18,
+            spec.plate_z,
+            spec.plate_x - hx + 0.18,
+            spec.plate_z,
+        ),
+        DoorFace::N => (
+            spec.plate_x,
+            spec.plate_z + hz + 0.18,
+            spec.plate_x,
+            spec.plate_z + hz - 0.18,
+        ),
+        DoorFace::S => (
+            spec.plate_x,
+            spec.plate_z - hz - 0.18,
+            spec.plate_x,
+            spec.plate_z - hz + 0.18,
+        ),
+    };
+    let d_out = (p.x - cx_out).hypot(p.z - cz_out);
+    let d_in = (p.x - cx_in).hypot(p.z - cz_in);
+    if exterior_interact_plate_local_ok(spec.door, hx, hz, lx, lz, p.y, fy) {
+        return d_out.min(d_in);
+    }
+    let cy = fy + 1.1;
+    d_out.min(d_in) + (p.y - cy).abs() * 0.5
+}
+
+fn resolve_exterior_door_toggle_target(
+    p: &PlayerPose,
+    requested_shaft_key: &str,
+    requested_level: u32,
+) -> Option<(&'static ElevShaftSpec, u32)> {
+    let requested_level = requested_level.clamp(1, MAX_LEVEL);
+    if let Some(spec) = spec_for_key(requested_shaft_key) {
+        if near_exterior_door_toggle_pose(p, spec, requested_level) {
+            return Some((spec, requested_level));
+        }
+    }
+
+    let mut best: Option<(&'static ElevShaftSpec, u32, f32)> = None;
+    for spec in MAMUTH_ELEVATOR_SPECS {
+        for level in 1..=MAX_LEVEL {
+            if !near_exterior_door_toggle_pose(p, spec, level) {
+                continue;
+            }
+            let score = exterior_door_toggle_pose_score(p, spec, level);
+            if best.is_none_or(|(_, _, best_score)| score < best_score) {
+                best = Some((spec, level, score));
+            }
+        }
+    }
+    best.map(|(spec, level, _)| (spec, level))
+}
+
+fn set_landing_exterior_door_desired_open(
+    ctx: &ReducerContext,
+    pose: &PlayerPose,
+    requested_shaft_key: &str,
+    requested_level: u32,
+    desired_open: u8,
+) {
+    let Some((spec, lv)) =
+        resolve_exterior_door_toggle_target(pose, requested_shaft_key, requested_level)
+    else {
+        return;
+    };
+    let target_shaft_key = spec.shaft_key.to_string();
+    let Some(car) = ctx.db.elevator_car().shaft_key().find(&target_shaft_key) else {
+        return;
+    };
+    if player_inside_cab(pose, &car) && car.phase == PH_MOVING {
+        return;
+    }
+    // Do not use `current_level` alone: it can desync from `cab_floor_y` while the car is still
+    // physically docked at this landing. Require cab feet alignment to the resolved landing.
+    if player_inside_cab(pose, &car)
+        && (car.cab_floor_y - support_y(lv)).abs() > LANDING_PASSAGE_DOCK_Y_TOL_M
+    {
+        return;
+    }
+    let rk = landing_door_row_key(&target_shaft_key, lv);
+    let mut row = ctx
+        .db
+        .elevator_landing_door()
+        .row_key()
+        .find(&rk)
+        .unwrap_or(ElevatorLandingDoor {
+            row_key: rk.clone(),
+            shaft_key: target_shaft_key.clone(),
+            level: lv,
+            desired_open: 0,
+            swing_open_01: 0.0,
+        });
+    row.desired_open = if desired_open != 0 { 1 } else { 0 };
+    if ctx.db.elevator_landing_door().row_key().find(&rk).is_some() {
+        ctx.db.elevator_landing_door().row_key().update(row);
+    } else {
+        let _ = ctx.db.elevator_landing_door().insert(row);
+    }
 }
 
 #[inline]
@@ -913,7 +1034,7 @@ fn collect_generated_collision_aabbs(
         let fy = support_y(landing.level);
         let y0 = fy + EXT_STRIP_Y0;
         let y1 = fy + EXT_STRIP_Y1;
-        if landing.swing_open_01 < EXT_DOOR_COLLISION_OPEN_THRESH {
+        if landing.swing_open_01 <= EXT_DOOR_SOLID_SLAB_MAX_SWING {
             match spec.door {
                 DoorFace::E => push_query_overlapping_aabb(
                     out,
@@ -1250,7 +1371,7 @@ pub fn resolve_player_generated_collision_aabbs(
 pub fn clamp_player_exterior_landing_doors(ctx: &ReducerContext, p: &mut PlayerPose) {
     let (hx, hz) = elevator_layout::inner_half_xz();
     for row in ctx.db.elevator_landing_door().iter() {
-        if row.swing_open_01 >= EXT_DOOR_COLLISION_OPEN_THRESH {
+        if row.swing_open_01 > EXT_DOOR_SOLID_SLAB_MAX_SWING {
             continue;
         }
         let Some(spec) = spec_for_key(&row.shaft_key) else {
@@ -1459,10 +1580,41 @@ mod exterior_interact_tests {
         exterior_collision_plate_local_ok, exterior_interact_plate_local_ok,
         in_closed_cab_outside_door_slab, landing_front_door_lane_local_ok,
         landing_front_face_local_ok, landing_front_passage_open, near_exterior_door_toggle_pose,
-        support_y, ElevatorCar, ElevatorLandingDoor, EXT_INTERACT_L0, EXT_INTERACT_L1, PH_IDLE,
+        support_y, ElevatorCar, ElevatorLandingDoor, EXT_DOOR_COLLISION_OPEN_THRESH,
+        EXT_DOOR_SOLID_SLAB_MAX_SWING, EXT_INTERACT_L0, EXT_INTERACT_L1, MAMUTH_ELEVATOR_SPECS,
+        PH_IDLE,
     };
     use crate::elevator_layout::{inner_half_xz, DoorFace};
     use crate::elevator_layout::ElevShaftSpec;
+
+    #[test]
+    fn solid_slab_swing_threshold_sits_below_passage_open() {
+        assert!(EXT_DOOR_SOLID_SLAB_MAX_SWING < EXT_DOOR_COLLISION_OPEN_THRESH);
+    }
+
+    #[test]
+    fn near_toggle_accepts_mamutica_hub_east_interact_strip_level1() {
+        let (hx, _) = inner_half_xz();
+        let fy = support_y(1);
+        let spec = MAMUTH_ELEVATOR_SPECS
+            .iter()
+            .find(|s| s.shaft_key == "-3.17,0")
+            .expect("hub shaft");
+        let lx = hx + (EXT_INTERACT_L0 + EXT_INTERACT_L1) * 0.5;
+        let pose = crate::pose::PlayerPose {
+            identity: spacetimedb::Identity::from_byte_array([0; 32]),
+            x: spec.plate_x + lx,
+            y: fy + 1.0,
+            z: spec.plate_z,
+            yaw: 0.0,
+            seq: 0,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+        };
+        assert!(near_exterior_door_toggle_pose(&pose, spec, 1));
+    }
 
     #[test]
     fn east_mid_strip_accepted() {
@@ -1626,45 +1778,42 @@ pub fn elevator_landing_exterior_door_toggle(ctx: &ReducerContext, shaft_key: St
         log::debug!("elevator_landing_exterior_door_toggle blocked: {e}");
         return;
     }
-    let Some(spec) = spec_for_key(&shaft_key) else {
-        return;
-    };
-    let lv = level.clamp(1, MAX_LEVEL);
     let id = ctx.sender();
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
     };
-    let Some(car) = ctx.db.elevator_car().shaft_key().find(&shaft_key) else {
+    let Some((spec, lv)) = resolve_exterior_door_toggle_target(&pose, &shaft_key, level) else {
         return;
     };
-    if player_inside_cab(&pose, &car) && car.phase == PH_MOVING {
-        return;
-    }
-    if player_inside_cab(&pose, &car) && car.current_level != lv {
-        return;
-    }
-    if !near_exterior_door_toggle_pose(&pose, spec, lv) {
-        return;
-    }
-    let rk = landing_door_row_key(&shaft_key, lv);
-    let mut row = ctx
+    let target_shaft_key = spec.shaft_key.to_string();
+    let rk = landing_door_row_key(&target_shaft_key, lv);
+    let current_desired = ctx
         .db
         .elevator_landing_door()
         .row_key()
         .find(&rk)
-        .unwrap_or(ElevatorLandingDoor {
-            row_key: rk.clone(),
-            shaft_key: shaft_key.clone(),
-            level: lv,
-            desired_open: 0,
-            swing_open_01: 0.0,
-        });
-    row.desired_open = if row.desired_open != 0 { 0 } else { 1 };
-    if ctx.db.elevator_landing_door().row_key().find(&rk).is_some() {
-        ctx.db.elevator_landing_door().row_key().update(row);
-    } else {
-        let _ = ctx.db.elevator_landing_door().insert(row);
+        .map(|row| row.desired_open)
+        .unwrap_or(0);
+    let next_desired = if current_desired != 0 { 0 } else { 1 };
+    set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, next_desired);
+}
+
+#[spacetimedb::reducer]
+pub fn elevator_landing_exterior_door_set(
+    ctx: &ReducerContext,
+    shaft_key: String,
+    level: u32,
+    desired_open: u8,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("elevator_landing_exterior_door_set blocked: {e}");
+        return;
     }
+    let id = ctx.sender();
+    let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
+        return;
+    };
+    set_landing_exterior_door_desired_open(ctx, &pose, &shaft_key, level, desired_open);
 }
 
 #[spacetimedb::reducer]

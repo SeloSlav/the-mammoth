@@ -1,6 +1,6 @@
 # Building content and server walk collision
 
-Authoritative player grounding on the SpaceTimeDB module uses **baked axis-aligned boxes** emitted into Rust, not runtime mesh loading.
+Authoritative player grounding and static world blocking on the SpaceTimeDB module use **baked axis-aligned boxes** emitted into Rust, not runtime mesh loading.
 
 ## When to regenerate
 
@@ -8,15 +8,23 @@ Run from the **repository root** after you change any of:
 
 - `content/building/mammoth.json` (including `worldOrigin` or floor refs)
 - Any floor document under `content/building/floors/*.json`
+- Any floor override document under `content/building/floor-overrides/*.json`
 - Walk-surface or floor-mesh rules in `@the-mammoth/world` (for example `packages/world/src/walkSurfaceAABBs.ts` or the floor builder pipeline)
 
 ```bash
 pnpm content:gen-walk-aabbs
 ```
 
-This runs `scripts/gen-walk-aabbs.ts` and updates `apps/server/src/generated_walk_surfaces.rs` plus shard files `apps/server/src/generated_walk_surfaces/part_*.rs` (each shard is a `static PART_…` slice). **Do not hand-edit** generated output; fix the generator or the source JSON instead.
+This runs `scripts/gen-walk-aabbs.ts` and updates:
 
-Commit the regenerated Rust under `apps/server/src/generated_walk_surfaces*` together with the content changes so server movement stays aligned with what the client and editor show.
+- `apps/server/src/generated_walk_surfaces.rs` plus shard files under `apps/server/src/generated_walk_surfaces/`
+- `apps/server/src/generated_collision_solids.rs` plus shard files under `apps/server/src/generated_collision_solids/`
+
+The generator also writes a stamp file at `content/building/.collision-artifacts-stamp.json` so editor tooling can tell whether authored structural content is newer than the last successful artifact rebuild.
+
+**Do not hand-edit** generated output; fix the generator or the source JSON instead.
+
+Commit the regenerated Rust under `apps/server/src/generated_walk_surfaces*` and `apps/server/src/generated_collision_solids*` together with the content changes so server movement stays aligned with what the client and editor show.
 
 ## Related scripts
 

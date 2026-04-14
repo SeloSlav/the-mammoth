@@ -1,19 +1,79 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import os from "node:os";
 import path from "node:path";
 import type { Connect } from "vite";
+import {
+  BuildingDocSchema,
+  CellDocSchema,
+  ElevatorCabDefSchema,
+  FloorDocSchema,
+  FloorOverrideDocSchema,
+  InteriorDocSchema,
+  LandingKitDefSchema,
+  PrefabDefSchema,
+} from "@the-mammoth/schemas";
 // Repo-relative: `@the-mammoth/engine` entry pulls `index.ts` → Node config load dies on `./fpLocomotion.js` specifiers.
 import {
   ALL_WEAPON_DEFINITIONS,
   WEAPON_DEFINITION_ID_SET,
 } from "../../../../packages/engine/src/weapons/weaponRegistry";
+import {
+  EDITOR_BUILDING_FILE,
+  EDITOR_CELLS_DIR,
+  EDITOR_FLOOR_OVERRIDES_DIR,
+  EDITOR_ELEVATOR_DIR,
+  EDITOR_FLOORS_DIR,
+  EDITOR_INTERIORS_DIR,
+  EDITOR_PREFABS_DIR,
+} from "../editor/editorContentDiscovery.js";
+import {
+  collisionArtifactsStampPath,
+  computeWorldCollisionSourceFingerprint,
+} from "../../../../scripts/worldCollisionArtifacts";
 import { assertValidWeaponPresentationJson } from "./weaponPresentationSaveValidate.js";
 
 const FLOOR_DOC_ID_RE = /^floor_[a-z0-9_]+$/;
-/** Interior JSON filenames in repo (e.g. lobby_central.json). */
 const INTERIOR_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
+const CELL_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
+const PREFAB_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
+const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
 const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
+const execFileAsync = promisify(execFile);
+
+let rebuildInFlight = false;
+
+export type EditorDevMiddlewareOptions = {
+  /** Vite `config.base` (e.g. `/` or `/app/`); pathname is stripped before routing. */
+  viteBase?: string;
+};
+
+/** Strip query, absolute URL form, trailing slash, and optional Vite base. */
+function editorRequestPath(req: IncomingMessage, viteBase: string): string {
+  let raw = req.url?.split("?")[0] ?? "/";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      raw = new URL(raw).pathname;
+    } catch {
+      /* keep raw */
+    }
+  }
+  const base =
+    viteBase === "/" || viteBase === "" || viteBase === undefined
+      ? ""
+      : viteBase.endsWith("/")
+        ? viteBase.slice(0, -1)
+        : viteBase;
+  let p = raw;
+  if (base && (p === base || p.startsWith(`${base}/`))) {
+    p = p.slice(base.length) || "/";
+  }
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return p || "/";
+}
 
 function safeContentFile(repoRoot: string, relFromContent: string): string | null {
   const abs = path.resolve(repoRoot, "content", relFromContent);
@@ -31,60 +91,282 @@ function readJsonBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+async function readJsonStemList(absDir: string): Promise<string[]> {
+  try {
+    const names = await fs.readdir(absDir);
+    return names
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.replace(/\.json$/, ""))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function sendJson(res: ServerResponse, payload: unknown, statusCode = 200): void {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(payload));
+}
+
+function ensureEditorSaveEnabled(res: ServerResponse): boolean {
+  if (process.env.EDITOR_SAVE === "1") return true;
+  res.statusCode = 403;
+  res.end("EDITOR_SAVE not enabled");
+  return false;
+}
+
+async function computeCollisionArtifactsStatus(repoRoot: string) {
+  const sourceFingerprint = computeWorldCollisionSourceFingerprint(repoRoot);
+  const stampPath = collisionArtifactsStampPath(repoRoot);
+  let builtFingerprint: string | null = null;
+  try {
+    const parsed = JSON.parse(await fs.readFile(stampPath, "utf8")) as {
+      sourceFingerprint?: string;
+    };
+    builtFingerprint =
+      typeof parsed.sourceFingerprint === "string" ? parsed.sourceFingerprint : null;
+  } catch {
+    builtFingerprint = null;
+  }
+  return {
+    sourceFingerprint,
+    builtFingerprint,
+    stale: builtFingerprint !== sourceFingerprint,
+    stampPath,
+    generatedFiles: [
+      "apps/server/src/generated_walk_surfaces.rs",
+      "apps/server/src/generated_collision_solids.rs",
+    ],
+  };
+}
+
 /**
  * Dev-only middleware: serve `content/**` at `/content/...` and optional POST saves
  * when `process.env.EDITOR_SAVE === "1"`.
  */
-export function editorDevMiddleware(repoRoot: string): Connect.NextHandleFunction {
+export function editorDevMiddleware(
+  repoRoot: string,
+  options?: EditorDevMiddlewareOptions,
+): Connect.NextHandleFunction {
+  const viteBase = options?.viteBase ?? "/";
   return async (req, res, next) => {
-    const url = req.url?.split("?")[0] ?? "";
-    if (!url.startsWith("/content/") && url !== "/content") {
-      if (url === "/__editor/weapon-asset-survey" && req.method === "GET") {
-        return void handleWeaponAssetSurvey(repoRoot, res).catch((e) => {
-          res.statusCode = 500;
-          res.setHeader("Content-Type", "text/plain; charset=utf-8");
-          res.end(e instanceof Error ? e.message : "error");
-        });
+    const path = editorRequestPath(req, viteBase);
+
+    if (path === "/content" || path.startsWith("/content/")) {
+      const rel = decodeURIComponent(path.replace(/^\/content\/?/, ""));
+      const abs = safeContentFile(repoRoot, rel);
+      if (!abs) {
+        res.statusCode = 403;
+        res.end("bad path");
+        return;
       }
-      if (url === "/__editor/save-floor" && req.method === "POST") {
-        return handleSaveFloor(repoRoot, req, res, next);
+
+      if (req.method === "GET" || req.method === "HEAD") {
+        try {
+          const data = await fs.readFile(abs);
+          res.setHeader("Content-Type", "application/json");
+          res.statusCode = 200;
+          if (req.method === "HEAD") res.end();
+          else res.end(data);
+        } catch {
+          res.statusCode = 404;
+          res.end("not found");
+        }
+        return;
       }
-      if (url === "/__editor/save-interior" && req.method === "POST") {
-        return handleSaveInterior(repoRoot, req, res, next);
-      }
-      if (url === "/__editor/save-building" && req.method === "POST") {
-        return handleSaveBuilding(repoRoot, req, res, next);
-      }
-      if (url === "/__editor/save-weapon-presentation" && req.method === "POST") {
-        return handleSaveWeaponPresentation(repoRoot, req, res, next);
-      }
+
       return next();
     }
 
-    const rel = decodeURIComponent(url.replace(/^\/content\/?/, ""));
-    const abs = safeContentFile(repoRoot, rel);
+    if (!path.startsWith("/__editor")) {
+      return next();
+    }
+
+    if (req.method === "OPTIONS") {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+
+    try {
+      if (path === "/__editor/weapon-asset-survey" && req.method === "GET") {
+        return void (await handleWeaponAssetSurvey(repoRoot, res));
+      }
+      if (path === "/__editor/content-index" && req.method === "GET") {
+        return void (await handleContentIndex(repoRoot, res));
+      }
+      if (path === "/__editor/collision-artifacts-status" && req.method === "GET") {
+        return void (await handleCollisionArtifactsStatus(repoRoot, res));
+      }
+      if (path === "/__editor/rebuild-server-collision" && req.method === "POST") {
+        return void (await handleRebuildServerCollision(repoRoot, res));
+      }
+      if (path === "/__editor/save-floor" && req.method === "POST") {
+        return void (await handleSaveFloor(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-interior" && req.method === "POST") {
+        return void (await handleSaveInterior(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-cell" && req.method === "POST") {
+        return void (await handleSaveCell(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-prefab" && req.method === "POST") {
+        return void (await handleSavePrefab(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-floor-override" && req.method === "POST") {
+        return void (await handleSaveFloorOverride(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-building" && req.method === "POST") {
+        return void (await handleSaveBuilding(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-elevator-cab" && req.method === "POST") {
+        return void (await handleSaveElevatorCab(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-landing-kit" && req.method === "POST") {
+        return void (await handleSaveLandingKit(repoRoot, req, res, next));
+      }
+      if (path === "/__editor/save-weapon-presentation" && req.method === "POST") {
+        return void (await handleSaveWeaponPresentation(repoRoot, req, res, next));
+      }
+    } catch (e) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end(e instanceof Error ? e.message : "error");
+      return;
+    }
+
+    res.statusCode = 404;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end(`__editor: no handler for ${req.method} ${path}`);
+  };
+}
+
+async function handleContentIndex(repoRoot: string, res: ServerResponse): Promise<void> {
+  sendJson(res, {
+    buildingPath: EDITOR_BUILDING_FILE,
+    floorDocIds: await readJsonStemList(path.resolve(repoRoot, "content", EDITOR_FLOORS_DIR)),
+    interiorDocIds: await readJsonStemList(
+      path.resolve(repoRoot, "content", EDITOR_INTERIORS_DIR),
+    ),
+    cellDocIds: await readJsonStemList(path.resolve(repoRoot, "content", EDITOR_CELLS_DIR)),
+    prefabDefIds: await readJsonStemList(path.resolve(repoRoot, "content", EDITOR_PREFABS_DIR)),
+    floorOverrideDocIds: await readJsonStemList(
+      path.resolve(repoRoot, "content", EDITOR_FLOOR_OVERRIDES_DIR),
+    ),
+    elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
+    landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
+  });
+}
+
+async function handleSaveElevatorCab(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  if (!ensureEditorSaveEnabled(res)) return;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { json?: string };
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json string");
+      return;
+    }
+    ElevatorCabDefSchema.parse(JSON.parse(body.json));
+    const abs = safeContentFile(repoRoot, path.join(EDITOR_ELEVATOR_DIR, "cab.json"));
     if (!abs) {
       res.statusCode = 403;
       res.end("bad path");
       return;
     }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
+}
 
-    if (req.method === "GET" || req.method === "HEAD") {
-      try {
-        const data = await fs.readFile(abs);
-        res.setHeader("Content-Type", "application/json");
-        res.statusCode = 200;
-        if (req.method === "HEAD") res.end();
-        else res.end(data);
-      } catch {
-        res.statusCode = 404;
-        res.end("not found");
-      }
+async function handleSaveLandingKit(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  if (!ensureEditorSaveEnabled(res)) return;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { json?: string };
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json string");
       return;
     }
+    LandingKitDefSchema.parse(JSON.parse(body.json));
+    const abs = safeContentFile(repoRoot, path.join(EDITOR_ELEVATOR_DIR, "landing_kit.json"));
+    if (!abs) {
+      res.statusCode = 403;
+      res.end("bad path");
+      return;
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
+}
 
-    return next();
-  };
+async function handleCollisionArtifactsStatus(
+  repoRoot: string,
+  res: ServerResponse,
+): Promise<void> {
+  sendJson(res, await computeCollisionArtifactsStatus(repoRoot));
+}
+
+async function handleRebuildServerCollision(
+  repoRoot: string,
+  res: ServerResponse,
+): Promise<void> {
+  if (!ensureEditorSaveEnabled(res)) return;
+  if (rebuildInFlight) {
+    sendJson(
+      res,
+      { ok: false, message: "Collision rebuild already in progress." },
+      409,
+    );
+    return;
+  }
+  rebuildInFlight = true;
+  try {
+    const cmd = os.platform() === "win32" ? "pnpm.cmd" : "pnpm";
+    const out = await execFileAsync(cmd, ["content:gen-walk-aabbs"], {
+      cwd: repoRoot,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    sendJson(res, {
+      ok: true,
+      stdout: out.stdout,
+      stderr: out.stderr,
+      status: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } finally {
+    rebuildInFlight = false;
+  }
 }
 
 async function handleWeaponAssetSurvey(repoRoot: string, res: ServerResponse): Promise<void> {
@@ -181,6 +463,45 @@ async function handleSaveWeaponPresentation(
   }
 }
 
+async function handleValidatedSave(args: {
+  repoRoot: string;
+  req: IncomingMessage;
+  res: ServerResponse;
+  idKey: string;
+  idPattern: RegExp;
+  relPath: (id: string) => string;
+  parseJson: (raw: unknown) => unknown;
+}): Promise<void> {
+  if (!ensureEditorSaveEnabled(args.res)) return;
+  const raw = await readJsonBody(args.req);
+  const body = JSON.parse(raw) as Record<string, unknown>;
+  const id = body[args.idKey];
+  if (typeof id !== "string" || !args.idPattern.test(id)) {
+    args.res.statusCode = 400;
+    args.res.end(`invalid ${args.idKey}`);
+    return;
+  }
+  if (typeof body.json !== "string") {
+    args.res.statusCode = 400;
+    args.res.end("missing json string");
+    return;
+  }
+  args.parseJson(JSON.parse(body.json));
+  const abs = safeContentFile(args.repoRoot, args.relPath(id));
+  if (!abs) {
+    args.res.statusCode = 403;
+    args.res.end("bad path");
+    return;
+  }
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  await fs.writeFile(abs, body.json, "utf8");
+  sendJson(args.res, {
+    ok: true,
+    path: abs,
+    collisionArtifactsStatus: await computeCollisionArtifactsStatus(args.repoRoot),
+  });
+}
+
 async function handleSaveFloor(
   repoRoot: string,
   req: IncomingMessage,
@@ -188,39 +509,15 @@ async function handleSaveFloor(
   next: Connect.NextFunction,
 ) {
   void next;
-  if (process.env.EDITOR_SAVE !== "1") {
-    res.statusCode = 403;
-    res.end("EDITOR_SAVE not enabled");
-    return;
-  }
-  try {
-    const raw = await readJsonBody(req);
-    const body = JSON.parse(raw) as { floorDocId?: string; json?: string };
-    const id = body.floorDocId;
-    if (typeof id !== "string" || !FLOOR_DOC_ID_RE.test(id)) {
-      res.statusCode = 400;
-      res.end("invalid floorDocId");
-      return;
-    }
-    if (typeof body.json !== "string") {
-      res.statusCode = 400;
-      res.end("missing json string");
-      return;
-    }
-    const abs = safeContentFile(repoRoot, path.join("building", "floors", `${id}.json`));
-    if (!abs) {
-      res.statusCode = 403;
-      res.end("bad path");
-      return;
-    }
-    await fs.writeFile(abs, body.json, "utf8");
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ ok: true, path: abs }));
-  } catch (e) {
-    res.statusCode = 500;
-    res.end(e instanceof Error ? e.message : "error");
-  }
+  await handleValidatedSave({
+    repoRoot,
+    req,
+    res,
+    idKey: "floorDocId",
+    idPattern: FLOOR_DOC_ID_RE,
+    relPath: (id) => path.join(EDITOR_FLOORS_DIR, `${id}.json`),
+    parseJson: (raw) => FloorDocSchema.parse(raw),
+  });
 }
 
 async function handleSaveInterior(
@@ -230,39 +527,69 @@ async function handleSaveInterior(
   next: Connect.NextFunction,
 ) {
   void next;
-  if (process.env.EDITOR_SAVE !== "1") {
-    res.statusCode = 403;
-    res.end("EDITOR_SAVE not enabled");
-    return;
-  }
-  try {
-    const raw = await readJsonBody(req);
-    const body = JSON.parse(raw) as { interiorDocId?: string; json?: string };
-    const id = body.interiorDocId;
-    if (typeof id !== "string" || !INTERIOR_DOC_ID_RE.test(id)) {
-      res.statusCode = 400;
-      res.end("invalid interiorDocId");
-      return;
-    }
-    if (typeof body.json !== "string") {
-      res.statusCode = 400;
-      res.end("missing json string");
-      return;
-    }
-    const abs = safeContentFile(repoRoot, path.join("interiors", `${id}.json`));
-    if (!abs) {
-      res.statusCode = 403;
-      res.end("bad path");
-      return;
-    }
-    await fs.writeFile(abs, body.json, "utf8");
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ ok: true, path: abs }));
-  } catch (e) {
-    res.statusCode = 500;
-    res.end(e instanceof Error ? e.message : "error");
-  }
+  await handleValidatedSave({
+    repoRoot,
+    req,
+    res,
+    idKey: "interiorDocId",
+    idPattern: INTERIOR_DOC_ID_RE,
+    relPath: (id) => path.join(EDITOR_INTERIORS_DIR, `${id}.json`),
+    parseJson: (raw) => InteriorDocSchema.parse(raw),
+  });
+}
+
+async function handleSaveCell(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  await handleValidatedSave({
+    repoRoot,
+    req,
+    res,
+    idKey: "cellDocId",
+    idPattern: CELL_DOC_ID_RE,
+    relPath: (id) => path.join(EDITOR_CELLS_DIR, `${id}.json`),
+    parseJson: (raw) => CellDocSchema.parse(raw),
+  });
+}
+
+async function handleSavePrefab(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  await handleValidatedSave({
+    repoRoot,
+    req,
+    res,
+    idKey: "prefabDefId",
+    idPattern: PREFAB_DOC_ID_RE,
+    relPath: (id) => path.join(EDITOR_PREFABS_DIR, `${id}.json`),
+    parseJson: (raw) => PrefabDefSchema.parse(raw),
+  });
+}
+
+async function handleSaveFloorOverride(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  await handleValidatedSave({
+    repoRoot,
+    req,
+    res,
+    idKey: "floorOverrideDocId",
+    idPattern: FLOOR_OVERRIDE_DOC_ID_RE,
+    relPath: (id) => path.join(EDITOR_FLOOR_OVERRIDES_DIR, `${id}.json`),
+    parseJson: (raw) => FloorOverrideDocSchema.parse(raw),
+  });
 }
 
 async function handleSaveBuilding(
@@ -272,11 +599,7 @@ async function handleSaveBuilding(
   next: Connect.NextFunction,
 ) {
   void next;
-  if (process.env.EDITOR_SAVE !== "1") {
-    res.statusCode = 403;
-    res.end("EDITOR_SAVE not enabled");
-    return;
-  }
+  if (!ensureEditorSaveEnabled(res)) return;
   try {
     const raw = await readJsonBody(req);
     const body = JSON.parse(raw) as { json?: string };
@@ -291,10 +614,13 @@ async function handleSaveBuilding(
       res.end("bad path");
       return;
     }
+    BuildingDocSchema.parse(JSON.parse(body.json));
     await fs.writeFile(abs, body.json, "utf8");
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ ok: true, path: abs }));
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
   } catch (e) {
     res.statusCode = 500;
     res.end(e instanceof Error ? e.message : "error");

@@ -8,6 +8,8 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     prefabDefs: structuredClone(state.prefabDefs),
     floorOverrideDocs: structuredClone(state.floorOverrideDocs),
     building: structuredClone(state.building),
+    elevatorCabDef: structuredClone(state.elevatorCabDef),
+    landingKitDef: structuredClone(state.landingKitDef),
     selectedId: state.selectedId,
     dirty: state.dirty,
     contentStructureEpoch: state.contentStructureEpoch ?? 0,

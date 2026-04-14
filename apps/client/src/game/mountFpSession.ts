@@ -41,6 +41,7 @@ import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
 import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
+import { mountWorldContentDevReload } from "./fpWorldContentDevReload.js";
 import { buildMockRemoteSnapshots } from "./mockRemoteSnapshots";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./localGameAudio";
@@ -165,6 +166,9 @@ export async function mountFpSession(
   });
 
   const disposeWeaponPresentationHotReload = mountWeaponPresentationDevHotReload(presentation);
+  const disposeWorldContentHotReload = mountWorldContentDevReload(() => {
+    window.location.reload();
+  });
 
   /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
   const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
@@ -883,6 +887,7 @@ export async function mountFpSession(
     disposeFpEnvironment();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
+    disposeWorldContentHotReload();
     unsubHotbarRail();
     worldAudio.dispose();
     worldAudioReady = false;

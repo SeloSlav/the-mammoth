@@ -16,9 +16,14 @@ import {
   walkSurfaceAabbXZFootprint,
   walkSurfaceAABBsForBuilding,
 } from "../packages/world/src/index.ts";
+import {
+  computeWorldCollisionSourceFingerprint,
+  writeWorldCollisionArtifactsStamp,
+} from "./worldCollisionArtifacts.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
+const sourceFingerprint = computeWorldCollisionSourceFingerprint(root);
 
 /** AABB rows per shard — keeps each generated file reviewable. */
 const AABBS_PER_SHARD = 500;
@@ -159,6 +164,14 @@ const solidOut = writeShardedAabbModule({
   footprint: solidFp,
   shardConstName: "COLLISION_SOLID_AABB_SHARDS",
   footprintPrefix: "COLLISION_SOLID",
+});
+writeWorldCollisionArtifactsStamp({
+  repoRoot: root,
+  sourceFingerprint,
+  generatedFiles: [
+    "apps/server/src/generated_walk_surfaces.rs",
+    "apps/server/src/generated_collision_solids.rs",
+  ],
 });
 console.log(
   `Wrote ${aabbs.length} walk AABBs across ${walkOut.shardCount} shards and ${solidAabbs.length} collision AABBs across ${solidOut.shardCount} shards.`,

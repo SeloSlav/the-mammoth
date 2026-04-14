@@ -1,15 +1,19 @@
 import {
   BuildingDocSchema,
   CellDocSchema,
+  ElevatorCabDefSchema,
   FloorDocSchema,
   FloorOverrideDocSchema,
   InteriorDocSchema,
+  LandingKitDefSchema,
   PrefabDefSchema,
   type BuildingDoc,
   type CellDoc,
+  type ElevatorCabDef,
   type FloorDoc,
   type FloorOverrideDoc,
   type InteriorDoc,
+  type LandingKitDef,
   type PlacedObject,
   type PrefabDef,
 } from "@the-mammoth/schemas";
@@ -26,19 +30,24 @@ import type {
   EditorCameraMode,
   EditorMode,
   EditorState,
+  EditorWorkspace,
   FpAuthorCameraKind,
   FpAuthorPickMeta,
+  LandingDocKind,
   TransformMode,
 } from "./editorStoreTypes.js";
+import { landingDocKindToMode, workspaceToInitialMode } from "./editorWorkspaceMap.js";
 
 export type {
   EditorCameraMode,
   EditorMaterialMeta,
   EditorMode,
   EditorState,
+  EditorWorkspace,
   FpAuthorCameraKind,
   FpAuthorPickMeta,
   HistoryEntry,
+  LandingDocKind,
   TransformMode,
 } from "./editorStoreTypes.js";
 
@@ -60,16 +69,31 @@ const EMPTY_CONTENT_INDEX: EditorContentIndex = {
   cellDocIds: [],
   prefabDefIds: [],
   floorOverrideDocIds: [],
+  elevatorCabRelPath: "elevator/cab.json",
+  landingKitRelPath: "elevator/landing_kit.json",
 };
 
+const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
+  id: "default_elevator_cab",
+  version: 1,
+});
+const DEFAULT_LANDING_KIT_DEF = LandingKitDefSchema.parse({
+  id: "default_landing_kit",
+  version: 1,
+});
+
 export const useEditorStore = create<EditorState>((set, get) => ({
-  mode: "fp_viewmodel",
+  workspace: "world",
+  landingDocKind: "kit",
+  mode: "floor",
   building: BuildingDocSchema.parse({ id: "mammoth_main", version: 1, floorRefs: [] }),
   floorDocs: {},
   interiorDocs: {},
   cellDocs: {},
   prefabDefs: {},
   floorOverrideDocs: {},
+  elevatorCabDef: DEFAULT_ELEVATOR_CAB_DEF,
+  landingKitDef: DEFAULT_LANDING_KIT_DEF,
   contentIndex: EMPTY_CONTENT_INDEX,
   activeFloorDocId: "floor_mamutica_ground",
   activeInteriorDocId: "lobby_central",
@@ -84,7 +108,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   shadowsEnabled: false,
   useHdriEnvironment: true,
-  cameraMode: "orbit",
+  cameraMode: "fly",
   flySpeedMps: 18,
   fpAuthorCamera: "orbit",
   fpAuthorTargetId: FP_AUTHOR_PREFERRED_TARGET_ID,
@@ -122,6 +146,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       prefabDefs: prev.prefabDefs,
       floorOverrideDocs: prev.floorOverrideDocs,
       building: prev.building,
+      elevatorCabDef: prev.elevatorCabDef,
+      landingKitDef: prev.landingKitDef,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
       contentStructureEpoch: prev.contentStructureEpoch ?? 0,
@@ -143,6 +169,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       prefabDefs: next.prefabDefs,
       floorOverrideDocs: next.floorOverrideDocs,
       building: next.building,
+      elevatorCabDef: next.elevatorCabDef,
+      landingKitDef: next.landingKitDef,
       selectedId: next.selectedId,
       dirty: next.dirty,
       contentStructureEpoch: next.contentStructureEpoch ?? 0,
@@ -161,6 +189,70 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
       };
     }),
+
+  setWorkspace: (workspace: EditorWorkspace) =>
+    set((s) => {
+      const mode = workspaceToInitialMode(workspace, s.landingDocKind);
+      const touchesFp = s.mode === "fp_viewmodel" || mode === "fp_viewmodel";
+      const exitFp = s.mode === "fp_viewmodel" && mode !== "fp_viewmodel";
+      const bumpEpoch = !touchesFp || exitFp;
+      const cameraMode: EditorCameraMode = workspace === "world" ? "fly" : "orbit";
+      return {
+        workspace,
+        mode,
+        cameraMode,
+        ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    }),
+
+  setLandingDocKind: (landingDocKind: LandingDocKind) =>
+    set((s) => {
+      if (s.landingDocKind === landingDocKind) return { landingDocKind };
+      const mode =
+        s.workspace === "landing" ? landingDocKindToMode(landingDocKind) : s.mode;
+      return {
+        landingDocKind,
+        mode,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+
+  patchElevatorCabDef: (fn) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const prev = s.elevatorCabDef;
+      const next = fn(prev);
+      /** Part-only edits sync via {@link applyElevatorCabPartTransforms}; avoid full mesh rebuild while dragging. */
+      const needsRebuild =
+        next.id !== prev.id ||
+        next.version !== prev.version ||
+        JSON.stringify(next.materials) !== JSON.stringify(prev.materials);
+      return {
+        elevatorCabDef: next,
+        dirty: true,
+        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    });
+  },
+
+  patchLandingKitDef: (fn) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const prev = s.landingKitDef;
+      const next = fn(prev);
+      /** Part-only edits sync via `applyLandingKitPartTransforms` (no full mesh rebuild). */
+      const needsRebuild =
+        next.id !== prev.id ||
+        next.version !== prev.version ||
+        next.exteriorSwingMaxRad !== prev.exteriorSwingMaxRad ||
+        JSON.stringify(next.materials) !== JSON.stringify(prev.materials);
+      return {
+        landingKitDef: next,
+        dirty: true,
+        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    });
+  },
   setBuilding: (building) =>
     set((s) => ({
       building,
@@ -718,6 +810,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: [],
       contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
+
+  replaceElevatorCabDefFromRemote: (doc) =>
+    set((s) => ({
+      elevatorCabDef: ElevatorCabDefSchema.parse(doc),
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+
+  replaceLandingKitDefFromRemote: (doc) =>
+    set((s) => ({
+      landingKitDef: LandingKitDefSchema.parse(doc),
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
 }));
 
 export function collectPrefabIdsFromFloors(floorDocs: Record<string, FloorDoc>): string[] {
@@ -783,4 +893,12 @@ export function serializeFloorOverrideDocPretty(doc: FloorOverrideDoc): string {
 
 export function serializeBuildingDocPretty(doc: BuildingDoc): string {
   return `${JSON.stringify(BuildingDocSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeElevatorCabDefPretty(doc: ElevatorCabDef): string {
+  return `${JSON.stringify(ElevatorCabDefSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeLandingKitDefPretty(doc: LandingKitDef): string {
+  return `${JSON.stringify(LandingKitDefSchema.parse(doc), null, 2)}\n`;
 }
