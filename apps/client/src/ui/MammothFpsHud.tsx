@@ -8,6 +8,7 @@ import {
   subscribeFpPerf,
   computeFpPerfStats,
   exportFpPerfReport,
+  getLastRendererInfo,
   type FpPerfStats,
 } from "../game/fpSessionPerfStore";
 import {
@@ -271,6 +272,20 @@ export function MammothFpsHud() {
             </div>
           ) : (
             <>
+              {/* Renderer counters */}
+              {(() => {
+                const ri = getLastRendererInfo();
+                return (
+                  <div style={{ ...monoStyle, ...dimStyle, fontSize: 11, marginBottom: 4 }}>
+                    <span style={{ color: ri.drawCalls > 200 ? THEME_ERROR : ri.drawCalls > 80 ? "#e8c47a" : THEME_SUCCESS }}>
+                      {ri.drawCalls} draw calls
+                    </span>
+                    {"  "}
+                    <span>{(ri.triangles / 1000).toFixed(1)}k tris</span>
+                  </div>
+                );
+              })()}
+
               {/* FPS summary */}
               <div style={sectionHeaderStyle}>Performance</div>
               <div style={{ ...rowStyle, ...monoStyle, gap: 14 }}>

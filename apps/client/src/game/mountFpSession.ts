@@ -1199,12 +1199,20 @@ export async function mountFpSession(
 
     onFpSessionPostRenderFrame(nowMs);
     logFpPerf();
-    pushFpPerfFrame(nowMs, _t_renderEnd - nowMs, {
-      physicsMs: _t_physicsEnd - nowMs,
-      elevatorMs: _t_elevEnd - _t_physicsEnd,
-      presentMs: _t_presentEnd - _t_elevEnd,
-      renderMs: _t_renderEnd - _t_presentEnd,
-    });
+    pushFpPerfFrame(
+      nowMs,
+      _t_renderEnd - nowMs,
+      {
+        physicsMs: _t_physicsEnd - nowMs,
+        elevatorMs: _t_elevEnd - _t_physicsEnd,
+        presentMs: _t_presentEnd - _t_elevEnd,
+        renderMs: _t_renderEnd - _t_presentEnd,
+      },
+      {
+        drawCalls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+      },
+    );
   };
   tick();
 

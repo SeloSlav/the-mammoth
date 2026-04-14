@@ -41,11 +41,30 @@ export type FpPerfSections = {
   renderMs: number;
 };
 
+/** Renderer counters read from renderer.info.render after each frame. */
+export type FpRendererInfo = {
+  drawCalls: number;
+  triangles: number;
+};
+
+// Last renderer info — read by the UI; updated each frame.
+let _lastDrawCalls = 0;
+let _lastTriangles = 0;
+
+export function getLastRendererInfo(): FpRendererInfo {
+  return { drawCalls: _lastDrawCalls, triangles: _lastTriangles };
+}
+
 export function pushFpPerfFrame(
   nowMs: number,
   totalMs: number,
   sections: FpPerfSections,
+  rendererInfo?: FpRendererInfo,
 ): void {
+  if (rendererInfo) {
+    _lastDrawCalls = rendererInfo.drawCalls;
+    _lastTriangles = rendererInfo.triangles;
+  }
   const i = _head;
   _ts[i] = nowMs;
   _total[i] = totalMs;
@@ -263,6 +282,7 @@ function secBar(ms: number, maxMs: number, width = 18): string {
 export function exportFpPerfReport(nowMs: number, windowSec: number): string {
   const s = computeFpPerfStats(nowMs, windowSec);
   if (!s) return "No profiler data available yet.";
+  const ri = getLastRendererInfo();
 
   const { frameMs, sections, histogram } = s;
   const secMax = Math.max(
@@ -276,6 +296,7 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
   const lines: string[] = [
     "=== The Mammoth — Performance Report ===",
     `Window: ${windowSec}s  Samples: ${s.samples}  Elapsed: ${s.actualElapsedSec.toFixed(1)}s`,
+    `Renderer: ${ri.drawCalls} draw calls  ${(ri.triangles / 1000).toFixed(1)}k triangles`,
     "",
     `FPS    avg=${s.fps}  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
     `Frame  avg=${frameMs.avg}ms  p50=${frameMs.p50}ms  p95=${frameMs.p95}ms  p99=${frameMs.p99}ms`,
