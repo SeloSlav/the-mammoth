@@ -180,14 +180,20 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
     // Cab walls (3 non-door faces).  These are the primary containment for
     // riders — they move with the cab and are always emitted regardless of
     // door state, moving phase, or suppression.
+    // Walls extend from the inner gameplay face (hx/hz) outward past the static
+    // shaft face (outerHx/outerHz) + padding, making them ~0.28 m thick.  This
+    // prevents the min-penetration heuristic from ever pushing outward during
+    // server-client reconciliation corrections.
     {
-      const wt = 0.11;
+      const outerHx = layout.sx * 0.5;
+      const outerHz = layout.sz * 0.5;
+      const wallPad = 0.10;
       const y0w = cabFloorY - 0.05;
       const y1w = cabFloorY + innerH + 0.1;
-      if (layout.doorFace !== "e") emit(plateX + hx, y0w, plateZ - hz, plateX + hx + wt, y1w, plateZ + hz);
-      if (layout.doorFace !== "w") emit(plateX - hx - wt, y0w, plateZ - hz, plateX - hx, y1w, plateZ + hz);
-      if (layout.doorFace !== "n") emit(plateX - hx, y0w, plateZ + hz, plateX + hx, y1w, plateZ + hz + wt);
-      if (layout.doorFace !== "s") emit(plateX - hx, y0w, plateZ - hz - wt, plateX + hx, y1w, plateZ - hz);
+      if (layout.doorFace !== "e") emit(plateX + hx, y0w, plateZ - hz, plateX + outerHx + wallPad, y1w, plateZ + hz);
+      if (layout.doorFace !== "w") emit(plateX - outerHx - wallPad, y0w, plateZ - hz, plateX - hx, y1w, plateZ + hz);
+      if (layout.doorFace !== "n") emit(plateX - hx, y0w, plateZ + hz, plateX + hx, y1w, plateZ + outerHz + wallPad);
+      if (layout.doorFace !== "s") emit(plateX - hx, y0w, plateZ - outerHz - wallPad, plateX + hx, y1w, plateZ - hz);
     }
 
     const cabDoorClosed = cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
