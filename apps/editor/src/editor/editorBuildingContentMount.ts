@@ -8,9 +8,11 @@ import type {
   InteriorDoc,
   LandingKitDef,
   PrefabDef,
+  StairWellDef,
 } from "@the-mammoth/schemas";
 import {
   buildCellMeshes,
+  buildStairWellPreviewRoot,
   buildElevatorCabCarPreviewRoot,
   buildInteriorMeshes,
   buildLandingDoorPreviewRoot,
@@ -20,6 +22,7 @@ import {
 } from "@the-mammoth/world";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../state/editorStore.js";
+import type { StairWellAuthoringScope } from "@the-mammoth/world";
 
 function buildPrefabPreview(def: PrefabDef): THREE.Group {
   const root = new THREE.Group();
@@ -64,6 +67,8 @@ export function buildEditorStructuralRoot(args: {
   activeFloorOverrideDocId: string | null;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
+  stairWellDef: StairWellDef;
+  stairWellAuthorScope: StairWellAuthoringScope;
   textureLoader: THREE.TextureLoader;
   emptyFloorDoc: (floorDocId: string) => FloorDoc;
 }): THREE.Group {
@@ -104,11 +109,36 @@ export function buildEditorStructuralRoot(args: {
     return root;
   }
 
+  if (args.mode === "stairwell_preview") {
+    const root = new THREE.Group();
+    root.name = "editor_workspace:stairwell";
+    const stairObj = Object.values(args.floorDocs)
+      .flatMap((doc) => doc.objects)
+      .find((obj) => {
+        const pid = obj.prefabId.toLowerCase();
+        return pid.includes("stair_well") || pid.includes("stairwell");
+      });
+    if (!stairObj) return root;
+    const sx = stairObj.scale?.[0] ?? 4.2;
+    const sy = stairObj.scale?.[1] ?? 3.2;
+    const sz = stairObj.scale?.[2] ?? 4.2;
+    const preview = buildStairWellPreviewRoot({
+      sx,
+      sy,
+      sz,
+      def: args.stairWellDef,
+      authoringScope: args.stairWellAuthorScope,
+    });
+    root.add(preview);
+    return root;
+  }
+
   if (args.mode === "floor" || args.mode === "floor_override") {
     const buildingRoot = instantiateBuildingFloorStack(args.building, (floorDocId) => {
       return args.floorDocs[floorDocId] ?? args.emptyFloorDoc(floorDocId);
     }, {
       getFloorOverrideDoc: (id) => args.floorOverrideDocs[id],
+      stairWellDef: args.stairWellDef,
     });
     for (const doc of Object.values(args.floorDocs)) {
       for (const obj of doc.objects) {

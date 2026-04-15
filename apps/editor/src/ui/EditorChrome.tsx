@@ -22,6 +22,7 @@ import {
   serializeInteriorDocPretty,
   serializeLandingKitDefPretty,
   serializePrefabDefPretty,
+  serializeStairWellDefPretty,
   useEditorStore,
 } from "../state/editorStore.js";
 import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
@@ -37,6 +38,7 @@ import {
   postSaveInterior,
   postSaveLandingKit,
   postSavePrefab,
+  postSaveStairWell,
 } from "./editorChromeNetwork.js";
 import { selectEditorChromeStore } from "./editorChromeSelectors.js";
 import {
@@ -63,6 +65,7 @@ export function EditorChrome() {
     floorOverrideDocs,
     elevatorCabDef,
     landingKitDef,
+    stairWellDef,
     contentIndex,
     activeFloorDocId,
     activeInteriorDocId,
@@ -79,6 +82,7 @@ export function EditorChrome() {
     useHdriEnvironment,
     cameraMode,
     flySpeedMps,
+    stairWellAuthorScope,
     historyPast,
     historyFuture,
     setMode,
@@ -86,6 +90,7 @@ export function EditorChrome() {
     setLandingDocKind,
     patchElevatorCabDef,
     patchLandingKitDef,
+    patchStairWellDef,
     setActiveFloorDocId,
     setActiveInteriorDocId,
     setActiveCellDocId,
@@ -98,6 +103,7 @@ export function EditorChrome() {
     setUseHdriEnvironment,
     setCameraMode,
     setFlySpeedMps,
+    setStairWellAuthorScope,
     setCollisionArtifactsStatus,
     undo,
     redo,
@@ -198,6 +204,8 @@ export function EditorChrome() {
         await postSaveElevatorCab(serializeElevatorCabDefPretty(elevatorCabDef));
       } else if (mode === "landing_preview") {
         await postSaveLandingKit(serializeLandingKitDefPretty(landingKitDef));
+      } else if (mode === "stairwell_preview") {
+        await postSaveStairWell(serializeStairWellDefPretty(stairWellDef));
       } else if (mode === "floor") {
         const doc = floorDocs[activeFloorDocId];
         if (!doc) throw new Error("No active floor doc");
@@ -232,6 +240,7 @@ export function EditorChrome() {
     mode,
     elevatorCabDef,
     landingKitDef,
+    stairWellDef,
     floorDocs,
     interiorDocs,
     cellDocs,
@@ -287,6 +296,14 @@ export function EditorChrome() {
       if (r) return quatToEulerDeg(r);
       return [0, 0, 0] as [number, number, number];
     }
+    if (mode === "stairwell_preview" && selectedId) {
+      const r =
+        stairWellAuthorScope === "ground"
+          ? stairWellDef.groundPartTransforms?.[selectedId]?.rotation
+          : stairWellDef.partTransforms?.[selectedId]?.rotation;
+      if (r) return quatToEulerDeg(r);
+      return [0, 0, 0] as [number, number, number];
+    }
     if (selectedFloorObj) return quatToEulerDeg(selectedFloorObj.rotation);
     if (selectedInteriorPl) return quatToEulerDeg(selectedInteriorPl.rotation);
     if (selectedCellPl) return quatToEulerDeg(selectedCellPl.rotation);
@@ -297,6 +314,8 @@ export function EditorChrome() {
     selectedId,
     elevatorCabDef,
     landingKitDef,
+    stairWellDef,
+    stairWellAuthorScope,
     selectedFloorObj,
     selectedInteriorPl,
     selectedCellPl,
@@ -336,6 +355,31 @@ export function EditorChrome() {
             rotation: q,
           },
         },
+      }));
+      return;
+    }
+    if (mode === "stairwell_preview" && selectedId) {
+      patchStairWellDef((d) => ({
+        ...d,
+        ...(stairWellAuthorScope === "ground"
+          ? {
+              groundPartTransforms: {
+                ...d.groundPartTransforms,
+                [selectedId]: {
+                  ...d.groundPartTransforms?.[selectedId],
+                  rotation: q,
+                },
+              },
+            }
+          : {
+              partTransforms: {
+                ...d.partTransforms,
+                [selectedId]: {
+                  ...d.partTransforms?.[selectedId],
+                  rotation: q,
+                },
+              },
+            }),
       }));
       return;
     }
@@ -389,16 +433,33 @@ export function EditorChrome() {
     <div style={editorChromePanel}>
       <strong style={{ fontSize: 15 }}>Authoring</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
-        <strong>Cab</strong> and <strong>Landing</strong> edit shared elevator visuals (
+        <strong>Cab</strong>, <strong>Landing</strong>, and <strong>Stairwell</strong> edit shared
+        vertical-core visuals (
         <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
-        <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>
-        ). <strong>World</strong> is the building + streamed docs: fly the stack, pick placements,
-        and save local JSON. <strong>FP viewmodel</strong> now authors both weapons and held
-        consumables.
+        <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
+        <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>).{" "}
+        <strong>World</strong> is the building + streamed docs: fly the stack, pick placements, and
+        save local JSON. <strong>FP viewmodel</strong> now authors both weapons and held consumables.
       </p>
 
       <span style={label}>Workspace</span>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <button
+          type="button"
+          style={{
+            ...rowBtn,
+            fontWeight: workspace === "stairwell" ? 700 : 400,
+            background: workspace === "stairwell" ? "#3a4a7a" : "#2a2a34",
+            border: "1px solid #444",
+            color: "#fff",
+          }}
+          onClick={() => {
+            setWorkspace("stairwell");
+            setCameraMode("orbit");
+          }}
+        >
+          Stairwell
+        </button>
         <button
           type="button"
           style={{
@@ -458,6 +519,34 @@ export function EditorChrome() {
           FP viewmodel
         </button>
       </div>
+
+      {workspace === "stairwell" ? (
+        <>
+          <span style={label}>Stairwell Scope</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {(["typical", "ground"] as const).map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                style={{
+                  ...rowBtn,
+                  fontWeight: stairWellAuthorScope === scope ? 700 : 400,
+                  background: stairWellAuthorScope === scope ? "#3a4a7a" : "#2a2a34",
+                  border: "1px solid #444",
+                  color: "#fff",
+                }}
+                onClick={() => setStairWellAuthorScope(scope)}
+              >
+                {scope === "typical" ? "Typical Storey" : "Ground Storey"}
+              </button>
+            ))}
+          </div>
+          <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            Transform deltas are authored separately for typical and ground stairwells. Materials stay
+            shared across the full shaft.
+          </p>
+        </>
+      ) : null}
 
       {workspace === "landing" ? (
         <>
@@ -848,6 +937,8 @@ export function EditorChrome() {
               downloadText("cab.json", serializeElevatorCabDefPretty(elevatorCabDef));
             } else if (mode === "landing_preview") {
               downloadText("landing_kit.json", serializeLandingKitDefPretty(landingKitDef));
+            } else if (mode === "stairwell_preview") {
+              downloadText("stairwell.json", serializeStairWellDefPretty(stairWellDef));
             } else if (mode === "floor" && activeFloorDoc) {
               downloadText(
                 `${activeFloorDocId}.json`,
@@ -930,6 +1021,7 @@ export function EditorChrome() {
 
       <EditorChromeOutliner
         mode={mode}
+        stairWellAuthorScope={stairWellAuthorScope}
         activeFloorDoc={activeFloorDoc}
         activeInteriorDoc={activeInteriorDoc}
         activeCellDoc={activeCellDoc}
@@ -940,7 +1032,7 @@ export function EditorChrome() {
         label={label}
       />
 
-      {mode !== "cab" && mode !== "landing_preview" ? (
+      {mode !== "cab" && mode !== "landing_preview" && mode !== "stairwell_preview" ? (
         <>
           <span style={label}>Prefab palette</span>
       <select
@@ -1054,8 +1146,11 @@ export function EditorChrome() {
         mode={mode}
         elevatorCabDef={elevatorCabDef}
         landingKitDef={landingKitDef}
+        stairWellDef={stairWellDef}
+        stairWellAuthorScope={stairWellAuthorScope}
         patchElevatorCabDef={patchElevatorCabDef}
         patchLandingKitDef={patchLandingKitDef}
+        patchStairWellDef={patchStairWellDef}
         selectedId={selectedId}
         selectedFloorObj={selectedFloorObj}
         selectedInteriorPl={selectedInteriorPl}

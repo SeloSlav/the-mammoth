@@ -10,6 +10,7 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     building: structuredClone(state.building),
     elevatorCabDef: structuredClone(state.elevatorCabDef),
     landingKitDef: structuredClone(state.landingKitDef),
+    stairWellDef: structuredClone(state.stairWellDef),
     selectedId: state.selectedId,
     dirty: state.dirty,
     contentStructureEpoch: state.contentStructureEpoch ?? 0,

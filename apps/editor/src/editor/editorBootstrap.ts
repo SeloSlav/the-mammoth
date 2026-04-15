@@ -7,6 +7,7 @@ import {
   InteriorDocSchema,
   LandingKitDefSchema,
   PrefabDefSchema,
+  StairWellDefSchema,
   type BuildingDoc,
   type CellDoc,
   type FloorDoc,
@@ -54,6 +55,7 @@ async function fetchEditorContentIndex(building: BuildingDoc): Promise<EditorCon
       floorOverrideDocIds: [],
       elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
       landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
+      stairWellRelPath: `${EDITOR_ELEVATOR_DIR}/stairwell.json`,
     };
   }
 }
@@ -103,6 +105,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
 
   let elevatorCabDef: import("@the-mammoth/schemas").ElevatorCabDef | undefined;
   let landingKitDef: import("@the-mammoth/schemas").LandingKitDef | undefined;
+  let stairWellDef: import("@the-mammoth/schemas").StairWellDef | undefined;
   try {
     elevatorCabDef = ElevatorCabDefSchema.parse(await fetchJson(`/content/elevator/cab.json`));
   } catch {
@@ -111,6 +114,13 @@ export async function bootstrapEditorFromContent(): Promise<void> {
   try {
     landingKitDef = LandingKitDefSchema.parse(
       await fetchJson(`/content/elevator/landing_kit.json`),
+    );
+  } catch {
+    /* optional */
+  }
+  try {
+    stairWellDef = StairWellDefSchema.parse(
+      await fetchJson(`/content/elevator/stairwell.json`),
     );
   } catch {
     /* optional */
@@ -131,6 +141,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     contentIndex,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
     ...(landingKitDef ? { landingKitDef } : {}),
+    ...(stairWellDef ? { stairWellDef } : {}),
     activeFloorDocId: first?.floorDocId ?? floorIds[0] ?? "floor_mamutica_ground",
     focusedStoryLevelIndex: first?.levelIndex ?? 1,
     activeInteriorDocId: interiorIds[0] ?? "lobby_central",

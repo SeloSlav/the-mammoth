@@ -7,7 +7,7 @@ import type {
   InteriorDoc,
   PrefabDef,
 } from "@the-mammoth/schemas";
-import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
+import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_EDITOR_PART_IDS } from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStore.js";
 
 /** Subparts tagged with `userData.editorCabPartId` in the cab preview (see `elevatorCabPreview.ts`). */
@@ -25,6 +25,7 @@ const ELEVATOR_CAB_OUTLINER_PART_IDS = [
 
 export function EditorChromeOutliner(props: {
   mode: EditorMode;
+  stairWellAuthorScope: "typical" | "ground";
   activeFloorDoc: FloorDoc | undefined;
   activeInteriorDoc: InteriorDoc | undefined;
   activeCellDoc: CellDoc | undefined;
@@ -36,6 +37,7 @@ export function EditorChromeOutliner(props: {
 }) {
   const {
     mode,
+    stairWellAuthorScope,
     activeFloorDoc,
     activeInteriorDoc,
     activeCellDoc,
@@ -75,6 +77,13 @@ export function EditorChromeOutliner(props: {
           Exterior landing door kit. Use the blue wireframe opening gizmo (or click the glass): move
           sets the hole height; non-uniform scale makes the opening taller/wider. Saved as{" "}
           <code>glassOpening</code> in shared LandingKitDef (rails + glass rebuild to match).
+        </p>
+      ) : null}
+      {mode === "stairwell_preview" ? (
+        <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+          Shared stairwell parts for the {stairWellAuthorScope} storey. Transform deltas are applied
+          relative to the generated procedural mesh, so one authored tweak propagates across matching
+          parts in every stairwell of that scope.
         </p>
       ) : null}
       {mode === "floor" ? (
@@ -180,6 +189,32 @@ export function EditorChromeOutliner(props: {
             </button>
           </>
         ) : null}
+        {mode === "stairwell_preview"
+          ? STAIR_WELL_EDITOR_PART_IDS.filter(
+              (id) => stairWellAuthorScope === "typical" || id !== "stair_corner_landing",
+            ).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSelectedId(id)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "6px 8px",
+                  border: "none",
+                  borderBottom: "1px solid #282830",
+                  background:
+                    selectedId === id ? "rgba(60,90,140,0.35)" : "transparent",
+                  color: "#ddd",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                {id}
+              </button>
+            ))
+          : null}
         {mode === "floor" && activeFloorDoc
           ? floorObjects.map((o) => (
               <button

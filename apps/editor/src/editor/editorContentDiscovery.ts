@@ -18,6 +18,7 @@ export type EditorContentIndex = {
   /** Repo-relative JSON paths under `content/` for shared elevator visuals. */
   elevatorCabRelPath: string;
   landingKitRelPath: string;
+  stairWellRelPath: string;
 };
 
 export type CollisionArtifactsStatus = {

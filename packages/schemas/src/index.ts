@@ -8,3 +8,4 @@ export * from "./building.js";
 export * from "./prefab.js";
 export * from "./elevatorCabDef.js";
 export * from "./landingKitDef.js";
+export * from "./stairWellDef.js";

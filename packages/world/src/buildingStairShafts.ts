@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
+import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
 import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
 
 /** Typical floor doc id (content + generator). */
@@ -19,8 +19,9 @@ export type BuildingStairShaftSpec = {
   sx: number;
   syPlate: number;
   sz: number;
-  megaSy: number;
-  centerY: number;
+  bottomY: number;
+  storeyCount: number;
+  storeySpacing: number;
 };
 
 export function shaftPlanKey(px: number, pz: number): string {
@@ -79,8 +80,7 @@ export function getBuildingStairShaftSpecs(
     (levelMin - 1) * spacing + CORE_PY - STOREY_SPACING_M * 0.5;
   const globalTop =
     (levelMax - 1) * spacing + CORE_PY + STOREY_SPACING_M * 0.5;
-  const megaSy = globalTop - globalBottom;
-  const centerY = (globalBottom + globalTop) * 0.5;
+  const storeyCount = levelMax - levelMin + 1;
 
   const out: BuildingStairShaftSpec[] = [];
   for (const [planKey, s] of map) {
@@ -92,17 +92,19 @@ export function getBuildingStairShaftSpecs(
       sx: s.sx,
       syPlate: s.syPlate,
       sz: s.sz,
-      megaSy,
-      centerY,
+      bottomY: globalBottom,
+      storeyCount,
+      storeySpacing: spacing,
     });
   }
   return out;
 }
 
-/** Full-height stair columns: closed shaft shell, no corridor doors or entry treads. */
+/** Always-visible stair columns: one authored stairwell segment per storey. */
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
+  stairWellDef?: StairWellDef,
 ): void {
   if (specs.length === 0) return;
 
@@ -110,12 +112,19 @@ export function addBuildingStairShaftColumnsToRoot(
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
     col.userData.mammothAlwaysVisible = true;
-    col.position.set(s.px, s.centerY, s.pz);
-    const climbFull = s.megaSy > STOREY_SPACING_M * 1.25;
-    addStairWellPlaceholder(col, s.sx, s.megaSy, s.sz, {
-      climbFullShaft: climbFull,
-      omitGroundStoreyCornerLandings: true,
-    });
+    col.position.set(s.px, 0, s.pz);
+    for (let i = 0; i < s.storeyCount; i++) {
+      const segment = new THREE.Group();
+      segment.name = `stair_shaft_segment_${i}`;
+      segment.position.y =
+        s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
+      addStairWellPlaceholder(segment, s.sx, s.syPlate, s.sz, {
+        omitGroundStoreyCornerLandings: i === 0,
+        def: stairWellDef,
+        authoringScope: i === 0 ? "ground" : "typical",
+      });
+      col.add(segment);
+    }
     root.add(col);
   }
 }

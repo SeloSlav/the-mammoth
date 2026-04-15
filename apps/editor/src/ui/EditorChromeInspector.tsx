@@ -7,6 +7,7 @@ import type {
   LandingKitDef,
   PlacedObject,
   PrefabComponent,
+  StairWellDef,
 } from "@the-mammoth/schemas";
 import { LANDING_DOOR_OPENING_PROXY_ID, resolveGlassOpening } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
@@ -27,8 +28,11 @@ export function EditorChromeInspector(props: {
   mode: EditorMode;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
+  stairWellDef: StairWellDef;
+  stairWellAuthorScope: "typical" | "ground";
   patchElevatorCabDef: EditorState["patchElevatorCabDef"];
   patchLandingKitDef: EditorState["patchLandingKitDef"];
+  patchStairWellDef: EditorState["patchStairWellDef"];
   selectedId: string | null;
   selectedFloorObj: PlacedObject | null;
   selectedInteriorPl: CellPlacement | null;
@@ -59,8 +63,11 @@ export function EditorChromeInspector(props: {
     mode,
     elevatorCabDef,
     landingKitDef,
+    stairWellDef,
+    stairWellAuthorScope,
     patchElevatorCabDef,
     patchLandingKitDef,
+    patchStairWellDef,
     selectedId,
     selectedFloorObj,
     selectedInteriorPl,
@@ -342,11 +349,111 @@ export function EditorChromeInspector(props: {
         </>
       ) : null}
 
+      {mode === "stairwell_preview" ? (
+        <>
+          <label style={label}>StairWellDef — material slots</label>
+          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            Shared stairwell visuals. Material edits rebuild the preview; transform deltas below apply
+            to the {stairWellAuthorScope} storey relative to the generated procedural part.
+          </p>
+          {(["wall", "floor", "tread", "landing", "railing"] as const).map((slot) => (
+            <div key={slot} style={{ marginBottom: 10 }}>
+              <label style={{ ...label, textTransform: "none" }}>{slot}</label>
+              <input
+                style={input}
+                placeholder="colorHex"
+                value={stairWellDef.materials?.[slot]?.colorHex ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patchStairWellDef((d) => ({
+                    ...d,
+                    materials: {
+                      ...d.materials,
+                      [slot]: { ...d.materials?.[slot], colorHex: v || undefined },
+                    },
+                  }));
+                }}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
+                <input
+                  style={input}
+                  type="number"
+                  step={0.05}
+                  min={0}
+                  max={1}
+                  placeholder="roughness"
+                  value={stairWellDef.materials?.[slot]?.roughness ?? ""}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    patchStairWellDef((d) => ({
+                      ...d,
+                      materials: {
+                        ...d.materials,
+                        [slot]: {
+                          ...d.materials?.[slot],
+                          roughness: Number.isFinite(v) ? v : undefined,
+                        },
+                      },
+                    }));
+                  }}
+                />
+                <input
+                  style={input}
+                  type="number"
+                  step={0.05}
+                  min={0}
+                  max={1}
+                  placeholder="metalness"
+                  value={stairWellDef.materials?.[slot]?.metalness ?? ""}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    patchStairWellDef((d) => ({
+                      ...d,
+                      materials: {
+                        ...d.materials,
+                        [slot]: {
+                          ...d.materials?.[slot],
+                          metalness: Number.isFinite(v) ? v : undefined,
+                        },
+                      },
+                    }));
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </>
+      ) : null}
+
       {mode === "cab" && selectedId ? (
         <>
           <label style={label}>Cab part rotation (° YXZ)</label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75 }}>
             Use the gizmo for move/scale; set precise yaw/pitch/roll here.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {([0, 1, 2] as const).map((i) => (
+              <input
+                key={i}
+                style={input}
+                type="number"
+                step={1}
+                value={euler[i].toFixed(2)}
+                onChange={(e) => updateEuler(i, Number(e.target.value) || 0)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {mode === "stairwell_preview" && selectedId ? (
+        <>
+          <label style={label}>
+            Stair part delta rotation (° YXZ) - {stairWellAuthorScope}
+          </label>
+          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75 }}>
+            Relative to the generated part. One tweak propagates to every matching tread / wall / post
+            in the {stairWellAuthorScope} stairwell scope.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {([0, 1, 2] as const).map((i) => (
@@ -378,7 +485,10 @@ export function EditorChromeInspector(props: {
         </p>
       ) : null}
 
-      {!selectedId && mode !== "cab" && mode !== "landing_preview" ? (
+      {!selectedId &&
+      mode !== "cab" &&
+      mode !== "landing_preview" &&
+      mode !== "stairwell_preview" ? (
         <p style={{ opacity: 0.7 }}>Click a volume in the 3D view or outliner.</p>
       ) : null}
       {!selectedId && mode === "cab" ? (
@@ -389,6 +499,12 @@ export function EditorChromeInspector(props: {
       {!selectedId && mode === "landing_preview" ? (
         <p style={{ opacity: 0.65, fontSize: 12 }}>
           Pick <code>landing_door_kit</code> in the outliner to focus the assembly (materials above).
+        </p>
+      ) : null}
+      {!selectedId && mode === "stairwell_preview" ? (
+        <p style={{ opacity: 0.65, fontSize: 12 }}>
+          Pick a shared stairwell part in the outliner to author a delta transform for the{" "}
+          {stairWellAuthorScope} stairwell scope.
         </p>
       ) : null}
 

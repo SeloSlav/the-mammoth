@@ -1,4 +1,4 @@
-import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import type { FloorDoc, PlacedObject, StairWellDef } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { shaftPlanKey } from "./buildingStairShafts.js";
 import { elevatorDoorFaceFromFloorCorridors } from "./shaftCorridorFlush.js";
@@ -30,6 +30,8 @@ export type BuildFloorMeshesOptions = {
    * Passed from {@link instantiateBuildingFloorStack} so upper storeys match the ground door side.
    */
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
+  /** Shared authored stairwell appearance / delta transforms. */
+  stairWellDef?: StairWellDef;
 };
 
 type ElevatorDoorFaceOverrideMeta = {

@@ -8,6 +8,7 @@ import {
   InteriorDocSchema,
   LandingKitDefSchema,
   PrefabDefSchema,
+  StairWellDefSchema,
   type BuildingDoc,
   type CellDoc,
   type CellPlacement,
@@ -18,6 +19,7 @@ import {
   type InteriorDoc,
   type LandingKitDef,
   type PrefabDef,
+  type StairWellDef,
 } from "@the-mammoth/schemas";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import {
@@ -152,6 +154,13 @@ export {
   buildLandingDoorPreviewRoot,
   rebuildLandingDoorPreviewSwing,
 } from "./landingDoorPreview.js";
+export {
+  applyStairWellPartTransforms,
+  buildStairWellPreviewRoot,
+  STAIR_WELL_EDITOR_PART_IDS,
+  type StairWellAuthoringScope,
+  type StairWellEditorPartId,
+} from "./stairElevatorPlaceholders.js";
 
 export function parseFloorDoc(raw: unknown): FloorDoc {
   return FloorDocSchema.parse(raw);
@@ -183,6 +192,10 @@ export function parseElevatorCabDef(raw: unknown): ElevatorCabDef {
 
 export function parseLandingKitDef(raw: unknown): LandingKitDef {
   return LandingKitDefSchema.parse(raw);
+}
+
+export function parseStairWellDef(raw: unknown): StairWellDef {
+  return StairWellDefSchema.parse(raw);
 }
 
 function addPlacementMeshes(

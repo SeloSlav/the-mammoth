@@ -11,12 +11,14 @@ import {
   parseBuildingDoc,
   parseCellDoc,
   parseFloorDoc,
+  parseStairWellDef,
   walkSurfaceAabbXZFootprint,
   walkSurfaceAABBsForBuilding,
 } from "@the-mammoth/world";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../content/building/mammoth.json";
 import cellDoc from "../../../../content/cells/cell_0_0.json";
+import stairWellAuthoringJson from "../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 
 export type FpSessionStaticWorld = {
@@ -34,6 +36,7 @@ export type FpSessionStaticWorld = {
 export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
+  const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
   const collisionScene = buildStaticCollisionSceneForBuilding(
     building,
     getFloorDoc,
@@ -55,7 +58,9 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
       stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
     });
 
-  const buildingRoot = instantiateBuildingFloorStack(building, getFloorDoc);
+  const buildingRoot = instantiateBuildingFloorStack(building, getFloorDoc, {
+    stairWellDef,
+  });
 
   // Merge all static geometry within each floor plate into one mesh per material.
   // Reduces draw calls from ~100+/floor to ~13/floor — the single largest render perf win.

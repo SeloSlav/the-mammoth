@@ -77,16 +77,37 @@ function matsFor(kind: PlaceholderKind): {
   floor: THREE.MeshStandardMaterial;
   ceil: THREE.MeshStandardMaterial;
   wall: THREE.MeshStandardMaterial;
+  exteriorWall: THREE.MeshStandardMaterial;
 } {
   switch (kind) {
     case "corridor":
-      return { floor: mat.corridorFloor, ceil: mat.corridorCeil, wall: mat.corridorWall };
+      return {
+        floor: mat.corridorFloor,
+        ceil: mat.corridorCeil,
+        wall: mat.corridorWall,
+        exteriorWall: mat.corridorExteriorWall,
+      };
     case "unit":
-      return { floor: mat.unitFloor, ceil: mat.unitCeil, wall: mat.unitWall };
+      return {
+        floor: mat.unitFloor,
+        ceil: mat.unitCeil,
+        wall: mat.unitWall,
+        exteriorWall: mat.unitExteriorWall,
+      };
     case "core":
-      return { floor: mat.coreFloor, ceil: mat.coreCeil, wall: mat.coreWall };
+      return {
+        floor: mat.coreFloor,
+        ceil: mat.coreCeil,
+        wall: mat.coreWall,
+        exteriorWall: mat.coreExteriorWall,
+      };
     default:
-      return { floor: mat.miscFloor, ceil: mat.miscCeil, wall: mat.miscWall };
+      return {
+        floor: mat.miscFloor,
+        ceil: mat.miscCeil,
+        wall: mat.miscWall,
+        exteriorWall: mat.miscExteriorWall,
+      };
   }
 }
 
@@ -121,6 +142,8 @@ type HollowShellOpts = {
   corridorWallHoles?: CorridorShellWallHoles;
   /** Elevator door heads on this corridor shell — room-local; used for manufacturer signage. */
   elevatorSignPlacements?: readonly ElevatorCorridorSignPlacement[];
+  /** Perimeter faces that sit on the building exterior and should receive facade cladding. */
+  exteriorFaces?: readonly CardinalFace[];
 };
 
 type PlateStairCorridorDoorPunch = {
@@ -740,6 +763,81 @@ function addShellFloorCeilingPieces(
   }
 }
 
+function addExteriorWallCladding(
+  group: THREE.Group,
+  hx: number,
+  hz: number,
+  vlenX: number,
+  vlenZ: number,
+  yLo: number,
+  yHi: number,
+  faces: readonly CardinalFace[],
+  exteriorWallM: THREE.MeshStandardMaterial,
+  holes?: Partial<Record<CardinalFace, readonly WallHoleYZ[] | readonly WallHoleXY[]>>,
+): void {
+  if (faces.length === 0) return;
+  const cladT = 0.035;
+  const zMin = -vlenZ * 0.5;
+  const zMax = vlenZ * 0.5;
+  const xMin = -vlenX * 0.5;
+  const xMax = vlenX * 0.5;
+  for (const face of faces) {
+    if (face === "e") {
+      addWallConstantXWithHoles(
+        group,
+        exteriorWallM,
+        hx + cladT * 0.5,
+        cladT,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        (holes?.e as readonly WallHoleYZ[] | undefined) ?? [],
+        "shell_exterior_cladding_e",
+      );
+    } else if (face === "w") {
+      addWallConstantXWithHoles(
+        group,
+        exteriorWallM,
+        -hx - cladT * 0.5,
+        cladT,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        (holes?.w as readonly WallHoleYZ[] | undefined) ?? [],
+        "shell_exterior_cladding_w",
+      );
+    } else if (face === "n") {
+      addWallConstantZWithHoles(
+        group,
+        exteriorWallM,
+        hz + cladT * 0.5,
+        cladT,
+        xMin,
+        xMax,
+        yLo,
+        yHi,
+        (holes?.n as readonly WallHoleXY[] | undefined) ?? [],
+        "shell_exterior_cladding_n",
+      );
+    } else {
+      addWallConstantZWithHoles(
+        group,
+        exteriorWallM,
+        -hz - cladT * 0.5,
+        cladT,
+        xMin,
+        xMax,
+        yLo,
+        yHi,
+        (holes?.s as readonly WallHoleXY[] | undefined) ?? [],
+        "shell_exterior_cladding_s",
+      );
+    }
+  }
+}
+
 function addResidenceEntryDoorFrameTrimsForUnit(
   group: THREE.Group,
   hx: number,
@@ -853,7 +951,8 @@ function addHollowRoomShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const { floor: floorM, ceil: ceilM, wall: wallM } = matsFor(kind);
+  const { floor: floorM, ceil: ceilM, wall: wallM, exteriorWall: exteriorWallM } = matsFor(kind);
+  const exteriorFaces = opts.exteriorFaces ?? [];
   const vh = Math.max(sy - 2 * wt, 0.05);
   const vlenX = Math.max(sx - 2 * wt, 0.05);
   const vlenZ = Math.max(sz - 2 * wt, 0.05);
@@ -910,6 +1009,17 @@ function addHollowRoomShell(
       south.name = "shell_wall_s";
       south.position.set(0, 0, -hz + wt * 0.5);
       group.add(south);
+      addExteriorWallCladding(
+        group,
+        hx,
+        hz,
+        vlenX,
+        vlenZ,
+        yLo,
+        yHi,
+        exteriorFaces,
+        exteriorWallM,
+      );
       return;
     }
 
@@ -970,6 +1080,12 @@ function addHollowRoomShell(
       cw?.s ?? [],
       "shell_wall_s",
     );
+    addExteriorWallCladding(group, hx, hz, vlenX, vlenZ, yLo, yHi, exteriorFaces, exteriorWallM, {
+      e: cw?.e,
+      w: cw?.w,
+      n: cw?.n,
+      s: cw?.s,
+    });
     if (kind === "unit" && cw) {
       addResidenceEntryDoorFrameTrimsForUnit(
         group,
@@ -1078,6 +1194,12 @@ function addHollowRoomShell(
     holesWallS,
     "shell_wall_s",
   );
+  addExteriorWallCladding(group, hx, hz, vlenX, vlenZ, yLo, yHi, exteriorFaces, exteriorWallM, {
+    e: holesWallE,
+    w: holesWallW,
+    n: holesWallN,
+    s: holesWallS,
+  });
 
   const frameM = mat.lobbyDoorFrame;
   let fi = 0;
@@ -1194,6 +1316,10 @@ export function buildFloorMeshes(
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
   let hasBounds = false;
+  for (const obj of floor.objects) {
+    expandBoxForPlacedObject(min, max, obj);
+    hasBounds = true;
+  }
 
   let plateCx = 0;
   let plateCz = 0;
@@ -1210,6 +1336,7 @@ export function buildFloorMeshes(
 
   const story = opts?.storyLevelIndex ?? 99;
   const corridorFootprint = firstCorridorOrLobbyFromFloor(floor);
+  const exteriorFaceTol = 0.16;
 
   const elevatorDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
   for (const o of floor.objects) {
@@ -1249,13 +1376,23 @@ export function buildFloorMeshes(
     elevatorDoorPunchesPlate;
 
   for (const obj of floor.objects) {
-    expandBoxForPlacedObject(min, max, obj);
-    hasBounds = true;
-
     const kind = classifyPrefab(obj.prefabId);
     const sx = obj.scale?.[0] ?? 1;
     const sy = obj.scale?.[1] ?? 1;
     const sz = obj.scale?.[2] ?? 1;
+    const roomExteriorFaces: CardinalFace[] = [];
+    if (hasBounds && !obj.rotation) {
+      const hx = sx * 0.5;
+      const hz = sz * 0.5;
+      const x0 = obj.position[0] - hx;
+      const x1 = obj.position[0] + hx;
+      const z0 = obj.position[2] - hz;
+      const z1 = obj.position[2] + hz;
+      if (x1 >= max.x - exteriorFaceTol) roomExteriorFaces.push("e");
+      if (x0 <= min.x + exteriorFaceTol) roomExteriorFaces.push("w");
+      if (z1 >= max.z - exteriorFaceTol) roomExteriorFaces.push("n");
+      if (z0 <= min.z + exteriorFaceTol) roomExteriorFaces.push("s");
+    }
 
     const room = new THREE.Group();
     room.name = obj.id;
@@ -1310,6 +1447,8 @@ export function buildFloorMeshes(
       if (!opts?.stairShaftSkipKeys?.has(sk)) {
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
+          def: opts?.stairWellDef,
+          authoringScope: story === 1 || story === 99 ? "ground" : "typical",
         });
       }
     } else {
@@ -1368,6 +1507,7 @@ export function buildFloorMeshes(
         shaftElevatorsMerged,
         corridorWallHoles,
         elevatorSignPlacements,
+        exteriorFaces: roomExteriorFaces,
       });
     }
     root.add(room);

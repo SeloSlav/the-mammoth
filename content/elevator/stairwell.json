@@ -1,0 +1,12 @@
+{
+  "id": "default_stair_well",
+  "version": 1,
+  "displayName": "Default stairwell",
+  "materials": {
+    "wall": { "colorHex": "0xd7dce2", "roughness": 0.94, "metalness": 0.02 },
+    "floor": { "colorHex": "0xa09d99", "roughness": 0.94, "metalness": 0.025 },
+    "tread": { "colorHex": "0xc5cad2", "roughness": 0.92, "metalness": 0.025 },
+    "landing": { "colorHex": "0xb8c0ca", "roughness": 0.92, "metalness": 0.025 },
+    "railing": { "colorHex": "0x5c5a58", "roughness": 0.35, "metalness": 0.35 }
+  }
+}

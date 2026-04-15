@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
+import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import { elevatorDoorFacesFromGroundFloorDoc } from "./elevatorDoorFacesFromGroundFloorDoc.js";
@@ -25,6 +25,7 @@ export const DEFAULT_BUILDING_FLOOR_SPACING_M = 60 / 19;
 export type InstantiateBuildingFloorStackOptions = {
   floorSpacingM?: number;
   getFloorOverrideDoc?: GetFloorOverrideDoc;
+  stairWellDef?: StairWellDef;
 };
 
 /**
@@ -83,6 +84,7 @@ export function instantiateBuildingFloorStack(
       shaftElevatorsMerged,
       plateWorldOriginY,
       elevatorDoorFaceByShaftKey,
+      stairWellDef: options?.stairWellDef,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;
@@ -91,7 +93,7 @@ export function instantiateBuildingFloorStack(
   }
 
   if (stairShaftSpecs.length > 0) {
-    addBuildingStairShaftColumnsToRoot(root, stairShaftSpecs);
+    addBuildingStairShaftColumnsToRoot(root, stairShaftSpecs, options?.stairWellDef);
   }
 
   return root;

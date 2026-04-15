@@ -8,16 +8,18 @@ import type {
   LandingKitDef,
   PlacedObject,
   PrefabDef,
+  StairWellDef,
 } from "@the-mammoth/schemas";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
 import type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
+import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import type {
   CollisionArtifactsStatus,
   EditorContentIndex,
 } from "../editor/editorContentDiscovery.js";
 
 /** Top-level authoring surface (3-button UX). */
-export type EditorWorkspace = "cab" | "landing" | "world";
+export type EditorWorkspace = "cab" | "landing" | "stairwell" | "world";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
@@ -31,7 +33,8 @@ export type EditorMode =
   | "fp_viewmodel"
   | "fp_consumable"
   | "cab"
-  | "landing_preview";
+  | "landing_preview"
+  | "stairwell_preview";
 
 export type EditorCameraMode = "orbit" | "fly";
 
@@ -58,6 +61,7 @@ export type HistoryEntry = {
   building: BuildingDoc;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
+  stairWellDef: StairWellDef;
   selectedId: string | null;
   dirty: boolean;
   contentStructureEpoch: number;
@@ -75,6 +79,7 @@ export interface EditorState {
   floorOverrideDocs: Record<string, FloorOverrideDoc>;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
+  stairWellDef: StairWellDef;
   contentIndex: EditorContentIndex;
   activeFloorDocId: string;
   activeInteriorDocId: string;
@@ -91,6 +96,7 @@ export interface EditorState {
   useHdriEnvironment: boolean;
   cameraMode: EditorCameraMode;
   flySpeedMps: number;
+  stairWellAuthorScope: StairWellAuthoringScope;
   fpAuthorCamera: FpAuthorCameraKind;
   fpAuthorSubjectKind: FpAuthorSubjectKind;
   fpAuthorTargetId: string;
@@ -115,6 +121,7 @@ export interface EditorState {
   setLandingDocKind: (kind: LandingDocKind) => void;
   patchElevatorCabDef: (fn: (d: ElevatorCabDef) => ElevatorCabDef) => void;
   patchLandingKitDef: (fn: (d: LandingKitDef) => LandingKitDef) => void;
+  patchStairWellDef: (fn: (d: StairWellDef) => StairWellDef) => void;
   setBuilding: (doc: BuildingDoc) => void;
   patchBuilding: (fn: (b: BuildingDoc) => BuildingDoc) => void;
   setFloorDoc: (id: string, doc: FloorDoc) => void;
@@ -137,6 +144,7 @@ export interface EditorState {
   setUseHdriEnvironment: (on: boolean) => void;
   setCameraMode: (mode: EditorCameraMode) => void;
   setFlySpeedMps: (speed: number) => void;
+  setStairWellAuthorScope: (scope: StairWellAuthoringScope) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;
   setFpAuthorTargetId: (id: string) => void;
@@ -228,4 +236,5 @@ export interface EditorState {
   replaceBuildingFromRemote: (doc: BuildingDoc) => void;
   replaceElevatorCabDefFromRemote: (doc: ElevatorCabDef) => void;
   replaceLandingKitDefFromRemote: (doc: LandingKitDef) => void;
+  replaceStairWellDefFromRemote: (doc: StairWellDef) => void;
 }

@@ -7,6 +7,7 @@ import {
   InteriorDocSchema,
   LandingKitDefSchema,
   PrefabDefSchema,
+  StairWellDefSchema,
   type BuildingDoc,
   type CellDoc,
   type ElevatorCabDef,
@@ -16,6 +17,7 @@ import {
   type LandingKitDef,
   type PlacedObject,
   type PrefabDef,
+  type StairWellDef,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
@@ -78,6 +80,7 @@ const EMPTY_CONTENT_INDEX: EditorContentIndex = {
   floorOverrideDocIds: [],
   elevatorCabRelPath: "elevator/cab.json",
   landingKitRelPath: "elevator/landing_kit.json",
+  stairWellRelPath: "elevator/stairwell.json",
 };
 
 const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
@@ -86,6 +89,10 @@ const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
 });
 const DEFAULT_LANDING_KIT_DEF = LandingKitDefSchema.parse({
   id: "default_landing_kit",
+  version: 1,
+});
+const DEFAULT_STAIR_WELL_DEF = StairWellDefSchema.parse({
+  id: "default_stair_well",
   version: 1,
 });
 
@@ -101,6 +108,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   floorOverrideDocs: {},
   elevatorCabDef: DEFAULT_ELEVATOR_CAB_DEF,
   landingKitDef: DEFAULT_LANDING_KIT_DEF,
+  stairWellDef: DEFAULT_STAIR_WELL_DEF,
   contentIndex: EMPTY_CONTENT_INDEX,
   activeFloorDocId: "floor_mamutica_ground",
   activeInteriorDocId: "lobby_central",
@@ -117,6 +125,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   useHdriEnvironment: true,
   cameraMode: "fly",
   flySpeedMps: 18,
+  stairWellAuthorScope: "typical",
   fpAuthorCamera: "orbit",
   fpAuthorSubjectKind: "weapon",
   fpAuthorTargetId: FP_AUTHOR_PREFERRED_TARGET_ID,
@@ -157,6 +166,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: prev.building,
       elevatorCabDef: prev.elevatorCabDef,
       landingKitDef: prev.landingKitDef,
+      stairWellDef: prev.stairWellDef,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
       contentStructureEpoch: prev.contentStructureEpoch ?? 0,
@@ -180,6 +190,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: next.building,
       elevatorCabDef: next.elevatorCabDef,
       landingKitDef: next.landingKitDef,
+      stairWellDef: next.stairWellDef,
       selectedId: next.selectedId,
       dirty: next.dirty,
       contentStructureEpoch: next.contentStructureEpoch ?? 0,
@@ -264,6 +275,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       };
     });
   },
+  patchStairWellDef: (fn) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const prev = s.stairWellDef;
+      const next = fn(prev);
+      const needsRebuild =
+        next.id !== prev.id ||
+        next.version !== prev.version ||
+        JSON.stringify(next.materials) !== JSON.stringify(prev.materials);
+      return {
+        stairWellDef: next,
+        dirty: true,
+        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    });
+  },
   setBuilding: (building) =>
     set((s) => ({
       building,
@@ -343,6 +370,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setUseHdriEnvironment: (useHdriEnvironment) => set({ useHdriEnvironment }),
   setCameraMode: (cameraMode) => set({ cameraMode }),
   setFlySpeedMps: (flySpeedMps) => set({ flySpeedMps }),
+  setStairWellAuthorScope: (stairWellAuthorScope) =>
+    set((s) => ({
+      stairWellAuthorScope,
+      ...(s.mode === "stairwell_preview" ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      ...(stairWellAuthorScope === "ground" && s.selectedId === "stair_corner_landing"
+        ? { selectedId: null }
+        : {}),
+    })),
   setFpAuthorCamera: (fpAuthorCamera) => set({ fpAuthorCamera }),
   setFpAuthorSubjectKind: (fpAuthorSubjectKind: FpAuthorSubjectKind) =>
     set((s) => {
@@ -855,6 +890,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       historyFuture: [],
       contentStructureEpoch: s.contentStructureEpoch + 1,
     })),
+  replaceStairWellDefFromRemote: (doc) =>
+    set((s) => ({
+      stairWellDef: StairWellDefSchema.parse(doc),
+      dirty: false,
+      historyPast: [],
+      historyFuture: [],
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
 }));
 
 export function collectPrefabIdsFromFloors(floorDocs: Record<string, FloorDoc>): string[] {
@@ -928,4 +971,8 @@ export function serializeElevatorCabDefPretty(doc: ElevatorCabDef): string {
 
 export function serializeLandingKitDefPretty(doc: LandingKitDef): string {
   return `${JSON.stringify(LandingKitDefSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeStairWellDefPretty(doc: StairWellDef): string {
+  return `${JSON.stringify(StairWellDefSchema.parse(doc), null, 2)}\n`;
 }

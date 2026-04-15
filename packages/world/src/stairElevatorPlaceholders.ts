@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { StairWellDef } from "@the-mammoth/schemas";
 import {
   computeSwitchbackStairLayout,
   STOREY_SPACING_M,
@@ -14,38 +15,16 @@ import {
   type WallHoleXY,
   type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
+import { concreteMaterial } from "./floorPlaceholderMeshMaterials.js";
+import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
 
-const stairTread = new THREE.MeshStandardMaterial({
-  color: 0xc5cad2,
-  roughness: 0.92,
-  metalness: 0.025,
-});
-const landingMat = new THREE.MeshStandardMaterial({
-  color: 0xb8c0ca,
-  roughness: 0.92,
-  metalness: 0.025,
-});
-const railMat = new THREE.MeshStandardMaterial({
-  color: 0x5c5a58,
-  roughness: 0.35,
-  metalness: 0.35,
-});
-/** Same chalky panel read as hollow shells — reads as exterior mass, not interior metal shaft. */
-const shaftWall = new THREE.MeshStandardMaterial({
-  color: 0xedf1f6,
-  roughness: 0.9,
-  metalness: 0.015,
-});
+/** Elevator hoistway exterior: light brutalist brick-red concrete so shafts read as distinct tower cores. */
+const shaftWall = concreteMaterial(0xd5a19b);
 /** Pit / landing slab at hoistway bottom (world slab is open here — must not read as outdoor grass). */
 const hoistwayFloor = new THREE.MeshStandardMaterial({
   color: 0xa09d99,
   roughness: 0.94,
   metalness: 0.025,
-});
-const stairShaftWall = new THREE.MeshStandardMaterial({
-  color: 0xe9eef4,
-  roughness: 0.9,
-  metalness: 0.015,
 });
 const shaftCeil = new THREE.MeshStandardMaterial({
   color: 0xe0e6ee,
@@ -57,6 +36,91 @@ const doorFrameMat = new THREE.MeshStandardMaterial({
   roughness: 0.42,
   metalness: 0.55,
 });
+
+export const STAIR_WELL_EDITOR_PART_IDS = [
+  "shaft_floor",
+  "shaft_wall",
+  "stair_tread",
+  "stair_corner_landing",
+  "stair_rail_post",
+] as const;
+
+export type StairWellEditorPartId = (typeof STAIR_WELL_EDITOR_PART_IDS)[number];
+export type StairWellAuthoringScope = "typical" | "ground";
+
+type StairWellMaterialSet = {
+  wall: THREE.MeshStandardMaterial;
+  floor: THREE.MeshStandardMaterial;
+  tread: THREE.MeshStandardMaterial;
+  landing: THREE.MeshStandardMaterial;
+  railing: THREE.MeshStandardMaterial;
+};
+
+function createStairWellMaterials(def: StairWellDef | undefined): StairWellMaterialSet {
+  const wall = concreteMaterial(0xd7dce2);
+  const floor = new THREE.MeshStandardMaterial({
+    color: 0xa09d99,
+    roughness: 0.94,
+    metalness: 0.025,
+  });
+  const tread = new THREE.MeshStandardMaterial({
+    color: 0xc5cad2,
+    roughness: 0.92,
+    metalness: 0.025,
+  });
+  const landing = new THREE.MeshStandardMaterial({
+    color: 0xb8c0ca,
+    roughness: 0.92,
+    metalness: 0.025,
+  });
+  const railing = new THREE.MeshStandardMaterial({
+    color: 0x5c5a58,
+    roughness: 0.35,
+    metalness: 0.35,
+  });
+  applyCabMaterialSlot(wall, def?.materials?.wall);
+  applyCabMaterialSlot(floor, def?.materials?.floor);
+  applyCabMaterialSlot(tread, def?.materials?.tread);
+  applyCabMaterialSlot(landing, def?.materials?.landing);
+  applyCabMaterialSlot(railing, def?.materials?.railing);
+  return { wall, floor, tread, landing, railing };
+}
+
+function setStairWellEditorPartId(
+  obj: THREE.Object3D,
+  partId: StairWellEditorPartId,
+  scope: StairWellAuthoringScope,
+): void {
+  obj.userData.editorStairPartId = partId;
+  obj.userData.editorStairAuthoringScope = scope;
+  obj.userData.editorStairBasePosition = [
+    obj.position.x,
+    obj.position.y,
+    obj.position.z,
+  ] as const;
+  obj.userData.editorStairBaseScale = [
+    obj.scale.x,
+    obj.scale.y,
+    obj.scale.z,
+  ] as const;
+  obj.userData.editorStairBaseRotation = [
+    obj.quaternion.x,
+    obj.quaternion.y,
+    obj.quaternion.z,
+    obj.quaternion.w,
+  ] as const;
+}
+
+function recordStairWellBaseTransforms(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const partId = obj.userData.editorStairPartId as StairWellEditorPartId | undefined;
+    if (!partId) return;
+    const scope =
+      (obj.userData.editorStairAuthoringScope as StairWellAuthoringScope | undefined) ??
+      "typical";
+    setStairWellEditorPartId(obj, partId, scope);
+  });
+}
 
 /**
  * Ground-level hoistway / stair entry: **double-door clear width** (m).
@@ -788,7 +852,96 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
    * Mega: lowest pad among those with `y` in the bottom ~`STOREY_SPACING_M` of the shaft.
    */
   omitGroundStoreyCornerLandings?: boolean;
+  /** Shared authored appearance / delta transforms applied to every stairwell. */
+  def?: StairWellDef;
+  /** Which authored stairwell bucket this instance belongs to. */
+  authoringScope?: StairWellAuthoringScope;
 };
+
+function tagGeneratedStairWellShellParts(
+  root: THREE.Object3D,
+  scope: StairWellAuthoringScope,
+): void {
+  root.traverse((obj) => {
+    if (obj.name === "shaft_floor") {
+      setStairWellEditorPartId(obj, "shaft_floor", scope);
+    } else if (obj.name.startsWith("shaft_wall_")) {
+      setStairWellEditorPartId(obj, "shaft_wall", scope);
+    }
+  });
+}
+
+function stairWellPartTransformsForScope(
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+): StairWellDef["partTransforms"] {
+  return scope === "ground" ? def?.groundPartTransforms : def?.partTransforms;
+}
+
+export function applyStairWellPartTransforms(
+  root: THREE.Object3D,
+  def: StairWellDef | undefined,
+): void {
+  const _baseQ = new THREE.Quaternion();
+  const _deltaQ = new THREE.Quaternion();
+  root.traverse((obj) => {
+    const partId = obj.userData.editorStairPartId as string | undefined;
+    if (!partId) return;
+    const scope =
+      (obj.userData.editorStairAuthoringScope as StairWellAuthoringScope | undefined) ??
+      "typical";
+    const partTransforms = stairWellPartTransformsForScope(def, scope);
+    const basePos = obj.userData.editorStairBasePosition as readonly number[] | undefined;
+    const baseScale = obj.userData.editorStairBaseScale as readonly number[] | undefined;
+    const baseRot = obj.userData.editorStairBaseRotation as readonly number[] | undefined;
+    if (!basePos || !baseScale || !baseRot) return;
+
+    obj.position.set(basePos[0] ?? 0, basePos[1] ?? 0, basePos[2] ?? 0);
+    obj.scale.set(baseScale[0] ?? 1, baseScale[1] ?? 1, baseScale[2] ?? 1);
+    obj.quaternion.set(baseRot[0] ?? 0, baseRot[1] ?? 0, baseRot[2] ?? 0, baseRot[3] ?? 1);
+
+    const tweak = partTransforms?.[partId];
+    if (!tweak) return;
+
+    if (tweak.position) {
+      obj.position.x += tweak.position[0];
+      obj.position.y += tweak.position[1];
+      obj.position.z += tweak.position[2];
+    }
+    if (tweak.scale) {
+      obj.scale.x *= tweak.scale[0];
+      obj.scale.y *= tweak.scale[1];
+      obj.scale.z *= tweak.scale[2];
+    }
+    if (tweak.rotation) {
+      _baseQ.set(baseRot[0] ?? 0, baseRot[1] ?? 0, baseRot[2] ?? 0, baseRot[3] ?? 1);
+      _deltaQ.set(
+        tweak.rotation[0],
+        tweak.rotation[1],
+        tweak.rotation[2],
+        tweak.rotation[3] ?? 1,
+      );
+      obj.quaternion.copy(_baseQ).multiply(_deltaQ);
+    }
+  });
+}
+
+export function buildStairWellPreviewRoot(args: {
+  sx: number;
+  sy: number;
+  sz: number;
+  def?: StairWellDef;
+  authoringScope?: StairWellAuthoringScope;
+}): THREE.Group {
+  const root = new THREE.Group();
+  root.name = "editor_stair_well_preview";
+  addStairWellPlaceholder(root, args.sx, args.sy, args.sz, {
+    def: args.def,
+    authoringScope: args.authoringScope,
+    omitGroundStoreyCornerLandings: args.authoringScope === "ground",
+  });
+  return root;
+}
 
 export function addStairWellPlaceholder(
   group: THREE.Group,
@@ -797,14 +950,18 @@ export function addStairWellPlaceholder(
   sz: number,
   opts?: StairWellPlaceholderOpts,
 ): void {
-  const { omitGroundStoreyCornerLandings, ...layoutOpts } = opts ?? {};
+  const { omitGroundStoreyCornerLandings, def: _def, ...layoutOpts } = opts ?? {};
   const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
+  const mats = createStairWellMaterials(opts?.def);
+  const authoringScope = opts?.authoringScope ?? "typical";
 
-  addShaftShell(group, sx, sy, sz, stairShaftWall, shaftCeil, {
+  addShaftShell(group, sx, sy, sz, mats.wall, shaftCeil, {
     includeFloor: true,
     includeCeiling: false,
+    floorMat: mats.floor,
     groundDoor: null,
   });
+  tagGeneratedStairWellShellParts(group, authoringScope);
 
   const { innerWallH, wallCenterY, ix0, ix1, iz0, iz1 } = L;
 
@@ -812,9 +969,10 @@ export function addStairWellPlaceholder(
   for (const tr of L.treads) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(tr.halfAlong * 2, tr.riseHalf * 2, tr.halfAcross * 2),
-      stairTread,
+      mats.tread,
     );
     mesh.name = `stair_tread_${ti}`;
+    setStairWellEditorPartId(mesh, "stair_tread", authoringScope);
     ti += 1;
     mesh.position.set(tr.x, tr.y, tr.z);
     mesh.rotation.y = tr.yaw;
@@ -850,9 +1008,10 @@ export function addStairWellPlaceholder(
         cl.thicknessHalf * 2,
         cl.halfD * 2,
       ),
-      landingMat,
+      mats.landing,
     );
     mesh.name = `stair_corner_landing_${li}`;
+    setStairWellEditorPartId(mesh, "stair_corner_landing", authoringScope);
     li += 1;
     mesh.position.set(cl.x, cl.y, cl.z);
     group.add(mesh);
@@ -869,11 +1028,15 @@ export function addStairWellPlaceholder(
   for (const [rx, rz] of corners) {
     const post = new THREE.Mesh(
       new THREE.BoxGeometry(railPost, innerWallH, railPost),
-      railMat,
+      mats.railing,
     );
     post.name = `stair_rail_post_${pi}`;
+    setStairWellEditorPartId(post, "stair_rail_post", authoringScope);
     pi += 1;
     post.position.set(rx, wallCenterY, rz);
     group.add(post);
   }
+
+  recordStairWellBaseTransforms(group);
+  applyStairWellPartTransforms(group, opts?.def);
 }

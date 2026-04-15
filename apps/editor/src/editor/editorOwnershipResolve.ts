@@ -39,6 +39,13 @@ export function describeEditorSaveTarget(args: {
       detail: "content/elevator/landing_kit.json (exterior door kit per landing)",
     };
   }
+  if (mode === "stairwell_preview") {
+    return {
+      kind: "shared",
+      title: "Shared — StairWellDef",
+      detail: "content/elevator/stairwell.json (all stairwells use this visual definition)",
+    };
+  }
   if (mode === "fp_viewmodel") {
     return {
       kind: "local",

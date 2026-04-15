@@ -167,3 +167,14 @@ export function resolveLandingKitPickId(hit: THREE.Object3D | null): string | nu
   }
   return null;
 }
+
+/** Walks parents for `userData.editorStairPartId` (shared stairwell workspace picking). */
+export function resolveStairWellPartId(hit: THREE.Object3D | null): string | null {
+  let cur: THREE.Object3D | null = hit;
+  while (cur) {
+    const id = cur.userData.editorStairPartId;
+    if (typeof id === "string" && id.length > 0) return id;
+    cur = cur.parent;
+  }
+  return null;
+}
