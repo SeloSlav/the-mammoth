@@ -122,7 +122,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
       queryPose,
     });
 
-    if (!suppressMovingCabGeneratedCollision && cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
+    if (cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN) {
       const y0 = cabFloorY - 0.22;
       const y1 = cabFloorY + innerH + 0.38;
       const doorHalf =

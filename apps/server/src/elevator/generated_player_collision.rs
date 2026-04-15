@@ -98,12 +98,9 @@ fn collect_generated_collision_aabbs(
     let (hx, hz) = elevator_layout::inner_half_xz();
     let iy = elevator_layout::inner_height();
 
+    // Cab door slab: always emit when doors are closed (no suppress check —
+    // this is the cab's own containment, not landing geometry).
     for car in ctx.db.elevator_car().iter() {
-        if let Some((px, py, pz)) = query_pose {
-            if suppress_moving_cab_generated_collision_for_pose(px, py, pz, &car) {
-                continue;
-            }
-        }
         if car.door_open_01 >= super::DOOR_EXIT_CLAMP_MIN_OPEN {
             continue;
         }

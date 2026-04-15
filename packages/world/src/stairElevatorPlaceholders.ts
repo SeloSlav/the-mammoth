@@ -767,7 +767,6 @@ export function addElevatorShaftPlaceholder(
   opts?: ElevatorShaftPlaceholderOpts | null,
 ): void {
   const includePitFloor = opts?.includePitFloor !== false;
-  const childCountBefore = group.children.length;
   addShaftShell(group, sx, sy, sz, shaftWall, shaftCeil, {
     includeFloor: includePitFloor,
     includeCeiling: false,
@@ -776,15 +775,6 @@ export function addElevatorShaftPlaceholder(
     groundDoor: opts?.groundDoor ?? null,
     corridorFlushGapM: opts?.corridorFlushGapM,
   });
-  // Elevator shaft walls are visual only — dynamic collision handles all
-  // hoistway blocking (cab door slab, landing front wall, exterior door).
-  // Without this, static baked AABBs from the shaft walls push riders
-  // sideways as the cab moves through each storey's wall segment.
-  for (let i = childCountBefore; i < group.children.length; i++) {
-    group.children[i]!.traverse((obj) => {
-      obj.userData.mammothNoCollision = true;
-    });
-  }
 }
 
 /**

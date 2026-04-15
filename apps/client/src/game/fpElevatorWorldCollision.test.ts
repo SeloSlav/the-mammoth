@@ -394,17 +394,19 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     const cabFloorY =
       feetYForLayout(movingLayout, 1) +
       (feetYForLayout(movingLayout, 2) - feetYForLayout(movingLayout, 1)) * 0.55;
-    const landing: ElevatorLandingDoor = {
-      rowKey: landingExteriorDoorRowKey(movingShaftKey, 2),
+    // Level 3 is far above the cab — cabCoversLanding will be false there,
+    // so its landing blockers appear for non-riders but are suppressed for riders.
+    const landing3: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(movingShaftKey, 3),
       shaftKey: movingShaftKey,
-      level: 2,
+      level: 3,
       desiredOpen: 0,
       swingOpen01: 0,
     };
     const auth: FpElevatorWorldCollisionAuth = {
       buildingOriginX: 0,
       buildingOriginZ: 0,
-      maxLevel: 2,
+      maxLevel: 3,
       latestCars: new Map([
         [
           movingShaftKey,
@@ -424,7 +426,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
         ],
       ]),
       layoutByKey: new Map([[movingShaftKey, movingLayout]]),
-      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      landingByRowKey: new Map([[landing3.rowKey, landing3]]),
       feetYForLayout,
     };
     const hits = collectHits(auth, 0.7, 2.4, -0.8, 0.8).filter(
@@ -440,9 +442,11 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       (aabb) => riderHits.push(aabb),
       { bodyX: 0, bodyFeetY: cabFloorY + 0.45, bodyZ: 0 },
     );
-    const riderLowBand = riderHits.filter((b) => b.max[1] - b.min[1] > 1.5);
-    expect(hits.length).toBeGreaterThan(0);
-    expect(riderLowBand.length).toBe(0);
+    const riderTall = riderHits.filter((b) => b.max[1] - b.min[1] > 1.5);
+    // Non-rider sees cab door slab + level-3 landing blocker(s).
+    expect(hits.length).toBeGreaterThan(1);
+    // Rider sees cab door slab but NOT the level-3 landing blockers.
+    expect(riderTall.length).toBeLessThan(hits.length);
   });
 
   it("keeps those blockers for non-riders in the same shaft xz column", () => {
