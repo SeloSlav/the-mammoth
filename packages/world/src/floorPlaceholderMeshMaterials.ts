@@ -112,9 +112,13 @@ export function concreteMaterial(
     color,
     roughness: 0.94,
     metalness: 0.02,
-    map: textures?.map,
-    roughnessMap: textures?.roughnessMap,
-    bumpMap: textures?.bumpMap,
+    ...(textures
+      ? {
+          map: textures.map,
+          roughnessMap: textures.roughnessMap,
+          bumpMap: textures.bumpMap,
+        }
+      : null),
     bumpScale: textures ? 0.035 : 0,
     ...(opts?.side != null ? { side: opts.side } : null),
   });

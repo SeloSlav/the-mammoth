@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
-import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_OPENING_PROXY_ID } from "@the-mammoth/world";
+import {
+  LANDING_DOOR_OPENING_PROXY_ID,
+  STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+} from "@the-mammoth/world";
 import {
   floorPlacedObjectIdForTransformRoot,
   interiorEntityIdForTransformRoot,
@@ -139,6 +143,17 @@ describe("resolveStairWellPartId", () => {
     const child = new THREE.Mesh();
     proxy.add(child);
     expect(resolveStairWellPartId(child)).toBe(STAIR_WELL_OPENING_PROXY_ID);
+    expect(resolveStairWellPartTarget(child)).toBe(proxy);
+  });
+
+  it("keeps the secondary stair opening proxy id distinct", () => {
+    const proxy = new THREE.Mesh();
+    proxy.name = STAIR_WELL_SECONDARY_OPENING_PROXY_ID;
+    proxy.userData.editorStairOpeningProxy = true;
+    proxy.userData.editorStairOpeningId = STAIR_WELL_SECONDARY_OPENING_PROXY_ID;
+    const child = new THREE.Mesh();
+    proxy.add(child);
+    expect(resolveStairWellPartId(child)).toBe(STAIR_WELL_SECONDARY_OPENING_PROXY_ID);
     expect(resolveStairWellPartTarget(child)).toBe(proxy);
   });
 });

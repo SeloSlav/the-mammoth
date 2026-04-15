@@ -13,46 +13,41 @@ export function anchoredScaleAxisFromTransformAxis(
 export function anchoredScaleAnchorLocalPoint(args: {
   axis: AnchoredScaleAxis;
   localBounds: THREE.Box3;
-  startScale?: THREE.Vector3;
-  currentScale?: THREE.Vector3;
+  handleAxisSigns?: THREE.Vector3;
 }): THREE.Vector3 {
-  const { axis, localBounds, startScale, currentScale } = args;
+  const { axis, localBounds, handleAxisSigns } = args;
   const center = localBounds.getCenter(new THREE.Vector3());
   const anchorForAxis = (
     includeAxis: boolean,
     minValue: number,
     maxValue: number,
-    startValue: number | undefined,
-    currentValue: number | undefined,
+    handleSign: number | undefined,
     centerValue: number,
   ) => {
     if (!includeAxis) return centerValue;
-    if (startValue == null || currentValue == null) return minValue;
-    return currentValue >= startValue ? minValue : maxValue;
+    if (handleSign == null) return minValue;
+    return handleSign < 0 ? maxValue : minValue;
   };
   return new THREE.Vector3(
     anchorForAxis(
       axis.includes("X"),
       localBounds.min.x,
       localBounds.max.x,
-      startScale?.x,
-      currentScale?.x,
+      handleAxisSigns?.x,
       center.x,
     ),
     anchorForAxis(
       axis.includes("Y"),
       localBounds.min.y,
       localBounds.max.y,
-      startScale?.y,
-      currentScale?.y,
+      handleAxisSigns?.y,
       center.y,
     ),
     anchorForAxis(
       axis.includes("Z"),
       localBounds.min.z,
       localBounds.max.z,
-      startScale?.z,
-      currentScale?.z,
+      handleAxisSigns?.z,
       center.z,
     ),
   );

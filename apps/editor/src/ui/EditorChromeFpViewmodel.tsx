@@ -246,7 +246,9 @@ export function EditorChromeFpViewmodel({
 
       <span style={label}>Camera</span>
       <p style={{ fontSize: 11, opacity: 0.8, margin: "0 0 6px" }}>
-        <strong>Orbit</strong>: left-drag = gizmo; <strong>middle-drag</strong> = orbit camera.{" "}
+        <strong>Orbit</strong>: drag empty space with <strong>LMB</strong> to orbit; drag the gizmo
+        handles with <strong>LMB</strong> to edit. <strong>MMB</strong> dollys, <strong>RMB</strong>{" "}
+        pans.{" "}
         <strong>Gameplay</strong>: through the real FP lens (no orbit).
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_OPENING_PROXY_ID } from "@the-mammoth/world";
+import {
+  isStairWellOpeningProxyId,
+  LANDING_DOOR_OPENING_PROXY_ID,
+} from "@the-mammoth/world";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
 import {
   frameEditorBuilding,
@@ -314,7 +317,7 @@ export function EditorChrome() {
       if (r) return quatToEulerDeg(r);
       return [0, 0, 0] as [number, number, number];
     }
-    if (mode === "stairwell_preview" && selectedId && selectedId !== STAIR_WELL_OPENING_PROXY_ID) {
+    if (mode === "stairwell_preview" && selectedId && !isStairWellOpeningProxyId(selectedId)) {
       const r =
         stairWellAuthorScope === "ground"
           ? stairWellDef.groundPartTransforms?.[selectedId]?.rotation
@@ -376,7 +379,7 @@ export function EditorChrome() {
       }));
       return;
     }
-    if (mode === "stairwell_preview" && selectedId && selectedId !== STAIR_WELL_OPENING_PROXY_ID) {
+    if (mode === "stairwell_preview" && selectedId && !isStairWellOpeningProxyId(selectedId)) {
       patchStairWellDef((d) => ({
         ...d,
         ...(stairWellAuthorScope === "ground"

@@ -7,6 +7,7 @@ import {
   addStairWellPlaceholder,
   elevatorGroundDoorOpeningLocals,
   resolveStairWellGroundDoor,
+  resolveStairWellSupplementalDoors,
   stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
 import {
@@ -1416,18 +1417,35 @@ export function buildFloorMeshes(
       },
     });
     if (!resolved) continue;
-    stairDoorPunchesPlate.push({
-      stairFace: resolved.groundDoor.face ?? "e",
-      tangentLocal: resolved.groundDoor.tangentOffsetAlongWall ?? 0,
-      doorHalfW: resolved.doorHalfW,
-      y0Local: resolved.y0Local,
-      y1Local: resolved.y1Local,
-      spx: o.position[0],
-      spz: o.position[2],
-      spy: o.position[1],
-      shx: sx * 0.5,
-      shz: sz * 0.5,
-    });
+    const doors = [
+      resolved,
+      ...resolveStairWellSupplementalDoors({
+        sx,
+        sy,
+        sz,
+        def: opts?.stairWellDef,
+        authoringScope: stairAuthoringScope,
+        context: {
+          towardPlateXZ,
+          shaftPlateXZ: [o.position[0], o.position[2]],
+        },
+        primaryDoor: resolved,
+      }),
+    ];
+    for (const door of doors) {
+      stairDoorPunchesPlate.push({
+        stairFace: door.groundDoor.face ?? "e",
+        tangentLocal: door.groundDoor.tangentOffsetAlongWall ?? 0,
+        doorHalfW: door.doorHalfW,
+        y0Local: door.y0Local,
+        y1Local: door.y1Local,
+        spx: o.position[0],
+        spz: o.position[2],
+        spy: o.position[1],
+        shx: sx * 0.5,
+        shz: sz * 0.5,
+      });
+    }
   }
 
   const corridorShaftDoorPunchesPlate: readonly PlateStairCorridorDoorPunch[] = [
@@ -1515,19 +1533,30 @@ export function buildFloorMeshes(
           ),
           shaftPlateXZ: [obj.position[0], obj.position[2]] as const,
         };
-        const resolvedGroundDoor = resolveStairWellGroundDoor({
+        const resolvedDoor = resolveStairWellGroundDoor({
           sx,
           sy,
           sz,
           context: stairDoorContext,
           def: opts?.stairWellDef,
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
-        })?.groundDoor;
+        });
+        const resolvedGroundDoor = resolvedDoor?.groundDoor;
+        const supplementalDoors = resolveStairWellSupplementalDoors({
+          sx,
+          sy,
+          sz,
+          context: stairDoorContext,
+          def: opts?.stairWellDef,
+          authoringScope: story === 1 || story === 99 ? "ground" : "typical",
+          primaryDoor: resolvedDoor,
+        });
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           groundDoor: resolvedGroundDoor,
+          supplementalDoors,
         });
       }
     } else {

@@ -5,7 +5,9 @@ import {
   addStairWellPlaceholder,
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
+  rebuildStairWellPreviewOpening,
   STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
   stairWellEntryOpeningFromProxyMesh,
 } from "./stairElevatorPlaceholders.js";
 import { STOREY_SPACING_M } from "./stairWellGeometry.js";
@@ -278,6 +280,23 @@ describe("applyStairWellPartTransforms", () => {
     });
   });
 
+  it("adds a second south-side opening on typical-storey previews", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+    });
+    const southWallNames: string[] = [];
+    root.traverse((obj) => {
+      if (obj.name.startsWith("shaft_wall_s")) southWallNames.push(obj.name);
+    });
+    expect(southWallNames).not.toContain("shaft_wall_s_solid");
+    expect(southWallNames.some((name) => name.startsWith("shaft_wall_s_"))).toBe(true);
+    expect(root.getObjectByName(STAIR_WELL_SECONDARY_OPENING_PROXY_ID)).not.toBeNull();
+  });
+
   it("adds an editable opening proxy and maps gizmo edits back into stairWellDef data", () => {
     const root = buildStairWellPreviewRoot({
       sx: 4,
@@ -303,4 +322,85 @@ describe("applyStairWellPartTransforms", () => {
     });
     expect(open!.widthM!).toBeGreaterThan(1);
   });
+
+  it("maps secondary stair opening gizmo edits back into persisted opening data", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+    });
+    const proxy = root.getObjectByName(STAIR_WELL_SECONDARY_OPENING_PROXY_ID);
+    expect(proxy).not.toBeNull();
+    if (!proxy) return;
+    proxy.scale.set(1.15, 1.05, 1);
+    proxy.position.x += 0.08;
+    const open = stairWellEntryOpeningFromProxyMesh(
+      proxy,
+      StairWellDefSchema.parse({ id: "stairs", version: 1 }),
+    );
+    expect(open).not.toBeNull();
+    expect(open!.face).toBe("s");
+    expect(open!.widthM).toBeGreaterThan(1);
+  });
+
+  it("can rebuild wall/frame live while preserving the dragged proxy transform", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+    });
+    const proxy = root.getObjectByName(STAIR_WELL_OPENING_PROXY_ID);
+    expect(proxy).not.toBeNull();
+    if (!proxy) return;
+    proxy.scale.set(1, 1.1, 1.25);
+    proxy.position.y += 0.05;
+    proxy.position.z += 0.12;
+    const beforeScale = proxy.scale.toArray();
+    const beforePos = proxy.position.toArray();
+    const nextOpen = stairWellEntryOpeningFromProxyMesh(
+      proxy,
+      StairWellDefSchema.parse({ id: "stairs", version: 1 }),
+    );
+    expect(nextOpen).not.toBeNull();
+    const nextDef = StairWellDefSchema.parse({
+      id: "stairs",
+      version: 1,
+      entryOpening: nextOpen!,
+    });
+    rebuildStairWellPreviewOpening(root, nextDef, {
+      preserveLiveProxyId: STAIR_WELL_OPENING_PROXY_ID,
+    });
+    expect(proxy.scale.toArray()).toEqual(beforeScale);
+    expect(proxy.position.toArray()).toEqual(beforePos);
+  });
+
+  it("tags opening-face wall fragments to pick the opening proxy", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+    });
+    const face = root.userData.editorStairPreviewGroundDoor?.face as
+      | "e"
+      | "w"
+      | "n"
+      | "s"
+      | undefined;
+    expect(face).toBeDefined();
+    const picked: THREE.Object3D[] = [];
+    root.traverse((obj) => {
+      if (face && obj.name.startsWith(`shaft_wall_${face}`)) picked.push(obj);
+    });
+    expect(picked.length).toBeGreaterThan(0);
+    expect(
+      picked.some((obj) => obj.userData.editorStairPickId === STAIR_WELL_OPENING_PROXY_ID),
+    ).toBe(true);
+  });
+
 });

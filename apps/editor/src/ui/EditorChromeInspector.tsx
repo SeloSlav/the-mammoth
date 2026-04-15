@@ -10,9 +10,11 @@ import type {
   StairWellDef,
 } from "@the-mammoth/schemas";
 import {
+  isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
   resolveGlassOpening,
   STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
 import type { EditorState, EditorMode, EditorWorkspace } from "../state/editorStore.js";
@@ -30,7 +32,11 @@ function isElevatorFace(value: unknown): value is ElevatorDoorFace {
 function stairOpeningForScope(
   def: StairWellDef,
   scope: "typical" | "ground",
+  openingId: string = STAIR_WELL_OPENING_PROXY_ID,
 ): NonNullable<StairWellDef["entryOpening"]> | undefined {
+  if (openingId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID) {
+    return scope === "typical" ? def.secondaryEntryOpening : undefined;
+  }
   return scope === "ground" ? (def.groundEntryOpening ?? def.entryOpening) : def.entryOpening;
 }
 
@@ -109,6 +115,15 @@ export function EditorChromeInspector(props: {
   const elevatorDoorFaceOverride = isElevatorFace(selectedFloorObj?.metadata?.elevatorDoorFace)
     ? selectedFloorObj.metadata.elevatorDoorFace
     : "auto";
+  const activeStairOpeningId =
+    mode === "stairwell_preview" && isStairWellOpeningProxyId(selectedId)
+      ? selectedId
+      : STAIR_WELL_OPENING_PROXY_ID;
+  const activeStairOpening = stairOpeningForScope(
+    stairWellDef,
+    stairWellAuthorScope,
+    activeStairOpeningId,
+  );
 
   const saveTarget = describeEditorSaveTarget({
     workspace,
@@ -240,30 +255,37 @@ export function EditorChromeInspector(props: {
           </label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
             The stairwell hole/door frame is authored once here and reused by preview, world render,
-            and collision. Translate the proxy in the viewport to slide it along the wall; scale it
-            to change width/height.
+            and collision. Translate the selected proxy in the viewport to slide it along the wall;
+            scale it to change width/height.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             <select
               style={input}
-              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.face ?? ""}
+              value={activeStairOpening?.face ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
                 patchStairWellDef((d) => ({
                   ...d,
-                  ...(stairWellAuthorScope === "ground"
+                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
                     ? {
-                        groundEntryOpening: {
-                          ...d.groundEntryOpening,
+                        secondaryEntryOpening: {
+                          ...d.secondaryEntryOpening,
                           face: isElevatorFace(v) ? v : undefined,
                         },
                       }
-                    : {
-                        entryOpening: {
-                          ...d.entryOpening,
-                          face: isElevatorFace(v) ? v : undefined,
-                        },
-                      }),
+                    : stairWellAuthorScope === "ground"
+                      ? {
+                          groundEntryOpening: {
+                            ...d.groundEntryOpening,
+                            face: isElevatorFace(v) ? v : undefined,
+                          },
+                        }
+                      : {
+                          entryOpening: {
+                            ...d.entryOpening,
+                            face: isElevatorFace(v) ? v : undefined,
+                          },
+                        }),
                 }));
               }}
             >
@@ -278,24 +300,31 @@ export function EditorChromeInspector(props: {
               type="number"
               step={0.01}
               placeholder="offset along wall (m)"
-              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.tangentOffsetAlongWallM ?? ""}
+              value={activeStairOpening?.tangentOffsetAlongWallM ?? ""}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 patchStairWellDef((d) => ({
                   ...d,
-                  ...(stairWellAuthorScope === "ground"
+                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
                     ? {
-                        groundEntryOpening: {
-                          ...d.groundEntryOpening,
+                        secondaryEntryOpening: {
+                          ...d.secondaryEntryOpening,
                           tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
                         },
                       }
-                    : {
-                        entryOpening: {
-                          ...d.entryOpening,
-                          tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }),
+                    : stairWellAuthorScope === "ground"
+                      ? {
+                          groundEntryOpening: {
+                            ...d.groundEntryOpening,
+                            tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }
+                      : {
+                          entryOpening: {
+                            ...d.entryOpening,
+                            tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }),
                 }));
               }}
             />
@@ -305,24 +334,31 @@ export function EditorChromeInspector(props: {
               step={0.01}
               min={0.4}
               placeholder="width (m)"
-              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.widthM ?? ""}
+              value={activeStairOpening?.widthM ?? ""}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 patchStairWellDef((d) => ({
                   ...d,
-                  ...(stairWellAuthorScope === "ground"
+                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
                     ? {
-                        groundEntryOpening: {
-                          ...d.groundEntryOpening,
+                        secondaryEntryOpening: {
+                          ...d.secondaryEntryOpening,
                           widthM: Number.isFinite(v) ? v : undefined,
                         },
                       }
-                    : {
-                        entryOpening: {
-                          ...d.entryOpening,
-                          widthM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }),
+                    : stairWellAuthorScope === "ground"
+                      ? {
+                          groundEntryOpening: {
+                            ...d.groundEntryOpening,
+                            widthM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }
+                      : {
+                          entryOpening: {
+                            ...d.entryOpening,
+                            widthM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }),
                 }));
               }}
             />
@@ -332,24 +368,31 @@ export function EditorChromeInspector(props: {
               step={0.01}
               min={0.4}
               placeholder="height (m)"
-              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.heightM ?? ""}
+              value={activeStairOpening?.heightM ?? ""}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 patchStairWellDef((d) => ({
                   ...d,
-                  ...(stairWellAuthorScope === "ground"
+                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
                     ? {
-                        groundEntryOpening: {
-                          ...d.groundEntryOpening,
+                        secondaryEntryOpening: {
+                          ...d.secondaryEntryOpening,
                           heightM: Number.isFinite(v) ? v : undefined,
                         },
                       }
-                    : {
-                        entryOpening: {
-                          ...d.entryOpening,
-                          heightM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }),
+                    : stairWellAuthorScope === "ground"
+                      ? {
+                          groundEntryOpening: {
+                            ...d.groundEntryOpening,
+                            heightM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }
+                      : {
+                          entryOpening: {
+                            ...d.entryOpening,
+                            heightM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }),
                 }));
               }}
             />
@@ -358,24 +401,31 @@ export function EditorChromeInspector(props: {
               type="number"
               step={0.01}
               placeholder="center Y (m)"
-              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.centerYM ?? ""}
+              value={activeStairOpening?.centerYM ?? ""}
               onChange={(e) => {
                 const v = Number(e.target.value);
                 patchStairWellDef((d) => ({
                   ...d,
-                  ...(stairWellAuthorScope === "ground"
+                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
                     ? {
-                        groundEntryOpening: {
-                          ...d.groundEntryOpening,
+                        secondaryEntryOpening: {
+                          ...d.secondaryEntryOpening,
                           centerYM: Number.isFinite(v) ? v : undefined,
                         },
                       }
-                    : {
-                        entryOpening: {
-                          ...d.entryOpening,
-                          centerYM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }),
+                    : stairWellAuthorScope === "ground"
+                      ? {
+                          groundEntryOpening: {
+                            ...d.groundEntryOpening,
+                            centerYM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }
+                      : {
+                          entryOpening: {
+                            ...d.entryOpening,
+                            centerYM: Number.isFinite(v) ? v : undefined,
+                          },
+                        }),
                 }));
               }}
             />
@@ -406,7 +456,7 @@ export function EditorChromeInspector(props: {
 
       {mode === "stairwell_preview" &&
       selectedId &&
-      selectedId !== STAIR_WELL_OPENING_PROXY_ID ? (
+      !isStairWellOpeningProxyId(selectedId) ? (
         <>
           <label style={label}>
             Stair part delta rotation (° YXZ) - {stairWellAuthorScope}
@@ -467,7 +517,7 @@ export function EditorChromeInspector(props: {
           {stairWellAuthorScope} stairwell scope.
         </p>
       ) : null}
-      {mode === "stairwell_preview" && selectedId === STAIR_WELL_OPENING_PROXY_ID ? (
+      {mode === "stairwell_preview" && isStairWellOpeningProxyId(selectedId) ? (
         <p style={{ opacity: 0.65, fontSize: 12 }}>
           Gizmo edits the stair entry hole for the {stairWellAuthorScope} scope. Translate slides it
           along the selected wall; scale changes width and height.

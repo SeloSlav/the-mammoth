@@ -33,7 +33,7 @@ describe("classifyPrefab", () => {
     expect(classifyPrefab("props_crate")).toBe("misc");
   });
 
-  it("cuts a stair entry through both the shaft and adjacent corridor shell on shared floors too", () => {
+  it("cuts both typical stairwell doors through the shaft and adjacent corridor shells", () => {
     const stairWellDef = parseStairWellDef({
       id: "stairs",
       version: 1,
@@ -50,10 +50,16 @@ describe("classifyPrefab", () => {
         version: 1,
         objects: [
           {
-            id: "corridor_01",
+            id: "corridor_east",
             prefabId: "corridor_main",
             position: [3.8, 0, 0],
             scale: [3.6, 3.2, 4.4],
+          },
+          {
+            id: "corridor_south",
+            prefabId: "corridor_main",
+            position: [0, 0, -4.2],
+            scale: [4.4, 3.2, 3.8],
           },
           {
             id: "stair_01",
@@ -71,14 +77,28 @@ describe("classifyPrefab", () => {
       face: expect.any(String),
       tangentOffsetAlongWall: expect.any(Number),
     });
-
-    const corridor = root.getObjectByName("corridor_01");
-    const wallNames: string[] = [];
-    corridor?.traverse((obj) => {
-      if (obj.name.startsWith("shell_wall_w")) wallNames.push(obj.name);
+    const stairSouthWallNames: string[] = [];
+    stair?.traverse((obj) => {
+      if (obj.name.startsWith("shaft_wall_s")) stairSouthWallNames.push(obj.name);
     });
-    expect(wallNames).not.toContain("shell_wall_w");
-    expect(wallNames.some((name) => name.startsWith("shell_wall_w_"))).toBe(true);
+    expect(stairSouthWallNames).not.toContain("shaft_wall_s_solid");
+    expect(stairSouthWallNames.some((name) => name.startsWith("shaft_wall_s_"))).toBe(true);
+
+    const eastCorridor = root.getObjectByName("corridor_east");
+    const eastWallNames: string[] = [];
+    eastCorridor?.traverse((obj) => {
+      if (obj.name.startsWith("shell_wall_w")) eastWallNames.push(obj.name);
+    });
+    expect(eastWallNames).not.toContain("shell_wall_w");
+    expect(eastWallNames.some((name) => name.startsWith("shell_wall_w_"))).toBe(true);
+
+    const southCorridor = root.getObjectByName("corridor_south");
+    const southWallNames: string[] = [];
+    southCorridor?.traverse((obj) => {
+      if (obj.name.startsWith("shell_wall_n")) southWallNames.push(obj.name);
+    });
+    expect(southWallNames).not.toContain("shell_wall_n");
+    expect(southWallNames.some((name) => name.startsWith("shell_wall_n_"))).toBe(true);
   });
 
   it("cuts the real ground-floor stair hub opening in the stacked building mesh", () => {

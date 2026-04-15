@@ -74,6 +74,11 @@ export const StairWellDefSchema = z.object({
    * Ground-storey override for the stair entry opening. Falls back to `entryOpening` when omitted.
    */
   groundEntryOpening: StairWellEntryOpeningSchema,
+  /**
+   * Optional second typical-storey corridor opening (used by the south-facing stairwell door).
+   * Falls back to a derived procedural default when omitted.
+   */
+  secondaryEntryOpening: StairWellEntryOpeningSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

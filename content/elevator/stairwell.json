@@ -48,15 +48,51 @@
         0,
         1
       ]
+    },
+    "stair_landing_lower": {
+      "position": [
+        -0.023367590932450222,
+        -0.3314765087156648,
+        -0.10090178797032667
+      ],
+      "scale": [
+        1.1960735330618584,
+        1,
+        0.9788465435823691
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_landing_upper": {
+      "position": [
+        -0.00302207789328798,
+        0,
+        0
+      ],
+      "scale": [
+        1.1372633330550466,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
     }
   },
   "groundPartTransforms": {},
   "entryOpening": {
-    "face": "s",
-    "tangentOffsetAlongWallM": 0.011472402689650885,
-    "widthM": 1.86,
-    "heightM": 2.2,
-    "centerYM": 0.015284097180345735
+    "face": "w",
+    "tangentOffsetAlongWallM": -5.177351451279119,
+    "widthM": 2.469149911172827,
+    "heightM": 2.6678947368421055,
+    "centerYM": -0.06499999999999995
   },
   "groundEntryOpening": {
     "face": "w",
@@ -64,5 +100,12 @@
     "widthM": 1.86,
     "heightM": 2.2,
     "centerYM": -0.3189473684210524
+  },
+  "secondaryEntryOpening": {
+    "face": "s",
+    "tangentOffsetAlongWallM": -0.10286764149329519,
+    "widthM": 2.469149911172827,
+    "heightM": 2.6678947368421055,
+    "centerYM": -0.06499999999999995
   }
 }

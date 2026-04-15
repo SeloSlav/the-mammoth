@@ -13,13 +13,14 @@ import {
 import {
   applyElevatorCabPartTransforms,
   glassOpeningFromProxyMesh,
+  isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
   rebuildLandingDoorPreviewSwing,
   applyStairWellPartTransforms,
   rebuildStairWellPreviewOpening,
   rebuildStairWellPreviewRoot,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
   stairWellEntryOpeningFromProxyMesh,
-  STAIR_WELL_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { useEditorStore } from "../state/editorStore.js";
 import {
@@ -153,6 +154,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         startRotation: THREE.Quaternion;
         axis: AnchoredScaleAxis;
         localBounds: THREE.Box3;
+        handleAxisSigns: THREE.Vector3;
       }
     | null = null;
   const _anchoredScaleInvWorld = new THREE.Matrix4();
@@ -183,16 +185,24 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     return has ? bounds : null;
   }
 
+  function shouldUseAnchoredScaleGesture(): boolean {
+    const st = useEditorStore.getState();
+    if (isFpMode(st.mode) || st.transformMode !== "scale") return false;
+    return !(st.mode === "landing_preview" && st.selectedId === LANDING_DOOR_OPENING_PROXY_ID);
+  }
+
   function primeAnchoredScaleGesture(): void {
     levelEditorAnchoredScaleGesture = null;
-    const st = useEditorStore.getState();
-    if (isFpMode(st.mode) || st.transformMode !== "scale") return;
+    if (!shouldUseAnchoredScaleGesture()) return;
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (!attached) return;
     const axis = anchoredScaleAxisFromTransformAxis(
       (transformControls as unknown as { axis?: string | null }).axis,
     );
     if (!axis) return;
+    const pointStart = (
+      transformControls as unknown as { pointStart?: THREE.Vector3 | null }
+    ).pointStart;
     const localBounds = localBoundsForAnchoredScale(attached);
     if (!localBounds) return;
     levelEditorAnchoredScaleGesture = {
@@ -202,14 +212,17 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       startRotation: attached.quaternion.clone(),
       axis,
       localBounds: localBounds.clone(),
+      handleAxisSigns: new THREE.Vector3(
+        axis.includes("X") ? (pointStart && pointStart.x < 0 ? -1 : 1) : 0,
+        axis.includes("Y") ? (pointStart && pointStart.y < 0 ? -1 : 1) : 0,
+        axis.includes("Z") ? (pointStart && pointStart.z < 0 ? -1 : 1) : 0,
+      ),
     };
   }
 
   function applyAnchoredScaleGesture(): void {
-    const st = useEditorStore.getState();
     if (
-      isFpMode(st.mode) ||
-      st.transformMode !== "scale" ||
+      !shouldUseAnchoredScaleGesture() ||
       !transformControls.dragging ||
       !levelEditorAnchoredScaleGesture
     ) {
@@ -220,8 +233,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const anchorLocalPoint = anchoredScaleAnchorLocalPoint({
       axis: levelEditorAnchoredScaleGesture.axis,
       localBounds: levelEditorAnchoredScaleGesture.localBounds,
-      startScale: levelEditorAnchoredScaleGesture.startScale,
-      currentScale: attached.scale,
+      handleAxisSigns: levelEditorAnchoredScaleGesture.handleAxisSigns,
     });
     const nextPos = computeAnchoredScalePosition({
       startPosition: levelEditorAnchoredScaleGesture.startPosition,
@@ -358,21 +370,33 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         if (o.userData.editorStairOpeningProxy === true) {
           const open = stairWellEntryOpeningFromProxyMesh(o, store.stairWellDef);
           if (!open) return;
+          const openingId =
+            (typeof o.userData.editorStairOpeningId === "string"
+              ? o.userData.editorStairOpeningId
+              : null) ??
+            (typeof o.name === "string" ? o.name : null);
           store.patchStairWellDef((d) => ({
             ...d,
-            ...(store.stairWellAuthorScope === "ground"
+            ...(openingId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
               ? {
-                  groundEntryOpening: {
-                    ...d.groundEntryOpening,
+                  secondaryEntryOpening: {
+                    ...d.secondaryEntryOpening,
                     ...open,
                   },
                 }
-              : {
-                  entryOpening: {
-                    ...d.entryOpening,
-                    ...open,
-                  },
-                }),
+              : store.stairWellAuthorScope === "ground"
+                ? {
+                    groundEntryOpening: {
+                      ...d.groundEntryOpening,
+                      ...open,
+                    },
+                  }
+                : {
+                    entryOpening: {
+                      ...d.entryOpening,
+                      ...open,
+                    },
+                  }),
           }));
           let previewRoot: THREE.Object3D | null = o;
           while (previewRoot && previewRoot.name !== "editor_stair_well_preview") {
@@ -382,6 +406,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
             rebuildStairWellPreviewOpening(
               previewRoot,
               useEditorStore.getState().stairWellDef,
+              transformControls.dragging ? { preserveLiveProxyId: openingId } : undefined,
             );
           }
           return;
@@ -814,9 +839,14 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       return target;
     }
     if (s.mode === "stairwell_preview") {
-      if (s.selectedId === STAIR_WELL_OPENING_PROXY_ID) {
+      if (isStairWellOpeningProxyId(s.selectedId)) {
         buildingRoot.traverse((o) => {
-          if (o.userData.editorStairOpeningProxy === true) target = o;
+          if (
+            o.userData.editorStairOpeningProxy === true &&
+            o.userData.editorStairOpeningId === s.selectedId
+          ) {
+            target = o;
+          }
         });
         return target;
       }
@@ -948,6 +978,14 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     };
   }
 
+  function applyFpOrbitMouseButtons(): void {
+    orbitControls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
+    };
+  }
+
   function shouldUseEditorHdri(st: EditorStoreSnapshot): boolean {
     return !isFpMode(st.mode) && !isSharedPreviewMode(st.mode) && st.useHdriEnvironment;
   }
@@ -981,65 +1019,69 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
   function disposeFpViewmodelRuntimeOnly() {
     if (fpTeardownInProgress) return;
-    levelEditorTransformGesture = false;
-    transformControls.enabled = true;
-    rewireCanvasPrimaryPointerListeners();
-    resetWeaponPresentationEditorSyncStateForTeardown();
-    disposeFpDefaultRigAnchor();
-    registerFpViewmodelAuthoringBridge(null);
-    registerWeaponPresentationPostSaveApply(null);
-    lastFpGizmoAttachKey = "";
-    fpClickCandidate = null;
-    fpSelectionOutline.setFromObject(null);
-    // Detach before tearing down the FP graph so we never render with a control target that was
-    // already removed from the scene (TransformControls warns and can glitch).
-    withProgrammaticTransformControls(() => transformControls.detach());
-    fpSession?.dispose();
-    fpSession = null;
-    fpSessionLoading = false;
-    // Store updates run synchronously; nested subscribers still see outer `prev` until the outer
-    // callback returns. Clear session *before* pick list so weapon-change teardown cannot recurse.
-    useEditorStore.getState().setFpAuthorPickList([]);
+    fpTeardownInProgress = true;
+    try {
+      levelEditorTransformGesture = false;
+      transformControls.enabled = true;
+      rewireCanvasPrimaryPointerListeners();
+      resetWeaponPresentationEditorSyncStateForTeardown();
+      disposeFpDefaultRigAnchor();
+      registerFpViewmodelAuthoringBridge(null);
+      registerWeaponPresentationPostSaveApply(null);
+      lastFpGizmoAttachKey = "";
+      fpClickCandidate = null;
+      fpSelectionOutline.setFromObject(null);
+      // Detach before tearing down the FP graph so we never render with a control target that was
+      // already removed from the scene (TransformControls warns and can glitch).
+      withProgrammaticTransformControls(() => transformControls.detach());
+      fpSession?.dispose();
+      fpSession = null;
+      fpSessionLoading = false;
+      // Store updates run synchronously; nested subscribers still see outer `prev` until the outer
+      // callback returns. Clear session *before* pick list so weapon-change teardown cannot recurse.
+      useEditorStore.getState().setFpAuthorPickList([]);
+    } finally {
+      fpTeardownInProgress = false;
+    }
   }
 
   function disposeFpConsumableRuntimeOnly() {
     if (fpTeardownInProgress) return;
-    levelEditorTransformGesture = false;
-    transformControls.enabled = true;
-    rewireCanvasPrimaryPointerListeners();
-    registerFpConsumableAuthoringBridge(null);
-    registerFpViewmodelAuthoringBridge(null);
-    lastFpGizmoAttachKey = "";
-    fpClickCandidate = null;
-    fpSelectionOutline.setFromObject(null);
-    withProgrammaticTransformControls(() => transformControls.detach());
-    fpConsumableSession?.dispose();
-    fpConsumableSession = null;
-    fpConsumableSessionLoading = false;
-    useEditorStore.getState().setFpAuthorPickList([]);
-  }
-
-  function teardownFpSession() {
-    if (fpTeardownInProgress) return;
     fpTeardownInProgress = true;
     try {
-      disposeFpViewmodelRuntimeOnly();
-      disposeFpConsumableRuntimeOnly();
-      contentRoot.visible = true;
-      grid.visible = true;
-      shouldFrameAfterRebuild = true;
-      camera.position.set(-38, 28, 22);
-      camera.lookAt(2, 18, 0);
-      orbitControls.target.set(0, 1.45, 0);
-      orbitControls.mouseButtons = {
-        LEFT: MOUSE.ROTATE,
-        MIDDLE: MOUSE.DOLLY,
-        RIGHT: MOUSE.PAN,
-      };
-      orbitControls.update();
+      levelEditorTransformGesture = false;
+      transformControls.enabled = true;
+      rewireCanvasPrimaryPointerListeners();
+      registerFpConsumableAuthoringBridge(null);
+      registerFpViewmodelAuthoringBridge(null);
+      lastFpGizmoAttachKey = "";
+      fpClickCandidate = null;
+      fpSelectionOutline.setFromObject(null);
+      withProgrammaticTransformControls(() => transformControls.detach());
+      fpConsumableSession?.dispose();
+      fpConsumableSession = null;
+      fpConsumableSessionLoading = false;
+      useEditorStore.getState().setFpAuthorPickList([]);
     } finally {
       fpTeardownInProgress = false;
     }
+  }
+
+  function teardownFpSession() {
+    disposeFpViewmodelRuntimeOnly();
+    disposeFpConsumableRuntimeOnly();
+    contentRoot.visible = true;
+    grid.visible = true;
+    shouldFrameAfterRebuild = true;
+    camera.position.set(-38, 28, 22);
+    camera.lookAt(2, 18, 0);
+    orbitControls.target.set(0, 1.45, 0);
+    orbitControls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
+    };
+    orbitControls.update();
   }
 
   function syncFpTransformAttachment() {
@@ -1347,7 +1389,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         transformControls.setMode(s.transformMode);
         const opening =
           (s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID) ||
-          (s.mode === "stairwell_preview" && s.selectedId === STAIR_WELL_OPENING_PROXY_ID);
+          (s.mode === "stairwell_preview" && isStairWellOpeningProxyId(s.selectedId));
         transformControls.setSize(opening ? 1.35 : 1);
         if (opening) {
           transformControls.setTranslationSnap(null);
@@ -1518,12 +1560,14 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
             !transformControls.dragging &&
             !levelEditorTransformGesture
           ) {
-            const stairOpeningChanged =s
+            const stairOpeningChanged =
               s.mode === "stairwell_preview" &&
               (JSON.stringify(s.stairWellDef.entryOpening) !==
                 JSON.stringify(prev.stairWellDef.entryOpening) ||
                 JSON.stringify(s.stairWellDef.groundEntryOpening) !==
-                  JSON.stringify(prev.stairWellDef.groundEntryOpening));
+                  JSON.stringify(prev.stairWellDef.groundEntryOpening) ||
+                JSON.stringify(s.stairWellDef.secondaryEntryOpening) !==
+                  JSON.stringify(prev.stairWellDef.secondaryEntryOpening));
             const stairPreviewRoot = buildingRoot?.getObjectByName("editor_stair_well_preview");
             if (stairOpeningChanged && stairPreviewRoot instanceof THREE.Group) {
               rebuildStairWellPreviewRoot(
@@ -1587,11 +1631,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       orbitControls.enabled = !gizmoDragging && wantOrbit;
       flyControls.enabled = !gizmoDragging && wantFly;
       if (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") {
-        orbitControls.mouseButtons = {
-          LEFT: null,
-          MIDDLE: MOUSE.ROTATE,
-          RIGHT: MOUSE.PAN,
-        };
+        applyFpOrbitMouseButtons();
       } else {
         applyLevelEditorMouseButtons(s);
         camera.up.set(0, 1, 0);
@@ -1629,11 +1669,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (isFpMode(st.mode)) {
       orbitControls.enabled = st.fpAuthorCamera === "orbit";
       if (st.fpAuthorCamera === "orbit") {
-        orbitControls.mouseButtons = {
-          LEFT: null,
-          MIDDLE: MOUSE.ROTATE,
-          RIGHT: MOUSE.PAN,
-        };
+        applyFpOrbitMouseButtons();
       } else {
         applyLevelEditorMouseButtons(st);
       }

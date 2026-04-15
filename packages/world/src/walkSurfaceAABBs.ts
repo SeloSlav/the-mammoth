@@ -19,6 +19,7 @@ import {
 } from "./shaftPlanformClip.js";
 import {
   computeSwitchbackStairLayout,
+  hollowShellCeilingLocalTopY,
   hollowShellFloorLocalTopY,
   shaftFloorLocalTopY,
   type StairCornerLanding,
@@ -223,10 +224,11 @@ function appendHollowShellFloorWalkAABBs(
   docHoles: readonly ShaftSlabHole[],
   elevMerged: readonly ShaftSlabHole[],
   skipShaftCutouts: boolean,
+  localTopY = hollowShellFloorLocalTopY(sy),
 ): void {
   const wt = 0.12;
-  const top = hollowShellFloorLocalTopY(sy);
   const thin = wt;
+  const top = localTopY;
   const hx = sx * 0.5;
   const hz = sz * 0.5;
   let rects: RectXZ[] = skipShaftCutouts
@@ -260,6 +262,8 @@ export type WalkSurfaceFloorOpts = {
    * Used so elevator hoistways stay open except for the L1 pit slab walk surface.
    */
   storyLevelIndex?: number;
+  /** Adds walkable top-cap plates for hollow shells; intended for the highest storey roof only. */
+  includeShellCeilingWalk?: boolean;
 };
 
 export function walkSurfaceAABBsForFloorDoc(
@@ -319,6 +323,21 @@ export function walkSurfaceAABBsForFloorDoc(
         elevMerged,
         Boolean(obj.rotation),
       );
+      if (opts?.includeShellCeilingWalk) {
+        appendHollowShellFloorWalkAABBs(
+          out,
+          sx,
+          sy,
+          sz,
+          px,
+          wy,
+          pz,
+          docHoles,
+          elevMerged,
+          Boolean(obj.rotation),
+          hollowShellCeilingLocalTopY(sy),
+        );
+      }
     }
   }
   appendConcreteSlabWalkAABBs(out, clean, floorWorldY, 0.8, 0.16, docHoles);
@@ -336,6 +355,7 @@ export function walkSurfaceAABBsForBuilding(
 ): WalkSurfaceAabb[] {
   const spacing = floorSpacingM;
   const sorted = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+  const topLevelIndex = sorted[sorted.length - 1]?.levelIndex ?? 1;
   const resolveDocForRef = (ref: BuildingDoc["floorRefs"][number]) =>
     resolveFloorDocForLevel({
       building,
@@ -371,6 +391,7 @@ export function walkSurfaceAABBsForBuilding(
     for (const b of walkSurfaceAABBsForFloorDoc(doc, plateWorldOriginY, {
       omitStairWalkPlanKeys: stairShaftSkipKeys,
       storyLevelIndex: ref.levelIndex,
+      includeShellCeilingWalk: ref.levelIndex === topLevelIndex,
       shaftHolesPlateMerged,
       shaftElevatorsMerged,
     })) {

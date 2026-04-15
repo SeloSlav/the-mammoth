@@ -176,14 +176,18 @@ export {
 export {
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
+  isStairWellOpeningProxyId,
   rebuildStairWellPreviewOpening,
   rebuildStairWellPreviewRoot,
   stairWellEntryOpeningFromProxyMesh,
   STAIR_WELL_EDITOR_PART_IDS,
   STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_OPENING_PROXY_IDS,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
   type BuildStairWellPreviewRootArgs,
   type StairWellAuthoringScope,
   type StairWellEditorPartId,
+  type StairWellOpeningProxyId,
 } from "./stairElevatorPlaceholders.js";
 export { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 

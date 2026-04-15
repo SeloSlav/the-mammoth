@@ -132,6 +132,11 @@ function cabSlotForSelectedId(selectedId: string | null): "wall" | "floor" | "ce
   if (selectedId === "cab_ceiling") return "ceiling";
   if (
     selectedId === "cab_wall_back" ||
+    selectedId === "cab_wall_front_top" ||
+    selectedId === "cab_wall_front_n" ||
+    selectedId === "cab_wall_front_s" ||
+    selectedId === "cab_wall_front_e" ||
+    selectedId === "cab_wall_front_w" ||
     selectedId === "cab_wall_side_n" ||
     selectedId === "cab_wall_side_s" ||
     selectedId === "cab_wall_side_e" ||

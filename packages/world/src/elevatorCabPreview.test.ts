@@ -58,5 +58,28 @@ describe("applyElevatorCabPartTransforms", () => {
     expect(root.getObjectByName("cab_floor_button_body_6")).not.toBeNull();
     const board = root.getObjectByName("cab_floor_panel_board");
     expect(board?.position.length()).toBeGreaterThan(0.1);
+    expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");
+    expect(root.getObjectByName("cab_wall_front_n")?.userData.editorCabPartId).toBe("cab_wall_front_n");
+    expect(root.getObjectByName("cab_wall_front_s")?.userData.editorCabPartId).toBe("cab_wall_front_s");
+  });
+
+  it("builds front wall panels for north-facing cab doors too", () => {
+    const root = buildElevatorCabCarPreviewRoot({
+      layout: {
+        planKey: "shaft_n",
+        plateX: 0,
+        plateZ: 0,
+        plateLocalY: 0,
+        sx: 3.4,
+        sy: 3.2,
+        sz: 3.8,
+        doorFace: "n",
+      },
+      includeDoors: false,
+    });
+
+    expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");
+    expect(root.getObjectByName("cab_wall_front_e")?.userData.editorCabPartId).toBe("cab_wall_front_e");
+    expect(root.getObjectByName("cab_wall_front_w")?.userData.editorCabPartId).toBe("cab_wall_front_w");
   });
 });

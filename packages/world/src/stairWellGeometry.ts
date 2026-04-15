@@ -820,3 +820,7 @@ export function hollowShellFloorLocalTopY(sy: number): number {
   const wt = 0.12;
   return -hy + wt;
 }
+
+export function hollowShellCeilingLocalTopY(sy: number): number {
+  return sy * 0.5;
+}

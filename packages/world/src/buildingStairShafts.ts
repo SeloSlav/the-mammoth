@@ -3,6 +3,7 @@ import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
 import {
   addStairWellPlaceholder,
   resolveStairWellGroundDoor,
+  resolveStairWellSupplementalDoors,
   type StairWellGroundDoorContext,
 } from "./stairElevatorPlaceholders.js";
 import { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
@@ -142,19 +143,30 @@ export function addBuildingStairShaftColumnsToRoot(
       segment.position.y =
         s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
       const authoringScope = i === 0 ? "ground" : "typical";
-      const resolvedGroundDoor = resolveStairWellGroundDoor({
+      const resolvedDoor = resolveStairWellGroundDoor({
         sx: s.sx,
         sy: s.syPlate,
         sz: s.sz,
         context: s.entryDoorContexts[i],
         def: stairWellDef,
         authoringScope,
-      })?.groundDoor;
+      });
+      const resolvedGroundDoor = resolvedDoor?.groundDoor;
+      const supplementalDoors = resolveStairWellSupplementalDoors({
+        sx: s.sx,
+        sy: s.syPlate,
+        sz: s.sz,
+        context: s.entryDoorContexts[i],
+        def: stairWellDef,
+        authoringScope,
+        primaryDoor: resolvedDoor,
+      });
       addStairWellPlaceholder(segment, s.sx, s.syPlate, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
         authoringScope,
         groundDoor: resolvedGroundDoor,
+        supplementalDoors,
       });
       col.add(segment);
     }

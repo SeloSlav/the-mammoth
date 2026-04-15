@@ -283,7 +283,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const next = fn(prev);
       const entryOpeningChanged =
         JSON.stringify(next.entryOpening) !== JSON.stringify(prev.entryOpening) ||
-        JSON.stringify(next.groundEntryOpening) !== JSON.stringify(prev.groundEntryOpening);
+        JSON.stringify(next.groundEntryOpening) !== JSON.stringify(prev.groundEntryOpening) ||
+        JSON.stringify(next.secondaryEntryOpening) !== JSON.stringify(prev.secondaryEntryOpening);
       const needsRebuild =
         next.id !== prev.id ||
         next.version !== prev.version ||
@@ -380,7 +381,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       stairWellAuthorScope,
       ...(s.mode === "stairwell_preview" ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
       ...((stairWellAuthorScope === "ground" &&
-        (s.selectedId === "stair_landing_lower" || s.selectedId === "stair_corner_landing")) ||
+        (s.selectedId === "stair_landing_lower" ||
+          s.selectedId === "stair_corner_landing" ||
+          s.selectedId === "stair_entry_opening_proxy_secondary")) ||
       (stairWellAuthorScope === "typical" && s.selectedId === "shaft_floor")
         ? { selectedId: null }
         : {}),

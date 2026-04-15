@@ -56,6 +56,19 @@ export const STAIR_WELL_EDITOR_PART_IDS = [
 
 /** Editor-only gizmo target: move/resize the stair corridor opening. */
 export const STAIR_WELL_OPENING_PROXY_ID = "stair_entry_opening_proxy" as const;
+export const STAIR_WELL_SECONDARY_OPENING_PROXY_ID =
+  "stair_entry_opening_proxy_secondary" as const;
+export const STAIR_WELL_OPENING_PROXY_IDS = [
+  STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+] as const;
+export type StairWellOpeningProxyId = (typeof STAIR_WELL_OPENING_PROXY_IDS)[number];
+
+export function isStairWellOpeningProxyId(
+  value: string | null | undefined,
+): value is StairWellOpeningProxyId {
+  return value === STAIR_WELL_OPENING_PROXY_ID || value === STAIR_WELL_SECONDARY_OPENING_PROXY_ID;
+}
 
 export type StairWellEditorPartId = (typeof STAIR_WELL_EDITOR_PART_IDS)[number];
 export type StairWellAuthoringScope = "typical" | "ground";
@@ -151,6 +164,17 @@ function stairWellOpeningDefForScope(
   return scope === "ground" ? (def?.groundEntryOpening ?? def?.entryOpening) : def?.entryOpening;
 }
 
+function stairWellOpeningDefForProxyId(
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+  proxyId: StairWellOpeningProxyId,
+): StairWellEntryOpeningDef | undefined {
+  if (proxyId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID) {
+    return scope === "typical" ? def?.secondaryEntryOpening : undefined;
+  }
+  return stairWellOpeningDefForScope(def, scope);
+}
+
 /**
  * Ground-level hoistway / stair entry: **double-door clear width** (m).
  * Leaf geometry comes later — opening + frame trim only for now.
@@ -203,6 +227,11 @@ type ShaftShellOpts = {
   openTopWallExtend?: number;
   /** Single ground-level opening (toward lobby / building core). */
   groundDoor?: ShaftGroundDoorOpts | null;
+  /**
+   * Additional fully resolved door openings. Unlike the legacy extra-hole arrays, these retain the
+   * target wall face so mixed-axis combinations (for example west + south) render correctly.
+   */
+  supplementalDoors?: readonly ShaftGroundDoorOpts[];
   /**
    * Extra corridor door holes on the **east/west** door wall (same YZ convention as the primary
    * door). When non-empty, the shell is not split; used for full-height mega shafts (one band
@@ -284,9 +313,11 @@ function addShaftShell(
   }
 
   const door = opts.groundDoor ?? null;
+  const supplementalDoors = opts.supplementalDoors ?? [];
   const extraHolesYZ = opts.corridorDoorExtraHolesYZ ?? [];
   const extraHolesXY = opts.corridorDoorExtraHolesXY ?? [];
-  const multiCorridorDoors = extraHolesYZ.length > 0 || extraHolesXY.length > 0;
+  const multiCorridorDoors =
+    supplementalDoors.length > 0 || extraHolesYZ.length > 0 || extraHolesXY.length > 0;
   const bandCap = door
     ? Math.max(0.55, Math.min(door.bandHeightM, innerWallH))
     : innerWallH;
@@ -509,259 +540,191 @@ function addShaftShell(
     return out;
   };
 
+  const appendOpeningHole = (
+    opening: ShaftGroundDoorOpts,
+    yzByFace: { e: WallHoleYZ[]; w: WallHoleYZ[] },
+    xyByFace: { n: WallHoleXY[]; s: WallHoleXY[] },
+  ): void => {
+    const openingFace = opening.face ?? "e";
+    const openingHalfW = Math.min(
+      (opening.doorWidthM ?? SHAFT_DOUBLE_DOOR_W) * 0.5,
+      vlenZ * 0.5 - 0.06,
+      vlenX * 0.5 - 0.06,
+    );
+    const openingBandCap = Math.max(0.55, Math.min(opening.bandHeightM, innerWallH));
+    const openingDoorH = Math.min(
+      SHAFT_DOUBLE_DOOR_H,
+      openingBandCap - SHAFT_DOOR_SILL - 0.06,
+    );
+    let openingY0 = yWallBottom + SHAFT_DOOR_SILL;
+    let openingY1 = openingY0 + Math.max(0.55, openingDoorH);
+    if (
+      opening.doorHoleY0Local != null &&
+      opening.doorHoleY1Local != null &&
+      Number.isFinite(opening.doorHoleY0Local) &&
+      Number.isFinite(opening.doorHoleY1Local)
+    ) {
+      const a = Math.min(opening.doorHoleY0Local, opening.doorHoleY1Local);
+      const b = Math.max(opening.doorHoleY0Local, opening.doorHoleY1Local);
+      openingY0 = Math.max(yWallBottom + 0.02, a);
+      openingY1 = Math.min(yWallTop - 0.04, b);
+      if (openingY1 < openingY0 + 0.52) {
+        const mid = (openingY0 + openingY1) * 0.5;
+        openingY0 = Math.max(yWallBottom + 0.02, mid - 0.28);
+        openingY1 = Math.min(yWallTop - 0.04, mid + 0.28);
+      }
+    }
+    if (openingY1 <= openingY0 + 0.45) return;
+    const tangent = opening.tangentOffsetAlongWall ?? 0;
+    if (openingFace === "e" || openingFace === "w") {
+      const z0 = Math.max(zMinWall, tangent - openingHalfW);
+      const z1 = Math.min(zMaxWall, tangent + openingHalfW);
+      if (z1 <= z0 + 0.08) return;
+      yzByFace[openingFace].push({
+        z0,
+        z1,
+        y0: openingY0,
+        y1: openingY1,
+      });
+      return;
+    }
+    const x0 = Math.max(xMinWall, tangent - openingHalfW);
+    const x1 = Math.min(xMaxWall, tangent + openingHalfW);
+    if (x1 <= x0 + 0.08) return;
+    xyByFace[openingFace].push({
+      x0,
+      x1,
+      y0: openingY0,
+      y1: openingY1,
+    });
+  };
+
   if (!splitShaft) {
     if (multiCorridorDoors) {
-      if (face === "e" || face === "w") {
-        /** Mega stair: per-storey extras did not include the primary entry cut — prepend it so ground doors stay open. */
-        const mergedExtraYZ: WallHoleYZ[] = [];
-        if (door && yDoor1 > yDoor0 + 0.45) {
-          const pz0 = Math.max(zMinWall, doorTangent - doorHalfW);
-          const pz1 = Math.min(zMaxWall, doorTangent + doorHalfW);
-          if (pz1 > pz0 + 0.08) {
-            mergedExtraYZ.push({
-              z0: pz0,
-              z1: pz1,
-              y0: yDoor0,
-              y1: yDoor1,
-            });
-          }
-        }
-        mergedExtraYZ.push(...extraHolesYZ);
-        const holes = clampHolesYZ(mergedExtraYZ);
-        const xeUse = face === "e" ? xE : hx - wt * 0.5;
-        const teUse = face === "e" ? thE : wt;
-        const xwUse = face === "w" ? xW : -hx + wt * 0.5;
-        const twUse = face === "w" ? thW : wt;
-        if (face === "e") {
-          addWallConstantXWithHoles(
-            group,
-            wallM,
-            xeUse,
-            teUse,
-            zMinWall,
-            zMaxWall,
-            yWallBottom,
-            yWallTop,
-            holes,
-            "shaft_wall_e",
-          );
-          const xInnerE = hx - wt;
-          for (let i = 0; i < holes.length; i++) {
-            const h = holes[i]!;
-            addDoorFrameTrimConstantX(
-              group,
-              doorFrameMat,
-              xInnerE,
-              -1,
-              h.z0,
-              h.z1,
-              h.y0,
-              h.y1,
-              `shaft_wall_e_frame_${i}`,
-            );
-          }
-          addWallConstantXWithHoles(
-            group,
-            wallM,
-            xwUse,
-            twUse,
-            zMinWall,
-            zMaxWall,
-            yWallBottom,
-            yWallTop,
-            [],
-            "shaft_wall_w",
-          );
-        } else {
-          addWallConstantXWithHoles(
-            group,
-            wallM,
-            xeUse,
-            teUse,
-            zMinWall,
-            zMaxWall,
-            yWallBottom,
-            yWallTop,
-            [],
-            "shaft_wall_e",
-          );
-          addWallConstantXWithHoles(
-            group,
-            wallM,
-            xwUse,
-            twUse,
-            zMinWall,
-            zMaxWall,
-            yWallBottom,
-            yWallTop,
-            holes,
-            "shaft_wall_w",
-          );
-          const xInnerW = -hx + wt;
-          for (let i = 0; i < holes.length; i++) {
-            const h = holes[i]!;
-            addDoorFrameTrimConstantX(
-              group,
-              doorFrameMat,
-              xInnerW,
-              1,
-              h.z0,
-              h.z1,
-              h.y0,
-              h.y1,
-              `shaft_wall_w_frame_${i}`,
-            );
-          }
-        }
-        addWallConstantZWithHoles(
+      const yzByFace: { e: WallHoleYZ[]; w: WallHoleYZ[] } = { e: [], w: [] };
+      const xyByFace: { n: WallHoleXY[]; s: WallHoleXY[] } = { n: [], s: [] };
+      if (door) appendOpeningHole(door, yzByFace, xyByFace);
+      for (const extraDoor of supplementalDoors) {
+        appendOpeningHole(extraDoor, yzByFace, xyByFace);
+      }
+      if (face === "e") yzByFace.e.push(...extraHolesYZ);
+      else if (face === "w") yzByFace.w.push(...extraHolesYZ);
+      else if (face === "n") xyByFace.n.push(...extraHolesXY);
+      else xyByFace.s.push(...extraHolesXY);
+
+      const holesE = clampHolesYZ(yzByFace.e);
+      const holesW = clampHolesYZ(yzByFace.w);
+      const holesN = clampHolesXY(xyByFace.n);
+      const holesS = clampHolesXY(xyByFace.s);
+
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xE,
+        thE,
+        zMinWall,
+        zMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesE,
+        "shaft_wall_e",
+      );
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xW,
+        thW,
+        zMinWall,
+        zMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesW,
+        "shaft_wall_w",
+      );
+      addWallConstantZWithHoles(
+        group,
+        wallM,
+        zN,
+        thN,
+        xMinWall,
+        xMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesN,
+        "shaft_wall_n",
+      );
+      addWallConstantZWithHoles(
+        group,
+        wallM,
+        zS,
+        thS,
+        xMinWall,
+        xMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesS,
+        "shaft_wall_s",
+      );
+
+      const xInnerE = hx - wt;
+      for (let i = 0; i < holesE.length; i++) {
+        const h = holesE[i]!;
+        addDoorFrameTrimConstantX(
           group,
-          wallM,
-          hz - wt * 0.5,
-          wt,
-          xMinWall,
-          xMaxWall,
-          yWallBottom,
-          yWallTop,
-          [],
-          "shaft_wall_n",
+          doorFrameMat,
+          xInnerE,
+          -1,
+          h.z0,
+          h.z1,
+          h.y0,
+          h.y1,
+          `shaft_wall_e_frame_${i}`,
         );
-        addWallConstantZWithHoles(
+      }
+      const xInnerW = -hx + wt;
+      for (let i = 0; i < holesW.length; i++) {
+        const h = holesW[i]!;
+        addDoorFrameTrimConstantX(
           group,
-          wallM,
-          -hz + wt * 0.5,
-          wt,
-          xMinWall,
-          xMaxWall,
-          yWallBottom,
-          yWallTop,
-          [],
-          "shaft_wall_s",
+          doorFrameMat,
+          xInnerW,
+          1,
+          h.z0,
+          h.z1,
+          h.y0,
+          h.y1,
+          `shaft_wall_w_frame_${i}`,
         );
-      } else {
-        const mergedExtraXY: WallHoleXY[] = [];
-        if (door && yDoor1 > yDoor0 + 0.45) {
-          const px0 = Math.max(xMinWall, doorTangent - doorHalfW);
-          const px1 = Math.min(xMaxWall, doorTangent + doorHalfW);
-          if (px1 > px0 + 0.08) {
-            mergedExtraXY.push({
-              x0: px0,
-              x1: px1,
-              y0: yDoor0,
-              y1: yDoor1,
-            });
-          }
-        }
-        mergedExtraXY.push(...extraHolesXY);
-        const holes = clampHolesXY(mergedExtraXY);
-        const znUse = face === "n" ? zN : hz - wt * 0.5;
-        const tnUse = face === "n" ? thN : wt;
-        const zsUse = face === "s" ? zS : -hz + wt * 0.5;
-        const tsUse = face === "s" ? thS : wt;
-        addWallConstantXWithHoles(
+      }
+      const zInnerN = hz - wt;
+      for (let i = 0; i < holesN.length; i++) {
+        const h = holesN[i]!;
+        addDoorFrameTrimConstantZ(
           group,
-          wallM,
-          xE,
-          thE,
-          zMinWall,
-          zMaxWall,
-          yWallBottom,
-          yWallTop,
-          [],
-          "shaft_wall_e",
+          doorFrameMat,
+          zInnerN,
+          -1,
+          h.x0,
+          h.x1,
+          h.y0,
+          h.y1,
+          `shaft_wall_n_frame_${i}`,
         );
-        addWallConstantXWithHoles(
+      }
+      const zInnerS = -hz + wt;
+      for (let i = 0; i < holesS.length; i++) {
+        const h = holesS[i]!;
+        addDoorFrameTrimConstantZ(
           group,
-          wallM,
-          xW,
-          thW,
-          zMinWall,
-          zMaxWall,
-          yWallBottom,
-          yWallTop,
-          [],
-          "shaft_wall_w",
+          doorFrameMat,
+          zInnerS,
+          1,
+          h.x0,
+          h.x1,
+          h.y0,
+          h.y1,
+          `shaft_wall_s_frame_${i}`,
         );
-        if (face === "n") {
-          addWallConstantZWithHoles(
-            group,
-            wallM,
-            znUse,
-            tnUse,
-            xMinWall,
-            xMaxWall,
-            yWallBottom,
-            yWallTop,
-            holes,
-            "shaft_wall_n",
-          );
-          const zInnerN = hz - wt;
-          for (let i = 0; i < holes.length; i++) {
-            const h = holes[i]!;
-            addDoorFrameTrimConstantZ(
-              group,
-              doorFrameMat,
-              zInnerN,
-              -1,
-              h.x0,
-              h.x1,
-              h.y0,
-              h.y1,
-              `shaft_wall_n_frame_${i}`,
-            );
-          }
-          addWallConstantZWithHoles(
-            group,
-            wallM,
-            zsUse,
-            tsUse,
-            xMinWall,
-            xMaxWall,
-            yWallBottom,
-            yWallTop,
-            [],
-            "shaft_wall_s",
-          );
-        } else {
-          addWallConstantZWithHoles(
-            group,
-            wallM,
-            znUse,
-            tnUse,
-            xMinWall,
-            xMaxWall,
-            yWallBottom,
-            yWallTop,
-            [],
-            "shaft_wall_n",
-          );
-          addWallConstantZWithHoles(
-            group,
-            wallM,
-            zsUse,
-            tsUse,
-            xMinWall,
-            xMaxWall,
-            yWallBottom,
-            yWallTop,
-            holes,
-            "shaft_wall_s",
-          );
-          const zInnerS = -hz + wt;
-          for (let i = 0; i < holes.length; i++) {
-            const h = holes[i]!;
-            addDoorFrameTrimConstantZ(
-              group,
-              doorFrameMat,
-              zInnerS,
-              1,
-              h.x0,
-              h.x1,
-              h.y0,
-              h.y1,
-              `shaft_wall_s_frame_${i}`,
-            );
-          }
-        }
       }
     } else {
       addEastWest("e", xE, thE, face === "e", yWallBottom, yWallTop, "shaft_wall_e");
@@ -891,6 +854,8 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   groundDoor?: ShaftGroundDoorOpts | null;
   /** Plan-space context used to derive a corridor-side entry opening when no explicit groundDoor is supplied. */
   previewGroundDoorContext?: StairWellGroundDoorContext;
+  /** Additional non-primary corridor openings to cut into the shell. */
+  supplementalDoors?: readonly ResolvedStairWellGroundDoor[];
   /** Editor-only wireframe gizmo target for the opening. */
   addOpeningEditProxy?: boolean;
 };
@@ -915,6 +880,7 @@ export type ResolvedStairWellGroundDoor = {
 function tagGeneratedStairWellShellParts(
   root: THREE.Object3D,
   scope: StairWellAuthoringScope,
+  openings: readonly StairWellPreviewOpeningSpec[],
 ): void {
   root.traverse((obj) => {
     if (obj.name === "shaft_floor") {
@@ -922,6 +888,14 @@ function tagGeneratedStairWellShellParts(
     } else if (obj.name === "shaft_wall") {
       setStairWellEditorPartId(obj, "shaft_wall", scope);
       setStairWellEditorPickId(obj, "shaft_wall");
+    } else if (obj.name !== "shaft_wall") {
+      for (const opening of openings) {
+        const openingFacePrefix = `shaft_wall_${opening.opening.face}`;
+        if (obj.name.startsWith(openingFacePrefix)) {
+          obj.userData.editorStairPickId = opening.proxyId;
+          break;
+        }
+      }
     }
   });
 }
@@ -1100,8 +1074,51 @@ export function rebuildStairWellPreviewRoot(
   });
 }
 
+type StairWellPreviewOpeningSpec = {
+  proxyId: StairWellOpeningProxyId;
+  opening: ResolvedStairWellGroundDoor;
+};
+
+function resolveStairWellPreviewOpenings(args: {
+  sx: number;
+  sy: number;
+  sz: number;
+  context?: StairWellGroundDoorContext;
+  def?: StairWellDef;
+  authoringScope: StairWellAuthoringScope;
+}): StairWellPreviewOpeningSpec[] {
+  const primary = resolveStairWellGroundDoor({
+    sx: args.sx,
+    sy: args.sy,
+    sz: args.sz,
+    context: args.context,
+    def: args.def,
+    authoringScope: args.authoringScope,
+  });
+  if (!primary) return [];
+  const out: StairWellPreviewOpeningSpec[] = [
+    { proxyId: STAIR_WELL_OPENING_PROXY_ID, opening: primary },
+  ];
+  for (const opening of resolveStairWellSupplementalDoors({
+    sx: args.sx,
+    sy: args.sy,
+    sz: args.sz,
+    context: args.context,
+    def: args.def,
+    authoringScope: args.authoringScope,
+    primaryDoor: primary,
+  })) {
+    out.push({
+      proxyId: STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+      opening,
+    });
+  }
+  return out;
+}
+
 function syncStairWellOpeningEditProxy(
   proxy: THREE.Mesh,
+  proxyId: StairWellOpeningProxyId,
   scope: StairWellAuthoringScope,
   sx: number,
   sy: number,
@@ -1128,8 +1145,9 @@ function syncStairWellOpeningEditProxy(
       depthTest: true,
     });
   }
-  proxy.name = STAIR_WELL_OPENING_PROXY_ID;
+  proxy.name = proxyId;
   proxy.userData.editorStairOpeningProxy = true;
+  proxy.userData.editorStairOpeningId = proxyId;
   proxy.userData.editorStairOpeningScope = scope;
   proxy.userData.editorStairPreviewDims = [sx, sy, sz] as const;
   if (context) proxy.userData.editorStairPreviewContext = context;
@@ -1150,6 +1168,7 @@ function syncStairWellOpeningEditProxy(
 export function rebuildStairWellPreviewOpening(
   root: THREE.Group,
   def: StairWellDef | undefined,
+  opts?: { preserveLiveProxyId?: string | null },
 ): void {
   const args = root.userData.editorStairPreviewArgs as BuildStairWellPreviewRootArgs | undefined;
   if (!args) return;
@@ -1161,7 +1180,7 @@ export function rebuildStairWellPreviewOpening(
           shaftPlateXZ: args.shaftPlateXZ,
         }
       : undefined;
-  const opening = resolveStairWellGroundDoor({
+  const openings = resolveStairWellPreviewOpenings({
     sx: args.sx,
     sy: args.sy,
     sz: args.sz,
@@ -1170,10 +1189,10 @@ export function rebuildStairWellPreviewOpening(
     authoringScope,
   });
   const doomed: THREE.Object3D[] = [];
-  let proxy: THREE.Mesh | null = null;
+  const proxyById = new Map<StairWellOpeningProxyId, THREE.Mesh>();
   for (const child of root.children) {
-    if (child.name === STAIR_WELL_OPENING_PROXY_ID && child instanceof THREE.Mesh) {
-      proxy = child;
+    if (isStairWellOpeningProxyId(child.name) && child instanceof THREE.Mesh) {
+      proxyById.set(child.name, child);
       continue;
     }
     if (
@@ -1194,38 +1213,54 @@ export function rebuildStairWellPreviewOpening(
     includeFloor: stairWellHasFloorSlab(authoringScope),
     includeCeiling: false,
     floorMat: mats.floor,
-    groundDoor: opening?.groundDoor ?? null,
+    groundDoor: openings[0]?.opening.groundDoor ?? null,
+    supplementalDoors: openings.slice(1).map((entry) => entry.opening.groundDoor),
   });
   groupGeneratedStairWellWallParts(root);
-  tagGeneratedStairWellShellParts(root, authoringScope);
+  tagGeneratedStairWellShellParts(root, authoringScope, openings);
   applyStairWellPartTransforms(root, def);
-  if (opening) {
-    const liveProxy = proxy ?? new THREE.Mesh();
-    if (!proxy) root.add(liveProxy);
-    syncStairWellOpeningEditProxy(
-      liveProxy,
-      authoringScope,
-      args.sx,
-      args.sy,
-      args.sz,
-      context,
-      opening,
-    );
+  for (const entry of openings) {
+    const liveProxy = proxyById.get(entry.proxyId) ?? new THREE.Mesh();
+    if (!proxyById.has(entry.proxyId)) root.add(liveProxy);
+    if (opts?.preserveLiveProxyId === entry.proxyId && proxyById.has(entry.proxyId)) {
+      liveProxy.name = entry.proxyId;
+      liveProxy.userData.editorStairOpeningProxy = true;
+      liveProxy.userData.editorStairOpeningId = entry.proxyId;
+      liveProxy.userData.editorStairOpeningScope = authoringScope;
+      liveProxy.userData.editorStairPreviewDims = [args.sx, args.sy, args.sz] as const;
+      if (context) liveProxy.userData.editorStairPreviewContext = context;
+      else delete liveProxy.userData.editorStairPreviewContext;
+    } else {
+      syncStairWellOpeningEditProxy(
+        liveProxy,
+        entry.proxyId,
+        authoringScope,
+        args.sx,
+        args.sy,
+        args.sz,
+        context,
+        entry.opening,
+      );
+    }
+    proxyById.delete(entry.proxyId);
+  }
+  for (const orphan of proxyById.values()) {
+    root.remove(orphan);
+    disposeObject3DTree(orphan);
+  }
+  if (openings[0]) {
     root.userData.editorStairPreviewGroundDoor = {
-      face: opening.face,
-      tangentOffsetAlongWall: opening.tangentOffsetAlongWallM,
+      face: openings[0].opening.face,
+      tangentOffsetAlongWall: openings[0].opening.tangentOffsetAlongWallM,
     };
   } else {
-    if (proxy) {
-      root.remove(proxy);
-      disposeObject3DTree(proxy);
-    }
     delete root.userData.editorStairPreviewGroundDoor;
   }
 }
 
 function addStairWellOpeningEditProxy(
   root: THREE.Group,
+  proxyId: StairWellOpeningProxyId,
   scope: StairWellAuthoringScope,
   sx: number,
   sy: number,
@@ -1234,7 +1269,7 @@ function addStairWellOpeningEditProxy(
   opening: ResolvedStairWellGroundDoor,
 ): void {
   const proxy = new THREE.Mesh();
-  syncStairWellOpeningEditProxy(proxy, scope, sx, sy, sz, context, opening);
+  syncStairWellOpeningEditProxy(proxy, proxyId, scope, sx, sy, sz, context, opening);
   root.add(proxy);
 }
 
@@ -1249,14 +1284,28 @@ export function stairWellEntryOpeningFromProxyMesh(
     | StairWellGroundDoorContext
     | undefined;
   if (!dims) return null;
-  const current = resolveStairWellGroundDoor({
-    sx: dims[0],
-    sy: dims[1],
-    sz: dims[2],
-    context,
-    def,
-    authoringScope: scope,
-  });
+  const proxyIdRaw = (proxy.userData.editorStairOpeningId as string | undefined) ?? proxy.name;
+  const proxyId = isStairWellOpeningProxyId(proxyIdRaw)
+    ? proxyIdRaw
+    : STAIR_WELL_OPENING_PROXY_ID;
+  const current =
+    proxyId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
+      ? resolveStairWellSupplementalDoors({
+          sx: dims[0],
+          sy: dims[1],
+          sz: dims[2],
+          context,
+          def,
+          authoringScope: scope,
+        })[0] ?? null
+      : resolveStairWellGroundDoor({
+          sx: dims[0],
+          sy: dims[1],
+          sz: dims[2],
+          context,
+          def,
+          authoringScope: scope,
+        });
   if (!current) return null;
   const widthScale =
     current.face === "e" || current.face === "w" ? Math.abs(proxy.scale.z) : Math.abs(proxy.scale.x);
@@ -1269,14 +1318,16 @@ export function stairWellEntryOpeningFromProxyMesh(
     centerYM: proxy.position.y,
   };
   const baseDef = (def ?? { id: "stair_preview", version: 1 }) as StairWellDef;
-  const resolved = resolveStairWellGroundDoor({
-    sx: dims[0],
-    sy: dims[1],
-    sz: dims[2],
-    context,
-    authoringScope: scope,
-    def:
-      scope === "ground"
+  const nextDef: StairWellDef =
+    proxyId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
+      ? {
+          ...baseDef,
+          secondaryEntryOpening: {
+            ...stairWellOpeningDefForProxyId(def, scope, proxyId),
+            ...nextRaw,
+          },
+        }
+      : scope === "ground"
         ? {
             ...baseDef,
             groundEntryOpening: { ...stairWellOpeningDefForScope(def, scope), ...nextRaw },
@@ -1284,8 +1335,25 @@ export function stairWellEntryOpeningFromProxyMesh(
         : {
             ...baseDef,
             entryOpening: { ...stairWellOpeningDefForScope(def, scope), ...nextRaw },
-          },
-  });
+          };
+  const resolved =
+    proxyId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
+      ? resolveStairWellSupplementalDoors({
+          sx: dims[0],
+          sy: dims[1],
+          sz: dims[2],
+          context,
+          def: nextDef,
+          authoringScope: scope,
+        })[0] ?? null
+      : resolveStairWellGroundDoor({
+          sx: dims[0],
+          sy: dims[1],
+          sz: dims[2],
+          context,
+          authoringScope: scope,
+          def: nextDef,
+        });
   if (!resolved) return null;
   return {
     face: resolved.face,
@@ -1314,20 +1382,36 @@ export function resolveStairWellGroundDoor(args: {
   const yWallBottom = wallCenterY - innerWallH * 0.5;
   const bandHeightM = Math.max(0.55, Math.min(SHAFT_GROUND_DOOR_BAND_M, innerWallH));
   const maxDoorHalfW = Math.min(
-    SHAFT_DOUBLE_DOOR_W * 0.5,
     Math.max(sx - 2 * wt, 0.05) * 0.5 - 0.06,
     Math.max(sz - 2 * wt, 0.05) * 0.5 - 0.06,
   );
-  const maxDoorH = Math.min(
-    SHAFT_DOUBLE_DOOR_H,
-    bandHeightM - SHAFT_DOOR_SILL - 0.06,
+  const maxDoorH = bandHeightM - SHAFT_DOOR_SILL - 0.06;
+  const defaultDoorHalfW = THREE.MathUtils.clamp(
+    SHAFT_DOUBLE_DOOR_W * 0.5,
+    0.325,
+    Math.max(0.325, maxDoorHalfW),
   );
-  const doorHalfW = Math.max(0.325, maxDoorHalfW);
-  const doorH = Math.max(0.65, maxDoorH);
+  const defaultDoorH = THREE.MathUtils.clamp(
+    SHAFT_DOUBLE_DOOR_H,
+    0.65,
+    Math.max(0.65, maxDoorH),
+  );
   const baseYDoor0 = yWallBottom + SHAFT_DOOR_SILL;
-  const baseYDoor1 = baseYDoor0 + doorH;
   const scope = args.authoringScope ?? "typical";
   const authored = stairWellOpeningDefForScope(args.def, scope);
+  const widthM = THREE.MathUtils.clamp(
+    authored?.widthM ?? defaultDoorHalfW * 2,
+    0.65,
+    Math.max(0.65, maxDoorHalfW * 2),
+  );
+  const heightM = THREE.MathUtils.clamp(
+    authored?.heightM ?? defaultDoorH,
+    0.65,
+    Math.max(0.65, maxDoorH),
+  );
+  const doorHalfW = widthM * 0.5;
+  const doorH = heightM;
+  const baseYDoor1 = baseYDoor0 + doorH;
   let pickedFace = authored?.face as CardinalFace | undefined;
   let tangentOffsetAlongWall = authored?.tangentOffsetAlongWallM ?? 0;
   if (!pickedFace && !context) return null;
@@ -1388,8 +1472,6 @@ export function resolveStairWellGroundDoor(args: {
     }
   }
   if (!pickedFace) return null;
-  const widthM = THREE.MathUtils.clamp(authored?.widthM ?? doorHalfW * 2, 0.65, maxDoorHalfW * 2);
-  const heightM = THREE.MathUtils.clamp(authored?.heightM ?? doorH, 0.65, maxDoorH);
   tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
     pickedFace,
     tangentOffsetAlongWall,
@@ -1425,6 +1507,118 @@ export function resolveStairWellGroundDoor(args: {
     heightM,
     centerYM,
   };
+}
+
+export function resolveStairWellSupplementalDoors(args: {
+  sx: number;
+  sy: number;
+  sz: number;
+  context?: StairWellGroundDoorContext;
+  layout?: StairSwitchbackLayout;
+  def?: StairWellDef;
+  authoringScope?: StairWellAuthoringScope;
+  primaryDoor?: ResolvedStairWellGroundDoor | null;
+}): readonly ResolvedStairWellGroundDoor[] {
+  const scope = args.authoringScope ?? "typical";
+  if (scope !== "typical") return [];
+  const primary =
+    args.primaryDoor ??
+    resolveStairWellGroundDoor({
+      sx: args.sx,
+      sy: args.sy,
+      sz: args.sz,
+      context: args.context,
+      layout: args.layout,
+      def: args.def,
+      authoringScope: scope,
+    });
+  if (!primary) return [];
+  const L = args.layout ?? computeSwitchbackStairLayout(args.sx, args.sy, args.sz);
+  const authored = stairWellOpeningDefForProxyId(
+    args.def,
+    scope,
+    STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+  );
+  const face: CardinalFace = authored?.face ?? "s";
+  const wt = 0.11;
+  const widthM = authored?.widthM ?? primary.widthM;
+  const heightM = authored?.heightM ?? primary.heightM;
+  const doorHalfW = widthM * 0.5;
+  const centerYM = authored?.centerYM ?? primary.centerYM;
+  const idealTang =
+    args.context != null
+      ? args.context.towardPlateXZ[0] - args.context.shaftPlateXZ[0]
+      : 0;
+  let tangentOffsetAlongWall =
+    authored?.tangentOffsetAlongWallM != null
+      ? authored.tangentOffsetAlongWallM
+      : clampStairDoorTangentAlongInnerWall(
+          face,
+          idealTang,
+          doorHalfW,
+          args.sx,
+          args.sz,
+          wt,
+        );
+  if (authored?.tangentOffsetAlongWallM == null) {
+    const landing = pickCornerLandingNearDoorBand(
+      L,
+      face,
+      tangentOffsetAlongWall,
+      doorHalfW,
+      centerYM,
+    );
+    if (landing) {
+      tangentOffsetAlongWall = snapStairDoorTangentAlongWallToLanding(
+        landing,
+        face,
+        doorHalfW,
+        args.sx,
+        args.sz,
+        {
+          alignTowardPlateXZ: args.context?.towardPlateXZ,
+          shaftPlateXZForAlign: args.context?.shaftPlateXZ,
+        },
+      );
+    }
+  }
+  tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
+    face,
+    tangentOffsetAlongWall,
+    doorHalfW,
+    args.sx,
+    args.sz,
+    wt,
+  );
+  if (
+    authored == null &&
+    primary.face === face &&
+    Math.abs(primary.tangentOffsetAlongWallM - tangentOffsetAlongWall) < 0.05
+  ) {
+    return [];
+  }
+  const yDoor0 = centerYM - heightM * 0.5;
+  const yDoor1 = centerYM + heightM * 0.5;
+  return [
+    {
+      groundDoor: {
+        face,
+        bandHeightM: SHAFT_GROUND_DOOR_BAND_M,
+        tangentOffsetAlongWall,
+        doorWidthM: widthM,
+        doorHoleY0Local: yDoor0,
+        doorHoleY1Local: yDoor1,
+      },
+      doorHalfW,
+      y0Local: yDoor0,
+      y1Local: yDoor1,
+      face,
+      tangentOffsetAlongWallM: tangentOffsetAlongWall,
+      widthM,
+      heightM,
+      centerYM,
+    },
+  ];
 }
 
 export function addStairWellPlaceholder(
@@ -1468,6 +1662,18 @@ export function addStairWellPlaceholder(
           authoringScope,
         });
   const stairGroundDoor = resolvedGroundDoor?.groundDoor ?? null;
+  const supplementalDoors =
+    opts?.supplementalDoors ??
+    resolveStairWellSupplementalDoors({
+      layout: L,
+      sx,
+      sy,
+      sz,
+      context: opts?.previewGroundDoorContext,
+      def: opts?.def,
+      authoringScope,
+      primaryDoor: resolvedGroundDoor,
+    });
   if (stairGroundDoor) {
     group.userData.editorStairPreviewGroundDoor = {
       face: stairGroundDoor.face,
@@ -1499,9 +1705,18 @@ export function addStairWellPlaceholder(
     includeCeiling: false,
     floorMat: mats.floor,
     groundDoor: stairGroundDoor,
+    supplementalDoors: supplementalDoors.map((door) => door.groundDoor),
   });
   groupGeneratedStairWellWallParts(group);
-  tagGeneratedStairWellShellParts(group, authoringScope);
+  tagGeneratedStairWellShellParts(group, authoringScope, [
+    ...(resolvedGroundDoor
+      ? [{ proxyId: STAIR_WELL_OPENING_PROXY_ID, opening: resolvedGroundDoor }]
+      : []),
+    ...supplementalDoors.map((opening) => ({
+      proxyId: STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+      opening,
+    })),
+  ]);
 
   const { ix0, ix1, iz0, iz1 } = L;
   const boundary = lowerFlightLegBoundary(L.legTreadCounts);
@@ -1574,6 +1789,7 @@ export function addStairWellPlaceholder(
   if (opts?.addOpeningEditProxy && resolvedGroundDoor) {
     addStairWellOpeningEditProxy(
       group,
+      STAIR_WELL_OPENING_PROXY_ID,
       authoringScope,
       sx,
       sy,
@@ -1581,6 +1797,18 @@ export function addStairWellPlaceholder(
       opts?.previewGroundDoorContext,
       resolvedGroundDoor,
     );
+    for (const supplementalDoor of supplementalDoors) {
+      addStairWellOpeningEditProxy(
+        group,
+        STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
+        authoringScope,
+        sx,
+        sy,
+        sz,
+        opts?.previewGroundDoorContext,
+        supplementalDoor,
+      );
+    }
   }
 
   recordStairWellBaseTransforms(group);

@@ -11,6 +11,7 @@ import {
   LANDING_DOOR_OPENING_PROXY_ID,
   STAIR_WELL_EDITOR_PART_IDS,
   STAIR_WELL_OPENING_PROXY_ID,
+  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStore.js";
 
@@ -20,6 +21,11 @@ const ELEVATOR_CAB_OUTLINER_PART_IDS = [
   "cab_floor_panel",
   "cab_ceiling",
   "cab_wall_back",
+  "cab_wall_front_top",
+  "cab_wall_front_n",
+  "cab_wall_front_s",
+  "cab_wall_front_e",
+  "cab_wall_front_w",
   "cab_wall_side_n",
   "cab_wall_side_s",
   "cab_wall_side_e",
@@ -195,6 +201,9 @@ export function EditorChromeOutliner(props: {
         {mode === "stairwell_preview"
           ? [
               STAIR_WELL_OPENING_PROXY_ID,
+              ...(stairWellAuthorScope === "typical"
+                ? [STAIR_WELL_SECONDARY_OPENING_PROXY_ID]
+                : []),
               ...Array.from(
                 STAIR_WELL_EDITOR_PART_IDS.filter(
                   (id) =>
@@ -223,7 +232,8 @@ export function EditorChromeOutliner(props: {
                 }}
               >
                 {id}
-                {id === STAIR_WELL_OPENING_PROXY_ID ? (
+                {id === STAIR_WELL_OPENING_PROXY_ID ||
+                id === STAIR_WELL_SECONDARY_OPENING_PROXY_ID ? (
                   <span style={{ opacity: 0.65 }}> (framed opening - gizmo)</span>
                 ) : null}
               </button>

@@ -258,17 +258,79 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
 
   const midY = cabinH * 0.5 + floorT;
   const wallH = cabinH - floorT - 0.08;
+  const wallTopY = midY + wallH * 0.5;
+  const doorTopY = floorT + 0.06 + DOOR_H;
+  const frontTopPanelH = Math.max(0.12, wallTopY - doorTopY);
+  const frontTopPanelY = wallTopY - frontTopPanelH * 0.5;
   const face = layout.doorFace;
   if (face === "e" || face === "w") {
     const xSign = face === "e" ? 1 : -1;
+    const frontPanelSpan = Math.max(0.12, hz - DOOR_W * 0.5);
+    const frontPanelZ = DOOR_W * 0.25 + frontPanelSpan * 0.5;
     addWall("cab_wall_back", wallT, wallH, hz * 2, -xSign * (hx - wallT * 0.5), midY, 0);
     addWall("cab_wall_side_n", hx * 2 - wallT * 2, wallH, wallT, 0, midY, hz - wallT * 0.5);
     addWall("cab_wall_side_s", hx * 2 - wallT * 2, wallH, wallT, 0, midY, -hz + wallT * 0.5);
+    addWall(
+      "cab_wall_front_n",
+      wallT,
+      wallH,
+      frontPanelSpan,
+      xSign * (hx - wallT * 0.5),
+      midY,
+      frontPanelZ,
+    );
+    addWall(
+      "cab_wall_front_s",
+      wallT,
+      wallH,
+      frontPanelSpan,
+      xSign * (hx - wallT * 0.5),
+      midY,
+      -frontPanelZ,
+    );
+    addWall(
+      "cab_wall_front_top",
+      wallT,
+      frontTopPanelH,
+      DOOR_W,
+      xSign * (hx - wallT * 0.5),
+      frontTopPanelY,
+      0,
+    );
   } else {
     const zSign = face === "n" ? 1 : -1;
+    const frontPanelSpan = Math.max(0.12, hx - DOOR_W * 0.5);
+    const frontPanelX = DOOR_W * 0.25 + frontPanelSpan * 0.5;
     addWall("cab_wall_back", hx * 2, wallH, wallT, 0, midY, -zSign * (hz - wallT * 0.5));
     addWall("cab_wall_side_e", wallT, wallH, hz * 2 - wallT * 2, hx - wallT * 0.5, midY, 0);
     addWall("cab_wall_side_w", wallT, wallH, hz * 2 - wallT * 2, -hx + wallT * 0.5, midY, 0);
+    addWall(
+      "cab_wall_front_e",
+      frontPanelSpan,
+      wallH,
+      wallT,
+      frontPanelX,
+      midY,
+      zSign * (hz - wallT * 0.5),
+    );
+    addWall(
+      "cab_wall_front_w",
+      frontPanelSpan,
+      wallH,
+      wallT,
+      -frontPanelX,
+      midY,
+      zSign * (hz - wallT * 0.5),
+    );
+    addWall(
+      "cab_wall_front_top",
+      DOOR_W,
+      frontTopPanelH,
+      wallT,
+      0,
+      frontTopPanelY,
+      zSign * (hz - wallT * 0.5),
+    );
   }
 
   let doorL: THREE.Group | null = null;

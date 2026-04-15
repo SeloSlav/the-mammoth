@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
 import {
+  isStairWellOpeningProxyId,
   LANDING_DOOR_GLASS_PART_ID,
   LANDING_DOOR_OPENING_PROXY_ID,
   STAIR_WELL_OPENING_PROXY_ID,
@@ -218,7 +219,11 @@ export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Ob
 export function resolveStairWellPartId(hit: THREE.Object3D | null): string | null {
   const target = resolveStairWellPartTarget(hit);
   if (!target) return null;
-  if (target.userData.editorStairOpeningProxy === true) return STAIR_WELL_OPENING_PROXY_ID;
+  if (target.userData.editorStairOpeningProxy === true) {
+    const openingId = target.userData.editorStairOpeningId;
+    if (typeof openingId === "string" && isStairWellOpeningProxyId(openingId)) return openingId;
+    return STAIR_WELL_OPENING_PROXY_ID;
+  }
   const pickId = target.userData.editorStairPickId;
   if (typeof pickId === "string" && pickId.length > 0) return pickId;
   const id = target.userData.editorStairPartId;
