@@ -6,10 +6,10 @@ const SKIN = 0.034;
 
 const GRAVITY = 18;
 const JUMP_SPEED = 5.4;
-/** Indoor-ish gait: ~6 km/h walk, hard run ~12 km/h (not hallway blur). */
-const WALK_SPEED = 1.65;
-const SPRINT_SPEED = 3.35;
-const CROUCH_SPEED = 1.05;
+/** Indoor-ish gait: brisk ~6.7 km/h walk, strong ~18 km/h run for large-map traversal. */
+const WALK_SPEED = 1.85;
+const SPRINT_SPEED = 5.1;
+const CROUCH_SPEED = 1.0;
 const GROUND_ACCEL = 19;
 const AIR_ACCEL = 4.2;
 const DRAG = 10;

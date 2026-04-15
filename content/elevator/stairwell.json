@@ -2,11 +2,54 @@
   "id": "default_stair_well",
   "version": 1,
   "materials": {
+    "wall": {
+      "mapUrl": "/static/materials/stairwell/slavic-two-tone-wall.svg"
+    },
     "tread": {
-      "mapUrl": "/static/materials/stairwell/ribbed-stair-tread.svg"
+      "mapUrl": "/static/materials/stairwell/slavic-terrazzo-stair-tread.svg"
+    },
+    "landing": {
+      "mapUrl": "/static/materials/stairwell/slavic-terrazzo-landing.svg"
     }
   },
-  "partTransforms": {},
+  "partTransforms": {
+    "stair_flight_lower": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_flight_upper": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
   "groundPartTransforms": {},
   "entryOpening": {
     "face": "s",

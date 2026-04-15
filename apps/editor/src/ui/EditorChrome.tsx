@@ -755,8 +755,9 @@ export function EditorChrome() {
       </div>
       {transformMode === "scale" ? (
         <p style={{ margin: "4px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-          Viewport: axis scale handles now expand from one side while keeping the opposite face fixed.
-          Drag the <strong>center</strong> scale handle (white cube) for uniform scale from center.
+          Viewport: axis scale handles now stretch from the dragged side while keeping the opposite
+          face fixed. Drag the <strong>center</strong> scale handle (white cube) for uniform scale
+          from center.
         </p>
       ) : null}
       <span style={label}>Grid snap (m / deg-ish for rotate)</span>

@@ -116,7 +116,7 @@ export function concreteMaterial(
     roughnessMap: textures?.roughnessMap,
     bumpMap: textures?.bumpMap,
     bumpScale: textures ? 0.035 : 0,
-    side: opts?.side,
+    ...(opts?.side != null ? { side: opts.side } : null),
   });
 }
 

@@ -40,6 +40,7 @@ import { FpSelectionAabbOutline } from "./fpSelectionAabbOutline.js";
 import { PreviewSelectionShapeOutline } from "./previewSelectionShapeOutline.js";
 import {
   anchoredScaleAnchorLocalPoint,
+  type AnchoredScaleAxis,
   anchoredScaleAxisFromTransformAxis,
   computeAnchoredScalePosition,
 } from "./anchoredScaleGizmo.js";
@@ -150,7 +151,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         startPosition: THREE.Vector3;
         startScale: THREE.Vector3;
         startRotation: THREE.Quaternion;
-        anchorLocalPoint: THREE.Vector3;
+        axis: AnchoredScaleAxis;
+        localBounds: THREE.Box3;
       }
     | null = null;
   const _anchoredScaleInvWorld = new THREE.Matrix4();
@@ -198,7 +200,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       startPosition: attached.position.clone(),
       startScale: attached.scale.clone(),
       startRotation: attached.quaternion.clone(),
-      anchorLocalPoint: anchoredScaleAnchorLocalPoint({ axis, localBounds }),
+      axis,
+      localBounds: localBounds.clone(),
     };
   }
 
@@ -214,12 +217,18 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     }
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (!attached || attached !== levelEditorAnchoredScaleGesture.object) return;
+    const anchorLocalPoint = anchoredScaleAnchorLocalPoint({
+      axis: levelEditorAnchoredScaleGesture.axis,
+      localBounds: levelEditorAnchoredScaleGesture.localBounds,
+      startScale: levelEditorAnchoredScaleGesture.startScale,
+      currentScale: attached.scale,
+    });
     const nextPos = computeAnchoredScalePosition({
       startPosition: levelEditorAnchoredScaleGesture.startPosition,
       startScale: levelEditorAnchoredScaleGesture.startScale,
       currentScale: attached.scale,
       rotation: levelEditorAnchoredScaleGesture.startRotation,
-      anchorLocalPoint: levelEditorAnchoredScaleGesture.anchorLocalPoint,
+      anchorLocalPoint,
     });
     withProgrammaticTransformControls(() => {
       attached.position.copy(nextPos);

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="glass" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cfd6d2"/>
+      <stop offset="50%" stop-color="#b6bdb9"/>
+      <stop offset="100%" stop-color="#dce2de"/>
+    </linearGradient>
+    <pattern id="wire" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M0 0 H16 M0 8 H16 M0 16 H16" stroke="#7f8682" stroke-width="0.7" opacity="0.48"/>
+      <path d="M0 0 V16 M8 0 V16 M16 0 V16" stroke="#7f8682" stroke-width="0.7" opacity="0.48"/>
+    </pattern>
+  </defs>
+  <rect width="256" height="256" fill="url(#glass)"/>
+  <rect width="256" height="256" fill="url(#wire)" opacity="0.9"/>
+  <g opacity="0.16">
+    <rect y="0" width="256" height="44" fill="#f4f6f3"/>
+    <rect y="54" width="256" height="32" fill="#aab3ae"/>
+    <rect y="96" width="256" height="42" fill="#eff2ee"/>
+    <rect y="150" width="256" height="34" fill="#aab1ad"/>
+    <rect y="196" width="256" height="60" fill="#eef2ef"/>
+  </g>
+  <g stroke="#ffffff" stroke-width="1" opacity="0.14">
+    <path d="M-12 60 C 44 18, 96 14, 154 44 S 230 82, 276 42"/>
+    <path d="M-24 188 C 20 150, 94 150, 156 182 S 232 220, 284 176"/>
+  </g>
+  <g fill="#ffffff" opacity="0.08">
+    <circle cx="28" cy="24" r="2.2"/>
+    <circle cx="112" cy="72" r="1.8"/>
+    <circle cx="208" cy="36" r="2"/>
+    <circle cx="76" cy="154" r="2.2"/>
+    <circle cx="172" cy="202" r="1.8"/>
+  </g>
+</svg>
