@@ -429,6 +429,124 @@ fn resolve_overlap_along_axis(
     }
 }
 
+#[inline]
+fn depenetrate_static_horizontal_overlaps(
+    p: &mut PlayerPose,
+    prev_x: f32,
+    prev_z: f32,
+    body_h: f32,
+) {
+    let r = FOOT_RADIUS_XZ;
+    let max_iterations = 8;
+    let mut overlapped_after_pass = false;
+
+    for _ in 0..max_iterations {
+        let mut changed = false;
+        overlapped_after_pass = false;
+        let x0 = p.x - r - COLLISION_EPS;
+        let x1 = p.x + r + COLLISION_EPS;
+        let z0 = p.z - r - COLLISION_EPS;
+        let z1 = p.z + r + COLLISION_EPS;
+        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
+            for (mn, mx) in *shard {
+                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
+                    continue;
+                }
+                if !swept_body_vertical_overlap(p.y, p.y, body_h, mn, mx) {
+                    continue;
+                }
+                if ignore_horizontal_block(p.y, mx[1]) {
+                    continue;
+                }
+                let body_min_x = p.x - r;
+                let body_max_x = p.x + r;
+                let body_min_z = p.z - r;
+                let body_max_z = p.z + r;
+                let overlap_x = (body_max_x - mn[0]).min(mx[0] - body_min_x);
+                let overlap_z = (body_max_z - mn[2]).min(mx[2] - body_min_z);
+                if overlap_x <= 0.0 || overlap_z <= 0.0 {
+                    continue;
+                }
+                overlapped_after_pass = true;
+                if overlap_x <= overlap_z {
+                    let next_x = resolve_overlap_along_axis(p.x, prev_x, r, mn[0], mx[0]);
+                    if next_x != p.x {
+                        if next_x < p.x && p.vel_x > 0.0 {
+                            p.vel_x = 0.0;
+                        }
+                        if next_x > p.x && p.vel_x < 0.0 {
+                            p.vel_x = 0.0;
+                        }
+                        p.x = next_x;
+                        changed = true;
+                    }
+                } else {
+                    let next_z = resolve_overlap_along_axis(p.z, prev_z, r, mn[2], mx[2]);
+                    if next_z != p.z {
+                        if next_z < p.z && p.vel_z > 0.0 {
+                            p.vel_z = 0.0;
+                        }
+                        if next_z > p.z && p.vel_z < 0.0 {
+                            p.vel_z = 0.0;
+                        }
+                        p.z = next_z;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    if !overlapped_after_pass {
+        return;
+    }
+
+    let x0 = p.x - r - COLLISION_EPS;
+    let x1 = p.x + r + COLLISION_EPS;
+    let z0 = p.z - r - COLLISION_EPS;
+    let z1 = p.z + r + COLLISION_EPS;
+    let mut still_overlapping = false;
+    for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
+        for (mn, mx) in *shard {
+            if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
+                continue;
+            }
+            if !swept_body_vertical_overlap(p.y, p.y, body_h, mn, mx) {
+                continue;
+            }
+            if ignore_horizontal_block(p.y, mx[1]) {
+                continue;
+            }
+            let body_min_x = p.x - r;
+            let body_max_x = p.x + r;
+            let body_min_z = p.z - r;
+            let body_max_z = p.z + r;
+            if body_max_x <= mn[0] || body_min_x >= mx[0] {
+                continue;
+            }
+            if body_max_z <= mn[2] || body_min_z >= mx[2] {
+                continue;
+            }
+            still_overlapping = true;
+            break;
+        }
+        if still_overlapping {
+            break;
+        }
+    }
+    if !still_overlapping {
+        return;
+    }
+
+    p.x = prev_x;
+    p.z = prev_z;
+    p.vel_x = 0.0;
+    p.vel_z = 0.0;
+}
+
 fn resolve_player_static_horizontal_collision_step(
     p: &mut PlayerPose,
     prev_x: f32,
@@ -534,6 +652,8 @@ fn resolve_player_static_collisions(
         step_prev_x = p.x;
         step_prev_z = p.z;
     }
+
+    depenetrate_static_horizontal_overlaps(p, prev_x, prev_z, body_h);
 
     if p.vel_y > 0.0 {
         let r = FOOT_RADIUS_XZ;

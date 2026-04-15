@@ -106,6 +106,92 @@ function resolveOverlapAlongAxis(
     : Math.max(resolvedPos, maxFace + radius + COLLISION_EPS);
 }
 
+function depenetrateHorizontalOverlaps(
+  pos: Vector3,
+  prevPos: Readonly<Vector3>,
+  vel: Vector3,
+  height: number,
+  stepUpMargin: number,
+  staticIndex: CollisionSpatialIndex,
+  dynamicSource: DynamicCollisionAabbSource | undefined,
+): void {
+  const radius = FP_PLAYER_COLLISION_RADIUS_M;
+  const maxIterations = 8;
+  let overlappedAfterPass = false;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    let changed = false;
+    overlappedAfterPass = false;
+    const x0 = pos.x - radius - COLLISION_EPS;
+    const x1 = pos.x + radius + COLLISION_EPS;
+    const z0 = pos.z - radius - COLLISION_EPS;
+    const z1 = pos.z + radius + COLLISION_EPS;
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
+      bodyX: pos.x,
+      bodyFeetY: pos.y,
+      bodyZ: pos.z,
+    }, (b) => {
+      if (!verticalOverlap(pos.y, height, b)) return;
+      if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
+      const bodyMinX = pos.x - radius;
+      const bodyMaxX = pos.x + radius;
+      const bodyMinZ = pos.z - radius;
+      const bodyMaxZ = pos.z + radius;
+      const overlapX = Math.min(bodyMaxX - b.min[0], b.max[0] - bodyMinX);
+      const overlapZ = Math.min(bodyMaxZ - b.min[2], b.max[2] - bodyMinZ);
+      if (overlapX <= 0 || overlapZ <= 0) return;
+      overlappedAfterPass = true;
+      if (overlapX <= overlapZ) {
+        const nextX = resolveOverlapAlongAxis(pos.x, prevPos.x, radius, b.min[0], b.max[0]);
+        if (nextX !== pos.x) {
+          if (nextX < pos.x && vel.x > 0) vel.x = 0;
+          if (nextX > pos.x && vel.x < 0) vel.x = 0;
+          pos.x = nextX;
+          changed = true;
+        }
+      } else {
+        const nextZ = resolveOverlapAlongAxis(pos.z, prevPos.z, radius, b.min[2], b.max[2]);
+        if (nextZ !== pos.z) {
+          if (nextZ < pos.z && vel.z > 0) vel.z = 0;
+          if (nextZ > pos.z && vel.z < 0) vel.z = 0;
+          pos.z = nextZ;
+          changed = true;
+        }
+      }
+    });
+    if (!changed) break;
+  }
+
+  if (!overlappedAfterPass) return;
+
+  const x0 = pos.x - radius - COLLISION_EPS;
+  const x1 = pos.x + radius + COLLISION_EPS;
+  const z0 = pos.z - radius - COLLISION_EPS;
+  const z1 = pos.z + radius + COLLISION_EPS;
+  let stillOverlapping = false;
+  visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
+    bodyX: pos.x,
+    bodyFeetY: pos.y,
+    bodyZ: pos.z,
+  }, (b) => {
+    if (!verticalOverlap(pos.y, height, b)) return;
+    if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
+    const bodyMinX = pos.x - radius;
+    const bodyMaxX = pos.x + radius;
+    const bodyMinZ = pos.z - radius;
+    const bodyMaxZ = pos.z + radius;
+    if (bodyMaxX <= b.min[0] || bodyMinX >= b.max[0]) return;
+    if (bodyMaxZ <= b.min[2] || bodyMinZ >= b.max[2]) return;
+    stillOverlapping = true;
+  });
+  if (!stillOverlapping) return;
+
+  pos.x = prevPos.x;
+  pos.z = prevPos.z;
+  vel.x = 0;
+  vel.z = 0;
+}
+
 function resolveHorizontalCollisionStep(
   pos: Vector3,
   prevX: number,
@@ -225,6 +311,16 @@ export function resolvePlayerCollisions(
     stepPrevX = pos.x;
     stepPrevZ = pos.z;
   }
+
+  depenetrateHorizontalOverlaps(
+    pos,
+    prevPos,
+    vel,
+    height,
+    stepUpMargin,
+    staticIndex,
+    dynamicSource,
+  );
 
   const resolveCeiling = () => {
     const radius = FP_PLAYER_COLLISION_RADIUS_M;

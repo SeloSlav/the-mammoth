@@ -17,7 +17,8 @@ import {
   type FpLocomotionWalkOptions,
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { parseFloorDoc } from "@the-mammoth/world";
+import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
+import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
@@ -142,6 +143,9 @@ export async function mountFpSession(
     sampleWalkTopBase,
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
+  buildingRoot.updateMatrixWorld(true);
+  const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+  const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -263,7 +267,7 @@ export async function mountFpSession(
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
     camera.getWorldDirection(_floorVisCamDir);
-    const band = fpElevators.getFloorVisibilityBand(
+    let band = fpElevators.getFloorVisibilityBand(
       pos.x,
       pos.y,
       pos.z,
@@ -271,6 +275,20 @@ export async function mountFpSession(
       _floorVisCamWorld.y,
       _floorVisCamDir.y,
     );
+    if (
+      fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: _floorVisCamWorld.x,
+        cameraZ: _floorVisCamWorld.z,
+        viewDirX: _floorVisCamDir.x,
+        viewDirZ: _floorVisCamDir.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+      })
+    ) {
+      band = { lo: 1, hi: maxBuildingLevel };
+    }
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
     _lastBandHi = band.hi;

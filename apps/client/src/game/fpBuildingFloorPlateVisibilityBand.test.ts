@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fpBuildingFloorPlateVisibilityBand } from "./fpBuildingFloorPlateVisibilityBand.js";
+import {
+  fpBuildingExteriorViewShouldRevealFullStack,
+  fpBuildingFloorPlateVisibilityBand,
+} from "./fpBuildingFloorPlateVisibilityBand.js";
 
 describe("fpBuildingFloorPlateVisibilityBand", () => {
   it("uses full stack when revealFullStack is true", () => {
@@ -61,5 +64,50 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: true,
       }),
     ).toEqual({ lo: 1, hi: 1 });
+  });
+
+  it("reveals the full stack when outside the footprint and facing the tower", () => {
+    expect(
+      fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: -8,
+        cameraZ: 0,
+        viewDirX: 1,
+        viewDirZ: 0.1,
+        boundsMinX: -2,
+        boundsMaxX: 2,
+        boundsMinZ: -3,
+        boundsMaxZ: 3,
+      }),
+    ).toBe(true);
+  });
+
+  it("reveals the full stack for nearby peripheral exterior views", () => {
+    expect(
+      fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: -8,
+        cameraZ: 0,
+        viewDirX: 0,
+        viewDirZ: 1,
+        boundsMinX: -2,
+        boundsMaxX: 2,
+        boundsMinZ: -3,
+        boundsMaxZ: 3,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps the optimization when far outside and looking away from the tower", () => {
+    expect(
+      fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: -24,
+        cameraZ: 0,
+        viewDirX: -1,
+        viewDirZ: 0,
+        boundsMinX: -2,
+        boundsMaxX: 2,
+        boundsMinZ: -3,
+        boundsMaxZ: 3,
+      }),
+    ).toBe(false);
   });
 });

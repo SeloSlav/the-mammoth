@@ -112,6 +112,122 @@ fn resolve_overlap_along_axis(
     }
 }
 
+fn depenetrate_generated_horizontal_overlaps(
+    ctx: &ReducerContext,
+    p: &mut PlayerPose,
+    prev_x: f32,
+    prev_z: f32,
+    body_h: f32,
+    aabbs: &mut Vec<CollisionAabb>,
+) {
+    let r = super::FOOT_R;
+    let max_iterations = 8;
+    let mut overlapped_after_pass = false;
+
+    for _ in 0..max_iterations {
+        let mut changed = false;
+        overlapped_after_pass = false;
+        aabbs.clear();
+        collect_generated_collision_aabbs(
+            ctx,
+            p.x - r - super::COLLISION_EPS,
+            p.x + r + super::COLLISION_EPS,
+            p.z - r - super::COLLISION_EPS,
+            p.z + r + super::COLLISION_EPS,
+            Some((p.x, p.y, p.z)),
+            aabbs,
+        );
+        for aabb in aabbs.iter() {
+            if !swept_body_vertical_overlap(p.y, p.y, body_h, aabb)
+                || ignore_horizontal_block(p.y, aabb.max[1])
+            {
+                continue;
+            }
+            let body_min_x = p.x - r;
+            let body_max_x = p.x + r;
+            let body_min_z = p.z - r;
+            let body_max_z = p.z + r;
+            let overlap_x = (body_max_x - aabb.min[0]).min(aabb.max[0] - body_min_x);
+            let overlap_z = (body_max_z - aabb.min[2]).min(aabb.max[2] - body_min_z);
+            if overlap_x <= 0.0 || overlap_z <= 0.0 {
+                continue;
+            }
+            overlapped_after_pass = true;
+            if overlap_x <= overlap_z {
+                let next_x = resolve_overlap_along_axis(p.x, prev_x, r, aabb.min[0], aabb.max[0]);
+                if next_x != p.x {
+                    if next_x < p.x && p.vel_x > 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                    if next_x > p.x && p.vel_x < 0.0 {
+                        p.vel_x = 0.0;
+                    }
+                    p.x = next_x;
+                    changed = true;
+                }
+            } else {
+                let next_z = resolve_overlap_along_axis(p.z, prev_z, r, aabb.min[2], aabb.max[2]);
+                if next_z != p.z {
+                    if next_z < p.z && p.vel_z > 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                    if next_z > p.z && p.vel_z < 0.0 {
+                        p.vel_z = 0.0;
+                    }
+                    p.z = next_z;
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    if !overlapped_after_pass {
+        return;
+    }
+
+    aabbs.clear();
+    collect_generated_collision_aabbs(
+        ctx,
+        p.x - r - super::COLLISION_EPS,
+        p.x + r + super::COLLISION_EPS,
+        p.z - r - super::COLLISION_EPS,
+        p.z + r + super::COLLISION_EPS,
+        Some((p.x, p.y, p.z)),
+        aabbs,
+    );
+    let mut still_overlapping = false;
+    for aabb in aabbs.iter() {
+        if !swept_body_vertical_overlap(p.y, p.y, body_h, aabb)
+            || ignore_horizontal_block(p.y, aabb.max[1])
+        {
+            continue;
+        }
+        let body_min_x = p.x - r;
+        let body_max_x = p.x + r;
+        let body_min_z = p.z - r;
+        let body_max_z = p.z + r;
+        if body_max_x <= aabb.min[0] || body_min_x >= aabb.max[0] {
+            continue;
+        }
+        if body_max_z <= aabb.min[2] || body_min_z >= aabb.max[2] {
+            continue;
+        }
+        still_overlapping = true;
+        break;
+    }
+    if !still_overlapping {
+        return;
+    }
+
+    p.x = prev_x;
+    p.z = prev_z;
+    p.vel_x = 0.0;
+    p.vel_z = 0.0;
+}
+
 #[inline]
 fn suppress_moving_cab_generated_collision_for_pose(
     px: f32,
@@ -626,6 +742,8 @@ pub fn resolve_player_generated_collision_aabbs(
         step_prev_x = p.x;
         step_prev_z = p.z;
     }
+
+    depenetrate_generated_horizontal_overlaps(ctx, p, prev_x, prev_z, body_h, &mut aabbs);
 
     if p.vel_y > 0.0 {
         let r = super::FOOT_R;
