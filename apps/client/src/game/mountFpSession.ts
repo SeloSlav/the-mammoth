@@ -219,6 +219,7 @@ export async function mountFpSession(
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
   const _floorVisCamWorld = new THREE.Vector3();
+  const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
 
@@ -261,12 +262,14 @@ export async function mountFpSession(
 
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
+    camera.getWorldDirection(_floorVisCamDir);
     const band = fpElevators.getFloorVisibilityBand(
       pos.x,
       pos.y,
       pos.z,
       nowMs,
       _floorVisCamWorld.y,
+      _floorVisCamDir.y,
     );
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
@@ -1204,7 +1207,9 @@ export async function mountFpSession(
     const _t_presentEnd = performance.now();
 
     if (conn.identity) {
-      const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(getInteractionPos(), camera);
+      // The HUD prompt should match the player's local first-person view, not the more
+      // authority-biased interaction pose that can lag behind a moving elevator rider.
+      const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(pos, camera);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",

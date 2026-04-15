@@ -177,6 +177,19 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
       emit(plateX - hx, roofY0, plateZ - hz, plateX + hx, roofY1, plateZ + hz);
     }
 
+    // Cab walls (3 non-door faces).  These are the primary containment for
+    // riders — they move with the cab and are always emitted regardless of
+    // door state, moving phase, or suppression.
+    {
+      const wt = 0.11;
+      const y0w = cabFloorY - 0.05;
+      const y1w = cabFloorY + innerH + 0.1;
+      if (layout.doorFace !== "e") emit(plateX + hx, y0w, plateZ - hz, plateX + hx + wt, y1w, plateZ + hz);
+      if (layout.doorFace !== "w") emit(plateX - hx - wt, y0w, plateZ - hz, plateX - hx, y1w, plateZ + hz);
+      if (layout.doorFace !== "n") emit(plateX - hx, y0w, plateZ + hz, plateX + hx, y1w, plateZ + hz + wt);
+      if (layout.doorFace !== "s") emit(plateX - hx, y0w, plateZ - hz - wt, plateX + hx, y1w, plateZ - hz);
+    }
+
     const cabDoorClosed = cabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN;
     const cabCollisionY0 = cabFloorY - 0.22;
     const cabCollisionY1 = cabFloorY + innerH + 0.38;

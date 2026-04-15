@@ -39,6 +39,11 @@ import {
 
 type DoorFace = ElevatorDoorFace;
 
+/** Hail panel origin offset along the door normal from hoistway outer half-extent (`sx/sz`). */
+const LANDING_HAIL_FACE_OUT_M = 0.14;
+/** Level 1 (PR): exterior trim sits slightly inset vs `sx/sz`; smaller offset matches upper-landing flush. */
+const LANDING_HAIL_FACE_OUT_GROUND_M = -0.025;
+
 function buildLandingHailIconTexture(): THREE.CanvasTexture {
   const size = 128;
   const canvas = document.createElement("canvas");
@@ -499,10 +504,9 @@ export class FpElevatorShaftVisual {
       this.hailBtnIconMat,
     );
     const y = 1.34;
-    // Distance outward from inner gameplay half-extent to the button group origin.
     // Button cylinder center is 0.045 from group origin; half-height is 0.0225,
-    // so the face sits at faceOut + 0.0675 from hx, flush with the visual wall.
-    const faceOut = 0.14;
+    // so the face sits at faceOut + 0.0675 from hx.
+    const faceOut = level === 1 ? LANDING_HAIL_FACE_OUT_GROUND_M : LANDING_HAIL_FACE_OUT_M;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);

@@ -8,6 +8,11 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   /** 1-based storey from feet Y (see {@link estimateStoreyFromFeetY}). */
   playerStorey: number;
   revealFullStack: boolean;
+  /**
+   * Highest storey the camera is actively looking toward; only widens the upper bound so exterior
+   * facades above the player do not pop out while looking up from lower levels.
+   */
+  upperTargetStorey?: number;
 }): { lo: number; hi: number } {
   const maxLevel = Math.max(1, input.maxLevel);
   if (input.revealFullStack) {
@@ -17,6 +22,9 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   const halfSpan = 4;
   let lo = input.playerStorey - halfSpan;
   let hi = input.playerStorey + halfSpan;
+  if (typeof input.upperTargetStorey === "number" && Number.isFinite(input.upperTargetStorey)) {
+    hi = Math.max(hi, Math.ceil(input.upperTargetStorey) + 2);
+  }
   lo = Math.max(1, Math.min(maxLevel, lo));
   hi = Math.max(1, Math.min(maxLevel, hi));
   if (lo > hi) [lo, hi] = [hi, lo];

@@ -247,12 +247,12 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       landingByRowKey: new Map([[landing.rowKey, landing]]),
       feetYForLayout,
     };
+    const outerHx = layout.sx * 0.5;
     const outerHz = layout.sz * 0.5;
     const plateZ = 0;
     const zMid = plateZ;
-    const x0 = -2;
-    const x1 = 2;
-    const slabBand = collectHits(auth, x0, x1, zMid - outerHz, zMid + outerHz);
+    // Query only the door-face side (+X for "e") to avoid picking up cab back wall AABBs.
+    const slabBand = collectHits(auth, outerHx - 0.5, outerHx + 1, zMid - outerHz, zMid + outerHz);
     const wallSlabs = slabBand.filter(
       (b) => b.max[1] - b.min[1] > 1.5 && b.max[0] - b.min[0] < 1.5,
     );

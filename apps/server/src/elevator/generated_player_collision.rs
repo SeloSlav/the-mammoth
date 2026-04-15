@@ -166,6 +166,34 @@ fn collect_generated_collision_aabbs(
         );
     }
 
+    // Cab walls (3 non-door faces, always): primary containment for riders.
+    for car in ctx.db.elevator_car().iter() {
+        let wt: f32 = 0.11;
+        let y0w = car.cab_floor_y - 0.05;
+        let y1w = car.cab_floor_y + iy + 0.1;
+        let face = door_face_from_u8(car.door_face);
+        if face != DoorFace::E {
+            push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                [car.plate_x + hx, y0w, car.plate_z - hz],
+                [car.plate_x + hx + wt, y1w, car.plate_z + hz]);
+        }
+        if face != DoorFace::W {
+            push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                [car.plate_x - hx - wt, y0w, car.plate_z - hz],
+                [car.plate_x - hx, y1w, car.plate_z + hz]);
+        }
+        if face != DoorFace::N {
+            push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                [car.plate_x - hx, y0w, car.plate_z + hz],
+                [car.plate_x + hx, y1w, car.plate_z + hz + wt]);
+        }
+        if face != DoorFace::S {
+            push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                [car.plate_x - hx, y0w, car.plate_z - hz - wt],
+                [car.plate_x + hx, y1w, car.plate_z - hz]);
+        }
+    }
+
     for landing in ctx.db.elevator_landing_door().iter() {
         let Some(spec) = spec_for_key(&landing.shaft_key) else {
             continue;

@@ -42,6 +42,17 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 5 });
   });
 
+  it("extends the upper band toward the storey the camera is looking at", () => {
+    expect(
+      fpBuildingFloorPlateVisibilityBand({
+        maxLevel: 19,
+        playerStorey: 1,
+        revealFullStack: false,
+        upperTargetStorey: 8,
+      }),
+    ).toEqual({ lo: 1, hi: 10 });
+  });
+
   it("normalizes maxLevel when below 1", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({

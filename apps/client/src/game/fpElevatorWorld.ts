@@ -146,6 +146,8 @@ export type MountFpElevatorWorldResult = {
     nowMs: number,
     /** Camera / eye world Y — widens visible storeys above the feet when looking up. */
     bandEyeWorldY?: number,
+    /** Camera forward Y — extends the upper bound toward storeys above the player. */
+    bandViewDirY?: number,
   ): {
     lo: number;
     hi: number;
@@ -509,10 +511,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         const inAuthoritativeCab =
           Number.isFinite(cabY) &&
           fpElevPlayerInsideCabAuthoritativePlateLocal(lx, lz, py, cabY, vis.inner);
+        const inHudCab =
+          Number.isFinite(cabY) && fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabY, vis.inner);
         const nearDoor = fpElevLandingExteriorDoorNearWhileShaftAuthorized({
           rawNear: rawNearDoor,
           phaseMoving,
           inAuthoritativeCab,
+          inHudCab,
         });
         const inCabDocked =
           Number.isFinite(cabY) &&
@@ -796,6 +801,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     pz: number,
     nowMs: number,
     bandEyeWorldY?: number,
+    bandViewDirY?: number,
   ) => {
     const sFeet = estimateStoreyFromFeetY(py, storeyOpts);
     const sEye =
@@ -803,6 +809,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         ? sFeet
         : estimateStoreyFromFeetY(bandEyeWorldY, storeyOpts);
     const playerStorey = Math.max(sFeet, sEye);
+    const upperLookAheadStorey =
+      bandEyeWorldY === undefined
+        ? undefined
+        : estimateStoreyFromFeetY(
+            bandEyeWorldY + Math.max(0, bandViewDirY ?? 0) * floorSpacingM * 20,
+            storeyOpts,
+          );
     let revealFullStack = false;
     for (const vis of visuals.values()) {
       if (
@@ -844,6 +857,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       maxLevel,
       playerStorey,
       revealFullStack,
+      upperTargetStorey: upperLookAheadStorey,
     });
   };
 

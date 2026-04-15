@@ -239,10 +239,13 @@ export function fpElevLandingExteriorDoorNearWhileShaftAuthorized(opts: {
   rawNear: boolean;
   phaseMoving: boolean;
   inAuthoritativeCab: boolean;
+  inHudCab: boolean;
 }): boolean {
   if (!opts.rawNear) return false;
   if (!opts.phaseMoving) return true;
-  return !opts.inAuthoritativeCab;
+  // While the car is traveling, suppress the corridor-door affordance for any pose that still
+  // reads as "inside the cab" to the player, even if the stricter authoritative plate test misses.
+  return !(opts.inAuthoritativeCab || opts.inHudCab);
 }
 
 /**

@@ -74,6 +74,7 @@ describe("fpElevLandingExteriorDoorNearWhileShaftAuthorized", () => {
         rawNear: true,
         phaseMoving: false,
         inAuthoritativeCab: true,
+        inHudCab: true,
       }),
     ).toBe(true);
   });
@@ -84,6 +85,7 @@ describe("fpElevLandingExteriorDoorNearWhileShaftAuthorized", () => {
         rawNear: true,
         phaseMoving: true,
         inAuthoritativeCab: false,
+        inHudCab: false,
       }),
     ).toBe(true);
   });
@@ -94,6 +96,18 @@ describe("fpElevLandingExteriorDoorNearWhileShaftAuthorized", () => {
         rawNear: true,
         phaseMoving: true,
         inAuthoritativeCab: true,
+        inHudCab: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks raw near while moving when only the broader HUD cab volume contains the pose", () => {
+    expect(
+      fpElevLandingExteriorDoorNearWhileShaftAuthorized({
+        rawNear: true,
+        phaseMoving: true,
+        inAuthoritativeCab: false,
+        inHudCab: true,
       }),
     ).toBe(false);
   });
