@@ -9,6 +9,7 @@ Run from the **repository root** after you change any of:
 - `content/building/mammoth.json` (including `worldOrigin` or floor refs)
 - Any floor document under `content/building/floors/*.json`
 - Any floor override document under `content/building/floor-overrides/*.json`
+- Shared elevator collision inputs under `content/elevator/*.json` such as `cab.json`, `landing_kit.json`, or `stairwell.json`
 - Walk-surface or floor-mesh rules in `@the-mammoth/world` (for example `packages/world/src/walkSurfaceAABBs.ts` or the floor builder pipeline)
 
 ```bash

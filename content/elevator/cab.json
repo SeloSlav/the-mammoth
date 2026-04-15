@@ -3,9 +3,45 @@
   "version": 1,
   "displayName": "Default elevator cab",
   "materials": {
-    "wall": { "colorHex": "0x6a6f78", "roughness": 0.72, "metalness": 0.08 },
-    "floor": { "colorHex": "0x4d5258", "roughness": 0.85, "metalness": 0.04 },
-    "door": { "colorHex": "0x8a929e", "roughness": 0.45, "metalness": 0.35 },
-    "ceiling": { "colorHex": "0x6a6f78", "roughness": 0.72, "metalness": 0.08 }
+    "wall": {
+      "colorHex": "0x6a6f78",
+      "roughness": 0.72,
+      "metalness": 0.08
+    },
+    "floor": {
+      "colorHex": "0x4d5258",
+      "roughness": 0.85,
+      "metalness": 0.04
+    },
+    "door": {
+      "colorHex": "0x8a929e",
+      "roughness": 0.45,
+      "metalness": 0.35
+    },
+    "ceiling": {
+      "colorHex": "0x6a6f78",
+      "roughness": 0.72,
+      "metalness": 0.08
+    }
+  },
+  "partTransforms": {
+    "cab_floor": {
+      "position": [
+        0,
+        0.20120384440433833,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
   }
 }

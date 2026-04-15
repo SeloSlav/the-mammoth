@@ -11,7 +11,7 @@ The level editor (`apps/editor`) is organized around three **workspaces** — no
 ## Hot reload & collision
 
 - Saving authored JSON with `EDITOR_SAVE=1` updates `content/**`.
-- Shared elevator defs are included in the world collision source fingerprint (see `scripts/worldCollisionArtifacts.ts`); after changing cab/landing JSON, run the editor’s **Save + rebuild collision** (or `pnpm content:gen-walk-aabbs`) so server walk/collision artifacts stay aligned.
+- Shared elevator defs are included in the world collision source fingerprint (see `scripts/worldCollisionArtifacts.ts`); after changing cab, landing, or stairwell JSON, run `pnpm content:gen-walk-aabbs` from the repo root so server walk/collision artifacts stay aligned. The editor reports stale vs in-sync status, but does not trigger the full rebuild.
 - Gameplay shaft dimensions and server elevator logic remain authoritative in `apps/server` and client constants; `ElevatorCabDef` / `LandingKitDef` are **appearance-first**.
 
 ## Implementation map

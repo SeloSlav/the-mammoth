@@ -2,16 +2,26 @@ import * as THREE from "three";
 
 export type EditorSceneLighting = {
   hemi: THREE.HemisphereLight;
+  fill: THREE.AmbientLight;
   dir: THREE.DirectionalLight;
   grid: THREE.GridHelper;
 };
 
 export function addEditorSceneLighting(scene: THREE.Scene): EditorSceneLighting {
-  const hemi = new THREE.HemisphereLight(0xb8c4ff, 0x2a2a30, 0.55);
+  const hemi = new THREE.HemisphereLight(0xf2f6fb, 0xd0d8e2, 0.88);
   scene.add(hemi);
 
-  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-  dir.position.set(40, 80, 30);
+  const fill = new THREE.AmbientLight(0xe8eef4, 0.14);
+  scene.add(fill);
+
+  const sunDir = new THREE.Vector3();
+  sunDir.setFromSphericalCoords(
+    1,
+    THREE.MathUtils.degToRad(90 - 58),
+    THREE.MathUtils.degToRad(218),
+  );
+  const dir = new THREE.DirectionalLight(0xfff8f2, 1.42);
+  dir.position.copy(sunDir.multiplyScalar(120));
   dir.castShadow = true;
   dir.shadow.mapSize.set(2048, 2048);
   dir.shadow.camera.near = 0.5;
@@ -22,9 +32,9 @@ export function addEditorSceneLighting(scene: THREE.Scene): EditorSceneLighting 
   dir.shadow.camera.bottom = -120;
   scene.add(dir);
 
-  const grid = new THREE.GridHelper(400, 80, 0x444455, 0x33333d);
+  const grid = new THREE.GridHelper(400, 80, 0x6b7480, 0x8a949f);
   grid.position.y = 0;
   scene.add(grid);
 
-  return { hemi, dir, grid };
+  return { hemi, fill, dir, grid };
 }

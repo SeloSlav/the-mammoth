@@ -18,6 +18,8 @@ function staticMime(filePath: string): string {
   if (filePath.endsWith(".gltf")) return "model/gltf+json";
   if (filePath.endsWith(".png")) return "image/png";
   if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
+  if (filePath.endsWith(".webp")) return "image/webp";
+  if (filePath.endsWith(".svg")) return "image/svg+xml";
   if (filePath.endsWith(".wav")) return "audio/wav";
   return "application/octet-stream";
 }

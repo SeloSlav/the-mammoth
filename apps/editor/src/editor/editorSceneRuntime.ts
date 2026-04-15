@@ -81,12 +81,16 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   const ORBIT_MAX_DISTANCE = 40;
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a22);
+  scene.background = new THREE.Color(0xe8edf4);
+  scene.fog = new THREE.Fog(0xe4eaf0, 95, 920);
 
   const camera = createFPCamera();
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -697,6 +701,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   type EditorStoreSnapshot = ReturnType<typeof useEditorStore.getState>;
   const isFpMode = (mode: EditorStoreSnapshot["mode"]) =>
     mode === "fp_viewmodel" || mode === "fp_consumable";
+  const isSharedPreviewMode = (mode: EditorStoreSnapshot["mode"]) =>
+    mode === "cab" || mode === "landing_preview" || mode === "stairwell_preview";
   const getFpAuthorSubjectKind = (s: EditorStoreSnapshot) =>
     s.fpAuthorSubjectKind === "consumable" ? "consumable" : "weapon";
   const isWeaponFpAuthoringState = (s: EditorStoreSnapshot) =>
@@ -931,6 +937,14 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       MIDDLE: MOUSE.DOLLY,
       RIGHT: MOUSE.PAN,
     };
+  }
+
+  function shouldUseEditorHdri(st: EditorStoreSnapshot): boolean {
+    return !isFpMode(st.mode) && !isSharedPreviewMode(st.mode) && st.useHdriEnvironment;
+  }
+
+  function shouldShowEditorGrid(st: EditorStoreSnapshot): boolean {
+    return !isFpMode(st.mode) && !isSharedPreviewMode(st.mode);
   }
 
   /**
@@ -1581,8 +1595,13 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           if (o instanceof THREE.Mesh) o.castShadow = s.shadowsEnabled;
         });
       }
-      if (s.useHdriEnvironment !== prev.useHdriEnvironment) {
-        applyEnvironment(s.useHdriEnvironment);
+      if (
+        s.useHdriEnvironment !== prev.useHdriEnvironment ||
+        s.mode !== prev.mode ||
+        s.workspace !== prev.workspace
+      ) {
+        applyEnvironment(shouldUseEditorHdri(s));
+        grid.visible = shouldShowEditorGrid(s);
       }
       prev = s;
     } finally {
@@ -1610,10 +1629,11 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         applyLevelEditorMouseButtons(st);
       }
     }
+    grid.visible = shouldShowEditorGrid(st);
   }
 
   rebuildStructural();
-  applyEnvironment(useEditorStore.getState().useHdriEnvironment);
+  applyEnvironment(shouldUseEditorHdri(useEditorStore.getState()));
   syncTransformAttachment();
 
   const onPointerDown = (ev: PointerEvent) => {

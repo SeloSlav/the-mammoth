@@ -1,6 +1,11 @@
 {
   "id": "default_stair_well",
   "version": 1,
+  "materials": {
+    "tread": {
+      "mapUrl": "/static/materials/stairwell/ribbed-stair-tread.svg"
+    }
+  },
   "partTransforms": {
     "stair_flight_lower": {
       "position": [
@@ -132,8 +137,8 @@
     }
   },
   "entryOpening": {
-    "face": "w",
-    "tangentOffsetAlongWallM": -5.915000000000001,
+    "face": "s",
+    "tangentOffsetAlongWallM": 0.011472402689650885,
     "widthM": 1.86,
     "heightM": 2.2,
     "centerYM": 0.015284097180345735

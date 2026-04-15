@@ -1,8 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import os from "node:os";
 import path from "node:path";
 import type { Connect } from "vite";
 import {
@@ -52,10 +49,7 @@ const PREFAB_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
 const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
 const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
-const execFileAsync = promisify(execFile);
 const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
-
-let rebuildInFlight = false;
 
 export type EditorDevMiddlewareOptions = {
   /** Vite `config.base` (e.g. `/` or `/app/`); pathname is stripped before routing. */
@@ -282,9 +276,6 @@ export function editorDevMiddleware(
       if (path === "/__editor/collision-artifacts-status" && req.method === "GET") {
         return void (await handleCollisionArtifactsStatus(repoRoot, res));
       }
-      if (path === "/__editor/rebuild-server-collision" && req.method === "POST") {
-        return void (await handleRebuildServerCollision(repoRoot, res));
-      }
       if (path === "/__editor/save-floor" && req.method === "POST") {
         return void (await handleSaveFloor(repoRoot, req, res, next));
       }
@@ -470,40 +461,6 @@ async function handleCollisionArtifactsStatus(
   res: ServerResponse,
 ): Promise<void> {
   sendJson(res, await computeCollisionArtifactsStatus(repoRoot));
-}
-
-async function handleRebuildServerCollision(
-  repoRoot: string,
-  res: ServerResponse,
-): Promise<void> {
-  if (!ensureEditorSaveEnabled(res)) return;
-  if (rebuildInFlight) {
-    sendJson(
-      res,
-      { ok: false, message: "Collision rebuild already in progress." },
-      409,
-    );
-    return;
-  }
-  rebuildInFlight = true;
-  try {
-    const execOpts = {
-      cwd: repoRoot,
-      maxBuffer: 8 * 1024 * 1024,
-    } as const;
-    const out =
-      os.platform() === "win32"
-        ? await execFileAsync("cmd.exe", ["/d", "/s", "/c", "pnpm content:gen-walk-aabbs"], execOpts)
-        : await execFileAsync("pnpm", ["content:gen-walk-aabbs"], execOpts);
-    sendJson(res, {
-      ok: true,
-      stdout: out.stdout,
-      stderr: out.stderr,
-      status: await computeCollisionArtifactsStatus(repoRoot),
-    });
-  } finally {
-    rebuildInFlight = false;
-  }
 }
 
 async function handleWeaponAssetSurvey(repoRoot: string, res: ServerResponse): Promise<void> {

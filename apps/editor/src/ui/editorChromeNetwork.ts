@@ -141,12 +141,3 @@ export async function fetchCollisionArtifactsStatus(): Promise<unknown> {
   if (!res.ok) throw new Error(t || res.statusText);
   return JSON.parse(t) as unknown;
 }
-
-export async function postRebuildServerCollision(): Promise<unknown> {
-  const res = await fetch("/__editor/rebuild-server-collision", {
-    method: "POST",
-  });
-  const t = await res.text();
-  if (!res.ok) throw new Error(t || res.statusText);
-  return JSON.parse(t) as unknown;
-}

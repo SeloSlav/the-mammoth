@@ -27,7 +27,6 @@ import {
 import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
 import {
   fetchCollisionArtifactsStatus,
-  postRebuildServerCollision,
   postSaveBuilding,
   postSaveCell,
   postSaveElevatorCab,
@@ -298,24 +297,6 @@ export function EditorChrome() {
     building,
     refreshCollisionStatus,
   ]);
-
-  const onRebuildCollision = useCallback(async () => {
-    setSaveMsg(null);
-    if (dirty) {
-      setSaveMsg("Save to disk first — collision regeneration reads JSON from content/, not unsaved editor state.");
-      return;
-    }
-    try {
-      const out = (await postRebuildServerCollision()) as {
-        stdout?: string;
-        status?: typeof collisionArtifactsStatus;
-      };
-      if (out.status) setCollisionArtifactsStatus(out.status);
-      setSaveMsg(out.stdout?.trim() || "Regenerated server walk/blocker collision from disk.");
-    } catch (e) {
-      setSaveMsg(e instanceof Error ? e.message : String(e));
-    }
-  }, [collisionArtifactsStatus, dirty, setCollisionArtifactsStatus]);
 
   const euler = useMemo(() => {
     if (mode === "cab" && selectedId) {
@@ -855,27 +836,14 @@ export function EditorChrome() {
       ) : null}
 
       <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-        <button
-          type="button"
-          style={rowBtn}
-          disabled={dirty}
-          onClick={() => onRebuildCollision()}
-          title={
-            dirty
-              ? "Save to disk first."
-              : "Runs pnpm content:gen-walk-aabbs: rebuilds walk + blocker AABBs for the whole saved building and elevator defs (not the current selection only)."
-          }
-        >
-          Regenerate from disk (full building)
-        </button>
-      </div>
       <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
-        Uses all JSON under <code style={{ fontSize: 10 }}>content/building</code> and{" "}
-        <code style={{ fontSize: 10 }}>content/elevator</code>. There is no per-room incremental rebuild yet.
+        Full collision regeneration is intentionally script-only. After saving collision-affecting changes, run{" "}
+        <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code> from the repo root.
       </p>
       {dirty ? (
-        <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>Unsaved edits — save before regenerating server collision</p>
+        <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>
+          Unsaved edits — save before running the collision generation script
+        </p>
       ) : null}
       {saveMsg ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>{saveMsg}</p>
@@ -883,7 +851,9 @@ export function EditorChrome() {
       {collisionArtifactsStatus ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8" }}>
           Generated collision vs disk:{" "}
-          {collisionArtifactsStatus.stale ? "stale (save, then regenerate)" : "in sync"}
+          {collisionArtifactsStatus.stale
+            ? "stale (save, then run pnpm content:gen-walk-aabbs)"
+            : "in sync"}
         </p>
       ) : null}
 
