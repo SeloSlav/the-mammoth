@@ -54,4 +54,16 @@ describe("buildWalkSurfaceSpatialIndex", () => {
       sampleWalkGroundTopYWithExteriorGround(aabbs, x, z, probe, fp, {}),
     );
   });
+
+  it("does not let a higher overlapping slab win when only the lower one is step-up reachable from feet", () => {
+    const aabbs: WalkSurfaceAabb[] = [
+      { min: [0, 2.1, 0], max: [2, 2.336, 2] },
+      { min: [0, 3.1, 0], max: [2, 3.348, 2] },
+    ];
+    const probeTopY = 3.386;
+    expect(sampleWalkGroundTopY(aabbs, 1, 1, probeTopY)).toBeCloseTo(2.336, 6);
+
+    const idx = buildWalkSurfaceSpatialIndex(aabbs);
+    expect(idx.sampleTopY(1, 1, probeTopY)).toBeCloseTo(2.336, 6);
+  });
 });

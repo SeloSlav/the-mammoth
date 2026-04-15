@@ -39,7 +39,7 @@ import { assertValidConsumablePresentationJson } from "./consumablePresentationS
  * Mirrors {@link FP_AUTHORABLE_CONSUMABLE_IDS} in consumablePresentationDiskSave.ts —
  * add new consumable IDs here when their GLB assets are committed.
  */
-const FP_CONSUMABLE_AUTHORABLE_IDS: readonly string[] = ["water_bottle", "apple"];
+const FP_CONSUMABLE_AUTHORABLE_IDS: readonly string[] = ["water_bottle", "apple", "rakija"];
 const FP_CONSUMABLE_AUTHORABLE_ID_SET = new Set<string>(FP_CONSUMABLE_AUTHORABLE_IDS);
 
 const FLOOR_DOC_ID_RE = /^floor_[a-z0-9_]+$/;

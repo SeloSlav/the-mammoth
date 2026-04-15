@@ -6,6 +6,9 @@ import {
   type WalkSurfaceXzFootprint,
 } from "./walkSurfaceAABBs.js";
 
+/** Sync with `FP_WALK_PROBE_DY` in `packages/engine/src/fpLocomotion.ts` and server `movement.rs`. */
+const WALK_PROBE_DY_M = 1.05;
+
 export type WalkSurfaceSpatialIndex = {
   readonly sampleTopY: (
     x: number,
@@ -116,6 +119,7 @@ export function buildWalkSurfaceSpatialIndex(
     footR: number,
     stepUpMargin: number,
   ): number => {
+    const feetY = probeTopY - WALK_PROBE_DY_M;
     const fx0 = x - footR;
     const fx1 = x + footR;
     const fz0 = z - footR;
@@ -142,7 +146,7 @@ export function buildWalkSurfaceSpatialIndex(
           const b = aabbs[j]!;
           if (fx1 < b.min[0] || fx0 > b.max[0] || fz1 < b.min[2] || fz0 > b.max[2]) continue;
           const top = b.max[1];
-          if (top <= probeTopY + stepUpMargin) {
+          if (top <= feetY + stepUpMargin) {
             best = Number.isFinite(best) ? Math.max(best, top) : top;
           }
         }

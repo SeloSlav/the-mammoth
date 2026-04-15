@@ -2,10 +2,10 @@ import { getFpConsumableSession } from "./fpConsumableAuthoringBridge.js";
 
 /**
  * Consumable IDs that have (or will have) first-person viewmodel GLBs under
- * `apps/client/public/static/models/consumables/{id}/{id}.glb`.
+ * `apps/client/public/static/models/consumables/{id}.glb`.
  * Kept in lockstep with the GLB files — add the GLB and the catalog entry, then append here.
  */
-export const FP_AUTHORABLE_CONSUMABLE_IDS: readonly string[] = ["water_bottle", "apple"];
+export const FP_AUTHORABLE_CONSUMABLE_IDS: readonly string[] = ["water_bottle", "apple", "rakija"];
 
 export type FpAuthorConsumableId = (typeof FP_AUTHORABLE_CONSUMABLE_IDS)[number];
 
@@ -34,7 +34,11 @@ export async function saveConsumablePresentationFromEditor(
     cache: "no-store",
   });
   if (curRes.ok) {
-    cur = (await curRes.json()) as Record<string, unknown>;
+    try {
+      cur = JSON.parse(await curRes.text()) as Record<string, unknown>;
+    } catch {
+      // Missing files may resolve to the HTML app shell during dev; overwrite with a fresh doc.
+    }
   }
 
   cur.version = 1;

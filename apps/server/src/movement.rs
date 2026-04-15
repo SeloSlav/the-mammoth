@@ -190,6 +190,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
 fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
     let mut best = f32::NAN;
+    let feet_y = probe_top_y - WALK_PROBE_DY;
     let fr = FOOT_RADIUS_XZ;
     let fx0 = x - fr;
     let fx1 = x + fr;
@@ -201,7 +202,7 @@ fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
                 continue;
             }
             let top = mx[1];
-            if top <= probe_top_y + WALK_STEP_UP_MARGIN {
+            if top <= feet_y + WALK_STEP_UP_MARGIN {
                 best = if best.is_nan() {
                     top
                 } else {

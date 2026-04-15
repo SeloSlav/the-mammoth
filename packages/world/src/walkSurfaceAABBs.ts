@@ -33,6 +33,8 @@ export type WalkSurfaceAabb = CollisionAabb;
 
 /** Infinite prototype slab used outside authored geometry (sync with `fpLocomotion` FLOOR_Y). */
 export const WALK_FALLBACK_FLOOR_TOP_Y = 0.35;
+/** Sync with `FP_WALK_PROBE_DY` in `packages/engine/src/fpLocomotion.ts` and server `movement.rs`. */
+const WALK_PROBE_DY_M = 1.05;
 
 function pushBox(
   out: WalkSurfaceAabb[],
@@ -413,6 +415,7 @@ export function sampleWalkGroundTopY(
   /** Defaults match `FP_WALK_*` in `@the-mammoth/engine` / server `movement.rs`. */
   const stepUpMargin = opts?.stepUpMargin ?? 0.82;
   const footR = opts?.footRadiusXZ ?? 0.22;
+  const feetY = probeTopY - WALK_PROBE_DY_M;
   const fx0 = x - footR;
   const fx1 = x + footR;
   const fz0 = z - footR;
@@ -421,7 +424,7 @@ export function sampleWalkGroundTopY(
   for (const b of aabbs) {
     if (fx1 < b.min[0] || fx0 > b.max[0] || fz1 < b.min[2] || fz0 > b.max[2]) continue;
     const top = b.max[1];
-    if (top <= probeTopY + stepUpMargin) {
+    if (top <= feetY + stepUpMargin) {
       best = Number.isFinite(best) ? Math.max(best, top) : top;
     }
   }

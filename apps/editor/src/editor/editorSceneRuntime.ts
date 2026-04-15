@@ -1201,7 +1201,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
               { cache: "no-store" },
             );
             if (!r.ok) return;
-            const doc = (await r.json()) as { firstPerson?: { mount?: unknown } };
+            const doc = JSON.parse(await r.text()) as { firstPerson?: { mount?: unknown } };
             const mount = doc?.firstPerson?.mount;
             if (mount && typeof mount === "object") {
               fpConsumableSession?.applyMount(mount as Parameters<typeof s.applyMount>[0]);

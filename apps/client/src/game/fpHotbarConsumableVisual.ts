@@ -41,7 +41,7 @@ async function loadConsumableMount(defId: string): Promise<ConsumableMount> {
       cache: "no-store",
     });
     if (!response.ok) return DEFAULT_CONSUMABLE_MOUNT;
-    const parsed = (await response.json()) as { firstPerson?: { mount?: unknown } };
+    const parsed = JSON.parse(await response.text()) as { firstPerson?: { mount?: unknown } };
     const mount = parsed?.firstPerson?.mount;
     return {
       positionM: readVec3(mount && typeof mount === "object" ? (mount as Record<string, unknown>).positionM : null, DEFAULT_CONSUMABLE_MOUNT.positionM),
