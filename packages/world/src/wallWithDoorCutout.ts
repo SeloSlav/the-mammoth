@@ -27,9 +27,11 @@ function addBox(
   y: number,
   z: number,
   name: string,
+  opts?: { noCollision?: boolean },
 ): void {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.name = name;
+  if (opts?.noCollision === true) mesh.userData.mammothNoCollision = true;
   mesh.position.set(x, y, z);
   group.add(mesh);
 }
@@ -295,6 +297,7 @@ export function addDoorFrameTrimConstantX(
     yc,
     hz0 + leg * 0.5,
     `${namePrefix}_jamb_lo`,
+    { noCollision: true },
   );
   addBox(
     group,
@@ -306,6 +309,7 @@ export function addDoorFrameTrimConstantX(
     yc,
     hz1 - leg * 0.5,
     `${namePrefix}_jamb_hi`,
+    { noCollision: true },
   );
   addBox(
     group,
@@ -317,6 +321,7 @@ export function addDoorFrameTrimConstantX(
     hy1 - leg * 0.5,
     zc,
     `${namePrefix}_lintel`,
+    { noCollision: true },
   );
 }
 
@@ -351,6 +356,7 @@ export function addDoorFrameTrimConstantZ(
     yc,
     zc,
     `${namePrefix}_jamb_lo`,
+    { noCollision: true },
   );
   addBox(
     group,
@@ -362,6 +368,7 @@ export function addDoorFrameTrimConstantZ(
     yc,
     zc,
     `${namePrefix}_jamb_hi`,
+    { noCollision: true },
   );
   addBox(
     group,
@@ -373,5 +380,6 @@ export function addDoorFrameTrimConstantZ(
     hy1 - leg * 0.5,
     zc,
     `${namePrefix}_lintel`,
+    { noCollision: true },
   );
 }

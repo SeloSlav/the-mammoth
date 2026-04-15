@@ -765,6 +765,12 @@ function addShellFloorCeilingPieces(
   }
 }
 
+function markNewChildrenNoCollision(group: THREE.Group, startIdx: number): void {
+  for (let i = startIdx; i < group.children.length; i++) {
+    group.children[i]!.userData.mammothNoCollision = true;
+  }
+}
+
 function addExteriorWallCladding(
   group: THREE.Group,
   hx: number,
@@ -785,6 +791,7 @@ function addExteriorWallCladding(
   const xMax = vlenX * 0.5;
   for (const face of faces) {
     if (face === "e") {
+      const startIdx = group.children.length;
       addWallConstantXWithHoles(
         group,
         exteriorWallM,
@@ -797,7 +804,9 @@ function addExteriorWallCladding(
         (holes?.e as readonly WallHoleYZ[] | undefined) ?? [],
         "shell_exterior_cladding_e",
       );
+      markNewChildrenNoCollision(group, startIdx);
     } else if (face === "w") {
+      const startIdx = group.children.length;
       addWallConstantXWithHoles(
         group,
         exteriorWallM,
@@ -810,7 +819,9 @@ function addExteriorWallCladding(
         (holes?.w as readonly WallHoleYZ[] | undefined) ?? [],
         "shell_exterior_cladding_w",
       );
+      markNewChildrenNoCollision(group, startIdx);
     } else if (face === "n") {
+      const startIdx = group.children.length;
       addWallConstantZWithHoles(
         group,
         exteriorWallM,
@@ -823,7 +834,9 @@ function addExteriorWallCladding(
         (holes?.n as readonly WallHoleXY[] | undefined) ?? [],
         "shell_exterior_cladding_n",
       );
+      markNewChildrenNoCollision(group, startIdx);
     } else {
+      const startIdx = group.children.length;
       addWallConstantZWithHoles(
         group,
         exteriorWallM,
@@ -836,6 +849,7 @@ function addExteriorWallCladding(
         (holes?.s as readonly WallHoleXY[] | undefined) ?? [],
         "shell_exterior_cladding_s",
       );
+      markNewChildrenNoCollision(group, startIdx);
     }
   }
 }

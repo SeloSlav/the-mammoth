@@ -1,5 +1,14 @@
+import { readFileSync } from "node:fs";
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { buildFloorMeshes, classifyPrefab } from "./floorPlaceholderMeshes.js";
+import { classifyPrefab } from "./floorPlaceholderMeshes.js";
+import {
+  buildFloorMeshes,
+  collectCollisionAabbsFromObject3D,
+  instantiateBuildingFloorStack,
+  parseBuildingDoc,
+  parseFloorDoc,
+} from "./index.js";
 
 describe("classifyPrefab", () => {
   it("classifies corridor and lobby prefabs", () => {
@@ -58,5 +67,71 @@ describe("classifyPrefab", () => {
     });
     expect(wallNames).not.toContain("shell_wall_w");
     expect(wallNames.some((name) => name.startsWith("shell_wall_w_"))).toBe(true);
+  });
+
+  it("cuts the real ground-floor stair hub opening in the stacked building mesh", () => {
+    const building = parseBuildingDoc(
+      JSON.parse(
+        readFileSync(new URL("../../../content/building/mammoth.json", import.meta.url), "utf8"),
+      ),
+    );
+    const root = instantiateBuildingFloorStack(building, (floorDocId) =>
+      parseFloorDoc(
+        JSON.parse(
+          readFileSync(
+            new URL(`../../../content/building/floors/${floorDocId}.json`, import.meta.url),
+            "utf8",
+          ),
+        ),
+      ),
+    );
+
+    const shaft = root.getObjectByName("stair_shaft:stair_hub_e");
+    expect(shaft).not.toBeNull();
+    const wallNames: string[] = [];
+    shaft?.traverse((obj) => {
+      if (obj.name.startsWith("shaft_wall_w_lo")) wallNames.push(obj.name);
+    });
+    expect(wallNames).not.toContain("shaft_wall_w_lo_solid");
+    expect(wallNames.some((name) => name.startsWith("shaft_wall_w_lo_"))).toBe(true);
+  });
+
+  it("marks decorative corridor trim and exterior cladding as non-collidable", () => {
+    const root = buildFloorMeshes(
+      {
+        id: "floor_decor_collision_test",
+        version: 1,
+        objects: [
+          {
+            id: "corridor_01",
+            prefabId: "corridor_main",
+            position: [0, 0, 0],
+            scale: [6.2, 3.2, 6.2],
+          },
+        ],
+      },
+      { storyLevelIndex: 1 },
+    );
+
+    const decorative: THREE.Object3D[] = [];
+    let totalBoxMeshes = 0;
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      if (obj.geometry instanceof THREE.BoxGeometry) totalBoxMeshes += 1;
+      if (
+        obj.name.startsWith("shell_lobby_frame_") ||
+        obj.name.startsWith("shell_exterior_cladding_")
+      ) {
+        decorative.push(obj);
+      }
+    });
+
+    expect(decorative.length).toBeGreaterThan(0);
+    for (const obj of decorative) {
+      expect(obj.userData.mammothNoCollision).toBe(true);
+    }
+
+    const collisionAabbs = collectCollisionAabbsFromObject3D(root);
+    expect(collisionAabbs.length).toBeLessThan(totalBoxMeshes);
   });
 });
