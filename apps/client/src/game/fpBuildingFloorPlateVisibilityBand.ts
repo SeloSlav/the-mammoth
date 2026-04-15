@@ -3,59 +3,42 @@
  * When {@link revealFullStack} is true (e.g. inside an elevator hoistway), every storey stays
  * visible so shaft-adjacent shell geometry is not culled while looking up/down the shaft.
  */
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 /**
- * When the camera is outside the building footprint, keep the shell visible either when the
- * tower is nearby in peripheral vision or when the player is actively facing back toward it.
+ * Only allow floor-band culling when the camera is clearly inside the building footprint.
+ * Exterior or near-perimeter views keep the full stack visible so facade slices never pop.
  */
 export function fpBuildingExteriorViewShouldRevealFullStack(input: {
   cameraX: number;
   cameraZ: number;
-  viewDirX: number;
-  viewDirZ: number;
   boundsMinX: number;
   boundsMaxX: number;
   boundsMinZ: number;
   boundsMaxZ: number;
-  nearRevealDistanceM?: number;
-  minFacingDot?: number;
+  interiorCullInsetM?: number;
 }): boolean {
   const {
     cameraX,
     cameraZ,
-    viewDirX,
-    viewDirZ,
     boundsMinX,
     boundsMaxX,
     boundsMinZ,
     boundsMaxZ,
   } = input;
-  if (
-    cameraX >= boundsMinX &&
-    cameraX <= boundsMaxX &&
-    cameraZ >= boundsMinZ &&
-    cameraZ <= boundsMaxZ
-  ) {
-    return false;
-  }
-  const targetX = clamp(cameraX, boundsMinX, boundsMaxX);
-  const targetZ = clamp(cameraZ, boundsMinZ, boundsMaxZ);
-  const toBuildingX = targetX - cameraX;
-  const toBuildingZ = targetZ - cameraZ;
-  const toBuildingLen = Math.hypot(toBuildingX, toBuildingZ);
-  if (toBuildingLen <= (input.nearRevealDistanceM ?? 14)) {
+  const inset = Math.max(0, input.interiorCullInsetM ?? 6);
+  const innerMinX = boundsMinX + inset;
+  const innerMaxX = boundsMaxX - inset;
+  const innerMinZ = boundsMinZ + inset;
+  const innerMaxZ = boundsMaxZ - inset;
+  if (innerMinX > innerMaxX || innerMinZ > innerMaxZ) {
     return true;
   }
-  const viewLen = Math.hypot(viewDirX, viewDirZ);
-  if (toBuildingLen <= 1e-5 || viewLen <= 1e-5) {
-    return false;
-  }
-  const facingDot =
-    (viewDirX * toBuildingX + viewDirZ * toBuildingZ) / (viewLen * toBuildingLen);
-  return facingDot >= (input.minFacingDot ?? 0.2);
+  return !(
+    cameraX >= innerMinX &&
+    cameraX <= innerMaxX &&
+    cameraZ >= innerMinZ &&
+    cameraZ <= innerMaxZ
+  );
 }
 
 export function fpBuildingFloorPlateVisibilityBand(input: {

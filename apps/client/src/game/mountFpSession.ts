@@ -279,8 +279,6 @@ export async function mountFpSession(
       fpBuildingExteriorViewShouldRevealFullStack({
         cameraX: _floorVisCamWorld.x,
         cameraZ: _floorVisCamWorld.z,
-        viewDirX: _floorVisCamDir.x,
-        viewDirZ: _floorVisCamDir.z,
         boundsMinX: buildingWorldBounds.min.x,
         boundsMaxX: buildingWorldBounds.max.x,
         boundsMinZ: buildingWorldBounds.min.z,

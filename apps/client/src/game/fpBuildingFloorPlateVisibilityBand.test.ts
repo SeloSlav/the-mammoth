@@ -71,8 +71,6 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
       fpBuildingExteriorViewShouldRevealFullStack({
         cameraX: -8,
         cameraZ: 0,
-        viewDirX: 1,
-        viewDirZ: 0.1,
         boundsMinX: -2,
         boundsMaxX: 2,
         boundsMinZ: -3,
@@ -86,8 +84,6 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
       fpBuildingExteriorViewShouldRevealFullStack({
         cameraX: -8,
         cameraZ: 0,
-        viewDirX: 0,
-        viewDirZ: 1,
         boundsMinX: -2,
         boundsMaxX: 2,
         boundsMinZ: -3,
@@ -96,18 +92,29 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toBe(true);
   });
 
-  it("keeps the optimization when far outside and looking away from the tower", () => {
+  it("keeps the optimization only when clearly inside the footprint core", () => {
     expect(
       fpBuildingExteriorViewShouldRevealFullStack({
-        cameraX: -24,
+        cameraX: 0,
         cameraZ: 0,
-        viewDirX: -1,
-        viewDirZ: 0,
-        boundsMinX: -2,
-        boundsMaxX: 2,
-        boundsMinZ: -3,
-        boundsMaxZ: 3,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
       }),
     ).toBe(false);
+  });
+
+  it("reveals the full stack near the perimeter even if technically inside the raw bounds", () => {
+    expect(
+      fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: 10,
+        cameraZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+      }),
+    ).toBe(true);
   });
 });
