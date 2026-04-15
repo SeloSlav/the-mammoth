@@ -36,6 +36,17 @@ function verticalOverlap(bodyFeetY: number, height: number, b: CollisionAabb): b
   return y1 > b.min[1] + 1e-4 && y0 < b.max[1] - 1e-4;
 }
 
+function sweptVerticalOverlap(
+  prevBodyFeetY: number,
+  bodyFeetY: number,
+  height: number,
+  b: CollisionAabb,
+): boolean {
+  const y0 = Math.min(prevBodyFeetY, bodyFeetY);
+  const y1 = Math.max(prevBodyFeetY + height, bodyFeetY + height);
+  return y1 > b.min[1] + 1e-4 && y0 < b.max[1] - 1e-4;
+}
+
 function shouldIgnoreHorizontalBlock(
   bodyFeetY: number,
   stepUpMargin: number,
@@ -98,6 +109,7 @@ function resolveOverlapAlongAxis(
 function resolveHorizontalCollisionStep(
   pos: Vector3,
   prevX: number,
+  prevY: number,
   prevZ: number,
   vel: Vector3,
   height: number,
@@ -118,7 +130,7 @@ function resolveHorizontalCollisionStep(
       bodyFeetY: pos.y,
       bodyZ: pos.z,
     }, (b) => {
-      if (!verticalOverlap(pos.y, height, b)) return;
+      if (!sweptVerticalOverlap(prevY, pos.y, height, b)) return;
       if (z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
       const bodyMin = resolvedX - radius;
@@ -149,7 +161,7 @@ function resolveHorizontalCollisionStep(
       bodyFeetY: pos.y,
       bodyZ: resolvedZ,
     }, (b) => {
-      if (!verticalOverlap(pos.y, height, b)) return;
+      if (!sweptVerticalOverlap(prevY, pos.y, height, b)) return;
       if (x1 <= b.min[0] || x0 >= b.max[0]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
       const bodyMin = resolvedZ - radius;
@@ -202,6 +214,7 @@ export function resolvePlayerCollisions(
     resolveHorizontalCollisionStep(
       pos,
       stepPrevX,
+      prevPos.y,
       stepPrevZ,
       vel,
       height,

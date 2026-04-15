@@ -376,9 +376,15 @@ fn player_body_height(bits: u8) -> f32 {
 }
 
 #[inline]
-fn body_vertical_overlap(feet_y: f32, body_h: f32, mn: &[f32; 3], mx: &[f32; 3]) -> bool {
-    let y0 = feet_y;
-    let y1 = feet_y + body_h;
+fn swept_body_vertical_overlap(
+    prev_feet_y: f32,
+    feet_y: f32,
+    body_h: f32,
+    mn: &[f32; 3],
+    mx: &[f32; 3],
+) -> bool {
+    let y0 = prev_feet_y.min(feet_y);
+    let y1 = (prev_feet_y + body_h).max(feet_y + body_h);
     y1 > mn[1] + 1e-4 && y0 < mx[1] - 1e-4
 }
 
@@ -426,6 +432,7 @@ fn resolve_overlap_along_axis(
 fn resolve_player_static_horizontal_collision_step(
     p: &mut PlayerPose,
     prev_x: f32,
+    prev_y: f32,
     prev_z: f32,
     body_h: f32,
 ) {
@@ -442,7 +449,7 @@ fn resolve_player_static_horizontal_collision_step(
                 if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
                     continue;
                 }
-                if !body_vertical_overlap(p.y, body_h, mn, mx) {
+                if !swept_body_vertical_overlap(prev_y, p.y, body_h, mn, mx) {
                     continue;
                 }
                 if ignore_horizontal_block(p.y, mx[1]) {
@@ -477,7 +484,7 @@ fn resolve_player_static_horizontal_collision_step(
                 if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
                     continue;
                 }
-                if !body_vertical_overlap(p.y, body_h, mn, mx) {
+                if !swept_body_vertical_overlap(prev_y, p.y, body_h, mn, mx) {
                     continue;
                 }
                 if ignore_horizontal_block(p.y, mx[1]) {
@@ -505,7 +512,7 @@ fn resolve_player_static_horizontal_collision_step(
 fn resolve_player_static_collisions(
     p: &mut PlayerPose,
     prev_x: f32,
-    _prev_y: f32,
+    prev_y: f32,
     prev_z: f32,
     bits: u8,
 ) {
@@ -523,7 +530,7 @@ fn resolve_player_static_collisions(
         let u = step as f32 / step_count as f32;
         p.x = start_x + (target_x - start_x) * u;
         p.z = start_z + (target_z - start_z) * u;
-        resolve_player_static_horizontal_collision_step(p, step_prev_x, step_prev_z, body_h);
+        resolve_player_static_horizontal_collision_step(p, step_prev_x, prev_y, step_prev_z, body_h);
         step_prev_x = p.x;
         step_prev_z = p.z;
     }

@@ -44,9 +44,14 @@ fn player_body_height(crouch: bool) -> f32 {
 }
 
 #[inline]
-fn body_vertical_overlap(feet_y: f32, body_h: f32, aabb: &CollisionAabb) -> bool {
-    let y0 = feet_y;
-    let y1 = feet_y + body_h;
+fn swept_body_vertical_overlap(
+    prev_feet_y: f32,
+    feet_y: f32,
+    body_h: f32,
+    aabb: &CollisionAabb,
+) -> bool {
+    let y0 = prev_feet_y.min(feet_y);
+    let y1 = (prev_feet_y + body_h).max(feet_y + body_h);
     y1 > aabb.min[1] + 1e-4 && y0 < aabb.max[1] - 1e-4
 }
 
@@ -506,6 +511,7 @@ fn resolve_generated_horizontal_collision_step(
     ctx: &ReducerContext,
     p: &mut PlayerPose,
     prev_x: f32,
+    prev_y: f32,
     prev_z: f32,
     body_h: f32,
     aabbs: &mut Vec<CollisionAabb>,
@@ -525,7 +531,9 @@ fn resolve_generated_horizontal_collision_step(
             aabbs,
         );
         for aabb in aabbs.iter() {
-            if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
+            if !swept_body_vertical_overlap(prev_y, p.y, body_h, aabb)
+                || ignore_horizontal_block(p.y, aabb.max[1])
+            {
                 continue;
             }
             let body_min = resolved_x - r;
@@ -559,7 +567,9 @@ fn resolve_generated_horizontal_collision_step(
             aabbs,
         );
         for aabb in aabbs.iter() {
-            if !body_vertical_overlap(p.y, body_h, aabb) || ignore_horizontal_block(p.y, aabb.max[1]) {
+            if !swept_body_vertical_overlap(prev_y, p.y, body_h, aabb)
+                || ignore_horizontal_block(p.y, aabb.max[1])
+            {
                 continue;
             }
             let body_min = resolved_z - r;
@@ -608,6 +618,7 @@ pub fn resolve_player_generated_collision_aabbs(
             ctx,
             p,
             step_prev_x,
+            prev_y,
             step_prev_z,
             body_h,
             &mut aabbs,

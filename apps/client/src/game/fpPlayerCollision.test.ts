@@ -67,6 +67,17 @@ describe("resolvePlayerCollisions", () => {
     expect(vel.x).toBe(0);
   });
 
+  it("blocks a side wall hit during a large downward move using swept vertical overlap", () => {
+    const solids = [aabb(1, 4.5, -2, 2, 8.5, 2)];
+    const index = buildCollisionSpatialIndex(solids);
+    const prev = new THREE.Vector3(0.4, 6.2, 0);
+    const pos = new THREE.Vector3(1.3, 0.4, 0);
+    const vel = new THREE.Vector3(1, -12, 0);
+    resolvePlayerCollisions(pos, prev, vel, false, 0.82, index);
+    expect(pos.x).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M);
+    expect(vel.x).toBe(0);
+  });
+
   it("ejects back to the entered side when already overlapping and pushing deeper into a thin wall", () => {
     const index = buildCollisionSpatialIndex([]);
     const prev = new THREE.Vector3(0.95, 0.4, 0);
