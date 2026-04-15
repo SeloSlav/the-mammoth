@@ -56,6 +56,7 @@ async function fetchEditorContentIndex(building: BuildingDoc): Promise<EditorCon
       elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
       landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
       stairWellRelPath: `${EDITOR_ELEVATOR_DIR}/stairwell.json`,
+      materialTextureUrls: [],
     };
   }
 }

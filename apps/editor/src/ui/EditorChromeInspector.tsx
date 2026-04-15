@@ -15,6 +15,7 @@ import {
   STAIR_WELL_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
+import type { EditorContentIndex } from "../editor/editorContentDiscovery.js";
 import type { EditorState, EditorMode, EditorWorkspace } from "../state/editorStore.js";
 
 function readScale(s: [number, number, number] | undefined): [number, number, number] {
@@ -34,9 +35,135 @@ function stairOpeningForScope(
   return scope === "ground" ? (def.groundEntryOpening ?? def.entryOpening) : def.entryOpening;
 }
 
+type AuthoringMaterialSlot = {
+  colorHex?: string;
+  roughness?: number;
+  metalness?: number;
+  mapUrl?: string;
+  transmission?: number;
+};
+
+function filterMaterialTextureUrls(
+  urls: readonly string[],
+  folderNames: readonly string[],
+): string[] {
+  const preferred = urls.filter((url) =>
+    folderNames.some((folder) => url.startsWith(`/static/materials/${folder}/`)),
+  );
+  const shared = urls.filter((url) => url.startsWith("/static/materials/shared/"));
+  const remainder = urls.filter((url) => !preferred.includes(url) && !shared.includes(url));
+  return [...preferred, ...shared, ...remainder];
+}
+
+function MaterialSlotEditor(props: {
+  slotLabel: string;
+  slot: AuthoringMaterialSlot | undefined;
+  textureOptions: readonly string[];
+  label: CSSProperties;
+  input: CSSProperties;
+  onPatch: (patch: Partial<AuthoringMaterialSlot>) => void;
+  transmissionLabel?: string;
+}) {
+  const { slotLabel, slot, textureOptions, label, input, onPatch, transmissionLabel } = props;
+  const mapUrl = slot?.mapUrl ?? "";
+  const selectValue =
+    mapUrl.length === 0 ? "" : textureOptions.includes(mapUrl) ? mapUrl : "__custom__";
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label style={{ ...label, textTransform: "none" }}>{slotLabel}</label>
+      <select
+        style={input}
+        value={selectValue}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === "__custom__") return;
+          onPatch({ mapUrl: next || undefined });
+        }}
+      >
+        <option value="">No texture map</option>
+        {textureOptions.map((url) => (
+          <option key={url} value={url}>
+            {url}
+          </option>
+        ))}
+        {selectValue === "__custom__" ? <option value="__custom__">Custom URL below</option> : null}
+      </select>
+      <input
+        style={{ ...input, marginTop: 6 }}
+        placeholder="/static/materials/..."
+        value={mapUrl}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          onPatch({ mapUrl: v || undefined });
+        }}
+      />
+      <input
+        style={{ ...input, marginTop: 6 }}
+        placeholder="colorHex"
+        value={slot?.colorHex ?? ""}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          onPatch({ colorHex: v || undefined });
+        }}
+      />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: transmissionLabel ? "1fr 1fr 1fr" : "1fr 1fr",
+          gap: 6,
+          marginTop: 6,
+        }}
+      >
+        <input
+          style={input}
+          type="number"
+          step={0.05}
+          min={0}
+          max={1}
+          placeholder="roughness"
+          value={slot?.roughness ?? ""}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            onPatch({ roughness: Number.isFinite(v) ? v : undefined });
+          }}
+        />
+        <input
+          style={input}
+          type="number"
+          step={0.05}
+          min={0}
+          max={1}
+          placeholder="metalness"
+          value={slot?.metalness ?? ""}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            onPatch({ metalness: Number.isFinite(v) ? v : undefined });
+          }}
+        />
+        {transmissionLabel ? (
+          <input
+            style={input}
+            type="number"
+            step={0.05}
+            min={0}
+            max={1}
+            placeholder={transmissionLabel}
+            value={slot?.transmission ?? ""}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              onPatch({ transmission: Number.isFinite(v) ? v : undefined });
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function EditorChromeInspector(props: {
   workspace: EditorWorkspace;
   mode: EditorMode;
+  contentIndex: EditorContentIndex;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
   stairWellDef: StairWellDef;
@@ -72,6 +199,7 @@ export function EditorChromeInspector(props: {
   const {
     workspace,
     mode,
+    contentIndex,
     elevatorCabDef,
     landingKitDef,
     stairWellDef,
@@ -120,6 +248,13 @@ export function EditorChromeInspector(props: {
     activeFloorOverrideDocId,
   });
   const resolvedGlassOpening = resolveGlassOpening(landingKitDef);
+  const cabTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, ["cab"]);
+  const corridorDoorTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, [
+    "corridor-door",
+  ]);
+  const stairwellTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, [
+    "stairwell",
+  ]);
 
   const patchSelectedFloorMetadata = (mutate: (next: Record<string, unknown>) => void) => {
     if (!selectedFloorObj) return;
@@ -170,89 +305,29 @@ export function EditorChromeInspector(props: {
       {mode === "cab" ? (
         <>
           <label style={label}>ElevatorCabDef — material slots</label>
-          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75 }}>
-            Author color plus optional <code>mapUrl</code>. Rebuilds the shared cab look in preview and gameplay.
+          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            Pick local textures from <code>/static/materials/cab</code> or enter any custom{" "}
+            <code>mapUrl</code>. These values rebuild the same shared cab materials in preview and
+            gameplay.
           </p>
           {(["wall", "floor", "door", "ceiling"] as const).map((slot) => (
-            <div key={slot} style={{ marginBottom: 10 }}>
-              <label style={{ ...label, textTransform: "none" }}>{slot}</label>
-              <input
-                style={input}
-                placeholder="mapUrl"
-                value={elevatorCabDef.materials?.[slot]?.mapUrl ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchElevatorCabDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      [slot]: { ...d.materials?.[slot], mapUrl: v || undefined },
-                    },
-                  }));
-                }}
-              />
-              <input
-                style={{ ...input, marginTop: 6 }}
-                placeholder="colorHex"
-                value={elevatorCabDef.materials?.[slot]?.colorHex ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchElevatorCabDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      [slot]: { ...d.materials?.[slot], colorHex: v || undefined },
-                    },
-                  }));
-                }}
-              />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-                <input
-                  style={input}
-                  type="number"
-                  step={0.05}
-                  min={0}
-                  max={1}
-                  placeholder="roughness"
-                  value={elevatorCabDef.materials?.[slot]?.roughness ?? ""}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    patchElevatorCabDef((d) => ({
-                      ...d,
-                      materials: {
-                        ...d.materials,
-                        [slot]: {
-                          ...d.materials?.[slot],
-                          roughness: Number.isFinite(v) ? v : undefined,
-                        },
-                      },
-                    }));
-                  }}
-                />
-                <input
-                  style={input}
-                  type="number"
-                  step={0.05}
-                  min={0}
-                  max={1}
-                  placeholder="metalness"
-                  value={elevatorCabDef.materials?.[slot]?.metalness ?? ""}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    patchElevatorCabDef((d) => ({
-                      ...d,
-                      materials: {
-                        ...d.materials,
-                        [slot]: {
-                          ...d.materials?.[slot],
-                          metalness: Number.isFinite(v) ? v : undefined,
-                        },
-                      },
-                    }));
-                  }}
-                />
-              </div>
-            </div>
+            <MaterialSlotEditor
+              key={slot}
+              slotLabel={slot}
+              slot={elevatorCabDef.materials?.[slot]}
+              textureOptions={cabTextureOptions}
+              label={label}
+              input={input}
+              onPatch={(patch) => {
+                patchElevatorCabDef((d) => ({
+                  ...d,
+                  materials: {
+                    ...d.materials,
+                    [slot]: { ...d.materials?.[slot], ...patch },
+                  },
+                }));
+              }}
+            />
           ))}
         </>
       ) : null}
@@ -263,189 +338,43 @@ export function EditorChromeInspector(props: {
             Corridor door kit (<code>LandingKitDef</code>) — material slots
           </label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-            Author optional <code>mapUrl</code> textures for the frame and glass so preview and gameplay use the same corridor-door look.
+            Pick local textures from <code>/static/materials/corridor-door</code> or type a custom{" "}
+            <code>mapUrl</code>. Preview and gameplay both use these same corridor-door materials.
           </p>
-          <label style={{ ...label, textTransform: "none" }}>frame</label>
-          <input
-            style={input}
-            placeholder="frame mapUrl"
-            value={landingKitDef.materials?.frame?.mapUrl ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
+          <MaterialSlotEditor
+            slotLabel="frame"
+            slot={landingKitDef.materials?.frame}
+            textureOptions={corridorDoorTextureOptions}
+            label={label}
+            input={input}
+            onPatch={(patch) => {
               patchLandingKitDef((d) => ({
                 ...d,
                 materials: {
                   ...d.materials,
-                  frame: { ...d.materials?.frame, mapUrl: v || undefined },
+                  frame: { ...d.materials?.frame, ...patch },
                 },
               }));
             }}
           />
-          <input
-            style={{ ...input, marginTop: 6 }}
-            placeholder="frame colorHex"
-            value={landingKitDef.materials?.frame?.colorHex ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
+          <MaterialSlotEditor
+            slotLabel="glass"
+            slot={landingKitDef.materials?.glass}
+            textureOptions={corridorDoorTextureOptions}
+            label={label}
+            input={input}
+            transmissionLabel="transmission"
+            onPatch={(patch) => {
               patchLandingKitDef((d) => ({
                 ...d,
                 materials: {
                   ...d.materials,
-                  frame: { ...d.materials?.frame, colorHex: v || undefined },
-                },
-              }));
-            }}
-          />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-            <input
-              style={input}
-              type="number"
-              step={0.05}
-              min={0}
-              max={1}
-              placeholder="frame roughness"
-              value={landingKitDef.materials?.frame?.roughness ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchLandingKitDef((d) => ({
-                  ...d,
-                  materials: {
-                    ...d.materials,
-                    frame: {
-                      ...d.materials?.frame,
-                      roughness: Number.isFinite(v) ? v : undefined,
-                    },
-                  },
-                }));
-              }}
-            />
-            <input
-              style={input}
-              type="number"
-              step={0.05}
-              min={0}
-              max={1}
-              placeholder="frame metalness"
-              value={landingKitDef.materials?.frame?.metalness ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchLandingKitDef((d) => ({
-                  ...d,
-                  materials: {
-                    ...d.materials,
-                    frame: {
-                      ...d.materials?.frame,
-                      metalness: Number.isFinite(v) ? v : undefined,
-                    },
-                  },
-                }));
-              }}
-            />
-          </div>
-          <label style={{ ...label, marginTop: 8, textTransform: "none" }}>glass</label>
-          <input
-            style={input}
-            placeholder="glass mapUrl"
-            value={landingKitDef.materials?.glass?.mapUrl ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              patchLandingKitDef((d) => ({
-                ...d,
-                materials: {
-                  ...d.materials,
-                  glass: { ...d.materials?.glass, mapUrl: v || undefined },
-                },
-              }));
-            }}
-          />
-          <input
-            style={{ ...input, marginTop: 6 }}
-            placeholder="glass colorHex"
-            value={landingKitDef.materials?.glass?.colorHex ?? ""}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              patchLandingKitDef((d) => ({
-                ...d,
-                materials: {
-                  ...d.materials,
-                  glass: { ...d.materials?.glass, colorHex: v || undefined },
+                  glass: { ...d.materials?.glass, ...patch },
                 },
               }));
             }}
           />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-            <label style={{ ...label, textTransform: "none" }}>
-              glass roughness
-              <input
-                style={{ ...input, marginTop: 4 }}
-                type="number"
-                step={0.05}
-                min={0}
-                max={1}
-                value={landingKitDef.materials?.glass?.roughness ?? ""}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  patchLandingKitDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      glass: {
-                        ...d.materials?.glass,
-                        roughness: Number.isFinite(v) ? v : undefined,
-                      },
-                    },
-                  }));
-                }}
-              />
-            </label>
-            <label style={{ ...label, textTransform: "none" }}>
-              glass transmission
-              <input
-                style={{ ...input, marginTop: 4 }}
-                type="number"
-                step={0.05}
-                min={0}
-                max={1}
-                value={landingKitDef.materials?.glass?.transmission ?? ""}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  patchLandingKitDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      glass: {
-                        ...d.materials?.glass,
-                        transmission: Number.isFinite(v) ? v : undefined,
-                      },
-                    },
-                  }));
-                }}
-              />
-            </label>
-            <label style={{ ...label, textTransform: "none" }}>
-              glass metalness
-              <input
-                style={{ ...input, marginTop: 4 }}
-                type="number"
-                step={0.05}
-                min={0}
-                max={1}
-                value={landingKitDef.materials?.glass?.metalness ?? ""}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  patchLandingKitDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      glass: {
-                        ...d.materials?.glass,
-                        metalness: Number.isFinite(v) ? v : undefined,
-                      },
-                    },
-                  }));
-                }}
-              />
-            </label>
             <label style={{ ...label, textTransform: "none" }}>
               exterior swing (rad)
               <input
@@ -509,88 +438,27 @@ export function EditorChromeInspector(props: {
         <>
           <label style={label}>StairWellDef — material slots</label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-            Shared stairwell visuals. Author optional <code>mapUrl</code> textures here; material edits rebuild the preview and apply to gameplay too.
+            Pick local textures from <code>/static/materials/stairwell</code> or type a custom{" "}
+            <code>mapUrl</code>. These shared stairwell materials rebuild the preview and gameplay.
           </p>
           {(["wall", "floor", "tread", "landing", "railing"] as const).map((slot) => (
-            <div key={slot} style={{ marginBottom: 10 }}>
-              <label style={{ ...label, textTransform: "none" }}>{slot}</label>
-              <input
-                style={input}
-                placeholder="mapUrl"
-                value={stairWellDef.materials?.[slot]?.mapUrl ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchStairWellDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      [slot]: { ...d.materials?.[slot], mapUrl: v || undefined },
-                    },
-                  }));
-                }}
-              />
-              <input
-                style={{ ...input, marginTop: 6 }}
-                placeholder="colorHex"
-                value={stairWellDef.materials?.[slot]?.colorHex ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value.trim();
-                  patchStairWellDef((d) => ({
-                    ...d,
-                    materials: {
-                      ...d.materials,
-                      [slot]: { ...d.materials?.[slot], colorHex: v || undefined },
-                    },
-                  }));
-                }}
-              />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-                <input
-                  style={input}
-                  type="number"
-                  step={0.05}
-                  min={0}
-                  max={1}
-                  placeholder="roughness"
-                  value={stairWellDef.materials?.[slot]?.roughness ?? ""}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    patchStairWellDef((d) => ({
-                      ...d,
-                      materials: {
-                        ...d.materials,
-                        [slot]: {
-                          ...d.materials?.[slot],
-                          roughness: Number.isFinite(v) ? v : undefined,
-                        },
-                      },
-                    }));
-                  }}
-                />
-                <input
-                  style={input}
-                  type="number"
-                  step={0.05}
-                  min={0}
-                  max={1}
-                  placeholder="metalness"
-                  value={stairWellDef.materials?.[slot]?.metalness ?? ""}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    patchStairWellDef((d) => ({
-                      ...d,
-                      materials: {
-                        ...d.materials,
-                        [slot]: {
-                          ...d.materials?.[slot],
-                          metalness: Number.isFinite(v) ? v : undefined,
-                        },
-                      },
-                    }));
-                  }}
-                />
-              </div>
-            </div>
+            <MaterialSlotEditor
+              key={slot}
+              slotLabel={slot}
+              slot={stairWellDef.materials?.[slot]}
+              textureOptions={stairwellTextureOptions}
+              label={label}
+              input={input}
+              onPatch={(patch) => {
+                patchStairWellDef((d) => ({
+                  ...d,
+                  materials: {
+                    ...d.materials,
+                    [slot]: { ...d.materials?.[slot], ...patch },
+                  },
+                }));
+              }}
+            />
           ))}
         </>
       ) : null}

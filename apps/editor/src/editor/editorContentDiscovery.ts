@@ -19,6 +19,8 @@ export type EditorContentIndex = {
   elevatorCabRelPath: string;
   landingKitRelPath: string;
   stairWellRelPath: string;
+  /** URLs under `apps/client/public/static/materials/**` that can be used directly as `mapUrl`. */
+  materialTextureUrls: string[];
 };
 
 export type CollisionArtifactsStatus = {

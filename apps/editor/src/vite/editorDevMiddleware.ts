@@ -53,6 +53,7 @@ const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
 const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
 const execFileAsync = promisify(execFile);
+const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
 let rebuildInFlight = false;
 
@@ -111,6 +112,35 @@ async function readJsonStemList(absDir: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+async function readStaticTextureUrlList(
+  absDir: string,
+  urlBase: string,
+): Promise<string[]> {
+  const out: string[] = [];
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(abs);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!MATERIAL_TEXTURE_EXTS.has(ext)) continue;
+      const rel = path.relative(absDir, abs).split(path.sep).join("/");
+      out.push(`${urlBase}/${rel}`);
+    }
+  }
+  await walk(absDir);
+  return out.sort((a, b) => a.localeCompare(b));
 }
 
 function sendJson(res: ServerResponse, payload: unknown, statusCode = 200): void {
@@ -262,6 +292,10 @@ export function editorDevMiddleware(
 }
 
 async function handleContentIndex(repoRoot: string, res: ServerResponse): Promise<void> {
+  const materialTextureUrls = await readStaticTextureUrlList(
+    path.resolve(repoRoot, "apps/client/public/static/materials"),
+    "/static/materials",
+  );
   sendJson(res, {
     buildingPath: EDITOR_BUILDING_FILE,
     floorDocIds: await readJsonStemList(path.resolve(repoRoot, "content", EDITOR_FLOORS_DIR)),
@@ -276,6 +310,7 @@ async function handleContentIndex(repoRoot: string, res: ServerResponse): Promis
     elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
     landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
     stairWellRelPath: `${EDITOR_ELEVATOR_DIR}/stairwell.json`,
+    materialTextureUrls,
   });
 }
 

@@ -1025,6 +1025,7 @@ export function EditorChrome() {
       <EditorChromeInspector
         workspace={workspace}
         mode={mode}
+        contentIndex={contentIndex}
         elevatorCabDef={elevatorCabDef}
         landingKitDef={landingKitDef}
         stairWellDef={stairWellDef}

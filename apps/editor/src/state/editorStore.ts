@@ -81,6 +81,7 @@ const EMPTY_CONTENT_INDEX: EditorContentIndex = {
   elevatorCabRelPath: "elevator/cab.json",
   landingKitRelPath: "elevator/landing_kit.json",
   stairWellRelPath: "elevator/stairwell.json",
+  materialTextureUrls: [],
 };
 
 const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
