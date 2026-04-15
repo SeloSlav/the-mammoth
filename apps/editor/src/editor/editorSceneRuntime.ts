@@ -39,6 +39,11 @@ import { resolveFpAuthorPickId } from "./fpAuthorPickResolve.js";
 import { FpSelectionAabbOutline } from "./fpSelectionAabbOutline.js";
 import { PreviewSelectionShapeOutline } from "./previewSelectionShapeOutline.js";
 import {
+  anchoredScaleAnchorLocalPoint,
+  anchoredScaleAxisFromTransformAxis,
+  computeAnchoredScalePosition,
+} from "./anchoredScaleGizmo.js";
+import {
   adoptWeaponPresentationFileText,
   getLastWeaponPresentationFileText,
   registerWeaponPresentationPostSaveApply,
@@ -135,6 +140,87 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
    * mesh while Zustand is catching up.
    */
   let levelEditorTransformGesture = false;
+  let levelEditorAnchoredScaleGesture:
+    | {
+        object: THREE.Object3D;
+        startPosition: THREE.Vector3;
+        startScale: THREE.Vector3;
+        startRotation: THREE.Quaternion;
+        anchorLocalPoint: THREE.Vector3;
+      }
+    | null = null;
+  const _anchoredScaleInvWorld = new THREE.Matrix4();
+  const _anchoredScaleWorldBox = new THREE.Box3();
+  const _anchoredScaleLocalBox = new THREE.Box3();
+
+  function localBoundsForAnchoredScale(root: THREE.Object3D): THREE.Box3 | null {
+    root.updateWorldMatrix(true, true);
+    _anchoredScaleInvWorld.copy(root.matrixWorld).invert();
+    let has = false;
+    const bounds = new THREE.Box3();
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const geom = obj.geometry;
+      if (!geom) return;
+      geom.computeBoundingBox();
+      if (!geom.boundingBox) return;
+      obj.updateWorldMatrix(true, false);
+      _anchoredScaleWorldBox.copy(geom.boundingBox).applyMatrix4(obj.matrixWorld);
+      _anchoredScaleLocalBox.copy(_anchoredScaleWorldBox).applyMatrix4(_anchoredScaleInvWorld);
+      if (!has) {
+        bounds.copy(_anchoredScaleLocalBox);
+        has = true;
+      } else {
+        bounds.union(_anchoredScaleLocalBox);
+      }
+    });
+    return has ? bounds : null;
+  }
+
+  function primeAnchoredScaleGesture(): void {
+    levelEditorAnchoredScaleGesture = null;
+    const st = useEditorStore.getState();
+    if (isFpMode(st.mode) || st.transformMode !== "scale") return;
+    const attached = transformControls.object as THREE.Object3D | undefined;
+    if (!attached) return;
+    const axis = anchoredScaleAxisFromTransformAxis(
+      (transformControls as unknown as { axis?: string | null }).axis,
+    );
+    if (!axis) return;
+    const localBounds = localBoundsForAnchoredScale(attached);
+    if (!localBounds) return;
+    levelEditorAnchoredScaleGesture = {
+      object: attached,
+      startPosition: attached.position.clone(),
+      startScale: attached.scale.clone(),
+      startRotation: attached.quaternion.clone(),
+      anchorLocalPoint: anchoredScaleAnchorLocalPoint({ axis, localBounds }),
+    };
+  }
+
+  function applyAnchoredScaleGesture(): void {
+    const st = useEditorStore.getState();
+    if (
+      isFpMode(st.mode) ||
+      st.transformMode !== "scale" ||
+      !transformControls.dragging ||
+      !levelEditorAnchoredScaleGesture
+    ) {
+      return;
+    }
+    const attached = transformControls.object as THREE.Object3D | undefined;
+    if (!attached || attached !== levelEditorAnchoredScaleGesture.object) return;
+    const nextPos = computeAnchoredScalePosition({
+      startPosition: levelEditorAnchoredScaleGesture.startPosition,
+      startScale: levelEditorAnchoredScaleGesture.startScale,
+      currentScale: attached.scale,
+      rotation: levelEditorAnchoredScaleGesture.startRotation,
+      anchorLocalPoint: levelEditorAnchoredScaleGesture.anchorLocalPoint,
+    });
+    withProgrammaticTransformControls(() => {
+      attached.position.copy(nextPos);
+    });
+  }
 
   const readStairBaseVec3 = (
     obj: THREE.Object3D,
@@ -496,10 +582,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   transformControls.addEventListener("mouseDown", () => {
     if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = true;
+    primeAnchoredScaleGesture();
   });
   transformControls.addEventListener("mouseUp", () => {
     if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = false;
+    levelEditorAnchoredScaleGesture = null;
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
@@ -530,10 +618,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       flyControls.enabled = st.cameraMode === "fly";
     }
     if (!active) levelEditorTransformGesture = false;
+    if (!active) levelEditorAnchoredScaleGesture = null;
     if (active) useEditorStore.getState().beginTransaction();
     else useEditorStore.getState().commitTransaction();
   });
   transformControls.addEventListener("objectChange", () => {
+    applyAnchoredScaleGesture();
     commitLevelEditorAttachedTransformToStore();
   });
   transformControls.addEventListener("change", () => {
