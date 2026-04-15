@@ -8,7 +8,6 @@ import {
 } from "../editor/editorNavigationBridge.js";
 import { spawnInFrontOfCamera } from "../editor/spawnBridge.js";
 import { useShallow } from "zustand/react/shallow";
-import type { LandingDocKind } from "../state/editorStore.js";
 import {
   collectPrefabIdsFromCells,
   collectPrefabIdsFromFloors,
@@ -27,7 +26,6 @@ import {
 } from "../state/editorStore.js";
 import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
 import {
-  downloadText,
   fetchCollisionArtifactsStatus,
   postRebuildServerCollision,
   postSaveBuilding,
@@ -55,7 +53,6 @@ import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMe
 export function EditorChrome() {
   const {
     workspace,
-    landingDocKind,
     mode,
     building,
     floorDocs,
@@ -87,7 +84,6 @@ export function EditorChrome() {
     historyFuture,
     setMode,
     setWorkspace,
-    setLandingDocKind,
     patchElevatorCabDef,
     patchLandingKitDef,
     patchStairWellDef,
@@ -173,6 +169,38 @@ export function EditorChrome() {
     [prefabDefs],
   );
 
+  const saveToDiskLabel = useMemo(() => {
+    switch (mode) {
+      case "cab":
+        return "Save cab.json";
+      case "landing_preview":
+        return "Save landing kit";
+      case "stairwell_preview":
+        return "Save stairwell.json";
+      case "floor":
+        return `Save floor ${activeFloorDocId}`;
+      case "interior":
+        return `Save interior ${activeInteriorDocId}`;
+      case "cell":
+        return `Save cell ${activeCellDocId}`;
+      case "prefab":
+        return activePrefabDefId ? `Save prefab ${activePrefabDefId}` : "Save prefab";
+      case "floor_override":
+        return activeFloorOverrideDocId
+          ? `Save floor override ${activeFloorOverrideDocId}`
+          : "Save floor override";
+      default:
+        return "Save to disk";
+    }
+  }, [
+    mode,
+    activeFloorDocId,
+    activeInteriorDocId,
+    activeCellDocId,
+    activePrefabDefId,
+    activeFloorOverrideDocId,
+  ]);
+
   const refreshCollisionStatus = useCallback(async () => {
     try {
       const next = (await fetchCollisionArtifactsStatus()) as typeof collisionArtifactsStatus;
@@ -185,6 +213,13 @@ export function EditorChrome() {
   useEffect(() => {
     void refreshCollisionStatus();
   }, [refreshCollisionStatus]);
+
+  /** World authoring is hidden for now; bounce off stale `world` workspace (e.g. devtools or old sessions). */
+  useEffect(() => {
+    if (workspace === "world") {
+      setWorkspace("landing");
+    }
+  }, [workspace, setWorkspace]);
 
   const onReload = useCallback(async () => {
     setSaveMsg(null);
@@ -230,9 +265,16 @@ export function EditorChrome() {
           serializeFloorOverrideDocPretty(activeFloorOverrideDoc),
         );
       }
+      if (workspace === "world") {
+        await postSaveBuilding(serializeBuildingDocPretty(building));
+      }
       useEditorStore.getState().setDirty(false);
       await refreshCollisionStatus();
-      setSaveMsg("Saved to content/ (disk write OK).");
+      setSaveMsg(
+        workspace === "world"
+          ? "Saved to content/ (open document + mammoth.json)."
+          : "Saved to content/.",
+      );
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }
@@ -251,34 +293,28 @@ export function EditorChrome() {
     activePrefabDef,
     activeFloorOverrideDocId,
     activeFloorOverrideDoc,
+    workspace,
+    building,
     refreshCollisionStatus,
   ]);
 
-  const onSaveBuilding = useCallback(async () => {
-    setSaveMsg(null);
-    try {
-      await postSaveBuilding(serializeBuildingDocPretty(building));
-      useEditorStore.getState().setDirty(false);
-      await refreshCollisionStatus();
-      setSaveMsg("Saved mammoth.json.");
-    } catch (e) {
-      setSaveMsg(e instanceof Error ? e.message : String(e));
-    }
-  }, [building, refreshCollisionStatus]);
-
   const onRebuildCollision = useCallback(async () => {
     setSaveMsg(null);
+    if (dirty) {
+      setSaveMsg("Save to disk first — collision regeneration reads JSON from content/, not unsaved editor state.");
+      return;
+    }
     try {
       const out = (await postRebuildServerCollision()) as {
         stdout?: string;
         status?: typeof collisionArtifactsStatus;
       };
       if (out.status) setCollisionArtifactsStatus(out.status);
-      setSaveMsg(out.stdout?.trim() || "Rebuilt walk/collision artifacts.");
+      setSaveMsg(out.stdout?.trim() || "Regenerated server walk/blocker collision from disk.");
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }
-  }, [collisionArtifactsStatus, setCollisionArtifactsStatus]);
+  }, [collisionArtifactsStatus, dirty, setCollisionArtifactsStatus]);
 
   const euler = useMemo(() => {
     if (mode === "cab" && selectedId) {
@@ -409,37 +445,16 @@ export function EditorChrome() {
           ? cellPrefabIds
           : knownPrefabIds;
 
-  const landingKindBtn = (kind: LandingDocKind, title: string) => (
-    <button
-      key={kind}
-      type="button"
-      style={{
-        ...rowBtn,
-        fontWeight: landingDocKind === kind ? 700 : 400,
-        background: landingDocKind === kind ? "#3a4a7a" : "#2a2a34",
-        border: "1px solid #444",
-        color: "#fff",
-      }}
-      onClick={() => {
-        setLandingDocKind(kind);
-        setCameraMode("orbit");
-      }}
-    >
-      {title}
-    </button>
-  );
-
   return (
     <div style={editorChromePanel}>
       <strong style={{ fontSize: 15 }}>Authoring</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
-        <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
-        shared vertical-core visuals (
+        <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit shared
+        vertical-core visuals (
         <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
         <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
         <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>).{" "}
-        <strong>World</strong> is the building + streamed docs: fly the stack, pick placements, and
-        save local JSON. <strong>FP viewmodel</strong> now authors both weapons and held consumables.
+        <strong>FP viewmodel</strong> authors weapons and held consumables.
       </p>
 
       <span style={label}>Workspace</span>
@@ -493,22 +508,6 @@ export function EditorChrome() {
           type="button"
           style={{
             ...rowBtn,
-            fontWeight: workspace === "world" ? 700 : 400,
-            background: workspace === "world" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => {
-            setWorkspace("world");
-            setCameraMode("fly");
-          }}
-        >
-          World
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
             fontWeight: mode === "fp_viewmodel" || mode === "fp_consumable" ? 700 : 400,
             background: mode === "fp_viewmodel" || mode === "fp_consumable" ? "#3a4a7a" : "#2a2a34",
             border: "1px solid #444",
@@ -545,107 +544,6 @@ export function EditorChrome() {
             Transform deltas are authored separately for typical and ground stairwells. Materials stay
             shared across the full shaft.
           </p>
-        </>
-      ) : null}
-
-      {workspace === "landing" ? (
-        <>
-          <span style={label}>Corridor door target</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {landingKindBtn("kit", "Corridor door kit (shared)")}
-            {landingKindBtn("interior", "Interior doc")}
-            {landingKindBtn("cell", "Cell doc")}
-            {landingKindBtn("prefab", "Prefab def")}
-            {landingKindBtn("floor_override", "Floor override")}
-          </div>
-        </>
-      ) : null}
-
-      {workspace === "world" ? (
-        <>
-          <span style={label}>World scope</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <button
-              type="button"
-              style={{
-                ...rowBtn,
-                fontWeight: mode === "floor" ? 700 : 400,
-                background: mode === "floor" ? "#3a4a7a" : "#2a2a34",
-                border: "1px solid #444",
-                color: "#fff",
-              }}
-              onClick={() => {
-                setMode("floor");
-                setCameraMode("fly");
-              }}
-            >
-              Building stack + cell
-            </button>
-            <button
-              type="button"
-              style={{
-                ...rowBtn,
-                fontWeight: mode === "interior" ? 700 : 400,
-                background: mode === "interior" ? "#3a4a7a" : "#2a2a34",
-                border: "1px solid #444",
-                color: "#fff",
-              }}
-              onClick={() => {
-                setMode("interior");
-                setCameraMode("fly");
-              }}
-            >
-              Interior
-            </button>
-            <button
-              type="button"
-              style={{
-                ...rowBtn,
-                fontWeight: mode === "cell" ? 700 : 400,
-                background: mode === "cell" ? "#3a4a7a" : "#2a2a34",
-                border: "1px solid #444",
-                color: "#fff",
-              }}
-              onClick={() => {
-                setMode("cell");
-                setCameraMode("fly");
-              }}
-            >
-              Cell
-            </button>
-            <button
-              type="button"
-              style={{
-                ...rowBtn,
-                fontWeight: mode === "prefab" ? 700 : 400,
-                background: mode === "prefab" ? "#3a4a7a" : "#2a2a34",
-                border: "1px solid #444",
-                color: "#fff",
-              }}
-              onClick={() => {
-                setMode("prefab");
-                setCameraMode("fly");
-              }}
-            >
-              Prefab
-            </button>
-            <button
-              type="button"
-              style={{
-                ...rowBtn,
-                fontWeight: mode === "floor_override" ? 700 : 400,
-                background: mode === "floor_override" ? "#3a4a7a" : "#2a2a34",
-                border: "1px solid #444",
-                color: "#fff",
-              }}
-              onClick={() => {
-                setMode("floor_override");
-                setCameraMode("fly");
-              }}
-            >
-              Floor override
-            </button>
-          </div>
         </>
       ) : null}
 
@@ -915,109 +813,92 @@ export function EditorChrome() {
         </button>
       </div>
 
-      <span style={label}>I/O</span>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        <button type="button" style={rowBtn} onClick={() => onReload()}>
-          Reload
+      <span style={label}>Content (JSON on disk)</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        <button type="button" style={rowBtn} onClick={() => onReload()} title="Reload every authoring document from content/ (discards unsaved editor changes).">
+          Reload from disk
         </button>
         {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
-          <button type="button" style={rowBtn} onClick={() => onSaveDisk()}>
-            Save to disk
+          <button
+            type="button"
+            style={rowBtn}
+            onClick={() => onSaveDisk()}
+            title={
+              workspace === "world"
+                ? "Writes the open document and mammoth.json under content/."
+                : "Writes the open document under content/."
+            }
+          >
+            {saveToDiskLabel}
           </button>
         ) : null}
-        <button type="button" style={rowBtn} onClick={() => onRebuildCollision()}>
-          Save + rebuild collision
-        </button>
-        {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
+      </div>
+      {workspace === "world" && mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
+        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
+          Saving also updates <code style={{ fontSize: 10 }}>mammoth.json</code> (storey layout and world origin) together
+          with the open document.
+        </p>
+      ) : null}
+
+      <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         <button
           type="button"
           style={rowBtn}
-          onClick={() => {
-            if (mode === "cab") {
-              downloadText("cab.json", serializeElevatorCabDefPretty(elevatorCabDef));
-            } else if (mode === "landing_preview") {
-              downloadText("landing_kit.json", serializeLandingKitDefPretty(landingKitDef));
-            } else if (mode === "stairwell_preview") {
-              downloadText("stairwell.json", serializeStairWellDefPretty(stairWellDef));
-            } else if (mode === "floor" && activeFloorDoc) {
-              downloadText(
-                `${activeFloorDocId}.json`,
-                serializeFloorDocPretty(activeFloorDoc),
-              );
-            } else if (mode === "interior" && activeInteriorDoc) {
-              downloadText(
-                `${activeInteriorDocId}.json`,
-                serializeInteriorDocPretty(activeInteriorDoc),
-              );
-            } else if (mode === "cell" && activeCellDoc) {
-              downloadText(`${activeCellDocId}.json`, serializeCellDocPretty(activeCellDoc));
-            } else if (mode === "prefab" && activePrefabDef && activePrefabDefId) {
-              downloadText(
-                `${activePrefabDefId}.json`,
-                serializePrefabDefPretty(activePrefabDef),
-              );
-            } else if (
-              mode === "floor_override" &&
-              activeFloorOverrideDoc &&
-              activeFloorOverrideDocId
-            ) {
-              downloadText(
-                `${activeFloorOverrideDocId}.json`,
-                serializeFloorOverrideDocPretty(activeFloorOverrideDoc),
-              );
-            }
-          }}
-        >
-          Download JSON
-        </button>
-        ) : null}
-        <button
-          type="button"
-          style={rowBtn}
-          onClick={() =>
-            downloadText("mammoth.json", serializeBuildingDocPretty(building))
+          disabled={dirty}
+          onClick={() => onRebuildCollision()}
+          title={
+            dirty
+              ? "Save to disk first."
+              : "Runs pnpm content:gen-walk-aabbs: rebuilds walk + blocker AABBs for the whole saved building and elevator defs (not the current selection only)."
           }
         >
-          Download mammoth
-        </button>
-        <button type="button" style={rowBtn} onClick={() => onSaveBuilding()}>
-          Save mammoth
+          Regenerate from disk (full building)
         </button>
       </div>
+      <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
+        Uses all JSON under <code style={{ fontSize: 10 }}>content/building</code> and{" "}
+        <code style={{ fontSize: 10 }}>content/elevator</code>. There is no per-room incremental rebuild yet.
+      </p>
       {dirty ? (
-        <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>Unsaved edits</p>
+        <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>Unsaved edits — save before regenerating server collision</p>
       ) : null}
       {saveMsg ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>{saveMsg}</p>
       ) : null}
       {collisionArtifactsStatus ? (
         <p style={{ margin: "8px 0 0", fontSize: 12, color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8" }}>
-          Collision artifacts: {collisionArtifactsStatus.stale ? "stale" : "up to date"}
+          Generated collision vs disk:{" "}
+          {collisionArtifactsStatus.stale ? "stale (save, then regenerate)" : "in sync"}
         </p>
       ) : null}
 
       {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
         <>
-      <span style={label}>Building origin (world)</span>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-        {(["X", "Y", "Z"] as const).map((axis, i) => (
-          <label key={axis} style={{ fontSize: 11 }}>
-            {axis}
-            <input
-              style={{ ...input, marginTop: 4 }}
-              type="number"
-              step={0.5}
-              value={wo[i]}
-              onChange={(e) => {
-                const nv = Number(e.target.value);
-                const next = [...wo] as [number, number, number];
-                next[i] = Number.isFinite(nv) ? nv : 0;
-                patchBuilding((b) => ({ ...b, worldOrigin: next }));
-              }}
-            />
-          </label>
-        ))}
-      </div>
+      {workspace === "world" ? (
+        <>
+          <span style={label}>Building origin (world)</span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {(["X", "Y", "Z"] as const).map((axis, i) => (
+              <label key={axis} style={{ fontSize: 11 }}>
+                {axis}
+                <input
+                  style={{ ...input, marginTop: 4 }}
+                  type="number"
+                  step={0.5}
+                  value={wo[i]}
+                  onChange={(e) => {
+                    const nv = Number(e.target.value);
+                    const next = [...wo] as [number, number, number];
+                    next[i] = Number.isFinite(nv) ? nv : 0;
+                    patchBuilding((b) => ({ ...b, worldOrigin: next }));
+                  }}
+                />
+              </label>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <EditorChromeOutliner
         mode={mode}

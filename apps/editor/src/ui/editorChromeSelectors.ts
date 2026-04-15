@@ -3,7 +3,6 @@ import type { EditorState } from "../state/editorStore.js";
 export function selectEditorChromeStore(s: EditorState) {
   return {
     workspace: s.workspace,
-    landingDocKind: s.landingDocKind,
     mode: s.mode,
     building: s.building,
     floorDocs: s.floorDocs,
@@ -35,7 +34,6 @@ export function selectEditorChromeStore(s: EditorState) {
     historyFuture: s.historyFuture,
     setMode: s.setMode,
     setWorkspace: s.setWorkspace,
-    setLandingDocKind: s.setLandingDocKind,
     patchElevatorCabDef: s.patchElevatorCabDef,
     patchLandingKitDef: s.patchLandingKitDef,
     patchStairWellDef: s.patchStairWellDef,

@@ -145,22 +145,23 @@ function panelBoardPosition(args: {
   hz: number;
   wallT: number;
   floorT: number;
+  boardDepth: number;
   gridRows: number;
 }): { position: THREE.Vector3; rotationY: number } {
-  const { face, hx, hz, wallT, floorT, gridRows } = args;
+  const { face, hx, hz, wallT, floorT, boardDepth, gridRows } = args;
   const panelCenterY =
     floorT + 1.12 + Math.max(0, gridRows - 1) * (FLOOR_BTN_H + FLOOR_GAP) * 0.5;
-  const boardInset = 0.019;
+  const boardInset = boardDepth * 0.5;
   if (face === "e") {
     return {
       position: new THREE.Vector3(-hx + wallT + boardInset, panelCenterY, 0),
-      rotationY: -Math.PI * 0.5,
+      rotationY: 0,
     };
   }
   if (face === "w") {
     return {
       position: new THREE.Vector3(hx - wallT - boardInset, panelCenterY, 0),
-      rotationY: Math.PI * 0.5,
+      rotationY: 0,
     };
   }
   if (face === "n") {
@@ -319,12 +320,32 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   const gridRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_COLS));
   const gridW = FLOOR_COLS * FLOOR_BTN_W + (FLOOR_COLS - 1) * FLOOR_GAP;
   const gridH = gridRows * FLOOR_BTN_H + Math.max(0, gridRows - 1) * FLOOR_GAP;
+  const panelBoardDepth = 0.038;
+  const buttonDepth = FLOOR_BTN_D;
   const panelBoard = new THREE.Mesh(
-    new THREE.BoxGeometry(0.038, Math.max(0.72, gridH + 0.34), Math.max(0.34, gridW + 0.18)),
+    face === "e" || face === "w"
+      ? new THREE.BoxGeometry(
+          panelBoardDepth,
+          Math.max(0.72, gridH + 0.34),
+          Math.max(0.34, gridW + 0.18),
+        )
+      : new THREE.BoxGeometry(
+          Math.max(0.34, gridW + 0.18),
+          Math.max(0.72, gridH + 0.34),
+          panelBoardDepth,
+        ),
     panelMat,
   );
   panelBoard.name = "cab_floor_panel_board";
-  const boardPose = panelBoardPosition({ face, hx, hz, wallT, floorT, gridRows });
+  const boardPose = panelBoardPosition({
+    face,
+    hx,
+    hz,
+    wallT,
+    floorT,
+    boardDepth: panelBoardDepth,
+    gridRows,
+  });
   panelBoard.position.copy(boardPose.position);
   panelBoard.rotation.y = boardPose.rotationY;
   panelRoot.add(panelBoard);
@@ -338,28 +359,35 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     const row = Math.floor(idx / FLOOR_COLS);
     const ly = y0 + row * (FLOOR_BTN_H + FLOOR_GAP);
     const gridAlong = z0 + col * (FLOOR_BTN_W + FLOOR_GAP);
-    const button = new THREE.Mesh(new THREE.BoxGeometry(0.024, FLOOR_BTN_H, FLOOR_BTN_W), doorMat);
+    const button = new THREE.Mesh(
+      face === "e" || face === "w"
+        ? new THREE.BoxGeometry(buttonDepth, FLOOR_BTN_H, FLOOR_BTN_W)
+        : new THREE.BoxGeometry(FLOOR_BTN_W, FLOOR_BTN_H, buttonDepth),
+      doorMat,
+    );
     button.name = `cab_floor_button_body_${level}`;
     const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_BTN_W, FLOOR_BTN_H), buttonMat);
     applyAtlasUvToPlaneGeometry(facePlane.geometry, level, atlasRows);
     facePlane.name = `cab_floor_button_label_${level}`;
+    const buttonFrontPad = 0.002;
     if (face === "e") {
-      button.position.set(-hx + wallT + 0.03, ly, gridAlong);
-      facePlane.position.set(-hx + wallT + FLOOR_BTN_D * 0.5 + 0.004, ly, gridAlong);
-      button.rotation.y = -Math.PI * 0.5;
+      const wallX = -hx + wallT;
+      button.position.set(wallX + panelBoardDepth + buttonDepth * 0.5, ly, gridAlong);
+      facePlane.position.set(wallX + panelBoardDepth + buttonDepth + buttonFrontPad, ly, gridAlong);
       facePlane.rotation.y = -Math.PI * 0.5;
     } else if (face === "w") {
-      button.position.set(hx - wallT - 0.03, ly, gridAlong);
-      facePlane.position.set(hx - wallT - FLOOR_BTN_D * 0.5 - 0.004, ly, gridAlong);
-      button.rotation.y = Math.PI * 0.5;
+      const wallX = hx - wallT;
+      button.position.set(wallX - panelBoardDepth - buttonDepth * 0.5, ly, gridAlong);
+      facePlane.position.set(wallX - panelBoardDepth - buttonDepth - buttonFrontPad, ly, gridAlong);
       facePlane.rotation.y = Math.PI * 0.5;
     } else if (face === "n") {
-      button.position.set(gridAlong, ly, -hz + wallT + 0.03);
-      facePlane.position.set(gridAlong, ly, -hz + wallT + FLOOR_BTN_D * 0.5 + 0.004);
+      const wallZ = -hz + wallT;
+      button.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth * 0.5);
+      facePlane.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth + buttonFrontPad);
     } else {
-      button.position.set(gridAlong, ly, hz - wallT - 0.03);
-      facePlane.position.set(gridAlong, ly, hz - wallT - FLOOR_BTN_D * 0.5 - 0.004);
-      button.rotation.y = Math.PI;
+      const wallZ = hz - wallT;
+      button.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth * 0.5);
+      facePlane.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth - buttonFrontPad);
       facePlane.rotation.y = Math.PI;
     }
     panelRoot.add(button);

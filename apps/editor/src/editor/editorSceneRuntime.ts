@@ -1526,8 +1526,6 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   applyEnvironment(useEditorStore.getState().useHdriEnvironment);
   syncTransformAttachment();
 
-  const transformRoot = transformHelper;
-
   const onPointerDown = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
     if (ev.currentTarget !== canvas) return;
@@ -1543,12 +1541,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-    transformRoot.updateMatrixWorld(true);
     raycaster.setFromCamera(pointer, pickCam);
-
-    const gizmoHits = raycaster.intersectObjects([transformRoot], true);
-
-    if (gizmoHits.length > 0) {
+    if (transformControls.dragging || levelEditorTransformGesture) {
       fpClickCandidate = null;
       levelClickCandidate = null;
       return;
@@ -1638,11 +1632,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       const rect = canvas.getBoundingClientRect();
       pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-      transformRoot.updateMatrixWorld(true);
       raycaster.setFromCamera(pointer, pickCam);
-
-      const gizmoHitsUp = raycaster.intersectObjects([transformRoot], true);
-      if (gizmoHitsUp.length > 0) return;
 
       const picks = getFpViewmodelAuthoringPicks();
       if (picks.length === 0) return;
@@ -1670,11 +1660,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
-    transformRoot.updateMatrixWorld(true);
     raycaster.setFromCamera(pointer, pickCam);
-
-    const gizmoHitsUp = raycaster.intersectObjects([transformRoot], true);
-    if (gizmoHitsUp.length > 0) return;
 
     if (!levelCandidate.id) {
       preferredPreviewSelectionTarget = null;
