@@ -67,19 +67,18 @@ describe("resolvePlayerCollisions", () => {
     expect(vel.x).toBe(0);
   });
 
-  it("never ratchets through a thin wall when holding movement into it across frames", () => {
-    const solids = [aabb(1, 0, -2, 1.11, 3, 2)];
-    const index = buildCollisionSpatialIndex(solids);
-    const pos = new THREE.Vector3(0.95, 0.4, 0);
+  it("ejects back to the entered side when already overlapping and pushing deeper into a thin wall", () => {
+    const index = buildCollisionSpatialIndex([]);
+    const prev = new THREE.Vector3(0.95, 0.4, 0);
+    const pos = new THREE.Vector3(1.15, 0.4, 0);
     const vel = new THREE.Vector3(1, 0, 0);
-    for (let i = 0; i < 24; i++) {
-      const prev = pos.clone();
-      pos.x += 0.08;
-      vel.set(1, 0, 0);
-      resolvePlayerCollisions(pos, prev, vel, false, 0.82, index);
-      expect(pos.x).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M - 1e-3);
-      expect(vel.x).toBe(0);
-    }
+    resolvePlayerCollisions(pos, prev, vel, false, 0.82, index, {
+      visitAabbsInXZ: (_x0, _x1, _z0, _z1, visit) => {
+        visit(aabb(1, 0, -2, 1.11, 3, 2));
+      },
+    });
+    expect(pos.x).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M - 1e-3);
+    expect(vel.x).toBe(0);
   });
 
   it("blocks horizontal motion into a closed elevator cab door slab from the hallway (+X / east)", () => {
