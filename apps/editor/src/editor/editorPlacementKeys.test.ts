@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
-import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
+import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_OPENING_PROXY_ID } from "@the-mammoth/world";
 import {
   floorPlacedObjectIdForTransformRoot,
   interiorEntityIdForTransformRoot,
@@ -76,6 +76,13 @@ describe("resolveLandingKitPickId", () => {
     expect(resolveLandingKitPickTarget(glass)).toBe(proxy);
   });
 
+  it("returns individually tagged landing frame volumes directly", () => {
+    const frame = new THREE.Mesh();
+    frame.userData.editorLandingPartId = "landing_frame_top_rail";
+    expect(resolveLandingKitPickId(frame)).toBe("landing_frame_top_rail");
+    expect(resolveLandingKitPickTarget(frame)).toBe(frame);
+  });
+
   it("returns null when absent", () => {
     expect(resolveLandingKitPickId(new THREE.Mesh())).toBe(null);
   });
@@ -121,6 +128,18 @@ describe("resolveStairWellPartId", () => {
     flight.add(tread);
     expect(resolveStairWellPartId(tread)).toBe("stair_flight_lower");
     expect(resolveStairWellPartTarget(tread)).toBe(flight);
+  });
+
+  it("maps stair opening proxies to the shared opening selection id", () => {
+    const root = new THREE.Group();
+    const proxy = new THREE.Mesh();
+    proxy.name = STAIR_WELL_OPENING_PROXY_ID;
+    proxy.userData.editorStairOpeningProxy = true;
+    root.add(proxy);
+    const child = new THREE.Mesh();
+    proxy.add(child);
+    expect(resolveStairWellPartId(child)).toBe(STAIR_WELL_OPENING_PROXY_ID);
+    expect(resolveStairWellPartTarget(child)).toBe(proxy);
   });
 });
 

@@ -3,10 +3,11 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   buildCollisionSpatialIndex,
-  buildStaticCollisionSceneForBuilding,
   buildCellMeshes,
   buildWalkSurfaceSpatialIndex,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  GENERATED_COLLISION_BLOCKER_AABBS,
+  GENERATED_WALK_SURFACE_AABBS,
   instantiateBuildingFloorStack,
   parseBuildingDoc,
   parseCellDoc,
@@ -37,21 +38,13 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
   const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
-  const collisionScene = buildStaticCollisionSceneForBuilding(
-    building,
-    getFloorDoc,
-    { floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M },
-  );
-  const walkAABBs = walkSurfaceAABBsForBuilding(
-    building,
-    getFloorDoc,
-    DEFAULT_BUILDING_FLOOR_SPACING_M,
-  );
+  const blockerAABBs = GENERATED_COLLISION_BLOCKER_AABBS;
+  const walkAABBs = GENERATED_WALK_SURFACE_AABBS;
   const walkFootprint =
     walkSurfaceAabbXZFootprint(walkAABBs) ??
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkAABBs);
-  const staticCollisionIndex = buildCollisionSpatialIndex(collisionScene.solids);
+  const staticCollisionIndex = buildCollisionSpatialIndex(blockerAABBs);
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) =>
     walkSpatialIndex.sampleTopYWithExteriorGround(worldX, worldZ, probeTopY, walkFootprint, {
       footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
@@ -73,7 +66,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     building,
     buildingRoot,
     cellRoot,
-    staticCollisionSolids: collisionScene.solids,
+    staticCollisionSolids: blockerAABBs,
     staticCollisionIndex,
     sampleWalkTopBase,
   };

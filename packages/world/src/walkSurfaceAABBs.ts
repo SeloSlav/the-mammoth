@@ -1,17 +1,17 @@
-import type { BuildingDoc, FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import type { BuildingDoc, FloorDoc, PlacedObject, StairWellDef } from "@the-mammoth/schemas";
+import { type CollisionAabb } from "./collisionScene.js";
 import {
-  buildStaticCollisionSceneForBuilding,
-  type CollisionAabb,
-} from "./collisionScene.js";
-import type { GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
-import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
-import {
+  getBuildingStairShaftSpecs,
   shaftPlanKey,
+  STOREY_SPACING_M,
 } from "./buildingStairShafts.js";
+import { resolveFloorDocForLevel, type GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
+import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
   collectShaftSlabHoles,
   hollowShellXZRectsWithShaftCutouts,
   mergeElevatorShaftSlabHolesFromFloorDocs,
+  mergeShaftSlabHolesFromFloorDocs,
   punchElevatorHolesInShellRects,
   subtractHolesFromRect,
   type RectXZ,
@@ -329,14 +329,63 @@ export function walkSurfaceAABBsForBuilding(
   floorSpacingM: number,
   options?: {
     getFloorOverrideDoc?: GetFloorOverrideDoc;
+    stairWellDef?: StairWellDef;
   },
 ): WalkSurfaceAabb[] {
-  return [
-    ...buildStaticCollisionSceneForBuilding(building, getFloorDoc, {
-      floorSpacingM,
+  const spacing = floorSpacingM;
+  const sorted = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+  const resolveDocForRef = (ref: BuildingDoc["floorRefs"][number]) =>
+    resolveFloorDocForLevel({
+      building,
+      ref,
+      getFloorDoc,
       getFloorOverrideDoc: options?.getFloorOverrideDoc,
-    }).walkables,
-  ];
+    });
+
+  const stairShaftSpecs = getBuildingStairShaftSpecs(
+    building,
+    getFloorDoc,
+    sorted,
+    spacing,
+  );
+  const stairShaftSkipKeys = new Set(stairShaftSpecs.map((s) => s.planKey));
+
+  const docsForShaftMerge = sorted.map((r) =>
+    withoutElevatorsInStairwells(resolveDocForRef(r)),
+  );
+  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+  const shaftElevatorsMerged =
+    mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+
+  const ox = building.worldOrigin?.[0] ?? 0;
+  const oy = building.worldOrigin?.[1] ?? 0;
+  const oz = building.worldOrigin?.[2] ?? 0;
+
+  const out: WalkSurfaceAabb[] = [];
+
+  for (const ref of sorted) {
+    const doc = resolveDocForRef(ref);
+    const plateWorldOriginY = oy + (ref.levelIndex - 1) * spacing;
+    for (const b of walkSurfaceAABBsForFloorDoc(doc, plateWorldOriginY, {
+      omitStairWalkPlanKeys: stairShaftSkipKeys,
+      storyLevelIndex: ref.levelIndex,
+      shaftHolesPlateMerged,
+      shaftElevatorsMerged,
+    })) {
+      out.push(translateAabb(b, ox, 0, oz));
+    }
+  }
+
+  for (const s of stairShaftSpecs) {
+    for (let i = 0; i < s.storeyCount; i++) {
+      const segY = s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
+      for (const b of stairWellWalkLocalAABBs(s.sx, s.syPlate, s.sz, false)) {
+        out.push(translateAabb(b, ox + s.px, oy + segY, oz + s.pz));
+      }
+    }
+  }
+
+  return out;
 }
 
 export type SampleWalkGroundOpts = {

@@ -280,10 +280,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       const prev = s.stairWellDef;
       const next = fn(prev);
+      const entryOpeningChanged =
+        JSON.stringify(next.entryOpening) !== JSON.stringify(prev.entryOpening) ||
+        JSON.stringify(next.groundEntryOpening) !== JSON.stringify(prev.groundEntryOpening);
       const needsRebuild =
         next.id !== prev.id ||
         next.version !== prev.version ||
-        JSON.stringify(next.materials) !== JSON.stringify(prev.materials);
+        JSON.stringify(next.materials) !== JSON.stringify(prev.materials) ||
+        (entryOpeningChanged && s.mode !== "stairwell_preview");
       return {
         stairWellDef: next,
         dirty: true,
@@ -374,7 +378,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({
       stairWellAuthorScope,
       ...(s.mode === "stairwell_preview" ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
-      ...(stairWellAuthorScope === "ground" && s.selectedId === "stair_corner_landing"
+      ...((stairWellAuthorScope === "ground" &&
+        (s.selectedId === "stair_landing_lower" || s.selectedId === "stair_corner_landing")) ||
+      (stairWellAuthorScope === "typical" && s.selectedId === "shaft_floor")
         ? { selectedId: null }
         : {}),
     })),

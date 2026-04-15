@@ -16,6 +16,10 @@ import {
   LANDING_DOOR_OPENING_PROXY_ID,
   rebuildLandingDoorPreviewSwing,
   applyStairWellPartTransforms,
+  rebuildStairWellPreviewOpening,
+  rebuildStairWellPreviewRoot,
+  stairWellEntryOpeningFromProxyMesh,
+  STAIR_WELL_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { useEditorStore } from "../state/editorStore.js";
 import {
@@ -33,6 +37,7 @@ import {
 import { registerFpConsumableAuthoringBridge } from "./fpConsumableAuthoringBridge.js";
 import { resolveFpAuthorPickId } from "./fpAuthorPickResolve.js";
 import { FpSelectionAabbOutline } from "./fpSelectionAabbOutline.js";
+import { PreviewSelectionShapeOutline } from "./previewSelectionShapeOutline.js";
 import {
   adoptWeaponPresentationFileText,
   getLastWeaponPresentationFileText,
@@ -250,6 +255,41 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (store.mode === "stairwell_preview") {
       let o: THREE.Object3D | null = attached;
+      while (o) {
+        if (o.userData.editorStairOpeningProxy === true) {
+          const open = stairWellEntryOpeningFromProxyMesh(o, store.stairWellDef);
+          if (!open) return;
+          store.patchStairWellDef((d) => ({
+            ...d,
+            ...(store.stairWellAuthorScope === "ground"
+              ? {
+                  groundEntryOpening: {
+                    ...d.groundEntryOpening,
+                    ...open,
+                  },
+                }
+              : {
+                  entryOpening: {
+                    ...d.entryOpening,
+                    ...open,
+                  },
+                }),
+          }));
+          let previewRoot: THREE.Object3D | null = o;
+          while (previewRoot && previewRoot.name !== "editor_stair_well_preview") {
+            previewRoot = previewRoot.parent;
+          }
+          if (previewRoot instanceof THREE.Group) {
+            rebuildStairWellPreviewOpening(
+              previewRoot,
+              useEditorStore.getState().stairWellDef,
+            );
+          }
+          return;
+        }
+        o = o.parent;
+      }
+      o = attached;
       let partId: string | undefined;
       while (o) {
         partId = o.userData.editorStairPartId as string | undefined;
@@ -532,11 +572,21 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   const fpSelectionOutline = new FpSelectionAabbOutline();
   fpSelectionOutline.visible = false;
   scene.add(fpSelectionOutline);
-  const previewSelectionOutline = new FpSelectionAabbOutline(0xff4fa3);
+  const previewSelectionOutline = new PreviewSelectionShapeOutline(0xff4fa3);
   previewSelectionOutline.visible = false;
   scene.add(previewSelectionOutline);
 
   let fpClickCandidate: { x: number; y: number } | null = null;
+  let levelClickCandidate:
+    | {
+        x: number;
+        y: number;
+        id: string | null;
+        target: THREE.Object3D | null;
+        hitFloorDocId: string | null;
+        hitLevelIndex: number | null;
+      }
+    | null = null;
   let preferredPreviewSelectionTarget: THREE.Object3D | null = null;
 
   let buildingRoot: THREE.Group | null = null;
@@ -659,6 +709,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       return target;
     }
     if (s.mode === "stairwell_preview") {
+      if (s.selectedId === STAIR_WELL_OPENING_PROXY_ID) {
+        buildingRoot.traverse((o) => {
+          if (o.userData.editorStairOpeningProxy === true) target = o;
+        });
+        return target;
+      }
       buildingRoot.traverse((o) => {
         const pid = o.userData.editorStairPartId as string | undefined;
         if (pid === s.selectedId && target === null) target = o;
@@ -776,6 +832,15 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   /** Kept for compatibility with existing weapon authoring bridge registration. */
   function frameOrbitOnFpViewmodel(): void {
     frameOrbitOnActiveFpSession();
+  }
+
+  function applyLevelEditorMouseButtons(st: ReturnType<typeof useEditorStore.getState>): void {
+    void st;
+    orbitControls.mouseButtons = {
+      LEFT: MOUSE.ROTATE,
+      MIDDLE: MOUSE.DOLLY,
+      RIGHT: MOUSE.PAN,
+    };
   }
 
   /**
@@ -1168,7 +1233,8 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         transformControls.attach(target);
         transformControls.setMode(s.transformMode);
         const opening =
-          s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID;
+          (s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID) ||
+          (s.mode === "stairwell_preview" && s.selectedId === STAIR_WELL_OPENING_PROXY_ID);
         transformControls.setSize(opening ? 1.35 : 1);
         if (opening) {
           transformControls.setTranslationSnap(null);
@@ -1339,6 +1405,19 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
             !transformControls.dragging &&
             !levelEditorTransformGesture
           ) {
+            const stairOpeningChanged =s
+              s.mode === "stairwell_preview" &&
+              (JSON.stringify(s.stairWellDef.entryOpening) !==
+                JSON.stringify(prev.stairWellDef.entryOpening) ||
+                JSON.stringify(s.stairWellDef.groundEntryOpening) !==
+                  JSON.stringify(prev.stairWellDef.groundEntryOpening));
+            const stairPreviewRoot = buildingRoot?.getObjectByName("editor_stair_well_preview");
+            if (stairOpeningChanged && stairPreviewRoot instanceof THREE.Group) {
+              rebuildStairWellPreviewRoot(
+                stairPreviewRoot,
+                s.stairWellDef,
+              );
+            }
             syncTransformsFromStore();
           }
         }
@@ -1369,7 +1448,15 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           s.elevatorCabDef !== prev.elevatorCabDef ||
           s.landingKitDef !== prev.landingKitDef ||
           s.stairWellDef !== prev.stairWellDef);
-      if (tcFp || tcLevel) {
+      /**
+       * Preview gizmo drags patch Zustand on every pointer move. Re-attaching here would detach the
+       * control from the captured pointer mid-gesture, which feels like "losing grip" after a tiny
+       * movement. Defer level-editor attachment refreshes until the drag ends (`mouseUp` already
+       * calls `syncTransformAttachment()` after store/mesh reconciliation).
+       */
+      const shouldSyncLevelAttachment =
+        tcLevel && !transformControls.dragging && !levelEditorTransformGesture;
+      if (tcFp || shouldSyncLevelAttachment) {
         syncTransformAttachment();
       }
 
@@ -1393,11 +1480,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           RIGHT: MOUSE.PAN,
         };
       } else {
-        orbitControls.mouseButtons = {
-          LEFT: MOUSE.ROTATE,
-          MIDDLE: MOUSE.DOLLY,
-          RIGHT: MOUSE.PAN,
-        };
+        applyLevelEditorMouseButtons(s);
         camera.up.set(0, 1, 0);
       }
 
@@ -1434,11 +1517,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           RIGHT: MOUSE.PAN,
         };
       } else {
-        orbitControls.mouseButtons = {
-          LEFT: MOUSE.ROTATE,
-          MIDDLE: MOUSE.DOLLY,
-          RIGHT: MOUSE.PAN,
-        };
+        applyLevelEditorMouseButtons(st);
       }
     }
   }
@@ -1471,59 +1550,53 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (gizmoHits.length > 0) {
       fpClickCandidate = null;
+      levelClickCandidate = null;
       return;
     }
 
     if (isFpMode(st.mode)) {
       fpClickCandidate = { x: ev.clientX, y: ev.clientY };
+      levelClickCandidate = null;
       return;
     }
     fpClickCandidate = null;
-
     const targets: THREE.Object3D[] = [];
     if (buildingRoot) targets.push(buildingRoot);
     const intersects = raycaster.intersectObjects(targets, true);
-    if (intersects.length === 0) {
-      preferredPreviewSelectionTarget = null;
-      useEditorStore.getState().setSelectedId(null);
-      return;
-    }
-    const hit = intersects[0]!;
+    const hit = intersects[0] ?? null;
     const store = useEditorStore.getState();
-    preferredPreviewSelectionTarget =
-      store.mode === "cab"
-        ? resolveCabPartTarget(hit.object)
-        : store.mode === "landing_preview"
-          ? resolveLandingKitPickTarget(hit.object)
-          : store.mode === "stairwell_preview"
-            ? resolveStairWellPartTarget(hit.object)
-            : null;
-    const id = hit
-      ? store.mode === "cab"
-        ? resolveCabPartId(hit.object)
-        : store.mode === "landing_preview"
-          ? resolveLandingKitPickId(hit.object)
-          : store.mode === "stairwell_preview"
-            ? resolveStairWellPartId(hit.object)
-          : resolvePlacedId(hit.object, store.floorDocs)
-      : null;
-    if (hit && id && store.mode === "floor") {
-      const hitFloorDocId = resolveGizmoFloorDocId(hit.object, store.activeFloorDocId);
-      if (hitFloorDocId !== store.activeFloorDocId) {
-        useEditorStore.getState().setActiveFloorDocId(hitFloorDocId);
-      }
-      const hitLevelIndex = ancestorLevelIndex(hit.object);
-      if (hitLevelIndex !== null && hitLevelIndex !== store.focusedStoryLevelIndex) {
-        useEditorStore.getState().setFocusedStoryLevelIndex(hitLevelIndex);
-      }
-    } else if (hit && id && store.mode === "floor_override") {
-      const hitLevelIndex = ancestorLevelIndex(hit.object);
-      if (hitLevelIndex !== null && hitLevelIndex !== store.focusedStoryLevelIndex) {
-        useEditorStore.getState().setFocusedStoryLevelIndex(hitLevelIndex);
-      }
-    }
-    if (!id) preferredPreviewSelectionTarget = null;
-    useEditorStore.getState().setSelectedId(id);
+    levelClickCandidate = {
+      x: ev.clientX,
+      y: ev.clientY,
+      id:
+        hit == null
+          ? null
+          : store.mode === "cab"
+            ? resolveCabPartId(hit.object)
+            : store.mode === "landing_preview"
+              ? resolveLandingKitPickId(hit.object)
+              : store.mode === "stairwell_preview"
+                ? resolveStairWellPartId(hit.object)
+                : resolvePlacedId(hit.object, store.floorDocs),
+      target:
+        hit == null
+          ? null
+          : store.mode === "cab"
+            ? resolveCabPartTarget(hit.object)
+            : store.mode === "landing_preview"
+              ? resolveLandingKitPickTarget(hit.object)
+              : store.mode === "stairwell_preview"
+                ? resolveStairWellPartTarget(hit.object)
+                : null,
+      hitFloorDocId:
+        hit && store.mode === "floor"
+          ? resolveGizmoFloorDocId(hit.object, store.activeFloorDocId)
+          : null,
+      hitLevelIndex:
+        hit && (store.mode === "floor" || store.mode === "floor_override")
+          ? ancestorLevelIndex(hit.object)
+          : null,
+    };
   };
 
   function rewireCanvasPrimaryPointerListeners(): void {
@@ -1546,24 +1619,54 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (ev.currentTarget !== canvas) return;
 
-    if (!isFpMode(st.mode)) {
+    if (isFpMode(st.mode)) {
+      if (!fpClickCandidate) return;
+      const dx = ev.clientX - fpClickCandidate.x;
+      const dy = ev.clientY - fpClickCandidate.y;
       fpClickCandidate = null;
+      levelClickCandidate = null;
+      if (Math.hypot(dx, dy) > 5) return;
+
+      const pickCam =
+        st.fpAuthorCamera === "gameplay" && isWeaponFpAuthoringState(st) && fpSession
+          ? fpSession.getGameplayCamera()
+          : st.fpAuthorCamera === "gameplay" &&
+              isConsumableFpAuthoringState(st) &&
+              fpConsumableSession
+            ? fpConsumableSession.getGameplayCamera()
+            : camera;
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      transformRoot.updateMatrixWorld(true);
+      raycaster.setFromCamera(pointer, pickCam);
+
+      const gizmoHitsUp = raycaster.intersectObjects([transformRoot], true);
+      if (gizmoHitsUp.length > 0) return;
+
+      const picks = getFpViewmodelAuthoringPicks();
+      if (picks.length === 0) return;
+      const hits = raycaster.intersectObjects(
+        picks.map((p) => p.object),
+        true,
+      );
+      if (hits.length === 0) return;
+      const id = resolveFpAuthorPickId(hits[0]!.object, picks);
+      if (id) {
+        useEditorStore.getState().pickFpAuthorTarget(id);
+        }
       return;
     }
-    if (!fpClickCandidate) return;
-    const dx = ev.clientX - fpClickCandidate.x;
-    const dy = ev.clientY - fpClickCandidate.y;
+
+    if (!levelClickCandidate) return;
+    const levelCandidate = levelClickCandidate;
+    const dx = ev.clientX - levelCandidate.x;
+    const dy = ev.clientY - levelCandidate.y;
     fpClickCandidate = null;
+    levelClickCandidate = null;
     if (Math.hypot(dx, dy) > 5) return;
 
-    const pickCam =
-      st.fpAuthorCamera === "gameplay" && isWeaponFpAuthoringState(st) && fpSession
-        ? fpSession.getGameplayCamera()
-        : st.fpAuthorCamera === "gameplay" &&
-            isConsumableFpAuthoringState(st) &&
-            fpConsumableSession
-          ? fpConsumableSession.getGameplayCamera()
-          : camera;
+    const pickCam = camera;
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1573,17 +1676,42 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const gizmoHitsUp = raycaster.intersectObjects([transformRoot], true);
     if (gizmoHitsUp.length > 0) return;
 
-    const picks = getFpViewmodelAuthoringPicks();
-    if (picks.length === 0) return;
-    const hits = raycaster.intersectObjects(
-      picks.map((p) => p.object),
-      true,
-    );
-    if (hits.length === 0) return;
-    const id = resolveFpAuthorPickId(hits[0]!.object, picks);
-    if (id) {
-      useEditorStore.getState().pickFpAuthorTarget(id);
+    if (!levelCandidate.id) {
+      preferredPreviewSelectionTarget = null;
+      useEditorStore.getState().setSelectedId(null);
+      previewSelectionOutline.setFromObject(null);
+      syncTransformAttachment();
+      return;
     }
+    const store = useEditorStore.getState();
+    preferredPreviewSelectionTarget = levelCandidate.target;
+    if (store.mode === "floor" && levelCandidate.hitFloorDocId) {
+      if (levelCandidate.hitFloorDocId !== store.activeFloorDocId) {
+        useEditorStore.getState().setActiveFloorDocId(levelCandidate.hitFloorDocId);
+      }
+      if (
+        levelCandidate.hitLevelIndex !== null &&
+        levelCandidate.hitLevelIndex !== store.focusedStoryLevelIndex
+      ) {
+        useEditorStore.getState().setFocusedStoryLevelIndex(levelCandidate.hitLevelIndex);
+      }
+    } else if (
+      store.mode === "floor_override" &&
+      levelCandidate.hitLevelIndex !== null &&
+      levelCandidate.hitLevelIndex !== store.focusedStoryLevelIndex
+    ) {
+      useEditorStore.getState().setFocusedStoryLevelIndex(levelCandidate.hitLevelIndex);
+    }
+    if (
+      store.mode === "cab" ||
+      store.mode === "landing_preview" ||
+      store.mode === "stairwell_preview"
+    ) {
+      useEditorStore.getState().setTransformMode("translate");
+    }
+    useEditorStore.getState().setSelectedId(levelCandidate.id);
+    previewSelectionOutline.setFromObject(preferredPreviewSelectionTarget);
+    syncTransformAttachment();
   };
   canvas.addEventListener("pointerup", onPointerUp);
 
@@ -1713,8 +1841,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     fpSelectionOutline.geometry.dispose();
     (fpSelectionOutline.material as THREE.Material).dispose();
     scene.remove(fpSelectionOutline);
-    previewSelectionOutline.geometry.dispose();
-    (previewSelectionOutline.material as THREE.Material).dispose();
+    previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
     if (buildingRoot) {
       contentRoot.remove(buildingRoot);

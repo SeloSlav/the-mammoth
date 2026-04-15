@@ -86,6 +86,7 @@ import {
 import { resolveAuthoritativeInteractionPose } from "./fpInteractionAuthority";
 import { pushFpPerfFrame, resetFpPerfStore } from "./fpSessionPerfStore";
 import { FpHotbarConsumableVisual } from "./fpHotbarConsumableVisual";
+import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -134,6 +135,8 @@ export async function mountFpSession(
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
   scene.add(playerRig);
+  const fpCollisionDebug = createFpCollisionDebugOverlay();
+  scene.add(fpCollisionDebug.group);
 
   const {
     building,
@@ -596,6 +599,7 @@ export async function mountFpSession(
         visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) =>
           fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
       },
+      opts.locoState.grounded,
     );
 
     const bodyH = opts.crouch
@@ -1088,6 +1092,7 @@ export async function mountFpSession(
     _mainStepOpts.bodyYawRad = bodyYaw;
     const headY = simulatePredictedPlayerStep(_mainStepOpts);
     const _t_physicsEnd = performance.now();
+    fpCollisionDebug.update(pos, loco.velocity);
 
     // --- Elevator section timing ---
     fpElevators.tick(dt, nowMs, pos);

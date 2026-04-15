@@ -112,17 +112,82 @@ function stdMatFromSlot(
   return m;
 }
 
-/**
- * Editor/game-shared cab interior preview (car only): same proportions as {@link FpElevatorShaftVisual}.
- */
-export function buildElevatorCabCarPreviewRoot(args: {
+export type ElevatorCabFloorButtonVisual = {
+  level: number;
+  bodyMesh: THREE.Mesh;
+  labelMesh: THREE.Mesh;
+};
+
+export type ElevatorCabCarVisual = {
+  root: THREE.Group;
+  panelRoot: THREE.Group;
+  doorL: THREE.Group | null;
+  doorR: THREE.Group | null;
+  floorButtons: ElevatorCabFloorButtonVisual[];
+};
+
+type BuildElevatorCabCarVisualArgs = {
   layout: ElevatorShaftLayout;
   def?: ElevatorCabDef;
   maxLevel?: number;
-  /** If true, doors are left at50% open for framing. */
-  previewDoorOpen01?: number;
-}): THREE.Group {
-  const { layout, def, maxLevel = 1, previewDoorOpen01 = 0.5 } = args;
+  /** Door opening fraction used for static previews or initial game state. */
+  doorOpen01?: number;
+  /** Editor cab authoring hides doors so transforms stay focused on authored shell/panel parts. */
+  includeDoors?: boolean;
+  /** Optional override for floor label faces (gameplay swaps highlight materials at runtime). */
+  floorButtonLabelMaterial?: THREE.Material;
+  rootName?: string;
+};
+
+function panelBoardPosition(args: {
+  face: ElevatorShaftLayout["doorFace"];
+  hx: number;
+  hz: number;
+  wallT: number;
+  floorT: number;
+  gridRows: number;
+}): { position: THREE.Vector3; rotationY: number } {
+  const { face, hx, hz, wallT, floorT, gridRows } = args;
+  const panelCenterY =
+    floorT + 1.12 + Math.max(0, gridRows - 1) * (FLOOR_BTN_H + FLOOR_GAP) * 0.5;
+  const boardInset = 0.019;
+  if (face === "e") {
+    return {
+      position: new THREE.Vector3(-hx + wallT + boardInset, panelCenterY, 0),
+      rotationY: -Math.PI * 0.5,
+    };
+  }
+  if (face === "w") {
+    return {
+      position: new THREE.Vector3(hx - wallT - boardInset, panelCenterY, 0),
+      rotationY: Math.PI * 0.5,
+    };
+  }
+  if (face === "n") {
+    return {
+      position: new THREE.Vector3(0, panelCenterY, -hz + wallT + boardInset),
+      rotationY: 0,
+    };
+  }
+  return {
+    position: new THREE.Vector3(0, panelCenterY, hz - wallT - boardInset),
+    rotationY: Math.PI,
+  };
+}
+
+/**
+ * Shared elevator cab shell/panel geometry used by both the editor preview and the in-game car.
+ */
+export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): ElevatorCabCarVisual {
+  const {
+    layout,
+    def,
+    maxLevel = 1,
+    doorOpen01 = 0.5,
+    includeDoors = true,
+    floorButtonLabelMaterial,
+    rootName = "editor_elevator_cab_preview",
+  } = args;
   const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
   const innerH = layout.sy - 2 * 0.11 - CAR_CEIL_BELOW_SHAFT_TOP;
   const hx = Math.max(0.12, halfX - CAR_INNER_MARGIN);
@@ -140,18 +205,19 @@ export function buildElevatorCabCarPreviewRoot(args: {
   });
   const clampedMaxLevel = Math.max(1, maxLevel);
   const atlasRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_ATLAS_COLS));
-  const buttonAtlas = buildElevFloorAtlas(clampedMaxLevel);
-  const buttonMat = new THREE.MeshStandardMaterial({
-    map: buttonAtlas,
-    color: 0xffffff,
-    roughness: 0.55,
-    metalness: 0.12,
-    emissive: 0x000000,
-    side: THREE.DoubleSide,
-  });
+  const buttonMat =
+    floorButtonLabelMaterial ??
+    new THREE.MeshStandardMaterial({
+      map: buildElevFloorAtlas(clampedMaxLevel),
+      color: 0xffffff,
+      roughness: 0.55,
+      metalness: 0.12,
+      emissive: 0x000000,
+      side: THREE.DoubleSide,
+    });
 
   const root = new THREE.Group();
-  root.name = "editor_elevator_cab_preview";
+  root.name = rootName;
 
   const floorT = 0.08;
   const wallT = 0.06;
@@ -204,46 +270,48 @@ export function buildElevatorCabCarPreviewRoot(args: {
     addWall("cab_wall_side_w", wallT, wallH, hz * 2 - wallT * 2, -hx + wallT * 0.5, midY, 0);
   }
 
-  const doorL = new THREE.Group();
-  const doorR = new THREE.Group();
-  const leafW = DOOR_W * 0.5 - 0.02;
-  const leafGeom = new THREE.BoxGeometry(
-    face === "e" || face === "w" ? DOOR_TH : leafW,
-    DOOR_H,
-    face === "e" || face === "w" ? leafW : DOOR_TH,
-  );
-  const lm = new THREE.Mesh(leafGeom, doorMat);
-  lm.name = "cab_door_leaf_l";
-  lm.userData.editorCabPartId = "cab_door_leaf_l";
-  doorL.add(lm);
-  const rm = new THREE.Mesh(leafGeom.clone(), doorMat);
-  rm.name = "cab_door_leaf_r";
-  rm.userData.editorCabPartId = "cab_door_leaf_r";
-  doorR.add(rm);
+  let doorL: THREE.Group | null = null;
+  let doorR: THREE.Group | null = null;
+  if (includeDoors) {
+    doorL = new THREE.Group();
+    doorR = new THREE.Group();
+    const leafW = DOOR_W * 0.5 - 0.02;
+    const leafGeom = new THREE.BoxGeometry(
+      face === "e" || face === "w" ? DOOR_TH : leafW,
+      DOOR_H,
+      face === "e" || face === "w" ? leafW : DOOR_TH,
+    );
+    const lm = new THREE.Mesh(leafGeom, doorMat);
+    lm.name = "cab_door_leaf_l";
+    doorL.add(lm);
+    const rm = new THREE.Mesh(leafGeom.clone(), doorMat);
+    rm.name = "cab_door_leaf_r";
+    doorR.add(rm);
 
-  const doorX =
-    face === "e" ? hx - DOOR_TH * 0.5 - 0.02 : face === "w" ? -hx + DOOR_TH * 0.5 + 0.02 : 0;
-  const doorZ =
-    face === "n" ? hz - DOOR_TH * 0.5 - 0.02 : face === "s" ? -hz + DOOR_TH * 0.5 + 0.02 : 0;
-  const doorY = floorT + DOOR_H * 0.5 + 0.06;
-  const t = doorSlideAxis(face);
-  const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, previewDoorOpen01);
-  const tL = t.clone().multiplyScalar(-DOOR_W * 0.25 - slide);
-  const tR = t.clone().multiplyScalar(DOOR_W * 0.25 + slide);
-  doorL.position.set(
-    doorX + (face === "n" || face === "s" ? tL.x : 0),
-    doorY,
-    doorZ + (face === "e" || face === "w" ? tL.z : 0),
-  );
-  doorR.position.set(
-    doorX + (face === "n" || face === "s" ? tR.x : 0),
-    doorY,
-    doorZ + (face === "e" || face === "w" ? tR.z : 0),
-  );
-  doorL.name = "cab_door_l";
-  doorR.name = "cab_door_r";
-  root.add(doorL);
-  root.add(doorR);
+    const doorX =
+      face === "e" ? hx - DOOR_TH * 0.5 - 0.02 : face === "w" ? -hx + DOOR_TH * 0.5 + 0.02 : 0;
+    const doorZ =
+      face === "n" ? hz - DOOR_TH * 0.5 - 0.02 : face === "s" ? -hz + DOOR_TH * 0.5 + 0.02 : 0;
+    const doorY = floorT + DOOR_H * 0.5 + 0.06;
+    const t = doorSlideAxis(face);
+    const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, doorOpen01);
+    const tL = t.clone().multiplyScalar(-DOOR_W * 0.25 - slide);
+    const tR = t.clone().multiplyScalar(DOOR_W * 0.25 + slide);
+    doorL.position.set(
+      doorX + (face === "n" || face === "s" ? tL.x : 0),
+      doorY,
+      doorZ + (face === "e" || face === "w" ? tL.z : 0),
+    );
+    doorR.position.set(
+      doorX + (face === "n" || face === "s" ? tR.x : 0),
+      doorY,
+      doorZ + (face === "e" || face === "w" ? tR.z : 0),
+    );
+    doorL.name = "cab_door_l";
+    doorR.name = "cab_door_r";
+    root.add(doorL);
+    root.add(doorR);
+  }
 
   const panelRoot = new THREE.Group();
   panelRoot.name = "cab_floor_panel";
@@ -256,10 +324,14 @@ export function buildElevatorCabCarPreviewRoot(args: {
     panelMat,
   );
   panelBoard.name = "cab_floor_panel_board";
+  const boardPose = panelBoardPosition({ face, hx, hz, wallT, floorT, gridRows });
+  panelBoard.position.copy(boardPose.position);
+  panelBoard.rotation.y = boardPose.rotationY;
   panelRoot.add(panelBoard);
   const zSpan = (FLOOR_COLS - 1) * (FLOOR_BTN_W + FLOOR_GAP);
   const z0 = -zSpan * 0.5;
   const y0 = floorT + 1.12;
+  const floorButtons: ElevatorCabFloorButtonVisual[] = [];
   for (let level = 1; level <= clampedMaxLevel; level++) {
     const idx = level - 1;
     const col = idx % FLOOR_COLS;
@@ -292,11 +364,32 @@ export function buildElevatorCabCarPreviewRoot(args: {
     }
     panelRoot.add(button);
     panelRoot.add(facePlane);
+    floorButtons.push({ level, bodyMesh: button, labelMesh: facePlane });
   }
   root.add(panelRoot);
 
   applyElevatorCabPartTransforms(root, def);
-  return root;
+  return { root, panelRoot, doorL, doorR, floorButtons };
+}
+
+/**
+ * Editor/game-shared cab interior preview root.
+ */
+export function buildElevatorCabCarPreviewRoot(args: {
+  layout: ElevatorShaftLayout;
+  def?: ElevatorCabDef;
+  maxLevel?: number;
+  /** If true, doors are left at 50% open for framing. */
+  previewDoorOpen01?: number;
+  includeDoors?: boolean;
+}): THREE.Group {
+  return buildElevatorCabCarVisual({
+    layout: args.layout,
+    def: args.def,
+    maxLevel: args.maxLevel,
+    doorOpen01: args.previewDoorOpen01,
+    includeDoors: args.includeDoors,
+  }).root;
 }
 
 /** Apply {@link ElevatorCabDef.partTransforms} to meshes tagged with `userData.editorCabPartId`. */

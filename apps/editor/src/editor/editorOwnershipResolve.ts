@@ -35,8 +35,8 @@ export function describeEditorSaveTarget(args: {
   if (mode === "landing_preview") {
     return {
       kind: "shared",
-      title: "Shared — LandingKitDef",
-      detail: "content/elevator/landing_kit.json (exterior door kit per landing)",
+      title: "Shared — CorridorDoorKit",
+      detail: "content/elevator/landing_kit.json (shared corridor door kit for elevator landings)",
     };
   }
   if (mode === "stairwell_preview") {

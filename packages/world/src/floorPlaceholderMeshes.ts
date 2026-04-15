@@ -1389,44 +1389,45 @@ export function buildFloorMeshes(
   }
 
   const stairDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
-  if (story === 1 || story === 99) {
-    for (const o of floor.objects) {
-      if (!o.prefabId.toLowerCase().includes("stair_well") && !o.prefabId.toLowerCase().includes("stairwell")) {
-        continue;
-      }
-      const sx = o.scale?.[0] ?? 1;
-      const sy = o.scale?.[1] ?? 1;
-      const sz = o.scale?.[2] ?? 1;
-      const towardPlateXZ = shaftDoorTowardPointFromFloorCorridors(
-        o.position[0],
-        o.position[2],
-        floor,
-        plateCx,
-        plateCz,
-      );
-      const resolved = resolveStairWellGroundDoor({
-        sx,
-        sy,
-        sz,
-        context: {
-          towardPlateXZ,
-          shaftPlateXZ: [o.position[0], o.position[2]],
-        },
-      });
-      if (!resolved) continue;
-      stairDoorPunchesPlate.push({
-        stairFace: resolved.groundDoor.face ?? "e",
-        tangentLocal: resolved.groundDoor.tangentOffsetAlongWall ?? 0,
-        doorHalfW: resolved.doorHalfW,
-        y0Local: resolved.y0Local,
-        y1Local: resolved.y1Local,
-        spx: o.position[0],
-        spz: o.position[2],
-        spy: o.position[1],
-        shx: sx * 0.5,
-        shz: sz * 0.5,
-      });
+  const stairAuthoringScope = story === 1 || story === 99 ? "ground" : "typical";
+  for (const o of floor.objects) {
+    if (!o.prefabId.toLowerCase().includes("stair_well") && !o.prefabId.toLowerCase().includes("stairwell")) {
+      continue;
     }
+    const sx = o.scale?.[0] ?? 1;
+    const sy = o.scale?.[1] ?? 1;
+    const sz = o.scale?.[2] ?? 1;
+    const towardPlateXZ = shaftDoorTowardPointFromFloorCorridors(
+      o.position[0],
+      o.position[2],
+      floor,
+      plateCx,
+      plateCz,
+    );
+    const resolved = resolveStairWellGroundDoor({
+      sx,
+      sy,
+      sz,
+      def: opts?.stairWellDef,
+      authoringScope: stairAuthoringScope,
+      context: {
+        towardPlateXZ,
+        shaftPlateXZ: [o.position[0], o.position[2]],
+      },
+    });
+    if (!resolved) continue;
+    stairDoorPunchesPlate.push({
+      stairFace: resolved.groundDoor.face ?? "e",
+      tangentLocal: resolved.groundDoor.tangentOffsetAlongWall ?? 0,
+      doorHalfW: resolved.doorHalfW,
+      y0Local: resolved.y0Local,
+      y1Local: resolved.y1Local,
+      spx: o.position[0],
+      spz: o.position[2],
+      spy: o.position[1],
+      shx: sx * 0.5,
+      shz: sz * 0.5,
+    });
   }
 
   const corridorShaftDoorPunchesPlate: readonly PlateStairCorridorDoorPunch[] = [
@@ -1504,24 +1505,24 @@ export function buildFloorMeshes(
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
       if (!opts?.stairShaftSkipKeys?.has(sk)) {
-        const resolvedGroundDoor =
-          story === 1 || story === 99
-            ? resolveStairWellGroundDoor({
-                sx,
-                sy,
-                sz,
-                context: {
-                  towardPlateXZ: shaftDoorTowardPointFromFloorCorridors(
-                    obj.position[0],
-                    obj.position[2],
-                    floor,
-                    plateCx,
-                    plateCz,
-                  ),
-                  shaftPlateXZ: [obj.position[0], obj.position[2]],
-                },
-              })?.groundDoor
-            : null;
+        const stairDoorContext = {
+          towardPlateXZ: shaftDoorTowardPointFromFloorCorridors(
+            obj.position[0],
+            obj.position[2],
+            floor,
+            plateCx,
+            plateCz,
+          ),
+          shaftPlateXZ: [obj.position[0], obj.position[2]] as const,
+        };
+        const resolvedGroundDoor = resolveStairWellGroundDoor({
+          sx,
+          sy,
+          sz,
+          context: stairDoorContext,
+          def: opts?.stairWellDef,
+          authoringScope: story === 1 || story === 99 ? "ground" : "typical",
+        })?.groundDoor;
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,

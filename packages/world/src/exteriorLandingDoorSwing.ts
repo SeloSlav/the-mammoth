@@ -13,6 +13,10 @@ export const EXTERIOR_DOOR_H = EXTERIOR_DOOR_H_M;
 
 /** Glass mesh id; opening size is driven by {@link LandingKitDef.glassOpening}. */
 export const LANDING_DOOR_GLASS_PART_ID = "landing_glass_lite" as const;
+export const LANDING_DOOR_TOP_RAIL_PART_ID = "landing_frame_top_rail" as const;
+export const LANDING_DOOR_BOTTOM_RAIL_PART_ID = "landing_frame_bottom_rail" as const;
+export const LANDING_DOOR_LEFT_STILE_PART_ID = "landing_frame_left_stile" as const;
+export const LANDING_DOOR_RIGHT_STILE_PART_ID = "landing_frame_right_stile" as const;
 
 /** Editor-only gizmo target: resize / move the framed hole (glass follows). */
 export const LANDING_DOOR_OPENING_PROXY_ID = "landing_opening_proxy" as const;
@@ -69,17 +73,59 @@ export function populateExteriorLandingDoorSwing(
   const railBotH = Math.max(0.12, open.centerYM - open.heightM * 0.5 + panelH * 0.5);
   const stileW = Math.max(0.12, (panelW - open.widthM) * 0.5);
 
-  const addRed = (sx: number, sy: number, sz: number, x: number, y: number, z: number) => {
+  const addRed = (
+    id: string,
+    sx: number,
+    sy: number,
+    sz: number,
+    x: number,
+    y: number,
+    z: number,
+  ) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), redMat);
+    m.name = id;
+    m.userData.editorLandingPartId = id;
     m.position.set(x, y, z);
     m.castShadow = false;
     swing.add(m);
   };
 
-  addRed(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
-  addRed(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
-  addRed(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -stileW * 0.5);
-  addRed(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -panelW + stileW * 0.5);
+  addRed(
+    LANDING_DOOR_TOP_RAIL_PART_ID,
+    panelT,
+    railTopH,
+    panelW,
+    panelT * 0.5,
+    panelH * 0.5 - railTopH * 0.5,
+    centerZ,
+  );
+  addRed(
+    LANDING_DOOR_BOTTOM_RAIL_PART_ID,
+    panelT,
+    railBotH,
+    panelW,
+    panelT * 0.5,
+    -panelH * 0.5 + railBotH * 0.5,
+    centerZ,
+  );
+  addRed(
+    LANDING_DOOR_LEFT_STILE_PART_ID,
+    panelT,
+    open.heightM,
+    stileW,
+    panelT * 0.5,
+    open.centerYM,
+    -stileW * 0.5,
+  );
+  addRed(
+    LANDING_DOOR_RIGHT_STILE_PART_ID,
+    panelT,
+    open.heightM,
+    stileW,
+    panelT * 0.5,
+    open.centerYM,
+    -panelW + stileW * 0.5,
+  );
 
   const glassGeom = new THREE.BoxGeometry(
     0.046,

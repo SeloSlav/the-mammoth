@@ -70,6 +70,24 @@ export {
   buildCollisionSpatialIndex,
   type CollisionSpatialIndex,
 } from "./collisionSpatialIndex.js";
+export {
+  buildFpBlockerAABBsForBuilding,
+  mergeCoplanarTouchingBlockerAabbs,
+  type FpBlockerBakeOptions,
+} from "./fpBlockerAABBs.js";
+export {
+  GENERATED_COLLISION_BLOCKER_AABBS,
+  GENERATED_COLLISION_BLOCKER_FOOTPRINT,
+  GENERATED_WALK_SURFACE_AABBS,
+  GENERATED_WALK_SURFACE_FOOTPRINT,
+} from "./generatedCollisionArtifacts.js";
+export {
+  FP_CHARACTER_MAX_HORIZONTAL_SUBSTEP_M,
+  resolveFpCharacterCollisions,
+  type DynamicBlockerSource,
+  type ResolveFpCharacterCollisionOpts,
+  type Vec3Like,
+} from "./fpCharacterController.js";
 export { estimateStoreyFromFeetY } from "./buildingStory.js";
 export { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 export {
@@ -140,6 +158,7 @@ export {
 } from "./elevatorVisualMaterialUtils.js";
 export {
   applyElevatorCabPartTransforms,
+  buildElevatorCabCarVisual,
   buildElevatorCabCarPreviewRoot,
 } from "./elevatorCabPreview.js";
 export {
@@ -157,11 +176,16 @@ export {
 export {
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
+  rebuildStairWellPreviewOpening,
+  rebuildStairWellPreviewRoot,
+  stairWellEntryOpeningFromProxyMesh,
   STAIR_WELL_EDITOR_PART_IDS,
+  STAIR_WELL_OPENING_PROXY_ID,
   type BuildStairWellPreviewRootArgs,
   type StairWellAuthoringScope,
   type StairWellEditorPartId,
 } from "./stairElevatorPlaceholders.js";
+export { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 
 export function parseFloorDoc(raw: unknown): FloorDoc {
   return FloorDocSchema.parse(raw);

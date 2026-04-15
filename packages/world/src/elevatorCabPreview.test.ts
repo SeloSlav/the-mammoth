@@ -42,11 +42,13 @@ describe("applyElevatorCabPartTransforms", () => {
         doorFace: "e",
       },
       maxLevel: 6,
-      previewDoorOpen01: 0.35,
+      includeDoors: false,
     });
 
     const panel = root.getObjectByName("cab_floor_panel");
     expect(panel?.userData.editorCabPartId).toBe("cab_floor_panel");
+    expect(root.getObjectByName("cab_door_l")).toBeUndefined();
+    expect(root.getObjectByName("cab_door_r")).toBeUndefined();
     const labels: string[] = [];
     root.traverse((child) => {
       if (child.name.startsWith("cab_floor_button_label_")) labels.push(child.name);
@@ -54,5 +56,7 @@ describe("applyElevatorCabPartTransforms", () => {
     expect(labels).toHaveLength(6);
     expect(root.getObjectByName("cab_floor_button_label_6")).not.toBeNull();
     expect(root.getObjectByName("cab_floor_button_body_6")).not.toBeNull();
+    const board = root.getObjectByName("cab_floor_panel_board");
+    expect(board?.position.length()).toBeGreaterThan(0.1);
   });
 });

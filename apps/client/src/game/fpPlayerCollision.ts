@@ -1,5 +1,7 @@
 import type { CollisionAabb, CollisionSpatialIndex } from "@the-mammoth/world";
+import { resolveFpCharacterCollisions, type DynamicBlockerSource } from "@the-mammoth/world";
 import type { Vector3 } from "three";
+import { readFpUseCharacterController } from "./fpCollisionPolicy.js";
 
 export const FP_PLAYER_COLLISION_RADIUS_M = 0.22;
 export const FP_PLAYER_COLLISION_HEIGHT_STAND_M = 1.78;
@@ -286,8 +288,30 @@ export function resolvePlayerCollisions(
   stepUpMargin: number,
   staticIndex: CollisionSpatialIndex,
   dynamicSource?: DynamicCollisionAabbSource,
+  grounded = true,
 ): void {
   const height = bodyHeight(crouch);
+  if (readFpUseCharacterController()) {
+    const p = { x: pos.x, y: pos.y, z: pos.z };
+    const pv = { x: prevPos.x, y: prevPos.y, z: prevPos.z };
+    const v = { x: vel.x, y: vel.y, z: vel.z };
+    resolveFpCharacterCollisions({
+      pos: p,
+      prevPos: pv,
+      vel: v,
+      bodyHeight: height,
+      radius: FP_PLAYER_COLLISION_RADIUS_M,
+      stepUpMargin,
+      stepUpProbeM: Math.min(0.42, stepUpMargin * 0.5),
+      staticIndex,
+      dynamicSource: dynamicSource as DynamicBlockerSource | undefined,
+      grounded,
+    });
+    pos.set(p.x, p.y, p.z);
+    vel.set(v.x, v.y, v.z);
+    return;
+  }
+
   const startX = prevPos.x;
   const startZ = prevPos.z;
   const targetX = pos.x;

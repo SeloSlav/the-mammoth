@@ -32,9 +32,6 @@ struct CollisionAabb {
     max: [f32; 3],
 }
 
-const MAX_HORIZONTAL_COLLISION_SUBSTEP_M: f32 = 0.18;
-const SWING_DOOR_COLLISION_SEGMENTS: usize = 4;
-
 #[inline]
 fn player_body_height(crouch: bool) -> f32 {
     if crouch {
@@ -42,23 +39,6 @@ fn player_body_height(crouch: bool) -> f32 {
     } else {
         super::PLAYER_HEIGHT_STAND_M
     }
-}
-
-#[inline]
-fn swept_body_vertical_overlap(
-    prev_feet_y: f32,
-    feet_y: f32,
-    body_h: f32,
-    aabb: &CollisionAabb,
-) -> bool {
-    let y0 = prev_feet_y.min(feet_y);
-    let y1 = (prev_feet_y + body_h).max(feet_y + body_h);
-    y1 > aabb.min[1] + 1e-4 && y0 < aabb.max[1] - 1e-4
-}
-
-#[inline]
-fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
-    top_y <= feet_y + 0.82 + 1e-4 && top_y >= feet_y - super::STEP_IGNORE_BELOW_FEET_M
 }
 
 #[inline]
@@ -77,8 +57,10 @@ fn push_query_overlapping_aabb(
     out.push(CollisionAabb { min, max });
 }
 
+/// Single conservative AABB for the swing panel (hinge → tip), avoiding seam artifacts from
+/// multi-segment approximation.
 #[inline]
-fn push_swing_door_collision_segments(
+fn push_swing_door_collision_panel(
     out: &mut Vec<CollisionAabb>,
     qx0: f32,
     qx1: f32,
@@ -92,176 +74,11 @@ fn push_swing_door_collision_segments(
     y1: f32,
     pad: f32,
 ) {
-    let mut prev_x = start_x;
-    let mut prev_z = start_z;
-    for i in 1..=SWING_DOOR_COLLISION_SEGMENTS {
-        let u = i as f32 / SWING_DOOR_COLLISION_SEGMENTS as f32;
-        let next_x = start_x + (end_x - start_x) * u;
-        let next_z = start_z + (end_z - start_z) * u;
-        push_query_overlapping_aabb(
-            out,
-            qx0,
-            qx1,
-            qz0,
-            qz1,
-            [prev_x.min(next_x) - pad, y0, prev_z.min(next_z) - pad],
-            [prev_x.max(next_x) + pad, y1, prev_z.max(next_z) + pad],
-        );
-        prev_x = next_x;
-        prev_z = next_z;
-    }
-}
-
-#[inline]
-fn resolve_overlap_along_axis(
-    resolved_pos: f32,
-    prev_pos: f32,
-    radius: f32,
-    min_face: f32,
-    max_face: f32,
-) -> f32 {
-    let prev_max = prev_pos + radius;
-    let prev_min = prev_pos - radius;
-    if prev_max <= min_face + super::COLLISION_EPS {
-        return resolved_pos.min(min_face - radius - super::COLLISION_EPS);
-    }
-    if prev_min >= max_face - super::COLLISION_EPS {
-        return resolved_pos.max(max_face + radius + super::COLLISION_EPS);
-    }
-
-    // If we are already overlapping, prefer the side opposite the attempted
-    // motion instead of the minimum-penetration side. This prevents held-input
-    // ratcheting through thin cab/shaft walls across repeated correction steps.
-    let axis_delta = resolved_pos - prev_pos;
-    if axis_delta > super::COLLISION_EPS {
-        return resolved_pos.min(min_face - radius - super::COLLISION_EPS);
-    }
-    if axis_delta < -super::COLLISION_EPS {
-        return resolved_pos.max(max_face + radius + super::COLLISION_EPS);
-    }
-
-    let mid = (min_face + max_face) * 0.5;
-    if prev_pos <= mid {
-        resolved_pos.min(min_face - radius - super::COLLISION_EPS)
-    } else {
-        resolved_pos.max(max_face + radius + super::COLLISION_EPS)
-    }
-}
-
-fn depenetrate_generated_horizontal_overlaps(
-    ctx: &ReducerContext,
-    p: &mut PlayerPose,
-    prev_x: f32,
-    prev_z: f32,
-    body_h: f32,
-    aabbs: &mut Vec<CollisionAabb>,
-) {
-    let r = super::FOOT_R;
-    let max_iterations = 8;
-    let mut overlapped_after_pass = false;
-
-    for _ in 0..max_iterations {
-        let mut changed = false;
-        overlapped_after_pass = false;
-        aabbs.clear();
-        collect_generated_collision_aabbs(
-            ctx,
-            p.x - r - super::COLLISION_EPS,
-            p.x + r + super::COLLISION_EPS,
-            p.z - r - super::COLLISION_EPS,
-            p.z + r + super::COLLISION_EPS,
-            Some((p.x, p.y, p.z)),
-            aabbs,
-        );
-        for aabb in aabbs.iter() {
-            if !swept_body_vertical_overlap(p.y, p.y, body_h, aabb)
-                || ignore_horizontal_block(p.y, aabb.max[1])
-            {
-                continue;
-            }
-            let body_min_x = p.x - r;
-            let body_max_x = p.x + r;
-            let body_min_z = p.z - r;
-            let body_max_z = p.z + r;
-            let overlap_x = (body_max_x - aabb.min[0]).min(aabb.max[0] - body_min_x);
-            let overlap_z = (body_max_z - aabb.min[2]).min(aabb.max[2] - body_min_z);
-            if overlap_x <= 0.0 || overlap_z <= 0.0 {
-                continue;
-            }
-            overlapped_after_pass = true;
-            if overlap_x <= overlap_z {
-                let next_x = resolve_overlap_along_axis(p.x, prev_x, r, aabb.min[0], aabb.max[0]);
-                if next_x != p.x {
-                    if next_x < p.x && p.vel_x > 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                    if next_x > p.x && p.vel_x < 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                    p.x = next_x;
-                    changed = true;
-                }
-            } else {
-                let next_z = resolve_overlap_along_axis(p.z, prev_z, r, aabb.min[2], aabb.max[2]);
-                if next_z != p.z {
-                    if next_z < p.z && p.vel_z > 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                    if next_z > p.z && p.vel_z < 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                    p.z = next_z;
-                    changed = true;
-                }
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-
-    if !overlapped_after_pass {
-        return;
-    }
-
-    aabbs.clear();
-    collect_generated_collision_aabbs(
-        ctx,
-        p.x - r - super::COLLISION_EPS,
-        p.x + r + super::COLLISION_EPS,
-        p.z - r - super::COLLISION_EPS,
-        p.z + r + super::COLLISION_EPS,
-        Some((p.x, p.y, p.z)),
-        aabbs,
-    );
-    let mut still_overlapping = false;
-    for aabb in aabbs.iter() {
-        if !swept_body_vertical_overlap(p.y, p.y, body_h, aabb)
-            || ignore_horizontal_block(p.y, aabb.max[1])
-        {
-            continue;
-        }
-        let body_min_x = p.x - r;
-        let body_max_x = p.x + r;
-        let body_min_z = p.z - r;
-        let body_max_z = p.z + r;
-        if body_max_x <= aabb.min[0] || body_min_x >= aabb.max[0] {
-            continue;
-        }
-        if body_max_z <= aabb.min[2] || body_min_z >= aabb.max[2] {
-            continue;
-        }
-        still_overlapping = true;
-        break;
-    }
-    if !still_overlapping {
-        return;
-    }
-
-    p.x = prev_x;
-    p.z = prev_z;
-    p.vel_x = 0.0;
-    p.vel_z = 0.0;
+    let min_x = start_x.min(end_x) - pad;
+    let max_x = start_x.max(end_x) + pad;
+    let min_z = start_z.min(end_z) - pad;
+    let max_z = start_z.max(end_z) + pad;
+    push_query_overlapping_aabb(out, qx0, qx1, qz0, qz1, [min_x, y0, min_z], [max_x, y1, max_z]);
 }
 
 #[inline]
@@ -461,7 +278,7 @@ fn collect_generated_collision_aabbs(
                     [spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD), y1, spec.plate_z - hz - super::EXT_COLLISION_L0],
                 ),
             }
-        } else {
+        } else if landing.swing_open_01 < super::EXT_DOOR_COLLISION_OPEN_THRESH {
             let theta = landing.swing_open_01 * super::EXT_DOOR_SWING_MAX_RAD;
             let panel_w = super::EXT_DOOR_W - 0.10;
             let hinge_lat = super::EXT_DOOR_W * 0.5 - 0.06;
@@ -475,7 +292,7 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o + panel_w * st;
                     let tip_z = hz_l - panel_w * ct;
-                    push_swing_door_collision_segments(
+                    push_swing_door_collision_panel(
                         out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -484,7 +301,7 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o - panel_w * st;
                     let tip_z = hz_l + panel_w * ct;
-                    push_swing_door_collision_segments(
+                    push_swing_door_collision_panel(
                         out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -493,7 +310,7 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z + hz + o;
                     let tip_x = hx_l + panel_w * ct;
                     let tip_z = hz_o + panel_w * st;
-                    push_swing_door_collision_segments(
+                    push_swing_door_collision_panel(
                         out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -502,7 +319,7 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z - hz - o;
                     let tip_x = hx_l - panel_w * ct;
                     let tip_z = hz_o - panel_w * st;
-                    push_swing_door_collision_segments(
+                    push_swing_door_collision_panel(
                         out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -655,99 +472,6 @@ fn collect_generated_collision_aabbs(
     }
 }
 
-fn resolve_generated_horizontal_collision_step(
-    ctx: &ReducerContext,
-    p: &mut PlayerPose,
-    prev_x: f32,
-    prev_y: f32,
-    prev_z: f32,
-    body_h: f32,
-    aabbs: &mut Vec<CollisionAabb>,
-) {
-    let r = super::FOOT_R;
-    let resolve_x = |p: &mut PlayerPose, aabbs: &mut Vec<CollisionAabb>| {
-        let mut resolved_x = p.x;
-        aabbs.clear();
-        collect_generated_collision_aabbs(
-            ctx,
-            prev_x.min(p.x) - r - super::COLLISION_EPS,
-            prev_x.max(p.x) + r + super::COLLISION_EPS,
-            prev_z.min(p.z) - r - super::COLLISION_EPS,
-            prev_z.max(p.z) + r + super::COLLISION_EPS,
-            Some((resolved_x, p.y, p.z)),
-            aabbs,
-        );
-        for aabb in aabbs.iter() {
-            if !swept_body_vertical_overlap(prev_y, p.y, body_h, aabb)
-                || ignore_horizontal_block(p.y, aabb.max[1])
-            {
-                continue;
-            }
-            let body_min = resolved_x - r;
-            let body_max = resolved_x + r;
-            if body_max <= aabb.min[0] || body_min >= aabb.max[0] {
-                continue;
-            }
-            let next_resolved_x =
-                resolve_overlap_along_axis(resolved_x, prev_x, r, aabb.min[0], aabb.max[0]);
-            if next_resolved_x < resolved_x && p.vel_x > 0.0 {
-                p.vel_x = 0.0;
-            }
-            if next_resolved_x > resolved_x && p.vel_x < 0.0 {
-                p.vel_x = 0.0;
-            }
-            resolved_x = next_resolved_x;
-        }
-        p.x = resolved_x;
-    };
-
-    let resolve_z = |p: &mut PlayerPose, aabbs: &mut Vec<CollisionAabb>| {
-        let mut resolved_z = p.z;
-        aabbs.clear();
-        collect_generated_collision_aabbs(
-            ctx,
-            prev_x.min(p.x) - r - super::COLLISION_EPS,
-            prev_x.max(p.x) + r + super::COLLISION_EPS,
-            prev_z.min(p.z) - r - super::COLLISION_EPS,
-            prev_z.max(p.z) + r + super::COLLISION_EPS,
-            Some((p.x, p.y, resolved_z)),
-            aabbs,
-        );
-        for aabb in aabbs.iter() {
-            if !swept_body_vertical_overlap(prev_y, p.y, body_h, aabb)
-                || ignore_horizontal_block(p.y, aabb.max[1])
-            {
-                continue;
-            }
-            let body_min = resolved_z - r;
-            let body_max = resolved_z + r;
-            if body_max <= aabb.min[2] || body_min >= aabb.max[2] {
-                continue;
-            }
-            let next_resolved_z =
-                resolve_overlap_along_axis(resolved_z, prev_z, r, aabb.min[2], aabb.max[2]);
-            if next_resolved_z < resolved_z && p.vel_z > 0.0 {
-                p.vel_z = 0.0;
-            }
-            if next_resolved_z > resolved_z && p.vel_z < 0.0 {
-                p.vel_z = 0.0;
-            }
-            resolved_z = next_resolved_z;
-        }
-        p.z = resolved_z;
-    };
-
-    let dx = (p.x - prev_x).abs();
-    let dz = (p.z - prev_z).abs();
-    if dx >= dz {
-        resolve_x(p, aabbs);
-        resolve_z(p, aabbs);
-    } else {
-        resolve_z(p, aabbs);
-        resolve_x(p, aabbs);
-    }
-}
-
 pub fn resolve_player_generated_collision_aabbs(
     ctx: &ReducerContext,
     p: &mut PlayerPose,
@@ -757,62 +481,31 @@ pub fn resolve_player_generated_collision_aabbs(
     crouch: bool,
 ) {
     let body_h = player_body_height(crouch);
-    let mut aabbs = Vec::<CollisionAabb>::new();
-    let start_x = prev_x;
-    let start_z = prev_z;
-    let target_x = p.x;
-    let target_z = p.z;
-    let max_axis_delta = (target_x - start_x).abs().max((target_z - start_z).abs());
-    let step_count =
-        ((max_axis_delta / MAX_HORIZONTAL_COLLISION_SUBSTEP_M).ceil() as u32).max(1);
-    let mut step_prev_x = start_x;
-    let mut step_prev_z = start_z;
-    for step in 1..=step_count {
-        let u = step as f32 / step_count as f32;
-        p.x = start_x + (target_x - start_x) * u;
-        p.z = start_z + (target_z - start_z) * u;
-        resolve_generated_horizontal_collision_step(
-            ctx,
-            p,
-            step_prev_x,
-            prev_y,
-            step_prev_z,
-            body_h,
-            &mut aabbs,
-        );
-        step_prev_x = p.x;
-        step_prev_z = p.z;
-    }
+    let grounded = p.grounded != 0;
+    let mut tuples: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(256);
+    let mut tmp_aabb: Vec<CollisionAabb> = Vec::with_capacity(256);
 
-    depenetrate_generated_horizontal_overlaps(ctx, p, prev_x, prev_z, body_h, &mut aabbs);
+    let mut fill =
+        |x0: f32, x1: f32, z0: f32, z1: f32, qp: Option<(f32, f32, f32)>, out: &mut Vec<([f32; 3], [f32; 3])>| {
+            tmp_aabb.clear();
+            collect_generated_collision_aabbs(ctx, x0, x1, z0, z1, qp, &mut tmp_aabb);
+            out.clear();
+            for a in &tmp_aabb {
+                out.push((a.min, a.max));
+            }
+        };
 
-    if p.vel_y > 0.0 {
-        let r = super::FOOT_R;
-        aabbs.clear();
-        collect_generated_collision_aabbs(
-            ctx,
-            p.x - r - super::COLLISION_EPS,
-            p.x + r + super::COLLISION_EPS,
-            p.z - r - super::COLLISION_EPS,
-            p.z + r + super::COLLISION_EPS,
-            Some((p.x, p.y, p.z)),
-            &mut aabbs,
-        );
-        let head = p.y + body_h;
-        let mut best_feet = p.y;
-        for aabb in &aabbs {
-            if head <= aabb.min[1] + super::COLLISION_EPS {
-                continue;
-            }
-            best_feet = best_feet.min(aabb.min[1] - body_h - super::COLLISION_EPS);
-        }
-        if best_feet < p.y {
-            p.y = best_feet;
-            if p.vel_y > 0.0 {
-                p.vel_y = 0.0;
-            }
-        }
-    }
+    crate::character_controller::resolve_horizontal_character_with_fill(
+        p,
+        prev_x,
+        prev_y,
+        prev_z,
+        body_h,
+        grounded,
+        super::FOOT_R,
+        &mut fill,
+        &mut tuples,
+    );
 
     // Land on cab roof when falling from above (walk merge alone can miss one substep).
     {

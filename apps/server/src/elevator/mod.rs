@@ -90,8 +90,6 @@ const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M: f32 = 0.5;
 // --- Landing swing door (corridor side): collision literals in `collision_tuning.rs` / `@the-mammoth/world` ---
 const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
 const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
-const COLLISION_EPS: f32 = 0.0015;
-const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
 
 #[spacetimedb::table(public, accessor = elevator_landing_door)]
 pub struct ElevatorLandingDoor {

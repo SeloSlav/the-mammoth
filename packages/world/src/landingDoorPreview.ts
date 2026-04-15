@@ -13,8 +13,12 @@ import {
 } from "./exteriorLandingDoorSwing.js";
 
 export {
+  LANDING_DOOR_BOTTOM_RAIL_PART_ID,
   LANDING_DOOR_GLASS_PART_ID,
+  LANDING_DOOR_LEFT_STILE_PART_ID,
   LANDING_DOOR_OPENING_PROXY_ID,
+  LANDING_DOOR_RIGHT_STILE_PART_ID,
+  LANDING_DOOR_TOP_RAIL_PART_ID,
 } from "./exteriorLandingDoorSwing.js";
 
 const FLOOR_T = 0.08;

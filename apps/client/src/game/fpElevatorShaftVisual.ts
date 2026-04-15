@@ -2,10 +2,10 @@ import * as THREE from "three";
 import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
 import type { ElevatorShaftLayout } from "@the-mammoth/world";
 import {
-  applyCabMaterialSlot,
   applyLandingFrameSlot,
   applyLandingGlassSlot,
   applyLandingKitPartTransforms,
+  buildElevatorCabCarVisual,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
 } from "@the-mammoth/world";
@@ -15,13 +15,7 @@ import {
   CAR_INNER_MARGIN,
   DOOR_H,
   DOOR_SLIDE_M,
-  DOOR_TH,
   DOOR_W,
-  FLOOR_BTN_D,
-  FLOOR_BTN_H,
-  FLOOR_BTN_W,
-  FLOOR_COLS,
-  FLOOR_GAP,
   FP_ELEV_EXTERIOR_DOOR_PICK_UD,
   FP_ELEV_FLOOR_PICK_UD,
   FP_ELEV_LANDING_HAIL_PICK_UD,
@@ -29,7 +23,7 @@ import {
   type FpElevFloorPickUserData,
   type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
-import { applyAtlasUvToPlaneGeometry, buildElevFloorAtlas } from "./fpElevFloorButtonAtlas.js";
+import { buildElevFloorAtlas } from "./fpElevFloorButtonAtlas.js";
 import { doorSlideAxis, type ElevatorDoorFace } from "./fpElevatorLabels.js";
 import type { FpElevatorInnerExtents } from "./fpElevatorVolumes.js";
 import {
@@ -122,7 +116,6 @@ export class FpElevatorShaftVisual {
   private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
   private readonly hailBtnIconTex: THREE.CanvasTexture;
   private readonly exteriorSwingMaxRad: number;
-  private readonly ceilMat: THREE.MeshStandardMaterial;
 
   constructor(
     layout: ElevatorShaftLayout,
@@ -193,129 +186,6 @@ export class FpElevatorShaftVisual {
     this.root.add(this.landingDoorPickRoot);
     this.root.add(this.landingHailPickRoot);
 
-    this.carRoot = new THREE.Group();
-    this.carRoot.name = "elevator_car";
-
-    const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x6a6f78,
-      roughness: 0.72,
-      metalness: 0.08,
-    });
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x4d5258,
-      roughness: 0.85,
-      metalness: 0.04,
-    });
-    const doorMat = new THREE.MeshStandardMaterial({
-      color: 0x8a929e,
-      roughness: 0.45,
-      metalness: 0.35,
-    });
-    this.ceilMat = new THREE.MeshStandardMaterial({
-      color: 0x6a6f78,
-      roughness: 0.72,
-      metalness: 0.08,
-    });
-    if (visualDefs?.cabDef?.materials) {
-      applyCabMaterialSlot(wallMat, visualDefs.cabDef.materials.wall);
-      applyCabMaterialSlot(floorMat, visualDefs.cabDef.materials.floor);
-      applyCabMaterialSlot(doorMat, visualDefs.cabDef.materials.door);
-      applyCabMaterialSlot(
-        this.ceilMat,
-        visualDefs.cabDef.materials.ceiling ?? visualDefs.cabDef.materials.wall,
-      );
-    }
-
-    const cabinH = this.inner.innerH;
-    const floorT = 0.08;
-    const wallT = 0.06;
-    const hx = this.inner.halfX;
-    const hz = this.inner.halfZ;
-
-    const floorMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(hx * 2 - wallT * 2, floorT, hz * 2 - wallT * 2),
-      floorMat,
-    );
-    floorMesh.position.set(0, floorT * 0.5, 0);
-    this.carRoot.add(floorMesh);
-
-    const ceil = new THREE.Mesh(
-      new THREE.BoxGeometry(hx * 2 - wallT * 2, 0.07, hz * 2 - wallT * 2),
-      this.ceilMat,
-    );
-    ceil.position.set(0, cabinH - 0.035, 0);
-    this.carRoot.add(ceil);
-
-    const addWall = (
-      name: string,
-      sx: number,
-      sy: number,
-      sz: number,
-      x: number,
-      y: number,
-      z: number,
-    ) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), wallMat);
-      m.name = name;
-      m.position.set(x, y, z);
-      this.carRoot.add(m);
-    };
-
-    const midY = cabinH * 0.5 + floorT;
-    const wallH = cabinH - floorT - 0.08;
-    const face = layout.doorFace;
-    if (face === "e" || face === "w") {
-      const xSign = face === "e" ? 1 : -1;
-      addWall("w_back", wallT, wallH, hz * 2, -xSign * (hx - wallT * 0.5), midY, 0);
-      addWall("w_side_n", hx * 2 - wallT * 2, wallH, wallT, 0, midY, hz - wallT * 0.5);
-      addWall("w_side_s", hx * 2 - wallT * 2, wallH, wallT, 0, midY, -hz + wallT * 0.5);
-    } else {
-      const zSign = face === "n" ? 1 : -1;
-      addWall("w_back", hx * 2, wallH, wallT, 0, midY, -zSign * (hz - wallT * 0.5));
-      addWall("w_side_e", wallT, wallH, hz * 2 - wallT * 2, hx - wallT * 0.5, midY, 0);
-      addWall("w_side_w", wallT, wallH, hz * 2 - wallT * 2, -hx + wallT * 0.5, midY, 0);
-    }
-
-    this.doorL = new THREE.Group();
-    this.doorR = new THREE.Group();
-    const leafW = DOOR_W * 0.5 - 0.02;
-    const leafGeom = new THREE.BoxGeometry(
-      face === "e" || face === "w" ? DOOR_TH : leafW,
-      DOOR_H,
-      face === "e" || face === "w" ? leafW : DOOR_TH,
-    );
-    this.doorL.add(new THREE.Mesh(leafGeom, doorMat));
-    this.doorR.add(new THREE.Mesh(leafGeom.clone(), doorMat));
-
-    const doorX =
-      face === "e"
-        ? hx - DOOR_TH * 0.5 - 0.02
-        : face === "w"
-          ? -hx + DOOR_TH * 0.5 + 0.02
-          : 0;
-    const doorZ =
-      face === "n"
-        ? hz - DOOR_TH * 0.5 - 0.02
-        : face === "s"
-          ? -hz + DOOR_TH * 0.5 + 0.02
-          : 0;
-    const doorY = floorT + DOOR_H * 0.5 + 0.06;
-    const t = doorSlideAxis(face);
-    const tL = t.clone().multiplyScalar(-DOOR_W * 0.25);
-    const tR = t.clone().multiplyScalar(DOOR_W * 0.25);
-    this.doorL.position.set(
-      doorX + (face === "n" || face === "s" ? tL.x : 0),
-      doorY,
-      doorZ + (face === "e" || face === "w" ? tL.z : 0),
-    );
-    this.doorR.position.set(
-      doorX + (face === "n" || face === "s" ? tR.x : 0),
-      doorY,
-      doorZ + (face === "e" || face === "w" ? tR.z : 0),
-    );
-    this.carRoot.add(this.doorL);
-    this.carRoot.add(this.doorR);
-
     this.atlas = buildElevFloorAtlas(pick.maxLevel);
     this.matNormal = new THREE.MeshStandardMaterial({
       map: this.atlas,
@@ -344,10 +214,30 @@ export class FpElevatorShaftVisual {
       side: THREE.DoubleSide,
     });
 
-    this.floorPickRoot = new THREE.Group();
+    const cabVisual = buildElevatorCabCarVisual({
+      layout,
+      def: visualDefs?.cabDef,
+      maxLevel: pick.maxLevel,
+      doorOpen01: 0,
+      includeDoors: true,
+      floorButtonLabelMaterial: this.matNormal,
+      rootName: "elevator_car",
+    });
+    this.carRoot = cabVisual.root;
+    this.doorL = cabVisual.doorL ?? new THREE.Group();
+    this.doorR = cabVisual.doorR ?? new THREE.Group();
+    this.floorPickRoot = cabVisual.panelRoot;
     this.floorPickRoot.name = "elev_floor_pick";
-    this.buildCarFloorPickPlanes(face, hx, hz, wallT, floorT, pick.shaftKey, pick.maxLevel);
-    this.carRoot.add(this.floorPickRoot);
+    for (const button of cabVisual.floorButtons) {
+      (button.labelMesh.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD] = {
+        shaftKey: pick.shaftKey,
+        level: button.level,
+      };
+      this.floorPickMeshes.push(button.labelMesh);
+    }
+    const face = layout.doorFace;
+    const hx = this.inner.halfX;
+    const hz = this.inner.halfZ;
 
     for (let level = 1; level <= pick.maxLevel; level++) {
       const feetY = elevatorSupportFeetWorldY({
@@ -393,50 +283,6 @@ export class FpElevatorShaftVisual {
 
     this.root.add(this.carRoot);
     this.root.position.set(this.ox + layout.plateX, 0, this.oz + layout.plateZ);
-  }
-
-  private buildCarFloorPickPlanes(
-    face: DoorFace,
-    hx: number,
-    hz: number,
-    wallT: number,
-    floorT: number,
-    shaftKey: string,
-    maxLevel: number,
-  ): void {
-    const zSpan = (FLOOR_COLS - 1) * (FLOOR_BTN_W + FLOOR_GAP);
-    const z0 = -zSpan * 0.5;
-    const y0 = floorT + 1.12;
-
-    for (let level = 1; level <= maxLevel; level++) {
-      const idx = level - 1;
-      const col = idx % FLOOR_COLS;
-      const row = Math.floor(idx / FLOOR_COLS);
-      const ly = y0 + row * (FLOOR_BTN_H + FLOOR_GAP);
-      const gridAlong = z0 + col * (FLOOR_BTN_W + FLOOR_GAP);
-
-      const baseGeom = new THREE.PlaneGeometry(FLOOR_BTN_W, FLOOR_BTN_H);
-      applyAtlasUvToPlaneGeometry(baseGeom, level);
-      const mesh = new THREE.Mesh(baseGeom, this.matNormal);
-      mesh.name = `elev_floor_btn_${level}`;
-      (mesh.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD] = { shaftKey, level };
-
-      if (face === "e") {
-        mesh.position.set(-hx + wallT + FLOOR_BTN_D * 0.5, ly, gridAlong);
-        mesh.rotation.y = -Math.PI / 2;
-      } else if (face === "w") {
-        mesh.position.set(hx - wallT - FLOOR_BTN_D * 0.5, ly, gridAlong);
-        mesh.rotation.y = Math.PI / 2;
-      } else if (face === "n") {
-        mesh.position.set(gridAlong, ly, -hz + wallT + FLOOR_BTN_D * 0.5);
-      } else {
-        mesh.position.set(gridAlong, ly, hz - wallT - FLOOR_BTN_D * 0.5);
-        mesh.rotation.y = Math.PI;
-      }
-
-      this.floorPickRoot.add(mesh);
-      this.floorPickMeshes.push(mesh);
-    }
   }
 
   private createLandingDoorPickMesh(
@@ -608,10 +454,24 @@ export class FpElevatorShaftVisual {
   }
 
   dispose(): void {
-    for (const m of this.floorPickMeshes) {
-      m.geometry.dispose();
-    }
     this.floorPickMeshes.length = 0;
+    const carGeometries = new Set<THREE.BufferGeometry>();
+    const carMaterials = new Set<THREE.Material>();
+    this.carRoot.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      carGeometries.add(o.geometry);
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const mat of mats) {
+        if (!mat) continue;
+        carMaterials.add(mat);
+      }
+    });
+    for (const geom of carGeometries) {
+      geom.dispose();
+    }
+    for (const mat of carMaterials) {
+      mat.dispose();
+    }
     this.landingRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
@@ -625,18 +485,11 @@ export class FpElevatorShaftVisual {
       mat.dispose();
     }
     this.hailBtnMaterials.clear();
-    this.ceilMat.dispose();
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
     this.hailBtnMatTemplate.dispose();
     this.hailBtnIconMat.dispose();
     this.hailBtnIconTex.dispose();
-    this.matNormal.map = null;
-    this.matHighlight.map = null;
-    this.matPickFlash.map = null;
-    this.matNormal.dispose();
-    this.matHighlight.dispose();
-    this.matPickFlash.dispose();
     this.atlas.dispose();
     this.carRoot.clear();
     this.landingRoot.clear();

@@ -3,6 +3,7 @@ import type { FloorDoc, InteriorDoc } from "@the-mammoth/schemas";
 import {
   LANDING_DOOR_GLASS_PART_ID,
   LANDING_DOOR_OPENING_PROXY_ID,
+  STAIR_WELL_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 
 export const PLACEMENT_KEY_SEP = "\u0000";
@@ -201,6 +202,7 @@ export function resolveLandingKitPickId(hit: THREE.Object3D | null): string | nu
 /** Walks parents for `userData.editorStairPartId` (shared stairwell workspace picking). */
 export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
   return (
+    resolveAncestor(hit, (obj) => obj.userData.editorStairOpeningProxy === true) ??
     resolveAncestor(hit, (obj) => {
       const pickId = obj.userData.editorStairPickId;
       return typeof pickId === "string" && pickId.length > 0;
@@ -216,6 +218,7 @@ export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Ob
 export function resolveStairWellPartId(hit: THREE.Object3D | null): string | null {
   const target = resolveStairWellPartTarget(hit);
   if (!target) return null;
+  if (target.userData.editorStairOpeningProxy === true) return STAIR_WELL_OPENING_PROXY_ID;
   const pickId = target.userData.editorStairPickId;
   if (typeof pickId === "string" && pickId.length > 0) return pickId;
   const id = target.userData.editorStairPartId;

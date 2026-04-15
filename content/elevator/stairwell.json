@@ -1,40 +1,104 @@
 {
   "id": "default_stair_well",
   "version": 1,
-  "displayName": "Default stairwell",
-  "materials": {
-    "wall": {
-      "colorHex": "0xd7dce2",
-      "roughness": 0.94,
-      "metalness": 0.02
-    },
-    "floor": {
-      "colorHex": "0xa09d99",
-      "roughness": 0.94,
-      "metalness": 0.025
-    },
-    "tread": {
-      "colorHex": "0xc5cad2",
-      "roughness": 0.92,
-      "metalness": 0.025
-    },
-    "landing": {
-      "colorHex": "0xb8c0ca",
-      "roughness": 0.92,
-      "metalness": 0.025
-    },
-    "railing": {
-      "colorHex": "0x5c5a58",
-      "roughness": 0.35,
-      "metalness": 0.35
-    }
-  },
   "partTransforms": {
+    "stair_flight_lower": {
+      "position": [
+        -0.08046752626380416,
+        0.24144502477960939,
+        0.1494886810874485
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
     "stair_flight_upper": {
       "position": [
-        0.07518067188598643,
-        0.2434528308627541,
-        -0.1678881955060526
+        0.09479034169240119,
+        0.07080855580484724,
+        -0.15522198500457707
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_landing_upper": {
+      "position": [
+        -0.0031471398007760776,
+        0,
+        0
+      ],
+      "scale": [
+        1.165699498211088,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_landing_lower": {
+      "position": [
+        -0.012601138502417286,
+        0,
+        0
+      ],
+      "scale": [
+        1.1354614147661461,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "groundPartTransforms": {
+    "stair_landing_upper": {
+      "position": [
+        0.028929587444481042,
+        0,
+        0
+      ],
+      "scale": [
+        1.1572215595822448,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_flight_upper": {
+      "position": [
+        0.1030804855555365,
+        0.07882818385282953,
+        -0.15528851553588718
       ],
       "scale": [
         1,
@@ -50,8 +114,8 @@
     },
     "stair_flight_lower": {
       "position": [
-        -0.06348857444084066,
-        0.08890553772335369,
+        0,
+        0.24299277529308938,
         0
       ],
       "scale": [
@@ -66,5 +130,19 @@
         1
       ]
     }
+  },
+  "entryOpening": {
+    "face": "w",
+    "tangentOffsetAlongWallM": -5.915000000000001,
+    "widthM": 1.86,
+    "heightM": 2.2,
+    "centerYM": 0.015284097180345735
+  },
+  "groundEntryOpening": {
+    "face": "w",
+    "tangentOffsetAlongWallM": -1.894676484676825,
+    "widthM": 1.86,
+    "heightM": 2.2,
+    "centerYM": -0.3189473684210524
   }
 }

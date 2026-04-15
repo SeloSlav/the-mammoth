@@ -49,13 +49,18 @@ export const STAIR_WELL_EDITOR_PART_IDS = [
   "shaft_wall",
   "stair_flights",
   "stair_flight_lower",
+  "stair_landing_lower",
   "stair_flight_upper",
-  "stair_corner_landing",
-  "stair_rail_post",
+  "stair_landing_upper",
 ] as const;
+
+/** Editor-only gizmo target: move/resize the stair corridor opening. */
+export const STAIR_WELL_OPENING_PROXY_ID = "stair_entry_opening_proxy" as const;
 
 export type StairWellEditorPartId = (typeof STAIR_WELL_EDITOR_PART_IDS)[number];
 export type StairWellAuthoringScope = "typical" | "ground";
+type StairWellEntryOpeningDef = NonNullable<StairWellDef["entryOpening"]>;
+const LEGACY_STAIR_CORNER_LANDING_PART_ID = "stair_corner_landing";
 
 type StairWellMaterialSet = {
   wall: THREE.MeshStandardMaterial;
@@ -64,6 +69,10 @@ type StairWellMaterialSet = {
   landing: THREE.MeshStandardMaterial;
   railing: THREE.MeshStandardMaterial;
 };
+
+function stairWellHasFloorSlab(scope: StairWellAuthoringScope): boolean {
+  return scope === "ground";
+}
 
 function createStairWellMaterials(def: StairWellDef | undefined): StairWellMaterialSet {
   const wall = concreteMaterial(0xd7dce2);
@@ -135,6 +144,13 @@ function recordStairWellBaseTransforms(root: THREE.Object3D): void {
   });
 }
 
+function stairWellOpeningDefForScope(
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+): StairWellEntryOpeningDef | undefined {
+  return scope === "ground" ? (def?.groundEntryOpening ?? def?.entryOpening) : def?.entryOpening;
+}
+
 /**
  * Ground-level hoistway / stair entry: **double-door clear width** (m).
  * Leaf geometry comes later — opening + frame trim only for now.
@@ -166,6 +182,8 @@ export type ShaftGroundDoorOpts = {
    * Hole centre offset along wall tangent (+Z for E/W, +X for N/S). Stairs: set by auto placement.
    */
   tangentOffsetAlongWall?: number;
+  /** Clear opening width in meters. */
+  doorWidthM?: number;
   /**
    * When set (stair only), overrides sill-based vertical extent for the door cutout / frame
    * (shaft interior local Y, same frame as treads / landings).
@@ -277,7 +295,7 @@ function addShaftShell(
   const ySplit = yWallBottom + bandCap;
 
   const doorHalfW = Math.min(
-    SHAFT_DOUBLE_DOOR_W * 0.5,
+    (door?.doorWidthM ?? SHAFT_DOUBLE_DOOR_W) * 0.5,
     vlenZ * 0.5 - 0.06,
     vlenX * 0.5 - 0.06,
   );
@@ -873,6 +891,8 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   groundDoor?: ShaftGroundDoorOpts | null;
   /** Plan-space context used to derive a corridor-side entry opening when no explicit groundDoor is supplied. */
   previewGroundDoorContext?: StairWellGroundDoorContext;
+  /** Editor-only wireframe gizmo target for the opening. */
+  addOpeningEditProxy?: boolean;
 };
 
 export type StairWellGroundDoorContext = {
@@ -885,6 +905,11 @@ export type ResolvedStairWellGroundDoor = {
   doorHalfW: number;
   y0Local: number;
   y1Local: number;
+  face: CardinalFace;
+  tangentOffsetAlongWallM: number;
+  widthM: number;
+  heightM: number;
+  centerYM: number;
 };
 
 function tagGeneratedStairWellShellParts(
@@ -894,10 +919,23 @@ function tagGeneratedStairWellShellParts(
   root.traverse((obj) => {
     if (obj.name === "shaft_floor") {
       setStairWellEditorPartId(obj, "shaft_floor", scope);
-    } else if (obj.name.startsWith("shaft_wall_")) {
+    } else if (obj.name === "shaft_wall") {
       setStairWellEditorPartId(obj, "shaft_wall", scope);
+      setStairWellEditorPickId(obj, "shaft_wall");
     }
   });
+}
+
+function groupGeneratedStairWellWallParts(root: THREE.Group): void {
+  const wallChildren = root.children.filter((child) => child.name.startsWith("shaft_wall_"));
+  if (wallChildren.length === 0) return;
+  const wallGroup = new THREE.Group();
+  wallGroup.name = "shaft_wall";
+  for (const child of wallChildren) {
+    root.remove(child);
+    wallGroup.add(child);
+  }
+  root.add(wallGroup);
 }
 
 function stairWellPartTransformsForScope(
@@ -926,6 +964,28 @@ function lowerFlightLegBoundary(counts: readonly [number, number, number, number
   return bestBoundary;
 }
 
+function stairLandingPartIdForIndex(
+  indexWithinLap: number,
+  landingsPerLap: number,
+): Extract<StairWellEditorPartId, "stair_landing_lower" | "stair_landing_upper"> {
+  if (landingsPerLap <= 1) return "stair_landing_lower";
+  return indexWithinLap < Math.ceil(landingsPerLap * 0.5)
+    ? "stair_landing_lower"
+    : "stair_landing_upper";
+}
+
+function stairWellPartTransformEntry(
+  partTransforms: StairWellDef["partTransforms"],
+  partId: string,
+) {
+  const direct = partTransforms?.[partId];
+  if (direct) return direct;
+  if (partId === "stair_landing_lower" || partId === "stair_landing_upper") {
+    return partTransforms?.[LEGACY_STAIR_CORNER_LANDING_PART_ID];
+  }
+  return undefined;
+}
+
 export function applyStairWellPartTransforms(
   root: THREE.Object3D,
   def: StairWellDef | undefined,
@@ -948,7 +1008,7 @@ export function applyStairWellPartTransforms(
     obj.scale.set(baseScale[0] ?? 1, baseScale[1] ?? 1, baseScale[2] ?? 1);
     obj.quaternion.set(baseRot[0] ?? 0, baseRot[1] ?? 0, baseRot[2] ?? 0, baseRot[3] ?? 1);
 
-    const tweak = partTransforms?.[partId];
+    const tweak = stairWellPartTransformEntry(partTransforms, partId);
     if (!tweak) return;
 
     if (tweak.position) {
@@ -987,6 +1047,7 @@ export type BuildStairWellPreviewRootArgs = {
 export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): THREE.Group {
   const root = new THREE.Group();
   root.name = "editor_stair_well_preview";
+  root.userData.editorStairPreviewArgs = args;
   addStairWellPlaceholder(root, args.sx, args.sy, args.sz, {
     def: args.def,
     authoringScope: args.authoringScope,
@@ -998,8 +1059,241 @@ export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): 
             shaftPlateXZ: args.shaftPlateXZ,
           }
         : undefined,
+    addOpeningEditProxy: true,
   });
   return root;
+}
+
+function disposeObject3DTree(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    obj.geometry?.dispose();
+    const material = obj.material as THREE.Material | THREE.Material[] | undefined;
+    if (Array.isArray(material)) material.forEach((m) => m.dispose());
+    else material?.dispose();
+  });
+}
+
+export function rebuildStairWellPreviewRoot(
+  root: THREE.Group,
+  def: StairWellDef | undefined,
+): void {
+  const args = root.userData.editorStairPreviewArgs as BuildStairWellPreviewRootArgs | undefined;
+  if (!args) return;
+  while (root.children.length > 0) {
+    const child = root.children[0]!;
+    root.remove(child);
+    disposeObject3DTree(child);
+  }
+  addStairWellPlaceholder(root, args.sx, args.sy, args.sz, {
+    def,
+    authoringScope: args.authoringScope,
+    omitGroundStoreyCornerLandings: args.authoringScope === "ground",
+    previewGroundDoorContext:
+      args.towardPlateXZ && args.shaftPlateXZ
+        ? {
+            towardPlateXZ: args.towardPlateXZ,
+            shaftPlateXZ: args.shaftPlateXZ,
+          }
+        : undefined,
+    addOpeningEditProxy: true,
+  });
+}
+
+function syncStairWellOpeningEditProxy(
+  proxy: THREE.Mesh,
+  scope: StairWellAuthoringScope,
+  sx: number,
+  sy: number,
+  sz: number,
+  context: StairWellGroundDoorContext | undefined,
+  opening: ResolvedStairWellGroundDoor,
+): void {
+  const hx = sx * 0.5;
+  const hz = sz * 0.5;
+  const wt = 0.11;
+  const inwardInset = 0.02;
+  const depth = 0.055;
+  proxy.geometry?.dispose();
+  proxy.geometry =
+    opening.face === "e" || opening.face === "w"
+      ? new THREE.BoxGeometry(depth, Math.max(0.05, opening.heightM), Math.max(0.05, opening.widthM))
+      : new THREE.BoxGeometry(Math.max(0.05, opening.widthM), Math.max(0.05, opening.heightM), depth);
+  if (!(proxy.material instanceof THREE.MeshBasicMaterial)) {
+    proxy.material = new THREE.MeshBasicMaterial({
+      color: 0x55b4ff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.45,
+      depthTest: true,
+    });
+  }
+  proxy.name = STAIR_WELL_OPENING_PROXY_ID;
+  proxy.userData.editorStairOpeningProxy = true;
+  proxy.userData.editorStairOpeningScope = scope;
+  proxy.userData.editorStairPreviewDims = [sx, sy, sz] as const;
+  if (context) proxy.userData.editorStairPreviewContext = context;
+  else delete proxy.userData.editorStairPreviewContext;
+  proxy.rotation.set(0, 0, 0);
+  proxy.scale.set(1, 1, 1);
+  if (opening.face === "e") {
+    proxy.position.set(hx - wt - inwardInset, opening.centerYM, opening.tangentOffsetAlongWallM);
+  } else if (opening.face === "w") {
+    proxy.position.set(-hx + wt + inwardInset, opening.centerYM, opening.tangentOffsetAlongWallM);
+  } else if (opening.face === "n") {
+    proxy.position.set(opening.tangentOffsetAlongWallM, opening.centerYM, hz - wt - inwardInset);
+  } else {
+    proxy.position.set(opening.tangentOffsetAlongWallM, opening.centerYM, -hz + wt + inwardInset);
+  }
+}
+
+export function rebuildStairWellPreviewOpening(
+  root: THREE.Group,
+  def: StairWellDef | undefined,
+): void {
+  const args = root.userData.editorStairPreviewArgs as BuildStairWellPreviewRootArgs | undefined;
+  if (!args) return;
+  const authoringScope = args.authoringScope ?? "typical";
+  const context =
+    args.towardPlateXZ && args.shaftPlateXZ
+      ? {
+          towardPlateXZ: args.towardPlateXZ,
+          shaftPlateXZ: args.shaftPlateXZ,
+        }
+      : undefined;
+  const opening = resolveStairWellGroundDoor({
+    sx: args.sx,
+    sy: args.sy,
+    sz: args.sz,
+    context,
+    def,
+    authoringScope,
+  });
+  const doomed: THREE.Object3D[] = [];
+  let proxy: THREE.Mesh | null = null;
+  for (const child of root.children) {
+    if (child.name === STAIR_WELL_OPENING_PROXY_ID && child instanceof THREE.Mesh) {
+      proxy = child;
+      continue;
+    }
+    if (
+      child.name === "shaft_floor" ||
+      child.name === "shaft_ceiling" ||
+      child.name === "shaft_wall" ||
+      child.name.startsWith("shaft_wall_")
+    ) {
+      doomed.push(child);
+    }
+  }
+  for (const child of doomed) {
+    root.remove(child);
+    disposeObject3DTree(child);
+  }
+  const mats = createStairWellMaterials(def);
+  addShaftShell(root, args.sx, args.sy, args.sz, mats.wall, shaftCeil, {
+    includeFloor: stairWellHasFloorSlab(authoringScope),
+    includeCeiling: false,
+    floorMat: mats.floor,
+    groundDoor: opening?.groundDoor ?? null,
+  });
+  groupGeneratedStairWellWallParts(root);
+  tagGeneratedStairWellShellParts(root, authoringScope);
+  applyStairWellPartTransforms(root, def);
+  if (opening) {
+    const liveProxy = proxy ?? new THREE.Mesh();
+    if (!proxy) root.add(liveProxy);
+    syncStairWellOpeningEditProxy(
+      liveProxy,
+      authoringScope,
+      args.sx,
+      args.sy,
+      args.sz,
+      context,
+      opening,
+    );
+    root.userData.editorStairPreviewGroundDoor = {
+      face: opening.face,
+      tangentOffsetAlongWall: opening.tangentOffsetAlongWallM,
+    };
+  } else {
+    if (proxy) {
+      root.remove(proxy);
+      disposeObject3DTree(proxy);
+    }
+    delete root.userData.editorStairPreviewGroundDoor;
+  }
+}
+
+function addStairWellOpeningEditProxy(
+  root: THREE.Group,
+  scope: StairWellAuthoringScope,
+  sx: number,
+  sy: number,
+  sz: number,
+  context: StairWellGroundDoorContext | undefined,
+  opening: ResolvedStairWellGroundDoor,
+): void {
+  const proxy = new THREE.Mesh();
+  syncStairWellOpeningEditProxy(proxy, scope, sx, sy, sz, context, opening);
+  root.add(proxy);
+}
+
+export function stairWellEntryOpeningFromProxyMesh(
+  proxy: THREE.Object3D,
+  def: StairWellDef | undefined,
+): StairWellEntryOpeningDef | null {
+  const scope =
+    (proxy.userData.editorStairOpeningScope as StairWellAuthoringScope | undefined) ?? "typical";
+  const dims = proxy.userData.editorStairPreviewDims as readonly [number, number, number] | undefined;
+  const context = proxy.userData.editorStairPreviewContext as
+    | StairWellGroundDoorContext
+    | undefined;
+  if (!dims) return null;
+  const current = resolveStairWellGroundDoor({
+    sx: dims[0],
+    sy: dims[1],
+    sz: dims[2],
+    context,
+    def,
+    authoringScope: scope,
+  });
+  if (!current) return null;
+  const widthScale =
+    current.face === "e" || current.face === "w" ? Math.abs(proxy.scale.z) : Math.abs(proxy.scale.x);
+  const nextRaw: StairWellEntryOpeningDef = {
+    face: current.face,
+    tangentOffsetAlongWallM:
+      current.face === "e" || current.face === "w" ? proxy.position.z : proxy.position.x,
+    widthM: current.widthM * widthScale,
+    heightM: current.heightM * Math.abs(proxy.scale.y),
+    centerYM: proxy.position.y,
+  };
+  const baseDef = (def ?? { id: "stair_preview", version: 1 }) as StairWellDef;
+  const resolved = resolveStairWellGroundDoor({
+    sx: dims[0],
+    sy: dims[1],
+    sz: dims[2],
+    context,
+    authoringScope: scope,
+    def:
+      scope === "ground"
+        ? {
+            ...baseDef,
+            groundEntryOpening: { ...stairWellOpeningDefForScope(def, scope), ...nextRaw },
+          }
+        : {
+            ...baseDef,
+            entryOpening: { ...stairWellOpeningDefForScope(def, scope), ...nextRaw },
+          },
+  });
+  if (!resolved) return null;
+  return {
+    face: resolved.face,
+    tangentOffsetAlongWallM: resolved.tangentOffsetAlongWallM,
+    widthM: resolved.widthM,
+    heightM: resolved.heightM,
+    centerYM: resolved.centerYM,
+  };
 }
 
 export function resolveStairWellGroundDoor(args: {
@@ -1008,9 +1302,10 @@ export function resolveStairWellGroundDoor(args: {
   sz: number;
   context?: StairWellGroundDoorContext;
   layout?: StairSwitchbackLayout;
+  def?: StairWellDef;
+  authoringScope?: StairWellAuthoringScope;
 }): ResolvedStairWellGroundDoor | null {
   const { sx, sy, sz, context } = args;
-  if (!context) return null;
   const L = args.layout ?? computeSwitchbackStairLayout(sx, sy, sz);
   const wt = 0.11;
   const hy = sy * 0.5;
@@ -1018,77 +1313,117 @@ export function resolveStairWellGroundDoor(args: {
   const wallCenterY = (-hy + wt) + innerWallH * 0.5;
   const yWallBottom = wallCenterY - innerWallH * 0.5;
   const bandHeightM = Math.max(0.55, Math.min(SHAFT_GROUND_DOOR_BAND_M, innerWallH));
-  const doorHalfW = Math.min(
+  const maxDoorHalfW = Math.min(
     SHAFT_DOUBLE_DOOR_W * 0.5,
     Math.max(sx - 2 * wt, 0.05) * 0.5 - 0.06,
     Math.max(sz - 2 * wt, 0.05) * 0.5 - 0.06,
   );
-  const doorH = Math.min(
+  const maxDoorH = Math.min(
     SHAFT_DOUBLE_DOOR_H,
     bandHeightM - SHAFT_DOOR_SILL - 0.06,
   );
-  const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
-  const yDoor1 = yDoor0 + Math.max(0.55, doorH);
-  const picked = pickStairShaftGroundDoorPlacement(L, {
-    sx,
-    sz,
-    wallThickness: wt,
-    doorHalfWidthM: doorHalfW,
-    doorY0Local: yDoor0,
-    doorY1Local: yDoor1,
-    collisionYMaxLocal: yWallBottom + bandHeightM,
-    towardX: context.towardPlateXZ[0],
-    towardZ: context.towardPlateXZ[1],
-    shaftPx: context.shaftPlateXZ[0],
-    shaftPz: context.shaftPlateXZ[1],
-  });
-  let tangentOffsetAlongWall = picked.tangentOffsetM;
-  const landing = pickCornerLandingNearDoorBand(
-    L,
-    picked.face,
-    tangentOffsetAlongWall,
-    doorHalfW,
-    (yDoor0 + yDoor1) * 0.5,
-  );
-  if (landing) {
-    tangentOffsetAlongWall = snapStairDoorTangentAlongWallToLanding(
-      landing,
-      picked.face,
-      doorHalfW,
+  const doorHalfW = Math.max(0.325, maxDoorHalfW);
+  const doorH = Math.max(0.65, maxDoorH);
+  const baseYDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  const baseYDoor1 = baseYDoor0 + doorH;
+  const scope = args.authoringScope ?? "typical";
+  const authored = stairWellOpeningDefForScope(args.def, scope);
+  let pickedFace = authored?.face as CardinalFace | undefined;
+  let tangentOffsetAlongWall = authored?.tangentOffsetAlongWallM ?? 0;
+  if (!pickedFace && !context) return null;
+  if (context) {
+    const picked = pickStairShaftGroundDoorPlacement(L, {
       sx,
       sz,
-      {
-        alignTowardPlateXZ: context.towardPlateXZ,
-        shaftPlateXZForAlign: context.shaftPlateXZ,
-      },
-    );
+      wallThickness: wt,
+      doorHalfWidthM: doorHalfW,
+      doorY0Local: baseYDoor0,
+      doorY1Local: baseYDoor1,
+      collisionYMaxLocal: yWallBottom + bandHeightM,
+      towardX: context.towardPlateXZ[0],
+      towardZ: context.towardPlateXZ[1],
+      shaftPx: context.shaftPlateXZ[0],
+      shaftPz: context.shaftPlateXZ[1],
+    });
+    pickedFace ??= picked.face;
+    if (authored?.tangentOffsetAlongWallM == null) {
+      tangentOffsetAlongWall = picked.tangentOffsetM;
+      const landing = pickCornerLandingNearDoorBand(
+        L,
+        picked.face,
+        tangentOffsetAlongWall,
+        doorHalfW,
+        (baseYDoor0 + baseYDoor1) * 0.5,
+      );
+      if (landing) {
+        tangentOffsetAlongWall = snapStairDoorTangentAlongWallToLanding(
+          landing,
+          picked.face,
+          doorHalfW,
+          sx,
+          sz,
+          {
+            alignTowardPlateXZ: context.towardPlateXZ,
+            shaftPlateXZForAlign: context.shaftPlateXZ,
+          },
+        );
+      }
+      tangentOffsetAlongWall = shiftStairDoorTangentViewerRightFromInside(
+        picked.face,
+        tangentOffsetAlongWall,
+        doorHalfW,
+        sx,
+        sz,
+        wt,
+      );
+      const rightBiasSign = picked.face === "e" || picked.face === "s" ? 1 : -1;
+      tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
+        picked.face,
+        tangentOffsetAlongWall + rightBiasSign * STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M * 0.25,
+        doorHalfW,
+        sx,
+        sz,
+        wt,
+      );
+    }
   }
-  tangentOffsetAlongWall = shiftStairDoorTangentViewerRightFromInside(
-    picked.face,
-    tangentOffsetAlongWall,
-    doorHalfW,
-    sx,
-    sz,
-    wt,
-  );
-  const rightBiasSign = picked.face === "e" || picked.face === "s" ? 1 : -1;
+  if (!pickedFace) return null;
+  const widthM = THREE.MathUtils.clamp(authored?.widthM ?? doorHalfW * 2, 0.65, maxDoorHalfW * 2);
+  const heightM = THREE.MathUtils.clamp(authored?.heightM ?? doorH, 0.65, maxDoorH);
   tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
-    picked.face,
-    tangentOffsetAlongWall + rightBiasSign * STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M * 0.25,
-    doorHalfW,
+    pickedFace,
+    tangentOffsetAlongWall,
+    widthM * 0.5,
     sx,
     sz,
     wt,
   );
+  const centerMin = yWallBottom + SHAFT_DOOR_SILL + heightM * 0.5;
+  const centerMax = yWallBottom + bandHeightM - 0.04 - heightM * 0.5;
+  const centerYM = THREE.MathUtils.clamp(
+    authored?.centerYM ?? (baseYDoor0 + baseYDoor1) * 0.5,
+    Math.min(centerMin, centerMax),
+    Math.max(centerMin, centerMax),
+  );
+  const yDoor0 = centerYM - heightM * 0.5;
+  const yDoor1 = centerYM + heightM * 0.5;
   return {
     groundDoor: {
-      face: picked.face,
+      face: pickedFace,
       bandHeightM: SHAFT_GROUND_DOOR_BAND_M,
       tangentOffsetAlongWall,
+      doorWidthM: widthM,
+      doorHoleY0Local: yDoor0,
+      doorHoleY1Local: yDoor1,
     },
-    doorHalfW,
+    doorHalfW: widthM * 0.5,
     y0Local: yDoor0,
     y1Local: yDoor1,
+    face: pickedFace,
+    tangentOffsetAlongWallM: tangentOffsetAlongWall,
+    widthM,
+    heightM,
+    centerYM,
   };
 }
 
@@ -1105,13 +1440,32 @@ export function addStairWellPlaceholder(
   const authoringScope = opts?.authoringScope ?? "typical";
   const resolvedGroundDoor =
     opts?.groundDoor != null
-      ? { groundDoor: opts.groundDoor, doorHalfW: 0, y0Local: 0, y1Local: 0 }
+      ? (() => {
+          const widthM = opts.groundDoor?.doorWidthM ?? SHAFT_DOUBLE_DOOR_W;
+          const y0Local =
+            opts.groundDoor?.doorHoleY0Local ?? (-sy * 0.5 + 0.11 + SHAFT_DOOR_SILL);
+          const y1Local =
+            opts.groundDoor?.doorHoleY1Local ?? (y0Local + Math.min(SHAFT_DOUBLE_DOOR_H, sy - 0.4));
+          return {
+            groundDoor: opts.groundDoor,
+            doorHalfW: widthM * 0.5,
+            y0Local,
+            y1Local,
+            face: opts.groundDoor?.face ?? "e",
+            tangentOffsetAlongWallM: opts.groundDoor?.tangentOffsetAlongWall ?? 0,
+            widthM,
+            heightM: y1Local - y0Local,
+            centerYM: (y0Local + y1Local) * 0.5,
+          } satisfies ResolvedStairWellGroundDoor;
+        })()
       : resolveStairWellGroundDoor({
           layout: L,
           sx,
           sy,
           sz,
           context: opts?.previewGroundDoorContext,
+          def: opts?.def,
+          authoringScope,
         });
   const stairGroundDoor = resolvedGroundDoor?.groundDoor ?? null;
   if (stairGroundDoor) {
@@ -1141,14 +1495,15 @@ export function addStairWellPlaceholder(
   stairFlights.add(upperFlight);
 
   addShaftShell(group, sx, sy, sz, mats.wall, shaftCeil, {
-    includeFloor: true,
+    includeFloor: stairWellHasFloorSlab(authoringScope),
     includeCeiling: false,
     floorMat: mats.floor,
     groundDoor: stairGroundDoor,
   });
+  groupGeneratedStairWellWallParts(group);
   tagGeneratedStairWellShellParts(group, authoringScope);
 
-  const { innerWallH, wallCenterY, ix0, ix1, iz0, iz1 } = L;
+  const { ix0, ix1, iz0, iz1 } = L;
   const boundary = lowerFlightLegBoundary(L.legTreadCounts);
 
   let ti = 0;
@@ -1192,8 +1547,10 @@ export function addStairWellPlaceholder(
     }
   }
 
+  const landingsPerLap =
+    L.numLaps > 0 ? Math.max(1, Math.floor(L.cornerLandings.length / L.numLaps)) : 1;
   let li = 0;
-  for (const cl of L.cornerLandings) {
+  for (const [landingIndex, cl] of L.cornerLandings.entries()) {
     if (omitOnlyLanding !== undefined && cl === omitOnlyLanding) continue;
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(
@@ -1204,30 +1561,26 @@ export function addStairWellPlaceholder(
       mats.landing,
     );
     mesh.name = `stair_corner_landing_${li}`;
-    setStairWellEditorPartId(mesh, "stair_corner_landing", authoringScope);
+    setStairWellEditorPartId(
+      mesh,
+      stairLandingPartIdForIndex(landingIndex % landingsPerLap, landingsPerLap),
+      authoringScope,
+    );
     li += 1;
     mesh.position.set(cl.x, cl.y, cl.z);
     group.add(mesh);
   }
 
-  const railPost = 0.055;
-  const corners: readonly [number, number][] = [
-    [ix0, iz0],
-    [ix1, iz0],
-    [ix1, iz1],
-    [ix0, iz1],
-  ];
-  let pi = 0;
-  for (const [rx, rz] of corners) {
-    const post = new THREE.Mesh(
-      new THREE.BoxGeometry(railPost, innerWallH, railPost),
-      mats.railing,
+  if (opts?.addOpeningEditProxy && resolvedGroundDoor) {
+    addStairWellOpeningEditProxy(
+      group,
+      authoringScope,
+      sx,
+      sy,
+      sz,
+      opts?.previewGroundDoorContext,
+      resolvedGroundDoor,
     );
-    post.name = `stair_rail_post_${pi}`;
-    setStairWellEditorPartId(post, "stair_rail_post", authoringScope);
-    pi += 1;
-    post.position.set(rx, wallCenterY, rz);
-    group.add(post);
   }
 
   recordStairWellBaseTransforms(group);

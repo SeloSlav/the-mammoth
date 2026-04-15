@@ -7,7 +7,11 @@ import type {
   InteriorDoc,
   PrefabDef,
 } from "@the-mammoth/schemas";
-import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_EDITOR_PART_IDS } from "@the-mammoth/world";
+import {
+  LANDING_DOOR_OPENING_PROXY_ID,
+  STAIR_WELL_EDITOR_PART_IDS,
+  STAIR_WELL_OPENING_PROXY_ID,
+} from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStore.js";
 
 /** Subparts tagged with `userData.editorCabPartId` in the cab preview (see `elevatorCabPreview.ts`). */
@@ -20,8 +24,6 @@ const ELEVATOR_CAB_OUTLINER_PART_IDS = [
   "cab_wall_side_s",
   "cab_wall_side_e",
   "cab_wall_side_w",
-  "cab_door_leaf_l",
-  "cab_door_leaf_r",
 ] as const;
 
 export function EditorChromeOutliner(props: {
@@ -75,9 +77,9 @@ export function EditorChromeOutliner(props: {
       ) : null}
       {mode === "landing_preview" ? (
         <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-          Exterior landing door kit. Use the blue wireframe opening gizmo (or click the glass): move
+          Exterior corridor door kit. Use the blue wireframe opening gizmo (or click the glass): move
           sets the hole height; non-uniform scale makes the opening taller/wider. Saved as{" "}
-          <code>glassOpening</code> in shared LandingKitDef (rails + glass rebuild to match).
+          <code>glassOpening</code> in shared <code>LandingKitDef</code> (rails + glass rebuild to match).
         </p>
       ) : null}
       {mode === "stairwell_preview" ? (
@@ -191,9 +193,17 @@ export function EditorChromeOutliner(props: {
           </>
         ) : null}
         {mode === "stairwell_preview"
-          ? STAIR_WELL_EDITOR_PART_IDS.filter(
-              (id) => stairWellAuthorScope === "typical" || id !== "stair_corner_landing",
-            ).map((id) => (
+          ? [
+              STAIR_WELL_OPENING_PROXY_ID,
+              ...Array.from(
+                STAIR_WELL_EDITOR_PART_IDS.filter(
+                  (id) =>
+                    stairWellAuthorScope === "typical"
+                      ? id !== "shaft_floor"
+                      : id !== "stair_landing_lower",
+                ),
+              ),
+            ].map((id) => (
               <button
                 key={id}
                 type="button"
@@ -213,6 +223,9 @@ export function EditorChromeOutliner(props: {
                 }}
               >
                 {id}
+                {id === STAIR_WELL_OPENING_PROXY_ID ? (
+                  <span style={{ opacity: 0.65 }}> (framed opening - gizmo)</span>
+                ) : null}
               </button>
             ))
           : null}

@@ -1,0 +1,33 @@
+{
+  "_comment": "Golden poses for FPS character collision. TypeScript: fpCharacterController.parity.test.ts. Server mirror: apps/server/src/character_controller.rs (same stepUpMargin / probe as client).",
+  "cases": [
+    {
+      "name": "diagonal_slide_wall_grounded",
+      "aabbs": [{ "min": [2, 0, -10], "max": [2.2, 3, 10] }],
+      "prevPos": [0, 0, 0],
+      "targetPos": [2, 0, 2],
+      "vel": [2, 0, 2],
+      "bodyHeight": 1.78,
+      "radius": 0.22,
+      "stepUpMargin": 0.82,
+      "stepUpProbeM": 0.41,
+      "grounded": true,
+      "expectPos": [1.7799998333333333, 0, 2],
+      "expectVel": [0, 0, 2]
+    },
+    {
+      "name": "diagonal_slide_wall_airborne",
+      "aabbs": [{ "min": [2, 0, -10], "max": [2.2, 3, 10] }],
+      "prevPos": [0, 0, 0],
+      "targetPos": [2, 0, 2],
+      "vel": [2, 0, 2],
+      "bodyHeight": 1.78,
+      "radius": 0.22,
+      "stepUpMargin": 0.82,
+      "stepUpProbeM": 0,
+      "grounded": false,
+      "expectPos": [1.7799998333333333, 0, 2],
+      "expectVel": [0, 0, 2]
+    }
+  ]
+}

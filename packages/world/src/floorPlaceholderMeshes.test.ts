@@ -3,11 +3,13 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { classifyPrefab } from "./floorPlaceholderMeshes.js";
 import {
+  buildStaticCollisionSceneForBuilding,
   buildFloorMeshes,
   collectCollisionAabbsFromObject3D,
   instantiateBuildingFloorStack,
   parseBuildingDoc,
   parseFloorDoc,
+  parseStairWellDef,
 } from "./index.js";
 
 describe("classifyPrefab", () => {
@@ -31,7 +33,17 @@ describe("classifyPrefab", () => {
     expect(classifyPrefab("props_crate")).toBe("misc");
   });
 
-  it("cuts a ground-floor stair entry through both the shaft and adjacent corridor shell", () => {
+  it("cuts a stair entry through both the shaft and adjacent corridor shell on shared floors too", () => {
+    const stairWellDef = parseStairWellDef({
+      id: "stairs",
+      version: 1,
+      entryOpening: {
+        face: "e",
+        tangentOffsetAlongWallM: 0,
+        widthM: 1.6,
+        heightM: 2,
+      },
+    });
     const root = buildFloorMeshes(
       {
         id: "floor_test",
@@ -40,7 +52,7 @@ describe("classifyPrefab", () => {
           {
             id: "corridor_01",
             prefabId: "corridor_main",
-            position: [2.8, 0, 0],
+            position: [3.8, 0, 0],
             scale: [3.6, 3.2, 4.4],
           },
           {
@@ -51,7 +63,7 @@ describe("classifyPrefab", () => {
           },
         ],
       },
-      { storyLevelIndex: 1 },
+      { storyLevelIndex: 7, stairWellDef },
     );
 
     const stair = root.getObjectByName("stair_01");
@@ -94,6 +106,65 @@ describe("classifyPrefab", () => {
     });
     expect(wallNames).not.toContain("shaft_wall_w_lo_solid");
     expect(wallNames.some((name) => name.startsWith("shaft_wall_w_lo_"))).toBe(true);
+  });
+
+  it("uses stairWellDef openings in collision generation for upper storeys too", () => {
+    const building = parseBuildingDoc({
+      id: "b",
+      version: 1,
+      floorRefs: [
+        { levelIndex: 1, floorDocId: "f" },
+        { levelIndex: 2, floorDocId: "f" },
+      ],
+    });
+    const floor = parseFloorDoc({
+      id: "f",
+      version: 1,
+      objects: [
+        {
+          id: "corridor_01",
+          prefabId: "corridor_main",
+          position: [3.8, 0, 0],
+          scale: [3.6, 3.2, 4.4],
+        },
+        {
+          id: "stair_01",
+          prefabId: "stair_well_a",
+          position: [0, 0, 0],
+          scale: [4, 3.2, 4],
+        },
+      ],
+    });
+    const stairWellDef = parseStairWellDef({
+      id: "stairs",
+      version: 1,
+      entryOpening: {
+        face: "e",
+        tangentOffsetAlongWallM: 0,
+        widthM: 1.6,
+        heightM: 2,
+      },
+      groundEntryOpening: {
+        face: "e",
+        tangentOffsetAlongWallM: 0,
+        widthM: 1.6,
+        heightM: 2,
+      },
+    });
+    const collision = buildStaticCollisionSceneForBuilding(building, () => floor, {
+      stairWellDef,
+    });
+    const probe = { x: 1.89, y: 4.4, z: 0 };
+    const blocked = collision.solids.some(
+      (aabb) =>
+        probe.x >= aabb.min[0] &&
+        probe.x <= aabb.max[0] &&
+        probe.y >= aabb.min[1] &&
+        probe.y <= aabb.max[1] &&
+        probe.z >= aabb.min[2] &&
+        probe.z <= aabb.max[2],
+    );
+    expect(blocked).toBe(false);
   });
 
   it("marks decorative corridor trim and exterior cladding as non-collidable", () => {

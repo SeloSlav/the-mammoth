@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
+import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   instantiateBuildingFloorStack,
@@ -95,12 +95,14 @@ export function buildStaticCollisionSceneForBuilding(
     floorSpacingM?: number;
     ignoreInvisible?: boolean;
     getFloorOverrideDoc?: GetFloorOverrideDoc;
+    stairWellDef?: StairWellDef;
   },
 ): CollisionScene {
   const floorSpacingM = options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
   const root = instantiateBuildingFloorStack(building, getFloorDoc, {
     floorSpacingM,
     getFloorOverrideDoc: options?.getFloorOverrideDoc,
+    stairWellDef: options?.stairWellDef,
   });
   const solids = collectCollisionAabbsFromObject3D(root, {
     ignoreInvisible: options?.ignoreInvisible,

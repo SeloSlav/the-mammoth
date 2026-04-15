@@ -55,10 +55,6 @@ const MAX_SUPPORT_DROP_M: f32 = 3.1;
 const SNAP_EPS: f32 = 0.006;
 const PLAYER_HEIGHT_STAND_M: f32 = 1.78;
 const PLAYER_HEIGHT_CROUCH_M: f32 = 1.2;
-const COLLISION_EPS: f32 = 0.0015;
-const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
-const MAX_HORIZONTAL_COLLISION_SUBSTEP_M: f32 = 0.18;
-
 #[inline]
 fn damp(current: f32, target: f32, lambda: f32, dt: f32) -> f32 {
     target + (current - target) * (-lambda * dt).exp()
@@ -138,6 +134,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         .collect();
     elevator::tick_all_elevators(ctx, TICK_DT);
 
+    let mut collision_scratch: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(512);
     for pose in ctx.db.player_pose().iter() {
         let id = pose.identity;
         let Some(u) = ctx.db.user().identity().find(&id) else {
@@ -169,7 +166,14 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         // so the dynamic AABB suppression check ("is rider inside moving cab?")
         // sees the correct feet Y rather than the pre-snap locomotion Y.
         elevator::snap_player_to_elevator_kinematic_support(ctx, &mut p);
-        resolve_player_static_collisions(&mut p, prev_x, prev_y, prev_z, input.bits);
+        resolve_player_static_collisions(
+            &mut p,
+            prev_x,
+            prev_y,
+            prev_z,
+            input.bits,
+            &mut collision_scratch,
+        );
         elevator::resolve_player_generated_collision_aabbs(
             ctx,
             &mut p,
@@ -375,326 +379,25 @@ fn player_body_height(bits: u8) -> f32 {
     }
 }
 
-#[inline]
-fn swept_body_vertical_overlap(
-    prev_feet_y: f32,
-    feet_y: f32,
-    body_h: f32,
-    mn: &[f32; 3],
-    mx: &[f32; 3],
-) -> bool {
-    let y0 = prev_feet_y.min(feet_y);
-    let y1 = (prev_feet_y + body_h).max(feet_y + body_h);
-    y1 > mn[1] + 1e-4 && y0 < mx[1] - 1e-4
-}
-
-#[inline]
-fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
-    top_y <= feet_y + WALK_STEP_UP_MARGIN + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
-}
-
-#[inline]
-fn resolve_overlap_along_axis(
-    resolved_pos: f32,
-    prev_pos: f32,
-    radius: f32,
-    min_face: f32,
-    max_face: f32,
-) -> f32 {
-    let prev_max = prev_pos + radius;
-    let prev_min = prev_pos - radius;
-    if prev_max <= min_face + COLLISION_EPS {
-        return resolved_pos.min(min_face - radius - COLLISION_EPS);
-    }
-    if prev_min >= max_face - COLLISION_EPS {
-        return resolved_pos.max(max_face + radius + COLLISION_EPS);
-    }
-
-    // If we are already overlapping, prefer the side opposite the attempted
-    // motion instead of the minimum-penetration side. This prevents held-input
-    // ratcheting through thin walls across repeated reconcile/tick steps.
-    let axis_delta = resolved_pos - prev_pos;
-    if axis_delta > COLLISION_EPS {
-        return resolved_pos.min(min_face - radius - COLLISION_EPS);
-    }
-    if axis_delta < -COLLISION_EPS {
-        return resolved_pos.max(max_face + radius + COLLISION_EPS);
-    }
-
-    let mid = (min_face + max_face) * 0.5;
-    if prev_pos <= mid {
-        resolved_pos.min(min_face - radius - COLLISION_EPS)
-    } else {
-        resolved_pos.max(max_face + radius + COLLISION_EPS)
-    }
-}
-
-#[inline]
-fn depenetrate_static_horizontal_overlaps(
-    p: &mut PlayerPose,
-    prev_x: f32,
-    prev_z: f32,
-    body_h: f32,
-) {
-    let r = FOOT_RADIUS_XZ;
-    let max_iterations = 8;
-    let mut overlapped_after_pass = false;
-
-    for _ in 0..max_iterations {
-        let mut changed = false;
-        overlapped_after_pass = false;
-        let x0 = p.x - r - COLLISION_EPS;
-        let x1 = p.x + r + COLLISION_EPS;
-        let z0 = p.z - r - COLLISION_EPS;
-        let z1 = p.z + r + COLLISION_EPS;
-        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
-            for (mn, mx) in *shard {
-                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
-                    continue;
-                }
-                if !swept_body_vertical_overlap(p.y, p.y, body_h, mn, mx) {
-                    continue;
-                }
-                if ignore_horizontal_block(p.y, mx[1]) {
-                    continue;
-                }
-                let body_min_x = p.x - r;
-                let body_max_x = p.x + r;
-                let body_min_z = p.z - r;
-                let body_max_z = p.z + r;
-                let overlap_x = (body_max_x - mn[0]).min(mx[0] - body_min_x);
-                let overlap_z = (body_max_z - mn[2]).min(mx[2] - body_min_z);
-                if overlap_x <= 0.0 || overlap_z <= 0.0 {
-                    continue;
-                }
-                overlapped_after_pass = true;
-                if overlap_x <= overlap_z {
-                    let next_x = resolve_overlap_along_axis(p.x, prev_x, r, mn[0], mx[0]);
-                    if next_x != p.x {
-                        if next_x < p.x && p.vel_x > 0.0 {
-                            p.vel_x = 0.0;
-                        }
-                        if next_x > p.x && p.vel_x < 0.0 {
-                            p.vel_x = 0.0;
-                        }
-                        p.x = next_x;
-                        changed = true;
-                    }
-                } else {
-                    let next_z = resolve_overlap_along_axis(p.z, prev_z, r, mn[2], mx[2]);
-                    if next_z != p.z {
-                        if next_z < p.z && p.vel_z > 0.0 {
-                            p.vel_z = 0.0;
-                        }
-                        if next_z > p.z && p.vel_z < 0.0 {
-                            p.vel_z = 0.0;
-                        }
-                        p.z = next_z;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-
-    if !overlapped_after_pass {
-        return;
-    }
-
-    let x0 = p.x - r - COLLISION_EPS;
-    let x1 = p.x + r + COLLISION_EPS;
-    let z0 = p.z - r - COLLISION_EPS;
-    let z1 = p.z + r + COLLISION_EPS;
-    let mut still_overlapping = false;
-    for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
-        for (mn, mx) in *shard {
-            if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
-                continue;
-            }
-            if !swept_body_vertical_overlap(p.y, p.y, body_h, mn, mx) {
-                continue;
-            }
-            if ignore_horizontal_block(p.y, mx[1]) {
-                continue;
-            }
-            let body_min_x = p.x - r;
-            let body_max_x = p.x + r;
-            let body_min_z = p.z - r;
-            let body_max_z = p.z + r;
-            if body_max_x <= mn[0] || body_min_x >= mx[0] {
-                continue;
-            }
-            if body_max_z <= mn[2] || body_min_z >= mx[2] {
-                continue;
-            }
-            still_overlapping = true;
-            break;
-        }
-        if still_overlapping {
-            break;
-        }
-    }
-    if !still_overlapping {
-        return;
-    }
-
-    p.x = prev_x;
-    p.z = prev_z;
-    p.vel_x = 0.0;
-    p.vel_z = 0.0;
-}
-
-fn resolve_player_static_horizontal_collision_step(
-    p: &mut PlayerPose,
-    prev_x: f32,
-    prev_y: f32,
-    prev_z: f32,
-    body_h: f32,
-) {
-    let r = FOOT_RADIUS_XZ;
-    let resolve_x = |p: &mut PlayerPose| {
-        let mut resolved_x = p.x;
-        let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
-        let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
-        let z0 = (prev_z.min(p.z)) - r - COLLISION_EPS;
-        let z1 = (prev_z.max(p.z)) + r + COLLISION_EPS;
-        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
-            for (mn, mx) in *shard {
-                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
-                    continue;
-                }
-                if !swept_body_vertical_overlap(prev_y, p.y, body_h, mn, mx) {
-                    continue;
-                }
-                if ignore_horizontal_block(p.y, mx[1]) {
-                    continue;
-                }
-                let body_min = resolved_x - r;
-                let body_max = resolved_x + r;
-                if body_max <= mn[0] || body_min >= mx[0] {
-                    continue;
-                }
-                let next_resolved_x =
-                    resolve_overlap_along_axis(resolved_x, prev_x, r, mn[0], mx[0]);
-                if next_resolved_x < resolved_x && p.vel_x > 0.0 {
-                    p.vel_x = 0.0;
-                }
-                if next_resolved_x > resolved_x && p.vel_x < 0.0 {
-                    p.vel_x = 0.0;
-                }
-                resolved_x = next_resolved_x;
-            }
-        }
-        p.x = resolved_x;
-    };
-
-    let resolve_z = |p: &mut PlayerPose| {
-        let mut resolved_z = p.z;
-        let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
-        let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
-        let z0 = (prev_z.min(p.z)) - r - COLLISION_EPS;
-        let z1 = (prev_z.max(p.z)) + r + COLLISION_EPS;
-        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
-            for (mn, mx) in *shard {
-                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
-                    continue;
-                }
-                if !swept_body_vertical_overlap(prev_y, p.y, body_h, mn, mx) {
-                    continue;
-                }
-                if ignore_horizontal_block(p.y, mx[1]) {
-                    continue;
-                }
-                let body_min = resolved_z - r;
-                let body_max = resolved_z + r;
-                if body_max <= mn[2] || body_min >= mx[2] {
-                    continue;
-                }
-                let next_resolved_z =
-                    resolve_overlap_along_axis(resolved_z, prev_z, r, mn[2], mx[2]);
-                if next_resolved_z < resolved_z && p.vel_z > 0.0 {
-                    p.vel_z = 0.0;
-                }
-                if next_resolved_z > resolved_z && p.vel_z < 0.0 {
-                    p.vel_z = 0.0;
-                }
-                resolved_z = next_resolved_z;
-            }
-        }
-        p.z = resolved_z;
-    };
-
-    let dx = (p.x - prev_x).abs();
-    let dz = (p.z - prev_z).abs();
-    if dx >= dz {
-        resolve_x(p);
-        resolve_z(p);
-    } else {
-        resolve_z(p);
-        resolve_x(p);
-    }
-}
-
 fn resolve_player_static_collisions(
     p: &mut PlayerPose,
     prev_x: f32,
     prev_y: f32,
     prev_z: f32,
     bits: u8,
+    scratch: &mut Vec<([f32; 3], [f32; 3])>,
 ) {
     let body_h = player_body_height(bits);
-    let start_x = prev_x;
-    let start_z = prev_z;
-    let target_x = p.x;
-    let target_z = p.z;
-    let max_axis_delta = (target_x - start_x).abs().max((target_z - start_z).abs());
-    let step_count =
-        ((max_axis_delta / MAX_HORIZONTAL_COLLISION_SUBSTEP_M).ceil() as u32).max(1);
-    let mut step_prev_x = start_x;
-    let mut step_prev_z = start_z;
-    for step in 1..=step_count {
-        let u = step as f32 / step_count as f32;
-        p.x = start_x + (target_x - start_x) * u;
-        p.z = start_z + (target_z - start_z) * u;
-        resolve_player_static_horizontal_collision_step(p, step_prev_x, prev_y, step_prev_z, body_h);
-        step_prev_x = p.x;
-        step_prev_z = p.z;
-    }
-
-    depenetrate_static_horizontal_overlaps(p, prev_x, prev_z, body_h);
-
-    if p.vel_y > 0.0 {
-        let r = FOOT_RADIUS_XZ;
-        let x0 = p.x - r - COLLISION_EPS;
-        let x1 = p.x + r + COLLISION_EPS;
-        let z0 = p.z - r - COLLISION_EPS;
-        let z1 = p.z + r + COLLISION_EPS;
-        let head = p.y + body_h;
-        let mut best_feet = p.y;
-        for shard in crate::generated_collision_solids::COLLISION_SOLID_AABB_SHARDS {
-            for (mn, mx) in *shard {
-                if x1 <= mn[0] || x0 >= mx[0] || z1 <= mn[2] || z0 >= mx[2] {
-                    continue;
-                }
-                if head <= mn[1] + COLLISION_EPS {
-                    continue;
-                }
-                if p.y >= mn[1] {
-                    continue;
-                }
-                best_feet = best_feet.min(mn[1] - body_h - COLLISION_EPS);
-            }
-        }
-        if best_feet < p.y {
-            p.y = best_feet;
-            if p.vel_y > 0.0 {
-                p.vel_y = 0.0;
-            }
-        }
-    }
+    let grounded = p.grounded != 0;
+    crate::character_controller::resolve_player_static_collisions_character(
+        p,
+        prev_x,
+        prev_y,
+        prev_z,
+        body_h,
+        grounded,
+        scratch,
+    );
 }
 
 /// Insert repeating physics schedule (call from `init`).

@@ -5,6 +5,8 @@ import {
   addStairWellPlaceholder,
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
+  STAIR_WELL_OPENING_PROXY_ID,
+  stairWellEntryOpeningFromProxyMesh,
 } from "./stairElevatorPlaceholders.js";
 import { STOREY_SPACING_M } from "./stairWellGeometry.js";
 
@@ -117,6 +119,41 @@ describe("applyStairWellPartTransforms", () => {
     expect(tread.getWorldPosition(new THREE.Vector3()).toArray()).toEqual([0, 3, 0]);
   });
 
+  it("keeps legacy corner-landing tweaks working for both landing groups", () => {
+    const root = new THREE.Group();
+
+    const lower = new THREE.Mesh();
+    lower.userData.editorStairPartId = "stair_landing_lower";
+    lower.userData.editorStairAuthoringScope = "typical";
+    lower.userData.editorStairBasePosition = [0, 0, 0];
+    lower.userData.editorStairBaseScale = [1, 1, 1];
+    lower.userData.editorStairBaseRotation = [0, 0, 0, 1];
+    root.add(lower);
+
+    const upper = new THREE.Mesh();
+    upper.userData.editorStairPartId = "stair_landing_upper";
+    upper.userData.editorStairAuthoringScope = "typical";
+    upper.userData.editorStairBasePosition = [0, 1, 0];
+    upper.userData.editorStairBaseScale = [1, 1, 1];
+    upper.userData.editorStairBaseRotation = [0, 0, 0, 1];
+    root.add(upper);
+
+    const def = StairWellDefSchema.parse({
+      id: "stairs",
+      version: 1,
+      partTransforms: {
+        stair_corner_landing: {
+          position: [0, 0.25, 0],
+        },
+      },
+    });
+
+    applyStairWellPartTransforms(root, def);
+
+    expect(lower.position.toArray()).toEqual([0, 0.25, 0]);
+    expect(upper.position.toArray()).toEqual([0, 1.25, 0]);
+  });
+
   it("keeps each generated tread leg wholly inside one grouped flight handle", () => {
     const root = new THREE.Group();
     addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);
@@ -148,6 +185,85 @@ describe("applyStairWellPartTransforms", () => {
     ]);
   });
 
+  it("tags both lower and upper landing groups in a typical stair preview", () => {
+    const root = new THREE.Group();
+    addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);
+
+    const landingIds: string[] = [];
+    const topLandingByY = { y: -Infinity, id: "" };
+    root.traverse((obj) => {
+      if (!obj.name.startsWith("stair_corner_landing_")) return;
+      const partId = obj.userData.editorStairPartId;
+      if (typeof partId !== "string") return;
+      landingIds.push(partId);
+      if (obj.position.y > topLandingByY.y) {
+        topLandingByY.y = obj.position.y;
+        topLandingByY.id = partId;
+      }
+    });
+
+    expect(landingIds).toContain("stair_landing_lower");
+    expect(landingIds).toContain("stair_landing_upper");
+    expect(topLandingByY.id).toBe("stair_landing_upper");
+  });
+
+  it("groups all shaft walls under one shared wall handle", () => {
+    const root = new THREE.Group();
+    addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);
+
+    const wallGroup = root.getObjectByName("shaft_wall") as THREE.Group | undefined;
+    expect(wallGroup).toBeDefined();
+    expect(wallGroup?.userData.editorStairPartId).toBe("shaft_wall");
+    expect(wallGroup?.userData.editorStairPickId).toBe("shaft_wall");
+    expect(
+      wallGroup?.children.some((child) => child.name.startsWith("shaft_wall_")),
+    ).toBe(true);
+  });
+
+  it("only adds the shaft floor slab on the ground stairwell scope", () => {
+    const typical = new THREE.Group();
+    addStairWellPlaceholder(typical, 4, STOREY_SPACING_M, 4, {
+      authoringScope: "typical",
+    });
+    expect(typical.getObjectByName("shaft_floor")).toBeUndefined();
+
+    const ground = new THREE.Group();
+    addStairWellPlaceholder(ground, 4, STOREY_SPACING_M, 4, {
+      authoringScope: "ground",
+      omitGroundStoreyCornerLandings: true,
+    });
+    expect(ground.getObjectByName("shaft_floor")).not.toBeNull();
+  });
+
+  it("does not generate stair rail posts anymore", () => {
+    const root = new THREE.Group();
+    addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);
+
+    let foundRailPost = false;
+    root.traverse((obj) => {
+      if (obj.name.startsWith("stair_rail_post")) foundRailPost = true;
+    });
+
+    expect(foundRailPost).toBe(false);
+  });
+
+  it("keeps an upper landing handle on the ground stairwell scope", () => {
+    const ground = new THREE.Group();
+    addStairWellPlaceholder(ground, 4, STOREY_SPACING_M, 4, {
+      authoringScope: "ground",
+      omitGroundStoreyCornerLandings: true,
+    });
+
+    const landingIds = new Set<string>();
+    ground.traverse((obj) => {
+      if (!obj.name.startsWith("stair_corner_landing_")) return;
+      const partId = obj.userData.editorStairPartId;
+      if (typeof partId === "string") landingIds.add(partId);
+    });
+
+    expect(landingIds.has("stair_landing_upper")).toBe(true);
+  });
+
   it("adds a corridor-side stair entry opening in the preview when plan context exists", () => {
     const root = buildStairWellPreviewRoot({
       sx: 4,
@@ -160,5 +276,31 @@ describe("applyStairWellPartTransforms", () => {
       face: expect.any(String),
       tangentOffsetAlongWall: expect.any(Number),
     });
+  });
+
+  it("adds an editable opening proxy and maps gizmo edits back into stairWellDef data", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+    });
+    const proxy = root.getObjectByName(STAIR_WELL_OPENING_PROXY_ID);
+    expect(proxy).not.toBeNull();
+    if (!proxy) return;
+    proxy.scale.set(1, 1.1, 1.2);
+    proxy.position.y += 0.05;
+    const open = stairWellEntryOpeningFromProxyMesh(
+      proxy,
+      StairWellDefSchema.parse({ id: "stairs", version: 1 }),
+    );
+    expect(open).toMatchObject({
+      face: expect.any(String),
+      widthM: expect.any(Number),
+      heightM: expect.any(Number),
+      centerYM: expect.any(Number),
+    });
+    expect(open!.widthM!).toBeGreaterThan(1);
   });
 });

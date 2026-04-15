@@ -21,6 +21,7 @@ import {
   instantiateBuildingFloorStack,
   listElevatorShaftLayouts,
   maxBuildingLevelIndex,
+  shaftDoorTowardPointFromFloorCorridors,
 } from "@the-mammoth/world";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../state/editorStore.js";
@@ -59,11 +60,6 @@ function isStairPrefab(prefabId: string): boolean {
   return pid.includes("stair_well") || pid.includes("stairwell");
 }
 
-function isCorridorLikePrefab(prefabId: string): boolean {
-  const pid = prefabId.toLowerCase();
-  return pid.includes("corridor") || pid.includes("lobby") || pid.includes("hall");
-}
-
 export function buildEditorStructuralRoot(args: {
   mode: EditorMode;
   workspace: EditorWorkspace;
@@ -96,7 +92,7 @@ export function buildEditorStructuralRoot(args: {
       layout,
       def: args.elevatorCabDef,
       maxLevel: maxBuildingLevelIndex(args.building),
-      previewDoorOpen01: 0.45,
+      includeDoors: false,
     });
     root.add(cab);
     return root;
@@ -125,27 +121,30 @@ export function buildEditorStructuralRoot(args: {
   if (args.mode === "stairwell_preview") {
     const root = new THREE.Group();
     root.name = "editor_workspace:stairwell";
-    const stairEntry = Object.values(args.floorDocs)
-      .flatMap((doc) => doc.objects.map((obj) => ({ doc, obj })))
-      .find(({ obj }) => isStairPrefab(obj.prefabId));
+    const sortedRefs = [...args.building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+    const preferredRefs =
+      args.stairWellAuthorScope === "ground"
+        ? sortedRefs.filter((ref) => ref.levelIndex === 1)
+        : sortedRefs.filter((ref) => ref.levelIndex !== 1);
+    const stairEntry =
+      preferredRefs
+        .flatMap((ref) => {
+          const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
+          return doc.objects.map((obj) => ({ doc, obj }));
+        })
+        .find(({ obj }) => isStairPrefab(obj.prefabId)) ??
+      sortedRefs
+        .flatMap((ref) => {
+          const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
+          return doc.objects.map((obj) => ({ doc, obj }));
+        })
+        .find(({ obj }) => isStairPrefab(obj.prefabId));
     if (!stairEntry) return root;
     const { doc: stairDoc, obj: stairObj } = stairEntry;
     const sx = stairObj.scale?.[0] ?? 4.2;
     const sy = stairObj.scale?.[1] ?? 3.2;
     const sz = stairObj.scale?.[2] ?? 4.2;
     const towardPlateXZ = (() => {
-      const corridor = stairDoc.objects
-        .filter((obj) => isCorridorLikePrefab(obj.prefabId))
-        .sort((a, b) => {
-          const da =
-            (a.position[0] - stairObj.position[0]) ** 2 + (a.position[2] - stairObj.position[2]) ** 2;
-          const db =
-            (b.position[0] - stairObj.position[0]) ** 2 + (b.position[2] - stairObj.position[2]) ** 2;
-          return da - db;
-        })[0];
-      if (corridor) {
-        return [corridor.position[0], corridor.position[2]] as const;
-      }
       if (stairDoc.objects.length === 0) {
         return [stairObj.position[0], stairObj.position[2]] as const;
       }
@@ -155,7 +154,13 @@ export function buildEditorStructuralRoot(args: {
         sumX += obj.position[0];
         sumZ += obj.position[2];
       }
-      return [sumX / stairDoc.objects.length, sumZ / stairDoc.objects.length] as const;
+      return shaftDoorTowardPointFromFloorCorridors(
+        stairObj.position[0],
+        stairObj.position[2],
+        stairDoc,
+        sumX / stairDoc.objects.length,
+        sumZ / stairDoc.objects.length,
+      );
     })();
     const previewArgs: BuildStairWellPreviewRootArgs = {
       sx,

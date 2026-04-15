@@ -27,7 +27,7 @@ export type BuildingStairShaftSpec = {
   bottomY: number;
   storeyCount: number;
   storeySpacing: number;
-  groundDoorContext?: StairWellGroundDoorContext;
+  entryDoorContexts: readonly (StairWellGroundDoorContext | undefined)[];
 };
 
 export function shaftPlanKey(px: number, pz: number): string {
@@ -59,9 +59,20 @@ export function getBuildingStairShaftSpecs(
 
   type Acc = { id: string; px: number; pz: number; sx: number; sz: number; syPlate: number };
   const map = new Map<string, Acc>();
+  const entryDoorContextsByKey = new Map<string, (StairWellGroundDoorContext | undefined)[]>();
 
-  for (const ref of sortedRefs) {
+  for (const [refIndex, ref] of sortedRefs.entries()) {
     const doc = getFloorDoc(ref.floorDocId);
+    let plateCx = 0;
+    let plateCz = 0;
+    for (const obj of doc.objects) {
+      plateCx += obj.position[0];
+      plateCz += obj.position[2];
+    }
+    if (doc.objects.length > 0) {
+      plateCx /= doc.objects.length;
+      plateCz /= doc.objects.length;
+    }
     for (const obj of doc.objects) {
       if (!isStairPrefab(obj.prefabId)) continue;
       const [px, , pz] = obj.position;
@@ -77,6 +88,12 @@ export function getBuildingStairShaftSpecs(
         ex.sz = Math.max(ex.sz, sz);
         ex.syPlate = Math.max(ex.syPlate, syPlate);
       }
+      const contexts = entryDoorContextsByKey.get(key) ?? Array.from({ length: sortedRefs.length });
+      contexts[refIndex] = {
+        towardPlateXZ: shaftDoorTowardPointFromFloorCorridors(px, pz, doc, plateCx, plateCz),
+        shaftPlateXZ: [px, pz],
+      };
+      entryDoorContextsByKey.set(key, contexts);
     }
   }
 
@@ -87,36 +104,6 @@ export function getBuildingStairShaftSpecs(
   const globalTop =
     (levelMax - 1) * spacing + CORE_PY + STOREY_SPACING_M * 0.5;
   const storeyCount = levelMax - levelMin + 1;
-  const groundRef = sortedRefs.find((r) => r.levelIndex === levelMin);
-  const groundDoc = groundRef ? getFloorDoc(groundRef.floorDocId) : undefined;
-  const groundDoorContextByKey = new Map<string, StairWellGroundDoorContext>();
-  if (groundDoc) {
-    let plateCx = 0;
-    let plateCz = 0;
-    for (const obj of groundDoc.objects) {
-      plateCx += obj.position[0];
-      plateCz += obj.position[2];
-    }
-    if (groundDoc.objects.length > 0) {
-      plateCx /= groundDoc.objects.length;
-      plateCz /= groundDoc.objects.length;
-    }
-    for (const obj of groundDoc.objects) {
-      if (!isStairPrefab(obj.prefabId)) continue;
-      const towardPlateXZ = shaftDoorTowardPointFromFloorCorridors(
-        obj.position[0],
-        obj.position[2],
-        groundDoc,
-        plateCx,
-        plateCz,
-      );
-      groundDoorContextByKey.set(shaftPlanKey(obj.position[0], obj.position[2]), {
-        towardPlateXZ,
-        shaftPlateXZ: [obj.position[0], obj.position[2]],
-      });
-    }
-  }
-
   const out: BuildingStairShaftSpec[] = [];
   for (const [planKey, s] of map) {
     out.push({
@@ -130,7 +117,7 @@ export function getBuildingStairShaftSpecs(
       bottomY: globalBottom,
       storeyCount,
       storeySpacing: spacing,
-      groundDoorContext: groundDoorContextByKey.get(planKey),
+      entryDoorContexts: entryDoorContextsByKey.get(planKey) ?? [],
     });
   }
   return out;
@@ -154,19 +141,19 @@ export function addBuildingStairShaftColumnsToRoot(
       segment.name = `stair_shaft_segment_${i}`;
       segment.position.y =
         s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
-      const resolvedGroundDoor =
-        i === 0
-          ? resolveStairWellGroundDoor({
-              sx: s.sx,
-              sy: s.syPlate,
-              sz: s.sz,
-              context: s.groundDoorContext,
-            })?.groundDoor
-          : null;
+      const authoringScope = i === 0 ? "ground" : "typical";
+      const resolvedGroundDoor = resolveStairWellGroundDoor({
+        sx: s.sx,
+        sy: s.syPlate,
+        sz: s.sz,
+        context: s.entryDoorContexts[i],
+        def: stairWellDef,
+        authoringScope,
+      })?.groundDoor;
       addStairWellPlaceholder(segment, s.sx, s.syPlate, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
-        authoringScope: i === 0 ? "ground" : "typical",
+        authoringScope,
         groundDoor: resolvedGroundDoor,
       });
       col.add(segment);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
+import { LANDING_DOOR_OPENING_PROXY_ID, STAIR_WELL_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
 import {
   frameEditorBuilding,
@@ -296,7 +296,7 @@ export function EditorChrome() {
       if (r) return quatToEulerDeg(r);
       return [0, 0, 0] as [number, number, number];
     }
-    if (mode === "stairwell_preview" && selectedId) {
+    if (mode === "stairwell_preview" && selectedId && selectedId !== STAIR_WELL_OPENING_PROXY_ID) {
       const r =
         stairWellAuthorScope === "ground"
           ? stairWellDef.groundPartTransforms?.[selectedId]?.rotation
@@ -358,7 +358,7 @@ export function EditorChrome() {
       }));
       return;
     }
-    if (mode === "stairwell_preview" && selectedId) {
+    if (mode === "stairwell_preview" && selectedId && selectedId !== STAIR_WELL_OPENING_PROXY_ID) {
       patchStairWellDef((d) => ({
         ...d,
         ...(stairWellAuthorScope === "ground"
@@ -422,7 +422,7 @@ export function EditorChrome() {
       }}
       onClick={() => {
         setLandingDocKind(kind);
-        setCameraMode("fly");
+        setCameraMode("orbit");
       }}
     >
       {title}
@@ -433,8 +433,8 @@ export function EditorChrome() {
     <div style={editorChromePanel}>
       <strong style={{ fontSize: 15 }}>Authoring</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
-        <strong>Cab</strong>, <strong>Landing</strong>, and <strong>Stairwell</strong> edit shared
-        vertical-core visuals (
+        <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
+        shared vertical-core visuals (
         <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
         <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
         <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>).{" "}
@@ -484,10 +484,10 @@ export function EditorChrome() {
           }}
           onClick={() => {
             setWorkspace("landing");
-            setCameraMode("fly");
+            setCameraMode("orbit");
           }}
         >
-          Landing
+          Corridor Door
         </button>
         <button
           type="button"
@@ -550,9 +550,9 @@ export function EditorChrome() {
 
       {workspace === "landing" ? (
         <>
-          <span style={label}>Landing target</span>
+          <span style={label}>Corridor door target</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {landingKindBtn("kit", "Door kit (shared)")}
+            {landingKindBtn("kit", "Corridor door kit (shared)")}
             {landingKindBtn("interior", "Interior doc")}
             {landingKindBtn("cell", "Cell doc")}
             {landingKindBtn("prefab", "Prefab def")}

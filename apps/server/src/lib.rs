@@ -3,6 +3,7 @@
 
 mod accounts;
 mod auth;
+mod character_controller;
 mod combat_stub;
 mod dropped_item;
 mod elevator;

@@ -4,7 +4,11 @@ import { LandingKitDefSchema } from "@the-mammoth/schemas";
 import {
   applyLandingKitPartTransforms,
   buildLandingDoorPreviewRoot,
+  LANDING_DOOR_BOTTOM_RAIL_PART_ID,
   LANDING_DOOR_GLASS_PART_ID,
+  LANDING_DOOR_LEFT_STILE_PART_ID,
+  LANDING_DOOR_RIGHT_STILE_PART_ID,
+  LANDING_DOOR_TOP_RAIL_PART_ID,
 } from "./landingDoorPreview.js";
 
 describe("landing door preview", () => {
@@ -45,5 +49,19 @@ describe("landing door preview", () => {
     applyLandingKitPartTransforms(structure, def);
     expect(glass.position.x).toBe(0);
     expect(glass.scale.y).toBe(1);
+  });
+
+  it("tags each red landing frame volume for direct viewport picking", () => {
+    const root = buildLandingDoorPreviewRoot({ face: "e", hx: 2, hz: 2 });
+    const taggedIds = new Set<string>();
+    root.traverse((obj) => {
+      const id = obj.userData.editorLandingPartId;
+      if (typeof id === "string") taggedIds.add(id);
+    });
+
+    expect(taggedIds.has(LANDING_DOOR_TOP_RAIL_PART_ID)).toBe(true);
+    expect(taggedIds.has(LANDING_DOOR_BOTTOM_RAIL_PART_ID)).toBe(true);
+    expect(taggedIds.has(LANDING_DOOR_LEFT_STILE_PART_ID)).toBe(true);
+    expect(taggedIds.has(LANDING_DOOR_RIGHT_STILE_PART_ID)).toBe(true);
   });
 });

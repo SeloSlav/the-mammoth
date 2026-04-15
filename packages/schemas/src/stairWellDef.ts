@@ -19,6 +19,24 @@ const StairWellPartTransformEntrySchema = z
   })
   .optional();
 
+const StairWellEntryOpeningSchema = z
+  .object({
+    /** Wall face carrying the corridor-side opening. */
+    face: z.enum(["e", "w", "n", "s"]).optional(),
+    /**
+     * Hole center offset along the selected wall tangent.
+     * E/W walls use local +Z; N/S walls use local +X.
+     */
+    tangentOffsetAlongWallM: z.number().optional(),
+    /** Clear opening width in meters. */
+    widthM: z.number().positive().optional(),
+    /** Clear opening height in meters. */
+    heightM: z.number().positive().optional(),
+    /** Opening center in shaft-local Y. */
+    centerYM: z.number().optional(),
+  })
+  .optional();
+
 /**
  * Shared stairwell visual definition (one file affects every stairwell placeholder / shaft column).
  *
@@ -47,6 +65,15 @@ export const StairWellDefSchema = z.object({
    * the omitted interior corner landing).
    */
   groundPartTransforms: z.record(z.string(), StairWellPartTransformEntrySchema).optional(),
+  /**
+   * Typical-storey stair entry opening authored relative to the procedural shaft shell.
+   * Editor/world/collision all consume the same opening.
+   */
+  entryOpening: StairWellEntryOpeningSchema,
+  /**
+   * Ground-storey override for the stair entry opening. Falls back to `entryOpening` when omitted.
+   */
+  groundEntryOpening: StairWellEntryOpeningSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

@@ -9,7 +9,11 @@ import type {
   PrefabComponent,
   StairWellDef,
 } from "@the-mammoth/schemas";
-import { LANDING_DOOR_OPENING_PROXY_ID, resolveGlassOpening } from "@the-mammoth/world";
+import {
+  LANDING_DOOR_OPENING_PROXY_ID,
+  resolveGlassOpening,
+  STAIR_WELL_OPENING_PROXY_ID,
+} from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
 import type { EditorState, EditorMode, EditorWorkspace } from "../state/editorStore.js";
 
@@ -21,6 +25,13 @@ type ElevatorDoorFace = "e" | "w" | "n" | "s";
 
 function isElevatorFace(value: unknown): value is ElevatorDoorFace {
   return value === "e" || value === "w" || value === "n" || value === "s";
+}
+
+function stairOpeningForScope(
+  def: StairWellDef,
+  scope: "typical" | "ground",
+): NonNullable<StairWellDef["entryOpening"]> | undefined {
+  return scope === "ground" ? (def.groundEntryOpening ?? def.entryOpening) : def.entryOpening;
 }
 
 export function EditorChromeInspector(props: {
@@ -160,13 +171,28 @@ export function EditorChromeInspector(props: {
         <>
           <label style={label}>ElevatorCabDef — material slots</label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75 }}>
-            Hex like <code>0x6a6f78</code> or <code>#6a6f78</code>. Rebuilds cab preview when changed.
+            Author color plus optional <code>mapUrl</code>. Rebuilds the shared cab look in preview and gameplay.
           </p>
           {(["wall", "floor", "door", "ceiling"] as const).map((slot) => (
             <div key={slot} style={{ marginBottom: 10 }}>
               <label style={{ ...label, textTransform: "none" }}>{slot}</label>
               <input
                 style={input}
+                placeholder="mapUrl"
+                value={elevatorCabDef.materials?.[slot]?.mapUrl ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patchElevatorCabDef((d) => ({
+                    ...d,
+                    materials: {
+                      ...d.materials,
+                      [slot]: { ...d.materials?.[slot], mapUrl: v || undefined },
+                    },
+                  }));
+                }}
+              />
+              <input
+                style={{ ...input, marginTop: 6 }}
                 placeholder="colorHex"
                 value={elevatorCabDef.materials?.[slot]?.colorHex ?? ""}
                 onChange={(e) => {
@@ -233,9 +259,30 @@ export function EditorChromeInspector(props: {
 
       {mode === "landing_preview" ? (
         <>
-          <label style={label}>LandingKitDef — frame</label>
+          <label style={label}>
+            Corridor door kit (<code>LandingKitDef</code>) — material slots
+          </label>
+          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            Author optional <code>mapUrl</code> textures for the frame and glass so preview and gameplay use the same corridor-door look.
+          </p>
+          <label style={{ ...label, textTransform: "none" }}>frame</label>
           <input
             style={input}
+            placeholder="frame mapUrl"
+            value={landingKitDef.materials?.frame?.mapUrl ?? ""}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              patchLandingKitDef((d) => ({
+                ...d,
+                materials: {
+                  ...d.materials,
+                  frame: { ...d.materials?.frame, mapUrl: v || undefined },
+                },
+              }));
+            }}
+          />
+          <input
+            style={{ ...input, marginTop: 6 }}
             placeholder="frame colorHex"
             value={landingKitDef.materials?.frame?.colorHex ?? ""}
             onChange={(e) => {
@@ -249,9 +296,70 @@ export function EditorChromeInspector(props: {
               }));
             }}
           />
-          <label style={label}>LandingKitDef — glass</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
+            <input
+              style={input}
+              type="number"
+              step={0.05}
+              min={0}
+              max={1}
+              placeholder="frame roughness"
+              value={landingKitDef.materials?.frame?.roughness ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchLandingKitDef((d) => ({
+                  ...d,
+                  materials: {
+                    ...d.materials,
+                    frame: {
+                      ...d.materials?.frame,
+                      roughness: Number.isFinite(v) ? v : undefined,
+                    },
+                  },
+                }));
+              }}
+            />
+            <input
+              style={input}
+              type="number"
+              step={0.05}
+              min={0}
+              max={1}
+              placeholder="frame metalness"
+              value={landingKitDef.materials?.frame?.metalness ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchLandingKitDef((d) => ({
+                  ...d,
+                  materials: {
+                    ...d.materials,
+                    frame: {
+                      ...d.materials?.frame,
+                      metalness: Number.isFinite(v) ? v : undefined,
+                    },
+                  },
+                }));
+              }}
+            />
+          </div>
+          <label style={{ ...label, marginTop: 8, textTransform: "none" }}>glass</label>
           <input
             style={input}
+            placeholder="glass mapUrl"
+            value={landingKitDef.materials?.glass?.mapUrl ?? ""}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              patchLandingKitDef((d) => ({
+                ...d,
+                materials: {
+                  ...d.materials,
+                  glass: { ...d.materials?.glass, mapUrl: v || undefined },
+                },
+              }));
+            }}
+          />
+          <input
+            style={{ ...input, marginTop: 6 }}
             placeholder="glass colorHex"
             value={landingKitDef.materials?.glass?.colorHex ?? ""}
             onChange={(e) => {
@@ -266,6 +374,30 @@ export function EditorChromeInspector(props: {
             }}
           />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
+            <label style={{ ...label, textTransform: "none" }}>
+              glass roughness
+              <input
+                style={{ ...input, marginTop: 4 }}
+                type="number"
+                step={0.05}
+                min={0}
+                max={1}
+                value={landingKitDef.materials?.glass?.roughness ?? ""}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  patchLandingKitDef((d) => ({
+                    ...d,
+                    materials: {
+                      ...d.materials,
+                      glass: {
+                        ...d.materials?.glass,
+                        roughness: Number.isFinite(v) ? v : undefined,
+                      },
+                    },
+                  }));
+                }}
+              />
+            </label>
             <label style={{ ...label, textTransform: "none" }}>
               glass transmission
               <input
@@ -284,6 +416,30 @@ export function EditorChromeInspector(props: {
                       glass: {
                         ...d.materials?.glass,
                         transmission: Number.isFinite(v) ? v : undefined,
+                      },
+                    },
+                  }));
+                }}
+              />
+            </label>
+            <label style={{ ...label, textTransform: "none" }}>
+              glass metalness
+              <input
+                style={{ ...input, marginTop: 4 }}
+                type="number"
+                step={0.05}
+                min={0}
+                max={1}
+                value={landingKitDef.materials?.glass?.metalness ?? ""}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  patchLandingKitDef((d) => ({
+                    ...d,
+                    materials: {
+                      ...d.materials,
+                      glass: {
+                        ...d.materials?.glass,
+                        metalness: Number.isFinite(v) ? v : undefined,
                       },
                     },
                   }));
@@ -353,14 +509,28 @@ export function EditorChromeInspector(props: {
         <>
           <label style={label}>StairWellDef — material slots</label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-            Shared stairwell visuals. Material edits rebuild the preview; transform deltas below apply
-            to the {stairWellAuthorScope} storey relative to the generated procedural part.
+            Shared stairwell visuals. Author optional <code>mapUrl</code> textures here; material edits rebuild the preview and apply to gameplay too.
           </p>
           {(["wall", "floor", "tread", "landing", "railing"] as const).map((slot) => (
             <div key={slot} style={{ marginBottom: 10 }}>
               <label style={{ ...label, textTransform: "none" }}>{slot}</label>
               <input
                 style={input}
+                placeholder="mapUrl"
+                value={stairWellDef.materials?.[slot]?.mapUrl ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patchStairWellDef((d) => ({
+                    ...d,
+                    materials: {
+                      ...d.materials,
+                      [slot]: { ...d.materials?.[slot], mapUrl: v || undefined },
+                    },
+                  }));
+                }}
+              />
+              <input
+                style={{ ...input, marginTop: 6 }}
                 placeholder="colorHex"
                 value={stairWellDef.materials?.[slot]?.colorHex ?? ""}
                 onChange={(e) => {
@@ -425,6 +595,156 @@ export function EditorChromeInspector(props: {
         </>
       ) : null}
 
+      {mode === "stairwell_preview" ? (
+        <>
+          <label style={label}>
+            Stair entry opening - {stairWellAuthorScope}
+          </label>
+          <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            The stairwell hole/door frame is authored once here and reused by preview, world render,
+            and collision. Translate the proxy in the viewport to slide it along the wall; scale it
+            to change width/height.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <select
+              style={input}
+              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.face ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                patchStairWellDef((d) => ({
+                  ...d,
+                  ...(stairWellAuthorScope === "ground"
+                    ? {
+                        groundEntryOpening: {
+                          ...d.groundEntryOpening,
+                          face: isElevatorFace(v) ? v : undefined,
+                        },
+                      }
+                    : {
+                        entryOpening: {
+                          ...d.entryOpening,
+                          face: isElevatorFace(v) ? v : undefined,
+                        },
+                      }),
+                }));
+              }}
+            >
+              <option value="">auto face</option>
+              <option value="e">east</option>
+              <option value="w">west</option>
+              <option value="n">north</option>
+              <option value="s">south</option>
+            </select>
+            <input
+              style={input}
+              type="number"
+              step={0.01}
+              placeholder="offset along wall (m)"
+              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.tangentOffsetAlongWallM ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchStairWellDef((d) => ({
+                  ...d,
+                  ...(stairWellAuthorScope === "ground"
+                    ? {
+                        groundEntryOpening: {
+                          ...d.groundEntryOpening,
+                          tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }
+                    : {
+                        entryOpening: {
+                          ...d.entryOpening,
+                          tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }),
+                }));
+              }}
+            />
+            <input
+              style={input}
+              type="number"
+              step={0.01}
+              min={0.4}
+              placeholder="width (m)"
+              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.widthM ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchStairWellDef((d) => ({
+                  ...d,
+                  ...(stairWellAuthorScope === "ground"
+                    ? {
+                        groundEntryOpening: {
+                          ...d.groundEntryOpening,
+                          widthM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }
+                    : {
+                        entryOpening: {
+                          ...d.entryOpening,
+                          widthM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }),
+                }));
+              }}
+            />
+            <input
+              style={input}
+              type="number"
+              step={0.01}
+              min={0.4}
+              placeholder="height (m)"
+              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.heightM ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchStairWellDef((d) => ({
+                  ...d,
+                  ...(stairWellAuthorScope === "ground"
+                    ? {
+                        groundEntryOpening: {
+                          ...d.groundEntryOpening,
+                          heightM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }
+                    : {
+                        entryOpening: {
+                          ...d.entryOpening,
+                          heightM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }),
+                }));
+              }}
+            />
+            <input
+              style={input}
+              type="number"
+              step={0.01}
+              placeholder="center Y (m)"
+              value={stairOpeningForScope(stairWellDef, stairWellAuthorScope)?.centerYM ?? ""}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                patchStairWellDef((d) => ({
+                  ...d,
+                  ...(stairWellAuthorScope === "ground"
+                    ? {
+                        groundEntryOpening: {
+                          ...d.groundEntryOpening,
+                          centerYM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }
+                    : {
+                        entryOpening: {
+                          ...d.entryOpening,
+                          centerYM: Number.isFinite(v) ? v : undefined,
+                        },
+                      }),
+                }));
+              }}
+            />
+          </div>
+        </>
+      ) : null}
+
       {mode === "cab" && selectedId ? (
         <>
           <label style={label}>Cab part rotation (° YXZ)</label>
@@ -446,7 +766,9 @@ export function EditorChromeInspector(props: {
         </>
       ) : null}
 
-      {mode === "stairwell_preview" && selectedId ? (
+      {mode === "stairwell_preview" &&
+      selectedId &&
+      selectedId !== STAIR_WELL_OPENING_PROXY_ID ? (
         <>
           <label style={label}>
             Stair part delta rotation (° YXZ) - {stairWellAuthorScope}
@@ -505,6 +827,12 @@ export function EditorChromeInspector(props: {
         <p style={{ opacity: 0.65, fontSize: 12 }}>
           Pick a shared stairwell part in the outliner to author a delta transform for the{" "}
           {stairWellAuthorScope} stairwell scope.
+        </p>
+      ) : null}
+      {mode === "stairwell_preview" && selectedId === STAIR_WELL_OPENING_PROXY_ID ? (
+        <p style={{ opacity: 0.65, fontSize: 12 }}>
+          Gizmo edits the stair entry hole for the {stairWellAuthorScope} scope. Translate slides it
+          along the selected wall; scale changes width and height.
         </p>
       ) : null}
 

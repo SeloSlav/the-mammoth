@@ -315,7 +315,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       shaftKey,
       level: 1,
       desiredOpen: 1,
-      swingOpen01: 0.95,
+      swingOpen01: 0.5,
     };
     const auth: FpElevatorWorldCollisionAuth = {
       buildingOriginX: 0,
@@ -348,6 +348,48 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       return spanX < 0.8 && spanZ < 0.8 && b.max[1] - b.min[1] > 1.5;
     });
     expect(thinDoorSlices.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("drops the swing-door leaf collider once the landing passage is considered open", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(shaftKey, 1),
+      shaftKey,
+      level: 1,
+      desiredOpen: 1,
+      swingOpen01: 0.95,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 1,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            currentLevel: 5,
+            cabFloorY: feetYForLayout(layout, 5),
+            doorOpen01: 1,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+    };
+    const hits = collectHits(auth, layout.sx * 0.5 - 0.2, layout.sx * 0.5 + 2.2, -1.2, 1.2).filter(
+      (b) => b.min[1] <= fy1 + 1.0 && b.max[1] >= fy1 + 1.0,
+    );
+    const thinDoorSlices = hits.filter((b) => {
+      const spanX = b.max[0] - b.min[0];
+      const spanZ = b.max[2] - b.min[2];
+      return spanX < 0.8 && spanZ < 0.8 && b.max[1] - b.min[1] > 1.5;
+    });
+    expect(thinDoorSlices.length).toBe(0);
   });
 
   it("emits exterior collision slab when swing is essentially closed (cab at different floor)", () => {
