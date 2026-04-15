@@ -61,6 +61,40 @@ function visitCandidateAabbs(
   dynamicSource?.visitAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
 }
 
+function resolveOverlapAlongAxis(
+  resolvedPos: number,
+  prevPos: number,
+  radius: number,
+  minFace: number,
+  maxFace: number,
+): number {
+  const prevMax = prevPos + radius;
+  const prevMin = prevPos - radius;
+  if (prevMax <= minFace + COLLISION_EPS) {
+    return Math.min(resolvedPos, minFace - radius - COLLISION_EPS);
+  }
+  if (prevMin >= maxFace - COLLISION_EPS) {
+    return Math.max(resolvedPos, maxFace + radius + COLLISION_EPS);
+  }
+
+  // If we are already overlapping, prefer the side opposite the attempted
+  // motion instead of the minimum-penetration side. This prevents thin walls
+  // from eventually ejecting the player through the far face while a movement
+  // key is held against the wall across many reconciliation steps.
+  const axisDelta = resolvedPos - prevPos;
+  if (axisDelta > COLLISION_EPS) {
+    return Math.min(resolvedPos, minFace - radius - COLLISION_EPS);
+  }
+  if (axisDelta < -COLLISION_EPS) {
+    return Math.max(resolvedPos, maxFace + radius + COLLISION_EPS);
+  }
+
+  const mid = (minFace + maxFace) * 0.5;
+  return prevPos <= mid
+    ? Math.min(resolvedPos, minFace - radius - COLLISION_EPS)
+    : Math.max(resolvedPos, maxFace + radius + COLLISION_EPS);
+}
+
 function resolveHorizontalCollisionStep(
   pos: Vector3,
   prevX: number,
@@ -90,27 +124,16 @@ function resolveHorizontalCollisionStep(
       const bodyMin = resolvedX - radius;
       const bodyMax = resolvedX + radius;
       if (bodyMax <= b.min[0] || bodyMin >= b.max[0]) return;
-      const prevMax = prevX + radius;
-      const prevMin = prevX - radius;
-      if (prevMax <= b.min[0] + COLLISION_EPS) {
-        resolvedX = Math.min(resolvedX, b.min[0] - radius - COLLISION_EPS);
-        if (vel.x > 0) vel.x = 0;
-        return;
-      }
-      if (prevMin >= b.max[0] - COLLISION_EPS) {
-        resolvedX = Math.max(resolvedX, b.max[0] + radius + COLLISION_EPS);
-        if (vel.x < 0) vel.x = 0;
-        return;
-      }
-      const pushLo = Math.abs(bodyMax - b.min[0]);
-      const pushHi = Math.abs(b.max[0] - bodyMin);
-      if (pushLo <= pushHi) {
-        resolvedX = Math.min(resolvedX, b.min[0] - radius - COLLISION_EPS);
-        if (vel.x > 0) vel.x = 0;
-      } else {
-        resolvedX = Math.max(resolvedX, b.max[0] + radius + COLLISION_EPS);
-        if (vel.x < 0) vel.x = 0;
-      }
+      const nextResolvedX = resolveOverlapAlongAxis(
+        resolvedX,
+        prevX,
+        radius,
+        b.min[0],
+        b.max[0],
+      );
+      if (nextResolvedX < resolvedX && vel.x > 0) vel.x = 0;
+      if (nextResolvedX > resolvedX && vel.x < 0) vel.x = 0;
+      resolvedX = nextResolvedX;
     });
     pos.x = resolvedX;
   };
@@ -132,27 +155,16 @@ function resolveHorizontalCollisionStep(
       const bodyMin = resolvedZ - radius;
       const bodyMax = resolvedZ + radius;
       if (bodyMax <= b.min[2] || bodyMin >= b.max[2]) return;
-      const prevMax = prevZ + radius;
-      const prevMin = prevZ - radius;
-      if (prevMax <= b.min[2] + COLLISION_EPS) {
-        resolvedZ = Math.min(resolvedZ, b.min[2] - radius - COLLISION_EPS);
-        if (vel.z > 0) vel.z = 0;
-        return;
-      }
-      if (prevMin >= b.max[2] - COLLISION_EPS) {
-        resolvedZ = Math.max(resolvedZ, b.max[2] + radius + COLLISION_EPS);
-        if (vel.z < 0) vel.z = 0;
-        return;
-      }
-      const pushLo = Math.abs(bodyMax - b.min[2]);
-      const pushHi = Math.abs(b.max[2] - bodyMin);
-      if (pushLo <= pushHi) {
-        resolvedZ = Math.min(resolvedZ, b.min[2] - radius - COLLISION_EPS);
-        if (vel.z > 0) vel.z = 0;
-      } else {
-        resolvedZ = Math.max(resolvedZ, b.max[2] + radius + COLLISION_EPS);
-        if (vel.z < 0) vel.z = 0;
-      }
+      const nextResolvedZ = resolveOverlapAlongAxis(
+        resolvedZ,
+        prevZ,
+        radius,
+        b.min[2],
+        b.max[2],
+      );
+      if (nextResolvedZ < resolvedZ && vel.z > 0) vel.z = 0;
+      if (nextResolvedZ > resolvedZ && vel.z < 0) vel.z = 0;
+      resolvedZ = nextResolvedZ;
     });
     pos.z = resolvedZ;
   };

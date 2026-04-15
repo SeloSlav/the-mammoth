@@ -387,6 +387,42 @@ fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
     top_y <= feet_y + WALK_STEP_UP_MARGIN + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
 }
 
+#[inline]
+fn resolve_overlap_along_axis(
+    resolved_pos: f32,
+    prev_pos: f32,
+    radius: f32,
+    min_face: f32,
+    max_face: f32,
+) -> f32 {
+    let prev_max = prev_pos + radius;
+    let prev_min = prev_pos - radius;
+    if prev_max <= min_face + COLLISION_EPS {
+        return resolved_pos.min(min_face - radius - COLLISION_EPS);
+    }
+    if prev_min >= max_face - COLLISION_EPS {
+        return resolved_pos.max(max_face + radius + COLLISION_EPS);
+    }
+
+    // If we are already overlapping, prefer the side opposite the attempted
+    // motion instead of the minimum-penetration side. This prevents held-input
+    // ratcheting through thin walls across repeated reconcile/tick steps.
+    let axis_delta = resolved_pos - prev_pos;
+    if axis_delta > COLLISION_EPS {
+        return resolved_pos.min(min_face - radius - COLLISION_EPS);
+    }
+    if axis_delta < -COLLISION_EPS {
+        return resolved_pos.max(max_face + radius + COLLISION_EPS);
+    }
+
+    let mid = (min_face + max_face) * 0.5;
+    if prev_pos <= mid {
+        resolved_pos.min(min_face - radius - COLLISION_EPS)
+    } else {
+        resolved_pos.max(max_face + radius + COLLISION_EPS)
+    }
+}
+
 fn resolve_player_static_horizontal_collision_step(
     p: &mut PlayerPose,
     prev_x: f32,
@@ -417,35 +453,14 @@ fn resolve_player_static_horizontal_collision_step(
                 if body_max <= mn[0] || body_min >= mx[0] {
                     continue;
                 }
-                let prev_max = prev_x + r;
-                let prev_min = prev_x - r;
-                if prev_max <= mn[0] + COLLISION_EPS {
-                    resolved_x = resolved_x.min(mn[0] - r - COLLISION_EPS);
-                    if p.vel_x > 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                    continue;
+                let next_resolved_x = resolve_overlap_along_axis(resolved_x, prev_x, r, mn[0], mx[0]);
+                if next_resolved_x < resolved_x && p.vel_x > 0.0 {
+                    p.vel_x = 0.0;
                 }
-                if prev_min >= mx[0] - COLLISION_EPS {
-                    resolved_x = resolved_x.max(mx[0] + r + COLLISION_EPS);
-                    if p.vel_x < 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                    continue;
+                if next_resolved_x > resolved_x && p.vel_x < 0.0 {
+                    p.vel_x = 0.0;
                 }
-                let push_lo = (body_max - mn[0]).abs();
-                let push_hi = (mx[0] - body_min).abs();
-                if push_lo <= push_hi {
-                    resolved_x = resolved_x.min(mn[0] - r - COLLISION_EPS);
-                    if p.vel_x > 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                } else {
-                    resolved_x = resolved_x.max(mx[0] + r + COLLISION_EPS);
-                    if p.vel_x < 0.0 {
-                        p.vel_x = 0.0;
-                    }
-                }
+                resolved_x = next_resolved_x;
             }
         }
         p.x = resolved_x;
@@ -473,35 +488,14 @@ fn resolve_player_static_horizontal_collision_step(
                 if body_max <= mn[2] || body_min >= mx[2] {
                     continue;
                 }
-                let prev_max = prev_z + r;
-                let prev_min = prev_z - r;
-                if prev_max <= mn[2] + COLLISION_EPS {
-                    resolved_z = resolved_z.min(mn[2] - r - COLLISION_EPS);
-                    if p.vel_z > 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                    continue;
+                let next_resolved_z = resolve_overlap_along_axis(resolved_z, prev_z, r, mn[2], mx[2]);
+                if next_resolved_z < resolved_z && p.vel_z > 0.0 {
+                    p.vel_z = 0.0;
                 }
-                if prev_min >= mx[2] - COLLISION_EPS {
-                    resolved_z = resolved_z.max(mx[2] + r + COLLISION_EPS);
-                    if p.vel_z < 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                    continue;
+                if next_resolved_z > resolved_z && p.vel_z < 0.0 {
+                    p.vel_z = 0.0;
                 }
-                let push_lo = (body_max - mn[2]).abs();
-                let push_hi = (mx[2] - body_min).abs();
-                if push_lo <= push_hi {
-                    resolved_z = resolved_z.min(mn[2] - r - COLLISION_EPS);
-                    if p.vel_z > 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                } else {
-                    resolved_z = resolved_z.max(mx[2] + r + COLLISION_EPS);
-                    if p.vel_z < 0.0 {
-                        p.vel_z = 0.0;
-                    }
-                }
+                resolved_z = next_resolved_z;
             }
         }
         p.z = resolved_z;

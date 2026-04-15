@@ -72,6 +72,42 @@ fn push_query_overlapping_aabb(
 }
 
 #[inline]
+fn resolve_overlap_along_axis(
+    resolved_pos: f32,
+    prev_pos: f32,
+    radius: f32,
+    min_face: f32,
+    max_face: f32,
+) -> f32 {
+    let prev_max = prev_pos + radius;
+    let prev_min = prev_pos - radius;
+    if prev_max <= min_face + super::COLLISION_EPS {
+        return resolved_pos.min(min_face - radius - super::COLLISION_EPS);
+    }
+    if prev_min >= max_face - super::COLLISION_EPS {
+        return resolved_pos.max(max_face + radius + super::COLLISION_EPS);
+    }
+
+    // If we are already overlapping, prefer the side opposite the attempted
+    // motion instead of the minimum-penetration side. This prevents held-input
+    // ratcheting through thin cab/shaft walls across repeated correction steps.
+    let axis_delta = resolved_pos - prev_pos;
+    if axis_delta > super::COLLISION_EPS {
+        return resolved_pos.min(min_face - radius - super::COLLISION_EPS);
+    }
+    if axis_delta < -super::COLLISION_EPS {
+        return resolved_pos.max(max_face + radius + super::COLLISION_EPS);
+    }
+
+    let mid = (min_face + max_face) * 0.5;
+    if prev_pos <= mid {
+        resolved_pos.min(min_face - radius - super::COLLISION_EPS)
+    } else {
+        resolved_pos.max(max_face + radius + super::COLLISION_EPS)
+    }
+}
+
+#[inline]
 fn suppress_moving_cab_generated_collision_for_pose(
     px: f32,
     py: f32,
@@ -497,35 +533,15 @@ fn resolve_generated_horizontal_collision_step(
             if body_max <= aabb.min[0] || body_min >= aabb.max[0] {
                 continue;
             }
-            let prev_max = prev_x + r;
-            let prev_min = prev_x - r;
-            if prev_max <= aabb.min[0] + super::COLLISION_EPS {
-                resolved_x = resolved_x.min(aabb.min[0] - r - super::COLLISION_EPS);
-                if p.vel_x > 0.0 {
-                    p.vel_x = 0.0;
-                }
-                continue;
+            let next_resolved_x =
+                resolve_overlap_along_axis(resolved_x, prev_x, r, aabb.min[0], aabb.max[0]);
+            if next_resolved_x < resolved_x && p.vel_x > 0.0 {
+                p.vel_x = 0.0;
             }
-            if prev_min >= aabb.max[0] - super::COLLISION_EPS {
-                resolved_x = resolved_x.max(aabb.max[0] + r + super::COLLISION_EPS);
-                if p.vel_x < 0.0 {
-                    p.vel_x = 0.0;
-                }
-                continue;
+            if next_resolved_x > resolved_x && p.vel_x < 0.0 {
+                p.vel_x = 0.0;
             }
-            let push_lo = (body_max - aabb.min[0]).abs();
-            let push_hi = (aabb.max[0] - body_min).abs();
-            if push_lo <= push_hi {
-                resolved_x = resolved_x.min(aabb.min[0] - r - super::COLLISION_EPS);
-                if p.vel_x > 0.0 {
-                    p.vel_x = 0.0;
-                }
-            } else {
-                resolved_x = resolved_x.max(aabb.max[0] + r + super::COLLISION_EPS);
-                if p.vel_x < 0.0 {
-                    p.vel_x = 0.0;
-                }
-            }
+            resolved_x = next_resolved_x;
         }
         p.x = resolved_x;
     }
@@ -551,35 +567,15 @@ fn resolve_generated_horizontal_collision_step(
             if body_max <= aabb.min[2] || body_min >= aabb.max[2] {
                 continue;
             }
-            let prev_max = prev_z + r;
-            let prev_min = prev_z - r;
-            if prev_max <= aabb.min[2] + super::COLLISION_EPS {
-                resolved_z = resolved_z.min(aabb.min[2] - r - super::COLLISION_EPS);
-                if p.vel_z > 0.0 {
-                    p.vel_z = 0.0;
-                }
-                continue;
+            let next_resolved_z =
+                resolve_overlap_along_axis(resolved_z, prev_z, r, aabb.min[2], aabb.max[2]);
+            if next_resolved_z < resolved_z && p.vel_z > 0.0 {
+                p.vel_z = 0.0;
             }
-            if prev_min >= aabb.max[2] - super::COLLISION_EPS {
-                resolved_z = resolved_z.max(aabb.max[2] + r + super::COLLISION_EPS);
-                if p.vel_z < 0.0 {
-                    p.vel_z = 0.0;
-                }
-                continue;
+            if next_resolved_z > resolved_z && p.vel_z < 0.0 {
+                p.vel_z = 0.0;
             }
-            let push_lo = (body_max - aabb.min[2]).abs();
-            let push_hi = (aabb.max[2] - body_min).abs();
-            if push_lo <= push_hi {
-                resolved_z = resolved_z.min(aabb.min[2] - r - super::COLLISION_EPS);
-                if p.vel_z > 0.0 {
-                    p.vel_z = 0.0;
-                }
-            } else {
-                resolved_z = resolved_z.max(aabb.max[2] + r + super::COLLISION_EPS);
-                if p.vel_z < 0.0 {
-                    p.vel_z = 0.0;
-                }
-            }
+            resolved_z = next_resolved_z;
         }
         p.z = resolved_z;
     }
