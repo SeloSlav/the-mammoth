@@ -32,7 +32,7 @@ export const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;
 export const CLOSED_CAB_OUTSIDE_WIDTH_PAD = 0.32;
 
 export const LANDING_FRONT_WALL_SLAB_IN = 0.2;
-export const LANDING_FRONT_WALL_SLAB_OUT = 0.34;
+export const LANDING_FRONT_WALL_SLAB_OUT = 0.04;
 export const LANDING_FRONT_WALL_PUSH_OUT = 0.08;
 
 /** Match server `LANDING_FRONT_PASSAGE_HALF_W` (= `EXT_DOOR_W * 0.5 + 0.04`). */

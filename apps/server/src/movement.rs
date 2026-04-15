@@ -165,6 +165,10 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         let prev_y = p.y;
         let prev_z = p.z;
         integrate_one(ctx, &input, &mut p, TICK_DT, &prev_elevators);
+        // Snap feet onto kinematic support (elevator cab floor) BEFORE collision
+        // so the dynamic AABB suppression check ("is rider inside moving cab?")
+        // sees the correct feet Y rather than the pre-snap locomotion Y.
+        elevator::snap_player_to_elevator_kinematic_support(ctx, &mut p);
         resolve_player_static_collisions(&mut p, prev_x, prev_y, prev_z, input.bits);
         elevator::resolve_player_generated_collision_aabbs(
             ctx,
@@ -174,7 +178,6 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
             prev_z,
             input.bits & BIT_CROUCH != 0,
         );
-        elevator::snap_player_to_elevator_kinematic_support(ctx, &mut p);
         elevator::clamp_player_to_elevator_kinematic_support(ctx, &mut p);
         world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
         ctx.db.player_pose().identity().update(p);

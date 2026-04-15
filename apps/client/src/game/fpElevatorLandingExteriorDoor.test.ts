@@ -166,7 +166,7 @@ describe("closed elevator frontage clamps", () => {
   });
 
   it("blocks the solid front wall segment outside the door lane", () => {
-    const pos = { x: 1.24, y: 11, z: 1.6 };
+    const pos = { x: 1.18, y: 11, z: 1.6 };
     const vel = new Vector3(-1, 0, 0);
     fpElevApplyLandingHoistwayFrontWallClamp(pos, vel, {
       ox: 0,
@@ -181,7 +181,7 @@ describe("closed elevator frontage clamps", () => {
       layoutByKey: new Map([["shaft", shaftLayout]]),
       feetYForLayout: () => 10,
     });
-    expect(pos.x).toBeGreaterThan(1.24);
+    expect(pos.x).toBeGreaterThan(1.18);
     expect(vel.x).toBe(0);
   });
 

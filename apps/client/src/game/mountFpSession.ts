@@ -554,6 +554,18 @@ export async function mountFpSession(
     );
     _stepLocoStateRef = null;
 
+    // Snap feet onto kinematic support (elevator cab floor) BEFORE horizontal
+    // collision so the query pose fed into dynamic AABB collection has the
+    // correct feet Y.  Without this, the "is rider inside moving cab" test
+    // sees the pre-snap locomotion Y which can be off by the cab's vertical
+    // velocity × dt, causing generated landing blockers to fire and push the
+    // rider sideways mid-ride.
+    snapAttachedFeetToKinematicSupportIfNeeded(opts.kinematicSupport, opts.pos, opts.locoState, {
+      evalWallClockMs: opts.evalWallClockMs,
+      jumpPressedThisFrame: opts.jumpPressedThisFrame,
+      skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
+    });
+
     resolvePlayerCollisions(
       opts.pos,
       opts.prevPos,
@@ -582,11 +594,6 @@ export async function mountFpSession(
       opts.locoState.grounded = true;
     }
 
-    snapAttachedFeetToKinematicSupportIfNeeded(opts.kinematicSupport, opts.pos, opts.locoState, {
-      evalWallClockMs: opts.evalWallClockMs,
-      jumpPressedThisFrame: opts.jumpPressedThisFrame,
-      skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
-    });
     clampAttachedBodyXZToKinematicSupportIfNeeded(
       opts.kinematicSupport,
       opts.pos,

@@ -29,7 +29,7 @@ pub(super) const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;
 pub(super) const CLOSED_CAB_OUTSIDE_WIDTH_PAD: f32 = 0.32;
 
 pub(super) const LANDING_FRONT_WALL_SLAB_IN: f32 = 0.2;
-pub(super) const LANDING_FRONT_WALL_SLAB_OUT: f32 = 0.34;
+pub(super) const LANDING_FRONT_WALL_SLAB_OUT: f32 = 0.04;
 /// Reserved for future server push-out; client still uses. Kept for parity with TS tuning.
 #[allow(dead_code)]
 pub(super) const LANDING_FRONT_WALL_PUSH_OUT: f32 = 0.08;

@@ -8,7 +8,6 @@ import {
   applyLandingKitPartTransforms,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
-  LANDING_FRONT_WALL_SLAB_OUT,
 } from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
@@ -500,17 +499,10 @@ export class FpElevatorShaftVisual {
       this.hailBtnIconMat,
     );
     const y = 1.34;
-    /**
-     * `LANDING_FRONT_WALL_SLAB_OUT` is how far the corridor-facing wall surface sits past the
-     * outer hoistway face. Subtracting a small offset leaves the button panel slightly proud of
-     * that surface so it is visible from the hallway on every storey.
-     */
-    // Button cylinder center is 0.045 from group origin; half-height is 0.0225.
-    // Total protrusion of button face from group = 0.045 + 0.0225 = 0.0675 m.
-    // Setting faceOut = LANDING_FRONT_WALL_SLAB_OUT - 0.0675 makes the button face flush
-    // with the corridor-facing wall surface on every storey.
-    const wallSurfaceOffset = 0.20;
-    const faceOut = LANDING_FRONT_WALL_SLAB_OUT - wallSurfaceOffset;
+    // Distance outward from inner gameplay half-extent to the button group origin.
+    // Button cylinder center is 0.045 from group origin; half-height is 0.0225,
+    // so the face sits at faceOut + 0.0675 from hx, flush with the visual wall.
+    const faceOut = 0.14;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);
