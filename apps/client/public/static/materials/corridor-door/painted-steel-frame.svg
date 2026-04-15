@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#6d746f"/>
+  <g opacity="0.28">
+    <rect y="0" width="256" height="42" fill="#79807a"/>
+    <rect y="54" width="256" height="38" fill="#656c67"/>
+    <rect y="108" width="256" height="44" fill="#737a75"/>
+    <rect y="170" width="256" height="34" fill="#626964"/>
+    <rect y="214" width="256" height="42" fill="#777e79"/>
+  </g>
+  <g stroke="#535852" stroke-width="1" opacity="0.55">
+    <path d="M0 42 H256"/>
+    <path d="M0 92 H256"/>
+    <path d="M0 152 H256"/>
+    <path d="M0 204 H256"/>
+  </g>
+  <g fill="#8e958f" opacity="0.28">
+    <rect x="18" y="12" width="1.5" height="20"/>
+    <rect x="64" y="66" width="2" height="18"/>
+    <rect x="126" y="118" width="1.5" height="22"/>
+    <rect x="188" y="178" width="2" height="18"/>
+    <rect x="230" y="224" width="1.5" height="20"/>
+  </g>
+</svg>

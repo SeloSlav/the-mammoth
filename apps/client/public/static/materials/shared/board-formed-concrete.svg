@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <pattern id="base" width="256" height="256" patternUnits="userSpaceOnUse">
+      <rect width="256" height="256" fill="#8f918d"/>
+      <rect y="0" width="256" height="60" fill="#969893"/>
+      <rect y="64" width="256" height="60" fill="#8b8d89"/>
+      <rect y="128" width="256" height="60" fill="#949691"/>
+      <rect y="192" width="256" height="64" fill="#878984"/>
+      <g stroke="#6f716d" stroke-width="2" opacity="0.75">
+        <line x1="0" y1="62" x2="256" y2="62"/>
+        <line x1="0" y1="126" x2="256" y2="126"/>
+        <line x1="0" y1="190" x2="256" y2="190"/>
+      </g>
+      <g fill="#7b7d78" opacity="0.45">
+        <circle cx="22" cy="18" r="2"/>
+        <circle cx="84" cy="36" r="1.8"/>
+        <circle cx="144" cy="20" r="1.6"/>
+        <circle cx="204" cy="42" r="1.8"/>
+        <circle cx="46" cy="90" r="1.5"/>
+        <circle cx="122" cy="74" r="2"/>
+        <circle cx="184" cy="104" r="1.4"/>
+        <circle cx="230" cy="82" r="1.7"/>
+        <circle cx="30" cy="156" r="1.6"/>
+        <circle cx="90" cy="144" r="1.9"/>
+        <circle cx="164" cy="172" r="1.5"/>
+        <circle cx="212" cy="150" r="2"/>
+        <circle cx="58" cy="224" r="1.8"/>
+        <circle cx="136" cy="210" r="1.4"/>
+        <circle cx="198" cy="236" r="1.9"/>
+        <circle cx="240" cy="214" r="1.5"/>
+      </g>
+      <g fill="#b0b2ad" opacity="0.3">
+        <rect x="8" y="8" width="2" height="48"/>
+        <rect x="36" y="8" width="1.5" height="48"/>
+        <rect x="68" y="72" width="2" height="48"/>
+        <rect x="112" y="136" width="1.5" height="48"/>
+        <rect x="156" y="72" width="2" height="48"/>
+        <rect x="206" y="8" width="1.5" height="48"/>
+        <rect x="232" y="200" width="2" height="48"/>
+      </g>
+    </pattern>
+  </defs>
+  <rect width="256" height="256" fill="url(#base)"/>
+</svg>

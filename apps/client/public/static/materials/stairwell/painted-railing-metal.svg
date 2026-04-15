@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="rail" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5a5f5e"/>
+      <stop offset="35%" stop-color="#858a88"/>
+      <stop offset="60%" stop-color="#656a69"/>
+      <stop offset="100%" stop-color="#4f5554"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#rail)"/>
+  <g opacity="0.25">
+    <rect x="14" y="0" width="2" height="256" fill="#aab0ad"/>
+    <rect x="48" y="0" width="1.5" height="256" fill="#474c4b"/>
+    <rect x="92" y="0" width="2" height="256" fill="#a7adaa"/>
+    <rect x="138" y="0" width="1.5" height="256" fill="#434847"/>
+    <rect x="186" y="0" width="2" height="256" fill="#aeb4b1"/>
+    <rect x="228" y="0" width="1.5" height="256" fill="#424746"/>
+  </g>
+  <g stroke="#ccd1cf" stroke-width="1" opacity="0.12">
+    <path d="M0 20 H256"/>
+    <path d="M0 52 H256"/>
+    <path d="M0 84 H256"/>
+    <path d="M0 116 H256"/>
+    <path d="M0 148 H256"/>
+    <path d="M0 180 H256"/>
+    <path d="M0 212 H256"/>
+    <path d="M0 244 H256"/>
+  </g>
+</svg>

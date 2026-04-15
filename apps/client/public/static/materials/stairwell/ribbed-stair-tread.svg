@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#474744"/>
+  <g opacity="0.78">
+    <rect x="0" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="14" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="28" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="42" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="56" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="70" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="84" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="98" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="112" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="126" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="140" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="154" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="168" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="182" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="196" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="210" y="0" width="10" height="256" fill="#3e3e3a"/>
+    <rect x="224" y="0" width="10" height="256" fill="#595955"/>
+    <rect x="238" y="0" width="10" height="256" fill="#3e3e3a"/>
+  </g>
+  <g stroke="#696965" stroke-width="1" opacity="0.45">
+    <path d="M0 32 H256"/>
+    <path d="M0 96 H256"/>
+    <path d="M0 160 H256"/>
+    <path d="M0 224 H256"/>
+  </g>
+</svg>

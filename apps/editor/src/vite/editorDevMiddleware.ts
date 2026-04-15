@@ -53,7 +53,7 @@ const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
 const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
 const execFileAsync = promisify(execFile);
-const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
 
 let rebuildInFlight = false;
 
@@ -91,6 +91,23 @@ function safeContentFile(repoRoot: string, relFromContent: string): string | nul
   const root = path.resolve(repoRoot, "content");
   if (!abs.startsWith(root)) return null;
   return abs;
+}
+
+function safeClientPublicMaterialsFile(repoRoot: string, relFromMaterials: string): string | null {
+  const abs = path.resolve(repoRoot, "apps/client/public/static/materials", relFromMaterials);
+  const root = path.resolve(repoRoot, "apps/client/public/static/materials");
+  if (!abs.startsWith(root)) return null;
+  return abs;
+}
+
+function contentTypeForPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".json") return "application/json";
+  return "application/octet-stream";
 }
 
 function readJsonBody(req: IncomingMessage): Promise<string> {
@@ -206,6 +223,32 @@ export function editorDevMiddleware(
         try {
           const data = await fs.readFile(abs);
           res.setHeader("Content-Type", "application/json");
+          res.statusCode = 200;
+          if (req.method === "HEAD") res.end();
+          else res.end(data);
+        } catch {
+          res.statusCode = 404;
+          res.end("not found");
+        }
+        return;
+      }
+
+      return next();
+    }
+
+    if (path === "/static/materials" || path.startsWith("/static/materials/")) {
+      const rel = decodeURIComponent(path.replace(/^\/static\/materials\/?/, ""));
+      const abs = safeClientPublicMaterialsFile(repoRoot, rel);
+      if (!abs) {
+        res.statusCode = 403;
+        res.end("bad path");
+        return;
+      }
+
+      if (req.method === "GET" || req.method === "HEAD") {
+        try {
+          const data = await fs.readFile(abs);
+          res.setHeader("Content-Type", contentTypeForPath(abs));
           res.statusCode = 200;
           if (req.method === "HEAD") res.end();
           else res.end(data);

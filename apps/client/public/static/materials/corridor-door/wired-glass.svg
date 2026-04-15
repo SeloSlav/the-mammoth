@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#a8bbb8"/>
+  <g opacity="0.32">
+    <rect width="256" height="256" fill="#d8e3e1"/>
+    <rect y="0" width="256" height="64" fill="#c2d2cf"/>
+    <rect y="128" width="256" height="52" fill="#b3c5c1"/>
+  </g>
+  <g stroke="#7e8b89" stroke-width="1" opacity="0.9">
+    <path d="M0 32 H256"/>
+    <path d="M0 64 H256"/>
+    <path d="M0 96 H256"/>
+    <path d="M0 128 H256"/>
+    <path d="M0 160 H256"/>
+    <path d="M0 192 H256"/>
+    <path d="M0 224 H256"/>
+    <path d="M32 0 V256"/>
+    <path d="M64 0 V256"/>
+    <path d="M96 0 V256"/>
+    <path d="M128 0 V256"/>
+    <path d="M160 0 V256"/>
+    <path d="M192 0 V256"/>
+    <path d="M224 0 V256"/>
+  </g>
+  <g stroke="#ecf4f3" stroke-width="3" opacity="0.18">
+    <path d="M-30 50 L80 -10"/>
+    <path d="M16 122 L180 24"/>
+    <path d="M76 206 L250 96"/>
+  </g>
+</svg>

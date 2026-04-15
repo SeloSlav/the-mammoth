@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#818891"/>
+      <stop offset="20%" stop-color="#b8bec4"/>
+      <stop offset="45%" stop-color="#8d949b"/>
+      <stop offset="70%" stop-color="#c1c7cd"/>
+      <stop offset="100%" stop-color="#787f87"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#g)"/>
+  <g opacity="0.18" stroke="#dfe4e8" stroke-width="1">
+    <path d="M0 10 H256"/>
+    <path d="M0 26 H256"/>
+    <path d="M0 42 H256"/>
+    <path d="M0 58 H256"/>
+    <path d="M0 74 H256"/>
+    <path d="M0 90 H256"/>
+    <path d="M0 106 H256"/>
+    <path d="M0 122 H256"/>
+    <path d="M0 138 H256"/>
+    <path d="M0 154 H256"/>
+    <path d="M0 170 H256"/>
+    <path d="M0 186 H256"/>
+    <path d="M0 202 H256"/>
+    <path d="M0 218 H256"/>
+    <path d="M0 234 H256"/>
+  </g>
+  <g opacity="0.2">
+    <rect x="12" y="0" width="4" height="256" fill="#6a7178"/>
+    <rect x="74" y="0" width="3" height="256" fill="#d5d9dc"/>
+    <rect x="136" y="0" width="2" height="256" fill="#666d74"/>
+    <rect x="198" y="0" width="3" height="256" fill="#d0d4d7"/>
+  </g>
+</svg>
