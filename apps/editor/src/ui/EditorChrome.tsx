@@ -46,6 +46,7 @@ import {
   editorChromeRowBtn,
 } from "./editorChromeStyles.js";
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
+import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMaterialPanel.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
@@ -446,7 +447,20 @@ export function EditorChrome() {
           : knownPrefabIds;
 
   return (
-    <div style={editorChromePanel}>
+    <>
+      <EditorChromeSelectedMaterialPanel
+        mode={mode}
+        selectedId={selectedId}
+        contentIndex={contentIndex}
+        elevatorCabDef={elevatorCabDef}
+        landingKitDef={landingKitDef}
+        stairWellDef={stairWellDef}
+        patchElevatorCabDef={patchElevatorCabDef}
+        patchLandingKitDef={patchLandingKitDef}
+        patchStairWellDef={patchStairWellDef}
+        input={input}
+      />
+      <div style={editorChromePanel}>
       <strong style={{ fontSize: 15 }}>Authoring</strong>
       <p style={{ opacity: 0.8, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
         <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit shared
@@ -1025,7 +1039,6 @@ export function EditorChrome() {
       <EditorChromeInspector
         workspace={workspace}
         mode={mode}
-        contentIndex={contentIndex}
         elevatorCabDef={elevatorCabDef}
         landingKitDef={landingKitDef}
         stairWellDef={stairWellDef}
@@ -1061,5 +1074,6 @@ export function EditorChrome() {
         </>
       ) : null}
     </div>
+    </>
   );
 }
