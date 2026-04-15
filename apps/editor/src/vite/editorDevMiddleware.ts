@@ -409,11 +409,14 @@ async function handleRebuildServerCollision(
   }
   rebuildInFlight = true;
   try {
-    const cmd = os.platform() === "win32" ? "pnpm.cmd" : "pnpm";
-    const out = await execFileAsync(cmd, ["content:gen-walk-aabbs"], {
+    const execOpts = {
       cwd: repoRoot,
       maxBuffer: 8 * 1024 * 1024,
-    });
+    } as const;
+    const out =
+      os.platform() === "win32"
+        ? await execFileAsync("cmd.exe", ["/d", "/s", "/c", "pnpm content:gen-walk-aabbs"], execOpts)
+        : await execFileAsync("pnpm", ["content:gen-walk-aabbs"], execOpts);
     sendJson(res, {
       ok: true,
       stdout: out.stdout,

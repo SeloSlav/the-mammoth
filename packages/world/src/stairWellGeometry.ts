@@ -40,6 +40,10 @@ export type StairCornerLanding = {
 export type StairSwitchbackLayout = {
   treads: readonly StairTreadSpec[];
   cornerLandings: readonly StairCornerLanding[];
+  /** Per-lap tread counts for the four generated wall runs, in climb order. */
+  legTreadCounts: readonly [number, number, number, number];
+  /** Number of repeated laps contributing to `treads`. */
+  numLaps: number;
   hx: number;
   hy: number;
   hz: number;
@@ -579,6 +583,8 @@ export function computeSwitchbackStairLayout(
   return {
     treads,
     cornerLandings,
+    legTreadCounts: [n1, n2, n3, n4],
+    numLaps,
     hx,
     hy,
     hz,

@@ -555,8 +555,7 @@ fn resolve_player_static_horizontal_collision_step(
     body_h: f32,
 ) {
     let r = FOOT_RADIUS_XZ;
-
-    {
+    let resolve_x = |p: &mut PlayerPose| {
         let mut resolved_x = p.x;
         let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
         let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
@@ -578,7 +577,8 @@ fn resolve_player_static_horizontal_collision_step(
                 if body_max <= mn[0] || body_min >= mx[0] {
                     continue;
                 }
-                let next_resolved_x = resolve_overlap_along_axis(resolved_x, prev_x, r, mn[0], mx[0]);
+                let next_resolved_x =
+                    resolve_overlap_along_axis(resolved_x, prev_x, r, mn[0], mx[0]);
                 if next_resolved_x < resolved_x && p.vel_x > 0.0 {
                     p.vel_x = 0.0;
                 }
@@ -589,9 +589,9 @@ fn resolve_player_static_horizontal_collision_step(
             }
         }
         p.x = resolved_x;
-    }
+    };
 
-    {
+    let resolve_z = |p: &mut PlayerPose| {
         let mut resolved_z = p.z;
         let x0 = (prev_x.min(p.x)) - r - COLLISION_EPS;
         let x1 = (prev_x.max(p.x)) + r + COLLISION_EPS;
@@ -613,7 +613,8 @@ fn resolve_player_static_horizontal_collision_step(
                 if body_max <= mn[2] || body_min >= mx[2] {
                     continue;
                 }
-                let next_resolved_z = resolve_overlap_along_axis(resolved_z, prev_z, r, mn[2], mx[2]);
+                let next_resolved_z =
+                    resolve_overlap_along_axis(resolved_z, prev_z, r, mn[2], mx[2]);
                 if next_resolved_z < resolved_z && p.vel_z > 0.0 {
                     p.vel_z = 0.0;
                 }
@@ -624,6 +625,16 @@ fn resolve_player_static_horizontal_collision_step(
             }
         }
         p.z = resolved_z;
+    };
+
+    let dx = (p.x - prev_x).abs();
+    let dz = (p.z - prev_z).abs();
+    if dx >= dz {
+        resolve_x(p);
+        resolve_z(p);
+    } else {
+        resolve_z(p);
+        resolve_x(p);
     }
 }
 

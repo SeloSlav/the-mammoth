@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { ElevatorCabDefSchema } from "@the-mammoth/schemas";
-import { applyElevatorCabPartTransforms } from "./elevatorCabPreview.js";
+import {
+  applyElevatorCabPartTransforms,
+  buildElevatorCabCarPreviewRoot,
+} from "./elevatorCabPreview.js";
 
 describe("applyElevatorCabPartTransforms", () => {
   it("applies partTransforms to tagged meshes", () => {
@@ -24,5 +27,32 @@ describe("applyElevatorCabPartTransforms", () => {
     expect(mesh.position.y).toBe(2);
     expect(mesh.position.z).toBe(3);
     expect(mesh.scale.x).toBe(2);
+  });
+
+  it("builds the in-car selector panel with one floor button per level", () => {
+    const root = buildElevatorCabCarPreviewRoot({
+      layout: {
+        planKey: "shaft",
+        plateX: 0,
+        plateZ: 0,
+        plateLocalY: 0,
+        sx: 3.4,
+        sy: 3.2,
+        sz: 3.8,
+        doorFace: "e",
+      },
+      maxLevel: 6,
+      previewDoorOpen01: 0.35,
+    });
+
+    const panel = root.getObjectByName("cab_floor_panel");
+    expect(panel?.userData.editorCabPartId).toBe("cab_floor_panel");
+    const labels: string[] = [];
+    root.traverse((child) => {
+      if (child.name.startsWith("cab_floor_button_label_")) labels.push(child.name);
+    });
+    expect(labels).toHaveLength(6);
+    expect(root.getObjectByName("cab_floor_button_label_6")).not.toBeNull();
+    expect(root.getObjectByName("cab_floor_button_body_6")).not.toBeNull();
   });
 });

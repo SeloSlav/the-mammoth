@@ -191,6 +191,35 @@ export function elevatorDoorFaceFromFloorCorridors(
 }
 
 /**
+ * Point on the plate a stair / shaft door should face toward. Prefers the nearest corridor / lobby
+ * center; falls back to the plate centroid when no circulation volumes exist.
+ */
+export function shaftDoorTowardPointFromFloorCorridors(
+  shaftPx: number,
+  shaftPz: number,
+  doc: FloorDoc,
+  plateCentroidX: number,
+  plateCentroidZ: number,
+): readonly [number, number] {
+  const corridors = collectCorridorOrLobbyFootprintsFromFloor(doc);
+  if (corridors.length === 0) {
+    return [plateCentroidX, plateCentroidZ] as const;
+  }
+  let best = corridors[0]!;
+  let bestD2 = Infinity;
+  for (const corridor of corridors) {
+    const dx = corridor.px - shaftPx;
+    const dz = corridor.pz - shaftPz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = corridor;
+    }
+  }
+  return [best.px, best.pz] as const;
+}
+
+/**
  * Gap (m) between the shaft’s corridor-facing outer plane and the corridor shell’s outer plane,
  * when the door opens toward the corridor and the two volumes overlap along the spine.
  */

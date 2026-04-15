@@ -16,9 +16,11 @@ import {
   buildElevatorCabCarPreviewRoot,
   buildInteriorMeshes,
   buildLandingDoorPreviewRoot,
+  type BuildStairWellPreviewRootArgs,
   elevatorHoistwayInnerHalfExtents,
   instantiateBuildingFloorStack,
   listElevatorShaftLayouts,
+  maxBuildingLevelIndex,
 } from "@the-mammoth/world";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../state/editorStore.js";
@@ -52,6 +54,16 @@ function buildPrefabPreview(def: PrefabDef): THREE.Group {
   return root;
 }
 
+function isStairPrefab(prefabId: string): boolean {
+  const pid = prefabId.toLowerCase();
+  return pid.includes("stair_well") || pid.includes("stairwell");
+}
+
+function isCorridorLikePrefab(prefabId: string): boolean {
+  const pid = prefabId.toLowerCase();
+  return pid.includes("corridor") || pid.includes("lobby") || pid.includes("hall");
+}
+
 export function buildEditorStructuralRoot(args: {
   mode: EditorMode;
   workspace: EditorWorkspace;
@@ -83,6 +95,7 @@ export function buildEditorStructuralRoot(args: {
     const cab = buildElevatorCabCarPreviewRoot({
       layout,
       def: args.elevatorCabDef,
+      maxLevel: maxBuildingLevelIndex(args.building),
       previewDoorOpen01: 0.45,
     });
     root.add(cab);
@@ -112,23 +125,48 @@ export function buildEditorStructuralRoot(args: {
   if (args.mode === "stairwell_preview") {
     const root = new THREE.Group();
     root.name = "editor_workspace:stairwell";
-    const stairObj = Object.values(args.floorDocs)
-      .flatMap((doc) => doc.objects)
-      .find((obj) => {
-        const pid = obj.prefabId.toLowerCase();
-        return pid.includes("stair_well") || pid.includes("stairwell");
-      });
-    if (!stairObj) return root;
+    const stairEntry = Object.values(args.floorDocs)
+      .flatMap((doc) => doc.objects.map((obj) => ({ doc, obj })))
+      .find(({ obj }) => isStairPrefab(obj.prefabId));
+    if (!stairEntry) return root;
+    const { doc: stairDoc, obj: stairObj } = stairEntry;
     const sx = stairObj.scale?.[0] ?? 4.2;
     const sy = stairObj.scale?.[1] ?? 3.2;
     const sz = stairObj.scale?.[2] ?? 4.2;
-    const preview = buildStairWellPreviewRoot({
+    const towardPlateXZ = (() => {
+      const corridor = stairDoc.objects
+        .filter((obj) => isCorridorLikePrefab(obj.prefabId))
+        .sort((a, b) => {
+          const da =
+            (a.position[0] - stairObj.position[0]) ** 2 + (a.position[2] - stairObj.position[2]) ** 2;
+          const db =
+            (b.position[0] - stairObj.position[0]) ** 2 + (b.position[2] - stairObj.position[2]) ** 2;
+          return da - db;
+        })[0];
+      if (corridor) {
+        return [corridor.position[0], corridor.position[2]] as const;
+      }
+      if (stairDoc.objects.length === 0) {
+        return [stairObj.position[0], stairObj.position[2]] as const;
+      }
+      let sumX = 0;
+      let sumZ = 0;
+      for (const obj of stairDoc.objects) {
+        sumX += obj.position[0];
+        sumZ += obj.position[2];
+      }
+      return [sumX / stairDoc.objects.length, sumZ / stairDoc.objects.length] as const;
+    })();
+    const previewArgs: BuildStairWellPreviewRootArgs = {
       sx,
       sy,
       sz,
       def: args.stairWellDef,
       authoringScope: args.stairWellAuthorScope,
-    });
+      towardPlateXZ,
+      shaftPlateXZ: [stairObj.position[0], stairObj.position[2]],
+    };
+    const preview = buildStairWellPreviewRoot(previewArgs);
     root.add(preview);
     return root;
   }

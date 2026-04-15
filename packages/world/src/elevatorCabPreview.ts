@@ -11,6 +11,81 @@ const DOOR_TH = 0.07;
 const DOOR_SLIDE_M = 0.82;
 const CAR_INNER_MARGIN = 0.07;
 const CAR_CEIL_BELOW_SHAFT_TOP = 0.14;
+const FLOOR_BTN_W = 0.12;
+const FLOOR_BTN_H = 0.092;
+const FLOOR_BTN_D = 0.014;
+const FLOOR_GAP = 0.014;
+const FLOOR_COLS = 3;
+const FLOOR_ATLAS_COLS = 5;
+const FLOOR_ATLAS_CELL_W = 64;
+const FLOOR_ATLAS_CELL_H = 48;
+
+function floorButtonLabel(levelIndex: number): string {
+  return levelIndex <= 1 ? "PR" : String(levelIndex);
+}
+
+function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
+  if (typeof document === "undefined") {
+    const data = new Uint8Array([255, 255, 255, 255]);
+    const tex = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    return tex as unknown as THREE.CanvasTexture;
+  }
+  const rows = Math.max(1, Math.ceil(Math.max(1, maxLevel) / FLOOR_ATLAS_COLS));
+  const canvas = document.createElement("canvas");
+  canvas.width = FLOOR_ATLAS_COLS * FLOOR_ATLAS_CELL_W;
+  canvas.height = rows * FLOOR_ATLAS_CELL_H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas 2d");
+  for (let level = 1; level <= maxLevel; level++) {
+    const idx = level - 1;
+    const col = idx % FLOOR_ATLAS_COLS;
+    const row = Math.floor(idx / FLOOR_ATLAS_COLS);
+    const x0 = col * FLOOR_ATLAS_CELL_W;
+    const y0 = row * FLOOR_ATLAS_CELL_H;
+    ctx.fillStyle = "#2a3138";
+    ctx.fillRect(x0, y0, FLOOR_ATLAS_CELL_W, FLOOR_ATLAS_CELL_H);
+    ctx.strokeStyle = "rgba(140, 200, 255, 0.45)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x0 + 2, y0 + 2, FLOOR_ATLAS_CELL_W - 4, FLOOR_ATLAS_CELL_H - 4);
+    ctx.fillStyle = "#e4ecff";
+    ctx.font = "700 19px system-ui,Segoe UI,sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      floorButtonLabel(level),
+      x0 + FLOOR_ATLAS_CELL_W * 0.5,
+      y0 + FLOOR_ATLAS_CELL_H * 0.5,
+    );
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function applyAtlasUvToPlaneGeometry(
+  geom: THREE.PlaneGeometry,
+  levelIndex1Based: number,
+  atlasRows: number,
+): void {
+  const idx = levelIndex1Based - 1;
+  const col = idx % FLOOR_ATLAS_COLS;
+  const row = Math.floor(idx / FLOOR_ATLAS_COLS);
+  const u0 = col / FLOOR_ATLAS_COLS;
+  const u1 = (col + 1) / FLOOR_ATLAS_COLS;
+  const v1 = 1 - row / atlasRows;
+  const v0 = 1 - (row + 1) / atlasRows;
+  const uv = geom.attributes.uv as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) {
+    const uOld = uv.getX(i);
+    const vOld = uv.getY(i);
+    uv.setX(i, u1 - uOld * (u1 - u0));
+    uv.setY(i, v0 + vOld * (v1 - v0));
+  }
+  uv.needsUpdate = true;
+}
 
 function doorSlideAxis(face: ElevatorShaftLayout["doorFace"]): THREE.Vector3 {
   switch (face) {
@@ -43,10 +118,11 @@ function stdMatFromSlot(
 export function buildElevatorCabCarPreviewRoot(args: {
   layout: ElevatorShaftLayout;
   def?: ElevatorCabDef;
+  maxLevel?: number;
   /** If true, doors are left at50% open for framing. */
   previewDoorOpen01?: number;
 }): THREE.Group {
-  const { layout, def, previewDoorOpen01 = 0.5 } = args;
+  const { layout, def, maxLevel = 1, previewDoorOpen01 = 0.5 } = args;
   const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
   const innerH = layout.sy - 2 * 0.11 - CAR_CEIL_BELOW_SHAFT_TOP;
   const hx = Math.max(0.12, halfX - CAR_INNER_MARGIN);
@@ -57,6 +133,22 @@ export function buildElevatorCabCarPreviewRoot(args: {
   const floorMat = stdMatFromSlot(def, "floor", 0x4d5258);
   const doorMat = stdMatFromSlot(def, "door", 0x8a929e);
   const ceilMat = stdMatFromSlot(def, "ceiling", 0x6a6f78);
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: 0x2a3138,
+    roughness: 0.42,
+    metalness: 0.22,
+  });
+  const clampedMaxLevel = Math.max(1, maxLevel);
+  const atlasRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_ATLAS_COLS));
+  const buttonAtlas = buildElevFloorAtlas(clampedMaxLevel);
+  const buttonMat = new THREE.MeshStandardMaterial({
+    map: buttonAtlas,
+    color: 0xffffff,
+    roughness: 0.55,
+    metalness: 0.12,
+    emissive: 0x000000,
+    side: THREE.DoubleSide,
+  });
 
   const root = new THREE.Group();
   root.name = "editor_elevator_cab_preview";
@@ -152,6 +244,56 @@ export function buildElevatorCabCarPreviewRoot(args: {
   doorR.name = "cab_door_r";
   root.add(doorL);
   root.add(doorR);
+
+  const panelRoot = new THREE.Group();
+  panelRoot.name = "cab_floor_panel";
+  panelRoot.userData.editorCabPartId = "cab_floor_panel";
+  const gridRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_COLS));
+  const gridW = FLOOR_COLS * FLOOR_BTN_W + (FLOOR_COLS - 1) * FLOOR_GAP;
+  const gridH = gridRows * FLOOR_BTN_H + Math.max(0, gridRows - 1) * FLOOR_GAP;
+  const panelBoard = new THREE.Mesh(
+    new THREE.BoxGeometry(0.038, Math.max(0.72, gridH + 0.34), Math.max(0.34, gridW + 0.18)),
+    panelMat,
+  );
+  panelBoard.name = "cab_floor_panel_board";
+  panelRoot.add(panelBoard);
+  const zSpan = (FLOOR_COLS - 1) * (FLOOR_BTN_W + FLOOR_GAP);
+  const z0 = -zSpan * 0.5;
+  const y0 = floorT + 1.12;
+  for (let level = 1; level <= clampedMaxLevel; level++) {
+    const idx = level - 1;
+    const col = idx % FLOOR_COLS;
+    const row = Math.floor(idx / FLOOR_COLS);
+    const ly = y0 + row * (FLOOR_BTN_H + FLOOR_GAP);
+    const gridAlong = z0 + col * (FLOOR_BTN_W + FLOOR_GAP);
+    const button = new THREE.Mesh(new THREE.BoxGeometry(0.024, FLOOR_BTN_H, FLOOR_BTN_W), doorMat);
+    button.name = `cab_floor_button_body_${level}`;
+    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_BTN_W, FLOOR_BTN_H), buttonMat);
+    applyAtlasUvToPlaneGeometry(facePlane.geometry, level, atlasRows);
+    facePlane.name = `cab_floor_button_label_${level}`;
+    if (face === "e") {
+      button.position.set(-hx + wallT + 0.03, ly, gridAlong);
+      facePlane.position.set(-hx + wallT + FLOOR_BTN_D * 0.5 + 0.004, ly, gridAlong);
+      button.rotation.y = -Math.PI * 0.5;
+      facePlane.rotation.y = -Math.PI * 0.5;
+    } else if (face === "w") {
+      button.position.set(hx - wallT - 0.03, ly, gridAlong);
+      facePlane.position.set(hx - wallT - FLOOR_BTN_D * 0.5 - 0.004, ly, gridAlong);
+      button.rotation.y = Math.PI * 0.5;
+      facePlane.rotation.y = Math.PI * 0.5;
+    } else if (face === "n") {
+      button.position.set(gridAlong, ly, -hz + wallT + 0.03);
+      facePlane.position.set(gridAlong, ly, -hz + wallT + FLOOR_BTN_D * 0.5 + 0.004);
+    } else {
+      button.position.set(gridAlong, ly, hz - wallT - 0.03);
+      facePlane.position.set(gridAlong, ly, hz - wallT - FLOOR_BTN_D * 0.5 - 0.004);
+      button.rotation.y = Math.PI;
+      facePlane.rotation.y = Math.PI;
+    }
+    panelRoot.add(button);
+    panelRoot.add(facePlane);
+  }
+  root.add(panelRoot);
 
   applyElevatorCabPartTransforms(root, def);
   return root;

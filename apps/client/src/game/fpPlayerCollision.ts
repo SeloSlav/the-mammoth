@@ -267,8 +267,15 @@ function resolveHorizontalCollisionStep(
     pos.z = resolvedZ;
   };
 
-  resolveX();
-  resolveZ();
+  const dx = Math.abs(pos.x - prevX);
+  const dz = Math.abs(pos.z - prevZ);
+  if (dx >= dz) {
+    resolveX();
+    resolveZ();
+  } else {
+    resolveZ();
+    resolveX();
+  }
 }
 
 export function resolvePlayerCollisions(

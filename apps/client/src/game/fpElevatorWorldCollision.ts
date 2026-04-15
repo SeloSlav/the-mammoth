@@ -54,6 +54,44 @@ export type FpElevatorWorldCollisionAuth = {
   getCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
 };
 
+const SWING_DOOR_COLLISION_SEGMENTS = 4;
+
+function emitSwingDoorCollisionSegments(
+  emit: (
+    minX: number,
+    minY: number,
+    minZ: number,
+    maxX: number,
+    maxY: number,
+    maxZ: number,
+  ) => void,
+  startX: number,
+  startZ: number,
+  endX: number,
+  endZ: number,
+  y0: number,
+  y1: number,
+  pad: number,
+): void {
+  let prevX = startX;
+  let prevZ = startZ;
+  for (let i = 1; i <= SWING_DOOR_COLLISION_SEGMENTS; i++) {
+    const u = i / SWING_DOOR_COLLISION_SEGMENTS;
+    const nextX = startX + (endX - startX) * u;
+    const nextZ = startZ + (endZ - startZ) * u;
+    emit(
+      Math.min(prevX, nextX) - pad,
+      y0,
+      Math.min(prevZ, nextZ) - pad,
+      Math.max(prevX, nextX) + pad,
+      y1,
+      Math.max(prevZ, nextZ) + pad,
+    );
+    prevX = nextX;
+    prevZ = nextZ;
+  }
+}
+
 function shouldSuppressMovingCabGeneratedCollisionForQuery(opts: {
   row: ElevatorCar;
   layout: ElevatorShaftLayout;
@@ -272,10 +310,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzL = plateZ + hingeLat;
             const tipX = hxO + panelW * st;
             const tipZ = hzL - panelW * ct;
-            emit(
-              hxO - pad, y0d, Math.min(tipZ, hzL) - pad,
-              tipX + pad, y1d, Math.max(tipZ, hzL) + pad,
-            );
+            emitSwingDoorCollisionSegments(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "w": {
@@ -283,10 +318,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzL = plateZ + hingeLat;
             const tipX = hxO - panelW * st;
             const tipZ = hzL + panelW * ct;
-            emit(
-              Math.min(tipX, hxO) - pad, y0d, Math.min(hzL, tipZ) - pad,
-              Math.max(tipX, hxO) + pad, y1d, Math.max(hzL, tipZ) + pad,
-            );
+            emitSwingDoorCollisionSegments(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "n": {
@@ -294,10 +326,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzO = plateZ + hz + o;
             const tipX = hxL + panelW * ct;
             const tipZ = hzO + panelW * st;
-            emit(
-              Math.min(hxL, tipX) - pad, y0d, hzO - pad,
-              Math.max(hxL, tipX) + pad, y1d, tipZ + pad,
-            );
+            emitSwingDoorCollisionSegments(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "s": {
@@ -305,10 +334,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzO = plateZ - hz - o;
             const tipX = hxL - panelW * ct;
             const tipZ = hzO - panelW * st;
-            emit(
-              Math.min(hxL, tipX) - pad, y0d, Math.min(tipZ, hzO) - pad,
-              Math.max(hxL, tipX) + pad, y1d, Math.max(tipZ, hzO) + pad,
-            );
+            emitSwingDoorCollisionSegments(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
             break;
           }
         }

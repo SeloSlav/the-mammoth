@@ -7,6 +7,18 @@ import {
 
 export const PLACEMENT_KEY_SEP = "\u0000";
 
+function resolveAncestor(
+  hit: THREE.Object3D | null,
+  predicate: (obj: THREE.Object3D) => boolean,
+): THREE.Object3D | null {
+  let cur: THREE.Object3D | null = hit;
+  while (cur) {
+    if (predicate(cur)) return cur;
+    cur = cur.parent;
+  }
+  return null;
+}
+
 function readUserDataStringFromAncestors(
   attached: THREE.Object3D,
   key: "floorDocId" | "streamDocId",
@@ -131,14 +143,45 @@ export function resolvePlacedId(
 }
 
 /** Walks parents for `userData.editorCabPartId` (cab workspace picking). */
+export function resolveCabPartTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
+  return resolveAncestor(hit, (obj) => {
+    const id = obj.userData.editorCabPartId;
+    return typeof id === "string" && id.length > 0;
+  });
+}
+
+/** Walks parents for `userData.editorCabPartId` (cab workspace picking). */
 export function resolveCabPartId(hit: THREE.Object3D | null): string | null {
-  let cur: THREE.Object3D | null = hit;
-  while (cur) {
-    const id = cur.userData.editorCabPartId;
-    if (typeof id === "string" && id.length > 0) return id;
-    cur = cur.parent;
+  const target = resolveCabPartTarget(hit);
+  const id = target?.userData.editorCabPartId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+/**
+ * Resolves landing workspace selection: opening proxy (framed hole), then other subparts; glass
+ * picks map to the opening proxy so the gizmo resizes the hole, not an isolated pane.
+ */
+export function resolveLandingKitPickTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
+  const openingProxy = resolveAncestor(hit, (obj) => obj.userData.editorLandingOpeningProxy === true);
+  if (openingProxy) return openingProxy;
+  const glass = resolveAncestor(
+    hit,
+    (obj) => obj.userData.editorLandingPartId === LANDING_DOOR_GLASS_PART_ID,
+  );
+  if (glass) {
+    let cur: THREE.Object3D | null = glass.parent;
+    while (cur) {
+      const proxy = cur.getObjectByName(LANDING_DOOR_OPENING_PROXY_ID);
+      if (proxy) return proxy;
+      cur = cur.parent;
+    }
   }
-  return null;
+  const part = resolveAncestor(hit, (obj) => {
+    const partId = obj.userData.editorLandingPartId;
+    return typeof partId === "string" && partId.length > 0;
+  });
+  if (part) return part;
+  return resolveAncestor(hit, (obj) => obj.userData.editorLandingKitRoot === true);
 }
 
 /**
@@ -146,35 +189,35 @@ export function resolveCabPartId(hit: THREE.Object3D | null): string | null {
  * picks map to the opening proxy so the gizmo resizes the hole, not an isolated pane.
  */
 export function resolveLandingKitPickId(hit: THREE.Object3D | null): string | null {
-  let cur: THREE.Object3D | null = hit;
-  while (cur) {
-    if (cur.userData.editorLandingOpeningProxy === true) return LANDING_DOOR_OPENING_PROXY_ID;
-    cur = cur.parent;
-  }
-  cur = hit;
-  while (cur) {
-    const part = cur.userData.editorLandingPartId;
-    if (typeof part === "string" && part.length > 0) {
-      if (part === LANDING_DOOR_GLASS_PART_ID) return LANDING_DOOR_OPENING_PROXY_ID;
-      return part;
-    }
-    cur = cur.parent;
-  }
-  cur = hit;
-  while (cur) {
-    if (cur.userData.editorLandingKitRoot === true) return "landing_door_kit";
-    cur = cur.parent;
-  }
+  const target = resolveLandingKitPickTarget(hit);
+  if (!target) return null;
+  if (target.userData.editorLandingOpeningProxy === true) return LANDING_DOOR_OPENING_PROXY_ID;
+  const part = target.userData.editorLandingPartId;
+  if (typeof part === "string" && part.length > 0) return part;
+  if (target.userData.editorLandingKitRoot === true) return "landing_door_kit";
   return null;
 }
 
 /** Walks parents for `userData.editorStairPartId` (shared stairwell workspace picking). */
+export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
+  return (
+    resolveAncestor(hit, (obj) => {
+      const pickId = obj.userData.editorStairPickId;
+      return typeof pickId === "string" && pickId.length > 0;
+    }) ??
+    resolveAncestor(hit, (obj) => {
+      const id = obj.userData.editorStairPartId;
+      return typeof id === "string" && id.length > 0;
+    })
+  );
+}
+
+/** Walks parents for `userData.editorStairPartId` (shared stairwell workspace picking). */
 export function resolveStairWellPartId(hit: THREE.Object3D | null): string | null {
-  let cur: THREE.Object3D | null = hit;
-  while (cur) {
-    const id = cur.userData.editorStairPartId;
-    if (typeof id === "string" && id.length > 0) return id;
-    cur = cur.parent;
-  }
-  return null;
+  const target = resolveStairWellPartTarget(hit);
+  if (!target) return null;
+  const pickId = target.userData.editorStairPickId;
+  if (typeof pickId === "string" && pickId.length > 0) return pickId;
+  const id = target.userData.editorStairPartId;
+  return typeof id === "string" && id.length > 0 ? id : null;
 }

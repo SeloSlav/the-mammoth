@@ -78,18 +78,31 @@ describe("resolvePlayerCollisions", () => {
     expect(vel.x).toBe(0);
   });
 
-  it("ejects back to the entered side when already overlapping and pushing deeper into a thin wall", () => {
+  it("keeps the player on the entered side of a thin wall", () => {
     const index = buildCollisionSpatialIndex([]);
-    const prev = new THREE.Vector3(0.95, 0.4, 0);
-    const pos = new THREE.Vector3(1.15, 0.4, 0);
-    const vel = new THREE.Vector3(1, 0, 0);
+    const prev = new THREE.Vector3(0, 0.4, 0.4);
+    const pos = new THREE.Vector3(0, 0.4, 1.15);
+    const vel = new THREE.Vector3(0, 0, 1);
     resolvePlayerCollisions(pos, prev, vel, false, 0.82, index, {
       visitAabbsInXZ: (_x0, _x1, _z0, _z1, visit) => {
-        visit(aabb(1, 0, -2, 1.11, 3, 2));
+        visit(aabb(-2, 0, 1, 2, 3, 1.11));
       },
     });
-    expect(pos.x).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M - 1e-3);
-    expect(vel.x).toBe(0);
+    expect(pos.z).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M - 1e-3);
+    expect(vel.z).toBe(0);
+  });
+
+  it("preserves tangential slide when moving diagonally into a broad north-south wall", () => {
+    const solids = [aabb(-2, 0, 1, 2, 3, 2)];
+    const index = buildCollisionSpatialIndex(solids);
+    const prev = new THREE.Vector3(0, 0.4, 0.4);
+    const pos = new THREE.Vector3(0.35, 0.4, 1.3);
+    const vel = new THREE.Vector3(0.7, 0, 1.8);
+    resolvePlayerCollisions(pos, prev, vel, false, 0.82, index);
+    expect(pos.x).toBeCloseTo(0.35, 6);
+    expect(pos.z).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M);
+    expect(vel.x).toBeCloseTo(0.7, 6);
+    expect(vel.z).toBe(0);
   });
 
   it("blocks horizontal motion into a closed elevator cab door slab from the hallway (+X / east)", () => {

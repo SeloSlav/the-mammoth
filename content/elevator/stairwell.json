@@ -3,10 +3,68 @@
   "version": 1,
   "displayName": "Default stairwell",
   "materials": {
-    "wall": { "colorHex": "0xd7dce2", "roughness": 0.94, "metalness": 0.02 },
-    "floor": { "colorHex": "0xa09d99", "roughness": 0.94, "metalness": 0.025 },
-    "tread": { "colorHex": "0xc5cad2", "roughness": 0.92, "metalness": 0.025 },
-    "landing": { "colorHex": "0xb8c0ca", "roughness": 0.92, "metalness": 0.025 },
-    "railing": { "colorHex": "0x5c5a58", "roughness": 0.35, "metalness": 0.35 }
+    "wall": {
+      "colorHex": "0xd7dce2",
+      "roughness": 0.94,
+      "metalness": 0.02
+    },
+    "floor": {
+      "colorHex": "0xa09d99",
+      "roughness": 0.94,
+      "metalness": 0.025
+    },
+    "tread": {
+      "colorHex": "0xc5cad2",
+      "roughness": 0.92,
+      "metalness": 0.025
+    },
+    "landing": {
+      "colorHex": "0xb8c0ca",
+      "roughness": 0.92,
+      "metalness": 0.025
+    },
+    "railing": {
+      "colorHex": "0x5c5a58",
+      "roughness": 0.35,
+      "metalness": 0.35
+    }
+  },
+  "partTransforms": {
+    "stair_flight_upper": {
+      "position": [
+        0.07518067188598643,
+        0.2434528308627541,
+        -0.1678881955060526
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "stair_flight_lower": {
+      "position": [
+        -0.06348857444084066,
+        0.08890553772335369,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
   }
 }

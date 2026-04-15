@@ -97,9 +97,9 @@ const DEFAULT_STAIR_WELL_DEF = StairWellDefSchema.parse({
 });
 
 export const useEditorStore = create<EditorState>((set, get) => ({
-  workspace: "world",
+  workspace: "stairwell",
   landingDocKind: "kit",
-  mode: "floor",
+  mode: "stairwell_preview",
   building: BuildingDocSchema.parse({ id: "mammoth_main", version: 1, floorRefs: [] }),
   floorDocs: {},
   interiorDocs: {},
@@ -123,7 +123,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   shadowsEnabled: false,
   useHdriEnvironment: true,
-  cameraMode: "fly",
+  cameraMode: "orbit",
   flySpeedMps: 18,
   stairWellAuthorScope: "typical",
   fpAuthorCamera: "orbit",
@@ -218,7 +218,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       const bumpEpoch = !touchesFp || exitFp;
-      const cameraMode: EditorCameraMode = workspace === "world" ? "fly" : "orbit";
+      const cameraMode: EditorCameraMode = "orbit";
       return {
         workspace,
         mode,

@@ -13,6 +13,7 @@ import type { EditorMode } from "../state/editorStore.js";
 /** Subparts tagged with `userData.editorCabPartId` in the cab preview (see `elevatorCabPreview.ts`). */
 const ELEVATOR_CAB_OUTLINER_PART_IDS = [
   "cab_floor",
+  "cab_floor_panel",
   "cab_ceiling",
   "cab_wall_back",
   "cab_wall_side_n",

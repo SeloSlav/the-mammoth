@@ -33,6 +33,7 @@ struct CollisionAabb {
 }
 
 const MAX_HORIZONTAL_COLLISION_SUBSTEP_M: f32 = 0.18;
+const SWING_DOOR_COLLISION_SEGMENTS: usize = 4;
 
 #[inline]
 fn player_body_height(crouch: bool) -> f32 {
@@ -74,6 +75,41 @@ fn push_query_overlapping_aabb(
         return;
     }
     out.push(CollisionAabb { min, max });
+}
+
+#[inline]
+fn push_swing_door_collision_segments(
+    out: &mut Vec<CollisionAabb>,
+    qx0: f32,
+    qx1: f32,
+    qz0: f32,
+    qz1: f32,
+    start_x: f32,
+    start_z: f32,
+    end_x: f32,
+    end_z: f32,
+    y0: f32,
+    y1: f32,
+    pad: f32,
+) {
+    let mut prev_x = start_x;
+    let mut prev_z = start_z;
+    for i in 1..=SWING_DOOR_COLLISION_SEGMENTS {
+        let u = i as f32 / SWING_DOOR_COLLISION_SEGMENTS as f32;
+        let next_x = start_x + (end_x - start_x) * u;
+        let next_z = start_z + (end_z - start_z) * u;
+        push_query_overlapping_aabb(
+            out,
+            qx0,
+            qx1,
+            qz0,
+            qz1,
+            [prev_x.min(next_x) - pad, y0, prev_z.min(next_z) - pad],
+            [prev_x.max(next_x) + pad, y1, prev_z.max(next_z) + pad],
+        );
+        prev_x = next_x;
+        prev_z = next_z;
+    }
 }
 
 #[inline]
@@ -439,9 +475,8 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o + panel_w * st;
                     let tip_z = hz_l - panel_w * ct;
-                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
-                        [hx_o - pad, y0, tip_z.min(hz_l) - pad],
-                        [tip_x + pad, y1, tip_z.max(hz_l) + pad],
+                    push_swing_door_collision_segments(
+                        out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
                 DoorFace::W => {
@@ -449,9 +484,8 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o - panel_w * st;
                     let tip_z = hz_l + panel_w * ct;
-                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
-                        [tip_x.min(hx_o) - pad, y0, hz_l.min(tip_z) - pad],
-                        [tip_x.max(hx_o) + pad, y1, hz_l.max(tip_z) + pad],
+                    push_swing_door_collision_segments(
+                        out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
                 DoorFace::N => {
@@ -459,9 +493,8 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z + hz + o;
                     let tip_x = hx_l + panel_w * ct;
                     let tip_z = hz_o + panel_w * st;
-                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
-                        [hx_l.min(tip_x) - pad, y0, hz_o - pad],
-                        [hx_l.max(tip_x) + pad, y1, tip_z + pad],
+                    push_swing_door_collision_segments(
+                        out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }
                 DoorFace::S => {
@@ -469,9 +502,8 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z - hz - o;
                     let tip_x = hx_l - panel_w * ct;
                     let tip_z = hz_o - panel_w * st;
-                    push_query_overlapping_aabb(out, x0, x1, z0, z1,
-                        [hx_l.min(tip_x) - pad, y0, tip_z.min(hz_o) - pad],
-                        [hx_l.max(tip_x) + pad, y1, tip_z.max(hz_o) + pad],
+                    push_swing_door_collision_segments(
+                        out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }
             }
@@ -633,8 +665,7 @@ fn resolve_generated_horizontal_collision_step(
     aabbs: &mut Vec<CollisionAabb>,
 ) {
     let r = super::FOOT_R;
-
-    {
+    let resolve_x = |p: &mut PlayerPose, aabbs: &mut Vec<CollisionAabb>| {
         let mut resolved_x = p.x;
         aabbs.clear();
         collect_generated_collision_aabbs(
@@ -668,9 +699,9 @@ fn resolve_generated_horizontal_collision_step(
             resolved_x = next_resolved_x;
         }
         p.x = resolved_x;
-    }
+    };
 
-    {
+    let resolve_z = |p: &mut PlayerPose, aabbs: &mut Vec<CollisionAabb>| {
         let mut resolved_z = p.z;
         aabbs.clear();
         collect_generated_collision_aabbs(
@@ -704,6 +735,16 @@ fn resolve_generated_horizontal_collision_step(
             resolved_z = next_resolved_z;
         }
         p.z = resolved_z;
+    };
+
+    let dx = (p.x - prev_x).abs();
+    let dz = (p.z - prev_z).abs();
+    if dx >= dz {
+        resolve_x(p, aabbs);
+        resolve_z(p, aabbs);
+    } else {
+        resolve_z(p, aabbs);
+        resolve_x(p, aabbs);
     }
 }
 

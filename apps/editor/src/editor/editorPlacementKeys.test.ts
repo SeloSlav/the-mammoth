@@ -8,12 +8,16 @@ import {
   placementKey,
   PLACEMENT_KEY_SEP,
   resolveCabPartId,
+  resolveCabPartTarget,
   resolveFloorPlacementTransformRoot,
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
   resolveInteriorPlacementTransformRoot,
   resolveLandingKitPickId,
+  resolveLandingKitPickTarget,
   resolvePlacedId,
+  resolveStairWellPartId,
+  resolveStairWellPartTarget,
 } from "./editorPlacementKeys.js";
 
 describe("placementKey", () => {
@@ -37,6 +41,14 @@ describe("resolveCabPartId", () => {
   it("returns null when absent", () => {
     expect(resolveCabPartId(new THREE.Mesh())).toBe(null);
   });
+
+  it("returns the actual tagged object for viewport highlighting", () => {
+    const parent = new THREE.Group();
+    parent.userData.editorCabPartId = "cab_ceiling";
+    const mesh = new THREE.Mesh();
+    parent.add(mesh);
+    expect(resolveCabPartTarget(mesh)).toBe(parent);
+  });
 });
 
 describe("resolveLandingKitPickId", () => {
@@ -51,10 +63,17 @@ describe("resolveLandingKitPickId", () => {
   it("maps glass hits to the opening proxy (hole resize target)", () => {
     const root = new THREE.Group();
     root.userData.editorLandingKitRoot = true;
+    const swing = new THREE.Group();
+    root.add(swing);
+    const proxy = new THREE.Mesh();
+    proxy.name = LANDING_DOOR_OPENING_PROXY_ID;
+    proxy.userData.editorLandingOpeningProxy = true;
+    swing.add(proxy);
     const glass = new THREE.Mesh();
     glass.userData.editorLandingPartId = "landing_glass_lite";
-    root.add(glass);
+    swing.add(glass);
     expect(resolveLandingKitPickId(glass)).toBe(LANDING_DOOR_OPENING_PROXY_ID);
+    expect(resolveLandingKitPickTarget(glass)).toBe(proxy);
   });
 
   it("returns null when absent", () => {
@@ -90,6 +109,18 @@ describe("resolvePlacedId", () => {
 
   it("returns null when nothing matches", () => {
     expect(resolvePlacedId(new THREE.Mesh(), floorDocs)).toBe(null);
+  });
+});
+
+describe("resolveStairWellPartId", () => {
+  it("prefers explicit pick handles so grouped flights select as one object", () => {
+    const flight = new THREE.Group();
+    flight.userData.editorStairPartId = "stair_flight_lower";
+    flight.userData.editorStairPickId = "stair_flight_lower";
+    const tread = new THREE.Mesh();
+    flight.add(tread);
+    expect(resolveStairWellPartId(tread)).toBe("stair_flight_lower");
+    expect(resolveStairWellPartTarget(tread)).toBe(flight);
   });
 });
 

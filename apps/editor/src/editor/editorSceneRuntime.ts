@@ -43,14 +43,17 @@ import { objectLivesUnderScene } from "./sceneGraphUtils.js";
 import {
   floorPlacedObjectIdForTransformRoot,
   interiorEntityIdForTransformRoot,
+  resolveCabPartTarget,
   resolveFloorPlacementTransformRoot,
   resolveGizmoFloorDocId,
   resolveGizmoInteriorDocId,
   resolveInteriorPlacementTransformRoot,
   resolveCabPartId,
   resolveLandingKitPickId,
+  resolveLandingKitPickTarget,
   resolvePlacedId,
   resolveStairWellPartId,
+  resolveStairWellPartTarget,
 } from "./editorPlacementKeys.js";
 import { emptyFloorDoc } from "./editorEmptyFloorDoc.js";
 import {
@@ -65,6 +68,7 @@ import { createEditorPmremEnvironment } from "./editorSceneEnvironment.js";
 import { buildEditorStructuralRoot } from "./editorBuildingContentMount.js";
 
 export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() => void> {
+  const ORBIT_MAX_DISTANCE = 40;
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a22);
@@ -514,7 +518,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   orbitControls.enableDamping = true;
   orbitControls.target.set(0, 1.45, 0);
   orbitControls.minDistance = 0.22;
-  orbitControls.maxDistance = 6;
+  orbitControls.maxDistance = ORBIT_MAX_DISTANCE;
   orbitControls.update();
   const flyControls = new FlyControls(camera, canvas);
   flyControls.movementSpeed = useEditorStore.getState().flySpeedMps;
@@ -528,8 +532,12 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   const fpSelectionOutline = new FpSelectionAabbOutline();
   fpSelectionOutline.visible = false;
   scene.add(fpSelectionOutline);
+  const previewSelectionOutline = new FpSelectionAabbOutline(0xff4fa3);
+  previewSelectionOutline.visible = false;
+  scene.add(previewSelectionOutline);
 
   let fpClickCandidate: { x: number; y: number } | null = null;
+  let preferredPreviewSelectionTarget: THREE.Object3D | null = null;
 
   let buildingRoot: THREE.Group | null = null;
   let lastBuiltContentEpoch = -1;
@@ -607,6 +615,21 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
   function findBestSelectionTarget(): THREE.Object3D | null {
     const s = useEditorStore.getState();
     if (!buildingRoot || !s.selectedId) return null;
+    if (
+      preferredPreviewSelectionTarget &&
+      objectLivesUnderScene(preferredPreviewSelectionTarget, scene)
+    ) {
+      const preferredId =
+        s.mode === "cab"
+          ? resolveCabPartId(preferredPreviewSelectionTarget)
+          : s.mode === "landing_preview"
+            ? resolveLandingKitPickId(preferredPreviewSelectionTarget)
+            : s.mode === "stairwell_preview"
+              ? resolveStairWellPartId(preferredPreviewSelectionTarget)
+              : null;
+      if (preferredId === s.selectedId) return preferredPreviewSelectionTarget;
+    }
+    preferredPreviewSelectionTarget = null;
     let target: THREE.Object3D | null = null;
     let bestRank = -1;
     let bestD = Infinity;
@@ -1461,11 +1484,20 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (buildingRoot) targets.push(buildingRoot);
     const intersects = raycaster.intersectObjects(targets, true);
     if (intersects.length === 0) {
+      preferredPreviewSelectionTarget = null;
       useEditorStore.getState().setSelectedId(null);
       return;
     }
-    const hit = intersects[0];
+    const hit = intersects[0]!;
     const store = useEditorStore.getState();
+    preferredPreviewSelectionTarget =
+      store.mode === "cab"
+        ? resolveCabPartTarget(hit.object)
+        : store.mode === "landing_preview"
+          ? resolveLandingKitPickTarget(hit.object)
+          : store.mode === "stairwell_preview"
+            ? resolveStairWellPartTarget(hit.object)
+            : null;
     const id = hit
       ? store.mode === "cab"
         ? resolveCabPartId(hit.object)
@@ -1490,6 +1522,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         useEditorStore.getState().setFocusedStoryLevelIndex(hitLevelIndex);
       }
     }
+    if (!id) preferredPreviewSelectionTarget = null;
     useEditorStore.getState().setSelectedId(id);
   };
 
@@ -1566,6 +1599,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     const tcDragging = transformControls.dragging === true;
     const inFpMode = isFpMode(st.mode);
     if (isWeaponFpAuthoringState(st) && fpSession?.getPresenter()) {
+      previewSelectionOutline.setFromObject(null);
       const pres = fpSession.getPresenter()!;
       if (!tcDragging) {
         pres.setFpSwingAuthoringOverlay({ previewPhase01: null, keyframes: null });
@@ -1603,6 +1637,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       )?.object;
       fpSelectionOutline.setFromObject(sel ?? null);
     } else if (isConsumableFpAuthoringState(st) && fpConsumableSession?.isReady()) {
+      previewSelectionOutline.setFromObject(null);
       const picksMeta = fpConsumableSession
         .getPickList()
         .map((p) => ({ id: p.id, label: p.label }));
@@ -1620,6 +1655,15 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       fpSelectionOutline.setFromObject(sel ?? null);
     } else {
       fpSelectionOutline.setFromObject(null);
+      if (
+        st.mode === "cab" ||
+        st.mode === "landing_preview" ||
+        st.mode === "stairwell_preview"
+      ) {
+        previewSelectionOutline.setFromObject(findBestSelectionTarget());
+      } else {
+        previewSelectionOutline.setFromObject(null);
+      }
     }
     const renderCam =
       isWeaponFpAuthoringState(st) && st.fpAuthorCamera === "gameplay" && fpSession
@@ -1669,6 +1713,9 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     fpSelectionOutline.geometry.dispose();
     (fpSelectionOutline.material as THREE.Material).dispose();
     scene.remove(fpSelectionOutline);
+    previewSelectionOutline.geometry.dispose();
+    (previewSelectionOutline.material as THREE.Material).dispose();
+    scene.remove(previewSelectionOutline);
     if (buildingRoot) {
       contentRoot.remove(buildingRoot);
       disposeSubtreeGpuAssets(buildingRoot);

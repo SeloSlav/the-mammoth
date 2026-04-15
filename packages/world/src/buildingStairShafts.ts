@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
-import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
+import {
+  addStairWellPlaceholder,
+  resolveStairWellGroundDoor,
+  type StairWellGroundDoorContext,
+} from "./stairElevatorPlaceholders.js";
+import { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
@@ -22,6 +27,7 @@ export type BuildingStairShaftSpec = {
   bottomY: number;
   storeyCount: number;
   storeySpacing: number;
+  groundDoorContext?: StairWellGroundDoorContext;
 };
 
 export function shaftPlanKey(px: number, pz: number): string {
@@ -81,6 +87,35 @@ export function getBuildingStairShaftSpecs(
   const globalTop =
     (levelMax - 1) * spacing + CORE_PY + STOREY_SPACING_M * 0.5;
   const storeyCount = levelMax - levelMin + 1;
+  const groundRef = sortedRefs.find((r) => r.levelIndex === levelMin);
+  const groundDoc = groundRef ? getFloorDoc(groundRef.floorDocId) : undefined;
+  const groundDoorContextByKey = new Map<string, StairWellGroundDoorContext>();
+  if (groundDoc) {
+    let plateCx = 0;
+    let plateCz = 0;
+    for (const obj of groundDoc.objects) {
+      plateCx += obj.position[0];
+      plateCz += obj.position[2];
+    }
+    if (groundDoc.objects.length > 0) {
+      plateCx /= groundDoc.objects.length;
+      plateCz /= groundDoc.objects.length;
+    }
+    for (const obj of groundDoc.objects) {
+      if (!isStairPrefab(obj.prefabId)) continue;
+      const towardPlateXZ = shaftDoorTowardPointFromFloorCorridors(
+        obj.position[0],
+        obj.position[2],
+        groundDoc,
+        plateCx,
+        plateCz,
+      );
+      groundDoorContextByKey.set(shaftPlanKey(obj.position[0], obj.position[2]), {
+        towardPlateXZ,
+        shaftPlateXZ: [obj.position[0], obj.position[2]],
+      });
+    }
+  }
 
   const out: BuildingStairShaftSpec[] = [];
   for (const [planKey, s] of map) {
@@ -95,6 +130,7 @@ export function getBuildingStairShaftSpecs(
       bottomY: globalBottom,
       storeyCount,
       storeySpacing: spacing,
+      groundDoorContext: groundDoorContextByKey.get(planKey),
     });
   }
   return out;
@@ -118,10 +154,20 @@ export function addBuildingStairShaftColumnsToRoot(
       segment.name = `stair_shaft_segment_${i}`;
       segment.position.y =
         s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
+      const resolvedGroundDoor =
+        i === 0
+          ? resolveStairWellGroundDoor({
+              sx: s.sx,
+              sy: s.syPlate,
+              sz: s.sz,
+              context: s.groundDoorContext,
+            })?.groundDoor
+          : null;
       addStairWellPlaceholder(segment, s.sx, s.syPlate, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
         authoringScope: i === 0 ? "ground" : "typical",
+        groundDoor: resolvedGroundDoor,
       });
       col.add(segment);
     }

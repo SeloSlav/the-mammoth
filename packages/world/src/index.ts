@@ -158,6 +158,7 @@ export {
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
   STAIR_WELL_EDITOR_PART_IDS,
+  type BuildStairWellPreviewRootArgs,
   type StairWellAuthoringScope,
   type StairWellEditorPartId,
 } from "./stairElevatorPlaceholders.js";
