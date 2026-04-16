@@ -731,13 +731,18 @@ mod head_clearance_tests {
         }
     }
 
-    /// Tall vertical wall whose bottom sits just above the feet (`fy + 0.05`) — this models the
-    /// elevator landing exterior door solid slab. Head-clearance must NOT fire; the player must
-    /// stay at feet Y after depenetration (horizontal pass blocks the wall).
+    /// Regression: elevator doorway "shot-down-a-floor" bug.
+    ///
+    /// The landing exterior door solid slab spans `[fy + 0.05, fy + 2.25]` in Y — a tall vertical
+    /// wall whose bottom sits near feet level, *not* a ceiling. The head-clearance query is
+    /// expanded by `COLLISION_EPS` beyond the body radius, so there is a ~1.5 mm window where the
+    /// clamp's XZ rect overlaps a blocker even though the body bounds do not (so depenetration
+    /// leaves the player alone). In that window the old code snapped feet to `mn[1] - body_h`,
+    /// and the walk sampler then rescued the player onto the storey below.
     #[test]
-    fn head_clearance_skips_tall_wall_near_feet_level() {
-        let wall_min: [f32; 3] = [1.0, 0.05, -2.0];
-        let wall_max: [f32; 3] = [2.1, 2.25, 2.0];
+    fn head_clearance_skips_tall_wall_inside_query_eps_window() {
+        let wall_min: [f32; 3] = [FOOT_R + 0.001, 0.05, -2.0];
+        let wall_max: [f32; 3] = [wall_min[0] + 1.0, 2.25, 2.0];
         let mut fill = |x0: f32,
                         x1: f32,
                         z0: f32,
@@ -757,33 +762,37 @@ mod head_clearance_tests {
         assert_eq!(p.vel_y, 0.0);
     }
 
-    /// Legitimate low ceiling 1.5 m above feet — head-clearance must still fire so the head
-    /// clears the slab.
+    /// Thin overhead slab whose top is within `WALK_STEP_UP_MARGIN` of feet level (so
+    /// `ignore_horizontal_block` skips it in the horizontal pass). The head-clearance clamp is the
+    /// only thing keeping the head out of the slab, and it must still fire.
     #[test]
-    fn head_clearance_clamps_true_low_ceiling() {
-        let ceil_min: [f32; 3] = [-1.0, 1.5, -1.0];
-        let ceil_max: [f32; 3] = [1.0, 1.8, 1.0];
+    fn head_clearance_clamps_thin_ignored_slab_above_feet() {
+        // Feet at 2.4, slab at [2.95, 3.05]: top (3.05) <= 2.4 + 0.82 = 3.22 so it is treated as
+        // an "ignored" (step-over) block horizontally; clamp must push feet down so head == 2.95.
+        let slab_min: [f32; 3] = [-1.0, 2.95, -1.0];
+        let slab_max: [f32; 3] = [1.0, 3.05, 1.0];
         let mut fill = |x0: f32,
                         x1: f32,
                         z0: f32,
                         z1: f32,
                         _qp: Option<(f32, f32, f32)>,
                         out: &mut Vec<([f32; 3], [f32; 3])>| {
-            if x1 > ceil_min[0] && x0 < ceil_max[0] && z1 > ceil_min[2] && z0 < ceil_max[2] {
-                out.push((ceil_min, ceil_max));
+            if x1 > slab_min[0] && x0 < slab_max[0] && z1 > slab_min[2] && z0 < slab_max[2] {
+                out.push((slab_min, slab_max));
             }
         };
-        let mut p = fresh_pose(0.0, 0.0, 0.0);
+        let mut p = fresh_pose(0.0, 2.4, 0.0);
         let mut buf = Vec::new();
         resolve_horizontal_character_with_fill(
-            &mut p, 0.0, 0.0, 0.0, 1.78, true, FOOT_R, &mut fill, &mut buf,
+            &mut p, 0.0, 2.48, 0.0, 1.78, true, FOOT_R, &mut fill, &mut buf,
         );
-        let expected = 1.5 - 1.78 - COLLISION_EPS;
+        let expected = 2.95 - 1.78 - COLLISION_EPS;
         assert!(
             (p.y - expected).abs() < 1e-4,
             "feet at {} expected {}",
             p.y,
             expected
         );
+        assert_eq!(p.vel_y, 0.0);
     }
 }
