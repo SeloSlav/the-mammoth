@@ -15,6 +15,7 @@ use crate::auth;
 use crate::elevator::{self, elevator_car, ElevatorCar};
 use crate::kinematic_support;
 use crate::pose::{player_pose, PlayerPose};
+use crate::stair_runtime_overlay;
 use crate::world_sound;
 
 // --- Bit layout (must match `apps/client/src/game/moveIntentCodec.ts`) ---
@@ -208,6 +209,9 @@ fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
             if fx1 < mn[0] || fx0 > mx[0] || fz1 < mn[2] || fz0 > mx[2] {
                 continue;
             }
+            if stair_runtime_overlay::suppress_static_walk_surface(*mn, *mx) {
+                continue;
+            }
             let top = mx[1];
             if top <= feet_y + WALK_STEP_UP_MARGIN {
                 best = if best.is_nan() {
@@ -217,6 +221,17 @@ fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
                 };
             }
         }
+    }
+    let stair_top = stair_runtime_overlay::sample_runtime_stair_support_top_y(
+        x,
+        z,
+        probe_top_y,
+        FOOT_RADIUS_XZ,
+        WALK_STEP_UP_MARGIN,
+        WALK_PROBE_DY,
+    );
+    if !stair_top.is_nan() {
+        best = if best.is_nan() { stair_top } else { best.max(stair_top) };
     }
     best
 }

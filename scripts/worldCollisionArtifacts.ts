@@ -17,15 +17,9 @@ function readJsonFilesSorted(absDir: string): [string, string][] {
 
 function normalizeCollisionFingerprintJson(name: string, text: string): string {
   if (name !== "stairwell.json") return text;
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    delete parsed.entryOpening;
-    delete parsed.groundEntryOpening;
-    delete parsed.secondaryEntryOpening;
-    return JSON.stringify(parsed);
-  } catch {
-    return text;
-  }
+  // Stairwell geometry/support is now supplied live by the runtime stair overlay on both client
+  // and server, so these authoring edits should not mark baked walk/blocker artifacts stale.
+  return JSON.stringify({ runtimeManaged: true, file: name });
 }
 
 export function computeWorldCollisionSourceFingerprint(repoRoot: string): string {

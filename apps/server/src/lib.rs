@@ -19,6 +19,7 @@ mod movement;
 mod player_vitals;
 mod pose;
 mod stair_opening_collision;
+mod stair_runtime_overlay;
 mod world_sound;
 
 use spacetimedb::{ReducerContext, Table};

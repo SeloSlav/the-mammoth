@@ -3,7 +3,10 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   applyStairOpeningCollisionOverlay,
+  applyStairRuntimeBlockerOverlay,
+  applyStairRuntimeWalkSuppressMasks,
   buildStairOpeningCollisionOverlayForBuilding,
+  buildStairRuntimeOverlayForBuilding,
   buildCollisionSpatialIndex,
   buildCellMeshes,
   buildWalkSurfaceSpatialIndex,
@@ -15,8 +18,8 @@ import {
   parseCellDoc,
   parseFloorDoc,
   parseStairWellDef,
+  sampleRuntimeStairSupportTopY,
   walkSurfaceAabbXZFootprint,
-  walkSurfaceAABBsForBuilding,
 } from "@the-mammoth/world";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../content/building/mammoth.json";
@@ -46,21 +49,54 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     stairWellDef,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const blockerAABBs = applyStairOpeningCollisionOverlay(
-    GENERATED_COLLISION_BLOCKER_AABBS,
-    stairOpeningOverlay,
+  const stairRuntimeOverlay = buildStairRuntimeOverlayForBuilding(
+    building,
+    getFloorDoc,
+    stairWellDef,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const walkAABBs = GENERATED_WALK_SURFACE_AABBS;
+  const blockerAABBs = applyStairRuntimeBlockerOverlay(
+    applyStairOpeningCollisionOverlay(
+      GENERATED_COLLISION_BLOCKER_AABBS,
+      stairOpeningOverlay,
+    ),
+    stairRuntimeOverlay,
+  );
+  const walkSupportAABBs = applyStairRuntimeWalkSuppressMasks(
+    GENERATED_WALK_SURFACE_AABBS,
+    stairRuntimeOverlay,
+  );
   const walkFootprint =
-    walkSurfaceAabbXZFootprint(walkAABBs) ??
+    walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
-  const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkAABBs);
+  const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
   const staticCollisionIndex = buildCollisionSpatialIndex(blockerAABBs);
-  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) =>
-    walkSpatialIndex.sampleTopYWithExteriorGround(worldX, worldZ, probeTopY, walkFootprint, {
-      footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
-      stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
-    });
+  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
+    const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
+      worldX,
+      worldZ,
+      probeTopY,
+      walkFootprint,
+      {
+        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      },
+    );
+    const stairTop = sampleRuntimeStairSupportTopY(
+      stairRuntimeOverlay.supportSurfaces,
+      worldX,
+      worldZ,
+      probeTopY,
+      {
+        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+        probeDy: fpLocomotionConstants.walkProbeDy,
+      },
+    );
+    if (!Number.isFinite(stairTop)) return bakedTop;
+    if (!Number.isFinite(bakedTop)) return stairTop;
+    return Math.max(bakedTop, stairTop);
+  };
 
   const buildingRoot = instantiateBuildingFloorStack(building, getFloorDoc, {
     stairWellDef,

@@ -37,6 +37,14 @@ export {
   type StairOpeningCollisionOverlay,
 } from "./floorPlaceholderMeshes.js";
 export {
+  applyStairRuntimeBlockerOverlay,
+  applyStairRuntimeWalkSuppressMasks,
+  buildStairRuntimeOverlayForBuilding,
+  sampleRuntimeStairSupportTopY,
+  type RuntimeStairSupportSurface,
+  type StairRuntimeOverlay,
+} from "./stairRuntimeOverlay.js";
+export {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   instantiateBuildingFloorStack,
   type InstantiateBuildingFloorStackOptions,
