@@ -97,6 +97,7 @@ export {
 } from "./generatedCollisionArtifacts.js";
 export {
   FP_CHARACTER_MAX_HORIZONTAL_SUBSTEP_M,
+  HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M,
   resolveFpCharacterCollisions,
   type DynamicBlockerSource,
   type ResolveFpCharacterCollisionOpts,

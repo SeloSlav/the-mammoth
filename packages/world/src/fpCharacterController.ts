@@ -21,6 +21,18 @@ export const FP_CHARACTER_MAX_HORIZONTAL_SUBSTEP_M = 0.18;
 const SLIDE_PASSES = 4;
 const RAY_EPS = 1e-8;
 
+/**
+ * Minimum height a blocker's bottom must sit above the feet for the post-depenetration
+ * head-clearance clamp to fire. Below this, the blocker is a **tall vertical wall** (typical
+ * bottom ≈ `feetY + 0..0.1`, top well above the head) rather than an overhead slab, and the
+ * clamp — which would otherwise push `pos.y` down by a full `bodyHeight` — produces a full-storey
+ * "shot-through-the-door" drop. The band between 0 m and this threshold is handled by the
+ * horizontal depenetration pass; anything above it is a legitimate low duct / overhang / cab
+ * roof where clamping is correct. Must stay in sync with server
+ * `HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M` in `character_controller.rs`.
+ */
+export const HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M = 0.5;
+
 function verticalOverlap(feetY: number, bodyH: number, b: CollisionAabb): boolean {
   const y0 = feetY;
   const y1 = feetY + bodyH;
@@ -530,6 +542,9 @@ export function resolveFpCharacterCollisions(opts: ResolveFpCharacterCollisionOp
       if (x1 <= b.min[0] || x0 >= b.max[0] || z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (head <= b.min[1] + COLLISION_EPS) return;
       if (pos.y >= b.min[1]) return;
+      // Wall-vs-ceiling gate: a tall vertical wall (e.g. landing exterior door slab whose bottom
+      // sits just above feet level) would otherwise snap feet a full body-height down here.
+      if (b.min[1] < pos.y + HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M) return;
       bestFeet = Math.min(bestFeet, b.min[1] - bodyHeight - COLLISION_EPS);
     });
     if (bestFeet !== pos.y) {

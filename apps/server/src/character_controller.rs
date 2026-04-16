@@ -17,6 +17,17 @@ const FOOT_R: f32 = 0.22;
 const SLIDE_PASSES: usize = 4;
 const RAY_EPS: f32 = 1e-8;
 
+/// Minimum height a blocker's bottom must sit above the feet for the post-depenetration
+/// head-clearance clamp to fire. Below this, the blocker is a **tall vertical wall** (typical
+/// bottom ≈ `feet_y + 0..0.1`, top well above the head) rather than an overhead slab, and the
+/// clamp — which would otherwise push `p.y` down by a full `body_h` — produces a full-storey
+/// "shot-through-the-door" drop. The band between 0 m and this threshold is handled by the
+/// horizontal depenetration pass; anything above it is a legitimate low duct / overhang / cab
+/// roof where clamping is correct. Must stay in sync with client
+/// `HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M` in `fpCharacterController.ts` +
+/// `fpPlayerCollision.ts`.
+const HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M: f32 = 0.5;
+
 #[inline]
 fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
     top_y <= feet_y + WALK_STEP_UP_MARGIN + 1e-4 && top_y >= feet_y - STEP_IGNORE_BELOW_FEET_M
@@ -572,6 +583,14 @@ pub fn resolve_player_static_collisions_character(
             if p.y >= mn[1] {
                 continue;
             }
+            // Wall-vs-ceiling gate: a tall vertical wall (e.g. landing exterior door slab with
+            // `mn[1] ≈ fy + 0.05`) is NOT a ceiling; clamping feet to `mn[1] - body_h` would
+            // teleport the player nearly a full body-height below the floor, after which walk
+            // sampling rescues them onto the storey below — the "shot-down-a-floor" doorway bug.
+            if mn[1] < p.y + HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M {
+                let _ = mx;
+                continue;
+            }
             best_feet = best_feet.min(mn[1] - body_h - COLLISION_EPS);
         }
         if best_feet < p.y {
@@ -675,6 +694,12 @@ pub fn resolve_horizontal_character_with_fill<F>(
             if p.y >= mn[1] {
                 continue;
             }
+            // See wall-vs-ceiling comment on the static-blocker clamp above — same story for
+            // generated blockers (elevator doorway exterior slab is the primary offender).
+            if mn[1] < p.y + HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M {
+                let _ = mx;
+                continue;
+            }
             best_feet = best_feet.min(mn[1] - body_h - COLLISION_EPS);
         }
         if best_feet < p.y {
@@ -683,5 +708,82 @@ pub fn resolve_horizontal_character_with_fill<F>(
                 p.vel_y = 0.0;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod head_clearance_tests {
+    use super::*;
+    use spacetimedb::Identity;
+
+    fn fresh_pose(x: f32, y: f32, z: f32) -> PlayerPose {
+        PlayerPose {
+            identity: Identity::from_byte_array([0u8; 32]),
+            x,
+            y,
+            z,
+            yaw: 0.0,
+            seq: 0,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+        }
+    }
+
+    /// Tall vertical wall whose bottom sits just above the feet (`fy + 0.05`) — this models the
+    /// elevator landing exterior door solid slab. Head-clearance must NOT fire; the player must
+    /// stay at feet Y after depenetration (horizontal pass blocks the wall).
+    #[test]
+    fn head_clearance_skips_tall_wall_near_feet_level() {
+        let wall_min: [f32; 3] = [1.0, 0.05, -2.0];
+        let wall_max: [f32; 3] = [2.1, 2.25, 2.0];
+        let mut fill = |x0: f32,
+                        x1: f32,
+                        z0: f32,
+                        z1: f32,
+                        _qp: Option<(f32, f32, f32)>,
+                        out: &mut Vec<([f32; 3], [f32; 3])>| {
+            if x1 > wall_min[0] && x0 < wall_max[0] && z1 > wall_min[2] && z0 < wall_max[2] {
+                out.push((wall_min, wall_max));
+            }
+        };
+        let mut p = fresh_pose(0.0, 0.0, 0.0);
+        let mut buf = Vec::new();
+        resolve_horizontal_character_with_fill(
+            &mut p, 0.0, 0.0, 0.0, 1.78, true, FOOT_R, &mut fill, &mut buf,
+        );
+        assert!(p.y.abs() < 1e-4, "feet snapped to {} (should stay at 0)", p.y);
+        assert_eq!(p.vel_y, 0.0);
+    }
+
+    /// Legitimate low ceiling 1.5 m above feet — head-clearance must still fire so the head
+    /// clears the slab.
+    #[test]
+    fn head_clearance_clamps_true_low_ceiling() {
+        let ceil_min: [f32; 3] = [-1.0, 1.5, -1.0];
+        let ceil_max: [f32; 3] = [1.0, 1.8, 1.0];
+        let mut fill = |x0: f32,
+                        x1: f32,
+                        z0: f32,
+                        z1: f32,
+                        _qp: Option<(f32, f32, f32)>,
+                        out: &mut Vec<([f32; 3], [f32; 3])>| {
+            if x1 > ceil_min[0] && x0 < ceil_max[0] && z1 > ceil_min[2] && z0 < ceil_max[2] {
+                out.push((ceil_min, ceil_max));
+            }
+        };
+        let mut p = fresh_pose(0.0, 0.0, 0.0);
+        let mut buf = Vec::new();
+        resolve_horizontal_character_with_fill(
+            &mut p, 0.0, 0.0, 0.0, 1.78, true, FOOT_R, &mut fill, &mut buf,
+        );
+        let expected = 1.5 - 1.78 - COLLISION_EPS;
+        assert!(
+            (p.y - expected).abs() < 1e-4,
+            "feet at {} expected {}",
+            p.y,
+            expected
+        );
     }
 }

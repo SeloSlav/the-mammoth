@@ -1,5 +1,9 @@
 import type { CollisionAabb, CollisionSpatialIndex } from "@the-mammoth/world";
-import { resolveFpCharacterCollisions, type DynamicBlockerSource } from "@the-mammoth/world";
+import {
+  HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M,
+  resolveFpCharacterCollisions,
+  type DynamicBlockerSource,
+} from "@the-mammoth/world";
 import type { Vector3 } from "three";
 import { readFpUseCharacterController } from "./fpCollisionPolicy.js";
 
@@ -369,6 +373,10 @@ export function resolvePlayerCollisions(
       if (x1 <= b.min[0] || x0 >= b.max[0] || z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (head <= b.min[1] + COLLISION_EPS) return;
       if (pos.y >= b.min[1]) return;
+      // Wall-vs-ceiling gate — see `fpCharacterController.ts` for the full rationale. Without
+      // this, a tall vertical wall whose bottom sits just above the feet (e.g. the elevator
+      // landing exterior door slab, `mn.y = fy + 0.05`) snaps `pos.y` down by a full body-height.
+      if (b.min[1] < pos.y + HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M) return;
       bestFeet = Math.min(bestFeet, b.min[1] - height - COLLISION_EPS);
     });
     if (bestFeet !== pos.y) {
