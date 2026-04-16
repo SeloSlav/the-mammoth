@@ -42,6 +42,7 @@ export type FpElevatorWorldCollisionAuth = {
   buildingOriginZ: number;
   maxLevel: number;
   latestCars: ReadonlyMap<string, ElevatorCar>;
+  getEvaluatedCarRow?: (shaftKey: string, row: ElevatorCar) => ElevatorCar;
   layoutByKey: ReadonlyMap<string, ElevatorShaftLayout>;
   landingByRowKey: ReadonlyMap<string, ElevatorLandingDoor>;
   feetYForLayout: (layout: ElevatorShaftLayout, level: number) => number;
@@ -129,17 +130,18 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
   };
 
   for (const [shaftKey, row] of latestCars) {
+    const evalRow = auth.getEvaluatedCarRow?.(shaftKey, row) ?? row;
     const layout = layoutByKey.get(shaftKey);
     if (!layout) continue;
-    const cabFloorY = auth.getCabFloorY?.(shaftKey, row) ?? row.cabFloorY;
-    const cabDoorOpen01 = auth.getCabDoorOpen01?.(shaftKey, row) ?? row.doorOpen01;
-    const plateX = ox + row.plateX;
-    const plateZ = oz + row.plateZ;
+    const cabFloorY = auth.getCabFloorY?.(shaftKey, evalRow) ?? evalRow.cabFloorY;
+    const cabDoorOpen01 = auth.getCabDoorOpen01?.(shaftKey, evalRow) ?? evalRow.doorOpen01;
+    const plateX = ox + evalRow.plateX;
+    const plateZ = oz + evalRow.plateZ;
     const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
 
     const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
     const suppressMovingCabGeneratedCollision = shouldSuppressMovingCabGeneratedCollisionForQuery({
-      row,
+      row: evalRow,
       layout,
       plateX,
       plateZ,

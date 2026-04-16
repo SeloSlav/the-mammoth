@@ -36,6 +36,12 @@ import {
   predictMovingCabFeetWorldY,
   predictMovingCabFeetWorldYVelocityMps,
 } from "./fpElevatorCabPredict.js";
+import {
+  nextElevatorCarReplicaSample,
+  pruneElevatorCarReplicaHistory,
+  selectElevatorCarReplicaSample,
+  type FpElevatorCarReplicaSample,
+} from "./fpElevatorReplicaHistory.js";
 import { FpElevatorCabInterpScalar, FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
 import { floorButtonLabel } from "./fpElevatorLabels.js";
 import {
@@ -243,8 +249,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const latest = new Map<string, ElevatorCar>();
   const landingByRowKey = new Map<string, ElevatorLandingDoor>();
-  /** Monotonic clock sample when `elevator_car` row last arrived (moving phase only). */
-  const moveReplicaAtMs = new Map<string, number>();
+  /** Short local history so reconcile can replay against the cab state that existed for each input. */
+  const replicaHistoryByKey = new Map<string, FpElevatorCarReplicaSample[]>();
   const doorInterp = new Map<string, FpElevatorCabInterpScalar>();
   /**
    * Smoothed landing-door swing for visuals only.
@@ -285,24 +291,15 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
 
   const ingest = (row: ElevatorCar) => {
-    const prev = latest.get(row.shaftKey);
+    const history = replicaHistoryByKey.get(row.shaftKey) ?? [];
+    const prev = history[history.length - 1];
+    const now = performance.now();
+    history.push(nextElevatorCarReplicaSample(prev, row, now));
+    pruneElevatorCarReplicaHistory(history, now);
+    replicaHistoryByKey.set(row.shaftKey, history);
     latest.set(row.shaftKey, row);
     ensureInterp(row.shaftKey);
-    const now = performance.now();
     doorInterp.get(row.shaftKey)!.setTarget(row.doorOpen01, now);
-    if (row.phase === ELEVATOR_PHASE_MOVING) {
-      const movingReplicaChanged =
-        !prev ||
-        prev.phase !== row.phase ||
-        prev.moveU !== row.moveU ||
-        prev.moveFromLevel !== row.moveFromLevel ||
-        prev.moveToLevel !== row.moveToLevel;
-      if (movingReplicaChanged) {
-        moveReplicaAtMs.set(row.shaftKey, now);
-      }
-    } else {
-      moveReplicaAtMs.delete(row.shaftKey);
-    }
   };
 
   for (const row of opts.conn.db.elevator_car) {
@@ -342,8 +339,19 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   opts.conn.db.elevator_landing_door.onUpdate(onLandingUpdate);
   opts.conn.db.elevator_landing_door.onDelete(onLandingDelete);
 
+  const getReplicaSample = (
+    key: string,
+    evalWallClockMs?: number,
+  ): FpElevatorCarReplicaSample | null => {
+    const history = replicaHistoryByKey.get(key);
+    if (!history || history.length === 0) return null;
+    if (evalWallClockMs === undefined) return history[history.length - 1] ?? null;
+    return selectElevatorCarReplicaSample(history, evalWallClockMs);
+  };
+
   const getCabY = (key: string, evalWallClockMs?: number): number => {
-    const row = latest.get(key);
+    const sample = getReplicaSample(key, evalWallClockMs ?? cabEvalNowMs);
+    const row = sample?.row;
     if (!row) return Number.NaN;
     if (row.phase !== ELEVATOR_PHASE_MOVING) {
       return row.cabFloorY;
@@ -351,7 +359,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const layout = layoutByKey.get(key);
     if (!layout) return row.cabFloorY;
     const tEval = evalWallClockMs ?? cabEvalNowMs;
-    const t0 = moveReplicaAtMs.get(key) ?? tEval;
+    const t0 = sample?.moveReplicaAtMs ?? tEval;
     const elapsedSec = Math.max(0, (tEval - t0) * 0.001);
     return predictMovingCabFeetWorldY({
       moveFromLevel: row.moveFromLevel,
@@ -363,12 +371,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
 
   const getCabVerticalVelocityMps = (key: string, evalWallClockMs?: number): number => {
-    const row = latest.get(key);
+    const sample = getReplicaSample(key, evalWallClockMs ?? cabEvalNowMs);
+    const row = sample?.row;
     if (!row || row.phase !== ELEVATOR_PHASE_MOVING) return 0;
     const layout = layoutByKey.get(key);
     if (!layout) return 0;
     const tEval = evalWallClockMs ?? cabEvalNowMs;
-    const t0 = moveReplicaAtMs.get(key) ?? tEval;
+    const t0 = sample?.moveReplicaAtMs ?? tEval;
     const elapsedSec = Math.max(0, (tEval - t0) * 0.001);
     return predictMovingCabFeetWorldYVelocityMps({
       moveFromLevel: row.moveFromLevel,
@@ -379,8 +388,15 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     });
   };
 
-  const getDoor = (key: string, nowMs: number): number =>
-    doorInterp.get(key)?.eval(nowMs) ?? latest.get(key)?.doorOpen01 ?? 1;
+  const getDoor = (key: string, nowMs: number): number => {
+    const latestSample = getReplicaSample(key);
+    const evalSample = getReplicaSample(key, nowMs);
+    if (!evalSample) return 1;
+    if (!latestSample || evalSample !== latestSample) {
+      return evalSample.row.doorOpen01;
+    }
+    return doorInterp.get(key)?.eval(nowMs) ?? evalSample.row.doorOpen01;
+  };
 
   const sampleSupportSurface = (
     opts: FpKinematicSupportSampleOpts,
@@ -1048,6 +1064,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         buildingOriginZ: oz,
         maxLevel,
         latestCars: latest,
+        getEvaluatedCarRow: (shaftKey, row) =>
+          getReplicaSample(shaftKey, cabEvalNowMs)?.row ?? row,
         layoutByKey,
         landingByRowKey,
         feetYForLayout,
@@ -1170,7 +1188,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       }
       latest.clear();
       landingByRowKey.clear();
-      moveReplicaAtMs.clear();
+      replicaHistoryByKey.clear();
       doorInterp.clear();
       landingDoorSwingInterp.clear();
     },

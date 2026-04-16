@@ -336,6 +336,7 @@ export async function mountFpSession(
     seq: bigint;
     bits: number;
     aimYaw: number;
+    evalWallClockMs: number;
   };
   const pendingMoveIntents: PendingMoveIntent[] = [];
   /** Head index into `pendingMoveIntents` — acked entries are skipped without shifting the array. */
@@ -713,10 +714,9 @@ export async function mountFpSession(
     _replayLoco.grounded = serverRow.grounded !== 0;
     _replayLoco.jumpQueued = false;
 
-    const replayStartMs = performance.now();
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
-      const stepNowMs = replayStartMs + (i - intentsHead) * NET_INTERVAL_MS;
+      const stepNowMs = sample.evalWallClockMs;
       fpElevators.syncCabEvalClock(stepNowMs);
       inputFromBitsInto(sample.bits, _replayInput);
       _replayStepOpts.evalWallClockMs = stepNowMs;
@@ -855,10 +855,17 @@ export async function mountFpSession(
     if (!conn.identity) return;
     intentSeq += 1n;
     const bits = encodeMoveIntentBits(input, jump);
-    const sample = { seq: intentSeq, bits, aimYaw: bodyYaw };
     const replacePendingSameStep =
       pendingMoveIntents.length > intentsHead &&
       nowMs - lastMoveIntentMs < MOVE_INTENT_EDGE_WINDOW_MS;
+    const sample = {
+      seq: intentSeq,
+      bits,
+      aimYaw: bodyYaw,
+      evalWallClockMs: replacePendingSameStep
+        ? pendingMoveIntents[pendingMoveIntents.length - 1]!.evalWallClockMs
+        : nowMs,
+    };
     // Pending replay models one local sample per coarse server step. If a newer edge-triggered
     // publish lands before the next 50 ms step elapses, replace that still-unacked sample instead
     // of appending a second one that the fixed-rate server will never simulate separately.
