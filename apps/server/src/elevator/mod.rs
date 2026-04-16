@@ -126,6 +126,8 @@ pub struct ElevatorCar {
     pub dest_queue: Vec<u32>,
     /// Authoritative feet support Y (matches `elevatorSupportFeetWorldY` on the client).
     pub cab_floor_y: f32,
+    /// Server wall-clock epoch for this sampled car state (microseconds since Unix epoch).
+    pub sample_server_micros: i64,
     pub door_face: u8,
     pub plate_x: f32,
     pub plate_z: f32,
@@ -146,6 +148,11 @@ fn door_face_from_u8(v: u8) -> DoorFace {
 
 fn support_y(level: u32) -> f32 {
     elevator_layout::support_feet_y_for_level(level, BUILDING_ORIGIN_Y)
+}
+
+#[inline]
+fn sample_server_micros(ctx: &ReducerContext) -> i64 {
+    ctx.timestamp.to_micros_since_unix_epoch()
 }
 
 #[inline]
@@ -192,6 +199,7 @@ pub fn seed_elevators(ctx: &ReducerContext) {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: cab_y,
+            sample_server_micros: sample_server_micros(ctx),
             door_face: s.door as u8,
             plate_x: s.plate_x,
             plate_z: s.plate_z,
@@ -292,6 +300,7 @@ pub fn tick_all_elevators(ctx: &ReducerContext, dt: f32) {
             continue;
         };
         step_one_row(&mut row, dt);
+        row.sample_server_micros = sample_server_micros(ctx);
         ctx.db.elevator_car().shaft_key().update(row);
     }
     tick_landing_exterior_doors(ctx, dt);
@@ -1195,6 +1204,7 @@ mod landing_hail_redundant_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y,
+            sample_server_micros: 0,
             door_face: 0,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1369,6 +1379,7 @@ mod exterior_interact_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: fy,
+            sample_server_micros: 0,
             door_face: DoorFace::E as u8,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1397,6 +1408,7 @@ mod exterior_interact_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: fy1,
+            sample_server_micros: 0,
             door_face: DoorFace::E as u8,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1424,6 +1436,7 @@ mod exterior_interact_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: fy,
+            sample_server_micros: 0,
             door_face: DoorFace::E as u8,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1448,6 +1461,7 @@ mod rider_snap_grip_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: fy,
+            sample_server_micros: 0,
             door_face: 0,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1554,6 +1568,7 @@ mod cab_walk_merge_support_tests {
             move_u: 0.0,
             dest_queue: Vec::new(),
             cab_floor_y: fy,
+            sample_server_micros: 0,
             door_face: 0,
             plate_x: 0.0,
             plate_z: 0.0,
@@ -1611,6 +1626,7 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
     if !enqueue_dest(&mut row, lv) {
         return;
     }
+    row.sample_server_micros = sample_server_micros(ctx);
     ctx.db.elevator_car().shaft_key().update(row);
     let (cx, cz) = call_panel_xz(spec);
     let cy = call_center_y(lv);
@@ -1717,6 +1733,7 @@ pub fn elevator_select_floor(ctx: &ReducerContext, shaft_key: String, level: u32
     if !enqueue_dest(&mut row, lv) {
         return;
     }
+    row.sample_server_micros = sample_server_micros(ctx);
     ctx.db.elevator_car().shaft_key().update(row);
     world_sound::emit_elevator_floor_button_at(ctx, pose.x, pose.y + 0.95, pose.z, id);
 }

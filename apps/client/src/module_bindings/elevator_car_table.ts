@@ -20,6 +20,7 @@ export default __t.row({
   moveU: __t.f32().name("move_u"),
   destQueue: __t.array(__t.u32()).name("dest_queue"),
   cabFloorY: __t.f32().name("cab_floor_y"),
+  sampleServerMicros: __t.i64().name("sample_server_micros"),
   doorFace: __t.u8().name("door_face"),
   plateX: __t.f32().name("plate_x"),
   plateZ: __t.f32().name("plate_z"),

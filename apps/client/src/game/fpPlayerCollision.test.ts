@@ -147,6 +147,7 @@ describe("resolvePlayerCollisions", () => {
       moveU: 0,
       destQueue: [],
       cabFloorY: fy1,
+      sampleServerMicros: 0n,
       doorFace: 0,
       plateX: 0,
       plateZ: 0,

@@ -38,6 +38,7 @@ export const ElevatorCar = __t.object("ElevatorCar", {
   moveU: __t.f32(),
   destQueue: __t.array(__t.u32()),
   cabFloorY: __t.f32(),
+  sampleServerMicros: __t.i64(),
   doorFace: __t.u8(),
   plateX: __t.f32(),
   plateZ: __t.f32(),

@@ -557,6 +557,7 @@ mod tests {
             move_u: 0.5,
             dest_queue: Vec::new(),
             cab_floor_y: 10.0,
+            sample_server_micros: 0,
             door_face: 0,
             plate_x: 20.0,
             plate_z: -5.0,

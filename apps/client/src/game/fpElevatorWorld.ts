@@ -260,6 +260,10 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const landingDoorSwingInterp = new Map<string, FpElevatorCabInterpScalar>();
   /** Evaluation time for cab Y this frame (set at start of `tick` so walk merge matches visuals). */
   let cabEvalNowMs = performance.now();
+  const performanceEpochOriginMs =
+    typeof performance.timeOrigin === "number"
+      ? performance.timeOrigin
+      : Date.now() - performance.now();
   /** Pre-allocated map reused each tick to pass swing values to per-shaft visuals — no allocation per shaft per frame. */
   const _swingByLevel = new Map<number, number>();
 
@@ -349,6 +353,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return selectElevatorCarReplicaSample(history, evalWallClockMs);
   };
 
+  const evalEpochMs = (wallClockMs: number): number => performanceEpochOriginMs + wallClockMs;
+
   const getCabY = (key: string, evalWallClockMs?: number): number => {
     const sample = getReplicaSample(key, evalWallClockMs ?? cabEvalNowMs);
     const row = sample?.row;
@@ -358,9 +364,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     }
     const layout = layoutByKey.get(key);
     if (!layout) return row.cabFloorY;
-    const tEval = evalWallClockMs ?? cabEvalNowMs;
-    const t0 = sample?.moveReplicaAtMs ?? tEval;
-    const elapsedSec = Math.max(0, (tEval - t0) * 0.001);
+    const sampleServerMs = Number(row.sampleServerMicros) * 0.001;
+    const elapsedSec = Math.max(
+      0,
+      (evalEpochMs(evalWallClockMs ?? cabEvalNowMs) - sampleServerMs) * 0.001,
+    );
     return predictMovingCabFeetWorldY({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
@@ -376,9 +384,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     if (!row || row.phase !== ELEVATOR_PHASE_MOVING) return 0;
     const layout = layoutByKey.get(key);
     if (!layout) return 0;
-    const tEval = evalWallClockMs ?? cabEvalNowMs;
-    const t0 = sample?.moveReplicaAtMs ?? tEval;
-    const elapsedSec = Math.max(0, (tEval - t0) * 0.001);
+    const sampleServerMs = Number(row.sampleServerMicros) * 0.001;
+    const elapsedSec = Math.max(
+      0,
+      (evalEpochMs(evalWallClockMs ?? cabEvalNowMs) - sampleServerMs) * 0.001,
+    );
     return predictMovingCabFeetWorldYVelocityMps({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,

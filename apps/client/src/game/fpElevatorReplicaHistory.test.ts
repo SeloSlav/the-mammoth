@@ -17,6 +17,7 @@ const makeRow = (overrides: Partial<ElevatorCar> = {}): ElevatorCar => ({
   moveU: 0,
   destQueue: [],
   cabFloorY: 10,
+  sampleServerMicros: 0n,
   doorFace: 0,
   plateX: 0,
   plateZ: 0,
@@ -24,25 +25,15 @@ const makeRow = (overrides: Partial<ElevatorCar> = {}): ElevatorCar => ({
 });
 
 describe("nextElevatorCarReplicaSample", () => {
-  it("pins move replica time to the sample that changed cab motion", () => {
-    const first = nextElevatorCarReplicaSample(undefined, makeRow({ moveU: 0.2 }), 1000);
-    const sameMotion = nextElevatorCarReplicaSample(first, makeRow({ moveU: 0.2 }), 1025);
-    const progressed = nextElevatorCarReplicaSample(sameMotion, makeRow({ moveU: 0.35 }), 1050);
-
-    expect(first.moveReplicaAtMs).toBe(1000);
-    expect(sameMotion.moveReplicaAtMs).toBe(1000);
-    expect(progressed.moveReplicaAtMs).toBe(1050);
-  });
-
-  it("clears move timing once the car is no longer moving", () => {
-    const moving = nextElevatorCarReplicaSample(undefined, makeRow({ moveU: 0.8 }), 1000);
-    const arrived = nextElevatorCarReplicaSample(
-      moving,
-      makeRow({ phase: 1, moveU: 1, cabFloorY: 30 }),
-      1100,
+  it("tracks the local receive time for history selection", () => {
+    const sample = nextElevatorCarReplicaSample(
+      undefined,
+      makeRow({ moveU: 0.2, sampleServerMicros: 2_000_000n }),
+      1000,
     );
 
-    expect(arrived.moveReplicaAtMs).toBeUndefined();
+    expect(sample.receivedAtMs).toBe(1000);
+    expect(sample.row.sampleServerMicros).toBe(2_000_000n);
   });
 });
 

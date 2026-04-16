@@ -66,6 +66,7 @@ function car(over: Partial<ElevatorCar> & Pick<ElevatorCar, "shaftKey" | "cabFlo
     moveU: over.moveU ?? 0,
     destQueue: over.destQueue ?? [],
     cabFloorY: over.cabFloorY,
+    sampleServerMicros: over.sampleServerMicros ?? 0n,
     doorFace: over.doorFace ?? 0,
     plateX: over.plateX ?? 0,
     plateZ: over.plateZ ?? 0,

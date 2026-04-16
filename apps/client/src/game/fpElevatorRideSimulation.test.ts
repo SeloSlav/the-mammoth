@@ -67,6 +67,7 @@ function car(over: Partial<ElevatorCar> & Pick<ElevatorCar, "shaftKey" | "cabFlo
     moveU: over.moveU ?? 0,
     destQueue: over.destQueue ?? [],
     cabFloorY: over.cabFloorY,
+    sampleServerMicros: over.sampleServerMicros ?? 0n,
     doorFace: over.doorFace ?? 0,
     plateX: over.plateX ?? 0,
     plateZ: over.plateZ ?? 0,
@@ -255,11 +256,14 @@ describe("fpElevator ride simulation", () => {
     expect(currentMismatches).toHaveLength(0);
   });
 
-  it("shows receive-time anchored cab prediction drifting under realistic replica latency", () => {
+  it("keeps cab prediction aligned under realistic replica latency when replay uses server sample time", () => {
     const layout = testLayout(0, 0, "e");
 
-    const simulateLatency = (latencyMs: number): number => {
-      let maxError = 0;
+    const simulateLatency = (
+      latencyMs: number,
+    ): { receiveAnchoredMaxError: number; serverAlignedMaxError: number } => {
+      let receiveAnchoredMaxError = 0;
+      let serverAlignedMaxError = 0;
       for (let fromLevel = 1; fromLevel < 8; fromLevel++) {
         const toLevel = fromLevel + 1;
         const y0 = feetYForLayout(layout, fromLevel);
@@ -286,6 +290,7 @@ describe("fpElevator ride simulation", () => {
                   moveU,
                   phase: ELEVATOR_PHASE_MOVING,
                   doorOpen01: 0,
+                  sampleServerMicros: BigInt(Math.round(nextReplicaMs * 1000)),
                   cabFloorY: serverCabFloorY(layout, fromLevel, toLevel, nextReplicaMs),
                 }),
                 nextReplicaMs + latencyMs,
@@ -297,23 +302,39 @@ describe("fpElevator ride simulation", () => {
           const authoritative = serverCabFloorY(layout, fromLevel, toLevel, Math.min(evalMs, durationMs));
           const sample = selectElevatorCarReplicaSample(history, evalMs);
           if (!sample) continue;
-          const predicted = predictMovingCabFeetWorldY({
+          const receiveAnchored = predictMovingCabFeetWorldY({
             moveFromLevel: sample.row.moveFromLevel,
             moveToLevel: sample.row.moveToLevel,
             moveUAtReplica: sample.row.moveU,
             elapsedSecSinceReplica: Math.max(0, evalMs - sample.receivedAtMs) * 0.001,
             feetYForLevel: (level) => feetYForLayout(layout, level),
           });
-          maxError = Math.max(maxError, Math.abs(predicted - authoritative));
+          const serverAligned = predictMovingCabFeetWorldY({
+            moveFromLevel: sample.row.moveFromLevel,
+            moveToLevel: sample.row.moveToLevel,
+            moveUAtReplica: sample.row.moveU,
+            elapsedSecSinceReplica:
+              Math.max(0, evalMs - Number(sample.row.sampleServerMicros) * 0.001) * 0.001,
+            feetYForLevel: (level) => feetYForLayout(layout, level),
+          });
+          receiveAnchoredMaxError = Math.max(
+            receiveAnchoredMaxError,
+            Math.abs(receiveAnchored - authoritative),
+          );
+          serverAlignedMaxError = Math.max(
+            serverAlignedMaxError,
+            Math.abs(serverAligned - authoritative),
+          );
         }
       }
-      return maxError;
+      return { receiveAnchoredMaxError, serverAlignedMaxError };
     };
 
-    const zeroLatencyError = simulateLatency(0);
-    const realisticLatencyError = simulateLatency(40);
+    const zeroLatency = simulateLatency(0);
+    const realisticLatency = simulateLatency(40);
 
-    expect(zeroLatencyError).toBeLessThan(0.01);
-    expect(realisticLatencyError).toBeGreaterThan(0.08);
+    expect(zeroLatency.serverAlignedMaxError).toBeLessThan(0.01);
+    expect(realisticLatency.receiveAnchoredMaxError).toBeGreaterThan(0.08);
+    expect(realisticLatency.serverAlignedMaxError).toBeLessThan(0.01);
   });
 });
