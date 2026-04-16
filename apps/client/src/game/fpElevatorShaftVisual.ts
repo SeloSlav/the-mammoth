@@ -89,6 +89,30 @@ export class FpElevatorCabInterpScalar {
   }
 }
 
+type FloorPickButtonVisual = {
+  level: number;
+  bodyMesh: THREE.Mesh;
+  labelMesh: THREE.Mesh;
+  bodyNormalMat: THREE.Material;
+  bodyHighlightMat: THREE.Material;
+  bodyFlashMat: THREE.Material;
+};
+
+function cloneFloorPickBodyMaterial(
+  base: THREE.Material,
+  opts: { emissiveHex: number; emissiveIntensity: number; brighten: number },
+): THREE.Material {
+  const mat = base.clone();
+  if (mat instanceof THREE.MeshStandardMaterial) {
+    mat.color.multiplyScalar(opts.brighten);
+    mat.emissive.setHex(opts.emissiveHex);
+    mat.emissiveIntensity = opts.emissiveIntensity;
+  } else if (mat instanceof THREE.MeshBasicMaterial) {
+    mat.color.multiplyScalar(opts.brighten);
+  }
+  return mat;
+}
+
 export class FpElevatorShaftVisual {
   readonly layout: ElevatorShaftLayout;
   readonly root: THREE.Group;
@@ -99,7 +123,8 @@ export class FpElevatorShaftVisual {
   private readonly ox: number;
   private readonly oz: number;
   readonly floorPickRoot: THREE.Group;
-  private readonly floorPickMeshes: THREE.Mesh[] = [];
+  private readonly floorPickButtons: FloorPickButtonVisual[] = [];
+  private readonly floorPickBodyMaterials = new Set<THREE.Material>();
   private readonly atlas: THREE.CanvasTexture;
   private readonly matNormal: THREE.MeshBasicMaterial;
   private readonly matHighlight: THREE.MeshBasicMaterial;
@@ -231,7 +256,28 @@ export class FpElevatorShaftVisual {
         shaftKey: pick.shaftKey,
         level: button.level,
       };
-      this.floorPickMeshes.push(button.labelMesh);
+      const bodyNormalMat = button.bodyMesh.material as THREE.Material;
+      const bodyHighlightMat = cloneFloorPickBodyMaterial(bodyNormalMat, {
+        emissiveHex: 0x1f8a6f,
+        emissiveIntensity: 0.7,
+        brighten: 1.14,
+      });
+      const bodyFlashMat = cloneFloorPickBodyMaterial(bodyNormalMat, {
+        emissiveHex: 0x7ffff4,
+        emissiveIntensity: 1.15,
+        brighten: 1.25,
+      });
+      this.floorPickBodyMaterials.add(bodyNormalMat);
+      this.floorPickBodyMaterials.add(bodyHighlightMat);
+      this.floorPickBodyMaterials.add(bodyFlashMat);
+      this.floorPickButtons.push({
+        level: button.level,
+        bodyMesh: button.bodyMesh,
+        labelMesh: button.labelMesh,
+        bodyNormalMat,
+        bodyHighlightMat,
+        bodyFlashMat,
+      });
     }
     const face = layout.doorFace;
     const hx = this.inner.halfX;
@@ -426,12 +472,19 @@ export class FpElevatorShaftVisual {
     const sig = `${currentLevel}|${flashOn ? flashLevel : 0}|${flashOn ? Math.floor(flashUntilMs) : 0}`;
     if (sig === this.lastMatSig) return;
     this.lastMatSig = sig;
-    for (const m of this.floorPickMeshes) {
-      const pick = (m.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD];
+    for (const button of this.floorPickButtons) {
+      const pick = (button.labelMesh.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD];
       if (!pick) continue;
-      if (flashOn && pick.level === flashLevel) m.material = this.matPickFlash;
-      else if (pick.level === currentLevel) m.material = this.matHighlight;
-      else m.material = this.matNormal;
+      if (flashOn && pick.level === flashLevel) {
+        button.labelMesh.material = this.matPickFlash;
+        button.bodyMesh.material = button.bodyFlashMat;
+      } else if (pick.level === currentLevel) {
+        button.labelMesh.material = this.matHighlight;
+        button.bodyMesh.material = button.bodyHighlightMat;
+      } else {
+        button.labelMesh.material = this.matNormal;
+        button.bodyMesh.material = button.bodyNormalMat;
+      }
     }
   }
 
@@ -452,7 +505,7 @@ export class FpElevatorShaftVisual {
   }
 
   dispose(): void {
-    this.floorPickMeshes.length = 0;
+    this.floorPickButtons.length = 0;
     const carGeometries = new Set<THREE.BufferGeometry>();
     const carMaterials = new Set<THREE.Material>();
     this.carRoot.traverse((o) => {
@@ -464,6 +517,10 @@ export class FpElevatorShaftVisual {
         carMaterials.add(mat);
       }
     });
+    for (const mat of this.floorPickBodyMaterials) {
+      carMaterials.add(mat);
+    }
+    this.floorPickBodyMaterials.clear();
     for (const geom of carGeometries) {
       geom.dispose();
     }

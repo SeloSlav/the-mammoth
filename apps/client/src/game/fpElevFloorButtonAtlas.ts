@@ -25,21 +25,8 @@ export function buildElevFloorAtlas(
     const y0 = row * ATLAS_CELL_H;
     const cx = x0 + ATLAS_CELL_W * 0.5;
     const cy = y0 + ATLAS_CELL_H * 0.5;
-    const outerR = Math.min(ATLAS_CELL_W, ATLAS_CELL_H) * 0.43;
-    const faceR = outerR * 0.78;
+    const faceR = Math.min(ATLAS_CELL_W, ATLAS_CELL_H) * 0.34;
     ctx.clearRect(x0, y0, ATLAS_CELL_W, ATLAS_CELL_H);
-    const rim = ctx.createRadialGradient(cx, cy, faceR, cx, cy, outerR);
-    // Inner stop must match the black face fill — a light inner stop reads as an unwanted
-    // "chrome oval" just inside the button.
-    rim.addColorStop(0, "#0a0b0d");
-    rim.addColorStop(0.18, "#4a515c");
-    rim.addColorStop(0.52, "#9aa2ad");
-    rim.addColorStop(1, "#e7ebf0");
-    ctx.fillStyle = rim;
-    ctx.beginPath();
-    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-    ctx.arc(cx, cy, faceR, 0, Math.PI * 2, true);
-    ctx.fill();
     ctx.fillStyle = "#0a0b0d";
     ctx.beginPath();
     ctx.arc(cx, cy, faceR, 0, Math.PI * 2);
