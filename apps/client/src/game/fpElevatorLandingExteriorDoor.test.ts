@@ -4,13 +4,11 @@ import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import { describe, expect, it } from "vitest";
 import { ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN } from "./fpElevatorConstants.js";
 import {
-  advanceExteriorDoorVisSwingTowardAuth,
   fpElevLandingExteriorDoorAimTargetWorld,
   fpElevApplyClosedCabDoorOutsideClamp,
   fpElevApplyClosedExteriorDoorCollisionClamp,
   fpElevApplyLandingHoistwayFrontWallClamp,
   fpElevLandingExteriorDoorCollisionPlateLocal,
-  EXTERIOR_DOOR_ANIM_SPEED,
   EXTERIOR_INTERACT_L0,
   EXTERIOR_INTERACT_L1,
   fpElevLandingExteriorDoorInteractPlateLocal,
@@ -94,30 +92,6 @@ describe("fpElevLandingExteriorDoorInteractPlateLocal", () => {
     expect(target.x).toBeCloseTo(100 + hx, 5);
     expect(target.y).toBeCloseTo(fy + 1.1, 5);
     expect(target.z).toBeCloseTo(200, 5);
-  });
-});
-
-describe("advanceExteriorDoorVisSwingTowardAuth", () => {
-  it("caps step rate to match authoritative animation speed", () => {
-    const dtSec = 0.05;
-    const next = advanceExteriorDoorVisSwingTowardAuth({
-      current: 0,
-      authoritative: 1,
-      dtSec,
-      animSpeedPerSec: EXTERIOR_DOOR_ANIM_SPEED,
-    });
-    // Expected advance is exactly one frame-worth of animation at the current speed constant.
-    expect(next).toBeCloseTo(EXTERIOR_DOOR_ANIM_SPEED * dtSec, 5);
-  });
-
-  it("snaps when within one step of the target", () => {
-    const next = advanceExteriorDoorVisSwingTowardAuth({
-      current: 0.99,
-      authoritative: 1,
-      dtSec: 0.05,
-      animSpeedPerSec: EXTERIOR_DOOR_ANIM_SPEED,
-    });
-    expect(next).toBe(1);
   });
 });
 

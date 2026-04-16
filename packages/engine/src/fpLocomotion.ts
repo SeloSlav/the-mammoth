@@ -13,6 +13,16 @@ const CROUCH_SPEED = 1.0;
 const GROUND_ACCEL = 19;
 const AIR_ACCEL = 4.2;
 const DRAG = 10;
+/**
+ * Snap grounded idle velocity to exact zero once the drag tail is inaudible / imperceptible.
+ *
+ * Why this exists:
+ * damp() asymptotically approaches zero, so without a deadzone the client can keep sliding at
+ * microscopic speeds after key release. The server mirrors that decay at 20 Hz, but tiny client /
+ * server divergence then shows up as visible "hitching while stopping" even at high FPS because
+ * prediction reconcile keeps nudging the rendered pose. Keep this aligned with `apps/server`.
+ */
+const STOP_SPEED_EPS = 0.01;
 
 const EYE_STAND = 1.55;
 const EYE_CROUCH = 1.0;
@@ -153,6 +163,12 @@ export function stepFpLocomotion(
   if (!moving && state.grounded) {
     state.velocity.x = THREE.MathUtils.damp(state.velocity.x, 0, DRAG, h);
     state.velocity.z = THREE.MathUtils.damp(state.velocity.z, 0, DRAG, h);
+    // Kill the asymptotic tail so stop-state reconcile converges to "fully still" instead of
+    // accumulating endless sub-pixel corrections that read as camera jitter.
+    if (Math.hypot(state.velocity.x, state.velocity.z) <= STOP_SPEED_EPS) {
+      state.velocity.x = 0;
+      state.velocity.z = 0;
+    }
   }
 
   if (state.grounded && state.jumpQueued) {

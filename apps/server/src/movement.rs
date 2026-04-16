@@ -38,6 +38,13 @@ const CROUCH_SPEED: f32 = 1.0;
 const GROUND_ACCEL: f32 = 19.0;
 const AIR_ACCEL: f32 = 4.2;
 const DRAG: f32 = 10.0;
+/// Match client: snap grounded idle velocity to zero once the drag tail is no longer visible.
+///
+/// Why this exists:
+/// without a deadzone, damp() decays forever and leaves the authoritative pose drifting at tiny
+/// velocities after input release. That creates a long tail of small prediction corrections on the
+/// client, which players feel as "hitching while coming to a stop" despite good frame time.
+const STOP_SPEED_EPS: f32 = 0.01;
 const TICK_DT: f32 = 0.05; // 20 Hz; matches 50_000 µs schedule
 /// Keep in sync with `FP_WALK_PROBE_DY` (`packages/engine/src/fpLocomotion.ts`).
 const WALK_PROBE_DY: f32 = 1.05;
@@ -305,6 +312,12 @@ fn integrate_one(
     if !moving && p.grounded != 0 {
         p.vel_x = damp(p.vel_x, 0.0, DRAG, h);
         p.vel_z = damp(p.vel_z, 0.0, DRAG, h);
+        // End the asymptotic drag tail so the authoritative pose reaches a true rest state and
+        // client reconcile stops emitting visible micro-corrections.
+        if p.vel_x.hypot(p.vel_z) <= STOP_SPEED_EPS {
+            p.vel_x = 0.0;
+            p.vel_z = 0.0;
+        }
     }
 
     if p.grounded != 0 && (bits & BIT_JUMP != 0) {

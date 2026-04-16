@@ -64,10 +64,15 @@ function buildLandingHailIconTexture(): THREE.CanvasTexture {
 }
 
 export class FpElevatorCabInterpScalar {
+  private readonly interpSec: number;
   private a = 0;
   private b = 0;
   private t0Ms = 0;
   private has = false;
+
+  constructor(interpSec: number = CAB_INTERP_SEC) {
+    this.interpSec = interpSec;
+  }
 
   setTarget(v: number, nowMs: number): void {
     this.a = this.has ? this.eval(nowMs) : v;
@@ -78,7 +83,7 @@ export class FpElevatorCabInterpScalar {
 
   eval(nowMs: number): number {
     if (!this.has) return this.b;
-    const u = Math.min(1, (nowMs - this.t0Ms) / (CAB_INTERP_SEC * 1000));
+    const u = Math.min(1, (nowMs - this.t0Ms) / (this.interpSec * 1000));
     const s = u * u * (3 - 2 * u);
     return this.a + (this.b - this.a) * s;
   }
@@ -96,9 +101,9 @@ export class FpElevatorShaftVisual {
   readonly floorPickRoot: THREE.Group;
   private readonly floorPickMeshes: THREE.Mesh[] = [];
   private readonly atlas: THREE.CanvasTexture;
-  private readonly matNormal: THREE.MeshStandardMaterial;
-  private readonly matHighlight: THREE.MeshStandardMaterial;
-  private readonly matPickFlash: THREE.MeshStandardMaterial;
+  private readonly matNormal: THREE.MeshBasicMaterial;
+  private readonly matHighlight: THREE.MeshBasicMaterial;
+  private readonly matPickFlash: THREE.MeshBasicMaterial;
   private lastMatSig = "";
   readonly landingRoot: THREE.Group;
   readonly landingDoorPickRoot: THREE.Group;
@@ -188,30 +193,21 @@ export class FpElevatorShaftVisual {
     this.root.add(this.landingHailPickRoot);
 
     this.atlas = buildElevFloorAtlas(pick.maxLevel, pick.floorLabelByLevel);
-    this.matNormal = new THREE.MeshStandardMaterial({
+    // Unlit labels: PBR on a circular plane + dark atlas reads as a false "chrome oval" from
+    // specular / env highlights. The atlas already carries rim chrome; BasicMaterial matches that.
+    this.matNormal = new THREE.MeshBasicMaterial({
       map: this.atlas,
       color: 0xffffff,
-      roughness: 0.55,
-      metalness: 0.12,
-      emissive: 0x000000,
       side: THREE.DoubleSide,
     });
-    this.matHighlight = new THREE.MeshStandardMaterial({
+    this.matHighlight = new THREE.MeshBasicMaterial({
       map: this.atlas,
-      color: 0xffffff,
-      roughness: 0.55,
-      metalness: 0.12,
-      emissive: 0x1a5040,
-      emissiveIntensity: 0.55,
+      color: 0xc5f8ea,
       side: THREE.DoubleSide,
     });
-    this.matPickFlash = new THREE.MeshStandardMaterial({
+    this.matPickFlash = new THREE.MeshBasicMaterial({
       map: this.atlas,
-      color: 0xffffff,
-      roughness: 0.42,
-      metalness: 0.18,
-      emissive: 0x55ffc8,
-      emissiveIntensity: 1.05,
+      color: 0xe8ffff,
       side: THREE.DoubleSide,
     });
 

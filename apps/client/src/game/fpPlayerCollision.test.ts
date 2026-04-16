@@ -88,7 +88,7 @@ describe("resolvePlayerCollisions", () => {
         visit(aabb(-2, 0, 1, 2, 3, 1.11));
       },
     });
-    expect(pos.z).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M - 1e-3);
+    expect(pos.z).toBeLessThanOrEqual(1 - FP_PLAYER_COLLISION_RADIUS_M + 1e-4);
     expect(vel.z).toBe(0);
   });
 

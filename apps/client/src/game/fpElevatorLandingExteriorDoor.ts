@@ -62,25 +62,6 @@ export function fpElevExteriorDoorSolidPlayerSlabActive(swingOpen01: number): bo
   return swingOpen01 <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING;
 }
 
-/**
- * Smooth client visuals toward replicated `swingOpen01` without restarting a spline every tick.
- * Caps step rate to match authoritative door animation speed.
- */
-export function advanceExteriorDoorVisSwingTowardAuth(opts: {
-  current: number;
-  authoritative: number;
-  dtSec: number;
-  animSpeedPerSec: number;
-}): number {
-  const { current, authoritative, dtSec, animSpeedPerSec } = opts;
-  const dt = Math.max(0, dtSec);
-  const maxStep = Math.max(0, animSpeedPerSec * dt);
-  const d = authoritative - current;
-  if (Math.abs(d) <= 1e-6) return authoritative;
-  if (Math.abs(d) <= maxStep) return authoritative;
-  return current + Math.sign(d) * maxStep;
-}
-
 export function landingExteriorDoorRowKey(shaftKey: string, level: number): string {
   return `${shaftKey}|${level >>> 0}`;
 }

@@ -146,15 +146,23 @@ export function resolvePlacedId(
 
 /** Walks parents for `userData.editorCabPartId` (cab workspace picking). */
 export function resolveCabPartTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
-  return resolveAncestor(hit, (obj) => {
-    const id = obj.userData.editorCabPartId;
-    return typeof id === "string" && id.length > 0;
-  });
+  return (
+    resolveAncestor(hit, (obj) => {
+      const pickId = obj.userData.editorCabPickId;
+      return typeof pickId === "string" && pickId.length > 0;
+    }) ??
+    resolveAncestor(hit, (obj) => {
+      const id = obj.userData.editorCabPartId;
+      return typeof id === "string" && id.length > 0;
+    })
+  );
 }
 
 /** Walks parents for `userData.editorCabPartId` (cab workspace picking). */
 export function resolveCabPartId(hit: THREE.Object3D | null): string | null {
   const target = resolveCabPartTarget(hit);
+  const pickId = target?.userData.editorCabPickId;
+  if (typeof pickId === "string" && pickId.length > 0) return pickId;
   const id = target?.userData.editorCabPartId;
   return typeof id === "string" && id.length > 0 ? id : null;
 }

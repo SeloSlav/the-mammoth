@@ -23,6 +23,18 @@
       "colorHex": "9B9793",
       "roughness": 0.72,
       "metalness": 0.08
+    },
+    "panel": {
+      "colorHex": "0xffffff",
+      "mapUrl": "/static/materials/cab/mammoth-elevator-panel-chrome.svg",
+      "roughness": 0.46,
+      "metalness": 0.12
+    },
+    "button": {
+      "colorHex": "0xffffff",
+      "mapUrl": "/static/materials/cab/mammoth-elevator-button-chrome.svg",
+      "roughness": 0.34,
+      "metalness": 0.28
     }
   },
   "partTransforms": {

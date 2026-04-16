@@ -42,6 +42,16 @@ describe("resolveCabPartId", () => {
     expect(resolveCabPartId(mesh)).toBe("cab_ceiling");
   });
 
+  it("prefers editorCabPickId so repeated button meshes share one selectable slot", () => {
+    const group = new THREE.Group();
+    group.userData.editorCabPartId = "cab_floor_panel";
+    const mesh = new THREE.Mesh();
+    mesh.userData.editorCabPickId = "cab_floor_button";
+    group.add(mesh);
+    expect(resolveCabPartId(mesh)).toBe("cab_floor_button");
+    expect(resolveCabPartTarget(mesh)).toBe(mesh);
+  });
+
   it("returns null when absent", () => {
     expect(resolveCabPartId(new THREE.Mesh())).toBe(null);
   });

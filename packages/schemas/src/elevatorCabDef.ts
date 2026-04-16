@@ -25,6 +25,8 @@ export const ElevatorCabDefSchema = z.object({
       floor: ElevatorCabMaterialSlotSchema.optional(),
       door: ElevatorCabMaterialSlotSchema.optional(),
       ceiling: ElevatorCabMaterialSlotSchema.optional(),
+      panel: ElevatorCabMaterialSlotSchema.optional(),
+      button: ElevatorCabMaterialSlotSchema.optional(),
     })
     .optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),

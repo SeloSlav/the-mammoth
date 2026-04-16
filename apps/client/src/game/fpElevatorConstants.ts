@@ -111,6 +111,12 @@ export const ELEVATOR_CAB_PHYS_GATE_PAD_M = 0.26;
 export const ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN = 0.22;
 /** Door open/close: short blend toward latest net sample (still discrete-ish, feels snappy). */
 export const CAB_INTERP_SEC = 0.1;
+/**
+ * Landing corridor swing: blend duration for replicated `swingOpen01` samples.
+ * Server advances this at `movement::TICK_DT` (20 Hz); matching that window hides stair-stepping
+ * without adding noticeable lag vs the authoritative animation.
+ */
+export const EXTERIOR_DOOR_VIS_INTERP_SEC = 0.05;
 
 /** Match `apps/server/src/elevator/mod.rs` `MOVE_SPEED_MPS`. */
 export const ELEVATOR_MOVE_SPEED_MPS = 3.15;

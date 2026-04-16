@@ -56,6 +56,15 @@ describe("applyElevatorCabPartTransforms", () => {
     expect(labels).toHaveLength(6);
     expect(root.getObjectByName("cab_floor_button_label_6")).not.toBeNull();
     expect(root.getObjectByName("cab_floor_button_body_6")).not.toBeNull();
+    expect(root.getObjectByName("cab_floor_button_body_6")?.userData.editorCabPickId).toBe(
+      "cab_floor_button",
+    );
+    expect(root.getObjectByName("cab_floor_button_body_6")).toMatchObject({
+      geometry: expect.objectContaining({ type: "CylinderGeometry" }),
+    });
+    expect(root.getObjectByName("cab_floor_button_label_6")).toMatchObject({
+      geometry: expect.objectContaining({ type: "CircleGeometry" }),
+    });
     const board = root.getObjectByName("cab_floor_panel_board");
     expect(board?.position.length()).toBeGreaterThan(0.1);
     expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");

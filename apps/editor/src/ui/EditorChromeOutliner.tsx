@@ -19,6 +19,7 @@ import type { EditorMode } from "../state/editorStore.js";
 const ELEVATOR_CAB_OUTLINER_PART_IDS = [
   "cab_floor",
   "cab_floor_panel",
+  "cab_floor_button",
   "cab_ceiling",
   "cab_wall_back",
   "cab_wall_front_top",

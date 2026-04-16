@@ -128,9 +128,13 @@ function MaterialSlotEditor(props: {
   );
 }
 
-function cabSlotForSelectedId(selectedId: string | null): "wall" | "floor" | "ceiling" | null {
+function cabSlotForSelectedId(
+  selectedId: string | null,
+): "wall" | "floor" | "ceiling" | "panel" | "button" | null {
   if (selectedId === "cab_floor") return "floor";
   if (selectedId === "cab_ceiling") return "ceiling";
+  if (selectedId === "cab_floor_panel") return "panel";
+  if (selectedId === "cab_floor_button") return "button";
   if (
     selectedId === "cab_wall_back" ||
     selectedId === "cab_wall_front_top" ||
@@ -231,9 +235,6 @@ export function EditorChromeSelectedMaterialPanel(props: {
           }));
         },
       };
-    } else if (selectedId === "cab_floor_panel") {
-      emptyMessage =
-        "The floor panel does not have its own authored material slot yet. Select a wall, floor, or ceiling.";
     }
   } else if (mode === "landing_preview") {
     const isGlass =

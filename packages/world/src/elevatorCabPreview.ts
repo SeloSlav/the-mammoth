@@ -12,10 +12,10 @@ const DOOR_TH = 0.07;
 const DOOR_SLIDE_M = 0.82;
 const CAR_INNER_MARGIN = 0.07;
 const CAR_CEIL_BELOW_SHAFT_TOP = 0.14;
-const FLOOR_BTN_W = 0.12;
-const FLOOR_BTN_H = 0.092;
-const FLOOR_BTN_D = 0.014;
-const FLOOR_GAP = 0.014;
+const FLOOR_BTN_DIA = 0.116;
+const FLOOR_BTN_FACE_DIA = 0.094;
+const FLOOR_BTN_D = 0.018;
+const FLOOR_GAP = 0.022;
 const FLOOR_COLS = 3;
 const FLOOR_ATLAS_COLS = 5;
 const FLOOR_ATLAS_CELL_W = 64;
@@ -44,20 +44,41 @@ function buildElevFloorAtlas(
     const row = Math.floor(idx / FLOOR_ATLAS_COLS);
     const x0 = col * FLOOR_ATLAS_CELL_W;
     const y0 = row * FLOOR_ATLAS_CELL_H;
-    ctx.fillStyle = "#2a3138";
-    ctx.fillRect(x0, y0, FLOOR_ATLAS_CELL_W, FLOOR_ATLAS_CELL_H);
-    ctx.strokeStyle = "rgba(140, 200, 255, 0.45)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x0 + 2, y0 + 2, FLOOR_ATLAS_CELL_W - 4, FLOOR_ATLAS_CELL_H - 4);
-    ctx.fillStyle = "#e4ecff";
-    ctx.font = "700 19px system-ui,Segoe UI,sans-serif";
+    const cx = x0 + FLOOR_ATLAS_CELL_W * 0.5;
+    const cy = y0 + FLOOR_ATLAS_CELL_H * 0.5;
+    const outerR = Math.min(FLOOR_ATLAS_CELL_W, FLOOR_ATLAS_CELL_H) * 0.43;
+    const faceR = outerR * 0.78;
+    ctx.clearRect(x0, y0, FLOOR_ATLAS_CELL_W, FLOOR_ATLAS_CELL_H);
+    const rim = ctx.createRadialGradient(cx, cy, faceR, cx, cy, outerR);
+    rim.addColorStop(0, "#0a0b0d");
+    rim.addColorStop(0.18, "#4a515c");
+    rim.addColorStop(0.52, "#9aa2ad");
+    rim.addColorStop(1, "#e7ebf0");
+    ctx.fillStyle = rim;
+    ctx.beginPath();
+    ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+    ctx.arc(cx, cy, faceR, 0, Math.PI * 2, true);
+    ctx.fill();
+    ctx.fillStyle = "#0a0b0d";
+    ctx.beginPath();
+    ctx.arc(cx, cy, faceR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#f4f6fb";
+    ctx.font = "700 18px system-ui,Segoe UI,sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
       shortFloorLabelForLevel(level, floorLabelByLevel),
-      x0 + FLOOR_ATLAS_CELL_W * 0.5,
-      y0 + FLOOR_ATLAS_CELL_H * 0.5,
+      cx,
+      cy - 3,
     );
+    ctx.fillStyle = "rgba(244,246,251,0.9)";
+    const brailleY = cy + 10;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.arc(cx + i * 5, brailleY, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -65,8 +86,8 @@ function buildElevFloorAtlas(
   return tex;
 }
 
-function applyAtlasUvToPlaneGeometry(
-  geom: THREE.PlaneGeometry,
+function applyAtlasUvToGeometry(
+  geom: THREE.BufferGeometry,
   levelIndex1Based: number,
   atlasRows: number,
 ): void {
@@ -100,7 +121,7 @@ function doorSlideAxis(face: ElevatorShaftLayout["doorFace"]): THREE.Vector3 {
 
 function stdMatFromSlot(
   def: ElevatorCabDef | undefined,
-  key: "wall" | "floor" | "door" | "ceiling",
+  key: "wall" | "floor" | "door" | "ceiling" | "panel" | "button",
   fallbackHex: number,
 ): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({
@@ -151,7 +172,7 @@ function panelBoardPosition(args: {
 }): { position: THREE.Vector3; rotationY: number } {
   const { face, hx, hz, wallT, floorT, boardDepth, gridRows } = args;
   const panelCenterY =
-    floorT + 1.12 + Math.max(0, gridRows - 1) * (FLOOR_BTN_H + FLOOR_GAP) * 0.5;
+    floorT + 1.12 + Math.max(0, gridRows - 1) * (FLOOR_BTN_DIA + FLOOR_GAP) * 0.5;
   const boardInset = boardDepth * 0.5;
   if (face === "e") {
     return {
@@ -201,21 +222,19 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   const floorMat = stdMatFromSlot(def, "floor", 0x4d5258);
   const doorMat = stdMatFromSlot(def, "door", 0x8a929e);
   const ceilMat = stdMatFromSlot(def, "ceiling", 0x6a6f78);
-  const panelMat = new THREE.MeshStandardMaterial({
-    color: 0x2a3138,
-    roughness: 0.42,
-    metalness: 0.22,
-  });
   const clampedMaxLevel = Math.max(1, maxLevel);
   const atlasRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_ATLAS_COLS));
+  const panelMat = stdMatFromSlot(def, "panel", 0xa13b3f);
+  if (def?.materials?.panel?.roughness == null) panelMat.roughness = 0.46;
+  if (def?.materials?.panel?.metalness == null) panelMat.metalness = 0.12;
+  const buttonBodyMat = stdMatFromSlot(def, "button", 0xd7dbe2);
+  if (def?.materials?.button?.roughness == null) buttonBodyMat.roughness = 0.34;
+  if (def?.materials?.button?.metalness == null) buttonBodyMat.metalness = 0.28;
   const buttonMat =
     floorButtonLabelMaterial ??
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshBasicMaterial({
       map: buildElevFloorAtlas(clampedMaxLevel, floorLabelByLevel),
       color: 0xffffff,
-      roughness: 0.55,
-      metalness: 0.12,
-      emissive: 0x000000,
       side: THREE.DoubleSide,
     });
 
@@ -382,8 +401,8 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   panelRoot.name = "cab_floor_panel";
   panelRoot.userData.editorCabPartId = "cab_floor_panel";
   const gridRows = Math.max(1, Math.ceil(clampedMaxLevel / FLOOR_COLS));
-  const gridW = FLOOR_COLS * FLOOR_BTN_W + (FLOOR_COLS - 1) * FLOOR_GAP;
-  const gridH = gridRows * FLOOR_BTN_H + Math.max(0, gridRows - 1) * FLOOR_GAP;
+  const gridW = FLOOR_COLS * FLOOR_BTN_DIA + (FLOOR_COLS - 1) * FLOOR_GAP;
+  const gridH = gridRows * FLOOR_BTN_DIA + Math.max(0, gridRows - 1) * FLOOR_GAP;
   const panelBoardDepth = 0.038;
   const buttonDepth = FLOOR_BTN_D;
   const panelBoard = new THREE.Mesh(
@@ -413,7 +432,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   panelBoard.position.copy(boardPose.position);
   panelBoard.rotation.y = boardPose.rotationY;
   panelRoot.add(panelBoard);
-  const zSpan = (FLOOR_COLS - 1) * (FLOOR_BTN_W + FLOOR_GAP);
+  const zSpan = (FLOOR_COLS - 1) * (FLOOR_BTN_DIA + FLOOR_GAP);
   const z0 = -zSpan * 0.5;
   const y0 = floorT + 1.12;
   const floorButtons: ElevatorCabFloorButtonVisual[] = [];
@@ -421,35 +440,42 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     const idx = level - 1;
     const col = idx % FLOOR_COLS;
     const row = Math.floor(idx / FLOOR_COLS);
-    const ly = y0 + row * (FLOOR_BTN_H + FLOOR_GAP);
-    const gridAlong = z0 + col * (FLOOR_BTN_W + FLOOR_GAP);
+    const ly = y0 + row * (FLOOR_BTN_DIA + FLOOR_GAP);
+    const gridAlong = z0 + col * (FLOOR_BTN_DIA + FLOOR_GAP);
     const button = new THREE.Mesh(
-      face === "e" || face === "w"
-        ? new THREE.BoxGeometry(buttonDepth, FLOOR_BTN_H, FLOOR_BTN_W)
-        : new THREE.BoxGeometry(FLOOR_BTN_W, FLOOR_BTN_H, buttonDepth),
-      doorMat,
+      new THREE.CylinderGeometry(FLOOR_BTN_DIA * 0.5, FLOOR_BTN_DIA * 0.5, buttonDepth, 40),
+      buttonBodyMat,
     );
     button.name = `cab_floor_button_body_${level}`;
-    const facePlane = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_BTN_W, FLOOR_BTN_H), buttonMat);
-    applyAtlasUvToPlaneGeometry(facePlane.geometry, level, atlasRows);
+    button.userData.editorCabPickId = "cab_floor_button";
+    const facePlane = new THREE.Mesh(
+      new THREE.CircleGeometry(FLOOR_BTN_FACE_DIA * 0.5, 40),
+      buttonMat,
+    );
+    facePlane.userData.editorCabPickId = "cab_floor_button";
+    applyAtlasUvToGeometry(facePlane.geometry, level, atlasRows);
     facePlane.name = `cab_floor_button_label_${level}`;
     const buttonFrontPad = 0.002;
     if (face === "e") {
       const wallX = -hx + wallT;
+      button.rotation.z = Math.PI * 0.5;
       button.position.set(wallX + panelBoardDepth + buttonDepth * 0.5, ly, gridAlong);
       facePlane.position.set(wallX + panelBoardDepth + buttonDepth + buttonFrontPad, ly, gridAlong);
       facePlane.rotation.y = -Math.PI * 0.5;
     } else if (face === "w") {
       const wallX = hx - wallT;
+      button.rotation.z = Math.PI * 0.5;
       button.position.set(wallX - panelBoardDepth - buttonDepth * 0.5, ly, gridAlong);
       facePlane.position.set(wallX - panelBoardDepth - buttonDepth - buttonFrontPad, ly, gridAlong);
       facePlane.rotation.y = Math.PI * 0.5;
     } else if (face === "n") {
       const wallZ = -hz + wallT;
+      button.rotation.x = Math.PI * 0.5;
       button.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth * 0.5);
       facePlane.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth + buttonFrontPad);
     } else {
       const wallZ = hz - wallT;
+      button.rotation.x = Math.PI * 0.5;
       button.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth * 0.5);
       facePlane.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth - buttonFrontPad);
       facePlane.rotation.y = Math.PI;

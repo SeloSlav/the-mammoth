@@ -250,6 +250,11 @@ export async function mountFpSession(
    *
    * Only the render position is offset — `pos` stays accurate so collision checks and
    * interaction queries always use the physics-correct position.
+   *
+   * Note: if locomotion is allowed to decay toward zero forever instead of snapping to an exact
+   * rest state, this smoothing layer ends up hiding a constant stream of tiny stop-state
+   * corrections. That presents as "hitching while stopping" even when frame time is fine, so keep
+   * the idle-velocity deadzone in client/server locomotion aligned with this reconcile path.
    */
   const _displayOffset = new THREE.Vector3();
   /** Exponential damp constant for display offset — ~80 ms to close half the gap. */

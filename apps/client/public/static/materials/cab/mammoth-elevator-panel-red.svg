@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d6dbe2"/>
+      <stop offset="45%" stop-color="#aeb4bf"/>
+      <stop offset="100%" stop-color="#8f96a3"/>
+    </linearGradient>
+    <linearGradient id="brushed" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#base)"/>
+  <rect width="512" height="512" fill="url(#brushed)"/>
+
+  <g opacity="0.09" stroke="#5c6472" stroke-width="1.2">
+    <path d="M0 28 H512"/>
+    <path d="M0 52 H512"/>
+    <path d="M0 76 H512"/>
+    <path d="M0 100 H512"/>
+    <path d="M0 124 H512"/>
+    <path d="M0 148 H512"/>
+    <path d="M0 172 H512"/>
+    <path d="M0 196 H512"/>
+    <path d="M0 220 H512"/>
+    <path d="M0 244 H512"/>
+    <path d="M0 268 H512"/>
+    <path d="M0 292 H512"/>
+    <path d="M0 316 H512"/>
+    <path d="M0 340 H512"/>
+    <path d="M0 364 H512"/>
+    <path d="M0 388 H512"/>
+    <path d="M0 412 H512"/>
+    <path d="M0 436 H512"/>
+    <path d="M0 460 H512"/>
+    <path d="M0 484 H512"/>
+  </g>
+
+  <g stroke="#ffffff" stroke-width="2" opacity="0.06">
+    <path d="M48 0 L220 512"/>
+    <path d="M180 0 L352 512"/>
+  </g>
+
+  <path d="M32 24 L420 8 L488 220 L96 236 Z" fill="url(#sheen)" opacity="0.55"/>
+</svg>
