@@ -42,6 +42,7 @@ import {
   selectElevatorCarReplicaSample,
   type FpElevatorCarReplicaSample,
 } from "./fpElevatorReplicaHistory.js";
+import { createFpElevatorServerClock } from "./fpElevatorServerClock.js";
 import { FpElevatorCabInterpScalar, FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
 import { floorButtonLabel } from "./fpElevatorLabels.js";
 import {
@@ -264,6 +265,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     typeof performance.timeOrigin === "number"
       ? performance.timeOrigin
       : Date.now() - performance.now();
+  /**
+   * Tracks the apparent client↔server wall-clock offset so cab prediction elapsed-time is
+   * measured on the server's timeline instead of the client's.  A fixed 100–500 ms clock skew
+   * (NTP drift, `performance.timeOrigin` quantisation, OS clock adjustments) would otherwise bake
+   * a constant prediction offset into every frame — which the reconcile pass then paints over as
+   * per-tick corrections, i.e. the residual hitch during rides.
+   */
+  const serverClock = createFpElevatorServerClock();
   /** Pre-allocated map reused each tick to pass swing values to per-shaft visuals — no allocation per shaft per frame. */
   const _swingByLevel = new Map<number, number>();
 
@@ -298,6 +307,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const history = replicaHistoryByKey.get(row.shaftKey) ?? [];
     const prev = history[history.length - 1];
     const now = performance.now();
+    const nowEpochMs = performanceEpochOriginMs + now;
+    const sampleServerEpochMs = Number(row.sampleServerMicros) / 1000;
+    if (sampleServerEpochMs > 0) {
+      serverClock.observe(nowEpochMs, sampleServerEpochMs);
+    }
     history.push(nextElevatorCarReplicaSample(prev, row, now));
     pruneElevatorCarReplicaHistory(history, now);
     replicaHistoryByKey.set(row.shaftKey, history);
@@ -355,6 +369,18 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const evalEpochMs = (wallClockMs: number): number => performanceEpochOriginMs + wallClockMs;
 
+  /**
+   * Elapsed seconds from the server-stamp time of `row` to the server-side moment corresponding
+   * to `evalWallClockMs` on the client — using the estimated clock offset so prediction tracks
+   * the server's physics clock rather than the raw browser wall clock.
+   */
+  const elapsedSecSinceServerSample = (row: ElevatorCar, evalWallClockMs: number): number => {
+    if (row.sampleServerMicros === 0n) return 0;
+    const serverNowEpochMs = serverClock.estimatedServerEpochMs(evalEpochMs(evalWallClockMs));
+    const sampleServerEpochMs = Number(row.sampleServerMicros) / 1000;
+    return Math.max(0, (serverNowEpochMs - sampleServerEpochMs) * 0.001);
+  };
+
   const getCabY = (key: string, evalWallClockMs?: number): number => {
     const sample = getReplicaSample(key, evalWallClockMs ?? cabEvalNowMs);
     const row = sample?.row;
@@ -364,16 +390,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     }
     const layout = layoutByKey.get(key);
     if (!layout) return row.cabFloorY;
-    const sampleServerMs = Number(row.sampleServerMicros) * 0.001;
-    const elapsedSec = Math.max(
-      0,
-      (evalEpochMs(evalWallClockMs ?? cabEvalNowMs) - sampleServerMs) * 0.001,
-    );
     return predictMovingCabFeetWorldY({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
       moveUAtReplica: row.moveU,
-      elapsedSecSinceReplica: elapsedSec,
+      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, evalWallClockMs ?? cabEvalNowMs),
       feetYForLevel: (lv) => feetYForLayout(layout, lv),
     });
   };
@@ -384,16 +405,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     if (!row || row.phase !== ELEVATOR_PHASE_MOVING) return 0;
     const layout = layoutByKey.get(key);
     if (!layout) return 0;
-    const sampleServerMs = Number(row.sampleServerMicros) * 0.001;
-    const elapsedSec = Math.max(
-      0,
-      (evalEpochMs(evalWallClockMs ?? cabEvalNowMs) - sampleServerMs) * 0.001,
-    );
     return predictMovingCabFeetWorldYVelocityMps({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
       moveUAtReplica: row.moveU,
-      elapsedSecSinceReplica: elapsedSec,
+      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, evalWallClockMs ?? cabEvalNowMs),
       feetYForLevel: (lv) => feetYForLayout(layout, lv),
     });
   };
