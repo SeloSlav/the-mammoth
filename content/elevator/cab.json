@@ -26,15 +26,15 @@
     },
     "panel": {
       "colorHex": "0xffffff",
-      "mapUrl": "/static/materials/cab/mammoth-elevator-panel-chrome.svg",
       "roughness": 0.46,
-      "metalness": 0.12
+      "metalness": 0.12,
+      "mapUrl": "/static/materials/cab/mammoth-elevator-panel-chrome.svg"
     },
     "button": {
       "colorHex": "0xffffff",
-      "mapUrl": "/static/materials/cab/mammoth-elevator-button-chrome.svg",
       "roughness": 0.34,
-      "metalness": 0.28
+      "metalness": 0.28,
+      "mapUrl": "/static/materials/cab/mammoth-elevator-button-chrome.svg"
     }
   },
   "partTransforms": {
