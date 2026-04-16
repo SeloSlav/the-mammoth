@@ -3,8 +3,11 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { classifyPrefab } from "./floorPlaceholderMeshes.js";
 import {
+  applyStairOpeningCollisionOverlay,
+  buildFpBlockerAABBsForBuilding,
   buildStaticCollisionSceneForBuilding,
   buildFloorMeshes,
+  buildStairOpeningCollisionOverlayForBuilding,
   collectCollisionAabbsFromObject3D,
   instantiateBuildingFloorStack,
   parseBuildingDoc,
@@ -185,6 +188,96 @@ describe("classifyPrefab", () => {
         probe.z <= aabb.max[2],
     );
     expect(blocked).toBe(false);
+  });
+
+  it("clears authored stair openings from stale blockers while keeping nearby wall blocked", () => {
+    const building = parseBuildingDoc({
+      id: "b",
+      version: 1,
+      floorRefs: [
+        { levelIndex: 1, floorDocId: "f" },
+        { levelIndex: 2, floorDocId: "f" },
+      ],
+    });
+    const floor = parseFloorDoc({
+      id: "f",
+      version: 1,
+      objects: [
+        {
+          id: "corridor_east",
+          prefabId: "corridor_main",
+          position: [3.8, 0, 0],
+          scale: [3.6, 3.2, 4.4],
+        },
+        {
+          id: "corridor_south",
+          prefabId: "corridor_main",
+          position: [0, 0, -4.2],
+          scale: [4.4, 3.2, 3.8],
+        },
+        {
+          id: "stair_01",
+          prefabId: "stair_well_a",
+          position: [0, 0, 0],
+          scale: [4, 3.2, 4],
+        },
+      ],
+    });
+    const stairWellDef = parseStairWellDef({
+      id: "stairs",
+      version: 1,
+      entryOpening: {
+        face: "e",
+        tangentOffsetAlongWallM: 0,
+        widthM: 1.6,
+        heightM: 2,
+        centerYM: -0.1,
+      },
+      secondaryEntryOpening: {
+        face: "s",
+        tangentOffsetAlongWallM: 0,
+        widthM: 1.4,
+        heightM: 2,
+        centerYM: -0.1,
+      },
+    });
+    const stale = buildFpBlockerAABBsForBuilding(building, () => floor, {
+      stairWellDef: parseStairWellDef({
+        id: "stairs_stale",
+        version: 1,
+        entryOpening: {
+          face: "e",
+          tangentOffsetAlongWallM: 1.1,
+          widthM: 1.2,
+          heightM: 2,
+          centerYM: -0.1,
+        },
+      }),
+    });
+    const overlay = buildStairOpeningCollisionOverlayForBuilding(
+      building,
+      () => floor,
+      stairWellDef,
+      60 / 19,
+    );
+    const live = applyStairOpeningCollisionOverlay(stale, overlay);
+    const blockedAt = (list: readonly { min: readonly [number, number, number]; max: readonly [number, number, number] }[], x: number, y: number, z: number) =>
+      list.some(
+        (aabb) =>
+          x >= aabb.min[0] &&
+          x <= aabb.max[0] &&
+          y >= aabb.min[1] &&
+          y <= aabb.max[1] &&
+          z >= aabb.min[2] &&
+          z <= aabb.max[2],
+      );
+    expect(blockedAt(stale, 1.95, 1.55, 0)).toBe(true);
+    expect(blockedAt(live, 1.95, 1.55, 0)).toBe(false);
+    expect(blockedAt(live, 1.95, 1.55, 1.5)).toBe(true);
+
+    expect(blockedAt(stale, 0, 4.72, -1.95)).toBe(true);
+    expect(blockedAt(live, 0, 4.72, -1.95)).toBe(false);
+    expect(blockedAt(live, 1.4, 4.72, -1.95)).toBe(true);
   });
 
   it("marks decorative corridor trim and exterior cladding as non-collidable", () => {

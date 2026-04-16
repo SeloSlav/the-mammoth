@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
+  applyStairOpeningCollisionOverlay,
+  buildStairOpeningCollisionOverlayForBuilding,
   buildCollisionSpatialIndex,
   buildCellMeshes,
   buildWalkSurfaceSpatialIndex,
@@ -38,7 +40,16 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
   const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
-  const blockerAABBs = GENERATED_COLLISION_BLOCKER_AABBS;
+  const stairOpeningOverlay = buildStairOpeningCollisionOverlayForBuilding(
+    building,
+    getFloorDoc,
+    stairWellDef,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const blockerAABBs = applyStairOpeningCollisionOverlay(
+    GENERATED_COLLISION_BLOCKER_AABBS,
+    stairOpeningOverlay,
+  );
   const walkAABBs = GENERATED_WALK_SURFACE_AABBS;
   const walkFootprint =
     walkSurfaceAabbXZFootprint(walkAABBs) ??

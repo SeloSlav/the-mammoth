@@ -4,19 +4,19 @@ overview: Stop requiring full collision artifact regeneration for stairwell wall
 todos:
   - id: shared-stair-opening-delta
     content: Design shared helper that turns all resolved authored stair openings into local ignore masks and replacement wall blocker AABBs
-    status: pending
+    status: completed
   - id: client-live-opening-collision
     content: Wire live stair opening collision into client dynamic blocker queries using existing dynamic source hooks
-    status: pending
+    status: completed
   - id: server-live-opening-collision
     content: Add matching server-side runtime stair opening collision overlay so authority matches the client
-    status: pending
+    status: completed
   - id: artifact-status-scope
     content: Exclude stair opening-only edits from full collision artifact staleness checks while leaving walk-surface generation unchanged
-    status: pending
+    status: completed
   - id: regression-tests
     content: Add parity and regression tests for passable stair openings and preserved surrounding walls
-    status: pending
+    status: completed
 isProject: false
 ---
 

@@ -31,6 +31,12 @@ import {
 export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc, readElevatorDoorFaceOverride };
 export type { BuildFloorMeshesOptions };
 export {
+  applyStairOpeningCollisionOverlay,
+  buildStairOpeningCollisionOverlayForBuilding,
+  stairOpeningAabbOverlaps,
+  type StairOpeningCollisionOverlay,
+} from "./floorPlaceholderMeshes.js";
+export {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   instantiateBuildingFloorStack,
   type InstantiateBuildingFloorStackOptions,

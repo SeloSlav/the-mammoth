@@ -15,6 +15,19 @@ function readJsonFilesSorted(absDir: string): [string, string][] {
   }
 }
 
+function normalizeCollisionFingerprintJson(name: string, text: string): string {
+  if (name !== "stairwell.json") return text;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    delete parsed.entryOpening;
+    delete parsed.groundEntryOpening;
+    delete parsed.secondaryEntryOpening;
+    return JSON.stringify(parsed);
+  } catch {
+    return text;
+  }
+}
+
 export function computeWorldCollisionSourceFingerprint(repoRoot: string): string {
   const hash = createHash("sha1");
   const mammothPath = join(repoRoot, "content/building/mammoth.json");
@@ -32,7 +45,7 @@ export function computeWorldCollisionSourceFingerprint(repoRoot: string): string
   }
   for (const [name, text] of readJsonFilesSorted(join(repoRoot, "content/elevator"))) {
     hash.update(`elevator:${name}\0`);
-    hash.update(text);
+    hash.update(normalizeCollisionFingerprintJson(name, text));
   }
   return hash.digest("hex");
 }

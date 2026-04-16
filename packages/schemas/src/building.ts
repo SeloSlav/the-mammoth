@@ -29,6 +29,8 @@ export const BuildingFloorRefSchema = z.object({
   floorDocId: z.string(),
   floorOverrideDocId: z.string().optional(),
   displayLabel: z.string().optional(),
+  /** Compact player-facing label, e.g. `PR`, `1`, `2`, ... */
+  shortLabel: z.string().optional(),
 });
 
 export type BuildingFloorRef = z.infer<typeof BuildingFloorRefSchema>;

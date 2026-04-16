@@ -5,6 +5,7 @@
 use std::cell::Cell;
 
 use crate::generated_collision_solids;
+use crate::stair_opening_collision;
 use crate::pose::PlayerPose;
 
 const COLLISION_EPS: f32 = 0.0015;
@@ -268,9 +269,15 @@ fn fill_static_blockers(
             if !vertical_overlap_body(feet_y, body_h, mn, mx) {
                 continue;
             }
+            if stair_opening_collision::suppress_static_blocker(*mn, *mx) {
+                continue;
+            }
             out.push((*mn, *mx));
         }
     }
+    stair_opening_collision::append_runtime_replacement_blockers(
+        x0, x1, z0, z1, feet_y, body_h, out,
+    );
 }
 
 fn slide_move_xz<F>(
