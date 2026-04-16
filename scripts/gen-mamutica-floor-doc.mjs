@@ -26,11 +26,10 @@ const UNIT_ALONG_Z_M = 7.2;
 const TARGET_CORRIDOR_LENGTH_M = 238;
 const BAY_GAP_M = 0.1;
 
-const UNITS_PER_ROW = Math.max(
-  2,
-  Math.round(TARGET_CORRIDOR_LENGTH_M / UNIT_ALONG_Z_M),
-);
-const corridorLen = UNITS_PER_ROW * UNIT_ALONG_Z_M;
+/** Distance (m) between core station centres along ±Z (symmetric about 0). */
+const CORE_STATION_SPACING_M = 46;
+const corridorLen =
+  Math.max(2, Math.round(TARGET_CORRIDOR_LENGTH_M / UNIT_ALONG_Z_M)) * UNIT_ALONG_Z_M;
 const halfLen = corridorLen * 0.5;
 const szBay = UNIT_ALONG_Z_M - BAY_GAP_M;
 const unitFootprintM2 = UNIT_DEPTH_M * szBay;
@@ -40,22 +39,23 @@ const PY_CENTER = FLOOR_TO_CEILING_M * 0.5 + 0.08;
 const CORE_PY = STOREY_SPACING_M * 0.5 + 0.08;
 
 const unitXEast = CORRIDOR_WIDTH_M * 0.5 + UNIT_DEPTH_M * 0.5;
-const unitZ = (i) => -halfLen + UNIT_ALONG_Z_M * 0.5 + i * UNIT_ALONG_Z_M;
-
-/** Distance (m) between core station centres along ±Z (symmetric about 0). */
-const CORE_STATION_SPACING_M = 46;
 
 /** Stair well outer box (m). Clamped so the shaft stays inside the residential bar, not past the façade. */
 const STAIR_SX_RAW = 3.55 * 3;
 const STAIR_SZ_RAW = 4.65 * 3;
 const STAIR_SX = Math.min(STAIR_SX_RAW, UNIT_DEPTH_M - 0.65);
 const STAIR_SZ = Math.min(STAIR_SZ_RAW, CORE_STATION_SPACING_M - 1.45);
-/** Half-width (m) along Z reserved for a core station (no units). Must clear stair footprint. */
-const CORE_EXCLUSION_HALF_Z = Math.max(2.85, STAIR_SZ * 0.5 + 0.45);
 /** Elevator hoistway (m). */
 const ELEV_SX = 2.38;
 /** Along Z for west-bank E-facing doors: must clear FP door slide (see `DOOR_SLIDE_M` + `DOOR_W`). */
 const ELEV_SZ = 4.0;
+/**
+ * Units must never intrude into the stair/elevator station void. The station itself clears the
+ * shaft footprint; per-segment centering below adds the larger balcony / landing breathing room.
+ */
+const CORE_CLEAR_HALF_Z = Math.max(2.85, STAIR_SZ * 0.5 + 0.45, ELEV_SZ * 0.5 + 0.45);
+/** Minimum clear margin (m) from a core void or bar end to the first apartment shell. */
+const UNIT_SEGMENT_EDGE_CLEAR_M = 2.2;
 
 function collectCoreCentersZ() {
   const centers = [0];
@@ -67,12 +67,43 @@ function collectCoreCentersZ() {
   return [...new Set(centers)].sort((a, b) => a - b);
 }
 
-function nearCore(z, coreZs) {
-  return coreZs.some((cz) => Math.abs(z - cz) < CORE_EXCLUSION_HALF_Z);
+function collectSegmentedUnitCentersZ(coreZs) {
+  const sortedCoreZs = [...coreZs].sort((a, b) => a - b);
+  const segments = [];
+  let segStart = -halfLen;
+
+  for (const cz of sortedCoreZs) {
+    const segEnd = cz - CORE_CLEAR_HALF_Z;
+    if (segEnd > segStart + szBay) segments.push([segStart, segEnd]);
+    segStart = cz + CORE_CLEAR_HALF_Z;
+  }
+
+  if (segStart < halfLen - szBay) segments.push([segStart, halfLen]);
+
+  const out = [];
+  for (const [z0, z1] of segments) {
+    const segLen = z1 - z0;
+    const maxUnits = Math.max(0, Math.floor((segLen - szBay) / UNIT_ALONG_Z_M) + 1);
+    let count = 0;
+    for (let n = maxUnits; n >= 1; n--) {
+      const occupiedLen = szBay + (n - 1) * UNIT_ALONG_Z_M;
+      if (occupiedLen <= segLen - UNIT_SEGMENT_EDGE_CLEAR_M * 2 + 1e-6) {
+        count = n;
+        break;
+      }
+    }
+    if (count <= 0) continue;
+    const center = (z0 + z1) * 0.5;
+    const first = center - ((count - 1) * UNIT_ALONG_Z_M) * 0.5;
+    for (let i = 0; i < count; i++) out.push(first + i * UNIT_ALONG_Z_M);
+  }
+
+  return out;
 }
 
 function writeTypicalFloor() {
   const coreZs = collectCoreCentersZ();
+  const unitCentersZ = collectSegmentedUnitCentersZ(coreZs);
   const objects = [];
 
   /** One spine; cores sit in ±X unit columns and do not overlap this X band. */
@@ -84,9 +115,7 @@ function writeTypicalFloor() {
     metadata: { note: "Residential corridor; vertical cores offset in unit bays." },
   });
 
-  for (let i = 0; i < UNITS_PER_ROW; i++) {
-    const z = unitZ(i);
-    if (nearCore(z, coreZs)) continue;
+  for (const [i, z] of unitCentersZ.entries()) {
     objects.push({
       id: `unit_e_${String(i + 1).padStart(3, "0")}`,
       prefabId: "apartment_unit_small_a",
@@ -94,9 +123,7 @@ function writeTypicalFloor() {
       scale: [UNIT_DEPTH_M, FLOOR_TO_CEILING_M, szBay],
     });
   }
-  for (let i = 0; i < UNITS_PER_ROW; i++) {
-    const z = unitZ(i);
-    if (nearCore(z, coreZs)) continue;
+  for (const [i, z] of unitCentersZ.entries()) {
     objects.push({
       id: `unit_w_${String(i + 1).padStart(3, "0")}`,
       prefabId: "apartment_unit_small_a",

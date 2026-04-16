@@ -22,7 +22,14 @@ import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPl
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
-import { encodeMoveIntentBits } from "./moveIntentCodec";
+import {
+  BIT_BACK,
+  BIT_FORWARD,
+  BIT_JUMP,
+  BIT_LEFT,
+  BIT_RIGHT,
+  encodeMoveIntentBits,
+} from "./moveIntentCodec";
 import { PoseInterpBuffer } from "./poseInterpBuffer";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay";
@@ -94,6 +101,14 @@ import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
  */
 const NET_INTERVAL_MS = 50;
 const NET_DT_SEC = NET_INTERVAL_MS * 0.001;
+/** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
+const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
+/**
+ * While grounded movement is active, resend aim yaw when turning by roughly 1 degree so the
+ * server path does not visibly cut corners between 20 Hz heartbeat publishes.
+ */
+const MOVE_INTENT_YAW_EDGE_RAD = 0.02;
+const MOVE_INTENT_MOVE_BITS = BIT_FORWARD | BIT_BACK | BIT_LEFT | BIT_RIGHT;
 
 /** Horizontal half-extent (m) of the replicated `player_pose` box (XZ). */
 const POSE_AOI_HALF = 42;
@@ -327,7 +342,15 @@ export async function mountFpSession(
   let intentsHead = 0;
   /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
   const MAX_PENDING_INTENTS = 30;
-  let lastNet = 0;
+  let lastMoveIntentMs = -Infinity;
+  let lastSentPersistentBits = 0;
+  let lastSentAimYaw = 0;
+  let hasSentMoveIntent = false;
+  /**
+   * Keep the jump bit live through at least one server tick. If we immediately overwrite the
+   * replicated input row with a no-jump sample, the fixed-rate reducer can miss the jump entirely.
+   */
+  let jumpIntentLockUntilMs = 0;
 
   const keys = new Set<string>();
   let crouchToggle = false;
@@ -645,6 +668,9 @@ export async function mountFpSession(
     out.crouch = (bits & 64) !== 0;
   };
 
+  const angleDeltaAbs = (a: number, b: number): number =>
+    Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
   const reconcileLocalPredictionToServer = (serverRow: PlayerPose) => {
     const serverSeq = poseSeqAsBigint(serverRow.seq);
 
@@ -825,18 +851,55 @@ export async function mountFpSession(
   const ro = new ResizeObserver(setSize);
   ro.observe(canvas);
 
-  const sendMoveIntent = (input: FpLocomotionInput, jump: boolean) => {
+  const sendMoveIntent = (input: FpLocomotionInput, jump: boolean, nowMs: number) => {
     if (!conn.identity) return;
     intentSeq += 1n;
     const bits = encodeMoveIntentBits(input, jump);
-    pendingMoveIntents.push({ seq: intentSeq, bits, aimYaw: bodyYaw });
+    const sample = { seq: intentSeq, bits, aimYaw: bodyYaw };
+    const replacePendingSameStep =
+      pendingMoveIntents.length > intentsHead &&
+      nowMs - lastMoveIntentMs < MOVE_INTENT_EDGE_WINDOW_MS;
+    // Pending replay models one local sample per coarse server step. If a newer edge-triggered
+    // publish lands before the next 50 ms step elapses, replace that still-unacked sample instead
+    // of appending a second one that the fixed-rate server will never simulate separately.
+    if (replacePendingSameStep) pendingMoveIntents[pendingMoveIntents.length - 1] = sample;
+    else pendingMoveIntents.push(sample);
     // Guard against runaway growth if the server stops acking (e.g. network drop).
     if (pendingMoveIntents.length - intentsHead > MAX_PENDING_INTENTS) {
       // Drop the oldest un-acked intents; replay will still be correct from the retained window.
       const excess = pendingMoveIntents.length - intentsHead - MAX_PENDING_INTENTS;
       intentsHead += excess;
     }
+    lastMoveIntentMs = nowMs;
+    lastSentPersistentBits = bits & ~BIT_JUMP;
+    lastSentAimYaw = bodyYaw;
+    hasSentMoveIntent = true;
+    if (jump) jumpIntentLockUntilMs = nowMs + NET_INTERVAL_MS;
     void conn.reducers.submitMoveIntent({ intentSeq, bits, aimYaw: bodyYaw });
+  };
+
+  const maybeSendMoveIntent = (
+    input: FpLocomotionInput,
+    jump: boolean,
+    nowMs: number,
+  ): void => {
+    if (!conn.identity) return;
+    if (jump) {
+      sendMoveIntent(input, true, nowMs);
+      return;
+    }
+    if (nowMs < jumpIntentLockUntilMs) return;
+    const persistentBits = encodeMoveIntentBits(input, false);
+    const moving = (persistentBits & MOVE_INTENT_MOVE_BITS) !== 0;
+    const periodicDue = !hasSentMoveIntent || nowMs - lastMoveIntentMs >= NET_INTERVAL_MS;
+    const bitsChanged = !hasSentMoveIntent || persistentBits !== lastSentPersistentBits;
+    const yawChanged =
+      moving &&
+      hasSentMoveIntent &&
+      angleDeltaAbs(bodyYaw, lastSentAimYaw) >= MOVE_INTENT_YAW_EDGE_RAD;
+    if (periodicDue || bitsChanged || yawChanged) {
+      sendMoveIntent(input, false, nowMs);
+    }
   };
 
   const mammothInventoryOpen = () =>
@@ -972,7 +1035,7 @@ export async function mountFpSession(
         sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
         crouch: crouchToggle,
       };
-      sendMoveIntent(jumpInput, true);
+      sendMoveIntent(jumpInput, true, performance.now());
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {
@@ -1162,10 +1225,7 @@ export async function mountFpSession(
 
     syncActiveHotbarSlotToServer();
 
-    if (nowMs - lastNet >= NET_INTERVAL_MS && conn.identity) {
-      lastNet = nowMs;
-      sendMoveIntent(_input, jumpQueuedBeforeStep);
-    }
+    maybeSendMoveIntent(_input, jumpQueuedBeforeStep, nowMs);
 
     if (conn.identity) {
       const drift = Math.hypot(pos.x - poseAoiAnchorX, pos.z - poseAoiAnchorZ);
