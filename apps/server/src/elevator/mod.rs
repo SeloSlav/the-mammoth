@@ -36,6 +36,17 @@ const WALK_MERGE_FEET_MAX_OFFSET_ABOVE_CAB_FLOOR_M: f32 = STOREY_SPACING_M * 0.8
 /// Extra slack when matching probe feet Y to a landing slab for walk-merge (crouch / probe). Sync
 /// client `ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M`.
 const WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M: f32 = 0.12;
+/// Extra plate-local XZ padding (m) around the cab inner AABB used as the **outer gate** for
+/// elevator walk-merge sampling. The landing slab "hole" is padded beyond the cab inner by
+/// `SHAFT_PAD` + `punchElevatorHolesInShellRects.holeTrimM` (see `shaftPlanformClip.ts`), leaving
+/// a short XZ band at the doorway threshold where neither the strict cab inner gate nor the
+/// corridor shell floor provides support. This padding bridges that seam so riders stepping out
+/// of a docked cab keep continuous walk support instead of free-falling into the shaft or
+/// snapping to the floor below (`MAX_SUPPORT_DROP_M`). The `cab_walk_merge_support_feet_allowed`
+/// predicate still gates walk-merge to *docked* cars at the player's feet Y, so only real seam
+/// traversal benefits from the extension. Sync client
+/// `ELEVATOR_WALK_MERGE_GATE_XZ_EXTRA_M`.
+const WALK_MERGE_GATE_XZ_EXTRA_M: f32 = 0.75;
 /// Feet may merge onto the cab **roof** walk surface this far below / above inner ceiling line.
 /// Sync client `ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M` / `ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M`.
 const CAB_ROOF_WALK_MERGE_FEET_BELOW_M: f32 = 0.65;
@@ -358,12 +369,21 @@ pub fn sample_elevator_kinematic_support_surface_lerped(
     let mut best_vy = 0.0_f32;
     let h = tick_dt.max(1e-4);
 
+    let gate_hx = ihx + WALK_MERGE_GATE_XZ_EXTRA_M;
+    let gate_hz = ihz + WALK_MERGE_GATE_XZ_EXTRA_M;
     for car in ctx.db.elevator_car().iter() {
         let cx = car.plate_x;
         let cz = car.plate_z;
-        if fx1 < cx - ihx || fx0 > cx + ihx || fz1 < cz - ihz || fz0 > cz + ihz {
+        // Wider XZ gate covers the doorway-threshold seam between the cab inner and the
+        // padded landing slab hole (`shaftPlanformClip.ts`). The roof branch below re-checks
+        // the strict inner AABB so an extended gate cannot snap mid-air bodies to the cab roof.
+        if fx1 < cx - gate_hx || fx0 > cx + gate_hx || fz1 < cz - gate_hz || fz0 > cz + gate_hz {
             continue;
         }
+        let inner_aabb_overlap = fx1 >= cx - ihx
+            && fx0 <= cx + ihx
+            && fz1 >= cz - ihz
+            && fz0 <= cz + ihz;
         let cab_y = match prev_cars.and_then(|m| m.get(&car.shaft_key)) {
             Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
             None => car.cab_floor_y,
@@ -392,14 +412,18 @@ pub fn sample_elevator_kinematic_support_surface_lerped(
         }
 
         // Cab roof: falling / standing on the car top (no dock gate — car may be mid-shaft).
-        let roof_feet_y = cab_y + iy;
-        if feet_y >= roof_feet_y - CAB_ROOF_WALK_MERGE_FEET_BELOW_M
-            && feet_y <= roof_feet_y + CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
-        {
-            let geom_top = roof_feet_y - SKIN;
-            if geom_top <= probe_top_y + step_up_margin && geom_top > best_top + 1e-5 {
-                best_top = geom_top;
-                best_vy = vy;
+        // Re-check the strict inner AABB so the extended walk-merge gate above cannot snap a
+        // body standing in the slab-hole fringe outside the cab onto the car roof.
+        if inner_aabb_overlap {
+            let roof_feet_y = cab_y + iy;
+            if feet_y >= roof_feet_y - CAB_ROOF_WALK_MERGE_FEET_BELOW_M
+                && feet_y <= roof_feet_y + CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
+            {
+                let geom_top = roof_feet_y - SKIN;
+                if geom_top <= probe_top_y + step_up_margin && geom_top > best_top + 1e-5 {
+                    best_top = geom_top;
+                    best_vy = vy;
+                }
             }
         }
     }

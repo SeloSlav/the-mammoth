@@ -131,6 +131,25 @@ describe("fpElevCabWalkMergeSupportFeetAllowed", () => {
       }),
     ).toBe(true);
   });
+
+  // Regression: walking across the doorway seam between a docked cab and the landing corridor
+  // must stay supported even when the foot center has stepped past the cab inner — the slab hole
+  // is padded further out than `inner.halfX`, so the predicate has to accept the landing-docked
+  // fallback regardless of XZ position (the outer gate in `sampleSupportSurface` bounds XZ).
+  it("allows walk merge at the doorway threshold just past the cab inner when docked", () => {
+    const fy = feetYForLevel(3);
+    expect(
+      fpElevCabWalkMergeSupportFeetAllowed({
+        plateLocalX: inner.halfX + 0.3,
+        plateLocalZ: 0,
+        feetWorldY: fy,
+        cabFeetWorldY: fy,
+        inner,
+        maxLevel: 19,
+        feetYForLevel,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("fpElevatorClampWorldXZToCabIfRider", () => {

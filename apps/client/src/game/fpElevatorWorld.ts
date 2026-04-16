@@ -21,6 +21,7 @@ import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types"
 import {
   ELEVATOR_PHASE_MOVING,
   ELEVATOR_SHAFT_VERTICAL_ABOVE_INNER_TOP_M,
+  ELEVATOR_WALK_MERGE_GATE_XZ_EXTRA_M,
   ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M,
   ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M,
   ELEVATOR_SHAFT_VERTICAL_BELOW_CAB_M,
@@ -444,9 +445,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const { halfX: ihx, halfZ: ihz } = vis.inner;
       const wx = ox + row.plateX;
       const wz = oz + row.plateZ;
-      if (fx1 < wx - ihx || fx0 > wx + ihx || fz1 < wz - ihz || fz0 > wz + ihz) {
+      const gateHx = ihx + ELEVATOR_WALK_MERGE_GATE_XZ_EXTRA_M;
+      const gateHz = ihz + ELEVATOR_WALK_MERGE_GATE_XZ_EXTRA_M;
+      if (fx1 < wx - gateHx || fx0 > wx + gateHx || fz1 < wz - gateHz || fz0 > wz + gateHz) {
         continue;
       }
+      const innerAabbOverlap =
+        fx1 >= wx - ihx && fx0 <= wx + ihx && fz1 >= wz - ihz && fz0 <= wz + ihz;
       const cabFeet = getCabY(key, opts.evalWallClockMs);
       if (!Number.isFinite(cabFeet)) continue;
       const vy = getCabVerticalVelocityMps(key, opts.evalWallClockMs);
@@ -476,15 +481,17 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         }
       }
 
-      const roofFeetY = cabFeet + vis.inner.innerH;
-      if (
-        feetY >= roofFeetY - ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M &&
-        feetY <= roofFeetY + ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
-      ) {
-        const geomTop = roofFeetY - FP_LOCOMOTION_SKIN;
-        if (geomTop <= opts.probeTopY + opts.stepUpMargin && geomTop > bestCabGeom + 1e-5) {
-          bestCabGeom = geomTop;
-          bestVy = vy;
+      if (innerAabbOverlap) {
+        const roofFeetY = cabFeet + vis.inner.innerH;
+        if (
+          feetY >= roofFeetY - ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M &&
+          feetY <= roofFeetY + ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M
+        ) {
+          const geomTop = roofFeetY - FP_LOCOMOTION_SKIN;
+          if (geomTop <= opts.probeTopY + opts.stepUpMargin && geomTop > bestCabGeom + 1e-5) {
+            bestCabGeom = geomTop;
+            bestVy = vy;
+          }
         }
       }
     }

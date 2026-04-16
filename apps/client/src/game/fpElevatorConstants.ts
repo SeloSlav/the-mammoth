@@ -22,6 +22,18 @@ export const LANDING_HAIL_SUPPRESS_CAB_Y_TOL_M = 0.5;
  * probe noise). Must match server `elevator::WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M`.
  */
 export const ELEV_WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M = 0.12;
+/**
+ * Extra plate-local XZ padding (m) around the cab inner AABB used as the **outer gate** for
+ * walk-merge sampling. The landing slab "hole" is padded beyond the cab inner by `SHAFT_PAD` +
+ * `punchElevatorHolesInShellRects.holeTrimM` (see `packages/world/src/shaftPlanformClip.ts`),
+ * leaving a short XZ band at the doorway threshold where neither the strict cab inner gate nor
+ * the corridor shell floor provides support. This padding bridges that seam so riders stepping
+ * out of a docked cab keep continuous walk support instead of free-falling into the shaft or
+ * snapping to the floor below. The `fpElevCabWalkMergeSupportFeetAllowed` predicate still gates
+ * walk-merge to *docked* cars at the player’s feet Y, so only real seam traversal benefits.
+ * Must match server `elevator::WALK_MERGE_GATE_XZ_EXTRA_M`.
+ */
+export const ELEVATOR_WALK_MERGE_GATE_XZ_EXTRA_M = 0.75;
 /** Match server `elevator::CAB_ROOF_WALK_MERGE_FEET_BELOW_M`. */
 export const ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_BELOW_M = 0.65;
 /** Match server `elevator::CAB_ROOF_WALK_MERGE_FEET_ABOVE_M`. */
