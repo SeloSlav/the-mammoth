@@ -1,11 +1,20 @@
 import * as THREE from "three";
-import { ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_COLS, ATLAS_ROWS } from "./fpElevatorConstants.js";
+import type { FloorShortLabelMap } from "@the-mammoth/world";
+import { ATLAS_CELL_H, ATLAS_CELL_W, ATLAS_COLS } from "./fpElevatorConstants.js";
 import { floorButtonLabel } from "./fpElevatorLabels.js";
 
-export function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
+function atlasRowsForMaxLevel(maxLevel: number): number {
+  return Math.max(1, Math.ceil(Math.max(1, maxLevel) / ATLAS_COLS));
+}
+
+export function buildElevFloorAtlas(
+  maxLevel: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): THREE.CanvasTexture {
   const c = document.createElement("canvas");
+  const atlasRows = atlasRowsForMaxLevel(maxLevel);
   c.width = ATLAS_COLS * ATLAS_CELL_W;
-  c.height = ATLAS_ROWS * ATLAS_CELL_H;
+  c.height = atlasRows * ATLAS_CELL_H;
   const ctx = c.getContext("2d");
   if (!ctx) throw new Error("canvas 2d");
   for (let level = 1; level <= maxLevel; level++) {
@@ -24,7 +33,7 @@ export function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-      floorButtonLabel(level),
+      floorButtonLabel(level, floorLabelByLevel),
       x0 + ATLAS_CELL_W * 0.5,
       y0 + ATLAS_CELL_H * 0.5,
     );
@@ -35,14 +44,19 @@ export function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
   return tex;
 }
 
-export function applyAtlasUvToPlaneGeometry(geom: THREE.PlaneGeometry, levelIndex1Based: number): void {
+export function applyAtlasUvToPlaneGeometry(
+  geom: THREE.PlaneGeometry,
+  levelIndex1Based: number,
+  maxLevel: number,
+): void {
+  const atlasRows = atlasRowsForMaxLevel(maxLevel);
   const idx = levelIndex1Based - 1;
   const col = idx % ATLAS_COLS;
   const row = Math.floor(idx / ATLAS_COLS);
   const u0 = col / ATLAS_COLS;
   const u1 = (col + 1) / ATLAS_COLS;
-  const v1 = 1 - row / ATLAS_ROWS;
-  const v0 = 1 - (row + 1) / ATLAS_ROWS;
+  const v1 = 1 - row / atlasRows;
+  const v0 = 1 - (row + 1) / atlasRows;
   const uv = geom.attributes.uv as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) {
     const uOld = uv.getX(i);

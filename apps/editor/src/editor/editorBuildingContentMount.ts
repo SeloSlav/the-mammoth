@@ -11,6 +11,7 @@ import type {
   StairWellDef,
 } from "@the-mammoth/schemas";
 import {
+  buildFloorShortLabelMap,
   buildCellMeshes,
   buildStairWellPreviewRoot,
   buildElevatorCabCarPreviewRoot,
@@ -92,6 +93,7 @@ export function buildEditorStructuralRoot(args: {
       layout,
       def: args.elevatorCabDef,
       maxLevel: maxBuildingLevelIndex(args.building),
+      floorLabelByLevel: buildFloorShortLabelMap(args.building),
       includeDoors: false,
     });
     root.add(cab);

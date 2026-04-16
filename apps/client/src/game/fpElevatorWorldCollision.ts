@@ -12,7 +12,7 @@ import {
   EXTERIOR_COLLISION_L0,
   EXTERIOR_COLLISION_L1,
   EXTERIOR_COLLISION_LZ_PAD,
-  EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
+  EXTERIOR_DOOR_PARKED_COLLISION_MIN_SWING,
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
   EXTERIOR_DOOR_SWING_MAX_RAD,
   EXTERIOR_DOOR_HINGE_OUTSET,
@@ -55,8 +55,8 @@ export type FpElevatorWorldCollisionAuth = {
   getCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
 };
 
-/** Single AABB from hinge to panel tip (matches server `push_swing_door_collision_panel`). */
-function emitSwingDoorCollisionPanel(
+/** Single AABB from hinge to leaf tip (matches server `push_door_leaf_collision_panel`). */
+function emitDoorLeafCollisionPanel(
   emit: (
     minX: number,
     minY: number,
@@ -283,8 +283,8 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             );
             break;
         }
-      } else if (!cabCoversLanding && authSwing < EXTERIOR_DOOR_COLLISION_OPEN_THRESH) {
-        const theta = authSwing * EXTERIOR_DOOR_SWING_MAX_RAD;
+      } else if (!cabCoversLanding && authSwing >= EXTERIOR_DOOR_PARKED_COLLISION_MIN_SWING) {
+        const theta = EXTERIOR_DOOR_SWING_MAX_RAD;
         const panelW = EXTERIOR_DOOR_W_M - 0.10;
         const hingeLat = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
         const o = EXTERIOR_DOOR_HINGE_OUTSET;
@@ -298,7 +298,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzL = plateZ + hingeLat;
             const tipX = hxO + panelW * st;
             const tipZ = hzL - panelW * ct;
-            emitSwingDoorCollisionPanel(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
+            emitDoorLeafCollisionPanel(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "w": {
@@ -306,7 +306,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzL = plateZ + hingeLat;
             const tipX = hxO - panelW * st;
             const tipZ = hzL + panelW * ct;
-            emitSwingDoorCollisionPanel(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
+            emitDoorLeafCollisionPanel(emit, hxO, hzL, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "n": {
@@ -314,7 +314,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzO = plateZ + hz + o;
             const tipX = hxL + panelW * ct;
             const tipZ = hzO + panelW * st;
-            emitSwingDoorCollisionPanel(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
+            emitDoorLeafCollisionPanel(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
             break;
           }
           case "s": {
@@ -322,7 +322,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
             const hzO = plateZ - hz - o;
             const tipX = hxL - panelW * ct;
             const tipZ = hzO - panelW * st;
-            emitSwingDoorCollisionPanel(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
+            emitDoorLeafCollisionPanel(emit, hxL, hzO, tipX, tipZ, y0d, y1d, pad);
             break;
           }
         }

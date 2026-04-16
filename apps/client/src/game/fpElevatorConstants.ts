@@ -156,6 +156,5 @@ export const ELEV_FLOOR_PICK_DOORWAY_VIS_MIN_OPEN = 0.16;
 export const ELEV_FLOOR_PICK_DOORWAY_RAY_MIN_OPEN = 0.32;
 
 export const ATLAS_COLS = 5;
-export const ATLAS_ROWS = 4;
 export const ATLAS_CELL_W = 64;
 export const ATLAS_CELL_H = 48;

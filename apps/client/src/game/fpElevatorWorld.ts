@@ -5,6 +5,7 @@ import { fpLocomotionConstants } from "@the-mammoth/engine";
 import cabAuthoringJson from "../../../../content/elevator/cab.json";
 import landingKitAuthoringJson from "../../../../content/elevator/landing_kit.json";
 import {
+  buildFloorShortLabelMap,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   type CollisionAabb,
   elevatorCabGameplayHalfExtentsM,
@@ -36,6 +37,7 @@ import {
   predictMovingCabFeetWorldYVelocityMps,
 } from "./fpElevatorCabPredict.js";
 import { FpElevatorCabInterpScalar, FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
+import { floorButtonLabel } from "./fpElevatorLabels.js";
 import {
   fpElevCarPanelDoorwayViewLocal,
   fpElevFeetInHoistwayColumnForFloorStack,
@@ -176,6 +178,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const oy = opts.building.worldOrigin?.[1] ?? 0;
   const oz = opts.building.worldOrigin?.[2] ?? 0;
   const maxLevel = maxBuildingLevelIndex(opts.building);
+  const floorLabelByLevel = buildFloorShortLabelMap(opts.building);
   const layouts = listElevatorShaftLayouts(opts.building, opts.getFloorDoc);
   const layoutByKey = new Map(layouts.map((l) => [l.planKey, l] as const));
   const shaftSpatialByKey = new Map(
@@ -206,6 +209,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       {
         shaftKey: layout.planKey,
         maxLevel,
+        floorLabelByLevel,
         floorSpacingM,
         buildingWorldOriginY: oy,
       },
@@ -971,7 +975,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const rk = landingExteriorDoorRowKey(ext.shaftKey, ext.level);
     const ld = landingByRowKey.get(rk);
     const willClose = (ld?.desiredOpen ?? 0) !== 0;
-    const floorLabel = ext.level <= 1 ? "Ground" : `Story ${ext.level}`;
+    const shortLabel = floorButtonLabel(ext.level, floorLabelByLevel);
+    const floorLabel = shortLabel === "PR" ? "PR / Ground" : `Floor ${shortLabel}`;
     return { willClose, floorLabel };
   };
 

@@ -3,13 +3,19 @@ import * as THREE from "three";
 import { doorSlideAxis, floorButtonLabel } from "./fpElevatorLabels";
 
 describe("floorButtonLabel", () => {
-  it("uses PR for ground level indices", () => {
-    expect(floorButtonLabel(0)).toBe("PR");
-    expect(floorButtonLabel(1)).toBe("PR");
+  it("uses authored compact labels when provided", () => {
+    const labels = new Map<number, string>([
+      [1, "PR"],
+      [2, "1"],
+      [12, "11"],
+    ]);
+    expect(floorButtonLabel(1, labels)).toBe("PR");
+    expect(floorButtonLabel(2, labels)).toBe("1");
+    expect(floorButtonLabel(12, labels)).toBe("11");
   });
 
-  it("uses numeric string for upper levels", () => {
-    expect(floorButtonLabel(2)).toBe("2");
+  it("falls back to raw level indices without authored labels", () => {
+    expect(floorButtonLabel(1)).toBe("1");
     expect(floorButtonLabel(12)).toBe("12");
   });
 });

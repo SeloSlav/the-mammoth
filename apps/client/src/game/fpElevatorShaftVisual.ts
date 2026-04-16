@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
-import type { ElevatorShaftLayout } from "@the-mammoth/world";
+import type { ElevatorShaftLayout, FloorShortLabelMap } from "@the-mammoth/world";
 import {
   applyLandingFrameSlot,
   applyLandingGlassSlot,
@@ -123,6 +123,7 @@ export class FpElevatorShaftVisual {
     pick: {
       shaftKey: string;
       maxLevel: number;
+      floorLabelByLevel?: FloorShortLabelMap;
       floorSpacingM: number;
       buildingWorldOriginY: number;
     },
@@ -186,7 +187,7 @@ export class FpElevatorShaftVisual {
     this.root.add(this.landingDoorPickRoot);
     this.root.add(this.landingHailPickRoot);
 
-    this.atlas = buildElevFloorAtlas(pick.maxLevel);
+    this.atlas = buildElevFloorAtlas(pick.maxLevel, pick.floorLabelByLevel);
     this.matNormal = new THREE.MeshStandardMaterial({
       map: this.atlas,
       color: 0xffffff,
@@ -218,6 +219,7 @@ export class FpElevatorShaftVisual {
       layout,
       def: visualDefs?.cabDef,
       maxLevel: pick.maxLevel,
+      floorLabelByLevel: pick.floorLabelByLevel,
       doorOpen01: 0,
       includeDoors: true,
       floorButtonLabelMaterial: this.matNormal,

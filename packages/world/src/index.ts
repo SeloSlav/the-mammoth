@@ -120,6 +120,12 @@ export {
   type ElevatorShaftLayout,
 } from "./elevatorShaftLayout.js";
 export {
+  buildFloorShortLabelMap,
+  shortFloorLabelForLevel,
+  shortFloorLabelForRef,
+  type FloorShortLabelMap,
+} from "./buildingFloorLabels.js";
+export {
   ELEVATOR_LANDING_CALL_CENTER_Y_OFFSET_M,
   resolveLandingHailLevel,
 } from "./elevatorLandingHailLevel.js";
@@ -133,6 +139,7 @@ export {
   EXTERIOR_DOOR_ANIM_SPEED,
   EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
   EXTERIOR_DOOR_H_M,
+  EXTERIOR_DOOR_PARKED_COLLISION_MIN_SWING,
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
   EXTERIOR_DOOR_SWING_MAX_RAD,
   EXTERIOR_DOOR_HINGE_OUTSET,

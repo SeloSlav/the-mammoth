@@ -1,12 +1,18 @@
 import * as THREE from "three";
-import type { ElevatorShaftLayout } from "@the-mammoth/world";
+import {
+  shortFloorLabelForLevel,
+  type ElevatorShaftLayout,
+  type FloorShortLabelMap,
+} from "@the-mammoth/world";
 
 export type ElevatorDoorFace = ElevatorShaftLayout["doorFace"];
 
-/** Level 1 = prizemlje (ground); in-car buttons use “PR”. */
-export function floorButtonLabel(levelIndex: number): string {
-  if (levelIndex <= 1) return "PR";
-  return String(levelIndex);
+/** Returns the authored compact label for a storey, falling back to the raw level index. */
+export function floorButtonLabel(
+  levelIndex: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): string {
+  return shortFloorLabelForLevel(levelIndex, floorLabelByLevel);
 }
 
 export function doorSlideAxis(face: ElevatorDoorFace): THREE.Vector3 {

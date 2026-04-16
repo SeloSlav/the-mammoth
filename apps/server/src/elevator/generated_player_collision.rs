@@ -57,10 +57,9 @@ fn push_query_overlapping_aabb(
     out.push(CollisionAabb { min, max });
 }
 
-/// Single conservative AABB for the swing panel (hinge → tip), avoiding seam artifacts from
-/// multi-segment approximation.
+/// Single conservative AABB for the exterior leaf (hinge -> tip).
 #[inline]
-fn push_swing_door_collision_panel(
+fn push_door_leaf_collision_panel(
     out: &mut Vec<CollisionAabb>,
     qx0: f32,
     qx1: f32,
@@ -278,8 +277,8 @@ fn collect_generated_collision_aabbs(
                     [spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD), y1, spec.plate_z - hz - super::EXT_COLLISION_L0],
                 ),
             }
-        } else if landing.swing_open_01 < super::EXT_DOOR_COLLISION_OPEN_THRESH {
-            let theta = landing.swing_open_01 * super::EXT_DOOR_SWING_MAX_RAD;
+        } else if landing.swing_open_01 >= super::EXT_DOOR_PARKED_COLLISION_MIN_SWING {
+            let theta = super::EXT_DOOR_SWING_MAX_RAD;
             let panel_w = super::EXT_DOOR_W - 0.10;
             let hinge_lat = super::EXT_DOOR_W * 0.5 - 0.06;
             let o = super::EXT_DOOR_HINGE_OUTSET;
@@ -292,7 +291,7 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o + panel_w * st;
                     let tip_z = hz_l - panel_w * ct;
-                    push_swing_door_collision_panel(
+                    push_door_leaf_collision_panel(
                         out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -301,7 +300,7 @@ fn collect_generated_collision_aabbs(
                     let hz_l = spec.plate_z + hinge_lat;
                     let tip_x = hx_o - panel_w * st;
                     let tip_z = hz_l + panel_w * ct;
-                    push_swing_door_collision_panel(
+                    push_door_leaf_collision_panel(
                         out, x0, x1, z0, z1, hx_o, hz_l, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -310,7 +309,7 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z + hz + o;
                     let tip_x = hx_l + panel_w * ct;
                     let tip_z = hz_o + panel_w * st;
-                    push_swing_door_collision_panel(
+                    push_door_leaf_collision_panel(
                         out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }
@@ -319,7 +318,7 @@ fn collect_generated_collision_aabbs(
                     let hz_o = spec.plate_z - hz - o;
                     let tip_x = hx_l - panel_w * ct;
                     let tip_z = hz_o - panel_w * st;
-                    push_swing_door_collision_panel(
+                    push_door_leaf_collision_panel(
                         out, x0, x1, z0, z1, hx_l, hz_o, tip_x, tip_z, y0, y1, pad,
                     );
                 }

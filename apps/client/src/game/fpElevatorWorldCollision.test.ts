@@ -308,7 +308,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     expect(wallSlabs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("approximates a swung landing door with multiple thin collision slices instead of one fat box", () => {
+  it("does not emit a door-leaf collider while the landing door is swinging", () => {
     const fy1 = feetYForLayout(layout, 1);
     const landing: ElevatorLandingDoor = {
       rowKey: landingExteriorDoorRowKey(shaftKey, 1),
@@ -342,22 +342,22 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     const hits = collectHits(auth, layout.sx * 0.5 - 0.2, layout.sx * 0.5 + 2.2, -1.2, 1.2).filter(
       (b) => b.min[1] <= fy1 + 1.0 && b.max[1] >= fy1 + 1.0,
     );
-    const thinDoorSlices = hits.filter((b) => {
+    const doorLeafHits = hits.filter((b) => {
       const spanX = b.max[0] - b.min[0];
       const spanZ = b.max[2] - b.min[2];
-      return spanX < 0.8 && spanZ < 0.8 && b.max[1] - b.min[1] > 1.5;
+      return spanX > 1.2 && spanZ < 0.35 && b.max[1] - b.min[1] > 1.5;
     });
-    expect(thinDoorSlices.length).toBeGreaterThanOrEqual(4);
+    expect(doorLeafHits.length).toBe(0);
   });
 
-  it("drops the swing-door leaf collider once the landing passage is considered open", () => {
+  it("emits a parked-open leaf collider once the landing door is fully open", () => {
     const fy1 = feetYForLayout(layout, 1);
     const landing: ElevatorLandingDoor = {
       rowKey: landingExteriorDoorRowKey(shaftKey, 1),
       shaftKey,
       level: 1,
       desiredOpen: 1,
-      swingOpen01: 0.95,
+      swingOpen01: 1,
     };
     const auth: FpElevatorWorldCollisionAuth = {
       buildingOriginX: 0,
@@ -384,12 +384,12 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     const hits = collectHits(auth, layout.sx * 0.5 - 0.2, layout.sx * 0.5 + 2.2, -1.2, 1.2).filter(
       (b) => b.min[1] <= fy1 + 1.0 && b.max[1] >= fy1 + 1.0,
     );
-    const thinDoorSlices = hits.filter((b) => {
+    const doorLeafHits = hits.filter((b) => {
       const spanX = b.max[0] - b.min[0];
       const spanZ = b.max[2] - b.min[2];
-      return spanX < 0.8 && spanZ < 0.8 && b.max[1] - b.min[1] > 1.5;
+      return spanX > 1.2 && spanZ < 0.35 && b.max[1] - b.min[1] > 1.5;
     });
-    expect(thinDoorSlices.length).toBe(0);
+    expect(doorLeafHits.length).toBeGreaterThanOrEqual(1);
   });
 
   it("emits exterior collision slab when swing is essentially closed (cab at different floor)", () => {

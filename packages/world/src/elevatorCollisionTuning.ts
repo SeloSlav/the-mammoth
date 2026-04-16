@@ -11,6 +11,11 @@ export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
 export const EXTERIOR_DOOR_ANIM_SPEED = 3.0;
 /** Closed swing: static slab only while essentially shut (matches server `EXT_DOOR_SOLID_SLAB_MAX_SWING`). */
 export const EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING = 0.025;
+/**
+ * Parked-open leaf collider only arms once the panel is effectively at rest against the jamb.
+ * While the door is still swinging, the leaf stays non-solid to avoid random player push-out.
+ */
+export const EXTERIOR_DOOR_PARKED_COLLISION_MIN_SWING = 0.995;
 export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.55;
 export const EXTERIOR_DOOR_HINGE_OUTSET = 0.048;
 export const EXTERIOR_DOOR_PANEL_HALF_THICK = 0.10;

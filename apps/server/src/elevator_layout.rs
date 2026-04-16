@@ -1,5 +1,8 @@
 //! Mamutica hoistway layout — must match `content/building/floors/*.json` + `shaftPlanKey` in `@the-mammoth/world`.
 
+use serde::Deserialize;
+use std::sync::OnceLock;
+
 /// Match `DEFAULT_BUILDING_FLOOR_SPACING_M` / `STOREY_SPACING_M`.
 pub const STOREY_SPACING_M: f32 = 60.0 / 19.0;
 pub const BUILDING_ORIGIN_Y: f32 = 0.0;
@@ -62,6 +65,36 @@ pub const MAMUTH_ELEVATOR_SPECS: &[ElevShaftSpec] = &[
     },
 ];
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BuildingDocForLayout {
+    floor_refs: Vec<FloorRefForLayout>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FloorRefForLayout {
+    level_index: u32,
+}
+
+pub fn max_level() -> u32 {
+    static MAX_LEVEL: OnceLock<u32> = OnceLock::new();
+    *MAX_LEVEL.get_or_init(|| {
+        let building: BuildingDocForLayout = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/building/mammoth.json"
+        )))
+        .expect("building JSON must parse for elevator layout");
+        building
+            .floor_refs
+            .iter()
+            .map(|r| r.level_index)
+            .max()
+            .unwrap_or(1)
+            .max(1)
+    })
+}
+
 #[inline]
 pub fn shaft_floor_local_top_y(sy: f32) -> f32 {
     let hy = sy * 0.5;
@@ -109,4 +142,14 @@ pub fn plan_key(px: f32, pz: f32) -> String {
     let rx = round_js(px * 100.0) / 100.0;
     let rz = round_js(pz * 100.0) / 100.0;
     format!("{rx},{rz}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::max_level;
+
+    #[test]
+    fn max_level_tracks_authored_building_floor_refs() {
+        assert_eq!(max_level(), 20);
+    }
 }

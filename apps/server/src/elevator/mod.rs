@@ -6,7 +6,7 @@ use spacetimedb::{ReducerContext, Table};
 
 use crate::auth;
 use crate::elevator_layout::{
-    self, DoorFace, ElevShaftSpec, BUILDING_ORIGIN_Y, MAMUTH_ELEVATOR_SPECS, SKIN,
+    self, max_level, DoorFace, ElevShaftSpec, BUILDING_ORIGIN_Y, MAMUTH_ELEVATOR_SPECS, SKIN,
     STOREY_SPACING_M,
 };
 use crate::kinematic_support::{self, KinematicAttachment, KinematicSupportSurface};
@@ -74,7 +74,6 @@ const PH_OPENING: u8 = 3;
 
 const DOOR_ANIM_SPEED: f32 = 2.35;
 const MOVE_SPEED_MPS: f32 = 3.15;
-pub const MAX_LEVEL: u32 = 19;
 const FOOT_R: f32 = 0.22;
 /// Client-predicted feet may lead replicated `player_pose` by several ticks; allow door eligibility
 /// to consider the client's reported feet when it stays near the authoritative pose.
@@ -149,9 +148,14 @@ fn support_y(level: u32) -> f32 {
     elevator_layout::support_feet_y_for_level(level, BUILDING_ORIGIN_Y)
 }
 
+#[inline]
+fn clamp_level(level: u32) -> u32 {
+    level.clamp(1, max_level())
+}
+
 /// Returns `true` if a new destination was appended (duplicate tail is ignored).
 fn enqueue_dest(row: &mut ElevatorCar, level: u32) -> bool {
-    let lv = level.clamp(1, MAX_LEVEL);
+    let lv = clamp_level(level);
     if row.dest_queue.last() == Some(&lv) {
         return false;
     }
@@ -200,7 +204,7 @@ pub fn seed_elevators(ctx: &ReducerContext) {
 pub fn seed_elevator_landing_doors(ctx: &ReducerContext) {
     for s in MAMUTH_ELEVATOR_SPECS {
         let shaft_key = s.shaft_key.to_string();
-        for lv in 1..=MAX_LEVEL {
+        for lv in 1..=max_level() {
             let row_key = landing_door_row_key(&shaft_key, lv);
             if ctx.db.elevator_landing_door().row_key().find(&row_key).is_some() {
                 continue;
@@ -432,7 +436,7 @@ fn cab_walk_merge_support_feet_allowed(px: f32, pz: f32, feet_y: f32, car: &Elev
         return true;
     }
     let land_tol = LANDING_PASSAGE_DOCK_Y_TOL_M + WALK_MERGE_FEET_ON_LANDING_EXTRA_SLACK_M;
-    for lv in 1..=MAX_LEVEL {
+    for lv in 1..=max_level() {
         let fy = support_y(lv);
         if (car.cab_floor_y - fy).abs() <= LANDING_PASSAGE_DOCK_Y_TOL_M
             && (feet_y - fy).abs() <= land_tol
@@ -870,7 +874,7 @@ fn in_cab_docked_at_landing_for_spec(
     spec: &'static ElevShaftSpec,
     level: u32,
 ) -> bool {
-    let level = level.clamp(1, MAX_LEVEL);
+    let level = clamp_level(level);
     let Some(car) = ctx
         .db
         .elevator_car()
@@ -917,7 +921,7 @@ fn exterior_door_toggle_eligible_score(
     spec: &'static ElevShaftSpec,
     level: u32,
 ) -> Option<f32> {
-    let level = level.clamp(1, MAX_LEVEL);
+    let level = clamp_level(level);
     if in_cab_docked_at_landing_for_spec(ctx, p, spec, level) {
         return Some(-1_000_000.0);
     }
@@ -966,7 +970,7 @@ fn resolve_exterior_door_toggle_target(
     requested_level: u32,
     client_feet_hint: Option<(f32, f32, f32)>,
 ) -> Option<(&'static ElevShaftSpec, u32)> {
-    let requested_level = requested_level.clamp(1, MAX_LEVEL);
+    let requested_level = clamp_level(requested_level);
     if let Some(spec) = spec_for_key(requested_shaft_key) {
         let try_pose = |pose: &PlayerPose| exterior_door_toggle_pose_matches_target(ctx, pose, spec, requested_level);
         if try_pose(p) {
@@ -988,7 +992,7 @@ fn resolve_exterior_door_toggle_target(
 
     let mut best: Option<(&'static ElevShaftSpec, u32, f32)> = None;
     for spec in MAMUTH_ELEVATOR_SPECS {
-        for level in 1..=MAX_LEVEL {
+        for level in 1..=max_level() {
             let Some(score) = exterior_door_toggle_eligible_score(ctx, p, spec, level) else {
                 continue;
             };
@@ -1590,7 +1594,7 @@ pub fn elevator_hail(ctx: &ReducerContext, shaft_key: String, level: u32) {
     let Some(spec) = spec_for_key(&shaft_key) else {
         return;
     };
-    let lv = level.clamp(1, MAX_LEVEL);
+    let lv = clamp_level(level);
     let id = ctx.sender();
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
@@ -1698,7 +1702,7 @@ pub fn elevator_select_floor(ctx: &ReducerContext, shaft_key: String, level: u32
     if spec_for_key(&shaft_key).is_none() {
         return;
     }
-    let lv = level.clamp(1, MAX_LEVEL);
+    let lv = clamp_level(level);
     let id = ctx.sender();
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;

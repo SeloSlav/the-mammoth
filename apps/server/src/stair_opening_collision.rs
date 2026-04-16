@@ -578,17 +578,17 @@ fn push_shaft_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f32,
     for door in doors.iter().filter(|door| door.face == face) {
         if matches!(face, Face::E | Face::W) {
             yz_holes.push(HoleYZ {
-                z0: (door.tangent - door.width * 0.5).max(z_min - world_z),
-                z1: (door.tangent + door.width * 0.5).min(z_max - world_z),
-                y0: door.y0,
-                y1: door.y1,
+                z0: world_z + (door.tangent - door.width * 0.5).max(z_min - world_z),
+                z1: world_z + (door.tangent + door.width * 0.5).min(z_max - world_z),
+                y0: world_y + door.y0,
+                y1: world_y + door.y1,
             });
         } else {
             xy_holes.push(HoleXY {
-                x0: (door.tangent - door.width * 0.5).max(x_min - world_x),
-                x1: (door.tangent + door.width * 0.5).min(x_max - world_x),
-                y0: door.y0,
-                y1: door.y1,
+                x0: world_x + (door.tangent - door.width * 0.5).max(x_min - world_x),
+                x1: world_x + (door.tangent + door.width * 0.5).min(x_max - world_x),
+                y0: world_y + door.y0,
+                y1: world_y + door.y1,
             });
         }
     }
@@ -792,8 +792,8 @@ fn push_corridor_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f
         if matches!(face, Face::E | Face::W) {
             for zc in lobby_door_centers_along(vlen_z - 0.14) {
                 yz_holes.push(HoleYZ {
-                    z0: zc - LOBBY_DOUBLE_DOOR_W * 0.5,
-                    z1: zc + LOBBY_DOUBLE_DOOR_W * 0.5,
+                    z0: world_z + zc - LOBBY_DOUBLE_DOOR_W * 0.5,
+                    z1: world_z + zc + LOBBY_DOUBLE_DOOR_W * 0.5,
                     y0,
                     y1,
                 });
@@ -801,8 +801,8 @@ fn push_corridor_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f
         } else {
             for xc in lobby_door_centers_along(vlen_x - 0.14) {
                 xy_holes.push(HoleXY {
-                    x0: xc - LOBBY_DOUBLE_DOOR_W * 0.5,
-                    x1: xc + LOBBY_DOUBLE_DOOR_W * 0.5,
+                    x0: world_x + xc - LOBBY_DOUBLE_DOOR_W * 0.5,
+                    x1: world_x + xc + LOBBY_DOUBLE_DOOR_W * 0.5,
                     y0,
                     y1,
                 });
@@ -812,17 +812,17 @@ fn push_corridor_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f
     for contact in contacts.iter().filter(|contact| contact.corridor_wall == face) {
         if contact.hole_along_z {
             yz_holes.push(HoleYZ {
-                z0: contact.z0r,
-                z1: contact.z1r,
-                y0: contact.y0r,
-                y1: contact.y1r,
+                z0: world_z + contact.z0r,
+                z1: world_z + contact.z1r,
+                y0: world_y + contact.y0r,
+                y1: world_y + contact.y1r,
             });
         } else {
             xy_holes.push(HoleXY {
-                x0: contact.x0r,
-                x1: contact.x1r,
-                y0: contact.y0r,
-                y1: contact.y1r,
+                x0: world_x + contact.x0r,
+                x1: world_x + contact.x1r,
+                y0: world_y + contact.y0r,
+                y1: world_y + contact.y1r,
             });
         }
     }
@@ -1082,5 +1082,89 @@ pub fn append_runtime_replacement_blockers(
             continue;
         }
         out.push((aabb.min, aabb.max));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn blocks(aabbs: &[Aabb], x: f32, y: f32, z: f32) -> bool {
+        aabbs.iter().any(|aabb| {
+            x >= aabb.min[0]
+                && x <= aabb.max[0]
+                && y >= aabb.min[1]
+                && y <= aabb.max[1]
+                && z >= aabb.min[2]
+                && z <= aabb.max[2]
+        })
+    }
+
+    #[test]
+    fn off_origin_west_stair_opening_stays_clear_through_full_body_height() {
+        let mut out = Vec::new();
+        push_shaft_wall_replacements(
+            &mut out,
+            6.16,
+            4.816842105263158,
+            46.0,
+            8.35,
+            STOREY_SPACING_M,
+            13.95,
+            &[ResolvedDoor {
+                face: Face::W,
+                tangent: -5.177351451279119,
+                width: 2.469149911172827,
+                y0: -1.3989473684210527,
+                y1: 1.2689473684210528,
+            }],
+            Face::W,
+        );
+
+        let wall_x = 6.16 - 8.35 * 0.5 + WT * 0.5;
+        assert!(
+            !blocks(&out, wall_x, 4.816842105263158 - 0.06, 46.0 - 5.177351451279119),
+            "west stair doorway center should be open at off-origin shaft positions",
+        );
+        assert!(
+            blocks(&out, wall_x, 4.816842105263158 - 0.06, 46.0 + 4.2),
+            "solid wall away from the doorway must remain blocked",
+        );
+    }
+
+    #[test]
+    fn off_origin_corridor_south_contact_cuts_opening_in_rebuilt_wall() {
+        let mut out = Vec::new();
+        push_corridor_wall_replacements(
+            &mut out,
+            20.0,
+            4.816842105263158,
+            50.0,
+            4.4,
+            3.05,
+            3.8,
+            7,
+            Face::N,
+            &[CorridorContact {
+                corridor_wall: Face::N,
+                y0r: -1.33,
+                y1r: 1.33,
+                z0r: 0.0,
+                z1r: 0.0,
+                x0r: -1.2,
+                x1r: 1.2,
+                hole_along_z: false,
+            }],
+        );
+
+        let wall_z = 50.0 + 3.8 * 0.5 - WT * 0.5;
+        assert!(
+            !blocks(&out, 20.0, 4.816842105263158, wall_z),
+            "south stair entry contact should cut an opening in off-origin corridor walls",
+        );
+        assert!(
+            blocks(&out, 20.0 + 1.8, 4.816842105263158, wall_z),
+            "corridor wall outside the opening should stay blocked",
+        );
     }
 }

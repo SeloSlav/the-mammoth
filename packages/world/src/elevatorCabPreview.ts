@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { ElevatorCabDef } from "@the-mammoth/schemas";
+import { shortFloorLabelForLevel, type FloorShortLabelMap } from "./buildingFloorLabels.js";
 import { elevatorHoistwayInnerHalfExtents } from "./elevatorShaftLayout.js";
 import type { ElevatorShaftLayout } from "./elevatorShaftLayout.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
@@ -20,11 +21,10 @@ const FLOOR_ATLAS_COLS = 5;
 const FLOOR_ATLAS_CELL_W = 64;
 const FLOOR_ATLAS_CELL_H = 48;
 
-function floorButtonLabel(levelIndex: number): string {
-  return levelIndex <= 1 ? "PR" : String(levelIndex);
-}
-
-function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
+function buildElevFloorAtlas(
+  maxLevel: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): THREE.CanvasTexture {
   if (typeof document === "undefined") {
     const data = new Uint8Array([255, 255, 255, 255]);
     const tex = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat);
@@ -54,7 +54,7 @@ function buildElevFloorAtlas(maxLevel: number): THREE.CanvasTexture {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(
-      floorButtonLabel(level),
+      shortFloorLabelForLevel(level, floorLabelByLevel),
       x0 + FLOOR_ATLAS_CELL_W * 0.5,
       y0 + FLOOR_ATLAS_CELL_H * 0.5,
     );
@@ -130,6 +130,7 @@ type BuildElevatorCabCarVisualArgs = {
   layout: ElevatorShaftLayout;
   def?: ElevatorCabDef;
   maxLevel?: number;
+  floorLabelByLevel?: FloorShortLabelMap;
   /** Door opening fraction used for static previews or initial game state. */
   doorOpen01?: number;
   /** Editor cab authoring hides doors so transforms stay focused on authored shell/panel parts. */
@@ -184,6 +185,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     layout,
     def,
     maxLevel = 1,
+    floorLabelByLevel,
     doorOpen01 = 0.5,
     includeDoors = true,
     floorButtonLabelMaterial,
@@ -209,7 +211,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   const buttonMat =
     floorButtonLabelMaterial ??
     new THREE.MeshStandardMaterial({
-      map: buildElevFloorAtlas(clampedMaxLevel),
+      map: buildElevFloorAtlas(clampedMaxLevel, floorLabelByLevel),
       color: 0xffffff,
       roughness: 0.55,
       metalness: 0.12,
@@ -469,6 +471,7 @@ export function buildElevatorCabCarPreviewRoot(args: {
   layout: ElevatorShaftLayout;
   def?: ElevatorCabDef;
   maxLevel?: number;
+  floorLabelByLevel?: FloorShortLabelMap;
   /** If true, doors are left at 50% open for framing. */
   previewDoorOpen01?: number;
   includeDoors?: boolean;
@@ -477,6 +480,7 @@ export function buildElevatorCabCarPreviewRoot(args: {
     layout: args.layout,
     def: args.def,
     maxLevel: args.maxLevel,
+    floorLabelByLevel: args.floorLabelByLevel,
     doorOpen01: args.previewDoorOpen01,
     includeDoors: args.includeDoors,
   }).root;

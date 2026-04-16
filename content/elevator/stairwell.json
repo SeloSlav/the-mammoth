@@ -5,11 +5,14 @@
     "wall": {
       "mapUrl": "/static/materials/stairwell/slavic-two-tone-wall.svg"
     },
+    "floor": {
+      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-landing.svg"
+    },
     "tread": {
-      "mapUrl": "/static/materials/stairwell/slavic-terrazzo-stair-tread.svg"
+      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-tread.svg"
     },
     "landing": {
-      "mapUrl": "/static/materials/stairwell/slavic-terrazzo-landing.svg"
+      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-landing.svg"
     }
   },
   "partTransforms": {
@@ -86,7 +89,26 @@
       ]
     }
   },
-  "groundPartTransforms": {},
+  "groundPartTransforms": {
+    "stair_landing_upper": {
+      "position": [
+        -0.010005206712217218,
+        0,
+        0
+      ],
+      "scale": [
+        1.1624480636738788,
+        1,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
   "entryOpening": {
     "face": "w",
     "tangentOffsetAlongWallM": -5.177351451279119,

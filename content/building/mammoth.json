@@ -12,25 +12,26 @@
     }
   ],
   "floorRefs": [
-    { "levelIndex": 1, "floorDocId": "floor_mamutica_ground", "displayLabel": "Ground / podium" },
-    { "levelIndex": 2, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 2" },
-    { "levelIndex": 3, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 3" },
-    { "levelIndex": 4, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 4" },
-    { "levelIndex": 5, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 5" },
-    { "levelIndex": 6, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 6" },
-    { "levelIndex": 7, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 7" },
-    { "levelIndex": 8, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 8" },
-    { "levelIndex": 9, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 9" },
-    { "levelIndex": 10, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 10" },
-    { "levelIndex": 11, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 11" },
-    { "levelIndex": 12, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 12" },
-    { "levelIndex": 13, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 13" },
-    { "levelIndex": 14, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 14" },
-    { "levelIndex": 15, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 15" },
-    { "levelIndex": 16, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 16" },
-    { "levelIndex": 17, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 17" },
-    { "levelIndex": 18, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 18" },
-    { "levelIndex": 19, "floorDocId": "floor_mamutica_typical", "displayLabel": "Story 19" }
+    { "levelIndex": 1, "floorDocId": "floor_mamutica_ground", "displayLabel": "PR / ground", "shortLabel": "PR" },
+    { "levelIndex": 2, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 1", "shortLabel": "1" },
+    { "levelIndex": 3, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 2", "shortLabel": "2" },
+    { "levelIndex": 4, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 3", "shortLabel": "3" },
+    { "levelIndex": 5, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 4", "shortLabel": "4" },
+    { "levelIndex": 6, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 5", "shortLabel": "5" },
+    { "levelIndex": 7, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 6", "shortLabel": "6" },
+    { "levelIndex": 8, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 7", "shortLabel": "7" },
+    { "levelIndex": 9, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 8", "shortLabel": "8" },
+    { "levelIndex": 10, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 9", "shortLabel": "9" },
+    { "levelIndex": 11, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 10", "shortLabel": "10" },
+    { "levelIndex": 12, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 11", "shortLabel": "11" },
+    { "levelIndex": 13, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 12", "shortLabel": "12" },
+    { "levelIndex": 14, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 13", "shortLabel": "13" },
+    { "levelIndex": 15, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 14", "shortLabel": "14" },
+    { "levelIndex": 16, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 15", "shortLabel": "15" },
+    { "levelIndex": 17, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 16", "shortLabel": "16" },
+    { "levelIndex": 18, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 17", "shortLabel": "17" },
+    { "levelIndex": 19, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 18", "shortLabel": "18" },
+    { "levelIndex": 20, "floorDocId": "floor_mamutica_typical", "displayLabel": "Floor 19 / top", "shortLabel": "19" }
   ],
   "units": [
     {
@@ -47,7 +48,7 @@
   "slotTemplates": [
     {
       "wingId": "E",
-      "floorRange": [2, 19],
+      "floorRange": [2, 20],
       "unitIndexRange": [1, 40],
       "interiorTemplateId": "lobby_central"
     }
@@ -62,6 +63,7 @@
       "gross_floor_area_m2_about": 100000,
       "cross_section_note": "Wikipedia cites length/height/apartment count, not slab width. Generated floors use inferred dimensions; cores are schematic."
     },
+    "gameplay_numbering_note": "Authored stack keeps original storey spacing but adds one physical top plate so local labels read PR + 1..19.",
     "authored_floor_note": "Run `pnpm content:gen-mamutica-floor` for floor JSON; then `pnpm content:gen-walk-aabbs` so `apps/server/src/generated_walk_surfaces.rs` matches.",
     "building_access_note": "Hub stairs ~±13 m X; upper stories repeat cores. Placeholder hollow shells punch floor+ceiling plates at every elevator/stair footprint so shafts read as continuous vertical cuts. Walk AABBs: `pnpm content:gen-walk-aabbs` after floor edits.",
     "targetResidentialUnits": 1169
