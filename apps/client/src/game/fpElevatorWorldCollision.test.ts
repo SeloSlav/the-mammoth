@@ -264,7 +264,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
     expect(zGaps[0]!.z1).toBeLessThan(zGaps[1]!.z0 + 1e-3);
   });
 
-  it("uses evaluated cab docking + door state when deciding whether the landing passage is open", () => {
+  it("uses replicated docking + door state when deciding whether the landing passage is open", () => {
     const fy1 = feetYForLayout(layout, 1);
     const fy2 = feetYForLayout(layout, 2);
     const landing: ElevatorLandingDoor = {
@@ -296,7 +296,7 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       landingByRowKey: new Map([[landing.rowKey, landing]]),
       feetYForLayout,
       getCabFloorY: () => fy2,
-      getCabDoorOpen01: () => 1,
+      getCabDoorOpen01: () => 0,
     };
     const outerHz = layout.sz * 0.5;
     const hits = collectHits(auth, -2, 2, -outerHz, outerHz).filter(
@@ -306,6 +306,53 @@ describe("visitFpElevatorWorldCollisionAabbsInXZ", () => {
       (b) => b.max[1] - b.min[1] > 1.5 && b.max[0] - b.min[0] < 1.5,
     );
     expect(wallSlabs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("uses replicated cab coverage when deciding whether landing blockers are suppressed", () => {
+    const fy1 = feetYForLayout(layout, 1);
+    const fy2 = feetYForLayout(layout, 2);
+    const landing: ElevatorLandingDoor = {
+      rowKey: landingExteriorDoorRowKey(shaftKey, 1),
+      shaftKey,
+      level: 1,
+      desiredOpen: 0,
+      swingOpen01: 0,
+    };
+    const auth: FpElevatorWorldCollisionAuth = {
+      buildingOriginX: 0,
+      buildingOriginZ: 0,
+      maxLevel: 2,
+      latestCars: new Map([
+        [
+          shaftKey,
+          car({
+            shaftKey,
+            plateX: 0,
+            plateZ: 0,
+            currentLevel: 1,
+            cabFloorY: fy1,
+            doorOpen01: 0,
+            doorFace: 0,
+          }),
+        ],
+      ]),
+      layoutByKey: new Map([[shaftKey, layout]]),
+      landingByRowKey: new Map([[landing.rowKey, landing]]),
+      feetYForLayout,
+      getCabFloorY: () => fy2,
+      getCabDoorOpen01: () => 1,
+    };
+    const outerHx = layout.sx * 0.5;
+    const hits = collectHits(auth, -2, 2, -2, 2);
+    const landingY = fy1 + 1.0;
+    const landingSlabs = hits.filter(
+      (b) =>
+        b.min[1] <= landingY &&
+        b.max[1] >= landingY &&
+        b.min[0] >= outerHx - 0.25 &&
+        b.max[0] - b.min[0] < 0.8,
+    );
+    expect(landingSlabs.length).toBe(0);
   });
 
   it("does not emit a door-leaf collider while the landing door is swinging", () => {

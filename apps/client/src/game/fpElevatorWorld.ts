@@ -1064,8 +1064,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         buildingOriginZ: oz,
         maxLevel,
         latestCars: latest,
-        getEvaluatedCarRow: (shaftKey, row) =>
-          getReplicaSample(shaftKey, cabEvalNowMs)?.row ?? row,
         layoutByKey,
         landingByRowKey,
         feetYForLayout,

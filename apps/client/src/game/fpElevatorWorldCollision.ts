@@ -42,18 +42,29 @@ export type FpElevatorWorldCollisionAuth = {
   buildingOriginZ: number;
   maxLevel: number;
   latestCars: ReadonlyMap<string, ElevatorCar>;
-  getEvaluatedCarRow?: (shaftKey: string, row: ElevatorCar) => ElevatorCar;
   layoutByKey: ReadonlyMap<string, ElevatorShaftLayout>;
   landingByRowKey: ReadonlyMap<string, ElevatorLandingDoor>;
   feetYForLayout: (layout: ElevatorShaftLayout, level: number) => number;
   /**
    * Optional evaluated cab feet Y for this frame. When omitted, raw replicated `cabFloorY` is used.
-   * Supplying this keeps dynamic collision aligned with the same predicted cab pose used by support
+   * Supplying this keeps the cab's own collider aligned with the same predicted pose used by support
    * sampling and visuals.
    */
   getCabFloorY?: (shaftKey: string, row: ElevatorCar) => number;
   /** Optional evaluated interior door openness for this frame. Defaults to replicated `doorOpen01`. */
   getCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
+  /**
+   * Optional authoritative cab feet Y for landing-threshold predicates such as dock tests,
+   * moving-cab suppression, and `cabCoversLanding`. Defaults to raw replicated `cabFloorY` to
+   * mirror the server's collision decisions.
+   */
+  getLandingCollisionCabFloorY?: (shaftKey: string, row: ElevatorCar) => number;
+  /**
+   * Optional authoritative door openness for landing-threshold predicates. Defaults to raw
+   * replicated `doorOpen01` so corridor/front-wall blockers toggle on the same samples as server
+   * authority rather than visual interpolation.
+   */
+  getLandingCollisionCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
 };
 
 /** Single AABB from hinge to leaf tip (matches server `push_door_leaf_collision_panel`). */
@@ -130,22 +141,25 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
   };
 
   for (const [shaftKey, row] of latestCars) {
-    const evalRow = auth.getEvaluatedCarRow?.(shaftKey, row) ?? row;
     const layout = layoutByKey.get(shaftKey);
     if (!layout) continue;
-    const cabFloorY = auth.getCabFloorY?.(shaftKey, evalRow) ?? evalRow.cabFloorY;
-    const cabDoorOpen01 = auth.getCabDoorOpen01?.(shaftKey, evalRow) ?? evalRow.doorOpen01;
-    const plateX = ox + evalRow.plateX;
-    const plateZ = oz + evalRow.plateZ;
+    const cabFloorY = auth.getCabFloorY?.(shaftKey, row) ?? row.cabFloorY;
+    const cabDoorOpen01 = auth.getCabDoorOpen01?.(shaftKey, row) ?? row.doorOpen01;
+    const landingCollisionCabFloorY =
+      auth.getLandingCollisionCabFloorY?.(shaftKey, row) ?? row.cabFloorY;
+    const landingCollisionCabDoorOpen01 =
+      auth.getLandingCollisionCabDoorOpen01?.(shaftKey, row) ?? row.doorOpen01;
+    const plateX = ox + row.plateX;
+    const plateZ = oz + row.plateZ;
     const { halfX: hx, halfZ: hz } = elevatorCabGameplayHalfExtentsM(layout.sx, layout.sz);
 
     const innerH = Math.max(1.8, layout.sy - 2 * 0.11 - 0.14);
     const suppressMovingCabGeneratedCollision = shouldSuppressMovingCabGeneratedCollisionForQuery({
-      row: evalRow,
+      row,
       layout,
       plateX,
       plateZ,
-      cabFloorY,
+      cabFloorY: landingCollisionCabFloorY,
       innerH,
       queryPose,
     });
@@ -238,7 +252,9 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
       const landingY0 = fy - 0.22;
       const landingY1 = fy + innerH + 0.38;
       const cabCoversLanding =
-        cabDoorClosed && cabCollisionY1 > landingY0 + 0.05 && cabCollisionY0 < landingY1 - 0.05;
+        landingCollisionCabDoorOpen01 < ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN &&
+        landingCollisionCabFloorY + innerH + 0.38 > landingY0 + 0.05 &&
+        landingCollisionCabFloorY - 0.22 < landingY1 - 0.05;
 
       const y0d = fy + EXTERIOR_STRIP_Y0;
       const y1d = fy + EXTERIOR_STRIP_Y1;
@@ -334,9 +350,9 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
 
       const passageOpen = landingFrontPassageOpen({
         swingOpen01: authSwing,
-        cabFloorY,
+        cabFloorY: landingCollisionCabFloorY,
         landingFeetY: fy,
-        cabDoorOpen01,
+        cabDoorOpen01: landingCollisionCabDoorOpen01,
       });
       const y0w = landingY0;
       const y1w = landingY1;
