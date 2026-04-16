@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
+import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import { elevatorDoorFacesFromGroundFloorDoc } from "./elevatorDoorFacesFromGroundFloorDoc.js";
@@ -80,6 +81,7 @@ export function instantiateBuildingFloorStack(
     const plate = buildFloorMeshes(doc, {
       stairShaftSkipKeys,
       storyLevelIndex: ref.levelIndex,
+      storyShortLabel: shortFloorLabelForRef(ref),
       shaftHolesPlateMerged,
       shaftElevatorsMerged,
       plateWorldOriginY,

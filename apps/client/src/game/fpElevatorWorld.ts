@@ -229,6 +229,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const pendingExteriorDoorToggle = {
     shaftKey: "",
     level: 0,
+    interactHintY: 0,
     expectedDesiredOpen: 0 as 0 | 1,
     retryCount: 0,
     nextRetryAtMs: 0,
@@ -557,13 +558,21 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return best == null ? null : { shaftKey: best.shaftKey, level: best.level };
   };
 
+  // Use the camera/eye sample for vertical targeting so prompts stay on the door in front of the
+  // player when they're standing on the cab roof between landings.
+  const exteriorDoorInteractHintY = (camera: THREE.PerspectiveCamera): number => camera.position.y;
+
   const resolveExteriorDoorInteract = (
-    _camera: THREE.PerspectiveCamera,
+    camera: THREE.PerspectiveCamera,
     px: number,
-    py: number,
+    _py: number,
     pz: number,
   ): { shaftKey: string; level: number } | null =>
-    resolveExteriorDoorInteractByPose(px, py, pz);
+    resolveExteriorDoorInteractByPose(
+      px,
+      exteriorDoorInteractHintY(camera),
+      pz,
+    );
 
   const landingDoorPendingSatisfied = (
     row: ElevatorLandingDoor | undefined,
@@ -588,11 +597,17 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return false;
   };
 
-  const queueExteriorDoorToggleAttempt = (shaftKey: string, level: number, nowMs: number) => {
+  const queueExteriorDoorToggleAttempt = (
+    shaftKey: string,
+    level: number,
+    nowMs: number,
+    interactHintY: number,
+  ) => {
     const rowKey = landingExteriorDoorRowKey(shaftKey, level);
     const currentDesired = (landingByRowKey.get(rowKey)?.desiredOpen ?? 0) !== 0 ? 1 : 0;
     pendingExteriorDoorToggle.shaftKey = shaftKey;
     pendingExteriorDoorToggle.level = level;
+    pendingExteriorDoorToggle.interactHintY = interactHintY;
     pendingExteriorDoorToggle.expectedDesiredOpen = currentDesired === 0 ? 1 : 0;
     pendingExteriorDoorToggle.retryCount = 0;
     pendingExteriorDoorToggle.nextRetryAtMs = nowMs;
@@ -601,13 +616,18 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const flushPendingExteriorDoorToggle = (nowMs: number, px: number, py: number, pz: number) => {
     if (!pendingExteriorDoorToggle.shaftKey) return;
-    const pendingHit = resolveExteriorDoorInteractByPose(px, py, pz);
+    const pendingHit = resolveExteriorDoorInteractByPose(
+      px,
+      pendingExteriorDoorToggle.interactHintY || py,
+      pz,
+    );
     const stillSameTarget =
       pendingHit != null &&
       pendingHit.shaftKey === pendingExteriorDoorToggle.shaftKey &&
       pendingHit.level === pendingExteriorDoorToggle.level;
     if (!stillSameTarget) {
       pendingExteriorDoorToggle.shaftKey = "";
+      pendingExteriorDoorToggle.interactHintY = 0;
       return;
     }
     const rowKey = landingExteriorDoorRowKey(
@@ -619,6 +639,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       landingDoorPendingSatisfied(landingRow, pendingExteriorDoorToggle.expectedDesiredOpen)
     ) {
       pendingExteriorDoorToggle.shaftKey = "";
+      pendingExteriorDoorToggle.interactHintY = 0;
       return;
     }
     if (nowMs >= pendingExteriorDoorToggle.expireAtMs) {
@@ -626,7 +647,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const lv = pendingExteriorDoorToggle.level;
       const want = pendingExteriorDoorToggle.expectedDesiredOpen;
       if (!landingDoorPendingSatisfied(landingByRowKey.get(rowKey), want)) {
-        const hit = resolveExteriorDoorInteractByPose(px, py, pz);
+        const hit = resolveExteriorDoorInteractByPose(
+          px,
+          pendingExteriorDoorToggle.interactHintY || py,
+          pz,
+        );
         const stillEligible =
           hit != null && hit.shaftKey === sk && hit.level === lv;
         if (stillEligible) {
@@ -650,6 +675,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         }
       }
       pendingExteriorDoorToggle.shaftKey = "";
+      pendingExteriorDoorToggle.interactHintY = 0;
       return;
     }
     if (nowMs < pendingExteriorDoorToggle.nextRetryAtMs) return;
@@ -659,7 +685,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         level: pendingExteriorDoorToggle.level >>> 0,
         desiredOpen: pendingExteriorDoorToggle.expectedDesiredOpen,
         clientFeetX: px,
-        clientFeetY: py,
+        clientFeetY: pendingExteriorDoorToggle.interactHintY || py,
         clientFeetZ: pz,
       });
       pendingExteriorDoorToggle.retryCount += 1;
@@ -938,14 +964,15 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       playerPos.z,
     );
     if (exterior) {
-      queueExteriorDoorToggleAttempt(exterior.shaftKey, exterior.level, nowMs);
+      const interactHintY = exteriorDoorInteractHintY(camera);
+      queueExteriorDoorToggleAttempt(exterior.shaftKey, exterior.level, nowMs, interactHintY);
       try {
         void opts.conn.reducers.elevatorLandingExteriorDoorSet({
           shaftKey: exterior.shaftKey,
           level: exterior.level >>> 0,
           desiredOpen: pendingExteriorDoorToggle.expectedDesiredOpen,
           clientFeetX: playerPos.x,
-          clientFeetY: playerPos.y,
+          clientFeetY: interactHintY,
           clientFeetZ: playerPos.z,
         });
       } catch (e) {

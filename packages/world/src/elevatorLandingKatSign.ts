@@ -17,6 +17,16 @@ export function landingKatSignTextForStory(storyLevelIndex: number): string | nu
   return `${storyLevelIndex} KAT`;
 }
 
+export function landingKatSignText(
+  storyLevelIndex: number,
+  storyShortLabel?: string,
+): string | null {
+  if (storyLevelIndex <= 1) return null;
+  if (storyLevelIndex === 99) return null;
+  const label = storyShortLabel?.trim();
+  return `${label && label.length > 0 ? label : String(storyLevelIndex)} KAT`;
+}
+
 /** Opposite compass face (e↔w, n↔s). */
 export function oppositeCardinalFace(face: CardinalFace): CardinalFace {
   switch (face) {
@@ -82,6 +92,7 @@ export function addOppositeCorridorKatSignMeshes(
   _sy: number,
   sz: number,
   storyLevelIndex: number,
+  storyShortLabel: string | undefined,
   placements: readonly {
     corridorWall: CardinalFace;
     yDoorTop: number;
@@ -89,7 +100,7 @@ export function addOppositeCorridorKatSignMeshes(
     xMid: number;
   }[],
 ): void {
-  const label = landingKatSignTextForStory(storyLevelIndex);
+  const label = landingKatSignText(storyLevelIndex, storyShortLabel);
   if (!label || placements.length === 0) return;
   const mat = createElevatorKatSignMaterial(label);
   if (!mat) return;

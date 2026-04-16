@@ -49,6 +49,7 @@ import {
   readElevatorDoorFaceOverride,
   type BuildFloorMeshesOptions,
 } from "./elevatorDoorFacesFromGroundFloorDoc.js";
+import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
 import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
 import type { CollisionAabb } from "./collisionScene.js";
 
@@ -144,6 +145,8 @@ type HollowShellOpts = {
   skipShaftCutouts: boolean;
   /** 1-based storey; level 1 gets lobby-style openings on corridor shells. */
   storyLevelIndex?: number;
+  /** Optional authored compact floor label for landing signs, e.g. `PR`, `1`, `19`. */
+  storyShortLabel?: string;
   /** Elevator-only union (plate-space); second cut on shell floor/ceiling so flanking plates do not cap hoistways. */
   shaftElevatorsMerged?: readonly ShaftSlabHole[];
   /** Cuts through corridor walls opposite elevator doors (room-local). */
@@ -1131,6 +1134,7 @@ function addHollowRoomShell(
       sy,
       sz,
       opts.storyLevelIndex ?? 99,
+      opts.storyShortLabel,
       opts.elevatorSignPlacements ?? [],
     );
     return;
@@ -1294,6 +1298,7 @@ function addHollowRoomShell(
     sy,
     sz,
     opts.storyLevelIndex ?? 99,
+    opts.storyShortLabel,
     opts.elevatorSignPlacements ?? [],
   );
 }
@@ -1617,6 +1622,7 @@ export function buildFloorMeshes(
         roomPz: obj.position[2],
         skipShaftCutouts,
         storyLevelIndex: opts?.storyLevelIndex,
+        storyShortLabel: opts?.storyShortLabel,
         shaftElevatorsMerged,
         corridorWallHoles,
         elevatorSignPlacements,
@@ -1954,6 +1960,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         roomPz: obj.position[2],
         skipShaftCutouts: false,
         storyLevelIndex: ref.levelIndex,
+        storyShortLabel: shortFloorLabelForRef(ref),
         corridorWallHoles,
       });
       replacementBlockers.push(

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b8afa6"/>
+      <stop offset="100%" stop-color="#a69d94"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="60%" cy="78%" r="48%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="55%" stop-color="#f3f3f1" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="fineDarkSpecks" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="none"/>
+      <g fill="#625a53" opacity="0.26">
+        <circle cx="8" cy="9" r="0.9"/>
+        <circle cx="20" cy="15" r="1"/>
+        <ellipse cx="33" cy="10" rx="1.4" ry="0.9"/>
+        <circle cx="52" cy="12" r="0.9"/>
+        <ellipse cx="13" cy="28" rx="1.5" ry="1"/>
+        <circle cx="24" cy="22" r="0.9"/>
+        <circle cx="42" cy="30" r="1"/>
+        <ellipse cx="56" cy="26" rx="1.3" ry="0.8"/>
+        <circle cx="7" cy="44" r="1"/>
+        <ellipse cx="18" cy="50" rx="1.3" ry="0.8"/>
+        <circle cx="34" cy="41" r="0.9"/>
+        <ellipse cx="47" cy="53" rx="1.5" ry="1"/>
+        <circle cx="59" cy="47" r="0.9"/>
+      </g>
+    </pattern>
+    <pattern id="sparkle" width="72" height="72" patternUnits="userSpaceOnUse">
+      <rect width="72" height="72" fill="none"/>
+      <g stroke="#fffdf8" stroke-width="1.7" stroke-linecap="round" opacity="0.65">
+        <path d="M16 18 l2 2"/>
+        <path d="M45 11 l2 2"/>
+        <path d="M60 31 l2 2"/>
+        <path d="M24 48 l2 2"/>
+        <path d="M50 55 l2 2"/>
+        <path d="M10 62 l2 2"/>
+      </g>
+      <g stroke="#ece8e0" stroke-width="1.2" stroke-linecap="round" opacity="0.35">
+        <path d="M30 24 l1.5 1.5"/>
+        <path d="M56 46 l1.5 1.5"/>
+        <path d="M18 36 l1.5 1.5"/>
+      </g>
+    </pattern>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#base)"/>
+  <rect width="512" height="512" fill="url(#fineDarkSpecks)"/>
+  <rect width="512" height="512" fill="url(#sparkle)"/>
+  <rect width="512" height="512" fill="url(#sheen)"/>
+
+  <g opacity="0.08">
+    <path d="M0 124 C108 112, 190 140, 292 128 S434 105, 512 119 V152 H0 Z" fill="#746c65"/>
+    <path d="M0 330 C94 318, 188 348, 286 334 S430 309, 512 324 V357 H0 Z" fill="#7a726b"/>
+  </g>
+
+  <g fill="#5e5650" opacity="0.18">
+    <circle cx="98" cy="142" r="3"/>
+    <circle cx="362" cy="104" r="2.5"/>
+    <circle cx="421" cy="226" r="2.7"/>
+    <circle cx="135" cy="318" r="2.4"/>
+    <circle cx="288" cy="402" r="2.8"/>
+  </g>
+</svg>

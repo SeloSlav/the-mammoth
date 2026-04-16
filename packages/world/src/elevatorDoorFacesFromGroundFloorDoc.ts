@@ -32,6 +32,8 @@ export type BuildFloorMeshesOptions = {
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
   /** Shared authored stairwell appearance / delta transforms. */
   stairWellDef?: StairWellDef;
+  /** Optional authored compact floor label for landing signs, e.g. `PR`, `1`, `19`. */
+  storyShortLabel?: string;
 };
 
 type ElevatorDoorFaceOverrideMeta = {
