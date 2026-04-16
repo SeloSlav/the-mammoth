@@ -27,4 +27,27 @@ describe("resolveFpCharacterCollisions", () => {
     expect(pos.x).toBeLessThan(1.95);
     expect(Math.abs(pos.z)).toBeGreaterThan(0.5);
   });
+
+  it("lowers grounded feet to preserve headroom under a thin ignored slab", () => {
+    const solids: CollisionAabb[] = [
+      { min: [-1, 2.95, -1], max: [1, 3.05, 1] },
+    ];
+    const index = buildCollisionSpatialIndex(solids);
+    const pos = { x: 0, y: 2.4, z: 0 };
+    const prevPos = { x: 0, y: 2.48, z: 0 };
+    const vel = { x: 0, y: 0, z: 0 };
+    resolveFpCharacterCollisions({
+      pos,
+      prevPos,
+      vel,
+      bodyHeight: 1.78,
+      radius: 0.22,
+      stepUpMargin: 0.82,
+      stepUpProbeM: 0.41,
+      staticIndex: index,
+      grounded: true,
+    });
+    expect(pos.y).toBeCloseTo(2.95 - 1.78 - 0.0015, 6);
+    expect(vel.y).toBe(0);
+  });
 });

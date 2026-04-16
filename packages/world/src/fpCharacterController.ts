@@ -515,7 +515,10 @@ export function resolveFpCharacterCollisions(opts: ResolveFpCharacterCollisionOp
     dynamicSource,
   );
 
-  if (vel.y > 0) {
+  // Always enforce standing headroom after support snapping / step-up. Descending stairs can leave
+  // the feet too high under a thin landing whose top is still inside the step-ignore band, so a
+  // jump-only ceiling pass lets the head clip into the overhead slab.
+  {
     const x0 = pos.x - radius - COLLISION_EPS;
     const x1 = pos.x + radius + COLLISION_EPS;
     const z0 = pos.z - radius - COLLISION_EPS;

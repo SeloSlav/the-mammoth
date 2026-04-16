@@ -463,7 +463,7 @@ fn depenetrate<F>(
     }
 }
 
-/// Static world shards + optional ceiling clamp when `vel_y > 0`.
+/// Static world shards + standing head-clearance clamp.
 pub fn resolve_player_static_collisions_character(
     p: &mut PlayerPose,
     prev_x: f32,
@@ -547,7 +547,7 @@ pub fn resolve_player_static_collisions_character(
     fallback_feet_y.set(p.y);
     depenetrate(p, prev_x, prev_z, body_h, r, buf, &mut fill);
 
-    if p.vel_y > 0.0 {
+    {
         let x0 = p.x - r - COLLISION_EPS;
         let x1 = p.x + r + COLLISION_EPS;
         let z0 = p.z - r - COLLISION_EPS;
@@ -649,7 +649,7 @@ pub fn resolve_horizontal_character_with_fill<F>(
 
     depenetrate(p, prev_x, prev_z, body_h, foot_r, buf, fill);
 
-    if p.vel_y > 0.0 {
+    {
         let r = foot_r;
         let x0 = p.x - r - COLLISION_EPS;
         let x1 = p.x + r + COLLISION_EPS;

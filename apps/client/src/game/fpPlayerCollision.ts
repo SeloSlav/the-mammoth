@@ -355,7 +355,6 @@ export function resolvePlayerCollisions(
 
   const resolveCeiling = () => {
     const radius = FP_PLAYER_COLLISION_RADIUS_M;
-    if (vel.y <= 0) return;
     const x0 = pos.x - radius - COLLISION_EPS;
     const x1 = pos.x + radius + COLLISION_EPS;
     const z0 = pos.z - radius - COLLISION_EPS;

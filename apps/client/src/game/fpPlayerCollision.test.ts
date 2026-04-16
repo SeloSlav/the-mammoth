@@ -105,6 +105,17 @@ describe("resolvePlayerCollisions", () => {
     expect(vel.z).toBe(0);
   });
 
+  it("preserves grounded headroom under a thin slab while descending", () => {
+    const solids = [aabb(-1, 2.95, -1, 1, 3.05, 1)];
+    const index = buildCollisionSpatialIndex(solids);
+    const prev = new THREE.Vector3(0, 2.48, 0);
+    const pos = new THREE.Vector3(0, 2.4, 0);
+    const vel = new THREE.Vector3(0, 0, 0);
+    resolvePlayerCollisions(pos, prev, vel, false, 0.82, index, undefined, true);
+    expect(pos.y).toBeCloseTo(2.95 - 1.78 - 0.0015, 6);
+    expect(vel.y).toBe(0);
+  });
+
   it("blocks horizontal motion into a closed elevator cab door slab from the hallway (+X / east)", () => {
     const shaftKey = "fp-player-collision-elev-shaft";
     const plateLocalY = 1.6589473684210527;

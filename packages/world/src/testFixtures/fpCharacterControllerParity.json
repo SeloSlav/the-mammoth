@@ -28,6 +28,20 @@
       "grounded": false,
       "expectPos": [1.7799998333333333, 0, 2],
       "expectVel": [0, 0, 2]
+    },
+    {
+      "name": "grounded_headroom_under_step_ignored_slab",
+      "aabbs": [{ "min": [-1, 2.95, -1], "max": [1, 3.05, 1] }],
+      "prevPos": [0, 2.48, 0],
+      "targetPos": [0, 2.4, 0],
+      "vel": [0, 0, 0],
+      "bodyHeight": 1.78,
+      "radius": 0.22,
+      "stepUpMargin": 0.82,
+      "stepUpProbeM": 0.41,
+      "grounded": true,
+      "expectPos": [0, 1.1685, 0],
+      "expectVel": [0, 0, 0]
     }
   ]
 }
