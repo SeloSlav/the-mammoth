@@ -20,7 +20,13 @@ export const LandingKitMaterialSlotSchema = z.object({
 export type LandingKitMaterialSlot = z.infer<typeof LandingKitMaterialSlotSchema>;
 
 /**
- * Shared exterior landing door kit (one definition, repeated per level per shaft).
+ * Shared swing-door kit. The same schema drives:
+ *
+ * - `content/elevator/landing_kit.json` (elevator landing exterior swing — the "corridor door").
+ * - `content/door/apartment_unit_kit.json` (per-unit apartment swing door, opaque/solid).
+ *
+ * Both feed into the shared mesh path in `packages/world/src/swingDoorMesh.ts`. Per-variant
+ * differences are expressed via the optional fields below (size overrides, `solid` flag).
  */
 export const LandingKitDefSchema = z.object({
   id: z.string(),
@@ -50,6 +56,20 @@ export const LandingKitDefSchema = z.object({
    * Optional overrides for non-opening parts only (glass is driven by `glassOpening`).
    */
   partTransforms: z.record(z.string(), LandingKitPartTransformEntrySchema).optional(),
+  /**
+   * When true the leaf renders as an opaque solid panel: the glass lite is replaced with a filled
+   * rectangle painted with the frame material. Used by the apartment door kit. Defaults to false
+   * (legacy elevator landing door keeps its glazed lite).
+   */
+  solid: z.boolean().optional(),
+  /**
+   * Per-variant override for the leaf panel width (hinge-to-tip, meters). When omitted the call
+   * site supplies a default — the elevator landing uses `EXTERIOR_DOOR_W_M`, apartment doors use
+   * the override.
+   */
+  panelWidthM: z.number().positive().max(3.0).optional(),
+  /** Per-variant override for the leaf panel height (meters). Same convention as `panelWidthM`. */
+  panelHeightM: z.number().positive().max(3.5).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

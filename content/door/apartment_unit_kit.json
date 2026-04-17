@@ -1,0 +1,16 @@
+{
+  "id": "default_apartment_unit_kit",
+  "version": 1,
+  "displayName": "Apartment unit door kit",
+  "materials": {
+    "frame": {
+      "colorHex": "0x6c4a2a",
+      "roughness": 0.78,
+      "metalness": 0.04
+    }
+  },
+  "exteriorSwingMaxRad": 1.4,
+  "solid": true,
+  "panelWidthM": 1.18,
+  "panelHeightM": 2.0
+}

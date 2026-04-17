@@ -141,6 +141,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
         .map(|c| (c.shaft_key.clone(), c))
         .collect();
     elevator::tick_all_elevators(ctx, TICK_DT);
+    crate::apartment_door::tick_apartment_doors(ctx, TICK_DT);
 
     let mut collision_scratch: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(512);
     for pose in ctx.db.player_pose().iter() {
@@ -183,6 +184,14 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
             &mut collision_scratch,
         );
         elevator::resolve_player_generated_collision_aabbs(
+            ctx,
+            &mut p,
+            prev_x,
+            prev_y,
+            prev_z,
+            input.bits & BIT_CROUCH != 0,
+        );
+        crate::apartment_door::resolve_player_apartment_door_collisions(
             ctx,
             &mut p,
             prev_x,

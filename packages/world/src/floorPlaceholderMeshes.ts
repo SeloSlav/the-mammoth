@@ -76,11 +76,12 @@ const LOBBY_DOOR_SILL = 0.04;
 /** Minimum centre-to-centre spacing so adjacent double frames read as separate bays. */
 const LOBBY_DOUBLE_DOOR_BAY_SPACING = LOBBY_DOUBLE_DOOR_W + 0.56;
 
-/** Typical residential entry clear width — aligned opening on both unit and corridor shells. */
-const UNIT_CORRIDOR_TOUCH_M = 0.55;
-const UNIT_ENTRY_DOOR_W = 1.26;
-const UNIT_ENTRY_DOOR_H = 2.06;
-const UNIT_ENTRY_DOOR_SILL = 0.04;
+import {
+  entryDoorTangentHalfFromOverlap,
+  entryDoorYRangeForShell,
+  UNIT_CORRIDOR_TOUCH_M,
+  UNIT_ENTRY_DOOR_W,
+} from "./unitEntryAdjacency.js";
 
 function matsFor(kind: PlaceholderKind): {
   floor: THREE.MeshStandardMaterial;
@@ -384,28 +385,6 @@ function mergeCorridorShellWallHoles(
   return n > 0 ? out : undefined;
 }
 
-function entryDoorYRangeForShell(sy: number): { yDoor0: number; yDoor1: number } {
-  const wt = 0.11;
-  const vh = Math.max(sy - 2 * wt, 0.05);
-  const yLo = -vh * 0.5;
-  const yHi = vh * 0.5;
-  const yDoor0 = yLo + UNIT_ENTRY_DOOR_SILL;
-  const yDoor1 = Math.min(yHi - 0.05, yDoor0 + UNIT_ENTRY_DOOR_H);
-  return { yDoor0, yDoor1 };
-}
-
-/**
- * Half-width along wall tangent for a door centred in `[t0,t1]` (world-line overlap).
- */
-function entryDoorTangentHalfFromOverlap(t0: number, t1: number): number | undefined {
-  const lo = Math.min(t0, t1);
-  const hi = Math.max(t0, t1);
-  const span = hi - lo;
-  if (span < 0.34) return undefined;
-  const avail = span * 0.5 - 0.08;
-  if (avail < 0.22) return undefined;
-  return Math.min(UNIT_ENTRY_DOOR_W * 0.5, avail);
-}
 
 /**
  * Door cut on the **unit** wall shared with a corridor / lobby volume.

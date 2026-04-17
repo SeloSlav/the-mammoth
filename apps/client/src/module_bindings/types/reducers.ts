@@ -6,6 +6,8 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import ApartmentDoorSetReducer from "../apartment_door_set_reducer";
+import ApartmentDoorToggleReducer from "../apartment_door_toggle_reducer";
 import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer";
 import CleanupOldWorldSoundEventsReducer from "../cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "../consume_hotbar_item_reducer";
@@ -27,6 +29,8 @@ import SetUsernameReducer from "../set_username_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "../submit_move_intent_reducer";
 
+export type ApartmentDoorSetParams = __Infer<typeof ApartmentDoorSetReducer>;
+export type ApartmentDoorToggleParams = __Infer<typeof ApartmentDoorToggleReducer>;
 export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItemsReducer>;
 export type CleanupOldWorldSoundEventsParams = __Infer<typeof CleanupOldWorldSoundEventsReducer>;
 export type ConsumeHotbarItemParams = __Infer<typeof ConsumeHotbarItemReducer>;

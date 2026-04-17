@@ -2,11 +2,13 @@
 //! Run `pnpm client:generate` from the repo root to refresh TypeScript bindings.
 
 mod accounts;
+mod apartment_door;
 mod auth;
 mod character_controller;
 mod combat_stub;
 mod dropped_item;
 mod elevator;
+mod generated_apartment_doors;
 mod generated_collision_solids;
 mod elevator_layout;
 mod generated_walk_surfaces;
@@ -30,6 +32,7 @@ use pose::{player_pose, PlayerPose};
 pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
     elevator::seed_elevators(ctx);
+    apartment_door::seed_apartment_doors(ctx);
     movement::start_physics_schedule(ctx);
     player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
@@ -62,6 +65,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     }
     movement::ensure_player_input_row(ctx, id, 0.0);
     elevator::seed_elevator_landing_doors(ctx);
+    apartment_door::seed_apartment_doors(ctx);
     world_sound::ensure_player_audio_rows(ctx, id);
     player_vitals::ensure_player_vitals_row(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);

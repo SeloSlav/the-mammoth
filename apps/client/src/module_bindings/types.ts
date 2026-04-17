@@ -10,6 +10,22 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const ApartmentDoor = __t.object("ApartmentDoor", {
+  rowKey: __t.string(),
+  floorDocId: __t.string(),
+  level: __t.u32(),
+  templateId: __t.string(),
+  face: __t.u8(),
+  hingeX: __t.f32(),
+  hingeZ: __t.f32(),
+  feetY: __t.f32(),
+  panelWM: __t.f32(),
+  panelHM: __t.f32(),
+  desiredOpen: __t.u8(),
+  swingOpen01: __t.f32(),
+});
+export type ApartmentDoor = __Infer<typeof ApartmentDoor>;
+
 export const DroppedItem = __t.object("DroppedItem", {
   id: __t.u64(),
   defId: __t.string(),
