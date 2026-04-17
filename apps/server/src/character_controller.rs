@@ -27,6 +27,73 @@ const RAY_EPS: f32 = 1e-8;
 /// `HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M` in `fpCharacterController.ts` +
 /// `fpPlayerCollision.ts`.
 const HEAD_CLEARANCE_MIN_CEILING_BOTTOM_ABOVE_FEET_M: f32 = 0.5;
+const WEST_DOOR_DEBUG_X_MIN: f32 = 0.3;
+const WEST_DOOR_DEBUG_X_MAX: f32 = 2.4;
+const WEST_DOOR_DEBUG_Z_MIN: f32 = -16.9;
+const WEST_DOOR_DEBUG_Z_MAX: f32 = -14.1;
+const WEST_DOOR_DEBUG_Y_MIN: f32 = 3.0;
+const WEST_DOOR_DEBUG_Y_MAX: f32 = 5.7;
+
+#[inline]
+fn west_door_debug_zone(x: f32, y: f32, z: f32) -> bool {
+    x >= WEST_DOOR_DEBUG_X_MIN
+        && x <= WEST_DOOR_DEBUG_X_MAX
+        && y >= WEST_DOOR_DEBUG_Y_MIN
+        && y <= WEST_DOOR_DEBUG_Y_MAX
+        && z >= WEST_DOOR_DEBUG_Z_MIN
+        && z <= WEST_DOOR_DEBUG_Z_MAX
+}
+
+fn log_west_door_static_debug(
+    label: &str,
+    p: &PlayerPose,
+    prev_x: f32,
+    prev_z: f32,
+    target_x: f32,
+    target_z: f32,
+    body_h: f32,
+    blockers: &[([f32; 3], [f32; 3])],
+) {
+    if !west_door_debug_zone(p.x, p.y, p.z)
+        && !west_door_debug_zone(target_x, p.y, target_z)
+        && !west_door_debug_zone(prev_x, p.y, prev_z)
+    {
+        return;
+    }
+    let body_min_x = p.x - FOOT_R;
+    let body_max_x = p.x + FOOT_R;
+    let body_min_z = p.z - FOOT_R;
+    let body_max_z = p.z + FOOT_R;
+    let mut hits: Vec<String> = Vec::new();
+    for (mn, mx) in blockers.iter() {
+        if !vertical_overlap_body(p.y, body_h, mn, mx) {
+            continue;
+        }
+        if body_max_x <= mn[0] || body_min_x >= mx[0] || body_max_z <= mn[2] || body_min_z >= mx[2] {
+            continue;
+        }
+        hits.push(format!(
+            "[{:.3},{:.3},{:.3}]→[{:.3},{:.3},{:.3}]",
+            mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]
+        ));
+        if hits.len() >= 6 {
+            break;
+        }
+    }
+    if hits.is_empty() && (p.x - target_x).abs() < 0.02 && (p.z - target_z).abs() < 0.02 {
+        return;
+    }
+    log::info!(
+        "[west-door-debug][static][{label}] prev=({prev_x:.3},{prev_z:.3}) target=({target_x:.3},{target_z:.3}) resolved=({:.3},{:.3},{:.3}) vel=({:.3},{:.3},{:.3}) hits={}",
+        p.x,
+        p.y,
+        p.z,
+        p.vel_x,
+        p.vel_y,
+        p.vel_z,
+        if hits.is_empty() { "[]".to_string() } else { format!("[{}]", hits.join(", ")) },
+    );
+}
 
 #[inline]
 fn ignore_horizontal_block(feet_y: f32, top_y: f32) -> bool {
@@ -599,6 +666,39 @@ pub fn resolve_player_static_collisions_character(
                 p.vel_y = 0.0;
             }
         }
+    }
+
+    fill_static_blockers(
+        p.x - r - COLLISION_EPS,
+        p.x + r + COLLISION_EPS,
+        p.z - r - COLLISION_EPS,
+        p.z + r + COLLISION_EPS,
+        p.y,
+        body_h,
+        buf,
+    );
+    if (p.x - target_x).abs() > 0.05 || (p.z - target_z).abs() > 0.05 {
+        log_west_door_static_debug(
+            "movement_clamped",
+            p,
+            prev_x,
+            prev_z,
+            target_x,
+            target_z,
+            body_h,
+            buf,
+        );
+    } else if west_door_debug_zone(p.x, p.y, p.z) {
+        log_west_door_static_debug(
+            "near_zone",
+            p,
+            prev_x,
+            prev_z,
+            target_x,
+            target_z,
+            body_h,
+            buf,
+        );
     }
 }
 

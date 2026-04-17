@@ -42,6 +42,13 @@ const SWING_DOOR_INTERACT_Y_HALF_M: f32 = 1.4;
 const WALK_PROBE_DY: f32 = 1.05;
 /// Allow the client's reported feet hint to lead the replicated pose by up to this much.
 const CLIENT_FEET_HINT_MAX_SEP_M: f32 = 2.8;
+const WEST_DOOR_DEBUG_ROW_KEY: &str = "floor_mamutica_typical|2|unit_e_008|w";
+const WEST_DOOR_DEBUG_X_MIN: f32 = 0.3;
+const WEST_DOOR_DEBUG_X_MAX: f32 = 2.4;
+const WEST_DOOR_DEBUG_Z_MIN: f32 = -16.9;
+const WEST_DOOR_DEBUG_Z_MAX: f32 = -14.1;
+const WEST_DOOR_DEBUG_Y_MIN: f32 = 3.0;
+const WEST_DOOR_DEBUG_Y_MAX: f32 = 5.7;
 
 /// Face code convention (matches `FACE_CODE` in `swingDoorCollision.ts`):
 /// 0 = N, 1 = S, 2 = E, 3 = W.
@@ -97,6 +104,16 @@ fn plate_world_y(level: u32) -> f32 {
 #[inline]
 fn feet_world_y(level: u32, feet_y_offset: f32) -> f32 {
     plate_world_y(level) + feet_y_offset
+}
+
+#[inline]
+fn west_door_debug_zone(x: f32, y: f32, z: f32) -> bool {
+    x >= WEST_DOOR_DEBUG_X_MIN
+        && x <= WEST_DOOR_DEBUG_X_MAX
+        && y >= WEST_DOOR_DEBUG_Y_MIN
+        && y <= WEST_DOOR_DEBUG_Y_MAX
+        && z >= WEST_DOOR_DEBUG_Z_MIN
+        && z <= WEST_DOOR_DEBUG_Z_MAX
 }
 
 /// Parse `content/building/mammoth.json` once and cache the floor-ref list
@@ -358,6 +375,41 @@ pub fn resolve_player_apartment_door_collisions(
     crate::character_controller::resolve_horizontal_character_with_fill(
         p, prev_x, prev_y, prev_z, body_h, grounded, FOOT_R, &mut fill, &mut tuples,
     );
+
+    if west_door_debug_zone(p.x, p.y, p.z) || west_door_debug_zone(prev_x, prev_y, prev_z) {
+        if let Some(row) = ctx.db.apartment_door().row_key().find(&WEST_DOOR_DEBUG_ROW_KEY.to_string()) {
+            let (mn, mx) = if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
+                closed_slab_aabb(&row)
+            } else if row.swing_open_01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 {
+                parked_leaf_aabb(&row)
+            } else {
+                ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+            };
+            let regime = if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
+                "closed-slab"
+            } else if row.swing_open_01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 {
+                "parked-leaf"
+            } else {
+                "transition"
+            };
+            log::info!(
+                "[west-door-debug][dynamic] prev=({prev_x:.3},{prev_y:.3},{prev_z:.3}) resolved=({:.3},{:.3},{:.3}) row_key={} desired={} open01={:.3} regime={} aabb=[{:.3},{:.3},{:.3}]→[{:.3},{:.3},{:.3}]",
+                p.x,
+                p.y,
+                p.z,
+                row.row_key,
+                row.desired_open,
+                row.swing_open_01,
+                regime,
+                mn[0],
+                mn[1],
+                mn[2],
+                mx[0],
+                mx[1],
+                mx[2],
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
