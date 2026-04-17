@@ -9,6 +9,7 @@ import {
   EXTERIOR_DOOR_PANEL_W_M,
   LANDING_DOOR_GLASS_PART_ID,
   populateExteriorLandingDoorSwing,
+  resolveLandingDims,
   resolveGlassOpening,
 } from "./exteriorLandingDoorSwing.js";
 
@@ -25,6 +26,17 @@ const FLOOR_T = 0.08;
 /** Full exterior door width including jambs (matches client `EXTERIOR_DOOR_W_M`). */
 const EXTERIOR_DOOR_W_M = EXTERIOR_DOOR_PANEL_W_M + 0.1;
 
+function applyLandingKitPreviewMeta(
+  doorStructure: THREE.Object3D,
+  def: LandingKitDef | undefined,
+): void {
+  const dims = resolveLandingDims(def);
+  doorStructure.userData.editorLandingKitRoot = true;
+  doorStructure.userData.editorLandingKitSolid = Boolean(def?.solid);
+  doorStructure.userData.editorLandingPanelWidthM = dims.panelW;
+  doorStructure.userData.editorLandingPanelHeightM = dims.panelH;
+}
+
 /**
  * Rebuilds swing meshes + editor opening proxy from `def` (materials, rails/stiles/glass, proxy).
  * Preserves swing's world transform; caller should re-apply preview swing angle if needed.
@@ -35,6 +47,7 @@ export function rebuildLandingDoorPreviewSwing(doorStructure: THREE.Group, def: 
   disposeExteriorLandingDoorSwingContents(swing);
   const { redMat, glassMat } = createExteriorLandingDoorMaterials(def);
   populateExteriorLandingDoorSwing(swing, redMat, glassMat, def);
+  applyLandingKitPreviewMeta(doorStructure, def);
   const glass = swing.getObjectByName(LANDING_DOOR_GLASS_PART_ID) as THREE.Mesh | undefined;
   if (glass) {
     glass.raycast = () => {};
@@ -90,7 +103,7 @@ export function buildLandingDoorPreviewRoot(args: {
 
   swing.rotation.y = swingSign * swingOpen01 * maxRad;
 
-  structure.userData.editorLandingKitRoot = true;
+  applyLandingKitPreviewMeta(structure, def);
   return structure;
 }
 

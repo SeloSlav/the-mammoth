@@ -97,6 +97,18 @@ describe("resolveLandingKitPickId", () => {
     expect(resolveLandingKitPickTarget(frame)).toBe(frame);
   });
 
+  it("collapses solid-leaf landing picks to the whole kit when requested", () => {
+    const root = new THREE.Group();
+    root.userData.editorLandingKitRoot = true;
+    const swing = new THREE.Group();
+    root.add(swing);
+    const frame = new THREE.Mesh();
+    frame.userData.editorLandingPartId = "landing_frame_top_rail";
+    swing.add(frame);
+    expect(resolveLandingKitPickId(frame, { solidLeafAsWhole: true })).toBe("landing_door_kit");
+    expect(resolveLandingKitPickTarget(frame, { solidLeafAsWhole: true })).toBe(root);
+  });
+
   it("returns null when absent", () => {
     expect(resolveLandingKitPickId(new THREE.Mesh())).toBe(null);
   });

@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ../../scripts/free-local-dev-server-port.mjs --port 5174 --must-include the-mammoth --must-include apps\\editor --must-include vite && cross-env EDITOR_SAVE=1 node --import=tsx ./node_modules/vite/bin/vite.js",
-    "build": "tsc --noEmit && node --import=tsx ./node_modules/vite/bin/vite.js build",
-    "preview": "node --import=tsx ./node_modules/vite/bin/vite.js preview",
+    "dev": "node ../../scripts/free-local-dev-server-port.mjs --port 5174 --must-include the-mammoth --must-include apps\\editor --must-include vite && cross-env EDITOR_SAVE=1 vite --configLoader runner",
+    "build": "tsc --noEmit && vite build --configLoader runner",
+    "preview": "vite preview --configLoader runner",
     "lint": "eslint .",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
@@ -14,7 +14,7 @@
   "dependencies": {
     "@the-mammoth/engine": "workspace:*",
     "@the-mammoth/game": "workspace:*",
-    "@the-mammoth/schemas": "worksp
+    "@the-mammoth/schemas": "workspace:*",
     "@the-mammoth/world": "workspace:*",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

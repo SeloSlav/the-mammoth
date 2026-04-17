@@ -64,4 +64,18 @@ describe("landing door preview", () => {
     expect(taggedIds.has(LANDING_DOOR_LEFT_STILE_PART_ID)).toBe(true);
     expect(taggedIds.has(LANDING_DOOR_RIGHT_STILE_PART_ID)).toBe(true);
   });
+
+  it("stores solid-leaf preview dimensions on the root for whole-door editing", () => {
+    const def = LandingKitDefSchema.parse({
+      id: "apartment",
+      version: 1,
+      solid: true,
+      panelWidthM: 1.18,
+      panelHeightM: 2.0,
+    });
+    const root = buildLandingDoorPreviewRoot({ face: "e", hx: 2, hz: 2, def });
+    expect(root.userData.editorLandingKitSolid).toBe(true);
+    expect(root.userData.editorLandingPanelWidthM).toBeCloseTo(1.18);
+    expect(root.userData.editorLandingPanelHeightM).toBeCloseTo(2.0);
+  });
 });

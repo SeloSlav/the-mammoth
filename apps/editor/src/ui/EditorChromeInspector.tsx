@@ -17,7 +17,12 @@ import {
   STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
-import type { EditorState, EditorMode, EditorWorkspace } from "../state/editorStore.js";
+import type {
+  EditorState,
+  EditorMode,
+  EditorWorkspace,
+  LandingKitVariant,
+} from "../state/editorStore.js";
 
 function readScale(s: [number, number, number] | undefined): [number, number, number] {
   return [s?.[0] ?? 1, s?.[1] ?? 1, s?.[2] ?? 1];
@@ -43,6 +48,7 @@ function stairOpeningForScope(
 export function EditorChromeInspector(props: {
   workspace: EditorWorkspace;
   mode: EditorMode;
+  landingKitVariant: LandingKitVariant;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
   stairWellDef: StairWellDef;
@@ -78,6 +84,7 @@ export function EditorChromeInspector(props: {
   const {
     workspace,
     mode,
+    landingKitVariant,
     elevatorCabDef,
     landingKitDef,
     stairWellDef,
@@ -184,11 +191,21 @@ export function EditorChromeInspector(props: {
 
       {mode === "landing_preview" ? (
         <>
-          <label style={label}>Corridor door opening</label>
+          <label style={label}>
+            {landingKitVariant === "apartment" ? "Apartment unit door" : "Corridor door opening"}
+          </label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
-            Geometry only. Use the opening proxy or these fields to set the shared corridor-door hole.
+            {landingKitVariant === "apartment"
+              ? "Solid-leaf apartment kit. Scale the whole `landing_door_kit` in the viewport to stretch width/height, or type exact panel dimensions here."
+              : "Geometry only. Use the opening proxy or these fields to set the shared corridor-door hole."}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: landingKitVariant === "apartment" ? "1fr 1fr 1fr" : "1fr 1fr",
+              gap: 6,
+            }}
+          >
             <label style={{ ...label, textTransform: "none" }}>
               exterior swing (rad)
               <input
@@ -206,45 +223,89 @@ export function EditorChromeInspector(props: {
                 }}
               />
             </label>
+            {landingKitVariant === "apartment" ? (
+              <>
+                <label style={{ ...label, textTransform: "none" }}>
+                  panel width (m)
+                  <input
+                    style={{ ...input, marginTop: 4 }}
+                    type="number"
+                    step={0.01}
+                    min={0.2}
+                    max={3}
+                    value={landingKitDef.panelWidthM ?? ""}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      patchLandingKitDef((d) => ({
+                        ...d,
+                        panelWidthM: Number.isFinite(v) ? v : undefined,
+                      }));
+                    }}
+                  />
+                </label>
+                <label style={{ ...label, textTransform: "none" }}>
+                  panel height (m)
+                  <input
+                    style={{ ...input, marginTop: 4 }}
+                    type="number"
+                    step={0.01}
+                    min={0.4}
+                    max={3.5}
+                    value={landingKitDef.panelHeightM ?? ""}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      patchLandingKitDef((d) => ({
+                        ...d,
+                        panelHeightM: Number.isFinite(v) ? v : undefined,
+                      }));
+                    }}
+                  />
+                </label>
+              </>
+            ) : null}
           </div>
-          <label style={{ ...label, marginTop: 8 }}>Glass opening (m)</label>
-          <p style={{ margin: "4px 0 6px", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
-            Outer size of the framed hole; rails/stiles and glass rebuild from these values. You can
-            also edit with the viewport gizmo on <code>{LANDING_DOOR_OPENING_PROXY_ID}</code>.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {(
-              [
-                ["widthM", "width", 0.02] as const,
-                ["heightM", "height", 0.02] as const,
-                ["centerYM", "center Y", 0.02] as const,
-              ] as const
-            ).map(([key, labelText, step]) => (
-              <label key={key} style={{ ...label, textTransform: "none" }}>
-                {labelText}
-                <input
-                  style={{ ...input, marginTop: 4 }}
-                  type="number"
-                  step={step}
-                  value={(() => {
-                    if (key === "widthM") return resolvedGlassOpening.widthM;
-                    if (key === "heightM") return resolvedGlassOpening.heightM;
-                    return resolvedGlassOpening.centerYM;
-                  })()}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    patchLandingKitDef((d) => ({
-                      ...d,
-                      glassOpening: {
-                        ...d.glassOpening,
-                        [key]: Number.isFinite(v) ? v : undefined,
-                      },
-                    }));
-                  }}
-                />
-              </label>
-            ))}
-          </div>
+          {landingKitVariant === "elevator" ? (
+            <>
+              <label style={{ ...label, marginTop: 8 }}>Glass opening (m)</label>
+              <p style={{ margin: "4px 0 6px", fontSize: 11, opacity: 0.75, lineHeight: 1.35 }}>
+                Outer size of the framed hole; rails/stiles and glass rebuild from these values. You can
+                also edit with the viewport gizmo on <code>{LANDING_DOOR_OPENING_PROXY_ID}</code>.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {(
+                  [
+                    ["widthM", "width", 0.02] as const,
+                    ["heightM", "height", 0.02] as const,
+                    ["centerYM", "center Y", 0.02] as const,
+                  ] as const
+                ).map(([key, labelText, step]) => (
+                  <label key={key} style={{ ...label, textTransform: "none" }}>
+                    {labelText}
+                    <input
+                      style={{ ...input, marginTop: 4 }}
+                      type="number"
+                      step={step}
+                      value={(() => {
+                        if (key === "widthM") return resolvedGlassOpening.widthM;
+                        if (key === "heightM") return resolvedGlassOpening.heightM;
+                        return resolvedGlassOpening.centerYM;
+                      })()}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        patchLandingKitDef((d) => ({
+                          ...d,
+                          glassOpening: {
+                            ...d.glassOpening,
+                            [key]: Number.isFinite(v) ? v : undefined,
+                          },
+                        }));
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -482,9 +543,11 @@ export function EditorChromeInspector(props: {
 
       {mode === "landing_preview" && selectedId === "landing_door_kit" ? (
         <p style={{ fontSize: 12, opacity: 0.8, margin: "8px 0 0" }}>
-          Full door overview (no transform gizmo). Select <code>{LANDING_DOOR_OPENING_PROXY_ID}</code>{" "}
+          {landingKitVariant === "apartment"
+            ? "Whole-door gizmo. Use scale mode to stretch width (Z) and height (Y) for the solid apartment door; the editor writes those changes back to panel dimensions."
+            : <>Full door overview (no transform gizmo). Select <code>{LANDING_DOOR_OPENING_PROXY_ID}</code>{" "}
           in the outliner or click the glass / wireframe in the viewport: translate moves the opening
-          vertically; scale mode with axis handles changes width (Z) and height (Y).
+          vertically; scale mode with axis handles changes width (Z) and height (Y).</>}
         </p>
       ) : null}
 
@@ -508,7 +571,9 @@ export function EditorChromeInspector(props: {
       ) : null}
       {!selectedId && mode === "landing_preview" ? (
         <p style={{ opacity: 0.65, fontSize: 12 }}>
-          Pick <code>landing_door_kit</code> in the outliner to focus the assembly (materials above).
+          {landingKitVariant === "apartment"
+            ? <>Pick <code>landing_door_kit</code> to stretch the whole apartment door as one block.</>
+            : <>Pick <code>landing_door_kit</code> in the outliner to focus the assembly (materials above).</>}
         </p>
       ) : null}
       {!selectedId && mode === "stairwell_preview" ? (

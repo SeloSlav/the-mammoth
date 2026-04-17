@@ -117,7 +117,7 @@ export function EditorChromeOutliner(props: {
           </div>
           <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
             {landingKitVariant === "apartment"
-              ? "Apartment unit door kit (solid leaf). Same LandingKitDef schema + transform authoring as the corridor door — just a different saved file."
+              ? "Apartment unit door kit (solid leaf). Select the whole door and use scale mode to stretch width (Z) and height (Y) as one block."
               : "Exterior corridor door kit. Use the blue wireframe opening gizmo (or click the glass): move sets the hole height; non-uniform scale makes the opening taller/wider."}
           </p>
         </>
@@ -187,28 +187,30 @@ export function EditorChromeOutliner(props: {
           : null}
         {mode === "landing_preview" ? (
           <>
-            <button
-              type="button"
-              onClick={() => setSelectedId(LANDING_DOOR_OPENING_PROXY_ID)}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                padding: "6px 8px",
-                border: "none",
-                borderBottom: "1px solid #282830",
-                background:
-                  selectedId === LANDING_DOOR_OPENING_PROXY_ID
-                    ? "rgba(60,90,140,0.35)"
-                    : "transparent",
-                color: "#ddd",
-                cursor: "pointer",
-                fontSize: 12,
-              }}
-            >
-              {LANDING_DOOR_OPENING_PROXY_ID}{" "}
-              <span style={{ opacity: 0.65 }}>(framed opening — gizmo)</span>
-            </button>
+            {landingKitVariant === "elevator" ? (
+              <button
+                type="button"
+                onClick={() => setSelectedId(LANDING_DOOR_OPENING_PROXY_ID)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "6px 8px",
+                  border: "none",
+                  borderBottom: "1px solid #282830",
+                  background:
+                    selectedId === LANDING_DOOR_OPENING_PROXY_ID
+                      ? "rgba(60,90,140,0.35)"
+                      : "transparent",
+                  color: "#ddd",
+                  cursor: "pointer",
+                  fontSize: 12,
+                }}
+              >
+                {LANDING_DOOR_OPENING_PROXY_ID}{" "}
+                <span style={{ opacity: 0.65 }}>(framed opening — gizmo)</span>
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setSelectedId("landing_door_kit")}
@@ -228,7 +230,12 @@ export function EditorChromeOutliner(props: {
                 fontSize: 12,
               }}
             >
-              landing_door_kit <span style={{ opacity: 0.65 }}>(overview, no gizmo)</span>
+              landing_door_kit{" "}
+              <span style={{ opacity: 0.65 }}>
+                {landingKitVariant === "apartment"
+                  ? "(whole-door gizmo)"
+                  : "(overview, no gizmo)"}
+              </span>
             </button>
           </>
         ) : null}

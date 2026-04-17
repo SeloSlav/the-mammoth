@@ -157,6 +157,20 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         handleAxisSigns: THREE.Vector3;
       }
     | null = null;
+  function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
+    const st = useEditorStore.getState();
+    return (
+      st.mode === "landing_preview" &&
+      st.landingKitVariant === "apartment" &&
+      st.selectedId === "landing_door_kit"
+    );
+  }
+
+  function landingKitPickOptions(): { solidLeafAsWhole?: boolean } | undefined {
+    return useEditorStore.getState().landingKitVariant === "apartment"
+      ? { solidLeafAsWhole: true }
+      : undefined;
+  }
   const _anchoredScaleInvWorld = new THREE.Matrix4();
   const _anchoredScaleWorldBox = new THREE.Box3();
   const _anchoredScaleLocalBox = new THREE.Box3();
@@ -317,6 +331,31 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
 
     if (store.mode === "landing_preview") {
       let o: THREE.Object3D | null = attached;
+      if (apartmentLandingKitUsesWholeDoorGizmo()) {
+        while (o) {
+          if (o.userData.editorLandingKitRoot === true) {
+            const widthBase =
+              typeof o.userData.editorLandingPanelWidthM === "number"
+                ? o.userData.editorLandingPanelWidthM
+                : store.landingKitDef.panelWidthM ?? 1.18;
+            const heightBase =
+              typeof o.userData.editorLandingPanelHeightM === "number"
+                ? o.userData.editorLandingPanelHeightM
+                : store.landingKitDef.panelHeightM ?? 2.0;
+            const nextWidth = THREE.MathUtils.clamp(widthBase * Math.abs(o.scale.z), 0.2, 3.0);
+            const nextHeight = THREE.MathUtils.clamp(heightBase * Math.abs(o.scale.y), 0.4, 3.5);
+            store.patchLandingKitDef((d) => ({
+              ...d,
+              panelWidthM: nextWidth,
+              panelHeightM: nextHeight,
+            }));
+            return;
+          }
+          o = o.parent;
+        }
+        return;
+      }
+      o = attached;
       while (o) {
         if (o.userData.editorLandingOpeningProxy === true) {
           const open = glassOpeningFromProxyMesh(o, store.landingKitDef);
@@ -803,7 +842,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         s.mode === "cab"
           ? resolveCabPartId(preferredPreviewSelectionTarget)
           : s.mode === "landing_preview"
-            ? resolveLandingKitPickId(preferredPreviewSelectionTarget)
+            ? resolveLandingKitPickId(preferredPreviewSelectionTarget, landingKitPickOptions())
             : s.mode === "stairwell_preview"
               ? resolveStairWellPartId(preferredPreviewSelectionTarget)
               : null;
@@ -1381,7 +1420,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         return;
       }
       if (s.mode === "landing_preview" && s.selectedId === "landing_door_kit") {
-        return;
+        if (!apartmentLandingKitUsesWholeDoorGizmo()) return;
       }
       const target = findBestSelectionTarget();
       if (target) {
@@ -1723,7 +1762,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           : store.mode === "cab"
             ? resolveCabPartId(hit.object)
             : store.mode === "landing_preview"
-              ? resolveLandingKitPickId(hit.object)
+              ? resolveLandingKitPickId(hit.object, landingKitPickOptions())
               : store.mode === "stairwell_preview"
                 ? resolveStairWellPartId(hit.object)
                 : resolvePlacedId(hit.object, store.floorDocs),
@@ -1733,7 +1772,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
           : store.mode === "cab"
             ? resolveCabPartTarget(hit.object)
             : store.mode === "landing_preview"
-              ? resolveLandingKitPickTarget(hit.object)
+              ? resolveLandingKitPickTarget(hit.object, landingKitPickOptions())
               : store.mode === "stairwell_preview"
                 ? resolveStairWellPartTarget(hit.object)
                 : null,

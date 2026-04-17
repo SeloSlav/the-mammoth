@@ -1,13 +1,16 @@
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Connect } from "vite";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import checker from "vite-plugin-checker";
+import { editorDevMiddleware } from "./src/vite/editorDevMiddleware";
 import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware";
 
-const repoRoot = path.resolve(__dirname, "../..");
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(configDir, "../..");
 const clientPublicRoot = path.resolve(repoRoot, "apps/client/public");
 
 const require = createRequire(import.meta.url);
@@ -65,13 +68,7 @@ export default defineConfig({
       name: "editor-dev-content",
       configureServer: {
         order: "pre",
-        /**
-         * Lazy import keeps `vite.config` surface small; dev server is started with
-         * `node --import tsx` (see `package.json`) so workspace `.ts` packages resolve
-         * TypeScript-style `.js` import specifiers when Vite’s config bundle loads them as externals.
-         */
         async handler(server) {
-          const { editorDevMiddleware } = await import("./src/vite/editorDevMiddleware");
           prependConnectMiddleware(
             server.middlewares,
             editorDevMiddleware(repoRoot, { viteBase: server.config.base }),
@@ -82,7 +79,6 @@ export default defineConfig({
       configurePreviewServer: {
         order: "pre",
         async handler(server) {
-          const { editorDevMiddleware } = await import("./src/vite/editorDevMiddleware");
           prependConnectMiddleware(
             server.middlewares,
             editorDevMiddleware(repoRoot, { viteBase: server.config.base }),

@@ -1,22 +1,19 @@
 //! Data-driven starter items for brand-new players (`ensure_starter_loadout`).
 //!
-//! Add rows with `starter_hotbar!(slot, "def_id", qty)` or `starter_inventory!(slot, "def_id", qty)`.
+//! Add rows with `starter_hotbar!(slot, "def_id", qty)`.
 //! Catalog keys must match `content/items/catalog` `id` fields.
 
 use log;
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
+use crate::inventory_models::{HotbarLocationData, ItemLocation};
 use crate::items_catalog;
 
-use super::{
-    inventory_item, player_item_count, InventoryItem, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
-};
+use super::{inventory_item, player_item_count, InventoryItem, NUM_PLAYER_HOTBAR_SLOTS};
 
 #[derive(Copy, Clone)]
 enum StarterPlacement {
     Hotbar(u8),
-    Inventory(u16),
 }
 
 struct StarterRow {
@@ -35,25 +32,11 @@ macro_rules! starter_hotbar {
     };
 }
 
-macro_rules! starter_inventory {
-    ($slot:literal, $def:literal, $qty:literal) => {
-        StarterRow {
-            def_id: $def,
-            quantity: $qty,
-            placement: StarterPlacement::Inventory($slot),
-        }
-    };
-}
-
 /// Spawn loadout for players with no inventory rows yet.
 const STARTER_LOADOUT: &[StarterRow] = &[
-    starter_hotbar!(0, "knife", 1),
-    starter_hotbar!(1, "crowbar", 1),
-    starter_hotbar!(2, "srbosjek", 1),
-    starter_hotbar!(3, "baseball_bat", 1),
-    starter_hotbar!(4, "apple", 8),
-    starter_hotbar!(5, "water_bottle", 6),
-    starter_inventory!(1, "rakija", 12),
+    starter_hotbar!(0, "crowbar", 1),
+    starter_hotbar!(1, "apple", 4),
+    starter_hotbar!(2, "water_bottle", 3),
 ];
 
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
@@ -70,10 +53,6 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
                 log::error!("starter loadout: hotbar slot {slot_index} out of range");
                 return;
             }
-            StarterPlacement::Inventory(slot_index) if slot_index >= NUM_PLAYER_INVENTORY_SLOTS => {
-                log::error!("starter loadout: inventory slot {slot_index} out of range");
-                return;
-            }
             _ => {}
         }
         if row.quantity == 0 {
@@ -85,10 +64,6 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
     for row in STARTER_LOADOUT {
         let location = match row.placement {
             StarterPlacement::Hotbar(slot_index) => ItemLocation::Hotbar(HotbarLocationData {
-                owner_id: owner,
-                slot_index,
-            }),
-            StarterPlacement::Inventory(slot_index) => ItemLocation::Inventory(InventoryLocationData {
                 owner_id: owner,
                 slot_index,
             }),

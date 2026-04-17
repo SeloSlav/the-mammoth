@@ -171,7 +171,13 @@ export function resolveCabPartId(hit: THREE.Object3D | null): string | null {
  * Resolves landing workspace selection: opening proxy (framed hole), then other subparts; glass
  * picks map to the opening proxy so the gizmo resizes the hole, not an isolated pane.
  */
-export function resolveLandingKitPickTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
+export function resolveLandingKitPickTarget(
+  hit: THREE.Object3D | null,
+  options?: { solidLeafAsWhole?: boolean },
+): THREE.Object3D | null {
+  const solidLeafAsWhole = options?.solidLeafAsWhole === true;
+  const root = resolveAncestor(hit, (obj) => obj.userData.editorLandingKitRoot === true);
+  if (solidLeafAsWhole) return root;
   const openingProxy = resolveAncestor(hit, (obj) => obj.userData.editorLandingOpeningProxy === true);
   if (openingProxy) return openingProxy;
   const glass = resolveAncestor(
@@ -191,15 +197,18 @@ export function resolveLandingKitPickTarget(hit: THREE.Object3D | null): THREE.O
     return typeof partId === "string" && partId.length > 0;
   });
   if (part) return part;
-  return resolveAncestor(hit, (obj) => obj.userData.editorLandingKitRoot === true);
+  return root;
 }
 
 /**
  * Resolves landing workspace selection: opening proxy (framed hole), then other subparts; glass
  * picks map to the opening proxy so the gizmo resizes the hole, not an isolated pane.
  */
-export function resolveLandingKitPickId(hit: THREE.Object3D | null): string | null {
-  const target = resolveLandingKitPickTarget(hit);
+export function resolveLandingKitPickId(
+  hit: THREE.Object3D | null,
+  options?: { solidLeafAsWhole?: boolean },
+): string | null {
+  const target = resolveLandingKitPickTarget(hit, options);
   if (!target) return null;
   if (target.userData.editorLandingOpeningProxy === true) return LANDING_DOOR_OPENING_PROXY_ID;
   const part = target.userData.editorLandingPartId;
