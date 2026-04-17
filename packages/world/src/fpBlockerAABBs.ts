@@ -29,8 +29,13 @@ const WALL_MAX_THICKNESS_M = 0.5;
 const DOORWAY_MIN_GAP_M = 0.8;
 const DOORWAY_MAX_GAP_M = 2.5;
 
-/** Minimum Y-overlap between two wall pieces to treat them as the same wall band. */
-const DOORWAY_Y_OVERLAP_MIN_M = 0.1;
+/**
+ * Minimum Y-overlap between two wall pieces to treat them as the same wall band.
+ * Walls split into multiple Y slabs by door-sill / lintel carves can end up as thin
+ * (30 mm) strips — we still want to pair them across a doorway, so the threshold
+ * must be below the sill-strip height.
+ */
+const DOORWAY_Y_OVERLAP_MIN_M = 0.02;
 
 type MutableBox = {
   min: [number, number, number];

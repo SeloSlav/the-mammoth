@@ -143,6 +143,23 @@ describe("trimDoorwayJambCornersForCollision", () => {
     expect(out[1]!.min[2]).toBeCloseTo(6.26, 5);
   });
 
+  // The sill-strip carve at the base of apartment doorways slices walls into a 30 mm
+  // tall sub-band. Those thin strips still need to be trimmed, otherwise the player's
+  // body can clip them where the main wall has been pulled back and get rubber-banded.
+  it("trims thin (30 mm) door-sill sub-strips that form a doorway pair", () => {
+    const sillSouth: CollisionAabb = {
+      min: [1.815, 3.388, -22.37],
+      max: [1.925, 3.418, -16.43],
+    };
+    const sillNorth: CollisionAabb = {
+      min: [1.815, 3.388, -15.17],
+      max: [1.925, 3.418, 15.17],
+    };
+    const out = trimDoorwayJambCornersForCollision([sillSouth, sillNorth], INSET);
+    expect(out[0]!.max[2]).toBeCloseTo(-16.43 - INSET, 5);
+    expect(out[1]!.min[2]).toBeCloseTo(-15.17 + INSET, 5);
+  });
+
   it("requires Y overlap — walls at disjoint Y bands aren't a pair", () => {
     const low: CollisionAabb = {
       min: [0, 0, 0],
