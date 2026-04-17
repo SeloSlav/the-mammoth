@@ -68,6 +68,14 @@ const APARTMENT_DOOR_MAX_RAD =
   APARTMENT_KIT?.exteriorSwingMaxRad ?? SWING_DOOR_DEFAULT_MAX_RAD;
 
 /**
+ * Apartment doors swing INTO the unit (inward), not into the corridor. This matches
+ * real-world residential-door behavior and keeps the open leaf out of shared corridor
+ * traffic. It's the UX-correct answer to "I press E and the door juts into the hallway,
+ * blocking me from walking straight in."
+ */
+const APARTMENT_DOOR_SWING_INWARD = true;
+
+/**
  * Apartment doors currently share a single authored size (`UNIT_ENTRY_DOOR_W` × `UNIT_ENTRY_DOOR_H`
  * from `unitEntryAdjacency`) — every template in `APARTMENT_DOOR_TEMPLATES` matches these. We
  * keep the instanced path tight by assuming the shared size so a single merged geometry covers
@@ -122,7 +130,9 @@ type DoorSlot = {
   level: number;
   face: SwingDoorFace;
   baseYaw: number;
-  swingSign: 1 | -1;
+  /** Effective swing sign after applying `APARTMENT_DOOR_SWING_INWARD` — negation of the
+   *  corridor-direction table value. Cached so {@link applyMatrix} can avoid per-frame lookups. */
+  effectiveSwingSign: 1 | -1;
   /** World-space hinge (feet ↔ collision). */
   hingeX: number;
   hingeZ: number;
@@ -278,7 +288,10 @@ export function mountFpApartmentDoors(
 
   const scratchMatrix = new THREE.Matrix4();
   const applyMatrix = (slot: DoorSlot, open01: number): void => {
-    const yaw = slot.baseYaw + slot.swingSign * open01 * APARTMENT_DOOR_MAX_RAD;
+    // Apartment doors swing INWARD (into the unit): `effectiveSwingSign` is the negation of
+    // the table's corridor-direction swing sign. This keeps the open leaf out of shared
+    // corridor traffic and matches real apartment-door conventions.
+    const yaw = slot.baseYaw + slot.effectiveSwingSign * open01 * APARTMENT_DOOR_MAX_RAD;
     composeHingeMatrix(scratchMatrix, slot.localX, slot.localCenterY, slot.localZ, yaw);
     slot.levelMesh.mesh.setMatrixAt(slot.instanceIndex, scratchMatrix);
     slot.levelMesh.dirty = true;
@@ -310,6 +323,9 @@ export function mountFpApartmentDoors(
     for (let i = 0; i < templates.length; i++) {
       const t = templates[i]!;
       const { baseYaw, swingSign } = swingDoorOrientationForFace(t.face as SwingDoorFace);
+      const effectiveSwingSign: 1 | -1 = APARTMENT_DOOR_SWING_INWARD
+        ? ((-swingSign) as 1 | -1)
+        : swingSign;
       const hingeX = t.hingeX;
       const hingeZ = t.hingeZ;
       const feetY = plateWorldOriginY + t.feetYOffset;
@@ -322,7 +338,7 @@ export function mountFpApartmentDoors(
         level: ref.levelIndex,
         face: t.face as SwingDoorFace,
         baseYaw,
-        swingSign,
+        effectiveSwingSign,
         hingeX,
         hingeZ,
         feetY,
@@ -442,6 +458,7 @@ export function mountFpApartmentDoors(
           feetY: slot.feetY,
           panelWidthM: slot.panelWidthM,
           panelHeightM: slot.panelHeightM,
+          swingInward: APARTMENT_DOOR_SWING_INWARD,
         });
       }
       if (!aabb) return;

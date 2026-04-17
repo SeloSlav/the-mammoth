@@ -142,7 +142,7 @@ describe("swingDoorClosedSlabAabb", () => {
   });
 });
 
-describe("swingDoorParkedLeafAabb", () => {
+describe("swingDoorParkedLeafAabb (outward — elevator landing doors)", () => {
   const base = {
     hingeX: 10,
     hingeZ: 20,
@@ -151,44 +151,79 @@ describe("swingDoorParkedLeafAabb", () => {
     panelHeightM: 2.06,
   };
 
-  it("W-face parked leaf extends into -X corridor and parks on +Z (wall) side of hinge", () => {
+  it("W-face parked leaf extends into -X corridor and straddles hinge on tangent", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "w", ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
     expect(aabb.max[0]).toBeCloseTo(base.hingeX + pad);
     expect(aabb.min[0]).toBeCloseTo(base.hingeX - base.panelWidthM - pad);
-    // Doorway opens in -Z; the AABB must NOT intrude past the hinge into the doorway.
-    expect(aabb.min[2]).toBeCloseTo(base.hingeZ);
-    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + 2 * ht + pad);
+    expect(aabb.min[2]).toBeCloseTo(base.hingeZ - ht - pad);
+    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + ht + pad);
   });
 
-  it("E-face parked leaf parks on +Z (wall) side of hinge (mirror of W)", () => {
-    const aabb = swingDoorParkedLeafAabb({ face: "e", ...base });
-    expect(aabb.min[2]).toBeCloseTo(base.hingeZ);
-    expect(aabb.max[2]).toBeCloseTo(
-      base.hingeZ + 2 * SWING_DOOR_OPEN_LEAF_HALF_THICK_M + SWING_DOOR_OPEN_LEAF_XZ_PAD_M,
-    );
-  });
-
-  it("N-face parked leaf extends into +Z corridor and parks on +X (wall) side of hinge", () => {
+  it("N-face parked leaf extends into +Z corridor (mirror of W on N axis)", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "n", ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
     expect(aabb.min[2]).toBeCloseTo(base.hingeZ - pad);
     expect(aabb.max[2]).toBeCloseTo(base.hingeZ + base.panelWidthM + pad);
-    expect(aabb.min[0]).toBeCloseTo(base.hingeX);
-    expect(aabb.max[0]).toBeCloseTo(base.hingeX + 2 * ht + pad);
+    expect(aabb.min[0]).toBeCloseTo(base.hingeX - ht - pad);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX + ht + pad);
+  });
+});
+
+describe("swingDoorParkedLeafAabb (inward — apartment doors)", () => {
+  const base = {
+    hingeX: 10,
+    hingeZ: 20,
+    feetY: 0,
+    panelWidthM: 1.26,
+    panelHeightM: 2.06,
+  };
+
+  it("W-face inward leaf extends INTO the unit (+X, opposite corridor)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "w", swingInward: true, ...base });
+    const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+    expect(aabb.min[0]).toBeCloseTo(base.hingeX - pad);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX + base.panelWidthM + pad);
   });
 
-  /**
-   * The crucial regression: the doorway opening (south of the hinge along the wall tangent)
-   * must NOT be obstructed by the parked-leaf collision AABB. A 0.32 m radius capsule walking
-   * straight into the middle of the opening must clear the AABB.
-   */
-  it("does not block a player capsule walking through the centre of the doorway", () => {
-    const radius = 0.32;
+  it("E-face inward leaf extends INTO the unit (-X, opposite corridor)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "e", swingInward: true, ...base });
+    const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+    expect(aabb.min[0]).toBeCloseTo(base.hingeX - base.panelWidthM - pad);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX + pad);
+  });
+
+  /** Open-door corridor-traffic regression: walking down the corridor past an OPEN inward-
+   *  swinging apartment door must be unobstructed. */
+  it("does not block corridor traffic past the doorway", () => {
+    const radius = 0.22;
+    for (const face of ["w", "e", "n", "s"] as SwingDoorFace[]) {
+      const aabb = swingDoorParkedLeafAabb({ face, swingInward: true, ...base });
+      const n = swingDoorOpenSideNormal(face); // corridor direction
+      // Player 0.3 m INTO the corridor at hinge tangent position.
+      const cx = base.hingeX + n.x * 0.3;
+      const cz = base.hingeZ + n.z * 0.3;
+      const cap = {
+        min: [cx - radius, base.feetY + 0.25, cz - radius],
+        max: [cx + radius, base.feetY + 1.72, cz + radius],
+      } as const;
+      const overlap =
+        cap.max[0] > aabb.min[0] &&
+        cap.min[0] < aabb.max[0] &&
+        cap.max[2] > aabb.min[2] &&
+        cap.min[2] < aabb.max[2];
+      expect({ face, overlap }).toEqual({ face, overlap: false });
+    }
+  });
+
+  /** Primary regression: a player walking straight through the middle of the doorway after
+   *  the door swings INWARD must NOT be blocked. */
+  it("does not block a player capsule walking through the doorway centre", () => {
+    const radius = 0.22;
     for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
-      const aabb = swingDoorParkedLeafAabb({ face, ...base });
+      const aabb = swingDoorParkedLeafAabb({ face, swingInward: true, ...base });
       const tan = swingDoorTangentRest(face);
       const midX = base.hingeX + tan.x * base.panelWidthM * 0.5;
       const midZ = base.hingeZ + tan.z * base.panelWidthM * 0.5;
@@ -267,15 +302,12 @@ describe("swingDoorPlayerInInteractRange", () => {
 
 /**
  * Regression guard for the "pushed back by an invisible leaf" bug: when a door is fully parked
- * open, the rendered leaf direction and the parked-leaf collision AABB must lie on the SAME side
- * of the hinge. A mismatch means the player sees a clear doorway but collision bumps them back,
- * exactly the regression that triggered this test.
+ * open, the rendered leaf position and the parked-leaf collision AABB must agree — otherwise
+ * the player sees clear space where physics blocks (or vice-versa).
  *
- * Two checks:
- * 1. Directional: the tip at full swing (with the kit's actual `maxRad`) must be on the
- *    corridor-side of the hinge along the open-side normal.
- * 2. Containment (idealized): at a perfect 90° park, the tip lies inside the parked-leaf AABB.
- *    This locks the AABB formula to the canonical orientation the rotation table encodes.
+ * We check both swing directions:
+ * - Outward: tip ends up on the corridor side, inside the parked-leaf AABB.
+ * - Inward:  tip ends up on the private (unit) side, inside the parked-leaf AABB.
  */
 describe("visual ↔ collision parity at full open", () => {
   const base = {
@@ -287,29 +319,29 @@ describe("visual ↔ collision parity at full open", () => {
   };
 
   for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
-    it(`face ${face}: tip swings onto the corridor side`, () => {
-      const yaw = swingDoorYawRad(face, 1, SWING_DOOR_DEFAULT_MAX_RAD);
-      const tipDX = -Math.sin(yaw) * base.panelWidthM;
-      const tipDZ = -Math.cos(yaw) * base.panelWidthM;
-      const normal = swingDoorOpenSideNormal(face);
-      // Projection of the tip displacement onto the open-side normal must be strongly positive
-      // (the leaf ends up in the corridor half-space, not the room).
-      const proj = tipDX * normal.x + tipDZ * normal.z;
-      expect(proj).toBeGreaterThan(base.panelWidthM * 0.9);
-    });
+    for (const swingInward of [false, true]) {
+      const label = swingInward ? "inward" : "outward";
+      it(`face ${face} (${label}): at 90° park, tip lies inside parked-leaf AABB`, () => {
+        const yaw = swingDoorYawRad(face, 1, Math.PI / 2, swingInward);
+        const tipX = base.hingeX - Math.sin(yaw) * base.panelWidthM;
+        const tipZ = base.hingeZ - Math.cos(yaw) * base.panelWidthM;
+        const aabb = swingDoorParkedLeafAabb({ face, swingInward, ...base });
+        expect(tipX).toBeGreaterThanOrEqual(aabb.min[0] - 1e-4);
+        expect(tipX).toBeLessThanOrEqual(aabb.max[0] + 1e-4);
+        expect(tipZ).toBeGreaterThanOrEqual(aabb.min[2] - 1e-4);
+        expect(tipZ).toBeLessThanOrEqual(aabb.max[2] + 1e-4);
+      });
 
-    it(`face ${face}: at ideal 90° park, tip lies inside parked-leaf AABB`, () => {
-      const yaw = swingDoorYawRad(face, 1, Math.PI / 2);
-      const tipX = base.hingeX - Math.sin(yaw) * base.panelWidthM;
-      const tipZ = base.hingeZ - Math.cos(yaw) * base.panelWidthM;
-      const aabb = swingDoorParkedLeafAabb({ face, ...base });
-      // The tip lies on the hinge wall plane along the tangent axis after the asymmetric AABB
-      // tightening (the doorway side is intentionally clipped off). Allow ε along that axis.
-      expect(tipX).toBeGreaterThanOrEqual(aabb.min[0] - 1e-4);
-      expect(tipX).toBeLessThanOrEqual(aabb.max[0] + 1e-4);
-      expect(tipZ).toBeGreaterThanOrEqual(aabb.min[2] - 1e-4);
-      expect(tipZ).toBeLessThanOrEqual(aabb.max[2] + 1e-4);
-    });
+      it(`face ${face} (${label}): tip displacement matches open-side normal direction`, () => {
+        const yaw = swingDoorYawRad(face, 1, SWING_DOOR_DEFAULT_MAX_RAD, swingInward);
+        const tipDX = -Math.sin(yaw) * base.panelWidthM;
+        const tipDZ = -Math.cos(yaw) * base.panelWidthM;
+        const n = swingDoorOpenSideNormal(face);
+        const proj = tipDX * n.x + tipDZ * n.z;
+        const expectedSign = swingInward ? -1 : 1;
+        expect(expectedSign * proj).toBeGreaterThan(base.panelWidthM * 0.9);
+      });
+    }
   }
 });
 

@@ -10,25 +10,33 @@
  * - The leaf hangs from the hinge at `(hingeX, feetY, hingeZ)` and rotates about world Y.
  * - At rest (closed), the leaf lies flat against the wall, extending **away from the hinge along
  *   the wall in the local -Z direction** of the swing group.
- * - Opening rotates the leaf into the **corridor / public side** (away from the room interior the
- *   door encloses). At `open01 = 1`, the tip direction in world space is approximately
- *   `swingDoorOpenSideNormal(face)`.
+ * - Two swing directions are supported (selected per door):
+ *   - **outward** (default, used by elevator landing doors): leaf swings into the public /
+ *     corridor side — i.e. along `swingDoorOpenSideNormal(face)`.
+ *   - **inward** (used by apartment-unit doors): leaf swings into the private / unit side — i.e.
+ *     along `-swingDoorOpenSideNormal(face)`. This matches real-world apartment-door behavior
+ *     (inward-swinging residential doors) and keeps the open leaf out of the shared corridor.
+ *   The leaf direction is chosen per door via the `swingInward` flag passed to the primitives.
  *
- * ## Per-face rotation
+ * ## Per-face rotation (outward convention)
  *
  * Derivation: the tip at rest is `R_y(baseYaw(face)) · (0, 0, -1)`, which equals
- * `swingDoorTangentRest(face)`. After opening, the tip is `R_y(baseYaw + swingSign*open*maxRad)
- * · (0, 0, -1)`. Setting that ≈ `swingDoorOpenSideNormal(face)` at `open = 1, maxRad ≈ π/2` fixes
- * each row below:
+ * `swingDoorTangentRest(face)`. After opening outward, the tip is
+ * `R_y(baseYaw + swingSign*open*maxRad) · (0, 0, -1)`. Setting that ≈
+ * `swingDoorOpenSideNormal(face)` at `open = 1, maxRad ≈ π/2` fixes each row below:
  *
- * | face | base yaw (rad) | swing sign | tip at rest | tip at full open |
- * |------|---------------:|-----------:|------------:|-----------------:|
- * | "w"  |              0 |         +1 |     (0, -1) |          (-1, 0) |
- * | "e"  |              0 |         -1 |     (0, -1) |          (+1, 0) |
- * | "n"  |            π/2 |         +1 |     (-1, 0) |          (0, +1) |
- * | "s"  |            π/2 |         -1 |     (-1, 0) |          (0, -1) |
+ * | face | base yaw (rad) | swing sign (outward) | tip at rest | tip at full open (outward) |
+ * |------|---------------:|---------------------:|------------:|---------------------------:|
+ * | "w"  |              0 |                   +1 |     (0, -1) |                    (-1, 0) |
+ * | "e"  |              0 |                   -1 |     (0, -1) |                    (+1, 0) |
+ * | "n"  |            π/2 |                   +1 |     (-1, 0) |                    (0, +1) |
+ * | "s"  |            π/2 |                   -1 |     (-1, 0) |                    (0, -1) |
  *
- * Final swing yaw = `baseYaw(face) + swingSign(face) * open01 * maxRad`.
+ * Inward simply negates `swingSign`, so the yaw rotates the opposite direction and the tip ends
+ * up at the opposite normal: `tip_inward = -swingDoorOpenSideNormal(face)`.
+ *
+ * Final swing yaw = `baseYaw(face) + effectiveSwingSign * open01 * maxRad`, where
+ * `effectiveSwingSign = swingInward ? -swingSign(face) : swingSign(face)`.
  */
 import type { CollisionAabb } from "./collisionScene.js";
 
@@ -82,9 +90,21 @@ export function swingDoorOrientationForFace(face: SwingDoorFace): SwingDoorOrien
   return ORIENTATIONS[face];
 }
 
-export function swingDoorYawRad(face: SwingDoorFace, open01: number, maxRad: number): number {
+/** Effective swing sign — flipped when the door opens inward (into the private side). */
+export function swingDoorEffectiveSwingSign(face: SwingDoorFace, swingInward: boolean): 1 | -1 {
+  const s = ORIENTATIONS[face].swingSign;
+  return swingInward ? ((-s) as 1 | -1) : s;
+}
+
+export function swingDoorYawRad(
+  face: SwingDoorFace,
+  open01: number,
+  maxRad: number,
+  swingInward: boolean = false,
+): number {
   const o = ORIENTATIONS[face];
-  return o.baseYaw + o.swingSign * open01 * maxRad;
+  const sign = swingInward ? -o.swingSign : o.swingSign;
+  return o.baseYaw + sign * open01 * maxRad;
 }
 
 /** Convert a face label to/from a compact `u8` (matches Rust `DoorFace` ordering). */
@@ -103,6 +123,16 @@ export function swingDoorOpenSideNormal(face: SwingDoorFace): { x: number; z: nu
     case "s":
       return { x: 0, z: -1 };
   }
+}
+
+/** Direction the leaf TIP ends up at full-open (unit vector). Inward swing negates the normal
+ *  so the tip lands on the PRIVATE (unit) side instead of the corridor side. */
+export function swingDoorTipDirAtFullOpen(
+  face: SwingDoorFace,
+  swingInward: boolean,
+): { x: number; z: number } {
+  const n = swingDoorOpenSideNormal(face);
+  return swingInward ? { x: -n.x, z: -n.z } : n;
 }
 
 /** Direction the leaf at-rest extends along the wall (from hinge → tip), unit vector. */
@@ -154,18 +184,12 @@ export function swingDoorClosedSlabAabb(opts: {
 }
 
 /**
- * Conservative AABB for the open leaf when the door is at-rest open against the corridor wall
- * (perpendicular to the closed position). Padded by `SWING_DOOR_OPEN_LEAF_XZ_PAD_M` to cover
- * client-prediction jitter.
+ * Conservative AABB for the open leaf at-rest (perpendicular to the closed position).
+ * Padded by `SWING_DOOR_OPEN_LEAF_XZ_PAD_M` to cover client-prediction jitter.
  *
- * Asymmetry on the wall-tangent axis (along the doorway opening): the AABB is anchored at the
- * hinge and extended ONLY toward the wall (opposite the doorway opening). This is the fix for
- * the "I press E and the door swings open but I still get pushed back" bug: with a symmetric
- * pad the AABB intruded ~0.11 m into the doorway from the hinge end, which combined with the
- * player capsule radius (~0.32 m) shrank the usable doorway width to <0.8 m and pushed players
- * off-center. Visually the parked leaf does straddle the wall plane by `halfThick`, but for
- * collision we treat that strip as part of the wall (it's effectively flush with the corridor's
- * adjacent wall surface) so the doorway remains as wide as authored.
+ * The AABB spans the length of the panel along `tipDir` (normal-axis) and straddles the hinge
+ * plane by `halfThick + pad` on the tangent axis — that's where the real leaf lives when fully
+ * open, regardless of inward vs outward swing.
  */
 export function swingDoorParkedLeafAabb(opts: {
   face: SwingDoorFace;
@@ -174,36 +198,27 @@ export function swingDoorParkedLeafAabb(opts: {
   feetY: number;
   panelWidthM: number;
   panelHeightM: number;
+  /** Direction of swing. Defaults to `false` (outward / into the corridor). */
+  swingInward?: boolean;
 }): CollisionAabb {
   const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
   const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
-  const open = swingDoorOpenSideNormal(opts.face);
-  const tan = swingDoorTangentRest(opts.face);
-  const tipX = opts.hingeX + open.x * opts.panelWidthM;
-  const tipZ = opts.hingeZ + open.z * opts.panelWidthM;
-  // The doorway extends from the hinge in `tan` direction; the wall continues in `-tan`.
-  // Wall-tangent extent of the leaf collision is anchored at the hinge and extends only
-  // into the wall side, leaving the doorway opening fully clear for the player capsule.
-  const wallStripDepth = 2 * ht + pad;
+  const tip = swingDoorTipDirAtFullOpen(opts.face, opts.swingInward ?? false);
+  const tipX = opts.hingeX + tip.x * opts.panelWidthM;
+  const tipZ = opts.hingeZ + tip.z * opts.panelWidthM;
   if (opts.face === "w" || opts.face === "e") {
     const xMin = Math.min(opts.hingeX, tipX) - pad;
     const xMax = Math.max(opts.hingeX, tipX) + pad;
-    const wallSign = -tan.z; // tan.z = -1 → wallSign = +1, leaf parks on +Z side of hinge.
-    const zNear = opts.hingeZ;
-    const zFar = opts.hingeZ + wallSign * wallStripDepth;
     return {
-      min: [xMin, opts.feetY, Math.min(zNear, zFar)],
-      max: [xMax, opts.feetY + opts.panelHeightM, Math.max(zNear, zFar)],
+      min: [xMin, opts.feetY, opts.hingeZ - ht - pad],
+      max: [xMax, opts.feetY + opts.panelHeightM, opts.hingeZ + ht + pad],
     };
   }
   const zMin = Math.min(opts.hingeZ, tipZ) - pad;
   const zMax = Math.max(opts.hingeZ, tipZ) + pad;
-  const wallSign = -tan.x; // tan.x = -1 → wallSign = +1, leaf parks on +X side of hinge.
-  const xNear = opts.hingeX;
-  const xFar = opts.hingeX + wallSign * wallStripDepth;
   return {
-    min: [Math.min(xNear, xFar), opts.feetY, zMin],
-    max: [Math.max(xNear, xFar), opts.feetY + opts.panelHeightM, zMax],
+    min: [opts.hingeX - ht - pad, opts.feetY, zMin],
+    max: [opts.hingeX + ht + pad, opts.feetY + opts.panelHeightM, zMax],
   };
 }
 

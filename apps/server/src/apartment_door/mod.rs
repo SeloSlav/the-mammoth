@@ -252,40 +252,47 @@ fn closed_slab_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     }
 }
 
-/// Parked-open leaf AABB (doorway is clear; leaf collision lives entirely on the wall side
-/// of the hinge so the player capsule passes through the authored doorway width unobstructed).
+/// Apartment doors swing INTO the unit (inward). Mirrors `APARTMENT_DOOR_SWING_INWARD` on the
+/// client. Keeps the open leaf inside the unit and out of corridor traffic.
+const APARTMENT_DOOR_SWING_INWARD: bool = true;
+
+/// Direction the leaf TIP ends up at full-open. Inward swing negates the normal.
+#[inline]
+fn tip_dir_at_full_open(face: SwingDoorFace, swing_inward: bool) -> (f32, f32) {
+    let (nx, nz) = open_normal(face);
+    if swing_inward {
+        (-nx, -nz)
+    } else {
+        (nx, nz)
+    }
+}
+
+/// Parked-open leaf AABB. Spans the panel length along `tipDir` (direction of swing) and
+/// straddles the hinge plane by `halfThick + pad` on the tangent axis.
 /// Mirrors `swingDoorParkedLeafAabb` in `packages/world/src/swingDoorCollision.ts`.
 fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     let face = SwingDoorFace::from_u8(row.face);
-    let (nx, nz) = open_normal(face);
-    let (tx, tz) = tangent_rest(face);
-    let tip_x = row.hinge_x + nx * row.panel_w_m;
-    let tip_z = row.hinge_z + nz * row.panel_w_m;
+    let (tx, tz) = tip_dir_at_full_open(face, APARTMENT_DOOR_SWING_INWARD);
+    let tip_x = row.hinge_x + tx * row.panel_w_m;
+    let tip_z = row.hinge_z + tz * row.panel_w_m;
     let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
     let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     let top_y = row.feet_y + row.panel_h_m;
-    let wall_strip_depth = 2.0 * ht + pad;
     match face {
         SwingDoorFace::W | SwingDoorFace::E => {
             let x_min = row.hinge_x.min(tip_x) - pad;
             let x_max = row.hinge_x.max(tip_x) + pad;
-            let wall_sign = -tz;
-            let z_near = row.hinge_z;
-            let z_far = row.hinge_z + wall_sign * wall_strip_depth;
             (
-                [x_min, row.feet_y, z_near.min(z_far)],
-                [x_max, top_y, z_near.max(z_far)],
+                [x_min, row.feet_y, row.hinge_z - ht - pad],
+                [x_max, top_y, row.hinge_z + ht + pad],
             )
         }
         SwingDoorFace::N | SwingDoorFace::S => {
             let z_min = row.hinge_z.min(tip_z) - pad;
             let z_max = row.hinge_z.max(tip_z) + pad;
-            let wall_sign = -tx;
-            let x_near = row.hinge_x;
-            let x_far = row.hinge_x + wall_sign * wall_strip_depth;
             (
-                [x_near.min(x_far), row.feet_y, z_min],
-                [x_near.max(x_far), top_y, z_max],
+                [row.hinge_x - ht - pad, row.feet_y, z_min],
+                [row.hinge_x + ht + pad, top_y, z_max],
             )
         }
     }
@@ -567,34 +574,26 @@ mod tests {
         assert!((mx[1] - (row.feet_y + row.panel_h_m)).abs() < 1e-4);
     }
 
+    /// Apartment doors swing INTO the unit. For a W-face door the unit is to the +X side of
+    /// hinge (corridor is -X), so the parked leaf must extend in +X from the hinge — NOT into
+    /// the corridor.
     #[test]
-    fn parked_leaf_aabb_extends_into_corridor_west_face() {
-        let row = sample_row();
-        let (mn, mx) = parked_leaf_aabb(&row);
-        // Face W opens toward -X, so the leaf should extend negative of hinge_x.
-        assert!(mn[0] < row.hinge_x - 0.5);
-        assert!(mx[0] >= row.hinge_x - SWING_DOOR_OPEN_LEAF_XZ_PAD_M);
-    }
-
-    /// Mirrors the TS regression: the doorway opening (along the wall tangent) must NOT be
-    /// obstructed. For a W-face door the doorway extends in -Z from the hinge, so the AABB's
-    /// z_min must equal the hinge plane (no intrusion) and z_max sits on the wall side.
-    #[test]
-    fn parked_leaf_aabb_does_not_intrude_into_west_face_doorway() {
+    fn parked_leaf_aabb_extends_into_unit_for_inward_west_face() {
         let row = sample_row();
         let (mn, mx) = parked_leaf_aabb(&row);
         let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
-        let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
-        assert!((mn[2] - row.hinge_z).abs() < 1e-4, "z_min should sit on hinge wall plane");
         assert!(
-            (mx[2] - (row.hinge_z + 2.0 * ht + pad)).abs() < 1e-4,
-            "z_max should extend wall_strip_depth on the +Z side",
+            (mn[0] - (row.hinge_x - pad)).abs() < 1e-4,
+            "x_min sits on hinge plane (inward swing — nothing in corridor)",
+        );
+        assert!(
+            (mx[0] - (row.hinge_x + row.panel_w_m + pad)).abs() < 1e-4,
+            "x_max extends INTO unit by panelWidth + pad (inward swing)",
         );
     }
 
-    /// Player capsule walking through the centre of a parked-open W-face doorway must NOT
-    /// overlap the parked-leaf AABB. This is the precise regression a user reported as
-    /// "I press E, the door swings open, but I still get pushed back."
+    /// Player capsule walking through the centre of a parked-open (inward) doorway must NOT
+    /// overlap the parked-leaf AABB — the leaf is inside the unit, corridor and doorway clear.
     #[test]
     fn parked_leaf_aabb_clears_player_capsule_in_doorway() {
         let row = sample_row();
@@ -611,5 +610,25 @@ mod tests {
             && cap_max[2] > mn[2]
             && cap_min[2] < mx[2];
         assert!(!overlaps, "parked leaf AABB must not block centre of doorway");
+    }
+
+    /// Corridor-side traffic (the ORIGINAL bug: open door juts into corridor) is now clear.
+    /// A player walking past the doorway on the corridor side at the hinge's z should NOT
+    /// collide with the parked-leaf AABB because the leaf lives inside the unit.
+    #[test]
+    fn parked_leaf_aabb_does_not_block_corridor_past_doorway() {
+        let row = sample_row();
+        let (mn, mx) = parked_leaf_aabb(&row);
+        let radius = 0.22_f32;
+        // Player 0.3 m INTO the corridor (west of hinge) and at hinge z.
+        let cx = row.hinge_x - 0.3;
+        let cz = row.hinge_z;
+        let cap_min = [cx - radius, row.feet_y + 0.25, cz - radius];
+        let cap_max = [cx + radius, row.feet_y + 1.72, cz + radius];
+        let overlaps = cap_max[0] > mn[0]
+            && cap_min[0] < mx[0]
+            && cap_max[2] > mn[2]
+            && cap_min[2] < mx[2];
+        assert!(!overlaps, "parked leaf must not block corridor traffic");
     }
 }
