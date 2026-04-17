@@ -339,8 +339,10 @@ export function buildApartmentSwingLeafGeometries(
     throw new Error("buildApartmentSwingLeafGeometries: mergeGeometries returned null");
   }
 
-  const gh = Math.max(0.05, open.heightM - 0.02);
-  const gw = Math.max(0.05, open.widthM - 0.02);
+  /** Tight inset inside the frame rails/stiles (was 2 cm; narrower gap at the jamb). */
+  const gInset = 0.006;
+  const gh = Math.max(0.05, open.heightM - 2 * gInset);
+  const gw = Math.max(0.05, open.widthM - 2 * gInset);
   const glassGeom = new THREE.BoxGeometry(0.046, gh, gw);
   glassGeom.translate(panelT * 0.5 + 0.014, open.centerYM, centerZ);
 

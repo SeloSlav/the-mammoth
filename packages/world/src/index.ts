@@ -240,6 +240,7 @@ export {
 export {
   apartmentDoorTemplatesForFloor,
   entryDoorTangentHalfFromOverlap,
+  entryDoorShellCarveYRangeForShell,
   entryDoorYRangeForShell,
   UNIT_CORRIDOR_TOUCH_M,
   UNIT_ENTRY_DOOR_H,

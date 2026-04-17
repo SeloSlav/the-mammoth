@@ -8,6 +8,7 @@
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import type { ApartmentDoorTemplate } from "./unitEntryAdjacency.js";
 import {
+  entryDoorShellCarveYRangeForShell,
   entryDoorYRangeForShell,
   UNIT_ENTRY_DOOR_W,
 } from "./unitEntryAdjacency.js";
@@ -94,6 +95,7 @@ export function manualCorridorShellHoleExtrasForFloor(
   const zMax = vlenZ * 0.5 - 0.05;
   const { yDoor0, yDoor1 } = entryDoorYRangeForShell(sy);
   if (yDoor1 < yDoor0 + 0.4) return undefined;
+  const { yDoor0: yHole0, yDoor1: yHole1 } = entryDoorShellCarveYRangeForShell(sy);
 
   const out: CorridorShellWallHolesLike = { e: [], w: [], n: [], s: [] };
 
@@ -110,7 +112,7 @@ export function manualCorridorShellHoleExtrasForFloor(
 
     if (t.face !== "w") continue;
     /** East interior wall of the corridor (same convention as `corridorShellHolesFromAdjacentUnitEntries`). */
-    out.e.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
+    out.e.push({ z0: z0r, z1: z1r, y0: yHole0, y1: yHole1 });
   }
 
   const n = out.e.length + out.w.length + out.n.length + out.s.length;

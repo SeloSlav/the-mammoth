@@ -77,6 +77,7 @@ const LOBBY_DOOR_SILL = 0.04;
 const LOBBY_DOUBLE_DOOR_BAY_SPACING = LOBBY_DOUBLE_DOOR_W + 0.56;
 
 import {
+  entryDoorShellCarveYRangeForShell,
   entryDoorTangentHalfFromOverlap,
   entryDoorYRangeForShell,
   UNIT_CORRIDOR_TOUCH_M,
@@ -421,6 +422,7 @@ function unitEntryWallHolesFromFloorAdjacency(
 
   const { yDoor0, yDoor1 } = entryDoorYRangeForShell(sy);
   if (yDoor1 < yDoor0 + 0.4) return undefined;
+  const { yDoor0: yHole0, yDoor1: yHole1 } = entryDoorShellCarveYRangeForShell(sy);
 
   type Cand = { face: CardinalFace; span: number; tMid: number };
   let best: Cand | null = null;
@@ -479,8 +481,8 @@ function unitEntryWallHolesFromFloorAdjacency(
     (out[best.face] as WallHoleYZ[]).push({
       z0: z0r,
       z1: z1r,
-      y0: yDoor0,
-      y1: yDoor1,
+      y0: yHole0,
+      y1: yHole1,
     });
   } else {
     const xMidLocal = best.tMid - upx;
@@ -492,8 +494,8 @@ function unitEntryWallHolesFromFloorAdjacency(
     (out[best.face] as WallHoleXY[]).push({
       x0: x0r,
       x1: x1r,
-      y0: yDoor0,
-      y1: yDoor1,
+      y0: yHole0,
+      y1: yHole1,
     });
   }
   return out;
@@ -528,6 +530,7 @@ function corridorShellHolesFromAdjacentUnitEntries(
 
   const { yDoor0, yDoor1 } = entryDoorYRangeForShell(sy);
   if (yDoor1 < yDoor0 + 0.4) return undefined;
+  const { yDoor0: yHole0, yDoor1: yHole1 } = entryDoorShellCarveYRangeForShell(sy);
 
   const out: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
 
@@ -556,7 +559,7 @@ function corridorShellHolesFromAdjacentUnitEntries(
       z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));
       z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
       if (z1r < z0r + 0.28) continue;
-      out.e.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
+      out.e.push({ z0: z0r, z1: z1r, y0: yHole0, y1: yHole1 });
     }
     if (Math.abs(cx0 - ux1) < UNIT_CORRIDOR_TOUCH_M && upx < cpx + 0.02) {
       const z0 = Math.max(uz0, cz0);
@@ -570,7 +573,7 @@ function corridorShellHolesFromAdjacentUnitEntries(
       z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));
       z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
       if (z1r < z0r + 0.28) continue;
-      out.w.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
+      out.w.push({ z0: z0r, z1: z1r, y0: yHole0, y1: yHole1 });
     }
     if (Math.abs(cz1 - uz0) < UNIT_CORRIDOR_TOUCH_M && upz > cpz - 0.02) {
       const x0 = Math.max(ux0, cx0);
@@ -584,7 +587,7 @@ function corridorShellHolesFromAdjacentUnitEntries(
       x0r = Math.max(xMin, Math.min(x0r, xMax - 0.28));
       x1r = Math.min(xMax, Math.max(x1r, xMin + 0.28));
       if (x1r < x0r + 0.28) continue;
-      out.n.push({ x0: x0r, x1: x1r, y0: yDoor0, y1: yDoor1 });
+      out.n.push({ x0: x0r, x1: x1r, y0: yHole0, y1: yHole1 });
     }
     if (Math.abs(cz0 - uz1) < UNIT_CORRIDOR_TOUCH_M && upz < cpz + 0.02) {
       const x0 = Math.max(ux0, cx0);
@@ -598,7 +601,7 @@ function corridorShellHolesFromAdjacentUnitEntries(
       x0r = Math.max(xMin, Math.min(x0r, xMax - 0.28));
       x1r = Math.min(xMax, Math.max(x1r, xMin + 0.28));
       if (x1r < x0r + 0.28) continue;
-      out.s.push({ x0: x0r, x1: x1r, y0: yDoor0, y1: yDoor1 });
+      out.s.push({ x0: x0r, x1: x1r, y0: yHole0, y1: yHole1 });
     }
   }
 

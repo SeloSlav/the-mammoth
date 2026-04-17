@@ -53,6 +53,19 @@ export function entryDoorYRangeForShell(sy: number): UnitEntryDoorYRange {
   return { yDoor0, yDoor1 };
 }
 
+/**
+ * Wall CSG cutouts for unit-entry openings: carve from **interior floor** to lintel so no sill
+ * band remains in the shell mesh (avoids a lip at the threshold). Door feet / templates still use
+ * {@link entryDoorYRangeForShell} for hinge height.
+ */
+export function entryDoorShellCarveYRangeForShell(sy: number): UnitEntryDoorYRange {
+  const wt = 0.11;
+  const vh = Math.max(sy - 2 * wt, 0.05);
+  const yLo = -vh * 0.5;
+  const { yDoor1 } = entryDoorYRangeForShell(sy);
+  return { yDoor0: yLo, yDoor1 };
+}
+
 type AdjacencyCandidate = {
   face: UnitEntryFace;
   span: number;
