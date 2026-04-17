@@ -1783,6 +1783,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
 
   for (const spec of stairShaftSpecs) {
     for (let i = 0; i < spec.storeyCount; i++) {
+      const isTopStorey = i === spec.storeyCount - 1;
       const authoringScope = i === 0 ? "ground" : "typical";
       const resolvedDoor = resolveStairWellGroundDoor({
         sx: spec.sx,
@@ -1818,6 +1819,9 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         authoringScope,
         groundDoor: resolvedDoor?.groundDoor,
         supplementalDoors,
+        includeCeiling: isTopStorey,
+        omitTreads: isTopStorey,
+        omitTopLanding: isTopStorey,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(segment, wallPrefixesForFaces("shaft_wall", affectedFaces)),

@@ -858,6 +858,12 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   supplementalDoors?: readonly ResolvedStairWellGroundDoor[];
   /** Editor-only wireframe gizmo target for the opening. */
   addOpeningEditProxy?: boolean;
+  /** Cap this shaft segment with a ceiling slab. Used for the topmost storey only. */
+  includeCeiling?: boolean;
+  /** Skip generating stair treads while retaining the rest of the shaft shell/openings. */
+  omitTreads?: boolean;
+  /** Omit the highest landing in this segment. Used for the terminal top storey. */
+  omitTopLanding?: boolean;
 };
 
 export type StairWellGroundDoorContext = {
@@ -1702,7 +1708,7 @@ export function addStairWellPlaceholder(
 
   addShaftShell(group, sx, sy, sz, mats.wall, shaftCeil, {
     includeFloor: stairWellHasFloorSlab(authoringScope),
-    includeCeiling: false,
+    includeCeiling: opts?.includeCeiling === true,
     floorMat: mats.floor,
     groundDoor: stairGroundDoor,
     supplementalDoors: supplementalDoors.map((door) => door.groundDoor),
@@ -1729,15 +1735,17 @@ export function addStairWellPlaceholder(
       for (let local = 0; local < count; local++) {
         const tr = L.treads[ti];
         if (!tr) break;
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(tr.halfAlong * 2, tr.riseHalf * 2, tr.halfAcross * 2),
-          mats.tread,
-        );
-        mesh.name = `stair_tread_${ti}`;
+        if (opts?.omitTreads !== true) {
+          const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(tr.halfAlong * 2, tr.riseHalf * 2, tr.halfAcross * 2),
+            mats.tread,
+          );
+          mesh.name = `stair_tread_${ti}`;
+          mesh.position.set(tr.x, tr.y, tr.z);
+          mesh.rotation.y = tr.yaw;
+          target.add(mesh);
+        }
         ti += 1;
-        mesh.position.set(tr.x, tr.y, tr.z);
-        mesh.rotation.y = tr.yaw;
-        target.add(mesh);
       }
     }
   }
@@ -1757,6 +1765,17 @@ export function addStairWellPlaceholder(
       const deckBot = cl.y - cl.thicknessHalf;
       if (deckBot < bestDeck - 1e-6) {
         bestDeck = deckBot;
+        omitOnlyLanding = cl;
+      }
+    }
+  }
+  if (opts?.omitTopLanding === true) {
+    let highestDeck = -Infinity;
+    for (const cl of L.cornerLandings) {
+      if (omitOnlyLanding !== undefined && cl === omitOnlyLanding) continue;
+      const deckTop = cl.y + cl.thicknessHalf;
+      if (deckTop > highestDeck + 1e-6) {
+        highestDeck = deckTop;
         omitOnlyLanding = cl;
       }
     }

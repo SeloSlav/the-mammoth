@@ -138,6 +138,7 @@ export function addBuildingStairShaftColumnsToRoot(
     col.userData.mammothAlwaysVisible = true;
     col.position.set(s.px, 0, s.pz);
     for (let i = 0; i < s.storeyCount; i++) {
+      const isTopStorey = i === s.storeyCount - 1;
       const segment = new THREE.Group();
       segment.name = `stair_shaft_segment_${i}`;
       segment.position.y =
@@ -167,6 +168,9 @@ export function addBuildingStairShaftColumnsToRoot(
         authoringScope,
         groundDoor: resolvedGroundDoor,
         supplementalDoors,
+        includeCeiling: isTopStorey,
+        omitTreads: isTopStorey,
+        omitTopLanding: isTopStorey,
       });
       col.add(segment);
     }

@@ -237,6 +237,44 @@ describe("applyStairWellPartTransforms", () => {
     expect(ground.getObjectByName("shaft_floor")).not.toBeNull();
   });
 
+  it("can cap a stairwell segment while omitting its top run", () => {
+    const baseline = new THREE.Group();
+    addStairWellPlaceholder(baseline, 4, STOREY_SPACING_M, 4, {
+      authoringScope: "typical",
+      includeCeiling: true,
+      omitTreads: true,
+    });
+
+    const baselineLandingYs: number[] = [];
+    baseline.traverse((obj) => {
+      if (obj.name.startsWith("stair_corner_landing_")) baselineLandingYs.push(obj.position.y);
+    });
+
+    const root = new THREE.Group();
+    addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4, {
+      authoringScope: "typical",
+      includeCeiling: true,
+      omitTreads: true,
+      omitTopLanding: true,
+    });
+
+    const landingNames: string[] = [];
+    const landingYs: number[] = [];
+    root.traverse((obj) => {
+      if (obj.name.startsWith("stair_corner_landing_")) {
+        landingNames.push(obj.name);
+        landingYs.push(obj.position.y);
+      }
+    });
+
+    expect(root.getObjectByName("shaft_ceiling")).not.toBeNull();
+    expect(root.getObjectByName("stair_tread_0")).toBeUndefined();
+    expect((root.getObjectByName("stair_flight_lower") as THREE.Group).children).toHaveLength(0);
+    expect((root.getObjectByName("stair_flight_upper") as THREE.Group).children).toHaveLength(0);
+    expect(landingNames).toHaveLength(baselineLandingYs.length - 1);
+    expect(Math.max(...landingYs)).toBeLessThan(Math.max(...baselineLandingYs));
+  });
+
   it("does not generate stair rail posts anymore", () => {
     const root = new THREE.Group();
     addStairWellPlaceholder(root, 4, STOREY_SPACING_M, 4);

@@ -330,27 +330,31 @@ function buildRuntimeSupportSurfacesForSegment(args: {
   def: StairWellDef | undefined;
   scope: StairWellAuthoringScope;
   omitGroundStoreyCornerLandings: boolean;
+  omitTreads: boolean;
+  omitTopLanding: boolean;
 }): RuntimeStairSupportSurface[] {
   const layout = computeSwitchbackStairLayout(args.sx, args.sy, args.sz, {});
   const transformState = buildSupportTransformState(layout, args.def, args.scope);
   const boundary = lowerFlightLegBoundary(layout.legTreadCounts);
   const out: RuntimeStairSupportSurface[] = [];
 
-  let treadIndex = 0;
-  for (let lap = 0; lap < layout.numLaps; lap++) {
-    for (let legIndex = 0; legIndex < layout.legTreadCounts.length; legIndex++) {
-      const count = layout.legTreadCounts[legIndex] ?? 0;
-      const legTreads = layout.treads.slice(treadIndex, treadIndex + count);
-      treadIndex += count;
-      const part = legIndex < boundary ? transformState.lowerFlight : transformState.upperFlight;
-      const surface = buildFlightSlopeSurface(
-        legTreads,
-        part,
-        args.baseWorldX,
-        args.baseWorldY,
-        args.baseWorldZ,
-      );
-      if (surface) out.push(surface);
+  if (!args.omitTreads) {
+    let treadIndex = 0;
+    for (let lap = 0; lap < layout.numLaps; lap++) {
+      for (let legIndex = 0; legIndex < layout.legTreadCounts.length; legIndex++) {
+        const count = layout.legTreadCounts[legIndex] ?? 0;
+        const legTreads = layout.treads.slice(treadIndex, treadIndex + count);
+        treadIndex += count;
+        const part = legIndex < boundary ? transformState.lowerFlight : transformState.upperFlight;
+        const surface = buildFlightSlopeSurface(
+          legTreads,
+          part,
+          args.baseWorldX,
+          args.baseWorldY,
+          args.baseWorldZ,
+        );
+        if (surface) out.push(surface);
+      }
     }
   }
 
@@ -363,6 +367,17 @@ function buildRuntimeSupportSurfacesForSegment(args: {
       const deckBottom = landing.y - landing.thicknessHalf;
       if (deckBottom < bestDeck - 1e-6) {
         bestDeck = deckBottom;
+        omitOnlyLanding = landing;
+      }
+    }
+  }
+  if (args.omitTopLanding) {
+    let highestDeck = -Infinity;
+    for (const landing of layout.cornerLandings) {
+      if (omitOnlyLanding && landing === omitOnlyLanding) continue;
+      const deckTop = landing.y + landing.thicknessHalf;
+      if (deckTop > highestDeck + 1e-6) {
+        highestDeck = deckTop;
         omitOnlyLanding = landing;
       }
     }
@@ -413,6 +428,7 @@ export function buildStairRuntimeOverlayForBuilding(
 
   for (const spec of stairShaftSpecs) {
     for (let i = 0; i < spec.storeyCount; i++) {
+      const isTopStorey = i === spec.storeyCount - 1;
       const scope: StairWellAuthoringScope = i === 0 ? "ground" : "typical";
       const worldX = worldOrigin[0] + spec.px;
       const worldY =
@@ -443,6 +459,9 @@ export function buildStairRuntimeOverlayForBuilding(
         authoringScope: scope,
         groundDoor: resolvedDoor?.groundDoor,
         supplementalDoors,
+        includeCeiling: isTopStorey,
+        omitTreads: isTopStorey,
+        omitTopLanding: isTopStorey,
       });
       blockerReplacementAabbs.push(...collectCollisionAabbsFromObject3D(segment));
       const mask = buildSegmentMask(worldX, worldY, worldZ, spec.sx, spec.syPlate, spec.sz);
@@ -459,6 +478,8 @@ export function buildStairRuntimeOverlayForBuilding(
           def: stairWellDef,
           scope,
           omitGroundStoreyCornerLandings: i === 0,
+          omitTreads: isTopStorey,
+          omitTopLanding: isTopStorey,
         }),
       );
     }
