@@ -497,6 +497,359 @@ export async function mountFpSession(
   };
 
   /**
+   * Live door-collision debug — enabled from the browser dev console.
+   *
+   *   window.__mmDoorDebug.all()         // master command: live logs + immediate dumps
+   *   window.__mmDoorDebug.on()          // start live logging near apartment doors
+   *   window.__mmDoorDebug.on(5)         // with 5m radius instead of default 2.5
+   *   window.__mmDoorDebug.off()
+   *   window.__mmDoorDebug.snapshot()    // print + return current nearby doors
+   *   window.__mmDoorDebug.staticAabbs() // print + return nearby static AABBs
+   *   window.__mmDoorDebug.persistOn()   // auto-enable `all()` after reloads
+   *   window.__mmDoorDebug.persistOff()
+   *
+   * On each frame with a door in range, it logs ONE line per "event":
+   *   - `clamped = true` means collision pushed the player back from their intended target
+   *   - `nearbyDoors` includes face, hinge, live open01 and the exact AABB the physics saw
+   * Paste the output back and we can pinpoint which AABB is blocking you.
+   */
+  const MM_DOOR_DEBUG_AUTOSTART_STORAGE_KEY = "mmDoorDebugAutostart";
+  const __mmDoorDebugState = {
+    enabled: false,
+    radiusM: 2.5,
+    /** Throttle identical events so holding W against a wall doesn't flood the console. */
+    minLogIntervalMs: 200,
+    lastLogMs: 0,
+  };
+
+  type DoorDebugFrame = {
+    prev: { x: number; y: number; z: number };
+    target: { x: number; y: number; z: number };
+    resolved: { x: number; y: number; z: number };
+    velocity: { x: number; y: number; z: number };
+    crouch: boolean;
+    nearbyDoors: ReturnType<typeof fpApartmentDoors.debugSnapshot>;
+  };
+
+  /**
+   * Side of a probe body that an AABB is closest to. Helpful when reading logs:
+   * a wall overlapping `-x` side of the player body is the one pushing them east.
+   */
+  const classifyOverlapSides = (
+    aabb: { min: [number, number, number]; max: [number, number, number] },
+    body: { cx: number; cz: number; yMin: number; yMax: number; radius: number },
+  ): string[] => {
+    const sides: string[] = [];
+    if (aabb.min[0] <= body.cx - body.radius + 1e-4) sides.push("-x");
+    if (aabb.max[0] >= body.cx + body.radius - 1e-4) sides.push("+x");
+    if (aabb.min[2] <= body.cz - body.radius + 1e-4) sides.push("-z");
+    if (aabb.max[2] >= body.cz + body.radius - 1e-4) sides.push("+z");
+    if (aabb.min[1] <= body.yMin + 1e-4) sides.push("-y");
+    if (aabb.max[1] >= body.yMax - 1e-4) sides.push("+y");
+    return sides;
+  };
+
+  const printDoorDebugJson = (label: string, payload: unknown): void => {
+    console.log(`[mmDoorDebug:${label}] ${JSON.stringify(payload, null, 2)}`);
+  };
+
+  const readDoorDebugAutostart = (): boolean => {
+    try {
+      return globalThis.localStorage?.getItem(MM_DOOR_DEBUG_AUTOSTART_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  const writeDoorDebugAutostart = (enabled: boolean): void => {
+    try {
+      if (enabled) globalThis.localStorage?.setItem(MM_DOOR_DEBUG_AUTOSTART_STORAGE_KEY, "1");
+      else globalThis.localStorage?.removeItem(MM_DOOR_DEBUG_AUTOSTART_STORAGE_KEY);
+    } catch {
+      /* ignore storage failures */
+    }
+  };
+
+  const roundV = (v: { x: number; y: number; z: number }) => ({
+    x: +v.x.toFixed(3),
+    y: +v.y.toFixed(3),
+    z: +v.z.toFixed(3),
+  });
+
+  const roundAabb = (a: import("@the-mammoth/world").CollisionAabb | null) =>
+    a
+      ? {
+          min: [+a.min[0].toFixed(3), +a.min[1].toFixed(3), +a.min[2].toFixed(3)],
+          max: [+a.max[0].toFixed(3), +a.max[1].toFixed(3), +a.max[2].toFixed(3)],
+        }
+      : null;
+
+  const snapshotDoorDebug = (radiusM: number) =>
+    fpApartmentDoors.debugSnapshot(pos.x, pos.z, radiusM).map((d) => ({
+      rowKey: d.rowKey,
+      level: d.level,
+      face: d.face,
+      hingeX: +d.hingeX.toFixed(3),
+      hingeZ: +d.hingeZ.toFixed(3),
+      feetY: +d.feetY.toFixed(3),
+      panelW: +d.panelWidthM.toFixed(3),
+      panelH: +d.panelHeightM.toFixed(3),
+      desired: d.desiredOpen,
+      open01: +d.swingOpen01.toFixed(3),
+      regime: d.regime,
+      aabb: roundAabb(d.emittedAabb),
+      distance: +d.distanceMeters.toFixed(3),
+    }));
+
+  const snapshotStaticAabbs = (radiusM: number): { min: [number, number, number]; max: [number, number, number] }[] => {
+    const out: { min: [number, number, number]; max: [number, number, number] }[] = [];
+    staticCollisionIndex.visitAabbsInXZ(
+      pos.x - radiusM,
+      pos.x + radiusM,
+      pos.z - radiusM,
+      pos.z + radiusM,
+      (a) => {
+        out.push({
+          min: [+a.min[0].toFixed(3), +a.min[1].toFixed(3), +a.min[2].toFixed(3)],
+          max: [+a.max[0].toFixed(3), +a.max[1].toFixed(3), +a.max[2].toFixed(3)],
+        });
+      },
+    );
+    return out;
+  };
+
+  /**
+   * Returns every static AABB that overlaps the player's body volume (capsule → AABB) at `center`,
+   * sorted by horizontal distance from the body center. This is the definitive list of what COULD
+   * be shoving the player on any given frame.
+   */
+  const snapshotStaticBodyOverlaps = (
+    center: { x: number; y: number; z: number },
+    crouch: boolean,
+    inflateM = 0.01,
+  ) => {
+    const radius = FP_PLAYER_COLLISION_RADIUS_M;
+    const bodyH = crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
+    const yMin = center.y;
+    const yMax = center.y + bodyH;
+    const xMin = center.x - radius - inflateM;
+    const xMax = center.x + radius + inflateM;
+    const zMin = center.z - radius - inflateM;
+    const zMax = center.z + radius + inflateM;
+    const out: {
+      min: [number, number, number];
+      max: [number, number, number];
+      overlapSides: string[];
+      distanceMeters: number;
+    }[] = [];
+    staticCollisionIndex.visitAabbsInXZ(xMin, xMax, zMin, zMax, (a) => {
+      if (a.max[1] < yMin - inflateM || a.min[1] > yMax + inflateM) return;
+      if (a.max[0] < xMin || a.min[0] > xMax) return;
+      if (a.max[2] < zMin || a.min[2] > zMax) return;
+      const clampedX = Math.max(a.min[0], Math.min(center.x, a.max[0]));
+      const clampedZ = Math.max(a.min[2], Math.min(center.z, a.max[2]));
+      const dx = clampedX - center.x;
+      const dz = clampedZ - center.z;
+      const distance = Math.hypot(dx, dz);
+      const rounded = {
+        min: [+a.min[0].toFixed(3), +a.min[1].toFixed(3), +a.min[2].toFixed(3)] as [number, number, number],
+        max: [+a.max[0].toFixed(3), +a.max[1].toFixed(3), +a.max[2].toFixed(3)] as [number, number, number],
+      };
+      out.push({
+        ...rounded,
+        overlapSides: classifyOverlapSides(rounded, {
+          cx: center.x,
+          cz: center.z,
+          yMin,
+          yMax,
+          radius,
+        }),
+        distanceMeters: +distance.toFixed(4),
+      });
+    });
+    out.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    return out;
+  };
+
+  /**
+   * Returns every dynamic AABB (apartment doors + elevators) that overlaps the player's body
+   * volume at `center`. Lets us tell the difference between "door slab is pushing you" and
+   * "static wall is pushing you" on the same frame.
+   */
+  const snapshotDynamicBodyOverlaps = (
+    center: { x: number; y: number; z: number },
+    crouch: boolean,
+    inflateM = 0.01,
+  ) => {
+    const radius = FP_PLAYER_COLLISION_RADIUS_M;
+    const bodyH = crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
+    const yMin = center.y;
+    const yMax = center.y + bodyH;
+    const xMin = center.x - radius - inflateM;
+    const xMax = center.x + radius + inflateM;
+    const zMin = center.z - radius - inflateM;
+    const zMax = center.z + radius + inflateM;
+    const out: {
+      min: [number, number, number];
+      max: [number, number, number];
+      overlapSides: string[];
+      distanceMeters: number;
+    }[] = [];
+    const visit = (a: import("@the-mammoth/world").CollisionAabb): void => {
+      if (a.max[1] < yMin - inflateM || a.min[1] > yMax + inflateM) return;
+      if (a.max[0] < xMin || a.min[0] > xMax) return;
+      if (a.max[2] < zMin || a.min[2] > zMax) return;
+      const clampedX = Math.max(a.min[0], Math.min(center.x, a.max[0]));
+      const clampedZ = Math.max(a.min[2], Math.min(center.z, a.max[2]));
+      const distance = Math.hypot(clampedX - center.x, clampedZ - center.z);
+      const rounded = {
+        min: [+a.min[0].toFixed(3), +a.min[1].toFixed(3), +a.min[2].toFixed(3)] as [number, number, number],
+        max: [+a.max[0].toFixed(3), +a.max[1].toFixed(3), +a.max[2].toFixed(3)] as [number, number, number],
+      };
+      out.push({
+        ...rounded,
+        overlapSides: classifyOverlapSides(rounded, {
+          cx: center.x,
+          cz: center.z,
+          yMin,
+          yMax,
+          radius,
+        }),
+        distanceMeters: +distance.toFixed(4),
+      });
+    };
+    fpApartmentDoors.visitCollisionAabbsInXZ(xMin, xMax, zMin, zMax, visit, undefined);
+    fpElevators.visitCollisionAabbsInXZ(xMin, xMax, zMin, zMax, visit, undefined);
+    out.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    return out;
+  };
+
+  const logDoorDebugFrame = (f: DoorDebugFrame): void => {
+    const nowMs = performance.now();
+    if (nowMs - __mmDoorDebugState.lastLogMs < __mmDoorDebugState.minLogIntervalMs) return;
+    const dx = f.target.x - f.resolved.x;
+    const dz = f.target.z - f.resolved.z;
+    const clampedBy = Math.hypot(dx, dz);
+    const clamped = clampedBy > 0.002;
+    const moved = Math.hypot(f.resolved.x - f.prev.x, f.resolved.z - f.prev.z);
+    const attempted = Math.hypot(f.target.x - f.prev.x, f.target.z - f.prev.z);
+    if (!clamped && attempted < 0.005) return;
+    __mmDoorDebugState.lastLogMs = nowMs;
+    const resolveDirection = (): string | null => {
+      if (clampedBy <= 1e-4) return null;
+      const parts: string[] = [];
+      if (Math.abs(dx) > 1e-4) parts.push(dx > 0 ? "-x (pushed west)" : "+x (pushed east)");
+      if (Math.abs(dz) > 1e-4) parts.push(dz > 0 ? "-z (pushed north)" : "+z (pushed south)");
+      return parts.join(", ");
+    };
+    // `target - resolved` is the vector the resolver removed. If positive +x, the blocker
+    // is EAST of the player (pushed them west), etc. Sides with larger push dominate.
+    const staticOverlaps = clamped ? snapshotStaticBodyOverlaps(f.resolved, f.crouch) : [];
+    const dynamicOverlaps = clamped ? snapshotDynamicBodyOverlaps(f.resolved, f.crouch) : [];
+    const payload = {
+      clamped,
+      clampedByMeters: +clampedBy.toFixed(4),
+      clampDirection: resolveDirection(),
+      attemptedMoveM: +attempted.toFixed(4),
+      resolvedMoveM: +moved.toFixed(4),
+      prev: roundV(f.prev),
+      target: roundV(f.target),
+      resolved: roundV(f.resolved),
+      velocity: roundV(f.velocity),
+      bodyRadiusM: FP_PLAYER_COLLISION_RADIUS_M,
+      bodyHeightM: f.crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M,
+      nearbyDoors: f.nearbyDoors.map((d) => ({
+        rowKey: d.rowKey,
+        level: d.level,
+        face: d.face,
+        hingeX: +d.hingeX.toFixed(3),
+        hingeZ: +d.hingeZ.toFixed(3),
+        feetY: +d.feetY.toFixed(3),
+        panelW: +d.panelWidthM.toFixed(3),
+        panelH: +d.panelHeightM.toFixed(3),
+        desired: d.desiredOpen,
+        open01: +d.swingOpen01.toFixed(3),
+        regime: d.regime,
+        aabb: roundAabb(d.emittedAabb),
+        distance: +d.distanceMeters.toFixed(3),
+      })),
+      // Only populated when `clamped` — these are the AABBs ACTUALLY touching the player body.
+      staticOverlaps,
+      dynamicOverlaps,
+    };
+    printDoorDebugJson("frame", payload);
+  };
+
+  const __mmDoorDebugApi = {
+    on(radiusM = 2.5): void {
+      __mmDoorDebugState.enabled = true;
+      __mmDoorDebugState.radiusM = radiusM;
+      printDoorDebugJson("status", {
+        enabled: true,
+        radiusM: +radiusM.toFixed(3),
+        autostart: readDoorDebugAutostart(),
+        message:
+          "Walk at a door; logs appear on collision / movement near a door. Call __mmDoorDebug.off() to stop.",
+      });
+    },
+    off(): void {
+      __mmDoorDebugState.enabled = false;
+      printDoorDebugJson("status", {
+        enabled: false,
+        radiusM: +__mmDoorDebugState.radiusM.toFixed(3),
+        autostart: readDoorDebugAutostart(),
+      });
+    },
+    snapshot(radiusM = 2.5) {
+      const payload = {
+        player: roundV(pos),
+        radiusM: +radiusM.toFixed(3),
+        nearbyDoors: snapshotDoorDebug(radiusM),
+      };
+      printDoorDebugJson("snapshot", payload);
+      return payload;
+    },
+    /** Dump every static-collision AABB whose XZ footprint is within `radiusM` of the player. */
+    staticAabbs(radiusM = 2.5) {
+      const payload = {
+        player: roundV(pos),
+        radiusM: +radiusM.toFixed(3),
+        staticAabbs: snapshotStaticAabbs(radiusM),
+      };
+      printDoorDebugJson("static-aabbs", payload);
+      return payload;
+    },
+    player(): { x: number; y: number; z: number } {
+      const payload = { player: roundV(pos) };
+      printDoorDebugJson("player", payload);
+      return payload.player;
+    },
+    all(radiusM = 2.5): void {
+      this.on(radiusM);
+      printDoorDebugJson("all", {
+        player: roundV(pos),
+        radiusM: +radiusM.toFixed(3),
+        nearbyDoors: snapshotDoorDebug(radiusM),
+        staticAabbs: snapshotStaticAabbs(radiusM),
+        autostart: readDoorDebugAutostart(),
+      });
+    },
+    persistOn(radiusM = __mmDoorDebugState.radiusM): void {
+      writeDoorDebugAutostart(true);
+      this.all(radiusM);
+      printDoorDebugJson("persist", { autostart: true, radiusM: +radiusM.toFixed(3) });
+    },
+    persistOff(): void {
+      writeDoorDebugAutostart(false);
+      printDoorDebugJson("persist", { autostart: false });
+    },
+  };
+  // Expose on window for dev-console use. Kept behind `unknown` cast so TS stays clean.
+  (globalThis as unknown as { __mmDoorDebug?: typeof __mmDoorDebugApi }).__mmDoorDebug =
+    __mmDoorDebugApi;
+  if (readDoorDebugAutostart()) __mmDoorDebugApi.all(__mmDoorDebugState.radiusM);
+
+  /**
    * Pre-allocated step-opts for the reconcile replay loop — same idea but points to the replay
    * pool objects (_replayPos, _replayPrevPos, _replayLoco, _replayInput).
    */
@@ -624,6 +977,16 @@ export async function mountFpSession(
       skipAttachUpwardVyMps: ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS,
     });
 
+    const dbg = __mmDoorDebugState;
+    const isLive = opts === _mainStepOpts;
+    const dbgActive = dbg.enabled && isLive;
+    const dbgCapture = dbgActive
+      ? fpApartmentDoors.debugSnapshot(opts.pos.x, opts.pos.z, dbg.radiusM)
+      : null;
+    const tgtX = opts.pos.x;
+    const tgtZ = opts.pos.z;
+    const tgtY = opts.pos.y;
+
     resolvePlayerCollisions(
       opts.pos,
       opts.prevPos,
@@ -639,6 +1002,17 @@ export async function mountFpSession(
       },
       opts.locoState.grounded,
     );
+
+    if (dbgActive) {
+      logDoorDebugFrame({
+        prev: { x: opts.prevPos.x, y: opts.prevPos.y, z: opts.prevPos.z },
+        target: { x: tgtX, y: tgtY, z: tgtZ },
+        resolved: { x: opts.pos.x, y: opts.pos.y, z: opts.pos.z },
+        velocity: { x: opts.locoState.velocity.x, y: opts.locoState.velocity.y, z: opts.locoState.velocity.z },
+        crouch: opts.crouch,
+        nearbyDoors: dbgCapture ?? [],
+      });
+    }
 
     const bodyH = opts.crouch
       ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M
@@ -1394,6 +1768,12 @@ export async function mountFpSession(
     setFpPickupPrompt(null);
     fpElevators.dispose();
     fpApartmentDoors.dispose();
+    try {
+      const g = globalThis as unknown as { __mmDoorDebug?: typeof __mmDoorDebugApi };
+      if (g.__mmDoorDebug === __mmDoorDebugApi) delete g.__mmDoorDebug;
+    } catch {
+      /* ignore */
+    }
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

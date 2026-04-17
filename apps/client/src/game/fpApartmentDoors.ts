@@ -100,6 +100,27 @@ export type MountFpApartmentDoorsOpts = {
   building: BuildingDoc;
 };
 
+/** Debug: live snapshot of a nearby apartment door — exactly the state the collision pipeline
+ *  consumed this frame. Used by `window.__mmDoorDebug` to trace rubber-banding reports. */
+export type ApartmentDoorDebugSlot = {
+  rowKey: string;
+  level: number;
+  face: SwingDoorFace;
+  hingeX: number;
+  hingeZ: number;
+  feetY: number;
+  panelWidthM: number;
+  panelHeightM: number;
+  desiredOpen: number;
+  swingOpen01: number;
+  /** Which collision regime the `open01` falls in (what AABB — if any — is emitted). */
+  regime: "closed-slab" | "passable" | "parked-leaf";
+  /** The actual AABB the collision pipeline sees this frame (null when passable). */
+  emittedAabb: CollisionAabb | null;
+  /** XZ distance from player feet to hinge. */
+  distanceMeters: number;
+};
+
 export type MountFpApartmentDoorsResult = {
   dispose(): void;
   /** Per-frame: advance visual interpolation and apply swing rotations. */
@@ -122,6 +143,8 @@ export type MountFpApartmentDoorsResult = {
   shouldSuppressEpickup(playerPos: THREE.Vector3): boolean;
   /** Drive the bottom interact prompt when the player is next to an apartment door. */
   getInteractPrompt(playerPos: THREE.Vector3): { willClose: boolean } | null;
+  /** Returns every apartment door within `radiusM` of `(x,z)` with its live collision state. */
+  debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
 };
 
 /** One pre-allocated door slot. World coordinates are stable across the session. */
@@ -527,6 +550,61 @@ export function mountFpApartmentDoors(
     return { willClose: target.desiredOpen !== 0 };
   };
 
+  const debugSnapshot = (x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[] => {
+    const out: ApartmentDoorDebugSlot[] = [];
+    const r2 = radiusM * radiusM;
+    visitBucketedSlots(bucketIndex, x - radiusM, x + radiusM, z - radiusM, z + radiusM, (slot) => {
+      const dx = slot.hingeX - x;
+      const dz = slot.hingeZ - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) return;
+      const open01 = slot.swingOpen01;
+      let regime: ApartmentDoorDebugSlot["regime"];
+      let emittedAabb: CollisionAabb | null = null;
+      if (swingDoorClosedSlabActive(open01)) {
+        regime = "closed-slab";
+        emittedAabb = swingDoorClosedSlabAabb({
+          face: slot.face,
+          hingeX: slot.hingeX,
+          hingeZ: slot.hingeZ,
+          feetY: slot.feetY,
+          panelWidthM: slot.panelWidthM,
+          panelHeightM: slot.panelHeightM,
+        });
+      } else if (swingDoorParkedLeafActive(open01)) {
+        regime = "parked-leaf";
+        emittedAabb = swingDoorParkedLeafAabb({
+          face: slot.face,
+          hingeX: slot.hingeX,
+          hingeZ: slot.hingeZ,
+          feetY: slot.feetY,
+          panelWidthM: slot.panelWidthM,
+          panelHeightM: slot.panelHeightM,
+          swingInward: APARTMENT_DOOR_SWING_INWARD,
+        });
+      } else {
+        regime = "passable";
+      }
+      out.push({
+        rowKey: slot.rowKey,
+        level: slot.level,
+        face: slot.face,
+        hingeX: slot.hingeX,
+        hingeZ: slot.hingeZ,
+        feetY: slot.feetY,
+        panelWidthM: slot.panelWidthM,
+        panelHeightM: slot.panelHeightM,
+        desiredOpen: slot.desiredOpen,
+        swingOpen01: open01,
+        regime,
+        emittedAabb,
+        distanceMeters: Math.sqrt(d2),
+      });
+    });
+    out.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    return out;
+  };
+
   const dispose = () => {
     try {
       sub?.unsubscribe();
@@ -559,6 +637,7 @@ export function mountFpApartmentDoors(
     consumeInteractKey,
     shouldSuppressEpickup,
     getInteractPrompt,
+    debugSnapshot,
   };
 }
 
