@@ -44,13 +44,28 @@ const LANDING_DIMS: SwingDoorDimensions = {
   panelH: EXTERIOR_DOOR_H_M,
 };
 
+/**
+ * Resolve the leaf dimensions used by a landing-door preview: honors authored
+ * `panelWidthM`/`panelHeightM` overrides on the kit (the apartment variant authors smaller dims),
+ * falling back to the elevator landing door defaults.
+ */
+export function resolveLandingDims(kit: LandingKitDef | undefined): SwingDoorDimensions {
+  const w = kit?.panelWidthM;
+  const h = kit?.panelHeightM;
+  if (w === undefined && h === undefined) return LANDING_DIMS;
+  return {
+    panelW: w ?? LANDING_DIMS.panelW,
+    panelH: h ?? LANDING_DIMS.panelH,
+  };
+}
+
 export function populateExteriorLandingDoorSwing(
   swing: THREE.Group,
   redMat: THREE.MeshStandardMaterial,
   glassMat: THREE.MeshPhysicalMaterial,
   kit: LandingKitDef | undefined,
 ): void {
-  populateSwingDoorLeaf(swing, redMat, glassMat, kit, LANDING_DIMS);
+  populateSwingDoorLeaf(swing, redMat, glassMat, kit, resolveLandingDims(kit));
 }
 
 export function disposeExteriorLandingDoorSwingContents(swing: THREE.Group): void {
@@ -65,13 +80,17 @@ export function createExteriorLandingDoorMaterials(kit: LandingKitDef | undefine
   return { redMat: frameMat, glassMat };
 }
 
-export function addLandingDoorOpeningEditProxy(swing: THREE.Group, open: ResolvedGlassOpening): void {
-  addSwingDoorOpeningEditProxy(swing, open, LANDING_DIMS);
+export function addLandingDoorOpeningEditProxy(
+  swing: THREE.Group,
+  open: ResolvedGlassOpening,
+  kit?: LandingKitDef,
+): void {
+  addSwingDoorOpeningEditProxy(swing, open, resolveLandingDims(kit));
 }
 
 export function glassOpeningFromProxyMesh(
   proxy: THREE.Object3D,
   kit: LandingKitDef | undefined,
 ): ResolvedGlassOpening {
-  return glassOpeningFromProxyMeshShared(proxy, kit, LANDING_DIMS);
+  return glassOpeningFromProxyMeshShared(proxy, kit, resolveLandingDims(kit));
 }

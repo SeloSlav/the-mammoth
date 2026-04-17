@@ -24,6 +24,18 @@ export type EditorWorkspace = "cab" | "landing" | "stairwell" | "world";
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
 
+/**
+ * Which swing-door kit the `landing_preview` mode is currently authoring.
+ *
+ * Both kits share `LandingKitDef`; only the save destination and runtime consumer differ:
+ * - `elevator` → `content/elevator/landing_kit.json`, used by `fpElevatorWorld`
+ * - `apartment` → `content/door/apartment_unit_kit.json`, used by `fpApartmentDoors`
+ *
+ * The editor swaps `landingKitDef` ⇄ `inactiveLandingKitDef` when this changes so every existing
+ * `s.landingKitDef` consumer sees the active kit — no downstream refactor required.
+ */
+export type LandingKitVariant = "elevator" | "apartment";
+
 export type EditorMode =
   | "floor"
   | "interior"
@@ -61,6 +73,8 @@ export type HistoryEntry = {
   building: BuildingDoc;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
+  inactiveLandingKitDef: LandingKitDef;
+  landingKitVariant: LandingKitVariant;
   stairWellDef: StairWellDef;
   selectedId: string | null;
   dirty: boolean;
@@ -70,6 +84,8 @@ export type HistoryEntry = {
 export interface EditorState {
   workspace: EditorWorkspace;
   landingDocKind: LandingDocKind;
+  /** Which kit `landingKitDef` currently holds. */
+  landingKitVariant: LandingKitVariant;
   mode: EditorMode;
   building: BuildingDoc;
   floorDocs: Record<string, FloorDoc>;
@@ -78,7 +94,10 @@ export interface EditorState {
   prefabDefs: Record<string, PrefabDef>;
   floorOverrideDocs: Record<string, FloorOverrideDoc>;
   elevatorCabDef: ElevatorCabDef;
+  /** Active kit (elevator or apartment, per {@link landingKitVariant}). */
   landingKitDef: LandingKitDef;
+  /** Parked copy of the non-active kit so a variant swap is just two assignments. */
+  inactiveLandingKitDef: LandingKitDef;
   stairWellDef: StairWellDef;
   contentIndex: EditorContentIndex;
   activeFloorDocId: string;
@@ -119,6 +138,11 @@ export interface EditorState {
   setMode: (mode: EditorMode) => void;
   setWorkspace: (workspace: EditorWorkspace) => void;
   setLandingDocKind: (kind: LandingDocKind) => void;
+  /**
+   * Swap active kit to `variant`. The currently-edited `landingKitDef` is parked into
+   * `inactiveLandingKitDef`, and the previously-parked kit becomes active. No-op if already active.
+   */
+  setLandingKitVariant: (variant: LandingKitVariant) => void;
   patchElevatorCabDef: (fn: (d: ElevatorCabDef) => ElevatorCabDef) => void;
   patchLandingKitDef: (fn: (d: LandingKitDef) => LandingKitDef) => void;
   patchStairWellDef: (fn: (d: StairWellDef) => StairWellDef) => void;
@@ -236,5 +260,7 @@ export interface EditorState {
   replaceBuildingFromRemote: (doc: BuildingDoc) => void;
   replaceElevatorCabDefFromRemote: (doc: ElevatorCabDef) => void;
   replaceLandingKitDefFromRemote: (doc: LandingKitDef) => void;
+  /** Reset the apartment-door kit from disk; routes to the active or parked slot based on variant. */
+  replaceApartmentKitDefFromRemote: (doc: LandingKitDef) => void;
   replaceStairWellDefFromRemote: (doc: StairWellDef) => void;
 }

@@ -39,7 +39,11 @@ export function rebuildLandingDoorPreviewSwing(doorStructure: THREE.Group, def: 
   if (glass) {
     glass.raycast = () => {};
   }
-  addLandingDoorOpeningEditProxy(swing, resolveGlassOpening(def));
+  // Solid-leaf kits (e.g. apartment unit) don't render a glass lite, so skip the opening gizmo —
+  // the glassOpening field still round-trips in JSON but has no visible effect on the leaf.
+  if (!def?.solid) {
+    addLandingDoorOpeningEditProxy(swing, resolveGlassOpening(def), def);
+  }
   applyLandingKitPartTransforms(doorStructure, def);
 }
 
@@ -56,7 +60,10 @@ export function buildLandingDoorPreviewRoot(args: {
 }): THREE.Group {
   const { face, hx, hz, def, swingOpen01 = 0.35 } = args;
 
-  const doorY = FLOOR_T + EXTERIOR_DOOR_H * 0.5 + 0.06;
+  // Honor kit panel-height override (apartment kit authors 2.0m vs elevator 2.04m) so the preview
+  // hinge height matches what the runtime renders.
+  const panelH = def?.panelHeightM ?? EXTERIOR_DOOR_H;
+  const doorY = FLOOR_T + panelH * 0.5 + 0.06;
   const structure = new THREE.Group();
   structure.name = "editor_landing_door";
   const swing = new THREE.Group();

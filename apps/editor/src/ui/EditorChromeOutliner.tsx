@@ -13,7 +13,7 @@ import {
   STAIR_WELL_OPENING_PROXY_ID,
   STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
-import type { EditorMode } from "../state/editorStore.js";
+import type { EditorMode, LandingKitVariant } from "../state/editorStore.js";
 
 /** Subparts tagged with `userData.editorCabPartId` in the cab preview (see `elevatorCabPreview.ts`). */
 const ELEVATOR_CAB_OUTLINER_PART_IDS = [
@@ -36,6 +36,8 @@ const ELEVATOR_CAB_OUTLINER_PART_IDS = [
 export function EditorChromeOutliner(props: {
   mode: EditorMode;
   stairWellAuthorScope: "typical" | "ground";
+  landingKitVariant: LandingKitVariant;
+  setLandingKitVariant: (variant: LandingKitVariant) => void;
   activeFloorDoc: FloorDoc | undefined;
   activeInteriorDoc: InteriorDoc | undefined;
   activeCellDoc: CellDoc | undefined;
@@ -48,6 +50,8 @@ export function EditorChromeOutliner(props: {
   const {
     mode,
     stairWellAuthorScope,
+    landingKitVariant,
+    setLandingKitVariant,
     activeFloorDoc,
     activeInteriorDoc,
     activeCellDoc,
@@ -83,11 +87,40 @@ export function EditorChromeOutliner(props: {
         </p>
       ) : null}
       {mode === "landing_preview" ? (
-        <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-          Exterior corridor door kit. Use the blue wireframe opening gizmo (or click the glass): move
-          sets the hole height; non-uniform scale makes the opening taller/wider. Saved as{" "}
-          <code>glassOpening</code> in shared <code>LandingKitDef</code> (rails + glass rebuild to match).
-        </p>
+        <>
+          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+            {(["elevator", "apartment"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setLandingKitVariant(v)}
+                style={{
+                  flex: 1,
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  border: "1px solid #444",
+                  background: landingKitVariant === v ? "#5a3d2d" : "#2a2a34",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  textTransform: "capitalize",
+                }}
+                title={
+                  v === "elevator"
+                    ? "Edit content/elevator/landing_kit.json (glass corridor door)"
+                    : "Edit content/door/apartment_unit_kit.json (solid apartment door)"
+                }
+              >
+                {v === "elevator" ? "Elevator landing" : "Apartment unit"}
+              </button>
+            ))}
+          </div>
+          <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
+            {landingKitVariant === "apartment"
+              ? "Apartment unit door kit (solid leaf). Same LandingKitDef schema + transform authoring as the corridor door — just a different saved file."
+              : "Exterior corridor door kit. Use the blue wireframe opening gizmo (or click the glass): move sets the hole height; non-uniform scale makes the opening taller/wider."}
+          </p>
+        </>
       ) : null}
       {mode === "stairwell_preview" ? (
         <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>

@@ -98,6 +98,26 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "apartment_door") {
+    return (
+      <FpBottomInteractPromptFrame
+        borderRgb="rgba(210,170,110,0.45)"
+        glowRgb="rgba(210,160,90,0.18)"
+      >
+        <span style={{ opacity: 0.92 }}>Press </span>
+        <InteractKeyE
+          kbdGradient="linear-gradient(180deg, #e9c285 0%, #b98645 45%, #855f2d 100%)"
+          kbdBorderRgb="rgba(240,210,160,0.55)"
+          kbdShadowRgb="rgba(210,160,90,0.35)"
+          kbdText="#180e04"
+        />
+        <span style={{ opacity: 0.92 }}>
+          {prompt.willClose ? " to close apartment door" : " to open apartment door"}
+        </span>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   return (
     <FpBottomInteractPromptFrame
       borderRgb="rgba(255,120,120,0.45)"

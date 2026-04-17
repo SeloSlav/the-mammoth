@@ -13,7 +13,16 @@ export type FpPickupPromptElevatorExteriorDoor = {
   floorLabel: string;
 };
 
-export type FpPickupPromptState = FpPickupPromptDroppedItem | FpPickupPromptElevatorExteriorDoor | null;
+export type FpPickupPromptApartmentDoor = {
+  kind: "apartment_door";
+  willClose: boolean;
+};
+
+export type FpPickupPromptState =
+  | FpPickupPromptDroppedItem
+  | FpPickupPromptElevatorExteriorDoor
+  | FpPickupPromptApartmentDoor
+  | null;
 
 const listeners = new Set<() => void>();
 
@@ -32,6 +41,9 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "elevator_exterior_door" && b.kind === "elevator_exterior_door") {
     return a.willClose === b.willClose && a.floorLabel === b.floorLabel;
+  }
+  if (a.kind === "apartment_door" && b.kind === "apartment_door") {
+    return a.willClose === b.willClose;
   }
   return false;
 }

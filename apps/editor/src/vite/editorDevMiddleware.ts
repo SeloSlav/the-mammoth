@@ -19,6 +19,7 @@ import {
   WEAPON_DEFINITION_ID_SET,
 } from "../../../../packages/engine/src/weapons/weaponRegistry";
 import {
+  EDITOR_APARTMENT_KIT_FILE,
   EDITOR_BUILDING_FILE,
   EDITOR_CELLS_DIR,
   EDITOR_FLOOR_OVERRIDES_DIR,
@@ -300,6 +301,9 @@ export function editorDevMiddleware(
       if (path === "/__editor/save-landing-kit" && req.method === "POST") {
         return void (await handleSaveLandingKit(repoRoot, req, res, next));
       }
+      if (path === "/__editor/save-apartment-kit" && req.method === "POST") {
+        return void (await handleSaveApartmentKit(repoRoot, req, res, next));
+      }
       if (path === "/__editor/save-stairwell" && req.method === "POST") {
         return void (await handleSaveStairWell(repoRoot, req, res, next));
       }
@@ -343,6 +347,7 @@ async function handleContentIndex(repoRoot: string, res: ServerResponse): Promis
     ),
     elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
     landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
+    apartmentKitRelPath: EDITOR_APARTMENT_KIT_FILE,
     stairWellRelPath: `${EDITOR_ELEVATOR_DIR}/stairwell.json`,
     materialTextureUrls,
   });
@@ -402,6 +407,42 @@ async function handleSaveLandingKit(
     }
     LandingKitDefSchema.parse(JSON.parse(body.json));
     const abs = safeContentFile(repoRoot, path.join(EDITOR_ELEVATOR_DIR, "landing_kit.json"));
+    if (!abs) {
+      res.statusCode = 403;
+      res.end("bad path");
+      return;
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
+}
+
+async function handleSaveApartmentKit(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  if (!ensureEditorSaveEnabled(res)) return;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { json?: string };
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json string");
+      return;
+    }
+    LandingKitDefSchema.parse(JSON.parse(body.json));
+    const abs = safeContentFile(repoRoot, EDITOR_APARTMENT_KIT_FILE);
     if (!abs) {
       res.statusCode = 403;
       res.end("bad path");

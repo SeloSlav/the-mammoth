@@ -123,6 +123,18 @@ export async function postSaveLandingKit(json: string): Promise<string> {
   return t;
 }
 
+export async function postSaveApartmentKit(json: string): Promise<string> {
+  const path = "/__editor/save-apartment-kit";
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ json }),
+  });
+  const t = await res.text();
+  if (!res.ok) throw editorSaveHttpError(path, res, t);
+  return t;
+}
+
 export async function postSaveStairWell(json: string): Promise<string> {
   const path = "/__editor/save-stairwell";
   const res = await fetch(path, {

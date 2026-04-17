@@ -41,6 +41,7 @@ import type {
   FpAuthorPickMeta,
   FpAuthorSubjectKind,
   LandingDocKind,
+  LandingKitVariant,
   TransformMode,
 } from "./editorStoreTypes.js";
 import { landingDocKindToMode, workspaceToInitialMode } from "./editorWorkspaceMap.js";
@@ -56,6 +57,7 @@ export type {
   FpAuthorSubjectKind,
   HistoryEntry,
   LandingDocKind,
+  LandingKitVariant,
   TransformMode,
 } from "./editorStoreTypes.js";
 export type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
@@ -80,6 +82,7 @@ const EMPTY_CONTENT_INDEX: EditorContentIndex = {
   floorOverrideDocIds: [],
   elevatorCabRelPath: "elevator/cab.json",
   landingKitRelPath: "elevator/landing_kit.json",
+  apartmentKitRelPath: "door/apartment_unit_kit.json",
   stairWellRelPath: "elevator/stairwell.json",
   materialTextureUrls: [],
 };
@@ -91,6 +94,19 @@ const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
 const DEFAULT_LANDING_KIT_DEF = LandingKitDefSchema.parse({
   id: "default_landing_kit",
   version: 1,
+});
+/**
+ * Pre-parsed default for the apartment-unit door kit — used until bootstrap loads
+ * `content/door/apartment_unit_kit.json`. Mirrors the on-disk shape so the editor renders a
+ * solid panel out of the box when the variant is toggled to `"apartment"`.
+ */
+const DEFAULT_APARTMENT_KIT_DEF = LandingKitDefSchema.parse({
+  id: "default_apartment_unit_kit",
+  version: 1,
+  displayName: "Apartment unit door kit",
+  solid: true,
+  panelWidthM: 1.18,
+  panelHeightM: 2.0,
 });
 const DEFAULT_STAIR_WELL_DEF = StairWellDefSchema.parse({
   id: "default_stair_well",
@@ -109,6 +125,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   floorOverrideDocs: {},
   elevatorCabDef: DEFAULT_ELEVATOR_CAB_DEF,
   landingKitDef: DEFAULT_LANDING_KIT_DEF,
+  inactiveLandingKitDef: DEFAULT_APARTMENT_KIT_DEF,
+  landingKitVariant: "elevator" as LandingKitVariant,
   stairWellDef: DEFAULT_STAIR_WELL_DEF,
   contentIndex: EMPTY_CONTENT_INDEX,
   activeFloorDocId: "floor_mamutica_ground",
@@ -167,6 +185,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: prev.building,
       elevatorCabDef: prev.elevatorCabDef,
       landingKitDef: prev.landingKitDef,
+      inactiveLandingKitDef: prev.inactiveLandingKitDef,
+      landingKitVariant: prev.landingKitVariant,
       stairWellDef: prev.stairWellDef,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
@@ -191,6 +211,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       building: next.building,
       elevatorCabDef: next.elevatorCabDef,
       landingKitDef: next.landingKitDef,
+      inactiveLandingKitDef: next.inactiveLandingKitDef,
+      landingKitVariant: next.landingKitVariant,
       stairWellDef: next.stairWellDef,
       selectedId: next.selectedId,
       dirty: next.dirty,
@@ -239,6 +261,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         contentStructureEpoch: s.contentStructureEpoch + 1,
       };
     }),
+
+  setLandingKitVariant: (variant: LandingKitVariant) => {
+    const s = get();
+    if (s.landingKitVariant === variant) return;
+    maybePushHistory(get, set);
+    set((st) => ({
+      landingKitVariant: variant,
+      landingKitDef: st.inactiveLandingKitDef,
+      inactiveLandingKitDef: st.landingKitDef,
+      selectedId: null,
+      contentStructureEpoch: st.contentStructureEpoch + 1,
+    }));
+  },
 
   patchElevatorCabDef: (fn) => {
     maybePushHistory(get, set);
@@ -893,13 +928,43 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })),
 
   replaceLandingKitDefFromRemote: (doc) =>
-    set((s) => ({
-      landingKitDef: LandingKitDefSchema.parse(doc),
-      dirty: false,
-      historyPast: [],
-      historyFuture: [],
-      contentStructureEpoch: s.contentStructureEpoch + 1,
-    })),
+    set((s) => {
+      const parsed = LandingKitDefSchema.parse(doc);
+      if (s.landingKitVariant === "elevator") {
+        return {
+          landingKitDef: parsed,
+          dirty: false,
+          historyPast: [],
+          historyFuture: [],
+          contentStructureEpoch: s.contentStructureEpoch + 1,
+        };
+      }
+      return {
+        inactiveLandingKitDef: parsed,
+        dirty: false,
+        historyPast: [],
+        historyFuture: [],
+      };
+    }),
+  replaceApartmentKitDefFromRemote: (doc) =>
+    set((s) => {
+      const parsed = LandingKitDefSchema.parse(doc);
+      if (s.landingKitVariant === "apartment") {
+        return {
+          landingKitDef: parsed,
+          dirty: false,
+          historyPast: [],
+          historyFuture: [],
+          contentStructureEpoch: s.contentStructureEpoch + 1,
+        };
+      }
+      return {
+        inactiveLandingKitDef: parsed,
+        dirty: false,
+        historyPast: [],
+        historyFuture: [],
+      };
+    }),
   replaceStairWellDefFromRemote: (doc) =>
     set((s) => ({
       stairWellDef: StairWellDefSchema.parse(doc),

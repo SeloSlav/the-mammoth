@@ -16,8 +16,10 @@ import {
   type PrefabDef,
 } from "@the-mammoth/schemas";
 import { useEditorStore } from "../state/editorStore.js";
+import type { LandingKitVariant } from "../state/editorStoreTypes.js";
 import {
   type EditorContentIndex,
+  EDITOR_APARTMENT_KIT_FILE,
   EDITOR_BUILDING_FILE,
   EDITOR_ELEVATOR_DIR,
 } from "./editorContentDiscovery.js";
@@ -55,6 +57,7 @@ async function fetchEditorContentIndex(building: BuildingDoc): Promise<EditorCon
       floorOverrideDocIds: [],
       elevatorCabRelPath: `${EDITOR_ELEVATOR_DIR}/cab.json`,
       landingKitRelPath: `${EDITOR_ELEVATOR_DIR}/landing_kit.json`,
+      apartmentKitRelPath: EDITOR_APARTMENT_KIT_FILE,
       stairWellRelPath: `${EDITOR_ELEVATOR_DIR}/stairwell.json`,
       materialTextureUrls: [],
     };
@@ -106,6 +109,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
 
   let elevatorCabDef: import("@the-mammoth/schemas").ElevatorCabDef | undefined;
   let landingKitDef: import("@the-mammoth/schemas").LandingKitDef | undefined;
+  let apartmentKitDef: import("@the-mammoth/schemas").LandingKitDef | undefined;
   let stairWellDef: import("@the-mammoth/schemas").StairWellDef | undefined;
   try {
     elevatorCabDef = ElevatorCabDefSchema.parse(await fetchJson(`/content/elevator/cab.json`));
@@ -118,6 +122,13 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     );
   } catch {
     /* optional */
+  }
+  try {
+    apartmentKitDef = LandingKitDefSchema.parse(
+      await fetchJson(`/content/${contentIndex.apartmentKitRelPath}`),
+    );
+  } catch {
+    /* optional — falls back to DEFAULT_APARTMENT_KIT_DEF until authored */
   }
   try {
     stairWellDef = StairWellDefSchema.parse(
@@ -141,7 +152,12 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     floorOverrideDocs,
     contentIndex,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
+    // Bootstrap always lands on the elevator variant so the freshly parsed `landingKitDef` matches
+    // what the existing scene-runtime + inspector code expects. Authoring is swapped post-load via
+    // `setLandingKitVariant` from the outliner.
+    landingKitVariant: "elevator" as LandingKitVariant,
     ...(landingKitDef ? { landingKitDef } : {}),
+    ...(apartmentKitDef ? { inactiveLandingKitDef: apartmentKitDef } : {}),
     ...(stairWellDef ? { stairWellDef } : {}),
     activeFloorDocId: first?.floorDocId ?? floorIds[0] ?? "floor_mamutica_ground",
     focusedStoryLevelIndex: first?.levelIndex ?? 1,

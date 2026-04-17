@@ -35,6 +35,7 @@ import {
   postSaveElevatorCab,
   postSaveFloor,
   postSaveFloorOverride,
+  postSaveApartmentKit,
   postSaveInterior,
   postSaveLandingKit,
   postSavePrefab,
@@ -65,6 +66,7 @@ export function EditorChrome() {
     floorOverrideDocs,
     elevatorCabDef,
     landingKitDef,
+    landingKitVariant,
     stairWellDef,
     contentIndex,
     activeFloorDocId,
@@ -87,6 +89,7 @@ export function EditorChrome() {
     historyFuture,
     setMode,
     setWorkspace,
+    setLandingKitVariant,
     patchElevatorCabDef,
     patchLandingKitDef,
     patchStairWellDef,
@@ -177,7 +180,9 @@ export function EditorChrome() {
       case "cab":
         return "Save cab.json";
       case "landing_preview":
-        return "Save landing kit";
+        return landingKitVariant === "apartment"
+          ? "Save apartment door kit"
+          : "Save landing kit";
       case "stairwell_preview":
         return "Save stairwell.json";
       case "floor":
@@ -197,6 +202,7 @@ export function EditorChrome() {
     }
   }, [
     mode,
+    landingKitVariant,
     activeFloorDocId,
     activeInteriorDocId,
     activeCellDocId,
@@ -241,7 +247,12 @@ export function EditorChrome() {
       if (mode === "cab") {
         await postSaveElevatorCab(serializeElevatorCabDefPretty(elevatorCabDef));
       } else if (mode === "landing_preview") {
-        await postSaveLandingKit(serializeLandingKitDefPretty(landingKitDef));
+        const body = serializeLandingKitDefPretty(landingKitDef);
+        if (landingKitVariant === "apartment") {
+          await postSaveApartmentKit(body);
+        } else {
+          await postSaveLandingKit(body);
+        }
       } else if (mode === "stairwell_preview") {
         await postSaveStairWell(serializeStairWellDefPretty(stairWellDef));
       } else if (mode === "floor") {
@@ -285,6 +296,7 @@ export function EditorChrome() {
     mode,
     elevatorCabDef,
     landingKitDef,
+    landingKitVariant,
     stairWellDef,
     floorDocs,
     interiorDocs,
@@ -891,6 +903,8 @@ export function EditorChrome() {
       <EditorChromeOutliner
         mode={mode}
         stairWellAuthorScope={stairWellAuthorScope}
+        landingKitVariant={landingKitVariant}
+        setLandingKitVariant={setLandingKitVariant}
         activeFloorDoc={activeFloorDoc}
         activeInteriorDoc={activeInteriorDoc}
         activeCellDoc={activeCellDoc}

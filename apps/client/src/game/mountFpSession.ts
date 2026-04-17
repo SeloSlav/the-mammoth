@@ -51,6 +51,7 @@ import {
   resetFpSessionFpsDisplay,
 } from "./fpSessionFpsDisplay";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
+import { mountFpApartmentDoors } from "./fpApartmentDoors.js";
 import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
@@ -170,6 +171,12 @@ export async function mountFpSession(
     buildingRoot,
     building,
     getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+  });
+
+  const fpApartmentDoors = mountFpApartmentDoors({
+    conn,
+    buildingRoot,
+    building,
   });
 
   scene.add(cellRoot);
@@ -625,8 +632,10 @@ export async function mountFpSession(
       fpLocomotionConstants.walkStepUpMargin,
       staticCollisionIndex,
       {
-        visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) =>
-          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose),
+        visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
+          fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+        },
       },
       opts.locoState.grounded,
     );
@@ -1027,6 +1036,8 @@ export async function mountFpSession(
       const interactionPos = getInteractionPos();
       if (fpElevators.consumeInteractKey(interactionPos, camera)) return;
       if (fpElevators.shouldSuppressEpickup(interactionPos, camera)) return;
+      if (fpApartmentDoors.consumeInteractKey(interactionPos)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(interactionPos)) return;
       droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
@@ -1172,6 +1183,7 @@ export async function mountFpSession(
     // --- Elevator section timing ---
     fpElevators.tick(dt, nowMs, pos);
     fpElevators.syncLandingHailUi(camera, pos, nowMs);
+    fpApartmentDoors.tick(nowMs);
     const _t_elevEnd = performance.now();
 
     // Decay the display offset — exponential approach to zero each frame.
@@ -1303,11 +1315,17 @@ export async function mountFpSession(
       // The HUD prompt should match the player's local first-person view, not the more
       // authority-biased interaction pose that can lag behind a moving elevator rider.
       const doorPrompt = fpElevators.getExteriorDoorInteractPrompt(pos, camera);
+      const apartmentPrompt = doorPrompt ? null : fpApartmentDoors.getInteractPrompt(pos);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",
           willClose: doorPrompt.willClose,
           floorLabel: doorPrompt.floorLabel,
+        });
+      } else if (apartmentPrompt) {
+        setFpPickupPrompt({
+          kind: "apartment_door",
+          willClose: apartmentPrompt.willClose,
         });
       } else {
         const hit = findNearestDroppedPickup(
@@ -1375,6 +1393,7 @@ export async function mountFpSession(
     poseAoiSub = null;
     setFpPickupPrompt(null);
     fpElevators.dispose();
+    fpApartmentDoors.dispose();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
