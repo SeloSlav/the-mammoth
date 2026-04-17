@@ -41,14 +41,14 @@ const PANEL = {
   panelHeightM: 2.06,
 } as const;
 
+/** Stair-adjacent side only (east interior wall of `corridor_main`); no doors on the far west wall. */
 function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
-  const east: ApartmentDoorTemplate[] = [];
-  const west: ApartmentDoorTemplate[] = [];
+  const out: ApartmentDoorTemplate[] = [];
   let i = 1;
   for (const cz of MAMUTICA_TYPICAL_CORE_STATION_Z_M) {
     const hingeZ = cz - CORRIDOR_GAP_S_OF_CORE_M;
     const n = String(i).padStart(2, "0");
-    east.push({
+    out.push({
       templateId: `manual_e_corridor_near_stair_${n}|w`,
       unitId: `manual_e_corridor_near_stair_${n}`,
       face: "w",
@@ -56,17 +56,9 @@ function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       ...PANEL,
     });
-    west.push({
-      templateId: `manual_w_corridor_near_stair_${n}|e`,
-      unitId: `manual_w_corridor_near_stair_${n}`,
-      face: "e",
-      hingeX: -1.925,
-      hingeZ,
-      ...PANEL,
-    });
     i += 1;
   }
-  return [...east, ...west];
+  return out;
 }
 
 /**
@@ -80,7 +72,7 @@ export const MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID: Readonly<
 };
 
 /**
- * Matching corridor-shell cutouts on `corridor_main` (east / west interior faces, plate-local Z).
+ * Matching corridor-shell cutouts on `corridor_main` east interior face (plate-local Z).
  * Only runs for authored extras above; keeps hollow shell + door parity.
  */
 export function manualCorridorShellHoleExtrasForFloor(
@@ -112,12 +104,9 @@ export function manualCorridorShellHoleExtrasForFloor(
     z1r = Math.min(zMax, Math.max(z1r, zMin + 0.28));
     if (z1r < z0r + 0.28) continue;
 
-    if (t.face === "w") {
-      /** East interior wall of the corridor (same convention as `corridorShellHolesFromAdjacentUnitEntries`). */
-      out.e.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
-    } else if (t.face === "e") {
-      out.w.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
-    }
+    if (t.face !== "w") continue;
+    /** East interior wall of the corridor (same convention as `corridorShellHolesFromAdjacentUnitEntries`). */
+    out.e.push({ z0: z0r, z1: z1r, y0: yDoor0, y1: yDoor1 });
   }
 
   const n = out.e.length + out.w.length + out.n.length + out.s.length;
