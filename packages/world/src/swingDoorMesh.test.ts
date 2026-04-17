@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildApartmentSwingLeafGeometries,
   buildSolidSwingLeafMergedGeometry,
   SWING_DOOR_FRAME_Y_INSET_M,
   SWING_DOOR_PANEL_THICK_M,
@@ -43,6 +44,39 @@ describe("buildSolidSwingLeafMergedGeometry", () => {
     } finally {
       a.dispose();
       b.dispose();
+    }
+  });
+});
+
+describe("buildApartmentSwingLeafGeometries", () => {
+  it("returns frame-only merged geometry when solid", () => {
+    const r = buildApartmentSwingLeafGeometries(
+      { panelW: 1.26, panelH: 2.06 },
+      { solid: true } as never,
+    );
+    try {
+      expect(r.glass).toBeUndefined();
+      expect(r.frame.getAttribute("position").count).toBeGreaterThan(0);
+    } finally {
+      r.frame.dispose();
+    }
+  });
+
+  it("splits frame + glass when not solid", () => {
+    const r = buildApartmentSwingLeafGeometries(
+      { panelW: 1.26, panelH: 2.06 },
+      {
+        solid: false,
+        glassOpening: { widthM: 0.5, heightM: 1.0, centerYM: 0 },
+      } as never,
+    );
+    try {
+      expect(r.glass).toBeDefined();
+      expect(r.frame.getAttribute("position").count).toBeGreaterThan(0);
+      expect(r.glass!.getAttribute("position").count).toBeGreaterThan(0);
+    } finally {
+      r.frame.dispose();
+      r.glass?.dispose();
     }
   });
 });

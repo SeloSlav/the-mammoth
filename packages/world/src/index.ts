@@ -192,10 +192,11 @@ export {
 } from "./exteriorLandingDoorSwing.js";
 export {
   addSwingDoorOpeningEditProxy,
+  buildApartmentSwingLeafGeometries,
+  buildSolidSwingLeafMergedGeometry,
   createSwingDoorMaterials,
   disposeSwingDoorLeafContents,
   isSolidLeafKit,
-  buildSolidSwingLeafMergedGeometry,
   populateSwingDoorLeaf,
   SWING_DOOR_BOTTOM_RAIL_PART_ID,
   SWING_DOOR_FRAME_Y_INSET_M,

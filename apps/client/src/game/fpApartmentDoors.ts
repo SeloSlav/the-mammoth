@@ -3,9 +3,9 @@
  *
  * Replicated `apartment_door` rows drive one hinged swing-door visual per (floor, unit, face).
  * The mesh, collision math, and interaction rules are all shared with the elevator landing
- * exterior door via `@the-mammoth/world/swingDoorMesh` + `swingDoorCollision`. The visual
- * appearance differs only because the apartment kit authors `solid: true` (opaque leaf) and
- * different panel dimensions, both of which the shared primitive handles.
+ * exterior door via `@the-mammoth/world/swingDoorMesh` + `swingDoorCollision`. The apartment kit
+ * (`content/door/apartment_unit_kit.json`) toggles a solid fill vs frame + glass lites; instancing
+ * uses one merged frame `InstancedMesh` plus an optional second `InstancedMesh` for the lite.
  *
  * Performance-critical design (Mamutica seeds ~608 rows):
  *
@@ -14,9 +14,8 @@
  *    subscription stampede that used to build ~3000 `BoxGeometry` objects in one frame is gone:
  *    rows arriving from the server only flip state on pre-existing slots.
  *
- * 2. **One `InstancedMesh` per floor plate** — merged 5-part solid leaf geometry + shared frame
- *    material — keeps the whole building down to at most `#levels` draw calls for doors (19 for
- *    Mamutica), versus the previous ~3040 (608 doors × 5 sub-meshes).
+ * 2. **One or two `InstancedMesh`es per floor plate** — merged frame (+ optional glass pass) —
+ *    keeps the whole building to at most `2×#levels` door draws versus the previous ~3040.
  *
  * 3. **Per-level `mammothPlateLevelIndex` tagging** lets the existing floor-plate visibility band
  *    (`fpBuildingFloorPlateVisibilityBand`) cull entire storeys of doors with a single
@@ -35,7 +34,7 @@ import type { BuildingDoc, LandingKitDef } from "@the-mammoth/schemas";
 import { LandingKitDefSchema } from "@the-mammoth/schemas";
 import {
   APARTMENT_DOOR_TEMPLATES,
-  buildSolidSwingLeafMergedGeometry,
+  buildApartmentSwingLeafGeometries,
   type CollisionAabb,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   FACE_CODE,
@@ -183,6 +182,8 @@ type DoorSlot = {
 type LevelMesh = {
   level: number;
   mesh: THREE.InstancedMesh;
+  /** Present when the kit authors a glass lite (second material / draw). */
+  glassMesh: THREE.InstancedMesh | undefined;
   slots: DoorSlot[];
   /** Flipped to true whenever any instance matrix was rewritten this frame. */
   dirty: boolean;
@@ -293,9 +294,11 @@ export function mountFpApartmentDoors(
   const oz = opts.building.worldOrigin?.[2] ?? 0;
   const floorSpacing = DEFAULT_BUILDING_FLOOR_SPACING_M;
 
-  // Shared material + merged geometry — one draw's worth of GPU state reused for every door.
   const { frameMat, glassMat } = createSwingDoorMaterials(APARTMENT_KIT);
-  const leafGeom = buildSolidSwingLeafMergedGeometry(APARTMENT_DOOR_DIMS);
+  const { frame: frameLeafGeom, glass: glassLeafGeom } = buildApartmentSwingLeafGeometries(
+    APARTMENT_DOOR_DIMS,
+    APARTMENT_KIT,
+  );
 
   const templatesByDocId = new Map<
     string,
@@ -317,6 +320,7 @@ export function mountFpApartmentDoors(
     const yaw = slot.baseYaw + slot.effectiveSwingSign * open01 * APARTMENT_DOOR_MAX_RAD;
     composeHingeMatrix(scratchMatrix, slot.localX, slot.localCenterY, slot.localZ, yaw);
     slot.levelMesh.mesh.setMatrixAt(slot.instanceIndex, scratchMatrix);
+    slot.levelMesh.glassMesh?.setMatrixAt(slot.instanceIndex, scratchMatrix);
     slot.levelMesh.dirty = true;
     slot.lastApplied = open01;
   };
@@ -325,7 +329,7 @@ export function mountFpApartmentDoors(
     const templates = templatesByDocId.get(ref.floorDocId);
     if (!templates || templates.length === 0) continue;
 
-    const mesh = new THREE.InstancedMesh(leafGeom, frameMat, templates.length);
+    const mesh = new THREE.InstancedMesh(frameLeafGeom, frameMat, templates.length);
     mesh.name = `apartment_doors:L${ref.levelIndex}`;
     mesh.userData.mammothPlateLevelIndex = ref.levelIndex;
     mesh.frustumCulled = false; // per-level group visibility drives culling, not frustum tests.
@@ -333,9 +337,22 @@ export function mountFpApartmentDoors(
     mesh.receiveShadow = false;
     opts.buildingRoot.add(mesh);
 
+    let glassMesh: THREE.InstancedMesh | undefined;
+    if (glassLeafGeom) {
+      glassMesh = new THREE.InstancedMesh(glassLeafGeom, glassMat, templates.length);
+      glassMesh.name = `apartment_doors_glass:L${ref.levelIndex}`;
+      glassMesh.userData.mammothPlateLevelIndex = ref.levelIndex;
+      glassMesh.frustumCulled = false;
+      glassMesh.castShadow = false;
+      glassMesh.receiveShadow = false;
+      glassMesh.renderOrder = 2;
+      opts.buildingRoot.add(glassMesh);
+    }
+
     const levelMesh: LevelMesh = {
       level: ref.levelIndex,
       mesh,
+      glassMesh,
       slots: [],
       dirty: true,
     };
@@ -449,6 +466,7 @@ export function mountFpApartmentDoors(
     for (const lm of levelMeshes) {
       if (!lm.dirty) continue;
       lm.mesh.instanceMatrix.needsUpdate = true;
+      if (lm.glassMesh) lm.glassMesh.instanceMatrix.needsUpdate = true;
       lm.dirty = false;
     }
   };
@@ -621,11 +639,14 @@ export function mountFpApartmentDoors(
     for (const lm of levelMeshes) {
       lm.mesh.removeFromParent();
       lm.mesh.dispose();
+      lm.glassMesh?.removeFromParent();
+      lm.glassMesh?.dispose();
     }
     levelMeshes.length = 0;
     slotsByKey.clear();
     allSlots.length = 0;
-    leafGeom.dispose();
+    frameLeafGeom.dispose();
+    glassLeafGeom?.dispose();
     frameMat.dispose();
     glassMat.dispose();
   };

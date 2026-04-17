@@ -28,11 +28,11 @@ static TEMPLATES_0: &[ApartmentDoorTemplate] = &[
 ];
 
 static TEMPLATES_1: &[ApartmentDoorTemplate] = &[
-    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_01|w", unit_id: "manual_e_corridor_near_stair_01", face: 3, hinge_x: 1.92500, hinge_z: -101.47000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
-    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_02|w", unit_id: "manual_e_corridor_near_stair_02", face: 3, hinge_x: 1.92500, hinge_z: -55.47000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
-    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_03|w", unit_id: "manual_e_corridor_near_stair_03", face: 3, hinge_x: 1.92500, hinge_z: -9.47000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
-    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_04|w", unit_id: "manual_e_corridor_near_stair_04", face: 3, hinge_x: 1.92500, hinge_z: 36.53000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
-    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_05|w", unit_id: "manual_e_corridor_near_stair_05", face: 3, hinge_x: 1.92500, hinge_z: 82.53000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
+    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_01|w", unit_id: "manual_e_corridor_near_stair_01", face: 3, hinge_x: 1.92500, hinge_z: -100.84000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
+    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_02|w", unit_id: "manual_e_corridor_near_stair_02", face: 3, hinge_x: 1.92500, hinge_z: -54.84000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
+    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_03|w", unit_id: "manual_e_corridor_near_stair_03", face: 3, hinge_x: 1.92500, hinge_z: -8.84000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
+    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_04|w", unit_id: "manual_e_corridor_near_stair_04", face: 3, hinge_x: 1.92500, hinge_z: 37.16000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
+    ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_05|w", unit_id: "manual_e_corridor_near_stair_05", face: 3, hinge_x: 1.92500, hinge_z: 83.16000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "unit_e_001|w", unit_id: "unit_e_001", face: 3, hinge_x: 1.92500, hinge_z: -112.08250, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "unit_e_002|w", unit_id: "unit_e_002", face: 3, hinge_x: 1.92500, hinge_z: -104.88250, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "unit_e_003|w", unit_id: "unit_e_003", face: 3, hinge_x: 1.92500, hinge_z: -75.57000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },

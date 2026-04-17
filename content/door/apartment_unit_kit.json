@@ -4,13 +4,24 @@
   "displayName": "Apartment unit door kit",
   "materials": {
     "frame": {
-      "colorHex": "0x6c4a2a",
+      "colorHex": "0x5c4030",
       "roughness": 0.78,
-      "metalness": 0.04
+      "metalness": 0.06
+    },
+    "glass": {
+      "colorHex": "0xd8e8f0",
+      "roughness": 0.04,
+      "metalness": 0,
+      "transmission": 0.94
     }
   },
   "exteriorSwingMaxRad": 1.55,
-  "solid": true,
-  "panelWidthM": 1.8018607158512812,
-  "panelHeightM": 2.1440882495344784
+  "glassOpening": {
+    "widthM": 0.88,
+    "heightM": 1.68,
+    "centerYM": 0
+  },
+  "solid": false,
+  "panelWidthM": 1.26,
+  "panelHeightM": 2.06
 }

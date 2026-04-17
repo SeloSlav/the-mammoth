@@ -46,7 +46,9 @@ function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
   const out: ApartmentDoorTemplate[] = [];
   let i = 1;
   for (const cz of MAMUTICA_TYPICAL_CORE_STATION_Z_M) {
-    const hingeZ = cz - CORRIDOR_GAP_S_OF_CORE_M;
+    const zOpenCenter = cz - CORRIDOR_GAP_S_OF_CORE_M;
+    /** North (+Z) jamb — matches `apartmentDoorTemplatesForFloor` (`hingeZ = tMid + half`). */
+    const hingeZ = zOpenCenter + PANEL.panelWidthM * 0.5;
     const n = String(i).padStart(2, "0");
     out.push({
       templateId: `manual_e_corridor_near_stair_${n}|w`,
@@ -97,7 +99,9 @@ export function manualCorridorShellHoleExtrasForFloor(
 
   for (const t of extras) {
     const half = Math.min(UNIT_ENTRY_DOOR_W * 0.5, 0.63);
-    const zMid = t.hingeZ;
+    /** Opening center along Z (face `w` stores hinge on +Z jamb). */
+    const zMid =
+      t.face === "w" || t.face === "e" ? t.hingeZ - t.panelWidthM * 0.5 : t.hingeZ;
     let z0r = zMid - half;
     let z1r = zMid + half;
     z0r = Math.max(zMin, Math.min(z0r, zMax - 0.28));

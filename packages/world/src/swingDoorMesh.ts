@@ -286,6 +286,67 @@ export function buildSolidSwingLeafMergedGeometry(
   return merged;
 }
 
+/**
+ * Apartment instanced path: opaque merged leaf **or** frame + separate glass lite (two draw calls).
+ * Matches {@link populateSwingDoorLeaf} layout; {@link isSolidLeafKit} selects the branch.
+ */
+export function buildApartmentSwingLeafGeometries(
+  dims: SwingDoorDimensions,
+  kit: LandingKitDef | undefined,
+): { frame: THREE.BufferGeometry; glass: THREE.BufferGeometry | undefined } {
+  if (isSolidLeafKit(kit)) {
+    return { frame: buildSolidSwingLeafMergedGeometry(dims), glass: undefined };
+  }
+
+  const open = clampOpening(resolveGlassOpening(kit), dims);
+  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
+  const panelW = dims.panelW - 0.1;
+  const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
+  const centerZ = -panelW * 0.5;
+
+  const railTopH = Math.max(
+    0.12,
+    panelH * 0.5 - (open.centerYM + open.heightM * 0.5),
+  );
+  const railBotH = Math.max(
+    0.12,
+    open.centerYM - open.heightM * 0.5 + panelH * 0.5,
+  );
+  const stileW = Math.max(0.12, (panelW - open.widthM) * 0.5);
+
+  const parts: THREE.BoxGeometry[] = [];
+  const push = (
+    sx: number,
+    sy: number,
+    sz: number,
+    x: number,
+    y: number,
+    z: number,
+  ): void => {
+    const g = new THREE.BoxGeometry(sx, sy, sz);
+    g.translate(x, y, z);
+    parts.push(g);
+  };
+
+  push(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
+  push(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
+  push(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -stileW * 0.5);
+  push(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -panelW + stileW * 0.5);
+
+  const merged = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  if (!merged) {
+    throw new Error("buildApartmentSwingLeafGeometries: mergeGeometries returned null");
+  }
+
+  const gh = Math.max(0.05, open.heightM - 0.02);
+  const gw = Math.max(0.05, open.widthM - 0.02);
+  const glassGeom = new THREE.BoxGeometry(0.046, gh, gw);
+  glassGeom.translate(panelT * 0.5 + 0.014, open.centerYM, centerZ);
+
+  return { frame: merged, glass: glassGeom };
+}
+
 /** Dispose mesh GPU assets under `swing` (geometries + materials). */
 export function disposeSwingDoorLeafContents(swing: THREE.Group): void {
   while (swing.children.length > 0) {

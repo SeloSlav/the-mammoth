@@ -18,11 +18,11 @@ export const APARTMENT_DOOR_TEMPLATES: readonly ApartmentDoorTemplateSet[] = [
   {
     floorDocId: "floor_mamutica_typical",
     templates: [
-      { templateId: "manual_e_corridor_near_stair_01|w", unitId: "manual_e_corridor_near_stair_01", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -101.47000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
-      { templateId: "manual_e_corridor_near_stair_02|w", unitId: "manual_e_corridor_near_stair_02", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -55.47000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
-      { templateId: "manual_e_corridor_near_stair_03|w", unitId: "manual_e_corridor_near_stair_03", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -9.47000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
-      { templateId: "manual_e_corridor_near_stair_04|w", unitId: "manual_e_corridor_near_stair_04", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 36.53000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
-      { templateId: "manual_e_corridor_near_stair_05|w", unitId: "manual_e_corridor_near_stair_05", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 82.53000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
+      { templateId: "manual_e_corridor_near_stair_01|w", unitId: "manual_e_corridor_near_stair_01", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -100.84000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
+      { templateId: "manual_e_corridor_near_stair_02|w", unitId: "manual_e_corridor_near_stair_02", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -54.84000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
+      { templateId: "manual_e_corridor_near_stair_03|w", unitId: "manual_e_corridor_near_stair_03", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -8.84000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
+      { templateId: "manual_e_corridor_near_stair_04|w", unitId: "manual_e_corridor_near_stair_04", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 37.16000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
+      { templateId: "manual_e_corridor_near_stair_05|w", unitId: "manual_e_corridor_near_stair_05", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 83.16000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "unit_e_001|w", unitId: "unit_e_001", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -112.08250, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "unit_e_002|w", unitId: "unit_e_002", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -104.88250, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "unit_e_003|w", unitId: "unit_e_003", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -75.57000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
