@@ -1,6 +1,10 @@
 /**
- * Diagnostic including the runtime stair / shaft overlays applied on top of
- * the baked static blockers, so we see what the running client actually uses.
+ * Diagnostic: simulate a player capsule walking through every apartment door in BOTH the
+ * fully-closed state (expect blocked) and the fully-open state (expect passable). Reports
+ * every door whose open-state behaviour disagrees with the elevator-door reference.
+ *
+ * Includes the full runtime collision stack (baked statics + stair opening + stair runtime
+ * overlays + per-door dynamic AABB) — i.e. the same set the live client uses.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,7 +20,9 @@ import {
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
+  swingDoorClosedSlabAabb,
   swingDoorOpenSideNormal,
+  swingDoorParkedLeafAabb,
   swingDoorTangentRest,
 } from "../packages/world/src/index.ts";
 import type { SwingDoorFace } from "../packages/world/src/swingDoorCollision.ts";
@@ -48,11 +54,10 @@ const stairRuntimeOverlay = buildStairRuntimeOverlayForBuilding(
   DEFAULT_BUILDING_FLOOR_SPACING_M,
 );
 
-const blockers = applyStairRuntimeBlockerOverlay(
+const baseStatics = applyStairRuntimeBlockerOverlay(
   applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, stairOpeningOverlay),
   stairRuntimeOverlay,
 );
-console.log(`Total runtime blockers (after stair overlays): ${blockers.length}`);
 
 const templatesByFloorDoc = new Map(
   APARTMENT_DOOR_TEMPLATES.map((s) => [s.floorDocId, s.templates]),
@@ -70,74 +75,153 @@ function overlaps(a: Aabb, b: Aabb): boolean {
   );
 }
 
-type Issue = {
-  templateId: string;
-  face: SwingDoorFace;
-  levelIndex: number;
-  atD: number;
-  cx: number;
-  cz: number;
-  y: number;
-  blockers: Aabb[];
-};
-const issues: Issue[] = [];
-let checked = 0;
+function capsuleAabb(cx: number, cz: number, feetY: number): Aabb {
+  return {
+    min: [cx - CAPSULE_RADIUS, feetY + 0.25, cz - CAPSULE_RADIUS],
+    max: [cx + CAPSULE_RADIUS, feetY + 1.72, cz + CAPSULE_RADIUS],
+  };
+}
+
+type Outcome = { blocked: boolean; firstD: number };
+function sweepThroughDoor(
+  blockers: readonly Aabb[],
+  midX: number,
+  midZ: number,
+  norm: { x: number; z: number },
+  feetY: number,
+): Outcome {
+  // Sample distances from corridor side (-1m) all the way to deep inside the unit (+1m).
+  const samples = [-1.0, -0.6, -0.3, -0.1, 0.0, 0.1, 0.3, 0.6, 1.0];
+  for (const d of samples) {
+    const cx = midX + norm.x * d;
+    const cz = midZ + norm.z * d;
+    const cap = capsuleAabb(cx, cz, feetY);
+    for (const b of blockers) {
+      if (overlaps(cap, b)) return { blocked: true, firstD: d };
+    }
+  }
+  return { blocked: false, firstD: NaN };
+}
+
+/** Walk the capsule THROUGH the door (corridor → unit) for each of 9 lateral offsets along
+ *  the wall-tangent axis, covering the full doorway width. Returns the count of lateral
+ *  offsets where the capsule encounters a blocker. */
+function sweepDoorAcrossWidth(
+  blockers: readonly Aabb[],
+  hingeX: number,
+  hingeZ: number,
+  panelW: number,
+  norm: { x: number; z: number },
+  tan: { x: number; z: number },
+  feetY: number,
+): { blockedLateralFraction: number } {
+  const radius = CAPSULE_RADIUS;
+  // Sample along the doorway's tangent axis from `radius` past the hinge to `panelW - radius`
+  // past it (i.e. the player capsule centres that fit between the two doorway jambs).
+  const N = 9;
+  let blockedSamples = 0;
+  for (let i = 0; i < N; i++) {
+    const t = radius + (i / (N - 1)) * (panelW - 2 * radius);
+    const cx0 = hingeX + tan.x * t;
+    const cz0 = hingeZ + tan.z * t;
+    let hit = false;
+    for (const d of [-0.6, -0.3, -0.1, 0.0, 0.1, 0.3, 0.6]) {
+      const cx = cx0 + norm.x * d;
+      const cz = cz0 + norm.z * d;
+      const cap = capsuleAabb(cx, cz, feetY);
+      for (const b of blockers) {
+        if (overlaps(cap, b)) {
+          hit = true;
+          break;
+        }
+      }
+      if (hit) break;
+    }
+    if (hit) blockedSamples++;
+  }
+  return { blockedLateralFraction: blockedSamples / N };
+}
+
+let closedBlocked = 0;
+let closedPassable = 0;
+let openBlocked = 0;
+let openPassable = 0;
+const surprises: { kind: string; templateId: string; level: number; face: string; firstD: number }[] = [];
 
 for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
   const ref = building.floorRefs[levelIndex]!;
   const tpls = templatesByFloorDoc.get(ref.floorDocId) ?? [];
   const floorY = levelIndex * DEFAULT_BUILDING_FLOOR_SPACING_M;
   for (const t of tpls) {
-    checked += 1;
+    const face = t.face as SwingDoorFace;
     const feetY = floorY + t.feetYOffset;
-    const norm = swingDoorOpenSideNormal(t.face as SwingDoorFace);
-    const tan = swingDoorTangentRest(t.face as SwingDoorFace);
+    const norm = swingDoorOpenSideNormal(face);
+    const tan = swingDoorTangentRest(face);
     const tipX = t.hingeX + tan.x * t.panelWidthM;
     const tipZ = t.hingeZ + tan.z * t.panelWidthM;
     const midX = (t.hingeX + tipX) * 0.5;
     const midZ = (t.hingeZ + tipZ) * 0.5;
-    const distances = [-1.0, -0.6, -0.3, 0.0, +0.3, +0.6, +1.0];
-    for (const d of distances) {
-      const cx = midX + norm.x * d;
-      const cz = midZ + norm.z * d;
-      const cap: Aabb = {
-        min: [cx - CAPSULE_RADIUS, feetY + 0.25, cz - CAPSULE_RADIUS],
-        max: [cx + CAPSULE_RADIUS, feetY + 1.72, cz + CAPSULE_RADIUS],
-      };
-      const hits: Aabb[] = [];
-      for (const b of blockers) {
-        if (overlaps(cap, b)) hits.push(b);
-      }
-      if (hits.length > 0) {
-        issues.push({
-          templateId: t.templateId,
-          face: t.face as SwingDoorFace,
-          levelIndex,
-          atD: d,
-          cx,
-          cz,
-          y: feetY,
-          blockers: hits,
-        });
-        break;
-      }
+    const slab = swingDoorClosedSlabAabb({
+      face,
+      hingeX: t.hingeX,
+      hingeZ: t.hingeZ,
+      feetY,
+      panelWidthM: t.panelWidthM,
+      panelHeightM: t.panelHeightM,
+    });
+    const leaf = swingDoorParkedLeafAabb({
+      face,
+      hingeX: t.hingeX,
+      hingeZ: t.hingeZ,
+      feetY,
+      panelWidthM: t.panelWidthM,
+      panelHeightM: t.panelHeightM,
+    });
+    const closedSet = [...baseStatics, slab];
+    const openSet = [...baseStatics, leaf];
+    const closed = sweepThroughDoor(closedSet, midX, midZ, norm, feetY);
+    const open = sweepThroughDoor(openSet, midX, midZ, norm, feetY);
+    if (closed.blocked) closedBlocked++; else closedPassable++;
+    if (open.blocked) openBlocked++; else openPassable++;
+
+    if (!closed.blocked) {
+      surprises.push({ kind: "closed-passable", templateId: t.templateId, level: levelIndex, face, firstD: closed.firstD });
+    }
+    if (open.blocked) {
+      surprises.push({ kind: "open-blocked", templateId: t.templateId, level: levelIndex, face, firstD: open.firstD });
+    }
+
+    // Stricter check: walk the capsule through every lateral offset across the doorway width.
+    const widthSweep = sweepDoorAcrossWidth(
+      openSet,
+      t.hingeX,
+      t.hingeZ,
+      t.panelWidthM,
+      norm,
+      tan,
+      feetY,
+    );
+    if (widthSweep.blockedLateralFraction > 0) {
+      surprises.push({
+        kind: `open-blocked-at-${(widthSweep.blockedLateralFraction * 100).toFixed(0)}%-of-width`,
+        templateId: t.templateId,
+        level: levelIndex,
+        face,
+        firstD: NaN,
+      });
     }
   }
 }
 
-console.log(`Checked ${checked} door instances with stair/shaft overlays applied.`);
-console.log(`Doors with blocker in capsule sweep: ${issues.length}`);
-const byFace: Record<string, number> = {};
-for (const i of issues) byFace[i.face] = (byFace[i.face] ?? 0) + 1;
-console.log("By face:", byFace);
-
-for (const i of issues.slice(0, 8)) {
-  console.log(
-    `  [${i.templateId}] L${i.levelIndex} face=${i.face} @d=${i.atD} xz=(${i.cx.toFixed(3)}, ${i.cz.toFixed(3)}) feetY=${i.y.toFixed(3)}`,
-  );
-  for (const b of i.blockers.slice(0, 3)) {
-    console.log(
-      `    blocker min=[${b.min.map((n) => n.toFixed(3)).join(", ")}] max=[${b.max.map((n) => n.toFixed(3)).join(", ")}]`,
-    );
-  }
+console.log(`closed: blocked=${closedBlocked}  passable=${closedPassable}`);
+console.log(`open  : blocked=${openBlocked}  passable=${openPassable}`);
+console.log(`surprises (these violate the open/closed contract): ${surprises.length}`);
+const byFace: Record<string, Record<string, number>> = {};
+for (const s of surprises) {
+  byFace[s.face] = byFace[s.face] ?? {};
+  byFace[s.face][s.kind] = (byFace[s.face][s.kind] ?? 0) + 1;
+}
+console.log("by face:", JSON.stringify(byFace, null, 2));
+for (const s of surprises.slice(0, 10)) {
+  console.log(`  ${s.kind} face=${s.face} template=${s.templateId} L${s.level} firstD=${s.firstD}`);
 }

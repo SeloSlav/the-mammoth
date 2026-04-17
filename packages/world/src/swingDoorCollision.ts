@@ -55,8 +55,11 @@ export const SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 = 0.97;
 /** When `open01 >= this` the door no longer obstructs passage. */
 export const SWING_DOOR_PASSAGE_OPEN_THRESH = 0.85;
 
-/** Default max swing in radians when the kit doesn't override. ~80° opens leaf clear of doorway. */
-export const SWING_DOOR_DEFAULT_MAX_RAD = 1.4;
+/** Default max swing in radians when the kit doesn't override.
+ *  ~89° (1.55 rad) parks the leaf nearly perpendicular to the wall so the parked-leaf AABB
+ *  matches the rendered geometry (the leaf clears the doorway opening, sitting flat against
+ *  the corridor side of the wall). Matches `content/elevator/landing_kit.json`. */
+export const SWING_DOOR_DEFAULT_MAX_RAD = 1.55;
 
 /** Interaction radius (world meters) — player must be within this XZ distance of the hinge. */
 export const SWING_DOOR_INTERACT_RADIUS_M = 1.6;
@@ -154,6 +157,15 @@ export function swingDoorClosedSlabAabb(opts: {
  * Conservative AABB for the open leaf when the door is at-rest open against the corridor wall
  * (perpendicular to the closed position). Padded by `SWING_DOOR_OPEN_LEAF_XZ_PAD_M` to cover
  * client-prediction jitter.
+ *
+ * Asymmetry on the wall-tangent axis (along the doorway opening): the AABB is anchored at the
+ * hinge and extended ONLY toward the wall (opposite the doorway opening). This is the fix for
+ * the "I press E and the door swings open but I still get pushed back" bug: with a symmetric
+ * pad the AABB intruded ~0.11 m into the doorway from the hinge end, which combined with the
+ * player capsule radius (~0.32 m) shrank the usable doorway width to <0.8 m and pushed players
+ * off-center. Visually the parked leaf does straddle the wall plane by `halfThick`, but for
+ * collision we treat that strip as part of the wall (it's effectively flush with the corridor's
+ * adjacent wall surface) so the doorway remains as wide as authored.
  */
 export function swingDoorParkedLeafAabb(opts: {
   face: SwingDoorFace;
@@ -166,21 +178,32 @@ export function swingDoorParkedLeafAabb(opts: {
   const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
   const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
   const open = swingDoorOpenSideNormal(opts.face);
+  const tan = swingDoorTangentRest(opts.face);
   const tipX = opts.hingeX + open.x * opts.panelWidthM;
   const tipZ = opts.hingeZ + open.z * opts.panelWidthM;
+  // The doorway extends from the hinge in `tan` direction; the wall continues in `-tan`.
+  // Wall-tangent extent of the leaf collision is anchored at the hinge and extends only
+  // into the wall side, leaving the doorway opening fully clear for the player capsule.
+  const wallStripDepth = 2 * ht + pad;
   if (opts.face === "w" || opts.face === "e") {
     const xMin = Math.min(opts.hingeX, tipX) - pad;
     const xMax = Math.max(opts.hingeX, tipX) + pad;
+    const wallSign = -tan.z; // tan.z = -1 → wallSign = +1, leaf parks on +Z side of hinge.
+    const zNear = opts.hingeZ;
+    const zFar = opts.hingeZ + wallSign * wallStripDepth;
     return {
-      min: [xMin, opts.feetY, opts.hingeZ - ht - pad],
-      max: [xMax, opts.feetY + opts.panelHeightM, opts.hingeZ + ht + pad],
+      min: [xMin, opts.feetY, Math.min(zNear, zFar)],
+      max: [xMax, opts.feetY + opts.panelHeightM, Math.max(zNear, zFar)],
     };
   }
   const zMin = Math.min(opts.hingeZ, tipZ) - pad;
   const zMax = Math.max(opts.hingeZ, tipZ) + pad;
+  const wallSign = -tan.x; // tan.x = -1 → wallSign = +1, leaf parks on +X side of hinge.
+  const xNear = opts.hingeX;
+  const xFar = opts.hingeX + wallSign * wallStripDepth;
   return {
-    min: [opts.hingeX - ht - pad, opts.feetY, zMin],
-    max: [opts.hingeX + ht + pad, opts.feetY + opts.panelHeightM, zMax],
+    min: [Math.min(xNear, xFar), opts.feetY, zMin],
+    max: [Math.max(xNear, xFar), opts.feetY + opts.panelHeightM, zMax],
   };
 }
 

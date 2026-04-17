@@ -151,20 +151,60 @@ describe("swingDoorParkedLeafAabb", () => {
     panelHeightM: 2.06,
   };
 
-  it("W-face parked leaf extends into -X corridor with XZ padding", () => {
+  it("W-face parked leaf extends into -X corridor and parks on +Z (wall) side of hinge", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "w", ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
     expect(aabb.max[0]).toBeCloseTo(base.hingeX + pad);
     expect(aabb.min[0]).toBeCloseTo(base.hingeX - base.panelWidthM - pad);
-    expect(aabb.min[2]).toBeCloseTo(base.hingeZ - ht - pad);
-    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + ht + pad);
+    // Doorway opens in -Z; the AABB must NOT intrude past the hinge into the doorway.
+    expect(aabb.min[2]).toBeCloseTo(base.hingeZ);
+    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + 2 * ht + pad);
   });
 
-  it("N-face parked leaf extends into +Z corridor", () => {
+  it("E-face parked leaf parks on +Z (wall) side of hinge (mirror of W)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "e", ...base });
+    expect(aabb.min[2]).toBeCloseTo(base.hingeZ);
+    expect(aabb.max[2]).toBeCloseTo(
+      base.hingeZ + 2 * SWING_DOOR_OPEN_LEAF_HALF_THICK_M + SWING_DOOR_OPEN_LEAF_XZ_PAD_M,
+    );
+  });
+
+  it("N-face parked leaf extends into +Z corridor and parks on +X (wall) side of hinge", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "n", ...base });
-    expect(aabb.min[2]).toBeCloseTo(base.hingeZ - SWING_DOOR_OPEN_LEAF_XZ_PAD_M);
-    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + base.panelWidthM + SWING_DOOR_OPEN_LEAF_XZ_PAD_M);
+    const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+    const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
+    expect(aabb.min[2]).toBeCloseTo(base.hingeZ - pad);
+    expect(aabb.max[2]).toBeCloseTo(base.hingeZ + base.panelWidthM + pad);
+    expect(aabb.min[0]).toBeCloseTo(base.hingeX);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX + 2 * ht + pad);
+  });
+
+  /**
+   * The crucial regression: the doorway opening (south of the hinge along the wall tangent)
+   * must NOT be obstructed by the parked-leaf collision AABB. A 0.32 m radius capsule walking
+   * straight into the middle of the opening must clear the AABB.
+   */
+  it("does not block a player capsule walking through the centre of the doorway", () => {
+    const radius = 0.32;
+    for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
+      const aabb = swingDoorParkedLeafAabb({ face, ...base });
+      const tan = swingDoorTangentRest(face);
+      const midX = base.hingeX + tan.x * base.panelWidthM * 0.5;
+      const midZ = base.hingeZ + tan.z * base.panelWidthM * 0.5;
+      const cap = {
+        min: [midX - radius, base.feetY + 0.25, midZ - radius],
+        max: [midX + radius, base.feetY + 1.72, midZ + radius],
+      } as const;
+      const overlap =
+        cap.max[0] > aabb.min[0] &&
+        cap.min[0] < aabb.max[0] &&
+        cap.max[1] > aabb.min[1] &&
+        cap.min[1] < aabb.max[1] &&
+        cap.max[2] > aabb.min[2] &&
+        cap.min[2] < aabb.max[2];
+      expect({ face, overlap }).toEqual({ face, overlap: false });
+    }
   });
 });
 
@@ -263,6 +303,8 @@ describe("visual ↔ collision parity at full open", () => {
       const tipX = base.hingeX - Math.sin(yaw) * base.panelWidthM;
       const tipZ = base.hingeZ - Math.cos(yaw) * base.panelWidthM;
       const aabb = swingDoorParkedLeafAabb({ face, ...base });
+      // The tip lies on the hinge wall plane along the tangent axis after the asymmetric AABB
+      // tightening (the doorway side is intentionally clipped off). Allow ε along that axis.
       expect(tipX).toBeGreaterThanOrEqual(aabb.min[0] - 1e-4);
       expect(tipX).toBeLessThanOrEqual(aabb.max[0] + 1e-4);
       expect(tipZ).toBeGreaterThanOrEqual(aabb.min[2] - 1e-4);
