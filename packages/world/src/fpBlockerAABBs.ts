@@ -15,12 +15,12 @@ function approxEq(a: number, b: number): boolean {
 
 /**
  * Doorway jamb trim — how far to pull the collision-only face of a wall back from
- * the doorway opening. Must be >= the player collision radius (0.22 m) so the body
- * disc can pass through the opening at any approach angle without catching on the
- * inside corner of the jamb. Visually the wall is unchanged; only the static
- * collision AABB is inset.
+ * the doorway opening. Matching the player radius was not enough in live play:
+ * the depenetration solver still picked tiny `-x` pushes when the player hugged
+ * the jamb and approached diagonally. A larger collision-only chamfer gives the
+ * capsule enough room to slide through naturally while leaving visuals unchanged.
  */
-const DOORWAY_COLLISION_INSET_M = 0.24;
+const DOORWAY_COLLISION_INSET_M = 0.6;
 
 /** Wall thickness cap used to recognise wall-shaped AABBs vs. floors/slabs. */
 const WALL_MAX_THICKNESS_M = 0.5;
