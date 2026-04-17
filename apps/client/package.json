@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node ../../scripts/free-local-dev-server-port.mjs --port 5173 --must-include the-mammoth --must-include apps\\client --must-include vite && vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",

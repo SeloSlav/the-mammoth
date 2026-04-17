@@ -520,6 +520,8 @@ export async function mountFpSession(
     /** Throttle identical events so holding W against a wall doesn't flood the console. */
     minLogIntervalMs: 200,
     lastLogMs: 0,
+    reconcileMinLogIntervalMs: 120,
+    lastReconcileLogMs: 0,
   };
 
   type DoorDebugFrame = {
@@ -584,8 +586,8 @@ export async function mountFpSession(
         }
       : null;
 
-  const snapshotDoorDebug = (radiusM: number) =>
-    fpApartmentDoors.debugSnapshot(pos.x, pos.z, radiusM).map((d) => ({
+  const snapshotDoorDebugAt = (x: number, z: number, radiusM: number) =>
+    fpApartmentDoors.debugSnapshot(x, z, radiusM).map((d) => ({
       rowKey: d.rowKey,
       level: d.level,
       face: d.face,
@@ -600,6 +602,8 @@ export async function mountFpSession(
       aabb: roundAabb(d.emittedAabb),
       distance: +d.distanceMeters.toFixed(3),
     }));
+
+  const snapshotDoorDebug = (radiusM: number) => snapshotDoorDebugAt(pos.x, pos.z, radiusM);
 
   const snapshotStaticAabbs = (radiusM: number): { min: [number, number, number]; max: [number, number, number] }[] => {
     const out: { min: [number, number, number]; max: [number, number, number] }[] = [];
@@ -778,6 +782,71 @@ export async function mountFpSession(
       dynamicOverlaps,
     };
     printDoorDebugJson("frame", payload);
+  };
+
+  const logDoorDebugReconcile = (
+    serverRow: PlayerPose,
+    predictedBefore: { x: number; y: number; z: number },
+    replayed: { x: number; y: number; z: number },
+    crouch: boolean,
+  ): void => {
+    if (!__mmDoorDebugState.enabled) return;
+    const nowMs = performance.now();
+    if (
+      nowMs - __mmDoorDebugState.lastReconcileLogMs <
+      __mmDoorDebugState.reconcileMinLogIntervalMs
+    ) {
+      return;
+    }
+    const serverDelta = {
+      x: serverRow.x - predictedBefore.x,
+      y: serverRow.y - predictedBefore.y,
+      z: serverRow.z - predictedBefore.z,
+    };
+    const replayDelta = {
+      x: replayed.x - predictedBefore.x,
+      y: replayed.y - predictedBefore.y,
+      z: replayed.z - predictedBefore.z,
+    };
+    const serverDeltaM = Math.hypot(serverDelta.x, serverDelta.y, serverDelta.z);
+    const replayDeltaM = Math.hypot(replayDelta.x, replayDelta.y, replayDelta.z);
+    if (serverDeltaM < 0.01 && replayDeltaM < 0.01) return;
+    __mmDoorDebugState.lastReconcileLogMs = nowMs;
+    const radiusM = __mmDoorDebugState.radiusM;
+    printDoorDebugJson("reconcile", {
+      predictedBefore: roundV(predictedBefore),
+      authoritativeServer: {
+        x: +serverRow.x.toFixed(3),
+        y: +serverRow.y.toFixed(3),
+        z: +serverRow.z.toFixed(3),
+        velX: +serverRow.velX.toFixed(3),
+        velY: +serverRow.velY.toFixed(3),
+        velZ: +serverRow.velZ.toFixed(3),
+        grounded: serverRow.grounded !== 0,
+        seq: poseSeqAsBigint(serverRow.seq).toString(),
+      },
+      replayResolved: roundV(replayed),
+      serverDelta: {
+        x: +serverDelta.x.toFixed(3),
+        y: +serverDelta.y.toFixed(3),
+        z: +serverDelta.z.toFixed(3),
+        meters: +serverDeltaM.toFixed(4),
+      },
+      replayDelta: {
+        x: +replayDelta.x.toFixed(3),
+        y: +replayDelta.y.toFixed(3),
+        z: +replayDelta.z.toFixed(3),
+        meters: +replayDeltaM.toFixed(4),
+      },
+      bodyRadiusM: FP_PLAYER_COLLISION_RADIUS_M,
+      bodyHeightM: crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M,
+      nearbyDoorsAtServer: snapshotDoorDebugAt(serverRow.x, serverRow.z, radiusM),
+      nearbyDoorsAtReplay: snapshotDoorDebugAt(replayed.x, replayed.z, radiusM),
+      staticOverlapsAtServer: snapshotStaticBodyOverlaps(serverRow, crouch),
+      dynamicOverlapsAtServer: snapshotDynamicBodyOverlaps(serverRow, crouch),
+      staticOverlapsAtReplay: snapshotStaticBodyOverlaps(replayed, crouch),
+      dynamicOverlapsAtReplay: snapshotDynamicBodyOverlaps(replayed, crouch),
+    });
   };
 
   const __mmDoorDebugApi = {
@@ -1112,6 +1181,12 @@ export async function mountFpSession(
     const corrY = _replayPos.y - pos.y;
     const corrZ = _replayPos.z - pos.z;
     const corrDist = Math.hypot(corrX, corrY, corrZ);
+    logDoorDebugReconcile(
+      serverRow,
+      { x: pos.x, y: pos.y, z: pos.z },
+      { x: _replayPos.x, y: _replayPos.y, z: _replayPos.z },
+      _replayStepOpts.crouch,
+    );
 
     if (corrDist > DISPLAY_HARD_SNAP_M) {
       // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
