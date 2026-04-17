@@ -2,6 +2,10 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use crate::generated_apartment_doors::{
+    ApartmentDoorTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
+};
+
 const DEFAULT_BUILDING_FLOOR_SPACING_M: f32 = 60.0 / 19.0;
 const STOREY_SPACING_M: f32 = 60.0 / 19.0;
 const CORE_PY: f32 = STOREY_SPACING_M * 0.5 + 0.08;
@@ -645,6 +649,78 @@ fn corridor_wall_receiving_stair_door(face: Face) -> Face {
     }
 }
 
+fn apartment_door_templates_for_floor(floor_doc_id: &str) -> &'static [ApartmentDoorTemplate] {
+    APARTMENT_DOOR_TEMPLATE_SETS
+        .iter()
+        .find(|set| set.floor_doc_id == floor_doc_id)
+        .map(|set| set.templates)
+        .unwrap_or(&[])
+}
+
+fn push_apartment_door_holes_for_corridor_wall(
+    yz_holes: &mut Vec<HoleYZ>,
+    xy_holes: &mut Vec<HoleXY>,
+    world_x: f32,
+    world_y: f32,
+    world_z: f32,
+    x_min: f32,
+    x_max: f32,
+    z_min: f32,
+    z_max: f32,
+    face: Face,
+    floor_base_y: f32,
+    templates: &[ApartmentDoorTemplate],
+) {
+    for door in templates {
+        let matches_face = match (face, door.face) {
+            (Face::E, 3) => true, // east corridor wall receives west-facing apartment doors
+            (Face::W, 2) => true, // west corridor wall receives east-facing apartment doors
+            _ => false,
+        };
+        if !matches_face {
+            continue;
+        }
+        let y0 = floor_base_y + door.feet_y_offset;
+        let y1 = y0 + door.panel_h_m;
+        if y1 <= world_y - 4.0 || y0 >= world_y + 4.0 {
+            continue;
+        }
+        let z0 = door.hinge_z - door.panel_w_m;
+        let z1 = door.hinge_z;
+        if matches!(face, Face::E | Face::W) {
+            let local_z0 = z0 - world_z;
+            let local_z1 = z1 - world_z;
+            let hole_z0 = local_z0.max(z_min);
+            let hole_z1 = local_z1.min(z_max);
+            if hole_z1 <= hole_z0 + 0.1 {
+                continue;
+            }
+            yz_holes.push(HoleYZ {
+                z0: world_z + hole_z0,
+                z1: world_z + hole_z1,
+                y0,
+                y1,
+            });
+        } else {
+            let x0 = door.hinge_x - door.panel_w_m;
+            let x1 = door.hinge_x;
+            let local_x0 = x0 - world_x;
+            let local_x1 = x1 - world_x;
+            let hole_x0 = local_x0.max(x_min);
+            let hole_x1 = local_x1.min(x_max);
+            if hole_x1 <= hole_x0 + 0.1 {
+                continue;
+            }
+            xy_holes.push(HoleXY {
+                x0: world_x + hole_x0,
+                x1: world_x + hole_x1,
+                y0,
+                y1,
+            });
+        }
+    }
+}
+
 fn stair_door_span(face: Face, tangent: f32, door_half_w: f32, sx: f32, sz: f32) -> (f32, f32) {
     let vlen_x = (sx - 2.0 * WT).max(0.05);
     let vlen_z = (sz - 2.0 * WT).max(0.05);
@@ -772,7 +848,20 @@ fn lobby_door_centers_along(usable_span: f32) -> Vec<f32> {
     out
 }
 
-fn push_corridor_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f32, world_z: f32, sx: f32, sy: f32, sz: f32, level_index: u32, face: Face, contacts: &[CorridorContact]) {
+fn push_corridor_wall_replacements(
+    out: &mut Vec<Aabb>,
+    world_x: f32,
+    world_y: f32,
+    world_z: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    level_index: u32,
+    floor_base_y: f32,
+    face: Face,
+    contacts: &[CorridorContact],
+    apartment_door_templates: &[ApartmentDoorTemplate],
+) {
     let hx = sx * 0.5;
     let hz = sz * 0.5;
     let vh = (sy - 2.0 * WT).max(0.05);
@@ -826,6 +915,20 @@ fn push_corridor_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f
             });
         }
     }
+    push_apartment_door_holes_for_corridor_wall(
+        &mut yz_holes,
+        &mut xy_holes,
+        world_x,
+        world_y,
+        world_z,
+        x_min,
+        x_max,
+        z_min,
+        z_max,
+        face,
+        floor_base_y,
+        apartment_door_templates,
+    );
     match face {
         Face::E => push_wall_constant_x_with_holes(out, world_x + hx - WT * 0.5, WT, z_min, z_max, y_lo, y_hi, &yz_holes),
         Face::W => push_wall_constant_x_with_holes(out, world_x - hx + WT * 0.5, WT, z_min, z_max, y_lo, y_hi, &yz_holes),
@@ -959,6 +1062,7 @@ fn build_overlay() -> StairOpeningOverlay {
 
     for floor_ref in &sorted {
         let doc = floor_doc_by_id(&floor_ref.floor_doc_id);
+        let apartment_door_templates = apartment_door_templates_for_floor(&floor_ref.floor_doc_id);
         let mut plate_cx = 0.0;
         let mut plate_cz = 0.0;
         for obj in &doc.objects {
@@ -1022,6 +1126,7 @@ fn build_overlay() -> StairOpeningOverlay {
                 continue;
             }
             let world_x = world_origin[0] + obj.position[0];
+            let floor_base_y = world_origin[1] + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M;
             let world_y = world_origin[1] + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M + obj.position[1];
             let world_z = world_origin[2] + obj.position[2];
             let mut faces = Vec::<Face>::new();
@@ -1043,8 +1148,10 @@ fn build_overlay() -> StairOpeningOverlay {
                     scale[1],
                     scale[2],
                     floor_ref.level_index,
+                    floor_base_y,
                     face,
                     &contacts,
+                    apartment_door_templates,
                 );
             }
         }
@@ -1144,6 +1251,7 @@ mod tests {
             3.05,
             3.8,
             7,
+            18.94736842105263,
             Face::N,
             &[CorridorContact {
                 corridor_wall: Face::N,
@@ -1155,6 +1263,7 @@ mod tests {
                 x1r: 1.2,
                 hole_along_z: false,
             }],
+            &[],
         );
 
         let wall_z = 50.0 + 3.8 * 0.5 - WT * 0.5;
@@ -1165,6 +1274,50 @@ mod tests {
         assert!(
             blocks(&out, 20.0 + 1.8, 4.816842105263158, wall_z),
             "corridor wall outside the opening should stay blocked",
+        );
+    }
+
+    #[test]
+    fn corridor_east_wall_rebuild_preserves_west_facing_apartment_door_opening() {
+        let mut out = Vec::new();
+        let world_x = -0.125_f32;
+        let world_y = 4.816842_f32;
+        let world_z = -28.1775_f32;
+        let scale_x = 4.4_f32;
+        let scale_y = 3.05_f32;
+        let scale_z = 43.64_f32;
+        let floor_base_y = DEFAULT_BUILDING_FLOOR_SPACING_M;
+        push_corridor_wall_replacements(
+            &mut out,
+            world_x,
+            world_y,
+            world_z,
+            scale_x,
+            scale_y,
+            scale_z,
+            2,
+            floor_base_y,
+            Face::E,
+            &[],
+            &[ApartmentDoorTemplate {
+                template_id: "unit_e_008|w",
+                unit_id: "unit_e_008",
+                face: 3,
+                hinge_x: 1.925,
+                hinge_z: -15.17,
+                feet_y_offset: 0.23,
+                panel_w_m: 1.26,
+                panel_h_m: 2.06,
+            }],
+        );
+        let wall_x = world_x + scale_x * 0.5 - WT * 0.5;
+        assert!(
+            !blocks(&out, wall_x, floor_base_y + 0.35, -15.8),
+            "rebuilt east corridor wall should preserve apartment door opening",
+        );
+        assert!(
+            blocks(&out, wall_x, floor_base_y + 0.35, -18.5),
+            "rebuilt east corridor wall away from apartment door should stay blocked",
         );
     }
 }

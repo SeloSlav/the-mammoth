@@ -313,17 +313,17 @@ fn find_closest_hit(
     prev_feet_y: f32,
     body_h: f32,
     buf: &[([f32; 3], [f32; 3])],
-) -> Option<(f32, f32, f32)> {
-    let mut best: Option<(f32, f32, f32)> = None;
+) -> Option<(f32, f32, f32, [f32; 3], [f32; 3])> {
+    let mut best: Option<(f32, f32, f32, [f32; 3], [f32; 3])> = None;
     for (mn, mx) in buf {
         if let Some(h) = sweep_disc_vs_aabb(ox, oz, dx, dz, r, mn, mx, feet_y, prev_feet_y, body_h) {
             let (t, nx, nz) = h;
             let replace = match best {
                 None => true,
-                Some((bt, _, _)) => t < bt - 1e-9,
+                Some((bt, _, _, _, _)) => t < bt - 1e-9,
             };
             if replace {
-                best = Some((t, nx, nz));
+                best = Some((t, nx, nz, *mn, *mx));
             }
         }
     }
@@ -406,11 +406,26 @@ where
 
         let hit = find_closest_hit(cx, cz, rx, rz, r, feet_y, prev_feet_y, body_h, buf);
 
-        let Some((t_hit, nx, nz)) = hit else {
+        let Some((t_hit, nx, nz, hit_mn, hit_mx)) = hit else {
             cx += rx;
             cz += rz;
             break;
         };
+
+        if west_door_debug_zone(cx, feet_y, cz) || west_door_debug_zone(cx + rx, feet_y, cz + rz) {
+            log::info!(
+                "[west-door-debug][static][sweep-hit] from=({cx:.3},{feet_y:.3},{cz:.3}) target=({:.3},{:.3},{:.3}) hit_t={t_hit:.4} normal=({nx:.3},{nz:.3}) blocker=[{:.3},{:.3},{:.3}]→[{:.3},{:.3},{:.3}]",
+                cx + rx,
+                feet_y,
+                cz + rz,
+                hit_mn[0],
+                hit_mn[1],
+                hit_mn[2],
+                hit_mx[0],
+                hit_mx[1],
+                hit_mx[2],
+            );
+        }
 
         if t_hit > 1.0 - 1e-9 {
             cx += rx;
