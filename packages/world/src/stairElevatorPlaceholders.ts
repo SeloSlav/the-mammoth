@@ -1408,10 +1408,13 @@ export function resolveStairWellGroundDoor(args: {
   const doorHalfW = widthM * 0.5;
   const doorH = heightM;
   const baseYDoor1 = baseYDoor0 + doorH;
-  let pickedFace = authored?.face as CardinalFace | undefined;
+  const forceTypicalPerpendicularFace = scope === "typical";
+  let pickedFace = forceTypicalPerpendicularFace
+    ? ("s" as CardinalFace)
+    : (authored?.face as CardinalFace | undefined);
   let tangentOffsetAlongWall = authored?.tangentOffsetAlongWallM ?? 0;
   if (!pickedFace && !context) return null;
-  if (context) {
+  if (context && !forceTypicalPerpendicularFace) {
     const picked = pickStairShaftGroundDoorPlacement(L, {
       sx,
       sz,
