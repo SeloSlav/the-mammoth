@@ -151,21 +151,21 @@ describe("swingDoorParkedLeafAabb (outward — elevator landing doors)", () => {
     panelHeightM: 2.06,
   };
 
-  it("W-face parked leaf extends into -X corridor and straddles hinge on tangent", () => {
+  it("W-face parked leaf extends into -X corridor; hinge side flush with wall plane", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "w", ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
-    expect(aabb.max[0]).toBeCloseTo(base.hingeX + pad);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX);
     expect(aabb.min[0]).toBeCloseTo(base.hingeX - base.panelWidthM - pad);
     expect(aabb.min[2]).toBeCloseTo(base.hingeZ - ht - pad);
     expect(aabb.max[2]).toBeCloseTo(base.hingeZ + ht + pad);
   });
 
-  it("N-face parked leaf extends into +Z corridor (mirror of W on N axis)", () => {
+  it("N-face parked leaf extends into +Z corridor; hinge side flush with wall plane", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "n", ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
-    expect(aabb.min[2]).toBeCloseTo(base.hingeZ - pad);
+    expect(aabb.min[2]).toBeCloseTo(base.hingeZ);
     expect(aabb.max[2]).toBeCloseTo(base.hingeZ + base.panelWidthM + pad);
     expect(aabb.min[0]).toBeCloseTo(base.hingeX - ht - pad);
     expect(aabb.max[0]).toBeCloseTo(base.hingeX + ht + pad);
@@ -181,18 +181,41 @@ describe("swingDoorParkedLeafAabb (inward — apartment doors)", () => {
     panelHeightM: 2.06,
   };
 
-  it("W-face inward leaf extends INTO the unit (+X, opposite corridor)", () => {
+  it("W-face inward leaf extends INTO the unit (+X); hinge side flush with wall plane", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "w", swingInward: true, ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
-    expect(aabb.min[0]).toBeCloseTo(base.hingeX - pad);
+    expect(aabb.min[0]).toBeCloseTo(base.hingeX);
     expect(aabb.max[0]).toBeCloseTo(base.hingeX + base.panelWidthM + pad);
   });
 
-  it("E-face inward leaf extends INTO the unit (-X, opposite corridor)", () => {
+  it("E-face inward leaf extends INTO the unit (-X); hinge side flush with wall plane", () => {
     const aabb = swingDoorParkedLeafAabb({ face: "e", swingInward: true, ...base });
     const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
     expect(aabb.min[0]).toBeCloseTo(base.hingeX - base.panelWidthM - pad);
-    expect(aabb.max[0]).toBeCloseTo(base.hingeX + pad);
+    expect(aabb.max[0]).toBeCloseTo(base.hingeX);
+  });
+
+  /** Regression guard for the "rubber-banding at the threshold" bug: the parked-leaf AABB
+   *  must NEVER extend across the hinge plane (wall plane) — otherwise the moment the door
+   *  snaps to fully-open the player gets depenetrated backward across the wall. */
+  it("W-face inward hinge side is flush with wall (no cross-threshold pad)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "w", swingInward: true, ...base });
+    expect(aabb.min[0]).toBeGreaterThanOrEqual(base.hingeX - 1e-6);
+  });
+
+  it("E-face inward hinge side is flush with wall (no cross-threshold pad)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "e", swingInward: true, ...base });
+    expect(aabb.max[0]).toBeLessThanOrEqual(base.hingeX + 1e-6);
+  });
+
+  it("N-face inward hinge side is flush with wall (no cross-threshold pad)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "n", swingInward: true, ...base });
+    expect(aabb.max[2]).toBeLessThanOrEqual(base.hingeZ + 1e-6);
+  });
+
+  it("S-face inward hinge side is flush with wall (no cross-threshold pad)", () => {
+    const aabb = swingDoorParkedLeafAabb({ face: "s", swingInward: true, ...base });
+    expect(aabb.min[2]).toBeGreaterThanOrEqual(base.hingeZ - 1e-6);
   });
 
   /** Open-door corridor-traffic regression: walking down the corridor past an OPEN inward-

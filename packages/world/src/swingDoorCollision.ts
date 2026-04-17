@@ -187,9 +187,17 @@ export function swingDoorClosedSlabAabb(opts: {
  * Conservative AABB for the open leaf at-rest (perpendicular to the closed position).
  * Padded by `SWING_DOOR_OPEN_LEAF_XZ_PAD_M` to cover client-prediction jitter.
  *
- * The AABB spans the length of the panel along `tipDir` (normal-axis) and straddles the hinge
- * plane by `halfThick + pad` on the tangent axis — that's where the real leaf lives when fully
- * open, regardless of inward vs outward swing.
+ * The AABB spans the length of the panel along `tipDir` (normal-axis), offset by `halfThick`
+ * on the tangent axis.
+ *
+ * ## Asymmetric hinge-axis padding
+ *
+ * The real leaf rotates 90° onto exactly ONE side of the wall plane (corridor side when
+ * outward, unit side when inward) — it NEVER physically crosses the hinge plane. The AABB
+ * must not either, because any overlap of the hinge-axis pad on the "wrong" side of the wall
+ * depenetrates the player across the threshold and produces the "rubber-banding at the
+ * doorway" behavior. So the pad is only added on the TIP side (the side the leaf actually
+ * lives on); the wall side of the AABB sits flush on the hinge plane minus `halfThick`.
  */
 export function swingDoorParkedLeafAabb(opts: {
   face: SwingDoorFace;
@@ -207,15 +215,17 @@ export function swingDoorParkedLeafAabb(opts: {
   const tipX = opts.hingeX + tip.x * opts.panelWidthM;
   const tipZ = opts.hingeZ + tip.z * opts.panelWidthM;
   if (opts.face === "w" || opts.face === "e") {
-    const xMin = Math.min(opts.hingeX, tipX) - pad;
-    const xMax = Math.max(opts.hingeX, tipX) + pad;
+    // Hinge side is flush with the wall plane (NO cross-threshold pad); tip side extends
+    // the full panel length plus jitter pad.
+    const xMin = tip.x > 0 ? opts.hingeX : tipX - pad;
+    const xMax = tip.x > 0 ? tipX + pad : opts.hingeX;
     return {
       min: [xMin, opts.feetY, opts.hingeZ - ht - pad],
       max: [xMax, opts.feetY + opts.panelHeightM, opts.hingeZ + ht + pad],
     };
   }
-  const zMin = Math.min(opts.hingeZ, tipZ) - pad;
-  const zMax = Math.max(opts.hingeZ, tipZ) + pad;
+  const zMin = tip.z > 0 ? opts.hingeZ : tipZ - pad;
+  const zMax = tip.z > 0 ? tipZ + pad : opts.hingeZ;
   return {
     min: [opts.hingeX - ht - pad, opts.feetY, zMin],
     max: [opts.hingeX + ht + pad, opts.feetY + opts.panelHeightM, zMax],

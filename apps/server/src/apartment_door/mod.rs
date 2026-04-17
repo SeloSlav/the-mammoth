@@ -268,7 +268,10 @@ fn tip_dir_at_full_open(face: SwingDoorFace, swing_inward: bool) -> (f32, f32) {
 }
 
 /// Parked-open leaf AABB. Spans the panel length along `tipDir` (direction of swing) and
-/// straddles the hinge plane by `halfThick + pad` on the tangent axis.
+/// straddles the hinge plane by `halfThick + pad` on the perpendicular axis. The hinge-axis
+/// side is flush with the wall plane (NO cross-threshold pad) so the AABB activating at the
+/// moment the door finishes opening can't depenetrate the player across the wall and produce
+/// the "rubber-banding at the doorway" feel.
 /// Mirrors `swingDoorParkedLeafAabb` in `packages/world/src/swingDoorCollision.ts`.
 fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     let face = SwingDoorFace::from_u8(row.face);
@@ -280,16 +283,16 @@ fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     let top_y = row.feet_y + row.panel_h_m;
     match face {
         SwingDoorFace::W | SwingDoorFace::E => {
-            let x_min = row.hinge_x.min(tip_x) - pad;
-            let x_max = row.hinge_x.max(tip_x) + pad;
+            let x_min = if tx > 0.0 { row.hinge_x } else { tip_x - pad };
+            let x_max = if tx > 0.0 { tip_x + pad } else { row.hinge_x };
             (
                 [x_min, row.feet_y, row.hinge_z - ht - pad],
                 [x_max, top_y, row.hinge_z + ht + pad],
             )
         }
         SwingDoorFace::N | SwingDoorFace::S => {
-            let z_min = row.hinge_z.min(tip_z) - pad;
-            let z_max = row.hinge_z.max(tip_z) + pad;
+            let z_min = if tz > 0.0 { row.hinge_z } else { tip_z - pad };
+            let z_max = if tz > 0.0 { tip_z + pad } else { row.hinge_z };
             (
                 [row.hinge_x - ht - pad, row.feet_y, z_min],
                 [row.hinge_x + ht + pad, top_y, z_max],
@@ -576,19 +579,36 @@ mod tests {
 
     /// Apartment doors swing INTO the unit. For a W-face door the unit is to the +X side of
     /// hinge (corridor is -X), so the parked leaf must extend in +X from the hinge — NOT into
-    /// the corridor.
+    /// the corridor. The hinge-side AABB edge is flush with the wall plane (no padding across
+    /// the threshold) so a door finishing its swing does not rubber-band a crossing player.
     #[test]
     fn parked_leaf_aabb_extends_into_unit_for_inward_west_face() {
         let row = sample_row();
         let (mn, mx) = parked_leaf_aabb(&row);
         let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
         assert!(
-            (mn[0] - (row.hinge_x - pad)).abs() < 1e-4,
-            "x_min sits on hinge plane (inward swing — nothing in corridor)",
+            (mn[0] - row.hinge_x).abs() < 1e-4,
+            "x_min flush with wall plane (no cross-threshold pad on hinge side)",
         );
         assert!(
             (mx[0] - (row.hinge_x + row.panel_w_m + pad)).abs() < 1e-4,
             "x_max extends INTO unit by panelWidth + pad (inward swing)",
+        );
+    }
+
+    /// A player whose capsule straddles the wall plane right next to the hinge Z (where the
+    /// leaf lives) must NOT be pushed west — i.e. the AABB must NOT reach across the wall
+    /// into the corridor at all. Regression guard against the pre-fix "rubber-banding at
+    /// the threshold" bug.
+    #[test]
+    fn parked_leaf_aabb_never_extends_into_corridor_for_inward_west_face() {
+        let row = sample_row();
+        let (mn, _mx) = parked_leaf_aabb(&row);
+        assert!(
+            mn[0] >= row.hinge_x - 1e-4,
+            "AABB hinge-side must sit at or east of the wall plane (got {:.4}, wall {:.4})",
+            mn[0],
+            row.hinge_x,
         );
     }
 

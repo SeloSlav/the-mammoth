@@ -168,7 +168,10 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
       const res = walkToward(startX, startZ, feetY + 0.01, targetX, targetZ, staticIdx, leaf);
       const dotInto = (res.finalX - baseX) * norm.x + (res.finalZ - baseZ) * norm.z;
       attempts.push({ lat, dotInto });
-      if (dotInto > 0.3) anyReached = true;
+      // Success = got at least 1.0m past the wall plane (well inside the unit, past any
+      // leaf thickness). "Stuck at threshold" behavior would trap the player at dotInto
+      // values < ~0.3, so this tighter threshold catches the user's reported issue.
+      if (dotInto > 1.0) anyReached = true;
     }
     if (anyReached) {
       reached++;
