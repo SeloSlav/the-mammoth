@@ -291,8 +291,8 @@ function resolveCorridorShaftDoorContacts(
     const y1w = spy + yb - cpy;
     let y0r = Math.min(y0w, y1w);
     let y1r = Math.max(y0w, y1w);
-    /** Light clamp only — avoid lifting the sill above the stair opening (was yLo+0.04 and caused a lip). */
-    y0r = Math.max(yLo + 0.008, y0r);
+    /** Clamp to interior wall band without introducing a raised sill lip at the threshold. */
+    y0r = Math.max(yLo, y0r);
     y1r = Math.min(yHi - 0.008, y1r);
 
     if (cw === "e" || cw === "w") {

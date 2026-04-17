@@ -183,7 +183,6 @@ export const SHAFT_DOUBLE_DOOR_W = 1.86;
 
 /** Exported for mega-shaft corridor door band spacing (m). */
 export const SHAFT_DOUBLE_DOOR_H = 2.2;
-const SHAFT_DOOR_SILL = 0.05;
 /** Ground-level door cutout only reaches this high on mega stair shafts (m). */
 export const SHAFT_GROUND_DOOR_BAND_M = STOREY_SPACING_M - 0.38;
 
@@ -330,11 +329,8 @@ function addShaftShell(
     vlenZ * 0.5 - 0.06,
     vlenX * 0.5 - 0.06,
   );
-  const doorH = Math.min(
-    SHAFT_DOUBLE_DOOR_H,
-    bandCap - SHAFT_DOOR_SILL - 0.06,
-  );
-  let yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  const doorH = Math.min(SHAFT_DOUBLE_DOOR_H, bandCap - 0.06);
+  let yDoor0 = yWallBottom;
   let yDoor1 = yDoor0 + Math.max(0.55, doorH);
   if (
     door?.doorHoleY0Local != null &&
@@ -344,11 +340,11 @@ function addShaftShell(
   ) {
     const a = Math.min(door.doorHoleY0Local, door.doorHoleY1Local);
     const b = Math.max(door.doorHoleY0Local, door.doorHoleY1Local);
-    yDoor0 = Math.max(yWallBottom + 0.02, a);
+    yDoor0 = Math.max(yWallBottom, a);
     yDoor1 = Math.min(yWallTop - 0.04, b);
     if (yDoor1 < yDoor0 + 0.52) {
       const mid = (yDoor0 + yDoor1) * 0.5;
-      yDoor0 = Math.max(yWallBottom + 0.02, mid - 0.28);
+      yDoor0 = Math.max(yWallBottom, mid - 0.28);
       yDoor1 = Math.min(yWallTop - 0.04, mid + 0.28);
     }
   }
@@ -552,11 +548,8 @@ function addShaftShell(
       vlenX * 0.5 - 0.06,
     );
     const openingBandCap = Math.max(0.55, Math.min(opening.bandHeightM, innerWallH));
-    const openingDoorH = Math.min(
-      SHAFT_DOUBLE_DOOR_H,
-      openingBandCap - SHAFT_DOOR_SILL - 0.06,
-    );
-    let openingY0 = yWallBottom + SHAFT_DOOR_SILL;
+    const openingDoorH = Math.min(SHAFT_DOUBLE_DOOR_H, openingBandCap - 0.06);
+    let openingY0 = yWallBottom;
     let openingY1 = openingY0 + Math.max(0.55, openingDoorH);
     if (
       opening.doorHoleY0Local != null &&
@@ -566,11 +559,11 @@ function addShaftShell(
     ) {
       const a = Math.min(opening.doorHoleY0Local, opening.doorHoleY1Local);
       const b = Math.max(opening.doorHoleY0Local, opening.doorHoleY1Local);
-      openingY0 = Math.max(yWallBottom + 0.02, a);
+      openingY0 = Math.max(yWallBottom, a);
       openingY1 = Math.min(yWallTop - 0.04, b);
       if (openingY1 < openingY0 + 0.52) {
         const mid = (openingY0 + openingY1) * 0.5;
-        openingY0 = Math.max(yWallBottom + 0.02, mid - 0.28);
+        openingY0 = Math.max(yWallBottom, mid - 0.28);
         openingY1 = Math.min(yWallTop - 0.04, mid + 0.28);
       }
     }
@@ -799,11 +792,8 @@ export function elevatorGroundDoorOpeningLocals(
     vlenZ * 0.5 - 0.06,
     vlenX * 0.5 - 0.06,
   );
-  const doorH = Math.min(
-    SHAFT_DOUBLE_DOOR_H,
-    bandCap - SHAFT_DOOR_SILL - 0.06,
-  );
-  const yDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  const doorH = Math.min(SHAFT_DOUBLE_DOOR_H, bandCap - 0.06);
+  const yDoor0 = yWallBottom;
   let yDoor1 = yDoor0 + Math.max(0.55, doorH);
   const yCap = splitShaft ? ySplit : yWallTop;
   yDoor1 = Math.min(yDoor1, yCap);
@@ -1391,7 +1381,7 @@ export function resolveStairWellGroundDoor(args: {
     Math.max(sx - 2 * wt, 0.05) * 0.5 - 0.06,
     Math.max(sz - 2 * wt, 0.05) * 0.5 - 0.06,
   );
-  const maxDoorH = bandHeightM - SHAFT_DOOR_SILL - 0.06;
+  const maxDoorH = bandHeightM - 0.06;
   const defaultDoorHalfW = THREE.MathUtils.clamp(
     SHAFT_DOUBLE_DOOR_W * 0.5,
     0.325,
@@ -1402,7 +1392,7 @@ export function resolveStairWellGroundDoor(args: {
     0.65,
     Math.max(0.65, maxDoorH),
   );
-  const baseYDoor0 = yWallBottom + SHAFT_DOOR_SILL;
+  const baseYDoor0 = yWallBottom;
   const scope = args.authoringScope ?? "typical";
   const authored = stairWellOpeningDefForScope(args.def, scope);
   const widthM = THREE.MathUtils.clamp(
@@ -1486,7 +1476,7 @@ export function resolveStairWellGroundDoor(args: {
     sz,
     wt,
   );
-  const centerMin = yWallBottom + SHAFT_DOOR_SILL + heightM * 0.5;
+  const centerMin = yWallBottom + heightM * 0.5;
   const centerMax = yWallBottom + bandHeightM - 0.04 - heightM * 0.5;
   const centerYM = THREE.MathUtils.clamp(
     authored?.centerYM ?? (baseYDoor0 + baseYDoor1) * 0.5,
@@ -1525,106 +1515,9 @@ export function resolveStairWellSupplementalDoors(args: {
   authoringScope?: StairWellAuthoringScope;
   primaryDoor?: ResolvedStairWellGroundDoor | null;
 }): readonly ResolvedStairWellGroundDoor[] {
-  const scope = args.authoringScope ?? "typical";
-  if (scope !== "typical") return [];
-  const primary =
-    args.primaryDoor ??
-    resolveStairWellGroundDoor({
-      sx: args.sx,
-      sy: args.sy,
-      sz: args.sz,
-      context: args.context,
-      layout: args.layout,
-      def: args.def,
-      authoringScope: scope,
-    });
-  if (!primary) return [];
-  const L = args.layout ?? computeSwitchbackStairLayout(args.sx, args.sy, args.sz);
-  const authored = stairWellOpeningDefForProxyId(
-    args.def,
-    scope,
-    STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
-  );
-  const face: CardinalFace = authored?.face ?? "s";
-  const wt = 0.11;
-  const widthM = authored?.widthM ?? primary.widthM;
-  const heightM = authored?.heightM ?? primary.heightM;
-  const doorHalfW = widthM * 0.5;
-  const centerYM = authored?.centerYM ?? primary.centerYM;
-  const idealTang =
-    args.context != null
-      ? args.context.towardPlateXZ[0] - args.context.shaftPlateXZ[0]
-      : 0;
-  let tangentOffsetAlongWall =
-    authored?.tangentOffsetAlongWallM != null
-      ? authored.tangentOffsetAlongWallM
-      : clampStairDoorTangentAlongInnerWall(
-          face,
-          idealTang,
-          doorHalfW,
-          args.sx,
-          args.sz,
-          wt,
-        );
-  if (authored?.tangentOffsetAlongWallM == null) {
-    const landing = pickCornerLandingNearDoorBand(
-      L,
-      face,
-      tangentOffsetAlongWall,
-      doorHalfW,
-      centerYM,
-    );
-    if (landing) {
-      tangentOffsetAlongWall = snapStairDoorTangentAlongWallToLanding(
-        landing,
-        face,
-        doorHalfW,
-        args.sx,
-        args.sz,
-        {
-          alignTowardPlateXZ: args.context?.towardPlateXZ,
-          shaftPlateXZForAlign: args.context?.shaftPlateXZ,
-        },
-      );
-    }
-  }
-  tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
-    face,
-    tangentOffsetAlongWall,
-    doorHalfW,
-    args.sx,
-    args.sz,
-    wt,
-  );
-  if (
-    authored == null &&
-    primary.face === face &&
-    Math.abs(primary.tangentOffsetAlongWallM - tangentOffsetAlongWall) < 0.05
-  ) {
-    return [];
-  }
-  const yDoor0 = centerYM - heightM * 0.5;
-  const yDoor1 = centerYM + heightM * 0.5;
-  return [
-    {
-      groundDoor: {
-        face,
-        bandHeightM: SHAFT_GROUND_DOOR_BAND_M,
-        tangentOffsetAlongWall,
-        doorWidthM: widthM,
-        doorHoleY0Local: yDoor0,
-        doorHoleY1Local: yDoor1,
-      },
-      doorHalfW,
-      y0Local: yDoor0,
-      y1Local: yDoor1,
-      face,
-      tangentOffsetAlongWallM: tangentOffsetAlongWall,
-      widthM,
-      heightM,
-      centerYM,
-    },
-  ];
+  void args;
+  // Balcony-door rollout: keep exactly one stairwell corridor door per storey.
+  return [];
 }
 
 export function addStairWellPlaceholder(
@@ -1642,8 +1535,7 @@ export function addStairWellPlaceholder(
     opts?.groundDoor != null
       ? (() => {
           const widthM = opts.groundDoor?.doorWidthM ?? SHAFT_DOUBLE_DOOR_W;
-          const y0Local =
-            opts.groundDoor?.doorHoleY0Local ?? (-sy * 0.5 + 0.11 + SHAFT_DOOR_SILL);
+          const y0Local = opts.groundDoor?.doorHoleY0Local ?? (-sy * 0.5 + 0.11);
           const y1Local =
             opts.groundDoor?.doorHoleY1Local ?? (y0Local + Math.min(SHAFT_DOUBLE_DOOR_H, sy - 0.4));
           return {
