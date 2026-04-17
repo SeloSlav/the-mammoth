@@ -127,6 +127,35 @@ const CAM_BOB_DIP_Y = 0.004;
 
 const MELEE_COOLDOWN_MS = 480;
 
+const MM_WALL_PROBE_LOADING_MSG =
+  "[mmWallProbe] Session still initializing (WebGPU / assets). Wait until the world is visible, then run window.__mmWallProbe.on() again.";
+
+/** Installed immediately when FP mount starts; replaced by the real API once the session is ready. */
+function installMmWallProbeLoadingStub(): void {
+  (globalThis as unknown as { __mmWallProbe?: Record<string, unknown> }).__mmWallProbe = {
+    on() {
+      console.warn(MM_WALL_PROBE_LOADING_MSG);
+    },
+    off() {
+      /* replaced later */
+    },
+    probe() {
+      console.warn(MM_WALL_PROBE_LOADING_MSG);
+      return undefined;
+    },
+    player() {
+      console.warn(MM_WALL_PROBE_LOADING_MSG);
+      return undefined;
+    },
+    persistOn() {
+      console.warn(MM_WALL_PROBE_LOADING_MSG);
+    },
+    persistOff() {
+      /* replaced later */
+    },
+  };
+}
+
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
  * capsule proxies for other players (interpolation buffer on remotes).
@@ -139,6 +168,7 @@ export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
 ): Promise<() => void> {
+  installMmWallProbeLoadingStub();
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
@@ -250,6 +280,10 @@ export async function mountFpSession(
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
+  const _wallProbeCamWorld = new THREE.Vector3();
+  const _wallProbeCamDir = new THREE.Vector3();
+  const _wallProbeHitNormal = new THREE.Vector3();
+  const _wallProbeRaycaster = new THREE.Raycaster();
   const prevPos = new THREE.Vector3();
 
   /** Pooled audio movement snapshot — mutated each frame, no object literal per frame. */
@@ -919,6 +953,200 @@ export async function mountFpSession(
   if (readDoorDebugAutostart()) __mmDoorDebugApi.all(__mmDoorDebugState.radiusM);
 
   /**
+   * Crosshair wall-hit probe for authoring by coordinates when the editor is not usable.
+   *
+   *   window.__mmWallProbe.on()          // enable RMB probe at current default range
+   *   window.__mmWallProbe.on(24)        // enable RMB probe with 24m max ray distance
+   *   window.__mmWallProbe.off()
+   *   window.__mmWallProbe.probe()       // immediate one-shot probe from the crosshair
+   *   window.__mmWallProbe.player()      // print player/camera pose only
+   *   window.__mmWallProbe.persistOn()   // auto-enable after reload
+   *   window.__mmWallProbe.persistOff()
+   */
+  const MM_WALL_PROBE_AUTOSTART_STORAGE_KEY = "mmWallProbeAutostart";
+  const __mmWallProbeState = {
+    enabled: false,
+    maxDistanceM: 20,
+  };
+
+  const printWallProbeJson = (label: string, payload: unknown): void => {
+    console.log(`[mmWallProbe:${label}] ${JSON.stringify(payload, null, 2)}`);
+  };
+
+  const readWallProbeAutostart = (): boolean => {
+    try {
+      return globalThis.localStorage?.getItem(MM_WALL_PROBE_AUTOSTART_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  const writeWallProbeAutostart = (enabled: boolean): void => {
+    try {
+      if (enabled) globalThis.localStorage?.setItem(MM_WALL_PROBE_AUTOSTART_STORAGE_KEY, "1");
+      else globalThis.localStorage?.removeItem(MM_WALL_PROBE_AUTOSTART_STORAGE_KEY);
+    } catch {
+      /* ignore storage failures */
+    }
+  };
+
+  const floorLabelByLevel = new Map(
+    building.floorRefs.map((ref) => [ref.levelIndex, ref.shortLabel || String(ref.levelIndex)]),
+  );
+
+  const dominantAxisLabel = (v: THREE.Vector3): "+x" | "-x" | "+y" | "-y" | "+z" | "-z" => {
+    const ax = Math.abs(v.x);
+    const ay = Math.abs(v.y);
+    const az = Math.abs(v.z);
+    if (ax >= ay && ax >= az) return v.x >= 0 ? "+x" : "-x";
+    if (ay >= ax && ay >= az) return v.y >= 0 ? "+y" : "-y";
+    return v.z >= 0 ? "+z" : "-z";
+  };
+
+  const surfaceKindFromNormal = (n: THREE.Vector3): "wall" | "floor" | "ceiling" => {
+    if (n.y >= 0.7) return "floor";
+    if (n.y <= -0.7) return "ceiling";
+    return "wall";
+  };
+
+  const findAnnotatedAncestor = (
+    obj: THREE.Object3D | null,
+  ): { plateLevelIndex?: number; alwaysVisible?: boolean; name?: string } => {
+    let cur: THREE.Object3D | null = obj;
+    while (cur) {
+      if (typeof cur.userData.mammothPlateLevelIndex === "number") {
+        return {
+          plateLevelIndex: cur.userData.mammothPlateLevelIndex as number,
+          name: cur.name || undefined,
+        };
+      }
+      if (cur.userData.mammothAlwaysVisible === true) {
+        return { alwaysVisible: true, name: cur.name || undefined };
+      }
+      cur = cur.parent;
+    }
+    return {};
+  };
+
+  const snapshotWallProbePlayer = () => {
+    camera.getWorldPosition(_wallProbeCamWorld);
+    camera.getWorldDirection(_wallProbeCamDir);
+    return {
+      player: roundV(pos),
+      camera: roundV(_wallProbeCamWorld),
+      aimDirection: roundV(_wallProbeCamDir),
+    };
+  };
+
+  const probeWallHit = (maxDistanceM = __mmWallProbeState.maxDistanceM) => {
+    camera.getWorldPosition(_wallProbeCamWorld);
+    camera.getWorldDirection(_wallProbeCamDir);
+    buildingRoot.updateMatrixWorld(true);
+    _wallProbeRaycaster.set(_wallProbeCamWorld, _wallProbeCamDir);
+    _wallProbeRaycaster.far = Math.max(0.5, maxDistanceM);
+    const hits = _wallProbeRaycaster.intersectObject(buildingRoot, true);
+    const hit = hits[0];
+    if (!hit) {
+      const miss = {
+        ...snapshotWallProbePlayer(),
+        maxDistanceM: +maxDistanceM.toFixed(3),
+        hit: null,
+      };
+      printWallProbeJson("miss", miss);
+      return miss;
+    }
+
+    const annotated = findAnnotatedAncestor(hit.object);
+    const faceNormal = hit.face?.normal;
+    if (faceNormal) {
+      _wallProbeHitNormal.copy(faceNormal).transformDirection(hit.object.matrixWorld).normalize();
+    } else {
+      _wallProbeHitNormal.copy(_wallProbeCamDir).multiplyScalar(-1).normalize();
+    }
+    const plateLevelIndex = annotated.plateLevelIndex;
+    const levelLabel =
+      plateLevelIndex != null ? (floorLabelByLevel.get(plateLevelIndex) ?? String(plateLevelIndex)) : null;
+    const buildingLocal = buildingRoot.worldToLocal(hit.point.clone());
+    const plateAnchor =
+      hit.object.parent && annotated.plateLevelIndex != null
+        ? (() => {
+            let cur: THREE.Object3D | null = hit.object;
+            while (cur) {
+              if (typeof cur.userData.mammothPlateLevelIndex === "number") return cur;
+              cur = cur.parent;
+            }
+            return null;
+          })()
+        : null;
+    const plateLocal = plateAnchor ? plateAnchor.worldToLocal(hit.point.clone()) : null;
+    const payload = {
+      ...snapshotWallProbePlayer(),
+      maxDistanceM: +maxDistanceM.toFixed(3),
+      hit: {
+        pointWorld: roundV(hit.point),
+        pointBuildingLocal: roundV(buildingLocal),
+        pointPlateLocal: plateLocal ? roundV(plateLocal) : null,
+        distanceM: +hit.distance.toFixed(3),
+        normalWorld: roundV(_wallProbeHitNormal),
+        dominantNormalAxis: dominantAxisLabel(_wallProbeHitNormal),
+        surfaceKind: surfaceKindFromNormal(_wallProbeHitNormal),
+        floorLevelIndex: plateLevelIndex ?? null,
+        floorLabel: levelLabel,
+        parentGroupName: annotated.name ?? null,
+        alwaysVisibleColumn: annotated.alwaysVisible ?? false,
+        objectName: hit.object.name || null,
+      },
+    };
+    printWallProbeJson("hit", payload);
+    return payload;
+  };
+
+  const __mmWallProbeApi = {
+    on(maxDistanceM = __mmWallProbeState.maxDistanceM): void {
+      __mmWallProbeState.enabled = true;
+      __mmWallProbeState.maxDistanceM = Math.max(0.5, maxDistanceM);
+      printWallProbeJson("status", {
+        enabled: true,
+        maxDistanceM: +__mmWallProbeState.maxDistanceM.toFixed(3),
+        autostart: readWallProbeAutostart(),
+        message:
+          "Aim at a surface and right-click to print the crosshair hit. Call __mmWallProbe.off() to stop.",
+      });
+    },
+    off(): void {
+      __mmWallProbeState.enabled = false;
+      printWallProbeJson("status", {
+        enabled: false,
+        maxDistanceM: +__mmWallProbeState.maxDistanceM.toFixed(3),
+        autostart: readWallProbeAutostart(),
+      });
+    },
+    probe(maxDistanceM = __mmWallProbeState.maxDistanceM) {
+      return probeWallHit(maxDistanceM);
+    },
+    player() {
+      const payload = snapshotWallProbePlayer();
+      printWallProbeJson("player", payload);
+      return payload;
+    },
+    persistOn(maxDistanceM = __mmWallProbeState.maxDistanceM): void {
+      writeWallProbeAutostart(true);
+      this.on(maxDistanceM);
+      printWallProbeJson("persist", {
+        autostart: true,
+        maxDistanceM: +__mmWallProbeState.maxDistanceM.toFixed(3),
+      });
+    },
+    persistOff(): void {
+      writeWallProbeAutostart(false);
+      printWallProbeJson("persist", { autostart: false });
+    },
+  };
+  (globalThis as unknown as { __mmWallProbe?: typeof __mmWallProbeApi }).__mmWallProbe =
+    __mmWallProbeApi;
+  if (readWallProbeAutostart()) __mmWallProbeApi.on(__mmWallProbeState.maxDistanceM);
+
+  /**
    * Pre-allocated step-opts for the reconcile replay loop — same idea but points to the replay
    * pool objects (_replayPos, _replayPrevPos, _replayLoco, _replayInput).
    */
@@ -1552,9 +1780,16 @@ export async function mountFpSession(
   let meleePressPending = false;
 
   const onPointerDown = (e: PointerEvent) => {
-    if (!e.isPrimary || e.button !== 0) return;
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
+    if (e.button === 2) {
+      if (__mmWallProbeState.enabled) {
+        e.preventDefault();
+        probeWallHit();
+      }
+      return;
+    }
+    if (!e.isPrimary || e.button !== 0) return;
     const nowMs = performance.now();
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
     const selectedHotbarSlot = getFpHotbarSelectedSlot();
@@ -1846,6 +2081,12 @@ export async function mountFpSession(
     try {
       const g = globalThis as unknown as { __mmDoorDebug?: typeof __mmDoorDebugApi };
       if (g.__mmDoorDebug === __mmDoorDebugApi) delete g.__mmDoorDebug;
+    } catch {
+      /* ignore */
+    }
+    try {
+      const g = globalThis as unknown as { __mmWallProbe?: typeof __mmWallProbeApi };
+      if (g.__mmWallProbe === __mmWallProbeApi) delete g.__mmWallProbe;
     } catch {
       /* ignore */
     }

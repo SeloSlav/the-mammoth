@@ -249,6 +249,10 @@ export {
   type UnitEntryFace,
 } from "./unitEntryAdjacency.js";
 export {
+  MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID,
+  manualCorridorShellHoleExtrasForFloor,
+} from "./manualApartmentDoorExtras.js";
+export {
   APARTMENT_DOOR_TEMPLATES,
   APARTMENT_DOOR_TEMPLATE_TOTAL,
   type ApartmentDoorTemplateSet,

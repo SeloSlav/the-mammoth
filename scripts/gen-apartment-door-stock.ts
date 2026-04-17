@@ -6,9 +6,10 @@
  *
  * Re-run from repo root: `pnpm content:gen-apartment-doors`
  *
- * The codegen runs the same `apartmentDoorTemplatesForFloor` adjacency that the floor mesh
- * pipeline already uses to carve unit-corridor wall holes, guaranteeing that every authored
- * doorway gets exactly one runtime door — no drift between the cut and the placed leaf.
+ * The codegen runs `apartmentDoorTemplatesForFloor` (adjacency) plus any
+ * `MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID` entries — the mesh pipeline carves holes from
+ * the same adjacency rules plus `manualCorridorShellHoleExtrasForFloor` so cuts and templates
+ * stay aligned.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   apartmentDoorTemplatesForFloor,
   FACE_CODE,
+  MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID,
   parseBuildingDoc,
   parseFloorDoc,
   type ApartmentDoorTemplate,
@@ -37,7 +39,9 @@ let totalTemplates = 0;
 for (const floorDocId of uniqueDocIds) {
   const docPath = join(floorDir, `${floorDocId}.json`);
   const doc = parseFloorDoc(JSON.parse(readFileSync(docPath, "utf8")) as unknown);
-  const templates = apartmentDoorTemplatesForFloor(doc).sort((a, b) =>
+  const adjacency = apartmentDoorTemplatesForFloor(doc);
+  const manual = MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID[floorDocId] ?? [];
+  const templates = [...adjacency, ...manual].sort((a, b) =>
     a.templateId.localeCompare(b.templateId),
   );
   bundles.push({ floorDocId, templates });

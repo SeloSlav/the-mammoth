@@ -82,6 +82,7 @@ import {
   UNIT_CORRIDOR_TOUCH_M,
   UNIT_ENTRY_DOOR_W,
 } from "./unitEntryAdjacency.js";
+import { manualCorridorShellHoleExtrasForFloor } from "./manualApartmentDoorExtras.js";
 
 function matsFor(kind: PlaceholderKind): {
   floor: THREE.MeshStandardMaterial;
@@ -1554,24 +1555,29 @@ export function buildFloorMeshes(
         ? undefined
         : mergeCorridorShellWallHoles(
             mergeCorridorShellWallHoles(
+              mergeCorridorShellWallHoles(
+                kind === "corridor"
+                  ? corridorShellHolesFromStairPunches(
+                      obj,
+                      sx,
+                      sy,
+                      sz,
+                      kind,
+                      corridorShaftDoorPunchesPlate,
+                    )
+                  : undefined,
+                kind === "corridor"
+                  ? corridorShellHolesFromAdjacentUnitEntries(
+                      obj,
+                      sx,
+                      sy,
+                      sz,
+                      floor,
+                    )
+                  : undefined,
+              ),
               kind === "corridor"
-                ? corridorShellHolesFromStairPunches(
-                    obj,
-                    sx,
-                    sy,
-                    sz,
-                    kind,
-                    corridorShaftDoorPunchesPlate,
-                  )
-                : undefined,
-              kind === "corridor"
-                ? corridorShellHolesFromAdjacentUnitEntries(
-                    obj,
-                    sx,
-                    sy,
-                    sz,
-                    floor,
-                  )
+                ? manualCorridorShellHoleExtrasForFloor(floor, obj, sx, sy, sz)
                 : undefined,
             ),
             kind === "unit"
