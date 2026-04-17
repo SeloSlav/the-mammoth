@@ -44,8 +44,8 @@ describe("swingDoorCollision: per-face convention", () => {
   it("swing yaw = baseYaw + sign * open * maxRad", () => {
     const rad = 1.4;
     expect(swingDoorYawRad("w", 0, rad)).toBeCloseTo(0);
-    expect(swingDoorYawRad("w", 1, rad)).toBeCloseTo(-rad);
-    expect(swingDoorYawRad("e", 1, rad)).toBeCloseTo(rad);
+    expect(swingDoorYawRad("w", 1, rad)).toBeCloseTo(rad);
+    expect(swingDoorYawRad("e", 1, rad)).toBeCloseTo(-rad);
     expect(swingDoorYawRad("n", 0, rad)).toBeCloseTo(Math.PI / 2);
     expect(swingDoorYawRad("n", 1, rad)).toBeCloseTo(Math.PI / 2 + rad);
     expect(swingDoorYawRad("s", 1, rad)).toBeCloseTo(Math.PI / 2 - rad);
@@ -68,10 +68,42 @@ describe("swingDoorCollision: per-face convention", () => {
   });
 
   it("orientation swing sign matches documented table", () => {
-    expect(swingDoorOrientationForFace("w").swingSign).toBe(-1);
-    expect(swingDoorOrientationForFace("e").swingSign).toBe(1);
+    expect(swingDoorOrientationForFace("w").swingSign).toBe(1);
+    expect(swingDoorOrientationForFace("e").swingSign).toBe(-1);
     expect(swingDoorOrientationForFace("n").swingSign).toBe(1);
     expect(swingDoorOrientationForFace("s").swingSign).toBe(-1);
+  });
+
+  /**
+   * Visual-collision parity: at full open the rendered leaf tip must swing toward the same side
+   * the parked-leaf collision AABB occupies. Otherwise the player sees open sky where physics
+   * blocks and vice-versa — the exact "pushed back through an invisible leaf" bug that triggered
+   * this regression.
+   */
+  it("at full open, tip direction matches open-side normal", () => {
+    const maxRad = Math.PI / 2;
+    for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
+      const yaw = swingDoorYawRad(face, 1, maxRad);
+      // Tip at rest is local (0, 0, -1); after rotating by yaw about Y the world tip is
+      // (-sin yaw, 0, -cos yaw).
+      const tipX = -Math.sin(yaw);
+      const tipZ = -Math.cos(yaw);
+      const normal = swingDoorOpenSideNormal(face);
+      expect(tipX).toBeCloseTo(normal.x, 5);
+      expect(tipZ).toBeCloseTo(normal.z, 5);
+    }
+  });
+
+  /** At rest (closed), the leaf tip must lie along `swingDoorTangentRest(face)`. */
+  it("at rest, tip direction matches tangent rest", () => {
+    for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
+      const { baseYaw } = swingDoorOrientationForFace(face);
+      const tipX = -Math.sin(baseYaw);
+      const tipZ = -Math.cos(baseYaw);
+      const tan = swingDoorTangentRest(face);
+      expect(tipX).toBeCloseTo(tan.x, 5);
+      expect(tipZ).toBeCloseTo(tan.z, 5);
+    }
   });
 });
 
@@ -191,6 +223,52 @@ describe("swingDoorPlayerInInteractRange", () => {
       }),
     ).toBe(false);
   });
+});
+
+/**
+ * Regression guard for the "pushed back by an invisible leaf" bug: when a door is fully parked
+ * open, the rendered leaf direction and the parked-leaf collision AABB must lie on the SAME side
+ * of the hinge. A mismatch means the player sees a clear doorway but collision bumps them back,
+ * exactly the regression that triggered this test.
+ *
+ * Two checks:
+ * 1. Directional: the tip at full swing (with the kit's actual `maxRad`) must be on the
+ *    corridor-side of the hinge along the open-side normal.
+ * 2. Containment (idealized): at a perfect 90° park, the tip lies inside the parked-leaf AABB.
+ *    This locks the AABB formula to the canonical orientation the rotation table encodes.
+ */
+describe("visual ↔ collision parity at full open", () => {
+  const base = {
+    hingeX: 10,
+    hingeZ: 20,
+    feetY: 0,
+    panelWidthM: 1.26,
+    panelHeightM: 2.06,
+  };
+
+  for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
+    it(`face ${face}: tip swings onto the corridor side`, () => {
+      const yaw = swingDoorYawRad(face, 1, SWING_DOOR_DEFAULT_MAX_RAD);
+      const tipDX = -Math.sin(yaw) * base.panelWidthM;
+      const tipDZ = -Math.cos(yaw) * base.panelWidthM;
+      const normal = swingDoorOpenSideNormal(face);
+      // Projection of the tip displacement onto the open-side normal must be strongly positive
+      // (the leaf ends up in the corridor half-space, not the room).
+      const proj = tipDX * normal.x + tipDZ * normal.z;
+      expect(proj).toBeGreaterThan(base.panelWidthM * 0.9);
+    });
+
+    it(`face ${face}: at ideal 90° park, tip lies inside parked-leaf AABB`, () => {
+      const yaw = swingDoorYawRad(face, 1, Math.PI / 2);
+      const tipX = base.hingeX - Math.sin(yaw) * base.panelWidthM;
+      const tipZ = base.hingeZ - Math.cos(yaw) * base.panelWidthM;
+      const aabb = swingDoorParkedLeafAabb({ face, ...base });
+      expect(tipX).toBeGreaterThanOrEqual(aabb.min[0] - 1e-4);
+      expect(tipX).toBeLessThanOrEqual(aabb.max[0] + 1e-4);
+      expect(tipZ).toBeGreaterThanOrEqual(aabb.min[2] - 1e-4);
+      expect(tipZ).toBeLessThanOrEqual(aabb.max[2] + 1e-4);
+    });
+  }
 });
 
 describe("default max swing radians", () => {

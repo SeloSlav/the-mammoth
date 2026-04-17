@@ -195,6 +195,7 @@ export {
   createSwingDoorMaterials,
   disposeSwingDoorLeafContents,
   isSolidLeafKit,
+  buildSolidSwingLeafMergedGeometry,
   populateSwingDoorLeaf,
   SWING_DOOR_BOTTOM_RAIL_PART_ID,
   SWING_DOOR_FRAME_Y_INSET_M,
@@ -245,6 +246,11 @@ export {
   type UnitEntryDoorYRange,
   type UnitEntryFace,
 } from "./unitEntryAdjacency.js";
+export {
+  APARTMENT_DOOR_TEMPLATES,
+  APARTMENT_DOOR_TEMPLATE_TOTAL,
+  type ApartmentDoorTemplateSet,
+} from "./generatedApartmentDoors.js";
 export {
   applyLandingKitPartTransforms,
   buildLandingDoorPreviewRoot,

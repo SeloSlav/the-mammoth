@@ -11,16 +11,22 @@
  * - At rest (closed), the leaf lies flat against the wall, extending **away from the hinge along
  *   the wall in the local -Z direction** of the swing group.
  * - Opening rotates the leaf into the **corridor / public side** (away from the room interior the
- *   door encloses).
+ *   door encloses). At `open01 = 1`, the tip direction in world space is approximately
+ *   `swingDoorOpenSideNormal(face)`.
  *
  * ## Per-face rotation
  *
- * | face | base yaw (rad) | swing sign |
- * |------|---------------:|-----------:|
- * | "w"  |              0 |         -1 |
- * | "e"  |              0 |         +1 |
- * | "n"  |           π/2  |         +1 |
- * | "s"  |           π/2  |         -1 |
+ * Derivation: the tip at rest is `R_y(baseYaw(face)) · (0, 0, -1)`, which equals
+ * `swingDoorTangentRest(face)`. After opening, the tip is `R_y(baseYaw + swingSign*open*maxRad)
+ * · (0, 0, -1)`. Setting that ≈ `swingDoorOpenSideNormal(face)` at `open = 1, maxRad ≈ π/2` fixes
+ * each row below:
+ *
+ * | face | base yaw (rad) | swing sign | tip at rest | tip at full open |
+ * |------|---------------:|-----------:|------------:|-----------------:|
+ * | "w"  |              0 |         +1 |     (0, -1) |          (-1, 0) |
+ * | "e"  |              0 |         -1 |     (0, -1) |          (+1, 0) |
+ * | "n"  |            π/2 |         +1 |     (-1, 0) |          (0, +1) |
+ * | "s"  |            π/2 |         -1 |     (-1, 0) |          (0, -1) |
  *
  * Final swing yaw = `baseYaw(face) + swingSign(face) * open01 * maxRad`.
  */
@@ -63,8 +69,8 @@ export type SwingDoorOrientation = {
 };
 
 const ORIENTATIONS: Record<SwingDoorFace, SwingDoorOrientation> = {
-  w: { baseYaw: 0, swingSign: -1 },
-  e: { baseYaw: 0, swingSign: 1 },
+  w: { baseYaw: 0, swingSign: 1 },
+  e: { baseYaw: 0, swingSign: -1 },
   n: { baseYaw: Math.PI / 2, swingSign: 1 },
   s: { baseYaw: Math.PI / 2, swingSign: -1 },
 };

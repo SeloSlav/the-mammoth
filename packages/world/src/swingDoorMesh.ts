@@ -8,6 +8,7 @@
  * — the DRY goal set in the apartment-door design review.
  */
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { LandingKitDef } from "@the-mammoth/schemas";
 import {
   applyLandingFrameSlot,
@@ -230,6 +231,59 @@ export function populateSwingDoorLeaf(
   glassMesh.castShadow = false;
   glassMesh.renderOrder = 2;
   swing.add(glassMesh);
+}
+
+/**
+ * Build a single merged {@link THREE.BufferGeometry} that draws the whole solid-leaf door in one
+ * draw call. The pivot is at the swing group origin (the hinge) — same convention as
+ * {@link populateSwingDoorLeaf} — and the leaf extends in local `-Z`, so this geometry can be
+ * placed directly under an `InstancedMesh` whose per-instance matrix encodes
+ * `translate(hinge) · rotateY(baseYaw + swingSign*open*maxRad)`.
+ *
+ * Only the solid variant is supported here: glass lites would need a second material/draw pass.
+ * Callers rendering the apartment kit (which authors `solid: true`) use this; the elevator door
+ * uses {@link populateSwingDoorLeaf} because its opening gizmo + glass lite still need separate
+ * meshes.
+ */
+export function buildSolidSwingLeafMergedGeometry(
+  dims: SwingDoorDimensions,
+): THREE.BufferGeometry {
+  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
+  const panelW = dims.panelW - 0.1;
+  const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
+  const centerZ = -panelW * 0.5;
+  const openW = Math.max(0.12, panelW - 0.24);
+  const openH = Math.max(0.12, panelH - 0.22);
+  const railTopH = Math.max(0.12, panelH * 0.5 - openH * 0.5);
+  const railBotH = Math.max(0.12, panelH * 0.5 - openH * 0.5);
+  const stileW = Math.max(0.12, (panelW - openW) * 0.5);
+
+  const parts: THREE.BoxGeometry[] = [];
+  const push = (
+    sx: number,
+    sy: number,
+    sz: number,
+    x: number,
+    y: number,
+    z: number,
+  ): void => {
+    const g = new THREE.BoxGeometry(sx, sy, sz);
+    g.translate(x, y, z);
+    parts.push(g);
+  };
+
+  push(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
+  push(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
+  push(panelT, openH, stileW, panelT * 0.5, 0, -stileW * 0.5);
+  push(panelT, openH, stileW, panelT * 0.5, 0, -panelW + stileW * 0.5);
+  push(panelT, Math.max(0.05, openH), Math.max(0.05, openW), panelT * 0.5, 0, centerZ);
+
+  const merged = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  if (!merged) {
+    throw new Error("buildSolidSwingLeafMergedGeometry: mergeGeometries returned null");
+  }
+  return merged;
 }
 
 /** Dispose mesh GPU assets under `swing` (geometries + materials). */
