@@ -1481,13 +1481,20 @@ export function resolveStairWellGroundDoor(args: {
   );
   const centerMin = yWallBottom + heightM * 0.5;
   const centerMax = yWallBottom + bandHeightM - 0.04 - heightM * 0.5;
-  const centerYM = THREE.MathUtils.clamp(
+  const authoredCenterYM = THREE.MathUtils.clamp(
     authored?.centerYM ?? (baseYDoor0 + baseYDoor1) * 0.5,
     Math.min(centerMin, centerMax),
     Math.max(centerMin, centerMax),
   );
-  const yDoor0 = centerYM - heightM * 0.5;
-  const yDoor1 = centerYM + heightM * 0.5;
+  let yDoor0 = authoredCenterYM - heightM * 0.5;
+  let yDoor1 = authoredCenterYM + heightM * 0.5;
+  // Stair/corridor thresholds must be floor-flush; otherwise a thin sill strip survives and
+  // causes the same rubber-banding bug we previously had on west apartment doors.
+  if (yDoor0 > yWallBottom) {
+    yDoor1 -= yDoor0 - yWallBottom;
+    yDoor0 = yWallBottom;
+  }
+  const centerYM = (yDoor0 + yDoor1) * 0.5;
   return {
     groundDoor: {
       face: pickedFace,

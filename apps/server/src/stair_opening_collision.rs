@@ -325,16 +325,22 @@ fn resolve_primary_door(
     );
     let center_min = y_wall_bottom + SHAFT_DOOR_SILL + height * 0.5;
     let center_max = y_wall_bottom + band_height - 0.04 - height * 0.5;
-    let center = authored
+    let authored_center = authored
         .center_y_m
         .unwrap_or(y_wall_bottom + SHAFT_DOOR_SILL + height * 0.5)
         .clamp(center_min.min(center_max), center_min.max(center_max));
+    let mut y0 = authored_center - height * 0.5;
+    let mut y1 = authored_center + height * 0.5;
+    if y0 > y_wall_bottom {
+        y1 -= y0 - y_wall_bottom;
+        y0 = y_wall_bottom;
+    }
     Some(ResolvedDoor {
         face,
         tangent,
         width,
-        y0: center - height * 0.5,
-        y1: center + height * 0.5,
+        y0,
+        y1,
     })
 }
 
@@ -367,16 +373,22 @@ fn resolve_secondary_door(
     );
     let center_min = y_wall_bottom + SHAFT_DOOR_SILL + height * 0.5;
     let center_max = y_wall_bottom + band_height - 0.04 - height * 0.5;
-    let center = authored
+    let authored_center = authored
         .center_y_m
         .unwrap_or((base.y0 + base.y1) * 0.5)
         .clamp(center_min.min(center_max), center_min.max(center_max));
+    let mut y0 = authored_center - height * 0.5;
+    let mut y1 = authored_center + height * 0.5;
+    if y0 > y_wall_bottom {
+        y1 -= y0 - y_wall_bottom;
+        y0 = y_wall_bottom;
+    }
     Some(ResolvedDoor {
         face,
         tangent,
         width,
-        y0: center - height * 0.5,
-        y1: center + height * 0.5,
+        y0,
+        y1,
     })
 }
 
