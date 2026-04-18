@@ -20,6 +20,11 @@ export function getHotbarSlotInventoryItem(
   return undefined;
 }
 
+/** `true` only for hotbar items that map to a shipped melee weapon implementation. */
+export function hotbarDefIdSupportsMeleeAttack(defId: string | null | undefined): boolean {
+  return !!defId && equippedHeldItemIdFromDefId(defId) !== "unarmed";
+}
+
 /**
  * Maps the selected hotbar slot (+ DB rows) to the local player's `equippedPrimary`.
  */

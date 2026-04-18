@@ -395,19 +395,19 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
     if now_us - cd.last_swing_micros < MELEE_COOLDOWN_MICROS {
         return;
     }
+    let Some(weapon_def_id) = combat_stub::active_hotbar_weapon_def_id(ctx, id) else {
+        return;
+    };
     cd.last_swing_micros = now_us;
     ctx.db.player_melee_cooldown().identity().update(cd);
 
-    let stub_damage = combat_stub::stub_melee_damage_for_active_loadout(ctx, id);
+    let stub_damage = combat_stub::stub_melee_damage_for_def_id(&weapon_def_id);
     log::debug!(
         "submit_melee_swing: stub base damage {:.2} (active hotbar; hit validation not implemented)",
         stub_damage
     );
 
-    let profile = combat_stub::active_hotbar_weapon_def_id(ctx, id)
-        .as_deref()
-        .map(melee_weapon_swing_sound_profile_for_def_id)
-        .unwrap_or(0);
+    let profile = melee_weapon_swing_sound_profile_for_def_id(&weapon_def_id);
     let stem = ((now_us >> 7) as u8) & MELEE_SWING_VARIATION_STEM_MASK;
     let v = melee_weapon_swing_variation(profile, stem);
     emit_world_sound(

@@ -1550,6 +1550,8 @@ export function buildFloorMeshes(
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           groundDoor: resolvedGroundDoor,
           supplementalDoors,
+          storyLevelIndex: story,
+          storyShortLabel: opts?.storyShortLabel,
         });
       }
     } else {

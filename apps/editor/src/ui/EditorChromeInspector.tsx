@@ -10,11 +10,8 @@ import type {
   StairWellDef,
 } from "@the-mammoth/schemas";
 import {
-  isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
   resolveGlassOpening,
-  STAIR_WELL_OPENING_PROXY_ID,
-  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
 import type {
@@ -32,17 +29,6 @@ type ElevatorDoorFace = "e" | "w" | "n" | "s";
 
 function isElevatorFace(value: unknown): value is ElevatorDoorFace {
   return value === "e" || value === "w" || value === "n" || value === "s";
-}
-
-function stairOpeningForScope(
-  def: StairWellDef,
-  scope: "typical" | "ground",
-  openingId: string = STAIR_WELL_OPENING_PROXY_ID,
-): NonNullable<StairWellDef["entryOpening"]> | undefined {
-  if (openingId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID) {
-    return scope === "typical" ? def.secondaryEntryOpening : undefined;
-  }
-  return scope === "ground" ? (def.groundEntryOpening ?? def.entryOpening) : def.entryOpening;
 }
 
 export function EditorChromeInspector(props: {
@@ -122,16 +108,6 @@ export function EditorChromeInspector(props: {
   const elevatorDoorFaceOverride = isElevatorFace(selectedFloorObj?.metadata?.elevatorDoorFace)
     ? selectedFloorObj.metadata.elevatorDoorFace
     : "auto";
-  const activeStairOpeningId =
-    mode === "stairwell_preview" && isStairWellOpeningProxyId(selectedId)
-      ? selectedId
-      : STAIR_WELL_OPENING_PROXY_ID;
-  const activeStairOpening = stairOpeningForScope(
-    stairWellDef,
-    stairWellAuthorScope,
-    activeStairOpeningId,
-  );
-
   const saveTarget = describeEditorSaveTarget({
     workspace,
     mode,
@@ -312,185 +288,12 @@ export function EditorChromeInspector(props: {
       {mode === "stairwell_preview" ? (
         <>
           <label style={label}>
-            Stair entry opening - {stairWellAuthorScope}
+            Stairwell door openings
           </label>
           <p style={{ margin: "4px 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
-            The stairwell hole/door frame is authored once here and reused by preview, world render,
-            and collision. Translate the selected proxy in the viewport to slide it along the wall;
-            scale it to change width/height.
+            Door location authoring is disabled. Stairwell preview mode now only supports part
+            transform/material authoring; doorway placement follows world rules.
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <select
-              style={input}
-              value={activeStairOpening?.face ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                patchStairWellDef((d) => ({
-                  ...d,
-                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-                    ? {
-                        secondaryEntryOpening: {
-                          ...d.secondaryEntryOpening,
-                          face: isElevatorFace(v) ? v : undefined,
-                        },
-                      }
-                    : stairWellAuthorScope === "ground"
-                      ? {
-                          groundEntryOpening: {
-                            ...d.groundEntryOpening,
-                            face: isElevatorFace(v) ? v : undefined,
-                          },
-                        }
-                      : {
-                          entryOpening: {
-                            ...d.entryOpening,
-                            face: isElevatorFace(v) ? v : undefined,
-                          },
-                        }),
-                }));
-              }}
-            >
-              <option value="">auto face</option>
-              <option value="e">east</option>
-              <option value="w">west</option>
-              <option value="n">north</option>
-              <option value="s">south</option>
-            </select>
-            <input
-              style={input}
-              type="number"
-              step={0.01}
-              placeholder="offset along wall (m)"
-              value={activeStairOpening?.tangentOffsetAlongWallM ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchStairWellDef((d) => ({
-                  ...d,
-                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-                    ? {
-                        secondaryEntryOpening: {
-                          ...d.secondaryEntryOpening,
-                          tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }
-                    : stairWellAuthorScope === "ground"
-                      ? {
-                          groundEntryOpening: {
-                            ...d.groundEntryOpening,
-                            tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }
-                      : {
-                          entryOpening: {
-                            ...d.entryOpening,
-                            tangentOffsetAlongWallM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }),
-                }));
-              }}
-            />
-            <input
-              style={input}
-              type="number"
-              step={0.01}
-              min={0.4}
-              placeholder="width (m)"
-              value={activeStairOpening?.widthM ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchStairWellDef((d) => ({
-                  ...d,
-                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-                    ? {
-                        secondaryEntryOpening: {
-                          ...d.secondaryEntryOpening,
-                          widthM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }
-                    : stairWellAuthorScope === "ground"
-                      ? {
-                          groundEntryOpening: {
-                            ...d.groundEntryOpening,
-                            widthM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }
-                      : {
-                          entryOpening: {
-                            ...d.entryOpening,
-                            widthM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }),
-                }));
-              }}
-            />
-            <input
-              style={input}
-              type="number"
-              step={0.01}
-              min={0.4}
-              placeholder="height (m)"
-              value={activeStairOpening?.heightM ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchStairWellDef((d) => ({
-                  ...d,
-                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-                    ? {
-                        secondaryEntryOpening: {
-                          ...d.secondaryEntryOpening,
-                          heightM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }
-                    : stairWellAuthorScope === "ground"
-                      ? {
-                          groundEntryOpening: {
-                            ...d.groundEntryOpening,
-                            heightM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }
-                      : {
-                          entryOpening: {
-                            ...d.entryOpening,
-                            heightM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }),
-                }));
-              }}
-            />
-            <input
-              style={input}
-              type="number"
-              step={0.01}
-              placeholder="center Y (m)"
-              value={activeStairOpening?.centerYM ?? ""}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                patchStairWellDef((d) => ({
-                  ...d,
-                  ...(activeStairOpeningId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-                    ? {
-                        secondaryEntryOpening: {
-                          ...d.secondaryEntryOpening,
-                          centerYM: Number.isFinite(v) ? v : undefined,
-                        },
-                      }
-                    : stairWellAuthorScope === "ground"
-                      ? {
-                          groundEntryOpening: {
-                            ...d.groundEntryOpening,
-                            centerYM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }
-                      : {
-                          entryOpening: {
-                            ...d.entryOpening,
-                            centerYM: Number.isFinite(v) ? v : undefined,
-                          },
-                        }),
-                }));
-              }}
-            />
-          </div>
         </>
       ) : null}
 
@@ -515,9 +318,7 @@ export function EditorChromeInspector(props: {
         </>
       ) : null}
 
-      {mode === "stairwell_preview" &&
-      selectedId &&
-      !isStairWellOpeningProxyId(selectedId) ? (
+      {mode === "stairwell_preview" && selectedId ? (
         <>
           <label style={label}>
             Stair part delta rotation (° YXZ) - {stairWellAuthorScope}
@@ -580,12 +381,6 @@ export function EditorChromeInspector(props: {
         <p style={{ opacity: 0.65, fontSize: 12 }}>
           Pick a shared stairwell part in the outliner to author a delta transform for the{" "}
           {stairWellAuthorScope} stairwell scope.
-        </p>
-      ) : null}
-      {mode === "stairwell_preview" && isStairWellOpeningProxyId(selectedId) ? (
-        <p style={{ opacity: 0.65, fontSize: 12 }}>
-          Gizmo edits the stair entry hole for the {stairWellAuthorScope} scope. Translate slides it
-          along the selected wall; scale changes width and height.
         </p>
       ) : null}
 

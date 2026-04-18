@@ -10,8 +10,6 @@ import type {
 import {
   LANDING_DOOR_OPENING_PROXY_ID,
   STAIR_WELL_EDITOR_PART_IDS,
-  STAIR_WELL_OPENING_PROXY_ID,
-  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
 import type { EditorMode, LandingKitVariant } from "../state/editorStore.js";
 
@@ -241,10 +239,6 @@ export function EditorChromeOutliner(props: {
         ) : null}
         {mode === "stairwell_preview"
           ? [
-              STAIR_WELL_OPENING_PROXY_ID,
-              ...(stairWellAuthorScope === "typical"
-                ? [STAIR_WELL_SECONDARY_OPENING_PROXY_ID]
-                : []),
               ...Array.from(
                 STAIR_WELL_EDITOR_PART_IDS.filter(
                   (id) =>
@@ -273,10 +267,6 @@ export function EditorChromeOutliner(props: {
                 }}
               >
                 {id}
-                {id === STAIR_WELL_OPENING_PROXY_ID ||
-                id === STAIR_WELL_SECONDARY_OPENING_PROXY_ID ? (
-                  <span style={{ opacity: 0.65 }}> (framed opening - gizmo)</span>
-                ) : null}
               </button>
             ))
           : null}

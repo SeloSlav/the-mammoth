@@ -44,7 +44,7 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
-import { getHotbarSlotInventoryItem } from "./fpHotbarResolve";
+import { getHotbarSlotInventoryItem, hotbarDefIdSupportsMeleeAttack } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import {
   onFpSessionPostRenderFrame,
@@ -1834,7 +1834,8 @@ export async function mountFpSession(
 
     if (meleePressPending) {
       meleePressPending = false;
-      if (nowMs - lastMeleeMs >= MELEE_COOLDOWN_MS) {
+      const meleeEnabled = hotbarDefIdSupportsMeleeAttack(selectedHotbarRow()?.defId);
+      if (meleeEnabled && nowMs - lastMeleeMs >= MELEE_COOLDOWN_MS) {
         lastMeleeMs = nowMs;
         meleeAttackSeq += 1;
         localAudio.playMeleeWeaponSwingLocal();

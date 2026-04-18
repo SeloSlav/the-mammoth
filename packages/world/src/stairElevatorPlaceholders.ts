@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { StairWellDef } from "@the-mammoth/schemas";
+import type { LandingKitDef, StairWellDef } from "@the-mammoth/schemas";
 import {
   clampStairDoorTangentAlongInnerWall,
   computeSwitchbackStairLayout,
@@ -24,6 +24,12 @@ import {
 } from "./wallWithDoorCutout.js";
 import { concreteMaterial } from "./floorPlaceholderMeshMaterials.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
+import {
+  createElevatorKatSignMaterial,
+  landingKatSignText,
+} from "./elevatorLandingKatSign.js";
+import { swingDoorOrientationForFace, type SwingDoorFace } from "./swingDoorCollision.js";
+import { populateSwingDoorLeaf } from "./swingDoorMesh.js";
 
 /** Elevator hoistway exterior: light brutalist brick-red concrete so shafts read as distinct tower cores. */
 const shaftWall = concreteMaterial(0xd5a19b);
@@ -42,6 +48,17 @@ const doorFrameMat = new THREE.MeshStandardMaterial({
   color: 0x4a4846,
   roughness: 0.42,
   metalness: 0.55,
+});
+const stairDoorGlassMat = new THREE.MeshPhysicalMaterial({
+  color: 0xd8e8f0,
+  roughness: 0.04,
+  metalness: 0,
+  transmission: 0.94,
+  thickness: 0.09,
+  ior: 1.45,
+  transparent: true,
+  opacity: 1,
+  depthWrite: false,
 });
 
 export const STAIR_WELL_EDITOR_PART_IDS = [
@@ -183,6 +200,8 @@ export const SHAFT_DOUBLE_DOOR_W = 1.86;
 
 /** Exported for mega-shaft corridor door band spacing (m). */
 export const SHAFT_DOUBLE_DOOR_H = 2.2;
+/** Slightly shorter stairwell entry opening to reserve clean headroom for the `N KAT` sign. */
+const STAIRWELL_DOOR_H = 1.86;
 /** Ground-level door cutout only reaches this high on mega stair shafts (m). */
 export const SHAFT_GROUND_DOOR_BAND_M = STOREY_SPACING_M - 0.38;
 
@@ -725,6 +744,13 @@ function addShaftShell(
       addNorthSouth("n", zN, thN, face === "n", yWallBottom, yWallTop, "shaft_wall_n");
       addNorthSouth("s", zS, thS, face === "s", yWallBottom, yWallTop, "shaft_wall_s");
     }
+    addStairwellSwingDoorMesh(group, sx, sz, {
+      face,
+      tangentOffsetAlongWall: doorTangent,
+      doorHalfW,
+      y0Local: yDoor0,
+      y1Local: yDoor1,
+    });
     return;
   }
 
@@ -736,6 +762,13 @@ function addShaftShell(
   addNorthSouth("n", zN, thN, false, ySplit, yWallTop, "shaft_wall_n_hi");
   addNorthSouth("s", zS, thS, face === "s", yWallBottom, ySplit, "shaft_wall_s_lo");
   addNorthSouth("s", zS, thS, false, ySplit, yWallTop, "shaft_wall_s_hi");
+  addStairwellSwingDoorMesh(group, sx, sz, {
+    face,
+    tangentOffsetAlongWall: doorTangent,
+    doorHalfW,
+    y0Local: yDoor0,
+    y1Local: yDoor1,
+  });
 }
 
 /**
@@ -854,6 +887,10 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   omitTreads?: boolean;
   /** Omit the highest landing in this segment. Used for the terminal top storey. */
   omitTopLanding?: boolean;
+  /** 1-based storey index for per-level stair signage. */
+  storyLevelIndex?: number;
+  /** Optional compact storey label (e.g. `PR`, `1`, `19`). */
+  storyShortLabel?: string;
 };
 
 export type StairWellGroundDoorContext = {
@@ -872,6 +909,106 @@ export type ResolvedStairWellGroundDoor = {
   heightM: number;
   centerYM: number;
 };
+
+function addStairwellSwingDoorMesh(
+  group: THREE.Group,
+  sx: number,
+  sz: number,
+  opening: {
+    face: CardinalFace;
+    tangentOffsetAlongWall: number;
+    doorHalfW: number;
+    y0Local: number;
+    y1Local: number;
+  },
+): void {
+  const wt = 0.11;
+  const hx = sx * 0.5;
+  const hz = sz * 0.5;
+  const openW = Math.max(0.4, opening.doorHalfW * 2);
+  const openH = Math.max(0.6, opening.y1Local - opening.y0Local);
+  const panelW = Math.max(0.36, openW - 0.02);
+  const panelH = Math.max(0.55, openH - 0.02);
+  const face = opening.face as SwingDoorFace;
+  const { baseYaw } = swingDoorOrientationForFace(face);
+  const hingeX =
+    face === "e"
+      ? hx - wt
+      : face === "w"
+        ? -hx + wt
+        : opening.tangentOffsetAlongWall + panelW * 0.5;
+  const hingeZ =
+    face === "n"
+      ? hz - wt
+      : face === "s"
+        ? -hz + wt
+        : opening.tangentOffsetAlongWall + panelW * 0.5;
+
+  const swing = new THREE.Group();
+  swing.name = `shaft_swing_door_${face}`;
+  swing.position.set(hingeX, opening.y0Local + panelH * 0.5, hingeZ);
+  swing.rotation.y = baseYaw;
+
+  const kit: LandingKitDef = {
+    id: "stair_swing_door_glass",
+    version: 1,
+    displayName: "Stairwell swing door",
+    glassOpening: {
+      widthM: Math.max(0.2, panelW - 0.24),
+      heightM: Math.max(0.25, panelH - 0.2),
+      centerYM: 0,
+    },
+  };
+  populateSwingDoorLeaf(swing, doorFrameMat, stairDoorGlassMat, kit, { panelW, panelH });
+  swing.traverse((obj) => {
+    obj.userData.mammothNoCollision = true;
+  });
+  group.add(swing);
+}
+
+function addStairwellKatSignMesh(
+  group: THREE.Group,
+  sx: number,
+  sz: number,
+  storyLevelIndex: number | undefined,
+  storyShortLabel: string | undefined,
+  opening: ResolvedStairWellGroundDoor,
+): void {
+  if (storyLevelIndex == null) return;
+  const label = landingKatSignText(storyLevelIndex, storyShortLabel);
+  if (!label) return;
+  const mat = createElevatorKatSignMaterial(label);
+  if (!mat) return;
+  const geo = new THREE.PlaneGeometry(1.34, 0.4);
+  const wt = 0.11;
+  const hx = sx * 0.5;
+  const hz = sz * 0.5;
+  const inset = 0.014;
+  const lookDepth = 2.5;
+  const y = opening.y1Local + 0.07 + 0.4 * 0.5;
+  const t = opening.tangentOffsetAlongWallM;
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "stair_sign_kat";
+  mesh.userData.mammothNoCollision = true;
+  if (opening.face === "e") {
+    const x = hx - wt - inset;
+    mesh.position.set(x, y, t);
+    mesh.lookAt(x - lookDepth, y, t);
+  } else if (opening.face === "w") {
+    const x = -hx + wt + inset;
+    mesh.position.set(x, y, t);
+    mesh.lookAt(x + lookDepth, y, t);
+  } else if (opening.face === "n") {
+    const z = hz - wt - inset;
+    mesh.position.set(t, y, z);
+    mesh.lookAt(t, y, z - lookDepth);
+  } else {
+    const z = -hz + wt + inset;
+    mesh.position.set(t, y, z);
+    mesh.lookAt(t, y, z + lookDepth);
+  }
+  group.add(mesh);
+}
 
 function tagGeneratedStairWellShellParts(
   root: THREE.Object3D,
@@ -1029,7 +1166,7 @@ export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): 
             shaftPlateXZ: args.shaftPlateXZ,
           }
         : undefined,
-    addOpeningEditProxy: true,
+    addOpeningEditProxy: false,
   });
   return root;
 }
@@ -1066,7 +1203,7 @@ export function rebuildStairWellPreviewRoot(
             shaftPlateXZ: args.shaftPlateXZ,
           }
         : undefined,
-    addOpeningEditProxy: true,
+    addOpeningEditProxy: false,
   });
 }
 
@@ -1388,7 +1525,7 @@ export function resolveStairWellGroundDoor(args: {
     Math.max(0.325, maxDoorHalfW),
   );
   const defaultDoorH = THREE.MathUtils.clamp(
-    SHAFT_DOUBLE_DOOR_H,
+    STAIRWELL_DOOR_H,
     0.65,
     Math.max(0.65, maxDoorH),
   );
@@ -1400,10 +1537,12 @@ export function resolveStairWellGroundDoor(args: {
     0.65,
     Math.max(0.65, maxDoorHalfW * 2),
   );
+  const maxAuthoredDoorH =
+    scope === "typical" ? Math.min(maxDoorH, STAIRWELL_DOOR_H) : maxDoorH;
   const heightM = THREE.MathUtils.clamp(
     authored?.heightM ?? defaultDoorH,
     0.65,
-    Math.max(0.65, maxDoorH),
+    Math.max(0.65, maxAuthoredDoorH),
   );
   const doorHalfW = widthM * 0.5;
   const doorH = heightM;
@@ -1540,7 +1679,7 @@ export function addStairWellPlaceholder(
           const widthM = opts.groundDoor?.doorWidthM ?? SHAFT_DOUBLE_DOOR_W;
           const y0Local = opts.groundDoor?.doorHoleY0Local ?? (-sy * 0.5 + 0.11);
           const y1Local =
-            opts.groundDoor?.doorHoleY1Local ?? (y0Local + Math.min(SHAFT_DOUBLE_DOOR_H, sy - 0.4));
+            opts.groundDoor?.doorHoleY1Local ?? (y0Local + Math.min(STAIRWELL_DOOR_H, sy - 0.4));
           return {
             groundDoor: opts.groundDoor,
             doorHalfW: widthM * 0.5,
@@ -1700,31 +1839,16 @@ export function addStairWellPlaceholder(
     group.add(mesh);
   }
 
-  if (opts?.addOpeningEditProxy && resolvedGroundDoor) {
-    addStairWellOpeningEditProxy(
-      group,
-      STAIR_WELL_OPENING_PROXY_ID,
-      authoringScope,
-      sx,
-      sy,
-      sz,
-      opts?.previewGroundDoorContext,
-      resolvedGroundDoor,
-    );
-    for (const supplementalDoor of supplementalDoors) {
-      addStairWellOpeningEditProxy(
-        group,
-        STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
-        authoringScope,
-        sx,
-        sy,
-        sz,
-        opts?.previewGroundDoorContext,
-        supplementalDoor,
-      );
-    }
-  }
-
   recordStairWellBaseTransforms(group);
   applyStairWellPartTransforms(group, opts?.def);
+  if (resolvedGroundDoor) {
+    addStairwellKatSignMesh(
+      group,
+      sx,
+      sz,
+      opts?.storyLevelIndex,
+      opts?.storyShortLabel,
+      resolvedGroundDoor,
+    );
+  }
 }

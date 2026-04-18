@@ -180,18 +180,17 @@ export class LocalFirstPersonPresenter {
     this.applyRigRestToRightHandRig();
   }
 
-  /**
-   * FP hand + rig framing when no weapon is equipped: reuse the shipped crowbar `fpViewmodel`
-   * authoring so the hand stays in the same camera volume as melee weapons (the generic
-   * shoulder defaults were only a legacy fallback and sit off-frustum vs gameplay pitch).
-   */
+/**
+ * Keep the hidden hand rig / grip anchor in a sane camera volume even when no weapon is equipped,
+ * so non-weapon attachments can still mount without drifting back to legacy shoulder defaults.
+ */
   private fpLayoutDefinition(): WeaponDefinition {
     return this.weaponDefinition ?? crowbarWeaponDefinition;
   }
 
   /**
-   * First-person melee swing keyframes: active weapon when present; otherwise crowbar’s track so
-   * unarmed punches use the same motion pipeline as equipped melee (rig additive on {@link rightHandRig}).
+   * First-person melee swing keyframes for the active weapon only. Unarmed state has no attack
+   * animation because empty hands cannot melee.
    */
   private resolveFpMeleeSwingTrack(): PrimitiveSwingKeyframe[] | undefined {
     if (this.swingAuthoringKeyframes && this.swingAuthoringKeyframes.length > 0) {
@@ -199,11 +198,6 @@ export class LocalFirstPersonPresenter {
     }
     const fromEquipped = this.weaponDefinition?.primitivePresentation?.firstPerson?.meleeSwing;
     if (fromEquipped && fromEquipped.length > 0) return fromEquipped;
-    if (!this.weaponDefinition) {
-      const fromUnarmedFallback =
-        crowbarWeaponDefinition.primitivePresentation?.firstPerson?.meleeSwing;
-      if (fromUnarmedFallback && fromUnarmedFallback.length > 0) return fromUnarmedFallback;
-    }
     return undefined;
   }
 
@@ -308,7 +302,7 @@ export class LocalFirstPersonPresenter {
    * equipped weapon under the grip anchor) back to visible, then optionally hide drawables only.
    */
   private applyFpHandMeshVisibility(): void {
-    const hide = this.weaponDefinition?.fpHidesHandMesh === true;
+    const hide = !this.weaponDefinition || this.weaponDefinition.fpHidesHandMesh === true;
     if (!this.handScene || !this.weaponGripAnchor) return;
     const grip = this.weaponGripAnchor;
     this.handScene.visible = true;

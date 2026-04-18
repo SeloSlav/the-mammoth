@@ -13,14 +13,10 @@ import {
 import {
   applyElevatorCabPartTransforms,
   glassOpeningFromProxyMesh,
-  isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
   rebuildLandingDoorPreviewSwing,
   applyStairWellPartTransforms,
-  rebuildStairWellPreviewOpening,
   rebuildStairWellPreviewRoot,
-  STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
-  stairWellEntryOpeningFromProxyMesh,
 } from "@the-mammoth/world";
 import { useEditorStore } from "../state/editorStore.js";
 import {
@@ -406,50 +402,6 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
     if (store.mode === "stairwell_preview") {
       let o: THREE.Object3D | null = attached;
       while (o) {
-        if (o.userData.editorStairOpeningProxy === true) {
-          const open = stairWellEntryOpeningFromProxyMesh(o, store.stairWellDef);
-          if (!open) return;
-          const openingId =
-            (typeof o.userData.editorStairOpeningId === "string"
-              ? o.userData.editorStairOpeningId
-              : null) ??
-            (typeof o.name === "string" ? o.name : null);
-          store.patchStairWellDef((d) => ({
-            ...d,
-            ...(openingId === STAIR_WELL_SECONDARY_OPENING_PROXY_ID
-              ? {
-                  secondaryEntryOpening: {
-                    ...d.secondaryEntryOpening,
-                    ...open,
-                  },
-                }
-              : store.stairWellAuthorScope === "ground"
-                ? {
-                    groundEntryOpening: {
-                      ...d.groundEntryOpening,
-                      ...open,
-                    },
-                  }
-                : {
-                    entryOpening: {
-                      ...d.entryOpening,
-                      ...open,
-                    },
-                  }),
-          }));
-          let previewRoot: THREE.Object3D | null = o;
-          while (previewRoot && previewRoot.name !== "editor_stair_well_preview") {
-            previewRoot = previewRoot.parent;
-          }
-          if (previewRoot instanceof THREE.Group) {
-            rebuildStairWellPreviewOpening(
-              previewRoot,
-              useEditorStore.getState().stairWellDef,
-              transformControls.dragging ? { preserveLiveProxyId: openingId } : undefined,
-            );
-          }
-          return;
-        }
         o = o.parent;
       }
       o = attached;
@@ -878,17 +830,6 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
       return target;
     }
     if (s.mode === "stairwell_preview") {
-      if (isStairWellOpeningProxyId(s.selectedId)) {
-        buildingRoot.traverse((o) => {
-          if (
-            o.userData.editorStairOpeningProxy === true &&
-            o.userData.editorStairOpeningId === s.selectedId
-          ) {
-            target = o;
-          }
-        });
-        return target;
-      }
       buildingRoot.traverse((o) => {
         const pid = o.userData.editorStairPartId as string | undefined;
         if (pid === s.selectedId && target === null) target = o;
@@ -1427,8 +1368,7 @@ export async function mountEditorScene(canvas: HTMLCanvasElement): Promise<() =>
         transformControls.attach(target);
         transformControls.setMode(s.transformMode);
         const opening =
-          (s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID) ||
-          (s.mode === "stairwell_preview" && isStairWellOpeningProxyId(s.selectedId));
+          s.mode === "landing_preview" && s.selectedId === LANDING_DOOR_OPENING_PROXY_ID;
         transformControls.setSize(opening ? 1.35 : 1);
         if (opening) {
           transformControls.setTranslationSnap(null);
