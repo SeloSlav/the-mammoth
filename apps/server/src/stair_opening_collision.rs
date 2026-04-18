@@ -392,6 +392,22 @@ fn resolve_secondary_door(
     })
 }
 
+fn normalize_stair_door_vertical_span(y_min: f32, y_max: f32, raw_y0: f32, raw_y1: f32) -> (f32, f32) {
+    let mut y0 = raw_y0.min(raw_y1).max(y_min);
+    let mut y1 = raw_y0.max(raw_y1).min(y_max);
+    if y1 < y0 + 0.52 {
+        let mid = (y0 + y1) * 0.5;
+        y0 = (mid - 0.28).max(y_min);
+        y1 = (mid + 0.28).min(y_max);
+    }
+    if y0 > y_min {
+        let shift_down = y0 - y_min;
+        y0 = y_min;
+        y1 = (y1 - shift_down).min(y_max).max(y0 + 0.52);
+    }
+    (y0, y1)
+}
+
 fn push_box(out: &mut Vec<Aabb>, min: [f32; 3], max: [f32; 3]) {
     if max[0] <= min[0] + 1e-4 || max[1] <= min[1] + 1e-4 || max[2] <= min[2] + 1e-4 {
         return;
@@ -592,19 +608,21 @@ fn push_shaft_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f32,
     let mut yz_holes = Vec::<HoleYZ>::new();
     let mut xy_holes = Vec::<HoleXY>::new();
     for door in doors.iter().filter(|door| door.face == face) {
+        let (door_y0, door_y1) =
+            normalize_stair_door_vertical_span(y_lo, y_hi - 0.04, world_y + door.y0, world_y + door.y1);
         if matches!(face, Face::E | Face::W) {
             yz_holes.push(HoleYZ {
                 z0: world_z + (door.tangent - door.width * 0.5).max(z_min - world_z),
                 z1: world_z + (door.tangent + door.width * 0.5).min(z_max - world_z),
-                y0: world_y + door.y0,
-                y1: world_y + door.y1,
+                y0: door_y0,
+                y1: door_y1,
             });
         } else {
             xy_holes.push(HoleXY {
                 x0: world_x + (door.tangent - door.width * 0.5).max(x_min - world_x),
                 x1: world_x + (door.tangent + door.width * 0.5).min(x_max - world_x),
-                y0: world_y + door.y0,
-                y1: world_y + door.y1,
+                y0: door_y0,
+                y1: door_y1,
             });
         }
     }
@@ -806,10 +824,7 @@ fn resolve_corridor_contacts(
         let yb = p.y0_local.max(p.y1_local);
         let y0w = p.spy + ya - cpy;
         let y1w = p.spy + yb - cpy;
-        let mut y0r = y0w.min(y1w);
-        let mut y1r = y0w.max(y1w);
-        y0r = y0r.max(y_lo);
-        y1r = y1r.min(y_hi - 0.008);
+        let (y0r, y1r) = normalize_stair_door_vertical_span(y_lo, y_hi - 0.008, y0w, y1w);
         if matches!(corridor_wall, Face::E | Face::W) {
             let z0r = (z0p.min(z1p) - cpz).max(z_min);
             let z1r = (z0p.max(z1p) - cpz).min(z_max);
@@ -1323,6 +1338,74 @@ mod tests {
         assert!(contact.z0r < -0.5 && contact.z1r > 0.5, "opening span should stay centered on the doorway");
         assert!(contact.y0r <= -1.33 + 1e-4, "opening should reach the corridor floor band without a sill lip");
         assert!(contact.y1r >= 1.32, "opening should preserve nearly full authored door height");
+    }
+
+    #[test]
+    fn raised_stair_thresholds_get_pulled_flush_in_shaft_rebuilds() {
+        let mut out = Vec::new();
+        let world_x = 6.16_f32;
+        let world_y = 4.816842_f32;
+        let world_z = 46.0_f32;
+        let sx = 8.35_f32;
+        let sy = STOREY_SPACING_M;
+        let sz = 13.95_f32;
+        push_shaft_wall_replacements(
+            &mut out,
+            world_x,
+            world_y,
+            world_z,
+            sx,
+            sy,
+            sz,
+            &[ResolvedDoor {
+                face: Face::W,
+                tangent: -5.1773515,
+                width: 2.46915,
+                y0: -1.2269473,
+                y1: 1.4409474,
+            }],
+            Face::W,
+        );
+
+        let wall_x = world_x - sx * 0.5 + WT * 0.5;
+        let floor_band_y = world_y - sy * 0.5 + WT + 0.06;
+        assert!(
+            !blocks(&out, wall_x, floor_band_y, world_z - 5.1773515),
+            "shaft rebuild should clear the doorway all the way down to the stair floor band",
+        );
+    }
+
+    #[test]
+    fn raised_stair_thresholds_get_pulled_flush_in_corridor_contacts() {
+        let corridor = PlacedObject {
+            prefab_id: "corridor_main".to_string(),
+            position: [15.8, 4.816842105263158, 50.0],
+            scale: Some([4.4, 3.05, 3.8]),
+            rotation: None,
+        };
+        let contacts = resolve_corridor_contacts(
+            &corridor,
+            4.4,
+            3.05,
+            3.8,
+            &[PlatePunch {
+                stair_face: Face::W,
+                tangent_local: 0.0,
+                door_half_w: 1.2,
+                y0_local: -1.16,
+                y1_local: 1.5,
+                spx: 20.0,
+                spz: 50.0,
+                spy: 4.816842105263158,
+                shx: 2.0,
+                shz: 2.0,
+            }],
+        );
+
+        assert_eq!(contacts.len(), 1, "raised stair punch should still produce one corridor opening");
+        let contact = contacts[0];
+        assert!(contact.y0r <= -1.415 + 1e-4, "corridor opening should be flush to the local floor band");
+        assert!(contact.y1r >= 1.24, "corridor opening should retain enough headroom after flush normalization");
     }
 
     #[test]

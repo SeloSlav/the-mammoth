@@ -203,6 +203,27 @@ type CorridorShaftDoorContact = {
   holeAlongZ: boolean;
 };
 
+function normalizeCorridorStairDoorVerticalSpan(
+  yMin: number,
+  yMax: number,
+  rawY0: number,
+  rawY1: number,
+): { y0: number; y1: number } {
+  let y0 = Math.max(yMin, Math.min(rawY0, rawY1));
+  let y1 = Math.min(yMax, Math.max(rawY0, rawY1));
+  if (y1 < y0 + 0.52) {
+    const mid = (y0 + y1) * 0.5;
+    y0 = Math.max(yMin, mid - 0.28);
+    y1 = Math.min(yMax, mid + 0.28);
+  }
+  if (y0 > yMin) {
+    const shiftDown = y0 - yMin;
+    y0 = yMin;
+    y1 = Math.max(y0 + 0.52, Math.min(yMax, y1 - shiftDown));
+  }
+  return { y0, y1 };
+}
+
 function resolveCorridorShaftDoorContacts(
   corridor: PlacedObject,
   sx: number,
@@ -289,11 +310,12 @@ function resolveCorridorShaftDoorContacts(
     /** Shaft door Y is interior-local; convert to corridor room-local Y (same as lobby holes). */
     const y0w = spy + ya - cpy;
     const y1w = spy + yb - cpy;
-    let y0r = Math.min(y0w, y1w);
-    let y1r = Math.max(y0w, y1w);
-    /** Clamp to interior wall band without introducing a raised sill lip at the threshold. */
-    y0r = Math.max(yLo, y0r);
-    y1r = Math.min(yHi - 0.008, y1r);
+    let { y0: y0r, y1: y1r } = normalizeCorridorStairDoorVerticalSpan(
+      yLo,
+      yHi - 0.008,
+      y0w,
+      y1w,
+    );
 
     if (cw === "e" || cw === "w") {
       const z0r = Math.max(zMin, Math.min(z0p, z1p) - cpz);

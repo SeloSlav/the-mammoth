@@ -274,6 +274,27 @@ export function stairShaftDoorTangentSpanShaftLocal(
   return { x0, x1 };
 }
 
+function normalizeStairDoorVerticalSpan(
+  yMin: number,
+  yMax: number,
+  rawY0: number,
+  rawY1: number,
+): { y0: number; y1: number } {
+  let y0 = Math.max(yMin, Math.min(rawY0, rawY1));
+  let y1 = Math.min(yMax, Math.max(rawY0, rawY1));
+  if (y1 < y0 + 0.52) {
+    const mid = (y0 + y1) * 0.5;
+    y0 = Math.max(yMin, mid - 0.28);
+    y1 = Math.min(yMax, mid + 0.28);
+  }
+  if (y0 > yMin) {
+    const shiftDown = y0 - yMin;
+    y0 = yMin;
+    y1 = Math.max(y0 + 0.52, Math.min(yMax, y1 - shiftDown));
+  }
+  return { y0, y1 };
+}
+
 function addShaftShell(
   group: THREE.Group,
   sx: number,
@@ -342,12 +363,13 @@ function addShaftShell(
     const b = Math.max(door.doorHoleY0Local, door.doorHoleY1Local);
     yDoor0 = Math.max(yWallBottom, a);
     yDoor1 = Math.min(yWallTop - 0.04, b);
-    if (yDoor1 < yDoor0 + 0.52) {
-      const mid = (yDoor0 + yDoor1) * 0.5;
-      yDoor0 = Math.max(yWallBottom, mid - 0.28);
-      yDoor1 = Math.min(yWallTop - 0.04, mid + 0.28);
-    }
   }
+  ({ y0: yDoor0, y1: yDoor1 } = normalizeStairDoorVerticalSpan(
+    yWallBottom,
+    yWallTop - 0.04,
+    yDoor0,
+    yDoor1,
+  ));
   /** Along-wall shift: +Z for E/W door walls, +X for N/S (matches stair placement). */
   const doorTangent = door?.tangentOffsetAlongWall ?? 0;
 
@@ -561,12 +583,13 @@ function addShaftShell(
       const b = Math.max(opening.doorHoleY0Local, opening.doorHoleY1Local);
       openingY0 = Math.max(yWallBottom, a);
       openingY1 = Math.min(yWallTop - 0.04, b);
-      if (openingY1 < openingY0 + 0.52) {
-        const mid = (openingY0 + openingY1) * 0.5;
-        openingY0 = Math.max(yWallBottom, mid - 0.28);
-        openingY1 = Math.min(yWallTop - 0.04, mid + 0.28);
-      }
     }
+    ({ y0: openingY0, y1: openingY1 } = normalizeStairDoorVerticalSpan(
+      yWallBottom,
+      yWallTop - 0.04,
+      openingY0,
+      openingY1,
+    ));
     if (openingY1 <= openingY0 + 0.45) return;
     const tangent = opening.tangentOffsetAlongWall ?? 0;
     if (openingFace === "e" || openingFace === "w") {

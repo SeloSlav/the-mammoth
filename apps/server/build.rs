@@ -25,12 +25,14 @@ fn main() {
         .current_dir(repo_root)
         .args([
             "exec",
+            "node",
+            "--import",
             "tsx",
             "scripts/gen-stair-runtime-overlay.ts",
             out_file.to_string_lossy().as_ref(),
         ])
         .status()
-        .expect("failed to spawn pnpm exec tsx scripts/gen-stair-runtime-overlay.ts");
+        .expect("failed to spawn pnpm exec node --import tsx scripts/gen-stair-runtime-overlay.ts");
     if !status.success() {
         panic!("stair runtime overlay generation failed with status {status}");
     }
