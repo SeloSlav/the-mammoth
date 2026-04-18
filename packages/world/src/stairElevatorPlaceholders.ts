@@ -927,27 +927,30 @@ function addStairwellSwingDoorMesh(
   const hz = sz * 0.5;
   const openW = Math.max(0.4, opening.doorHalfW * 2);
   const openH = Math.max(0.6, opening.y1Local - opening.y0Local);
-  const panelW = Math.max(0.36, openW - 0.02);
-  const panelH = Math.max(0.55, openH - 0.02);
+  // `populateSwingDoorLeaf` internally subtracts frame insets (0.1 W / 0.12 H), so compensate
+  // here to match the authored wall opening clear size.
+  const panelW = Math.max(0.36, openW + 0.1);
+  const panelH = Math.max(0.55, openH + 0.12);
   const face = opening.face as SwingDoorFace;
-  const { baseYaw } = swingDoorOrientationForFace(face);
+  const { baseYaw, swingSign } = swingDoorOrientationForFace(face);
   const hingeX =
     face === "e"
       ? hx - wt
       : face === "w"
         ? -hx + wt
-        : opening.tangentOffsetAlongWall + panelW * 0.5;
+        : opening.tangentOffsetAlongWall + opening.doorHalfW;
   const hingeZ =
     face === "n"
       ? hz - wt
       : face === "s"
         ? -hz + wt
-        : opening.tangentOffsetAlongWall + panelW * 0.5;
+        : opening.tangentOffsetAlongWall + opening.doorHalfW;
 
   const swing = new THREE.Group();
   swing.name = `shaft_swing_door_${face}`;
   swing.position.set(hingeX, opening.y0Local + panelH * 0.5, hingeZ);
-  swing.rotation.y = baseYaw;
+  // Static visual in "parked open" pose so the passage is usable without a reducer-backed state.
+  swing.rotation.y = baseYaw + swingSign * 1.45;
 
   const kit: LandingKitDef = {
     id: "stair_swing_door_glass",
