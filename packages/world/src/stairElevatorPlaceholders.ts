@@ -341,6 +341,8 @@ function addShaftShell(
   const bandCap = door
     ? Math.max(0.55, Math.min(door.bandHeightM, innerWallH))
     : innerWallH;
+  const doorOpeningYMax =
+    door && door.bandHeightM >= innerWallH - 0.02 ? yWallTop : yWallTop - 0.04;
   const splitShaft =
     Boolean(door && bandCap < innerWallH - 0.08) && !multiCorridorDoors;
   const ySplit = yWallBottom + bandCap;
@@ -362,11 +364,11 @@ function addShaftShell(
     const a = Math.min(door.doorHoleY0Local, door.doorHoleY1Local);
     const b = Math.max(door.doorHoleY0Local, door.doorHoleY1Local);
     yDoor0 = Math.max(yWallBottom, a);
-    yDoor1 = Math.min(yWallTop - 0.04, b);
+    yDoor1 = Math.min(doorOpeningYMax, b);
   }
   ({ y0: yDoor0, y1: yDoor1 } = normalizeStairDoorVerticalSpan(
     yWallBottom,
-    yWallTop - 0.04,
+    doorOpeningYMax,
     yDoor0,
     yDoor1,
   ));
@@ -570,6 +572,8 @@ function addShaftShell(
       vlenX * 0.5 - 0.06,
     );
     const openingBandCap = Math.max(0.55, Math.min(opening.bandHeightM, innerWallH));
+    const openingYMax =
+      opening.bandHeightM >= innerWallH - 0.02 ? yWallTop : yWallTop - 0.04;
     const openingDoorH = Math.min(SHAFT_DOUBLE_DOOR_H, openingBandCap - 0.06);
     let openingY0 = yWallBottom;
     let openingY1 = openingY0 + Math.max(0.55, openingDoorH);
@@ -582,11 +586,11 @@ function addShaftShell(
       const a = Math.min(opening.doorHoleY0Local, opening.doorHoleY1Local);
       const b = Math.max(opening.doorHoleY0Local, opening.doorHoleY1Local);
       openingY0 = Math.max(yWallBottom, a);
-      openingY1 = Math.min(yWallTop - 0.04, b);
+      openingY1 = Math.min(openingYMax, b);
     }
     ({ y0: openingY0, y1: openingY1 } = normalizeStairDoorVerticalSpan(
       yWallBottom,
-      yWallTop - 0.04,
+      openingYMax,
       openingY0,
       openingY1,
     ));
@@ -1548,9 +1552,73 @@ export function resolveStairWellSupplementalDoors(args: {
   authoringScope?: StairWellAuthoringScope;
   primaryDoor?: ResolvedStairWellGroundDoor | null;
 }): readonly ResolvedStairWellGroundDoor[] {
-  void args;
-  // Balcony-door rollout: keep exactly one stairwell corridor door per storey.
-  return [];
+  const { sx, sy, sz } = args;
+  const authored = args.def?.secondaryEntryOpening;
+  if (!authored) return [];
+
+  const primaryDoor =
+    args.primaryDoor ??
+    resolveStairWellGroundDoor({
+      sx,
+      sy,
+      sz,
+      context: args.context,
+      layout: args.layout,
+      def: args.def,
+      authoringScope: args.authoringScope,
+    });
+  if (!primaryDoor) return [];
+
+  const wt = 0.11;
+  const hy = sy * 0.5;
+  const innerWallH = Math.max(sy - 2 * wt, 0.08);
+  const yWallBottom = -hy + wt;
+  const maxDoorHalfW = Math.min(
+    Math.max(sx - 2 * wt, 0.05) * 0.5 - 0.06,
+    Math.max(sz - 2 * wt, 0.05) * 0.5 - 0.06,
+  );
+  const widthM = THREE.MathUtils.clamp(
+    authored.widthM ?? primaryDoor.widthM,
+    0.65,
+    Math.max(0.65, maxDoorHalfW * 2),
+  );
+  const face = (authored.face ?? "s") as CardinalFace;
+  const tangentOffsetAlongWallM = clampStairDoorTangentAlongInnerWall(
+    face,
+    authored.tangentOffsetAlongWallM ?? 0,
+    widthM * 0.5,
+    sx,
+    sz,
+    wt,
+  );
+  // Secondary stair openings connect stacked landings, so they must clear the full wall band.
+  const { y0, y1 } = normalizeStairDoorVerticalSpan(
+    yWallBottom,
+    yWallBottom + innerWallH,
+    yWallBottom,
+    yWallBottom + innerWallH,
+  );
+
+  return [
+    {
+      groundDoor: {
+        face,
+        bandHeightM: innerWallH,
+        tangentOffsetAlongWall: tangentOffsetAlongWallM,
+        doorWidthM: widthM,
+        doorHoleY0Local: y0,
+        doorHoleY1Local: y1,
+      },
+      doorHalfW: widthM * 0.5,
+      y0Local: y0,
+      y1Local: y1,
+      face,
+      tangentOffsetAlongWallM,
+      widthM,
+      heightM: y1 - y0,
+      centerYM: (y0 + y1) * 0.5,
+    },
+  ];
 }
 
 export function addStairWellPlaceholder(

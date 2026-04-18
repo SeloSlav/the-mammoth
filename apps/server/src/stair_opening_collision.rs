@@ -356,13 +356,7 @@ fn resolve_secondary_door(
     let hy = sy * 0.5;
     let inner_wall_h = (sy - 2.0 * WT).max(0.08);
     let y_wall_bottom = -hy + WT;
-    let band_height = SHAFT_GROUND_DOOR_BAND_M.min(inner_wall_h).max(0.55);
-    let max_door_h = band_height - SHAFT_DOOR_SILL - 0.06;
     let width = authored.width_m.unwrap_or(base.width).max(0.65);
-    let height = authored
-        .height_m
-        .unwrap_or(base.y1 - base.y0)
-        .clamp(0.65, max_door_h.max(0.65));
     let face = parse_face(authored.face.clone()).unwrap_or(Face::S);
     let tangent = clamp_tangent(
         face,
@@ -371,18 +365,7 @@ fn resolve_secondary_door(
         sx,
         sz,
     );
-    let center_min = y_wall_bottom + SHAFT_DOOR_SILL + height * 0.5;
-    let center_max = y_wall_bottom + band_height - 0.04 - height * 0.5;
-    let authored_center = authored
-        .center_y_m
-        .unwrap_or((base.y0 + base.y1) * 0.5)
-        .clamp(center_min.min(center_max), center_min.max(center_max));
-    let mut y0 = authored_center - height * 0.5;
-    let mut y1 = authored_center + height * 0.5;
-    if y0 > y_wall_bottom {
-        y1 -= y0 - y_wall_bottom;
-        y0 = y_wall_bottom;
-    }
+    let (y0, y1) = normalize_stair_door_vertical_span(y_wall_bottom, y_wall_bottom + inner_wall_h, y_wall_bottom, y_wall_bottom + inner_wall_h);
     Some(ResolvedDoor {
         face,
         tangent,
@@ -1047,11 +1030,7 @@ fn build_overlay() -> StairOpeningOverlay {
         for i in 0..spec.storey_count {
             let scope = if i == 0 { "ground" } else { "typical" };
             let primary = resolve_primary_door(opening_for_scope(&stairwell, scope), spec.entry_contexts[i], spec.sx, spec.sy_plate, spec.sz);
-            let secondary = if scope == "typical" {
-                resolve_secondary_door(&stairwell, primary, spec.sx, spec.sy_plate, spec.sz)
-            } else {
-                None
-            };
+            let secondary = resolve_secondary_door(&stairwell, primary, spec.sx, spec.sy_plate, spec.sz);
             let mut faces = Vec::<Face>::new();
             let mut doors = Vec::<ResolvedDoor>::new();
             if let Some(primary) = primary {
@@ -1124,21 +1103,19 @@ fn build_overlay() -> StairOpeningOverlay {
                     shx: scale[0] * 0.5,
                     shz: scale[2] * 0.5,
                 });
-                if scope == "typical" {
-                    if let Some(secondary) = resolve_secondary_door(&stairwell, Some(primary), scale[0], scale[1], scale[2]) {
-                        punches.push(PlatePunch {
-                            stair_face: secondary.face,
-                            tangent_local: secondary.tangent,
-                            door_half_w: secondary.width * 0.5,
-                            y0_local: secondary.y0,
-                            y1_local: secondary.y1,
-                            spx: obj.position[0],
-                            spz: obj.position[2],
-                            spy: obj.position[1],
-                            shx: scale[0] * 0.5,
-                            shz: scale[2] * 0.5,
-                        });
-                    }
+                if let Some(secondary) = resolve_secondary_door(&stairwell, Some(primary), scale[0], scale[1], scale[2]) {
+                    punches.push(PlatePunch {
+                        stair_face: secondary.face,
+                        tangent_local: secondary.tangent,
+                        door_half_w: secondary.width * 0.5,
+                        y0_local: secondary.y0,
+                        y1_local: secondary.y1,
+                        spx: obj.position[0],
+                        spz: obj.position[2],
+                        spy: obj.position[1],
+                        shx: scale[0] * 0.5,
+                        shz: scale[2] * 0.5,
+                    });
                 }
             }
         }

@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
+  buildFpBlockerAABBsForBuilding,
   buildFloorMeshes,
   collectCollisionAabbsFromObject3D,
+  parseBuildingDoc,
+  parseFloorDoc,
   parseStairWellDef,
 } from "./index.js";
 import { addStairWellPlaceholder } from "./stairElevatorPlaceholders.js";
@@ -34,6 +37,7 @@ describe("stair door threshold collision", () => {
     addStairWellPlaceholder(root, sx, sy, sz, {
       groundDoor: {
         face: "s",
+        bandHeightM: sy - 0.38,
         tangentOffsetAlongWall: 0,
         doorWidthM: 1.8,
         doorHoleY0Local: -sy * 0.5 + 0.282,
@@ -90,5 +94,72 @@ describe("stair door threshold collision", () => {
 
     expect(blocks(aabbs, 0, 0.25, wallZ)).toBe(false);
     expect(blocks(aabbs, 1.55, 0.25, wallZ)).toBe(true);
+  });
+
+  it("cuts the stacked ground stair segment under the upper south doorway", () => {
+    const sy = 60 / 19;
+    const building = parseBuildingDoc({
+      id: "b",
+      version: 1,
+      floorRefs: [
+        { levelIndex: 1, floorDocId: "ground" },
+        { levelIndex: 2, floorDocId: "typical" },
+      ],
+    });
+    const docs = {
+      ground: parseFloorDoc({
+        id: "ground",
+        version: 1,
+        objects: [
+          {
+            id: "stair_hub_e",
+            prefabId: "stair_well_a",
+            position: [6.16, 1.6589473684210527, 0],
+            scale: [8.35, sy, 13.95],
+          },
+        ],
+      }),
+      typical: parseFloorDoc({
+        id: "typical",
+        version: 1,
+        objects: [
+          {
+            id: "stair_well_01_e",
+            prefabId: "stair_well_a",
+            position: [6.16, 1.6589473684210527, 0],
+            scale: [8.35, sy, 13.95],
+          },
+        ],
+      }),
+    } as const;
+    const aabbs = buildFpBlockerAABBsForBuilding(building, (floorDocId) => docs[floorDocId], {
+      stairWellDef: parseStairWellDef({
+        id: "stairs",
+        version: 1,
+        entryOpening: {
+          face: "w",
+          tangentOffsetAlongWallM: -5.177351451279119,
+          widthM: 2.469149911172827,
+          heightM: 2.6678947368421055,
+          centerYM: -0.06499999999999995,
+        },
+        groundEntryOpening: {
+          face: "w",
+          tangentOffsetAlongWallM: -1.894676484676825,
+          widthM: 1.86,
+          heightM: 2.2,
+          centerYM: -0.3189473684210524,
+        },
+        secondaryEntryOpening: {
+          face: "s",
+          tangentOffsetAlongWallM: -0.10286764149329519,
+          widthM: 2.469149911172827,
+          heightM: 2.6678947368421055,
+          centerYM: -0.06499999999999995,
+        },
+      }),
+    });
+
+    expect(blocks(aabbs, 6.1, sy + 0.18, -6.92)).toBe(false);
   });
 });
