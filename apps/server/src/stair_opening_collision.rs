@@ -790,15 +790,17 @@ fn resolve_corridor_contacts(
         if overlap < 0.14 {
             continue;
         }
-        let mut y0r = (p.spy + p.y0_local - cpy).min(p.spy + p.y1_local - cpy);
-        let mut y1r = (p.spy + p.y0_local - cpy).max(p.spy + p.y1_local - cpy);
-        y0r = y0r.max(y_lo + 0.008);
+        let ya = p.y0_local.min(p.y1_local);
+        let yb = p.y0_local.max(p.y1_local);
+        let y0w = p.spy + ya - cpy;
+        let y1w = p.spy + yb - cpy;
+        let mut y0r = y0w.min(y1w);
+        let mut y1r = y0w.max(y1w);
+        y0r = y0r.max(y_lo);
         y1r = y1r.min(y_hi - 0.008);
         if matches!(corridor_wall, Face::E | Face::W) {
-            let z0r = z0p.min(z1p).max(cpx + z_min - cpx) - cpz;
-            let z1r = z0p.max(z1p).min(cpz + chz) - cpz;
-            let z0r = z0r.max(z_min);
-            let z1r = z1r.min(z_max);
+            let z0r = (z0p.min(z1p) - cpz).max(z_min);
+            let z1r = (z0p.max(z1p) - cpz).min(z_max);
             if z1r < z0r + 0.1 || y1r < y0r + 0.45 {
                 continue;
             }
@@ -813,10 +815,8 @@ fn resolve_corridor_contacts(
                 hole_along_z: true,
             });
         } else {
-            let x0r = x0p.min(x1p).max(cpx + x_min - cpx) - cpx;
-            let x1r = x0p.max(x1p).min(cpx + chx) - cpx;
-            let x0r = x0r.max(x_min);
-            let x1r = x1r.min(x_max);
+            let x0r = (x0p.min(x1p) - cpx).max(x_min);
+            let x1r = (x0p.max(x1p) - cpx).min(x_max);
             if x1r < x0r + 0.1 || y1r < y0r + 0.45 {
                 continue;
             }
@@ -1275,6 +1275,42 @@ mod tests {
             blocks(&out, 20.0 + 1.8, 4.816842105263158, wall_z),
             "corridor wall outside the opening should stay blocked",
         );
+    }
+
+    #[test]
+    fn off_origin_west_stair_contact_resolves_corridor_opening_span() {
+        let corridor = PlacedObject {
+            prefab_id: "corridor_main".to_string(),
+            position: [15.8, 4.816842105263158, 50.0],
+            scale: Some([4.4, 3.05, 3.8]),
+            rotation: None,
+        };
+        let contacts = resolve_corridor_contacts(
+            &corridor,
+            4.4,
+            3.05,
+            3.8,
+            &[PlatePunch {
+                stair_face: Face::W,
+                tangent_local: 0.0,
+                door_half_w: 1.2,
+                y0_local: -1.33,
+                y1_local: 1.33,
+                spx: 20.0,
+                spz: 50.0,
+                spy: 4.816842105263158,
+                shx: 2.0,
+                shz: 2.0,
+            }],
+        );
+
+        assert_eq!(contacts.len(), 1, "west stair contact should produce one corridor wall opening");
+        let contact = contacts[0];
+        assert!(matches!(contact.corridor_wall, Face::E));
+        assert!(contact.hole_along_z, "west stair doorway should cut along corridor Z span");
+        assert!(contact.z0r < -0.5 && contact.z1r > 0.5, "opening span should stay centered on the doorway");
+        assert!(contact.y0r <= -1.33 + 1e-4, "opening should reach the corridor floor band without a sill lip");
+        assert!(contact.y1r >= 1.32, "opening should preserve nearly full authored door height");
     }
 
     #[test]
