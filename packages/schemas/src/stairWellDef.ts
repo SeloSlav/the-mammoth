@@ -78,7 +78,7 @@ export const StairWellDefSchema = z.object({
    * Optional second typical-storey corridor opening (used by the south-facing stairwell door).
    * Falls back to a derived procedural default when omitted.
    */
-  secondaryEntryOpening: StairWellEntryOpeningSchema,
+  secondaryEntryOpening: StairWellEntryOpeningSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

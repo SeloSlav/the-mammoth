@@ -42,6 +42,24 @@ const PANEL = {
   panelHeightM: 2.06,
 } as const;
 
+/**
+ * Shared prefix for the manual corridor→stairwell door templates. Exposed so the client renderer
+ * can identify which apartment-door slots should render with a glass lite (the rest use the
+ * apartment kit's default `solid: true` opaque leaf). Keeps the "what counts as glazed?" decision
+ * in one place alongside the template definitions themselves.
+ */
+export const MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX =
+  "manual_e_corridor_near_stair_";
+
+/**
+ * True when `templateId` names one of the corridor→stairwell access doors authored by
+ * {@link mamuticaTypicalCorridorGapDoorTemplates}. The apartment kit is authored opaque; only
+ * these stair-adjacent doors get the glass lite treatment at render time.
+ */
+export function isGlazedApartmentDoorTemplate(templateId: string): boolean {
+  return templateId.startsWith(MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX);
+}
+
 /** Stair-adjacent side only (east interior wall of `corridor_main`); no doors on the far west wall. */
 function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
   const out: ApartmentDoorTemplate[] = [];
@@ -52,8 +70,8 @@ function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
     const hingeZ = zOpenCenter + PANEL.panelWidthM * 0.5;
     const n = String(i).padStart(2, "0");
     out.push({
-      templateId: `manual_e_corridor_near_stair_${n}|w`,
-      unitId: `manual_e_corridor_near_stair_${n}`,
+      templateId: `${MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX}${n}|w`,
+      unitId: `${MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX}${n}`,
       face: "w",
       hingeX: 1.925,
       hingeZ,

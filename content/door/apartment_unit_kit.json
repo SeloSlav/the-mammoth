@@ -21,7 +21,7 @@
     "heightM": 1.72,
     "centerYM": 0
   },
-  "solid": false,
+  "solid": true,
   "panelWidthM": 1.26,
   "panelHeightM": 2.06
 }

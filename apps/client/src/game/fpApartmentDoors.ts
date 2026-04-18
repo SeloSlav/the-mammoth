@@ -39,6 +39,7 @@ import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   FACE_CODE,
   FACE_FROM_CODE,
+  isGlazedApartmentDoorTemplate,
   SWING_DOOR_DEFAULT_MAX_RAD,
   type SwingDoorDimensions,
   type SwingDoorFace,
@@ -146,6 +147,30 @@ export type MountFpApartmentDoorsResult = {
   debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
 };
 
+/**
+ * Apartment doors come in two visual flavors driven by {@link isGlazedApartmentDoorTemplate}:
+ *
+ * - `solid` — opaque leaf from the apartment kit (`apartment_unit_kit.json` with `solid: true`).
+ *   Used for every per-unit door; one merged `InstancedMesh` per level.
+ * - `glazed` — frame + glass lite from the same kit with `solid` overridden to `false`. Used only
+ *   for the corridor→stairwell access doors (`manual_e_corridor_near_stair_*`). Adds a second
+ *   `InstancedMesh` per level for the glass pass.
+ *
+ * Slots record which group they live in so `applyMatrix` writes to the right instance buffers;
+ * the rest of the pipeline (collision, interact, buckets) treats both identically.
+ */
+type InstanceGroupKind = "solid" | "glazed";
+
+type InstanceGroup = {
+  kind: InstanceGroupKind;
+  /** Frame mesh — merged opaque leaf for `solid`, frame-only for `glazed`. */
+  mesh: THREE.InstancedMesh;
+  /** Glass lite mesh; only populated when `kind === "glazed"`. */
+  glassMesh: THREE.InstancedMesh | undefined;
+  /** Flipped to true whenever any instance matrix was rewritten this frame. */
+  dirty: boolean;
+};
+
 /** One pre-allocated door slot. World coordinates are stable across the session. */
 type DoorSlot = {
   rowKey: string;
@@ -165,9 +190,9 @@ type DoorSlot = {
   localX: number;
   localCenterY: number;
   localZ: number;
-  /** Index into {@link LevelMesh.mesh.instanceMatrix}. */
+  /** Index into {@link InstanceGroup.mesh.instanceMatrix}. */
   instanceIndex: number;
-  levelMesh: LevelMesh;
+  group: InstanceGroup;
   /** Server-mirrored state — initially closed, updated on subscription events. */
   desiredOpen: number;
   swingOpen01: number;
@@ -181,12 +206,9 @@ type DoorSlot = {
 
 type LevelMesh = {
   level: number;
-  mesh: THREE.InstancedMesh;
-  /** Present when the kit authors a glass lite (second material / draw). */
-  glassMesh: THREE.InstancedMesh | undefined;
-  slots: DoorSlot[];
-  /** Flipped to true whenever any instance matrix was rewritten this frame. */
-  dirty: boolean;
+  /** Up to two groups per level — `solid` for per-unit doors, `glazed` for the corridor→stairwell
+   *  access doors. Empty subsets are simply absent (no zero-length `InstancedMesh` allocations). */
+  groups: InstanceGroup[];
 };
 
 type Bucket = DoorSlot[];
@@ -295,10 +317,30 @@ export function mountFpApartmentDoors(
   const floorSpacing = DEFAULT_BUILDING_FLOOR_SPACING_M;
 
   const { frameMat, glassMat } = createSwingDoorMaterials(APARTMENT_KIT);
-  const { frame: frameLeafGeom, glass: glassLeafGeom } = buildApartmentSwingLeafGeometries(
-    APARTMENT_DOOR_DIMS,
-    APARTMENT_KIT,
-  );
+
+  // Build both leaf variants up-front. The apartment kit authors `solid: true` as the default
+  // (opaque per-unit doors); `solid: false` is only used for the corridor→stairwell access doors.
+  // We override the kit-level flag locally rather than forking the JSON so the two flavors share
+  // one material palette, one glass-opening definition, and one kit file.
+  const solidKit: LandingKitDef | undefined = APARTMENT_KIT
+    ? { ...APARTMENT_KIT, solid: true }
+    : undefined;
+  const glazedKit: LandingKitDef | undefined = APARTMENT_KIT
+    ? { ...APARTMENT_KIT, solid: false }
+    : undefined;
+  const solidGeoms = buildApartmentSwingLeafGeometries(APARTMENT_DOOR_DIMS, solidKit);
+  const glazedGeoms = buildApartmentSwingLeafGeometries(APARTMENT_DOOR_DIMS, glazedKit);
+  const solidFrameGeom = solidGeoms.frame;
+  const glazedFrameGeom = glazedGeoms.frame;
+  const glazedGlassGeom = glazedGeoms.glass;
+  if (!glazedGlassGeom) {
+    // Defensive: `buildApartmentSwingLeafGeometries` always returns a glass geometry when `solid`
+    // is false. Surface a clear error if the invariant ever changes so we don't silently drop the
+    // glass pass.
+    throw new Error(
+      "[fpApartmentDoors] glazed leaf built without glass geometry — check apartment kit",
+    );
+  }
 
   const templatesByDocId = new Map<
     string,
@@ -319,29 +361,31 @@ export function mountFpApartmentDoors(
     // corridor traffic and matches real apartment-door conventions.
     const yaw = slot.baseYaw + slot.effectiveSwingSign * open01 * APARTMENT_DOOR_MAX_RAD;
     composeHingeMatrix(scratchMatrix, slot.localX, slot.localCenterY, slot.localZ, yaw);
-    slot.levelMesh.mesh.setMatrixAt(slot.instanceIndex, scratchMatrix);
-    slot.levelMesh.glassMesh?.setMatrixAt(slot.instanceIndex, scratchMatrix);
-    slot.levelMesh.dirty = true;
+    slot.group.mesh.setMatrixAt(slot.instanceIndex, scratchMatrix);
+    slot.group.glassMesh?.setMatrixAt(slot.instanceIndex, scratchMatrix);
+    slot.group.dirty = true;
     slot.lastApplied = open01;
   };
 
-  for (const ref of opts.building.floorRefs) {
-    const templates = templatesByDocId.get(ref.floorDocId);
-    if (!templates || templates.length === 0) continue;
-
-    const mesh = new THREE.InstancedMesh(frameLeafGeom, frameMat, templates.length);
-    mesh.name = `apartment_doors:L${ref.levelIndex}`;
-    mesh.userData.mammothPlateLevelIndex = ref.levelIndex;
+  const createInstanceGroup = (
+    kind: InstanceGroupKind,
+    levelIndex: number,
+    count: number,
+  ): InstanceGroup => {
+    const frameGeom = kind === "solid" ? solidFrameGeom : glazedFrameGeom;
+    const mesh = new THREE.InstancedMesh(frameGeom, frameMat, count);
+    mesh.name = `apartment_doors_${kind}:L${levelIndex}`;
+    mesh.userData.mammothPlateLevelIndex = levelIndex;
     mesh.frustumCulled = false; // per-level group visibility drives culling, not frustum tests.
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     opts.buildingRoot.add(mesh);
 
     let glassMesh: THREE.InstancedMesh | undefined;
-    if (glassLeafGeom) {
-      glassMesh = new THREE.InstancedMesh(glassLeafGeom, glassMat, templates.length);
-      glassMesh.name = `apartment_doors_glass:L${ref.levelIndex}`;
-      glassMesh.userData.mammothPlateLevelIndex = ref.levelIndex;
+    if (kind === "glazed") {
+      glassMesh = new THREE.InstancedMesh(glazedGlassGeom, glassMat, count);
+      glassMesh.name = `apartment_doors_glass:L${levelIndex}`;
+      glassMesh.userData.mammothPlateLevelIndex = levelIndex;
       glassMesh.frustumCulled = false;
       glassMesh.castShadow = false;
       glassMesh.receiveShadow = false;
@@ -349,19 +393,46 @@ export function mountFpApartmentDoors(
       opts.buildingRoot.add(glassMesh);
     }
 
+    return { kind, mesh, glassMesh, dirty: true };
+  };
+
+  for (const ref of opts.building.floorRefs) {
+    const templates = templatesByDocId.get(ref.floorDocId);
+    if (!templates || templates.length === 0) continue;
+
+    // Partition the floor's templates into the two visual flavors without allocating new arrays
+    // if the floor is entirely one kind (the common case).
+    let solidCount = 0;
+    let glazedCount = 0;
+    for (const t of templates) {
+      if (isGlazedApartmentDoorTemplate(t.templateId)) glazedCount += 1;
+      else solidCount += 1;
+    }
+
+    const solidGroup =
+      solidCount > 0 ? createInstanceGroup("solid", ref.levelIndex, solidCount) : undefined;
+    const glazedGroup =
+      glazedCount > 0 ? createInstanceGroup("glazed", ref.levelIndex, glazedCount) : undefined;
+
     const levelMesh: LevelMesh = {
       level: ref.levelIndex,
-      mesh,
-      glassMesh,
-      slots: [],
-      dirty: true,
+      groups: [
+        ...(solidGroup ? [solidGroup] : []),
+        ...(glazedGroup ? [glazedGroup] : []),
+      ],
     };
     levelMeshes.push(levelMesh);
 
     const plateWorldOriginY = oy + (ref.levelIndex - 1) * floorSpacing;
+    let nextSolidIdx = 0;
+    let nextGlazedIdx = 0;
 
-    for (let i = 0; i < templates.length; i++) {
-      const t = templates[i]!;
+    for (const t of templates) {
+      const glazed = isGlazedApartmentDoorTemplate(t.templateId);
+      const group = glazed ? glazedGroup : solidGroup;
+      if (!group) continue; // unreachable: counts above ensure the matching group exists.
+      const instanceIndex = glazed ? nextGlazedIdx++ : nextSolidIdx++;
+
       const { baseYaw, swingSign } = swingDoorOrientationForFace(t.face as SwingDoorFace);
       const effectiveSwingSign: 1 | -1 = APARTMENT_DOOR_SWING_INWARD
         ? ((-swingSign) as 1 | -1)
@@ -387,8 +458,8 @@ export function mountFpApartmentDoors(
         localX: hingeX - ox,
         localCenterY: feetY - oy + panelHeightM * 0.5,
         localZ: hingeZ - oz,
-        instanceIndex: i,
-        levelMesh,
+        instanceIndex,
+        group,
         desiredOpen: 0,
         swingOpen01: 0,
         interp: new FpElevatorCabInterpScalar(EXTERIOR_DOOR_VIS_INTERP_SEC),
@@ -399,13 +470,15 @@ export function mountFpApartmentDoors(
       slot.interp.setTarget(0, performance.now());
       applyMatrix(slot, 0);
 
-      levelMesh.slots.push(slot);
       slotsByKey.set(rowKey, slot);
       allSlots.push(slot);
     }
 
-    mesh.instanceMatrix.needsUpdate = true;
-    levelMesh.dirty = false;
+    for (const g of levelMesh.groups) {
+      g.mesh.instanceMatrix.needsUpdate = true;
+      if (g.glassMesh) g.glassMesh.instanceMatrix.needsUpdate = true;
+      g.dirty = false;
+    }
   }
 
   const bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
@@ -464,10 +537,12 @@ export function mountFpApartmentDoors(
       }
     }
     for (const lm of levelMeshes) {
-      if (!lm.dirty) continue;
-      lm.mesh.instanceMatrix.needsUpdate = true;
-      if (lm.glassMesh) lm.glassMesh.instanceMatrix.needsUpdate = true;
-      lm.dirty = false;
+      for (const g of lm.groups) {
+        if (!g.dirty) continue;
+        g.mesh.instanceMatrix.needsUpdate = true;
+        if (g.glassMesh) g.glassMesh.instanceMatrix.needsUpdate = true;
+        g.dirty = false;
+      }
     }
   };
 
@@ -637,16 +712,19 @@ export function mountFpApartmentDoors(
       /* removeOn* may be absent on older bindings; falling through is safe */
     }
     for (const lm of levelMeshes) {
-      lm.mesh.removeFromParent();
-      lm.mesh.dispose();
-      lm.glassMesh?.removeFromParent();
-      lm.glassMesh?.dispose();
+      for (const g of lm.groups) {
+        g.mesh.removeFromParent();
+        g.mesh.dispose();
+        g.glassMesh?.removeFromParent();
+        g.glassMesh?.dispose();
+      }
     }
     levelMeshes.length = 0;
     slotsByKey.clear();
     allSlots.length = 0;
-    frameLeafGeom.dispose();
-    glassLeafGeom?.dispose();
+    solidFrameGeom.dispose();
+    glazedFrameGeom.dispose();
+    glazedGlassGeom.dispose();
     frameMat.dispose();
     glassMat.dispose();
   };

@@ -2,6 +2,40 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
+fn locate_node_executable() -> PathBuf {
+    for key in ["MAMMOTH_NODE_EXE", "NODE_EXE", "npm_node_execpath"] {
+        if let Some(value) = env::var_os(key) {
+            let candidate = PathBuf::from(value);
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+
+    if cfg!(windows) {
+        let mut candidates = Vec::new();
+        if let Some(program_files) = env::var_os("ProgramFiles") {
+            candidates.push(PathBuf::from(&program_files).join("nodejs").join("node.exe"));
+        }
+        if let Some(program_files_x86) = env::var_os("ProgramFiles(x86)") {
+            candidates.push(PathBuf::from(&program_files_x86).join("nodejs").join("node.exe"));
+        }
+        if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
+            candidates.push(
+                PathBuf::from(&local_app_data)
+                    .join("Programs")
+                    .join("nodejs")
+                    .join("node.exe"),
+            );
+        }
+        if let Some(candidate) = candidates.into_iter().find(|path| path.is_file()) {
+            return candidate;
+        }
+    }
+
+    PathBuf::from("node")
+}
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
@@ -20,19 +54,17 @@ fn main() {
     println!("cargo:rerun-if-changed={}", repo_root.join("content/elevator/stairwell.json").display());
     println!("cargo:rerun-if-changed={}", repo_root.join("content/building/floors").display());
 
-    let pnpm = if cfg!(windows) { "pnpm.cmd" } else { "pnpm" };
-    let status = Command::new(pnpm)
+    let node = locate_node_executable();
+    let status = Command::new(&node)
         .current_dir(repo_root)
         .args([
-            "exec",
-            "node",
             "--import",
             "tsx",
             "scripts/gen-stair-runtime-overlay.ts",
             out_file.to_string_lossy().as_ref(),
         ])
         .status()
-        .expect("failed to spawn pnpm exec node --import tsx scripts/gen-stair-runtime-overlay.ts");
+        .unwrap_or_else(|err| panic!("failed to spawn {} --import tsx scripts/gen-stair-runtime-overlay.ts: {err}", node.display()));
     if !status.success() {
         panic!("stair runtime overlay generation failed with status {status}");
     }
