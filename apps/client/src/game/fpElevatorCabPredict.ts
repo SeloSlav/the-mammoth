@@ -51,3 +51,38 @@ export function predictMovingCabFeetWorldYVelocityMps(opts: {
   const dsDu = 6 * u * (1 - u);
   return dy * dsDu * (1 / need);
 }
+
+/**
+ * Advance the live client-side move parameter for a moving cab.
+ *
+ * Unlike a plain low-pass toward the newest replica-derived target, this keeps the local `u`
+ * monotone within a move leg: the cab should never move backward because clock-offset or packet
+ * jitter made the target dip for one frame.
+ */
+export function advanceSmoothedMovingCabU(opts: {
+  prevSmoothedU: number | undefined;
+  authoritativeMoveU: number;
+  targetU: number;
+  dtSec: number;
+  moveDurationSec: number;
+  correctionPerS?: number;
+  correctionDeadzoneSec?: number;
+}): number {
+  const correctionPerS = opts.correctionPerS ?? 6;
+  const correctionDeadzoneSec = opts.correctionDeadzoneSec ?? 0.012;
+  const moveDurationSec = Math.max(1e-4, opts.moveDurationSec);
+  const targetU = Math.min(1, Math.max(opts.authoritativeMoveU, opts.targetU));
+  if (!(opts.dtSec > 0) || !Number.isFinite(opts.dtSec)) {
+    return targetU;
+  }
+  const prev = opts.prevSmoothedU ?? targetU;
+  const predicted = Math.min(1, Math.max(opts.authoritativeMoveU, prev + opts.dtSec / moveDurationSec));
+  const deadzoneU = correctionDeadzoneSec / moveDurationSec;
+  const errorU = targetU - predicted;
+  const blend = 1 - Math.exp(-correctionPerS * opts.dtSec);
+  const corrected =
+    Math.abs(errorU) <= deadzoneU
+      ? predicted
+      : predicted + (errorU - Math.sign(errorU) * deadzoneU) * blend;
+  return Math.min(1, Math.max(prev, opts.authoritativeMoveU, corrected));
+}

@@ -339,18 +339,24 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const serverClock = createFpElevatorServerClock();
   /** Pre-allocated map reused each tick to pass swing values to per-shaft visuals — no allocation per shaft per frame. */
   const _swingByLevel = new Map<number, number>();
-  /** Exponential blend rate toward replica target move-u (live frames only). */
-  const CAB_MOVE_U_SMOOTH_PER_S = 34;
   /**
-   * Low-pass on extrapolated elapsed used only for move-u targeting.  `estimatedServerEpochMs`
-   * shifts when new min-offset observations arrive (~every replica), which makes raw elapsed
-   * oscillate at ~20 Hz and hitch the cab even when {@link ElevatorCar.moveU} is unchanged.
+   * Live MOVING cab: integrate+clamp `u` in {@link cabIntegrateUByKey}, then EMA into
+   * {@link cabSmoothedUByKey} for **display** (integration must not feed off smoothed values).
+   * Ceiling chain: elapsed low-pass → soft-ceiling EMA → hard raw cap.
    */
-  const ELAPSED_FOR_U_SMOOTH_PER_S = 18;
-  /** Smoothed move parameter per shaft while MOVING (same smoothstep path as server). */
+  /** Integrate+clamp only; never read back smoothed display `u`. */
+  const cabIntegrateUByKey = new Map<string, number>();
+  /** Low-pass of {@link cabIntegrateUByKey} for {@link getCabY} / rider support. */
   const cabSmoothedUByKey = new Map<string, number>();
   const cabMoveLegByKey = new Map<string, string>();
+  /** Elapsed low-pass **only** for {@link advanceCabSmoothU} soft ceiling (not for integration). */
+  const ELAPSED_FOR_U_CEILING_SMOOTH_PER_S = 11;
   const cabFilteredElapsedSecByKey = new Map<string, number>();
+  /** Second-stage EMA on soft ceiling U before {@link advanceCabSmoothU} clamps with hard cap. */
+  const CEILING_U_SOFT_EMA_PER_S = 9;
+  const cabSoftCeilingUByKey = new Map<string, number>();
+  /** Final low-pass on displayed move-u (damps clamp/ceiling kinks without drifting integration). */
+  const CAB_MOVE_U_DISPLAY_SMOOTH_PER_S = 14;
 
   const ensureInterp = (key: string) => {
     if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
@@ -459,17 +465,20 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const advanceCabSmoothU = (dtSec: number, nowMs: number) => {
     if (!(dtSec > 0) || !Number.isFinite(dtSec)) return;
-    const blend = 1 - Math.exp(-CAB_MOVE_U_SMOOTH_PER_S * dtSec);
-    const elapsedBlend = 1 - Math.exp(-ELAPSED_FOR_U_SMOOTH_PER_S * dtSec);
+    const elapsedBlend = 1 - Math.exp(-ELAPSED_FOR_U_CEILING_SMOOTH_PER_S * dtSec);
+    const softCeilingBlend = 1 - Math.exp(-CEILING_U_SOFT_EMA_PER_S * dtSec);
+    const displayUBlend = 1 - Math.exp(-CAB_MOVE_U_DISPLAY_SMOOTH_PER_S * dtSec);
     const speed = ELEVATOR_MOVE_SPEED_MPS;
     for (const key of latest.keys()) {
       const row = latest.get(key);
       const layout = layoutByKey.get(key);
       if (!row || !layout) continue;
       if (row.phase !== ELEVATOR_PHASE_MOVING) {
+        cabIntegrateUByKey.delete(key);
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
+        cabSoftCeilingUByKey.delete(key);
         continue;
       }
 
@@ -477,8 +486,16 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const legChanged = cabMoveLegByKey.get(key) !== leg;
       if (legChanged) {
         cabMoveLegByKey.set(key, leg);
+        cabIntegrateUByKey.delete(key);
+        cabSmoothedUByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
+        cabSoftCeilingUByKey.delete(key);
       }
+
+      const y0 = feetYForLayout(layout, row.moveFromLevel);
+      const y1 = feetYForLayout(layout, row.moveToLevel);
+      const dist = Math.abs(y1 - y0);
+      const need = Math.max(1e-4, dist / Math.max(0.08, speed));
 
       const rawElapsed = elapsedSecSinceServerSample(row, nowMs);
       const prevF = cabFilteredElapsedSecByKey.get(key);
@@ -487,25 +504,38 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           ? rawElapsed
           : prevF + (rawElapsed - prevF) * elapsedBlend;
       cabFilteredElapsedSecByKey.set(key, filtElapsed);
+      const elapsedForCeiling = Math.min(rawElapsed, filtElapsed);
+      const softCeilingU = Math.min(1, row.moveU + elapsedForCeiling / need);
+      const hardCapU = Math.min(1, row.moveU + rawElapsed / need);
+      const prevSoftCeil = cabSoftCeilingUByKey.get(key);
+      const softCeilSmoothed =
+        prevSoftCeil === undefined
+          ? softCeilingU
+          : prevSoftCeil + (softCeilingU - prevSoftCeil) * softCeilingBlend;
+      cabSoftCeilingUByKey.set(key, softCeilSmoothed);
+      const ceilingU = Math.min(hardCapU, softCeilSmoothed);
 
-      const y0 = feetYForLayout(layout, row.moveFromLevel);
-      const y1 = feetYForLayout(layout, row.moveToLevel);
-      const dist = Math.abs(y1 - y0);
-      const need = Math.max(1e-4, dist / Math.max(0.08, speed));
-      const targetU = Math.min(1, row.moveU + filtElapsed / need);
+      let uInt = legChanged ? row.moveU : (cabIntegrateUByKey.get(key) ?? row.moveU);
+      uInt = Math.min(1, uInt + dtSec / need);
+      uInt = Math.min(uInt, ceilingU);
+      uInt = Math.min(1, Math.max(uInt, row.moveU));
+      cabIntegrateUByKey.set(key, uInt);
 
-      if (legChanged) {
-        cabSmoothedUByKey.set(key, targetU);
-        continue;
-      }
-      const prev = cabSmoothedUByKey.get(key) ?? targetU;
-      cabSmoothedUByKey.set(key, prev + (targetU - prev) * blend);
+      const uPrevDisp = cabSmoothedUByKey.get(key);
+      const uDisp =
+        uPrevDisp === undefined || legChanged
+          ? uInt
+          : uPrevDisp + (uInt - uPrevDisp) * displayUBlend;
+      const uOut = Math.min(ceilingU, Math.max(row.moveU, uDisp));
+      cabSmoothedUByKey.set(key, uOut);
     }
     for (const key of cabSmoothedUByKey.keys()) {
       if (!latest.has(key)) {
+        cabIntegrateUByKey.delete(key);
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
+        cabSoftCeilingUByKey.delete(key);
       }
     }
   };
@@ -1469,9 +1499,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         vis.dispose();
       }
       latest.clear();
+      cabIntegrateUByKey.clear();
       cabSmoothedUByKey.clear();
       cabMoveLegByKey.clear();
       cabFilteredElapsedSecByKey.clear();
+      cabSoftCeilingUByKey.clear();
       landingByRowKey.clear();
       replicaHistoryByKey.clear();
       doorInterp.clear();

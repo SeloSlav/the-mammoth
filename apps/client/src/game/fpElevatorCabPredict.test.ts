@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceSmoothedMovingCabU,
   elevatorMoveSmoothstep01,
   predictMovingCabFeetWorldY,
   predictMovingCabFeetWorldYVelocityMps,
@@ -106,5 +107,45 @@ describe("predictMovingCabFeetWorldYVelocityMps", () => {
         feetYForLevel: feet,
       }),
     ).toBe(0);
+  });
+});
+
+describe("advanceSmoothedMovingCabU", () => {
+  it("stays monotone when jitter makes the target dip", () => {
+    let u: number | undefined = 0.2;
+    const targets = [0.214, 0.223, 0.219, 0.233, 0.229, 0.246, 0.241, 0.258];
+    for (const targetU of targets) {
+      const next = advanceSmoothedMovingCabU({
+        prevSmoothedU: u,
+        authoritativeMoveU: 0.2,
+        targetU,
+        dtSec: 1 / 60,
+        moveDurationSec: 2.4,
+      });
+      expect(next).toBeGreaterThanOrEqual((u ?? 0) - 1e-6);
+      u = next;
+    }
+  });
+
+  it("ignores small replica timing jitter inside the deadzone", () => {
+    const next = advanceSmoothedMovingCabU({
+      prevSmoothedU: 0.4,
+      authoritativeMoveU: 0.39,
+      targetU: 0.401,
+      dtSec: 1 / 60,
+      moveDurationSec: 8,
+    });
+    expect(next).toBeCloseTo(0.4 + 1 / 60 / 8, 6);
+  });
+
+  it("snaps forward to authoritative u when the local predictor falls behind", () => {
+    const next = advanceSmoothedMovingCabU({
+      prevSmoothedU: 0.31,
+      authoritativeMoveU: 0.37,
+      targetU: 0.39,
+      dtSec: 1 / 60,
+      moveDurationSec: 2.4,
+    });
+    expect(next).toBeGreaterThanOrEqual(0.37);
   });
 });

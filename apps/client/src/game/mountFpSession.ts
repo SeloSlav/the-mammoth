@@ -344,6 +344,25 @@ export async function mountFpSession(
    * stays exact). Hides residual jitter from reconcile + irregular RAF; ~0 = off.
    */
   const PLAYER_RIG_VIEW_LERP_PER_S = 14;
+  /**
+   * After a full stop, small 20 Hz reconcile corrections still move the render target; a second
+   * slow ease on the rig reads as “settling drift”. Match a faster follow only when input is idle
+   * and horizontal speed is negligible (see {@link VIEW_SETTLED_IDLE_MAX_HS}).
+   */
+  const PLAYER_RIG_VIEW_IDLE_LERP_PER_S = 40;
+  /**
+   * Multiplier on {@link DISPLAY_OFFSET_DAMP} while settled — clears stop-state display offset
+   * sooner so reconcile does not pump visible wobble.
+   */
+  const DISPLAY_OFFSET_IDLE_DAMP_MULT = 2.35;
+  /** With movement keys up, treat horizontal speed below this (m/s) as fully stopped for view settle. */
+  const VIEW_SETTLED_IDLE_MAX_HS = 0.055;
+  /**
+   * Max distance we correct toward replay in one server pose (~50 ms). Larger errors spread
+   * across several updates so we never jump a full accumulated desync in one frame (that was
+   * happening after the full-stop no-op path let client/server drift apart).
+   */
+  const RECONCILE_MAX_CORRECTION_PER_POSE_M = 0.08;
   const _rigViewScratch = new THREE.Vector3();
   /** Beyond this distance corrections hard-snap (teleport, cheat detection, etc.). */
   const DISPLAY_HARD_SNAP_M = 3.0;
@@ -1543,15 +1562,7 @@ export async function mountFpSession(
     const pendingCount = pendingMoveIntents.length - intentsHead;
     if (pendingCount === 0) return;
 
-    // Early-exit: if the server confirms we're already at the predicted position, no
-    // physics replay is needed.  On localhost (< 1 ms RTT) this is almost always true.
-    if (
-      Math.abs(serverRow.x - pos.x) < 0.006 &&
-      Math.abs(serverRow.y - pos.y) < 0.006 &&
-      Math.abs(serverRow.z - pos.z) < 0.006
-    ) {
-      return;
-    }
+    const alignHintMs = performance.now();
 
     // Reset pooled replay state — no Vec3 / LocoState allocation.
     // Only physics state is initialised from the server row; visual state (headBobPhase,
@@ -1563,22 +1574,17 @@ export async function mountFpSession(
     _replayLoco.grounded = serverRow.grounded !== 0;
     _replayLoco.jumpQueued = false;
 
-    const alignHintMs = performance.now();
-    const useElevReplayWallDt =
-      Math.abs(
-        fpElevators.getHudMovingCabVyMps(pos.x, pos.y, pos.z, alignHintMs),
-      ) >= 0.1;
-
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
       const stepNowMs = sample.evalWallClockMs;
       const isLast = i === pendingMoveIntents.length - 1;
       let stepDt = NET_DT_SEC;
-      if (isLast && useElevReplayWallDt) {
+      if (isLast) {
         const wallSec = (alignHintMs - stepNowMs) * 0.001;
-        // Live sim uses real frame dts (~6–16 ms); replay used a fixed 50 ms step and could
-        // integrate **past** wall-clock time since the intent, desyncing kinematic cab Y vs the
-        // main loop and inflating reconcile / displayOffset spikes on elevators.
+        // Live sim integrates with real frame dts since this intent; replay must use the same
+        // elapsed wall time (capped at one net interval). A fixed 50 ms last step over-integrates
+        // deceleration vs the main loop and reads as the body sliding backward after a stop.
+        // (Elevators originally forced this path for cab Y; the same dt mismatch applies on foot.)
         stepDt = Math.min(NET_DT_SEC, Math.max(wallSec, 0.001));
       }
       fpElevators.syncCabEvalClock(stepNowMs);
@@ -1609,14 +1615,22 @@ export async function mountFpSession(
       // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
       pos.copy(_replayPos);
       _displayOffset.set(0, 0, 0);
+      loco.velocity.copy(_replayLoco.velocity);
+      loco.grounded = _replayLoco.grounded;
     } else if (corrDist > 0.001 && !ignoreSmallElevRiderPhantom) {
-      // Small correction: immediately fix physics position but let the visual catch up smoothly.
-      // The player never sees a snap — the render position is pos + _displayOffset, and the
-      // offset decays to zero every frame.
-      pos.copy(_replayPos);
-      _displayOffset.x -= corrX;
-      _displayOffset.y -= corrY;
-      _displayOffset.z -= corrZ;
+      // Capped step toward replay: avoids a single-frame snap when accumulated error is large.
+      const t = Math.min(1, RECONCILE_MAX_CORRECTION_PER_POSE_M / corrDist);
+      pos.x += corrX * t;
+      pos.y += corrY * t;
+      pos.z += corrZ * t;
+      _displayOffset.x -= corrX * t;
+      _displayOffset.y -= corrY * t;
+      _displayOffset.z -= corrZ * t;
+      loco.velocity.lerp(_replayLoco.velocity, t);
+      loco.grounded = _replayLoco.grounded;
+    } else {
+      loco.velocity.copy(_replayLoco.velocity);
+      loco.grounded = _replayLoco.grounded;
     }
     // Correct physics state only.  Visual-only fields (headBobPhase, eyeSmoothed) are
     // deliberately NOT overwritten: they belong exclusively to the main-loop timeline and must
@@ -1624,8 +1638,6 @@ export async function mountFpSession(
     //   • audio hitching  (footstep strideCell jumping forward, firing spurious steps at 20 Hz)
     //   • hand-animation resets  (viewmodel bob phase discontinuously jumping)
     //   • perceived "rubber-band" stutter  (now handled by _displayOffset smooth correction)
-    loco.velocity.copy(_replayLoco.velocity);
-    loco.grounded = _replayLoco.grounded;
   };
 
   let meleeAttackSeq = 0;
@@ -2083,8 +2095,14 @@ export async function mountFpSession(
       Math.abs(lastTickHudCabVyMps),
     );
     const fastElevY = lastTickElevVyBlendAbs >= ELEVATOR_KINEMATIC_FAST_ABS_VY_MPS;
+    const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
+    const inputIdle =
+      !_input.forward && !_input.backward && !_input.left && !_input.right;
+    const viewSettledIdle =
+      inputIdle && hs < VIEW_SETTLED_IDLE_MAX_HS && !fastElevY;
     if (_displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0) {
-      const k = Math.exp(-DISPLAY_OFFSET_DAMP * dt);
+      const idleOffMult = viewSettledIdle ? DISPLAY_OFFSET_IDLE_DAMP_MULT : 1;
+      const k = Math.exp(-DISPLAY_OFFSET_DAMP * idleOffMult * dt);
       const kY = fastElevY
         ? Math.exp(-DISPLAY_OFFSET_DAMP * DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE * dt)
         : k;
@@ -2105,14 +2123,17 @@ export async function mountFpSession(
       _rigViewScratch.set(rtx, rty, rtz);
       fpRigViewSmoothedReady = true;
     } else if (PLAYER_RIG_VIEW_LERP_PER_S > 1e-3) {
-      const a = 1 - Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * dt);
+      const rigLerpPerS = viewSettledIdle
+        ? PLAYER_RIG_VIEW_IDLE_LERP_PER_S
+        : PLAYER_RIG_VIEW_LERP_PER_S;
+      const a = 1 - Math.exp(-rigLerpPerS * dt);
       const aXZ = fastElevY
         ? 1 -
-          Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * PLAYER_RIG_VIEW_XZ_ELEV_LERP_MULT * dt)
+          Math.exp(-rigLerpPerS * PLAYER_RIG_VIEW_XZ_ELEV_LERP_MULT * dt)
         : a;
       const aY = fastElevY
         ? 1 -
-          Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * PLAYER_RIG_VIEW_Y_ELEV_LERP_MULT * dt)
+          Math.exp(-rigLerpPerS * PLAYER_RIG_VIEW_Y_ELEV_LERP_MULT * dt)
         : a;
       _rigViewScratch.x += (rtx - _rigViewScratch.x) * aXZ;
       _rigViewScratch.y += (rty - _rigViewScratch.y) * aY;
@@ -2132,7 +2153,6 @@ export async function mountFpSession(
     headPitch.rotation.x = freeLook ? 0 : pitch;
     headCameraPitch.rotation.x = pitch;
     headFreeLook.rotation.y = headLookYaw;
-    const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
     if (worldAudioReady) {
       worldAudio.syncListener();
     }
