@@ -102,14 +102,6 @@ import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
  */
 const NET_INTERVAL_MS = 50;
 const NET_DT_SEC = NET_INTERVAL_MS * 0.001;
-/**
- * `THREE.MathUtils.damp` (used for accel / drag in {@link stepFpLocomotion}) is non-linear in
- * `dt`. The server integrates once per 50 ms tick; reconcile replay used **one** 50 ms step per
- * intent while the main loop applied **one** damp per frame at ~16 ms — different curves →
- * multi-decimeter replay error, constant `_displayOffset` nudges, and perceived hitching. Split
- * both paths into the same number of sub-steps so prediction and replay match.
- */
-const PREDICTION_PHYS_SUBSTEPS = 3;
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**
@@ -321,8 +313,18 @@ export async function mountFpSession(
    * the idle-velocity deadzone in client/server locomotion aligned with this reconcile path.
    */
   const _displayOffset = new THREE.Vector3();
-  /** Exponential damp constant for display offset — ~80 ms to close half the gap. */
-  const DISPLAY_OFFSET_DAMP = 12;
+  /**
+   * Exponential decay for `_displayOffset` (prediction-error smoothing). Lower = slower decay =
+   * camera eases for more frames after a reconcile (less “micro-jerk”). Tuned vs 12 which felt
+   * snappy enough to reveal every 20 Hz nudge as hitching.
+   */
+  const DISPLAY_OFFSET_DAMP = 5;
+  /**
+   * Extra exponential ease on the **visual** rig feet toward `pos + _displayOffset` (physics
+   * stays exact). Hides residual jitter from reconcile + irregular RAF; ~0 = off.
+   */
+  const PLAYER_RIG_VIEW_LERP_PER_S = 14;
+  const _rigViewScratch = new THREE.Vector3();
   /** Beyond this distance corrections hard-snap (teleport, cheat detection, etc.). */
   const DISPLAY_HARD_SNAP_M = 3.0;
 
@@ -1245,6 +1247,8 @@ export async function mountFpSession(
   /** Latest authoritative self pose from `player_pose`. */
   const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
+  /** False until first render target is written — seeds {@link _rigViewScratch} without a frame-0 ease-in. */
+  let fpRigViewSmoothedReady = false;
 
   const simulatePredictedPlayerStep = (opts: {
     pos: THREE.Vector3;
@@ -1416,20 +1420,15 @@ export async function mountFpSession(
 
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
+      const stepNowMs = sample.evalWallClockMs;
+      fpElevators.syncCabEvalClock(stepNowMs);
       inputFromBitsInto(sample.bits, _replayInput);
+      _replayStepOpts.evalWallClockMs = stepNowMs;
+      _replayStepOpts.dtSec = NET_DT_SEC;
       _replayStepOpts.crouch = (sample.bits & 64) !== 0;
+      _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
       _replayStepOpts.bodyYawRad = sample.aimYaw;
-      const tickEndMs = sample.evalWallClockMs;
-      const tickStartMs = tickEndMs - NET_INTERVAL_MS;
-      for (let k = 0; k < PREDICTION_PHYS_SUBSTEPS; k++) {
-        const stepNowMs =
-          tickStartMs + (NET_INTERVAL_MS * (k + 1)) / PREDICTION_PHYS_SUBSTEPS;
-        fpElevators.syncCabEvalClock(stepNowMs);
-        _replayStepOpts.evalWallClockMs = stepNowMs;
-        _replayStepOpts.dtSec = NET_DT_SEC / PREDICTION_PHYS_SUBSTEPS;
-        _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0 && k === 0;
-        simulatePredictedPlayerStep(_replayStepOpts);
-      }
+      simulatePredictedPlayerStep(_replayStepOpts);
     }
     const corrX = _replayPos.x - pos.x;
     const corrY = _replayPos.y - pos.y;
@@ -1484,6 +1483,7 @@ export async function mountFpSession(
         pos.set(row.x, row.y, row.z);
         bodyYaw = row.yaw;
         _displayOffset.set(0, 0, 0);
+        fpRigViewSmoothedReady = false;
         spawnSynced = true;
       } else {
         reconcileLocalPredictionToServer(row);
@@ -1878,21 +1878,16 @@ export async function mountFpSession(
     _input.crouch = crouchToggle;
 
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    const subDt = dt / PREDICTION_PHYS_SUBSTEPS;
-    let headY = headPivot.position.y;
-    for (let k = 0; k < PREDICTION_PHYS_SUBSTEPS; k++) {
-      const subEvalMs =
-        nowMs - 1000 * dt + (1000 * dt * (k + 1)) / PREDICTION_PHYS_SUBSTEPS;
-      fpElevators.syncCabEvalClock(subEvalMs);
-      _mainStepOpts.dtSec = subDt;
-      _mainStepOpts.evalWallClockMs = subEvalMs;
-      _mainStepOpts.crouch = crouchToggle;
-      _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep && k === 0;
-      _mainStepOpts.bodyYawRad = bodyYaw;
-      headY = simulatePredictedPlayerStep(_mainStepOpts);
-    }
+    fpElevators.syncCabEvalClock(nowMs);
+    prevPos.copy(pos);
 
     // --- Physics section timing ---
+    _mainStepOpts.dtSec = dt;
+    _mainStepOpts.evalWallClockMs = nowMs;
+    _mainStepOpts.crouch = crouchToggle;
+    _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep;
+    _mainStepOpts.bodyYawRad = bodyYaw;
+    const headY = simulatePredictedPlayerStep(_mainStepOpts);
     const _t_physicsEnd = performance.now();
     fpCollisionDebug.update(pos, loco.velocity);
 
@@ -1915,12 +1910,25 @@ export async function mountFpSession(
       if (Math.abs(_displayOffset.z) < 1e-5) _displayOffset.z = 0;
     }
 
-    // Render at physics position + smooth display offset.
-    playerRig.position.set(
-      pos.x + _displayOffset.x,
-      pos.y + _displayOffset.y,
-      pos.z + _displayOffset.z,
-    );
+    // Render at physics position + smooth display offset (extra ease on the mesh only).
+    const rtx = pos.x + _displayOffset.x;
+    const rty = pos.y + _displayOffset.y;
+    const rtz = pos.z + _displayOffset.z;
+    if (!fpRigViewSmoothedReady) {
+      _rigViewScratch.set(rtx, rty, rtz);
+      fpRigViewSmoothedReady = true;
+    } else if (PLAYER_RIG_VIEW_LERP_PER_S > 1e-3) {
+      const a = 1 - Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * dt);
+      _rigViewScratch.x += (rtx - _rigViewScratch.x) * a;
+      _rigViewScratch.y += (rty - _rigViewScratch.y) * a;
+      _rigViewScratch.z += (rtz - _rigViewScratch.z) * a;
+    } else {
+      _rigViewScratch.set(rtx, rty, rtz);
+    }
+    if (Math.hypot(rtx - _rigViewScratch.x, rty - _rigViewScratch.y, rtz - _rigViewScratch.z) > 2.5) {
+      _rigViewScratch.set(rtx, rty, rtz);
+    }
+    playerRig.position.copy(_rigViewScratch);
     playerRig.rotation.y = bodyYaw;
     headPivot.position.y = headY;
     headPivot.rotation.set(0, 0, 0);
