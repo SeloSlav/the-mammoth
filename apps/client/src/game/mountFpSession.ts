@@ -823,6 +823,7 @@ export async function mountFpSession(
     predictedBefore: { x: number; y: number; z: number },
     replayed: { x: number; y: number; z: number },
     crouch: boolean,
+    pendingIntentCount: number,
   ): void => {
     if (!__mmDoorDebugState.enabled) return;
     const nowMs = performance.now();
@@ -845,9 +846,20 @@ export async function mountFpSession(
     const serverDeltaM = Math.hypot(serverDelta.x, serverDelta.y, serverDelta.z);
     const replayDeltaM = Math.hypot(replayDelta.x, replayDelta.y, replayDelta.z);
     if (serverDeltaM < 0.01 && replayDeltaM < 0.01) return;
+    /**
+     * While moving, the subscribed `player_pose` row is often **meters** behind local `pos`
+     * because the client has already simulated frames the server has not applied yet. That gap
+     * is *not* prediction error. When intent replay matches (`replayDelta` tiny), skip the line —
+     * otherwise the console floods scary multi-meter “deltas” during every sprint.
+     */
+    if (replayDeltaM < 0.018 && serverDeltaM > 0.12 && pendingIntentCount > 0) return;
     __mmDoorDebugState.lastReconcileLogMs = nowMs;
     const radiusM = __mmDoorDebugState.radiusM;
     printDoorDebugJson("reconcile", {
+      readThisFirst:
+        "authoritativeVsPredicted_m is usually large while sprinting (server row lags unacked intents). " +
+        "physicsReplayMismatch_m is the real correction |corr|; keep that small.",
+      pendingIntentCount,
       predictedBefore: roundV(predictedBefore),
       authoritativeServer: {
         x: +serverRow.x.toFixed(3),
@@ -860,13 +872,13 @@ export async function mountFpSession(
         seq: poseSeqAsBigint(serverRow.seq).toString(),
       },
       replayResolved: roundV(replayed),
-      serverDelta: {
+      authoritativeVsPredicted: {
         x: +serverDelta.x.toFixed(3),
         y: +serverDelta.y.toFixed(3),
         z: +serverDelta.z.toFixed(3),
         meters: +serverDeltaM.toFixed(4),
       },
-      replayDelta: {
+      physicsReplayMismatch: {
         x: +replayDelta.x.toFixed(3),
         y: +replayDelta.y.toFixed(3),
         z: +replayDelta.z.toFixed(3),
@@ -1414,6 +1426,7 @@ export async function mountFpSession(
       { x: pos.x, y: pos.y, z: pos.z },
       { x: _replayPos.x, y: _replayPos.y, z: _replayPos.z },
       _replayStepOpts.crouch,
+      pendingCount,
     );
 
     if (corrDist > DISPLAY_HARD_SNAP_M) {
