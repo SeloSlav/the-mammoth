@@ -192,7 +192,7 @@ export function addUnitExteriorWindowGlassMeshes(
     holesNs: Partial<Record<"n" | "s", readonly WallHoleXY[]>>;
   },
 ): void {
-  const { hx, hz, wt, faces, tintByFace } = opts;
+  const { hx, hz, faces, tintByFace } = opts;
   let gi = 0;
   for (const face of faces) {
     const tintId = tintByFace[face] ?? 0;

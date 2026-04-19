@@ -1724,14 +1724,12 @@ export function buildFloorMeshes(
         tintByExteriorFace &&
         roomExteriorFaces.length > 0
       ) {
-        const wt = 0.11;
         const hx = sx * 0.5;
         const hz = sz * 0.5;
         addUnitExteriorWindowGlassMeshes(room, {
           faces: roomExteriorFaces,
           hx,
           hz,
-          wt,
           tintByFace: tintByExteriorFace,
           holesEw: { e: exteriorWindowHoles.e, w: exteriorWindowHoles.w },
           holesNs: { n: exteriorWindowHoles.n, s: exteriorWindowHoles.s },
