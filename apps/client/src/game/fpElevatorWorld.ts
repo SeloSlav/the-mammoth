@@ -329,9 +329,17 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const _swingByLevel = new Map<number, number>();
   /** Exponential blend rate toward replica target move-u (live frames only). */
   const CAB_MOVE_U_SMOOTH_PER_S = 34;
+  /**
+   * Low-pass on extrapolated elapsed used only for move-u targeting.  `estimatedServerEpochMs`
+   * shifts when new min-offset observations arrive (~every replica), which makes raw elapsed
+   * oscillate at ~20 Hz and hitch the cab even when {@link ElevatorCar.moveU} is unchanged.
+   */
+  const ELAPSED_FOR_U_SMOOTH_PER_S = 18;
   /** Smoothed move parameter per shaft while MOVING (same smoothstep path as server). */
   const cabSmoothedUByKey = new Map<string, number>();
   const cabMoveLegByKey = new Map<string, string>();
+  const cabFilteredElapsedSecByKey = new Map<string, number>();
+  const cabLastElevSampleMicrosByKey = new Map<string, bigint>();
 
   const ensureInterp = (key: string) => {
     if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
@@ -441,6 +449,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const advanceCabSmoothU = (dtSec: number, nowMs: number) => {
     if (!(dtSec > 0) || !Number.isFinite(dtSec)) return;
     const blend = 1 - Math.exp(-CAB_MOVE_U_SMOOTH_PER_S * dtSec);
+    const elapsedBlend = 1 - Math.exp(-ELAPSED_FOR_U_SMOOTH_PER_S * dtSec);
     const speed = ELEVATOR_MOVE_SPEED_MPS;
     for (const key of latest.keys()) {
       const row = latest.get(key);
@@ -449,25 +458,43 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (row.phase !== ELEVATOR_PHASE_MOVING) {
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
+        cabFilteredElapsedSecByKey.delete(key);
+        cabLastElevSampleMicrosByKey.delete(key);
         continue;
       }
-      const leg = `${row.moveFromLevel}:${row.moveToLevel}`;
-      if (cabMoveLegByKey.get(key) !== leg) {
-        cabMoveLegByKey.set(key, leg);
-        const y0 = feetYForLayout(layout, row.moveFromLevel);
-        const y1 = feetYForLayout(layout, row.moveToLevel);
-        const dist = Math.abs(y1 - y0);
-        const need = Math.max(1e-4, dist / Math.max(0.08, speed));
-        const elapsed = elapsedSecSinceServerSample(row, nowMs);
-        cabSmoothedUByKey.set(key, Math.min(1, row.moveU + elapsed / need));
-        continue;
+      const stamp = row.sampleServerMicros;
+      const stampChanged = cabLastElevSampleMicrosByKey.get(key) !== stamp;
+      cabLastElevSampleMicrosByKey.set(key, stamp);
+
+      const rawElapsed = elapsedSecSinceServerSample(row, nowMs);
+      let filtElapsed: number;
+      if (stampChanged) {
+        filtElapsed = rawElapsed;
+      } else {
+        const prevF = cabFilteredElapsedSecByKey.get(key);
+        filtElapsed =
+          prevF === undefined
+            ? rawElapsed
+            : prevF + (rawElapsed - prevF) * elapsedBlend;
       }
+      cabFilteredElapsedSecByKey.set(key, filtElapsed);
+
       const y0 = feetYForLayout(layout, row.moveFromLevel);
       const y1 = feetYForLayout(layout, row.moveToLevel);
       const dist = Math.abs(y1 - y0);
       const need = Math.max(1e-4, dist / Math.max(0.08, speed));
-      const elapsed = elapsedSecSinceServerSample(row, nowMs);
-      const targetU = Math.min(1, row.moveU + elapsed / need);
+      const targetU = Math.min(1, row.moveU + filtElapsed / need);
+
+      const leg = `${row.moveFromLevel}:${row.moveToLevel}`;
+      if (cabMoveLegByKey.get(key) !== leg) {
+        cabMoveLegByKey.set(key, leg);
+        cabSmoothedUByKey.set(key, targetU);
+        continue;
+      }
+      if (stampChanged) {
+        cabSmoothedUByKey.set(key, targetU);
+        continue;
+      }
       const prev = cabSmoothedUByKey.get(key) ?? targetU;
       cabSmoothedUByKey.set(key, prev + (targetU - prev) * blend);
     }
@@ -475,6 +502,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       if (!latest.has(key)) {
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
+        cabFilteredElapsedSecByKey.delete(key);
+        cabLastElevSampleMicrosByKey.delete(key);
       }
     }
   };
@@ -1407,6 +1436,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       latest.clear();
       cabSmoothedUByKey.clear();
       cabMoveLegByKey.clear();
+      cabFilteredElapsedSecByKey.clear();
+      cabLastElevSampleMicrosByKey.clear();
       landingByRowKey.clear();
       replicaHistoryByKey.clear();
       doorInterp.clear();
