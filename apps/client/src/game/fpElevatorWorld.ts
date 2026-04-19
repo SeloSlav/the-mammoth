@@ -68,7 +68,7 @@ import {
   landingExteriorDoorRowKey,
   LANDING_PASSAGE_DOCK_Y_TOL_M,
 } from "./fpElevatorLandingExteriorDoor.js";
-import { EXTERIOR_DOOR_VIS_INTERP_SEC } from "./fpElevatorConstants.js";
+import { ELEVATOR_MOVE_SPEED_MPS, EXTERIOR_DOOR_VIS_INTERP_SEC } from "./fpElevatorConstants.js";
 import { visitFpElevatorWorldCollisionAabbsInXZ } from "./fpElevatorWorldCollision.js";
 import type {
   FpKinematicAttachment,
@@ -133,8 +133,12 @@ export type FpElevatorRideDebugSnapshot = {
 
 export type MountFpElevatorWorldResult = {
   dispose(): void;
-  /** Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned. */
-  syncCabEvalClock(nowMs: number): void;
+  /**
+   * Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned.
+   * Pass `frameDtSec` from the main rAF tick so move-`u` smoothing advances once per frame; omit it during reconcile
+   * replay so `getCabY` uses raw replica extrapolation for those steps.
+   */
+  syncCabEvalClock(nowMs: number, frameDtSec?: number): void;
   tick(dt: number, nowMs: number, playerPos: THREE.Vector3): void;
   /** Crosshair hover + click flash for per-landing hail meshes (no reducer). */
   syncLandingHailUi(camera: THREE.PerspectiveCamera, playerPos: THREE.Vector3, nowMs: number): void;
@@ -302,8 +306,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
    * the mesh doesn't "catch up" in visible plateaus.
    */
   const landingDoorSwingInterp = new Map<string, FpElevatorCabInterpScalar>();
-  /** Evaluation time for cab Y this frame (set at start of `tick` so walk merge matches visuals). */
+  /** Evaluation time for cab Y this frame (set in {@link syncCabEvalClock} before locomotion). */
   let cabEvalNowMs = performance.now();
+  /**
+   * When true, MOVING cabs use smoothed move-u toward the replica-predicted target (reduces 20 Hz row hitches).
+   * False during reconcile replay (`syncCabEvalClock` without `frameDtSec`).
+   */
+  let cabEvalUseSmoothedMoveU = false;
   const performanceEpochOriginMs =
     typeof performance.timeOrigin === "number"
       ? performance.timeOrigin
@@ -318,6 +327,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const serverClock = createFpElevatorServerClock();
   /** Pre-allocated map reused each tick to pass swing values to per-shaft visuals — no allocation per shaft per frame. */
   const _swingByLevel = new Map<number, number>();
+  /** Exponential blend rate toward replica target move-u (live frames only). */
+  const CAB_MOVE_U_SMOOTH_PER_S = 34;
+  /** Smoothed move parameter per shaft while MOVING (same smoothstep path as server). */
+  const cabSmoothedUByKey = new Map<string, number>();
+  const cabMoveLegByKey = new Map<string, string>();
 
   const ensureInterp = (key: string) => {
     if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
@@ -424,6 +438,47 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return Math.max(0, (serverNowEpochMs - sampleServerEpochMs) * 0.001);
   };
 
+  const advanceCabSmoothU = (dtSec: number, nowMs: number) => {
+    if (!(dtSec > 0) || !Number.isFinite(dtSec)) return;
+    const blend = 1 - Math.exp(-CAB_MOVE_U_SMOOTH_PER_S * dtSec);
+    const speed = ELEVATOR_MOVE_SPEED_MPS;
+    for (const key of latest.keys()) {
+      const row = latest.get(key);
+      const layout = layoutByKey.get(key);
+      if (!row || !layout) continue;
+      if (row.phase !== ELEVATOR_PHASE_MOVING) {
+        cabSmoothedUByKey.delete(key);
+        cabMoveLegByKey.delete(key);
+        continue;
+      }
+      const leg = `${row.moveFromLevel}:${row.moveToLevel}`;
+      if (cabMoveLegByKey.get(key) !== leg) {
+        cabMoveLegByKey.set(key, leg);
+        const y0 = feetYForLayout(layout, row.moveFromLevel);
+        const y1 = feetYForLayout(layout, row.moveToLevel);
+        const dist = Math.abs(y1 - y0);
+        const need = Math.max(1e-4, dist / Math.max(0.08, speed));
+        const elapsed = elapsedSecSinceServerSample(row, nowMs);
+        cabSmoothedUByKey.set(key, Math.min(1, row.moveU + elapsed / need));
+        continue;
+      }
+      const y0 = feetYForLayout(layout, row.moveFromLevel);
+      const y1 = feetYForLayout(layout, row.moveToLevel);
+      const dist = Math.abs(y1 - y0);
+      const need = Math.max(1e-4, dist / Math.max(0.08, speed));
+      const elapsed = elapsedSecSinceServerSample(row, nowMs);
+      const targetU = Math.min(1, row.moveU + elapsed / need);
+      const prev = cabSmoothedUByKey.get(key) ?? targetU;
+      cabSmoothedUByKey.set(key, prev + (targetU - prev) * blend);
+    }
+    for (const key of cabSmoothedUByKey.keys()) {
+      if (!latest.has(key)) {
+        cabSmoothedUByKey.delete(key);
+        cabMoveLegByKey.delete(key);
+      }
+    }
+  };
+
   const getCabY = (key: string, evalWallClockMs?: number): number => {
     const sample = getReplicaSample(key, evalWallClockMs ?? cabEvalNowMs);
     const row = sample?.row;
@@ -433,11 +488,22 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     }
     const layout = layoutByKey.get(key);
     if (!layout) return row.cabFloorY;
+    const tEval = evalWallClockMs ?? cabEvalNowMs;
+    const uSmooth = cabSmoothedUByKey.get(key);
+    if (cabEvalUseSmoothedMoveU && uSmooth !== undefined) {
+      return predictMovingCabFeetWorldY({
+        moveFromLevel: row.moveFromLevel,
+        moveToLevel: row.moveToLevel,
+        moveUAtReplica: uSmooth,
+        elapsedSecSinceReplica: 0,
+        feetYForLevel: (lv) => feetYForLayout(layout, lv),
+      });
+    }
     return predictMovingCabFeetWorldY({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
       moveUAtReplica: row.moveU,
-      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, evalWallClockMs ?? cabEvalNowMs),
+      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, tEval),
       feetYForLevel: (lv) => feetYForLayout(layout, lv),
     });
   };
@@ -448,11 +514,22 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     if (!row || row.phase !== ELEVATOR_PHASE_MOVING) return 0;
     const layout = layoutByKey.get(key);
     if (!layout) return 0;
+    const tEval = evalWallClockMs ?? cabEvalNowMs;
+    const uSmooth = cabSmoothedUByKey.get(key);
+    if (cabEvalUseSmoothedMoveU && uSmooth !== undefined) {
+      return predictMovingCabFeetWorldYVelocityMps({
+        moveFromLevel: row.moveFromLevel,
+        moveToLevel: row.moveToLevel,
+        moveUAtReplica: uSmooth,
+        elapsedSecSinceReplica: 0,
+        feetYForLevel: (lv) => feetYForLayout(layout, lv),
+      });
+    }
     return predictMovingCabFeetWorldYVelocityMps({
       moveFromLevel: row.moveFromLevel,
       moveToLevel: row.moveToLevel,
       moveUAtReplica: row.moveU,
-      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, evalWallClockMs ?? cabEvalNowMs),
+      elapsedSecSinceReplica: elapsedSecSinceServerSample(row, tEval),
       feetYForLevel: (lv) => feetYForLayout(layout, lv),
     });
   };
@@ -1074,8 +1151,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
 
   const tick = (_dtSec: number, nowMs: number, playerPos: THREE.Vector3) => {
-    cabEvalNowMs = nowMs;
-    void _dtSec;
     const px = playerPos.x;
     const py = playerPos.y;
     const pz = playerPos.z;
@@ -1083,10 +1158,10 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
     for (const [key, vis] of visuals) {
       const row = latest.get(key);
-      const cabY = row != null ? getCabY(key, nowMs) : Number.NaN;
+      const rawCabY = row != null ? getCabY(key, nowMs) : Number.NaN;
       const d = getDoor(key, nowMs);
-      if (Number.isFinite(cabY)) {
-        vis.updateFromServer(cabY, d);
+      if (Number.isFinite(rawCabY)) {
+        vis.updateFromServer(rawCabY, d);
       }
       _swingByLevel.clear();
       for (const row of landingByRowKey.values()) {
@@ -1102,8 +1177,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       }
       vis.updateLandingExteriorDoorSwings(_swingByLevel);
       const flashActive = pickFlash.untilMs > nowMs && pickFlash.shaftKey === key;
-      const floorPickLevel = Number.isFinite(cabY)
-        ? cabFloorButtonDisplayLevel(vis.layout, cabY)
+      const floorPickLevel = Number.isFinite(rawCabY)
+        ? cabFloorButtonDisplayLevel(vis.layout, rawCabY)
         : Number(row?.currentLevel ?? 1);
       vis.updateFloorPickMaterials(
         floorPickLevel,
@@ -1111,7 +1186,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         pickFlash.untilMs,
         nowMs,
       );
-      if (!row || !Number.isFinite(cabY)) {
+      vis.updateLandingHailCabFloorDisplay(floorPickLevel);
+      if (!row || !Number.isFinite(rawCabY)) {
         vis.setFloorPickRootVisible(false);
         continue;
       }
@@ -1123,7 +1199,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         lx,
         lz,
         py,
-        cabY,
+        rawCabY,
         vis.inner,
       );
       vis.setFloorPickRootVisible(fpElevFloorPickMeshesShouldShow(insideThis, doorwayView, d));
@@ -1214,8 +1290,16 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       queryPose,
     );
 
-  const syncCabEvalClock = (nowMs: number) => {
+  const syncCabEvalClock = (nowMs: number, frameDtSec?: number) => {
     cabEvalNowMs = nowMs;
+    if (frameDtSec !== undefined) {
+      cabEvalUseSmoothedMoveU = true;
+      if (frameDtSec > 0) {
+        advanceCabSmoothU(frameDtSec, nowMs);
+      }
+    } else {
+      cabEvalUseSmoothedMoveU = false;
+    }
   };
 
   const resolveAttachment = (
@@ -1321,6 +1405,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         vis.dispose();
       }
       latest.clear();
+      cabSmoothedUByKey.clear();
+      cabMoveLegByKey.clear();
       landingByRowKey.clear();
       replicaHistoryByKey.clear();
       doorInterp.clear();

@@ -173,96 +173,16 @@ export function planUnitExteriorWindowsForFace(opts: {
   return { count: n, tintId, holesEw, holesNs };
 }
 
-const GLASS_THICK_M = 0.014;
-/** Offset past room shell outer face (+/-hx / +/-hz) so glass clears the wall slab (room-local). */
-const GLASS_OUTSET_FROM_HX_HZ_M = 0.006;
-
 /**
- * Matches `wt` in `floorPlaceholderMeshes` / `addHollowRoomShell` — full slab depth for window collision hulls.
- * Thin glass AABBs (~14 mm) are far below player capsule radius and make `resolveFpCharacterCollisions`
- * depenetrate unstably; hulls use this thickness so blocking matches normal walls.
+ * Same `wt` as `addHollowRoomShell` / `addWallConstantXWithHoles` — each window is one slab in the
+ * holed wall plane (not a second offset shell), so baked AABBs match `shell_wall_*` and the FP
+ * capsule does not fight overlapping volumes.
  */
 export const UNIT_SHELL_WALL_THICKNESS_M = 0.11;
 
-let collisionHullMaterial: THREE.MeshBasicMaterial | undefined;
-function getCollisionHullMaterial(): THREE.MeshBasicMaterial {
-  if (!collisionHullMaterial) {
-    collisionHullMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      visible: false,
-    });
-  }
-  return collisionHullMaterial;
-}
-
 /**
- * Invisible boxes spanning inner wall face through the glass plane (room-local).
- * Harvested into baked collision; stripped on the client before static mesh merging.
- */
-export function addUnitExteriorWindowCollisionHulls(
-  group: THREE.Group,
-  opts: {
-    faces: readonly CardinalFace[];
-    hx: number;
-    hz: number;
-    holesEw: Partial<Record<"e" | "w", readonly WallHoleYZ[]>>;
-    holesNs: Partial<Record<"n" | "s", readonly WallHoleXY[]>>;
-  },
-): void {
-  const { hx, hz, faces } = opts;
-  const wt = UNIT_SHELL_WALL_THICKNESS_M;
-  /** Past the exterior plaster line, flush with the visible glass slab. */
-  const facadeGlassExtentM = GLASS_OUTSET_FROM_HX_HZ_M + GLASS_THICK_M;
-  const mat = getCollisionHullMaterial();
-  let ci = 0;
-
-  for (const face of faces) {
-    if (face === "e" || face === "w") {
-      const holes = opts.holesEw[face];
-      if (!holes?.length) continue;
-      const xMin = face === "e" ? hx - wt : -hx - facadeGlassExtentM;
-      const xMax = face === "e" ? hx + facadeGlassExtentM : -hx + wt;
-      const depthX = xMax - xMin;
-      for (const h of holes) {
-        const z0 = Math.min(h.z0, h.z1);
-        const z1 = Math.max(h.z0, h.z1);
-        const y0 = Math.min(h.y0, h.y1);
-        const y1 = Math.max(h.y0, h.y1);
-        const dz = z1 - z0;
-        const dy = y1 - y0;
-        if (dz < 0.05 || dy < 0.05 || depthX < 0.02) continue;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(depthX, dy, dz), mat);
-        mesh.name = `unit_exterior_win_collision_${face}_${ci++}`;
-        mesh.userData.mammothCollisionHull = true;
-        mesh.position.set((xMin + xMax) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5);
-        group.add(mesh);
-      }
-    } else {
-      const holes = opts.holesNs[face];
-      if (!holes?.length) continue;
-      const zMin = face === "n" ? hz - wt : -hz - facadeGlassExtentM;
-      const zMax = face === "n" ? hz + facadeGlassExtentM : -hz + wt;
-      const depthZ = zMax - zMin;
-      for (const h of holes) {
-        const x0 = Math.min(h.x0, h.x1);
-        const x1 = Math.max(h.x0, h.x1);
-        const y0 = Math.min(h.y0, h.y1);
-        const y1 = Math.max(h.y0, h.y1);
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        if (dx < 0.05 || dy < 0.05 || depthZ < 0.02) continue;
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(dx, dy, depthZ), mat);
-        mesh.name = `unit_exterior_win_collision_${face}_${ci++}`;
-        mesh.userData.mammothCollisionHull = true;
-        mesh.position.set((x0 + x1) * 0.5, (y0 + y1) * 0.5, (zMin + zMax) * 0.5);
-        group.add(mesh);
-      }
-    }
-  }
-}
-
-/**
- * Thin glass boxes flush with exterior openings (room-local; group is unit shell root).
+ * Glass-filled wall segments in exterior window openings: same box placement and thickness as the
+ * plaster `shell_wall_*` pieces (see `addWallConstantXWithHoles`), with glass material in the hole.
  */
 export function addUnitExteriorWindowGlassMeshes(
   group: THREE.Group,
@@ -277,6 +197,7 @@ export function addUnitExteriorWindowGlassMeshes(
   },
 ): void {
   const { hx, hz, faces, tintByFace } = opts;
+  const wt = UNIT_SHELL_WALL_THICKNESS_M;
   let gi = 0;
   for (const face of faces) {
     const tintId = tintByFace[face] ?? 0;
@@ -284,10 +205,7 @@ export function addUnitExteriorWindowGlassMeshes(
     if (face === "e" || face === "w") {
       const holes = opts.holesEw[face];
       if (!holes?.length) continue;
-      const xCenter =
-        face === "e"
-          ? hx + GLASS_THICK_M * 0.5 + GLASS_OUTSET_FROM_HX_HZ_M
-          : -hx - GLASS_THICK_M * 0.5 - GLASS_OUTSET_FROM_HX_HZ_M;
+      const xCenter = face === "e" ? hx - wt * 0.5 : -hx + wt * 0.5;
       for (const h of holes) {
         const z0 = Math.min(h.z0, h.z1);
         const z1 = Math.max(h.z0, h.z1);
@@ -296,22 +214,15 @@ export function addUnitExteriorWindowGlassMeshes(
         const dz = z1 - z0;
         const dy = y1 - y0;
         if (dz < 0.05 || dy < 0.05) continue;
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(GLASS_THICK_M, dy, dz),
-          mat,
-        );
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(wt, dy, dz), mat);
         mesh.name = `unit_exterior_glass_${face}_${gi++}`;
-        mesh.userData.mammothNoCollision = true;
         mesh.position.set(xCenter, (y0 + y1) * 0.5, (z0 + z1) * 0.5);
         group.add(mesh);
       }
     } else {
       const holes = opts.holesNs[face];
       if (!holes?.length) continue;
-      const zCenter =
-        face === "n"
-          ? hz + GLASS_THICK_M * 0.5 + GLASS_OUTSET_FROM_HX_HZ_M
-          : -hz - GLASS_THICK_M * 0.5 - GLASS_OUTSET_FROM_HX_HZ_M;
+      const zCenter = face === "n" ? hz - wt * 0.5 : -hz + wt * 0.5;
       for (const h of holes) {
         const x0 = Math.min(h.x0, h.x1);
         const x1 = Math.max(h.x0, h.x1);
@@ -320,12 +231,8 @@ export function addUnitExteriorWindowGlassMeshes(
         const dx = x1 - x0;
         const dy = y1 - y0;
         if (dx < 0.05 || dy < 0.05) continue;
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(dx, dy, GLASS_THICK_M),
-          mat,
-        );
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(dx, dy, wt), mat);
         mesh.name = `unit_exterior_glass_${face}_${gi++}`;
-        mesh.userData.mammothNoCollision = true;
         mesh.position.set((x0 + x1) * 0.5, (y0 + y1) * 0.5, zCenter);
         group.add(mesh);
       }

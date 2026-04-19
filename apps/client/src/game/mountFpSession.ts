@@ -1556,13 +1556,28 @@ export async function mountFpSession(
     _replayLoco.grounded = serverRow.grounded !== 0;
     _replayLoco.jumpQueued = false;
 
+    const alignHintMs = performance.now();
+    const useElevReplayWallDt =
+      Math.abs(
+        fpElevators.getHudMovingCabVyMps(pos.x, pos.y, pos.z, alignHintMs),
+      ) >= 0.1;
+
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
       const stepNowMs = sample.evalWallClockMs;
+      const isLast = i === pendingMoveIntents.length - 1;
+      let stepDt = NET_DT_SEC;
+      if (isLast && useElevReplayWallDt) {
+        const wallSec = (alignHintMs - stepNowMs) * 0.001;
+        // Live sim uses real frame dts (~6–16 ms); replay used a fixed 50 ms step and could
+        // integrate **past** wall-clock time since the intent, desyncing kinematic cab Y vs the
+        // main loop and inflating reconcile / displayOffset spikes on elevators.
+        stepDt = Math.min(NET_DT_SEC, Math.max(wallSec, 0.001));
+      }
       fpElevators.syncCabEvalClock(stepNowMs);
       inputFromBitsInto(sample.bits, _replayInput);
       _replayStepOpts.evalWallClockMs = stepNowMs;
-      _replayStepOpts.dtSec = NET_DT_SEC;
+      _replayStepOpts.dtSec = stepDt;
       _replayStepOpts.crouch = (sample.bits & 64) !== 0;
       _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
       _replayStepOpts.bodyYawRad = sample.aimYaw;
@@ -2021,7 +2036,7 @@ export async function mountFpSession(
     _input.crouch = crouchToggle;
 
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    fpElevators.syncCabEvalClock(nowMs);
+    fpElevators.syncCabEvalClock(nowMs, dt);
     prevPos.copy(pos);
 
     // --- Physics section timing ---

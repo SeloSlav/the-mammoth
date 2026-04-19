@@ -8,6 +8,7 @@ import {
   buildElevatorCabCarVisual,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
+  shortFloorLabelForLevel,
 } from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
@@ -38,8 +39,45 @@ const LANDING_HAIL_FACE_OUT_M = 0.14;
 /** Level 1 (PR): exterior trim sits slightly inset vs `sx/sz`; smaller offset matches upper-landing flush. */
 const LANDING_HAIL_FACE_OUT_GROUND_M = -0.025;
 
-function buildLandingHailIconTexture(): THREE.CanvasTexture {
-  const size = 128;
+const LANDING_HAIL_ICON_TEX_SIZE = 160;
+
+/** Arrows hug top/bottom so the storey label has clear vertical padding in the middle. */
+const HAIL_ICON_ARROW_TOP_Y = 0.17;
+const HAIL_ICON_ARROW_BOTTOM_Y = 0.83;
+const HAIL_ICON_LABEL_Y = 0.5;
+/** Readable on the dark hail disc; distinct from white arrows. */
+const HAIL_ICON_LABEL_HEX = "#5eb0ff";
+
+function paintLandingHailIconCanvas(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  cabFloorLevel: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): void {
+  ctx.clearRect(0, 0, size, size);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const level = Math.max(1, Math.floor(cabFloorLevel));
+  const label = shortFloorLabelForLevel(level, floorLabelByLevel);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 42px system-ui, sans-serif";
+  ctx.fillText("⬆", size * 0.5, size * HAIL_ICON_ARROW_TOP_Y);
+  ctx.fillText("⬇", size * 0.5, size * HAIL_ICON_ARROW_BOTTOM_Y);
+
+  ctx.fillStyle = HAIL_ICON_LABEL_HEX;
+  const len = label.length;
+  const labelFont =
+    len >= 3 ? "900 30px system-ui, sans-serif" : len === 2 ? "900 36px system-ui, sans-serif" : "900 40px system-ui, sans-serif";
+  ctx.font = labelFont;
+  ctx.fillText(label, size * 0.5, size * HAIL_ICON_LABEL_Y);
+}
+
+function buildLandingHailIconTexture(
+  initialCabFloorLevel: number,
+  floorLabelByLevel?: FloorShortLabelMap,
+): THREE.CanvasTexture {
+  const size = LANDING_HAIL_ICON_TEX_SIZE;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -50,13 +88,7 @@ function buildLandingHailIconTexture(): THREE.CanvasTexture {
     return tex;
   }
 
-  ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = "900 44px sans-serif";
-  ctx.fillText("⬆", size * 0.5, 42);
-  ctx.fillText("⬇", size * 0.5, 86);
+  paintLandingHailIconCanvas(ctx, size, initialCabFloorLevel, floorLabelByLevel);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
@@ -145,6 +177,9 @@ export class FpElevatorShaftVisual {
   private readonly hailBtnMaterials = new Map<number, THREE.MeshStandardMaterial>();
   private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
   private readonly hailBtnIconTex: THREE.CanvasTexture;
+  /** Avoid repainting the shared hail icon every frame when the displayed storey is unchanged. */
+  private lastHailCabFloorPainted = Number.NaN;
+  private readonly floorLabelByLevel?: FloorShortLabelMap;
   private readonly exteriorSwingMaxRad: number;
 
   constructor(
@@ -164,6 +199,7 @@ export class FpElevatorShaftVisual {
       visualDefs?.landingKitDef?.exteriorSwingMaxRad ?? EXTERIOR_DOOR_SWING_MAX_RAD;
     this.ox = buildingWorldOrigin[0];
     this.oz = buildingWorldOrigin[2];
+    this.floorLabelByLevel = pick.floorLabelByLevel;
     const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
     const innerH = layout.sy - 2 * 0.11 - CAR_CEIL_BELOW_SHAFT_TOP;
     this.inner = {
@@ -207,7 +243,7 @@ export class FpElevatorShaftVisual {
       emissive: new THREE.Color(0x143040),
       emissiveIntensity: 0.28,
     });
-    this.hailBtnIconTex = buildLandingHailIconTexture();
+    this.hailBtnIconTex = buildLandingHailIconTexture(1, pick.floorLabelByLevel);
     this.hailBtnIconMat = new THREE.MeshBasicMaterial({
       map: this.hailBtnIconTex,
       transparent: true,
@@ -383,19 +419,23 @@ export class FpElevatorShaftVisual {
     const btnMat = this.hailBtnMatTemplate.clone();
     btnMat.name = `elev_hail_btn_mat_${level}`;
     this.hailBtnMaterials.set(level, btnMat);
-    const button = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.045, 32), btnMat);
+    const btnR = 0.175;
+    const btnDepth = 0.065;
+    const btnHalf = btnDepth * 0.5;
+    const iconPlane = 0.248;
+    /** Outer circular face sits at `btnDepth + btnHalf` from the panel origin (matches prior hail layout). */
+    const iconOff = btnDepth + btnHalf + 0.0015;
+    const button = new THREE.Mesh(new THREE.CylinderGeometry(btnR, btnR, btnDepth, 32), btnMat);
     button.name = `elev_landing_hail_btn_${level}`;
     (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
       shaftKey,
       level,
     };
     const icon = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.17, 0.17),
+      new THREE.PlaneGeometry(iconPlane, iconPlane),
       this.hailBtnIconMat,
     );
     const y = 1.34;
-    // Button cylinder center is 0.045 from group origin; half-height is 0.0225,
-    // so the face sits at faceOut + 0.0675 from hx.
     const faceOut = level === 1 ? LANDING_HAIL_FACE_OUT_GROUND_M : LANDING_HAIL_FACE_OUT_M;
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
@@ -403,25 +443,25 @@ export class FpElevatorShaftVisual {
     if (face === "e") {
       group.position.set(hx + faceOut, y, -doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
-      button.position.set(0.045, 0, 0);
-      icon.position.set(0.069, 0, 0);
+      button.position.set(btnDepth, 0, 0);
+      icon.position.set(iconOff, 0, 0);
       icon.rotation.y = Math.PI * 0.5;
     } else if (face === "w") {
       group.position.set(-hx - faceOut, y, doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
-      button.position.set(-0.045, 0, 0);
-      icon.position.set(-0.069, 0, 0);
+      button.position.set(-btnDepth, 0, 0);
+      icon.position.set(-iconOff, 0, 0);
       icon.rotation.y = -Math.PI * 0.5;
     } else if (face === "n") {
       group.position.set(doorSideOffset, y, hz + faceOut);
       button.rotation.x = Math.PI * 0.5;
-      button.position.set(0, 0, 0.045);
-      icon.position.set(0, 0, 0.069);
+      button.position.set(0, 0, btnDepth);
+      icon.position.set(0, 0, iconOff);
     } else {
       group.position.set(-doorSideOffset, y, -hz - faceOut);
       button.rotation.x = Math.PI * 0.5;
-      button.position.set(0, 0, -0.045);
-      icon.position.set(0, 0, -0.069);
+      button.position.set(0, 0, -btnDepth);
+      icon.position.set(0, 0, -iconOff);
       icon.rotation.y = Math.PI;
     }
     return group;
@@ -438,6 +478,21 @@ export class FpElevatorShaftVisual {
   /**
    * Hover / click feedback for landing hail buttons (per-level materials).
    */
+  /**
+   * Landing hail buttons share one icon texture per shaft; redraw when the cab’s nearest storey
+   * (same rounding as in-cab floor buttons) changes.
+   */
+  updateLandingHailCabFloorDisplay(cabFloorLevel: number): void {
+    if (cabFloorLevel === this.lastHailCabFloorPainted) return;
+    this.lastHailCabFloorPainted = cabFloorLevel;
+    const img = this.hailBtnIconTex.image;
+    if (!(img instanceof HTMLCanvasElement)) return;
+    const ctx = img.getContext("2d");
+    if (!ctx) return;
+    paintLandingHailIconCanvas(ctx, LANDING_HAIL_ICON_TEX_SIZE, cabFloorLevel, this.floorLabelByLevel);
+    this.hailBtnIconTex.needsUpdate = true;
+  }
+
   setLandingHailHighlight(opts: {
     hoverLevel: number;
     flashLevel: number;
