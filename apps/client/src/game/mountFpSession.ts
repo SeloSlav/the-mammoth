@@ -102,6 +102,14 @@ import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
  */
 const NET_INTERVAL_MS = 50;
 const NET_DT_SEC = NET_INTERVAL_MS * 0.001;
+/**
+ * `THREE.MathUtils.damp` (used for accel / drag in {@link stepFpLocomotion}) is non-linear in
+ * `dt`. The server integrates once per 50 ms tick; reconcile replay used **one** 50 ms step per
+ * intent while the main loop applied **one** damp per frame at ~16 ms — different curves →
+ * multi-decimeter replay error, constant `_displayOffset` nudges, and perceived hitching. Split
+ * both paths into the same number of sub-steps so prediction and replay match.
+ */
+const PREDICTION_PHYS_SUBSTEPS = 3;
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**
@@ -564,7 +572,6 @@ export async function mountFpSession(
     resolved: { x: number; y: number; z: number };
     velocity: { x: number; y: number; z: number };
     crouch: boolean;
-    nearbyDoors: ReturnType<typeof fpApartmentDoors.debugSnapshot>;
   };
 
   /**
@@ -773,6 +780,11 @@ export async function mountFpSession(
     const attempted = Math.hypot(f.target.x - f.prev.x, f.target.z - f.prev.z);
     if (!clamped && attempted < 0.005) return;
     __mmDoorDebugState.lastLogMs = nowMs;
+    const nearbyDoors = fpApartmentDoors.debugSnapshot(
+      f.resolved.x,
+      f.resolved.z,
+      __mmDoorDebugState.radiusM,
+    );
     const resolveDirection = (): string | null => {
       if (clampedBy <= 1e-4) return null;
       const parts: string[] = [];
@@ -796,7 +808,7 @@ export async function mountFpSession(
       velocity: roundV(f.velocity),
       bodyRadiusM: FP_PLAYER_COLLISION_RADIUS_M,
       bodyHeightM: f.crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M,
-      nearbyDoors: f.nearbyDoors.map((d) => ({
+      nearbyDoors: nearbyDoors.map((d) => ({
         rowKey: d.rowKey,
         level: d.level,
         face: d.face,
@@ -1289,9 +1301,6 @@ export async function mountFpSession(
     const dbg = __mmDoorDebugState;
     const isLive = opts === _mainStepOpts;
     const dbgActive = dbg.enabled && isLive;
-    const dbgCapture = dbgActive
-      ? fpApartmentDoors.debugSnapshot(opts.pos.x, opts.pos.z, dbg.radiusM)
-      : null;
     const tgtX = opts.pos.x;
     const tgtZ = opts.pos.z;
     const tgtY = opts.pos.y;
@@ -1319,7 +1328,6 @@ export async function mountFpSession(
         resolved: { x: opts.pos.x, y: opts.pos.y, z: opts.pos.z },
         velocity: { x: opts.locoState.velocity.x, y: opts.locoState.velocity.y, z: opts.locoState.velocity.z },
         crouch: opts.crouch,
-        nearbyDoors: dbgCapture ?? [],
       });
     }
 
@@ -1408,14 +1416,20 @@ export async function mountFpSession(
 
     for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
       const sample = pendingMoveIntents[i]!;
-      const stepNowMs = sample.evalWallClockMs;
-      fpElevators.syncCabEvalClock(stepNowMs);
       inputFromBitsInto(sample.bits, _replayInput);
-      _replayStepOpts.evalWallClockMs = stepNowMs;
       _replayStepOpts.crouch = (sample.bits & 64) !== 0;
-      _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
       _replayStepOpts.bodyYawRad = sample.aimYaw;
-      simulatePredictedPlayerStep(_replayStepOpts);
+      const tickEndMs = sample.evalWallClockMs;
+      const tickStartMs = tickEndMs - NET_INTERVAL_MS;
+      for (let k = 0; k < PREDICTION_PHYS_SUBSTEPS; k++) {
+        const stepNowMs =
+          tickStartMs + (NET_INTERVAL_MS * (k + 1)) / PREDICTION_PHYS_SUBSTEPS;
+        fpElevators.syncCabEvalClock(stepNowMs);
+        _replayStepOpts.evalWallClockMs = stepNowMs;
+        _replayStepOpts.dtSec = NET_DT_SEC / PREDICTION_PHYS_SUBSTEPS;
+        _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0 && k === 0;
+        simulatePredictedPlayerStep(_replayStepOpts);
+      }
     }
     const corrX = _replayPos.x - pos.x;
     const corrY = _replayPos.y - pos.y;
@@ -1864,16 +1878,21 @@ export async function mountFpSession(
     _input.crouch = crouchToggle;
 
     const jumpQueuedBeforeStep = loco.jumpQueued;
-    fpElevators.syncCabEvalClock(nowMs);
-    prevPos.copy(pos);
+    const subDt = dt / PREDICTION_PHYS_SUBSTEPS;
+    let headY = headPivot.position.y;
+    for (let k = 0; k < PREDICTION_PHYS_SUBSTEPS; k++) {
+      const subEvalMs =
+        nowMs - 1000 * dt + (1000 * dt * (k + 1)) / PREDICTION_PHYS_SUBSTEPS;
+      fpElevators.syncCabEvalClock(subEvalMs);
+      _mainStepOpts.dtSec = subDt;
+      _mainStepOpts.evalWallClockMs = subEvalMs;
+      _mainStepOpts.crouch = crouchToggle;
+      _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep && k === 0;
+      _mainStepOpts.bodyYawRad = bodyYaw;
+      headY = simulatePredictedPlayerStep(_mainStepOpts);
+    }
 
     // --- Physics section timing ---
-    _mainStepOpts.dtSec = dt;
-    _mainStepOpts.evalWallClockMs = nowMs;
-    _mainStepOpts.crouch = crouchToggle;
-    _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep;
-    _mainStepOpts.bodyYawRad = bodyYaw;
-    const headY = simulatePredictedPlayerStep(_mainStepOpts);
     const _t_physicsEnd = performance.now();
     fpCollisionDebug.update(pos, loco.velocity);
 
