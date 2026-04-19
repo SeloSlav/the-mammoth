@@ -19,7 +19,10 @@ import {
 /** Rail/stile thickness through the panel normal (door leaf depth). */
 export const SWING_DOOR_PANEL_THICK_M = 0.056;
 
-/** Default frame vertical inset (top + bottom combined reduces usable leaf height by this much). */
+/**
+ * Historical constant: outer leaf height once omitted this inset from {@link SwingDoorDimensions}.
+ * Geometry now uses full `panelH`; kept exported in case tooling still references the name.
+ */
 export const SWING_DOOR_FRAME_Y_INSET_M = 0.12;
 
 /** Shared part-id namespace. Both landing and apartment leaves reuse these names — the editor
@@ -72,11 +75,12 @@ export function isSolidLeafKit(kit: LandingKitDef | undefined): boolean {
 }
 
 function clampOpening(open: ResolvedGlassOpening, dims: SwingDoorDimensions): ResolvedGlassOpening {
-  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
-  const panelW = dims.panelW - 0.1;
-  const maxW = Math.max(0.2, panelW - 0.24);
-  const maxH = Math.max(0.2, panelH - 0.22);
-  const half = panelH * 0.5;
+  /** Outer leaf size matches {@link SwingDoorDimensions} — wall cuts and collision use these. */
+  const outerH = dims.panelH;
+  const outerW = dims.panelW;
+  const maxW = Math.max(0.2, outerW - 0.24);
+  const maxH = Math.max(0.2, outerH - 0.22);
+  const half = outerH * 0.5;
   return {
     widthM: THREE.MathUtils.clamp(open.widthM, 0.12, maxW),
     heightM: THREE.MathUtils.clamp(open.heightM, 0.12, maxH),
@@ -128,27 +132,31 @@ export function populateSwingDoorLeaf(
   dims: SwingDoorDimensions,
 ): void {
   const open = clampOpening(resolveGlassOpening(kit), dims);
-  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
-  const panelW = dims.panelW - 0.1;
+  const outerH = dims.panelH;
+  const outerW = dims.panelW;
   const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
-  const centerZ = -panelW * 0.5;
+  const centerZ = -outerW * 0.5;
   const solid = isSolidLeafKit(kit);
 
   // Solid leaves skip the rebate: rails fill top+bottom, stiles fill left+right, and a filled
   // panel covers the opening rectangle. Glass/lite geometry is omitted entirely.
   const effectiveOpen = solid
-    ? { widthM: Math.max(0.12, panelW - 0.24), heightM: Math.max(0.12, panelH - 0.22), centerYM: 0 }
+    ? {
+        widthM: Math.max(0.12, outerW - 0.24),
+        heightM: Math.max(0.12, outerH - 0.22),
+        centerYM: 0,
+      }
     : open;
 
   const railTopH = Math.max(
     0.12,
-    panelH * 0.5 - (effectiveOpen.centerYM + effectiveOpen.heightM * 0.5),
+    outerH * 0.5 - (effectiveOpen.centerYM + effectiveOpen.heightM * 0.5),
   );
   const railBotH = Math.max(
     0.12,
-    effectiveOpen.centerYM - effectiveOpen.heightM * 0.5 + panelH * 0.5,
+    effectiveOpen.centerYM - effectiveOpen.heightM * 0.5 + outerH * 0.5,
   );
-  const stileW = Math.max(0.12, (panelW - effectiveOpen.widthM) * 0.5);
+  const stileW = Math.max(0.12, (outerW - effectiveOpen.widthM) * 0.5);
 
   const addFrame = (
     id: string,
@@ -171,18 +179,18 @@ export function populateSwingDoorLeaf(
     SWING_DOOR_TOP_RAIL_PART_ID,
     panelT,
     railTopH,
-    panelW,
+    outerW,
     panelT * 0.5,
-    panelH * 0.5 - railTopH * 0.5,
+    outerH * 0.5 - railTopH * 0.5,
     centerZ,
   );
   addFrame(
     SWING_DOOR_BOTTOM_RAIL_PART_ID,
     panelT,
     railBotH,
-    panelW,
+    outerW,
     panelT * 0.5,
-    -panelH * 0.5 + railBotH * 0.5,
+    -outerH * 0.5 + railBotH * 0.5,
     centerZ,
   );
   addFrame(
@@ -201,7 +209,7 @@ export function populateSwingDoorLeaf(
     stileW,
     panelT * 0.5,
     effectiveOpen.centerYM,
-    -panelW + stileW * 0.5,
+    -outerW + stileW * 0.5,
   );
 
   if (solid) {
@@ -248,15 +256,15 @@ export function populateSwingDoorLeaf(
 export function buildSolidSwingLeafMergedGeometry(
   dims: SwingDoorDimensions,
 ): THREE.BufferGeometry {
-  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
-  const panelW = dims.panelW - 0.1;
+  const outerH = dims.panelH;
+  const outerW = dims.panelW;
   const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
-  const centerZ = -panelW * 0.5;
-  const openW = Math.max(0.12, panelW - 0.24);
-  const openH = Math.max(0.12, panelH - 0.22);
-  const railTopH = Math.max(0.12, panelH * 0.5 - openH * 0.5);
-  const railBotH = Math.max(0.12, panelH * 0.5 - openH * 0.5);
-  const stileW = Math.max(0.12, (panelW - openW) * 0.5);
+  const centerZ = -outerW * 0.5;
+  const openW = Math.max(0.12, outerW - 0.24);
+  const openH = Math.max(0.12, outerH - 0.22);
+  const railTopH = Math.max(0.12, outerH * 0.5 - openH * 0.5);
+  const railBotH = Math.max(0.12, outerH * 0.5 - openH * 0.5);
+  const stileW = Math.max(0.12, (outerW - openW) * 0.5);
 
   const parts: THREE.BoxGeometry[] = [];
   const push = (
@@ -272,10 +280,10 @@ export function buildSolidSwingLeafMergedGeometry(
     parts.push(g);
   };
 
-  push(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
-  push(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
+  push(panelT, railTopH, outerW, panelT * 0.5, outerH * 0.5 - railTopH * 0.5, centerZ);
+  push(panelT, railBotH, outerW, panelT * 0.5, -outerH * 0.5 + railBotH * 0.5, centerZ);
   push(panelT, openH, stileW, panelT * 0.5, 0, -stileW * 0.5);
-  push(panelT, openH, stileW, panelT * 0.5, 0, -panelW + stileW * 0.5);
+  push(panelT, openH, stileW, panelT * 0.5, 0, -outerW + stileW * 0.5);
   push(panelT, Math.max(0.05, openH), Math.max(0.05, openW), panelT * 0.5, 0, centerZ);
 
   const merged = mergeGeometries(parts, false);
@@ -299,20 +307,20 @@ export function buildApartmentSwingLeafGeometries(
   }
 
   const open = clampOpening(resolveGlassOpening(kit), dims);
-  const panelH = dims.panelH - SWING_DOOR_FRAME_Y_INSET_M;
-  const panelW = dims.panelW - 0.1;
+  const outerH = dims.panelH;
+  const outerW = dims.panelW;
   const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
-  const centerZ = -panelW * 0.5;
+  const centerZ = -outerW * 0.5;
 
   const railTopH = Math.max(
     0.12,
-    panelH * 0.5 - (open.centerYM + open.heightM * 0.5),
+    outerH * 0.5 - (open.centerYM + open.heightM * 0.5),
   );
   const railBotH = Math.max(
     0.12,
-    open.centerYM - open.heightM * 0.5 + panelH * 0.5,
+    open.centerYM - open.heightM * 0.5 + outerH * 0.5,
   );
-  const stileW = Math.max(0.12, (panelW - open.widthM) * 0.5);
+  const stileW = Math.max(0.12, (outerW - open.widthM) * 0.5);
 
   const parts: THREE.BoxGeometry[] = [];
   const push = (
@@ -328,10 +336,10 @@ export function buildApartmentSwingLeafGeometries(
     parts.push(g);
   };
 
-  push(panelT, railTopH, panelW, panelT * 0.5, panelH * 0.5 - railTopH * 0.5, centerZ);
-  push(panelT, railBotH, panelW, panelT * 0.5, -panelH * 0.5 + railBotH * 0.5, centerZ);
+  push(panelT, railTopH, outerW, panelT * 0.5, outerH * 0.5 - railTopH * 0.5, centerZ);
+  push(panelT, railBotH, outerW, panelT * 0.5, -outerH * 0.5 + railBotH * 0.5, centerZ);
   push(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -stileW * 0.5);
-  push(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -panelW + stileW * 0.5);
+  push(panelT, open.heightM, stileW, panelT * 0.5, open.centerYM, -outerW + stileW * 0.5);
 
   const merged = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();
@@ -371,7 +379,7 @@ export function addSwingDoorOpeningEditProxy(
   open: ResolvedGlassOpening,
   dims: SwingDoorDimensions,
 ): void {
-  const panelW = dims.panelW - 0.1;
+  const panelW = dims.panelW;
   const panelT = dims.panelT ?? SWING_DOOR_PANEL_THICK_M;
   const centerZ = -panelW * 0.5;
   const glassX = panelT * 0.5 + 0.014;

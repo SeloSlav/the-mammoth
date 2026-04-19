@@ -1581,7 +1581,9 @@ export async function mountFpSession(
       );
       // Still hard-resync teleports / huge desync; only ignore sub-threshold idle nudges.
       if (rough <= DISPLAY_HARD_SNAP_M) {
-        _displayOffset.set(0, 0, 0);
+        // Do **not** zero `_displayOffset` here — that ran every 20 Hz while WASD was up and
+        // popped the camera/rig (offset is the Source-style error camouflage; let the main loop
+        // decay it smoothly).
         return;
       }
     }
@@ -2169,8 +2171,9 @@ export async function mountFpSession(
     if (!fpRigViewSmoothedReady) {
       _rigViewScratch.set(rtx, rty, rtz);
       fpRigViewSmoothedReady = true;
-    } else if (inputIdle) {
-      // Instant rig = camera/feet follow `pos + _displayOffset` same frame keys go up (no ease-out lag).
+    } else if (viewSettledIdle) {
+      // Only snap rig once friction tail is gone — instant follow on raw key-up bypassed easing
+      // during the coast and read as a sharp stop/jerk next to 20 Hz reconcile.
       _rigViewScratch.set(rtx, rty, rtz);
     } else if (PLAYER_RIG_VIEW_LERP_PER_S > 1e-3) {
       const rigLerpPerS = PLAYER_RIG_VIEW_LERP_PER_S;

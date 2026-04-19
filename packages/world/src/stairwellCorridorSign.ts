@@ -16,6 +16,10 @@ export type StairCorridorSignPlacement = {
 
 const CANVAS_W = 1120;
 const CANVAS_H = 280;
+/** Scale applied inside `drawStairPictogram` (larger = bigger stair icon). */
+const STAIR_PICTOGRAM_SCALE = 2.35;
+/** “STEP” word size (px); keep within `CANVAS_H` minus border. */
+const STEP_WORD_FONT_PX = 178;
 
 function drawStairPictogram(
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
@@ -44,10 +48,7 @@ function drawStairPictogram(
   ctx.restore();
 }
 
-function createStairwellStepSignMaterialPair(): {
-  a: THREE.MeshBasicMaterial;
-  b: THREE.MeshBasicMaterial;
-} | null {
+function createStairwellStepBoardMaterial(): THREE.MeshBasicMaterial | null {
   let canvas: HTMLCanvasElement | OffscreenCanvas | null = null;
   if (typeof document !== "undefined") {
     const c = document.createElement("canvas");
@@ -64,38 +65,28 @@ function createStairwellStepSignMaterialPair(): {
   ctx.fillStyle = "#f0eeea";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.strokeStyle = "#2a3138";
-  ctx.lineWidth = 6;
-  ctx.strokeRect(3, 3, CANVAS_W - 6, CANVAS_H - 6);
-  drawStairPictogram(ctx, CANVAS_W * 0.16, CANVAS_H * 0.5, 1.12);
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, CANVAS_W - 8, CANVAS_H - 8);
+  drawStairPictogram(ctx, CANVAS_W * 0.14, CANVAS_H * 0.5, STAIR_PICTOGRAM_SCALE);
   ctx.fillStyle = "#1a1f26";
-  ctx.font = '800 118px system-ui, "Segoe UI", sans-serif';
+  ctx.font = `800 ${STEP_WORD_FONT_PX}px system-ui, "Segoe UI", sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("STEP", CANVAS_W * 0.58, CANVAS_H * 0.52);
+  ctx.fillText("STEP", CANVAS_W * 0.56, CANVAS_H * 0.52);
 
-  const baseTex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
-  baseTex.colorSpace = THREE.SRGBColorSpace;
-  baseTex.needsUpdate = true;
+  const tex = new THREE.CanvasTexture(canvas as unknown as HTMLCanvasElement);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
 
-  const flippedTex = baseTex.clone();
-  flippedTex.wrapS = THREE.RepeatWrapping;
-  flippedTex.repeat.x = -1;
-  flippedTex.offset.x = 1;
-  flippedTex.needsUpdate = true;
-
-  const matOpts: THREE.MeshBasicMaterialParameters = {
+  return new THREE.MeshBasicMaterial({
+    map: tex,
     transparent: true,
     depthWrite: false,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
     side: THREE.DoubleSide,
-  };
-
-  return {
-    a: new THREE.MeshBasicMaterial({ map: baseTex, ...matOpts }),
-    b: new THREE.MeshBasicMaterial({ map: flippedTex, ...matOpts }),
-  };
+  });
 }
 
 const grayFace = new THREE.MeshStandardMaterial({
@@ -106,26 +97,62 @@ const grayFace = new THREE.MeshStandardMaterial({
 
 const SIGN_H = 0.44;
 /** Gap from door head to bottom of lintel (m). */
-const CLEARANCE_DOOR_TOP_TO_PANEL_BOTTOM = 1.02;
-const LINTEL_LEN_MIN = 0.81;
-const LINTEL_EXTRA_ON_OPENING = 0.51;
+const CLEARANCE_DOOR_TOP_TO_PANEL_BOTTOM = 1.33;
+/** Design basis before `LINTEL_LENGTH_SCALE` (lintel axis = local Z of the box). */
+const LINTEL_LEN_MIN = 1.62;
+const LINTEL_EXTRA_ON_OPENING = 1.02;
+/** Corridor span of the STEP blade vs that basis (0.5 = half as long). */
+const LINTEL_LENGTH_SCALE = 0.5;
 /** Thin slab dimension before `rotation.y` (maps into wall-normal after +90°). */
 const PROTRUSION = 0.18;
 const PAD = 0.016;
 /** Extra lift above hinge math for frame / swing-door mesh (m). */
 const FRAME_HEAD_FUDGE = 0.34;
+/** STEP boards sit slightly proud of the gray shell to avoid z-fighting (m). */
+const BOARD_FACE_BUMP = 0.007;
+/** Extra translation toward the corridor so the blade sits in the hall, not past the opening (m). */
+const SIGN_SHIFT_INTO_CORRIDOR_M = 0.2;
+/** Fraction of lintel length biased past the inner wall plane (along corridor normal). */
+const SIGN_LINTEL_CENTER_BIAS = 0.34;
+
+const _tmpQ = new THREE.Quaternion();
+const _tmpS = new THREE.Vector3(1, 1, 1);
+const _tmpP = new THREE.Vector3();
+
+/** Same transform as a `Group` with `position` (px,py,pz) and `rotation.y = rotY`. */
+function signRootMatrix(px: number, py: number, pz: number, rotY: number, out: THREE.Matrix4): void {
+  _tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+  _tmpP.set(px, py, pz);
+  _tmpS.set(1, 1, 1);
+  out.compose(_tmpP, _tmpQ, _tmpS);
+}
+
+function faceLocalMatrix(offsetX: number, rotYLocal: number, out: THREE.Matrix4): void {
+  _tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotYLocal);
+  _tmpP.set(offsetX, 0, 0);
+  _tmpS.set(1, 1, 1);
+  out.compose(_tmpP, _tmpQ, _tmpS);
+}
+
+function decomposeToObject3D(m: THREE.Matrix4, obj: THREE.Object3D): void {
+  m.decompose(_tmpP, _tmpQ, _tmpS);
+  obj.position.copy(_tmpP);
+  obj.quaternion.copy(_tmpQ);
+  obj.scale.copy(_tmpS);
+}
+
+const _mRoot = new THREE.Matrix4();
+const _mFace = new THREE.Matrix4();
+const _mWorld = new THREE.Matrix4();
 
 /**
- * Three `BoxGeometry(width, height, depth)` puts the **largest ±z faces** (materials **4 / 5**)
- * in the **xy** plane with size **width × height**.
+ * Same **box shell** size and **`rotation.y = ±π/2`** as before (do not change that pairing).
+ * STEP uses **two `PlaneGeometry` meshes** with the same texture and **±π/2** local yaw so each
+ * corridor side sees a front face (no mirrored box UVs).
  *
- * Use **`BoxGeometry(lintelLen, SIGN_H, PROTRUSION)`** so STEP sits on **4 / 5** — the **long**
- * lintel × sign height boards (not the thin edge).
- *
- * **East / west:** `rotation.y = ±π/2` maps local **±z** normals to **world ±x** so those big
- * faces face along the hall; **depth** (local **z**) becomes the wall-normal protrusion.
- *
- * **North / south:** `rotation.y = 0` — lintel runs along **world x**, protrusion along **z**.
+ * Each piece is a **direct child** of `group` with a **baked** transform (`root * face`), because
+ * `mergeGroupDescendantsByMaterial` detaches `mammothSkipFloorGeometryMerge` meshes and drops
+ * intermediate `Group` parents — nested hierarchies would lose placement.
  */
 export function addStairwellCorridorSignMeshes(
   group: THREE.Group,
@@ -135,7 +162,7 @@ export function addStairwellCorridorSignMeshes(
   placements: readonly StairCorridorSignPlacement[],
 ): void {
   if (placements.length === 0) return;
-  const stepPair = createStairwellStepSignMaterialPair();
+  const stepMat = createStairwellStepBoardMaterial();
   const g = grayFace;
   const wt = 0.11;
   const hx = sx * 0.5;
@@ -147,57 +174,67 @@ export function addStairwellCorridorSignMeshes(
     const doorSpan = pl.holeAlongZ
       ? Math.abs(pl.z1 - pl.z0)
       : Math.abs(pl.x1 - pl.x0);
-    const lintelLen = Math.max(LINTEL_LEN_MIN, doorSpan + LINTEL_EXTRA_ON_OPENING);
+    const lintelLen =
+      LINTEL_LENGTH_SCALE *
+      Math.max(LINTEL_LEN_MIN, doorSpan + LINTEL_EXTRA_ON_OPENING);
     const doorHeadY = Math.max(pl.yDoorTop, shellDoorHeadY) + FRAME_HEAD_FUDGE;
     const y = doorHeadY + CLEARANCE_DOOR_TOP_TO_PANEL_BOTTOM + SIGN_H * 0.5;
 
-    let geo: THREE.BoxGeometry;
-    let mats: THREE.Material[];
     let px: number;
-    let py = y;
+    const py = y;
     let pz: number;
     let rotY = 0;
 
     if (pl.corridorWall === "e") {
-      geo = new THREE.BoxGeometry(lintelLen, SIGN_H, PROTRUSION);
-      mats = stepPair
-        ? [g, g, g, g, stepPair.a, stepPair.b]
-        : [g, g, g, g, g, g];
-      px = hx - wt - PROTRUSION * 0.52 - PAD;
+      px = hx - wt - lintelLen * SIGN_LINTEL_CENTER_BIAS - PAD - SIGN_SHIFT_INTO_CORRIDOR_M;
       pz = (pl.z0 + pl.z1) * 0.5;
       rotY = Math.PI * 0.5;
     } else if (pl.corridorWall === "w") {
-      geo = new THREE.BoxGeometry(lintelLen, SIGN_H, PROTRUSION);
-      mats = stepPair
-        ? [g, g, g, g, stepPair.a, stepPair.b]
-        : [g, g, g, g, g, g];
-      px = -hx + wt + PROTRUSION * 0.52 + PAD;
+      px = -hx + wt + lintelLen * SIGN_LINTEL_CENTER_BIAS + PAD + SIGN_SHIFT_INTO_CORRIDOR_M;
       pz = (pl.z0 + pl.z1) * 0.5;
       rotY = -Math.PI * 0.5;
     } else if (pl.corridorWall === "n") {
-      geo = new THREE.BoxGeometry(lintelLen, SIGN_H, PROTRUSION);
-      mats = stepPair
-        ? [g, g, g, g, stepPair.a, stepPair.b]
-        : [g, g, g, g, g, g];
       px = (pl.x0 + pl.x1) * 0.5;
-      pz = hz - wt - PROTRUSION * 0.52 - PAD;
-      rotY = 0;
+      pz = hz - wt - lintelLen * SIGN_LINTEL_CENTER_BIAS - PAD - SIGN_SHIFT_INTO_CORRIDOR_M;
+      rotY = Math.PI * 0.5;
     } else {
-      geo = new THREE.BoxGeometry(lintelLen, SIGN_H, PROTRUSION);
-      mats = stepPair
-        ? [g, g, g, g, stepPair.a, stepPair.b]
-        : [g, g, g, g, g, g];
       px = (pl.x0 + pl.x1) * 0.5;
-      pz = -hz + wt + PROTRUSION * 0.52 + PAD;
-      rotY = 0;
+      pz = -hz + wt + lintelLen * SIGN_LINTEL_CENTER_BIAS + PAD + SIGN_SHIFT_INTO_CORRIDOR_M;
+      rotY = -Math.PI * 0.5;
     }
 
-    const mesh = new THREE.Mesh(geo, mats);
-    mesh.name = `stairwell_corridor_sign_${meshIdx++}`;
-    mesh.position.set(px, py, pz);
-    mesh.rotation.y = rotY;
-    mesh.userData.mammothNoCollision = true;
-    mesh.userData.mammothSkipFloorGeometryMerge = true;
-    group.add(mesh);
+    const baseName = `stairwell_corridor_sign_${meshIdx++}`;
+    signRootMatrix(px, py, pz, rotY, _mRoot);
+
+    const shellGeo = new THREE.BoxGeometry(PROTRUSION, SIGN_H, lintelLen);
+    const shell = new THREE.Mesh(shellGeo, [g, g, g, g, g, g]);
+    shell.name = `${baseName}_shell`;
+    shell.userData.mammothNoCollision = true;
+    shell.userData.mammothSkipFloorGeometryMerge = true;
+    decomposeToObject3D(_mRoot, shell);
+    group.add(shell);
+
+    if (stepMat) {
+      const halfP = PROTRUSION * 0.5;
+      const bump = BOARD_FACE_BUMP;
+
+      const facePosX = new THREE.Mesh(new THREE.PlaneGeometry(lintelLen, SIGN_H), stepMat);
+      facePosX.name = `${baseName}_board_px`;
+      facePosX.userData.mammothNoCollision = true;
+      facePosX.userData.mammothSkipFloorGeometryMerge = true;
+      faceLocalMatrix(halfP + bump, Math.PI * 0.5, _mFace);
+      _mWorld.multiplyMatrices(_mRoot, _mFace);
+      decomposeToObject3D(_mWorld, facePosX);
+      group.add(facePosX);
+
+      const faceNegX = new THREE.Mesh(new THREE.PlaneGeometry(lintelLen, SIGN_H), stepMat);
+      faceNegX.name = `${baseName}_board_nx`;
+      faceNegX.userData.mammothNoCollision = true;
+      faceNegX.userData.mammothSkipFloorGeometryMerge = true;
+      faceLocalMatrix(-halfP - bump, -Math.PI * 0.5, _mFace);
+      _mWorld.multiplyMatrices(_mRoot, _mFace);
+      decomposeToObject3D(_mWorld, faceNegX);
+      group.add(faceNegX);
+    }
   }
 }
