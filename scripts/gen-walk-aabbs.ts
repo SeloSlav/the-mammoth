@@ -4,10 +4,17 @@
  * Re-run after changing floors, `worldOrigin`, or walk-surface rules in `@the-mammoth/world`.
  *
  * Each shard is a full `static PART_…` item so `include!` is valid (one item per file).
+ *
+ * Floor JSON is memoized: the building stack asks for the same `floorDocId` tens of times per
+ * run (walk + collision + shaft scans). Parsing once per id avoids redundant work.
+ *
+ * Slow runs are usually dominated by `buildFpBlockerAABBsForBuilding` (full Three.js stack +
+ * co-planar merge over ~10k+ AABBs). Set `GEN_WALK_AABBS_TIMING=1` to print phase timings.
  */
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { FloorDoc } from "@the-mammoth/schemas";
 import {
   buildFpBlockerAABBsForBuilding,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
@@ -26,6 +33,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const sourceFingerprint = computeWorldCollisionSourceFingerprint(root);
 
+function msSince(t0: number): string {
+  return `${(performance.now() - t0).toFixed(0)}ms`;
+}
+
+const logTiming = process.env.GEN_WALK_AABBS_TIMING === "1";
+
 /** AABB rows per shard — keeps each generated file reviewable. */
 const AABBS_PER_SHARD = 500;
 
@@ -38,23 +51,43 @@ const stairWellDef = parseStairWellDef(
 );
 const floorDir = join(root, "content/building/floors");
 
+/** Same floor id is requested many times per storey (shaft merge, walk pass, collision pass). */
+const floorDocCache = new Map<string, FloorDoc>();
+function getFloorDoc(floorDocId: string) {
+  let doc = floorDocCache.get(floorDocId);
+  if (!doc) {
+    doc = parseFloorDoc(
+      JSON.parse(readFileSync(join(floorDir, `${floorDocId}.json`), "utf8")) as unknown,
+    );
+    floorDocCache.set(floorDocId, doc);
+  }
+  return doc;
+}
+
+const tWalk = performance.now();
 const aabbs = walkSurfaceAABBsForBuilding(
   building,
-  (id) =>
-    parseFloorDoc(
-      JSON.parse(readFileSync(join(floorDir, `${id}.json`), "utf8")) as unknown,
-    ),
+  getFloorDoc,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   { stairWellDef },
 );
+if (logTiming) {
+  console.log(`walkSurfaceAABBsForBuilding: ${msSince(tWalk)} (${floorDocCache.size} floor JSON cached)`);
+}
+
+const tSolid = performance.now();
 const solidAabbs = buildFpBlockerAABBsForBuilding(
   building,
-  (id) =>
-    parseFloorDoc(
-      JSON.parse(readFileSync(join(floorDir, `${id}.json`), "utf8")) as unknown,
-    ),
-  { floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M, stairWellDef },
+  getFloorDoc,
+  {
+    floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+    stairWellDef,
+    mergeCoplanarPreheat: true,
+  },
 );
+if (logTiming) {
+  console.log(`buildFpBlockerAABBsForBuilding: ${msSince(tSolid)}`);
+}
 
 const lines = aabbs.map(
   (b) =>

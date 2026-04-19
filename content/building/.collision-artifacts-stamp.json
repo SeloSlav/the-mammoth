@@ -1,6 +1,6 @@
 {
-  "builtAtIso": "2026-04-19T23:22:03.276Z",
-  "sourceFingerprint": "32b00cca8805b94dac9b1b4daa2916ae1d4861bd",
+  "builtAtIso": "2026-04-19T23:48:05.436Z",
+  "sourceFingerprint": "258eb4b98ac35480e0194fadca3001dbba2e5a75",
   "generatedFiles": [
     "apps/server/src/generated_walk_surfaces.rs",
     "apps/server/src/generated_collision_solids.rs",

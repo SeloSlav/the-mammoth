@@ -91,6 +91,7 @@ export {
 } from "./collisionSpatialIndex.js";
 export {
   buildFpBlockerAABBsForBuilding,
+  mergeCoplanarSweepPreheat,
   mergeCoplanarTouchingBlockerAabbs,
   type FpBlockerBakeOptions,
 } from "./fpBlockerAABBs.js";

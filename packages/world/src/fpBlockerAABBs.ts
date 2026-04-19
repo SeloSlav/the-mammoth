@@ -14,6 +14,132 @@ function approxEq(a: number, b: number): boolean {
   return Math.abs(a - b) < MERGE_EPS;
 }
 
+type MergeBox = {
+  min: [number, number, number];
+  max: [number, number, number];
+};
+
+const q6 = (v: number) => v.toFixed(6);
+const slabKeyYz = (b: MergeBox) =>
+  `${q6(b.min[1])},${q6(b.max[1])},${q6(b.min[2])},${q6(b.max[2])}`;
+const slabKeyYx = (b: MergeBox) =>
+  `${q6(b.min[1])},${q6(b.max[1])},${q6(b.min[0])},${q6(b.max[0])}`;
+
+/**
+ * O(n log n) slab-key sweeps that collapse obvious co-planar runs before the legacy greedy
+ * merge. Intended for offline generators (`pnpm content:gen-walk-aabbs`); gameplay paths
+ * keep the default `mergeCoplanarPreheat: false` so behaviour matches historical merges.
+ */
+export function mergeCoplanarSweepPreheat(aabbs: readonly CollisionAabb[]): CollisionAabb[] {
+  let list: MergeBox[] = aabbs.map((b) => ({
+    min: [b.min[0], b.min[1], b.min[2]],
+    max: [b.max[0], b.max[1], b.max[2]],
+  }));
+
+  const yBandMatch = (a: MergeBox, b: MergeBox): boolean =>
+    approxEq(a.min[1], b.min[1]) && approxEq(a.max[1], b.max[1]);
+
+  const xzOverlap1D = (a0: number, a1: number, b0: number, b1: number): boolean =>
+    !(a1 < b0 - MERGE_EPS || b1 < a0 - MERGE_EPS);
+
+  const mergeAlongXInBucket = (arr: MergeBox[]): MergeBox[] => {
+    if (arr.length <= 1) return arr;
+    const sorted = [...arr].sort((a, b) => a.min[0] - b.min[0]);
+    const out: MergeBox[] = [];
+    let cur = sorted[0]!;
+    for (let t = 1; t < sorted.length; t++) {
+      const b = sorted[t]!;
+      if (
+        yBandMatch(cur, b) &&
+        approxEq(cur.min[2], b.min[2]) &&
+        approxEq(cur.max[2], b.max[2]) &&
+        xzOverlap1D(cur.min[0], cur.max[0], b.min[0], b.max[0])
+      ) {
+        cur = {
+          min: [Math.min(cur.min[0], b.min[0]), cur.min[1], cur.min[2]],
+          max: [Math.max(cur.max[0], b.max[0]), cur.max[1], cur.max[2]],
+        };
+      } else {
+        out.push(cur);
+        cur = b;
+      }
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const mergeAlongZInBucket = (arr: MergeBox[]): MergeBox[] => {
+    if (arr.length <= 1) return arr;
+    const sorted = [...arr].sort((a, b) => a.min[2] - b.min[2]);
+    const out: MergeBox[] = [];
+    let cur = sorted[0]!;
+    for (let t = 1; t < sorted.length; t++) {
+      const b = sorted[t]!;
+      if (
+        yBandMatch(cur, b) &&
+        approxEq(cur.min[0], b.min[0]) &&
+        approxEq(cur.max[0], b.max[0]) &&
+        xzOverlap1D(cur.min[2], cur.max[2], b.min[2], b.max[2])
+      ) {
+        cur = {
+          min: [cur.min[0], cur.min[1], Math.min(cur.min[2], b.min[2])],
+          max: [cur.max[0], cur.max[1], Math.max(cur.max[2], b.max[2])],
+        };
+      } else {
+        out.push(cur);
+        cur = b;
+      }
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const sweepRound = (): boolean => {
+    const before = list.length;
+    const byYz = new Map<string, MergeBox[]>();
+    for (const b of list) {
+      const k = slabKeyYz(b);
+      let g = byYz.get(k);
+      if (!g) {
+        g = [];
+        byYz.set(k, g);
+      }
+      g.push(b);
+    }
+    let next: MergeBox[] = [];
+    for (const g of byYz.values()) {
+      next.push(...mergeAlongXInBucket(g));
+    }
+    list = next;
+
+    const byYx = new Map<string, MergeBox[]>();
+    for (const b of list) {
+      const k = slabKeyYx(b);
+      let g = byYx.get(k);
+      if (!g) {
+        g = [];
+        byYx.set(k, g);
+      }
+      g.push(b);
+    }
+    next = [];
+    for (const g of byYx.values()) {
+      next.push(...mergeAlongZInBucket(g));
+    }
+    list = next;
+    return list.length !== before;
+  };
+
+  for (let guard = 0; guard < 64; guard++) {
+    if (!sweepRound()) break;
+  }
+
+  return list.map((b) => ({
+    min: [b.min[0], b.min[1], b.min[2]] as const,
+    max: [b.max[0], b.max[1], b.max[2]] as const,
+  }));
+}
+
 /**
  * Doorway jamb trim — how far to pull the collision-only face of a wall back from
  * the doorway opening. Matching the player radius was not enough in live play:
@@ -143,25 +269,20 @@ export function trimDoorwayJambCornersForCollision(
 export function mergeCoplanarTouchingBlockerAabbs(
   aabbs: readonly CollisionAabb[],
 ): CollisionAabb[] {
-  type Box = {
-    min: [number, number, number];
-    max: [number, number, number];
-  };
-  const list: Box[] = aabbs.map((b) => ({
+  let list: MergeBox[] = aabbs.map((b) => ({
     min: [b.min[0], b.min[1], b.min[2]],
     max: [b.max[0], b.max[1], b.max[2]],
   }));
 
-  const yBandMatch = (a: Box, b: Box): boolean =>
+  const yBandMatch = (a: MergeBox, b: MergeBox): boolean =>
     approxEq(a.min[1], b.min[1]) && approxEq(a.max[1], b.max[1]);
 
   const xzOverlap1D = (a0: number, a1: number, b0: number, b1: number): boolean =>
     !(a1 < b0 - MERGE_EPS || b1 < a0 - MERGE_EPS);
 
-  const tryMergePair = (a: Box, b: Box): Box | null => {
+  const tryMergePair = (a: MergeBox, b: MergeBox): MergeBox | null => {
     if (!yBandMatch(a, b)) return null;
 
-    // Same Z span — merge along X (touching or overlapping in X).
     if (approxEq(a.min[2], b.min[2]) && approxEq(a.max[2], b.max[2])) {
       if (!xzOverlap1D(a.min[0], a.max[0], b.min[0], b.max[0])) return null;
       return {
@@ -170,7 +291,6 @@ export function mergeCoplanarTouchingBlockerAabbs(
       };
     }
 
-    // Same X span — merge along Z.
     if (approxEq(a.min[0], b.min[0]) && approxEq(a.max[0], b.max[0])) {
       if (!xzOverlap1D(a.min[2], a.max[2], b.min[2], b.max[2])) return null;
       return {
@@ -210,6 +330,11 @@ export type FpBlockerBakeOptions = {
   stairWellDef?: StairWellDef;
   /** Default true — merges co-planar touching boxes from mesh harvest. */
   mergeCoplanar?: boolean;
+  /**
+   * When true (offline generators), run {@link mergeCoplanarSweepPreheat} before the greedy
+   * merge to shrink O(n³) work. Runtime defaults to false so collision matches historical output.
+   */
+  mergeCoplanarPreheat?: boolean;
 };
 
 /**
@@ -229,7 +354,9 @@ export function buildFpBlockerAABBsForBuilding(
   });
   const raw = [...scene.solids];
   const merge = options?.mergeCoplanar !== false;
-  const merged = merge ? mergeCoplanarTouchingBlockerAabbs(raw) : raw;
+  const seeded =
+    merge && options?.mergeCoplanarPreheat === true ? mergeCoplanarSweepPreheat(raw) : raw;
+  const merged = merge ? mergeCoplanarTouchingBlockerAabbs(seeded) : raw;
   const trimmed = trimDoorwayJambCornersForCollision(merged);
   const windowSeals = buildUnitExteriorWindowSealBlockersForBuilding(
     building,
