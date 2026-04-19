@@ -3,6 +3,7 @@ import {
   isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
+import type { CollisionArtifactsStatus } from "../editor/editorContentDiscovery.js";
 import { reloadEditorFromContent } from "../editor/editorBootstrap.js";
 import {
   frameEditorBuilding,
@@ -212,12 +213,12 @@ export function EditorChrome() {
 
   const refreshCollisionStatus = useCallback(async () => {
     try {
-      const next = (await fetchCollisionArtifactsStatus()) as typeof collisionArtifactsStatus;
+      const next = (await fetchCollisionArtifactsStatus()) as CollisionArtifactsStatus | null;
       setCollisionArtifactsStatus(next ?? null);
     } catch {
       /* ignore */
     }
-  }, [collisionArtifactsStatus, setCollisionArtifactsStatus]);
+  }, [setCollisionArtifactsStatus]);
 
   useEffect(() => {
     void refreshCollisionStatus();

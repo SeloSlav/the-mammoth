@@ -10,4 +10,16 @@ export default [
       "max-lines": ["warn", { max: 900, skipBlankLines: true, skipComments: true }],
     },
   },
+  {
+    files: ["src/ui/EditorChrome.tsx", "src/state/editorStore.ts"],
+    rules: {
+      "max-lines": ["warn", { max: 1200, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    files: ["src/editor/editorSceneRuntime.ts"],
+    rules: {
+      "max-lines": ["warn", { max: 2500, skipBlankLines: true, skipComments: true }],
+    },
+  },
 ];

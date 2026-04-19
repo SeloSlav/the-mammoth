@@ -225,7 +225,8 @@ export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Ob
     resolveAncestor(hit, (obj) => {
       const id = obj.userData.editorStairPartId;
       return typeof id === "string" && id.length > 0;
-    })
+    }) ??
+    resolveAncestor(hit, (obj) => obj.userData.editorStairOpeningProxy === true)
   );
 }
 
@@ -233,6 +234,12 @@ export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Ob
 export function resolveStairWellPartId(hit: THREE.Object3D | null): string | null {
   const target = resolveStairWellPartTarget(hit);
   if (!target) return null;
+  if (target.userData.editorStairOpeningProxy === true) {
+    const openingId = target.userData.editorStairOpeningId;
+    if (typeof openingId === "string" && openingId.length > 0) return openingId;
+    if (typeof target.name === "string" && target.name.length > 0) return target.name;
+    return null;
+  }
   const pickId = target.userData.editorStairPickId;
   if (typeof pickId === "string" && pickId.length > 0) return pickId;
   const id = target.userData.editorStairPartId;

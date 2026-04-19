@@ -37,12 +37,9 @@ import type {
   EditorMode,
   EditorState,
   EditorWorkspace,
-  FpAuthorCameraKind,
-  FpAuthorPickMeta,
   FpAuthorSubjectKind,
   LandingDocKind,
   LandingKitVariant,
-  TransformMode,
 } from "./editorStoreTypes.js";
 import { landingDocKindToMode, workspaceToInitialMode } from "./editorWorkspaceMap.js";
 
