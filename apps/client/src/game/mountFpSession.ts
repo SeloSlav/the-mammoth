@@ -44,7 +44,10 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbarSelection";
-import { getHotbarSlotInventoryItem } from "./fpHotbarResolve";
+import {
+  getHotbarSlotInventoryItem,
+  hotbarDefIdSupportsMeleeAttack,
+} from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
 import {
   onFpSessionPostRenderFrame,
@@ -1861,7 +1864,12 @@ export async function mountFpSession(
 
     if (meleePressPending) {
       meleePressPending = false;
-      if (nowMs - lastMeleeMs >= MELEE_COOLDOWN_MS) {
+      const hb = selectedHotbarRow();
+      if (
+        hb &&
+        hotbarDefIdSupportsMeleeAttack(hb.defId) &&
+        nowMs - lastMeleeMs >= MELEE_COOLDOWN_MS
+      ) {
         lastMeleeMs = nowMs;
         meleeAttackSeq += 1;
         localAudio.playMeleeWeaponSwingLocal();
@@ -2013,6 +2021,10 @@ export async function mountFpSession(
       hotbarRow && getMammothItemDef(hotbarRow.defId)?.category === "consumable"
         ? hotbarRow.defId
         : null;
+
+    presentation.setLocalFpGameplayStockHandVisible(
+      hotbarHeld !== "unarmed" || hotbarConsumableDefId !== null,
+    );
 
     const localState = buildLocalPlayerGameplayState({
       playerIdHex: localId,

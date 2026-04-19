@@ -145,6 +145,8 @@ export class LocalFirstPersonPresenter {
   private handScene?: THREE.Object3D;
   private weaponGripAnchor?: THREE.Group;
   private authoringFrozen = false;
+  /** When false and no weapon GLB is equipped, stock hand meshes are hidden (empty hotbar / non-weapon slot). */
+  private fpGameplayStockHandVisible = false;
   /**
    * Editor / tools: preview normalized swing phase on the frozen viewmodel (same space as
    * `firstPerson.meleeSwing` — additive on {@link rigRestPos} under `fpRoot` / head pitch).
@@ -295,17 +297,24 @@ export class LocalFirstPersonPresenter {
 
   /**
    * Toggle visibility of the stock FP hand GLB drawables only (not the weapon under
-   * {@link weaponGripAnchor}), driven by {@link WeaponDefinition.fpHidesHandMesh}.
-   *
-   * When no weapon is equipped (`weaponDefinition === null`), the stock hand stays **visible** so
-   * empty hands and hotbar consumables (mounted on {@link weaponGripAnchor}) read correctly.
+   * {@link weaponGripAnchor}), driven by {@link WeaponDefinition.fpHidesHandMesh} and gameplay
+   * ({@link setFpGameplayStockHandVisible} — weapon or consumable on selected hotbar).
    *
    * GLTFs often ship helper groups or even the scene root with `visible: false`; that suppresses
    * the whole subtree regardless of mesh flags, so we first force the hand branch (excluding the
    * equipped weapon under the grip anchor) back to visible, then optionally hide drawables only.
    */
+  setFpGameplayStockHandVisible(visible: boolean): void {
+    if (this.fpGameplayStockHandVisible === visible) return;
+    this.fpGameplayStockHandVisible = visible;
+    this.applyFpHandMeshVisibility();
+  }
+
   private applyFpHandMeshVisibility(): void {
-    const hide = this.weaponDefinition?.fpHidesHandMesh === true;
+    const hideForWeaponMesh = this.weaponDefinition?.fpHidesHandMesh === true;
+    const hideForEmptyHands =
+      !this.fpGameplayStockHandVisible && this.weaponDefinition == null;
+    const hide = hideForWeaponMesh || hideForEmptyHands;
     if (!this.handScene || !this.weaponGripAnchor) return;
     const grip = this.weaponGripAnchor;
     this.handScene.visible = true;

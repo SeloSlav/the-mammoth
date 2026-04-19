@@ -83,6 +83,7 @@ export class FpConsumableEditorSession {
         weaponDefinition: null,
       });
       await presenter.initViewmodel();
+      presenter.setFpGameplayStockHandVisible(true);
       presenter.setAuthoringFrozen(true);
       session.presenter = presenter;
       const gripAnchor = presenter.getFpGripAnchorObject();

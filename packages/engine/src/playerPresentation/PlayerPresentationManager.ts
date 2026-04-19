@@ -128,6 +128,11 @@ export class PlayerPresentationManager {
     return this.local.getFpGripAnchorObject();
   }
 
+  /** Hide stock hand meshes when the selected hotbar has neither a weapon nor a consumable. */
+  setLocalFpGameplayStockHandVisible(visible: boolean): void {
+    this.local.setFpGameplayStockHandVisible(visible);
+  }
+
   /** After moving the weapon root in authoring, sync baseline so gameplay matches. */
   syncLocalFpWeaponMountBaselineFromRoot(): void {
     this.local.syncFpWeaponMountBaselineFromRoot();
