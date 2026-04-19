@@ -297,12 +297,15 @@ export class LocalFirstPersonPresenter {
    * Toggle visibility of the stock FP hand GLB drawables only (not the weapon under
    * {@link weaponGripAnchor}), driven by {@link WeaponDefinition.fpHidesHandMesh}.
    *
+   * When no weapon is equipped (`weaponDefinition === null`), the stock hand stays **visible** so
+   * empty hands and hotbar consumables (mounted on {@link weaponGripAnchor}) read correctly.
+   *
    * GLTFs often ship helper groups or even the scene root with `visible: false`; that suppresses
    * the whole subtree regardless of mesh flags, so we first force the hand branch (excluding the
    * equipped weapon under the grip anchor) back to visible, then optionally hide drawables only.
    */
   private applyFpHandMeshVisibility(): void {
-    const hide = !this.weaponDefinition || this.weaponDefinition.fpHidesHandMesh === true;
+    const hide = this.weaponDefinition?.fpHidesHandMesh === true;
     if (!this.handScene || !this.weaponGripAnchor) return;
     const grip = this.weaponGripAnchor;
     this.handScene.visible = true;

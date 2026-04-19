@@ -34,6 +34,11 @@ export type BuildFloorMeshesOptions = {
   stairWellDef?: StairWellDef;
   /** Optional authored compact floor label for landing signs, e.g. `PR`, `1`, `19`. */
   storyShortLabel?: string;
+  /**
+   * Salt for deterministic unit exterior window layout (facade). Same building content yields the
+   * same windows until this value changes.
+   */
+  facadeSalt?: number;
 };
 
 type ElevatorDoorFaceOverrideMeta = {

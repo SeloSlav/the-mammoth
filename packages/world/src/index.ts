@@ -46,9 +46,14 @@ export {
 } from "./stairRuntimeOverlay.js";
 export {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  DEFAULT_EXTERIOR_FACADE_SALT,
   instantiateBuildingFloorStack,
   type InstantiateBuildingFloorStackOptions,
 } from "./buildingFloorStack.js";
+export {
+  facadeSeedForUnitFace,
+  planUnitExteriorWindowsForFace,
+} from "./unitExteriorWindows.js";
 export {
   buildStaticCollisionSceneForBuilding,
   collectCollisionAabbsFromObject3D,

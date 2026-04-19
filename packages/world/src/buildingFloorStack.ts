@@ -16,6 +16,9 @@ import {
   resolveFloorDocForLevel,
   type GetFloorOverrideDoc,
 } from "./resolvedFloorDoc.js";
+import { DEFAULT_EXTERIOR_FACADE_SALT } from "./unitExteriorWindows.js";
+
+export { DEFAULT_EXTERIOR_FACADE_SALT };
 
 /**
  * Vertical spacing between stacked `BuildingFloorRef` plates (meters).
@@ -27,6 +30,8 @@ export type InstantiateBuildingFloorStackOptions = {
   floorSpacingM?: number;
   getFloorOverrideDoc?: GetFloorOverrideDoc;
   stairWellDef?: StairWellDef;
+  /** Overrides default deterministic salt for unit exterior windows (see `BuildFloorMeshesOptions`). */
+  facadeSalt?: number;
 };
 
 /**
@@ -87,6 +92,7 @@ export function instantiateBuildingFloorStack(
       plateWorldOriginY,
       elevatorDoorFaceByShaftKey,
       stairWellDef: options?.stairWellDef,
+      facadeSalt: options?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;
