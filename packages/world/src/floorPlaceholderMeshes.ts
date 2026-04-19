@@ -56,6 +56,10 @@ import {
 } from "./unitExteriorWindows.js";
 import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
 import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
+import {
+  type StairCorridorSignPlacement,
+  addStairwellCorridorSignMeshes,
+} from "./stairwellCorridorSign.js";
 import type { CollisionAabb } from "./collisionScene.js";
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
@@ -160,6 +164,8 @@ type HollowShellOpts = {
   corridorWallHoles?: CorridorShellWallHoles;
   /** Elevator door heads on this corridor shell — room-local; used for manufacturer signage. */
   elevatorSignPlacements?: readonly ElevatorCorridorSignPlacement[];
+  /** Stairwell door heads — room-local; cantilevered STEP signs above each cutout. */
+  stairSignPlacements?: readonly StairCorridorSignPlacement[];
   /** Perimeter faces that sit on the building exterior and should receive facade cladding. */
   exteriorFaces?: readonly CardinalFace[];
   /** Unit exterior window openings (merged into inner walls; cladding uses these for units only). */
@@ -661,6 +667,113 @@ function elevatorCorridorSignPlacementsFromPunches(
       zMid: (c.z0r + c.z1r) * 0.5,
       xMid: (c.x0r + c.x1r) * 0.5,
     });
+  }
+  return out;
+}
+
+function stairCorridorSignPlacementsFromPunches(
+  corridor: PlacedObject,
+  sx: number,
+  sy: number,
+  sz: number,
+  stairPunches: readonly PlateStairCorridorDoorPunch[],
+): StairCorridorSignPlacement[] {
+  const contacts = resolveCorridorShaftDoorContacts(
+    corridor,
+    sx,
+    sy,
+    sz,
+    "corridor",
+    stairPunches,
+  );
+  const out: StairCorridorSignPlacement[] = [];
+  for (const c of contacts) {
+    out.push({
+      corridorWall: c.corridorWall,
+      yDoorTop: Math.max(c.y0r, c.y1r),
+      holeAlongZ: c.holeAlongZ,
+      z0: Math.min(c.z0r, c.z1r),
+      z1: Math.max(c.z0r, c.z1r),
+      x0: Math.min(c.x0r, c.x1r),
+      x1: Math.max(c.x0r, c.x1r),
+    });
+  }
+  return out;
+}
+
+/**
+ * One STEP sign per wall cutout (room-local spans from {@link CorridorShellWallHoles}).
+ * Uses {@link entryDoorYRangeForShell} for vertical head so the lintel clears the door frame
+ * (shell carve holes extend down to the floor slab).
+ */
+function stairSignPlacementsFromCorridorWallHoleSpans(
+  holes: CorridorShellWallHoles,
+  sy: number,
+): StairCorridorSignPlacement[] {
+  const { yDoor1 } = entryDoorYRangeForShell(sy);
+  const yDoorTop = yDoor1;
+  const out: StairCorridorSignPlacement[] = [];
+  for (const h of holes.e) {
+    out.push({
+      corridorWall: "e",
+      yDoorTop,
+      holeAlongZ: true,
+      z0: Math.min(h.z0, h.z1),
+      z1: Math.max(h.z0, h.z1),
+      x0: 0,
+      x1: 0,
+    });
+  }
+  for (const h of holes.w) {
+    out.push({
+      corridorWall: "w",
+      yDoorTop,
+      holeAlongZ: true,
+      z0: Math.min(h.z0, h.z1),
+      z1: Math.max(h.z0, h.z1),
+      x0: 0,
+      x1: 0,
+    });
+  }
+  for (const h of holes.n) {
+    out.push({
+      corridorWall: "n",
+      yDoorTop,
+      holeAlongZ: false,
+      z0: 0,
+      z1: 0,
+      x0: Math.min(h.x0, h.x1),
+      x1: Math.max(h.x0, h.x1),
+    });
+  }
+  for (const h of holes.s) {
+    out.push({
+      corridorWall: "s",
+      yDoorTop,
+      holeAlongZ: false,
+      z0: 0,
+      z1: 0,
+      x0: Math.min(h.x0, h.x1),
+      x1: Math.max(h.x0, h.x1),
+    });
+  }
+  return out;
+}
+
+function mergeStairCorridorSignPlacements(
+  ...lists: readonly StairCorridorSignPlacement[][]
+): StairCorridorSignPlacement[] {
+  const seen = new Set<string>();
+  const out: StairCorridorSignPlacement[] = [];
+  for (const list of lists) {
+    for (const p of list) {
+      const zc = p.holeAlongZ ? (p.z0 + p.z1) * 0.5 : 0;
+      const xc = p.holeAlongZ ? 0 : (p.x0 + p.x1) * 0.5;
+      const key = `${p.corridorWall}:${zc.toFixed(3)}:${xc.toFixed(3)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
   }
   return out;
 }
@@ -1177,6 +1290,7 @@ function addHollowRoomShell(
       opts.storyShortLabel,
       opts.elevatorSignPlacements ?? [],
     );
+    addStairwellCorridorSignMeshes(group, sx, sy, sz, opts.stairSignPlacements ?? []);
     return;
   }
 
@@ -1341,6 +1455,7 @@ function addHollowRoomShell(
     opts.storyShortLabel,
     opts.elevatorSignPlacements ?? [],
   );
+  addStairwellCorridorSignMeshes(group, sx, sy, sz, opts.stairSignPlacements ?? []);
 }
 
 function expandBoxForPlacedObject(
@@ -1661,6 +1776,28 @@ export function buildFloorMeshes(
               elevatorDoorPunchesPlate,
             )
           : [];
+      const stairSignPlacements =
+        kind === "corridor" && !skipShaftCutouts
+          ? mergeStairCorridorSignPlacements(
+              stairCorridorSignPlacementsFromPunches(
+                obj,
+                sx,
+                sy,
+                sz,
+                stairDoorPunchesPlate,
+              ),
+              (() => {
+                const manual = manualCorridorShellHoleExtrasForFloor(
+                  floor,
+                  obj,
+                  sx,
+                  sy,
+                  sz,
+                );
+                return manual ? stairSignPlacementsFromCorridorWallHoleSpans(manual, sy) : [];
+              })(),
+            )
+          : [];
 
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
@@ -1713,6 +1850,7 @@ export function buildFloorMeshes(
         shaftElevatorsMerged,
         corridorWallHoles,
         elevatorSignPlacements,
+        stairSignPlacements,
         exteriorFaces: roomExteriorFaces,
         exteriorWindowHoles,
       });
@@ -2058,6 +2196,13 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         corridorShellHolesFromStairPunches(obj, sx, sy, sz, kind, stairDoorPunchesPlate),
         corridorShellHolesFromAdjacentUnitEntries(obj, sx, sy, sz, floor),
       );
+      const stairSignPlacements = stairCorridorSignPlacementsFromPunches(
+        obj,
+        sx,
+        sy,
+        sz,
+        stairDoorPunchesPlate,
+      );
       const corridor = new THREE.Group();
       corridor.position.set(
         worldOrigin[0] + obj.position[0],
@@ -2072,6 +2217,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         storyLevelIndex: ref.levelIndex,
         storyShortLabel: shortFloorLabelForRef(ref),
         corridorWallHoles,
+        stairSignPlacements,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(corridor, wallPrefixesForFaces("shell_wall", affectedFaces)),

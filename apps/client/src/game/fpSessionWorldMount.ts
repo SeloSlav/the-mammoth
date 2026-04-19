@@ -167,6 +167,16 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     .copy(group.matrixWorld)
     .invert();
 
+  /** Meshes that must stay separate (e.g. canvas-textured stair signs). */
+  const preserveMeshes: THREE.Mesh[] = [];
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothSkipFloorGeometryMerge === true) preserveMeshes.push(obj);
+  });
+  for (const m of preserveMeshes) {
+    m.removeFromParent();
+  }
+
   // Collect geometry clones keyed by material UUID.
   const geosByMat = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
 
@@ -202,5 +212,9 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     const mesh = new THREE.Mesh(merged, mat);
     mesh.frustumCulled = true;
     group.add(mesh);
+  }
+
+  for (const m of preserveMeshes) {
+    group.add(m);
   }
 }

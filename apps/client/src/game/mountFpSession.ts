@@ -345,14 +345,8 @@ export async function mountFpSession(
    */
   const PLAYER_RIG_VIEW_LERP_PER_S = 14;
   /**
-   * After a full stop, small 20 Hz reconcile corrections still move the render target; a second
-   * slow ease on the rig reads as “settling drift”. Match a faster follow only when input is idle
-   * and horizontal speed is negligible (see {@link VIEW_SETTLED_IDLE_MAX_HS}).
-   */
-  const PLAYER_RIG_VIEW_IDLE_LERP_PER_S = 40;
-  /**
-   * Multiplier on {@link DISPLAY_OFFSET_DAMP} while settled — clears stop-state display offset
-   * sooner so reconcile does not pump visible wobble.
+   * Multiplier on {@link DISPLAY_OFFSET_DAMP} while movement keys are up — clears display offset
+   * sooner so reconcile does not pump visible wobble after a stop.
    */
   const DISPLAY_OFFSET_IDLE_DAMP_MULT = 2.35;
   /** With movement keys up, treat horizontal speed below this (m/s) as fully stopped for view settle. */
@@ -1559,46 +1553,94 @@ export async function mountFpSession(
       intentsHead = 0;
     }
 
-    const pendingCount = pendingMoveIntents.length - intentsHead;
-    if (pendingCount === 0) return;
-
     const alignHintMs = performance.now();
-
-    // Reset pooled replay state — no Vec3 / LocoState allocation.
-    // Only physics state is initialised from the server row; visual state (headBobPhase,
-    // eyeSmoothed) is intentionally left at whatever the replay pool currently holds.
-    // We will NOT copy those back — see below.
-    _replayPos.set(serverRow.x, serverRow.y, serverRow.z);
-    _replayPrevPos.copy(_replayPos);
-    _replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
-    _replayLoco.grounded = serverRow.grounded !== 0;
-    _replayLoco.jumpQueued = false;
-
-    for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
-      const sample = pendingMoveIntents[i]!;
-      const stepNowMs = sample.evalWallClockMs;
-      const isLast = i === pendingMoveIntents.length - 1;
-      let stepDt = NET_DT_SEC;
-      if (isLast) {
-        const wallSec = (alignHintMs - stepNowMs) * 0.001;
-        // Live sim integrates with real frame dts since this intent; replay must use the same
-        // elapsed wall time (capped at one net interval). A fixed 50 ms last step over-integrates
-        // deceleration vs the main loop and reads as the body sliding backward after a stop.
-        // (Elevators originally forced this path for cab Y; the same dt mismatch applies on foot.)
-        stepDt = Math.min(NET_DT_SEC, Math.max(wallSec, 0.001));
+    // Use `keys` (updated on keydown/keyup), not `_input` (only copied at RAF start). Pose
+    // callbacks can run between frames while `_input` still shows last tick’s movement — then
+    // reconcile would fire right after key release and feel like rubber-band “snap back”.
+    const inputIdleRecon =
+      !keys.has("KeyW") &&
+      !keys.has("KeyS") &&
+      !keys.has("KeyA") &&
+      !keys.has("KeyD");
+    const onMovingElevatorRider =
+      fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(
+        pos.x,
+        pos.y,
+        pos.z,
+        alignHintMs,
+      );
+    // Any time WASD is up, ignore server pose nudges for the whole friction coast — not only
+    // after horizontal speed has decayed below a small epsilon (that gap was still reconciling
+    // and felt like the same “snap back”).
+    const skipFootPoseReconcile = inputIdleRecon && !onMovingElevatorRider;
+    if (skipFootPoseReconcile) {
+      const rough = Math.hypot(
+        serverRow.x - pos.x,
+        serverRow.y - pos.y,
+        serverRow.z - pos.z,
+      );
+      // Still hard-resync teleports / huge desync; only ignore sub-threshold idle nudges.
+      if (rough <= DISPLAY_HARD_SNAP_M) {
+        _displayOffset.set(0, 0, 0);
+        return;
       }
-      fpElevators.syncCabEvalClock(stepNowMs);
-      inputFromBitsInto(sample.bits, _replayInput);
-      _replayStepOpts.evalWallClockMs = stepNowMs;
-      _replayStepOpts.dtSec = stepDt;
-      _replayStepOpts.crouch = (sample.bits & 64) !== 0;
-      _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
-      _replayStepOpts.bodyYawRad = sample.aimYaw;
-      simulatePredictedPlayerStep(_replayStepOpts);
     }
-    const corrX = _replayPos.x - pos.x;
-    const corrY = _replayPos.y - pos.y;
-    const corrZ = _replayPos.z - pos.z;
+
+    const pendingCount = pendingMoveIntents.length - intentsHead;
+
+    let replayPosForLog: { x: number; y: number; z: number };
+    let crouchForLog: boolean;
+
+    if (pendingCount > 0) {
+      // Reset pooled replay state — no Vec3 / LocoState allocation.
+      // Only physics state is initialised from the server row; visual state (headBobPhase,
+      // eyeSmoothed) is intentionally left at whatever the replay pool currently holds.
+      // We will NOT copy those back — see below.
+      _replayPos.set(serverRow.x, serverRow.y, serverRow.z);
+      _replayPrevPos.copy(_replayPos);
+      _replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
+      _replayLoco.grounded = serverRow.grounded !== 0;
+      _replayLoco.jumpQueued = false;
+
+      for (let i = intentsHead; i < pendingMoveIntents.length; i++) {
+        const sample = pendingMoveIntents[i]!;
+        const stepNowMs = sample.evalWallClockMs;
+        const isLast = i === pendingMoveIntents.length - 1;
+        let stepDt = NET_DT_SEC;
+        if (isLast) {
+          const wallSec = (alignHintMs - stepNowMs) * 0.001;
+          // Live sim integrates with real frame dts since this intent; replay must use the same
+          // elapsed wall time (capped at one net interval). A fixed 50 ms last step over-integrates
+          // deceleration vs the main loop and reads as the body sliding backward after a stop.
+          // (Elevators originally forced this path for cab Y; the same dt mismatch applies on foot.)
+          stepDt = Math.min(NET_DT_SEC, Math.max(wallSec, 0.001));
+        }
+        fpElevators.syncCabEvalClock(stepNowMs);
+        inputFromBitsInto(sample.bits, _replayInput);
+        _replayStepOpts.evalWallClockMs = stepNowMs;
+        _replayStepOpts.dtSec = stepDt;
+        _replayStepOpts.crouch = (sample.bits & 64) !== 0;
+        _replayStepOpts.jumpPressedThisFrame = (sample.bits & 16) !== 0;
+        _replayStepOpts.bodyYawRad = sample.aimYaw;
+        simulatePredictedPlayerStep(_replayStepOpts);
+      }
+      replayPosForLog = { x: _replayPos.x, y: _replayPos.y, z: _replayPos.z };
+      crouchForLog = _replayStepOpts.crouch;
+    } else {
+      // All intents acked — no replay tail, but `player_pose` can still disagree until the next
+      // periodic intent lands. Skipping correction here used to pile error into one visible snap.
+      _replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
+      _replayLoco.grounded = serverRow.grounded !== 0;
+      replayPosForLog = { x: serverRow.x, y: serverRow.y, z: serverRow.z };
+      crouchForLog = crouchToggle;
+    }
+
+    const corrX =
+      pendingCount > 0 ? _replayPos.x - pos.x : serverRow.x - pos.x;
+    const corrY =
+      pendingCount > 0 ? _replayPos.y - pos.y : serverRow.y - pos.y;
+    const corrZ =
+      pendingCount > 0 ? _replayPos.z - pos.z : serverRow.z - pos.z;
     const corrDist = Math.hypot(corrX, corrY, corrZ);
     const ignoreSmallElevRiderPhantom =
       fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(pos.x, pos.y, pos.z, alignHintMs) &&
@@ -1606,14 +1648,18 @@ export async function mountFpSession(
     logDoorDebugReconcile(
       serverRow,
       { x: pos.x, y: pos.y, z: pos.z },
-      { x: _replayPos.x, y: _replayPos.y, z: _replayPos.z },
-      _replayStepOpts.crouch,
+      replayPosForLog,
+      crouchForLog,
       pendingCount,
     );
 
     if (corrDist > DISPLAY_HARD_SNAP_M) {
       // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
-      pos.copy(_replayPos);
+      if (pendingCount > 0) {
+        pos.copy(_replayPos);
+      } else {
+        pos.set(serverRow.x, serverRow.y, serverRow.z);
+      }
       _displayOffset.set(0, 0, 0);
       loco.velocity.copy(_replayLoco.velocity);
       loco.grounded = _replayLoco.grounded;
@@ -2101,7 +2147,8 @@ export async function mountFpSession(
     const viewSettledIdle =
       inputIdle && hs < VIEW_SETTLED_IDLE_MAX_HS && !fastElevY;
     if (_displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0) {
-      const idleOffMult = viewSettledIdle ? DISPLAY_OFFSET_IDLE_DAMP_MULT : 1;
+      // Faster decay as soon as WASD is released so `rtx` does not creep after a stop.
+      const idleOffMult = inputIdle ? DISPLAY_OFFSET_IDLE_DAMP_MULT : 1;
       const k = Math.exp(-DISPLAY_OFFSET_DAMP * idleOffMult * dt);
       const kY = fastElevY
         ? Math.exp(-DISPLAY_OFFSET_DAMP * DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE * dt)
@@ -2122,10 +2169,11 @@ export async function mountFpSession(
     if (!fpRigViewSmoothedReady) {
       _rigViewScratch.set(rtx, rty, rtz);
       fpRigViewSmoothedReady = true;
+    } else if (inputIdle) {
+      // Instant rig = camera/feet follow `pos + _displayOffset` same frame keys go up (no ease-out lag).
+      _rigViewScratch.set(rtx, rty, rtz);
     } else if (PLAYER_RIG_VIEW_LERP_PER_S > 1e-3) {
-      const rigLerpPerS = viewSettledIdle
-        ? PLAYER_RIG_VIEW_IDLE_LERP_PER_S
-        : PLAYER_RIG_VIEW_LERP_PER_S;
+      const rigLerpPerS = PLAYER_RIG_VIEW_LERP_PER_S;
       const a = 1 - Math.exp(-rigLerpPerS * dt);
       const aXZ = fastElevY
         ? 1 -
