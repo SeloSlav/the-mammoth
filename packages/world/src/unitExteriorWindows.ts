@@ -140,7 +140,7 @@ export function planUnitExteriorWindowsForFace(opts: {
 
   const usable = tMax - tMin;
   const gapTotal = (n - 1) * MULLION_GAP_M;
-  let remaining = usable - gapTotal;
+  const remaining = usable - gapTotal;
   if (remaining < n * MIN_SEGMENT_WIDTH_M) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }

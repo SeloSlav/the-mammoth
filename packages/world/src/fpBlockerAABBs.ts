@@ -146,7 +146,7 @@ export function mergeCoplanarTouchingBlockerAabbs(
     min: [number, number, number];
     max: [number, number, number];
   };
-  let list: Box[] = aabbs.map((b) => ({
+  const list: Box[] = aabbs.map((b) => ({
     min: [b.min[0], b.min[1], b.min[2]],
     max: [b.max[0], b.max[1], b.max[2]],
   }));

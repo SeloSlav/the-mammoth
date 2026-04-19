@@ -86,7 +86,6 @@ import {
   entryDoorTangentHalfFromOverlap,
   entryDoorYRangeForShell,
   UNIT_CORRIDOR_TOUCH_M,
-  UNIT_ENTRY_DOOR_W,
 } from "./unitEntryAdjacency.js";
 import { manualCorridorShellHoleExtrasForFloor } from "./manualApartmentDoorExtras.js";
 
@@ -317,7 +316,7 @@ function resolveCorridorShaftDoorContacts(
     /** Shaft door Y is interior-local; convert to corridor room-local Y (same as lobby holes). */
     const y0w = spy + ya - cpy;
     const y1w = spy + yb - cpy;
-    let { y0: y0r, y1: y1r } = normalizeCorridorStairDoorVerticalSpan(
+    const { y0: y0r, y1: y1r } = normalizeCorridorStairDoorVerticalSpan(
       yLo,
       yHi - 0.008,
       y0w,

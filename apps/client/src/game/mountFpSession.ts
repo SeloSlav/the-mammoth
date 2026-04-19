@@ -347,6 +347,13 @@ export async function mountFpSession(
   const _rigViewScratch = new THREE.Vector3();
   /** Beyond this distance corrections hard-snap (teleport, cheat detection, etc.). */
   const DISPLAY_HARD_SNAP_M = 3.0;
+  /**
+   * While feet are in the **moving** cab rider volume, skip applying **any** small replay correction
+   * (X/Y/Z + `_displayOffset`). Replay dt ≠ server tick dt, so phantom error is on all axes; only
+   * deferring Y still left horizontal reconcile pumping `displayOffsetM`.  Above this, full snap
+   * (fell out, teleported, etc.).
+   */
+  const ELEV_MOVING_RIDER_RECONCILE_SNAP_M = 2.5;
 
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
@@ -1587,6 +1594,9 @@ export async function mountFpSession(
     const corrY = _replayPos.y - pos.y;
     const corrZ = _replayPos.z - pos.z;
     const corrDist = Math.hypot(corrX, corrY, corrZ);
+    const ignoreSmallElevRiderPhantom =
+      fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(pos.x, pos.y, pos.z, alignHintMs) &&
+      corrDist < ELEV_MOVING_RIDER_RECONCILE_SNAP_M;
     logDoorDebugReconcile(
       serverRow,
       { x: pos.x, y: pos.y, z: pos.z },
@@ -1599,7 +1609,7 @@ export async function mountFpSession(
       // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
       pos.copy(_replayPos);
       _displayOffset.set(0, 0, 0);
-    } else if (corrDist > 0.001) {
+    } else if (corrDist > 0.001 && !ignoreSmallElevRiderPhantom) {
       // Small correction: immediately fix physics position but let the visual catch up smoothly.
       // The player never sees a snap — the render position is pos + _displayOffset, and the
       // offset decays to zero every frame.

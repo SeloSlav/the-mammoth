@@ -207,6 +207,18 @@ export type MountFpElevatorWorldResult = {
    * the same source as `sampleRideDebug().cabVyMps` when feet sampling lags.
    */
   getHudMovingCabVyMps(px: number, py: number, pz: number, nowMs: number): number;
+  /**
+   * True when the car is {@link ELEVATOR_PHASE_MOVING} and the feet point is inside the **rider snap /
+   * physics cab volume** (door-aware), not just the HUD pick volume. Used by prediction reconcile:
+   * replay uses different dt than the server tick, so small phantom error hits **X, Y, and Z** — skipping
+   * only Y still pumped `_displayOffset` from horizontal corrections (see `mountFpSession`).
+   */
+  ignoreSmallPoseReconcileWhileMovingElevatorRider(
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+  ): boolean;
 };
 
 function parseElevatorVisualDefs():
@@ -339,7 +351,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const cabSmoothedUByKey = new Map<string, number>();
   const cabMoveLegByKey = new Map<string, string>();
   const cabFilteredElapsedSecByKey = new Map<string, number>();
-  const cabLastElevSampleMicrosByKey = new Map<string, bigint>();
 
   const ensureInterp = (key: string) => {
     if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
@@ -459,24 +470,22 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
-        cabLastElevSampleMicrosByKey.delete(key);
         continue;
       }
-      const stamp = row.sampleServerMicros;
-      const stampChanged = cabLastElevSampleMicrosByKey.get(key) !== stamp;
-      cabLastElevSampleMicrosByKey.set(key, stamp);
+
+      const leg = `${row.moveFromLevel}:${row.moveToLevel}`;
+      const legChanged = cabMoveLegByKey.get(key) !== leg;
+      if (legChanged) {
+        cabMoveLegByKey.set(key, leg);
+        cabFilteredElapsedSecByKey.delete(key);
+      }
 
       const rawElapsed = elapsedSecSinceServerSample(row, nowMs);
-      let filtElapsed: number;
-      if (stampChanged) {
-        filtElapsed = rawElapsed;
-      } else {
-        const prevF = cabFilteredElapsedSecByKey.get(key);
-        filtElapsed =
-          prevF === undefined
-            ? rawElapsed
-            : prevF + (rawElapsed - prevF) * elapsedBlend;
-      }
+      const prevF = cabFilteredElapsedSecByKey.get(key);
+      const filtElapsed =
+        prevF === undefined
+          ? rawElapsed
+          : prevF + (rawElapsed - prevF) * elapsedBlend;
       cabFilteredElapsedSecByKey.set(key, filtElapsed);
 
       const y0 = feetYForLayout(layout, row.moveFromLevel);
@@ -485,13 +494,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const need = Math.max(1e-4, dist / Math.max(0.08, speed));
       const targetU = Math.min(1, row.moveU + filtElapsed / need);
 
-      const leg = `${row.moveFromLevel}:${row.moveToLevel}`;
-      if (cabMoveLegByKey.get(key) !== leg) {
-        cabMoveLegByKey.set(key, leg);
-        cabSmoothedUByKey.set(key, targetU);
-        continue;
-      }
-      if (stampChanged) {
+      if (legChanged) {
         cabSmoothedUByKey.set(key, targetU);
         continue;
       }
@@ -503,7 +506,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
-        cabLastElevSampleMicrosByKey.delete(key);
       }
     }
   };
@@ -1179,6 +1181,39 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return 0;
   };
 
+  const ignoreSmallPoseReconcileWhileMovingElevatorRider = (
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+  ): boolean => {
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      if (row.phase !== ELEVATOR_PHASE_MOVING) continue;
+      const cabFeet = getCabY(key, nowMs);
+      if (!Number.isFinite(cabFeet)) continue;
+      const lx = px - (ox + row.plateX);
+      const lz = pz - (oz + row.plateZ);
+      const doorOpen = getDoor(key, nowMs);
+      if (
+        fpElevatorRiderSnapContainsLocalPoint(
+          lx,
+          lz,
+          py,
+          cabFeet,
+          vis.inner,
+          vis.layout.doorFace,
+          doorOpen,
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const tick = (_dtSec: number, nowMs: number, playerPos: THREE.Vector3) => {
     const px = playerPos.x;
     const py = playerPos.y;
@@ -1437,7 +1472,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       cabSmoothedUByKey.clear();
       cabMoveLegByKey.clear();
       cabFilteredElapsedSecByKey.clear();
-      cabLastElevSampleMicrosByKey.clear();
       landingByRowKey.clear();
       replicaHistoryByKey.clear();
       doorInterp.clear();
@@ -1456,5 +1490,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     getFloorVisibilityBand,
     sampleRideDebug,
     getHudMovingCabVyMps,
+    ignoreSmallPoseReconcileWhileMovingElevatorRider,
   };
 }

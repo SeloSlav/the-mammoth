@@ -102,8 +102,6 @@ export function getBuildingStairShaftSpecs(
 
   const globalBottom =
     (levelMin - 1) * spacing + CORE_PY - STOREY_SPACING_M * 0.5;
-  const globalTop =
-    (levelMax - 1) * spacing + CORE_PY + STOREY_SPACING_M * 0.5;
   const storeyCount = levelMax - levelMin + 1;
   const out: BuildingStairShaftSpec[] = [];
   for (const [planKey, s] of map) {

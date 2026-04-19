@@ -10,7 +10,11 @@ export default [
     },
   },
   {
-    files: ["src/floorPlaceholderMeshes.ts"],
+    files: [
+      "src/floorPlaceholderMeshes.ts",
+      "src/stairElevatorPlaceholders.ts",
+      "src/generatedCollisionArtifacts.ts",
+    ],
     rules: { "max-lines": "off" },
   },
 ];

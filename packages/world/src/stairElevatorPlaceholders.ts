@@ -1281,21 +1281,6 @@ export function rebuildStairWellPreviewOpening(
   }
 }
 
-function addStairWellOpeningEditProxy(
-  root: THREE.Group,
-  proxyId: StairWellOpeningProxyId,
-  scope: StairWellAuthoringScope,
-  sx: number,
-  sy: number,
-  sz: number,
-  context: StairWellGroundDoorContext | undefined,
-  opening: ResolvedStairWellGroundDoor,
-): void {
-  const proxy = new THREE.Mesh();
-  syncStairWellOpeningEditProxy(proxy, proxyId, scope, sx, sy, sz, context, opening);
-  root.add(proxy);
-}
-
 export function stairWellEntryOpeningFromProxyMesh(
   proxy: THREE.Object3D,
   def: StairWellDef | undefined,
@@ -1717,7 +1702,6 @@ export function addStairWellPlaceholder(
     })),
   ]);
 
-  const { ix0, ix1, iz0, iz1 } = L;
   const boundary = lowerFlightLegBoundary(L.legTreadCounts);
 
   let ti = 0;
