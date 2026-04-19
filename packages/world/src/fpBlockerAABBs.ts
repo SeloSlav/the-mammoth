@@ -5,6 +5,7 @@ import {
 } from "./collisionScene.js";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "./buildingFloorStack.js";
 import type { GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
+import { buildUnitExteriorWindowSealBlockersForBuilding } from "./unitExteriorWindowBlockers.js";
 
 /** Metres — co-planar faces within this gap merge into one blocker. */
 const MERGE_EPS = 0.002;
@@ -229,5 +230,12 @@ export function buildFpBlockerAABBsForBuilding(
   const raw = [...scene.solids];
   const merge = options?.mergeCoplanar !== false;
   const merged = merge ? mergeCoplanarTouchingBlockerAabbs(raw) : raw;
-  return trimDoorwayJambCornersForCollision(merged);
+  const trimmed = trimDoorwayJambCornersForCollision(merged);
+  const windowSeals = buildUnitExteriorWindowSealBlockersForBuilding(
+    building,
+    getFloorDoc,
+    options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M,
+    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+  );
+  return [...trimmed, ...windowSeals];
 }

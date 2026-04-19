@@ -1,9 +1,12 @@
+import type { FloorDoc } from "@the-mammoth/schemas";
 import { describe, expect, it } from "vitest";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
+import { parseBuildingDoc } from "./index.js";
 import {
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
 } from "./unitExteriorWindows.js";
+import { buildUnitExteriorWindowSealBlockersForBuilding } from "./unitExteriorWindowBlockers.js";
 
 describe("planUnitExteriorWindowsForFace", () => {
   const base = {
@@ -111,5 +114,37 @@ describe("buildFloorMeshes unit exterior windows", () => {
       if (o.name.startsWith("unit_exterior_glass_")) glass += 1;
     });
     expect(glass).toBeGreaterThan(0);
+  });
+
+  it("adds analytic window seal blockers without changing floor meshes", () => {
+    const building = parseBuildingDoc({
+      id: "b",
+      version: 1,
+      worldOrigin: [0, 0, 0],
+      floorRefs: [{ levelIndex: 2, floorDocId: "win_test_floor" }],
+    });
+    const floor: FloorDoc = {
+      id: "win_test_floor",
+      version: 1,
+      objects: [
+        {
+          id: "unit_e",
+          prefabId: "apartment_unit_small_a",
+          position: [6.425, 1.605, 0],
+          scale: [9, 3.05, 7.38],
+        },
+      ],
+    };
+    const seals = buildUnitExteriorWindowSealBlockersForBuilding(
+      building,
+      () => floor,
+      60 / 19,
+    );
+    expect(seals.length).toBeGreaterThan(0);
+    const thinX = seals.filter((b) => {
+      const dx = b.max[0] - b.min[0];
+      return dx > 0.08 && dx < 0.14;
+    });
+    expect(thinX.length).toBeGreaterThan(0);
   });
 });

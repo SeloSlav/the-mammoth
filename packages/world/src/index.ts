@@ -94,6 +94,7 @@ export {
   mergeCoplanarTouchingBlockerAabbs,
   type FpBlockerBakeOptions,
 } from "./fpBlockerAABBs.js";
+export { buildUnitExteriorWindowSealBlockersForBuilding } from "./unitExteriorWindowBlockers.js";
 export {
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_COLLISION_BLOCKER_FOOTPRINT,
