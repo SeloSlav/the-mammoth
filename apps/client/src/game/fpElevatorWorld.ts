@@ -11,6 +11,7 @@ import {
   elevatorCabGameplayHalfExtentsM,
   elevatorSupportFeetWorldY,
   estimateStoreyFromFeetY,
+  EXTERIOR_DOOR_ANIM_SPEED,
   FP_LOCOMOTION_SKIN,
   listElevatorShaftLayouts,
   maxBuildingLevelIndex,
@@ -44,7 +45,7 @@ import {
   type FpElevatorCarReplicaSample,
 } from "./fpElevatorReplicaHistory.js";
 import { createFpElevatorServerClock } from "./fpElevatorServerClock.js";
-import { FpElevatorCabInterpScalar, FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
+import { FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
 import { floorButtonLabel } from "./fpElevatorLabels.js";
 import {
   fpElevCarPanelDoorwayViewLocal,
@@ -68,7 +69,10 @@ import {
   landingExteriorDoorRowKey,
   LANDING_PASSAGE_DOCK_Y_TOL_M,
 } from "./fpElevatorLandingExteriorDoor.js";
-import { ELEVATOR_MOVE_SPEED_MPS, EXTERIOR_DOOR_VIS_INTERP_SEC } from "./fpElevatorConstants.js";
+import {
+  DOOR_SWING_OPEN01_VIS_SMOOTH_PER_S,
+  ELEVATOR_MOVE_SPEED_MPS,
+} from "./fpElevatorConstants.js";
 import { visitFpElevatorWorldCollisionAabbsInXZ } from "./fpElevatorWorldCollision.js";
 import type {
   FpKinematicAttachment,
@@ -311,13 +315,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const landingByRowKey = new Map<string, ElevatorLandingDoor>();
   /** Short local history so reconcile can replay against the cab state that existed for each input. */
   const replicaHistoryByKey = new Map<string, FpElevatorCarReplicaSample[]>();
-  const doorInterp = new Map<string, FpElevatorCabInterpScalar>();
+  /** Cab `doorOpen01` smooth chase toward replica (cab motion is server state-machine driven). */
+  const cabDoorOpenSmoothed = new Map<string, number>();
   /**
-   * Smoothed landing-door swing for visuals only.
-   * Replicated `swingOpen01` advances on the server's 20 Hz tick; we smoothstep between samples so
-   * the mesh doesn't "catch up" in visible plateaus.
+   * Landing corridor swing: client-integrated toward `desiredOpen` at {@link EXTERIOR_DOOR_ANIM_SPEED}
+   * (same rate as server physics) so the leaf is smooth at frame rate instead of 20 Hz replica steps.
    */
-  const landingDoorSwingInterp = new Map<string, FpElevatorCabInterpScalar>();
+  const landingSwingVisual = new Map<string, number>();
   /** Evaluation time for cab Y this frame (set in {@link syncCabEvalClock} before locomotion). */
   let cabEvalNowMs = performance.now();
   /**
@@ -358,12 +362,27 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   /** Final low-pass on displayed move-u (damps clamp/ceiling kinks without drifting integration). */
   const CAB_MOVE_U_DISPLAY_SMOOTH_PER_S = 14;
 
-  const ensureInterp = (key: string) => {
-    if (!doorInterp.has(key)) doorInterp.set(key, new FpElevatorCabInterpScalar());
+  const advanceCabDoorOpenVisual = (dtSec: number) => {
+    if (!(dtSec > 0)) return;
+    const k = DOOR_SWING_OPEN01_VIS_SMOOTH_PER_S;
+    const alpha = 1 - Math.exp(-k * dtSec);
+    for (const [key, row] of latest) {
+      const t = row.doorOpen01;
+      const p = cabDoorOpenSmoothed.get(key) ?? t;
+      cabDoorOpenSmoothed.set(key, p + (t - p) * alpha);
+    }
   };
-  const ensureLandingSwingInterp = (rowKey: string) => {
-    if (!landingDoorSwingInterp.has(rowKey)) {
-      landingDoorSwingInterp.set(rowKey, new FpElevatorCabInterpScalar(EXTERIOR_DOOR_VIS_INTERP_SEC));
+
+  const advanceLandingSwingClientVisual = (dtSec: number) => {
+    if (!(dtSec > 0)) return;
+    const maxStep = EXTERIOR_DOOR_ANIM_SPEED * dtSec;
+    for (const [rk, row] of landingByRowKey) {
+      const goal = (row.desiredOpen ?? 0) !== 0 ? 1 : 0;
+      let v = landingSwingVisual.get(rk) ?? row.swingOpen01;
+      if (v < goal - 1e-5) v = Math.min(goal, v + maxStep);
+      else if (v > goal + 1e-5) v = Math.max(goal, v - maxStep);
+      else v = goal;
+      landingSwingVisual.set(rk, v);
     }
   };
   const feetYForLayout = (layout: ElevatorShaftLayout, level: number): number =>
@@ -398,8 +417,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     pruneElevatorCarReplicaHistory(history, now);
     replicaHistoryByKey.set(row.shaftKey, history);
     latest.set(row.shaftKey, row);
-    ensureInterp(row.shaftKey);
-    doorInterp.get(row.shaftKey)!.setTarget(row.doorOpen01, now);
+    if (!cabDoorOpenSmoothed.has(row.shaftKey)) {
+      cabDoorOpenSmoothed.set(row.shaftKey, row.doorOpen01);
+    }
   };
 
   for (const row of opts.conn.db.elevator_car) {
@@ -407,12 +427,9 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   }
 
   const ingestLanding = (row: ElevatorLandingDoor) => {
-    const prev = landingByRowKey.get(row.rowKey);
     landingByRowKey.set(row.rowKey, row);
-    ensureLandingSwingInterp(row.rowKey);
-    const now = performance.now();
-    if (!prev || prev.swingOpen01 !== row.swingOpen01) {
-      landingDoorSwingInterp.get(row.rowKey)!.setTarget(row.swingOpen01, now);
+    if (!landingSwingVisual.has(row.rowKey)) {
+      landingSwingVisual.set(row.rowKey, row.swingOpen01);
     }
   };
   for (const row of opts.conn.db.elevator_landing_door) {
@@ -433,7 +450,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   };
   const onLandingDelete = (_ctx: unknown, row: ElevatorLandingDoor) => {
     landingByRowKey.delete(row.rowKey);
-    landingDoorSwingInterp.delete(row.rowKey);
+    landingSwingVisual.delete(row.rowKey);
   };
   opts.conn.db.elevator_landing_door.onInsert(onLandingInsert);
   opts.conn.db.elevator_landing_door.onUpdate(onLandingUpdate);
@@ -602,7 +619,11 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     if (!latestSample || evalSample !== latestSample) {
       return evalSample.row.doorOpen01;
     }
-    return doorInterp.get(key)?.eval(nowMs) ?? evalSample.row.doorOpen01;
+    return THREE.MathUtils.clamp(
+      cabDoorOpenSmoothed.get(key) ?? evalSample.row.doorOpen01,
+      0,
+      1,
+    );
   };
 
   const sampleSupportSurface = (
@@ -836,20 +857,25 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   const landingDoorPendingSatisfied = (
     row: ElevatorLandingDoor | undefined,
     expectedDesiredOpen: 0 | 1,
+    rowKey?: string,
   ): boolean => {
     if (!row) return false;
     const desired = (row.desiredOpen ?? 0) !== 0 ? 1 : 0;
     if (desired === expectedDesiredOpen) return true;
+    const client =
+      rowKey != null ? landingSwingVisual.get(rowKey) : undefined;
+    const swing =
+      client !== undefined && Number.isFinite(client) ? client : row.swingOpen01;
     // Rows often show `swingOpen01` before `desiredOpen` on the subscription; treat as acked.
     if (
       expectedDesiredOpen === 1 &&
-      row.swingOpen01 >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH - 0.05
+      swing >= EXTERIOR_DOOR_COLLISION_OPEN_THRESH - 0.05
     ) {
       return true;
     }
     if (
       expectedDesiredOpen === 0 &&
-      row.swingOpen01 <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING + 0.08
+      swing <= EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING + 0.08
     ) {
       return true;
     }
@@ -895,7 +921,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     );
     const landingRow = landingByRowKey.get(rowKey);
     if (
-      landingDoorPendingSatisfied(landingRow, pendingExteriorDoorToggle.expectedDesiredOpen)
+      landingDoorPendingSatisfied(landingRow, pendingExteriorDoorToggle.expectedDesiredOpen, rowKey)
     ) {
       pendingExteriorDoorToggle.shaftKey = "";
       pendingExteriorDoorToggle.interactHintY = 0;
@@ -905,7 +931,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const sk = pendingExteriorDoorToggle.shaftKey;
       const lv = pendingExteriorDoorToggle.level;
       const want = pendingExteriorDoorToggle.expectedDesiredOpen;
-      if (!landingDoorPendingSatisfied(landingByRowKey.get(rowKey), want)) {
+      if (!landingDoorPendingSatisfied(landingByRowKey.get(rowKey), want, rowKey)) {
         const hit = resolveExteriorDoorInteractByPose(
           px,
           pendingExteriorDoorToggle.interactHintY || py,
@@ -1249,6 +1275,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const py = playerPos.y;
     const pz = playerPos.z;
     flushPendingExteriorDoorToggle(nowMs, px, py, pz);
+    advanceCabDoorOpenVisual(_dtSec);
+    advanceLandingSwingClientVisual(_dtSec);
 
     for (const [key, vis] of visuals) {
       const row = latest.get(key);
@@ -1260,9 +1288,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       _swingByLevel.clear();
       for (const row of landingByRowKey.values()) {
         if (row.shaftKey === key) {
-          ensureLandingSwingInterp(row.rowKey);
           const u = THREE.MathUtils.clamp(
-            landingDoorSwingInterp.get(row.rowKey)!.eval(nowMs),
+            landingSwingVisual.get(row.rowKey) ?? row.swingOpen01,
             0,
             1,
           );
@@ -1375,6 +1402,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         feetYForLayout,
         getCabFloorY: (shaftKey) => getCabY(shaftKey, cabEvalNowMs),
         getCabDoorOpen01: (shaftKey) => getDoor(shaftKey, cabEvalNowMs),
+        getLandingExteriorSwingOpen01: (shaftKey, level) =>
+          landingSwingVisual.get(landingExteriorDoorRowKey(shaftKey, level)),
       },
       x0,
       x1,
@@ -1506,8 +1535,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       cabSoftCeilingUByKey.clear();
       landingByRowKey.clear();
       replicaHistoryByKey.clear();
-      doorInterp.clear();
-      landingDoorSwingInterp.clear();
+      cabDoorOpenSmoothed.clear();
+      landingSwingVisual.clear();
     },
     syncCabEvalClock,
     tick,

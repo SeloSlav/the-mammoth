@@ -105,6 +105,12 @@ import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
  */
 const NET_INTERVAL_MS = 50;
 const NET_DT_SEC = NET_INTERVAL_MS * 0.001;
+
+const clampTinyDisplayOffsetComponents = (v: THREE.Vector3) => {
+  if (Math.abs(v.x) < 1e-5) v.x = 0;
+  if (Math.abs(v.y) < 1e-5) v.y = 0;
+  if (Math.abs(v.z) < 1e-5) v.z = 0;
+};
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**
@@ -314,6 +320,10 @@ export async function mountFpSession(
    * rest state, this smoothing layer ends up hiding a constant stream of tiny stop-state
    * corrections. That presents as "hitching while stopping" even when frame time is fine, so keep
    * the idle-velocity deadzone in client/server locomotion aligned with this reconcile path.
+   *
+   * While WASD is up during the friction coast, **do not decay** offset — shrinking offset moves
+   * `pos + offset` in world space even when `pos` has almost stopped (felt like a camera hitch).
+   * Once fully settled, offset is **baked into** `pos` so physics matches what you were seeing.
    */
   const _displayOffset = new THREE.Vector3();
   /**
@@ -344,11 +354,6 @@ export async function mountFpSession(
    * stays exact). Hides residual jitter from reconcile + irregular RAF; ~0 = off.
    */
   const PLAYER_RIG_VIEW_LERP_PER_S = 14;
-  /**
-   * Multiplier on {@link DISPLAY_OFFSET_DAMP} while movement keys are up — clears display offset
-   * sooner so reconcile does not pump visible wobble after a stop.
-   */
-  const DISPLAY_OFFSET_IDLE_DAMP_MULT = 2.35;
   /** With movement keys up, treat horizontal speed below this (m/s) as fully stopped for view settle. */
   const VIEW_SETTLED_IDLE_MAX_HS = 0.055;
   /**
@@ -1961,11 +1966,13 @@ export async function mountFpSession(
     ) {
       e.preventDefault();
       const interactionPos = getInteractionPos();
-      if (fpElevators.consumeInteractKey(interactionPos, camera)) return;
-      if (fpElevators.shouldSuppressEpickup(interactionPos, camera)) return;
-      if (fpApartmentDoors.consumeInteractKey(interactionPos)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(interactionPos)) return;
-      droppedWorld.tryPickupNearest(pos.x, pos.y, pos.z);
+      // Doors: use predicted feet so range tests match what you see while moving; server still
+      // validates with pose + client feet hint.
+      if (fpElevators.consumeInteractKey(pos, camera)) return;
+      if (fpElevators.shouldSuppressEpickup(pos, camera)) return;
+      if (fpApartmentDoors.consumeInteractKey(pos)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(pos)) return;
+      droppedWorld.tryPickupNearest(interactionPos.x, interactionPos.y, interactionPos.z);
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {
@@ -2148,21 +2155,36 @@ export async function mountFpSession(
       !_input.forward && !_input.backward && !_input.left && !_input.right;
     const viewSettledIdle =
       inputIdle && hs < VIEW_SETTLED_IDLE_MAX_HS && !fastElevY;
-    if (_displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0) {
-      // Faster decay as soon as WASD is released so `rtx` does not creep after a stop.
-      const idleOffMult = inputIdle ? DISPLAY_OFFSET_IDLE_DAMP_MULT : 1;
-      const k = Math.exp(-DISPLAY_OFFSET_DAMP * idleOffMult * dt);
+    const offNonZero =
+      _displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0;
+    if (viewSettledIdle) {
+      // `rtx = pos + offset` must not drift from decay after key release: bake offset into physics
+      // (world-space target unchanged) so the camera stays exactly where it was.
+      if (offNonZero) {
+        pos.x += _displayOffset.x;
+        pos.y += _displayOffset.y;
+        pos.z += _displayOffset.z;
+        _displayOffset.set(0, 0, 0);
+      }
+    } else if (!inputIdle && offNonZero) {
+      const k = Math.exp(-DISPLAY_OFFSET_DAMP * dt);
       const kY = fastElevY
         ? Math.exp(-DISPLAY_OFFSET_DAMP * DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE * dt)
         : k;
       _displayOffset.x *= k;
       _displayOffset.y *= kY;
       _displayOffset.z *= k;
-      // Clamp tiny residuals to exact zero so the condition above short-circuits next frame.
-      if (Math.abs(_displayOffset.x) < 1e-5) _displayOffset.x = 0;
-      if (Math.abs(_displayOffset.y) < 1e-5) _displayOffset.y = 0;
-      if (Math.abs(_displayOffset.z) < 1e-5) _displayOffset.z = 0;
+      clampTinyDisplayOffsetComponents(_displayOffset);
+    } else if (inputIdle && fastElevY && offNonZero) {
+      // Keys up on a fast-moving cab: still decay (mostly Y) so vertical reconcile does not stick.
+      const k = Math.exp(-DISPLAY_OFFSET_DAMP * dt);
+      const kY = Math.exp(-DISPLAY_OFFSET_DAMP * DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE * dt);
+      _displayOffset.x *= k;
+      _displayOffset.y *= kY;
+      _displayOffset.z *= k;
+      clampTinyDisplayOffsetComponents(_displayOffset);
     }
+    // else: WASD up, foot friction coast — hold offset so `rtx` tracks `pos` only (no idle decay).
 
     // Render at physics position + smooth display offset (extra ease on the mesh only).
     const rtx = pos.x + _displayOffset.x;

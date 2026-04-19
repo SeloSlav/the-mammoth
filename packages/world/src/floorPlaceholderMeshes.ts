@@ -52,6 +52,7 @@ import {
 import {
   addUnitExteriorWindowGlassMeshes,
   DEFAULT_EXTERIOR_FACADE_SALT,
+  EXTERIOR_WINDOW_SHELL_INSET_INTO_ROOM_M,
   planUnitExteriorWindowsForFace,
 } from "./unitExteriorWindows.js";
 import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
@@ -170,6 +171,11 @@ type HollowShellOpts = {
   exteriorFaces?: readonly CardinalFace[];
   /** Unit exterior window openings (merged into inner walls; cladding uses these for units only). */
   exteriorWindowHoles?: CorridorShellWallHoles;
+  /**
+   * Default 0.11 m. When a unit has exterior windows, set to `0.11 + EXTERIOR_WINDOW_SHELL_INSET_INTO_ROOM_M`
+   * so shell slabs extend slightly into the room for FP collision.
+   */
+  shellWallThicknessM?: number;
 };
 
 type PlateStairCorridorDoorPunch = {
@@ -1096,7 +1102,7 @@ function addHollowRoomShell(
   opts: HollowShellOpts,
 ): void {
   /** Match shaft placeholder shells so adjacent stair/elev doors meet flush (was 0.12 vs 0.11). */
-  const wt = 0.11;
+  const wt = opts.shellWallThicknessM ?? 0.11;
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
@@ -1799,45 +1805,59 @@ export function buildFloorMeshes(
             )
           : [];
 
+      let unitShellWallThicknessM: number | undefined;
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
       if (kind === "unit" && roomExteriorFaces.length > 0 && !skipShaftCutouts) {
-        const wt = 0.11;
-        const vh = Math.max(sy - 2 * wt, 0.05);
-        const vlenX = Math.max(sx - 2 * wt, 0.05);
-        const vlenZ = Math.max(sz - 2 * wt, 0.05);
-        const yLo = -vh * 0.5;
-        const yHi = vh * 0.5;
+        const baseWt = 0.11;
         const salt = opts?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT;
-        const gathered: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
-        tintByExteriorFace = {};
-        for (const face of roomExteriorFaces) {
-          const plan = planUnitExteriorWindowsForFace({
-            face,
-            vlenX,
-            vlenZ,
-            yLo,
-            yHi,
-            facadeSalt: salt,
-            storyLevelIndex: story,
-            floorDocId: floor.id,
-            placedObjectId: obj.id,
-          });
-          tintByExteriorFace[face] = plan.tintId;
-          if (face === "e" || face === "w") {
-            gathered[face].push(...plan.holesEw);
-          } else {
-            gathered[face].push(...plan.holesNs);
+
+        const gatherWindows = (shellWt: number) => {
+          const vh = Math.max(sy - 2 * shellWt, 0.05);
+          const vlenX = Math.max(sx - 2 * shellWt, 0.05);
+          const vlenZ = Math.max(sz - 2 * shellWt, 0.05);
+          const yLo = -vh * 0.5;
+          const yHi = vh * 0.5;
+          const gathered: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+          const tints: Partial<Record<CardinalFace, number>> = {};
+          for (const face of roomExteriorFaces) {
+            const plan = planUnitExteriorWindowsForFace({
+              face,
+              vlenX,
+              vlenZ,
+              yLo,
+              yHi,
+              facadeSalt: salt,
+              storyLevelIndex: story,
+              floorDocId: floor.id,
+              placedObjectId: obj.id,
+            });
+            tints[face] = plan.tintId;
+            if (face === "e" || face === "w") {
+              gathered[face].push(...plan.holesEw);
+            } else {
+              gathered[face].push(...plan.holesNs);
+            }
           }
+          const anyHole =
+            gathered.e.length +
+              gathered.w.length +
+              gathered.n.length +
+              gathered.s.length >
+            0;
+          return { gathered, tints, anyHole };
+        };
+
+        const first = gatherWindows(baseWt);
+        if (!first.anyHole) {
+          exteriorWindowHoles = undefined;
+          tintByExteriorFace = undefined;
+        } else {
+          unitShellWallThicknessM = baseWt + EXTERIOR_WINDOW_SHELL_INSET_INTO_ROOM_M;
+          const second = gatherWindows(unitShellWallThicknessM);
+          exteriorWindowHoles = second.anyHole ? second.gathered : first.gathered;
+          tintByExteriorFace = second.anyHole ? second.tints : first.tints;
         }
-        const anyHole =
-          gathered.e.length +
-            gathered.w.length +
-            gathered.n.length +
-            gathered.s.length >
-          0;
-        exteriorWindowHoles = anyHole ? gathered : undefined;
-        if (!anyHole) tintByExteriorFace = undefined;
       }
 
       addHollowRoomShell(room, sx, sy, sz, kind, {
@@ -1853,6 +1873,7 @@ export function buildFloorMeshes(
         stairSignPlacements,
         exteriorFaces: roomExteriorFaces,
         exteriorWindowHoles,
+        shellWallThicknessM: unitShellWallThicknessM,
       });
 
       if (
@@ -1867,6 +1888,7 @@ export function buildFloorMeshes(
           faces: roomExteriorFaces,
           hx,
           hz,
+          wallThicknessM: unitShellWallThicknessM,
           tintByFace: tintByExteriorFace,
           holesEw: { e: exteriorWindowHoles.e, w: exteriorWindowHoles.w },
           holesNs: { n: exteriorWindowHoles.n, s: exteriorWindowHoles.s },

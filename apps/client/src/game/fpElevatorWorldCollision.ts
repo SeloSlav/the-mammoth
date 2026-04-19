@@ -65,6 +65,11 @@ export type FpElevatorWorldCollisionAuth = {
    * authority rather than visual interpolation.
    */
   getLandingCollisionCabDoorOpen01?: (shaftKey: string, row: ElevatorCar) => number;
+  /**
+   * Optional client-driven landing exterior swing (0..1) for local collision so it matches the
+   * client-visual leaf. When omitted or non-finite, replicated `swingOpen01` is used.
+   */
+  getLandingExteriorSwingOpen01?: (shaftKey: string, level: number) => number | undefined;
 };
 
 /** Single AABB from hinge to leaf tip (matches server `push_door_leaf_collision_panel`). */
@@ -246,8 +251,15 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
 
     for (let level = 1; level <= maxLevel; level++) {
       const fy = feetYForLayout(layout, level);
-      const landingRow = landingByRowKey.get(landingExteriorDoorRowKey(shaftKey, level));
-      const authSwing = landingRow == null ? 0 : landingRow.swingOpen01;
+      const landingRk = landingExteriorDoorRowKey(shaftKey, level);
+      const landingRow = landingByRowKey.get(landingRk);
+      const clientSwing = auth.getLandingExteriorSwingOpen01?.(shaftKey, level);
+      const authSwing =
+        clientSwing !== undefined && Number.isFinite(clientSwing)
+          ? clientSwing
+          : landingRow == null
+            ? 0
+            : landingRow.swingOpen01;
 
       const landingY0 = fy - 0.22;
       const landingY1 = fy + innerH + 0.38;

@@ -181,6 +181,13 @@ export function planUnitExteriorWindowsForFace(opts: {
 export const UNIT_SHELL_WALL_THICKNESS_M = 0.11;
 
 /**
+ * When a unit has exterior windows, shell walls use `UNIT_SHELL_WALL_THICKNESS_M +` this value so the
+ * plaster slab extends further into the room. That keeps the player capsule from sliding past the
+ * thin 11 cm wall at window openings (thin-wall depenetration + feet probe gaps).
+ */
+export const EXTERIOR_WINDOW_SHELL_INSET_INTO_ROOM_M = 0.05;
+
+/**
  * Glass-filled wall segments in exterior window openings: same box placement and thickness as the
  * plaster `shell_wall_*` pieces (see `addWallConstantXWithHoles`), with glass material in the hole.
  */
@@ -190,6 +197,8 @@ export function addUnitExteriorWindowGlassMeshes(
     faces: readonly CardinalFace[];
     hx: number;
     hz: number;
+    /** Matches `addHollowRoomShell` wall thickness (may include {@link EXTERIOR_WINDOW_SHELL_INSET_INTO_ROOM_M}). */
+    wallThicknessM?: number;
     /** Per-face tint (same id as {@link getExteriorWindowGlassMaterial}). */
     tintByFace: Partial<Record<CardinalFace, number>>;
     holesEw: Partial<Record<"e" | "w", readonly WallHoleYZ[]>>;
@@ -197,7 +206,7 @@ export function addUnitExteriorWindowGlassMeshes(
   },
 ): void {
   const { hx, hz, faces, tintByFace } = opts;
-  const wt = UNIT_SHELL_WALL_THICKNESS_M;
+  const wt = opts.wallThicknessM ?? UNIT_SHELL_WALL_THICKNESS_M;
   let gi = 0;
   for (const face of faces) {
     const tintId = tintByFace[face] ?? 0;

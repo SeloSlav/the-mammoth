@@ -19,6 +19,9 @@ import {
 /** Rail/stile thickness through the panel normal (door leaf depth). */
 export const SWING_DOOR_PANEL_THICK_M = 0.056;
 
+/** Solid fill / glass grows this much past the nominal opening so inner corners do not gap (no black seam). */
+const SWING_DOOR_OPENING_FILL_OVERLAP_M = 0.004;
+
 /**
  * Historical constant: outer leaf height once omitted this inset from {@link SwingDoorDimensions}.
  * Geometry now uses full `panelH`; kept exported in case tooling still references the name.
@@ -213,10 +216,11 @@ export function populateSwingDoorLeaf(
   );
 
   if (solid) {
+    const o = SWING_DOOR_OPENING_FILL_OVERLAP_M;
     const fillGeom = new THREE.BoxGeometry(
       panelT,
-      Math.max(0.05, effectiveOpen.heightM),
-      Math.max(0.05, effectiveOpen.widthM),
+      Math.max(0.05, effectiveOpen.heightM + 2 * o),
+      Math.max(0.05, effectiveOpen.widthM + 2 * o),
     );
     const fill = new THREE.Mesh(fillGeom, frameMat);
     fill.name = SWING_DOOR_SOLID_FILL_PART_ID;
@@ -284,7 +288,15 @@ export function buildSolidSwingLeafMergedGeometry(
   push(panelT, railBotH, outerW, panelT * 0.5, -outerH * 0.5 + railBotH * 0.5, centerZ);
   push(panelT, openH, stileW, panelT * 0.5, 0, -stileW * 0.5);
   push(panelT, openH, stileW, panelT * 0.5, 0, -outerW + stileW * 0.5);
-  push(panelT, Math.max(0.05, openH), Math.max(0.05, openW), panelT * 0.5, 0, centerZ);
+  const fo = SWING_DOOR_OPENING_FILL_OVERLAP_M;
+  push(
+    panelT,
+    Math.max(0.05, openH + 2 * fo),
+    Math.max(0.05, openW + 2 * fo),
+    panelT * 0.5,
+    0,
+    centerZ,
+  );
 
   const merged = mergeGeometries(parts, false);
   for (const p of parts) p.dispose();
@@ -347,8 +359,8 @@ export function buildApartmentSwingLeafGeometries(
     throw new Error("buildApartmentSwingLeafGeometries: mergeGeometries returned null");
   }
 
-  /** Tight inset inside the frame rails/stiles (was 2 cm; narrower gap at the jamb). */
-  const gInset = 0.006;
+  /** Negative inset = lite overlaps the frame inner edge slightly so the rebate does not read as a black ring. */
+  const gInset = -0.004;
   const gh = Math.max(0.05, open.heightM - 2 * gInset);
   const gw = Math.max(0.05, open.widthM - 2 * gInset);
   const glassGeom = new THREE.BoxGeometry(0.046, gh, gw);

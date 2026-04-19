@@ -52,7 +52,7 @@ export const SWING_DOOR_OPEN_LEAF_HALF_THICK_M = 0.07;
 export const SWING_DOOR_OPEN_LEAF_XZ_PAD_M = 0.04;
 
 /** Apartment-door anim speed (per-second open01 rate). Mirrors elevator landing's `EXTERIOR_DOOR_ANIM_SPEED`. */
-export const SWING_DOOR_ANIM_SPEED = 3.0;
+export const SWING_DOOR_ANIM_SPEED = 4.5;
 
 /** Open01 below this counts as "essentially closed" for collision purposes. */
 export const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 = 0.025;
@@ -70,9 +70,9 @@ export const SWING_DOOR_PASSAGE_OPEN_THRESH = 0.85;
 export const SWING_DOOR_DEFAULT_MAX_RAD = 1.55;
 
 /** Interaction radius (world meters) — player must be within this XZ distance of the hinge. */
-export const SWING_DOOR_INTERACT_RADIUS_M = 1.6;
+export const SWING_DOOR_INTERACT_RADIUS_M = 2.05;
 /** Interaction Y half-window (world meters) — player feet within this band relative to door feet. */
-export const SWING_DOOR_INTERACT_Y_HALF_M = 1.4;
+export const SWING_DOOR_INTERACT_Y_HALF_M = 1.55;
 
 export type SwingDoorOrientation = {
   baseYaw: number;

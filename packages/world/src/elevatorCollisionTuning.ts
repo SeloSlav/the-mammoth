@@ -8,7 +8,7 @@
 export const EXTERIOR_DOOR_W_M = 1.86;
 export const EXTERIOR_DOOR_H_M = 2.05;
 export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
-export const EXTERIOR_DOOR_ANIM_SPEED = 3.0;
+export const EXTERIOR_DOOR_ANIM_SPEED = 4.5;
 /** Closed swing: static slab only while essentially shut (matches server `EXT_DOOR_SOLID_SLAB_MAX_SWING`). */
 export const EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING = 0.025;
 /**
@@ -29,8 +29,8 @@ export const EXTERIOR_STRIP_Y1 = 2.25;
 export const EXTERIOR_COLLISION_L0 = -0.55;
 export const EXTERIOR_COLLISION_L1 = 0.92;
 export const EXTERIOR_COLLISION_LZ_PAD = 0.18;
-export const EXTERIOR_INTERACT_WORLD_RADIUS_M = 1.6;
-export const EXTERIOR_INTERACT_WORLD_Y_HALF_M = 1.42;
+export const EXTERIOR_INTERACT_WORLD_RADIUS_M = 2.05;
+export const EXTERIOR_INTERACT_WORLD_Y_HALF_M = 1.55;
 
 export const CLOSED_CAB_OUTSIDE_SLAB_IN = 0.28;
 export const CLOSED_CAB_OUTSIDE_SLAB_OUT = 1.05;

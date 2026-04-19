@@ -129,6 +129,12 @@ export const CAB_INTERP_SEC = 0.1;
  * without adding noticeable lag vs the authoritative animation.
  */
 export const EXTERIOR_DOOR_VIS_INTERP_SEC = 0.05;
+/**
+ * Exponential smoothing rate (1/s) for cab `doorOpen01` + landing `swingOpen01` **visuals** (and
+ * apartment instanced doors): chases replica every frame instead of a fixed smoothstep segment
+ * that finishes between 20 Hz updates and reads as a mid-swing pause.
+ */
+export const DOOR_SWING_OPEN01_VIS_SMOOTH_PER_S = 14;
 
 /** Match `apps/server/src/elevator/mod.rs` `MOVE_SPEED_MPS`. */
 export const ELEVATOR_MOVE_SPEED_MPS = 3.15;

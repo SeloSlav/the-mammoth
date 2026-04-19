@@ -6,7 +6,7 @@ pub(super) const EXT_DOOR_W: f32 = 1.86;
 #[allow(dead_code)]
 pub(super) const EXT_DOOR_H: f32 = 2.05;
 pub(super) const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
-pub(super) const EXT_DOOR_ANIM_SPEED: f32 = 3.0;
+pub(super) const EXT_DOOR_ANIM_SPEED: f32 = 4.5;
 pub(super) const EXT_DOOR_SOLID_SLAB_MAX_SWING: f32 = 0.025;
 pub(super) const EXT_DOOR_PARKED_COLLISION_MIN_SWING: f32 = 0.995;
 pub(super) const EXT_DOOR_SWING_MAX_RAD: f32 = 1.55;
@@ -22,8 +22,8 @@ pub(super) const EXT_STRIP_Y1: f32 = 2.25;
 pub(super) const EXT_COLLISION_L0: f32 = -0.55;
 pub(super) const EXT_COLLISION_L1: f32 = 0.92;
 pub(super) const EXT_COLLISION_LZ_PAD: f32 = 0.18;
-pub(super) const EXT_INTERACT_WORLD_RADIUS_M: f32 = 1.6;
-pub(super) const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.42;
+pub(super) const EXT_INTERACT_WORLD_RADIUS_M: f32 = 2.05;
+pub(super) const EXT_INTERACT_WORLD_Y_HALF_M: f32 = 1.55;
 
 pub(super) const CLOSED_CAB_OUTSIDE_SLAB_IN: f32 = 0.28;
 pub(super) const CLOSED_CAB_OUTSIDE_SLAB_OUT: f32 = 1.05;

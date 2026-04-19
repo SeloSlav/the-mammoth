@@ -21,9 +21,8 @@
  *    (`fpBuildingFloorPlateVisibilityBand`) cull entire storeys of doors with a single
  *    `object.visible = false`, just like the static floor geometry.
  *
- * 4. **Instance matrices are only rewritten for slots whose scalar interp is still settling.**
- *    Closed and fully-parked doors contribute zero per-frame cost; only the handful of actively
- *    animating doors pay.
+ * 4. **Instance matrices are only rewritten when the eased visual `open01` moves materially.**
+ *    Idle doors skip `setMatrixAt`; only doors chasing a changing replica pay each frame.
  *
  * 5. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
  *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size) and
@@ -40,7 +39,9 @@ import {
   FACE_CODE,
   FACE_FROM_CODE,
   isGlazedApartmentDoorTemplate,
+  SWING_DOOR_ANIM_SPEED,
   SWING_DOOR_DEFAULT_MAX_RAD,
+  SWING_DOOR_INTERACT_RADIUS_M,
   type SwingDoorDimensions,
   type SwingDoorFace,
   swingDoorClosedSlabAabb,
@@ -54,8 +55,6 @@ import {
 import apartmentKitAuthoringJson from "../../../../content/door/apartment_unit_kit.json";
 import type { DbConnection, SubscriptionHandle } from "../module_bindings";
 import type { ApartmentDoor } from "../module_bindings/types";
-import { EXTERIOR_DOOR_VIS_INTERP_SEC } from "./fpElevatorConstants.js";
-import { FpElevatorCabInterpScalar } from "./fpElevatorShaftVisual.js";
 import type { DynamicCollisionQueryPose } from "./fpPlayerCollision.js";
 
 function parseApartmentKit(): LandingKitDef | undefined {
@@ -195,11 +194,11 @@ type DoorSlot = {
   group: InstanceGroup;
   /** Server-mirrored state — initially closed, updated on subscription events. */
   desiredOpen: number;
+  /** Replicated `swing_open_01` (authoritative sample; not used for rendering after seed). */
   swingOpen01: number;
-  /** Visual smoothing toward `swingOpen01`. `lastApplied` lets us skip matrix writes when still. */
-  interp: FpElevatorCabInterpScalar;
+  /** Client-driven visual/collision open01; integrates toward `desiredOpen` at `SWING_DOOR_ANIM_SPEED` (world). */
+  visualOpen01: number;
   lastApplied: number;
-  animating: boolean;
   /** `true` once the server's row has been seen at least once (until then we draw "closed"). */
   seeded: boolean;
 };
@@ -462,12 +461,10 @@ export function mountFpApartmentDoors(
         group,
         desiredOpen: 0,
         swingOpen01: 0,
-        interp: new FpElevatorCabInterpScalar(EXTERIOR_DOOR_VIS_INTERP_SEC),
+        visualOpen01: 0,
         lastApplied: Number.NaN, // force first write
-        animating: false,
         seeded: false,
       };
-      slot.interp.setTarget(0, performance.now());
       applyMatrix(slot, 0);
 
       slotsByKey.set(rowKey, slot);
@@ -486,14 +483,16 @@ export function mountFpApartmentDoors(
   const ingestRow = (row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
     if (!slot) return; // orphan row (floor/template removed from codegen) — ignore.
+    const wasSeeded = slot.seeded;
     slot.desiredOpen = row.desiredOpen;
     const nextOpen = row.swingOpen01;
-    if (!slot.seeded || Math.abs(nextOpen - slot.swingOpen01) > APARTMENT_DOOR_ANIM_EPSILON) {
-      slot.interp.setTarget(nextOpen, performance.now());
-      slot.animating = true;
-    }
     slot.swingOpen01 = nextOpen;
     slot.seeded = true;
+    if (!wasSeeded) {
+      slot.visualOpen01 = nextOpen;
+      applyMatrix(slot, nextOpen);
+      return;
+    }
   };
 
   for (const row of opts.conn.db.apartment_door) ingestRow(row as ApartmentDoor);
@@ -506,9 +505,10 @@ export function mountFpApartmentDoors(
     const slot = slotsByKey.get(row.rowKey);
     if (!slot) return;
     slot.desiredOpen = 0;
+    slot.swingOpen01 = 0;
+    slot.visualOpen01 = 0;
     slot.seeded = false;
-    slot.interp.setTarget(0, performance.now());
-    slot.animating = true;
+    applyMatrix(slot, 0);
   };
   opts.conn.db.apartment_door.onInsert(onInsert);
   opts.conn.db.apartment_door.onUpdate(onUpdate);
@@ -521,19 +521,27 @@ export function mountFpApartmentDoors(
     console.warn("[fpApartmentDoors] subscribe failed", e);
   }
 
+  let lastApartmentDoorTickMs: number | null = null;
   const tick = (nowMs: number): void => {
-    // Only walk slots still settling. Static closed / fully parked doors stay out of this loop,
-    // so the per-frame cost is proportional to "doors currently animating", not to door count.
+    const dtSec =
+      lastApartmentDoorTickMs != null
+        ? Math.min(0.05, Math.max(0, (nowMs - lastApartmentDoorTickMs) * 0.001))
+        : 0;
+    lastApartmentDoorTickMs = nowMs;
+    const maxStep = SWING_DOOR_ANIM_SPEED * dtSec;
+
     for (const slot of allSlots) {
-      if (!slot.animating) continue;
-      const u = slot.interp.eval(nowMs);
-      if (Math.abs(u - slot.lastApplied) > APARTMENT_DOOR_ANIM_EPSILON) {
-        applyMatrix(slot, u);
+      if (!slot.seeded) continue;
+      const goal = slot.desiredOpen !== 0 ? 1 : 0;
+      let v = slot.visualOpen01;
+      if (dtSec > 0) {
+        if (v < goal - 1e-5) v = Math.min(goal, v + maxStep);
+        else if (v > goal + 1e-5) v = Math.max(goal, v - maxStep);
+        else v = goal;
+        slot.visualOpen01 = v;
       }
-      if (Math.abs(u - slot.swingOpen01) <= APARTMENT_DOOR_ANIM_EPSILON) {
-        // Converged to the latest server target; lock-in the final matrix and stop ticking.
-        slot.animating = false;
-        slot.lastApplied = slot.swingOpen01;
+      if (Math.abs(slot.visualOpen01 - slot.lastApplied) > APARTMENT_DOOR_ANIM_EPSILON) {
+        applyMatrix(slot, slot.visualOpen01);
       }
     }
     for (const lm of levelMeshes) {
@@ -555,7 +563,7 @@ export function mountFpApartmentDoors(
     _queryPose?: DynamicCollisionQueryPose,
   ) => {
     visitBucketedSlots(bucketIndex, x0, x1, z0, z1, (slot) => {
-      const open01 = slot.swingOpen01;
+      const open01 = slot.visualOpen01;
       let aabb: CollisionAabb | null = null;
       if (swingDoorClosedSlabActive(open01)) {
         aabb = swingDoorClosedSlabAabb({
@@ -586,7 +594,7 @@ export function mountFpApartmentDoors(
 
   type BestInteract = { slot: DoorSlot; dsq: number };
   const resolveInteractTarget = (playerPos: THREE.Vector3): DoorSlot | null => {
-    const r = 1.6 + APARTMENT_DOOR_DIMS.panelW; // conservative bucket expansion
+    const r = SWING_DOOR_INTERACT_RADIUS_M + APARTMENT_DOOR_DIMS.panelW; // conservative bucket expansion
     let best: BestInteract | null = null;
     visitBucketedSlots(
       bucketIndex,
@@ -651,7 +659,7 @@ export function mountFpApartmentDoors(
       const dz = slot.hingeZ - z;
       const d2 = dx * dx + dz * dz;
       if (d2 > r2) return;
-      const open01 = slot.swingOpen01;
+      const open01 = slot.visualOpen01;
       let regime: ApartmentDoorDebugSlot["regime"];
       let emittedAabb: CollisionAabb | null = null;
       if (swingDoorClosedSlabActive(open01)) {

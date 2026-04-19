@@ -23,7 +23,7 @@ use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
 /// Must match `packages/world/src/swingDoorCollision.ts` `SWING_DOOR_ANIM_SPEED`.
-const SWING_DOOR_ANIM_SPEED: f32 = 3.0;
+const SWING_DOOR_ANIM_SPEED: f32 = 4.5;
 /// Match `SWING_DOOR_CLOSED_SLAB_HALF_THICK_M`.
 const SWING_DOOR_CLOSED_SLAB_HALF_THICK_M: f32 = 0.09;
 /// Match `SWING_DOOR_OPEN_LEAF_HALF_THICK_M`.
@@ -35,9 +35,9 @@ const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01: f32 = 0.025;
 /// Match `SWING_DOOR_PARKED_LEAF_MIN_OPEN_01`.
 const SWING_DOOR_PARKED_LEAF_MIN_OPEN_01: f32 = 0.97;
 /// Match `SWING_DOOR_INTERACT_RADIUS_M`.
-const SWING_DOOR_INTERACT_RADIUS_M: f32 = 1.6;
+const SWING_DOOR_INTERACT_RADIUS_M: f32 = 2.05;
 /// Match `SWING_DOOR_INTERACT_Y_HALF_M`.
-const SWING_DOOR_INTERACT_Y_HALF_M: f32 = 1.4;
+const SWING_DOOR_INTERACT_Y_HALF_M: f32 = 1.55;
 /// Same walk-probe offset used by `movement.rs` — recover feet Y from the head probe.
 const WALK_PROBE_DY: f32 = 1.05;
 /// Allow the client's reported feet hint to lead the replicated pose by up to this much.
