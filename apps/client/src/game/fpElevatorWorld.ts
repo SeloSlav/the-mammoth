@@ -107,6 +107,30 @@ export type MountFpElevatorWorldOpts = {
   floorSpacingM?: number;
 };
 
+/**
+ * Snapshot of replicated + predicted cab state while the local player is inside a **moving** car.
+ * Used by `window.__mmElevDebug` to correlate hitches with prediction / clock / visibility band.
+ */
+export type FpElevatorRideDebugSnapshot = {
+  shaftKey: string;
+  phase: number;
+  currentLevel: number;
+  moveFromLevel: number;
+  moveToLevel: number;
+  moveU: number;
+  /** Raw replica feet Y at last server sample (prediction uses this + elapsed time while moving). */
+  replicaCabFloorY: number;
+  cabFeetY: number;
+  cabVyMps: number;
+  doorOpen01: number;
+  /** Seconds from server-stamped sample time to this frame’s eval time (prediction input). */
+  elapsedSecSinceServerSample: number;
+  /** Estimated `client_epoch - server_epoch` (ms); 0 before first replica. */
+  serverClockOffsetMs: number;
+  clockHasEstimate: boolean;
+  floorVisBand: { lo: number; hi: number };
+};
+
 export type MountFpElevatorWorldResult = {
   dispose(): void;
   /** Advance replicated cab evaluation time before locomotion/support sampling so moving-cab prediction stays aligned. */
@@ -161,6 +185,24 @@ export type MountFpElevatorWorldResult = {
     lo: number;
     hi: number;
   };
+  /**
+   * When the player is inside the HUD cab volume and the car is in {@link ELEVATOR_PHASE_MOVING},
+   * returns prediction + visibility-band fields for hitch debugging. Otherwise `null`.
+   */
+  sampleRideDebug(
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+    bandEyeWorldY?: number,
+    bandViewDirY?: number,
+  ): FpElevatorRideDebugSnapshot | null;
+  /**
+   * Predicted cab vertical velocity (m/s) when inside the HUD car volume during {@link ELEVATOR_PHASE_MOVING};
+   * otherwise `0`. Use with kinematic support Vy: `max(abs(support), abs(this))` so view smoothing matches
+   * the same source as `sampleRideDebug().cabVyMps` when feet sampling lags.
+   */
+  getHudMovingCabVyMps(px: number, py: number, pz: number, nowMs: number): number;
 };
 
 function parseElevatorVisualDefs():
@@ -970,6 +1012,67 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     });
   };
 
+  const sampleRideDebug = (
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+    bandEyeWorldY?: number,
+    bandViewDirY?: number,
+  ): FpElevatorRideDebugSnapshot | null => {
+    const eyeY = bandEyeWorldY ?? py;
+    const vdy = bandViewDirY ?? 0;
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      if (row.phase !== ELEVATOR_PHASE_MOVING) continue;
+      if (!isInsideCarHud(px, py, pz, key)) continue;
+      const cabFeet = getCabY(key, nowMs);
+      const cabVy = getCabVerticalVelocityMps(key, nowMs);
+      const doorOpen = getDoor(key, nowMs);
+      const elapsed =
+        row.sampleServerMicros !== 0n
+          ? elapsedSecSinceServerSample(row, nowMs)
+          : 0;
+      const band = getFloorVisibilityBand(px, py, pz, nowMs, eyeY, vdy);
+      return {
+        shaftKey: key,
+        phase: row.phase,
+        currentLevel: row.currentLevel,
+        moveFromLevel: row.moveFromLevel,
+        moveToLevel: row.moveToLevel,
+        moveU: row.moveU,
+        replicaCabFloorY: row.cabFloorY,
+        cabFeetY: cabFeet,
+        cabVyMps: cabVy,
+        doorOpen01: doorOpen,
+        elapsedSecSinceServerSample: elapsed,
+        serverClockOffsetMs: serverClock.estimatedOffsetMs(),
+        clockHasEstimate: serverClock.hasEstimate(),
+        floorVisBand: { lo: band.lo, hi: band.hi },
+      };
+    }
+    return null;
+  };
+
+  const getHudMovingCabVyMps = (
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+  ): number => {
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      if (row.phase !== ELEVATOR_PHASE_MOVING) continue;
+      if (!isInsideCarHud(px, py, pz, key)) continue;
+      return getCabVerticalVelocityMps(key, nowMs);
+    }
+    return 0;
+  };
+
   const tick = (_dtSec: number, nowMs: number, playerPos: THREE.Vector3) => {
     cabEvalNowMs = nowMs;
     void _dtSec;
@@ -1234,5 +1337,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     visitCollisionAabbsInXZ,
     applyCabRoofFeetSnap,
     getFloorVisibilityBand,
+    sampleRideDebug,
+    getHudMovingCabVyMps,
   };
 }

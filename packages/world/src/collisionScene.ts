@@ -61,7 +61,9 @@ export function collectCollisionAabbsFromObject3D(
   root.updateWorldMatrix(true, true);
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    if (ignoreInvisible && !obj.visible) return;
+    // Invisible `mammothCollisionHull` boxes are baked for FP static collision only; they are
+    // stripped before client mesh merging (see `fpSessionWorldMount.mergeGroupDescendantsByMaterial`).
+    if (ignoreInvisible && !obj.visible && obj.userData.mammothCollisionHull !== true) return;
     if (obj.userData.mammothNoCollision === true) return;
     if (!(obj.geometry instanceof THREE.BoxGeometry)) return;
     if (obj.geometry.boundingBox == null) {

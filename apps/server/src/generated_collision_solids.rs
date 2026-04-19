@@ -28,6 +28,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/pa
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0024.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0025.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0026.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0027.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0028.rs"));
 
 #[allow(dead_code)]
 pub const COLLISION_SOLID_FOOTPRINT_MIN_X: f32 = -16.55000;
@@ -67,4 +69,6 @@ pub static COLLISION_SOLID_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
     PART_0024,
     PART_0025,
     PART_0026,
+    PART_0027,
+    PART_0028,
 ];

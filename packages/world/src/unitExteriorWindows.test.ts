@@ -107,9 +107,12 @@ describe("buildFloorMeshes unit exterior windows", () => {
     expect(names.some((n) => n.endsWith("_solid"))).toBe(false);
 
     let glass = 0;
+    let collisionHulls = 0;
     root.traverse((o) => {
       if (o.name.startsWith("unit_exterior_glass_")) glass += 1;
+      if (o.name.startsWith("unit_exterior_win_collision_")) collisionHulls += 1;
     });
     expect(glass).toBeGreaterThan(0);
+    expect(collisionHulls).toBe(glass);
   });
 });

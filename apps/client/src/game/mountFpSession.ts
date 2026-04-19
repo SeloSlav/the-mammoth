@@ -323,6 +323,23 @@ export async function mountFpSession(
    */
   const DISPLAY_OFFSET_DAMP = 5;
   /**
+   * Feet on a **vertically moving** kinematic surface (elevator cab floor):
+   * - Somewhat stronger `_displayOffset.y` decay (reconcile vs cab motion); not too aggressive or
+   *   it fights 20 Hz corrections and reads as shimmer.
+   * - **Faster** vertical rig ease (not snap): snapping `rty` was transmitting reconcile spikes
+   *   in `_displayOffset.y` straight to the camera every frame.
+   */
+  /** Blended (kinematic vs HUD-predicted cab) vertical speed gate for elevator view smoothing. */
+  const ELEVATOR_KINEMATIC_FAST_ABS_VY_MPS = 0.14;
+  /** While HUD reports meaningful cab Vy, skip stride bob so it does not fight cab motion. */
+  const ELEV_HEAD_BOB_SUPPRESS_MIN_HUD_CAB_VY_MPS = 0.02;
+  /** Multiplier on {@link DISPLAY_OFFSET_DAMP} for `_displayOffset.y` only during fast vertical kinematic motion. */
+  const DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE = 2.1;
+  /** Extra horizontal rig ease toward target while elevator smoothing is active (parallax). */
+  const PLAYER_RIG_VIEW_XZ_ELEV_LERP_MULT = 2.25;
+  /** Extra **vertical** rig ease while riding (replaces hard Y snap; still faster than walking). */
+  const PLAYER_RIG_VIEW_Y_ELEV_LERP_MULT = 5.5;
+  /**
    * Extra exponential ease on the **visual** rig feet toward `pos + _displayOffset` (physics
    * stays exact). Hides residual jitter from reconcile + irregular RAF; ~0 = off.
    */
@@ -982,6 +999,118 @@ export async function mountFpSession(
   if (readDoorDebugAutostart()) __mmDoorDebugApi.all(__mmDoorDebugState.radiusM);
 
   /**
+   * Elevator ride / hitch debug — correlate slow frames with cab prediction + floor culling.
+   *
+   *   window.__mmElevDebug.on()                 // periodic samples while cab is moving
+   *   window.__mmElevDebug.on({ hitchMs: 28 })  // also log any frame ≥28 ms while riding
+   *   window.__mmElevDebug.on({ logSlowFramesAlways: true }) // slow frames even off cab
+   *   window.__mmElevDebug.snapshot()           // one-shot ride snapshot + timings
+   *   window.__mmElevDebug.off()
+   *   window.__mmElevDebug.persistOn()            // re-enable after reload
+   *   window.__mmElevDebug.persistOff()
+   *   ?elevdebug=1 or localStorage mmElevDebugAutostart=1 — auto-start on session load
+   */
+  const MM_ELEV_DEBUG_AUTOSTART_STORAGE_KEY = "mmElevDebugAutostart";
+  const printElevDebugJson = (label: string, payload: unknown): void => {
+    console.log(`[mmElevDebug:${label}] ${JSON.stringify(payload, null, 2)}`);
+  };
+  /** Require this many consecutive frames outside HUD cab before `[exit]` (kills one-frame flicker at door seams). */
+  const ELEV_DEBUG_EXIT_DEBOUNCE_FRAMES = 5;
+  const __mmElevDebugState = {
+    enabled: false,
+    intervalMs: 300,
+    hitchMs: 22,
+    logSlowFramesAlways: false,
+    lastPeriodicLogMs: 0,
+    /** True after any frame with a ride sample until `[exit]` fires. */
+    seenRideHud: false,
+    /** Consecutive frames with no ride while `seenRideHud` */
+    hudMissStreak: 0,
+  };
+  const readElevDebugAutostart = (): boolean => {
+    try {
+      if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("elevdebug")) {
+        return true;
+      }
+      return globalThis.localStorage?.getItem(MM_ELEV_DEBUG_AUTOSTART_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const writeElevDebugAutostart = (enabled: boolean): void => {
+    try {
+      if (enabled) globalThis.localStorage?.setItem(MM_ELEV_DEBUG_AUTOSTART_STORAGE_KEY, "1");
+      else globalThis.localStorage?.removeItem(MM_ELEV_DEBUG_AUTOSTART_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+  const __mmElevDebugApi = {
+    on(opts?: { intervalMs?: number; hitchMs?: number; logSlowFramesAlways?: boolean }): void {
+      __mmElevDebugState.enabled = true;
+      if (opts?.intervalMs != null) __mmElevDebugState.intervalMs = Math.max(50, opts.intervalMs);
+      if (opts?.hitchMs != null) __mmElevDebugState.hitchMs = Math.max(1, opts.hitchMs);
+      __mmElevDebugState.logSlowFramesAlways = opts?.logSlowFramesAlways === true;
+      __mmElevDebugState.lastPeriodicLogMs = 0;
+      __mmElevDebugState.seenRideHud = false;
+      __mmElevDebugState.hudMissStreak = 0;
+      printElevDebugJson("status", {
+        enabled: true,
+        intervalMs: __mmElevDebugState.intervalMs,
+        hitchMs: __mmElevDebugState.hitchMs,
+        logSlowFramesAlways: __mmElevDebugState.logSlowFramesAlways,
+        autostart: readElevDebugAutostart(),
+        message:
+          "Ride a moving cab; logs include prediction + floorVisBand. Slow frames while riding use hitchMs.",
+      });
+    },
+    off(): void {
+      __mmElevDebugState.enabled = false;
+      __mmElevDebugState.seenRideHud = false;
+      __mmElevDebugState.hudMissStreak = 0;
+      printElevDebugJson("status", { enabled: false, autostart: readElevDebugAutostart() });
+    },
+    snapshot(): unknown {
+      camera.getWorldPosition(_floorVisCamWorld);
+      camera.getWorldDirection(_floorVisCamDir);
+      const nowSnap = performance.now();
+      const ride = fpElevators.sampleRideDebug(
+        pos.x,
+        pos.y,
+        pos.z,
+        nowSnap,
+        _floorVisCamWorld.y,
+        _floorVisCamDir.y,
+      );
+      const payload = {
+        player: roundV(pos),
+        ride,
+        note: ride
+          ? "Inside moving cab — fields match last frame’s eval time (call during ride for live data)."
+          : "Not in a moving cab (or not inside HUD volume).",
+      };
+      printElevDebugJson("snapshot", payload);
+      return payload;
+    },
+    all(opts?: { intervalMs?: number; hitchMs?: number; logSlowFramesAlways?: boolean }): void {
+      this.on(opts);
+      this.snapshot();
+    },
+    persistOn(opts?: { intervalMs?: number; hitchMs?: number; logSlowFramesAlways?: boolean }): void {
+      writeElevDebugAutostart(true);
+      this.on(opts);
+      printElevDebugJson("persist", { autostart: true });
+    },
+    persistOff(): void {
+      writeElevDebugAutostart(false);
+      printElevDebugJson("persist", { autostart: false });
+    },
+  };
+  (globalThis as unknown as { __mmElevDebug?: typeof __mmElevDebugApi }).__mmElevDebug =
+    __mmElevDebugApi;
+  if (readElevDebugAutostart()) __mmElevDebugApi.on();
+
+  /**
    * Crosshair wall-hit probe for authoring by coordinates when the editor is not usable.
    *
    *   window.__mmWallProbe.on()          // enable RMB probe at current default range
@@ -1252,6 +1381,12 @@ export async function mountFpSession(
   let spawnSynced = false;
   /** False until first render target is written — seeds {@link _rigViewScratch} without a frame-0 ease-in. */
   let fpRigViewSmoothedReady = false;
+  /** Last frame’s kinematic support vertical velocity (elevator cab); for elev debug + tuning. */
+  let lastTickElevSupportVyMps = 0;
+  /** Last frame’s HUD moving-cab predicted Vy (matches ride debug); 0 when not in moving cab. */
+  let lastTickHudCabVyMps = 0;
+  /** `max(abs(supportVy), abs(hudCabVy))` — drives elevator view smoothing when feet sampling lags. */
+  let lastTickElevVyBlendAbs = 0;
 
   const simulatePredictedPlayerStep = (opts: {
     pos: THREE.Vector3;
@@ -1907,10 +2042,29 @@ export async function mountFpSession(
 
     // Decay the display offset — exponential approach to zero each frame.
     // Any server correction applied this frame (or earlier) smoothly blends out.
+    const probeTopElevDecay = pos.y + fpLocomotionConstants.walkProbeDy;
+    _elevSupportEval.worldX = pos.x;
+    _elevSupportEval.worldZ = pos.z;
+    _elevSupportEval.probeTopY = probeTopElevDecay;
+    _elevSupportEval.baseTop = sampleWalkTopBase(pos.x, pos.z, probeTopElevDecay);
+    _elevSupportEval.evalWallClockMs = nowMs;
+    lastTickElevSupportVyMps = getKinematicSupportVerticalVelocityMps(
+      fpElevators.kinematicSupport,
+      _elevSupportEval,
+    );
+    lastTickHudCabVyMps = fpElevators.getHudMovingCabVyMps(pos.x, pos.y, pos.z, nowMs);
+    lastTickElevVyBlendAbs = Math.max(
+      Math.abs(lastTickElevSupportVyMps),
+      Math.abs(lastTickHudCabVyMps),
+    );
+    const fastElevY = lastTickElevVyBlendAbs >= ELEVATOR_KINEMATIC_FAST_ABS_VY_MPS;
     if (_displayOffset.x !== 0 || _displayOffset.y !== 0 || _displayOffset.z !== 0) {
       const k = Math.exp(-DISPLAY_OFFSET_DAMP * dt);
+      const kY = fastElevY
+        ? Math.exp(-DISPLAY_OFFSET_DAMP * DISPLAY_OFFSET_ELEVATOR_Y_DAMP_SCALE * dt)
+        : k;
       _displayOffset.x *= k;
-      _displayOffset.y *= k;
+      _displayOffset.y *= kY;
       _displayOffset.z *= k;
       // Clamp tiny residuals to exact zero so the condition above short-circuits next frame.
       if (Math.abs(_displayOffset.x) < 1e-5) _displayOffset.x = 0;
@@ -1927,9 +2081,17 @@ export async function mountFpSession(
       fpRigViewSmoothedReady = true;
     } else if (PLAYER_RIG_VIEW_LERP_PER_S > 1e-3) {
       const a = 1 - Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * dt);
-      _rigViewScratch.x += (rtx - _rigViewScratch.x) * a;
-      _rigViewScratch.y += (rty - _rigViewScratch.y) * a;
-      _rigViewScratch.z += (rtz - _rigViewScratch.z) * a;
+      const aXZ = fastElevY
+        ? 1 -
+          Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * PLAYER_RIG_VIEW_XZ_ELEV_LERP_MULT * dt)
+        : a;
+      const aY = fastElevY
+        ? 1 -
+          Math.exp(-PLAYER_RIG_VIEW_LERP_PER_S * PLAYER_RIG_VIEW_Y_ELEV_LERP_MULT * dt)
+        : a;
+      _rigViewScratch.x += (rtx - _rigViewScratch.x) * aXZ;
+      _rigViewScratch.y += (rty - _rigViewScratch.y) * aY;
+      _rigViewScratch.z += (rtz - _rigViewScratch.z) * aXZ;
     } else {
       _rigViewScratch.set(rtx, rty, rtz);
     }
@@ -1962,7 +2124,9 @@ export async function mountFpSession(
       0,
       1,
     );
-    if (loco.grounded && !crouchToggle && !freeLook && hs > 0.12) {
+    const suppressHeadBobForElev =
+      Math.abs(lastTickHudCabVyMps) >= ELEV_HEAD_BOB_SUPPRESS_MIN_HUD_CAB_VY_MPS;
+    if (loco.grounded && !crouchToggle && !freeLook && hs > 0.12 && !suppressHeadBobForElev) {
       // Stride-locked vertical bob only (roll / lateral sway read as side-to-side rocking).
       const dip = Math.sin(loco.headBobPhase * 2) * CAM_BOB_DIP_Y * walkStrength;
       camera.rotation.z = 0;
@@ -2090,17 +2254,74 @@ export async function mountFpSession(
     syncBuildingFloorPlateVisibility(nowMs);
     renderer.render(scene, camera);
     const _t_renderEnd = performance.now();
+    const physicsMs = _t_physicsEnd - nowMs;
+    const elevatorMs = _t_elevEnd - _t_physicsEnd;
+    const presentMs = _t_presentEnd - _t_elevEnd;
+    const renderMs = _t_renderEnd - _t_presentEnd;
+    const totalFrameMs = _t_renderEnd - nowMs;
+
+    if (__mmElevDebugState.enabled) {
+      camera.getWorldPosition(_floorVisCamWorld);
+      camera.getWorldDirection(_floorVisCamDir);
+      const ride = fpElevators.sampleRideDebug(
+        pos.x,
+        pos.y,
+        pos.z,
+        nowMs,
+        _floorVisCamWorld.y,
+        _floorVisCamDir.y,
+      );
+      const riding = ride != null;
+      if (riding) {
+        __mmElevDebugState.hudMissStreak = 0;
+        __mmElevDebugState.seenRideHud = true;
+      } else if (__mmElevDebugState.seenRideHud) {
+        __mmElevDebugState.hudMissStreak += 1;
+        if (__mmElevDebugState.hudMissStreak >= ELEV_DEBUG_EXIT_DEBOUNCE_FRAMES) {
+          printElevDebugJson("exit", {
+            nowMs: +nowMs.toFixed(1),
+            note: `No HUD cab sample for ${ELEV_DEBUG_EXIT_DEBOUNCE_FRAMES}+ frames (left car, docked, or phase idle).`,
+          });
+          __mmElevDebugState.hudMissStreak = 0;
+          __mmElevDebugState.seenRideHud = false;
+        }
+      }
+      const periodicDue =
+        riding && nowMs - __mmElevDebugState.lastPeriodicLogMs >= __mmElevDebugState.intervalMs;
+      const slowFrame = totalFrameMs >= __mmElevDebugState.hitchMs;
+      const logSlow = slowFrame && (riding || __mmElevDebugState.logSlowFramesAlways);
+      if (periodicDue || logSlow) {
+        if (periodicDue) __mmElevDebugState.lastPeriodicLogMs = nowMs;
+        const displayOffLen = Math.hypot(_displayOffset.x, _displayOffset.y, _displayOffset.z);
+        printElevDebugJson("frame", {
+          frameMs: +totalFrameMs.toFixed(2),
+          dtSec: +dt.toFixed(4),
+          slow: slowFrame,
+          periodic: periodicDue,
+          physicsMs: +physicsMs.toFixed(3),
+          elevatorMs: +elevatorMs.toFixed(3),
+          presentMs: +presentMs.toFixed(3),
+          renderMs: +renderMs.toFixed(3),
+          displayOffsetM: +displayOffLen.toFixed(4),
+          offsetSpike: displayOffLen > 0.2,
+          elevSupportVyMps: +lastTickElevSupportVyMps.toFixed(3),
+          hudCabVyMps: +lastTickHudCabVyMps.toFixed(3),
+          elevVyBlendAbs: +lastTickElevVyBlendAbs.toFixed(3),
+          ride,
+        });
+      }
+    }
 
     onFpSessionPostRenderFrame(nowMs);
     logFpPerf();
     pushFpPerfFrame(
       nowMs,
-      _t_renderEnd - nowMs,
+      totalFrameMs,
       {
-        physicsMs: _t_physicsEnd - nowMs,
-        elevatorMs: _t_elevEnd - _t_physicsEnd,
-        presentMs: _t_presentEnd - _t_elevEnd,
-        renderMs: _t_renderEnd - _t_presentEnd,
+        physicsMs,
+        elevatorMs,
+        presentMs,
+        renderMs,
       },
       {
         drawCalls: renderer.info.render.calls,
@@ -2139,6 +2360,12 @@ export async function mountFpSession(
     try {
       const g = globalThis as unknown as { __mmWallProbe?: typeof __mmWallProbeApi };
       if (g.__mmWallProbe === __mmWallProbeApi) delete g.__mmWallProbe;
+    } catch {
+      /* ignore */
+    }
+    try {
+      const g = globalThis as unknown as { __mmElevDebug?: typeof __mmElevDebugApi };
+      if (g.__mmElevDebug === __mmElevDebugApi) delete g.__mmElevDebug;
     } catch {
       /* ignore */
     }

@@ -50,6 +50,7 @@ import {
   type BuildFloorMeshesOptions,
 } from "./elevatorDoorFacesFromGroundFloorDoc.js";
 import {
+  addUnitExteriorWindowCollisionHulls,
   addUnitExteriorWindowGlassMeshes,
   DEFAULT_EXTERIOR_FACADE_SALT,
   planUnitExteriorWindowsForFace,
@@ -1726,6 +1727,13 @@ export function buildFloorMeshes(
       ) {
         const hx = sx * 0.5;
         const hz = sz * 0.5;
+        addUnitExteriorWindowCollisionHulls(room, {
+          faces: roomExteriorFaces,
+          hx,
+          hz,
+          holesEw: { e: exteriorWindowHoles.e, w: exteriorWindowHoles.w },
+          holesNs: { n: exteriorWindowHoles.n, s: exteriorWindowHoles.s },
+        });
         addUnitExteriorWindowGlassMeshes(room, {
           faces: roomExteriorFaces,
           hx,

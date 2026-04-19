@@ -167,6 +167,21 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     .copy(group.matrixWorld)
     .invert();
 
+  /** Baked-only window collision boxes — not needed at runtime (client uses precomputed AABBs). */
+  const stripCollisionHullMeshes = (): void => {
+    const strip: THREE.Mesh[] = [];
+    group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.userData.mammothCollisionHull === true) {
+        strip.push(obj);
+      }
+    });
+    for (const m of strip) {
+      m.parent?.remove(m);
+      m.geometry.dispose();
+    }
+  };
+  stripCollisionHullMeshes();
+
   // Collect geometry clones keyed by material UUID.
   const geosByMat = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
 
