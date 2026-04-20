@@ -144,12 +144,16 @@ describe("buildFloorMeshes unit exterior windows", () => {
       60 / 19,
     );
     expect(seals.length).toBeGreaterThan(0);
-    const eastWindowSealSlabs = seals.filter((b) => {
+    const px = 6.425;
+    const hx = 9 * 0.5;
+    const eastShellOuterX = px + hx;
+    const eastWindowSlabs = seals.filter((b) => {
       const dx = b.max[0] - b.min[0];
-      // Spans inner room setback through full shell thickness (~wt + WINDOW_INWARD_SEAL_DEPTH_M).
-      return dx > 0.58 && dx < 0.68;
+      return dx > 0.78 && dx < 0.98;
     });
-    expect(eastWindowSealSlabs.length).toBeGreaterThan(0);
+    expect(eastWindowSlabs.length).toBeGreaterThan(0);
+    expect(eastWindowSlabs.some((s) => s.max[0] >= eastShellOuterX + 0.16)).toBe(true);
+    expect(eastWindowSlabs.some((s) => s.min[0] < eastShellOuterX - 0.52)).toBe(true);
 
     const sills = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
       building,
@@ -157,6 +161,7 @@ describe("buildFloorMeshes unit exterior windows", () => {
       60 / 19,
     );
     expect(sills.length).toBeGreaterThan(0);
+    expect(sills.some((s) => Math.abs(s.min[0] - eastShellOuterX) < 1e-4)).toBe(true);
     const sillTops = sills.map((b) => b.max[1] - b.min[1]);
     expect(Math.min(...sillTops)).toBeLessThan(0.15);
     const wideX = sills.filter((b) => b.max[0] - b.min[0] > 0.2);

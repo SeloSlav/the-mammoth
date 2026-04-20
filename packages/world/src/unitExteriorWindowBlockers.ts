@@ -9,17 +9,17 @@ import {
 } from "./unitExteriorWindows.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
 
-/**
- * How far the seal slab extends **into** the apartment from the inner plaster face (m).
- * Deeper = collision meets you sooner at window holes (shell + cladding have no solid in the
- * opening). Keep below ~½ bay depth so we only thicken the window band, not the whole room.
- */
-const WINDOW_INWARD_SEAL_DEPTH_M = 0.52;
-/** Stay just inside the shell **outer** face so seals fill the glass band without crossing the void. */
-const WINDOW_SEAL_EXTERIOR_SHELL_EPS_M = 0.002;
-/** Slight tangent padding so we do not leave hairline gaps at mullion corners. */
+/** Sill tangent padding — narrow sills still get foot overlap (see exterior sill branch). */
 const WINDOW_SEAL_TANGENT_PAD_M = 0.03;
 const EXTERIOR_FACE_TOL_M = 0.16;
+/**
+ * **One** collision box per window opening: still thicker than glass alone, but kept tight so you
+ * can stand near the window; bump outward/inward if tunneling reappears.
+ */
+const WINDOW_IMPENETRABLE_INWARD_M = 0.52;
+const WINDOW_IMPENETRABLE_OUTWARD_M = 0.22;
+const WINDOW_IMPENETRABLE_Y_PAD_M = 0.1;
+const WINDOW_IMPENETRABLE_TANG_PAD_M = 0.06;
 
 /** Outward from shell **outer** face — matches the visible exterior window stool (m). */
 const WINDOW_SILL_LEDGE_DEPTH_M = 0.42;
@@ -168,19 +168,20 @@ function appendUnitExteriorWindowAnalyticSolids(
         if (face === "e") {
           const inner = hx - wt;
           for (const h of holesEw) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
             const zA = Math.min(h.z0, h.z1) - tang;
             const zB = Math.max(h.z0, h.z1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
-              // Full wall thickness at the opening (same x span as `unit_exterior_glass_*` boxes).
+              const yLo = yA - WINDOW_IMPENETRABLE_Y_PAD_M;
+              const yHi = yB + WINDOW_IMPENETRABLE_Y_PAD_M;
               pushWorld(
-                inner - WINDOW_INWARD_SEAL_DEPTH_M,
-                hx - WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
-                yA,
-                yB,
+                inner - WINDOW_IMPENETRABLE_INWARD_M,
+                hx + WINDOW_IMPENETRABLE_OUTWARD_M,
+                yLo,
+                yHi,
                 zA,
                 zB,
               );
@@ -199,18 +200,20 @@ function appendUnitExteriorWindowAnalyticSolids(
         } else if (face === "w") {
           const inner = -hx + wt;
           for (const h of holesEw) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
             const zA = Math.min(h.z0, h.z1) - tang;
             const zB = Math.max(h.z0, h.z1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
+              const yLo = yA - WINDOW_IMPENETRABLE_Y_PAD_M;
+              const yHi = yB + WINDOW_IMPENETRABLE_Y_PAD_M;
               pushWorld(
-                -hx + WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
-                inner + WINDOW_INWARD_SEAL_DEPTH_M,
-                yA,
-                yB,
+                -hx - WINDOW_IMPENETRABLE_OUTWARD_M,
+                inner + WINDOW_IMPENETRABLE_INWARD_M,
+                yLo,
+                yHi,
                 zA,
                 zB,
               );
@@ -229,20 +232,22 @@ function appendUnitExteriorWindowAnalyticSolids(
         } else if (face === "n") {
           const inner = hz - wt;
           for (const h of holesNs) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
             const xA = Math.min(h.x0, h.x1) - tang;
             const xB = Math.max(h.x0, h.x1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
+              const yLo = yA - WINDOW_IMPENETRABLE_Y_PAD_M;
+              const yHi = yB + WINDOW_IMPENETRABLE_Y_PAD_M;
               pushWorld(
                 xA,
                 xB,
-                yA,
-                yB,
-                inner - WINDOW_INWARD_SEAL_DEPTH_M,
-                hz - WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
+                yLo,
+                yHi,
+                inner - WINDOW_IMPENETRABLE_INWARD_M,
+                hz + WINDOW_IMPENETRABLE_OUTWARD_M,
               );
             } else {
               const yBottom = yA;
@@ -259,20 +264,22 @@ function appendUnitExteriorWindowAnalyticSolids(
         } else {
           const inner = -hz + wt;
           for (const h of holesNs) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
             const xA = Math.min(h.x0, h.x1) - tang;
             const xB = Math.max(h.x0, h.x1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
+              const yLo = yA - WINDOW_IMPENETRABLE_Y_PAD_M;
+              const yHi = yB + WINDOW_IMPENETRABLE_Y_PAD_M;
               pushWorld(
                 xA,
                 xB,
-                yA,
-                yB,
-                -hz + WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
-                inner + WINDOW_INWARD_SEAL_DEPTH_M,
+                yLo,
+                yHi,
+                -hz - WINDOW_IMPENETRABLE_OUTWARD_M,
+                inner + WINDOW_IMPENETRABLE_INWARD_M,
               );
             } else {
               const yBottom = yA;
@@ -293,9 +300,8 @@ function appendUnitExteriorWindowAnalyticSolids(
 }
 
 /**
- * Vertical slabs at each exterior window hole: span from deep in the unit to just shy of the
- * shell **outer** face (same thickness band as `unit_exterior_glass_*`), so there is no
- * millimetre-scale air gap where mesh merge skipped the glass box.
+ * **Thick** collision only: one deep/wide/tall AABB per window hole (well into the room and past
+ * the façade) so players cannot tunnel or squeeze through; sills stay separate for walk support.
  *
  * Horizontal FP blockers only — no walk surfaces, no mesh edits.
  */
