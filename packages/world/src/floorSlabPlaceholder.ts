@@ -7,10 +7,10 @@ import {
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 
 /**
- * World-space meters per texture repeat on horizontal ground slabs (patina maps are not seamless;
- * planar UV keeps tiles roughly square in XZ regardless of plate aspect ratio).
+ * World-space meters per texture repeat on horizontal ground slabs (planar UV keeps repeats
+ * roughly square in XZ regardless of plate aspect ratio).
  */
-export const GROUND_SLAB_PATINA_TILE_SIZE_M = 2.75;
+export const GROUND_SLAB_PLANAR_TILE_SIZE_M = 2.75;
 
 /**
  * Replaces default box top-face UVs with planar XZ mapping in meters so albedo/normal repeat
@@ -21,7 +21,7 @@ export function applyGroundSlabPlanarTopUV(
   width: number,
   depth: number,
   thickness: number,
-  metersPerTile = GROUND_SLAB_PATINA_TILE_SIZE_M,
+  metersPerTile = GROUND_SLAB_PLANAR_TILE_SIZE_M,
 ): void {
   const pos = geometry.attributes.position;
   const uv = geometry.attributes.uv;

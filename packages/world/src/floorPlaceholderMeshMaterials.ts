@@ -1,41 +1,4 @@
-import type { ElevatorCabMaterialSlot } from "@the-mammoth/schemas";
 import * as THREE from "three";
-import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
-
-/** Matches `content/elevator/stairwell.json` `materials.landing` — podium / ground foot slab. */
-const PATINA_STAIRWELL_LANDING_SLOT: ElevatorCabMaterialSlot = {
-  roughness: 1,
-  metalness: 1,
-  mapUrl: "/static/materials/stairwell/patina-landing/basecolor.png",
-  normalMapUrl: "/static/materials/stairwell/patina-landing/normal.png",
-  roughnessMapUrl: "/static/materials/stairwell/patina-landing/roughness.png",
-  metalnessMapUrl: "/static/materials/stairwell/patina-landing/metalness.png",
-  bumpMapUrl: "/static/materials/stairwell/patina-landing/height.png",
-};
-
-/**
- * Patina albedo is not a seamless tile — high `texture.repeat` on large quads shows a pillow/grid.
- * Tiling density comes from {@link applyGroundSlabPlanarTopUV} (world-space UV on the slab top).
- */
-function patinaLandingGroundSlabMaterial(): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 1,
-    metalness: 1,
-    side: THREE.DoubleSide,
-  });
-  applyCabMaterialSlot(mat, PATINA_STAIRWELL_LANDING_SLOT);
-  for (const tex of [mat.map, mat.normalMap, mat.roughnessMap, mat.metalnessMap, mat.bumpMap]) {
-    if (tex) {
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(1, 1);
-      tex.needsUpdate = true;
-    }
-  }
-  mat.bumpScale = 0.045;
-  return mat;
-}
 
 /**
  * Shared materials so massive generated floors do not allocate thousands of materials.
@@ -180,7 +143,11 @@ export const floorPlaceholderMeshMaterials = {
   miscCeil: concreteMaterial(0xe2e6ea, { side: THREE.DoubleSide }),
   miscWall: concreteMaterial(0xd3d8dc),
   miscExteriorWall: concreteMaterial(0xe5edf6),
-  slab: patinaLandingGroundSlabMaterial(),
+  /**
+   * Holed structural pad under the plate (lobby / courtyard shell). Procedural concrete only —
+   * stairwell patina (`stairwell.json` landing/floor) is applied inside shaft meshes, not here.
+   */
+  slab: concreteMaterial(0xc2c8ce),
   /** Tall vertical box under the plate — keep procedural; patina is for horizontal slabs only. */
   groundFootprintOccluder: concreteMaterial(0xc3c9cf, { side: THREE.DoubleSide }),
   lobbyDoorFrame: new THREE.MeshStandardMaterial({

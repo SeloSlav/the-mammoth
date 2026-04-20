@@ -5,7 +5,7 @@ import {
 } from "./stairWellGeometry.js";
 
 describe("computeSwitchbackStairLayout", () => {
-  it("adds ground-storey extras on the bottom run (Mamutica hub: east 10 → 12)", () => {
+  it("adds ground-storey extras on the bottom run (Mamutica hub: east 10 → 13)", () => {
     const sx = 8.35;
     const sy = 3.1578947368421053;
     const sz = 13.95;
@@ -15,7 +15,7 @@ describe("computeSwitchbackStairLayout", () => {
     });
     const sum = (c: readonly number[]) => c.reduce((a, b) => a + b, 0);
     expect(typical.legTreadCounts).toEqual([0, 10, 0, 8]);
-    expect(ground.legTreadCounts).toEqual([0, 12, 0, 8]);
+    expect(ground.legTreadCounts).toEqual([0, 13, 0, 8]);
     expect(sum(ground.legTreadCounts)).toBe(
       sum(typical.legTreadCounts) + GROUND_STOREY_EXTRA_BOTTOM_TREADS,
     );

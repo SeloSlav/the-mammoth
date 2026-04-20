@@ -13,9 +13,9 @@ export const STOREY_SPACING_M = 60 / 19;
 /**
  * Default {@link SwitchbackStairOpts.extraBottomTreads} for **ground-storey** stair segments.
  * Mamutica hub proportions merge the south run into east (`n1 === 0`); extras apply to that leg,
- * so **2** yields 12 east treads vs 10 typical (11 with 1 extra was still one short).
+ * so **3** yields 13 east treads vs 10 typical.
  */
-export const GROUND_STOREY_EXTRA_BOTTOM_TREADS = 2;
+export const GROUND_STOREY_EXTRA_BOTTOM_TREADS = 3;
 
 export const STAIR_RUN = 0.28;
 export const STAIR_RISE = 0.165;
@@ -486,7 +486,7 @@ export function computeSwitchbackStairLayout(
   ];
 
   const extraBottom = Math.min(
-    2,
+    3,
     Math.max(0, Math.floor(opts?.extraBottomTreads ?? 0)),
   );
   if (extraBottom > 0) {
