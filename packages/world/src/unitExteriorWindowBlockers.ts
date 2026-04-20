@@ -10,10 +10,11 @@ import {
 import type { CardinalFace } from "./wallWithDoorCutout.js";
 
 /**
- * How far the seal slab sits **inside** the apartment from the inner plaster face (m).
- * Must stay ≥ ~0.1 so overlap resolution does not fight a slab thinner than the capsule radius.
+ * How far the seal slab extends **into** the apartment from the inner plaster face (m).
+ * Deeper = collision meets you sooner at window holes (shell + cladding have no solid in the
+ * opening). Keep below ~½ bay depth so we only thicken the window band, not the whole room.
  */
-const WINDOW_INWARD_SEAL_DEPTH_M = 0.12;
+const WINDOW_INWARD_SEAL_DEPTH_M = 0.52;
 /** Stay slightly short of the inner face so the AABB never protrudes into the exterior void (+X eject). */
 const WINDOW_SEAL_INNER_FACE_EPS_M = 0.002;
 /** Slight tangent padding so we do not leave hairline gaps at mullion corners. */

@@ -144,11 +144,11 @@ describe("buildFloorMeshes unit exterior windows", () => {
       60 / 19,
     );
     expect(seals.length).toBeGreaterThan(0);
-    const thinX = seals.filter((b) => {
+    const eastWindowSealSlabs = seals.filter((b) => {
       const dx = b.max[0] - b.min[0];
-      return dx > 0.08 && dx < 0.14;
+      return dx > 0.35 && dx < 0.65;
     });
-    expect(thinX.length).toBeGreaterThan(0);
+    expect(eastWindowSealSlabs.length).toBeGreaterThan(0);
 
     const sills = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
       building,
