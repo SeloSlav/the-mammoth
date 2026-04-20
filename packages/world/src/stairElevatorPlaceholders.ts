@@ -24,6 +24,7 @@ import {
   type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
 import { concreteMaterial } from "./floorPlaceholderMeshMaterials.js";
+import { createStairTreadBoxGeometry } from "./stairTreadUv.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
 
 /** Elevator hoistway exterior: light brutalist brick-red concrete so shafts read as distinct tower cores. */
@@ -178,7 +179,7 @@ function stairWellOpeningDefForProxyId(
 
 /**
  * Ground-level hoistway / stair entry: **double-door clear width** (m).
- * Leaf geometry comes later — opening + frame trim only for now.
+ * Leaf geometry comes later — wall cutout only (no separate frame mesh).
  */
 export const SHAFT_DOUBLE_DOOR_W = 1.86;
 
@@ -245,6 +246,11 @@ type ShaftShellOpts = {
    * so thin air gaps between shaft boxes and hollow corridor shells do not read as missing exterior.
    */
   corridorFlushGapM?: number;
+  /**
+   * Inset trim meshes around door cutouts (elevator hoistways). Stairwells omit this — opening is
+   * wall material only.
+   */
+  includeDoorFrameTrim?: boolean;
 };
 
 /**
@@ -337,6 +343,7 @@ function addShaftShell(
   const supplementalDoors = opts.supplementalDoors ?? [];
   const extraHolesYZ = opts.corridorDoorExtraHolesYZ ?? [];
   const extraHolesXY = opts.corridorDoorExtraHolesXY ?? [];
+  const doorFrameTrim = opts.includeDoorFrameTrim === true;
   const multiCorridorDoors =
     supplementalDoors.length > 0 || extraHolesYZ.length > 0 || extraHolesXY.length > 0;
   const bandCap = door
@@ -413,9 +420,9 @@ function addShaftShell(
         holes,
         name,
       );
-      const xInner = face === "e" ? hx - wt : -hx + wt;
-      const inwardX = face === "e" ? -1 : 1;
-      if (holes.length > 0) {
+      if (doorFrameTrim && holes.length > 0) {
+        const xInner = face === "e" ? hx - wt : -hx + wt;
+        const inwardX = face === "e" ? -1 : 1;
         addDoorFrameTrimConstantX(
           group,
           doorFrameMat,
@@ -481,9 +488,9 @@ function addShaftShell(
         holes,
         name,
       );
-      const zInner = face === "n" ? hz - wt : -hz + wt;
-      const inwardZ = face === "n" ? -1 : 1;
-      if (holes.length > 0) {
+      if (doorFrameTrim && holes.length > 0) {
+        const zInner = face === "n" ? hz - wt : -hz + wt;
+        const inwardZ = face === "n" ? -1 : 1;
         addDoorFrameTrimConstantZ(
           group,
           doorFrameMat,
@@ -687,65 +694,67 @@ function addShaftShell(
         "shaft_wall_s",
       );
 
-      const xInnerE = hx - wt;
-      for (let i = 0; i < holesE.length; i++) {
-        const h = holesE[i]!;
-        addDoorFrameTrimConstantX(
-          group,
-          doorFrameMat,
-          xInnerE,
-          -1,
-          h.z0,
-          h.z1,
-          h.y0,
-          h.y1,
-          `shaft_wall_e_frame_${i}`,
-        );
-      }
-      const xInnerW = -hx + wt;
-      for (let i = 0; i < holesW.length; i++) {
-        const h = holesW[i]!;
-        addDoorFrameTrimConstantX(
-          group,
-          doorFrameMat,
-          xInnerW,
-          1,
-          h.z0,
-          h.z1,
-          h.y0,
-          h.y1,
-          `shaft_wall_w_frame_${i}`,
-        );
-      }
-      const zInnerN = hz - wt;
-      for (let i = 0; i < holesN.length; i++) {
-        const h = holesN[i]!;
-        addDoorFrameTrimConstantZ(
-          group,
-          doorFrameMat,
-          zInnerN,
-          -1,
-          h.x0,
-          h.x1,
-          h.y0,
-          h.y1,
-          `shaft_wall_n_frame_${i}`,
-        );
-      }
-      const zInnerS = -hz + wt;
-      for (let i = 0; i < holesS.length; i++) {
-        const h = holesS[i]!;
-        addDoorFrameTrimConstantZ(
-          group,
-          doorFrameMat,
-          zInnerS,
-          1,
-          h.x0,
-          h.x1,
-          h.y0,
-          h.y1,
-          `shaft_wall_s_frame_${i}`,
-        );
+      if (doorFrameTrim) {
+        const xInnerE = hx - wt;
+        for (let i = 0; i < holesE.length; i++) {
+          const h = holesE[i]!;
+          addDoorFrameTrimConstantX(
+            group,
+            doorFrameMat,
+            xInnerE,
+            -1,
+            h.z0,
+            h.z1,
+            h.y0,
+            h.y1,
+            `shaft_wall_e_frame_${i}`,
+          );
+        }
+        const xInnerW = -hx + wt;
+        for (let i = 0; i < holesW.length; i++) {
+          const h = holesW[i]!;
+          addDoorFrameTrimConstantX(
+            group,
+            doorFrameMat,
+            xInnerW,
+            1,
+            h.z0,
+            h.z1,
+            h.y0,
+            h.y1,
+            `shaft_wall_w_frame_${i}`,
+          );
+        }
+        const zInnerN = hz - wt;
+        for (let i = 0; i < holesN.length; i++) {
+          const h = holesN[i]!;
+          addDoorFrameTrimConstantZ(
+            group,
+            doorFrameMat,
+            zInnerN,
+            -1,
+            h.x0,
+            h.x1,
+            h.y0,
+            h.y1,
+            `shaft_wall_n_frame_${i}`,
+          );
+        }
+        const zInnerS = -hz + wt;
+        for (let i = 0; i < holesS.length; i++) {
+          const h = holesS[i]!;
+          addDoorFrameTrimConstantZ(
+            group,
+            doorFrameMat,
+            zInnerS,
+            1,
+            h.x0,
+            h.x1,
+            h.y0,
+            h.y1,
+            `shaft_wall_s_frame_${i}`,
+          );
+        }
       }
     } else {
       addEastWest("e", xE, thE, face === "e", yWallBottom, yWallTop, "shaft_wall_e");
@@ -850,6 +859,7 @@ export function addElevatorShaftPlaceholder(
     openTopWallExtend: 0.06,
     groundDoor: opts?.groundDoor ?? null,
     corridorFlushGapM: opts?.corridorFlushGapM,
+    includeDoorFrameTrim: true,
   });
 }
 
@@ -1724,9 +1734,10 @@ export function addStairWellPlaceholder(
         if (!tr) break;
         if (opts?.omitTreads !== true) {
           /** Single material on full box so Patina / PBR wraps every face (riser, bottom, sides).
-           * Multi-material arrays were avoided — they broke WebGPU draws in the editor. */
+           * Multi-material arrays were avoided — they broke WebGPU draws in the editor.
+           * Metric UVs ({@link createStairTreadBoxGeometry}) avoid default cube UV stretch on wide tops. */
           const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(tr.halfAlong * 2, tr.riseHalf * 2, tr.halfAcross * 2),
+            createStairTreadBoxGeometry(tr.halfAlong, tr.riseHalf, tr.halfAcross),
             mats.tread,
           );
           mesh.name = `stair_tread_${ti}`;

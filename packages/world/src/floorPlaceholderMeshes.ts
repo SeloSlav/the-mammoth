@@ -1817,10 +1817,13 @@ function collectNamedBoxCollisionAabbs(
   root.updateWorldMatrix(true, true);
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    if (!(obj.geometry instanceof THREE.BoxGeometry)) return;
+    const g = obj.geometry;
+    const boxLike =
+      g instanceof THREE.BoxGeometry || obj.userData.mammothAxisAlignedCollisionBox === true;
+    if (!boxLike) return;
     if (!namePrefixes.some((prefix) => obj.name.startsWith(prefix))) return;
-    if (obj.geometry.boundingBox == null) obj.geometry.computeBoundingBox();
-    const bb = obj.geometry.boundingBox;
+    if (g.boundingBox == null) g.computeBoundingBox();
+    const bb = g.boundingBox;
     if (!bb) return;
     box.copy(bb).applyMatrix4(obj.matrixWorld);
     out.push({

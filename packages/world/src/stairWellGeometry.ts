@@ -12,10 +12,10 @@ export const STOREY_SPACING_M = 60 / 19;
 
 /**
  * Default {@link SwitchbackStairOpts.extraBottomTreads} for **ground-storey** stair segments.
- * Mamutica hub proportions merge the south run into east (`n1 === 0`); extras apply to that leg,
- * so **3** yields 13 east treads vs 10 typical.
+ * Extends the lap’s vertical span (and shifts `runStart` down) so extra treads are real reach to
+ * the lobby/pit, not the same climb with shallower risers.
  */
-export const GROUND_STOREY_EXTRA_BOTTOM_TREADS = 3;
+export const GROUND_STOREY_EXTRA_BOTTOM_TREADS = 2;
 
 export const STAIR_RUN = 0.28;
 export const STAIR_RISE = 0.165;
@@ -24,9 +24,9 @@ const STAIR_WT = 0.11;
 export type SwitchbackStairOpts = {
   climbFullShaft?: boolean;
   /**
-   * Extra tread(s) on the **first leg in climb order** that has treads (bottom of the flight).
-   * Ground storeys often use {@link GROUND_STOREY_EXTRA_BOTTOM_TREADS}. Re-solves `rise` for the
-   * same lap vertical span.
+   * Extra treads on the **bottom** of the flight (ground lobby / pit reach). Increases the lap
+   * vertical span and lowers the run start so riser height stays in band instead of squeezing more
+   * steps into the same storey height.
    */
   extraBottomTreads?: number;
 };
@@ -367,7 +367,7 @@ export function computeSwitchbackStairLayout(
     ? hy - STAIR_WT - 0.38
     : STOREY_SPACING_M - hy + STAIR_WT - 0.06;
   const verticalSpan = Math.max(yLastCenter - yLow, 0.22);
-  const runStart = yLow + pitGap;
+  let runStart = yLow + pitGap;
   const fullClimb = Math.max(0.14, yLastCenter - runStart);
 
   /** Steeper service stairs (still within common code max rise). */
@@ -377,7 +377,7 @@ export function computeSwitchbackStairLayout(
 
   /** One lap ≈ one storey on mega shafts; vertical pitch of each lap is `advance = nTotal * rise`. */
   const storeyClimb = STOREY_SPACING_M - 0.065;
-  const lapInner = climbFull ? storeyClimb : Math.max(0.16, verticalSpan - 2 * pitGap);
+  let lapInner = climbFull ? storeyClimb : Math.max(0.16, verticalSpan - 2 * pitGap);
 
   let nTotal = Math.max(10, Math.ceil(lapInner / riseMax + 0.5));
   nTotal = Math.min(maxTreadsPerLap, nTotal);
@@ -391,6 +391,27 @@ export function computeSwitchbackStairLayout(
     rise = lapInner / Math.max(nTotal - 0.5, 1);
   }
   rise = Math.max(riseMin, Math.min(riseMax, rise));
+  const riseFirstLap = rise;
+
+  const extraBottomRaw = Math.floor(opts?.extraBottomTreads ?? 0);
+  const extraBottom =
+    climbFull || extraBottomRaw <= 0 ? 0 : Math.min(8, extraBottomRaw);
+
+  if (extraBottom > 0) {
+    lapInner = lapInner + extraBottom * riseFirstLap;
+    nTotal += extraBottom;
+    rise = lapInner / Math.max(nTotal - 0.5, 1);
+    while (rise > riseMax && nTotal < maxTreadsPerLap) {
+      nTotal += 1;
+      rise = lapInner / Math.max(nTotal - 0.5, 1);
+    }
+    while (rise < riseMin && nTotal > 8) {
+      nTotal -= 1;
+      rise = lapInner / Math.max(nTotal - 0.5, 1);
+    }
+    rise = Math.max(riseMin, Math.min(riseMax, rise));
+    runStart -= extraBottom * rise;
+  }
 
   const landTh = Math.max(0.085, Math.min(rise * 0.92, 0.15));
   const lh = strip * 0.5;
@@ -484,24 +505,6 @@ export function computeSwitchbackStairLayout(
     { ax: ix1 - strip, az: zN, bx: ix0 + strip, bz: zN, count: n3 },
     { ax: xW, az: wzHi, bx: xW, bz: wzLo, count: n4 },
   ];
-
-  const extraBottom = Math.min(
-    3,
-    Math.max(0, Math.floor(opts?.extraBottomTreads ?? 0)),
-  );
-  if (extraBottom > 0) {
-    if (n1 > 0) n1 += extraBottom;
-    else if (n2 > 0) n2 += extraBottom;
-    else if (n3 > 0) n3 += extraBottom;
-    else n4 += extraBottom;
-    nTotal += extraBottom;
-    rise = lapInner / Math.max(nTotal - 0.5, 1);
-    rise = Math.max(riseMin, Math.min(riseMax, rise));
-    legs[0]!.count = n1;
-    legs[1]!.count = n2;
-    legs[2]!.count = n3;
-    legs[3]!.count = n4;
-  }
 
   const advance = nTotal * rise;
   const numLaps = climbFull

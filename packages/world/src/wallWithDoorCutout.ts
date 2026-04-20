@@ -1,5 +1,90 @@
 import * as THREE from "three";
 
+/**
+ * Meters per UV unit along holed wall slabs (shaft shells, corridor shells). Matches ground-slab
+ * planar scale so procedural concrete tiles consistently instead of stretching on long faces.
+ */
+export const WALL_SEGMENT_UV_METERS_PER_TILE = 2.75;
+
+/**
+ * Replaces default 0–1 box face UVs with world-space planar mapping (meters / tile) so shared
+ * `concreteMaterial` textures repeat at a consistent scale on long walls and across adjacent
+ * fragments. Axis-aligned mesh only; call after `mesh.position` is set.
+ */
+export function applyWorldMetricUvsToAxisAlignedBoxMesh(
+  mesh: THREE.Mesh,
+  metersPerTile = WALL_SEGMENT_UV_METERS_PER_TILE,
+): void {
+  const g = mesh.geometry;
+  const geom = g.index != null ? g.toNonIndexed() : g;
+  if (geom !== g) {
+    g.dispose();
+    mesh.geometry = geom;
+  }
+  const pos = geom.attributes.position;
+  if (!pos) return;
+  const inv = 1 / Math.max(1e-6, metersPerTile);
+  const px = mesh.position.x;
+  const py = mesh.position.y;
+  const pz = mesh.position.z;
+  const uv = new Float32Array(pos.count * 2);
+
+  for (let vi = 0; vi < pos.count; vi += 3) {
+    const x0 = pos.getX(vi) + px;
+    const y0 = pos.getY(vi) + py;
+    const z0 = pos.getZ(vi) + pz;
+    const x1 = pos.getX(vi + 1) + px;
+    const y1 = pos.getY(vi + 1) + py;
+    const z1 = pos.getZ(vi + 1) + pz;
+    const x2 = pos.getX(vi + 2) + px;
+    const y2 = pos.getY(vi + 2) + py;
+    const z2 = pos.getZ(vi + 2) + pz;
+
+    const e1x = x1 - x0;
+    const e1y = y1 - y0;
+    const e1z = z1 - z0;
+    const e2x = x2 - x0;
+    const e2y = y2 - y0;
+    const e2z = z2 - z0;
+    let nx = e1y * e2z - e1z * e2y;
+    let ny = e1z * e2x - e1x * e2z;
+    let nz = e1x * e2y - e1y * e2x;
+    const len = Math.hypot(nx, ny, nz);
+    if (len > 1e-8) {
+      nx /= len;
+      ny /= len;
+      nz /= len;
+    }
+    const absx = Math.abs(nx);
+    const absy = Math.abs(ny);
+    const absz = Math.abs(nz);
+
+    for (let j = 0; j < 3; j++) {
+      const i = vi + j;
+      const wx = pos.getX(i) + px;
+      const wy = pos.getY(i) + py;
+      const wz = pos.getZ(i) + pz;
+      let u: number;
+      let v: number;
+      if (absx >= absy && absx >= absz) {
+        u = wz * inv;
+        v = wy * inv;
+      } else if (absz >= absy) {
+        u = wx * inv;
+        v = wy * inv;
+      } else {
+        u = wx * inv;
+        v = wz * inv;
+      }
+      uv[i * 2] = u;
+      uv[i * 2 + 1] = v;
+    }
+  }
+
+  geom.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geom.computeVertexNormals();
+}
+
 /** Local +X / −X / +Z / −Z wall of an axis-aligned box shell. */
 export type CardinalFace = "e" | "w" | "n" | "s";
 
@@ -27,12 +112,17 @@ function addBox(
   y: number,
   z: number,
   name: string,
-  opts?: { noCollision?: boolean },
+  opts?: { noCollision?: boolean; worldMetricWallUvs?: boolean },
 ): void {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
   mesh.name = name;
   if (opts?.noCollision === true) mesh.userData.mammothNoCollision = true;
   mesh.position.set(x, y, z);
+  if (opts?.worldMetricWallUvs) {
+    applyWorldMetricUvsToAxisAlignedBoxMesh(mesh);
+    /** Still an axis-aligned box; geometry is non-indexed BufferGeometry for per-face UVs. */
+    mesh.userData.mammothAxisAlignedCollisionBox = true;
+  }
   group.add(mesh);
 }
 
@@ -87,6 +177,7 @@ export function addWallConstantXWithHoles(
       (yLo + yHi) * 0.5,
       (zMin + zMax) * 0.5,
       `${namePrefix}_solid`,
+      { worldMetricWallUvs: true },
     );
     return;
   }
@@ -118,6 +209,7 @@ export function addWallConstantXWithHoles(
         (y0 + y1) * 0.5,
         (zMin + zMax) * 0.5,
         `${namePrefix}_y_${part++}`,
+        { worldMetricWallUvs: true },
       );
       continue;
     }
@@ -143,6 +235,7 @@ export function addWallConstantXWithHoles(
           (y0 + y1) * 0.5,
           (zCursor + hz0) * 0.5,
           `${namePrefix}_z_${part++}`,
+          { worldMetricWallUvs: true },
         );
       }
       zCursor = Math.max(zCursor, hz1);
@@ -158,6 +251,7 @@ export function addWallConstantXWithHoles(
         (y0 + y1) * 0.5,
         (zCursor + zMax) * 0.5,
         `${namePrefix}_z_${part++}`,
+        { worldMetricWallUvs: true },
       );
     }
   }
@@ -189,6 +283,7 @@ export function addWallConstantZWithHoles(
       (yLo + yHi) * 0.5,
       zCenter,
       `${namePrefix}_solid`,
+      { worldMetricWallUvs: true },
     );
     return;
   }
@@ -220,6 +315,7 @@ export function addWallConstantZWithHoles(
         (y0 + y1) * 0.5,
         zCenter,
         `${namePrefix}_y_${part++}`,
+        { worldMetricWallUvs: true },
       );
       continue;
     }
@@ -245,6 +341,7 @@ export function addWallConstantZWithHoles(
           (y0 + y1) * 0.5,
           zCenter,
           `${namePrefix}_x_${part++}`,
+          { worldMetricWallUvs: true },
         );
       }
       xCursor = Math.max(xCursor, hx1);
@@ -260,6 +357,7 @@ export function addWallConstantZWithHoles(
         (y0 + y1) * 0.5,
         zCenter,
         `${namePrefix}_x_${part++}`,
+        { worldMetricWallUvs: true },
       );
     }
   }

@@ -63,11 +63,14 @@ export function collectCollisionAabbsFromObject3D(
     if (!(obj instanceof THREE.Mesh)) return;
     if (ignoreInvisible && !obj.visible) return;
     if (obj.userData.mammothNoCollision === true) return;
-    if (!(obj.geometry instanceof THREE.BoxGeometry)) return;
-    if (obj.geometry.boundingBox == null) {
-      obj.geometry.computeBoundingBox();
+    const g = obj.geometry;
+    const boxLike =
+      g instanceof THREE.BoxGeometry || obj.userData.mammothAxisAlignedCollisionBox === true;
+    if (!boxLike) return;
+    if (g.boundingBox == null) {
+      g.computeBoundingBox();
     }
-    const bb = obj.geometry.boundingBox;
+    const bb = g.boundingBox;
     if (bb == null) return;
     box.copy(bb).applyMatrix4(obj.matrixWorld);
     const sx = box.max.x - box.min.x;

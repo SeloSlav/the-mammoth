@@ -383,7 +383,7 @@ describe("applyStairWellPartTransforms", () => {
     expect(open!.widthM).toBeGreaterThan(1);
   });
 
-  it("can rebuild wall/frame live while preserving the dragged proxy transform", () => {
+  it("can rebuild wall opening live while preserving the dragged proxy transform", () => {
     const root = buildStairWellPreviewRoot({
       sx: 4,
       sy: STOREY_SPACING_M,
