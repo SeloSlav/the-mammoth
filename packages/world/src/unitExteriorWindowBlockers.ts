@@ -335,19 +335,3 @@ export function buildUnitExteriorWindowSillLedgeAABBsForBuilding(
   appendUnitExteriorWindowAnalyticSolids(out, "exteriorSill", building, getFloorDoc, floorSpacingM, options);
   return out;
 }
-
-/** FP collision only — seals + exterior sill ledges (collision-sized sills). */
-export function buildUnitExteriorWindowFpBlockerAABBsForBuilding(
-  building: BuildingDoc,
-  getFloorDoc: (floorDocId: string) => FloorDoc,
-  floorSpacingM: number,
-  options?: {
-    getFloorOverrideDoc?: GetFloorOverrideDoc;
-    facadeSalt?: number;
-  },
-): CollisionAabb[] {
-  return [
-    ...buildUnitExteriorWindowSealBlockersForBuilding(building, getFloorDoc, floorSpacingM, options),
-    ...buildUnitExteriorWindowSillLedgeAABBsForBuilding(building, getFloorDoc, floorSpacingM, options),
-  ];
-}

@@ -5,6 +5,10 @@ import {
 } from "./collisionScene.js";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "./buildingFloorStack.js";
 import type { GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
+import {
+  buildUnitExteriorWindowSealBlockersForBuilding,
+  buildUnitExteriorWindowSillLedgeAABBsForBuilding,
+} from "./unitExteriorWindowBlockers.js";
 
 /** Metres — co-planar faces within this gap merge into one blocker. */
 const MERGE_EPS = 0.002;
@@ -337,14 +341,8 @@ export type FpBlockerBakeOptions = {
 };
 
 /**
- * Static **blocking** volumes for FPS horizontal collision (walls, shafts, props) from the
- * authored placeholder mesh harvest only — merged / doorway-trimmed.
- *
- * Unit exterior **window** seal + sill slabs are **not** included here: they must be appended
- * **after** stair opening / runtime overlays in gameplay so `applyStairOpeningCollisionOverlay`
- * does not strip them (their XZ overlaps thin stair-door suppress masks on the façade).
- * Use {@link buildUnitExteriorWindowFpBlockerAABBsForBuilding} for that pass.
- *
+ * Static **blocking** volumes for FPS horizontal collision (walls, shafts, props).
+ * Still sourced from authored placeholder meshes, but post-processed to reduce seam count.
  * Walk / support surfaces come from {@link walkSurfaceAABBsForBuilding} — not duplicated here.
  */
 export function buildFpBlockerAABBsForBuilding(
@@ -362,5 +360,18 @@ export function buildFpBlockerAABBsForBuilding(
   const seeded =
     merge && options?.mergeCoplanarPreheat === true ? mergeCoplanarSweepPreheat(raw) : raw;
   const merged = merge ? mergeCoplanarTouchingBlockerAabbs(seeded) : raw;
-  return trimDoorwayJambCornersForCollision(merged);
+  const trimmed = trimDoorwayJambCornersForCollision(merged);
+  const windowSeals = buildUnitExteriorWindowSealBlockersForBuilding(
+    building,
+    getFloorDoc,
+    options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M,
+    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+  );
+  const windowSills = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+    building,
+    getFloorDoc,
+    options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M,
+    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+  );
+  return [...trimmed, ...windowSeals, ...windowSills];
 }

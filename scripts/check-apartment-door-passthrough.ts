@@ -12,8 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   APARTMENT_DOOR_TEMPLATES,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
-  GENERATED_COLLISION_CORE_BLOCKER_AABBS,
-  GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
+  GENERATED_COLLISION_BLOCKER_AABBS,
   applyStairOpeningCollisionOverlay,
   applyStairRuntimeBlockerOverlay,
   buildStairOpeningCollisionOverlayForBuilding,
@@ -55,13 +54,10 @@ const stairRuntimeOverlay = buildStairRuntimeOverlayForBuilding(
   DEFAULT_BUILDING_FLOOR_SPACING_M,
 );
 
-const baseStatics = [
-  ...applyStairRuntimeBlockerOverlay(
-    applyStairOpeningCollisionOverlay(GENERATED_COLLISION_CORE_BLOCKER_AABBS, stairOpeningOverlay),
-    stairRuntimeOverlay,
-  ),
-  ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
-];
+const baseStatics = applyStairRuntimeBlockerOverlay(
+  applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, stairOpeningOverlay),
+  stairRuntimeOverlay,
+);
 
 const templatesByFloorDoc = new Map(
   APARTMENT_DOOR_TEMPLATES.map((s) => [s.floorDocId, s.templates]),

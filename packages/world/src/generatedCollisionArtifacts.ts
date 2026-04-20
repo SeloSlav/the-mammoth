@@ -5443,8 +5443,7 @@ export const GENERATED_WALK_SURFACE_FOOTPRINT = {
   maxZ: 119.60000,
 } as const;
 
-/** Mesh-harvest + merge only — apply stair overlays to this, then append {@link GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS}. */
-export const GENERATED_COLLISION_CORE_BLOCKER_AABBS: readonly CollisionAabb[] = [
+export const GENERATED_COLLISION_BLOCKER_AABBS: readonly CollisionAabb[] = [
   { min: [-15.75000, 0.08000, -118.80000], max: [15.75000, 0.19000, -99.17500] },
   { min: [-15.75000, 0.08000, -84.82500], max: [15.75000, 0.19000, -53.17500] },
   { min: [-15.75000, 0.08000, -38.82500], max: [15.75000, 0.19000, -7.17500] },
@@ -17575,10 +17574,6 @@ export const GENERATED_COLLISION_CORE_BLOCKER_AABBS: readonly CollisionAabb[] = 
   { min: [2.08388, 60.00168, -6.96678], max: [10.29083, 60.15168, -2.86502] },
   { min: [2.08388, 60.00168, 39.03322], max: [10.29083, 60.15168, 43.13498] },
   { min: [2.08388, 60.00168, 85.03322], max: [10.29083, 60.15168, 89.13498] },
-];
-
-/** Unit window seals + sill ledges — append **after** stair opening/runtime overlays (not suppress-culled). */
-export const GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS: readonly CollisionAabb[] = [
   { min: [10.29500, 3.89789, -115.83250], max: [10.92300, 5.67789, -113.89682] },
   { min: [10.29500, 3.89789, -113.83682], max: [10.92300, 5.67789, -111.79683] },
   { min: [10.29500, 3.89789, -111.73683], max: [10.92300, 5.67789, -109.59250] },
@@ -19945,12 +19940,6 @@ export const GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS: readonly CollisionAa
   { min: [-11.34500, 60.64000, 109.59250], max: [-10.92500, 60.76000, 111.50344] },
   { min: [-11.34500, 60.64000, 111.56344], max: [-10.92500, 60.76000, 113.56424] },
   { min: [-11.34500, 60.64000, 113.62424], max: [-10.92500, 60.76000, 115.83250] },
-];
-
-/** Full static bake (core + windows) before runtime stair overlays — diagnostics / tooling only. */
-export const GENERATED_COLLISION_BLOCKER_AABBS: readonly CollisionAabb[] = [
-  ...GENERATED_COLLISION_CORE_BLOCKER_AABBS,
-  ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
 ];
 
 export const GENERATED_COLLISION_BLOCKER_FOOTPRINT = {

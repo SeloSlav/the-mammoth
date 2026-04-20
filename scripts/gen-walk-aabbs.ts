@@ -15,19 +15,15 @@ import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FloorDoc } from "@the-mammoth/schemas";
-import { collisionAabbXZFootprint } from "../packages/world/src/collisionScene.ts";
-import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "../packages/world/src/buildingFloorStack.ts";
-import { buildFpBlockerAABBsForBuilding } from "../packages/world/src/fpBlockerAABBs.ts";
-import { buildUnitExteriorWindowFpBlockerAABBsForBuilding } from "../packages/world/src/unitExteriorWindowBlockers.ts";
 import {
+  buildFpBlockerAABBsForBuilding,
+  DEFAULT_BUILDING_FLOOR_SPACING_M,
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
-} from "../packages/world/src/worldDocParsers.ts";
-import {
   walkSurfaceAabbXZFootprint,
   walkSurfaceAABBsForBuilding,
-} from "../packages/world/src/walkSurfaceAABBs.ts";
+} from "../packages/world/src/index.ts";
 import {
   computeWorldCollisionSourceFingerprint,
   writeWorldCollisionArtifactsStamp,
@@ -80,30 +76,24 @@ if (logTiming) {
 }
 
 const tSolid = performance.now();
-const coreSolidAabbs = buildFpBlockerAABBsForBuilding(building, getFloorDoc, {
-  floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
-  stairWellDef,
-  mergeCoplanarPreheat: true,
-});
-const unitWindowSolidAabbs = buildUnitExteriorWindowFpBlockerAABBsForBuilding(
+const solidAabbs = buildFpBlockerAABBsForBuilding(
   building,
   getFloorDoc,
-  DEFAULT_BUILDING_FLOOR_SPACING_M,
+  {
+    floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+    stairWellDef,
+    mergeCoplanarPreheat: true,
+  },
 );
-const solidAabbs = [...coreSolidAabbs, ...unitWindowSolidAabbs];
 if (logTiming) {
-  console.log(`buildFpBlockerAABBsForBuilding (core): ${msSince(tSolid)}`);
+  console.log(`buildFpBlockerAABBsForBuilding: ${msSince(tSolid)}`);
 }
 
 const lines = aabbs.map(
   (b) =>
     `    ([${b.min.map((n) => n.toFixed(5)).join(", ")}], [${b.max.map((n) => n.toFixed(5)).join(", ")}]),`,
 );
-const coreSolidLines = coreSolidAabbs.map(
-  (b) =>
-    `    ([${b.min.map((n) => n.toFixed(5)).join(", ")}], [${b.max.map((n) => n.toFixed(5)).join(", ")}]),`,
-);
-const unitWindowSolidLines = unitWindowSolidAabbs.map(
+const solidLines = solidAabbs.map(
   (b) =>
     `    ([${b.min.map((n) => n.toFixed(5)).join(", ")}], [${b.max.map((n) => n.toFixed(5)).join(", ")}]),`,
 );
@@ -114,7 +104,7 @@ const fp = walkSurfaceAabbXZFootprint(aabbs) ?? {
   minZ: 0,
   maxZ: 0,
 };
-const solidFp = collisionAabbXZFootprint(solidAabbs) ?? {
+const solidFp = walkSurfaceAabbXZFootprint(solidAabbs) ?? {
   minX: 0,
   maxX: 0,
   minZ: 0,
@@ -134,12 +124,6 @@ const solidsDir = join(root, "apps/server/src/generated_collision_solids");
 mkdirSync(solidsDir, { recursive: true });
 for (const name of readdirSync(solidsDir)) {
   if (name.startsWith("part_") && name.endsWith(".rs")) unlinkSync(join(solidsDir, name));
-}
-
-const unitWindowSolidsDir = join(root, "apps/server/src/generated_unit_window_collision_solids");
-mkdirSync(unitWindowSolidsDir, { recursive: true });
-for (const name of readdirSync(unitWindowSolidsDir)) {
-  if (name.startsWith("part_") && name.endsWith(".rs")) unlinkSync(join(unitWindowSolidsDir, name));
 }
 
 function writeShardedAabbModule(opts: {
@@ -201,8 +185,7 @@ ${shardRefs}
 function writeClientCollisionArtifactsTs(opts: {
   walkAabbs: typeof aabbs;
   walkFootprint: { minX: number; maxX: number; minZ: number; maxZ: number };
-  coreBlockerAabbs: typeof coreSolidAabbs;
-  unitWindowBlockerAabbs: typeof unitWindowSolidAabbs;
+  blockerAabbs: typeof solidAabbs;
   blockerFootprint: { minX: number; maxX: number; minZ: number; maxZ: number };
 }) {
   const fmtBox = (b: { min: readonly [number, number, number]; max: readonly [number, number, number] }) =>
@@ -224,20 +207,8 @@ export const GENERATED_WALK_SURFACE_FOOTPRINT = {
   maxZ: ${opts.walkFootprint.maxZ.toFixed(5)},
 } as const;
 
-/** Mesh-harvest + merge only — apply stair overlays to this, then append {@link GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS}. */
-export const GENERATED_COLLISION_CORE_BLOCKER_AABBS: readonly CollisionAabb[] = [
-${opts.coreBlockerAabbs.map(fmtBox).join("\n")}
-];
-
-/** Unit window seals + sill ledges — append **after** stair opening/runtime overlays (not suppress-culled). */
-export const GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS: readonly CollisionAabb[] = [
-${opts.unitWindowBlockerAabbs.map(fmtBox).join("\n")}
-];
-
-/** Full static bake (core + windows) before runtime stair overlays — diagnostics / tooling only. */
 export const GENERATED_COLLISION_BLOCKER_AABBS: readonly CollisionAabb[] = [
-  ...GENERATED_COLLISION_CORE_BLOCKER_AABBS,
-  ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
+${opts.blockerAabbs.map(fmtBox).join("\n")}
 ];
 
 export const GENERATED_COLLISION_BLOCKER_FOOTPRINT = {
@@ -262,36 +233,18 @@ const walkOut = writeShardedAabbModule({
 });
 const solidOut = writeShardedAabbModule({
   dir: solidsDir,
-  lines: coreSolidLines,
+  lines: solidLines,
   partPrefix: "generated_collision_solids",
-  title: "collision solids (core mesh harvest)",
+  title: "collision solids",
   outputFile: "apps/server/src/generated_collision_solids.rs",
   footprint: solidFp,
   shardConstName: "COLLISION_SOLID_AABB_SHARDS",
   footprintPrefix: "COLLISION_SOLID",
 });
-const unitWindowFp =
-  collisionAabbXZFootprint(unitWindowSolidAabbs) ?? {
-    minX: 0,
-    maxX: 0,
-    minZ: 0,
-    maxZ: 0,
-  };
-const unitWindowOut = writeShardedAabbModule({
-  dir: unitWindowSolidsDir,
-  lines: unitWindowSolidLines,
-  partPrefix: "generated_unit_window_collision_solids",
-  title: "unit window collision",
-  outputFile: "apps/server/src/generated_unit_window_collision_solids.rs",
-  footprint: unitWindowFp,
-  shardConstName: "UNIT_WINDOW_COLLISION_SOLID_AABB_SHARDS",
-  footprintPrefix: "UNIT_WINDOW_COLLISION_SOLID",
-});
 writeClientCollisionArtifactsTs({
   walkAabbs: aabbs,
   walkFootprint: fp,
-  coreBlockerAabbs: coreSolidAabbs,
-  unitWindowBlockerAabbs: unitWindowSolidAabbs,
+  blockerAabbs: solidAabbs,
   blockerFootprint: solidFp,
 });
 writeWorldCollisionArtifactsStamp({
@@ -300,10 +253,9 @@ writeWorldCollisionArtifactsStamp({
   generatedFiles: [
     "apps/server/src/generated_walk_surfaces.rs",
     "apps/server/src/generated_collision_solids.rs",
-    "apps/server/src/generated_unit_window_collision_solids.rs",
     "packages/world/src/generatedCollisionArtifacts.ts",
   ],
 });
 console.log(
-  `Wrote ${aabbs.length} walk / ${coreSolidAabbs.length} core + ${unitWindowSolidAabbs.length} unit-window collision AABBs across ${walkOut.shardCount} + ${solidOut.shardCount} + ${unitWindowOut.shardCount} shards.`,
+  `Wrote ${aabbs.length} walk AABBs across ${walkOut.shardCount} shards and ${solidAabbs.length} collision AABBs across ${solidOut.shardCount} shards.`,
 );

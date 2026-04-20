@@ -1,11 +1,14 @@
 import * as THREE from "three";
 import {
+  BuildingDocSchema,
   CellDocSchema,
   ElevatorCabDefSchema,
+  FloorDocSchema,
   FloorOverrideDocSchema,
   InteriorDocSchema,
   LandingKitDefSchema,
   PrefabDefSchema,
+  StairWellDefSchema,
   type BuildingDoc,
   type CellDoc,
   type CellPlacement,
@@ -93,15 +96,12 @@ export {
   type FpBlockerBakeOptions,
 } from "./fpBlockerAABBs.js";
 export {
-  buildUnitExteriorWindowFpBlockerAABBsForBuilding,
   buildUnitExteriorWindowSealBlockersForBuilding,
   buildUnitExteriorWindowSillLedgeAABBsForBuilding,
 } from "./unitExteriorWindowBlockers.js";
 export {
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_COLLISION_BLOCKER_FOOTPRINT,
-  GENERATED_COLLISION_CORE_BLOCKER_AABBS,
-  GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
   GENERATED_WALK_SURFACE_FOOTPRINT,
 } from "./generatedCollisionArtifacts.js";
@@ -294,7 +294,9 @@ export {
 } from "./stairElevatorPlaceholders.js";
 export { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 
-export { parseBuildingDoc, parseFloorDoc, parseStairWellDef } from "./worldDocParsers.js";
+export function parseFloorDoc(raw: unknown): FloorDoc {
+  return FloorDocSchema.parse(raw);
+}
 
 export function parseCellDoc(raw: unknown): CellDoc {
   return CellDocSchema.parse(raw);
@@ -308,6 +310,10 @@ export function parseInteriorDoc(raw: unknown): InteriorDoc {
   return InteriorDocSchema.parse(raw);
 }
 
+export function parseBuildingDoc(raw: unknown): BuildingDoc {
+  return BuildingDocSchema.parse(raw);
+}
+
 export function parsePrefabDef(raw: unknown): PrefabDef {
   return PrefabDefSchema.parse(raw);
 }
@@ -318,6 +324,10 @@ export function parseElevatorCabDef(raw: unknown): ElevatorCabDef {
 
 export function parseLandingKitDef(raw: unknown): LandingKitDef {
   return LandingKitDefSchema.parse(raw);
+}
+
+export function parseStairWellDef(raw: unknown): StairWellDef {
+  return StairWellDefSchema.parse(raw);
 }
 
 function addPlacementMeshes(

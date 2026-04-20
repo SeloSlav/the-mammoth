@@ -1,10 +1,9 @@
 {
-  "builtAtIso": "2026-04-20T00:27:53.408Z",
+  "builtAtIso": "2026-04-20T00:34:13.857Z",
   "sourceFingerprint": "258eb4b98ac35480e0194fadca3001dbba2e5a75",
   "generatedFiles": [
     "apps/server/src/generated_walk_surfaces.rs",
     "apps/server/src/generated_collision_solids.rs",
-    "apps/server/src/generated_unit_window_collision_solids.rs",
     "packages/world/src/generatedCollisionArtifacts.ts"
   ]
 }
