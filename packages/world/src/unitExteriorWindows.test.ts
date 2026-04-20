@@ -6,7 +6,10 @@ import {
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
 } from "./unitExteriorWindows.js";
-import { buildUnitExteriorWindowSealBlockersForBuilding } from "./unitExteriorWindowBlockers.js";
+import {
+  buildUnitExteriorWindowSealBlockersForBuilding,
+  buildUnitExteriorWindowSillLedgeAABBsForBuilding,
+} from "./unitExteriorWindowBlockers.js";
 
 describe("planUnitExteriorWindowsForFace", () => {
   const base = {
@@ -146,5 +149,16 @@ describe("buildFloorMeshes unit exterior windows", () => {
       return dx > 0.08 && dx < 0.14;
     });
     expect(thinX.length).toBeGreaterThan(0);
+
+    const sills = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+      building,
+      () => floor,
+      60 / 19,
+    );
+    expect(sills.length).toBeGreaterThan(0);
+    const sillTops = sills.map((b) => b.max[1] - b.min[1]);
+    expect(Math.min(...sillTops)).toBeLessThan(0.15);
+    const wideX = sills.filter((b) => b.max[0] - b.min[0] > 0.2);
+    expect(wideX.length).toBeGreaterThan(0);
   });
 });

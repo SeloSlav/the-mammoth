@@ -25,6 +25,7 @@ import {
   type StairCornerLanding,
   type StairTreadSpec,
 } from "./stairWellGeometry.js";
+import { buildUnitExteriorWindowSillLedgeAABBsForBuilding } from "./unitExteriorWindowBlockers.js";
 
 /**
  * Axis-aligned walk volume in **world** metres. `max[1]` is the top of the walk surface
@@ -406,6 +407,15 @@ export function walkSurfaceAABBsForBuilding(
         out.push(translateAabb(b, ox + s.px, oy + segY, oz + s.pz));
       }
     }
+  }
+
+  for (const b of buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+    building,
+    getFloorDoc,
+    spacing,
+    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+  )) {
+    out.push(b);
   }
 
   return out;

@@ -10,6 +10,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0006.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0007.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0008.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0009.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0010.rs"));
 
 #[allow(dead_code)]
 pub const WALK_SURFACE_FOOTPRINT_MIN_X: f32 = -16.55000;
@@ -31,4 +33,6 @@ pub static WALK_SURFACE_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
     PART_0006,
     PART_0007,
     PART_0008,
+    PART_0009,
+    PART_0010,
 ];

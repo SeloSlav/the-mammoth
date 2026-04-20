@@ -5,7 +5,10 @@ import {
 } from "./collisionScene.js";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "./buildingFloorStack.js";
 import type { GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
-import { buildUnitExteriorWindowSealBlockersForBuilding } from "./unitExteriorWindowBlockers.js";
+import {
+  buildUnitExteriorWindowSealBlockersForBuilding,
+  buildUnitExteriorWindowSillLedgeAABBsForBuilding,
+} from "./unitExteriorWindowBlockers.js";
 
 /** Metres — co-planar faces within this gap merge into one blocker. */
 const MERGE_EPS = 0.002;
@@ -364,5 +367,11 @@ export function buildFpBlockerAABBsForBuilding(
     options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M,
     { getFloorOverrideDoc: options?.getFloorOverrideDoc },
   );
-  return [...trimmed, ...windowSeals];
+  const windowSills = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+    building,
+    getFloorDoc,
+    options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M,
+    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+  );
+  return [...trimmed, ...windowSeals, ...windowSills];
 }

@@ -20,6 +20,15 @@ const WINDOW_SEAL_INNER_FACE_EPS_M = 0.002;
 const WINDOW_SEAL_TANGENT_PAD_M = 0.03;
 const EXTERIOR_FACE_TOL_M = 0.16;
 
+/** Outward from shell **outer** face — matches the visible exterior window stool (m). */
+const WINDOW_SILL_LEDGE_DEPTH_M = 0.42;
+/** Vertical slab under the opening bottom; top is flush with the window sill line (m). */
+const WINDOW_SILL_LEDGE_THICKNESS_M = 0.1;
+/** Tiny upward lip so walk sampling and the capsule share the same top (m). */
+const WINDOW_SILL_TOP_LIP_M = 0.02;
+
+type UnitWindowAnalyticKind = "interiorSeal" | "exteriorSill";
+
 function isUnitPrefab(prefabId: string): boolean {
   const p = prefabId.toLowerCase();
   return p.includes("apartment") || p.includes("unit");
@@ -41,14 +50,9 @@ function expandPlateBounds(min: [number, number, number], max: [number, number, 
   max[2] = Math.max(max[2], pz + hz);
 }
 
-/**
- * Thin vertical slabs **fully inside** each window opening (they never cross the inner plaster
- * face into the exterior void, so depenetration pushes back into the unit, not outside).
- * Horizontal FP blockers only — no walk surfaces, no mesh edits.
- *
- * Fills holes where holed `shell_wall_*` has no collision and the capsule would otherwise slide out.
- */
-export function buildUnitExteriorWindowSealBlockersForBuilding(
+function appendUnitExteriorWindowAnalyticSolids(
+  out: CollisionAabb[],
+  kind: UnitWindowAnalyticKind,
   building: BuildingDoc,
   getFloorDoc: (floorDocId: string) => FloorDoc,
   floorSpacingM: number,
@@ -56,7 +60,7 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
     getFloorOverrideDoc?: GetFloorOverrideDoc;
     facadeSalt?: number;
   },
-): CollisionAabb[] {
+): void {
   const ox = building.worldOrigin?.[0] ?? 0;
   const oy = building.worldOrigin?.[1] ?? 0;
   const oz = building.worldOrigin?.[2] ?? 0;
@@ -69,7 +73,6 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
       getFloorOverrideDoc: options?.getFloorOverrideDoc,
     });
 
-  const out: CollisionAabb[] = [];
   const salt = options?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT;
 
   for (const ref of sorted) {
@@ -134,7 +137,7 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
         const holesEw = face === "e" || face === "w" ? plan.holesEw : [];
         const holesNs = face === "n" || face === "s" ? plan.holesNs : [];
 
-        const pushSeal = (lx0: number, lx1: number, ly0: number, ly1: number, lz0: number, lz1: number) => {
+        const pushWorld = (lx0: number, lx1: number, ly0: number, ly1: number, lz0: number, lz1: number) => {
           const ax0 = Math.min(lx0, lx1);
           const ax1 = Math.max(lx0, lx1);
           const ay0 = Math.min(ly0, ly1);
@@ -155,15 +158,27 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
-            // Interior only: x < inner. Deeper x = further into unit (−x direction from opening).
-            pushSeal(
-              inner - WINDOW_INWARD_SEAL_DEPTH_M,
-              inner - WINDOW_SEAL_INNER_FACE_EPS_M,
-              yA,
-              yB,
-              zA,
-              zB,
-            );
+            if (kind === "interiorSeal") {
+              // Interior only: x < inner. Deeper x = further into unit (−x direction from opening).
+              pushWorld(
+                inner - WINDOW_INWARD_SEAL_DEPTH_M,
+                inner - WINDOW_SEAL_INNER_FACE_EPS_M,
+                yA,
+                yB,
+                zA,
+                zB,
+              );
+            } else {
+              const yBottom = yA;
+              pushWorld(
+                hx,
+                hx + WINDOW_SILL_LEDGE_DEPTH_M,
+                yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yBottom + WINDOW_SILL_TOP_LIP_M,
+                zA,
+                zB,
+              );
+            }
           }
         } else if (face === "w") {
           const inner = -hx + wt;
@@ -173,14 +188,26 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
-            pushSeal(
-              inner + WINDOW_SEAL_INNER_FACE_EPS_M,
-              inner + WINDOW_INWARD_SEAL_DEPTH_M,
-              yA,
-              yB,
-              zA,
-              zB,
-            );
+            if (kind === "interiorSeal") {
+              pushWorld(
+                inner + WINDOW_SEAL_INNER_FACE_EPS_M,
+                inner + WINDOW_INWARD_SEAL_DEPTH_M,
+                yA,
+                yB,
+                zA,
+                zB,
+              );
+            } else {
+              const yBottom = yA;
+              pushWorld(
+                -hx - WINDOW_SILL_LEDGE_DEPTH_M,
+                -hx,
+                yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yBottom + WINDOW_SILL_TOP_LIP_M,
+                zA,
+                zB,
+              );
+            }
           }
         } else if (face === "n") {
           const inner = hz - wt;
@@ -190,14 +217,26 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
-            pushSeal(
-              xA,
-              xB,
-              yA,
-              yB,
-              inner - WINDOW_INWARD_SEAL_DEPTH_M,
-              inner - WINDOW_SEAL_INNER_FACE_EPS_M,
-            );
+            if (kind === "interiorSeal") {
+              pushWorld(
+                xA,
+                xB,
+                yA,
+                yB,
+                inner - WINDOW_INWARD_SEAL_DEPTH_M,
+                inner - WINDOW_SEAL_INNER_FACE_EPS_M,
+              );
+            } else {
+              const yBottom = yA;
+              pushWorld(
+                xA,
+                xB,
+                yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yBottom + WINDOW_SILL_TOP_LIP_M,
+                hz,
+                hz + WINDOW_SILL_LEDGE_DEPTH_M,
+              );
+            }
           }
         } else {
           const inner = -hz + wt;
@@ -207,19 +246,70 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
-            pushSeal(
-              xA,
-              xB,
-              yA,
-              yB,
-              inner + WINDOW_SEAL_INNER_FACE_EPS_M,
-              inner + WINDOW_INWARD_SEAL_DEPTH_M,
-            );
+            if (kind === "interiorSeal") {
+              pushWorld(
+                xA,
+                xB,
+                yA,
+                yB,
+                inner + WINDOW_SEAL_INNER_FACE_EPS_M,
+                inner + WINDOW_INWARD_SEAL_DEPTH_M,
+              );
+            } else {
+              const yBottom = yA;
+              pushWorld(
+                xA,
+                xB,
+                yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yBottom + WINDOW_SILL_TOP_LIP_M,
+                -hz - WINDOW_SILL_LEDGE_DEPTH_M,
+                -hz,
+              );
+            }
           }
         }
       }
     }
   }
+}
 
+/**
+ * Thin vertical slabs **fully inside** each window opening (they never cross the inner plaster
+ * face into the exterior void, so depenetration pushes back into the unit, not outside).
+ * Horizontal FP blockers only — no walk surfaces, no mesh edits.
+ *
+ * Fills holes where holed `shell_wall_*` has no collision and the capsule would otherwise slide out.
+ */
+export function buildUnitExteriorWindowSealBlockersForBuilding(
+  building: BuildingDoc,
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  floorSpacingM: number,
+  options?: {
+    getFloorOverrideDoc?: GetFloorOverrideDoc;
+    facadeSalt?: number;
+  },
+): CollisionAabb[] {
+  const out: CollisionAabb[] = [];
+  appendUnitExteriorWindowAnalyticSolids(out, "interiorSeal", building, getFloorDoc, floorSpacingM, options);
+  return out;
+}
+
+/**
+ * Exterior window **stool** ledges: thin horizontal slabs just outside the shell outer face.
+ * Cladding is collision-excluded (`mammothNoCollision`); without these, feet miss walk AABBs and
+ * locomotion can snap to the exterior walk fallback slab (`WALK_FALLBACK_FLOOR_TOP_Y`). Same boxes
+ * are used as FP blockers.
+ */
+export function buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+  building: BuildingDoc,
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  floorSpacingM: number,
+  options?: {
+    getFloorOverrideDoc?: GetFloorOverrideDoc;
+    facadeSalt?: number;
+  },
+): CollisionAabb[] {
+  const out: CollisionAabb[] = [];
+  appendUnitExteriorWindowAnalyticSolids(out, "exteriorSill", building, getFloorDoc, floorSpacingM, options);
   return out;
 }
