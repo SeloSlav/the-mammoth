@@ -18,6 +18,7 @@ import {
   addDoorFrameTrimConstantZ,
   addWallConstantXWithHoles,
   addWallConstantZWithHoles,
+  applyWorldMetricUvsToAxisAlignedBoxMesh,
   pickFaceTowardPoint,
   type CardinalFace,
   type WallHoleXY,
@@ -1802,6 +1803,9 @@ export function addStairWellPlaceholder(
     );
     li += 1;
     mesh.position.set(cl.x, cl.y, cl.z);
+    /** Same meter-based UV projection as shaft walls — default cube UVs stretch on long pads. */
+    applyWorldMetricUvsToAxisAlignedBoxMesh(mesh);
+    mesh.userData.mammothAxisAlignedCollisionBox = true;
     group.add(mesh);
   }
 
