@@ -6,7 +6,10 @@ import {
   resolveStairWellSupplementalDoors,
   type StairWellGroundDoorContext,
 } from "./stairElevatorPlaceholders.js";
-import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
+import {
+  exteriorFacesForPlacedObjectInFloor,
+  shaftFacesTowardAdjacentElevatorHoistways,
+} from "./exteriorFaceExposure.js";
 import { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
 
@@ -152,17 +155,26 @@ export function getBuildingStairShaftSpecs(
   if (map.size === 0) return [];
 
   const exposedFacesByKey = new Map<string, CardinalFace[]>();
+  const towardElevatorFacesByKey = new Map<string, CardinalFace[]>();
   for (const ref of sortedRefs) {
     const doc = getFloorDoc(ref.floorDocId);
     for (const obj of doc.objects) {
       if (!isStairPrefab(obj.prefabId)) continue;
       const key = shaftPlanKey(obj.position[0], obj.position[2]);
       const faces = exteriorFacesForPlacedObjectInFloor(doc, obj);
-      if (faces.length === 0) continue;
-      exposedFacesByKey.set(
-        key,
-        [...new Set<CardinalFace>([...(exposedFacesByKey.get(key) ?? []), ...faces])],
-      );
+      if (faces.length > 0) {
+        exposedFacesByKey.set(
+          key,
+          [...new Set<CardinalFace>([...(exposedFacesByKey.get(key) ?? []), ...faces])],
+        );
+      }
+      const elevFaces = shaftFacesTowardAdjacentElevatorHoistways(doc, obj);
+      if (elevFaces.length > 0) {
+        towardElevatorFacesByKey.set(
+          key,
+          [...new Set<CardinalFace>([...(towardElevatorFacesByKey.get(key) ?? []), ...elevFaces])],
+        );
+      }
     }
   }
 
@@ -183,10 +195,15 @@ export function getBuildingStairShaftSpecs(
       storeyCount,
       storeySpacing: spacing,
       entryDoorContexts: entryDoorContextsByKey.get(planKey) ?? [],
-      exteriorShaftFaces: mergeShaftExteriorHints(
-        exposedFacesByKey.get(planKey) ?? [],
-        facadeHintByKey.get(planKey),
-      ),
+      exteriorShaftFaces: [
+        ...new Set<CardinalFace>([
+          ...mergeShaftExteriorHints(
+            exposedFacesByKey.get(planKey) ?? [],
+            facadeHintByKey.get(planKey),
+          ),
+          ...(towardElevatorFacesByKey.get(planKey) ?? []),
+        ]),
+      ],
     });
   }
   return out;

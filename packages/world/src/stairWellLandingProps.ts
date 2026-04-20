@@ -85,6 +85,25 @@ export function pickCornerLandingOppositePrimaryDoor(
   return best;
 }
 
+/**
+ * Corner landing with the greatest deck height in the segment, ignoring an optional omitted pad
+ * (e.g. ground lobby corner that has no mesh).
+ */
+export function pickCornerLandingHighestY(
+  L: StairSwitchbackLayout,
+  omitOnly?: StairCornerLanding,
+): StairCornerLanding | undefined {
+  const candidates = L.cornerLandings.filter((cl) => cl !== omitOnly);
+  if (candidates.length === 0) return undefined;
+  let best = candidates[0]!;
+  for (let i = 1; i < candidates.length; i++) {
+    const cl = candidates[i]!;
+    if (cl.y > best.y + 1e-9) best = cl;
+    else if (Math.abs(cl.y - best.y) <= 1e-9 && cl.z > best.z) best = cl;
+  }
+  return best;
+}
+
 function landingLocalCornerPosition(
   cl: Pick<StairCornerLanding, "halfW" | "halfD" | "thicknessHalf">,
   prop: StairWellLandingProp,
@@ -194,13 +213,23 @@ export function attachStairWellLandingProps(args: {
   for (const prop of props) {
     if (!propAllowedForScope(prop, args.authoringScope)) continue;
 
-    if (prop.landingSelector.kind !== "opposite_primary_door") continue;
-
-    const cl = pickCornerLandingOppositePrimaryDoor(
-      args.L,
-      args.primaryDoor,
-      args.omitOnlyLanding,
-    );
+    let cl: StairCornerLanding | undefined;
+    switch (prop.landingSelector.kind) {
+      case "opposite_primary_door":
+        cl = pickCornerLandingOppositePrimaryDoor(
+          args.L,
+          args.primaryDoor,
+          args.omitOnlyLanding,
+        );
+        break;
+      case "highest_y":
+        cl = pickCornerLandingHighestY(args.L, args.omitOnlyLanding);
+        break;
+      default: {
+        const _never: never = prop.landingSelector;
+        void _never;
+      }
+    }
     if (!cl) continue;
 
     const landingMesh = findLandingMeshForCorner(args.root, cl);

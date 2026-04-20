@@ -1,6 +1,17 @@
 import * as THREE from "three";
 import type { CardinalFace, WallHoleXY, WallHoleYZ } from "./wallWithDoorCutout.js";
 
+/**
+ * Subset of `exteriorFacesForPlacedObjectInFloor` hits that may receive apartment façade window
+ * holes / glass. North/south can still read as exposed (slot between units along Z) but are not
+ * primary elevations — keep them solid.
+ */
+export function unitShellFacesForExteriorWindows(
+  exteriorFaces: readonly CardinalFace[],
+): CardinalFace[] {
+  return exteriorFaces.filter((f) => f === "e" || f === "w");
+}
+
 const EDGE_INSET_M = 0.35;
 const MULLION_GAP_M = 0.12;
 const MIN_SEGMENT_WIDTH_M = 0.42;

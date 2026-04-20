@@ -224,11 +224,79 @@ export const exteriorConcreteWallMaterial = (() => {
   return m;
 })();
 
+/** PBR for corridor / lobby **interior** perimeter walls: ground plate and upper corridors beside units. */
+const GROUND_LEVEL_CORRIDOR_WALL_AUTHORING: StandardAuthoringSlot = {
+  roughness: 1,
+  metalness: 1,
+  mapUrl: "/static/materials/ground-level-interior-wall/basecolor.png",
+  normalMapUrl: "/static/materials/ground-level-interior-wall/normal.png",
+  roughnessMapUrl: "/static/materials/ground-level-interior-wall/roughness.png",
+  metalnessMapUrl: "/static/materials/ground-level-interior-wall/metalness.png",
+  bumpMapUrl: "/static/materials/ground-level-interior-wall/height.png",
+};
+
+export const groundLevelCorridorInteriorWallMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 1,
+  });
+  applyStandardAuthoringSlot(m, GROUND_LEVEL_CORRIDOR_WALL_AUTHORING);
+  m.bumpScale = 0.024;
+  /** Match shell wall planar UV scale (~2.75 m/tile); similar repeat to interior floor vinyl. */
+  const rep = 0.3;
+  for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "bumpMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  return m;
+})();
+
+/** PBR ceiling for corridor shells: ground storey and upper corridors with unit entry door cuts. */
+const BUILDING_CORRIDOR_CEILING_AUTHORING: StandardAuthoringSlot = {
+  roughness: 1,
+  metalness: 1,
+  mapUrl: "/static/materials/building-ceiling/basecolor.png",
+  normalMapUrl: "/static/materials/building-ceiling/normal.png",
+  roughnessMapUrl: "/static/materials/building-ceiling/roughness.png",
+  metalnessMapUrl: "/static/materials/building-ceiling/metalness.png",
+  bumpMapUrl: "/static/materials/building-ceiling/height.png",
+};
+
+export const buildingCorridorCeilingMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 1,
+    side: THREE.DoubleSide,
+  });
+  applyStandardAuthoringSlot(m, BUILDING_CORRIDOR_CEILING_AUTHORING);
+  m.bumpScale = 0.014;
+  /** Shell ceilings use {@link applyShellFloorPlanarTopUV} (~2.75 m/UV); same repeat band as corridor vinyl. */
+  const rep = 0.32;
+  for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "bumpMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  return m;
+})();
+
 export const floorPlaceholderMeshMaterials = {
   corridorFloor: interiorConcreteFloorShellMaterial,
   corridorFloorUpperStorey: corridorHallFloorMaterial,
   corridorCeil: concreteMaterial(0xe5e8eb, { side: THREE.DoubleSide }),
+  buildingCorridorCeiling: buildingCorridorCeilingMaterial,
   corridorWall: concreteMaterial(0xd4d8dc),
+  /** Corridor shells: ground (`1` / `99`) and upper storeys with unit-adjacent doors — see {@link addHollowRoomShell}. */
+  groundLevelCorridorInteriorWall: groundLevelCorridorInteriorWallMaterial,
   corridorExteriorWall: exteriorConcreteWallMaterial,
   unitFloor: interiorConcreteFloorShellMaterial,
   unitCeil: concreteMaterial(0xe3e7ea, { side: THREE.DoubleSide }),

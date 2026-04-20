@@ -5,7 +5,9 @@ import { parseBuildingDoc } from "./index.js";
 import {
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
+  unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
+import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import {
   buildUnitExteriorWindowSealBlockersForBuilding,
   buildUnitExteriorWindowSillLedgeAABBsForBuilding,
@@ -82,6 +84,39 @@ describe("facadeSeedForUnitFace", () => {
 });
 
 describe("buildFloorMeshes unit exterior windows", () => {
+  it("does not cut north/south façade windows when only those faces read as exposed slots", () => {
+    const floor: FloorDoc = {
+      id: "gap_faces_mesh",
+      version: 1,
+      objects: [
+        {
+          id: "corridor",
+          prefabId: "corridor_segment_a",
+          position: [0, 0, 0],
+          scale: [4, 3, 30],
+        },
+        {
+          id: "unit_a",
+          prefabId: "apartment_unit_small_a",
+          position: [6.5, 0, -10],
+          scale: [8, 3, 8],
+        },
+      ],
+    };
+    expect(exteriorFacesForPlacedObjectInFloor(floor, floor.objects[1]!)).toContain("n");
+    expect(unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(floor, floor.objects[1]!))).toEqual([
+      "e",
+    ]);
+
+    const root = buildFloorMeshes(floor, { storyLevelIndex: 2, facadeSalt: 42 });
+    const glassNames: string[] = [];
+    root.traverse((o) => {
+      if (o.name.startsWith("unit_exterior_glass_")) glassNames.push(o.name);
+    });
+    expect(glassNames.length).toBeGreaterThan(0);
+    expect(glassNames.every((n) => !n.includes("_glass_n_") && !n.includes("_glass_s_"))).toBe(true);
+  });
+
   it("cuts east shell wall into fragments when unit has exterior facade windows", () => {
     const root = buildFloorMeshes(
       {

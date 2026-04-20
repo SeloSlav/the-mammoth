@@ -39,10 +39,16 @@ const StairWellEntryOpeningSchema = z
 
 const StairWellLandingPropCornerSchema = z.enum(["ne", "nw", "se", "sw"]);
 
-/** Resolves which corner landing slab should host a prop (shaft-local, matches racetrack layout). */
-export const StairWellLandingPropSelectorSchema = z.object({
-  kind: z.literal("opposite_primary_door"),
-});
+/**
+ * Resolves which corner landing slab should host a prop (shaft-local, matches racetrack layout).
+ * - `opposite_primary_door`: corner pad away from the main stair door (or a stable fallback).
+ * - `highest_y`: the topmost corner deck in the segment (e.g. ground floor’s upper landing when the
+ *   lobby pad is omitted from the mesh list).
+ */
+export const StairWellLandingPropSelectorSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("opposite_primary_door") }),
+  z.object({ kind: z.literal("highest_y") }),
+]);
 
 export type StairWellLandingPropSelector = z.infer<typeof StairWellLandingPropSelectorSchema>;
 

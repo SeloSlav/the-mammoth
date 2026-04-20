@@ -53,6 +53,7 @@ export {
 export {
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
+  unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
 export {
   buildStaticCollisionSceneForBuilding,
@@ -71,7 +72,15 @@ export {
   TYPICAL_FLOOR_DOC_ID,
   type BuildingStairShaftSpec,
 } from "./buildingStairShafts.js";
-export { pickCornerLandingOppositePrimaryDoor } from "./stairWellLandingProps.js";
+export {
+  exteriorFacesForPlacedObjectInFloor,
+  shaftFacesTowardAdjacentElevatorHoistways,
+  shaftFacesTowardAdjacentStairwells,
+} from "./exteriorFaceExposure.js";
+export {
+  pickCornerLandingHighestY,
+  pickCornerLandingOppositePrimaryDoor,
+} from "./stairWellLandingProps.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,

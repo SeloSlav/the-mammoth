@@ -10,6 +10,7 @@ import {
   STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
   stairWellEntryOpeningFromProxyMesh,
 } from "./stairElevatorPlaceholders.js";
+import { exteriorConcreteWallMaterial } from "./floorPlaceholderMeshMaterials.js";
 import { STOREY_SPACING_M } from "./stairWellGeometry.js";
 
 describe("applyStairWellPartTransforms", () => {
@@ -333,6 +334,24 @@ describe("applyStairWellPartTransforms", () => {
     expect(southWallNames).not.toContain("shaft_wall_s_solid");
     expect(southWallNames.some((name) => name.startsWith("shaft_wall_s_"))).toBe(true);
     expect(root.getObjectByName(STAIR_WELL_SECONDARY_OPENING_PROXY_ID)).not.toBeNull();
+  });
+
+  it("passes authored shaft exterior faces through the preview shell", () => {
+    const root = buildStairWellPreviewRoot({
+      sx: 4,
+      sy: STOREY_SPACING_M,
+      sz: 4,
+      towardPlateXZ: [6, 0],
+      shaftPlateXZ: [0, 0],
+      shaftExteriorFaces: ["n"],
+    });
+    let exteriorMeshCount = 0;
+    root.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.material === exteriorConcreteWallMaterial) {
+        exteriorMeshCount += 1;
+      }
+    });
+    expect(exteriorMeshCount).toBeGreaterThan(0);
   });
 
   it("adds an editable opening proxy and maps gizmo edits back into stairWellDef data", () => {

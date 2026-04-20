@@ -29,6 +29,11 @@ const DEAD_GRASS_GROUND_TEX_BASE = "/static/materials/dead-grass-ground";
 /** Planar tile size (m) on the infinite FP ground plane — ~2.5 m matches podium slab tiling scale. */
 const GRASS_GROUND_TILE_M = 2.5;
 const FP_GROUND_PLANE_SIZE = 6000;
+/**
+ * Default `PlaneGeometry` is 1×1 segments (two triangles). Tangent-space `normalMap` on that mesh
+ * often shows **black wedge / zig-zag seams** along the diagonal — not missing albedo, broken tangents.
+ */
+const FP_GROUND_PLANE_SEGMENTS = 96;
 /** World-space scale for `triNoise3D` — dirt mask. */
 const GROUND_DIRT_NOISE_SCALE = 0.022;
 /** Live grass (sparse green) mask — slightly different scale so it doesn’t lock-step with dirt. */
@@ -47,6 +52,10 @@ const GROUND_WEIGHT_DEAD_LO = 0.24;
 const GROUND_WEIGHT_DEAD_HI = 0.54;
 const GROUND_WEIGHT_LIVE_LO = 0.2;
 const GROUND_WEIGHT_LIVE_HI = 0.5;
+/** Keep a little default coverage so all-three-zero regions don't collapse to black. */
+const GROUND_LIVE_GRASS_BASELINE = 0.08;
+const GROUND_DIRT_BASELINE = 0.02;
+const GROUND_DEAD_GRASS_BASELINE = 0.02;
 /** Max fraction of the dirt weight that can become gravel (0..1). */
 const GROUND_GRAVEL_OF_DIRT_MAX = 0.42;
 const GROUND_GRAVEL_EDGE_LO = 0.58;
@@ -352,16 +361,20 @@ export function attachFpSessionEnvironment(
       );
 
       const rawDirt = useDirtBlend
-        ? smoothstep(float(GROUND_WEIGHT_DIRT_LO), float(GROUND_WEIGHT_DIRT_HI), dirtNoise)
+        ? smoothstep(float(GROUND_WEIGHT_DIRT_LO), float(GROUND_WEIGHT_DIRT_HI), dirtNoise).add(
+            float(GROUND_DIRT_BASELINE),
+          )
         : float(0);
       const rawDead = useDeadGrassBlend
-        ? smoothstep(float(GROUND_WEIGHT_DEAD_LO), float(GROUND_WEIGHT_DEAD_HI), deadGrassNoise)
+        ? smoothstep(float(GROUND_WEIGHT_DEAD_LO), float(GROUND_WEIGHT_DEAD_HI), deadGrassNoise).add(
+            float(GROUND_DEAD_GRASS_BASELINE),
+          )
         : float(0);
       const rawLive = smoothstep(
         float(GROUND_WEIGHT_LIVE_LO),
         float(GROUND_WEIGHT_LIVE_HI),
         liveGrassNoise,
-      );
+      ).add(float(GROUND_LIVE_GRASS_BASELINE));
       const sumPrimary = max(add(add(rawDirt, rawDead), rawLive), float(1e-4));
       const wDirt = div(rawDirt, sumPrimary);
       const wDead = div(rawDead, sumPrimary);
@@ -404,7 +417,12 @@ export function attachFpSessionEnvironment(
   })();
 
   const groundPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(FP_GROUND_PLANE_SIZE, FP_GROUND_PLANE_SIZE),
+    new THREE.PlaneGeometry(
+      FP_GROUND_PLANE_SIZE,
+      FP_GROUND_PLANE_SIZE,
+      FP_GROUND_PLANE_SEGMENTS,
+      FP_GROUND_PLANE_SEGMENTS,
+    ),
     groundMat,
   );
   groundPlane.name = "fp_session_ground_plane";

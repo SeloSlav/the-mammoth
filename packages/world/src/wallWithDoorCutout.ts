@@ -165,6 +165,7 @@ export function addWallConstantXWithHoles(
   yHi: number,
   holes: readonly WallHoleYZ[],
   namePrefix: string,
+  opts?: { noCollision?: boolean },
 ): void {
   if (holes.length === 0) {
     addBox(
@@ -177,7 +178,7 @@ export function addWallConstantXWithHoles(
       (yLo + yHi) * 0.5,
       (zMin + zMax) * 0.5,
       `${namePrefix}_solid`,
-      { worldMetricWallUvs: true },
+      { worldMetricWallUvs: true, noCollision: opts?.noCollision },
     );
     return;
   }
@@ -235,7 +236,7 @@ export function addWallConstantXWithHoles(
           (y0 + y1) * 0.5,
           (zCursor + hz0) * 0.5,
           `${namePrefix}_z_${part++}`,
-          { worldMetricWallUvs: true },
+          { worldMetricWallUvs: true, noCollision: opts?.noCollision },
         );
       }
       zCursor = Math.max(zCursor, hz1);
@@ -251,7 +252,7 @@ export function addWallConstantXWithHoles(
         (y0 + y1) * 0.5,
         (zCursor + zMax) * 0.5,
         `${namePrefix}_z_${part++}`,
-        { worldMetricWallUvs: true },
+        { worldMetricWallUvs: true, noCollision: opts?.noCollision },
       );
     }
   }
@@ -271,6 +272,7 @@ export function addWallConstantZWithHoles(
   yHi: number,
   holes: readonly WallHoleXY[],
   namePrefix: string,
+  opts?: { noCollision?: boolean },
 ): void {
   if (holes.length === 0) {
     addBox(
@@ -283,7 +285,7 @@ export function addWallConstantZWithHoles(
       (yLo + yHi) * 0.5,
       zCenter,
       `${namePrefix}_solid`,
-      { worldMetricWallUvs: true },
+      { worldMetricWallUvs: true, noCollision: opts?.noCollision },
     );
     return;
   }
@@ -341,7 +343,7 @@ export function addWallConstantZWithHoles(
           (y0 + y1) * 0.5,
           zCenter,
           `${namePrefix}_x_${part++}`,
-          { worldMetricWallUvs: true },
+          { worldMetricWallUvs: true, noCollision: opts?.noCollision },
         );
       }
       xCursor = Math.max(xCursor, hx1);
@@ -357,7 +359,7 @@ export function addWallConstantZWithHoles(
         (y0 + y1) * 0.5,
         zCenter,
         `${namePrefix}_x_${part++}`,
-        { worldMetricWallUvs: true },
+        { worldMetricWallUvs: true, noCollision: opts?.noCollision },
       );
     }
   }

@@ -18,10 +18,14 @@ import {
   buildInteriorMeshes,
   buildLandingDoorPreviewRoot,
   type BuildStairWellPreviewRootArgs,
+  exteriorFacesForPlacedObjectInFloor,
   elevatorHoistwayInnerHalfExtents,
   instantiateBuildingFloorStack,
   listElevatorShaftLayouts,
+  mergeShaftExteriorHints,
+  readShaftFacadeHintFaces,
   maxBuildingLevelIndex,
+  shaftFacesTowardAdjacentElevatorHoistways,
   shaftDoorTowardPointFromFloorCorridors,
 } from "@the-mammoth/world";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
@@ -172,6 +176,15 @@ export function buildEditorStructuralRoot(args: {
       authoringScope: args.stairWellAuthorScope,
       towardPlateXZ,
       shaftPlateXZ: [stairObj.position[0], stairObj.position[2]],
+      shaftExteriorFaces: [
+        ...new Set([
+          ...mergeShaftExteriorHints(
+            exteriorFacesForPlacedObjectInFloor(stairDoc, stairObj),
+            readShaftFacadeHintFaces(stairObj.metadata),
+          ),
+          ...shaftFacesTowardAdjacentElevatorHoistways(stairDoc, stairObj),
+        ]),
+      ],
     };
     const preview = buildStairWellPreviewRoot(previewArgs);
     root.add(preview);

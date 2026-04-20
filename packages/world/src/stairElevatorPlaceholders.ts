@@ -313,13 +313,13 @@ function addShaftShell(
   opts: ShaftShellOpts,
 ): void {
   const wt = 0.11;
+  const exteriorCladdingThickness = 0.016;
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
   const extMat = opts.exteriorWallMat;
   const extFaces = opts.exteriorShaftFaces;
-  const matFor = (card: CardinalFace): THREE.MeshStandardMaterial =>
-    extMat && extFaces?.includes(card) ? extMat : wallM;
+  const hasExteriorFace = (card: CardinalFace): boolean => Boolean(extMat && extFaces?.includes(card));
   const topExtend =
     opts.includeCeiling ? 0 : Math.max(0, opts.openTopWallExtend ?? 0);
   const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
@@ -390,6 +390,66 @@ function addShaftShell(
   /** Along-wall shift: +Z for E/W door walls, +X for N/S (matches stair placement). */
   const doorTangent = door?.tangentOffsetAlongWall ?? 0;
 
+  const addExteriorCladdingX = (
+    face: "e" | "w",
+    xCenter: number,
+    wallThickness: number,
+    zMin: number,
+    zMax: number,
+    y0: number,
+    y1: number,
+    holes: readonly WallHoleYZ[],
+    name: string,
+  ): void => {
+    if (!extMat || !hasExteriorFace(face)) return;
+    const outward = face === "e" ? 1 : -1;
+    const skinX =
+      xCenter + outward * (wallThickness * 0.5 + exteriorCladdingThickness * 0.5 + 0.001);
+    addWallConstantXWithHoles(
+      group,
+      extMat,
+      skinX,
+      exteriorCladdingThickness,
+      zMin,
+      zMax,
+      y0,
+      y1,
+      holes,
+      `${name}_exterior`,
+      { noCollision: true },
+    );
+  };
+
+  const addExteriorCladdingZ = (
+    face: "n" | "s",
+    zCenter: number,
+    wallThickness: number,
+    xMin: number,
+    xMax: number,
+    y0: number,
+    y1: number,
+    holes: readonly WallHoleXY[],
+    name: string,
+  ): void => {
+    if (!extMat || !hasExteriorFace(face)) return;
+    const outward = face === "n" ? 1 : -1;
+    const skinZ =
+      zCenter + outward * (wallThickness * 0.5 + exteriorCladdingThickness * 0.5 + 0.001);
+    addWallConstantZWithHoles(
+      group,
+      extMat,
+      skinZ,
+      exteriorCladdingThickness,
+      xMin,
+      xMax,
+      y0,
+      y1,
+      holes,
+      `${name}_exterior`,
+      { noCollision: true },
+    );
+  };
+
   const addEastWest = (
     face: "e" | "w",
     xCenter: number,
@@ -417,7 +477,7 @@ function addShaftShell(
           : [];
       addWallConstantXWithHoles(
         group,
-        matFor(face),
+        wallM,
         xCenter,
         wallThickness,
         zMin,
@@ -427,6 +487,7 @@ function addShaftShell(
         holes,
         name,
       );
+      addExteriorCladdingX(face, xCenter, wallThickness, zMin, zMax, y0, y1, holes, name);
       if (doorFrameTrim && holes.length > 0) {
         const xInner = face === "e" ? hx - wt : -hx + wt;
         const inwardX = face === "e" ? -1 : 1;
@@ -445,7 +506,7 @@ function addShaftShell(
     } else {
       addWallConstantXWithHoles(
         group,
-        matFor(face),
+        wallM,
         xCenter,
         wallThickness,
         zMin,
@@ -455,6 +516,7 @@ function addShaftShell(
         [],
         name,
       );
+      addExteriorCladdingX(face, xCenter, wallThickness, zMin, zMax, y0, y1, [], name);
     }
   };
 
@@ -485,7 +547,7 @@ function addShaftShell(
           : [];
       addWallConstantZWithHoles(
         group,
-        matFor(face),
+        wallM,
         zCenter,
         wallThickness,
         xMin,
@@ -495,6 +557,7 @@ function addShaftShell(
         holes,
         name,
       );
+      addExteriorCladdingZ(face, zCenter, wallThickness, xMin, xMax, y0, y1, holes, name);
       if (doorFrameTrim && holes.length > 0) {
         const zInner = face === "n" ? hz - wt : -hz + wt;
         const inwardZ = face === "n" ? -1 : 1;
@@ -513,7 +576,7 @@ function addShaftShell(
     } else {
       addWallConstantZWithHoles(
         group,
-        matFor(face),
+        wallM,
         zCenter,
         wallThickness,
         xMin,
@@ -523,13 +586,25 @@ function addShaftShell(
         [],
         name,
       );
+      addExteriorCladdingZ(face, zCenter, wallThickness, xMin, xMax, y0, y1, [], name);
     }
   };
 
   if (!door) {
     addWallConstantXWithHoles(
       group,
-      matFor("e"),
+      wallM,
+      hx - wt * 0.5,
+      wt,
+      -vlenZ * 0.5,
+      vlenZ * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_e",
+    );
+    addExteriorCladdingX(
+      "e",
       hx - wt * 0.5,
       wt,
       -vlenZ * 0.5,
@@ -541,7 +616,18 @@ function addShaftShell(
     );
     addWallConstantXWithHoles(
       group,
-      matFor("w"),
+      wallM,
+      -hx + wt * 0.5,
+      wt,
+      -vlenZ * 0.5,
+      vlenZ * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_w",
+    );
+    addExteriorCladdingX(
+      "w",
       -hx + wt * 0.5,
       wt,
       -vlenZ * 0.5,
@@ -553,7 +639,18 @@ function addShaftShell(
     );
     addWallConstantZWithHoles(
       group,
-      matFor("n"),
+      wallM,
+      hz - wt * 0.5,
+      wt,
+      -vlenX * 0.5,
+      vlenX * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_n",
+    );
+    addExteriorCladdingZ(
+      "n",
       hz - wt * 0.5,
       wt,
       -vlenX * 0.5,
@@ -565,7 +662,18 @@ function addShaftShell(
     );
     addWallConstantZWithHoles(
       group,
-      matFor("s"),
+      wallM,
+      -hz + wt * 0.5,
+      wt,
+      -vlenX * 0.5,
+      vlenX * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_s",
+    );
+    addExteriorCladdingZ(
+      "s",
       -hz + wt * 0.5,
       wt,
       -vlenX * 0.5,
@@ -698,7 +806,18 @@ function addShaftShell(
 
       addWallConstantXWithHoles(
         group,
-        matFor("e"),
+        wallM,
+        xE,
+        thE,
+        zMinWall,
+        zMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesE,
+        "shaft_wall_e",
+      );
+      addExteriorCladdingX(
+        "e",
         xE,
         thE,
         zMinWall,
@@ -710,7 +829,18 @@ function addShaftShell(
       );
       addWallConstantXWithHoles(
         group,
-        matFor("w"),
+        wallM,
+        xW,
+        thW,
+        zMinWall,
+        zMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesW,
+        "shaft_wall_w",
+      );
+      addExteriorCladdingX(
+        "w",
         xW,
         thW,
         zMinWall,
@@ -722,7 +852,18 @@ function addShaftShell(
       );
       addWallConstantZWithHoles(
         group,
-        matFor("n"),
+        wallM,
+        zN,
+        thN,
+        xMinWall,
+        xMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesN,
+        "shaft_wall_n",
+      );
+      addExteriorCladdingZ(
+        "n",
         zN,
         thN,
         xMinWall,
@@ -734,7 +875,18 @@ function addShaftShell(
       );
       addWallConstantZWithHoles(
         group,
-        matFor("s"),
+        wallM,
+        zS,
+        thS,
+        xMinWall,
+        xMaxWall,
+        yWallBottom,
+        yWallTop,
+        holesS,
+        "shaft_wall_s",
+      );
+      addExteriorCladdingZ(
+        "s",
         zS,
         thS,
         xMinWall,
@@ -1112,6 +1264,8 @@ export type BuildStairWellPreviewRootArgs = {
   authoringScope?: StairWellAuthoringScope;
   towardPlateXZ?: readonly [number, number];
   shaftPlateXZ?: readonly [number, number];
+  /** Preview-only facade cardinals; lets the editor match runtime shaft exterior cladding. */
+  shaftExteriorFaces?: readonly CardinalFace[];
 };
 
 export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): THREE.Group {
@@ -1129,6 +1283,7 @@ export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): 
             shaftPlateXZ: args.shaftPlateXZ,
           }
         : undefined,
+    shaftExteriorFaces: args.shaftExteriorFaces,
     addOpeningEditProxy: false,
   });
   return root;
@@ -1166,6 +1321,7 @@ export function rebuildStairWellPreviewRoot(
             shaftPlateXZ: args.shaftPlateXZ,
           }
         : undefined,
+    shaftExteriorFaces: args.shaftExteriorFaces,
     addOpeningEditProxy: false,
   });
 }
@@ -1311,6 +1467,8 @@ export function rebuildStairWellPreviewOpening(
     floorMat: mats.floor,
     groundDoor: openings[0]?.opening.groundDoor ?? null,
     supplementalDoors: openings.slice(1).map((entry) => entry.opening.groundDoor),
+    exteriorShaftFaces: args.shaftExteriorFaces,
+    exteriorWallMat: exteriorConcreteWallMaterial,
   });
   groupGeneratedStairWellWallParts(root);
   tagGeneratedStairWellShellParts(root, authoringScope, openings);

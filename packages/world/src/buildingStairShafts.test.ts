@@ -49,7 +49,48 @@ describe("getBuildingStairShaftSpecs", () => {
     };
     const building: BuildingDoc = {
       id: "b",
+      version: 1,
       floorRefs: [{ levelIndex: 1, floorDocId: floor.id }],
+      cores: [],
+      units: [],
+      slotTemplates: [],
+    };
+    const specs = getBuildingStairShaftSpecs(
+      building,
+      () => floor,
+      [...building.floorRefs],
+      3.2,
+    );
+    expect(specs).toHaveLength(1);
+    expect(specs[0]!.exteriorShaftFaces).toContain("e");
+  });
+
+  it("adds facade cardinals for stair faces flush with elevator hoistways (core-to-core)", () => {
+    const floor: FloorDoc = {
+      id: "core_floor",
+      version: 1,
+      objects: [
+        {
+          id: "stair_col",
+          prefabId: "stair_well_a",
+          position: [0, 0, 0],
+          scale: [6, 3, 6],
+        },
+        {
+          id: "elev_core",
+          prefabId: "elevator_placeholder",
+          position: [4, 0, 0],
+          scale: [2, 3, 3],
+        },
+      ],
+    };
+    const building: BuildingDoc = {
+      id: "b2",
+      version: 1,
+      floorRefs: [{ levelIndex: 1, floorDocId: floor.id }],
+      cores: [],
+      units: [],
+      slotTemplates: [],
     };
     const specs = getBuildingStairShaftSpecs(
       building,

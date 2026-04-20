@@ -1,6 +1,9 @@
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
 
+const SHAFT_FLUSH_TOUCH_M = 0.55;
+const SHAFT_FLUSH_PENETRATE_M = 0.08;
+
 const OUTWARD_BLOCK_EPS_M = 0.08;
 const MAX_UNIT_BLOCKING_GAP_M = 0.02;
 const MAX_NON_UNIT_BLOCKING_GAP_M = 0.6;
@@ -116,4 +119,82 @@ export function exteriorFacesForPlacedObjectInFloor(
   if (hasMeaningfulGap([a.x0, a.x1], mergeSpans(blockers.n))) out.push("n");
   if (hasMeaningfulGap([a.x0, a.x1], mergeSpans(blockers.s))) out.push("s");
   return out;
+}
+
+function spanOverlap1D(a0: number, a1: number, b0: number, b1: number): number {
+  return Math.min(a1, b1) - Math.max(a0, b0);
+}
+
+/**
+ * Axis-aligned shaft sides of `obj` that sit flush against another footprint whose prefab
+ * matches `neighborMatcher`. Used so core-to-core faces (e.g. stair ↔ elevator) still get facade
+ * PBR on the outward shell — {@link exteriorFacesForPlacedObjectInFloor} treats the neighbor as a
+ * blocker and omits those cardinals.
+ */
+export function shaftPerimeterFacesFlushAgainstPrefabs(
+  floor: FloorDoc,
+  obj: PlacedObject,
+  neighborMatcher: (prefabId: string) => boolean,
+): CardinalFace[] {
+  if (obj.rotation) return [];
+  const a = objectBounds(obj);
+  const out = new Set<CardinalFace>();
+
+  for (const other of floor.objects) {
+    if (other.id === obj.id || other.rotation || !neighborMatcher(other.prefabId)) continue;
+    const b = objectBounds(other);
+
+    const zOverlap = spanOverlap1D(a.z0, a.z1, b.z0, b.z1);
+    if (zOverlap > MIN_BLOCKING_OVERLAP_M) {
+      if (
+        b.x0 <= a.x1 + SHAFT_FLUSH_TOUCH_M &&
+        b.x0 >= a.x1 - SHAFT_FLUSH_PENETRATE_M
+      ) {
+        out.add("e");
+      }
+      if (
+        b.x1 >= a.x0 - SHAFT_FLUSH_TOUCH_M &&
+        b.x1 <= a.x0 + SHAFT_FLUSH_PENETRATE_M
+      ) {
+        out.add("w");
+      }
+    }
+
+    const xOverlap = spanOverlap1D(a.x0, a.x1, b.x0, b.x1);
+    if (xOverlap > MIN_BLOCKING_OVERLAP_M) {
+      if (
+        b.z0 <= a.z1 + SHAFT_FLUSH_TOUCH_M &&
+        b.z0 >= a.z1 - SHAFT_FLUSH_PENETRATE_M
+      ) {
+        out.add("n");
+      }
+      if (
+        b.z1 >= a.z0 - SHAFT_FLUSH_TOUCH_M &&
+        b.z1 <= a.z0 + SHAFT_FLUSH_PENETRATE_M
+      ) {
+        out.add("s");
+      }
+    }
+  }
+
+  return [...out];
+}
+
+export function shaftFacesTowardAdjacentElevatorHoistways(
+  floor: FloorDoc,
+  obj: PlacedObject,
+): CardinalFace[] {
+  return shaftPerimeterFacesFlushAgainstPrefabs(floor, obj, (prefabId) =>
+    prefabId.toLowerCase().includes("elevator"),
+  );
+}
+
+export function shaftFacesTowardAdjacentStairwells(
+  floor: FloorDoc,
+  obj: PlacedObject,
+): CardinalFace[] {
+  return shaftPerimeterFacesFlushAgainstPrefabs(floor, obj, (prefabId) => {
+    const p = prefabId.toLowerCase();
+    return p.includes("stair_well") || p.includes("stairwell");
+  });
 }

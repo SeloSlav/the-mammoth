@@ -17,7 +17,11 @@ import {
   resolveStairWellSupplementalDoors,
   stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
-import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
+import {
+  exteriorFacesForPlacedObjectInFloor,
+  shaftFacesTowardAdjacentElevatorHoistways,
+  shaftFacesTowardAdjacentStairwells,
+} from "./exteriorFaceExposure.js";
 import {
   addDoorFrameTrimConstantX,
   addDoorFrameTrimConstantZ,
@@ -58,6 +62,7 @@ import {
   addUnitExteriorWindowGlassMeshes,
   DEFAULT_EXTERIOR_FACADE_SALT,
   planUnitExteriorWindowsForFace,
+  unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
 import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
 import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
@@ -117,6 +122,7 @@ function matsFor(
       return {
         floor: upperCorridorFloor ? mat.corridorFloorUpperStorey : mat.corridorFloor,
         ceil: mat.corridorCeil,
+        /** Default shell wall; {@link addHollowRoomShell} swaps in PBR for ground + unit-adjacent runs. */
         wall: mat.corridorWall,
         exteriorWall: mat.corridorExteriorWall,
       };
@@ -183,6 +189,8 @@ type HollowShellOpts = {
   exteriorFaces?: readonly CardinalFace[];
   /** Unit exterior window openings (merged into inner walls; cladding uses these for units only). */
   exteriorWindowHoles?: CorridorShellWallHoles;
+  /** Authoring PBR ceiling for ground-storey shells and corridors with apartment entry cuts. */
+  useAuthoringCorridorCeiling?: boolean;
 };
 
 type PlateStairCorridorDoorPunch = {
@@ -434,6 +442,10 @@ function mergeCorridorShellWallHoles(
   return n > 0 ? out : undefined;
 }
 
+function corridorShellWallHoleCount(h: CorridorShellWallHoles | undefined): number {
+  if (!h) return 0;
+  return h.e.length + h.w.length + h.n.length + h.s.length;
+}
 
 /**
  * Door cut on the **unit** wall shared with a corridor / lobby volume.
@@ -907,7 +919,10 @@ function addShellFloorCeilingPieces(
     floor.position.set(cx, -hy + wt * 0.5, cz);
     group.add(floor);
 
-    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(w, wt, d), ceilM);
+    const ceilGeom = new THREE.BoxGeometry(w, wt, d);
+    /** Match floor shell: default box UVs are 0..1 per piece and stretch badly on long corridors. */
+    applyShellFloorPlanarTopUV(ceilGeom, wt, cx, cz, roomHalfX, roomHalfZ);
+    const ceiling = new THREE.Mesh(ceilGeom, ceilM);
     ceiling.name = rects.length > 1 ? `shell_ceiling_${ci}` : "shell_ceiling";
     ci += 1;
     ceiling.position.set(cx, hy - wt * 0.5, cz);
@@ -1035,10 +1050,18 @@ function addHollowRoomShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const { floor: floorM, ceil: ceilM, wall: wallM, exteriorWall: exteriorWallM } = matsFor(
-    kind,
-    opts.storyLevelIndex,
-  );
+  const { floor: floorM, ceil: defaultCeilM, wall: defaultWallM, exteriorWall: exteriorWallM } =
+    matsFor(kind, opts.storyLevelIndex);
+  const story = opts.storyLevelIndex ?? 99;
+  /** Match ceiling rule plus always-on ground / legacy plate corridors (incl. rotated shells). */
+  const residentialCorridorWall =
+    kind === "corridor" &&
+    (Boolean(opts.useAuthoringCorridorCeiling) || story === 1 || story === 99);
+  const wallM = residentialCorridorWall ? mat.groundLevelCorridorInteriorWall : defaultWallM;
+  const ceilM =
+    kind === "corridor" && opts.useAuthoringCorridorCeiling
+      ? mat.buildingCorridorCeiling
+      : defaultCeilM;
   const exteriorFaces = opts.exteriorFaces ?? [];
   const vh = Math.max(sy - 2 * wt, 0.05);
   const vlenX = Math.max(sx - 2 * wt, 0.05);
@@ -1607,10 +1630,15 @@ export function buildFloorMeshes(
         if (g > 1e-4) elevFlush = Math.min(0.35, g);
       }
       const elevSy = shaftStackSy(sy, STOREY_SPACING_M);
-      const shaftExteriorFaces = mergeShaftExteriorHints(
-        roomExteriorFaces,
-        readShaftFacadeHintFaces(obj.metadata),
-      );
+      const shaftExteriorFaces = [
+        ...new Set<CardinalFace>([
+          ...mergeShaftExteriorHints(
+            roomExteriorFaces,
+            readShaftFacadeHintFaces(obj.metadata),
+          ),
+          ...shaftFacesTowardAdjacentStairwells(floor, obj),
+        ]),
+      ];
       addElevatorShaftPlaceholder(room, sx, elevSy, sz, {
         groundDoor: { face: doorFace, bandHeightM: elevSy },
         includePitFloor: elevatorPitSlab,
@@ -1648,10 +1676,15 @@ export function buildFloorMeshes(
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           primaryDoor: resolvedDoor,
         });
-        const shaftExteriorFaces = mergeShaftExteriorHints(
-          roomExteriorFaces,
-          readShaftFacadeHintFaces(obj.metadata),
-        );
+        const shaftExteriorFaces = [
+          ...new Set<CardinalFace>([
+            ...mergeShaftExteriorHints(
+              roomExteriorFaces,
+              readShaftFacadeHintFaces(obj.metadata),
+            ),
+            ...shaftFacesTowardAdjacentElevatorHoistways(floor, obj),
+          ]),
+        ];
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,
@@ -1663,6 +1696,10 @@ export function buildFloorMeshes(
       }
     } else {
       const skipShaftCutouts = Boolean(obj.rotation);
+      const unitAdjacentCorridorHoles =
+        kind === "corridor" && !skipShaftCutouts
+          ? corridorShellHolesFromAdjacentUnitEntries(obj, sx, sy, sz, floor)
+          : undefined;
       const corridorWallHoles = skipShaftCutouts
         ? undefined
         : mergeCorridorShellWallHoles(
@@ -1678,15 +1715,7 @@ export function buildFloorMeshes(
                       corridorShaftDoorPunchesPlate,
                     )
                   : undefined,
-                kind === "corridor"
-                  ? corridorShellHolesFromAdjacentUnitEntries(
-                      obj,
-                      sx,
-                      sy,
-                      sz,
-                      floor,
-                    )
-                  : undefined,
+                unitAdjacentCorridorHoles,
               ),
               kind === "corridor"
                 ? manualCorridorShellHoleExtrasForFloor(floor, obj, sx, sy, sz)
@@ -1703,6 +1732,10 @@ export function buildFloorMeshes(
                 )
               : undefined,
           );
+      const useAuthoringCorridorCeiling =
+        kind === "corridor" &&
+        !skipShaftCutouts &&
+        (story === 1 || story === 99 || corridorShellWallHoleCount(unitAdjacentCorridorHoles) > 0);
       const elevatorSignPlacements =
         kind === "corridor" && !skipShaftCutouts
           ? elevatorCorridorSignPlacementsFromPunches(
@@ -1739,42 +1772,41 @@ export function buildFloorMeshes(
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
       if (kind === "unit" && roomExteriorFaces.length > 0 && !skipShaftCutouts) {
-        const wt = 0.11;
-        const vh = Math.max(sy - 2 * wt, 0.05);
-        const vlenX = Math.max(sx - 2 * wt, 0.05);
-        const vlenZ = Math.max(sz - 2 * wt, 0.05);
-        const yLo = -vh * 0.5;
-        const yHi = vh * 0.5;
-        const salt = opts?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT;
-        const gathered: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
-        tintByExteriorFace = {};
-        for (const face of roomExteriorFaces) {
-          const plan = planUnitExteriorWindowsForFace({
-            face,
-            vlenX,
-            vlenZ,
-            yLo,
-            yHi,
-            facadeSalt: salt,
-            storyLevelIndex: story,
-            floorDocId: floor.id,
-            placedObjectId: obj.id,
-          });
-          tintByExteriorFace[face] = plan.tintId;
-          if (face === "e" || face === "w") {
-            gathered[face].push(...plan.holesEw);
-          } else {
-            gathered[face].push(...plan.holesNs);
+        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces);
+        if (windowFaces.length > 0) {
+          const wt = 0.11;
+          const vh = Math.max(sy - 2 * wt, 0.05);
+          const vlenX = Math.max(sx - 2 * wt, 0.05);
+          const vlenZ = Math.max(sz - 2 * wt, 0.05);
+          const yLo = -vh * 0.5;
+          const yHi = vh * 0.5;
+          const salt = opts?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT;
+          const gathered: CorridorShellWallHoles = { e: [], w: [], n: [], s: [] };
+          tintByExteriorFace = {};
+          for (const face of windowFaces) {
+            const plan = planUnitExteriorWindowsForFace({
+              face,
+              vlenX,
+              vlenZ,
+              yLo,
+              yHi,
+              facadeSalt: salt,
+              storyLevelIndex: story,
+              floorDocId: floor.id,
+              placedObjectId: obj.id,
+            });
+            tintByExteriorFace[face] = plan.tintId;
+            if (face === "e") {
+              gathered.e.push(...plan.holesEw);
+            } else if (face === "w") {
+              gathered.w.push(...plan.holesEw);
+            }
           }
+          const anyHole =
+            gathered.e.length + gathered.w.length + gathered.n.length + gathered.s.length > 0;
+          exteriorWindowHoles = anyHole ? gathered : undefined;
+          if (!anyHole) tintByExteriorFace = undefined;
         }
-        const anyHole =
-          gathered.e.length +
-            gathered.w.length +
-            gathered.n.length +
-            gathered.s.length >
-          0;
-        exteriorWindowHoles = anyHole ? gathered : undefined;
-        if (!anyHole) tintByExteriorFace = undefined;
       }
 
       addHollowRoomShell(room, sx, sy, sz, kind, {
@@ -1790,18 +1822,15 @@ export function buildFloorMeshes(
         stairSignPlacements,
         exteriorFaces: roomExteriorFaces,
         exteriorWindowHoles,
+        useAuthoringCorridorCeiling,
       });
 
-      if (
-        kind === "unit" &&
-        exteriorWindowHoles &&
-        tintByExteriorFace &&
-        roomExteriorFaces.length > 0
-      ) {
+      if (kind === "unit" && exteriorWindowHoles && tintByExteriorFace) {
         const hx = sx * 0.5;
         const hz = sz * 0.5;
+        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces);
         addUnitExteriorWindowGlassMeshes(room, {
-          faces: roomExteriorFaces,
+          faces: glassFaces,
           hx,
           hz,
           tintByFace: tintByExteriorFace,
@@ -2134,9 +2163,16 @@ export function buildStairOpeningCollisionOverlayForBuilding(
       const affectedFaces = new Set<CardinalFace>(
         stairContacts.map((contact) => contact.corridorWall),
       );
+      const unitAdjacentCorridorHoles = corridorShellHolesFromAdjacentUnitEntries(
+        obj,
+        sx,
+        sy,
+        sz,
+        floor,
+      );
       const corridorWallHoles = mergeCorridorShellWallHoles(
         corridorShellHolesFromStairPunches(obj, sx, sy, sz, kind, stairDoorPunchesPlate),
-        corridorShellHolesFromAdjacentUnitEntries(obj, sx, sy, sz, floor),
+        unitAdjacentCorridorHoles,
       );
       const stairSignPlacements = stairCorridorSignPlacementsFromPunches(
         obj,
@@ -2160,6 +2196,10 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         storyShortLabel: shortFloorLabelForRef(ref),
         corridorWallHoles,
         stairSignPlacements,
+        useAuthoringCorridorCeiling:
+          ref.levelIndex === 1 ||
+          ref.levelIndex === 99 ||
+          corridorShellWallHoleCount(unitAdjacentCorridorHoles) > 0,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(corridor, wallPrefixesForFaces("shell_wall", affectedFaces)),

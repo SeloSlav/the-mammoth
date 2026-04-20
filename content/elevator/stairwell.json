@@ -230,11 +230,27 @@
       },
       "anchor": {
         "corner": "nw",
-        "insetXM": 0.7,
-        "insetZM": 0.75,
+        "insetXM": 0.3,
+        "insetZM": 0.3,
         "liftM": 0.02,
         "yawRad": 0,
-        "uniformScale": 1
+        "uniformScale": 0.5
+      }
+    },
+    {
+      "id": "stairwell_heater_ground_top",
+      "modelUrl": "/static/models/objects/stairwell-heater.glb",
+      "applyToScopes": ["ground"],
+      "landingSelector": {
+        "kind": "highest_y"
+      },
+      "anchor": {
+        "corner": "nw",
+        "insetXM": 0.3,
+        "insetZM": 0.3,
+        "liftM": 0.02,
+        "yawRad": 0,
+        "uniformScale": 0.5
       }
     }
   ]
