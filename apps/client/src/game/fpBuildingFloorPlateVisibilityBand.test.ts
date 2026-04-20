@@ -15,14 +15,14 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 19 });
   });
 
-  it("uses a wide storey band when not in shaft context", () => {
+  it("keeps every storey visible when not in shaft context (facade cohesion)", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 19,
         playerStorey: 10,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 6, hi: 14 });
+    ).toEqual({ lo: 1, hi: 19 });
   });
 
   it("clamps to maxLevel at the top", () => {
@@ -42,7 +42,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 5 });
+    ).toEqual({ lo: 1, hi: 12 });
   });
 
   it("extends the upper band toward the storey the camera is looking at", () => {
@@ -53,7 +53,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: false,
         upperTargetStorey: 8,
       }),
-    ).toEqual({ lo: 1, hi: 10 });
+    ).toEqual({ lo: 1, hi: 19 });
   });
 
   it("normalizes maxLevel when below 1", () => {

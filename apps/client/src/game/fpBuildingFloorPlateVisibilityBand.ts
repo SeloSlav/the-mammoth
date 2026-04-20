@@ -56,8 +56,12 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   if (input.revealFullStack) {
     return { lo: 1, hi: maxLevel };
   }
-  /** Half-width (storeys) around the player — wider than ±1 avoids plate pop-in when moving fast. */
-  const halfSpan = 4;
+  /**
+   * Half-width (storeys) around the player. Use at least `maxLevel - 1` so every plate stays visible
+   * from any storey (wide footprints otherwise keep the camera “interior” in XZ while tall
+   * façades / top-level shells were culled).
+   */
+  const halfSpan = Math.max(4, maxLevel - 1);
   let lo = input.playerStorey - halfSpan;
   let hi = input.playerStorey + halfSpan;
   if (typeof input.upperTargetStorey === "number" && Number.isFinite(input.upperTargetStorey)) {

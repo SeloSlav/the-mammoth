@@ -477,6 +477,18 @@ export class FpElevatorShaftVisual {
     this.root.add(this.carRoot);
     this.root.position.set(this.ox + layout.plateX, 0, this.oz + layout.plateZ);
 
+    this.root.traverse((node) => {
+      if (
+        node instanceof THREE.Mesh ||
+        node instanceof THREE.Line ||
+        node instanceof THREE.LineSegments ||
+        node instanceof THREE.Points ||
+        node instanceof THREE.InstancedMesh
+      ) {
+        node.frustumCulled = false;
+      }
+    });
+
     if (this.mergedCabFloorButtons) {
       this.lastMatSig = "";
       this.updateFloorPickMaterials(0, 0, -1, 0);
