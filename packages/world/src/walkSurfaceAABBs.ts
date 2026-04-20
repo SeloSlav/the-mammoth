@@ -413,7 +413,10 @@ export function walkSurfaceAABBsForBuilding(
     building,
     getFloorDoc,
     spacing,
-    { getFloorOverrideDoc: options?.getFloorOverrideDoc },
+    {
+      getFloorOverrideDoc: options?.getFloorOverrideDoc,
+      sillLedgeForWalkSurfaces: true,
+    },
   )) {
     out.push(b);
   }

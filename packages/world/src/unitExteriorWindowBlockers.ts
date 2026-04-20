@@ -26,6 +26,13 @@ const WINDOW_SILL_LEDGE_DEPTH_M = 0.42;
 const WINDOW_SILL_LEDGE_THICKNESS_M = 0.1;
 /** Tiny upward lip so walk sampling and the capsule share the same top (m). */
 const WINDOW_SILL_TOP_LIP_M = 0.02;
+/**
+ * Walk-only sill inflation: `stepFpLocomotion` probes start/end XZ each substep with a foot radius;
+ * narrow sill AABBs lose overlap while still colliding, so support vanishes and you fall to `FLOOR_Y`.
+ */
+const WINDOW_SILL_LEDGE_WALK_EXTRA_DEPTH_M = 0.72;
+const WINDOW_SILL_LEDGE_WALK_TANGENT_PAD_M = 0.16;
+const WINDOW_SILL_WALK_EXTRA_TOP_LIP_M = 0.045;
 
 type UnitWindowAnalyticKind = "interiorSeal" | "exteriorSill";
 
@@ -59,8 +66,15 @@ function appendUnitExteriorWindowAnalyticSolids(
   options?: {
     getFloorOverrideDoc?: GetFloorOverrideDoc;
     facadeSalt?: number;
+    /** When building exterior sill boxes for **walk** AABBs only — deeper/wider than collision. */
+    sillLedgeForWalkSurfaces?: boolean;
   },
 ): void {
+  const sillWalk = kind === "exteriorSill" && Boolean(options?.sillLedgeForWalkSurfaces);
+  const sillTangPad = sillWalk ? WINDOW_SILL_LEDGE_WALK_TANGENT_PAD_M : WINDOW_SEAL_TANGENT_PAD_M;
+  const sillDepth = sillWalk ? WINDOW_SILL_LEDGE_DEPTH_M + WINDOW_SILL_LEDGE_WALK_EXTRA_DEPTH_M : WINDOW_SILL_LEDGE_DEPTH_M;
+  const sillTopLip = sillWalk ? WINDOW_SILL_TOP_LIP_M + WINDOW_SILL_WALK_EXTRA_TOP_LIP_M : WINDOW_SILL_TOP_LIP_M;
+
   const ox = building.worldOrigin?.[0] ?? 0;
   const oy = building.worldOrigin?.[1] ?? 0;
   const oz = building.worldOrigin?.[2] ?? 0;
@@ -153,8 +167,9 @@ function appendUnitExteriorWindowAnalyticSolids(
         if (face === "e") {
           const inner = hx - wt;
           for (const h of holesEw) {
-            const zA = Math.min(h.z0, h.z1) - WINDOW_SEAL_TANGENT_PAD_M;
-            const zB = Math.max(h.z0, h.z1) + WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const zA = Math.min(h.z0, h.z1) - tang;
+            const zB = Math.max(h.z0, h.z1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
@@ -172,9 +187,9 @@ function appendUnitExteriorWindowAnalyticSolids(
               const yBottom = yA;
               pushWorld(
                 hx,
-                hx + WINDOW_SILL_LEDGE_DEPTH_M,
+                hx + sillDepth,
                 yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yBottom + WINDOW_SILL_TOP_LIP_M,
+                yBottom + sillTopLip,
                 zA,
                 zB,
               );
@@ -183,8 +198,9 @@ function appendUnitExteriorWindowAnalyticSolids(
         } else if (face === "w") {
           const inner = -hx + wt;
           for (const h of holesEw) {
-            const zA = Math.min(h.z0, h.z1) - WINDOW_SEAL_TANGENT_PAD_M;
-            const zB = Math.max(h.z0, h.z1) + WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const zA = Math.min(h.z0, h.z1) - tang;
+            const zB = Math.max(h.z0, h.z1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
@@ -200,10 +216,10 @@ function appendUnitExteriorWindowAnalyticSolids(
             } else {
               const yBottom = yA;
               pushWorld(
-                -hx - WINDOW_SILL_LEDGE_DEPTH_M,
+                -hx - sillDepth,
                 -hx,
                 yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yBottom + WINDOW_SILL_TOP_LIP_M,
+                yBottom + sillTopLip,
                 zA,
                 zB,
               );
@@ -212,8 +228,9 @@ function appendUnitExteriorWindowAnalyticSolids(
         } else if (face === "n") {
           const inner = hz - wt;
           for (const h of holesNs) {
-            const xA = Math.min(h.x0, h.x1) - WINDOW_SEAL_TANGENT_PAD_M;
-            const xB = Math.max(h.x0, h.x1) + WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const xA = Math.min(h.x0, h.x1) - tang;
+            const xB = Math.max(h.x0, h.x1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
@@ -232,17 +249,18 @@ function appendUnitExteriorWindowAnalyticSolids(
                 xA,
                 xB,
                 yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yBottom + WINDOW_SILL_TOP_LIP_M,
+                yBottom + sillTopLip,
                 hz,
-                hz + WINDOW_SILL_LEDGE_DEPTH_M,
+                hz + sillDepth,
               );
             }
           }
         } else {
           const inner = -hz + wt;
           for (const h of holesNs) {
-            const xA = Math.min(h.x0, h.x1) - WINDOW_SEAL_TANGENT_PAD_M;
-            const xB = Math.max(h.x0, h.x1) + WINDOW_SEAL_TANGENT_PAD_M;
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_SEAL_TANGENT_PAD_M;
+            const xA = Math.min(h.x0, h.x1) - tang;
+            const xB = Math.max(h.x0, h.x1) + tang;
             const yA = Math.min(h.y0, h.y1);
             const yB = Math.max(h.y0, h.y1);
             if (xB - xA < 0.05 || yB - yA < 0.05) continue;
@@ -261,8 +279,8 @@ function appendUnitExteriorWindowAnalyticSolids(
                 xA,
                 xB,
                 yBottom - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yBottom + WINDOW_SILL_TOP_LIP_M,
-                -hz - WINDOW_SILL_LEDGE_DEPTH_M,
+                yBottom + sillTopLip,
+                -hz - sillDepth,
                 -hz,
               );
             }
@@ -297,8 +315,10 @@ export function buildUnitExteriorWindowSealBlockersForBuilding(
 /**
  * Exterior window **stool** ledges: thin horizontal slabs just outside the shell outer face.
  * Cladding is collision-excluded (`mammothNoCollision`); without these, feet miss walk AABBs and
- * locomotion can snap to the exterior walk fallback slab (`WALK_FALLBACK_FLOOR_TOP_Y`). Same boxes
- * are used as FP blockers.
+ * locomotion can snap to the exterior walk fallback slab (`WALK_FALLBACK_FLOOR_TOP_Y`).
+ *
+ * Pass `sillLedgeForWalkSurfaces: true` for **walk** AABBs only — deeper/wider than collision so
+ * `sampleWalkGroundTopY` still overlaps the foot rectangle while striding (see `stepFpLocomotion`).
  */
 export function buildUnitExteriorWindowSillLedgeAABBsForBuilding(
   building: BuildingDoc,
@@ -307,6 +327,7 @@ export function buildUnitExteriorWindowSillLedgeAABBsForBuilding(
   options?: {
     getFloorOverrideDoc?: GetFloorOverrideDoc;
     facadeSalt?: number;
+    sillLedgeForWalkSurfaces?: boolean;
   },
 ): CollisionAabb[] {
   const out: CollisionAabb[] = [];

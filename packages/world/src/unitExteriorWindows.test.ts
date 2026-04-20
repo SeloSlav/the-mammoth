@@ -160,5 +160,16 @@ describe("buildFloorMeshes unit exterior windows", () => {
     expect(Math.min(...sillTops)).toBeLessThan(0.15);
     const wideX = sills.filter((b) => b.max[0] - b.min[0] > 0.2);
     expect(wideX.length).toBeGreaterThan(0);
+
+    const sillsWalk = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+      building,
+      () => floor,
+      60 / 19,
+      { sillLedgeForWalkSurfaces: true },
+    );
+    expect(sillsWalk.length).toBe(sills.length);
+    const maxDxCollision = Math.max(...sills.map((b) => b.max[0] - b.min[0]));
+    const maxDxWalk = Math.max(...sillsWalk.map((b) => b.max[0] - b.min[0]));
+    expect(maxDxWalk).toBeGreaterThan(maxDxCollision + 0.2);
   });
 });
