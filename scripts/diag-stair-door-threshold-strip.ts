@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   GENERATED_COLLISION_BLOCKER_AABBS,
+  GENERATED_COLLISION_CORE_BLOCKER_AABBS,
+  GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
   applyStairOpeningCollisionOverlay,
   applyStairRuntimeBlockerOverlay,
   buildStairOpeningCollisionOverlayForBuilding,
@@ -57,11 +59,17 @@ const runtimeOverlay = buildStairRuntimeOverlayForBuilding(
 
 const stages = {
   baked: GENERATED_COLLISION_BLOCKER_AABBS,
-  opened: applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, openingOverlay),
-  runtime: applyStairRuntimeBlockerOverlay(
-    applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, openingOverlay),
-    runtimeOverlay,
-  ),
+  opened: [
+    ...applyStairOpeningCollisionOverlay(GENERATED_COLLISION_CORE_BLOCKER_AABBS, openingOverlay),
+    ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
+  ],
+  runtime: [
+    ...applyStairRuntimeBlockerOverlay(
+      applyStairOpeningCollisionOverlay(GENERATED_COLLISION_CORE_BLOCKER_AABBS, openingOverlay),
+      runtimeOverlay,
+    ),
+    ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
+  ],
 } satisfies Record<string, readonly Aabb[]>;
 
 function overlapsFootBand(list: readonly Aabb[], cx: number, cz: number, y0: number, y1: number): Aabb[] {

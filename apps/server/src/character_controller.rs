@@ -5,6 +5,7 @@
 use std::cell::Cell;
 
 use crate::generated_collision_solids;
+use crate::generated_unit_window_collision_solids;
 use crate::stair_opening_collision;
 use crate::stair_runtime_overlay;
 use crate::pose::PlayerPose;
@@ -352,6 +353,17 @@ fn fill_static_blockers(
                 continue;
             }
             if stair_runtime_overlay::suppress_static_blocker(*mn, *mx) {
+                continue;
+            }
+            out.push((*mn, *mx));
+        }
+    }
+    for shard in generated_unit_window_collision_solids::UNIT_WINDOW_COLLISION_SOLID_AABB_SHARDS {
+        for (mn, mx) in *shard {
+            if x1 < mn[0] || x0 > mx[0] || z1 < mn[2] || z0 > mx[2] {
+                continue;
+            }
+            if !vertical_overlap_body(feet_y, body_h, mn, mx) {
                 continue;
             }
             out.push((*mn, *mx));

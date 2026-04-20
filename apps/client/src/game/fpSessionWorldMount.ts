@@ -11,7 +11,8 @@ import {
   buildCellMeshes,
   buildWalkSurfaceSpatialIndex,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
-  GENERATED_COLLISION_BLOCKER_AABBS,
+  GENERATED_COLLISION_CORE_BLOCKER_AABBS,
+  GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
   instantiateBuildingFloorStack,
   parseBuildingDoc,
@@ -55,13 +56,16 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     stairWellDef,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const blockerAABBs = applyStairRuntimeBlockerOverlay(
-    applyStairOpeningCollisionOverlay(
-      GENERATED_COLLISION_BLOCKER_AABBS,
-      stairOpeningOverlay,
+  const blockerAABBs = [
+    ...applyStairRuntimeBlockerOverlay(
+      applyStairOpeningCollisionOverlay(
+        GENERATED_COLLISION_CORE_BLOCKER_AABBS,
+        stairOpeningOverlay,
+      ),
+      stairRuntimeOverlay,
     ),
-    stairRuntimeOverlay,
-  );
+    ...GENERATED_COLLISION_UNIT_WINDOW_BLOCKER_AABBS,
+  ];
   const walkSupportAABBs = applyStairRuntimeWalkSuppressMasks(
     GENERATED_WALK_SURFACE_AABBS,
     stairRuntimeOverlay,

@@ -10,6 +10,7 @@ mod dropped_item;
 mod elevator;
 mod generated_apartment_doors;
 mod generated_collision_solids;
+mod generated_unit_window_collision_solids;
 mod elevator_layout;
 mod generated_walk_surfaces;
 mod inventory;
