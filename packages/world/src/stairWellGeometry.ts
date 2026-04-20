@@ -10,6 +10,13 @@
 /** Matches `DEFAULT_BUILDING_FLOOR_SPACING_M` / building stack spacing. */
 export const STOREY_SPACING_M = 60 / 19;
 
+/**
+ * Default {@link SwitchbackStairOpts.extraBottomTreads} for **ground-storey** stair segments.
+ * Mamutica hub proportions merge the south run into east (`n1 === 0`); extras apply to that leg,
+ * so **2** yields 12 east treads vs 10 typical (11 with 1 extra was still one short).
+ */
+export const GROUND_STOREY_EXTRA_BOTTOM_TREADS = 2;
+
 export const STAIR_RUN = 0.28;
 export const STAIR_RISE = 0.165;
 const STAIR_WT = 0.11;
@@ -18,8 +25,8 @@ export type SwitchbackStairOpts = {
   climbFullShaft?: boolean;
   /**
    * Extra tread(s) on the **first leg in climb order** that has treads (bottom of the flight).
-   * Intended for **ground-storey** stair segments so the lobby run can show one more step before
-   * the racetrack continues; re-solves `rise` for the same lap vertical span.
+   * Ground storeys often use {@link GROUND_STOREY_EXTRA_BOTTOM_TREADS}. Re-solves `rise` for the
+   * same lap vertical span.
    */
   extraBottomTreads?: number;
 };

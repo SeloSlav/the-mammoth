@@ -13,6 +13,7 @@ import {
 } from "./stairElevatorPlaceholders.js";
 import {
   computeSwitchbackStairLayout,
+  GROUND_STOREY_EXTRA_BOTTOM_TREADS,
   type StairCornerLanding,
   type StairSwitchbackLayout,
   type StairTreadSpec,
@@ -334,7 +335,8 @@ function buildRuntimeSupportSurfacesForSegment(args: {
   omitTopLanding: boolean;
 }): RuntimeStairSupportSurface[] {
   const layout = computeSwitchbackStairLayout(args.sx, args.sy, args.sz, {
-    extraBottomTreads: args.scope === "ground" ? 1 : 0,
+    extraBottomTreads:
+      args.scope === "ground" ? GROUND_STOREY_EXTRA_BOTTOM_TREADS : 0,
   });
   const transformState = buildSupportTransformState(layout, args.def, args.scope);
   const boundary = lowerFlightLegBoundary(layout.legTreadCounts);

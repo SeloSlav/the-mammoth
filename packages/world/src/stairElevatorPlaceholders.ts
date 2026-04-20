@@ -3,6 +3,7 @@ import type { StairWellDef } from "@the-mammoth/schemas";
 import {
   clampStairDoorTangentAlongInnerWall,
   computeSwitchbackStairLayout,
+  GROUND_STOREY_EXTRA_BOTTOM_TREADS,
   pickCornerLandingNearDoorBand,
   pickStairShaftGroundDoorPlacement,
   shiftStairDoorTangentViewerRightFromInside,
@@ -1386,7 +1387,7 @@ export function resolveStairWellGroundDoor(args: {
   const L =
     args.layout ??
     computeSwitchbackStairLayout(sx, sy, sz, {
-      extraBottomTreads: scope === "ground" ? 1 : 0,
+      extraBottomTreads: scope === "ground" ? GROUND_STOREY_EXTRA_BOTTOM_TREADS : 0,
     });
   const wt = 0.11;
   const hy = sy * 0.5;
@@ -1622,7 +1623,8 @@ export function addStairWellPlaceholder(
   const L = computeSwitchbackStairLayout(sx, sy, sz, {
     ...layoutOpts,
     extraBottomTreads:
-      opts?.extraBottomTreads ?? (authoringScope === "ground" ? 1 : 0),
+      opts?.extraBottomTreads ??
+      (authoringScope === "ground" ? GROUND_STOREY_EXTRA_BOTTOM_TREADS : 0),
   });
   const mats = createStairWellMaterials(opts?.def);
   const resolvedGroundDoor =
