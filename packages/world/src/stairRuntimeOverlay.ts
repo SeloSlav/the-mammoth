@@ -333,7 +333,9 @@ function buildRuntimeSupportSurfacesForSegment(args: {
   omitTreads: boolean;
   omitTopLanding: boolean;
 }): RuntimeStairSupportSurface[] {
-  const layout = computeSwitchbackStairLayout(args.sx, args.sy, args.sz, {});
+  const layout = computeSwitchbackStairLayout(args.sx, args.sy, args.sz, {
+    extraBottomTreads: args.scope === "ground" ? 1 : 0,
+  });
   const transformState = buildSupportTransformState(layout, args.def, args.scope);
   const boundary = lowerFlightLegBoundary(layout.legTreadCounts);
   const out: RuntimeStairSupportSurface[] = [];

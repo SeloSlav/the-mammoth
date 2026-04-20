@@ -127,9 +127,11 @@ function stairWellWalkLocalAABBs(
   sy: number,
   sz: number,
   climbFullShaft = false,
+  extraBottomTreads = 0,
 ): WalkSurfaceAabb[] {
   const L = computeSwitchbackStairLayout(sx, sy, sz, {
     climbFullShaft,
+    extraBottomTreads,
   });
   const out: WalkSurfaceAabb[] = [];
   for (const tr of L.treads) {
@@ -307,7 +309,9 @@ export function walkSurfaceAABBsForFloorDoc(
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const pk = shaftPlanKey(px, pz);
       if (!opts?.omitStairWalkPlanKeys?.has(pk)) {
-        for (const b of stairWellWalkLocalAABBs(sx, sy, sz, false)) {
+        const story = opts?.storyLevelIndex ?? 99;
+        const extraBottom = story === 1 ? 1 : 0;
+        for (const b of stairWellWalkLocalAABBs(sx, sy, sz, false, extraBottom)) {
           out.push(translateAabb(b, px, wy, pz));
         }
       }
@@ -403,7 +407,8 @@ export function walkSurfaceAABBsForBuilding(
   for (const s of stairShaftSpecs) {
     for (let i = 0; i < s.storeyCount; i++) {
       const segY = s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
-      for (const b of stairWellWalkLocalAABBs(s.sx, s.syPlate, s.sz, false)) {
+      const extraBottom = i === 0 ? 1 : 0;
+      for (const b of stairWellWalkLocalAABBs(s.sx, s.syPlate, s.sz, false, extraBottom)) {
         out.push(translateAabb(b, ox + s.px, oy + segY, oz + s.pz));
       }
     }

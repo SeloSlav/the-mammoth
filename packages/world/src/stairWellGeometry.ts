@@ -16,6 +16,12 @@ const STAIR_WT = 0.11;
 
 export type SwitchbackStairOpts = {
   climbFullShaft?: boolean;
+  /**
+   * Extra tread(s) on the **first leg in climb order** that has treads (bottom of the flight).
+   * Intended for **ground-storey** stair segments so the lobby run can show one more step before
+   * the racetrack continues; re-solves `rise` for the same lap vertical span.
+   */
+  extraBottomTreads?: number;
 };
 
 export type StairTreadSpec = {
@@ -471,6 +477,24 @@ export function computeSwitchbackStairLayout(
     { ax: ix1 - strip, az: zN, bx: ix0 + strip, bz: zN, count: n3 },
     { ax: xW, az: wzHi, bx: xW, bz: wzLo, count: n4 },
   ];
+
+  const extraBottom = Math.min(
+    2,
+    Math.max(0, Math.floor(opts?.extraBottomTreads ?? 0)),
+  );
+  if (extraBottom > 0) {
+    if (n1 > 0) n1 += extraBottom;
+    else if (n2 > 0) n2 += extraBottom;
+    else if (n3 > 0) n3 += extraBottom;
+    else n4 += extraBottom;
+    nTotal += extraBottom;
+    rise = lapInner / Math.max(nTotal - 0.5, 1);
+    rise = Math.max(riseMin, Math.min(riseMax, rise));
+    legs[0]!.count = n1;
+    legs[1]!.count = n2;
+    legs[2]!.count = n3;
+    legs[3]!.count = n4;
+  }
 
   const advance = nTotal * rise;
   const numLaps = climbFull

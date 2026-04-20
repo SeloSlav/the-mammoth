@@ -89,7 +89,11 @@ describe("stairRuntimeOverlay", () => {
       parseStairWellDef({ id: "stairs", version: 1 }),
       DEFAULT_BUILDING_FLOOR_SPACING_M,
     );
-    const slope = overlay.supportSurfaces.find((surface) => surface.kind === "slope");
+    const slope = overlay.supportSurfaces.find(
+      (surface) =>
+        surface.kind === "slope" &&
+        Math.abs(surface.yAtAlongMax - surface.yAtAlongMin) > 0.02,
+    );
     expect(slope).toBeDefined();
     if (!slope || slope.kind !== "slope") return;
 
@@ -98,14 +102,14 @@ describe("stairRuntimeOverlay", () => {
     const t0 = slope.alongMin + (slope.alongMax - slope.alongMin) * 0.2;
     const t1 = slope.alongMin + (slope.alongMax - slope.alongMin) * 0.8;
     const low = sampleRuntimeStairSupportTopY(
-      overlay.supportSurfaces,
+      [slope],
       slope.axis === "x" ? t0 : midAcrossX,
       slope.axis === "x" ? midAcrossZ : t0,
       4.5,
       { footRadiusXZ: 0.01 },
     );
     const high = sampleRuntimeStairSupportTopY(
-      overlay.supportSurfaces,
+      [slope],
       slope.axis === "x" ? t1 : midAcrossX,
       slope.axis === "x" ? midAcrossZ : t1,
       4.5,
@@ -131,7 +135,7 @@ describe("stairRuntimeOverlay", () => {
       parseStairWellDef({
         id: "stairs",
         version: 1,
-        partTransforms: {
+        groundPartTransforms: {
           stair_flight_lower: {
             position: [0, 0.25, 0],
           },
@@ -139,15 +143,21 @@ describe("stairRuntimeOverlay", () => {
       }),
       DEFAULT_BUILDING_FLOOR_SPACING_M,
     );
-    const baseSlopeIndex = baseOverlay.supportSurfaces.findIndex((surface, index) => {
-      const movedSurface = movedOverlay.supportSurfaces[index];
-      return (
-        surface.kind === "slope" &&
-        movedSurface?.kind === "slope" &&
-        (Math.abs(movedSurface.yAtAlongMin - surface.yAtAlongMin) > 0.2 ||
-          Math.abs(movedSurface.yAtAlongMax - surface.yAtAlongMax) > 0.2)
-      );
-    });
+    const n = Math.min(
+      baseOverlay.supportSurfaces.length,
+      movedOverlay.supportSurfaces.length,
+    );
+    let baseSlopeIndex = -1;
+    for (let i = 0; i < n; i++) {
+      const surface = baseOverlay.supportSurfaces[i];
+      const movedSurface = movedOverlay.supportSurfaces[i];
+      if (surface?.kind !== "slope" || movedSurface?.kind !== "slope") continue;
+      if (Math.abs(surface.yAtAlongMax - surface.yAtAlongMin) <= 0.02) continue;
+      if (Math.abs(movedSurface.yAtAlongMin - surface.yAtAlongMin) > 0.01) {
+        baseSlopeIndex = i;
+        break;
+      }
+    }
     expect(baseSlopeIndex).toBeGreaterThanOrEqual(0);
     const baseSlope = baseOverlay.supportSurfaces[baseSlopeIndex];
     const movedSlope = movedOverlay.supportSurfaces[baseSlopeIndex];

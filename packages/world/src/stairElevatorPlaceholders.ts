@@ -1382,7 +1382,12 @@ export function resolveStairWellGroundDoor(args: {
   authoringScope?: StairWellAuthoringScope;
 }): ResolvedStairWellGroundDoor | null {
   const { sx, sy, sz, context } = args;
-  const L = args.layout ?? computeSwitchbackStairLayout(sx, sy, sz);
+  const scope = args.authoringScope ?? "typical";
+  const L =
+    args.layout ??
+    computeSwitchbackStairLayout(sx, sy, sz, {
+      extraBottomTreads: scope === "ground" ? 1 : 0,
+    });
   const wt = 0.11;
   const hy = sy * 0.5;
   const innerWallH = Math.max(sy - 2 * wt, 0.08);
@@ -1405,7 +1410,6 @@ export function resolveStairWellGroundDoor(args: {
     Math.max(0.65, maxDoorH),
   );
   const baseYDoor0 = yWallBottom;
-  const scope = args.authoringScope ?? "typical";
   const authored = stairWellOpeningDefForScope(args.def, scope);
   const widthM = THREE.MathUtils.clamp(
     authored?.widthM ?? defaultDoorHalfW * 2,
@@ -1614,9 +1618,13 @@ export function addStairWellPlaceholder(
   opts?: StairWellPlaceholderOpts,
 ): void {
   const { omitGroundStoreyCornerLandings, def: _def, ...layoutOpts } = opts ?? {};
-  const L = computeSwitchbackStairLayout(sx, sy, sz, layoutOpts);
-  const mats = createStairWellMaterials(opts?.def);
   const authoringScope = opts?.authoringScope ?? "typical";
+  const L = computeSwitchbackStairLayout(sx, sy, sz, {
+    ...layoutOpts,
+    extraBottomTreads:
+      opts?.extraBottomTreads ?? (authoringScope === "ground" ? 1 : 0),
+  });
+  const mats = createStairWellMaterials(opts?.def);
   const resolvedGroundDoor =
     opts?.groundDoor != null
       ? (() => {
