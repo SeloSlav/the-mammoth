@@ -15,8 +15,8 @@ import type { CardinalFace } from "./wallWithDoorCutout.js";
  * opening). Keep below ~½ bay depth so we only thicken the window band, not the whole room.
  */
 const WINDOW_INWARD_SEAL_DEPTH_M = 0.52;
-/** Stay slightly short of the inner face so the AABB never protrudes into the exterior void (+X eject). */
-const WINDOW_SEAL_INNER_FACE_EPS_M = 0.002;
+/** Stay just inside the shell **outer** face so seals fill the glass band without crossing the void. */
+const WINDOW_SEAL_EXTERIOR_SHELL_EPS_M = 0.002;
 /** Slight tangent padding so we do not leave hairline gaps at mullion corners. */
 const WINDOW_SEAL_TANGENT_PAD_M = 0.03;
 const EXTERIOR_FACE_TOL_M = 0.16;
@@ -175,10 +175,10 @@ function appendUnitExteriorWindowAnalyticSolids(
             const yB = Math.max(h.y0, h.y1);
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
-              // Interior only: x < inner. Deeper x = further into unit (−x direction from opening).
+              // Full wall thickness at the opening (same x span as `unit_exterior_glass_*` boxes).
               pushWorld(
                 inner - WINDOW_INWARD_SEAL_DEPTH_M,
-                inner - WINDOW_SEAL_INNER_FACE_EPS_M,
+                hx - WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
                 yA,
                 yB,
                 zA,
@@ -207,7 +207,7 @@ function appendUnitExteriorWindowAnalyticSolids(
             if (zB - zA < 0.05 || yB - yA < 0.05) continue;
             if (kind === "interiorSeal") {
               pushWorld(
-                inner + WINDOW_SEAL_INNER_FACE_EPS_M,
+                -hx + WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
                 inner + WINDOW_INWARD_SEAL_DEPTH_M,
                 yA,
                 yB,
@@ -242,7 +242,7 @@ function appendUnitExteriorWindowAnalyticSolids(
                 yA,
                 yB,
                 inner - WINDOW_INWARD_SEAL_DEPTH_M,
-                inner - WINDOW_SEAL_INNER_FACE_EPS_M,
+                hz - WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
               );
             } else {
               const yBottom = yA;
@@ -271,7 +271,7 @@ function appendUnitExteriorWindowAnalyticSolids(
                 xB,
                 yA,
                 yB,
-                inner + WINDOW_SEAL_INNER_FACE_EPS_M,
+                -hz + WINDOW_SEAL_EXTERIOR_SHELL_EPS_M,
                 inner + WINDOW_INWARD_SEAL_DEPTH_M,
               );
             } else {
@@ -293,11 +293,11 @@ function appendUnitExteriorWindowAnalyticSolids(
 }
 
 /**
- * Thin vertical slabs **fully inside** each window opening (they never cross the inner plaster
- * face into the exterior void, so depenetration pushes back into the unit, not outside).
- * Horizontal FP blockers only — no walk surfaces, no mesh edits.
+ * Vertical slabs at each exterior window hole: span from deep in the unit to just shy of the
+ * shell **outer** face (same thickness band as `unit_exterior_glass_*`), so there is no
+ * millimetre-scale air gap where mesh merge skipped the glass box.
  *
- * Fills holes where holed `shell_wall_*` has no collision and the capsule would otherwise slide out.
+ * Horizontal FP blockers only — no walk surfaces, no mesh edits.
  */
 export function buildUnitExteriorWindowSealBlockersForBuilding(
   building: BuildingDoc,

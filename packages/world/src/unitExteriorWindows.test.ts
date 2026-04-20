@@ -146,7 +146,8 @@ describe("buildFloorMeshes unit exterior windows", () => {
     expect(seals.length).toBeGreaterThan(0);
     const eastWindowSealSlabs = seals.filter((b) => {
       const dx = b.max[0] - b.min[0];
-      return dx > 0.35 && dx < 0.65;
+      // Spans inner room setback through full shell thickness (~wt + WINDOW_INWARD_SEAL_DEPTH_M).
+      return dx > 0.58 && dx < 0.68;
     });
     expect(eastWindowSealSlabs.length).toBeGreaterThan(0);
 
