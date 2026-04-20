@@ -26,6 +26,7 @@
     "react-router-dom": "^7.13.1",
     "spacetimedb": "2.0.1",
     "three": "^0.183.2",
+    "weft-sdk": "file:../../../pretext-three-experiment",
     "zod": "^4.3.6",
     "zustand": "^5.0.9"
   },
