@@ -2,7 +2,11 @@ import * as THREE from "three";
 import type { BuildingDoc, FloorDoc, StairWellDef } from "@the-mammoth/schemas";
 import type { CollisionAabb } from "./collisionScene.js";
 import { collectCollisionAabbsFromObject3D } from "./collisionScene.js";
-import { getBuildingStairShaftSpecs, STOREY_SPACING_M } from "./buildingStairShafts.js";
+import {
+  getBuildingStairShaftSpecs,
+  shaftStackSy,
+  STOREY_SPACING_M,
+} from "./buildingStairShafts.js";
 import {
   addStairWellPlaceholder,
   applyStairWellPartTransforms,
@@ -434,13 +438,14 @@ export function buildStairRuntimeOverlayForBuilding(
     for (let i = 0; i < spec.storeyCount; i++) {
       const isTopStorey = i === spec.storeyCount - 1;
       const scope: StairWellAuthoringScope = i === 0 ? "ground" : "typical";
+      const sySeg = shaftStackSy(spec.syPlate, spec.storeySpacing);
       const worldX = worldOrigin[0] + spec.px;
       const worldY =
         worldOrigin[1] + spec.bottomY + STOREY_SPACING_M * 0.5 + i * spec.storeySpacing;
       const worldZ = worldOrigin[2] + spec.pz;
       const resolvedDoor = resolveStairWellGroundDoor({
         sx: spec.sx,
-        sy: spec.syPlate,
+        sy: sySeg,
         sz: spec.sz,
         context: spec.entryDoorContexts[i],
         def: stairWellDef,
@@ -448,7 +453,7 @@ export function buildStairRuntimeOverlayForBuilding(
       });
       const supplementalDoors = resolveStairWellSupplementalDoors({
         sx: spec.sx,
-        sy: spec.syPlate,
+        sy: sySeg,
         sz: spec.sz,
         context: spec.entryDoorContexts[i],
         def: stairWellDef,
@@ -457,7 +462,7 @@ export function buildStairRuntimeOverlayForBuilding(
       });
       const segment = new THREE.Group();
       segment.position.set(worldX, worldY, worldZ);
-      addStairWellPlaceholder(segment, spec.sx, spec.syPlate, spec.sz, {
+      addStairWellPlaceholder(segment, spec.sx, sySeg, spec.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
         authoringScope: scope,
@@ -466,15 +471,16 @@ export function buildStairRuntimeOverlayForBuilding(
         includeCeiling: isTopStorey,
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
+        shaftExteriorFaces: spec.exteriorShaftFaces,
       });
       blockerReplacementAabbs.push(...collectCollisionAabbsFromObject3D(segment));
-      const mask = buildSegmentMask(worldX, worldY, worldZ, spec.sx, spec.syPlate, spec.sz);
+      const mask = buildSegmentMask(worldX, worldY, worldZ, spec.sx, sySeg, spec.sz);
       blockerSuppressMasks.push(mask);
       walkSuppressMasks.push(mask);
       supportSurfaces.push(
         ...buildRuntimeSupportSurfacesForSegment({
           sx: spec.sx,
-          sy: spec.syPlate,
+          sy: sySeg,
           sz: spec.sz,
           baseWorldX: worldX,
           baseWorldY: worldY,

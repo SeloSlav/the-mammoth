@@ -5,7 +5,7 @@ import type {
 } from "@the-mammoth/schemas";
 
 /** Shared PBR fields for cab, stair, landing frame/glass (plus optional `transmission` on landing glass). */
-type StandardAuthoringSlot = {
+export type StandardAuthoringSlot = {
   colorHex?: string;
   roughness?: number;
   metalness?: number;
@@ -145,7 +145,7 @@ function loadAuthorDataMap(mapUrl: string | undefined): THREE.Texture | null {
   return tex;
 }
 
-function applyStandardAuthoringSlot(
+export function applyStandardAuthoringSlot(
   mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial,
   slot: StandardAuthoringSlot | undefined,
 ): void {

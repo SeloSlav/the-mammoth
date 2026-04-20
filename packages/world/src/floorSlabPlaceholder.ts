@@ -13,8 +13,10 @@ import { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 export const GROUND_SLAB_PLANAR_TILE_SIZE_M = 2.75;
 
 /**
- * Replaces default box top-face UVs with planar XZ mapping in meters so albedo/normal repeat
- * consistently on long, narrow podium pieces (default 0–1 UV × equal `texture.repeat` looks awful).
+ * Replaces default box horizontal-face UVs with planar XZ mapping in meters so albedo/normal
+ * repeat consistently on long, narrow podium pieces. Both top and underside use the same world
+ * scale; otherwise the bottom face keeps BoxGeometry's 0..1 UVs and stretches badly when visible
+ * from below.
  */
 export function applyGroundSlabPlanarTopUV(
   geometry: THREE.BufferGeometry,
@@ -27,12 +29,46 @@ export function applyGroundSlabPlanarTopUV(
   const uv = geometry.attributes.uv;
   if (!pos || !uv) return;
   const yTop = thickness * 0.5;
+  const yBottom = -thickness * 0.5;
   const inv = 1 / Math.max(1e-6, metersPerTile);
   for (let i = 0; i < pos.count; i++) {
-    if (pos.getY(i) < yTop - 1e-5) continue;
+    const y = pos.getY(i);
+    if (y < yTop - 1e-5 && y > yBottom + 1e-5) continue;
     const x = pos.getX(i);
     const z = pos.getZ(i);
     uv.setXY(i, (x + width * 0.5) * inv, (z + depth * 0.5) * inv);
+  }
+  uv.needsUpdate = true;
+}
+
+/**
+ * Horizontal-face UVs for holed corridor/core shell floors: each piece uses **room** XZ
+ * coordinates so albedo/normal tile continuously across elevator/stair cutouts on both the walk
+ * surface and the visible underside.
+ */
+export function applyShellFloorPlanarTopUV(
+  geometry: THREE.BufferGeometry,
+  thickness: number,
+  meshCenterX: number,
+  meshCenterZ: number,
+  roomHalfX: number,
+  roomHalfZ: number,
+  metersPerTile = GROUND_SLAB_PLANAR_TILE_SIZE_M,
+): void {
+  const pos = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  if (!pos || !uv) return;
+  const yTop = thickness * 0.5;
+  const yBottom = -thickness * 0.5;
+  const inv = 1 / Math.max(1e-6, metersPerTile);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y < yTop - 1e-5 && y > yBottom + 1e-5) continue;
+    const lx = pos.getX(i);
+    const lz = pos.getZ(i);
+    const gx = meshCenterX + lx;
+    const gz = meshCenterZ + lz;
+    uv.setXY(i, (gx + roomHalfX) * inv, (gz + roomHalfZ) * inv);
   }
   uv.needsUpdate = true;
 }

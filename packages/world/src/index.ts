@@ -65,10 +65,13 @@ export {
 export {
   addBuildingStairShaftColumnsToRoot,
   getBuildingStairShaftSpecs,
+  mergeShaftExteriorHints,
+  readShaftFacadeHintFaces,
   shaftPlanKey,
   TYPICAL_FLOOR_DOC_ID,
   type BuildingStairShaftSpec,
 } from "./buildingStairShafts.js";
+export { pickCornerLandingOppositePrimaryDoor } from "./stairWellLandingProps.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,
@@ -202,6 +205,7 @@ export {
   LANDING_DOOR_OPENING_PROXY_ID,
   populateExteriorLandingDoorSwing,
   resolveGlassOpening,
+  resolveLandingDims,
 } from "./exteriorLandingDoorSwing.js";
 export {
   addSwingDoorOpeningEditProxy,

@@ -27,6 +27,10 @@ import cellDoc from "../../../../content/cells/cell_0_0.json";
 import stairWellAuthoringJson from "../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 
+/** Scratch for {@link mergeGroupDescendantsByMaterial} preserve re-parenting (avoid alloc per mesh). */
+const _mergePreserveParentInv = new THREE.Matrix4();
+const _mergePreserveLocal = new THREE.Matrix4();
+
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
@@ -167,13 +171,22 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     .copy(group.matrixWorld)
     .invert();
 
-  /** Meshes that must stay separate (e.g. canvas-textured stair signs). */
+  /** Meshes that must stay separate (e.g. canvas-textured stair signs, elevator hoistway shells). */
   const preserveMeshes: THREE.Mesh[] = [];
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     if (obj.userData.mammothSkipFloorGeometryMerge === true) preserveMeshes.push(obj);
   });
+
+  /**
+   * Orphaning with `removeFromParent()` before saving world space breaks re-parenting: with no
+   * parent, `matrixWorld` collapses to local-only, so `attach()` / `add()` misalign nested room
+   * geometry (e.g. hoistway walls vs cab). Snapshot world matrices while still parented.
+   */
+  const preserveWorld = new Map<THREE.Mesh, THREE.Matrix4>();
   for (const m of preserveMeshes) {
+    m.updateMatrixWorld(true);
+    preserveWorld.set(m, m.matrixWorld.clone());
     m.removeFromParent();
   }
 
@@ -196,7 +209,14 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     geosByMat.get(key)!.geos.push(geo);
   });
 
-  if (geosByMat.size === 0) return;
+  if (geosByMat.size === 0) {
+    if (preserveMeshes.length === 0) return;
+    while (group.children.length > 0) {
+      group.remove(group.children[0]!);
+    }
+    reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
+    return;
+  }
 
   // Swap out all children for the smaller set of merged meshes.
   while (group.children.length > 0) {
@@ -210,11 +230,31 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     merged.computeBoundingSphere();
     merged.computeBoundingBox();
     const mesh = new THREE.Mesh(merged, mat);
-    mesh.frustumCulled = true;
+    // Merged shells include thin perimeter pieces (elevator hoistway walls, holed slabs). A single
+    // bounding sphere for disjoint fragments can miss the frustum while the camera sits in the
+    // hollow interior — walls vanish but generated collision AABBs still match. Parent plate
+    // visibility already gates cost; draw-call win is from merging, not per-mesh frustum tests.
+    mesh.frustumCulled = false;
     group.add(mesh);
   }
 
+  reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
+}
+
+function reattachPreservedMeshesWithSavedWorld(
+  group: THREE.Group,
+  preserveMeshes: THREE.Mesh[],
+  preserveWorld: Map<THREE.Mesh, THREE.Matrix4>,
+): void {
+  group.updateMatrixWorld(true);
   for (const m of preserveMeshes) {
+    const world = preserveWorld.get(m);
+    if (!world) continue;
     group.add(m);
+    _mergePreserveParentInv.copy(group.matrixWorld).invert();
+    _mergePreserveLocal.multiplyMatrices(_mergePreserveParentInv, world);
+    _mergePreserveLocal.decompose(m.position, m.quaternion, m.scale);
+    m.updateMatrix();
+    m.frustumCulled = false;
   }
 }

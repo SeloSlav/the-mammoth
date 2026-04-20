@@ -6,13 +6,57 @@ import {
   resolveStairWellSupplementalDoors,
   type StairWellGroundDoorContext,
 } from "./stairElevatorPlaceholders.js";
+import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import { shaftDoorTowardPointFromFloorCorridors } from "./shaftCorridorFlush.js";
+import type { CardinalFace } from "./wallWithDoorCutout.js";
+
+/**
+ * Reads optional authored facade direction on stair/elevator `PlacedObject.metadata`
+ * (e.g. Mamutica `"side": "east"`). Geometry-only detection misses shafts inset from the plate
+ * AABB when units extend past the core (east stair wall is ~0.6 m inside `max.x`).
+ */
+export function readShaftFacadeHintFaces(metadata: unknown): CardinalFace[] {
+  if (!metadata || typeof metadata !== "object") return [];
+  const sideRaw = (metadata as { side?: unknown }).side;
+  if (typeof sideRaw !== "string") return [];
+  const side = sideRaw.trim().toLowerCase();
+  if (!side) return [];
+  const map: Record<string, CardinalFace> = {
+    east: "e",
+    west: "w",
+    north: "n",
+    south: "s",
+    e: "e",
+    w: "w",
+    n: "n",
+    s: "s",
+  };
+  const face = map[side];
+  return face ? [face] : [];
+}
+
+/** Union geometry-exposed faces with optional authored hints (deduped). */
+export function mergeShaftExteriorHints(
+  geometryFaces: readonly CardinalFace[],
+  hint: readonly CardinalFace[] | undefined,
+): CardinalFace[] {
+  if (!hint?.length) return [...geometryFaces];
+  return [...new Set<CardinalFace>([...hint, ...geometryFaces])];
+}
 
 /** Typical floor doc id (content + generator). */
 export const TYPICAL_FLOOR_DOC_ID = "floor_mamutica_typical";
 
 /** Match `DEFAULT_BUILDING_FLOOR_SPACING_M` / `gen-mamutica-floor-doc.mjs`. */
 export const STOREY_SPACING_M = 60 / 19;
+
+/**
+ * Hoistway / stair-shell height from authored `scale.y` can sit slightly below `storeySpacing`,
+ * leaving visible seams between stacked segments — stretch the shell to the storey pitch.
+ */
+export function shaftStackSy(syPlate: number, storeySpacing: number): number {
+  return Math.max(syPlate, storeySpacing);
+}
 
 const CORE_PY = STOREY_SPACING_M * 0.5 + 0.08;
 
@@ -29,6 +73,8 @@ export type BuildingStairShaftSpec = {
   storeyCount: number;
   storeySpacing: number;
   entryDoorContexts: readonly (StairWellGroundDoorContext | undefined)[];
+  /** Shaft faces flush with the merged floor-plate footprint (plate-space); facade PBR on these only. */
+  exteriorShaftFaces: readonly CardinalFace[];
 };
 
 export function shaftPlanKey(px: number, pz: number): string {
@@ -61,6 +107,7 @@ export function getBuildingStairShaftSpecs(
   type Acc = { id: string; px: number; pz: number; sx: number; sz: number; syPlate: number };
   const map = new Map<string, Acc>();
   const entryDoorContextsByKey = new Map<string, (StairWellGroundDoorContext | undefined)[]>();
+  const facadeHintByKey = new Map<string, CardinalFace[]>();
 
   for (const [refIndex, ref] of sortedRefs.entries()) {
     const doc = getFloorDoc(ref.floorDocId);
@@ -81,6 +128,10 @@ export function getBuildingStairShaftSpecs(
       const syPlate = obj.scale?.[1] ?? 1;
       const sz = obj.scale?.[2] ?? 1;
       const key = shaftPlanKey(px, pz);
+      const hint = readShaftFacadeHintFaces(obj.metadata);
+      if (hint.length > 0 && !facadeHintByKey.has(key)) {
+        facadeHintByKey.set(key, hint);
+      }
       const ex = map.get(key);
       if (!ex) {
         map.set(key, { id: obj.id, px, pz, sx, sz, syPlate });
@@ -100,6 +151,21 @@ export function getBuildingStairShaftSpecs(
 
   if (map.size === 0) return [];
 
+  const exposedFacesByKey = new Map<string, CardinalFace[]>();
+  for (const ref of sortedRefs) {
+    const doc = getFloorDoc(ref.floorDocId);
+    for (const obj of doc.objects) {
+      if (!isStairPrefab(obj.prefabId)) continue;
+      const key = shaftPlanKey(obj.position[0], obj.position[2]);
+      const faces = exteriorFacesForPlacedObjectInFloor(doc, obj);
+      if (faces.length === 0) continue;
+      exposedFacesByKey.set(
+        key,
+        [...new Set<CardinalFace>([...(exposedFacesByKey.get(key) ?? []), ...faces])],
+      );
+    }
+  }
+
   const globalBottom =
     (levelMin - 1) * spacing + CORE_PY - STOREY_SPACING_M * 0.5;
   const storeyCount = levelMax - levelMin + 1;
@@ -117,6 +183,10 @@ export function getBuildingStairShaftSpecs(
       storeyCount,
       storeySpacing: spacing,
       entryDoorContexts: entryDoorContextsByKey.get(planKey) ?? [],
+      exteriorShaftFaces: mergeShaftExteriorHints(
+        exposedFacesByKey.get(planKey) ?? [],
+        facadeHintByKey.get(planKey),
+      ),
     });
   }
   return out;
@@ -142,9 +212,10 @@ export function addBuildingStairShaftColumnsToRoot(
       segment.position.y =
         s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
       const authoringScope = i === 0 ? "ground" : "typical";
+      const sySeg = shaftStackSy(s.syPlate, s.storeySpacing);
       const resolvedDoor = resolveStairWellGroundDoor({
         sx: s.sx,
-        sy: s.syPlate,
+        sy: sySeg,
         sz: s.sz,
         context: s.entryDoorContexts[i],
         def: stairWellDef,
@@ -153,14 +224,14 @@ export function addBuildingStairShaftColumnsToRoot(
       const resolvedGroundDoor = resolvedDoor?.groundDoor;
       const supplementalDoors = resolveStairWellSupplementalDoors({
         sx: s.sx,
-        sy: s.syPlate,
+        sy: sySeg,
         sz: s.sz,
         context: s.entryDoorContexts[i],
         def: stairWellDef,
         authoringScope,
         primaryDoor: resolvedDoor,
       });
-      addStairWellPlaceholder(segment, s.sx, s.syPlate, s.sz, {
+      addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
         authoringScope,
@@ -169,6 +240,7 @@ export function addBuildingStairShaftColumnsToRoot(
         includeCeiling: isTopStorey,
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
+        shaftExteriorFaces: s.exteriorShaftFaces,
       });
       col.add(segment);
     }

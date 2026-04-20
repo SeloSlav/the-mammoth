@@ -3,6 +3,7 @@ import { type CollisionAabb } from "./collisionScene.js";
 import {
   getBuildingStairShaftSpecs,
   shaftPlanKey,
+  shaftStackSy,
   STOREY_SPACING_M,
 } from "./buildingStairShafts.js";
 import { resolveFloorDocForLevel, type GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
@@ -409,7 +410,8 @@ export function walkSurfaceAABBsForBuilding(
     for (let i = 0; i < s.storeyCount; i++) {
       const segY = s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
       const extraBottom = i === 0 ? GROUND_STOREY_EXTRA_BOTTOM_TREADS : 0;
-      for (const b of stairWellWalkLocalAABBs(s.sx, s.syPlate, s.sz, false, extraBottom)) {
+      const sySeg = shaftStackSy(s.syPlate, s.storeySpacing);
+      for (const b of stairWellWalkLocalAABBs(s.sx, sySeg, s.sz, false, extraBottom)) {
         out.push(translateAabb(b, ox + s.px, oy + segY, oz + s.pz));
       }
     }

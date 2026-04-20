@@ -3,7 +3,10 @@ import type { BuildingDoc, FloorDoc, PlacedObject, StairWellDef } from "@the-mam
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
   getBuildingStairShaftSpecs,
+  mergeShaftExteriorHints,
+  readShaftFacadeHintFaces,
   shaftPlanKey,
+  shaftStackSy,
   STOREY_SPACING_M,
 } from "./buildingStairShafts.js";
 import {
@@ -14,6 +17,7 @@ import {
   resolveStairWellSupplementalDoors,
   stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
+import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import {
   addDoorFrameTrimConstantX,
   addDoorFrameTrimConstantZ,
@@ -36,6 +40,7 @@ import {
   GROUND_SLAB_THICKNESS_M,
   addConcreteSlabWithOptionalShaftHoles,
   addGroundFootprintGrassOccluder,
+  applyShellFloorPlanarTopUV,
 } from "./floorSlabPlaceholder.js";
 import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMaterials.js";
 import {
@@ -93,16 +98,24 @@ import {
 } from "./unitEntryAdjacency.js";
 import { manualCorridorShellHoleExtrasForFloor } from "./manualApartmentDoorExtras.js";
 
-function matsFor(kind: PlaceholderKind): {
+function matsFor(
+  kind: PlaceholderKind,
+  storyLevelIndex?: number,
+): {
   floor: THREE.MeshStandardMaterial;
   ceil: THREE.MeshStandardMaterial;
   wall: THREE.MeshStandardMaterial;
   exteriorWall: THREE.MeshStandardMaterial;
 } {
+  const upperCorridorFloor =
+    kind === "corridor" &&
+    storyLevelIndex != null &&
+    storyLevelIndex > 1 &&
+    storyLevelIndex !== 99;
   switch (kind) {
     case "corridor":
       return {
-        floor: mat.corridorFloor,
+        floor: upperCorridorFloor ? mat.corridorFloorUpperStorey : mat.corridorFloor,
         ceil: mat.corridorCeil,
         wall: mat.corridorWall,
         exteriorWall: mat.corridorExteriorWall,
@@ -876,6 +889,8 @@ function addShellFloorCeilingPieces(
   hy: number,
   floorM: THREE.MeshStandardMaterial,
   ceilM: THREE.MeshStandardMaterial,
+  roomHalfX: number,
+  roomHalfZ: number,
 ): void {
   let fi = 0;
   let ci = 0;
@@ -884,7 +899,9 @@ function addShellFloorCeilingPieces(
     const d = r.z1 - r.z0;
     const cx = (r.x0 + r.x1) * 0.5;
     const cz = (r.z0 + r.z1) * 0.5;
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(w, wt, d), floorM);
+    const floorGeom = new THREE.BoxGeometry(w, wt, d);
+    applyShellFloorPlanarTopUV(floorGeom, wt, cx, cz, roomHalfX, roomHalfZ);
+    const floor = new THREE.Mesh(floorGeom, floorM);
     floor.name = rects.length > 1 ? `shell_floor_${fi}` : "shell_floor";
     fi += 1;
     floor.position.set(cx, -hy + wt * 0.5, cz);
@@ -1018,7 +1035,10 @@ function addHollowRoomShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
-  const { floor: floorM, ceil: ceilM, wall: wallM, exteriorWall: exteriorWallM } = matsFor(kind);
+  const { floor: floorM, ceil: ceilM, wall: wallM, exteriorWall: exteriorWallM } = matsFor(
+    kind,
+    opts.storyLevelIndex,
+  );
   const exteriorFaces = opts.exteriorFaces ?? [];
   const vh = Math.max(sy - 2 * wt, 0.05);
   const vlenX = Math.max(sx - 2 * wt, 0.05);
@@ -1035,7 +1055,7 @@ function addHollowRoomShell(
       opts.shaftElevatorsMerged,
     );
   }
-  addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM);
+  addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM, hx, hz);
 
   const yLo = -vh * 0.5;
   const yHi = vh * 0.5;
@@ -1290,60 +1310,72 @@ function addHollowRoomShell(
   });
 
   const frameM = mat.lobbyDoorFrame;
+  const extE = exteriorFaces.includes("e");
+  const extW = exteriorFaces.includes("w");
+  const extN = exteriorFaces.includes("n");
+  const extS = exteriorFaces.includes("s");
   let fi = 0;
   for (const zc of czList) {
     const z0 = zc - halfDoor;
     const z1 = zc + halfDoor;
-    addDoorFrameTrimConstantX(
-      group,
-      frameM,
-      hx - wt,
-      -1,
-      z0,
-      z1,
-      yDoor0,
-      yDoor1,
-      `shell_lobby_frame_e_${fi}`,
-    );
-    addDoorFrameTrimConstantX(
-      group,
-      frameM,
-      -hx + wt,
-      1,
-      z0,
-      z1,
-      yDoor0,
-      yDoor1,
-      `shell_lobby_frame_w_${fi}`,
-    );
+    if (!extE) {
+      addDoorFrameTrimConstantX(
+        group,
+        frameM,
+        hx - wt,
+        -1,
+        z0,
+        z1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_e_${fi}`,
+      );
+    }
+    if (!extW) {
+      addDoorFrameTrimConstantX(
+        group,
+        frameM,
+        -hx + wt,
+        1,
+        z0,
+        z1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_w_${fi}`,
+      );
+    }
     fi += 1;
   }
   let fj = 0;
   for (const xc of cxList) {
     const x0 = xc - halfDoor;
     const x1 = xc + halfDoor;
-    addDoorFrameTrimConstantZ(
-      group,
-      frameM,
-      hz - wt,
-      -1,
-      x0,
-      x1,
-      yDoor0,
-      yDoor1,
-      `shell_lobby_frame_n_${fj}`,
-    );
-    addDoorFrameTrimConstantZ(
-      group,
-      frameM,
-      -hz + wt,
-      1,
-      x0,
-      x1,
-      yDoor0,
-      yDoor1,
-      `shell_lobby_frame_s_${fj}`,
-    );
+    if (!extN) {
+      addDoorFrameTrimConstantZ(
+        group,
+        frameM,
+        hz - wt,
+        -1,
+        x0,
+        x1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_n_${fj}`,
+      );
+    }
+    if (!extS) {
+      addDoorFrameTrimConstantZ(
+        group,
+        frameM,
+        -hz + wt,
+        1,
+        x0,
+        x1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_s_${fj}`,
+      );
+    }
     fj += 1;
   }
 
@@ -1397,12 +1429,6 @@ export function buildFloorMeshes(
   const root = new THREE.Group();
   root.name = `floor:${floor.id}`;
 
-  const shaftHolesPlate =
-    opts?.shaftHolesPlateMerged ?? collectShaftSlabHoles(floor);
-  const shaftElevatorsMerged =
-    opts?.shaftElevatorsMerged ??
-    mergeElevatorShaftSlabHolesFromFloorDocs([floor]);
-
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
   const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
   let hasBounds = false;
@@ -1410,6 +1436,12 @@ export function buildFloorMeshes(
     expandBoxForPlacedObject(min, max, obj);
     hasBounds = true;
   }
+
+  const shaftHolesPlate =
+    opts?.shaftHolesPlateMerged ?? collectShaftSlabHoles(floor);
+  const shaftElevatorsMerged =
+    opts?.shaftElevatorsMerged ??
+    mergeElevatorShaftSlabHolesFromFloorDocs([floor]);
 
   let plateCx = 0;
   let plateCz = 0;
@@ -1426,8 +1458,6 @@ export function buildFloorMeshes(
 
   const story = opts?.storyLevelIndex ?? 99;
   const corridorFootprint = firstCorridorOrLobbyFromFloor(floor);
-  const exteriorFaceTol = 0.16;
-
   const elevatorDoorPunchesPlate: PlateStairCorridorDoorPunch[] = [];
   for (const o of floor.objects) {
     if (!o.prefabId.toLowerCase().includes("elevator")) continue;
@@ -1531,19 +1561,7 @@ export function buildFloorMeshes(
     const sx = obj.scale?.[0] ?? 1;
     const sy = obj.scale?.[1] ?? 1;
     const sz = obj.scale?.[2] ?? 1;
-    const roomExteriorFaces: CardinalFace[] = [];
-    if (hasBounds && !obj.rotation) {
-      const hx = sx * 0.5;
-      const hz = sz * 0.5;
-      const x0 = obj.position[0] - hx;
-      const x1 = obj.position[0] + hx;
-      const z0 = obj.position[2] - hz;
-      const z1 = obj.position[2] + hz;
-      if (x1 >= max.x - exteriorFaceTol) roomExteriorFaces.push("e");
-      if (x0 <= min.x + exteriorFaceTol) roomExteriorFaces.push("w");
-      if (z1 >= max.z - exteriorFaceTol) roomExteriorFaces.push("n");
-      if (z0 <= min.z + exteriorFaceTol) roomExteriorFaces.push("s");
-    }
+    const roomExteriorFaces = exteriorFacesForPlacedObjectInFloor(floor, obj);
 
     const room = new THREE.Group();
     room.name = obj.id;
@@ -1588,10 +1606,16 @@ export function buildFloorMeshes(
         );
         if (g > 1e-4) elevFlush = Math.min(0.35, g);
       }
-      addElevatorShaftPlaceholder(room, sx, sy, sz, {
-        groundDoor: { face: doorFace, bandHeightM: sy },
+      const elevSy = shaftStackSy(sy, STOREY_SPACING_M);
+      const shaftExteriorFaces = mergeShaftExteriorHints(
+        roomExteriorFaces,
+        readShaftFacadeHintFaces(obj.metadata),
+      );
+      addElevatorShaftPlaceholder(room, sx, elevSy, sz, {
+        groundDoor: { face: doorFace, bandHeightM: elevSy },
         includePitFloor: elevatorPitSlab,
         corridorFlushGapM: elevFlush,
+        shaftExteriorFaces,
       });
     } else if (pid.includes("stair_well") || pid.includes("stairwell")) {
       const sk = shaftPlanKey(obj.position[0], obj.position[2]);
@@ -1624,12 +1648,17 @@ export function buildFloorMeshes(
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           primaryDoor: resolvedDoor,
         });
+        const shaftExteriorFaces = mergeShaftExteriorHints(
+          roomExteriorFaces,
+          readShaftFacadeHintFaces(obj.metadata),
+        );
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           groundDoor: resolvedGroundDoor,
           supplementalDoors,
+          shaftExteriorFaces,
         });
       }
     } else {
@@ -1961,9 +1990,10 @@ export function buildStairOpeningCollisionOverlayForBuilding(
     for (let i = 0; i < spec.storeyCount; i++) {
       const isTopStorey = i === spec.storeyCount - 1;
       const authoringScope = i === 0 ? "ground" : "typical";
+      const sySeg = shaftStackSy(spec.syPlate, spec.storeySpacing);
       const resolvedDoor = resolveStairWellGroundDoor({
         sx: spec.sx,
-        sy: spec.syPlate,
+        sy: sySeg,
         sz: spec.sz,
         context: spec.entryDoorContexts[i],
         def: stairWellDef,
@@ -1971,7 +2001,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
       });
       const supplementalDoors = resolveStairWellSupplementalDoors({
         sx: spec.sx,
-        sy: spec.syPlate,
+        sy: sySeg,
         sz: spec.sz,
         context: spec.entryDoorContexts[i],
         def: stairWellDef,
@@ -1989,7 +2019,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         worldOrigin[1] + spec.bottomY + STOREY_SPACING_M * 0.5 + i * spec.storeySpacing,
         worldOrigin[2] + spec.pz,
       );
-      addStairWellPlaceholder(segment, spec.sx, spec.syPlate, spec.sz, {
+      addStairWellPlaceholder(segment, spec.sx, sySeg, spec.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
         authoringScope,
@@ -1998,6 +2028,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         includeCeiling: isTopStorey,
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
+        shaftExteriorFaces: spec.exteriorShaftFaces,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(segment, wallPrefixesForFaces("shaft_wall", affectedFaces)),
@@ -2009,7 +2040,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
             segment.position.y,
             segment.position.z,
             spec.sx,
-            spec.syPlate,
+            sySeg,
             spec.sz,
             face,
           ),

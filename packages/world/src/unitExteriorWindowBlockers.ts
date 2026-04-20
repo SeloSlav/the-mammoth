@@ -2,6 +2,7 @@ import type { BuildingDoc, FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import type { CollisionAabb } from "./collisionScene.js";
 import { resolveFloorDocForLevel, type GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
+import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import {
   DEFAULT_EXTERIOR_FACADE_SALT,
   planUnitExteriorWindowsForFace,
@@ -11,7 +12,6 @@ import type { CardinalFace } from "./wallWithDoorCutout.js";
 
 /** Sill tangent padding — narrow sills still get foot overlap (see exterior sill branch). */
 const WINDOW_SEAL_TANGENT_PAD_M = 0.03;
-const EXTERIOR_FACE_TOL_M = 0.16;
 /**
  * **One** collision box per window opening: still thicker than glass alone, but kept tight so you
  * can stand near the window; bump outward/inward if tunneling reappears.
@@ -40,22 +40,6 @@ type UnitWindowAnalyticKind = "interiorSeal" | "exteriorSill";
 function isUnitPrefab(prefabId: string): boolean {
   const p = prefabId.toLowerCase();
   return p.includes("apartment") || p.includes("unit");
-}
-
-function expandPlateBounds(min: [number, number, number], max: [number, number, number], obj: PlacedObject): void {
-  const [px, py, pz] = obj.position;
-  const sx = obj.scale?.[0] ?? 1;
-  const sy = obj.scale?.[1] ?? 1;
-  const sz = obj.scale?.[2] ?? 1;
-  const hx = sx * 0.5;
-  const hy = sy * 0.5;
-  const hz = sz * 0.5;
-  min[0] = Math.min(min[0], px - hx);
-  min[1] = Math.min(min[1], py - hy);
-  min[2] = Math.min(min[2], pz - hz);
-  max[0] = Math.max(max[0], px + hx);
-  max[1] = Math.max(max[1], py + hy);
-  max[2] = Math.max(max[2], pz + hz);
 }
 
 function appendUnitExteriorWindowAnalyticSolids(
@@ -94,15 +78,6 @@ function appendUnitExteriorWindowAnalyticSolids(
     const doc = withoutElevatorsInStairwells(resolveDocForRef(ref));
     const plateY = (ref.levelIndex - 1) * floorSpacingM;
 
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    let has = false;
-    for (const obj of doc.objects) {
-      expandPlateBounds(min, max, obj);
-      has = true;
-    }
-    if (!has) continue;
-
     for (const obj of doc.objects) {
       if (!isUnitPrefab(obj.prefabId)) continue;
       if (obj.rotation) continue;
@@ -116,16 +91,7 @@ function appendUnitExteriorWindowAnalyticSolids(
       const py = obj.position[1];
       const pz = obj.position[2];
 
-      const x0 = px - hx;
-      const x1 = px + hx;
-      const z0 = pz - hz;
-      const z1 = pz + hz;
-
-      const faces: CardinalFace[] = [];
-      if (x1 >= max[0] - EXTERIOR_FACE_TOL_M) faces.push("e");
-      if (x0 <= min[0] + EXTERIOR_FACE_TOL_M) faces.push("w");
-      if (z1 >= max[2] - EXTERIOR_FACE_TOL_M) faces.push("n");
-      if (z0 <= min[2] + EXTERIOR_FACE_TOL_M) faces.push("s");
+      const faces: CardinalFace[] = exteriorFacesForPlacedObjectInFloor(doc, obj);
       if (faces.length === 0) continue;
 
       const wt = UNIT_SHELL_WALL_THICKNESS_M;

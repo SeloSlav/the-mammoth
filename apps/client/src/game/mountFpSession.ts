@@ -48,7 +48,10 @@ import {
   getHotbarSlotInventoryItem,
   hotbarDefIdSupportsMeleeAttack,
 } from "./fpHotbarResolve";
-import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
+import {
+  attachFpSessionEnvironment,
+  FP_SESSION_SKY_CAMERA_FAR,
+} from "./fpSessionEnvironment";
 import {
   onFpSessionPostRenderFrame,
   resetFpSessionFpsDisplay,
@@ -185,10 +188,12 @@ export async function mountFpSession(
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
-  const disposeFpEnvironment = attachFpSessionEnvironment(scene, renderer);
+  const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
+  /** Skydome is a large inner sphere; default rig `far` (900) clips it to black. */
+  camera.far = FP_SESSION_SKY_CAMERA_FAR;
   scene.add(playerRig);
   const fpCollisionDebug = createFpCollisionDebugOverlay();
   scene.add(fpCollisionDebug.group);
@@ -393,6 +398,8 @@ export async function mountFpSession(
       nowMs,
       _floorVisCamWorld.y,
       _floorVisCamDir.y,
+      _floorVisCamWorld.x,
+      _floorVisCamWorld.z,
     );
     if (
       fpBuildingExteriorViewShouldRevealFullStack({
@@ -2370,6 +2377,12 @@ export async function mountFpSession(
 
     // --- Render section timing ---
     syncBuildingFloorPlateVisibility(nowMs);
+    fpEnvironment.onFrame({
+      camera,
+      nowSec: nowMs * 0.001,
+      viewWidthPx: canvas.clientWidth,
+      viewHeightPx: canvas.clientHeight,
+    });
     renderer.render(scene, camera);
     const _t_renderEnd = performance.now();
     const physicsMs = _t_physicsEnd - nowMs;
@@ -2490,7 +2503,7 @@ export async function mountFpSession(
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
-    disposeFpEnvironment();
+    fpEnvironment.dispose();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();

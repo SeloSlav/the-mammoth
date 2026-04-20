@@ -1,15 +1,17 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
 import type { ElevatorShaftLayout, FloorShortLabelMap } from "@the-mammoth/world";
 import {
   applyLandingFrameSlot,
   applyLandingGlassSlot,
-  applyLandingKitPartTransforms,
+  buildApartmentSwingLeafGeometries,
   buildElevatorCabCarVisual,
+  buildSolidSwingLeafMergedGeometry,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
+  isSolidLeafKit,
   MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
+  resolveLandingDims,
   shortFloorLabelForLevel,
   type MergedCabFloorPickLayout,
 } from "@the-mammoth/world";
@@ -372,9 +374,6 @@ export class FpElevatorShaftVisual {
     const swingProbe = pivotProbe.swing;
     this.landingDoorSwingSign = pivotProbe.swingSign;
     wrapProbe.add(structureProbe);
-    if (kit) {
-      applyLandingKitPartTransforms(structureProbe, kit);
-    }
     for (let level = 1; level <= pick.maxLevel; level++) {
       const feetY = elevatorSupportFeetWorldY({
         buildingWorldOriginY: pick.buildingWorldOriginY,
@@ -390,32 +389,26 @@ export class FpElevatorShaftVisual {
     }
     wrapProbe.remove(structureProbe);
 
-    const frameGeomCopies: THREE.BufferGeometry[] = [];
-    let glassGeomSingle: THREE.BufferGeometry | null = null;
-    const meshLocal = new THREE.Matrix4();
-    const swingChildren = [...swingProbe.children];
-    for (const ch of swingChildren) {
-      if (!(ch instanceof THREE.Mesh)) continue;
-      const g = ch.geometry.clone();
-      meshLocal.compose(ch.position, ch.quaternion, ch.scale);
-      g.applyMatrix4(meshLocal);
-      const mat = ch.material;
-      if (mat === this.extGlassMat) {
-        if (glassGeomSingle) glassGeomSingle.dispose();
-        glassGeomSingle = g;
-      } else {
-        frameGeomCopies.push(g);
-      }
-    }
-    for (const ch of swingChildren) {
+    // Discard probe leaf meshes (materials are shared with InstancedMesh — only drop geometry).
+    while (swingProbe.children.length > 0) {
+      const ch = swingProbe.children[0]!;
       swingProbe.remove(ch);
-      if (ch instanceof THREE.Mesh) ch.geometry.dispose();
+      ch.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry?.dispose();
+      });
     }
 
-    const frameMerged = mergeGeometries(frameGeomCopies, false);
-    for (const g of frameGeomCopies) g.dispose();
-    if (!frameMerged) {
-      throw new Error("FpElevatorShaftVisual: mergeGeometries returned null for landing door frame");
+    // Procedural merged frame + glass: one clean rectangular ring aligned to `glassOpening`, never
+    // baked from per-part `partTransforms` (those are editor-only tweaks to preview meshes).
+    const dims = resolveLandingDims(kit);
+    let frameMerged: THREE.BufferGeometry;
+    let glassGeomSingle: THREE.BufferGeometry | null = null;
+    if (!isSolidLeafKit(kit)) {
+      const built = buildApartmentSwingLeafGeometries(dims, kit);
+      frameMerged = built.frame;
+      glassGeomSingle = built.glass ?? null;
+    } else {
+      frameMerged = buildSolidSwingLeafMergedGeometry(dims);
     }
     frameMerged.computeBoundingSphere();
     frameMerged.computeBoundingBox();

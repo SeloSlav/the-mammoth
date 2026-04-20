@@ -7,13 +7,6 @@ import * as THREE from "three";
 export const WALL_SEGMENT_UV_METERS_PER_TILE = 2.75;
 
 /**
- * Meters per UV repeat for **horizontal** stairwell slabs using `patina-landing` (shaft pit floor,
- * ground-storey corner decks). Tighter than {@link WALL_SEGMENT_UV_METERS_PER_TILE} so tiles read
- * at foot scale instead of smearing across a wide box top.
- */
-export const STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE = 0.86;
-
-/**
  * Replaces default 0–1 box face UVs with world-space planar mapping (meters / tile) so shared
  * `concreteMaterial` textures repeat at a consistent scale on long walls and across adjacent
  * fragments. Axis-aligned mesh only; call after `mesh.position` is set.

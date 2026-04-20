@@ -218,5 +218,24 @@
     "widthM": 1.86,
     "heightM": 2.2,
     "centerYM": -0.3189473684210524
-  }
+  },
+  "landingProps": [
+    {
+      "id": "stairwell_heater",
+      "modelUrl": "/static/models/objects/stairwell-heater.glb",
+      "applyToScopes": ["typical"],
+      "skipGroundStorey": true,
+      "landingSelector": {
+        "kind": "opposite_primary_door"
+      },
+      "anchor": {
+        "corner": "nw",
+        "insetXM": 0.7,
+        "insetZM": 0.75,
+        "liftM": 0.02,
+        "yawRad": 0,
+        "uniformScale": 1
+      }
+    }
+  ]
 }

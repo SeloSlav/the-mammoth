@@ -20,43 +20,5 @@
     "widthM": 0.38,
     "heightM": 1.06,
     "centerYM": 0.1
-  },
-  "partTransforms": {
-    "landing_frame_bottom_rail": {
-      "position": [
-        0.028,
-        -0.7758480382053253,
-        -0.88
-      ],
-      "scale": [
-        1,
-        1.2960235496782848,
-        1
-      ],
-      "rotation": [
-        0,
-        0,
-        0,
-        1
-      ]
-    },
-    "landing_frame_top_rail": {
-      "position": [
-        0.028,
-        0.8397677372958169,
-        -0.88
-      ],
-      "scale": [
-        1,
-        1.2523446939877776,
-        1
-      ],
-      "rotation": [
-        0,
-        0,
-        0,
-        1
-      ]
-    }
   }
 }

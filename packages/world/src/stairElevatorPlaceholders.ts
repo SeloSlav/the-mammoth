@@ -20,24 +20,23 @@ import {
   addWallConstantZWithHoles,
   applyWorldMetricUvsToAxisAlignedBoxMesh,
   pickFaceTowardPoint,
-  STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE,
-  WALL_SEGMENT_UV_METERS_PER_TILE,
   type CardinalFace,
   type WallHoleXY,
   type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
-import { concreteMaterial } from "./floorPlaceholderMeshMaterials.js";
+import {
+  concreteMaterial,
+  exteriorConcreteWallMaterial,
+  interiorConcreteFloorShellMaterial,
+} from "./floorPlaceholderMeshMaterials.js";
 import { createStairTreadBoxGeometry } from "./stairTreadUv.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
+import { attachStairWellLandingProps } from "./stairWellLandingProps.js";
 
 /** Elevator hoistway exterior: light brutalist brick-red concrete so shafts read as distinct tower cores. */
 const shaftWall = concreteMaterial(0xd5a19b);
 /** Pit / landing slab at hoistway bottom (world slab is open here — must not read as outdoor grass). */
-const hoistwayFloor = new THREE.MeshStandardMaterial({
-  color: 0xa09d99,
-  roughness: 0.94,
-  metalness: 0.025,
-});
+const hoistwayFloor = interiorConcreteFloorShellMaterial;
 const shaftCeil = new THREE.MeshStandardMaterial({
   color: 0xe0e6ee,
   roughness: 0.88,
@@ -91,11 +90,7 @@ function stairWellHasFloorSlab(scope: StairWellAuthoringScope): boolean {
 
 function createStairWellMaterials(def: StairWellDef | undefined): StairWellMaterialSet {
   const wall = concreteMaterial(0xd7dce2);
-  const floor = new THREE.MeshStandardMaterial({
-    color: 0xa09d99,
-    roughness: 0.94,
-    metalness: 0.025,
-  });
+  const floor = interiorConcreteFloorShellMaterial.clone();
   const tread = new THREE.MeshStandardMaterial({
     color: 0xc5cad2,
     roughness: 0.92,
@@ -251,6 +246,12 @@ type ShaftShellOpts = {
    * wall material only.
    */
   includeDoorFrameTrim?: boolean;
+  /**
+   * Plate-space cardinals for faces on the building perimeter; those walls use {@link exteriorWallMat}
+   * (facade concrete). Interior faces keep `wallM`.
+   */
+  exteriorShaftFaces?: readonly CardinalFace[];
+  exteriorWallMat?: THREE.MeshStandardMaterial;
 };
 
 /**
@@ -315,6 +316,10 @@ function addShaftShell(
   const hx = sx * 0.5;
   const hy = sy * 0.5;
   const hz = sz * 0.5;
+  const extMat = opts.exteriorWallMat;
+  const extFaces = opts.exteriorShaftFaces;
+  const matFor = (card: CardinalFace): THREE.MeshStandardMaterial =>
+    extMat && extFaces?.includes(card) ? extMat : wallM;
   const topExtend =
     opts.includeCeiling ? 0 : Math.max(0, opts.openTopWallExtend ?? 0);
   const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
@@ -329,7 +334,7 @@ function addShaftShell(
     const floor = new THREE.Mesh(new THREE.BoxGeometry(sx, wt, sz), floorMat);
     floor.name = "shaft_floor";
     floor.position.set(0, -hy + wt * 0.5, 0);
-    applyWorldMetricUvsToAxisAlignedBoxMesh(floor, STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE);
+    applyWorldMetricUvsToAxisAlignedBoxMesh(floor);
     floor.userData.mammothAxisAlignedCollisionBox = true;
     group.add(floor);
   }
@@ -412,7 +417,7 @@ function addShaftShell(
           : [];
       addWallConstantXWithHoles(
         group,
-        wallM,
+        matFor(face),
         xCenter,
         wallThickness,
         zMin,
@@ -440,7 +445,7 @@ function addShaftShell(
     } else {
       addWallConstantXWithHoles(
         group,
-        wallM,
+        matFor(face),
         xCenter,
         wallThickness,
         zMin,
@@ -480,7 +485,7 @@ function addShaftShell(
           : [];
       addWallConstantZWithHoles(
         group,
-        wallM,
+        matFor(face),
         zCenter,
         wallThickness,
         xMin,
@@ -508,7 +513,7 @@ function addShaftShell(
     } else {
       addWallConstantZWithHoles(
         group,
-        wallM,
+        matFor(face),
         zCenter,
         wallThickness,
         xMin,
@@ -522,10 +527,54 @@ function addShaftShell(
   };
 
   if (!door) {
-    addEastWest("e", hx - wt * 0.5, wt, false, yWallBottom, yWallTop, "shaft_wall_e");
-    addEastWest("w", -hx + wt * 0.5, wt, false, yWallBottom, yWallTop, "shaft_wall_w");
-    addNorthSouth("n", hz - wt * 0.5, wt, false, yWallBottom, yWallTop, "shaft_wall_n");
-    addNorthSouth("s", -hz + wt * 0.5, wt, false, yWallBottom, yWallTop, "shaft_wall_s");
+    addWallConstantXWithHoles(
+      group,
+      matFor("e"),
+      hx - wt * 0.5,
+      wt,
+      -vlenZ * 0.5,
+      vlenZ * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_e",
+    );
+    addWallConstantXWithHoles(
+      group,
+      matFor("w"),
+      -hx + wt * 0.5,
+      wt,
+      -vlenZ * 0.5,
+      vlenZ * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_w",
+    );
+    addWallConstantZWithHoles(
+      group,
+      matFor("n"),
+      hz - wt * 0.5,
+      wt,
+      -vlenX * 0.5,
+      vlenX * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_n",
+    );
+    addWallConstantZWithHoles(
+      group,
+      matFor("s"),
+      -hz + wt * 0.5,
+      wt,
+      -vlenX * 0.5,
+      vlenX * 0.5,
+      yWallBottom,
+      yWallTop,
+      [],
+      "shaft_wall_s",
+    );
     return;
   }
 
@@ -649,7 +698,7 @@ function addShaftShell(
 
       addWallConstantXWithHoles(
         group,
-        wallM,
+        matFor("e"),
         xE,
         thE,
         zMinWall,
@@ -661,7 +710,7 @@ function addShaftShell(
       );
       addWallConstantXWithHoles(
         group,
-        wallM,
+        matFor("w"),
         xW,
         thW,
         zMinWall,
@@ -673,7 +722,7 @@ function addShaftShell(
       );
       addWallConstantZWithHoles(
         group,
-        wallM,
+        matFor("n"),
         zN,
         thN,
         xMinWall,
@@ -685,7 +734,7 @@ function addShaftShell(
       );
       addWallConstantZWithHoles(
         group,
-        wallM,
+        matFor("s"),
         zS,
         thS,
         xMinWall,
@@ -791,6 +840,8 @@ export type ElevatorShaftPlaceholderOpts = {
   includePitFloor?: boolean;
   /** See {@link ShaftShellOpts.corridorFlushGapM}. */
   corridorFlushGapM?: number;
+  /** Plate-space perimeter faces for this car’s footprint — PBR facade on those walls only. */
+  shaftExteriorFaces?: readonly CardinalFace[];
 };
 
 /**
@@ -861,7 +912,14 @@ export function addElevatorShaftPlaceholder(
     openTopWallExtend: 0.06,
     groundDoor: opts?.groundDoor ?? null,
     corridorFlushGapM: opts?.corridorFlushGapM,
-    includeDoorFrameTrim: true,
+    exteriorShaftFaces: opts?.shaftExteriorFaces,
+    exteriorWallMat: exteriorConcreteWallMaterial,
+  });
+  /** Skip {@link mergeGroupDescendantsByMaterial}: hoistway walls are thin shells; merge + frustum / WebGPU paths made them vanish while collision stayed valid. */
+  group.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.userData.mammothSkipFloorGeometryMerge = true;
+    }
   });
 }
 
@@ -894,6 +952,8 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   omitTreads?: boolean;
   /** Omit the highest landing in this segment. Used for the terminal top storey. */
   omitTopLanding?: boolean;
+  /** Plate-space perimeter faces — PBR facade concrete on those shaft walls only (see `addShaftShell`). */
+  shaftExteriorFaces?: readonly CardinalFace[];
 };
 
 export type StairWellGroundDoorContext = {
@@ -1712,6 +1772,8 @@ export function addStairWellPlaceholder(
     floorMat: mats.floor,
     groundDoor: stairGroundDoor,
     supplementalDoors: supplementalDoors.map((door) => door.groundDoor),
+    exteriorShaftFaces: opts?.shaftExteriorFaces,
+    exteriorWallMat: exteriorConcreteWallMaterial,
   });
   groupGeneratedStairWellWallParts(group);
   tagGeneratedStairWellShellParts(group, authoringScope, [
@@ -1804,17 +1866,22 @@ export function addStairWellPlaceholder(
     );
     li += 1;
     mesh.position.set(cl.x, cl.y, cl.z);
-    /** Ground decks use landing patina at foot scale; typical storeys match shaft wall UV density. */
-    applyWorldMetricUvsToAxisAlignedBoxMesh(
-      mesh,
-      authoringScope === "ground"
-        ? STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE
-        : WALL_SEGMENT_UV_METERS_PER_TILE,
-    );
+    /** Same world-metric tile scale as shaft walls and typical-storey landings (default m/tile). */
+    applyWorldMetricUvsToAxisAlignedBoxMesh(mesh);
     mesh.userData.mammothAxisAlignedCollisionBox = true;
+    /** Stable ref for {@link attachStairWellLandingProps} (same object as layout `cornerLandings`). */
+    mesh.userData.mammothStairCornerLandingRef = cl;
     group.add(mesh);
   }
 
   recordStairWellBaseTransforms(group);
   applyStairWellPartTransforms(group, opts?.def);
+  attachStairWellLandingProps({
+    root: group,
+    def: opts?.def,
+    authoringScope,
+    L,
+    primaryDoor: resolvedGroundDoor ?? undefined,
+    omitOnlyLanding,
+  });
 }

@@ -24,12 +24,12 @@ import {
 export type FpElevatorInnerExtents = { halfX: number; halfZ: number; innerH: number };
 
 /**
- * True when feet sit in this hoistway’s stacked world XZ column (authoritative plate X/Z from
- * {@link ElevatorShaftLayout}) and within a conservative building Y band.
+ * True when a **world-space** point (feet, camera, etc.) sits in this hoistway’s stacked XZ column
+ * ({@link ElevatorShaftLayout} plate X/Z) and within a conservative building Y band.
  *
- * Floor-plate culling uses this so every storey stays visible while you look up the open shaft:
- * upper slabs only exist on other plates, and the in-car HUD box is intentionally tighter than
- * the hoistway interior.
+ * Floor-plate culling uses this so every storey stays visible while you look up the open shaft.
+ * Probe with **camera XZ** as well as feet — eyes can sit inside the shaft while feet remain in
+ * the hallway; feet-only tests culled upper plates and made the shaft walls “disappear”.
  */
 export function fpElevFeetInHoistwayColumnForFloorStack(
   px: number,

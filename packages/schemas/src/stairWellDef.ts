@@ -37,6 +37,54 @@ const StairWellEntryOpeningSchema = z
   })
   .optional();
 
+const StairWellLandingPropCornerSchema = z.enum(["ne", "nw", "se", "sw"]);
+
+/** Resolves which corner landing slab should host a prop (shaft-local, matches racetrack layout). */
+export const StairWellLandingPropSelectorSchema = z.object({
+  kind: z.literal("opposite_primary_door"),
+});
+
+export type StairWellLandingPropSelector = z.infer<typeof StairWellLandingPropSelectorSchema>;
+
+export const StairWellLandingPropAnchorSchema = z.object({
+  /** Which corner of the landing rectangle (shaft interior: +X east, +Z north). */
+  corner: StairWellLandingPropCornerSchema,
+  /** Inset from max +X edge toward interior (m). */
+  insetXM: z.number().optional(),
+  /** Inset from max +Z edge toward interior (m). */
+  insetZM: z.number().optional(),
+  /** Extra lift above landing slab top (m). */
+  liftM: z.number().optional(),
+  /** Yaw around +Y in landing-local space. */
+  yawRad: z.number().optional(),
+  /** Uniform scale applied to the loaded root. */
+  uniformScale: z.number().optional(),
+});
+
+export type StairWellLandingPropAnchor = z.infer<typeof StairWellLandingPropAnchorSchema>;
+
+/**
+ * Optional GLB props parented to a stair corner landing (inherits partTransforms on that slab).
+ */
+export const StairWellLandingPropSchema = z.object({
+  id: z.string(),
+  /** Client URL, e.g. `/static/models/objects/stairwell-heater.glb`. */
+  modelUrl: z.string(),
+  /**
+   * If set, only these authoring scopes spawn this prop. When omitted, all scopes except those
+   * excluded by {@link skipGroundStorey} are eligible.
+   */
+  applyToScopes: z.array(z.enum(["typical", "ground"])).optional(),
+  /** When true, never spawns on the ground-storey segment (`authoringScope === "ground"`). */
+  skipGroundStorey: z.boolean().optional(),
+  landingSelector: StairWellLandingPropSelectorSchema,
+  anchor: StairWellLandingPropAnchorSchema,
+  /** Extra offset in landing-local space after corner placement (m). */
+  pivotOffsetM: Vec3Schema.optional(),
+});
+
+export type StairWellLandingProp = z.infer<typeof StairWellLandingPropSchema>;
+
 /**
  * Shared stairwell visual definition (one file affects every stairwell placeholder / shaft column).
  *
@@ -79,6 +127,8 @@ export const StairWellDefSchema = z.object({
    * Falls back to a derived procedural default when omitted.
    */
   secondaryEntryOpening: StairWellEntryOpeningSchema.optional(),
+  /** Props (GLB) placed on corner landings — shaft-relative, scales with stair authoring. */
+  landingProps: z.array(StairWellLandingPropSchema).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

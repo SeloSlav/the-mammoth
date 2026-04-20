@@ -192,6 +192,12 @@ export type MountFpElevatorWorldResult = {
     bandEyeWorldY?: number,
     /** Camera forward Y — extends the upper bound toward storeys above the player. */
     bandViewDirY?: number,
+    /**
+     * Camera / eye world XZ — with {@link bandEyeWorldY}, OR’d into hoistway-column detection so
+     * shaft-adjacent shells stay visible when the view is inside the shaft but feet are not.
+     */
+    bandEyeWorldX?: number,
+    bandEyeWorldZ?: number,
   ): {
     lo: number;
     hi: number;
@@ -1134,6 +1140,8 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     nowMs: number,
     bandEyeWorldY?: number,
     bandViewDirY?: number,
+    bandEyeWorldX?: number,
+    bandEyeWorldZ?: number,
   ) => {
     const sFeet = estimateStoreyFromFeetY(py, storeyOpts);
     const sEye =
@@ -1150,15 +1158,24 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           );
     let revealFullStack = false;
     for (const vis of visuals.values()) {
-      if (
-        fpElevFeetInHoistwayColumnForFloorStack(px, py, pz, {
+      const hoistwayProbe = (wx: number, wy: number, wz: number) =>
+        fpElevFeetInHoistwayColumnForFloorStack(wx, wy, wz, {
           buildingWorldOriginX: ox,
           buildingWorldOriginY: oy,
           buildingWorldOriginZ: oz,
           floorSpacingM,
           maxLevel,
           layout: vis.layout,
-        })
+        });
+      if (hoistwayProbe(px, py, pz)) {
+        revealFullStack = true;
+        break;
+      }
+      if (
+        bandEyeWorldY !== undefined &&
+        bandEyeWorldX !== undefined &&
+        bandEyeWorldZ !== undefined &&
+        hoistwayProbe(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ)
       ) {
         revealFullStack = true;
         break;

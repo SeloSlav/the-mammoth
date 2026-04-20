@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import {
+  applyStandardAuthoringSlot,
+  type StandardAuthoringSlot,
+} from "./elevatorVisualMaterialUtils.js";
 
 /**
  * Shared materials so massive generated floors do not allocate thousands of materials.
@@ -126,28 +130,123 @@ export function concreteMaterial(
 
 const concreteSurfaceTextures = createConcreteSurfaceTextures();
 
+/** PBR sheet flooring for **upper-storey** corridor shells only (`matsFor` uses this when level > 1). */
+const CORRIDOR_HALL_FLOOR_AUTHORING: StandardAuthoringSlot = {
+  roughness: 1,
+  metalness: 1,
+  mapUrl: "/static/materials/corridor-hall-vinyl/basecolor.png",
+  normalMapUrl: "/static/materials/corridor-hall-vinyl/normal.png",
+  roughnessMapUrl: "/static/materials/corridor-hall-vinyl/roughness.png",
+  metalnessMapUrl: "/static/materials/corridor-hall-vinyl/metalness.png",
+  bumpMapUrl: "/static/materials/corridor-hall-vinyl/height.png",
+};
+
+const corridorHallFloorMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 1,
+  });
+  applyStandardAuthoringSlot(m, CORRIDOR_HALL_FLOOR_AUTHORING);
+  m.bumpScale = 0.022;
+  /** Shell floor top UVs use ~2.75 m per UV unit; low repeat stretches the sheet (~8.5 m/cycle at 0.32). */
+  const rep = 0.32;
+  for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "bumpMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  return m;
+})();
+
+/** PBR for indoor cast-concrete floors (shells, units, cores, plate slab, stair/elev pit slabs — not upper corridor vinyl). */
+const CONCRETE_INTERIOR_FLOOR_AUTHORING: StandardAuthoringSlot = {
+  roughness: 1,
+  metalness: 1,
+  mapUrl: "/static/materials/concrete-floor-interior/basecolor.png",
+  normalMapUrl: "/static/materials/concrete-floor-interior/normal.png",
+  roughnessMapUrl: "/static/materials/concrete-floor-interior/roughness.png",
+  metalnessMapUrl: "/static/materials/concrete-floor-interior/metalness.png",
+  bumpMapUrl: "/static/materials/concrete-floor-interior/height.png",
+};
+
+export const interiorConcreteFloorShellMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 1,
+  });
+  applyStandardAuthoringSlot(m, CONCRETE_INTERIOR_FLOOR_AUTHORING);
+  m.bumpScale = 0.026;
+  const rep = 0.3;
+  for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "bumpMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  return m;
+})();
+
+/** PBR tile set for building shell faces on the exterior (cladding only — interior walls stay procedural). */
+const CONCRETE_EXTERIOR_WALL_AUTHORING: StandardAuthoringSlot = {
+  roughness: 1,
+  metalness: 1,
+  mapUrl: "/static/materials/concrete-exterior/basecolor.png",
+  normalMapUrl: "/static/materials/concrete-exterior/normal.png",
+  roughnessMapUrl: "/static/materials/concrete-exterior/roughness.png",
+  metalnessMapUrl: "/static/materials/concrete-exterior/metalness.png",
+};
+
+export const exteriorConcreteWallMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 1,
+  });
+  applyStandardAuthoringSlot(m, CONCRETE_EXTERIOR_WALL_AUTHORING);
+  /** Shell cladding UVs are ~2.75 m per UV unit (`wallWithDoorCutout`); low repeat stretches the sheet
+   *  so large-scale concrete reads believable on long walls (~14 m per full texture cycle at 0.2). */
+  const rep = 0.2;
+  for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "bumpMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  return m;
+})();
+
 export const floorPlaceholderMeshMaterials = {
-  corridorFloor: concreteMaterial(0xc9ced4),
+  corridorFloor: interiorConcreteFloorShellMaterial,
+  corridorFloorUpperStorey: corridorHallFloorMaterial,
   corridorCeil: concreteMaterial(0xe5e8eb, { side: THREE.DoubleSide }),
   corridorWall: concreteMaterial(0xd4d8dc),
-  corridorExteriorWall: concreteMaterial(0xe7eef7),
-  unitFloor: concreteMaterial(0xc5cbd1),
+  corridorExteriorWall: exteriorConcreteWallMaterial,
+  unitFloor: interiorConcreteFloorShellMaterial,
   unitCeil: concreteMaterial(0xe3e7ea, { side: THREE.DoubleSide }),
   unitWall: concreteMaterial(0xd2d7db),
-  unitExteriorWall: concreteMaterial(0xe5edf6),
-  coreFloor: concreteMaterial(0xc2c8ce),
+  unitExteriorWall: exteriorConcreteWallMaterial,
+  coreFloor: interiorConcreteFloorShellMaterial,
   coreCeil: concreteMaterial(0xe0e4e8, { side: THREE.DoubleSide }),
   coreWall: concreteMaterial(0xd0d6db),
-  coreExteriorWall: concreteMaterial(0xe4ebf4),
-  miscFloor: concreteMaterial(0xc7ccd2),
+  coreExteriorWall: exteriorConcreteWallMaterial,
+  miscFloor: interiorConcreteFloorShellMaterial,
   miscCeil: concreteMaterial(0xe2e6ea, { side: THREE.DoubleSide }),
   miscWall: concreteMaterial(0xd3d8dc),
-  miscExteriorWall: concreteMaterial(0xe5edf6),
+  miscExteriorWall: exteriorConcreteWallMaterial,
   /**
    * Holed structural pad under the plate (lobby / courtyard shell). Procedural concrete only —
    * stairwell patina (`stairwell.json` landing/floor) is applied inside shaft meshes, not here.
    */
-  slab: concreteMaterial(0xc2c8ce),
+  slab: interiorConcreteFloorShellMaterial,
   /** Tall vertical box under the plate — keep procedural; patina is for horizontal slabs only. */
   groundFootprintOccluder: concreteMaterial(0xc3c9cf, { side: THREE.DoubleSide }),
   /** Lobby / ground shell double-door reveals — match corridor concrete so trims are not dark “picture frames”. */

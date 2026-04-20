@@ -126,15 +126,15 @@ importers:
       react-router-dom:
         specifier: ^7.13.1
         version: 7.14.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      sky-cloud-3d:
+        specifier: github:xiaxiangfeng/sky-cloud-3d
+        version: https://codeload.github.com/xiaxiangfeng/sky-cloud-3d/tar.gz/260dbcf230163912abb3b9d807169247cfe39eea(three@0.183.2)
       spacetimedb:
         specifier: 2.0.1
         version: 2.0.1(react@19.2.5)
       three:
         specifier: ^0.183.2
         version: 0.183.2
-      weft-sdk:
-        specifier: file:../../../pretext-three-experiment
-        version: file:../pretext-three-experiment(three@0.183.2)(typescript@6.0.2)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -651,11 +651,6 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
-
-  '@chenglou/pretext@0.0.2':
-    resolution: {integrity: sha512-bMPySDxbU1h+qU3D7HzTsz2vhBFIeO19Yp8gsYTJ219tjuX7WFsKJzk2oPVpwxl2P1VEuQGo6whg6Kr8gztphA==}
-    peerDependencies:
-      typescript: ^5
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -2872,6 +2867,12 @@ packages:
   signal-exit@3.0.7:
     resolution: {integrity: sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==}
 
+  sky-cloud-3d@https://codeload.github.com/xiaxiangfeng/sky-cloud-3d/tar.gz/260dbcf230163912abb3b9d807169247cfe39eea:
+    resolution: {tarball: https://codeload.github.com/xiaxiangfeng/sky-cloud-3d/tar.gz/260dbcf230163912abb3b9d807169247cfe39eea}
+    version: 1.0.0
+    peerDependencies:
+      three: ^0.183.0
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -3267,12 +3268,6 @@ packages:
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
 
-  weft-sdk@file:../pretext-three-experiment:
-    resolution: {directory: ../pretext-three-experiment, type: directory}
-    engines: {node: '>=20'}
-    peerDependencies:
-      three: ^0.183.0
-
   whatwg-url@5.0.0:
     resolution: {integrity: sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==}
 
@@ -3453,10 +3448,6 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
-
-  '@chenglou/pretext@0.0.2(typescript@6.0.2)':
-    dependencies:
-      typescript: 6.0.2
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -5802,6 +5793,10 @@ snapshots:
 
   signal-exit@3.0.7: {}
 
+  sky-cloud-3d@https://codeload.github.com/xiaxiangfeng/sky-cloud-3d/tar.gz/260dbcf230163912abb3b9d807169247cfe39eea(three@0.183.2):
+    dependencies:
+      three: 0.183.2
+
   source-map-js@1.2.1: {}
 
   spacetimedb@2.0.1(react@19.2.5):
@@ -6144,13 +6139,6 @@ snapshots:
   wavefile@11.0.0: {}
 
   webidl-conversions@3.0.1: {}
-
-  weft-sdk@file:../pretext-three-experiment(three@0.183.2)(typescript@6.0.2):
-    dependencies:
-      '@chenglou/pretext': 0.0.2(typescript@6.0.2)
-      three: 0.183.2
-    transitivePeerDependencies:
-      - typescript
 
   whatwg-url@5.0.0:
     dependencies:
