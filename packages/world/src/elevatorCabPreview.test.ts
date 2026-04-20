@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { ElevatorCabDefSchema } from "@the-mammoth/schemas";
 import {
   applyElevatorCabPartTransforms,
+  buildElevatorCabCarVisual,
   buildElevatorCabCarPreviewRoot,
+  MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
+  resolveMergedCabFloorPickLevel,
+  type MergedCabFloorPickLayout,
 } from "./elevatorCabPreview.js";
 
 describe("applyElevatorCabPartTransforms", () => {
@@ -90,5 +94,41 @@ describe("applyElevatorCabPartTransforms", () => {
     expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");
     expect(root.getObjectByName("cab_wall_front_e")?.userData.editorCabPartId).toBe("cab_wall_front_e");
     expect(root.getObjectByName("cab_wall_front_w")?.userData.editorCabPartId).toBe("cab_wall_front_w");
+  });
+
+  it("mergeCabFloorButtons emits one merged body + label mesh and resolvable pick layout", () => {
+    const vis = buildElevatorCabCarVisual({
+      layout: {
+        planKey: "shaft",
+        plateX: 0,
+        plateZ: 0,
+        plateLocalY: 0,
+        sx: 3.4,
+        sy: 3.2,
+        sz: 3.8,
+        doorFace: "e",
+      },
+      maxLevel: 6,
+      includeDoors: false,
+      mergeCabFloorButtons: true,
+    });
+    expect(vis.mergedFloorButtons).toBe(true);
+    const mergedBody = vis.panelRoot.getObjectByName("cab_floor_button_bodies_merged");
+    const mergedLabel = vis.panelRoot.getObjectByName("cab_floor_button_labels_merged");
+    expect(mergedBody).toBeInstanceOf(THREE.Mesh);
+    expect(mergedLabel).toBeInstanceOf(THREE.Mesh);
+    const layout = (mergedBody as THREE.Mesh).userData[
+      MAMMOTH_MERGED_CAB_FLOOR_PICK_UD
+    ] as MergedCabFloorPickLayout;
+    expect(layout.maxLevel).toBe(6);
+    expect(layout.centersPanelLocal).toHaveLength(6);
+    expect(layout.vertsPerBodyLevel).toBeGreaterThan(10);
+    expect(layout.vertsPerLabelLevel).toBeGreaterThan(10);
+
+    vis.root.updateMatrixWorld(true);
+    const c1 = layout.centersPanelLocal[0]!;
+    const worldNear = new THREE.Vector3(c1.x, c1.y, c1.z);
+    vis.panelRoot.localToWorld(worldNear);
+    expect(resolveMergedCabFloorPickLevel(worldNear, vis.panelRoot, layout)).toBe(1);
   });
 });

@@ -41,11 +41,8 @@ const shaftCeil = new THREE.MeshStandardMaterial({
   roughness: 0.88,
   metalness: 0.03,
 });
-const doorFrameMat = new THREE.MeshStandardMaterial({
-  color: 0x4a4846,
-  roughness: 0.42,
-  metalness: 0.55,
-});
+/** Reuse hoistway wall concrete so door cutout trim is not a separate dark metallic band. */
+const doorFrameMat = shaftWall;
 
 export const STAIR_WELL_EDITOR_PART_IDS = [
   "shaft_floor",

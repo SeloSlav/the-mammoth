@@ -14,8 +14,11 @@ import {
   EXTERIOR_DOOR_ANIM_SPEED,
   FP_LOCOMOTION_SKIN,
   listElevatorShaftLayouts,
+  MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
   maxBuildingLevelIndex,
+  resolveMergedCabFloorPickLevel,
   type ElevatorShaftLayout,
+  type MergedCabFloorPickLayout,
 } from "@the-mammoth/world";
 import type { DbConnection } from "../module_bindings";
 import type { ElevatorCar, ElevatorLandingDoor } from "../module_bindings/types";
@@ -1075,8 +1078,22 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     const hits = raycaster.intersectObjects(roots, true);
     for (const h of hits) {
       const mesh = h.object as THREE.Mesh;
-      const pick = (mesh.userData as Partial<FpElevFloorPickUserData>)[FP_ELEV_FLOOR_PICK_UD];
-      if (!pick) continue;
+      const mergedLayout = mesh.userData[MAMMOTH_MERGED_CAB_FLOOR_PICK_UD] as
+        | MergedCabFloorPickLayout
+        | undefined;
+      let pick: { shaftKey: string; level: number } | undefined;
+      if (mergedLayout?.shaftKey) {
+        const panelRoot = mesh.parent;
+        if (!panelRoot) continue;
+        pick = {
+          shaftKey: mergedLayout.shaftKey,
+          level: resolveMergedCabFloorPickLevel(h.point, panelRoot, mergedLayout),
+        };
+      } else {
+        const ud = (mesh.userData as Partial<FpElevFloorPickUserData>)[FP_ELEV_FLOOR_PICK_UD];
+        if (!ud) continue;
+        pick = { shaftKey: ud.shaftKey, level: ud.level };
+      }
       const row = latest.get(pick.shaftKey);
       const layout = layoutByKey.get(pick.shaftKey);
       const vis = visuals.get(pick.shaftKey);

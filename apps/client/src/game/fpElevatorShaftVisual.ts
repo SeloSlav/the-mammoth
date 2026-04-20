@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
 import type { ElevatorShaftLayout, FloorShortLabelMap } from "@the-mammoth/world";
 import {
@@ -8,7 +9,9 @@ import {
   buildElevatorCabCarVisual,
   elevatorHoistwayInnerHalfExtents,
   elevatorSupportFeetWorldY,
+  MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
   shortFloorLabelForLevel,
+  type MergedCabFloorPickLayout,
 } from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
@@ -157,6 +160,8 @@ export class FpElevatorShaftVisual {
   readonly floorPickRoot: THREE.Group;
   private readonly floorPickButtons: FloorPickButtonVisual[] = [];
   private readonly floorPickBodyMaterials = new Set<THREE.Material>();
+  /** Cab floor buttons merged to two meshes — highlight uses vertex colors, not per-mesh materials. */
+  private mergedCabFloorButtons = false;
   private readonly atlas: THREE.CanvasTexture;
   private readonly matNormal: THREE.MeshBasicMaterial;
   private readonly matHighlight: THREE.MeshBasicMaterial;
@@ -166,15 +171,20 @@ export class FpElevatorShaftVisual {
   readonly landingDoorPickRoot: THREE.Group;
   readonly landingHailPickRoot: THREE.Group;
   private readonly landingHailPickByLevel = new Map<number, THREE.Object3D>();
-  private readonly landingDoorSwings: {
-    level: number;
-    swing: THREE.Group;
-    swingSign: number;
-  }[] = [];
+  /** Per-storey `swing.matrixWorld` at open01=0 — multiplied each tick by landing swing. */
+  private readonly landingDoorSwingBase: THREE.Matrix4[] = [];
+  private landingDoorSwingSign = 1;
+  private landingDoorFrameInst: THREE.InstancedMesh | null = null;
+  private landingDoorGlassInst: THREE.InstancedMesh | null = null;
+  private readonly _landingDoorRy = new THREE.Matrix4();
+  private readonly _landingDoorInstWorld = new THREE.Matrix4();
   private readonly extRedMat: THREE.MeshStandardMaterial;
   private readonly extGlassMat: THREE.MeshPhysicalMaterial;
   private readonly hailBtnMatTemplate: THREE.MeshStandardMaterial;
-  private readonly hailBtnMaterials = new Map<number, THREE.MeshStandardMaterial>();
+  /** Shared hover/flash materials — avoids per-level `clone()` + hundreds of hail draw batches. */
+  private readonly hailBtnMatHover: THREE.MeshStandardMaterial;
+  private readonly hailBtnMatFlash: THREE.MeshStandardMaterial;
+  private readonly hailBtnBodies = new Map<number, THREE.Mesh>();
   private readonly hailBtnIconMat: THREE.MeshBasicMaterial;
   private readonly hailBtnIconTex: THREE.CanvasTexture;
   /** Avoid repainting the shared hail icon every frame when the displayed storey is unchanged. */
@@ -243,6 +253,14 @@ export class FpElevatorShaftVisual {
       emissive: new THREE.Color(0x143040),
       emissiveIntensity: 0.28,
     });
+    this.hailBtnMatHover = this.hailBtnMatTemplate.clone();
+    this.hailBtnMatHover.name = "elev_hail_btn_hover";
+    this.hailBtnMatHover.emissive.setHex(0x55aaff);
+    this.hailBtnMatHover.emissiveIntensity = 0.62;
+    this.hailBtnMatFlash = this.hailBtnMatTemplate.clone();
+    this.hailBtnMatFlash.name = "elev_hail_btn_flash";
+    this.hailBtnMatFlash.emissive.setHex(0x66ffff);
+    this.hailBtnMatFlash.emissiveIntensity = 1.05;
     this.hailBtnIconTex = buildLandingHailIconTexture(1, pick.floorLabelByLevel);
     this.hailBtnIconMat = new THREE.MeshBasicMaterial({
       map: this.hailBtnIconTex,
@@ -281,13 +299,33 @@ export class FpElevatorShaftVisual {
       includeDoors: true,
       floorButtonLabelMaterial: this.matNormal,
       rootName: "elevator_car",
+      mergeCabFloorButtons: true,
     });
+    this.mergedCabFloorButtons = cabVisual.mergedFloorButtons === true;
     this.carRoot = cabVisual.root;
     this.doorL = cabVisual.doorL ?? new THREE.Group();
     this.doorR = cabVisual.doorR ?? new THREE.Group();
     this.floorPickRoot = cabVisual.panelRoot;
     this.floorPickRoot.name = "elev_floor_pick";
     for (const button of cabVisual.floorButtons) {
+      if (this.mergedCabFloorButtons) {
+        if (button.level === 1) {
+          const layout = button.bodyMesh.userData[
+            MAMMOTH_MERGED_CAB_FLOOR_PICK_UD
+          ] as MergedCabFloorPickLayout;
+          layout.shaftKey = pick.shaftKey;
+        }
+        const sharedBodyMat = button.bodyMesh.material as THREE.Material;
+        this.floorPickButtons.push({
+          level: button.level,
+          bodyMesh: button.bodyMesh,
+          labelMesh: button.labelMesh,
+          bodyNormalMat: sharedBodyMat,
+          bodyHighlightMat: sharedBodyMat,
+          bodyFlashMat: sharedBodyMat,
+        });
+        continue;
+      }
       (button.labelMesh.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD] = {
         shaftKey: pick.shaftKey,
         level: button.level,
@@ -318,6 +356,97 @@ export class FpElevatorShaftVisual {
     const face = layout.doorFace;
     const hx = this.inner.halfX;
     const hz = this.inner.halfZ;
+    const kit = visualDefs?.landingKitDef;
+
+    // --- Instanced exterior landing doors (one draw for all frame parts × all levels; same for glass) ---
+    const wrapProbe = new THREE.Group();
+    const pivotProbe = createExteriorLandingDoorPivot(
+      face,
+      hx,
+      hz,
+      this.extRedMat,
+      this.extGlassMat,
+      kit,
+    );
+    const structureProbe = pivotProbe.structure;
+    const swingProbe = pivotProbe.swing;
+    this.landingDoorSwingSign = pivotProbe.swingSign;
+    wrapProbe.add(structureProbe);
+    if (kit) {
+      applyLandingKitPartTransforms(structureProbe, kit);
+    }
+    for (let level = 1; level <= pick.maxLevel; level++) {
+      const feetY = elevatorSupportFeetWorldY({
+        buildingWorldOriginY: pick.buildingWorldOriginY,
+        levelIndex: level,
+        floorSpacingM: pick.floorSpacingM,
+        shaftPlateLocalY: layout.plateLocalY,
+        shaftSy: layout.sy,
+      });
+      wrapProbe.position.set(0, feetY, 0);
+      swingProbe.rotation.y = 0;
+      wrapProbe.updateMatrixWorld(true);
+      this.landingDoorSwingBase.push(new THREE.Matrix4().copy(swingProbe.matrixWorld));
+    }
+    wrapProbe.remove(structureProbe);
+
+    const frameGeomCopies: THREE.BufferGeometry[] = [];
+    let glassGeomSingle: THREE.BufferGeometry | null = null;
+    const meshLocal = new THREE.Matrix4();
+    const swingChildren = [...swingProbe.children];
+    for (const ch of swingChildren) {
+      if (!(ch instanceof THREE.Mesh)) continue;
+      const g = ch.geometry.clone();
+      meshLocal.compose(ch.position, ch.quaternion, ch.scale);
+      g.applyMatrix4(meshLocal);
+      const mat = ch.material;
+      if (mat === this.extGlassMat) {
+        if (glassGeomSingle) glassGeomSingle.dispose();
+        glassGeomSingle = g;
+      } else {
+        frameGeomCopies.push(g);
+      }
+    }
+    for (const ch of swingChildren) {
+      swingProbe.remove(ch);
+      if (ch instanceof THREE.Mesh) ch.geometry.dispose();
+    }
+
+    const frameMerged = mergeGeometries(frameGeomCopies, false);
+    for (const g of frameGeomCopies) g.dispose();
+    if (!frameMerged) {
+      throw new Error("FpElevatorShaftVisual: mergeGeometries returned null for landing door frame");
+    }
+    frameMerged.computeBoundingSphere();
+    frameMerged.computeBoundingBox();
+
+    this.landingDoorFrameInst = new THREE.InstancedMesh(
+      frameMerged,
+      this.extRedMat,
+      pick.maxLevel,
+    );
+    this.landingDoorFrameInst.name = "elev_landing_doors_frame_inst";
+    this.landingDoorFrameInst.frustumCulled = false;
+    this.landingDoorFrameInst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.landingRoot.add(this.landingDoorFrameInst);
+
+    if (glassGeomSingle) {
+      glassGeomSingle.computeBoundingSphere();
+      glassGeomSingle.computeBoundingBox();
+      this.landingDoorGlassInst = new THREE.InstancedMesh(
+        glassGeomSingle,
+        this.extGlassMat,
+        pick.maxLevel,
+      );
+      this.landingDoorGlassInst.name = "elev_landing_doors_glass_inst";
+      this.landingDoorGlassInst.frustumCulled = false;
+      this.landingDoorGlassInst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.landingRoot.add(this.landingDoorGlassInst);
+    } else {
+      this.landingDoorGlassInst = null;
+    }
+
+    this.updateLandingExteriorDoorSwings(new Map());
 
     for (let level = 1; level <= pick.maxLevel; level++) {
       const feetY = elevatorSupportFeetWorldY({
@@ -327,27 +456,11 @@ export class FpElevatorShaftVisual {
         shaftPlateLocalY: layout.plateLocalY,
         shaftSy: layout.sy,
       });
-      const wrap = new THREE.Group();
-      wrap.position.set(0, feetY, 0);
-      const { structure, swing, swingSign } = createExteriorLandingDoorPivot(
-        face,
-        hx,
-        hz,
-        this.extRedMat,
-        this.extGlassMat,
-        visualDefs?.landingKitDef,
-      );
-      this.tagLandingDoorInteractMeshes(structure, pick.shaftKey, level);
-      wrap.add(structure);
-      if (visualDefs?.landingKitDef) {
-        applyLandingKitPartTransforms(structure, visualDefs.landingKitDef);
-      }
-      this.landingRoot.add(wrap);
-      this.landingDoorSwings.push({ level, swing, swingSign });
 
       const doorPickWrap = new THREE.Group();
       doorPickWrap.position.set(0, feetY, 0);
       const doorPick = this.createLandingDoorPickMesh(face, hx, hz, level, pick.shaftKey);
+      doorPick.visible = false;
       doorPickWrap.add(doorPick);
       this.landingDoorPickRoot.add(doorPickWrap);
 
@@ -363,6 +476,11 @@ export class FpElevatorShaftVisual {
 
     this.root.add(this.carRoot);
     this.root.position.set(this.ox + layout.plateX, 0, this.oz + layout.plateZ);
+
+    if (this.mergedCabFloorButtons) {
+      this.lastMatSig = "";
+      this.updateFloorPickMaterials(0, 0, -1, 0);
+    }
   }
 
   private createLandingDoorPickMesh(
@@ -393,20 +511,6 @@ export class FpElevatorShaftVisual {
     return pick;
   }
 
-  private tagLandingDoorInteractMeshes(
-    root: THREE.Object3D,
-    shaftKey: string,
-    level: number,
-  ): void {
-    root.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return;
-      (obj.userData as FpElevExteriorDoorPickUserData)[FP_ELEV_EXTERIOR_DOOR_PICK_UD] = {
-        shaftKey,
-        level,
-      };
-    });
-  }
-
   private createLandingHailButtonMesh(
     face: DoorFace,
     hx: number,
@@ -416,16 +520,16 @@ export class FpElevatorShaftVisual {
   ): THREE.Group {
     const group = new THREE.Group();
     group.name = `elev_landing_hail_panel_${level}`;
-    const btnMat = this.hailBtnMatTemplate.clone();
-    btnMat.name = `elev_hail_btn_mat_${level}`;
-    this.hailBtnMaterials.set(level, btnMat);
     const btnR = 0.175;
     const btnDepth = 0.065;
     const btnHalf = btnDepth * 0.5;
     const iconPlane = 0.248;
     /** Outer circular face sits at `btnDepth + btnHalf` from the panel origin (matches prior hail layout). */
     const iconOff = btnDepth + btnHalf + 0.0015;
-    const button = new THREE.Mesh(new THREE.CylinderGeometry(btnR, btnR, btnDepth, 32), btnMat);
+    const button = new THREE.Mesh(
+      new THREE.CylinderGeometry(btnR, btnR, btnDepth, 32),
+      this.hailBtnMatTemplate,
+    );
     button.name = `elev_landing_hail_btn_${level}`;
     (button.userData as FpElevLandingHailPickUserData)[FP_ELEV_LANDING_HAIL_PICK_UD] = {
       shaftKey,
@@ -440,6 +544,7 @@ export class FpElevatorShaftVisual {
     const doorSideOffset = DOOR_W * 0.5 + 0.32;
     group.add(button);
     group.add(icon);
+    this.hailBtnBodies.set(level, button);
     if (face === "e") {
       group.position.set(hx + faceOut, y, -doorSideOffset);
       button.rotation.z = Math.PI * 0.5;
@@ -476,9 +581,6 @@ export class FpElevatorShaftVisual {
   }
 
   /**
-   * Hover / click feedback for landing hail buttons (per-level materials).
-   */
-  /**
    * Landing hail buttons share one icon texture per shaft; redraw when the cab’s nearest storey
    * (same rounding as in-cab floor buttons) changes.
    */
@@ -501,19 +603,12 @@ export class FpElevatorShaftVisual {
   }): void {
     const flashOn =
       opts.flashLevel > 0 && opts.nowMs < opts.flashUntilMs && opts.flashUntilMs > 0;
-    for (const [lv, mat] of this.hailBtnMaterials) {
+    for (const [lv, btn] of this.hailBtnBodies) {
       const hover = opts.hoverLevel > 0 && lv === opts.hoverLevel;
       const flash = flashOn && lv === opts.flashLevel;
-      if (flash) {
-        mat.emissive.setHex(0x66ffff);
-        mat.emissiveIntensity = 1.05;
-      } else if (hover) {
-        mat.emissive.setHex(0x55aaff);
-        mat.emissiveIntensity = 0.62;
-      } else {
-        mat.emissive.setHex(0x143040);
-        mat.emissiveIntensity = 0.28;
-      }
+      if (flash) btn.material = this.hailBtnMatFlash;
+      else if (hover) btn.material = this.hailBtnMatHover;
+      else btn.material = this.hailBtnMatTemplate;
     }
   }
 
@@ -527,6 +622,10 @@ export class FpElevatorShaftVisual {
     const sig = `${currentLevel}|${flashOn ? flashLevel : 0}|${flashOn ? Math.floor(flashUntilMs) : 0}`;
     if (sig === this.lastMatSig) return;
     this.lastMatSig = sig;
+    if (this.mergedCabFloorButtons) {
+      this.applyMergedFloorPickVertexColors(currentLevel, flashLevel, flashUntilMs, nowMs);
+      return;
+    }
     for (const button of this.floorPickButtons) {
       const pick = (button.labelMesh.userData as FpElevFloorPickUserData)[FP_ELEV_FLOOR_PICK_UD];
       if (!pick) continue;
@@ -543,6 +642,54 @@ export class FpElevatorShaftVisual {
     }
   }
 
+  private applyMergedFloorPickVertexColors(
+    currentLevel: number,
+    flashLevel: number,
+    flashUntilMs: number,
+    nowMs: number,
+  ): void {
+    const fb = this.floorPickButtons[0];
+    if (!fb) return;
+    const layout = fb.bodyMesh.userData[MAMMOTH_MERGED_CAB_FLOOR_PICK_UD] as
+      | MergedCabFloorPickLayout
+      | undefined;
+    if (!layout) return;
+    const flashOn = flashLevel > 0 && nowMs < flashUntilMs;
+    const bodyAttr = fb.bodyMesh.geometry.attributes.color as THREE.BufferAttribute | undefined;
+    const labelAttr = fb.labelMesh.geometry.attributes.color as THREE.BufferAttribute | undefined;
+    if (!bodyAttr || !labelAttr) return;
+    const nb = layout.vertsPerBodyLevel;
+    const nl = layout.vertsPerLabelLevel;
+    const dimB = { r: 0.82, g: 0.86, b: 0.9 };
+    const hiB = { r: 0.48, g: 0.92, b: 0.8 };
+    const flB = { r: 0.58, g: 0.98, b: 0.98 };
+    const dimL = { r: 0.62, g: 0.65, b: 0.68 };
+    const hiL = { r: 0.88, g: 1, b: 0.96 };
+    const flL = { r: 0.96, g: 1, b: 1 };
+    for (let i = 0; i < layout.maxLevel; i++) {
+      const level = i + 1;
+      let bc = dimB;
+      let lc = dimL;
+      if (flashOn && level === flashLevel) {
+        bc = flB;
+        lc = flL;
+      } else if (level === currentLevel) {
+        bc = hiB;
+        lc = hiL;
+      }
+      const vb = i * nb;
+      for (let v = 0; v < nb; v++) {
+        bodyAttr.setXYZ(vb + v, bc.r, bc.g, bc.b);
+      }
+      const vl = i * nl;
+      for (let v = 0; v < nl; v++) {
+        labelAttr.setXYZ(vl + v, lc.r, lc.g, lc.b);
+      }
+    }
+    bodyAttr.needsUpdate = true;
+    labelAttr.needsUpdate = true;
+  }
+
   updateFromServer(cabFeetY: number, doorOpen01: number): void {
     this.carRoot.position.y = cabFeetY;
     const o = doorOpen01;
@@ -553,9 +700,24 @@ export class FpElevatorShaftVisual {
   }
 
   updateLandingExteriorDoorSwings(swingByLevel: ReadonlyMap<number, number>): void {
-    for (const e of this.landingDoorSwings) {
-      const u = swingByLevel.get(e.level) ?? 0;
-      e.swing.rotation.y = e.swingSign * u * this.exteriorSwingMaxRad;
+    const frameInst = this.landingDoorFrameInst;
+    if (!frameInst) return;
+    const n = this.landingDoorSwingBase.length;
+    for (let i = 0; i < n; i++) {
+      const level = i + 1;
+      const u = swingByLevel.get(level) ?? 0;
+      this._landingDoorRy.makeRotationY(
+        this.landingDoorSwingSign * u * this.exteriorSwingMaxRad,
+      );
+      this._landingDoorInstWorld.copy(this.landingDoorSwingBase[i]!).multiply(this._landingDoorRy);
+      frameInst.setMatrixAt(i, this._landingDoorInstWorld);
+      if (this.landingDoorGlassInst) {
+        this.landingDoorGlassInst.setMatrixAt(i, this._landingDoorInstWorld);
+      }
+    }
+    frameInst.instanceMatrix.needsUpdate = true;
+    if (this.landingDoorGlassInst) {
+      this.landingDoorGlassInst.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -582,19 +744,20 @@ export class FpElevatorShaftVisual {
     for (const mat of carMaterials) {
       mat.dispose();
     }
-    this.landingRoot.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
-    });
+    this.landingDoorFrameInst?.dispose();
+    this.landingDoorGlassInst?.dispose();
+    this.landingDoorFrameInst = null;
+    this.landingDoorGlassInst = null;
+    this.landingDoorSwingBase.length = 0;
     this.landingDoorPickRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
     this.landingHailPickRoot.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
     });
-    for (const mat of this.hailBtnMaterials.values()) {
-      mat.dispose();
-    }
-    this.hailBtnMaterials.clear();
+    this.hailBtnBodies.clear();
+    this.hailBtnMatHover.dispose();
+    this.hailBtnMatFlash.dispose();
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
     this.hailBtnMatTemplate.dispose();

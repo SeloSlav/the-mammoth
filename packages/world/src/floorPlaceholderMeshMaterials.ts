@@ -150,9 +150,6 @@ export const floorPlaceholderMeshMaterials = {
   slab: concreteMaterial(0xc2c8ce),
   /** Tall vertical box under the plate — keep procedural; patina is for horizontal slabs only. */
   groundFootprintOccluder: concreteMaterial(0xc3c9cf, { side: THREE.DoubleSide }),
-  lobbyDoorFrame: new THREE.MeshStandardMaterial({
-    color: 0x5a5856,
-    roughness: 0.5,
-    metalness: 0.42,
-  }),
+  /** Lobby / ground shell double-door reveals — match corridor concrete so trims are not dark “picture frames”. */
+  lobbyDoorFrame: concreteMaterial(0xc4cad1),
 } as const;

@@ -49,7 +49,6 @@ import {
   hotbarDefIdSupportsMeleeAttack,
 } from "./fpHotbarResolve";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment";
-import { createFpSessionGrass } from "./fpSessionGrass";
 import {
   onFpSessionPostRenderFrame,
   resetFpSessionFpsDisplay,
@@ -204,8 +203,6 @@ export async function mountFpSession(
   scene.add(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
   const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
-  const fpGrass = createFpSessionGrass(buildingWorldBounds);
-  scene.add(fpGrass.group);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   const fpElevators = mountFpElevatorWorld({
@@ -2083,7 +2080,6 @@ export async function mountFpSession(
 
   let raf = 0;
   let lastFrameMs = performance.now();
-  let grassElapsedSec = 0;
 
   const tick = () => {
     raf = requestAnimationFrame(tick);
@@ -2374,8 +2370,6 @@ export async function mountFpSession(
 
     // --- Render section timing ---
     syncBuildingFloorPlateVisibility(nowMs);
-    grassElapsedSec += dt;
-    fpGrass.tick(camera, grassElapsedSec);
     renderer.render(scene, camera);
     const _t_renderEnd = performance.now();
     const physicsMs = _t_physicsEnd - nowMs;
@@ -2494,7 +2488,6 @@ export async function mountFpSession(
       /* ignore */
     }
     droppedWorld.dispose();
-    fpGrass.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     disposeFpEnvironment();

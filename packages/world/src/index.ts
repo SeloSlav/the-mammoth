@@ -192,7 +192,10 @@ export {
   applyElevatorCabPartTransforms,
   buildElevatorCabCarVisual,
   buildElevatorCabCarPreviewRoot,
+  MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
+  resolveMergedCabFloorPickLevel,
 } from "./elevatorCabPreview.js";
+export type { MergedCabFloorPickLayout } from "./elevatorCabPreview.js";
 export {
   glassOpeningFromProxyMesh,
   LANDING_DOOR_GLASS_PART_ID,

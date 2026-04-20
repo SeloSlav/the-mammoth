@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { ElevatorCabDef } from "@the-mammoth/schemas";
 import { shortFloorLabelForLevel, type FloorShortLabelMap } from "./buildingFloorLabels.js";
 import { elevatorHoistwayInnerHalfExtents } from "./elevatorShaftLayout.js";
@@ -128,12 +129,27 @@ export type ElevatorCabFloorButtonVisual = {
   labelMesh: THREE.Mesh;
 };
 
+/** UserData on merged cab floor pick meshes (`body` + `label`) for nearest-level ray resolve. */
+export const MAMMOTH_MERGED_CAB_FLOOR_PICK_UD = "mammothMergedCabFloorPickLayout" as const;
+
+export type MergedCabFloorPickLayout = {
+  /** Set by gameplay (`FpElevatorShaftVisual`) after cab build. */
+  shaftKey?: string;
+  maxLevel: number;
+  vertsPerBodyLevel: number;
+  vertsPerLabelLevel: number;
+  /** Label centers in `panelRoot` local space (m). */
+  centersPanelLocal: readonly { level: number; x: number; y: number; z: number }[];
+};
+
 export type ElevatorCabCarVisual = {
   root: THREE.Group;
   panelRoot: THREE.Group;
   doorL: THREE.Group | null;
   doorR: THREE.Group | null;
   floorButtons: ElevatorCabFloorButtonVisual[];
+  /** When true, every `floorButtons[*].bodyMesh` shares one merged mesh (same for labels). */
+  mergedFloorButtons?: boolean;
 };
 
 type BuildElevatorCabCarVisualArgs = {
@@ -148,7 +164,37 @@ type BuildElevatorCabCarVisualArgs = {
   /** Optional override for floor label faces (gameplay swaps highlight materials at runtime). */
   floorButtonLabelMaterial?: THREE.Material;
   rootName?: string;
+  /**
+   * Collapse per-floor button meshes into two merged draws (body + label atlas) for FP perf.
+   * Picking uses {@link resolveMergedCabFloorPickLevel} + {@link MAMMOTH_MERGED_CAB_FLOOR_PICK_UD}.
+   */
+  mergeCabFloorButtons?: boolean;
 };
+
+/**
+ * Nearest label center in panel space — used when cab floor buttons are merged into one mesh pair.
+ */
+export function resolveMergedCabFloorPickLevel(
+  hitPointWorld: THREE.Vector3,
+  panelRoot: THREE.Object3D,
+  layout: MergedCabFloorPickLayout,
+): number {
+  const p = new THREE.Vector3();
+  panelRoot.worldToLocal(p.copy(hitPointWorld));
+  let bestLevel = 1;
+  let bestD = Infinity;
+  for (const c of layout.centersPanelLocal) {
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    const dz = p.z - c.z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      bestLevel = c.level;
+    }
+  }
+  return bestLevel;
+}
 
 function panelBoardPosition(args: {
   face: ElevatorShaftLayout["doorFace"];
@@ -200,6 +246,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     includeDoors = true,
     floorButtonLabelMaterial,
     rootName = "editor_elevator_cab_preview",
+    mergeCabFloorButtons = false,
   } = args;
   const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
   const innerH = layout.sy - 2 * 0.11 - CAR_CEIL_BELOW_SHAFT_TOP;
@@ -425,58 +472,224 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   const z0 = -zSpan * 0.5;
   const y0 = floorT + 1.12;
   const floorButtons: ElevatorCabFloorButtonVisual[] = [];
-  for (let level = 1; level <= clampedMaxLevel; level++) {
-    const idx = level - 1;
-    const col = idx % FLOOR_COLS;
-    const row = Math.floor(idx / FLOOR_COLS);
-    const ly = y0 + row * (FLOOR_BTN_DIA + FLOOR_GAP);
-    const gridAlong = z0 + col * (FLOOR_BTN_DIA + FLOOR_GAP);
-    const button = new THREE.Mesh(
-      new THREE.CylinderGeometry(FLOOR_BTN_DIA * 0.5, FLOOR_BTN_DIA * 0.5, buttonDepth, 40),
-      buttonBodyMat,
-    );
-    button.name = `cab_floor_button_body_${level}`;
-    button.userData.editorCabPickId = "cab_floor_button";
-    const facePlane = new THREE.Mesh(
-      new THREE.CircleGeometry(FLOOR_BTN_FACE_DIA * 0.5, 40),
-      buttonMat,
-    );
-    facePlane.userData.editorCabPickId = "cab_floor_button";
-    applyAtlasUvToGeometry(facePlane.geometry, level, atlasRows);
-    facePlane.name = `cab_floor_button_label_${level}`;
-    const buttonFrontPad = 0.002;
-    if (face === "e") {
-      const wallX = -hx + wallT;
-      button.rotation.z = Math.PI * 0.5;
-      button.position.set(wallX + panelBoardDepth + buttonDepth * 0.5, ly, gridAlong);
-      facePlane.position.set(wallX + panelBoardDepth + buttonDepth + buttonFrontPad, ly, gridAlong);
-      facePlane.rotation.y = -Math.PI * 0.5;
-    } else if (face === "w") {
-      const wallX = hx - wallT;
-      button.rotation.z = Math.PI * 0.5;
-      button.position.set(wallX - panelBoardDepth - buttonDepth * 0.5, ly, gridAlong);
-      facePlane.position.set(wallX - panelBoardDepth - buttonDepth - buttonFrontPad, ly, gridAlong);
-      facePlane.rotation.y = Math.PI * 0.5;
-    } else if (face === "n") {
-      const wallZ = -hz + wallT;
-      button.rotation.x = Math.PI * 0.5;
-      button.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth * 0.5);
-      facePlane.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth + buttonFrontPad);
-    } else {
-      const wallZ = hz - wallT;
-      button.rotation.x = Math.PI * 0.5;
-      button.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth * 0.5);
-      facePlane.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth - buttonFrontPad);
-      facePlane.rotation.y = Math.PI;
+
+  if (mergeCabFloorButtons) {
+    const bodies: THREE.Mesh[] = [];
+    const labels: THREE.Mesh[] = [];
+    for (let level = 1; level <= clampedMaxLevel; level++) {
+      const idx = level - 1;
+      const col = idx % FLOOR_COLS;
+      const row = Math.floor(idx / FLOOR_COLS);
+      const ly = y0 + row * (FLOOR_BTN_DIA + FLOOR_GAP);
+      const gridAlong = z0 + col * (FLOOR_BTN_DIA + FLOOR_GAP);
+      const button = new THREE.Mesh(
+        new THREE.CylinderGeometry(FLOOR_BTN_DIA * 0.5, FLOOR_BTN_DIA * 0.5, buttonDepth, 40),
+        buttonBodyMat,
+      );
+      button.name = `cab_floor_button_body_${level}`;
+      button.userData.editorCabPickId = "cab_floor_button";
+      const facePlane = new THREE.Mesh(
+        new THREE.CircleGeometry(FLOOR_BTN_FACE_DIA * 0.5, 40),
+        buttonMat,
+      );
+      facePlane.userData.editorCabPickId = "cab_floor_button";
+      applyAtlasUvToGeometry(facePlane.geometry, level, atlasRows);
+      facePlane.name = `cab_floor_button_label_${level}`;
+      const buttonFrontPad = 0.002;
+      if (face === "e") {
+        const wallX = -hx + wallT;
+        button.rotation.z = Math.PI * 0.5;
+        button.position.set(wallX + panelBoardDepth + buttonDepth * 0.5, ly, gridAlong);
+        facePlane.position.set(wallX + panelBoardDepth + buttonDepth + buttonFrontPad, ly, gridAlong);
+        facePlane.rotation.y = -Math.PI * 0.5;
+      } else if (face === "w") {
+        const wallX = hx - wallT;
+        button.rotation.z = Math.PI * 0.5;
+        button.position.set(wallX - panelBoardDepth - buttonDepth * 0.5, ly, gridAlong);
+        facePlane.position.set(wallX - panelBoardDepth - buttonDepth - buttonFrontPad, ly, gridAlong);
+        facePlane.rotation.y = Math.PI * 0.5;
+      } else if (face === "n") {
+        const wallZ = -hz + wallT;
+        button.rotation.x = Math.PI * 0.5;
+        button.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth * 0.5);
+        facePlane.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth + buttonFrontPad);
+      } else {
+        const wallZ = hz - wallT;
+        button.rotation.x = Math.PI * 0.5;
+        button.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth * 0.5);
+        facePlane.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth - buttonFrontPad);
+        facePlane.rotation.y = Math.PI;
+      }
+      panelRoot.add(button);
+      panelRoot.add(facePlane);
+      bodies.push(button);
+      labels.push(facePlane);
     }
-    panelRoot.add(button);
-    panelRoot.add(facePlane);
-    floorButtons.push({ level, bodyMesh: button, labelMesh: facePlane });
+
+    panelRoot.updateMatrixWorld(true);
+    const invPanel = new THREE.Matrix4().copy(panelRoot.matrixWorld).invert();
+    const toPanelLocal = (mesh: THREE.Mesh): THREE.BufferGeometry => {
+      const g = mesh.geometry.clone();
+      const m = new THREE.Matrix4().multiplyMatrices(invPanel, mesh.matrixWorld);
+      g.applyMatrix4(m);
+      return g;
+    };
+
+    const centersPanelLocal: { level: number; x: number; y: number; z: number }[] = [];
+    const wp = new THREE.Vector3();
+    const pl = new THREE.Vector3();
+    for (let i = 0; i < labels.length; i++) {
+      labels[i]!.getWorldPosition(wp);
+      panelRoot.worldToLocal(pl.copy(wp));
+      centersPanelLocal.push({
+        level: i + 1,
+        x: pl.x,
+        y: pl.y,
+        z: pl.z,
+      });
+    }
+
+    const bp0 = bodies[0]!.geometry.getAttribute("position");
+    const lp0 = labels[0]!.geometry.getAttribute("position");
+    if (!bp0 || !lp0) {
+      throw new Error("buildElevatorCabCarVisual: mergeCabFloorButtons missing position attribute");
+    }
+    const vertsPerBodyLevel = bp0.count;
+    const vertsPerLabelLevel = lp0.count;
+
+    const bodyGeos = bodies.map(toPanelLocal);
+    const labelGeos = labels.map(toPanelLocal);
+    for (const m of bodies) {
+      panelRoot.remove(m);
+      m.geometry.dispose();
+    }
+    for (const m of labels) {
+      panelRoot.remove(m);
+      m.geometry.dispose();
+    }
+
+    const mergedBodyGeom = mergeGeometries(bodyGeos, false);
+    const mergedLabelGeom = mergeGeometries(labelGeos, false);
+    for (const g of bodyGeos) g.dispose();
+    for (const g of labelGeos) g.dispose();
+    if (!mergedBodyGeom || !mergedLabelGeom) {
+      throw new Error("buildElevatorCabCarVisual: mergeCabFloorButtons mergeGeometries failed");
+    }
+    mergedBodyGeom.computeBoundingSphere();
+    mergedBodyGeom.computeBoundingBox();
+    mergedLabelGeom.computeBoundingSphere();
+    mergedLabelGeom.computeBoundingBox();
+
+    const posB = mergedBodyGeom.getAttribute("position") as THREE.BufferAttribute | null;
+    const posL = mergedLabelGeom.getAttribute("position") as THREE.BufferAttribute | null;
+    if (!posB || !posL) {
+      throw new Error("buildElevatorCabCarVisual: merged cab floor geom missing position");
+    }
+    const nBody = posB.count;
+    const nLabel = posL.count;
+    mergedBodyGeom.setAttribute(
+      "color",
+      new THREE.BufferAttribute(new Float32Array(nBody * 3).fill(0.96), 3),
+    );
+    mergedLabelGeom.setAttribute(
+      "color",
+      new THREE.BufferAttribute(new Float32Array(nLabel * 3).fill(0.88), 3),
+    );
+
+    const mergedBodyMat = buttonBodyMat.clone();
+    mergedBodyMat.vertexColors = true;
+    mergedBodyMat.name = "cab_floor_btn_body_merged_vc";
+
+    const mergedLabelMat = buttonMat.clone();
+    if (!(mergedLabelMat instanceof THREE.MeshBasicMaterial)) {
+      throw new Error("buildElevatorCabCarVisual: mergeCabFloorButtons expects MeshBasic label material");
+    }
+    mergedLabelMat.vertexColors = true;
+    mergedLabelMat.name = "cab_floor_btn_label_merged_vc";
+
+    const mergedBody = new THREE.Mesh(mergedBodyGeom, mergedBodyMat);
+    mergedBody.name = "cab_floor_button_bodies_merged";
+    mergedBody.userData.editorCabPickId = "cab_floor_button";
+    const mergedLabel = new THREE.Mesh(mergedLabelGeom, mergedLabelMat);
+    mergedLabel.name = "cab_floor_button_labels_merged";
+    mergedLabel.userData.editorCabPickId = "cab_floor_button";
+
+    const pickLayout: MergedCabFloorPickLayout = {
+      maxLevel: clampedMaxLevel,
+      vertsPerBodyLevel,
+      vertsPerLabelLevel,
+      centersPanelLocal,
+    };
+    mergedBody.userData[MAMMOTH_MERGED_CAB_FLOOR_PICK_UD] = pickLayout;
+    mergedLabel.userData[MAMMOTH_MERGED_CAB_FLOOR_PICK_UD] = pickLayout;
+
+    panelRoot.add(mergedBody);
+    panelRoot.add(mergedLabel);
+
+    for (let level = 1; level <= clampedMaxLevel; level++) {
+      floorButtons.push({ level, bodyMesh: mergedBody, labelMesh: mergedLabel });
+    }
+  } else {
+    for (let level = 1; level <= clampedMaxLevel; level++) {
+      const idx = level - 1;
+      const col = idx % FLOOR_COLS;
+      const row = Math.floor(idx / FLOOR_COLS);
+      const ly = y0 + row * (FLOOR_BTN_DIA + FLOOR_GAP);
+      const gridAlong = z0 + col * (FLOOR_BTN_DIA + FLOOR_GAP);
+      const button = new THREE.Mesh(
+        new THREE.CylinderGeometry(FLOOR_BTN_DIA * 0.5, FLOOR_BTN_DIA * 0.5, buttonDepth, 40),
+        buttonBodyMat,
+      );
+      button.name = `cab_floor_button_body_${level}`;
+      button.userData.editorCabPickId = "cab_floor_button";
+      const facePlane = new THREE.Mesh(
+        new THREE.CircleGeometry(FLOOR_BTN_FACE_DIA * 0.5, 40),
+        buttonMat,
+      );
+      facePlane.userData.editorCabPickId = "cab_floor_button";
+      applyAtlasUvToGeometry(facePlane.geometry, level, atlasRows);
+      facePlane.name = `cab_floor_button_label_${level}`;
+      const buttonFrontPad = 0.002;
+      if (face === "e") {
+        const wallX = -hx + wallT;
+        button.rotation.z = Math.PI * 0.5;
+        button.position.set(wallX + panelBoardDepth + buttonDepth * 0.5, ly, gridAlong);
+        facePlane.position.set(wallX + panelBoardDepth + buttonDepth + buttonFrontPad, ly, gridAlong);
+        facePlane.rotation.y = -Math.PI * 0.5;
+      } else if (face === "w") {
+        const wallX = hx - wallT;
+        button.rotation.z = Math.PI * 0.5;
+        button.position.set(wallX - panelBoardDepth - buttonDepth * 0.5, ly, gridAlong);
+        facePlane.position.set(wallX - panelBoardDepth - buttonDepth - buttonFrontPad, ly, gridAlong);
+        facePlane.rotation.y = Math.PI * 0.5;
+      } else if (face === "n") {
+        const wallZ = -hz + wallT;
+        button.rotation.x = Math.PI * 0.5;
+        button.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth * 0.5);
+        facePlane.position.set(gridAlong, ly, wallZ + panelBoardDepth + buttonDepth + buttonFrontPad);
+      } else {
+        const wallZ = hz - wallT;
+        button.rotation.x = Math.PI * 0.5;
+        button.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth * 0.5);
+        facePlane.position.set(gridAlong, ly, wallZ - panelBoardDepth - buttonDepth - buttonFrontPad);
+        facePlane.rotation.y = Math.PI;
+      }
+      panelRoot.add(button);
+      panelRoot.add(facePlane);
+      floorButtons.push({ level, bodyMesh: button, labelMesh: facePlane });
+    }
   }
   root.add(panelRoot);
 
   applyElevatorCabPartTransforms(root, def);
-  return { root, panelRoot, doorL, doorR, floorButtons };
+  return {
+    root,
+    panelRoot,
+    doorL,
+    doorR,
+    floorButtons,
+    mergedFloorButtons: mergeCabFloorButtons ? true : undefined,
+  };
 }
 
 /**
