@@ -20,6 +20,8 @@ import {
   addWallConstantZWithHoles,
   applyWorldMetricUvsToAxisAlignedBoxMesh,
   pickFaceTowardPoint,
+  STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE,
+  WALL_SEGMENT_UV_METERS_PER_TILE,
   type CardinalFace,
   type WallHoleXY,
   type WallHoleYZ,
@@ -327,6 +329,8 @@ function addShaftShell(
     const floor = new THREE.Mesh(new THREE.BoxGeometry(sx, wt, sz), floorMat);
     floor.name = "shaft_floor";
     floor.position.set(0, -hy + wt * 0.5, 0);
+    applyWorldMetricUvsToAxisAlignedBoxMesh(floor, STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE);
+    floor.userData.mammothAxisAlignedCollisionBox = true;
     group.add(floor);
   }
 
@@ -1800,8 +1804,13 @@ export function addStairWellPlaceholder(
     );
     li += 1;
     mesh.position.set(cl.x, cl.y, cl.z);
-    /** Same meter-based UV projection as shaft walls — default cube UVs stretch on long pads. */
-    applyWorldMetricUvsToAxisAlignedBoxMesh(mesh);
+    /** Ground decks use landing patina at foot scale; typical storeys match shaft wall UV density. */
+    applyWorldMetricUvsToAxisAlignedBoxMesh(
+      mesh,
+      authoringScope === "ground"
+        ? STAIR_WELL_HORIZONTAL_PATINA_METERS_PER_TILE
+        : WALL_SEGMENT_UV_METERS_PER_TILE,
+    );
     mesh.userData.mammothAxisAlignedCollisionBox = true;
     group.add(mesh);
   }
