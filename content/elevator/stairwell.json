@@ -3,24 +3,48 @@
   "version": 1,
   "materials": {
     "wall": {
-      "mapUrl": "/static/materials/stairwell/slavic-two-tone-wall.svg"
+      "roughness": 1,
+      "metalness": 1,
+      "mapUrl": "/static/materials/stairwell/patina-wall/basecolor.png",
+      "normalMapUrl": "/static/materials/stairwell/patina-wall/normal.png",
+      "roughnessMapUrl": "/static/materials/stairwell/patina-wall/roughness.png",
+      "metalnessMapUrl": "/static/materials/stairwell/patina-wall/metalness.png",
+      "bumpMapUrl": "/static/materials/stairwell/patina-wall/height.png"
     },
     "floor": {
-      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-landing.svg"
+      "roughness": 1,
+      "metalness": 1,
+      "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
+      "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
+      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png",
+      "metalnessMapUrl": "/static/materials/stairwell/patina-landing/metalness.png",
+      "bumpMapUrl": "/static/materials/stairwell/patina-landing/height.png"
     },
     "tread": {
-      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-tread.svg"
+      "roughness": 1,
+      "metalness": 1,
+      "mapUrl": "/static/materials/stairwell/patina-tread/basecolor.png",
+      "normalMapUrl": "/static/materials/stairwell/patina-tread/normal.png",
+      "roughnessMapUrl": "/static/materials/stairwell/patina-tread/roughness.png",
+      "metalnessMapUrl": "/static/materials/stairwell/patina-tread/metalness.png",
+      "bumpMapUrl": "/static/materials/stairwell/patina-tread/height.png"
     },
     "landing": {
-      "mapUrl": "/static/materials/stairwell/mammoth-worn-stair-landing.svg"
+      "roughness": 1,
+      "metalness": 1,
+      "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
+      "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
+      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png",
+      "metalnessMapUrl": "/static/materials/stairwell/patina-landing/metalness.png",
+      "bumpMapUrl": "/static/materials/stairwell/patina-landing/height.png"
     }
   },
   "partTransforms": {
     "stair_flight_lower": {
       "position": [
         0,
-        0,
-        0
+        0.23826512601792094,
+        -0.15433905718826546
       ],
       "scale": [
         1,
@@ -36,26 +60,26 @@
     },
     "stair_flight_upper": {
       "position": [
-        0,
-        0.07008461184940695,
-        -0.2065832999779431
+        0.047113333034866416,
+        0.07570744887537195,
+        -0.15654456034460884
       ],
       "scale": [
-        1,
+        1.1222453007540465,
         1,
         1
       ],
       "rotation": [
-        0,
-        0,
-        0,
-        1
+        0.0010342027207092932,
+        -0.001981559426453653,
+        -0.0005371587281406981,
+        0.9999973576502456
       ]
     },
     "stair_landing_lower": {
       "position": [
         0.027352413575924408,
-        -0.41297427164930833,
+        -0.31739998025035177,
         -0.10090178797032667
       ],
       "scale": [
@@ -142,6 +166,24 @@
         0,
         0,
         1
+      ]
+    },
+    "stair_flight_upper": {
+      "position": [
+        0.05256912132857792,
+        0.0691467982445414,
+        0
+      ],
+      "scale": [
+        1.1364014734943957,
+        1,
+        1
+      ],
+      "rotation": [
+        0.004184182435092182,
+        -0.006604068464764842,
+        -0.00033781825044070234,
+        0.9999693819192127
       ]
     }
   },

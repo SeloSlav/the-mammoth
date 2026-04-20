@@ -60,6 +60,10 @@ export type FpAuthorPickMeta = { id: string; label: string };
 
 export type EditorMaterialMeta = {
   mapUrl?: string;
+  normalMapUrl?: string;
+  roughnessMapUrl?: string;
+  metalnessMapUrl?: string;
+  bumpMapUrl?: string;
   roughness?: number;
   metalness?: number;
 };

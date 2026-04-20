@@ -4,7 +4,7 @@
   "displayName": "Mamutica typical residential plate (generated)",
   "metadata": {
     "mamutica_reference": "Zagreb Mamutica: ~240 m length, ~60 m height, 19 inhabited floors, 1169 apartments (hr.wikipedia).",
-    "generated_corridor_length_m": 237.6,
+    "generated_corridor_length_m": 232.525,
     "inferred_double_loaded_bar_width_m": 21.85,
     "unit_bay_footprint_about_m2": 63.9,
     "core_station_centers_z_m": [
@@ -31,7 +31,7 @@
       "scale": [
         3.85,
         3.05,
-        237.6
+        232.525
       ],
       "metadata": {
         "note": "Residential corridor; vertical cores offset in unit bays."

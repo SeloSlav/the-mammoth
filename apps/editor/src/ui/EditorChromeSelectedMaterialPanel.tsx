@@ -11,6 +11,10 @@ type AuthoringMaterialSlot = {
   roughness?: number;
   metalness?: number;
   mapUrl?: string;
+  normalMapUrl?: string;
+  roughnessMapUrl?: string;
+  metalnessMapUrl?: string;
+  bumpMapUrl?: string;
   transmission?: number;
 };
 
@@ -24,6 +28,49 @@ function filterMaterialTextureUrls(
   const shared = urls.filter((url) => url.startsWith("/static/materials/shared/"));
   const remainder = urls.filter((url) => !preferred.includes(url) && !shared.includes(url));
   return [...preferred, ...shared, ...remainder];
+}
+
+function OptionalTextureMapRow(props: {
+  label: string;
+  url: string | undefined;
+  textureOptions: readonly string[];
+  input: CSSProperties;
+  onUrl: (next: string | undefined) => void;
+}) {
+  const { label, url, textureOptions, input, onUrl } = props;
+  const v = url ?? "";
+  const selectValue = v.length === 0 ? "" : textureOptions.includes(v) ? v : "__custom__";
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, opacity: 0.78, marginBottom: 4 }}>{label}</div>
+      <select
+        style={input}
+        value={selectValue}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === "__custom__") return;
+          onUrl(next || undefined);
+        }}
+      >
+        <option value="">None</option>
+        {textureOptions.map((u) => (
+          <option key={u} value={u}>
+            {materialTextureOptionLabel(u)}
+          </option>
+        ))}
+        {selectValue === "__custom__" ? <option value="__custom__">Custom URL below</option> : null}
+      </select>
+      <input
+        style={{ ...input, marginTop: 6 }}
+        placeholder="/static/materials/..."
+        value={v}
+        onChange={(e) => {
+          const t = e.target.value.trim();
+          onUrl(t || undefined);
+        }}
+      />
+    </div>
+  );
 }
 
 function MaterialSlotEditor(props: {
@@ -64,6 +111,34 @@ function MaterialSlotEditor(props: {
           const v = e.target.value.trim();
           onPatch({ mapUrl: v || undefined });
         }}
+      />
+      <OptionalTextureMapRow
+        label="Normal map"
+        url={slot?.normalMapUrl}
+        textureOptions={textureOptions}
+        input={input}
+        onUrl={(next) => onPatch({ normalMapUrl: next })}
+      />
+      <OptionalTextureMapRow
+        label="Roughness map"
+        url={slot?.roughnessMapUrl}
+        textureOptions={textureOptions}
+        input={input}
+        onUrl={(next) => onPatch({ roughnessMapUrl: next })}
+      />
+      <OptionalTextureMapRow
+        label="Metalness map"
+        url={slot?.metalnessMapUrl}
+        textureOptions={textureOptions}
+        input={input}
+        onUrl={(next) => onPatch({ metalnessMapUrl: next })}
+      />
+      <OptionalTextureMapRow
+        label="Height → bump map"
+        url={slot?.bumpMapUrl}
+        textureOptions={textureOptions}
+        input={input}
+        onUrl={(next) => onPatch({ bumpMapUrl: next })}
       />
       <input
         style={{ ...input, marginTop: 8 }}

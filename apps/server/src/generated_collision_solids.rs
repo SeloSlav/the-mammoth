@@ -30,15 +30,16 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/pa
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0026.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0027.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0028.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_collision_solids/part_0029.rs"));
 
 #[allow(dead_code)]
-pub const COLLISION_SOLID_FOOTPRINT_MIN_X: f32 = -16.55000;
+pub const COLLISION_SOLID_FOOTPRINT_MIN_X: f32 = -11.72500;
 #[allow(dead_code)]
-pub const COLLISION_SOLID_FOOTPRINT_MAX_X: f32 = 16.55000;
+pub const COLLISION_SOLID_FOOTPRINT_MAX_X: f32 = 11.72500;
 #[allow(dead_code)]
-pub const COLLISION_SOLID_FOOTPRINT_MIN_Z: f32 = -119.60000;
+pub const COLLISION_SOLID_FOOTPRINT_MIN_Z: f32 = -117.06250;
 #[allow(dead_code)]
-pub const COLLISION_SOLID_FOOTPRINT_MAX_Z: f32 = 119.60000;
+pub const COLLISION_SOLID_FOOTPRINT_MAX_Z: f32 = 117.06250;
 
 /// AABBs split across shard files for reviewability.
 pub static COLLISION_SOLID_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
@@ -71,4 +72,5 @@ pub static COLLISION_SOLID_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
     PART_0026,
     PART_0027,
     PART_0028,
+    PART_0029,
 ];

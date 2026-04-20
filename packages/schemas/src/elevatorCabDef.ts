@@ -6,7 +6,16 @@ export const ElevatorCabMaterialSlotSchema = z.object({
   colorHex: z.string().optional(),
   roughness: z.number().min(0).max(1).optional(),
   metalness: z.number().min(0).max(1).optional(),
+  /** Albedo / base color map (sRGB). */
   mapUrl: z.string().optional(),
+  /** Tangent-space normal map (linear / data). */
+  normalMapUrl: z.string().optional(),
+  /** Grayscale or packed roughness; multiplied with scalar `roughness`. */
+  roughnessMapUrl: z.string().optional(),
+  /** Grayscale metalness; multiplied with scalar `metalness`. */
+  metalnessMapUrl: z.string().optional(),
+  /** Height / displacement-style map used as `bumpMap` (no mesh subdivision). */
+  bumpMapUrl: z.string().optional(),
 });
 
 export type ElevatorCabMaterialSlot = z.infer<typeof ElevatorCabMaterialSlotSchema>;

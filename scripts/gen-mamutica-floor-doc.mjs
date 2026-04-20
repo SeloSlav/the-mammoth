@@ -3,7 +3,7 @@
  * Generates Mamutica-inspired floor JSON:
  * - `floor_mamutica_typical.json` — double-loaded residential plate with **symmetric** vertical
  *   cores (stair + elevator) along the spine and **segmented** corridors (no single 240 m tube).
- * - `floor_mamutica_ground.json` — podium / lobby: wide halls, **elevator banks**, stair wells.
+ * - `floor_mamutica_ground.json` — podium / lobby: shell matches residential bar width, **elevator banks**, stair wells.
  *
  * Published references (hr.wikipedia infobox): ~240 m, ~60 m, 19 floors, 1169 apartments.
  * Cross-section is inferred, not surveyed.
@@ -28,12 +28,21 @@ const BAY_GAP_M = 0.1;
 
 /** Distance (m) between core station centres along ±Z (symmetric about 0). */
 const CORE_STATION_SPACING_M = 46;
-const corridorLen =
+/** Drives core placement + unit segmentation along Z (layout-only; spine shell length is tightened below). */
+const layoutCorridorLen =
   Math.max(2, Math.round(TARGET_CORRIDOR_LENGTH_M / UNIT_ALONG_Z_M)) * UNIT_ALONG_Z_M;
-const halfLen = corridorLen * 0.5;
+const halfLen = layoutCorridorLen * 0.5;
 const szBay = UNIT_ALONG_Z_M - BAY_GAP_M;
 const unitFootprintM2 = UNIT_DEPTH_M * szBay;
 const barWidthM = CORRIDOR_WIDTH_M + 2 * UNIT_DEPTH_M;
+
+/** Spine / lobby shell length along Z: match occupied unit row so façades do not step past apartment shells. */
+function shellCorridorLenFromUnitCenters(unitCentersZ) {
+  if (unitCentersZ.length === 0) return layoutCorridorLen;
+  const zMin = Math.min(...unitCentersZ) - szBay * 0.5;
+  const zMax = Math.max(...unitCentersZ) + szBay * 0.5;
+  return Math.round((zMax - zMin) * 1e6) / 1e6;
+}
 const PY_CENTER = FLOOR_TO_CEILING_M * 0.5 + 0.08;
 /** Vertical centre for cores whose box height matches one full storey climb. */
 const CORE_PY = STOREY_SPACING_M * 0.5 + 0.08;
@@ -104,6 +113,7 @@ function collectSegmentedUnitCentersZ(coreZs) {
 function writeTypicalFloor() {
   const coreZs = collectCoreCentersZ();
   const unitCentersZ = collectSegmentedUnitCentersZ(coreZs);
+  const shellCorridorLen = shellCorridorLenFromUnitCenters(unitCentersZ);
   const objects = [];
 
   /** One spine; cores sit in ±X unit columns and do not overlap this X band. */
@@ -111,7 +121,7 @@ function writeTypicalFloor() {
     id: "corridor_main",
     prefabId: "corridor_segment_a",
     position: [0, PY_CENTER, 0],
-    scale: [CORRIDOR_WIDTH_M, FLOOR_TO_CEILING_M, corridorLen],
+    scale: [CORRIDOR_WIDTH_M, FLOOR_TO_CEILING_M, shellCorridorLen],
     metadata: { note: "Residential corridor; vertical cores offset in unit bays." },
   });
 
@@ -160,7 +170,7 @@ function writeTypicalFloor() {
     metadata: {
       mamutica_reference:
         "Zagreb Mamutica: ~240 m length, ~60 m height, 19 inhabited floors, 1169 apartments (hr.wikipedia).",
-      generated_corridor_length_m: corridorLen,
+      generated_corridor_length_m: shellCorridorLen,
       inferred_double_loaded_bar_width_m: barWidthM,
       unit_bay_footprint_about_m2: Math.round(unitFootprintM2 * 100) / 100,
       core_station_centers_z_m: coreZs,
@@ -180,13 +190,13 @@ function writeTypicalFloor() {
 }
 
 function writeGroundFloor() {
-  /** Match typical plate Z extent so storey-2+ shells do not overhang the podium footprint. */
-  const lobbyLen = corridorLen;
-  /**
-   * Wide enough that hub stairs (past the residential stack) + lifts sit **inside** one hollow
-   * lobby shell so spawn at the centre can see them without a wall in the way.
-   */
-  const lobbyWide = 31.5;
+  const coreZs = collectCoreCentersZ();
+  const unitCentersZ = collectSegmentedUnitCentersZ(coreZs);
+  /** Match typical residential plate XZ footprint so podium façades align with storey-2+ apartment shells. */
+  const shellCorridorLen = shellCorridorLenFromUnitCenters(unitCentersZ);
+  const lobbyLen = shellCorridorLen;
+  /** Same width as double-loaded bar (`barWidthM`): hub cores stay inside without a wide perimeter ring. */
+  const lobbyWide = barWidthM;
   const objects = [];
 
   objects.push({
@@ -200,7 +210,6 @@ function writeGroundFloor() {
   });
 
   /** Same X/Z grid as `writeTypicalFloor` cores so podium hoistways stack with slab + shell holes. */
-  const coreZs = collectCoreCentersZ();
   const stairXHub = CORRIDOR_WIDTH_M * 0.5 + STAIR_SX * 0.5 + 0.06;
   const elevX = -(CORRIDOR_WIDTH_M * 0.5 + ELEV_SX * 0.5 + 0.06);
   const elevScale = [ELEV_SX, STOREY_SPACING_M, ELEV_SZ];

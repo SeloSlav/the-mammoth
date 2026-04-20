@@ -1713,6 +1713,8 @@ export function addStairWellPlaceholder(
         const tr = L.treads[ti];
         if (!tr) break;
         if (opts?.omitTreads !== true) {
+          /** Single material on full box so Patina / PBR wraps every face (riser, bottom, sides).
+           * Multi-material arrays were avoided — they broke WebGPU draws in the editor. */
           const mesh = new THREE.Mesh(
             new THREE.BoxGeometry(tr.halfAlong * 2, tr.riseHalf * 2, tr.halfAcross * 2),
             mats.tread,

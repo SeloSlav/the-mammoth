@@ -6,6 +6,37 @@ import {
 } from "./shaftPlanformClip.js";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "./fpOutdoorGroundVisualY.js";
 
+/**
+ * World-space meters per texture repeat on horizontal ground slabs (patina maps are not seamless;
+ * planar UV keeps tiles roughly square in XZ regardless of plate aspect ratio).
+ */
+export const GROUND_SLAB_PATINA_TILE_SIZE_M = 2.75;
+
+/**
+ * Replaces default box top-face UVs with planar XZ mapping in meters so albedo/normal repeat
+ * consistently on long, narrow podium pieces (default 0–1 UV × equal `texture.repeat` looks awful).
+ */
+export function applyGroundSlabPlanarTopUV(
+  geometry: THREE.BufferGeometry,
+  width: number,
+  depth: number,
+  thickness: number,
+  metersPerTile = GROUND_SLAB_PATINA_TILE_SIZE_M,
+): void {
+  const pos = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  if (!pos || !uv) return;
+  const yTop = thickness * 0.5;
+  const inv = 1 / Math.max(1e-6, metersPerTile);
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) < yTop - 1e-5) continue;
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    uv.setXY(i, (x + width * 0.5) * inv, (z + depth * 0.5) * inv);
+  }
+  uv.needsUpdate = true;
+}
+
 /** Matches {@link addConcreteSlabWithOptionalShaftHoles} call on the ground storey. */
 export const GROUND_SLAB_MARGIN_XZ = 0.8;
 export const GROUND_SLAB_THICKNESS_M = 0.16;
@@ -68,10 +99,9 @@ export function addConcreteSlabWithOptionalShaftHoles(
     const d = p.z1 - p.z0;
     const cx = (p.x0 + p.x1) * 0.5;
     const cz = (p.z0 + p.z1) * 0.5;
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(w, thickness, d),
-      slabMaterial,
-    );
+    const geom = new THREE.BoxGeometry(w, thickness, d);
+    applyGroundSlabPlanarTopUV(geom, w, d, thickness);
+    const slab = new THREE.Mesh(geom, slabMaterial);
     slab.name =
       holes.length > 0 ? `floor_slab_piece_${i}` : "floor_slab_placeholder";
     i += 1;

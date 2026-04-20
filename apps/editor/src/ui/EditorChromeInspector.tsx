@@ -497,7 +497,10 @@ export function EditorChromeInspector(props: {
               </select>
             </>
           ) : null}
-          <label style={label}>metadata (JSON) — use editorMaterial.mapUrl etc.</label>
+          <label style={label}>
+            metadata (JSON) — editorMaterial: mapUrl, normalMapUrl, roughnessMapUrl, metalnessMapUrl,
+            bumpMapUrl, roughness, metalness
+          </label>
           <textarea
             style={{ ...input, minHeight: 100, fontFamily: "monospace", fontSize: 11 }}
             value={metaText}
