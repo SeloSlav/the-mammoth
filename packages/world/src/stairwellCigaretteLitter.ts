@@ -10,6 +10,10 @@ export const STAIRWELL_CIGARETTE_MODEL_URL = "/static/models/objects/used-cigare
  */
 const CIGARETTE_TARGET_MAX_EXTENT_M = 0.08;
 
+/** Inclusive random count per stair segment (storey); placements may reuse treads/landings. */
+const MIN_CIGARETTES_PER_STAIR_SEGMENT = 5;
+const MAX_CIGARETTES_PER_STAIR_SEGMENT = 10;
+
 /**
  * Deterministic seed for litter placement (combine plan key + storey index at call sites).
  */
@@ -175,40 +179,19 @@ function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterA
     }
   }
 
-  const totalAvailable = landingPool.length + treadPool.length;
-  if (totalAvailable === 0) return;
+  const anchors: PoolEntry[] = [...landingPool, ...treadPool];
+  if (anchors.length === 0) return;
 
-  const wantCount = Math.min(2 + (rng() < 0.5 ? 0 : 1), totalAvailable);
+  const span =
+    MAX_CIGARETTES_PER_STAIR_SEGMENT - MIN_CIGARETTES_PER_STAIR_SEGMENT + 1;
+  const wantCount =
+    MIN_CIGARETTES_PER_STAIR_SEGMENT + Math.floor(rng() * span);
 
-  const entryKey = (e: PoolEntry) =>
-    e.kind === "landing" ? `L:${e.cl.x},${e.cl.y},${e.cl.z}` : `T:${e.ti}`;
-
-  /**
-   * Tread-heavy pool: a naive shuffle almost always yields tread-only picks (~80%+), so landings
-   * never get litter. Reserve one pick for a corner pad whenever one exists.
-   */
-  const picks: PoolEntry[] = [];
-  const pickedKeys = new Set<string>();
-  if (landingPool.length > 0) {
-    const choice = landingPool[Math.floor(rng() * landingPool.length)]!;
-    picks.push(choice);
-    pickedKeys.add(entryKey(choice));
-  }
-  const filler = [...treadPool, ...landingPool].filter((e) => !pickedKeys.has(entryKey(e)));
-  for (let i = filler.length - 1; i >= 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    const a = filler[i]!;
-    filler[i] = filler[j]!;
-    filler[j] = a;
-  }
-  for (const e of filler) {
-    if (picks.length >= wantCount) break;
-    picks.push(e);
-    pickedKeys.add(entryKey(e));
-  }
-
-  for (let i = 0; i < picks.length; i++) {
-    const entry = picks[i]!;
+  for (let i = 0; i < wantCount; i++) {
+    const entry =
+      i === 0 && landingPool.length > 0
+        ? landingPool[Math.floor(rng() * landingPool.length)]!
+        : anchors[Math.floor(rng() * anchors.length)]!;
     const mesh = new THREE.Mesh(sharedGeometry, sharedMaterial);
     mesh.name = `stairwell_cigarette_${i}`;
     mesh.userData.mammothSkipFloorGeometryMerge = true;
@@ -245,7 +228,9 @@ function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterA
 }
 
 /**
- * Places 2–3 tiny cigarette props per stair segment on random corner landings and/or tread tops.
+ * Places a random count (default 50–100) of tiny cigarette props per stair segment on corner
+ * landings and/or tread tops (same pad/tread may repeat with new random offsets). Count is in
+ * `MIN_CIGARETTES_PER_STAIR_SEGMENT`–`MAX_CIGARETTES_PER_STAIR_SEGMENT` inclusive.
  * Uses one shared {@link THREE.BufferGeometry} for all instances in the session (low VRAM, low
  * upload cost); meshes are marked merge-skip so FP static-world merge does not strip them.
  *
