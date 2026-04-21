@@ -8,6 +8,7 @@
 | [architecture/persistence.md](architecture/persistence.md) | Disk vs SpaceTimeDB; baseline vs dynamic; document types |
 | [architecture/monorepo.md](architecture/monorepo.md) | Where code, authored data, and binaries belong |
 | [architecture/fp-prediction-view-smoothing.md](architecture/fp-prediction-view-smoothing.md) | Why FP motion can feel “hitchy” under 20 Hz reconcile; what helped (display + view ease vs physics sub-steps) |
+| [architecture/fp-building-mesh-visibility.md](architecture/fp-building-mesh-visibility.md) | FP building culling: floor plates vs unit plaster; why inset footprint must not gate interior walls |
 | [content-building.md](content-building.md) | After floor/building JSON edits: run `pnpm content:gen-walk-aabbs` so server walk collision stays in sync |
 
 Start with **PROJECT.md**, then read **world-streaming** and **persistence** if you are touching world data or the database.

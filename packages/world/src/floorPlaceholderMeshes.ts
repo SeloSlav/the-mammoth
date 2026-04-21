@@ -1854,17 +1854,24 @@ export function buildFloorMeshes(
           if (obj.name.startsWith("unit_exterior_glass_")) return;
           obj.userData.mammothSkipFloorGeometryMerge = true;
           /**
-           * Tag **only interior walls** (not floors / ceilings) as hide-from-outside. Walls are the
-           * bulk of the hollow-shell triangle count and are always occluded by the opaque
-           * `shell_exterior_cladding_*` concrete from any outside viewpoint, so rasterising them
-           * when the camera is outside the building footprint is pure waste.
+           * Tag interior hollow-shell pieces (walls, inter-unit floors, inter-unit ceilings) as
+           * hide-from-outside. All of these are occluded by `shell_exterior_cladding_*` concrete
+           * and the per-floor `addConcreteSlabWithOptionalShaftHoles` slab, so rasterising them
+           * while the camera is outside the building footprint is pure fill-rate waste. Ceilings
+           * and floors are fragment-expensive (big planar PBR surfaces) — this measurement showed
+           * the gap between "walls hidden only" (34 FPS, 25ms) and "walls+floors+ceilings hidden"
+           * (57 FPS, 16ms) on the same external-facing view.
            *
-           * `shell_floor_*` and `shell_ceiling_*` are left visible because they double as structural
-           * caps: the top-floor ceiling IS the building's roof silhouette (there is no separate
-           * roof slab — exterior cladding covers walls only), and the ground-floor floor seals the
-           * podium. Hiding those revealed sky through the top of the building from outside views.
+           * Exception: `shell_ceiling_*` on the **top floor** is kept visible because it doubles
+           * as the building's roof silhouette — there is no separate roof slab, exterior cladding
+           * covers walls only. The top-floor exemption is applied at runtime in `mountFpSession`
+           * (needs to know the max `mammothPlateLevelIndex` across the whole building).
            */
-          if (obj.name.startsWith("shell_wall_")) {
+          if (
+            obj.name.startsWith("shell_wall_") ||
+            obj.name.startsWith("shell_floor") ||
+            obj.name.startsWith("shell_ceiling")
+          ) {
             obj.userData.mammothUnitInterior = true;
           }
         });

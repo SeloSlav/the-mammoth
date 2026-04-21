@@ -216,11 +216,25 @@ export function attachStairWellLandingProps(args: {
   L: StairSwitchbackLayout;
   primaryDoor: PrimaryDoorLike | null | undefined;
   omitOnlyLanding: StairCornerLanding | undefined;
+  /**
+   * Top shaft segment uses {@link addStairWellPlaceholder}'s `omitTopLanding`: the roof slab corner
+   * is omitted, but the deck below still exists as the **upper** corner landing of the storey
+   * below. Typical `landingProps` (e.g. `applyToScopes: ["typical"]`) would attach again on this
+   * segment’s coincident landing mesh → duplicate GLBs (two heaters on the pad before the roof door).
+   * Ground-scoped props (single-storey lobby) must still run.
+   */
+  skipTypicalLandingProps?: boolean;
 }): void {
   const props = args.def?.landingProps;
   if (!props || props.length === 0) return;
 
   for (const prop of props) {
+    if (
+      args.skipTypicalLandingProps === true &&
+      prop.applyToScopes?.includes("typical") === true
+    ) {
+      continue;
+    }
     if (!propAllowedForScope(prop, args.authoringScope)) continue;
 
     let cl: StairCornerLanding | undefined;

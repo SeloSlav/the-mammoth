@@ -18,10 +18,7 @@ import {
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
-import {
-  fpBuildingExteriorViewShouldRevealFullStack,
-  fpCameraOrFeetInsideBuildingFootprintXZ,
-} from "./fpBuildingFloorPlateVisibilityBand.js";
+import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
@@ -223,18 +220,38 @@ export async function mountFpSession(
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   /**
-   * Unit interior shell meshes (hollow plaster walls/ceilings/floors inside each apartment).
+   * Unit interior shell meshes (hollow plaster walls + inter-unit floors + inter-unit ceilings).
    * Tagged in `packages/world/src/floorPlaceholderMeshes.ts` and collected here so
-   * `syncBuildingFloorPlateVisibility` can hide them when both the camera and feet are **outside**
-   * the building’s raw world XZ footprint (see {@link fpCameraOrFeetInsideBuildingFootprintXZ}).
-   * The floor-plate path still uses a perimeter inset for façade stability; that rule is not reused
-   * here — shallow perimeter units would otherwise lose plaster near windows. Cached once at mount;
-   * `.visible` is flipped on state change rather than per-frame traversal.
+   * `syncBuildingFloorPlateVisibility` can hide them whenever the camera is outside the building
+   * footprint. From outside the facade, interior geometry is occluded by opaque cladding + slabs
+   * and blurred by alpha-blend window glass — rendering it is ~1.3M wasted triangles per frame
+   * when the whole building fills the viewport. Cached once at mount; `.visible` is flipped on
+   * state change rather than per-frame traversal.
+   *
+   * The top floor's `shell_ceiling_*` is intentionally **excluded** from the hide set: it doubles
+   * as the building's roof silhouette (there is no separate roof slab — exterior cladding covers
+   * walls only). Without this exception, looking at the building from outside showed sky through
+   * the top.
    */
+  let topPlateLevel = -Infinity;
+  for (const ch of buildingRoot.children) {
+    const li = ch.userData.mammothPlateLevelIndex;
+    if (typeof li === "number" && li > topPlateLevel) topPlateLevel = li;
+  }
   const unitInteriorMeshes: THREE.Mesh[] = [];
   buildingRoot.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    if (obj.userData.mammothUnitInterior === true) unitInteriorMeshes.push(obj);
+    if (obj.userData.mammothUnitInterior !== true) return;
+    if (obj.name.startsWith("shell_ceiling")) {
+      // Walk up to the enclosing floor plate (direct child of buildingRoot) to check its level.
+      let ancestor: THREE.Object3D | null = obj;
+      while (ancestor && ancestor.parent !== buildingRoot) ancestor = ancestor.parent;
+      const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
+      if (typeof ancestorLevel === "number" && ancestorLevel === topPlateLevel) {
+        return;
+      }
+    }
+    unitInteriorMeshes.push(obj);
   });
 
   const fpElevators = mountFpElevatorWorld({
@@ -510,21 +527,12 @@ export async function mountFpSession(
       band = { lo: 1, hi: maxBuildingLevel };
     }
     /**
-     * Hide unit interior plaster shells only when both camera and feet are outside the raw XZ
-     * footprint. Do not tie this to {@link fpBuildingExteriorViewShouldRevealFullStack}: its inset
-     * treats perimeter units as “exterior” for floor-band reasons, which incorrectly culled plaster
-     * near façade windows.
+     * Hide unit interior plaster shells whenever the camera is outside the building footprint.
+     * The opaque exterior cladding + alpha-blend window glass still render so the facade silhouette
+     * is preserved, but interior wall/ceiling/floor triangles stop being rasterised — the single
+     * biggest fill-rate saving for the "looking at the whole building from far away" camera state.
      */
-    const unitInteriorVisible = fpCameraOrFeetInsideBuildingFootprintXZ({
-      cameraX: _floorVisCamWorld.x,
-      cameraZ: _floorVisCamWorld.z,
-      feetX: pos.x,
-      feetZ: pos.z,
-      boundsMinX: buildingWorldBounds.min.x,
-      boundsMaxX: buildingWorldBounds.max.x,
-      boundsMinZ: buildingWorldBounds.min.z,
-      boundsMaxZ: buildingWorldBounds.max.z,
-    });
+    const unitInteriorVisible = !cameraOutsideBuilding;
     if (unitInteriorVisible !== _lastUnitInteriorVisible) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {

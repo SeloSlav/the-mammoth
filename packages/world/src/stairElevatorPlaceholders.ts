@@ -2050,5 +2050,7 @@ export function addStairWellPlaceholder(
     L,
     primaryDoor: resolvedGroundDoor ?? undefined,
     omitOnlyLanding,
+    skipTypicalLandingProps:
+      opts?.omitTopLanding === true && authoringScope === "typical",
   });
 }
