@@ -1875,6 +1875,26 @@ export function buildFloorMeshes(
             obj.userData.mammothUnitInterior = true;
           }
         });
+      } else if (kind === "corridor") {
+        /**
+         * Corridors sit behind units + exterior cladding (except their own `shell_exterior_cladding_*`
+         * faces), so their interior hollow-shell pieces are also invisible from outside the building.
+         * Same hide-from-outside treatment as units — reuse the `mammothUnitInterior` tag so the
+         * runtime visibility gate in `mountFpSession.syncBuildingFloorPlateVisibility` covers both.
+         * Corridor meshes do NOT get `mammothSkipFloorGeometryMerge`: unlike unit hollow shells,
+         * corridor geometry merges cleanly, and keeping merge on is critical for draw-call count.
+         */
+        room.traverse((obj) => {
+          if (!(obj instanceof THREE.Mesh)) return;
+          if (obj.name.startsWith("shell_exterior_cladding")) return;
+          if (
+            obj.name.startsWith("shell_wall_") ||
+            obj.name.startsWith("shell_floor") ||
+            obj.name.startsWith("shell_ceiling")
+          ) {
+            obj.userData.mammothUnitInterior = true;
+          }
+        });
       }
     }
     root.add(room);

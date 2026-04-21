@@ -8,6 +8,8 @@ export const BIT_RIGHT = 1 << 3;
 export const BIT_JUMP = 1 << 4;
 export const BIT_SPRINT = 1 << 5;
 export const BIT_CROUCH = 1 << 6;
+/** Must match `apps/server/src/movement.rs` `BIT_JUMP_HELD`. */
+export const BIT_JUMP_HELD = 1 << 7;
 
 /**
  * Pack WASD / sprint / crouch / jump into the `bits` field for `submit_move_intent`.
@@ -25,5 +27,6 @@ export function encodeMoveIntentBits(
   if (input.sprint) bits |= BIT_SPRINT;
   if (input.crouch) bits |= BIT_CROUCH;
   if (jump) bits |= BIT_JUMP;
+  if (input.jumpHeld) bits |= BIT_JUMP_HELD;
   return bits & 0xff;
 }

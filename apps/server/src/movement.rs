@@ -26,18 +26,21 @@ pub const BIT_RIGHT: u8 = 1 << 3;
 pub const BIT_JUMP: u8 = 1 << 4;
 pub const BIT_SPRINT: u8 = 1 << 5;
 pub const BIT_CROUCH: u8 = 1 << 6;
+/// Space held — variable jump height while rising (`fpLocomotion.ts` `jumpHeld`).
+pub const BIT_JUMP_HELD: u8 = 1 << 7;
 
 // --- Physics (keep aligned with fpLocomotion.ts) ---
 const FLOOR_Y: f32 = 0.35;
 const SKIN: f32 = 0.034;
-const GRAVITY: f32 = 18.0;
-const JUMP_SPEED: f32 = 5.4;
+const GRAVITY: f32 = 21.5;
+const JUMP_SPEED: f32 = 5.7;
 // Indoor-ish profile — keep in sync with `packages/engine/src/fpLocomotion.ts`.
 const WALK_SPEED: f32 = 1.85;
 const SPRINT_SPEED: f32 = 5.1;
 const CROUCH_SPEED: f32 = 1.0;
 const GROUND_ACCEL: f32 = 19.0;
-const AIR_ACCEL: f32 = 4.2;
+const AIR_ACCEL: f32 = 7.8;
+const JUMP_RISE_CUT_FACTOR: f32 = 0.91;
 const DRAG: f32 = 10.0;
 /// Match client: snap grounded idle velocity to zero once the drag tail is no longer visible.
 ///
@@ -371,6 +374,9 @@ fn integrate_one(
         let x0 = p.x;
         let z0 = p.z;
         p.vel_y -= GRAVITY * sh;
+        if p.vel_y > 0.02 && bits & BIT_JUMP_HELD == 0 {
+            p.vel_y *= JUMP_RISE_CUT_FACTOR;
+        }
         p.x += p.vel_x * sh;
         p.z += p.vel_z * sh;
         p.y += p.vel_y * sh;

@@ -190,8 +190,17 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     m.removeFromParent();
   }
 
-  // Collect geometry clones keyed by material UUID.
-  const geosByMat = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[] }>();
+  /**
+   * Collect geometry clones keyed by material UUID, plus a flag tracking whether **all** source
+   * meshes contributing to that material were tagged `mammothUnitInterior = true`. Corridor shell
+   * walls/ceilings/floors are tagged before merge, and the resulting merged mesh inherits the flag
+   * only if every source had it — so e.g. the root-level concrete slab (untagged) sharing a
+   * material with corridor floors (tagged) correctly drops the flag and keeps the slab visible.
+   */
+  const geosByMat = new Map<
+    string,
+    { mat: THREE.Material; geos: THREE.BufferGeometry[]; allInterior: boolean }
+  >();
 
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
@@ -203,10 +212,15 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
       new THREE.Matrix4().multiplyMatrices(groupWorldInv, obj.matrixWorld),
     );
     const key = material.uuid;
-    if (!geosByMat.has(key)) {
-      geosByMat.set(key, { mat: material, geos: [] });
+    const isInterior = obj.userData.mammothUnitInterior === true;
+    let bucket = geosByMat.get(key);
+    if (!bucket) {
+      bucket = { mat: material, geos: [], allInterior: isInterior };
+      geosByMat.set(key, bucket);
+    } else {
+      bucket.allInterior = bucket.allInterior && isInterior;
     }
-    geosByMat.get(key)!.geos.push(geo);
+    bucket.geos.push(geo);
   });
 
   if (geosByMat.size === 0) {
@@ -223,7 +237,7 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     group.remove(group.children[0]!);
   }
 
-  for (const { mat, geos } of geosByMat.values()) {
+  for (const { mat, geos, allInterior } of geosByMat.values()) {
     const merged = mergeGeometries(geos, false);
     for (const g of geos) g.dispose();
     if (!merged) continue;
@@ -240,6 +254,12 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
      * frame regardless of camera direction — a catastrophic fill-rate regression.
      */
     mesh.frustumCulled = true;
+    /**
+     * Propagate the interior-hide flag only when every source mesh for this material was
+     * tagged. Mixed materials (e.g. corridor floor + root slab sharing one material) fall
+     * through as non-interior so the slab keeps rendering from outside views.
+     */
+    if (allInterior) mesh.userData.mammothUnitInterior = true;
     group.add(mesh);
   }
 

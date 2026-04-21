@@ -4,14 +4,16 @@ import * as THREE from "three";
 const FLOOR_Y = 0.35;
 const SKIN = 0.034;
 
-const GRAVITY = 18;
-const JUMP_SPEED = 5.4;
+const GRAVITY = 21.5;
+const JUMP_SPEED = 5.7;
 /** Indoor-ish gait: brisk ~6.7 km/h walk, strong ~18 km/h run for large-map traversal. */
 const WALK_SPEED = 1.85;
 const SPRINT_SPEED = 5.1;
 const CROUCH_SPEED = 1.0;
 const GROUND_ACCEL = 19;
-const AIR_ACCEL = 4.2;
+const AIR_ACCEL = 7.8;
+/** Per substep, while rising: applied if jump is not held (variable jump height). */
+const JUMP_RISE_CUT_FACTOR = 0.91;
 const DRAG = 10;
 /**
  * Snap grounded idle velocity to exact zero once the drag tail is inaudible / imperceptible.
@@ -87,6 +89,8 @@ export type FpLocomotionInput = {
   sprint: boolean;
   /** Toggle or hold — caller decides (we use sprint && !crouch for speed cap). */
   crouch: boolean;
+  /** Space held this frame — drives jump-height cut while `velocity.y > 0` (see `movement.rs` bit 7). */
+  jumpHeld: boolean;
 };
 
 export type FpLocomotionState = {
@@ -189,10 +193,13 @@ export function stepFpLocomotion(
     : 1;
   const sh = h / substeps;
   const endWallMs = walk?.integrationEvalEndWallClockMs;
-  for (let i = 0; i < substeps; i++) {
+    for (let i = 0; i < substeps; i++) {
     const x0 = pos.x;
     const z0 = pos.z;
     state.velocity.y -= GRAVITY * sh;
+    if (state.velocity.y > 0.02 && !input.jumpHeld) {
+      state.velocity.y *= JUMP_RISE_CUT_FACTOR;
+    }
     pos.x += state.velocity.x * sh;
     pos.z += state.velocity.z * sh;
     pos.y += state.velocity.y * sh;

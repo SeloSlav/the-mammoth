@@ -54,8 +54,13 @@ function mulberry32(seed: number): () => number {
  * building). `MeshPhysicalMaterial` with `transmission > 0` triggers the backbuffer-sampling
  * refraction path and runs an expensive PBR-plus-IOR fragment shader on every covered pixel —
  * that's a 50+ ms per-frame GPU regression on this scene. At any normal viewing distance a
- * tinted alpha-blended plane is visually indistinguishable from real transmission, so we use a
- * cheap `MeshStandardMaterial` with moderate opacity instead.
+ * tinted alpha-blended plane is visually indistinguishable from real transmission.
+ *
+ * Downgraded further from `MeshStandardMaterial` to `MeshBasicMaterial`: glass has no meaningful
+ * specular highlight at architectural scale, so the PBR BRDF (GGX, Fresnel) buys us nothing vs.
+ * the per-fragment cost on thousands of overlapping transparent panels. Basic runs no lighting
+ * shader at all — just `color × opacity` blend — roughly 4-5× cheaper per covered pixel, which
+ * matters because overlapping window overdraw stacks 3-4 deep across the visible façade.
  *
  * Keep `opacity` in the 0.25–0.45 range: higher reads as "dirty concrete square" instead of glass,
  * lower becomes invisible against bright exterior cladding.
@@ -63,34 +68,28 @@ function mulberry32(seed: number): () => number {
 const GLASS_TINT_PRESETS: readonly {
   color: number;
   opacity: number;
-  roughness: number;
 }[] = [
-  { color: 0xd8e8f0, opacity: 0.32, roughness: 0.2 },
-  { color: 0xc8dce8, opacity: 0.34, roughness: 0.22 },
-  { color: 0xe8f2f8, opacity: 0.3, roughness: 0.18 },
-  { color: 0xb8ccd8, opacity: 0.38, roughness: 0.25 },
-  { color: 0xa8c4d4, opacity: 0.42, roughness: 0.28 },
-  { color: 0xf0f6fc, opacity: 0.28, roughness: 0.16 },
+  { color: 0xdbeaf2, opacity: 0.32 },
+  { color: 0xcbdeea, opacity: 0.34 },
+  { color: 0xebf4fa, opacity: 0.3 },
+  { color: 0xbcd0dc, opacity: 0.38 },
+  { color: 0xacc8d8, opacity: 0.42 },
+  { color: 0xf2f8fd, opacity: 0.28 },
 ];
 
-const glassMaterialByTintId = new Map<number, THREE.MeshStandardMaterial>();
+const glassMaterialByTintId = new Map<number, THREE.MeshBasicMaterial>();
 
-export function getExteriorWindowGlassMaterial(tintId: number): THREE.MeshStandardMaterial {
+export function getExteriorWindowGlassMaterial(tintId: number): THREE.MeshBasicMaterial {
   const id = ((tintId % GLASS_TINT_PRESETS.length) + GLASS_TINT_PRESETS.length) % GLASS_TINT_PRESETS.length;
   const cached = glassMaterialByTintId.get(id);
   if (cached) return cached;
   const p = GLASS_TINT_PRESETS[id]!;
-  const m = new THREE.MeshStandardMaterial({
+  const m = new THREE.MeshBasicMaterial({
     color: p.color,
-    metalness: 0,
-    roughness: p.roughness,
     transparent: true,
     opacity: p.opacity,
     /** Without this, thousands of back-to-back glass panels at the same Z sort-flicker each frame. */
     depthWrite: false,
-    /** Subtle cool daylight kick so windows read as glass, not muted tape. */
-    emissive: p.color,
-    emissiveIntensity: 0.06,
   });
   glassMaterialByTintId.set(id, m);
   return m;

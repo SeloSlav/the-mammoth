@@ -619,6 +619,7 @@ export async function mountFpSession(
     right: false,
     sprint: false,
     crouch: false,
+    jumpHeld: false,
   };
 
   /** Pre-allocated input for reconcile replay (avoid allocating inside the replay loop). */
@@ -629,6 +630,7 @@ export async function mountFpSession(
     right: false,
     sprint: false,
     crouch: false,
+    jumpHeld: false,
   };
 
   /** Pre-allocated remote snapshot map — cleared each frame instead of constructed anew. */
@@ -1667,6 +1669,7 @@ export async function mountFpSession(
     out.right = (bits & 8) !== 0;
     out.sprint = (bits & 32) !== 0;
     out.crouch = (bits & 64) !== 0;
+    out.jumpHeld = (bits & 128) !== 0;
   };
 
   const angleDeltaAbs = (a: number, b: number): number =>
@@ -2128,6 +2131,7 @@ export async function mountFpSession(
         right: keys.has("KeyD"),
         sprint: keys.has("ShiftLeft") || keys.has("ShiftRight"),
         crouch: crouchToggle,
+        jumpHeld: keys.has("Space"),
       };
       sendMoveIntent(jumpInput, true, performance.now());
     }
@@ -2259,6 +2263,7 @@ export async function mountFpSession(
     _input.right = keys.has("KeyD");
     _input.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
     _input.crouch = crouchToggle;
+    _input.jumpHeld = keys.has("Space");
 
     const jumpQueuedBeforeStep = loco.jumpQueued;
     fpElevators.syncCabEvalClock(nowMs, dt);
