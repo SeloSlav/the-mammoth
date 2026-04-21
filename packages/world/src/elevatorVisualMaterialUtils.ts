@@ -16,21 +16,6 @@ export type StandardAuthoringSlot = {
   bumpMapUrl?: string;
 };
 
-/**
- * Global kill-switch for authored patina detail maps.
- *
- * When `true`, `applyStandardAuthoringSlot` loads **only** the basecolor texture — every
- * other map (normal / roughness / metalness / bump) is dropped. A `MeshStandardMaterial`
- * with just a basecolor map executes roughly **one** texture fetch per fragment instead of
- * three or four, and skips the entire tangent-space normal perturbation path.
- *
- * This is an A/B-measurable hot path: authored patina covers corridors, unit interiors,
- * elevator cabs, apartment doors, stair landings — effectively every large surface in view.
- *
- * Flip to `false` to re-enable the full PBR read when profiling.
- */
-export const PATINA_AUTHORING_BASECOLOR_ONLY = true;
-
 const authorColorMapCache = new Map<string, THREE.Texture>();
 const authorColorMapLoadInFlight = new Map<string, Promise<void>>();
 const authorDataMapCache = new Map<string, THREE.Texture>();
@@ -141,22 +126,10 @@ export function applyStandardAuthoringSlot(
     if (slot.colorHex) mat.color.setHex(parseAuthorColorHex(slot.colorHex));
   }
 
-  if (PATINA_AUTHORING_BASECOLOR_ONLY) {
-    /**
-     * Drop every non-basecolor texture fetch for every authored surface. This was the single
-     * largest fragment-shader win in A/B profiling the patina rollout.
-     */
-    mat.normalMap = null;
-    mat.roughnessMap = null;
-    mat.metalnessMap = null;
-    mat.bumpMap = null;
-    mat.bumpScale = 0;
-  } else {
-    mat.normalMap = loadAuthorDataMap(slot.normalMapUrl);
-    mat.roughnessMap = loadAuthorDataMap(slot.roughnessMapUrl);
-    mat.metalnessMap = loadAuthorDataMap(slot.metalnessMapUrl);
-    mat.bumpMap = loadAuthorDataMap(slot.bumpMapUrl);
-  }
+  mat.normalMap = loadAuthorDataMap(slot.normalMapUrl);
+  mat.roughnessMap = loadAuthorDataMap(slot.roughnessMapUrl);
+  mat.metalnessMap = loadAuthorDataMap(slot.metalnessMapUrl);
+  mat.bumpMap = loadAuthorDataMap(slot.bumpMapUrl);
 
   mat.needsUpdate = true;
 }

@@ -106,8 +106,10 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     stairWellDef,
   });
 
-  // Static merge is deferred to `mountFpSession` after systems that need per-mesh stair data
-  // (e.g. `installStairwellCigaretteDebris`) have sampled the unmerged hierarchy.
+  // Merge all static geometry within each floor plate into one mesh per material.
+  // Reduces draw calls from ~100+/floor to ~13/floor — the single largest render perf win.
+  // Floor plate visibility (mammothPlateLevelIndex) is preserved on the group itself.
+  mergeStaticFloorGeometries(buildingRoot);
 
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
 
@@ -144,7 +146,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
  * (`syncBuildingFloorPlateVisibility`) and always-visible logic continue to
  * work unchanged.
  */
-export function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
+function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
   // updateMatrixWorld propagates transforms through the full hierarchy even
   // before the root is attached to a scene.
   buildingRoot.updateMatrixWorld(true);

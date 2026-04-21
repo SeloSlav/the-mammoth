@@ -19,7 +19,7 @@ import {
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
 import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
-import { createFpSessionStaticWorld, mergeStaticFloorGeometries } from "./fpSessionWorldMount";
+import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 import {
@@ -79,7 +79,6 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./droppedItemWorldRuntime";
-import { installStairwellCigaretteDebris } from "./stairwellCigaretteDebris.js";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevatorConstants.js";
@@ -211,26 +210,8 @@ export async function mountFpSession(
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
-  let buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+  const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
-
-  let stairwellCigarettes = {
-    dispose: () => {},
-    syncVisibility: (_playerWorldX: number, _playerFeetY: number, _playerWorldZ: number) => {},
-  };
-  {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < building.id.length; i++) {
-      h ^= building.id.charCodeAt(i);
-      h = Math.imul(h, 0x01000193);
-    }
-    stairwellCigarettes = installStairwellCigaretteDebris(buildingRoot, {
-      seed: h >>> 0,
-    });
-  }
-  mergeStaticFloorGeometries(buildingRoot);
-  buildingRoot.updateMatrixWorld(true);
-  buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -435,7 +416,6 @@ export async function mountFpSession(
     ) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
-    stairwellCigarettes.syncVisibility(pos.x, pos.y, pos.z);
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
     _lastBandHi = band.hi;
@@ -2523,7 +2503,6 @@ export async function mountFpSession(
     } catch {
       /* ignore */
     }
-    stairwellCigarettes.dispose();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

@@ -1972,12 +1972,6 @@ export function addStairWellPlaceholder(
             mats.tread,
           );
           mesh.name = `stair_tread_${ti}`;
-          /** FP scatter / decals: tread top is local +Y (`riseHalf`); X/Z match {@link createStairTreadBoxGeometry}. */
-          mesh.userData.mammothStairTreadHalfExtents = {
-            halfAlong: tr.halfAlong,
-            riseHalf: tr.riseHalf,
-            halfAcross: tr.halfAcross,
-          };
           mesh.position.set(tr.x, tr.y, tr.z);
           mesh.rotation.y = tr.yaw;
           target.add(mesh);

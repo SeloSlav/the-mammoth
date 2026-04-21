@@ -389,13 +389,7 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
     }
   }
   applyShellTextureAnisotropy(m);
-  /**
-   * Apartment unit interiors cover more surface area than any other authored material in view at
-   * once (every wall and ceiling of every room on every floor). Keeping the tangent normal map
-   * here was measurably the dominant fragment cost when patina was enabled, so drop it along with
-   * the rest of the shell surfaces — the basecolor alone still reads as plaster.
-   */
-  applyShellNormalMapToggle(m);
+  /** Keep tangent detail for plaster; `applyShellNormalMapToggle` would drop it and flatten the read. */
   return m;
 })();
 
