@@ -213,7 +213,8 @@ export function addStairwellCorridorSignMeshes(
     signRootMatrix(px, py, pz, rotY, _mRoot);
 
     const shellGeo = new THREE.BoxGeometry(PROTRUSION, SIGN_H, lintelLen);
-    const shell = new THREE.Mesh(shellGeo, [g, g, g, g, g, g]);
+    /** One shared material — a 6-slot array would still issue six draws (one per box face group). */
+    const shell = new THREE.Mesh(shellGeo, g);
     shell.name = `${baseName}_shell`;
     shell.userData.mammothNoCollision = true;
     shell.userData.mammothSkipFloorGeometryMerge = true;
