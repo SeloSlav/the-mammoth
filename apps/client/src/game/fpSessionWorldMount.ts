@@ -230,11 +230,16 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     merged.computeBoundingSphere();
     merged.computeBoundingBox();
     const mesh = new THREE.Mesh(merged, mat);
-    // Merged shells include thin perimeter pieces (elevator hoistway walls, holed slabs). A single
-    // bounding sphere for disjoint fragments can miss the frustum while the camera sits in the
-    // hollow interior — walls vanish but generated collision AABBs still match. Parent plate
-    // visibility already gates cost; draw-call win is from merging, not per-mesh frustum tests.
-    mesh.frustumCulled = false;
+    /**
+     * Keep frustum culling ON. Geometry is already baked into group-local space
+     * (`applyMatrix4(groupWorldInv * meshMatrixWorld)` above), and `computeBoundingSphere`
+     * runs on the merged result — so the sphere correctly encloses every disjoint shell
+     * fragment in the mesh's local frame. When the camera sits inside a hollow interior the
+     * sphere contains the camera and trivially intersects the frustum, so walls don't vanish.
+     * Without this, 19 storeys of merged floor-plate + stair-column geometry submits every
+     * frame regardless of camera direction — a catastrophic fill-rate regression.
+     */
+    mesh.frustumCulled = true;
     group.add(mesh);
   }
 
@@ -255,6 +260,11 @@ function reattachPreservedMeshesWithSavedWorld(
     _mergePreserveLocal.multiplyMatrices(_mergePreserveParentInv, world);
     _mergePreserveLocal.decompose(m.position, m.quaternion, m.scale);
     m.updateMatrix();
-    m.frustumCulled = false;
+    /**
+     * Re-enable frustum culling — preserved meshes (canvas-textured stair signs, apartment
+     * hollow shells, etc.) each have their own geometry bounding sphere and should be culled
+     * when outside the camera frustum, same reasoning as the merged meshes above.
+     */
+    m.frustumCulled = true;
   }
 }
