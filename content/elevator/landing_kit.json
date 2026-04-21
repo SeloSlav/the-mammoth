@@ -20,5 +20,25 @@
     "widthM": 0.38,
     "heightM": 1.06,
     "centerYM": 0.1
+  },
+  "partTransforms": {
+    "landing_frame_bottom_rail": {
+      "position": [
+        0.028,
+        -0.8255500993917682,
+        -0.93
+      ],
+      "scale": [
+        1,
+        1.32958015017508,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
   }
 }

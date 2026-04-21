@@ -1,8 +1,9 @@
 /** Shared dimensions / tuning for FP elevator cab + HUD (client + tests). */
 
-import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M, EXTERIOR_DOOR_W_M } from "@the-mammoth/world";
 
-export const DOOR_W = 1.86;
+/** Clear cab / hoistway door width — matches landing swing `EXTERIOR_DOOR_W_M`. */
+export const DOOR_W = EXTERIOR_DOOR_W_M;
 export const DOOR_H = 2.05;
 export const DOOR_TH = 0.07;
 export const DOOR_SLIDE_M = 0.82;

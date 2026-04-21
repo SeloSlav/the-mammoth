@@ -27,6 +27,7 @@ describe("elevator collision tuning parity (TS world vs Rust server)", () => {
     const expectMap: Record<string, number> = {
       EXT_DOOR_W: tuning.EXTERIOR_DOOR_W_M,
       EXT_DOOR_H: tuning.EXTERIOR_DOOR_H_M,
+      EXT_DOOR_JAMB_INSET: tuning.EXTERIOR_DOOR_JAMB_INSET_M,
       EXT_DOOR_COLLISION_OPEN_THRESH: tuning.EXTERIOR_DOOR_COLLISION_OPEN_THRESH,
       EXT_DOOR_ANIM_SPEED: tuning.EXTERIOR_DOOR_ANIM_SPEED,
       EXT_DOOR_SOLID_SLAB_MAX_SWING: tuning.EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,

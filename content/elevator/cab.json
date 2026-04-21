@@ -4,25 +4,36 @@
   "displayName": "Default elevator cab",
   "materials": {
     "wall": {
-      "colorHex": "9B9793",
-      "roughness": 0.72,
-      "metalness": 0.08
+      "colorHex": "0xffffff",
+      "roughness": 0.78,
+      "metalness": 0.12,
+      "mapUrl": "/static/materials/elevator-cab-wall/basecolor.png",
+      "normalMapUrl": "/static/materials/elevator-cab-wall/normal.png",
+      "roughnessMapUrl": "/static/materials/elevator-cab-wall/roughness.png"
     },
     "floor": {
       "colorHex": "0xffffff",
-      "roughness": 0.72,
+      "roughness": 0.82,
       "metalness": 0.02,
-      "mapUrl": "/static/materials/cab/mammoth-speckled-cab-floor.svg"
+      "mapUrl": "/static/materials/elevator-cab-floor/basecolor.png",
+      "normalMapUrl": "/static/materials/elevator-cab-floor/normal.png",
+      "roughnessMapUrl": "/static/materials/elevator-cab-floor/roughness.png"
     },
     "door": {
-      "colorHex": "0x8a929e",
-      "roughness": 0.45,
-      "metalness": 0.35
+      "colorHex": "0xffffff",
+      "roughness": 0.48,
+      "metalness": 0.55,
+      "mapUrl": "/static/materials/elevator-cab-door/basecolor.png",
+      "normalMapUrl": "/static/materials/elevator-cab-door/normal.png",
+      "roughnessMapUrl": "/static/materials/elevator-cab-door/roughness.png"
     },
     "ceiling": {
-      "colorHex": "9B9793",
-      "roughness": 0.72,
-      "metalness": 0.08
+      "colorHex": "0xffffff",
+      "roughness": 0.78,
+      "metalness": 0.12,
+      "mapUrl": "/static/materials/elevator-cab-ceiling/basecolor.png",
+      "normalMapUrl": "/static/materials/elevator-cab-ceiling/normal.png",
+      "roughnessMapUrl": "/static/materials/elevator-cab-ceiling/roughness.png"
     },
     "panel": {
       "colorHex": "0xffffff",
@@ -38,52 +49,88 @@
     }
   },
   "partTransforms": {
-    "cab_wall_front_s": {
-      "position": [
-        0.9799999999999998,
-        1.4789473684210526,
-        -1.3225565918465763
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "rotation": [
-        0,
-        0,
-        0,
-        1
-      ]
-    },
-    "cab_wall_front_n": {
-      "position": [
-        0.9799999999999998,
-        1.4789473684210526,
-        1.3170194089195066
-      ],
-      "scale": [
-        1,
-        1,
-        1
-      ],
-      "rotation": [
-        0,
-        0,
-        0,
-        1
-      ]
-    },
     "cab_floor": {
       "position": [
         0,
-        0.12047346998897893,
+        -0.21645858465459308,
         0
       ],
       "scale": [
         1,
         1,
         1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "cab_wall_side_s": {
+      "position": [
+        0,
+        1.3116775972639045,
+        -1.7899999999999998
+      ],
+      "scale": [
+        1,
+        1.1268206616196392,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "cab_wall_back": {
+      "position": [
+        -0.9799999999999998,
+        1.2877030893139398,
+        0
+      ],
+      "scale": [
+        1,
+        1.1449976635918804,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "cab_wall_side_n": {
+      "position": [
+        0,
+        1.3017176179977032,
+        1.7899999999999998
+      ],
+      "scale": [
+        1,
+        1.1343721226608026,
+        1
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "cab_wall_front_surround": {
+      "position": [
+        0,
+        -0.416628155735001,
+        0.004135776119061671
+      ],
+      "scale": [
+        1,
+        1.148907731700318,
+        1.3454337884628405
       ],
       "rotation": [
         0,

@@ -26,14 +26,17 @@ import {
 } from "./wallWithDoorCutout.js";
 import {
   concreteMaterial,
+  elevatorHoistwayExteriorWallMaterial,
   exteriorConcreteWallMaterial,
   interiorConcreteFloorShellMaterial,
 } from "./floorPlaceholderMeshMaterials.js";
 import { createStairTreadBoxGeometry } from "./stairTreadUv.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
+import { stripArchitecturalDetailMaps } from "./elevatorVisualMaterialUtils.js";
+import { EXTERIOR_DOOR_W_M } from "./elevatorCollisionTuning.js";
 import { attachStairWellLandingProps } from "./stairWellLandingProps.js";
 
-/** Elevator hoistway exterior: light brutalist brick-red concrete so shafts read as distinct tower cores. */
+/** Hoistway inner shell for **stair** shafts (and door-frame trim reference); brick-red concrete. */
 const shaftWall = concreteMaterial(0xd5a19b);
 /** Pit / landing slab at hoistway bottom (world slab is open here — must not read as outdoor grass). */
 const hoistwayFloor = interiorConcreteFloorShellMaterial;
@@ -111,6 +114,10 @@ function createStairWellMaterials(def: StairWellDef | undefined): StairWellMater
   applyCabMaterialSlot(tread, def?.materials?.tread);
   applyCabMaterialSlot(landing, def?.materials?.landing);
   applyCabMaterialSlot(railing, def?.materials?.railing);
+  stripArchitecturalDetailMaps(wall, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(floor, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(tread, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(landing, { metalness: 0.02 });
   return { wall, floor, tread, landing, railing };
 }
 
@@ -176,7 +183,8 @@ function stairWellOpeningDefForProxyId(
  * Ground-level hoistway / stair entry: **double-door clear width** (m).
  * Leaf geometry comes later — wall cutout only (no separate frame mesh).
  */
-export const SHAFT_DOUBLE_DOOR_W = 1.86;
+/** Hoistway + corridor punch clear width (m). Matches cab / landing `EXTERIOR_DOOR_W_M`. */
+export const SHAFT_DOUBLE_DOOR_W = EXTERIOR_DOOR_W_M;
 
 /** Exported for mega-shaft corridor door band spacing (m). */
 export const SHAFT_DOUBLE_DOOR_H = 2.2;
@@ -1057,7 +1065,8 @@ export function addElevatorShaftPlaceholder(
   opts?: ElevatorShaftPlaceholderOpts | null,
 ): void {
   const includePitFloor = opts?.includePitFloor !== false;
-  addShaftShell(group, sx, sy, sz, shaftWall, shaftCeil, {
+  /** Inner `shaft_wall_*` skins use authored PBR; thin perimeter `_exterior` skins reuse the same mat when listed in `shaftExteriorFaces`. */
+  addShaftShell(group, sx, sy, sz, elevatorHoistwayExteriorWallMaterial, shaftCeil, {
     includeFloor: includePitFloor,
     includeCeiling: false,
     floorMat: hoistwayFloor,
@@ -1065,7 +1074,7 @@ export function addElevatorShaftPlaceholder(
     groundDoor: opts?.groundDoor ?? null,
     corridorFlushGapM: opts?.corridorFlushGapM,
     exteriorShaftFaces: opts?.shaftExteriorFaces,
-    exteriorWallMat: exteriorConcreteWallMaterial,
+    exteriorWallMat: elevatorHoistwayExteriorWallMaterial,
   });
   /** Skip {@link mergeGroupDescendantsByMaterial}: hoistway walls are thin shells; merge + frustum / WebGPU paths made them vanish while collision stayed valid. */
   group.traverse((obj) => {
@@ -1963,6 +1972,12 @@ export function addStairWellPlaceholder(
             mats.tread,
           );
           mesh.name = `stair_tread_${ti}`;
+          /** FP scatter / decals: tread top is local +Y (`riseHalf`); X/Z match {@link createStairTreadBoxGeometry}. */
+          mesh.userData.mammothStairTreadHalfExtents = {
+            halfAlong: tr.halfAlong,
+            riseHalf: tr.riseHalf,
+            halfAcross: tr.halfAcross,
+          };
           mesh.position.set(tr.x, tr.y, tr.z);
           mesh.rotation.y = tr.yaw;
           target.add(mesh);

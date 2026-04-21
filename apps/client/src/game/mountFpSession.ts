@@ -19,7 +19,7 @@ import {
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
 import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
-import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
+import { createFpSessionStaticWorld, mergeStaticFloorGeometries } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 import {
@@ -79,6 +79,7 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./droppedItemWorldRuntime";
+import { installStairwellCigaretteDebris } from "./stairwellCigaretteDebris.js";
 import { setFpPickupPrompt } from "./fpPickupPrompt";
 import { WorldProximityAudio } from "./worldProximityAudio";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevatorConstants.js";
@@ -168,6 +169,9 @@ function installMmWallProbeLoadingStub(): void {
   };
 }
 
+/** PBR shell + large static merges: shading cost grows ~pixelRatio²; keep below 2× on high-DPR panels. */
+const FP_SESSION_MAX_PIXEL_RATIO = 1.5;
+
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
  * capsule proxies for other players (interpolation buffer on remotes).
@@ -207,8 +211,26 @@ export async function mountFpSession(
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
-  const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+  let buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  let stairwellCigarettes = {
+    dispose: () => {},
+    syncVisibility: (_playerWorldX: number, _playerFeetY: number, _playerWorldZ: number) => {},
+  };
+  {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < building.id.length; i++) {
+      h ^= building.id.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    stairwellCigarettes = installStairwellCigaretteDebris(buildingRoot, {
+      seed: h >>> 0,
+    });
+  }
+  mergeStaticFloorGeometries(buildingRoot);
+  buildingRoot.updateMatrixWorld(true);
+  buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -413,6 +435,7 @@ export async function mountFpSession(
     ) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
+    stairwellCigarettes.syncVisibility(pos.x, pos.y, pos.z);
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
     _lastBandHi = band.hi;
@@ -1360,8 +1383,8 @@ export async function mountFpSession(
   const worldAudio = new WorldProximityAudio(conn, () => camera);
   let worldAudioReady = false;
 
+  /** Subscribes immediately with pose AOI — must not wait for audio unlock: inserts are only replicated for active `world_sound_event` queries. */
   const refreshWorldSoundSubscription = () => {
-    if (!worldAudioReady) return;
     worldAudio.subscribeAoi(poseAoiAnchorX, poseAoiAnchorZ, WORLD_SOUND_AOI_HALF);
   };
 
@@ -1790,7 +1813,7 @@ export async function mountFpSession(
   const setSize = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, FP_SESSION_MAX_PIXEL_RATIO));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -2500,6 +2523,7 @@ export async function mountFpSession(
     } catch {
       /* ignore */
     }
+    stairwellCigarettes.dispose();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);

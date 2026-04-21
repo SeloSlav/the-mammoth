@@ -1,14 +1,13 @@
 import * as THREE from "three";
 import type { LandingKitDef } from "@the-mammoth/schemas";
 import {
+  EXTERIOR_DOOR_CENTER_FEET_CLEAR_M,
+  EXTERIOR_DOOR_JAMB_INSET_M,
   LANDING_DOOR_GLASS_PART_ID,
   populateExteriorLandingDoorSwing,
+  resolveLandingDims,
 } from "@the-mammoth/world";
 import type { ElevatorDoorFace } from "./fpElevatorLabels.js";
-import { DOOR_H } from "./fpElevatorConstants.js";
-import { EXTERIOR_DOOR_W_M } from "./fpElevatorLandingExteriorDoor.js";
-
-const FLOOR_T = 0.08;
 /** Max swing (rad) at `swingOpen01 === 1`. */
 export const EXTERIOR_DOOR_SWING_MAX_RAD = 1.55;
 
@@ -26,7 +25,8 @@ export function createExteriorLandingDoorPivot(
   glassMat: THREE.MeshPhysicalMaterial,
   landingKitDef?: LandingKitDef,
 ): ExteriorLandingDoorPivot {
-  const doorY = FLOOR_T + DOOR_H * 0.5 + 0.06;
+  const dims = resolveLandingDims(landingKitDef);
+  const doorY = dims.panelH * 0.5 + EXTERIOR_DOOR_CENTER_FEET_CLEAR_M;
   const structure = new THREE.Group();
   structure.name = "exterior_landing_door";
   const swing = new THREE.Group();
@@ -34,7 +34,7 @@ export function createExteriorLandingDoorPivot(
   structure.add(swing);
   populateExteriorLandingDoorSwing(swing, redMat, glassMat, landingKitDef);
 
-  const jambZ = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
+  const jambZ = dims.panelW * 0.5 - EXTERIOR_DOOR_JAMB_INSET_M;
   const swingSign = -1;
 
   if (face === "e") {

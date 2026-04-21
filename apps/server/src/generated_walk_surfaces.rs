@@ -12,16 +12,15 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0008.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0009.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0010.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0011.rs"));
 
 #[allow(dead_code)]
 pub const WALK_SURFACE_FOOTPRINT_MIN_X: f32 = -12.06500;
 #[allow(dead_code)]
 pub const WALK_SURFACE_FOOTPRINT_MAX_X: f32 = 12.06500;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -117.40250;
+pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -117.06250;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 117.40250;
+pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 117.06250;
 
 /// AABBs split across shard files for reviewability.
 pub static WALK_SURFACE_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
@@ -36,5 +35,4 @@ pub static WALK_SURFACE_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
     PART_0008,
     PART_0009,
     PART_0010,
-    PART_0011,
 ];

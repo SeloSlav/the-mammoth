@@ -280,7 +280,7 @@ fn collect_generated_collision_aabbs(
         } else if landing.swing_open_01 >= super::EXT_DOOR_PARKED_COLLISION_MIN_SWING {
             let theta = super::EXT_DOOR_SWING_MAX_RAD;
             let panel_w = super::EXT_DOOR_W - 0.10;
-            let hinge_lat = super::EXT_DOOR_W * 0.5 - 0.06;
+            let hinge_lat = super::EXT_DOOR_W * 0.5 - super::EXT_DOOR_JAMB_INSET;
             let o = super::EXT_DOOR_HINGE_OUTSET;
             let pad = super::EXT_DOOR_PANEL_HALF_THICK;
             let (st, ct) = (theta.sin(), theta.cos());

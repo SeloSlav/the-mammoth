@@ -1,6 +1,11 @@
 {
   "extends": "@repo/typescript-config/vite-app.json",
   "compilerOptions": {
+    /**
+     * `@chenglou/pretext` (transitive via `weft-sdk`) uses `.ts` extensions in relative imports.
+     * Without this, `tsc` reports TS5097 for those paths under our strict workspace config.
+     */
+    "allowImportingTsExtensions": true,
     "paths": {
       "three": ["./node_modules/@types/three/src/Three.WebGPU.d.ts"]
     },

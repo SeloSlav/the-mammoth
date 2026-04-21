@@ -212,11 +212,7 @@ function cabSlotForSelectedId(
   if (selectedId === "cab_floor_button") return "button";
   if (
     selectedId === "cab_wall_back" ||
-    selectedId === "cab_wall_front_top" ||
-    selectedId === "cab_wall_front_n" ||
-    selectedId === "cab_wall_front_s" ||
-    selectedId === "cab_wall_front_e" ||
-    selectedId === "cab_wall_front_w" ||
+    selectedId === "cab_wall_front_surround" ||
     selectedId === "cab_wall_side_n" ||
     selectedId === "cab_wall_side_s" ||
     selectedId === "cab_wall_side_e" ||

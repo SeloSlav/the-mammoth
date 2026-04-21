@@ -4,7 +4,8 @@
 
 pub(super) const EXT_DOOR_W: f32 = 1.86;
 #[allow(dead_code)]
-pub(super) const EXT_DOOR_H: f32 = 2.05;
+pub(super) const EXT_DOOR_H: f32 = 2.14;
+pub(super) const EXT_DOOR_JAMB_INSET: f32 = 0.005;
 pub(super) const EXT_DOOR_COLLISION_OPEN_THRESH: f32 = 0.88;
 pub(super) const EXT_DOOR_ANIM_SPEED: f32 = 4.5;
 pub(super) const EXT_DOOR_SOLID_SLAB_MAX_SWING: f32 = 0.025;

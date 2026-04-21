@@ -1838,6 +1838,20 @@ export function buildFloorMeshes(
           holesNs: { n: exteriorWindowHoles.n, s: exteriorWindowHoles.s },
         });
       }
+
+      /**
+       * `mergeGroupDescendantsByMaterial` (client `fpSessionWorldMount`) collapses each floor plate
+       * into a few merged meshes. Hollow unit shells + shared plaster materials can produce bad merged
+       * buffers / bounds so interior faces never draw — façade cladding (concrete) still merges fine.
+       * Skip merge for unit interiors (same escape hatch as `mammothSkipFloorGeometryMerge` elsewhere).
+       */
+      if (kind === "unit") {
+        room.traverse((obj) => {
+          if (!(obj instanceof THREE.Mesh)) return;
+          if (obj.name.startsWith("shell_exterior_cladding")) return;
+          obj.userData.mammothSkipFloorGeometryMerge = true;
+        });
+      }
     }
     root.add(room);
   }

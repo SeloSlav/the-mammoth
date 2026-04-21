@@ -16,87 +16,89 @@ export type StandardAuthoringSlot = {
   bumpMapUrl?: string;
 };
 
+/**
+ * Global kill-switch for authored patina detail maps.
+ *
+ * When `true`, `applyStandardAuthoringSlot` loads **only** the basecolor texture — every
+ * other map (normal / roughness / metalness / bump) is dropped. A `MeshStandardMaterial`
+ * with just a basecolor map executes roughly **one** texture fetch per fragment instead of
+ * three or four, and skips the entire tangent-space normal perturbation path.
+ *
+ * This is an A/B-measurable hot path: authored patina covers corridors, unit interiors,
+ * elevator cabs, apartment doors, stair landings — effectively every large surface in view.
+ *
+ * Flip to `false` to re-enable the full PBR read when profiling.
+ */
+export const PATINA_AUTHORING_BASECOLOR_ONLY = true;
+
 const authorColorMapCache = new Map<string, THREE.Texture>();
 const authorColorMapLoadInFlight = new Map<string, Promise<void>>();
 const authorDataMapCache = new Map<string, THREE.Texture>();
 const authorDataMapLoadInFlight = new Map<string, Promise<void>>();
 
+const authorTextureLoader = new THREE.TextureLoader();
+
 function canLoadAuthorTextures(): boolean {
   return typeof document !== "undefined" && typeof Image !== "undefined";
 }
 
-function beginAuthorColorMapLoad(url: string, tex: THREE.Texture): void {
-  if (authorColorMapLoadInFlight.has(url)) return;
-  const pending = new Promise<void>((resolve) => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      try {
-        const width = Math.max(1, img.naturalWidth || img.width || 1);
-        const height = Math.max(1, img.naturalHeight || img.height || 1);
-        const canvas =
-          tex.image instanceof HTMLCanvasElement ? tex.image : document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve();
-          return;
-        }
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        tex.image = canvas;
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.needsUpdate = true;
-      } finally {
-        resolve();
-      }
-    };
-    img.onerror = () => {
-      resolve();
-    };
-    img.src = url;
-  }).finally(() => {
-    authorColorMapLoadInFlight.delete(url);
-  });
-  authorColorMapLoadInFlight.set(url, pending);
+/**
+ * WebGPU: tiny `DataTexture` uploads go through `_copyBufferToTexture` / `queue.writeTexture`,
+ * which can throw "Overload resolution failed" for 1×1 RGBA (layout / stride rules). Use a
+ * small canvas-backed texture so the backend uses the image copy path until real maps load.
+ */
+function makeAuthorMapPlaceholder(r: number, g: number, b: number, colorSpace: THREE.ColorSpace): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 2;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = colorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
 }
 
-function beginAuthorDataMapLoad(url: string, tex: THREE.Texture): void {
-  if (authorDataMapLoadInFlight.has(url)) return;
+function beginAuthorTextureLoad(
+  url: string,
+  tex: THREE.Texture,
+  colorSpace: THREE.ColorSpace,
+  inFlight: Map<string, Promise<void>>,
+): void {
+  if (inFlight.has(url)) return;
   const pending = new Promise<void>((resolve) => {
-    const img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      try {
-        const width = Math.max(1, img.naturalWidth || img.width || 1);
-        const height = Math.max(1, img.naturalHeight || img.height || 1);
-        const canvas =
-          tex.image instanceof HTMLCanvasElement ? tex.image : document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
+    authorTextureLoader.load(
+      url,
+      (loaded) => {
+        try {
+          tex.image = loaded.image;
+          tex.colorSpace = colorSpace;
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          tex.generateMipmaps = true;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.needsUpdate = true;
+          loaded.dispose();
+        } finally {
           resolve();
-          return;
         }
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        tex.image = canvas;
-        tex.colorSpace = THREE.NoColorSpace;
-        tex.needsUpdate = true;
-      } finally {
-        resolve();
-      }
-    };
-    img.onerror = () => {
-      resolve();
-    };
-    img.src = url;
+      },
+      undefined,
+      () => resolve(),
+    );
   }).finally(() => {
-    authorDataMapLoadInFlight.delete(url);
+    inFlight.delete(url);
   });
-  authorDataMapLoadInFlight.set(url, pending);
+  inFlight.set(url, pending);
 }
 
 function loadAuthorColorMap(mapUrl: string | undefined): THREE.Texture | null {
@@ -104,21 +106,9 @@ function loadAuthorColorMap(mapUrl: string | undefined): THREE.Texture | null {
   if (!url || !canLoadAuthorTextures()) return null;
   const cached = authorColorMapCache.get(url);
   if (cached) return cached;
-  const canvas = document.createElement("canvas");
-  canvas.width = 2;
-  canvas.height = 2;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
+  const tex = makeAuthorMapPlaceholder(255, 255, 255, THREE.SRGBColorSpace);
   authorColorMapCache.set(url, tex);
-  beginAuthorColorMapLoad(url, tex);
+  beginAuthorTextureLoad(url, tex, THREE.SRGBColorSpace, authorColorMapLoadInFlight);
   return tex;
 }
 
@@ -127,21 +117,10 @@ function loadAuthorDataMap(mapUrl: string | undefined): THREE.Texture | null {
   if (!url || !canLoadAuthorTextures()) return null;
   const cached = authorDataMapCache.get(url);
   if (cached) return cached;
-  const canvas = document.createElement("canvas");
-  canvas.width = 2;
-  canvas.height = 2;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "#8080ff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
+  /** Flat normal-ish placeholder until the real map arrives. */
+  const tex = makeAuthorMapPlaceholder(128, 128, 255, THREE.NoColorSpace);
   authorDataMapCache.set(url, tex);
-  beginAuthorDataMapLoad(url, tex);
+  beginAuthorTextureLoad(url, tex, THREE.NoColorSpace, authorDataMapLoadInFlight);
   return tex;
 }
 
@@ -162,11 +141,40 @@ export function applyStandardAuthoringSlot(
     if (slot.colorHex) mat.color.setHex(parseAuthorColorHex(slot.colorHex));
   }
 
-  mat.normalMap = loadAuthorDataMap(slot.normalMapUrl);
-  mat.roughnessMap = loadAuthorDataMap(slot.roughnessMapUrl);
-  mat.metalnessMap = loadAuthorDataMap(slot.metalnessMapUrl);
-  mat.bumpMap = loadAuthorDataMap(slot.bumpMapUrl);
+  if (PATINA_AUTHORING_BASECOLOR_ONLY) {
+    /**
+     * Drop every non-basecolor texture fetch for every authored surface. This was the single
+     * largest fragment-shader win in A/B profiling the patina rollout.
+     */
+    mat.normalMap = null;
+    mat.roughnessMap = null;
+    mat.metalnessMap = null;
+    mat.bumpMap = null;
+    mat.bumpScale = 0;
+  } else {
+    mat.normalMap = loadAuthorDataMap(slot.normalMapUrl);
+    mat.roughnessMap = loadAuthorDataMap(slot.roughnessMapUrl);
+    mat.metalnessMap = loadAuthorDataMap(slot.metalnessMapUrl);
+    mat.bumpMap = loadAuthorDataMap(slot.bumpMapUrl);
+  }
 
+  mat.needsUpdate = true;
+}
+
+/**
+ * Architectural concrete / plaster / vinyl materials rarely need both tangent-space normal detail
+ * and a separate height bump pass, and a metalness texture on these surfaces is usually noise
+ * around an effectively constant non-metal value. Clear those maps to reduce fragment texture
+ * fetches on the heaviest repeated surfaces.
+ */
+export function stripArchitecturalDetailMaps(
+  mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial,
+  opts?: { metalness?: number },
+): void {
+  mat.bumpMap = null;
+  mat.bumpScale = 0;
+  mat.metalnessMap = null;
+  if (opts?.metalness != null) mat.metalness = opts.metalness;
   mat.needsUpdate = true;
 }
 

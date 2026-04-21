@@ -16,6 +16,7 @@ import {
   EXTERIOR_DOOR_SOLID_SLAB_MAX_SWING,
   EXTERIOR_DOOR_SWING_MAX_RAD,
   EXTERIOR_DOOR_HINGE_OUTSET,
+  EXTERIOR_DOOR_JAMB_INSET_M,
   EXTERIOR_DOOR_PANEL_HALF_THICK,
   EXTERIOR_DOOR_W_M,
   EXTERIOR_STRIP_Y0,
@@ -316,7 +317,7 @@ export function visitFpElevatorWorldCollisionAabbsInXZ(
       } else if (!cabCoversLanding && authSwing >= EXTERIOR_DOOR_PARKED_COLLISION_MIN_SWING) {
         const theta = EXTERIOR_DOOR_SWING_MAX_RAD;
         const panelW = EXTERIOR_DOOR_W_M - 0.10;
-        const hingeLat = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
+        const hingeLat = EXTERIOR_DOOR_W_M * 0.5 - EXTERIOR_DOOR_JAMB_INSET_M;
         const o = EXTERIOR_DOOR_HINGE_OUTSET;
         const pad = EXTERIOR_DOOR_PANEL_HALF_THICK;
         const st = Math.sin(theta);

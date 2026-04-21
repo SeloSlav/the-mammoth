@@ -4,9 +4,11 @@
   "displayName": "Apartment unit door kit",
   "materials": {
     "frame": {
-      "colorHex": "0x5c4030",
-      "roughness": 0.78,
-      "metalness": 0.06
+      "colorHex": "0xffffff",
+      "roughness": 0.72,
+      "metalness": 0.02,
+      "mapUrl": "/static/materials/apartment-unit-door/basecolor.png",
+      "normalMapUrl": "/static/materials/apartment-unit-door/normal.png"
     },
     "glass": {
       "colorHex": "0xd8e8f0",

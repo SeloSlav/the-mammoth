@@ -23,6 +23,7 @@ import {
   instantiateBuildingFloorStack,
   listElevatorShaftLayouts,
   mergeShaftExteriorHints,
+  resolveLandingDims,
   readShaftFacadeHintFaces,
   maxBuildingLevelIndex,
   shaftFacesTowardAdjacentElevatorHoistways,
@@ -99,6 +100,7 @@ export function buildEditorStructuralRoot(args: {
       maxLevel: maxBuildingLevelIndex(args.building),
       floorLabelByLevel: buildFloorShortLabelMap(args.building),
       includeDoors: false,
+      doorClearWidthM: resolveLandingDims(args.landingKitDef).panelW,
     });
     root.add(cab);
     return root;

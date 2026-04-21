@@ -71,9 +71,9 @@ describe("applyElevatorCabPartTransforms", () => {
     });
     const board = root.getObjectByName("cab_floor_panel_board");
     expect(board?.position.length()).toBeGreaterThan(0.1);
-    expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");
-    expect(root.getObjectByName("cab_wall_front_n")?.userData.editorCabPartId).toBe("cab_wall_front_n");
-    expect(root.getObjectByName("cab_wall_front_s")?.userData.editorCabPartId).toBe("cab_wall_front_s");
+    expect(root.getObjectByName("cab_wall_front_surround")?.userData.editorCabPartId).toBe(
+      "cab_wall_front_surround",
+    );
   });
 
   it("builds front wall panels for north-facing cab doors too", () => {
@@ -91,9 +91,9 @@ describe("applyElevatorCabPartTransforms", () => {
       includeDoors: false,
     });
 
-    expect(root.getObjectByName("cab_wall_front_top")?.userData.editorCabPartId).toBe("cab_wall_front_top");
-    expect(root.getObjectByName("cab_wall_front_e")?.userData.editorCabPartId).toBe("cab_wall_front_e");
-    expect(root.getObjectByName("cab_wall_front_w")?.userData.editorCabPartId).toBe("cab_wall_front_w");
+    expect(root.getObjectByName("cab_wall_front_surround")?.userData.editorCabPartId).toBe(
+      "cab_wall_front_surround",
+    );
   });
 
   it("mergeCabFloorButtons emits one merged body + label mesh and resolvable pick layout", () => {

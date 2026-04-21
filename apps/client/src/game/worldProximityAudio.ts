@@ -64,6 +64,9 @@ export class WorldProximityAudio {
   private elevatorLandingHailBuffer: AudioBuffer | null = null;
   private doorOpenBuffer: AudioBuffer | null = null;
   private doorCloseBuffer: AudioBuffer | null = null;
+  /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
+  private pendingRows: WorldSoundEvent[] = [];
+  private static readonly PENDING_CAP = 64;
   private soundSub: SubscriptionHandle | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
 
@@ -122,6 +125,12 @@ export class WorldProximityAudio {
       g.connect(hp);
       hp.connect(ctx.destination);
       this.worldGain = g;
+    }
+    this.syncListener();
+    const queued = this.pendingRows;
+    this.pendingRows = [];
+    for (const row of queued) {
+      this.handleInsert(row);
     }
   }
 
@@ -194,6 +203,7 @@ export class WorldProximityAudio {
     this.elevatorLandingHailBuffer = null;
     this.doorOpenBuffer = null;
     this.doorCloseBuffer = null;
+    this.pendingRows.length = 0;
     this.sourceCache.clear();
   }
 
@@ -205,7 +215,13 @@ export class WorldProximityAudio {
     const ctx = this.ctx;
     const out = this.worldGain;
     const selfId = this.conn.identity;
-    if (!ctx || !out || !selfId) return;
+    if (!selfId) return;
+    if (!ctx || !out) {
+      if (this.pendingRows.length < WorldProximityAudio.PENDING_CAP) {
+        this.pendingRows.push(row);
+      }
+      return;
+    }
     if (selfId.isEqual(row.emitter)) {
       const hearOwnSpatial =
         row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||

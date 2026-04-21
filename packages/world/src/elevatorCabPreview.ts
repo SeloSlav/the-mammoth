@@ -5,9 +5,7 @@ import { shortFloorLabelForLevel, type FloorShortLabelMap } from "./buildingFloo
 import { elevatorHoistwayInnerHalfExtents } from "./elevatorShaftLayout.js";
 import type { ElevatorShaftLayout } from "./elevatorShaftLayout.js";
 import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
-
-/** Mirrors `apps/client/src/game/fpElevatorConstants.ts` for visual parity. */
-const DOOR_W = 1.86;
+import { EXTERIOR_DOOR_W_M } from "./elevatorCollisionTuning.js";
 const DOOR_H = 2.05;
 const DOOR_TH = 0.07;
 const DOOR_SLIDE_M = 0.82;
@@ -109,6 +107,118 @@ function doorSlideAxis(face: ElevatorShaftLayout["doorFace"]): THREE.Vector3 {
   }
 }
 
+/** Unit normal of the cab-interior-facing side of the door-surround wall (world space, before part transforms). */
+function mergedCabDoorSurroundInteriorNormal(
+  face: ElevatorShaftLayout["doorFace"],
+): THREE.Vector3 {
+  switch (face) {
+    case "e":
+      return new THREE.Vector3(-1, 0, 0);
+    case "w":
+      return new THREE.Vector3(1, 0, 0);
+    case "n":
+      return new THREE.Vector3(0, 0, -1);
+    case "s":
+      return new THREE.Vector3(0, 0, 1);
+  }
+}
+
+/**
+ * Planar UVs on interior-facing triangles so wall maps tile continuously across the
+ * jambs and header (one merged mesh instead of three separate boxes).
+ */
+function applyMergedCabDoorWallInteriorPlanarUvs(
+  geom: THREE.BufferGeometry,
+  face: ElevatorShaftLayout["doorFace"],
+): void {
+  geom.computeVertexNormals();
+  const pos = geom.getAttribute("position") as THREE.BufferAttribute | undefined;
+  const norm = geom.getAttribute("normal") as THREE.BufferAttribute | undefined;
+  const uv = geom.getAttribute("uv") as THREE.BufferAttribute | undefined;
+  if (!pos || !norm || !uv) return;
+  const eps = 0.004;
+  const t = mergedCabDoorSurroundInteriorNormal(face);
+  for (let i = 0; i < pos.count; i++) {
+    const nx = norm.getX(i);
+    const ny = norm.getY(i);
+    const nz = norm.getZ(i);
+    if (
+      Math.abs(nx - t.x) > eps ||
+      Math.abs(ny - t.y) > eps ||
+      Math.abs(nz - t.z) > eps
+    ) {
+      continue;
+    }
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    if (face === "e" || face === "w") {
+      uv.setXY(i, z, y);
+    } else {
+      uv.setXY(i, x, y);
+    }
+  }
+  uv.needsUpdate = true;
+}
+
+function buildMergedCabDoorSurroundGeometryEw(
+  face: "e" | "w",
+  hx: number,
+  wallT: number,
+  midY: number,
+  wallH: number,
+  frontPanelSpan: number,
+  frontPanelZ: number,
+  frontTopPanelH: number,
+  frontTopPanelY: number,
+  doorClearWidthM: number,
+): THREE.BufferGeometry {
+  const xSign = face === "e" ? 1 : -1;
+  const x = xSign * (hx - wallT * 0.5);
+  const g1 = new THREE.BoxGeometry(wallT, wallH, frontPanelSpan);
+  g1.translate(x, midY, frontPanelZ);
+  const g2 = new THREE.BoxGeometry(wallT, wallH, frontPanelSpan);
+  g2.translate(x, midY, -frontPanelZ);
+  const g3 = new THREE.BoxGeometry(wallT, frontTopPanelH, doorClearWidthM);
+  g3.translate(x, frontTopPanelY, 0);
+  const merged = mergeGeometries([g1, g2, g3], false);
+  if (!merged) throw new Error("buildMergedCabDoorSurroundGeometryEw: mergeGeometries failed");
+  g1.dispose();
+  g2.dispose();
+  g3.dispose();
+  applyMergedCabDoorWallInteriorPlanarUvs(merged, face);
+  return merged;
+}
+
+function buildMergedCabDoorSurroundGeometryNs(
+  face: "n" | "s",
+  hz: number,
+  wallT: number,
+  midY: number,
+  wallH: number,
+  frontPanelSpan: number,
+  frontPanelX: number,
+  frontTopPanelH: number,
+  frontTopPanelY: number,
+  doorClearWidthM: number,
+): THREE.BufferGeometry {
+  const zSign = face === "n" ? 1 : -1;
+  const z = zSign * (hz - wallT * 0.5);
+  const g1 = new THREE.BoxGeometry(frontPanelSpan, wallH, wallT);
+  g1.translate(frontPanelX, midY, z);
+  const g2 = new THREE.BoxGeometry(frontPanelSpan, wallH, wallT);
+  g2.translate(-frontPanelX, midY, z);
+  const g3 = new THREE.BoxGeometry(doorClearWidthM, frontTopPanelH, wallT);
+  g3.translate(0, frontTopPanelY, z);
+  const merged = mergeGeometries([g1, g2, g3], false);
+  if (!merged) throw new Error("buildMergedCabDoorSurroundGeometryNs: mergeGeometries failed");
+  g1.dispose();
+  g2.dispose();
+  g3.dispose();
+  applyMergedCabDoorWallInteriorPlanarUvs(merged, face);
+  return merged;
+}
+
 function stdMatFromSlot(
   def: ElevatorCabDef | undefined,
   key: "wall" | "floor" | "door" | "ceiling" | "panel" | "button",
@@ -169,6 +279,11 @@ type BuildElevatorCabCarVisualArgs = {
    * Picking uses {@link resolveMergedCabFloorPickLevel} + {@link MAMMOTH_MERGED_CAB_FLOOR_PICK_UD}.
    */
   mergeCabFloorButtons?: boolean;
+  /**
+   * Cab door clear width (m), including merged front surround header span and sliding leaves.
+   * Defaults to `EXTERIOR_DOOR_W_M` so the opening matches the corridor landing swing.
+   */
+  doorClearWidthM?: number;
 };
 
 /**
@@ -247,6 +362,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     floorButtonLabelMaterial,
     rootName = "editor_elevator_cab_preview",
     mergeCabFloorButtons = false,
+    doorClearWidthM: doorClearWidthOpt,
   } = args;
   const { halfX, halfZ } = elevatorHoistwayInnerHalfExtents(layout.sx, layout.sz);
   const innerH = layout.sy - 2 * 0.11 - CAR_CEIL_BELOW_SHAFT_TOP;
@@ -279,6 +395,12 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
 
   const floorT = 0.08;
   const wallT = 0.06;
+  const doorClearRequested = doorClearWidthOpt ?? EXTERIOR_DOOR_W_M;
+  const doorW = THREE.MathUtils.clamp(
+    doorClearRequested,
+    1.0,
+    Math.max(1.05, 2 * Math.min(hx, hz) - wallT - 0.14),
+  );
   const floorMesh = new THREE.Mesh(
     new THREE.BoxGeometry(hx * 2 - wallT * 2, floorT, hz * 2 - wallT * 2),
     floorMat,
@@ -322,72 +444,50 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   const face = layout.doorFace;
   if (face === "e" || face === "w") {
     const xSign = face === "e" ? 1 : -1;
-    const frontPanelSpan = Math.max(0.12, hz - DOOR_W * 0.5);
-    const frontPanelZ = DOOR_W * 0.25 + frontPanelSpan * 0.5;
+    const frontPanelSpan = Math.max(0.12, hz - doorW * 0.5);
+    const frontPanelZ = doorW * 0.5 + frontPanelSpan * 0.5;
     addWall("cab_wall_back", wallT, wallH, hz * 2, -xSign * (hx - wallT * 0.5), midY, 0);
     addWall("cab_wall_side_n", hx * 2 - wallT * 2, wallH, wallT, 0, midY, hz - wallT * 0.5);
     addWall("cab_wall_side_s", hx * 2 - wallT * 2, wallH, wallT, 0, midY, -hz + wallT * 0.5);
-    addWall(
-      "cab_wall_front_n",
+    const doorSurroundGeom = buildMergedCabDoorSurroundGeometryEw(
+      face,
+      hx,
       wallT,
+      midY,
       wallH,
       frontPanelSpan,
-      xSign * (hx - wallT * 0.5),
-      midY,
       frontPanelZ,
-    );
-    addWall(
-      "cab_wall_front_s",
-      wallT,
-      wallH,
-      frontPanelSpan,
-      xSign * (hx - wallT * 0.5),
-      midY,
-      -frontPanelZ,
-    );
-    addWall(
-      "cab_wall_front_top",
-      wallT,
       frontTopPanelH,
-      DOOR_W,
-      xSign * (hx - wallT * 0.5),
       frontTopPanelY,
-      0,
+      doorW,
     );
+    const doorSurround = new THREE.Mesh(doorSurroundGeom, wallMat);
+    doorSurround.name = "cab_wall_front_surround";
+    doorSurround.userData.editorCabPartId = "cab_wall_front_surround";
+    root.add(doorSurround);
   } else {
     const zSign = face === "n" ? 1 : -1;
-    const frontPanelSpan = Math.max(0.12, hx - DOOR_W * 0.5);
-    const frontPanelX = DOOR_W * 0.25 + frontPanelSpan * 0.5;
+    const frontPanelSpan = Math.max(0.12, hx - doorW * 0.5);
+    const frontPanelX = doorW * 0.5 + frontPanelSpan * 0.5;
     addWall("cab_wall_back", hx * 2, wallH, wallT, 0, midY, -zSign * (hz - wallT * 0.5));
     addWall("cab_wall_side_e", wallT, wallH, hz * 2 - wallT * 2, hx - wallT * 0.5, midY, 0);
     addWall("cab_wall_side_w", wallT, wallH, hz * 2 - wallT * 2, -hx + wallT * 0.5, midY, 0);
-    addWall(
-      "cab_wall_front_e",
-      frontPanelSpan,
-      wallH,
+    const doorSurroundGeomNs = buildMergedCabDoorSurroundGeometryNs(
+      face,
+      hz,
       wallT,
+      midY,
+      wallH,
+      frontPanelSpan,
       frontPanelX,
-      midY,
-      zSign * (hz - wallT * 0.5),
-    );
-    addWall(
-      "cab_wall_front_w",
-      frontPanelSpan,
-      wallH,
-      wallT,
-      -frontPanelX,
-      midY,
-      zSign * (hz - wallT * 0.5),
-    );
-    addWall(
-      "cab_wall_front_top",
-      DOOR_W,
       frontTopPanelH,
-      wallT,
-      0,
       frontTopPanelY,
-      zSign * (hz - wallT * 0.5),
+      doorW,
     );
+    const doorSurroundNs = new THREE.Mesh(doorSurroundGeomNs, wallMat);
+    doorSurroundNs.name = "cab_wall_front_surround";
+    doorSurroundNs.userData.editorCabPartId = "cab_wall_front_surround";
+    root.add(doorSurroundNs);
   }
 
   let doorL: THREE.Group | null = null;
@@ -395,7 +495,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   if (includeDoors) {
     doorL = new THREE.Group();
     doorR = new THREE.Group();
-    const leafW = DOOR_W * 0.5 - 0.02;
+    const leafW = doorW * 0.5 - 0.02;
     const leafGeom = new THREE.BoxGeometry(
       face === "e" || face === "w" ? DOOR_TH : leafW,
       DOOR_H,
@@ -415,8 +515,8 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     const doorY = floorT + DOOR_H * 0.5 + 0.06;
     const t = doorSlideAxis(face);
     const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, doorOpen01);
-    const tL = t.clone().multiplyScalar(-DOOR_W * 0.25 - slide);
-    const tR = t.clone().multiplyScalar(DOOR_W * 0.25 + slide);
+    const tL = t.clone().multiplyScalar(-doorW * 0.25 - slide);
+    const tR = t.clone().multiplyScalar(doorW * 0.25 + slide);
     doorL.position.set(
       doorX + (face === "n" || face === "s" ? tL.x : 0),
       doorY,
@@ -703,6 +803,7 @@ export function buildElevatorCabCarPreviewRoot(args: {
   /** If true, doors are left at 50% open for framing. */
   previewDoorOpen01?: number;
   includeDoors?: boolean;
+  doorClearWidthM?: number;
 }): THREE.Group {
   return buildElevatorCabCarVisual({
     layout: args.layout,
@@ -711,6 +812,7 @@ export function buildElevatorCabCarPreviewRoot(args: {
     floorLabelByLevel: args.floorLabelByLevel,
     doorOpen01: args.previewDoorOpen01,
     includeDoors: args.includeDoors,
+    doorClearWidthM: args.doorClearWidthM,
   }).root;
 }
 

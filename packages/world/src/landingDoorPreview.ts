@@ -5,13 +5,15 @@ import {
   addLandingDoorOpeningEditProxy,
   createExteriorLandingDoorMaterials,
   disposeExteriorLandingDoorSwingContents,
-  EXTERIOR_DOOR_H,
-  EXTERIOR_DOOR_PANEL_W_M,
   LANDING_DOOR_GLASS_PART_ID,
   populateExteriorLandingDoorSwing,
   resolveLandingDims,
   resolveGlassOpening,
 } from "./exteriorLandingDoorSwing.js";
+import {
+  EXTERIOR_DOOR_CENTER_FEET_CLEAR_M,
+  EXTERIOR_DOOR_JAMB_INSET_M,
+} from "./elevatorCollisionTuning.js";
 
 export {
   LANDING_DOOR_BOTTOM_RAIL_PART_ID,
@@ -21,10 +23,6 @@ export {
   LANDING_DOOR_RIGHT_STILE_PART_ID,
   LANDING_DOOR_TOP_RAIL_PART_ID,
 } from "./exteriorLandingDoorSwing.js";
-
-const FLOOR_T = 0.08;
-/** Full exterior door width including jambs (matches client `EXTERIOR_DOOR_W_M`). */
-const EXTERIOR_DOOR_W_M = EXTERIOR_DOOR_PANEL_W_M + 0.1;
 
 function applyLandingKitPreviewMeta(
   doorStructure: THREE.Object3D,
@@ -73,10 +71,8 @@ export function buildLandingDoorPreviewRoot(args: {
 }): THREE.Group {
   const { face, hx, hz, def, swingOpen01 = 0.35 } = args;
 
-  // Honor kit panel-height override (apartment kit authors 2.0m vs elevator 2.04m) so the preview
-  // hinge height matches what the runtime renders.
-  const panelH = def?.panelHeightM ?? EXTERIOR_DOOR_H;
-  const doorY = FLOOR_T + panelH * 0.5 + 0.06;
+  const dims = resolveLandingDims(def);
+  const doorY = dims.panelH * 0.5 + EXTERIOR_DOOR_CENTER_FEET_CLEAR_M;
   const structure = new THREE.Group();
   structure.name = "editor_landing_door";
   const swing = new THREE.Group();
@@ -85,7 +81,7 @@ export function buildLandingDoorPreviewRoot(args: {
 
   rebuildLandingDoorPreviewSwing(structure, def);
 
-  const jambZ = EXTERIOR_DOOR_W_M * 0.5 - 0.06;
+  const jambZ = dims.panelW * 0.5 - EXTERIOR_DOOR_JAMB_INSET_M;
   const swingSign = -1;
   const maxRad = def?.exteriorSwingMaxRad ?? 1.55;
 

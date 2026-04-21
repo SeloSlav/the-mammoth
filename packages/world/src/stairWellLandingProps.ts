@@ -14,6 +14,16 @@ const _templatePromiseByUrl = new Map<string, Promise<THREE.Object3D>>();
 function loadPropTemplate(url: string): Promise<THREE.Object3D> {
   const cached = _templatePromiseByUrl.get(url);
   if (cached) return cached;
+
+  // Node (walk/collision generators, Vitest): Three's FileLoader uses `fetch`, which rejects
+  // site-root paths like `/static/...` without a browser origin. Props are visual-only
+  // (`mammothNoCollision`); offline tooling does not need mesh data.
+  if (typeof window === "undefined") {
+    const pending = Promise.resolve(new THREE.Group());
+    _templatePromiseByUrl.set(url, pending);
+    return pending;
+  }
+
   const pending = _loader
     .loadAsync(url)
     .then((gltf) => gltf.scene)

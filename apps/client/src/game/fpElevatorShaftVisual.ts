@@ -292,6 +292,7 @@ export class FpElevatorShaftVisual {
       side: THREE.DoubleSide,
     });
 
+    const cabDoorClearW = resolveLandingDims(visualDefs?.landingKitDef).panelW;
     const cabVisual = buildElevatorCabCarVisual({
       layout,
       def: visualDefs?.cabDef,
@@ -302,6 +303,7 @@ export class FpElevatorShaftVisual {
       floorButtonLabelMaterial: this.matNormal,
       rootName: "elevator_car",
       mergeCabFloorButtons: true,
+      doorClearWidthM: cabDoorClearW,
     });
     this.mergedCabFloorButtons = cabVisual.mergedFloorButtons === true;
     this.carRoot = cabVisual.root;

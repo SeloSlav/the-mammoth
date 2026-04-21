@@ -96,8 +96,14 @@ const grayFace = new THREE.MeshStandardMaterial({
 });
 
 const SIGN_H = 0.44;
-/** Gap from door head to bottom of lintel (m). */
-const CLEARANCE_DOOR_TOP_TO_PANEL_BOTTOM = 1.33;
+/**
+ * Gap from door opening top to the **bottom** edge of the STEP panel (m).
+ * Same idea as the elevator corridor Koncar sign (`0.07` m gap in `floorPlaceholderMeshes.ts`);
+ * slightly larger so the lintel
+ * blade clears the frame. Must stay small — room-local Y is centered on the shell (`yHi` ≈ ~1.4 m
+ * for a 3 m floor); values around **1 m** push the sign above the ceiling and it vanishes.
+ */
+const GAP_ABOVE_DOOR_OPENING_TO_PANEL_BOTTOM_M = 0.0;
 /** Design basis before `LINTEL_LENGTH_SCALE` (lintel axis = local Z of the box). */
 const LINTEL_LEN_MIN = 1.62;
 const LINTEL_EXTRA_ON_OPENING = 1.02;
@@ -106,8 +112,8 @@ const LINTEL_LENGTH_SCALE = 0.5;
 /** Thin slab dimension before `rotation.y` (maps into wall-normal after +90°). */
 const PROTRUSION = 0.18;
 const PAD = 0.016;
-/** Extra lift above hinge math for frame / swing-door mesh (m). */
-const FRAME_HEAD_FUDGE = 0.34;
+/** Small lift so the lintel aligns with authored frame / swing-door head (m). */
+const FRAME_HEAD_FUDGE = 0.08;
 /** STEP boards sit slightly proud of the gray shell to avoid z-fighting (m). */
 const BOARD_FACE_BUMP = 0.007;
 /** Extra translation toward the corridor so the blade sits in the hall, not past the opening (m). */
@@ -178,7 +184,7 @@ export function addStairwellCorridorSignMeshes(
       LINTEL_LENGTH_SCALE *
       Math.max(LINTEL_LEN_MIN, doorSpan + LINTEL_EXTRA_ON_OPENING);
     const doorHeadY = Math.max(pl.yDoorTop, shellDoorHeadY) + FRAME_HEAD_FUDGE;
-    const y = doorHeadY + CLEARANCE_DOOR_TOP_TO_PANEL_BOTTOM + SIGN_H * 0.5;
+    const y = doorHeadY + GAP_ABOVE_DOOR_OPENING_TO_PANEL_BOTTOM_M + SIGN_H * 0.5;
 
     let px: number;
     const py = y;
