@@ -36,6 +36,9 @@ const SECTION_COLORS: Record<string, string> = {
   elevator: "#6b8cae",
   present: "#b89f6b",
   render: "#e87878",
+  "render·floorVis": "#e8a0a0",
+  "render·fpEnv": "#e8a0a0",
+  "render·three": "#e87878",
   other: "#9a9a9a",
 };
 
@@ -341,17 +344,28 @@ export function MammothFpsHud() {
                   ["elevator", stats.sections.elevatorMs],
                   ["present", stats.sections.presentMs],
                   ["render", stats.sections.renderMs],
+                  ["render·floorVis", stats.sections.renderFloorPlateVisMs],
+                  ["render·fpEnv", stats.sections.renderFpEnvironmentMs],
+                  ["render·three", stats.sections.renderThreeMs],
                   ["other", stats.sections.otherMs],
                 ] as [string, number][]
               ).map(([name, ms]) => {
                 const frameMax = stats.frameMs.avg;
                 const frac = frameMax > 0 ? ms / frameMax : 0;
+                const isRenderSplit = name.startsWith("render·");
                 return (
-                  <div key={name} style={{ ...rowStyle, ...monoStyle }}>
+                  <div
+                    key={name}
+                    style={{
+                      ...rowStyle,
+                      ...monoStyle,
+                      ...(isRenderSplit ? { paddingLeft: 10, opacity: 0.92 } : null),
+                    }}
+                  >
                     <span
                       style={{
                         color: THEME_TEXT_MUTED,
-                        minWidth: 55,
+                        minWidth: isRenderSplit ? 88 : 55,
                         fontSize: 11,
                       }}
                     >

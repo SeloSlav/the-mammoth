@@ -138,16 +138,18 @@ export function applyStandardAuthoringSlot(
  * Architectural concrete / plaster / vinyl materials rarely need both tangent-space normal detail
  * and a separate height bump pass, and a metalness texture on these surfaces is usually noise
  * around an effectively constant non-metal value. Clear those maps to reduce fragment texture
- * fetches on the heaviest repeated surfaces.
+ * fetches on the heaviest repeated surfaces. When `opts.stripRoughnessMap` is true, drops the
+ * roughness map (one fewer fetch per fragment on huge merged shells).
  */
 export function stripArchitecturalDetailMaps(
   mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial,
-  opts?: { metalness?: number },
+  opts?: { metalness?: number; stripRoughnessMap?: boolean },
 ): void {
   mat.bumpMap = null;
   mat.bumpScale = 0;
   mat.metalnessMap = null;
   if (opts?.metalness != null) mat.metalness = opts.metalness;
+  if (opts?.stripRoughnessMap) mat.roughnessMap = null;
   mat.needsUpdate = true;
 }
 

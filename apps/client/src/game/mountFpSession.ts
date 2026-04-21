@@ -168,8 +168,8 @@ function installMmWallProbeLoadingStub(): void {
   };
 }
 
-/** PBR shell + large static merges: shading cost grows ~pixelRatio²; keep below 2× on high-DPR panels. */
-const FP_SESSION_MAX_PIXEL_RATIO = 1.5;
+/** PBR shell + large static merges: shading cost grows ~pixelRatio²; `1` keeps fill-rate predictable on DPR>1 laptops. */
+const FP_SESSION_MAX_PIXEL_RATIO = 1;
 
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
@@ -186,7 +186,8 @@ export async function mountFpSession(
   installMmWallProbeLoadingStub();
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
+  // MSAA off: `renderer.render` is the FP hot path (~GPU + sync); 4× MSAA scales fragment cost badly here.
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL: false });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
@@ -2091,6 +2092,12 @@ export async function mountFpSession(
   let raf = 0;
   let lastFrameMs = performance.now();
 
+  /**
+   * Single RAF driver for the whole FP session. Chrome’s “[Violation] requestAnimationFrame
+   * handler took N ms” points at an **early line inside this function** (often the first
+   * `performance.now()`), not the line that consumed the time — the whole body from input
+   * through `renderer.render` is attributed to that handler.
+   */
   const tick = () => {
     raf = requestAnimationFrame(tick);
     // Single performance.now() for the whole tick — avoids redundant syscalls and keeps
@@ -2378,16 +2385,22 @@ export async function mountFpSession(
       setFpPickupPrompt(null);
     }
 
-    // --- Render section timing ---
+    // --- Render section timing (see pushFpPerfFrame render split) ---
+    const _t_renderStart = performance.now();
     syncBuildingFloorPlateVisibility(nowMs);
+    const _t_afterFloorVis = performance.now();
     fpEnvironment.onFrame({
       camera,
       nowSec: nowMs * 0.001,
       viewWidthPx: canvas.clientWidth,
       viewHeightPx: canvas.clientHeight,
     });
+    const _t_afterFpEnv = performance.now();
     renderer.render(scene, camera);
     const _t_renderEnd = performance.now();
+    const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
+    const renderFpEnvironmentMs = _t_afterFpEnv - _t_afterFloorVis;
+    const renderThreeMs = _t_renderEnd - _t_afterFpEnv;
     const physicsMs = _t_physicsEnd - nowMs;
     const elevatorMs = _t_elevEnd - _t_physicsEnd;
     const presentMs = _t_presentEnd - _t_elevEnd;
@@ -2456,6 +2469,9 @@ export async function mountFpSession(
         elevatorMs,
         presentMs,
         renderMs,
+        renderFloorPlateVisMs,
+        renderFpEnvironmentMs,
+        renderThreeMs,
       },
       {
         drawCalls: renderer.info.render.calls,

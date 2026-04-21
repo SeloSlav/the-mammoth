@@ -22,8 +22,14 @@ const _physics = new Float32Array(RING);
 const _elevator = new Float32Array(RING);
 /** Presentation update section (PlayerPresentationManager.update). */
 const _present = new Float32Array(RING);
-/** Render section (syncBuildingFloorPlateVisibility + renderer.render). */
+/** Render section wall time: floor visibility + fp environment + `renderer.render`. */
 const _render = new Float32Array(RING);
+/** {@link syncBuildingFloorPlateVisibility} only. */
+const _renderFloorVis = new Float32Array(RING);
+/** {@link FpSessionEnvironmentHandle.onFrame} (sky time / resolution). */
+const _renderFpEnv = new Float32Array(RING);
+/** `renderer.render` — WebGPU record/submit and usually the main thread wait for GPU. */
+const _renderThree = new Float32Array(RING);
 
 /** Next write slot (wraps around RING). */
 let _head = 0;
@@ -39,6 +45,10 @@ export type FpPerfSections = {
   elevatorMs: number;
   presentMs: number;
   renderMs: number;
+  /** Split of {@link renderMs}; three values sum to `renderMs` (same wall-clock window). */
+  renderFloorPlateVisMs: number;
+  renderFpEnvironmentMs: number;
+  renderThreeMs: number;
 };
 
 /** Renderer counters read from renderer.info.render after each frame. */
@@ -72,6 +82,9 @@ export function pushFpPerfFrame(
   _elevator[i] = sections.elevatorMs;
   _present[i] = sections.presentMs;
   _render[i] = sections.renderMs;
+  _renderFloorVis[i] = sections.renderFloorPlateVisMs;
+  _renderFpEnv[i] = sections.renderFpEnvironmentMs;
+  _renderThree[i] = sections.renderThreeMs;
   _head = (_head + 1) % RING;
   _wrote += 1;
   _notifyIfNeeded(nowMs);
@@ -86,6 +99,9 @@ export function resetFpPerfStore(): void {
   _elevator.fill(0);
   _present.fill(0);
   _render.fill(0);
+  _renderFloorVis.fill(0);
+  _renderFpEnv.fill(0);
+  _renderThree.fill(0);
   _listeners.clear();
   _lastNotifyMs = 0;
 }
@@ -145,6 +161,9 @@ export type FpPerfStats = {
     presentMs: number;
     renderMs: number;
     otherMs: number;
+    renderFloorPlateVisMs: number;
+    renderFpEnvironmentMs: number;
+    renderThreeMs: number;
   };
   histogram: FpPerfHistBucket[];
 };
@@ -188,6 +207,9 @@ export function computeFpPerfStats(
   let sumElev = 0;
   let sumPresent = 0;
   let sumRender = 0;
+  let sumRenderFloorVis = 0;
+  let sumRenderFpEnv = 0;
+  let sumRenderThree = 0;
 
   const hist = new Int32Array(6);
 
@@ -202,6 +224,9 @@ export function computeFpPerfStats(
     sumElev += _elevator[i]!;
     sumPresent += _present[i]!;
     sumRender += _render[i]!;
+    sumRenderFloorVis += _renderFloorVis[i]!;
+    sumRenderFpEnv += _renderFpEnv[i]!;
+    sumRenderThree += _renderThree[i]!;
 
     // Histogram bucket.
     let b = 5;
@@ -234,6 +259,9 @@ export function computeFpPerfStats(
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
   const avgRender = sumRender / n;
+  const avgRenderFloorVis = sumRenderFloorVis / n;
+  const avgRenderFpEnv = sumRenderFpEnv / n;
+  const avgRenderThree = sumRenderThree / n;
   const avgOther = Math.max(0, avgTotal - avgPhysics - avgElev - avgPresent - avgRender);
 
   const histogram: FpPerfHistBucket[] = HIST_LABELS.map((label, b) => ({
@@ -261,6 +289,9 @@ export function computeFpPerfStats(
       presentMs: Math.round(avgPresent * 100) / 100,
       renderMs: Math.round(avgRender * 100) / 100,
       otherMs: Math.round(avgOther * 100) / 100,
+      renderFloorPlateVisMs: Math.round(avgRenderFloorVis * 100) / 100,
+      renderFpEnvironmentMs: Math.round(avgRenderFpEnv * 100) / 100,
+      renderThreeMs: Math.round(avgRenderThree * 100) / 100,
     },
     histogram,
   };
@@ -291,6 +322,9 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
     sections.presentMs,
     sections.renderMs,
     sections.otherMs,
+    sections.renderFloorPlateVisMs,
+    sections.renderFpEnvironmentMs,
+    sections.renderThreeMs,
   );
 
   const lines: string[] = [
@@ -306,6 +340,9 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
     `  elevator  ${sections.elevatorMs.toFixed(2).padStart(6)}ms  ${secBar(sections.elevatorMs, secMax)}`,
     `  present   ${sections.presentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentMs, secMax)}`,
     `  render    ${sections.renderMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderMs, secMax)}`,
+    `    floorVis ${sections.renderFloorPlateVisMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFloorPlateVisMs, secMax)}`,
+    `    fpEnv    ${sections.renderFpEnvironmentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFpEnvironmentMs, secMax)}`,
+    `    three.js ${sections.renderThreeMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderThreeMs, secMax)}`,
     `  other     ${sections.otherMs.toFixed(2).padStart(6)}ms  ${secBar(sections.otherMs, secMax)}`,
     "",
     "Frame-time histogram:",

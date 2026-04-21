@@ -11,7 +11,9 @@ export async function assertWebGpuAdapterOrThrow(): Promise<void> {
   if (typeof navigator === "undefined" || !navigator.gpu) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }
-  const adapter = await navigator.gpu.requestAdapter();
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: "high-performance",
+  });
   if (!adapter) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }

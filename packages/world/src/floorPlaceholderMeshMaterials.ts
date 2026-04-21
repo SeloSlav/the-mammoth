@@ -177,7 +177,7 @@ const corridorHallFloorMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, CORRIDOR_HALL_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   /** Shell floor top UVs use ~2.75 m per UV unit; low repeat stretches the sheet (~8.5 m/cycle at 0.32). */
   const rep = 0.32;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -209,7 +209,7 @@ export const interiorConcreteFloorShellMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, CONCRETE_INTERIOR_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   const rep = 0.3;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
@@ -240,7 +240,7 @@ export const exteriorConcreteWallMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, CONCRETE_EXTERIOR_WALL_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   /** Shell cladding UVs are ~2.75 m per UV unit (`wallWithDoorCutout`); low repeat stretches the sheet
    *  so large-scale concrete reads believable on long walls (~14 m per full texture cycle at 0.2). */
   const rep = 0.2;
@@ -276,11 +276,7 @@ export const elevatorHoistwayExteriorWallMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, ELEVATOR_HOISTWAY_EXTERIOR_AUTHORING);
-  /** Pack has no height map; match other shell walls — skip bump to save fetches. */
-  m.metalnessMap = null;
-  m.metalness = 0.1;
-  m.bumpMap = null;
-  m.bumpScale = 0;
+  stripArchitecturalDetailMaps(m, { metalness: 0.1, stripRoughnessMap: true });
   const rep = 0.2;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
@@ -311,7 +307,7 @@ export const groundLevelCorridorInteriorWallMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, GROUND_LEVEL_CORRIDOR_WALL_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   /** Match shell wall planar UV scale (~2.75 m/tile); similar repeat to interior floor vinyl. */
   const rep = 0.3;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -344,7 +340,7 @@ export const buildingCorridorCeilingMaterial = (() => {
     side: THREE.DoubleSide,
   });
   applyStandardAuthoringSlot(m, BUILDING_CORRIDOR_CEILING_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   /** Shell ceilings use {@link applyShellFloorPlanarTopUV} (~2.75 m/UV); same repeat band as corridor vinyl. */
   const rep = 0.32;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -378,7 +374,7 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_INTERIOR_WALL_CEILING_AUTHORING);
   m.roughnessMap = null;
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   const rep = 0.28;
   for (const key of ["map", "normalMap"] as const) {
     const t = m[key];
@@ -409,7 +405,7 @@ const apartmentUnitFloorMaterial = (() => {
     metalness: 1,
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
   /** Parquet blocks are small — slightly higher repeat than slab concrete so planks read at room scale. */
   const rep = 0.42;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
