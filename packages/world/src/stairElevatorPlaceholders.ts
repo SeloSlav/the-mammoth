@@ -34,6 +34,7 @@ import { applyCabMaterialSlot } from "./elevatorVisualMaterialUtils.js";
 import { stripArchitecturalDetailMaps } from "./elevatorVisualMaterialUtils.js";
 import { EXTERIOR_DOOR_W_M } from "./elevatorCollisionTuning.js";
 import { attachStairWellLandingProps } from "./stairWellLandingProps.js";
+import { attachStairwellCigaretteLitter } from "./stairwellCigaretteLitter.js";
 
 /** Hoistway inner shell for **stair** shafts (and door-frame trim reference); brick-red concrete. */
 const shaftWall = concreteMaterial(0xd5a19b);
@@ -1159,6 +1160,15 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
    * `(story - 1) % 2 === 1` / `(minLevelIndex + segmentIndex - 1) % 2 === 1` from callers.
    */
   interiorWallUvAlternated?: boolean;
+  /** Seed for deterministic stairwell litter scatter (plan key XOR segment index at call sites). */
+  segmentScatterSeed?: number;
+  /**
+   * Merge / visibility search root for stair litter (full-height stair column or floor plate).
+   * When omitted, uses `group.parent ?? group`. FP callers should pass the stair column group.
+   */
+  stairGraphicsMergeRoot?: THREE.Object3D;
+  /** When true, skip decorative stair litter (e.g. collision-only overlay segments with no parent). */
+  omitStairwellCigaretteLitter?: boolean;
 };
 
 export type StairWellGroundDoorContext = {
@@ -2101,6 +2111,17 @@ export function addStairWellPlaceholder(
     skipTypicalLandingProps:
       opts?.omitTopLanding === true && authoringScope === "typical",
   });
+  if (opts?.omitStairwellCigaretteLitter !== true) {
+    const litterSearchRoot = opts?.stairGraphicsMergeRoot ?? group.parent ?? group;
+    attachStairwellCigaretteLitter({
+      root: group,
+      litterSearchRoot,
+      L,
+      omitOnlyLanding,
+      omitTreads: opts?.omitTreads === true,
+      scatterSeed: opts?.segmentScatterSeed ?? 0,
+    });
+  }
   /**
    * Same merge skip as {@link addElevatorShaftPlaceholder}: without this, stair-shaft
    * `shaft_wall_*` / `*_exterior*` geometry shares `exteriorConcreteWallMaterial` with merged

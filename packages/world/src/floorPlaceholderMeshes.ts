@@ -70,6 +70,7 @@ import {
   type StairCorridorSignPlacement,
   addStairwellCorridorSignMeshes,
 } from "./stairwellCorridorSign.js";
+import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
 import type { CollisionAabb } from "./collisionScene.js";
 
 type PlaceholderKind = "corridor" | "unit" | "core" | "misc";
@@ -1789,6 +1790,8 @@ export function buildFloorMeshes(
           supplementalDoors,
           shaftExteriorFaces,
           interiorWallUvAlternated: (story - 1) % 2 === 1,
+          segmentScatterSeed: stairwellLitterScatterSeed(sk, story),
+          stairGraphicsMergeRoot: room.parent ?? room,
         });
       }
     } else {
@@ -2210,6 +2213,8 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         omitTopLanding: isTopStorey,
         shaftExteriorFaces: spec.exteriorShaftFaces,
         interiorWallUvAlternated: (spec.minLevelIndex + i - 1) % 2 === 1,
+        segmentScatterSeed: stairwellLitterScatterSeed(spec.planKey, i),
+        omitStairwellCigaretteLitter: true,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(segment, wallPrefixesForFaces("shaft_wall", affectedFaces)),

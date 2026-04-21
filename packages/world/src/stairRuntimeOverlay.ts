@@ -22,6 +22,7 @@ import {
   type StairSwitchbackLayout,
   type StairTreadSpec,
 } from "./stairWellGeometry.js";
+import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
 
 type LandingPartId = Extract<StairWellEditorPartId, "stair_landing_lower" | "stair_landing_upper">;
 
@@ -473,6 +474,8 @@ export function buildStairRuntimeOverlayForBuilding(
         omitTopLanding: isTopStorey,
         shaftExteriorFaces: spec.exteriorShaftFaces,
         interiorWallUvAlternated: (spec.minLevelIndex + i - 1) % 2 === 1,
+        segmentScatterSeed: stairwellLitterScatterSeed(spec.planKey, i),
+        omitStairwellCigaretteLitter: true,
       });
       blockerReplacementAabbs.push(...collectCollisionAabbsFromObject3D(segment));
       const mask = buildSegmentMask(worldX, worldY, worldZ, spec.sx, sySeg, spec.sz);

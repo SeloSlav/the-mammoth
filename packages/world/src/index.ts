@@ -81,6 +81,7 @@ export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,
 } from "./stairWellLandingProps.js";
+export { ensureStairwellCigaretteMeshReady } from "./stairwellCigaretteLitter.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,

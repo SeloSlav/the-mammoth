@@ -11,7 +11,7 @@ import {
 const _loader = new GLTFLoader();
 const _templatePromiseByUrl = new Map<string, Promise<THREE.Object3D>>();
 
-function loadPropTemplate(url: string): Promise<THREE.Object3D> {
+export function loadPropTemplate(url: string): Promise<THREE.Object3D> {
   const cached = _templatePromiseByUrl.get(url);
   if (cached) return cached;
 

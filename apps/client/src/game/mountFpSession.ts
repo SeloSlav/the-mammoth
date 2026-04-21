@@ -17,7 +17,11 @@ import {
   type FpLocomotionWalkOptions,
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
+import {
+  ensureStairwellCigaretteMeshReady,
+  maxBuildingLevelIndex,
+  parseFloorDoc,
+} from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraOrFeetInsideBuildingFootprintXZ,
@@ -220,6 +224,8 @@ export async function mountFpSession(
   scene.add(playerRig);
   const fpCollisionDebug = createFpCollisionDebugOverlay();
   scene.add(fpCollisionDebug.group);
+
+  await ensureStairwellCigaretteMeshReady();
 
   const {
     building,

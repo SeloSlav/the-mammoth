@@ -6,6 +6,7 @@ import {
   resolveStairWellSupplementalDoors,
   type StairWellGroundDoorContext,
 } from "./stairElevatorPlaceholders.js";
+import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
 import {
   exteriorFacesForPlacedObjectInFloor,
   shaftFacesTowardAdjacentElevatorHoistways,
@@ -264,6 +265,7 @@ export function addBuildingStairShaftColumnsToRoot(
           if (sup.face) shaftExteriorFaceSet.add(sup.face);
         }
       }
+      col.add(segment);
       addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
@@ -275,8 +277,9 @@ export function addBuildingStairShaftColumnsToRoot(
         omitTopLanding: isTopStorey,
         shaftExteriorFaces: [...shaftExteriorFaceSet],
         interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
+        segmentScatterSeed: stairwellLitterScatterSeed(s.planKey, i),
+        stairGraphicsMergeRoot: col,
       });
-      col.add(segment);
     }
     root.add(col);
   }
