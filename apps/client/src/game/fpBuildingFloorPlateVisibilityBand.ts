@@ -41,6 +41,41 @@ export function fpBuildingExteriorViewShouldRevealFullStack(input: {
   );
 }
 
+/**
+ * Whether apartment unit interior shell meshes (plaster `shell_wall_*`) should draw.
+ *
+ * {@link fpBuildingExteriorViewShouldRevealFullStack} intentionally uses a **6 m inset** so
+ * floor-plate culling stays conservative near façades. That same “perimeter = exterior” rule must
+ * **not** drive interior visibility: shallow perimeter units sit entirely in that outer ring, so
+ * reusing the inset test makes plaster walls vanish when you approach a window.
+ *
+ * Use the building’s **raw** world XZ AABB instead (camera **or** feet — whichever still reads as
+ * inside the footprint). Hide only when both samples are clearly outside the slab outline.
+ */
+export function fpCameraOrFeetInsideBuildingFootprintXZ(input: {
+  cameraX: number;
+  cameraZ: number;
+  feetX: number;
+  feetZ: number;
+  boundsMinX: number;
+  boundsMaxX: number;
+  boundsMinZ: number;
+  boundsMaxZ: number;
+  /** Expand the footprint slightly so boundary grazing does not flicker. */
+  epsilonM?: number;
+}): boolean {
+  const eps = Math.max(0, input.epsilonM ?? 0.05);
+  const minX = input.boundsMinX - eps;
+  const maxX = input.boundsMaxX + eps;
+  const minZ = input.boundsMinZ - eps;
+  const maxZ = input.boundsMaxZ + eps;
+  const xzIn = (x: number, z: number) =>
+    x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+  return (
+    xzIn(input.cameraX, input.cameraZ) || xzIn(input.feetX, input.feetZ)
+  );
+}
+
 export function fpBuildingFloorPlateVisibilityBand(input: {
   maxLevel: number;
   /** 1-based storey from feet Y (see {@link estimateStoreyFromFeetY}). */

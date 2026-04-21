@@ -1854,13 +1854,19 @@ export function buildFloorMeshes(
           if (obj.name.startsWith("unit_exterior_glass_")) return;
           obj.userData.mammothSkipFloorGeometryMerge = true;
           /**
-           * Tag interior plaster shell pieces so the session can hide them when the camera is
-           * outside the building footprint. From outside the façade the interior is never visible
-           * (alpha-blend glass hides detail, opaque cladding occludes the rest), but the GPU still
-           * rasterises every interior triangle in the frustum — 19 floors × ~8 units × hollow
-           * shell walls/ceilings/floors = ~1.3M wasted triangles when looking at the building.
+           * Tag **only interior walls** (not floors / ceilings) as hide-from-outside. Walls are the
+           * bulk of the hollow-shell triangle count and are always occluded by the opaque
+           * `shell_exterior_cladding_*` concrete from any outside viewpoint, so rasterising them
+           * when the camera is outside the building footprint is pure waste.
+           *
+           * `shell_floor_*` and `shell_ceiling_*` are left visible because they double as structural
+           * caps: the top-floor ceiling IS the building's roof silhouette (there is no separate
+           * roof slab — exterior cladding covers walls only), and the ground-floor floor seals the
+           * podium. Hiding those revealed sky through the top of the building from outside views.
            */
-          obj.userData.mammothUnitInterior = true;
+          if (obj.name.startsWith("shell_wall_")) {
+            obj.userData.mammothUnitInterior = true;
+          }
         });
       }
     }

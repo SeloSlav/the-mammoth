@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
+  fpCameraOrFeetInsideBuildingFootprintXZ,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 
 describe("fpBuildingFloorPlateVisibilityBand", () => {
@@ -110,6 +111,51 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
       fpBuildingExteriorViewShouldRevealFullStack({
         cameraX: 10,
         cameraZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+      }),
+    ).toBe(true);
+  });
+
+  it("still treats shallow perimeter XZ as inside for unit plaster (inset must not apply)", () => {
+    expect(
+      fpCameraOrFeetInsideBuildingFootprintXZ({
+        cameraX: 10,
+        cameraZ: 0,
+        feetX: 10,
+        feetZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+      }),
+    ).toBe(true);
+  });
+
+  it("hides unit plaster only when both camera and feet are outside raw footprint", () => {
+    expect(
+      fpCameraOrFeetInsideBuildingFootprintXZ({
+        cameraX: -20,
+        cameraZ: 0,
+        feetX: -20,
+        feetZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps plaster when feet remain inside even if camera leans past raw X", () => {
+    expect(
+      fpCameraOrFeetInsideBuildingFootprintXZ({
+        cameraX: 13,
+        cameraZ: 0,
+        feetX: 10,
+        feetZ: 0,
         boundsMinX: -12,
         boundsMaxX: 12,
         boundsMinZ: -12,
