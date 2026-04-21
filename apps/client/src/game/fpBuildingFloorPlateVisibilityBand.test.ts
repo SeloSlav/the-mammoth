@@ -24,7 +24,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 10,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 6, hi: 14 });
+    ).toEqual({ lo: 8, hi: 12 });
   });
 
   it("clamps to maxLevel at the top", () => {
@@ -34,7 +34,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 5,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 5 });
+    ).toEqual({ lo: 3, hi: 5 });
   });
 
   it("clamps at ground", () => {
@@ -44,7 +44,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 5 });
+    ).toEqual({ lo: 1, hi: 3 });
   });
 
   it("extends the upper band toward the storey the camera is looking at", () => {
@@ -66,7 +66,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: false,
         lowerTargetStorey: 3,
       }),
-    ).toEqual({ lo: 1, hi: 19 });
+    ).toEqual({ lo: 1, hi: 17 });
   });
 
   it("normalizes maxLevel when below 1", () => {

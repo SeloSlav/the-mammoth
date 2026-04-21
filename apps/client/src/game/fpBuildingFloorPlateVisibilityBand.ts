@@ -106,7 +106,7 @@ export function fpCameraOrFeetNearBuildingFootprintXZ(input: {
 }
 
 /** Storeys above/below the player to keep visible when not in shaft / cab (interior band). */
-const INTERIOR_PLATE_BAND_HALF_SPAN = 4;
+const INTERIOR_PLATE_BAND_HALF_SPAN = 2;
 
 export function fpBuildingFloorPlateVisibilityBand(input: {
   maxLevel: number;

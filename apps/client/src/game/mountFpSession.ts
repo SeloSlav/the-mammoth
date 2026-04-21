@@ -204,7 +204,7 @@ export async function mountFpSession(
    * a cheap post-pass (FXAA or SMAA) which costs a flat ~1 ms instead of scaling with scene
    * complexity.
    */
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL: false });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();

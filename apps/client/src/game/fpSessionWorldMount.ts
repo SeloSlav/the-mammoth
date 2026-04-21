@@ -30,6 +30,7 @@ import { floorPayloadByDocId } from "./fpSessionContentLoad";
 /** Scratch for {@link mergeGroupDescendantsByMaterial} preserve re-parenting (avoid alloc per mesh). */
 const _mergePreserveParentInv = new THREE.Matrix4();
 const _mergePreserveLocal = new THREE.Matrix4();
+const _mergeUnitShellScratch = new THREE.Matrix4();
 
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
@@ -157,6 +158,79 @@ function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
     if (!isFloorPlate && !isStairColumn) continue;
 
     mergeGroupDescendantsByMaterial(child as THREE.Group);
+    if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
+  }
+}
+
+/**
+ * Second pass after {@link mergeGroupDescendantsByMaterial}: unit hollow shells skip the big merge
+ * (shared plaster + disjoint volumes broke a single buffer), but **within one apartment** the
+ * pieces share materials and sit in a tight volume — merge by `(placedObjectId, material)` so a
+ * corridor full of doors drops from many draws per unit to ~2–4 per unit.
+ */
+function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): void {
+  floorPlateGroup.updateMatrixWorld(true);
+  const floorInv = new THREE.Matrix4().copy(floorPlateGroup.matrixWorld).invert();
+
+  const placedIds = new Set<string>();
+  for (const ch of floorPlateGroup.children) {
+    if (!(ch instanceof THREE.Mesh)) continue;
+    if (ch.userData.mammothSkipFloorGeometryMerge !== true) continue;
+    const pid = ch.userData.mammothPlacedObjectId;
+    if (typeof pid === "string") placedIds.add(pid);
+  }
+
+  for (const placedObjectId of placedIds) {
+    const meshes = floorPlateGroup.children.filter(
+      (ch): ch is THREE.Mesh =>
+        ch instanceof THREE.Mesh &&
+        ch.userData.mammothSkipFloorGeometryMerge === true &&
+        ch.userData.mammothPlacedObjectId === placedObjectId,
+    );
+
+    const byMat = new Map<
+      string,
+      { mat: THREE.Material; list: THREE.Mesh[]; allInterior: boolean }
+    >();
+    for (const m of meshes) {
+      if (Array.isArray(m.material)) continue;
+      const mat = m.material as THREE.Material;
+      const key = mat.uuid;
+      const isInt = m.userData.mammothUnitInterior === true;
+      let bucket = byMat.get(key);
+      if (!bucket) {
+        bucket = { mat, list: [], allInterior: isInt };
+        byMat.set(key, bucket);
+      } else {
+        bucket.allInterior = bucket.allInterior && isInt;
+      }
+      bucket.list.push(m);
+    }
+
+    for (const { mat, list, allInterior } of byMat.values()) {
+      if (list.length <= 1) continue;
+      const geos: THREE.BufferGeometry[] = [];
+      for (const m of list) {
+        m.updateWorldMatrix(true, false);
+        const g = (m.geometry as THREE.BufferGeometry).clone();
+        _mergeUnitShellScratch.multiplyMatrices(floorInv, m.matrixWorld);
+        g.applyMatrix4(_mergeUnitShellScratch);
+        geos.push(g);
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+      const merged = mergeGeometries(geos, false);
+      for (const g of geos) g.dispose();
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      merged.computeBoundingBox();
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.frustumCulled = true;
+      mesh.userData.mammothPlacedObjectId = placedObjectId;
+      if (allInterior) mesh.userData.mammothUnitInterior = true;
+      mesh.name = `merged_unit_shell:${placedObjectId}`;
+      floorPlateGroup.add(mesh);
+    }
   }
 }
 

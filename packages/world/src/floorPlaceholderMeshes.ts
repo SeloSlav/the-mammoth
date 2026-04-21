@@ -1931,11 +1931,13 @@ export function buildFloorMeshes(
        * otherwise drops ~1200 draws to ~120), and the merge is purely geometric so they combine cleanly.
        */
       if (kind === "unit") {
-        room.traverse((obj) => {
-          if (!(obj instanceof THREE.Mesh)) return;
-          if (obj.name.startsWith("shell_exterior_cladding")) return;
-          if (obj.name.startsWith("unit_exterior_glass_")) return;
-          obj.userData.mammothSkipFloorGeometryMerge = true;
+        const placedObjectId = obj.id;
+        room.traverse((mesh) => {
+          if (!(mesh instanceof THREE.Mesh)) return;
+          if (mesh.name.startsWith("shell_exterior_cladding")) return;
+          if (mesh.name.startsWith("unit_exterior_glass_")) return;
+          mesh.userData.mammothSkipFloorGeometryMerge = true;
+          mesh.userData.mammothPlacedObjectId = placedObjectId;
           /**
            * Tag interior hollow-shell pieces (walls, inter-unit floors, inter-unit ceilings) for
            * tooling / consistency (`mammothUnitInterior`). The FP session toggles these when the
@@ -1946,11 +1948,11 @@ export function buildFloorMeshes(
            * roof slab; cladding covers walls only).
            */
           if (
-            obj.name.startsWith("shell_wall_") ||
-            obj.name.startsWith("shell_floor") ||
-            obj.name.startsWith("shell_ceiling")
+            mesh.name.startsWith("shell_wall_") ||
+            mesh.name.startsWith("shell_floor") ||
+            mesh.name.startsWith("shell_ceiling")
           ) {
-            obj.userData.mammothUnitInterior = true;
+            mesh.userData.mammothUnitInterior = true;
           }
         });
       } else if (kind === "corridor") {
