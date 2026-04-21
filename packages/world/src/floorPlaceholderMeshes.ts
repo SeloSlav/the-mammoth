@@ -1842,14 +1842,25 @@ export function buildFloorMeshes(
       /**
        * `mergeGroupDescendantsByMaterial` (client `fpSessionWorldMount`) collapses each floor plate
        * into a few merged meshes. Hollow unit shells + shared plaster materials can produce bad merged
-       * buffers / bounds so interior faces never draw — façade cladding (concrete) still merges fine.
-       * Skip merge for unit interiors (same escape hatch as `mammothSkipFloorGeometryMerge` elsewhere).
+       * buffers / bounds so interior faces never draw — preserve the interior shell walls / floors /
+       * ceilings. **Do merge** exterior cladding (concrete) and per-face glass windows: the glass
+       * panels are simple `BoxGeometry` with shared alpha-blend materials (6 tints × N floors
+       * otherwise drops ~1200 draws to ~120), and the merge is purely geometric so they combine cleanly.
        */
       if (kind === "unit") {
         room.traverse((obj) => {
           if (!(obj instanceof THREE.Mesh)) return;
           if (obj.name.startsWith("shell_exterior_cladding")) return;
+          if (obj.name.startsWith("unit_exterior_glass_")) return;
           obj.userData.mammothSkipFloorGeometryMerge = true;
+          /**
+           * Tag interior plaster shell pieces so the session can hide them when the camera is
+           * outside the building footprint. From outside the façade the interior is never visible
+           * (alpha-blend glass hides detail, opaque cladding occludes the rest), but the GPU still
+           * rasterises every interior triangle in the frustum — 19 floors × ~8 units × hollow
+           * shell walls/ceilings/floors = ~1.3M wasted triangles when looking at the building.
+           */
+          obj.userData.mammothUnitInterior = true;
         });
       }
     }

@@ -1,4 +1,9 @@
+import { useSyncExternalStore } from "react";
 import type { DbConnection } from "../module_bindings";
+import {
+  getFpSessionGameUiHidden,
+  subscribeFpSessionGameUiHidden,
+} from "../game/fpSessionGameUiHidden";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
@@ -14,8 +19,14 @@ type HudProps = {
 
 /** React shell for HUD / inventory; engine loop stays outside React (see App.tsx). */
 export function HudShell({ displayName, onSignOut, conn }: HudProps) {
+  const gameUiHidden = useSyncExternalStore(
+    subscribeFpSessionGameUiHidden,
+    getFpSessionGameUiHidden,
+    getFpSessionGameUiHidden,
+  );
+
   return (
-    <>
+    <div style={gameUiHidden ? { display: "none" } : undefined}>
       <div
         onDragStart={(e) => e.preventDefault()}
         style={{
@@ -36,7 +47,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         The Mammoth — <strong>{displayName}</strong>
         <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
           {
-            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · click canvas to look · Tab inventory"
+            "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · click canvas to look · Tab inventory"
           }
         </div>
         <div style={{ marginTop: 8, pointerEvents: "auto" }}>
@@ -63,6 +74,6 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
       <MammothPickupPromptHud />
       <MammothElevatorHud />
       <MammothFpReticule />
-    </>
+    </div>
   );
 }

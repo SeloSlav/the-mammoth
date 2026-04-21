@@ -56,6 +56,10 @@ import {
   onFpSessionPostRenderFrame,
   resetFpSessionFpsDisplay,
 } from "./fpSessionFpsDisplay";
+import {
+  resetFpSessionGameUiHidden,
+  toggleFpSessionGameUiHidden,
+} from "./fpSessionGameUiHidden";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
 import { mountFpApartmentDoors } from "./fpApartmentDoors.js";
 import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
@@ -191,6 +195,7 @@ export async function mountFpSession(
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
+  resetFpSessionGameUiHidden();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
@@ -213,6 +218,21 @@ export async function mountFpSession(
   buildingRoot.updateMatrixWorld(true);
   const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  /**
+   * Unit interior shell meshes (hollow plaster walls/ceilings/floors inside each apartment).
+   * Tagged in `packages/world/src/floorPlaceholderMeshes.ts` and collected here so
+   * `syncBuildingFloorPlateVisibility` can hide them whenever the camera is outside the building
+   * footprint. From outside the facade, interior geometry is occluded by opaque cladding and
+   * blurred by alpha-blend window glass — rendering it is ~1.3M wasted triangles per frame when
+   * the whole building fills the viewport. Cached once at mount; `.visible` is flipped on state
+   * change rather than per-frame traversal.
+   */
+  const unitInteriorMeshes: THREE.Mesh[] = [];
+  buildingRoot.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothUnitInterior === true) unitInteriorMeshes.push(obj);
+  });
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -456,6 +476,11 @@ export async function mountFpSession(
   // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
   let _lastBandLo = -999;
   let _lastBandHi = -999;
+  /**
+   * Tracks whether unit interiors were last rendered. Flipping visibility on ~800-1000 meshes
+   * is cheap if we only do it on state transitions, so gate writes behind this.
+   */
+  let _lastUnitInteriorVisible = true;
 
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
@@ -470,17 +495,29 @@ export async function mountFpSession(
       _floorVisCamWorld.x,
       _floorVisCamWorld.z,
     );
-    if (
-      fpBuildingExteriorViewShouldRevealFullStack({
-        cameraX: _floorVisCamWorld.x,
-        cameraZ: _floorVisCamWorld.z,
-        boundsMinX: buildingWorldBounds.min.x,
-        boundsMaxX: buildingWorldBounds.max.x,
-        boundsMinZ: buildingWorldBounds.min.z,
-        boundsMaxZ: buildingWorldBounds.max.z,
-      })
-    ) {
+    const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
+      cameraX: _floorVisCamWorld.x,
+      cameraZ: _floorVisCamWorld.z,
+      boundsMinX: buildingWorldBounds.min.x,
+      boundsMaxX: buildingWorldBounds.max.x,
+      boundsMinZ: buildingWorldBounds.min.z,
+      boundsMaxZ: buildingWorldBounds.max.z,
+    });
+    if (cameraOutsideBuilding) {
       band = { lo: 1, hi: maxBuildingLevel };
+    }
+    /**
+     * Hide unit interior plaster shells whenever the camera is outside the building footprint.
+     * The opaque exterior cladding + alpha-blend window glass still render so the facade silhouette
+     * is preserved, but interior wall/ceiling/floor triangles stop being rasterised — the single
+     * biggest fill-rate saving for the "looking at the whole building from far away" camera state.
+     */
+    const unitInteriorVisible = !cameraOutsideBuilding;
+    if (unitInteriorVisible !== _lastUnitInteriorVisible) {
+      _lastUnitInteriorVisible = unitInteriorVisible;
+      for (let i = 0; i < unitInteriorMeshes.length; i++) {
+        unitInteriorMeshes[i]!.visible = unitInteriorVisible;
+      }
     }
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
@@ -1962,6 +1999,15 @@ export async function mountFpSession(
     if (e.code === "AltLeft" || e.code === "AltRight") {
       e.preventDefault();
     }
+    if (
+      e.code === "KeyZ" &&
+      e.altKey &&
+      !e.repeat &&
+      !isTextInputFocused()
+    ) {
+      e.preventDefault();
+      toggleFpSessionGameUiHidden();
+    }
     if (!isTextInputFocused() && !mammothInventoryOpen()) {
       let n = -1;
       if (e.code.startsWith("Digit")) {
@@ -2601,6 +2647,7 @@ export async function mountFpSession(
     renderer.dispose();
     scene.clear();
     resetFpSessionFpsDisplay();
+    resetFpSessionGameUiHidden();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };

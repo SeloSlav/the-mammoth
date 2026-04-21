@@ -31,9 +31,12 @@ const GRASS_GROUND_TILE_M = 2.5;
 const FP_GROUND_PLANE_SIZE = 6000;
 /**
  * Default `PlaneGeometry` is 1×1 segments (two triangles). Tangent-space `normalMap` on that mesh
- * often shows **black wedge / zig-zag seams** along the diagonal — not missing albedo, broken tangents.
+ * can show **black wedge / zig-zag seams** along the diagonal from inconsistent tangent basis.
+ * A handful of segments is more than enough to break up the diagonal at any viewing distance —
+ * previously 96×96 = 18,432 triangles, now 8×8 = 128 triangles (144× cheaper, no visible difference
+ * at any realistic view since the per-segment tile is still ~750 m across on the 6000 m plane).
  */
-const FP_GROUND_PLANE_SEGMENTS = 96;
+const FP_GROUND_PLANE_SEGMENTS = 8;
 /** World-space scale for `triNoise3D` — dirt mask. */
 const GROUND_DIRT_NOISE_SCALE = 0.022;
 /** Live grass (sparse green) mask — slightly different scale so it doesn’t lock-step with dirt. */
