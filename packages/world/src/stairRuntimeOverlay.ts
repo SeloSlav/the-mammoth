@@ -472,6 +472,7 @@ export function buildStairRuntimeOverlayForBuilding(
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
         shaftExteriorFaces: spec.exteriorShaftFaces,
+        interiorWallUvAlternated: (spec.minLevelIndex + i - 1) % 2 === 1,
       });
       blockerReplacementAabbs.push(...collectCollisionAabbsFromObject3D(segment));
       const mask = buildSegmentMask(worldX, worldY, worldZ, spec.sx, sySeg, spec.sz);

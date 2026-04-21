@@ -26,7 +26,6 @@ import {
 } from "./wallWithDoorCutout.js";
 import {
   concreteMaterial,
-  elevatorHoistwayExteriorWallMaterial,
   exteriorConcreteWallMaterial,
   interiorConcreteFloorShellMaterial,
 } from "./floorPlaceholderMeshMaterials.js";
@@ -89,6 +88,30 @@ type StairWellMaterialSet = {
 
 function stairWellHasFloorSlab(scope: StairWellAuthoringScope): boolean {
   return scope === "ground";
+}
+
+/**
+ * World-metric shaft wall UVs use unbounded planar U (see {@link applyWorldMetricUvsToAxisAlignedBoxMesh}).
+ * Negating U mirrors the authored concrete along each interior wall so alternating storeys do not
+ * read as a single repeating tile phase up the full-height column.
+ */
+function negateWorldMetricUvUForShaftInteriorWalls(root: THREE.Object3D, wallMat: THREE.Material): void {
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.material !== wallMat) return;
+    const n = obj.name;
+    if (!n.startsWith("shaft_wall_")) return;
+    if (n.includes("_exterior")) return;
+    if (n.includes("_frame")) return;
+    const g = obj.geometry as THREE.BufferGeometry;
+    const attr = g.getAttribute("uv") as THREE.BufferAttribute | undefined;
+    if (!attr?.array) return;
+    const arr = attr.array as Float32Array;
+    for (let i = 0; i < arr.length; i += 2) {
+      arr[i] = -arr[i]!;
+    }
+    attr.needsUpdate = true;
+  });
 }
 
 function createStairWellMaterials(def: StairWellDef | undefined): StairWellMaterialSet {
@@ -1057,6 +1080,25 @@ export function elevatorGroundDoorOpeningLocals(
   };
 }
 
+/**
+ * Stair / elevator shaft shells must **not** participate in per-floor-plate
+ * {@link mergeGroupDescendantsByMaterial}. Thin `shaft_wall_*_exterior*` skins share
+ * `exteriorConcreteWallMaterial` with merged façade concrete — baking them into the same
+ * `BufferGeometry` collapses the ~16 mm standoff in floating-point space and breaks depth vs the
+ * inner `shaft_wall_*` shells, so distant exterior shots show the brick-toned inner wall “bleeding
+ * through”. Elevator groups contain only shaft meshes; stair wells share the same `group` with
+ * treads/landings, so only `shaft_*`-named meshes are tagged.
+ */
+export function tagShaftShellMeshesSkipFloorGeometryMerge(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const n = obj.name;
+    if (n === "shaft_floor" || n === "shaft_ceiling" || n.startsWith("shaft_wall_")) {
+      obj.userData.mammothSkipFloorGeometryMerge = true;
+    }
+  });
+}
+
 export function addElevatorShaftPlaceholder(
   group: THREE.Group,
   sx: number,
@@ -1065,8 +1107,8 @@ export function addElevatorShaftPlaceholder(
   opts?: ElevatorShaftPlaceholderOpts | null,
 ): void {
   const includePitFloor = opts?.includePitFloor !== false;
-  /** Inner `shaft_wall_*` skins use authored PBR; thin perimeter `_exterior` skins reuse the same mat when listed in `shaftExteriorFaces`. */
-  addShaftShell(group, sx, sy, sz, elevatorHoistwayExteriorWallMaterial, shaftCeil, {
+  /** Inner `shaft_wall_*` skins match building exterior concrete; thin perimeter `_exterior` skins use the same mat when listed in `shaftExteriorFaces`. */
+  addShaftShell(group, sx, sy, sz, exteriorConcreteWallMaterial, shaftCeil, {
     includeFloor: includePitFloor,
     includeCeiling: false,
     floorMat: hoistwayFloor,
@@ -1074,14 +1116,10 @@ export function addElevatorShaftPlaceholder(
     groundDoor: opts?.groundDoor ?? null,
     corridorFlushGapM: opts?.corridorFlushGapM,
     exteriorShaftFaces: opts?.shaftExteriorFaces,
-    exteriorWallMat: elevatorHoistwayExteriorWallMaterial,
+    exteriorWallMat: exteriorConcreteWallMaterial,
   });
   /** Skip {@link mergeGroupDescendantsByMaterial}: hoistway walls are thin shells; merge + frustum / WebGPU paths made them vanish while collision stayed valid. */
-  group.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) {
-      obj.userData.mammothSkipFloorGeometryMerge = true;
-    }
-  });
+  tagShaftShellMeshesSkipFloorGeometryMerge(group);
 }
 
 /**
@@ -1115,6 +1153,12 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   omitTopLanding?: boolean;
   /** Plate-space perimeter faces — PBR facade concrete on those shaft walls only (see `addShaftShell`). */
   shaftExteriorFaces?: readonly CardinalFace[];
+  /**
+   * When true: mirror world-metric **U** on inner `shaft_wall_*` meshes (not `_exterior`, not door
+   * frame trim) so texture phase alternates vs the storey below. Matches
+   * `(story - 1) % 2 === 1` / `(minLevelIndex + segmentIndex - 1) % 2 === 1` from callers.
+   */
+  interiorWallUvAlternated?: boolean;
 };
 
 export type StairWellGroundDoorContext = {
@@ -1481,6 +1525,7 @@ export function rebuildStairWellPreviewOpening(
   });
   groupGeneratedStairWellWallParts(root);
   tagGeneratedStairWellShellParts(root, authoringScope, openings);
+  tagShaftShellMeshesSkipFloorGeometryMerge(root);
   applyStairWellPartTransforms(root, def);
   for (const entry of openings) {
     const liveProxy = proxyById.get(entry.proxyId) ?? new THREE.Mesh();
@@ -1943,6 +1988,9 @@ export function addStairWellPlaceholder(
     exteriorWallMat: exteriorConcreteWallMaterial,
   });
   groupGeneratedStairWellWallParts(group);
+  if (opts?.interiorWallUvAlternated === true) {
+    negateWorldMetricUvUForShaftInteriorWalls(group, mats.wall);
+  }
   tagGeneratedStairWellShellParts(group, authoringScope, [
     ...(resolvedGroundDoor
       ? [{ proxyId: STAIR_WELL_OPENING_PROXY_ID, opening: resolvedGroundDoor }]
@@ -2053,4 +2101,10 @@ export function addStairWellPlaceholder(
     skipTypicalLandingProps:
       opts?.omitTopLanding === true && authoringScope === "typical",
   });
+  /**
+   * Same merge skip as {@link addElevatorShaftPlaceholder}: without this, stair-shaft
+   * `shaft_wall_*` / `*_exterior*` geometry shares `exteriorConcreteWallMaterial` with merged
+   * façade slabs and gets collapsed into one mesh (see {@link tagShaftShellMeshesSkipFloorGeometryMerge}).
+   */
+  tagShaftShellMeshesSkipFloorGeometryMerge(group);
 }

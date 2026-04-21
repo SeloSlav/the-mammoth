@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import type { LandingKitDef } from "@the-mammoth/schemas";
 import {
-  EXTERIOR_DOOR_CENTER_FEET_CLEAR_M,
   EXTERIOR_DOOR_JAMB_INSET_M,
+  exteriorLandingDoorSwingOriginY,
   LANDING_DOOR_GLASS_PART_ID,
   populateExteriorLandingDoorSwing,
   resolveLandingDims,
@@ -26,7 +26,7 @@ export function createExteriorLandingDoorPivot(
   landingKitDef?: LandingKitDef,
 ): ExteriorLandingDoorPivot {
   const dims = resolveLandingDims(landingKitDef);
-  const doorY = dims.panelH * 0.5 + EXTERIOR_DOOR_CENTER_FEET_CLEAR_M;
+  const doorY = exteriorLandingDoorSwingOriginY(dims.panelH);
   const structure = new THREE.Group();
   structure.name = "exterior_landing_door";
   const swing = new THREE.Group();

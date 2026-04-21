@@ -15,6 +15,7 @@ import {
   applyLandingGlassSlot,
   parseAuthorColorHex,
 } from "./elevatorVisualMaterialUtils.js";
+import { elevatorLandingDoorFrameMaterial } from "./floorPlaceholderMeshMaterials.js";
 
 /** Rail/stile thickness through the panel normal (door leaf depth). */
 export const SWING_DOOR_PANEL_THICK_M = 0.056;
@@ -97,11 +98,8 @@ export function createSwingDoorMaterials(kit: LandingKitDef | undefined): {
 } {
   const frameSlot = kit?.materials?.frame;
   const glassSlot = kit?.materials?.glass;
-  const frameMat = new THREE.MeshStandardMaterial({
-    color: frameSlot?.colorHex ? parseAuthorColorHex(frameSlot.colorHex) : 0xc42b2b,
-    roughness: frameSlot?.roughness ?? 0.52,
-    metalness: frameSlot?.metalness ?? 0.12,
-  });
+  /** Default elevator landing door: cloned red panel PBR; apartment / other kits override via `materials.frame` (e.g. different `mapUrl`). */
+  const frameMat = elevatorLandingDoorFrameMaterial.clone();
   applyLandingFrameSlot(frameMat, frameSlot);
   const glassMat = new THREE.MeshPhysicalMaterial({
     color: glassSlot?.colorHex ? parseAuthorColorHex(glassSlot.colorHex) : 0xffffff,

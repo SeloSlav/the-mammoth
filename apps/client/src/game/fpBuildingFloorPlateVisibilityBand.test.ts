@@ -3,6 +3,7 @@ import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
   fpCameraOrFeetInsideBuildingFootprintXZ,
+  fpCameraOrFeetNearBuildingFootprintXZ,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 
 describe("fpBuildingFloorPlateVisibilityBand", () => {
@@ -16,14 +17,14 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 19 });
   });
 
-  it("keeps every storey visible when not in shaft context (facade cohesion)", () => {
+  it("caps the interior band on tall stacks so distant plates are toggled off (corridor perf)", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 19,
         playerStorey: 10,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 19 });
+    ).toEqual({ lo: 6, hi: 14 });
   });
 
   it("clamps to maxLevel at the top", () => {
@@ -43,7 +44,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 12 });
+    ).toEqual({ lo: 1, hi: 5 });
   });
 
   it("extends the upper band toward the storey the camera is looking at", () => {
@@ -53,6 +54,17 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
         upperTargetStorey: 8,
+      }),
+    ).toEqual({ lo: 1, hi: 10 });
+  });
+
+  it("extends the lower band when looking downward (stairs / atrium)", () => {
+    expect(
+      fpBuildingFloorPlateVisibilityBand({
+        maxLevel: 19,
+        playerStorey: 15,
+        revealFullStack: false,
+        lowerTargetStorey: 3,
       }),
     ).toEqual({ lo: 1, hi: 19 });
   });
@@ -160,6 +172,38 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         boundsMaxX: 12,
         boundsMinZ: -12,
         boundsMaxZ: 12,
+      }),
+    ).toBe(true);
+  });
+
+  it("near footprint: false when both samples are well outside expanded slab", () => {
+    expect(
+      fpCameraOrFeetNearBuildingFootprintXZ({
+        cameraX: -30,
+        cameraZ: 0,
+        feetX: -30,
+        feetZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+        nearMarginM: 10,
+      }),
+    ).toBe(false);
+  });
+
+  it("near footprint: true when just outside raw AABB but within margin (peek / sidewalk)", () => {
+    expect(
+      fpCameraOrFeetNearBuildingFootprintXZ({
+        cameraX: 14,
+        cameraZ: 0,
+        feetX: 14,
+        feetZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+        nearMarginM: 10,
       }),
     ).toBe(true);
   });

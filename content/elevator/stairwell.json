@@ -115,12 +115,12 @@
     "shaft_wall": {
       "position": [
         0,
-        0.13047813347022313,
+        0.10922287263753219,
         0
       ],
       "scale": [
         1,
-        1.0888242371745733,
+        1.0743545151535148,
         1
       ],
       "rotation": [
@@ -223,7 +223,9 @@
     {
       "id": "stairwell_heater",
       "modelUrl": "/static/models/objects/stairwell-heater.glb",
-      "applyToScopes": ["typical"],
+      "applyToScopes": [
+        "typical"
+      ],
       "skipGroundStorey": true,
       "landingSelector": {
         "kind": "opposite_primary_door"
@@ -240,7 +242,9 @@
     {
       "id": "stairwell_heater_ground_top",
       "modelUrl": "/static/models/objects/stairwell-heater.glb",
-      "applyToScopes": ["ground"],
+      "applyToScopes": [
+        "ground"
+      ],
       "landingSelector": {
         "kind": "highest_y"
       },

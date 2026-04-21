@@ -42,15 +42,8 @@ export function fpBuildingExteriorViewShouldRevealFullStack(input: {
 }
 
 /**
- * Whether apartment unit interior shell meshes (plaster `shell_wall_*`) should draw.
- *
- * {@link fpBuildingExteriorViewShouldRevealFullStack} intentionally uses a **6 m inset** so
- * floor-plate culling stays conservative near façades. That same “perimeter = exterior” rule must
- * **not** drive interior visibility: shallow perimeter units sit entirely in that outer ring, so
- * reusing the inset test makes plaster walls vanish when you approach a window.
- *
- * Use the building’s **raw** world XZ AABB instead (camera **or** feet — whichever still reads as
- * inside the footprint). Hide only when both samples are clearly outside the slab outline.
+ * True when camera **or** feet lie inside the building’s **raw** world XZ AABB (optional epsilon).
+ * Stricter than {@link fpCameraOrFeetNearBuildingFootprintXZ} (that helper adds `nearMarginM`).
  */
 export function fpCameraOrFeetInsideBuildingFootprintXZ(input: {
   cameraX: number;
@@ -76,6 +69,45 @@ export function fpCameraOrFeetInsideBuildingFootprintXZ(input: {
   );
 }
 
+/**
+ * True when camera **or** feet lie inside the world XZ slab expanded **outward** by `nearMarginM`
+ * on each side (plus `epsilonM`). Used to rasterise `mammothUnitInterior` shells only when the
+ * player could plausibly see them (inside, perimeter, or peeking from a sidewalk), while keeping
+ * them off on distant exterior shots for fill-rate.
+ */
+export function fpCameraOrFeetNearBuildingFootprintXZ(input: {
+  cameraX: number;
+  cameraZ: number;
+  feetX: number;
+  feetZ: number;
+  boundsMinX: number;
+  boundsMaxX: number;
+  boundsMinZ: number;
+  boundsMaxZ: number;
+  /**
+   * Meters past the raw footprint edge on −X/+X/−Z/+Z. Default tuned for lobby doors slightly
+   * outside the merged mesh AABB and head lean through glass.
+   */
+  nearMarginM?: number;
+  /** Expand the near box slightly so grazing the margin does not flicker. */
+  epsilonM?: number;
+}): boolean {
+  const margin = Math.max(0, input.nearMarginM ?? 10);
+  const eps = Math.max(0, input.epsilonM ?? 0.05);
+  const minX = input.boundsMinX - margin - eps;
+  const maxX = input.boundsMaxX + margin + eps;
+  const minZ = input.boundsMinZ - margin - eps;
+  const maxZ = input.boundsMaxZ + margin + eps;
+  const xzIn = (x: number, z: number) =>
+    x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+  return (
+    xzIn(input.cameraX, input.cameraZ) || xzIn(input.feetX, input.feetZ)
+  );
+}
+
+/** Storeys above/below the player to keep visible when not in shaft / cab (interior band). */
+const INTERIOR_PLATE_BAND_HALF_SPAN = 4;
+
 export function fpBuildingFloorPlateVisibilityBand(input: {
   maxLevel: number;
   /** 1-based storey from feet Y (see {@link estimateStoreyFromFeetY}). */
@@ -86,21 +118,34 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
    * facades above the player do not pop out while looking up from lower levels.
    */
   upperTargetStorey?: number;
+  /**
+   * Lowest storey the camera is looking toward when pitching down (stairs, atrium); widens the lower
+   * bound symmetrically to {@link upperTargetStorey}.
+   */
+  lowerTargetStorey?: number;
 }): { lo: number; hi: number } {
   const maxLevel = Math.max(1, input.maxLevel);
   if (input.revealFullStack) {
     return { lo: 1, hi: maxLevel };
   }
   /**
-   * Half-width (storeys) around the player. Use at least `maxLevel - 1` so every plate stays visible
-   * from any storey (wide footprints otherwise keep the camera “interior” in XZ while tall
-   * façades / top-level shells were culled).
+   * Cap half-width for tall buildings so `syncBuildingFloorPlateVisibility` turns off distant
+   * plates — merged shells + preserved unit interiors otherwise stay in the scene graph every frame
+   * (frustum tests are weak for full-floor bounding volumes when sightlines are horizontal along a
+   * corridor). Small stacks still get `halfSpan >= maxLevel - 1` via the inner `min` so short
+   * towers stay fully banded.
    */
-  const halfSpan = Math.max(4, maxLevel - 1);
+  const halfSpan = Math.min(
+    INTERIOR_PLATE_BAND_HALF_SPAN,
+    Math.max(4, maxLevel - 1),
+  );
   let lo = input.playerStorey - halfSpan;
   let hi = input.playerStorey + halfSpan;
   if (typeof input.upperTargetStorey === "number" && Number.isFinite(input.upperTargetStorey)) {
     hi = Math.max(hi, Math.ceil(input.upperTargetStorey) + 2);
+  }
+  if (typeof input.lowerTargetStorey === "number" && Number.isFinite(input.lowerTargetStorey)) {
+    lo = Math.min(lo, Math.floor(input.lowerTargetStorey) - 2);
   }
   lo = Math.max(1, Math.min(maxLevel, lo));
   hi = Math.max(1, Math.min(maxLevel, hi));

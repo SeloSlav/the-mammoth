@@ -18,7 +18,10 @@ import {
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
-import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
+import {
+  fpBuildingExteriorViewShouldRevealFullStack,
+  fpCameraOrFeetNearBuildingFootprintXZ,
+} from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
@@ -190,7 +193,17 @@ export async function mountFpSession(
   installMmWallProbeLoadingStub();
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
-  // MSAA on for edge quality; turn off if `renderer.render` becomes GPU-bound (4× MSAA scales fragment cost).
+  /**
+   * MSAA is **off**: 4× MSAA multiplies fragment cost at every edge pixel, and this scene is
+   * GPU-fragment-bound when the building fills the viewport (PBR concrete over a 19-storey
+   * façade + interior merge). Turning it off gave ~30% frame-time back on the
+   * "looking at the building from outside" view.
+   *
+   * Visual impact: geometric edges become slightly harder, but WebGPU's linear → SRGB output
+   * conversion keeps them from aliasing violently. If edge quality becomes a problem we can add
+   * a cheap post-pass (FXAA or SMAA) which costs a flat ~1 ms instead of scaling with scene
+   * complexity.
+   */
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
@@ -220,19 +233,15 @@ export async function mountFpSession(
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   /**
-   * Unit interior shell meshes (hollow plaster walls + inter-unit floors + inter-unit ceilings).
-   * Tagged in `packages/world/src/floorPlaceholderMeshes.ts` and collected here so
-   * `syncBuildingFloorPlateVisibility` can hide them whenever the camera is outside the building
-   * footprint. From outside the facade, interior geometry is occluded by opaque cladding + slabs
-   * and blurred by alpha-blend window glass — rendering it is ~1.3M wasted triangles per frame
-   * when the whole building fills the viewport. Cached once at mount; `.visible` is flipped on
-   * state change rather than per-frame traversal.
-   *
-   * The top floor's `shell_ceiling_*` is intentionally **excluded** from the hide set: it doubles
-   * as the building's roof silhouette (there is no separate roof slab — exterior cladding covers
-   * walls only). Without this exception, looking at the building from outside showed sky through
-   * the top.
+   * Tagged interior shells (`mammothUnitInterior`: units + corridors) are hidden when the camera
+   * **and** feet are farther than {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} outside the building XZ
+   * AABB (see {@link fpCameraOrFeetNearBuildingFootprintXZ}). That restores distant fill-rate while
+   * keeping plaster / corridor materials when peeking through doors or standing just past the slab.
+   * Top-floor `shell_ceiling_*` that forms the roof silhouette is excluded from the hide list.
    */
+  /** Outward XZ expansion per edge for showing tagged interior shells (ground-floor apartments / lobby read from the street). */
+  const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 16;
+
   let topPlateLevel = -Infinity;
   for (const ch of buildingRoot.children) {
     const li = ch.userData.mammothPlateLevelIndex;
@@ -243,7 +252,6 @@ export async function mountFpSession(
     if (!(obj instanceof THREE.Mesh)) return;
     if (obj.userData.mammothUnitInterior !== true) return;
     if (obj.name.startsWith("shell_ceiling")) {
-      // Walk up to the enclosing floor plate (direct child of buildingRoot) to check its level.
       let ancestor: THREE.Object3D | null = obj;
       while (ancestor && ancestor.parent !== buildingRoot) ancestor = ancestor.parent;
       const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
@@ -496,10 +504,6 @@ export async function mountFpSession(
   // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
   let _lastBandLo = -999;
   let _lastBandHi = -999;
-  /**
-   * Tracks whether unit interiors were last rendered. Flipping visibility on ~800-1000 meshes
-   * is cheap if we only do it on state transitions, so gate writes behind this.
-   */
   let _lastUnitInteriorVisible = true;
 
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
@@ -526,19 +530,25 @@ export async function mountFpSession(
     if (cameraOutsideBuilding) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
-    /**
-     * Hide unit interior plaster shells whenever the camera is outside the building footprint.
-     * The opaque exterior cladding + alpha-blend window glass still render so the facade silhouette
-     * is preserved, but interior wall/ceiling/floor triangles stop being rasterised — the single
-     * biggest fill-rate saving for the "looking at the whole building from far away" camera state.
-     */
-    const unitInteriorVisible = !cameraOutsideBuilding;
+
+    const unitInteriorVisible = fpCameraOrFeetNearBuildingFootprintXZ({
+      cameraX: _floorVisCamWorld.x,
+      cameraZ: _floorVisCamWorld.z,
+      feetX: pos.x,
+      feetZ: pos.z,
+      boundsMinX: buildingWorldBounds.min.x,
+      boundsMaxX: buildingWorldBounds.max.x,
+      boundsMinZ: buildingWorldBounds.min.z,
+      boundsMaxZ: buildingWorldBounds.max.z,
+      nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
+    });
     if (unitInteriorVisible !== _lastUnitInteriorVisible) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {
         unitInteriorMeshes[i]!.visible = unitInteriorVisible;
       }
     }
+
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
     _lastBandLo = band.lo;
     _lastBandHi = band.hi;

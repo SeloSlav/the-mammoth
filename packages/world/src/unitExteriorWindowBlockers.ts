@@ -1,4 +1,4 @@
-import type { BuildingDoc, FloorDoc, PlacedObject } from "@the-mammoth/schemas";
+import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import type { CollisionAabb } from "./collisionScene.js";
 import { resolveFloorDocForLevel, type GetFloorOverrideDoc } from "./resolvedFloorDoc.js";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
@@ -9,7 +9,6 @@ import {
   UNIT_SHELL_WALL_THICKNESS_M,
   unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
-import type { CardinalFace } from "./wallWithDoorCutout.js";
 
 /** Sill tangent padding — narrow sills still get foot overlap (see exterior sill branch). */
 const WINDOW_SEAL_TANGENT_PAD_M = 0.03;

@@ -258,10 +258,10 @@ export const exteriorConcreteWallMaterial = (() => {
 })();
 
 /**
- * PBR for **elevator** hoistways: inner `shaft_wall_*` shells plus optional thin `*_exterior` skins
- * (see {@link addShaftShell} / {@link addElevatorShaftPlaceholder}). Stairwells keep concrete {@link exteriorConcreteWallMaterial}.
+ * Authoring for red panel concrete used on **elevator landing swing-door** frames (maps previously on hoistway shells).
+ * Clone via {@link elevatorLandingDoorFrameMaterial} in {@link createSwingDoorMaterials}; apartment kits override maps in JSON.
  */
-const ELEVATOR_HOISTWAY_EXTERIOR_AUTHORING: StandardAuthoringSlot = {
+export const elevatorLandingDoorFrameAuthoring: StandardAuthoringSlot = {
   roughness: 1,
   metalness: 0.1,
   mapUrl: "/static/materials/elevator-hoistway-exterior/basecolor.png",
@@ -269,15 +269,16 @@ const ELEVATOR_HOISTWAY_EXTERIOR_AUTHORING: StandardAuthoringSlot = {
   roughnessMapUrl: "/static/materials/elevator-hoistway-exterior/roughness.png",
 };
 
-export const elevatorHoistwayExteriorWallMaterial = (() => {
+/** Shared landing-door frame material (clone per swing). Full PBR — not stripped like merged shell mats. */
+export const elevatorLandingDoorFrameMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
     metalness: 1,
   });
-  applyStandardAuthoringSlot(m, ELEVATOR_HOISTWAY_EXTERIOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.1, stripRoughnessMap: true });
-  const rep = 0.2;
+  applyStandardAuthoringSlot(m, elevatorLandingDoorFrameAuthoring);
+  /** Door rails/stiles are ~0.05–2 m faces — slightly tighter repeat than shaft cladding so grain reads at arm's length. */
+  const rep = 0.35;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
     if (t) {
@@ -287,7 +288,6 @@ export const elevatorHoistwayExteriorWallMaterial = (() => {
     }
   }
   applyShellTextureAnisotropy(m);
-  applyShellNormalMapToggle(m);
   return m;
 })();
 
@@ -430,8 +430,8 @@ export const floorPlaceholderMeshMaterials = {
   /** Corridor shells: ground (`1` / `99`) and upper storeys with unit-adjacent doors — see {@link addHollowRoomShell}. */
   groundLevelCorridorInteriorWall: groundLevelCorridorInteriorWallMaterial,
   corridorExteriorWall: exteriorConcreteWallMaterial,
-  /** Elevator hoistway inner + optional perimeter `_exterior` skins (not stairwells). */
-  elevatorHoistwayExteriorWall: elevatorHoistwayExteriorWallMaterial,
+  /** Elevator landing swing-door frame rail/stile/fill — red panel PBR (clone for each leaf). */
+  elevatorLandingDoorFrame: elevatorLandingDoorFrameMaterial,
   unitFloor: apartmentUnitFloorMaterial,
   unitCeil: apartmentUnitInteriorWallCeilingMaterial,
   unitWall: apartmentUnitInteriorWallCeilingMaterial,
@@ -453,4 +453,6 @@ export const floorPlaceholderMeshMaterials = {
   groundFootprintOccluder: concreteMaterial(0xc3c9cf, { side: THREE.DoubleSide }),
   /** Lobby / ground shell double-door reveals — match corridor concrete so trims are not dark “picture frames”. */
   lobbyDoorFrame: concreteMaterial(0xc4cad1),
+  /** Ground lobby doors: trim on the **facade** side only (slightly inset from cladding outer). */
+  lobbyDoorFrameExterior: concreteMaterial(0x2a2e34),
 } as const;

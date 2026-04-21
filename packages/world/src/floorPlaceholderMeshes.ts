@@ -1402,6 +1402,74 @@ function addHollowRoomShell(
     fj += 1;
   }
 
+  /** Must match {@link addExteriorWallCladding} — frame sits flush with façade, slightly inset. */
+  const lobbyExteriorCladT = 0.035;
+  const extFrameM = mat.lobbyDoorFrameExterior;
+  let fxi = 0;
+  for (const zc of czList) {
+    const z0 = zc - halfDoor;
+    const z1 = zc + halfDoor;
+    if (extE) {
+      addDoorFrameTrimConstantX(
+        group,
+        extFrameM,
+        hx + lobbyExteriorCladT,
+        -1,
+        z0,
+        z1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_ext_e_${fxi}`,
+      );
+    }
+    if (extW) {
+      addDoorFrameTrimConstantX(
+        group,
+        extFrameM,
+        -hx - lobbyExteriorCladT,
+        1,
+        z0,
+        z1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_ext_w_${fxi}`,
+      );
+    }
+    fxi += 1;
+  }
+  let fxj = 0;
+  for (const xc of cxList) {
+    const x0 = xc - halfDoor;
+    const x1 = xc + halfDoor;
+    if (extN) {
+      addDoorFrameTrimConstantZ(
+        group,
+        extFrameM,
+        hz + lobbyExteriorCladT,
+        -1,
+        x0,
+        x1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_ext_n_${fxj}`,
+      );
+    }
+    if (extS) {
+      addDoorFrameTrimConstantZ(
+        group,
+        extFrameM,
+        -hz - lobbyExteriorCladT,
+        1,
+        x0,
+        x1,
+        yDoor0,
+        yDoor1,
+        `shell_lobby_frame_ext_s_${fxj}`,
+      );
+    }
+    fxj += 1;
+  }
+
   addKoncarElevatorSignMeshes(
     group,
     sx,
@@ -1676,15 +1744,29 @@ export function buildFloorMeshes(
           authoringScope: story === 1 || story === 99 ? "ground" : "typical",
           primaryDoor: resolvedDoor,
         });
-        const shaftExteriorFaces = [
-          ...new Set<CardinalFace>([
-            ...mergeShaftExteriorHints(
-              roomExteriorFaces,
-              readShaftFacadeHintFaces(obj.metadata),
-            ),
-            ...shaftFacesTowardAdjacentElevatorHoistways(floor, obj),
-          ]),
-        ];
+        const shaftExteriorFaceSet = new Set<CardinalFace>([
+          ...mergeShaftExteriorHints(
+            roomExteriorFaces,
+            readShaftFacadeHintFaces(obj.metadata),
+          ),
+          ...shaftFacesTowardAdjacentElevatorHoistways(floor, obj),
+        ]);
+        /**
+         * `exteriorFacesForPlacedObjectInFloor` can omit the ground-entry door cardinal when the
+         * shaft sits inset from the plate edge (lobby / massing overlaps the door band). Without that
+         * face in `shaftExteriorFaces`, `addShaftShell` skips `*_exterior` cladding on the door wall
+         * — the outer world then sees `mats.wall` (stairwell interior concrete) instead of
+         * `exteriorConcreteWallMaterial`. Always treat resolved ground (and supplemental) door
+         * faces as façade on **ground / legacy single plate** storeys only.
+         */
+        if (story === 1 || story === 99) {
+          const f = resolvedGroundDoor?.face;
+          if (f) shaftExteriorFaceSet.add(f);
+          for (const sup of supplementalDoors) {
+            if (sup.face) shaftExteriorFaceSet.add(sup.face);
+          }
+        }
+        const shaftExteriorFaces = [...shaftExteriorFaceSet];
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,
@@ -1692,6 +1774,7 @@ export function buildFloorMeshes(
           groundDoor: resolvedGroundDoor,
           supplementalDoors,
           shaftExteriorFaces,
+          interiorWallUvAlternated: (story - 1) % 2 === 1,
         });
       }
     } else {
@@ -1854,18 +1937,13 @@ export function buildFloorMeshes(
           if (obj.name.startsWith("unit_exterior_glass_")) return;
           obj.userData.mammothSkipFloorGeometryMerge = true;
           /**
-           * Tag interior hollow-shell pieces (walls, inter-unit floors, inter-unit ceilings) as
-           * hide-from-outside. All of these are occluded by `shell_exterior_cladding_*` concrete
-           * and the per-floor `addConcreteSlabWithOptionalShaftHoles` slab, so rasterising them
-           * while the camera is outside the building footprint is pure fill-rate waste. Ceilings
-           * and floors are fragment-expensive (big planar PBR surfaces) — this measurement showed
-           * the gap between "walls hidden only" (34 FPS, 25ms) and "walls+floors+ceilings hidden"
-           * (57 FPS, 16ms) on the same external-facing view.
+           * Tag interior hollow-shell pieces (walls, inter-unit floors, inter-unit ceilings) for
+           * tooling / consistency (`mammothUnitInterior`). The FP session toggles these when the
+           * camera and feet are both outside an **expanded** XZ footprint (near-margin) so distant
+           * views stay cheap while door/window peeks keep authored materials.
            *
-           * Exception: `shell_ceiling_*` on the **top floor** is kept visible because it doubles
-           * as the building's roof silhouette — there is no separate roof slab, exterior cladding
-           * covers walls only. The top-floor exemption is applied at runtime in `mountFpSession`
-           * (needs to know the max `mammothPlateLevelIndex` across the whole building).
+           * `shell_ceiling_*` on the **top floor** still doubles as the roof silhouette (no separate
+           * roof slab; cladding covers walls only).
            */
           if (
             obj.name.startsWith("shell_wall_") ||
@@ -1878,9 +1956,8 @@ export function buildFloorMeshes(
       } else if (kind === "corridor") {
         /**
          * Corridors sit behind units + exterior cladding (except their own `shell_exterior_cladding_*`
-         * faces), so their interior hollow-shell pieces are also invisible from outside the building.
-         * Same hide-from-outside treatment as units — reuse the `mammothUnitInterior` tag so the
-         * runtime visibility gate in `mountFpSession.syncBuildingFloorPlateVisibility` covers both.
+         * faces). Reuse the `mammothUnitInterior` tag with units — same FP near-footprint visibility
+         * as hollow unit shells.
          * Corridor meshes do NOT get `mammothSkipFloorGeometryMerge`: unlike unit hollow shells,
          * corridor geometry merges cleanly, and keeping merge on is critical for draw-call count.
          */
@@ -2116,6 +2193,7 @@ export function buildStairOpeningCollisionOverlayForBuilding(
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
         shaftExteriorFaces: spec.exteriorShaftFaces,
+        interiorWallUvAlternated: (spec.minLevelIndex + i - 1) % 2 === 1,
       });
       replacementBlockers.push(
         ...collectNamedBoxCollisionAabbs(segment, wallPrefixesForFaces("shaft_wall", affectedFaces)),

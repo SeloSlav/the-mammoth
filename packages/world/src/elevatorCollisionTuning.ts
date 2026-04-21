@@ -8,7 +8,7 @@
 /** Clear opening width for landing swing + cab sliding doors + hoistway wall cut (m). */
 export const EXTERIOR_DOOR_W_M = 1.86;
 /** Landing leaf height — closer to hoistway door cut (~2.2 m cap) than cab `DOOR_H` (2.05). */
-export const EXTERIOR_DOOR_H_M = 2.14;
+export const EXTERIOR_DOOR_H_M = 2.22;
 /**
  * Hinge line sits slightly inboard of the tangent half-width so the closed leaf covers the wall
  * hole without a wide gap on the jamb side (was 0.06; too much inset).
@@ -16,6 +16,16 @@ export const EXTERIOR_DOOR_H_M = 2.14;
 export const EXTERIOR_DOOR_JAMB_INSET_M = 0.005;
 /** `doorY` above landing feet anchor: centers leaf so bottom clears slab by a few cm (not cab `FLOOR_T`). */
 export const EXTERIOR_DOOR_CENTER_FEET_CLEAR_M = 0.015;
+/**
+ * Added to nominal half-panel + feet clear when placing the swing group.
+ * Negative shifts the hinge down so added {@link EXTERIOR_DOOR_H_M} reads as more reach toward the corridor floor vs the lintel.
+ */
+export const EXTERIOR_DOOR_SWING_CENTER_Y_BIAS_M = -0.04;
+
+/** World-space Y offset of landing swing origin above feet anchor (matches clients + editor preview). */
+export function exteriorLandingDoorSwingOriginY(panelHM: number): number {
+  return panelHM * 0.5 + EXTERIOR_DOOR_CENTER_FEET_CLEAR_M + EXTERIOR_DOOR_SWING_CENTER_Y_BIAS_M;
+}
 export const EXTERIOR_DOOR_COLLISION_OPEN_THRESH = 0.88;
 export const EXTERIOR_DOOR_ANIM_SPEED = 4.5;
 /** Closed swing: static slab only while essentially shut (matches server `EXT_DOOR_SOLID_SLAB_MAX_SWING`). */

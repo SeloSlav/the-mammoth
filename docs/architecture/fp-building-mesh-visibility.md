@@ -1,53 +1,32 @@
-# FP session: building mesh visibility and unit interiors
+# FP session: building mesh visibility
 
-First-person `mountFpSession` toggles large chunks of the static building for performance. Two decisions look similar (“is the player inside the building?”) but **must use different tests**. Reusing one for the other caused façade apartments to **lose all plaster `shell_wall_*` geometry** when approaching windows.
+## Floor plates
 
----
-
-## What gets toggled
-
-1. **Floor plates** — `buildingRoot` children tagged with `userData.mammothPlateLevelIndex`. Visibility is a storey band around the player (and sometimes the full stack).
-2. **Unit interior shells** — meshes collected at mount with `userData.mammothUnitInterior === true` (only `shell_wall_*` inside hollow unit rooms). Tagged in `packages/world/src/floorPlaceholderMeshes.ts` when building floor placeholders.
-
-Exterior concrete cladding and merged window glass are **not** in the interior list; they stay visible when unit plaster is hidden.
+`syncBuildingFloorPlateVisibility` toggles `buildingRoot` children with `mammothPlateLevelIndex` using a storey band from the elevator world helper. When `fpBuildingExteriorViewShouldRevealFullStack` is true (camera XZ outside the **6 m inset** “core” of the building AABB), the band widens to the **full vertical stack** so façades do not pop.
 
 ---
 
-## Rule 1: Floor band vs full stack (uses a **footprint inset**)
+## Tagged interiors (`mammothUnitInterior`) — near footprint only
 
-`fpBuildingExteriorViewShouldRevealFullStack` in `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.ts` returns “exterior / near-perimeter mode” when the camera’s XZ position is **outside** a rectangle shrunk from the building world AABB by **6 m per side** (default `interiorCullInsetM`).
+Unit hollow shells and corridor `shell_*` (see `floorPlaceholderMeshes.ts`) are collected once at FP mount. Each frame, `fpCameraOrFeetNearBuildingFootprintXZ` runs with an **outward margin** on the building world XZ AABB (see `FP_INTERIOR_SHELL_NEAR_MARGIN_M` in `mountFpSession.ts`; currently **16 m** per side so ground-floor interiors read from further out).
 
-That mode forces the **full vertical stack** of floor plates to stay visible so façades and shaft-adjacent geometry do not pop when you stand near the edge of the footprint.
+| Situation | Meshes |
+|-----------|--------|
+| Camera **or** feet inside expanded XZ slab | `.visible = true` — interiors, perimeter, door/window peeks |
+| **Both** outside expanded slab | `.visible = false` — distant exterior views skip ~1M+ interior triangles |
 
-**Intent:** stability for **vertical** culling and distant views — not a literal “player is outside the building” flag for gameplay.
+Top-storey `shell_ceiling_*` that reads as the roof silhouette is **not** in the toggled list (same exclusion as before).
 
----
-
-## Rule 2: Unit plaster visibility (uses **raw footprint XZ**)
-
-Unit interior walls must stay visible whenever the player is still **inside the slab outline**, including shallow **perimeter units** whose XZ lies entirely in that outer 6 m ring relative to the global building AABB.
-
-Use `fpCameraOrFeetInsideBuildingFootprintXZ` (same module as above): treat as inside if **either** the camera **or** the feet (`pos`) lie inside the **full** world XZ bounds (small epsilon for edge stability).
-
-**Intent:** hide plaster only when both samples are clearly **outside** the building’s axis-aligned footprint — e.g. true exterior shots where cladding + glass are enough.
+Tighten or widen behaviour by changing `FP_INTERIOR_SHELL_NEAR_MARGIN_M` in `mountFpSession.ts`.
 
 ---
 
-## Pitfall (fixed): one heuristic for both
+## Helpers (`fpBuildingFloorPlateVisibilityBand.ts`)
 
-Previously, `unitInteriorVisible` was derived as `!fpBuildingExteriorViewShouldRevealFullStack(...)`. Any camera in the inset’s “exterior” ring — including deep inside a façade apartment — flipped all unit plaster off, so only concrete cladding read through the window gap.
+| Function | Role |
+|----------|------|
+| `fpBuildingExteriorViewShouldRevealFullStack` | Inset test → widen floor plate band |
+| `fpCameraOrFeetInsideBuildingFootprintXZ` | Strict raw footprint (tests / strict checks) |
+| `fpCameraOrFeetNearBuildingFootprintXZ` | Expanded footprint → interior shell visibility |
 
-**Do not** tie `mammothUnitInterior` mesh `.visible` to the inset-based function again unless you also change world tagging so perimeter units are excluded (likely not worth it).
-
----
-
-## Where to change this
-
-| Concern | Location |
-|--------|----------|
-| Inset full-stack test | `fpBuildingExteriorViewShouldRevealFullStack` |
-| Raw footprint test for plaster | `fpCameraOrFeetInsideBuildingFootprintXZ` |
-| Wiring + mesh collection | `apps/client/src/game/mountFpSession.ts` (`syncBuildingFloorPlateVisibility`, `unitInteriorMeshes`) |
-| Which meshes are “unit interior” | `packages/world/src/floorPlaceholderMeshes.ts` (`mammothUnitInterior`, `mammothSkipFloorGeometryMerge`) |
-
-Tests for the footprint helper live in `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.
+Tests: `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.

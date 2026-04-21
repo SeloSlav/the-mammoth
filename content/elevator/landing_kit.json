@@ -4,9 +4,12 @@
   "displayName": "Default landing door kit",
   "materials": {
     "frame": {
-      "colorHex": "0xc42b2b",
-      "roughness": 0.52,
-      "metalness": 0.12
+      "colorHex": "0xffffff",
+      "roughness": 1,
+      "metalness": 0.1,
+      "mapUrl": "/static/materials/elevator-hoistway-exterior/basecolor.png",
+      "normalMapUrl": "/static/materials/elevator-hoistway-exterior/normal.png",
+      "roughnessMapUrl": "/static/materials/elevator-hoistway-exterior/roughness.png"
     },
     "glass": {
       "colorHex": "0xffffff",

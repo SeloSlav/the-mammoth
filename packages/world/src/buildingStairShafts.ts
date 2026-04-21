@@ -75,6 +75,8 @@ export type BuildingStairShaftSpec = {
   bottomY: number;
   storeyCount: number;
   storeySpacing: number;
+  /** Lowest `levelIndex` in the building stack (aligns segment `i` with per-floor plate `story`). */
+  minLevelIndex: number;
   entryDoorContexts: readonly (StairWellGroundDoorContext | undefined)[];
   /** Shaft faces flush with the merged floor-plate footprint (plate-space); facade PBR on these only. */
   exteriorShaftFaces: readonly CardinalFace[];
@@ -194,6 +196,7 @@ export function getBuildingStairShaftSpecs(
       bottomY: globalBottom,
       storeyCount,
       storeySpacing: spacing,
+      minLevelIndex: levelMin,
       entryDoorContexts: entryDoorContextsByKey.get(planKey) ?? [],
       exteriorShaftFaces: [
         ...new Set<CardinalFace>([
@@ -248,6 +251,19 @@ export function addBuildingStairShaftColumnsToRoot(
         authoringScope,
         primaryDoor: resolvedDoor,
       });
+      const shaftExteriorFaceSet = new Set<CardinalFace>(s.exteriorShaftFaces);
+      /**
+       * Same ground-door façade rule as {@link floorPlaceholderMeshes} per-floor stair rooms:
+       * merged `exteriorShaftFaces` from geometry can miss the entry cardinal; ground segment
+       * would otherwise render interior wall mat on the public door wall.
+       */
+      if (i === 0) {
+        const f = resolvedGroundDoor?.face;
+        if (f) shaftExteriorFaceSet.add(f);
+        for (const sup of supplementalDoors) {
+          if (sup.face) shaftExteriorFaceSet.add(sup.face);
+        }
+      }
       addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
         omitGroundStoreyCornerLandings: i === 0,
         def: stairWellDef,
@@ -257,7 +273,8 @@ export function addBuildingStairShaftColumnsToRoot(
         includeCeiling: isTopStorey,
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
-        shaftExteriorFaces: s.exteriorShaftFaces,
+        shaftExteriorFaces: [...shaftExteriorFaceSet],
+        interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
       });
       col.add(segment);
     }

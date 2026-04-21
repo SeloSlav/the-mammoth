@@ -272,7 +272,7 @@ export function trimDoorwayJambCornersForCollision(
 export function mergeCoplanarTouchingBlockerAabbs(
   aabbs: readonly CollisionAabb[],
 ): CollisionAabb[] {
-  let list: MergeBox[] = aabbs.map((b) => ({
+  const list: MergeBox[] = aabbs.map((b) => ({
     min: [b.min[0], b.min[1], b.min[2]],
     max: [b.max[0], b.max[1], b.max[2]],
   }));

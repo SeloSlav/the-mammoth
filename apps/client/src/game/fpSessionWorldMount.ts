@@ -284,7 +284,16 @@ function reattachPreservedMeshesWithSavedWorld(
      * Re-enable frustum culling — preserved meshes (canvas-textured stair signs, apartment
      * hollow shells, etc.) each have their own geometry bounding sphere and should be culled
      * when outside the camera frustum, same reasoning as the merged meshes above.
+     *
+     * Exception: elevator / stair-shaft **thin façade skins** (`addShaftShell` →
+     * `shaft_wall_*_exterior*`, ~16 mm thick, `noCollision` overlays). Forcing culling on every
+     * preserved mesh can false-negative cull these slivers at long range (sphere vs frustum tests
+     * + large world coordinates), so the inner brick-toned shaft wall reads through where the
+     * exterior concrete skin should be. Keep them always submitted while their floor plate is
+     * visible — draw cost is tiny (a few quads per shaft per storey).
      */
-    m.frustumCulled = true;
+    const isThinShaftFacadeSkin =
+      m.name.startsWith("shaft_wall_") && m.name.includes("_exterior");
+    m.frustumCulled = !isThinShaftFacadeSkin;
   }
 }

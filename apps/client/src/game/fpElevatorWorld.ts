@@ -1156,6 +1156,13 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
             bandEyeWorldY + Math.max(0, bandViewDirY ?? 0) * floorSpacingM * 20,
             storeyOpts,
           );
+    const lowerLookAheadStorey =
+      bandEyeWorldY === undefined
+        ? undefined
+        : estimateStoreyFromFeetY(
+            bandEyeWorldY + Math.min(0, bandViewDirY ?? 0) * floorSpacingM * 20,
+            storeyOpts,
+          );
     let revealFullStack = false;
     for (const vis of visuals.values()) {
       const hoistwayProbe = (wx: number, wy: number, wz: number) =>
@@ -1207,6 +1214,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       playerStorey,
       revealFullStack,
       upperTargetStorey: upperLookAheadStorey,
+      lowerTargetStorey: lowerLookAheadStorey,
     });
   };
 

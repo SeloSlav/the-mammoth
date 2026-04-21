@@ -13,7 +13,6 @@ describe("createStairTreadBoxGeometry", () => {
     expect(uv!.count).toBe(pos.count);
 
     const hw = halfAlong;
-    const hh = riseHalf;
     const hd = halfAcross;
     let maxVAlongRun = -Infinity;
     let minVAlongRun = Infinity;
