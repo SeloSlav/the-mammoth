@@ -15,7 +15,6 @@ const MIN_CIGARETTES_PER_STAIR_SEGMENT = 5;
 const MAX_CIGARETTES_PER_STAIR_SEGMENT = 10;
 
 const _instDummy = new THREE.Object3D();
-const _instParentWorld = new THREE.Matrix4();
 const _instLocal = new THREE.Matrix4();
 const _instWorld = new THREE.Matrix4();
 const _instSegInv = new THREE.Matrix4();
