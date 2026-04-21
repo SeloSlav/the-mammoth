@@ -101,15 +101,24 @@ export function createSwingDoorMaterials(kit: LandingKitDef | undefined): {
   /** Default elevator landing door: cloned red panel PBR; apartment / other kits override via `materials.frame` (e.g. different `mapUrl`). */
   const frameMat = elevatorLandingDoorFrameMaterial.clone();
   applyLandingFrameSlot(frameMat, frameSlot);
+  /**
+   * Default `transmission: 0` — non-zero transmission on `MeshPhysicalMaterial` forces three.js
+   * into the backbuffer-sampling refraction path (per-pixel PBR + IOR + envmap blur on a copy of
+   * the framebuffer); one tower contains hundreds of swing doors (every apartment entry + every
+   * elevator landing per storey), so even modest pixel coverage compounds into a multi-10ms
+   * per-frame GPU regression (same rationale as {@link ./unitExteriorWindows.ts}). A soft tinted
+   * translucent alpha with `depthWrite: false` reads as glass at arm's length for ~zero cost.
+   * Kit authors can still opt into refraction by setting `glassSlot.transmission` explicitly.
+   */
   const glassMat = new THREE.MeshPhysicalMaterial({
-    color: glassSlot?.colorHex ? parseAuthorColorHex(glassSlot.colorHex) : 0xffffff,
+    color: glassSlot?.colorHex ? parseAuthorColorHex(glassSlot.colorHex) : 0xeaf1f5,
     metalness: glassSlot?.metalness ?? 0,
     roughness: glassSlot?.roughness ?? 0.06,
-    transmission: glassSlot?.transmission ?? 0.92,
+    transmission: glassSlot?.transmission ?? 0,
     thickness: 0.09,
     ior: 1.45,
     transparent: true,
-    opacity: 1,
+    opacity: glassSlot?.transmission == null ? 0.32 : 1,
     depthWrite: false,
   });
   applyLandingGlassSlot(glassMat, glassSlot);

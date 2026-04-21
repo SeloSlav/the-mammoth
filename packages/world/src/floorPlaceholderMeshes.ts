@@ -872,6 +872,13 @@ function addKoncarElevatorSignMeshes(
     const y = pl.yDoorTop + 0.07 + KONCAR_SIGN_H * 0.5;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `elevator_sign_koncar_${i++}`;
+    /**
+     * Koncar corridor signs sit above elevator landing openings — strictly corridor-facing
+     * and fully occluded by the opaque facade from outside. Tag `mammothUnitInterior` so the
+     * exterior-view hide (see `mountFpSession` → `unitInteriorMeshes`) drops them together
+     * with other corridor-only geometry (STEP signs, apartment doors, etc.).
+     */
+    mesh.userData.mammothUnitInterior = true;
 
     if (pl.corridorWall === "e") {
       const x = hx - wt - inset;

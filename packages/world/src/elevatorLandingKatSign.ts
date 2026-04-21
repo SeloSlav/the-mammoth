@@ -118,6 +118,8 @@ export function addOppositeCorridorKatSignMeshes(
     const y = pl.yDoorTop + 0.07 + KAT_CORRIDOR_PLANE_H * 0.5;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = `elevator_sign_kat_corridor_${i++}`;
+    /** Corridor-only signage — hide together with other interior shells from the exterior view. */
+    mesh.userData.mammothUnitInterior = true;
 
     if (wall === "e") {
       const x = hx - wt - inset;

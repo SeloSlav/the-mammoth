@@ -21,6 +21,7 @@ import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraOrFeetInsideBuildingFootprintXZ,
+  fpCameraOrFeetNearBuildingFootprintXZ,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
@@ -194,17 +195,17 @@ export async function mountFpSession(
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   /**
-   * MSAA is **off**: 4× MSAA multiplies fragment cost at every edge pixel, and this scene is
-   * GPU-fragment-bound when the building fills the viewport (PBR concrete over a 19-storey
-   * façade + interior merge). Turning it off gave ~30% frame-time back on the
-   * "looking at the building from outside" view.
-   *
-   * Visual impact: geometric edges become slightly harder, but WebGPU's linear → SRGB output
-   * conversion keeps them from aliasing violently. If edge quality becomes a problem we can add
-   * a cheap post-pass (FXAA or SMAA) which costs a flat ~1 ms instead of scaling with scene
-   * complexity.
+   * MSAA is back on — edge aliasing on the 19-storey facade + interior shell edges read as visible
+   * shimmer without it. The fragment-cost objections from the previous disable comment are now
+   * mitigated upstream: the session hides unit plaster, corridor shells, shaft interiors, apartment
+   * doors, and corridor signage from the exterior view (see `mountFpSession` → `unitInteriorMeshes`
+   * and the `mammothUnitInterior` tagging in `fpSessionWorldMount`, `fpElevatorShaftVisual`,
+   * `fpApartmentDoors`, `stairwellCorridorSign`, `elevatorLandingKatSign`,
+   * `floorPlaceholderMeshes::addKoncarElevatorSignMeshes`), and every `MeshPhysicalMaterial` glass
+   * default now runs with `transmission = 0` (see `swingDoorMesh` + `fpElevatorShaftVisual`).
+   * Net effect: far fewer fragments to multi-sample per frame, so MSAA's cost is affordable again.
    */
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: false, forceWebGL: false });
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
@@ -232,6 +233,23 @@ export async function mountFpSession(
   const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
+  /**
+   * Exterior-view fill-rate: the single biggest win for "looking at the whole tower from the
+   * street" is **hiding** tagged interior shells (unit plaster walls/floors/ceilings + merged
+   * corridor shells) when the camera + feet are comfortably outside the footprint. Opaque cladding
+   * + alpha-blend window tint preserve the silhouette; interior triangles are fully occluded for
+   * those pixels, so rendering them is pure waste (measured ~8× draw-call inflation and 2–3× GPU
+   * time before this toggle).
+   *
+   * Cached at mount — `.visible` is then flipped together for the whole set on state change
+   * rather than per-frame traversal. Correctness is protected by two things:
+   *   1. A wide {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} so any plausible doorway peek / lean keeps
+   *      plaster visible even if the pose tracker briefly reports the camera outside the slab.
+   *   2. Top-floor `shell_ceiling_*` is **excluded** from the hide list — it doubles as the roof
+   *      silhouette (no separate roof slab), without it the sky reads through the top from outside.
+   */
+  const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 20;
+
   const fpElevators = mountFpElevatorWorld({
     conn,
     buildingRoot,
@@ -243,6 +261,31 @@ export async function mountFpSession(
     conn,
     buildingRoot,
     building,
+  });
+
+  /**
+   * Collected **after** the elevator and apartment-door mounts so the hide set also picks up
+   * `fp_elevator:*` cab / landing / hail geometry and swing-door meshes, which are tagged
+   * `mammothUnitInterior` at construction (see `fpElevatorShaftVisual.ts`). Running this traversal
+   * before those mounts would leave dozens of always-rasterized interior shaft/door meshes visible
+   * from the street even though they are fully occluded by the facade.
+   */
+  let topPlateLevel = -Infinity;
+  for (const ch of buildingRoot.children) {
+    const li = ch.userData.mammothPlateLevelIndex;
+    if (typeof li === "number" && li > topPlateLevel) topPlateLevel = li;
+  }
+  const unitInteriorMeshes: THREE.Mesh[] = [];
+  buildingRoot.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothUnitInterior !== true) return;
+    if (obj.name.startsWith("shell_ceiling")) {
+      let ancestor: THREE.Object3D | null = obj;
+      while (ancestor && ancestor.parent !== buildingRoot) ancestor = ancestor.parent;
+      const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
+      if (typeof ancestorLevel === "number" && ancestorLevel === topPlateLevel) return;
+    }
+    unitInteriorMeshes.push(obj);
   });
 
   scene.add(cellRoot);
@@ -474,6 +517,8 @@ export async function mountFpSession(
   // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
   let _lastBandLo = -999;
   let _lastBandHi = -999;
+  /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
+  let _lastUnitInteriorVisible = true;
 
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
@@ -517,6 +562,31 @@ export async function mountFpSession(
       });
       if (cameraOutsideBuilding) {
         band = { lo: 1, hi: maxBuildingLevel };
+      }
+    }
+
+    /**
+     * Hide tagged interior shells whenever camera **and** feet are clearly outside the footprint
+     * (both farther than {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} past the raw edge). From there,
+     * opaque cladding + window tint occlude every interior fragment, so rendering ~1M interior
+     * triangles every frame is pure fill-rate waste. Inside the margin (doorways, sidewalk peek,
+     * rooftop lean) we submit everything and let the depth test sort it out.
+     */
+    const unitInteriorVisible = fpCameraOrFeetNearBuildingFootprintXZ({
+      cameraX: _floorVisCamWorld.x,
+      cameraZ: _floorVisCamWorld.z,
+      feetX: pos.x,
+      feetZ: pos.z,
+      boundsMinX: buildingWorldBounds.min.x,
+      boundsMaxX: buildingWorldBounds.max.x,
+      boundsMinZ: buildingWorldBounds.min.z,
+      boundsMaxZ: buildingWorldBounds.max.z,
+      nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
+    });
+    if (unitInteriorVisible !== _lastUnitInteriorVisible) {
+      _lastUnitInteriorVisible = unitInteriorVisible;
+      for (let i = 0; i < unitInteriorMeshes.length; i++) {
+        unitInteriorMeshes[i]!.visible = unitInteriorVisible;
       }
     }
 

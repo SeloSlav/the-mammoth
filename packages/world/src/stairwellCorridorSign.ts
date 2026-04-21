@@ -218,6 +218,14 @@ export function addStairwellCorridorSignMeshes(
     shell.name = `${baseName}_shell`;
     shell.userData.mammothNoCollision = true;
     shell.userData.mammothSkipFloorGeometryMerge = true;
+    /**
+     * STEP sign lintels hang into corridor airspace — strictly interior, fully occluded by the
+     * opaque facade from any street-level view. Tag `mammothUnitInterior` so the session-level
+     * exterior-view hide (see `mountFpSession` → `unitInteriorMeshes`) drops them together with
+     * unit plaster / shaft / apartment-door interiors. Otherwise each sign (up to one per
+     * stairwell × 19 storeys) is an always-rendered extra draw + blended board face.
+     */
+    shell.userData.mammothUnitInterior = true;
     decomposeToObject3D(_mRoot, shell);
     group.add(shell);
 
@@ -229,6 +237,7 @@ export function addStairwellCorridorSignMeshes(
       facePosX.name = `${baseName}_board_px`;
       facePosX.userData.mammothNoCollision = true;
       facePosX.userData.mammothSkipFloorGeometryMerge = true;
+      facePosX.userData.mammothUnitInterior = true;
       faceLocalMatrix(halfP + bump, Math.PI * 0.5, _mFace);
       _mWorld.multiplyMatrices(_mRoot, _mFace);
       decomposeToObject3D(_mWorld, facePosX);
@@ -238,6 +247,7 @@ export function addStairwellCorridorSignMeshes(
       faceNegX.name = `${baseName}_board_nx`;
       faceNegX.userData.mammothNoCollision = true;
       faceNegX.userData.mammothSkipFloorGeometryMerge = true;
+      faceNegX.userData.mammothUnitInterior = true;
       faceLocalMatrix(-halfP - bump, -Math.PI * 0.5, _mFace);
       _mWorld.multiplyMatrices(_mRoot, _mFace);
       decomposeToObject3D(_mWorld, faceNegX);

@@ -227,15 +227,26 @@ export class FpElevatorShaftVisual {
       roughness: 0.52,
       metalness: 0.12,
     });
+    /**
+     * Transmission must default to **0** — any positive transmission on `MeshPhysicalMaterial`
+     * flips three.js into the backbuffer-sampling refraction path (per-pixel PBR + IOR + envmap
+     * blur on a copy of the framebuffer), which is a documented multi-10ms/frame regression in
+     * this scene (see {@link ../../../packages/world/src/unitExteriorWindows.ts} for the same
+     * rationale on unit-facade glass). An instanced landing-door glass covers dozens of storeys
+     * and is `frustumCulled = false`, so the expensive path multiplies with every covered pixel.
+     * A low-opacity tint with `depthWrite: false` reads as glass at arm's-length from inside the
+     * corridor without the GPU cost. Kit authors can still opt into transmission via the glass
+     * slot's `transmission` field if they accept the perf trade.
+     */
     this.extGlassMat = new THREE.MeshPhysicalMaterial({
-      color: 0xffffff,
+      color: 0xeaf1f5,
       metalness: 0,
       roughness: 0.06,
-      transmission: 0.92,
+      transmission: 0,
       thickness: 0.09,
       ior: 1.45,
       transparent: true,
-      opacity: 1,
+      opacity: 0.32,
       depthWrite: false,
     });
     if (visualDefs?.landingKitDef?.materials) {
@@ -481,6 +492,16 @@ export class FpElevatorShaftVisual {
         node instanceof THREE.InstancedMesh
       ) {
         node.frustumCulled = false;
+        /**
+         * Everything the shaft visual owns — cab mesh, landing doors, hail buttons, floor-pick
+         * buttons, door frames/glass — lives inside the building and is fully occluded by the
+         * opaque cladding when the camera is looking at the tower from outside. Tagging each
+         * mesh as `mammothUnitInterior` lets the session-level exterior-view hide (see
+         * `mountFpSession` → `unitInteriorMeshes` / `FP_INTERIOR_SHELL_NEAR_MARGIN_M`) flip the
+         * whole set to `visible = false` from the street without touching interior correctness
+         * (the 20 m near-margin keeps them up for any plausible doorway / window peek).
+         */
+        node.userData.mammothUnitInterior = true;
       }
     });
 

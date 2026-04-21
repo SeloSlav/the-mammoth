@@ -157,6 +157,24 @@ function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
     const isStairColumn = child.userData.mammothAlwaysVisible === true;
     if (!isFloorPlate && !isStairColumn) continue;
 
+    /**
+     * Tag stair-shaft **interior** geometry (treads, corner landings, railings, inner
+     * `shaft_wall_*`, `shaft_floor`, `shaft_ceiling`) as `mammothUnitInterior` before merge so the
+     * session-level hide (see `mountFpSession` → `unitInteriorMeshes`) drops ~all non-silhouette
+     * stair geometry from the exterior view. The outer `_exterior` skins stay untagged; the merged
+     * mesh that holds them keeps rendering because `mergeGroupDescendantsByMaterial` requires
+     * **every** source contributor to be tagged before propagating the flag. Tread/landing/railing
+     * materials are dedicated to stairs, so their merged meshes end up purely interior and get
+     * hidden cleanly from street-level views.
+     */
+    if (isStairColumn) {
+      child.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        if (obj.name.includes("_exterior")) return;
+        obj.userData.mammothUnitInterior = true;
+      });
+    }
+
     mergeGroupDescendantsByMaterial(child as THREE.Group);
     if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
   }

@@ -375,6 +375,14 @@ export function mountFpApartmentDoors(
     const mesh = new THREE.InstancedMesh(frameGeom, frameMat, count);
     mesh.name = `apartment_doors_${kind}:L${levelIndex}`;
     mesh.userData.mammothPlateLevelIndex = levelIndex;
+    /**
+     * Apartment doors are strictly corridor-facing — fully occluded by the opaque facade when
+     * looking at the tower from outside. Tag as `mammothUnitInterior` so the session-level
+     * interior-hide (see `mountFpSession` → `unitInteriorMeshes`) drops them from the exterior
+     * view together with unit plaster / shaft interiors; avoids N_floors × instance fragment
+     * cost for geometry that cannot possibly contribute to the silhouette.
+     */
+    mesh.userData.mammothUnitInterior = true;
     mesh.frustumCulled = false; // per-level group visibility drives culling, not frustum tests.
     mesh.castShadow = false;
     mesh.receiveShadow = false;
@@ -385,6 +393,7 @@ export function mountFpApartmentDoors(
       glassMesh = new THREE.InstancedMesh(glazedGlassGeom, glassMat, count);
       glassMesh.name = `apartment_doors_glass:L${levelIndex}`;
       glassMesh.userData.mammothPlateLevelIndex = levelIndex;
+      glassMesh.userData.mammothUnitInterior = true;
       glassMesh.frustumCulled = false;
       glassMesh.castShadow = false;
       glassMesh.receiveShadow = false;
