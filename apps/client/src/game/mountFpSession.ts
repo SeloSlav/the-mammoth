@@ -18,7 +18,10 @@ import {
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
-import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
+import {
+  fpBuildingExteriorViewShouldRevealFullStack,
+  fpCameraOrFeetInsideBuildingFootprintXZ,
+} from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
@@ -485,16 +488,36 @@ export async function mountFpSession(
       _floorVisCamWorld.x,
       _floorVisCamWorld.z,
     );
-    const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
-      cameraX: _floorVisCamWorld.x,
-      cameraZ: _floorVisCamWorld.z,
+    /**
+     * Inset-based "exterior" widens to the full stack so façades do not pop when the camera sits
+     * just outside the footprint core — but perimeter corridors often sit **outside** that inset
+     * while feet are still inside the raw world XZ AABB. Camera-only full stack then submits every
+     * storey (~1000+ draw calls). Only apply the override when feet are clearly off the slab
+     * (sidewalk / true exterior); hoistway / cab / doorway full-stack still comes from
+     * {@link fpElevators.getFloorVisibilityBand}.
+     */
+    const feetOnBuildingSlab = fpCameraOrFeetInsideBuildingFootprintXZ({
+      cameraX: pos.x,
+      cameraZ: pos.z,
+      feetX: pos.x,
+      feetZ: pos.z,
       boundsMinX: buildingWorldBounds.min.x,
       boundsMaxX: buildingWorldBounds.max.x,
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
-    if (cameraOutsideBuilding) {
-      band = { lo: 1, hi: maxBuildingLevel };
+    if (!feetOnBuildingSlab) {
+      const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: _floorVisCamWorld.x,
+        cameraZ: _floorVisCamWorld.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+      });
+      if (cameraOutsideBuilding) {
+        band = { lo: 1, hi: maxBuildingLevel };
+      }
     }
 
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;

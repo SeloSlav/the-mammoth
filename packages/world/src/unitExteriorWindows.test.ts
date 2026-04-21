@@ -61,6 +61,21 @@ describe("planUnitExteriorWindowsForFace", () => {
     expect(n.holesNs.length).toBe(n.count);
     expect(n.holesEw.length).toBe(0);
   });
+
+  it("allows up to four tangent windows on wide façades (deterministic draw)", () => {
+    let foundFour = false;
+    for (let facadeSalt = 0; facadeSalt < 500; facadeSalt++) {
+      const p = planUnitExteriorWindowsForFace({ ...base, face: "e", facadeSalt });
+      expect(p.count).toBeGreaterThanOrEqual(0);
+      expect(p.count).toBeLessThanOrEqual(4);
+      if (p.count === 4) {
+        expect(p.holesEw).toHaveLength(4);
+        foundFour = true;
+        break;
+      }
+    }
+    expect(foundFour).toBe(true);
+  });
 });
 
 describe("facadeSeedForUnitFace", () => {

@@ -6,18 +6,25 @@
 
 ---
 
-## Tagged interiors (`mammothUnitInterior`) — near footprint only
+## Tagged interiors (`mammothUnitInterior`)
 
-Unit hollow shells and corridor `shell_*` (see `floorPlaceholderMeshes.ts`) are collected once at FP mount. Each frame, `fpCameraOrFeetNearBuildingFootprintXZ` runs with an **outward margin** on the building world XZ AABB (see `FP_INTERIOR_SHELL_NEAR_MARGIN_M` in `mountFpSession.ts`; currently **16 m** per side so ground-floor interiors read from further out).
+`mammothUnitInterior` is still set on unit hollow shells and corridor `shell_*` meshes in `floorPlaceholderMeshes.ts` for tooling and consistency. **FP no longer toggles** those meshes off by building footprint (that path hid plaster incorrectly and fought pose / bounds edge cases).
 
-| Situation | Meshes |
-|-----------|--------|
-| Camera **or** feet inside expanded XZ slab | `.visible = true` — interiors, perimeter, door/window peeks |
-| **Both** outside expanded slab | `.visible = false` — distant exterior views skip ~1M+ interior triangles |
+---
 
-Top-storey `shell_ceiling_*` that reads as the roof silhouette is **not** in the toggled list (same exclusion as before).
+## Unit hollow shells: merge safety (`fpSessionWorldMount.ts`)
 
-Tighten or widen behaviour by changing `FP_INTERIOR_SHELL_NEAR_MARGIN_M` in `mountFpSession.ts`.
+After `mergeGroupDescendantsByMaterial`, `mergeUnitPreservedShellsByPlacedObject` merges preserved unit `shell_*` meshes that share a material (fewer draws per apartment).
+
+**Critical:** `mergeGeometries` can return `null` if buffer layouts do not combine. The merge pass must **only** `removeFromParent` / `dispose` source meshes **after** a non-null merged geometry exists. Doing the opposite removed every unit shell while window glass (different merge path) remained—**only glass visible**.
+
+---
+
+## Apartment façade vs plaster depth (`floorPlaceholderMeshes.ts`)
+
+Unit `shell_exterior_cladding_*` uses the same holed exterior PBR as other façades. It must not sit **coplanar** with the plaster hollow shell or WebGPU depth can show concrete from inside the unit.
+
+For `kind === "unit"`, `addExteriorWallCladding` is called with a small **`outwardBiasAlongNormalM`** (currently **0.05 m**) so cladding sits slightly outside the shell plane.
 
 ---
 
@@ -27,6 +34,6 @@ Tighten or widen behaviour by changing `FP_INTERIOR_SHELL_NEAR_MARGIN_M` in `mou
 |----------|------|
 | `fpBuildingExteriorViewShouldRevealFullStack` | Inset test → widen floor plate band |
 | `fpCameraOrFeetInsideBuildingFootprintXZ` | Strict raw footprint (tests / strict checks) |
-| `fpCameraOrFeetNearBuildingFootprintXZ` | Expanded footprint → interior shell visibility |
+| `fpCameraOrFeetNearBuildingFootprintXZ` | Expanded footprint (still used by helpers / tests; not used for interior shell visibility toggling in FP mount) |
 
 Tests: `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.

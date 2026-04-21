@@ -96,7 +96,7 @@ export function getExteriorWindowGlassMaterial(tintId: number): THREE.MeshBasicM
 }
 
 export type UnitExteriorWindowPlan = {
-  /** 1–3 segments (windows) along the wall tangent. */
+  /** 1–4 segments (windows) along the wall tangent. */
   count: number;
   tintId: number;
   holesEw: WallHoleYZ[];
@@ -138,7 +138,7 @@ export function planUnitExteriorWindowsForFace(opts: {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }
 
-  let n = 1 + Math.floor(rnd() * 3);
+  let n = 1 + Math.floor(rnd() * 4);
   while (
     n > 1 &&
     tangentSpan < n * MIN_SEGMENT_WIDTH_M + (n - 1) * MULLION_GAP_M
