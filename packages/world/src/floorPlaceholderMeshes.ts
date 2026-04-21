@@ -947,9 +947,12 @@ function addExteriorWallCladding(
   faces: readonly CardinalFace[],
   exteriorWallM: THREE.MeshStandardMaterial,
   holes?: Partial<Record<CardinalFace, readonly WallHoleYZ[] | readonly WallHoleXY[]>>,
+  /** Push holed façade slabs outward (m) so they do not coplanar-z-fight unit plaster shells. */
+  outwardBiasAlongNormalM = 0,
 ): void {
   if (faces.length === 0) return;
   const cladT = 0.035;
+  const b = outwardBiasAlongNormalM;
   const zMin = -vlenZ * 0.5;
   const zMax = vlenZ * 0.5;
   const xMin = -vlenX * 0.5;
@@ -960,7 +963,7 @@ function addExteriorWallCladding(
       addWallConstantXWithHoles(
         group,
         exteriorWallM,
-        hx + cladT * 0.5,
+        hx + cladT * 0.5 + b,
         cladT,
         zMin,
         zMax,
@@ -975,7 +978,7 @@ function addExteriorWallCladding(
       addWallConstantXWithHoles(
         group,
         exteriorWallM,
-        -hx - cladT * 0.5,
+        -hx - cladT * 0.5 - b,
         cladT,
         zMin,
         zMax,
@@ -990,7 +993,7 @@ function addExteriorWallCladding(
       addWallConstantZWithHoles(
         group,
         exteriorWallM,
-        hz + cladT * 0.5,
+        hz + cladT * 0.5 + b,
         cladT,
         xMin,
         xMax,
@@ -1005,7 +1008,7 @@ function addExteriorWallCladding(
       addWallConstantZWithHoles(
         group,
         exteriorWallM,
-        -hz - cladT * 0.5,
+        -hz - cladT * 0.5 - b,
         cladT,
         xMin,
         xMax,
@@ -1063,6 +1066,8 @@ function addHollowRoomShell(
       ? mat.buildingCorridorCeiling
       : defaultCeilM;
   const exteriorFaces = opts.exteriorFaces ?? [];
+  /** Slight outward shift for apartment façades vs plaster shell (see {@link addExteriorWallCladding}). */
+  const unitCladOutwardBiasM = kind === "unit" ? 0.05 : 0;
   const vh = Math.max(sy - 2 * wt, 0.05);
   const vlenX = Math.max(sx - 2 * wt, 0.05);
   const vlenZ = Math.max(sz - 2 * wt, 0.05);
@@ -1158,6 +1163,8 @@ function addHollowRoomShell(
         yHi,
         exteriorFaces,
         exteriorWallM,
+        undefined,
+        unitCladOutwardBiasM,
       );
       return;
     }
@@ -1224,7 +1231,7 @@ function addHollowRoomShell(
       w: claddingW,
       n: claddingN,
       s: claddingS,
-    });
+    }, unitCladOutwardBiasM);
     addKoncarElevatorSignMeshes(
       group,
       sx,
@@ -1936,24 +1943,24 @@ export function buildFloorMeshes(
           if (!(mesh instanceof THREE.Mesh)) return;
           if (mesh.name.startsWith("shell_exterior_cladding")) return;
           if (mesh.name.startsWith("unit_exterior_glass_")) return;
+          const isInteriorShell =
+            mesh.name.startsWith("shell_wall_") ||
+            mesh.name.startsWith("shell_floor") ||
+            mesh.name.startsWith("shell_ceiling");
+          if (!isInteriorShell) return;
           mesh.userData.mammothSkipFloorGeometryMerge = true;
           mesh.userData.mammothPlacedObjectId = placedObjectId;
           /**
            * Tag interior hollow-shell pieces (walls, inter-unit floors, inter-unit ceilings) for
-           * tooling / consistency (`mammothUnitInterior`). The FP session toggles these when the
-           * camera and feet are both outside an **expanded** XZ footprint (near-margin) so distant
-           * views stay cheap while door/window peeks keep authored materials.
+           * tooling / consistency (`mammothUnitInterior`). FP no longer toggles these off by footprint
+           * (merged-building AABB + pose sources were too unreliable vs in-unit plaster).
            *
            * `shell_ceiling_*` on the **top floor** still doubles as the roof silhouette (no separate
            * roof slab; cladding covers walls only).
            */
-          if (
-            mesh.name.startsWith("shell_wall_") ||
-            mesh.name.startsWith("shell_floor") ||
-            mesh.name.startsWith("shell_ceiling")
-          ) {
-            mesh.userData.mammothUnitInterior = true;
-          }
+          mesh.userData.mammothUnitInterior = true;
+          /** Sphere vs frustum tests can drop hollow shells when the camera sits inside the volume. */
+          mesh.frustumCulled = false;
         });
       } else if (kind === "corridor") {
         /**

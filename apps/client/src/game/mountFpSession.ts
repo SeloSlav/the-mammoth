@@ -18,10 +18,7 @@ import {
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { maxBuildingLevelIndex, parseFloorDoc } from "@the-mammoth/world";
-import {
-  fpBuildingExteriorViewShouldRevealFullStack,
-  fpCameraOrFeetNearBuildingFootprintXZ,
-} from "./fpBuildingFloorPlateVisibilityBand.js";
+import { fpBuildingExteriorViewShouldRevealFullStack } from "./fpBuildingFloorPlateVisibilityBand.js";
 import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
@@ -231,36 +228,6 @@ export async function mountFpSession(
   buildingRoot.updateMatrixWorld(true);
   const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
-
-  /**
-   * Tagged interior shells (`mammothUnitInterior`: units + corridors) are hidden when the camera
-   * **and** feet are farther than {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} outside the building XZ
-   * AABB (see {@link fpCameraOrFeetNearBuildingFootprintXZ}). That restores distant fill-rate while
-   * keeping plaster / corridor materials when peeking through doors or standing just past the slab.
-   * Top-floor `shell_ceiling_*` that forms the roof silhouette is excluded from the hide list.
-   */
-  /** Outward XZ expansion per edge for showing tagged interior shells (ground-floor apartments / lobby read from the street). */
-  const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 16;
-
-  let topPlateLevel = -Infinity;
-  for (const ch of buildingRoot.children) {
-    const li = ch.userData.mammothPlateLevelIndex;
-    if (typeof li === "number" && li > topPlateLevel) topPlateLevel = li;
-  }
-  const unitInteriorMeshes: THREE.Mesh[] = [];
-  buildingRoot.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    if (obj.userData.mammothUnitInterior !== true) return;
-    if (obj.name.startsWith("shell_ceiling")) {
-      let ancestor: THREE.Object3D | null = obj;
-      while (ancestor && ancestor.parent !== buildingRoot) ancestor = ancestor.parent;
-      const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
-      if (typeof ancestorLevel === "number" && ancestorLevel === topPlateLevel) {
-        return;
-      }
-    }
-    unitInteriorMeshes.push(obj);
-  });
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -504,7 +471,6 @@ export async function mountFpSession(
   // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
   let _lastBandLo = -999;
   let _lastBandHi = -999;
-  let _lastUnitInteriorVisible = true;
 
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
@@ -529,24 +495,6 @@ export async function mountFpSession(
     });
     if (cameraOutsideBuilding) {
       band = { lo: 1, hi: maxBuildingLevel };
-    }
-
-    const unitInteriorVisible = fpCameraOrFeetNearBuildingFootprintXZ({
-      cameraX: _floorVisCamWorld.x,
-      cameraZ: _floorVisCamWorld.z,
-      feetX: pos.x,
-      feetZ: pos.z,
-      boundsMinX: buildingWorldBounds.min.x,
-      boundsMaxX: buildingWorldBounds.max.x,
-      boundsMinZ: buildingWorldBounds.min.z,
-      boundsMaxZ: buildingWorldBounds.max.z,
-      nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
-    });
-    if (unitInteriorVisible !== _lastUnitInteriorVisible) {
-      _lastUnitInteriorVisible = unitInteriorVisible;
-      for (let i = 0; i < unitInteriorMeshes.length; i++) {
-        unitInteriorMeshes[i]!.visible = unitInteriorVisible;
-      }
     }
 
     if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;

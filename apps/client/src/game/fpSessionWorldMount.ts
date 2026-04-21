@@ -188,26 +188,20 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
         ch.userData.mammothPlacedObjectId === placedObjectId,
     );
 
-    const byMat = new Map<
-      string,
-      { mat: THREE.Material; list: THREE.Mesh[]; allInterior: boolean }
-    >();
+    const byMat = new Map<string, { mat: THREE.Material; list: THREE.Mesh[] }>();
     for (const m of meshes) {
       if (Array.isArray(m.material)) continue;
       const mat = m.material as THREE.Material;
       const key = mat.uuid;
-      const isInt = m.userData.mammothUnitInterior === true;
       let bucket = byMat.get(key);
       if (!bucket) {
-        bucket = { mat, list: [], allInterior: isInt };
+        bucket = { mat, list: [] };
         byMat.set(key, bucket);
-      } else {
-        bucket.allInterior = bucket.allInterior && isInt;
       }
       bucket.list.push(m);
     }
 
-    for (const { mat, list, allInterior } of byMat.values()) {
+    for (const { mat, list } of byMat.values()) {
       if (list.length <= 1) continue;
       const geos: THREE.BufferGeometry[] = [];
       for (const m of list) {
@@ -216,18 +210,23 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
         _mergeUnitShellScratch.multiplyMatrices(floorInv, m.matrixWorld);
         g.applyMatrix4(_mergeUnitShellScratch);
         geos.push(g);
-        m.removeFromParent();
-        m.geometry.dispose();
       }
       const merged = mergeGeometries(geos, false);
       for (const g of geos) g.dispose();
+      /** If merge fails, keep originals — otherwise the apartment shell vanishes (only glass remains). */
       if (!merged) continue;
+      for (const m of list) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
-      mesh.frustumCulled = true;
+      /** Hollow unit buffers can sphere-cull wrong when the eye sits inside the shell volume. */
+      mesh.frustumCulled = false;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
-      if (allInterior) mesh.userData.mammothUnitInterior = true;
+      /** Only hollow unit shells use this merge path (`mammothPlacedObjectId`). */
+      mesh.userData.mammothUnitInterior = true;
       mesh.name = `merged_unit_shell:${placedObjectId}`;
       floorPlateGroup.add(mesh);
     }
