@@ -620,17 +620,26 @@ export async function mountFpSession(
      * triangles every frame is pure fill-rate waste. Inside the margin (doorways, sidewalk peek,
      * rooftop lean) we submit everything and let the depth test sort it out.
      */
-    const unitInteriorVisible = fpCameraOrFeetNearBuildingFootprintXZ({
-      cameraX: _floorVisCamWorld.x,
-      cameraZ: _floorVisCamWorld.z,
-      feetX: pos.x,
-      feetZ: pos.z,
-      boundsMinX: buildingWorldBounds.min.x,
-      boundsMaxX: buildingWorldBounds.max.x,
-      boundsMinZ: buildingWorldBounds.min.z,
-      boundsMaxZ: buildingWorldBounds.max.z,
-      nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
-    });
+    const unitInteriorVisible =
+      fpElevators.isInsideAnyCabHud(
+        pos.x,
+        pos.y,
+        pos.z,
+        _floorVisCamWorld.x,
+        _floorVisCamWorld.y,
+        _floorVisCamWorld.z,
+      ) ||
+      fpCameraOrFeetNearBuildingFootprintXZ({
+        cameraX: _floorVisCamWorld.x,
+        cameraZ: _floorVisCamWorld.z,
+        feetX: pos.x,
+        feetZ: pos.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+        nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
+      });
     if (unitInteriorVisible !== _lastUnitInteriorVisible) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {

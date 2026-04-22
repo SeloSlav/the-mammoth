@@ -256,6 +256,15 @@ export type MountFpElevatorWorldResult = {
     viewDirX?: number,
     viewDirZ?: number,
   ): boolean;
+  /** True when feet or eye are inside any elevator cab HUD volume. */
+  isInsideAnyCabHud(
+    px: number,
+    py: number,
+    pz: number,
+    eyeWorldX?: number,
+    eyeWorldY?: number,
+    eyeWorldZ?: number,
+  ): boolean;
   /**
    * When {@link isInsideCabOccludedView} is true, returns the cab's current display storey so the
    * session visibility pass can collapse to that floor instead of guessing from the widened band.
@@ -1408,6 +1417,28 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     return false;
   };
 
+  const isInsideAnyCabHud = (
+    px: number,
+    py: number,
+    pz: number,
+    eyeWorldX?: number,
+    eyeWorldY?: number,
+    eyeWorldZ?: number,
+  ): boolean => {
+    for (const key of visuals.keys()) {
+      if (isInsideCarHud(px, py, pz, key)) return true;
+      if (
+        eyeWorldX !== undefined &&
+        eyeWorldY !== undefined &&
+        eyeWorldZ !== undefined &&
+        isInsideCarHud(eyeWorldX, eyeWorldY, eyeWorldZ, key)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const getCabOccludedViewStorey = (
     px: number,
     py: number,
@@ -1865,6 +1896,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     getFloorVisibilityBand,
     syncShaftVisualCulling,
     isInsideCabOccludedView,
+    isInsideAnyCabHud,
     getCabOccludedViewStorey,
     sampleRideDebug,
     getHudMovingCabVyMps,

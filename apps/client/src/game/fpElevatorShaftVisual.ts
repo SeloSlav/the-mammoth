@@ -517,7 +517,25 @@ export class FpElevatorShaftVisual {
         }
       });
     };
-    tagInterior(this.carRoot, true);
+    /**
+     * Keep the cab interior out of the generic `mammothUnitInterior` hide set. The footprint-based
+     * exterior heuristic in `mountFpSession` is good for apartment/corridor shells but too coarse
+     * for the moving cab: at ground floor the camera can sit near/outside the raw building AABB
+     * while still being physically inside the car, which made the cab floor disappear. We still
+     * disable frustum culling on the cab root, but leave visibility ownership to elevator-specific
+     * logic instead of the generic exterior shell toggle.
+     */
+    this.carRoot.traverse((node) => {
+      if (
+        node instanceof THREE.Mesh ||
+        node instanceof THREE.Line ||
+        node instanceof THREE.LineSegments ||
+        node instanceof THREE.Points ||
+        node instanceof THREE.InstancedMesh
+      ) {
+        node.frustumCulled = false;
+      }
+    });
     tagInterior(this.landingRoot, true);
     tagInterior(this.landingHailPickRoot, false);
     tagInterior(this.landingDoorPickRoot, false);
