@@ -1169,6 +1169,11 @@ export type StairWellPlaceholderOpts = SwitchbackStairOpts & {
   stairGraphicsMergeRoot?: THREE.Object3D;
   /** When true, skip decorative stair litter (e.g. collision-only overlay segments with no parent). */
   omitStairwellCigaretteLitter?: boolean;
+  /**
+   * The segment that contains the top **inhabited** exit deck (mesh for the flight below the roof
+   * cap). Enables roof-landing props opposite the authored `entryOpening`.
+   */
+  isTopOccupiedStairStorey?: boolean;
 };
 
 export type StairWellGroundDoorContext = {
@@ -2145,6 +2150,7 @@ export function addStairWellPlaceholder(
     L,
     primaryDoor: resolvedGroundDoor ?? undefined,
     omitOnlyLanding,
+    isTopOccupiedStairStorey: opts?.isTopOccupiedStairStorey,
     skipTypicalLandingProps:
       opts?.omitTopLanding === true && authoringScope === "typical",
   });

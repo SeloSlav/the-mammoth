@@ -285,6 +285,7 @@ export {
   isGlazedApartmentDoorTemplate,
   MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID,
   MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX,
+  MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX,
   manualCorridorShellHoleExtrasForFloor,
 } from "./manualApartmentDoorExtras.js";
 export {

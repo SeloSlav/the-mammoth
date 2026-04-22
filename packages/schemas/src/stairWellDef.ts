@@ -44,10 +44,16 @@ const StairWellLandingPropCornerSchema = z.enum(["ne", "nw", "se", "sw"]);
  * - `opposite_primary_door`: corner pad away from the main stair door (or a stable fallback).
  * - `highest_y`: the topmost corner deck in the segment (e.g. ground floor’s upper landing when the
  *   lobby pad is omitted from the mesh list).
+ * - `opposite_entry_opening`: corner pad opposite the authored `entryOpening` wall band, using the
+ *   **highest** deck in the segment (roof exit vs. south-façade door used for `opposite_primary_door`
+ *   on typical storeys).
+ * - `lowest_y`: the bottommost corner deck in the segment (entry level of that storey’s climb).
  */
 export const StairWellLandingPropSelectorSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("opposite_primary_door") }),
   z.object({ kind: z.literal("highest_y") }),
+  z.object({ kind: z.literal("lowest_y") }),
+  z.object({ kind: z.literal("opposite_entry_opening") }),
 ]);
 
 export type StairWellLandingPropSelector = z.infer<typeof StairWellLandingPropSelectorSchema>;
@@ -83,6 +89,16 @@ export const StairWellLandingPropSchema = z.object({
   applyToScopes: z.array(z.enum(["typical", "ground"])).optional(),
   /** When true, never spawns on the ground-storey segment (`authoringScope === "ground"`). */
   skipGroundStorey: z.boolean().optional(),
+  /**
+   * When true, only spawns on the segment that **owns** the roof-exit deck mesh (the storey below
+   * the terminal `omitTopLanding` cap).
+   */
+  onlyOnTopOccupiedStairStorey: z.boolean().optional(),
+  /**
+   * When true, on that top-occupied segment only, skip this prop if the resolved landing is the
+   * **highest-Y** pad (so a separate `opposite_entry_opening` prop can own the roof landing).
+   */
+  skipIfResolvedIsTopDeckOnTopOccupiedStairStorey: z.boolean().optional(),
   landingSelector: StairWellLandingPropSelectorSchema,
   anchor: StairWellLandingPropAnchorSchema,
   /** Extra offset in landing-local space after corner placement (m). */

@@ -1782,6 +1782,8 @@ export function buildFloorMeshes(
           }
         }
         const shaftExteriorFaces = [...shaftExteriorFaceSet];
+        const typicalTop =
+          (story > 1 && story !== 99) && opts?.isTopOccupiedFloor === true;
         addStairWellPlaceholder(room, sx, sy, sz, {
           omitGroundStoreyCornerLandings: story === 1 || story === 99,
           def: opts?.stairWellDef,
@@ -1792,6 +1794,7 @@ export function buildFloorMeshes(
           interiorWallUvAlternated: (story - 1) % 2 === 1,
           segmentScatterSeed: stairwellLitterScatterSeed(sk, story),
           stairGraphicsMergeRoot: room.parent ?? room,
+          isTopOccupiedStairStorey: typicalTop,
         });
       }
     } else {

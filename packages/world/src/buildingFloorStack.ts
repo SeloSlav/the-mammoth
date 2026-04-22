@@ -80,6 +80,7 @@ export function instantiateBuildingFloorStack(
   const elevatorDoorFaceByShaftKey = groundDoc
     ? elevatorDoorFacesFromGroundFloorDoc(groundDoc)
     : undefined;
+  const maxLevelIndex = sorted[sorted.length - 1]!.levelIndex;
   for (const ref of sorted) {
     const doc = resolveDocForRef(ref);
     const plateWorldOriginY = (o?.[1] ?? 0) + (ref.levelIndex - 1) * spacing;
@@ -93,6 +94,7 @@ export function instantiateBuildingFloorStack(
       elevatorDoorFaceByShaftKey,
       stairWellDef: options?.stairWellDef,
       facadeSalt: options?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT,
+      isTopOccupiedFloor: ref.levelIndex === maxLevelIndex,
     });
     plate.position.y = (ref.levelIndex - 1) * spacing;
     plate.name = `${plate.name}:L${ref.levelIndex}`;

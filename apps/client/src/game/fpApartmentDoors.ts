@@ -75,16 +75,19 @@ const APARTMENT_DOOR_MAX_RAD =
 const APARTMENT_DOOR_SWING_INWARD = true;
 
 /**
- * Apartment doors currently share a single authored size (`UNIT_ENTRY_DOOR_W` × `UNIT_ENTRY_DOOR_H`
- * from `unitEntryAdjacency`) — every template in `APARTMENT_DOOR_TEMPLATES` matches these. We
- * keep the instanced path tight by assuming the shared size so a single merged geometry covers
- * every door; any future per-template dim override would need to fall back to the per-door mesh
- * path used pre-optimization.
+ * Base merged leaf size from the apartment kit. Most templates match this exactly; stair-shaft
+ * exit doors (`manual_stair_shaft_exit_*`) author wider/taller `panelWidthM` / `panelHeightM` and
+ * get a per-instance non-uniform scale in {@link applyMatrix} so visuals match the shaft cutout.
  */
 const APARTMENT_DOOR_DIMS: SwingDoorDimensions = {
   panelW: APARTMENT_KIT?.panelWidthM ?? 1.26,
   panelH: APARTMENT_KIT?.panelHeightM ?? 2.06,
 };
+
+const _hingeComposePos = new THREE.Vector3();
+const _hingeComposeQuat = new THREE.Quaternion();
+const _hingeComposeScale = new THREE.Vector3(1, 1, 1);
+const _hingeYAxis = new THREE.Vector3(0, 1, 0);
 
 /** Bucket size (meters) used by the collision/interact spatial index. Tuned so a typical query
  *  window touches at most 2×2 buckets for 608 doors stretched over ~230 m. */
@@ -152,7 +155,8 @@ export type MountFpApartmentDoorsResult = {
  * - `solid` — opaque leaf from the apartment kit (`apartment_unit_kit.json` with `solid: true`).
  *   Used for every per-unit door; one merged `InstancedMesh` per level.
  * - `glazed` — frame + glass lite from the same kit with `solid` overridden to `false`. Used only
- *   for the corridor→stairwell access doors (`manual_e_corridor_near_stair_*`). Adds a second
+ *   for the corridor→stairwell access doors (`manual_e_corridor_near_stair_*`) and shaft exits
+ *   (`manual_stair_shaft_exit_*`). Adds a second
  *   `InstancedMesh` per level for the glass pass.
  *
  * Slots record which group they live in so `applyMatrix` writes to the right instance buffers;
@@ -359,7 +363,18 @@ export function mountFpApartmentDoors(
     // the table's corridor-direction swing sign. This keeps the open leaf out of shared
     // corridor traffic and matches real apartment-door conventions.
     const yaw = slot.baseYaw + slot.effectiveSwingSign * open01 * APARTMENT_DOOR_MAX_RAD;
-    composeHingeMatrix(scratchMatrix, slot.localX, slot.localCenterY, slot.localZ, yaw);
+    const kitW = APARTMENT_DOOR_DIMS.panelW;
+    const kitH = APARTMENT_DOOR_DIMS.panelH;
+    const sw = slot.panelWidthM / kitW;
+    const sh = slot.panelHeightM / kitH;
+    if (Math.abs(sw - 1) < 0.004 && Math.abs(sh - 1) < 0.004) {
+      composeHingeMatrix(scratchMatrix, slot.localX, slot.localCenterY, slot.localZ, yaw);
+    } else {
+      _hingeComposeScale.set(1, sh, sw);
+      _hingeComposeQuat.setFromAxisAngle(_hingeYAxis, yaw);
+      _hingeComposePos.set(slot.localX, slot.localCenterY, slot.localZ);
+      scratchMatrix.compose(_hingeComposePos, _hingeComposeQuat, _hingeComposeScale);
+    }
     slot.group.mesh.setMatrixAt(slot.instanceIndex, scratchMatrix);
     slot.group.glassMesh?.setMatrixAt(slot.instanceIndex, scratchMatrix);
     slot.group.dirty = true;

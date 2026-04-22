@@ -648,7 +648,7 @@ const FACE_ANCHOR_TOL = 0.42;
  * Merged E/W pads sit inboard of `xE`/`xW` by `eastWestWallHug` (often >0.42 m), so a symmetric
  * tolerance on the racetrack corner would miss them; use a one-sided band from the anchor instead.
  */
-function landingNearRacetrackAnchor(
+export function landingNearRacetrackAnchor(
   L: StairSwitchbackLayout,
   cl: StairCornerLanding,
   face: StairShaftCardinalFace,

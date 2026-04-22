@@ -32,6 +32,11 @@ export type BuildFloorMeshesOptions = {
   elevatorDoorFaceByShaftKey?: ReadonlyMap<string, CardinalFace>;
   /** Shared authored stairwell appearance / delta transforms. */
   stairWellDef?: StairWellDef;
+  /**
+   * True when this plate is the highest level in the stacked building (see
+   * {@link instantiateBuildingFloorStack}). Used for roof-exit stair landing props.
+   */
+  isTopOccupiedFloor?: boolean;
   /** Optional authored compact floor label for landing signs, e.g. `PR`, `1`, `19`. */
   storyShortLabel?: string;
   /**

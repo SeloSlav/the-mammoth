@@ -275,6 +275,8 @@ export function addBuildingStairShaftColumnsToRoot(
         includeCeiling: isTopStorey,
         omitTreads: isTopStorey,
         omitTopLanding: isTopStorey,
+        isTopOccupiedStairStorey:
+          s.storeyCount >= 2 && !isTopStorey && i === s.storeyCount - 2,
         shaftExteriorFaces: [...shaftExteriorFaceSet],
         interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
         segmentScatterSeed: stairwellLitterScatterSeed(s.planKey, i),

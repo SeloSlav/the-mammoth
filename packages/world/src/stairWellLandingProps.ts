@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { StairWellLandingProp, StairWellDef } from "@the-mammoth/schemas";
 import {
+  landingNearRacetrackAnchor,
   pickCornerLandingNearDoorBand,
   type StairCornerLanding,
   type StairShaftCardinalFace,
@@ -37,6 +38,107 @@ export function loadPropTemplate(url: string): Promise<THREE.Object3D> {
 
 type StairWellAuthoringScope = "typical" | "ground";
 
+function stairWellEntryOpeningForScope(
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+): StairWellDef["entryOpening"] {
+  return scope === "ground"
+    ? (def?.groundEntryOpening ?? def?.entryOpening)
+    : def?.entryOpening;
+}
+
+/**
+ * Picks the corner pad in front of the `entryOpening` cutout, then
+ * {@link pickCornerLandingOppositeDoorPad}. Authored `tangentOffsetAlongWallM` is often in
+ * editor/plate space; when it does not overlap any pad in a given shaft, we use shaft-local
+ * fallbacks.
+ */
+function pickEntryDoorPadForTopDeck(
+  L: StairSwitchbackLayout,
+  face: StairShaftCardinalFace,
+  topDeck: StairCornerLanding,
+  doorHalfW: number,
+  omitOnly: StairCornerLanding | undefined,
+  authoredTangent: number | undefined,
+): StairCornerLanding | undefined {
+  /**
+   * Authoring often stores full corridor opening width (~2.5 m). {@link pickCornerLandingNearDoorBand}
+   * requires the band to overlap a corner pad’s along-wall span — a half-width larger than that span
+   * can fail every tangent and yield **no** door pad on typical storeys (ground uses `highest_y` and
+   * never hits this path).
+   */
+  const shaftHalfSpan =
+    face === "e" || face === "w"
+      ? Math.max(0.15, L.hz * 0.5 - 0.14)
+      : Math.max(0.15, L.hx * 0.5 - 0.14);
+  const pickHalfW = Math.min(doorHalfW, shaftHalfSpan * 0.92);
+
+  const tryTangent = (t: number) =>
+    pickCornerLandingNearDoorBand(L, face, t, pickHalfW, topDeck.y);
+  if (authoredTangent != null) {
+    const found = tryTangent(authoredTangent);
+    if (found) return found;
+  }
+  const along = face === "e" || face === "w" ? topDeck.z : topDeck.x;
+  if (authoredTangent == null || Math.abs(along - authoredTangent) > 1e-4) {
+    const a = tryTangent(along);
+    if (a) return a;
+  }
+  if (authoredTangent == null || Math.abs(authoredTangent) > 1e-4) {
+    const z = tryTangent(0);
+    if (z) return z;
+  }
+  for (const cl of L.cornerLandings) {
+    if (cl === omitOnly) continue;
+    if (!landingNearRacetrackAnchor(L, cl, face)) continue;
+    if (Math.abs(cl.y - topDeck.y) > 0.35) continue;
+    const tAlong = face === "e" || face === "w" ? cl.z : cl.x;
+    const found = tryTangent(tAlong);
+    if (found) return found;
+  }
+  let best: StairCornerLanding | undefined;
+  let bestDy = Infinity;
+  for (const cl of L.cornerLandings) {
+    if (cl === omitOnly) continue;
+    if (!landingNearRacetrackAnchor(L, cl, face)) continue;
+    const dy = Math.abs(cl.y - topDeck.y);
+    if (dy < bestDy) {
+      bestDy = dy;
+      best = cl;
+    }
+  }
+  return best;
+}
+
+/**
+ * Corner pad opposite the authored {@link StairWellDef.entryOpening} (big stair door), at the
+ * **highest** deck of the segment (top landing of each one-storey column segment).
+ */
+export function pickCornerLandingOppositeEntryOpening(
+  L: StairSwitchbackLayout,
+  def: StairWellDef | undefined,
+  scope: StairWellAuthoringScope,
+  omitOnly?: StairCornerLanding,
+): StairCornerLanding | undefined {
+  const o = stairWellEntryOpeningForScope(def, scope);
+  const face = o?.face;
+  if (!face) return undefined;
+  const topDeck = pickCornerLandingHighestY(L, omitOnly);
+  if (!topDeck) return undefined;
+  const widthM = o.widthM ?? 2.2;
+  const doorHalfW = widthM * 0.5;
+  const doorLanding = pickEntryDoorPadForTopDeck(
+    L,
+    face,
+    topDeck,
+    doorHalfW,
+    omitOnly,
+    o.tangentOffsetAlongWallM,
+  );
+  if (!doorLanding) return undefined;
+  return pickCornerLandingOppositeDoorPad(L, doorLanding, omitOnly);
+}
+
 /** Minimal door resolve for landing selection (matches {@link ResolvedStairWellGroundDoor}). */
 type PrimaryDoorLike = {
   face: StairShaftCardinalFace;
@@ -49,6 +151,34 @@ type PrimaryDoorLike = {
  * Corner landing that is **not** carrying the primary corridor door pad (best for props).
  * When the door pad cannot be resolved, picks the northernmost (+Z) candidate.
  */
+function pickCornerLandingOppositeDoorPad(
+  L: StairSwitchbackLayout,
+  doorLanding: StairCornerLanding,
+  omitOnly?: StairCornerLanding,
+): StairCornerLanding | undefined {
+  const candidates = L.cornerLandings.filter((cl) => cl !== omitOnly);
+  if (candidates.length === 0) return undefined;
+  const others = candidates.filter((cl) => cl !== doorLanding);
+  if (others.length === 1) return others[0];
+  if (others.length > 1) {
+    let best: StairCornerLanding | undefined;
+    let bestDy = Infinity;
+    for (const cl of others) {
+      const dy = Math.abs(cl.y - doorLanding.y);
+      if (dy < bestDy) {
+        bestDy = dy;
+        best = cl;
+      }
+    }
+    return best;
+  }
+  /**
+   * Degenerate small layouts (or the only non-omitted pad is the door pad): no distinct “opposite”
+   * slab — fall back to the door pad so a prop can still spawn (corner inset keeps it inboard).
+   */
+  return doorLanding;
+}
+
 export function pickCornerLandingOppositePrimaryDoor(
   L: StairSwitchbackLayout,
   primary: PrimaryDoorLike | null | undefined,
@@ -68,20 +198,8 @@ export function pickCornerLandingOppositePrimaryDoor(
     );
 
   if (doorLanding) {
-    const others = candidates.filter((cl) => cl !== doorLanding);
-    if (others.length === 1) return others[0];
-    if (others.length > 1) {
-      let best: StairCornerLanding | undefined;
-      let bestDy = Infinity;
-      for (const cl of others) {
-        const dy = Math.abs(cl.y - doorLanding.y);
-        if (dy < bestDy) {
-          bestDy = dy;
-          best = cl;
-        }
-      }
-      return best;
-    }
+    const opposite = pickCornerLandingOppositeDoorPad(L, doorLanding, omitOnly);
+    if (opposite) return opposite;
   }
 
   let best: StairCornerLanding | undefined;
@@ -109,6 +227,22 @@ export function pickCornerLandingHighestY(
   for (let i = 1; i < candidates.length; i++) {
     const cl = candidates[i]!;
     if (cl.y > best.y + 1e-9) best = cl;
+    else if (Math.abs(cl.y - best.y) <= 1e-9 && cl.z > best.z) best = cl;
+  }
+  return best;
+}
+
+/** Bottommost corner deck in the segment (ignore optional omitted mesh ref). */
+export function pickCornerLandingLowestY(
+  L: StairSwitchbackLayout,
+  omitOnly?: StairCornerLanding,
+): StairCornerLanding | undefined {
+  const candidates = L.cornerLandings.filter((cl) => cl !== omitOnly);
+  if (candidates.length === 0) return undefined;
+  let best = candidates[0]!;
+  for (let i = 1; i < candidates.length; i++) {
+    const cl = candidates[i]!;
+    if (cl.y < best.y - 1e-9) best = cl;
     else if (Math.abs(cl.y - best.y) <= 1e-9 && cl.z > best.z) best = cl;
   }
   return best;
@@ -205,6 +339,16 @@ function propAllowedForScope(
   return true;
 }
 
+function propAllowedForTopOccupiedStairStorey(
+  prop: StairWellLandingProp,
+  isTopOccupiedStairStorey: boolean | undefined,
+): boolean {
+  if (prop.onlyOnTopOccupiedStairStorey === true && isTopOccupiedStairStorey !== true) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Parents GLB props under the correct corner-landing mesh (after part transform deltas).
  * Loads asynchronously; failures are logged once.
@@ -216,6 +360,12 @@ export function attachStairWellLandingProps(args: {
   L: StairSwitchbackLayout;
   primaryDoor: PrimaryDoorLike | null | undefined;
   omitOnlyLanding: StairCornerLanding | undefined;
+  /**
+   * True for the stair segment that **owns** the roof-exit deck mesh (storey below the cap with
+   * {@link addStairWellPlaceholder}'s `omitTopLanding`). Used for props that should only appear on
+   * that top inhabited flight.
+   */
+  isTopOccupiedStairStorey?: boolean;
   /**
    * Top shaft segment uses {@link addStairWellPlaceholder}'s `omitTopLanding`: the roof slab corner
    * is omitted, but the deck below still exists as the **upper** corner landing of the storey
@@ -236,6 +386,7 @@ export function attachStairWellLandingProps(args: {
       continue;
     }
     if (!propAllowedForScope(prop, args.authoringScope)) continue;
+    if (!propAllowedForTopOccupiedStairStorey(prop, args.isTopOccupiedStairStorey)) continue;
 
     let cl: StairCornerLanding | undefined;
     switch (prop.landingSelector.kind) {
@@ -249,12 +400,30 @@ export function attachStairWellLandingProps(args: {
       case "highest_y":
         cl = pickCornerLandingHighestY(args.L, args.omitOnlyLanding);
         break;
+      case "lowest_y":
+        cl = pickCornerLandingLowestY(args.L, args.omitOnlyLanding);
+        break;
+      case "opposite_entry_opening":
+        cl = pickCornerLandingOppositeEntryOpening(
+          args.L,
+          args.def,
+          args.authoringScope,
+          args.omitOnlyLanding,
+        );
+        break;
       default: {
         const _never: never = prop.landingSelector;
         void _never;
       }
     }
     if (!cl) continue;
+    if (
+      prop.skipIfResolvedIsTopDeckOnTopOccupiedStairStorey === true &&
+      args.isTopOccupiedStairStorey === true
+    ) {
+      const topDeck = pickCornerLandingHighestY(args.L, args.omitOnlyLanding);
+      if (topDeck && cl === topDeck) continue;
+    }
 
     const landingMesh = findLandingMeshForCorner(args.root, cl);
     if (!landingMesh) continue;

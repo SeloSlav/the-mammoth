@@ -227,8 +227,48 @@
         "typical"
       ],
       "skipGroundStorey": true,
+      "skipIfResolvedIsTopDeckOnTopOccupiedStairStorey": true,
       "landingSelector": {
         "kind": "opposite_primary_door"
+      },
+      "anchor": {
+        "corner": "nw",
+        "insetXM": 0.3,
+        "insetZM": 0.3,
+        "liftM": 0.02,
+        "yawRad": 0,
+        "uniformScale": 0.5
+      }
+    },
+    {
+      "id": "stairwell_heater_typical_bottom",
+      "modelUrl": "/static/models/objects/stairwell-heater.glb",
+      "applyToScopes": [
+        "typical"
+      ],
+      "skipGroundStorey": true,
+      "landingSelector": {
+        "kind": "lowest_y"
+      },
+      "anchor": {
+        "corner": "nw",
+        "insetXM": 5.9,
+        "insetZM": 3.5,
+        "liftM": 0.02,
+        "yawRad": 0,
+        "uniformScale": 0.5
+      }
+    },
+    {
+      "id": "stairwell_heater_roof_entry",
+      "modelUrl": "/static/models/objects/stairwell-heater.glb",
+      "applyToScopes": [
+        "typical"
+      ],
+      "skipGroundStorey": true,
+      "onlyOnTopOccupiedStairStorey": true,
+      "landingSelector": {
+        "kind": "opposite_entry_opening"
       },
       "anchor": {
         "corner": "nw",
