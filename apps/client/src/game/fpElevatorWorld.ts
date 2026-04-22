@@ -1443,11 +1443,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       ) {
         continue;
       }
+      const row = latest.get(key);
+      if (row && row.phase !== ELEVATOR_PHASE_MOVING) {
+        return Math.max(1, Math.min(maxLevel, Number(row.currentLevel ?? 1)));
+      }
       const cabFeetWorldY = getCabY(key, nowMs);
       if (Number.isFinite(cabFeetWorldY)) {
         return cabFloorButtonDisplayLevel(vis.layout, cabFeetWorldY);
       }
-      const row = latest.get(key);
       if (row) return Math.max(1, Math.min(maxLevel, Number(row.currentLevel ?? 1)));
       return 1;
     }
