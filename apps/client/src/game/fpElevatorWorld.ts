@@ -36,7 +36,10 @@ import {
   type FpElevFloorPickUserData,
   type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
-import { fpBuildingFloorPlateVisibilityBand } from "./fpBuildingFloorPlateVisibilityBand.js";
+import {
+  fpBuildingExteriorViewShouldRevealFullStack,
+  fpBuildingFloorPlateVisibilityBand,
+} from "./fpBuildingFloorPlateVisibilityBand.js";
 import {
   predictMovingCabFeetWorldY,
   predictMovingCabFeetWorldYVelocityMps,
@@ -112,6 +115,19 @@ export type MountFpElevatorWorldOpts = {
   building: BuildingDoc;
   getFloorDoc: (floorDocId: string) => FloorDoc;
   floorSpacingM?: number;
+  /**
+   * World XZ bounds of the building mesh (e.g. `Box3` from `buildingRoot`). When set, pitch-based
+   * floor-band widening (looking up/down toward distant storeys) is **only** applied when the camera
+   * is outside the footprint core (see {@link fpBuildingExteriorViewShouldRevealFullStack}). While
+   * in the core — typical apartments, corridors, hoistway not at edge — upward pitch no longer
+   * expands the band to the roof (which was ~2M submitted triangles in multi-storey shells).
+   */
+  floorVisPitchLookaheadWorldBoundsXz?: {
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  };
 };
 
 /**
@@ -252,6 +268,7 @@ const LANDING_HAIL_PICK_SHAFT_CENTER_PAD_M = 9.0;
 
 export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpElevatorWorldResult {
   const floorSpacingM = opts.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
+  const floorVisPitchLookaheadWorldBoundsXz = opts.floorVisPitchLookaheadWorldBoundsXz;
   const ox = opts.building.worldOrigin?.[0] ?? 0;
   const oy = opts.building.worldOrigin?.[1] ?? 0;
   const oz = opts.building.worldOrigin?.[2] ?? 0;
@@ -1149,15 +1166,28 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         ? sFeet
         : estimateStoreyFromFeetY(bandEyeWorldY, storeyOpts);
     const playerStorey = Math.max(sFeet, sEye);
+    const gatingCamX = bandEyeWorldX ?? px;
+    const gatingCamZ = bandEyeWorldZ ?? pz;
+    const b = floorVisPitchLookaheadWorldBoundsXz;
+    const suppressPitchLookahead =
+      b != null &&
+      !fpBuildingExteriorViewShouldRevealFullStack({
+        cameraX: gatingCamX,
+        cameraZ: gatingCamZ,
+        boundsMinX: b.minX,
+        boundsMaxX: b.maxX,
+        boundsMinZ: b.minZ,
+        boundsMaxZ: b.maxZ,
+      });
     const upperLookAheadStorey =
-      bandEyeWorldY === undefined
+      bandEyeWorldY === undefined || suppressPitchLookahead
         ? undefined
         : estimateStoreyFromFeetY(
             bandEyeWorldY + Math.max(0, bandViewDirY ?? 0) * floorSpacingM * 20,
             storeyOpts,
           );
     const lowerLookAheadStorey =
-      bandEyeWorldY === undefined
+      bandEyeWorldY === undefined || suppressPitchLookahead
         ? undefined
         : estimateStoreyFromFeetY(
             bandEyeWorldY + Math.min(0, bandViewDirY ?? 0) * floorSpacingM * 20,

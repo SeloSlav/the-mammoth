@@ -213,7 +213,7 @@ export function getBuildingStairShaftSpecs(
   return out;
 }
 
-/** Always-visible stair columns: one authored stairwell segment per storey. */
+/** Stair columns: one segment group per storey (band-culled in FP via `mammothPlateLevelIndex`). */
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
   specs: readonly BuildingStairShaftSpec[],
@@ -224,12 +224,17 @@ export function addBuildingStairShaftColumnsToRoot(
   for (const s of specs) {
     const col = new THREE.Group();
     col.name = `stair_shaft:${s.id}`;
-    col.userData.mammothAlwaysVisible = true;
+    /**
+     * Per-segment children carry `mammothPlateLevelIndex` so FP can cull off-band storeys instead
+     * of submitting a full-height merged stair (all levels) every frame.
+     */
+    col.userData.mammothStairColumnRoot = true;
     col.position.set(s.px, 0, s.pz);
     for (let i = 0; i < s.storeyCount; i++) {
       const isTopStorey = i === s.storeyCount - 1;
       const segment = new THREE.Group();
       segment.name = `stair_shaft_segment_${i}`;
+      segment.userData.mammothPlateLevelIndex = s.minLevelIndex + i;
       segment.position.y =
         s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
       const authoringScope = i === 0 ? "ground" : "typical";

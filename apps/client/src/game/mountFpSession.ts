@@ -261,6 +261,12 @@ export async function mountFpSession(
     buildingRoot,
     building,
     getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+    floorVisPitchLookaheadWorldBoundsXz: {
+      minX: buildingWorldBounds.min.x,
+      maxX: buildingWorldBounds.max.x,
+      minZ: buildingWorldBounds.min.z,
+      maxZ: buildingWorldBounds.max.z,
+    },
   });
 
   const fpApartmentDoors = mountFpApartmentDoors({
@@ -600,6 +606,18 @@ export async function mountFpSession(
     _lastBandLo = band.lo;
     _lastBandHi = band.hi;
     for (const ch of buildingRoot.children) {
+      if (ch.userData.mammothStairColumnRoot === true) {
+        ch.visible = true;
+        for (const sub of (ch as THREE.Group).children) {
+          const li = sub.userData.mammothPlateLevelIndex;
+          if (typeof li === "number") {
+            sub.visible = li >= band.lo && li <= band.hi;
+          } else {
+            sub.visible = true;
+          }
+        }
+        continue;
+      }
       if (ch.userData.mammothAlwaysVisible === true) {
         ch.visible = true;
         continue;
@@ -2554,6 +2572,7 @@ export async function mountFpSession(
         setFpPickupPrompt({
           kind: "apartment_door",
           willClose: apartmentPrompt.willClose,
+          promptKind: apartmentPrompt.promptKind,
         });
       } else {
         const hit = findNearestDroppedPickup(

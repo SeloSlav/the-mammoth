@@ -12,7 +12,7 @@ export const APARTMENT_DOOR_TEMPLATES: readonly ApartmentDoorTemplateSet[] = [
   {
     floorDocId: "floor_mamutica_ground",
     templates: [
-      { templateId: "manual_stair_shaft_exit_ground_hub|w", unitId: "manual_stair_shaft_exit_ground_hub", face: "w" as UnitEntryFace, hingeX: 2.11000, hingeZ: -0.96468, feetYOffset: 0.19000, panelWidthM: 1.86000, panelHeightM: 2.28000 },
+      { templateId: "manual_stair_shaft_exit_ground_hub|w", unitId: "manual_stair_shaft_exit_ground_hub", face: "w" as UnitEntryFace, hingeX: 2.11000, hingeZ: -0.96468, feetYOffset: 0.19000, panelWidthM: 1.86000, panelHeightM: 2.34000 },
     ],
   },
   {
@@ -23,11 +23,11 @@ export const APARTMENT_DOOR_TEMPLATES: readonly ApartmentDoorTemplateSet[] = [
       { templateId: "manual_e_corridor_near_stair_03|w", unitId: "manual_e_corridor_near_stair_03", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -8.84000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "manual_e_corridor_near_stair_04|w", unitId: "manual_e_corridor_near_stair_04", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 37.16000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "manual_e_corridor_near_stair_05|w", unitId: "manual_e_corridor_near_stair_05", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: 83.16000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
-      { templateId: "manual_stair_shaft_exit_typ_01|s", unitId: "manual_stair_shaft_exit_typ_01", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -98.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.74789 },
-      { templateId: "manual_stair_shaft_exit_typ_02|s", unitId: "manual_stair_shaft_exit_typ_02", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -52.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.74789 },
-      { templateId: "manual_stair_shaft_exit_typ_03|s", unitId: "manual_stair_shaft_exit_typ_03", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -6.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.74789 },
-      { templateId: "manual_stair_shaft_exit_typ_04|s", unitId: "manual_stair_shaft_exit_typ_04", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: 39.15000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.74789 },
-      { templateId: "manual_stair_shaft_exit_typ_05|s", unitId: "manual_stair_shaft_exit_typ_05", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: 85.15000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.74789 },
+      { templateId: "manual_stair_shaft_exit_typ_01|s", unitId: "manual_stair_shaft_exit_typ_01", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -98.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.80789 },
+      { templateId: "manual_stair_shaft_exit_typ_02|s", unitId: "manual_stair_shaft_exit_typ_02", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -52.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.80789 },
+      { templateId: "manual_stair_shaft_exit_typ_03|s", unitId: "manual_stair_shaft_exit_typ_03", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: -6.85000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.80789 },
+      { templateId: "manual_stair_shaft_exit_typ_04|s", unitId: "manual_stair_shaft_exit_typ_04", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: 39.15000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.80789 },
+      { templateId: "manual_stair_shaft_exit_typ_05|s", unitId: "manual_stair_shaft_exit_typ_05", face: "s" as UnitEntryFace, hingeX: 4.58415, hingeZ: 85.15000, feetYOffset: 0.19000, panelWidthM: 2.46915, panelHeightM: 2.80789 },
       { templateId: "unit_e_001|w", unitId: "unit_e_001", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -112.08250, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "unit_e_002|w", unitId: "unit_e_002", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -104.88250, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },
       { templateId: "unit_e_003|w", unitId: "unit_e_003", face: "w" as UnitEntryFace, hingeX: 1.92500, hingeZ: -75.57000, feetYOffset: 0.23000, panelWidthM: 1.26000, panelHeightM: 2.06000 },

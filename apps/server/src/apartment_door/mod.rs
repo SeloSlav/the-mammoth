@@ -106,6 +106,18 @@ fn feet_world_y(level: u32, feet_y_offset: f32) -> f32 {
     plate_world_y(level) + feet_y_offset
 }
 
+/// True when replicated geometry already matches the codegen template (within epsilon).
+fn apartment_door_row_matches_template(row: &ApartmentDoor, level: u32, t: &GenTemplate) -> bool {
+    const EPS: f32 = 0.02;
+    let want_feet = feet_world_y(level, t.feet_y_offset);
+    row.face == t.face
+        && (row.hinge_x - t.hinge_x).abs() <= EPS
+        && (row.hinge_z - t.hinge_z).abs() <= EPS
+        && (row.feet_y - want_feet).abs() <= EPS
+        && (row.panel_w_m - t.panel_w_m).abs() <= EPS
+        && (row.panel_h_m - t.panel_h_m).abs() <= EPS
+}
+
 #[inline]
 fn west_door_debug_zone(x: f32, y: f32, z: f32) -> bool {
     x >= WEST_DOOR_DEBUG_X_MIN
@@ -172,7 +184,16 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
         }
         for t in templates {
             let rk = row_key(floor_doc_id, level, t.template_id);
-            if ctx.db.apartment_door().row_key().find(&rk).is_some() {
+            if let Some(mut row) = ctx.db.apartment_door().row_key().find(&rk) {
+                if !apartment_door_row_matches_template(&row, level, t) {
+                    row.hinge_x = t.hinge_x;
+                    row.hinge_z = t.hinge_z;
+                    row.face = t.face;
+                    row.feet_y = feet_world_y(level, t.feet_y_offset);
+                    row.panel_w_m = t.panel_w_m;
+                    row.panel_h_m = t.panel_h_m;
+                    let _ = ctx.db.apartment_door().row_key().update(row);
+                }
                 continue;
             }
             let _ = ctx.db.apartment_door().insert(ApartmentDoor {

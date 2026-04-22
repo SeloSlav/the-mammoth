@@ -1,5 +1,7 @@
 /** FP world interact hint (pickup, elevator door, …) — written from `mountFpSession` tick, read by React HUD. */
 
+import type { ApartmentDoorInteractPromptKind } from "@the-mammoth/world";
+
 export type FpPickupPromptDroppedItem = {
   kind: "dropped_item";
   /** Stable key for React / equality (bigint string). */
@@ -16,6 +18,7 @@ export type FpPickupPromptElevatorExteriorDoor = {
 export type FpPickupPromptApartmentDoor = {
   kind: "apartment_door";
   willClose: boolean;
+  promptKind: ApartmentDoorInteractPromptKind;
 };
 
 export type FpPickupPromptState =
@@ -43,7 +46,7 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
     return a.willClose === b.willClose && a.floorLabel === b.floorLabel;
   }
   if (a.kind === "apartment_door" && b.kind === "apartment_door") {
-    return a.willClose === b.willClose;
+    return a.willClose === b.willClose && a.promptKind === b.promptKind;
   }
   return false;
 }

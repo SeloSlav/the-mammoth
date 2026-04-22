@@ -1,3 +1,4 @@
+import type { ApartmentDoorInteractPromptKind } from "@the-mammoth/world";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpPickupPrompt";
 
@@ -99,6 +100,12 @@ export function MammothPickupPromptHud() {
   }
 
   if (prompt.kind === "apartment_door") {
+    const openClose = prompt.willClose ? "close" : "open";
+    const doorNoun: Record<ApartmentDoorInteractPromptKind, string> = {
+      stairwell: "stairwell door",
+      hallway: "hallway door",
+      unit: "apartment door",
+    };
     return (
       <FpBottomInteractPromptFrame
         borderRgb="rgba(210,170,110,0.45)"
@@ -112,7 +119,7 @@ export function MammothPickupPromptHud() {
           kbdText="#180e04"
         />
         <span style={{ opacity: 0.92 }}>
-          {prompt.willClose ? " to close apartment door" : " to open apartment door"}
+          {` to ${openClose} ${doorNoun[prompt.promptKind]}`}
         </span>
       </FpBottomInteractPromptFrame>
     );

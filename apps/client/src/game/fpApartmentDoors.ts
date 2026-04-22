@@ -33,6 +33,7 @@ import type { BuildingDoc, LandingKitDef } from "@the-mammoth/schemas";
 import { LandingKitDefSchema } from "@the-mammoth/schemas";
 import {
   APARTMENT_DOOR_TEMPLATES,
+  apartmentDoorInteractPromptKindFromTemplateId,
   buildApartmentSwingLeafGeometries,
   type CollisionAabb,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
@@ -51,6 +52,7 @@ import {
   swingDoorParkedLeafActive,
   swingDoorPlayerInInteractRange,
   createSwingDoorMaterials,
+  type ApartmentDoorInteractPromptKind,
 } from "@the-mammoth/world";
 import apartmentKitAuthoringJson from "../../../../content/door/apartment_unit_kit.json";
 import type { DbConnection, SubscriptionHandle } from "../module_bindings";
@@ -150,7 +152,9 @@ export type MountFpApartmentDoorsResult = {
   /** True when an apartment door is in range, so the generic pickup prompt/action is suppressed. */
   shouldSuppressEpickup(playerPos: THREE.Vector3): boolean;
   /** Drive the bottom interact prompt when the player is next to an apartment door. */
-  getInteractPrompt(playerPos: THREE.Vector3): { willClose: boolean } | null;
+  getInteractPrompt(
+    playerPos: THREE.Vector3,
+  ): { willClose: boolean; promptKind: ApartmentDoorInteractPromptKind } | null;
   /** Returns every apartment door within `radiusM` of `(x,z)` with its live collision state. */
   debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
 };
@@ -183,6 +187,8 @@ type InstanceGroup = {
 /** One pre-allocated door slot. World coordinates are stable across the session. */
 type DoorSlot = {
   rowKey: string;
+  /** Matches `apartment_door.template_id` / codegen `templateId` (includes `|face` suffix). */
+  templateId: string;
   level: number;
   face: SwingDoorFace;
   baseYaw: number;
@@ -512,6 +518,7 @@ export function mountFpApartmentDoors(
 
       const slot: DoorSlot = {
         rowKey,
+        templateId: t.templateId,
         level: ref.levelIndex,
         face: t.face as SwingDoorFace,
         baseYaw,
@@ -550,6 +557,7 @@ export function mountFpApartmentDoors(
   const ingestRow = (row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
     if (!slot) return; // orphan row (floor/template removed from codegen) — ignore.
+    slot.templateId = row.templateId;
     const geomChanged = syncSlotGeometryFromApartmentDoorRow(slot, row, ox, oy, oz);
     if (geomChanged) {
       bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
@@ -722,7 +730,10 @@ export function mountFpApartmentDoors(
   const getInteractPrompt = (playerPos: THREE.Vector3) => {
     const target = resolveInteractTarget(playerPos);
     if (!target) return null;
-    return { willClose: target.desiredOpen !== 0 };
+    return {
+      willClose: target.desiredOpen !== 0,
+      promptKind: apartmentDoorInteractPromptKindFromTemplateId(target.templateId),
+    };
   };
 
   const debugSnapshot = (x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[] => {

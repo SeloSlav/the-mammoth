@@ -150,8 +150,13 @@ export const MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX =
  */
 export const MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX = "manual_stair_shaft_exit_";
 
-/** Extra leaf height so the glazed frame fills the CSG hole lintel (small gap vs bare concrete). */
-const STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M = 0.08;
+/**
+ * Extra leaf height so the glazed frame fills the CSG hole lintel (covers frame trim / float
+ * error). Panel height uses `y1Local - y0Local` from {@link resolveStairWellGroundDoor} so it
+ * tracks the same vertical span as `appendOpeningHole`, not only authored `heightM` when those
+ * differ.
+ */
+const STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M = 0.14;
 
 /**
  * True when `templateId` names one of the corridor→stairwell access doors authored by
@@ -164,6 +169,17 @@ export function isGlazedApartmentDoorTemplate(templateId: string): boolean {
     templateId.startsWith(MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX) ||
     templateId.startsWith(MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX)
   );
+}
+
+/** Drives FP “Press E …” copy — unit entries vs corridor vs shaft façade doors. */
+export type ApartmentDoorInteractPromptKind = "unit" | "hallway" | "stairwell";
+
+export function apartmentDoorInteractPromptKindFromTemplateId(
+  templateId: string,
+): ApartmentDoorInteractPromptKind {
+  if (templateId.startsWith(MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX)) return "stairwell";
+  if (templateId.startsWith(MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX)) return "hallway";
+  return "unit";
 }
 
 /** Stair-adjacent side only (east interior wall of `corridor_main`); no doors on the far west wall. */
@@ -205,6 +221,7 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
 
   const face = resolved.face as UnitEntryFace;
   const feetYOffset = MAMUTICA_STAIR_HUB_PY + resolved.y0Local;
+  const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
   const out: ApartmentDoorTemplate[] = [];
   let i = 1;
   for (const cz of MAMUTICA_TYPICAL_CORE_STATION_Z_M) {
@@ -227,7 +244,7 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: resolved.heightM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
+      panelHeightM: holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
     });
     i += 1;
   }
@@ -251,6 +268,7 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
 
   const face = resolved.face as UnitEntryFace;
   const feetYOffset = MAMUTICA_STAIR_HUB_PY + resolved.y0Local;
+  const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
   const { hingeX, hingeZ } = shaftExitSwingDoorHingePlateXZ({
     spx: MAMUTICA_STAIR_HUB_PX,
     spz: 0,
@@ -270,7 +288,7 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: resolved.heightM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
+      panelHeightM: holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
     },
   ];
 }

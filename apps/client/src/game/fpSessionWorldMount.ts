@@ -139,13 +139,12 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
  *    ~100+ draw calls/floor to ~13 (one per material), for a 19-floor building
  *    that is ~1,900 → 247 draw calls.
  *
- * 2. **Stair shaft columns** (`mammothAlwaysVisible` set) — full-height stairwells
- *    with hundreds of individual tread/landing/railing meshes. After merging,
- *    each shaft reduces from ~500 → ~7 draw calls.
+ * 2. **Stair shaft columns** (`mammothStairColumnRoot` on the column; each **segment** has
+ *    `mammothPlateLevelIndex`) — per-storey segments are merged separately so FP can hide
+ *    off-band storeys instead of submitting a full-height vertical stack every frame.
  *
  * The group nodes themselves are preserved so the floor-plate visibility band
- * (`syncBuildingFloorPlateVisibility`) and always-visible logic continue to
- * work unchanged.
+ * (`syncBuildingFloorPlateVisibility`) can toggle segment children.
  */
 function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
   // updateMatrixWorld propagates transforms through the full hierarchy even
@@ -154,7 +153,7 @@ function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
 
   for (const child of buildingRoot.children) {
     const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
-    const isStairColumn = child.userData.mammothAlwaysVisible === true;
+    const isStairColumn = child.userData.mammothStairColumnRoot === true;
     if (!isFloorPlate && !isStairColumn) continue;
 
     /**
@@ -168,11 +167,15 @@ function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
      * hidden cleanly from street-level views.
      */
     if (isStairColumn) {
-      child.traverse((obj) => {
-        if (!(obj instanceof THREE.Mesh)) return;
-        if (obj.name.includes("_exterior")) return;
-        obj.userData.mammothUnitInterior = true;
-      });
+      for (const seg of (child as THREE.Group).children) {
+        seg.traverse((obj) => {
+          if (!(obj instanceof THREE.Mesh)) return;
+          if (obj.name.includes("_exterior")) return;
+          obj.userData.mammothUnitInterior = true;
+        });
+        mergeGroupDescendantsByMaterial(seg as THREE.Group);
+      }
+      continue;
     }
 
     mergeGroupDescendantsByMaterial(child as THREE.Group);
