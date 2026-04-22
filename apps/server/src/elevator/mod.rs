@@ -459,6 +459,14 @@ fn player_inside_cab(p: &PlayerPose, car: &ElevatorCar) -> bool {
     player_inside_cab_at_feet(lx, lz, p.y, car)
 }
 
+/// True when feet are inside any elevator car interior volume (matches client "in cab" gameplay).
+pub fn player_inside_any_elevator_cab(ctx: &ReducerContext, p: &PlayerPose) -> bool {
+    ctx.db
+        .elevator_car()
+        .iter()
+        .any(|car| player_inside_cab(p, &car))
+}
+
 /// Cab floor may merge into walk sampling only when the car is a real support: rider inside the
 /// cab volume, or the car is **docked** at a landing whose slab matches the probe feet height.
 /// Otherwise empty hoistways (no static floor) would still snap onto a distant cab in the column.

@@ -347,7 +347,10 @@ fn integrate_one(
         }
     }
 
-    if p.grounded != 0 && (bits & BIT_JUMP != 0) {
+    if p.grounded != 0
+        && (bits & BIT_JUMP != 0)
+        && !elevator::player_inside_any_elevator_cab(ctx, p)
+    {
         let probe_top_y = p.y + WALK_PROBE_DY;
         let base_top = sample_static_walk_ground_top_y(p.x, p.z, probe_top_y);
         let elevator_surface = elevator::sample_elevator_kinematic_support_surface_lerped(

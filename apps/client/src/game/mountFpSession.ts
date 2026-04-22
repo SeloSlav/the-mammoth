@@ -538,6 +538,19 @@ export async function mountFpSession(
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
 
+  /** Jump is disabled while feet (or camera) are inside any elevator HUD cab volume. */
+  const isInsideElevatorCabHudForJump = (): boolean => {
+    camera.getWorldPosition(_floorVisCamWorld);
+    return fpElevators.isInsideAnyCabHud(
+      pos.x,
+      pos.y,
+      pos.z,
+      _floorVisCamWorld.x,
+      _floorVisCamWorld.y,
+      _floorVisCamWorld.z,
+    );
+  };
+
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
     camera.getWorldDirection(_floorVisCamDir);
@@ -2273,6 +2286,10 @@ export async function mountFpSession(
     }
     if (e.code === "KeyC" && !e.repeat) crouchToggle = !crouchToggle;
     if (e.code === "Space" && !e.repeat) {
+      if (isInsideElevatorCabHudForJump()) {
+        e.preventDefault();
+        return;
+      }
       queueFpJump(loco);
       // Build a one-shot input snapshot for the jump intent; _input may not be current yet
       // (tick hasn't run), so read keys directly here.
@@ -2418,6 +2435,8 @@ export async function mountFpSession(
     _input.jumpHeld = keys.has("Space");
 
     const jumpQueuedBeforeStep = loco.jumpQueued;
+    const jumpBlockedInElevatorCab = isInsideElevatorCabHudForJump();
+    if (jumpBlockedInElevatorCab) loco.jumpQueued = false;
     fpElevators.syncCabEvalClock(nowMs, dt);
     prevPos.copy(pos);
 
@@ -2425,7 +2444,7 @@ export async function mountFpSession(
     _mainStepOpts.dtSec = dt;
     _mainStepOpts.evalWallClockMs = nowMs;
     _mainStepOpts.crouch = crouchToggle;
-    _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep;
+    _mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep && !jumpBlockedInElevatorCab;
     _mainStepOpts.bodyYawRad = bodyYaw;
     const headY = simulatePredictedPlayerStep(_mainStepOpts);
     const _t_physicsEnd = performance.now();
@@ -2563,7 +2582,7 @@ export async function mountFpSession(
 
     syncActiveHotbarSlotToServer();
 
-    maybeSendMoveIntent(_input, jumpQueuedBeforeStep, nowMs);
+    maybeSendMoveIntent(_input, jumpQueuedBeforeStep && !jumpBlockedInElevatorCab, nowMs);
 
     if (conn.identity) {
       const drift = Math.hypot(pos.x - poseAoiAnchorX, pos.z - poseAoiAnchorZ);

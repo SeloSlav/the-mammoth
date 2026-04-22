@@ -1610,17 +1610,19 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
       const doorOpen = getDoor(key, nowMs);
-      if (
-        fpElevatorRiderSnapContainsLocalPoint(
-          lx,
-          lz,
-          py,
-          cabFeet,
-          vis.inner,
-          vis.layout.doorFace,
-          doorOpen,
-        )
-      ) {
+      const insideRiderSnap = fpElevatorRiderSnapContainsLocalPoint(
+        lx,
+        lz,
+        py,
+        cabFeet,
+        vis.inner,
+        vis.layout.doorFace,
+        doorOpen,
+      );
+      const insideClosedMovingCabHud =
+        doorOpen <= DOOR_OPEN_REVEAL_THRESHOLD &&
+        fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabFeet, vis.inner);
+      if (insideRiderSnap || insideClosedMovingCabHud) {
         return true;
       }
     }
@@ -1797,17 +1799,25 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
       const doorOpen = getDoor(key, evalWallClockMs);
-      if (
-        !fpElevatorRiderSnapContainsLocalPoint(
-          lx,
-          lz,
-          py,
-          cabFeet,
-          vis.inner,
-          vis.layout.doorFace,
-          doorOpen,
-        )
-      ) {
+      const insideRiderSnap = fpElevatorRiderSnapContainsLocalPoint(
+        lx,
+        lz,
+        py,
+        cabFeet,
+        vis.inner,
+        vis.layout.doorFace,
+        doorOpen,
+      );
+      /**
+       * Moving-cab rides should feel welded to the slab even if the narrower rider-snap physics
+       * volume jitters at a boundary for one frame. While the doors are effectively shut, fall back
+       * to the broader HUD cab volume so vertical foot snap + XZ clamp stay continuous.
+       */
+      const insideClosedMovingCabHud =
+        row.phase === ELEVATOR_PHASE_MOVING &&
+        doorOpen <= DOOR_OPEN_REVEAL_THRESHOLD &&
+        fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabFeet, vis.inner);
+      if (!insideRiderSnap && !insideClosedMovingCabHud) {
         continue;
       }
       const plateX = ox + row.plateX;
