@@ -36,7 +36,7 @@ describe("classifyPrefab", () => {
     expect(classifyPrefab("props_crate")).toBe("misc");
   });
 
-  it("cuts both typical stairwell doors through the shaft and adjacent corridor shells", () => {
+  it("cuts typical stairwell south (exterior) door through the shaft and south corridor shell", () => {
     const stairWellDef = parseStairWellDef({
       id: "stairs",
       version: 1,
@@ -77,7 +77,7 @@ describe("classifyPrefab", () => {
 
     const stair = root.getObjectByName("stair_01");
     expect(stair?.userData.editorStairPreviewGroundDoor).toMatchObject({
-      face: expect.any(String),
+      face: "s",
       tangentOffsetAlongWall: expect.any(Number),
     });
     const stairSouthWallNames: string[] = [];
@@ -87,13 +87,13 @@ describe("classifyPrefab", () => {
     expect(stairSouthWallNames).not.toContain("shaft_wall_s_solid");
     expect(stairSouthWallNames.some((name) => name.startsWith("shaft_wall_s_"))).toBe(true);
 
+    /** Typical primary opens to the exterior (south here), not the east corridor — no east punch. */
     const eastCorridor = root.getObjectByName("corridor_east");
     const eastWallNames: string[] = [];
     eastCorridor?.traverse((obj) => {
       if (obj.name.startsWith("shell_wall_w")) eastWallNames.push(obj.name);
     });
-    expect(eastWallNames).not.toContain("shell_wall_w");
-    expect(eastWallNames.some((name) => name.startsWith("shell_wall_w_"))).toBe(true);
+    expect(eastWallNames).toContain("shell_wall_w");
 
     const southCorridor = root.getObjectByName("corridor_south");
     const southWallNames: string[] = [];
@@ -110,21 +110,43 @@ describe("classifyPrefab", () => {
         readFileSync(new URL("../../../content/building/mammoth.json", import.meta.url), "utf8"),
       ),
     );
-    const root = instantiateBuildingFloorStack(building, (floorDocId) =>
-      parseFloorDoc(
-        JSON.parse(
-          readFileSync(
-            new URL(`../../../content/building/floors/${floorDocId}.json`, import.meta.url),
-            "utf8",
+    const root = instantiateBuildingFloorStack(
+      building,
+      (floorDocId) =>
+        parseFloorDoc(
+          JSON.parse(
+            readFileSync(
+              new URL(`../../../content/building/floors/${floorDocId}.json`, import.meta.url),
+              "utf8",
+            ),
           ),
         ),
-      ),
+      {
+        stairWellDef: parseStairWellDef({
+          id: "mammoth_column_vis",
+          version: 1,
+          entryOpening: {
+            face: "e",
+            tangentOffsetAlongWallM: 0,
+            widthM: 1.86,
+            heightM: 2.2,
+          },
+          groundEntryOpening: {
+            face: "w",
+            tangentOffsetAlongWallM: 0,
+            widthM: 1.86,
+            heightM: 2.2,
+          },
+        }),
+      },
     );
 
     const shaft = root.getObjectByName("stair_shaft:stair_hub_e");
     expect(shaft).not.toBeNull();
+    const groundSeg = shaft?.getObjectByName("stair_shaft_segment_0");
+    expect(groundSeg).not.toBeNull();
     const wallNames: string[] = [];
-    shaft?.traverse((obj) => {
+    groundSeg?.traverse((obj) => {
       if (obj.name.startsWith("shaft_wall_w_lo")) wallNames.push(obj.name);
     });
     expect(wallNames).not.toContain("shaft_wall_w_lo_solid");
@@ -245,10 +267,24 @@ describe("classifyPrefab", () => {
       stairWellDef: parseStairWellDef({
         id: "stairs_stale",
         version: 1,
+        groundEntryOpening: {
+          face: "e",
+          tangentOffsetAlongWallM: 1.1,
+          widthM: 1.2,
+          heightM: 2,
+          centerYM: -0.1,
+        },
         entryOpening: {
           face: "e",
           tangentOffsetAlongWallM: 1.1,
           widthM: 1.2,
+          heightM: 2,
+          centerYM: -0.1,
+        },
+        secondaryEntryOpening: {
+          face: "s",
+          tangentOffsetAlongWallM: 0,
+          widthM: 1.4,
           heightM: 2,
           centerYM: -0.1,
         },
@@ -271,13 +307,15 @@ describe("classifyPrefab", () => {
           z >= aabb.min[2] &&
           z <= aabb.max[2],
       );
-    expect(blockedAt(stale, 1.95, 1.55, 0)).toBe(true);
+    expect(blockedAt(stale, 1.95, 1.55, 2.2)).toBe(true);
     expect(blockedAt(live, 1.95, 1.55, 0)).toBe(false);
-    expect(blockedAt(live, 1.95, 1.55, 1.5)).toBe(true);
+    expect(blockedAt(live, 1.95, 1.55, 2.2)).toBe(true);
 
-    expect(blockedAt(stale, 0, 4.72, -1.95)).toBe(true);
-    expect(blockedAt(live, 0, 4.72, -1.95)).toBe(false);
-    expect(blockedAt(live, 1.4, 4.72, -1.95)).toBe(true);
+    const pitch = 60 / 19;
+    /** Upper plate: south-corridor shell beside the south stair door; stale tangent keeps this blocked. */
+    expect(blockedAt(stale, 1.35, pitch + 1.55, -2.35)).toBe(true);
+    expect(blockedAt(live, 0, pitch + 1.55, -1.95)).toBe(false);
+    expect(blockedAt(live, 1.4, pitch + 1.55, -1.95)).toBe(true);
   });
 
   it("marks decorative corridor trim and exterior cladding as non-collidable", () => {

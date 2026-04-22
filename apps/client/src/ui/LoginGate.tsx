@@ -1,7 +1,5 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { authIssuerUrl } from "../auth/env";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
-import { spacetimeDatabase, spacetimeUri } from "../spacetime/env";
 import {
   THEME_ACCENT,
   THEME_ACCENT_ON,
@@ -55,13 +53,9 @@ export function LoginGate({ session }: Props) {
         <div style={cardStyle}>
           <h1 style={titleStyle}>The Mammoth</h1>
           <p style={{ lineHeight: 1.5, color: THEME_TEXT_MUTED }}>
-            Sign in with your account (email and password). The game uses your auth server — not
-            anonymous browser profiles.
+            Sign in with your account (email and password) to continue.
           </p>
           {errorMsg ? <p style={{ color: THEME_ERROR, marginTop: 12 }}>{errorMsg}</p> : null}
-          <p style={hintStyle}>
-            Auth issuer: <strong>{authIssuerUrl()}</strong>
-          </p>
           <button
             type="button"
             style={buttonStyle}
@@ -88,9 +82,7 @@ export function LoginGate({ session }: Props) {
         <div style={cardStyle}>
           <h1 style={titleStyle}>The Mammoth</h1>
           <p style={{ color: THEME_TEXT_PRIMARY }}>Connecting…</p>
-          <p style={hintStyle}>
-            {spacetimeUri()} · {spacetimeDatabase()}
-          </p>
+          <p style={hintStyle}>Checking you in with the building.</p>
         </div>
       </div>
     );
@@ -101,17 +93,16 @@ export function LoginGate({ session }: Props) {
       <div style={overlayStyle}>
         <div style={cardStyle}>
           <h1 style={titleStyle}>The Mammoth</h1>
-          <p style={{ color: THEME_TEXT_PRIMARY }}>Could not connect to the game server with your login.</p>
-          <p style={hintStyle}>
-            Trying <strong>{spacetimeUri()}</strong> · database <strong>{spacetimeDatabase()}</strong>
+          <p style={{ color: THEME_TEXT_PRIMARY, lineHeight: 1.5 }}>
+            The tower wouldn&apos;t open a line for you — your key reached the front desk, but the building
+            didn&apos;t clear it.
           </p>
-          <pre style={preStyle}>{errorMsg}</pre>
+          <p style={{ ...hintStyle, lineHeight: 1.5 }}>{connectionErrorPlayerMessage(errorMsg)}</p>
           <p style={hintStyle}>
-            Ensure the game server is running, the module is published, and the node trusts JWTs from{" "}
-            <strong>{authIssuerUrl()}</strong> (see <code>apps/client/.env.example</code>).
+            If this keeps happening, try again in a few minutes or sign in from the lobby.
           </p>
           <button type="button" style={buttonStyle} onClick={() => signOut()}>
-            Back to sign in
+            Return to the lobby
           </button>
         </div>
       </div>
@@ -153,6 +144,21 @@ export function LoginGate({ session }: Props) {
   );
 }
 
+/** Player-facing only — never echo server responses or infrastructure details. */
+function connectionErrorPlayerMessage(raw: string | null): string {
+  if (!raw?.trim()) {
+    return "The line went quiet before anyone explained why.";
+  }
+  const lower = raw.toLowerCase();
+  if (lower.includes("verify token") || lower.includes("unauthorized")) {
+    return "Security didn't recognize your access. Signing in again from the lobby sometimes clears it.";
+  }
+  if (lower.includes("websocket")) {
+    return "We couldn't reach the building just now — check your connection, then try again.";
+  }
+  return "Something interrupted check-in before the doors could unlock.";
+}
+
 const titleStyle: CSSProperties = {
   marginTop: 0,
   color: THEME_ACCENT,
@@ -184,16 +190,6 @@ const cardStyle: CSSProperties = {
 const hintStyle: CSSProperties = {
   fontSize: 12,
   color: THEME_TEXT_MUTED,
-};
-
-const preStyle: CSSProperties = {
-  fontSize: 12,
-  textAlign: "left",
-  overflow: "auto",
-  padding: 10,
-  background: "rgba(0,0,0,0.35)",
-  borderRadius: 8,
-  color: THEME_TEXT_PRIMARY,
 };
 
 const inputStyle: CSSProperties = {

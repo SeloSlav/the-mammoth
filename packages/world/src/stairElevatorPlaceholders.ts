@@ -1720,6 +1720,11 @@ export function resolveStairWellGroundDoor(args: {
   const doorH = heightM;
   const baseYDoor1 = baseYDoor0 + doorH;
   const forceTypicalPerpendicularFace = scope === "typical";
+  /**
+   * Typical storeys keep the primary door on the **façade / exterior** band (south in shaft-local
+   * space), not `entryOpening.face`, which often targets the corridor and reads as opening into
+   * the hallway. Ground still uses authored openings + placement toward circulation.
+   */
   let pickedFace = forceTypicalPerpendicularFace
     ? ("s" as CardinalFace)
     : (authored?.face as CardinalFace | undefined);
@@ -1740,7 +1745,29 @@ export function resolveStairWellGroundDoor(args: {
       shaftPz: context.shaftPlateXZ[1],
     });
     pickedFace ??= picked.face;
-    if (authored?.tangentOffsetAlongWallM == null) {
+    /**
+     * Undocumented shafts (`def` omitted): tread-hit scoring can pick the façade wall; pin the
+     * ground door to the dominant circulation axis from `towardPlateXZ` before tangent snapping
+     * (snapping uses the chosen face).
+     */
+    let towardPinnedFace = false;
+    if (scope === "ground" && !args.def) {
+      const tw = context.towardPlateXZ[0] - context.shaftPlateXZ[0];
+      const tz = context.towardPlateXZ[1] - context.shaftPlateXZ[1];
+      const prevFace = pickedFace;
+      if (Math.abs(tw) >= Math.abs(tz)) {
+        if (tw < -0.25) pickedFace = "w";
+        else if (tw > 0.25) pickedFace = "e";
+      } else {
+        if (tz < -0.25) pickedFace = "s";
+        else if (tz > 0.25) pickedFace = "n";
+      }
+      if (pickedFace !== prevFace) {
+        towardPinnedFace = true;
+        tangentOffsetAlongWall = 0;
+      }
+    }
+    if (authored?.tangentOffsetAlongWallM == null && !towardPinnedFace) {
       tangentOffsetAlongWall = picked.tangentOffsetM;
       const landing = pickCornerLandingNearDoorBand(
         L,
@@ -1774,6 +1801,16 @@ export function resolveStairWellGroundDoor(args: {
       tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
         picked.face,
         tangentOffsetAlongWall + rightBiasSign * STAIR_CORRIDOR_DOOR_EXIT_TANGENT_NUDGE_M * 0.25,
+        doorHalfW,
+        sx,
+        sz,
+        wt,
+      );
+    }
+    if (towardPinnedFace) {
+      tangentOffsetAlongWall = clampStairDoorTangentAlongInnerWall(
+        pickedFace,
+        tangentOffsetAlongWall,
         doorHalfW,
         sx,
         sz,

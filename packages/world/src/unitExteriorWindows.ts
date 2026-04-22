@@ -62,19 +62,20 @@ function mulberry32(seed: number): () => number {
  * shader at all — just `color × opacity` blend — roughly 4-5× cheaper per covered pixel, which
  * matters because overlapping window overdraw stacks 3-4 deep across the visible façade.
  *
- * Keep `opacity` in the 0.25–0.45 range: higher reads as "dirty concrete square" instead of glass,
- * lower becomes invisible against bright exterior cladding.
+ * Keep opacity modest: high + saturated tint reads as a grey/blue slab over the exterior (from
+ * inside especially); too low disappears on bright cladding. Near-white tints preserve outdoor
+ * color through the blend.
  */
 const GLASS_TINT_PRESETS: readonly {
   color: number;
   opacity: number;
 }[] = [
-  { color: 0xdbeaf2, opacity: 0.32 },
-  { color: 0xcbdeea, opacity: 0.34 },
-  { color: 0xebf4fa, opacity: 0.3 },
-  { color: 0xbcd0dc, opacity: 0.38 },
-  { color: 0xacc8d8, opacity: 0.42 },
-  { color: 0xf2f8fd, opacity: 0.28 },
+  { color: 0xf7fafc, opacity: 0.18 },
+  { color: 0xf2f6f9, opacity: 0.2 },
+  { color: 0xfbfcfe, opacity: 0.16 },
+  { color: 0xf5f8fa, opacity: 0.19 },
+  { color: 0xf0f4f8, opacity: 0.21 },
+  { color: 0xfafcfd, opacity: 0.17 },
 ];
 
 const glassMaterialByTintId = new Map<number, THREE.MeshBasicMaterial>();
@@ -90,6 +91,8 @@ export function getExteriorWindowGlassMaterial(tintId: number): THREE.MeshBasicM
     opacity: p.opacity,
     /** Without this, thousands of back-to-back glass panels at the same Z sort-flicker each frame. */
     depthWrite: false,
+    /** Scene fog is grey; mixing it again on window panes dulls the exterior when viewed from units. */
+    fog: false,
   });
   glassMaterialByTintId.set(id, m);
   return m;

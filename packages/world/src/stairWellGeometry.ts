@@ -260,9 +260,6 @@ export function pickStairShaftGroundDoorPlacement(
     cands.push({ face: "s", along: tx, hits: countHits(slabSouth(tx), boxes) });
   }
 
-  const bestHits = Math.min(...cands.map((c) => c.hits));
-  const tier0 = cands.filter((c) => c.hits === bestHits);
-
   const tx = params.towardX - params.shaftPx;
   const tz = params.towardZ - params.shaftPz;
   const len = Math.hypot(tx, tz);
@@ -274,6 +271,18 @@ export function pickStairShaftGroundDoorPlacement(
     if (f === "n") return uz;
     return -uz;
   };
+
+  /**
+   * Prefer door faces aligned with circulation (high faceDot). When the toward-vector is weak
+   * (shaft near plate centroid), fall back to the full candidate set.
+   */
+  const maxFaceDot = Math.max(...cands.map((c) => faceDot(c.face)), 0);
+  const pool =
+    maxFaceDot > 1e-3
+      ? cands.filter((c) => faceDot(c.face) > maxFaceDot - 0.35)
+      : cands;
+  const bestHits = Math.min(...pool.map((c) => c.hits));
+  const tier0 = pool.filter((c) => c.hits === bestHits);
 
   let pick = tier0[0]!;
   let bestDot = -Infinity;
