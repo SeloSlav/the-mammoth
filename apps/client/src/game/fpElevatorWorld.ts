@@ -329,10 +329,9 @@ const EXTERIOR_INTERACT_SHAFT_CENTER_PAD_M = EXTERIOR_INTERACT_WORLD_RADIUS_M + 
 const LANDING_HAIL_PICK_SHAFT_CENTER_PAD_M = 9.0;
 
 /**
- * Door openness required before the opening is visually wide enough to justify rendering hallway /
- * shaft-adjacent geometry from inside the cab. Using a tiny epsilon here was too aggressive: the
- * perf path still revealed the full building while the doors were visually "closed enough" or when
- * the player was inside the cab but not actually looking through the doorway.
+ * Door openness required before the opening is visually wide enough to justify doorway-sightline
+ * logic. It no longer forces a full-stack reveal from inside the cab; it only decides when the
+ * doorway can count as a real view out for cab-occlusion / landing-visibility decisions.
  */
 const DOOR_OPEN_REVEAL_THRESHOLD = 0.16;
 /** Horizontal look component toward the doorway required before we assume the camera can see out. */
@@ -1342,23 +1341,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         (feetInColumn || eyeInColumn) &&
         !feetInCab &&
         !eyeInCab
-      ) {
-        revealFullStack = true;
-        break;
-      }
-      if (
-        hasCabDoorwaySightline(
-          key,
-          px,
-          py,
-          pz,
-          nowMs,
-          bandEyeWorldX,
-          bandEyeWorldY,
-          bandEyeWorldZ,
-          bandViewDirX,
-          bandViewDirZ,
-        )
       ) {
         revealFullStack = true;
         break;
