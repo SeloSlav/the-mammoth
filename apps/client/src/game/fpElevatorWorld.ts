@@ -150,6 +150,8 @@ export type FpElevatorRideDebugSnapshot = {
   elapsedSecSinceServerSample: number;
   /** Estimated `client_epoch - server_epoch` (ms); 0 before first replica. */
   serverClockOffsetMs: number;
+  /** Offset actually used for this moving leg's prediction (prevents mid-ride offset step-ups). */
+  serverClockRideOffsetMs: number;
   clockHasEstimate: boolean;
   floorVisBand: { lo: number; hi: number };
 };
@@ -461,6 +463,12 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
   /** Low-pass of {@link cabIntegrateUByKey} for {@link getCabY} / rider support. */
   const cabSmoothedUByKey = new Map<string, number>();
   const cabMoveLegByKey = new Map<string, string>();
+  /**
+   * Per moving leg, hold the smallest client-server clock offset seen so far. This lets the
+   * predictor benefit from newer lower-latency samples, but avoids stepping the cab backward when
+   * the rolling min-offset estimator jumps upward mid-ride.
+   */
+  const cabRideClockOffsetFloorMsByKey = new Map<string, number>();
   /** Elapsed low-pass **only** for {@link advanceCabSmoothU} soft ceiling (not for integration). */
   const ELAPSED_FOR_U_CEILING_SMOOTH_PER_S = 11;
   const cabFilteredElapsedSecByKey = new Map<string, number>();
@@ -576,6 +584,14 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
 
   const evalEpochMs = (wallClockMs: number): number => performanceEpochOriginMs + wallClockMs;
 
+  const getRideClockOffsetMs = (row: ElevatorCar): number => {
+    const estimatedOffsetMs = serverClock.estimatedOffsetMs();
+    if (row.phase !== ELEVATOR_PHASE_MOVING) return estimatedOffsetMs;
+    const floorOffsetMs = cabRideClockOffsetFloorMsByKey.get(row.shaftKey);
+    if (floorOffsetMs === undefined) return estimatedOffsetMs;
+    return Math.min(estimatedOffsetMs, floorOffsetMs);
+  };
+
   /**
    * Elapsed seconds from the server-stamp time of `row` to the server-side moment corresponding
    * to `evalWallClockMs` on the client — using the estimated clock offset so prediction tracks
@@ -583,7 +599,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
    */
   const elapsedSecSinceServerSample = (row: ElevatorCar, evalWallClockMs: number): number => {
     if (row.sampleServerMicros === 0n) return 0;
-    const serverNowEpochMs = serverClock.estimatedServerEpochMs(evalEpochMs(evalWallClockMs));
+    const serverNowEpochMs = evalEpochMs(evalWallClockMs) - getRideClockOffsetMs(row);
     const sampleServerEpochMs = Number(row.sampleServerMicros) / 1000;
     return Math.max(0, (serverNowEpochMs - sampleServerEpochMs) * 0.001);
   };
@@ -602,6 +618,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         cabIntegrateUByKey.delete(key);
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
+        cabRideClockOffsetFloorMsByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
         cabSoftCeilingUByKey.delete(key);
         continue;
@@ -613,6 +630,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         cabMoveLegByKey.set(key, leg);
         cabIntegrateUByKey.delete(key);
         cabSmoothedUByKey.delete(key);
+        cabRideClockOffsetFloorMsByKey.set(key, serverClock.estimatedOffsetMs());
         cabFilteredElapsedSecByKey.delete(key);
         cabSoftCeilingUByKey.delete(key);
       }
@@ -659,6 +677,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         cabIntegrateUByKey.delete(key);
         cabSmoothedUByKey.delete(key);
         cabMoveLegByKey.delete(key);
+        cabRideClockOffsetFloorMsByKey.delete(key);
         cabFilteredElapsedSecByKey.delete(key);
         cabSoftCeilingUByKey.delete(key);
       }
@@ -1550,6 +1569,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         doorOpen01: doorOpen,
         elapsedSecSinceServerSample: elapsed,
         serverClockOffsetMs: serverClock.estimatedOffsetMs(),
+        serverClockRideOffsetMs: getRideClockOffsetMs(row),
         clockHasEstimate: serverClock.hasEstimate(),
         floorVisBand: { lo: band.lo, hi: band.hi },
       };
