@@ -483,27 +483,44 @@ export class FpElevatorShaftVisual {
     this.root.add(this.carRoot);
     this.root.position.set(this.ox + layout.plateX, 0, this.oz + layout.plateZ);
 
-    this.root.traverse((node) => {
-      if (
-        node instanceof THREE.Mesh ||
-        node instanceof THREE.Line ||
-        node instanceof THREE.LineSegments ||
-        node instanceof THREE.Points ||
-        node instanceof THREE.InstancedMesh
-      ) {
-        node.frustumCulled = false;
-        /**
-         * Everything the shaft visual owns — cab mesh, landing doors, hail buttons, floor-pick
-         * buttons, door frames/glass — lives inside the building and is fully occluded by the
-         * opaque cladding when the camera is looking at the tower from outside. Tagging each
-         * mesh as `mammothUnitInterior` lets the session-level exterior-view hide (see
-         * `mountFpSession` → `unitInteriorMeshes` / `FP_INTERIOR_SHELL_NEAR_MARGIN_M`) flip the
-         * whole set to `visible = false` from the street without touching interior correctness
-         * (the 20 m near-margin keeps them up for any plausible doorway / window peek).
-         */
-        node.userData.mammothUnitInterior = true;
-      }
-    });
+    /**
+     * Two traversal passes, split by whether frustum culling is safe:
+     *
+     *  - `carRoot` + `landingRoot`: **must** keep `frustumCulled = false`.
+     *    `carRoot` hosts the cab interior — the eye routinely sits inside the shell, and three.js
+     *    will cull on a bounding sphere without an occlusion test, popping the walls away. The
+     *    landing `InstancedMesh`es span every storey as one draw each; instance matrices move
+     *    with swing and the static geometry bounding sphere does not track them, so auto-culling
+     *    would misfire when a single landing is on-screen but the shared bounding sphere is off.
+     *
+     *  - `landingHailPickRoot` + `landingDoorPickRoot`: per-storey discrete meshes with tight,
+     *    static world bounding spheres. Frustum culling works correctly here and is the only
+     *    thing that keeps 2·`maxLevel` hail meshes off the draw list when the camera is looking
+     *    along a single hallway. Previously the blanket `frustumCulled = false` traverse forced
+     *    every storey's hail button + icon through the pipeline every frame.
+     *
+     * Both passes still tag meshes as `mammothUnitInterior` so the session-level exterior-view
+     * hide (see `mountFpSession` → `unitInteriorMeshes` / `FP_INTERIOR_SHELL_NEAR_MARGIN_M`) can
+     * flip the whole set off from the street.
+     */
+    const tagInterior = (root: THREE.Object3D, disableFrustum: boolean) => {
+      root.traverse((node) => {
+        if (
+          node instanceof THREE.Mesh ||
+          node instanceof THREE.Line ||
+          node instanceof THREE.LineSegments ||
+          node instanceof THREE.Points ||
+          node instanceof THREE.InstancedMesh
+        ) {
+          if (disableFrustum) node.frustumCulled = false;
+          node.userData.mammothUnitInterior = true;
+        }
+      });
+    };
+    tagInterior(this.carRoot, true);
+    tagInterior(this.landingRoot, true);
+    tagInterior(this.landingHailPickRoot, false);
+    tagInterior(this.landingDoorPickRoot, false);
 
     if (this.mergedCabFloorButtons) {
       this.lastMatSig = "";
@@ -602,6 +619,23 @@ export class FpElevatorShaftVisual {
 
   setFloorPickRootVisible(visible: boolean): void {
     this.floorPickRoot.visible = visible;
+  }
+
+  /**
+   * Toggle all hallway-side landing geometry (frame/glass instancers + hail panels + invisible
+   * door pick boxes) for this shaft. From inside a sealed cab every landing across every shaft
+   * is fully occluded by the cab's own walls, so skipping the subtree eliminates both the
+   * `InstancedMesh` draws (2 per shaft × N vertex-shader instances) and the per-storey hail
+   * button + icon draws (2·`maxLevel` per shaft). Hiding the pick root does not block picking
+   * (three.js raycasts do not honor `visible`), but while the cab is sealed nothing outside is
+   * reachable anyway, and re-enabling visibility on a door-open cracks it back in a single tick
+   * before the landing appears through the opening.
+   */
+  setLandingsVisible(visible: boolean): void {
+    if (this.landingRoot.visible === visible) return;
+    this.landingRoot.visible = visible;
+    this.landingHailPickRoot.visible = visible;
+    this.landingDoorPickRoot.visible = visible;
   }
 
   getLandingHailPickForLevel(level: number): THREE.Object3D | undefined {

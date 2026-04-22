@@ -219,6 +219,12 @@ export type MountFpElevatorWorldResult = {
     hi: number;
   };
   /**
+   * Hide hallway-side landing visuals (door instancers + hail panels + pick boxes) on every shaft
+   * while the player is sealed inside any cab. Call once per frame from the same pass that runs
+   * {@link syncBuildingFloorPlateVisibility} — the toggle is a no-op when the state is unchanged.
+   */
+  syncShaftVisualCulling(px: number, py: number, pz: number, nowMs: number): void;
+  /**
    * When the player is inside the HUD cab volume and the car is in {@link ELEVATOR_PHASE_MOVING},
    * returns prediction + visibility-band fields for hitch debugging. Otherwise `null`.
    */
@@ -265,6 +271,19 @@ const elevatorVisualAuthoring = parseElevatorVisualDefs();
 
 const EXTERIOR_INTERACT_SHAFT_CENTER_PAD_M = EXTERIOR_INTERACT_WORLD_RADIUS_M + 0.45;
 const LANDING_HAIL_PICK_SHAFT_CENTER_PAD_M = 9.0;
+
+/**
+ * Any non-trivial crack in a cab/landing door pair reveals the shaft: we then need the full stack
+ * visible so upper/lower storeys don't pop in as the doors part, and we need hallway-side landing
+ * visuals visible so they appear correctly through the opening. A fully closed cab is opaque —
+ * there is no sightline from a closed cab into the shaft or into the hallway, so both the
+ * full-stack reveal and the landing-visual submit cost are pure waste while sealed.
+ *
+ * Threshold is intentionally small so the reveal starts the instant doors begin parting; the
+ * doorway-facing geometric view check uses a larger `0.16` because it is only meaningful once the
+ * gap is wide enough to see through.
+ */
+const DOOR_OPEN_REVEAL_THRESHOLD = 0.02;
 
 export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpElevatorWorldResult {
   const floorSpacingM = opts.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
@@ -1194,7 +1213,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
             storeyOpts,
           );
     let revealFullStack = false;
-    for (const vis of visuals.values()) {
+    for (const [key, vis] of visuals) {
       const hoistwayProbe = (wx: number, wy: number, wz: number) =>
         fpElevFeetInHoistwayColumnForFloorStack(wx, wy, wz, {
           buildingWorldOriginX: ox,
@@ -1204,35 +1223,37 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
           maxLevel,
           layout: vis.layout,
         });
-      if (hoistwayProbe(px, py, pz)) {
-        revealFullStack = true;
-        break;
-      }
-      if (
+      const feetInColumn = hoistwayProbe(px, py, pz);
+      const eyeInColumn =
         bandEyeWorldY !== undefined &&
         bandEyeWorldX !== undefined &&
         bandEyeWorldZ !== undefined &&
-        hoistwayProbe(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ)
-      ) {
+        hoistwayProbe(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ);
+      if (!feetInColumn && !eyeInColumn) continue;
+      if (getDoor(key, nowMs) > DOOR_OPEN_REVEAL_THRESHOLD) {
         revealFullStack = true;
         break;
       }
     }
     for (const key of visuals.keys()) {
       if (revealFullStack) break;
-      if (isInsideCarHud(px, py, pz, key)) {
-        revealFullStack = true;
-        break;
-      }
       const row = latest.get(key);
       const vis = visuals.get(key);
       if (!row || !vis) continue;
       const cabY = getCabY(key);
       if (!Number.isFinite(cabY)) continue;
+      const doorOpen = getDoor(key, nowMs);
+      if (
+        doorOpen > DOOR_OPEN_REVEAL_THRESHOLD &&
+        isInsideCarHud(px, py, pz, key)
+      ) {
+        revealFullStack = true;
+        break;
+      }
       const lx = px - (ox + row.plateX);
       const lz = pz - (oz + row.plateZ);
       if (
-        getDoor(key, nowMs) > 0.16 &&
+        doorOpen > 0.16 &&
         fpElevCarPanelDoorwayViewLocal(vis.layout.doorFace, lx, lz, py, cabY, vis.inner)
       ) {
         revealFullStack = true;
@@ -1246,6 +1267,34 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       upperTargetStorey: upperLookAheadStorey,
       lowerTargetStorey: lowerLookAheadStorey,
     });
+  };
+
+  /**
+   * Per-frame visibility hook for shaft visuals. While the player is sealed inside any cab (inside
+   * the HUD car volume AND that cab's doors are effectively shut), the cab's own walls fully
+   * occlude every shaft's hallway-side geometry — landing doors, hail panels, and invisible pick
+   * boxes — so skipping the whole landing subtree drops `2 + 2·maxLevel` draws per shaft with no
+   * visible change. Any door crack (same threshold used by `getFloorVisibilityBand`) immediately
+   * re-enables them so landings appear through the opening on the very next tick.
+   */
+  const syncShaftVisualCulling = (
+    px: number,
+    py: number,
+    pz: number,
+    nowMs: number,
+  ): void => {
+    let insideSealedCab = false;
+    for (const key of visuals.keys()) {
+      if (!isInsideCarHud(px, py, pz, key)) continue;
+      if (getDoor(key, nowMs) < DOOR_OPEN_REVEAL_THRESHOLD) {
+        insideSealedCab = true;
+        break;
+      }
+    }
+    const landingsVisible = !insideSealedCab;
+    for (const vis of visuals.values()) {
+      vis.setLandingsVisible(landingsVisible);
+    }
   };
 
   const sampleRideDebug = (
@@ -1621,6 +1670,7 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     visitCollisionAabbsInXZ,
     applyCabRoofFeetSnap,
     getFloorVisibilityBand,
+    syncShaftVisualCulling,
     sampleRideDebug,
     getHudMovingCabVyMps,
     ignoreSmallPoseReconcileWhileMovingElevatorRider,

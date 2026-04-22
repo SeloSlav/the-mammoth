@@ -2638,6 +2638,13 @@ export async function mountFpSession(
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
     syncBuildingFloorPlateVisibility(nowMs);
+    /**
+     * Runs every frame (not just band-change frames) because door openness mutates without shifting
+     * the plate band. The call is idempotent — each shaft visual no-ops when its landing
+     * visibility matches the requested state — so the cost is one `getDoor`/`isInsideCarHud` pair
+     * per shaft plus a handful of comparisons.
+     */
+    fpElevators.syncShaftVisualCulling(pos.x, pos.y, pos.z, nowMs);
     const _t_afterFloorVis = performance.now();
     fpEnvironment.onFrame({
       camera,

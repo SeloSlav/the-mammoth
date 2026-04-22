@@ -230,6 +230,34 @@ type BucketIndex = {
   buckets: Bucket[];
 };
 
+/** XZ AABB for spatial indexing: closed slab ∪ parked leaf. Wide stair doors span several meters
+ *  from the hinge; indexing only the hinge point missed buckets when the player was near the tip. */
+function doorSlotIndexFootprintXz(s: DoorSlot): { x0: number; x1: number; z0: number; z1: number } {
+  const closed = swingDoorClosedSlabAabb({
+    face: s.face,
+    hingeX: s.hingeX,
+    hingeZ: s.hingeZ,
+    feetY: s.feetY,
+    panelWidthM: s.panelWidthM,
+    panelHeightM: s.panelHeightM,
+  });
+  const parked = swingDoorParkedLeafAabb({
+    face: s.face,
+    hingeX: s.hingeX,
+    hingeZ: s.hingeZ,
+    feetY: s.feetY,
+    panelWidthM: s.panelWidthM,
+    panelHeightM: s.panelHeightM,
+    swingInward: s.swingInward,
+  });
+  return {
+    x0: Math.min(closed.min[0], parked.min[0]),
+    x1: Math.max(closed.max[0], parked.max[0]),
+    z0: Math.min(closed.min[2], parked.min[2]),
+    z1: Math.max(closed.max[2], parked.max[2]),
+  };
+}
+
 function buildBucketIndex(slots: DoorSlot[], bucketSize: number): BucketIndex {
   if (slots.length === 0) {
     return {
@@ -246,19 +274,29 @@ function buildBucketIndex(slots: DoorSlot[], bucketSize: number): BucketIndex {
   let maxX = -Infinity;
   let maxZ = -Infinity;
   for (const s of slots) {
-    if (s.hingeX < minX) minX = s.hingeX;
-    if (s.hingeX > maxX) maxX = s.hingeX;
-    if (s.hingeZ < minZ) minZ = s.hingeZ;
-    if (s.hingeZ > maxZ) maxZ = s.hingeZ;
+    const fp = doorSlotIndexFootprintXz(s);
+    if (fp.x0 < minX) minX = fp.x0;
+    if (fp.x1 > maxX) maxX = fp.x1;
+    if (fp.z0 < minZ) minZ = fp.z0;
+    if (fp.z1 > maxZ) maxZ = fp.z1;
   }
   const nX = Math.max(1, Math.ceil((maxX - minX) / bucketSize) + 1);
   const nZ = Math.max(1, Math.ceil((maxZ - minZ) / bucketSize) + 1);
   const buckets: Bucket[] = [];
   for (let i = 0; i < nX * nZ; i++) buckets.push([]);
+
+  const pad = 0.06;
   for (const s of slots) {
-    const ix = Math.min(nX - 1, Math.max(0, Math.floor((s.hingeX - minX) / bucketSize)));
-    const iz = Math.min(nZ - 1, Math.max(0, Math.floor((s.hingeZ - minZ) / bucketSize)));
-    buckets[iz * nX + ix]!.push(s);
+    const fp = doorSlotIndexFootprintXz(s);
+    const ix0 = Math.max(0, Math.min(nX - 1, Math.floor((fp.x0 - pad - minX) / bucketSize)));
+    const ix1 = Math.max(0, Math.min(nX - 1, Math.floor((fp.x1 + pad - minX) / bucketSize)));
+    const iz0 = Math.max(0, Math.min(nZ - 1, Math.floor((fp.z0 - pad - minZ) / bucketSize)));
+    const iz1 = Math.max(0, Math.min(nZ - 1, Math.floor((fp.z1 + pad - minZ) / bucketSize)));
+    for (let iz = iz0; iz <= iz1; iz++) {
+      for (let ix = ix0; ix <= ix1; ix++) {
+        buckets[iz * nX + ix]!.push(s);
+      }
+    }
   }
   return { bucketSize, minX, minZ, nX, nZ, buckets };
 }
@@ -564,6 +602,8 @@ export function mountFpApartmentDoors(
   }
 
   let bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
+  /** One door can sit in several buckets; collision queries may touch many buckets at once. */
+  const collisionSlotVisitSeen = new Set<string>();
 
   const ingestRow = (row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
@@ -656,7 +696,10 @@ export function mountFpApartmentDoors(
     visit: (aabb: CollisionAabb) => void,
     _queryPose?: DynamicCollisionQueryPose,
   ) => {
+    collisionSlotVisitSeen.clear();
     visitBucketedSlots(bucketIndex, x0, x1, z0, z1, (slot) => {
+      if (collisionSlotVisitSeen.has(slot.rowKey)) return;
+      collisionSlotVisitSeen.add(slot.rowKey);
       const open01 = slot.visualOpen01;
       let aabb: CollisionAabb | null = null;
       if (swingDoorClosedSlabActive(open01)) {
