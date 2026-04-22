@@ -283,6 +283,7 @@ export {
 } from "./unitEntryAdjacency.js";
 export {
   apartmentDoorInteractPromptKindFromTemplateId,
+  apartmentDoorSwingInwardForTemplateId,
   isGlazedApartmentDoorTemplate,
   MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID,
   MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX,

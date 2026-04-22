@@ -290,9 +290,13 @@ fn closed_slab_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     }
 }
 
-/// Apartment doors swing INTO the unit (inward). Mirrors `APARTMENT_DOOR_SWING_INWARD` on the
-/// client. Keeps the open leaf inside the unit and out of corridor traffic.
-const APARTMENT_DOOR_SWING_INWARD: bool = true;
+/// Per-template swing direction for open-leaf collision. Must match
+/// `apartmentDoorSwingInwardForTemplateId` in `packages/world/src/manualApartmentDoorExtras.ts`.
+#[inline]
+fn apartment_door_swing_inward(template_id: &str) -> bool {
+    !template_id.starts_with("manual_e_corridor_near_stair_")
+        && !template_id.starts_with("manual_stair_shaft_exit_")
+}
 
 /// Direction the leaf TIP ends up at full-open. Inward swing negates the normal.
 #[inline]
@@ -313,7 +317,7 @@ fn tip_dir_at_full_open(face: SwingDoorFace, swing_inward: bool) -> (f32, f32) {
 /// Mirrors `swingDoorParkedLeafAabb` in `packages/world/src/swingDoorCollision.ts`.
 fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     let face = SwingDoorFace::from_u8(row.face);
-    let (tx, tz) = tip_dir_at_full_open(face, APARTMENT_DOOR_SWING_INWARD);
+    let (tx, tz) = tip_dir_at_full_open(face, apartment_door_swing_inward(&row.template_id));
     let tip_x = row.hinge_x + tx * row.panel_w_m;
     let tip_z = row.hinge_z + tz * row.panel_w_m;
     let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;

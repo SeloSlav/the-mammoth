@@ -720,6 +720,8 @@ export async function mountFpSession(
   /** Reconcile replay pools — reset in place on every server update (20 Hz); avoid 3× Vec3. */
   const _replayPos = new THREE.Vector3();
   const _replayPrevPos = new THREE.Vector3();
+  /** Feet pose before a reconcile nudge — passed to `resolvePlayerCollisions` as `prevPos`. */
+  const _reconcilePosBefore = new THREE.Vector3();
   const _replayLoco = createFpLocomotionState();
 
   /**
@@ -1810,6 +1812,8 @@ export async function mountFpSession(
       }
     }
 
+    _reconcilePosBefore.copy(pos);
+
     const pendingCount = pendingMoveIntents.length - intentsHead;
 
     let replayPosForLog: { x: number; y: number; z: number };
@@ -1906,6 +1910,30 @@ export async function mountFpSession(
       loco.velocity.copy(_replayLoco.velocity);
       loco.grounded = _replayLoco.grounded;
     }
+
+    // Reconcile adjusts `pos` without going through the main `simulatePredictedPlayerStep` path, so
+    // it previously skipped `resolvePlayerCollisions`. A larger per-pose correction (sprint tuning)
+    // or a correction aimed across a thin blocker could leave the capsule intersecting a wall; the
+    // next frame’s locomotion had no `prev` across that edge and could “tunnel”. Re-apply the same
+    // horizontal resolution here from pre-nudge → post-nudge feet.
+    if (pos.distanceToSquared(_reconcilePosBefore) > 1e-10) {
+      resolvePlayerCollisions(
+        pos,
+        _reconcilePosBefore,
+        loco.velocity,
+        crouchToggle,
+        fpLocomotionConstants.walkStepUpMargin,
+        staticCollisionIndex,
+        {
+          visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
+            fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+            fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          },
+        },
+        loco.grounded,
+      );
+    }
+
     // Correct physics state only.  Visual-only fields (headBobPhase, eyeSmoothed) are
     // deliberately NOT overwritten: they belong exclusively to the main-loop timeline and must
     // never be disturbed by the 20 Hz reconcile.  Touching them was the root cause of:
