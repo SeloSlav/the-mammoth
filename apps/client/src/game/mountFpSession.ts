@@ -601,14 +601,16 @@ export async function mountFpSession(
        * The previous "hide everything outside the cab" pass was too aggressive: when a stopped car
        * had its doors open, the current landing corridor disappeared and the sky showed through the
        * doorway. The cab walls only occlude **other storeys**; the stopped floor can still be seen
-       * through the opening or in peripheral vision. Collapse the visible band to the current
-       * cab storey instead of blanking the whole building. This keeps the local corridor / shell /
-       * stair segment alive while still dropping the tall-stack overdraw that made elevator turns
-       * expensive. Use the actual cab display storey from `fpElevatorWorld`; deriving it from the
-       * widened band midpoint was wrong on the ground floor when exterior overrides forced the band
-       * to `{ lo: 1, hi: maxBuildingLevel }`.
+       * through the opening or in peripheral vision. A strict single-floor band (`lo=hi=current`)
+       * turned out to be too narrow on the ground floor: some landing-adjacent slab / shell pieces
+       * behave like they belong to the neighboring storey. Keep a tiny local band around the cab
+       * instead. This still drops the tall-stack overdraw that made elevator turns expensive while
+       * preserving the stopped-floor landing and its immediate shell context.
        */
-      band = { lo: occludedCabStorey, hi: occludedCabStorey };
+      band = {
+        lo: Math.max(1, occludedCabStorey - 1),
+        hi: Math.min(maxBuildingLevel, occludedCabStorey + 1),
+      };
     }
 
     /**
