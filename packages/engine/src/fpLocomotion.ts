@@ -6,10 +6,10 @@ const SKIN = 0.034;
 
 const GRAVITY = 21.5;
 const JUMP_SPEED = 5.7;
-/** Indoor-ish gait: brisk ~6.7 km/h walk, strong ~18 km/h run for large-map traversal. */
-const WALK_SPEED = 1.85;
-const SPRINT_SPEED = 5.1;
-const CROUCH_SPEED = 1.0;
+/** Base gait ~18 km/h; sprint larger-map traversal; crouch still clearly below walk. */
+const WALK_SPEED = 5.0;
+const SPRINT_SPEED = 7.5;
+const CROUCH_SPEED = 2.8;
 const GROUND_ACCEL = 19;
 const AIR_ACCEL = 7.8;
 /** Per substep, while rising: applied if jump is not held (variable jump height). */

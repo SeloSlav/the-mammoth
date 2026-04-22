@@ -35,9 +35,9 @@ const SKIN: f32 = 0.034;
 const GRAVITY: f32 = 21.5;
 const JUMP_SPEED: f32 = 5.7;
 // Indoor-ish profile — keep in sync with `packages/engine/src/fpLocomotion.ts`.
-const WALK_SPEED: f32 = 1.85;
-const SPRINT_SPEED: f32 = 5.1;
-const CROUCH_SPEED: f32 = 1.0;
+const WALK_SPEED: f32 = 5.0;
+const SPRINT_SPEED: f32 = 7.5;
+const CROUCH_SPEED: f32 = 2.8;
 const GROUND_ACCEL: f32 = 19.0;
 const AIR_ACCEL: f32 = 7.8;
 const JUMP_RISE_CUT_FACTOR: f32 = 0.91;
