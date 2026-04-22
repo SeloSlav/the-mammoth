@@ -87,26 +87,39 @@ export function addGroundFootprintGrassOccluder(
   min: THREE.Vector3,
   max: THREE.Vector3,
   plateWorldOriginY: number,
+  holes: readonly ShaftSlabHole[],
   slabMaterial: THREE.MeshStandardMaterial,
 ): void {
   const x0 = min.x - GROUND_SLAB_MARGIN_XZ;
   const x1 = max.x + GROUND_SLAB_MARGIN_XZ;
   const z0 = min.z - GROUND_SLAB_MARGIN_XZ;
   const z1 = max.z + GROUND_SLAB_MARGIN_XZ;
-  const w = x1 - x0;
-  const d = z1 - z0;
-  const cx = (x0 + x1) * 0.5;
-  const cz = (z0 + z1) * 0.5;
-
   const yLow = min.y - GROUND_SLAB_THICKNESS_M - 0.006;
   const yHigh = FP_OUTDOOR_GROUND_VISUAL_Y + 0.012 - plateWorldOriginY;
   if (yHigh <= yLow + 1e-4) return;
 
   const h = yHigh - yLow;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), slabMaterial);
-  mesh.name = "ground_footprint_grass_occluder";
-  mesh.position.set(cx, yLow + h * 0.5, cz);
-  root.add(mesh);
+  const slabRect: RectXZ = { x0, x1, z0, z1 };
+  let pieces =
+    holes.length > 0 ? subtractHolesFromRect(slabRect, holes) : [slabRect];
+  if (pieces.length === 0 && holes.length > 0) {
+    pieces = subtractHolesFromRect(slabRect, holes, 0.001);
+  }
+  let i = 0;
+  for (const p of pieces) {
+    const w = p.x1 - p.x0;
+    const d = p.z1 - p.z0;
+    const cx = (p.x0 + p.x1) * 0.5;
+    const cz = (p.z0 + p.z1) * 0.5;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), slabMaterial);
+    mesh.name =
+      holes.length > 0
+        ? `ground_footprint_grass_occluder_piece_${i}`
+        : "ground_footprint_grass_occluder";
+    i += 1;
+    mesh.position.set(cx, yLow + h * 0.5, cz);
+    root.add(mesh);
+  }
 }
 
 export function addConcreteSlabWithOptionalShaftHoles(

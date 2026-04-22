@@ -2011,7 +2011,14 @@ export function buildFloorMeshes(
     );
     const plateWy = opts?.plateWorldOriginY ?? 0;
     if (story === 1 || story === 99) {
-      addGroundFootprintGrassOccluder(root, min, max, plateWy, mat.groundFootprintOccluder);
+      addGroundFootprintGrassOccluder(
+        root,
+        min,
+        max,
+        plateWy,
+        shaftHolesPlate,
+        mat.groundFootprintOccluder,
+      );
     }
   }
 

@@ -8,6 +8,7 @@ import {
   buildElevatorCabCarVisual,
   buildSolidSwingLeafMergedGeometry,
   elevatorHoistwayInnerHalfExtents,
+  FP_LOCOMOTION_SKIN,
   elevatorSupportFeetWorldY,
   isSolidLeafKit,
   MAMMOTH_MERGED_CAB_FLOOR_PICK_UD,
@@ -45,6 +46,8 @@ const LANDING_HAIL_FACE_OUT_M = 0.14;
 const LANDING_HAIL_FACE_OUT_GROUND_M = -0.025;
 
 const LANDING_HAIL_ICON_TEX_SIZE = 160;
+/** Must match `buildElevatorCabCarVisual` local cab-floor top (`floorT`). */
+const CAB_FLOOR_TOP_LOCAL_Y = 0.08;
 
 /** Arrows hug top/bottom so the storey label has clear vertical padding in the middle. */
 const HAIL_ICON_ARROW_TOP_Y = 0.17;
@@ -771,7 +774,16 @@ export class FpElevatorShaftVisual {
   }
 
   updateFromServer(cabFeetY: number, doorOpen01: number): void {
-    this.carRoot.position.y = cabFeetY;
+    /**
+     * `cabFeetY` is the gameplay support height for the player's feet, i.e. the walkable cab-floor
+     * top plus {@link FP_LOCOMOTION_SKIN}. The rendered cab root, however, is authored with local
+     * Y=0 at the **bottom** of the car and the visible floor top at `CAB_FLOOR_TOP_LOCAL_Y`.
+     * Align the visual floor top to the same support plane the collision / rider code uses; the
+     * previous direct assignment (`carRoot.y = cabFeetY`) floated the whole car upward by
+     * `FP_LOCOMOTION_SKIN + CAB_FLOOR_TOP_LOCAL_Y`, which is why the concrete underlay showed
+     * through where the cab floor should have been.
+     */
+    this.carRoot.position.y = cabFeetY - FP_LOCOMOTION_SKIN - CAB_FLOOR_TOP_LOCAL_Y;
     const o = doorOpen01;
     const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, o);
     const t = doorSlideAxis(this.layout.doorFace);
