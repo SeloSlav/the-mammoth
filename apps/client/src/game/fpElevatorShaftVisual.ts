@@ -622,18 +622,18 @@ export class FpElevatorShaftVisual {
   }
 
   /**
-   * Toggle all hallway-side landing geometry (frame/glass instancers + hail panels + invisible
-   * door pick boxes) for this shaft. From inside a sealed cab every landing across every shaft
-   * is fully occluded by the cab's own walls, so skipping the subtree eliminates both the
-   * `InstancedMesh` draws (2 per shaft × N vertex-shader instances) and the per-storey hail
-   * button + icon draws (2·`maxLevel` per shaft). Hiding the pick root does not block picking
-   * (three.js raycasts do not honor `visible`), but while the cab is sealed nothing outside is
-   * reachable anyway, and re-enabling visibility on a door-open cracks it back in a single tick
-   * before the landing appears through the opening.
+   * Toggle auxiliary landing UI / pick helpers for this shaft while leaving the actual landing door
+   * render mesh visible. The red corridor door on the stopped floor must remain visible from inside
+   * the cab even when the camera is not aimed through the opening; hiding only hail panels + pick
+   * roots preserves that cue without bringing back the full building-stack cost.
    */
   setLandingsVisible(visible: boolean): void {
-    if (this.landingRoot.visible === visible) return;
-    this.landingRoot.visible = visible;
+    if (
+      this.landingHailPickRoot.visible === visible &&
+      this.landingDoorPickRoot.visible === visible
+    ) {
+      return;
+    }
     this.landingHailPickRoot.visible = visible;
     this.landingDoorPickRoot.visible = visible;
   }

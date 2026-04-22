@@ -541,6 +541,18 @@ export async function mountFpSession(
   const syncBuildingFloorPlateVisibility = (nowMs: number) => {
     camera.getWorldPosition(_floorVisCamWorld);
     camera.getWorldDirection(_floorVisCamDir);
+    const occludedCabStorey = fpElevators.getCabOccludedViewStorey(
+      pos.x,
+      pos.y,
+      pos.z,
+      nowMs,
+      _floorVisCamWorld.x,
+      _floorVisCamWorld.y,
+      _floorVisCamWorld.z,
+      _floorVisCamDir.x,
+      _floorVisCamDir.z,
+    );
+    const cabOccludesWorld = typeof occludedCabStorey === "number";
     let band = fpElevators.getFloorVisibilityBand(
       pos.x,
       pos.y,
@@ -550,6 +562,8 @@ export async function mountFpSession(
       _floorVisCamDir.y,
       _floorVisCamWorld.x,
       _floorVisCamWorld.z,
+      _floorVisCamDir.x,
+      _floorVisCamDir.z,
     );
     /**
      * Inset-based "exterior" widens to the full stack so façades do not pop when the camera sits
@@ -581,6 +595,20 @@ export async function mountFpSession(
       if (cameraOutsideBuilding) {
         band = { lo: 1, hi: maxBuildingLevel };
       }
+    }
+    if (cabOccludesWorld) {
+      /**
+       * The previous "hide everything outside the cab" pass was too aggressive: when a stopped car
+       * had its doors open, the current landing corridor disappeared and the sky showed through the
+       * doorway. The cab walls only occlude **other storeys**; the stopped floor can still be seen
+       * through the opening or in peripheral vision. Collapse the visible band to the current
+       * cab storey instead of blanking the whole building. This keeps the local corridor / shell /
+       * stair segment alive while still dropping the tall-stack overdraw that made elevator turns
+       * expensive. Use the actual cab display storey from `fpElevatorWorld`; deriving it from the
+       * widened band midpoint was wrong on the ground floor when exterior overrides forced the band
+       * to `{ lo: 1, hi: maxBuildingLevel }`.
+       */
+      band = { lo: occludedCabStorey, hi: occludedCabStorey };
     }
 
     /**
@@ -2644,7 +2672,17 @@ export async function mountFpSession(
      * visibility matches the requested state — so the cost is one `getDoor`/`isInsideCarHud` pair
      * per shaft plus a handful of comparisons.
      */
-    fpElevators.syncShaftVisualCulling(pos.x, pos.y, pos.z, nowMs);
+    fpElevators.syncShaftVisualCulling(
+      pos.x,
+      pos.y,
+      pos.z,
+      nowMs,
+      _floorVisCamWorld.x,
+      _floorVisCamWorld.y,
+      _floorVisCamWorld.z,
+      _floorVisCamDir.x,
+      _floorVisCamDir.z,
+    );
     const _t_afterFloorVis = performance.now();
     fpEnvironment.onFrame({
       camera,
