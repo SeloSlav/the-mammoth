@@ -1457,14 +1457,24 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         continue;
       }
       const row = latest.get(key);
-      if (row && row.phase !== ELEVATOR_PHASE_MOVING) {
+      if (row) {
+        if (row.phase === ELEVATOR_PHASE_MOVING) {
+          /**
+           * While the cab fully occludes the world, the rider cannot see intermediate landings. Pin
+           * the hidden world band to the trip target instead of the continuously changing predicted
+           * cab Y; otherwise every storey crossing churns `visible` flags across the building root.
+           */
+          return Math.max(
+            1,
+            Math.min(maxLevel, Number(row.moveToLevel ?? row.currentLevel ?? 1)),
+          );
+        }
         return Math.max(1, Math.min(maxLevel, Number(row.currentLevel ?? 1)));
       }
       const cabFeetWorldY = getCabY(key, nowMs);
       if (Number.isFinite(cabFeetWorldY)) {
         return cabFloorButtonDisplayLevel(vis.layout, cabFeetWorldY);
       }
-      if (row) return Math.max(1, Math.min(maxLevel, Number(row.currentLevel ?? 1)));
       return 1;
     }
     return null;

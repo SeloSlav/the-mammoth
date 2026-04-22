@@ -32,6 +32,26 @@ const _mergePreserveParentInv = new THREE.Matrix4();
 const _mergePreserveLocal = new THREE.Matrix4();
 const _mergeUnitShellScratch = new THREE.Matrix4();
 
+/**
+ * `BufferGeometryUtils.mergeGeometries()` requires every geometry in a batch to agree on indexed vs
+ * non-indexed layout. Authoring/runtime paths occasionally mix them (e.g. procedural box pieces vs
+ * transformed shell fragments), which otherwise throws at load time. Normalize every merge input to
+ * **non-indexed** after cloning so downstream merge buckets are structurally compatible.
+ */
+function cloneGeometryForMerge(
+  geometry: THREE.BufferGeometry,
+  transform?: THREE.Matrix4,
+): THREE.BufferGeometry {
+  let g = geometry.clone();
+  if (g.index) {
+    const nonIndexed = g.toNonIndexed();
+    g.dispose();
+    g = nonIndexed;
+  }
+  if (transform) g.applyMatrix4(transform);
+  return g;
+}
+
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
@@ -227,9 +247,11 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       const geos: THREE.BufferGeometry[] = [];
       for (const m of list) {
         m.updateWorldMatrix(true, false);
-        const g = (m.geometry as THREE.BufferGeometry).clone();
         _mergeUnitShellScratch.multiplyMatrices(floorInv, m.matrixWorld);
-        g.applyMatrix4(_mergeUnitShellScratch);
+        const g = cloneGeometryForMerge(
+          m.geometry as THREE.BufferGeometry,
+          _mergeUnitShellScratch,
+        );
         geos.push(g);
       }
       const merged = mergeGeometries(geos, false);
@@ -301,8 +323,8 @@ function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     const material = obj.material as THREE.Material;
     obj.updateWorldMatrix(true, false);
     // Transform to group-local space so all merged verts share the same frame.
-    const geo = (obj.geometry as THREE.BufferGeometry).clone();
-    geo.applyMatrix4(
+    const geo = cloneGeometryForMerge(
+      obj.geometry as THREE.BufferGeometry,
       new THREE.Matrix4().multiplyMatrices(groupWorldInv, obj.matrixWorld),
     );
     const key = material.uuid;

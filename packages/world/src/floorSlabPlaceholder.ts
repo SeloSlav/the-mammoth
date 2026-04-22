@@ -116,6 +116,14 @@ export function addGroundFootprintGrassOccluder(
       holes.length > 0
         ? `ground_footprint_grass_occluder_piece_${i}`
         : "ground_footprint_grass_occluder";
+    /**
+     * Keep these out of `mergeGroupDescendantsByMaterial` in `fpSessionWorldMount`. After we started
+     * splitting the ground-footprint occluder by shaft holes, one merge bucket mixed incompatible
+     * geometry layouts during load (`BufferGeometryUtils.mergeGeometries()` index/attribute mismatch).
+     * The piece count here is tiny (ground storey only), so preserving them as-is is effectively
+     * free and avoids a brittle geometry-normalization step in the hot path.
+     */
+    mesh.userData.mammothSkipFloorGeometryMerge = true;
     i += 1;
     mesh.position.set(cx, yLow + h * 0.5, cz);
     root.add(mesh);
