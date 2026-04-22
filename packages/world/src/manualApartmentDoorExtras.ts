@@ -150,6 +150,9 @@ export const MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX =
  */
 export const MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX = "manual_stair_shaft_exit_";
 
+/** Extra leaf height so the glazed frame fills the CSG hole lintel (small gap vs bare concrete). */
+const STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M = 0.08;
+
 /**
  * True when `templateId` names one of the corridor→stairwell access doors authored by
  * {@link mamuticaTypicalCorridorGapDoorTemplates}, or a stair-shaft exit door from
@@ -224,7 +227,7 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: resolved.heightM,
+      panelHeightM: resolved.heightM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
     });
     i += 1;
   }
@@ -267,7 +270,7 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: resolved.heightM,
+      panelHeightM: resolved.heightM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
     },
   ];
 }

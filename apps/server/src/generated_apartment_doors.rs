@@ -24,7 +24,7 @@ pub struct ApartmentDoorTemplateSet {
 }
 
 static TEMPLATES_0: &[ApartmentDoorTemplate] = &[
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_ground_hub|w", unit_id: "manual_stair_shaft_exit_ground_hub", face: 3, hinge_x: 2.11000, hinge_z: -0.96468, feet_y_offset: 0.19000, panel_w_m: 1.86000, panel_h_m: 2.20000 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_ground_hub|w", unit_id: "manual_stair_shaft_exit_ground_hub", face: 3, hinge_x: 2.11000, hinge_z: -0.96468, feet_y_offset: 0.19000, panel_w_m: 1.86000, panel_h_m: 2.28000 },
 ];
 
 static TEMPLATES_1: &[ApartmentDoorTemplate] = &[
@@ -33,11 +33,11 @@ static TEMPLATES_1: &[ApartmentDoorTemplate] = &[
     ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_03|w", unit_id: "manual_e_corridor_near_stair_03", face: 3, hinge_x: 1.92500, hinge_z: -8.84000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_04|w", unit_id: "manual_e_corridor_near_stair_04", face: 3, hinge_x: 1.92500, hinge_z: 37.16000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "manual_e_corridor_near_stair_05|w", unit_id: "manual_e_corridor_near_stair_05", face: 3, hinge_x: 1.92500, hinge_z: 83.16000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_01|s", unit_id: "manual_stair_shaft_exit_typ_01", face: 1, hinge_x: 4.58415, hinge_z: -98.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.66789 },
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_02|s", unit_id: "manual_stair_shaft_exit_typ_02", face: 1, hinge_x: 4.58415, hinge_z: -52.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.66789 },
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_03|s", unit_id: "manual_stair_shaft_exit_typ_03", face: 1, hinge_x: 4.58415, hinge_z: -6.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.66789 },
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_04|s", unit_id: "manual_stair_shaft_exit_typ_04", face: 1, hinge_x: 4.58415, hinge_z: 39.15000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.66789 },
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_05|s", unit_id: "manual_stair_shaft_exit_typ_05", face: 1, hinge_x: 4.58415, hinge_z: 85.15000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.66789 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_01|s", unit_id: "manual_stair_shaft_exit_typ_01", face: 1, hinge_x: 4.58415, hinge_z: -98.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.74789 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_02|s", unit_id: "manual_stair_shaft_exit_typ_02", face: 1, hinge_x: 4.58415, hinge_z: -52.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.74789 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_03|s", unit_id: "manual_stair_shaft_exit_typ_03", face: 1, hinge_x: 4.58415, hinge_z: -6.85000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.74789 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_04|s", unit_id: "manual_stair_shaft_exit_typ_04", face: 1, hinge_x: 4.58415, hinge_z: 39.15000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.74789 },
+    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_typ_05|s", unit_id: "manual_stair_shaft_exit_typ_05", face: 1, hinge_x: 4.58415, hinge_z: 85.15000, feet_y_offset: 0.19000, panel_w_m: 2.46915, panel_h_m: 2.74789 },
     ApartmentDoorTemplate { template_id: "unit_e_001|w", unit_id: "unit_e_001", face: 3, hinge_x: 1.92500, hinge_z: -112.08250, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "unit_e_002|w", unit_id: "unit_e_002", face: 3, hinge_x: 1.92500, hinge_z: -104.88250, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },
     ApartmentDoorTemplate { template_id: "unit_e_003|w", unit_id: "unit_e_003", face: 3, hinge_x: 1.92500, hinge_z: -75.57000, feet_y_offset: 0.23000, panel_w_m: 1.26000, panel_h_m: 2.06000 },

@@ -93,6 +93,12 @@ const _hingeYAxis = new THREE.Vector3(0, 1, 0);
  *  window touches at most 2×2 buckets for 608 doors stretched over ~230 m. */
 const APARTMENT_DOOR_BUCKET_SIZE_M = 8;
 
+/**
+ * When probing buckets for interact / collision, expand XZ by at least this half-extent so wide
+ * stair-shaft doors (≈2.5 m leaf) still hit their bucket even though the kit default width is 1.26 m.
+ */
+const APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M = 1.35;
+
 /** Threshold below which two open01 values are treated as converged (skip matrix rewrite). */
 const APARTMENT_DOOR_ANIM_EPSILON = 1e-4;
 
@@ -255,6 +261,43 @@ function buildBucketIndex(slots: DoorSlot[], bucketSize: number): BucketIndex {
     buckets[iz * nX + ix]!.push(s);
   }
   return { bucketSize, minX, minZ, nX, nZ, buckets };
+}
+
+/**
+ * Keep slot geometry aligned with replicated `apartment_door` rows. Codegen templates are the
+ * initial guess; after subscription the server row is authoritative (stale DB vs new client would
+ * otherwise show prompts that fail `apartment_door_toggle` validation).
+ */
+function syncSlotGeometryFromApartmentDoorRow(
+  slot: DoorSlot,
+  row: ApartmentDoor,
+  ox: number,
+  oy: number,
+  oz: number,
+): boolean {
+  const nx = row.hingeX;
+  const nz = row.hingeZ;
+  const nf = row.feetY;
+  const nw = row.panelWM;
+  const nh = row.panelHM;
+  if (
+    Math.abs(slot.hingeX - nx) < 1e-4 &&
+    Math.abs(slot.hingeZ - nz) < 1e-4 &&
+    Math.abs(slot.feetY - nf) < 1e-4 &&
+    Math.abs(slot.panelWidthM - nw) < 1e-4 &&
+    Math.abs(slot.panelHeightM - nh) < 1e-4
+  ) {
+    return false;
+  }
+  slot.hingeX = nx;
+  slot.hingeZ = nz;
+  slot.feetY = nf;
+  slot.panelWidthM = nw;
+  slot.panelHeightM = nh;
+  slot.localX = nx - ox;
+  slot.localZ = nz - oz;
+  slot.localCenterY = nf - oy + nh * 0.5;
+  return true;
 }
 
 function visitBucketedSlots(
@@ -502,11 +545,16 @@ export function mountFpApartmentDoors(
     }
   }
 
-  const bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
+  let bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
 
   const ingestRow = (row: ApartmentDoor) => {
     const slot = slotsByKey.get(row.rowKey);
     if (!slot) return; // orphan row (floor/template removed from codegen) — ignore.
+    const geomChanged = syncSlotGeometryFromApartmentDoorRow(slot, row, ox, oy, oz);
+    if (geomChanged) {
+      bucketIndex = buildBucketIndex(allSlots, APARTMENT_DOOR_BUCKET_SIZE_M);
+      applyMatrix(slot, slot.visualOpen01);
+    }
     const wasSeeded = slot.seeded;
     slot.desiredOpen = row.desiredOpen;
     const nextOpen = row.swingOpen01;
@@ -618,7 +666,9 @@ export function mountFpApartmentDoors(
 
   type BestInteract = { slot: DoorSlot; dsq: number };
   const resolveInteractTarget = (playerPos: THREE.Vector3): DoorSlot | null => {
-    const r = SWING_DOOR_INTERACT_RADIUS_M + APARTMENT_DOOR_DIMS.panelW; // conservative bucket expansion
+    const r =
+      SWING_DOOR_INTERACT_RADIUS_M +
+      Math.max(APARTMENT_DOOR_DIMS.panelW, APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M * 2);
     let best: BestInteract | null = null;
     visitBucketedSlots(
       bucketIndex,
