@@ -504,11 +504,17 @@ export async function mountFpSession(
   /** With movement keys up, treat horizontal speed below this (m/s) as fully stopped for view settle. */
   const VIEW_SETTLED_IDLE_MAX_HS = 0.055;
   /**
-   * Max distance we correct toward replay in one server pose (~50 ms). Larger errors spread
+   * Base max distance we correct toward replay in one server pose (~50 ms). Larger errors spread
    * across several updates so we never jump a full accumulated desync in one frame (that was
    * happening after the full-stop no-op path let client/server drift apart).
    */
   const RECONCILE_MAX_CORRECTION_PER_POSE_M = 0.08;
+  /**
+   * At higher walk/sprint caps, the same sub-tick / 20 Hz skew shows up as a larger **meter** error.
+   * Without extra budget, `t = 0.08 / corrDist` only closes a big sprint desync over many pose
+   * updates, which reads as rubber-banding. Scales with horizontal speed; idle stays at base.
+   */
+  const RECONCILE_MAX_EXTRA_PER_HORIZONTAL_MPS = 0.012;
   const _rigViewScratch = new THREE.Vector3();
   /** Beyond this distance corrections hard-snap (teleport, cheat detection, etc.). */
   const DISPLAY_HARD_SNAP_M = 3.0;
@@ -1883,7 +1889,11 @@ export async function mountFpSession(
       loco.grounded = _replayLoco.grounded;
     } else if (corrDist > 0.001 && !ignoreSmallElevRiderPhantom) {
       // Capped step toward replay: avoids a single-frame snap when accumulated error is large.
-      const t = Math.min(1, RECONCILE_MAX_CORRECTION_PER_POSE_M / corrDist);
+      const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
+      const reconcileMaxM =
+        RECONCILE_MAX_CORRECTION_PER_POSE_M +
+        Math.min(hs, fpLocomotionConstants.sprintSpeedMps) * RECONCILE_MAX_EXTRA_PER_HORIZONTAL_MPS;
+      const t = Math.min(1, reconcileMaxM / corrDist);
       pos.x += corrX * t;
       pos.y += corrY * t;
       pos.z += corrZ * t;
