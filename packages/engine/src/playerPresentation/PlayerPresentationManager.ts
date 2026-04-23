@@ -8,7 +8,11 @@ import {
   LocalFirstPersonPresenter,
   type FpAuthoringPick,
 } from "./local/LocalFirstPersonPresenter.js";
-import { RemotePlayerPresenter } from "./remote/RemotePlayerPresenter.js";
+import {
+  LocalMirrorPlayerPresenter,
+  preloadRemotePlayerBody,
+  RemotePlayerPresenter,
+} from "./remote/RemotePlayerPresenter.js";
 import { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
 import type { MeleeCombatVisualSink } from "./combatVisuals.js";
 
@@ -31,8 +35,8 @@ export class PlayerPresentationManager {
   private readonly scene: THREE.Scene;
   private readonly modelRegistry: IModelLoadRegistry;
   private readonly local: LocalFirstPersonPresenter;
+  private readonly localMirror: LocalMirrorPlayerPresenter;
   private readonly remotes = new Map<string, RemotePlayerPresenter>();
-  private remoteTintCursor = 0;
   private lastLocalEquipped: HeldItemId;
   /** Pooled set — cleared and reused each update() to avoid per-frame allocation. */
   private readonly _keepIds = new Set<string>();
@@ -41,11 +45,13 @@ export class PlayerPresentationManager {
     scene: THREE.Scene,
     modelRegistry: IModelLoadRegistry,
     local: LocalFirstPersonPresenter,
+    localMirror: LocalMirrorPlayerPresenter,
     initialEquipped: HeldItemId,
   ) {
     this.scene = scene;
     this.modelRegistry = modelRegistry;
     this.local = local;
+    this.localMirror = localMirror;
     this.lastLocalEquipped = initialEquipped;
   }
 
@@ -58,6 +64,7 @@ export class PlayerPresentationManager {
     const initialDef = getWeaponDefinitionForEquippedPrimary(initialEquipped) ?? null;
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
+      preloadRemotePlayerBody(),
       ...ALL_WEAPON_DEFINITIONS.map((d) => modelRegistry.preload(d.modelRef)),
     ]);
     const local = new LocalFirstPersonPresenter({
@@ -67,7 +74,14 @@ export class PlayerPresentationManager {
       onMeleeVisual: opts.onMeleeVisual,
     });
     await local.initViewmodel();
-    return new PlayerPresentationManager(opts.scene, modelRegistry, local, initialEquipped);
+    const localMirror = new LocalMirrorPlayerPresenter(opts.scene);
+    return new PlayerPresentationManager(
+      opts.scene,
+      modelRegistry,
+      local,
+      localMirror,
+      initialEquipped,
+    );
   }
 
   update(
@@ -83,12 +97,13 @@ export class PlayerPresentationManager {
       );
     }
     this.local.update(localState, dt);
+    this.localMirror.updateFromLocalState(localState, dt);
     this._keepIds.clear();
     for (const [id, snap] of remoteSnapshots) {
       this._keepIds.add(id);
       let rp = this.remotes.get(id);
       if (!rp) {
-        rp = new RemotePlayerPresenter(this.scene, this.pickTint(), this.modelRegistry);
+        rp = new RemotePlayerPresenter(this.scene, this.modelRegistry);
         this.remotes.set(id, rp);
       }
       rp.updateFromSnapshot(snap, dt, nowMs);
@@ -101,17 +116,15 @@ export class PlayerPresentationManager {
     }
   }
 
-  private pickTint(): number {
-    const palette = [0x9f7a6b, 0x7fa38f, 0x8b9ac9, 0xb89f6b];
-    const c = palette[this.remoteTintCursor % palette.length]!;
-    this.remoteTintCursor += 1;
-    return c;
-  }
-
   dispose(): void {
     this.local.dispose();
+    this.localMirror.dispose(this.scene);
     for (const rp of this.remotes.values()) rp.dispose(this.scene);
     this.remotes.clear();
+  }
+
+  setLocalMirrorAvatarVisible(visible: boolean): void {
+    this.localMirror.setVisible(visible);
   }
 
   /** Dev / tools: freeze FP viewmodel motion so gizmos stay stable under the gameplay camera. */

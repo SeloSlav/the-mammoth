@@ -117,6 +117,7 @@ import { resolveAuthoritativeInteractionPose } from "./fpInteractionAuthority";
 import { pushFpPerfFrame, resetFpPerfStore } from "./fpSessionPerfStore";
 import { FpHotbarConsumableVisual } from "./fpHotbarConsumableVisual";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug";
+import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpPlanarMirror";
 
 /**
  * Intent publish cadence — keep near `apps/server/src/movement.rs` physics schedule
@@ -429,6 +430,15 @@ export async function mountFpSession(
       // TODO: hand off to gameplay hit-scan / server validation — placeholder trace only.
     },
   });
+  const cabMirrorPlaceholders: THREE.Mesh[] = [];
+  scene.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothCabMirror !== true) return;
+    cabMirrorPlaceholders.push(obj);
+  });
+  const cabMirrors: FpPlanarMirror[] = cabMirrorPlaceholders.map((mesh) =>
+    createFpPlanarMirrorFromPlaceholder(mesh),
+  );
 
   const fpAuthoringActiveRef = { active: false };
   const disposeFpAuthoring = mountFpViewmodelAuthoringDevOnly({
@@ -560,6 +570,13 @@ export async function mountFpSession(
    * (fell out, teleported, etc.).
    */
   const ELEV_MOVING_RIDER_RECONCILE_SNAP_M = 2.5;
+  /**
+   * Moving-cab authority can be a few meters behind/ahead in Y while still being the same ride.
+   * If XZ still agrees and the gap is mostly vertical, treat it as timeline skew instead of a
+   * real desync so reconcile does not tug the camera every 20 Hz pose update.
+   */
+  const ELEV_MOVING_RIDER_RECONCILE_VERTICAL_ONLY_MAX_M = 4.5;
+  const ELEV_MOVING_RIDER_RECONCILE_HORIZONTAL_MAX_M = 0.35;
 
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
@@ -2017,9 +2034,21 @@ export async function mountFpSession(
     const corrZ =
       pendingCount > 0 ? _replayPos.z - pos.z : serverRow.z - pos.z;
     const corrDist = Math.hypot(corrX, corrY, corrZ);
+    const corrHorizontalDist = Math.hypot(corrX, corrZ);
+    const ridingMovingElevatorNow = fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(
+      pos.x,
+      pos.y,
+      pos.z,
+      alignHintMs,
+    );
     const ignoreSmallElevRiderPhantom =
-      fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(pos.x, pos.y, pos.z, alignHintMs) &&
-      corrDist < ELEV_MOVING_RIDER_RECONCILE_SNAP_M;
+      ridingMovingElevatorNow && corrDist < ELEV_MOVING_RIDER_RECONCILE_SNAP_M;
+    const ignoreElevRiderVerticalTimelineMismatch =
+      ridingMovingElevatorNow &&
+      corrHorizontalDist <= ELEV_MOVING_RIDER_RECONCILE_HORIZONTAL_MAX_M &&
+      Math.abs(corrY) <= ELEV_MOVING_RIDER_RECONCILE_VERTICAL_ONLY_MAX_M;
+    const ignoreElevRiderReconcile =
+      ignoreSmallElevRiderPhantom || ignoreElevRiderVerticalTimelineMismatch;
     logDoorDebugReconcile(
       serverRow,
       { x: pos.x, y: pos.y, z: pos.z },
@@ -2028,7 +2057,7 @@ export async function mountFpSession(
       pendingCount,
     );
 
-    if (corrDist > DISPLAY_HARD_SNAP_M) {
+    if (corrDist > DISPLAY_HARD_SNAP_M && !ignoreElevRiderVerticalTimelineMismatch) {
       // Large discrepancy (teleport / anti-cheat correction): hard snap everything.
       if (pendingCount > 0) {
         pos.copy(_replayPos);
@@ -2038,7 +2067,7 @@ export async function mountFpSession(
       _displayOffset.set(0, 0, 0);
       loco.velocity.copy(_replayLoco.velocity);
       loco.grounded = _replayLoco.grounded;
-    } else if (corrDist > 0.001 && !ignoreSmallElevRiderPhantom) {
+    } else if (corrDist > 0.001 && !ignoreElevRiderReconcile) {
       // Capped step toward replay: avoids a single-frame snap when accumulated error is large.
       const hs = Math.hypot(loco.velocity.x, loco.velocity.z);
       const reconcileMaxM =
@@ -2602,9 +2631,15 @@ export async function mountFpSession(
     const rtx = pos.x + _displayOffset.x;
     const rty = pos.y + _displayOffset.y;
     const rtz = pos.z + _displayOffset.z;
+    const ridingMovingCabView =
+      Math.abs(lastTickHudCabVyMps) >= ELEV_HEAD_BOB_SUPPRESS_MIN_HUD_CAB_VY_MPS;
     if (!fpRigViewSmoothedReady) {
       _rigViewScratch.set(rtx, rty, rtz);
       fpRigViewSmoothedReady = true;
+    } else if (ridingMovingCabView) {
+      // While riding a moving cab, weld the rendered rig to physics Y so the camera follows the
+      // slab exactly instead of easing on a second vertical timeline.
+      _rigViewScratch.set(rtx, rty, rtz);
     } else if (viewSettledIdle) {
       // Only snap rig once friction tail is gone — instant follow on raw key-up bypassed easing
       // during the coast and read as a sharp stop/jerk next to 20 Hz reconcile.
@@ -2826,6 +2861,23 @@ export async function mountFpSession(
       stairwellInteriorDark01: stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();
+    for (const mirror of cabMirrors) {
+      let headPitchWasVisible = false;
+      mirror.render({
+        renderer,
+        scene,
+        camera,
+        beforeMirrorRender: () => {
+          headPitchWasVisible = headPitch.visible;
+          headPitch.visible = false;
+          presentation.setLocalMirrorAvatarVisible(true);
+        },
+        afterMirrorRender: () => {
+          presentation.setLocalMirrorAvatarVisible(false);
+          headPitch.visible = headPitchWasVisible;
+        },
+      });
+    }
     renderer.render(scene, camera);
     const _t_renderEnd = performance.now();
     const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
@@ -2870,6 +2922,7 @@ export async function mountFpSession(
       if (periodicDue || logSlow) {
         if (periodicDue) __mmElevDebugState.lastPeriodicLogMs = nowMs;
         const displayOffLen = Math.hypot(_displayOffset.x, _displayOffset.y, _displayOffset.z);
+        const rigMinusPhysicsY = playerRig.position.y - pos.y;
         printElevDebugJson("frame", {
           frameMs: +totalFrameMs.toFixed(2),
           dtSec: +dt.toFixed(4),
@@ -2880,6 +2933,7 @@ export async function mountFpSession(
           presentMs: +presentMs.toFixed(3),
           renderMs: +renderMs.toFixed(3),
           displayOffsetM: +displayOffLen.toFixed(4),
+          rigMinusPhysicsY: +rigMinusPhysicsY.toFixed(4),
           offsetSpike: displayOffLen > 0.2,
           elevSupportVyMps: +lastTickElevSupportVyMps.toFixed(3),
           hudCabVyMps: +lastTickHudCabVyMps.toFixed(3),
@@ -2964,6 +3018,7 @@ export async function mountFpSession(
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
     hotbarConsumableVisual.dispose();
+    for (const mirror of cabMirrors) mirror.dispose();
     presentation.dispose();
     renderer.dispose();
     scene.clear();

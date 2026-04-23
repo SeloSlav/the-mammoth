@@ -1,90 +1,259 @@
 import * as THREE from "three";
-import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
-import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
-import { getWeaponDefinition } from "../../weapons/weaponRegistry.js";
-import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
-import { TP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
+import type { IModelLoadRegistry } from "@the-mammoth/assets";
+import type { LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
+import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
 
-type GltfRef = Extract<ModelRef, { kind: "gltf" }>;
+const REMOTE_PLAYER_MODEL_URI = "/static/models/players/male.glb";
+const REMOTE_PLAYER_TARGET_HEIGHT_M = 1.78;
+const REMOTE_PLAYER_YAW_OFFSET_RAD = Math.PI;
+const REMOTE_PLAYER_TRANSITION_SEC = 0.18;
+const REMOTE_PLAYER_CLIP_NAMES = {
+  idle: "Idle",
+  walk: "Walking",
+  run: "Running",
+  jump: "Regular_Jump",
+} as const satisfies Record<PlayerBodyClipName, string>;
 
-function asGltf(ref: ModelRef): GltfRef {
-  if (ref.kind !== "gltf") throw new Error(`Expected gltf ModelRef, got ${ref.kind}`);
-  return ref;
+const remotePlayerLoader = new GLTFLoader();
+let remotePlayerTemplatePromise:
+  | Promise<{ scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }>
+  | null = null;
+let remotePlayerTemplate:
+  | { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }
+  | null = null;
+
+function cloneRemotePlayerScene(template: THREE.Object3D): THREE.Object3D {
+  const root = cloneSkeleton(template);
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    mesh.geometry = mesh.geometry.clone();
+    const mat = mesh.material;
+    mesh.material = Array.isArray(mat) ? mat.map((entry) => entry.clone()) : mat.clone();
+  });
+  return root;
 }
 
-/**
- * Third-person-only body + held item visuals for other players.
- * TODO: swap `buildPrimitiveHumanoid` for `GltfCharacterInstance` + animation graph.
- */
-export class RemotePlayerPresenter {
-  readonly root: THREE.Group;
-  private humanoid: ReturnType<typeof buildPrimitiveHumanoid>;
-  private weapon?: WeaponPresenter;
-  private equippedPrimary: HeldItemId = "unarmed";
-  private readonly modelRegistry: IModelLoadRegistry;
+function normalizeRemotePlayerModel(model: THREE.Object3D): void {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  if (!Number.isFinite(size.y) || size.y <= 0.001) return;
+  const uniformScale = REMOTE_PLAYER_TARGET_HEIGHT_M / size.y;
+  model.scale.setScalar(uniformScale);
+  model.updateMatrixWorld(true);
+  const scaledBox = new THREE.Box3().setFromObject(model);
+  const center = scaledBox.getCenter(new THREE.Vector3());
+  model.position.set(-center.x, -scaledBox.min.y, -center.z);
+  model.updateMatrixWorld(true);
+}
 
-  constructor(scene: THREE.Scene, tint: number, modelRegistry: IModelLoadRegistry) {
-    this.modelRegistry = modelRegistry;
-    this.root = new THREE.Group();
+function createLoopingAction(
+  mixer: THREE.AnimationMixer,
+  clipLibrary: Map<string, THREE.AnimationClip>,
+  clipName: string,
+  loopMode: number,
+): THREE.AnimationAction | null {
+  const clip = clipLibrary.get(clipName);
+  if (!clip) return null;
+  const action = mixer.clipAction(clip);
+  action.enabled = true;
+  action.setLoop(
+    loopMode as THREE.AnimationActionLoopStyles,
+    loopMode === THREE.LoopOnce ? 1 : Infinity,
+  );
+  action.clampWhenFinished = loopMode === THREE.LoopOnce;
+  return action;
+}
+
+class AnimatedRemotePlayerBody {
+  readonly root = new THREE.Group();
+  private readonly modelRoot: THREE.Object3D;
+  private readonly mixer: THREE.AnimationMixer;
+  private readonly actions = new Map<PlayerBodyClipName, THREE.AnimationAction>();
+  private activeClip: PlayerBodyClipName | null = null;
+
+  constructor(template: { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }) {
     this.root.name = "remote_player_body";
-    this.humanoid = buildPrimitiveHumanoid({ tint });
-    this.root.add(this.humanoid.root);
-    scene.add(this.root);
-    this.syncWeapon("unarmed");
+    this.modelRoot = cloneRemotePlayerScene(template.scene);
+    this.modelRoot.name = "remote_player_model";
+    normalizeRemotePlayerModel(this.modelRoot);
+    this.root.add(this.modelRoot);
+    this.mixer = new THREE.AnimationMixer(this.modelRoot);
+    const clipLibrary = new Map(template.animations.map((clip) => [clip.name, clip] as const));
+    const idle = createLoopingAction(
+      this.mixer,
+      clipLibrary,
+      REMOTE_PLAYER_CLIP_NAMES.idle,
+      THREE.LoopRepeat,
+    );
+    const walk = createLoopingAction(
+      this.mixer,
+      clipLibrary,
+      REMOTE_PLAYER_CLIP_NAMES.walk,
+      THREE.LoopRepeat,
+    );
+    const run = createLoopingAction(
+      this.mixer,
+      clipLibrary,
+      REMOTE_PLAYER_CLIP_NAMES.run,
+      THREE.LoopRepeat,
+    );
+    const jump = createLoopingAction(
+      this.mixer,
+      clipLibrary,
+      REMOTE_PLAYER_CLIP_NAMES.jump,
+      THREE.LoopOnce,
+    );
+    if (idle) this.actions.set("idle", idle);
+    if (walk) this.actions.set("walk", walk);
+    if (run) this.actions.set("run", run);
+    if (jump) this.actions.set("jump", jump);
+    this.playClip("idle", true);
   }
 
-  private syncWeapon(equipped: ReplicatedPlayerSnapshot["equippedPrimary"]): void {
-    if (equipped === this.equippedPrimary && (equipped === "unarmed" || this.weapon)) return;
-    this.equippedPrimary = equipped;
-    this.weapon?.dispose(this.humanoid.handAttachRight);
-    this.weapon = undefined;
-    if (equipped === "unarmed") return;
+  setVisible(visible: boolean): void {
+    this.root.visible = visible;
+  }
 
-    const def = getWeaponDefinition(equipped);
-    if (!def) {
-      console.warn(`[RemotePlayerPresenter] no definition for equipped id "${equipped}"`);
-      return;
+  syncTransform(position: { x: number; y: number; z: number }, yawRad: number): void {
+    this.root.position.set(position.x, position.y, position.z);
+    this.root.rotation.y = yawRad + REMOTE_PLAYER_YAW_OFFSET_RAD;
+  }
+
+  updateMotion(args: { grounded: boolean; locomotion: ReplicatedPlayerSnapshot["locomotion"] }, dt: number): void {
+    this.playClip(resolvePlayerBodyClipName(args), false);
+    this.mixer.update(dt);
+  }
+
+  dispose(): void {
+    this.mixer.stopAllAction();
+    deepDisposeObject3D(this.root);
+  }
+
+  private playClip(next: PlayerBodyClipName, immediate: boolean): void {
+    if (this.activeClip === next) return;
+    const nextAction = this.actions.get(next);
+    if (!nextAction) return;
+    const prevAction = this.activeClip ? this.actions.get(this.activeClip) : null;
+    this.activeClip = next;
+    if (prevAction && prevAction !== nextAction) {
+      prevAction.fadeOut(immediate ? 0 : REMOTE_PLAYER_TRANSITION_SEC);
     }
-    const res = this.modelRegistry.instantiateLoaded(asGltf(def.modelRef));
-    if (!res.ok) {
-      console.error(`[RemotePlayerPresenter] weapon GLB (${def.id}): ${res.error}`);
-      return;
-    }
-    this.weapon = new WeaponPresenter({
-      definition: def,
-      role: "remote_third_person",
-      visual: res.root as THREE.Object3D,
-    });
-    this.weapon.normalizeVisualToMaxEdgeMeters(TP_CROWBAR_GLTF_MAX_EDGE_M);
-    this.humanoid.handAttachRight.add(this.weapon.root);
+    nextAction.reset();
+    nextAction.fadeIn(immediate ? 0 : REMOTE_PLAYER_TRANSITION_SEC);
+    nextAction.play();
+  }
+}
+
+function getRemotePlayerTemplate(): { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] } {
+  if (!remotePlayerTemplate) throw new Error("Remote player body not preloaded");
+  return remotePlayerTemplate;
+}
+
+export async function preloadRemotePlayerBody(): Promise<void> {
+  if (!remotePlayerTemplatePromise) {
+    remotePlayerTemplatePromise = remotePlayerLoader
+      .loadAsync(REMOTE_PLAYER_MODEL_URI)
+      .then((gltf) => ({
+        scene: gltf.scene,
+        animations: gltf.animations,
+      }));
+  }
+  remotePlayerTemplate = await remotePlayerTemplatePromise;
+}
+
+type BodyPose = {
+  position: { x: number; y: number; z: number };
+  yawRad: number;
+  locomotion: ReplicatedPlayerSnapshot["locomotion"];
+  grounded: boolean;
+};
+
+class WorldPlayerBodyPresenter {
+  readonly root: THREE.Group;
+  private readonly body: AnimatedRemotePlayerBody;
+
+  constructor(scene: THREE.Scene) {
+    this.body = new AnimatedRemotePlayerBody(getRemotePlayerTemplate());
+    this.root = this.body.root;
+    scene.add(this.root);
+  }
+
+  updateFromPose(pose: BodyPose, dt: number): void {
+    this.body.syncTransform(pose.position, pose.yawRad);
+    this.body.updateMotion({ grounded: pose.grounded, locomotion: pose.locomotion }, dt);
+  }
+
+  setVisible(visible: boolean): void {
+    this.body.setVisible(visible);
+  }
+
+  dispose(scene: THREE.Scene): void {
+    scene.remove(this.root);
+    this.body.dispose();
+  }
+}
+
+export class RemotePlayerPresenter {
+  readonly root: THREE.Group;
+  private readonly presenter: WorldPlayerBodyPresenter;
+
+  constructor(scene: THREE.Scene, _modelRegistry: IModelLoadRegistry) {
+    this.presenter = new WorldPlayerBodyPresenter(scene);
+    this.root = this.presenter.root;
   }
 
   updateFromSnapshot(snap: ReplicatedPlayerSnapshot, dt: number, nowMs: number): void {
     void nowMs;
-    void dt;
-    this.syncWeapon(snap.equippedPrimary);
-    const { x, y, z } = snap.worldPosition;
-    this.root.position.set(x, y, z);
-    this.root.rotation.y = snap.yawRad;
-    if (this.weapon) {
-      // TODO: drive from replicated action bits / animation state when server exposes them.
-      this.weapon.resetPose();
-    }
+    this.presenter.updateFromPose(
+      {
+        position: snap.worldPosition,
+        yawRad: snap.yawRad,
+        locomotion: snap.locomotion,
+        grounded: snap.grounded,
+      },
+      dt,
+    );
   }
 
   dispose(scene: THREE.Scene): void {
-    this.weapon?.dispose(this.humanoid.handAttachRight);
-    this.weapon = undefined;
-    scene.remove(this.root);
-    this.humanoid.root.traverse((obj) => {
-      const m = obj as THREE.Mesh;
-      if (m.isMesh) {
-        m.geometry.dispose();
-        const mat = m.material;
-        if (!Array.isArray(mat)) mat.dispose();
-        else mat.forEach((x) => x.dispose());
-      }
-    });
+    this.presenter.dispose(scene);
+  }
+}
+
+export class LocalMirrorPlayerPresenter {
+  readonly root: THREE.Group;
+  private readonly presenter: WorldPlayerBodyPresenter;
+
+  constructor(scene: THREE.Scene) {
+    this.presenter = new WorldPlayerBodyPresenter(scene);
+    this.root = this.presenter.root;
+    this.presenter.setVisible(false);
+  }
+
+  updateFromLocalState(state: LocalPlayerGameplayState, dt: number): void {
+    this.presenter.updateFromPose(
+      {
+        position: state.position,
+        yawRad: state.yawRad,
+        locomotion: state.locomotion,
+        grounded: state.grounded,
+      },
+      dt,
+    );
+  }
+
+  setVisible(visible: boolean): void {
+    this.presenter.setVisible(visible);
+  }
+
+  dispose(scene: THREE.Scene): void {
+    this.presenter.dispose(scene);
   }
 }

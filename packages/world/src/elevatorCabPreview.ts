@@ -23,6 +23,12 @@ const FLOOR_BTN_FACE_DIA = 0.094;
 const FLOOR_BTN_D = 0.018;
 const FLOOR_GAP = 0.022;
 const FLOOR_COLS = 3;
+const CAB_MIRROR_W = 0.72;
+const CAB_MIRROR_H = 1.28;
+const CAB_MIRROR_FRAME_OVERHANG_M = 0.05;
+const CAB_MIRROR_FRAME_THICKNESS_M = 0.024;
+const CAB_MIRROR_SURFACE_GAP_M = 0.005;
+const CAB_MIRROR_CENTER_Y = 1.34;
 const FLOOR_ATLAS_COLS = 5;
 const FLOOR_ATLAS_CELL_W = 64;
 const FLOOR_ATLAS_CELL_H = 48;
@@ -265,6 +271,7 @@ export type ElevatorCabCarVisual = {
   doorL: THREE.Group | null;
   doorR: THREE.Group | null;
   floorButtons: ElevatorCabFloorButtonVisual[];
+  mirrorSurface?: THREE.Mesh;
   /** When true, every `floorButtons[*].bodyMesh` shares one merged mesh (same for labels). */
   mergedFloorButtons?: boolean;
 };
@@ -499,6 +506,58 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
 
   let doorL: THREE.Group | null = null;
   let doorR: THREE.Group | null = null;
+  const mirrorFrameMat = wallMat.clone();
+  mirrorFrameMat.color = wallMat.color.clone().offsetHSL(0, 0, 0.07);
+  mirrorFrameMat.roughness = Math.min(mirrorFrameMat.roughness, 0.24);
+  mirrorFrameMat.metalness = Math.max(mirrorFrameMat.metalness, 0.58);
+  const mirrorSurfaceMat = new THREE.MeshStandardMaterial({
+    color: 0xdfe4ec,
+    roughness: 0.04,
+    metalness: 0.02,
+  });
+  const mirrorBacker = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      CAB_MIRROR_W + CAB_MIRROR_FRAME_OVERHANG_M * 2,
+      CAB_MIRROR_H + CAB_MIRROR_FRAME_OVERHANG_M * 2,
+      CAB_MIRROR_FRAME_THICKNESS_M,
+    ),
+    mirrorFrameMat,
+  );
+  mirrorBacker.name = "cab_mirror_frame";
+  mirrorBacker.userData.editorCabPartId = "cab_mirror_frame";
+  const mirrorSurface = new THREE.Mesh(
+    new THREE.PlaneGeometry(CAB_MIRROR_W, CAB_MIRROR_H),
+    mirrorSurfaceMat,
+  );
+  mirrorSurface.name = "cab_mirror_surface";
+  mirrorSurface.userData.editorCabPartId = "cab_mirror_surface";
+  mirrorSurface.userData.mammothCabMirror = true;
+  const mirrorFlushInset = 0.001;
+  if (face === "e" || face === "w") {
+    const mirrorZ = hz - wallT - mirrorFlushInset;
+    const mirrorX = 0;
+    mirrorBacker.position.set(
+      mirrorX,
+      CAB_MIRROR_CENTER_Y,
+      mirrorZ - CAB_MIRROR_FRAME_THICKNESS_M * 0.5 - CAB_MIRROR_SURFACE_GAP_M,
+    );
+    mirrorBacker.rotation.y = Math.PI;
+    mirrorSurface.position.set(mirrorX, CAB_MIRROR_CENTER_Y, mirrorZ);
+    mirrorSurface.rotation.y = Math.PI;
+  } else {
+    const mirrorX = hx - wallT - mirrorFlushInset;
+    const mirrorZ = 0;
+    mirrorBacker.position.set(
+      mirrorX - CAB_MIRROR_FRAME_THICKNESS_M * 0.5 - CAB_MIRROR_SURFACE_GAP_M,
+      CAB_MIRROR_CENTER_Y,
+      mirrorZ,
+    );
+    mirrorBacker.rotation.y = Math.PI * 0.5;
+    mirrorSurface.position.set(mirrorX, CAB_MIRROR_CENTER_Y, mirrorZ);
+    mirrorSurface.rotation.y = -Math.PI * 0.5;
+  }
+  root.add(mirrorBacker);
+  root.add(mirrorSurface);
   if (includeDoors) {
     doorL = new THREE.Group();
     doorR = new THREE.Group();
@@ -796,6 +855,7 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     doorL,
     doorR,
     floorButtons,
+    mirrorSurface,
     mergedFloorButtons: mergeCabFloorButtons ? true : undefined,
   };
 }
