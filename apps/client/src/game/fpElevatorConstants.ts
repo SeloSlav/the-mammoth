@@ -141,7 +141,6 @@ export const DOOR_SWING_OPEN01_VIS_SMOOTH_PER_S = 14;
 
 /** Match `apps/server/src/elevator/mod.rs` `MOVE_SPEED_MPS`. */
 export const ELEVATOR_MOVE_SPEED_MPS = 3.15;
-
 /** Match `apps/server/src/elevator/mod.rs` `PH_MOVING`. */
 export const ELEVATOR_PHASE_MOVING = 2;
 

@@ -567,9 +567,18 @@ export async function mountFpSession(
     return _interactionPos;
   };
 
-  // Cache the last visibility band so we skip the O(buildingChildren) loop when unchanged.
+  /**
+   * Cached applied floor-band (after smoothing). Raw target can jump from full-stack → interior in
+   * one frame when leaving the hoistway; stepping the band spreads `.visible` toggles across frames.
+   */
   let _lastBandLo = -999;
   let _lastBandHi = -999;
+  let _visBandSmoothLo = -999;
+  let _visBandSmoothHi = -999;
+  /** Narrowing hides plates — keep slow to avoid shader/GC spikes when dropping full-stack reveals. */
+  const VIS_BAND_NARROW_STOREYS_PER_FRAME = 1;
+  /** Widening shows plates — slightly faster so shaft views fill in promptly. */
+  const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 3;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
 
@@ -661,6 +670,36 @@ export async function mountFpSession(
       };
     }
 
+    const targetBandLo = band.lo;
+    const targetBandHi = band.hi;
+    if (_visBandSmoothLo < 0) {
+      _visBandSmoothLo = targetBandLo;
+      _visBandSmoothHi = targetBandHi;
+    } else {
+      if (_visBandSmoothLo < targetBandLo) {
+        _visBandSmoothLo = Math.min(
+          targetBandLo,
+          _visBandSmoothLo + VIS_BAND_NARROW_STOREYS_PER_FRAME,
+        );
+      } else if (_visBandSmoothLo > targetBandLo) {
+        _visBandSmoothLo = Math.max(
+          targetBandLo,
+          _visBandSmoothLo - VIS_BAND_EXPAND_STOREYS_PER_FRAME,
+        );
+      }
+      if (_visBandSmoothHi > targetBandHi) {
+        _visBandSmoothHi = Math.max(
+          targetBandHi,
+          _visBandSmoothHi - VIS_BAND_NARROW_STOREYS_PER_FRAME,
+        );
+      } else if (_visBandSmoothHi < targetBandHi) {
+        _visBandSmoothHi = Math.min(
+          targetBandHi,
+          _visBandSmoothHi + VIS_BAND_EXPAND_STOREYS_PER_FRAME,
+        );
+      }
+    }
+
     /**
      * Hide tagged interior shells whenever camera **and** feet are clearly outside the footprint
      * (both farther than {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} past the raw edge). From there,
@@ -695,16 +734,25 @@ export async function mountFpSession(
       }
     }
 
-    if (band.lo === _lastBandLo && band.hi === _lastBandHi) return;
-    _lastBandLo = band.lo;
-    _lastBandHi = band.hi;
+    if (
+      _visBandSmoothLo === _lastBandLo &&
+      _visBandSmoothHi === _lastBandHi &&
+      _visBandSmoothLo === targetBandLo &&
+      _visBandSmoothHi === targetBandHi
+    ) {
+      return;
+    }
+    _lastBandLo = _visBandSmoothLo;
+    _lastBandHi = _visBandSmoothHi;
+    const lo = _visBandSmoothLo;
+    const hi = _visBandSmoothHi;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothStairColumnRoot === true) {
         ch.visible = true;
         for (const sub of (ch as THREE.Group).children) {
           const li = sub.userData.mammothPlateLevelIndex;
           if (typeof li === "number") {
-            sub.visible = li >= band.lo && li <= band.hi;
+            sub.visible = li >= lo && li <= hi;
           } else {
             sub.visible = true;
           }
@@ -717,7 +765,7 @@ export async function mountFpSession(
       }
       const li = ch.userData.mammothPlateLevelIndex;
       if (typeof li === "number") {
-        ch.visible = li >= band.lo && li <= band.hi;
+        ch.visible = li >= lo && li <= hi;
       }
     }
   };
