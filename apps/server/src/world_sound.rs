@@ -1,4 +1,5 @@
-//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup, elevator / landing-door UI) for nearby players.
+//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup, elevator / landing-door UI,
+//! cab arrival chime) for nearby players.
 //! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
 use spacetimedb::{
@@ -35,6 +36,8 @@ pub const KIND_ELEVATOR_LANDING_HAIL: u8 = 6;
 pub const KIND_LANDING_EXTERIOR_DOOR_OPEN: u8 = 7;
 /// Corridor swing door closing (desired_open 1→0); `variation` unused.
 pub const KIND_LANDING_EXTERIOR_DOOR_CLOSE: u8 = 8;
+/// Elevator car finished a travel leg — docked at `move_to_level` (`variation` unused).
+pub const KIND_ELEVATOR_CAB_ARRIVAL: u8 = 9;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -259,6 +262,21 @@ pub fn emit_landing_exterior_door_close_at(
         0.58,
         20.0,
         emitter,
+    );
+}
+
+/// In-cab world position for the arrival chime (`emitter` = module identity so every subscriber hears it).
+pub fn emit_elevator_cab_arrival_at(ctx: &ReducerContext, x: f32, y: f32, z: f32) {
+    emit_world_sound(
+        ctx,
+        KIND_ELEVATOR_CAB_ARRIVAL,
+        0,
+        x,
+        y,
+        z,
+        0.62,
+        22.0,
+        ctx.identity(),
     );
 }
 

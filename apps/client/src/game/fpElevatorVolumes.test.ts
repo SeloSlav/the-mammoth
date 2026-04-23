@@ -4,8 +4,10 @@ import {
   elevatorSupportFeetWorldY,
 } from "@the-mammoth/world";
 import {
+  fpElevBlocksHoistwayFullStackRevealPlateLocal,
   fpElevCabWalkMergeSupportFeetAllowed,
   fpElevFeetInHoistwayColumnForFloorStack,
+  fpElevOnCabRoofDeckPlateLocal,
   fpElevatorClampWorldXZToCabIfRider,
   fpElevatorInDoorOutwardPadShellOnly,
   fpElevatorPlateLocalClampBounds,
@@ -68,6 +70,26 @@ describe("fpElevPlayerInsideCabAuthoritativePlateLocal", () => {
     expect(fpElevPlayerInsideCabAuthoritativePlateLocal(0, 0, py, cabFeetY, inner)).toBe(
       false,
     );
+  });
+});
+
+describe("fpElevBlocksHoistwayFullStackRevealPlateLocal", () => {
+  const inner = { halfX: 1.05, halfZ: 1.86, innerH: 2.2 } as const;
+  const cabFeetY = 1.0;
+
+  it("blocks full-stack reveal while inside the car body", () => {
+    expect(
+      fpElevBlocksHoistwayFullStackRevealPlateLocal(0, 0, cabFeetY + 0.55, cabFeetY, inner),
+    ).toBe(true);
+  });
+
+  it("does not block on the cab roof deck (full hoistway stack should render)", () => {
+    const roofY = cabFeetY + inner.innerH;
+    const pyOnRoof = roofY - 0.08;
+    expect(fpElevOnCabRoofDeckPlateLocal(0, 0, pyOnRoof, cabFeetY, inner)).toBe(true);
+    expect(
+      fpElevBlocksHoistwayFullStackRevealPlateLocal(0, 0, pyOnRoof, cabFeetY, inner),
+    ).toBe(false);
   });
 });
 

@@ -18,6 +18,7 @@ import {
 } from "@the-mammoth/world";
 import {
   CAB_INTERP_SEC,
+  CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M,
   CAR_CEIL_BELOW_SHAFT_TOP,
   CAR_INNER_MARGIN,
   DOOR_H,
@@ -785,7 +786,7 @@ export class FpElevatorShaftVisual {
      */
     this.carRoot.position.y = cabFeetY - FP_LOCOMOTION_SKIN - CAB_FLOOR_TOP_LOCAL_Y;
     const o = doorOpen01;
-    const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, o);
+    const slide = THREE.MathUtils.lerp(-CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M, DOOR_SLIDE_M, o);
     const t = doorSlideAxis(this.layout.doorFace);
     this.doorL.children[0]!.position.set(-t.x * slide, 0, -t.z * slide);
     this.doorR.children[0]!.position.set(t.x * slide, 0, t.z * slide);

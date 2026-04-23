@@ -14,6 +14,7 @@ import {
   ELEVATOR_CLAMP_DOOR_SLACK_START,
   ELEVATOR_CLAMP_FOOT_CLEARANCE_M,
   ELEVATOR_CAB_PHYS_GATE_PAD_M,
+  ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M,
   ELEVATOR_DOOR_EXIT_CLAMP_MIN_OPEN,
   ELEVATOR_RIDER_SNAP_FLOOR_ATTACH_MAX_FEET_Y_INSET_BELOW_INNER_TOP_M,
   ELEVATOR_RIDER_SNAP_GRIP_EXTRA_ABOVE_INNER_M,
@@ -71,6 +72,43 @@ export function fpElevatorHudCarContainsLocalPoint(
   if (Math.abs(lx) > inner.halfX * 0.97 || Math.abs(lz) > inner.halfZ * 0.97) return false;
   if (py < cabFeetY - 0.22 || py > cabFeetY + inner.innerH + 0.38) return false;
   return true;
+}
+
+/**
+ * True on the **roof deck** slab (inner XZ, tight Y near `cabFeetY + innerH`). Used so FP can still
+ * reveal the full hoistway stack while you stand on the car roof — {@link fpElevatorHudCarContainsLocalPoint}
+ * incorrectly includes that slab in “inside cab”, which suppressed shaft plates.
+ */
+export function fpElevOnCabRoofDeckPlateLocal(
+  lx: number,
+  lz: number,
+  py: number,
+  cabFeetY: number,
+  inner: FpElevatorInnerExtents,
+): boolean {
+  const { halfX: ihx, halfZ: ihz, innerH } = inner;
+  if (Math.abs(lx) > ihx || Math.abs(lz) > ihz) return false;
+  const roofY = cabFeetY + innerH;
+  /** Narrow — avoid classifying upper interior volume under the ceiling as “roof”. */
+  const deckBelowM = 0.22;
+  return py >= roofY - deckBelowM && py <= roofY + ELEVATOR_CAB_ROOF_WALK_MERGE_FEET_ABOVE_M;
+}
+
+/**
+ * True when the player should **not** trigger full-hoistway floor-plate reveal (actually inside the
+ * car chamber, not on the roof deck looking up the shaft).
+ */
+export function fpElevBlocksHoistwayFullStackRevealPlateLocal(
+  lx: number,
+  lz: number,
+  py: number,
+  cabFeetY: number,
+  inner: FpElevatorInnerExtents,
+): boolean {
+  return (
+    fpElevatorHudCarContainsLocalPoint(lx, lz, py, cabFeetY, inner) &&
+    !fpElevOnCabRoofDeckPlateLocal(lx, lz, py, cabFeetY, inner)
+  );
 }
 
 /**

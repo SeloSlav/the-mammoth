@@ -73,6 +73,7 @@ import {
 } from "./fpSessionGameUiHidden";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSessionPerfDebug";
 import { mountFpApartmentDoors } from "./fpApartmentDoors.js";
+import { ElevatorCabMotionAudio } from "./elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./weaponPresentationDevHotReload.js";
@@ -1656,10 +1657,22 @@ export async function mountFpSession(
   registerHotbarConsumeLocalPlayback((profile) => localAudio.playHotbarConsumeLocal(profile));
   const worldAudio = new WorldProximityAudio(conn, () => camera);
   let worldAudioReady = false;
+  const cabMotionAudio = new ElevatorCabMotionAudio(() => camera);
+  let cabMotionAudioReady = false;
 
   /** Subscribes immediately with pose AOI — must not wait for audio unlock: inserts are only replicated for active `world_sound_event` queries. */
   const refreshWorldSoundSubscription = () => {
     worldAudio.subscribeAoi(poseAoiAnchorX, poseAoiAnchorZ, WORLD_SOUND_AOI_HALF);
+  };
+
+  const attachSpatialWorldAudio = async (): Promise<void> => {
+    await localAudio.unlock();
+    const actx = localAudio.getAudioContext();
+    if (!actx) return;
+    await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
+    worldAudioReady = true;
+    cabMotionAudioReady = await cabMotionAudio.attachSharedContext(actx);
+    refreshWorldSoundSubscription();
   };
 
   /**
@@ -2076,7 +2089,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF, {
     onPickupRemoved: async () => {
-      await localAudio.unlock();
+      await attachSpatialWorldAudio();
       localAudio.playItemPickLocal();
     },
   });
@@ -2364,15 +2377,7 @@ export async function mountFpSession(
   };
 
   const onClick = () => {
-    void (async () => {
-      await localAudio.unlock();
-      const actx = localAudio.getAudioContext();
-      if (actx) {
-        await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
-        worldAudioReady = true;
-        refreshWorldSoundSubscription();
-      }
-    })();
+    void attachSpatialWorldAudio();
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
@@ -2587,6 +2592,10 @@ export async function mountFpSession(
     headFreeLook.rotation.y = headLookYaw;
     if (worldAudioReady) {
       worldAudio.syncListener();
+      if (cabMotionAudioReady) {
+        cabMotionAudio.syncListener();
+        cabMotionAudio.sync(fpElevators.getCabMotionAudioEmitters(nowMs));
+      }
     }
 
     _audioMovement.horizontalSpeed = hs;
@@ -2900,6 +2909,8 @@ export async function mountFpSession(
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();
     unsubHotbarRail();
+    cabMotionAudio.dispose();
+    cabMotionAudioReady = false;
     worldAudio.dispose();
     worldAudioReady = false;
     unregisterHotbarConsumeLocalAudio();

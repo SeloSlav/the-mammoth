@@ -9,6 +9,13 @@ import { EXTERIOR_DOOR_W_M } from "./elevatorCollisionTuning.js";
 const DOOR_H = 2.05;
 const DOOR_TH = 0.07;
 const DOOR_SLIDE_M = 0.82;
+/** Match `fpElevatorConstants.CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M` — hide bifolding seam at closed. */
+const CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M = 0.014;
+/**
+ * Extra half-width on each bifolding leaf toward the side jambs (inner meeting edge unchanged).
+ * Geometry only — fills the vertical slit at the frame.
+ */
+const CAB_DOOR_LEAF_OUTER_EDGE_EXTEND_M = 0.02;
 const CAR_INNER_MARGIN = 0.07;
 const CAR_CEIL_BELOW_SHAFT_TOP = 0.14;
 const FLOOR_BTN_DIA = 0.116;
@@ -495,7 +502,8 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   if (includeDoors) {
     doorL = new THREE.Group();
     doorR = new THREE.Group();
-    const leafW = doorW * 0.5 - 0.02;
+    const edge = CAB_DOOR_LEAF_OUTER_EDGE_EXTEND_M;
+    const leafW = doorW * 0.5 - 0.02 + 2 * edge;
     const leafGeom = new THREE.BoxGeometry(
       face === "e" || face === "w" ? DOOR_TH : leafW,
       DOOR_H,
@@ -514,9 +522,9 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
       face === "n" ? hz - DOOR_TH * 0.5 - 0.02 : face === "s" ? -hz + DOOR_TH * 0.5 + 0.02 : 0;
     const doorY = floorT + DOOR_H * 0.5 + 0.06;
     const t = doorSlideAxis(face);
-    const slide = THREE.MathUtils.lerp(0, DOOR_SLIDE_M, doorOpen01);
-    const tL = t.clone().multiplyScalar(-doorW * 0.25 - slide);
-    const tR = t.clone().multiplyScalar(doorW * 0.25 + slide);
+    const slide = THREE.MathUtils.lerp(-CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M, DOOR_SLIDE_M, doorOpen01);
+    const tL = t.clone().multiplyScalar(-doorW * 0.25 - slide - edge);
+    const tR = t.clone().multiplyScalar(doorW * 0.25 + slide + edge);
     doorL.position.set(
       doorX + (face === "n" || face === "s" ? tL.x : 0),
       doorY,

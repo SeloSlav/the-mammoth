@@ -310,9 +310,21 @@ pub fn tick_all_elevators(ctx: &ReducerContext, dt: f32) {
         let Some(mut row) = ctx.db.elevator_car().shaft_key().find(&k) else {
             continue;
         };
+        let prev_phase = row.phase;
         step_one_row(&mut row, dt);
         row.sample_server_micros = sample_server_micros(ctx);
+
+        let play_arrival = prev_phase == PH_MOVING && row.phase == PH_OPENING;
+        let arrival_x = row.plate_x;
+        let arrival_y = row.cab_floor_y + 1.15;
+        let arrival_z = row.plate_z;
+
         ctx.db.elevator_car().shaft_key().update(row);
+
+        // Travel finished: physics tick transitions MOVING → OPENING when move_u reaches 1.
+        if play_arrival {
+            world_sound::emit_elevator_cab_arrival_at(ctx, arrival_x, arrival_y, arrival_z);
+        }
     }
     tick_landing_exterior_doors(ctx, dt);
 }

@@ -36,6 +36,7 @@ import {
   type FpElevFloorPickUserData,
   type FpElevLandingHailPickUserData,
 } from "./fpElevatorConstants.js";
+import type { FpElevCabMotionAudioEmitter } from "./elevatorCabMotionAudio.js";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
@@ -54,6 +55,7 @@ import { createFpElevatorServerClock } from "./fpElevatorServerClock.js";
 import { FpElevatorShaftVisual } from "./fpElevatorShaftVisual.js";
 import { floorButtonLabel, type ElevatorDoorFace } from "./fpElevatorLabels.js";
 import {
+  fpElevBlocksHoistwayFullStackRevealPlateLocal,
   fpElevCarPanelDoorwayViewLocal,
   fpElevFeetInHoistwayColumnForFloorStack,
   fpElevFloorPickMeshesShouldShow,
@@ -107,6 +109,8 @@ export {
   fpElevatorPlateLocalClampBounds,
   fpElevatorPlateLocalInCabPhysicsVolume,
   fpElevatorRiderSnapContainsLocalPoint,
+  fpElevBlocksHoistwayFullStackRevealPlateLocal,
+  fpElevOnCabRoofDeckPlateLocal,
 } from "./fpElevatorVolumes.js";
 
 export type MountFpElevatorWorldOpts = {
@@ -312,6 +316,11 @@ export type MountFpElevatorWorldResult = {
     pz: number,
     nowMs: number,
   ): boolean;
+  /**
+   * World-space emitters for looping cab motion audio — one entry per shaft in
+   * {@link ELEVATOR_PHASE_MOVING}. Playback gates on vertical speed in `elevatorCabMotionAudio.sync`.
+   */
+  getCabMotionAudioEmitters(nowMs: number): readonly FpElevCabMotionAudioEmitter[];
 };
 
 function parseElevatorVisualDefs():
@@ -1349,17 +1358,32 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
         bandEyeWorldX !== undefined &&
         bandEyeWorldZ !== undefined &&
         hoistwayProbe(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ);
-      const feetInCab = isInsideCarHud(px, py, pz, key);
-      const eyeInCab =
+      /** HUD “inside cab” includes roof deck; exclude roof so hoistway stacks stay visible there. */
+      const lxFeet = px - (ox + row.plateX);
+      const lzFeet = pz - (oz + row.plateZ);
+      const feetBlockHoistReveal = fpElevBlocksHoistwayFullStackRevealPlateLocal(
+        lxFeet,
+        lzFeet,
+        py,
+        cabY,
+        vis.inner,
+      );
+      const eyeBlockHoistReveal =
         bandEyeWorldY !== undefined &&
         bandEyeWorldX !== undefined &&
         bandEyeWorldZ !== undefined &&
-        isInsideCarHud(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ, key);
+        fpElevBlocksHoistwayFullStackRevealPlateLocal(
+          bandEyeWorldX - (ox + row.plateX),
+          bandEyeWorldZ - (oz + row.plateZ),
+          bandEyeWorldY,
+          cabY,
+          vis.inner,
+        );
       if (
         doorOpen > DOOR_OPEN_REVEAL_THRESHOLD &&
         (feetInColumn || eyeInColumn) &&
-        !feetInCab &&
-        !eyeInCab
+        !feetBlockHoistReveal &&
+        !eyeBlockHoistReveal
       ) {
         revealFullStack = true;
         break;
@@ -1627,6 +1651,30 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
       }
     }
     return false;
+  };
+
+  const getCabMotionAudioEmitters = (
+    nowMs: number,
+  ): readonly FpElevCabMotionAudioEmitter[] => {
+    const out: FpElevCabMotionAudioEmitter[] = [];
+    for (const key of visuals.keys()) {
+      const row = latest.get(key);
+      const vis = visuals.get(key);
+      if (!row || !vis) continue;
+      if (row.phase !== ELEVATOR_PHASE_MOVING) continue;
+      const cabFeet = getCabY(key, nowMs);
+      if (!Number.isFinite(cabFeet)) continue;
+      const vy = getCabVerticalVelocityMps(key, nowMs);
+      const innerH = vis.inner.innerH;
+      out.push({
+        shaftKey: key,
+        worldX: ox + row.plateX,
+        worldY: cabFeet + innerH * 0.42,
+        worldZ: oz + row.plateZ,
+        vyMps: vy,
+      });
+    }
+    return out;
   };
 
   const tick = (_dtSec: number, nowMs: number, playerPos: THREE.Vector3) => {
@@ -1923,5 +1971,6 @@ export function mountFpElevatorWorld(opts: MountFpElevatorWorldOpts): MountFpEle
     sampleRideDebug,
     getHudMovingCabVyMps,
     ignoreSmallPoseReconcileWhileMovingElevatorRider,
+    getCabMotionAudioEmitters,
   };
 }

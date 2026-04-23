@@ -2,8 +2,8 @@
  * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for footsteps, melee weapon swings,
  * pickups, hotbar consume (eat / drink), and elevator UI. The emitter skips **most** of their own rows
  * (footsteps / swings / pickup / consume have immediate or local paths in {@link LocalGameAudio}).
- * Elevator floor / hail presses and landing corridor door toggles use **only** this path so the
- * actor hears the same spatial cue as observers.
+ * Elevator floor / hail presses, landing corridor door toggles, and cab arrival use **only** this path
+ * so observers (and riders when applicable) hear the same spatial cue.
  */
 
 import * as THREE from "three";
@@ -39,6 +39,8 @@ export const WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL = 6;
 export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN = 7;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_LANDING_EXTERIOR_DOOR_CLOSE`. */
 export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE = 8;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_CAB_ARRIVAL`. */
+export const WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL = 9;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -48,6 +50,7 @@ const ELEVATOR_FLOOR_BUTTON_STEM = `${UI_STEM}/elevator-floor-button` as const;
 const ELEVATOR_LANDING_HAIL_STEM = `${UI_STEM}/elevator-hail` as const;
 const DOOR_OPEN_STEM = `${UI_STEM}/door-open` as const;
 const DOOR_CLOSE_STEM = `${UI_STEM}/door-close` as const;
+const ELEVATOR_CAB_ARRIVAL_STEM = `${UI_STEM}/elevator-arrival` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -64,11 +67,14 @@ export class WorldProximityAudio {
   private elevatorLandingHailBuffer: AudioBuffer | null = null;
   private doorOpenBuffer: AudioBuffer | null = null;
   private doorCloseBuffer: AudioBuffer | null = null;
+  private elevatorCabArrivalBuffer: AudioBuffer | null = null;
   /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
   private pendingRows: WorldSoundEvent[] = [];
   private static readonly PENDING_CAP = 64;
   private soundSub: SubscriptionHandle | null = null;
   private readonly sourceCache = new Map<string, Promise<string | null>>();
+  /** For distance cull — `Camera.position` is local; event `x,y,z` are world. */
+  private readonly _camWorld = new THREE.Vector3();
 
   constructor(
     private readonly conn: DbConnection,
@@ -114,6 +120,7 @@ export class WorldProximityAudio {
     this.elevatorLandingHailBuffer = await this.decodeSingleStem(ctx, ELEVATOR_LANDING_HAIL_STEM);
     this.doorOpenBuffer = await this.decodeSingleStem(ctx, DOOR_OPEN_STEM);
     this.doorCloseBuffer = await this.decodeSingleStem(ctx, DOOR_CLOSE_STEM);
+    this.elevatorCabArrivalBuffer = await this.decodeSingleStem(ctx, ELEVATOR_CAB_ARRIVAL_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -203,6 +210,7 @@ export class WorldProximityAudio {
     this.elevatorLandingHailBuffer = null;
     this.doorOpenBuffer = null;
     this.doorCloseBuffer = null;
+    this.elevatorCabArrivalBuffer = null;
     this.pendingRows.length = 0;
     this.sourceCache.clear();
   }
@@ -227,7 +235,8 @@ export class WorldProximityAudio {
         row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||
         row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
         row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
-        row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE;
+        row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
+        row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL;
       if (!hearOwnSpatial) return;
     }
 
@@ -264,15 +273,20 @@ export class WorldProximityAudio {
     } else if (row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE) {
       if (!this.doorCloseBuffer) return;
       buf = this.doorCloseBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL) {
+      if (!this.elevatorCabArrivalBuffer) return;
+      buf = this.elevatorCabArrivalBuffer;
     } else {
       return;
     }
 
     const t = ctx.currentTime;
     const cam = this.getCamera();
-    const lx = cam.position.x;
-    const ly = cam.position.y;
-    const lz = cam.position.z;
+    cam.updateMatrixWorld(true);
+    cam.getWorldPosition(this._camWorld);
+    const lx = this._camWorld.x;
+    const ly = this._camWorld.y;
+    const lz = this._camWorld.z;
     const d = Math.hypot(row.x - lx, row.y - ly, row.z - lz);
     if (d > row.maxDistanceM * 1.08) return;
 
@@ -303,7 +317,8 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||
       row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
-      row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE
+      row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
+      row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL
     ) {
       src.playbackRate.value = 0.99 + Math.random() * 0.04;
     }

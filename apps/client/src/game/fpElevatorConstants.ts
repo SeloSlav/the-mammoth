@@ -7,6 +7,8 @@ export const DOOR_W = EXTERIOR_DOOR_W_M;
 export const DOOR_H = 2.05;
 export const DOOR_TH = 0.07;
 export const DOOR_SLIDE_M = 0.82;
+/** Extra inward slide at fully closed (`doorOpen01 === 0`) to hide the bifolding seam — visual-only. */
+export const CAB_SLIDING_DOOR_CLOSED_OVERLAP_SLIDE_M = 0.014;
 export const CAR_INNER_MARGIN = 0.07;
 export const CAR_CEIL_BELOW_SHAFT_TOP = 0.14;
 /** Must match server `elevator::CALL_R_XZ` within a few cm (landing pad vs hail reducer). */
