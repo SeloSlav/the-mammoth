@@ -144,6 +144,10 @@ function createStairWellMaterials(def: StairWellDef | undefined): StairWellMater
   stripArchitecturalDetailMaps(floor, { metalness: 0.02 });
   stripArchitecturalDetailMaps(tread, { metalness: 0.02 });
   stripArchitecturalDetailMaps(landing, { metalness: 0.02 });
+  /** Stairwells read too glossy under exterior fill — bias rougher than corridor vinyl / plaster. */
+  tread.roughness = Math.min(1, tread.roughness + 0.07);
+  landing.roughness = Math.min(1, landing.roughness + 0.06);
+  floor.roughness = Math.min(1, floor.roughness + 0.06);
   return { wall, floor, tread, landing, railing };
 }
 

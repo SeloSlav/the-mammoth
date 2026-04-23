@@ -27,7 +27,10 @@ import {
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
-import { createFpSessionStaticWorld } from "./fpSessionWorldMount";
+import {
+  createFpSessionStaticWorld,
+  type FpStairShaftInteriorLightBounds,
+} from "./fpSessionWorldMount";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSessionRemotePoseFeed";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 import {
@@ -126,6 +129,36 @@ const clampTinyDisplayOffsetComponents = (v: THREE.Vector3) => {
   if (Math.abs(v.y) < 1e-5) v.y = 0;
   if (Math.abs(v.z) < 1e-5) v.z = 0;
 };
+
+function fpSampleStairwellInteriorDarkTarget(
+  x: number,
+  y: number,
+  z: number,
+  bounds: readonly FpStairShaftInteriorLightBounds[],
+): number {
+  for (const b of bounds) {
+    if (
+      x >= b.minX &&
+      x <= b.maxX &&
+      y >= b.minY &&
+      y <= b.maxY &&
+      z >= b.minZ &&
+      z <= b.maxZ
+    ) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+function fpExpSmoothToward(current: number, target: number, dtSec: number, halfLifeSec: number): number {
+  if (halfLifeSec <= 1e-6) return target;
+  const a = 1 - Math.pow(0.5, dtSec / halfLifeSec);
+  return current + (target - current) * a;
+}
+
+const STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC = 0.22;
+
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**
@@ -233,6 +266,7 @@ export async function mountFpSession(
     cellRoot,
     staticCollisionIndex,
     sampleWalkTopBase,
+    stairShaftInteriorLightBounds,
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
@@ -2395,6 +2429,7 @@ export async function mountFpSession(
 
   let raf = 0;
   let lastFrameMs = performance.now();
+  let stairwellInteriorDarkSmoothed = 0;
 
   /**
    * Single RAF driver for the whole FP session. Chrome’s “[Violation] requestAnimationFrame
@@ -2696,6 +2731,18 @@ export async function mountFpSession(
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
     syncBuildingFloorPlateVisibility(nowMs);
+    const darkTarget = fpSampleStairwellInteriorDarkTarget(
+      _floorVisCamWorld.x,
+      _floorVisCamWorld.y,
+      _floorVisCamWorld.z,
+      stairShaftInteriorLightBounds,
+    );
+    stairwellInteriorDarkSmoothed = fpExpSmoothToward(
+      stairwellInteriorDarkSmoothed,
+      darkTarget,
+      dt,
+      STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
+    );
     /**
      * Runs every frame (not just band-change frames) because door openness mutates without shifting
      * the plate band. The call is idempotent — each shaft visual no-ops when its landing
@@ -2719,6 +2766,7 @@ export async function mountFpSession(
       nowSec: nowMs * 0.001,
       viewWidthPx: canvas.clientWidth,
       viewHeightPx: canvas.clientHeight,
+      stairwellInteriorDark01: stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();
     renderer.render(scene, camera);

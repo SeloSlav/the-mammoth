@@ -13,6 +13,7 @@ import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
+  getBuildingStairShaftSpecs,
   instantiateBuildingFloorStack,
   parseBuildingDoc,
   parseCellDoc,
@@ -20,6 +21,7 @@ import {
   parseStairWellDef,
   sampleRuntimeStairSupportTopY,
   walkSurfaceAabbXZFootprint,
+  type BuildingStairShaftSpec,
 } from "@the-mammoth/world";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../content/building/mammoth.json";
@@ -52,6 +54,36 @@ function cloneGeometryForMerge(
   return g;
 }
 
+/** Expanded stair-shaft AABB for FP mood lighting (XZ pad eats a slice of corridor at door thresholds). */
+export type FpStairShaftInteriorLightBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+};
+
+const STAIR_SHAFT_LIGHT_XZ_PAD_M = 2.85;
+const STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M = 0.55;
+const STAIR_SHAFT_LIGHT_Y_PAD_TOP_M = 3.5;
+
+function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpStairShaftInteriorLightBounds {
+  const hw = s.sx * 0.5 + STAIR_SHAFT_LIGHT_XZ_PAD_M;
+  const hd = s.sz * 0.5 + STAIR_SHAFT_LIGHT_XZ_PAD_M;
+  const minY = s.bottomY - STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M;
+  const maxY =
+    s.bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_LIGHT_Y_PAD_TOP_M;
+  return {
+    minX: s.px - hw,
+    maxX: s.px + hw,
+    minY,
+    maxY,
+    minZ: s.pz - hd,
+    maxZ: s.pz + hd,
+  };
+}
+
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
@@ -62,6 +94,8 @@ export type FpSessionStaticWorld = {
   }[];
   staticCollisionIndex: ReturnType<typeof buildCollisionSpatialIndex>;
   sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
+  /** World boxes for stair shafts (+ corridor threshold) — FP dims fill lights when camera is inside. */
+  stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
 };
 
 export function createFpSessionStaticWorld(): FpSessionStaticWorld {
@@ -127,6 +161,15 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     stairWellDef,
   });
 
+  const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+  const stairSpecs = getBuildingStairShaftSpecs(
+    building,
+    getFloorDoc,
+    sortedFloorRefs,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
+
   // Merge all static geometry within each floor plate into one mesh per material.
   // Reduces draw calls from ~100+/floor to ~13/floor — the single largest render perf win.
   // Floor plate visibility (mammothPlateLevelIndex) is preserved on the group itself.
@@ -141,6 +184,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     staticCollisionSolids: blockerAABBs,
     staticCollisionIndex,
     sampleWalkTopBase,
+    stairShaftInteriorLightBounds,
   };
 }
 

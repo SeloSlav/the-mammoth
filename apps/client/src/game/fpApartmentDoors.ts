@@ -185,7 +185,7 @@ type DoorSlot = {
   level: number;
   face: SwingDoorFace;
   baseYaw: number;
-  /** True for unit doors (inward); false for corridor→stairwell / shaft exits (outward). */
+  /** All templates swing inward about the hinge (including glazed corridor→stair / shaft exits). */
   swingInward: boolean;
   /** Cached `swingDoorEffectiveSwingSign(face, swingInward)` for {@link applyMatrix}. */
   effectiveSwingSign: 1 | -1;

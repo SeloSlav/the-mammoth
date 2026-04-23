@@ -160,6 +160,11 @@ export type FpSessionEnvironmentHandle = {
     nowSec: number;
     viewWidthPx: number;
     viewHeightPx: number;
+    /**
+     * 0 = normal exterior fill; 1 = apply full stair-shaft interior dimming (smooth blend in
+     * {@link mountFpSession}).
+     */
+    stairwellInteriorDark01?: number;
   }) => void;
 };
 
@@ -436,9 +441,15 @@ export function attachFpSessionEnvironment(
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
 
-  const hemi = new THREE.HemisphereLight(0xd2d6dc, 0xb0b6be, 0.82);
-  const fill = new THREE.AmbientLight(0xd0d4da, 0.3);
-  const dir = new THREE.DirectionalLight(0xe0e2e6, 0.78);
+  const BASE_HEMI_INTENSITY = 0.82;
+  const BASE_FILL_INTENSITY = 0.3;
+  const BASE_DIR_INTENSITY = 0.78;
+  /** Multiplies sun fill when `stairwellInteriorDark01` is 1 — keeps stairwells moody vs bright corridors. */
+  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.48;
+
+  const hemi = new THREE.HemisphereLight(0xd2d6dc, 0xb0b6be, BASE_HEMI_INTENSITY);
+  const fill = new THREE.AmbientLight(0xd0d4da, BASE_FILL_INTENSITY);
+  const dir = new THREE.DirectionalLight(0xe0e2e6, BASE_DIR_INTENSITY);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
   scene.add(hemi, fill, dir);
 
@@ -448,11 +459,18 @@ export function attachFpSessionEnvironment(
   };
 
   return {
-    onFrame: ({ camera, nowSec, viewWidthPx, viewHeightPx }) => {
+    onFrame: ({ camera, nowSec, viewWidthPx, viewHeightPx, stairwellInteriorDark01 = 0 }) => {
       sky.updateTime(nowSec);
       sky.updateSun(sunDir);
       sky.updateCamera(camera);
       sky.updateResolution(viewWidthPx, viewHeightPx);
+
+      const dark01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
+      const scale = THREE.MathUtils.lerp(1, STAIRWELL_INTERIOR_LIGHT_SCALE, dark01);
+      hemi.intensity = BASE_HEMI_INTENSITY * scale;
+      fill.intensity = BASE_FILL_INTENSITY * scale;
+      dir.intensity = BASE_DIR_INTENSITY * scale;
+      dir.position.copy(sunDir).multiplyScalar(120);
     },
     dispose: () => {
       scene.background = null;

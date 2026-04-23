@@ -172,12 +172,13 @@ export function isGlazedApartmentDoorTemplate(templateId: string): boolean {
 }
 
 /**
- * Whether the leaf rotates the “inward” way about the authored hinge (into the private side).
- * Corridor→stairwell and stair-shaft exit doors use the same hinge placement as units but swing
- * **outward** into shared space so the open leaf does not block the stair landings.
+ * Whether the leaf rotates the “inward” way about the authored hinge (same hinge line as before:
+ * mirrors the corridor-side outward convention by negating effective swing sign). Glazed corridor→stairwell
+ * and shaft-exit leaves included — they swing into the stair shaft instead of blocking the corridor.
  */
 export function apartmentDoorSwingInwardForTemplateId(templateId: string): boolean {
-  return !isGlazedApartmentDoorTemplate(templateId);
+  void templateId;
+  return true;
 }
 
 /** Drives FP “Press E …” copy — unit entries vs corridor vs shaft façade doors. */
