@@ -7,9 +7,10 @@ import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
 import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
 
 const REMOTE_PLAYER_MODEL_URI = "/static/models/players/male.glb";
-const REMOTE_PLAYER_TARGET_HEIGHT_M = 1.78;
 const REMOTE_PLAYER_YAW_OFFSET_RAD = Math.PI;
 const REMOTE_PLAYER_TRANSITION_SEC = 0.18;
+const LOCAL_MIRROR_BODY_FORWARD_OFFSET_M = 0.12;
+const LOCAL_MIRROR_BODY_DOWN_OFFSET_M = 0.02;
 const REMOTE_PLAYER_CLIP_NAMES = {
   idle: "Idle",
   walk: "Walking",
@@ -24,6 +25,17 @@ let remotePlayerTemplatePromise:
 let remotePlayerTemplate:
   | { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }
   | null = null;
+
+function sanitizeRemotePlayerClip(clip: THREE.AnimationClip): THREE.AnimationClip {
+  /**
+   * The shipped body GLB contains scale keys on multiple bones, and `Idle` notably drives
+   * `Hips.scale` above 1.0. That makes the whole avatar visibly grow/shrink when transitioning
+   * between idle and locomotion. Third-person gameplay should preserve a stable silhouette, so
+   * strip skeletal scale animation and keep only translation/rotation.
+   */
+  const tracks = clip.tracks.filter((track) => !track.name.endsWith(".scale"));
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
 
 function cloneRemotePlayerScene(template: THREE.Object3D): THREE.Object3D {
   const root = cloneSkeleton(template);
@@ -41,15 +53,15 @@ function cloneRemotePlayerScene(template: THREE.Object3D): THREE.Object3D {
 }
 
 function normalizeRemotePlayerModel(model: THREE.Object3D): void {
+  /**
+   * `male.glb` already bakes the correct cm->m conversion on the armature root (`Armature.scale = 0.01`).
+   * Scaling the cloned scene again blows up animated hip translations (`~95` authored cm keys become
+   * tens of world meters once multiplied by the extra root scale), which is why remote players read as
+   * building-sized giants. Keep authored scale; only recenter the scene so feet stay on Y=0.
+   */
   const box = new THREE.Box3().setFromObject(model);
-  const size = box.getSize(new THREE.Vector3());
-  if (!Number.isFinite(size.y) || size.y <= 0.001) return;
-  const uniformScale = REMOTE_PLAYER_TARGET_HEIGHT_M / size.y;
-  model.scale.setScalar(uniformScale);
-  model.updateMatrixWorld(true);
-  const scaledBox = new THREE.Box3().setFromObject(model);
-  const center = scaledBox.getCenter(new THREE.Vector3());
-  model.position.set(-center.x, -scaledBox.min.y, -center.z);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.set(-center.x, -box.min.y, -center.z);
   model.updateMatrixWorld(true);
 }
 
@@ -121,6 +133,15 @@ class AnimatedRemotePlayerBody {
     this.root.visible = visible;
   }
 
+  collapseHeadForMirrorSelf(): void {
+    for (const name of ["Head", "headfront", "head_end"]) {
+      const node = this.modelRoot.getObjectByName(name);
+      if (!node) continue;
+      node.scale.setScalar(0.001);
+      node.updateMatrixWorld(true);
+    }
+  }
+
   syncTransform(position: { x: number; y: number; z: number }, yawRad: number): void {
     this.root.position.set(position.x, position.y, position.z);
     this.root.rotation.y = yawRad + REMOTE_PLAYER_YAW_OFFSET_RAD;
@@ -162,7 +183,7 @@ export async function preloadRemotePlayerBody(): Promise<void> {
       .loadAsync(REMOTE_PLAYER_MODEL_URI)
       .then((gltf) => ({
         scene: gltf.scene,
-        animations: gltf.animations,
+        animations: gltf.animations.map(sanitizeRemotePlayerClip),
       }));
   }
   remotePlayerTemplate = await remotePlayerTemplatePromise;
@@ -192,6 +213,10 @@ class WorldPlayerBodyPresenter {
 
   setVisible(visible: boolean): void {
     this.body.setVisible(visible);
+  }
+
+  collapseHeadForMirrorSelf(): void {
+    this.body.collapseHeadForMirrorSelf();
   }
 
   dispose(scene: THREE.Scene): void {
@@ -230,17 +255,24 @@ export class RemotePlayerPresenter {
 export class LocalMirrorPlayerPresenter {
   readonly root: THREE.Group;
   private readonly presenter: WorldPlayerBodyPresenter;
+  private readonly mirrorPosition = new THREE.Vector3();
 
   constructor(scene: THREE.Scene) {
     this.presenter = new WorldPlayerBodyPresenter(scene);
     this.root = this.presenter.root;
     this.presenter.setVisible(false);
+    this.presenter.collapseHeadForMirrorSelf();
   }
 
   updateFromLocalState(state: LocalPlayerGameplayState, dt: number): void {
+    this.mirrorPosition.set(
+      state.position.x - Math.sin(state.yawRad) * LOCAL_MIRROR_BODY_FORWARD_OFFSET_M,
+      state.position.y - LOCAL_MIRROR_BODY_DOWN_OFFSET_M,
+      state.position.z - Math.cos(state.yawRad) * LOCAL_MIRROR_BODY_FORWARD_OFFSET_M,
+    );
     this.presenter.updateFromPose(
       {
-        position: state.position,
+        position: this.mirrorPosition,
         yawRad: state.yawRad,
         locomotion: state.locomotion,
         grounded: state.grounded,

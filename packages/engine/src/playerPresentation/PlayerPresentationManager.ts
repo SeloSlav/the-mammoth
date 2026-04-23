@@ -127,6 +127,10 @@ export class PlayerPresentationManager {
     this.localMirror.setVisible(visible);
   }
 
+  setLocalMirrorAvatarLayer(layer: number): void {
+    this.localMirror.root.traverse((obj) => obj.layers.set(layer));
+  }
+
   /** Dev / tools: freeze FP viewmodel motion so gizmos stay stable under the gameplay camera. */
   setFpAuthoringFrozen(frozen: boolean): void {
     this.local.setAuthoringFrozen(frozen);

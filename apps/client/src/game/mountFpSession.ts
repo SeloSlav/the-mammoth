@@ -217,6 +217,8 @@ function installMmWallProbeLoadingStub(): void {
 
 /** PBR shell + large static merges: shading cost grows ~pixelRatio²; `1` keeps fill-rate predictable on DPR>1 laptops. */
 const FP_SESSION_MAX_PIXEL_RATIO = 1;
+const FP_VIEWMODEL_RENDER_LAYER = 1;
+const FP_MIRROR_SELF_RENDER_LAYER = 2;
 
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
@@ -439,6 +441,10 @@ export async function mountFpSession(
   const cabMirrors: FpPlanarMirror[] = cabMirrorPlaceholders.map((mesh) =>
     createFpPlanarMirrorFromPlaceholder(mesh),
   );
+  headPitch.traverse((obj) => obj.layers.set(FP_VIEWMODEL_RENDER_LAYER));
+  camera.layers.enable(FP_VIEWMODEL_RENDER_LAYER);
+  presentation.setLocalMirrorAvatarLayer(FP_MIRROR_SELF_RENDER_LAYER);
+  presentation.setLocalMirrorAvatarVisible(true);
 
   const fpAuthoringActiveRef = { active: false };
   const disposeFpAuthoring = mountFpViewmodelAuthoringDevOnly({
@@ -2862,19 +2868,12 @@ export async function mountFpSession(
     });
     const _t_afterFpEnv = performance.now();
     for (const mirror of cabMirrors) {
-      let headPitchWasVisible = false;
-      mirror.render({
-        renderer,
-        scene,
+      mirror.syncForCamera({
         camera,
-        beforeMirrorRender: () => {
-          headPitchWasVisible = headPitch.visible;
-          headPitch.visible = false;
-          presentation.setLocalMirrorAvatarVisible(true);
-        },
-        afterMirrorRender: () => {
-          presentation.setLocalMirrorAvatarVisible(false);
-          headPitch.visible = headPitchWasVisible;
+        configureVirtualCamera: (virtualCamera) => {
+          virtualCamera.layers.mask = camera.layers.mask;
+          virtualCamera.layers.disable(FP_VIEWMODEL_RENDER_LAYER);
+          virtualCamera.layers.enable(FP_MIRROR_SELF_RENDER_LAYER);
         },
       });
     }

@@ -515,16 +515,63 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
     roughness: 0.04,
     metalness: 0.02,
   });
-  const mirrorBacker = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      CAB_MIRROR_W + CAB_MIRROR_FRAME_OVERHANG_M * 2,
-      CAB_MIRROR_H + CAB_MIRROR_FRAME_OVERHANG_M * 2,
-      CAB_MIRROR_FRAME_THICKNESS_M,
-    ),
-    mirrorFrameMat,
+  const mirrorFrame = new THREE.Group();
+  mirrorFrame.name = "cab_mirror_frame";
+  mirrorFrame.userData.editorCabPartId = "cab_mirror_frame";
+  const mirrorFrameOuterW = CAB_MIRROR_W + CAB_MIRROR_FRAME_OVERHANG_M * 2;
+  const mirrorFrameOuterH = CAB_MIRROR_H + CAB_MIRROR_FRAME_OVERHANG_M * 2;
+  const mirrorFrameBarW = CAB_MIRROR_FRAME_OVERHANG_M;
+  const addMirrorFrameBar = (
+    name: string,
+    sx: number,
+    sy: number,
+    sz: number,
+    x: number,
+    y: number,
+    z: number,
+  ) => {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mirrorFrameMat);
+    bar.name = name;
+    bar.userData.editorCabPartId = "cab_mirror_frame";
+    bar.position.set(x, y, z);
+    mirrorFrame.add(bar);
+  };
+  addMirrorFrameBar(
+    "cab_mirror_frame_top",
+    mirrorFrameOuterW,
+    mirrorFrameBarW,
+    CAB_MIRROR_FRAME_THICKNESS_M,
+    0,
+    (CAB_MIRROR_H + mirrorFrameBarW) * 0.5,
+    0,
   );
-  mirrorBacker.name = "cab_mirror_frame";
-  mirrorBacker.userData.editorCabPartId = "cab_mirror_frame";
+  addMirrorFrameBar(
+    "cab_mirror_frame_bottom",
+    mirrorFrameOuterW,
+    mirrorFrameBarW,
+    CAB_MIRROR_FRAME_THICKNESS_M,
+    0,
+    -(CAB_MIRROR_H + mirrorFrameBarW) * 0.5,
+    0,
+  );
+  addMirrorFrameBar(
+    "cab_mirror_frame_left",
+    mirrorFrameBarW,
+    CAB_MIRROR_H,
+    CAB_MIRROR_FRAME_THICKNESS_M,
+    -(CAB_MIRROR_W + mirrorFrameBarW) * 0.5,
+    0,
+    0,
+  );
+  addMirrorFrameBar(
+    "cab_mirror_frame_right",
+    mirrorFrameBarW,
+    CAB_MIRROR_H,
+    CAB_MIRROR_FRAME_THICKNESS_M,
+    (CAB_MIRROR_W + mirrorFrameBarW) * 0.5,
+    0,
+    0,
+  );
   const mirrorSurface = new THREE.Mesh(
     new THREE.PlaneGeometry(CAB_MIRROR_W, CAB_MIRROR_H),
     mirrorSurfaceMat,
@@ -536,27 +583,27 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   if (face === "e" || face === "w") {
     const mirrorZ = hz - wallT - mirrorFlushInset;
     const mirrorX = 0;
-    mirrorBacker.position.set(
+    mirrorFrame.position.set(
       mirrorX,
       CAB_MIRROR_CENTER_Y,
-      mirrorZ - CAB_MIRROR_FRAME_THICKNESS_M * 0.5 - CAB_MIRROR_SURFACE_GAP_M,
+      mirrorZ - CAB_MIRROR_FRAME_THICKNESS_M * 0.5,
     );
-    mirrorBacker.rotation.y = Math.PI;
+    mirrorFrame.rotation.y = Math.PI;
     mirrorSurface.position.set(mirrorX, CAB_MIRROR_CENTER_Y, mirrorZ);
     mirrorSurface.rotation.y = Math.PI;
   } else {
     const mirrorX = hx - wallT - mirrorFlushInset;
     const mirrorZ = 0;
-    mirrorBacker.position.set(
-      mirrorX - CAB_MIRROR_FRAME_THICKNESS_M * 0.5 - CAB_MIRROR_SURFACE_GAP_M,
+    mirrorFrame.position.set(
+      mirrorX - CAB_MIRROR_FRAME_THICKNESS_M * 0.5,
       CAB_MIRROR_CENTER_Y,
       mirrorZ,
     );
-    mirrorBacker.rotation.y = Math.PI * 0.5;
+    mirrorFrame.rotation.y = Math.PI * 0.5;
     mirrorSurface.position.set(mirrorX, CAB_MIRROR_CENTER_Y, mirrorZ);
     mirrorSurface.rotation.y = -Math.PI * 0.5;
   }
-  root.add(mirrorBacker);
+  root.add(mirrorFrame);
   root.add(mirrorSurface);
   if (includeDoors) {
     doorL = new THREE.Group();
