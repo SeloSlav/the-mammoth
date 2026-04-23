@@ -1,10 +1,11 @@
 import * as THREE from "three";
 
 /**
- * Meters per texture repeat on stair tread PBR maps. Tuned for ~0.25–0.35 m tread boards so the
- * albedo does not smear across the wide walking surface (default box UVs stretch per-face).
+ * Meters per texture repeat on stair tread PBR maps. Larger values stretch the texture (fewer
+ * ribs/grooves per tread); smaller values tile tighter. Raised for patina tread albedo where one
+ * texture period packs several horizontal grooves — we want ~1–2 ribs visible per tread depth.
  */
-export const STAIR_TREAD_UV_METERS_PER_TILE = 0.38;
+export const STAIR_TREAD_UV_METERS_PER_TILE = 1.95;
 
 /**
  * Replaces UVs on a box so each face maps **position / metersPerTile** (RepeatWrapping textures

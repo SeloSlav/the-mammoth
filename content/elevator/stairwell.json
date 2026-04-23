@@ -3,13 +3,10 @@
   "version": 1,
   "materials": {
     "wall": {
-      "roughness": 1,
+      "roughness": 0.93,
       "metalness": 1,
-      "mapUrl": "/static/materials/stairwell/patina-wall/basecolor.png",
-      "normalMapUrl": "/static/materials/stairwell/patina-wall/normal.png",
-      "roughnessMapUrl": "/static/materials/stairwell/patina-wall/roughness.png",
-      "metalnessMapUrl": "/static/materials/stairwell/patina-wall/metalness.png",
-      "bumpMapUrl": "/static/materials/stairwell/patina-wall/height.png"
+      "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+      "normalMapUrl": "/static/materials/apartment-unit-interior/normal.png"
     },
     "floor": {
       "roughness": 1,
@@ -171,7 +168,7 @@
     "stair_flight_upper": {
       "position": [
         0.05360051164868324,
-        0.08511568801156899,
+        0.07414638708599586,
         -0.07841433029293754
       ],
       "scale": [

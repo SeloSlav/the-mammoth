@@ -27,6 +27,7 @@ import {
 import {
   concreteMaterial,
   exteriorConcreteWallMaterial,
+  floorPlaceholderMeshMaterials,
   interiorConcreteFloorShellMaterial,
 } from "./floorPlaceholderMeshMaterials.js";
 import { createStairTreadBoxGeometry } from "./stairTreadUv.js";
@@ -93,8 +94,8 @@ function stairWellHasFloorSlab(scope: StairWellAuthoringScope): boolean {
 
 /**
  * World-metric shaft wall UVs use unbounded planar U (see {@link applyWorldMetricUvsToAxisAlignedBoxMesh}).
- * Negating U mirrors the authored concrete along each interior wall so alternating storeys do not
- * read as a single repeating tile phase up the full-height column.
+ * Negating U mirrors plaster along each interior wall so alternating storeys do not read as a single
+ * repeating tile phase up the full-height column.
  */
 function negateWorldMetricUvUForShaftInteriorWalls(root: THREE.Object3D, wallMat: THREE.Material): void {
   root.traverse((obj) => {
@@ -116,7 +117,8 @@ function negateWorldMetricUvUForShaftInteriorWalls(root: THREE.Object3D, wallMat
 }
 
 function createStairWellMaterials(def: StairWellDef | undefined): StairWellMaterialSet {
-  const wall = concreteMaterial(0xd7dce2);
+  /** Same white plaster PBR as apartment unit interior walls (`matsFor("unit").wall`). */
+  const wall = floorPlaceholderMeshMaterials.unitWall.clone();
   const floor = interiorConcreteFloorShellMaterial.clone();
   const tread = new THREE.MeshStandardMaterial({
     color: 0xc5cad2,
@@ -138,7 +140,7 @@ function createStairWellMaterials(def: StairWellDef | undefined): StairWellMater
   applyCabMaterialSlot(tread, def?.materials?.tread);
   applyCabMaterialSlot(landing, def?.materials?.landing);
   applyCabMaterialSlot(railing, def?.materials?.railing);
-  stripArchitecturalDetailMaps(wall, { metalness: 0.02 });
+  stripArchitecturalDetailMaps(wall, { metalness: 0.02, stripRoughnessMap: true });
   stripArchitecturalDetailMaps(floor, { metalness: 0.02 });
   stripArchitecturalDetailMaps(tread, { metalness: 0.02 });
   stripArchitecturalDetailMaps(landing, { metalness: 0.02 });
