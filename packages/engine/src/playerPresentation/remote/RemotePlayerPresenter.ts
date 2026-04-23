@@ -11,6 +11,9 @@ const REMOTE_PLAYER_YAW_OFFSET_RAD = Math.PI;
 const REMOTE_PLAYER_TRANSITION_SEC = 0.18;
 const LOCAL_MIRROR_BODY_FORWARD_OFFSET_M = 0.12;
 const LOCAL_MIRROR_BODY_DOWN_OFFSET_M = 0.02;
+const REMOTE_PLAYER_ENV_INTENSITY = 0.35;
+const REMOTE_PLAYER_MIN_ROUGHNESS = 0.82;
+const REMOTE_PLAYER_MAX_METALNESS = 0.04;
 const REMOTE_PLAYER_CLIP_NAMES = {
   idle: "Idle",
   walk: "Walking",
@@ -47,9 +50,31 @@ function cloneRemotePlayerScene(template: THREE.Object3D): THREE.Object3D {
     mesh.frustumCulled = false;
     mesh.geometry = mesh.geometry.clone();
     const mat = mesh.material;
-    mesh.material = Array.isArray(mat) ? mat.map((entry) => entry.clone()) : mat.clone();
+    mesh.material = Array.isArray(mat)
+      ? mat.map((entry) => tuneRemotePlayerMaterial(entry.clone()))
+      : tuneRemotePlayerMaterial(mat.clone());
   });
   return root;
+}
+
+function tuneRemotePlayerMaterial<T extends THREE.Material>(material: T): T {
+  if (
+    material instanceof THREE.MeshStandardMaterial ||
+    material instanceof THREE.MeshPhysicalMaterial
+  ) {
+    /**
+     * The authored GLB reads far glossier than the building shell under the session's muted
+     * overcast lighting + environment map. Keep its albedo/normal detail, but bias the imported
+     * body materials toward matte dielectric values so remotes sit in the same lighting family as
+     * the world instead of reflecting like polished plastic.
+     */
+    material.envMapIntensity = Math.min(material.envMapIntensity ?? 1, REMOTE_PLAYER_ENV_INTENSITY);
+    material.metalnessMap = null;
+    material.metalness = Math.min(material.metalness, REMOTE_PLAYER_MAX_METALNESS);
+    material.roughness = Math.max(material.roughness, REMOTE_PLAYER_MIN_ROUGHNESS);
+    material.needsUpdate = true;
+  }
+  return material;
 }
 
 function normalizeRemotePlayerModel(model: THREE.Object3D): void {

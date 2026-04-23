@@ -28,6 +28,11 @@ import {
   fpCameraOrFeetNearBuildingFootprintXZ,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 import {
+  POSE_AOI_RECENTER_Y_M,
+  POSE_AOI_Y_HALF_M,
+  shouldRenderRemotePlayer,
+} from "./remotePlayerVisibility.js";
+import {
   createFpSessionStaticWorld,
   type FpStairShaftInteriorLightBounds,
 } from "./fpSessionWorldMount";
@@ -2179,9 +2184,10 @@ export async function mountFpSession(
 
   let poseAoiSub: SubscriptionHandle | null = null;
   let poseAoiAnchorX = pos.x;
+  let poseAoiAnchorY = pos.y;
   let poseAoiAnchorZ = pos.z;
 
-  const subscribePoseAoi = (cx: number, cz: number) => {
+  const subscribePoseAoi = (cx: number, cy: number, cz: number) => {
     const selfId = conn.identity;
     if (!selfId) return;
     if (poseAoiSub?.isActive()) {
@@ -2189,12 +2195,21 @@ export async function mountFpSession(
     }
     const x0 = cx - POSE_AOI_HALF;
     const x1 = cx + POSE_AOI_HALF;
+    const y0 = cy - POSE_AOI_Y_HALF_M;
+    const y1 = cy + POSE_AOI_Y_HALF_M;
     const z0 = cz - POSE_AOI_HALF;
     const z1 = cz + POSE_AOI_HALF;
     const query = tables.player_pose.where((r) =>
       or(
         r.identity.eq(selfId),
-        and(r.x.gte(x0), r.x.lte(x1), r.z.gte(z0), r.z.lte(z1)),
+        and(
+          r.x.gte(x0),
+          r.x.lte(x1),
+          r.y.gte(y0),
+          r.y.lte(y1),
+          r.z.gte(z0),
+          r.z.lte(z1),
+        ),
       ),
     );
     poseAoiSub = conn
@@ -2204,12 +2219,13 @@ export async function mountFpSession(
       })
       .subscribe(query);
     poseAoiAnchorX = cx;
+    poseAoiAnchorY = cy;
     poseAoiAnchorZ = cz;
     refreshWorldSoundSubscription();
     droppedWorld.subscribeAoi(cx, cz);
   };
 
-  subscribePoseAoi(poseAoiAnchorX, poseAoiAnchorZ);
+  subscribePoseAoi(poseAoiAnchorX, poseAoiAnchorY, poseAoiAnchorZ);
 
   const setSize = () => {
     const w = canvas.clientWidth;
@@ -2719,13 +2735,15 @@ export async function mountFpSession(
 
     if (conn.identity) {
       const drift = Math.hypot(pos.x - poseAoiAnchorX, pos.z - poseAoiAnchorZ);
-      if (drift > POSE_AOI_RECENTER) {
-        subscribePoseAoi(pos.x, pos.z);
+      const verticalDrift = Math.abs(pos.y - poseAoiAnchorY);
+      if (drift > POSE_AOI_RECENTER || verticalDrift > POSE_AOI_RECENTER_Y_M) {
+        subscribePoseAoi(pos.x, pos.y, pos.z);
       }
     }
 
     // Reuse pre-allocated map — clear is O(n remote players), no Map construction cost.
     _remoteSnapshots.clear();
+    camera.getWorldPosition(_floorVisCamWorld);
     if (conn.identity) {
       for (const row of conn.db.player_pose) {
         const id = row.identity.toHexString();
@@ -2749,6 +2767,26 @@ export async function mountFpSession(
             equippedPrimary: "unarmed",
           },
         );
+        if (
+          !shouldRenderRemotePlayer({
+            localCameraX: _floorVisCamWorld.x,
+            localCameraZ: _floorVisCamWorld.z,
+            localFeetX: pos.x,
+            localFeetY: pos.y,
+            localFeetZ: pos.z,
+            remoteFeetX: snap.worldPosition.x,
+            remoteFeetY: snap.worldPosition.y,
+            remoteFeetZ: snap.worldPosition.z,
+            buildingBoundsXz: {
+              minX: buildingWorldBounds.min.x,
+              maxX: buildingWorldBounds.max.x,
+              minZ: buildingWorldBounds.min.z,
+              maxZ: buildingWorldBounds.max.z,
+            },
+          })
+        ) {
+          continue;
+        }
         _remoteSnapshots.set(id, snap);
       }
     }
