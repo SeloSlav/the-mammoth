@@ -189,11 +189,6 @@ export type ApartmentClaimBlockedGearPrompt = {
   unitKey: string;
 };
 
-export type ApartmentReinforcePrompt = {
-  kind: "apartment_reinforce";
-  doorRowKey: string;
-};
-
 export type ApartmentStashPrompt = {
   kind: "apartment_stash";
   unitKey: string;
@@ -202,7 +197,6 @@ export type ApartmentStashPrompt = {
 export type ApartmentSystemPrompt =
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
-  | ApartmentReinforcePrompt
   | ApartmentStashPrompt;
 
 /** Wardrobe / claim / stash HUD should beat overlapping residential door prompts (same E priority). */
@@ -228,6 +222,29 @@ function nearWardrobe(u: ApartmentUnit, x: number, y: number, z: number): boolea
   return feetVerticalOkForInteract(u.footY, y);
 }
 
+function nearestUnclaimedUnitNearWardrobe(
+  conn: DbConnection,
+  x: number,
+  y: number,
+  z: number,
+): ApartmentUnit | null {
+  let best: ApartmentUnit | null = null;
+  let bestD = Infinity;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.state !== UNIT_STATE_UNCLAIMED) continue;
+    if (!nearWardrobe(u, x, y, z)) continue;
+    const dx = x - u.wardrobeX;
+    const dz = z - u.wardrobeZ;
+    const d = dx * dx + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = u;
+    }
+  }
+  return best;
+}
+
 /** `foot_x/z` stash anchor — matches `stash_push` / `stash_pull` range on server. */
 function nearFootlocker(u: ApartmentUnit, x: number, y: number, z: number): boolean {
   const r = APARTMENT_FURNITURE_INTERACT_R_M;
@@ -247,46 +264,23 @@ export function getApartmentSystemPrompt(
 ):
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
-  | ApartmentReinforcePrompt
   | ApartmentStashPrompt
   | null {
   const id = conn.identity;
   if (!id) return null;
+  const claimUnit = nearestUnclaimedUnitNearWardrobe(conn, pose.x, pose.y, pose.z);
+  if (claimUnit) {
+    if (playerOwnsDoorLock(conn, id) && playerOwnsScrewdriver(conn, id)) {
+      return { kind: "apartment_claim", unitKey: claimUnit.unitKey };
+    }
+    return { kind: "apartment_claim_blocked_gear", unitKey: claimUnit.unitKey };
+  }
+
   const u = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
   if (!u) return null;
 
-  if (u.state === UNIT_STATE_UNCLAIMED) {
-    if (!nearWardrobe(u, pose.x, pose.y, pose.z)) {
-      return null;
-    }
-    if (playerOwnsDoorLock(conn, id) && playerOwnsScrewdriver(conn, id)) {
-      return { kind: "apartment_claim", unitKey: u.unitKey };
-    }
-    return { kind: "apartment_claim_blocked_gear", unitKey: u.unitKey };
-  }
-
   if (u.state === UNIT_STATE_CLAIMED && u.owner?.isEqual(id) && nearFootlocker(u, pose.x, pose.y, pose.z)) {
     return { kind: "apartment_stash", unitKey: u.unitKey };
-  }
-
-  if (u.state === UNIT_STATE_CLAIMED && u.owner?.isEqual(id) && u.reinforced === 0) {
-    let bestKey: string | null = null;
-    let bestD = Infinity;
-    for (const row of conn.db.apartment_door) {
-      const ad = row as ApartmentDoor;
-      if (!ad.templateId.includes("unit_")) continue;
-      if (residentUnitKeyFromDoor(ad) !== u.unitKey) continue;
-      const dx = pose.x - ad.hingeX;
-      const dz = pose.z - ad.hingeZ;
-      const d = dx * dx + dz * dz;
-      if (d < bestD && d <= 7.5 * 7.5) {
-        bestD = d;
-        bestKey = ad.rowKey;
-      }
-    }
-    if (bestKey) {
-      return { kind: "apartment_reinforce", doorRowKey: bestKey };
-    }
   }
 
   return null;

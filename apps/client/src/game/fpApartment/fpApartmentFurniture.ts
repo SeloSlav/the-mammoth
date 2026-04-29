@@ -24,6 +24,35 @@ const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.72;
 const BED_VIS_SCALE = 0.98;
 
+const FURNITURE_PLACEMENT_FIELDS = [
+  "unitKey",
+  "unitId",
+  "level",
+  "bedX",
+  "bedY",
+  "bedZ",
+  "bedYaw",
+  "footX",
+  "footY",
+  "footZ",
+  "wardrobeX",
+  "wardrobeZ",
+  "boundMinX",
+  "boundMaxX",
+  "boundMinZ",
+  "boundMaxZ",
+] as const satisfies readonly (keyof ApartmentUnit)[];
+
+export function apartmentFurniturePlacementChanged(
+  oldUnit: ApartmentUnit,
+  newUnit: ApartmentUnit,
+): boolean {
+  for (const field of FURNITURE_PLACEMENT_FIELDS) {
+    if (oldUnit[field] !== newUnit[field]) return true;
+  }
+  return false;
+}
+
 function boundsFromUnit(u: ApartmentUnit): ApartmentInteriorBounds {
   return {
     boundMinX: u.boundMinX,
@@ -175,9 +204,18 @@ export async function mountFpApartmentFurniture(opts: {
   };
 
   const bumpApartmentUnit = () => scheduleRebuild();
+  const bumpApartmentUnitIfPlacementChanged = (
+    _ctx: unknown,
+    oldUnit: ApartmentUnit,
+    newUnit: ApartmentUnit,
+  ) => {
+    if (apartmentFurniturePlacementChanged(oldUnit, newUnit)) {
+      scheduleRebuild();
+    }
+  };
 
   opts.conn.db.apartment_unit.onInsert(bumpApartmentUnit);
-  opts.conn.db.apartment_unit.onUpdate(bumpApartmentUnit);
+  opts.conn.db.apartment_unit.onUpdate(bumpApartmentUnitIfPlacementChanged);
   opts.conn.db.apartment_unit.onDelete(bumpApartmentUnit);
 
   rebuild();
@@ -185,7 +223,7 @@ export async function mountFpApartmentFurniture(opts: {
   return {
     dispose: () => {
       opts.conn.db.apartment_unit.removeOnInsert(bumpApartmentUnit);
-      opts.conn.db.apartment_unit.removeOnUpdate(bumpApartmentUnit);
+      opts.conn.db.apartment_unit.removeOnUpdate(bumpApartmentUnitIfPlacementChanged);
       opts.conn.db.apartment_unit.removeOnDelete(bumpApartmentUnit);
       for (const o of managed) {
         opts.buildingRoot.remove(o);

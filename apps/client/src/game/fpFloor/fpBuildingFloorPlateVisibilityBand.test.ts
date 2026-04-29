@@ -4,6 +4,7 @@ import {
   fpBuildingFloorPlateVisibilityBand,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
+  fpStairShaftLocalVisibilityBand,
   fpStairColumnPlateVisibilityBand,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 
@@ -25,7 +26,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 10,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 8, hi: 12 });
+    ).toEqual({ lo: 10, hi: 10 });
   });
 
   it("clamps to maxLevel at the top", () => {
@@ -35,7 +36,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 5,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 3, hi: 5 });
+    ).toEqual({ lo: 5, hi: 5 });
   });
 
   it("clamps at ground", () => {
@@ -45,7 +46,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         playerStorey: 1,
         revealFullStack: false,
       }),
-    ).toEqual({ lo: 1, hi: 3 });
+    ).toEqual({ lo: 1, hi: 1 });
   });
 
   it("caps stair column band when pitch lookahead widens global plates but full stack is off", () => {
@@ -113,7 +114,29 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: false,
         upperTargetStorey: 48,
       }),
-    ).toEqual({ lo: 3, hi: 19 });
+    ).toEqual({ lo: 5, hi: 19 });
+  });
+
+  it("caps full-stack stair-shaft views to a local vertical budget", () => {
+    expect(
+      fpStairShaftLocalVisibilityBand({
+        globalLo: 1,
+        globalHi: 80,
+        maxLevel: 80,
+        playerStorey: 20,
+      }),
+    ).toEqual({ lo: 18, hi: 24 });
+  });
+
+  it("widens narrow corridor bands while inside a stair shaft", () => {
+    expect(
+      fpStairShaftLocalVisibilityBand({
+        globalLo: 20,
+        globalHi: 20,
+        maxLevel: 80,
+        playerStorey: 20,
+      }),
+    ).toEqual({ lo: 18, hi: 24 });
   });
 
   it("extends the lower band when looking downward (stairs / atrium)", () => {
@@ -124,7 +147,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: false,
         lowerTargetStorey: 3,
       }),
-    ).toEqual({ lo: 1, hi: 17 });
+    ).toEqual({ lo: 1, hi: 15 });
   });
 
   it("normalizes maxLevel when below 1", () => {

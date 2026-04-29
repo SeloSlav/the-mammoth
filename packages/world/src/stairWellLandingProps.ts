@@ -9,6 +9,16 @@ import {
   type StairSwitchbackLayout,
 } from "./stairWellGeometry.js";
 
+/** Matches `content/elevator/stairwell.json` heater `landingProps` entries. */
+const STAIRWELL_HEATER_LANDING_PROP_MODEL_URL =
+  "/static/models/objects/stairwell-heater.glb";
+
+/**
+ * When false, stairwell heater GLBs (`stairwell-heater.glb` landing props) are not spawned.
+ * Use with the litter toggle in `stairwellCigaretteLitter.ts` when testing stair visuals.
+ */
+export let ENABLE_STAIRWELL_HEATER_LANDING_PROPS = false;
+
 const _loader = new GLTFLoader();
 const _templatePromiseByUrl = new Map<string, Promise<THREE.Object3D>>();
 
@@ -380,6 +390,12 @@ export function attachStairWellLandingProps(args: {
 
   for (const prop of props) {
     if (
+      !ENABLE_STAIRWELL_HEATER_LANDING_PROPS &&
+      prop.modelUrl === STAIRWELL_HEATER_LANDING_PROP_MODEL_URL
+    ) {
+      continue;
+    }
+    if (
       args.skipTypicalLandingProps === true &&
       prop.applyToScopes?.includes("typical") === true
     ) {
@@ -433,6 +449,7 @@ export function attachStairWellLandingProps(args: {
     const localPos = landingLocalCornerPosition(cl, prop);
     const wrap = new THREE.Group();
     wrap.name = `stairwell_prop_${prop.id}`;
+    wrap.userData.mammothUnitInterior = true;
     wrap.position.copy(localPos);
     const yaw = prop.anchor.yawRad ?? 0;
     if (yaw !== 0) wrap.rotation.y = yaw;
@@ -448,8 +465,9 @@ export function attachStairWellLandingProps(args: {
         scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
-            m.castShadow = true;
-            m.receiveShadow = true;
+            m.castShadow = false;
+            m.receiveShadow = false;
+            m.userData.mammothUnitInterior = true;
             /** High-poly GLB — do not feed every triangle into static AABB bake (see collisionScene). */
             m.userData.mammothNoCollision = true;
           }

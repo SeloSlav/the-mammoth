@@ -78,10 +78,14 @@ export {
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";
 export {
+  ENABLE_STAIRWELL_HEATER_LANDING_PROPS,
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,
 } from "./stairWellLandingProps.js";
-export { ensureStairwellCigaretteMeshReady } from "./stairwellCigaretteLitter.js";
+export {
+  ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER,
+  ensureStairwellCigaretteMeshReady,
+} from "./stairwellCigaretteLitter.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,

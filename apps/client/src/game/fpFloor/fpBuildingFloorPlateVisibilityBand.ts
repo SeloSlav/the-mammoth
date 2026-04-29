@@ -106,8 +106,8 @@ export function fpCameraOrFeetNearBuildingFootprintXZ(input: {
   );
 }
 
-/** Storeys above/below the player to keep visible when not in shaft / cab (interior band). */
-const INTERIOR_PLATE_BAND_HALF_SPAN = 2;
+/** Storeys above/below the player to keep visible in ordinary interior corridors. */
+const INTERIOR_PLATE_BAND_HALF_SPAN = 0;
 
 /**
  * Pitch lookahead widens the global plate band many storeys upward; stair flight meshes stack in the
@@ -117,6 +117,10 @@ const INTERIOR_PLATE_BAND_HALF_SPAN = 2;
  */
 const STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 14;
 const STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 5;
+
+/** Looking up/down inside a stair shaft must not submit the whole tower. */
+const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 4;
+const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 2;
 
 /**
  * Open elevator hoistway with doors visible: wider than {@link STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER}
@@ -147,6 +151,25 @@ export function fpStairColumnPlateVisibilityBand(input: {
   hi = Math.max(1, Math.min(maxLevel, hi));
   if (lo > hi) [lo, hi] = [hi, lo];
   return { lo, hi };
+}
+
+export function fpStairShaftLocalVisibilityBand(input: {
+  globalLo: number;
+  globalHi: number;
+  maxLevel: number;
+  playerStorey: number;
+}): { lo: number; hi: number } {
+  const maxLevel = Math.max(1, input.maxLevel);
+  const playerStorey = Math.max(1, Math.min(maxLevel, input.playerStorey));
+  const localLo = Math.max(
+    1,
+    playerStorey - STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER,
+  );
+  const localHi = Math.min(
+    maxLevel,
+    playerStorey + STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER,
+  );
+  return { lo: localLo, hi: localHi };
 }
 
 export function fpBuildingFloorPlateVisibilityBand(input: {
@@ -181,10 +204,7 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
    * corridor). Small stacks still get `halfSpan >= maxLevel - 1` via the inner `min` so short
    * towers stay fully banded.
    */
-  const halfSpan = Math.min(
-    INTERIOR_PLATE_BAND_HALF_SPAN,
-    Math.max(4, maxLevel - 1),
-  );
+  const halfSpan = Math.min(INTERIOR_PLATE_BAND_HALF_SPAN, maxLevel - 1);
   let lo = input.playerStorey - halfSpan;
   let hi = input.playerStorey + halfSpan;
   if (typeof input.upperTargetStorey === "number" && Number.isFinite(input.upperTargetStorey)) {

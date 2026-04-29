@@ -184,21 +184,6 @@ export function MammothPickupPromptHud() {
     );
   }
 
-  if (prompt.kind === "apartment_reinforce") {
-    return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(180,210,240,0.42)" glowRgb="rgba(100,170,230,0.15)">
-        <span style={{ opacity: 0.92 }}>Press </span>
-        <InteractKeyE
-          kbdGradient="linear-gradient(180deg, #b8daf8 0%, #5898d8 45%, #2a5580 100%)"
-          kbdBorderRgb="rgba(190,225,255,0.5)"
-          kbdShadowRgb="rgba(70,140,230,0.3)"
-          kbdText="#030810"
-        />
-        <span style={{ opacity: 0.92 }}> repeatedly to reinforce — needs hammer + 10 nails; takes ~22s held.</span>
-      </FpBottomInteractPromptFrame>
-    );
-  }
-
   if (prompt.kind === "apartment_stash") {
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">

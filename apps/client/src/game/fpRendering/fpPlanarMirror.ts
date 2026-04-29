@@ -1,6 +1,4 @@
 import * as THREE from "three";
-import { MeshBasicNodeMaterial } from "three/webgpu";
-import { reflector } from "three/tsl";
 
 export type FpPlanarMirror = {
   surface: THREE.Mesh;
@@ -16,37 +14,15 @@ export type FpPlanarMirror = {
   dispose(): void;
 };
 
-function planeSizeFromGeometry(geometry: THREE.BufferGeometry): { width: number; height: number } {
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  if (!box) return { width: 1, height: 1 };
-  const size = box.getSize(new THREE.Vector3());
-  const width = Math.max(size.x, size.z, 0.001);
-  const height = Math.max(size.y, 0.001);
-  return { width, height };
-}
-
-export function createFpPlanarMirrorFromPlaceholder(
-  placeholder: THREE.Mesh,
-  opts?: { resolutionScale?: number; reflectionSamples?: number },
-): FpPlanarMirror {
+export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): FpPlanarMirror {
   const parent = placeholder.parent;
   if (!parent) throw new Error("createFpPlanarMirrorFromPlaceholder: placeholder has no parent");
   const geometry = placeholder.geometry.clone();
-  const planeSize = planeSizeFromGeometry(geometry);
-  const aspect = planeSize.width / planeSize.height;
-  /** Lower than fullscreen RT; edge AA comes from main WebGPU canvas MSAA, not this offscreen pass. */
-  const resolutionScale =
-    opts?.resolutionScale ?? (aspect >= 0.75 ? 0.38 : 0.32);
-  /** MSAA on reflector RT doubles reflection fill cost; keep `0` (main view still uses canvas MSAA). */
-  const reflectionSamples = opts?.reflectionSamples ?? 0;
-  const mirrorNode = reflector({
-    resolutionScale,
-    bounces: false,
-    samples: reflectionSamples,
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x7f8588,
+    metalness: 0.65,
+    roughness: 0.18,
   });
-  const material = new MeshBasicNodeMaterial();
-  material.colorNode = mirrorNode;
   material.toneMapped = false;
   const surface = new THREE.Mesh(geometry, material);
   surface.name = placeholder.name;
@@ -57,7 +33,6 @@ export function createFpPlanarMirrorFromPlaceholder(
   surface.renderOrder = placeholder.renderOrder;
   surface.frustumCulled = false;
   surface.userData = { ...placeholder.userData, mammothCabMirror: true };
-  surface.add(mirrorNode.target);
   parent.add(surface);
   parent.remove(placeholder);
   const placeholderMat = placeholder.material;
@@ -67,14 +42,11 @@ export function createFpPlanarMirrorFromPlaceholder(
 
   return {
     surface,
-    syncForCamera({ camera, configureVirtualCamera, forceReflectionUpdate = true }) {
-      const reflectorBase = mirrorNode.reflector;
-      reflectorBase.forceUpdate = forceReflectionUpdate;
-      const virtualCamera = reflectorBase.getVirtualCamera(camera);
-      configureVirtualCamera?.(virtualCamera);
+    syncForCamera() {
+      // Dynamic planar reflections were a full extra scene render and still looked too low-res in
+      // cab gameplay. Keep mirrors as cheap static panels until we have a proper high-quality path.
     },
     dispose() {
-      mirrorNode.dispose();
       geometry.dispose();
       material.dispose();
     },

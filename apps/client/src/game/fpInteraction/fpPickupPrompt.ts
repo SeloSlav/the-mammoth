@@ -39,11 +39,6 @@ export type FpPickupPromptApartmentClaimBlockedGear = {
   missingScrewdriver: boolean;
 };
 
-export type FpPickupPromptApartmentReinforce = {
-  kind: "apartment_reinforce";
-  doorRowKey: string;
-};
-
 export type FpPickupPromptApartmentStash = {
   kind: "apartment_stash";
   unitKey: string;
@@ -55,7 +50,6 @@ export type FpPickupPromptState =
   | FpPickupPromptApartmentDoor
   | FpPickupPromptApartmentClaim
   | FpPickupPromptApartmentClaimBlockedGear
-  | FpPickupPromptApartmentReinforce
   | FpPickupPromptApartmentStash
   | null;
 
@@ -97,9 +91,6 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
       a.missingDoorLock === b.missingDoorLock &&
       a.missingScrewdriver === b.missingScrewdriver
     );
-  }
-  if (a.kind === "apartment_reinforce" && b.kind === "apartment_reinforce") {
-    return a.doorRowKey === b.doorRowKey;
   }
   if (a.kind === "apartment_stash" && b.kind === "apartment_stash") {
     return a.unitKey === b.unitKey;

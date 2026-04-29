@@ -294,8 +294,11 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       merged.computeBoundingSphere();
       merged.computeBoundingBox();
       const mesh = new THREE.Mesh(merged, mat);
-      /** Hollow unit buffers can sphere-cull wrong when the eye sits inside the shell volume. */
-      mesh.frustumCulled = false;
+      /**
+       * Keep each apartment shell as its own cullable volume. Corridor views otherwise submit every
+       * unit on the visible floor even though only the current sightline can contribute pixels.
+       */
+      mesh.frustumCulled = true;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       /** Only hollow unit shells use this merge path (`mammothPlacedObjectId`). */
       mesh.userData.mammothUnitInterior = true;

@@ -4,9 +4,19 @@ import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
+  fpStairShaftLocalVisibilityBand,
   fpStairColumnPlateVisibilityBand,
 } from "../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
+
+type FpStairShaftVisibilityBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+};
 
 /**
  * Mirrors {@link mountFpSession}’s interior-shell hide margin: keep plaster visible for doorway
@@ -24,6 +34,11 @@ const VIS_BAND_NARROW_STOREYS_PER_FRAME = 1;
 /** Widening shows plates — slightly faster so shaft views fill in promptly. */
 const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 3;
 
+/** Keep heavy stairwell detail close; architecture still uses the wider stair column band. */
+const STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER = 1;
+const STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER = 2;
+const STAIR_SHAFT_BOUNDS_MARGIN_M = 0.2;
+
 export type FpSessionFloorPlateVisibilityOpts = {
   camera: THREE.PerspectiveCamera;
   buildingRoot: THREE.Group;
@@ -40,6 +55,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
     MountFpElevatorWorldResult,
     "getCabOccludedViewStorey" | "getFloorVisibilityBand" | "isInsideAnyCabHud"
   >;
+  stairShaftInteriorLightBounds: readonly FpStairShaftVisibilityBounds[];
   /** Predicted feet position — same reference as session `pos`. */
   feetPos: THREE.Vector3;
   /** Writable scratch filled each visibility pass; shared with downstream frame logic. */
@@ -59,6 +75,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     storeyOpts,
     unitInteriorMeshes,
     fpElevators,
+    stairShaftInteriorLightBounds,
     feetPos,
     floorVisCamWorld,
     floorVisCamDir,
@@ -68,10 +85,40 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastBandHi = -999;
   let _lastStairBandLo = -999;
   let _lastStairBandHi = -999;
+  let _lastStairDetailLo = -999;
+  let _lastStairDetailHi = -999;
   let _visBandSmoothLo = -999;
   let _visBandSmoothHi = -999;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
+
+  const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
+    for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
+      const b = stairShaftInteriorLightBounds[i]!;
+      if (
+        x >= b.minX - STAIR_SHAFT_BOUNDS_MARGIN_M &&
+        x <= b.maxX + STAIR_SHAFT_BOUNDS_MARGIN_M &&
+        y >= b.minY - STAIR_SHAFT_BOUNDS_MARGIN_M &&
+        y <= b.maxY + STAIR_SHAFT_BOUNDS_MARGIN_M &&
+        z >= b.minZ - STAIR_SHAFT_BOUNDS_MARGIN_M &&
+        z <= b.maxZ + STAIR_SHAFT_BOUNDS_MARGIN_M
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const setStairSegmentDetailVisible = (segment: THREE.Object3D, visible: boolean): void => {
+    segment.traverse((obj) => {
+      if (
+        obj.name.startsWith("stairwell_prop_") ||
+        obj.name === "stairwell_cigarette_litter"
+      ) {
+        obj.visible = visible;
+      }
+    });
+  };
 
   const isInsideElevatorCabHudForJump = (): boolean => {
     camera.getWorldPosition(floorVisCamWorld);
@@ -160,6 +207,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       };
     }
 
+    const insideStairShaft =
+      pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
+      pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z);
+    if (insideStairShaft) {
+      const stairLocalBand = fpStairShaftLocalVisibilityBand({
+        globalLo: band.lo,
+        globalHi: band.hi,
+        maxLevel: maxBuildingLevel,
+        playerStorey: estimateStoreyFromFeetY(feetPos.y, storeyOpts),
+      });
+      band = stairLocalBand;
+    }
+
     const targetBandLo = band.lo;
     const targetBandHi = band.hi;
     if (_visBandSmoothLo < 0) {
@@ -233,13 +293,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       maxLevel: maxBuildingLevel,
       playerStorey,
     });
+    const stairDetailBand = {
+      lo: Math.max(1, playerStorey - STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER),
+      hi: Math.min(maxBuildingLevel, playerStorey + STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER),
+    };
     if (
       lo === _lastBandLo &&
       hi === _lastBandHi &&
       lo === targetBandLo &&
       hi === targetBandHi &&
       stairBand.lo === _lastStairBandLo &&
-      stairBand.hi === _lastStairBandHi
+      stairBand.hi === _lastStairBandHi &&
+      stairDetailBand.lo === _lastStairDetailLo &&
+      stairDetailBand.hi === _lastStairDetailHi
     ) {
       return;
     }
@@ -247,6 +313,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     _lastBandHi = hi;
     _lastStairBandLo = stairBand.lo;
     _lastStairBandHi = stairBand.hi;
+    _lastStairDetailLo = stairDetailBand.lo;
+    _lastStairDetailHi = stairDetailBand.hi;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothStairColumnRoot === true) {
         ch.visible = true;
@@ -254,6 +322,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           const li = sub.userData.mammothPlateLevelIndex;
           if (typeof li === "number") {
             sub.visible = li >= stairBand.lo && li <= stairBand.hi;
+            setStairSegmentDetailVisible(
+              sub,
+              li >= stairDetailBand.lo && li <= stairDetailBand.hi,
+            );
           } else {
             sub.visible = true;
           }

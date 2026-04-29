@@ -351,6 +351,7 @@ export async function mountFpSession(
       },
       unitInteriorMeshes,
       fpElevators,
+      stairShaftInteriorLightBounds,
       feetPos: pos,
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
@@ -799,11 +800,6 @@ export async function mountFpSession(
         }
         return;
       }
-      if (aptKey?.kind === "apartment_reinforce") {
-        void conn.reducers.reinforceApartmentPulse({ doorRowKey: aptKey.doorRowKey });
-        return;
-      }
-
       if (
         aptKey?.kind === "apartment_claim" ||
         aptKey?.kind === "apartment_claim_blocked_gear"

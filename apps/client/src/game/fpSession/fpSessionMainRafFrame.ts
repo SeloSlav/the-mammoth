@@ -44,6 +44,7 @@ import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.j
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
 import {
+  FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
   FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
   pickCabMirrorPrimaryUpdateIndex,
 } from "../fpRendering/fpCabMirrorReflectionGate.js";
@@ -73,7 +74,7 @@ import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 const FIREARM_COOLDOWN_MS = 170;
 
 /** Min interval between claim pulses while holding E — balances UX vs reducer throughput. */
-const APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS = 72;
+const APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS = 250;
 
 /** Blended (kinematic vs HUD-predicted cab) vertical speed gate for elevator view smoothing. */
 const ELEVATOR_KINEMATIC_FAST_ABS_VY_MPS = 0.14;
@@ -206,6 +207,8 @@ export function createFpSessionMainRafFrame(
 ): { runFrame: (nowMs: number, dt: number) => void } {
   const _rigViewScratch = deps._rigViewScratch;
   let lastApartmentClaimHoldPulseMs = 0;
+  let lastCabMirrorReflectionUpdateMs = -Infinity;
+  let lastCabMirrorReflectionIdx = -1;
   /** Advances claim bar at wall-clock while E is held; cleared when HUD leaves apartment claim. */
   let claimHoldSmoothState: ApartmentClaimHoldSmooth | null = null;
 
@@ -643,11 +646,6 @@ export function createFpSessionMainRafFrame(
             claimProgressSecs: claimProgressHudSecs,
             claimFullSecs: APARTMENT_CLAIM_FULL_SECS,
           });
-        } else if (aSys?.kind === "apartment_reinforce") {
-          setFpPickupPrompt({
-            kind: "apartment_reinforce",
-            doorRowKey: aSys.doorRowKey,
-          });
         } else if (aSys?.kind === "apartment_stash") {
           setFpPickupPrompt({
             kind: "apartment_stash",
@@ -717,11 +715,20 @@ export function createFpSessionMainRafFrame(
       cameraForward: deps._floorVisCamDir,
       skipReflectionWhenVerticalLookAboveAbsY: FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
     });
+    const forceMirrorReflectionUpdate =
+      primaryMirrorIdx >= 0 &&
+      (primaryMirrorIdx !== lastCabMirrorReflectionIdx ||
+        nowMs - lastCabMirrorReflectionUpdateMs >=
+          FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS);
+    if (forceMirrorReflectionUpdate) {
+      lastCabMirrorReflectionUpdateMs = nowMs;
+      lastCabMirrorReflectionIdx = primaryMirrorIdx;
+    }
     for (let i = 0; i < deps.cabMirrors.length; i++) {
       const mirror = deps.cabMirrors[i]!;
       mirror.syncForCamera({
         camera: deps.camera,
-        forceReflectionUpdate: i === primaryMirrorIdx,
+        forceReflectionUpdate: forceMirrorReflectionUpdate && i === primaryMirrorIdx,
         configureVirtualCamera: (virtualCamera) => {
           virtualCamera.layers.mask = deps.camera.layers.mask;
           virtualCamera.layers.disable(FP_VIEWMODEL_RENDER_LAYER);
@@ -729,6 +736,7 @@ export function createFpSessionMainRafFrame(
         },
       });
     }
+    deps.renderer.info.reset();
     deps.renderer.render(deps.scene, deps.camera);
     const _t_renderEnd = performance.now();
     const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
