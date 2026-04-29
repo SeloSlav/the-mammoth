@@ -43,7 +43,10 @@ import { pushFpPerfFrame } from "./fpSessionPerfStore.js";
 import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
-import { cabMirrorReflectionWorthUpdating } from "../fpRendering/fpCabMirrorReflectionGate.js";
+import {
+  FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
+  pickCabMirrorPrimaryUpdateIndex,
+} from "../fpRendering/fpCabMirrorReflectionGate.js";
 import {
   CAM_BOB_DIP_Y,
   clampTinyDisplayOffsetComponents,
@@ -190,6 +193,8 @@ export type FpSessionMainRafFrameDeps = {
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
   /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI or typing. */
   fpInteractInputBlocked: () => boolean;
+  /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
+  fpInteractionFeet: () => THREE.Vector3;
 };
 
 /**
@@ -509,22 +514,26 @@ export function createFpSessionMainRafFrame(
     const _t_presentEnd = performance.now();
 
     if (deps.conn.identity) {
+      const ft = deps.fpInteractionFeet();
+
       const droppedHud = findNearestDroppedPickupsHud(
         deps.conn,
-        deps.pos.x,
-        deps.pos.y,
-        deps.pos.z,
+        ft.x,
+        ft.y,
+        ft.z,
         MAMMOTH_PICKUP_RADIUS_M,
       );
-      const aSys = getApartmentSystemPrompt(deps.conn, deps.pos);
+      const aSys = getApartmentSystemPrompt(deps.conn, ft);
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
-        const pos = deps.pos;
         const holdPrompt = aSys;
         const doorSuppressBlocksClaimHold =
-          holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(pos);
+          holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(ft);
+        const elevatorBlocksClaimHold =
+          deps.fpElevators.shouldSuppressEpickup(ft, deps.camera) &&
+          !(holdPrompt !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(holdPrompt));
         if (
-          !deps.fpElevators.shouldSuppressEpickup(pos, deps.camera) &&
+          !elevatorBlocksClaimHold &&
           !doorSuppressBlocksClaimHold
         ) {
           const worldLootBlocksClaimPulse =
@@ -543,13 +552,18 @@ export function createFpSessionMainRafFrame(
       }
 
       let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
-      const doorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(deps.pos, deps.camera);
+      const rawElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
+      const doorPrompt =
+        rawElevDoorPrompt !== null &&
+        !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
+          ? rawElevDoorPrompt
+          : null;
       const apartmentDoorHud =
         doorPrompt !== null
           ? null
           : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
             ? null
-            : deps.fpApartmentDoors.getInteractPrompt(deps.pos);
+            : deps.fpApartmentDoors.getInteractPrompt(ft);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",
@@ -605,9 +619,12 @@ export function createFpSessionMainRafFrame(
           let claimHoldEligible =
             deps.keys.has("KeyE") &&
             !deps.fpInteractInputBlocked() &&
-            !deps.fpElevators.shouldSuppressEpickup(deps.pos, deps.camera);
+            !(
+              deps.fpElevators.shouldSuppressEpickup(ft, deps.camera) &&
+              !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
+            );
           if (aSys?.kind !== "apartment_claim") {
-            claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(deps.pos);
+            claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(ft);
           }
           const { displaySecs: claimProgressHudSecs, nextSmooth } =
             computeOptimisticClaimProgressSecs({
@@ -695,17 +712,16 @@ export function createFpSessionMainRafFrame(
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();
-    for (const mirror of deps.cabMirrors) {
-      const forceReflection =
-        mirror.surface.visible &&
-        cabMirrorReflectionWorthUpdating(
-          mirror.surface,
-          deps._floorVisCamWorld,
-          deps._floorVisCamDir,
-        );
+    const primaryMirrorIdx = pickCabMirrorPrimaryUpdateIndex(deps.cabMirrors, {
+      cameraWorld: deps._floorVisCamWorld,
+      cameraForward: deps._floorVisCamDir,
+      skipReflectionWhenVerticalLookAboveAbsY: FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
+    });
+    for (let i = 0; i < deps.cabMirrors.length; i++) {
+      const mirror = deps.cabMirrors[i]!;
       mirror.syncForCamera({
         camera: deps.camera,
-        forceReflectionUpdate: forceReflection,
+        forceReflectionUpdate: i === primaryMirrorIdx,
         configureVirtualCamera: (virtualCamera) => {
           virtualCamera.layers.mask = deps.camera.layers.mask;
           virtualCamera.layers.disable(FP_VIEWMODEL_RENDER_LAYER);

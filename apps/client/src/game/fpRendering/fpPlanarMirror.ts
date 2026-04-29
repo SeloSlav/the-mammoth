@@ -35,9 +35,11 @@ export function createFpPlanarMirrorFromPlaceholder(
   const geometry = placeholder.geometry.clone();
   const planeSize = planeSizeFromGeometry(geometry);
   const aspect = planeSize.width / planeSize.height;
+  /** Lower than fullscreen RT; edge AA comes from main WebGPU canvas MSAA, not this offscreen pass. */
   const resolutionScale =
-    opts?.resolutionScale ?? (aspect >= 0.75 ? 0.48 : 0.4);
-  const reflectionSamples = opts?.reflectionSamples ?? 1;
+    opts?.resolutionScale ?? (aspect >= 0.75 ? 0.38 : 0.32);
+  /** MSAA on reflector RT doubles reflection fill cost; keep `0` (main view still uses canvas MSAA). */
+  const reflectionSamples = opts?.reflectionSamples ?? 0;
   const mirrorNode = reflector({
     resolutionScale,
     bounces: false,

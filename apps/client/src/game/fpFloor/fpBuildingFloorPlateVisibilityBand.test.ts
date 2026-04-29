@@ -4,6 +4,7 @@ import {
   fpBuildingFloorPlateVisibilityBand,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
+  fpStairColumnPlateVisibilityBand,
 } from "./fpBuildingFloorPlateVisibilityBand.js";
 
 describe("fpBuildingFloorPlateVisibilityBand", () => {
@@ -47,6 +48,39 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 3 });
   });
 
+  it("caps stair column band when pitch lookahead widens global plates but full stack is off", () => {
+    expect(
+      fpStairColumnPlateVisibilityBand({
+        globalLo: 1,
+        globalHi: 40,
+        maxLevel: 80,
+        playerStorey: 5,
+      }),
+    ).toEqual({ lo: 1, hi: 19 });
+  });
+
+  it("does not cap stair columns when the global band spans the full building (hoistway / exterior)", () => {
+    expect(
+      fpStairColumnPlateVisibilityBand({
+        globalLo: 1,
+        globalHi: 25,
+        maxLevel: 25,
+        playerStorey: 8,
+      }),
+    ).toEqual({ lo: 1, hi: 25 });
+  });
+
+  it("keeps stair column band inside a narrow global band", () => {
+    expect(
+      fpStairColumnPlateVisibilityBand({
+        globalLo: 8,
+        globalHi: 12,
+        maxLevel: 40,
+        playerStorey: 10,
+      }),
+    ).toEqual({ lo: 8, hi: 12 });
+  });
+
   it("extends the upper band toward the storey the camera is looking at", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
@@ -56,6 +90,30 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         upperTargetStorey: 8,
       }),
     ).toEqual({ lo: 1, hi: 10 });
+  });
+
+  it("hoistway plate boost widens budget vs interior-only caps but stays below full stack", () => {
+    expect(
+      fpBuildingFloorPlateVisibilityBand({
+        maxLevel: 80,
+        playerStorey: 10,
+        revealFullStack: false,
+        elevatorHoistwayPlateBoost: true,
+        upperTargetStorey: 80,
+        lowerTargetStorey: 1,
+      }),
+    ).toEqual({ lo: 1, hi: 32 });
+  });
+
+  it("caps pitch lookahead above the player so stairwell upsights do not submit distant slabs", () => {
+    expect(
+      fpBuildingFloorPlateVisibilityBand({
+        maxLevel: 80,
+        playerStorey: 5,
+        revealFullStack: false,
+        upperTargetStorey: 48,
+      }),
+    ).toEqual({ lo: 3, hi: 19 });
   });
 
   it("extends the lower band when looking downward (stairs / atrium)", () => {

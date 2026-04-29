@@ -16,6 +16,7 @@ import {
 } from "@the-mammoth/engine";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import {
+  DEFAULT_BUILDING_FLOOR_SPACING_M,
   ensureStairwellCigaretteMeshReady,
   maxBuildingLevelIndex,
   parseFloorDoc,
@@ -60,7 +61,10 @@ import {
   subscribeFpHotbarSelection,
 } from "./fpHotbar/fpHotbarSelection.js";
 import { getHotbarSlotInventoryItem } from "./fpHotbar/fpHotbarResolve.js";
-import { getApartmentSystemPrompt } from "./fpApartment/fpApartmentGameplay.js";
+import {
+  apartmentFurnitureInteriorsPreferOverUnitDoor,
+  getApartmentSystemPrompt,
+} from "./fpApartment/fpApartmentGameplay.js";
 import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
@@ -340,6 +344,11 @@ export async function mountFpSession(
       buildingRoot,
       buildingWorldBounds,
       maxBuildingLevel,
+      storeyOpts: {
+        buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+        floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+        maxLevel: maxBuildingLevel,
+      },
       unitInteriorMeshes,
       fpElevators,
       feetPos: pos,
@@ -763,17 +772,20 @@ export async function mountFpSession(
       !isTextInputFocused()
     ) {
       e.preventDefault();
-      const interactionPos = getInteractionPos();
-      // Doors: use predicted feet so range tests match what you see while moving; server still
-      // validates with pose + client feet hint.
+      /** Same blend as RAF pickup prompts ({@link resolveAuthoritativeInteractionPose}). */
+      const feet = getInteractionPos();
       if (fpElevators.consumeInteractKey(pos, camera)) return;
-      if (fpElevators.shouldSuppressEpickup(pos, camera)) return;
+      const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
+      const aptKey = conn.identity ? getApartmentSystemPrompt(conn, feet) : null;
+      /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */
+      const interiorBeatElevPickup =
+        aptKey !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aptKey);
+      if (suppressElevPickup && !interiorBeatElevPickup) return;
       if (!conn.identity) {
-        droppedWorld.tryPickupNearest(interactionPos.x, interactionPos.y, interactionPos.z);
+        droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
         return;
       }
 
-      const aptKey = getApartmentSystemPrompt(conn, pos);
       if (aptKey?.kind === "apartment_stash") {
         const slot = getFpHotbarSelectedSlot();
         if (slot !== null) {
@@ -802,9 +814,9 @@ export async function mountFpSession(
 
       const nearWorld = findNearestDroppedPickup(
         conn,
-        pos.x,
-        pos.y,
-        pos.z,
+        feet.x,
+        feet.y,
+        feet.z,
         MAMMOTH_PICKUP_RADIUS_M,
         droppedItemIsWorldAnchor,
       );
@@ -813,10 +825,10 @@ export async function mountFpSession(
         return;
       }
 
-      if (fpApartmentDoors.consumeInteractKey(pos)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(pos)) return;
+      if (fpApartmentDoors.consumeInteractKey(feet)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(feet)) return;
 
-      droppedWorld.tryPickupNearest(interactionPos.x, interactionPos.y, interactionPos.z);
+      droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
     }
     if (e.code === "KeyC" && !e.repeat) mainRaf.crouchToggle = !mainRaf.crouchToggle;
     if (e.code === "Space" && !e.repeat) {
@@ -973,6 +985,7 @@ export async function mountFpSession(
     logFpPerf,
     tickFpSessionElevDebug,
     fpInteractInputBlocked,
+    fpInteractionFeet: getInteractionPos,
   });
 
   let raf = 0;

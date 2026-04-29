@@ -1,7 +1,8 @@
 /**
  * 1-based floor plate index band (`mammothPlateLevelIndex`) for toggling `buildingRoot` children.
- * When {@link revealFullStack} is true (e.g. inside an elevator hoistway), every storey stays
- * visible so shaft-adjacent shell geometry is not culled while looking up/down the shaft.
+ *
+ * `revealFullStack: true` is tests / legacy only (every storey on). Runtime FP uses `elevatorHoistwayPlateBoost`
+ * for open hoistways so shaft-adjacent shells stay visible without submitting the entire merged stack.
  */
 
 /**
@@ -108,11 +109,56 @@ export function fpCameraOrFeetNearBuildingFootprintXZ(input: {
 /** Storeys above/below the player to keep visible when not in shaft / cab (interior band). */
 const INTERIOR_PLATE_BAND_HALF_SPAN = 2;
 
+/**
+ * Pitch lookahead widens the global plate band many storeys upward; stair flight meshes stack in the
+ * same band and become fill-rate bound when peeking up a shaft. Stair columns (`mammothStairColumnRoot`)
+ * get a tighter cap so you still see a tall vertical run without submitting every flight to the GPU.
+ * Skipped when the global band already spans the full building (elevator hoistway / exterior stack).
+ */
+const STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 14;
+const STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 5;
+
+/**
+ * Open elevator hoistway with doors visible: wider than {@link STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER}
+ * so landing slabs above/below remain coherent, but far smaller than `maxLevel` for tall stacks.
+ */
+export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER = 22;
+export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER = 14;
+
+export function fpStairColumnPlateVisibilityBand(input: {
+  globalLo: number;
+  globalHi: number;
+  maxLevel: number;
+  playerStorey: number;
+}): { lo: number; hi: number } {
+  const maxLevel = Math.max(1, input.maxLevel);
+  const gLo = input.globalLo;
+  const gHi = input.globalHi;
+  if (gLo <= 1 && gHi >= maxLevel) {
+    return { lo: gLo, hi: gHi };
+  }
+  const capLo =
+    input.playerStorey - STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER;
+  const capHi =
+    input.playerStorey + STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
+  let lo = Math.max(gLo, capLo);
+  let hi = Math.min(gHi, capHi);
+  lo = Math.max(1, Math.min(maxLevel, lo));
+  hi = Math.max(1, Math.min(maxLevel, hi));
+  if (lo > hi) [lo, hi] = [hi, lo];
+  return { lo, hi };
+}
+
 export function fpBuildingFloorPlateVisibilityBand(input: {
   maxLevel: number;
   /** 1-based storey from feet Y (see {@link estimateStoreyFromFeetY}). */
   playerStorey: number;
   revealFullStack: boolean;
+  /**
+   * Open hoistway, eye/feet in shaft column (not inside cab volume): widen vertical plate budget vs
+   * interior-only caps, without enabling {@link revealFullStack}.
+   */
+  elevatorHoistwayPlateBoost?: boolean;
   /**
    * Highest storey the camera is actively looking toward; only widens the upper bound so exterior
    * facades above the player do not pop out while looking up from lower levels.
@@ -146,6 +192,19 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   }
   if (typeof input.lowerTargetStorey === "number" && Number.isFinite(input.lowerTargetStorey)) {
     lo = Math.min(lo, Math.floor(input.lowerTargetStorey) - 2);
+  }
+  /**
+   * Pitch lookahead can push `hi` many storeys upward when looking up inside the footprint (stairwell),
+   * while stair-column geometry is already capped via {@link fpStairColumnPlateVisibilityBand}. Hoistway
+   * views need a wider band than interior-only stair caps but must stay bounded vs `{ lo: 1, hi: maxLevel }`.
+   */
+  const maxAbove =
+    input.elevatorHoistwayPlateBoost === true
+      ? HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER
+      : STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
+  hi = Math.min(hi, input.playerStorey + maxAbove);
+  if (input.elevatorHoistwayPlateBoost === true) {
+    lo = Math.max(lo, input.playerStorey - HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER);
   }
   lo = Math.max(1, Math.min(maxLevel, lo));
   hi = Math.max(1, Math.min(maxLevel, hi));

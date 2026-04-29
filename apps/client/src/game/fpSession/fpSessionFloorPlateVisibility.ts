@@ -1,8 +1,10 @@
 import * as THREE from "three";
+import { estimateStoreyFromFeetY } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
+  fpStairColumnPlateVisibilityBand,
 } from "../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 
@@ -27,6 +29,12 @@ export type FpSessionFloorPlateVisibilityOpts = {
   buildingRoot: THREE.Group;
   buildingWorldBounds: THREE.Box3;
   maxBuildingLevel: number;
+  /** Vertical storey indexing — matches elevator / {@link estimateStoreyFromFeetY} conventions. */
+  storeyOpts: {
+    buildingWorldOriginY: number;
+    floorSpacingM: number;
+    maxLevel: number;
+  };
   unitInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
     MountFpElevatorWorldResult,
@@ -48,6 +56,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     buildingRoot,
     buildingWorldBounds,
     maxBuildingLevel,
+    storeyOpts,
     unitInteriorMeshes,
     fpElevators,
     feetPos,
@@ -57,6 +66,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
   let _lastBandLo = -999;
   let _lastBandHi = -999;
+  let _lastStairBandLo = -999;
+  let _lastStairBandHi = -999;
   let _visBandSmoothLo = -999;
   let _visBandSmoothHi = -999;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
@@ -213,25 +224,36 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
+    const lo = _visBandSmoothLo;
+    const hi = _visBandSmoothHi;
+    const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
+    const stairBand = fpStairColumnPlateVisibilityBand({
+      globalLo: lo,
+      globalHi: hi,
+      maxLevel: maxBuildingLevel,
+      playerStorey,
+    });
     if (
-      _visBandSmoothLo === _lastBandLo &&
-      _visBandSmoothHi === _lastBandHi &&
-      _visBandSmoothLo === targetBandLo &&
-      _visBandSmoothHi === targetBandHi
+      lo === _lastBandLo &&
+      hi === _lastBandHi &&
+      lo === targetBandLo &&
+      hi === targetBandHi &&
+      stairBand.lo === _lastStairBandLo &&
+      stairBand.hi === _lastStairBandHi
     ) {
       return;
     }
-    _lastBandLo = _visBandSmoothLo;
-    _lastBandHi = _visBandSmoothHi;
-    const lo = _visBandSmoothLo;
-    const hi = _visBandSmoothHi;
+    _lastBandLo = lo;
+    _lastBandHi = hi;
+    _lastStairBandLo = stairBand.lo;
+    _lastStairBandHi = stairBand.hi;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothStairColumnRoot === true) {
         ch.visible = true;
         for (const sub of (ch as THREE.Group).children) {
           const li = sub.userData.mammothPlateLevelIndex;
           if (typeof li === "number") {
-            sub.visible = li >= lo && li <= hi;
+            sub.visible = li >= stairBand.lo && li <= stairBand.hi;
           } else {
             sub.visible = true;
           }

@@ -17,3 +17,7 @@ export {
   MAMMOTH_STATIC_MODEL_BASE,
   mammothCatalogGlbCandidates,
 } from "./catalogGlb.js";
+export {
+  getMammothDroppedWorldTargetMaxDimM,
+  MAMMOTH_DROPPED_WORLD_DEFAULT_TARGET_MAX_DIM_M,
+} from "./droppedWorldVisual.js";

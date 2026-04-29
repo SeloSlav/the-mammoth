@@ -184,7 +184,7 @@ export function createFpElevatorFloorVisAndCabContext(
             bandEyeWorldY + Math.min(0, bandViewDirY ?? 0) * floorSpacingM * 20,
             storeyOpts,
           );
-    let revealFullStack = false;
+    let elevatorHoistwayPlateBoost = false;
     for (const [key, vis] of visuals) {
       const row = latest.get(key);
       if (!row) continue;
@@ -233,16 +233,28 @@ export function createFpElevatorFloorVisAndCabContext(
         !feetBlockHoistReveal &&
         !eyeBlockHoistReveal
       ) {
-        revealFullStack = true;
+        elevatorHoistwayPlateBoost = true;
         break;
       }
+    }
+    let upperTarget = upperLookAheadStorey;
+    let lowerTarget = lowerLookAheadStorey;
+    if (elevatorHoistwayPlateBoost) {
+      upperTarget =
+        upperTarget === undefined
+          ? maxLevel
+          : Math.max(upperTarget, maxLevel);
+      /** Avoid `Math.min(undefined, 1)` → NaN when pitch lookahead is suppressed (no lower bound). */
+      lowerTarget =
+        lowerTarget === undefined ? 1 : Math.min(lowerTarget, 1);
     }
     return fpBuildingFloorPlateVisibilityBand({
       maxLevel,
       playerStorey,
-      revealFullStack,
-      upperTargetStorey: upperLookAheadStorey,
-      lowerTargetStorey: lowerLookAheadStorey,
+      revealFullStack: false,
+      elevatorHoistwayPlateBoost,
+      upperTargetStorey: upperTarget,
+      lowerTargetStorey: lowerTarget,
     });
   };
 

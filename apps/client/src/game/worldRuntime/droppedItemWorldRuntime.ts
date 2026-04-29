@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
+import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
@@ -9,6 +10,27 @@ import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatal
 
 /** Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ` (√ here). */
 export const MAMMOTH_PICKUP_RADIUS_M = 2.75;
+
+const EPS_BB = 1e-6;
+
+/**
+ * Uniform scale + Y shift so the longest AABB edge matches the catalog target (meters) and
+ * the mesh rests on the placement Y from the server (`@the-mammoth/assets` sizing table).
+ */
+export function fitDroppedWorldItemModelToCatalog(object: THREE.Object3D, defId: string): void {
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z, EPS_BB);
+  const targetM = getMammothDroppedWorldTargetMaxDimM(defId);
+  const s = targetM / maxDim;
+  object.scale.multiplyScalar(s);
+
+  object.updateWorldMatrix(true, true);
+  const boxAfter = new THREE.Box3().setFromObject(object);
+  object.position.y -= boxAfter.min.y;
+}
 
 export type NearestDroppedPickup = {
   droppedItemId: bigint;
@@ -163,14 +185,17 @@ export function mountDroppedItemsWorld(
 
   const spawnFallbackBox = (key: string, row: DroppedItem) => {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.22, 0.06, 0.42),
+      new THREE.BoxGeometry(0.14, 0.04, 0.24),
       new THREE.MeshStandardMaterial({ color: 0x7a8a9a, metalness: 0.2, roughness: 0.75 }),
     );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    const inner = new THREE.Group();
+    inner.add(mesh);
+    fitDroppedWorldItemModelToCatalog(inner, row.defId);
     const g = new THREE.Group();
     g.name = `drop_${key}`;
-    g.add(mesh);
+    g.add(inner);
     applyPose(g, row);
     root.add(g);
     idToGroup.set(key, g);
@@ -204,6 +229,7 @@ export function mountDroppedItemsWorld(
             m.receiveShadow = true;
           }
         });
+        fitDroppedWorldItemModelToCatalog(clone, row.defId);
         const g = new THREE.Group();
         g.name = `drop_${key}`;
         g.add(clone);

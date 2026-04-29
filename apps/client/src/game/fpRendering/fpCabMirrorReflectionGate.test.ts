@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { cabMirrorReflectionWorthUpdating } from "./fpCabMirrorReflectionGate.js";
+import {
+  cabMirrorReflectionFacingScore,
+  cabMirrorReflectionWorthUpdating,
+  pickCabMirrorPrimaryUpdateIndex,
+} from "./fpCabMirrorReflectionGate.js";
 
 describe("cabMirrorReflectionWorthUpdating", () => {
   it("returns false when mirror is behind the camera (XZ)", () => {
@@ -19,5 +23,85 @@ describe("cabMirrorReflectionWorthUpdating", () => {
     const cam = new THREE.Vector3(0, 1.6, 0);
     const forward = new THREE.Vector3(0, 0, 1);
     expect(cabMirrorReflectionWorthUpdating(mesh, cam, forward)).toBe(true);
+  });
+});
+
+describe("cabMirrorReflectionFacingScore", () => {
+  it("returns -1 when outside forward cone", () => {
+    const mesh = new THREE.Mesh();
+    mesh.position.set(0, 1.6, 0);
+    mesh.updateMatrixWorld(true);
+    const cam = new THREE.Vector3(0, 1.6, 2);
+    const forward = new THREE.Vector3(0, 0, 1);
+    expect(cabMirrorReflectionFacingScore(mesh, cam, forward)).toBe(-1);
+  });
+
+  it("returns positive when mirror is ahead", () => {
+    const mesh = new THREE.Mesh();
+    mesh.position.set(0, 1.6, 8);
+    mesh.updateMatrixWorld(true);
+    const cam = new THREE.Vector3(0, 1.6, 0);
+    const forward = new THREE.Vector3(0, 0, 1);
+    expect(cabMirrorReflectionFacingScore(mesh, cam, forward)).toBeGreaterThan(0);
+  });
+});
+
+describe("pickCabMirrorPrimaryUpdateIndex", () => {
+  it("returns -1 when every surface is invisible", () => {
+    const a = new THREE.Mesh();
+    a.position.set(0, 1.6, 8);
+    a.visible = false;
+    a.updateMatrixWorld(true);
+    const b = new THREE.Mesh();
+    b.position.set(8, 1.6, 0);
+    b.visible = false;
+    b.updateMatrixWorld(true);
+    const cam = new THREE.Vector3(0, 1.6, 0);
+    const forward = new THREE.Vector3(0, 0, 1);
+    expect(
+      pickCabMirrorPrimaryUpdateIndex([{ surface: a }, { surface: b }], {
+        cameraWorld: cam,
+        cameraForward: forward,
+      }),
+    ).toBe(-1);
+  });
+
+  it("prefers the mirror more aligned with the view among eligible surfaces", () => {
+    const ahead = new THREE.Mesh();
+    ahead.position.set(0, 1.6, 6);
+    ahead.updateMatrixWorld(true);
+    const side = new THREE.Mesh();
+    side.position.set(6, 1.6, 2);
+    side.updateMatrixWorld(true);
+    const cam = new THREE.Vector3(0, 1.6, 0);
+    const forward = new THREE.Vector3(0, 0, 1);
+    const idx = pickCabMirrorPrimaryUpdateIndex([{ surface: ahead }, { surface: side }], {
+      cameraWorld: cam,
+      cameraForward: forward,
+    });
+    expect(idx).toBe(0);
+  });
+
+  it("returns -1 when looking vertically so reflections do not duplicate the whole scene", () => {
+    const ahead = new THREE.Mesh();
+    ahead.position.set(0, 1.6, 6);
+    ahead.updateMatrixWorld(true);
+    const cam = new THREE.Vector3(0, 1.6, 0);
+    const forwardUp = new THREE.Vector3(0.05, 0.92, 0.1).normalize();
+    expect(
+      pickCabMirrorPrimaryUpdateIndex([{ surface: ahead }], {
+        cameraWorld: cam,
+        cameraForward: forwardUp,
+        skipReflectionWhenVerticalLookAboveAbsY: 0.62,
+      }),
+    ).toBe(-1);
+    const forwardFlat = new THREE.Vector3(0, 0, 1);
+    expect(
+      pickCabMirrorPrimaryUpdateIndex([{ surface: ahead }], {
+        cameraWorld: cam,
+        cameraForward: forwardFlat,
+        skipReflectionWhenVerticalLookAboveAbsY: 0.62,
+      }),
+    ).toBe(0);
   });
 });

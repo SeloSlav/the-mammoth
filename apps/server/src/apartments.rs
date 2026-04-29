@@ -201,13 +201,63 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
             let (mn, mx) = derive_bounds(t, level);
             let sx = mx[0] - mn[0];
             let sz = mx[2] - mn[2];
-            let bed_x = (mn[0] + BED_FRAC_X * sx).clamp(mn[0] + BED_EDGE_MARGIN, mx[0] - BED_EDGE_MARGIN);
-            let bed_z = (mn[2] + BED_FRAC_Z * sz).clamp(mn[2] + BED_EDGE_MARGIN, mx[2] - BED_EDGE_MARGIN);
-            let (wardrobe_xz, foot_xz) = crate::apartment_interior_anchors::wardrobe_and_footlocker_xz_for_unit_seed(
-                mn[0], mx[0], mn[2], mx[2], t.hinge_x, t.hinge_z, t.face,
-            );
-            let foot_x = foot_xz[0];
-            let foot_z = foot_xz[1];
+            let face = SwingDoorFace::from_u8(t.face);
+
+            let (
+                bed_x,
+                bed_z,
+                bed_yaw,
+                foot_x,
+                foot_z,
+                wardrobe_x,
+                wardrobe_z,
+            ) =
+                if let Some(seed) = crate::apartment_interior_anchors::east_west_interior_furniture_seed(
+                    &mn,
+                    &mx,
+                    t.hinge_x,
+                    t.hinge_z,
+                    face,
+                ) {
+                    (
+                        seed.bed_x,
+                        seed.bed_z,
+                        seed.bed_yaw,
+                        seed.foot_x,
+                        seed.foot_z,
+                        seed.wardrobe_x,
+                        seed.wardrobe_z,
+                    )
+                } else {
+                    let bed_x_frac =
+                        (mn[0] + BED_FRAC_X * sx).clamp(mn[0] + BED_EDGE_MARGIN, mx[0] - BED_EDGE_MARGIN);
+                    let bed_z_frac =
+                        (mn[2] + BED_FRAC_Z * sz).clamp(mn[2] + BED_EDGE_MARGIN, mx[2] - BED_EDGE_MARGIN);
+                    let bed_yaw_legacy = match face {
+                        SwingDoorFace::W => std::f32::consts::FRAC_PI_2,
+                        SwingDoorFace::E => -std::f32::consts::FRAC_PI_2,
+                        _ => 0.0,
+                    };
+                    let (wardrobe_xz, foot_xz) =
+                        crate::apartment_interior_anchors::wardrobe_and_footlocker_xz_for_unit_seed(
+                            mn[0],
+                            mx[0],
+                            mn[2],
+                            mx[2],
+                            t.hinge_x,
+                            t.hinge_z,
+                            t.face,
+                        );
+                    (
+                        bed_x_frac,
+                        bed_z_frac,
+                        bed_yaw_legacy,
+                        foot_xz[0],
+                        foot_xz[1],
+                        wardrobe_xz[0],
+                        wardrobe_xz[1],
+                    )
+                };
             let _ = ctx.db.apartment_unit().insert(ApartmentUnit {
                 unit_key: uk,
                 floor_doc_id: floor_doc_id.to_string(),
@@ -224,16 +274,12 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                 bed_x,
                 bed_y: mn[1] + 0.01,
                 bed_z,
-                bed_yaw: match SwingDoorFace::from_u8(t.face) {
-                    SwingDoorFace::W => std::f32::consts::FRAC_PI_2,
-                    SwingDoorFace::E => -std::f32::consts::FRAC_PI_2,
-                    _ => 0.0,
-                },
+                bed_yaw,
                 foot_x,
                 foot_y: mn[1],
                 foot_z,
-                wardrobe_x: wardrobe_xz[0],
-                wardrobe_z: wardrobe_xz[1],
+                wardrobe_x,
+                wardrobe_z,
                 bound_min_x: mn[0],
                 bound_max_x: mx[0],
                 bound_min_z: mn[2],
