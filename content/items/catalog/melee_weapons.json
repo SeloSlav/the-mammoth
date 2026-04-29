@@ -7,6 +7,9 @@
       "description": "Compact blade for close work. Fast swings, low reach.",
       "category": "weapon",
       "maxStack": 1,
+      "meleeCombat": {
+        "damage": 12
+      },
       "construction": {
         "buildTimeSecs": 10,
         "materials": [
@@ -21,6 +24,9 @@
       "description": "Heavy pry bar. Slower swings, high impact.",
       "category": "weapon",
       "maxStack": 1,
+      "meleeCombat": {
+        "damage": 22
+      },
       "construction": {
         "buildTimeSecs": 18,
         "materials": [
@@ -35,6 +41,9 @@
       "description": "Regional improvised cutting tool. Balanced between speed and heft.",
       "category": "weapon",
       "maxStack": 1,
+      "meleeCombat": {
+        "damage": 18
+      },
       "construction": {
         "buildTimeSecs": 22,
         "materials": [
@@ -50,6 +59,9 @@
       "description": "Wooden club. Wide swing arc, blunt trauma.",
       "category": "weapon",
       "maxStack": 1,
+      "meleeCombat": {
+        "damage": 20
+      },
       "construction": {
         "buildTimeSecs": 8,
         "materials": [

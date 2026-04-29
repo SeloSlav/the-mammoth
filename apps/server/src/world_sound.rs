@@ -9,6 +9,7 @@ use spacetimedb::{
 use crate::auth;
 use crate::combat_stub;
 use crate::movement::PlayerInput;
+use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
 
 // --- Bit layout: keep in sync with `apps/server/src/movement.rs` / `moveIntentCodec.ts` ---
@@ -38,6 +39,8 @@ pub const KIND_LANDING_EXTERIOR_DOOR_OPEN: u8 = 7;
 pub const KIND_LANDING_EXTERIOR_DOOR_CLOSE: u8 = 8;
 /// Elevator car finished a travel leg — docked at `move_to_level` (`variation` unused).
 pub const KIND_ELEVATOR_CAB_ARRIVAL: u8 = 9;
+/// Melee hit landed on another player (`variation` unused).
+pub const KIND_MELEE_FLESH_HIT: u8 = 10;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -280,6 +283,16 @@ pub fn emit_elevator_cab_arrival_at(ctx: &ReducerContext, x: f32, y: f32, z: f32
     );
 }
 
+pub fn emit_melee_flesh_hit_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(ctx, KIND_MELEE_FLESH_HIT, 0, x, y, z, 0.72, 18.0, emitter);
+}
+
 /// Per-connection rows used by footsteps + melee cooldown.
 pub fn ensure_player_audio_rows(ctx: &ReducerContext, id: Identity) {
     if ctx.db.player_foot_cadence().identity().find(&id).is_none() {
@@ -295,6 +308,13 @@ pub fn ensure_player_audio_rows(ctx: &ReducerContext, id: Identity) {
             identity: id,
             last_swing_micros: 0,
         });
+    }
+}
+
+pub fn reset_player_melee_cooldown_row(ctx: &ReducerContext, id: Identity) {
+    if let Some(mut row) = ctx.db.player_melee_cooldown().identity().find(&id) {
+        row.last_swing_micros = 0;
+        ctx.db.player_melee_cooldown().identity().update(row);
     }
 }
 
@@ -397,6 +417,9 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
         return;
     }
     let id = ctx.sender();
+    if player_vitals::is_player_dead(ctx, id) {
+        return;
+    }
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
     };
@@ -419,11 +442,18 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
     cd.last_swing_micros = now_us;
     ctx.db.player_melee_cooldown().identity().update(cd);
 
-    let stub_damage = combat_stub::stub_melee_damage_for_def_id(&weapon_def_id);
-    log::debug!(
-        "submit_melee_swing: stub base damage {:.2} (active hotbar; hit validation not implemented)",
-        stub_damage
-    );
+    if let Some(hit) = combat_stub::resolve_melee_hit(
+        ctx,
+        id,
+        pose.x,
+        pose.y,
+        pose.z,
+        pose.yaw,
+        &weapon_def_id,
+    ) {
+        let _killed = player_vitals::apply_damage(ctx, hit.target, hit.damage);
+        emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
+    }
 
     let profile = melee_weapon_swing_sound_profile_for_def_id(&weapon_def_id);
     let stem = ((now_us >> 7) as u8) & MELEE_SWING_VARIATION_STEM_MASK;

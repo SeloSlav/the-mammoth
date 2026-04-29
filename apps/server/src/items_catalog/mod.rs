@@ -50,6 +50,12 @@ pub fn instant_hotbar_consume_vital_deltas(def_id: &str) -> Option<(f32, f32, f3
     (dhp != 0.0 || dh != 0.0 || dy != 0.0).then_some((dhp, dh, dy))
 }
 
+#[inline]
+pub fn melee_damage(def_id: &str) -> Option<f32> {
+    let c = get(def_id)?;
+    Some(c.melee_combat.as_ref()?.damage)
+}
+
 /// Authored hotbar consume mouth SFX (`eat` / `drink`), defaulting to `eat`.
 #[inline]
 pub fn hotbar_consume_sound(def_id: &str) -> HotbarConsumeSound {
@@ -69,7 +75,7 @@ pub fn is_material_def_id(def_id: &str) -> bool {
 
 #[cfg(test)]
 mod hotbar_consume_sound_tests {
-    use super::{hotbar_consume_sound, HotbarConsumeSound};
+    use super::{hotbar_consume_sound, melee_damage, HotbarConsumeSound};
 
     #[test]
     fn authored_consume_sounds_match_item_type() {
@@ -81,5 +87,12 @@ mod hotbar_consume_sound_tests {
     #[test]
     fn missing_sound_defaults_to_eat() {
         assert_eq!(hotbar_consume_sound("field_rations"), HotbarConsumeSound::Eat);
+    }
+
+    #[test]
+    fn melee_weapons_read_authored_damage_from_catalog() {
+        assert_eq!(melee_damage("knife"), Some(12.0));
+        assert_eq!(melee_damage("crowbar"), Some(22.0));
+        assert_eq!(melee_damage("water_bottle"), None);
     }
 }

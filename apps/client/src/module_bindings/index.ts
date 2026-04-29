@@ -50,6 +50,7 @@ import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
+import RespawnPlayerReducer from "./respawn_player_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
@@ -287,6 +288,7 @@ const reducersSchema = __reducers(
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
+  __reducerSchema("respawn_player", RespawnPlayerReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),

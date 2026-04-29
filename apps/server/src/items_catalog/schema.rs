@@ -23,6 +23,12 @@ pub struct ConsumeOnUseSpec {
     pub hydration_delta: Option<f32>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeleeCombatSpec {
+    pub damage: f32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HotbarConsumeSound {
@@ -39,6 +45,8 @@ pub struct CatalogItem {
     pub description: String,
     pub category: ItemCategory,
     pub max_stack: u32,
+    #[serde(default)]
+    pub melee_combat: Option<MeleeCombatSpec>,
     #[serde(default)]
     pub construction: Option<ConstructionSpec>,
     #[serde(default)]

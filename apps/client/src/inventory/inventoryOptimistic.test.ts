@@ -16,6 +16,7 @@ function item(instanceNum: number, defId: string, qty: number, max: number): Mam
       description: "",
       category: "weapon",
       maxStack: max,
+      meleeCombat: null,
       construction: null,
       consumeOnUse: null,
       hotbarConsumeSound: null,

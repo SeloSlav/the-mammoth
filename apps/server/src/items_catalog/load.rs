@@ -111,6 +111,11 @@ fn load_catalog() -> ItemCatalog {
         }
     }
     for it in by_id.values() {
+        if let Some(ref melee) = it.melee_combat {
+            if melee.damage <= 0.0 {
+                panic!("catalog item {}: meleeCombat.damage must be > 0", it.id);
+            }
+        }
         if let Some(ref c) = it.construction {
             validate_construction(it.id.as_str(), c, &by_id);
         }

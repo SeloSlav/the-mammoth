@@ -9,6 +9,7 @@ function def(maxStack: number): MammothItemDef {
     description: "",
     category: "consumable",
     maxStack,
+    meleeCombat: null,
     construction: null,
     consumeOnUse: null,
     hotbarConsumeSound: null,

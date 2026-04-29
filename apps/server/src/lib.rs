@@ -26,7 +26,6 @@ mod world_sound;
 
 use spacetimedb::{ReducerContext, Table};
 use accounts::{user, User};
-use pose::{player_pose, PlayerPose};
 
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {
@@ -49,20 +48,7 @@ pub fn on_connect(ctx: &ReducerContext) {
             username: None,
         });
     }
-    if ctx.db.player_pose().identity().find(&id).is_none() {
-        let _ = ctx.db.player_pose().insert(PlayerPose {
-            identity: id,
-            x: 0.0,
-            y: 1.35,
-            z: 0.0,
-            yaw: 0.0,
-            seq: 0,
-            vel_x: 0.0,
-            vel_y: 0.0,
-            vel_z: 0.0,
-            grounded: 1,
-        });
-    }
+    pose::ensure_player_pose_row(ctx, id);
     movement::ensure_player_input_row(ctx, id, 0.0);
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
@@ -100,4 +86,20 @@ pub fn ping_world(ctx: &ReducerContext) {
     }
     let u = ctx.db.user().identity().find(&ctx.sender()).unwrap();
     log::info!("ping_world ok for {}", auth::display_name_for(&u));
+}
+
+#[spacetimedb::reducer]
+pub fn respawn_player(ctx: &ReducerContext) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("respawn_player blocked: {e}");
+        return;
+    }
+    let id = ctx.sender();
+    if !player_vitals::is_player_dead(ctx, id) {
+        return;
+    }
+    pose::reset_player_pose_to_spawn(ctx, id);
+    movement::reset_player_input_row(ctx, id, pose::PLAYER_SPAWN_YAW);
+    player_vitals::reset_player_vitals_for_respawn(ctx, id);
+    world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

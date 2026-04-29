@@ -54,7 +54,7 @@ function cloneGeometryForMerge(
   return g;
 }
 
-/** Expanded stair-shaft AABB for FP mood lighting (XZ pad eats a slice of corridor at door thresholds). */
+/** Stair-shaft core AABB for FP mood lighting; keep darkness inside the actual shaft, not corridors. */
 export type FpStairShaftInteriorLightBounds = {
   minX: number;
   maxX: number;
@@ -64,13 +64,13 @@ export type FpStairShaftInteriorLightBounds = {
   maxZ: number;
 };
 
-const STAIR_SHAFT_LIGHT_XZ_PAD_M = 2.85;
+const STAIR_SHAFT_LIGHT_XZ_INSET_M = 0.18;
 const STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M = 0.55;
 const STAIR_SHAFT_LIGHT_Y_PAD_TOP_M = 3.5;
 
 function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpStairShaftInteriorLightBounds {
-  const hw = s.sx * 0.5 + STAIR_SHAFT_LIGHT_XZ_PAD_M;
-  const hd = s.sz * 0.5 + STAIR_SHAFT_LIGHT_XZ_PAD_M;
+  const hw = Math.max(0.05, s.sx * 0.5 - STAIR_SHAFT_LIGHT_XZ_INSET_M);
+  const hd = Math.max(0.05, s.sz * 0.5 - STAIR_SHAFT_LIGHT_XZ_INSET_M);
   const minY = s.bottomY - STAIR_SHAFT_LIGHT_Y_PAD_BOTTOM_M;
   const maxY =
     s.bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_LIGHT_Y_PAD_TOP_M;

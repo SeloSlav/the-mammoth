@@ -41,6 +41,8 @@ export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN = 7;
 export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE = 8;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_CAB_ARRIVAL`. */
 export const WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL = 9;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_MELEE_FLESH_HIT`. */
+export const WORLD_SOUND_KIND_MELEE_FLESH_HIT = 10;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -51,6 +53,7 @@ const ELEVATOR_LANDING_HAIL_STEM = `${UI_STEM}/elevator-hail` as const;
 const DOOR_OPEN_STEM = `${UI_STEM}/door-open` as const;
 const DOOR_CLOSE_STEM = `${UI_STEM}/door-close` as const;
 const ELEVATOR_CAB_ARRIVAL_STEM = `${UI_STEM}/elevator-arrival` as const;
+const MELEE_FLESH_HIT_STEM = `${UI_STEM}/melee-weapon-flesh` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -68,6 +71,7 @@ export class WorldProximityAudio {
   private doorOpenBuffer: AudioBuffer | null = null;
   private doorCloseBuffer: AudioBuffer | null = null;
   private elevatorCabArrivalBuffer: AudioBuffer | null = null;
+  private meleeFleshHitBuffer: AudioBuffer | null = null;
   /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
   private pendingRows: WorldSoundEvent[] = [];
   private static readonly PENDING_CAP = 64;
@@ -121,6 +125,7 @@ export class WorldProximityAudio {
     this.doorOpenBuffer = await this.decodeSingleStem(ctx, DOOR_OPEN_STEM);
     this.doorCloseBuffer = await this.decodeSingleStem(ctx, DOOR_CLOSE_STEM);
     this.elevatorCabArrivalBuffer = await this.decodeSingleStem(ctx, ELEVATOR_CAB_ARRIVAL_STEM);
+    this.meleeFleshHitBuffer = await this.decodeSingleStem(ctx, MELEE_FLESH_HIT_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -211,6 +216,7 @@ export class WorldProximityAudio {
     this.doorOpenBuffer = null;
     this.doorCloseBuffer = null;
     this.elevatorCabArrivalBuffer = null;
+    this.meleeFleshHitBuffer = null;
     this.pendingRows.length = 0;
     this.sourceCache.clear();
   }
@@ -236,7 +242,8 @@ export class WorldProximityAudio {
         row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
         row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
         row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
-        row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL;
+        row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL ||
+        row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT;
       if (!hearOwnSpatial) return;
     }
 
@@ -276,6 +283,9 @@ export class WorldProximityAudio {
     } else if (row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL) {
       if (!this.elevatorCabArrivalBuffer) return;
       buf = this.elevatorCabArrivalBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT) {
+      if (!this.meleeFleshHitBuffer) return;
+      buf = this.meleeFleshHitBuffer;
     } else {
       return;
     }
@@ -318,7 +328,8 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
-      row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL
+      row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL ||
+      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT
     ) {
       src.playbackRate.value = 0.99 + Math.random() * 0.04;
     }

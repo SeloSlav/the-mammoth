@@ -9,6 +9,8 @@ use crate::movement::{player_input, PlayerInput, BIT_SPRINT};
 
 /// All vitals use 0..=MAX; keeps HUD math simple and matches a “percent bar” mental model.
 pub(crate) const VITAL_MAX: f32 = 100.0;
+pub(crate) const RESPAWN_HUNGER: f32 = VITAL_MAX * 0.82;
+pub(crate) const RESPAWN_HYDRATION: f32 = VITAL_MAX * 0.78;
 /// ~40 minutes from full to empty at 1× drain.
 const HUNGER_FULL_DRAIN_SECS: f32 = 40.0 * 60.0;
 /// Hydration falls faster than hunger (~28 minutes full → empty at 1×).
@@ -137,15 +139,52 @@ pub fn ensure_player_vitals_row(ctx: &ReducerContext, id: Identity) {
     if ctx.db.player_vitals().identity().find(&id).is_some() {
         return;
     }
-    let start_hunger = VITAL_MAX * 0.82;
-    let start_hydration = VITAL_MAX * 0.78;
     let _ = ctx.db.player_vitals().insert(PlayerVitals {
         identity: id,
         health: VITAL_MAX,
-        hunger: start_hunger,
-        hydration: start_hydration,
+        hunger: RESPAWN_HUNGER,
+        hydration: RESPAWN_HYDRATION,
         last_hotbar_consume_at: None,
     });
+}
+
+#[inline]
+pub fn is_player_dead(ctx: &ReducerContext, id: Identity) -> bool {
+    ctx.db
+        .player_vitals()
+        .identity()
+        .find(&id)
+        .map(|v| v.health <= 0.0)
+        .unwrap_or(false)
+}
+
+pub fn apply_damage(ctx: &ReducerContext, owner: Identity, amount: f32) -> bool {
+    if amount <= 0.0 {
+        return false;
+    }
+    let Some(mut v) = ctx.db.player_vitals().identity().find(&owner) else {
+        log::warn!("apply_damage: no player_vitals row for {owner}");
+        return false;
+    };
+    if v.health <= 0.0 {
+        return false;
+    }
+    v.health = clamp_vital(v.health - amount);
+    let killed = v.health <= 0.0;
+    ctx.db.player_vitals().identity().update(v);
+    killed
+}
+
+pub fn reset_player_vitals_for_respawn(ctx: &ReducerContext, owner: Identity) {
+    let Some(mut v) = ctx.db.player_vitals().identity().find(&owner) else {
+        ensure_player_vitals_row(ctx, owner);
+        return;
+    };
+    v.health = VITAL_MAX;
+    v.hunger = RESPAWN_HUNGER;
+    v.hydration = RESPAWN_HYDRATION;
+    v.last_hotbar_consume_at = None;
+    ctx.db.player_vitals().identity().update(v);
 }
 
 pub fn start_player_vitals_schedule(ctx: &ReducerContext) {

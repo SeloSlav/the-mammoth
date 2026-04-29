@@ -12,8 +12,10 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::accounts::user;
 use crate::auth;
+use crate::combat_stub;
 use crate::elevator::{self, elevator_car, ElevatorCar};
 use crate::kinematic_support;
+use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
 use crate::stair_runtime_overlay;
 use crate::world_sound;
@@ -111,6 +113,9 @@ pub fn submit_move_intent(ctx: &ReducerContext, intent_seq: u64, bits: u8, aim_y
         return;
     }
     let id = ctx.sender();
+    if player_vitals::is_player_dead(ctx, id) {
+        return;
+    }
     if let Some(prev) = ctx.db.player_input().identity().find(&id) {
         if intent_seq <= prev.intent_seq {
             return;
@@ -131,6 +136,13 @@ pub fn submit_move_intent(ctx: &ReducerContext, intent_seq: u64, bits: u8, aim_y
     }
 }
 
+struct SimulatedPlayerTick {
+    id: Identity,
+    pose: PlayerPose,
+    input: PlayerInput,
+    grounded_before: u8,
+}
+
 #[spacetimedb::reducer]
 pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
     if ctx.sender() != ctx.identity() {
@@ -147,6 +159,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
     crate::apartment_door::tick_apartment_doors(ctx, TICK_DT);
 
     let mut collision_scratch: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(512);
+    let mut simulated = Vec::<SimulatedPlayerTick>::new();
     for pose in ctx.db.player_pose().iter() {
         let id = pose.identity;
         let Some(u) = ctx.db.user().identity().find(&id) else {
@@ -167,6 +180,16 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
                 bits: 0,
                 aim_yaw: pose.yaw,
             });
+        let input = if player_vitals::is_player_dead(ctx, id) {
+            PlayerInput {
+                identity: id,
+                intent_seq: input.intent_seq,
+                bits: 0,
+                aim_yaw: pose.yaw,
+            }
+        } else {
+            input
+        };
 
         let grounded_before = pose.grounded;
         let mut p = pose;
@@ -203,8 +226,50 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
             input.bits & BIT_CROUCH != 0,
         );
         elevator::clamp_player_to_elevator_kinematic_support(ctx, &mut p);
-        world_sound::sync_footsteps_for_tick(ctx, id, &input, grounded_before, &p, TICK_DT);
-        ctx.db.player_pose().identity().update(p);
+        simulated.push(SimulatedPlayerTick {
+            id,
+            pose: p,
+            input,
+            grounded_before,
+        });
+    }
+
+    let mut body_samples = simulated
+        .iter()
+        .map(|row| combat_stub::PlayerBodySample {
+            identity: row.id,
+            x: row.pose.x,
+            y: row.pose.y,
+            z: row.pose.z,
+            body_height: player_body_height(row.input.bits),
+        })
+        .collect::<Vec<_>>();
+    combat_stub::resolve_player_player_collisions(&mut body_samples);
+
+    for (mut row, body) in simulated.into_iter().zip(body_samples.into_iter()) {
+        row.pose.x = body.x;
+        row.pose.z = body.z;
+        let depen_prev_x = row.pose.x;
+        let depen_prev_y = row.pose.y;
+        let depen_prev_z = row.pose.z;
+        resolve_player_static_collisions(
+            &mut row.pose,
+            depen_prev_x,
+            depen_prev_y,
+            depen_prev_z,
+            row.input.bits,
+            &mut collision_scratch,
+        );
+        elevator::clamp_player_to_elevator_kinematic_support(ctx, &mut row.pose);
+        world_sound::sync_footsteps_for_tick(
+            ctx,
+            row.id,
+            &row.input,
+            row.grounded_before,
+            &row.pose,
+            TICK_DT,
+        );
+        ctx.db.player_pose().identity().update(row.pose);
     }
 }
 
@@ -464,6 +529,24 @@ pub fn ensure_player_input_row(ctx: &ReducerContext, id: Identity, yaw0: f32) {
             intent_seq: 0,
             bits: 0,
             aim_yaw: yaw0,
+        });
+    }
+}
+
+pub fn reset_player_input_row(ctx: &ReducerContext, id: Identity, yaw: f32) {
+    if ctx.db.player_input().identity().find(&id).is_some() {
+        ctx.db.player_input().identity().update(PlayerInput {
+            identity: id,
+            intent_seq: 0,
+            bits: 0,
+            aim_yaw: yaw,
+        });
+    } else {
+        let _ = ctx.db.player_input().insert(PlayerInput {
+            identity: id,
+            intent_seq: 0,
+            bits: 0,
+            aim_yaw: yaw,
         });
     }
 }

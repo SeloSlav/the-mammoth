@@ -17,6 +17,7 @@ import type {
   MammothConstruction,
   MammothConsumeOnUse,
   MammothHotbarConsumeSound,
+  MammothMeleeCombat,
   MammothItemDef,
 } from "./mammothItemCatalogTypes";
 
@@ -45,6 +46,7 @@ type RawItem = {
   category: ItemCategory;
   maxStack: number;
   construction?: MammothConstruction;
+  meleeCombat?: MammothMeleeCombat;
   consumeOnUse?: MammothConsumeOnUse;
   hotbarConsumeSound?: MammothHotbarConsumeSound;
 };
@@ -90,6 +92,12 @@ function normalizeHotbarConsumeSound(raw?: MammothHotbarConsumeSound): MammothHo
   return raw === "eat" || raw === "drink" ? raw : null;
 }
 
+function normalizeMeleeCombat(raw?: MammothMeleeCombat): MammothMeleeCombat | null {
+  if (!raw) return null;
+  if (!(raw.damage > 0)) return null;
+  return { damage: raw.damage };
+}
+
 /** `true` when catalog says instant hotbar consume is defined (category consumable + non-zero `consumeOnUse`). */
 export function mammothItemDefSupportsHotbarInstantConsume(def: MammothItemDef | undefined): boolean {
   if (!def || def.category !== "consumable") return false;
@@ -113,6 +121,7 @@ for (const it of mergeRawItems()) {
     description: it.description,
     category: it.category,
     maxStack: it.maxStack,
+    meleeCombat: normalizeMeleeCombat(it.meleeCombat),
     construction: it.construction ?? null,
     consumeOnUse: normalizeConsumeOnUse(it.consumeOnUse),
     hotbarConsumeSound: normalizeHotbarConsumeSound(it.hotbarConsumeSound),
