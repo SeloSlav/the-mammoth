@@ -64,6 +64,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     movement::ensure_player_input_row(ctx, id, 0.0);
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
+    apartments::seed_apartment_units(ctx);
     world_sound::ensure_player_audio_rows(ctx, id);
     firearm::ensure_player_firearm_cooldown_row(ctx, id);
     player_vitals::ensure_player_vitals_row(ctx, id);
