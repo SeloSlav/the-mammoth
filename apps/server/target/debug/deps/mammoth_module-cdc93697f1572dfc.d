@@ -90,4 +90,5 @@ C:\WebProjects\the-mammoth\apps\server/../../content/elevator/stairwell.json:
 C:\WebProjects\the-mammoth\apps\server\target\debug\build\mammoth-module-07aff0180892f00a\out/stair_runtime_overlay.rs:
 
 # env-dep:CARGO_MANIFEST_DIR=C:\\WebProjects\\the-mammoth\\apps\\server
+# env-dep:MAMMOTH_REQUIRE_REGISTERED_APARTMENT_CLAIMS
 # env-dep:OUT_DIR=C:\\WebProjects\\the-mammoth\\apps\\server\\target\\debug\\build\\mammoth-module-07aff0180892f00a\\out

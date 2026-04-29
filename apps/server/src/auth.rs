@@ -54,13 +54,25 @@ pub(crate) fn ensure_gameplay_unlocked(ctx: &ReducerContext) -> Result<(), Strin
     Ok(())
 }
 
-/// True registered accounts connect with an OIDC JWT; anonymous guest tokens do not.
-pub(crate) fn ensure_registered_account(ctx: &ReducerContext) -> Result<(), String> {
+/// Apartment ownership can be limited to OIDC-backed accounts via a compile-time feature flag.
+pub(crate) fn ensure_apartment_claim_allowed(ctx: &ReducerContext) -> Result<(), String> {
     ensure_gameplay_unlocked(ctx)?;
+    if !require_registered_account_for_apartment_claims() {
+        return Ok(());
+    }
     if !ctx.sender_auth().has_jwt() {
         return Err("Apartment claims require a registered account.".to_string());
     }
     Ok(())
+}
+
+fn require_registered_account_for_apartment_claims() -> bool {
+    option_env!("MAMMOTH_REQUIRE_REGISTERED_APARTMENT_CLAIMS")
+        .map(|v| {
+            let v = v.trim();
+            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
+        })
+        .unwrap_or(false)
 }
 
 /// Chat / HUD display: prefer username, fall back to short identity string.

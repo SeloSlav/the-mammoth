@@ -480,7 +480,7 @@ fn force_unit_primary_door_open(ctx: &ReducerContext, uk: &str) {
 
 #[spacetimedb::reducer]
 pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
-    if let Err(e) = auth::ensure_registered_account(ctx) {
+    if let Err(e) = auth::ensure_apartment_claim_allowed(ctx) {
         log::debug!("claim_apartment_pulse blocked: {e}");
         return;
     }

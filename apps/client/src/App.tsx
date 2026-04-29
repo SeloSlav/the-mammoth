@@ -4,6 +4,9 @@ import { HudShell } from "./ui/HudShell";
 import { LoginGate } from "./ui/LoginGate";
 import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
 
+const REQUIRE_REGISTERED_APARTMENT_CLAIMS =
+  import.meta.env.VITE_REQUIRE_REGISTERED_APARTMENT_CLAIMS === "true";
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const session = useSpacetimeSession();
@@ -21,7 +24,8 @@ export default function App() {
     let cancelled = false;
     setGpuError(null);
     void mountFpSession(canvas, conn, {
-      apartmentClaimsAllowed: session.connectionKind === "oidc",
+      apartmentClaimsAllowed:
+        !REQUIRE_REGISTERED_APARTMENT_CLAIMS || session.connectionKind === "oidc",
     })
       .then((d) => {
         if (cancelled) {
