@@ -23,11 +23,20 @@ pub struct PlayerFirearmCooldown {
 }
 
 pub fn ensure_player_firearm_cooldown_row(ctx: &ReducerContext, id: Identity) {
-    if ctx.db.player_firearm_cooldown().identity().find(&id).is_none() {
-        let _ = ctx.db.player_firearm_cooldown().insert(PlayerFirearmCooldown {
-            identity: id,
-            last_shot_micros: 0,
-        });
+    if ctx
+        .db
+        .player_firearm_cooldown()
+        .identity()
+        .find(&id)
+        .is_none()
+    {
+        let _ = ctx
+            .db
+            .player_firearm_cooldown()
+            .insert(PlayerFirearmCooldown {
+                identity: id,
+                last_shot_micros: 0,
+            });
     }
 }
 
@@ -69,12 +78,7 @@ fn consume_first_owned_stack_one(ctx: &ReducerContext, owner: Identity, def: &st
 /// Client-sent camera-forward direction `(aim_dir_xyz)` in world units. Server normalizes +
 /// clamps wild vectors before consuming ammo — **must** precede projectile math.
 #[spacetimedb::reducer]
-pub fn submit_firearm_shot(
-    ctx: &ReducerContext,
-    aim_dir_x: f32,
-    aim_dir_y: f32,
-    aim_dir_z: f32,
-) {
+pub fn submit_firearm_shot(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32, aim_dir_z: f32) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("submit_firearm_shot blocked: {e}");
         return;
@@ -126,17 +130,17 @@ pub fn submit_firearm_shot(
     } else {
         world_sound::FIREARM_VARIATION_PISTOL
     };
-    world_sound::emit_gunfire_at(
-        ctx,
-        pose.x,
-        pose.y + 1.02,
-        pose.z,
-        id,
-        gun_sound_variation,
-    );
+    world_sound::emit_gunfire_at(ctx, pose.x, pose.y + 1.02, pose.z, id, gun_sound_variation);
 
-    let hits =
-        hitscan::firearm_hitscan_weapon(ctx, id, &pose, weapon_def_id.as_str(), aim_dir_x, aim_dir_y, aim_dir_z);
+    let hits = hitscan::firearm_hitscan_weapon(
+        ctx,
+        id,
+        &pose,
+        weapon_def_id.as_str(),
+        aim_dir_x,
+        aim_dir_y,
+        aim_dir_z,
+    );
 
     for h in hits {
         let killed = player_vitals::apply_damage(ctx, h.identity, h.damage);

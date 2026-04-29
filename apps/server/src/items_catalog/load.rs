@@ -56,7 +56,11 @@ fn parse_shards() -> Vec<CatalogItem> {
     out
 }
 
-fn validate_construction(owner_id: &str, c: &ConstructionSpec, catalog: &HashMap<String, CatalogItem>) {
+fn validate_construction(
+    owner_id: &str,
+    c: &ConstructionSpec,
+    catalog: &HashMap<String, CatalogItem>,
+) {
     if c.build_time_secs == 0 {
         panic!("catalog item {owner_id}: construction.buildTimeSecs must be > 0");
     }

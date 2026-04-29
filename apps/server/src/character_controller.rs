@@ -5,9 +5,9 @@
 use std::cell::Cell;
 
 use crate::generated_collision_solids;
+use crate::pose::PlayerPose;
 use crate::stair_opening_collision;
 use crate::stair_runtime_overlay;
-use crate::pose::PlayerPose;
 
 const COLLISION_EPS: f32 = 0.0015;
 const STEP_IGNORE_BELOW_FEET_M: f32 = 0.2;
@@ -69,7 +69,8 @@ fn log_west_door_static_debug(
         if !vertical_overlap_body(p.y, body_h, mn, mx) {
             continue;
         }
-        if body_max_x <= mn[0] || body_min_x >= mx[0] || body_max_z <= mn[2] || body_min_z >= mx[2] {
+        if body_max_x <= mn[0] || body_min_x >= mx[0] || body_max_z <= mn[2] || body_min_z >= mx[2]
+        {
             continue;
         }
         hits.push(format!(
@@ -227,7 +228,16 @@ fn penetration_normal_xz(ox: f32, oz: f32, x0: f32, z0: f32, x1: f32, z1: f32) -
     (0.0, 1.0)
 }
 
-fn hit_normal_at_xz(px: f32, pz: f32, x0: f32, z0: f32, x1: f32, z1: f32, dx: f32, dz: f32) -> (f32, f32) {
+fn hit_normal_at_xz(
+    px: f32,
+    pz: f32,
+    x0: f32,
+    z0: f32,
+    x1: f32,
+    z1: f32,
+    dx: f32,
+    dz: f32,
+) -> (f32, f32) {
     let e = 1e-4_f32;
     if (px - x0).abs() < e {
         return (-1.0, 0.0);
@@ -316,7 +326,8 @@ fn find_closest_hit(
 ) -> Option<(f32, f32, f32, [f32; 3], [f32; 3])> {
     let mut best: Option<(f32, f32, f32, [f32; 3], [f32; 3])> = None;
     for (mn, mx) in buf {
-        if let Some(h) = sweep_disc_vs_aabb(ox, oz, dx, dz, r, mn, mx, feet_y, prev_feet_y, body_h) {
+        if let Some(h) = sweep_disc_vs_aabb(ox, oz, dx, dz, r, mn, mx, feet_y, prev_feet_y, body_h)
+        {
             let (t, nx, nz) = h;
             let replace = match best {
                 None => true,
@@ -360,9 +371,7 @@ fn fill_static_blockers(
     stair_opening_collision::append_runtime_replacement_blockers(
         x0, x1, z0, z1, feet_y, body_h, out,
     );
-    stair_runtime_overlay::append_runtime_replacement_blockers(
-        x0, x1, z0, z1, feet_y, body_h, out,
-    );
+    stair_runtime_overlay::append_runtime_replacement_blockers(x0, x1, z0, z1, feet_y, body_h, out);
 }
 
 fn slide_move_xz<F>(
@@ -395,14 +404,7 @@ where
         let qx1 = (cx.max(cx + rx)) + pad;
         let qz0 = (cz.min(cz + rz)) - pad;
         let qz1 = (cz.max(cz + rz)) + pad;
-        fill(
-            qx0,
-            qx1,
-            qz0,
-            qz1,
-            Some((cx, feet_y, cz)),
-            buf,
-        );
+        fill(qx0, qx1, qz0, qz1, Some((cx, feet_y, cz)), buf);
 
         let hit = find_closest_hit(cx, cz, rx, rz, r, feet_y, prev_feet_y, body_h, buf);
 
@@ -873,7 +875,11 @@ mod head_clearance_tests {
         resolve_horizontal_character_with_fill(
             &mut p, 0.0, 0.0, 0.0, 1.78, true, FOOT_R, &mut fill, &mut buf,
         );
-        assert!(p.y.abs() < 1e-4, "feet snapped to {} (should stay at 0)", p.y);
+        assert!(
+            p.y.abs() < 1e-4,
+            "feet snapped to {} (should stay at 0)",
+            p.y
+        );
         assert_eq!(p.vel_y, 0.0);
     }
 

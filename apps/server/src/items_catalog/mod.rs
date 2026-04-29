@@ -80,13 +80,19 @@ mod hotbar_consume_sound_tests {
     #[test]
     fn authored_consume_sounds_match_item_type() {
         assert_eq!(hotbar_consume_sound("apple"), HotbarConsumeSound::Eat);
-        assert_eq!(hotbar_consume_sound("water-bottle"), HotbarConsumeSound::Drink);
+        assert_eq!(
+            hotbar_consume_sound("water-bottle"),
+            HotbarConsumeSound::Drink
+        );
         assert_eq!(hotbar_consume_sound("rakija"), HotbarConsumeSound::Drink);
     }
 
     #[test]
     fn missing_sound_defaults_to_eat() {
-        assert_eq!(hotbar_consume_sound("field-rations"), HotbarConsumeSound::Eat);
+        assert_eq!(
+            hotbar_consume_sound("field-rations"),
+            HotbarConsumeSound::Eat
+        );
     }
 
     #[test]

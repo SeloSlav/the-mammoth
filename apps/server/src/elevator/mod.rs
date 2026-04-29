@@ -225,7 +225,13 @@ pub fn seed_elevator_landing_doors(ctx: &ReducerContext) {
         let shaft_key = s.shaft_key.to_string();
         for lv in 1..=max_level() {
             let row_key = landing_door_row_key(&shaft_key, lv);
-            if ctx.db.elevator_landing_door().row_key().find(&row_key).is_some() {
+            if ctx
+                .db
+                .elevator_landing_door()
+                .row_key()
+                .find(&row_key)
+                .is_some()
+            {
                 continue;
             }
             let _ = ctx.db.elevator_landing_door().insert(ElevatorLandingDoor {
@@ -341,7 +347,11 @@ fn tick_landing_exterior_doors(ctx: &ReducerContext, dt: f32) {
         let Some(mut row) = ctx.db.elevator_landing_door().row_key().find(&rk) else {
             continue;
         };
-        let goal = if row.desired_open != 0 { 1.0_f32 } else { 0.0_f32 };
+        let goal = if row.desired_open != 0 {
+            1.0_f32
+        } else {
+            0.0_f32
+        };
         if row.swing_open_01 < goal - 1e-4 {
             row.swing_open_01 = (row.swing_open_01 + tgt).min(goal);
         } else if row.swing_open_01 > goal + 1e-4 {
@@ -392,10 +402,8 @@ pub fn sample_elevator_kinematic_support_surface_lerped(
         if fx1 < cx - gate_hx || fx0 > cx + gate_hx || fz1 < cz - gate_hz || fz0 > cz + gate_hz {
             continue;
         }
-        let inner_aabb_overlap = fx1 >= cx - ihx
-            && fx0 <= cx + ihx
-            && fz1 >= cz - ihz
-            && fz0 <= cz + ihz;
+        let inner_aabb_overlap =
+            fx1 >= cx - ihx && fx0 <= cx + ihx && fz1 >= cz - ihz && fz0 <= cz + ihz;
         let cab_y = match prev_cars.and_then(|m| m.get(&car.shaft_key)) {
             Some(prev) => prev.cab_floor_y + a * (car.cab_floor_y - prev.cab_floor_y),
             None => car.cab_floor_y,
@@ -510,7 +518,8 @@ fn door_side_slack_m(door_open_01: f32) -> f32 {
     if door_open_01 >= DOOR_SLACK_FULL_OPEN {
         DOOR_SLACK_FULL_M
     } else if door_open_01 > DOOR_SLACK_START {
-        DOOR_SLACK_FULL_M * ((door_open_01 - DOOR_SLACK_START) / (DOOR_SLACK_FULL_OPEN - DOOR_SLACK_START))
+        DOOR_SLACK_FULL_M
+            * ((door_open_01 - DOOR_SLACK_START) / (DOOR_SLACK_FULL_OPEN - DOOR_SLACK_START))
     } else {
         0.0
     }
@@ -1025,7 +1034,9 @@ fn resolve_exterior_door_toggle_target(
 ) -> Option<(&'static ElevShaftSpec, u32)> {
     let requested_level = clamp_level(requested_level);
     if let Some(spec) = spec_for_key(requested_shaft_key) {
-        let try_pose = |pose: &PlayerPose| exterior_door_toggle_pose_matches_target(ctx, pose, spec, requested_level);
+        let try_pose = |pose: &PlayerPose| {
+            exterior_door_toggle_pose_matches_target(ctx, pose, spec, requested_level)
+        };
         if try_pose(p) {
             return Some((spec, requested_level));
         }
@@ -1145,7 +1156,13 @@ fn set_landing_exterior_door_desired_open(
 
 #[cfg(test)]
 #[inline]
-fn landing_front_face_local_ok(door: DoorFace, outer_hx: f32, outer_hz: f32, lx: f32, lz: f32) -> bool {
+fn landing_front_face_local_ok(
+    door: DoorFace,
+    outer_hx: f32,
+    outer_hz: f32,
+    lx: f32,
+    lz: f32,
+) -> bool {
     match door {
         DoorFace::E => {
             lx >= outer_hx - LANDING_FRONT_WALL_SLAB_IN
@@ -1293,8 +1310,8 @@ mod exterior_interact_tests {
         EXT_DOOR_SOLID_SLAB_MAX_SWING, EXT_INTERACT_L0, EXT_INTERACT_L1, MAMUTH_ELEVATOR_SPECS,
         PH_IDLE,
     };
-    use crate::elevator_layout::{inner_half_xz, DoorFace};
     use crate::elevator_layout::ElevShaftSpec;
+    use crate::elevator_layout::{inner_half_xz, DoorFace};
 
     #[test]
     fn solid_slab_swing_threshold_sits_below_passage_open() {
@@ -1332,7 +1349,13 @@ mod exterior_interact_tests {
         let py = fy + 1.0;
         let lx = hx + (EXT_INTERACT_L0 + EXT_INTERACT_L1) * 0.5;
         assert!(exterior_interact_plate_local_ok(
-            DoorFace::E, hx, hz, lx, 0.0, py, fy
+            DoorFace::E,
+            hx,
+            hz,
+            lx,
+            0.0,
+            py,
+            fy
         ));
     }
 
@@ -1342,7 +1365,15 @@ mod exterior_interact_tests {
         let fy = support_y(1);
         let py = fy + 1.0;
         let lx = hx;
-        assert!(!exterior_interact_plate_local_ok(DoorFace::E, hx, hz, lx, 2.0, py, fy));
+        assert!(!exterior_interact_plate_local_ok(
+            DoorFace::E,
+            hx,
+            hz,
+            lx,
+            2.0,
+            py,
+            fy
+        ));
     }
 
     #[test]
@@ -1399,8 +1430,20 @@ mod exterior_interact_tests {
 
     #[test]
     fn landing_front_face_blocks_side_wall_segment() {
-        assert!(landing_front_face_local_ok(DoorFace::E, 1.19, 2.0, 1.22, 1.6));
-        assert!(!landing_front_door_lane_local_ok(DoorFace::E, 1.19, 2.0, 1.22, 1.6));
+        assert!(landing_front_face_local_ok(
+            DoorFace::E,
+            1.19,
+            2.0,
+            1.22,
+            1.6
+        ));
+        assert!(!landing_front_door_lane_local_ok(
+            DoorFace::E,
+            1.19,
+            2.0,
+            1.22,
+            1.6
+        ));
     }
 
     #[test]
@@ -1632,7 +1675,12 @@ mod cab_walk_merge_support_tests {
         let fy = support_y(4);
         car.cab_floor_y = fy;
         car.current_level = 4;
-        assert!(cab_walk_merge_support_feet_allowed(0.0, 0.0, fy + 0.02, &car));
+        assert!(cab_walk_merge_support_feet_allowed(
+            0.0,
+            0.0,
+            fy + 0.02,
+            &car
+        ));
     }
 
     #[test]
@@ -1640,7 +1688,12 @@ mod cab_walk_merge_support_tests {
         let mut car = car_docked_level1();
         car.phase = PH_MOVING;
         car.cab_floor_y = (support_y(1) + support_y(2)) * 0.5;
-        assert!(cab_walk_merge_support_feet_allowed(0.0, 0.0, car.cab_floor_y + 0.04, &car));
+        assert!(cab_walk_merge_support_feet_allowed(
+            0.0,
+            0.0,
+            car.cab_floor_y + 0.04,
+            &car
+        ));
     }
 }
 
@@ -1699,7 +1752,8 @@ pub fn elevator_landing_exterior_door_toggle(
         return;
     };
     let hint = Some((client_feet_x, client_feet_y, client_feet_z));
-    let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level, hint) else {
+    let Some((spec, lv)) = resolve_exterior_door_toggle_target(ctx, &pose, &shaft_key, level, hint)
+    else {
         log::info!(
             "elevator_landing_exterior_door_toggle: reject not_eligible shaft_key={shaft_key:?} level={level} identity={id} pose=({:.3},{:.3},{:.3})",
             pose.x,

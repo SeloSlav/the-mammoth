@@ -2,8 +2,8 @@
 
 mod starting_item;
 
-use spacetimedb::{Identity, ReducerContext, Table};
 use log;
+use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::auth;
 use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
@@ -64,7 +64,11 @@ pub(crate) fn find_item_in_stash_slot(
 }
 
 /// Find hotbar/inventory stacks for merge targets (stash reducers, …).
-pub(crate) fn find_item_in_inventory_slot(ctx: &ReducerContext, owner: Identity, slot: u16) -> Option<InventoryItem> {
+pub(crate) fn find_item_in_inventory_slot(
+    ctx: &ReducerContext,
+    owner: Identity,
+    slot: u16,
+) -> Option<InventoryItem> {
     ctx.db.inventory_item().iter().find(|i| {
         matches!(
             &i.location,
@@ -86,7 +90,10 @@ pub(crate) fn find_item_in_hotbar_slot(
     })
 }
 
-pub(crate) fn get_player_item(ctx: &ReducerContext, instance_id: u64) -> Result<InventoryItem, String> {
+pub(crate) fn get_player_item(
+    ctx: &ReducerContext,
+    instance_id: u64,
+) -> Result<InventoryItem, String> {
     let sender = ctx.sender();
     let row = ctx
         .db
@@ -371,7 +378,11 @@ pub(crate) fn move_between_player_slots(
 }
 
 #[spacetimedb::reducer]
-pub fn move_item_to_inventory(ctx: &ReducerContext, item_instance_id: u64, target_inventory_slot: u16) {
+pub fn move_item_to_inventory(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    target_inventory_slot: u16,
+) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("move_item_to_inventory blocked: {e}");
         return;
@@ -431,7 +442,8 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
         log::debug!("consume_hotbar_item: empty hotbar slot {hotbar_slot}");
         return;
     };
-    let Some((dhp, dh, dy)) = items_catalog::instant_hotbar_consume_vital_deltas(&item.def_id) else {
+    let Some((dhp, dh, dy)) = items_catalog::instant_hotbar_consume_vital_deltas(&item.def_id)
+    else {
         log::debug!(
             "consume_hotbar_item: no instant use for {} (need category consumable + consumeOnUse vitals)",
             item.def_id

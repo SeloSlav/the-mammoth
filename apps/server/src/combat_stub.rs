@@ -211,8 +211,7 @@ pub fn resolve_melee_hit(
     reach_m: Option<f32>,
     damage_override: Option<f32>,
 ) -> Option<MeleeResolvedHit> {
-    let damage =
-        damage_override.unwrap_or_else(|| melee_damage_for_def_id(weapon_def_id));
+    let damage = damage_override.unwrap_or_else(|| melee_damage_for_def_id(weapon_def_id));
     if damage <= 0.0 {
         return None;
     }

@@ -206,10 +206,11 @@ fn trace_static_solids(origin: [f32; 3], dir: [f32; 3], max_t: f32) -> Option<f3
                 continue;
             }
             if let Some(hit) = ray_aabb(
-                ox, oy, oz, dx, dy, dz,
-                mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
+                ox, oy, oz, dx, dy, dz, mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
             ) {
-                if hit.t_hit <= max_t + RAY_T_EPS && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5 {
+                if hit.t_hit <= max_t + RAY_T_EPS
+                    && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5
+                {
                     best = Some(hit.t_hit);
                 }
             }
@@ -236,7 +237,10 @@ fn trace_best_player_hit(
             continue;
         }
 
-        let bits = ctx.db.player_input().identity()
+        let bits = ctx
+            .db
+            .player_input()
+            .identity()
             .find(&pose.identity)
             .map(|i| i.bits)
             .unwrap_or(0);
@@ -252,10 +256,7 @@ fn trace_best_player_hit(
         let mx_z = pz + pr;
         let mn_y = py;
         let mx_y = py + bh;
-        if let Some(hit) = ray_aabb(
-            ox, oy, oz, dx, dy, dz,
-            mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
-        ) {
+        if let Some(hit) = ray_aabb(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) {
             if hit.t_hit > max_t + RAY_T_EPS {
                 continue;
             }
@@ -274,7 +275,15 @@ fn falloff_factor(dist_m: f32, range_m: f32, floor_frac: f32) -> f32 {
     1.0 - t * (1.0 - floor_frac)
 }
 
-fn pellet_impact_px(ox: f32, oy: f32, oz: f32, dx: f32, dy: f32, dz: f32, t: f32) -> (f32, f32, f32) {
+fn pellet_impact_px(
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    t: f32,
+) -> (f32, f32, f32) {
     (ox + dx * t, oy + dy * t, oz + dz * t)
 }
 
@@ -294,13 +303,7 @@ fn resolve_pistol_ray(
     let origin = [ox, oy, oz];
     let dir = [dx, dy, dz];
     let t_wall = trace_static_solids(origin, dir, max_range_m);
-    let phit = trace_best_player_hit(
-        ctx, attacker,
-        ox, oy, oz,
-        dx, dy, dz,
-        max_range_m,
-        0.0,
-    );
+    let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
 
     let Some((pid, hp)) = phit else {
         return Vec::new();
@@ -354,14 +357,7 @@ fn resolve_shotgun_pellets(
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
         let t_wall = trace_static_solids(origin, [jx, jy, jz], max_range_m);
-        let phit = trace_best_player_hit(
-            ctx,
-            attacker,
-            ox, oy, oz,
-            jx, jy, jz,
-            max_range_m,
-            0.04,
-        );
+        let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {
             (Some((pid, pr)), Some(t_w)) => {
@@ -390,9 +386,11 @@ fn resolve_shotgun_pellets(
     let mut out: Vec<PlayerDamageEvent> = damage_by_player
         .into_iter()
         .map(|(identity, damage)| {
-            let (ix, iy, iz) = impact_by_player
-                .remove(&identity)
-                .unwrap_or((ox + bx * max_range_m * 0.35, oy, oz + bz * max_range_m * 0.35));
+            let (ix, iy, iz) = impact_by_player.remove(&identity).unwrap_or((
+                ox + bx * max_range_m * 0.35,
+                oy,
+                oz + bz * max_range_m * 0.35,
+            ));
             PlayerDamageEvent {
                 identity,
                 damage,
@@ -403,7 +401,11 @@ fn resolve_shotgun_pellets(
         })
         .collect();
 
-    out.sort_by(|a, b| a.identity.partial_cmp(&b.identity).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        a.identity
+            .partial_cmp(&b.identity)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     out
 }
 
@@ -499,7 +501,10 @@ pub fn firearm_hitscan_weapon(
     aim_dir_y: f32,
     aim_dir_z: f32,
 ) -> Vec<PlayerDamageEvent> {
-    let yaw = ctx.db.player_input().identity()
+    let yaw = ctx
+        .db
+        .player_input()
+        .identity()
         .find(&attacker)
         .map(|r| r.aim_yaw)
         .unwrap_or(shooter_pose.yaw);
@@ -508,7 +513,10 @@ pub fn firearm_hitscan_weapon(
         return Vec::new();
     };
 
-    let bits = ctx.db.player_input().identity()
+    let bits = ctx
+        .db
+        .player_input()
+        .identity()
         .find(&attacker)
         .map(|r| r.bits)
         .unwrap_or(0);
@@ -520,9 +528,14 @@ pub fn firearm_hitscan_weapon(
 
     match weapon_def_id {
         "pistol" => resolve_pistol_ray(
-            ctx, attacker,
-            ox, oy, oz,
-            dx, dy, dz,
+            ctx,
+            attacker,
+            ox,
+            oy,
+            oz,
+            dx,
+            dy,
+            dz,
             RANGE_PISTOL_M,
             FALL_MIN_FRAC_PISTOL,
             20.0,

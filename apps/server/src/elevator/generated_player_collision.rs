@@ -24,7 +24,9 @@ use super::{elevator_car, elevator_landing_door};
 use crate::elevator_layout::{self, DoorFace, SKIN};
 use crate::pose::PlayerPose;
 
-use super::{door_face_from_u8, face_lateral_half, landing_front_passage_open, spec_for_key, support_y};
+use super::{
+    door_face_from_u8, face_lateral_half, landing_front_passage_open, spec_for_key, support_y,
+};
 
 #[derive(Clone, Copy)]
 struct CollisionAabb {
@@ -77,7 +79,15 @@ fn push_door_leaf_collision_panel(
     let max_x = start_x.max(end_x) + pad;
     let min_z = start_z.min(end_z) - pad;
     let max_z = start_z.max(end_z) + pad;
-    push_query_overlapping_aabb(out, qx0, qx1, qz0, qz1, [min_x, y0, min_z], [max_x, y1, max_z]);
+    push_query_overlapping_aabb(
+        out,
+        qx0,
+        qx1,
+        qz0,
+        qz1,
+        [min_x, y0, min_z],
+        [max_x, y1, max_z],
+    );
 }
 
 #[inline]
@@ -113,8 +123,8 @@ fn collect_generated_collision_aabbs(
         if car.door_open_01 >= super::DOOR_EXIT_CLAMP_MIN_OPEN {
             continue;
         }
-        let door_half =
-            face_lateral_half(door_face_from_u8(car.door_face), hx, hz) + super::CLOSED_CAB_OUTSIDE_WIDTH_PAD;
+        let door_half = face_lateral_half(door_face_from_u8(car.door_face), hx, hz)
+            + super::CLOSED_CAB_OUTSIDE_WIDTH_PAD;
         let y0 = car.cab_floor_y - 0.22;
         let y1 = car.cab_floor_y + iy + 0.38;
         match door_face_from_u8(car.door_face) {
@@ -124,8 +134,16 @@ fn collect_generated_collision_aabbs(
                 x1,
                 z0,
                 z1,
-                [car.plate_x + hx - super::CLOSED_CAB_OUTSIDE_SLAB_IN, y0, car.plate_z - door_half],
-                [car.plate_x + hx + super::CLOSED_CAB_OUTSIDE_SLAB_OUT, y1, car.plate_z + door_half],
+                [
+                    car.plate_x + hx - super::CLOSED_CAB_OUTSIDE_SLAB_IN,
+                    y0,
+                    car.plate_z - door_half,
+                ],
+                [
+                    car.plate_x + hx + super::CLOSED_CAB_OUTSIDE_SLAB_OUT,
+                    y1,
+                    car.plate_z + door_half,
+                ],
             ),
             DoorFace::W => push_query_overlapping_aabb(
                 out,
@@ -133,8 +151,16 @@ fn collect_generated_collision_aabbs(
                 x1,
                 z0,
                 z1,
-                [car.plate_x - hx - super::CLOSED_CAB_OUTSIDE_SLAB_OUT, y0, car.plate_z - door_half],
-                [car.plate_x - hx + super::CLOSED_CAB_OUTSIDE_SLAB_IN, y1, car.plate_z + door_half],
+                [
+                    car.plate_x - hx - super::CLOSED_CAB_OUTSIDE_SLAB_OUT,
+                    y0,
+                    car.plate_z - door_half,
+                ],
+                [
+                    car.plate_x - hx + super::CLOSED_CAB_OUTSIDE_SLAB_IN,
+                    y1,
+                    car.plate_z + door_half,
+                ],
             ),
             DoorFace::N => push_query_overlapping_aabb(
                 out,
@@ -142,8 +168,16 @@ fn collect_generated_collision_aabbs(
                 x1,
                 z0,
                 z1,
-                [car.plate_x - door_half, y0, car.plate_z + hz - super::CLOSED_CAB_OUTSIDE_SLAB_IN],
-                [car.plate_x + door_half, y1, car.plate_z + hz + super::CLOSED_CAB_OUTSIDE_SLAB_OUT],
+                [
+                    car.plate_x - door_half,
+                    y0,
+                    car.plate_z + hz - super::CLOSED_CAB_OUTSIDE_SLAB_IN,
+                ],
+                [
+                    car.plate_x + door_half,
+                    y1,
+                    car.plate_z + hz + super::CLOSED_CAB_OUTSIDE_SLAB_OUT,
+                ],
             ),
             DoorFace::S => push_query_overlapping_aabb(
                 out,
@@ -151,8 +185,16 @@ fn collect_generated_collision_aabbs(
                 x1,
                 z0,
                 z1,
-                [car.plate_x - door_half, y0, car.plate_z - hz - super::CLOSED_CAB_OUTSIDE_SLAB_OUT],
-                [car.plate_x + door_half, y1, car.plate_z - hz + super::CLOSED_CAB_OUTSIDE_SLAB_IN],
+                [
+                    car.plate_x - door_half,
+                    y0,
+                    car.plate_z - hz - super::CLOSED_CAB_OUTSIDE_SLAB_OUT,
+                ],
+                [
+                    car.plate_x + door_half,
+                    y1,
+                    car.plate_z - hz + super::CLOSED_CAB_OUTSIDE_SLAB_IN,
+                ],
             ),
         }
     }
@@ -185,24 +227,48 @@ fn collect_generated_collision_aabbs(
             let y1w = car.cab_floor_y + iy + 0.1;
             let face = door_face_from_u8(car.door_face);
             if face != DoorFace::E {
-                push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
                     [car.plate_x + hx, y0w, car.plate_z - hz],
-                    [car.plate_x + outer_hx + wall_pad, y1w, car.plate_z + hz]);
+                    [car.plate_x + outer_hx + wall_pad, y1w, car.plate_z + hz],
+                );
             }
             if face != DoorFace::W {
-                push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
                     [car.plate_x - outer_hx - wall_pad, y0w, car.plate_z - hz],
-                    [car.plate_x - hx, y1w, car.plate_z + hz]);
+                    [car.plate_x - hx, y1w, car.plate_z + hz],
+                );
             }
             if face != DoorFace::N {
-                push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
                     [car.plate_x - hx, y0w, car.plate_z + hz],
-                    [car.plate_x + hx, y1w, car.plate_z + outer_hz + wall_pad]);
+                    [car.plate_x + hx, y1w, car.plate_z + outer_hz + wall_pad],
+                );
             }
             if face != DoorFace::S {
-                push_query_overlapping_aabb(out, x0, x1, z0, z1,
+                push_query_overlapping_aabb(
+                    out,
+                    x0,
+                    x1,
+                    z0,
+                    z1,
                     [car.plate_x - hx, y0w, car.plate_z - outer_hz - wall_pad],
-                    [car.plate_x + hx, y1w, car.plate_z - hz]);
+                    [car.plate_x + hx, y1w, car.plate_z - hz],
+                );
             }
         }
     }
@@ -246,8 +312,16 @@ fn collect_generated_collision_aabbs(
                     x1,
                     z0,
                     z1,
-                    [spec.plate_x + hx + super::EXT_COLLISION_L0, y0, spec.plate_z - (hz + super::EXT_COLLISION_LZ_PAD)],
-                    [spec.plate_x + hx + super::EXT_COLLISION_L1, y1, spec.plate_z + (hz + super::EXT_COLLISION_LZ_PAD)],
+                    [
+                        spec.plate_x + hx + super::EXT_COLLISION_L0,
+                        y0,
+                        spec.plate_z - (hz + super::EXT_COLLISION_LZ_PAD),
+                    ],
+                    [
+                        spec.plate_x + hx + super::EXT_COLLISION_L1,
+                        y1,
+                        spec.plate_z + (hz + super::EXT_COLLISION_LZ_PAD),
+                    ],
                 ),
                 DoorFace::W => push_query_overlapping_aabb(
                     out,
@@ -255,8 +329,16 @@ fn collect_generated_collision_aabbs(
                     x1,
                     z0,
                     z1,
-                    [spec.plate_x - hx - super::EXT_COLLISION_L1, y0, spec.plate_z - (hz + super::EXT_COLLISION_LZ_PAD)],
-                    [spec.plate_x - hx - super::EXT_COLLISION_L0, y1, spec.plate_z + (hz + super::EXT_COLLISION_LZ_PAD)],
+                    [
+                        spec.plate_x - hx - super::EXT_COLLISION_L1,
+                        y0,
+                        spec.plate_z - (hz + super::EXT_COLLISION_LZ_PAD),
+                    ],
+                    [
+                        spec.plate_x - hx - super::EXT_COLLISION_L0,
+                        y1,
+                        spec.plate_z + (hz + super::EXT_COLLISION_LZ_PAD),
+                    ],
                 ),
                 DoorFace::N => push_query_overlapping_aabb(
                     out,
@@ -264,8 +346,16 @@ fn collect_generated_collision_aabbs(
                     x1,
                     z0,
                     z1,
-                    [spec.plate_x - (hx + super::EXT_COLLISION_LZ_PAD), y0, spec.plate_z + hz + super::EXT_COLLISION_L0],
-                    [spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD), y1, spec.plate_z + hz + super::EXT_COLLISION_L1],
+                    [
+                        spec.plate_x - (hx + super::EXT_COLLISION_LZ_PAD),
+                        y0,
+                        spec.plate_z + hz + super::EXT_COLLISION_L0,
+                    ],
+                    [
+                        spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD),
+                        y1,
+                        spec.plate_z + hz + super::EXT_COLLISION_L1,
+                    ],
                 ),
                 DoorFace::S => push_query_overlapping_aabb(
                     out,
@@ -273,8 +363,16 @@ fn collect_generated_collision_aabbs(
                     x1,
                     z0,
                     z1,
-                    [spec.plate_x - (hx + super::EXT_COLLISION_LZ_PAD), y0, spec.plate_z - hz - super::EXT_COLLISION_L1],
-                    [spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD), y1, spec.plate_z - hz - super::EXT_COLLISION_L0],
+                    [
+                        spec.plate_x - (hx + super::EXT_COLLISION_LZ_PAD),
+                        y0,
+                        spec.plate_z - hz - super::EXT_COLLISION_L1,
+                    ],
+                    [
+                        spec.plate_x + (hx + super::EXT_COLLISION_LZ_PAD),
+                        y1,
+                        spec.plate_z - hz - super::EXT_COLLISION_L0,
+                    ],
                 ),
             }
         } else if landing.swing_open_01 >= super::EXT_DOOR_PARKED_COLLISION_MIN_SWING {
@@ -352,7 +450,11 @@ fn collect_generated_collision_aabbs(
                         z0,
                         z1,
                         [min_x, wall_y0, spec.plate_z - outer_hz],
-                        [max_x, wall_y1, spec.plate_z - super::LANDING_FRONT_PASSAGE_HALF_W],
+                        [
+                            max_x,
+                            wall_y1,
+                            spec.plate_z - super::LANDING_FRONT_PASSAGE_HALF_W,
+                        ],
                     );
                     push_query_overlapping_aabb(
                         out,
@@ -360,7 +462,11 @@ fn collect_generated_collision_aabbs(
                         x1,
                         z0,
                         z1,
-                        [min_x, wall_y0, spec.plate_z + super::LANDING_FRONT_PASSAGE_HALF_W],
+                        [
+                            min_x,
+                            wall_y0,
+                            spec.plate_z + super::LANDING_FRONT_PASSAGE_HALF_W,
+                        ],
                         [max_x, wall_y1, spec.plate_z + outer_hz],
                     );
                 }
@@ -386,7 +492,11 @@ fn collect_generated_collision_aabbs(
                         z0,
                         z1,
                         [min_x, wall_y0, spec.plate_z - outer_hz],
-                        [max_x, wall_y1, spec.plate_z - super::LANDING_FRONT_PASSAGE_HALF_W],
+                        [
+                            max_x,
+                            wall_y1,
+                            spec.plate_z - super::LANDING_FRONT_PASSAGE_HALF_W,
+                        ],
                     );
                     push_query_overlapping_aabb(
                         out,
@@ -394,7 +504,11 @@ fn collect_generated_collision_aabbs(
                         x1,
                         z0,
                         z1,
-                        [min_x, wall_y0, spec.plate_z + super::LANDING_FRONT_PASSAGE_HALF_W],
+                        [
+                            min_x,
+                            wall_y0,
+                            spec.plate_z + super::LANDING_FRONT_PASSAGE_HALF_W,
+                        ],
                         [max_x, wall_y1, spec.plate_z + outer_hz],
                     );
                 }
@@ -420,7 +534,11 @@ fn collect_generated_collision_aabbs(
                         z0,
                         z1,
                         [spec.plate_x - outer_hx, wall_y0, min_z],
-                        [spec.plate_x - super::LANDING_FRONT_PASSAGE_HALF_W, wall_y1, max_z],
+                        [
+                            spec.plate_x - super::LANDING_FRONT_PASSAGE_HALF_W,
+                            wall_y1,
+                            max_z,
+                        ],
                     );
                     push_query_overlapping_aabb(
                         out,
@@ -428,7 +546,11 @@ fn collect_generated_collision_aabbs(
                         x1,
                         z0,
                         z1,
-                        [spec.plate_x + super::LANDING_FRONT_PASSAGE_HALF_W, wall_y0, min_z],
+                        [
+                            spec.plate_x + super::LANDING_FRONT_PASSAGE_HALF_W,
+                            wall_y0,
+                            min_z,
+                        ],
                         [spec.plate_x + outer_hx, wall_y1, max_z],
                     );
                 }
@@ -454,7 +576,11 @@ fn collect_generated_collision_aabbs(
                         z0,
                         z1,
                         [spec.plate_x - outer_hx, wall_y0, min_z],
-                        [spec.plate_x - super::LANDING_FRONT_PASSAGE_HALF_W, wall_y1, max_z],
+                        [
+                            spec.plate_x - super::LANDING_FRONT_PASSAGE_HALF_W,
+                            wall_y1,
+                            max_z,
+                        ],
                     );
                     push_query_overlapping_aabb(
                         out,
@@ -462,7 +588,11 @@ fn collect_generated_collision_aabbs(
                         x1,
                         z0,
                         z1,
-                        [spec.plate_x + super::LANDING_FRONT_PASSAGE_HALF_W, wall_y0, min_z],
+                        [
+                            spec.plate_x + super::LANDING_FRONT_PASSAGE_HALF_W,
+                            wall_y0,
+                            min_z,
+                        ],
                         [spec.plate_x + outer_hx, wall_y1, max_z],
                     );
                 }
@@ -484,15 +614,19 @@ pub fn resolve_player_generated_collision_aabbs(
     let mut tuples: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(256);
     let mut tmp_aabb: Vec<CollisionAabb> = Vec::with_capacity(256);
 
-    let mut fill =
-        |x0: f32, x1: f32, z0: f32, z1: f32, qp: Option<(f32, f32, f32)>, out: &mut Vec<([f32; 3], [f32; 3])>| {
-            tmp_aabb.clear();
-            collect_generated_collision_aabbs(ctx, x0, x1, z0, z1, qp, &mut tmp_aabb);
-            out.clear();
-            for a in &tmp_aabb {
-                out.push((a.min, a.max));
-            }
-        };
+    let mut fill = |x0: f32,
+                    x1: f32,
+                    z0: f32,
+                    z1: f32,
+                    qp: Option<(f32, f32, f32)>,
+                    out: &mut Vec<([f32; 3], [f32; 3])>| {
+        tmp_aabb.clear();
+        collect_generated_collision_aabbs(ctx, x0, x1, z0, z1, qp, &mut tmp_aabb);
+        out.clear();
+        for a in &tmp_aabb {
+            out.push((a.min, a.max));
+        }
+    };
 
     crate::character_controller::resolve_horizontal_character_with_fill(
         p,

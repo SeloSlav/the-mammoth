@@ -29,4 +29,3 @@ pub enum ItemLocation {
     Stash(StashLocationData),
     Unknown,
 }
-

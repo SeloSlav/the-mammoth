@@ -11,10 +11,10 @@ mod chat;
 mod combat_stub;
 mod dropped_item;
 mod elevator;
+mod elevator_layout;
 mod firearm;
 mod generated_apartment_doors;
 mod generated_collision_solids;
-mod elevator_layout;
 mod generated_walk_surfaces;
 mod hitscan;
 mod inventory;
@@ -26,14 +26,14 @@ mod melee_turn;
 mod movement;
 mod player_vitals;
 mod pose;
+mod spawn_routing;
 mod stair_opening_collision;
 mod stair_runtime_overlay;
-mod spawn_routing;
 mod world_sound;
 
-use spacetimedb::{ReducerContext, Table};
-use accounts::{user, User};
 use crate::pose::player_pose;
+use accounts::{user, User};
+use spacetimedb::{ReducerContext, Table};
 
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {

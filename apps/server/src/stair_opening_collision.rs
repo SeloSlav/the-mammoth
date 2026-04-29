@@ -2,9 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::generated_apartment_doors::{
-    ApartmentDoorTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
-};
+use crate::generated_apartment_doors::{ApartmentDoorTemplate, APARTMENT_DOOR_TEMPLATE_SETS};
 
 const DEFAULT_BUILDING_FLOOR_SPACING_M: f32 = 60.0 / 19.0;
 const STOREY_SPACING_M: f32 = 60.0 / 19.0;
@@ -222,7 +220,10 @@ fn corridor_footprints(doc: &FloorDoc) -> Vec<CorridorFootprint> {
         if !is_corridor_like(&obj.prefab_id) {
             continue;
         }
-        out.push(CorridorFootprint { px: obj.position[0], pz: obj.position[2] });
+        out.push(CorridorFootprint {
+            px: obj.position[0],
+            pz: obj.position[2],
+        });
     }
     out
 }
@@ -243,7 +244,13 @@ fn pick_face_toward_point(px: f32, pz: f32, tx: f32, tz: f32) -> Face {
     }
 }
 
-fn shaft_door_toward_point(shaft_px: f32, shaft_pz: f32, doc: &FloorDoc, plate_cx: f32, plate_cz: f32) -> [f32; 2] {
+fn shaft_door_toward_point(
+    shaft_px: f32,
+    shaft_pz: f32,
+    doc: &FloorDoc,
+    plate_cx: f32,
+    plate_cz: f32,
+) -> [f32; 2] {
     let corridors = corridor_footprints(doc);
     if corridors.is_empty() {
         return [plate_cx, plate_cz];
@@ -291,7 +298,9 @@ fn face_from_context(context: Option<Context>) -> Face {
 
 fn opening_for_scope<'a>(def: &'a StairWellDef, scope: &str) -> Option<&'a OpeningDef> {
     if scope == "ground" {
-        def.ground_entry_opening.as_ref().or(def.entry_opening.as_ref())
+        def.ground_entry_opening
+            .as_ref()
+            .or(def.entry_opening.as_ref())
     } else {
         def.entry_opening.as_ref()
     }
@@ -365,7 +374,12 @@ fn resolve_secondary_door(
         sx,
         sz,
     );
-    let (y0, y1) = normalize_stair_door_vertical_span(y_wall_bottom, y_wall_bottom + inner_wall_h, y_wall_bottom, y_wall_bottom + inner_wall_h);
+    let (y0, y1) = normalize_stair_door_vertical_span(
+        y_wall_bottom,
+        y_wall_bottom + inner_wall_h,
+        y_wall_bottom,
+        y_wall_bottom + inner_wall_h,
+    );
     Some(ResolvedDoor {
         face,
         tangent,
@@ -375,7 +389,12 @@ fn resolve_secondary_door(
     })
 }
 
-fn normalize_stair_door_vertical_span(y_min: f32, y_max: f32, raw_y0: f32, raw_y1: f32) -> (f32, f32) {
+fn normalize_stair_door_vertical_span(
+    y_min: f32,
+    y_max: f32,
+    raw_y0: f32,
+    raw_y1: f32,
+) -> (f32, f32) {
     let mut y0 = raw_y0.min(raw_y1).max(y_min);
     let mut y1 = raw_y0.max(raw_y1).min(y_max);
     if y1 < y0 + 0.52 {
@@ -409,7 +428,11 @@ fn push_wall_constant_x_with_holes(
     holes: &[HoleYZ],
 ) {
     if holes.is_empty() {
-        push_box(out, [x_center - thickness * 0.5, y_lo, z_min], [x_center + thickness * 0.5, y_hi, z_max]);
+        push_box(
+            out,
+            [x_center - thickness * 0.5, y_lo, z_min],
+            [x_center + thickness * 0.5, y_hi, z_max],
+        );
         return;
     }
     let mut y_levels = vec![y_lo, y_hi];
@@ -432,7 +455,11 @@ fn push_wall_constant_x_with_holes(
             .filter(|(a, b)| *b > *a + 1e-4)
             .collect();
         if intervals.is_empty() {
-            push_box(out, [x_center - thickness * 0.5, y0, z_min], [x_center + thickness * 0.5, y1, z_max]);
+            push_box(
+                out,
+                [x_center - thickness * 0.5, y0, z_min],
+                [x_center + thickness * 0.5, y1, z_max],
+            );
             continue;
         }
         intervals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -443,18 +470,30 @@ fn push_wall_constant_x_with_holes(
                 cur.1 = cur.1.max(next.1);
             } else {
                 if cur.0 > cursor + 1e-4 {
-                    push_box(out, [x_center - thickness * 0.5, y0, cursor], [x_center + thickness * 0.5, y1, cur.0]);
+                    push_box(
+                        out,
+                        [x_center - thickness * 0.5, y0, cursor],
+                        [x_center + thickness * 0.5, y1, cur.0],
+                    );
                 }
                 cursor = cur.1;
                 cur = next;
             }
         }
         if cur.0 > cursor + 1e-4 {
-            push_box(out, [x_center - thickness * 0.5, y0, cursor], [x_center + thickness * 0.5, y1, cur.0]);
+            push_box(
+                out,
+                [x_center - thickness * 0.5, y0, cursor],
+                [x_center + thickness * 0.5, y1, cur.0],
+            );
         }
         cursor = cursor.max(cur.1);
         if z_max > cursor + 1e-4 {
-            push_box(out, [x_center - thickness * 0.5, y0, cursor], [x_center + thickness * 0.5, y1, z_max]);
+            push_box(
+                out,
+                [x_center - thickness * 0.5, y0, cursor],
+                [x_center + thickness * 0.5, y1, z_max],
+            );
         }
     }
 }
@@ -470,7 +509,11 @@ fn push_wall_constant_z_with_holes(
     holes: &[HoleXY],
 ) {
     if holes.is_empty() {
-        push_box(out, [x_min, y_lo, z_center - thickness * 0.5], [x_max, y_hi, z_center + thickness * 0.5]);
+        push_box(
+            out,
+            [x_min, y_lo, z_center - thickness * 0.5],
+            [x_max, y_hi, z_center + thickness * 0.5],
+        );
         return;
     }
     let mut y_levels = vec![y_lo, y_hi];
@@ -493,7 +536,11 @@ fn push_wall_constant_z_with_holes(
             .filter(|(a, b)| *b > *a + 1e-4)
             .collect();
         if intervals.is_empty() {
-            push_box(out, [x_min, y0, z_center - thickness * 0.5], [x_max, y1, z_center + thickness * 0.5]);
+            push_box(
+                out,
+                [x_min, y0, z_center - thickness * 0.5],
+                [x_max, y1, z_center + thickness * 0.5],
+            );
             continue;
         }
         intervals.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -504,23 +551,43 @@ fn push_wall_constant_z_with_holes(
                 cur.1 = cur.1.max(next.1);
             } else {
                 if cur.0 > cursor + 1e-4 {
-                    push_box(out, [cursor, y0, z_center - thickness * 0.5], [cur.0, y1, z_center + thickness * 0.5]);
+                    push_box(
+                        out,
+                        [cursor, y0, z_center - thickness * 0.5],
+                        [cur.0, y1, z_center + thickness * 0.5],
+                    );
                 }
                 cursor = cur.1;
                 cur = next;
             }
         }
         if cur.0 > cursor + 1e-4 {
-            push_box(out, [cursor, y0, z_center - thickness * 0.5], [cur.0, y1, z_center + thickness * 0.5]);
+            push_box(
+                out,
+                [cursor, y0, z_center - thickness * 0.5],
+                [cur.0, y1, z_center + thickness * 0.5],
+            );
         }
         cursor = cursor.max(cur.1);
         if x_max > cursor + 1e-4 {
-            push_box(out, [cursor, y0, z_center - thickness * 0.5], [x_max, y1, z_center + thickness * 0.5]);
+            push_box(
+                out,
+                [cursor, y0, z_center - thickness * 0.5],
+                [x_max, y1, z_center + thickness * 0.5],
+            );
         }
     }
 }
 
-fn build_shaft_wall_mask(world_x: f32, world_y: f32, world_z: f32, sx: f32, sy: f32, sz: f32, face: Face) -> Aabb {
+fn build_shaft_wall_mask(
+    world_x: f32,
+    world_y: f32,
+    world_z: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    face: Face,
+) -> Aabb {
     let hx = sx * 0.5;
     let hy = sy * 0.5;
     let hz = sz * 0.5;
@@ -549,7 +616,15 @@ fn build_shaft_wall_mask(world_x: f32, world_y: f32, world_z: f32, sx: f32, sy: 
     }
 }
 
-fn build_corridor_wall_mask(world_x: f32, world_y: f32, world_z: f32, sx: f32, sy: f32, sz: f32, face: Face) -> Aabb {
+fn build_corridor_wall_mask(
+    world_x: f32,
+    world_y: f32,
+    world_z: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    face: Face,
+) -> Aabb {
     let hx = sx * 0.5;
     let hz = sz * 0.5;
     let vh = (sy - 2.0 * WT).max(0.05);
@@ -577,7 +652,17 @@ fn build_corridor_wall_mask(world_x: f32, world_y: f32, world_z: f32, sx: f32, s
     }
 }
 
-fn push_shaft_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f32, world_z: f32, sx: f32, sy: f32, sz: f32, doors: &[ResolvedDoor], face: Face) {
+fn push_shaft_wall_replacements(
+    out: &mut Vec<Aabb>,
+    world_x: f32,
+    world_y: f32,
+    world_z: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    doors: &[ResolvedDoor],
+    face: Face,
+) {
     let hx = sx * 0.5;
     let hy = sy * 0.5;
     let hz = sz * 0.5;
@@ -591,8 +676,12 @@ fn push_shaft_wall_replacements(out: &mut Vec<Aabb>, world_x: f32, world_y: f32,
     let mut yz_holes = Vec::<HoleYZ>::new();
     let mut xy_holes = Vec::<HoleXY>::new();
     for door in doors.iter().filter(|door| door.face == face) {
-        let (door_y0, door_y1) =
-            normalize_stair_door_vertical_span(y_lo, y_hi - 0.04, world_y + door.y0, world_y + door.y1);
+        let (door_y0, door_y1) = normalize_stair_door_vertical_span(
+            y_lo,
+            y_hi - 0.04,
+            world_y + door.y0,
+            world_y + door.y1,
+        );
         if matches!(face, Face::E | Face::W) {
             yz_holes.push(HoleYZ {
                 z0: world_z + (door.tangent - door.width * 0.5).max(z_min - world_z),
@@ -738,9 +827,15 @@ fn stair_door_span(face: Face, tangent: f32, door_half_w: f32, sx: f32, sz: f32)
     let vlen_x = (sx - 2.0 * WT).max(0.05);
     let vlen_z = (sz - 2.0 * WT).max(0.05);
     if matches!(face, Face::E | Face::W) {
-        ((tangent - door_half_w).max(-vlen_z * 0.5), (tangent + door_half_w).min(vlen_z * 0.5))
+        (
+            (tangent - door_half_w).max(-vlen_z * 0.5),
+            (tangent + door_half_w).min(vlen_z * 0.5),
+        )
     } else {
-        ((tangent - door_half_w).max(-vlen_x * 0.5), (tangent + door_half_w).min(vlen_x * 0.5))
+        (
+            (tangent - door_half_w).max(-vlen_x * 0.5),
+            (tangent + door_half_w).min(vlen_x * 0.5),
+        )
     }
 }
 
@@ -770,7 +865,13 @@ fn resolve_corridor_contacts(
         let corridor_wall = corridor_wall_receiving_stair_door(p.stair_face);
         let sx_shaft = 2.0 * p.shx;
         let sz_shaft = 2.0 * p.shz;
-        let (span0, span1) = stair_door_span(p.stair_face, p.tangent_local, p.door_half_w, sx_shaft, sz_shaft);
+        let (span0, span1) = stair_door_span(
+            p.stair_face,
+            p.tangent_local,
+            p.door_half_w,
+            sx_shaft,
+            sz_shaft,
+        );
         let (z0p, z1p, x0p, x1p) = if matches!(p.stair_face, Face::E | Face::W) {
             (
                 p.spz + span0,
@@ -787,10 +888,18 @@ fn resolve_corridor_contacts(
             )
         };
         let adjacent = match p.stair_face {
-            Face::E => (cpx - chx - (p.spx + p.shx)).abs() < STAIR_CORRIDOR_TOUCH_M && cpx > p.spx - 0.02,
-            Face::W => (cpx + chx - (p.spx - p.shx)).abs() < STAIR_CORRIDOR_TOUCH_M && cpx < p.spx + 0.02,
-            Face::N => (cpz - chz - (p.spz + p.shz)).abs() < STAIR_CORRIDOR_TOUCH_M && cpz > p.spz - 0.02,
-            Face::S => (cpz + chz - (p.spz - p.shz)).abs() < STAIR_CORRIDOR_TOUCH_M && cpz < p.spz + 0.02,
+            Face::E => {
+                (cpx - chx - (p.spx + p.shx)).abs() < STAIR_CORRIDOR_TOUCH_M && cpx > p.spx - 0.02
+            }
+            Face::W => {
+                (cpx + chx - (p.spx - p.shx)).abs() < STAIR_CORRIDOR_TOUCH_M && cpx < p.spx + 0.02
+            }
+            Face::N => {
+                (cpz - chz - (p.spz + p.shz)).abs() < STAIR_CORRIDOR_TOUCH_M && cpz > p.spz - 0.02
+            }
+            Face::S => {
+                (cpz + chz - (p.spz - p.shz)).abs() < STAIR_CORRIDOR_TOUCH_M && cpz < p.spz + 0.02
+            }
         };
         if !adjacent {
             continue;
@@ -908,7 +1017,10 @@ fn push_corridor_wall_replacements(
             }
         }
     }
-    for contact in contacts.iter().filter(|contact| contact.corridor_wall == face) {
+    for contact in contacts
+        .iter()
+        .filter(|contact| contact.corridor_wall == face)
+    {
         if contact.hole_along_z {
             yz_holes.push(HoleYZ {
                 z0: world_z + contact.z0r,
@@ -940,18 +1052,63 @@ fn push_corridor_wall_replacements(
         apartment_door_templates,
     );
     match face {
-        Face::E => push_wall_constant_x_with_holes(out, world_x + hx - WT * 0.5, WT, z_min, z_max, y_lo, y_hi, &yz_holes),
-        Face::W => push_wall_constant_x_with_holes(out, world_x - hx + WT * 0.5, WT, z_min, z_max, y_lo, y_hi, &yz_holes),
-        Face::N => push_wall_constant_z_with_holes(out, world_z + hz - WT * 0.5, WT, x_min, x_max, y_lo, y_hi, &xy_holes),
-        Face::S => push_wall_constant_z_with_holes(out, world_z - hz + WT * 0.5, WT, x_min, x_max, y_lo, y_hi, &xy_holes),
+        Face::E => push_wall_constant_x_with_holes(
+            out,
+            world_x + hx - WT * 0.5,
+            WT,
+            z_min,
+            z_max,
+            y_lo,
+            y_hi,
+            &yz_holes,
+        ),
+        Face::W => push_wall_constant_x_with_holes(
+            out,
+            world_x - hx + WT * 0.5,
+            WT,
+            z_min,
+            z_max,
+            y_lo,
+            y_hi,
+            &yz_holes,
+        ),
+        Face::N => push_wall_constant_z_with_holes(
+            out,
+            world_z + hz - WT * 0.5,
+            WT,
+            x_min,
+            x_max,
+            y_lo,
+            y_hi,
+            &xy_holes,
+        ),
+        Face::S => push_wall_constant_z_with_holes(
+            out,
+            world_z - hz + WT * 0.5,
+            WT,
+            x_min,
+            x_max,
+            y_lo,
+            y_hi,
+            &xy_holes,
+        ),
     }
 }
 
 fn floor_doc_by_id(id: &str) -> FloorDoc {
     let raw = match id {
-        "floor_01_east" => include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/building/floors/floor_01_east.json")),
-        "floor_mamutica_ground" => include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/building/floors/floor_mamutica_ground.json")),
-        "floor_mamutica_typical" => include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../content/building/floors/floor_mamutica_typical.json")),
+        "floor_01_east" => include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/building/floors/floor_01_east.json"
+        )),
+        "floor_mamutica_ground" => include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/building/floors/floor_mamutica_ground.json"
+        )),
+        "floor_mamutica_typical" => include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../content/building/floors/floor_mamutica_typical.json"
+        )),
         other => panic!("unsupported floor doc for stair opening collision overlay: {other}"),
     };
     serde_json::from_str(raw).expect("floor doc JSON must parse")
@@ -995,15 +1152,21 @@ fn build_stair_shaft_specs(_building: &BuildingDoc, sorted: &[FloorRef]) -> Vec<
             entry.sy_plate = entry.sy_plate.max(scale[1]);
             entry.sz = entry.sz.max(scale[2]);
             entry.entry_contexts[ref_index] = Some(Context {
-                toward_plate: shaft_door_toward_point(obj.position[0], obj.position[2], &doc, plate_cx, plate_cz),
+                toward_plate: shaft_door_toward_point(
+                    obj.position[0],
+                    obj.position[2],
+                    &doc,
+                    plate_cx,
+                    plate_cz,
+                ),
                 shaft_plate: [obj.position[0], obj.position[2]],
             });
         }
     }
     if let Some(min_level) = sorted.iter().map(|r| r.level_index).min() {
         for spec in map.values_mut() {
-            spec.bottom_y =
-                (min_level as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M + CORE_PY - STOREY_SPACING_M * 0.5;
+            spec.bottom_y = (min_level as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M + CORE_PY
+                - STOREY_SPACING_M * 0.5;
         }
     }
     map.into_values().collect()
@@ -1029,8 +1192,15 @@ fn build_overlay() -> StairOpeningOverlay {
     for spec in &shaft_specs {
         for i in 0..spec.storey_count {
             let scope = if i == 0 { "ground" } else { "typical" };
-            let primary = resolve_primary_door(opening_for_scope(&stairwell, scope), spec.entry_contexts[i], spec.sx, spec.sy_plate, spec.sz);
-            let secondary = resolve_secondary_door(&stairwell, primary, spec.sx, spec.sy_plate, spec.sz);
+            let primary = resolve_primary_door(
+                opening_for_scope(&stairwell, scope),
+                spec.entry_contexts[i],
+                spec.sx,
+                spec.sy_plate,
+                spec.sz,
+            );
+            let secondary =
+                resolve_secondary_door(&stairwell, primary, spec.sx, spec.sy_plate, spec.sz);
             let mut faces = Vec::<Face>::new();
             let mut doors = Vec::<ResolvedDoor>::new();
             if let Some(primary) = primary {
@@ -1045,12 +1215,21 @@ fn build_overlay() -> StairOpeningOverlay {
                 continue;
             }
             let world_x = world_origin[0] + spec.px;
-            let world_y = world_origin[1] + spec.bottom_y + STOREY_SPACING_M * 0.5 + i as f32 * spec.storey_spacing;
+            let world_y = world_origin[1]
+                + spec.bottom_y
+                + STOREY_SPACING_M * 0.5
+                + i as f32 * spec.storey_spacing;
             let world_z = world_origin[2] + spec.pz;
             for face in faces {
-                overlay
-                    .suppress_masks
-                    .push(build_shaft_wall_mask(world_x, world_y, world_z, spec.sx, spec.sy_plate, spec.sz, face));
+                overlay.suppress_masks.push(build_shaft_wall_mask(
+                    world_x,
+                    world_y,
+                    world_z,
+                    spec.sx,
+                    spec.sy_plate,
+                    spec.sz,
+                    face,
+                ));
                 push_shaft_wall_replacements(
                     &mut overlay.replacement_blockers,
                     world_x,
@@ -1079,7 +1258,11 @@ fn build_overlay() -> StairOpeningOverlay {
             plate_cx /= doc.objects.len() as f32;
             plate_cz /= doc.objects.len() as f32;
         }
-        let scope = if floor_ref.level_index == 1 { "ground" } else { "typical" };
+        let scope = if floor_ref.level_index == 1 {
+            "ground"
+        } else {
+            "typical"
+        };
         let mut punches = Vec::<PlatePunch>::new();
         for obj in &doc.objects {
             if !is_stair_prefab(&obj.prefab_id) {
@@ -1087,10 +1270,22 @@ fn build_overlay() -> StairOpeningOverlay {
             }
             let scale = obj.scale.unwrap_or([1.0, 1.0, 1.0]);
             let context = Context {
-                toward_plate: shaft_door_toward_point(obj.position[0], obj.position[2], &doc, plate_cx, plate_cz),
+                toward_plate: shaft_door_toward_point(
+                    obj.position[0],
+                    obj.position[2],
+                    &doc,
+                    plate_cx,
+                    plate_cz,
+                ),
                 shaft_plate: [obj.position[0], obj.position[2]],
             };
-            if let Some(primary) = resolve_primary_door(opening_for_scope(&stairwell, scope), Some(context), scale[0], scale[1], scale[2]) {
+            if let Some(primary) = resolve_primary_door(
+                opening_for_scope(&stairwell, scope),
+                Some(context),
+                scale[0],
+                scale[1],
+                scale[2],
+            ) {
                 punches.push(PlatePunch {
                     stair_face: primary.face,
                     tangent_local: primary.tangent,
@@ -1103,7 +1298,9 @@ fn build_overlay() -> StairOpeningOverlay {
                     shx: scale[0] * 0.5,
                     shz: scale[2] * 0.5,
                 });
-                if let Some(secondary) = resolve_secondary_door(&stairwell, Some(primary), scale[0], scale[1], scale[2]) {
+                if let Some(secondary) =
+                    resolve_secondary_door(&stairwell, Some(primary), scale[0], scale[1], scale[2])
+                {
                     punches.push(PlatePunch {
                         stair_face: secondary.face,
                         tangent_local: secondary.tangent,
@@ -1130,8 +1327,11 @@ fn build_overlay() -> StairOpeningOverlay {
                 continue;
             }
             let world_x = world_origin[0] + obj.position[0];
-            let floor_base_y = world_origin[1] + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M;
-            let world_y = world_origin[1] + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M + obj.position[1];
+            let floor_base_y = world_origin[1]
+                + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M;
+            let world_y = world_origin[1]
+                + (floor_ref.level_index as f32 - 1.0) * DEFAULT_BUILDING_FLOOR_SPACING_M
+                + obj.position[1];
             let world_z = world_origin[2] + obj.position[2];
             let mut faces = Vec::<Face>::new();
             for contact in &contacts {
@@ -1140,9 +1340,9 @@ fn build_overlay() -> StairOpeningOverlay {
                 }
             }
             for face in faces {
-                overlay
-                    .suppress_masks
-                    .push(build_corridor_wall_mask(world_x, world_y, world_z, scale[0], scale[1], scale[2], face));
+                overlay.suppress_masks.push(build_corridor_wall_mask(
+                    world_x, world_y, world_z, scale[0], scale[1], scale[2], face,
+                ));
                 push_corridor_wall_replacements(
                     &mut overlay.replacement_blockers,
                     world_x,
@@ -1234,7 +1434,12 @@ mod tests {
 
         let wall_x = 6.16 - 8.35 * 0.5 + WT * 0.5;
         assert!(
-            !blocks(&out, wall_x, 4.816842105263158 - 0.06, 46.0 - 5.177351451279119),
+            !blocks(
+                &out,
+                wall_x,
+                4.816842105263158 - 0.06,
+                46.0 - 5.177351451279119
+            ),
             "west stair doorway center should be open at off-origin shaft positions",
         );
         assert!(
@@ -1308,13 +1513,29 @@ mod tests {
             }],
         );
 
-        assert_eq!(contacts.len(), 1, "west stair contact should produce one corridor wall opening");
+        assert_eq!(
+            contacts.len(),
+            1,
+            "west stair contact should produce one corridor wall opening"
+        );
         let contact = contacts[0];
         assert!(matches!(contact.corridor_wall, Face::E));
-        assert!(contact.hole_along_z, "west stair doorway should cut along corridor Z span");
-        assert!(contact.z0r < -0.5 && contact.z1r > 0.5, "opening span should stay centered on the doorway");
-        assert!(contact.y0r <= -1.33 + 1e-4, "opening should reach the corridor floor band without a sill lip");
-        assert!(contact.y1r >= 1.32, "opening should preserve nearly full authored door height");
+        assert!(
+            contact.hole_along_z,
+            "west stair doorway should cut along corridor Z span"
+        );
+        assert!(
+            contact.z0r < -0.5 && contact.z1r > 0.5,
+            "opening span should stay centered on the doorway"
+        );
+        assert!(
+            contact.y0r <= -1.33 + 1e-4,
+            "opening should reach the corridor floor band without a sill lip"
+        );
+        assert!(
+            contact.y1r >= 1.32,
+            "opening should preserve nearly full authored door height"
+        );
     }
 
     #[test]
@@ -1379,10 +1600,20 @@ mod tests {
             }],
         );
 
-        assert_eq!(contacts.len(), 1, "raised stair punch should still produce one corridor opening");
+        assert_eq!(
+            contacts.len(),
+            1,
+            "raised stair punch should still produce one corridor opening"
+        );
         let contact = contacts[0];
-        assert!(contact.y0r <= -1.415 + 1e-4, "corridor opening should be flush to the local floor band");
-        assert!(contact.y1r >= 1.24, "corridor opening should retain enough headroom after flush normalization");
+        assert!(
+            contact.y0r <= -1.415 + 1e-4,
+            "corridor opening should be flush to the local floor band"
+        );
+        assert!(
+            contact.y1r >= 1.24,
+            "corridor opening should retain enough headroom after flush normalization"
+        );
     }
 
     #[test]

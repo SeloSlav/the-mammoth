@@ -21,7 +21,9 @@ pub(crate) fn is_valid_username(s: &str) -> Result<(), String> {
             USERNAME_MAX_LEN
         ));
     }
-    let valid = s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-');
+    let valid = s
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-');
     if !valid {
         return Err(
             "Username may only contain letters, numbers, underscores, and hyphens.".to_string(),

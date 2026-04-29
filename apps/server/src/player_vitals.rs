@@ -192,10 +192,13 @@ pub fn start_player_vitals_schedule(ctx: &ReducerContext) {
         return;
     }
     let interval = TimeDuration::from_micros(TICK_INTERVAL_MICROS);
-    let _ = ctx.db.player_vitals_schedule().insert(PlayerVitalsSchedule {
-        scheduled_id: 0,
-        scheduled_at: interval.into(),
-    });
+    let _ = ctx
+        .db
+        .player_vitals_schedule()
+        .insert(PlayerVitalsSchedule {
+            scheduled_id: 0,
+            scheduled_at: interval.into(),
+        });
 }
 
 #[spacetimedb::reducer]
@@ -223,7 +226,8 @@ pub fn player_vitals_tick_step(ctx: &ReducerContext, _arg: PlayerVitalsSchedule)
             .map(|i: PlayerInput| (i.bits & BIT_SPRINT) != 0)
             .unwrap_or(false);
 
-        let (nh, nhu, nhy) = step_vitals_once(row.health, row.hunger, row.hydration, dt_secs, sprinting);
+        let (nh, nhu, nhy) =
+            step_vitals_once(row.health, row.hunger, row.hydration, dt_secs, sprinting);
 
         // Skip writes when nothing meaningful changed (reduces replication noise).
         const EPS: f32 = 0.004;

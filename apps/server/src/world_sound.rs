@@ -2,9 +2,7 @@
 //! cab arrival chime) for nearby players.
 //! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
-use spacetimedb::{
-    Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp,
-};
+use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::movement::PlayerInput;
 use crate::pose::PlayerPose;
@@ -131,10 +129,13 @@ pub fn cleanup_old_world_sound_events(ctx: &ReducerContext, _arg: WorldSoundEven
 
 pub fn start_cleanup_schedule(ctx: &ReducerContext) {
     let interval: TimeDuration = TimeDuration::from_micros(3_000_000);
-    let _ = ctx.db.world_sound_event_cleanup().insert(WorldSoundEventCleanup {
-        scheduled_id: 0,
-        scheduled_at: interval.into(),
-    });
+    let _ = ctx
+        .db
+        .world_sound_event_cleanup()
+        .insert(WorldSoundEventCleanup {
+            scheduled_id: 0,
+            scheduled_at: interval.into(),
+        });
 }
 
 pub(crate) fn emit_world_sound(
@@ -166,13 +167,7 @@ pub(crate) fn emit_world_sound(
 }
 
 /// One-shot at the drop position so nearby players hear the pickup (`emitter` = picker).
-pub fn emit_item_pickup_at(
-    ctx: &ReducerContext,
-    x: f32,
-    y: f32,
-    z: f32,
-    emitter: Identity,
-) {
+pub fn emit_item_pickup_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
     emit_world_sound(
         ctx,
         KIND_ITEM_PICKUP,
@@ -340,7 +335,14 @@ pub fn emit_reinforcement_noise_at(
     );
 }
 
-pub fn emit_gunfire_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity, variation: u8) {
+pub fn emit_gunfire_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+    variation: u8,
+) {
     emit_world_sound(
         ctx,
         KIND_FIREARM_SHOT,
@@ -355,13 +357,7 @@ pub fn emit_gunfire_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Id
     );
 }
 
-pub fn emit_melee_flesh_hit_at(
-    ctx: &ReducerContext,
-    x: f32,
-    y: f32,
-    z: f32,
-    emitter: Identity,
-) {
+pub fn emit_melee_flesh_hit_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
     emit_world_sound(
         ctx,
         KIND_MELEE_FLESH_HIT,
@@ -386,7 +382,13 @@ pub fn ensure_player_audio_rows(ctx: &ReducerContext, id: Identity) {
             foot_rr: 0,
         });
     }
-    if ctx.db.player_melee_cooldown().identity().find(&id).is_none() {
+    if ctx
+        .db
+        .player_melee_cooldown()
+        .identity()
+        .find(&id)
+        .is_none()
+    {
         let _ = ctx.db.player_melee_cooldown().insert(PlayerMeleeCooldown {
             identity: id,
             last_swing_micros: 0,

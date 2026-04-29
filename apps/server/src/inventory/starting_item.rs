@@ -86,10 +86,12 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
                 owner_id: owner,
                 slot_index,
             }),
-            StarterPlacement::Inventory(slot_index) => ItemLocation::Inventory(InventoryLocationData {
-                owner_id: owner,
-                slot_index,
-            }),
+            StarterPlacement::Inventory(slot_index) => {
+                ItemLocation::Inventory(InventoryLocationData {
+                    owner_id: owner,
+                    slot_index,
+                })
+            }
         };
         let _ = ctx.db.inventory_item().insert(InventoryItem {
             instance_id: 0,

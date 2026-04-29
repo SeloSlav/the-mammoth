@@ -19,10 +19,10 @@ const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
 const BED_URL = "/static/models/objects/bed.glb";
 
-/** Authoring GLBs — wardrobe/bed read larger than gameplay anchors; footlocker slightly reduced. */
+/** Authoring GLBs — tuned against the replicated wall-based furniture anchors. */
 const WARDROBE_VIS_SCALE = 0.98;
-const FOOTLOCKER_VIS_SCALE = 0.72;
-const BED_VIS_SCALE = 0.98;
+const FOOTLOCKER_VIS_SCALE = 0.56;
+const BED_VIS_SCALE = 1.14;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",

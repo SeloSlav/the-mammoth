@@ -291,11 +291,7 @@ fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
             }
             let top = mx[1];
             if top <= feet_y + WALK_STEP_UP_MARGIN {
-                best = if best.is_nan() {
-                    top
-                } else {
-                    best.max(top)
-                };
+                best = if best.is_nan() { top } else { best.max(top) };
             }
         }
     }
@@ -308,7 +304,11 @@ fn sample_static_walk_ground_top_y(x: f32, z: f32, probe_top_y: f32) -> f32 {
         WALK_PROBE_DY,
     );
     if !stair_top.is_nan() {
-        best = if best.is_nan() { stair_top } else { best.max(stair_top) };
+        best = if best.is_nan() {
+            stair_top
+        } else {
+            best.max(stair_top)
+        };
     }
     best
 }
@@ -428,8 +428,11 @@ fn integrate_one(
             1.0,
             h,
         );
-        let boost =
-            kinematic_support::support_vertical_velocity_mps(base_top, elevator_surface.as_ref(), 0.05);
+        let boost = kinematic_support::support_vertical_velocity_mps(
+            base_top,
+            elevator_surface.as_ref(),
+            0.05,
+        );
         p.vel_y = JUMP_SPEED + boost;
         p.grounded = 0;
     }
@@ -502,13 +505,7 @@ fn resolve_player_static_collisions(
     let body_h = player_body_height(bits);
     let grounded = p.grounded != 0;
     crate::character_controller::resolve_player_static_collisions_character(
-        p,
-        prev_x,
-        prev_y,
-        prev_z,
-        body_h,
-        grounded,
-        scratch,
+        p, prev_x, prev_y, prev_z, body_h, grounded, scratch,
     );
 }
 

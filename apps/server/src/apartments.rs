@@ -2,18 +2,18 @@
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::apartment_door::{
-    apartment_door, ApartmentDoor, SwingDoorFace, building_floor_refs,
-};
+use crate::accounts::user;
+use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
 use crate::auth;
 use crate::chat;
-use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::elevator_layout::max_level;
-use crate::generated_apartment_doors::{ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS};
-use crate::accounts::user;
+use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
+use crate::generated_apartment_doors::{
+    ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
+};
 use crate::inventory::{
-    self, find_item_in_inventory_slot, find_item_in_stash_slot, inventory_item, NUM_PLAYER_INVENTORY_SLOTS,
-    NUM_STASH_SLOTS,
+    self, find_item_in_inventory_slot, find_item_in_stash_slot, inventory_item,
+    NUM_PLAYER_INVENTORY_SLOTS, NUM_STASH_SLOTS,
 };
 use crate::inventory_models::{InventoryLocationData, ItemLocation, StashLocationData};
 use crate::player_vitals;
@@ -59,7 +59,11 @@ fn pose_near_horizontal_marker(
     pose_feet_vertical_ok_for_interact(unit_floor_y, pose_y)
 }
 
-fn cancel_other_active_claims_for_player(ctx: &ReducerContext, sender: Identity, except_unit_key: &str) {
+fn cancel_other_active_claims_for_player(
+    ctx: &ReducerContext,
+    sender: Identity,
+    except_unit_key: &str,
+) {
     for mut u in ctx.db.apartment_unit().iter() {
         if u.unit_key == except_unit_key {
             continue;
@@ -156,11 +160,7 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     const HALF_WIDTH: f32 = 5.5;
     match face {
         SwingDoorFace::W => (
-            [
-                t.hinge_x - DEPTH,
-                feet_y - 0.06,
-                t.hinge_z - HALF_WIDTH,
-            ],
+            [t.hinge_x - DEPTH, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
             [t.hinge_x - 0.08, top_y, t.hinge_z + HALF_WIDTH],
         ),
         SwingDoorFace::E => (
@@ -195,30 +195,18 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
             if !seen.insert(uk.clone()) {
                 continue;
             }
-            if ctx.db.apartment_unit().unit_key().find(&uk).is_some() {
-                continue;
-            }
+            let existing = ctx.db.apartment_unit().unit_key().find(&uk);
             let (mn, mx) = derive_bounds(t, level);
             let sx = mx[0] - mn[0];
             let sz = mx[2] - mn[2];
             let face = SwingDoorFace::from_u8(t.face);
 
-            let (
-                bed_x,
-                bed_z,
-                bed_yaw,
-                foot_x,
-                foot_z,
-                wardrobe_x,
-                wardrobe_z,
-            ) =
-                if let Some(seed) = crate::apartment_interior_anchors::east_west_interior_furniture_seed(
-                    &mn,
-                    &mx,
-                    t.hinge_x,
-                    t.hinge_z,
-                    face,
-                ) {
+            let (bed_x, bed_z, bed_yaw, foot_x, foot_z, wardrobe_x, wardrobe_z) =
+                if let Some(seed) =
+                    crate::apartment_interior_anchors::east_west_interior_furniture_seed(
+                        &mn, &mx, t.hinge_x, t.hinge_z, face,
+                    )
+                {
                     (
                         seed.bed_x,
                         seed.bed_z,
@@ -229,10 +217,10 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                         seed.wardrobe_z,
                     )
                 } else {
-                    let bed_x_frac =
-                        (mn[0] + BED_FRAC_X * sx).clamp(mn[0] + BED_EDGE_MARGIN, mx[0] - BED_EDGE_MARGIN);
-                    let bed_z_frac =
-                        (mn[2] + BED_FRAC_Z * sz).clamp(mn[2] + BED_EDGE_MARGIN, mx[2] - BED_EDGE_MARGIN);
+                    let bed_x_frac = (mn[0] + BED_FRAC_X * sx)
+                        .clamp(mn[0] + BED_EDGE_MARGIN, mx[0] - BED_EDGE_MARGIN);
+                    let bed_z_frac = (mn[2] + BED_FRAC_Z * sz)
+                        .clamp(mn[2] + BED_EDGE_MARGIN, mx[2] - BED_EDGE_MARGIN);
                     let bed_yaw_legacy = match face {
                         SwingDoorFace::W => std::f32::consts::FRAC_PI_2,
                         SwingDoorFace::E => -std::f32::consts::FRAC_PI_2,
@@ -240,13 +228,7 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                     };
                     let (wardrobe_xz, foot_xz) =
                         crate::apartment_interior_anchors::wardrobe_and_footlocker_xz_for_unit_seed(
-                            mn[0],
-                            mx[0],
-                            mn[2],
-                            mx[2],
-                            t.hinge_x,
-                            t.hinge_z,
-                            t.face,
+                            mn[0], mx[0], mn[2], mx[2], t.hinge_x, t.hinge_z, t.face,
                         );
                     (
                         bed_x_frac,
@@ -258,6 +240,48 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                         wardrobe_xz[1],
                     )
                 };
+            if let Some(mut row) = existing {
+                let changed = row.floor_doc_id != floor_doc_id
+                    || row.level != level
+                    || row.unit_id != t.unit_id
+                    || (row.bed_x - bed_x).abs() > 1e-4
+                    || (row.bed_y - (mn[1] + 0.01)).abs() > 1e-4
+                    || (row.bed_z - bed_z).abs() > 1e-4
+                    || (row.bed_yaw - bed_yaw).abs() > 1e-4
+                    || (row.foot_x - foot_x).abs() > 1e-4
+                    || (row.foot_y - mn[1]).abs() > 1e-4
+                    || (row.foot_z - foot_z).abs() > 1e-4
+                    || (row.wardrobe_x - wardrobe_x).abs() > 1e-4
+                    || (row.wardrobe_z - wardrobe_z).abs() > 1e-4
+                    || (row.bound_min_x - mn[0]).abs() > 1e-4
+                    || (row.bound_max_x - mx[0]).abs() > 1e-4
+                    || (row.bound_min_z - mn[2]).abs() > 1e-4
+                    || (row.bound_max_z - mx[2]).abs() > 1e-4
+                    || (row.bound_min_y - mn[1]).abs() > 1e-4
+                    || (row.bound_max_y - mx[1]).abs() > 1e-4;
+                if changed {
+                    row.floor_doc_id = floor_doc_id.to_string();
+                    row.level = level;
+                    row.unit_id = t.unit_id.to_string();
+                    row.bed_x = bed_x;
+                    row.bed_y = mn[1] + 0.01;
+                    row.bed_z = bed_z;
+                    row.bed_yaw = bed_yaw;
+                    row.foot_x = foot_x;
+                    row.foot_y = mn[1];
+                    row.foot_z = foot_z;
+                    row.wardrobe_x = wardrobe_x;
+                    row.wardrobe_z = wardrobe_z;
+                    row.bound_min_x = mn[0];
+                    row.bound_max_x = mx[0];
+                    row.bound_min_z = mn[2];
+                    row.bound_max_z = mx[2];
+                    row.bound_min_y = mn[1];
+                    row.bound_max_y = mx[1];
+                    ctx.db.apartment_unit().unit_key().update(row);
+                }
+                continue;
+            }
             let _ = ctx.db.apartment_unit().insert(ApartmentUnit {
                 unit_key: uk,
                 floor_doc_id: floor_doc_id.to_string(),
@@ -300,7 +324,13 @@ fn template_set_for_floor(floor_doc_id: &str) -> &'static [GenTemplate] {
     &[]
 }
 
-fn pose_near_apartment_stash_anchor(_ctx: &ReducerContext, unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+fn pose_near_apartment_stash_anchor(
+    _ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
     pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
 }
 
@@ -343,7 +373,6 @@ pub(crate) fn lock_owned_residential_doors(ctx: &ReducerContext, owner: Identity
         }
     }
 }
-
 
 fn claim_pulse_cap_secs() -> f32 {
     1.05
@@ -458,13 +487,18 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
 
     let now_us = ctx.timestamp.to_micros_since_unix_epoch();
     let dt = if unit.last_claim_pulse_micros > 0 {
-        ((now_us - unit.last_claim_pulse_micros).max(0) as f32 / 1_000_000.0).min(claim_pulse_cap_secs())
+        ((now_us - unit.last_claim_pulse_micros).max(0) as f32 / 1_000_000.0)
+            .min(claim_pulse_cap_secs())
     } else {
         0.35
     };
     unit.last_claim_pulse_micros = now_us;
 
-    if unit.claim_started_by.map(|id| id != sender).unwrap_or(false) {
+    if unit
+        .claim_started_by
+        .map(|id| id != sender)
+        .unwrap_or(false)
+    {
         unit.claim_progress_secs = 0.0;
     }
     unit.claim_started_by = Some(sender);
@@ -488,7 +522,10 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
         unit.claim_started_by = None;
         unit.claim_progress_secs = CLAIM_FULL_SECS;
         ctx.db.apartment_unit().unit_key().update(unit);
-        chat::post_system_message(ctx, format!("Claim complete — {unit_label} is now occupied."));
+        chat::post_system_message(
+            ctx,
+            format!("Claim complete — {unit_label} is now occupied."),
+        );
         force_unit_primary_door_open(ctx, &unit_key);
         return;
     }
@@ -533,13 +570,23 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
         unit.reinforced = 1;
         unit.reinforce_progress_secs = REINFORCE_HOLD_SECS;
         ctx.db.apartment_unit().unit_key().update(unit);
-        world_sound::emit_reinforcement_noise_at(ctx, ad.hinge_x, ad.feet_y + 1.2, ad.hinge_z, sender);
+        world_sound::emit_reinforcement_noise_at(
+            ctx,
+            ad.hinge_x,
+            ad.feet_y + 1.2,
+            ad.hinge_z,
+            sender,
+        );
     } else {
         ctx.db.apartment_unit().unit_key().update(unit);
     }
 }
 
-fn first_empty_stash_slot(ctx: &ReducerContext, stash_owner: Identity, unit_key: &str) -> Option<u16> {
+fn first_empty_stash_slot(
+    ctx: &ReducerContext,
+    stash_owner: Identity,
+    unit_key: &str,
+) -> Option<u16> {
     for s in 0..NUM_STASH_SLOTS {
         if find_item_in_stash_slot(ctx, stash_owner, unit_key, s).is_none() {
             return Some(s);
@@ -610,9 +657,9 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     if !ok {
         return;
     }
-    let Some(empty_inv) = (0..NUM_PLAYER_INVENTORY_SLOTS).find(|s| {
-        find_item_in_inventory_slot(ctx, sender, *s).is_none()
-    }) else {
+    let Some(empty_inv) = (0..NUM_PLAYER_INVENTORY_SLOTS)
+        .find(|s| find_item_in_inventory_slot(ctx, sender, *s).is_none())
+    else {
         return;
     };
     row.location = ItemLocation::Inventory(InventoryLocationData {
@@ -633,14 +680,22 @@ pub(crate) fn on_player_killed_cancel_claim(ctx: &ReducerContext, victim: Identi
 }
 
 pub(crate) fn ensure_door_gp(ctx: &ReducerContext, row_key: &str) -> ApartmentDoorGameplay {
-    if let Some(g) = ctx.db.apartment_door_gameplay().row_key().find(&row_key.to_string()) {
+    if let Some(g) = ctx
+        .db
+        .apartment_door_gameplay()
+        .row_key()
+        .find(&row_key.to_string())
+    {
         return g;
     }
-    let _ = ctx.db.apartment_door_gameplay().insert(ApartmentDoorGameplay {
-        row_key: row_key.to_string(),
-        door_hp: 100.0,
-        breached: 0,
-    });
+    let _ = ctx
+        .db
+        .apartment_door_gameplay()
+        .insert(ApartmentDoorGameplay {
+            row_key: row_key.to_string(),
+            door_hp: 100.0,
+            breached: 0,
+        });
     ctx.db
         .apartment_door_gameplay()
         .row_key()
@@ -657,7 +712,11 @@ pub(crate) fn door_breached(ctx: &ReducerContext, row_key: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn player_may_toggle_door(ctx: &ReducerContext, actor: Identity, door: &ApartmentDoor) -> bool {
+pub(crate) fn player_may_toggle_door(
+    ctx: &ReducerContext,
+    actor: Identity,
+    door: &ApartmentDoor,
+) -> bool {
     if door_breached(ctx, &door.row_key) {
         return false;
     }

@@ -15,10 +15,18 @@ fn locate_node_executable() -> PathBuf {
     if cfg!(windows) {
         let mut candidates = Vec::new();
         if let Some(program_files) = env::var_os("ProgramFiles") {
-            candidates.push(PathBuf::from(&program_files).join("nodejs").join("node.exe"));
+            candidates.push(
+                PathBuf::from(&program_files)
+                    .join("nodejs")
+                    .join("node.exe"),
+            );
         }
         if let Some(program_files_x86) = env::var_os("ProgramFiles(x86)") {
-            candidates.push(PathBuf::from(&program_files_x86).join("nodejs").join("node.exe"));
+            candidates.push(
+                PathBuf::from(&program_files_x86)
+                    .join("nodejs")
+                    .join("node.exe"),
+            );
         }
         if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
             candidates.push(
@@ -37,7 +45,8 @@ fn locate_node_executable() -> PathBuf {
 }
 
 fn main() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing CARGO_MANIFEST_DIR"));
+    let manifest_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing CARGO_MANIFEST_DIR"));
     let repo_root = manifest_dir
         .parent()
         .and_then(|p| p.parent())
@@ -45,14 +54,48 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("missing OUT_DIR"));
     let out_file = out_dir.join("stair_runtime_overlay.rs");
 
-    println!("cargo:rerun-if-changed={}", repo_root.join("scripts/gen-stair-runtime-overlay.ts").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("packages/world/src/stairRuntimeOverlay.ts").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("packages/world/src/stairElevatorPlaceholders.ts").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("packages/world/src/stairWellGeometry.ts").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("packages/world/src/buildingStairShafts.ts").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("content/building/mammoth.json").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("content/elevator/stairwell.json").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("content/building/floors").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root
+            .join("scripts/gen-stair-runtime-overlay.ts")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root
+            .join("packages/world/src/stairRuntimeOverlay.ts")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root
+            .join("packages/world/src/stairElevatorPlaceholders.ts")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root
+            .join("packages/world/src/stairWellGeometry.ts")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root
+            .join("packages/world/src/buildingStairShafts.ts")
+            .display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("content/building/mammoth.json").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("content/elevator/stairwell.json").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("content/building/floors").display()
+    );
 
     let node = locate_node_executable();
     let status = Command::new(&node)
@@ -64,7 +107,12 @@ fn main() {
             out_file.to_string_lossy().as_ref(),
         ])
         .status()
-        .unwrap_or_else(|err| panic!("failed to spawn {} --import tsx scripts/gen-stair-runtime-overlay.ts: {err}", node.display()));
+        .unwrap_or_else(|err| {
+            panic!(
+                "failed to spawn {} --import tsx scripts/gen-stair-runtime-overlay.ts: {err}",
+                node.display()
+            )
+        });
     if !status.success() {
         panic!("stair runtime overlay generation failed with status {status}");
     }

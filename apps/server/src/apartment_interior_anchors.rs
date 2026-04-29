@@ -1,11 +1,10 @@
 //! Wardrobe / footlocker / bed placement for apartment shells.
 //!
-//! **`unit_e_*`/`unit_w_*` residential flats** (`SwingDoorFace::W`/`E`): bed headboard flush on the wall
-//! **opposite** the exterior door hinge strip, mattress axis points along the doorway ray; footlocker
-//! sits centered just past the **foot edge** of the bed toward the doorway; wardrobe is placed
-//! flush on the **long corridor-parallel wall** that does **not** host the doorway strip (south vs
-//! north picked from hinge side vs centroid), swept **along X ~2.1 m inward** from that back-corner
-//! wall (`mn_x`/`mx_x`), so it clears the bedside without floating mid-room.
+//! **`unit_e_*`/`unit_w_*` residential flats** (`SwingDoorFace::W`/`E`): use one mirrored,
+//! wall-based layout per apartment. The bed headboard sits on the exterior/back wall, the
+//! footlocker sits at the foot of the bed toward the apartment door, and the wardrobe sits on the
+//! same back wall with a fixed Z offset from the bed. This keeps all three props away from
+//! stair/corridor cutouts while making each unit read as the same furnished plan.
 
 use crate::apartment_door::SwingDoorFace;
 
@@ -16,24 +15,17 @@ const LATERAL_SEP_M: f32 = 1.08;
 const SPINE_DEPTH_FRAC: f32 = 0.42;
 
 // --- East/West doorway residential flats (canonical layout) ---
-const BED_HEADBOARD_GAP_M: f32 = 0.088;
-const BED_HALF_LENGTH_M: f32 = 1.02;
-const FOOT_GAP_BEYOND_MATTRESS_M: f32 = 0.16;
-const FOOTLOCKER_TAIL_HALF_M: f32 = 0.34;
 /// Keep props away from shell edges — matches client furniture merge padding.
-const HULL_EDGE_M: f32 = 0.56;
-const WARD_FLUSH_LONG_WALL_INSET_M: f32 = 0.44;
-const WARD_CORNER_DEPTH_ALONG_ROOM_AXIS_M: f32 = 2.12;
+const HULL_EDGE_M: f32 = 0.82;
+const BED_CENTER_FROM_BACK_WALL_M: f32 = 1.28;
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 3.05;
+const BED_CENTER_Z_OFFSET_M: f32 = -1.55;
+const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 0.92;
+const WARDROBE_CENTER_Z_OFFSET_M: f32 = 3.35;
 
 #[inline]
 fn clamp(v: f32, lo: f32, hi: f32) -> f32 {
     v.max(lo).min(hi)
-}
-
-#[inline]
-fn unit2(dx: f32, dz: f32) -> (f32, f32) {
-    let l = (dx * dx + dz * dz).sqrt().max(1e-5);
-    (dx / l, dz / l)
 }
 
 /// Bed / footlocker / wardrobe for **SwingDoorFace `W|E`** units (east/west hinged corridor doors).
@@ -52,8 +44,8 @@ pub(crate) struct EastWestInteriorFurnitureSeed {
 pub(crate) fn east_west_interior_furniture_seed(
     mn: &[f32; 3],
     mx: &[f32; 3],
-    hinge_x: f32,
-    hinge_z: f32,
+    _hinge_x: f32,
+    _hinge_z: f32,
     face: SwingDoorFace,
 ) -> Option<EastWestInteriorFurnitureSeed> {
     if !matches!(face, SwingDoorFace::W | SwingDoorFace::E) {
@@ -61,51 +53,51 @@ pub(crate) fn east_west_interior_furniture_seed(
     }
 
     let cz = (mn[2] + mx[2]) * 0.5;
-    let cz_f = clamp(cz, mn[2] + HULL_EDGE_M, mx[2] - HULL_EDGE_M);
+    let z_lo = mn[2] + HULL_EDGE_M;
+    let z_hi = mx[2] - HULL_EDGE_M;
+    let bed_z = clamp(cz + BED_CENTER_Z_OFFSET_M, z_lo, z_hi);
+    let foot_z = bed_z;
+    let wardrobe_z = clamp(cz + WARDROBE_CENTER_Z_OFFSET_M, z_lo, z_hi);
 
-    // Headboard midpoint on plane parallel to the hinge strip — small inset from drywall.
-    let bx = match face {
-        SwingDoorFace::W => mn[0] + BED_HEADBOARD_GAP_M,
-        SwingDoorFace::E => mx[0] - BED_HEADBOARD_GAP_M,
+    let (bed_x, foot_x, wardrobe_x, bed_yaw) = match face {
+        SwingDoorFace::W => (
+            clamp(
+                mn[0] + BED_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            clamp(
+                mn[0] + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            clamp(
+                mn[0] + WARDROBE_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            std::f32::consts::FRAC_PI_2,
+        ),
+        SwingDoorFace::E => (
+            clamp(
+                mx[0] - BED_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            clamp(
+                mx[0] - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            clamp(
+                mx[0] - WARDROBE_CENTER_FROM_BACK_WALL_M,
+                mn[0] + HULL_EDGE_M,
+                mx[0] - HULL_EDGE_M,
+            ),
+            -std::f32::consts::FRAC_PI_2,
+        ),
         SwingDoorFace::N | SwingDoorFace::S => unreachable!("filtered above"),
     };
-
-    // Feet / mattress longitudinal axis runs from headboard toward the hinge doorway.
-    let (efx, efz) = unit2(hinge_x - bx, hinge_z - cz_f);
-
-    let bed_half = BED_HALF_LENGTH_M;
-    let foot_ray = bed_half + bed_half + FOOT_GAP_BEYOND_MATTRESS_M + FOOTLOCKER_TAIL_HALF_M;
-
-    let mut bed_x = bx + efx * bed_half;
-    let mut bed_z = cz_f + efz * bed_half;
-    let mut foot_x = bx + efx * foot_ray;
-    let mut foot_z = cz_f + efz * foot_ray;
-
-    bed_x = clamp(bed_x, mn[0] + HULL_EDGE_M, mx[0] - HULL_EDGE_M);
-    bed_z = clamp(bed_z, mn[2] + HULL_EDGE_M, mx[2] - HULL_EDGE_M);
-    foot_x = clamp(foot_x, mn[0] + HULL_EDGE_M, mx[0] - HULL_EDGE_M);
-    foot_z = clamp(foot_z, mn[2] + HULL_EDGE_M, mx[2] - HULL_EDGE_M);
-
-    // Wardrobe hugs the corridor-parallel interior wall farthest from the door strip in Z …
-    let wardrobe_z_raw = if hinge_z <= cz_f {
-        mx[2] - WARD_FLUSH_LONG_WALL_INSET_M
-    } else {
-        mn[2] + WARD_FLUSH_LONG_WALL_INSET_M
-    };
-
-    // Spine offset along −X/+X opposite the corridor doorway so wardrobe clears the bedside.
-    let mut wardrobe_x = match face {
-        SwingDoorFace::W => mn[0] + WARD_CORNER_DEPTH_ALONG_ROOM_AXIS_M,
-        SwingDoorFace::E => mx[0] - WARD_CORNER_DEPTH_ALONG_ROOM_AXIS_M,
-        SwingDoorFace::N | SwingDoorFace::S => unreachable!("filtered above"),
-    };
-    wardrobe_x = clamp(wardrobe_x, mn[0] + HULL_EDGE_M, mx[0] - HULL_EDGE_M);
-
-    let wardrobe_z_clamped =
-        clamp(wardrobe_z_raw, mn[2] + HULL_EDGE_M, mx[2] - HULL_EDGE_M);
-
-    // Match `{ forward_x, forward_z } = { -sin yaw, -cos yaw }` used by `movement` / `spawn_pose_owned_bed`.
-    let bed_yaw = (-efx).atan2(-efz);
 
     Some(EastWestInteriorFurnitureSeed {
         bed_x,
@@ -113,7 +105,7 @@ pub(crate) fn east_west_interior_furniture_seed(
         foot_x,
         foot_z,
         wardrobe_x,
-        wardrobe_z: wardrobe_z_clamped,
+        wardrobe_z,
         bed_yaw,
     })
 }
@@ -170,8 +162,11 @@ pub(crate) fn wardrobe_and_footlocker_xz_for_unit_seed(
     let depth_near = APARTMENT_INTERIOR_MIN_DEPTH_FROM_DOOR_M + WALL_MARGIN_M;
     let max_depth_clamped = (max_depth - WALL_MARGIN_M * 0.5).max(depth_near);
     let depth_span = (max_depth_clamped - depth_near).max(0.05);
-    let depth_clamped =
-        clamp(depth_near + SPINE_DEPTH_FRAC * depth_span, depth_near, max_depth_clamped);
+    let depth_clamped = clamp(
+        depth_near + SPINE_DEPTH_FRAC * depth_span,
+        depth_near,
+        max_depth_clamped,
+    );
     let base = depth_at(depth_clamped);
 
     let z_span = mx_z - mn_z;
@@ -194,4 +189,130 @@ pub(crate) fn wardrobe_and_footlocker_xz_for_unit_seed(
     fz = clamp(fz, mn_z + WALL_MARGIN_M, mx_z - WALL_MARGIN_M);
 
     ([wx, wz], [fx, fz])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generated_apartment_doors::APARTMENT_DOOR_TEMPLATE_SETS;
+
+    const TEST_LEVEL: u32 = 2;
+    const BUILDING_ORIGIN_Y: f32 = 0.0;
+    const STOREY_SPACING_M: f32 = 3.16;
+    const DEPTH: f32 = 13.0;
+    const HALF_WIDTH: f32 = 5.5;
+
+    fn feet_world_y(level: u32, feet_y_offset: f32) -> f32 {
+        BUILDING_ORIGIN_Y + (level.max(1) as f32 - 1.0) * STOREY_SPACING_M + feet_y_offset
+    }
+
+    fn test_bounds(
+        face: SwingDoorFace,
+        hinge_x: f32,
+        hinge_z: f32,
+        feet_y: f32,
+    ) -> ([f32; 3], [f32; 3]) {
+        let top_y = feet_y + 3.0;
+        match face {
+            SwingDoorFace::W => (
+                [hinge_x - DEPTH, feet_y - 0.06, hinge_z - HALF_WIDTH],
+                [hinge_x - 0.08, top_y, hinge_z + HALF_WIDTH],
+            ),
+            SwingDoorFace::E => (
+                [hinge_x + 0.08, feet_y - 0.06, hinge_z - HALF_WIDTH],
+                [hinge_x + DEPTH, top_y, hinge_z + HALF_WIDTH],
+            ),
+            _ => (
+                [hinge_x - HALF_WIDTH, feet_y - 0.06, hinge_z - DEPTH],
+                [hinge_x + HALF_WIDTH, top_y, hinge_z + HALF_WIDTH],
+            ),
+        }
+    }
+
+    fn assert_inside(label: &str, mn: &[f32; 3], mx: &[f32; 3], x: f32, z: f32) {
+        assert!(
+            x >= mn[0] + HULL_EDGE_M && x <= mx[0] - HULL_EDGE_M,
+            "{label} x={x} outside [{}, {}]",
+            mn[0] + HULL_EDGE_M,
+            mx[0] - HULL_EDGE_M,
+        );
+        assert!(
+            z >= mn[2] + HULL_EDGE_M && z <= mx[2] - HULL_EDGE_M,
+            "{label} z={z} outside [{}, {}]",
+            mn[2] + HULL_EDGE_M,
+            mx[2] - HULL_EDGE_M,
+        );
+    }
+
+    #[test]
+    fn generated_residential_furniture_anchors_stay_inside_unit_hulls() {
+        let mut checked = 0;
+        for set in APARTMENT_DOOR_TEMPLATE_SETS {
+            for t in set.templates {
+                if !(t.unit_id.starts_with("unit_e_") || t.unit_id.starts_with("unit_w_")) {
+                    continue;
+                }
+                let face = SwingDoorFace::from_u8(t.face);
+                let feet_y = feet_world_y(TEST_LEVEL, t.feet_y_offset);
+                let (mn, mx) = test_bounds(face, t.hinge_x, t.hinge_z, feet_y);
+                let seed = east_west_interior_furniture_seed(&mn, &mx, t.hinge_x, t.hinge_z, face)
+                    .expect("residential east/west units must use canonical furniture seed");
+                let unit_label = format!("{}:{}", set.floor_doc_id, t.unit_id);
+
+                assert_inside(
+                    &format!("{unit_label} bed"),
+                    &mn,
+                    &mx,
+                    seed.bed_x,
+                    seed.bed_z,
+                );
+                assert_inside(
+                    &format!("{unit_label} footlocker"),
+                    &mn,
+                    &mx,
+                    seed.foot_x,
+                    seed.foot_z,
+                );
+                assert_inside(
+                    &format!("{unit_label} wardrobe"),
+                    &mn,
+                    &mx,
+                    seed.wardrobe_x,
+                    seed.wardrobe_z,
+                );
+
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 32);
+    }
+
+    #[test]
+    fn canonical_layout_is_mirrored_and_footlocker_sits_at_bed_foot() {
+        let mn = [-11.075, 0.0, -117.5825];
+        let mx = [1.845, 3.0, -106.5825];
+        let east = east_west_interior_furniture_seed(&mn, &mx, 1.925, -112.0825, SwingDoorFace::W)
+            .unwrap();
+        assert!(east.foot_x > east.bed_x);
+        assert!((east.foot_z - east.bed_z).abs() < 1e-4);
+        assert!(east.wardrobe_x < east.bed_x);
+        assert!(east.wardrobe_z > east.bed_z);
+        assert!((east.bed_yaw - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+
+        let west_mn = [-1.845, 0.0, -117.5825];
+        let west_mx = [11.075, 3.0, -106.5825];
+        let west = east_west_interior_furniture_seed(
+            &west_mn,
+            &west_mx,
+            -1.925,
+            -112.0825,
+            SwingDoorFace::E,
+        )
+        .unwrap();
+        assert!(west.foot_x < west.bed_x);
+        assert!((west.foot_z - west.bed_z).abs() < 1e-4);
+        assert!(west.wardrobe_x > west.bed_x);
+        assert!(west.wardrobe_z > west.bed_z);
+        assert!((west.bed_yaw + std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+    }
 }

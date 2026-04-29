@@ -234,7 +234,11 @@ pub fn tick_apartment_doors(ctx: &ReducerContext, dt: f32) {
         let Some(mut row) = ctx.db.apartment_door().row_key().find(&rk) else {
             continue;
         };
-        let goal = if row.desired_open != 0 { 1.0_f32 } else { 0.0_f32 };
+        let goal = if row.desired_open != 0 {
+            1.0_f32
+        } else {
+            0.0_f32
+        };
         if row.swing_open_01 < goal - 1e-4 {
             row.swing_open_01 = (row.swing_open_01 + step).min(goal);
         } else if row.swing_open_01 > goal + 1e-4 {
@@ -403,11 +407,24 @@ pub fn resolve_player_apartment_door_collisions(
 
     const FOOT_R: f32 = 0.22;
     crate::character_controller::resolve_horizontal_character_with_fill(
-        p, prev_x, prev_y, prev_z, body_h, grounded, FOOT_R, &mut fill, &mut tuples,
+        p,
+        prev_x,
+        prev_y,
+        prev_z,
+        body_h,
+        grounded,
+        FOOT_R,
+        &mut fill,
+        &mut tuples,
     );
 
     if west_door_debug_zone(p.x, p.y, p.z) || west_door_debug_zone(prev_x, prev_y, prev_z) {
-        if let Some(row) = ctx.db.apartment_door().row_key().find(&WEST_DOOR_DEBUG_ROW_KEY.to_string()) {
+        if let Some(row) = ctx
+            .db
+            .apartment_door()
+            .row_key()
+            .find(&WEST_DOOR_DEBUG_ROW_KEY.to_string())
+        {
             let (mn, mx) = if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
                 closed_slab_aabb(&row)
             } else if row.swing_open_01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 {
@@ -466,9 +483,7 @@ fn resolve_interact_target(
     }
     if let Some((hx, hy, hz)) = client_feet_hint {
         let sep_xz = ((hx - px).powi(2) + (hz - pz).powi(2)).sqrt();
-        if sep_xz <= CLIENT_FEET_HINT_MAX_SEP_M
-            && player_in_interact_range(&row, hx, hy, hz)
-        {
+        if sep_xz <= CLIENT_FEET_HINT_MAX_SEP_M && player_in_interact_range(&row, hx, hy, hz) {
             return Some(row);
         }
     }
@@ -491,11 +506,7 @@ fn sound_xyz_for_row(row: &ApartmentDoor) -> (f32, f32, f32) {
     let (nx, nz) = open_normal(face);
     const PICK_OUT: f32 = 0.06;
     let cy = row.feet_y + row.panel_h_m * 0.5;
-    (
-        row.hinge_x + nx * PICK_OUT,
-        cy,
-        row.hinge_z + nz * PICK_OUT,
-    )
+    (row.hinge_x + nx * PICK_OUT, cy, row.hinge_z + nz * PICK_OUT)
 }
 
 fn apply_desired_open(
@@ -723,7 +734,10 @@ mod tests {
             && cap_min[1] < mx[1]
             && cap_max[2] > mn[2]
             && cap_min[2] < mx[2];
-        assert!(!overlaps, "parked leaf AABB must not block centre of doorway");
+        assert!(
+            !overlaps,
+            "parked leaf AABB must not block centre of doorway"
+        );
     }
 
     /// Corridor-side traffic (the ORIGINAL bug: open door juts into corridor) is now clear.
@@ -739,10 +753,8 @@ mod tests {
         let cz = row.hinge_z;
         let cap_min = [cx - radius, row.feet_y + 0.25, cz - radius];
         let cap_max = [cx + radius, row.feet_y + 1.72, cz + radius];
-        let overlaps = cap_max[0] > mn[0]
-            && cap_min[0] < mx[0]
-            && cap_max[2] > mn[2]
-            && cap_min[2] < mx[2];
+        let overlaps =
+            cap_max[0] > mn[0] && cap_min[0] < mx[0] && cap_max[2] > mn[2] && cap_min[2] < mx[2];
         assert!(!overlaps, "parked leaf must not block corridor traffic");
     }
 }

@@ -262,17 +262,19 @@ fn drop_item_inner(
 ) -> Result<(), String> {
     let row = get_player_item(ctx, item_instance_id)?;
     if row.quantity < quantity_to_drop {
-        return Err(format!(
-            "only {} in stack",
-            row.quantity
-        ));
+        return Err(format!("only {} in stack", row.quantity));
     }
     let (def_id, removed_qty) =
         remove_player_item_quantity(ctx, item_instance_id, quantity_to_drop)?;
     let (x, y, z, yaw) = drop_spawn_transform(&pose);
     log::info!(
         "drop_item: {:?} dropping {}×{} at ({:.2},{:.2},{:.2})",
-        sender, removed_qty, def_id, x, y, z
+        sender,
+        removed_qty,
+        def_id,
+        x,
+        y,
+        z
     );
     let _ = ctx.db.dropped_item().insert(DroppedItem {
         id: 0,
@@ -332,7 +334,8 @@ fn pickup_dropped_item_inner(
     try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
     world_sound::emit_item_pickup_at(ctx, px, py, pz, sender);
     ctx.db.dropped_item().id().delete(dropped_item_id);
-    log::info!("pickup_dropped_item: {:?} picked up {}×{} (id {})",
+    log::info!(
+        "pickup_dropped_item: {:?} picked up {}×{} (id {})",
         sender,
         qty,
         def_id,
