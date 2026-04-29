@@ -2,6 +2,10 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
+  cloneGeometryForMerge,
+  mergeGroupDescendantsByMaterial,
+} from "./fpMergeGroupDescendantsByMaterial.js";
+import {
   applyStairOpeningCollisionOverlay,
   applyStairRuntimeBlockerOverlay,
   applyStairRuntimeWalkSuppressMasks,
@@ -29,30 +33,8 @@ import cellDoc from "../../../../../content/cells/cell_0_0.json";
 import stairWellAuthoringJson from "../../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
 
-/** Scratch for {@link mergeGroupDescendantsByMaterial} preserve re-parenting (avoid alloc per mesh). */
-const _mergePreserveParentInv = new THREE.Matrix4();
-const _mergePreserveLocal = new THREE.Matrix4();
+/** Scratch for {@link mergeUnitPreservedShellsByPlacedObject} (avoid alloc per mesh). */
 const _mergeUnitShellScratch = new THREE.Matrix4();
-
-/**
- * `BufferGeometryUtils.mergeGeometries()` requires every geometry in a batch to agree on indexed vs
- * non-indexed layout. Authoring/runtime paths occasionally mix them (e.g. procedural box pieces vs
- * transformed shell fragments), which otherwise throws at load time. Normalize every merge input to
- * **non-indexed** after cloning so downstream merge buckets are structurally compatible.
- */
-function cloneGeometryForMerge(
-  geometry: THREE.BufferGeometry,
-  transform?: THREE.Matrix4,
-): THREE.BufferGeometry {
-  let g = geometry.clone();
-  if (g.index) {
-    const nonIndexed = g.toNonIndexed();
-    g.dispose();
-    g = nonIndexed;
-  }
-  if (transform) g.applyMatrix4(transform);
-  return g;
-}
 
 /** Stair-shaft core AABB for FP mood lighting; keep darkness inside the actual shaft, not corridors. */
 export type FpStairShaftInteriorLightBounds = {
@@ -323,140 +305,3 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
   }
 }
 
-/**
- * Merge all descendant `Mesh` objects inside `group` by material, replacing the
- * group's full subtree with one merged `Mesh` per unique material.
- * All geometry is transformed to group-local space before merging so the
- * replacement meshes sit at local origin.
- */
-function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
-  const groupWorldInv = new THREE.Matrix4()
-    .copy(group.matrixWorld)
-    .invert();
-
-  /** Meshes that must stay separate (e.g. canvas-textured stair signs, apartment unit hollow shells). */
-  const preserveMeshes: THREE.Mesh[] = [];
-  group.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    if (obj.userData.mammothSkipFloorGeometryMerge === true) preserveMeshes.push(obj);
-  });
-
-  /**
-   * Orphaning with `removeFromParent()` before saving world space breaks re-parenting: with no
-   * parent, `matrixWorld` collapses to local-only, so `attach()` / `add()` misalign nested room
-   * geometry (e.g. hoistway walls vs cab). Snapshot world matrices while still parented.
-   */
-  const preserveWorld = new Map<THREE.Mesh, THREE.Matrix4>();
-  for (const m of preserveMeshes) {
-    m.updateMatrixWorld(true);
-    preserveWorld.set(m, m.matrixWorld.clone());
-    m.removeFromParent();
-  }
-
-  /**
-   * Collect geometry clones keyed by material UUID, plus a flag tracking whether **all** source
-   * meshes contributing to that material were tagged `mammothUnitInterior = true`. Corridor shell
-   * walls/ceilings/floors are tagged before merge, and the resulting merged mesh inherits the flag
-   * only if every source had it — so e.g. the root-level concrete slab (untagged) sharing a
-   * material with corridor floors (tagged) correctly drops the flag and keeps the slab visible.
-   */
-  const geosByMat = new Map<
-    string,
-    { mat: THREE.Material; geos: THREE.BufferGeometry[]; allInterior: boolean }
-  >();
-
-  group.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    const material = obj.material as THREE.Material;
-    obj.updateWorldMatrix(true, false);
-    // Transform to group-local space so all merged verts share the same frame.
-    const geo = cloneGeometryForMerge(
-      obj.geometry as THREE.BufferGeometry,
-      new THREE.Matrix4().multiplyMatrices(groupWorldInv, obj.matrixWorld),
-    );
-    const key = material.uuid;
-    const isInterior = obj.userData.mammothUnitInterior === true;
-    let bucket = geosByMat.get(key);
-    if (!bucket) {
-      bucket = { mat: material, geos: [], allInterior: isInterior };
-      geosByMat.set(key, bucket);
-    } else {
-      bucket.allInterior = bucket.allInterior && isInterior;
-    }
-    bucket.geos.push(geo);
-  });
-
-  if (geosByMat.size === 0) {
-    if (preserveMeshes.length === 0) return;
-    while (group.children.length > 0) {
-      group.remove(group.children[0]!);
-    }
-    reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
-    return;
-  }
-
-  // Swap out all children for the smaller set of merged meshes.
-  while (group.children.length > 0) {
-    group.remove(group.children[0]!);
-  }
-
-  for (const { mat, geos, allInterior } of geosByMat.values()) {
-    const merged = mergeGeometries(geos, false);
-    for (const g of geos) g.dispose();
-    if (!merged) continue;
-    merged.computeBoundingSphere();
-    merged.computeBoundingBox();
-    const mesh = new THREE.Mesh(merged, mat);
-    /**
-     * Keep frustum culling ON. Geometry is already baked into group-local space
-     * (`applyMatrix4(groupWorldInv * meshMatrixWorld)` above), and `computeBoundingSphere`
-     * runs on the merged result — so the sphere correctly encloses every disjoint shell
-     * fragment in the mesh's local frame. When the camera sits inside a hollow interior the
-     * sphere contains the camera and trivially intersects the frustum, so walls don't vanish.
-     * Without this, 19 storeys of merged floor-plate + stair-column geometry submits every
-     * frame regardless of camera direction — a catastrophic fill-rate regression.
-     */
-    mesh.frustumCulled = true;
-    /**
-     * Propagate the interior-hide flag only when every source mesh for this material was
-     * tagged. Mixed materials (e.g. corridor floor + root slab sharing one material) fall
-     * through as non-interior so the slab keeps rendering from outside views.
-     */
-    if (allInterior) mesh.userData.mammothUnitInterior = true;
-    group.add(mesh);
-  }
-
-  reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
-}
-
-function reattachPreservedMeshesWithSavedWorld(
-  group: THREE.Group,
-  preserveMeshes: THREE.Mesh[],
-  preserveWorld: Map<THREE.Mesh, THREE.Matrix4>,
-): void {
-  group.updateMatrixWorld(true);
-  for (const m of preserveMeshes) {
-    const world = preserveWorld.get(m);
-    if (!world) continue;
-    group.add(m);
-    _mergePreserveParentInv.copy(group.matrixWorld).invert();
-    _mergePreserveLocal.multiplyMatrices(_mergePreserveParentInv, world);
-    _mergePreserveLocal.decompose(m.position, m.quaternion, m.scale);
-    m.updateMatrix();
-    /**
-     * Re-enable frustum culling — preserved meshes (canvas-textured stair signs, apartment
-     * hollow shells, etc.) each have their own geometry bounding sphere and should be culled
-     * when outside the camera frustum, same reasoning as the merged meshes above.
-     *
-     * Exception: elevator / stair-shaft **thin façade skins** (`addShaftShell` →
-     * `shaft_wall_*_exterior*`, ~16 mm thick, `noCollision` overlays). Forcing culling on every
-     * preserved mesh can false-negative cull these slivers at long range (sphere vs frustum tests
-     * + large world coordinates), so the inner brick-toned shaft wall reads through where the
-     * exterior concrete skin should be. Keep them always submitted while their floor plate is
-     * visible — draw cost is tiny (a few quads per shaft per storey).
-     */
-    const isThinShaftFacadeSkin =
-      m.name.startsWith("shaft_wall_") && m.name.includes("_exterior");
-    m.frustumCulled = !isThinShaftFacadeSkin;
-  }
-}

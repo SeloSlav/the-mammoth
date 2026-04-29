@@ -46,5 +46,11 @@ export const MELEE_COOLDOWN_MS = 480;
 
 /** PBR shell + large static merges: shading cost grows ~pixelRatio²; `1` keeps fill-rate predictable on DPR>1 laptops. */
 export const FP_SESSION_MAX_PIXEL_RATIO = 1;
+/**
+ * WebGPU MSAA on {@link THREE.WebGPURenderer}. Every rendered pass (main camera + each planar cab
+ * mirror reflection) pays multisample fill cost — traded against jaggy facade / prop edges (`false`
+ * improves throughput on low-end GPUs).
+ */
+export const FP_SESSION_WEBGPU_ANTIALIAS = true;
 export const FP_VIEWMODEL_RENDER_LAYER = 1;
 export const FP_MIRROR_SELF_RENDER_LAYER = 2;

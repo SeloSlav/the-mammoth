@@ -13,8 +13,7 @@ import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
 import {
-  droppedItemIsWorldAnchor,
-  findNearestDroppedPickup,
+  findNearestDroppedPickupsHud,
   MAMMOTH_PICKUP_RADIUS_M,
 } from "../worldRuntime/droppedItemWorldRuntime.js";
 import {
@@ -44,6 +43,7 @@ import { pushFpPerfFrame } from "./fpSessionPerfStore.js";
 import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
+import { cabMirrorReflectionWorthUpdating } from "../fpRendering/fpCabMirrorReflectionGate.js";
 import {
   CAM_BOB_DIP_Y,
   clampTinyDisplayOffsetComponents,
@@ -238,40 +238,6 @@ export function createFpSessionMainRafFrame(
         mainRaf.meleeAttackSeq += 1;
         deps.localAudio.playMeleeWeaponSwingLocal();
         if (deps.conn.identity) void deps.conn.reducers.submitMeleeSwing({});
-      }
-    }
-
-    if (
-      deps.conn.identity &&
-      deps.keys.has("KeyE") &&
-      !deps.fpInteractInputBlocked()
-    ) {
-      const pos = deps.pos;
-      const holdPrompt = getApartmentSystemPrompt(deps.conn, pos);
-      const doorSuppressBlocksClaimHold =
-        holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(pos);
-      if (
-        !deps.fpElevators.shouldSuppressEpickup(pos, deps.camera) &&
-        !doorSuppressBlocksClaimHold
-      ) {
-        const nearWorldHold = findNearestDroppedPickup(
-          deps.conn,
-          pos.x,
-          pos.y,
-          pos.z,
-          MAMMOTH_PICKUP_RADIUS_M,
-          droppedItemIsWorldAnchor,
-        );
-        if (!nearWorldHold) {
-          const aSysHold = holdPrompt;
-          if (
-            aSysHold?.kind === "apartment_claim" &&
-            nowMs - lastApartmentClaimHoldPulseMs >= APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS
-          ) {
-            lastApartmentClaimHoldPulseMs = nowMs;
-            void deps.conn.reducers.claimApartmentPulse({ unitKey: aSysHold.unitKey });
-          }
-        }
       }
     }
 
@@ -543,8 +509,40 @@ export function createFpSessionMainRafFrame(
     const _t_presentEnd = performance.now();
 
     if (deps.conn.identity) {
-      let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
+      const droppedHud = findNearestDroppedPickupsHud(
+        deps.conn,
+        deps.pos.x,
+        deps.pos.y,
+        deps.pos.z,
+        MAMMOTH_PICKUP_RADIUS_M,
+      );
       const aSys = getApartmentSystemPrompt(deps.conn, deps.pos);
+
+      if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
+        const pos = deps.pos;
+        const holdPrompt = aSys;
+        const doorSuppressBlocksClaimHold =
+          holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(pos);
+        if (
+          !deps.fpElevators.shouldSuppressEpickup(pos, deps.camera) &&
+          !doorSuppressBlocksClaimHold
+        ) {
+          const worldLootBlocksClaimPulse =
+            droppedHud.worldAnchor !== null && holdPrompt?.kind !== "apartment_claim";
+          if (!worldLootBlocksClaimPulse) {
+            const aSysHold = holdPrompt;
+            if (
+              aSysHold?.kind === "apartment_claim" &&
+              nowMs - lastApartmentClaimHoldPulseMs >= APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS
+            ) {
+              lastApartmentClaimHoldPulseMs = nowMs;
+              void deps.conn.reducers.claimApartmentPulse({ unitKey: aSysHold.unitKey });
+            }
+          }
+        }
+      }
+
+      let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
       const doorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(deps.pos, deps.camera);
       const apartmentDoorHud =
         doorPrompt !== null
@@ -565,23 +563,12 @@ export function createFpSessionMainRafFrame(
           promptKind: apartmentDoorHud.promptKind,
         });
       } else {
-        const nearWorld = findNearestDroppedPickup(
-          deps.conn,
-          deps.pos.x,
-          deps.pos.y,
-          deps.pos.z,
-          MAMMOTH_PICKUP_RADIUS_M,
-          droppedItemIsWorldAnchor,
-        );
-        const hitPlain = findNearestDroppedPickup(
-          deps.conn,
-          deps.pos.x,
-          deps.pos.y,
-          deps.pos.z,
-          MAMMOTH_PICKUP_RADIUS_M,
-          (row) => !droppedItemIsWorldAnchor(row),
-        );
-        if (nearWorld) {
+        const nearWorld = droppedHud.worldAnchor;
+        const hitPlain = droppedHud.plain;
+        /** Same priority ordering as overlapping residential swing doors ({@link apartmentFurnitureInteriorsPreferOverUnitDoor}). */
+        const preferAptInterior =
+          aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys);
+        if (!preferAptInterior && nearWorld) {
           const def = getMammothItemDef(nearWorld.defId);
           setFpPickupPrompt({
             kind: "dropped_item",
@@ -621,22 +608,6 @@ export function createFpSessionMainRafFrame(
             !deps.fpElevators.shouldSuppressEpickup(deps.pos, deps.camera);
           if (aSys?.kind !== "apartment_claim") {
             claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(deps.pos);
-          }
-          if (claimHoldEligible) {
-            const blockWorld = findNearestDroppedPickup(
-              deps.conn,
-              deps.pos.x,
-              deps.pos.y,
-              deps.pos.z,
-              MAMMOTH_PICKUP_RADIUS_M,
-              droppedItemIsWorldAnchor,
-            );
-            if (blockWorld) claimHoldEligible = false;
-          }
-          if (claimHoldEligible) {
-            const asp = getApartmentSystemPrompt(deps.conn, deps.pos);
-            claimHoldEligible =
-              asp?.kind === "apartment_claim" && asp.unitKey === aSys.unitKey;
           }
           const { displaySecs: claimProgressHudSecs, nextSmooth } =
             computeOptimisticClaimProgressSecs({
@@ -725,8 +696,16 @@ export function createFpSessionMainRafFrame(
     });
     const _t_afterFpEnv = performance.now();
     for (const mirror of deps.cabMirrors) {
+      const forceReflection =
+        mirror.surface.visible &&
+        cabMirrorReflectionWorthUpdating(
+          mirror.surface,
+          deps._floorVisCamWorld,
+          deps._floorVisCamDir,
+        );
       mirror.syncForCamera({
         camera: deps.camera,
+        forceReflectionUpdate: forceReflection,
         configureVirtualCamera: (virtualCamera) => {
           virtualCamera.layers.mask = deps.camera.layers.mask;
           virtualCamera.layers.disable(FP_VIEWMODEL_RENDER_LAYER);

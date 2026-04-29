@@ -215,8 +215,8 @@ export function attachFpSessionEnvironment(
     mieCoefficient: 0.0051,
     mieDirectionalG: 0.32,
     radius: FP_SESSION_SKY_RADIUS,
-    widthSegments: 64,
-    heightSegments: 32,
+    widthSegments: 40,
+    heightSegments: 20,
     width: viewSize.x,
     height: viewSize.y,
   });

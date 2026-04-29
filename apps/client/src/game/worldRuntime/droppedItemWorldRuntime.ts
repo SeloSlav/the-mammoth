@@ -72,6 +72,43 @@ export function findNearestDroppedPickup(
   return best;
 }
 
+/** Single pass: nearest world-anchor + nearest plain drop within radius (HUD + hold pulse). */
+export function findNearestDroppedPickupsHud(
+  conn: DbConnection,
+  x: number,
+  y: number,
+  z: number,
+  radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
+): { worldAnchor: NearestDroppedPickup | null; plain: NearestDroppedPickup | null } {
+  const r2 = radiusM * radiusM;
+  let bestWorld: NearestDroppedPickup | null = null;
+  let bestWorldD = Infinity;
+  let bestPlain: NearestDroppedPickup | null = null;
+  let bestPlainD = Infinity;
+  for (const r of conn.db.dropped_item) {
+    const row = r as DroppedItem;
+    const dx = row.x - x;
+    const dy = row.y - y;
+    const dz = row.z - z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d > r2) continue;
+    const isWorld = droppedItemIsWorldAnchor(row);
+    const id = row.id;
+    const droppedItemId = typeof id === "bigint" ? id : BigInt(id as number);
+    const hit: NearestDroppedPickup = { droppedItemId, defId: row.defId };
+    if (isWorld) {
+      if (d < bestWorldD) {
+        bestWorldD = d;
+        bestWorld = hit;
+      }
+    } else if (d < bestPlainD) {
+      bestPlainD = d;
+      bestPlain = hit;
+    }
+  }
+  return { worldAnchor: bestWorld, plain: bestPlain };
+}
+
 function droppedIdKey(id: DroppedItem["id"]): string {
   return typeof id === "bigint" ? id.toString() : String(id);
 }

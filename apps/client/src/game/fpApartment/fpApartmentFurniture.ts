@@ -3,12 +3,17 @@
  * wardrobe (`wardrobe_x/z`), footlocker (`foot_x/z`), bed (`bed_x/y/z` + `bed_yaw`).
  *
  * GLB pivots vary — each clone is snapped so its **world AABB bottom** meets the floor plane.
+ * After placement, each unit’s three props are merged into **one mesh per material** per unit
+ * (see {@link mergeGroupDescendantsByMaterial}) so draw calls stay bounded while each merged group
+ * keeps a tight AABB for frustum culling (merging an entire floor’s units into one mesh made the
+ * bounds huge and forced the GPU to draw every apartment on the plate every frame).
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { yawTowardRoomCenterXZ, type ApartmentInteriorBounds } from "@the-mammoth/game";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
+import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -93,6 +98,20 @@ export async function mountFpApartmentFurniture(opts: {
     }
     managed.length = 0;
 
+    const byLevel = new Map<number, THREE.Group>();
+
+    const floorGroupFor = (levelIdx: number): THREE.Group => {
+      let g = byLevel.get(levelIdx);
+      if (!g) {
+        g = new THREE.Group();
+        g.name = `apartment_furniture_plate_${levelIdx}`;
+        g.userData.mammothPlateLevelIndex = levelIdx;
+        g.userData.mammothApartmentFurnitureProp = true;
+        byLevel.set(levelIdx, g);
+      }
+      return g;
+    };
+
     for (const row of opts.conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
       if (!(u.unitId.startsWith("unit_e_") || u.unitId.startsWith("unit_w_"))) continue;
@@ -101,34 +120,56 @@ export async function mountFpApartmentFurniture(opts: {
       /** Matches server floor slab (`mn[1]` / `foot_y`). */
       const floorY = u.footY;
       const levelIdx = u.level;
+      const plate = floorGroupFor(levelIdx);
 
       const yawW = yawTowardRoomCenterXZ(u.wardrobeX, u.wardrobeZ, bounds);
       const yawF = yawTowardRoomCenterXZ(u.footX, u.footZ, bounds);
+
+      const unitGroup = new THREE.Group();
+      unitGroup.name = `apartment_furniture_${u.unitKey}`;
+      unitGroup.userData.mammothApartmentFurnitureProp = true;
+      unitGroup.userData.mammothPlateLevelIndex = levelIdx;
 
       const w = clonePropScene(wardrobeTemplate, levelIdx);
       w.scale.setScalar(WARDROBE_VIS_SCALE);
       w.position.set(u.wardrobeX, 0, u.wardrobeZ);
       w.rotation.y = yawW;
       snapCloneBottomToWorldFloor(w, floorY);
-      opts.buildingRoot.add(w);
-      managed.push(w);
+      unitGroup.add(w);
 
       const f = clonePropScene(footlockerTemplate, levelIdx);
       f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
       f.position.set(u.footX, 0, u.footZ);
       f.rotation.y = yawF;
       snapCloneBottomToWorldFloor(f, floorY);
-      opts.buildingRoot.add(f);
-      managed.push(f);
+      unitGroup.add(f);
 
       const b = clonePropScene(bedTemplate, levelIdx);
       b.scale.setScalar(BED_VIS_SCALE);
       b.position.set(u.bedX, 0, u.bedZ);
       b.rotation.y = u.bedYaw;
       snapCloneBottomToWorldFloor(b, u.bedY);
-      opts.buildingRoot.add(b);
-      managed.push(b);
+      unitGroup.add(b);
+
+      unitGroup.updateMatrixWorld(true);
+      mergeGroupDescendantsByMaterial(unitGroup);
+      for (const m of unitGroup.children) {
+        if (m instanceof THREE.Mesh) {
+          m.castShadow = false;
+          m.receiveShadow = false;
+        }
+      }
+
+      plate.add(unitGroup);
     }
+
+    for (const g of byLevel.values()) {
+      if (g.children.length === 0) continue;
+      g.updateMatrixWorld(true);
+      opts.buildingRoot.add(g);
+      managed.push(g);
+    }
+
     opts.buildingRoot.updateMatrixWorld(true);
     opts.onRebuilt?.();
   };

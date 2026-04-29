@@ -7,6 +7,11 @@ export type FpPlanarMirror = {
   syncForCamera(args: {
     camera: THREE.PerspectiveCamera;
     configureVirtualCamera?: (camera: THREE.Camera) => void;
+    /**
+     * When false, the reflector keeps the last captured texture instead of re-rendering the scene
+     * (large GPU savings when the mirror is behind you / far away).
+     */
+    forceReflectionUpdate?: boolean;
   }): void;
   dispose(): void;
 };
@@ -23,18 +28,20 @@ function planeSizeFromGeometry(geometry: THREE.BufferGeometry): { width: number;
 
 export function createFpPlanarMirrorFromPlaceholder(
   placeholder: THREE.Mesh,
-  opts?: { resolutionScale?: number },
+  opts?: { resolutionScale?: number; reflectionSamples?: number },
 ): FpPlanarMirror {
   const parent = placeholder.parent;
   if (!parent) throw new Error("createFpPlanarMirrorFromPlaceholder: placeholder has no parent");
   const geometry = placeholder.geometry.clone();
   const planeSize = planeSizeFromGeometry(geometry);
   const aspect = planeSize.width / planeSize.height;
-  const resolutionScale = opts?.resolutionScale ?? (aspect >= 0.75 ? 0.85 : 0.7);
+  const resolutionScale =
+    opts?.resolutionScale ?? (aspect >= 0.75 ? 0.48 : 0.4);
+  const reflectionSamples = opts?.reflectionSamples ?? 1;
   const mirrorNode = reflector({
     resolutionScale,
     bounces: false,
-    samples: 4,
+    samples: reflectionSamples,
   });
   const material = new MeshBasicNodeMaterial();
   material.colorNode = mirrorNode;
@@ -58,9 +65,9 @@ export function createFpPlanarMirrorFromPlaceholder(
 
   return {
     surface,
-    syncForCamera({ camera, configureVirtualCamera }) {
+    syncForCamera({ camera, configureVirtualCamera, forceReflectionUpdate = true }) {
       const reflectorBase = mirrorNode.reflector;
-      reflectorBase.forceUpdate = true;
+      reflectorBase.forceUpdate = forceReflectionUpdate;
       const virtualCamera = reflectorBase.getVirtualCamera(camera);
       configureVirtualCamera?.(virtualCamera);
     },

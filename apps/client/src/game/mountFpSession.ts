@@ -108,6 +108,7 @@ import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpRe
 import {
   FP_MIRROR_SELF_RENDER_LAYER,
   FP_SESSION_MAX_PIXEL_RATIO,
+  FP_SESSION_WEBGPU_ANTIALIAS,
   FP_VIEWMODEL_RENDER_LAYER,
   FREE_LOOK_YAW_MAX,
   MOUSE_SENS,
@@ -137,18 +138,11 @@ export async function mountFpSession(
   installMmWallProbeLoadingStub();
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
-  /**
-   * MSAA is back on — edge aliasing on the 19-storey facade + interior shell edges read as visible
-   * shimmer without it. The fragment-cost objections from the previous disable comment are now
-   * mitigated upstream: the session hides unit plaster, corridor shells, shaft interiors, apartment
-   * doors, and corridor signage from the exterior view (see `mountFpSession` → `unitInteriorMeshes`
-   * and the `mammothUnitInterior` tagging in `fpSessionWorldMount`, `fpElevatorShaftVisual`,
-   * `fpApartmentDoors`, `stairwellCorridorSign`, `elevatorLandingKatSign`,
-   * `floorPlaceholderMeshes::addKoncarElevatorSignMeshes`), and every `MeshPhysicalMaterial` glass
-   * default now runs with `transmission = 0` (see `swingDoorMesh` + `fpElevatorShaftVisual`).
-   * Net effect: far fewer fragments to multi-sample per frame, so MSAA's cost is affordable again.
-   */
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: false });
+  const renderer = new THREE.WebGPURenderer({
+    canvas,
+    antialias: FP_SESSION_WEBGPU_ANTIALIAS,
+    forceWebGL: false,
+  });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
@@ -795,6 +789,14 @@ export async function mountFpSession(
       }
       if (aptKey?.kind === "apartment_reinforce") {
         void conn.reducers.reinforceApartmentPulse({ doorRowKey: aptKey.doorRowKey });
+        return;
+      }
+
+      if (
+        aptKey?.kind === "apartment_claim" ||
+        aptKey?.kind === "apartment_claim_blocked_gear"
+      ) {
+        // Hold-to-claim uses RAF pulses; do not let a nearby world-anchor drop steal this keypress.
         return;
       }
 
