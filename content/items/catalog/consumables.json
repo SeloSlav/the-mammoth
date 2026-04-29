@@ -2,28 +2,28 @@
   "version": 1,
   "items": [
     {
-      "id": "field_rations",
+      "id": "field-rations",
       "displayName": "Field rations",
       "description": "Dense calorie brick. Restores condition over time (consumable effect hook TBD).",
       "category": "consumable",
       "maxStack": 20
     },
     {
-      "id": "iodine_tablets",
+      "id": "iodine-tablets",
       "displayName": "Iodine tablets",
       "description": "Water treatment strips. Stackable survival consumable (effect hook TBD).",
       "category": "consumable",
       "maxStack": 30
     },
     {
-      "id": "bandage_roll",
+      "id": "bandage-roll",
       "displayName": "Bandage roll",
       "description": "Sterile wrap. Stops bleeding in a pinch (effect hook TBD).",
       "category": "consumable",
       "maxStack": 15
     },
     {
-      "id": "caffeine_gum",
+      "id": "caffeine-gum",
       "displayName": "Caffeine gum",
       "description": "Keeps you sharp for short sprints. Mild stamina buff placeholder (effect hook TBD).",
       "category": "consumable",
@@ -39,7 +39,7 @@
       "consumeOnUse": { "hungerDelta": 24 }
     },
     {
-      "id": "water_bottle",
+      "id": "water-bottle",
       "displayName": "Water bottle",
       "description": "Clear bottle. Restores hydration when consumed (use hook TBD).",
       "category": "consumable",

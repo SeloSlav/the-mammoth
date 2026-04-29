@@ -457,7 +457,7 @@ export async function mountEditorScene(
           .getAuthoringPickList()
           .find((p) => p.object === attached)?.id;
         if (pid === "rigRoot") pres.syncAuthoringRigRestFromAttachedRig();
-        else if (pid === "weaponRoot") pres.syncFpWeaponMountBaselineFromRoot();
+        else if (pid === "weapon") pres.syncFpWeaponMountBaselineFromRoot();
       }
       store.bumpFpAuthorLive();
     }

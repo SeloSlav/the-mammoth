@@ -4,26 +4,12 @@
     {
       "id": "pistol",
       "displayName": "Sidearm",
-      "description": "Compact semi-auto frame.",
+      "description": "Compact semi-auto frame. Uses loose 9mm from inventory stacks.",
       "category": "weapon",
       "maxStack": 1
     },
     {
-      "id": "rifle",
-      "displayName": "Rifle",
-      "description": "Long gun platform.",
-      "category": "weapon",
-      "maxStack": 1
-    },
-    {
-      "id": "rusty_pistol",
-      "displayName": "Rusty pistol",
-      "description": "Soviet-surplus squeaker. Uses loose 9mm from inventory stacks.",
-      "category": "weapon",
-      "maxStack": 1
-    },
-    {
-      "id": "shotgun_coach",
+      "id": "shotgun-coach",
       "displayName": "Coach shotgun",
       "description": "Sawed barrel, heavy swing. Uses shotgun shells from inventory.",
       "category": "weapon",

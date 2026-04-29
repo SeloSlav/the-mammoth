@@ -2,42 +2,42 @@
   "version": 1,
   "items": [
     {
-      "id": "scrap_metal",
+      "id": "scrap-metal",
       "displayName": "Scrap metal",
       "description": "Salvaged plate and fittings. Staple for improvised tools and weapons.",
       "category": "material",
       "maxStack": 5
     },
     {
-      "id": "wood_scraps",
+      "id": "wood-scraps",
       "displayName": "Wood scraps",
       "description": "Short offcuts and splintered boards. Good for handles and crude clubs.",
       "category": "material",
       "maxStack": 500
     },
     {
-      "id": "duct_tape",
+      "id": "duct-tape",
       "displayName": "Duct tape",
       "description": "Industrial tape. Binds grips, patches hulls, fixes morale.",
       "category": "material",
       "maxStack": 200
     },
     {
-      "id": "synthetic_polymer",
+      "id": "synthetic-polymer",
       "displayName": "Synthetic polymer",
       "description": "Moldable stock. Used for durable grips and impact pads.",
       "category": "material",
       "maxStack": 200
     },
     {
-      "id": "wire_spool",
+      "id": "wire-spool",
       "displayName": "Wire spool",
       "description": "Multi-purpose steel wire. Locks guards, lashes heads to hafts.",
       "category": "material",
       "maxStack": 150
     },
     {
-      "id": "chemical_reagent",
+      "id": "chemical-reagent",
       "displayName": "Chemical reagent",
       "description": "Small sealed ampoule. Etches, hardens, or cleans metal before assembly.",
       "category": "material",
@@ -58,21 +58,21 @@
       "maxStack": 20
     },
     {
-      "id": "ammo_9mm",
+      "id": "ammo-9mm",
       "displayName": "9mm rounds",
       "description": "Loose pistol ammunition (no magazines).",
       "category": "material",
       "maxStack": 60
     },
     {
-      "id": "ammo_shotgun_shell",
+      "id": "ammo-shotgun-shell",
       "displayName": "Shotgun shells",
       "description": "Loose shells for improvised shotguns.",
       "category": "material",
       "maxStack": 24
     },
     {
-      "id": "door_lock",
+      "id": "door-lock",
       "displayName": "Door lock",
       "description": "Cylinder lock consumed when formally claiming an apartment.",
       "category": "material",

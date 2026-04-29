@@ -1,18 +1,17 @@
-//! Ranged fire — consumes ammo stacks, hits use `resolve_melee_hit` cone with custom reach/damage.
+//! Ranged fire — ammo consumption + authoritative LOS hit-scan (walls + doors via static solids).
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::auth;
 use crate::apartments;
-use crate::combat_stub;
+use crate::auth;
 use crate::dropped_item;
+use crate::hitscan;
 use crate::inventory::{self, inventory_item};
 use crate::inventory_models::ItemLocation;
+use crate::movement::player_input;
 use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::world_sound;
-
-pub(crate) const RANGED_HIT_REACH_M: f32 = 45.0;
 
 const RANGED_COOLDOWN_MICROS: i64 = 160_000;
 
@@ -34,18 +33,16 @@ pub fn ensure_player_firearm_cooldown_row(ctx: &ReducerContext, id: Identity) {
 
 fn ammo_def_for_weapon(weapon: &str) -> Option<&'static str> {
     match weapon {
-        "rusty_pistol" | "pistol" => Some("ammo_9mm"),
-        "rifle" => Some("ammo_9mm"),
-        "shotgun_coach" => Some("ammo_shotgun_shell"),
+        "pistol" => Some("ammo-9mm"),
+        "shotgun-coach" => Some("ammo-shotgun-shell"),
         _ => None,
     }
 }
 
 fn ranged_damage(weapon: &str) -> f32 {
     match weapon {
-        "rusty_pistol" | "pistol" => 20.0,
-        "rifle" => 36.0,
-        "shotgun_coach" => 11.0,
+        "pistol" => 20.0,
+        "shotgun-coach" => 11.0,
         _ => 0.0,
     }
 }
@@ -69,8 +66,15 @@ fn consume_first_owned_stack_one(ctx: &ReducerContext, owner: Identity, def: &st
     false
 }
 
+/// Client-sent camera-forward direction `(aim_dir_xyz)` in world units. Server normalizes +
+/// clamps wild vectors before consuming ammo — **must** precede projectile math.
 #[spacetimedb::reducer]
-pub fn submit_firearm_shot(ctx: &ReducerContext) {
+pub fn submit_firearm_shot(
+    ctx: &ReducerContext,
+    aim_dir_x: f32,
+    aim_dir_y: f32,
+    aim_dir_z: f32,
+) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("submit_firearm_shot blocked: {e}");
         return;
@@ -82,13 +86,25 @@ pub fn submit_firearm_shot(ctx: &ReducerContext) {
     let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
         return;
     };
-    let Some(weapon_def_id) = combat_stub::active_hotbar_item_def_id(ctx, id) else {
+    let Some(weapon_def_id) = crate::combat_stub::active_hotbar_item_def_id(ctx, id) else {
         return;
     };
     if !is_ranged_weapon(&weapon_def_id) {
         return;
     }
-    let dmg = ranged_damage(&weapon_def_id);
+
+    let yaw = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&id)
+        .map(|r| r.aim_yaw)
+        .unwrap_or(pose.yaw);
+
+    if hitscan::sanitize_client_aim_dir(yaw, aim_dir_x, aim_dir_y, aim_dir_z).is_none() {
+        return;
+    }
+
     let ammo_def = ammo_def_for_weapon(&weapon_def_id).expect("validated");
     ensure_player_firearm_cooldown_row(ctx, id);
     let now_us = ctx.timestamp.to_micros_since_unix_epoch();
@@ -105,24 +121,29 @@ pub fn submit_firearm_shot(ctx: &ReducerContext) {
     cd.last_shot_micros = now_us;
     ctx.db.player_firearm_cooldown().identity().update(cd);
 
-    world_sound::emit_gunfire_at(ctx, pose.x, pose.y + 1.02, pose.z, id);
-
-    if let Some(hit) = combat_stub::resolve_melee_hit(
+    let gun_sound_variation = if weapon_def_id == "shotgun-coach" {
+        world_sound::FIREARM_VARIATION_SHOTGUN
+    } else {
+        world_sound::FIREARM_VARIATION_PISTOL
+    };
+    world_sound::emit_gunfire_at(
         ctx,
-        id,
         pose.x,
-        pose.y,
+        pose.y + 1.02,
         pose.z,
-        pose.yaw,
-        &weapon_def_id,
-        Some(RANGED_HIT_REACH_M),
-        Some(dmg),
-    ) {
-        let killed = player_vitals::apply_damage(ctx, hit.target, hit.damage);
-        world_sound::emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
+        id,
+        gun_sound_variation,
+    );
+
+    let hits =
+        hitscan::firearm_hitscan_weapon(ctx, id, &pose, weapon_def_id.as_str(), aim_dir_x, aim_dir_y, aim_dir_z);
+
+    for h in hits {
+        let killed = player_vitals::apply_damage(ctx, h.identity, h.damage);
+        world_sound::emit_melee_flesh_hit_at(ctx, h.ix, h.iy, h.iz, id);
         if killed {
-            dropped_item::scatter_carrier_inventory_at_death(ctx, hit.target);
-            apartments::on_player_killed_cancel_claim(ctx, hit.target);
+            dropped_item::scatter_carrier_inventory_at_death(ctx, h.identity);
+            apartments::on_player_killed_cancel_claim(ctx, h.identity);
         }
     }
 }

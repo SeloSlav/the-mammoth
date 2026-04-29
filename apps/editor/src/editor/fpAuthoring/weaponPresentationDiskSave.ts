@@ -4,7 +4,7 @@ import {
   mergeWeaponFpViewmodelForSave,
 } from "./fpAuthoringExport.js";
 import { notifyWeaponPresentationSavedToDisk } from "./weaponPresentationEditorSync.js";
-import { getFpViewmodelAuthoringPicks } from "./fpViewmodelAuthoringBridge.js";
+import { getFpViewmodelAuthoringPicks, getFpViewmodelPresenterForAuthoring } from "./fpViewmodelAuthoringBridge.js";
 import { assertValidWeaponPresentationJson } from "../../vite/weaponPresentationSaveValidate.js";
 
 /** Kept in lockstep with {@link ALL_WEAPON_DEFINITIONS} — add a weapon in engine once, editor follows. */
@@ -25,12 +25,18 @@ export async function saveWeaponPresentationFromEditor(
   weaponId: FpAuthorWeaponId,
   opts?: { meleeSwingDraft?: PrimitiveSwingKeyframe[] | null },
 ): Promise<void> {
+  const swingDraft = opts?.meleeSwingDraft ?? null;
   const picks = getFpViewmodelAuthoringPicks();
   if (picks.length === 0) {
     throw new Error("Models are still loading — wait for the hand and weapon, then try again.");
   }
-  const swingDraft = opts?.meleeSwingDraft ?? null;
-  const merge = buildWeaponFirstPersonMergeFromPicks(picks);
+  const pres = getFpViewmodelPresenterForAuthoring();
+  // Do not call reconcileFpWeaponGripAnchorToPresentationHand() here: it would snap the grip to
+  // hand × the *previous* JSON grip offset and destroy hand-only edits (e.g. hand forward of the gun).
+  const merge = buildWeaponFirstPersonMergeFromPicks(picks, {
+    gripAnchor: pres?.getFpGripAnchorObject(),
+    weaponVisual: pres?.getFpWeaponVisualObject(),
+  });
   const hasMount = merge.mount != null;
   const hasFp = merge.fpViewmodel != null;
   if (!hasMount && !hasFp) {

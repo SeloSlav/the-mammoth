@@ -181,7 +181,6 @@ export function useSpacetimeConnection(): SpacetimeSession {
               "SELECT * FROM apartment_door",
               "SELECT * FROM apartment_door_gameplay",
               "SELECT * FROM chat_message",
-              "SELECT * FROM world_loot_pickup",
               "SELECT * FROM flashlight_charge",
               "SELECT * FROM dropped_item",
               "SELECT * FROM player_pose",

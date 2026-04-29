@@ -62,7 +62,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
           The Mammoth — <strong>{displayName}</strong>
           <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
             {
-              "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · click canvas to look · Tab inventory"
+              "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory"
             }
           </div>
           <div style={{ marginTop: 8, pointerEvents: "auto" }}>

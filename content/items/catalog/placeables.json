@@ -10,13 +10,13 @@
       "construction": {
         "buildTimeSecs": 6,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 2 },
-          { "itemId": "wood_scraps", "quantity": 8 }
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "wood-scraps", "quantity": 8 }
         ]
       }
     },
     {
-      "id": "brick_oven",
+      "id": "brick-oven",
       "displayName": "Brick oven",
       "description": "Heavy shell for retained heat. For baking and slow roasts once placed (world hook TBD).",
       "category": "placeable",
@@ -24,14 +24,14 @@
       "construction": {
         "buildTimeSecs": 45,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 12 },
-          { "itemId": "duct_tape", "quantity": 4 },
-          { "itemId": "synthetic_polymer", "quantity": 3 }
+          { "itemId": "scrap-metal", "quantity": 12 },
+          { "itemId": "duct-tape", "quantity": 4 },
+          { "itemId": "synthetic-polymer", "quantity": 3 }
         ]
       }
     },
     {
-      "id": "reloading_press",
+      "id": "reloading-press",
       "displayName": "Reloading press",
       "description": "Bench-mounted press for sizing brass, seating bullets, and crimping. Anchor near a sturdy surface (crafting hook TBD).",
       "category": "placeable",
@@ -39,15 +39,15 @@
       "construction": {
         "buildTimeSecs": 60,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 20 },
-          { "itemId": "wire_spool", "quantity": 4 },
-          { "itemId": "synthetic_polymer", "quantity": 6 },
-          { "itemId": "duct_tape", "quantity": 3 }
+          { "itemId": "scrap-metal", "quantity": 20 },
+          { "itemId": "wire-spool", "quantity": 4 },
+          { "itemId": "synthetic-polymer", "quantity": 6 },
+          { "itemId": "duct-tape", "quantity": 3 }
         ]
       }
     },
     {
-      "id": "gunsmith_workbench",
+      "id": "gunsmith-workbench",
       "displayName": "Gunsmith workbench",
       "description": "Vise, pin punches, and reference gauges for stripping receivers and aligning optics. Pairs with the reloading press for a full ballistic pipeline (crafting hook TBD).",
       "category": "placeable",
@@ -55,10 +55,10 @@
       "construction": {
         "buildTimeSecs": 90,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 25 },
-          { "itemId": "chemical_reagent", "quantity": 4 },
-          { "itemId": "wire_spool", "quantity": 3 },
-          { "itemId": "duct_tape", "quantity": 5 }
+          { "itemId": "scrap-metal", "quantity": 25 },
+          { "itemId": "chemical-reagent", "quantity": 4 },
+          { "itemId": "wire-spool", "quantity": 3 },
+          { "itemId": "duct-tape", "quantity": 5 }
         ]
       }
     }

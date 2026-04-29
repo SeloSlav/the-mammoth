@@ -14,7 +14,11 @@ import {
   type PbrMaterialConfig,
   aoSpecFromConfig,
 } from "./pbrMaterialConfig.js";
-import { beginHydrateTextureFromSpec, loadTextureFromSpec } from "./pbrTextureSystem.js";
+import {
+  authorImportedPbrTexturesState,
+  beginHydrateTextureFromSpec,
+  loadTextureFromSpec,
+} from "./pbrTextureSystem.js";
 
 export type { PbrMaterialConfig };
 /** Legacy alias — same shape as {@link PbrMaterialConfig}. */
@@ -122,7 +126,7 @@ export function applyStandardAuthoringSlot(
   mat.aoMapIntensity = 1;
 
   /** Albedo — keep shared cache when path present (heavy merged shells reuse one upload). */
-  if (baseSpec?.trim() && canLoadAuthorTextures()) {
+  if (baseSpec?.trim() && canLoadAuthorTextures() && authorImportedPbrTexturesState.enabled) {
     const trimmed = baseSpec.trim();
     let tex = authorColorMapCache.get(trimmed);
     if (!tex) {

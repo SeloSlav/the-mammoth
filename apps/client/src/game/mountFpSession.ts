@@ -24,7 +24,11 @@ import {
   POSE_AOI_RECENTER_Y_M,
   POSE_AOI_Y_HALF_M,
 } from "./fpRemote/remotePlayerVisibility.js";
-import { collectFpSessionUnitInteriorShellMeshes } from "./fpSession/fpSessionUnitInteriorShellMeshes.js";
+import {
+  appendApartmentFurnitureInteriorMeshes,
+  collectFpSessionUnitInteriorShellMeshes,
+  stripApartmentFurnitureInteriorMeshes,
+} from "./fpSession/fpSessionUnitInteriorShellMeshes.js";
 import { installFpSessionTransientDebugConsole } from "./fpSession/fpSessionTransientDebugConsole.js";
 import { createFpSessionFloorPlateVisibility } from "./fpSession/fpSessionFloorPlateVisibility.js";
 import { createFpSessionMoveIntentChannel } from "./fpSession/fpSessionMoveIntentChannel.js";
@@ -56,7 +60,6 @@ import {
   subscribeFpHotbarSelection,
 } from "./fpHotbar/fpHotbarSelection.js";
 import { getHotbarSlotInventoryItem } from "./fpHotbar/fpHotbarResolve.js";
-import { findNearestWorldLoot } from "./worldRuntime/worldLootRuntime.js";
 import { getApartmentSystemPrompt } from "./fpApartment/fpApartmentGameplay.js";
 import {
   attachFpSessionEnvironment,
@@ -69,6 +72,7 @@ import {
 } from "./fpSession/fpSessionGameUiHidden.js";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSession/fpSessionPerfDebug.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
+import { mountFpApartmentFurniture } from "./fpApartment/fpApartmentFurniture.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpDev/fpViewmodelAuthoringOverlay.js";
@@ -87,6 +91,7 @@ import {
 } from "./fpHotbar/hotbarConsumeLocalAudio.js";
 import { runFpHotbarInstantConsume } from "./fpHotbar/fpHotbarConsume.js";
 import {
+  droppedItemIsWorldAnchor,
   findNearestDroppedPickup,
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
@@ -111,6 +116,11 @@ import {
   POSE_AOI_HALF,
   WORLD_SOUND_AOI_HALF,
 } from "./fpSession/fpSessionConstants.js";
+import {
+  DecalManager,
+  DECAL_MANIFEST,
+  generateStairwellDecalPlacements,
+} from "../rendering/decals/index.js";
 
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
@@ -163,6 +173,7 @@ export async function mountFpSession(
     staticCollisionIndex,
     sampleWalkTopBase,
     stairShaftInteriorLightBounds,
+    stairShaftSpecs,
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
@@ -189,6 +200,23 @@ export async function mountFpSession(
   });
 
   const unitInteriorMeshes = collectFpSessionUnitInteriorShellMeshes(buildingRoot);
+
+  const fpApartmentFurniture = await mountFpApartmentFurniture({
+    conn,
+    buildingRoot,
+    onRebuilt: () => {
+      stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
+      appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
+    },
+  });
+
+  const decalManager = new DecalManager(scene, renderer);
+  await decalManager.preloadManifest(DECAL_MANIFEST);
+  await decalManager.loadPlacements(
+    generateStairwellDecalPlacements(buildingRoot, stairShaftSpecs),
+    buildingRoot,
+  );
+  unitInteriorMeshes.push(...decalManager.getMeshes());
 
   scene.add(cellRoot);
 
@@ -310,6 +338,7 @@ export async function mountFpSession(
    */
   const _displayOffset = new THREE.Vector3();
   const _rigViewScratch = new THREE.Vector3();
+  const _aimShotWorldDir = new THREE.Vector3();
 
   const { syncBuildingFloorPlateVisibility, isInsideElevatorCabHudForJump } =
     createFpSessionFloorPlateVisibility({
@@ -745,39 +774,46 @@ export async function mountFpSession(
       // validates with pose + client feet hint.
       if (fpElevators.consumeInteractKey(pos, camera)) return;
       if (fpElevators.shouldSuppressEpickup(pos, camera)) return;
-      if (fpApartmentDoors.consumeInteractKey(pos)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(pos)) return;
       if (!conn.identity) {
         droppedWorld.tryPickupNearest(interactionPos.x, interactionPos.y, interactionPos.z);
         return;
       }
-      const wl = findNearestWorldLoot(conn, pos.x, pos.y, pos.z);
-      if (wl) {
-        void conn.reducers.pickupWorldLoot({ lootId: wl.lootId });
-        return;
-      }
-      const aSys = getApartmentSystemPrompt(conn, pos);
-      if (aSys?.kind === "apartment_claim") {
-        void conn.reducers.claimApartmentPulse({ unitKey: aSys.unitKey });
-        return;
-      }
-      if (aSys?.kind === "apartment_reinforce") {
-        void conn.reducers.reinforceApartmentPulse({ doorRowKey: aSys.doorRowKey });
-        return;
-      }
-      if (aSys?.kind === "apartment_stash") {
+
+      const aptKey = getApartmentSystemPrompt(conn, pos);
+      if (aptKey?.kind === "apartment_stash") {
         const slot = getFpHotbarSelectedSlot();
         if (slot !== null) {
           const it = getHotbarSlotInventoryItem(conn, conn.identity, slot);
           if (it) {
             void conn.reducers.stashPushItem({
               itemInstanceId: it.instanceId,
-              unitKey: aSys.unitKey,
+              unitKey: aptKey.unitKey,
             });
           }
         }
         return;
       }
+      if (aptKey?.kind === "apartment_reinforce") {
+        void conn.reducers.reinforceApartmentPulse({ doorRowKey: aptKey.doorRowKey });
+        return;
+      }
+
+      const nearWorld = findNearestDroppedPickup(
+        conn,
+        pos.x,
+        pos.y,
+        pos.z,
+        MAMMOTH_PICKUP_RADIUS_M,
+        droppedItemIsWorldAnchor,
+      );
+      if (nearWorld) {
+        void conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
+        return;
+      }
+
+      if (fpApartmentDoors.consumeInteractKey(pos)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(pos)) return;
+
       droppedWorld.tryPickupNearest(interactionPos.x, interactionPos.y, interactionPos.z);
     }
     if (e.code === "KeyC" && !e.repeat) mainRaf.crouchToggle = !mainRaf.crouchToggle;
@@ -839,6 +875,8 @@ export async function mountFpSession(
   const onPointerDown = (e: PointerEvent) => {
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
+    // Match server combat rail (`player_active_hotbar`) to HUD selection before enqueueing attack.
+    syncActiveHotbarSlotToServer();
     if (e.button === 2) {
       if (__mmWallProbeState.enabled) {
         e.preventDefault();
@@ -878,6 +916,8 @@ export async function mountFpSession(
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
+  const fpInteractInputBlocked = () => mammothInventoryOpen() || isTextInputFocused();
+
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,
     canvas,
@@ -899,6 +939,7 @@ export async function mountFpSession(
     _elevSupportEval,
     _displayOffset,
     _rigViewScratch,
+    _aimShotWorldDir,
     _audioMovement,
     playerRig,
     headPivot,
@@ -929,6 +970,7 @@ export async function mountFpSession(
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,
+    fpInteractInputBlocked,
   });
 
   let raf = 0;
@@ -970,12 +1012,14 @@ export async function mountFpSession(
     poseAoiSub = null;
     setFpPickupPrompt(null);
     fpElevators.dispose();
+    fpApartmentFurniture.dispose();
     fpApartmentDoors.dispose();
     disposeFpSessionDevDebug();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     fpEnvironment.dispose();
+    decalManager.dispose();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();

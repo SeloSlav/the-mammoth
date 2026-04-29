@@ -5,7 +5,7 @@ import { getFpConsumableSession } from "./fpConsumableAuthoringBridge.js";
  * `apps/client/public/static/models/consumables/{id}.glb`.
  * Kept in lockstep with the GLB files — add the GLB and the catalog entry, then append here.
  */
-export const FP_AUTHORABLE_CONSUMABLE_IDS: readonly string[] = ["water_bottle", "apple", "rakija"];
+export const FP_AUTHORABLE_CONSUMABLE_IDS: readonly string[] = ["water-bottle", "apple", "rakija"];
 
 export type FpAuthorConsumableId = (typeof FP_AUTHORABLE_CONSUMABLE_IDS)[number];
 

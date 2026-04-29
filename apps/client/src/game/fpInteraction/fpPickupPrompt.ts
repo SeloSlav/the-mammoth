@@ -6,12 +6,8 @@ export type FpPickupPromptDroppedItem = {
   kind: "dropped_item";
   droppedItemIdStr: string;
   displayName: string;
-};
-
-export type FpPickupPromptWorldLoot = {
-  kind: "world_loot";
-  lootIdStr: string;
-  displayName: string;
+  /** `dropped_item.world_spawn_slot` — world loot uses "collect" copy in HUD. */
+  worldAnchorSpawn?: boolean;
 };
 
 export type FpPickupPromptElevatorExteriorDoor = {
@@ -35,6 +31,14 @@ export type FpPickupPromptApartmentClaim = {
   claimFullSecs: number;
 };
 
+export type FpPickupPromptApartmentClaimBlockedGear = {
+  kind: "apartment_claim_blocked_gear";
+  unitKey: string;
+  displayLabel: string;
+  missingDoorLock: boolean;
+  missingScrewdriver: boolean;
+};
+
 export type FpPickupPromptApartmentReinforce = {
   kind: "apartment_reinforce";
   doorRowKey: string;
@@ -47,10 +51,10 @@ export type FpPickupPromptApartmentStash = {
 
 export type FpPickupPromptState =
   | FpPickupPromptDroppedItem
-  | FpPickupPromptWorldLoot
   | FpPickupPromptElevatorExteriorDoor
   | FpPickupPromptApartmentDoor
   | FpPickupPromptApartmentClaim
+  | FpPickupPromptApartmentClaimBlockedGear
   | FpPickupPromptApartmentReinforce
   | FpPickupPromptApartmentStash
   | null;
@@ -68,10 +72,11 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   if (a === null || b === null) return false;
   if (a.kind !== b.kind) return false;
   if (a.kind === "dropped_item" && b.kind === "dropped_item") {
-    return a.droppedItemIdStr === b.droppedItemIdStr && a.displayName === b.displayName;
-  }
-  if (a.kind === "world_loot" && b.kind === "world_loot") {
-    return a.lootIdStr === b.lootIdStr && a.displayName === b.displayName;
+    return (
+      a.droppedItemIdStr === b.droppedItemIdStr &&
+      a.displayName === b.displayName &&
+      a.worldAnchorSpawn === b.worldAnchorSpawn
+    );
   }
   if (a.kind === "elevator_exterior_door" && b.kind === "elevator_exterior_door") {
     return a.willClose === b.willClose && a.floorLabel === b.floorLabel;
@@ -81,9 +86,17 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "apartment_claim" && b.kind === "apartment_claim") {
     if (a.unitKey !== b.unitKey || a.displayLabel !== b.displayLabel) return false;
-    const ra = Math.max(0, a.claimFullSecs - a.claimProgressSecs);
-    const rb = Math.max(0, b.claimFullSecs - b.claimProgressSecs);
-    return Math.abs(ra - rb) < 0.08;
+    if (a.claimFullSecs !== b.claimFullSecs) return false;
+    /** Wall-clock extrapolation updates every RAF — coarser epsilon made the fill bar chunky. */
+    return Math.abs(a.claimProgressSecs - b.claimProgressSecs) < 1 / 960;
+  }
+  if (a.kind === "apartment_claim_blocked_gear" && b.kind === "apartment_claim_blocked_gear") {
+    return (
+      a.unitKey === b.unitKey &&
+      a.displayLabel === b.displayLabel &&
+      a.missingDoorLock === b.missingDoorLock &&
+      a.missingScrewdriver === b.missingScrewdriver
+    );
   }
   if (a.kind === "apartment_reinforce" && b.kind === "apartment_reinforce") {
     return a.doorRowKey === b.doorRowKey;

@@ -2,7 +2,10 @@ import * as THREE from "three";
 import type { FpAuthoringPick } from "@the-mammoth/engine";
 
 /**
- * Pick the **innermost** authoring root that contains `hit` (deepest ancestor in the pick list).
+ * Pick the innermost authoring root that contains `hit`: among pick objects that are ancestors of
+ * `hit`, the one reachable in the fewest parent-steps from `hit` (narrowest subtree).
+ *
+ * Formerly compared `>` which always preferred `rigRoot` over weapon/hand — wrong for FP mesh picks.
  */
 export function resolveFpAuthorPickId(hit: THREE.Object3D, picks: FpAuthoringPick[]): string | null {
   let best: { id: string; depth: number } | null = null;
@@ -11,7 +14,7 @@ export function resolveFpAuthorPickId(hit: THREE.Object3D, picks: FpAuthoringPic
     let depth = 0;
     while (d) {
       if (d === p.object) {
-        if (!best || depth > best.depth) best = { id: p.id, depth };
+        if (!best || depth < best.depth) best = { id: p.id, depth };
         break;
       }
       d = d.parent;

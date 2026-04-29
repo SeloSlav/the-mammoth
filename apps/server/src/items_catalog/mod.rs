@@ -80,19 +80,19 @@ mod hotbar_consume_sound_tests {
     #[test]
     fn authored_consume_sounds_match_item_type() {
         assert_eq!(hotbar_consume_sound("apple"), HotbarConsumeSound::Eat);
-        assert_eq!(hotbar_consume_sound("water_bottle"), HotbarConsumeSound::Drink);
+        assert_eq!(hotbar_consume_sound("water-bottle"), HotbarConsumeSound::Drink);
         assert_eq!(hotbar_consume_sound("rakija"), HotbarConsumeSound::Drink);
     }
 
     #[test]
     fn missing_sound_defaults_to_eat() {
-        assert_eq!(hotbar_consume_sound("field_rations"), HotbarConsumeSound::Eat);
+        assert_eq!(hotbar_consume_sound("field-rations"), HotbarConsumeSound::Eat);
     }
 
     #[test]
     fn melee_weapons_read_authored_damage_from_catalog() {
         assert_eq!(melee_damage("knife"), Some(12.0));
         assert_eq!(melee_damage("crowbar"), Some(22.0));
-        assert_eq!(melee_damage("water_bottle"), None);
+        assert_eq!(melee_damage("water-bottle"), None);
     }
 }

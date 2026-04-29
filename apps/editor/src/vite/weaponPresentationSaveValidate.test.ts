@@ -8,7 +8,7 @@ const _dir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(_dir, "../../../..");
 const crowbarPath = join(repoRoot, "content/weapons/crowbar.presentation.json");
 const knifePath = join(repoRoot, "content/weapons/knife.presentation.json");
-const baseballBatPath = join(repoRoot, "content/weapons/baseball_bat.presentation.json");
+const baseballBatPath = join(repoRoot, "content/weapons/baseball-bat.presentation.json");
 const srbosjekPath = join(repoRoot, "content/weapons/srbosjek.presentation.json");
 
 describe("assertValidWeaponPresentationJson", () => {
@@ -22,7 +22,7 @@ describe("assertValidWeaponPresentationJson", () => {
     expect(() => assertValidWeaponPresentationJson(parsed)).not.toThrow();
   });
 
-  it("accepts committed baseball_bat.presentation.json", () => {
+  it("accepts committed baseball-bat.presentation.json", () => {
     const parsed = JSON.parse(readFileSync(baseballBatPath, "utf8")) as unknown;
     expect(() => assertValidWeaponPresentationJson(parsed)).not.toThrow();
   });

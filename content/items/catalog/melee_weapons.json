@@ -13,8 +13,8 @@
       "construction": {
         "buildTimeSecs": 10,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 2 },
-          { "itemId": "duct_tape", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "duct-tape", "quantity": 1 }
         ]
       }
     },
@@ -30,8 +30,8 @@
       "construction": {
         "buildTimeSecs": 18,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 4 },
-          { "itemId": "synthetic_polymer", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 4 },
+          { "itemId": "synthetic-polymer", "quantity": 1 }
         ]
       }
     },
@@ -47,14 +47,14 @@
       "construction": {
         "buildTimeSecs": 22,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 3 },
-          { "itemId": "wire_spool", "quantity": 1 },
-          { "itemId": "chemical_reagent", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 3 },
+          { "itemId": "wire-spool", "quantity": 1 },
+          { "itemId": "chemical-reagent", "quantity": 1 }
         ]
       }
     },
     {
-      "id": "baseball_bat",
+      "id": "baseball-bat",
       "displayName": "Baseball bat",
       "description": "Wooden club. Wide swing arc, blunt trauma.",
       "category": "weapon",
@@ -65,8 +65,8 @@
       "construction": {
         "buildTimeSecs": 8,
         "materials": [
-          { "itemId": "wood_scraps", "quantity": 6 },
-          { "itemId": "duct_tape", "quantity": 2 }
+          { "itemId": "wood-scraps", "quantity": 6 },
+          { "itemId": "duct-tape", "quantity": 2 }
         ]
       }
     }

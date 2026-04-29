@@ -10,4 +10,8 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {};
+export default {
+  aimDirX: __t.f32(),
+  aimDirY: __t.f32(),
+  aimDirZ: __t.f32(),
+};

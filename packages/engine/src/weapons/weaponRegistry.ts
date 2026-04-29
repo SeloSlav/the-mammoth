@@ -5,15 +5,23 @@ import {
   baseballBatWeaponDefinition,
   crowbarWeaponDefinition,
   knifeWeaponDefinition,
+  pistolWeaponDefinition,
   srbosjekWeaponDefinition,
+  screwdriverWeaponDefinition,
+  shotgunCoachWeaponDefinition,
 } from "./sampleDefinitions.js";
 
-const WEAPON_REGISTRY = {
+type WeaponRegistryMap = Record<Exclude<HeldItemId, "unarmed">, WeaponDefinition>;
+
+const WEAPON_REGISTRY: WeaponRegistryMap = {
   crowbar: crowbarWeaponDefinition,
   knife: knifeWeaponDefinition,
   srbosjek: srbosjekWeaponDefinition,
-  baseball_bat: baseballBatWeaponDefinition,
-} as const;
+  "baseball-bat": baseballBatWeaponDefinition,
+  pistol: pistolWeaponDefinition,
+  "shotgun-coach": shotgunCoachWeaponDefinition,
+  screwdriver: screwdriverWeaponDefinition,
+};
 
 type RegistryKey = keyof typeof WEAPON_REGISTRY;
 
@@ -27,6 +35,9 @@ export const ALL_WEAPON_DEFINITIONS: readonly WeaponDefinition[] = [
   knifeWeaponDefinition,
   srbosjekWeaponDefinition,
   baseballBatWeaponDefinition,
+  pistolWeaponDefinition,
+  shotgunCoachWeaponDefinition,
+  screwdriverWeaponDefinition,
 ];
 
 /** Every {@link ALL_WEAPON_DEFINITIONS} id — editor save validation, middleware, hot-reload lists. */
@@ -34,25 +45,12 @@ export const WEAPON_DEFINITION_ID_SET: ReadonlySet<string> = new Set(
   ALL_WEAPON_DEFINITIONS.map((d) => d.id),
 );
 
-export function getWeaponDefinition(
-  id: Exclude<HeldItemId, "unarmed">,
-): WeaponDefinition | undefined {
-  return isRegistryKey(id) ? WEAPON_REGISTRY[id] : undefined;
+export function getWeaponDefinition(id: Exclude<HeldItemId, "unarmed">): WeaponDefinition | undefined {
+  return WEAPON_REGISTRY[id];
 }
 
-const PRESENTATION_ALIAS: Record<string, HeldItemId> = {
-  rusty_pistol: "crowbar",
-  pistol: "crowbar",
-  rifle: "crowbar",
-  shotgun_coach: "crowbar",
-};
-
-/** Inventory / catalog `def_id` for an implemented weapon → {@link HeldItemId} for presentation.
- * Ranged placeholders map to shipped meshes until dedicated GLBs exist.
- */
+/** Inventory / catalog `def_id` → {@link HeldItemId} when that id is a registered weapon preview mesh. */
 export function equippedHeldItemIdFromDefId(defId: string): HeldItemId {
-  const aliased = PRESENTATION_ALIAS[defId];
-  if (aliased && isRegistryKey(aliased)) return aliased;
   if (isRegistryKey(defId)) return defId;
   return "unarmed";
 }

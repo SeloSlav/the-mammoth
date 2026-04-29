@@ -5,7 +5,9 @@ import {
   createGltfModelLoadRegistry,
   fpLocomotionConstants,
   FP_MELEE_HAND_RIGHT,
+  loadGltfSceneFirstMatch,
   LocalFirstPersonPresenter,
+  mammothCatalogGlbCandidates,
   type FpAuthoringPick,
 } from "@the-mammoth/engine";
 
@@ -18,9 +20,11 @@ export type ConsumableMount = {
   scaleM: { x: number; y: number; z: number };
 };
 
-/** URL for a consumable's FP GLB given its catalog ID. */
+/** Preferred consumable GLB URL — first path in {@link mammothCatalogGlbCandidates}. */
 export function consumableGltfUri(consumableId: string): string {
-  return `/static/models/consumables/${consumableId}.glb`;
+  const first = [...mammothCatalogGlbCandidates(consumableId)][0];
+  if (!first) throw new Error(`mammothCatalogGlbCandidates: empty for ${consumableId}`);
+  return first;
 }
 
 /**
@@ -89,15 +93,17 @@ export class FpConsumableEditorSession {
       const gripAnchor = presenter.getFpGripAnchorObject();
       if (!gripAnchor) throw new Error("FP grip anchor missing");
 
-      const consumableGltf = await loader.loadAsync(consumableGltfUri(consumableId));
+      const consumableScene = (
+        await loadGltfSceneFirstMatch(loader, [...mammothCatalogGlbCandidates(consumableId)])
+      ).scene;
       const consumableRoot = new THREE.Group();
       consumableRoot.name = `fp_consumable_root_${consumableId}`;
       consumableRoot.position.copy(CONSUMABLE_MOUNT_DEFAULT_POS);
-      consumableGltf.scene.traverse((o) => {
+      consumableScene.traverse((o) => {
         o.castShadow = false;
         o.frustumCulled = false;
       });
-      consumableRoot.add(consumableGltf.scene);
+      consumableRoot.add(consumableScene);
       gripAnchor.add(consumableRoot);
       session.consumableRoot = consumableRoot;
     } catch (e) {

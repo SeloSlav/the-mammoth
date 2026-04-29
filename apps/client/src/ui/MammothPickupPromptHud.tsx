@@ -101,8 +101,8 @@ export function MammothPickupPromptHud() {
     );
   }
 
-  if (prompt.kind === "dropped_item" || prompt.kind === "world_loot") {
-    const isWorld = prompt.kind === "world_loot";
+  if (prompt.kind === "dropped_item") {
+    const isWorld = prompt.worldAnchorSpawn === true;
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(120,200,255,0.45)" glowRgb="rgba(92,200,255,0.18)">
         <span style={{ opacity: 0.92 }}>Press </span>
@@ -136,6 +136,22 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "apartment_claim_blocked_gear") {
+    const msg =
+      prompt.missingDoorLock && prompt.missingScrewdriver
+        ? "You need a door lock and a screwdriver (inventory or hotbar) to claim this apartment."
+        : prompt.missingDoorLock
+          ? "You need a door lock (inventory or hotbar) to claim this apartment."
+          : "You need a screwdriver (inventory or hotbar) to claim this apartment.";
+    return (
+      <FpBottomInteractPromptFrame borderRgb="rgba(255,110,110,0.55)" glowRgb="rgba(255,70,70,0.18)">
+        <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffb8b8" }}>{prompt.displayLabel}</div>
+        <div style={{ color: "#ff8a8a", fontWeight: 600 }}>{msg}</div>
+        <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>Stand at this apartment&apos;s wardrobe.</div>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   if (prompt.kind === "apartment_claim") {
     const remain = Math.max(0, prompt.claimFullSecs - prompt.claimProgressSecs);
     const pct = Math.min(1, Math.max(0, prompt.claimProgressSecs / prompt.claimFullSecs));
@@ -154,7 +170,7 @@ export function MammothPickupPromptHud() {
         >
           <div style={{ width: `${pct * 100}%`, height: "100%", background: "linear-gradient(90deg, #6a9a52, #a8d878)" }} />
         </div>
-        <span style={{ opacity: 0.92 }}>Press </span>
+        <span style={{ opacity: 0.92 }}>Hold </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #cbe8b4 0%, #82b06a 45%, #4d743a 100%)"
           kbdBorderRgb="rgba(220,255,210,0.45)"
@@ -162,7 +178,7 @@ export function MammothPickupPromptHud() {
           kbdText="#061004"
         />
         <span style={{ opacity: 0.92 }}>
-          {` to continue claiming — ~${secUi}s left (stay inside; lock + screwdriver).`}
+          {` to claim — ~${secUi}s left (stay at the wardrobe; uses door lock + screwdriver).`}
         </span>
       </FpBottomInteractPromptFrame>
     );
@@ -187,7 +203,7 @@ export function MammothPickupPromptHud() {
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>
-          Near footlocker — stash is on the side panel. Selected hotbar: press{" "}
+          Near your footlocker — selected hotbar stack: press{" "}
         </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ffd8b0 0%, #da9a55 45%, #8a5822 100%)"

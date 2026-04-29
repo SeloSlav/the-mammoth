@@ -217,13 +217,13 @@ export class DecalManager {
   removeDecal(mesh: THREE.Mesh): void {
     if (!this.meshes.has(mesh)) return;
     this.meshes.delete(mesh);
-    this.group.remove(mesh);
+    mesh.removeFromParent();
     mesh.geometry?.dispose();
   }
 
   clear(): void {
     for (const m of [...this.meshes]) {
-      this.group.remove(m);
+      m.removeFromParent();
       m.geometry?.dispose();
     }
     this.meshes.clear();
@@ -243,6 +243,11 @@ export class DecalManager {
     if (this.group.parent) {
       this.group.parent.remove(this.group);
     }
+  }
+
+  /** Decal meshes currently managed — append to FP `unitInteriorMeshes` so exterior shell-hide applies. */
+  getMeshes(): THREE.Mesh[] {
+    return [...this.meshes];
   }
 
   serializeDecal(mesh: THREE.Mesh): DecalPlacement | undefined {
@@ -315,15 +320,26 @@ export class DecalManager {
   async loadPlacements(placements: readonly DecalPlacement[], buildingRoot: THREE.Object3D): Promise<void> {
     for (const p of placements) {
       let candidates: THREE.Mesh[] = [];
+      let segment: THREE.Object3D | null = null;
       if (p.stairShaftId !== undefined && p.storeyLevelIndex !== undefined) {
-        const seg = findStairShaftSegment(buildingRoot, p.stairShaftId, p.storeyLevelIndex);
-        if (seg) candidates = collectMeshesInSegment(seg);
+        segment = findStairShaftSegment(buildingRoot, p.stairShaftId, p.storeyLevelIndex);
+        if (segment) candidates = collectMeshesInSegment(segment);
       }
       const hit = defaultProjectedResolver(p, candidates);
       if (!hit) continue;
       const mesh = await this.spawnFromPlacement(p, candidates, defaultProjectedResolver);
-      if (mesh && p.grime) {
-        await this.spawnGrimeLayerFromPlacement(p, hit);
+      if (!mesh) continue;
+
+      const linkStairDecal = (m: THREE.Mesh): void => {
+        if (!segment) return;
+        segment.attach(m);
+        m.userData.mammothUnitInterior = true;
+      };
+      linkStairDecal(mesh);
+
+      if (p.grime) {
+        const grimeMesh = await this.spawnGrimeLayerFromPlacement(p, hit);
+        if (grimeMesh) linkStairDecal(grimeMesh);
       }
     }
   }

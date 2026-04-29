@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
+import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
@@ -14,19 +15,48 @@ export type NearestDroppedPickup = {
   defId: string;
 };
 
-/** Closest dropped item within `radiusM` of `(x,y,z)`, or `null`. */
+/** Decode `Option<u16>` subscription row shapes — mirrors `username.readOptionalString`. */
+export function readOptionalU16(value: unknown): number | undefined {
+  if (value == null || value === undefined) return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "object" && value !== null && "tag" in value) {
+    const v = value as { tag: string; value?: unknown };
+    const tag = String(v.tag).toLowerCase();
+    if (tag === "some") {
+      if (typeof v.value === "number" && Number.isFinite(v.value)) return v.value;
+      if (typeof v.value === "bigint") {
+        const n = Number(v.value);
+        return Number.isFinite(n) ? n : undefined;
+      }
+    }
+    if (tag === "none") return undefined;
+  }
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.some === "number" && Number.isFinite(rec.some)) return rec.some;
+  return undefined;
+}
+
+/** `true` for server-scheduled anchored world piles (`DroppedItem.world_spawn_slot`). */
+export function droppedItemIsWorldAnchor(row: DroppedItem): boolean {
+  return readOptionalU16(row.worldSpawnSlot) !== undefined;
+}
+
+/** Closest dropped item within `radiusM`; optional `predicate` filters candidates. */
 export function findNearestDroppedPickup(
   conn: DbConnection,
   x: number,
   y: number,
   z: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
+  predicate?: (row: DroppedItem) => boolean,
 ): NearestDroppedPickup | null {
+  const pred = predicate ?? (() => true);
   const r2 = radiusM * radiusM;
   let best: NearestDroppedPickup | null = null;
   let bestD = Infinity;
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
+    if (!pred(row)) continue;
     const dx = row.x - x;
     const dy = row.y - y;
     const dz = row.z - z;
@@ -65,6 +95,9 @@ export type MountDroppedItemsWorldOptions = {
 
 /**
  * Subscribes to dropped items in an XZ AOI, renders GLB (or fallback box), and supports E pickup.
+ *
+ * Server world-anchor spawns use the **same** table (`world_spawn_slot`): pickup prefers those over
+ * player drops inside the reducer path here (mirror legacy world_loot precedence).
  */
 export function mountDroppedItemsWorld(
   scene: THREE.Scene,
@@ -115,19 +148,18 @@ export function mountDroppedItemsWorld(
     }
     if (loading.has(key)) return;
 
-    const url = getMammothDroppedWorldModelUrl(row.defId);
-    if (!url) {
+    const candidates = [...mammothCatalogGlbCandidates(row.defId)];
+    if (candidates.length === 0) {
       spawnFallbackBox(key, row);
       return;
     }
 
     loading.add(key);
-    void loader
-      .loadAsync(url)
-      .then((gltf) => {
+    void loadGltfSceneFirstMatch(loader, candidates)
+      .then(({ scene }) => {
         loading.delete(key);
         if (idToGroup.has(key)) return;
-        const clone = gltf.scene.clone(true);
+        const clone = scene.clone(true);
         clone.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
@@ -190,7 +222,14 @@ export function mountDroppedItemsWorld(
 
   const tryPickupNearest = (x: number, y: number, z: number) => {
     if (!conn.identity) return;
-    const hit = findNearestDroppedPickup(conn, x, y, z, MAMMOTH_PICKUP_RADIUS_M);
+    const hit = findNearestDroppedPickup(
+      conn,
+      x,
+      y,
+      z,
+      MAMMOTH_PICKUP_RADIUS_M,
+      (row) => !droppedItemIsWorldAnchor(row),
+    );
     if (!hit) return;
     const droppedItemId = hit.droppedItemId;
     void (async () => {

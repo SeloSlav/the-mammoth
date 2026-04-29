@@ -117,6 +117,7 @@ export {
   LocalFirstPersonPresenter,
   RemotePlayerPresenter,
   buildPrimitiveHumanoid,
+  buildWeaponFirstPersonPresentationMergeFromPickList,
   FP_MELEE_HAND_RIGHT,
   type PlayerPresentationManagerOptions,
   type LocalFirstPersonPresenterOptions,
@@ -125,8 +126,19 @@ export {
   type MeleeCombatVisualEvent,
   type MeleeCombatVisualSink,
   type HitTracePlaceholder,
+  type WeaponFirstPersonAuthoringPresentationMerge,
+  type WeaponMountAuthorMerge,
+  type WeaponFirstPersonPersistRefs,
 } from "./playerPresentation/index.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
+export { loadGltfSceneFirstMatch } from "./loaders/gltfLoadFirstMatch.js";
+export {
+  mammothCatalogGlbCandidates,
+  MAMMOTH_CATALOG_GLB_FALLBACK_URI,
+  MAMMOTH_CATALOG_GLB_PRIMARY_URI,
+  MAMMOTH_CATALOG_GLB_SEARCH_ROOTS,
+  MAMMOTH_STATIC_MODEL_BASE,
+} from "@the-mammoth/assets";
 export { deepDisposeObject3D } from "./loaders/deepDisposeObject3D.js";
 export {
   assertWebGpuAdapterOrThrow,

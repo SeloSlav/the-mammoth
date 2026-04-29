@@ -40,7 +40,7 @@ import { assertValidConsumablePresentationJson } from "./consumablePresentationS
  * Mirrors {@link FP_AUTHORABLE_CONSUMABLE_IDS} in consumablePresentationDiskSave.ts —
  * add new consumable IDs here when their GLB assets are committed.
  */
-const FP_CONSUMABLE_AUTHORABLE_IDS: readonly string[] = ["water_bottle", "apple", "rakija"];
+const FP_CONSUMABLE_AUTHORABLE_IDS: readonly string[] = ["water-bottle", "apple", "rakija"];
 const FP_CONSUMABLE_AUTHORABLE_ID_SET = new Set<string>(FP_CONSUMABLE_AUTHORABLE_IDS);
 
 const FLOOR_DOC_ID_RE = /^floor_[a-z0-9_]+$/;
@@ -49,7 +49,18 @@ const CELL_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
 const PREFAB_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
 const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
-const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
+/** On-disk model / presentation stems: `a-z`, digits, underscores, hyphens (prefer kebab-case for multi-word). */
+const WEAPON_STEM_RE = /^[a-z][a-z0-9_-]*$/;
+
+/** Presentation / GLB stems match catalog `def_id` (kebab-case). */
+function pathStemToCatalogId(stem: string): string {
+  return stem;
+}
+
+function catalogIdHasGlbStem(glbStemSet: ReadonlySet<string>, catalogId: string): boolean {
+  return glbStemSet.has(catalogId);
+}
+
 const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg", ".ktx2"]);
 
 export type EditorDevMiddlewareOptions = {
@@ -515,9 +526,11 @@ async function handleWeaponAssetSurvey(repoRoot: string, res: ServerResponse): P
 
   const registrySet = new Set<string>(registryIds);
   const glbSet = new Set<string>(glbStems);
-  const glbWithoutRegistry = glbStems.filter((id) => !registrySet.has(id));
-  const registryWithoutGlb = registryIds.filter((id) => !glbSet.has(id));
-  const presentationWithoutRegistry = presentationStems.filter((id) => !registrySet.has(id));
+  const glbWithoutRegistry = glbStems.filter((stem) => !registrySet.has(pathStemToCatalogId(stem)));
+  const registryWithoutGlb = registryIds.filter((id) => !catalogIdHasGlbStem(glbSet, id));
+  const presentationWithoutRegistry = presentationStems.filter(
+    (stem) => !registrySet.has(pathStemToCatalogId(stem)),
+  );
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "application/json");
@@ -742,9 +755,11 @@ async function handleConsumableAssetSurvey(repoRoot: string, res: ServerResponse
   const authorableSet = FP_CONSUMABLE_AUTHORABLE_ID_SET;
   const glbSet = new Set(glbIds);
 
-  const glbWithoutAuthorable = glbIds.filter((id) => !authorableSet.has(id));
-  const authorableWithoutGlb = FP_CONSUMABLE_AUTHORABLE_IDS.filter((id) => !glbSet.has(id));
-  const presentationWithoutAuthorable = presentationStems.filter((id) => !authorableSet.has(id));
+  const glbWithoutAuthorable = glbIds.filter((stem) => !authorableSet.has(pathStemToCatalogId(stem)));
+  const authorableWithoutGlb = FP_CONSUMABLE_AUTHORABLE_IDS.filter((id) => !catalogIdHasGlbStem(glbSet, id));
+  const presentationWithoutAuthorable = presentationStems.filter(
+    (stem) => !authorableSet.has(pathStemToCatalogId(stem)),
+  );
 
   sendJson(res, {
     authorableIds: [...FP_CONSUMABLE_AUTHORABLE_IDS],

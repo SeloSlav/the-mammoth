@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { deepDisposeObject3D } from "@the-mammoth/engine";
+import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatalog.js";
 
 type ConsumableMount = {
   positionM: { x: number; y: number; z: number };
@@ -15,7 +16,7 @@ const DEFAULT_CONSUMABLE_MOUNT: ConsumableMount = {
 };
 
 function consumableGltfUri(defId: string): string {
-  return `/static/models/consumables/${defId}.glb`;
+  return getMammothDroppedWorldModelUrl(defId);
 }
 
 function isFiniteNumber(value: unknown): value is number {

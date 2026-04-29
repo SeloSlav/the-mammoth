@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import type { PlayerPresentationManager } from "@the-mammoth/engine";
+import {
+  type PlayerPresentationManager,
+  buildWeaponFirstPersonPresentationMergeFromPickList,
+} from "@the-mammoth/engine";
 
 export type FpViewmodelAuthoringOpts = {
   scene: THREE.Scene;
@@ -11,66 +14,16 @@ export type FpViewmodelAuthoringOpts = {
   activeRef: { active: boolean };
 };
 
-function r4(n: number): number {
-  return Math.round(n * 10000) / 10000;
-}
-
-function vec3(v: THREE.Vector3) {
-  return { x: r4(v.x), y: r4(v.y), z: r4(v.z) };
-}
-
 function buildExportJson(presentation: PlayerPresentationManager): string {
   const picks = presentation.getFpAuthoringPickList();
-  const byId = new Map(picks.map((p) => [p.id, p.object]));
-
-  const rig = byId.get("rigRoot");
-  const grip = byId.get("gripAnchor");
-  const hand = byId.get("hand");
-  const wRoot = byId.get("weaponRoot");
-  const wVis = byId.get("weaponVisual");
-
-  const mountEuler = wRoot?.rotation;
-  const mount =
-    wRoot && mountEuler
-      ? {
-          positionM: vec3(wRoot.position),
-          eulerRad: { x: r4(mountEuler.x), y: r4(mountEuler.y), z: r4(mountEuler.z) },
-        }
-      : null;
-  const fpViewmodel: Record<string, unknown> = {};
-  if (rig) {
-    const re = rig.rotation;
-    fpViewmodel.rigRoot = {
-      positionM: vec3(rig.position),
-      eulerRad: { x: r4(re.x), y: r4(re.y), z: r4(re.z) },
-      scaleM: vec3(rig.scale),
-    };
-  }
-  if (grip) {
-    const w = new THREE.Vector3();
-    if (hand) {
-      grip.getWorldPosition(w);
-      hand.worldToLocal(w);
-      fpViewmodel.gripAnchorPositionM = vec3(w);
-    } else {
-      fpViewmodel.gripAnchorPositionM = vec3(grip.position);
-    }
-  }
-  if (hand) { 
-    fpViewmodel.hand = {
-      positionM: vec3(hand.position),
-      eulerRad: { x: r4(hand.rotation.x), y: r4(hand.rotation.y), z: r4(hand.rotation.z) },
-      scale: vec3(hand.scale),
-    };
-  }
-  if (wVis) fpViewmodel.weaponVisualScale = vec3(wVis.scale);
+  const merge = buildWeaponFirstPersonPresentationMergeFromPickList(picks, {
+    gripAnchor: presentation.getLocalFpGripAnchorObject(),
+    weaponVisual: presentation.getLocalFpWeaponVisualObject(),
+  });
   const doc = {
     _note:
       'Merge into content/weapons/<weaponId>.presentation.json under "firstPerson" (same shape as editor export). Commit JSON — HMR reloads it.',
-    firstPersonMerge: {
-      mount,
-      fpViewmodel: Object.keys(fpViewmodel).length > 0 ? fpViewmodel : null,
-    },
+    firstPersonMerge: merge,
   };
   return JSON.stringify(doc, null, 2);
 }

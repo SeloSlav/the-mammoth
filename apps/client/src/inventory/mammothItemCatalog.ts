@@ -4,13 +4,19 @@ import meleeWeapons from "../../../../content/items/catalog/melee_weapons.json";
 import placeableItems from "../../../../content/items/catalog/placeables.json";
 import rangedWeapons from "../../../../content/items/catalog/ranged_weapons.json";
 import toolItems from "../../../../content/items/catalog/tools.json";
-import appleIcon from "../../../../content/references/meshy/apple-lowpoly-reference.png?url";
-import baseballBatIcon from "../../../../content/references/meshy/baseball-bat-lowpoly-reference.png?url";
-import crowbarIcon from "../../../../content/references/meshy/crowbar-lowpoly-reference.png?url";
-import knifeIcon from "../../../../content/references/meshy/knife-lowpoly-reference.png?url";
-import srbosjekIcon from "../../../../content/references/meshy/srbosjek-lowpoly-reference.png?url";
-import waterBottleIcon from "../../../../content/references/meshy/water-bottle-lowpoly-reference.png?url";
+import ammo9mmIcon from "../../../../content/references/meshy/9-mm-round.png?url";
+import appleIcon from "../../../../content/references/meshy/apple.png?url";
+import baseballBatIcon from "../../../../content/references/meshy/baseball-bat.png?url";
+import crowbarIcon from "../../../../content/references/meshy/crowbar.png?url";
+import doorLockIcon from "../../../../content/references/meshy/door-lock.png?url";
+import knifeIcon from "../../../../content/references/meshy/knife.png?url";
+import pistolIcon from "../../../../content/references/meshy/pistol.png?url";
 import rakijaIcon from "../../../../content/references/meshy/rakija-icon.png?url";
+import screwdriverIcon from "../../../../content/references/meshy/screwdriver.png?url";
+import shotgunCoachIcon from "../../../../content/references/meshy/shotgun-coach.png?url";
+import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell.png?url";
+import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
+import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
 
 import type {
   ItemCategory,
@@ -21,6 +27,12 @@ import type {
   MammothItemDef,
 } from "./mammothItemCatalogTypes";
 
+import {
+  mammothCatalogGlbCandidates,
+  MAMMOTH_CATALOG_GLB_FALLBACK_URI,
+  MAMMOTH_CATALOG_GLB_PRIMARY_URI,
+} from "@the-mammoth/assets";
+
 export type {
   ItemCategory,
   MammothConstruction,
@@ -28,6 +40,9 @@ export type {
   MammothConsumeOnUse,
   MammothItemDef,
 } from "./mammothItemCatalogTypes";
+
+/** World GLB resolution (re-exported from `@the-mammoth/assets`). */
+export { mammothCatalogGlbCandidates, MAMMOTH_CATALOG_GLB_FALLBACK_URI, MAMMOTH_CATALOG_GLB_PRIMARY_URI };
 
 /** Keep in sync with `apps/server/src/items_catalog/load.rs` `SHARD_SOURCES`. */
 const CATALOG_SHARDS = [
@@ -61,44 +76,25 @@ const ICONS: Record<string, string> = {
   knife: knifeIcon,
   crowbar: crowbarIcon,
   srbosjek: srbosjekIcon,
-  baseball_bat: baseballBatIcon,
+  "baseball-bat": baseballBatIcon,
   apple: appleIcon,
-  water_bottle: waterBottleIcon,
+  "water-bottle": waterBottleIcon,
   rakija: rakijaIcon,
-  rusty_pistol: crowbarIcon,
-  pistol: knifeIcon,
-  rifle: baseballBatIcon,
-  shotgun_coach: crowbarIcon,
+  pistol: pistolIcon,
+  "shotgun-coach": shotgunCoachIcon,
   nails: crowbarIcon,
-  ammo_9mm: knifeIcon,
-  ammo_shotgun_shell: knifeIcon,
+  "ammo-9mm": ammo9mmIcon,
+  "ammo-shotgun-shell": shotgunShellIcon,
   cigarettes: crowbarIcon,
-  door_lock: crowbarIcon,
-  screwdriver: knifeIcon,
-  claw_hammer: crowbarIcon,
+  "door-lock": doorLockIcon,
+  screwdriver: screwdriverIcon,
+  "claw-hammer": crowbarIcon,
 };
 
-/** World pickup mesh (under `apps/client/public`). Keep aligned with weapon GLBs + catalog ids. */
-const WORLD_MODELS: Record<string, string> = {
-  knife: "/static/models/weapons/knife.glb",
-  crowbar: "/static/models/weapons/crowbar.glb",
-  srbosjek: "/static/models/weapons/srbosjek.glb",
-  baseball_bat: "/static/models/weapons/baseball_bat.glb",
-  rusty_pistol: "/static/models/weapons/crowbar.glb",
-  pistol: "/static/models/weapons/knife.glb",
-  rifle: "/static/models/weapons/crowbar.glb",
-  shotgun_coach: "/static/models/weapons/baseball_bat.glb",
-  nails: "/static/models/weapons/crowbar.glb",
-  ammo_9mm: "/static/models/weapons/knife.glb",
-  ammo_shotgun_shell: "/static/models/weapons/knife.glb",
-  cigarettes: "/static/models/weapons/crowbar.glb",
-  door_lock: "/static/models/weapons/knife.glb",
-  screwdriver: "/static/models/weapons/knife.glb",
-  claw_hammer: "/static/models/weapons/crowbar.glb",
-};
-
-export function getMammothDroppedWorldModelUrl(defId: string): string | undefined {
-  return WORLD_MODELS[defId];
+/** First candidate URL (preview / legacy). World mesh load uses the full candidate list. */
+export function getMammothDroppedWorldModelUrl(defId: string): string {
+  const first = mammothCatalogGlbCandidates(defId)[0];
+  return first ?? MAMMOTH_CATALOG_GLB_FALLBACK_URI;
 }
 
 function normalizeConsumeOnUse(raw?: MammothConsumeOnUse): MammothConsumeOnUse | null {

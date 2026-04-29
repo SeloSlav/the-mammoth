@@ -10,6 +10,6 @@ describe("hotbarDefIdSupportsMeleeAttack", () => {
   it("rejects empty or non-weapon selections", () => {
     expect(hotbarDefIdSupportsMeleeAttack(undefined)).toBe(false);
     expect(hotbarDefIdSupportsMeleeAttack(null)).toBe(false);
-    expect(hotbarDefIdSupportsMeleeAttack("water_bottle")).toBe(false);
+    expect(hotbarDefIdSupportsMeleeAttack("water-bottle")).toBe(false);
   });
 });

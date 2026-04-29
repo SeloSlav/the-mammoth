@@ -29,3 +29,33 @@ export function collectFpSessionUnitInteriorShellMeshes(
   });
   return unitInteriorMeshes;
 }
+
+/** Removes meshes spawned under apartment wardrobe / footlocker props — called before furniture rebuild refreshes. */
+export function stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes: THREE.Mesh[]): void {
+  let w = 0;
+  outer: for (let i = 0; i < unitInteriorMeshes.length; i++) {
+    const m = unitInteriorMeshes[i]!;
+    for (let cur: THREE.Object3D | null = m; cur; cur = cur.parent) {
+      if (cur.userData.mammothApartmentFurnitureProp === true) continue outer;
+    }
+    unitInteriorMeshes[w++] = m;
+  }
+  unitInteriorMeshes.length = w;
+}
+
+/** Meshes under wardrobe / footlocker clones (`mammothApartmentFurnitureProp`). Idempotent per rebuild when paired with strip. */
+export function appendApartmentFurnitureInteriorMeshes(
+  buildingRoot: THREE.Object3D,
+  unitInteriorMeshes: THREE.Mesh[],
+): void {
+  buildingRoot.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothUnitInterior !== true) return;
+    for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+      if (cur.userData.mammothApartmentFurnitureProp === true) {
+        unitInteriorMeshes.push(obj);
+        return;
+      }
+    }
+  });
+}

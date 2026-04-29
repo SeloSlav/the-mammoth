@@ -28,7 +28,10 @@ export {
   baseballBatWeaponDefinition,
   crowbarWeaponDefinition,
   knifeWeaponDefinition,
+  pistolWeaponDefinition,
   srbosjekWeaponDefinition,
+  screwdriverWeaponDefinition,
+  shotgunCoachWeaponDefinition,
 } from "./sampleDefinitions.js";
 export {
   ALL_WEAPON_DEFINITIONS,

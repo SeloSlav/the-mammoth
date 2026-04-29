@@ -2,7 +2,9 @@
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::apartment_door::{apartment_door, ApartmentDoor, SwingDoorFace, building_floor_refs};
+use crate::apartment_door::{
+    apartment_door, ApartmentDoor, SwingDoorFace, building_floor_refs,
+};
 use crate::auth;
 use crate::chat;
 use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
@@ -25,7 +27,37 @@ pub(crate) const UNIT_STATE_BROKEN: u8 = 2;
 
 const CLAIM_FULL_SECS: f32 = 42.0;
 const REINFORCE_HOLD_SECS: f32 = 22.0;
-const STASH_INTERACT_SQ: f32 = 2.8 * 2.8;
+/// Horizontal radius² (m²) for wardrobe / footlocker — feet pose is compared on **XZ**
+/// against anchor columns; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`).
+const STASH_INTERACT_SQ: f32 = 3.5 * 3.5;
+
+const INTERACT_FEET_Y_BELOW_SLACK_M: f32 = 0.55;
+const INTERACT_FEET_Y_ABOVE_SLACK_M: f32 = 2.85;
+
+#[inline]
+fn pose_feet_vertical_ok_for_interact(unit_floor_y: f32, pose_y: f32) -> bool {
+    pose_y >= unit_floor_y - INTERACT_FEET_Y_BELOW_SLACK_M
+        && pose_y <= unit_floor_y + INTERACT_FEET_Y_ABOVE_SLACK_M
+}
+
+/// Horizontal cylinder (+ vertical slab) around an interact anchor — matches client
+/// `nearWardrobe` / `nearFootlocker` (`fpApartmentGameplay.ts`).
+#[inline]
+fn pose_near_horizontal_marker(
+    pose_x: f32,
+    pose_y: f32,
+    pose_z: f32,
+    ax: f32,
+    az: f32,
+    unit_floor_y: f32,
+) -> bool {
+    let dx = pose_x - ax;
+    let dz = pose_z - az;
+    if dx * dx + dz * dz > STASH_INTERACT_SQ {
+        return false;
+    }
+    pose_feet_vertical_ok_for_interact(unit_floor_y, pose_y)
+}
 
 fn cancel_other_active_claims_for_player(ctx: &ReducerContext, sender: Identity, except_unit_key: &str) {
     for mut u in ctx.db.apartment_unit().iter() {
@@ -78,6 +110,8 @@ pub struct ApartmentUnit {
     pub foot_x: f32,
     pub foot_y: f32,
     pub foot_z: f32,
+    pub wardrobe_x: f32,
+    pub wardrobe_z: f32,
     pub bound_min_x: f32,
     pub bound_max_x: f32,
     pub bound_min_z: f32,
@@ -141,6 +175,10 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
 }
 
 pub fn seed_apartment_units(ctx: &ReducerContext) {
+    const BED_FRAC_X: f32 = 0.62;
+    const BED_FRAC_Z: f32 = 0.48;
+    const BED_EDGE_MARGIN: f32 = 0.85;
+
     let refs = building_floor_refs();
     let max_lv = max_level();
     let mut seen = std::collections::HashSet::<String>::new();
@@ -161,13 +199,15 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                 continue;
             }
             let (mn, mx) = derive_bounds(t, level);
-            let bed_x = (mn[0] + mx[0]) * 0.5 + 0.85;
-            let bed_z = (mn[2] + mx[2]) * 0.5 + 0.05;
-            let (foot_x, foot_z) = match SwingDoorFace::from_u8(t.face) {
-                SwingDoorFace::W => (t.hinge_x - 1.1, t.hinge_z),
-                SwingDoorFace::E => (t.hinge_x + 1.1, t.hinge_z),
-                _ => (t.hinge_x, t.hinge_z),
-            };
+            let sx = mx[0] - mn[0];
+            let sz = mx[2] - mn[2];
+            let bed_x = (mn[0] + BED_FRAC_X * sx).clamp(mn[0] + BED_EDGE_MARGIN, mx[0] - BED_EDGE_MARGIN);
+            let bed_z = (mn[2] + BED_FRAC_Z * sz).clamp(mn[2] + BED_EDGE_MARGIN, mx[2] - BED_EDGE_MARGIN);
+            let (wardrobe_xz, foot_xz) = crate::apartment_interior_anchors::wardrobe_and_footlocker_xz_for_unit_seed(
+                mn[0], mx[0], mn[2], mx[2], t.hinge_x, t.hinge_z, t.face,
+            );
+            let foot_x = foot_xz[0];
+            let foot_z = foot_xz[1];
             let _ = ctx.db.apartment_unit().insert(ApartmentUnit {
                 unit_key: uk,
                 floor_doc_id: floor_doc_id.to_string(),
@@ -192,6 +232,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                 foot_x,
                 foot_y: mn[1],
                 foot_z,
+                wardrobe_x: wardrobe_xz[0],
+                wardrobe_z: wardrobe_xz[1],
                 bound_min_x: mn[0],
                 bound_max_x: mx[0],
                 bound_min_z: mn[2],
@@ -212,19 +254,14 @@ fn template_set_for_floor(floor_doc_id: &str) -> &'static [GenTemplate] {
     &[]
 }
 
-pub(crate) fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
-    x >= unit.bound_min_x
-        && x <= unit.bound_max_x
-        && z >= unit.bound_min_z
-        && z <= unit.bound_max_z
-        && y >= unit.bound_min_y - 0.05
-        && y <= unit.bound_max_y + 2.45
+fn pose_near_apartment_stash_anchor(_ctx: &ReducerContext, unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+    pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
 }
 
 pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
     let pose_row = ctx.db.player_pose().identity().find(&owner)?;
     ctx.db.apartment_unit().iter().find_map(|u| {
-        if u.owner != Some(owner) {
+        if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
         Some(PlayerPose {
@@ -240,6 +277,25 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
             grounded: 1,
         })
     })
+}
+
+pub(crate) fn lock_owned_residential_doors(ctx: &ReducerContext, owner: Identity) {
+    for u in ctx.db.apartment_unit().iter() {
+        if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
+            continue;
+        }
+        let uk = u.unit_key.clone();
+        for mut d in ctx.db.apartment_door().iter() {
+            if crate::apartment_door::resident_unit_key_from_door_row(&d) != uk {
+                continue;
+            }
+            if !d.template_id.contains("unit_") {
+                continue;
+            }
+            d.desired_open = 0;
+            ctx.db.apartment_door().row_key().update(d);
+        }
+    }
 }
 
 
@@ -334,13 +390,21 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
         return;
     };
-    if !feet_inside_unit(&unit, pose.x, pose.y, pose.z) {
+    let near_claim = pose_near_horizontal_marker(
+        pose.x,
+        pose.y,
+        pose.z,
+        unit.wardrobe_x,
+        unit.wardrobe_z,
+        unit.foot_y,
+    );
+    if !near_claim {
         unit.claim_progress_secs = 0.0;
         unit.claim_started_by = None;
         ctx.db.apartment_unit().unit_key().update(unit);
         return;
     }
-    if !inventory_has_pair(ctx, sender, "door_lock", "screwdriver") {
+    if !inventory_has_pair(ctx, sender, "door-lock", "screwdriver") {
         return;
     }
 
@@ -371,7 +435,7 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
     }
 
     if unit.claim_progress_secs >= CLAIM_FULL_SECS {
-        consume_first_matching_stack(ctx, sender, "door_lock");
+        consume_first_matching_stack(ctx, sender, "door-lock");
         let unit_label = format_apartment_public_label(unit.level, &unit.unit_id);
         unit.state = UNIT_STATE_CLAIMED;
         unit.owner = Some(sender);
@@ -403,7 +467,7 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED || unit.reinforced != 0 {
         return;
     }
-    if !inventory_has(ctx, sender, "claw_hammer", 1) || !inventory_has(ctx, sender, "nails", 10) {
+    if !inventory_has(ctx, sender, "claw-hammer", 1) || !inventory_has(ctx, sender, "nails", 10) {
         return;
     }
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
@@ -427,13 +491,6 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     } else {
         ctx.db.apartment_unit().unit_key().update(unit);
     }
-}
-
-fn dist_sq(ax: f32, ay: f32, az: f32, bx: f32, by: f32, bz: f32) -> f32 {
-    let dx = ax - bx;
-    let dy = ay - by;
-    let dz = az - bz;
-    dx * dx + dy * dy + dz * dz
 }
 
 fn first_empty_stash_slot(ctx: &ReducerContext, stash_owner: Identity, unit_key: &str) -> Option<u16> {
@@ -461,15 +518,7 @@ pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
         return;
     };
-    if dist_sq(
-        pose.x,
-        pose.y,
-        pose.z,
-        unit.foot_x,
-        unit.foot_y + 0.85,
-        unit.foot_z,
-    ) > STASH_INTERACT_SQ
-    {
+    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
         return;
     }
     let Ok(mut row) = inventory::get_player_item(ctx, item_instance_id) else {
@@ -502,15 +551,7 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
         return;
     };
-    if dist_sq(
-        pose.x,
-        pose.y,
-        pose.z,
-        unit.foot_x,
-        unit.foot_y + 0.85,
-        unit.foot_z,
-    ) > STASH_INTERACT_SQ
-    {
+    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
         return;
     }
     let Some(mut row) = ctx.db.inventory_item().instance_id().find(item_instance_id) else {

@@ -49,9 +49,9 @@ import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
-import PickupWorldLootReducer from "./pickup_world_loot_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
+import RefreshWorldLootSpawnsReducer from "./refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "./respawn_player_reducer";
 import SendChatReducer from "./send_chat_reducer";
@@ -86,7 +86,7 @@ import PlayerPoseRow from "./player_pose_table";
 import PlayerVitalsRow from "./player_vitals_table";
 import PlayerVitalsScheduleRow from "./player_vitals_schedule_table";
 import UserRow from "./user_table";
-import WorldLootPickupRow from "./world_loot_pickup_table";
+import WorldLootRefreshRow from "./world_loot_refresh_table";
 import WorldSoundEventRow from "./world_sound_event_table";
 import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
 
@@ -317,17 +317,17 @@ const tablesSchema = __schema({
       { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, UserRow),
-  world_loot_pickup: __table({
-    name: 'world_loot_pickup',
+  world_loot_refresh: __table({
+    name: 'world_loot_refresh',
     indexes: [
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
       ] },
     ],
     constraints: [
-      { name: 'world_loot_pickup_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'world_loot_refresh_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
     ],
-  }, WorldLootPickupRow),
+  }, WorldLootRefreshRow),
   world_sound_event: __table({
     name: 'world_sound_event',
     indexes: [
@@ -369,9 +369,9 @@ const reducersSchema = __reducers(
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
-  __reducerSchema("pickup_world_loot", PickupWorldLootReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
+  __reducerSchema("refresh_world_loot_spawns", RefreshWorldLootSpawnsReducer),
   __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),
   __reducerSchema("respawn_player", RespawnPlayerReducer),
   __reducerSchema("send_chat", SendChatReducer),

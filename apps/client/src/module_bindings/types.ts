@@ -53,6 +53,8 @@ export const ApartmentUnit = __t.object("ApartmentUnit", {
   footX: __t.f32(),
   footY: __t.f32(),
   footZ: __t.f32(),
+  wardrobeX: __t.f32(),
+  wardrobeZ: __t.f32(),
   boundMinX: __t.f32(),
   boundMaxX: __t.f32(),
   boundMinZ: __t.f32(),
@@ -78,6 +80,7 @@ export const DroppedItem = __t.object("DroppedItem", {
   z: __t.f32(),
   yaw: __t.f32(),
   createdAt: __t.timestamp(),
+  worldSpawnSlot: __t.option(__t.u16()),
 });
 export type DroppedItem = __Infer<typeof DroppedItem>;
 
@@ -238,15 +241,11 @@ export const User = __t.object("User", {
 });
 export type User = __Infer<typeof User>;
 
-export const WorldLootPickup = __t.object("WorldLootPickup", {
-  id: __t.u64(),
-  defId: __t.string(),
-  quantity: __t.u32(),
-  x: __t.f32(),
-  y: __t.f32(),
-  z: __t.f32(),
+export const WorldLootRefresh = __t.object("WorldLootRefresh", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
 });
-export type WorldLootPickup = __Infer<typeof WorldLootPickup>;
+export type WorldLootRefresh = __Infer<typeof WorldLootRefresh>;
 
 export const WorldSoundEvent = __t.object("WorldSoundEvent", {
   id: __t.u64(),
@@ -257,6 +256,7 @@ export const WorldSoundEvent = __t.object("WorldSoundEvent", {
   z: __t.f32(),
   volume: __t.f32(),
   maxDistanceM: __t.f32(),
+  axisWeightY: __t.f32(),
   emitter: __t.identity(),
   createdAt: __t.timestamp(),
 });

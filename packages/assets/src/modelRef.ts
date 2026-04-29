@@ -2,7 +2,7 @@
  * Stable asset key for registries (no URL construction here — loaders resolve paths).
  *
  * **On disk (client):** `apps/client/public/static/models/...` → served as `/static/models/...`.
- * - Weapons: `.../weapons/<id>.glb`
+ * - Weapons: `.../weapons/<id>.glb` (kebab-case ids)
  * - FP hands: `.../fp/hands/<file>.glb`
  */
 export type ModelAssetKey =
@@ -12,7 +12,10 @@ export type ModelAssetKey =
   | "weapons/crowbar"
   | "weapons/knife"
   | "weapons/srbosjek"
-  | "weapons/baseball_bat";
+  | "weapons/baseball-bat"
+  | "weapons/pistol"
+  | "weapons/shotgun-coach"
+  | "weapons/screwdriver";
 
 /** Future: LOD variants, material overrides. */
 export type ModelRef =

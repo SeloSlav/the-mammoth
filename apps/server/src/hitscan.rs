@@ -1,0 +1,541 @@
+//! Authoritative LOS hit-scan for firearms: rays vs baked static collision AABBs and player boxes.
+
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+
+use spacetimedb::{Identity, ReducerContext, Table};
+
+use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
+use crate::generated_collision_solids::{
+    COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
+    COLLISION_SOLID_FOOTPRINT_MIN_X, COLLISION_SOLID_FOOTPRINT_MIN_Z,
+};
+use crate::movement::player_input;
+use crate::movement::BIT_CROUCH;
+use crate::player_vitals;
+use crate::pose::player_pose;
+use crate::pose::PlayerPose;
+
+use crate::combat_stub::PLAYER_BODY_RADIUS_M;
+
+/// Match `movement::PLAYER_HEIGHT_CROUCH_M` (cross-crate API is private).
+const PLAYER_BODY_HEIGHT_CROUCH_M: f32 = 1.2;
+
+pub const RANGE_PISTOL_M: f32 = 48.0;
+pub const RANGE_SHOTGUN_M: f32 = 22.0;
+
+const FALL_MIN_FRAC_PISTOL: f32 = 0.38;
+const FALL_MIN_FRAC_SHOTGUN: f32 = 0.35;
+
+pub const SHOTGUN_PELLET_COUNT: u32 = 8;
+pub const SHOTGUN_SPREAD_RAD: f32 = 0.055;
+
+const RAY_T_EPS: f32 = 4e-4;
+const PLANAR_AIM_DOT_MIN: f32 = 0.18;
+const RAY_EPS2: f32 = 1e-18;
+
+#[derive(Clone, Debug)]
+pub struct PlayerDamageEvent {
+    pub identity: Identity,
+    pub damage: f32,
+    pub ix: f32,
+    pub iy: f32,
+    pub iz: f32,
+}
+
+#[inline]
+fn body_height(bits: u8) -> f32 {
+    if bits & BIT_CROUCH != 0 {
+        PLAYER_BODY_HEIGHT_CROUCH_M
+    } else {
+        PLAYER_BODY_HEIGHT_STAND_M
+    }
+}
+
+#[inline]
+fn eye_y_above_feet(crouch: bool) -> f32 {
+    if crouch {
+        0.92
+    } else {
+        1.62
+    }
+}
+
+/// Normalize `(dx,dy,dz)` and reject gross aim cheats vs the authoritative planar yaw plane.
+pub fn sanitize_client_aim_dir(
+    aim_yaw_rad: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+) -> Option<(f32, f32, f32)> {
+    let len_sq = dx * dx + dy * dy + dz * dz;
+    if !(len_sq > RAY_EPS2) || !len_sq.is_finite() {
+        return None;
+    }
+    let ilen = 1.0 / len_sq.sqrt();
+    let nx = dx * ilen;
+    let ny = dy * ilen;
+    let nz = dz * ilen;
+
+    let xz_sq = nx * nx + nz * nz;
+    if xz_sq > 4e-4 {
+        let inv = xz_sq.sqrt().recip();
+        let hx = nx * inv;
+        let hz = nz * inv;
+        let fwd_x = -aim_yaw_rad.sin();
+        let fwd_z = -aim_yaw_rad.cos();
+        let planar_dot = fwd_x * hx + fwd_z * hz;
+        if planar_dot < PLANAR_AIM_DOT_MIN {
+            return None;
+        }
+    }
+
+    Some((nx, ny, nz))
+}
+
+#[derive(Clone, Copy, Debug)]
+struct RayHit {
+    t_hit: f32,
+}
+
+#[inline]
+fn ray_aabb(
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    mn_x: f32,
+    mn_y: f32,
+    mn_z: f32,
+    mx_x: f32,
+    mx_y: f32,
+    mx_z: f32,
+) -> Option<RayHit> {
+    fn axis(ox: f32, dir: f32, mn: f32, mx: f32) -> Result<(f32, f32), ()> {
+        const AXIS_EPS: f32 = 1e-14;
+        if dir.abs() < AXIS_EPS {
+            if ox < mn || ox > mx {
+                Err(())
+            } else {
+                Ok((f32::NEG_INFINITY, f32::INFINITY))
+            }
+        } else {
+            let inv = 1.0 / dir;
+            let mut t1 = (mn - ox) * inv;
+            let mut t2 = (mx - ox) * inv;
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
+            Ok((t1, t2))
+        }
+    }
+
+    let (tx_enter, tx_exit) = axis(ox, dx, mn_x, mx_x).ok()?;
+    let (ty_enter, ty_exit) = axis(oy, dy, mn_y, mx_y).ok()?;
+    let (tz_enter, tz_exit) = axis(oz, dz, mn_z, mx_z).ok()?;
+
+    let t_enter = tx_enter.max(ty_enter).max(tz_enter);
+    let t_exit = tx_exit.min(ty_exit).min(tz_exit);
+
+    if t_enter > t_exit || t_exit < -1e-3 {
+        return None;
+    }
+    let t_hit = if t_enter >= RAY_T_EPS {
+        t_enter
+    } else if t_exit >= RAY_T_EPS {
+        RAY_T_EPS
+    } else {
+        return None;
+    };
+
+    Some(RayHit { t_hit })
+}
+
+struct CollQueryLimits {
+    gx0: f32,
+    gx1: f32,
+    gz0: f32,
+    gz1: f32,
+}
+
+impl CollQueryLimits {
+    fn from_ray(ox: f32, oz: f32, dx: f32, dz: f32, max_t: f32) -> Self {
+        Self {
+            gx0: ox.min(ox + dx * max_t) - 3.5,
+            gx1: ox.max(ox + dx * max_t) + 3.5,
+            gz0: oz.min(oz + dz * max_t) - 3.5,
+            gz1: oz.max(oz + dz * max_t) + 3.5,
+        }
+    }
+
+    #[inline]
+    fn intersects_shard_aabb(&self, mn: [f32; 3], mx: [f32; 3]) -> bool {
+        if self.gx1 < mn[0] || self.gx0 > mx[0] || self.gz1 < mn[2] || self.gz0 > mx[2] {
+            return false;
+        }
+        if mx[0] < COLLISION_SOLID_FOOTPRINT_MIN_X - 160.0
+            || mn[0] > COLLISION_SOLID_FOOTPRINT_MAX_X + 160.0
+            || mx[2] < COLLISION_SOLID_FOOTPRINT_MIN_Z - 160.0
+            || mn[2] > COLLISION_SOLID_FOOTPRINT_MAX_Z + 160.0
+        {
+            return false;
+        }
+        true
+    }
+}
+
+fn trace_static_solids(origin: [f32; 3], dir: [f32; 3], max_t: f32) -> Option<f32> {
+    let ox = origin[0];
+    let oy = origin[1];
+    let oz = origin[2];
+    let dx = dir[0];
+    let dy = dir[1];
+    let dz = dir[2];
+    let lim = CollQueryLimits::from_ray(ox, oz, dx, dz, max_t);
+    let mut best: Option<f32> = None;
+
+    for shard in COLLISION_SOLID_AABB_SHARDS.iter() {
+        for (mn, mx) in shard.iter() {
+            if mx[1] - mn[1] < 0.04 {
+                continue;
+            }
+            if !lim.intersects_shard_aabb(*mn, *mx) {
+                continue;
+            }
+            if let Some(hit) = ray_aabb(
+                ox, oy, oz, dx, dy, dz,
+                mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
+            ) {
+                if hit.t_hit <= max_t + RAY_T_EPS && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5 {
+                    best = Some(hit.t_hit);
+                }
+            }
+        }
+    }
+    best
+}
+
+fn trace_best_player_hit(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    max_t: f32,
+    lateral_inflate: f32,
+) -> Option<(Identity, RayHit)> {
+    let mut best: Option<(Identity, RayHit)> = None;
+    for pose in ctx.db.player_pose().iter() {
+        if pose.identity == attacker || player_vitals::is_player_dead(ctx, pose.identity) {
+            continue;
+        }
+
+        let bits = ctx.db.player_input().identity()
+            .find(&pose.identity)
+            .map(|i| i.bits)
+            .unwrap_or(0);
+        let bh = body_height(bits);
+        let pr = PLAYER_BODY_RADIUS_M + lateral_inflate;
+        let px = pose.x;
+        let pz = pose.z;
+        let py = pose.y;
+
+        let mn_x = px - pr;
+        let mx_x = px + pr;
+        let mn_z = pz - pr;
+        let mx_z = pz + pr;
+        let mn_y = py;
+        let mx_y = py + bh;
+        if let Some(hit) = ray_aabb(
+            ox, oy, oz, dx, dy, dz,
+            mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
+        ) {
+            if hit.t_hit > max_t + RAY_T_EPS {
+                continue;
+            }
+            let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1.t_hit;
+            if replace {
+                best = Some((pose.identity, hit));
+            }
+        }
+    }
+    best
+}
+
+#[inline]
+fn falloff_factor(dist_m: f32, range_m: f32, floor_frac: f32) -> f32 {
+    let t = (dist_m / range_m.max(1e-3)).clamp(0.0, 1.0);
+    1.0 - t * (1.0 - floor_frac)
+}
+
+fn pellet_impact_px(ox: f32, oy: f32, oz: f32, dx: f32, dy: f32, dz: f32, t: f32) -> (f32, f32, f32) {
+    (ox + dx * t, oy + dy * t, oz + dz * t)
+}
+
+fn resolve_pistol_ray(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    max_range_m: f32,
+    floor_frac: f32,
+    base_damage: f32,
+) -> Vec<PlayerDamageEvent> {
+    let origin = [ox, oy, oz];
+    let dir = [dx, dy, dz];
+    let t_wall = trace_static_solids(origin, dir, max_range_m);
+    let phit = trace_best_player_hit(
+        ctx, attacker,
+        ox, oy, oz,
+        dx, dy, dz,
+        max_range_m,
+        0.0,
+    );
+
+    let Some((pid, hp)) = phit else {
+        return Vec::new();
+    };
+    if let Some(t_w) = t_wall {
+        if t_w + 1e-3 < hp.t_hit {
+            return Vec::new();
+        }
+    }
+    let dist_m = hp.t_hit;
+    let scale = falloff_factor(dist_m, max_range_m, floor_frac);
+    let dmg = base_damage * scale;
+    let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, dist_m);
+    Vec::from([PlayerDamageEvent {
+        identity: pid,
+        damage: dmg,
+        ix,
+        iy,
+        iz,
+    }])
+}
+
+fn resolve_shotgun_pellets(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    origin: [f32; 3],
+    base_dir: [f32; 3],
+    max_range_m: f32,
+    floor_frac: f32,
+    base_damage_total: f32,
+) -> Vec<PlayerDamageEvent> {
+    let per = base_damage_total / SHOTGUN_PELLET_COUNT as f32;
+    let ox = origin[0];
+    let oy = origin[1];
+    let oz = origin[2];
+    let bx = base_dir[0];
+    let by = base_dir[1];
+    let bz = base_dir[2];
+
+    let mut damage_by_player: HashMap<Identity, f32> = HashMap::new();
+    let mut impact_by_player: HashMap<Identity, (f32, f32, f32)> = HashMap::new();
+
+    let (jr, jp) = orthonormal_screen_axes(bx, by, bz);
+
+    for pellet_idx in 0..SHOTGUN_PELLET_COUNT {
+        let seed = shotgun_seed(attacker, pellet_idx);
+        let jx = bx + jr[0] * seed.spread_rx + jp[0] * seed.spread_ry;
+        let jy = by + jr[1] * seed.spread_rx + jp[1] * seed.spread_ry;
+        let jz = bz + jr[2] * seed.spread_rx + jp[2] * seed.spread_ry;
+
+        let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
+
+        let t_wall = trace_static_solids(origin, [jx, jy, jz], max_range_m);
+        let phit = trace_best_player_hit(
+            ctx,
+            attacker,
+            ox, oy, oz,
+            jx, jy, jz,
+            max_range_m,
+            0.04,
+        );
+
+        let dmg_this = match (phit.as_ref(), t_wall) {
+            (Some((pid, pr)), Some(t_w)) => {
+                if t_w + 1e-3 < pr.t_hit {
+                    None
+                } else {
+                    let scale = falloff_factor(pr.t_hit, max_range_m, floor_frac);
+                    let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, pr.t_hit);
+                    Some((*pid, per * scale, ipt))
+                }
+            }
+            (Some((pid, pr)), None) => {
+                let scale = falloff_factor(pr.t_hit, max_range_m, floor_frac);
+                let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, pr.t_hit);
+                Some((*pid, per * scale, ipt))
+            }
+            _ => None,
+        };
+
+        if let Some((pid, dmg, ipt)) = dmg_this {
+            *damage_by_player.entry(pid).or_insert(0.0) += dmg;
+            impact_by_player.entry(pid).or_insert(ipt);
+        }
+    }
+
+    let mut out: Vec<PlayerDamageEvent> = damage_by_player
+        .into_iter()
+        .map(|(identity, damage)| {
+            let (ix, iy, iz) = impact_by_player
+                .remove(&identity)
+                .unwrap_or((ox + bx * max_range_m * 0.35, oy, oz + bz * max_range_m * 0.35));
+            PlayerDamageEvent {
+                identity,
+                damage,
+                ix,
+                iy,
+                iz,
+            }
+        })
+        .collect();
+
+    out.sort_by(|a, b| a.identity.partial_cmp(&b.identity).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+struct SpreadSeed {
+    spread_rx: f32,
+    spread_ry: f32,
+}
+
+fn shotgun_seed(attacker: Identity, pellet_idx: u32) -> SpreadSeed {
+    let mut base = folding_identity(attacker);
+    base ^= (pellet_idx as u64).rotate_left(11);
+
+    let s1 = xorshift64(base ^ 0xA0761D6478BD642Fu64);
+    let s2 = xorshift64(s1 ^ 0x705199C370000Fu64);
+    let u1 = ((s1 >> 33) & 0xFFFF_FFFF) as f32 / 4294967295.0;
+    let u2 = ((s2 >> 33) & 0xFFFF_FFFF) as f32 / 4294967295.0;
+
+    SpreadSeed {
+        spread_rx: (u1 * 2.0 - 1.0) * SHOTGUN_SPREAD_RAD,
+        spread_ry: (u2 * 2.0 - 1.0) * SHOTGUN_SPREAD_RAD,
+    }
+}
+
+fn folding_identity(id: Identity) -> u64 {
+    let mut h = DefaultHasher::new();
+    id.hash(&mut h);
+    h.finish()
+}
+
+fn xorshift64(mut x: u64) -> u64 {
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    x.max(1)
+}
+
+/// Returns two orthonormal perpendicular vectors spanning the screen-relative pellet plane (right, up').
+fn orthonormal_screen_axes(dx: f32, dy: f32, dz: f32) -> ([f32; 3], [f32; 3]) {
+    let ft = normalize_or_fallback(dx, dy, dz);
+    let f = [ft.0, ft.1, ft.2];
+    let up = [0.0_f32, 1.0, 0.0];
+    let mut r = cross3(up, f);
+    let r_len = magnitude3(r[0], r[1], r[2]);
+    if r_len < 1e-5 {
+        let alt = [1.0_f32, 0.0, 0.0];
+        r = cross3(alt, f);
+    }
+    r = normalize3_arr(r);
+    let mut p = cross3(f, r);
+    p = normalize3_arr(p);
+    (r, p)
+}
+
+#[inline]
+fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+#[inline]
+fn magnitude3(x: f32, y: f32, z: f32) -> f32 {
+    (x * x + y * y + z * z).sqrt()
+}
+
+#[inline]
+fn normalize3_arr(v: [f32; 3]) -> [f32; 3] {
+    let t = normalize_or_fallback(v[0], v[1], v[2]);
+    [t.0, t.1, t.2]
+}
+
+fn normalize_or_fallback(mut x: f32, mut y: f32, mut z: f32) -> (f32, f32, f32) {
+    let len = magnitude3(x, y, z);
+    let len_fixed = len.max(1e-16);
+    if !(len > 1e-28) || !len.is_finite() {
+        (0.0, 1.0, 0.0)
+    } else {
+        x /= len_fixed;
+        y /= len_fixed;
+        z /= len_fixed;
+        (x, y, z)
+    }
+}
+
+pub fn firearm_hitscan_weapon(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    shooter_pose: &PlayerPose,
+    weapon_def_id: &str,
+    aim_dir_x: f32,
+    aim_dir_y: f32,
+    aim_dir_z: f32,
+) -> Vec<PlayerDamageEvent> {
+    let yaw = ctx.db.player_input().identity()
+        .find(&attacker)
+        .map(|r| r.aim_yaw)
+        .unwrap_or(shooter_pose.yaw);
+
+    let Some((dx, dy, dz)) = sanitize_client_aim_dir(yaw, aim_dir_x, aim_dir_y, aim_dir_z) else {
+        return Vec::new();
+    };
+
+    let bits = ctx.db.player_input().identity()
+        .find(&attacker)
+        .map(|r| r.bits)
+        .unwrap_or(0);
+    let feet_y = shooter_pose.y;
+    let oy = feet_y + eye_y_above_feet(bits & BIT_CROUCH != 0);
+    let ox = shooter_pose.x;
+    let oz = shooter_pose.z;
+    let origin = [ox, oy, oz];
+
+    match weapon_def_id {
+        "pistol" => resolve_pistol_ray(
+            ctx, attacker,
+            ox, oy, oz,
+            dx, dy, dz,
+            RANGE_PISTOL_M,
+            FALL_MIN_FRAC_PISTOL,
+            20.0,
+        ),
+        "shotgun-coach" => resolve_shotgun_pellets(
+            ctx,
+            attacker,
+            origin,
+            [dx, dy, dz],
+            RANGE_SHOTGUN_M,
+            FALL_MIN_FRAC_SHOTGUN,
+            11.0,
+        ),
+        _ => Vec::new(),
+    }
+}

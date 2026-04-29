@@ -8,7 +8,16 @@ import knifePresentationJson from "../../../../content/weapons/knife.presentatio
 import srbosjekPresentationJson from "../../../../content/weapons/srbosjek.presentation.json" with {
   type: "json",
 };
-import baseballBatPresentationJson from "../../../../content/weapons/baseball_bat.presentation.json" with {
+import baseballBatPresentationJson from "../../../../content/weapons/baseball-bat.presentation.json" with {
+  type: "json",
+};
+import pistolPresentationJson from "../../../../content/weapons/pistol.presentation.json" with {
+  type: "json",
+};
+import shotgunCoachPresentationJson from "../../../../content/weapons/shotgun-coach.presentation.json" with {
+  type: "json",
+};
+import screwdriverPresentationJson from "../../../../content/weapons/screwdriver.presentation.json" with {
   type: "json",
 };
 import { parseWeaponPrimitivePresentationDoc } from "./weaponPrimitiveAuthoring.js";
@@ -27,6 +36,16 @@ const srbosjekPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc
 
 const baseballBatPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
   baseballBatPresentationJson,
+);
+
+const pistolPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(pistolPresentationJson);
+
+const shotgunCoachPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
+  shotgunCoachPresentationJson,
+);
+
+const screwdriverPrimitivePresentationBundled = parseWeaponPrimitivePresentationDoc(
+  screwdriverPresentationJson,
 );
 
 export const crowbarWeaponDefinition: WeaponDefinition = {
@@ -84,13 +103,13 @@ export const srbosjekWeaponDefinition: WeaponDefinition = {
 };
 
 export const baseballBatWeaponDefinition: WeaponDefinition = {
-  id: "baseball_bat",
+  id: "baseball-bat",
   displayName: "Baseball bat",
   primitivePresentation: baseballBatPrimitivePresentationBundled,
   modelRef: {
     kind: "gltf",
-    key: "weapons/baseball_bat",
-    uri: "/static/models/weapons/baseball_bat.glb",
+    key: "weapons/baseball-bat",
+    uri: "/static/models/weapons/baseball-bat.glb",
   },
   animationSet: {
     idle: "baseball_bat_idle",
@@ -99,4 +118,54 @@ export const baseballBatWeaponDefinition: WeaponDefinition = {
     inspect: "baseball_bat_inspect",
   },
   primitiveSwingDurationS: 0.5,
+};
+
+export const pistolWeaponDefinition: WeaponDefinition = {
+  id: "pistol",
+  displayName: "Pistol",
+  primitivePresentation: pistolPrimitivePresentationBundled,
+  modelRef: {
+    kind: "gltf",
+    key: "weapons/pistol",
+    uri: "/static/models/weapons/pistol.glb",
+  },
+  animationSet: {
+    idle: "pistol_idle",
+    attack_light: "pistol_melee_stub",
+  },
+  primitiveSwingDurationS: 0.32,
+};
+
+export const shotgunCoachWeaponDefinition: WeaponDefinition = {
+  id: "shotgun-coach",
+  displayName: "Coach shotgun",
+  primitivePresentation: shotgunCoachPrimitivePresentationBundled,
+  modelRef: {
+    kind: "gltf",
+    key: "weapons/shotgun-coach",
+    uri: "/static/models/weapons/shotgun-coach.glb",
+  },
+  animationSet: {
+    idle: "shotgun_idle",
+    attack_light: "shotgun_melee_stub",
+    attack_heavy: "shotgun_swing_heavy",
+    inspect: "shotgun_inspect",
+  },
+  primitiveSwingDurationS: 0.52,
+};
+
+export const screwdriverWeaponDefinition: WeaponDefinition = {
+  id: "screwdriver",
+  displayName: "Screwdriver",
+  primitivePresentation: screwdriverPrimitivePresentationBundled,
+  modelRef: {
+    kind: "gltf",
+    key: "weapons/screwdriver",
+    uri: "/static/models/weapons/screwdriver.glb",
+  },
+  animationSet: {
+    idle: "screwdriver_idle",
+    attack_light: "screwdriver_stab",
+  },
+  primitiveSwingDurationS: 0.3,
 };

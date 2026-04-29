@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import type { DbConnection } from "../module_bindings";
 import { hotbarSlotHasInstantConsume } from "../game/fpHotbar/fpHotbarActivate";
 import { runFpHotbarInstantConsume } from "../game/fpHotbar/fpHotbarConsume";
@@ -24,12 +25,18 @@ import {
 } from "../game/fpHotbar/fpHotbarSelection";
 import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "./mammothItemCatalog";
 import type {
+  MammothDragSourceSlotInfo,
   MammothDraggedItemInfo,
   MammothDropResult,
   MammothPopulatedItem,
 } from "./inventoryDragDropTypes";
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
+import { MammothItemTooltip } from "./MammothItemTooltip";
+import {
+  buildMammothItemTooltipContent,
+  type MammothItemTooltipContentModel,
+} from "./mammothItemTooltipContent";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
 import {
   inventorySlotGridsMatch,
@@ -91,6 +98,68 @@ export function MammothInventoryHud({ conn }: Props) {
     getHotbarInstantConsumeCooldownVersion,
   );
   const lastHotbarClickRef = useRef<{ slot: number; t: number } | null>(null);
+
+  const hoveredTooltipSlotRef = useRef<MammothDragSourceSlotInfo | null>(null);
+  const [itemTooltip, setItemTooltip] = useState<{
+    visible: boolean;
+    content: MammothItemTooltipContentModel | null;
+    position: { x: number; y: number };
+  }>({ visible: false, content: null, position: { x: 0, y: 0 } });
+
+  const hideItemTooltip = useCallback(() => {
+    hoveredTooltipSlotRef.current = null;
+    setItemTooltip({ visible: false, content: null, position: { x: 0, y: 0 } });
+  }, []);
+
+  const updateTooltipPositionFromHoverEvent = useCallback((e: ReactMouseEvent) => {
+    const slotEl = e.currentTarget.closest("[data-slot-type]") as HTMLElement | null;
+    if (!slotEl) return;
+    const rect = slotEl.getBoundingClientRect();
+    setItemTooltip((prev) =>
+      prev.visible
+        ? {
+            ...prev,
+            position: { x: rect.left - 10, y: rect.top + rect.height / 2 },
+          }
+        : prev,
+    );
+  }, []);
+
+  const openItemTooltipForSlot = useCallback(
+    (slotInfo: MammothDragSourceSlotInfo, pop: MammothPopulatedItem, e: ReactMouseEvent) => {
+      const slotEl = e.currentTarget.closest("[data-slot-type]") as HTMLElement | null;
+      if (!slotEl) return;
+      const rect = slotEl.getBoundingClientRect();
+      hoveredTooltipSlotRef.current = slotInfo;
+      setItemTooltip({
+        visible: true,
+        content: buildMammothItemTooltipContent(pop),
+        position: { x: rect.left - 10, y: rect.top + rect.height / 2 },
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!itemTooltip.visible || !hoveredTooltipSlotRef.current) return;
+    const slot = hoveredTooltipSlotRef.current;
+    const arr = slot.type === "hotbar" ? displaySlots.hotbar : displaySlots.inventory;
+    const pop = arr[slot.index] ?? null;
+    if (!pop) {
+      hideItemTooltip();
+      return;
+    }
+    setItemTooltip((prev) => ({
+      ...prev,
+      content: buildMammothItemTooltipContent(pop),
+    }));
+  }, [displaySlots, itemTooltip.visible, hideItemTooltip]);
+
+  useEffect(() => {
+    if (!invOpen && hoveredTooltipSlotRef.current?.type === "inventory") {
+      hideItemTooltip();
+    }
+  }, [invOpen, hideItemTooltip]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -248,7 +317,6 @@ export function MammothInventoryHud({ conn }: Props) {
       <img
         src={pop.def.iconUrl}
         alt={pop.def.displayName}
-        title={pop.def.displayName}
         draggable={false}
         style={{
           width: 44,
@@ -322,6 +390,11 @@ export function MammothInventoryHud({ conn }: Props) {
                       onDragStart={handleDragStart}
                       onDrop={handleDrop}
                       onItemContextMenu={() => quickMoveInventoryToHotbar(pop, i)}
+                      slotHover={{
+                        onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
+                        onMove: updateTooltipPositionFromHoverEvent,
+                        onLeave: hideItemTooltip,
+                      }}
                     >
                       {slotInner(pop)}
                     </MammothDraggableItem>
@@ -396,6 +469,11 @@ export function MammothInventoryHud({ conn }: Props) {
                     onDrop={handleDrop}
                     onActivate={() => onHotbarSlotClick(index)}
                     onItemContextMenu={() => quickMoveHotbarToInventory(pop, index)}
+                    slotHover={{
+                      onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
+                      onMove: updateTooltipPositionFromHoverEvent,
+                      onLeave: hideItemTooltip,
+                    }}
                   >
                     {slotInner(pop)}
                   </MammothDraggableItem>
@@ -405,6 +483,15 @@ export function MammothInventoryHud({ conn }: Props) {
           );
         })}
       </div>
+
+      {createPortal(
+        <MammothItemTooltip
+          visible={itemTooltip.visible}
+          content={itemTooltip.content}
+          position={itemTooltip.position}
+        />,
+        document.body,
+      )}
     </div>
   );
 }

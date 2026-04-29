@@ -19,6 +19,7 @@ export default __t.row({
   z: __t.f32(),
   volume: __t.f32(),
   maxDistanceM: __t.f32().name("max_distance_m"),
+  axisWeightY: __t.f32().name("axis_weight_y"),
   emitter: __t.identity(),
   createdAt: __t.timestamp().name("created_at"),
 });

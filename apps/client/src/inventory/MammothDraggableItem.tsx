@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type {
   MammothDraggedItemInfo,
   MammothDragSourceSlotInfo,
@@ -15,6 +15,12 @@ type Props = {
   onActivate?: () => void;
   /** Right-click: browser menu suppressed; used for quick move (inventory ↔ hotbar). */
   onItemContextMenu?: () => void;
+  /** Inventory/hotbar hover tooltip — cleared when drag starts. */
+  slotHover?: {
+    onEnter: (e: ReactMouseEvent) => void;
+    onMove: (e: ReactMouseEvent) => void;
+    onLeave: () => void;
+  };
   children: ReactNode;
 };
 
@@ -25,6 +31,7 @@ export function MammothDraggableItem({
   onDrop,
   onActivate,
   onItemContextMenu,
+  slotHover,
   children,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,6 +59,7 @@ export function MammothDraggableItem({
         const dy = ev.clientY - startRef.current.y;
         if (!draggingRef.current && dx * dx + dy * dy >= 4) {
           draggingRef.current = true;
+          slotHover?.onLeave();
           document.body.classList.add("item-dragging");
           if (ref.current) ref.current.style.opacity = "0.45";
           onDragStartRef.current({ item, sourceSlot });
@@ -128,6 +136,9 @@ export function MammothDraggableItem({
       ref={ref}
       role="presentation"
       onMouseDown={onMouseDown}
+      onMouseEnter={slotHover?.onEnter}
+      onMouseMove={slotHover?.onMove}
+      onMouseLeave={slotHover?.onLeave}
       onContextMenu={onItemContextMenu ? handleContextMenu : undefined}
       onDragStart={(e) => e.preventDefault()}
       style={{

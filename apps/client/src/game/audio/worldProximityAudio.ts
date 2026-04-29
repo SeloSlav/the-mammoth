@@ -4,6 +4,9 @@
  * (footsteps / swings / pickup / consume have immediate or local paths in {@link LocalGameAudio}).
  * Elevator floor / hail presses, landing corridor door toggles, and cab arrival use **only** this path
  * so observers (and riders when applicable) hear the same spatial cue.
+ *
+ * Attenuation uses replicated `axis_weight_y` (see `worldProximityMetric.ts`): vertical offset is weighted
+ * more than XZ so footsteps and similar cues do not carry “through slabs” like a pure sphere.
  */
 
 import * as THREE from "three";
@@ -21,6 +24,10 @@ import {
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
+import {
+  worldSoundAxisWeightedDistanceM,
+  worldSoundVirtualPannerPosition,
+} from "./worldProximityMetric.js";
 
 export const WORLD_SOUND_KIND_FOOTSTEP = 0;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_MELEE_WEAPON_SWING`. */
@@ -47,6 +54,10 @@ export const WORLD_SOUND_KIND_MELEE_FLESH_HIT = 10;
 export const WORLD_SOUND_KIND_DOOR_REINFORCE = 11;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_FIREARM_SHOT`. */
 export const WORLD_SOUND_KIND_FIREARM_SHOT = 12;
+/** Matches `world_sound::FIREARM_VARIATION_PISTOL`. */
+export const WORLD_SOUND_FIREARM_VARIATION_PISTOL = 0;
+/** Matches `world_sound::FIREARM_VARIATION_SHOTGUN`. */
+export const WORLD_SOUND_FIREARM_VARIATION_SHOTGUN = 1;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -58,6 +69,8 @@ const DOOR_OPEN_STEM = `${UI_STEM}/door-open` as const;
 const DOOR_CLOSE_STEM = `${UI_STEM}/door-close` as const;
 const ELEVATOR_CAB_ARRIVAL_STEM = `${UI_STEM}/elevator-arrival` as const;
 const MELEE_FLESH_HIT_STEM = `${UI_STEM}/melee-weapon-flesh` as const;
+const PISTOL_SHOT_STEM = `${UI_STEM}/pistol-shot` as const;
+const SHOTGUN_SHOT_STEM = `${UI_STEM}/shotgun-shot` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -76,6 +89,8 @@ export class WorldProximityAudio {
   private doorCloseBuffer: AudioBuffer | null = null;
   private elevatorCabArrivalBuffer: AudioBuffer | null = null;
   private meleeFleshHitBuffer: AudioBuffer | null = null;
+  private pistolShotBuffer: AudioBuffer | null = null;
+  private shotgunShotBuffer: AudioBuffer | null = null;
   /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
   private pendingRows: WorldSoundEvent[] = [];
   private static readonly PENDING_CAP = 64;
@@ -130,6 +145,8 @@ export class WorldProximityAudio {
     this.doorCloseBuffer = await this.decodeSingleStem(ctx, DOOR_CLOSE_STEM);
     this.elevatorCabArrivalBuffer = await this.decodeSingleStem(ctx, ELEVATOR_CAB_ARRIVAL_STEM);
     this.meleeFleshHitBuffer = await this.decodeSingleStem(ctx, MELEE_FLESH_HIT_STEM);
+    this.pistolShotBuffer = await this.decodeSingleStem(ctx, PISTOL_SHOT_STEM);
+    this.shotgunShotBuffer = await this.decodeSingleStem(ctx, SHOTGUN_SHOT_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -221,6 +238,8 @@ export class WorldProximityAudio {
     this.doorCloseBuffer = null;
     this.elevatorCabArrivalBuffer = null;
     this.meleeFleshHitBuffer = null;
+    this.pistolShotBuffer = null;
+    this.shotgunShotBuffer = null;
     this.pendingRows.length = 0;
     this.sourceCache.clear();
   }
@@ -296,8 +315,13 @@ export class WorldProximityAudio {
       if (!this.doorCloseBuffer) return;
       buf = this.doorCloseBuffer;
     } else if (row.kind === WORLD_SOUND_KIND_FIREARM_SHOT) {
-      if (!this.itemPickBuffer) return;
-      buf = this.itemPickBuffer;
+      if (row.variation === WORLD_SOUND_FIREARM_VARIATION_SHOTGUN) {
+        buf = this.shotgunShotBuffer ?? this.pistolShotBuffer;
+      } else {
+        buf = this.pistolShotBuffer ?? this.shotgunShotBuffer;
+      }
+      if (!buf) buf = this.itemPickBuffer;
+      if (!buf) return;
     } else {
       return;
     }
@@ -309,8 +333,10 @@ export class WorldProximityAudio {
     const lx = this._camWorld.x;
     const ly = this._camWorld.y;
     const lz = this._camWorld.z;
-    const d = Math.hypot(row.x - lx, row.y - ly, row.z - lz);
-    if (d > row.maxDistanceM * 1.08) return;
+    const dEff = worldSoundAxisWeightedDistanceM(lx, ly, lz, row.x, row.y, row.z, row.axisWeightY);
+    if (dEff > row.maxDistanceM * 1.08) return;
+
+    const pan = worldSoundVirtualPannerPosition(lx, ly, lz, row.x, row.y, row.z, dEff);
 
     const dry = ctx.createGain();
     dry.gain.value = Math.min(1.15, row.volume);
@@ -325,9 +351,9 @@ export class WorldProximityAudio {
     panner.refDistance = 0.4;
     panner.maxDistance = Math.max(2.0, row.maxDistanceM);
     panner.rolloffFactor = 1.1;
-    panner.positionX.setValueAtTime(row.x, t);
-    panner.positionY.setValueAtTime(row.y, t);
-    panner.positionZ.setValueAtTime(row.z, t);
+    panner.positionX.setValueAtTime(pan.x, t);
+    panner.positionY.setValueAtTime(pan.y, t);
+    panner.positionZ.setValueAtTime(pan.z, t);
 
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -341,7 +367,8 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
       row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL ||
-      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT
+      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT ||
+      row.kind === WORLD_SOUND_KIND_FIREARM_SHOT
     ) {
       src.playbackRate.value = 0.99 + Math.random() * 0.04;
     }

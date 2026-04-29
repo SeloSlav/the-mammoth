@@ -19,4 +19,5 @@ export default __t.row({
   z: __t.f32(),
   yaw: __t.f32(),
   createdAt: __t.timestamp().name("created_at"),
+  worldSpawnSlot: __t.option(__t.u16()).name("world_spawn_slot"),
 });

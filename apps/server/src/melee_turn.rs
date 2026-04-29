@@ -11,8 +11,8 @@ use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::world_sound::{
     emit_melee_flesh_hit_at, emit_world_sound, melee_weapon_swing_sound_profile_for_def_id,
-    melee_weapon_swing_variation, player_melee_cooldown, PlayerMeleeCooldown, KIND_MELEE_WEAPON_SWING,
-    MELEE_SWING_VARIATION_STEM_MASK,
+    melee_weapon_swing_variation, player_melee_cooldown, PlayerMeleeCooldown,
+    AXIS_WEIGHT_Y_MELEE, KIND_MELEE_WEAPON_SWING, MELEE_SWING_VARIATION_STEM_MASK,
 };
 
 const MELEE_COOLDOWN_MICROS: i64 = 480_000;
@@ -87,6 +87,7 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
         pose.z,
         0.62,
         20.0,
+        AXIS_WEIGHT_Y_MELEE,
         id,
     );
 }

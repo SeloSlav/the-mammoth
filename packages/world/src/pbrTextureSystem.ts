@@ -2,6 +2,19 @@ import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
 import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
 
+/**
+ * Single knob for FPS profiling: when `enabled` is `false`, skips all loads routed through
+ * {@link loadTextureFromSpec} / {@link beginHydrateTextureFromSpec} (author basecolor hydrate,
+ * normal, roughness, AO, patina metalness, height bump).
+ *
+ * Scalars from authoring slots (`roughness`, `metalness`, `colorHex`, etc.) still apply.
+ * Toggle `enabled` to `false` when benchmarking FPS vs full author textures (default below).
+ */
+export const authorImportedPbrTexturesState = {
+  /** Set `true` for shipped visuals; `false` skips author PBR loads for FPS experiments. */
+  enabled: false,
+};
+
 let ktx2Loader: InstanceType<typeof import("three/addons/loaders/KTX2Loader.js").KTX2Loader> | null =
   null;
 /** `true` once {@link ensurePbrKtx2Support} finishes (or when KTX2 is unavailable). */
@@ -103,6 +116,7 @@ export function beginHydrateTextureFromSpec(
   wrapS: THREE.Texture["wrapS"],
   wrapT: THREE.Texture["wrapT"],
 ): void {
+  if (!authorImportedPbrTexturesState.enabled) return;
   if (!spec?.trim()) return;
 
   let urls = textureCandidatesFromSpec(spec);
@@ -131,6 +145,7 @@ export async function loadTextureFromSpec(
   wrapS: THREE.Texture["wrapS"],
   wrapT: THREE.Texture["wrapT"],
 ): Promise<THREE.Texture | null> {
+  if (!authorImportedPbrTexturesState.enabled) return null;
   if (!spec?.trim()) return null;
   let urls = textureCandidatesFromSpec(spec);
   urls = filterKtxCandidates(urls);

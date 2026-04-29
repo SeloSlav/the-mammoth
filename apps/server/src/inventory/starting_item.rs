@@ -1,12 +1,14 @@
 //! Data-driven starter items for brand-new players (`ensure_starter_loadout`).
 //!
-//! Add rows with `starter_hotbar!(slot, "def_id", qty)`.
+//! Hotbar: `starter_hotbar!(slot, "def_id", qty)`.
+//! Backpack: `starter_inventory!(slot_index, "def_id", qty)` (`u16` slot for `InventoryLocationData`).
+//!
 //! Catalog keys must match `content/items/catalog` `id` fields.
 
 use log;
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::inventory_models::{HotbarLocationData, ItemLocation};
+use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
 use crate::items_catalog;
 
 use super::{inventory_item, player_item_count, InventoryItem, NUM_PLAYER_HOTBAR_SLOTS};
@@ -14,6 +16,7 @@ use super::{inventory_item, player_item_count, InventoryItem, NUM_PLAYER_HOTBAR_
 #[derive(Copy, Clone)]
 enum StarterPlacement {
     Hotbar(u8),
+    Inventory(u16),
 }
 
 struct StarterRow {
@@ -32,14 +35,27 @@ macro_rules! starter_hotbar {
     };
 }
 
+macro_rules! starter_inventory {
+    ($slot:literal, $def:literal, $qty:literal) => {
+        StarterRow {
+            def_id: $def,
+            quantity: $qty,
+            placement: StarterPlacement::Inventory($slot),
+        }
+    };
+}
+
 /// Spawn loadout for players with no inventory rows yet.
 const STARTER_LOADOUT: &[StarterRow] = &[
-    starter_hotbar!(0, "rusty_pistol", 1),
+    starter_hotbar!(0, "pistol", 1),
     starter_hotbar!(1, "crowbar", 1),
-    starter_hotbar!(2, "ammo_9mm", 24),
-    starter_hotbar!(3, "door_lock", 1),
+    starter_hotbar!(2, "ammo-9mm", 24),
+    starter_hotbar!(3, "door-lock", 1),
     starter_hotbar!(4, "screwdriver", 1),
     starter_hotbar!(5, "apple", 4),
+    // Backpack: shotgun + shells (catalog `ammo-shotgun-shell`; slugs are a different ammo type IRL).
+    starter_inventory!(0, "shotgun-coach", 1),
+    starter_inventory!(1, "ammo-shotgun-shell", 24),
 ];
 
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
@@ -67,6 +83,10 @@ pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {
     for row in STARTER_LOADOUT {
         let location = match row.placement {
             StarterPlacement::Hotbar(slot_index) => ItemLocation::Hotbar(HotbarLocationData {
+                owner_id: owner,
+                slot_index,
+            }),
+            StarterPlacement::Inventory(slot_index) => ItemLocation::Inventory(InventoryLocationData {
                 owner_id: owner,
                 slot_index,
             }),

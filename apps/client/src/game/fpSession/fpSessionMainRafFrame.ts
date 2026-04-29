@@ -12,16 +12,26 @@ import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
-import { findNearestWorldLoot } from "../worldRuntime/worldLootRuntime.js";
 import {
+  droppedItemIsWorldAnchor,
+  findNearestDroppedPickup,
+  MAMMOTH_PICKUP_RADIUS_M,
+} from "../worldRuntime/droppedItemWorldRuntime.js";
+import {
+  apartmentFurnitureInteriorsPreferOverUnitDoor,
   getApartmentSystemPrompt,
   APARTMENT_CLAIM_FULL_SECS,
   formatApartmentPublicLabel,
+  playerOwnsDoorLock,
+  playerOwnsScrewdriver,
 } from "../fpApartment/fpApartmentGameplay.js";
+import {
+  computeOptimisticClaimProgressSecs,
+  type ApartmentClaimHoldSmooth,
+} from "../fpApartment/fpApartmentClaimHoldSmooth.js";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
-import { findNearestDroppedPickup, MAMMOTH_PICKUP_RADIUS_M } from "../worldRuntime/droppedItemWorldRuntime.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import { LocalGameAudio } from "../audio/localGameAudio.js";
 import { WorldProximityAudio } from "../audio/worldProximityAudio.js";
@@ -58,6 +68,9 @@ import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 
 const FIREARM_COOLDOWN_MS = 170;
+
+/** Min interval between claim pulses while holding E — balances UX vs reducer throughput. */
+const APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS = 72;
 
 /** Blended (kinematic vs HUD-predicted cab) vertical speed gate for elevator view smoothing. */
 const ELEVATOR_KINEMATIC_FAST_ABS_VY_MPS = 0.14;
@@ -136,6 +149,8 @@ export type FpSessionMainRafFrameDeps = {
   _elevSupportEval: FpKinematicSupportSampleOpts;
   _displayOffset: THREE.Vector3;
   _rigViewScratch: THREE.Vector3;
+  /** World-space camera aim direction for `submitFirearmShot` (reused, no alloc). */
+  _aimShotWorldDir: THREE.Vector3;
   _audioMovement: {
     horizontalSpeed: number;
     stridePhaseRad: number;
@@ -173,6 +188,8 @@ export type FpSessionMainRafFrameDeps = {
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
+  /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI or typing. */
+  fpInteractInputBlocked: () => boolean;
 };
 
 /**
@@ -183,9 +200,17 @@ export function createFpSessionMainRafFrame(
   deps: FpSessionMainRafFrameDeps,
 ): { runFrame: (nowMs: number, dt: number) => void } {
   const _rigViewScratch = deps._rigViewScratch;
+  let lastApartmentClaimHoldPulseMs = 0;
+  /** Advances claim bar at wall-clock while E is held; cleared when HUD leaves apartment claim. */
+  let claimHoldSmoothState: ApartmentClaimHoldSmooth | null = null;
 
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
+
+    // Combat reducers (`submit_firearm_shot`, `submit_melee_swing`) read `player_active_hotbar` on
+    // the server. Sync selected slot before resolving `meleePressPending` so a click right after a
+    // scroll / slot change cannot outrun `set_active_hotbar_slot` (previously synced at frame end).
+    deps.syncActiveHotbarSlotToServer();
 
     if (mainRaf.meleePressPending) {
       mainRaf.meleePressPending = false;
@@ -197,7 +222,13 @@ export function createFpSessionMainRafFrame(
         nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
       ) {
         mainRaf.lastRangedMs = nowMs;
-        void deps.conn.reducers.submitFirearmShot({});
+        deps.camera.updateMatrixWorld(true);
+        deps.camera.getWorldDirection(deps._aimShotWorldDir);
+        void deps.conn.reducers.submitFirearmShot({
+          aimDirX: deps._aimShotWorldDir.x,
+          aimDirY: deps._aimShotWorldDir.y,
+          aimDirZ: deps._aimShotWorldDir.z,
+        });
       } else if (
         hb &&
         hotbarDefIdSupportsMeleeAttack(hb.defId) &&
@@ -207,6 +238,40 @@ export function createFpSessionMainRafFrame(
         mainRaf.meleeAttackSeq += 1;
         deps.localAudio.playMeleeWeaponSwingLocal();
         if (deps.conn.identity) void deps.conn.reducers.submitMeleeSwing({});
+      }
+    }
+
+    if (
+      deps.conn.identity &&
+      deps.keys.has("KeyE") &&
+      !deps.fpInteractInputBlocked()
+    ) {
+      const pos = deps.pos;
+      const holdPrompt = getApartmentSystemPrompt(deps.conn, pos);
+      const doorSuppressBlocksClaimHold =
+        holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(pos);
+      if (
+        !deps.fpElevators.shouldSuppressEpickup(pos, deps.camera) &&
+        !doorSuppressBlocksClaimHold
+      ) {
+        const nearWorldHold = findNearestDroppedPickup(
+          deps.conn,
+          pos.x,
+          pos.y,
+          pos.z,
+          MAMMOTH_PICKUP_RADIUS_M,
+          droppedItemIsWorldAnchor,
+        );
+        if (!nearWorldHold) {
+          const aSysHold = holdPrompt;
+          if (
+            aSysHold?.kind === "apartment_claim" &&
+            nowMs - lastApartmentClaimHoldPulseMs >= APARTMENT_CLAIM_HOLD_PULSE_INTERVAL_MS
+          ) {
+            lastApartmentClaimHoldPulseMs = nowMs;
+            void deps.conn.reducers.claimApartmentPulse({ unitKey: aSysHold.unitKey });
+          }
+        }
       }
     }
 
@@ -376,8 +441,6 @@ export function createFpSessionMainRafFrame(
       deps.camera.position.y = THREE.MathUtils.damp(deps.camera.position.y, 0, 10, dt);
     }
 
-    deps.syncActiveHotbarSlotToServer();
-
     deps.maybeSendMoveIntent(
       deps._input,
       jumpQueuedBeforeStep && !jumpBlockedInElevatorCab,
@@ -480,52 +543,116 @@ export function createFpSessionMainRafFrame(
     const _t_presentEnd = performance.now();
 
     if (deps.conn.identity) {
+      let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
+      const aSys = getApartmentSystemPrompt(deps.conn, deps.pos);
       const doorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(deps.pos, deps.camera);
-      const apartmentPrompt = doorPrompt ? null : deps.fpApartmentDoors.getInteractPrompt(deps.pos);
+      const apartmentDoorHud =
+        doorPrompt !== null
+          ? null
+          : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
+            ? null
+            : deps.fpApartmentDoors.getInteractPrompt(deps.pos);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",
           willClose: doorPrompt.willClose,
           floorLabel: doorPrompt.floorLabel,
         });
-      } else if (apartmentPrompt) {
+      } else if (apartmentDoorHud) {
         setFpPickupPrompt({
           kind: "apartment_door",
-          willClose: apartmentPrompt.willClose,
-          promptKind: apartmentPrompt.promptKind,
+          willClose: apartmentDoorHud.willClose,
+          promptKind: apartmentDoorHud.promptKind,
         });
       } else {
-        const wl = findNearestWorldLoot(deps.conn, deps.pos.x, deps.pos.y, deps.pos.z);
-        const aSys = getApartmentSystemPrompt(deps.conn, deps.pos);
-        const hit = findNearestDroppedPickup(
+        const nearWorld = findNearestDroppedPickup(
           deps.conn,
           deps.pos.x,
           deps.pos.y,
           deps.pos.z,
           MAMMOTH_PICKUP_RADIUS_M,
+          droppedItemIsWorldAnchor,
         );
-        if (wl) {
-          const def = getMammothItemDef(wl.defId);
+        const hitPlain = findNearestDroppedPickup(
+          deps.conn,
+          deps.pos.x,
+          deps.pos.y,
+          deps.pos.z,
+          MAMMOTH_PICKUP_RADIUS_M,
+          (row) => !droppedItemIsWorldAnchor(row),
+        );
+        if (nearWorld) {
+          const def = getMammothItemDef(nearWorld.defId);
           setFpPickupPrompt({
-            kind: "world_loot",
-            lootIdStr: wl.lootId.toString(),
-            displayName: def?.displayName ?? wl.defId,
+            kind: "dropped_item",
+            droppedItemIdStr: nearWorld.droppedItemId.toString(),
+            displayName: def?.displayName ?? nearWorld.defId,
+            worldAnchorSpawn: true,
           });
-        } else if (aSys?.kind === "apartment_claim") {
-          let claimProgressSecs = 0;
+        } else if (aSys?.kind === "apartment_claim_blocked_gear") {
           let displayLabel = aSys.unitKey;
           for (const row of deps.conn.db.apartment_unit) {
             if (row.unitKey === aSys.unitKey) {
-              claimProgressSecs = row.claimProgressSecs;
               displayLabel = formatApartmentPublicLabel(row);
               break;
             }
           }
+          const id = deps.conn.identity!;
+          setFpPickupPrompt({
+            kind: "apartment_claim_blocked_gear",
+            unitKey: aSys.unitKey,
+            displayLabel,
+            missingDoorLock: !playerOwnsDoorLock(deps.conn, id),
+            missingScrewdriver: !playerOwnsScrewdriver(deps.conn, id),
+          });
+        } else if (aSys?.kind === "apartment_claim") {
+          let serverClaimSecs = 0;
+          let displayLabel = aSys.unitKey;
+          for (const row of deps.conn.db.apartment_unit) {
+            if (row.unitKey === aSys.unitKey) {
+              serverClaimSecs = row.claimProgressSecs;
+              displayLabel = formatApartmentPublicLabel(row);
+              break;
+            }
+          }
+          let claimHoldEligible =
+            deps.keys.has("KeyE") &&
+            !deps.fpInteractInputBlocked() &&
+            !deps.fpElevators.shouldSuppressEpickup(deps.pos, deps.camera);
+          if (aSys?.kind !== "apartment_claim") {
+            claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(deps.pos);
+          }
+          if (claimHoldEligible) {
+            const blockWorld = findNearestDroppedPickup(
+              deps.conn,
+              deps.pos.x,
+              deps.pos.y,
+              deps.pos.z,
+              MAMMOTH_PICKUP_RADIUS_M,
+              droppedItemIsWorldAnchor,
+            );
+            if (blockWorld) claimHoldEligible = false;
+          }
+          if (claimHoldEligible) {
+            const asp = getApartmentSystemPrompt(deps.conn, deps.pos);
+            claimHoldEligible =
+              asp?.kind === "apartment_claim" && asp.unitKey === aSys.unitKey;
+          }
+          const { displaySecs: claimProgressHudSecs, nextSmooth } =
+            computeOptimisticClaimProgressSecs({
+              fullSecs: APARTMENT_CLAIM_FULL_SECS,
+              unitKey: aSys.unitKey,
+              serverSecs: serverClaimSecs,
+              nowMs,
+              eligible: claimHoldEligible,
+              prevSmooth: claimHoldSmoothState,
+            });
+          nextClaimSmoothCarry = nextSmooth;
           setFpPickupPrompt({
             kind: "apartment_claim",
             unitKey: aSys.unitKey,
             displayLabel,
-            claimProgressSecs,
+            claimProgressSecs: claimProgressHudSecs,
             claimFullSecs: APARTMENT_CLAIM_FULL_SECS,
           });
         } else if (aSys?.kind === "apartment_reinforce") {
@@ -538,19 +665,22 @@ export function createFpSessionMainRafFrame(
             kind: "apartment_stash",
             unitKey: aSys.unitKey,
           });
-        } else if (hit) {
-          const def = getMammothItemDef(hit.defId);
+        } else if (hitPlain) {
+          const def = getMammothItemDef(hitPlain.defId);
           setFpPickupPrompt({
             kind: "dropped_item",
-            droppedItemIdStr: hit.droppedItemId.toString(),
-            displayName: def?.displayName ?? hit.defId,
+            droppedItemIdStr: hitPlain.droppedItemId.toString(),
+            displayName: def?.displayName ?? hitPlain.defId,
+            worldAnchorSpawn: false,
           });
         } else {
           setFpPickupPrompt(null);
         }
       }
+      claimHoldSmoothState = nextClaimSmoothCarry;
     } else {
       setFpPickupPrompt(null);
+      claimHoldSmoothState = null;
     }
 
     // --- Render section timing (see pushFpPerfFrame render split) ---

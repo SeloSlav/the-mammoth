@@ -1,0 +1,100 @@
+@import "@the-mammoth/ui-theme/uiTheme.css";
+
+.tooltipRoot {
+  position: fixed;
+  z-index: 10002;
+  pointer-events: none;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--ui-card-bg) 92%, var(--ui-accent) 8%),
+    color-mix(in srgb, var(--ui-page-bg-edge) 88%, black)
+  );
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--ui-accent) 15%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  backdrop-filter: blur(10px);
+  color: var(--ui-text-primary);
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.anchorSlotLeft {
+  transform: translate(-100%, -50%);
+  animation: mammothTooltipFadeInSlotLeft 0.12s ease-out;
+}
+
+@keyframes mammothTooltipFadeInSlotLeft {
+  from {
+    opacity: 0;
+    transform: translate(-100%, calc(-50% - 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-100%, -50%);
+  }
+}
+
+.tooltipName {
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-accent) 35%, transparent);
+  text-align: center;
+  color: var(--ui-text-primary);
+}
+
+.tooltipNameSimple {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.tooltipCategory {
+  font-size: 0.68rem;
+  color: var(--ui-accent-hover);
+  text-align: center;
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+.tooltipDescription {
+  font-size: 0.74rem;
+  color: var(--ui-text-muted);
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+}
+
+.tooltipStatsSection {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltipStatRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.74rem;
+}
+
+.statLabel {
+  color: var(--ui-accent);
+  flex-shrink: 0;
+}
+
+.statValue {
+  color: var(--ui-text-primary);
+  font-weight: 600;
+  text-align: right;
+}

@@ -308,11 +308,11 @@ export function EditorChromeFpViewmodel({
         the client).
       </p>
 
-      <span style={label}>Part</span>
+      <span style={label}>Gizmo moves</span>
       <p style={{ fontSize: 10, opacity: 0.75, margin: "0 0 4px" }}>
         {isConsumable
           ? "Consumables currently expose a single authored mount root."
-          : "Grip socket: stay within a normal reach of the hand; extreme values are blocked on save."}
+          : "Hand only moves the stock hand mesh relative to the rig; the weapon stays put until you switch gizmo target. Save layout writes the current hand and grip offset to disk as you see it."}
       </p>
       <select
         style={{ ...input, marginBottom: 8 }}

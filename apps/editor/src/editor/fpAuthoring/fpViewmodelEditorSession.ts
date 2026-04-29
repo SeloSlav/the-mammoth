@@ -5,7 +5,9 @@ import {
   fpLocomotionConstants,
   FP_MELEE_HAND_RIGHT,
   getWeaponDefinition,
+  GltfModelLoadRegistry,
   LocalFirstPersonPresenter,
+  mammothCatalogGlbCandidates,
 } from "@the-mammoth/engine";
 import type { LocalPlayerGameplayState } from "@the-mammoth/game";
 import type { FpAuthorWeaponId } from "./weaponPresentationDiskSave.js";
@@ -80,8 +82,15 @@ export class FpViewmodelEditorSession {
     try {
       const def = getWeaponDefinition(weaponId);
       if (!def) throw new Error(`Unknown FP authoring weapon: ${weaponId}`);
+      if (def.modelRef.kind !== "gltf") {
+        throw new Error(`FP authoring weapon ${weaponId} has no GLTF viewmodel (modelRef.kind=${def.modelRef.kind})`);
+      }
       const registry = createGltfModelLoadRegistry();
-      await Promise.all([registry.preload(FP_MELEE_HAND_RIGHT), registry.preload(def.modelRef)]);
+      await registry.preload(FP_MELEE_HAND_RIGHT);
+      await (registry as GltfModelLoadRegistry).preloadWithUriCandidates(
+        def.modelRef,
+        mammothCatalogGlbCandidates(weaponId),
+      );
       const presenter = new LocalFirstPersonPresenter({
         viewModelParent: headPitch,
         modelRegistry: registry,

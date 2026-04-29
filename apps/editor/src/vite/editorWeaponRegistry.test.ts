@@ -9,9 +9,9 @@ describe("editor / engine weapon registry alignment", () => {
   it("ships melee definitions the editor FP mode expects (srbosjek + baseball bat)", () => {
     const ids = ALL_WEAPON_DEFINITIONS.map((d) => d.id);
     expect(ids).toContain("srbosjek");
-    expect(ids).toContain("baseball_bat");
+    expect(ids).toContain("baseball-bat");
     expect(WEAPON_DEFINITION_ID_SET.has("srbosjek")).toBe(true);
-    expect(WEAPON_DEFINITION_ID_SET.has("baseball_bat")).toBe(true);
+    expect(WEAPON_DEFINITION_ID_SET.has("baseball-bat")).toBe(true);
   });
 
   it("srbosjek hides the stock FP hand (gloved mesh replaces it)", () => {

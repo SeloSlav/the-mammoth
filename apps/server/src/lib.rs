@@ -3,6 +3,7 @@
 
 mod accounts;
 mod apartment_door;
+mod apartment_interior_anchors;
 mod apartments;
 mod auth;
 mod character_controller;
@@ -15,6 +16,7 @@ mod generated_apartment_doors;
 mod generated_collision_solids;
 mod elevator_layout;
 mod generated_walk_surfaces;
+mod hitscan;
 mod inventory;
 mod inventory_models;
 mod items_catalog;
@@ -26,7 +28,7 @@ mod player_vitals;
 mod pose;
 mod stair_opening_collision;
 mod stair_runtime_overlay;
-mod world_loot;
+mod spawn_routing;
 mod world_sound;
 
 use spacetimedb::{ReducerContext, Table};
@@ -40,7 +42,8 @@ pub fn init(ctx: &ReducerContext) {
     apartment_door::seed_apartment_doors(ctx);
     apartments::seed_apartment_units(ctx);
     apartments::open_unclaimed_residential_doors(ctx);
-    world_loot::seed_world_loot(ctx);
+    dropped_item::seed_world_loot_spawns(ctx);
+    dropped_item::start_world_loot_refresh_schedule(ctx);
     movement::start_physics_schedule(ctx);
     player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
@@ -99,7 +102,7 @@ pub fn ping_world(ctx: &ReducerContext) {
 }
 
 #[spacetimedb::reducer]
-pub fn respawn_player(ctx: &ReducerContext) {
+pub fn respawn_player(ctx: &ReducerContext, mode: u8) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("respawn_player blocked: {e}");
         return;
@@ -108,14 +111,20 @@ pub fn respawn_player(ctx: &ReducerContext) {
     if !player_vitals::is_player_dead(ctx, id) {
         return;
     }
-    if let Some(sp) = apartments::spawn_pose_owned_bed(ctx, id) {
-        let yaw = sp.yaw;
-        ctx.db.player_pose().identity().update(sp);
-        movement::reset_player_input_row(ctx, id, yaw);
+    let bed_pose = if mode == 1 {
+        apartments::spawn_pose_owned_bed(ctx, id)
     } else {
-        pose::reset_player_pose_to_spawn(ctx, id);
-        movement::reset_player_input_row(ctx, id, pose::PLAYER_SPAWN_YAW);
-    }
+        None
+    };
+    let sp = if let Some(bed) = bed_pose {
+        apartments::lock_owned_residential_doors(ctx, id);
+        bed
+    } else {
+        spawn_routing::random_public_spawn_pose(ctx, id)
+    };
+    let yaw = sp.yaw;
+    ctx.db.player_pose().identity().update(sp);
+    movement::reset_player_input_row(ctx, id, yaw);
     player_vitals::reset_player_vitals_for_respawn(ctx, id);
     world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

@@ -4,4 +4,5 @@ export type ApartmentClaimIntent = {
   unitId: string;
 };
 
+export * from "./apartmentInteriorAnchors.js";
 export * from "./player/index.js";

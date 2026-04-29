@@ -1,9 +1,13 @@
 import * as THREE from "three";
+import { mammothCatalogGlbCandidates } from "@the-mammoth/assets";
+import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
 import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import type { IModelLoadRegistry } from "@the-mammoth/assets";
 import { ALL_WEAPON_DEFINITIONS, getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
 import type { WeaponDefinition } from "../weapons/weaponTypes.js";
-import { createGltfModelLoadRegistry } from "../loaders/GltfModelLoadRegistry.js";
+import {
+  createGltfModelLoadRegistry,
+  GltfModelLoadRegistry,
+} from "../loaders/GltfModelLoadRegistry.js";
 import {
   LocalFirstPersonPresenter,
   type FpAuthoringPick,
@@ -62,10 +66,20 @@ export class PlayerPresentationManager {
     const modelRegistry = opts.modelRegistry ?? createGltfModelLoadRegistry();
     const initialEquipped = opts.initialEquippedPrimary ?? "unarmed";
     const initialDef = getWeaponDefinitionForEquippedPrimary(initialEquipped) ?? null;
+    const preloadWeapons =
+      modelRegistry instanceof GltfModelLoadRegistry
+        ? ALL_WEAPON_DEFINITIONS.map((d) =>
+            modelRegistry.preloadWithUriCandidates(
+              d.modelRef as Extract<ModelRef, { kind: "gltf" }>,
+              mammothCatalogGlbCandidates(d.id),
+            ),
+          )
+        : ALL_WEAPON_DEFINITIONS.map((d) => modelRegistry.preload(d.modelRef));
+
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
       preloadRemotePlayerBody(),
-      ...ALL_WEAPON_DEFINITIONS.map((d) => modelRegistry.preload(d.modelRef)),
+      ...preloadWeapons,
     ]);
     const local = new LocalFirstPersonPresenter({
       viewModelParent: opts.fpViewModelParent,
@@ -143,6 +157,11 @@ export class PlayerPresentationManager {
   /** Local gameplay: shared hand socket used by weapons and hotbar consumables. */
   getLocalFpGripAnchorObject(): THREE.Object3D | undefined {
     return this.local.getFpGripAnchorObject();
+  }
+
+  /** Weapon mesh object for authoring scale persistence (separate from simplified `weapon` gizmo root). */
+  getLocalFpWeaponVisualObject(): THREE.Object3D | undefined {
+    return this.local.getFpWeaponVisualObject();
   }
 
   /** Hide stock hand meshes when the selected hotbar has neither a weapon nor a consumable. */

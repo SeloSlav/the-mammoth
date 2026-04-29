@@ -62,6 +62,7 @@ export function startEditorSceneRenderLoop(deps: {
     if (isWeaponFpAuthoringState(st) && fp.getFpSession()?.getPresenter()) {
       previewSelectionOutline.setFromObject(null);
       const pres = fp.getFpSession()!.getPresenter()!;
+      pres.setFpAuthorGripAnchoredToLiveHandPose(st.fpAuthorTargetId !== "hand");
       if (!tcDragging) {
         pres.setFpSwingAuthoringOverlay({
           previewPhase01: null,

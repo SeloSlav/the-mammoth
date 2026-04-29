@@ -40,14 +40,27 @@ pub const KIND_ELEVATOR_CAB_ARRIVAL: u8 = 9;
 pub const KIND_MELEE_FLESH_HIT: u8 = 10;
 /// Door boarding / reinforcement (`variation` unused until assets land).
 pub const KIND_DOOR_REINFORCE: u8 = 11;
-/// Gunshot — client maps ammo sounds (`variation` ammo profile stub).
+/// Gunshot — client maps WAV by `variation`: [`FIREARM_VARIATION_*`].
 pub const KIND_FIREARM_SHOT: u8 = 12;
+/// `world_sound_event.variation` for [`KIND_FIREARM_SHOT`]: pistol discharge.
+pub const FIREARM_VARIATION_PISTOL: u8 = 0;
+/// `world_sound_event.variation` for [`KIND_FIREARM_SHOT`]: shotgun discharge.
+pub const FIREARM_VARIATION_SHOTGUN: u8 = 1;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
 const BOB_SPEED_MAX: f32 = 6.5;
 const V0_FOOT: f32 = 0.15;
 const STRIDE_PHASE_PER_STEP: f32 = std::f32::consts::PI;
+
+/// Multiplier on **world Y** separation for proximity falloff (`sqrt(dx² + dz² + (axis_weight_y·dy)²)`).
+/// `1.0` is spherical; `>1` makes vertical offsets (floors / height) attenuate faster than the same span on XZ.
+pub const AXIS_WEIGHT_Y_FOOTSTEP: f32 = 1.68;
+pub const AXIS_WEIGHT_Y_MELEE: f32 = 1.52;
+pub const AXIS_WEIGHT_Y_ITEM_PICKUP_CONSUME: f32 = 1.48;
+pub const AXIS_WEIGHT_Y_ELEVATOR_DOOR: f32 = 1.26;
+pub const AXIS_WEIGHT_Y_GUNFIRE: f32 = 1.2;
+pub const AXIS_WEIGHT_Y_REINFORCE: f32 = 1.34;
 
 #[spacetimedb::table(public, accessor = world_sound_event)]
 pub struct WorldSoundEvent {
@@ -64,6 +77,8 @@ pub struct WorldSoundEvent {
     pub z: f32,
     pub volume: f32,
     pub max_distance_m: f32,
+    /// See module `AXIS_WEIGHT_Y_*`; replicated so clients match server intent without a second mapping table.
+    pub axis_weight_y: f32,
     pub emitter: Identity,
     pub created_at: Timestamp,
 }
@@ -131,6 +146,7 @@ pub(crate) fn emit_world_sound(
     z: f32,
     volume: f32,
     max_distance_m: f32,
+    axis_weight_y: f32,
     emitter: Identity,
 ) {
     let row = WorldSoundEvent {
@@ -142,6 +158,7 @@ pub(crate) fn emit_world_sound(
         z,
         volume,
         max_distance_m,
+        axis_weight_y: axis_weight_y.clamp(0.25, 8.0),
         emitter,
         created_at: ctx.timestamp,
     };
@@ -165,6 +182,7 @@ pub fn emit_item_pickup_at(
         z,
         0.58,
         18.0,
+        AXIS_WEIGHT_Y_ITEM_PICKUP_CONSUME,
         emitter,
     );
 }
@@ -182,7 +200,18 @@ pub fn emit_hotbar_consume_at(
         log::warn!("emit_hotbar_consume_at: unexpected kind {kind}");
         return;
     }
-    emit_world_sound(ctx, kind, 0, x, y, z, 0.66, 16.0, emitter);
+    emit_world_sound(
+        ctx,
+        kind,
+        0,
+        x,
+        y,
+        z,
+        0.66,
+        16.0,
+        AXIS_WEIGHT_Y_ITEM_PICKUP_CONSUME,
+        emitter,
+    );
 }
 
 /// Chest-height point by the in-cab panel (`emitter` = rider who pressed).
@@ -202,6 +231,7 @@ pub fn emit_elevator_floor_button_at(
         z,
         0.52,
         14.0,
+        AXIS_WEIGHT_Y_ELEVATOR_DOOR,
         emitter,
     );
 }
@@ -223,6 +253,7 @@ pub fn emit_elevator_landing_hail_at(
         z,
         0.55,
         16.0,
+        AXIS_WEIGHT_Y_ELEVATOR_DOOR,
         emitter,
     );
 }
@@ -244,6 +275,7 @@ pub fn emit_landing_exterior_door_open_at(
         z,
         0.58,
         20.0,
+        AXIS_WEIGHT_Y_ELEVATOR_DOOR,
         emitter,
     );
 }
@@ -265,6 +297,7 @@ pub fn emit_landing_exterior_door_close_at(
         z,
         0.58,
         20.0,
+        AXIS_WEIGHT_Y_ELEVATOR_DOOR,
         emitter,
     );
 }
@@ -280,6 +313,7 @@ pub fn emit_elevator_cab_arrival_at(ctx: &ReducerContext, x: f32, y: f32, z: f32
         z,
         0.62,
         22.0,
+        AXIS_WEIGHT_Y_ELEVATOR_DOOR,
         ctx.identity(),
     );
 }
@@ -301,12 +335,24 @@ pub fn emit_reinforcement_noise_at(
         z,
         0.94,
         48.0,
+        AXIS_WEIGHT_Y_REINFORCE,
         emitter,
     );
 }
 
-pub fn emit_gunfire_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
-    emit_world_sound(ctx, KIND_FIREARM_SHOT, 0, x, y, z, 0.88, 56.0, emitter);
+pub fn emit_gunfire_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity, variation: u8) {
+    emit_world_sound(
+        ctx,
+        KIND_FIREARM_SHOT,
+        variation,
+        x,
+        y,
+        z,
+        0.88,
+        56.0,
+        AXIS_WEIGHT_Y_GUNFIRE,
+        emitter,
+    );
 }
 
 pub fn emit_melee_flesh_hit_at(
@@ -316,7 +362,18 @@ pub fn emit_melee_flesh_hit_at(
     z: f32,
     emitter: Identity,
 ) {
-    emit_world_sound(ctx, KIND_MELEE_FLESH_HIT, 0, x, y, z, 0.72, 18.0, emitter);
+    emit_world_sound(
+        ctx,
+        KIND_MELEE_FLESH_HIT,
+        0,
+        x,
+        y,
+        z,
+        0.72,
+        18.0,
+        AXIS_WEIGHT_Y_MELEE,
+        emitter,
+    );
 }
 
 /// Per-connection rows used by footsteps + melee cooldown.
@@ -404,6 +461,7 @@ pub fn sync_footsteps_for_tick(
             p.z,
             0.48,
             26.0,
+            AXIS_WEIGHT_Y_FOOTSTEP,
             id,
         );
         cad.last_stride_cell = stride_cell;

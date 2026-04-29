@@ -12,6 +12,12 @@ export {
 } from "./remote/RemotePlayerPresenter.js";
 export { buildPrimitiveHumanoid, type PrimitiveHumanoidParts } from "./primitiveHumanoid.js";
 export { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
+export {
+  buildWeaponFirstPersonPresentationMergeFromPickList,
+  type WeaponFirstPersonAuthoringPresentationMerge,
+  type WeaponMountAuthorMerge,
+  type WeaponFirstPersonPersistRefs,
+} from "./weaponFpAuthoringPresentationMerge.js";
 export type {
   HitTracePlaceholder,
   MeleeCombatVisualEvent,

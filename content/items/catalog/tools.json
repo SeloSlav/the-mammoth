@@ -2,7 +2,7 @@
   "version": 1,
   "items": [
     {
-      "id": "pipe_wrench",
+      "id": "pipe-wrench",
       "displayName": "Pipe wrench",
       "description": "Adjustable jaw for seized fittings.",
       "category": "tool",
@@ -10,13 +10,13 @@
       "construction": {
         "buildTimeSecs": 14,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 5 },
-          { "itemId": "duct_tape", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 5 },
+          { "itemId": "duct-tape", "quantity": 1 }
         ]
       }
     },
     {
-      "id": "claw_hammer",
+      "id": "claw-hammer",
       "displayName": "Claw hammer",
       "description": "Drive nails and board doors. Not craftable in the Balkan MVP survival loop.",
       "category": "tool",
@@ -38,14 +38,14 @@
       "construction": {
         "buildTimeSecs": 20,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 2 },
-          { "itemId": "wire_spool", "quantity": 2 },
-          { "itemId": "synthetic_polymer", "quantity": 2 }
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "wire-spool", "quantity": 2 },
+          { "itemId": "synthetic-polymer", "quantity": 2 }
         ]
       }
     },
     {
-      "id": "prybar_light",
+      "id": "prybar-light",
       "displayName": "Light pry bar",
       "description": "Thin blade for gaps and seams.",
       "category": "tool",
@@ -53,7 +53,7 @@
       "construction": {
         "buildTimeSecs": 10,
         "materials": [
-          { "itemId": "scrap_metal", "quantity": 4 }
+          { "itemId": "scrap-metal", "quantity": 4 }
         ]
       }
     }

@@ -20,12 +20,7 @@ export function getHotbarSlotInventoryItem(
   return undefined;
 }
 
-const RANGED_DEF_IDS = new Set([
-  "rusty_pistol",
-  "pistol",
-  "rifle",
-  "shotgun_coach",
-]);
+const RANGED_DEF_IDS = new Set(["pistol", "shotgun-coach"]);
 
 /** True when selected hotbar def is wired to {@link conn.reducers.submitFirearmShot}. */
 export function hotbarDefIdSupportsRangedAttack(defId: string | null | undefined): boolean {

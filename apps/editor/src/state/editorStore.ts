@@ -78,7 +78,7 @@ const FP_AUTHOR_DEV_DEFAULT_WEAPON: FpAuthorWeaponId | null = null;
 const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 
 /** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
-export const FP_AUTHOR_PREFERRED_TARGET_ID = "weaponRoot";
+export const FP_AUTHOR_PREFERRED_TARGET_ID = "weapon";
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   workspace: "stairwell",

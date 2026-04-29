@@ -30,6 +30,8 @@ export default __t.row({
   footX: __t.f32().name("foot_x"),
   footY: __t.f32().name("foot_y"),
   footZ: __t.f32().name("foot_z"),
+  wardrobeX: __t.f32().name("wardrobe_x"),
+  wardrobeZ: __t.f32().name("wardrobe_z"),
   boundMinX: __t.f32().name("bound_min_x"),
   boundMaxX: __t.f32().name("bound_max_x"),
   boundMinZ: __t.f32().name("bound_min_z"),

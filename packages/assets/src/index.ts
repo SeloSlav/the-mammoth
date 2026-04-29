@@ -10,3 +10,10 @@ export const placeholderPrefabs = [
 export type { ModelAssetKey, ModelRef } from "./modelRef.js";
 export type { IModelLoadRegistry, ModelInstantiationResult } from "./modelLoadRegistry.js";
 export { NoopModelLoadRegistry } from "./modelLoadRegistry.js";
+export {
+  MAMMOTH_CATALOG_GLB_FALLBACK_URI,
+  MAMMOTH_CATALOG_GLB_PRIMARY_URI,
+  MAMMOTH_CATALOG_GLB_SEARCH_ROOTS,
+  MAMMOTH_STATIC_MODEL_BASE,
+  mammothCatalogGlbCandidates,
+} from "./catalogGlb.js";

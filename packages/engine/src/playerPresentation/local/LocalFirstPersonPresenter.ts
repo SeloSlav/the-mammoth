@@ -154,7 +154,16 @@ export class LocalFirstPersonPresenter {
   private swingAuthoringPreviewPhase: number | null = null;
   /** When set, sampled instead of `weaponDefinition` track for swing preview + capture. */
   private swingAuthoringKeyframes: PrimitiveSwingKeyframe[] | null = null;
-  /** Scratch for {@link frameWeaponMountIntoGameplayCamera}. */
+  private readonly _mtxGripOffset = new THREE.Matrix4();
+  private readonly _mtxGripWorld = new THREE.Matrix4();
+  private readonly _mtxInvRigWorld = new THREE.Matrix4();
+  private readonly _mtxGripInRig = new THREE.Matrix4();
+  /**
+   * When true (gameplay default), grip position/orientation tracks `hand × gripOffset` each frame.
+   * When false (editor “Hand only”), grip stays rig-local so manipulating {@link handScene} does not
+   * drag the mounted weapon until the grip is reconciled (mode change / Save layout).
+   */
+  private fpAuthorGripAnchoredToLiveHandPose = true;
   private readonly _vmMountBox = new THREE.Box3();
   private readonly _vmMountCur = new THREE.Vector3();
   private readonly _vmMountTgt = new THREE.Vector3();
@@ -252,6 +261,21 @@ export class LocalFirstPersonPresenter {
     return this.weaponGripAnchor;
   }
 
+  /** Weapon mesh scale from presentation — child of grip. */
+  getFpWeaponVisualObject(): THREE.Object3D | undefined {
+    return this.weapon?.getVisual();
+  }
+
+  /** Editor FP: while false (“Hand only”), the grip does not weld to live hand edits every frame. */
+  setFpAuthorGripAnchoredToLiveHandPose(v: boolean): void {
+    this.fpAuthorGripAnchoredToLiveHandPose = v;
+  }
+
+  /** Re-weld grip to `presentation hand × grip offset` rig-local pose (layout/save/target change). */
+  reconcileFpWeaponGripAnchorToPresentationHand(): void {
+    this.syncGripAnchorFromLiveHandHierarchy();
+  }
+
   /** Rest pose used before swing offsets (`fpViewmodel.rigRoot` + clamps). */
   getFpRigRestLocal(): {
     position: THREE.Vector3;
@@ -293,6 +317,28 @@ export class LocalFirstPersonPresenter {
     this.rightHandRig.position.copy(this.rigRestPos);
     this.rightHandRig.rotation.copy(this.rigRestEuler);
     this.rightHandRig.scale.copy(this.rigRestScale);
+  }
+
+  /**
+   * Places {@link weaponGripAnchor} under `rightHandRig` at the same world pose as `hand × grip`,
+   * so the grip may be sibling to the hand (weapon not parented under the hand Scene).
+   */
+  private syncGripAnchorFromLiveHandHierarchy(): void {
+    if (!this.handScene || !this.weaponGripAnchor) return;
+    const gripPos = this.resolveFpViewmodelLayout().gripPosition;
+    this.rightHandRig.updateMatrixWorld(true);
+    this.handScene.updateMatrixWorld(true);
+    this._mtxGripOffset.identity();
+    this._mtxGripOffset.makeTranslation(gripPos.x, gripPos.y, gripPos.z);
+    this._mtxGripWorld.multiplyMatrices(this.handScene.matrixWorld, this._mtxGripOffset);
+    this._mtxInvRigWorld.copy(this.rightHandRig.matrixWorld).invert();
+    this._mtxGripInRig.multiplyMatrices(this._mtxInvRigWorld, this._mtxGripWorld);
+    this._mtxGripInRig.decompose(
+      this.weaponGripAnchor.position,
+      this.weaponGripAnchor.quaternion,
+      this.weaponGripAnchor.scale,
+    );
+    this.weaponGripAnchor.updateMatrix();
   }
 
   /**
@@ -349,8 +395,9 @@ export class LocalFirstPersonPresenter {
 
     this.weaponGripAnchor = new THREE.Group();
     this.weaponGripAnchor.name = "weapon_grip_anchor";
-    this.weaponGripAnchor.position.copy(fpLayout.gripPosition);
-    this.handScene.add(this.weaponGripAnchor);
+    this.rightHandRig.add(this.weaponGripAnchor);
+    this.fpAuthorGripAnchoredToLiveHandPose = true;
+    this.syncGripAnchorFromLiveHandHierarchy();
 
     if (this.weaponDefinition) {
       this.equipWeaponFromDefinition();
@@ -367,31 +414,22 @@ export class LocalFirstPersonPresenter {
     this.authoringFrozen = frozen;
   }
 
-  /** Targets for dev FP layout tools (hand mesh, grip socket, weapon root / visual). */
+  /** Dev layout targets: rig (both), hand mesh, weapon mount (`weapon` meshes resolve here for click-pick). */
   getAuthoringPickList(): FpAuthoringPick[] {
     const list: FpAuthoringPick[] = [];
     list.push({
       id: "rigRoot",
-      label: "Hand + weapon rig (rest pose + swing arc — same root)",
+      label: "Hand & weapon together",
       object: this.rightHandRig,
     });
     if (this.handScene) {
-      list.push({ id: "hand", label: "Hand GLB (scale / mirror / tilt)", object: this.handScene });
-    }
-    if (this.weaponGripAnchor) {
-      list.push({ id: "gripAnchor", label: "Weapon grip anchor (socket on hand)", object: this.weaponGripAnchor });
+      list.push({ id: "hand", label: "Hand only", object: this.handScene });
     }
     if (this.weapon && this.weaponDefinition) {
-      const dn = this.weaponDefinition.displayName;
       list.push({
-        id: "weaponRoot",
-        label: `${dn} mount (weapon root vs grip)`,
+        id: "weapon",
+        label: "Weapon only",
         object: this.weapon.root,
-      });
-      list.push({
-        id: "weaponVisual",
-        label: `${dn} mesh (visual scale)`,
-        object: this.weapon.getVisual(),
       });
     }
     return list;
@@ -435,6 +473,7 @@ export class LocalFirstPersonPresenter {
       this.getAuthoringPickList(),
       _AUTHOR_ORBIT_FALLBACK_OFFSET,
       out,
+      { gripSocketForBounds: this.weaponGripAnchor },
     );
   }
 
@@ -514,7 +553,7 @@ export class LocalFirstPersonPresenter {
     this.handScene.position.copy(lay.handPosition);
     this.handScene.rotation.copy(lay.handEuler);
     this.handScene.scale.copy(lay.handScale);
-    this.weaponGripAnchor.position.copy(lay.gripPosition);
+    this.syncGripAnchorFromLiveHandHierarchy();
     this.equipWeaponFromDefinition();
     this.applyFpHandMeshVisibility();
   }
@@ -570,6 +609,9 @@ export class LocalFirstPersonPresenter {
         this.weapon?.updateMeleeSwing(u);
       } else {
         this.weapon?.resetPose();
+      }
+      if (this.fpAuthorGripAnchoredToLiveHandPose) {
+        this.syncGripAnchorFromLiveHandHierarchy();
       }
       return;
     }
@@ -629,6 +671,9 @@ export class LocalFirstPersonPresenter {
       );
       this.rightHandRig.scale.copy(this.rigRestScale);
     }
+    if (this.fpAuthorGripAnchoredToLiveHandPose) {
+      this.syncGripAnchorFromLiveHandHierarchy();
+    }
   }
 
   dispose(): void {
@@ -639,7 +684,10 @@ export class LocalFirstPersonPresenter {
       deepDisposeObject3D(this.handScene);
       this.handScene = undefined;
     }
-    this.weaponGripAnchor = undefined;
+    if (this.weaponGripAnchor) {
+      this.rightHandRig.remove(this.weaponGripAnchor);
+      this.weaponGripAnchor = undefined;
+    }
     this.viewModelParent.remove(this.fpRoot);
     this.fpRoot.clear();
     this.driver.dispose();
