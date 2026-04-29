@@ -27,6 +27,7 @@ function idleGameplayState(pitchRad: number, equippedPrimary: FpAuthorWeaponId):
     locomotion: "idle",
     equippedPrimary,
     meleeAttackSeq: 0,
+    firearmShotSeq: 0,
     primaryAction: "none",
     life: "alive",
     animation: { locomotion: "idle", overlay: undefined, aimWeight01: 0 },

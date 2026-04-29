@@ -10,7 +10,6 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { yawTowardRoomCenterXZ, type ApartmentInteriorBounds } from "@the-mammoth/game";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
@@ -51,15 +50,6 @@ export function apartmentFurniturePlacementChanged(
     if (oldUnit[field] !== newUnit[field]) return true;
   }
   return false;
-}
-
-function boundsFromUnit(u: ApartmentUnit): ApartmentInteriorBounds {
-  return {
-    boundMinX: u.boundMinX,
-    boundMaxX: u.boundMaxX,
-    boundMinZ: u.boundMinZ,
-    boundMaxZ: u.boundMaxZ,
-  };
 }
 
 /** After world rotation + xz placement (y left arbitrary), raise/lowers root so mesh bottoms sit on `floorWorldY`. */
@@ -145,14 +135,11 @@ export async function mountFpApartmentFurniture(opts: {
       const u = row as ApartmentUnit;
       if (!(u.unitId.startsWith("unit_e_") || u.unitId.startsWith("unit_w_"))) continue;
 
-      const bounds = boundsFromUnit(u);
       /** Matches server floor slab (`mn[1]` / `foot_y`). */
       const floorY = u.footY;
       const levelIdx = u.level;
       const plate = floorGroupFor(levelIdx);
-
-      const yawW = yawTowardRoomCenterXZ(u.wardrobeX, u.wardrobeZ, bounds);
-      const yawF = yawTowardRoomCenterXZ(u.footX, u.footZ, bounds);
+      const furnitureYaw = u.bedYaw;
 
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_${u.unitKey}`;
@@ -162,14 +149,14 @@ export async function mountFpApartmentFurniture(opts: {
       const w = clonePropScene(wardrobeTemplate, levelIdx);
       w.scale.setScalar(WARDROBE_VIS_SCALE);
       w.position.set(u.wardrobeX, 0, u.wardrobeZ);
-      w.rotation.y = yawW;
+      w.rotation.y = furnitureYaw;
       snapCloneBottomToWorldFloor(w, floorY);
       unitGroup.add(w);
 
       const f = clonePropScene(footlockerTemplate, levelIdx);
       f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
       f.position.set(u.footX, 0, u.footZ);
-      f.rotation.y = yawF;
+      f.rotation.y = furnitureYaw;
       snapCloneBottomToWorldFloor(f, floorY);
       unitGroup.add(f);
 

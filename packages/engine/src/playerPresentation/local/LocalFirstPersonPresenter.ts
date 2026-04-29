@@ -23,6 +23,11 @@ import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
 import { resolveAuthoringOrbitTargetWorld } from "./localFirstPersonAuthoringOrbit.js";
 import { largestValidAuthoringRigRestStep } from "./localFirstPersonRigAuthoringClamp.js";
 import { computeWeaponGripMountFromDefinition } from "./localFirstPersonWeaponGripLayout.js";
+import {
+  fpFirearmShotVisualConfigForHeldItem,
+  sampleFpFirearmShotVisual,
+  type FpFirearmShotVisualConfig,
+} from "./fpFirearmShotVisuals.js";
 
 export type LocalFirstPersonPresenterOptions = {
   /** Where `fpRoot` attaches — use `headPitch` from {@link createFPRig}, not the camera. */
@@ -80,6 +85,7 @@ const DEFAULT_FP_HAND_POS = new THREE.Vector3(0, 0, 0);
 const DEFAULT_FP_HAND_EULER = new THREE.Euler(1.5708, 0, 3.1416, "XYZ");
 const DEFAULT_FP_HAND_SCALE = new THREE.Vector3(-0.1679, 0.1679, 0.1679);
 const DEFAULT_FP_WEAPON_VISUAL_SCALE = new THREE.Vector3(0.2762, 0.2762, 0.2762);
+const FIREARM_FLASH_COLOR = 0xffc46b;
 
 function vec3FromAuthorOr(
   v: WeaponAuthorVec3 | undefined,
@@ -136,8 +142,22 @@ export class LocalFirstPersonPresenter {
   private readonly onMeleeVisual?: MeleeCombatVisualSink;
   private weapon?: WeaponPresenter;
   private lastMeleeSeq = 0;
+  private lastFirearmShotSeq = 0;
+  private firearmShotElapsedS = Number.POSITIVE_INFINITY;
+  private firearmShotConfig: FpFirearmShotVisualConfig | null = null;
   private viewmodelReady = false;
   private readonly rightHandRig = new THREE.Group();
+  private readonly firearmFlashRoot = new THREE.Group();
+  private readonly firearmFlashGeometry = new THREE.PlaneGeometry(1, 1);
+  private readonly firearmFlashMaterial = new THREE.MeshBasicMaterial({
+    color: FIREARM_FLASH_COLOR,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
   /** Rest pose for {@link rightHandRig} under `fpRoot` (before walk sway / melee offset). */
   private readonly rigRestPos = new THREE.Vector3();
   private readonly rigRestEuler = new THREE.Euler(0, 0, 0, "XYZ");
@@ -183,12 +203,31 @@ export class LocalFirstPersonPresenter {
     this.fpRoot.name = "local_fp_viewmodel_root";
     this.fpRoot.frustumCulled = false;
     this.viewModelParent.add(this.fpRoot);
+    this.initFirearmFlash();
 
     this.rightHandRig.name = "local_fp_right_hand_rig";
     this.rightHandRig.frustumCulled = false;
     this.fpRoot.add(this.rightHandRig);
     this.refreshRigRestFromDefinition();
     this.applyRigRestToRightHandRig();
+  }
+
+  private initFirearmFlash(): void {
+    this.firearmFlashRoot.name = "local_fp_firearm_muzzle_flash";
+    this.firearmFlashRoot.visible = false;
+    this.firearmFlashRoot.frustumCulled = false;
+
+    const vertical = new THREE.Mesh(this.firearmFlashGeometry, this.firearmFlashMaterial);
+    vertical.name = "local_fp_firearm_muzzle_flash_vertical";
+    vertical.frustumCulled = false;
+    const diagonal = new THREE.Mesh(this.firearmFlashGeometry, this.firearmFlashMaterial);
+    diagonal.name = "local_fp_firearm_muzzle_flash_diagonal";
+    diagonal.rotation.z = Math.PI * 0.25;
+    diagonal.scale.setScalar(0.72);
+    diagonal.frustumCulled = false;
+
+    this.firearmFlashRoot.add(vertical, diagonal);
+    this.fpRoot.add(this.firearmFlashRoot);
   }
 
 /**
@@ -585,11 +624,58 @@ export class LocalFirstPersonPresenter {
     });
   }
 
+  private maybeTriggerFirearmShot(state: LocalPlayerGameplayState): void {
+    if (state.firearmShotSeq <= this.lastFirearmShotSeq) return;
+    this.lastFirearmShotSeq = state.firearmShotSeq;
+    const config = fpFirearmShotVisualConfigForHeldItem(state.equippedPrimary);
+    if (!config) return;
+    this.firearmShotConfig = config;
+    this.firearmShotElapsedS = 0;
+  }
+
+  private applyFirearmShotVisual(dt: number): void {
+    const config = this.firearmShotConfig;
+    if (!config) {
+      this.firearmFlashRoot.visible = false;
+      return;
+    }
+    const sample = sampleFpFirearmShotVisual(config, this.firearmShotElapsedS);
+    this.rightHandRig.position.x += sample.translationM.x;
+    this.rightHandRig.position.y += sample.translationM.y;
+    this.rightHandRig.position.z += sample.translationM.z;
+    this.rightHandRig.rotation.x += sample.rotationRad.x;
+    this.rightHandRig.rotation.y += sample.rotationRad.y;
+    this.rightHandRig.rotation.z += sample.rotationRad.z;
+
+    if (sample.flashAlpha > 0) {
+      this.firearmFlashRoot.visible = true;
+      this.firearmFlashRoot.position.set(
+        config.flashLocalPositionM.x,
+        config.flashLocalPositionM.y,
+        config.flashLocalPositionM.z,
+      );
+      this.firearmFlashRoot.scale.setScalar(sample.flashScaleM);
+      this.firearmFlashMaterial.opacity = sample.flashAlpha;
+    } else {
+      this.firearmFlashRoot.visible = false;
+      this.firearmFlashMaterial.opacity = 0;
+    }
+
+    this.firearmShotElapsedS += dt;
+    if (this.firearmShotElapsedS >= config.durationS) {
+      this.firearmShotConfig = null;
+      this.firearmFlashRoot.visible = false;
+      this.firearmFlashMaterial.opacity = 0;
+    }
+  }
+
   update(state: LocalPlayerGameplayState, dt: number): void {
     if (!this.viewmodelReady) return;
+    this.maybeTriggerFirearmShot(state);
     this.fpRoot.rotation.set(0, 0, 0);
     if (this.authoringFrozen) {
       this.applyRigRestToRightHandRig();
+      this.firearmFlashRoot.visible = false;
       const swingTrack = this.resolveFpMeleeSwingTrack();
       const ph = this.swingAuthoringPreviewPhase;
       if (ph !== null && swingTrack && swingTrack.length > 0) {
@@ -674,6 +760,7 @@ export class LocalFirstPersonPresenter {
     if (this.fpAuthorGripAnchoredToLiveHandPose) {
       this.syncGripAnchorFromLiveHandHierarchy();
     }
+    this.applyFirearmShotVisual(dt);
   }
 
   dispose(): void {
@@ -688,6 +775,9 @@ export class LocalFirstPersonPresenter {
       this.rightHandRig.remove(this.weaponGripAnchor);
       this.weaponGripAnchor = undefined;
     }
+    this.fpRoot.remove(this.firearmFlashRoot);
+    this.firearmFlashGeometry.dispose();
+    this.firearmFlashMaterial.dispose();
     this.viewModelParent.remove(this.fpRoot);
     this.fpRoot.clear();
     this.driver.dispose();

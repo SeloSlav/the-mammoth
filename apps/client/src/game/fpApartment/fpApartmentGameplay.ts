@@ -131,7 +131,7 @@ export function feetDeepEnoughFromEntryDoor(door: ApartmentDoor, x: number, z: n
   }
 }
 
-/** Inside coarse hull (same as server `feet_inside_unit`) AND deep enough past entry door (legacy zone name). */
+/** Inside strict unit interior (same as server `feet_inside_unit`) AND deep enough past entry door. */
 export function feetInClaimZone(conn: DbConnection, unit: ApartmentUnit, x: number, y: number, z: number): boolean {
   if (!feetInsideUnitHull(unit, x, y, z)) return false;
   const door = primaryEntryDoorForUnit(conn, unit);
@@ -237,6 +237,7 @@ function nearestUnclaimedUnitNearWardrobe(
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
     if (u.state !== UNIT_STATE_UNCLAIMED) continue;
+    if (!feetInsideUnitHull(u, x, y, z)) continue;
     if (!nearWardrobe(u, x, y, z)) continue;
     const dx = x - u.wardrobeX;
     const dz = z - u.wardrobeZ;
@@ -272,6 +273,7 @@ function nearestOwnedClaimedUnitNearFootlocker(
     const u = row as ApartmentUnit;
     if (u.state !== UNIT_STATE_CLAIMED) continue;
     if (!sameIdentity(u.owner, owner)) continue;
+    if (!feetInsideUnitHull(u, x, y, z)) continue;
     if (!nearFootlocker(u, x, y, z)) continue;
     const dx = x - u.footX;
     const dz = z - u.footZ;

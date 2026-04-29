@@ -33,6 +33,8 @@ export type LocalPlayerGameplayState = {
   equippedPrimary: HeldItemId;
   /** Monotonic counter: presentation fires melee visuals when this advances. */
   meleeAttackSeq: number;
+  /** Monotonic counter: presentation fires ranged recoil / muzzle flash when this advances. */
+  firearmShotSeq: number;
   primaryAction: PlayerPrimaryAction;
   life: PlayerLifePhase;
   animation: PlayerAnimationIntent;

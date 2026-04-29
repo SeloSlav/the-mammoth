@@ -15,6 +15,7 @@ export function buildLocalPlayerGameplayState(args: {
   grounded: boolean;
   crouch: boolean;
   meleeAttackSeq: number;
+  firearmShotSeq: number;
   /** From hotbar + item `defId` (before dev-only override). */
   equippedPrimaryFromHotbar: HeldItemId;
 }): LocalPlayerGameplayState {
@@ -42,6 +43,7 @@ export function buildLocalPlayerGameplayState(args: {
     locomotion,
     equippedPrimary: effectiveDevGameplayEquippedPrimary(args.equippedPrimaryFromHotbar),
     meleeAttackSeq: args.meleeAttackSeq,
+    firearmShotSeq: args.firearmShotSeq,
     primaryAction: "none",
     life: "alive",
     animation,

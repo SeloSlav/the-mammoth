@@ -18,6 +18,12 @@ export {
   type WeaponMountAuthorMerge,
   type WeaponFirstPersonPersistRefs,
 } from "./weaponFpAuthoringPresentationMerge.js";
+export {
+  fpFirearmShotVisualConfigForHeldItem,
+  sampleFpFirearmShotVisual,
+  type FpFirearmShotVisualConfig,
+  type FpFirearmShotVisualSample,
+} from "./local/fpFirearmShotVisuals.js";
 export type {
   HitTracePlaceholder,
   MeleeCombatVisualEvent,

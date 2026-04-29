@@ -138,20 +138,36 @@ describe("fpApartmentGameplay", () => {
     expect(feetDeepEnoughFromEntryDoor(door, hingeX + CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M - 0.05, 0)).toBe(false);
   });
 
-  it("offers apartment claim near an unclaimed wardrobe even outside the coarse unit hull", () => {
+  it("offers apartment claim near an unclaimed wardrobe from inside that unit", () => {
     const unit = apartmentUnit({
-      wardrobeX: 20,
-      wardrobeZ: 20,
+      wardrobeX: 2,
+      wardrobeZ: 3,
       boundMinX: 0,
-      boundMaxX: 10,
+      boundMaxX: 6,
       boundMinZ: 0,
-      boundMaxZ: 10,
+      boundMaxZ: 6,
     });
     const prompt = getApartmentSystemPrompt(
       mockConn([unit], ["door-lock", "screwdriver"]),
-      { x: 20.5, y: 10, z: 20.25 },
+      { x: 2.5, y: 10, z: 3.25 },
     );
     expect(prompt).toEqual({ kind: "apartment_claim", unitKey: unit.unitKey });
+  });
+
+  it("does not offer apartment claim through a wall from outside that unit", () => {
+    const unit = apartmentUnit({
+      wardrobeX: 6.25,
+      wardrobeZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const prompt = getApartmentSystemPrompt(
+      mockConn([unit], ["door-lock", "screwdriver"]),
+      { x: 6.35, y: 10, z: 3.1 },
+    );
+    expect(prompt).toBeNull();
   });
 
   it("keeps owned claimed apartments on stash only and does not expose reinforcement", () => {
@@ -169,19 +185,34 @@ describe("fpApartmentGameplay", () => {
     expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
   });
 
-  it("offers owned footlocker stash near the footlocker even outside the coarse unit hull", () => {
+  it("offers owned footlocker stash near the footlocker from inside that unit", () => {
     const unit = apartmentUnit({
       state: UNIT_STATE_CLAIMED,
       owner: testIdentity as never,
-      footX: 20,
-      footZ: 20,
+      footX: 2,
+      footZ: 3,
       boundMinX: 0,
-      boundMaxX: 10,
+      boundMaxX: 6,
       boundMinZ: 0,
-      boundMaxZ: 10,
+      boundMaxZ: 6,
     });
-    const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 20.2, y: 10, z: 20.1 });
+    const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 2.2, y: 10, z: 3.1 });
     expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+  });
+
+  it("does not offer owned footlocker stash through a wall from outside that unit", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 6.25,
+      footZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 6.35, y: 10, z: 3.1 });
+    expect(prompt).toBeNull();
   });
 
   it("allows the claimed owner to toggle their apartment door", () => {

@@ -115,6 +115,7 @@ export type FpSessionMainRafState = {
   lastTickElevVyBlendAbs: number;
   stairwellInteriorDarkSmoothed: number;
   meleeAttackSeq: number;
+  firearmShotSeq: number;
   lastMeleeMs: number;
   lastRangedMs: number;
 };
@@ -230,6 +231,7 @@ export function createFpSessionMainRafFrame(
         nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
       ) {
         mainRaf.lastRangedMs = nowMs;
+        mainRaf.firearmShotSeq += 1;
         deps.camera.updateMatrixWorld(true);
         deps.camera.getWorldDirection(deps._aimShotWorldDir);
         void deps.conn.reducers.submitFirearmShot({
@@ -506,6 +508,7 @@ export function createFpSessionMainRafFrame(
       grounded: deps.loco.grounded,
       crouch: mainRaf.crouchToggle,
       meleeAttackSeq: mainRaf.meleeAttackSeq,
+      firearmShotSeq: mainRaf.firearmShotSeq,
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---

@@ -129,6 +129,10 @@ export {
   type WeaponFirstPersonAuthoringPresentationMerge,
   type WeaponMountAuthorMerge,
   type WeaponFirstPersonPersistRefs,
+  fpFirearmShotVisualConfigForHeldItem,
+  sampleFpFirearmShotVisual,
+  type FpFirearmShotVisualConfig,
+  type FpFirearmShotVisualSample,
 } from "./playerPresentation/index.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
 export { loadGltfSceneFirstMatch } from "./loaders/gltfLoadFirstMatch.js";

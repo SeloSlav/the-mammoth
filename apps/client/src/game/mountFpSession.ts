@@ -198,13 +198,16 @@ export async function mountFpSession(
   });
 
   const unitInteriorMeshes = collectFpSessionUnitInteriorShellMeshes(buildingRoot);
+  const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
 
   const fpApartmentFurniture = await mountFpApartmentFurniture({
     conn,
     buildingRoot,
     onRebuilt: () => {
       stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
+      apartmentFurnitureInteriorMeshes.length = 0;
       appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
+      appendApartmentFurnitureInteriorMeshes(buildingRoot, apartmentFurnitureInteriorMeshes);
     },
   });
 
@@ -350,6 +353,7 @@ export async function mountFpSession(
         maxLevel: maxBuildingLevel,
       },
       unitInteriorMeshes,
+      apartmentFurnitureInteriorMeshes,
       fpElevators,
       stairShaftInteriorLightBounds,
       feetPos: pos,
@@ -375,6 +379,7 @@ export async function mountFpSession(
     lastTickElevVyBlendAbs: 0,
     stairwellInteriorDarkSmoothed: 0,
     meleeAttackSeq: 0,
+    firearmShotSeq: 0,
     lastMeleeMs: 0,
     lastRangedMs: 0,
   };

@@ -157,7 +157,7 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     let top_y = feet_y + 3.0;
     let face = SwingDoorFace::from_u8(t.face);
     const DEPTH: f32 = 13.0;
-    const HALF_WIDTH: f32 = 5.5;
+    const HALF_WIDTH: f32 = 3.3;
     match face {
         SwingDoorFace::W => (
             [t.hinge_x - DEPTH, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
@@ -172,6 +172,15 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
             [t.hinge_x + HALF_WIDTH, top_y, t.hinge_z + HALF_WIDTH],
         ),
     }
+}
+
+fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+    x >= unit.bound_min_x
+        && x <= unit.bound_max_x
+        && z >= unit.bound_min_z
+        && z <= unit.bound_max_z
+        && y >= unit.bound_min_y - 0.05
+        && y <= unit.bound_max_y + 2.45
 }
 
 pub fn seed_apartment_units(ctx: &ReducerContext) {
@@ -331,7 +340,8 @@ fn pose_near_apartment_stash_anchor(
     y: f32,
     z: f32,
 ) -> bool {
-    pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
+    feet_inside_unit(unit, x, y, z)
+        && pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
 }
 
 pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
@@ -465,14 +475,15 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
         return;
     };
-    let near_claim = pose_near_horizontal_marker(
-        pose.x,
-        pose.y,
-        pose.z,
-        unit.wardrobe_x,
-        unit.wardrobe_z,
-        unit.foot_y,
-    );
+    let near_claim = feet_inside_unit(&unit, pose.x, pose.y, pose.z)
+        && pose_near_horizontal_marker(
+            pose.x,
+            pose.y,
+            pose.z,
+            unit.wardrobe_x,
+            unit.wardrobe_z,
+            unit.foot_y,
+        );
     if !near_claim {
         unit.claim_progress_secs = 0.0;
         unit.claim_started_by = None;

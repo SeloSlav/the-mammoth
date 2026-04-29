@@ -51,6 +51,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
     maxLevel: number;
   };
   unitInteriorMeshes: readonly THREE.Mesh[];
+  apartmentFurnitureInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
     MountFpElevatorWorldResult,
     "getCabOccludedViewStorey" | "getFloorVisibilityBand" | "isInsideAnyCabHud"
@@ -74,6 +75,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     maxBuildingLevel,
     storeyOpts,
     unitInteriorMeshes,
+    apartmentFurnitureInteriorMeshes,
     fpElevators,
     stairShaftInteriorLightBounds,
     feetPos,
@@ -91,6 +93,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _visBandSmoothHi = -999;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
+  let _lastApartmentFurnitureInteriorVisible = true;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -281,6 +284,32 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastUnitInteriorVisible = unitInteriorVisible;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {
         unitInteriorMeshes[i]!.visible = unitInteriorVisible;
+      }
+    }
+
+    const apartmentFurnitureInteriorVisible =
+      fpElevators.isInsideAnyCabHud(
+        feetPos.x,
+        feetPos.y,
+        feetPos.z,
+        floorVisCamWorld.x,
+        floorVisCamWorld.y,
+        floorVisCamWorld.z,
+      ) ||
+      fpCameraOrFeetInsideBuildingFootprintXZ({
+        cameraX: floorVisCamWorld.x,
+        cameraZ: floorVisCamWorld.z,
+        feetX: feetPos.x,
+        feetZ: feetPos.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+      });
+    if (apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible) {
+      _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
+      for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
+        apartmentFurnitureInteriorMeshes[i]!.visible = apartmentFurnitureInteriorVisible;
       }
     }
 
