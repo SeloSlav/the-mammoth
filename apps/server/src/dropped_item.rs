@@ -51,7 +51,8 @@ const WORLD_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
     ("ammo-9mm", 18, 55, 22),
     ("ammo-shotgun-shell", 6, 18, 14),
     ("pistol", 1, 1, 1),
-    ("bandage-roll", 1, 3, 2),
+    ("apple", 2, 6, 3),
+    ("water-bottle", 1, 3, 3),
 ];
 
 #[spacetimedb::table(public, accessor = dropped_item)]

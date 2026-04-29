@@ -79,10 +79,10 @@
 
 .logoFull {
   display: block;
-  max-width: min(100%, 360px);
+  max-width: min(100%, 440px);
   width: 100%;
   height: auto;
-  max-height: 96px;
+  max-height: min(200px, 34vh);
   object-fit: contain;
 }
 

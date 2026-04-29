@@ -534,7 +534,8 @@ export function createFpSessionMainRafFrame(
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
         const holdPrompt = aSys;
         const doorSuppressBlocksClaimHold =
-          holdPrompt?.kind !== "apartment_claim" && deps.fpApartmentDoors.shouldSuppressEpickup(ft);
+          holdPrompt?.kind !== "apartment_claim" &&
+          deps.fpApartmentDoors.shouldSuppressEpickup(ft, deps.camera);
         const elevatorBlocksClaimHold =
           deps.fpElevators.shouldSuppressEpickup(ft, deps.camera) &&
           !(holdPrompt !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(holdPrompt));
@@ -569,7 +570,7 @@ export function createFpSessionMainRafFrame(
           ? null
           : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
             ? null
-            : deps.fpApartmentDoors.getInteractPrompt(ft);
+            : deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
       if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",
@@ -628,7 +629,7 @@ export function createFpSessionMainRafFrame(
               !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
             );
           if (aSys?.kind !== "apartment_claim") {
-            claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(ft);
+            claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(ft, deps.camera);
           }
           const { displaySecs: claimProgressHudSecs, nextSmooth } =
             computeOptimisticClaimProgressSecs({

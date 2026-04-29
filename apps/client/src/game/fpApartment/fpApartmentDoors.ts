@@ -87,6 +87,8 @@ const _hingeComposePos = new THREE.Vector3();
 const _hingeComposeQuat = new THREE.Quaternion();
 const _hingeComposeScale = new THREE.Vector3(1, 1, 1);
 const _hingeYAxis = new THREE.Vector3(0, 1, 0);
+const _interactCamWorld = new THREE.Vector3();
+const _interactCamDir = new THREE.Vector3();
 
 /** Bucket size (meters) used by the collision/interact spatial index. Tuned so a typical query
  *  window touches at most 2×2 buckets for 608 doors stretched over ~230 m. */
@@ -100,6 +102,9 @@ const APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M = 1.35;
 
 /** Threshold below which two open01 values are treated as converged (skip matrix rewrite). */
 const APARTMENT_DOOR_ANIM_EPSILON = 1e-4;
+const APARTMENT_DOOR_LOOK_MAX_DIST_M = 5.5;
+const APARTMENT_DOOR_LOOK_MAX_PERP_M = 1.15;
+const APARTMENT_DOOR_LOOK_MIN_FORWARD_M = 0.12;
 
 export type MountFpApartmentDoorsOpts = {
   conn: DbConnection;
@@ -145,12 +150,13 @@ export type MountFpApartmentDoorsResult = {
    * Try to open/close the nearest eligible door. Returns true when a reducer was dispatched and
    * the `E` key chain should short-circuit (pickup etc. is suppressed).
    */
-  consumeInteractKey(playerPos: THREE.Vector3): boolean;
+  consumeInteractKey(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
   /** True when an apartment door is in range, so the generic pickup prompt/action is suppressed. */
-  shouldSuppressEpickup(playerPos: THREE.Vector3): boolean;
+  shouldSuppressEpickup(playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean;
   /** Drive the bottom interact prompt when the player is next to an apartment door. */
   getInteractPrompt(
     playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
   ): { willClose: boolean; promptKind: ApartmentDoorInteractPromptKind } | null;
   /** Returns every apartment door within `radiusM` of `(x,z)` with its live collision state. */
   debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
@@ -384,6 +390,31 @@ function visitBucketedSlots(
       for (const slot of bucket) visit(slot);
     }
   }
+}
+
+export function apartmentDoorLookScore(input: {
+  cameraX: number;
+  cameraZ: number;
+  viewDirX: number;
+  viewDirZ: number;
+  targetX: number;
+  targetZ: number;
+  maxDistM?: number;
+  maxPerpM?: number;
+  minForwardM?: number;
+}): number | null {
+  const len = Math.hypot(input.viewDirX, input.viewDirZ);
+  if (len < 1e-4) return null;
+  const fx = input.viewDirX / len;
+  const fz = input.viewDirZ / len;
+  const dx = input.targetX - input.cameraX;
+  const dz = input.targetZ - input.cameraZ;
+  const forward = dx * fx + dz * fz;
+  if (forward < (input.minForwardM ?? APARTMENT_DOOR_LOOK_MIN_FORWARD_M)) return null;
+  if (forward > (input.maxDistM ?? APARTMENT_DOOR_LOOK_MAX_DIST_M)) return null;
+  const perp = Math.abs(dx * fz - dz * fx);
+  if (perp > (input.maxPerpM ?? APARTMENT_DOOR_LOOK_MAX_PERP_M)) return null;
+  return perp + forward * 0.04;
 }
 
 /**
@@ -738,11 +769,16 @@ export function mountFpApartmentDoors(
     });
   };
 
-  const resolveInteractTarget = (playerPos: THREE.Vector3): DoorSlot | null => {
+  const resolveInteractTarget = (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ): DoorSlot | null => {
+    camera.getWorldPosition(_interactCamWorld);
+    camera.getWorldDirection(_interactCamDir);
     const r =
       SWING_DOOR_INTERACT_RADIUS_M +
       Math.max(APARTMENT_DOOR_DIMS.panelW, APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M * 2);
-    const candidates: { slot: DoorSlot; dsq: number }[] = [];
+    const candidates: { slot: DoorSlot; lookScore: number; dsq: number }[] = [];
     visitBucketedSlots(
       bucketIndex,
       playerPos.x - r,
@@ -764,13 +800,22 @@ export function mountFpApartmentDoors(
         ) {
           return;
         }
+        const lookScore = apartmentDoorLookScore({
+          cameraX: _interactCamWorld.x,
+          cameraZ: _interactCamWorld.z,
+          viewDirX: _interactCamDir.x,
+          viewDirZ: _interactCamDir.z,
+          targetX: slot.hingeX,
+          targetZ: slot.hingeZ,
+        });
+        if (lookScore === null) return;
         const dx = playerPos.x - slot.hingeX;
         const dz = playerPos.z - slot.hingeZ;
         const dsq = dx * dx + dz * dz;
-        candidates.push({ slot, dsq });
+        candidates.push({ slot, lookScore, dsq });
       },
     );
-    candidates.sort((a, b) => a.dsq - b.dsq);
+    candidates.sort((a, b) => a.lookScore - b.lookScore || a.dsq - b.dsq);
     const id = opts.conn.identity ?? undefined;
     for (const { slot } of candidates) {
       if (!apartmentDoorMatchesContainingUnit(opts.conn, playerPos, slot)) continue;
@@ -779,8 +824,8 @@ export function mountFpApartmentDoors(
     return null;
   };
 
-  const consumeInteractKey = (playerPos: THREE.Vector3): boolean => {
-    const target = resolveInteractTarget(playerPos);
+  const consumeInteractKey = (playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean => {
+    const target = resolveInteractTarget(playerPos, camera);
     if (!target) return false;
     try {
       void opts.conn.reducers.apartmentDoorToggle({
@@ -795,11 +840,11 @@ export function mountFpApartmentDoors(
     return true;
   };
 
-  const shouldSuppressEpickup = (playerPos: THREE.Vector3): boolean =>
-    resolveInteractTarget(playerPos) !== null;
+  const shouldSuppressEpickup = (playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera): boolean =>
+    resolveInteractTarget(playerPos, camera) !== null;
 
-  const getInteractPrompt = (playerPos: THREE.Vector3) => {
-    const target = resolveInteractTarget(playerPos);
+  const getInteractPrompt = (playerPos: THREE.Vector3, camera: THREE.PerspectiveCamera) => {
+    const target = resolveInteractTarget(playerPos, camera);
     if (!target) return null;
     return {
       willClose: target.desiredOpen !== 0,

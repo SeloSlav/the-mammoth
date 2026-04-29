@@ -800,8 +800,8 @@ export async function mountFpSession(
         return;
       }
 
-      if (fpApartmentDoors.consumeInteractKey(feet)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(feet)) return;
+      if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
       if (aptKey?.kind === "apartment_stash") {
         const slot = getFpHotbarSelectedSlot();

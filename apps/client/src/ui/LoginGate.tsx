@@ -155,7 +155,7 @@ function AuthScreen({ eyebrow, children }: { eyebrow: string; children: ReactNod
               id="mammoth-auth-title"
               className={styles.logoFull}
               src={MAMMOTH_LOGO_PUBLIC_PATH}
-              width={320}
+              width={440}
               alt="The Mammoth"
               decoding="async"
               fetchPriority="high"
