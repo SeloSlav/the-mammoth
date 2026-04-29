@@ -96,6 +96,12 @@ fn row_key(floor_doc_id: &str, level: u32, template_id: &str) -> String {
     format!("{floor_doc_id}|{level}|{template_id}")
 }
 
+/// Maps a residential door row to `floor|level|unit_id` (first segment of `template_id`).
+pub(crate) fn resident_unit_key_from_door_row(row: &ApartmentDoor) -> String {
+    let uid = row.template_id.split('|').next().unwrap_or("");
+    format!("{}|{}|{}", row.floor_doc_id, row.level, uid)
+}
+
 #[inline]
 fn plate_world_y(level: u32) -> f32 {
     BUILDING_ORIGIN_Y + (level.max(1) as f32 - 1.0) * STOREY_SPACING_M
@@ -130,7 +136,7 @@ fn west_door_debug_zone(x: f32, y: f32, z: f32) -> bool {
 
 /// Parse `content/building/mammoth.json` once and cache the floor-ref list
 /// `(level_index, floor_doc_id)` so we can expand codegen templates into rows.
-fn building_floor_refs() -> &'static [(u32, &'static str)] {
+pub(crate) fn building_floor_refs() -> &'static [(u32, &'static str)] {
     use std::sync::OnceLock;
     static REFS: OnceLock<Vec<(u32, &'static str)>> = OnceLock::new();
     REFS.get_or_init(|| {
@@ -546,6 +552,12 @@ pub fn apartment_door_toggle(
         return;
     };
     let hint = Some((client_feet_x, client_feet_y, client_feet_z));
+    let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
+        return;
+    };
+    if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
+        return;
+    }
     let current_desired = ctx
         .db
         .apartment_door()
@@ -578,6 +590,12 @@ pub fn apartment_door_set(
         log::info!("apartment_door_set: reject no_player_pose identity={id}");
         return;
     };
+    let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
+        return;
+    };
+    if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
+        return;
+    }
     apply_desired_open(
         ctx,
         &pose,

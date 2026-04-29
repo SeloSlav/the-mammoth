@@ -65,6 +65,17 @@ const ICONS: Record<string, string> = {
   apple: appleIcon,
   water_bottle: waterBottleIcon,
   rakija: rakijaIcon,
+  rusty_pistol: crowbarIcon,
+  pistol: knifeIcon,
+  rifle: baseballBatIcon,
+  shotgun_coach: crowbarIcon,
+  nails: crowbarIcon,
+  ammo_9mm: knifeIcon,
+  ammo_shotgun_shell: knifeIcon,
+  cigarettes: crowbarIcon,
+  door_lock: crowbarIcon,
+  screwdriver: knifeIcon,
+  claw_hammer: crowbarIcon,
 };
 
 /** World pickup mesh (under `apps/client/public`). Keep aligned with weapon GLBs + catalog ids. */
@@ -73,6 +84,17 @@ const WORLD_MODELS: Record<string, string> = {
   crowbar: "/static/models/weapons/crowbar.glb",
   srbosjek: "/static/models/weapons/srbosjek.glb",
   baseball_bat: "/static/models/weapons/baseball_bat.glb",
+  rusty_pistol: "/static/models/weapons/crowbar.glb",
+  pistol: "/static/models/weapons/knife.glb",
+  rifle: "/static/models/weapons/crowbar.glb",
+  shotgun_coach: "/static/models/weapons/baseball_bat.glb",
+  nails: "/static/models/weapons/crowbar.glb",
+  ammo_9mm: "/static/models/weapons/knife.glb",
+  ammo_shotgun_shell: "/static/models/weapons/knife.glb",
+  cigarettes: "/static/models/weapons/crowbar.glb",
+  door_lock: "/static/models/weapons/knife.glb",
+  screwdriver: "/static/models/weapons/knife.glb",
+  claw_hammer: "/static/models/weapons/crowbar.glb",
 };
 
 export function getMammothDroppedWorldModelUrl(defId: string): string | undefined {

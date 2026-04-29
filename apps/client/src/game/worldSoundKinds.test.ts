@@ -11,7 +11,7 @@ import {
   WORLD_SOUND_KIND_ITEM_PICKUP,
   WORLD_SOUND_KIND_MELEE_FLESH_HIT,
   WORLD_SOUND_KIND_MELEE_WEAPON_SWING,
-} from "./worldProximityAudio";
+} from "./audio/worldProximityAudio.js";
 
 /** Numeric `kind` must match `apps/server/src/world_sound.rs` `KIND_*`. */
 describe("world sound kinds", () => {

@@ -19,7 +19,9 @@
     "content:gen-walk-aabbs": "tsx scripts/gen-walk-aabbs.ts",
     "content:gen-apartment-doors": "tsx scripts/gen-apartment-door-stock.ts",
     "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",
-    "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run"
+    "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run",
+    "check:hand-authored-loc": "node scripts/check-hand-authored-ts-loc.mjs",
+    "check:hand-authored-loc:strict": "node scripts/check-hand-authored-ts-loc.mjs --strict"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",

@@ -40,11 +40,19 @@ export function getWeaponDefinition(
   return isRegistryKey(id) ? WEAPON_REGISTRY[id] : undefined;
 }
 
-/**
- * Inventory / catalog `def_id` for an implemented weapon → {@link HeldItemId} for presentation.
- * Anything else (unknown id, future consumables, etc.) → `"unarmed"`.
+const PRESENTATION_ALIAS: Record<string, HeldItemId> = {
+  rusty_pistol: "crowbar",
+  pistol: "crowbar",
+  rifle: "crowbar",
+  shotgun_coach: "crowbar",
+};
+
+/** Inventory / catalog `def_id` for an implemented weapon → {@link HeldItemId} for presentation.
+ * Ranged placeholders map to shipped meshes until dedicated GLBs exist.
  */
 export function equippedHeldItemIdFromDefId(defId: string): HeldItemId {
+  const aliased = PRESENTATION_ALIAS[defId];
+  if (aliased && isRegistryKey(aliased)) return aliased;
   if (isRegistryKey(defId)) return defId;
   return "unarmed";
 }

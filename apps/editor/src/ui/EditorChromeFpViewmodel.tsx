@@ -5,10 +5,10 @@ import {
   FP_AUTHORABLE_CONSUMABLE_IDS,
   isFpAuthorConsumableId,
   saveConsumablePresentationFromEditor,
-} from "../editor/consumablePresentationDiskSave.js";
-import { isFpAuthorWeaponId, saveWeaponPresentationFromEditor } from "../editor/weaponPresentationDiskSave.js";
+} from "../editor/fpAuthoring/consumablePresentationDiskSave.js";
+import { isFpAuthorWeaponId, saveWeaponPresentationFromEditor } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
 import { useEditorFpViewmodelPanelStore } from "./hooks/useEditorFpViewmodelPanelStore.js";
-import { frameFpMountIntoGameplayView } from "../editor/fpViewmodelAuthoringBridge.js";
+import { frameFpMountIntoGameplayView } from "../editor/fpAuthoring/fpViewmodelAuthoringBridge.js";
 import { editorChromeInput, editorChromeLabel, editorChromeRowBtn } from "./editorChromeStyles.js";
 
 type WeaponAssetSurvey = {

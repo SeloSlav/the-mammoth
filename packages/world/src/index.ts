@@ -35,7 +35,7 @@ export {
   buildStairOpeningCollisionOverlayForBuilding,
   stairOpeningAabbOverlaps,
   type StairOpeningCollisionOverlay,
-} from "./floorPlaceholderMeshes.js";
+} from "./stairOpeningCollisionOverlay.js";
 export {
   applyStairRuntimeBlockerOverlay,
   applyStairRuntimeWalkSuppressMasks,
@@ -203,8 +203,14 @@ export {
   applyCabMaterialSlot,
   applyLandingFrameSlot,
   applyLandingGlassSlot,
+  applyStandardAuthoringSlot,
   parseAuthorColorHex,
+  stripArchitecturalDetailMaps,
 } from "./elevatorVisualMaterialUtils.js";
+export type { PbrMaterialConfig, StandardAuthoringSlot } from "./pbrMaterialConfig.js";
+export { ensurePbrKtx2Support } from "./pbrTextureSystem.js";
+export { textureCandidatesFromSpec } from "./pbrTexturePath.js";
+export { disposeMaterial, disposeTexture, disposeObject3D } from "./threeDispose.js";
 export {
   applyElevatorCabPartTransforms,
   buildElevatorCabCarVisual,

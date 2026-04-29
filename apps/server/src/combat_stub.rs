@@ -126,14 +126,20 @@ fn vertical_overlap(a_y: f32, a_h: f32, b_y: f32, b_h: f32) -> bool {
 
 /// Selected hotbar item `def_id` when the combat rail points at a melee weapon with authored
 /// catalog damage; otherwise `None`.
-pub fn active_hotbar_weapon_def_id(ctx: &ReducerContext, attacker: Identity) -> Option<String> {
+/// Selected hotbar `def_id` when a slot is active, ignoring catalog weapon-vs-consumable rules.
+pub fn active_hotbar_item_def_id(ctx: &ReducerContext, attacker: Identity) -> Option<String> {
     let row = ctx.db.player_active_hotbar().identity().find(&attacker)?;
     if row.slot_index == ACTIVE_HOTBAR_SLOT_CLEARED || row.slot_index >= NUM_PLAYER_HOTBAR_SLOTS {
         return None;
     }
     let item = find_item_in_hotbar_slot(ctx, attacker, row.slot_index)?;
-    if items_catalog::melee_damage(&item.def_id).unwrap_or(0.0) > 0.0 {
-        Some(item.def_id)
+    Some(item.def_id)
+}
+
+pub fn active_hotbar_weapon_def_id(ctx: &ReducerContext, attacker: Identity) -> Option<String> {
+    let def = active_hotbar_item_def_id(ctx, attacker)?;
+    if items_catalog::melee_damage(&def).unwrap_or(0.0) > 0.0 {
+        Some(def)
     } else {
         None
     }
@@ -202,11 +208,15 @@ pub fn resolve_melee_hit(
     attacker_z: f32,
     attacker_yaw: f32,
     weapon_def_id: &str,
+    reach_m: Option<f32>,
+    damage_override: Option<f32>,
 ) -> Option<MeleeResolvedHit> {
-    let damage = melee_damage_for_def_id(weapon_def_id);
+    let damage =
+        damage_override.unwrap_or_else(|| melee_damage_for_def_id(weapon_def_id));
     if damage <= 0.0 {
         return None;
     }
+    let reach = reach_m.unwrap_or(MELEE_REACH_M);
     let mut candidates = Vec::<PlayerBodySample>::new();
     for pose in ctx.db.player_pose().iter() {
         if pose.identity == attacker || player_vitals::is_player_dead(ctx, pose.identity) {
@@ -227,12 +237,12 @@ pub fn resolve_melee_hit(
     let mut nearby = Vec::<usize>::with_capacity(16);
     let mut seen = vec![false; candidates.len()];
     grid.gather_indices_in_bounds(
-        attacker_x - MELEE_REACH_M,
+        attacker_x - reach,
         attacker_y - 0.25,
-        attacker_z - MELEE_REACH_M,
-        attacker_x + MELEE_REACH_M,
+        attacker_z - reach,
+        attacker_x + reach,
         attacker_y + PLAYER_BODY_HEIGHT_STAND_M,
-        attacker_z + MELEE_REACH_M,
+        attacker_z + reach,
         &mut nearby,
         &mut seen,
     );
@@ -258,11 +268,11 @@ pub fn resolve_melee_hit(
         let dx = target.x - attacker_x;
         let dz = target.z - attacker_z;
         let dist = (dx * dx + dz * dz).sqrt();
-        if dist > MELEE_REACH_M + PLAYER_BODY_RADIUS_M + MELEE_HIT_RADIUS_M {
+        if dist > reach + PLAYER_BODY_RADIUS_M + MELEE_HIT_RADIUS_M {
             continue;
         }
         let forward = dx * forward_x + dz * forward_z;
-        if forward < 0.0 || forward > MELEE_REACH_M + PLAYER_BODY_RADIUS_M {
+        if forward < 0.0 || forward > reach + PLAYER_BODY_RADIUS_M {
             continue;
         }
         let dot = if dist > 1e-5 { forward / dist } else { 1.0 };

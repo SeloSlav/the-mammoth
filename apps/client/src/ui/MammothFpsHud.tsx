@@ -3,14 +3,14 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   getFpSessionDisplayedFps,
   subscribeFpSessionDisplayedFps,
-} from "../game/fpSessionFpsDisplay";
+} from "../game/fpSession/fpSessionFpsDisplay";
 import {
   subscribeFpPerf,
   computeFpPerfStats,
   exportFpPerfReport,
   getLastRendererInfo,
   type FpPerfStats,
-} from "../game/fpSessionPerfStore";
+} from "../game/fpSession/fpSessionPerfStore";
 import {
   THEME_CARD_BG,
   THEME_CARD_BORDER,

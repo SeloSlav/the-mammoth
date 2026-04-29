@@ -26,6 +26,49 @@ export const ApartmentDoor = __t.object("ApartmentDoor", {
 });
 export type ApartmentDoor = __Infer<typeof ApartmentDoor>;
 
+export const ApartmentDoorGameplay = __t.object("ApartmentDoorGameplay", {
+  rowKey: __t.string(),
+  doorHp: __t.f32(),
+  breached: __t.u8(),
+});
+export type ApartmentDoorGameplay = __Infer<typeof ApartmentDoorGameplay>;
+
+export const ApartmentUnit = __t.object("ApartmentUnit", {
+  unitKey: __t.string(),
+  floorDocId: __t.string(),
+  level: __t.u32(),
+  unitId: __t.string(),
+  state: __t.u8(),
+  owner: __t.option(__t.identity()),
+  claimProgressSecs: __t.f32(),
+  claimStartedBy: __t.option(__t.identity()),
+  lastClaimPulseMicros: __t.i64(),
+  reinforceProgressSecs: __t.f32(),
+  reinforceBy: __t.option(__t.identity()),
+  reinforced: __t.u8(),
+  bedX: __t.f32(),
+  bedY: __t.f32(),
+  bedZ: __t.f32(),
+  bedYaw: __t.f32(),
+  footX: __t.f32(),
+  footY: __t.f32(),
+  footZ: __t.f32(),
+  boundMinX: __t.f32(),
+  boundMaxX: __t.f32(),
+  boundMinZ: __t.f32(),
+  boundMaxZ: __t.f32(),
+  boundMinY: __t.f32(),
+  boundMaxY: __t.f32(),
+});
+export type ApartmentUnit = __Infer<typeof ApartmentUnit>;
+
+export const ChatMessage = __t.object("ChatMessage", {
+  id: __t.u64(),
+  body: __t.string(),
+  createdAt: __t.timestamp(),
+});
+export type ChatMessage = __Infer<typeof ChatMessage>;
+
 export const DroppedItem = __t.object("DroppedItem", {
   id: __t.u64(),
   defId: __t.string(),
@@ -70,6 +113,12 @@ export const ElevatorLandingDoor = __t.object("ElevatorLandingDoor", {
 });
 export type ElevatorLandingDoor = __Infer<typeof ElevatorLandingDoor>;
 
+export const FlashlightCharge = __t.object("FlashlightCharge", {
+  itemInstanceId: __t.u64(),
+  charge: __t.f32(),
+});
+export type FlashlightCharge = __Infer<typeof FlashlightCharge>;
+
 export const HotbarLocationData = __t.object("HotbarLocationData", {
   ownerId: __t.identity(),
   slotIndex: __t.u8(),
@@ -100,6 +149,9 @@ export const ItemLocation = __t.enum("ItemLocation", {
   get Hotbar() {
     return HotbarLocationData;
   },
+  get Stash() {
+    return StashLocationData;
+  },
   Unknown: __t.unit(),
 });
 export type ItemLocation = __Infer<typeof ItemLocation>;
@@ -115,6 +167,12 @@ export const PlayerActiveHotbar = __t.object("PlayerActiveHotbar", {
   slotIndex: __t.u8(),
 });
 export type PlayerActiveHotbar = __Infer<typeof PlayerActiveHotbar>;
+
+export const PlayerFirearmCooldown = __t.object("PlayerFirearmCooldown", {
+  identity: __t.identity(),
+  lastShotMicros: __t.i64(),
+});
+export type PlayerFirearmCooldown = __Infer<typeof PlayerFirearmCooldown>;
 
 export const PlayerFootCadence = __t.object("PlayerFootCadence", {
   identity: __t.identity(),
@@ -167,11 +225,28 @@ export const PlayerVitalsSchedule = __t.object("PlayerVitalsSchedule", {
 });
 export type PlayerVitalsSchedule = __Infer<typeof PlayerVitalsSchedule>;
 
+export const StashLocationData = __t.object("StashLocationData", {
+  ownerIdentity: __t.identity(),
+  unitKey: __t.string(),
+  slotIndex: __t.u16(),
+});
+export type StashLocationData = __Infer<typeof StashLocationData>;
+
 export const User = __t.object("User", {
   identity: __t.identity(),
   username: __t.option(__t.string()),
 });
 export type User = __Infer<typeof User>;
+
+export const WorldLootPickup = __t.object("WorldLootPickup", {
+  id: __t.u64(),
+  defId: __t.string(),
+  quantity: __t.u32(),
+  x: __t.f32(),
+  y: __t.f32(),
+  z: __t.f32(),
+});
+export type WorldLootPickup = __Infer<typeof WorldLootPickup>;
 
 export const WorldSoundEvent = __t.object("WorldSoundEvent", {
   id: __t.u64(),

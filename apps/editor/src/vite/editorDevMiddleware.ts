@@ -27,7 +27,7 @@ import {
   EDITOR_FLOORS_DIR,
   EDITOR_INTERIORS_DIR,
   EDITOR_PREFABS_DIR,
-} from "../editor/editorContentDiscovery.js";
+} from "../editor/content/editorContentDiscovery.js";
 import {
   collisionArtifactsStampPath,
   computeWorldCollisionSourceFingerprint,
@@ -50,7 +50,7 @@ const PREFAB_DOC_ID_RE = /^[a-z][a-z0-9_]*$/;
 const FLOOR_OVERRIDE_DOC_ID_RE = /^[a-z][a-z0-9_]*(?:__L\d+)?$/;
 const BUILDING_FILENAME = "mammoth.json";
 const WEAPON_STEM_RE = /^[a-z][a-z0-9_]*$/;
-const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
+const MATERIAL_TEXTURE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg", ".ktx2"]);
 
 export type EditorDevMiddlewareOptions = {
   /** Vite `config.base` (e.g. `/` or `/app/`); pathname is stripped before routing. */
@@ -101,6 +101,7 @@ function contentTypeForPath(filePath: string): string {
   if (ext === ".png") return "image/png";
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
+  if (ext === ".ktx2") return "image/ktx2";
   if (ext === ".json") return "application/json";
   return "application/octet-stream";
 }

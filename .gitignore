@@ -36,3 +36,7 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Generated client assets (Copied from node_modules/three on install/build — see sync-basis-transcoder)
+/apps/client/public/basis/*
+!/apps/client/public/basis/README.txt

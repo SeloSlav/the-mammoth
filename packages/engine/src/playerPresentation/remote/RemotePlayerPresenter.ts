@@ -158,15 +158,6 @@ class AnimatedRemotePlayerBody {
     this.root.visible = visible;
   }
 
-  collapseHeadForMirrorSelf(): void {
-    for (const name of ["Head", "headfront", "head_end"]) {
-      const node = this.modelRoot.getObjectByName(name);
-      if (!node) continue;
-      node.scale.setScalar(0.001);
-      node.updateMatrixWorld(true);
-    }
-  }
-
   syncTransform(position: { x: number; y: number; z: number }, yawRad: number): void {
     this.root.position.set(position.x, position.y, position.z);
     this.root.rotation.y = yawRad + REMOTE_PLAYER_YAW_OFFSET_RAD;
@@ -240,10 +231,6 @@ class WorldPlayerBodyPresenter {
     this.body.setVisible(visible);
   }
 
-  collapseHeadForMirrorSelf(): void {
-    this.body.collapseHeadForMirrorSelf();
-  }
-
   dispose(scene: THREE.Scene): void {
     scene.remove(this.root);
     this.body.dispose();
@@ -286,7 +273,6 @@ export class LocalMirrorPlayerPresenter {
     this.presenter = new WorldPlayerBodyPresenter(scene);
     this.root = this.presenter.root;
     this.presenter.setVisible(false);
-    this.presenter.collapseHeadForMirrorSelf();
   }
 
   updateFromLocalState(state: LocalPlayerGameplayState, dt: number): void {

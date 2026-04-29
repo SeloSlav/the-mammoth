@@ -31,6 +31,7 @@ export function LoginGate({ session }: Props) {
     errorMsg,
     submitUsername,
     startPasswordSignIn,
+    startGuestPlay,
     signOut,
   } = session;
   const [nameInput, setNameInput] = useState("");
@@ -53,7 +54,8 @@ export function LoginGate({ session }: Props) {
         <div style={cardStyle}>
           <h1 style={titleStyle}>The Mammoth</h1>
           <p style={{ lineHeight: 1.5, color: THEME_TEXT_MUTED }}>
-            Sign in with your account (email and password) to continue.
+            Sign in to keep your apartment and stash across visits, or play as a guest without an
+            account (your character is tied to this browser until you sign out).
           </p>
           {errorMsg ? <p style={{ color: THEME_ERROR, marginTop: 12 }}>{errorMsg}</p> : null}
           <button
@@ -70,6 +72,26 @@ export function LoginGate({ session }: Props) {
             }}
           >
             {busy ? "Redirecting…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            style={{
+              ...buttonStyle,
+              marginTop: 10,
+              background: THEME_SECONDARY_BG,
+              color: THEME_SECONDARY_TEXT,
+            }}
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              try {
+                startGuestPlay();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Play as guest
           </button>
         </div>
       </div>

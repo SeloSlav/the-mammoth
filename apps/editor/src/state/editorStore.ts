@@ -20,18 +20,25 @@ import {
   type StairWellDef,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
-import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
+import type { FpAuthorWeaponId } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
 import {
   FP_AUTHORABLE_CONSUMABLE_IDS,
   type FpAuthorConsumableId,
-} from "../editor/consumablePresentationDiskSave.js";
-import type { EditorContentIndex } from "../editor/editorContentDiscovery.js";
+} from "../editor/fpAuthoring/consumablePresentationDiskSave.js";
 import {
   beginEditorTransactionGroup,
   cloneHistorySlice,
   commitEditorTransactionGroup,
   maybePushHistory,
 } from "./editorStoreHistory.js";
+import {
+  DEFAULT_APARTMENT_KIT_DEF,
+  DEFAULT_BUILDING,
+  DEFAULT_ELEVATOR_CAB_DEF,
+  DEFAULT_LANDING_KIT_DEF,
+  DEFAULT_STAIR_WELL_DEF,
+  EMPTY_CONTENT_INDEX,
+} from "./editorStoreSeedValues.js";
 import type {
   EditorCameraMode,
   EditorMode,
@@ -41,7 +48,10 @@ import type {
   LandingDocKind,
   LandingKitVariant,
 } from "./editorStoreTypes.js";
-import { landingDocKindToMode, workspaceToInitialMode } from "./editorWorkspaceMap.js";
+import {
+  landingDocKindToMode,
+  workspaceToInitialMode,
+} from "./editorWorkspaceMap.js";
 
 export type {
   EditorCameraMode,
@@ -57,7 +67,7 @@ export type {
   LandingKitVariant,
   TransformMode,
 } from "./editorStoreTypes.js";
-export type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
+export type { FpAuthorConsumableId } from "../editor/fpAuthoring/consumablePresentationDiskSave.js";
 
 /**
  * Dev-only: set to any {@link FpAuthorWeaponId} (`ALL_WEAPON_DEFINITIONS` in engine) so the editor
@@ -70,51 +80,11 @@ const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 /** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
 export const FP_AUTHOR_PREFERRED_TARGET_ID = "weaponRoot";
 
-const EMPTY_CONTENT_INDEX: EditorContentIndex = {
-  buildingPath: "building/mammoth.json",
-  floorDocIds: [],
-  interiorDocIds: [],
-  cellDocIds: [],
-  prefabDefIds: [],
-  floorOverrideDocIds: [],
-  elevatorCabRelPath: "elevator/cab.json",
-  landingKitRelPath: "elevator/landing_kit.json",
-  apartmentKitRelPath: "door/apartment_unit_kit.json",
-  stairWellRelPath: "elevator/stairwell.json",
-  materialTextureUrls: [],
-};
-
-const DEFAULT_ELEVATOR_CAB_DEF = ElevatorCabDefSchema.parse({
-  id: "default_elevator_cab",
-  version: 1,
-});
-const DEFAULT_LANDING_KIT_DEF = LandingKitDefSchema.parse({
-  id: "default_landing_kit",
-  version: 1,
-});
-/**
- * Pre-parsed default for the apartment-unit door kit — used until bootstrap loads
- * `content/door/apartment_unit_kit.json`. Mirrors the on-disk shape so the editor renders a
- * solid panel out of the box when the variant is toggled to `"apartment"`.
- */
-const DEFAULT_APARTMENT_KIT_DEF = LandingKitDefSchema.parse({
-  id: "default_apartment_unit_kit",
-  version: 1,
-  displayName: "Apartment unit door kit",
-  solid: true,
-  panelWidthM: 1.18,
-  panelHeightM: 2.0,
-});
-const DEFAULT_STAIR_WELL_DEF = StairWellDefSchema.parse({
-  id: "default_stair_well",
-  version: 1,
-});
-
 export const useEditorStore = create<EditorState>((set, get) => ({
   workspace: "stairwell",
   landingDocKind: "kit",
   mode: "stairwell_preview",
-  building: BuildingDocSchema.parse({ id: "mammoth_main", version: 1, floorRefs: [] }),
+  building: DEFAULT_BUILDING,
   floorDocs: {},
   interiorDocs: {},
   cellDocs: {},
@@ -220,21 +190,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setMode: (mode) =>
     set((s) => {
       if (s.mode === mode) return { mode };
-      const isFpMode = (m: typeof mode) => m === "fp_viewmodel" || m === "fp_consumable";
+      const isFpMode = (m: typeof mode) =>
+        m === "fp_viewmodel" || m === "fp_consumable";
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       /** Entering/leaving FP must not rebuild; leaving FP must rebuild so floor/interior mesh matches mode. */
       const bumpEpoch = !touchesFp || exitFp;
       return {
         mode,
-        ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(bumpEpoch
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     }),
 
   setWorkspace: (workspace: EditorWorkspace) =>
     set((s) => {
       const mode = workspaceToInitialMode(workspace, s.landingDocKind);
-      const isFpMode = (m: EditorMode) => m === "fp_viewmodel" || m === "fp_consumable";
+      const isFpMode = (m: EditorMode) =>
+        m === "fp_viewmodel" || m === "fp_consumable";
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       const bumpEpoch = !touchesFp || exitFp;
@@ -243,7 +217,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         workspace,
         mode,
         cameraMode,
-        ...(bumpEpoch ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(bumpEpoch
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     }),
 
@@ -251,7 +227,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       if (s.landingDocKind === landingDocKind) return { landingDocKind };
       const mode =
-        s.workspace === "landing" ? landingDocKindToMode(landingDocKind) : s.mode;
+        s.workspace === "landing"
+          ? landingDocKindToMode(landingDocKind)
+          : s.mode;
       return {
         landingDocKind,
         mode,
@@ -285,7 +263,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         elevatorCabDef: next,
         dirty: true,
-        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(needsRebuild
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     });
   },
@@ -304,7 +284,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         landingKitDef: next,
         dirty: true,
-        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(needsRebuild
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     });
   },
@@ -314,9 +296,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const prev = s.stairWellDef;
       const next = fn(prev);
       const entryOpeningChanged =
-        JSON.stringify(next.entryOpening) !== JSON.stringify(prev.entryOpening) ||
-        JSON.stringify(next.groundEntryOpening) !== JSON.stringify(prev.groundEntryOpening) ||
-        JSON.stringify(next.secondaryEntryOpening) !== JSON.stringify(prev.secondaryEntryOpening);
+        JSON.stringify(next.entryOpening) !==
+          JSON.stringify(prev.entryOpening) ||
+        JSON.stringify(next.groundEntryOpening) !==
+          JSON.stringify(prev.groundEntryOpening) ||
+        JSON.stringify(next.secondaryEntryOpening) !==
+          JSON.stringify(prev.secondaryEntryOpening);
       const needsRebuild =
         next.id !== prev.id ||
         next.version !== prev.version ||
@@ -325,7 +310,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         stairWellDef: next,
         dirty: true,
-        ...(needsRebuild ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+        ...(needsRebuild
+          ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+          : {}),
       };
     });
   },
@@ -381,13 +368,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) =>
       s.activeCellDocId === activeCellDocId
         ? { activeCellDocId }
-        : { activeCellDocId, contentStructureEpoch: s.contentStructureEpoch + 1 },
+        : {
+            activeCellDocId,
+            contentStructureEpoch: s.contentStructureEpoch + 1,
+          },
     ),
   setActivePrefabDefId: (activePrefabDefId) =>
     set((s) =>
       s.activePrefabDefId === activePrefabDefId
         ? { activePrefabDefId }
-        : { activePrefabDefId, contentStructureEpoch: s.contentStructureEpoch + 1 },
+        : {
+            activePrefabDefId,
+            contentStructureEpoch: s.contentStructureEpoch + 1,
+          },
     ),
   setActiveFloorOverrideDocId: (activeFloorOverrideDocId) =>
     set((s) =>
@@ -398,10 +391,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             contentStructureEpoch: s.contentStructureEpoch + 1,
           },
     ),
-  setFocusedStoryLevelIndex: (focusedStoryLevelIndex) => set({ focusedStoryLevelIndex }),
+  setFocusedStoryLevelIndex: (focusedStoryLevelIndex) =>
+    set({ focusedStoryLevelIndex }),
   setSelectedId: (selectedId) => set({ selectedId }),
   setDirty: (dirty) => set({ dirty }),
-  setCollisionArtifactsStatus: (collisionArtifactsStatus) => set({ collisionArtifactsStatus }),
+  setCollisionArtifactsStatus: (collisionArtifactsStatus) =>
+    set({ collisionArtifactsStatus }),
   setTransformMode: (transformMode) => set({ transformMode }),
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
   setShadowsEnabled: (shadowsEnabled) => set({ shadowsEnabled }),
@@ -411,7 +406,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,
-      ...(s.mode === "stairwell_preview" ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      ...(s.mode === "stairwell_preview"
+        ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
+        : {}),
       ...((stairWellAuthorScope === "ground" &&
         (s.selectedId === "stair_landing_lower" ||
           s.selectedId === "stair_corner_landing" ||
@@ -467,17 +464,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         s.fpAuthorPickList.length === next.length &&
         next.every(
           (p, i) =>
-            p.id === s.fpAuthorPickList[i]?.id && p.label === s.fpAuthorPickList[i]?.label,
+            p.id === s.fpAuthorPickList[i]?.id &&
+            p.label === s.fpAuthorPickList[i]?.label,
         );
       if (same) return {};
       let fpAuthorTargetId = s.fpAuthorTargetId;
       if (next.length > 0 && !next.some((p) => p.id === fpAuthorTargetId)) {
         fpAuthorTargetId =
-          next.find((p) => p.id === FP_AUTHOR_PREFERRED_TARGET_ID)?.id ?? next[0]!.id;
+          next.find((p) => p.id === FP_AUTHOR_PREFERRED_TARGET_ID)?.id ??
+          next[0]!.id;
       }
       return {
         fpAuthorPickList: [...next],
-        ...(fpAuthorTargetId !== s.fpAuthorTargetId ? { fpAuthorTargetId } : {}),
+        ...(fpAuthorTargetId !== s.fpAuthorTargetId
+          ? { fpAuthorTargetId }
+          : {}),
       };
     }),
 
@@ -515,9 +516,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateInteriorPlacement: (interiorDocId, entityId, patch) => {
     maybePushHistory(get, set);
     const structural =
-      "prefabId" in patch ||
-      "assetId" in patch ||
-      "overrides" in patch;
+      "prefabId" in patch || "assetId" in patch || "overrides" in patch;
     set((s) => {
       const cur = s.interiorDocs[interiorDocId];
       if (!cur) return s;
@@ -540,9 +539,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateCellPlacement: (cellDocId, entityId, patch) => {
     maybePushHistory(get, set);
     const structural =
-      "prefabId" in patch ||
-      "assetId" in patch ||
-      "overrides" in patch;
+      "prefabId" in patch || "assetId" in patch || "overrides" in patch;
     set((s) => {
       const cur = s.cellDocs[cellDocId];
       if (!cur) return s;
@@ -580,11 +577,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => {
       const cur = s.floorOverrideDocs[overrideDocId];
       if (!cur) return s;
-      const existing = cur.objectPatches.find((row) => row.targetObjectId === targetObjectId);
+      const existing = cur.objectPatches.find(
+        (row) => row.targetObjectId === targetObjectId,
+      );
       const nextPatch = { ...(existing?.patch ?? {}), ...patch };
       const objectPatches = existing
         ? cur.objectPatches.map((row) =>
-            row.targetObjectId === targetObjectId ? { ...row, patch: nextPatch } : row,
+            row.targetObjectId === targetObjectId
+              ? { ...row, patch: nextPatch }
+              : row,
           )
         : [...cur.objectPatches, { targetObjectId, patch: nextPatch }];
       return {
@@ -972,79 +973,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })),
 }));
 
-export function collectPrefabIdsFromFloors(floorDocs: Record<string, FloorDoc>): string[] {
-  const s = new Set<string>();
-  for (const d of Object.values(floorDocs)) {
-    for (const o of d.objects) s.add(o.prefabId);
-  }
-  return [...s].sort();
-}
-
-export function collectPrefabIdsFromInteriors(
-  interiorDocs: Record<string, InteriorDoc>,
-): string[] {
-  const s = new Set<string>();
-  for (const d of Object.values(interiorDocs)) {
-    for (const p of d.placements) {
-      if (p.prefabId) s.add(p.prefabId);
-    }
-  }
-  return [...s].sort();
-}
-
-export function collectPrefabIdsFromCells(cellDocs: Record<string, CellDoc>): string[] {
-  const s = new Set<string>();
-  for (const d of Object.values(cellDocs)) {
-    for (const p of d.placements) {
-      if (p.prefabId) s.add(p.prefabId);
-    }
-  }
-  return [...s].sort();
-}
-
-export function collectPrefabIdsFromPrefabDefs(prefabDefs: Record<string, PrefabDef>): string[] {
-  const s = new Set<string>();
-  for (const d of Object.values(prefabDefs)) {
-    s.add(d.id);
-    for (const c of d.components) {
-      if (c.prefabId) s.add(c.prefabId);
-    }
-  }
-  return [...s].sort();
-}
-
-export function serializeFloorDocPretty(doc: FloorDoc): string {
-  return `${JSON.stringify(FloorDocSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeInteriorDocPretty(doc: InteriorDoc): string {
-  return `${JSON.stringify(InteriorDocSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeCellDocPretty(doc: CellDoc): string {
-  return `${JSON.stringify(CellDocSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializePrefabDefPretty(doc: PrefabDef): string {
-  return `${JSON.stringify(PrefabDefSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeFloorOverrideDocPretty(doc: FloorOverrideDoc): string {
-  return `${JSON.stringify(FloorOverrideDocSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeBuildingDocPretty(doc: BuildingDoc): string {
-  return `${JSON.stringify(BuildingDocSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeElevatorCabDefPretty(doc: ElevatorCabDef): string {
-  return `${JSON.stringify(ElevatorCabDefSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeLandingKitDefPretty(doc: LandingKitDef): string {
-  return `${JSON.stringify(LandingKitDefSchema.parse(doc), null, 2)}\n`;
-}
-
-export function serializeStairWellDefPretty(doc: StairWellDef): string {
-  return `${JSON.stringify(StairWellDefSchema.parse(doc), null, 2)}\n`;
-}
+export {
+  collectPrefabIdsFromCells,
+  collectPrefabIdsFromFloors,
+  collectPrefabIdsFromInteriors,
+  collectPrefabIdsFromPrefabDefs,
+} from "./editorStoreCollectPrefabIds.js";
+export {
+  serializeBuildingDocPretty,
+  serializeCellDocPretty,
+  serializeElevatorCabDefPretty,
+  serializeFloorDocPretty,
+  serializeFloorOverrideDocPretty,
+  serializeInteriorDocPretty,
+  serializeLandingKitDefPretty,
+  serializePrefabDefPretty,
+  serializeStairWellDefPretty,
+} from "./editorStoreDocSerialize.js";

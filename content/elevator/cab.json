@@ -6,7 +6,7 @@
     "wall": {
       "colorHex": "0xffffff",
       "roughness": 0.78,
-      "metalness": 0.12,
+      "metalness": 0,
       "mapUrl": "/static/materials/elevator-cab-wall/basecolor.png",
       "normalMapUrl": "/static/materials/elevator-cab-wall/normal.png",
       "roughnessMapUrl": "/static/materials/elevator-cab-wall/roughness.png"
@@ -30,7 +30,7 @@
     "ceiling": {
       "colorHex": "0xffffff",
       "roughness": 0.78,
-      "metalness": 0.12,
+      "metalness": 0,
       "mapUrl": "/static/materials/elevator-cab-ceiling/basecolor.png",
       "normalMapUrl": "/static/materials/elevator-cab-ceiling/normal.png",
       "roughnessMapUrl": "/static/materials/elevator-cab-ceiling/roughness.png"

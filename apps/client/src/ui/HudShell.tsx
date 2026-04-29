@@ -1,14 +1,17 @@
 import { useSyncExternalStore } from "react";
 import type { DbConnection } from "../module_bindings";
+import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpInteraction/fpPickupPrompt";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
-} from "../game/fpSessionGameUiHidden";
+} from "../game/fpSession/fpSessionGameUiHidden";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
+import { MammothStashHud } from "../inventory/MammothStashHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
 import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
+import { MammothChatHud } from "./MammothChatHud";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
 
@@ -24,6 +27,15 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
     subscribeFpSessionGameUiHidden,
     getFpSessionGameUiHidden,
     getFpSessionGameUiHidden,
+  );
+
+  const stashUnitKey = useSyncExternalStore(
+    subscribeFpPickupPrompt,
+    () => {
+      const p = getFpPickupPrompt();
+      return p?.kind === "apartment_stash" ? p.unitKey : null;
+    },
+    () => null,
   );
 
   return (
@@ -75,6 +87,8 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud />
         <MammothPickupPromptHud />
+        {conn && stashUnitKey ? <MammothStashHud conn={conn} unitKey={stashUnitKey} /> : null}
+        {conn ? <MammothChatHud conn={conn} /> : null}
         <MammothElevatorHud />
         <MammothFpReticule />
       </div>

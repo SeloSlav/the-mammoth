@@ -4,7 +4,9 @@
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::auth;
-use crate::inventory::{get_player_item, remove_player_item_quantity, try_grant_stack_to_player};
+use crate::inventory::{
+    get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
+};
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
@@ -191,12 +193,59 @@ fn pickup_dropped_item_inner(
     try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
     world_sound::emit_item_pickup_at(ctx, px, py, pz, sender);
     ctx.db.dropped_item().id().delete(dropped_item_id);
-    log::info!(
-        "pickup_dropped_item: {:?} picked up {}×{} (id {})",
+    log::info!("pickup_dropped_item: {:?} picked up {}×{} (id {})",
         sender,
         qty,
         def_id,
         dropped_item_id
     );
     Ok(())
+}
+
+/// Death: spill carried inventory/hotbar (not apartment stash rows).
+pub(crate) fn scatter_carrier_inventory_at_death(ctx: &ReducerContext, victim: Identity) {
+    use crate::inventory_models::ItemLocation;
+
+    let Some(pose) = ctx.db.player_pose().identity().find(&victim) else {
+        return;
+    };
+    let mut idx = 0u32;
+    let rows: Vec<(u64, String, u32)> = ctx
+        .db
+        .inventory_item()
+        .iter()
+        .filter_map(|r| {
+            let carrier = match &r.location {
+                ItemLocation::Inventory(d) if d.owner_id == victim => true,
+                ItemLocation::Hotbar(d) if d.owner_id == victim => true,
+                _ => false,
+            };
+            if carrier {
+                Some((r.instance_id, r.def_id.clone(), r.quantity))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let inv_tbl = ctx.db.inventory_item();
+
+    for (instance_id, def_id, qty) in rows {
+        let jitter = ((idx % 9) as f32) * 0.11 - 0.44;
+        idx += 1;
+        let (fx, fz) = forward_from_yaw(pose.yaw);
+        let x = pose.x + fx * (0.45 + jitter * 0.15) + (idx as f32 * 0.02);
+        let z = pose.z + fz * (0.45 + jitter * 0.15);
+        let y = pose.y + DROP_Y_LIFT_M;
+        inv_tbl.instance_id().delete(instance_id);
+        let _ = ctx.db.dropped_item().insert(DroppedItem {
+            id: 0,
+            def_id,
+            quantity: qty,
+            x,
+            y,
+            z,
+            yaw: pose.yaw,
+            created_at: ctx.timestamp,
+        });
+    }
 }

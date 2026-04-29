@@ -5,12 +5,13 @@ import {
   type StandardAuthoringSlot,
 } from "./elevatorVisualMaterialUtils.js";
 
+// Default materials use basecolor + normal + roughness. Height/metal textures are opt-in only (see PbrMaterialConfig).
+
 /**
- * Hard toggle (no UI): when `true`, drops **normal maps** from shared shell PBR used on merged
- * corridor/slab/ceiling/cladding meshes — one fewer texture sample in `MeshStandardMaterial`.
- * Flip here while profiling; defaults to full PBR.
+ * Hard toggle (no UI): when `true`, drops **normal maps** from merged shell PBR (saves one fetch).
+ * Keep `false` so concrete/plaster read with tangent detail; profile if needed.
  */
-export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = true;
+export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = false;
 
 /**
  * Tiled shell PBR: default renderer anisotropy (often 16×) scales texture fetches at grazing
@@ -19,7 +20,7 @@ export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = true;
 const BUILDING_SHELL_TEXTURE_ANISOTROPY = 1;
 
 function applyShellTextureAnisotropy(mat: THREE.MeshStandardMaterial): void {
-  for (const key of ["map", "normalMap", "roughnessMap", "bumpMap"] as const) {
+  for (const key of ["map", "normalMap", "roughnessMap", "bumpMap", "aoMap"] as const) {
     const t = mat[key];
     if (t instanceof THREE.Texture) t.anisotropy = BUILDING_SHELL_TEXTURE_ANISOTROPY;
   }
@@ -163,6 +164,7 @@ const concreteSurfaceTextures = createConcreteSurfaceTextures();
 
 /** PBR sheet flooring for **upper-storey** corridor shells only (`matsFor` uses this when level > 1). */
 const CORRIDOR_HALL_FLOOR_AUTHORING: StandardAuthoringSlot = {
+  name: "corridor-hall-vinyl-upper",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/corridor-hall-vinyl/basecolor.png",
@@ -174,10 +176,10 @@ const corridorHallFloorMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, CORRIDOR_HALL_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   /** Shell floor top UVs use ~2.75 m per UV unit; low repeat stretches the sheet (~8.5 m/cycle at 0.32). */
   const rep = 0.32;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -195,6 +197,7 @@ const corridorHallFloorMaterial = (() => {
 
 /** PBR for indoor cast-concrete floors (shells, units, cores, plate slab, stair/elev pit slabs — not upper corridor vinyl). */
 const CONCRETE_INTERIOR_FLOOR_AUTHORING: StandardAuthoringSlot = {
+  name: "concrete-floor-interior-shell",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/concrete-floor-interior/basecolor.png",
@@ -206,10 +209,10 @@ export const interiorConcreteFloorShellMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, CONCRETE_INTERIOR_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   const rep = 0.3;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
@@ -226,6 +229,7 @@ export const interiorConcreteFloorShellMaterial = (() => {
 
 /** PBR tile set for building shell faces on the exterior (cladding only — interior walls stay procedural). */
 const CONCRETE_EXTERIOR_WALL_AUTHORING: StandardAuthoringSlot = {
+  name: "concrete-exterior-wall",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/concrete-exterior/basecolor.png",
@@ -237,10 +241,10 @@ export const exteriorConcreteWallMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, CONCRETE_EXTERIOR_WALL_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   /** Shell cladding UVs are ~2.75 m per UV unit (`wallWithDoorCutout`); low repeat stretches the sheet
    *  so large-scale concrete reads believable on long walls (~14 m per full texture cycle at 0.2). */
   const rep = 0.2;
@@ -262,6 +266,7 @@ export const exteriorConcreteWallMaterial = (() => {
  * Clone via {@link elevatorLandingDoorFrameMaterial} in {@link createSwingDoorMaterials}; apartment kits override maps in JSON.
  */
 export const elevatorLandingDoorFrameAuthoring: StandardAuthoringSlot = {
+  name: "elevator-hoistway-exterior-frame",
   roughness: 1,
   metalness: 0.1,
   mapUrl: "/static/materials/elevator-hoistway-exterior/basecolor.png",
@@ -274,7 +279,7 @@ export const elevatorLandingDoorFrameMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, elevatorLandingDoorFrameAuthoring);
   /** Door rails/stiles are ~0.05–2 m faces — slightly tighter repeat than shaft cladding so grain reads at arm's length. */
@@ -293,6 +298,7 @@ export const elevatorLandingDoorFrameMaterial = (() => {
 
 /** PBR for corridor / lobby **interior** perimeter walls: ground plate and upper corridors beside units. */
 const GROUND_LEVEL_CORRIDOR_WALL_AUTHORING: StandardAuthoringSlot = {
+  name: "ground-level-corridor-interior-wall",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/ground-level-interior-wall/basecolor.png",
@@ -304,10 +310,10 @@ export const groundLevelCorridorInteriorWallMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, GROUND_LEVEL_CORRIDOR_WALL_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   /** Match shell wall planar UV scale (~2.75 m/tile); similar repeat to interior floor vinyl. */
   const rep = 0.3;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -325,6 +331,7 @@ export const groundLevelCorridorInteriorWallMaterial = (() => {
 
 /** PBR ceiling for corridor shells: ground storey and upper corridors with unit entry door cuts. */
 const BUILDING_CORRIDOR_CEILING_AUTHORING: StandardAuthoringSlot = {
+  name: "building-corridor-ceiling",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/building-ceiling/basecolor.png",
@@ -336,11 +343,11 @@ export const buildingCorridorCeilingMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
     side: THREE.DoubleSide,
   });
   applyStandardAuthoringSlot(m, BUILDING_CORRIDOR_CEILING_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   /** Shell ceilings use {@link applyShellFloorPlanarTopUV} (~2.75 m/UV); same repeat band as corridor vinyl. */
   const rep = 0.32;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
@@ -358,7 +365,8 @@ export const buildingCorridorCeilingMaterial = (() => {
 
 /** PBR for apartment **unit** interior shells: walls + ceiling only (`matsFor("unit")`). */
 const APARTMENT_UNIT_INTERIOR_WALL_CEILING_AUTHORING: StandardAuthoringSlot = {
-  /** Matte plaster — no `roughnessMapUrl`: authored packs often ship a dark grain sheet that reads as exterior concrete under lighting. */
+  name: "apartment-unit-plaster-wall-ceiling",
+  /** Matte plaster — authored roughness scalar only (no roughness map). */
   roughness: 0.93,
   metalness: 0.02,
   mapUrl: "/static/materials/apartment-unit-interior/basecolor.png",
@@ -369,12 +377,11 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.93,
-    metalness: 1,
+    metalness: 0,
     side: THREE.DoubleSide,
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_INTERIOR_WALL_CEILING_AUTHORING);
-  m.roughnessMap = null;
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   const rep = 0.28;
   for (const key of ["map", "normalMap"] as const) {
     const t = m[key];
@@ -391,6 +398,7 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
 
 /** PBR parquet for apartment **unit** floors only (`matsFor("unit")` floor slot). */
 const APARTMENT_UNIT_FLOOR_AUTHORING: StandardAuthoringSlot = {
+  name: "apartment-unit-parquet-floor",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/apartment-unit-floor/basecolor.png",
@@ -402,10 +410,10 @@ const apartmentUnitFloorMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 1,
-    metalness: 1,
+    metalness: 0,
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_FLOOR_AUTHORING);
-  stripArchitecturalDetailMaps(m, { metalness: 0.02, stripRoughnessMap: true });
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   /** Parquet blocks are small — slightly higher repeat than slab concrete so planks read at room scale. */
   const rep = 0.42;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {

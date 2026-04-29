@@ -8,20 +8,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { DbConnection } from "../module_bindings";
-import { hotbarSlotHasInstantConsume } from "../game/fpHotbarActivate";
-import { runFpHotbarInstantConsume } from "../game/fpHotbarConsume";
-import { primeHotbarConsumeAudio } from "../game/hotbarConsumeLocalAudio";
-import { getHotbarSlotInventoryItem } from "../game/fpHotbarResolve";
+import { hotbarSlotHasInstantConsume } from "../game/fpHotbar/fpHotbarActivate";
+import { runFpHotbarInstantConsume } from "../game/fpHotbar/fpHotbarConsume";
+import { primeHotbarConsumeAudio } from "../game/fpHotbar/hotbarConsumeLocalAudio";
+import { getHotbarSlotInventoryItem } from "../game/fpHotbar/fpHotbarResolve";
 import {
   getHotbarInstantConsumeCooldownVersion,
   hotbarInstantConsumeCooldownProgress,
   subscribeHotbarInstantConsumeCooldown,
-} from "../game/fpHotbarInstantConsumeCooldown";
+} from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
-} from "../game/fpHotbarSelection";
+} from "../game/fpHotbar/fpHotbarSelection";
 import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "./mammothItemCatalog";
 import type {
   MammothDraggedItemInfo,

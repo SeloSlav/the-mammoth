@@ -4,36 +4,30 @@
   "materials": {
     "wall": {
       "roughness": 0.93,
-      "metalness": 1,
+      "metalness": 0.02,
       "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
       "normalMapUrl": "/static/materials/apartment-unit-interior/normal.png"
     },
     "floor": {
       "roughness": 1,
-      "metalness": 1,
+      "metalness": 0.02,
       "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
-      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png",
-      "metalnessMapUrl": "/static/materials/stairwell/patina-landing/metalness.png",
-      "bumpMapUrl": "/static/materials/stairwell/patina-landing/height.png"
+      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png"
     },
     "tread": {
       "roughness": 1,
-      "metalness": 1,
+      "metalness": 0.02,
       "mapUrl": "/static/materials/stairwell/patina-tread/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-tread/normal.png",
-      "roughnessMapUrl": "/static/materials/stairwell/patina-tread/roughness.png",
-      "metalnessMapUrl": "/static/materials/stairwell/patina-tread/metalness.png",
-      "bumpMapUrl": "/static/materials/stairwell/patina-tread/height.png"
+      "roughnessMapUrl": "/static/materials/stairwell/patina-tread/roughness.png"
     },
     "landing": {
       "roughness": 1,
-      "metalness": 1,
+      "metalness": 0.02,
       "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
-      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png",
-      "metalnessMapUrl": "/static/materials/stairwell/patina-landing/metalness.png",
-      "bumpMapUrl": "/static/materials/stairwell/patina-landing/height.png"
+      "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png"
     }
   },
   "partTransforms": {

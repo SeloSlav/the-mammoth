@@ -44,7 +44,27 @@ pub(super) fn player_item_count(ctx: &ReducerContext, owner: Identity) -> usize 
         .count()
 }
 
-fn find_item_in_inventory_slot(ctx: &ReducerContext, owner: Identity, slot: u16) -> Option<InventoryItem> {
+pub(crate) const NUM_STASH_SLOTS: u16 = 24;
+
+pub(crate) fn find_item_in_stash_slot(
+    ctx: &ReducerContext,
+    owner_identity: Identity,
+    unit_key: &str,
+    slot: u16,
+) -> Option<InventoryItem> {
+    ctx.db.inventory_item().iter().find(|i| {
+        matches!(
+            &i.location,
+            ItemLocation::Stash(s)
+                if s.owner_identity == owner_identity
+                    && s.unit_key == unit_key
+                    && s.slot_index == slot
+        )
+    })
+}
+
+/// Find hotbar/inventory stacks for merge targets (stash reducers, …).
+pub(crate) fn find_item_in_inventory_slot(ctx: &ReducerContext, owner: Identity, slot: u16) -> Option<InventoryItem> {
     ctx.db.inventory_item().iter().find(|i| {
         matches!(
             &i.location,
@@ -77,6 +97,7 @@ pub(crate) fn get_player_item(ctx: &ReducerContext, instance_id: u64) -> Result<
     let ok = match &row.location {
         ItemLocation::Inventory(d) => d.owner_id == sender,
         ItemLocation::Hotbar(d) => d.owner_id == sender,
+        ItemLocation::Stash(_) => false,
         ItemLocation::Unknown => false,
     };
     if !ok {
@@ -150,6 +171,7 @@ pub(crate) fn try_grant_stack_to_player(
         let owned = match &row.location {
             ItemLocation::Inventory(d) => d.owner_id == owner,
             ItemLocation::Hotbar(d) => d.owner_id == owner,
+            ItemLocation::Stash(_) => false,
             ItemLocation::Unknown => false,
         };
         if !owned || quantity == 0 {
@@ -268,8 +290,11 @@ pub(crate) fn move_between_player_slots(
                 return Err("bad hotbar slot".to_string());
             }
         }
+        ItemLocation::Stash(_) => {
+            return Err("stash transfers use dedicated reducers".to_string());
+        }
         ItemLocation::Unknown => return Err("invalid destination".to_string()),
-    }
+    };
 
     let mut item_to_move = get_player_item(ctx, item_instance_id)?;
     let max_stack = items_catalog::max_stack_for(&item_to_move.def_id)
@@ -280,7 +305,7 @@ pub(crate) fn move_between_player_slots(
     let target_opt = match &dest {
         ItemLocation::Inventory(d) => find_item_in_inventory_slot(ctx, sender, d.slot_index),
         ItemLocation::Hotbar(d) => find_item_in_hotbar_slot(ctx, sender, d.slot_index),
-        ItemLocation::Unknown => None,
+        ItemLocation::Stash(_) | ItemLocation::Unknown => None,
     };
 
     if let Some(target_item) = target_opt {

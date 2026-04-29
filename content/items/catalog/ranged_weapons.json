@@ -4,35 +4,30 @@
     {
       "id": "pistol",
       "displayName": "Sidearm",
-      "description": "Compact semi-auto frame. Gameplay presentation not wired; catalog + inventory id reserved.",
+      "description": "Compact semi-auto frame.",
       "category": "weapon",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 120,
-        "materials": [
-          { "itemId": "scrap_metal", "quantity": 18 },
-          { "itemId": "synthetic_polymer", "quantity": 8 },
-          { "itemId": "wire_spool", "quantity": 5 },
-          { "itemId": "chemical_reagent", "quantity": 2 }
-        ]
-      }
+      "maxStack": 1
     },
     {
       "id": "rifle",
       "displayName": "Rifle",
-      "description": "Long gun platform. Gameplay presentation not wired; catalog + inventory id reserved.",
+      "description": "Long gun platform.",
       "category": "weapon",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 180,
-        "materials": [
-          { "itemId": "scrap_metal", "quantity": 35 },
-          { "itemId": "synthetic_polymer", "quantity": 10 },
-          { "itemId": "wire_spool", "quantity": 6 },
-          { "itemId": "duct_tape", "quantity": 4 },
-          { "itemId": "chemical_reagent", "quantity": 3 }
-        ]
-      }
+      "maxStack": 1
+    },
+    {
+      "id": "rusty_pistol",
+      "displayName": "Rusty pistol",
+      "description": "Soviet-surplus squeaker. Uses loose 9mm from inventory stacks.",
+      "category": "weapon",
+      "maxStack": 1
+    },
+    {
+      "id": "shotgun_coach",
+      "displayName": "Coach shotgun",
+      "description": "Sawed barrel, heavy swing. Uses shotgun shells from inventory.",
+      "category": "weapon",
+      "maxStack": 1
     }
   ]
 }

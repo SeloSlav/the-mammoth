@@ -13,7 +13,7 @@ import {
   LANDING_DOOR_OPENING_PROXY_ID,
   resolveGlassOpening,
 } from "@the-mammoth/world";
-import { describeEditorSaveTarget } from "../editor/editorOwnershipResolve.js";
+import { describeEditorSaveTarget } from "../editor/placement/editorOwnershipResolve.js";
 import type {
   EditorState,
   EditorMode,

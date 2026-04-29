@@ -3,34 +3,33 @@ import type {
   ElevatorCabMaterialSlot,
   LandingKitMaterialSlot,
 } from "@the-mammoth/schemas";
+import {
+  PBR_DEFAULT_ROUGHNESS_SCALAR,
+  baseColorSpecFromConfig,
+  heightSpecFromConfig,
+  metalnessSpecFromConfig,
+  normalSpecFromConfig,
+  resolvePbrTextureRepeat,
+  roughnessSpecFromConfig,
+  type PbrMaterialConfig,
+  aoSpecFromConfig,
+} from "./pbrMaterialConfig.js";
+import { beginHydrateTextureFromSpec, loadTextureFromSpec } from "./pbrTextureSystem.js";
 
-/** Shared PBR fields for cab, stair, landing frame/glass (plus optional `transmission` on landing glass). */
-export type StandardAuthoringSlot = {
-  colorHex?: string;
-  roughness?: number;
-  metalness?: number;
-  mapUrl?: string;
-  normalMapUrl?: string;
-  roughnessMapUrl?: string;
-  metalnessMapUrl?: string;
-  bumpMapUrl?: string;
-};
+export type { PbrMaterialConfig };
+/** Legacy alias — same shape as {@link PbrMaterialConfig}. */
+export type StandardAuthoringSlot = PbrMaterialConfig;
 
-const authorColorMapCache = new Map<string, THREE.Texture>();
-const authorColorMapLoadInFlight = new Map<string, Promise<void>>();
-const authorDataMapCache = new Map<string, THREE.Texture>();
-const authorDataMapLoadInFlight = new Map<string, Promise<void>>();
-
-const authorTextureLoader = new THREE.TextureLoader();
+/** @deprecated Prefer {@link StandardAuthoringSlot} / {@link PbrMaterialConfig}. */
+export type ElevatorLikeAuthoringSlot = PbrMaterialConfig;
 
 function canLoadAuthorTextures(): boolean {
   return typeof document !== "undefined" && typeof Image !== "undefined";
 }
 
 /**
- * WebGPU: tiny `DataTexture` uploads go through `_copyBufferToTexture` / `queue.writeTexture`,
- * which can throw "Overload resolution failed" for 1×1 RGBA (layout / stride rules). Use a
- * small canvas-backed texture so the backend uses the image copy path until real maps load.
+ * WebGPU: tiny `DataTexture` uploads can fail for 1×1 layouts on some backends. Use canvas-backed
+ * placeholders until the real map resolves.
  */
 function makeAuthorMapPlaceholder(r: number, g: number, b: number, colorSpace: THREE.ColorSpace): THREE.Texture {
   const canvas = document.createElement("canvas");
@@ -43,8 +42,6 @@ function makeAuthorMapPlaceholder(r: number, g: number, b: number, colorSpace: T
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = colorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -52,94 +49,174 @@ function makeAuthorMapPlaceholder(r: number, g: number, b: number, colorSpace: T
   return tex;
 }
 
-function beginAuthorTextureLoad(
-  url: string,
-  tex: THREE.Texture,
-  colorSpace: THREE.ColorSpace,
-  inFlight: Map<string, Promise<void>>,
-): void {
-  if (inFlight.has(url)) return;
-  const pending = new Promise<void>((resolve) => {
-    authorTextureLoader.load(
-      url,
-      (loaded) => {
-        try {
-          tex.image = loaded.image;
-          tex.colorSpace = colorSpace;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
-          tex.generateMipmaps = true;
-          tex.minFilter = THREE.LinearMipmapLinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.needsUpdate = true;
-          loaded.dispose();
-        } finally {
-          resolve();
-        }
-      },
-      undefined,
-      () => resolve(),
-    );
-  }).finally(() => {
-    inFlight.delete(url);
-  });
-  inFlight.set(url, pending);
+/** Shared placeholders / resolved maps — one GPU texture shared across clones. */
+const authorColorMapCache = new Map<string, THREE.Texture>();
+const authorRoughnessResolved = new Map<string, THREE.Texture>();
+
+function resolveWrap(cfg: PbrMaterialConfig): {
+  wrapS: THREE.Texture["wrapS"];
+  wrapT: THREE.Texture["wrapT"];
+} {
+  const tiled = cfg.tiled !== false;
+  const w = (tiled ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping) as THREE.Texture["wrapS"];
+  return { wrapS: w, wrapT: w };
 }
 
-function loadAuthorColorMap(mapUrl: string | undefined): THREE.Texture | null {
-  const url = mapUrl?.trim();
-  if (!url || !canLoadAuthorTextures()) return null;
-  const cached = authorColorMapCache.get(url);
-  if (cached) return cached;
-  const tex = makeAuthorMapPlaceholder(255, 255, 255, THREE.SRGBColorSpace);
-  authorColorMapCache.set(url, tex);
-  beginAuthorTextureLoad(url, tex, THREE.SRGBColorSpace, authorColorMapLoadInFlight);
+function scalarRoughnessFromSlot(slot: PbrMaterialConfig): number {
+  if (slot.roughness != null) return slot.roughness;
+  if (slot.roughnessFallback != null) return slot.roughnessFallback;
+  return PBR_DEFAULT_ROUGHNESS_SCALAR;
+}
+
+function scalarMetalnessFromSlot(slot: PbrMaterialConfig): number {
+  return slot.metalness ?? 0;
+}
+
+async function acquireSharedRoughnessResolved(
+  spec: string,
+  wrapS: THREE.Texture["wrapS"],
+  wrapT: THREE.Texture["wrapT"],
+): Promise<THREE.Texture | null> {
+  const key = spec.trim();
+  const hit = authorRoughnessResolved.get(key);
+  if (hit) return hit;
+  const tex = await loadTextureFromSpec(spec, THREE.NoColorSpace, wrapS, wrapT);
+  if (tex) authorRoughnessResolved.set(key, tex);
   return tex;
 }
 
-function loadAuthorDataMap(mapUrl: string | undefined): THREE.Texture | null {
-  const url = mapUrl?.trim();
-  if (!url || !canLoadAuthorTextures()) return null;
-  const cached = authorDataMapCache.get(url);
-  if (cached) return cached;
-  /** Flat normal-ish placeholder until the real map arrives. */
-  const tex = makeAuthorMapPlaceholder(128, 128, 255, THREE.NoColorSpace);
-  authorDataMapCache.set(url, tex);
-  beginAuthorTextureLoad(url, tex, THREE.NoColorSpace, authorDataMapLoadInFlight);
-  return tex;
-}
-
+/**
+ * Applies PBR authoring: basecolor + optional normal + optional roughness + optional AO + opt-in metal/height maps.
+ *
+ * Missing optional maps leave the shader path empty (scalar fallbacks instead of placeholders).
+ *
+ * Legacy paths with explicit `.png`/`.jpg` filenames keep working.
+ */
 export function applyStandardAuthoringSlot(
   mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial,
-  slot: StandardAuthoringSlot | undefined,
+  slot: PbrMaterialConfig | undefined,
 ): void {
   if (!slot) return;
-  if (slot.roughness != null) mat.roughness = slot.roughness;
-  if (slot.metalness != null) mat.metalness = slot.metalness;
 
-  const map = loadAuthorColorMap(slot.mapUrl);
-  if (map) {
-    mat.color.setHex(slot.colorHex ? parseAuthorColorHex(slot.colorHex) : 0xffffff);
-    mat.map = map;
+  mat.metalness = scalarMetalnessFromSlot(slot);
+
+  const baseSpec = baseColorSpecFromConfig(slot);
+
+  /** Scalar roughness is always defined; multiplied with grayscale roughness maps when loaded. */
+  const roughSpec = roughnessSpecFromConfig(slot);
+  mat.roughness = scalarRoughnessFromSlot(slot);
+
+  const { wrapS, wrapT } = resolveWrap(slot);
+
+  if (slot.colorHex) mat.color.setHex(parseAuthorColorHex(slot.colorHex));
+
+  const useMetalTex = slot.useMetalnessMap === true;
+  const useBump = slot.useHeightMap === true;
+
+  mat.metalnessMap = null;
+  mat.bumpMap = null;
+  mat.bumpScale = 0;
+  mat.normalMap = null;
+  mat.roughnessMap = null;
+  mat.aoMap = null;
+  mat.aoMapIntensity = 1;
+
+  /** Albedo — keep shared cache when path present (heavy merged shells reuse one upload). */
+  if (baseSpec?.trim() && canLoadAuthorTextures()) {
+    const trimmed = baseSpec.trim();
+    let tex = authorColorMapCache.get(trimmed);
+    if (!tex) {
+      tex = makeAuthorMapPlaceholder(255, 255, 255, THREE.SRGBColorSpace);
+      tex.wrapS = wrapS;
+      tex.wrapT = wrapT;
+      tex.repeat.set(1, 1);
+      authorColorMapCache.set(trimmed, tex);
+      beginHydrateTextureFromSpec(tex, trimmed, THREE.SRGBColorSpace, wrapS, wrapT);
+    }
+    mat.map = tex;
   } else {
     mat.map = null;
-    if (slot.colorHex) mat.color.setHex(parseAuthorColorHex(slot.colorHex));
   }
 
-  mat.normalMap = loadAuthorDataMap(slot.normalMapUrl);
-  mat.roughnessMap = loadAuthorDataMap(slot.roughnessMapUrl);
-  mat.metalnessMap = loadAuthorDataMap(slot.metalnessMapUrl);
-  mat.bumpMap = loadAuthorDataMap(slot.bumpMapUrl);
+  /** Normal map — optional, no bogus placeholder tint. */
+  const nSpec = normalSpecFromConfig(slot);
+  if (nSpec?.trim()) {
+    void loadTextureFromSpec(nSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+      mat.normalMap = tex;
+      mat.needsUpdate = true;
+    });
+  }
+
+  /** Roughness — optional grayscale map baked per shell; shared GPU texture per URL stack. */
+  if (roughSpec?.trim()) {
+    void acquireSharedRoughnessResolved(roughSpec.trim(), wrapS, wrapT).then((tex) => {
+      mat.roughnessMap = tex;
+      mat.needsUpdate = true;
+    });
+  }
+
+  /** Ambient occlusion — uses UV2 where authors provide meshes with a second UV set. */
+  const aoSpec = aoSpecFromConfig(slot);
+  if (aoSpec?.trim()) {
+    void loadTextureFromSpec(aoSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+      mat.aoMap = tex;
+      mat.needsUpdate = true;
+    });
+  }
+
+  if (useMetalTex) {
+    const mSpec = metalnessSpecFromConfig(slot);
+    if (mSpec?.trim()) {
+      void loadTextureFromSpec(mSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+        mat.metalnessMap = tex;
+        mat.needsUpdate = true;
+      });
+    }
+  }
+
+  if (useBump) {
+    const hSpec = heightSpecFromConfig(slot);
+    if (hSpec?.trim()) {
+      void loadTextureFromSpec(hSpec.trim(), THREE.NoColorSpace, wrapS, wrapT).then((tex) => {
+        mat.bumpMap = tex;
+        mat.bumpScale = tex ? 0.02 : 0;
+        mat.needsUpdate = true;
+      });
+    }
+  }
+
+  const rep = resolvePbrTextureRepeat(slot);
+  /**
+   * When `textureRepeat` / `uvScale` set on authoring, apply after slot maps resolve.
+   * Callers usually override repeat per-shell from mesh UV norms — handled by follow-up traversal.
+   */
+  if (
+    slot.uvScale != null ||
+    slot.textureRepeat != null ||
+    slot.textureRepeatU != null ||
+    slot.textureRepeatV != null
+  ) {
+    for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "bumpMap"] as const) {
+      const t = mat[key];
+      if (t instanceof THREE.Texture) {
+        t.wrapS = wrapS;
+        t.wrapT = wrapT;
+        t.repeat.set(rep.u, rep.v);
+        t.needsUpdate = true;
+      }
+    }
+  }
 
   mat.needsUpdate = true;
 }
 
 /**
- * Architectural concrete / plaster / vinyl materials rarely need both tangent-space normal detail
- * and a separate height bump pass, and a metalness texture on these surfaces is usually noise
- * around an effectively constant non-metal value. Clear those maps to reduce fragment texture
- * fetches on the heaviest repeated surfaces. When `opts.stripRoughnessMap` is true, drops the
- * roughness map (one fewer fetch per fragment on huge merged shells).
+ * Architectural concrete / plaster / vinyl shells rarely benefit from separate height bumps and
+ * non-metal surfaces should not bind Patina noise metalness. Clears maps to lower fragment fetches on
+ * large merged meshes.
+ *
+ * Prefer omitting `{ metalnessMapUrl, bumpMapUrl }` in JSON so GPUs never allocate them — flags
+ * `useMetalnessMap` / `useHeightMap` also gate uploads.
  */
 export function stripArchitecturalDetailMaps(
   mat: THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial,
@@ -161,25 +238,16 @@ export function parseAuthorColorHex(hex: string): number {
   return Number.isFinite(v) ? v : 0xffffff;
 }
 
-export function applyCabMaterialSlot(
-  mat: THREE.MeshStandardMaterial,
-  slot: ElevatorCabMaterialSlot | undefined,
-): void {
-  applyStandardAuthoringSlot(mat, slot);
+export function applyCabMaterialSlot(mat: THREE.MeshStandardMaterial, slot: ElevatorCabMaterialSlot | undefined): void {
+  applyStandardAuthoringSlot(mat, slot as unknown as PbrMaterialConfig | undefined);
 }
 
-export function applyLandingFrameSlot(
-  mat: THREE.MeshStandardMaterial,
-  slot: LandingKitMaterialSlot | undefined,
-): void {
-  applyStandardAuthoringSlot(mat, slot);
+export function applyLandingFrameSlot(mat: THREE.MeshStandardMaterial, slot: LandingKitMaterialSlot | undefined): void {
+  applyStandardAuthoringSlot(mat, slot as unknown as PbrMaterialConfig | undefined);
 }
 
-export function applyLandingGlassSlot(
-  mat: THREE.MeshPhysicalMaterial,
-  slot: LandingKitMaterialSlot | undefined,
-): void {
-  applyStandardAuthoringSlot(mat, slot);
+export function applyLandingGlassSlot(mat: THREE.MeshPhysicalMaterial, slot: LandingKitMaterialSlot | undefined): void {
+  applyStandardAuthoringSlot(mat, slot as unknown as PbrMaterialConfig | undefined);
   if (!slot) return;
   if (slot.transmission != null) mat.transmission = slot.transmission;
 }

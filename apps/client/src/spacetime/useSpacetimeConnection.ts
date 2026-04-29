@@ -9,6 +9,7 @@ import type { DbConnection } from "../module_bindings";
 import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
+import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
 
 function isOidcCallbackPath(): boolean {
   const p = window.location.pathname;
@@ -28,7 +29,8 @@ function formatSpacetimeConnectError(err: unknown): string {
       "Most often: nothing is listening on the host/port above.",
       "1) Run `spacetime start` in a terminal and leave it running.",
       "2) Publish: `spacetime publish mammoth-local --project-path apps/server`",
-      "3) Configure the node to accept JWTs from your auth issuer (see apps/client/.env.example).",
+      "3) For Sign in: configure the node for your auth issuer JWKS (see apps/client/.env.example).",
+      "4) For guest play: the local node must allow anonymous WebSocket connections (default in local dev).",
     ].join("\n");
   }
   if (err && typeof err === "object" && "message" in err) {
@@ -45,21 +47,27 @@ export type SpacetimePhase =
   | "ready"
   | "error";
 
+export type ConnectionKind = "oidc" | "guest";
+
 export type SpacetimeSession = {
   phase: SpacetimePhase;
   conn: DbConnection | null;
   displayName: string | null;
   errorMsg: string | null;
+  /** How we connected — guest uses anonymous WS token persisted in localStorage. */
+  connectionKind: ConnectionKind | null;
   /** OpenAuth password flow (redirects away to `apps/auth`). */
   startPasswordSignIn: () => Promise<void>;
-  /** Clear OIDC session and disconnect from SpacetimeDB. */
+  /** Connect without OIDC — requires local node to accept anonymous connections. */
+  startGuestPlay: () => void;
+  /** Clear OIDC + guest WS token and disconnect from SpacetimeDB. */
   signOut: () => void;
   submitUsername: (raw: string) => Promise<void>;
 };
 
 /**
- * SpacetimeDB over OIDC: obtain a JWT from `apps/auth` (PKCE), then `withToken(jwt)` so the
- * node maps a stable identity from `sub` — no anonymous browser profiles.
+ * SpacetimeDB: either OIDC JWT from OpenAuth or anonymous `withToken(undefined)` guest flow.
+ * Guest identity is stable while the WebSocket token from `onConnect` is kept in localStorage.
  */
 export function useSpacetimeConnection(): SpacetimeSession {
   const [phase, setPhase] = useState<SpacetimePhase>(() => {
@@ -72,6 +80,10 @@ export function useSpacetimeConnection(): SpacetimeSession {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [connEpoch, setConnEpoch] = useState(0);
+  /** Set when connecting; `null` before first choice or after full sign-out. */
+  const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(() =>
+    typeof window !== "undefined" && readOidcAccessToken() ? "oidc" : null,
+  );
 
   const refreshRegistration = useCallback((c: DbConnection) => {
     const id = c.identity;
@@ -113,20 +125,38 @@ export function useSpacetimeConnection(): SpacetimeSession {
       if (!active) return;
 
       const jwt = readOidcAccessToken();
-      if (!jwt) {
+      if (jwt) {
+        setConnectionKind("oidc");
+      }
+
+      const kind = connectionKind ?? (jwt ? "oidc" : null);
+      if (!kind) {
         setConn(null);
         setPhase("needs_auth");
         return;
       }
+
+      if (kind === "oidc" && !jwt) {
+        setConn(null);
+        setPhase("needs_auth");
+        return;
+      }
+
+      const guestPersisted = readGuestConnectionToken();
+      const tokenForBuilder: string | undefined =
+        kind === "oidc" ? jwt! : guestPersisted ?? undefined;
 
       if (!active) return;
 
       connection = DbConnectionClass.builder()
         .withUri(spacetimeUri())
         .withDatabaseName(spacetimeDatabase())
-        .withToken(jwt)
-        .onConnect((cc) => {
+        .withToken(tokenForBuilder)
+        .onConnect((cc, _identity, wsToken) => {
           if (!active) return;
+          if (kind === "guest" && typeof wsToken === "string" && wsToken.length > 0) {
+            writeGuestConnectionToken(wsToken);
+          }
           setConn(cc);
           setErrorMsg(null);
           const bump = () => {
@@ -147,6 +177,15 @@ export function useSpacetimeConnection(): SpacetimeSession {
               "SELECT * FROM player_vitals",
               "SELECT * FROM elevator_car",
               "SELECT * FROM elevator_landing_door",
+              "SELECT * FROM apartment_unit",
+              "SELECT * FROM apartment_door",
+              "SELECT * FROM apartment_door_gameplay",
+              "SELECT * FROM chat_message",
+              "SELECT * FROM world_loot_pickup",
+              "SELECT * FROM flashlight_charge",
+              "SELECT * FROM dropped_item",
+              "SELECT * FROM player_pose",
+              "SELECT * FROM world_sound_event",
             ]);
           cc.db.user.onInsert((_ctx, row) => {
             if (cc.identity?.isEqual(row.identity)) bump();
@@ -169,18 +208,29 @@ export function useSpacetimeConnection(): SpacetimeSession {
       connection?.disconnect();
       setConn(null);
     };
-  }, [connEpoch, refreshRegistration]);
+  }, [connEpoch, connectionKind, refreshRegistration]);
 
   const startPasswordSignIn = useCallback(async () => {
     setErrorMsg(null);
     await startPasswordOidcRedirect();
   }, []);
 
+  const startGuestPlay = useCallback(() => {
+    setErrorMsg(null);
+    writeGuestConnectionToken(null);
+    setDisplayName(null);
+    setConnectionKind("guest");
+    setPhase("connecting");
+    setConnEpoch((e) => e + 1);
+  }, []);
+
   const signOut = useCallback(() => {
     clearOidcAccessToken();
+    writeGuestConnectionToken(null);
     setConn(null);
     setDisplayName(null);
     setErrorMsg(null);
+    setConnectionKind(null);
     setPhase("needs_auth");
     setConnEpoch((e) => e + 1);
   }, []);
@@ -204,7 +254,9 @@ export function useSpacetimeConnection(): SpacetimeSession {
     conn,
     displayName,
     errorMsg,
+    connectionKind,
     startPasswordSignIn,
+    startGuestPlay,
     signOut,
     submitUsername,
   };

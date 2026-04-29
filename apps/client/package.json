@@ -4,8 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "sync:basis-transcoder": "node ./scripts/sync-basis-transcoder.mjs",
+    "postinstall": "node ./scripts/sync-basis-transcoder.mjs",
     "dev": "node ../../scripts/free-local-dev-server-port.mjs --port 5173 --must-include the-mammoth --must-include apps\\client --must-include vite && vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "pnpm run sync:basis-transcoder && tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "check-types": "tsc --noEmit",

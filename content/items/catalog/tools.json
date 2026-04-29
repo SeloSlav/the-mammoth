@@ -4,7 +4,7 @@
     {
       "id": "pipe_wrench",
       "displayName": "Pipe wrench",
-      "description": "Adjustable jaw for seized fittings. Utility tool (interaction hook TBD).",
+      "description": "Adjustable jaw for seized fittings.",
       "category": "tool",
       "maxStack": 1,
       "construction": {
@@ -18,21 +18,21 @@
     {
       "id": "claw_hammer",
       "displayName": "Claw hammer",
-      "description": "Drive nails, pry panels, persuade latches. Utility tool (interaction hook TBD).",
+      "description": "Drive nails and board doors. Not craftable in the Balkan MVP survival loop.",
       "category": "tool",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 12,
-        "materials": [
-          { "itemId": "wood_scraps", "quantity": 4 },
-          { "itemId": "scrap_metal", "quantity": 3 }
-        ]
-      }
+      "maxStack": 1
+    },
+    {
+      "id": "screwdriver",
+      "displayName": "Screwdriver",
+      "description": "Required with a door lock cylinder to claim an apartment.",
+      "category": "tool",
+      "maxStack": 1
     },
     {
       "id": "multimeter",
       "displayName": "Multimeter",
-      "description": "Continuity and voltage checks for jury-rigged circuits. Utility tool (interaction hook TBD).",
+      "description": "Continuity and voltage checks for jury-rigged circuits.",
       "category": "tool",
       "maxStack": 1,
       "construction": {
@@ -47,7 +47,7 @@
     {
       "id": "prybar_light",
       "displayName": "Light pry bar",
-      "description": "Thin blade for gaps and seams. Not a weapon profile — utility only (interaction hook TBD).",
+      "description": "Thin blade for gaps and seams.",
       "category": "tool",
       "maxStack": 1,
       "construction": {

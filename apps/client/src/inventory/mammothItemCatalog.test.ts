@@ -4,7 +4,7 @@ import {
   getMammothItemDef,
   mammothItemDefSupportsHotbarInstantConsume,
 } from "./mammothItemCatalog";
-import { itemDefIdSupportsHotbarInstantConsume } from "../game/fpConsumableUse";
+import { itemDefIdSupportsHotbarInstantConsume } from "../game/fpInteraction/fpConsumableUse";
 
 describe("mammothItemCatalog", () => {
   it("exposes world model URLs for shipped melee defs", () => {

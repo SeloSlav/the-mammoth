@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
+import ClaimApartmentPulseReducer from "./claim_apartment_pulse_reducer";
 import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
 import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
@@ -48,11 +49,17 @@ import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
+import PickupWorldLootReducer from "./pickup_world_loot_reducer";
 import PingWorldReducer from "./ping_world_reducer";
 import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
+import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "./respawn_player_reducer";
+import SendChatReducer from "./send_chat_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "./set_username_reducer";
+import StashPullItemReducer from "./stash_pull_item_reducer";
+import StashPushItemReducer from "./stash_push_item_reducer";
+import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 
@@ -60,13 +67,18 @@ import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
 
 // Import all table schema definitions
 import ApartmentDoorRow from "./apartment_door_table";
+import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
+import ApartmentUnitRow from "./apartment_unit_table";
+import ChatMessageRow from "./chat_message_table";
 import DroppedItemRow from "./dropped_item_table";
 import DroppedItemCleanupRow from "./dropped_item_cleanup_table";
 import ElevatorCarRow from "./elevator_car_table";
 import ElevatorLandingDoorRow from "./elevator_landing_door_table";
+import FlashlightChargeRow from "./flashlight_charge_table";
 import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
 import PlayerActiveHotbarRow from "./player_active_hotbar_table";
+import PlayerFirearmCooldownRow from "./player_firearm_cooldown_table";
 import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerInputRow from "./player_input_table";
 import PlayerMeleeCooldownRow from "./player_melee_cooldown_table";
@@ -74,6 +86,7 @@ import PlayerPoseRow from "./player_pose_table";
 import PlayerVitalsRow from "./player_vitals_table";
 import PlayerVitalsScheduleRow from "./player_vitals_schedule_table";
 import UserRow from "./user_table";
+import WorldLootPickupRow from "./world_loot_pickup_table";
 import WorldSoundEventRow from "./world_sound_event_table";
 import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
 
@@ -92,6 +105,42 @@ const tablesSchema = __schema({
       { name: 'apartment_door_row_key_key', constraint: 'unique', columns: ['rowKey'] },
     ],
   }, ApartmentDoorRow),
+  apartment_door_gameplay: __table({
+    name: 'apartment_door_gameplay',
+    indexes: [
+      { name: 'row_key', algorithm: 'btree', columns: [
+        'rowKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_door_gameplay_row_key_key', constraint: 'unique', columns: ['rowKey'] },
+    ],
+  }, ApartmentDoorGameplayRow),
+  apartment_unit: __table({
+    name: 'apartment_unit',
+    indexes: [
+      { name: 'unit_key', algorithm: 'btree', columns: [
+        'unitKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_unit_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
+    ],
+  }, ApartmentUnitRow),
+  chat_message: __table({
+    name: 'chat_message',
+    indexes: [
+      { name: 'created_at', algorithm: 'btree', columns: [
+        'createdAt',
+      ] },
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'chat_message_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ChatMessageRow),
   dropped_item: __table({
     name: 'dropped_item',
     indexes: [
@@ -136,6 +185,17 @@ const tablesSchema = __schema({
       { name: 'elevator_landing_door_row_key_key', constraint: 'unique', columns: ['rowKey'] },
     ],
   }, ElevatorLandingDoorRow),
+  flashlight_charge: __table({
+    name: 'flashlight_charge',
+    indexes: [
+      { name: 'item_instance_id', algorithm: 'btree', columns: [
+        'itemInstanceId',
+      ] },
+    ],
+    constraints: [
+      { name: 'flashlight_charge_item_instance_id_key', constraint: 'unique', columns: ['itemInstanceId'] },
+    ],
+  }, FlashlightChargeRow),
   inventory_item: __table({
     name: 'inventory_item',
     indexes: [
@@ -169,6 +229,17 @@ const tablesSchema = __schema({
       { name: 'player_active_hotbar_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, PlayerActiveHotbarRow),
+  player_firearm_cooldown: __table({
+    name: 'player_firearm_cooldown',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_firearm_cooldown_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerFirearmCooldownRow),
   player_foot_cadence: __table({
     name: 'player_foot_cadence',
     indexes: [
@@ -246,6 +317,17 @@ const tablesSchema = __schema({
       { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, UserRow),
+  world_loot_pickup: __table({
+    name: 'world_loot_pickup',
+    indexes: [
+      { name: 'id', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'world_loot_pickup_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, WorldLootPickupRow),
   world_sound_event: __table({
     name: 'world_sound_event',
     indexes: [
@@ -274,6 +356,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
+  __reducerSchema("claim_apartment_pulse", ClaimApartmentPulseReducer),
   __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
   __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
@@ -286,11 +369,17 @@ const reducersSchema = __reducers(
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
+  __reducerSchema("pickup_world_loot", PickupWorldLootReducer),
   __reducerSchema("ping_world", PingWorldReducer),
   __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
+  __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),
   __reducerSchema("respawn_player", RespawnPlayerReducer),
+  __reducerSchema("send_chat", SendChatReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_username", SetUsernameReducer),
+  __reducerSchema("stash_pull_item", StashPullItemReducer),
+  __reducerSchema("stash_push_item", StashPushItemReducer),
+  __reducerSchema("submit_firearm_shot", SubmitFirearmShotReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),
 );

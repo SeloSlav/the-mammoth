@@ -34,9 +34,12 @@ macro_rules! starter_hotbar {
 
 /// Spawn loadout for players with no inventory rows yet.
 const STARTER_LOADOUT: &[StarterRow] = &[
-    starter_hotbar!(0, "crowbar", 1),
-    starter_hotbar!(1, "apple", 4),
-    starter_hotbar!(2, "water_bottle", 3),
+    starter_hotbar!(0, "rusty_pistol", 1),
+    starter_hotbar!(1, "crowbar", 1),
+    starter_hotbar!(2, "ammo_9mm", 24),
+    starter_hotbar!(3, "door_lock", 1),
+    starter_hotbar!(4, "screwdriver", 1),
+    starter_hotbar!(5, "apple", 4),
 ];
 
 pub(crate) fn ensure_starter_loadout(ctx: &ReducerContext, owner: Identity) {

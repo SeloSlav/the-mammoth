@@ -10,13 +10,13 @@ import type {
   PrefabDef,
   StairWellDef,
 } from "@the-mammoth/schemas";
-import type { FpAuthorWeaponId } from "../editor/weaponPresentationDiskSave.js";
-import type { FpAuthorConsumableId } from "../editor/consumablePresentationDiskSave.js";
+import type { FpAuthorWeaponId } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
+import type { FpAuthorConsumableId } from "../editor/fpAuthoring/consumablePresentationDiskSave.js";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import type {
   CollisionArtifactsStatus,
   EditorContentIndex,
-} from "../editor/editorContentDiscovery.js";
+} from "../editor/content/editorContentDiscovery.js";
 
 /** Top-level authoring surface (3-button UX). */
 export type EditorWorkspace = "cab" | "landing" | "stairwell" | "world";
@@ -64,6 +64,10 @@ export type EditorMaterialMeta = {
   roughnessMapUrl?: string;
   metalnessMapUrl?: string;
   bumpMapUrl?: string;
+  /** Default false — metalness textures are VRAM-heavy; opt-in for chrome details. */
+  useMetalnessMap?: boolean;
+  /** Default false — height-as-bump is opt-in only. */
+  useHeightMap?: boolean;
   roughness?: number;
   metalness?: number;
 };

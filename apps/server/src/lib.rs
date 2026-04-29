@@ -3,11 +3,14 @@
 
 mod accounts;
 mod apartment_door;
+mod apartments;
 mod auth;
 mod character_controller;
+mod chat;
 mod combat_stub;
 mod dropped_item;
 mod elevator;
+mod firearm;
 mod generated_apartment_doors;
 mod generated_collision_solids;
 mod elevator_layout;
@@ -17,21 +20,27 @@ mod inventory_models;
 mod items_catalog;
 mod kinematic_support;
 mod loadout;
+mod melee_turn;
 mod movement;
 mod player_vitals;
 mod pose;
 mod stair_opening_collision;
 mod stair_runtime_overlay;
+mod world_loot;
 mod world_sound;
 
 use spacetimedb::{ReducerContext, Table};
 use accounts::{user, User};
+use crate::pose::player_pose;
 
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {
     log::info!("mammoth-module initialized");
     elevator::seed_elevators(ctx);
     apartment_door::seed_apartment_doors(ctx);
+    apartments::seed_apartment_units(ctx);
+    apartments::open_unclaimed_residential_doors(ctx);
+    world_loot::seed_world_loot(ctx);
     movement::start_physics_schedule(ctx);
     player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
@@ -53,6 +62,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
     world_sound::ensure_player_audio_rows(ctx, id);
+    firearm::ensure_player_firearm_cooldown_row(ctx, id);
     player_vitals::ensure_player_vitals_row(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
@@ -98,8 +108,14 @@ pub fn respawn_player(ctx: &ReducerContext) {
     if !player_vitals::is_player_dead(ctx, id) {
         return;
     }
-    pose::reset_player_pose_to_spawn(ctx, id);
-    movement::reset_player_input_row(ctx, id, pose::PLAYER_SPAWN_YAW);
+    if let Some(sp) = apartments::spawn_pose_owned_bed(ctx, id) {
+        let yaw = sp.yaw;
+        ctx.db.player_pose().identity().update(sp);
+        movement::reset_player_input_row(ctx, id, yaw);
+    } else {
+        pose::reset_player_pose_to_spawn(ctx, id);
+        movement::reset_player_input_row(ctx, id, pose::PLAYER_SPAWN_YAW);
+    }
     player_vitals::reset_player_vitals_for_respawn(ctx, id);
     world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

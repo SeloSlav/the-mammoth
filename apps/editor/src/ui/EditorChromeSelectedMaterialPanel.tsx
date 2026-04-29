@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { ElevatorCabDef, LandingKitDef, StairWellDef } from "@the-mammoth/schemas";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
-import type { EditorContentIndex } from "../editor/editorContentDiscovery.js";
+import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import type { EditorMode, EditorState } from "../state/editorStore.js";
 import { editorChromePanel } from "./editorChromeStyles.js";
 import { materialTextureOptionLabel } from "./materialTextureOptionLabel.js";

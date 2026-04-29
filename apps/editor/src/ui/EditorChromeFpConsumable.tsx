@@ -5,7 +5,7 @@ import {
   FP_AUTHORABLE_CONSUMABLE_IDS,
   isFpAuthorConsumableId,
   saveConsumablePresentationFromEditor,
-} from "../editor/consumablePresentationDiskSave.js";
+} from "../editor/fpAuthoring/consumablePresentationDiskSave.js";
 import { editorChromeInput, editorChromeLabel, editorChromeRowBtn } from "./editorChromeStyles.js";
 
 type ConsumableAssetSurvey = {

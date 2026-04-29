@@ -19,6 +19,9 @@ export const LandingKitMaterialSlotSchema = z.object({
   roughnessMapUrl: z.string().optional(),
   metalnessMapUrl: z.string().optional(),
   bumpMapUrl: z.string().optional(),
+  aoMapUrl: z.string().optional(),
+  useMetalnessMap: z.boolean().optional(),
+  useHeightMap: z.boolean().optional(),
 });
 
 export type LandingKitMaterialSlot = z.infer<typeof LandingKitMaterialSlotSchema>;

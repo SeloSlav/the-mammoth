@@ -6,7 +6,7 @@
       "displayName": "Scrap metal",
       "description": "Salvaged plate and fittings. Staple for improvised tools and weapons.",
       "category": "material",
-      "maxStack": 500
+      "maxStack": 5
     },
     {
       "id": "wood_scraps",
@@ -42,6 +42,41 @@
       "description": "Small sealed ampoule. Etches, hardens, or cleans metal before assembly.",
       "category": "material",
       "maxStack": 100
+    },
+    {
+      "id": "nails",
+      "displayName": "Nails",
+      "description": "Box of mixed nails for boarding doors.",
+      "category": "material",
+      "maxStack": 30
+    },
+    {
+      "id": "cigarettes",
+      "displayName": "Cigarettes",
+      "description": "Loose smokes. Trade currency and stress relief.",
+      "category": "material",
+      "maxStack": 20
+    },
+    {
+      "id": "ammo_9mm",
+      "displayName": "9mm rounds",
+      "description": "Loose pistol ammunition (no magazines).",
+      "category": "material",
+      "maxStack": 60
+    },
+    {
+      "id": "ammo_shotgun_shell",
+      "displayName": "Shotgun shells",
+      "description": "Loose shells for improvised shotguns.",
+      "category": "material",
+      "maxStack": 24
+    },
+    {
+      "id": "door_lock",
+      "displayName": "Door lock",
+      "description": "Cylinder lock consumed when formally claiming an apartment.",
+      "category": "material",
+      "maxStack": 1
     }
   ]
 }

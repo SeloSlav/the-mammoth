@@ -6,11 +6,8 @@ use spacetimedb::{
     Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp,
 };
 
-use crate::auth;
-use crate::combat_stub;
 use crate::movement::PlayerInput;
-use crate::player_vitals;
-use crate::pose::{player_pose, PlayerPose};
+use crate::pose::PlayerPose;
 
 // --- Bit layout: keep in sync with `apps/server/src/movement.rs` / `moveIntentCodec.ts` ---
 const BIT_FORWARD: u8 = 1 << 0;
@@ -41,6 +38,10 @@ pub const KIND_LANDING_EXTERIOR_DOOR_CLOSE: u8 = 8;
 pub const KIND_ELEVATOR_CAB_ARRIVAL: u8 = 9;
 /// Melee hit landed on another player (`variation` unused).
 pub const KIND_MELEE_FLESH_HIT: u8 = 10;
+/// Door boarding / reinforcement (`variation` unused until assets land).
+pub const KIND_DOOR_REINFORCE: u8 = 11;
+/// Gunshot — client maps ammo sounds (`variation` ammo profile stub).
+pub const KIND_FIREARM_SHOT: u8 = 12;
 
 // --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
 const SPRINT_SPEED: f32 = 3.35;
@@ -121,7 +122,7 @@ pub fn start_cleanup_schedule(ctx: &ReducerContext) {
     });
 }
 
-fn emit_world_sound(
+pub(crate) fn emit_world_sound(
     ctx: &ReducerContext,
     kind: u8,
     variation: u8,
@@ -283,6 +284,31 @@ pub fn emit_elevator_cab_arrival_at(ctx: &ReducerContext, x: f32, y: f32, z: f32
     );
 }
 
+/// Loud woodworking / hammering noise while reinforcing claimed doors (`variation` unused).
+pub fn emit_reinforcement_noise_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_DOOR_REINFORCE,
+        0,
+        x,
+        y,
+        z,
+        0.94,
+        48.0,
+        emitter,
+    );
+}
+
+pub fn emit_gunfire_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
+    emit_world_sound(ctx, KIND_FIREARM_SHOT, 0, x, y, z, 0.88, 56.0, emitter);
+}
+
 pub fn emit_melee_flesh_hit_at(
     ctx: &ReducerContext,
     x: f32,
@@ -388,8 +414,6 @@ pub fn sync_footsteps_for_tick(
     ctx.db.player_foot_cadence().identity().update(cad);
 }
 
-const MELEE_COOLDOWN_MICROS: i64 = 480_000;
-
 /// Low bits of melee swing `variation` — stem index (A/B alternation). Sync with
 /// `apps/client/src/game/meleeSwingSound.ts` `MELEE_SWING_VARIATION_STEM_MASK`.
 pub const MELEE_SWING_VARIATION_STEM_MASK: u8 = 0b11;
@@ -408,67 +432,6 @@ pub fn melee_weapon_swing_sound_profile_for_def_id(def_id: &str) -> u8 {
 pub fn melee_weapon_swing_variation(profile: u8, stem_jitter: u8) -> u8 {
     let profile = profile.min(63);
     (profile << 2) | (stem_jitter & MELEE_SWING_VARIATION_STEM_MASK)
-}
-
-#[spacetimedb::reducer]
-pub fn submit_melee_swing(ctx: &ReducerContext) {
-    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
-        log::debug!("submit_melee_swing blocked: {e}");
-        return;
-    }
-    let id = ctx.sender();
-    if player_vitals::is_player_dead(ctx, id) {
-        return;
-    }
-    let Some(pose) = ctx.db.player_pose().identity().find(&id) else {
-        return;
-    };
-    if ctx.db.player_melee_cooldown().identity().find(&id).is_none() {
-        let _ = ctx.db.player_melee_cooldown().insert(PlayerMeleeCooldown {
-            identity: id,
-            last_swing_micros: 0,
-        });
-    }
-    let now_us = ctx.timestamp.to_micros_since_unix_epoch();
-    let Some(mut cd) = ctx.db.player_melee_cooldown().identity().find(&id) else {
-        return;
-    };
-    if now_us - cd.last_swing_micros < MELEE_COOLDOWN_MICROS {
-        return;
-    }
-    let Some(weapon_def_id) = combat_stub::active_hotbar_weapon_def_id(ctx, id) else {
-        return;
-    };
-    cd.last_swing_micros = now_us;
-    ctx.db.player_melee_cooldown().identity().update(cd);
-
-    if let Some(hit) = combat_stub::resolve_melee_hit(
-        ctx,
-        id,
-        pose.x,
-        pose.y,
-        pose.z,
-        pose.yaw,
-        &weapon_def_id,
-    ) {
-        let _killed = player_vitals::apply_damage(ctx, hit.target, hit.damage);
-        emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
-    }
-
-    let profile = melee_weapon_swing_sound_profile_for_def_id(&weapon_def_id);
-    let stem = ((now_us >> 7) as u8) & MELEE_SWING_VARIATION_STEM_MASK;
-    let v = melee_weapon_swing_variation(profile, stem);
-    emit_world_sound(
-        ctx,
-        KIND_MELEE_WEAPON_SWING,
-        v,
-        pose.x,
-        pose.y + 0.95,
-        pose.z,
-        0.62,
-        20.0,
-        id,
-    );
 }
 
 #[cfg(test)]

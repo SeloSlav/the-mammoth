@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { bootstrapEditorFromContent } from "./editor/editorBootstrap.js";
-import { mountEditorScene } from "./editor/editorSceneRuntime.js";
+import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.js";
+import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
 
 export default function App() {

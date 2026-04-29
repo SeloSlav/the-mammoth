@@ -17,7 +17,7 @@ export default [
     },
   },
   {
-    files: ["src/editor/editorSceneRuntime.ts"],
+    files: ["src/editor/editorScene/editorSceneRuntime.ts"],
     rules: {
       "max-lines": ["warn", { max: 2500, skipBlankLines: true, skipComments: true }],
     },

@@ -12,10 +12,16 @@ export const ElevatorCabMaterialSlotSchema = z.object({
   normalMapUrl: z.string().optional(),
   /** Grayscale or packed roughness; multiplied with scalar `roughness`. */
   roughnessMapUrl: z.string().optional(),
-  /** Grayscale metalness; multiplied with scalar `metalness`. */
+  /** Grayscale metalness; multiplied with scalar `metalness`. Ignored unless `useMetalnessMap` is true. */
   metalnessMapUrl: z.string().optional(),
-  /** Height / displacement-style map used as `bumpMap` (no mesh subdivision). */
+  /** Height / displacement-style map used as `bumpMap` (no mesh subdivision). Ignored unless `useHeightMap` is true. */
   bumpMapUrl: z.string().optional(),
+  /** Ambient occlusion — requires UV2 on meshes that should receive AO. */
+  aoMapUrl: z.string().optional(),
+  /** When true, binds `metalnessMapUrl` (default false — saves VRAM on concrete/plaster). */
+  useMetalnessMap: z.boolean().optional(),
+  /** When true, binds `bumpMapUrl` as height-as-bump (default false). */
+  useHeightMap: z.boolean().optional(),
 });
 
 export type ElevatorCabMaterialSlot = z.infer<typeof ElevatorCabMaterialSlotSchema>;
