@@ -161,12 +161,12 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     const HALF_WIDTH: f32 = 3.3;
     match face {
         SwingDoorFace::W => (
-            [t.hinge_x - DEPTH, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
-            [t.hinge_x - 0.08, top_y, t.hinge_z + HALF_WIDTH],
-        ),
-        SwingDoorFace::E => (
             [t.hinge_x + 0.08, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
             [t.hinge_x + DEPTH, top_y, t.hinge_z + HALF_WIDTH],
+        ),
+        SwingDoorFace::E => (
+            [t.hinge_x - DEPTH, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
+            [t.hinge_x - 0.08, top_y, t.hinge_z + HALF_WIDTH],
         ),
         _ => (
             [t.hinge_x - HALF_WIDTH, feet_y - 0.06, t.hinge_z - DEPTH],

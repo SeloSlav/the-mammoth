@@ -223,12 +223,12 @@ mod tests {
         let top_y = feet_y + 3.0;
         match face {
             SwingDoorFace::W => (
-                [hinge_x - DEPTH, feet_y - 0.06, hinge_z - HALF_WIDTH],
-                [hinge_x - 0.08, top_y, hinge_z + HALF_WIDTH],
-            ),
-            SwingDoorFace::E => (
                 [hinge_x + 0.08, feet_y - 0.06, hinge_z - HALF_WIDTH],
                 [hinge_x + DEPTH, top_y, hinge_z + HALF_WIDTH],
+            ),
+            SwingDoorFace::E => (
+                [hinge_x - DEPTH, feet_y - 0.06, hinge_z - HALF_WIDTH],
+                [hinge_x - 0.08, top_y, hinge_z + HALF_WIDTH],
             ),
             _ => (
                 [hinge_x - HALF_WIDTH, feet_y - 0.06, hinge_z - DEPTH],
@@ -351,8 +351,8 @@ mod tests {
 
     #[test]
     fn canonical_layout_is_mirrored_and_footlocker_sits_at_bed_foot() {
-        let mn = [-11.075, 0.0, -117.5825];
-        let mx = [1.845, 3.0, -106.5825];
+        let mn = [2.005, 0.0, -117.5825];
+        let mx = [14.925, 3.0, -106.5825];
         let east = east_west_interior_furniture_seed(&mn, &mx, 1.925, -112.0825, SwingDoorFace::W)
             .unwrap();
         assert!(east.foot_x > east.bed_x);
@@ -362,8 +362,8 @@ mod tests {
         assert!((east.wardrobe_x - (mn[0] + WARDROBE_CENTER_FROM_BACK_WALL_M)).abs() < 1e-4);
         assert!((east.bed_yaw - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
 
-        let west_mn = [-1.845, 0.0, -117.5825];
-        let west_mx = [11.075, 3.0, -106.5825];
+        let west_mn = [-14.925, 0.0, -117.5825];
+        let west_mx = [-2.005, 3.0, -106.5825];
         let west = east_west_interior_furniture_seed(
             &west_mn,
             &west_mx,
