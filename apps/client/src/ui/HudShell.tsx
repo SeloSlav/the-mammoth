@@ -14,6 +14,7 @@ import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { MammothChatHud } from "./MammothChatHud";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
+import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 
 type HudProps = {
   displayName: string;
@@ -59,7 +60,31 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
             WebkitUserSelect: "none",
           }}
         >
-          The Mammoth — <strong>{displayName}</strong>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 2,
+            }}
+          >
+            <img
+              src={MAMMOTH_LOGO_PUBLIC_PATH}
+              alt=""
+              decoding="async"
+              style={{
+                height: 28,
+                width: "auto",
+                maxWidth: 132,
+                objectFit: "contain",
+                display: "block",
+                opacity: 0.96,
+              }}
+            />
+            <span>
+              <span style={{ opacity: 0.9 }}>—</span> <strong>{displayName}</strong>
+            </span>
+          </div>
           <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
             {
               "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory"

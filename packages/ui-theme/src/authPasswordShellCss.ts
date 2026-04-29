@@ -17,36 +17,78 @@ body {
   width: 100%;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
   color: var(--ui-text-primary);
-  background: radial-gradient(ellipse at center, var(--ui-page-bg-mid) 0%, var(--ui-page-bg-edge) 72%);
+  background:
+    radial-gradient(circle at 16% 12%, var(--ui-page-bg-mid) 0, transparent 34vw),
+    radial-gradient(circle at 82% 18%, var(--ui-accent) 0, transparent 22vw),
+    linear-gradient(145deg, var(--ui-page-bg-edge), var(--ui-page-bg-mid) 52%, var(--ui-page-bg-edge));
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 24px 16px;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  opacity: 0.28;
+  background:
+    linear-gradient(90deg, transparent 0 12%, var(--ui-divider) 12.1% 12.35%, transparent 12.45% 100%),
+    repeating-linear-gradient(0deg, transparent 0 38px, var(--ui-card-border) 39px 40px);
+  mask-image: linear-gradient(90deg, transparent, black 16%, black 72%, transparent);
+}
+
+body::after {
+  background:
+    radial-gradient(ellipse at center, transparent 0 35%, var(--ui-backdrop-vignette) 100%),
+    linear-gradient(90deg, var(--ui-backdrop-scrim), transparent 48%, var(--ui-backdrop-scrim));
 }
 
 .container {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 440px;
-  padding: 28px 24px;
-  border-radius: 12px;
-  background: var(--ui-card-bg);
-  border: 1px solid var(--ui-card-border);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+  max-width: 460px;
+  padding: 30px 26px;
+  border-radius: 22px;
+  background: var(--ui-card-bg-strong);
+  border: 1px solid var(--ui-card-border-strong);
+  box-shadow: var(--ui-panel-shadow);
   text-align: center;
+  backdrop-filter: blur(18px);
 }
 
-.mammoth-brand {
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--ui-text-primary);
-  margin-bottom: 4px;
+.mammoth-brand-lockup {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 6px;
+}
+
+.mammoth-logo-full {
+  display: block;
+  margin: 0 auto;
+  max-width: min(100%, 340px);
+  width: 100%;
+  height: auto;
+  max-height: 118px;
+  object-fit: contain;
 }
 
 .mammoth-tagline {
-  font-size: 0.8125rem;
-  color: var(--ui-text-muted);
-  margin-bottom: 22px;
+  font-size: 0.7rem;
+  color: var(--ui-text-faint);
+  letter-spacing: 0.18em;
+  margin-bottom: 24px;
+  text-transform: uppercase;
 }
 
 .form-title {
@@ -78,10 +120,11 @@ label {
 }
 
 input[type="email"],
-input[type="password"] {
+input[type="password"],
+input[type="text"] {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 13px 14px;
+  border-radius: 12px;
   border: 1px solid var(--ui-input-border);
   background: var(--ui-input-bg);
   color: var(--ui-text-primary);
@@ -91,14 +134,16 @@ input[type="password"] {
 }
 
 input[type="email"]:focus,
-input[type="password"]:focus {
+input[type="password"]:focus,
+input[type="text"]:focus {
   outline: none;
   border-color: var(--ui-accent);
   box-shadow: 0 0 0 3px var(--ui-focus-ring);
 }
 
 input[type="email"]::placeholder,
-input[type="password"]::placeholder {
+input[type="password"]::placeholder,
+input[type="text"]::placeholder {
   color: var(--ui-text-faint);
 }
 
@@ -113,7 +158,7 @@ input:disabled {
   margin-top: 4px;
   margin-bottom: 18px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--ui-accent);
   color: var(--ui-accent-on);
   font-size: 0.9375rem;
@@ -138,10 +183,15 @@ input:disabled {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.12) 50%,
+    var(--ui-divider) 50%,
     transparent 100%
   );
   margin: 18px 0;
+}
+
+.form-link-tight {
+  margin-top: -8px;
+  margin-bottom: 0;
 }
 
 .form-link {
@@ -162,9 +212,9 @@ input:disabled {
 }
 
 .error-message {
-  background: rgba(232, 120, 120, 0.12);
-  border: 1px solid rgba(232, 120, 120, 0.35);
-  border-radius: 8px;
+  background: var(--ui-error-bg);
+  border: 1px solid var(--ui-error-border);
+  border-radius: 12px;
   padding: 10px 12px;
   margin-bottom: 16px;
   font-size: 0.875rem;
@@ -173,9 +223,9 @@ input:disabled {
 }
 
 .success-message {
-  background: rgba(123, 207, 154, 0.1);
-  border: 1px solid rgba(123, 207, 154, 0.35);
-  border-radius: 8px;
+  background: var(--ui-success-bg);
+  border: 1px solid var(--ui-success-border);
+  border-radius: 12px;
   padding: 10px 12px;
   margin-bottom: 16px;
   font-size: 0.875rem;

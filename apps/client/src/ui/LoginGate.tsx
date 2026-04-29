@@ -1,21 +1,8 @@
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
-import {
-  THEME_ACCENT,
-  THEME_ACCENT_ON,
-  THEME_CARD_BG,
-  THEME_CARD_BORDER,
-  THEME_ERROR,
-  THEME_INPUT_BG,
-  THEME_INPUT_BORDER,
-  THEME_PAGE_BG_EDGE,
-  THEME_PAGE_BG_MID,
-  THEME_SECONDARY_BG,
-  THEME_SECONDARY_TEXT,
-  THEME_TEXT_MUTED,
-  THEME_TEXT_PRIMARY,
-  UI_FONT_SANS,
-} from "@the-mammoth/ui-theme";
+import { MammothAuthBackdrop } from "./MammothAuthBackdrop";
+import styles from "./LoginGate.module.css";
 
 type Props = {
   session: SpacetimeSession;
@@ -50,17 +37,19 @@ export function LoginGate({ session }: Props) {
 
   if (phase === "needs_auth") {
     return (
-      <div style={overlayStyle}>
-        <div style={cardStyle}>
-          <h1 style={titleStyle}>The Mammoth</h1>
-          <p style={{ lineHeight: 1.5, color: THEME_TEXT_MUTED }}>
-            Sign in to keep your apartment and stash across visits, or play as a guest without an
-            account (your character is tied to this browser until you sign out).
-          </p>
-          {errorMsg ? <p style={{ color: THEME_ERROR, marginTop: 12 }}>{errorMsg}</p> : null}
+      <AuthScreen eyebrow="Welcome to the block">
+        <p className={styles.subtitle}>
+          Come on up. <strong>The Mammoth</strong> is a multiplayer survival game set in a
+          late-socialist Balkan commie block—long corridors, thin heat, and neighbors who may or may
+          not be on your side. Sign in to keep your flat, stash, and name between visits, or step in
+          as a guest with a key that stays in this browser until you sign out.
+        </p>
+        {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
+        <div className={styles.divider} />
+        <div>
           <button
             type="button"
-            style={buttonStyle}
+            className={styles.button}
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -71,16 +60,11 @@ export function LoginGate({ session }: Props) {
               }
             }}
           >
-            {busy ? "Redirecting…" : "Sign in"}
+            {busy ? "Opening the stairwell door..." : "Sign in or create an account"}
           </button>
           <button
             type="button"
-            style={{
-              ...buttonStyle,
-              marginTop: 10,
-              background: THEME_SECONDARY_BG,
-              color: THEME_SECONDARY_TEXT,
-            }}
+            className={styles.secondaryButton}
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -91,76 +75,94 @@ export function LoginGate({ session }: Props) {
               }
             }}
           >
-            Play as guest
+            Sneak in as a guest
           </button>
         </div>
-      </div>
+        <p className={styles.microcopy}>
+          Accounts keep your progress across visits. Guests are tied to this browser—fine for a
+          look around the tower.
+        </p>
+      </AuthScreen>
     );
   }
 
   if (phase === "connecting" && !errorMsg) {
     return (
-      <div style={overlayStyle}>
-        <div style={cardStyle}>
-          <h1 style={titleStyle}>The Mammoth</h1>
-          <p style={{ color: THEME_TEXT_PRIMARY }}>Connecting…</p>
-          <p style={hintStyle}>Checking you in with the building.</p>
-        </div>
-      </div>
+      <AuthScreen eyebrow="Almost there">
+        <p className={styles.statusCopy}>Connecting you to the building...</p>
+        <p className={styles.hint}>The intercom crackles; give it a moment.</p>
+      </AuthScreen>
     );
   }
 
   if (phase === "error") {
     return (
-      <div style={overlayStyle}>
-        <div style={cardStyle}>
-          <h1 style={titleStyle}>The Mammoth</h1>
-          <p style={{ color: THEME_TEXT_PRIMARY, lineHeight: 1.5 }}>
-            The tower wouldn&apos;t open a line for you — your key reached the front desk, but the building
-            didn&apos;t clear it.
-          </p>
-          <p style={{ ...hintStyle, lineHeight: 1.5 }}>{connectionErrorPlayerMessage(errorMsg)}</p>
-          <p style={hintStyle}>
-            If this keeps happening, try again in a few minutes or sign in from the lobby.
-          </p>
-          <button type="button" style={buttonStyle} onClick={() => signOut()}>
-            Return to the lobby
-          </button>
-        </div>
-      </div>
+      <AuthScreen eyebrow="Couldn&apos;t get you in">
+        <p className={styles.statusCopy}>
+          We couldn&apos;t patch you through to the tower. Something at the front desk turned your
+          key away.
+        </p>
+        <p className={styles.hint}>{connectionErrorPlayerMessage(errorMsg)}</p>
+        <p className={styles.hint}>
+          If it keeps happening, wait a minute and try again—or head back and sign in fresh.
+        </p>
+        <button type="button" className={styles.button} onClick={() => signOut()}>
+          Back to the lobby
+        </button>
+      </AuthScreen>
     );
   }
 
   return (
-    <div style={overlayStyle}>
-      <div style={cardStyle}>
-        <h1 style={titleStyle}>The Mammoth</h1>
-        <p style={{ color: THEME_TEXT_MUTED }}>
-          Choose a display name (3–24 characters: letters, numbers, _ and -).
-        </p>
-        {errorMsg ? <p style={{ color: THEME_ERROR }}>{errorMsg}</p> : null}
-        <form onSubmit={onSubmit}>
-          <input
-            autoFocus
-            value={nameInput}
-            onChange={(ev) => setNameInput(ev.target.value)}
-            placeholder="username"
-            style={inputStyle}
-            disabled={busy || !conn}
-            maxLength={24}
-            autoComplete="username"
-          />
-          <button type="submit" style={buttonStyle} disabled={busy || !conn}>
-            {busy ? "Saving…" : "Enter"}
-          </button>
-        </form>
-        <button
-          type="button"
-          style={{ ...buttonStyle, marginTop: 10, background: THEME_SECONDARY_BG, color: THEME_SECONDARY_TEXT }}
-          onClick={() => signOut()}
-        >
-          Use a different account
+    <AuthScreen eyebrow="Who are you in the halls?">
+      <p className={styles.subtitle}>
+        Pick the name other players will see on the landing and in chat. Use 3–24 characters:
+        letters, numbers, underscores, and hyphens.
+      </p>
+      {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
+      <form className={styles.form} onSubmit={onSubmit}>
+        <input
+          autoFocus
+          value={nameInput}
+          onChange={(ev) => setNameInput(ev.target.value)}
+          placeholder="Your callsign on the block"
+          className={styles.input}
+          disabled={busy || !conn}
+          maxLength={24}
+          autoComplete="username"
+        />
+        <button type="submit" className={styles.button} disabled={busy || !conn}>
+          {busy ? "Saving your name..." : "Step inside"}
         </button>
+      </form>
+      <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
+        Different account
+      </button>
+    </AuthScreen>
+  );
+}
+
+function AuthScreen({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
+  return (
+    <div className={styles.screen}>
+      <MammothAuthBackdrop />
+      <div className={styles.backdropScrim} aria-hidden="true" />
+      <div className={styles.layout}>
+        <main className={styles.panel} aria-labelledby="mammoth-auth-title">
+          <p className={styles.kicker}>{eyebrow}</p>
+          <div className={styles.brandLockup}>
+            <img
+              id="mammoth-auth-title"
+              className={styles.logoFull}
+              src={MAMMOTH_LOGO_PUBLIC_PATH}
+              width={320}
+              alt="The Mammoth"
+              decoding="async"
+              fetchPriority="high"
+            />
+          </div>
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -169,71 +171,14 @@ export function LoginGate({ session }: Props) {
 /** Player-facing only — never echo server responses or infrastructure details. */
 function connectionErrorPlayerMessage(raw: string | null): string {
   if (!raw?.trim()) {
-    return "The line went quiet before anyone explained why.";
+    return "The line died before the porter said a word.";
   }
   const lower = raw.toLowerCase();
   if (lower.includes("verify token") || lower.includes("unauthorized")) {
-    return "Security didn't recognize your access. Signing in again from the lobby sometimes clears it.";
+    return "Your key did not match what security has on file. Going back and signing in again usually sorts it.";
   }
   if (lower.includes("websocket")) {
-    return "We couldn't reach the building just now — check your connection, then try again.";
+    return "We could not raise the building on the wire—check your connection, then try again.";
   }
-  return "Something interrupted check-in before the doors could unlock.";
+  return "Check-in cut out before the lock could turn.";
 }
-
-const titleStyle: CSSProperties = {
-  marginTop: 0,
-  color: THEME_ACCENT,
-  fontWeight: 700,
-  letterSpacing: "0.02em",
-};
-
-const overlayStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 20,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: `radial-gradient(ellipse at center, ${THEME_PAGE_BG_MID} 0%, ${THEME_PAGE_BG_EDGE} 70%)`,
-  color: THEME_TEXT_PRIMARY,
-  fontFamily: UI_FONT_SANS,
-};
-
-const cardStyle: CSSProperties = {
-  width: "min(420px, 92vw)",
-  padding: "28px 24px",
-  borderRadius: 12,
-  background: THEME_CARD_BG,
-  border: `1px solid ${THEME_CARD_BORDER}`,
-  boxSizing: "border-box",
-};
-
-const hintStyle: CSSProperties = {
-  fontSize: 12,
-  color: THEME_TEXT_MUTED,
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  marginBottom: 12,
-  borderRadius: 8,
-  border: `1px solid ${THEME_INPUT_BORDER}`,
-  background: THEME_INPUT_BG,
-  color: THEME_TEXT_PRIMARY,
-  fontSize: 16,
-};
-
-const buttonStyle: CSSProperties = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: 8,
-  border: "none",
-  background: THEME_ACCENT,
-  color: THEME_ACCENT_ON,
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-};

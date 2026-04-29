@@ -1,0 +1,219 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--ui-text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(circle at 22% 18%, var(--ui-page-bg-mid), transparent 36vw),
+    radial-gradient(circle at 78% 8%, var(--ui-accent), transparent 24vw),
+    var(--ui-page-bg-edge);
+}
+
+.backdropCanvas,
+.backdropFallback,
+.backdropScrim {
+  position: absolute;
+  inset: 0;
+}
+
+.backdropCanvas {
+  width: 100%;
+  height: 100%;
+}
+
+.backdropFallback {
+  background:
+    linear-gradient(145deg, transparent 0 42%, var(--ui-backdrop-scrim) 42% 100%),
+    repeating-linear-gradient(90deg, var(--ui-card-border) 0 1px, transparent 1px 74px),
+    radial-gradient(circle at 52% 38%, var(--ui-page-bg-mid), var(--ui-page-bg-edge) 72%);
+}
+
+.backdropScrim {
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 68% 45%, transparent 0 44%, var(--ui-backdrop-vignette) 108%),
+    linear-gradient(90deg, var(--ui-backdrop-scrim) 0%, rgba(9, 11, 16, 0.18) 38%, transparent 72%);
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: minmax(20px, 0.55fr) minmax(320px, 470px) minmax(20px, 1.8fr);
+  align-items: center;
+  padding: clamp(18px, 4vw, 54px);
+  box-sizing: border-box;
+}
+
+.panel {
+  grid-column: 2;
+  width: 100%;
+  box-sizing: border-box;
+  padding: clamp(24px, 4vw, 38px);
+  border: 1px solid var(--ui-card-border-strong);
+  border-radius: 26px;
+  background: var(--ui-card-bg-strong);
+  box-shadow: var(--ui-panel-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.kicker {
+  margin: 0 0 18px;
+  color: var(--ui-text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.brandLockup {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.logoFull {
+  display: block;
+  max-width: min(100%, 360px);
+  width: 100%;
+  height: auto;
+  max-height: 96px;
+  object-fit: contain;
+}
+
+.subtitle {
+  margin: 0 0 22px;
+  color: var(--ui-text-muted);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+.statusCopy {
+  margin: 0 0 20px;
+  color: var(--ui-text-primary);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.message {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  border: 1px solid var(--ui-error-border);
+  color: var(--ui-error);
+  background: var(--ui-error-bg);
+  line-height: 1.45;
+}
+
+.hint {
+  margin: 0 0 16px;
+  color: var(--ui-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.form {
+  margin-top: 18px;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 15px;
+  margin-bottom: 12px;
+  border: 1px solid var(--ui-input-border);
+  border-radius: 13px;
+  outline: none;
+  background: var(--ui-input-bg);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px var(--ui-focus-ring);
+}
+
+.input::placeholder {
+  color: var(--ui-text-faint);
+}
+
+.button,
+.secondaryButton {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 12px 15px;
+  border: 0;
+  border-radius: 13px;
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.button {
+  color: var(--ui-accent-on);
+  background: var(--ui-accent);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+}
+
+.secondaryButton {
+  margin-top: 10px;
+  color: var(--ui-secondary-text);
+  background: var(--ui-secondary-bg);
+}
+
+.button:active:not(:disabled),
+.secondaryButton:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.button:disabled,
+.secondaryButton:disabled,
+.input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.divider {
+  height: 1px;
+  margin: 18px 0;
+  background: linear-gradient(90deg, transparent, var(--ui-divider), transparent);
+}
+
+.microcopy {
+  margin: 16px 0 0;
+  color: var(--ui-text-faint);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: minmax(18px, 1fr) minmax(300px, 470px) minmax(18px, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .layout {
+    display: flex;
+    align-items: flex-end;
+    padding: 16px;
+  }
+
+  .panel {
+    border-radius: 22px;
+  }
+}

@@ -23,9 +23,14 @@ import { mountStaticImageRoutes } from './routes/staticAssets.js';
 import { mountTokenEndpoint } from './routes/tokenEndpoint.js';
 import { mammothAuthPage } from './mammothAuthHtml.js';
 import {
+  MAMMOTH_DEFAULT_HTML_TITLE,
+  MAMMOTH_LOGO_PUBLIC_PATH,
+  mammothIssuerSocialMetaHead,
   THEME_ACCENT,
   THEME_ACCENT_ON,
   THEME_CARD_BG,
+  THEME_CARD_BORDER,
+  THEME_DIVIDER,
   THEME_PAGE_BG_EDGE,
   THEME_PAGE_BG_MID,
   THEME_TEXT_FAINT,
@@ -35,6 +40,10 @@ import {
 
 const CLIENT_ID = process.env.OIDC_CLIENT_ID || 'the-mammoth-client';
 const PASSWORD_RESET_EXPIRY_MINUTES = 15;
+
+function authIssuerSocial(canonicalPath: string) {
+  return { issuerOrigin: ISSUER_URL.replace(/\/+$/, ""), canonicalPath } as const;
+}
 
 // Initialize Resend for email sending
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -193,7 +202,7 @@ function renderForgotPasswordPage(opts: { error?: string; success?: string } = {
   const footer = `
           <div class="divider"></div>
           <p class="form-link">Remember your password? <a href="/auth/password/login">Sign In</a></p>`;
-  return mammothAuthPage("Forgot Password - The Mammoth", main + footer);
+  return mammothAuthPage("Forgot Password - The Mammoth", main + footer, authIssuerSocial("/auth/password/forgot"));
 }
 
 function renderResetPasswordPage(opts: { token?: string; email?: string; error?: string } = {}): string {
@@ -230,7 +239,7 @@ function renderResetPasswordPage(opts: { token?: string; email?: string; error?:
     <div class="divider"></div>
     <p class="form-link"><a href="/auth/password/forgot">Request New Reset Link</a> · <a href="/auth/password/login">Sign In</a></p>`;
 
-  return mammothAuthPage("Reset Password - The Mammoth", inner);
+  return mammothAuthPage("Reset Password - The Mammoth", inner, authIssuerSocial("/auth/password/reset"));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -263,8 +272,12 @@ export async function startAuthServer(): Promise<void> {
 
   // --- Server-rendered document page with full SEO/OG meta ---
   app.get('/document', (c) => {
-    const baseUrl = ISSUER_URL;
-    const ogImage = `${baseUrl}/og-social.png`;
+    const baseUrl = ISSUER_URL.replace(/\/+$/, "");
+    const socialHead = mammothIssuerSocialMetaHead({
+      issuerOrigin: baseUrl,
+      canonicalPath: "/document",
+      htmlTitle: MAMMOTH_DEFAULT_HTML_TITLE,
+    });
     return c.html(`
 <!DOCTYPE html>
 <html lang="en">
@@ -272,27 +285,8 @@ export async function startAuthServer(): Promise<void> {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <title>The Mammoth</title>
-  <meta name="description" content="The Mammoth — multiplayer survival in a frozen megastructure." />
-  <meta name="keywords" content="The Mammoth, multiplayer, survival game, 3D" />
-  <meta name="author" content="The Mammoth" />
-  <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="${baseUrl}/document" />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="The Mammoth" />
-  <meta property="og:description" content="Multiplayer survival in a frozen megastructure." />
-  <meta property="og:image" content="${ogImage}" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:url" content="${baseUrl}/document" />
-  <meta property="og:site_name" content="The Mammoth" />
-  <meta property="og:locale" content="en_US" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="The Mammoth" />
-  <meta name="twitter:description" content="Multiplayer survival in a frozen megastructure." />
-  <meta name="twitter:image" content="${ogImage}" />
-  <meta name="twitter:image:alt" content="The Mammoth" />
+  <title>${MAMMOTH_DEFAULT_HTML_TITLE}</title>
+  ${socialHead}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -307,7 +301,8 @@ export async function startAuthServer(): Promise<void> {
       color: ${THEME_TEXT_PRIMARY};
       background: radial-gradient(ellipse at center, ${THEME_PAGE_BG_MID} 0%, ${THEME_PAGE_BG_EDGE} 72%);
     }
-    h1 { font-size: 2rem; margin-bottom: 1rem; color: ${THEME_ACCENT}; letter-spacing: 0.02em; }
+    h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .doc-hero-logo { max-width: min(100%, 420px); width: 100%; height: auto; max-height: 120px; object-fit: contain; margin-bottom: 1.25rem; }
     p { max-width: 500px; line-height: 1.6; margin-bottom: 1.5rem; color: ${THEME_TEXT_MUTED}; }
     a {
       color: ${THEME_ACCENT_ON};
@@ -324,7 +319,8 @@ export async function startAuthServer(): Promise<void> {
 </head>
 <body>
   <h1>The Mammoth</h1>
-  <p>Multiplayer survival in a frozen megastructure.</p>
+  <img class="doc-hero-logo" src="${baseUrl}${MAMMOTH_LOGO_PUBLIC_PATH}" width="360" alt="The Mammoth" decoding="async" />
+  <p>Late-socialist Balkan megablock survival — multiplayer in a frozen concrete tower.</p>
   <a href="https://github.com/the-mammoth/the-mammoth">GitHub</a>
 </body>
 </html>
@@ -421,6 +417,7 @@ export async function startAuthServer(): Promise<void> {
             <div class="divider"></div>
             <p class="form-link">Already have an account? <a href="/auth/password/login?${queryString}">Sign In</a></p>
         `,
+        authIssuerSocial("/auth/password/register"),
       ),
     );
   });
@@ -490,6 +487,7 @@ export async function startAuthServer(): Promise<void> {
                 <button type="submit" class="submit-button">Create Account</button>
             </form>
             `,
+          authIssuerSocial("/auth/password/register"),
           ),
         );
     }
@@ -527,11 +525,12 @@ export async function startAuthServer(): Promise<void> {
                     <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
                 </div>
                 <button type="submit" class="submit-button">Sign In</button>
-                <p class="form-link" style="margin-top: -8px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot password?</a></p>
+                <p class="form-link form-link-tight"><a href="/auth/password/forgot">Forgot password?</a></p>
             </form>
             <div class="divider"></div>
             <p class="form-link">Need an account? <a href="/auth/password/register?${queryString}">Create account</a></p>
         `,
+        authIssuerSocial("/auth/password/login"),
       ),
     );
   });
@@ -605,11 +604,12 @@ export async function startAuthServer(): Promise<void> {
                             <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
                         </div>
                         <button type="submit" class="submit-button">Sign In</button>
-                        <p class="form-link" style="margin-top: -8px; margin-bottom: 0;"><a href="/auth/password/forgot">Forgot password?</a></p>
+                        <p class="form-link form-link-tight"><a href="/auth/password/forgot">Forgot password?</a></p>
                     </form>
                     <div class="divider"></div>
                     <p class="form-link">Need an account? <a href="/auth/password/register?${queryString}">Create account</a></p>
               `,
+              authIssuerSocial("/auth/password/login"),
             ),
           );
       }
@@ -666,7 +666,10 @@ export async function startAuthServer(): Promise<void> {
               <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
             <body style="font-family: system-ui, -apple-system, sans-serif; background: radial-gradient(ellipse at center, ${THEME_PAGE_BG_MID} 0%, ${THEME_PAGE_BG_EDGE} 72%); color: ${THEME_TEXT_PRIMARY}; padding: 40px 20px; margin: 0;">
-              <div style="max-width: 500px; margin: 0 auto; background: ${THEME_CARD_BG}; border-radius: 14px; padding: 36px 28px; border: 1px solid rgba(255,255,255,0.1);">
+              <div style="max-width: 500px; margin: 0 auto; background: ${THEME_CARD_BG}; border-radius: 14px; padding: 36px 28px; border: 1px solid ${THEME_CARD_BORDER};">
+                <div style="text-align: center; margin: 0 0 22px;">
+                  <img src="${ISSUER_URL}${MAMMOTH_LOGO_PUBLIC_PATH}" alt="The Mammoth" width="320" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+                </div>
                 <h1 style="color: ${THEME_ACCENT}; margin-bottom: 18px; font-size: 22px;">Reset your password</h1>
                 <p style="color: ${THEME_TEXT_MUTED}; line-height: 1.6; margin-bottom: 26px;">
                   You requested a password reset for your The Mammoth account. Use the button below to choose a new password.
@@ -678,7 +681,7 @@ export async function startAuthServer(): Promise<void> {
                   This link will expire in ${PASSWORD_RESET_EXPIRY_MINUTES} minutes.<br><br>
                   If you didn't request this reset, you can safely ignore this email.
                 </p>
-                <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 28px 0;">
+                <hr style="border: none; border-top: 1px solid ${THEME_DIVIDER}; margin: 28px 0;">
                 <p style="color: ${THEME_TEXT_FAINT}; font-size: 12px;">
                   The Mammoth
                 </p>
@@ -785,6 +788,7 @@ export async function startAuthServer(): Promise<void> {
             <p class="form-description">Your password was saved. You can sign in with your new password.</p>
             <a href="/auth/password/login" class="submit-button">Sign in</a>
         `,
+        authIssuerSocial("/auth/password/login"),
       ),
     );
   });
