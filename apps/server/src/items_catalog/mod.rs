@@ -85,7 +85,10 @@ mod hotbar_consume_sound_tests {
             HotbarConsumeSound::Drink
         );
         assert_eq!(hotbar_consume_sound("rakija"), HotbarConsumeSound::Drink);
-        assert_eq!(hotbar_consume_sound("cigarettes"), HotbarConsumeSound::Smoke);
+        assert_eq!(
+            hotbar_consume_sound("cigarettes"),
+            HotbarConsumeSound::Smoke
+        );
     }
 
     #[test]
