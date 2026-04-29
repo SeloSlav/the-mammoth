@@ -58,6 +58,11 @@ export function apartmentDoorGameplayBreached(conn: DbConnection, rowKey: string
   return false;
 }
 
+function sameIdentity(a: Identity | null | undefined, b: Identity | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.isEqual(b) || b.isEqual(a);
+}
+
 /**
  * Client mirror of `player_may_toggle_door` for HUD + input — must stay aligned with server.
  */
@@ -83,7 +88,7 @@ export function clientMayToggleApartmentDoor(
   if (unit.state === UNIT_STATE_UNCLAIMED) return false;
   if (unit.state === UNIT_STATE_BROKEN) return false;
   if (unit.state === UNIT_STATE_CLAIMED) {
-    return unit.owner != null && unit.owner.isEqual(identity);
+    return sameIdentity(unit.owner, identity);
   }
   return false;
 }
@@ -199,10 +204,9 @@ export type ApartmentSystemPrompt =
   | ApartmentClaimBlockedGearPrompt
   | ApartmentStashPrompt;
 
-/** Wardrobe / claim / stash HUD should beat overlapping residential door prompts (same E priority). */
+/** Claim HUD should beat overlapping residential door prompts because claiming is a hold action. */
 export function apartmentFurnitureInteriorsPreferOverUnitDoor(p: ApartmentSystemPrompt | null): boolean {
   return (
-    p?.kind === "apartment_stash" ||
     p?.kind === "apartment_claim" ||
     p?.kind === "apartment_claim_blocked_gear"
   );
@@ -255,6 +259,31 @@ function nearFootlocker(u: ApartmentUnit, x: number, y: number, z: number): bool
   return feetVerticalOkForInteract(u.footY, y);
 }
 
+function nearestOwnedClaimedUnitNearFootlocker(
+  conn: DbConnection,
+  owner: Identity,
+  x: number,
+  y: number,
+  z: number,
+): ApartmentUnit | null {
+  let best: ApartmentUnit | null = null;
+  let bestD = Infinity;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.state !== UNIT_STATE_CLAIMED) continue;
+    if (!sameIdentity(u.owner, owner)) continue;
+    if (!nearFootlocker(u, x, y, z)) continue;
+    const dx = x - u.footX;
+    const dz = z - u.footZ;
+    const d = dx * dx + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = u;
+    }
+  }
+  return best;
+}
+
 /**
  * Highest-priority apartment prompt for FP HUD (excluding world loot — handled separately).
  */
@@ -276,10 +305,15 @@ export function getApartmentSystemPrompt(
     return { kind: "apartment_claim_blocked_gear", unitKey: claimUnit.unitKey };
   }
 
+  const stashUnit = nearestOwnedClaimedUnitNearFootlocker(conn, id, pose.x, pose.y, pose.z);
+  if (stashUnit) {
+    return { kind: "apartment_stash", unitKey: stashUnit.unitKey };
+  }
+
   const u = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
   if (!u) return null;
 
-  if (u.state === UNIT_STATE_CLAIMED && u.owner?.isEqual(id) && nearFootlocker(u, pose.x, pose.y, pose.z)) {
+  if (u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, id) && nearFootlocker(u, pose.x, pose.y, pose.z)) {
     return { kind: "apartment_stash", unitKey: u.unitKey };
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
+  clientMayToggleApartmentDoor,
   feetDeepEnoughFromEntryDoor,
   formatApartmentPublicLabel,
   getApartmentSystemPrompt,
@@ -54,6 +55,7 @@ function mockConn(apartmentUnits: ApartmentUnit[], defIds: string[] = []) {
     db: {
       apartment_unit: apartmentUnits,
       apartment_door: [],
+      apartment_door_gameplay: [],
       inventory_item: defIds.map((defId, index) => ({
         instanceId: BigInt(index + 1),
         defId,
@@ -165,5 +167,35 @@ describe("fpApartmentGameplay", () => {
     });
     const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 4.2, y: 10, z: 5.2 });
     expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+  });
+
+  it("offers owned footlocker stash near the footlocker even outside the coarse unit hull", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 20,
+      footZ: 20,
+      boundMinX: 0,
+      boundMaxX: 10,
+      boundMinZ: 0,
+      boundMaxZ: 10,
+    });
+    const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 20.2, y: 10, z: 20.1 });
+    expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+  });
+
+  it("allows the claimed owner to toggle their apartment door", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+    });
+    expect(
+      clientMayToggleApartmentDoor(mockConn([unit]), testIdentity as never, {
+        rowKey: "door-row",
+        floorDocId: unit.floorDocId,
+        level: unit.level,
+        templateId: `${unit.unitId}|W|0`,
+      }),
+    ).toBe(true);
   });
 });

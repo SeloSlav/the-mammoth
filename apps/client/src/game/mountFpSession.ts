@@ -787,6 +787,17 @@ export async function mountFpSession(
         return;
       }
 
+      if (
+        aptKey?.kind === "apartment_claim" ||
+        aptKey?.kind === "apartment_claim_blocked_gear"
+      ) {
+        // Hold-to-claim uses RAF pulses; do not let a nearby world-anchor drop steal this keypress.
+        return;
+      }
+
+      if (fpApartmentDoors.consumeInteractKey(feet)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(feet)) return;
+
       if (aptKey?.kind === "apartment_stash") {
         const slot = getFpHotbarSelectedSlot();
         if (slot !== null) {
@@ -796,16 +807,9 @@ export async function mountFpSession(
               itemInstanceId: it.instanceId,
               unitKey: aptKey.unitKey,
             });
+            return;
           }
         }
-        return;
-      }
-      if (
-        aptKey?.kind === "apartment_claim" ||
-        aptKey?.kind === "apartment_claim_blocked_gear"
-      ) {
-        // Hold-to-claim uses RAF pulses; do not let a nearby world-anchor drop steal this keypress.
-        return;
       }
 
       const nearWorld = findNearestDroppedPickup(
@@ -820,9 +824,6 @@ export async function mountFpSession(
         void conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
         return;
       }
-
-      if (fpApartmentDoors.consumeInteractKey(feet)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(feet)) return;
 
       droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
     }

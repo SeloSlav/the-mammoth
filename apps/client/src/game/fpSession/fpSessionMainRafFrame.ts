@@ -582,10 +582,8 @@ export function createFpSessionMainRafFrame(
       } else {
         const nearWorld = droppedHud.worldAnchor;
         const hitPlain = droppedHud.plain;
-        /** Same priority ordering as overlapping residential swing doors ({@link apartmentFurnitureInteriorsPreferOverUnitDoor}). */
-        const preferAptInterior =
-          aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys);
-        if (!preferAptInterior && nearWorld) {
+        const aptSystemBeatsWorldAnchor = aSys !== null;
+        if (!aptSystemBeatsWorldAnchor && nearWorld) {
           const def = getMammothItemDef(nearWorld.defId);
           setFpPickupPrompt({
             kind: "dropped_item",
@@ -713,6 +711,7 @@ export function createFpSessionMainRafFrame(
     const primaryMirrorIdx = pickCabMirrorPrimaryUpdateIndex(deps.cabMirrors, {
       cameraWorld: deps._floorVisCamWorld,
       cameraForward: deps._floorVisCamDir,
+      opts: { maxDistanceM: 4.5, minFacingDot: 0.22 },
       skipReflectionWhenVerticalLookAboveAbsY: FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
     });
     const forceMirrorReflectionUpdate =
@@ -728,6 +727,7 @@ export function createFpSessionMainRafFrame(
       const mirror = deps.cabMirrors[i]!;
       mirror.syncForCamera({
         camera: deps.camera,
+        dynamicActive: i === primaryMirrorIdx,
         forceReflectionUpdate: forceMirrorReflectionUpdate && i === primaryMirrorIdx,
         configureVirtualCamera: (virtualCamera) => {
           virtualCamera.layers.mask = deps.camera.layers.mask;

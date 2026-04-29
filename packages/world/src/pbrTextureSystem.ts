@@ -12,7 +12,7 @@ import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
  */
 export const authorImportedPbrTexturesState = {
   /** Set `true` for shipped visuals; `false` skips author PBR loads for FPS experiments. */
-  enabled: false,
+  enabled: true,
 };
 
 let ktx2Loader: InstanceType<typeof import("three/addons/loaders/KTX2Loader.js").KTX2Loader> | null =
