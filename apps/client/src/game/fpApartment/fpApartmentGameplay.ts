@@ -198,6 +198,24 @@ export function playerOwnsScrewdriver(conn: DbConnection, id: Identity): boolean
   return false;
 }
 
+export function clientMayUseApartmentStash(
+  conn: DbConnection,
+  owner: Identity | undefined,
+  unitKey: string,
+  pose: { x: number; y: number; z: number },
+): boolean {
+  if (!owner) return false;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.unitKey !== unitKey) continue;
+    if (u.state !== UNIT_STATE_CLAIMED) return false;
+    if (!sameIdentity(u.owner, owner)) return false;
+    if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
+    return nearFootlocker(u, pose.x, pose.y, pose.z);
+  }
+  return false;
+}
+
 export type ApartmentClaimPrompt = {
   kind: "apartment_claim";
   unitKey: string;
@@ -313,7 +331,7 @@ function nearestOwnedClaimedUnitNearFootlocker(
 export function getApartmentSystemPrompt(
   conn: DbConnection,
   pose: { x: number; y: number; z: number },
-  opts: { apartmentClaimsAllowed?: boolean } = {},
+  opts: { apartmentClaimsAllowed?: boolean; lookedAtStashUnitKey?: string | null } = {},
 ):
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
@@ -333,15 +351,26 @@ export function getApartmentSystemPrompt(
     return { kind: "apartment_claim_blocked_gear", unitKey: claimUnit.unitKey };
   }
 
+  if (opts.lookedAtStashUnitKey === null) return null;
+
+  if (opts.lookedAtStashUnitKey !== undefined) {
+    return clientMayUseApartmentStash(conn, id, opts.lookedAtStashUnitKey, pose)
+      ? { kind: "apartment_stash", unitKey: opts.lookedAtStashUnitKey }
+      : null;
+  }
+
   const stashUnit = nearestOwnedClaimedUnitNearFootlocker(conn, id, pose.x, pose.y, pose.z);
   if (stashUnit) {
     return { kind: "apartment_stash", unitKey: stashUnit.unitKey };
   }
 
   const u = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
-  if (!u) return null;
-
-  if (u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, id) && nearFootlocker(u, pose.x, pose.y, pose.z)) {
+  if (
+    u &&
+    u.state === UNIT_STATE_CLAIMED &&
+    sameIdentity(u.owner, id) &&
+    nearFootlocker(u, pose.x, pose.y, pose.z)
+  ) {
     return { kind: "apartment_stash", unitKey: u.unitKey };
   }
 

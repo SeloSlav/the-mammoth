@@ -13,6 +13,10 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import {
+  clientMayUseApartmentStash,
+  type ApartmentStashPrompt,
+} from "./fpApartmentGameplay.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -22,6 +26,7 @@ const BED_URL = "/static/models/objects/bed.glb";
 const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
 const BED_VIS_SCALE = 1.14;
+const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
@@ -41,6 +46,10 @@ const FURNITURE_PLACEMENT_FIELDS = [
   "boundMinZ",
   "boundMaxZ",
 ] as const satisfies readonly (keyof ApartmentUnit)[];
+
+const _stashRaycaster = new THREE.Raycaster();
+const _screenCenterNdc = new THREE.Vector2(0, 0);
+const _visibleStashPickMeshes: THREE.Object3D[] = [];
 
 export function apartmentFurniturePlacementChanged(
   oldUnit: ApartmentUnit,
@@ -80,6 +89,10 @@ function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Objec
 
 export type MountFpApartmentFurnitureResult = {
   dispose: () => void;
+  getStashPrompt: (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ) => ApartmentStashPrompt | null;
 };
 
 export async function mountFpApartmentFurniture(opts: {
@@ -100,6 +113,14 @@ export async function mountFpApartmentFurniture(opts: {
   const bedTemplate = bedGltf.scene;
 
   const managed: THREE.Object3D[] = [];
+  const stashPickMeshes: THREE.Mesh[] = [];
+  const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const stashPickMaterial = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  stashPickMaterial.colorWrite = false;
 
   let rebuildScheduled = false;
   const scheduleRebuild = () => {
@@ -116,6 +137,7 @@ export async function mountFpApartmentFurniture(opts: {
       opts.buildingRoot.remove(o);
     }
     managed.length = 0;
+    stashPickMeshes.length = 0;
 
     const byLevel = new Map<number, THREE.Group>();
 
@@ -158,7 +180,28 @@ export async function mountFpApartmentFurniture(opts: {
       f.position.set(u.footX, 0, u.footZ);
       f.rotation.y = furnitureYaw;
       snapCloneBottomToWorldFloor(f, floorY);
+      f.updateMatrixWorld(true);
+      const footlockerBounds = new THREE.Box3().setFromObject(f);
+      const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+      const footlockerPickSize = new THREE.Vector3();
+      const footlockerPickCenter = new THREE.Vector3();
+      footlockerBounds.getSize(footlockerPickSize);
+      footlockerBounds.getCenter(footlockerPickCenter);
+      footlockerPick.name = `apartment_footlocker_pick:${u.unitKey}`;
+      footlockerPick.position.copy(footlockerPickCenter);
+      footlockerPick.scale.set(
+        Math.max(0.35, footlockerPickSize.x),
+        Math.max(0.25, footlockerPickSize.y),
+        Math.max(0.35, footlockerPickSize.z),
+      );
+      footlockerPick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
+      footlockerPick.userData.mammothSkipFloorGeometryMerge = true;
+      footlockerPick.userData.mammothApartmentFurnitureProp = true;
+      footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
+      footlockerPick.userData.mammothUnitInterior = true;
       unitGroup.add(f);
+      unitGroup.add(footlockerPick);
+      stashPickMeshes.push(footlockerPick);
 
       const b = clonePropScene(bedTemplate, levelIdx);
       b.scale.setScalar(BED_VIS_SCALE);
@@ -208,6 +251,27 @@ export async function mountFpApartmentFurniture(opts: {
   rebuild();
 
   return {
+    getStashPrompt: (playerPos, camera) => {
+      if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
+      _visibleStashPickMeshes.length = 0;
+      for (const m of stashPickMeshes) {
+        if (m.visible) _visibleStashPickMeshes.push(m);
+      }
+      if (_visibleStashPickMeshes.length === 0) return null;
+      _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
+      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      const hits = _stashRaycaster.intersectObjects(_visibleStashPickMeshes, false);
+      const seen = new Set<string>();
+      for (const hit of hits) {
+        const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
+        if (typeof unitKey !== "string" || seen.has(unitKey)) continue;
+        seen.add(unitKey);
+        if (clientMayUseApartmentStash(opts.conn, opts.conn.identity, unitKey, playerPos)) {
+          return { kind: "apartment_stash", unitKey };
+        }
+      }
+      return null;
+    },
     dispose: () => {
       opts.conn.db.apartment_unit.removeOnInsert(bumpApartmentUnit);
       opts.conn.db.apartment_unit.removeOnUpdate(bumpApartmentUnitIfPlacementChanged);
@@ -216,6 +280,9 @@ export async function mountFpApartmentFurniture(opts: {
         opts.buildingRoot.remove(o);
       }
       managed.length = 0;
+      stashPickMeshes.length = 0;
+      stashPickGeometry.dispose();
+      stashPickMaterial.dispose();
     },
   };
 }

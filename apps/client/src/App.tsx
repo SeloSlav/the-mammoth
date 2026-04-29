@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mountFpSession } from "./game/mountFpSession";
 import { HudShell } from "./ui/HudShell";
-import { LoginGate } from "./ui/LoginGate";
+import LoginGate from "./ui/LoginGate";
 import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
 
 const REQUIRE_REGISTERED_APARTMENT_CLAIMS =

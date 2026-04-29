@@ -30,6 +30,7 @@ import {
 } from "../fpApartment/fpApartmentClaimHoldSmooth.js";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
+import type { MountFpApartmentFurnitureResult } from "../fpApartment/fpApartmentFurniture.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import { LocalGameAudio } from "../audio/localGameAudio.js";
@@ -150,6 +151,7 @@ export type FpSessionMainRafFrameDeps = {
   fpCollisionDebug: ReturnType<typeof createFpCollisionDebugOverlay>;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
+  fpApartmentFurniture: MountFpApartmentFurnitureResult;
   sampleWalkTopBase: (x: number, z: number, probeTopY: number) => number;
   _elevSupportEval: FpKinematicSupportSampleOpts;
   _displayOffset: THREE.Vector3;
@@ -531,8 +533,10 @@ export function createFpSessionMainRafFrame(
         ft.z,
         MAMMOTH_PICKUP_RADIUS_M,
       );
+      const lookedAtStash = deps.fpApartmentFurniture.getStashPrompt(ft, deps.camera);
       const aSys = getApartmentSystemPrompt(deps.conn, ft, {
         apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
+        lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,
       });
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {

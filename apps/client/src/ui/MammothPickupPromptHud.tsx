@@ -200,7 +200,7 @@ export function MammothPickupPromptHud() {
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>
-          Near your footlocker — selected hotbar stack: press{" "}
+          Looking at your footlocker — selected hotbar stack: press{" "}
         </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ffd8b0 0%, #da9a55 45%, #8a5822 100%)"

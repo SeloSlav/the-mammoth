@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   apartmentDoorMatchesContainingUnit,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
+  clientMayUseApartmentStash,
   clientMayToggleApartmentDoor,
   feetDeepEnoughFromEntryDoor,
   formatApartmentPublicLabel,
@@ -220,6 +221,59 @@ describe("fpApartmentGameplay", () => {
     });
     const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 2.2, y: 10, z: 3.1 });
     expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+  });
+
+  it("requires an explicit looked-at stash target when proximity stash prompts are disabled", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 2,
+      footZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const conn = mockConn([unit]);
+    const pose = { x: 2.2, y: 10, z: 3.1 };
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashUnitKey: null,
+      }),
+    ).toBeNull();
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashUnitKey: unit.unitKey,
+      }),
+    ).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+  });
+
+  it("clientMayUseApartmentStash rejects owned stash unless feet are inside range", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 2,
+      footZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const conn = mockConn([unit]);
+    expect(
+      clientMayUseApartmentStash(conn, testIdentity as never, unit.unitKey, {
+        x: 2.2,
+        y: 10,
+        z: 3.1,
+      }),
+    ).toBe(true);
+    expect(
+      clientMayUseApartmentStash(conn, testIdentity as never, unit.unitKey, {
+        x: 6.35,
+        y: 10,
+        z: 3.1,
+      }),
+    ).toBe(false);
   });
 
   it("does not offer owned footlocker stash through a wall from outside that unit", () => {

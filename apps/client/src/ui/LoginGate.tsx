@@ -182,3 +182,5 @@ function connectionErrorPlayerMessage(raw: string | null): string {
   }
   return "Check-in cut out before the lock could turn.";
 }
+
+export default LoginGate;

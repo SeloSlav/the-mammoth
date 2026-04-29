@@ -43,7 +43,6 @@ import {
   isGlazedApartmentDoorTemplate,
   SWING_DOOR_ANIM_SPEED,
   SWING_DOOR_DEFAULT_MAX_RAD,
-  SWING_DOOR_INTERACT_RADIUS_M,
   type SwingDoorDimensions,
   type SwingDoorFace,
   swingDoorClosedSlabAabb,
@@ -87,18 +86,12 @@ const _hingeComposePos = new THREE.Vector3();
 const _hingeComposeQuat = new THREE.Quaternion();
 const _hingeComposeScale = new THREE.Vector3(1, 1, 1);
 const _hingeYAxis = new THREE.Vector3(0, 1, 0);
-const _interactCamWorld = new THREE.Vector3();
-const _interactCamDir = new THREE.Vector3();
+const _interactRaycaster = new THREE.Raycaster();
+const _screenCenterNdc = new THREE.Vector2(0, 0);
 
 /** Bucket size (meters) used by the collision/interact spatial index. Tuned so a typical query
  *  window touches at most 2×2 buckets for 608 doors stretched over ~230 m. */
 const APARTMENT_DOOR_BUCKET_SIZE_M = 8;
-
-/**
- * When probing buckets for interact / collision, expand XZ by at least this half-extent so wide
- * stair-shaft doors (≈2.5 m leaf) still hit their bucket even though the kit default width is 1.26 m.
- */
-const APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M = 1.35;
 
 /** Threshold below which two open01 values are treated as converged (skip matrix rewrite). */
 const APARTMENT_DOOR_ANIM_EPSILON = 1e-4;
@@ -183,6 +176,8 @@ type InstanceGroup = {
   mesh: THREE.InstancedMesh;
   /** Glass lite mesh; only populated when `kind === "glazed"`. */
   glassMesh: THREE.InstancedMesh | undefined;
+  /** Door slot by `Raycaster` hit `instanceId` for both frame and optional glass pass. */
+  slots: DoorSlot[];
   /** Flipped to true whenever any instance matrix was rewritten this frame. */
   dirty: boolean;
 };
@@ -551,7 +546,7 @@ export function mountFpApartmentDoors(
       opts.buildingRoot.add(glassMesh);
     }
 
-    return { kind, mesh, glassMesh, dirty: true };
+    return { kind, mesh, glassMesh, slots: [], dirty: true };
   };
 
   for (const ref of opts.building.floorRefs) {
@@ -626,6 +621,7 @@ export function mountFpApartmentDoors(
         lastApplied: Number.NaN, // force first write
         seeded: false,
       };
+      group.slots[instanceIndex] = slot;
       applyMatrix(slot, 0);
 
       slotsByKey.set(rowKey, slot);
@@ -773,51 +769,49 @@ export function mountFpApartmentDoors(
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
   ): DoorSlot | null => {
-    camera.getWorldPosition(_interactCamWorld);
-    camera.getWorldDirection(_interactCamDir);
-    const r =
-      SWING_DOOR_INTERACT_RADIUS_M +
-      Math.max(APARTMENT_DOOR_DIMS.panelW, APARTMENT_DOOR_BUCKET_PROBE_HALF_EXTENT_M * 2);
-    const candidates: { slot: DoorSlot; lookScore: number; dsq: number }[] = [];
-    visitBucketedSlots(
-      bucketIndex,
-      playerPos.x - r,
-      playerPos.x + r,
-      playerPos.z - r,
-      playerPos.z + r,
-      (slot) => {
-        if (
-          !swingDoorPlayerInInteractRange({
-            hingeX: slot.hingeX,
-            hingeZ: slot.hingeZ,
-            feetY: slot.feetY,
-            panelWidthM: slot.panelWidthM,
-            panelHeightM: slot.panelHeightM,
-            px: playerPos.x,
-            py: playerPos.y,
-            pz: playerPos.z,
-          })
-        ) {
-          return;
-        }
-        const lookScore = apartmentDoorLookScore({
-          cameraX: _interactCamWorld.x,
-          cameraZ: _interactCamWorld.z,
-          viewDirX: _interactCamDir.x,
-          viewDirZ: _interactCamDir.z,
-          targetX: slot.hingeX,
-          targetZ: slot.hingeZ,
-        });
-        if (lookScore === null) return;
-        const dx = playerPos.x - slot.hingeX;
-        const dz = playerPos.z - slot.hingeZ;
-        const dsq = dx * dx + dz * dz;
-        candidates.push({ slot, lookScore, dsq });
-      },
-    );
-    candidates.sort((a, b) => a.lookScore - b.lookScore || a.dsq - b.dsq);
+    const roots: THREE.Object3D[] = [];
+    for (const lm of levelMeshes) {
+      for (const group of lm.groups) {
+        if (group.mesh.visible) roots.push(group.mesh);
+        if (group.glassMesh?.visible) roots.push(group.glassMesh);
+      }
+    }
+    if (roots.length === 0) return null;
+
+    _interactRaycaster.setFromCamera(_screenCenterNdc, camera);
+    _interactRaycaster.far = APARTMENT_DOOR_LOOK_MAX_DIST_M;
+    const hits = _interactRaycaster.intersectObjects(roots, false);
     const id = opts.conn.identity ?? undefined;
-    for (const { slot } of candidates) {
+    const seen = new Set<string>();
+    for (const hit of hits) {
+      const instanceId = hit.instanceId;
+      if (instanceId == null) continue;
+      let slot: DoorSlot | undefined;
+      for (const lm of levelMeshes) {
+        for (const group of lm.groups) {
+          if (hit.object === group.mesh || hit.object === group.glassMesh) {
+            slot = group.slots[instanceId];
+            break;
+          }
+        }
+        if (slot) break;
+      }
+      if (!slot || seen.has(slot.rowKey)) continue;
+      seen.add(slot.rowKey);
+      if (
+        !swingDoorPlayerInInteractRange({
+          hingeX: slot.hingeX,
+          hingeZ: slot.hingeZ,
+          feetY: slot.feetY,
+          panelWidthM: slot.panelWidthM,
+          panelHeightM: slot.panelHeightM,
+          px: playerPos.x,
+          py: playerPos.y,
+          pz: playerPos.z,
+        })
+      ) {
+        continue;
+      }
       if (!apartmentDoorMatchesContainingUnit(opts.conn, playerPos, slot)) continue;
       if (clientMayToggleApartmentDoor(opts.conn, id, slot)) return slot;
     }

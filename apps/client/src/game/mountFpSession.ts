@@ -783,7 +783,14 @@ export async function mountFpSession(
       const feet = getInteractionPos();
       if (fpElevators.consumeInteractKey(pos, camera)) return;
       const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
-      const aptKey = conn.identity ? getApartmentSystemPrompt(conn, feet) : null;
+      const lookedAtStash = conn.identity
+        ? fpApartmentFurniture.getStashPrompt(feet, camera)
+        : null;
+      const aptKey = conn.identity
+        ? getApartmentSystemPrompt(conn, feet, {
+            lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,
+          })
+        : null;
       /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */
       const interiorBeatElevPickup =
         aptKey !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aptKey);
@@ -904,6 +911,7 @@ export async function mountFpSession(
     if (!e.isPrimary || e.button !== 0) return;
     const nowMs = performance.now();
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
+    if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
     const selectedHotbarSlot = getFpHotbarSelectedSlot();
     if (
       conn.identity &&
@@ -952,6 +960,7 @@ export async function mountFpSession(
     fpCollisionDebug,
     fpElevators,
     fpApartmentDoors,
+    fpApartmentFurniture,
     sampleWalkTopBase,
     _elevSupportEval,
     _displayOffset,
