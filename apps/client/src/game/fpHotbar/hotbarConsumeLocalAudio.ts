@@ -3,7 +3,7 @@
  * Inventory HUD and digit-key consume call {@link primeHotbarConsumeAudio} / {@link playHotbarConsumeLocalAfterServer}.
  */
 
-let playImpl: ((profile: "eat" | "drink") => void) | null = null;
+let playImpl: ((profile: "eat" | "drink" | "smoke") => void) | null = null;
 let primeImpl: (() => Promise<void>) | null = null;
 
 export function registerHotbarConsumeLocalPlayback(fn: typeof playImpl): void {
@@ -19,7 +19,7 @@ export function primeHotbarConsumeAudio(): Promise<void> {
   return primeImpl?.() ?? Promise.resolve();
 }
 
-export function playHotbarConsumeLocalAfterServer(profile: "eat" | "drink"): void {
+export function playHotbarConsumeLocalAfterServer(profile: "eat" | "drink" | "smoke"): void {
   playImpl?.(profile);
 }
 

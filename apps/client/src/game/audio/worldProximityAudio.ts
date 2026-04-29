@@ -1,6 +1,6 @@
 /**
  * **Replicated** one-shots (`world_sound_event`): 3D Web Audio for footsteps, melee weapon swings,
- * pickups, hotbar consume (eat / drink), and elevator UI. The emitter skips **most** of their own rows
+ * pickups, hotbar consume (eat / drink / smoke), and elevator UI. The emitter skips **most** of their own rows
  * (footsteps / swings / pickup / consume have immediate or local paths in {@link LocalGameAudio}).
  * Elevator floor / hail presses, landing corridor door toggles, and cab arrival use **only** this path
  * so observers (and riders when applicable) hear the same spatial cue.
@@ -21,6 +21,7 @@ import {
 import {
   CONSUME_DRINK_STEM,
   CONSUME_EAT_STEM,
+  CONSUME_SMOKE_STEM,
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
@@ -38,6 +39,8 @@ export const WORLD_SOUND_KIND_ITEM_PICKUP = 2;
 export const WORLD_SOUND_KIND_CONSUME_EAT = 3;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_CONSUME_DRINK`. */
 export const WORLD_SOUND_KIND_CONSUME_DRINK = 4;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_CONSUME_SMOKE`. */
+export const WORLD_SOUND_KIND_CONSUME_SMOKE = 13;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_FLOOR_BUTTON`. */
 export const WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON = 5;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_ELEVATOR_LANDING_HAIL`. */
@@ -83,6 +86,7 @@ export class WorldProximityAudio {
   private itemPickBuffer: AudioBuffer | null = null;
   private consumeEatBuffer: AudioBuffer | null = null;
   private consumeDrinkBuffer: AudioBuffer | null = null;
+  private consumeSmokeBuffer: AudioBuffer | null = null;
   private elevatorFloorButtonBuffer: AudioBuffer | null = null;
   private elevatorLandingHailBuffer: AudioBuffer | null = null;
   private doorOpenBuffer: AudioBuffer | null = null;
@@ -137,6 +141,11 @@ export class WorldProximityAudio {
     this.consumeDrinkBuffer = await this.decodeSingleStem(
       ctx,
       CONSUME_DRINK_STEM,
+      CONSUME_STEM_MEDIA_EXTENSIONS,
+    );
+    this.consumeSmokeBuffer = await this.decodeSingleStem(
+      ctx,
+      CONSUME_SMOKE_STEM,
       CONSUME_STEM_MEDIA_EXTENSIONS,
     );
     this.elevatorFloorButtonBuffer = await this.decodeSingleStem(ctx, ELEVATOR_FLOOR_BUTTON_STEM);
@@ -293,6 +302,9 @@ export class WorldProximityAudio {
     } else if (row.kind === WORLD_SOUND_KIND_CONSUME_DRINK) {
       if (!this.consumeDrinkBuffer) return;
       buf = this.consumeDrinkBuffer;
+    } else if (row.kind === WORLD_SOUND_KIND_CONSUME_SMOKE) {
+      buf = this.consumeSmokeBuffer ?? this.consumeEatBuffer;
+      if (!buf) return;
     } else if (row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON) {
       if (!this.elevatorFloorButtonBuffer) return;
       buf = this.elevatorFloorButtonBuffer;
@@ -362,6 +374,7 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_MELEE_WEAPON_SWING ||
       row.kind === WORLD_SOUND_KIND_CONSUME_EAT ||
       row.kind === WORLD_SOUND_KIND_CONSUME_DRINK ||
+      row.kind === WORLD_SOUND_KIND_CONSUME_SMOKE ||
       row.kind === WORLD_SOUND_KIND_ELEVATOR_FLOOR_BUTTON ||
       row.kind === WORLD_SOUND_KIND_ELEVATOR_LANDING_HAIL ||
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_OPEN ||

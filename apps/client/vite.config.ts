@@ -4,7 +4,7 @@ import path from "node:path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import checker from "vite-plugin-checker";
-import { mammothGameClientSocialMetaHead } from "../../packages/ui-theme/src/mammothSiteMeta.ts";
+import { mammothGameClientSocialMetaHead } from "../../packages/ui-theme/src/mammothSiteMeta";
 import { contentDevStaticGetMiddleware } from "./src/vite/contentDevMiddleware.js";
 
 /**

@@ -51,13 +51,6 @@
       "maxStack": 30
     },
     {
-      "id": "cigarettes",
-      "displayName": "Cigarettes",
-      "description": "Loose smokes. Trade currency and stress relief.",
-      "category": "material",
-      "maxStack": 20
-    },
-    {
       "id": "ammo-9mm",
       "displayName": "9mm rounds",
       "description": "Loose pistol ammunition (no magazines).",

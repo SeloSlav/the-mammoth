@@ -462,6 +462,7 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
     let kind = match items_catalog::hotbar_consume_sound(&item.def_id) {
         items_catalog::HotbarConsumeSound::Eat => world_sound::KIND_CONSUME_EAT,
         items_catalog::HotbarConsumeSound::Drink => world_sound::KIND_CONSUME_DRINK,
+        items_catalog::HotbarConsumeSound::Smoke => world_sound::KIND_CONSUME_SMOKE,
     };
     if let Some(pose) = ctx.db.player_pose().identity().find(&sender) {
         world_sound::emit_hotbar_consume_at(ctx, kind, pose.x, pose.y + 0.92, pose.z, sender);

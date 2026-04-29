@@ -55,6 +55,18 @@
       "maxStack": 12,
       "hotbarConsumeSound": "drink",
       "consumeOnUse": { "hydrationDelta": -24 }
+    },
+    {
+      "id": "cigarettes",
+      "displayName": "Cigarettes",
+      "description": "Loose smokes. Trade currency and stress relief.",
+      "category": "consumable",
+      "maxStack": 20,
+      "hotbarConsumeSound": "smoke",
+      "consumeOnUse": {
+        "hydrationDelta": -3,
+        "hungerDelta": -2
+      }
     }
   ]
 }

@@ -6,6 +6,7 @@ import rangedWeapons from "../../../../content/items/catalog/ranged_weapons.json
 import toolItems from "../../../../content/items/catalog/tools.json";
 import ammo9mmIcon from "../../../../content/references/meshy/9-mm-round.png?url";
 import appleIcon from "../../../../content/references/meshy/apple.png?url";
+import cigaretteIcon from "../../../../content/references/meshy/cigarette.png?url";
 import baseballBatIcon from "../../../../content/references/meshy/baseball-bat.png?url";
 import crowbarIcon from "../../../../content/references/meshy/crowbar.png?url";
 import doorLockIcon from "../../../../content/references/meshy/door-lock.png?url";
@@ -85,7 +86,7 @@ const ICONS: Record<string, string> = {
   nails: crowbarIcon,
   "ammo-9mm": ammo9mmIcon,
   "ammo-shotgun-shell": shotgunShellIcon,
-  cigarettes: crowbarIcon,
+  cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
   "claw-hammer": crowbarIcon,
@@ -107,7 +108,7 @@ function normalizeConsumeOnUse(raw?: MammothConsumeOnUse): MammothConsumeOnUse |
 }
 
 function normalizeHotbarConsumeSound(raw?: MammothHotbarConsumeSound): MammothHotbarConsumeSound | null {
-  return raw === "eat" || raw === "drink" ? raw : null;
+  return raw === "eat" || raw === "drink" || raw === "smoke" ? raw : null;
 }
 
 function normalizeMeleeCombat(raw?: MammothMeleeCombat): MammothMeleeCombat | null {

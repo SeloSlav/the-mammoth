@@ -24,6 +24,8 @@ pub const KIND_ITEM_PICKUP: u8 = 2;
 pub const KIND_CONSUME_EAT: u8 = 3;
 /// Hotbar instant consume — drink / hydration-first (`variation` 0 → `consume-drink` stem).
 pub const KIND_CONSUME_DRINK: u8 = 4;
+/// Hotbar instant consume — smoke (`variation` 0 → `consume-smoke` stem on client).
+pub const KIND_CONSUME_SMOKE: u8 = 13;
 /// In-cab floor selector (`elevator_select_floor`); `variation` unused.
 pub const KIND_ELEVATOR_FLOOR_BUTTON: u8 = 5;
 /// Landing hail / call panel (`elevator_hail`); `variation` unused.
@@ -191,7 +193,7 @@ pub fn emit_hotbar_consume_at(
     z: f32,
     emitter: Identity,
 ) {
-    if kind != KIND_CONSUME_EAT && kind != KIND_CONSUME_DRINK {
+    if kind != KIND_CONSUME_EAT && kind != KIND_CONSUME_DRINK && kind != KIND_CONSUME_SMOKE {
         log::warn!("emit_hotbar_consume_at: unexpected kind {kind}");
         return;
     }

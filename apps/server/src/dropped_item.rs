@@ -48,10 +48,8 @@ const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
 /// `(def_id, qty_min_inclusive, qty_max_inclusive, weight)`.
 const WORLD_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
     ("cigarettes", 4, 12, 3),
-    ("nails", 8, 20, 4),
     ("ammo-9mm", 18, 55, 22),
     ("ammo-shotgun-shell", 6, 18, 14),
-    ("scrap-metal", 1, 4, 2),
     ("pistol", 1, 1, 1),
     ("bandage-roll", 1, 3, 2),
 ];

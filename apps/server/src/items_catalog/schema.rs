@@ -34,6 +34,7 @@ pub struct MeleeCombatSpec {
 pub enum HotbarConsumeSound {
     Eat,
     Drink,
+    Smoke,
 }
 
 #[derive(Debug, Clone, Deserialize)]

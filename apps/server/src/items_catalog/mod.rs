@@ -12,8 +12,8 @@
 //! 2. Add its `include_str!` to [`load::SHARD_SOURCES`](load.rs).
 //! 3. Import the same shard in `apps/client/src/inventory/mammothItemCatalog.ts`.
 //! 4. For hotbar **V** instant consume: `category: "consumable"` plus optional `consumeOnUse` vitals in JSON
-//!    (see [`instant_hotbar_consume_vital_deltas`]). Author `hotbarConsumeSound` when local / world
-//!    consume SFX should be `eat` vs `drink`.
+//!    (see [`instant_hotbar_consume_vital_deltas`]). Author `hotbarConsumeSound` for local / world
+//!    consume SFX: `eat`, `drink`, or `smoke`.
 
 mod load;
 mod schema;
@@ -56,7 +56,7 @@ pub fn melee_damage(def_id: &str) -> Option<f32> {
     Some(c.melee_combat.as_ref()?.damage)
 }
 
-/// Authored hotbar consume mouth SFX (`eat` / `drink`), defaulting to `eat`.
+/// Authored hotbar consume mouth SFX (`eat` / `drink` / `smoke`), defaulting to `eat`.
 #[inline]
 pub fn hotbar_consume_sound(def_id: &str) -> HotbarConsumeSound {
     get(def_id)
@@ -85,6 +85,7 @@ mod hotbar_consume_sound_tests {
             HotbarConsumeSound::Drink
         );
         assert_eq!(hotbar_consume_sound("rakija"), HotbarConsumeSound::Drink);
+        assert_eq!(hotbar_consume_sound("cigarettes"), HotbarConsumeSound::Smoke);
     }
 
     #[test]

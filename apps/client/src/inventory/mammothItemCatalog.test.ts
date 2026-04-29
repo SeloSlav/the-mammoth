@@ -150,6 +150,18 @@ describe("mammothItemCatalog", () => {
 
     expect(mammothItemDefSupportsHotbarInstantConsume(rakija)).toBe(true);
 
+
+
+    const cigarettes = getMammothItemDef("cigarettes");
+
+    expect(cigarettes?.category).toBe("consumable");
+
+    expect(cigarettes?.hotbarConsumeSound).toBe("smoke");
+
+    expect(mammothItemDefSupportsHotbarInstantConsume(cigarettes)).toBe(true);
+
+    expect(itemDefIdSupportsHotbarInstantConsume("cigarettes")).toBe(true);
+
   });
 
 });

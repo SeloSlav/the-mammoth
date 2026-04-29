@@ -6,7 +6,7 @@ export function itemDefIdSupportsHotbarInstantConsume(defId: string): boolean {
 }
 
 /** Which consume SFX to play — authored per item in the shared catalog. */
-export function hotbarInstantConsumeSoundProfile(defId: string): "eat" | "drink" {
+export function hotbarInstantConsumeSoundProfile(defId: string): "eat" | "drink" | "smoke" {
   const def = getMammothItemDef(defId);
   return def?.hotbarConsumeSound ?? "eat";
 }

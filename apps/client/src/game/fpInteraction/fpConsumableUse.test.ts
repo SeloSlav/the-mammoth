@@ -6,5 +6,6 @@ describe("hotbarInstantConsumeSoundProfile", () => {
     expect(hotbarInstantConsumeSoundProfile("water-bottle")).toBe("drink");
     expect(hotbarInstantConsumeSoundProfile("apple")).toBe("eat");
     expect(hotbarInstantConsumeSoundProfile("rakija")).toBe("drink");
+    expect(hotbarInstantConsumeSoundProfile("cigarettes")).toBe("smoke");
   });
 });

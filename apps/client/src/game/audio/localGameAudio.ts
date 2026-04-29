@@ -20,6 +20,7 @@ import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   CONSUME_DRINK_STEM,
   CONSUME_EAT_STEM,
+  CONSUME_SMOKE_STEM,
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
@@ -104,6 +105,7 @@ export class LocalGameAudio {
   private itemPickBuffer: AudioBuffer | null = null;
   private consumeEatBuffer: AudioBuffer | null = null;
   private consumeDrinkBuffer: AudioBuffer | null = null;
+  private consumeSmokeBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -179,6 +181,11 @@ export class LocalGameAudio {
       const decoded = await this.decodeImpactBuffers(ctx, [drinkUrl]);
       this.consumeDrinkBuffer = decoded[0] ?? null;
     }
+    const smokeUrl = await this.resolveSource(CONSUME_SMOKE_STEM, CONSUME_STEM_MEDIA_EXTENSIONS);
+    if (smokeUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [smokeUrl]);
+      this.consumeSmokeBuffer = decoded[0] ?? null;
+    }
     if (!this.consumeEatBuffer || !this.consumeDrinkBuffer) {
       console.warn(
         "[LocalGameAudio] Missing consume UI assets: consume-eat.* / consume-drink.* under public/audio/ui/ (mp3 preferred).",
@@ -225,6 +232,7 @@ export class LocalGameAudio {
     this.itemPickBuffer = null;
     this.consumeEatBuffer = null;
     this.consumeDrinkBuffer = null;
+    this.consumeSmokeBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
@@ -293,8 +301,13 @@ export class LocalGameAudio {
   }
 
   /** Immediate hotbar consume feedback (local client); others hear replicated `world_sound_event`. */
-  playHotbarConsumeLocal(profile: "eat" | "drink"): void {
-    const buf = profile === "drink" ? this.consumeDrinkBuffer : this.consumeEatBuffer;
+  playHotbarConsumeLocal(profile: "eat" | "drink" | "smoke"): void {
+    const buf =
+      profile === "drink"
+        ? this.consumeDrinkBuffer
+        : profile === "smoke"
+          ? (this.consumeSmokeBuffer ?? this.consumeEatBuffer)
+          : this.consumeEatBuffer;
     if (!this.unlocked || !this.ctx || !this.footstepBus || !buf) {
       return;
     }

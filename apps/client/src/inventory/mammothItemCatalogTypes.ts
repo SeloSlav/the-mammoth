@@ -28,7 +28,7 @@ export type MammothMeleeCombat = {
 };
 
 /** Authored SFX for hotbar instant consume. */
-export type MammothHotbarConsumeSound = "eat" | "drink";
+export type MammothHotbarConsumeSound = "eat" | "drink" | "smoke";
 
 export type MammothItemDef = {
   id: string;
