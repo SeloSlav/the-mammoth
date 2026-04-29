@@ -195,6 +195,8 @@ export type FpSessionMainRafFrameDeps = {
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
   /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI or typing. */
   fpInteractInputBlocked: () => boolean;
+  /** Guests can fight/loot, but only registered accounts can claim apartments. */
+  apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
 };
@@ -529,7 +531,9 @@ export function createFpSessionMainRafFrame(
         ft.z,
         MAMMOTH_PICKUP_RADIUS_M,
       );
-      const aSys = getApartmentSystemPrompt(deps.conn, ft);
+      const aSys = getApartmentSystemPrompt(deps.conn, ft, {
+        apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
+      });
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
         const holdPrompt = aSys;
@@ -610,6 +614,19 @@ export function createFpSessionMainRafFrame(
             displayLabel,
             missingDoorLock: !playerOwnsDoorLock(deps.conn, id),
             missingScrewdriver: !playerOwnsScrewdriver(deps.conn, id),
+          });
+        } else if (aSys?.kind === "apartment_claim_blocked_guest") {
+          let displayLabel = aSys.unitKey;
+          for (const row of deps.conn.db.apartment_unit) {
+            if (row.unitKey === aSys.unitKey) {
+              displayLabel = formatApartmentPublicLabel(row);
+              break;
+            }
+          }
+          setFpPickupPrompt({
+            kind: "apartment_claim_blocked_guest",
+            unitKey: aSys.unitKey,
+            displayLabel,
           });
         } else if (aSys?.kind === "apartment_claim") {
           let serverClaimSecs = 0;

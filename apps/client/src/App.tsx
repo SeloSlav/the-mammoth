@@ -20,7 +20,9 @@ export default function App() {
     let dispose: (() => void) | undefined;
     let cancelled = false;
     setGpuError(null);
-    void mountFpSession(canvas, conn)
+    void mountFpSession(canvas, conn, {
+      apartmentClaimsAllowed: session.connectionKind === "oidc",
+    })
       .then((d) => {
         if (cancelled) {
           d();

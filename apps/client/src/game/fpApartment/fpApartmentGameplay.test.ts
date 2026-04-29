@@ -17,6 +17,10 @@ const testIdentity = {
   isEqual: (other: unknown) => other === testIdentity,
 };
 
+const otherIdentity = {
+  isEqual: (other: unknown) => other === otherIdentity,
+};
+
 function apartmentUnit(overrides: Partial<ApartmentUnit>): ApartmentUnit {
   return {
     unitKey: "floor_a|2|unit_w_001",
@@ -94,8 +98,8 @@ describe("fpApartmentGameplay", () => {
   });
 
   it("formatApartmentPublicLabel matches server format_apartment_public_label", () => {
-    expect(formatApartmentPublicLabel({ level: 12, unitId: "unit_w_005" })).toBe("Floor 12, West 5");
-    expect(formatApartmentPublicLabel({ level: 2, unitId: "unit_e_008" })).toBe("Floor 2, East 8");
+    expect(formatApartmentPublicLabel({ level: 12, unitId: "unit_w_005" })).toBe("Floor 11, West 5");
+    expect(formatApartmentPublicLabel({ level: 2, unitId: "unit_e_008" })).toBe("Floor 1, East 8");
     expect(formatApartmentPublicLabel({ level: 1, unitId: "loft_A" })).toBe("Floor 1, loft_A");
   });
 
@@ -153,6 +157,23 @@ describe("fpApartmentGameplay", () => {
       { x: 2.5, y: 10, z: 3.25 },
     );
     expect(prompt).toEqual({ kind: "apartment_claim", unitKey: unit.unitKey });
+  });
+
+  it("blocks guest apartment claims even when claim gear is present", () => {
+    const unit = apartmentUnit({
+      wardrobeX: 2,
+      wardrobeZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const prompt = getApartmentSystemPrompt(
+      mockConn([unit], ["door-lock", "screwdriver"]),
+      { x: 2.5, y: 10, z: 3.25 },
+      { apartmentClaimsAllowed: false },
+    );
+    expect(prompt).toEqual({ kind: "apartment_claim_blocked_guest", unitKey: unit.unitKey });
   });
 
   it("does not offer apartment claim through a wall from outside that unit", () => {
@@ -229,6 +250,21 @@ describe("fpApartmentGameplay", () => {
         templateId: `${unit.unitId}|W|0`,
       }),
     ).toBe(true);
+  });
+
+  it("rejects a claimed apartment door for a different identity", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+    });
+    expect(
+      clientMayToggleApartmentDoor(mockConn([unit]), otherIdentity as never, {
+        rowKey: "door-row",
+        floorDocId: unit.floorDocId,
+        level: unit.level,
+        templateId: `${unit.unitId}|W|0`,
+      }),
+    ).toBe(false);
   });
 
   it("rejects a cross-hall door when feet are inside a different apartment unit", () => {

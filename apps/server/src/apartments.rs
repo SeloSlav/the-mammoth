@@ -79,14 +79,15 @@ fn cancel_other_active_claims_for_player(
 
 /// Human-facing label for chat / logs (`unit_w_005` → "Floor 3, West 5").
 fn format_apartment_public_label(level: u32, unit_id: &str) -> String {
+    let residential_floor = level.saturating_sub(1).max(1);
     if let Some(rest) = unit_id.strip_prefix("unit_w_") {
         if let Ok(n) = rest.parse::<u32>() {
-            return format!("Floor {level}, West {n}");
+            return format!("Floor {residential_floor}, West {n}");
         }
     }
     if let Some(rest) = unit_id.strip_prefix("unit_e_") {
         if let Ok(n) = rest.parse::<u32>() {
-            return format!("Floor {level}, East {n}");
+            return format!("Floor {residential_floor}, East {n}");
         }
     }
     format!("Floor {level}, {unit_id}")
@@ -479,7 +480,7 @@ fn force_unit_primary_door_open(ctx: &ReducerContext, uk: &str) {
 
 #[spacetimedb::reducer]
 pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
-    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+    if let Err(e) = auth::ensure_registered_account(ctx) {
         log::debug!("claim_apartment_pulse blocked: {e}");
         return;
     }
@@ -848,7 +849,7 @@ mod format_apartment_public_label_tests {
     fn west_zero_padded() {
         assert_eq!(
             format_apartment_public_label(12, "unit_w_005"),
-            "Floor 12, West 5"
+            "Floor 11, West 5"
         );
     }
 
@@ -856,7 +857,7 @@ mod format_apartment_public_label_tests {
     fn east_large_index() {
         assert_eq!(
             format_apartment_public_label(2, "unit_e_008"),
-            "Floor 2, East 8"
+            "Floor 1, East 8"
         );
     }
 

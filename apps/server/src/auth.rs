@@ -54,6 +54,15 @@ pub(crate) fn ensure_gameplay_unlocked(ctx: &ReducerContext) -> Result<(), Strin
     Ok(())
 }
 
+/// True registered accounts connect with an OIDC JWT; anonymous guest tokens do not.
+pub(crate) fn ensure_registered_account(ctx: &ReducerContext) -> Result<(), String> {
+    ensure_gameplay_unlocked(ctx)?;
+    if !ctx.sender_auth().has_jwt() {
+        return Err("Apartment claims require a registered account.".to_string());
+    }
+    Ok(())
+}
+
 /// Chat / HUD display: prefer username, fall back to short identity string.
 pub(crate) fn display_name_for(user: &User) -> String {
     user.username

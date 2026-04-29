@@ -40,13 +40,14 @@ export function residentUnitKeyFromDoor(d: ApartmentDoor): string {
 /** Human-facing label — keep in sync with `format_apartment_public_label` in `apartments.rs`. */
 export function formatApartmentPublicLabel(u: Pick<ApartmentUnit, "level" | "unitId">): string {
   const { level, unitId } = u;
+  const floorLabel = Math.max(1, level - 1);
   if (unitId.startsWith("unit_w_")) {
     const n = Number.parseInt(unitId.slice("unit_w_".length), 10);
-    if (!Number.isNaN(n)) return `Floor ${level}, West ${n}`;
+    if (!Number.isNaN(n)) return `Floor ${floorLabel}, West ${n}`;
   }
   if (unitId.startsWith("unit_e_")) {
     const n = Number.parseInt(unitId.slice("unit_e_".length), 10);
-    if (!Number.isNaN(n)) return `Floor ${level}, East ${n}`;
+    if (!Number.isNaN(n)) return `Floor ${floorLabel}, East ${n}`;
   }
   return `Floor ${level}, ${unitId}`;
 }
@@ -207,6 +208,11 @@ export type ApartmentClaimBlockedGearPrompt = {
   unitKey: string;
 };
 
+export type ApartmentClaimBlockedGuestPrompt = {
+  kind: "apartment_claim_blocked_guest";
+  unitKey: string;
+};
+
 export type ApartmentStashPrompt = {
   kind: "apartment_stash";
   unitKey: string;
@@ -215,13 +221,15 @@ export type ApartmentStashPrompt = {
 export type ApartmentSystemPrompt =
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
+  | ApartmentClaimBlockedGuestPrompt
   | ApartmentStashPrompt;
 
 /** Claim HUD should beat overlapping residential door prompts because claiming is a hold action. */
 export function apartmentFurnitureInteriorsPreferOverUnitDoor(p: ApartmentSystemPrompt | null): boolean {
   return (
     p?.kind === "apartment_claim" ||
-    p?.kind === "apartment_claim_blocked_gear"
+    p?.kind === "apartment_claim_blocked_gear" ||
+    p?.kind === "apartment_claim_blocked_guest"
   );
 }
 
@@ -305,15 +313,20 @@ function nearestOwnedClaimedUnitNearFootlocker(
 export function getApartmentSystemPrompt(
   conn: DbConnection,
   pose: { x: number; y: number; z: number },
+  opts: { apartmentClaimsAllowed?: boolean } = {},
 ):
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
+  | ApartmentClaimBlockedGuestPrompt
   | ApartmentStashPrompt
   | null {
   const id = conn.identity;
   if (!id) return null;
   const claimUnit = nearestUnclaimedUnitNearWardrobe(conn, pose.x, pose.y, pose.z);
   if (claimUnit) {
+    if (opts.apartmentClaimsAllowed === false) {
+      return { kind: "apartment_claim_blocked_guest", unitKey: claimUnit.unitKey };
+    }
     if (playerOwnsDoorLock(conn, id) && playerOwnsScrewdriver(conn, id)) {
       return { kind: "apartment_claim", unitKey: claimUnit.unitKey };
     }

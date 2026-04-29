@@ -152,6 +152,18 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "apartment_claim_blocked_guest") {
+    return (
+      <FpBottomInteractPromptFrame borderRgb="rgba(255,150,90,0.55)" glowRgb="rgba(255,100,40,0.16)">
+        <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffd0b0" }}>{prompt.displayLabel}</div>
+        <div style={{ color: "#ffad82", fontWeight: 650 }}>Guests cannot claim apartments.</div>
+        <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>
+          Sign in with an account to own a door. Guests are here to scavenge and fight.
+        </div>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   if (prompt.kind === "apartment_claim") {
     const remain = Math.max(0, prompt.claimFullSecs - prompt.claimProgressSecs);
     const pct = Math.min(1, Math.max(0, prompt.claimProgressSecs / prompt.claimFullSecs));

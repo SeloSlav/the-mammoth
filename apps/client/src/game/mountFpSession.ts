@@ -138,6 +138,7 @@ import {
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
+  opts: { apartmentClaimsAllowed?: boolean } = {},
 ): Promise<() => void> {
   installMmWallProbeLoadingStub();
   await assertWebGpuAdapterOrThrow();
@@ -987,6 +988,7 @@ export async function mountFpSession(
     logFpPerf,
     tickFpSessionElevDebug,
     fpInteractInputBlocked,
+    apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
   });
 
