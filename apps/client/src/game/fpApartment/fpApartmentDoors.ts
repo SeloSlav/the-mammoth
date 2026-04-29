@@ -59,7 +59,10 @@ import apartmentKitAuthoringJson from "../../../../../content/door/apartment_uni
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import type { ApartmentDoor } from "../../module_bindings/types";
 import type { DynamicCollisionQueryPose } from "../fpPhysics/fpPlayerCollision.js";
-import { clientMayToggleApartmentDoor } from "./fpApartmentGameplay.js";
+import {
+  apartmentDoorMatchesContainingUnit,
+  clientMayToggleApartmentDoor,
+} from "./fpApartmentGameplay.js";
 
 function parseApartmentKit(): LandingKitDef | undefined {
   const parsed = LandingKitDefSchema.safeParse(apartmentKitAuthoringJson);
@@ -770,6 +773,7 @@ export function mountFpApartmentDoors(
     candidates.sort((a, b) => a.dsq - b.dsq);
     const id = opts.conn.identity ?? undefined;
     for (const { slot } of candidates) {
+      if (!apartmentDoorMatchesContainingUnit(opts.conn, playerPos, slot)) continue;
       if (clientMayToggleApartmentDoor(opts.conn, id, slot)) return slot;
     }
     return null;

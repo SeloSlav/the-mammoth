@@ -25,7 +25,7 @@ pub(crate) const UNIT_STATE_UNCLAIMED: u8 = 0;
 pub(crate) const UNIT_STATE_CLAIMED: u8 = 1;
 pub(crate) const UNIT_STATE_BROKEN: u8 = 2;
 
-const CLAIM_FULL_SECS: f32 = 42.0;
+const CLAIM_FULL_SECS: f32 = 30.0;
 const REINFORCE_HOLD_SECS: f32 = 22.0;
 /// Horizontal radius² (m²) for wardrobe / footlocker — feet pose is compared on **XZ**
 /// against anchor columns; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`).
@@ -181,6 +181,27 @@ fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
         && z <= unit.bound_max_z
         && y >= unit.bound_min_y - 0.05
         && y <= unit.bound_max_y + 2.45
+}
+
+pub(crate) fn unit_key_containing_feet(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> Option<String> {
+    let mut best: Option<(String, f32)> = None;
+    for u in ctx.db.apartment_unit().iter() {
+        if !feet_inside_unit(&u, x, y, z) {
+            continue;
+        }
+        let cx = (u.bound_min_x + u.bound_max_x) * 0.5;
+        let cz = (u.bound_min_z + u.bound_max_z) * 0.5;
+        let d = (x - cx).powi(2) + (z - cz).powi(2);
+        if best.as_ref().map(|(_, bd)| d < *bd).unwrap_or(true) {
+            best = Some((u.unit_key.clone(), d));
+        }
+    }
+    best.map(|(unit_key, _)| unit_key)
 }
 
 pub fn seed_apartment_units(ctx: &ReducerContext) {

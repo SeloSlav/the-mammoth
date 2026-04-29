@@ -566,6 +566,16 @@ pub fn apartment_door_toggle(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
+    if let Some(containing_unit_key) = crate::apartments::unit_key_containing_feet(
+        ctx,
+        client_feet_x,
+        client_feet_y,
+        client_feet_z,
+    ) {
+        if crate::apartment_door::resident_unit_key_from_door_row(&dr) != containing_unit_key {
+            return;
+        }
+    }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
         return;
     }
@@ -604,6 +614,16 @@ pub fn apartment_door_set(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
+    if let Some(containing_unit_key) = crate::apartments::unit_key_containing_feet(
+        ctx,
+        client_feet_x,
+        client_feet_y,
+        client_feet_z,
+    ) {
+        if crate::apartment_door::resident_unit_key_from_door_row(&dr) != containing_unit_key {
+            return;
+        }
+    }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
         return;
     }

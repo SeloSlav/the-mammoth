@@ -17,7 +17,7 @@ export const UNIT_STATE_CLAIMED = 1;
 export const UNIT_STATE_BROKEN = 2;
 
 /** Must match `CLAIM_FULL_SECS` in `apps/server/src/apartments.rs`. */
-export const APARTMENT_CLAIM_FULL_SECS = 42;
+export const APARTMENT_CLAIM_FULL_SECS = 30;
 
 /** Must match `CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M` in `apps/server/src/apartments.rs`. */
 export const CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M = 2.35;
@@ -160,6 +160,19 @@ export function apartmentUnitContainingFeet(
     }
   }
   return best;
+}
+
+export function apartmentDoorMatchesContainingUnit(
+  conn: DbConnection,
+  pose: { x: number; y: number; z: number },
+  slot: { floorDocId: string; level: number; templateId: string },
+): boolean {
+  const containingUnit = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
+  if (!containingUnit) return true;
+  return (
+    residentUnitKeyFromParts(slot.floorDocId, slot.level, slot.templateId) ===
+    containingUnit.unitKey
+  );
 }
 
 export function playerOwnsDoorLock(conn: DbConnection, id: Identity): boolean {

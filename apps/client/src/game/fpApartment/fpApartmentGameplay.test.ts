@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  apartmentDoorMatchesContainingUnit,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
   clientMayToggleApartmentDoor,
   feetDeepEnoughFromEntryDoor,
@@ -227,6 +228,48 @@ describe("fpApartmentGameplay", () => {
         level: unit.level,
         templateId: `${unit.unitId}|W|0`,
       }),
+    ).toBe(true);
+  });
+
+  it("rejects a cross-hall door when feet are inside a different apartment unit", () => {
+    const containingUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_001",
+      unitId: "unit_e_001",
+      boundMinX: -12,
+      boundMaxX: -1,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const crossHallUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_w_001",
+      unitId: "unit_w_001",
+      boundMinX: 1,
+      boundMaxX: 12,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const conn = mockConn([containingUnit, crossHallUnit]);
+    expect(
+      apartmentDoorMatchesContainingUnit(
+        conn,
+        { x: -4, y: 10, z: 0 },
+        {
+          floorDocId: "floor_a",
+          level: 2,
+          templateId: "unit_w_001|E|0",
+        },
+      ),
+    ).toBe(false);
+    expect(
+      apartmentDoorMatchesContainingUnit(
+        conn,
+        { x: -4, y: 10, z: 0 },
+        {
+          floorDocId: "floor_a",
+          level: 2,
+          templateId: "unit_e_001|W|0",
+        },
+      ),
     ).toBe(true);
   });
 });
