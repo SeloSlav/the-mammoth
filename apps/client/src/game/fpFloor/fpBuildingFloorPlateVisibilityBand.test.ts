@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fpCameraInsideBuildingFootprintXZ,
   fpBuildingExteriorViewShouldRevealFullStack,
   fpBuildingFloorPlateVisibilityBand,
   fpCameraOrFeetInsideBuildingFootprintXZ,
@@ -255,6 +256,19 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         boundsMaxZ: 12,
       }),
     ).toBe(true);
+  });
+
+  it("treats furniture props as outside when only feet remain inside the raw footprint", () => {
+    expect(
+      fpCameraInsideBuildingFootprintXZ({
+        cameraX: 13,
+        cameraZ: 0,
+        boundsMinX: -12,
+        boundsMaxX: 12,
+        boundsMinZ: -12,
+        boundsMaxZ: 12,
+      }),
+    ).toBe(false);
   });
 
   it("near footprint: false when both samples are well outside expanded slab", () => {

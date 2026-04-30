@@ -2,6 +2,9 @@ import * as THREE from "three";
 
 export const EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT = 440;
 
+/** Uniform expansion on branch/leaf primitives for inverted-hull silhouette outlines. */
+const EXTERIOR_TREE_OUTLINE_GEOMETRY_SCALE = 0;
+
 type LSystemSpec = {
   readonly name: string;
   readonly axiom: string;
@@ -393,6 +396,15 @@ function buildTreePlacements(
   return placements;
 }
 
+function cloneScaledOutlineGeometry(
+  source: THREE.BufferGeometry,
+  scale: number,
+): THREE.BufferGeometry {
+  const g = source.clone();
+  g.scale(scale, scale, scale);
+  return g;
+}
+
 export function buildExteriorProceduralTreeGroup(
   buildingFootprint: THREE.Box3,
   options: ExteriorProceduralTreeOptions = {},
@@ -432,6 +444,27 @@ export function buildExteriorProceduralTreeGroup(
   /** Low-poly sphere reads softer than an icosahedron under smooth shading (organic clumps). */
   const leafGeom = new THREE.SphereGeometry(1, 5, 4);
   leafGeom.name = "exterior_tree_leaf_cluster_sphere";
+  const branchOutlineGeom = cloneScaledOutlineGeometry(
+    branchGeom,
+    EXTERIOR_TREE_OUTLINE_GEOMETRY_SCALE,
+  );
+  branchOutlineGeom.name = "exterior_tree_branch_outline_shell";
+  const leafOutlineGeom = cloneScaledOutlineGeometry(
+    leafGeom,
+    EXTERIOR_TREE_OUTLINE_GEOMETRY_SCALE,
+  );
+  leafOutlineGeom.name = "exterior_tree_leaf_outline_shell";
+
+  const outlineMatBranch = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    side: THREE.BackSide,
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
+  const outlineMatLeaf = outlineMatBranch.clone();
+
   const branchMat = new THREE.MeshStandardMaterial({
     color: 0x775b42,
     roughness: 0.9,
@@ -446,7 +479,28 @@ export function buildExteriorProceduralTreeGroup(
     vertexColors: true,
     emissive: 0x2a3520,
     emissiveIntensity: 0.028,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
+
+  const branchOutlineMesh = new THREE.InstancedMesh(
+    branchOutlineGeom,
+    outlineMatBranch,
+    segmentCount,
+  );
+  branchOutlineMesh.name = "exterior_tree_lsystem_branches_outline_instanced";
+  branchOutlineMesh.castShadow = false;
+  branchOutlineMesh.receiveShadow = false;
+  branchOutlineMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  branchOutlineMesh.renderOrder = -1;
+
+  const leafOutlineMesh = new THREE.InstancedMesh(leafOutlineGeom, outlineMatLeaf, leafCount);
+  leafOutlineMesh.name = "exterior_tree_lsystem_leaf_clusters_outline_instanced";
+  leafOutlineMesh.castShadow = false;
+  leafOutlineMesh.receiveShadow = false;
+  leafOutlineMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  leafOutlineMesh.renderOrder = -1;
 
   const branchMesh = new THREE.InstancedMesh(
     branchGeom,
@@ -457,12 +511,14 @@ export function buildExteriorProceduralTreeGroup(
   branchMesh.castShadow = false;
   branchMesh.receiveShadow = false;
   branchMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  branchMesh.renderOrder = 0;
 
   const leafMesh = new THREE.InstancedMesh(leafGeom, leafMat, leafCount);
   leafMesh.name = "exterior_tree_lsystem_leaf_clusters_instanced";
   leafMesh.castShadow = false;
   leafMesh.receiveShadow = false;
   leafMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  leafMesh.renderOrder = 0;
 
   let segmentIndex = 0;
   let leafIndex = 0;
@@ -484,7 +540,9 @@ export function buildExteriorProceduralTreeGroup(
         new THREE.Vector3(segment.radius, segment.length, segment.radius),
       );
       _instanceMatrix.multiplyMatrices(_treeMatrix, _localMatrix);
-      branchMesh.setMatrixAt(segmentIndex++, _instanceMatrix);
+      branchMesh.setMatrixAt(segmentIndex, _instanceMatrix);
+      branchOutlineMesh.setMatrixAt(segmentIndex, _instanceMatrix);
+      segmentIndex += 1;
     }
 
     for (const leaf of proto.leaves) {
@@ -506,6 +564,7 @@ export function buildExteriorProceduralTreeGroup(
       _localMatrix.compose(leaf.position, _leafQuatInst, _leafScaleInst);
       _instanceMatrix.multiplyMatrices(_treeMatrix, _localMatrix);
       leafMesh.setMatrixAt(leafIndex, _instanceMatrix);
+      leafOutlineMesh.setMatrixAt(leafIndex, _instanceMatrix);
       const v = foliageVariation01(ti, leafIndex, placementOptions.seed);
       const v2 = foliageVariation01(ti, leafIndex ^ 0x9e37_79b9, placementOptions.seed + 1);
       const v3 = foliageVariation01(leafIndex, ti, placementOptions.seed + 2);
@@ -552,10 +611,15 @@ export function buildExteriorProceduralTreeGroup(
   }
 
   branchMesh.instanceMatrix.needsUpdate = true;
+  branchOutlineMesh.instanceMatrix.needsUpdate = true;
   leafMesh.instanceMatrix.needsUpdate = true;
+  leafOutlineMesh.instanceMatrix.needsUpdate = true;
   if (leafMesh.instanceColor) leafMesh.instanceColor.needsUpdate = true;
   branchMesh.computeBoundingSphere();
+  branchOutlineMesh.computeBoundingSphere();
   leafMesh.computeBoundingSphere();
-  root.add(branchMesh, leafMesh);
+  leafOutlineMesh.computeBoundingSphere();
+  /** Draw outline shells first so filled toon meshes layer cleanly on top. */
+  root.add(branchOutlineMesh, leafOutlineMesh, branchMesh, leafMesh);
   return root;
 }

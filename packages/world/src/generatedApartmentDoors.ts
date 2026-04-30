@@ -12,7 +12,7 @@ export const APARTMENT_DOOR_TEMPLATES: readonly ApartmentDoorTemplateSet[] = [
   {
     floorDocId: "floor_mamutica_ground",
     templates: [
-      { templateId: "manual_stair_shaft_exit_ground_hub|w", unitId: "manual_stair_shaft_exit_ground_hub", face: "w" as UnitEntryFace, hingeX: 2.11000, hingeZ: -0.96468, feetYOffset: 0.27000, panelWidthM: 1.86000, panelHeightM: 2.26000 },
+
     ],
   },
   {
@@ -64,4 +64,4 @@ export const APARTMENT_DOOR_TEMPLATES: readonly ApartmentDoorTemplateSet[] = [
   },
 ];
 
-export const APARTMENT_DOOR_TEMPLATE_TOTAL = 43;
+export const APARTMENT_DOOR_TEMPLATE_TOTAL = 42;

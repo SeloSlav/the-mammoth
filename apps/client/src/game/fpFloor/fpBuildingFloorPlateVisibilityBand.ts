@@ -71,6 +71,33 @@ export function fpCameraOrFeetInsideBuildingFootprintXZ(input: {
 }
 
 /**
+ * True only when the camera lies inside the building's raw world XZ AABB.
+ * Use this for interior props that must not be visible from outside glass.
+ */
+export function fpCameraInsideBuildingFootprintXZ(input: {
+  cameraX: number;
+  cameraZ: number;
+  boundsMinX: number;
+  boundsMaxX: number;
+  boundsMinZ: number;
+  boundsMaxZ: number;
+  /** Expand the footprint slightly so boundary grazing does not flicker. */
+  epsilonM?: number;
+}): boolean {
+  return fpCameraOrFeetInsideBuildingFootprintXZ({
+    cameraX: input.cameraX,
+    cameraZ: input.cameraZ,
+    feetX: input.cameraX,
+    feetZ: input.cameraZ,
+    boundsMinX: input.boundsMinX,
+    boundsMaxX: input.boundsMaxX,
+    boundsMinZ: input.boundsMinZ,
+    boundsMaxZ: input.boundsMaxZ,
+    epsilonM: input.epsilonM,
+  });
+}
+
+/**
  * True when camera **or** feet lie inside the world XZ slab expanded **outward** by `nearMarginM`
  * on each side (plus `epsilonM`). Used to rasterise `mammothUnitInterior` shells only when the
  * player could plausibly see them (inside, perimeter, or peeking from a sidewalk), while keeping

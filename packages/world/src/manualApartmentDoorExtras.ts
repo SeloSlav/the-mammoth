@@ -39,9 +39,6 @@ const DEFAULT_STAIR_WELL_DEF = {
   },
 } as const satisfies Pick<StairWellDef, "id" | "version" | "entryOpening" | "groundEntryOpening">;
 
-/** Lobby centroid for `floor_mamutica_ground` — matches `shaftDoorTowardPointFromFloorCorridors` for the hub stair. */
-const MAMUTICA_GROUND_STAIR_TOWARD_PLATE_XZ = [0, 0] as const;
-
 /**
  * Mamutica east `stair_well_*` / ground `stair_hub_e` — keep in sync with floor JSON positions.
  * @see content/building/floors/floor_mamutica_typical.json
@@ -168,7 +165,7 @@ const STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M = 0.14;
 /**
  * True when `templateId` names one of the corridor→stairwell access doors authored by
  * {@link mamuticaTypicalCorridorGapDoorTemplates}, or a stair-shaft exit door from
- * {@link mamuticaTypicalStairShaftExitDoorTemplates} / {@link mamuticaGroundStairShaftExitDoorTemplates}.
+ * {@link mamuticaTypicalStairShaftExitDoorTemplates}.
  * The apartment kit is authored opaque; only these doors get the glass lite treatment at render time.
  */
 export function isGlazedApartmentDoorTemplate(templateId: string): boolean {
@@ -273,50 +270,6 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
   return out;
 }
 
-/** Ground hub stair only (`stair_hub_e` at plate Z = 0). */
-function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
-  const resolved = resolveStairWellGroundDoor({
-    sx: MAMUTICA_STAIR_SX,
-    sy: MAMUTICA_STAIR_SY,
-    sz: MAMUTICA_STAIR_SZ,
-    def: DEFAULT_STAIR_WELL_DEF as StairWellDef,
-    authoringScope: "ground",
-    context: {
-      towardPlateXZ: MAMUTICA_GROUND_STAIR_TOWARD_PLATE_XZ,
-      shaftPlateXZ: [MAMUTICA_STAIR_HUB_PX, 0],
-    },
-  });
-  if (!resolved) return [];
-
-  const face = resolved.face as UnitEntryFace;
-  const feetYOffset =
-    MAMUTICA_STAIR_HUB_PY + resolved.y0Local + STAIRWELL_SWING_DOOR_FEET_LIFT_M;
-  const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
-  const { hingeX, hingeZ } = shaftExitSwingDoorHingePlateXZ({
-    spx: MAMUTICA_STAIR_HUB_PX,
-    spz: 0,
-    sx: MAMUTICA_STAIR_SX,
-    sz: MAMUTICA_STAIR_SZ,
-    face: resolved.face,
-    tangentAlongWall: resolved.tangentOffsetAlongWallM,
-    doorHalfW: resolved.doorHalfW,
-  });
-  const uid = `${MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX}ground_hub`;
-  return [
-    {
-      templateId: `${uid}|${face}`,
-      unitId: uid,
-      face,
-      hingeX,
-      hingeZ,
-      feetYOffset,
-      panelWidthM: resolved.widthM,
-      panelHeightM:
-        holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
-    },
-  ];
-}
-
 /**
  * Extra templates merged into `pnpm content:gen-apartment-doors` output for matching `floorDocId`.
  * Server seeds one `apartment_door` row per `(floorDocId, levelIndex, templateId)`.
@@ -324,7 +277,8 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
 export const MANUAL_APARTMENT_DOOR_EXTRAS_BY_FLOOR_DOC_ID: Readonly<
   Record<string, readonly ApartmentDoorTemplate[]>
 > = {
-  floor_mamutica_ground: mamuticaGroundStairShaftExitDoorTemplates(),
+  /** Ground floor: no interactable swing leaves; shaft wall openings / CSG cutouts unchanged. */
+  floor_mamutica_ground: [],
   floor_mamutica_typical: [
     ...mamuticaTypicalCorridorGapDoorTemplates(),
     ...mamuticaTypicalStairShaftExitDoorTemplates(),

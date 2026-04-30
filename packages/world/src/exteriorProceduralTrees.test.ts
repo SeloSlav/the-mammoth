@@ -53,7 +53,7 @@ describe("exterior procedural trees", () => {
         (child): child is THREE.InstancedMesh =>
           child instanceof THREE.InstancedMesh,
       );
-      expect(instanced).toHaveLength(2);
+      expect(instanced).toHaveLength(4);
       expect(instanced[0]!.count).toBeGreaterThan(placements.length);
       expect(instanced[1]!.count).toBeGreaterThan(placements.length);
     } finally {

@@ -229,6 +229,8 @@ export async function mountFpApartmentFurniture(opts: {
   stashPickMaterial.colorWrite = false;
 
   let templates: ApartmentFurnitureTemplates | null = null;
+  let templatesLoading = false;
+  let templatesLoadFailed = false;
   let disposed = false;
   let buildRaf = 0;
   let activeBuildJob: ApartmentFurnitureLevelBuildJob | null = null;
@@ -429,6 +431,32 @@ export async function mountFpApartmentFurniture(opts: {
     buildRaf = requestAnimationFrame(runBuildSlice);
   };
 
+  const ensureTemplatesLoading = () => {
+    if (templates || templatesLoading || templatesLoadFailed) return;
+    templatesLoading = true;
+    void Promise.all([
+      loader.loadAsync(WARDROBE_URL),
+      loader.loadAsync(FOOTLOCKER_URL),
+      loader.loadAsync(BED_URL),
+    ])
+      .then(([wardrobeGltf, footGltf, bedGltf]) => {
+        templatesLoading = false;
+        if (disposed) return;
+        templates = {
+          wardrobe: wardrobeGltf.scene,
+          footlocker: footGltf.scene,
+          bed: bedGltf.scene,
+        };
+        rowsByLevel = indexRowsByLevel();
+        scheduleBuildSlice();
+      })
+      .catch((err) => {
+        templatesLoading = false;
+        templatesLoadFailed = true;
+        console.warn("[mountFpApartmentFurniture] failed to load furniture GLBs", err);
+      });
+  };
+
   function runBuildSlice() {
     buildRaf = 0;
     if (disposed || !templates) {
@@ -500,24 +528,6 @@ export async function mountFpApartmentFurniture(opts: {
     queuedLevelSet.clear();
   };
 
-  void Promise.all([
-    loader.loadAsync(WARDROBE_URL),
-    loader.loadAsync(FOOTLOCKER_URL),
-    loader.loadAsync(BED_URL),
-  ])
-    .then(([wardrobeGltf, footGltf, bedGltf]) => {
-      if (disposed) return;
-      templates = {
-        wardrobe: wardrobeGltf.scene,
-        footlocker: footGltf.scene,
-        bed: bedGltf.scene,
-      };
-      rowsByLevel = indexRowsByLevel();
-    })
-    .catch((err) => {
-      console.warn("[mountFpApartmentFurniture] failed to load furniture GLBs", err);
-    });
-
   const bumpApartmentUnit = () => resetBuiltFurniture();
   const bumpApartmentUnitIfPlacementChanged = (
     _ctx: unknown,
@@ -539,6 +549,7 @@ export async function mountFpApartmentFurniture(opts: {
         cancelPendingDemandBuild();
       }
       if (allowDemandBuild) {
+        ensureTemplatesLoading();
         visibleLevelScratch.clear();
         for (const ch of opts.buildingRoot.children) {
           if (ch.userData.mammothApartmentFurnitureProp === true) continue;

@@ -24,7 +24,7 @@ pub struct ApartmentDoorTemplateSet {
 }
 
 static TEMPLATES_0: &[ApartmentDoorTemplate] = &[
-    ApartmentDoorTemplate { template_id: "manual_stair_shaft_exit_ground_hub|w", unit_id: "manual_stair_shaft_exit_ground_hub", face: 3, hinge_x: 2.11000, hinge_z: -0.96468, feet_y_offset: 0.27000, panel_w_m: 1.86000, panel_h_m: 2.26000 },
+
 ];
 
 static TEMPLATES_1: &[ApartmentDoorTemplate] = &[
@@ -77,4 +77,4 @@ pub static APARTMENT_DOOR_TEMPLATE_SETS: &[ApartmentDoorTemplateSet] = &[
     ApartmentDoorTemplateSet { floor_doc_id: "floor_mamutica_typical", templates: TEMPLATES_1 },
 ];
 
-pub const APARTMENT_DOOR_TEMPLATE_TOTAL: usize = 43;
+pub const APARTMENT_DOOR_TEMPLATE_TOTAL: usize = 42;

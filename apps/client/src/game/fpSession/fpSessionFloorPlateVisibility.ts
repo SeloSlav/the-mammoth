@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { estimateStoreyFromFeetY } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
+  fpCameraInsideBuildingFootprintXZ,
   fpCameraOrFeetInsideBuildingFootprintXZ,
   fpCameraOrFeetNearBuildingFootprintXZ,
   fpStairShaftLocalVisibilityBand,
@@ -19,10 +20,11 @@ type FpStairShaftVisibilityBounds = {
 };
 
 /**
- * Mirrors {@link mountFpSession}’s interior-shell hide margin: keep plaster visible for doorway
- * peeks and sidewalk leans; only hide when camera **and** feet are comfortably past the slab edge.
+ * Expanded-footprint margin for {@link fpCameraOrFeetNearBuildingFootprintXZ}: interiors rasterise only
+ * when camera or feet could plausibly see through entries/glass. Keep this tight so distant sidewalk
+ * views do not pay for unit plaster / shaft fill; doorway peek still has raw AABB + this pad.
  */
-const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 20;
+const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 6;
 
 /**
  * Cached applied floor-band (after smoothing). Raw target can jump from full-stack → interior in
@@ -183,7 +185,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
-    let exteriorFullStackReveal = false;
     const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
     const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
       cameraX: floorVisCamWorld.x,
@@ -195,7 +196,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     });
     if (cameraOutsideBuilding && (!feetOnBuildingSlab || playerStorey <= 1)) {
       band = { lo: 1, hi: maxBuildingLevel };
-      exteriorFullStackReveal = true;
     }
     if (cabOccludesWorld) {
       /**
@@ -258,11 +258,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     }
 
     /**
-     * Hide tagged interior shells whenever camera **and** feet are clearly outside the footprint
-     * (both farther than {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M} past the raw edge). From there,
-     * opaque cladding + window tint occlude every interior fragment, so rendering ~1M interior
-     * triangles every frame is pure fill-rate waste. Inside the margin (doorways, sidewalk peek,
-     * rooftop lean) we submit everything and let the depth test sort it out.
+     * Hide tagged interior shells when camera **and** feet sit outside the footprint expanded by
+     * {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M}. Beyond that band, cladding/tint occludes interiors;
+     * inside it we submit shells and let depth sort.
      */
     const unitInteriorVisible =
       fpElevators.isInsideAnyCabHud(
@@ -295,8 +293,27 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
-    /** Same predicate as shells: strict camera-only footprint + exterior gates hid beds at façade windows while plaster stayed visible. */
-    const apartmentFurnitureInteriorVisible = unitInteriorVisible;
+    /**
+     * Furniture GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
+     * sidewalk/doorway peeks, but only build/render apartment props once the camera is inside.
+     */
+    const apartmentFurnitureInteriorVisible =
+      fpElevators.isInsideAnyCabHud(
+        feetPos.x,
+        feetPos.y,
+        feetPos.z,
+        floorVisCamWorld.x,
+        floorVisCamWorld.y,
+        floorVisCamWorld.z,
+      ) ||
+      fpCameraInsideBuildingFootprintXZ({
+        cameraX: floorVisCamWorld.x,
+        cameraZ: floorVisCamWorld.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+      });
     const apartmentFurnitureInteriorVisibilityChanged =
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
       apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount;
