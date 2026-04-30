@@ -19,6 +19,8 @@ const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
 const AUTH_BACKDROP_ORBIT_WOBBLE_SPEED_SEC = 0.055;
 /** Slow yaw orbit around the building (~3.3 min per full turn at this rate). */
 const AUTH_BACKDROP_BUILDING_YAW_RAD_PER_SEC = 0.032;
+/** Aim-point shift (fraction of building short-axis width) so the block reads on the right while we yaw. */
+const AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC = 0.22;
 
 export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promise<() => void> {
   await assertWebGpuAdapterOrThrow();
@@ -42,20 +44,25 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     FP_SESSION_SKY_CAMERA_FAR,
   );
 
-  const { buildingRoot, cellRoot } = createFpSessionStaticWorld();
+  const { buildingRoot, cellRoot, buildingBodyWorldBounds } =
+    createFpSessionStaticWorld();
   hideUnitInteriorMeshesForExteriorAuthView(buildingRoot);
   scene.add(buildingRoot, cellRoot);
   buildingRoot.updateMatrixWorld(true);
   cellRoot.updateMatrixWorld(true);
 
-  const buildingBounds = new THREE.Box3().setFromObject(buildingRoot);
+  /**
+   * Framing must use the megablock stack only. `buildingRoot` also parents the exterior tree grove
+   * (huge scatter radius) — `setFromObject(buildingRoot)` was pushing the camera to the horizon.
+   */
+  const buildingBounds = buildingBodyWorldBounds.clone();
   const buildingSize = new THREE.Vector3();
   const buildingCenter = new THREE.Vector3();
   buildingBounds.getSize(buildingSize);
   buildingBounds.getCenter(buildingCenter);
 
+  /** Orbit / distance reference point — vertical band across the façade, not offset in X (framing handles left/right). */
   const lookTarget = buildingCenter.clone();
-  lookTarget.x += buildingSize.x * 0.12;
   lookTarget.y = buildingBounds.min.y + buildingSize.y * 0.35;
 
   const baseCameraOffset = new THREE.Vector3(
@@ -65,6 +72,9 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   );
   const cameraOffset = new THREE.Vector3();
   const worldUp = new THREE.Vector3(0, 1, 0);
+  const framingShiftWorld = new THREE.Vector3();
+  const aimPoint = new THREE.Vector3();
+  const toCamFlat = new THREE.Vector3();
 
   const resize = () => {
     const width = Math.max(1, canvas.clientWidth);
@@ -91,7 +101,19 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
       AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD;
     cameraOffset.copy(baseCameraOffset).applyAxisAngle(worldUp, yawOrbit + wobble);
     camera.position.copy(lookTarget).add(cameraOffset);
-    camera.lookAt(lookTarget);
+    // Horizontal “screen right”: in the ground plane, perpendicular to camera→target.
+    toCamFlat.subVectors(camera.position, lookTarget);
+    toCamFlat.y = 0;
+    const horizLenSq = toCamFlat.lengthSq();
+    if (horizLenSq > 1e-6) {
+      toCamFlat.multiplyScalar(1 / Math.sqrt(horizLenSq));
+      framingShiftWorld.crossVectors(worldUp, toCamFlat).normalize();
+      const framingM = buildingSize.x * AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC;
+      aimPoint.copy(lookTarget).addScaledVector(framingShiftWorld, -framingM);
+      camera.lookAt(aimPoint);
+    } else {
+      camera.lookAt(lookTarget);
+    }
 
     fpEnvironment.onFrame({
       camera,

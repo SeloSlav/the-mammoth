@@ -107,6 +107,10 @@ const _treeMatrix = new THREE.Matrix4();
 const _localMatrix = new THREE.Matrix4();
 const _instanceMatrix = new THREE.Matrix4();
 const _leafColor = new THREE.Color();
+const _leafTint = new THREE.Color();
+const _leafEuler = new THREE.Euler();
+const _leafQuatInst = new THREE.Quaternion();
+const _leafScaleInst = new THREE.Vector3();
 
 /** Unit sphere-ish offsets for layered crowns (two rings in {@link pushCanopyClusters}). */
 const CANOPY_OFFSETS: readonly [number, number, number][] = [
@@ -425,8 +429,9 @@ export function buildExteriorProceduralTreeGroup(
 
   const branchGeom = new THREE.CylinderGeometry(1, 0.64, 1, 6, 1, false);
   branchGeom.name = "exterior_tree_branch_lsystem_segment";
-  const leafGeom = new THREE.IcosahedronGeometry(1, 0);
-  leafGeom.name = "exterior_tree_leaf_cluster_lowpoly";
+  /** Low-poly sphere reads softer than an icosahedron under smooth shading (organic clumps). */
+  const leafGeom = new THREE.SphereGeometry(1, 5, 4);
+  leafGeom.name = "exterior_tree_leaf_cluster_sphere";
   const branchMat = new THREE.MeshStandardMaterial({
     color: 0x775b42,
     roughness: 0.9,
@@ -435,12 +440,12 @@ export function buildExteriorProceduralTreeGroup(
   });
   const leafMat = new THREE.MeshStandardMaterial({
     color: 0xc4dd8f,
-    roughness: 0.82,
+    roughness: 0.74,
     metalness: 0,
-    flatShading: true,
+    flatShading: false,
     vertexColors: true,
-    emissive: 0x3d4a28,
-    emissiveIntensity: 0.045,
+    emissive: 0x2a3520,
+    emissiveIntensity: 0.028,
   });
 
   const branchMesh = new THREE.InstancedMesh(
@@ -483,7 +488,22 @@ export function buildExteriorProceduralTreeGroup(
     }
 
     for (const leaf of proto.leaves) {
-      _localMatrix.compose(leaf.position, _treeQuat.identity(), leaf.scale);
+      const v4 = foliageVariation01(ti, leafIndex + 911, placementOptions.seed + 4);
+      const v5 = foliageVariation01(leafIndex, ti + 427, placementOptions.seed + 5);
+      const v6 = foliageVariation01(ti * 17 + leafIndex, 13, placementOptions.seed + 6);
+      _leafEuler.set(
+        (v4 - 0.5) * 1.2,
+        (v5 - 0.5) * Math.PI * 2,
+        (v6 - 0.5) * 1.15,
+      );
+      _leafQuatInst.setFromEuler(_leafEuler);
+      _leafScaleInst.copy(leaf.scale);
+      _leafScaleInst.multiplyScalar(0.88 + v4 * 0.26);
+      _leafScaleInst.x *= 0.78 + v5 * 0.38;
+      _leafScaleInst.y *= 0.72 + v6 * 0.42;
+      _leafScaleInst.z *= 0.78 + (1 - v5) * 0.36;
+
+      _localMatrix.compose(leaf.position, _leafQuatInst, _leafScaleInst);
       _instanceMatrix.multiplyMatrices(_treeMatrix, _localMatrix);
       leafMesh.setMatrixAt(leafIndex, _instanceMatrix);
       const v = foliageVariation01(ti, leafIndex, placementOptions.seed);
@@ -492,22 +512,40 @@ export function buildExteriorProceduralTreeGroup(
       /** Yellow–spring green: hue 0.2–0.31, lighter reads, internal mottling. */
       const protoHueBias =
         p.prototypeIndex === 1 ? -0.02 : p.prototypeIndex === 0 ? 0 : 0.012;
-      const hue = THREE.MathUtils.clamp(
+      let hue = THREE.MathUtils.clamp(
         0.2 + protoHueBias + (v - 0.5) * 0.11 + (v2 - 0.5) * 0.06,
         0.17,
         0.32,
       );
-      const sat = THREE.MathUtils.clamp(
+      let sat = THREE.MathUtils.clamp(
         0.32 + v2 * 0.2 + (v3 - 0.5) * 0.12,
         0.22,
         0.55,
       );
-      const light = THREE.MathUtils.clamp(
+      let light = THREE.MathUtils.clamp(
         0.52 + v * 0.18 + (v3 - 0.4) * 0.12,
         0.45,
         0.74,
       );
+      /** Scattered drought / sun-scorch and cooler shaded patches — breaks uniform plastic blobs. */
+      if (v2 > 0.68) {
+        hue += (v2 - 0.68) * 0.06;
+        sat *= THREE.MathUtils.lerp(1, 0.78, (v2 - 0.68) * 2.2);
+        light = THREE.MathUtils.lerp(light, 0.62, (v2 - 0.68) * 0.85);
+      }
+      if (v3 < 0.28) {
+        hue -= (0.28 - v3) * 0.12;
+        sat *= THREE.MathUtils.lerp(1, 0.88, (0.28 - v3) * 2);
+        light *= THREE.MathUtils.lerp(1, 0.94, (0.28 - v3) * 1.2);
+      }
+      hue = THREE.MathUtils.clamp(hue, 0.15, 0.34);
+      sat = THREE.MathUtils.clamp(sat, 0.18, 0.58);
+      light = THREE.MathUtils.clamp(light, 0.42, 0.76);
       _leafColor.setHSL(hue, sat, light);
+      if (v * v3 > 0.55) {
+        _leafTint.setHSL(0.14, 0.42, 0.52);
+        _leafColor.lerp(_leafTint, 0.06 + (v * v3 - 0.55) * 0.08);
+      }
       leafMesh.setColorAt(leafIndex, _leafColor);
       leafIndex += 1;
     }
