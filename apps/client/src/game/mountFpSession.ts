@@ -167,7 +167,7 @@ export async function mountFpSession(
   const fpCollisionDebug = createFpCollisionDebugOverlay();
   scene.add(fpCollisionDebug.group);
 
-  await ensureStairwellCigaretteMeshReady();
+  void ensureStairwellCigaretteMeshReady();
 
   const {
     building,

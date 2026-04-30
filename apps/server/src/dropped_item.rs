@@ -24,6 +24,11 @@ const DROP_DESPAWN_SECS: i64 = 900;
 /// How often to reroll anchored world loot (random defs/qty/yaw).
 const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 
+/// Top of ground-floor elevator-lobby walk slabs (see `generated_walk_surfaces/part_0000.rs`, ≈0.08..0.20 m Y).
+/// Matches client placement: bottom of the pickup mesh sits on this plane.
+/// **Keep equal to** `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
+const WORLD_LOOT_Y_GROUND_FLOOR_M: f32 = 0.20;
+
 /// Authoring anchors (hall / corridor — keep clear of elevators in data later).
 /// Index IS `world_spawn_slot`.
 const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
@@ -31,7 +36,7 @@ const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
     (1.1, 3.52, -40.15),
     (1.95, 3.52, -88.42),
     (-0.72, 3.52, 22.1),
-    (0.62, 1.82, -0.4),
+    (0.62, WORLD_LOOT_Y_GROUND_FLOOR_M, -0.4),
     (1.15, 3.52, -72.5),
     (0.95, 3.52, -54.0),
     (1.45, 3.52, -27.0),
@@ -41,8 +46,8 @@ const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
     (1.25, 3.52, 52.0),
     (-0.65, 3.52, -63.0),
     (1.85, 3.52, 12.0),
-    (0.55, 1.82, 1.8),
-    (0.9, 1.82, -3.2),
+    (0.55, WORLD_LOOT_Y_GROUND_FLOOR_M, 1.8),
+    (0.9, WORLD_LOOT_Y_GROUND_FLOOR_M, -3.2),
 ];
 
 /// `(def_id, qty_min_inclusive, qty_max_inclusive, weight)`.

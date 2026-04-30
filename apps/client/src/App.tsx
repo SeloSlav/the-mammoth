@@ -3,12 +3,6 @@ import { mountFpSession } from "./game/mountFpSession";
 import { HudShell } from "./ui/HudShell";
 import LoginGate from "./ui/LoginGate";
 import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
-import {
-  THEME_CARD_BG_STRONG,
-  THEME_TEXT_MUTED,
-  THEME_TEXT_PRIMARY,
-  UI_FONT_SANS,
-} from "@the-mammoth/ui-theme";
 
 const REQUIRE_REGISTERED_APARTMENT_CLAIMS =
   import.meta.env.VITE_REQUIRE_REGISTERED_APARTMENT_CLAIMS === "true";
@@ -17,11 +11,9 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const session = useSpacetimeSession();
   const [gpuError, setGpuError] = useState<string | null>(null);
-  const [fpSessionReady, setFpSessionReady] = useState(false);
 
   useEffect(() => {
     if (session.phase !== "ready" || !session.displayName) {
-      setFpSessionReady(false);
       return;
     }
     const canvas = canvasRef.current;
@@ -31,7 +23,6 @@ export default function App() {
     let dispose: (() => void) | undefined;
     let cancelled = false;
     setGpuError(null);
-    setFpSessionReady(false);
     void mountFpSession(canvas, conn, {
       apartmentClaimsAllowed:
         !REQUIRE_REGISTERED_APARTMENT_CLAIMS || session.connectionKind === "oidc",
@@ -42,7 +33,6 @@ export default function App() {
           return;
         }
         dispose = d;
-        setFpSessionReady(true);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -82,29 +72,6 @@ export default function App() {
           <div style={{ maxWidth: 520 }}>
             <strong style={{ display: "block", marginBottom: 12 }}>WebGPU required</strong>
             {gpuError}
-          </div>
-        </div>
-      ) : null}
-      {!gpuError && !fpSessionReady ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 15,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: THEME_CARD_BG_STRONG,
-            color: THEME_TEXT_PRIMARY,
-            fontFamily: UI_FONT_SANS,
-            pointerEvents: "none",
-          }}
-        >
-          <div style={{ textAlign: "center", lineHeight: 1.45 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Entering The Mammoth</div>
-            <div style={{ marginTop: 6, fontSize: 12, color: THEME_TEXT_MUTED }}>
-              Warming up the building...
-            </div>
           </div>
         </div>
       ) : null}

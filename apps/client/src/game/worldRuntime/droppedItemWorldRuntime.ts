@@ -2,11 +2,16 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
-import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
+import { deepDisposeObject3D, loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatalog";
+import {
+  attachDroppedPickupGlow,
+  createDroppedPickupGlowMaterial,
+  stripDroppedPickupGlow,
+} from "./droppedItemPickupGlow.js";
 
 /** Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ` (√ here). */
 export const MAMMOTH_PICKUP_RADIUS_M = 2.75;
@@ -172,6 +177,8 @@ export function mountDroppedItemsWorld(
   root.name = "dropped_items";
   scene.add(root);
 
+  const pickupGlowMaterial = createDroppedPickupGlowMaterial();
+
   const loader = new GLTFLoader();
   const idToGroup = new Map<string, THREE.Group>();
   const loading = new Set<string>();
@@ -193,6 +200,7 @@ export function mountDroppedItemsWorld(
     const inner = new THREE.Group();
     inner.add(mesh);
     fitDroppedWorldItemModelToCatalog(inner, row.defId);
+    attachDroppedPickupGlow(inner, pickupGlowMaterial);
     const g = new THREE.Group();
     g.name = `drop_${key}`;
     g.add(inner);
@@ -220,7 +228,6 @@ export function mountDroppedItemsWorld(
     void loadGltfSceneFirstMatch(loader, candidates)
       .then(({ scene }) => {
         loading.delete(key);
-        if (idToGroup.has(key)) return;
         const clone = scene.clone(true);
         clone.traverse((o) => {
           const m = o as THREE.Mesh;
@@ -229,7 +236,12 @@ export function mountDroppedItemsWorld(
             m.receiveShadow = true;
           }
         });
+        if (idToGroup.has(key)) {
+          deepDisposeObject3D(clone);
+          return;
+        }
         fitDroppedWorldItemModelToCatalog(clone, row.defId);
+        attachDroppedPickupGlow(clone, pickupGlowMaterial);
         const g = new THREE.Group();
         g.name = `drop_${key}`;
         g.add(clone);
@@ -252,6 +264,9 @@ export function mountDroppedItemsWorld(
     }
     for (const [k, g] of idToGroup) {
       if (!seen.has(k)) {
+        for (const child of g.children) {
+          stripDroppedPickupGlow(child);
+        }
         root.remove(g);
         idToGroup.delete(k);
       }
@@ -313,6 +328,12 @@ export function mountDroppedItemsWorld(
     conn.db.dropped_item.removeOnInsert(onRowChange);
     conn.db.dropped_item.removeOnUpdate(onRowChange);
     conn.db.dropped_item.removeOnDelete(onRowChange);
+    for (const [, g] of idToGroup) {
+      for (const child of g.children) {
+        stripDroppedPickupGlow(child);
+      }
+    }
+    pickupGlowMaterial.dispose();
     scene.remove(root);
     idToGroup.clear();
   };

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   getMammothDroppedWorldTargetMaxDimM,
   MAMMOTH_DROPPED_WORLD_DEFAULT_TARGET_MAX_DIM_M,
+  MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
 } from "@the-mammoth/assets";
 import { describe, expect, it } from "vitest";
 import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldRuntime";
@@ -19,6 +20,12 @@ describe("fitDroppedWorldItemModelToCatalog", () => {
     bb.getSize(sz);
     expect(Math.max(sz.x, sz.y, sz.z)).toBeCloseTo(getMammothDroppedWorldTargetMaxDimM("pistol"), 5);
     expect(bb.min.y).toBeCloseTo(0, 5);
+  });
+});
+
+describe("world loot ground plane (Spacetime anchors)", () => {
+  it("MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M matches server WORLD_LOOT_Y_GROUND_FLOOR_M", () => {
+    expect(MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M).toBeCloseTo(0.2, 5);
   });
 });
 

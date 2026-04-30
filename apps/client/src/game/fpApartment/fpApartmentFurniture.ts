@@ -27,7 +27,9 @@ const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
 const BED_VIS_SCALE = 1.14;
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
-const FURNITURE_BOUNDS_INSET_M = 0.22;
+const WARDROBE_BOUNDS_INSET_M = 0.48;
+const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
+const BED_BOUNDS_INSET_M = 0.95;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
@@ -74,16 +76,16 @@ function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number):
   root.updateMatrixWorld(true);
 }
 
-function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit): void {
+function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM: number): void {
   root.updateMatrixWorld(true);
   _furnitureBoundsScratch.setFromObject(root);
   _furnitureBoundsScratch.getSize(_furnitureSizeScratch);
   _furnitureBoundsScratch.getCenter(_furnitureCenterScratch);
 
-  const minX = unit.boundMinX + FURNITURE_BOUNDS_INSET_M;
-  const maxX = unit.boundMaxX - FURNITURE_BOUNDS_INSET_M;
-  const minZ = unit.boundMinZ + FURNITURE_BOUNDS_INSET_M;
-  const maxZ = unit.boundMaxZ - FURNITURE_BOUNDS_INSET_M;
+  const minX = unit.boundMinX + insetM;
+  const maxX = unit.boundMaxX - insetM;
+  const minZ = unit.boundMinZ + insetM;
+  const maxZ = unit.boundMaxZ - insetM;
 
   let dx = 0;
   if (_furnitureSizeScratch.x > maxX - minX) {
@@ -213,7 +215,7 @@ export async function mountFpApartmentFurniture(opts: {
       w.position.set(u.wardrobeX, 0, u.wardrobeZ);
       w.rotation.y = furnitureYaw;
       snapCloneBottomToWorldFloor(w, floorY);
-      keepCloneInsideUnitXZ(w, u);
+      keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
       unitGroup.add(w);
 
       const f = clonePropScene(footlockerTemplate, levelIdx);
@@ -221,7 +223,7 @@ export async function mountFpApartmentFurniture(opts: {
       f.position.set(u.footX, 0, u.footZ);
       f.rotation.y = furnitureYaw;
       snapCloneBottomToWorldFloor(f, floorY);
-      keepCloneInsideUnitXZ(f, u);
+      keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
       f.updateMatrixWorld(true);
       const footlockerBounds = new THREE.Box3().setFromObject(f);
       const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -250,7 +252,7 @@ export async function mountFpApartmentFurniture(opts: {
       b.position.set(u.bedX, 0, u.bedZ);
       b.rotation.y = u.bedYaw;
       snapCloneBottomToWorldFloor(b, u.bedY);
-      keepCloneInsideUnitXZ(b, u);
+      keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
       unitGroup.add(b);
 
       unitGroup.updateMatrixWorld(true);

@@ -1,4 +1,10 @@
 /**
+ * Ground-plane Y (m) for lobby world-loot anchors: client places the bottom of the fitted mesh here.
+ * Keep equal to `WORLD_LOOT_Y_GROUND_FLOOR_M` in `apps/server/src/dropped_item.rs` (lobby walk slab top ≈0.20).
+ */
+export const MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M = 0.2 as const;
+
+/**
  * World pickup mesh sizing (meters). Dropped-item GLBs are uniformly scaled so their
  * axis-aligned bounding-box **longest edge** matches these values, then shifted so the
  * bottom of the AABB sits on the placement plane.
@@ -34,14 +40,14 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   "wire-spool": 0.2,
   "chemical-reagent": 0.09,
   nails: 0.16,
-  cigarettes: 0.1,
+  cigarettes: 0.18,
 
   // Keys / hardware
   "door-lock": 0.085,
 
   // Consumables
-  apple: 0.09,
-  "water-bottle": 0.26,
+  apple: 0.15,
+  "water-bottle": 0.34,
   rakija: 0.31,
   "field-rations": 0.2,
   "iodine-tablets": 0.06,

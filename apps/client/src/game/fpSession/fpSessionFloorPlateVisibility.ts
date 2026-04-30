@@ -188,6 +188,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
+    let exteriorFullStackReveal = false;
     if (!feetOnBuildingSlab) {
       const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
         cameraX: floorVisCamWorld.x,
@@ -199,6 +200,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       });
       if (cameraOutsideBuilding) {
         band = { lo: 1, hi: maxBuildingLevel };
+        exteriorFullStackReveal = true;
       }
     }
     if (cabOccludesWorld) {
@@ -221,12 +223,13 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const insideStairShaft =
       pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
       pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z);
+    const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
     if (insideStairShaft) {
       const stairLocalBand = fpStairShaftLocalVisibilityBand({
         globalLo: band.lo,
         globalHi: band.hi,
         maxLevel: maxBuildingLevel,
-        playerStorey: estimateStoreyFromFeetY(feetPos.y, storeyOpts),
+        playerStorey,
       });
       band = stairLocalBand;
     }
@@ -299,6 +302,15 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
+    const cameraOutsideBuildingForFurniture = fpBuildingExteriorViewShouldRevealFullStack({
+      cameraX: floorVisCamWorld.x,
+      cameraZ: floorVisCamWorld.z,
+      boundsMinX: buildingWorldBounds.min.x,
+      boundsMaxX: buildingWorldBounds.max.x,
+      boundsMinZ: buildingWorldBounds.min.z,
+      boundsMaxZ: buildingWorldBounds.max.z,
+    });
+    const exteriorGroundView = cameraOutsideBuildingForFurniture && playerStorey <= 1;
     const apartmentFurnitureInteriorVisible =
       fpElevators.isInsideAnyCabHud(
         feetPos.x,
@@ -308,7 +320,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         floorVisCamWorld.y,
         floorVisCamWorld.z,
       ) ||
-      cameraInsideBuildingFootprint();
+      (!exteriorFullStackReveal && !exteriorGroundView && cameraInsideBuildingFootprint());
     if (
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
       apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount
@@ -322,7 +334,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
     const lo = _visBandSmoothLo;
     const hi = _visBandSmoothHi;
-    const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
     const stairBand = fpStairColumnPlateVisibilityBand({
       globalLo: lo,
       globalHi: hi,
