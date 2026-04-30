@@ -179,9 +179,27 @@ export async function mountFpSession(
     stairShaftSpecs,
   } = createFpSessionStaticWorld();
   scene.add(buildingRoot);
+  scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
+  cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  /**
+   * Get something real onto the canvas before async apartment props, decals, and presentation assets
+   * finish. Without this bootstrap frame, React has already swapped to the FP canvas but the browser
+   * only has a cleared black surface until the full RAF driver starts near the end of this mount.
+   */
+  const renderBootstrapFrame = () => {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, FP_SESSION_MAX_PIXEL_RATIO));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+  };
+  renderBootstrapFrame();
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -223,9 +241,6 @@ export async function mountFpSession(
     buildingRoot,
   );
   unitInteriorMeshes.push(...decalManager.getMeshes());
-
-  scene.add(cellRoot);
-
   installFpSessionTransientDebugConsole({ scene, buildingRoot, cellRoot, renderer });
 
   const selectedHotbarRow = () => {
