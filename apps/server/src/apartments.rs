@@ -3,6 +3,7 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::accounts::user;
+use crate::feature_flags;
 use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
 use crate::auth;
 use crate::chat;
@@ -25,7 +26,11 @@ pub(crate) const UNIT_STATE_UNCLAIMED: u8 = 0;
 pub(crate) const UNIT_STATE_CLAIMED: u8 = 1;
 pub(crate) const UNIT_STATE_BROKEN: u8 = 2;
 
-const CLAIM_FULL_SECS: f32 = 30.0;
+const CLAIM_FULL_SECS: f32 = if feature_flags::APARTMENT_CLAIM_FAST_FOR_TESTING {
+    1.0
+} else {
+    30.0
+};
 const REINFORCE_HOLD_SECS: f32 = 22.0;
 /// Horizontal radius² (m²) for wardrobe / footlocker — feet pose is compared on **XZ**
 /// against anchor columns; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`).

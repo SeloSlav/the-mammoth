@@ -4,14 +4,12 @@ import {
   stripArchitecturalDetailMaps,
   type StandardAuthoringSlot,
 } from "./elevatorVisualMaterialUtils.js";
+import { FLOOR_SHELL_DISABLE_NORMAL_MAPS } from "./featureFlags.js";
 
 // Default materials use basecolor + normal + roughness. Height/metal textures are opt-in only (see PbrMaterialConfig).
 
-/**
- * Hard toggle (no UI): when `true`, drops **normal maps** from merged shell PBR (saves one fetch).
- * Keep `false` so concrete/plaster read with tangent detail; profile if needed.
- */
-export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = false;
+/** @see `./featureFlags.ts` — re-export for call sites importing from floor materials. */
+export { FLOOR_SHELL_DISABLE_NORMAL_MAPS } from "./featureFlags.js";
 
 /**
  * Tiled shell PBR: default renderer anisotropy (often 16×) scales texture fetches at grazing

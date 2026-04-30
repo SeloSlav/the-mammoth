@@ -4,6 +4,7 @@
 import type { Identity } from "spacetimedb";
 import type { ApartmentDoor, ApartmentUnit } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
+import { APARTMENT_CLAIM_FAST_FOR_TESTING } from "../../featureFlags";
 
 /** Horizontal radius (m); must match server `STASH_INTERACT_SQ = 3.5 * 3.5` (`apartments.rs`). */
 export const APARTMENT_FURNITURE_INTERACT_R_M = 3.5;
@@ -16,8 +17,8 @@ export const UNIT_STATE_UNCLAIMED = 0;
 export const UNIT_STATE_CLAIMED = 1;
 export const UNIT_STATE_BROKEN = 2;
 
-/** Must match `CLAIM_FULL_SECS` in `apps/server/src/apartments.rs`. */
-export const APARTMENT_CLAIM_FULL_SECS = 30;
+/** Seconds of hold progress to complete claim (30 production, 1 when testing flag matches server). */
+export const APARTMENT_CLAIM_FULL_SECS = APARTMENT_CLAIM_FAST_FOR_TESTING ? 1 : 30;
 
 /** Must match `CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M` in `apps/server/src/apartments.rs`. */
 export const CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M = 2.35;

@@ -78,14 +78,16 @@ export {
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";
 export {
+  ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER,
   ENABLE_STAIRWELL_HEATER_LANDING_PROPS,
+  AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED,
+  FLOOR_SHELL_DISABLE_NORMAL_MAPS,
+} from "./featureFlags.js";
+export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,
 } from "./stairWellLandingProps.js";
-export {
-  ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER,
-  ensureStairwellCigaretteMeshReady,
-} from "./stairwellCigaretteLitter.js";
+export { ensureStairwellCigaretteMeshReady } from "./stairwellCigaretteLitter.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,

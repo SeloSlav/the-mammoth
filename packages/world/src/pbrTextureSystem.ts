@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { WebGPURenderer } from "three/webgpu";
+import { AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED } from "./featureFlags.js";
 import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
 
 /**
@@ -8,11 +9,11 @@ import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
  * normal, roughness, AO, patina metalness, height bump).
  *
  * Scalars from authoring slots (`roughness`, `metalness`, `colorHex`, etc.) still apply.
- * Toggle `enabled` to `false` when benchmarking FPS vs full author textures (default below).
+ * Default comes from {@link AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED} in `./featureFlags.js`.
  */
 export const authorImportedPbrTexturesState = {
-  /** Set `true` for shipped visuals; `false` skips author PBR loads for FPS experiments. */
-  enabled: true,
+  /** Runtime toggle; initialized from central default (see `./featureFlags.ts`). */
+  enabled: AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED,
 };
 
 let ktx2Loader: InstanceType<typeof import("three/addons/loaders/KTX2Loader.js").KTX2Loader> | null =

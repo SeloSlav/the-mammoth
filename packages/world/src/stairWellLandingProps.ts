@@ -8,16 +8,11 @@ import {
   type StairShaftCardinalFace,
   type StairSwitchbackLayout,
 } from "./stairWellGeometry.js";
+import { ENABLE_STAIRWELL_HEATER_LANDING_PROPS } from "./featureFlags.js";
 
 /** Matches `content/elevator/stairwell.json` heater `landingProps` entries. */
 const STAIRWELL_HEATER_LANDING_PROP_MODEL_URL =
   "/static/models/objects/stairwell-heater.glb";
-
-/**
- * When false, stairwell heater GLBs (`stairwell-heater.glb` landing props) are not spawned.
- * Use with the litter toggle in `stairwellCigaretteLitter.ts` when testing stair visuals.
- */
-export let ENABLE_STAIRWELL_HEATER_LANDING_PROPS = false;
 
 const _loader = new GLTFLoader();
 const _templatePromiseByUrl = new Map<string, Promise<THREE.Object3D>>();

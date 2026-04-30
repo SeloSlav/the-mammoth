@@ -1,12 +1,7 @@
 import * as THREE from "three";
+import { ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER } from "./featureFlags.js";
 import type { StairCornerLanding, StairSwitchbackLayout } from "./stairWellGeometry.js";
 import { loadPropTemplate } from "./stairWellLandingProps.js";
-
-/**
- * Global toggle for stairwell cigarette litter (decoration around heater landings / treads).
- * Set to `true` to show; keep `false` to test or profile without litter.
- */
-export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
 
 /** FP client URL; same origin as other stairwell props. */
 export const STAIRWELL_CIGARETTE_MODEL_URL = "/static/models/objects/used-cigarette.glb";

@@ -12,6 +12,7 @@ mod combat_stub;
 mod dropped_item;
 mod elevator;
 mod elevator_layout;
+mod feature_flags;
 mod firearm;
 mod generated_apartment_doors;
 mod generated_collision_solids;
