@@ -13,6 +13,7 @@ import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { MammothChatHud } from "./MammothChatHud";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
+import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
 import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 
@@ -42,6 +43,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
   return (
     <>
       {conn ? <PlayerDeathOverlay conn={conn} /> : null}
+      {conn ? <PlayerDamageFeedbackOverlay conn={conn} /> : null}
       <div style={gameUiHidden ? { display: "none" } : undefined}>
         <div
           onDragStart={(e) => e.preventDefault()}

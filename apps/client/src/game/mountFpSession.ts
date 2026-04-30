@@ -26,6 +26,7 @@ import {
   POSE_AOI_RECENTER_Y_M,
   POSE_AOI_Y_HALF_M,
 } from "./fpRemote/remotePlayerVisibility.js";
+import { visitRemotePlayerCollisionAabbsInXZ } from "./fpRemote/remotePlayerCollisionAabbs.js";
 import {
   appendApartmentFurnitureInteriorMeshes,
   collectFpSessionUnitInteriorShellMeshes,
@@ -514,6 +515,11 @@ export async function mountFpSession(
       fpElevators,
       fpApartmentDoors,
       staticCollisionIndex,
+      remotePlayers: {
+        visitCollisionAabbsInXZ: (x0, x1, z0, z1, visit) => {
+          visitRemotePlayerCollisionAabbsInXZ(conn, x0, x1, z0, z1, visit);
+        },
+      },
       doorDebugState: __mmDoorDebugState,
       logDoorDebugFrame,
       logDoorDebugReconcile,

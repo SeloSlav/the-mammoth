@@ -52,5 +52,6 @@ export const FP_SESSION_MAX_PIXEL_RATIO = 1;
  * are not multiplied by MSAA fill.
  */
 export const FP_SESSION_WEBGPU_ANTIALIAS = true;
+
 export const FP_VIEWMODEL_RENDER_LAYER = 1;
 export const FP_MIRROR_SELF_RENDER_LAYER = 2;

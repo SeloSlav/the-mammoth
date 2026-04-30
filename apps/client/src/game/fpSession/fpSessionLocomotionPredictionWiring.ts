@@ -45,6 +45,9 @@ export type WireFpSessionLocomotionPredictionArgs = {
   sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
+  remotePlayers: {
+    visitCollisionAabbsInXZ: MountFpElevatorWorldResult["visitCollisionAabbsInXZ"];
+  };
   staticCollisionIndex: FpSessionStaticWorld["staticCollisionIndex"];
   doorDebugState: FpSessionDoorDebugState;
   logDoorDebugFrame: (args: {
@@ -210,6 +213,7 @@ export function wireFpSessionLocomotionPrediction(
       staticCollisionIndex,
       fpElevators,
       fpApartmentDoors,
+      remotePlayers: args.remotePlayers,
       elevatorWalkMergeSkipVy: ELEVATOR_WALK_MERGE_SKIP_VY,
       elevatorRiderLockSkipUpwardVyMps,
       intentQueue: moveIntentQueue,

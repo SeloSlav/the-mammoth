@@ -35,6 +35,7 @@ export function replicatedPlayerSnapshotFromPlainPose(
     worldPositionOverride?: { x: number; y: number; z: number };
     observedTimeMs?: number;
     equippedPrimary?: HeldItemId;
+    displayName?: string;
   },
 ): ReplicatedPlayerSnapshot {
   const observedTimeMs = options?.observedTimeMs ?? 0;
@@ -45,6 +46,7 @@ export function replicatedPlayerSnapshotFromPlainPose(
   };
   return {
     playerIdHex: fields.playerIdHex,
+    displayName: options?.displayName ?? fields.playerIdHex.slice(0, 8),
     observedTimeMs,
     worldPosition,
     yawRad: fields.yawRad,

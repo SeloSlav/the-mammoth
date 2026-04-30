@@ -73,6 +73,9 @@ type ElevDoorCollisionHost = {
 type ApartmentDoorCollisionHost = {
   visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
 };
+type RemotePlayerCollisionHost = {
+  visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
+};
 
 export type FpSessionLocalPredictionDeps = {
   fpLocomotionConstants: Pick<
@@ -121,6 +124,7 @@ export type FpSessionLocalPredictionDeps = {
   staticCollisionIndex: CollisionSpatialIndex;
   fpElevators: ElevDoorCollisionHost;
   fpApartmentDoors: ApartmentDoorCollisionHost;
+  remotePlayers: RemotePlayerCollisionHost;
   elevatorWalkMergeSkipVy: number;
   elevatorRiderLockSkipUpwardVyMps: number;
   intentQueue: FpSessionMoveIntentQueue;
@@ -206,6 +210,7 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
         visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
           deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          deps.remotePlayers.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
         },
       },
       opts.locoState.grounded,
@@ -403,6 +408,7 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
           visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
             deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
             deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+            deps.remotePlayers.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           },
         },
         deps.loco.grounded,

@@ -23,13 +23,6 @@
       "maxStack": 1
     },
     {
-      "id": "screwdriver",
-      "displayName": "Screwdriver",
-      "description": "Required with a door lock cylinder to claim an apartment.",
-      "category": "tool",
-      "maxStack": 1
-    },
-    {
       "id": "multimeter",
       "displayName": "Multimeter",
       "description": "Continuity and voltage checks for jury-rigged circuits.",

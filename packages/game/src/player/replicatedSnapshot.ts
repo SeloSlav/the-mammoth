@@ -8,6 +8,7 @@ import type { Vec3 } from "./gameplayState.js";
  */
 export type ReplicatedPlayerSnapshot = {
   playerIdHex: PlayerIdHex;
+  displayName: string;
   /** Client time when this snapshot was observed (for debugging / diagnostics). */
   observedTimeMs: number;
   worldPosition: Vec3;

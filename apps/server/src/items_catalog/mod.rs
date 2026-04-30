@@ -103,6 +103,7 @@ mod hotbar_consume_sound_tests {
     fn melee_weapons_read_authored_damage_from_catalog() {
         assert_eq!(melee_damage("knife"), Some(12.0));
         assert_eq!(melee_damage("crowbar"), Some(22.0));
+        assert_eq!(melee_damage("screwdriver"), Some(8.0));
         assert_eq!(melee_damage("water-bottle"), None);
     }
 }

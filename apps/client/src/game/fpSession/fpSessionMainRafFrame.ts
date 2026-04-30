@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
-import type { InventoryItem } from "../../module_bindings/types";
+import type { InventoryItem, User } from "../../module_bindings/types";
 import {
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
@@ -451,6 +451,8 @@ export function createFpSessionMainRafFrame(
         const id = row.identity.toHexString();
         if (deps.conn.identity.isEqual(row.identity)) continue;
         const p = deps.interp.getInterpolated(id, nowMs);
+        const user = deps.conn.db.user.identity.find(row.identity) as User | undefined;
+        const displayName = user?.username?.trim() || `Guest ${id.slice(0, 6)}`;
         const snap = replicatedPlayerSnapshotFromPlainPose(
           {
             playerIdHex: id,
@@ -467,6 +469,7 @@ export function createFpSessionMainRafFrame(
             observedTimeMs: nowMs,
             worldPositionOverride: p ?? undefined,
             equippedPrimary: "unarmed",
+            displayName,
           },
         );
         if (

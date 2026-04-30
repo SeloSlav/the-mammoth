@@ -69,6 +69,16 @@
           { "itemId": "duct-tape", "quantity": 2 }
         ]
       }
+    },
+    {
+      "id": "screwdriver",
+      "displayName": "Screwdriver",
+      "description": "Compact stabbing tool, also required with a door lock cylinder to claim an apartment.",
+      "category": "weapon",
+      "maxStack": 1,
+      "meleeCombat": {
+        "damage": 8
+      }
     }
   ]
 }
