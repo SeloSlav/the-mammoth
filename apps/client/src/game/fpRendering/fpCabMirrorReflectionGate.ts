@@ -61,8 +61,8 @@ export type CabMirrorPickPrimaryArgs = {
 
 /** Default gate for {@link CabMirrorPickPrimaryArgs.skipReflectionWhenVerticalLookAboveAbsY}. */
 export const FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y = 0.62;
-/** Redraw cab mirror reflections at 8 Hz; the cached texture is reused between updates. */
-export const FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 125;
+/** Redraw cab mirror reflections at 12 Hz; the cached texture is reused between updates. */
+export const FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 83;
 
 /**
  * Index of the mirror that should receive a fresh reflection this frame (`-1` if none).

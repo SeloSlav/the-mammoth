@@ -23,6 +23,8 @@ type DynamicMirrorState = {
   material: MeshBasicNodeMaterial;
 };
 
+const FP_CAB_MIRROR_REFLECTION_RESOLUTION_SCALE = 0.62;
+
 export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): FpPlanarMirror {
   const parent = placeholder.parent;
   if (!parent) throw new Error("createFpPlanarMirrorFromPlaceholder: placeholder has no parent");
@@ -54,7 +56,7 @@ export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): Fp
   const ensureDynamic = (): DynamicMirrorState => {
     if (dynamic) return dynamic;
     const mirrorNode = reflector({
-      resolutionScale: 0.38,
+      resolutionScale: FP_CAB_MIRROR_REFLECTION_RESOLUTION_SCALE,
       bounces: false,
       samples: 0,
     });
