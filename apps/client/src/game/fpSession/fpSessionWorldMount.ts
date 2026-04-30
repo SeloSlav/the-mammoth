@@ -13,8 +13,10 @@ import {
   buildStairRuntimeOverlayForBuilding,
   buildCollisionSpatialIndex,
   buildCellMeshes,
+  buildExteriorProceduralTreeGroup,
   buildWalkSurfaceSpatialIndex,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  ENABLE_EXTERIOR_PROCEDURAL_TREES,
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
   getBuildingStairShaftSpecs,
@@ -158,6 +160,20 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   // Reduces draw calls from ~100+/floor to ~13/floor — the single largest render perf win.
   // Floor plate visibility (mammothPlateLevelIndex) is preserved on the group itself.
   mergeStaticFloorGeometries(buildingRoot);
+  buildingRoot.updateMatrixWorld(true);
+  if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
+    const buildingLocalFootprint = new THREE.Box3()
+      .setFromObject(buildingRoot)
+      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
+    buildingLocalFootprint.min.y = 0;
+    buildingLocalFootprint.max.y = 1;
+    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
+    buildingRoot.add(
+      buildExteriorProceduralTreeGroup(buildingLocalFootprint, {
+        groundY: localGroundY,
+      }),
+    );
+  }
 
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
 

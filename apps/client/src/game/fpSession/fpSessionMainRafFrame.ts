@@ -192,6 +192,7 @@ export type FpSessionMainRafFrameDeps = {
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
+  isApartmentFurnitureInteriorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
@@ -700,7 +701,10 @@ export function createFpSessionMainRafFrame(
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
     deps.syncBuildingFloorPlateVisibility(nowMs);
-    deps.fpApartmentFurniture.syncVisibility(deps.camera);
+    deps.fpApartmentFurniture.syncVisibility(
+      deps.camera,
+      deps.isApartmentFurnitureInteriorVisible(),
+    );
     const darkTarget = fpSampleStairwellInteriorDarkTarget(
       deps._floorVisCamWorld.x,
       deps._floorVisCamWorld.y,

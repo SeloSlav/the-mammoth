@@ -67,6 +67,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
+  isApartmentFurnitureInteriorVisible: () => boolean;
 } {
   const {
     camera,
@@ -367,5 +368,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     }
   };
 
-  return { syncBuildingFloorPlateVisibility, isInsideElevatorCabHudForJump };
+  return {
+    syncBuildingFloorPlateVisibility,
+    isInsideElevatorCabHudForJump,
+    isApartmentFurnitureInteriorVisible: () => _lastApartmentFurnitureInteriorVisible,
+  };
 }

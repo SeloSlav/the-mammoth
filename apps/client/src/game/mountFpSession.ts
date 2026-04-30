@@ -385,7 +385,11 @@ export async function mountFpSession(
   const _rigViewScratch = new THREE.Vector3();
   const _aimShotWorldDir = new THREE.Vector3();
 
-  const { syncBuildingFloorPlateVisibility, isInsideElevatorCabHudForJump } =
+  const {
+    syncBuildingFloorPlateVisibility,
+    isInsideElevatorCabHudForJump,
+    isApartmentFurnitureInteriorVisible,
+  } =
     createFpSessionFloorPlateVisibility({
       camera,
       buildingRoot,
@@ -1035,6 +1039,7 @@ export async function mountFpSession(
     maybeSendMoveIntent,
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
+    isApartmentFurnitureInteriorVisible,
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,

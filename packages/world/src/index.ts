@@ -78,12 +78,19 @@ export {
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";
 export {
+  ENABLE_EXTERIOR_PROCEDURAL_TREES,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
   ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER,
   ENABLE_STAIRWELL_HEATER_LANDING_PROPS,
   AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED,
   FLOOR_SHELL_DISABLE_NORMAL_MAPS,
 } from "./featureFlags.js";
+export {
+  buildExteriorProceduralTreeGroup,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
+  type ExteriorProceduralTreeOptions,
+  type ExteriorProceduralTreePlacement,
+} from "./exteriorProceduralTrees.js";
 export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,

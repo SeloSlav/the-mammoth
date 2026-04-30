@@ -159,7 +159,7 @@ function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Objec
 
 export type MountFpApartmentFurnitureResult = {
   dispose: () => void;
-  syncVisibility: (camera: THREE.PerspectiveCamera) => void;
+  syncVisibility: (camera: THREE.PerspectiveCamera, allowDemandBuild?: boolean) => void;
   getStashPrompt: (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
@@ -172,10 +172,17 @@ type ApartmentFurnitureTemplates = {
   bed: THREE.Object3D;
 };
 
-type ApartmentFurnitureBuildState = {
+type ApartmentFurnitureLevelState = {
+  group: THREE.Group;
+  unitGroups: THREE.Group[];
+  stashPickMeshes: THREE.Mesh[];
+};
+
+type ApartmentFurnitureLevelBuildJob = {
+  level: number;
   rows: ApartmentUnit[];
   nextIndex: number;
-  byLevel: Map<number, THREE.Group>;
+  group: THREE.Group;
   unitGroups: THREE.Group[];
   stashPickMeshes: THREE.Mesh[];
 };
@@ -223,11 +230,14 @@ export async function mountFpApartmentFurniture(opts: {
 
   let templates: ApartmentFurnitureTemplates | null = null;
   let disposed = false;
-  let rebuildScheduled = false;
-  let rebuildRunning = false;
-  let rebuildRequested = false;
-  let activeBuild: ApartmentFurnitureBuildState | null = null;
-  let rebuildRaf = 0;
+  let buildRaf = 0;
+  let activeBuildJob: ApartmentFurnitureLevelBuildJob | null = null;
+  let rowsByLevel = new Map<number, ApartmentUnit[]>();
+  const builtLevels = new Map<number, ApartmentFurnitureLevelState>();
+  const emptyBuiltLevels = new Set<number>();
+  const queuedLevels: number[] = [];
+  const queuedLevelSet = new Set<number>();
+  const visibleLevelScratch = new Set<number>();
 
   const disposeGeneratedGeometry = (root: THREE.Object3D) => {
     root.traverse((o) => {
@@ -245,53 +255,49 @@ export async function mountFpApartmentFurniture(opts: {
     managed.length = 0;
     unitFurnitureGroups.length = 0;
     stashPickMeshes.length = 0;
+    builtLevels.clear();
+    emptyBuiltLevels.clear();
   };
 
-  const disposeBuildState = (build: ApartmentFurnitureBuildState | null) => {
-    if (!build) return;
-    for (const g of build.byLevel.values()) {
-      disposeGeneratedGeometry(g);
-    }
-    build.byLevel.clear();
-    build.unitGroups.length = 0;
-    build.stashPickMeshes.length = 0;
+  const disposeBuildJob = (job: ApartmentFurnitureLevelBuildJob | null) => {
+    if (!job) return;
+    disposeGeneratedGeometry(job.group);
+    job.unitGroups.length = 0;
+    job.stashPickMeshes.length = 0;
   };
 
-  const floorGroupFor = (
-    byLevel: Map<number, THREE.Group>,
-    levelIdx: number,
-  ): THREE.Group => {
-    let g = byLevel.get(levelIdx);
-    if (!g) {
-      g = new THREE.Group();
-      g.name = `apartment_furniture_plate_${levelIdx}`;
-      g.userData.mammothPlateLevelIndex = levelIdx;
-      g.userData.mammothApartmentFurnitureProp = true;
-      byLevel.set(levelIdx, g);
-    }
+  const createFloorGroup = (levelIdx: number): THREE.Group => {
+    const g = new THREE.Group();
+    g.name = `apartment_furniture_plate_${levelIdx}`;
+    g.userData.mammothPlateLevelIndex = levelIdx;
+    g.userData.mammothApartmentFurnitureProp = true;
     return g;
   };
 
-  const createBuildState = (): ApartmentFurnitureBuildState => ({
-    rows: [...opts.conn.db.apartment_unit].filter((row): row is ApartmentUnit => {
+  const indexRowsByLevel = (): Map<number, ApartmentUnit[]> => {
+    const next = new Map<number, ApartmentUnit[]>();
+    for (const row of opts.conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
-      return u.unitId.startsWith("unit_e_") || u.unitId.startsWith("unit_w_");
-    }),
-    nextIndex: 0,
-    byLevel: new Map<number, THREE.Group>(),
-    unitGroups: [],
-    stashPickMeshes: [],
-  });
+      if (!u.unitId.startsWith("unit_e_") && !u.unitId.startsWith("unit_w_")) continue;
+      const arr = next.get(u.level);
+      if (arr) {
+        arr.push(u);
+      } else {
+        next.set(u.level, [u]);
+      }
+    }
+    return next;
+  };
 
   const buildUnitFurniture = (
-    build: ApartmentFurnitureBuildState,
+    build: ApartmentFurnitureLevelBuildJob,
     u: ApartmentUnit,
     readyTemplates: ApartmentFurnitureTemplates,
   ) => {
     /** Matches server floor slab (`mn[1]` / `foot_y`). */
     const floorY = u.footY;
     const levelIdx = u.level;
-    const plate = floorGroupFor(build.byLevel, levelIdx);
+    const plate = build.group;
     const furnitureYaw = u.bedYaw;
 
     const unitGroup = new THREE.Group();
@@ -381,38 +387,61 @@ export async function mountFpApartmentFurniture(opts: {
     build.unitGroups.push(unitGroup);
   };
 
-  const finishBuild = (build: ApartmentFurnitureBuildState) => {
-    for (const g of build.byLevel.values()) {
-      if (g.children.length === 0) continue;
-      g.updateMatrixWorld(true);
-      opts.buildingRoot.add(g);
-      managed.push(g);
-    }
-
+  const finishLevelBuild = (build: ApartmentFurnitureLevelBuildJob) => {
+    build.group.updateMatrixWorld(true);
+    opts.buildingRoot.add(build.group);
+    managed.push(build.group);
+    builtLevels.set(build.level, {
+      group: build.group,
+      unitGroups: build.unitGroups,
+      stashPickMeshes: build.stashPickMeshes,
+    });
     opts.buildingRoot.updateMatrixWorld(true);
-    unitFurnitureGroups.length = 0;
     unitFurnitureGroups.push(...build.unitGroups);
-    stashPickMeshes.length = 0;
     stashPickMeshes.push(...build.stashPickMeshes);
     opts.onRebuilt?.();
   };
 
-  const runRebuildSlice = () => {
-    rebuildRaf = 0;
-    if (disposed || !templates || !activeBuild) {
-      disposeBuildState(activeBuild);
-      rebuildRunning = false;
-      activeBuild = null;
+  const startNextBuildJob = (): ApartmentFurnitureLevelBuildJob | null => {
+    while (queuedLevels.length > 0) {
+      const level = queuedLevels.shift()!;
+      queuedLevelSet.delete(level);
+      if (builtLevels.has(level) || emptyBuiltLevels.has(level)) continue;
+      const rows = rowsByLevel.get(level) ?? [];
+      if (rows.length === 0) {
+        emptyBuiltLevels.add(level);
+        continue;
+      }
+      return {
+        level,
+        rows,
+        nextIndex: 0,
+        group: createFloorGroup(level),
+        unitGroups: [],
+        stashPickMeshes: [],
+      };
+    }
+    return null;
+  };
+
+  const scheduleBuildSlice = () => {
+    if (disposed || buildRaf !== 0 || !templates) return;
+    buildRaf = requestAnimationFrame(runBuildSlice);
+  };
+
+  function runBuildSlice() {
+    buildRaf = 0;
+    if (disposed || !templates) {
+      disposeBuildJob(activeBuildJob);
+      activeBuildJob = null;
       return;
     }
 
-    if (rebuildRequested) {
-      disposeBuildState(activeBuild);
-      activeBuild = createBuildState();
-      rebuildRequested = false;
+    if (!activeBuildJob) {
+      activeBuildJob = startNextBuildJob();
     }
-
-    const build = activeBuild;
+    const build = activeBuildJob;
+    if (!build) return;
     const sliceStart = performance.now();
     let processed = 0;
 
@@ -429,35 +458,46 @@ export async function mountFpApartmentFurniture(opts: {
     }
 
     if (build.nextIndex >= build.rows.length) {
-      finishBuild(build);
-      activeBuild = null;
-      rebuildRunning = false;
-      if (rebuildRequested) scheduleRebuild();
+      finishLevelBuild(build);
+      activeBuildJob = null;
+      if (queuedLevels.length > 0) scheduleBuildSlice();
       return;
     }
 
-    rebuildRaf = requestAnimationFrame(runRebuildSlice);
+    scheduleBuildSlice();
   };
 
-  const beginRebuild = () => {
-    if (disposed || !templates) return;
-    rebuildRunning = true;
-    rebuildRequested = false;
+  const requestLevelBuild = (level: number) => {
+    if (!templates || builtLevels.has(level) || emptyBuiltLevels.has(level)) return;
+    if (activeBuildJob?.level === level || queuedLevelSet.has(level)) return;
+    queuedLevelSet.add(level);
+    queuedLevels.push(level);
+    scheduleBuildSlice();
+  };
+
+  const resetBuiltFurniture = () => {
+    if (buildRaf !== 0) {
+      cancelAnimationFrame(buildRaf);
+      buildRaf = 0;
+    }
+    disposeBuildJob(activeBuildJob);
+    activeBuildJob = null;
+    queuedLevels.length = 0;
+    queuedLevelSet.clear();
     clearManaged();
-    activeBuild = createBuildState();
-    rebuildRaf = requestAnimationFrame(runRebuildSlice);
+    rowsByLevel = indexRowsByLevel();
+    opts.onRebuilt?.();
   };
 
-  const scheduleRebuild = () => {
-    if (disposed) return;
-    rebuildRequested = true;
-    if (!templates || rebuildScheduled || rebuildRunning) return;
-    rebuildScheduled = true;
-    requestAnimationFrame(() => {
-      if (disposed) return;
-      rebuildScheduled = false;
-      beginRebuild();
-    });
+  const cancelPendingDemandBuild = () => {
+    if (buildRaf !== 0) {
+      cancelAnimationFrame(buildRaf);
+      buildRaf = 0;
+    }
+    disposeBuildJob(activeBuildJob);
+    activeBuildJob = null;
+    queuedLevels.length = 0;
+    queuedLevelSet.clear();
   };
 
   void Promise.all([
@@ -472,20 +512,20 @@ export async function mountFpApartmentFurniture(opts: {
         footlocker: footGltf.scene,
         bed: bedGltf.scene,
       };
-      scheduleRebuild();
+      rowsByLevel = indexRowsByLevel();
     })
     .catch((err) => {
       console.warn("[mountFpApartmentFurniture] failed to load furniture GLBs", err);
     });
 
-  const bumpApartmentUnit = () => scheduleRebuild();
+  const bumpApartmentUnit = () => resetBuiltFurniture();
   const bumpApartmentUnitIfPlacementChanged = (
     _ctx: unknown,
     oldUnit: ApartmentUnit,
     newUnit: ApartmentUnit,
   ) => {
     if (apartmentFurniturePlacementChanged(oldUnit, newUnit)) {
-      scheduleRebuild();
+      resetBuiltFurniture();
     }
   };
 
@@ -494,7 +534,19 @@ export async function mountFpApartmentFurniture(opts: {
   opts.conn.db.apartment_unit.onDelete(bumpApartmentUnit);
 
   return {
-    syncVisibility: (camera) => {
+    syncVisibility: (camera, allowDemandBuild = true) => {
+      if (!allowDemandBuild) {
+        cancelPendingDemandBuild();
+      }
+      if (allowDemandBuild) {
+        visibleLevelScratch.clear();
+        for (const ch of opts.buildingRoot.children) {
+          if (ch.userData.mammothApartmentFurnitureProp === true) continue;
+          const li = ch.userData.mammothPlateLevelIndex;
+          if (typeof li === "number" && ch.visible) visibleLevelScratch.add(li);
+        }
+        for (const level of visibleLevelScratch) requestLevelBuild(level);
+      }
       if (unitFurnitureGroups.length === 0) return;
       camera.updateMatrixWorld();
       _furnitureVisibilityViewProjection.multiplyMatrices(
@@ -504,6 +556,10 @@ export async function mountFpApartmentFurniture(opts: {
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
       for (let i = 0; i < unitFurnitureGroups.length; i++) {
         const g = unitFurnitureGroups[i]!;
+        if (!allowDemandBuild) {
+          g.visible = false;
+          continue;
+        }
         const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
         g.visible = bounds instanceof THREE.Box3
           ? _furnitureVisibilityFrustum.intersectsBox(bounds)
@@ -533,16 +589,16 @@ export async function mountFpApartmentFurniture(opts: {
     },
     dispose: () => {
       disposed = true;
-      if (rebuildRaf !== 0) {
-        cancelAnimationFrame(rebuildRaf);
-        rebuildRaf = 0;
+      if (buildRaf !== 0) {
+        cancelAnimationFrame(buildRaf);
+        buildRaf = 0;
       }
       opts.conn.db.apartment_unit.removeOnInsert(bumpApartmentUnit);
       opts.conn.db.apartment_unit.removeOnUpdate(bumpApartmentUnitIfPlacementChanged);
       opts.conn.db.apartment_unit.removeOnDelete(bumpApartmentUnit);
       clearManaged();
-      disposeBuildState(activeBuild);
-      activeBuild = null;
+      disposeBuildJob(activeBuildJob);
+      activeBuildJob = null;
       stashPickGeometry.dispose();
       stashPickMaterial.dispose();
       unitBoundsDebugGeometry?.dispose();

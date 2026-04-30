@@ -24,3 +24,9 @@ export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
  * When `false`, the FP session skips loading decal assets entirely (no texture fetches).
  */
 export let ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
+
+/**
+ * Client-side procedural L-system tree grove around the exterior megablock yard.
+ * Defaults on, but can be disabled here for profiling or art-direction passes.
+ */
+export let ENABLE_EXTERIOR_PROCEDURAL_TREES = true;
