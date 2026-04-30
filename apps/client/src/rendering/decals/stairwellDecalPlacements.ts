@@ -14,9 +14,9 @@ const GRAFFITI_IDS = [
   "blok47_h",
 ] as const;
 
-/** Projected decals are fill-rate heavy in WebGPU; keep counts conservative. */
-const STAIRWELL_GRAFFITI_SLOTS_PER_SEGMENT = 2;
-/** Grime spawns a second projected mesh + another standard-material variant — too expensive for shafts. */
+/** Projected decals ({@link DecalGeometry}); flat quads failed visibility (wrong face vs interior walls). */
+const STAIRWELL_GRAFFITI_SLOTS_PER_SEGMENT = 3;
+/** Extra grime layer doubles mesh + materials — keep off for shafts. */
 const STAIRWELL_GRAFFITI_GRIME_LAYER = false;
 
 function shaftSegmentHeightM(s: BuildingStairShaftSpec): number {
@@ -24,7 +24,7 @@ function shaftSegmentHeightM(s: BuildingStairShaftSpec): number {
 }
 
 /**
- * ~2 projected graffiti placements per stair segment — deterministic from shaft id, level, slot.
+ * ~3 projected graffiti placements per stair segment — deterministic from shaft id, level, slot.
  */
 export function generateStairwellDecalPlacements(
   buildingRoot: THREE.Object3D,

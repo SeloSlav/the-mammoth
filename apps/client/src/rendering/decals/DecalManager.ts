@@ -453,7 +453,8 @@ export class DecalManager {
   }
 
   /**
-   * Resolves stair-scoped placements via raycast against segment meshes under `buildingRoot`.
+   * Places decals from authoring data. `mode: "flat"` does not require a mesh ray-hit (cheap); projected
+   * decals resolve against `buildingRoot` stair segment meshes.
    */
   async loadPlacements(placements: readonly DecalPlacement[], buildingRoot: THREE.Object3D): Promise<void> {
     for (const p of placements) {
@@ -463,6 +464,17 @@ export class DecalManager {
         segment = findStairShaftSegment(buildingRoot, p.stairShaftId, p.storeyLevelIndex);
         if (segment) candidates = collectMeshesInSegment(segment);
       }
+
+      if (p.mode === "flat") {
+        const mesh = await this.spawnFromPlacement(p, candidates, defaultProjectedResolver);
+        if (!mesh) continue;
+        if (segment) {
+          segment.attach(mesh);
+          mesh.userData.mammothUnitInterior = true;
+        }
+        continue;
+      }
+
       const hit = defaultProjectedResolver(p, candidates);
       if (!hit) continue;
       const mesh = await this.spawnFromPlacement(p, candidates, defaultProjectedResolver);

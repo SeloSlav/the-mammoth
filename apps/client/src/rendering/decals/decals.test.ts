@@ -111,7 +111,7 @@ describe("generateStairwellDecalPlacements", () => {
     const a = generateStairwellDecalPlacements(root, [spec]);
     const b = generateStairwellDecalPlacements(root, [spec]);
     expect(a).toEqual(b);
-    expect(a.length).toBe(spec.storeyCount * 2);
+    expect(a.length).toBe(spec.storeyCount * 3);
     for (const p of a) {
       expect(p.stairShaftId).toBe(spec.id);
       expect(p.mode).toBe("projected");

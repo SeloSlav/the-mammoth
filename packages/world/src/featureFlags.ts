@@ -18,3 +18,9 @@ export let ENABLE_STAIRWELL_HEATER_LANDING_PROPS = false;
 
 /** Stairwell kit: stray cigarette meshes near heaters (content experiment). */
 export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
+
+/**
+ * Stairwell graffiti decals on client (projected meshes + decal textures).
+ * When `false`, the FP session skips loading decal assets entirely (no texture fetches).
+ */
+export let ENABLE_STAIRWELL_GRAFFITI_DECALS = false;

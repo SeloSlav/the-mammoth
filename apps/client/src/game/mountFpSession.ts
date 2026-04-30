@@ -17,6 +17,7 @@ import {
 import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  ENABLE_STAIRWELL_GRAFFITI_DECALS,
   ensureStairwellCigaretteMeshReady,
   maxBuildingLevelIndex,
   parseFloorDoc,
@@ -127,11 +128,7 @@ import {
   POSE_AOI_HALF,
   WORLD_SOUND_AOI_HALF,
 } from "./fpSession/fpSessionConstants.js";
-import {
-  DecalManager,
-  DECAL_MANIFEST,
-  generateStairwellDecalPlacements,
-} from "../rendering/decals/index.js";
+import type { DecalManager } from "../rendering/decals/DecalManager.js";
 import { isTextInputFocused } from "./isTextInputFocused.js";
 
 /**
@@ -239,23 +236,35 @@ export async function mountFpSession(
   });
 
   let sessionDisposed = false;
-  const decalManager = new DecalManager(scene, renderer);
-  void (async () => {
-    try {
-      await decalManager.preloadManifest(DECAL_MANIFEST);
-      if (sessionDisposed) return;
-      await decalManager.loadPlacements(
-        generateStairwellDecalPlacements(buildingRoot, stairShaftSpecs),
-        buildingRoot,
-      );
-      if (sessionDisposed) return;
-      unitInteriorMeshes.push(...decalManager.getMeshes());
-    } catch (err) {
-      if (!sessionDisposed) {
-        console.warn("[mountFpSession] failed to load stairwell decals", err);
+  let decalManager: DecalManager | null = null;
+  if (ENABLE_STAIRWELL_GRAFFITI_DECALS) {
+    void (async () => {
+      try {
+        const { DecalManager: DecalManagerCtor, DECAL_MANIFEST, generateStairwellDecalPlacements } =
+          await import("../rendering/decals/index.js");
+        if (sessionDisposed) return;
+        const dm = new DecalManagerCtor(scene, renderer);
+        decalManager = dm;
+        if (sessionDisposed) {
+          dm.dispose();
+          decalManager = null;
+          return;
+        }
+        await dm.preloadManifest(DECAL_MANIFEST);
+        if (sessionDisposed) return;
+        await dm.loadPlacements(
+          generateStairwellDecalPlacements(buildingRoot, stairShaftSpecs),
+          buildingRoot,
+        );
+        if (sessionDisposed) return;
+        unitInteriorMeshes.push(...dm.getMeshes());
+      } catch (err) {
+        if (!sessionDisposed) {
+          console.warn("[mountFpSession] failed to load stairwell decals", err);
+        }
       }
-    }
-  })();
+    })();
+  }
   installFpSessionTransientDebugConsole({ scene, buildingRoot, cellRoot, renderer });
 
   const selectedHotbarRow = () => {
@@ -1088,7 +1097,7 @@ export async function mountFpSession(
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     fpEnvironment.dispose();
-    decalManager.dispose();
+    decalManager?.dispose();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();
