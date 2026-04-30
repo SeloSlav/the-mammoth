@@ -1,8 +1,8 @@
 //! Wardrobe / footlocker / bed placement for apartment shells.
 //!
 //! **`unit_e_*`/`unit_w_*`** (`SwingDoorFace::W`/`E`): bed + footlocker anchors are measured from
-//! the hull **far wall** (away from the corridor hinge) so they sit deep in the room and along the
-//! wall run; footlock stays between bed and entryway. Wardrobe anchors are unchanged (door-adjacent).
+//! the hull **far wall** (away from the corridor hinge); footlock stays between bed and entryway.
+//! Wardrobe stays door-adjacent but inset from the hinge edge so interact radii do not reach the corridor.
 //! Z offsets are hull-centered with clamps.
 
 use crate::apartment_door::SwingDoorFace;
@@ -22,13 +22,14 @@ const FOOTLOCKER_HALF_X_M: f32 = 0.43;
 const WARDROBE_HALF_X_M: f32 = 0.26;
 const Z_EDGE_M: f32 = BED_HALF_Z_M + PROP_WALL_GAP_M;
 /// Distance from the exterior / window wall (hull X face) to bed center.
-/// The rendered bed GLB is large and off-pivot; keep the spawn anchor deep enough that client
-/// AABB clamping is a final guard, not the primary thing preventing window clipping.
-const BED_CENTER_FROM_BACK_WALL_M: f32 = 3.25;
+/// The rendered shell's glass sits inside this hull box; anchors must leave margin so GLB footprints
+/// (and server interact columns) stay clearly inside the living volume.
+const BED_CENTER_FROM_BACK_WALL_M: f32 = 5.15;
 /// Footlocker stays between entryway and bed; keep it beyond the bed foot along the spine.
-const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 4.70;
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 6.75;
 const BED_CENTER_Z_OFFSET_M: f32 = -1.08;
-const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 0.72;
+/// Door-adjacent wardrobe — pushed deeper so hallway poses cannot overlap the wardrobe interact disc.
+const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 1.38;
 const WARDROBE_CENTER_Z_OFFSET_M: f32 = 2.34;
 
 #[inline]
@@ -211,6 +212,7 @@ mod tests {
     const STOREY_SPACING_M: f32 = 3.16;
     const DEPTH: f32 = 13.0;
     const HALF_WIDTH: f32 = 3.3;
+    const RESIDENTIAL_FAR_WALL_X_INSET_M: f32 = 1.38;
     const FOOTLOCKER_HALF_Z_M: f32 = 0.54;
     const WARDROBE_HALF_Z_M: f32 = 0.56;
 
@@ -228,10 +230,18 @@ mod tests {
         match face {
             SwingDoorFace::W => (
                 [hinge_x + 0.08, feet_y - 0.06, hinge_z - HALF_WIDTH],
-                [hinge_x + DEPTH, top_y, hinge_z + HALF_WIDTH],
+                [
+                    hinge_x + DEPTH - RESIDENTIAL_FAR_WALL_X_INSET_M,
+                    top_y,
+                    hinge_z + HALF_WIDTH,
+                ],
             ),
             SwingDoorFace::E => (
-                [hinge_x - DEPTH, feet_y - 0.06, hinge_z - HALF_WIDTH],
+                [
+                    hinge_x - DEPTH + RESIDENTIAL_FAR_WALL_X_INSET_M,
+                    feet_y - 0.06,
+                    hinge_z - HALF_WIDTH,
+                ],
                 [hinge_x - 0.08, top_y, hinge_z + HALF_WIDTH],
             ),
             _ => (

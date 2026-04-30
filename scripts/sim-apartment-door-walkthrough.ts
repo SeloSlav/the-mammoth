@@ -18,6 +18,7 @@ import {
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
+  apartmentDoorSwingInwardForTemplateId,
   resolveFpCharacterCollisions,
   swingDoorOpenSideNormal,
   swingDoorParkedLeafAabb,
@@ -148,7 +149,7 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
       feetY,
       panelWidthM: t.panelWidthM,
       panelHeightM: t.panelHeightM,
-      swingInward: true,
+      swingInward: apartmentDoorSwingInwardForTemplateId(t.templateId),
     });
     const staticIdx = buildCollisionSpatialIndex(statics);
 

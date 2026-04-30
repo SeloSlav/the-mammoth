@@ -1,19 +1,15 @@
-//! Public spawn / respawn routing — random stairwell landings match east-hub shafts in
-//! `content/building/floors/floor_mamutica_typical.json` (`stair_well_*_e` at px≈6.16).
+//! Public spawn / respawn routing — new joins and bedless respawns land on the **ground-floor lobby**
+//! near the west elevator bank (shared space with world loot anchors), not random stairwells.
 
 use spacetimedb::{Identity, ReducerContext};
 
-use crate::elevator_layout::{max_level, support_feet_y_for_level, BUILDING_ORIGIN_Y};
+use crate::elevator_layout::{support_feet_y_for_level, BUILDING_ORIGIN_Y};
 use crate::pose::{player_pose, PlayerPose};
 
-/// Stair column centers (`shaftPlanKey` xz); paired `pz` cores repeat across Mamutica.
-const STAIR_SHAFT_CENTER_XZ: &[(f32, f32)] = &[
-    (6.16, -92.0),
-    (6.16, -46.0),
-    (6.16, 0.0),
-    (6.16, 46.0),
-    (6.16, 92.0),
-];
+/// Central lobby walk area (see `WORLD_LOOT_*` anchors in `dropped_item.rs`, ground slab Y ≈ 0.20 m).
+const GROUND_LOBBY_SPAWN_CENTER_XZ: (f32, f32) = (-1.35, -0.35);
+const GROUND_LOBBY_SPAWN_JITTER_X: f32 = 4.8;
+const GROUND_LOBBY_SPAWN_JITTER_Z: f32 = 6.0;
 
 #[inline]
 fn splitmix64(mut z: u64) -> u64 {
@@ -30,7 +26,7 @@ fn rand_next(seed: &mut u64) -> u64 {
     x
 }
 
-/// Random landing on an east stair shaft (same columns every storey). Uses timestamp + pose seq as RNG seed.
+/// Random point on the ground-floor lobby (level 1 plate). Uses timestamp + pose seq as RNG seed.
 pub(crate) fn random_public_spawn_pose(ctx: &ReducerContext, id: Identity) -> PlayerPose {
     let seq = ctx
         .db
@@ -43,18 +39,15 @@ pub(crate) fn random_public_spawn_pose(ctx: &ReducerContext, id: Identity) -> Pl
     let micros = ctx.timestamp.to_micros_since_unix_epoch().max(0) as u64;
     let mut seed = micros ^ seq.wrapping_mul(0xD6E8_FEB9_C471_D7F7);
 
-    let n_shafts = STAIR_SHAFT_CENTER_XZ.len() as u64;
-    let shaft_i = (rand_next(&mut seed) % n_shafts) as usize;
-    let max_lv = max_level().max(1);
-    let level = 1 + ((rand_next(&mut seed) % u64::from(max_lv)) as u32);
+    let (cx, cz) = GROUND_LOBBY_SPAWN_CENTER_XZ;
+    let jitter_x =
+        ((rand_next(&mut seed) & 0xFFFF) as f32 / 65535.0 - 0.5) * GROUND_LOBBY_SPAWN_JITTER_X;
+    let jitter_z =
+        ((rand_next(&mut seed) & 0xFFFF) as f32 / 65535.0 - 0.5) * GROUND_LOBBY_SPAWN_JITTER_Z;
 
-    let (cx, cz) = STAIR_SHAFT_CENTER_XZ[shaft_i];
-    let jitter_x = ((rand_next(&mut seed) & 0xFFFF) as f32 / 65535.0 - 0.5) * 2.4;
-    let jitter_z = ((rand_next(&mut seed) & 0xFFFF) as f32 / 65535.0 - 0.5) * 3.5;
+    let feet_y = support_feet_y_for_level(1, BUILDING_ORIGIN_Y);
 
-    let feet_y = support_feet_y_for_level(level, BUILDING_ORIGIN_Y);
-
-    // Face roughly toward the residential wing (−X) from the east stair core.
+    // Match historical stairwell spawns: face toward +Z (hall spine).
     let yaw = std::f32::consts::PI;
 
     PlayerPose {

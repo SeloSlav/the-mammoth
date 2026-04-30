@@ -302,9 +302,10 @@ fn closed_slab_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
 
 /// Per-template swing direction for open-leaf collision. Must match
 /// `apartmentDoorSwingInwardForTemplateId` in `packages/world/src/manualApartmentDoorExtras.ts`.
+/// `false` means the leaf opens outward into the hallway on the same hinge, creating corridor cover.
 #[inline]
 fn apartment_door_swing_inward(_template_id: &str) -> bool {
-    true
+    false
 }
 
 /// Direction the leaf TIP ends up at full-open. Inward swing negates the normal.

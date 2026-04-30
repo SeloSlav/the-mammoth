@@ -11,11 +11,10 @@
  * - At rest (closed), the leaf lies flat against the wall, extending **away from the hinge along
  *   the wall in the local -Z direction** of the swing group.
  * - Two swing directions are supported (selected per door):
- *   - **outward** (default, used by elevator landing doors): leaf swings into the public /
+ *   - **outward** (default, used by elevator landing and apartment corridor doors): leaf swings into the public /
  *     corridor side — i.e. along `swingDoorOpenSideNormal(face)`.
- *   - **inward** (used by apartment-unit doors): leaf swings into the private / unit side — i.e.
- *     along `-swingDoorOpenSideNormal(face)`. This matches real-world apartment-door behavior
- *     (inward-swinging residential doors) and keeps the open leaf out of the shared corridor.
+ *   - **inward**: leaf swings into the private / unit side — i.e.
+ *     along `-swingDoorOpenSideNormal(face)`.
  *   The leaf direction is chosen per door via the `swingInward` flag passed to the primitives.
  *
  * ## Per-face rotation (outward convention)

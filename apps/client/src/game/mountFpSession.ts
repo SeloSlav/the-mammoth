@@ -76,7 +76,10 @@ import {
 } from "./fpSession/fpSessionGameUiHidden.js";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSession/fpSessionPerfDebug.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
-import { mountFpApartmentFurniture } from "./fpApartment/fpApartmentFurniture.js";
+import {
+  isApartmentUnitBoundsDebugEnabled,
+  mountFpApartmentFurniture,
+} from "./fpApartment/fpApartmentFurniture.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpDev/fpViewmodelAuthoringOverlay.js";
@@ -226,6 +229,7 @@ export async function mountFpSession(
   const fpApartmentFurniture = await mountFpApartmentFurniture({
     conn,
     buildingRoot,
+    showUnitBoundsDebug: isApartmentUnitBoundsDebugEnabled(),
     onRebuilt: () => {
       stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
       apartmentFurnitureInteriorMeshes.length = 0;

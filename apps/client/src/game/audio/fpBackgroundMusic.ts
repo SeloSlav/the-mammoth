@@ -11,8 +11,8 @@ const RANDOM_ROOT = `${AMBIENCE_ROOT}/random` as const;
 
 const OUT_GAIN = 1;
 const MUSIC_BUS_GAIN = 0.22;
-const AMBIENCE_BUS_GAIN = 1.15;
-const RANDOM_BUS_GAIN = 1.35;
+const AMBIENCE_BUS_GAIN = 0.92;
+const RANDOM_BUS_GAIN = 0.72;
 const USER_FADE_SECONDS = 1.6;
 const AMBIENCE_FADE_SECONDS = 5.5;
 const CHUNK_FADE_SECONDS = 4.5;
@@ -28,9 +28,9 @@ const RANDOM_FIRST_MAX_SECONDS = 28;
 const RANDOM_NEXT_MIN_SECONDS = 18;
 const RANDOM_NEXT_MAX_SECONDS = 52;
 const RANDOM_MAX_ACTIVE = 2;
-const RANDOM_REF_DISTANCE_M = 7.5;
+const RANDOM_REF_DISTANCE_M = 3.0;
 const RANDOM_MAX_DISTANCE_M = 85;
-const RANDOM_ROLLOFF = 0.42;
+const RANDOM_ROLLOFF = 0.72;
 
 type Vec3Like = {
   x: number;
@@ -90,7 +90,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "building-breath",
     url: `${AMBIENCE_ROOT}/building-breath.wav`,
-    gain: 0.42,
+    gain: 0.36,
     playbackRate: 0.985,
     highpassHz: 24,
     lowpassHz: 820,
@@ -98,7 +98,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "distant-city-veil",
     url: `${AMBIENCE_ROOT}/distant-city-veil.wav`,
-    gain: 0.28,
+    gain: 0.23,
     playbackRate: 1.0,
     highpassHz: 70,
     lowpassHz: 1900,
@@ -106,7 +106,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "corridor-life",
     url: `${AMBIENCE_ROOT}/corridor-life.wav`,
-    gain: 0.22,
+    gain: 0.18,
     playbackRate: 1.006,
     highpassHz: 95,
     lowpassHz: 2800,
@@ -114,7 +114,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "interior-electricity",
     url: `${AMBIENCE_ROOT}/interior-electricity.wav`,
-    gain: 0.13,
+    gain: 0.105,
     playbackRate: 1.012,
     highpassHz: 140,
     lowpassHz: 6200,
@@ -130,9 +130,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/vacuum-3.wav`,
     ],
     weight: 3.8,
-    gain: 0.18,
-    minDistanceM: 18,
-    maxDistanceM: 36,
+    gain: 0.105,
+    minDistanceM: 24,
+    maxDistanceM: 48,
     yMinM: -5,
     yMaxM: 7,
     highpassHz: 120,
@@ -148,9 +148,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/dog-bark-4.wav`,
     ],
     weight: 3.0,
-    gain: 0.3,
-    minDistanceM: 16,
-    maxDistanceM: 32,
+    gain: 0.17,
+    minDistanceM: 22,
+    maxDistanceM: 44,
     yMinM: -4,
     yMaxM: 6,
     highpassHz: 180,
@@ -161,9 +161,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "toilet-flush",
     urls: [`${RANDOM_ROOT}/toilet-flush.wav`],
     weight: 2.0,
-    gain: 0.24,
-    minDistanceM: 14,
-    maxDistanceM: 28,
+    gain: 0.13,
+    minDistanceM: 20,
+    maxDistanceM: 40,
     yMinM: -3,
     yMaxM: 5,
     highpassHz: 90,
@@ -179,9 +179,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/baby-cry-4.wav`,
     ],
     weight: 1.35,
-    gain: 0.26,
-    minDistanceM: 20,
-    maxDistanceM: 42,
+    gain: 0.145,
+    minDistanceM: 28,
+    maxDistanceM: 56,
     yMinM: -5,
     yMaxM: 8,
     highpassHz: 240,
@@ -192,9 +192,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "smoke-detector-chirp",
     urls: [`${RANDOM_ROOT}/smoke-detector-chirp.wav`],
     weight: 0.75,
-    gain: 0.18,
-    minDistanceM: 22,
-    maxDistanceM: 46,
+    gain: 0.1,
+    minDistanceM: 30,
+    maxDistanceM: 62,
     yMinM: -5,
     yMaxM: 8,
     highpassHz: 650,
@@ -205,9 +205,9 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "ajmo-dinamo",
     urls: [`${RANDOM_ROOT}/ajmo-dinamo.wav`],
     weight: 0.55,
-    gain: 0.22,
-    minDistanceM: 26,
-    maxDistanceM: 52,
+    gain: 0.12,
+    minDistanceM: 34,
+    maxDistanceM: 68,
     yMinM: -7,
     yMaxM: 9,
     highpassHz: 180,

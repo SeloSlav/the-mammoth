@@ -26,11 +26,29 @@ const BED_URL = "/static/models/objects/bed.glb";
 const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
 const BED_VIS_SCALE = 1.14;
+
+/** Set true to force hull debug in production builds. */
+const FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE = false;
+
+/** Enable with `?apartmentunitdebug`, `localStorage.setItem("mammothApartmentUnitBoundsDebug","1")`, or {@link FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE}. */
+export function isApartmentUnitBoundsDebugEnabled(): boolean {
+  if (FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    const ls = window.localStorage.getItem("mammothApartmentUnitBoundsDebug");
+    if (ls === "1" || ls === "on") return true;
+    if (new URLSearchParams(window.location.search).has("apartmentunitdebug")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 const WARDROBE_BOUNDS_INSET_M = 0.48;
 const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
 /** Keep the actual bed GLB AABB well inside the unit hull so it cannot poke through exterior glass. */
-const BED_BOUNDS_INSET_M = 2.25;
+const BED_BOUNDS_INSET_M = 2.95;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
@@ -143,6 +161,11 @@ export async function mountFpApartmentFurniture(opts: {
   buildingRoot: THREE.Group;
   /** Runs after every rebuild so FP can refresh `unitInteriorMeshes` visibility targets. */
   onRebuilt?: () => void;
+  /**
+   * Semi-transparent magenta box per unit using replicated `bound_*` (authoritative hull).
+   * Enable via {@link isApartmentUnitBoundsDebugEnabled}.
+   */
+  showUnitBoundsDebug?: boolean;
 }): Promise<MountFpApartmentFurnitureResult> {
   const loader = new GLTFLoader();
   const [wardrobeGltf, footGltf, bedGltf] = await Promise.all([
@@ -158,6 +181,17 @@ export async function mountFpApartmentFurniture(opts: {
   const managed: THREE.Object3D[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const unitBoundsDebugGeometry = opts.showUnitBoundsDebug ? new THREE.BoxGeometry(1, 1, 1) : null;
+  const unitBoundsDebugMaterial =
+    opts.showUnitBoundsDebug && unitBoundsDebugGeometry
+      ? new THREE.MeshBasicMaterial({
+          color: 0xff44cc,
+          transparent: true,
+          opacity: 0.28,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
+      : null;
   const stashPickMaterial = new THREE.MeshBasicMaterial({
     transparent: true,
     opacity: 0,
@@ -258,6 +292,28 @@ export async function mountFpApartmentFurniture(opts: {
 
       unitGroup.updateMatrixWorld(true);
       mergeGroupDescendantsByMaterial(unitGroup);
+
+      if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
+        const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
+        hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
+        hull.userData.mammothApartmentUnitBoundsDebug = true;
+        hull.userData.mammothApartmentFurnitureProp = true;
+        hull.userData.mammothUnitInterior = true;
+        hull.userData.mammothPlateLevelIndex = levelIdx;
+        hull.renderOrder = -1;
+        const sx = u.boundMaxX - u.boundMinX;
+        const sy = Math.max(0.02, u.boundMaxY - u.boundMinY);
+        const sz = u.boundMaxZ - u.boundMinZ;
+        hull.scale.set(sx, sy, sz);
+        hull.position.set(
+          (u.boundMinX + u.boundMaxX) * 0.5,
+          (u.boundMinY + u.boundMaxY) * 0.5,
+          (u.boundMinZ + u.boundMaxZ) * 0.5,
+        );
+        hull.frustumCulled = false;
+        unitGroup.add(hull);
+      }
+
       for (const m of unitGroup.children) {
         if (m instanceof THREE.Mesh) {
           m.castShadow = false;
@@ -329,6 +385,8 @@ export async function mountFpApartmentFurniture(opts: {
       stashPickMeshes.length = 0;
       stashPickGeometry.dispose();
       stashPickMaterial.dispose();
+      unitBoundsDebugGeometry?.dispose();
+      unitBoundsDebugMaterial?.dispose();
     },
   };
 }

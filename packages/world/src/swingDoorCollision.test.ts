@@ -172,7 +172,7 @@ describe("swingDoorParkedLeafAabb (outward — elevator landing doors)", () => {
   });
 });
 
-describe("swingDoorParkedLeafAabb (inward — apartment doors)", () => {
+describe("swingDoorParkedLeafAabb (inward swing support)", () => {
   const base = {
     hingeX: 10,
     hingeZ: 20,
@@ -218,9 +218,8 @@ describe("swingDoorParkedLeafAabb (inward — apartment doors)", () => {
     expect(aabb.min[2]).toBeGreaterThanOrEqual(base.hingeZ - 1e-6);
   });
 
-  /** Open-door corridor-traffic regression: walking down the corridor past an OPEN inward-
-   *  swinging apartment door must be unobstructed. */
-  it("does not block corridor traffic past the doorway", () => {
+  /** Open-door corridor-traffic regression for private-side/inward leaves. */
+  it("does not block corridor traffic past an inward-swing doorway", () => {
     const radius = 0.22;
     for (const face of ["w", "e", "n", "s"] as SwingDoorFace[]) {
       const aabb = swingDoorParkedLeafAabb({ face, swingInward: true, ...base });
@@ -241,9 +240,9 @@ describe("swingDoorParkedLeafAabb (inward — apartment doors)", () => {
     }
   });
 
-  /** Primary regression: a player walking straight through the middle of the doorway after
-   *  the door swings INWARD must NOT be blocked. */
-  it("does not block a player capsule walking through the doorway centre", () => {
+  /** Primary regression: a player walking through the middle of the doorway after an inward
+   *  swing must NOT be blocked. */
+  it("does not block a player capsule walking through an inward-swing doorway centre", () => {
     const radius = 0.22;
     for (const face of ["n", "s", "e", "w"] as SwingDoorFace[]) {
       const aabb = swingDoorParkedLeafAabb({ face, swingInward: true, ...base });

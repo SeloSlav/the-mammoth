@@ -4,6 +4,8 @@ import type { UnitEntryFace } from "./unitEntryAdjacency.js";
 
 const DEPTH_M = 13;
 const UNIT_HALF_WIDTH_M = 3.3;
+/** Matches `derive_bounds` in `apps/server/src/apartments.rs` for east/west units. */
+const RESIDENTIAL_FAR_WALL_X_INSET_M = 1.38;
 const PROP_WALL_GAP_M = 0.06;
 
 const BED_HALF_X_M = 1.09;
@@ -14,10 +16,10 @@ const WARDROBE_HALF_X_M = 0.26;
 const WARDROBE_HALF_Z_M = 0.56;
 
 /** Mirrored against `apps/server/src/apartment_interior_anchors.rs` east/west seed. */
-const BED_CENTER_FROM_BACK_WALL_M = 3.25;
-const FOOTLOCKER_CENTER_FROM_BACK_WALL_M = 4.7;
+const BED_CENTER_FROM_BACK_WALL_M = 5.15;
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M = 6.75;
 const BED_CENTER_Z_OFFSET_M = -1.08;
-const WARDROBE_CENTER_FROM_BACK_WALL_M = 0.72;
+const WARDROBE_CENTER_FROM_BACK_WALL_M = 1.38;
 const WARDROBE_CENTER_Z_OFFSET_M = 2.34;
 const Z_EDGE_M = BED_HALF_Z_M + PROP_WALL_GAP_M;
 
@@ -35,16 +37,16 @@ function boundsForDoor(t: {
 }): Bounds {
   if (t.face === "w") {
     return {
-      minX: t.hingeX - DEPTH_M,
-      maxX: t.hingeX - 0.08,
+      minX: t.hingeX + 0.08,
+      maxX: t.hingeX + DEPTH_M - RESIDENTIAL_FAR_WALL_X_INSET_M,
       minZ: t.hingeZ - UNIT_HALF_WIDTH_M,
       maxZ: t.hingeZ + UNIT_HALF_WIDTH_M,
     };
   }
   if (t.face === "e") {
     return {
-      minX: t.hingeX + 0.08,
-      maxX: t.hingeX + DEPTH_M,
+      minX: t.hingeX - DEPTH_M + RESIDENTIAL_FAR_WALL_X_INSET_M,
+      maxX: t.hingeX - 0.08,
       minZ: t.hingeZ - UNIT_HALF_WIDTH_M,
       maxZ: t.hingeZ + UNIT_HALF_WIDTH_M,
     };
@@ -78,11 +80,12 @@ function furnitureRects(t: {
     b.minZ + Z_EDGE_M,
     b.maxZ - Z_EDGE_M,
   );
+  // `face` matches Spacetime template door swing: "w" → `SwingDoorFace::W` (+X into unit), "e" → `::E` (−X).
   if (t.face === "w") {
     return {
       bed: {
         x: clamp(
-          b.minX + BED_CENTER_FROM_BACK_WALL_M,
+          b.maxX - BED_CENTER_FROM_BACK_WALL_M,
           b.minX + BED_HALF_X_M + PROP_WALL_GAP_M,
           b.maxX - BED_HALF_X_M - PROP_WALL_GAP_M,
         ),
@@ -92,7 +95,7 @@ function furnitureRects(t: {
       },
       footlocker: {
         x: clamp(
-          b.minX + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+          b.maxX - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
           b.minX + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
           b.maxX - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
         ),
@@ -115,7 +118,7 @@ function furnitureRects(t: {
   return {
     bed: {
       x: clamp(
-        b.maxX - BED_CENTER_FROM_BACK_WALL_M,
+        b.minX + BED_CENTER_FROM_BACK_WALL_M,
         b.minX + BED_HALF_X_M + PROP_WALL_GAP_M,
         b.maxX - BED_HALF_X_M - PROP_WALL_GAP_M,
       ),
@@ -125,7 +128,7 @@ function furnitureRects(t: {
     },
     footlocker: {
       x: clamp(
-        b.maxX - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+        b.minX + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
         b.minX + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
         b.maxX - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
       ),

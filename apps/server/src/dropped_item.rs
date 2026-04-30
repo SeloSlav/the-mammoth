@@ -1,10 +1,13 @@
 //! World pickups: drag-out from inventory/hotbar → `drop_item`, `E` / reducer → `pickup_dropped_item`.
 //! Static world loot uses the **same** `dropped_item` rows with [`DroppedItem.world_spawn_slot`], filled on
-//! `init`, refreshed on a timer with weighted RNG. Player drops stay `world_spawn_slot = None`; cleanup only
+//! `init`, refreshed on a timer with weighted RNG. A **sparse** set of corridor anchors rolls **ammo + rations only**;
+//! up to [`MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS`] **unclaimed** apartment units get weapon-biased loot (sorted by floor).
+//! Player drops stay `world_spawn_slot = None`; cleanup only
 //! ages those rows so server-spawn piles do not silently despawn mid-session.
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
+use crate::apartments::{apartment_unit, UNIT_STATE_UNCLAIMED};
 use crate::auth;
 use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
@@ -29,36 +32,43 @@ const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 /// **Keep equal to** `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
 const WORLD_LOOT_Y_GROUND_FLOOR_M: f32 = 0.20;
 
-/// Authoring anchors (hall / corridor — keep clear of elevators in data later).
+/// Sparse hallway anchors — light pickups only (ammo / rations). Weapons stay in unclaimed apartments.
+/// Keep ground-floor lobby spots aligned with public spawn; a few upper spine samples along Z.
 /// Index IS `world_spawn_slot`.
 const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
-    (0.85, 3.52, -15.42),
-    (1.1, 3.52, -40.15),
-    (1.95, 3.52, -88.42),
-    (-0.72, 3.52, 22.1),
     (0.62, WORLD_LOOT_Y_GROUND_FLOOR_M, -0.4),
-    (1.15, 3.52, -72.5),
-    (0.95, 3.52, -54.0),
-    (1.45, 3.52, -27.0),
-    (1.05, 3.52, -4.5),
-    (1.55, 3.52, 7.5),
-    (0.88, 3.52, 38.0),
-    (1.25, 3.52, 52.0),
-    (-0.65, 3.52, -63.0),
-    (1.85, 3.52, 12.0),
     (0.55, WORLD_LOOT_Y_GROUND_FLOOR_M, 1.8),
     (0.9, WORLD_LOOT_Y_GROUND_FLOOR_M, -3.2),
+    (1.1, 3.52, -40.15),
+    (1.05, 3.52, -4.5),
+    (1.55, 3.52, 7.5),
+    (1.25, 3.52, 52.0),
 ];
 
+/// Hall / corridor — ammo and consumables only (no weapons, cigarettes, etc.).
 /// `(def_id, qty_min_inclusive, qty_max_inclusive, weight)`.
 const WORLD_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
-    ("cigarettes", 4, 12, 3),
-    ("ammo-9mm", 18, 55, 22),
-    ("ammo-shotgun-shell", 6, 18, 14),
-    ("pistol", 1, 1, 1),
-    ("apple", 2, 6, 3),
-    ("water-bottle", 1, 3, 3),
+    ("ammo-9mm", 12, 40, 10),
+    ("ammo-shotgun-shell", 4, 14, 8),
+    ("apple", 2, 6, 6),
+    ("water-bottle", 1, 3, 6),
 ];
+
+/// Unclaimed residential units — biased toward weapons so new players find fighting gear inside lootable apartments.
+const UNCLAIMED_APARTMENT_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
+    ("pistol", 1, 1, 11),
+    ("shotgun-coach", 1, 1, 9),
+    ("crowbar", 1, 1, 13),
+    ("baseball-bat", 1, 1, 13),
+    ("ammo-9mm", 10, 32, 14),
+    ("ammo-shotgun-shell", 4, 14, 11),
+    ("apple", 1, 4, 6),
+    ("water-bottle", 1, 2, 6),
+    ("cigarettes", 2, 8, 4),
+];
+
+/// Max weapon-biased piles in unclaimed apartments per refresh (lower floors are filled first).
+const MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS: usize = 56;
 
 #[spacetimedb::table(public, accessor = dropped_item)]
 pub struct DroppedItem {
@@ -157,13 +167,16 @@ fn splitmix64(mut x: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-fn roll_world_loot(seed: u64) -> Option<(&'static str, u32)> {
-    let total_w: u32 = WORLD_LOOT_TIERS.iter().map(|t| t.3).sum();
+fn roll_world_loot_from_tiers(
+    seed: u64,
+    tiers: &[(&'static str, u32, u32, u32)],
+) -> Option<(&'static str, u32)> {
+    let total_w: u32 = tiers.iter().map(|t| t.3).sum();
     if total_w == 0 {
         return None;
     }
     let mut r = splitmix64(seed) % (total_w as u64);
-    for tier in WORLD_LOOT_TIERS {
+    for tier in tiers {
         let w = tier.3 as u64;
         if r < w {
             let span = tier.2.saturating_sub(tier.1).saturating_add(1);
@@ -179,9 +192,16 @@ fn roll_world_loot(seed: u64) -> Option<(&'static str, u32)> {
     None
 }
 
-fn insert_world_loot_at_anchor(ctx: &ReducerContext, slot: u16, x: f32, y: f32, z: f32) {
+fn insert_world_loot_at_anchor(
+    ctx: &ReducerContext,
+    slot: u16,
+    x: f32,
+    y: f32,
+    z: f32,
+    tiers: &[(&'static str, u32, u32, u32)],
+) {
     let seed = ctx.timestamp.to_micros_since_unix_epoch() as u64 ^ ((slot as u64) << 48);
-    let Some((def_id, quantity)) = roll_world_loot(seed) else {
+    let Some((def_id, quantity)) = roll_world_loot_from_tiers(seed, tiers) else {
         return;
     };
     if !items_catalog::is_known_def(def_id) {
@@ -202,12 +222,12 @@ fn insert_world_loot_at_anchor(ctx: &ReducerContext, slot: u16, x: f32, y: f32, 
     });
 }
 
-fn delete_drops_for_world_slot(ctx: &ReducerContext, slot: u16) {
+fn delete_all_anchored_world_loot(ctx: &ReducerContext) {
     let ids: Vec<u64> = ctx
         .db
         .dropped_item()
         .iter()
-        .filter(|d| d.world_spawn_slot == Some(slot))
+        .filter(|d| d.world_spawn_slot.is_some())
         .map(|d| d.id)
         .collect();
     for id in ids {
@@ -216,11 +236,41 @@ fn delete_drops_for_world_slot(ctx: &ReducerContext, slot: u16) {
 }
 
 fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
-    let n = WORLD_LOOT_ANCHORS.len().min(u16::MAX as usize) as u16;
-    for slot in 0u16..n {
-        delete_drops_for_world_slot(ctx, slot);
-        let (x, y, z) = WORLD_LOOT_ANCHORS[slot as usize];
-        insert_world_loot_at_anchor(ctx, slot, x, y, z);
+    delete_all_anchored_world_loot(ctx);
+
+    for (i, &(x, y, z)) in WORLD_LOOT_ANCHORS.iter().enumerate() {
+        let Ok(slot) = u16::try_from(i) else {
+            log::warn!("world loot: anchor index {i} does not fit u16, skipping");
+            continue;
+        };
+        insert_world_loot_at_anchor(ctx, slot, x, y, z, WORLD_LOOT_TIERS);
+    }
+
+    let apartment_base = WORLD_LOOT_ANCHORS.len();
+    let mut unclaimed: Vec<_> = ctx
+        .db
+        .apartment_unit()
+        .iter()
+        .filter(|u| u.state == UNIT_STATE_UNCLAIMED)
+        .collect();
+    unclaimed.sort_by(|a, b| a.level.cmp(&b.level).then_with(|| a.unit_key.cmp(&b.unit_key)));
+
+    for (i, u) in unclaimed
+        .into_iter()
+        .take(MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS)
+        .enumerate()
+    {
+        let idx = apartment_base.saturating_add(i);
+        let Ok(slot) = u16::try_from(idx) else {
+            log::warn!(
+                "world loot: unclaimed apartment slot index {idx} exceeds u16::MAX; stopping apartment loot"
+            );
+            break;
+        };
+        let cx = (u.bound_min_x + u.bound_max_x) * 0.5;
+        let cz = (u.bound_min_z + u.bound_max_z) * 0.5;
+        let cy = u.foot_y + 0.02;
+        insert_world_loot_at_anchor(ctx, slot, cx, cy, cz, UNCLAIMED_APARTMENT_LOOT_TIERS);
     }
 }
 

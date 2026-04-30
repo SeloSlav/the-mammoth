@@ -21,6 +21,7 @@ import {
 import {
   CONSUME_DRINK_STEM,
   CONSUME_EAT_STEM,
+  CONSUME_SMOKE_MEDIA_EXTENSIONS,
   CONSUME_SMOKE_STEM,
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
@@ -146,7 +147,7 @@ export class WorldProximityAudio {
     this.consumeSmokeBuffer = await this.decodeSingleStem(
       ctx,
       CONSUME_SMOKE_STEM,
-      CONSUME_STEM_MEDIA_EXTENSIONS,
+      CONSUME_SMOKE_MEDIA_EXTENSIONS,
     );
     this.elevatorFloorButtonBuffer = await this.decodeSingleStem(ctx, ELEVATOR_FLOOR_BUTTON_STEM);
     this.elevatorLandingHailBuffer = await this.decodeSingleStem(ctx, ELEVATOR_LANDING_HAIL_STEM);

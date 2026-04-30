@@ -20,6 +20,7 @@ import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   CONSUME_DRINK_STEM,
   CONSUME_EAT_STEM,
+  CONSUME_SMOKE_MEDIA_EXTENSIONS,
   CONSUME_SMOKE_STEM,
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
@@ -181,7 +182,7 @@ export class LocalGameAudio {
       const decoded = await this.decodeImpactBuffers(ctx, [drinkUrl]);
       this.consumeDrinkBuffer = decoded[0] ?? null;
     }
-    const smokeUrl = await this.resolveSource(CONSUME_SMOKE_STEM, CONSUME_STEM_MEDIA_EXTENSIONS);
+    const smokeUrl = await this.resolveSource(CONSUME_SMOKE_STEM, CONSUME_SMOKE_MEDIA_EXTENSIONS);
     if (smokeUrl) {
       const decoded = await this.decodeImpactBuffers(ctx, [smokeUrl]);
       this.consumeSmokeBuffer = decoded[0] ?? null;

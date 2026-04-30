@@ -20,6 +20,7 @@ import {
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
+  apartmentDoorSwingInwardForTemplateId,
   swingDoorClosedSlabAabb,
   swingDoorOpenSideNormal,
   swingDoorParkedLeafAabb,
@@ -104,10 +105,8 @@ function sweepThroughDoor(
 }
 
 /** Walk the capsule from the CORRIDOR to the DOORWAY THRESHOLD for each of 9 lateral offsets
- *  along the wall-tangent axis. With inward-swinging apartment doors the leaf lives inside the
- *  unit, so we check only that corridor approach + doorway traversal is clear — NOT that every
- *  square inch of the unit interior is walkable (the open leaf is a real physical obstacle
- *  inside the unit, same as real-life apartment doors). */
+ *  along the wall-tangent axis. The open leaf is a real physical obstacle on its swing side, so
+ *  this checks doorway traversal, not that every square inch around the hinge is walkable. */
 function sweepDoorAcrossWidth(
   blockers: readonly Aabb[],
   hingeX: number,
@@ -178,7 +177,7 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
       feetY,
       panelWidthM: t.panelWidthM,
       panelHeightM: t.panelHeightM,
-      swingInward: true, // apartment doors swing inward
+      swingInward: apartmentDoorSwingInwardForTemplateId(t.templateId),
     });
     const closedSet = [...baseStatics, slab];
     const openSet = [...baseStatics, leaf];

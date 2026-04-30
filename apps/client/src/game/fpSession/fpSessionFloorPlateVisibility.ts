@@ -97,12 +97,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastUnitInteriorMeshCount = -1;
   let _lastApartmentFurnitureInteriorMeshCount = -1;
 
-  const cameraInsideBuildingFootprint = (): boolean =>
-    floorVisCamWorld.x >= buildingWorldBounds.min.x &&
-    floorVisCamWorld.x <= buildingWorldBounds.max.x &&
-    floorVisCamWorld.z >= buildingWorldBounds.min.z &&
-    floorVisCamWorld.z <= buildingWorldBounds.max.z;
-
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
       const b = stairShaftInteriorLightBounds[i]!;
@@ -302,25 +296,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
-    const cameraOutsideBuildingForFurniture = fpBuildingExteriorViewShouldRevealFullStack({
-      cameraX: floorVisCamWorld.x,
-      cameraZ: floorVisCamWorld.z,
-      boundsMinX: buildingWorldBounds.min.x,
-      boundsMaxX: buildingWorldBounds.max.x,
-      boundsMinZ: buildingWorldBounds.min.z,
-      boundsMaxZ: buildingWorldBounds.max.z,
-    });
-    const exteriorGroundView = cameraOutsideBuildingForFurniture && playerStorey <= 1;
-    const apartmentFurnitureInteriorVisible =
-      fpElevators.isInsideAnyCabHud(
-        feetPos.x,
-        feetPos.y,
-        feetPos.z,
-        floorVisCamWorld.x,
-        floorVisCamWorld.y,
-        floorVisCamWorld.z,
-      ) ||
-      (!exteriorFullStackReveal && !exteriorGroundView && cameraInsideBuildingFootprint());
+    /** Same predicate as shells: strict camera-only footprint + exterior gates hid beds at façade windows while plaster stayed visible. */
+    const apartmentFurnitureInteriorVisible = unitInteriorVisible;
     if (
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
       apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount

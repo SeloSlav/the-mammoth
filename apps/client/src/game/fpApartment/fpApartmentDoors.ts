@@ -195,7 +195,7 @@ type DoorSlot = {
   level: number;
   face: SwingDoorFace;
   baseYaw: number;
-  /** All templates swing inward about the hinge (including glazed corridor→stair / shaft exits). */
+  /** Per-template swing direction. Unit doors now swing outward into corridors for FPS cover. */
   swingInward: boolean;
   /** Cached `swingDoorEffectiveSwingSign(face, swingInward)` for {@link applyMatrix}. */
   effectiveSwingSign: 1 | -1;

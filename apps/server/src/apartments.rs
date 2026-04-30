@@ -164,13 +164,23 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     let face = SwingDoorFace::from_u8(t.face);
     const DEPTH: f32 = 13.0;
     const HALF_WIDTH: f32 = 3.3;
+    // Template depth terminates on the façade plane; playable volume ends short of exterior glass.
+    const RESIDENTIAL_FAR_WALL_X_INSET_M: f32 = 1.38;
     match face {
         SwingDoorFace::W => (
             [t.hinge_x + 0.08, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
-            [t.hinge_x + DEPTH, top_y, t.hinge_z + HALF_WIDTH],
+            [
+                t.hinge_x + DEPTH - RESIDENTIAL_FAR_WALL_X_INSET_M,
+                top_y,
+                t.hinge_z + HALF_WIDTH,
+            ],
         ),
         SwingDoorFace::E => (
-            [t.hinge_x - DEPTH, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
+            [
+                t.hinge_x - DEPTH + RESIDENTIAL_FAR_WALL_X_INSET_M,
+                feet_y - 0.06,
+                t.hinge_z - HALF_WIDTH,
+            ],
             [t.hinge_x - 0.08, top_y, t.hinge_z + HALF_WIDTH],
         ),
         _ => (
