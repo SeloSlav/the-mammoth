@@ -25,6 +25,7 @@ const BED_URL = "/static/models/objects/bed.glb";
 /** Keep apartment prop construction below one noticeable frame hitch while the player is already in-world. */
 const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
 const FURNITURE_REBUILD_MIN_UNITS_PER_SLICE = 1;
+const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 
 /** Authoring GLBs — tuned against the replicated wall-based furniture anchors. */
 const WARDROBE_VIS_SCALE = 0.98;
@@ -81,6 +82,8 @@ const _furnitureSizeScratch = new THREE.Vector3();
 const _furnitureCenterScratch = new THREE.Vector3();
 const _footlockerPickSizeScratch = new THREE.Vector3();
 const _footlockerPickCenterScratch = new THREE.Vector3();
+const _furnitureVisibilityViewProjection = new THREE.Matrix4();
+const _furnitureVisibilityFrustum = new THREE.Frustum();
 
 export function apartmentFurniturePlacementChanged(
   oldUnit: ApartmentUnit,
@@ -156,6 +159,7 @@ function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Objec
 
 export type MountFpApartmentFurnitureResult = {
   dispose: () => void;
+  syncVisibility: (camera: THREE.PerspectiveCamera) => void;
   getStashPrompt: (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
@@ -172,8 +176,16 @@ type ApartmentFurnitureBuildState = {
   rows: ApartmentUnit[];
   nextIndex: number;
   byLevel: Map<number, THREE.Group>;
+  unitGroups: THREE.Group[];
   stashPickMeshes: THREE.Mesh[];
 };
+
+function objectAndAncestorsVisible(obj: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (!cur.visible) return false;
+  }
+  return true;
+}
 
 export async function mountFpApartmentFurniture(opts: {
   conn: DbConnection;
@@ -188,6 +200,7 @@ export async function mountFpApartmentFurniture(opts: {
 }): Promise<MountFpApartmentFurnitureResult> {
   const loader = new GLTFLoader();
   const managed: THREE.Object3D[] = [];
+  const unitFurnitureGroups: THREE.Group[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const unitBoundsDebugGeometry = opts.showUnitBoundsDebug ? new THREE.BoxGeometry(1, 1, 1) : null;
@@ -230,6 +243,7 @@ export async function mountFpApartmentFurniture(opts: {
       disposeGeneratedGeometry(o);
     }
     managed.length = 0;
+    unitFurnitureGroups.length = 0;
     stashPickMeshes.length = 0;
   };
 
@@ -239,6 +253,7 @@ export async function mountFpApartmentFurniture(opts: {
       disposeGeneratedGeometry(g);
     }
     build.byLevel.clear();
+    build.unitGroups.length = 0;
     build.stashPickMeshes.length = 0;
   };
 
@@ -264,6 +279,7 @@ export async function mountFpApartmentFurniture(opts: {
     }),
     nextIndex: 0,
     byLevel: new Map<number, THREE.Group>(),
+    unitGroups: [],
     stashPickMeshes: [],
   });
 
@@ -328,6 +344,10 @@ export async function mountFpApartmentFurniture(opts: {
 
     unitGroup.updateMatrixWorld(true);
     mergeGroupDescendantsByMaterial(unitGroup);
+    unitGroup.updateMatrixWorld(true);
+    const unitFurnitureBounds = new THREE.Box3().setFromObject(unitGroup);
+    unitFurnitureBounds.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+    unitGroup.userData.mammothApartmentFurnitureWorldBounds = unitFurnitureBounds;
 
     if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
       const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
@@ -358,6 +378,7 @@ export async function mountFpApartmentFurniture(opts: {
     }
 
     plate.add(unitGroup);
+    build.unitGroups.push(unitGroup);
   };
 
   const finishBuild = (build: ApartmentFurnitureBuildState) => {
@@ -369,6 +390,8 @@ export async function mountFpApartmentFurniture(opts: {
     }
 
     opts.buildingRoot.updateMatrixWorld(true);
+    unitFurnitureGroups.length = 0;
+    unitFurnitureGroups.push(...build.unitGroups);
     stashPickMeshes.length = 0;
     stashPickMeshes.push(...build.stashPickMeshes);
     opts.onRebuilt?.();
@@ -471,11 +494,27 @@ export async function mountFpApartmentFurniture(opts: {
   opts.conn.db.apartment_unit.onDelete(bumpApartmentUnit);
 
   return {
+    syncVisibility: (camera) => {
+      if (unitFurnitureGroups.length === 0) return;
+      camera.updateMatrixWorld();
+      _furnitureVisibilityViewProjection.multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse,
+      );
+      _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
+      for (let i = 0; i < unitFurnitureGroups.length; i++) {
+        const g = unitFurnitureGroups[i]!;
+        const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
+        g.visible = bounds instanceof THREE.Box3
+          ? _furnitureVisibilityFrustum.intersectsBox(bounds)
+          : true;
+      }
+    },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
       _visibleStashPickMeshes.length = 0;
       for (const m of stashPickMeshes) {
-        if (m.visible) _visibleStashPickMeshes.push(m);
+        if (objectAndAncestorsVisible(m)) _visibleStashPickMeshes.push(m);
       }
       if (_visibleStashPickMeshes.length === 0) return null;
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);

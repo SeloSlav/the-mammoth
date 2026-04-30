@@ -700,6 +700,7 @@ export function createFpSessionMainRafFrame(
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
     deps.syncBuildingFloorPlateVisibility(nowMs);
+    deps.fpApartmentFurniture.syncVisibility(deps.camera);
     const darkTarget = fpSampleStairwellInteriorDarkTarget(
       deps._floorVisCamWorld.x,
       deps._floorVisCamWorld.y,
