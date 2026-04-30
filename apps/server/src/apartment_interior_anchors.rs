@@ -22,11 +22,11 @@ const FOOTLOCKER_HALF_X_M: f32 = 0.43;
 const WARDROBE_HALF_X_M: f32 = 0.26;
 const Z_EDGE_M: f32 = BED_HALF_Z_M + PROP_WALL_GAP_M;
 /// Distance from the exterior / window wall (hull X face) to bed center.
-/// Keep generous clearance: the rendered bed GLB has an off-center pivot and is rotated per side,
-/// so center-only placement near the façade can still push the mesh through window openings.
-const BED_CENTER_FROM_BACK_WALL_M: f32 = 2.30;
-/// Footlocker stays between entryway and bed; keep ~constant delta vs bed along the spine.
-const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 3.82;
+/// The rendered bed GLB is large and off-pivot; keep the spawn anchor deep enough that client
+/// AABB clamping is a final guard, not the primary thing preventing window clipping.
+const BED_CENTER_FROM_BACK_WALL_M: f32 = 3.25;
+/// Footlocker stays between entryway and bed; keep it beyond the bed foot along the spine.
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 4.70;
 const BED_CENTER_Z_OFFSET_M: f32 = -1.08;
 const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 0.72;
 const WARDROBE_CENTER_Z_OFFSET_M: f32 = 2.34;

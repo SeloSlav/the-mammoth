@@ -278,7 +278,7 @@ export function MammothFpsHud() {
         style={audioButtonStyle}
         title={backgroundMusicEnabled ? "Turn background music off" : "Turn background music on"}
       >
-        <span>Audio</span>
+        <span>Music</span>
         <span style={{ ...monoStyle, color: backgroundMusicEnabled ? THEME_ACCENT : THEME_TEXT_FAINT }}>
           {backgroundMusicEnabled ? "ON" : "OFF"}
         </span>

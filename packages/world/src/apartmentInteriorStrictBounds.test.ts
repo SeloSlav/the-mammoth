@@ -14,8 +14,8 @@ const WARDROBE_HALF_X_M = 0.26;
 const WARDROBE_HALF_Z_M = 0.56;
 
 /** Mirrored against `apps/server/src/apartment_interior_anchors.rs` east/west seed. */
-const BED_CENTER_FROM_BACK_WALL_M = 2.3;
-const FOOTLOCKER_CENTER_FROM_BACK_WALL_M = 3.82;
+const BED_CENTER_FROM_BACK_WALL_M = 3.25;
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M = 4.7;
 const BED_CENTER_Z_OFFSET_M = -1.08;
 const WARDROBE_CENTER_FROM_BACK_WALL_M = 0.72;
 const WARDROBE_CENTER_Z_OFFSET_M = 2.34;

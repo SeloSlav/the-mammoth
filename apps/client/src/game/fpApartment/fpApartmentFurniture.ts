@@ -29,7 +29,8 @@ const BED_VIS_SCALE = 1.14;
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 const WARDROBE_BOUNDS_INSET_M = 0.48;
 const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
-const BED_BOUNDS_INSET_M = 0.95;
+/** Keep the actual bed GLB AABB well inside the unit hull so it cannot poke through exterior glass. */
+const BED_BOUNDS_INSET_M = 2.25;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",

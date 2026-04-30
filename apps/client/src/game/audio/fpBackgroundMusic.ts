@@ -1,7 +1,7 @@
 /**
  * In-game sound bed: quiet always-on building ambience loops underneath soft, randomized music
- * chunks plus distant neighbor/building one-shots. All sources share the FP Web Audio context and
- * one HUD on/off switch.
+ * chunks plus distant neighbor/building one-shots. The HUD switch only controls the music chunks;
+ * ambience and random one-shots remain part of the world sound bed once audio is primed.
  */
 
 const AUDIO_ROOT = `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -11,8 +11,8 @@ const RANDOM_ROOT = `${AMBIENCE_ROOT}/random` as const;
 
 const OUT_GAIN = 1;
 const MUSIC_BUS_GAIN = 0.22;
-const AMBIENCE_BUS_GAIN = 0.52;
-const RANDOM_BUS_GAIN = 0.62;
+const AMBIENCE_BUS_GAIN = 1.15;
+const RANDOM_BUS_GAIN = 1.35;
 const USER_FADE_SECONDS = 1.6;
 const AMBIENCE_FADE_SECONDS = 5.5;
 const CHUNK_FADE_SECONDS = 4.5;
@@ -28,9 +28,9 @@ const RANDOM_FIRST_MAX_SECONDS = 28;
 const RANDOM_NEXT_MIN_SECONDS = 18;
 const RANDOM_NEXT_MAX_SECONDS = 52;
 const RANDOM_MAX_ACTIVE = 2;
-const RANDOM_REF_DISTANCE_M = 1.2;
+const RANDOM_REF_DISTANCE_M = 7.5;
 const RANDOM_MAX_DISTANCE_M = 85;
-const RANDOM_ROLLOFF = 0.7;
+const RANDOM_ROLLOFF = 0.42;
 
 type Vec3Like = {
   x: number;
@@ -90,7 +90,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "building-breath",
     url: `${AMBIENCE_ROOT}/building-breath.wav`,
-    gain: 0.3,
+    gain: 0.42,
     playbackRate: 0.985,
     highpassHz: 24,
     lowpassHz: 820,
@@ -98,7 +98,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "distant-city-veil",
     url: `${AMBIENCE_ROOT}/distant-city-veil.wav`,
-    gain: 0.18,
+    gain: 0.28,
     playbackRate: 1.0,
     highpassHz: 70,
     lowpassHz: 1900,
@@ -106,7 +106,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "corridor-life",
     url: `${AMBIENCE_ROOT}/corridor-life.wav`,
-    gain: 0.13,
+    gain: 0.22,
     playbackRate: 1.006,
     highpassHz: 95,
     lowpassHz: 2800,
@@ -114,7 +114,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
   {
     name: "interior-electricity",
     url: `${AMBIENCE_ROOT}/interior-electricity.wav`,
-    gain: 0.075,
+    gain: 0.13,
     playbackRate: 1.012,
     highpassHz: 140,
     lowpassHz: 6200,
@@ -130,7 +130,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/vacuum-3.wav`,
     ],
     weight: 3.8,
-    gain: 0.1,
+    gain: 0.18,
     minDistanceM: 18,
     maxDistanceM: 36,
     yMinM: -5,
@@ -148,7 +148,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/dog-bark-4.wav`,
     ],
     weight: 3.0,
-    gain: 0.18,
+    gain: 0.3,
     minDistanceM: 16,
     maxDistanceM: 32,
     yMinM: -4,
@@ -161,7 +161,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "toilet-flush",
     urls: [`${RANDOM_ROOT}/toilet-flush.wav`],
     weight: 2.0,
-    gain: 0.14,
+    gain: 0.24,
     minDistanceM: 14,
     maxDistanceM: 28,
     yMinM: -3,
@@ -179,7 +179,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
       `${RANDOM_ROOT}/baby-cry-4.wav`,
     ],
     weight: 1.35,
-    gain: 0.12,
+    gain: 0.26,
     minDistanceM: 20,
     maxDistanceM: 42,
     yMinM: -5,
@@ -192,7 +192,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "smoke-detector-chirp",
     urls: [`${RANDOM_ROOT}/smoke-detector-chirp.wav`],
     weight: 0.75,
-    gain: 0.08,
+    gain: 0.18,
     minDistanceM: 22,
     maxDistanceM: 46,
     yMinM: -5,
@@ -205,7 +205,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     name: "ajmo-dinamo",
     urls: [`${RANDOM_ROOT}/ajmo-dinamo.wav`],
     weight: 0.55,
-    gain: 0.11,
+    gain: 0.22,
     minDistanceM: 26,
     maxDistanceM: 52,
     yMinM: -7,
@@ -238,7 +238,7 @@ export class FpBackgroundMusic {
   private activeRandomSounds: ActiveRandomSound[] = [];
   private nextMusicTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRandomTimer: ReturnType<typeof setTimeout> | null = null;
-  private enabled = true;
+  private musicEnabled = true;
   private disposed = false;
 
   constructor(private readonly getPlayerWorldPosition?: () => Vec3Like) {}
@@ -298,15 +298,17 @@ export class FpBackgroundMusic {
   }
 
   setEnabled(enabled: boolean): void {
-    if (this.enabled === enabled) return;
-    this.enabled = enabled;
+    if (this.musicEnabled === enabled) return;
+    this.musicEnabled = enabled;
 
     if (!enabled) {
-      this.fadeOutAndStop(USER_FADE_SECONDS);
+      clearTimer(this.nextMusicTimer);
+      this.nextMusicTimer = null;
+      this.stopActiveMusic(USER_FADE_SECONDS);
       return;
     }
 
-    this.startIfReady();
+    this.startMusicIfReady();
   }
 
   dispose(): void {
@@ -327,18 +329,30 @@ export class FpBackgroundMusic {
   }
 
   private startIfReady(): void {
-    if (!this.enabled || this.disposed || !this.ctx || !this.outGain) return;
+    if (this.disposed || !this.ctx || !this.outGain) return;
     this.fadeOutGainTo(OUT_GAIN, USER_FADE_SECONDS);
     this.startAmbienceLoopsIfReady();
-    if (this.musicBuffer && !this.activeMusic && this.nextMusicTimer === null) {
-      this.nextMusicTimer = setTimeout(() => this.startMusicChunk(), 0);
-    }
+    this.startMusicIfReady();
     if (this.randomSounds.length > 0 && this.nextRandomTimer === null) {
       this.nextRandomTimer = setTimeout(
         () => this.playRandomDistantSound(),
         randomRange(RANDOM_FIRST_MIN_SECONDS, RANDOM_FIRST_MAX_SECONDS) * 1000,
       );
     }
+  }
+
+  private startMusicIfReady(): void {
+    if (
+      !this.musicEnabled ||
+      this.disposed ||
+      !this.ctx ||
+      !this.musicBuffer ||
+      this.activeMusic ||
+      this.nextMusicTimer !== null
+    ) {
+      return;
+    }
+    this.nextMusicTimer = setTimeout(() => this.startMusicChunk(), 0);
   }
 
   private startAmbienceLoopsIfReady(): void {
@@ -393,7 +407,7 @@ export class FpBackgroundMusic {
     const ctx = this.ctx;
     const musicBus = this.musicBus;
     const buffer = this.musicBuffer;
-    if (!this.enabled || this.disposed || !ctx || !musicBus || !buffer) return;
+    if (!this.musicEnabled || this.disposed || !ctx || !musicBus || !buffer) return;
 
     this.stopActiveMusic(0);
 
@@ -441,7 +455,7 @@ export class FpBackgroundMusic {
     this.nextRandomTimer = null;
     const ctx = this.ctx;
     const bus = this.randomBus;
-    if (!this.enabled || this.disposed || !ctx || !bus || this.randomSounds.length === 0) return;
+    if (this.disposed || !ctx || !bus || this.randomSounds.length === 0) return;
 
     if (this.activeRandomSounds.length < RANDOM_MAX_ACTIVE) {
       const sound = this.pickRandomSound();
@@ -536,17 +550,6 @@ export class FpBackgroundMusic {
       if (pick <= 0) return sound;
     }
     return this.randomSounds[this.randomSounds.length - 1]!;
-  }
-
-  private fadeOutAndStop(seconds: number): void {
-    this.fadeOutGainTo(0, seconds);
-    clearTimer(this.nextMusicTimer);
-    this.nextMusicTimer = null;
-    clearTimer(this.nextRandomTimer);
-    this.nextRandomTimer = null;
-    this.stopActiveMusic(seconds);
-    this.stopAmbience(seconds);
-    this.stopRandomSounds(seconds);
   }
 
   private stopAll(fadeSeconds: number): void {
