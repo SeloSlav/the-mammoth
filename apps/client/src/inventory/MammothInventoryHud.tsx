@@ -18,6 +18,7 @@ import {
   hotbarInstantConsumeCooldownProgress,
   subscribeHotbarInstantConsumeCooldown,
 } from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
+import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
   getFpHotbarSelectedSlot,
   setFpHotbarSelectedSlot,
@@ -54,13 +55,6 @@ const NO_SELECT: CSSProperties = {
   MozUserSelect: "none",
   msUserSelect: "none",
 };
-
-function isTextInputFocused(): boolean {
-  const el = document.activeElement;
-  if (!el || !(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-}
 
 type Props = {
   conn: DbConnection;

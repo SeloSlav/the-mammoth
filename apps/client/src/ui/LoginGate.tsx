@@ -3,6 +3,7 @@ import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
 import { MammothAuthBackdrop } from "./MammothAuthBackdrop";
 import styles from "./LoginGate.module.css";
+import { useMammothAuthMenuMusic } from "./useMammothAuthMenuMusic";
 
 type Props = {
   session: SpacetimeSession;
@@ -143,6 +144,7 @@ export function LoginGate({ session }: Props) {
 }
 
 function AuthScreen({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
+  useMammothAuthMenuMusic();
   return (
     <div className={styles.screen}>
       <MammothAuthBackdrop />

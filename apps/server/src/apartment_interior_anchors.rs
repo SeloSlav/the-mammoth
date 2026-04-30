@@ -21,9 +21,12 @@ const BED_HALF_Z_M: f32 = 0.61;
 const FOOTLOCKER_HALF_X_M: f32 = 0.43;
 const WARDROBE_HALF_X_M: f32 = 0.26;
 const Z_EDGE_M: f32 = BED_HALF_Z_M + PROP_WALL_GAP_M;
-const BED_CENTER_FROM_BACK_WALL_M: f32 = 1.62;
-/// Foot of bed toward corridor — keep a bit ahead of the bed when the bed shifts from the window wall.
-const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 3.14;
+/// Distance from the exterior / window wall (hull X face) to bed center.
+/// Keep generous clearance: the rendered bed GLB has an off-center pivot and is rotated per side,
+/// so center-only placement near the façade can still push the mesh through window openings.
+const BED_CENTER_FROM_BACK_WALL_M: f32 = 2.85;
+/// Footlocker stays between entryway and bed; keep ~constant delta vs bed along the spine.
+const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 4.37;
 const BED_CENTER_Z_OFFSET_M: f32 = -1.08;
 const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 0.72;
 const WARDROBE_CENTER_Z_OFFSET_M: f32 = 2.34;

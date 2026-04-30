@@ -25,6 +25,8 @@
   --ui-success: #7bcf9a;
   --ui-success-bg: rgba(123, 207, 154, 0.1);
   --ui-success-border: rgba(123, 207, 154, 0.35);
+  --ui-chat-name-self: #7bcf9a;
+  --ui-chat-name-peer: #c9b686;
   --ui-secondary-bg: #4a4a58;
   --ui-secondary-text: #dddddd;
   --ui-focus-ring: rgba(107, 140, 174, 0.35);

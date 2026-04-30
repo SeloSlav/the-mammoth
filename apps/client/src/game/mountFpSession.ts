@@ -126,6 +126,7 @@ import {
   DECAL_MANIFEST,
   generateStairwellDecalPlacements,
 } from "../rendering/decals/index.js";
+import { isTextInputFocused } from "./isTextInputFocused.js";
 
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
@@ -679,15 +680,8 @@ export async function mountFpSession(
     setFpHotbarSelectedSlot(next);
   };
 
-  const isTextInputFocused = () => {
-    const el = document.activeElement;
-    if (!el || !(el instanceof HTMLElement)) return false;
-    const tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-  };
-
   const onKeyDown = (e: KeyboardEvent) => {
-    keys.add(e.code);
+    if (!isTextInputFocused()) keys.add(e.code);
     if (e.code === "AltLeft" || e.code === "AltRight") {
       e.preventDefault();
     }
@@ -840,8 +834,10 @@ export async function mountFpSession(
 
       droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
     }
-    if (e.code === "KeyC" && !e.repeat) mainRaf.crouchToggle = !mainRaf.crouchToggle;
-    if (e.code === "Space" && !e.repeat) {
+    if (e.code === "KeyC" && !e.repeat && !isTextInputFocused()) {
+      mainRaf.crouchToggle = !mainRaf.crouchToggle;
+    }
+    if (e.code === "Space" && !e.repeat && !isTextInputFocused()) {
       if (isInsideElevatorCabHudForJump()) {
         e.preventDefault();
         return;

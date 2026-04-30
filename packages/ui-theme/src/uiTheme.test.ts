@@ -9,6 +9,8 @@ describe("@the-mammoth/ui-theme", () => {
     expect(block).toContain(":root");
     expect(block).toContain(THEME_ACCENT);
     expect(block).toContain("--ui-accent:");
+    expect(block).toContain("--ui-chat-name-self:");
+    expect(block).toContain("--ui-chat-name-peer:");
   });
 
   it("ships auth shell CSS with variables and body rules", () => {

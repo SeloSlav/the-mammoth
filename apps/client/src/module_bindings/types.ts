@@ -66,6 +66,7 @@ export type ApartmentUnit = __Infer<typeof ApartmentUnit>;
 
 export const ChatMessage = __t.object("ChatMessage", {
   id: __t.u64(),
+  sender: __t.option(__t.string()),
   body: __t.string(),
   createdAt: __t.timestamp(),
 });

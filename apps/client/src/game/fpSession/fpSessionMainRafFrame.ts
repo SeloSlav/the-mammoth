@@ -255,13 +255,16 @@ export function createFpSessionMainRafFrame(
       }
     }
 
-    deps._input.forward = deps.keys.has("KeyW");
-    deps._input.backward = deps.keys.has("KeyS");
-    deps._input.left = deps.keys.has("KeyA");
-    deps._input.right = deps.keys.has("KeyD");
-    deps._input.sprint = deps.keys.has("ShiftLeft") || deps.keys.has("ShiftRight");
+    const inputBlocked = deps.fpInteractInputBlocked();
+    deps._input.forward = inputBlocked ? false : deps.keys.has("KeyW");
+    deps._input.backward = inputBlocked ? false : deps.keys.has("KeyS");
+    deps._input.left = inputBlocked ? false : deps.keys.has("KeyA");
+    deps._input.right = inputBlocked ? false : deps.keys.has("KeyD");
+    deps._input.sprint = inputBlocked
+      ? false
+      : deps.keys.has("ShiftLeft") || deps.keys.has("ShiftRight");
     deps._input.crouch = mainRaf.crouchToggle;
-    deps._input.jumpHeld = deps.keys.has("Space");
+    deps._input.jumpHeld = inputBlocked ? false : deps.keys.has("Space");
 
     const jumpQueuedBeforeStep = deps.loco.jumpQueued;
     const jumpBlockedInElevatorCab = deps.isInsideElevatorCabHudForJump();
@@ -378,7 +381,9 @@ export function createFpSessionMainRafFrame(
     deps.playerRig.rotation.y = mainRaf.bodyYaw;
     deps.headPivot.position.y = headY;
     deps.headPivot.rotation.set(0, 0, 0);
-    const freeLook = deps.keys.has("AltLeft") || deps.keys.has("AltRight");
+    const freeLook =
+      !deps.fpInteractInputBlocked() &&
+      (deps.keys.has("AltLeft") || deps.keys.has("AltRight"));
     deps.headPitch.rotation.x = freeLook ? 0 : mainRaf.pitch;
     deps.headCameraPitch.rotation.x = mainRaf.pitch;
     deps.headFreeLook.rotation.y = mainRaf.headLookYaw;

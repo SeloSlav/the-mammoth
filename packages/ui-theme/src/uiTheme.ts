@@ -31,6 +31,11 @@ export const THEME_SUCCESS = "#7bcf9a";
 export const THEME_SUCCESS_BG = "rgba(123, 207, 154, 0.1)";
 export const THEME_SUCCESS_BORDER = "rgba(123, 207, 154, 0.35)";
 
+/** Local player name in global chat HUD. */
+export const THEME_CHAT_NAME_SELF = THEME_SUCCESS;
+/** Other players' names in global chat HUD. */
+export const THEME_CHAT_NAME_PEER = "#c9b686";
+
 export const THEME_SECONDARY_BG = "#4a4a58";
 export const THEME_SECONDARY_TEXT = "#dddddd";
 
@@ -72,6 +77,8 @@ export function uiRootStyleBlock(): string {
   --ui-success: ${THEME_SUCCESS};
   --ui-success-bg: ${THEME_SUCCESS_BG};
   --ui-success-border: ${THEME_SUCCESS_BORDER};
+  --ui-chat-name-self: ${THEME_CHAT_NAME_SELF};
+  --ui-chat-name-peer: ${THEME_CHAT_NAME_PEER};
   --ui-secondary-bg: ${THEME_SECONDARY_BG};
   --ui-secondary-text: ${THEME_SECONDARY_TEXT};
   --ui-focus-ring: ${THEME_FOCUS_RING};

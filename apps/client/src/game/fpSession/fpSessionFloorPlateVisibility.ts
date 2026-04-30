@@ -94,6 +94,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
   let _lastApartmentFurnitureInteriorVisible = true;
+  let _lastUnitInteriorMeshCount = -1;
+  let _lastApartmentFurnitureInteriorMeshCount = -1;
+
+  const cameraInsideBuildingFootprint = (): boolean =>
+    floorVisCamWorld.x >= buildingWorldBounds.min.x &&
+    floorVisCamWorld.x <= buildingWorldBounds.max.x &&
+    floorVisCamWorld.z >= buildingWorldBounds.min.z &&
+    floorVisCamWorld.z <= buildingWorldBounds.max.z;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -280,8 +288,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         boundsMaxZ: buildingWorldBounds.max.z,
         nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
       });
-    if (unitInteriorVisible !== _lastUnitInteriorVisible) {
+    if (
+      unitInteriorVisible !== _lastUnitInteriorVisible ||
+      unitInteriorMeshes.length !== _lastUnitInteriorMeshCount
+    ) {
       _lastUnitInteriorVisible = unitInteriorVisible;
+      _lastUnitInteriorMeshCount = unitInteriorMeshes.length;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {
         unitInteriorMeshes[i]!.visible = unitInteriorVisible;
       }
@@ -296,18 +308,13 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         floorVisCamWorld.y,
         floorVisCamWorld.z,
       ) ||
-      fpCameraOrFeetInsideBuildingFootprintXZ({
-        cameraX: floorVisCamWorld.x,
-        cameraZ: floorVisCamWorld.z,
-        feetX: feetPos.x,
-        feetZ: feetPos.z,
-        boundsMinX: buildingWorldBounds.min.x,
-        boundsMaxX: buildingWorldBounds.max.x,
-        boundsMinZ: buildingWorldBounds.min.z,
-        boundsMaxZ: buildingWorldBounds.max.z,
-      });
-    if (apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible) {
+      cameraInsideBuildingFootprint();
+    if (
+      apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
+      apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount
+    ) {
       _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
+      _lastApartmentFurnitureInteriorMeshCount = apartmentFurnitureInteriorMeshes.length;
       for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
         apartmentFurnitureInteriorMeshes[i]!.visible = apartmentFurnitureInteriorVisible;
       }

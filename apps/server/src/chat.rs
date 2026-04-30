@@ -2,6 +2,7 @@
 
 use spacetimedb::{ReducerContext, Table, Timestamp};
 
+use crate::accounts::user;
 use crate::auth;
 
 const CHAT_BODY_MAX_CHARS: usize = 220;
@@ -11,6 +12,8 @@ pub struct ChatMessage {
     #[primary_key]
     #[auto_inc]
     pub id: u64,
+    /// `None` for system / server transcripts; `Some` for player-typed lines from `send_chat`.
+    pub sender: Option<String>,
     pub body: String,
     #[index(btree)]
     pub created_at: Timestamp,
@@ -24,6 +27,7 @@ pub(crate) fn post_system_message(ctx: &ReducerContext, body: String) {
     }
     let _ = ctx.db.chat_message().insert(ChatMessage {
         id: 0,
+        sender: None,
         body: text,
         created_at: ctx.timestamp,
     });
@@ -41,5 +45,19 @@ pub fn send_chat(ctx: &ReducerContext, body: String) {
         log::debug!("send_chat blocked: {e}");
         return;
     }
-    post_system_message(ctx, body);
+    let Some(user) = ctx.db.user().identity().find(&ctx.sender()) else {
+        log::debug!("send_chat: user row missing");
+        return;
+    };
+    let text = sanitize_body(body);
+    if text.is_empty() {
+        return;
+    }
+    let dn = auth::display_name_for(&user);
+    let _ = ctx.db.chat_message().insert(ChatMessage {
+        id: 0,
+        sender: Some(dn),
+        body: text,
+        created_at: ctx.timestamp,
+    });
 }
