@@ -10,7 +10,8 @@ import {
   THEME_TEXT_PRIMARY,
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { DbConnection } from "../module_bindings";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import { readOptionalString } from "../spacetime/username";
@@ -92,7 +93,7 @@ export function MammothChatHud({ conn, localDisplayName }: Props) {
     closeChat();
   }, [conn.reducers, draft, closeChat]);
 
-  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const onInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.code === "Enter") {
       e.preventDefault();
       submitOrClose();
