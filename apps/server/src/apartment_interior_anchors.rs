@@ -1,10 +1,9 @@
 //! Wardrobe / footlocker / bed placement for apartment shells.
 //!
-//! **`unit_e_*`/`unit_w_*` residential flats** (`SwingDoorFace::W`/`E`): use one mirrored,
-//! wall-based layout per apartment. The bed headboard sits on the exterior/back wall, the
-//! footlocker sits at the foot of the bed toward the apartment door, and the wardrobe sits on the
-//! same back wall with a fixed Z offset from the bed. This keeps all three props away from
-//! stair/corridor cutouts while making each unit read as the same furnished plan.
+//! **`unit_e_*`/`unit_w_*`** (`SwingDoorFace::W`/`E`): bed + footlocker anchors are measured from
+//! the hull **far wall** (away from the corridor hinge) so they sit deep in the room and along the
+//! wall run; footlock stays between bed and entryway. Wardrobe anchors are unchanged (door-adjacent).
+//! Z offsets are hull-centered with clamps.
 
 use crate::apartment_door::SwingDoorFace;
 
@@ -66,14 +65,15 @@ pub(crate) fn east_west_interior_furniture_seed(
     let wardrobe_z = clamp(cz + WARDROBE_CENTER_Z_OFFSET_M, z_lo, z_hi);
 
     let (bed_x, foot_x, wardrobe_x, bed_yaw) = match face {
+        // Door / corridor at low X (mn). Back wall at high X (mx). Bed + footlocker live deep, by mx.
         SwingDoorFace::W => (
             clamp(
-                mn[0] + BED_CENTER_FROM_BACK_WALL_M,
+                mx[0] - BED_CENTER_FROM_BACK_WALL_M,
                 mn[0] + BED_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - BED_HALF_X_M - PROP_WALL_GAP_M,
             ),
             clamp(
-                mn[0] + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mx[0] - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
                 mn[0] + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
             ),
@@ -84,14 +84,15 @@ pub(crate) fn east_west_interior_furniture_seed(
             ),
             std::f32::consts::FRAC_PI_2,
         ),
+        // Back wall at low X (mn). Corridor at high X (mx). Wardrobe stays door-side toward mx (unchanged).
         SwingDoorFace::E => (
             clamp(
-                mx[0] - BED_CENTER_FROM_BACK_WALL_M,
+                mn[0] + BED_CENTER_FROM_BACK_WALL_M,
                 mn[0] + BED_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - BED_HALF_X_M - PROP_WALL_GAP_M,
             ),
             clamp(
-                mx[0] - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mn[0] + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
                 mn[0] + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
             ),
@@ -355,9 +356,9 @@ mod tests {
         let mx = [14.925, 3.0, -106.5825];
         let east = east_west_interior_furniture_seed(&mn, &mx, 1.925, -112.0825, SwingDoorFace::W)
             .unwrap();
-        assert!(east.foot_x > east.bed_x);
+        assert!(east.foot_x < east.bed_x);
         assert!((east.foot_z - east.bed_z).abs() < 1e-4);
-        assert!(east.wardrobe_x < east.bed_x);
+        assert!(east.wardrobe_x < east.foot_x);
         assert!(east.wardrobe_z > east.bed_z);
         assert!((east.wardrobe_x - (mn[0] + WARDROBE_CENTER_FROM_BACK_WALL_M)).abs() < 1e-4);
         assert!((east.bed_yaw - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
@@ -372,9 +373,9 @@ mod tests {
             SwingDoorFace::E,
         )
         .unwrap();
-        assert!(west.foot_x < west.bed_x);
+        assert!(west.foot_x > west.bed_x);
         assert!((west.foot_z - west.bed_z).abs() < 1e-4);
-        assert!(west.wardrobe_x > west.bed_x);
+        assert!(west.wardrobe_x > west.foot_x);
         assert!(west.wardrobe_z > west.bed_z);
         assert!((west.wardrobe_x - (west_mx[0] - WARDROBE_CENTER_FROM_BACK_WALL_M)).abs() < 1e-4);
         assert!((west.bed_yaw + std::f32::consts::FRAC_PI_2).abs() < 1e-4);

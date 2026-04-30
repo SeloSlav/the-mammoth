@@ -15,8 +15,10 @@ import {
 } from "../game/fpSession/fpSessionConstants.js";
 
 const AUTH_BACKDROP_CAMERA_FOV_DEG = 38;
-const AUTH_BACKDROP_ORBIT_AMPLITUDE_RAD = 0.045;
-const AUTH_BACKDROP_ORBIT_SPEED_SEC = 0.055;
+const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
+const AUTH_BACKDROP_ORBIT_WOBBLE_SPEED_SEC = 0.055;
+/** Slow yaw orbit around the building (~3.3 min per full turn at this rate). */
+const AUTH_BACKDROP_BUILDING_YAW_RAD_PER_SEC = 0.032;
 
 export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promise<() => void> {
   await assertWebGpuAdapterOrThrow();
@@ -83,8 +85,11 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     if (disposed) return;
     raf = requestAnimationFrame(tick);
     const nowSec = performance.now() * 0.001;
-    const orbit = Math.sin(nowSec * AUTH_BACKDROP_ORBIT_SPEED_SEC) * AUTH_BACKDROP_ORBIT_AMPLITUDE_RAD;
-    cameraOffset.copy(baseCameraOffset).applyAxisAngle(worldUp, orbit);
+    const yawOrbit = nowSec * AUTH_BACKDROP_BUILDING_YAW_RAD_PER_SEC;
+    const wobble =
+      Math.sin(nowSec * AUTH_BACKDROP_ORBIT_WOBBLE_SPEED_SEC) *
+      AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD;
+    cameraOffset.copy(baseCameraOffset).applyAxisAngle(worldUp, yawOrbit + wobble);
     camera.position.copy(lookTarget).add(cameraOffset);
     camera.lookAt(lookTarget);
 

@@ -5,4 +5,4 @@
 
 /// When `true`, `claim_apartment_pulse` completes after ~1 s instead of ~30 s.
 /// **Never ship production with this enabled.**
-pub const APARTMENT_CLAIM_FAST_FOR_TESTING: bool = false;
+pub const APARTMENT_CLAIM_FAST_FOR_TESTING: bool = true;

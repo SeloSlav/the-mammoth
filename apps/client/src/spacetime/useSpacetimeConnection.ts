@@ -16,6 +16,23 @@ function isOidcCallbackPath(): boolean {
   return p === "/auth/callback" || p.endsWith("/auth/callback");
 }
 
+function readInitialConnectionKind(): ConnectionKind | null {
+  if (typeof window === "undefined") return null;
+  if (readOidcAccessToken()) return "oidc";
+  /** Completing OpenAuth — ignore any stale guest WS token in storage. */
+  if (isOidcCallbackPath()) return "oidc";
+  if (readGuestConnectionToken()) return "guest";
+  return null;
+}
+
+function readInitialPhase(): SpacetimePhase {
+  if (typeof window === "undefined") return "needs_auth";
+  if (isOidcCallbackPath()) return "connecting";
+  if (readOidcAccessToken()) return "connecting";
+  if (readGuestConnectionToken()) return "connecting";
+  return "needs_auth";
+}
+
 /** SpacetimeDB passes the browser `WebSocket` `error` event here, not an `Error` — avoid `[object Event]`. */
 function formatSpacetimeConnectError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -70,20 +87,16 @@ export type SpacetimeSession = {
  * Guest identity is stable while the WebSocket token from `onConnect` is kept in localStorage.
  */
 export function useSpacetimeConnection(): SpacetimeSession {
-  const [phase, setPhase] = useState<SpacetimePhase>(() => {
-    if (typeof window !== "undefined" && isOidcCallbackPath()) {
-      return "connecting";
-    }
-    return readOidcAccessToken() ? "connecting" : "needs_auth";
-  });
+  const [phase, setPhase] = useState<SpacetimePhase>(readInitialPhase);
   const [conn, setConn] = useState<DbConnection | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [connEpoch, setConnEpoch] = useState(0);
-  /** Set when connecting; `null` before first choice or after full sign-out. */
-  const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(() =>
-    typeof window !== "undefined" && readOidcAccessToken() ? "oidc" : null,
-  );
+  /**
+   * Guests resume the same Spacetime identity after refresh when
+   * {@link readGuestConnectionToken} has a value — keep in sync with initial connect effect.
+   */
+  const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(readInitialConnectionKind);
 
   const refreshRegistration = useCallback((c: DbConnection) => {
     const id = c.identity;
@@ -129,14 +142,8 @@ export function useSpacetimeConnection(): SpacetimeSession {
         setConnectionKind("oidc");
       }
 
-      const kind = connectionKind ?? (jwt ? "oidc" : null);
+      const kind: ConnectionKind | null = jwt ? "oidc" : connectionKind;
       if (!kind) {
-        setConn(null);
-        setPhase("needs_auth");
-        return;
-      }
-
-      if (kind === "oidc" && !jwt) {
         setConn(null);
         setPhase("needs_auth");
         return;
@@ -216,7 +223,6 @@ export function useSpacetimeConnection(): SpacetimeSession {
 
   const startGuestPlay = useCallback(() => {
     setErrorMsg(null);
-    writeGuestConnectionToken(null);
     setDisplayName(null);
     setConnectionKind("guest");
     setPhase("connecting");
