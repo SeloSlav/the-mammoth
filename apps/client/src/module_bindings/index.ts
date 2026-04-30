@@ -37,6 +37,8 @@ import {
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
 import ClaimApartmentPulseReducer from "./claim_apartment_pulse_reducer";
+import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
+import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DropItemReducer from "./drop_item_reducer";
 import ElevatorHailReducer from "./elevator_hail_reducer";
@@ -45,8 +47,11 @@ import ElevatorLandingExteriorDoorToggleReducer from "./elevator_landing_exterio
 import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
+import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
+import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
+import RefreshWorldLootSpawnsReducer from "./refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "./respawn_player_reducer";
 import SendChatReducer from "./send_chat_reducer";
@@ -352,6 +357,8 @@ const reducersSchema = __reducers(
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
   __reducerSchema("claim_apartment_pulse", ClaimApartmentPulseReducer),
+  __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
+  __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("drop_item", DropItemReducer),
   __reducerSchema("elevator_hail", ElevatorHailReducer),
@@ -360,8 +367,11 @@ const reducersSchema = __reducers(
   __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
+  __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
+  __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
+  __reducerSchema("refresh_world_loot_spawns", RefreshWorldLootSpawnsReducer),
   __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),
   __reducerSchema("respawn_player", RespawnPlayerReducer),
   __reducerSchema("send_chat", SendChatReducer),
