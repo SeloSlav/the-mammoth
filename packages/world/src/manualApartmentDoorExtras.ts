@@ -86,6 +86,13 @@ const PANEL = {
 } as const;
 
 /**
+ * Raises corridor + shaft stairwell swing leaves within the existing wall holes (feet up, panel
+ * shortened by the same delta so the lintel alignment stays stable). Does not change shaft
+ * `doorHoleY*` or corridor CSG vertical spans.
+ */
+const STAIRWELL_SWING_DOOR_FEET_LIFT_M = 0.08;
+
+/**
  * Hinge XZ in **plate / building** space for a stair-shaft swing door, matching
  * `addShaftShell` / {@link resolveStairWellGroundDoor} hole placement (inner wall plane + positive
  * tangent jamb — same convention as {@link apartmentDoorTemplatesForFloor}).
@@ -208,7 +215,9 @@ function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
       face: "w",
       hingeX: 1.925,
       hingeZ,
-      ...PANEL,
+      feetYOffset: PANEL.feetYOffset + STAIRWELL_SWING_DOOR_FEET_LIFT_M,
+      panelWidthM: PANEL.panelWidthM,
+      panelHeightM: PANEL.panelHeightM - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
     });
     i += 1;
   }
@@ -231,7 +240,8 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
   if (!resolved) return [];
 
   const face = resolved.face as UnitEntryFace;
-  const feetYOffset = MAMUTICA_STAIR_HUB_PY + resolved.y0Local;
+  const feetYOffset =
+    MAMUTICA_STAIR_HUB_PY + resolved.y0Local + STAIRWELL_SWING_DOOR_FEET_LIFT_M;
   const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
   const out: ApartmentDoorTemplate[] = [];
   let i = 1;
@@ -255,7 +265,8 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
+      panelHeightM:
+        holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
     });
     i += 1;
   }
@@ -278,7 +289,8 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
   if (!resolved) return [];
 
   const face = resolved.face as UnitEntryFace;
-  const feetYOffset = MAMUTICA_STAIR_HUB_PY + resolved.y0Local;
+  const feetYOffset =
+    MAMUTICA_STAIR_HUB_PY + resolved.y0Local + STAIRWELL_SWING_DOOR_FEET_LIFT_M;
   const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
   const { hingeX, hingeZ } = shaftExitSwingDoorHingePlateXZ({
     spx: MAMUTICA_STAIR_HUB_PX,
@@ -299,7 +311,8 @@ function mamuticaGroundStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       hingeZ,
       feetYOffset,
       panelWidthM: resolved.widthM,
-      panelHeightM: holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M,
+      panelHeightM:
+        holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
     },
   ];
 }

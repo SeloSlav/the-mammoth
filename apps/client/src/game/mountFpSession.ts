@@ -107,6 +107,7 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./worldRuntime/droppedItemWorldRuntime.js";
+import { requestMammothInventoryOpenFromFp } from "./fpInteraction/fpInventoryOpenRequest.js";
 import { setFpPickupPrompt } from "./fpInteraction/fpPickupPrompt.js";
 import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorConstants.js";
@@ -859,17 +860,9 @@ export async function mountFpSession(
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
       if (aptKey?.kind === "apartment_stash") {
-        const slot = getFpHotbarSelectedSlot();
-        if (slot !== null) {
-          const it = getHotbarSlotInventoryItem(conn, conn.identity, slot);
-          if (it) {
-            void conn.reducers.stashPushItem({
-              itemInstanceId: it.instanceId,
-              unitKey: aptKey.unitKey,
-            });
-            return;
-          }
-        }
+        requestMammothInventoryOpenFromFp();
+        if (document.pointerLockElement) void document.exitPointerLock();
+        return;
       }
 
       const nearWorld = findNearestDroppedPickup(

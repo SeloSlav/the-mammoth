@@ -18,6 +18,7 @@ import {
   hotbarInstantConsumeCooldownProgress,
   subscribeHotbarInstantConsumeCooldown,
 } from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
+import { onMammothInventoryOpenRequestFromFp } from "../game/fpInteraction/fpInventoryOpenRequest";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
   getFpHotbarSelectedSlot,
@@ -167,6 +168,13 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
     // Capture so Tab opens inventory even when focus is on the canvas / other controls.
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  useEffect(() => {
+    return onMammothInventoryOpenRequestFromFp(() => {
+      setInvOpen(true);
+      if (document.pointerLockElement) void document.exitPointerLock();
+    });
   }, []);
 
   const handleDragStart = useCallback((info: MammothDraggedItemInfo) => {
