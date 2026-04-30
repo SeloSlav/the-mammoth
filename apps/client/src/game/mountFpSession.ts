@@ -173,6 +173,7 @@ export async function mountFpSession(
   const {
     building,
     buildingRoot,
+    buildingBodyWorldBounds,
     cellRoot,
     staticCollisionIndex,
     sampleWalkTopBase,
@@ -183,7 +184,7 @@ export async function mountFpSession(
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
   cellRoot.updateMatrixWorld(true);
-  const buildingWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+  const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   /**

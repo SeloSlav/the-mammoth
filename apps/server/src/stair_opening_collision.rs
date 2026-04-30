@@ -954,11 +954,13 @@ fn resolve_corridor_contacts(
     contacts
 }
 
-fn lobby_door_centers_along(usable_span: f32) -> Vec<f32> {
+/// `max_bays`: long E/W lobby walls use 4; narrow N/S bar ends use 2 (matches `hollowRoomShell.ts`).
+fn lobby_door_centers_along(usable_span: f32, max_bays: i32) -> Vec<f32> {
     if usable_span < LOBBY_DOUBLE_DOOR_W + 0.28 {
         return vec![0.0];
     }
-    let n = ((usable_span / LOBBY_DOUBLE_DOOR_BAY_SPACING).floor() as i32).clamp(1, 4) as usize;
+    let n = ((usable_span / LOBBY_DOUBLE_DOOR_BAY_SPACING).floor() as i32)
+        .clamp(1, max_bays) as usize;
     let mut out = Vec::new();
     for i in 0..n {
         let t = (i + 1) as f32 / (n + 1) as f32;
@@ -998,7 +1000,7 @@ fn push_corridor_wall_replacements(
         let y0 = y_lo + LOBBY_DOOR_SILL;
         let y1 = (y_hi - 0.05).min(y0 + LOBBY_DOUBLE_DOOR_H);
         if matches!(face, Face::E | Face::W) {
-            for zc in lobby_door_centers_along(vlen_z - 0.14) {
+            for zc in lobby_door_centers_along(vlen_z - 0.14, 4) {
                 yz_holes.push(HoleYZ {
                     z0: world_z + zc - LOBBY_DOUBLE_DOOR_W * 0.5,
                     z1: world_z + zc + LOBBY_DOUBLE_DOOR_W * 0.5,
@@ -1007,7 +1009,7 @@ fn push_corridor_wall_replacements(
                 });
             }
         } else {
-            for xc in lobby_door_centers_along(vlen_x - 0.14) {
+            for xc in lobby_door_centers_along(vlen_x - 0.14, 2) {
                 xy_holes.push(HoleXY {
                     x0: world_x + xc - LOBBY_DOUBLE_DOOR_W * 0.5,
                     x1: world_x + xc + LOBBY_DOUBLE_DOOR_W * 0.5,

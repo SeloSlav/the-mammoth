@@ -35,14 +35,23 @@ describe("exterior procedural trees", () => {
 
       for (const p of placements) {
         const clearX =
-          p.x < footprint.min.x ? footprint.min.x - p.x : p.x > footprint.max.x ? p.x - footprint.max.x : 0;
+          p.x < footprint.min.x
+            ? footprint.min.x - p.x
+            : p.x > footprint.max.x
+              ? p.x - footprint.max.x
+              : 0;
         const clearZ =
-          p.z < footprint.min.z ? footprint.min.z - p.z : p.z > footprint.max.z ? p.z - footprint.max.z : 0;
+          p.z < footprint.min.z
+            ? footprint.min.z - p.z
+            : p.z > footprint.max.z
+              ? p.z - footprint.max.z
+              : 0;
         expect(Math.max(clearX, clearZ)).toBeGreaterThanOrEqual(6);
       }
 
       const instanced = group.children.filter(
-        (child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh,
+        (child): child is THREE.InstancedMesh =>
+          child instanceof THREE.InstancedMesh,
       );
       expect(instanced).toHaveLength(2);
       expect(instanced[0]!.count).toBeGreaterThan(placements.length);

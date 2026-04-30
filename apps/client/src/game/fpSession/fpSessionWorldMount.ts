@@ -71,6 +71,8 @@ function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpSta
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
+  /** Bounds of the authored building stack only; excludes procedural exterior trees. */
+  buildingBodyWorldBounds: THREE.Box3;
   cellRoot: THREE.Group;
   staticCollisionSolids: readonly {
     min: readonly [number, number, number];
@@ -161,13 +163,18 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   // Floor plate visibility (mammothPlateLevelIndex) is preserved on the group itself.
   mergeStaticFloorGeometries(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
+  const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
   if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
     const buildingLocalFootprint = new THREE.Box3()
       .setFromObject(buildingRoot)
-      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
+      .applyMatrix4(
+        new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert(),
+      );
     buildingLocalFootprint.min.y = 0;
     buildingLocalFootprint.max.y = 1;
-    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
+    const localGroundY = buildingRoot.worldToLocal(
+      new THREE.Vector3(0, 0, 0),
+    ).y;
     buildingRoot.add(
       buildExteriorProceduralTreeGroup(buildingLocalFootprint, {
         groundY: localGroundY,
@@ -180,6 +187,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   return {
     building,
     buildingRoot,
+    buildingBodyWorldBounds,
     cellRoot,
     staticCollisionSolids: blockerAABBs,
     staticCollisionIndex,
@@ -323,4 +331,3 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
     }
   }
 }
-

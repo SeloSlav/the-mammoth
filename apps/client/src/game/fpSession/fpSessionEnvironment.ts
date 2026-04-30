@@ -81,14 +81,21 @@ function createTilableMacroGrayTexture(size: number): THREE.DataTexture {
     for (let x = 0; x < size; x++) {
       const u = x / size;
       const v = y / size;
-      const a = Math.sin(u * TAU * 2 + 0.71) * Math.cos(v * TAU * 2 + 0.29) * 0.5 + 0.5;
+      const a =
+        Math.sin(u * TAU * 2 + 0.71) * Math.cos(v * TAU * 2 + 0.29) * 0.5 + 0.5;
       const b = Math.sin((u + v * 0.68) * TAU * 3 + 1.07) * 0.5 + 0.5;
       const c = Math.sin(u * TAU + v * TAU * 1.47 + 0.33) * 0.5 + 0.5;
       const n = THREE.MathUtils.clamp(a * 0.44 + b * 0.33 + c * 0.23, 0, 1);
       data[y * size + x] = Math.floor(n * 255);
     }
   }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.UnsignedByteType);
+  const tex = new THREE.DataTexture(
+    data,
+    size,
+    size,
+    THREE.RedFormat,
+    THREE.UnsignedByteType,
+  );
   tex.name = "fp_ground_macro_gray";
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.NoColorSpace;
@@ -103,7 +110,11 @@ type GroundPbrSet = {
 };
 
 function groundPbrUrls(base: string): [string, string, string] {
-  return [`${base}/basecolor.png`, `${base}/normal.png`, `${base}/roughness.png`];
+  return [
+    `${base}/basecolor.png`,
+    `${base}/normal.png`,
+    `${base}/roughness.png`,
+  ];
 }
 
 /**
@@ -118,8 +129,8 @@ export const FP_SESSION_SKY_RADIUS = 20_000 as const;
 export const FP_SESSION_SKY_CAMERA_FAR = 25_000 as const;
 
 /** Residual chroma in {@link wireBrutalistSkyDome} (lower = more concrete-gray). */
-const SKY_DOME_CHROMA = 0.26 as const;
-const SKY_DOME_SHADOW_FLOOR = 0.38 as const;
+const SKY_DOME_CHROMA = 0.34 as const;
+const SKY_DOME_SHADOW_FLOOR = 0.52 as const;
 const LUMINANCE = vec3(0.2126, 0.7152, 0.0722);
 
 /**
@@ -168,12 +179,12 @@ export function attachFpSessionEnvironment(
 ): FpSessionEnvironmentHandle {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  /** Flat oppressive overcast; slightly low so the plate doesn’t read as a tourism brochure. */
-  renderer.toneMappingExposure = 0.9;
+  /** Overcast daylight, but bright enough for foliage and facade color to read. */
+  renderer.toneMappingExposure = 1.06;
 
   const sunDir = new THREE.Vector3();
-  /** Very low sun — the stock sky model still skews blue at higher elevations. */
-  const sunElevationDeg = 14;
+  /** Low Zagreb afternoon sun with enough elevation to keep exterior trees from silhouetting. */
+  const sunElevationDeg = 22;
   const sunAzimuthDeg = 198;
   sunDir.setFromSphericalCoords(
     1,
@@ -189,9 +200,9 @@ export function attachFpSessionEnvironment(
   const sky = new SkyCloudMesh({
     sunDirection: sunDir,
     /**
-     * A bit more cloud than “broken overcast” — hides blue clear patches; FBM still reads as masses.
+     * Broken overcast: still concrete-gray, but no longer crushes the whole yard into gloom.
      */
-    cloudCoverage: 0.66,
+    cloudCoverage: 0.54,
     /** Cloud band height — a bit lower so the layer feels like stratus scud, not a second sky. */
     cloudHeight: 460,
     /**
@@ -203,17 +214,17 @@ export function attachFpSessionEnvironment(
     windSpeedX: 0.42,
     windSpeedZ: 0.28,
     /** Softer edges and more semi-transparent wisp (thick clouds read as one grey wall). */
-    cloudAbsorption: 0.94,
+    cloudAbsorption: 0.82,
     maxCloudDistance: 10_000.0,
     /**
      * Push smog; Rayleigh is still wavelength-weighted in-shader, so it never goes fully neutral
      * from uniforms alone — we also desaturate {@link wireBrutalistSkyDome} on `colorNode`.
      */
-    rayleigh: 0.06,
-    turbidity: 4.4,
-    hazeStrength: 0.55,
-    mieCoefficient: 0.0051,
-    mieDirectionalG: 0.32,
+    rayleigh: 0.08,
+    turbidity: 3.8,
+    hazeStrength: 0.42,
+    mieCoefficient: 0.0044,
+    mieDirectionalG: 0.28,
     radius: FP_SESSION_SKY_RADIUS,
     widthSegments: 40,
     heightSegments: 20,
@@ -228,7 +239,7 @@ export function attachFpSessionEnvironment(
    * Match the plate mood without crushing distance to black — slightly brighter and farther `far`
    * so the yard reads as weathered concrete, not a void.
    */
-  scene.fog = new THREE.Fog(0xbfbfbf, 85, 1100);
+  scene.fog = new THREE.Fog(0xd0d4cf, 120, 1350);
 
   type LoadedTex = THREE.Texture;
   const groundTextures: LoadedTex[] = [];
@@ -251,7 +262,9 @@ export function attachFpSessionEnvironment(
     emissiveIntensity: 0.12,
   });
 
-  const macroVariationTex = createTilableMacroGrayTexture(GROUND_MACRO_TEX_SIZE);
+  const macroVariationTex = createTilableMacroGrayTexture(
+    GROUND_MACRO_TEX_SIZE,
+  );
   pushTerrainTexture(macroVariationTex);
 
   const loader = new THREE.TextureLoader();
@@ -260,7 +273,9 @@ export function attachFpSessionEnvironment(
       for (const t of texs) t.dispose();
     };
     const loadGroundSet = async (base: string): Promise<GroundPbrSet> => {
-      const loaded = await Promise.all(groundPbrUrls(base).map((u) => loader.loadAsync(u)));
+      const loaded = await Promise.all(
+        groundPbrUrls(base).map((u) => loader.loadAsync(u)),
+      );
       const [baseColor, normal, roughness] = loaded as [
         THREE.Texture,
         THREE.Texture,
@@ -328,8 +343,12 @@ export function attachFpSessionEnvironment(
         }
       }
 
-      const uv = vec2(positionWorld.x, positionWorld.z).div(float(GRASS_GROUND_TILE_M));
-      const macroUv = vec2(positionWorld.x, positionWorld.z).div(float(GROUND_MACRO_TILE_M));
+      const uv = vec2(positionWorld.x, positionWorld.z).div(
+        float(GRASS_GROUND_TILE_M),
+      );
+      const macroUv = vec2(positionWorld.x, positionWorld.z).div(
+        float(GROUND_MACRO_TILE_M),
+      );
       const grassCol = texture(grassSet.baseColor, uv);
       const dirtCol = texture(dirtSet.baseColor, uv);
       const gravelCol = texture(gravelSet.baseColor, uv);
@@ -346,30 +365,40 @@ export function attachFpSessionEnvironment(
         float(0),
       );
       const liveGrassNoise = triNoise3D(
-        positionWorld.mul(float(GROUND_LIVE_GRASS_NOISE_SCALE)).add(vec3(101.3, 0, -55.8)),
+        positionWorld
+          .mul(float(GROUND_LIVE_GRASS_NOISE_SCALE))
+          .add(vec3(101.3, 0, -55.8)),
         float(0),
         float(0),
       );
       const deadGrassNoise = triNoise3D(
-        positionWorld.mul(float(GROUND_DEAD_GRASS_NOISE_SCALE)).add(vec3(31.7, 0, -19.4)),
+        positionWorld
+          .mul(float(GROUND_DEAD_GRASS_NOISE_SCALE))
+          .add(vec3(31.7, 0, -19.4)),
         float(0),
         float(0),
       );
       const gravelNoise = triNoise3D(
-        positionWorld.mul(float(GROUND_GRAVEL_NOISE_SCALE)).add(vec3(-47.2, 0, 22.1)),
+        positionWorld
+          .mul(float(GROUND_GRAVEL_NOISE_SCALE))
+          .add(vec3(-47.2, 0, 22.1)),
         float(0),
         float(0),
       );
 
       const rawDirt = useDirtBlend
-        ? smoothstep(float(GROUND_WEIGHT_DIRT_LO), float(GROUND_WEIGHT_DIRT_HI), dirtNoise).add(
-            float(GROUND_DIRT_BASELINE),
-          )
+        ? smoothstep(
+            float(GROUND_WEIGHT_DIRT_LO),
+            float(GROUND_WEIGHT_DIRT_HI),
+            dirtNoise,
+          ).add(float(GROUND_DIRT_BASELINE))
         : float(0);
       const rawDead = useDeadGrassBlend
-        ? smoothstep(float(GROUND_WEIGHT_DEAD_LO), float(GROUND_WEIGHT_DEAD_HI), deadGrassNoise).add(
-            float(GROUND_DEAD_GRASS_BASELINE),
-          )
+        ? smoothstep(
+            float(GROUND_WEIGHT_DEAD_LO),
+            float(GROUND_WEIGHT_DEAD_HI),
+            deadGrassNoise,
+          ).add(float(GROUND_DEAD_GRASS_BASELINE))
         : float(0);
       const rawLive = smoothstep(
         float(GROUND_WEIGHT_LIVE_LO),
@@ -382,9 +411,11 @@ export function attachFpSessionEnvironment(
       const wLive = div(rawLive, sumPrimary);
 
       const gravelOfDirt = useGravelBlend
-        ? smoothstep(float(GROUND_GRAVEL_EDGE_LO), float(GROUND_GRAVEL_EDGE_HI), gravelNoise).mul(
-            float(GROUND_GRAVEL_OF_DIRT_MAX),
-          )
+        ? smoothstep(
+            float(GROUND_GRAVEL_EDGE_LO),
+            float(GROUND_GRAVEL_EDGE_HI),
+            gravelNoise,
+          ).mul(float(GROUND_GRAVEL_OF_DIRT_MAX))
         : float(0);
       const wGravel = wDirt.mul(gravelOfDirt);
       const wDirtVis = wDirt.mul(float(1).sub(gravelOfDirt));
@@ -395,7 +426,9 @@ export function attachFpSessionEnvironment(
         .add(deadGrassCol.rgb.mul(wDead))
         .add(gravelCol.rgb.mul(wGravel));
       const macroCenter = sub(macro.r, float(0.5)).mul(float(2));
-      const macroMul = macroCenter.mul(float(GROUND_MACRO_ALBEDO_STRENGTH)).add(float(1));
+      const macroMul = macroCenter
+        .mul(float(GROUND_MACRO_ALBEDO_STRENGTH))
+        .add(float(1));
       groundMat.colorNode = vec4(baseRgb.mul(macroMul), float(1));
       /**
        * Stay matte under overcast light: blend roughness maps toward higher roughness and keep
@@ -412,7 +445,10 @@ export function attachFpSessionEnvironment(
       groundMat.normalScale.set(0.45, 0.45);
       groundMat.needsUpdate = true;
     } catch (err) {
-      console.warn("[fpSessionEnvironment] grass ground textures failed to load", err);
+      console.warn(
+        "[fpSessionEnvironment] grass ground textures failed to load",
+        err,
+      );
     }
   })();
 
@@ -433,15 +469,19 @@ export function attachFpSessionEnvironment(
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
 
-  const BASE_HEMI_INTENSITY = 0.82;
-  const BASE_FILL_INTENSITY = 0.3;
-  const BASE_DIR_INTENSITY = 0.78;
+  const BASE_HEMI_INTENSITY = 1.05;
+  const BASE_FILL_INTENSITY = 0.42;
+  const BASE_DIR_INTENSITY = 0.92;
   /** Multiplies sun fill when `stairwellInteriorDark01` is 1 — keeps stairwells moody vs bright corridors. */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.48;
 
-  const hemi = new THREE.HemisphereLight(0xd2d6dc, 0xb0b6be, BASE_HEMI_INTENSITY);
-  const fill = new THREE.AmbientLight(0xd0d4da, BASE_FILL_INTENSITY);
-  const dir = new THREE.DirectionalLight(0xe0e2e6, BASE_DIR_INTENSITY);
+  const hemi = new THREE.HemisphereLight(
+    0xe3e7df,
+    0xb8bcae,
+    BASE_HEMI_INTENSITY,
+  );
+  const fill = new THREE.AmbientLight(0xdce1d8, BASE_FILL_INTENSITY);
+  const dir = new THREE.DirectionalLight(0xf0efd9, BASE_DIR_INTENSITY);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
   scene.add(hemi, fill, dir);
 
@@ -451,14 +491,24 @@ export function attachFpSessionEnvironment(
   };
 
   return {
-    onFrame: ({ camera, nowSec, viewWidthPx, viewHeightPx, stairwellInteriorDark01 = 0 }) => {
+    onFrame: ({
+      camera,
+      nowSec,
+      viewWidthPx,
+      viewHeightPx,
+      stairwellInteriorDark01 = 0,
+    }) => {
       sky.updateTime(nowSec);
       sky.updateSun(sunDir);
       sky.updateCamera(camera);
       sky.updateResolution(viewWidthPx, viewHeightPx);
 
       const dark01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
-      const scale = THREE.MathUtils.lerp(1, STAIRWELL_INTERIOR_LIGHT_SCALE, dark01);
+      const scale = THREE.MathUtils.lerp(
+        1,
+        STAIRWELL_INTERIOR_LIGHT_SCALE,
+        dark01,
+      );
       hemi.intensity = BASE_HEMI_INTENSITY * scale;
       fill.intensity = BASE_FILL_INTENSITY * scale;
       dir.intensity = BASE_DIR_INTENSITY * scale;

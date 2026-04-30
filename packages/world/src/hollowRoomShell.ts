@@ -161,11 +161,12 @@ function addExteriorWallCladding(
     }
   }
 }
-function lobbyDoorCentersAlong(usableSpan: number): number[] {
+/** @param maxBays upper cap (long E/W bar sides vs short N/S ends of the podium hall). */
+function lobbyDoorCentersAlong(usableSpan: number, maxBays = 4): number[] {
   if (usableSpan < LOBBY_DOUBLE_DOOR_W + 0.28) return [0];
   const n = Math.max(
     1,
-    Math.min(4, Math.floor(usableSpan / LOBBY_DOUBLE_DOOR_BAY_SPACING)),
+    Math.min(maxBays, Math.floor(usableSpan / LOBBY_DOUBLE_DOOR_BAY_SPACING)),
   );
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -410,7 +411,8 @@ export function addHollowRoomShell(
   const usableZ = vlenZ - 0.14;
   const usableX = vlenX - 0.14;
   const czList = lobbyDoorCentersAlong(usableZ);
-  const cxList = lobbyDoorCentersAlong(usableX);
+  /** N/S façades are the narrow ends of the double-loaded bar — fewer bays than the long E/W spine. */
+  const cxList = lobbyDoorCentersAlong(usableX, 2);
   const lobbyHolesEw: WallHoleYZ[] = czList.map((zc) => ({
     z0: zc - halfDoor,
     z1: zc + halfDoor,

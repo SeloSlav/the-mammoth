@@ -184,19 +184,18 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMaxZ: buildingWorldBounds.max.z,
     });
     let exteriorFullStackReveal = false;
-    if (!feetOnBuildingSlab) {
-      const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
-        cameraX: floorVisCamWorld.x,
-        cameraZ: floorVisCamWorld.z,
-        boundsMinX: buildingWorldBounds.min.x,
-        boundsMaxX: buildingWorldBounds.max.x,
-        boundsMinZ: buildingWorldBounds.min.z,
-        boundsMaxZ: buildingWorldBounds.max.z,
-      });
-      if (cameraOutsideBuilding) {
-        band = { lo: 1, hi: maxBuildingLevel };
-        exteriorFullStackReveal = true;
-      }
+    const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
+    const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
+      cameraX: floorVisCamWorld.x,
+      cameraZ: floorVisCamWorld.z,
+      boundsMinX: buildingWorldBounds.min.x,
+      boundsMaxX: buildingWorldBounds.max.x,
+      boundsMinZ: buildingWorldBounds.min.z,
+      boundsMaxZ: buildingWorldBounds.max.z,
+    });
+    if (cameraOutsideBuilding && (!feetOnBuildingSlab || playerStorey <= 1)) {
+      band = { lo: 1, hi: maxBuildingLevel };
+      exteriorFullStackReveal = true;
     }
     if (cabOccludesWorld) {
       /**
@@ -218,7 +217,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const insideStairShaft =
       pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
       pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z);
-    const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
     if (insideStairShaft) {
       const stairLocalBand = fpStairShaftLocalVisibilityBand({
         globalLo: band.lo,
@@ -286,10 +284,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         boundsMaxZ: buildingWorldBounds.max.z,
         nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
       });
-    if (
+    const unitInteriorVisibilityChanged =
       unitInteriorVisible !== _lastUnitInteriorVisible ||
-      unitInteriorMeshes.length !== _lastUnitInteriorMeshCount
-    ) {
+      unitInteriorMeshes.length !== _lastUnitInteriorMeshCount;
+    if (unitInteriorVisibilityChanged) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       _lastUnitInteriorMeshCount = unitInteriorMeshes.length;
       for (let i = 0; i < unitInteriorMeshes.length; i++) {
@@ -299,10 +297,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
     /** Same predicate as shells: strict camera-only footprint + exterior gates hid beds at façade windows while plaster stayed visible. */
     const apartmentFurnitureInteriorVisible = unitInteriorVisible;
-    if (
+    const apartmentFurnitureInteriorVisibilityChanged =
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
-      apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount
-    ) {
+      apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount;
+    if (apartmentFurnitureInteriorVisibilityChanged) {
       _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
       _lastApartmentFurnitureInteriorMeshCount = apartmentFurnitureInteriorMeshes.length;
       for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
@@ -330,7 +328,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       stairBand.lo === _lastStairBandLo &&
       stairBand.hi === _lastStairBandHi &&
       stairDetailBand.lo === _lastStairDetailLo &&
-      stairDetailBand.hi === _lastStairDetailHi
+      stairDetailBand.hi === _lastStairDetailHi &&
+      !unitInteriorVisibilityChanged &&
+      !apartmentFurnitureInteriorVisibilityChanged
     ) {
       return;
     }

@@ -13,6 +13,8 @@ type LSystemSpec = {
   readonly radius: number;
   readonly radiusFalloff: number;
   readonly leafScale: readonly [number, number, number];
+  readonly canopySpread: number;
+  readonly canopyLayers: number;
 };
 
 type SegmentPrototype = {
@@ -59,7 +61,9 @@ const L_SYSTEMS: readonly LSystemSpec[] = [
     lengthFalloff: 0.78,
     radius: 0.028,
     radiusFalloff: 0.68,
-    leafScale: [0.12, 0.09, 0.12],
+    leafScale: [0.17, 0.13, 0.17],
+    canopySpread: 0.17,
+    canopyLayers: 11,
   },
   {
     name: "zagreb_poplar",
@@ -71,7 +75,9 @@ const L_SYSTEMS: readonly LSystemSpec[] = [
     lengthFalloff: 0.84,
     radius: 0.022,
     radiusFalloff: 0.7,
-    leafScale: [0.065, 0.17, 0.065],
+    leafScale: [0.09, 0.24, 0.09],
+    canopySpread: 0.1,
+    canopyLayers: 9,
   },
   {
     name: "zagreb_yard_tree",
@@ -83,7 +89,9 @@ const L_SYSTEMS: readonly LSystemSpec[] = [
     lengthFalloff: 0.76,
     radius: 0.026,
     radiusFalloff: 0.66,
-    leafScale: [0.1, 0.1, 0.1],
+    leafScale: [0.15, 0.13, 0.15],
+    canopySpread: 0.15,
+    canopyLayers: 10,
   },
 ];
 
@@ -99,6 +107,24 @@ const _treeMatrix = new THREE.Matrix4();
 const _localMatrix = new THREE.Matrix4();
 const _instanceMatrix = new THREE.Matrix4();
 const _leafColor = new THREE.Color();
+
+/** Unit sphere-ish offsets for layered crowns (two rings in {@link pushCanopyClusters}). */
+const CANOPY_OFFSETS: readonly [number, number, number][] = [
+  [0, 0.08, 0],
+  [0.82, -0.06, 0.31],
+  [-0.71, -0.04, 0.42],
+  [0.28, 0.18, -0.79],
+  [-0.22, -0.14, -0.76],
+  [0.44, 0.26, 0.58],
+  [-0.51, 0.2, -0.24],
+  [0.12, -0.22, 0.88],
+  [-0.88, 0.1, 0.18],
+  [0.55, -0.18, -0.52],
+  [-0.33, 0.28, 0.66],
+  [0.66, 0.12, 0.35],
+  [-0.15, -0.12, 0.92],
+  [0.08, 0.32, -0.45],
+];
 
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0;
@@ -120,15 +146,64 @@ function expandLSystem(spec: LSystemSpec): string {
   return current.replaceAll("X", "F");
 }
 
-function rotateLocal(q: THREE.Quaternion, axis: THREE.Vector3, angleRad: number): void {
+function rotateLocal(
+  q: THREE.Quaternion,
+  axis: THREE.Vector3,
+  angleRad: number,
+): void {
   q.multiply(_segQuat.setFromAxisAngle(axis, angleRad));
+}
+
+function pushCanopyClusters(
+  leaves: LeafPrototype[],
+  position: THREE.Vector3,
+  scale: THREE.Vector3,
+  spread: number,
+  layerCount: number,
+): void {
+  const rings = 2;
+  for (let ring = 0; ring < rings; ring++) {
+    const ringSpread = spread * (ring === 0 ? 1 : 1.48);
+    const ringScale = ring === 0 ? 1 : 0.58;
+    const ringPhase = ring * 4;
+    for (let i = 0; i < layerCount; i++) {
+      const [ox, oy, oz] =
+        CANOPY_OFFSETS[(i + ringPhase) % CANOPY_OFFSETS.length]!;
+      const layerScale =
+        (1 + (i % 3) * 0.11 - (i === 0 && ring === 0 ? 0.03 : 0)) * ringScale;
+      leaves.push({
+        position: position
+          .clone()
+          .add(
+            new THREE.Vector3(
+              ox * ringSpread,
+              oy * ringSpread * 0.78,
+              oz * ringSpread,
+            ),
+          ),
+        scale: scale.clone().multiplyScalar(layerScale),
+      });
+    }
+  }
+}
+
+/** Deterministic 0..1 for per-instance leaf albedo variation. */
+function foliageVariation01(
+  treeIndex: number,
+  leafIndex: number,
+  salt: number,
+): number {
+  let h = (treeIndex * 374761393 + leafIndex * 668265263 + salt * 144269393) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h >>> 0) / 4294967296;
 }
 
 function buildTreePrototype(spec: LSystemSpec): TreePrototype {
   const expanded = expandLSystem(spec);
   const segments: SegmentPrototype[] = [];
   const leaves: LeafPrototype[] = [];
-  const stack: { pos: THREE.Vector3; quat: THREE.Quaternion; depth: number }[] = [];
+  const stack: { pos: THREE.Vector3; quat: THREE.Quaternion; depth: number }[] =
+    [];
   const state = {
     pos: new THREE.Vector3(0, 0, 0),
     quat: new THREE.Quaternion(),
@@ -161,12 +236,15 @@ function buildTreePrototype(spec: LSystemSpec): TreePrototype {
       state.depth += 1;
     } else if (ch === "]") {
       if (state.depth >= 2) {
-        leaves.push({
-          position: state.pos.clone(),
-          scale: new THREE.Vector3(...spec.leafScale).multiplyScalar(
+        pushCanopyClusters(
+          leaves,
+          state.pos,
+          new THREE.Vector3(...spec.leafScale).multiplyScalar(
             0.9 + 0.18 * ((leaves.length % 3) - 1),
           ),
-        });
+          spec.canopySpread,
+          spec.canopyLayers,
+        );
       }
       const popped = stack.pop();
       if (popped) {
@@ -186,10 +264,28 @@ function buildTreePrototype(spec: LSystemSpec): TreePrototype {
       rotateLocal(state.quat, _axisY, spec.angleRad);
     }
   }
-  leaves.push({
-    position: state.pos.clone(),
-    scale: new THREE.Vector3(...spec.leafScale),
-  });
+  pushCanopyClusters(
+    leaves,
+    state.pos,
+    new THREE.Vector3(...spec.leafScale).multiplyScalar(1.08),
+    spec.canopySpread,
+    spec.canopyLayers,
+  );
+
+  /** Upper-branch twig clusters: extra read without new L-system symbols. */
+  const fillSpread = spec.canopySpread * 0.38;
+  for (const seg of segments) {
+    _segDir.set(0, 1, 0).applyQuaternion(seg.quat);
+    const tip = seg.midpoint.clone().addScaledVector(_segDir, seg.length * 0.52);
+    if (tip.y < maxY * 0.54) continue;
+    pushCanopyClusters(
+      leaves,
+      tip,
+      new THREE.Vector3(...spec.leafScale).multiplyScalar(0.34),
+      fillSpread,
+      3,
+    );
+  }
 
   const invHeight = 1 / maxY;
   return {
@@ -207,7 +303,8 @@ function buildTreePrototype(spec: LSystemSpec): TreePrototype {
 }
 
 function treeHeightM(rand: () => number, prototypeIndex: number): number {
-  if (prototypeIndex === 1) return THREE.MathUtils.lerp(22, 35, Math.pow(rand(), 0.65));
+  if (prototypeIndex === 1)
+    return THREE.MathUtils.lerp(22, 35, Math.pow(rand(), 0.65));
   const mature = rand() < 0.24;
   return mature
     ? THREE.MathUtils.lerp(16, 24, rand())
@@ -223,10 +320,12 @@ function choosePrototypeIndex(rand: () => number): number {
 
 function buildTreePlacements(
   footprint: THREE.Box3,
-  options: Required<Pick<
-    ExteriorProceduralTreeOptions,
-    "count" | "seed" | "minFacadeClearanceM" | "maxScatterDistanceM"
-  >>,
+  options: Required<
+    Pick<
+      ExteriorProceduralTreeOptions,
+      "count" | "seed" | "minFacadeClearanceM" | "maxScatterDistanceM"
+    >
+  >,
 ): ExteriorProceduralTreePlacement[] {
   const rand = mulberry32(options.seed);
   const minX = footprint.min.x;
@@ -250,12 +349,17 @@ function buildTreePlacements(
           : sidePick < sideWeights[0]! + sideWeights[1]! + sideWeights[2]!
             ? 2
             : 3;
-    const nearBand = rand() < 0.72;
+    /**
+     * Most trees sit in the mid/far yard; only a minority use the "near" band, and that band
+     * still keeps a floor distance so we do not hug the megablock façade.
+     */
+    const nearBand = rand() < 0.24;
     const scatter = nearBand
-      ? Math.pow(rand(), 1.65) * (options.maxScatterDistanceM * 0.52)
-      : options.maxScatterDistanceM * (0.48 + rand() * 0.52);
+      ? options.maxScatterDistanceM * 0.14 +
+        Math.pow(rand(), 1.85) * (options.maxScatterDistanceM * 0.36)
+      : options.maxScatterDistanceM * (0.52 + rand() * 0.48);
     const offset = options.minFacadeClearanceM + scatter;
-    const alongPad = nearBand ? 34 : 72;
+    const alongPad = nearBand ? 28 : 72;
     let x = 0;
     let z = 0;
     if (side === 0) {
@@ -271,8 +375,9 @@ function buildTreePlacements(
       x = minX - offset;
       z = THREE.MathUtils.lerp(minZ - alongPad, maxZ + alongPad, rand());
     }
-    x += (rand() - 0.5) * 9;
-    z += (rand() - 0.5) * 9;
+    const jitter = nearBand ? 5 : 9;
+    x += (rand() - 0.5) * jitter;
+    z += (rand() - 0.5) * jitter;
     placements.push({
       x,
       z,
@@ -288,7 +393,10 @@ export function buildExteriorProceduralTreeGroup(
   buildingFootprint: THREE.Box3,
   options: ExteriorProceduralTreeOptions = {},
 ): THREE.Group {
-  const count = Math.max(0, Math.floor(options.count ?? EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT));
+  const count = Math.max(
+    0,
+    Math.floor(options.count ?? EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT),
+  );
   const root = new THREE.Group();
   root.name = "exterior_procedural_tree_grove";
   root.userData.mammothAlwaysVisible = true;
@@ -315,25 +423,31 @@ export function buildExteriorProceduralTreeGroup(
     leafCount += proto.leaves.length;
   }
 
-  const branchGeom = new THREE.CylinderGeometry(1, 0.72, 1, 5, 1, false);
+  const branchGeom = new THREE.CylinderGeometry(1, 0.64, 1, 6, 1, false);
   branchGeom.name = "exterior_tree_branch_lsystem_segment";
   const leafGeom = new THREE.IcosahedronGeometry(1, 0);
   leafGeom.name = "exterior_tree_leaf_cluster_lowpoly";
   const branchMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3527,
-    roughness: 0.96,
+    color: 0x775b42,
+    roughness: 0.9,
     metalness: 0,
     flatShading: true,
   });
   const leafMat = new THREE.MeshStandardMaterial({
-    color: 0x496337,
-    roughness: 0.92,
+    color: 0xc4dd8f,
+    roughness: 0.82,
     metalness: 0,
     flatShading: true,
     vertexColors: true,
+    emissive: 0x3d4a28,
+    emissiveIntensity: 0.045,
   });
 
-  const branchMesh = new THREE.InstancedMesh(branchGeom, branchMat, segmentCount);
+  const branchMesh = new THREE.InstancedMesh(
+    branchGeom,
+    branchMat,
+    segmentCount,
+  );
   branchMesh.name = "exterior_tree_lsystem_branches_instanced";
   branchMesh.castShadow = false;
   branchMesh.receiveShadow = false;
@@ -347,11 +461,16 @@ export function buildExteriorProceduralTreeGroup(
 
   let segmentIndex = 0;
   let leafIndex = 0;
-  for (const p of placements) {
+  for (let ti = 0; ti < placements.length; ti++) {
+    const p = placements[ti]!;
     const proto = prototypes[p.prototypeIndex]!;
     _treeQuat.setFromAxisAngle(_axisY, p.yawRad);
     _treeScale.setScalar(p.heightM);
-    _treeMatrix.compose(new THREE.Vector3(p.x, placementOptions.groundY, p.z), _treeQuat, _treeScale);
+    _treeMatrix.compose(
+      new THREE.Vector3(p.x, placementOptions.groundY, p.z),
+      _treeQuat,
+      _treeScale,
+    );
 
     for (const segment of proto.segments) {
       _localMatrix.compose(
@@ -367,8 +486,28 @@ export function buildExteriorProceduralTreeGroup(
       _localMatrix.compose(leaf.position, _treeQuat.identity(), leaf.scale);
       _instanceMatrix.multiplyMatrices(_treeMatrix, _localMatrix);
       leafMesh.setMatrixAt(leafIndex, _instanceMatrix);
-      const hueShift = (p.prototypeIndex === 1 ? -0.04 : 0.02) + ((leafIndex % 7) - 3) * 0.006;
-      _leafColor.setHSL(0.27 + hueShift, 0.26 + (leafIndex % 5) * 0.025, 0.27 + (leafIndex % 3) * 0.035);
+      const v = foliageVariation01(ti, leafIndex, placementOptions.seed);
+      const v2 = foliageVariation01(ti, leafIndex ^ 0x9e37_79b9, placementOptions.seed + 1);
+      const v3 = foliageVariation01(leafIndex, ti, placementOptions.seed + 2);
+      /** Yellow–spring green: hue 0.2–0.31, lighter reads, internal mottling. */
+      const protoHueBias =
+        p.prototypeIndex === 1 ? -0.02 : p.prototypeIndex === 0 ? 0 : 0.012;
+      const hue = THREE.MathUtils.clamp(
+        0.2 + protoHueBias + (v - 0.5) * 0.11 + (v2 - 0.5) * 0.06,
+        0.17,
+        0.32,
+      );
+      const sat = THREE.MathUtils.clamp(
+        0.32 + v2 * 0.2 + (v3 - 0.5) * 0.12,
+        0.22,
+        0.55,
+      );
+      const light = THREE.MathUtils.clamp(
+        0.52 + v * 0.18 + (v3 - 0.4) * 0.12,
+        0.45,
+        0.74,
+      );
+      _leafColor.setHSL(hue, sat, light);
       leafMesh.setColorAt(leafIndex, _leafColor);
       leafIndex += 1;
     }
