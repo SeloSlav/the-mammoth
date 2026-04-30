@@ -4,6 +4,7 @@ import type { DecalManifest, DecalMeshResolver, DecalPlacement, DecalManifestEnt
 import {
   createDecalMaterial,
   decalMaterialCacheKey,
+  decalMaterialCacheKeyForEntry,
   graffitiDecalMaterialOpts,
   grimeDecalMaterialOpts,
   stickerDecalMaterialOpts,
@@ -28,6 +29,122 @@ function manifestEntryById(manifest: DecalManifest, id: string): DecalManifestEn
   return manifest.find((e) => e.id === id);
 }
 
+function maxBorderConnectedBackgroundRemovalByUrl(manifest: DecalManifest): Map<
+  string,
+  NonNullable<DecalManifestEntry["borderConnectedBackgroundRemoval"]>
+> {
+  const out = new Map<string, NonNullable<DecalManifestEntry["borderConnectedBackgroundRemoval"]>>();
+  for (const e of manifest) {
+    const cfg = e.borderConnectedBackgroundRemoval;
+    if (!cfg) continue;
+    const prev = out.get(e.url);
+    if (!prev || cfg.maxLuma > prev.maxLuma) out.set(e.url, cfg);
+  }
+  return out;
+}
+
+function rgbaFromImageLike(source: CanvasImageSource, w: number, h: number): ImageData | null {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(source, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Punch alpha for **border-connected** near-black matte pixels.
+ * Preserves enclosed blacks (paint strokes/shadow cores) disconnected from image edges.
+ */
+function punchBorderConnectedBackgroundOnRgba(img: ImageData, maxChannel: number): void {
+  const { data, width: w, height: h } = img;
+  const n = w * h;
+  const visited = new Uint8Array(n);
+  const queue = new Uint32Array(n);
+  let head = 0;
+  let tail = 0;
+
+  const isSeedAt = (i: number, x: number, y: number): boolean => {
+    if (x < 0 || y < 0 || x >= w || y >= h) return false;
+    const j = i * 4;
+    const r = data[j]!;
+    const g = data[j + 1]!;
+    const b = data[j + 2]!;
+    return r <= maxChannel && g <= maxChannel && b <= maxChannel;
+  };
+
+  const push = (i: number) => {
+    if (visited[i]) return;
+    visited[i] = 1;
+    queue[tail++] = i;
+  };
+
+  for (let x = 0; x < w; x++) {
+    push(x);
+    push((h - 1) * w + x);
+  }
+  for (let y = 1; y < h - 1; y++) {
+    push(y * w);
+    push(y * w + (w - 1));
+  }
+
+  while (head < tail) {
+    const i = queue[head++]!;
+    const x = i % w;
+    const y = (i / w) | 0;
+    if (!isSeedAt(i, x, y)) continue;
+
+    const j = i * 4;
+    data[j + 3] = 0;
+
+    if (x > 0) push(i - 1);
+    if (x + 1 < w) push(i + 1);
+    if (y > 0) push(i - w);
+    if (y + 1 < h) push(i + w);
+  }
+}
+
+function applyBorderConnectedBackgroundRemoval(tex: THREE.Texture, maxChannel: number): void {
+  const img = tex.image as
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | OffscreenCanvas
+    | undefined;
+  if (!img) return;
+
+  let w = 0;
+  let h = 0;
+  if (img instanceof HTMLImageElement) {
+    w = img.naturalWidth;
+    h = img.naturalHeight;
+  } else if (img instanceof ImageBitmap) {
+    w = img.width;
+    h = img.height;
+  } else {
+    w = img.width;
+    h = img.height;
+  }
+  if (w <= 1 || h <= 1 || w > 8192 || h > 8192) return;
+
+  const rgba = rgbaFromImageLike(img as CanvasImageSource, w, h);
+  if (!rgba) return;
+  punchBorderConnectedBackgroundOnRgba(rgba, maxChannel);
+
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) return;
+  ctx.putImageData(rgba, 0, 0);
+  tex.image = out;
+}
+
 const defaultProjectedResolver: DecalMeshResolver = (pl, c) => {
   if (c.length === 0) return undefined;
   return resolveDecalHitMesh(c, new THREE.Vector3(...pl.position), new THREE.Vector3(...pl.normal));
@@ -39,7 +156,7 @@ export class DecalManager {
   private readonly textureLoader = new THREE.TextureLoader();
   private readonly textureByUrl = new Map<string, THREE.Texture>();
   private readonly loadingUrls = new Map<string, Promise<THREE.Texture>>();
-  private readonly materialCache = new Map<string, THREE.MeshStandardMaterial>();
+  private readonly materialCache = new Map<string, THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>();
   private readonly meshes = new Set<THREE.Mesh>();
   private manifest: DecalManifest = [];
 
@@ -61,7 +178,10 @@ export class DecalManager {
   async preloadManifest(manifest: DecalManifest): Promise<void> {
     this.manifest = manifest;
     const urls = [...new Set(manifest.map((e) => e.url))];
-    await Promise.all(urls.map((u) => this.loadTexture(u).catch(() => undefined)));
+    const removalByUrl = maxBorderConnectedBackgroundRemovalByUrl(manifest);
+    await Promise.all(
+      urls.map((u) => this.loadTexture(u, removalByUrl.get(u)).catch(() => undefined)),
+    );
   }
 
   private maxAnisotropy(): number {
@@ -79,7 +199,10 @@ export class DecalManager {
     return 4;
   }
 
-  private loadTexture(url: string): Promise<THREE.Texture> {
+  private loadTexture(
+    url: string,
+    borderRemoval?: DecalManifestEntry["borderConnectedBackgroundRemoval"],
+  ): Promise<THREE.Texture> {
     const existing = this.textureByUrl.get(url);
     if (existing) return Promise.resolve(existing);
     let pending = this.loadingUrls.get(url);
@@ -88,6 +211,9 @@ export class DecalManager {
         this.textureLoader.load(
           url,
           (tex) => {
+            if (borderRemoval) {
+              applyBorderConnectedBackgroundRemoval(tex, borderRemoval.maxLuma);
+            }
             tex.colorSpace = THREE.SRGBColorSpace;
             tex.wrapS = THREE.ClampToEdgeWrapping;
             tex.wrapT = THREE.ClampToEdgeWrapping;
@@ -109,7 +235,10 @@ export class DecalManager {
     return pending;
   }
 
-  private async materialFor(entry: DecalManifestEntry, placement: DecalPlacement): Promise<THREE.MeshStandardMaterial | undefined> {
+  private async materialFor(
+    entry: DecalManifestEntry,
+    placement: DecalPlacement,
+  ): Promise<THREE.MeshBasicMaterial | THREE.MeshStandardMaterial | undefined> {
     const opacity = placement.opacity ?? 1;
     let opts;
     if (entry.category === "grime") {
@@ -119,12 +248,15 @@ export class DecalManager {
     } else {
       opts = graffitiDecalMaterialOpts(opacity);
     }
-    const key = decalMaterialCacheKey(entry.id, opts);
+    const key =
+      entry.category === "grime"
+        ? decalMaterialCacheKey(entry.id, opts)
+        : decalMaterialCacheKeyForEntry(entry, opts);
     let mat = this.materialCache.get(key);
     if (mat) return mat;
     let tex: THREE.Texture | undefined;
     try {
-      tex = await this.loadTexture(entry.url);
+      tex = await this.loadTexture(entry.url, entry.borderConnectedBackgroundRemoval);
     } catch {
       return undefined;
     }
@@ -153,7 +285,10 @@ export class DecalManager {
     } else {
       opts = graffitiDecalMaterialOpts(opacity);
     }
-    const key = decalMaterialCacheKey(manifestEntry.id, opts);
+    const key =
+      manifestEntry.category === "grime"
+        ? decalMaterialCacheKey(manifestEntry.id, opts)
+        : decalMaterialCacheKeyForEntry(manifestEntry, opts);
     let mat = this.materialCache.get(key);
     if (!mat) {
       const tex = this.textureByUrl.get(manifestEntry.url);
@@ -190,7 +325,10 @@ export class DecalManager {
     } else {
       opts = graffitiDecalMaterialOpts(opacity);
     }
-    const key = decalMaterialCacheKey(manifestEntry.id, opts);
+    const key =
+      manifestEntry.category === "grime"
+        ? decalMaterialCacheKey(manifestEntry.id, opts)
+        : decalMaterialCacheKeyForEntry(manifestEntry, opts);
     let mat = this.materialCache.get(key);
     if (!mat) {
       const tex = this.textureByUrl.get(manifestEntry.url);

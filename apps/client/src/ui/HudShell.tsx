@@ -108,7 +108,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
             </button>
           </div>
         </div>
-        {conn ? <MammothInventoryHud conn={conn} /> : null}
+        {conn ? <MammothInventoryHud conn={conn} activeStashUnitKey={stashUnitKey} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud />
         <MammothPickupPromptHud />

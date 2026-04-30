@@ -13,10 +13,13 @@ use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
 };
 use crate::inventory::{
-    self, find_item_in_inventory_slot, find_item_in_stash_slot, inventory_item,
-    NUM_PLAYER_INVENTORY_SLOTS, NUM_STASH_SLOTS,
+    self, find_item_in_hotbar_slot, find_item_in_inventory_slot, find_item_in_stash_slot,
+    inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS, NUM_STASH_SLOTS,
 };
-use crate::inventory_models::{InventoryLocationData, ItemLocation, StashLocationData};
+use crate::inventory_models::{
+    HotbarLocationData, InventoryLocationData, ItemLocation, StashLocationData,
+};
+use crate::items_catalog;
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
@@ -643,37 +646,305 @@ fn first_empty_stash_slot(
     None
 }
 
+fn apartment_stash_owner_near_sender(ctx: &ReducerContext, unit_key: &str) -> Option<Identity> {
+    let sender = ctx.sender();
+    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string())?;
+    let owner_id = unit.owner?;
+    let pose = ctx.db.player_pose().identity().find(&sender)?;
+    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
+        return None;
+    }
+    Some(owner_id)
+}
+
+fn owned_apartment_stash_owner_near_sender(
+    ctx: &ReducerContext,
+    unit_key: &str,
+) -> Option<Identity> {
+    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)?;
+    if owner_id != ctx.sender() {
+        return None;
+    }
+    Some(owner_id)
+}
+
+fn stash_item_for_unit(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: &str,
+    owner_id: Identity,
+) -> Option<inventory::InventoryItem> {
+    let row = ctx.db.inventory_item().instance_id().find(item_instance_id)?;
+    match &row.location {
+        ItemLocation::Stash(s) if s.unit_key == unit_key && s.owner_identity == owner_id => {
+            Some(row)
+        }
+        _ => None,
+    }
+}
+
+fn move_inventory_row_to_location(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    dest: ItemLocation,
+    target_opt: Option<inventory::InventoryItem>,
+) -> Result<(), String> {
+    let inv = ctx.db.inventory_item();
+    let item_to_move = inv
+        .instance_id()
+        .find(item_instance_id)
+        .ok_or_else(|| format!("item instance {item_instance_id} not found"))?;
+    let max_stack = items_catalog::max_stack_for(&item_to_move.def_id)
+        .ok_or_else(|| format!("unknown def_id {}", item_to_move.def_id))?;
+    let original_location = item_to_move.location.clone();
+
+    if let Some(target_item) = target_opt {
+        if target_item.instance_id == item_instance_id {
+            let mut mv = inv
+                .instance_id()
+                .find(item_instance_id)
+                .ok_or_else(|| "same-slot move: item row missing".to_string())?;
+            mv.location = dest;
+            inv.instance_id().update(mv);
+            return Ok(());
+        }
+
+        match inventory::try_merge_into(&item_to_move, &target_item, max_stack) {
+            Ok((new_source_qty, new_target_qty, delete_source)) => {
+                let mut tgt = inv
+                    .instance_id()
+                    .find(target_item.instance_id)
+                    .ok_or_else(|| "stash merge: target row missing".to_string())?;
+                tgt.quantity = new_target_qty;
+                inv.instance_id().update(tgt);
+
+                if delete_source {
+                    let mut del = inv
+                        .instance_id()
+                        .find(item_instance_id)
+                        .ok_or_else(|| "stash merge: source row missing".to_string())?;
+                    del.location = ItemLocation::Unknown;
+                    inv.instance_id().update(del);
+                    inv.instance_id().delete(item_instance_id);
+                } else {
+                    let mut src = inv
+                        .instance_id()
+                        .find(item_instance_id)
+                        .ok_or_else(|| "stash merge: source row missing".to_string())?;
+                    src.quantity = new_source_qty;
+                    src.location = original_location;
+                    inv.instance_id().update(src);
+                }
+            }
+            Err(()) => {
+                let mut occ = inv
+                    .instance_id()
+                    .find(target_item.instance_id)
+                    .ok_or_else(|| "stash swap: target row missing".to_string())?;
+                occ.location = original_location;
+                inv.instance_id().update(occ);
+
+                let mut mv = inv
+                    .instance_id()
+                    .find(item_instance_id)
+                    .ok_or_else(|| "stash swap: source row missing".to_string())?;
+                mv.location = dest;
+                inv.instance_id().update(mv);
+            }
+        }
+    } else {
+        let mut mv = inv
+            .instance_id()
+            .find(item_instance_id)
+            .ok_or_else(|| "stash place: item row missing".to_string())?;
+        mv.location = dest;
+        inv.instance_id().update(mv);
+    }
+
+    Ok(())
+}
+
 #[spacetimedb::reducer]
 pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: String) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("stash_push blocked: {e}");
         return;
     }
+    let Some(owner_id) = owned_apartment_stash_owner_near_sender(ctx, &unit_key) else {
+        return;
+    };
+    let Some(slot) = first_empty_stash_slot(ctx, owner_id, &unit_key) else {
+        return;
+    };
+    if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, slot) {
+        log::warn!("stash_push: {e}");
+    }
+}
+
+fn stash_push_item_to_slot_impl(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: &str,
+    target_stash_slot: u16,
+) -> Result<(), String> {
+    if target_stash_slot >= NUM_STASH_SLOTS {
+        return Err("bad stash slot".to_string());
+    }
+    let owner_id = owned_apartment_stash_owner_near_sender(ctx, unit_key)
+        .ok_or_else(|| "caller may not push to stash".to_string())?;
+    let _row = inventory::get_player_item(ctx, item_instance_id)?;
+    let target_opt = find_item_in_stash_slot(ctx, owner_id, unit_key, target_stash_slot);
+    move_inventory_row_to_location(
+        ctx,
+        item_instance_id,
+        ItemLocation::Stash(StashLocationData {
+            owner_identity: owner_id,
+            unit_key: unit_key.to_string(),
+            slot_index: target_stash_slot,
+        }),
+        target_opt,
+    )
+}
+
+#[spacetimedb::reducer]
+pub fn stash_push_item_to_slot(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: String,
+    target_stash_slot: u16,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("stash_push_to_slot blocked: {e}");
+        return;
+    }
+    if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, target_stash_slot)
+    {
+        log::warn!("stash_push_to_slot: {e}");
+    }
+}
+
+fn stash_pull_item_to_inventory_slot_impl(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: &str,
+    target_inventory_slot: u16,
+) -> Result<(), String> {
+    if target_inventory_slot >= NUM_PLAYER_INVENTORY_SLOTS {
+        return Err("bad inventory slot".to_string());
+    }
     let sender = ctx.sender();
-    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key) else {
-        return;
-    };
-    if unit.owner != Some(sender) {
+    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)
+        .ok_or_else(|| "caller may not pull from stash".to_string())?;
+    let _row = stash_item_for_unit(ctx, item_instance_id, unit_key, owner_id)
+        .ok_or_else(|| "item is not in this stash".to_string())?;
+    let target_opt = find_item_in_inventory_slot(ctx, sender, target_inventory_slot);
+    move_inventory_row_to_location(
+        ctx,
+        item_instance_id,
+        ItemLocation::Inventory(InventoryLocationData {
+            owner_id: sender,
+            slot_index: target_inventory_slot,
+        }),
+        target_opt,
+    )
+}
+
+#[spacetimedb::reducer]
+pub fn stash_pull_item_to_inventory_slot(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: String,
+    target_inventory_slot: u16,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("stash_pull_to_inventory_slot blocked: {e}");
         return;
     }
-    let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
-        return;
-    };
-    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
+    if let Err(e) =
+        stash_pull_item_to_inventory_slot_impl(ctx, item_instance_id, &unit_key, target_inventory_slot)
+    {
+        log::warn!("stash_pull_to_inventory_slot: {e}");
+    }
+}
+
+fn stash_pull_item_to_hotbar_slot_impl(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: &str,
+    target_hotbar_slot: u8,
+) -> Result<(), String> {
+    if target_hotbar_slot >= NUM_PLAYER_HOTBAR_SLOTS {
+        return Err("bad hotbar slot".to_string());
+    }
+    let sender = ctx.sender();
+    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)
+        .ok_or_else(|| "caller may not pull from stash".to_string())?;
+    let _row = stash_item_for_unit(ctx, item_instance_id, unit_key, owner_id)
+        .ok_or_else(|| "item is not in this stash".to_string())?;
+    let target_opt = find_item_in_hotbar_slot(ctx, sender, target_hotbar_slot);
+    move_inventory_row_to_location(
+        ctx,
+        item_instance_id,
+        ItemLocation::Hotbar(HotbarLocationData {
+            owner_id: sender,
+            slot_index: target_hotbar_slot,
+        }),
+        target_opt,
+    )
+}
+
+#[spacetimedb::reducer]
+pub fn stash_pull_item_to_hotbar_slot(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: String,
+    target_hotbar_slot: u8,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("stash_pull_to_hotbar_slot blocked: {e}");
         return;
     }
-    let Ok(mut row) = inventory::get_player_item(ctx, item_instance_id) else {
+    if let Err(e) =
+        stash_pull_item_to_hotbar_slot_impl(ctx, item_instance_id, &unit_key, target_hotbar_slot)
+    {
+        log::warn!("stash_pull_to_hotbar_slot: {e}");
+    }
+}
+
+#[spacetimedb::reducer]
+pub fn stash_move_item_to_slot(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    unit_key: String,
+    target_stash_slot: u16,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("stash_move_to_slot blocked: {e}");
+        return;
+    }
+    if target_stash_slot >= NUM_STASH_SLOTS {
+        log::warn!("stash_move_to_slot: bad stash slot");
+        return;
+    }
+    let Some(owner_id) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
         return;
     };
-    let Some(slot) = first_empty_stash_slot(ctx, sender, &unit_key) else {
+    if stash_item_for_unit(ctx, item_instance_id, &unit_key, owner_id).is_none() {
         return;
-    };
-    row.location = ItemLocation::Stash(StashLocationData {
-        owner_identity: sender,
-        unit_key: unit_key.clone(),
-        slot_index: slot,
-    });
-    ctx.db.inventory_item().instance_id().update(row);
+    }
+    let target_opt = find_item_in_stash_slot(ctx, owner_id, &unit_key, target_stash_slot);
+    if let Err(e) = move_inventory_row_to_location(
+        ctx,
+        item_instance_id,
+        ItemLocation::Stash(StashLocationData {
+            owner_identity: owner_id,
+            unit_key: unit_key.clone(),
+            slot_index: target_stash_slot,
+        }),
+        target_opt,
+    ) {
+        log::warn!("stash_move_to_slot: {e}");
+    }
 }
 
 #[spacetimedb::reducer]
@@ -683,38 +954,22 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
         return;
     }
     let sender = ctx.sender();
-    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key) else {
+    let Some(owner_id) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
         return;
     };
-    let Some(owner_id) = unit.owner else {
+    if stash_item_for_unit(ctx, item_instance_id, &unit_key, owner_id).is_none() {
         return;
     };
-    let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
-        return;
-    };
-    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
-        return;
-    }
-    let Some(mut row) = ctx.db.inventory_item().instance_id().find(item_instance_id) else {
-        return;
-    };
-    let ok = match &row.location {
-        ItemLocation::Stash(s) if s.unit_key == unit_key && s.owner_identity == owner_id => true,
-        _ => false,
-    };
-    if !ok {
-        return;
-    }
     let Some(empty_inv) = (0..NUM_PLAYER_INVENTORY_SLOTS)
         .find(|s| find_item_in_inventory_slot(ctx, sender, *s).is_none())
     else {
         return;
     };
-    row.location = ItemLocation::Inventory(InventoryLocationData {
-        owner_id: sender,
-        slot_index: empty_inv,
-    });
-    ctx.db.inventory_item().instance_id().update(row);
+    if let Err(e) =
+        stash_pull_item_to_inventory_slot_impl(ctx, item_instance_id, &unit_key, empty_inv)
+    {
+        log::warn!("stash_pull: {e}");
+    }
 }
 
 pub(crate) fn on_player_killed_cancel_claim(ctx: &ReducerContext, victim: Identity) {

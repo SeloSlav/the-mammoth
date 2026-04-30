@@ -132,7 +132,7 @@ pub(crate) fn get_player_item(
 }
 
 /// `Ok((new_source_qty, new_target_qty, delete_source))` or `Err` if merge is impossible.
-fn try_merge_into(
+pub(crate) fn try_merge_into(
     source: &InventoryItem,
     target: &InventoryItem,
     max_stack: u32,

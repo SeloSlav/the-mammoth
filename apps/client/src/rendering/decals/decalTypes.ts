@@ -10,6 +10,15 @@ export type DecalManifestEntry = {
   defaultSize: readonly [number, number, number];
   roughness?: number;
   metalness?: number;
+  /**
+   * Some shipped graffiti PNGs are **RGB-only** with a nominally-black matte.
+   * Flood-fill outward from image borders within this luminance band and punch alpha → 0
+   * so decals do not occlude underlying wall albedo while preserving interior blacks.
+   */
+  borderConnectedBackgroundRemoval?: {
+    /** Max grayscale value (per channel clamp) treated as matte when connected to the border. */
+    maxLuma: number;
+  };
 };
 
 export type DecalPlacement = {

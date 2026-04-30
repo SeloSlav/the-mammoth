@@ -14,12 +14,17 @@ const GRAFFITI_IDS = [
   "blok47_h",
 ] as const;
 
+/** Projected decals are fill-rate heavy in WebGPU; keep counts conservative. */
+const STAIRWELL_GRAFFITI_SLOTS_PER_SEGMENT = 2;
+/** Grime spawns a second projected mesh + another standard-material variant — too expensive for shafts. */
+const STAIRWELL_GRAFFITI_GRIME_LAYER = false;
+
 function shaftSegmentHeightM(s: BuildingStairShaftSpec): number {
   return Math.max(s.syPlate, s.storeySpacing);
 }
 
 /**
- * ~3 projected graffiti placements per stair segment — deterministic from shaft id, level, slot.
+ * ~2 projected graffiti placements per stair segment — deterministic from shaft id, level, slot.
  */
 export function generateStairwellDecalPlacements(
   buildingRoot: THREE.Object3D,
@@ -39,7 +44,7 @@ export function generateStairwellDecalPlacements(
       const wallInset = 0.07;
       const yHalf = sySeg * 0.38;
 
-      for (let slot = 0; slot < 3; slot++) {
+      for (let slot = 0; slot < STAIRWELL_GRAFFITI_SLOTS_PER_SEGMENT; slot++) {
         const seed = hashStringToSeed(`${spec.id}:${storeyLevelIndex}:${slot}`);
         const rnd = mulberry32(seed);
 
@@ -70,7 +75,7 @@ export function generateStairwellDecalPlacements(
         const sizeJitter = 0.9 + rnd() * 0.2;
         const baseW = 0.95 * sizeJitter;
         const id = GRAFFITI_IDS[Math.floor(rnd() * GRAFFITI_IDS.length)]!;
-        const grime = rnd() > 0.72;
+        const grime = STAIRWELL_GRAFFITI_GRIME_LAYER && rnd() > 0.72;
 
         out.push({
           id,

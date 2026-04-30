@@ -57,8 +57,12 @@ import RespawnPlayerReducer from "./respawn_player_reducer";
 import SendChatReducer from "./send_chat_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetUsernameReducer from "./set_username_reducer";
+import StashMoveItemToSlotReducer from "./stash_move_item_to_slot_reducer";
 import StashPullItemReducer from "./stash_pull_item_reducer";
+import StashPullItemToHotbarSlotReducer from "./stash_pull_item_to_hotbar_slot_reducer";
+import StashPullItemToInventorySlotReducer from "./stash_pull_item_to_inventory_slot_reducer";
 import StashPushItemReducer from "./stash_push_item_reducer";
+import StashPushItemToSlotReducer from "./stash_push_item_to_slot_reducer";
 import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
@@ -377,8 +381,12 @@ const reducersSchema = __reducers(
   __reducerSchema("send_chat", SendChatReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_username", SetUsernameReducer),
+  __reducerSchema("stash_move_item_to_slot", StashMoveItemToSlotReducer),
   __reducerSchema("stash_pull_item", StashPullItemReducer),
+  __reducerSchema("stash_pull_item_to_hotbar_slot", StashPullItemToHotbarSlotReducer),
+  __reducerSchema("stash_pull_item_to_inventory_slot", StashPullItemToInventorySlotReducer),
   __reducerSchema("stash_push_item", StashPushItemReducer),
+  __reducerSchema("stash_push_item_to_slot", StashPushItemToSlotReducer),
   __reducerSchema("submit_firearm_shot", SubmitFirearmShotReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),

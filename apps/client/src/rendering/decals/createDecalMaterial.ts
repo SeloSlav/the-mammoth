@@ -4,6 +4,27 @@ import type { DecalMaterialOpts } from "./decalTypes.js";
 
 export type MaterialCacheKey = string;
 
+/** Share GPU materials whenever manifest entries reuse the same source texture URL (e.g. blok47_a…h → blok47.png). */
+export function decalMaterialCacheKeyForEntry(
+  entry: Pick<DecalManifestEntry, "url" | "category" | "roughness" | "metalness">,
+  opts: Pick<
+    DecalMaterialOpts,
+    "opacity" | "alphaTest" | "transparent" | "depthWrite" | "polygonOffsetFactor"
+  >,
+): MaterialCacheKey {
+  return [
+    entry.category,
+    entry.url,
+    (entry.roughness ?? "").toString(),
+    (entry.metalness ?? "").toString(),
+    opts.opacity.toFixed(3),
+    opts.alphaTest.toFixed(3),
+    opts.transparent ? 1 : 0,
+    opts.depthWrite ? 1 : 0,
+    opts.polygonOffsetFactor.toFixed(2),
+  ].join("|");
+}
+
 export function decalMaterialCacheKey(
   manifestId: string,
   opts: Pick<
@@ -67,8 +88,25 @@ export function createDecalMaterial(
   manifestEntry: DecalManifestEntry,
   texture: THREE.Texture,
   opts: DecalMaterialOpts,
-): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({
+): THREE.MeshBasicMaterial | THREE.MeshStandardMaterial {
+  if (manifestEntry.category === "grime") {
+    const mat = new THREE.MeshStandardMaterial({
+      map: texture,
+      transparent: opts.transparent,
+      opacity: opts.opacity,
+      alphaTest: opts.alphaTest,
+      depthWrite: opts.depthWrite,
+      polygonOffset: opts.polygonOffset,
+      polygonOffsetFactor: opts.polygonOffsetFactor,
+      polygonOffsetUnits: opts.polygonOffsetUnits,
+      roughness: manifestEntry.roughness ?? opts.roughness,
+      metalness: manifestEntry.metalness ?? opts.metalness,
+    });
+    mat.needsUpdate = true;
+    return mat;
+  }
+
+  const mat = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: opts.transparent,
     opacity: opts.opacity,
@@ -77,8 +115,6 @@ export function createDecalMaterial(
     polygonOffset: opts.polygonOffset,
     polygonOffsetFactor: opts.polygonOffsetFactor,
     polygonOffsetUnits: opts.polygonOffsetUnits,
-    roughness: manifestEntry.roughness ?? opts.roughness,
-    metalness: manifestEntry.metalness ?? opts.metalness,
   });
   mat.needsUpdate = true;
   return mat;

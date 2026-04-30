@@ -104,7 +104,7 @@ export function MammothDraggableItem({
         if (slot) {
           const type = slot.getAttribute("data-slot-type") as MammothDragSourceSlotInfo["type"] | null;
           const idx = slot.getAttribute("data-slot-index");
-          if ((type === "inventory" || type === "hotbar") && idx !== null) {
+          if ((type === "inventory" || type === "hotbar" || type === "stash") && idx !== null) {
             const index = Number.parseInt(idx, 10);
             if (!Number.isNaN(index)) {
               const targetSlot: MammothDragSourceSlotInfo = { type, index };

@@ -4,22 +4,31 @@ import type { MammothDragSourceSlotInfo, MammothPopulatedItem } from "./inventor
 export type SlotGrids = {
   hotbar: Array<MammothPopulatedItem | null>;
   inventory: Array<MammothPopulatedItem | null>;
+  stash?: Array<MammothPopulatedItem | null>;
 };
 
 function cloneGrids(g: SlotGrids): SlotGrids {
   return {
     hotbar: [...g.hotbar],
     inventory: [...g.inventory],
+    ...(g.stash ? { stash: [...g.stash] } : {}),
   };
 }
 
 function getSlot(g: SlotGrids, slot: MammothDragSourceSlotInfo): MammothPopulatedItem | null {
-  return slot.type === "hotbar" ? (g.hotbar[slot.index] ?? null) : (g.inventory[slot.index] ?? null);
+  if (slot.type === "hotbar") return g.hotbar[slot.index] ?? null;
+  if (slot.type === "inventory") return g.inventory[slot.index] ?? null;
+  return g.stash?.[slot.index] ?? null;
 }
 
 function setSlot(g: SlotGrids, slot: MammothDragSourceSlotInfo, val: MammothPopulatedItem | null) {
-  if (slot.type === "hotbar") g.hotbar[slot.index] = val;
-  else g.inventory[slot.index] = val;
+  if (slot.type === "hotbar") {
+    g.hotbar[slot.index] = val;
+  } else if (slot.type === "inventory") {
+    g.inventory[slot.index] = val;
+  } else if (g.stash) {
+    g.stash[slot.index] = val;
+  }
 }
 
 function sameInstance(a: MammothPopulatedItem, b: MammothPopulatedItem): boolean {
@@ -49,6 +58,12 @@ export function inventorySlotGridsMatch(a: SlotGrids, b: SlotGrids): boolean {
   }
   for (let i = 0; i < a.inventory.length; i++) {
     if (!slotPopulationMatch(a.inventory[i] ?? null, b.inventory[i] ?? null)) return false;
+  }
+  if (a.stash || b.stash) {
+    if (!a.stash || !b.stash || a.stash.length !== b.stash.length) return false;
+    for (let i = 0; i < a.stash.length; i++) {
+      if (!slotPopulationMatch(a.stash[i] ?? null, b.stash[i] ?? null)) return false;
+    }
   }
   return true;
 }

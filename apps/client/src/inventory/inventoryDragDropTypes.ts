@@ -1,7 +1,7 @@
 import type { InventoryItem } from "../module_bindings/types";
 import type { MammothItemDef } from "./mammothItemCatalogTypes";
 
-export type MammothSlotType = "inventory" | "hotbar";
+export type MammothSlotType = "inventory" | "hotbar" | "stash";
 
 export type MammothDragSourceSlotInfo = {
   type: MammothSlotType;

@@ -2,6 +2,15 @@ import type { DecalManifest } from "./decalTypes.js";
 
 const BLOK47_URL = "/assets/decals/graffiti/blok47.png";
 
+const BLOK47_ENTRY_COMMON = {
+  category: "graffiti",
+  url: BLOK47_URL,
+  defaultSize: [0.95, 0.95, 0.35] as const,
+  roughness: 0.92,
+  metalness: 0,
+  borderConnectedBackgroundRemoval: { maxLuma: 28 },
+} as const;
+
 /**
  * Several ids share one URL so placement variety does not duplicate binaries.
  * Grime URL is optional — {@link DecalManager} skips missing grime assets quietly.
@@ -11,11 +20,7 @@ export const DECAL_MANIFEST: DecalManifest = [
     (id) =>
       ({
         id,
-        category: "graffiti",
-        url: BLOK47_URL,
-        defaultSize: [0.95, 0.95, 0.35] as const,
-        roughness: 0.92,
-        metalness: 0,
+        ...BLOK47_ENTRY_COMMON,
       }) as const,
   ),
   {

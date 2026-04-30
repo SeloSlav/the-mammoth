@@ -54,6 +54,21 @@ describe("inventoryOptimistic", () => {
     expect(next?.hotbar[1]?.instance.defId).toBe("knife");
   });
 
+  it("moves between inventory and stash slots", () => {
+    const grids = {
+      hotbar: [null, null, null, null, null, null],
+      inventory: [item(251, "bandage", 3, 10), ...Array.from({ length: 23 }, () => null)],
+      stash: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictSlotMove(
+      grids,
+      { type: "inventory", index: 0 },
+      { type: "stash", index: 4 },
+    );
+    expect(next?.inventory[0]).toBeNull();
+    expect(next?.stash?.[4]?.instance.defId).toBe("bandage");
+  });
+
   it("predictWorldDrop clears source", () => {
     const grids = {
       hotbar: [item(301, "knife", 1, 1), null, null, null, null, null],
@@ -112,5 +127,25 @@ describe("inventorySlotGridsMatch", () => {
     expect(predicted).not.toBeNull();
     expect(inventorySlotGridsMatch(predicted!, predicted!)).toBe(true);
     expect(inventorySlotGridsMatch(predicted!, before)).toBe(false);
+  });
+
+  it("compares stash slot populations when present", () => {
+    const a = {
+      hotbar: [null, null, null, null, null, null],
+      inventory: emptyInv(),
+      stash: [item(801, "bandage", 3, 10), ...Array.from({ length: 23 }, () => null)],
+    };
+    const b = {
+      hotbar: [null, null, null, null, null, null],
+      inventory: emptyInv(),
+      stash: [item(801, "bandage", 3, 10), ...Array.from({ length: 23 }, () => null)],
+    };
+    const c = {
+      hotbar: [null, null, null, null, null, null],
+      inventory: emptyInv(),
+      stash: [item(801, "bandage", 2, 10), ...Array.from({ length: 23 }, () => null)],
+    };
+    expect(inventorySlotGridsMatch(a, b)).toBe(true);
+    expect(inventorySlotGridsMatch(a, c)).toBe(false);
   });
 });

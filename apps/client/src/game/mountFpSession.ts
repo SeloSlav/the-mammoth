@@ -238,13 +238,24 @@ export async function mountFpSession(
     },
   });
 
+  let sessionDisposed = false;
   const decalManager = new DecalManager(scene, renderer);
-  await decalManager.preloadManifest(DECAL_MANIFEST);
-  await decalManager.loadPlacements(
-    generateStairwellDecalPlacements(buildingRoot, stairShaftSpecs),
-    buildingRoot,
-  );
-  unitInteriorMeshes.push(...decalManager.getMeshes());
+  void (async () => {
+    try {
+      await decalManager.preloadManifest(DECAL_MANIFEST);
+      if (sessionDisposed) return;
+      await decalManager.loadPlacements(
+        generateStairwellDecalPlacements(buildingRoot, stairShaftSpecs),
+        buildingRoot,
+      );
+      if (sessionDisposed) return;
+      unitInteriorMeshes.push(...decalManager.getMeshes());
+    } catch (err) {
+      if (!sessionDisposed) {
+        console.warn("[mountFpSession] failed to load stairwell decals", err);
+      }
+    }
+  })();
   installFpSessionTransientDebugConsole({ scene, buildingRoot, cellRoot, renderer });
 
   const selectedHotbarRow = () => {
@@ -1051,6 +1062,7 @@ export async function mountFpSession(
   tick();
 
   return () => {
+    sessionDisposed = true;
     cancelAnimationFrame(raf);
     ro.disconnect();
     window.removeEventListener("keydown", onKeyDown);

@@ -22,6 +22,10 @@ const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
 const BED_URL = "/static/models/objects/bed.glb";
 
+/** Keep apartment prop construction below one noticeable frame hitch while the player is already in-world. */
+const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
+const FURNITURE_REBUILD_MIN_UNITS_PER_SLICE = 1;
+
 /** Authoring GLBs — tuned against the replicated wall-based furniture anchors. */
 const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
@@ -75,6 +79,8 @@ const _visibleStashPickMeshes: THREE.Object3D[] = [];
 const _furnitureBoundsScratch = new THREE.Box3();
 const _furnitureSizeScratch = new THREE.Vector3();
 const _furnitureCenterScratch = new THREE.Vector3();
+const _footlockerPickSizeScratch = new THREE.Vector3();
+const _footlockerPickCenterScratch = new THREE.Vector3();
 
 export function apartmentFurniturePlacementChanged(
   oldUnit: ApartmentUnit,
@@ -156,6 +162,19 @@ export type MountFpApartmentFurnitureResult = {
   ) => ApartmentStashPrompt | null;
 };
 
+type ApartmentFurnitureTemplates = {
+  wardrobe: THREE.Object3D;
+  footlocker: THREE.Object3D;
+  bed: THREE.Object3D;
+};
+
+type ApartmentFurnitureBuildState = {
+  rows: ApartmentUnit[];
+  nextIndex: number;
+  byLevel: Map<number, THREE.Group>;
+  stashPickMeshes: THREE.Mesh[];
+};
+
 export async function mountFpApartmentFurniture(opts: {
   conn: DbConnection;
   buildingRoot: THREE.Group;
@@ -168,16 +187,6 @@ export async function mountFpApartmentFurniture(opts: {
   showUnitBoundsDebug?: boolean;
 }): Promise<MountFpApartmentFurnitureResult> {
   const loader = new GLTFLoader();
-  const [wardrobeGltf, footGltf, bedGltf] = await Promise.all([
-    loader.loadAsync(WARDROBE_URL),
-    loader.loadAsync(FOOTLOCKER_URL),
-    loader.loadAsync(BED_URL),
-  ]);
-
-  const wardrobeTemplate = wardrobeGltf.scene;
-  const footlockerTemplate = footGltf.scene;
-  const bedTemplate = bedGltf.scene;
-
   const managed: THREE.Object3D[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -199,132 +208,160 @@ export async function mountFpApartmentFurniture(opts: {
   });
   stashPickMaterial.colorWrite = false;
 
+  let templates: ApartmentFurnitureTemplates | null = null;
+  let disposed = false;
   let rebuildScheduled = false;
-  const scheduleRebuild = () => {
-    if (rebuildScheduled) return;
-    rebuildScheduled = true;
-    requestAnimationFrame(() => {
-      rebuildScheduled = false;
-      rebuild();
+  let rebuildRunning = false;
+  let rebuildRequested = false;
+  let activeBuild: ApartmentFurnitureBuildState | null = null;
+  let rebuildRaf = 0;
+
+  const disposeGeneratedGeometry = (root: THREE.Object3D) => {
+    root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      if (o.geometry === stashPickGeometry || o.geometry === unitBoundsDebugGeometry) return;
+      o.geometry.dispose();
     });
   };
 
-  const rebuild = () => {
+  const clearManaged = () => {
     for (const o of managed) {
       opts.buildingRoot.remove(o);
+      disposeGeneratedGeometry(o);
     }
     managed.length = 0;
     stashPickMeshes.length = 0;
+  };
 
-    const byLevel = new Map<number, THREE.Group>();
+  const disposeBuildState = (build: ApartmentFurnitureBuildState | null) => {
+    if (!build) return;
+    for (const g of build.byLevel.values()) {
+      disposeGeneratedGeometry(g);
+    }
+    build.byLevel.clear();
+    build.stashPickMeshes.length = 0;
+  };
 
-    const floorGroupFor = (levelIdx: number): THREE.Group => {
-      let g = byLevel.get(levelIdx);
-      if (!g) {
-        g = new THREE.Group();
-        g.name = `apartment_furniture_plate_${levelIdx}`;
-        g.userData.mammothPlateLevelIndex = levelIdx;
-        g.userData.mammothApartmentFurnitureProp = true;
-        byLevel.set(levelIdx, g);
-      }
-      return g;
-    };
+  const floorGroupFor = (
+    byLevel: Map<number, THREE.Group>,
+    levelIdx: number,
+  ): THREE.Group => {
+    let g = byLevel.get(levelIdx);
+    if (!g) {
+      g = new THREE.Group();
+      g.name = `apartment_furniture_plate_${levelIdx}`;
+      g.userData.mammothPlateLevelIndex = levelIdx;
+      g.userData.mammothApartmentFurnitureProp = true;
+      byLevel.set(levelIdx, g);
+    }
+    return g;
+  };
 
-    for (const row of opts.conn.db.apartment_unit) {
+  const createBuildState = (): ApartmentFurnitureBuildState => ({
+    rows: [...opts.conn.db.apartment_unit].filter((row): row is ApartmentUnit => {
       const u = row as ApartmentUnit;
-      if (!(u.unitId.startsWith("unit_e_") || u.unitId.startsWith("unit_w_"))) continue;
+      return u.unitId.startsWith("unit_e_") || u.unitId.startsWith("unit_w_");
+    }),
+    nextIndex: 0,
+    byLevel: new Map<number, THREE.Group>(),
+    stashPickMeshes: [],
+  });
 
-      /** Matches server floor slab (`mn[1]` / `foot_y`). */
-      const floorY = u.footY;
-      const levelIdx = u.level;
-      const plate = floorGroupFor(levelIdx);
-      const furnitureYaw = u.bedYaw;
+  const buildUnitFurniture = (
+    build: ApartmentFurnitureBuildState,
+    u: ApartmentUnit,
+    readyTemplates: ApartmentFurnitureTemplates,
+  ) => {
+    /** Matches server floor slab (`mn[1]` / `foot_y`). */
+    const floorY = u.footY;
+    const levelIdx = u.level;
+    const plate = floorGroupFor(build.byLevel, levelIdx);
+    const furnitureYaw = u.bedYaw;
 
-      const unitGroup = new THREE.Group();
-      unitGroup.name = `apartment_furniture_${u.unitKey}`;
-      unitGroup.userData.mammothApartmentFurnitureProp = true;
-      unitGroup.userData.mammothPlateLevelIndex = levelIdx;
+    const unitGroup = new THREE.Group();
+    unitGroup.name = `apartment_furniture_${u.unitKey}`;
+    unitGroup.userData.mammothApartmentFurnitureProp = true;
+    unitGroup.userData.mammothPlateLevelIndex = levelIdx;
 
-      const w = clonePropScene(wardrobeTemplate, levelIdx);
-      w.scale.setScalar(WARDROBE_VIS_SCALE);
-      w.position.set(u.wardrobeX, 0, u.wardrobeZ);
-      w.rotation.y = furnitureYaw;
-      snapCloneBottomToWorldFloor(w, floorY);
-      keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
-      unitGroup.add(w);
+    const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
+    w.scale.setScalar(WARDROBE_VIS_SCALE);
+    w.position.set(u.wardrobeX, 0, u.wardrobeZ);
+    w.rotation.y = furnitureYaw;
+    snapCloneBottomToWorldFloor(w, floorY);
+    keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
+    unitGroup.add(w);
 
-      const f = clonePropScene(footlockerTemplate, levelIdx);
-      f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
-      f.position.set(u.footX, 0, u.footZ);
-      f.rotation.y = furnitureYaw;
-      snapCloneBottomToWorldFloor(f, floorY);
-      keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
-      f.updateMatrixWorld(true);
-      const footlockerBounds = new THREE.Box3().setFromObject(f);
-      const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-      const footlockerPickSize = new THREE.Vector3();
-      const footlockerPickCenter = new THREE.Vector3();
-      footlockerBounds.getSize(footlockerPickSize);
-      footlockerBounds.getCenter(footlockerPickCenter);
-      footlockerPick.name = `apartment_footlocker_pick:${u.unitKey}`;
-      footlockerPick.position.copy(footlockerPickCenter);
-      footlockerPick.scale.set(
-        Math.max(0.35, footlockerPickSize.x),
-        Math.max(0.25, footlockerPickSize.y),
-        Math.max(0.35, footlockerPickSize.z),
+    const f = clonePropScene(readyTemplates.footlocker, levelIdx);
+    f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
+    f.position.set(u.footX, 0, u.footZ);
+    f.rotation.y = furnitureYaw;
+    snapCloneBottomToWorldFloor(f, floorY);
+    keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
+    f.updateMatrixWorld(true);
+    const footlockerBounds = new THREE.Box3().setFromObject(f);
+    const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+    footlockerBounds.getSize(_footlockerPickSizeScratch);
+    footlockerBounds.getCenter(_footlockerPickCenterScratch);
+    footlockerPick.name = `apartment_footlocker_pick:${u.unitKey}`;
+    footlockerPick.position.copy(_footlockerPickCenterScratch);
+    footlockerPick.scale.set(
+      Math.max(0.35, _footlockerPickSizeScratch.x),
+      Math.max(0.25, _footlockerPickSizeScratch.y),
+      Math.max(0.35, _footlockerPickSizeScratch.z),
+    );
+    footlockerPick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
+    footlockerPick.userData.mammothSkipFloorGeometryMerge = true;
+    footlockerPick.userData.mammothApartmentFurnitureProp = true;
+    footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
+    footlockerPick.userData.mammothUnitInterior = true;
+    unitGroup.add(f);
+    unitGroup.add(footlockerPick);
+    build.stashPickMeshes.push(footlockerPick);
+
+    const b = clonePropScene(readyTemplates.bed, levelIdx);
+    b.scale.setScalar(BED_VIS_SCALE);
+    b.position.set(u.bedX, 0, u.bedZ);
+    b.rotation.y = u.bedYaw;
+    snapCloneBottomToWorldFloor(b, u.bedY);
+    keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
+    unitGroup.add(b);
+
+    unitGroup.updateMatrixWorld(true);
+    mergeGroupDescendantsByMaterial(unitGroup);
+
+    if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
+      const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
+      hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
+      hull.userData.mammothApartmentUnitBoundsDebug = true;
+      hull.userData.mammothApartmentFurnitureProp = true;
+      hull.userData.mammothUnitInterior = true;
+      hull.userData.mammothPlateLevelIndex = levelIdx;
+      hull.renderOrder = -1;
+      const sx = u.boundMaxX - u.boundMinX;
+      const sy = Math.max(0.02, u.boundMaxY - u.boundMinY);
+      const sz = u.boundMaxZ - u.boundMinZ;
+      hull.scale.set(sx, sy, sz);
+      hull.position.set(
+        (u.boundMinX + u.boundMaxX) * 0.5,
+        (u.boundMinY + u.boundMaxY) * 0.5,
+        (u.boundMinZ + u.boundMaxZ) * 0.5,
       );
-      footlockerPick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
-      footlockerPick.userData.mammothSkipFloorGeometryMerge = true;
-      footlockerPick.userData.mammothApartmentFurnitureProp = true;
-      footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
-      footlockerPick.userData.mammothUnitInterior = true;
-      unitGroup.add(f);
-      unitGroup.add(footlockerPick);
-      stashPickMeshes.push(footlockerPick);
-
-      const b = clonePropScene(bedTemplate, levelIdx);
-      b.scale.setScalar(BED_VIS_SCALE);
-      b.position.set(u.bedX, 0, u.bedZ);
-      b.rotation.y = u.bedYaw;
-      snapCloneBottomToWorldFloor(b, u.bedY);
-      keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
-      unitGroup.add(b);
-
-      unitGroup.updateMatrixWorld(true);
-      mergeGroupDescendantsByMaterial(unitGroup);
-
-      if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
-        const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
-        hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
-        hull.userData.mammothApartmentUnitBoundsDebug = true;
-        hull.userData.mammothApartmentFurnitureProp = true;
-        hull.userData.mammothUnitInterior = true;
-        hull.userData.mammothPlateLevelIndex = levelIdx;
-        hull.renderOrder = -1;
-        const sx = u.boundMaxX - u.boundMinX;
-        const sy = Math.max(0.02, u.boundMaxY - u.boundMinY);
-        const sz = u.boundMaxZ - u.boundMinZ;
-        hull.scale.set(sx, sy, sz);
-        hull.position.set(
-          (u.boundMinX + u.boundMaxX) * 0.5,
-          (u.boundMinY + u.boundMaxY) * 0.5,
-          (u.boundMinZ + u.boundMaxZ) * 0.5,
-        );
-        hull.frustumCulled = false;
-        unitGroup.add(hull);
-      }
-
-      for (const m of unitGroup.children) {
-        if (m instanceof THREE.Mesh) {
-          m.castShadow = false;
-          m.receiveShadow = false;
-        }
-      }
-
-      plate.add(unitGroup);
+      hull.frustumCulled = false;
+      unitGroup.add(hull);
     }
 
-    for (const g of byLevel.values()) {
+    for (const m of unitGroup.children) {
+      if (m instanceof THREE.Mesh) {
+        m.castShadow = false;
+        m.receiveShadow = false;
+      }
+    }
+
+    plate.add(unitGroup);
+  };
+
+  const finishBuild = (build: ApartmentFurnitureBuildState) => {
+    for (const g of build.byLevel.values()) {
       if (g.children.length === 0) continue;
       g.updateMatrixWorld(true);
       opts.buildingRoot.add(g);
@@ -332,8 +369,91 @@ export async function mountFpApartmentFurniture(opts: {
     }
 
     opts.buildingRoot.updateMatrixWorld(true);
+    stashPickMeshes.length = 0;
+    stashPickMeshes.push(...build.stashPickMeshes);
     opts.onRebuilt?.();
   };
+
+  const runRebuildSlice = () => {
+    rebuildRaf = 0;
+    if (disposed || !templates || !activeBuild) {
+      disposeBuildState(activeBuild);
+      rebuildRunning = false;
+      activeBuild = null;
+      return;
+    }
+
+    if (rebuildRequested) {
+      disposeBuildState(activeBuild);
+      activeBuild = createBuildState();
+      rebuildRequested = false;
+    }
+
+    const build = activeBuild;
+    const sliceStart = performance.now();
+    let processed = 0;
+
+    while (build.nextIndex < build.rows.length) {
+      buildUnitFurniture(build, build.rows[build.nextIndex]!, templates);
+      build.nextIndex += 1;
+      processed += 1;
+      if (
+        processed >= FURNITURE_REBUILD_MIN_UNITS_PER_SLICE &&
+        performance.now() - sliceStart >= FURNITURE_REBUILD_FRAME_BUDGET_MS
+      ) {
+        break;
+      }
+    }
+
+    if (build.nextIndex >= build.rows.length) {
+      finishBuild(build);
+      activeBuild = null;
+      rebuildRunning = false;
+      if (rebuildRequested) scheduleRebuild();
+      return;
+    }
+
+    rebuildRaf = requestAnimationFrame(runRebuildSlice);
+  };
+
+  const beginRebuild = () => {
+    if (disposed || !templates) return;
+    rebuildRunning = true;
+    rebuildRequested = false;
+    clearManaged();
+    activeBuild = createBuildState();
+    rebuildRaf = requestAnimationFrame(runRebuildSlice);
+  };
+
+  const scheduleRebuild = () => {
+    if (disposed) return;
+    rebuildRequested = true;
+    if (!templates || rebuildScheduled || rebuildRunning) return;
+    rebuildScheduled = true;
+    requestAnimationFrame(() => {
+      if (disposed) return;
+      rebuildScheduled = false;
+      beginRebuild();
+    });
+  };
+
+  void Promise.all([
+    loader.loadAsync(WARDROBE_URL),
+    loader.loadAsync(FOOTLOCKER_URL),
+    loader.loadAsync(BED_URL),
+  ])
+    .then(([wardrobeGltf, footGltf, bedGltf]) => {
+      if (disposed) return;
+      templates = {
+        wardrobe: wardrobeGltf.scene,
+        footlocker: footGltf.scene,
+        bed: bedGltf.scene,
+      };
+      scheduleRebuild();
+    })
+    .catch((err) => {
+      console.warn("[mountFpApartmentFurniture] failed to load furniture GLBs", err);
+    });
 
   const bumpApartmentUnit = () => scheduleRebuild();
   const bumpApartmentUnitIfPlacementChanged = (
@@ -349,8 +469,6 @@ export async function mountFpApartmentFurniture(opts: {
   opts.conn.db.apartment_unit.onInsert(bumpApartmentUnit);
   opts.conn.db.apartment_unit.onUpdate(bumpApartmentUnitIfPlacementChanged);
   opts.conn.db.apartment_unit.onDelete(bumpApartmentUnit);
-
-  rebuild();
 
   return {
     getStashPrompt: (playerPos, camera) => {
@@ -375,14 +493,17 @@ export async function mountFpApartmentFurniture(opts: {
       return null;
     },
     dispose: () => {
+      disposed = true;
+      if (rebuildRaf !== 0) {
+        cancelAnimationFrame(rebuildRaf);
+        rebuildRaf = 0;
+      }
       opts.conn.db.apartment_unit.removeOnInsert(bumpApartmentUnit);
       opts.conn.db.apartment_unit.removeOnUpdate(bumpApartmentUnitIfPlacementChanged);
       opts.conn.db.apartment_unit.removeOnDelete(bumpApartmentUnit);
-      for (const o of managed) {
-        opts.buildingRoot.remove(o);
-      }
-      managed.length = 0;
-      stashPickMeshes.length = 0;
+      clearManaged();
+      disposeBuildState(activeBuild);
+      activeBuild = null;
       stashPickGeometry.dispose();
       stashPickMaterial.dispose();
       unitBoundsDebugGeometry?.dispose();

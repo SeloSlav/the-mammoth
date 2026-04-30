@@ -58,9 +58,10 @@ const NO_SELECT: CSSProperties = {
 
 type Props = {
   conn: DbConnection;
+  activeStashUnitKey?: string | null;
 };
 
-export function MammothInventoryHud({ conn }: Props) {
+export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) {
   const { hotbar, inventory } = useMammothInventory(conn);
   const baseSlots = useMemo(() => ({ hotbar, inventory }), [hotbar, inventory]);
   const [optimisticSlots, setOptimisticSlots] = useState<typeof baseSlots | null>(null);
@@ -203,6 +204,21 @@ export function MammothInventoryHud({ conn }: Props) {
     [conn, gridsForPrediction, toInstanceId],
   );
 
+  const quickMovePlayerItemToStash = useCallback(
+    (pop: MammothPopulatedItem) => {
+      if (!activeStashUnitKey || document.body.classList.contains("item-dragging")) return;
+      try {
+        void conn.reducers.stashPushItem({
+          itemInstanceId: toInstanceId(pop),
+          unitKey: activeStashUnitKey,
+        });
+      } catch (err) {
+        console.warn("[MammothInventoryHud] quick move to stash failed", err);
+      }
+    },
+    [activeStashUnitKey, conn, toInstanceId],
+  );
+
   const quickMoveHotbarToInventory = useCallback(
     (pop: MammothPopulatedItem, fromHotbarIndex: number) => {
       if (document.body.classList.contains("item-dragging")) return;
@@ -246,14 +262,23 @@ export function MammothInventoryHud({ conn }: Props) {
           return;
         }
         const target = result.slot;
-        const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
-        if (predicted) setOptimisticSlots(predicted);
         if (target.type === "inventory") {
+          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
+          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.moveItemToInventory({
             itemInstanceId: instanceId,
             targetInventorySlot: target.index,
           });
+        } else if (target.type === "stash") {
+          if (!activeStashUnitKey) return;
+          void conn.reducers.stashPushItemToSlot({
+            itemInstanceId: instanceId,
+            unitKey: activeStashUnitKey,
+            targetStashSlot: target.index,
+          });
         } else {
+          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
+          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.moveItemToHotbar({
             itemInstanceId: instanceId,
             targetHotbarSlot: target.index,
@@ -263,7 +288,7 @@ export function MammothInventoryHud({ conn }: Props) {
         console.warn("[MammothInventoryHud] drop/move failed", err);
       }
     },
-    [conn, gridsForPrediction],
+    [activeStashUnitKey, conn, gridsForPrediction],
   );
 
   const onHotbarSlotClick = useCallback(
@@ -383,7 +408,11 @@ export function MammothInventoryHud({ conn }: Props) {
                       sourceSlot={slotInfo}
                       onDragStart={handleDragStart}
                       onDrop={handleDrop}
-                      onItemContextMenu={() => quickMoveInventoryToHotbar(pop, i)}
+                      onItemContextMenu={() =>
+                        activeStashUnitKey
+                          ? quickMovePlayerItemToStash(pop)
+                          : quickMoveInventoryToHotbar(pop, i)
+                      }
                       slotHover={{
                         onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
                         onMove: updateTooltipPositionFromHoverEvent,
@@ -462,7 +491,11 @@ export function MammothInventoryHud({ conn }: Props) {
                     onDragStart={handleDragStart}
                     onDrop={handleDrop}
                     onActivate={() => onHotbarSlotClick(index)}
-                    onItemContextMenu={() => quickMoveHotbarToInventory(pop, index)}
+                    onItemContextMenu={() =>
+                      activeStashUnitKey
+                        ? quickMovePlayerItemToStash(pop)
+                        : quickMoveHotbarToInventory(pop, index)
+                    }
                     slotHover={{
                       onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
                       onMove: updateTooltipPositionFromHoverEvent,

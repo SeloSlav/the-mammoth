@@ -1,6 +1,10 @@
 import * as THREE from "three";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { BuildingStairShaftSpec } from "@the-mammoth/world";
+import { DECAL_MANIFEST } from "./decalManifest.js";
 import {
   collectMeshesInSegment,
   findStairShaftSegment,
@@ -9,6 +13,13 @@ import {
   resolveDecalHitMesh,
 } from "./decalPlacementResolve.js";
 import { generateStairwellDecalPlacements } from "./stairwellDecalPlacements.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CLIENT_ROOT = resolve(__dirname, "../../..");
+
+function publicAssetPathFromUrl(url: string): string {
+  return resolve(CLIENT_ROOT, "public", url.replace(/^\//, ""));
+}
 
 describe("decalPlacementResolve", () => {
   it("finds stair segment by shaft id and plate level index", () => {
@@ -100,11 +111,24 @@ describe("generateStairwellDecalPlacements", () => {
     const a = generateStairwellDecalPlacements(root, [spec]);
     const b = generateStairwellDecalPlacements(root, [spec]);
     expect(a).toEqual(b);
-    expect(a.length).toBe(spec.storeyCount * 3);
+    expect(a.length).toBe(spec.storeyCount * 2);
     for (const p of a) {
       expect(p.stairShaftId).toBe(spec.id);
       expect(p.mode).toBe("projected");
       expect(p.category).toBe("graffiti");
+    }
+  });
+});
+
+describe("DECAL_MANIFEST", () => {
+  it("points graffiti entries at public assets that ship with the client", () => {
+    for (const entry of DECAL_MANIFEST) {
+      if (entry.category !== "graffiti") continue;
+
+      expect(
+        existsSync(publicAssetPathFromUrl(entry.url)),
+        `missing public decal asset for ${entry.id}: ${entry.url}`,
+      ).toBe(true);
     }
   });
 });
