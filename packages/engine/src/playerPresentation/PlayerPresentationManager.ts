@@ -126,7 +126,7 @@ export class PlayerPresentationManager {
       this._keepIds.add(id);
       let rp = this.remotes.get(id);
       if (!rp) {
-        rp = new RemotePlayerPresenter(this.scene, this.modelRegistry);
+        rp = new RemotePlayerPresenter(this.scene);
         this.remotes.set(id, rp);
       }
       rp.updateFromSnapshot(snap, dt, nowMs);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { estimateStoreyFromFeetY } from "@the-mammoth/world";
+import { estimateStoreyFromFeetY, type BuildingStairShaftSpec } from "@the-mammoth/world";
 import {
   fpBuildingExteriorViewShouldRevealFullStack,
   fpCameraInsideBuildingFootprintXZ,
@@ -24,7 +24,7 @@ type FpStairShaftVisibilityBounds = {
  * when camera or feet could plausibly see through entries/glass. Keep this tight so distant sidewalk
  * views do not pay for unit plaster / shaft fill; doorway peek still has raw AABB + this pad.
  */
-const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 6;
+const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 4;
 
 /**
  * Cached applied floor-band (after smoothing). Raw target can jump from full-stack → interior in
@@ -40,6 +40,45 @@ const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 3;
 const STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER = 1;
 const STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER = 2;
 const STAIR_SHAFT_BOUNDS_MARGIN_M = 0.2;
+
+/**
+ * {@link stairShaftInteriorLightBoundsFromSpec} insets XZ inward for mood lights; corridor door
+ * thresholds sit **outside** that hull while still needing stair segments above for occlusion.
+ */
+const STAIR_SHAFT_PLATE_PROBE_XZ_PAD_M = 3.75;
+/** Match `fpSessionWorldMount` stair light vertical padding — same shaft span probe. */
+const STAIR_SHAFT_PLATE_PROBE_Y_PAD_BOTTOM_M = 0.55;
+const STAIR_SHAFT_PLATE_PROBE_Y_PAD_TOP_M = 3.5;
+
+/**
+ * True when `(x,y,z)` is inside stair shaft hull expanded for plate visibility (not lighting).
+ */
+export function fpPointNearStairShaftForPlateBand(
+  x: number,
+  y: number,
+  z: number,
+  specs: readonly BuildingStairShaftSpec[],
+): boolean {
+  for (let i = 0; i < specs.length; i++) {
+    const s = specs[i]!;
+    const hw = Math.max(0.05, s.sx * 0.5 + STAIR_SHAFT_PLATE_PROBE_XZ_PAD_M);
+    const hd = Math.max(0.05, s.sz * 0.5 + STAIR_SHAFT_PLATE_PROBE_XZ_PAD_M);
+    const minY = s.bottomY - STAIR_SHAFT_PLATE_PROBE_Y_PAD_BOTTOM_M;
+    const maxY =
+      s.bottomY + s.storeyCount * s.storeySpacing + STAIR_SHAFT_PLATE_PROBE_Y_PAD_TOP_M;
+    if (
+      x >= s.px - hw &&
+      x <= s.px + hw &&
+      y >= minY &&
+      y <= maxY &&
+      z >= s.pz - hd &&
+      z <= s.pz + hd
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export type FpSessionFloorPlateVisibilityOpts = {
   camera: THREE.PerspectiveCamera;
@@ -59,6 +98,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
     "getCabOccludedViewStorey" | "getFloorVisibilityBand" | "isInsideAnyCabHud"
   >;
   stairShaftInteriorLightBounds: readonly FpStairShaftVisibilityBounds[];
+  stairShaftSpecs: readonly BuildingStairShaftSpec[];
   /** Predicted feet position — same reference as session `pos`. */
   feetPos: THREE.Vector3;
   /** Writable scratch filled each visibility pass; shared with downstream frame logic. */
@@ -81,6 +121,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     apartmentFurnitureInteriorMeshes,
     fpElevators,
     stairShaftInteriorLightBounds,
+    stairShaftSpecs,
     feetPos,
     floorVisCamWorld,
     floorVisCamDir,
@@ -216,7 +257,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
     const insideStairShaft =
       pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z) ||
-      pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z);
+      pointInsideStairShaft(floorVisCamWorld.x, floorVisCamWorld.y, floorVisCamWorld.z) ||
+      fpPointNearStairShaftForPlateBand(feetPos.x, feetPos.y, feetPos.z, stairShaftSpecs) ||
+      fpPointNearStairShaftForPlateBand(
+        floorVisCamWorld.x,
+        floorVisCamWorld.y,
+        floorVisCamWorld.z,
+        stairShaftSpecs,
+      );
     if (insideStairShaft) {
       const stairLocalBand = fpStairShaftLocalVisibilityBand({
         globalLo: band.lo,

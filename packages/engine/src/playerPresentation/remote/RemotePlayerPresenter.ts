@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import type { IModelLoadRegistry } from "@the-mammoth/assets";
 import type { LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
@@ -325,7 +324,7 @@ export class RemotePlayerPresenter {
   readonly root: THREE.Group;
   private readonly presenter: WorldPlayerBodyPresenter;
 
-  constructor(scene: THREE.Scene, _modelRegistry: IModelLoadRegistry) {
+  constructor(scene: THREE.Scene) {
     this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true });
     this.root = this.presenter.root;
   }

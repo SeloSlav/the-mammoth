@@ -406,6 +406,7 @@ export async function mountFpSession(
       apartmentFurnitureInteriorMeshes,
       fpElevators,
       stairShaftInteriorLightBounds,
+      stairShaftSpecs,
       feetPos: pos,
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
