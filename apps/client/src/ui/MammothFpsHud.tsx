@@ -4,6 +4,12 @@ import {
   getFpSessionDisplayedFps,
   subscribeFpSessionDisplayedFps,
 } from "../game/fpSession/fpSessionFpsDisplay";
+import { requestGameAudioPrime } from "../game/audio/gameAudioPrime";
+import {
+  getFpBackgroundMusicEnabled,
+  subscribeFpBackgroundMusicEnabled,
+  toggleFpBackgroundMusicEnabled,
+} from "../game/audio/fpBackgroundMusicState";
 import {
   subscribeFpPerf,
   computeFpPerfStats,
@@ -18,6 +24,7 @@ import {
   THEME_TEXT_MUTED,
   THEME_TEXT_FAINT,
   THEME_ACCENT,
+  THEME_FOCUS_RING,
   THEME_SUCCESS,
   THEME_ERROR,
   UI_FONT_MONO,
@@ -103,6 +110,11 @@ export function MammothFpsHud() {
   const [stats, setStats] = useState<FpPerfStats | null>(null);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backgroundMusicEnabled = useSyncExternalStore(
+    subscribeFpBackgroundMusicEnabled,
+    getFpBackgroundMusicEnabled,
+    getFpBackgroundMusicEnabled,
+  );
 
   // Recompute stats whenever the perf store notifies (throttled to ~10 fps).
   useEffect(() => {
@@ -132,6 +144,13 @@ export function MammothFpsHud() {
       console.info("[MammothFpsHud] copy fallback:\n" + text);
     }
   }, [windowSec]);
+
+  const handleAudioToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const willEnable = !getFpBackgroundMusicEnabled();
+    toggleFpBackgroundMusicEnabled();
+    if (willEnable) void requestGameAudioPrime();
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Styles (shared)
@@ -172,6 +191,25 @@ export function MammothFpsHud() {
     backdropFilter: "blur(8px)",
     WebkitBackdropFilter: "blur(8px)",
     minWidth: 310,
+  };
+
+  const audioButtonStyle: React.CSSProperties = {
+    marginTop: 6,
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "5px 10px",
+    borderRadius: 8,
+    border: `1px solid ${backgroundMusicEnabled ? THEME_ACCENT : THEME_CARD_BORDER}`,
+    background: backgroundMusicEnabled ? THEME_FOCUS_RING : THEME_CARD_BG,
+    color: backgroundMusicEnabled ? THEME_TEXT_PRIMARY : THEME_TEXT_FAINT,
+    cursor: "pointer",
+    fontFamily: UI_FONT_SANS,
+    fontSize: 11,
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
   };
 
   const sectionHeaderStyle: React.CSSProperties = {
@@ -232,6 +270,19 @@ export function MammothFpsHud() {
           {open ? "▲" : "▼"}
         </span>
       </div>
+
+      <button
+        type="button"
+        aria-pressed={backgroundMusicEnabled}
+        onClick={handleAudioToggle}
+        style={audioButtonStyle}
+        title={backgroundMusicEnabled ? "Turn background music off" : "Turn background music on"}
+      >
+        <span>Audio</span>
+        <span style={{ ...monoStyle, color: backgroundMusicEnabled ? THEME_ACCENT : THEME_TEXT_FAINT }}>
+          {backgroundMusicEnabled ? "ON" : "OFF"}
+        </span>
+      </button>
 
       {/* Expanded panel */}
       {open && (

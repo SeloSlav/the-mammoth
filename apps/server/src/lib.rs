@@ -127,6 +127,8 @@ pub fn respawn_player(ctx: &ReducerContext, mode: u8) {
     let yaw = sp.yaw;
     ctx.db.player_pose().identity().update(sp);
     movement::reset_player_input_row(ctx, id, yaw);
+    inventory::reset_player_loadout_for_respawn(ctx, id);
+    loadout::reset_player_active_hotbar_slot_to_first(ctx, id);
     player_vitals::reset_player_vitals_for_respawn(ctx, id);
     world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

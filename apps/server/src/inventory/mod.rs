@@ -13,7 +13,7 @@ use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::world_sound;
 
-pub(crate) use starting_item::ensure_starter_loadout;
+pub(crate) use starting_item::{ensure_starter_loadout, reset_player_loadout_for_respawn};
 
 pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
 pub(crate) const NUM_PLAYER_HOTBAR_SLOTS: u8 = 6;
@@ -42,6 +42,24 @@ pub(super) fn player_item_count(ctx: &ReducerContext, owner: Identity) -> usize 
             )
         })
         .count()
+}
+
+/// Removes every hotbar + backpack row for `owner`. Stash rows are untouched.
+pub(crate) fn delete_all_player_inventory_and_hotbar_items(ctx: &ReducerContext, owner: Identity) {
+    let to_delete: Vec<u64> = ctx
+        .db
+        .inventory_item()
+        .iter()
+        .filter_map(|i| match &i.location {
+            ItemLocation::Hotbar(h) if h.owner_id == owner => Some(i.instance_id),
+            ItemLocation::Inventory(inv) if inv.owner_id == owner => Some(i.instance_id),
+            _ => None,
+        })
+        .collect();
+    let inv = ctx.db.inventory_item();
+    for instance_id in to_delete {
+        inv.instance_id().delete(instance_id);
+    }
 }
 
 pub(crate) const NUM_STASH_SLOTS: u16 = 24;

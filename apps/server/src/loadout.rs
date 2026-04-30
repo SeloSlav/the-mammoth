@@ -26,6 +26,16 @@ pub fn ensure_player_active_hotbar_row(ctx: &ReducerContext, id: Identity) {
     });
 }
 
+/// After a full inventory wipe (e.g. respawn), snap the rail to the first hotbar slot.
+pub fn reset_player_active_hotbar_slot_to_first(ctx: &ReducerContext, id: Identity) {
+    ensure_player_active_hotbar_row(ctx, id);
+    let Some(mut row) = ctx.db.player_active_hotbar().identity().find(&id) else {
+        return;
+    };
+    row.slot_index = 0;
+    ctx.db.player_active_hotbar().identity().update(row);
+}
+
 #[spacetimedb::reducer]
 pub fn set_active_hotbar_slot(ctx: &ReducerContext, slot_index: u8) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {

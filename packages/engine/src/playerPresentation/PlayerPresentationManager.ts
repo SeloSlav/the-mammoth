@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mammothCatalogGlbCandidates } from "@the-mammoth/assets";
 import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
 import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { ALL_WEAPON_DEFINITIONS, getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
+import { getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
 import type { WeaponDefinition } from "../weapons/weaponTypes.js";
 import {
   createGltfModelLoadRegistry,
@@ -41,7 +41,11 @@ export class PlayerPresentationManager {
   private readonly local: LocalFirstPersonPresenter;
   private readonly localMirror: LocalMirrorPlayerPresenter;
   private readonly remotes = new Map<string, RemotePlayerPresenter>();
-  private lastLocalEquipped: HeldItemId;
+  /** Equip id currently shown on the local FP weapon mesh (may trail gameplay by a frame while a GLB loads). */
+  private lastAppliedLocalWeaponVisualEquip: HeldItemId;
+  private latestDesiredLocalEquip: HeldItemId;
+  /** True while {@link drainLocalWeaponGlbs} owns the preload chain — never await inside `update()`. */
+  private localWeaponGlbDrainRunning = false;
   /** Pooled set — cleared and reused each update() to avoid per-frame allocation. */
   private readonly _keepIds = new Set<string>();
 
@@ -56,30 +60,31 @@ export class PlayerPresentationManager {
     this.modelRegistry = modelRegistry;
     this.local = local;
     this.localMirror = localMirror;
-    this.lastLocalEquipped = initialEquipped;
+    this.lastAppliedLocalWeaponVisualEquip = initialEquipped;
+    this.latestDesiredLocalEquip = initialEquipped;
   }
 
   /**
-   * Preload weapon GLBs, build the local FP viewmodel (hand + weapon), then return the manager.
+   * Preload the FP hand + remote body GLBs, optionally the **initial** equipped weapon, then build
+   * the local viewmodel. Other registered weapons load on first equip.
    */
   static async create(opts: PlayerPresentationManagerOptions): Promise<PlayerPresentationManager> {
     const modelRegistry = opts.modelRegistry ?? createGltfModelLoadRegistry();
     const initialEquipped = opts.initialEquippedPrimary ?? "unarmed";
     const initialDef = getWeaponDefinitionForEquippedPrimary(initialEquipped) ?? null;
-    const preloadWeapons =
-      modelRegistry instanceof GltfModelLoadRegistry
-        ? ALL_WEAPON_DEFINITIONS.map((d) =>
-            modelRegistry.preloadWithUriCandidates(
-              d.modelRef as Extract<ModelRef, { kind: "gltf" }>,
-              mammothCatalogGlbCandidates(d.id),
-            ),
+    const preloadInitialWeapon =
+      initialDef &&
+      (modelRegistry instanceof GltfModelLoadRegistry
+        ? modelRegistry.preloadWithUriCandidates(
+            initialDef.modelRef as Extract<ModelRef, { kind: "gltf" }>,
+            mammothCatalogGlbCandidates(initialDef.id),
           )
-        : ALL_WEAPON_DEFINITIONS.map((d) => modelRegistry.preload(d.modelRef));
+        : modelRegistry.preload(initialDef.modelRef));
 
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
       preloadRemotePlayerBody(),
-      ...preloadWeapons,
+      ...(preloadInitialWeapon ? [preloadInitialWeapon] : []),
     ]);
     const local = new LocalFirstPersonPresenter({
       viewModelParent: opts.fpViewModelParent,
@@ -104,11 +109,15 @@ export class PlayerPresentationManager {
     remoteSnapshots: ReadonlyMap<string, ReplicatedPlayerSnapshot>,
     nowMs: number,
   ): void {
-    if (localState.equippedPrimary !== this.lastLocalEquipped) {
-      this.lastLocalEquipped = localState.equippedPrimary;
-      this.local.setWeaponDefinition(
-        getWeaponDefinitionForEquippedPrimary(localState.equippedPrimary) ?? null,
-      );
+    this.latestDesiredLocalEquip = localState.equippedPrimary;
+    if (
+      !this.localWeaponGlbDrainRunning &&
+      this.latestDesiredLocalEquip !== this.lastAppliedLocalWeaponVisualEquip
+    ) {
+      this.localWeaponGlbDrainRunning = true;
+      void this.drainLocalWeaponGlbs().finally(() => {
+        this.localWeaponGlbDrainRunning = false;
+      });
     }
     this.local.update(localState, dt);
     this.localMirror.updateFromLocalState(localState, dt);
@@ -127,6 +136,35 @@ export class PlayerPresentationManager {
         rp.dispose(this.scene);
         this.remotes.delete(id);
       }
+    }
+  }
+
+  private async drainLocalWeaponGlbs(): Promise<void> {
+    while (this.latestDesiredLocalEquip !== this.lastAppliedLocalWeaponVisualEquip) {
+      const targetEquip = this.latestDesiredLocalEquip;
+      const wantDef = getWeaponDefinitionForEquippedPrimary(targetEquip) ?? null;
+      let visualDef: typeof wantDef = wantDef;
+      try {
+        if (wantDef) {
+          const reg = this.modelRegistry;
+          if (reg instanceof GltfModelLoadRegistry) {
+            await reg.preloadWithUriCandidates(
+              wantDef.modelRef as Extract<ModelRef, { kind: "gltf" }>,
+              mammothCatalogGlbCandidates(wantDef.id),
+            );
+          } else {
+            await reg.preload(wantDef.modelRef);
+          }
+        }
+      } catch (err) {
+        console.error(`[PlayerPresentationManager] weapon GLB preload failed (${targetEquip})`, err);
+        visualDef = null;
+      }
+      if (this.latestDesiredLocalEquip !== targetEquip) {
+        continue;
+      }
+      this.local.setWeaponDefinition(visualDef);
+      this.lastAppliedLocalWeaponVisualEquip = targetEquip;
     }
   }
 

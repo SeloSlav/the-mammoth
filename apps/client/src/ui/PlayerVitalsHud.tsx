@@ -5,6 +5,8 @@ import type { PlayerVitals } from "../module_bindings/types";
 const VITAL_MAX = 100;
 /** Aligned with Broth & Bullets low-need UX on a 0–100 scale. */
 const LOW_NEED = 20;
+/** Lift above baseline so bottom-right embeds don’t overlap; ~widget height + small gap (widget ≈42px). */
+const BOTTOM_CORNER_WIDGET_CLEARANCE_PX = 48;
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",
@@ -118,7 +120,7 @@ export function PlayerVitalsHud({ conn }: Props) {
     return null;
   }
 
-  const bottom = "max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px))";
+  const bottom = `calc(max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px)) + ${BOTTOM_CORNER_WIDGET_CLEARANCE_PX}px)`;
   const right = "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))";
 
   return (

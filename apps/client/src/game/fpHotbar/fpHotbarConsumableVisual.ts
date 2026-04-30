@@ -66,15 +66,9 @@ export class FpHotbarConsumableVisual {
     await Promise.all(defIds.map((defId) => this.ensurePreloaded(defId)));
   }
 
-  syncSelected(defId: string | null, gripAnchor: THREE.Object3D | undefined): void {
-    if (!gripAnchor) {
-      this.dispose();
-      return;
-    }
-    if (defId === this.currentDefId && this.currentRoot?.parent === gripAnchor) return;
-    this.clearCurrent();
-    this.currentDefId = defId;
-    if (!defId) return;
+  private mountConsumableCloneOnGrip(defId: string, gripAnchor: THREE.Object3D): void {
+    if (this.currentDefId !== defId) return;
+    if (this.currentRoot?.parent === gripAnchor) return;
     const template = this.templateByDefId.get(defId);
     if (!template) return;
     const mount = this.mountByDefId.get(defId) ?? DEFAULT_CONSUMABLE_MOUNT;
@@ -86,6 +80,26 @@ export class FpHotbarConsumableVisual {
     root.add(template.clone(true));
     gripAnchor.add(root);
     this.currentRoot = root;
+  }
+
+  syncSelected(defId: string | null, gripAnchor: THREE.Object3D | undefined): void {
+    if (!gripAnchor) {
+      this.dispose();
+      return;
+    }
+    if (defId === this.currentDefId && this.currentRoot?.parent === gripAnchor) return;
+    this.clearCurrent();
+    this.currentDefId = defId;
+    if (!defId) return;
+    const template = this.templateByDefId.get(defId);
+    if (!template) {
+      void this.ensurePreloaded(defId).then(() => {
+        if (this.currentDefId !== defId) return;
+        this.mountConsumableCloneOnGrip(defId, gripAnchor);
+      });
+      return;
+    }
+    this.mountConsumableCloneOnGrip(defId, gripAnchor);
   }
 
   dispose(): void {

@@ -82,10 +82,7 @@ import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpDev/fpViewmodelAuthoringOverlay.js";
 import { mountWeaponPresentationDevHotReload } from "./fpDev/weaponPresentationDevHotReload.js";
 import { mountWorldContentDevReload } from "./fpDev/fpWorldContentDevReload.js";
-import {
-  getMammothHotbarInstantConsumeDefIds,
-  getMammothItemDef,
-} from "../inventory/mammothItemCatalog";
+import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
 import {
   primeHotbarConsumeAudio,
@@ -93,6 +90,12 @@ import {
   registerHotbarConsumePrimeAudio,
   unregisterHotbarConsumeLocalAudio,
 } from "./fpHotbar/hotbarConsumeLocalAudio.js";
+import { registerGameAudioPrime } from "./audio/gameAudioPrime.js";
+import { FpBackgroundMusic } from "./audio/fpBackgroundMusic.js";
+import {
+  getFpBackgroundMusicEnabled,
+  subscribeFpBackgroundMusicEnabled,
+} from "./audio/fpBackgroundMusicState.js";
 import { runFpHotbarInstantConsume } from "./fpHotbar/fpHotbarConsume.js";
 import {
   droppedItemIsWorldAnchor,
@@ -280,7 +283,6 @@ export async function mountFpSession(
     window.location.reload();
   });
   const hotbarConsumableVisual = new FpHotbarConsumableVisual();
-  await hotbarConsumableVisual.preload(getMammothHotbarInstantConsumeDefIds());
 
   /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
   const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
@@ -488,6 +490,16 @@ export async function mountFpSession(
   let worldAudioReady = false;
   const cabMotionAudio = new ElevatorCabMotionAudio(() => camera);
   let cabMotionAudioReady = false;
+  const _backgroundAudioWorldPos = new THREE.Vector3();
+  const backgroundMusic = new FpBackgroundMusic(() => {
+    camera.updateMatrixWorld(true);
+    camera.getWorldPosition(_backgroundAudioWorldPos);
+    return _backgroundAudioWorldPos;
+  });
+  backgroundMusic.setEnabled(getFpBackgroundMusicEnabled());
+  const unsubscribeBackgroundMusicEnabled = subscribeFpBackgroundMusicEnabled(() => {
+    backgroundMusic.setEnabled(getFpBackgroundMusicEnabled());
+  });
 
   /** Subscribes immediately with pose AOI — must not wait for audio unlock: inserts are only replicated for active `world_sound_event` queries. */
   const refreshWorldSoundSubscription = () => {
@@ -501,8 +513,10 @@ export async function mountFpSession(
     await worldAudio.attachSharedContext(actx, localAudio.getFootstepBuffers());
     worldAudioReady = true;
     cabMotionAudioReady = await cabMotionAudio.attachSharedContext(actx);
+    void backgroundMusic.attachSharedContext(actx);
     refreshWorldSoundSubscription();
   };
+  registerGameAudioPrime(attachSpatialWorldAudio);
 
   /**
    * Browsers often skip `keyup` when the tab/window loses focus — keys (including Alt) stay in
@@ -1050,8 +1064,11 @@ export async function mountFpSession(
     unsubHotbarRail();
     cabMotionAudio.dispose();
     cabMotionAudioReady = false;
+    backgroundMusic.dispose();
+    unsubscribeBackgroundMusicEnabled();
     worldAudio.dispose();
     worldAudioReady = false;
+    registerGameAudioPrime(null);
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
     hotbarConsumableVisual.dispose();
