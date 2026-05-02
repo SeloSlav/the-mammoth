@@ -11,6 +11,7 @@ import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
 import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothCraftingHud } from "./MammothCraftingHud";
+import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { MammothToastHud } from "./MammothToastHud";
 import { MammothChatHud } from "./MammothChatHud";
@@ -91,7 +92,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
           </div>
           <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
             {
-              "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory · B craft · Enter chat"
+              "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory · B craft · M debug · Enter chat"
             }
           </div>
           <div style={{ marginTop: 8, pointerEvents: "auto" }}>
@@ -112,6 +113,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
             </button>
           </div>
         </div>
+        <MammothDebugMenuHud />
         {conn ? <MammothCraftingHud conn={conn} /> : null}
         {conn ? <MammothToastHud conn={conn} /> : null}
         {conn ? <MammothInventoryHud conn={conn} activeStashUnitKey={stashUnitKey} /> : null}

@@ -96,6 +96,7 @@ export function installFpSessionDevDebugApis(
   ) => void;
   probeWallHit: (maxDistanceM?: number) => unknown;
   tickElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
+  getElevDebugEnabled: () => boolean;
   dispose: () => void;
 } {
   const { playerPos: pos, camera, buildingRoot, building, staticCollisionIndex } = deps;
@@ -884,6 +885,7 @@ export function installFpSessionDevDebugApis(
   return {
     doorDebugState,
     wallProbeState,
+    getElevDebugEnabled: () => __mmElevDebugState.enabled,
     logDoorDebugFrame,
     logDoorDebugReconcile,
     probeWallHit,

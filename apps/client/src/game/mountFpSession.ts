@@ -46,6 +46,10 @@ import {
   type FpSessionMoveIntentQueue,
 } from "./fpSession/fpSessionLocalPrediction.js";
 import { installFpSessionDevDebugApis } from "./fpSession/fpSessionDevDebugApis.js";
+import {
+  registerFpDebugMenuSessionSnapshot,
+  unregisterFpDebugMenuSessionSnapshot,
+} from "./fpDebugMenuSessionBridge.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
 import { createFpSessionStaticWorld } from "./fpSession/fpSessionWorldMount.js";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSession/fpSessionRemotePoseFeed.js";
@@ -487,6 +491,7 @@ export async function mountFpSession(
   const {
     doorDebugState: __mmDoorDebugState,
     wallProbeState: __mmWallProbeState,
+    getElevDebugEnabled,
     logDoorDebugFrame,
     logDoorDebugReconcile,
     probeWallHit,
@@ -501,6 +506,12 @@ export async function mountFpSession(
     fpApartmentDoors,
     fpElevators,
   });
+
+  registerFpDebugMenuSessionSnapshot(() => ({
+    doorDebugEnabled: __mmDoorDebugState.enabled,
+    wallProbeEnabled: __mmWallProbeState.enabled,
+    elevDebugEnabled: getElevDebugEnabled(),
+  }));
 
   const { _mainStepOpts, _elevSupportEval, simulatePredictedPlayerStep, reconcileLocalPredictionToServer } =
     wireFpSessionLocomotionPrediction({
@@ -734,11 +745,14 @@ export async function mountFpSession(
   const mammothCraftingOpen = () =>
     document.querySelector('[data-mammoth-crafting="open"]') !== null;
 
+  const mammothDebugMenuOpen = () =>
+    document.querySelector('[data-mammoth-debug-menu="open"]') !== null;
+
   /** Same `DigitN` / slot within debounce window — ignored unless instant-consume or same-slot unequip. */
   const digitKeyDebounce = { code: "", at: 0, slot: -1 };
 
   const onWheelHotbar = (e: WheelEvent) => {
-    if (mammothInventoryOpen() || mammothCraftingOpen() || isTextInputFocused()) return;
+    if (mammothInventoryOpen() || mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused()) return;
     if (document.pointerLockElement !== canvas) return;
     if (e.deltaY === 0) return;
     const target = e.target;
@@ -769,7 +783,7 @@ export async function mountFpSession(
       e.preventDefault();
       toggleFpSessionGameUiHidden();
     }
-    if (!isTextInputFocused() && !mammothInventoryOpen() && !mammothCraftingOpen()) {
+    if (!isTextInputFocused() && !mammothInventoryOpen() && !mammothCraftingOpen() && !mammothDebugMenuOpen()) {
       let n = -1;
       if (e.code.startsWith("Digit")) {
         n = Number.parseInt(e.code.slice(5), 10);
@@ -846,6 +860,7 @@ export async function mountFpSession(
       !e.repeat &&
       !mammothInventoryOpen() &&
       !mammothCraftingOpen() &&
+      !mammothDebugMenuOpen() &&
       !isTextInputFocused()
     ) {
       e.preventDefault();
@@ -1010,7 +1025,7 @@ export async function mountFpSession(
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
   const fpInteractInputBlocked = () =>
-    mammothInventoryOpen() || mammothCraftingOpen() || isTextInputFocused();
+    mammothInventoryOpen() || mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
 
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,
@@ -1113,6 +1128,7 @@ export async function mountFpSession(
     fpElevators.dispose();
     fpApartmentFurniture.dispose();
     fpApartmentDoors.dispose();
+    unregisterFpDebugMenuSessionSnapshot();
     disposeFpSessionDevDebug();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
