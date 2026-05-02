@@ -10,12 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  WorldLootRefresh,
-} from "./types";
-
 export default {
-  get arg() {
-    return WorldLootRefresh;
-  },
+  recipeId: __t.u8(),
 };

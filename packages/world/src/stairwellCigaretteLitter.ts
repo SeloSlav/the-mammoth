@@ -3,17 +3,49 @@ import { ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER } from "./featureFlags.js";
 import type { StairCornerLanding, StairSwitchbackLayout } from "./stairWellGeometry.js";
 import { loadPropTemplate } from "./stairWellLandingProps.js";
 
-/** FP client URL; same origin as other stairwell props. */
+/** FP client URL; legacy single-cigarette litter (included in multi-variant litter). */
 export const STAIRWELL_CIGARETTE_MODEL_URL = "/static/models/objects/used-cigarette.glb";
 
-/**
- * After uniform scale, the mesh's longest axis is about this many meters (realistic litter size).
- */
-const CIGARETTE_TARGET_MAX_EXTENT_M = 0.08;
+type StairwellLitterVariantSpec = {
+  readonly id: string;
+  readonly modelUrl: string;
+  /** Longest local bbox axis is scaled so it is about this many meters in world units. */
+  readonly targetMaxExtentM: number;
+  /** Sampling weight vs other variants (relative; normalized after load failures). */
+  readonly weight: number;
+};
+
+/** Small trash props scattered on stair landings / tread tops (weighted random placement). */
+const STAIRWELL_LITTER_VARIANTS: readonly StairwellLitterVariantSpec[] = [
+  {
+    id: "cigarette",
+    modelUrl: STAIRWELL_CIGARETTE_MODEL_URL,
+    targetMaxExtentM: 0.08,
+    weight: 4,
+  },
+  {
+    id: "pack",
+    modelUrl: "/static/models/objects/empty-cigarette-pack.glb",
+    targetMaxExtentM: 0.12,
+    weight: 2,
+  },
+  {
+    id: "bottle",
+    modelUrl: "/static/models/objects/empty-beer-bottle.glb",
+    targetMaxExtentM: 0.28,
+    weight: 2,
+  },
+  {
+    id: "can",
+    modelUrl: "/static/models/objects/empty-beer-can-ozujsko.glb",
+    targetMaxExtentM: 0.13,
+    weight: 2,
+  },
+];
 
 /** Inclusive random count per stair segment (storey); placements may reuse treads/landings. */
-const MIN_CIGARETTES_PER_STAIR_SEGMENT = 5;
-const MAX_CIGARETTES_PER_STAIR_SEGMENT = 10;
+const MIN_LITTER_PER_STAIR_SEGMENT = 5;
+const MAX_LITTER_PER_STAIR_SEGMENT = 10;
 
 const _instDummy = new THREE.Object3D();
 const _instLocal = new THREE.Matrix4();
@@ -21,22 +53,43 @@ const _instWorld = new THREE.Matrix4();
 const _instSegInv = new THREE.Matrix4();
 const _instScratch = new THREE.Matrix4();
 
-/** Instance origins live in segment space; pad (m) expands frustum sphere for cig extent + scale. */
-const LITTER_INSTANCE_BOUNDS_PAD_M = 0.14;
+type LoadedLitterVariant = {
+  id: string;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  scaleToWorld: number;
+  /** Extra radius so frustum sphere covers scaled mesh around each instance origin. */
+  frustumOriginPadM: number;
+  weight: number;
+};
 
-function pushCigaretteInstanceInSegmentSpace(args: {
+function computeScaleToWorld(geometry: THREE.BufferGeometry, targetMaxExtentM: number): number {
+  geometry.computeBoundingBox();
+  const bb = geometry.boundingBox;
+  if (!bb || bb.isEmpty()) return 0.05;
+  const dx = bb.max.x - bb.min.x;
+  const dy = bb.max.y - bb.min.y;
+  const dz = bb.max.z - bb.min.z;
+  const longest = Math.max(dx, dy, dz);
+  if (longest < 1e-8) return 0.05;
+  return THREE.MathUtils.clamp(targetMaxExtentM / longest, 0.0005, 0.5);
+}
+
+function pushLitterInstanceInSegmentSpace(args: {
   segInv: THREE.Matrix4;
   parentWorld: THREE.Matrix4;
   lx: number;
   ly: number;
   lz: number;
-  yaw: number;
+  yawRad: number;
+  pitchRad: number;
+  rollRad: number;
   uniformScale: number;
   out: THREE.Matrix4[];
 }): void {
-  const { segInv, parentWorld, lx, ly, lz, yaw, uniformScale, out } = args;
+  const { segInv, parentWorld, lx, ly, lz, yawRad, pitchRad, rollRad, uniformScale, out } = args;
   _instDummy.position.set(lx, ly, lz);
-  _instDummy.rotation.set(0, yaw, 0, "XYZ");
+  _instDummy.rotation.set(pitchRad, yawRad, rollRad, "XYZ");
   _instDummy.scale.setScalar(uniformScale);
   _instDummy.updateMatrix();
   _instWorld.copy(parentWorld).multiply(_instDummy.matrix);
@@ -44,7 +97,11 @@ function pushCigaretteInstanceInSegmentSpace(args: {
   out.push(_instLocal.clone());
 }
 
-function setInstancedLitterBoundingSphere(inst: THREE.InstancedMesh, count: number): void {
+function setInstancedLitterBoundingSphere(
+  inst: THREE.InstancedMesh,
+  count: number,
+  originPadM: number,
+): void {
   if (count <= 0) return;
   let minX = Infinity;
   let minY = Infinity;
@@ -69,7 +126,7 @@ function setInstancedLitterBoundingSphere(inst: THREE.InstancedMesh, count: numb
   const cy = (minY + maxY) * 0.5;
   const cz = (minZ + maxZ) * 0.5;
   const r =
-    Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) * 0.5 + LITTER_INSTANCE_BOUNDS_PAD_M;
+    Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) * 0.5 + Math.max(originPadM, 0.04);
   const sphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), Math.max(r, 0.04));
   inst.boundingSphere = sphere;
 }
@@ -144,46 +201,53 @@ function resolveTreadMesh(
   return findTreadMeshForIndex(segmentRoot, ti) ?? findTreadMeshForIndex(litterSearchRoot, ti);
 }
 
-let sharedGeometry: THREE.BufferGeometry | null = null;
-let sharedMaterial: THREE.Material | null = null;
-/** Uniform scale so bbox longest edge ≈ `CIGARETTE_TARGET_MAX_EXTENT_M`. */
-let cigaretteScaleToWorld: number | null = null;
+let loadedVariants: readonly LoadedLitterVariant[] | null = null;
 let sharedInit: Promise<void> | null = null;
 
-function refreshCigaretteAutoscale(geometry: THREE.BufferGeometry): void {
-  geometry.computeBoundingBox();
-  const bb = geometry.boundingBox;
-  if (!bb || bb.isEmpty()) {
-    cigaretteScaleToWorld = 0.05;
-    return;
+async function tryLoadLitterVariant(spec: StairwellLitterVariantSpec): Promise<LoadedLitterVariant | null> {
+  try {
+    const scene = await loadPropTemplate(spec.modelUrl);
+    const src = findFirstMesh(scene);
+    if (!src) {
+      console.warn(`[stairwellLitter] no mesh in ${spec.modelUrl}`);
+      return null;
+    }
+    const geometry = src.geometry.clone();
+    const scaleToWorld = computeScaleToWorld(geometry, spec.targetMaxExtentM);
+    const bb = geometry.boundingBox;
+    let longest = 0.05;
+    if (bb && !bb.isEmpty()) {
+      longest = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z);
+    }
+    const frustumOriginPadM = longest * scaleToWorld * 0.62;
+    const m = src.material;
+    const material = (Array.isArray(m) ? m[0] : m) as THREE.Material;
+    return {
+      id: spec.id,
+      geometry,
+      material,
+      scaleToWorld,
+      frustumOriginPadM,
+      weight: spec.weight,
+    };
+  } catch (err) {
+    console.warn(`[stairwellLitter] failed to load ${spec.modelUrl}:`, err);
+    return null;
   }
-  const dx = bb.max.x - bb.min.x;
-  const dy = bb.max.y - bb.min.y;
-  const dz = bb.max.z - bb.min.z;
-  const longest = Math.max(dx, dy, dz);
-  if (longest < 1e-8) {
-    cigaretteScaleToWorld = 0.05;
-    return;
-  }
-  cigaretteScaleToWorld = THREE.MathUtils.clamp(
-    CIGARETTE_TARGET_MAX_EXTENT_M / longest,
-    0.0005,
-    0.25,
-  );
 }
 
-function ensureSharedCigaretteMesh(): Promise<void> {
-  if (sharedGeometry && sharedMaterial) return Promise.resolve();
+function ensureAllLitterVariantsLoaded(): Promise<void> {
+  if (loadedVariants && loadedVariants.length > 0) return Promise.resolve();
   if (sharedInit) return sharedInit;
 
-  sharedInit = loadPropTemplate(STAIRWELL_CIGARETTE_MODEL_URL)
-    .then((scene) => {
-      const src = findFirstMesh(scene);
-      if (!src) return;
-      sharedGeometry = src.geometry.clone();
-      refreshCigaretteAutoscale(sharedGeometry);
-      const m = src.material;
-      sharedMaterial = (Array.isArray(m) ? m[0] : m) as THREE.Material;
+  sharedInit = Promise.all(STAIRWELL_LITTER_VARIANTS.map((s) => tryLoadLitterVariant(s)))
+    .then((rows) => {
+      const ok = rows.filter((x): x is LoadedLitterVariant => x !== null);
+      if (ok.length === 0) {
+        sharedInit = null;
+        throw new Error("[stairwellLitter] no litter GLBs could be loaded");
+      }
+      loadedVariants = ok;
     })
     .catch((err) => {
       sharedInit = null;
@@ -194,14 +258,17 @@ function ensureSharedCigaretteMesh(): Promise<void> {
 }
 
 /**
- * Resolves the GLB once; call from FP mount **before** `instantiateBuildingFloorStack` so litter can
- * parent synchronously and survive static floor/stair geometry merge (merge runs right after stack build).
+ * Resolves litter GLBs once; call from FP mount **before** `instantiateBuildingFloorStack` so litter can
+ * parent synchronously and survive static floor/stair geometry merge.
  */
-export async function ensureStairwellCigaretteMeshReady(): Promise<void> {
+export async function ensureStairwellLitterMeshesReady(): Promise<void> {
   if (typeof window === "undefined") return;
   if (!ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER) return;
-  await ensureSharedCigaretteMesh();
+  await ensureAllLitterVariantsLoaded();
 }
+
+/** @deprecated Prefer {@link ensureStairwellLitterMeshesReady} — loads all stairwell litter props, not only cigarettes. */
+export const ensureStairwellCigaretteMeshReady = ensureStairwellLitterMeshesReady;
 
 export type AttachStairwellCigaretteLitterArgs = {
   /** Stair segment group (shaft-local geometry). */
@@ -217,8 +284,21 @@ export type AttachStairwellCigaretteLitterArgs = {
   scatterSeed: number;
 };
 
-function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterArgs): void {
-  if (!sharedGeometry || !sharedMaterial) return;
+function weightedVariantIndex(rng: () => number, weights: readonly number[]): number {
+  let t = 0;
+  for (const w of weights) t += w;
+  if (t <= 0) return 0;
+  let r = rng() * t;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return i;
+  }
+  return weights.length - 1;
+}
+
+function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): void {
+  const variants = loadedVariants;
+  if (!variants || variants.length === 0) return;
 
   const rng = mulberry32(args.scatterSeed ^ 0x4f6cdd1d);
   const search = args.litterSearchRoot;
@@ -243,18 +323,19 @@ function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterA
   const anchors: PoolEntry[] = [...landingPool, ...treadPool];
   if (anchors.length === 0) return;
 
-  const span =
-    MAX_CIGARETTES_PER_STAIR_SEGMENT - MIN_CIGARETTES_PER_STAIR_SEGMENT + 1;
-  const wantCount =
-    MIN_CIGARETTES_PER_STAIR_SEGMENT + Math.floor(rng() * span);
+  const span = MAX_LITTER_PER_STAIR_SEGMENT - MIN_LITTER_PER_STAIR_SEGMENT + 1;
+  const wantCount = MIN_LITTER_PER_STAIR_SEGMENT + Math.floor(rng() * span);
 
   segment.updateMatrixWorld(true);
   _instSegInv.copy(segment.matrixWorld).invert();
 
-  const instanceMatrices: THREE.Matrix4[] = [];
-  const baseScale = cigaretteScaleToWorld ?? 0.05;
+  const weights = variants.map((v) => v.weight);
+  const buckets: THREE.Matrix4[][] = variants.map(() => []);
 
   for (let i = 0; i < wantCount; i++) {
+    const vi = weightedVariantIndex(rng, weights);
+    const v = variants[vi]!;
+    const baseScale = v.scaleToWorld;
     const entry =
       i === 0 && landingPool.length > 0
         ? landingPool[Math.floor(rng() * landingPool.length)]!
@@ -270,15 +351,17 @@ function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterA
       const lz = (rng() * 2 - 1) * Math.max(0.05, entry.cl.halfD - inset);
       const sy = Math.max(1e-6, Math.abs(lm.scale.y));
       const ly = entry.cl.thicknessHalf * sy + 0.012;
-      pushCigaretteInstanceInSegmentSpace({
+      pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: lm.matrixWorld,
         lx,
         ly,
         lz,
-        yaw: rng() * Math.PI * 2,
+        yawRad: rng() * Math.PI * 2,
+        pitchRad: (rng() - 0.5) * 0.35,
+        rollRad: (rng() - 0.5) * 0.45,
         uniformScale: variantScale,
-        out: instanceMatrices,
+        out: buckets[vi]!,
       });
     } else {
       const tr = args.L.treads[entry.ti];
@@ -288,63 +371,62 @@ function placeStairwellCigaretteLitterSync(args: AttachStairwellCigaretteLitterA
       const lx = (rng() * 2 - 1) * tr.halfAlong * 0.62;
       const lz = (rng() * 2 - 1) * tr.halfAcross * 0.42;
       const ly = tr.riseHalf + 0.004;
-      pushCigaretteInstanceInSegmentSpace({
+      pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: tm.matrixWorld,
         lx,
         ly,
         lz,
-        yaw: (rng() - 0.5) * 1.3,
+        yawRad: (rng() - 0.5) * 1.3,
+        pitchRad: (rng() - 0.5) * 0.25,
+        rollRad: (rng() - 0.5) * 0.35,
         uniformScale: variantScale,
-        out: instanceMatrices,
+        out: buckets[vi]!,
       });
     }
   }
 
-  const n = instanceMatrices.length;
-  if (n === 0) return;
+  for (let vi = 0; vi < variants.length; vi++) {
+    const v = variants[vi]!;
+    const instanceMatrices = buckets[vi]!;
+    const n = instanceMatrices.length;
+    if (n === 0) continue;
 
-  const inst = new THREE.InstancedMesh(sharedGeometry, sharedMaterial, n);
-  inst.name = "stairwell_cigarette_litter";
-  inst.userData.mammothSkipFloorGeometryMerge = true;
-  inst.userData.mammothNoCollision = true;
-  inst.userData.mammothUnitInterior = true;
-  /** Shadow pass cost dominated FPS when each butt cast; litter is tiny vs architectural shadows. */
-  inst.castShadow = false;
-  inst.receiveShadow = false;
-  inst.frustumCulled = true;
-  for (let i = 0; i < n; i++) {
-    inst.setMatrixAt(i, instanceMatrices[i]!);
+    const inst = new THREE.InstancedMesh(v.geometry, v.material, n);
+    inst.name = `stairwell_litter:${v.id}`;
+    inst.userData.mammothStairwellLitter = true;
+    inst.userData.mammothSkipFloorGeometryMerge = true;
+    inst.userData.mammothNoCollision = true;
+    inst.userData.mammothUnitInterior = true;
+    inst.castShadow = false;
+    inst.receiveShadow = false;
+    inst.frustumCulled = true;
+    for (let i = 0; i < n; i++) {
+      inst.setMatrixAt(i, instanceMatrices[i]!);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    setInstancedLitterBoundingSphere(inst, n, v.frustumOriginPadM);
+    segment.add(inst);
   }
-  inst.instanceMatrix.needsUpdate = true;
-  setInstancedLitterBoundingSphere(inst, n);
-  segment.add(inst);
 }
 
 /**
- * Places a random count of tiny cigarette props per stair segment on corner landings and/or tread
- * tops (same pad/tread may repeat with new random offsets). Range: `MIN_CIGARETTES_PER_STAIR_SEGMENT`
- * –`MAX_CIGARETTES_PER_STAIR_SEGMENT` inclusive.
- *
- * Renders as one {@link THREE.InstancedMesh} per segment (single draw, tight frustum sphere) and
- * skips shadow casting so corridor / exterior views are not taxed by thousands of micro-shadow
- * casters on always-built stair columns.
- *
- * When the GLB is not ready yet, defers once — for FP, call {@link ensureStairwellCigaretteMeshReady}
- * before stack build so placement runs synchronously and survives merge.
+ * Places mixed stairwell litter (cigarette butts, packs, bottles, cans) on corner landings and/or tread
+ * tops. One {@link THREE.InstancedMesh} per variant per segment (single draw per type, tight frustum
+ * sphere). Skips shadow casting.
  */
 export function attachStairwellCigaretteLitter(args: AttachStairwellCigaretteLitterArgs): void {
   if (typeof window === "undefined") return;
   if (!ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER) return;
 
-  if (sharedGeometry && sharedMaterial) {
-    placeStairwellCigaretteLitterSync(args);
+  if (loadedVariants && loadedVariants.length > 0) {
+    placeStairwellLitterSync(args);
     return;
   }
 
-  void ensureSharedCigaretteMesh()
+  void ensureAllLitterVariantsLoaded()
     .then(() => {
-      placeStairwellCigaretteLitterSync(args);
+      placeStairwellLitterSync(args);
     })
     .catch((err) => {
       console.warn("[attachStairwellCigaretteLitter] failed:", err);

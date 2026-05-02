@@ -9,6 +9,7 @@ mod auth;
 mod character_controller;
 mod chat;
 mod combat_stub;
+mod crafting;
 mod dropped_item;
 mod elevator;
 mod elevator_layout;
@@ -49,6 +50,8 @@ pub fn init(ctx: &ReducerContext) {
     player_vitals::start_player_vitals_schedule(ctx);
     world_sound::start_cleanup_schedule(ctx);
     dropped_item::start_dropped_item_cleanup_schedule(ctx);
+    crafting::start_craft_queue_tick_schedule(ctx);
+    crafting::start_hud_toast_cleanup_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.

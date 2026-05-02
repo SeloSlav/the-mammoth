@@ -13,6 +13,7 @@ use crate::auth;
 use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
 };
+use crate::crafting;
 use crate::items_catalog;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
@@ -533,6 +534,13 @@ fn pickup_dropped_item_inner(
     let py = dropped.y;
     let pz = dropped.z;
     try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
+    crafting::emit_hud_toast(
+        ctx,
+        sender,
+        crafting::HUD_TOAST_KIND_ITEM_RECEIVED,
+        def_id.clone(),
+        qty,
+    );
     world_sound::emit_item_pickup_at(ctx, px, py, pz, sender);
     ctx.db.dropped_item().id().delete(dropped_item_id);
     log::info!(

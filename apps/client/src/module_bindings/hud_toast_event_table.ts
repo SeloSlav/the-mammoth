@@ -10,12 +10,11 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  WorldSoundEventCleanup,
-} from "./types";
-
-export default {
-  get arg() {
-    return WorldSoundEventCleanup;
-  },
-};
+export default __t.row({
+  id: __t.u64().primaryKey(),
+  recipient: __t.identity(),
+  toastKind: __t.u8().name("toast_kind"),
+  defId: __t.string().name("def_id"),
+  quantity: __t.u32(),
+  createdAt: __t.timestamp().name("created_at"),
+});

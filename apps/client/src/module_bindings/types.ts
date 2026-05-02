@@ -72,6 +72,22 @@ export const ChatMessage = __t.object("ChatMessage", {
 });
 export type ChatMessage = __Infer<typeof ChatMessage>;
 
+export const CraftQueueItem = __t.object("CraftQueueItem", {
+  id: __t.u64(),
+  owner: __t.identity(),
+  recipeId: __t.u8(),
+  orderIndex: __t.u32(),
+  startMicros: __t.i64(),
+  finishMicros: __t.i64(),
+});
+export type CraftQueueItem = __Infer<typeof CraftQueueItem>;
+
+export const CraftQueueTickSchedule = __t.object("CraftQueueTickSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type CraftQueueTickSchedule = __Infer<typeof CraftQueueTickSchedule>;
+
 export const DroppedItem = __t.object("DroppedItem", {
   id: __t.u64(),
   defId: __t.string(),
@@ -128,6 +144,22 @@ export const HotbarLocationData = __t.object("HotbarLocationData", {
   slotIndex: __t.u8(),
 });
 export type HotbarLocationData = __Infer<typeof HotbarLocationData>;
+
+export const HudToastCleanupSchedule = __t.object("HudToastCleanupSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type HudToastCleanupSchedule = __Infer<typeof HudToastCleanupSchedule>;
+
+export const HudToastEvent = __t.object("HudToastEvent", {
+  id: __t.u64(),
+  recipient: __t.identity(),
+  toastKind: __t.u8(),
+  defId: __t.string(),
+  quantity: __t.u32(),
+  createdAt: __t.timestamp(),
+});
+export type HudToastEvent = __Infer<typeof HudToastEvent>;
 
 export const InventoryItem = __t.object("InventoryItem", {
   instanceId: __t.u64(),

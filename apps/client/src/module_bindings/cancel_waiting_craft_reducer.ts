@@ -10,12 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  DroppedItemCleanup,
-} from "./types";
-
 export default {
-  get arg() {
-    return DroppedItemCleanup;
-  },
+  queueItemId: __t.u64(),
 };

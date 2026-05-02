@@ -162,7 +162,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     segment.traverse((obj) => {
       if (
         obj.name.startsWith("stairwell_prop_") ||
-        obj.name === "stairwell_cigarette_litter"
+        obj.name.startsWith("stairwell_litter:") ||
+        obj.userData?.mammothStairwellLitter === true
       ) {
         obj.visible = visible;
       }

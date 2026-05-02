@@ -46,7 +46,7 @@ describe("mammothItemCatalog", () => {
 
     expect(getMammothDroppedWorldModelUrl("scrap-metal")).toBe("/static/models/items/scrap-metal.glb");
 
-    expect(getMammothDroppedWorldModelUrl("door-lock")).toBe("/static/models/weapons/door-lock.glb");
+    expect(getMammothDroppedWorldModelUrl("door-lock")).toBe("/static/models/items/door-lock.glb");
 
   });
 

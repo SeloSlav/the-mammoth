@@ -36,12 +36,9 @@ macro_rules! starter_hotbar {
     };
 }
 
-/// Survival loadout: basic melee weapon, door lock, food, water — no ammo.
+/// Survival loadout: screwdriver tool, food, water — door lock is crafted only.
 const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[
     starter_hotbar!(0, "screwdriver", 1),
-    starter_hotbar!(1, "door-lock", 1),
-    starter_hotbar!(2, "apple", 4),
-    starter_hotbar!(3, "water-bottle", 4),
 ];
 
 fn validate_survival_loadout(_ctx: &ReducerContext) -> bool {

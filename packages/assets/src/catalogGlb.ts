@@ -20,7 +20,7 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
   "ammo-shotgun-shell": `${MAMMOTH_STATIC_MODEL_BASE}/items/shotgun-shell.glb`,
   cigarettes: `${MAMMOTH_STATIC_MODEL_BASE}/items/cigarette.glb`,
   "scrap-metal": `${MAMMOTH_STATIC_MODEL_BASE}/items/scrap-metal.glb`,
-  "door-lock": `${MAMMOTH_STATIC_MODEL_BASE}/weapons/door-lock.glb`,
+  "door-lock": `${MAMMOTH_STATIC_MODEL_BASE}/items/door-lock.glb`,
   // Consumables: search order tries `weapons/` before `consumables/` — pin folder for correct primary + previews.
   apple: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
   "water-bottle": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/water-bottle.glb`,
