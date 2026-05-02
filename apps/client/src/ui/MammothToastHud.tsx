@@ -14,6 +14,10 @@ import {
   THEME_SUCCESS_BORDER,
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
+import {
+  BOTTOM_RIGHT_FP_HUD_INSET,
+  PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX,
+} from "./PlayerVitalsHud";
 
 type ToastLine = {
   key: string;
@@ -23,6 +27,8 @@ type ToastLine = {
 
 const TOAST_MS = 5200;
 const MAX_TOASTS = 6;
+/** Gap between vitals (below) and the bottom of the toast stack. */
+const TOAST_ABOVE_VITALS_GAP_PX = 10;
 
 export function MammothToastHud({ conn }: { conn: DbConnection }) {
   const [toasts, setToasts] = useState<ToastLine[]>([]);
@@ -88,8 +94,8 @@ export function MammothToastHud({ conn }: { conn: DbConnection }) {
     <div
       style={{
         position: "fixed",
-        right: 16,
-        bottom: Math.max(20, typeof window !== "undefined" ? 20 : 20),
+        right: "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))",
+        bottom: `calc(${BOTTOM_RIGHT_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${TOAST_ABOVE_VITALS_GAP_PX}px)`,
         zIndex: 120,
         display: "flex",
         flexDirection: "column",

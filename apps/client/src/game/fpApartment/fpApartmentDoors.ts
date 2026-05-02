@@ -24,7 +24,10 @@
  * 4. **Instance matrices are only rewritten when the eased visual `open01` moves materially.**
  *    Idle doors skip `setMatrixAt`; only doors chasing a changing replica pay each frame.
  *
- * 5. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
+ * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual — matches
+ *    the server `movement` tick so door thresholds do not rubber-band from client/server skew.
+ *
+ * 6. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
  *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size) and
  *    matches the server's `collect_apartment_door_collision_aabbs` path.
  */
@@ -117,8 +120,7 @@ export type MountFpApartmentDoorsOpts = {
   building: BuildingDoc;
 };
 
-/** Debug: live snapshot of a nearby apartment door — exactly the state the collision pipeline
- *  consumed this frame. Used by `window.__mmDoorDebug` to trace rubber-banding reports. */
+/** Debug: nearby apartment door — blocking matches replicated `swing_open_01`; `visualOpen01` is render-only. */
 export type ApartmentDoorDebugSlot = {
   rowKey: string;
   level: number;
@@ -129,14 +131,16 @@ export type ApartmentDoorDebugSlot = {
   panelWidthM: number;
   panelHeightM: number;
   desiredOpen: number;
-  /** Client-smoothed open01 used for **prediction collision** (may lag server a few frames). */
+  /** Client-smoothed open01 — **instanced mesh / render only**; prediction blocking uses {@link replicatedOpen01}. */
   visualOpen01: number;
-  /** Replicated `swing_open_01` — server physics uses this each 20 Hz tick. */
+  /** Replicated `swing_open_01` — same sample used for **prediction collision** and server physics. */
   replicatedOpen01: number;
-  /** Regime implied by `visualOpen01` (client collision). */
+  /** Blocking regime (from `replicatedOpen01`) — matches server. */
   regime: "closed-slab" | "passable" | "parked-leaf";
-  /** Regime implied by `replicatedOpen01` (authoritative). Mismatch vs `regime` ⇒ likely rubber-band near thresholds. */
+  /** Same as `regime` (kept for existing debug JSON shape). */
   serverRegime: "closed-slab" | "passable" | "parked-leaf";
+  /** Regime implied by `visualOpen01` only — can differ from {@link regime} while the door eases. */
+  visualRegime: "closed-slab" | "passable" | "parked-leaf";
   /** The actual AABB the collision pipeline sees this frame (null when passable). */
   emittedAabb: CollisionAabb | null;
   /** XZ distance from player feet to hinge. */
@@ -228,9 +232,9 @@ type DoorSlot = {
   group: InstanceGroup;
   /** Server-mirrored state — initially closed, updated on subscription events. */
   desiredOpen: number;
-  /** Replicated `swing_open_01` (authoritative sample; not used for rendering after seed). */
+  /** Replicated `swing_open_01` (authoritative sample; used for **prediction collision** + server parity). */
   swingOpen01: number;
-  /** Client-driven visual/collision open01; integrates toward `desiredOpen` at `SWING_DOOR_ANIM_SPEED` (world). */
+  /** Client-driven visual open01; integrates toward `desiredOpen` at `SWING_DOOR_ANIM_SPEED` — **render / matrices only**. */
   visualOpen01: number;
   lastApplied: number;
   /** `true` once the server's row has been seen at least once (until then we draw "closed"). */
@@ -812,14 +816,15 @@ export function mountFpApartmentDoors(
         if (vReg === sReg && dv < 0.12) continue;
         lastDoorSkewWarnMs = nowMs;
         console.warn(
-          "[mmDoorAnimSkew] client collision uses visualOpen01; server uses swing_open_01 — mismatch can cause rubber-banding near door thresholds.",
+          "[mmDoorAnimSkew] door **mesh** eases with `visualOpen01`; **blocking** uses replicated `swing_open_01`. " +
+            "During animation the leaf may not match the magenta physics box — that is expected.",
           {
             rowKey: slot.rowKey,
             visualOpen01: +slot.visualOpen01.toFixed(3),
             replicatedOpen01: +slot.swingOpen01.toFixed(3),
             delta: +dv.toFixed(3),
-            clientRegime: vReg,
-            serverRegime: sReg,
+            visualRegime: vReg,
+            blockingRegime: sReg,
           },
         );
         break;
@@ -839,7 +844,8 @@ export function mountFpApartmentDoors(
     visitBucketedSlots(bucketIndex, x0, x1, z0, z1, (slot) => {
       if (collisionSlotVisitSeen.has(slot.rowKey)) return;
       collisionSlotVisitSeen.add(slot.rowKey);
-      const open01 = slot.visualOpen01;
+      /** Blocking matches server: replicated `swing_open_01` stepped at 20 Hz (see `movement::physics_tick_step`). */
+      const open01 = slot.swingOpen01;
       let aabb: CollisionAabb | null = null;
       if (swingDoorClosedSlabActive(open01)) {
         aabb = swingDoorClosedSlabAabb({
@@ -948,10 +954,11 @@ export function mountFpApartmentDoors(
       if (d2 > r2) return;
       const visualOpen = slot.visualOpen01;
       const replicatedOpen = slot.swingOpen01;
-      const regime = doorCollisionRegimeFromOpen01(visualOpen);
-      const serverRegime = doorCollisionRegimeFromOpen01(replicatedOpen);
+      const regime = doorCollisionRegimeFromOpen01(replicatedOpen);
+      const serverRegime = regime;
+      const visualRegime = doorCollisionRegimeFromOpen01(visualOpen);
       let emittedAabb: CollisionAabb | null = null;
-      if (swingDoorClosedSlabActive(visualOpen)) {
+      if (swingDoorClosedSlabActive(replicatedOpen)) {
         emittedAabb = swingDoorClosedSlabAabb({
           face: slot.face,
           hingeX: slot.hingeX,
@@ -960,7 +967,7 @@ export function mountFpApartmentDoors(
           panelWidthM: slot.panelWidthM,
           panelHeightM: slot.panelHeightM,
         });
-      } else if (swingDoorParkedLeafActive(visualOpen)) {
+      } else if (swingDoorParkedLeafActive(replicatedOpen)) {
         emittedAabb = swingDoorParkedLeafAabb({
           face: slot.face,
           hingeX: slot.hingeX,
@@ -985,6 +992,7 @@ export function mountFpApartmentDoors(
         replicatedOpen01: replicatedOpen,
         regime,
         serverRegime,
+        visualRegime,
         emittedAabb,
         distanceMeters: Math.sqrt(d2),
       });
