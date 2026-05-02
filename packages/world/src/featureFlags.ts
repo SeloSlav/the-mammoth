@@ -17,7 +17,7 @@ export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = false;
 export let ENABLE_STAIRWELL_HEATER_LANDING_PROPS = false;
 
 /** Stairwell kit: mixed litter near landings / treads (cigarettes, packs, bottles, cans). */
-export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = true;
+export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
 
 /**
  * Stairwell graffiti decals on client (projected meshes + decal textures).
@@ -27,6 +27,6 @@ export let ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
 
 /**
  * Exterior megablock yard trees (procedural via `@dgreenheck/ez-tree`, merged per species).
- * Defaults on, but can be disabled here for profiling or art-direction passes.
+ * When `false`, FP skips grove mesh build + client tree collision pillars (toggle here for perf).
  */
-export let ENABLE_EXTERIOR_PROCEDURAL_TREES = true;
+export let ENABLE_EXTERIOR_PROCEDURAL_TREES = false;

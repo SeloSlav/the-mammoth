@@ -63,7 +63,6 @@ export function buildExteriorProceduralTreeGroup(
   );
   const root = new THREE.Group();
   root.name = "exterior_procedural_tree_grove";
-  root.userData.mammothAlwaysVisible = true;
   root.userData.mammothExteriorProceduralTrees = true;
   if (buildingFootprint.isEmpty()) {
     root.userData.mammothExteriorProceduralTreeCount = 0;

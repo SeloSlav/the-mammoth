@@ -2,11 +2,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
-import { deepDisposeObject3D, loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
+import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
-import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatalog";
 import {
   attachDroppedPickupGlow,
   createDroppedPickupGlowMaterial,
@@ -149,6 +148,15 @@ function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolea
   return false;
 }
 
+type DroppedGlbTemplate = {
+  /** Un-parented master; each drop uses {@link THREE.Object3D.clone}. */
+  root: THREE.Object3D;
+};
+
+type DefTemplateState =
+  | { status: "ready"; template: DroppedGlbTemplate }
+  | { status: "glb_unavailable" };
+
 export type MountDroppedItemsWorldOptions = {
   /**
    * Called after `pickup_dropped_item` settles and the dropped row is gone from the local cache
@@ -181,9 +189,61 @@ export function mountDroppedItemsWorld(
 
   const loader = new GLTFLoader();
   const idToGroup = new Map<string, THREE.Group>();
-  const loading = new Set<string>();
+  /** Drop rows currently resolving a visual (avoid duplicate async work per id). */
+  const rowVisualInFlight = new Set<string>();
+  const defTemplateState = new Map<string, DefTemplateState>();
+  const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
 
   let droppedSub: SubscriptionHandle | null = null;
+
+  const prepareLoadedSceneForTemplate = (scene: THREE.Group): void => {
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) {
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+  };
+
+  /**
+   * One GLB load + parse per `def_id` for the whole session; every dropped row clones the template.
+   * Failed catalogs (missing GLB) are remembered so subscription churn does not re-hit the network.
+   */
+  const resolveDefTemplate = (defId: string): Promise<DefTemplateState> => {
+    const settled = defTemplateState.get(defId);
+    if (settled) return Promise.resolve(settled);
+    const inflight = defTemplatePromise.get(defId);
+    if (inflight) return inflight;
+
+    const candidates = [...mammothCatalogGlbCandidates(defId)];
+    if (candidates.length === 0) {
+      const st: DefTemplateState = { status: "glb_unavailable" };
+      defTemplateState.set(defId, st);
+      return Promise.resolve(st);
+    }
+
+    const p = loadGltfSceneFirstMatch(loader, candidates)
+      .then(({ scene }) => {
+        prepareLoadedSceneForTemplate(scene);
+        const st: DefTemplateState = {
+          status: "ready",
+          template: { root: scene },
+        };
+        defTemplateState.set(defId, st);
+        defTemplatePromise.delete(defId);
+        return st;
+      })
+      .catch(() => {
+        const st: DefTemplateState = { status: "glb_unavailable" };
+        defTemplateState.set(defId, st);
+        defTemplatePromise.delete(defId);
+        return st;
+      });
+
+    defTemplatePromise.set(defId, p);
+    return p;
+  };
 
   const applyPose = (g: THREE.Group, row: DroppedItem) => {
     g.position.set(row.x, row.y, row.z);
@@ -216,7 +276,7 @@ export function mountDroppedItemsWorld(
       applyPose(existing, row);
       return;
     }
-    if (loading.has(key)) return;
+    if (rowVisualInFlight.has(key)) return;
 
     const candidates = [...mammothCatalogGlbCandidates(row.defId)];
     if (candidates.length === 0) {
@@ -224,35 +284,24 @@ export function mountDroppedItemsWorld(
       return;
     }
 
-    loading.add(key);
-    void loadGltfSceneFirstMatch(loader, candidates)
-      .then(({ scene }) => {
-        loading.delete(key);
-        const clone = scene.clone(true);
-        clone.traverse((o) => {
-          const m = o as THREE.Mesh;
-          if (m.isMesh) {
-            m.castShadow = true;
-            m.receiveShadow = true;
-          }
-        });
-        if (idToGroup.has(key)) {
-          deepDisposeObject3D(clone);
-          return;
-        }
-        fitDroppedWorldItemModelToCatalog(clone, row.defId);
-        attachDroppedPickupGlow(clone, pickupGlowMaterial);
-        const g = new THREE.Group();
-        g.name = `drop_${key}`;
-        g.add(clone);
-        applyPose(g, row);
-        root.add(g);
-        idToGroup.set(key, g);
-      })
-      .catch(() => {
-        loading.delete(key);
-        if (!idToGroup.has(key)) spawnFallbackBox(key, row);
-      });
+    rowVisualInFlight.add(key);
+    void resolveDefTemplate(row.defId).then((state) => {
+      rowVisualInFlight.delete(key);
+      if (idToGroup.has(key)) return;
+      if (state.status === "glb_unavailable") {
+        spawnFallbackBox(key, row);
+        return;
+      }
+      const clone = state.template.root.clone(true);
+      fitDroppedWorldItemModelToCatalog(clone, row.defId);
+      attachDroppedPickupGlow(clone, pickupGlowMaterial);
+      const g = new THREE.Group();
+      g.name = `drop_${key}`;
+      g.add(clone);
+      applyPose(g, row);
+      root.add(g);
+      idToGroup.set(key, g);
+    });
   };
 
   const syncFromDb = () => {
@@ -336,6 +385,8 @@ export function mountDroppedItemsWorld(
     pickupGlowMaterial.dispose();
     scene.remove(root);
     idToGroup.clear();
+    defTemplateState.clear();
+    defTemplatePromise.clear();
   };
 
   return { subscribeAoi, tryPickupNearest, dispose };

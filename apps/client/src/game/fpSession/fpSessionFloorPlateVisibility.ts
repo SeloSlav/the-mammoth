@@ -236,6 +236,17 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
+    /**
+     * Merged ez-tree meshes are fill-rate heavy. They used to use `mammothAlwaysVisible` and were
+     * rasterised on every interior frame (~1000+ storey stack hidden, trees still drawn). Tie them
+     * to the same footprint inset as façade full-stack: off in the building core, on near glass /
+     * sidewalks.
+     */
+    for (const ch of buildingRoot.children) {
+      if (ch.userData.mammothExteriorProceduralTrees === true) {
+        ch.visible = cameraOutsideBuilding;
+      }
+    }
     if (cameraOutsideBuilding && (!feetOnBuildingSlab || playerStorey <= 1)) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
