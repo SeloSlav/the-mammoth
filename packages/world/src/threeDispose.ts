@@ -30,9 +30,17 @@ export function disposeMaterial(
   const mats = Array.isArray(material) ? material : [material];
   for (const mat of mats) {
     if ("dispose" in mat && typeof mat.dispose === "function") {
-      if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshPhysicalMaterial) {
+      if (
+        mat instanceof THREE.MeshStandardMaterial ||
+        mat instanceof THREE.MeshPhysicalMaterial ||
+        mat instanceof THREE.MeshPhongMaterial
+      ) {
+        const surface = mat as unknown as Record<
+          (typeof TEXTURE_KEYS)[number],
+          THREE.Texture | undefined
+        >;
         for (const key of TEXTURE_KEYS) {
-          const t = mat[key];
+          const t = surface[key];
           if (t instanceof THREE.Texture) t.dispose();
         }
       }

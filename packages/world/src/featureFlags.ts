@@ -26,7 +26,7 @@ export let ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
 export let ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
 
 /**
- * Client-side procedural L-system tree grove around the exterior megablock yard.
+ * Exterior megablock yard trees (procedural via `@dgreenheck/ez-tree`, merged per species).
  * Defaults on, but can be disabled here for profiling or art-direction passes.
  */
 export let ENABLE_EXTERIOR_PROCEDURAL_TREES = true;

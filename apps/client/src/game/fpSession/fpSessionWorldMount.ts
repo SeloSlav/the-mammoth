@@ -1,10 +1,5 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { fpLocomotionConstants } from "@the-mammoth/engine";
-import {
-  cloneGeometryForMerge,
-  mergeGroupDescendantsByMaterial,
-} from "./fpMergeGroupDescendantsByMaterial.js";
 import {
   applyStairOpeningCollisionOverlay,
   applyStairRuntimeBlockerOverlay,
@@ -13,10 +8,15 @@ import {
   buildStairRuntimeOverlayForBuilding,
   buildCollisionSpatialIndex,
   buildCellMeshes,
-  buildExteriorProceduralTreeGroup,
   buildWalkSurfaceSpatialIndex,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
+  buildExteriorEzTreeCollisionAABBs,
+  buildExteriorMegablockTreePlacements,
   ENABLE_EXTERIOR_PROCEDURAL_TREES,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
   getBuildingStairShaftSpecs,
@@ -29,14 +29,13 @@ import {
   walkSurfaceAabbXZFootprint,
   type BuildingStairShaftSpec,
 } from "@the-mammoth/world";
+import { buildExteriorProceduralTreeGroup } from "@the-mammoth/world/exterior-procedural-trees.js";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../../content/building/mammoth.json";
 import cellDoc from "../../../../../content/cells/cell_0_0.json";
 import stairWellAuthoringJson from "../../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
-
-/** Scratch for {@link mergeUnitPreservedShellsByPlacedObject} (avoid alloc per mesh). */
-const _mergeUnitShellScratch = new THREE.Matrix4();
+import { mergeStaticFloorGeometries } from "./fpSessionStaticFloorMerge.js";
 
 /** Stair-shaft core AABB for FP mood lighting; keep darkness inside the actual shaft, not corridors. */
 export type FpStairShaftInteriorLightBounds = {
@@ -117,7 +116,9 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
-  const staticCollisionIndex = buildCollisionSpatialIndex(blockerAABBs);
+
+  /** Authoritative blocker list (walls + shafts + deterministic exterior tree pillars). Built after meshes merge for footprint parity with server hit-scan codegen. */
+  let consolidatedCollisionBlockers = blockerAABBs;
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
     const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
       worldX,
@@ -164,23 +165,40 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   mergeStaticFloorGeometries(buildingRoot);
   buildingRoot.updateMatrixWorld(true);
   const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+
   if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
     const buildingLocalFootprint = new THREE.Box3()
       .setFromObject(buildingRoot)
-      .applyMatrix4(
-        new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert(),
-      );
+      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
     buildingLocalFootprint.min.y = 0;
     buildingLocalFootprint.max.y = 1;
-    const localGroundY = buildingRoot.worldToLocal(
-      new THREE.Vector3(0, 0, 0),
-    ).y;
+    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
+
+    const treeScatterOpts = {
+      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
+      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
+      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
+    };
+    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(
+      buildingLocalFootprint,
+      treeScatterOpts,
+    );
+    consolidatedCollisionBlockers = [
+      ...consolidatedCollisionBlockers,
+      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
+    ];
+
     buildingRoot.add(
       buildExteriorProceduralTreeGroup(buildingLocalFootprint, {
         groundY: localGroundY,
-      }),
+        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      }, exteriorTreePlacements),
     );
   }
+
+  const staticCollisionIndex =
+    buildCollisionSpatialIndex(consolidatedCollisionBlockers);
 
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
 
@@ -189,145 +207,10 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     buildingRoot,
     buildingBodyWorldBounds,
     cellRoot,
-    staticCollisionSolids: blockerAABBs,
+    staticCollisionSolids: consolidatedCollisionBlockers,
     staticCollisionIndex,
     sampleWalkTopBase,
     stairShaftInteriorLightBounds,
     stairShaftSpecs: stairSpecs,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Static geometry merging
-// ---------------------------------------------------------------------------
-
-/**
- * For each static geometry group that is a direct child of `buildingRoot`,
- * collapse all descendant meshes that share the same material into a single
- * merged `Mesh`.
- *
- * This covers two categories:
- *
- * 1. **Floor plates** (`mammothPlateLevelIndex` set) — per-floor rooms. Reduces
- *    ~100+ draw calls/floor to ~13 (one per material), for a 19-floor building
- *    that is ~1,900 → 247 draw calls.
- *
- * 2. **Stair shaft columns** (`mammothStairColumnRoot` on the column; each **segment** has
- *    `mammothPlateLevelIndex`) — per-storey segments are merged separately so FP can hide
- *    off-band storeys instead of submitting a full-height vertical stack every frame.
- *
- * The group nodes themselves are preserved so the floor-plate visibility band
- * (`syncBuildingFloorPlateVisibility`) can toggle segment children.
- */
-function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
-  // updateMatrixWorld propagates transforms through the full hierarchy even
-  // before the root is attached to a scene.
-  buildingRoot.updateMatrixWorld(true);
-
-  for (const child of buildingRoot.children) {
-    const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
-    const isStairColumn = child.userData.mammothStairColumnRoot === true;
-    if (!isFloorPlate && !isStairColumn) continue;
-
-    /**
-     * Tag stair-shaft **interior** geometry (treads, corner landings, railings, inner
-     * `shaft_wall_*`, `shaft_floor`, `shaft_ceiling`) as `mammothUnitInterior` before merge so the
-     * session-level hide (see `mountFpSession` → `unitInteriorMeshes`) drops ~all non-silhouette
-     * stair geometry from the exterior view. The outer `_exterior` skins stay untagged; the merged
-     * mesh that holds them keeps rendering because `mergeGroupDescendantsByMaterial` requires
-     * **every** source contributor to be tagged before propagating the flag. Tread/landing/railing
-     * materials are dedicated to stairs, so their merged meshes end up purely interior and get
-     * hidden cleanly from street-level views.
-     */
-    if (isStairColumn) {
-      for (const seg of (child as THREE.Group).children) {
-        seg.traverse((obj) => {
-          if (!(obj instanceof THREE.Mesh)) return;
-          if (obj.name.includes("_exterior")) return;
-          obj.userData.mammothUnitInterior = true;
-        });
-        mergeGroupDescendantsByMaterial(seg as THREE.Group);
-      }
-      continue;
-    }
-
-    mergeGroupDescendantsByMaterial(child as THREE.Group);
-    if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
-  }
-}
-
-/**
- * Second pass after {@link mergeGroupDescendantsByMaterial}: unit hollow shells skip the big merge
- * (shared plaster + disjoint volumes broke a single buffer), but **within one apartment** the
- * pieces share materials and sit in a tight volume — merge by `(placedObjectId, material)` so a
- * corridor full of doors drops from many draws per unit to ~2–4 per unit.
- */
-function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): void {
-  floorPlateGroup.updateMatrixWorld(true);
-  const floorInv = new THREE.Matrix4().copy(floorPlateGroup.matrixWorld).invert();
-
-  const placedIds = new Set<string>();
-  for (const ch of floorPlateGroup.children) {
-    if (!(ch instanceof THREE.Mesh)) continue;
-    if (ch.userData.mammothSkipFloorGeometryMerge !== true) continue;
-    const pid = ch.userData.mammothPlacedObjectId;
-    if (typeof pid === "string") placedIds.add(pid);
-  }
-
-  for (const placedObjectId of placedIds) {
-    const meshes = floorPlateGroup.children.filter(
-      (ch): ch is THREE.Mesh =>
-        ch instanceof THREE.Mesh &&
-        ch.userData.mammothSkipFloorGeometryMerge === true &&
-        ch.userData.mammothPlacedObjectId === placedObjectId,
-    );
-
-    const byMat = new Map<string, { mat: THREE.Material; list: THREE.Mesh[] }>();
-    for (const m of meshes) {
-      if (Array.isArray(m.material)) continue;
-      const mat = m.material as THREE.Material;
-      const key = mat.uuid;
-      let bucket = byMat.get(key);
-      if (!bucket) {
-        bucket = { mat, list: [] };
-        byMat.set(key, bucket);
-      }
-      bucket.list.push(m);
-    }
-
-    for (const { mat, list } of byMat.values()) {
-      if (list.length <= 1) continue;
-      const geos: THREE.BufferGeometry[] = [];
-      for (const m of list) {
-        m.updateWorldMatrix(true, false);
-        _mergeUnitShellScratch.multiplyMatrices(floorInv, m.matrixWorld);
-        const g = cloneGeometryForMerge(
-          m.geometry as THREE.BufferGeometry,
-          _mergeUnitShellScratch,
-        );
-        geos.push(g);
-      }
-      const merged = mergeGeometries(geos, false);
-      for (const g of geos) g.dispose();
-      /** If merge fails, keep originals — otherwise the apartment shell vanishes (only glass remains). */
-      if (!merged) continue;
-      for (const m of list) {
-        m.removeFromParent();
-        m.geometry.dispose();
-      }
-      merged.computeBoundingSphere();
-      merged.computeBoundingBox();
-      const mesh = new THREE.Mesh(merged, mat);
-      /**
-       * Keep each apartment shell as its own cullable volume. Corridor views otherwise submit every
-       * unit on the visible floor even though only the current sightline can contribute pixels.
-       */
-      mesh.frustumCulled = true;
-      mesh.userData.mammothPlacedObjectId = placedObjectId;
-      /** Only hollow unit shells use this merge path (`mammothPlacedObjectId`). */
-      mesh.userData.mammothUnitInterior = true;
-      mesh.name = `merged_unit_shell:${placedObjectId}`;
-      floorPlateGroup.add(mesh);
-    }
-  }
 }

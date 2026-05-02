@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./exterior-procedural-trees.js": "./src/exteriorProceduralTrees.ts"
   },
   "scripts": {
+    "gen-exterior-tree-collision": "tsx --tsconfig ../../scripts/tsconfig.codegen.json ../../scripts/gen-exterior-tree-collision.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@dgreenheck/ez-tree": "^1.1.0",
     "@the-mammoth/schemas": "workspace:*"
   },
   "peerDependencies": {
@@ -22,6 +25,7 @@
     "@repo/typescript-config": "workspace:*",
     "@types/three": "^0.183.1",
     "eslint": "^9.39.4",
+    "tsx": "^4.19.3",
     "three": "^0.183.2",
     "typescript": "~6.0.2",
     "vitest": "^4.1.3"

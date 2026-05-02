@@ -86,11 +86,18 @@ export {
   FLOOR_SHELL_DISABLE_NORMAL_MAPS,
 } from "./featureFlags.js";
 export {
-  buildExteriorProceduralTreeGroup,
+  buildExteriorEzTreeCollisionAABBs,
+  buildExteriorMegablockTreePlacements,
   EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
+  EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+  EZ_TREE_MEGABLOCK_VARIANT_COUNT,
+  EZ_TREE_MEGABLOCK_VARIANTS,
+  xzFootprintHalfExtentMForEzTreeSpecies,
   type ExteriorProceduralTreeOptions,
   type ExteriorProceduralTreePlacement,
-} from "./exteriorProceduralTrees.js";
+} from "./exteriorProceduralTreeSites.js";
 export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,

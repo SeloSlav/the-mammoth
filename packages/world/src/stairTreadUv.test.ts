@@ -55,8 +55,9 @@ describe("createStairTreadBoxGeometry", () => {
         minVAlongRun = Math.min(minVAlongRun, v);
       }
     }
-    /** Wide tread still spans a meaningful UV interval (may be <1 UV when texture scale is stretched). */
-    expect(maxVAlongRun - minVAlongRun).toBeGreaterThan(0.5);
+    /** Along-run span on the top face = (2 * halfAlong) / metersPerTile (often less than one repeat). */
+    const expectedRunSpan = (2 * halfAlong) / STAIR_TREAD_UV_METERS_PER_TILE;
+    expect(maxVAlongRun - minVAlongRun).toBeCloseTo(expectedRunSpan, 5);
     g.dispose();
   });
 });

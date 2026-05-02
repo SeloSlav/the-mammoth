@@ -17,6 +17,7 @@
     "test": "turbo run test",
     "content:gen-mamutica-floor": "node scripts/gen-mamutica-floor-doc.mjs",
     "content:gen-walk-aabbs": "tsx scripts/gen-walk-aabbs.ts",
+    "content:gen-exterior-tree-collision": "pnpm --filter @the-mammoth/world run gen-exterior-tree-collision",
     "content:gen-apartment-doors": "tsx scripts/gen-apartment-door-stock.ts",
     "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",
     "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^24.12.2",
     "prettier": "^3.7.4",
+    "three": "^0.183.2",
     "tsx": "^4.19.3",
     "turbo": "^2.9.6",
     "typescript": "~6.0.2",
