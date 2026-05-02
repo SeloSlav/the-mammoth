@@ -190,12 +190,9 @@ export async function mountFpSession(
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
-  const fpFirearmImpactRaycastRoots: THREE.Object3D[] = [buildingRoot, cellRoot];
-  const fpSessionGroundPlane = scene.getObjectByName("fp_session_ground_plane");
-  if (fpSessionGroundPlane) fpFirearmImpactRaycastRoots.push(fpSessionGroundPlane);
   const fpFirearmImpactDecals = createFpFirearmImpactDecals({
     scene,
-    raycastRoots: fpFirearmImpactRaycastRoots,
+    staticCollisionIndex,
   });
 
   /**
@@ -875,7 +872,7 @@ export async function mountFpSession(
       e.preventDefault();
       /** Same blend as RAF pickup prompts ({@link resolveAuthoritativeInteractionPose}). */
       const feet = getInteractionPos();
-      if (fpElevators.consumeInteractKey(pos, camera)) return;
+      if (fpElevators.consumeInteractKey(feet, camera)) return;
       const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
       const lookedAtStash = conn.identity
         ? fpApartmentFurniture.getStashPrompt(feet, camera)

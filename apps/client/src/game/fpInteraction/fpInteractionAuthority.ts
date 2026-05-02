@@ -5,18 +5,16 @@ export type FpInteractionPose = {
 };
 
 /**
- * Use local predicted position while it remains close to authority, but once drift is large enough
- * that we might target the wrong door/floor, switch interaction queries over to the authoritative
- * pose without moving the rendered first-person body.
+ * Interaction prompts and E-key volumes should track the **predicted** body: the server pose can lag
+ * replication by several ticks. Switching to authority on large drift (previous behavior) kept
+ * interact queries at the old spot — e.g. corridor-door HUD stuck after walking away.
+ *
+ * Still returns the same reference as {@link localPose} / {@link serverPose} when they coincide
+ * so callers that rely on identity (tests, tiny setups) behave unchanged.
  */
 export function resolveAuthoritativeInteractionPose(
   localPose: FpInteractionPose,
-  serverPose: FpInteractionPose,
+  _serverPose: FpInteractionPose,
 ): FpInteractionPose {
-  const driftXZ = Math.hypot(localPose.x - serverPose.x, localPose.z - serverPose.z);
-  const driftY = Math.abs(localPose.y - serverPose.y);
-  if (driftY > 0.75 || driftXZ > 0.95) {
-    return serverPose;
-  }
   return localPose;
 }
