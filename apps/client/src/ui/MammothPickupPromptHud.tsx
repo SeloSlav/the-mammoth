@@ -139,10 +139,10 @@ export function MammothPickupPromptHud() {
   if (prompt.kind === "apartment_claim_blocked_gear") {
     const msg =
       prompt.missingDoorLock && prompt.missingScrewdriver
-        ? "You need a door lock and a screwdriver (inventory or hotbar) to claim this apartment."
+        ? "You need a door lock plus a screwdriver in inventory/hotbar. Craft the lock with 3× scrap metal (B opens crafting — tool not consumed)."
         : prompt.missingDoorLock
-          ? "You need a door lock (inventory or hotbar) to claim this apartment."
-          : "You need a screwdriver (inventory or hotbar) to claim this apartment.";
+          ? "Door lock missing — craft one from 3× scrap metal in the B crafting panel (keep a screwdriver in inventory or hotbar)."
+          : "You need a screwdriver (inventory or hotbar) to install the lock when claiming.";
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,110,110,0.55)" glowRgb="rgba(255,70,70,0.18)">
         <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffb8b8" }}>{prompt.displayLabel}</div>

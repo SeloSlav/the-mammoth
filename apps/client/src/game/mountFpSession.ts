@@ -725,11 +725,14 @@ export async function mountFpSession(
   const mammothInventoryOpen = () =>
     document.querySelector('[data-mammoth-inventory="open"]') !== null;
 
+  const mammothCraftingOpen = () =>
+    document.querySelector('[data-mammoth-crafting="open"]') !== null;
+
   /** Same `DigitN` / slot within debounce window — ignored unless instant-consume or same-slot unequip. */
   const digitKeyDebounce = { code: "", at: 0, slot: -1 };
 
   const onWheelHotbar = (e: WheelEvent) => {
-    if (mammothInventoryOpen() || isTextInputFocused()) return;
+    if (mammothInventoryOpen() || mammothCraftingOpen() || isTextInputFocused()) return;
     if (document.pointerLockElement !== canvas) return;
     if (e.deltaY === 0) return;
     const target = e.target;
@@ -760,7 +763,7 @@ export async function mountFpSession(
       e.preventDefault();
       toggleFpSessionGameUiHidden();
     }
-    if (!isTextInputFocused() && !mammothInventoryOpen()) {
+    if (!isTextInputFocused() && !mammothInventoryOpen() && !mammothCraftingOpen()) {
       let n = -1;
       if (e.code.startsWith("Digit")) {
         n = Number.parseInt(e.code.slice(5), 10);
@@ -836,6 +839,7 @@ export async function mountFpSession(
       e.code === "KeyE" &&
       !e.repeat &&
       !mammothInventoryOpen() &&
+      !mammothCraftingOpen() &&
       !isTextInputFocused()
     ) {
       e.preventDefault();
@@ -995,7 +999,8 @@ export async function mountFpSession(
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
-  const fpInteractInputBlocked = () => mammothInventoryOpen() || isTextInputFocused();
+  const fpInteractInputBlocked = () =>
+    mammothInventoryOpen() || mammothCraftingOpen() || isTextInputFocused();
 
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,

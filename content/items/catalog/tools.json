@@ -18,9 +18,17 @@
     {
       "id": "claw-hammer",
       "displayName": "Claw hammer",
-      "description": "Drive nails and board doors. Not craftable in the Balkan MVP survival loop.",
+      "description": "Drive nails and board doors.",
       "category": "tool",
-      "maxStack": 1
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 22,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 6 },
+          { "itemId": "nails", "quantity": 2 },
+          { "itemId": "synthetic-polymer", "quantity": 2 }
+        ]
+      }
     },
     {
       "id": "multimeter",

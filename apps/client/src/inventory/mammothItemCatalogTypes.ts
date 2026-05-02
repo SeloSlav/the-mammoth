@@ -14,6 +14,10 @@ export type MammothConstructionIngredient = {
 export type MammothConstruction = {
   buildTimeSecs: number;
   materials: MammothConstructionIngredient[];
+  /** Catalog `id`s — tool or weapon rows the player carries; not consumed when crafting. */
+  requiredTools: string[];
+  /** When set, one craft grants this many of the output stack (e.g. ammo batches). */
+  outputQuantity?: number;
 };
 
 /** Matches catalog `consumeOnUse` — hotbar instant use (see server `instant_hotbar_consume_vital_deltas`). */

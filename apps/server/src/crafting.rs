@@ -1,25 +1,21 @@
 //! Crafting queue (authoritative) + lightweight HUD toast rows for pickup receipts and craft-complete pings.
 //!
-//! Recipes are intentionally small curated constants (`CRAFT_*`). Expand with catalog-driven data later.
+//! Recipes are **catalog-owned**: [`items_catalog::CatalogItem::construction`] on each output item
+//! (`materials`, `requiredTools`, `buildTimeSecs`, optional `outputQuantity`). No mirrored recipe constants.
+
+use std::collections::HashMap;
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::auth;
-use crate::inventory;
-use crate::inventory::inventory_item;
+use crate::inventory::{self, inventory_item};
 use crate::inventory_models::ItemLocation;
 use crate::items_catalog;
+use crate::items_catalog::ConstructionIngredient;
 use crate::player_vitals;
 
 pub const HUD_TOAST_KIND_ITEM_RECEIVED: u8 = 0;
 pub const HUD_TOAST_KIND_CRAFT_COMPLETE: u8 = 1;
-
-pub const CRAFT_RECIPE_DOOR_LOCK_ID: u8 = 1;
-const DOOR_LOCK_OUTPUT_DEF: &str = "door-lock";
-const DOOR_LOCK_SCRAP_COST: u32 = 3;
-const SCREWDRIVER_DEF: &str = "screwdriver";
-/// Wall time for one door-lock assemble (matches client copy in `fpCraftRecipes.ts`).
-const DOOR_LOCK_CRAFT_MICROS: i64 = 12 * 1_000_000;
 
 /// Max queued rows per player (waiting + active).
 const MAX_QUEUE_PER_PLAYER: usize = 14;
@@ -30,7 +26,8 @@ pub struct CraftQueueItem {
     #[auto_inc]
     pub id: u64,
     pub owner: Identity,
-    pub recipe_id: u8,
+    /// Matches catalog `CatalogItem.id` / inventory `def_id` once this job activates.
+    pub output_def_id: String,
     pub order_index: u32,
     /// `0` = waiting for idle bench / prior crafts; otherwise wall clock µs epoch when materials were consumed.
     pub start_micros: i64,
@@ -146,6 +143,15 @@ fn consume_carrier_def_quantity(
     Ok(())
 }
 
+fn aggregated_material_totals(materials: &[ConstructionIngredient]) -> Vec<(String, u32)> {
+    let mut m: HashMap<String, u32> = HashMap::new();
+    for ing in materials {
+        let e = m.entry(ing.item_id.clone()).or_insert(0);
+        *e = e.saturating_add(ing.quantity);
+    }
+    m.into_iter().collect()
+}
+
 #[inline]
 fn now_micros(ctx: &ReducerContext) -> i64 {
     ctx.timestamp.to_micros_since_unix_epoch()
@@ -176,7 +182,7 @@ fn queue_len_for_owner(ctx: &ReducerContext, owner: Identity) -> usize {
         .count()
 }
 
-/// Try to start the next waiting door-lock craft for `owner`.
+/// Try to start the next waiting craft for `owner` (consume mats, stamp timers).
 fn try_activate_waiting_for_owner(ctx: &ReducerContext, owner: Identity) {
     let now = now_micros(ctx);
     if owner_has_active_craft(ctx, owner, now) {
@@ -194,35 +200,69 @@ fn try_activate_waiting_for_owner(ctx: &ReducerContext, owner: Identity) {
         return;
     };
 
-    if next.recipe_id != CRAFT_RECIPE_DOOR_LOCK_ID {
-        log::warn!("crafting: dropping unknown recipe_id {}", next.recipe_id);
+    let output_def_id = next.output_def_id.clone();
+    let Some(out_item) = items_catalog::get(output_def_id.as_str()) else {
+        log::warn!(
+            "crafting: dropping queue {} unknown output_def_id {:?}",
+            next.id,
+            output_def_id
+        );
         ctx.db.craft_queue_item().id().delete(next.id);
         try_activate_waiting_for_owner(ctx, owner);
         return;
-    }
+    };
+
+    let Some(cons) = out_item.construction.as_ref() else {
+        log::warn!(
+            "crafting: dropping queue {} no construction on {:?}",
+            next.id,
+            output_def_id
+        );
+        ctx.db.craft_queue_item().id().delete(next.id);
+        try_activate_waiting_for_owner(ctx, owner);
+        return;
+    };
 
     if player_vitals::is_player_dead(ctx, owner) {
         return;
     }
-    if !carrier_has_tools(ctx, owner, SCREWDRIVER_DEF, 1) {
-        ctx.db.craft_queue_item().id().delete(next.id);
-        try_activate_waiting_for_owner(ctx, owner);
-        return;
-    }
-    if carrier_def_count(ctx, owner, "scrap-metal") < DOOR_LOCK_SCRAP_COST {
-        ctx.db.craft_queue_item().id().delete(next.id);
-        try_activate_waiting_for_owner(ctx, owner);
-        return;
+
+    for tool_id in &cons.required_tools {
+        if tool_id.is_empty() {
+            continue;
+        }
+        if !carrier_has_tools(ctx, owner, tool_id, 1) {
+            ctx.db.craft_queue_item().id().delete(next.id);
+            try_activate_waiting_for_owner(ctx, owner);
+            return;
+        }
     }
 
-    if let Err(e) = consume_carrier_def_quantity(ctx, owner, "scrap-metal", DOOR_LOCK_SCRAP_COST) {
-        log::warn!("crafting: consume scrap failed queue {}: {e}", next.id);
-        ctx.db.craft_queue_item().id().delete(next.id);
-        try_activate_waiting_for_owner(ctx, owner);
-        return;
+    let totals = aggregated_material_totals(&cons.materials);
+    for (mid, amt) in &totals {
+        if carrier_def_count(ctx, owner, mid) < *amt {
+            ctx.db.craft_queue_item().id().delete(next.id);
+            try_activate_waiting_for_owner(ctx, owner);
+            return;
+        }
     }
 
-    let finish = now + DOOR_LOCK_CRAFT_MICROS;
+    for (mid, amt) in &totals {
+        if let Err(e) = consume_carrier_def_quantity(ctx, owner, mid, *amt) {
+            log::warn!(
+                "crafting: consume {:?} failed queue {}: {e}",
+                mid,
+                next.id
+            );
+            ctx.db.craft_queue_item().id().delete(next.id);
+            try_activate_waiting_for_owner(ctx, owner);
+            return;
+        }
+    }
+
+    let micros = cons.build_time_secs as i64 * 1_000_000;
+    let finish = now + micros;
+
     let Some(mut row) = ctx.db.craft_queue_item().id().find(next.id) else {
         return;
     };
@@ -231,17 +271,46 @@ fn try_activate_waiting_for_owner(ctx: &ReducerContext, owner: Identity) {
     ctx.db.craft_queue_item().id().update(row);
 }
 
-fn complete_door_lock_job(ctx: &ReducerContext, job: CraftQueueItem) {
+fn craft_output_quantity(max_stack: u32, output_quantity: Option<u32>) -> u32 {
+    output_quantity.unwrap_or(1).min(max_stack).max(1)
+}
+
+fn complete_craft_job(ctx: &ReducerContext, job: CraftQueueItem) {
     let owner = job.owner;
     if player_vitals::is_player_dead(ctx, owner) {
         ctx.db.craft_queue_item().id().delete(job.id);
         try_activate_waiting_for_owner(ctx, owner);
         return;
     }
-    if let Err(e) =
-        inventory::try_grant_stack_to_player(ctx, owner, DOOR_LOCK_OUTPUT_DEF.into(), 1)
-    {
-        log::error!("crafting: grant {} failed {:?}: {e}", DOOR_LOCK_OUTPUT_DEF, owner);
+
+    let Some(out_item) = items_catalog::get(job.output_def_id.as_str()) else {
+        log::warn!("crafting: complete unknown {:?}", job.output_def_id);
+        ctx.db.craft_queue_item().id().delete(job.id);
+        try_activate_waiting_for_owner(ctx, owner);
+        return;
+    };
+
+    let Some(cons) = out_item.construction.as_ref() else {
+        log::warn!("crafting: complete no construction {:?}", job.output_def_id);
+        ctx.db.craft_queue_item().id().delete(job.id);
+        try_activate_waiting_for_owner(ctx, owner);
+        return;
+    };
+
+    let qty = craft_output_quantity(out_item.max_stack, cons.output_quantity);
+
+    if let Err(e) = inventory::try_grant_stack_to_player(
+        ctx,
+        owner,
+        job.output_def_id.clone(),
+        qty,
+    ) {
+        log::error!(
+            "crafting: grant {} x{} failed {:?}: {e}",
+            job.output_def_id,
+            qty,
+            owner
+        );
         ctx.db.craft_queue_item().id().delete(job.id);
         try_activate_waiting_for_owner(ctx, owner);
         return;
@@ -251,8 +320,8 @@ fn complete_door_lock_job(ctx: &ReducerContext, job: CraftQueueItem) {
         ctx,
         owner,
         HUD_TOAST_KIND_CRAFT_COMPLETE,
-        DOOR_LOCK_OUTPUT_DEF.to_string(),
-        1,
+        job.output_def_id.clone(),
+        qty,
     );
     ctx.db.craft_queue_item().id().delete(job.id);
     try_activate_waiting_for_owner(ctx, owner);
@@ -273,12 +342,7 @@ pub fn tick_craft_queue_step(ctx: &ReducerContext, _arg: CraftQueueTickSchedule)
         .collect();
 
     for job in due {
-        if job.recipe_id == CRAFT_RECIPE_DOOR_LOCK_ID {
-            complete_door_lock_job(ctx, job);
-        } else {
-            ctx.db.craft_queue_item().id().delete(job.id);
-            try_activate_waiting_for_owner(ctx, job.owner);
-        }
+        complete_craft_job(ctx, job);
     }
 }
 
@@ -323,7 +387,7 @@ pub fn start_hud_toast_cleanup_schedule(ctx: &ReducerContext) {
 }
 
 #[spacetimedb::reducer]
-pub fn enqueue_craft(ctx: &ReducerContext, recipe_id: u8) {
+pub fn enqueue_craft(ctx: &ReducerContext, output_def_id: String) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("enqueue_craft blocked: {e}");
         return;
@@ -332,8 +396,23 @@ pub fn enqueue_craft(ctx: &ReducerContext, recipe_id: u8) {
     if player_vitals::is_player_dead(ctx, owner) {
         return;
     }
-    if recipe_id != CRAFT_RECIPE_DOOR_LOCK_ID || !items_catalog::is_known_def(DOOR_LOCK_OUTPUT_DEF) {
-        log::debug!("enqueue_craft: unsupported recipe {}", recipe_id);
+
+    let output_def_id = output_def_id.trim().to_string();
+    if output_def_id.is_empty() {
+        log::debug!("enqueue_craft: empty output_def_id");
+        return;
+    }
+
+    let Some(out) = items_catalog::get(output_def_id.as_str()) else {
+        log::debug!("enqueue_craft: unknown def {:?}", output_def_id);
+        return;
+    };
+
+    if out.construction.is_none() {
+        log::debug!(
+            "enqueue_craft: {:?} has no construction / not craftable",
+            output_def_id
+        );
         return;
     }
 
@@ -346,7 +425,7 @@ pub fn enqueue_craft(ctx: &ReducerContext, recipe_id: u8) {
     let _ = ctx.db.craft_queue_item().insert(CraftQueueItem {
         id: 0,
         owner,
-        recipe_id,
+        output_def_id,
         order_index,
         start_micros: 0,
         finish_micros: 0,

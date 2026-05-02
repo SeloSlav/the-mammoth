@@ -11,9 +11,23 @@
     {
       "id": "wood-scraps",
       "displayName": "Wood scraps",
-      "description": "Short offcuts and splintered boards. Good for handles and crude clubs.",
+      "description": "Interior demolition offcuts — mostly packaging and trim debris. Not prioritized for improvised metalwork benches.",
       "category": "material",
       "maxStack": 500
+    },
+    {
+      "id": "riser-pipe-stub",
+      "displayName": "Riser stub",
+      "description": "Cutoff from a chase or wet-wall riser — heavy threaded steel stub good for improvised hafts.",
+      "category": "material",
+      "maxStack": 16
+    },
+    {
+      "id": "panel-bus-scrap",
+      "displayName": "Breaker bus scrap",
+      "description": "Thick copper strap from an electrical cabinet — decent for improvised contacts or jacketed bullets.",
+      "category": "material",
+      "maxStack": 30
     },
     {
       "id": "duct-tape",
@@ -53,23 +67,51 @@
     {
       "id": "ammo-9mm",
       "displayName": "9mm rounds",
-      "description": "Loose pistol ammunition (no magazines).",
+      "description": "Loose pistol ammunition (no magazines). Bench-assembled heads on salvaged jackets.",
       "category": "material",
-      "maxStack": 60
+      "maxStack": 60,
+      "construction": {
+        "buildTimeSecs": 18,
+        "outputQuantity": 12,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "panel-bus-scrap", "quantity": 1 },
+          { "itemId": "chemical-reagent", "quantity": 1 },
+          { "itemId": "synthetic-polymer", "quantity": 1 }
+        ]
+      }
     },
     {
       "id": "ammo-shotgun-shell",
       "displayName": "Shotgun shells",
-      "description": "Loose shells for improvised shotguns.",
+      "description": "Loose shells assembled from scavenged cups, wads cut from salvage, and scavenged shot.",
       "category": "material",
-      "maxStack": 24
+      "maxStack": 24,
+      "construction": {
+        "buildTimeSecs": 20,
+        "outputQuantity": 8,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "duct-tape", "quantity": 2 },
+          { "itemId": "chemical-reagent", "quantity": 1 },
+          { "itemId": "panel-bus-scrap", "quantity": 1 }
+        ]
+      }
     },
     {
       "id": "door-lock",
       "displayName": "Door lock",
       "description": "Cylinder lock consumed when formally claiming an apartment.",
       "category": "material",
-      "maxStack": 1
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 12,
+        "requiredTools": ["screwdriver"],
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 3 },
+          { "itemId": "nails", "quantity": 2 }
+        ]
+      }
     }
   ]
 }

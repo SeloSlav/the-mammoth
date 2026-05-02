@@ -70,6 +70,41 @@ fn validate_construction(
     for ing in &c.materials {
         validate_construction_ingredient(owner_id, ing, catalog);
     }
+    for tool_id in &c.required_tools {
+        validate_required_tool(owner_id, tool_id, catalog);
+    }
+    let out_qty = c.output_quantity.unwrap_or(1);
+    if out_qty < 1 {
+        panic!("catalog item {owner_id}: construction.outputQuantity must be >= 1");
+    }
+    let Some(owner_item) = catalog.get(owner_id) else {
+        panic!("catalog item {owner_id}: missing from map during construction validation");
+    };
+    if out_qty > owner_item.max_stack {
+        panic!(
+            "catalog item {owner_id}: construction.outputQuantity {out_qty} exceeds maxStack {}",
+            owner_item.max_stack
+        );
+    }
+}
+
+fn validate_required_tool(owner_id: &str, tool_id: &str, catalog: &HashMap<String, CatalogItem>) {
+    if tool_id.is_empty() {
+        panic!("catalog item {owner_id}: empty construction.requiredTools entry");
+    }
+    let Some(target) = catalog.get(tool_id) else {
+        panic!(
+            "catalog item {owner_id}: unknown construction.requiredTools id {:?}",
+            tool_id
+        );
+    };
+    match target.category {
+        ItemCategory::Tool | ItemCategory::Weapon => {}
+        other => panic!(
+            "catalog item {owner_id}: required tool {:?} must be category tool or weapon (got {:?})",
+            tool_id, other
+        ),
+    }
 }
 
 fn validate_construction_ingredient(

@@ -22,6 +22,7 @@ import waterBottleIcon from "../../../../content/references/meshy/water-bottle.p
 import type {
   ItemCategory,
   MammothConstruction,
+  MammothConstructionIngredient,
   MammothConsumeOnUse,
   MammothHotbarConsumeSound,
   MammothMeleeCombat,
@@ -61,7 +62,12 @@ type RawItem = {
   description: string;
   category: ItemCategory;
   maxStack: number;
-  construction?: MammothConstruction;
+  construction?: {
+    buildTimeSecs?: number;
+    materials?: MammothConstructionIngredient[];
+    requiredTools?: string[];
+    outputQuantity?: number;
+  };
   meleeCombat?: MammothMeleeCombat;
   consumeOnUse?: MammothConsumeOnUse;
   hotbarConsumeSound?: MammothHotbarConsumeSound;
@@ -89,6 +95,8 @@ const ICONS: Record<string, string> = {
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
+  "riser-pipe-stub": crowbarIcon,
+  "panel-bus-scrap": crowbarIcon,
   "claw-hammer": crowbarIcon,
 };
 
@@ -117,6 +125,38 @@ function normalizeMeleeCombat(raw?: MammothMeleeCombat): MammothMeleeCombat | nu
   return { damage: raw.damage };
 }
 
+function normalizeConstruction(raw?: RawItem["construction"] | null): MammothConstruction | null {
+  if (!raw) return null;
+  if (!(raw.buildTimeSecs && raw.buildTimeSecs > 0)) return null;
+  if (!Array.isArray(raw.materials) || raw.materials.length === 0) return null;
+  const materials: MammothConstructionIngredient[] = [];
+  for (const m of raw.materials) {
+    if (
+      typeof m.itemId !== "string" ||
+      m.itemId.trim().length === 0 ||
+      typeof m.quantity !== "number" ||
+      !Number.isFinite(m.quantity)
+    )
+      continue;
+    materials.push({ itemId: m.itemId, quantity: Math.max(1, Math.floor(m.quantity)) });
+  }
+  if (materials.length === 0) return null;
+  const requiredTools = Array.isArray(raw.requiredTools)
+    ? raw.requiredTools.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    : [];
+
+  const construction: MammothConstruction = {
+    buildTimeSecs: raw.buildTimeSecs,
+    materials,
+    requiredTools,
+  };
+  if (typeof raw.outputQuantity === "number" && Number.isFinite(raw.outputQuantity)) {
+    const oq = Math.max(1, Math.floor(raw.outputQuantity));
+    if (oq > 1) construction.outputQuantity = oq;
+  }
+  return construction;
+}
+
 /** `true` when catalog says instant hotbar consume is defined (category consumable + non-zero `consumeOnUse`). */
 export function mammothItemDefSupportsHotbarInstantConsume(def: MammothItemDef | undefined): boolean {
   if (!def || def.category !== "consumable") return false;
@@ -141,7 +181,7 @@ for (const it of mergeRawItems()) {
     category: it.category,
     maxStack: it.maxStack,
     meleeCombat: normalizeMeleeCombat(it.meleeCombat),
-    construction: it.construction ?? null,
+    construction: normalizeConstruction(it.construction),
     consumeOnUse: normalizeConsumeOnUse(it.consumeOnUse),
     hotbarConsumeSound: normalizeHotbarConsumeSound(it.hotbarConsumeSound),
     iconUrl: ICONS[it.id] ?? "",
@@ -150,6 +190,17 @@ for (const it of mergeRawItems()) {
 
 export function getMammothItemDef(defId: string): MammothItemDef | undefined {
   return byId.get(defId);
+}
+
+/** Catalog defs whose `construction` row makes them craftable — sorted for HUD picker. */
+export function listMammothCraftableItemDefs(): MammothItemDef[] {
+  return [...byId.values()].filter((d) => d.construction != null).sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/** Stack granted when one craft completes (batch ammo vs ×1 equip). */
+export function mammothCraftYieldCount(def: MammothItemDef): number {
+  const q = def.construction?.outputQuantity;
+  return typeof q === "number" && q >= 1 ? q : 1;
 }
 
 export function getMammothHotbarInstantConsumeDefIds(): string[] {

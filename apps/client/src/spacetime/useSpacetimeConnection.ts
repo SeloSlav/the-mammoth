@@ -181,6 +181,8 @@ export function useSpacetimeConnection(): SpacetimeSession {
             .subscribe([
               "SELECT * FROM user",
               "SELECT * FROM inventory_item",
+              "SELECT * FROM craft_queue_item",
+              "SELECT * FROM hud_toast_event",
               "SELECT * FROM player_vitals",
               "SELECT * FROM elevator_car",
               "SELECT * FROM elevator_landing_door",

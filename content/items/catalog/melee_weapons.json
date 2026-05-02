@@ -56,17 +56,18 @@
     {
       "id": "baseball-bat",
       "displayName": "Baseball bat",
-      "description": "Wooden club. Wide swing arc, blunt trauma.",
+      "description": "Tape-wrapped slugger built from salvage riser stubs and grips — wide swing arc, blunt trauma.",
       "category": "weapon",
       "maxStack": 1,
       "meleeCombat": {
         "damage": 20
       },
       "construction": {
-        "buildTimeSecs": 8,
+        "buildTimeSecs": 10,
         "materials": [
-          { "itemId": "wood-scraps", "quantity": 6 },
-          { "itemId": "duct-tape", "quantity": 2 }
+          { "itemId": "riser-pipe-stub", "quantity": 1 },
+          { "itemId": "duct-tape", "quantity": 2 },
+          { "itemId": "synthetic-polymer", "quantity": 2 }
         ]
       }
     },
@@ -78,6 +79,14 @@
       "maxStack": 1,
       "meleeCombat": {
         "damage": 8
+      },
+      "construction": {
+        "buildTimeSecs": 14,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 2 },
+          { "itemId": "wire-spool", "quantity": 1 },
+          { "itemId": "synthetic-polymer", "quantity": 2 }
+        ]
       }
     }
   ]

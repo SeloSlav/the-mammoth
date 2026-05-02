@@ -6,6 +6,8 @@ import {
 
   getMammothItemDef,
 
+  mammothCraftYieldCount,
+
   mammothItemDefSupportsHotbarInstantConsume,
 
 } from "./mammothItemCatalog";
@@ -162,6 +164,20 @@ describe("mammothItemCatalog", () => {
 
     expect(itemDefIdSupportsHotbarInstantConsume("cigarettes")).toBe(true);
 
+  });
+
+  it("crafting metadata is read from catalog rows (requiredTools, ammo batch yield)", () => {
+    const door = getMammothItemDef("door-lock");
+
+    expect(door?.construction?.requiredTools).toContain("screwdriver");
+
+    expect(door?.construction?.materials.some((m) => m.itemId === "scrap-metal")).toBe(true);
+
+    const ammo = getMammothItemDef("ammo-9mm");
+
+    expect(ammo).toBeDefined();
+
+    expect(mammothCraftYieldCount(ammo!)).toBe(12);
   });
 
 });

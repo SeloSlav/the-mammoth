@@ -11,5 +11,5 @@ import {
 } from "spacetimedb";
 
 export default {
-  recipeId: __t.u8(),
+  outputDefId: __t.string(),
 };

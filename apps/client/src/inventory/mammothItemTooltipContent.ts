@@ -1,5 +1,6 @@
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import type { ItemCategory } from "./mammothItemCatalogTypes";
+import { getMammothItemDef, mammothCraftYieldCount } from "./mammothItemCatalog";
 import { THEME_ERROR, THEME_SUCCESS } from "@the-mammoth/ui-theme";
 
 export type MammothItemTooltipStat = {
@@ -81,11 +82,20 @@ export function buildMammothItemTooltipContent(pop: MammothPopulatedItem): Mammo
   }
 
   if (def.construction) {
-    const { buildTimeSecs, materials } = def.construction;
+    const { buildTimeSecs, materials, requiredTools } = def.construction;
     stats.push({
       label: "Build time",
       value: `${buildTimeSecs}s`,
     });
+    const y = mammothCraftYieldCount(def);
+    if (y > 1) {
+      stats.push({ label: "Craft yield", value: `×${y}` });
+    }
+    const tools = requiredTools ?? [];
+    if (tools.length > 0) {
+      const labels = tools.map((id) => getMammothItemDef(id)?.displayName ?? id).join(", ");
+      stats.push({ label: "Requires carried", value: labels });
+    }
     if (materials.length > 0) {
       stats.push({
         label: "Recipe",

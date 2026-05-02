@@ -72,6 +72,12 @@ pub enum ItemCategory {
 pub struct ConstructionSpec {
     pub build_time_secs: u32,
     pub materials: Vec<ConstructionIngredient>,
+    /// Catalog `id`s of **tool** or **weapon** rows the player must carry (not consumed).
+    #[serde(default)]
+    pub required_tools: Vec<String>,
+    /// Crafted stack size when the recipe yields a bundle (e.g. ammo). Defaults to `1`.
+    #[serde(default)]
+    pub output_quantity: Option<u32>,
 }
 
 /// One line in a recipe: references another catalog **`id`** (same as inventory `def_id`).

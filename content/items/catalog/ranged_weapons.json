@@ -6,14 +6,35 @@
       "displayName": "Sidearm",
       "description": "Compact semi-auto frame. Uses loose 9mm from inventory stacks.",
       "category": "weapon",
-      "maxStack": 1
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 55,
+        "requiredTools": ["multimeter"],
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 8 },
+          { "itemId": "wire-spool", "quantity": 3 },
+          { "itemId": "synthetic-polymer", "quantity": 2 },
+          { "itemId": "chemical-reagent", "quantity": 1 },
+          { "itemId": "nails", "quantity": 2 }
+        ]
+      }
     },
     {
       "id": "shotgun-coach",
       "displayName": "Coach shotgun",
       "description": "Sawed barrel, heavy swing. Uses shotgun shells from inventory.",
       "category": "weapon",
-      "maxStack": 1
+      "maxStack": 1,
+      "construction": {
+        "buildTimeSecs": 48,
+        "requiredTools": ["pipe-wrench"],
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 10 },
+          { "itemId": "duct-tape", "quantity": 3 },
+          { "itemId": "synthetic-polymer", "quantity": 1 },
+          { "itemId": "nails", "quantity": 1 }
+        ]
+      }
     }
   ]
 }

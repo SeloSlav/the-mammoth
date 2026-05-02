@@ -75,7 +75,7 @@ export type ChatMessage = __Infer<typeof ChatMessage>;
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
-  recipeId: __t.u8(),
+  outputDefId: __t.string(),
   orderIndex: __t.u32(),
   startMicros: __t.i64(),
   finishMicros: __t.i64(),

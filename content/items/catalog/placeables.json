@@ -8,10 +8,11 @@
       "category": "placeable",
       "maxStack": 5,
       "construction": {
-        "buildTimeSecs": 6,
+        "buildTimeSecs": 8,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "wood-scraps", "quantity": 8 }
+          { "itemId": "scrap-metal", "quantity": 4 },
+          { "itemId": "duct-tape", "quantity": 2 },
+          { "itemId": "riser-pipe-stub", "quantity": 1 }
         ]
       }
     },
