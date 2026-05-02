@@ -6,14 +6,9 @@ import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammo
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
-import {
-  attachDroppedPickupGlow,
-  createDroppedPickupGlowMaterial,
-  stripDroppedPickupGlow,
-} from "./droppedItemPickupGlow.js";
 
 /** Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ` (√ here). */
-export const MAMMOTH_PICKUP_RADIUS_M = 2.75;
+export const MAMMOTH_PICKUP_RADIUS_M = 3.5;
 
 const EPS_BB = 1e-6;
 
@@ -185,8 +180,6 @@ export function mountDroppedItemsWorld(
   root.name = "dropped_items";
   scene.add(root);
 
-  const pickupGlowMaterial = createDroppedPickupGlowMaterial();
-
   const loader = new GLTFLoader();
   const idToGroup = new Map<string, THREE.Group>();
   /** Drop rows currently resolving a visual (avoid duplicate async work per id). */
@@ -260,7 +253,6 @@ export function mountDroppedItemsWorld(
     const inner = new THREE.Group();
     inner.add(mesh);
     fitDroppedWorldItemModelToCatalog(inner, row.defId);
-    attachDroppedPickupGlow(inner, pickupGlowMaterial);
     const g = new THREE.Group();
     g.name = `drop_${key}`;
     g.add(inner);
@@ -294,7 +286,6 @@ export function mountDroppedItemsWorld(
       }
       const clone = state.template.root.clone(true);
       fitDroppedWorldItemModelToCatalog(clone, row.defId);
-      attachDroppedPickupGlow(clone, pickupGlowMaterial);
       const g = new THREE.Group();
       g.name = `drop_${key}`;
       g.add(clone);
@@ -313,9 +304,6 @@ export function mountDroppedItemsWorld(
     }
     for (const [k, g] of idToGroup) {
       if (!seen.has(k)) {
-        for (const child of g.children) {
-          stripDroppedPickupGlow(child);
-        }
         root.remove(g);
         idToGroup.delete(k);
       }
@@ -377,12 +365,6 @@ export function mountDroppedItemsWorld(
     conn.db.dropped_item.removeOnInsert(onRowChange);
     conn.db.dropped_item.removeOnUpdate(onRowChange);
     conn.db.dropped_item.removeOnDelete(onRowChange);
-    for (const [, g] of idToGroup) {
-      for (const child of g.children) {
-        stripDroppedPickupGlow(child);
-      }
-    }
-    pickupGlowMaterial.dispose();
     scene.remove(root);
     idToGroup.clear();
     defTemplateState.clear();

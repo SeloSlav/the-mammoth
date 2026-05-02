@@ -601,7 +601,7 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED || unit.reinforced != 0 {
         return;
     }
-    if !inventory_has(ctx, sender, "claw-hammer", 1) || !inventory_has(ctx, sender, "scrap-metal", 10) {
+    if !inventory_has(ctx, sender, "screwdriver", 1) || !inventory_has(ctx, sender, "scrap-metal", 10) {
         return;
     }
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {

@@ -49,6 +49,8 @@ describe("mammothItemCatalog", () => {
     expect(getMammothDroppedWorldModelUrl("scrap-metal")).toBe("/static/models/items/scrap-metal.glb");
 
     expect(getMammothDroppedWorldModelUrl("chemical-stock")).toBe("/static/models/items/chemical-stock.glb");
+    expect(getMammothItemDef("scrap-metal")?.iconUrl?.length).toBeGreaterThan(8);
+    expect(getMammothItemDef("chemical-stock")?.iconUrl?.length).toBeGreaterThan(8);
 
     expect(getMammothDroppedWorldModelUrl("door-lock")).toBe("/static/models/items/door-lock.glb");
 
@@ -171,6 +173,7 @@ describe("mammothItemCatalog", () => {
   it("crafting metadata is read from catalog rows (requiredTools, ammo batch yield)", () => {
     const door = getMammothItemDef("door-lock");
 
+    expect(door?.category).toBe("utility");
     expect(door?.construction?.requiredTools).toContain("screwdriver");
 
     expect(door?.construction?.materials).toEqual([{ itemId: "scrap-metal", quantity: 5 }]);
@@ -178,11 +181,12 @@ describe("mammothItemCatalog", () => {
     const ammo = getMammothItemDef("ammo-9mm");
 
     expect(ammo).toBeDefined();
+    expect(ammo?.category).toBe("ammo");
 
     expect(mammothCraftYieldCount(ammo!)).toBe(12);
 
     const chem = getMammothItemDef("chemical-stock");
-    expect(chem?.category).toBe("material");
+    expect(chem?.category).toBe("resource");
     expect(chem?.construction).toBeNull();
     expect(
       ammo?.construction?.materials.some((m) => m.itemId === "chemical-stock"),

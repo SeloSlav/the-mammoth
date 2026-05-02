@@ -543,9 +543,11 @@ export function createFpSessionMainRafFrame(
         MAMMOTH_PICKUP_RADIUS_M,
       );
       const lookedAtStash = deps.fpApartmentFurniture.getStashPrompt(ft, deps.camera);
+      const lookedAtWardrobeUnitKey = deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera);
       const aSys = getApartmentSystemPrompt(deps.conn, ft, {
         apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
         lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,
+        lookedAtWardrobeUnitKey,
       });
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {

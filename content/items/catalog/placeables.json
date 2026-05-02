@@ -2,17 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "campfire",
-      "displayName": "Campfire kit",
-      "description": "Portable ring and grate. Place to cook simple meals and dry gear (world hook TBD).",
-      "category": "placeable",
-      "maxStack": 5,
-      "construction": {
-        "buildTimeSecs": 8,
-        "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
-      }
-    },
-    {
       "id": "brick-oven",
       "displayName": "Brick oven",
       "description": "Heavy shell for retained heat. For baking and slow roasts once placed (world hook TBD).",

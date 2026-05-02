@@ -1,5 +1,5 @@
 //! Merge catalog JSON shards. Construction costs reference other catalog **`id`**s with
-//! [`super::schema::ItemCategory::Material`] — same strings as inventory `def_id` (single source of truth).
+//! [`super::schema::ItemCategory::Resource`] — same strings as inventory `def_id` (single source of truth).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -127,9 +127,9 @@ fn validate_construction_ingredient(
             ing.item_id
         );
     };
-    if target.category != ItemCategory::Material {
+    if target.category != ItemCategory::Resource {
         panic!(
-            "catalog item {owner_id}: construction ingredient {:?} must reference a catalog item with category \"material\" (got {:?})",
+            "catalog item {owner_id}: construction ingredient {:?} must reference a catalog item with category \"resource\" (got {:?})",
             ing.item_id, target.category
         );
     }

@@ -62,7 +62,10 @@ pub struct CatalogItem {
 pub enum ItemCategory {
     Weapon,
     Tool,
-    Material,
+    /// Salvaged inputs consumed by recipes (scrap, chemicals, etc.).
+    Resource,
+    Ammo,
+    Utility,
     Placeable,
     Consumable,
 }

@@ -156,6 +156,7 @@ describe("fpApartmentGameplay", () => {
     const prompt = getApartmentSystemPrompt(
       mockConn([unit], ["door-lock", "screwdriver"]),
       { x: 2.5, y: 10, z: 3.25 },
+      { lookedAtWardrobeUnitKey: unit.unitKey },
     );
     expect(prompt).toEqual({ kind: "apartment_claim", unitKey: unit.unitKey });
   });
@@ -172,7 +173,7 @@ describe("fpApartmentGameplay", () => {
     const prompt = getApartmentSystemPrompt(
       mockConn([unit], ["door-lock", "screwdriver"]),
       { x: 2.5, y: 10, z: 3.25 },
-      { apartmentClaimsAllowed: false },
+      { apartmentClaimsAllowed: false, lookedAtWardrobeUnitKey: unit.unitKey },
     );
     expect(prompt).toEqual({ kind: "apartment_claim_blocked_guest", unitKey: unit.unitKey });
   });
@@ -189,8 +190,48 @@ describe("fpApartmentGameplay", () => {
     const prompt = getApartmentSystemPrompt(
       mockConn([unit], ["door-lock", "screwdriver"]),
       { x: 6.35, y: 10, z: 3.1 },
+      { lookedAtWardrobeUnitKey: unit.unitKey },
     );
     expect(prompt).toBeNull();
+  });
+
+  it("does not offer claim or gear prompts unless reticle aims at the wardrobe", () => {
+    const unit = apartmentUnit({
+      wardrobeX: 2,
+      wardrobeZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    expect(
+      getApartmentSystemPrompt(mockConn([unit], ["door-lock", "screwdriver"]), {
+        x: 2.5,
+        y: 10,
+        z: 3.25,
+      }),
+    ).toBeNull();
+    expect(
+      getApartmentSystemPrompt(mockConn([unit]), { x: 2.5, y: 10, z: 3.25 }, {
+        lookedAtWardrobeUnitKey: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("blocked gear prompt requires aiming at wardrobe", () => {
+    const unit = apartmentUnit({
+      wardrobeX: 2,
+      wardrobeZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    expect(
+      getApartmentSystemPrompt(mockConn([unit], ["door-lock"]), { x: 2.5, y: 10, z: 3.25 }, {
+        lookedAtWardrobeUnitKey: unit.unitKey,
+      }),
+    ).toEqual({ kind: "apartment_claim_blocked_gear", unitKey: unit.unitKey });
   });
 
   it("keeps owned claimed apartments on stash only and does not expose reinforcement", () => {

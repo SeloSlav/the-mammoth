@@ -16,6 +16,8 @@ import rakijaIcon from "../../../../content/references/meshy/rakija-icon.png?url
 import screwdriverIcon from "../../../../content/references/meshy/screwdriver.png?url";
 import shotgunCoachIcon from "../../../../content/references/meshy/shotgun-coach.png?url";
 import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell.png?url";
+import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
+import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
 import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
 import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
 
@@ -91,11 +93,11 @@ const ICONS: Record<string, string> = {
   "shotgun-coach": shotgunCoachIcon,
   "ammo-9mm": ammo9mmIcon,
   "ammo-shotgun-shell": shotgunShellIcon,
-  "chemical-stock": crowbarIcon,
+  "scrap-metal": scrapMetalIcon,
+  "chemical-stock": chemicalStockIcon,
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
-  "claw-hammer": crowbarIcon,
 };
 
 /** First candidate URL (preview / legacy). World mesh load uses the full candidate list. */
@@ -208,6 +210,6 @@ export function getMammothHotbarInstantConsumeDefIds(): string[] {
     .sort();
 }
 
-export function isMaterialDefId(defId: string): boolean {
-  return getMammothItemDef(defId)?.category === "material";
+export function isResourceDefId(defId: string): boolean {
+  return getMammothItemDef(defId)?.category === "resource";
 }

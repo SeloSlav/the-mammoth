@@ -5,21 +5,21 @@
       "id": "scrap-metal",
       "displayName": "Scrap metal",
       "description": "Salvaged plate and fittings — primary bench input for improvised tools, weapons, and hardware.",
-      "category": "material",
+      "category": "resource",
       "maxStack": 5
     },
     {
       "id": "chemical-stock",
       "displayName": "Chemical stock",
       "description": "Bottles, pucks, and ampoules rescued from custodial and MEP lockers — propellant feedstock and flux for ballistics.",
-      "category": "material",
+      "category": "resource",
       "maxStack": 40
     },
     {
       "id": "ammo-9mm",
       "displayName": "9mm rounds",
       "description": "Loose pistol ammunition (no magazines). Scrap jackets plus chemical stock for primer and propellant chemistry.",
-      "category": "material",
+      "category": "ammo",
       "maxStack": 60,
       "construction": {
         "buildTimeSecs": 18,
@@ -34,7 +34,7 @@
       "id": "ammo-shotgun-shell",
       "displayName": "Shotgun shells",
       "description": "Loose shells crimped from scrap cups — chemical stock feeds primers and payloads.",
-      "category": "material",
+      "category": "ammo",
       "maxStack": 24,
       "construction": {
         "buildTimeSecs": 20,
@@ -49,7 +49,7 @@
       "id": "door-lock",
       "displayName": "Door lock",
       "description": "Cylinder lock consumed when formally claiming an apartment.",
-      "category": "material",
+      "category": "utility",
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 12,

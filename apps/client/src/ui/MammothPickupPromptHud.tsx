@@ -139,15 +139,17 @@ export function MammothPickupPromptHud() {
   if (prompt.kind === "apartment_claim_blocked_gear") {
     const msg =
       prompt.missingDoorLock && prompt.missingScrewdriver
-        ? "You need a door lock plus a screwdriver in inventory/hotbar. Craft the lock with 3× scrap metal (B opens crafting — tool not consumed)."
+        ? "You need a door lock plus a screwdriver in inventory/hotbar. Craft the lock with 5× scrap metal (B opens crafting — tool not consumed)."
         : prompt.missingDoorLock
-          ? "Door lock missing — craft one from 3× scrap metal in the B crafting panel (keep a screwdriver in inventory or hotbar)."
+          ? "Door lock missing — craft one from 5× scrap metal in the B crafting panel (keep a screwdriver in inventory or hotbar)."
           : "You need a screwdriver (inventory or hotbar) to install the lock when claiming.";
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,110,110,0.55)" glowRgb="rgba(255,70,70,0.18)">
         <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffb8b8" }}>{prompt.displayLabel}</div>
         <div style={{ color: "#ff8a8a", fontWeight: 600 }}>{msg}</div>
-        <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>Stand at this apartment&apos;s wardrobe.</div>
+        <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>
+          Face this apartment&apos;s wardrobe (center of screen) from inside the unit.
+        </div>
       </FpBottomInteractPromptFrame>
     );
   }
@@ -190,7 +192,7 @@ export function MammothPickupPromptHud() {
           kbdText="#061004"
         />
         <span style={{ opacity: 0.92 }}>
-          {` to claim — ~${secUi}s left (stay at the wardrobe; uses door lock + screwdriver).`}
+          {` to claim — ~${secUi}s left (keep the wardrobe centered; uses door lock + screwdriver).`}
         </span>
       </FpBottomInteractPromptFrame>
     );

@@ -19,7 +19,7 @@ use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
 /// Squared max distance (m²) from player feet to allow pickup.
-const PICKUP_RADIUS_SQ: f32 = 2.75 * 2.75;
+const PICKUP_RADIUS_SQ: f32 = 3.5 * 3.5;
 /// Forward offset along look direction when spawning a drop (m).
 const DROP_FORWARD_M: f32 = 0.55;
 /// Lift mesh slightly above replicated foot height to avoid z-fighting (m).

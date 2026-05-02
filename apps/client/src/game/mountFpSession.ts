@@ -850,9 +850,13 @@ export async function mountFpSession(
       const lookedAtStash = conn.identity
         ? fpApartmentFurniture.getStashPrompt(feet, camera)
         : null;
+      const lookedAtWardrobeUnitKey = conn.identity
+        ? fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(feet, camera)
+        : null;
       const aptKey = conn.identity
         ? getApartmentSystemPrompt(conn, feet, {
             lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,
+            lookedAtWardrobeUnitKey,
           })
         : null;
       /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */

@@ -14,10 +14,13 @@ import {
   listMammothCraftableItemDefs,
   mammothCraftYieldCount,
 } from "../inventory/mammothItemCatalog";
-import type { MammothConstructionIngredient } from "../inventory/mammothItemCatalogTypes";
+import type {
+  ItemCategory,
+  MammothConstructionIngredient,
+  MammothItemDef,
+} from "../inventory/mammothItemCatalogTypes";
 import type { MammothPopulatedItem } from "../inventory/inventoryDragDropTypes";
 import { useMammothInventory } from "../inventory/useMammothInventory";
-import { MammothGlbPreviewCanvas } from "./MammothGlbPreviewCanvas";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
@@ -37,6 +40,29 @@ import {
 } from "@the-mammoth/ui-theme";
 
 const MAX_QUEUE_PER_PLAYER = 14;
+
+/** Above inventory / pickup / toasts / vitals; keep below {@link PlayerDeathOverlay} (400). */
+const CRAFTING_OVERLAY_Z_INDEX = 380;
+
+const CATEGORY_ORDER: ItemCategory[] = [
+  "weapon",
+  "tool",
+  "ammo",
+  "utility",
+  "placeable",
+  "resource",
+  "consumable",
+];
+
+const CATEGORY_LABEL: Record<ItemCategory, string> = {
+  weapon: "Weapons",
+  tool: "Tools",
+  ammo: "Ammo",
+  utility: "Utilities",
+  placeable: "Placeables",
+  resource: "Resources",
+  consumable: "Consumables",
+};
 
 function carrierCountForDef(
   grids: { hotbar: (MammothPopulatedItem | null)[]; inventory: (MammothPopulatedItem | null)[] },
@@ -70,15 +96,47 @@ export function MammothCraftingHud({ conn }: Props) {
   const [open, setOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const craftables = useMemo(() => listMammothCraftableItemDefs(), []);
-  const defaultDefId = craftables[0]?.id ?? "";
+  const { craftablesByCategory, categoriesWithRecipes } = useMemo(() => {
+    const m = new Map<ItemCategory, MammothItemDef[]>();
+    for (const c of CATEGORY_ORDER) m.set(c, []);
+    for (const d of craftables) {
+      m.get(d.category)!.push(d);
+    }
+    for (const c of CATEGORY_ORDER) {
+      m.get(c)!.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    }
+    const cats = CATEGORY_ORDER.filter((c) => m.get(c)!.length > 0);
+    return { craftablesByCategory: m, categoriesWithRecipes: cats };
+  }, [craftables]);
 
-  const [selectedOutputDefId, setSelectedOutputDefId] = useState(defaultDefId);
+  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | null>(null);
+  useEffect(() => {
+    if (categoriesWithRecipes.length === 0) return;
+    if (!selectedCategory || !categoriesWithRecipes.includes(selectedCategory)) {
+      setSelectedCategory(categoriesWithRecipes[0]!);
+    }
+  }, [categoriesWithRecipes, selectedCategory]);
+
+  const itemsInCategory = useMemo(() => {
+    if (!selectedCategory) return [];
+    return craftablesByCategory.get(selectedCategory) ?? [];
+  }, [selectedCategory, craftablesByCategory]);
+
+  const [selectedOutputDefId, setSelectedOutputDefId] = useState(() => craftables[0]?.id ?? "");
 
   useEffect(() => {
     if (craftables.length === 0) return;
-    if (!craftables.some((d) => d.id === selectedOutputDefId))
+    if (!craftables.some((d) => d.id === selectedOutputDefId)) {
       setSelectedOutputDefId(craftables[0]!.id);
+    }
   }, [craftables, selectedOutputDefId]);
+
+  useEffect(() => {
+    if (itemsInCategory.length === 0) return;
+    if (!itemsInCategory.some((d) => d.id === selectedOutputDefId)) {
+      setSelectedOutputDefId(itemsInCategory[0]!.id);
+    }
+  }, [itemsInCategory, selectedOutputDefId]);
 
   const selectedDef =
     craftables.find((d) => d.id === selectedOutputDefId) ?? craftables[0];
@@ -199,25 +257,28 @@ export function MammothCraftingHud({ conn }: Props) {
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 118,
+          zIndex: CRAFTING_OVERLAY_Z_INDEX,
           background: THEME_BACKDROP_SCRIM,
           display: "flex",
+          flexDirection: "column",
           alignItems: "stretch",
           justifyContent: "stretch",
           fontFamily: UI_FONT_SANS,
+          padding: "4px 8px",
+          boxSizing: "border-box",
         }}
       >
         <div
           style={{
             flex: 1,
-            margin: "3vh auto",
-            width: "min(1100px, calc(100vw - 48px))",
-            maxHeight: "94vh",
-            display: "grid",
-            gridTemplateColumns: "220px minmax(0, 1fr) minmax(0, 340px)",
-            gap: 16,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            width: "100%",
+            maxWidth: "100%",
+            margin: 0,
             boxSizing: "border-box",
-            padding: "18px 20px",
+            padding: "14px 18px",
             borderRadius: 12,
             background: THEME_CARD_BG,
             border: `1px solid ${THEME_CARD_BORDER}`,
@@ -227,91 +288,271 @@ export function MammothCraftingHud({ conn }: Props) {
           onMouseDown={(e) => e.stopPropagation()}
           data-mammoth-no-hotbar-wheel="true"
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 11, opacity: 0.65 }}>CRAFTING</div>
-            {craftables.length === 0 ? (
-              <div style={{ color: THEME_TEXT_FAINT, fontSize: 12 }}>No craftable defs in catalog.</div>
-            ) : (
-              craftables.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => setSelectedOutputDefId(d.id)}
-                  style={{
-                    textAlign: "left",
-                    padding: "11px 12px",
-                    borderRadius: 8,
-                    border:
-                      selectedOutputDefId === d.id
-                        ? `1px solid ${THEME_ACCENT}`
-                        : `1px solid ${THEME_CARD_BORDER}`,
-                    background:
-                      selectedOutputDefId === d.id ? "rgba(107,140,174,0.18)" : "rgba(0,0,0,0.35)",
-                    color: THEME_TEXT_PRIMARY,
-                    cursor: "pointer",
-                    fontSize: 13,
-                  }}
-                >
-                  {d.displayName}
-                </button>
-              ))
-            )}
-            <div style={{ flex: 1 }} />
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              paddingBottom: 12,
+              marginBottom: 12,
+              borderBottom: `1px solid ${THEME_DIVIDER}`,
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 650, letterSpacing: "0.02em" }}>Crafting</div>
             <button
               type="button"
               onClick={() => setOpen(false)}
               style={{
-                padding: "8px 10px",
+                padding: "10px 14px",
                 borderRadius: 8,
                 border: `1px solid ${THEME_CARD_BORDER}`,
                 background: "rgba(0,0,0,0.45)",
-                color: THEME_TEXT_MUTED,
+                color: THEME_TEXT_PRIMARY,
                 cursor: "pointer",
-                fontSize: 12,
+                fontSize: 14,
+                fontWeight: 550,
               }}
             >
               Close · Esc
             </button>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, gap: 12 }}>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "grid",
+              gridTemplateColumns: "200px minmax(0, 1fr) minmax(300px, 380px)",
+              gap: 16,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {categoriesWithRecipes.length === 0 ? (
+                <div style={{ color: THEME_TEXT_FAINT, fontSize: 12 }}>No craftable defs in catalog.</div>
+              ) : (
+                categoriesWithRecipes.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    style={{
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border:
+                        selectedCategory === cat
+                          ? `1px solid ${THEME_ACCENT}`
+                          : `1px solid ${THEME_CARD_BORDER}`,
+                      background:
+                        selectedCategory === cat ? "rgba(107,140,174,0.18)" : "rgba(0,0,0,0.35)",
+                      color: THEME_TEXT_PRIMARY,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontWeight: selectedCategory === cat ? 650 : 400,
+                    }}
+                  >
+                    {CATEGORY_LABEL[cat]}
+                  </button>
+                ))
+              )}
+            </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              minWidth: 0,
+              minHeight: 0,
+              gap: 10,
+              borderLeft: `1px solid ${THEME_DIVIDER}`,
+              borderRight: `1px solid ${THEME_DIVIDER}`,
+              paddingLeft: 16,
+              paddingRight: 16,
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ flexShrink: 0, fontSize: 12, color: THEME_TEXT_MUTED }}>
+              {selectedCategory ? CATEGORY_LABEL[selectedCategory] : "—"}
+            </div>
+            {itemsInCategory.length === 0 ? (
+              <div style={{ color: THEME_TEXT_MUTED, fontSize: 13 }}>No recipes in this category.</div>
+            ) : (
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))",
+                  gap: 10,
+                  alignContent: "start",
+                }}
+              >
+                {itemsInCategory.map((d) => {
+                  const selected = d.id === selectedOutputDefId;
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setSelectedOutputDefId(d.id)}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "12px 8px",
+                        borderRadius: 10,
+                        border: selected
+                          ? `1px solid ${THEME_ACCENT}`
+                          : `1px solid ${THEME_CARD_BORDER}`,
+                        background: selected
+                          ? "rgba(107,140,174,0.2)"
+                          : "rgba(0,0,0,0.32)",
+                        color: THEME_TEXT_PRIMARY,
+                        cursor: "pointer",
+                        textAlign: "center",
+                        minHeight: 100,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 52,
+                          height: 52,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: 8,
+                          background: "rgba(0,0,0,0.35)",
+                        }}
+                      >
+                        {d.iconUrl ? (
+                          <img
+                            src={d.iconUrl}
+                            alt=""
+                            draggable={false}
+                            style={{
+                              maxWidth: 46,
+                              maxHeight: 46,
+                              objectFit: "contain",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 10, color: THEME_TEXT_FAINT }}>—</span>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 1.25,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical" as const,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {d.displayName}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              minWidth: 0,
+              minHeight: 0,
+              overflowY: "auto",
+              paddingLeft: 4,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 620 }}>Recipe</div>
             {selectedDef && cons ? (
               <>
-                <div style={{ fontSize: 18, fontWeight: 650 }}>{selectedDef.displayName}</div>
-                <div style={{ color: THEME_TEXT_MUTED, fontSize: 13, lineHeight: 1.55 }}>
-                  {selectedDef.description}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 14,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 88,
+                      height: 88,
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 10,
+                      border: `1px solid ${THEME_CARD_BORDER}`,
+                      background:
+                        "radial-gradient(ellipse at center, rgba(107,140,174,0.12), rgba(0,0,0,0.45))",
+                    }}
+                  >
+                    {selectedDef.iconUrl ? (
+                      <img
+                        src={selectedDef.iconUrl}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          maxWidth: 76,
+                          maxHeight: 76,
+                          objectFit: "contain",
+                        }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 11, color: THEME_TEXT_FAINT }}>No icon</span>
+                    )}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 650, lineHeight: 1.25 }}>
+                      {selectedDef.displayName}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        color: THEME_TEXT_MUTED,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {selectedDef.description}
+                    </div>
+                  </div>
                 </div>
                 <div
                   style={{
                     height: 1,
                     background: THEME_DIVIDER,
-                    margin: "4px 0",
+                    margin: "2px 0",
                   }}
                 />
-                <div style={{ flex: "1 1 52%", minHeight: 260 }}>
-                  <MammothGlbPreviewCanvas
-                    defId={selectedDef.id}
-                    style={{
-                      border: `1px solid ${THEME_CARD_BORDER}`,
-                      background:
-                        "radial-gradient(ellipse at center, rgba(107,140,174,0.12), rgba(0,0,0,0.5))",
-                      minHeight: 280,
-                      width: "100%",
-                    }}
-                  />
-                </div>
-                <div style={{ fontSize: 13, display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 12, display: "grid", gap: 5, color: THEME_TEXT_MUTED }}>
                   <div>
-                    <span style={{ color: THEME_TEXT_FAINT }}>Max stack:</span>{" "}
-                    {selectedDef.maxStack ?? "—"}
+                    <span style={{ color: THEME_TEXT_FAINT }}>Max stack:</span> {selectedDef.maxStack ?? "—"}
                   </div>
                   <div>
                     <span style={{ color: THEME_TEXT_FAINT }}>Category:</span>{" "}
-                    {selectedDef.category ?? "—"}
+                    {CATEGORY_LABEL[selectedDef.category]}
                   </div>
                   <div>
-                    <span style={{ color: THEME_TEXT_FAINT }}>Craft time:</span> {cons.buildTimeSecs}s (server advances{" "}
-                    ~1 Hz)
+                    <span style={{ color: THEME_TEXT_FAINT }}>Craft time:</span> {cons.buildTimeSecs}s (~1 Hz server)
                   </div>
                   {yieldCount > 1 ? (
                     <div>
@@ -322,20 +563,11 @@ export function MammothCraftingHud({ conn }: Props) {
                 </div>
               </>
             ) : (
-              <div style={{ opacity: 0.7 }}>Select a blueprint.</div>
+              <div style={{ color: THEME_TEXT_MUTED, fontSize: 13 }}>
+                Select an item from the grid to see recipe details and craft.
+              </div>
             )}
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              minWidth: 0,
-              borderLeft: `1px solid ${THEME_DIVIDER}`,
-              paddingLeft: 16,
-            }}
-          >
             <div style={{ fontSize: 14, fontWeight: 620 }}>Requirements</div>
             {selectedDef && cons ? (
               <ul style={{ margin: 0, paddingLeft: 18, color: THEME_TEXT_MUTED, fontSize: 13 }}>
@@ -468,10 +700,18 @@ export function MammothCraftingHud({ conn }: Props) {
               )}
             </div>
 
-            <div style={{ fontSize: 11, color: THEME_TEXT_FAINT, lineHeight: 1.45 }}>
+            <div
+              style={{
+                flexShrink: 0,
+                fontSize: 12,
+                color: THEME_TEXT_MUTED,
+                lineHeight: 1.45,
+              }}
+            >
               Ingredients are consumed when each job begins. Tools stay equipped in inventory/hotbar. If something is
               missing when a job activates, it is discarded and the next waiting job is tried.
             </div>
+          </div>
           </div>
         </div>
       </div>

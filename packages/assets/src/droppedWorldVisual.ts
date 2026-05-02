@@ -50,14 +50,10 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   "caffeine-gum": 0.08,
 
   // Tools
-  "pipe-wrench": 0.32,
-  "claw-hammer": 0.38,
   screwdriver: 0.22,
   multimeter: 0.19,
-  "prybar-light": 0.38,
 
   // Placeables (until dedicated world mesh; keep under human height)
-  campfire: 0.45,
   "brick-oven": 0.65,
   "reloading-press": 0.55,
   "gunsmith-workbench": 0.85,

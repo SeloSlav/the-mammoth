@@ -4,6 +4,8 @@
  * Prefer editing here rather than scattering `ENABLE_*` / PBR knobs across modules.
  */
 
+import { truncate } from "fs";
+
 /**
  * Initial value for {@link authorImportedPbrTexturesState.enabled}.
  * When `false`, skips loading author basecolor/normal/roughness/AO/opt-in maps (FPS profiling).
@@ -29,4 +31,4 @@ export let ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
  * Exterior megablock yard trees (procedural via `@dgreenheck/ez-tree`, merged per species).
  * When `false`, FP skips grove mesh build + client tree collision pillars (toggle here for perf).
  */
-export let ENABLE_EXTERIOR_PROCEDURAL_TREES = false;
+export let ENABLE_EXTERIOR_PROCEDURAL_TREES = true;

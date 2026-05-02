@@ -9,7 +9,7 @@
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 55,
-        "requiredTools": ["multimeter"],
+        "requiredTools": ["screwdriver"],
         "materials": [
           { "itemId": "scrap-metal", "quantity": 11 },
           { "itemId": "chemical-stock", "quantity": 4 }
@@ -24,7 +24,7 @@
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 48,
-        "requiredTools": ["pipe-wrench"],
+        "requiredTools": ["screwdriver"],
         "materials": [
           { "itemId": "scrap-metal", "quantity": 13 },
           { "itemId": "chemical-stock", "quantity": 4 }

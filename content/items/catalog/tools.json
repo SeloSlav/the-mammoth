@@ -2,28 +2,6 @@
   "version": 1,
   "items": [
     {
-      "id": "pipe-wrench",
-      "displayName": "Pipe wrench",
-      "description": "Adjustable jaw for seized fittings.",
-      "category": "tool",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 14,
-        "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]
-      }
-    },
-    {
-      "id": "claw-hammer",
-      "displayName": "Claw hammer",
-      "description": "Drive straps and brace apartment doors after claim.",
-      "category": "tool",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 22,
-        "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
-      }
-    },
-    {
       "id": "multimeter",
       "displayName": "Multimeter",
       "description": "Continuity and voltage checks for jury-rigged circuits.",
@@ -35,17 +13,6 @@
           { "itemId": "scrap-metal", "quantity": 5 },
           { "itemId": "chemical-stock", "quantity": 2 }
         ]
-      }
-    },
-    {
-      "id": "prybar-light",
-      "displayName": "Light pry bar",
-      "description": "Thin blade for gaps and seams.",
-      "category": "tool",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 10,
-        "materials": [{ "itemId": "scrap-metal", "quantity": 4 }]
       }
     }
   ]

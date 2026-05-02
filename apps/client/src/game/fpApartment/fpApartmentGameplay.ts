@@ -266,28 +266,26 @@ function nearWardrobe(u: ApartmentUnit, x: number, y: number, z: number): boolea
   return feetVerticalOkForInteract(u.footY, y);
 }
 
-function nearestUnclaimedUnitNearWardrobe(
+/**
+ * Claim UI / hold-E eligibility when the player is aiming at this unit's wardrobe (see
+ * {@link mountFpApartmentFurniture} wardrobe pick meshes) — still requires hull + wardrobe proximity.
+ */
+export function unclaimedUnitIfPlayerAimedAtWardrobe(
   conn: DbConnection,
+  unitKey: string,
   x: number,
   y: number,
   z: number,
 ): ApartmentUnit | null {
-  let best: ApartmentUnit | null = null;
-  let bestD = Infinity;
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
-    if (u.state !== UNIT_STATE_UNCLAIMED) continue;
-    if (!feetInsideUnitHull(u, x, y, z)) continue;
-    if (!nearWardrobe(u, x, y, z)) continue;
-    const dx = x - u.wardrobeX;
-    const dz = z - u.wardrobeZ;
-    const d = dx * dx + dz * dz;
-    if (d < bestD) {
-      bestD = d;
-      best = u;
-    }
+    if (u.unitKey !== unitKey) continue;
+    if (u.state !== UNIT_STATE_UNCLAIMED) return null;
+    if (!feetInsideUnitHull(u, x, y, z)) return null;
+    if (!nearWardrobe(u, x, y, z)) return null;
+    return u;
   }
-  return best;
+  return null;
 }
 
 /** `foot_x/z` stash anchor — matches `stash_push` / `stash_pull` range on server. */
@@ -332,7 +330,12 @@ function nearestOwnedClaimedUnitNearFootlocker(
 export function getApartmentSystemPrompt(
   conn: DbConnection,
   pose: { x: number; y: number; z: number },
-  opts: { apartmentClaimsAllowed?: boolean; lookedAtStashUnitKey?: string | null } = {},
+  opts: {
+    apartmentClaimsAllowed?: boolean;
+    lookedAtStashUnitKey?: string | null;
+    /** Center-screen ray hit on wardrobe pick mesh (`null` / omitted = no claim prompts). */
+    lookedAtWardrobeUnitKey?: string | null;
+  } = {},
 ):
   | ApartmentClaimPrompt
   | ApartmentClaimBlockedGearPrompt
@@ -341,15 +344,19 @@ export function getApartmentSystemPrompt(
   | null {
   const id = conn.identity;
   if (!id) return null;
-  const claimUnit = nearestUnclaimedUnitNearWardrobe(conn, pose.x, pose.y, pose.z);
-  if (claimUnit) {
-    if (opts.apartmentClaimsAllowed === false) {
-      return { kind: "apartment_claim_blocked_guest", unitKey: claimUnit.unitKey };
+
+  const aimedWardrobeKey = opts.lookedAtWardrobeUnitKey ?? null;
+  if (aimedWardrobeKey) {
+    const claimUnit = unclaimedUnitIfPlayerAimedAtWardrobe(conn, aimedWardrobeKey, pose.x, pose.y, pose.z);
+    if (claimUnit) {
+      if (opts.apartmentClaimsAllowed === false) {
+        return { kind: "apartment_claim_blocked_guest", unitKey: claimUnit.unitKey };
+      }
+      if (playerOwnsDoorLock(conn, id) && playerOwnsScrewdriver(conn, id)) {
+        return { kind: "apartment_claim", unitKey: claimUnit.unitKey };
+      }
+      return { kind: "apartment_claim_blocked_gear", unitKey: claimUnit.unitKey };
     }
-    if (playerOwnsDoorLock(conn, id) && playerOwnsScrewdriver(conn, id)) {
-      return { kind: "apartment_claim", unitKey: claimUnit.unitKey };
-    }
-    return { kind: "apartment_claim_blocked_gear", unitKey: claimUnit.unitKey };
   }
 
   if (opts.lookedAtStashUnitKey === null) return null;

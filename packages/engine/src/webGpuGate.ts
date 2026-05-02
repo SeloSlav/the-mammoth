@@ -7,13 +7,21 @@
 const WEBGPU_REQUIRED_MSG =
   "WebGPU is required. Use a recent Chrome or Edge with WebGPU enabled, update GPU drivers, or check chrome://flags (e.g. unsafe WebGPU on unsupported configs).";
 
+/**
+ * Chrome warns (and ignores `powerPreference`) on Windows — see https://crbug.com/369219127.
+ * Omit the option there; keep high-performance hint elsewhere where the browser honors it.
+ */
+function webGpuRequestAdapterOptions(): GPURequestAdapterOptions {
+  if (typeof navigator === "undefined") return {};
+  if (/windows/i.test(navigator.userAgent)) return {};
+  return { powerPreference: "high-performance" };
+}
+
 export async function assertWebGpuAdapterOrThrow(): Promise<void> {
   if (typeof navigator === "undefined" || !navigator.gpu) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: "high-performance",
-  });
+  const adapter = await navigator.gpu.requestAdapter(webGpuRequestAdapterOptions());
   if (!adapter) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }

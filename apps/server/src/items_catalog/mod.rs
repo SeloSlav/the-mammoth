@@ -1,11 +1,11 @@
 //! Authoritative item definitions: JSON shards under `content/items/catalog/` (baked into WASM).
 //!
-//! **Materials** are normal catalog rows (`category: "material"` in `materials.json`), same `id` as
+//! **Resources** are normal catalog rows (`category: "resource"` in `materials.json`), same `id` as
 //! inventory `def_id`. Recipe lines use `itemId` pointing at those ids — validated at load, no
 //! duplicate list in Rust.
 //!
 //! ## Shards (authoring)
-//! - `materials.json`, `melee_weapons.json`, `ranged_weapons.json`, `tools.json`, `placeables.json`, `consumables.json`
+//! - `materials.json` (resources, ammo, utilities), `melee_weapons.json`, `ranged_weapons.json`, `tools.json`, `placeables.json`, `consumables.json`
 //!
 //! ## Adding items
 //! 1. Edit or add a shard under `content/items/catalog/`.
@@ -64,12 +64,12 @@ pub fn hotbar_consume_sound(def_id: &str) -> HotbarConsumeSound {
         .unwrap_or(HotbarConsumeSound::Eat)
 }
 
-/// `true` when this catalog id is a stackable **material** (not a weapon / tool equip archetype).
+/// `true` when this catalog id is a **resource** row (recipe inputs like scrap — not weapon/tool/ammo rows).
 #[allow(dead_code)]
-pub fn is_material_def_id(def_id: &str) -> bool {
+pub fn is_resource_def_id(def_id: &str) -> bool {
     matches!(
         get(def_id).map(|c| c.category),
-        Some(ItemCategory::Material)
+        Some(ItemCategory::Resource)
     )
 }
 

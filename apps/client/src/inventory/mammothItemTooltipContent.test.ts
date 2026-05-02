@@ -19,6 +19,9 @@ describe("formatMammothItemCategory", () => {
     expect(formatMammothItemCategory("weapon")).toBe("Weapon");
     expect(formatMammothItemCategory("consumable")).toBe("Consumable");
     expect(formatMammothItemCategory("placeable")).toBe("Placeable");
+    expect(formatMammothItemCategory("resource")).toBe("Resource");
+    expect(formatMammothItemCategory("ammo")).toBe("Ammo");
+    expect(formatMammothItemCategory("utility")).toBe("Utility");
   });
 });
 
