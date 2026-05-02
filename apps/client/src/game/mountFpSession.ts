@@ -39,6 +39,7 @@ import {
   createFpSessionMainRafFrame,
   type FpSessionMainRafState,
 } from "./fpSession/fpSessionMainRafFrame.js";
+import { createFpFirearmImpactDecals } from "./fpSession/fpFirearmImpactDecals.js";
 import {
   wireFpSessionLocomotionPrediction,
 } from "./fpSession/fpSessionLocomotionPredictionWiring.js";
@@ -188,6 +189,14 @@ export async function mountFpSession(
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  const fpFirearmImpactRaycastRoots: THREE.Object3D[] = [buildingRoot, cellRoot];
+  const fpSessionGroundPlane = scene.getObjectByName("fp_session_ground_plane");
+  if (fpSessionGroundPlane) fpFirearmImpactRaycastRoots.push(fpSessionGroundPlane);
+  const fpFirearmImpactDecals = createFpFirearmImpactDecals({
+    scene,
+    raycastRoots: fpFirearmImpactRaycastRoots,
+  });
 
   /**
    * Get something real onto the canvas before async apartment props, decals, and presentation assets
@@ -1084,6 +1093,7 @@ export async function mountFpSession(
     fpInteractInputBlocked,
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
+    fpFirearmImpactDecals,
   });
 
   let raf = 0;
@@ -1148,6 +1158,7 @@ export async function mountFpSession(
     registerGameAudioPrime(null);
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
+    fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
     for (const mirror of cabMirrors) mirror.dispose();
     presentation.dispose();

@@ -1,10 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  fpFirearmHitscanPelletCountForHeldItem,
+  fpFirearmHitscanRangeMForHeldItem,
   fpFirearmShotVisualConfigForHeldItem,
   sampleFpFirearmShotVisual,
 } from "@the-mammoth/engine";
 
 describe("fp firearm shot visuals", () => {
+  it("client hitscan ranges mirror server hitscan.rs", () => {
+    expect(fpFirearmHitscanRangeMForHeldItem("pistol")).toBe(48);
+    expect(fpFirearmHitscanRangeMForHeldItem("shotgun-coach")).toBe(22);
+    expect(fpFirearmHitscanPelletCountForHeldItem("pistol")).toBe(1);
+    expect(fpFirearmHitscanPelletCountForHeldItem("shotgun-coach")).toBe(8);
+    expect(fpFirearmHitscanRangeMForHeldItem("crowbar")).toBeNull();
+  });
+
   it("only configures recoil and flash for ranged weapons", () => {
     expect(fpFirearmShotVisualConfigForHeldItem("pistol")).not.toBeNull();
     expect(fpFirearmShotVisualConfigForHeldItem("shotgun-coach")).not.toBeNull();

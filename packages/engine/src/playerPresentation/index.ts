@@ -19,6 +19,12 @@ export {
   type WeaponFirstPersonPersistRefs,
 } from "./weaponFpAuthoringPresentationMerge.js";
 export {
+  FP_FIREARM_HITSCAN_RANGE_PISTOL_M,
+  FP_FIREARM_HITSCAN_RANGE_SHOTGUN_M,
+  FP_FIREARM_HITSCAN_SHOTGUN_PELLET_COUNT,
+  FP_FIREARM_HITSCAN_SHOTGUN_SPREAD_RAD,
+  fpFirearmHitscanPelletCountForHeldItem,
+  fpFirearmHitscanRangeMForHeldItem,
   fpFirearmShotVisualConfigForHeldItem,
   sampleFpFirearmShotVisual,
   type FpFirearmShotVisualConfig,

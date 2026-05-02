@@ -1,5 +1,24 @@
 import type { HeldItemId, Vec3 } from "@the-mammoth/game";
 
+/** Keep in lockstep with `apps/server/src/hitscan.rs` (`RANGE_*`). */
+export const FP_FIREARM_HITSCAN_RANGE_PISTOL_M = 48;
+/** Keep in lockstep with `apps/server/src/hitscan.rs`. */
+export const FP_FIREARM_HITSCAN_RANGE_SHOTGUN_M = 22;
+/** Keep in lockstep with `apps/server/src/hitscan.rs` (`SHOTGUN_PELLET_COUNT`). */
+export const FP_FIREARM_HITSCAN_SHOTGUN_PELLET_COUNT = 8;
+/** Keep in lockstep with `apps/server/src/hitscan.rs` (`SHOTGUN_SPREAD_RAD`). */
+export const FP_FIREARM_HITSCAN_SHOTGUN_SPREAD_RAD = 0.055;
+
+export function fpFirearmHitscanRangeMForHeldItem(heldItemId: HeldItemId): number | null {
+  if (heldItemId === "pistol") return FP_FIREARM_HITSCAN_RANGE_PISTOL_M;
+  if (heldItemId === "shotgun-coach") return FP_FIREARM_HITSCAN_RANGE_SHOTGUN_M;
+  return null;
+}
+
+export function fpFirearmHitscanPelletCountForHeldItem(heldItemId: HeldItemId): number {
+  return heldItemId === "shotgun-coach" ? FP_FIREARM_HITSCAN_SHOTGUN_PELLET_COUNT : 1;
+}
+
 export type FpFirearmShotVisualConfig = {
   durationS: number;
   flashDurationS: number;

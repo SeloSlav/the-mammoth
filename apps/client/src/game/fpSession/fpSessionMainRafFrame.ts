@@ -9,7 +9,7 @@ import {
   createFpLocomotionState,
 } from "@the-mammoth/engine";
 import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
-import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
 import {
@@ -71,6 +71,7 @@ import type { PoseInterpBuffer } from "../fpRemote/poseInterpBuffer.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
+import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
 
 const FIREARM_COOLDOWN_MS = 170;
 
@@ -202,6 +203,7 @@ export type FpSessionMainRafFrameDeps = {
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
+  fpFirearmImpactDecals: FpFirearmImpactDecals;
 };
 
 /**
@@ -220,6 +222,8 @@ export function createFpSessionMainRafFrame(
 
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
+
+    deps.fpFirearmImpactDecals.tick(nowMs);
 
     // Combat reducers (`submit_firearm_shot`, `submit_melee_swing`) read `player_active_hotbar` on
     // the server. Sync selected slot before resolving `meleePressPending` so a click right after a
@@ -243,6 +247,13 @@ export function createFpSessionMainRafFrame(
           aimDirX: deps._aimShotWorldDir.x,
           aimDirY: deps._aimShotWorldDir.y,
           aimDirZ: deps._aimShotWorldDir.z,
+        });
+        deps.fpFirearmImpactDecals.spawnForShot({
+          nowMs,
+          camera: deps.camera,
+          aimWorldDir: deps._aimShotWorldDir,
+          heldItemId: hb.defId as HeldItemId,
+          shotSeq: mainRaf.firearmShotSeq,
         });
       } else if (
         hb &&
