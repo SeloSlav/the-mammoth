@@ -166,9 +166,6 @@ export async function mountFpSession(
   /** Skydome is a large inner sphere; default rig `far` (900) clips it to black. */
   camera.far = FP_SESSION_SKY_CAMERA_FAR;
   scene.add(playerRig);
-  const fpCollisionDebug = createFpCollisionDebugOverlay();
-  scene.add(fpCollisionDebug.group);
-
   void ensureStairwellCigaretteMeshReady();
 
   const {
@@ -222,6 +219,15 @@ export async function mountFpSession(
     buildingRoot,
     building,
   });
+
+  const fpCollisionDebug = createFpCollisionDebugOverlay({
+    staticCollisionIndex,
+    visitDynamicCollisionAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
+      fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+      fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+    },
+  });
+  scene.add(fpCollisionDebug.group);
 
   const unitInteriorMeshes = collectFpSessionUnitInteriorShellMeshes(buildingRoot);
   const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];

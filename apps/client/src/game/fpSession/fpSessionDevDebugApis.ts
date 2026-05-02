@@ -194,8 +194,11 @@ export function installFpSessionDevDebugApis(
       panelW: +d.panelWidthM.toFixed(3),
       panelH: +d.panelHeightM.toFixed(3),
       desired: d.desiredOpen,
-      open01: +d.swingOpen01.toFixed(3),
+      visualOpen01: +d.visualOpen01.toFixed(3),
+      replicatedOpen01: +d.replicatedOpen01.toFixed(3),
+      open01Skew: +Math.abs(d.visualOpen01 - d.replicatedOpen01).toFixed(3),
       regime: d.regime,
+      serverRegime: d.serverRegime,
       aabb: roundAabb(d.emittedAabb),
       distance: +d.distanceMeters.toFixed(3),
     }));
@@ -364,8 +367,11 @@ export function installFpSessionDevDebugApis(
         panelW: +d.panelWidthM.toFixed(3),
         panelH: +d.panelHeightM.toFixed(3),
         desired: d.desiredOpen,
-        open01: +d.swingOpen01.toFixed(3),
+        visualOpen01: +d.visualOpen01.toFixed(3),
+        replicatedOpen01: +d.replicatedOpen01.toFixed(3),
+        open01Skew: +Math.abs(d.visualOpen01 - d.replicatedOpen01).toFixed(3),
         regime: d.regime,
+        serverRegime: d.serverRegime,
         aabb: roundAabb(d.emittedAabb),
         distance: +d.distanceMeters.toFixed(3),
       })),
@@ -452,7 +458,8 @@ export function installFpSessionDevDebugApis(
         radiusM: +radiusM.toFixed(3),
         autostart: readDoorDebugAutostart(),
         message:
-          "Walk at a door; logs appear on collision / movement near a door. Call __mmDoorDebug.off() to stop.",
+          "Walk at a door; logs appear on collision / movement near a door. Call __mmDoorDebug.off() to stop. " +
+          "Also: localStorage mammothFpPhysicsDebug=1 (wireframe AABBs), mammothFpReconcileDebug=1, mammothFpDoorAnimSkewWarn=1.",
       });
     },
     off(): void {

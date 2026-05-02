@@ -32,6 +32,7 @@ import {
   type FpKinematicSupportProvider,
   type FpKinematicSupportSampleOpts,
 } from "../fpPhysics/fpKinematicSupport.js";
+import { readFpReconcileDebugLog } from "../fpPhysics/fpCollisionPolicy.js";
 
 export type FpSessionPendingMoveIntent = {
   seq: bigint;
@@ -366,6 +367,25 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
       crouchForLog,
       pendingCount,
     );
+
+    if (readFpReconcileDebugLog() && corrDist > 0.02 && !ignoreElevRiderReconcile) {
+      console.info("[mmReconcile]", {
+        corrM: +corrDist.toFixed(4),
+        corrXZM: +corrHorizontalDist.toFixed(4),
+        pendingIntentCount: pendingCount,
+        predictedBefore: {
+          x: +deps.reconcilePosBefore.x.toFixed(3),
+          y: +deps.reconcilePosBefore.y.toFixed(3),
+          z: +deps.reconcilePosBefore.z.toFixed(3),
+        },
+        replayOrAuthRow: {
+          x: +replayPosForLog.x.toFixed(3),
+          y: +replayPosForLog.y.toFixed(3),
+          z: +replayPosForLog.z.toFixed(3),
+        },
+        willHardSnap: corrDist > DISPLAY_HARD_SNAP_M && !ignoreElevRiderVerticalTimelineMismatch,
+      });
+    }
 
     if (corrDist > DISPLAY_HARD_SNAP_M && !ignoreElevRiderVerticalTimelineMismatch) {
       if (pendingCount > 0) {

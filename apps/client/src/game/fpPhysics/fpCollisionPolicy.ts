@@ -4,6 +4,15 @@
  * - Default: character controller (sweep + slide + merged blockers).
  * - Set `localStorage.setItem("mammothFpLegacyCollision", "1")` to force legacy axis depenetration
  *   for A/B comparison (client only).
+ *
+ * Debug visualization (dev / manual QA only):
+ * - `mammothFpCollisionDebug` = `"1"` — feet ring + horizontal velocity arrow at physics feet.
+ * - `mammothFpPhysicsDebug` = `"1"` — adds wireframe AABBs (static + elevator + apartment doors
+ *   near the player), approximate capsule sticks, and rig vs physics feet marker when offset is non-zero.
+ * - `mammothFpReconcileDebug` = `"1"` — `console.info` on every prediction reconcile that applies
+ *   a non-trivial correction (client vs replayed/server pose).
+ * - `mammothFpDoorAnimSkewWarn` = `"1"` — throttled `console.warn` when apartment-door
+ *   `visualOpen01` (client collision) diverges from replicated `swing_open_01` (server).
  */
 export function readFpUseCharacterController(): boolean {
   try {
@@ -18,6 +27,34 @@ export function readFpCollisionDebugDraw(): boolean {
   try {
     if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) return false;
     return globalThis.localStorage.getItem("mammothFpCollisionDebug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Wireframe solids + capsule helpers (see module docstring). */
+export function readFpPhysicsDebugOverlay(): boolean {
+  try {
+    if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) return false;
+    return globalThis.localStorage.getItem("mammothFpPhysicsDebug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function readFpReconcileDebugLog(): boolean {
+  try {
+    if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) return false;
+    return globalThis.localStorage.getItem("mammothFpReconcileDebug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function readFpDoorAnimSkewWarn(): boolean {
+  try {
+    if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) return false;
+    return globalThis.localStorage.getItem("mammothFpDoorAnimSkewWarn") === "1";
   } catch {
     return false;
   }

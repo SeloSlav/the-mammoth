@@ -60,6 +60,7 @@ import apartmentKitAuthoringJson from "../../../../../content/door/apartment_uni
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import type { ApartmentDoor } from "../../module_bindings/types";
 import type { DynamicCollisionQueryPose } from "../fpPhysics/fpPlayerCollision.js";
+import { readFpDoorAnimSkewWarn } from "../fpPhysics/fpCollisionPolicy.js";
 import {
   apartmentDoorMatchesContainingUnit,
   clientMayToggleApartmentDoor,
@@ -102,6 +103,14 @@ const APARTMENT_DOOR_LOOK_MAX_PERP_M = 1.15;
 const APARTMENT_DOOR_LOOK_MIN_FORWARD_M = 0.08;
 const APARTMENT_DOOR_LOOK_TANGENT_PAD_M = 0.18;
 
+function doorCollisionRegimeFromOpen01(
+  open01: number,
+): "closed-slab" | "passable" | "parked-leaf" {
+  if (swingDoorClosedSlabActive(open01)) return "closed-slab";
+  if (swingDoorParkedLeafActive(open01)) return "parked-leaf";
+  return "passable";
+}
+
 export type MountFpApartmentDoorsOpts = {
   conn: DbConnection;
   buildingRoot: THREE.Group;
@@ -120,9 +129,14 @@ export type ApartmentDoorDebugSlot = {
   panelWidthM: number;
   panelHeightM: number;
   desiredOpen: number;
-  swingOpen01: number;
-  /** Which collision regime the `open01` falls in (what AABB — if any — is emitted). */
+  /** Client-smoothed open01 used for **prediction collision** (may lag server a few frames). */
+  visualOpen01: number;
+  /** Replicated `swing_open_01` — server physics uses this each 20 Hz tick. */
+  replicatedOpen01: number;
+  /** Regime implied by `visualOpen01` (client collision). */
   regime: "closed-slab" | "passable" | "parked-leaf";
+  /** Regime implied by `replicatedOpen01` (authoritative). Mismatch vs `regime` ⇒ likely rubber-band near thresholds. */
+  serverRegime: "closed-slab" | "passable" | "parked-leaf";
   /** The actual AABB the collision pipeline sees this frame (null when passable). */
   emittedAabb: CollisionAabb | null;
   /** XZ distance from player feet to hinge. */
@@ -756,6 +770,7 @@ export function mountFpApartmentDoors(
   }
 
   let lastApartmentDoorTickMs: number | null = null;
+  let lastDoorSkewWarnMs = 0;
   const tick = (nowMs: number): void => {
     const dtSec =
       lastApartmentDoorTickMs != null
@@ -784,6 +799,30 @@ export function mountFpApartmentDoors(
         g.mesh.instanceMatrix.needsUpdate = true;
         if (g.glassMesh) g.glassMesh.instanceMatrix.needsUpdate = true;
         g.dirty = false;
+      }
+    }
+
+    if (readFpDoorAnimSkewWarn() && nowMs - lastDoorSkewWarnMs >= 1800) {
+      for (const slot of allSlots) {
+        if (!slot.seeded) continue;
+        const dv = Math.abs(slot.visualOpen01 - slot.swingOpen01);
+        if (dv < 0.045) continue;
+        const vReg = doorCollisionRegimeFromOpen01(slot.visualOpen01);
+        const sReg = doorCollisionRegimeFromOpen01(slot.swingOpen01);
+        if (vReg === sReg && dv < 0.12) continue;
+        lastDoorSkewWarnMs = nowMs;
+        console.warn(
+          "[mmDoorAnimSkew] client collision uses visualOpen01; server uses swing_open_01 — mismatch can cause rubber-banding near door thresholds.",
+          {
+            rowKey: slot.rowKey,
+            visualOpen01: +slot.visualOpen01.toFixed(3),
+            replicatedOpen01: +slot.swingOpen01.toFixed(3),
+            delta: +dv.toFixed(3),
+            clientRegime: vReg,
+            serverRegime: sReg,
+          },
+        );
+        break;
       }
     }
   };
@@ -907,11 +946,12 @@ export function mountFpApartmentDoors(
       const dz = slot.hingeZ - z;
       const d2 = dx * dx + dz * dz;
       if (d2 > r2) return;
-      const open01 = slot.visualOpen01;
-      let regime: ApartmentDoorDebugSlot["regime"];
+      const visualOpen = slot.visualOpen01;
+      const replicatedOpen = slot.swingOpen01;
+      const regime = doorCollisionRegimeFromOpen01(visualOpen);
+      const serverRegime = doorCollisionRegimeFromOpen01(replicatedOpen);
       let emittedAabb: CollisionAabb | null = null;
-      if (swingDoorClosedSlabActive(open01)) {
-        regime = "closed-slab";
+      if (swingDoorClosedSlabActive(visualOpen)) {
         emittedAabb = swingDoorClosedSlabAabb({
           face: slot.face,
           hingeX: slot.hingeX,
@@ -920,8 +960,7 @@ export function mountFpApartmentDoors(
           panelWidthM: slot.panelWidthM,
           panelHeightM: slot.panelHeightM,
         });
-      } else if (swingDoorParkedLeafActive(open01)) {
-        regime = "parked-leaf";
+      } else if (swingDoorParkedLeafActive(visualOpen)) {
         emittedAabb = swingDoorParkedLeafAabb({
           face: slot.face,
           hingeX: slot.hingeX,
@@ -931,8 +970,6 @@ export function mountFpApartmentDoors(
           panelHeightM: slot.panelHeightM,
           swingInward: slot.swingInward,
         });
-      } else {
-        regime = "passable";
       }
       out.push({
         rowKey: slot.rowKey,
@@ -944,8 +981,10 @@ export function mountFpApartmentDoors(
         panelWidthM: slot.panelWidthM,
         panelHeightM: slot.panelHeightM,
         desiredOpen: slot.desiredOpen,
-        swingOpen01: open01,
+        visualOpen01: visualOpen,
+        replicatedOpen01: replicatedOpen,
         regime,
+        serverRegime,
         emittedAabb,
         distanceMeters: Math.sqrt(d2),
       });

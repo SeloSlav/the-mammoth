@@ -281,7 +281,10 @@ export function createFpSessionMainRafFrame(
     deps._mainStepOpts.bodyYawRad = mainRaf.bodyYaw;
     const headY = deps.simulatePredictedPlayerStep(deps._mainStepOpts);
     const _t_physicsEnd = performance.now();
-    deps.fpCollisionDebug.update(deps.pos, deps.loco.velocity);
+    deps.fpCollisionDebug.update(deps.pos, deps.loco.velocity, {
+      crouch: mainRaf.crouchToggle,
+      displayOffset: deps._displayOffset,
+    });
 
     // --- Elevator section timing ---
     deps.fpElevators.tick(dt, nowMs, deps.pos);
