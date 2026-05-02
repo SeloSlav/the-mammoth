@@ -89,14 +89,12 @@ const ICONS: Record<string, string> = {
   rakija: rakijaIcon,
   pistol: pistolIcon,
   "shotgun-coach": shotgunCoachIcon,
-  nails: crowbarIcon,
   "ammo-9mm": ammo9mmIcon,
   "ammo-shotgun-shell": shotgunShellIcon,
+  "chemical-stock": crowbarIcon,
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
-  "riser-pipe-stub": crowbarIcon,
-  "panel-bus-scrap": crowbarIcon,
   "claw-hammer": crowbarIcon,
 };
 

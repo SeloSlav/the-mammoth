@@ -472,12 +472,12 @@ fn consume_first_matching_stack(ctx: &ReducerContext, owner: Identity, def: &str
     }
 }
 
-fn nail_consume_many(ctx: &ReducerContext, owner: Identity, mut need: u32) {
+fn consume_scrap_metal_many(ctx: &ReducerContext, owner: Identity, mut need: u32) {
     for row in ctx.db.inventory_item().iter() {
         if need == 0 {
             break;
         }
-        if !location_owned_by_player(&row, owner) || row.def_id != "nails" {
+        if !location_owned_by_player(&row, owner) || row.def_id != "scrap-metal" {
             continue;
         }
         let take = need.min(row.quantity);
@@ -601,7 +601,7 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED || unit.reinforced != 0 {
         return;
     }
-    if !inventory_has(ctx, sender, "claw-hammer", 1) || !inventory_has(ctx, sender, "nails", 10) {
+    if !inventory_has(ctx, sender, "claw-hammer", 1) || !inventory_has(ctx, sender, "scrap-metal", 10) {
         return;
     }
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
@@ -617,7 +617,7 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     unit.reinforce_by = Some(sender);
 
     if unit.reinforce_progress_secs >= REINFORCE_HOLD_SECS {
-        nail_consume_many(ctx, sender, 10);
+        consume_scrap_metal_many(ctx, sender, 10);
         unit.reinforced = 1;
         unit.reinforce_progress_secs = REINFORCE_HOLD_SECS;
         ctx.db.apartment_unit().unit_key().update(unit);

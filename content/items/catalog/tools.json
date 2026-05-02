@@ -9,25 +9,18 @@
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 14,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 5 },
-          { "itemId": "duct-tape", "quantity": 1 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]
       }
     },
     {
       "id": "claw-hammer",
       "displayName": "Claw hammer",
-      "description": "Drive nails and board doors.",
+      "description": "Drive straps and brace apartment doors after claim.",
       "category": "tool",
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 22,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 6 },
-          { "itemId": "nails", "quantity": 2 },
-          { "itemId": "synthetic-polymer", "quantity": 2 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
       }
     },
     {
@@ -39,9 +32,8 @@
       "construction": {
         "buildTimeSecs": 20,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "wire-spool", "quantity": 2 },
-          { "itemId": "synthetic-polymer", "quantity": 2 }
+          { "itemId": "scrap-metal", "quantity": 5 },
+          { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
     },
@@ -53,9 +45,7 @@
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 10,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 4 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 4 }]
       }
     }
   ]

@@ -4,97 +4,44 @@
     {
       "id": "scrap-metal",
       "displayName": "Scrap metal",
-      "description": "Salvaged plate and fittings. Staple for improvised tools and weapons.",
+      "description": "Salvaged plate and fittings — primary bench input for improvised tools, weapons, and hardware.",
       "category": "material",
       "maxStack": 5
     },
     {
-      "id": "wood-scraps",
-      "displayName": "Wood scraps",
-      "description": "Interior demolition offcuts — mostly packaging and trim debris. Not prioritized for improvised metalwork benches.",
+      "id": "chemical-stock",
+      "displayName": "Chemical stock",
+      "description": "Bottles, pucks, and ampoules rescued from custodial and MEP lockers — propellant feedstock and flux for ballistics.",
       "category": "material",
-      "maxStack": 500
-    },
-    {
-      "id": "riser-pipe-stub",
-      "displayName": "Riser stub",
-      "description": "Cutoff from a chase or wet-wall riser — heavy threaded steel stub good for improvised hafts.",
-      "category": "material",
-      "maxStack": 16
-    },
-    {
-      "id": "panel-bus-scrap",
-      "displayName": "Breaker bus scrap",
-      "description": "Thick copper strap from an electrical cabinet — decent for improvised contacts or jacketed bullets.",
-      "category": "material",
-      "maxStack": 30
-    },
-    {
-      "id": "duct-tape",
-      "displayName": "Duct tape",
-      "description": "Industrial tape. Binds grips, patches hulls, fixes morale.",
-      "category": "material",
-      "maxStack": 200
-    },
-    {
-      "id": "synthetic-polymer",
-      "displayName": "Synthetic polymer",
-      "description": "Moldable stock. Used for durable grips and impact pads.",
-      "category": "material",
-      "maxStack": 200
-    },
-    {
-      "id": "wire-spool",
-      "displayName": "Wire spool",
-      "description": "Multi-purpose steel wire. Locks guards, lashes heads to hafts.",
-      "category": "material",
-      "maxStack": 150
-    },
-    {
-      "id": "chemical-reagent",
-      "displayName": "Chemical reagent",
-      "description": "Small sealed ampoule. Etches, hardens, or cleans metal before assembly.",
-      "category": "material",
-      "maxStack": 100
-    },
-    {
-      "id": "nails",
-      "displayName": "Nails",
-      "description": "Box of mixed nails for boarding doors.",
-      "category": "material",
-      "maxStack": 30
+      "maxStack": 40
     },
     {
       "id": "ammo-9mm",
       "displayName": "9mm rounds",
-      "description": "Loose pistol ammunition (no magazines). Bench-assembled heads on salvaged jackets.",
+      "description": "Loose pistol ammunition (no magazines). Scrap jackets plus chemical stock for primer and propellant chemistry.",
       "category": "material",
       "maxStack": 60,
       "construction": {
         "buildTimeSecs": 18,
         "outputQuantity": 12,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "panel-bus-scrap", "quantity": 1 },
-          { "itemId": "chemical-reagent", "quantity": 1 },
-          { "itemId": "synthetic-polymer", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 3 },
+          { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
     },
     {
       "id": "ammo-shotgun-shell",
       "displayName": "Shotgun shells",
-      "description": "Loose shells assembled from scavenged cups, wads cut from salvage, and scavenged shot.",
+      "description": "Loose shells crimped from scrap cups — chemical stock feeds primers and payloads.",
       "category": "material",
       "maxStack": 24,
       "construction": {
         "buildTimeSecs": 20,
         "outputQuantity": 8,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "duct-tape", "quantity": 2 },
-          { "itemId": "chemical-reagent", "quantity": 1 },
-          { "itemId": "panel-bus-scrap", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 4 },
+          { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
     },
@@ -107,10 +54,7 @@
       "construction": {
         "buildTimeSecs": 12,
         "requiredTools": ["screwdriver"],
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 3 },
-          { "itemId": "nails", "quantity": 2 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 5 }]
       }
     }
   ]

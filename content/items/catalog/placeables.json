@@ -9,11 +9,7 @@
       "maxStack": 5,
       "construction": {
         "buildTimeSecs": 8,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 4 },
-          { "itemId": "duct-tape", "quantity": 2 },
-          { "itemId": "riser-pipe-stub", "quantity": 1 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
       }
     },
     {
@@ -24,11 +20,7 @@
       "maxStack": 1,
       "construction": {
         "buildTimeSecs": 45,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 12 },
-          { "itemId": "duct-tape", "quantity": 4 },
-          { "itemId": "synthetic-polymer", "quantity": 3 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 24 }]
       }
     },
     {
@@ -40,10 +32,8 @@
       "construction": {
         "buildTimeSecs": 60,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 20 },
-          { "itemId": "wire-spool", "quantity": 4 },
-          { "itemId": "synthetic-polymer", "quantity": 6 },
-          { "itemId": "duct-tape", "quantity": 3 }
+          { "itemId": "scrap-metal", "quantity": 32 },
+          { "itemId": "chemical-stock", "quantity": 8 }
         ]
       }
     },
@@ -56,10 +46,8 @@
       "construction": {
         "buildTimeSecs": 90,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 25 },
-          { "itemId": "chemical-reagent", "quantity": 4 },
-          { "itemId": "wire-spool", "quantity": 3 },
-          { "itemId": "duct-tape", "quantity": 5 }
+          { "itemId": "scrap-metal", "quantity": 42 },
+          { "itemId": "chemical-stock", "quantity": 12 }
         ]
       }
     }

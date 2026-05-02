@@ -7,15 +7,10 @@
       "description": "Compact blade for close work. Fast swings, low reach.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": {
-        "damage": 12
-      },
+      "meleeCombat": { "damage": 12 },
       "construction": {
         "buildTimeSecs": 10,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "duct-tape", "quantity": 1 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 3 }]
       }
     },
     {
@@ -24,15 +19,10 @@
       "description": "Heavy pry bar. Slower swings, high impact.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": {
-        "damage": 22
-      },
+      "meleeCombat": { "damage": 22 },
       "construction": {
         "buildTimeSecs": 18,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 4 },
-          { "itemId": "synthetic-polymer", "quantity": 1 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]
       }
     },
     {
@@ -41,34 +31,25 @@
       "description": "Regional improvised cutting tool. Balanced between speed and heft.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": {
-        "damage": 18
-      },
+      "meleeCombat": { "damage": 18 },
       "construction": {
         "buildTimeSecs": 22,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 3 },
-          { "itemId": "wire-spool", "quantity": 1 },
-          { "itemId": "chemical-reagent", "quantity": 1 }
+          { "itemId": "scrap-metal", "quantity": 6 },
+          { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
     },
     {
       "id": "baseball-bat",
       "displayName": "Baseball bat",
-      "description": "Tape-wrapped slugger built from salvage riser stubs and grips — wide swing arc, blunt trauma.",
+      "description": "Tape-wrapped slugger built from welded salvage — wide swing arc, blunt trauma.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": {
-        "damage": 20
-      },
+      "meleeCombat": { "damage": 20 },
       "construction": {
         "buildTimeSecs": 10,
-        "materials": [
-          { "itemId": "riser-pipe-stub", "quantity": 1 },
-          { "itemId": "duct-tape", "quantity": 2 },
-          { "itemId": "synthetic-polymer", "quantity": 2 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
       }
     },
     {
@@ -77,16 +58,10 @@
       "description": "Compact stabbing tool, also required with a door lock cylinder to claim an apartment.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": {
-        "damage": 8
-      },
+      "meleeCombat": { "damage": 8 },
       "construction": {
         "buildTimeSecs": 14,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 2 },
-          { "itemId": "wire-spool", "quantity": 1 },
-          { "itemId": "synthetic-polymer", "quantity": 2 }
-        ]
+        "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]
       }
     }
   ]

@@ -171,13 +171,20 @@ describe("mammothItemCatalog", () => {
 
     expect(door?.construction?.requiredTools).toContain("screwdriver");
 
-    expect(door?.construction?.materials.some((m) => m.itemId === "scrap-metal")).toBe(true);
+    expect(door?.construction?.materials).toEqual([{ itemId: "scrap-metal", quantity: 5 }]);
 
     const ammo = getMammothItemDef("ammo-9mm");
 
     expect(ammo).toBeDefined();
 
     expect(mammothCraftYieldCount(ammo!)).toBe(12);
+
+    const chem = getMammothItemDef("chemical-stock");
+    expect(chem?.category).toBe("material");
+    expect(chem?.construction).toBeNull();
+    expect(
+      ammo?.construction?.materials.some((m) => m.itemId === "chemical-stock"),
+    ).toBe(true);
   });
 
 });

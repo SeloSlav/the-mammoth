@@ -1,10 +1,10 @@
 //! World pickups: drag-out from inventory/hotbar → `drop_item`, `E` / reducer → `pickup_dropped_item`.
 //! Static world loot uses the **same** `dropped_item` rows with [`DroppedItem.world_spawn_slot`], filled on
-//! `init`, refreshed on a timer with weighted RNG. A **sparse** set of corridor anchors rolls **ammo + rations only**;
-//! up to [`MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS`] **unclaimed** apartment units get weapon-biased loot (sorted by floor)
-//! plus a guaranteed scrap-metal resource pile in a varied interior spot.
-//! Player drops stay `world_spawn_slot = None`; cleanup only
-//! ages those rows so server-spawn piles do not silently despawn mid-session.
+//! `init`, refreshed on a timer with weighted RNG. Corridor anchors roll **ammo, rations, and chemical-stock**
+//! (custodial/service-cache proxy until janitor closets are anchored). Up to [`MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS`]
+//! **unclaimed** apartment units get weapon-biased loot (sorted by floor) plus a guaranteed scrap-metal pile.
+//! Player drops stay `world_spawn_slot = None`; cleanup only ages those rows so server-spawn piles do not silently
+//! despawn mid-session.
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
@@ -34,7 +34,7 @@ const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 /// **Keep equal to** `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
 const WORLD_LOOT_Y_GROUND_FLOOR_M: f32 = 0.20;
 
-/// Sparse hallway anchors — light pickups only (ammo / rations). Weapons stay in unclaimed apartments.
+/// Sparse hallway anchors — ammo, consumables, **chemical-stock** (service-route pickups). Weapons stay inside units.
 /// Keep ground-floor lobby spots aligned with public spawn; a few upper spine samples along Z.
 /// Index IS the corridor `world_spawn_slot`; apartment slots are allocated after this sparse list.
 const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
@@ -47,11 +47,12 @@ const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
     (1.25, 3.52, 52.0),
 ];
 
-/// Hall / corridor — ammo and consumables only (no weapons, cigarettes, etc.).
+/// Hall / corridor — ammo, consumables, **chemical-stock** (service-route spawns; closet props later).
 /// `(def_id, qty_min_inclusive, qty_max_inclusive, weight)`.
 const WORLD_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
     ("ammo-9mm", 12, 40, 10),
     ("ammo-shotgun-shell", 4, 14, 8),
+    ("chemical-stock", 2, 6, 8),
     ("apple", 2, 6, 6),
     ("water-bottle", 1, 3, 6),
 ];
