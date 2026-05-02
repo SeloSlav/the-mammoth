@@ -77,6 +77,18 @@ freestanding double-door wardrobe closet with doors fully closed, late Soviet / 
 simple Eastern European apartment bed, modest twin or full width, low plain painted metal tube frame or scuffed wood headboard and footboard with minimal detail, thin mattress with sag in the middle visible as gentle shape only, faded floral or dull stripe bedspread in muted dirty beige or gray-blue, one flat pillow with worn case, bedding slightly rumpled but made, no people, no bedside tables, practical residential prop, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
 ```
 
+### Cigarette pack (`cigarette-pack.png`)
+
+```
+upright flip-top cigarette pack, heavily weathered dirty beige cardboard with creases crushed corners peel at the lid edge brown water staining along seams, three diagonal parallel stripes rendered as chunky pixel-graphic blocks muted forest green dull brick red dark charcoal brown, thin brushed silver foil strip visible under the flap line, grounded street clutter prop matched to PS2 gritty reference, strong readable silhouette, centered and fully visible
+```
+
+### Empty beer bottle (`empty-beer-bottle.png`)
+
+```
+upright empty longneck beer bottle facet-cut low-poly body and tapered neck dull olive green translucent glass with crown rim and no cap, fine scratches dull grime bottom interior dried residue ring torn rectangular paper label with abstract muted green tan reddish-brown blotches only no legible branding, grounded bar litter prop matched to gritty reference silhouette, centered and fully visible
+```
+
 ---
 
 ## 3. Adding a new reference

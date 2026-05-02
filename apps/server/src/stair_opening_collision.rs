@@ -959,8 +959,8 @@ fn lobby_door_centers_along(usable_span: f32, max_bays: i32) -> Vec<f32> {
     if usable_span < LOBBY_DOUBLE_DOOR_W + 0.28 {
         return vec![0.0];
     }
-    let n = ((usable_span / LOBBY_DOUBLE_DOOR_BAY_SPACING).floor() as i32)
-        .clamp(1, max_bays) as usize;
+    let n =
+        ((usable_span / LOBBY_DOUBLE_DOOR_BAY_SPACING).floor() as i32).clamp(1, max_bays) as usize;
     let mut out = Vec::new();
     for i in 0..n {
         let t = (i + 1) as f32 / (n + 1) as f32;

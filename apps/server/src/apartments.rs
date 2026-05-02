@@ -3,12 +3,12 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::accounts::user;
-use crate::feature_flags;
 use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
 use crate::auth;
 use crate::chat;
 use crate::elevator_layout::max_level;
 use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
+use crate::feature_flags;
 use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
 };
@@ -648,7 +648,11 @@ fn first_empty_stash_slot(
 
 fn apartment_stash_owner_near_sender(ctx: &ReducerContext, unit_key: &str) -> Option<Identity> {
     let sender = ctx.sender();
-    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string())?;
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())?;
     let owner_id = unit.owner?;
     let pose = ctx.db.player_pose().identity().find(&sender)?;
     if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
@@ -674,7 +678,11 @@ fn stash_item_for_unit(
     unit_key: &str,
     owner_id: Identity,
 ) -> Option<inventory::InventoryItem> {
-    let row = ctx.db.inventory_item().instance_id().find(item_instance_id)?;
+    let row = ctx
+        .db
+        .inventory_item()
+        .instance_id()
+        .find(item_instance_id)?;
     match &row.location {
         ItemLocation::Stash(s) if s.unit_key == unit_key && s.owner_identity == owner_id => {
             Some(row)
@@ -817,7 +825,8 @@ pub fn stash_push_item_to_slot(
         log::debug!("stash_push_to_slot blocked: {e}");
         return;
     }
-    if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, target_stash_slot)
+    if let Err(e) =
+        stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, target_stash_slot)
     {
         log::warn!("stash_push_to_slot: {e}");
     }
@@ -860,9 +869,12 @@ pub fn stash_pull_item_to_inventory_slot(
         log::debug!("stash_pull_to_inventory_slot blocked: {e}");
         return;
     }
-    if let Err(e) =
-        stash_pull_item_to_inventory_slot_impl(ctx, item_instance_id, &unit_key, target_inventory_slot)
-    {
+    if let Err(e) = stash_pull_item_to_inventory_slot_impl(
+        ctx,
+        item_instance_id,
+        &unit_key,
+        target_inventory_slot,
+    ) {
         log::warn!("stash_pull_to_inventory_slot: {e}");
     }
 }
