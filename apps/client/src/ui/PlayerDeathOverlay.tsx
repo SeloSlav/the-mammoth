@@ -126,10 +126,10 @@ export function PlayerDeathOverlay({ conn }: Props) {
           {hasClaimedApartment ? (
             <>
               You have a claimed apartment. Respawn at your bed — your residential doors lock (including if left open)
-              — or respawn in the ground-floor lobby near the elevators, same as players without a unit.
+              — or respawn at a random ground-floor walk area, same as players without a unit.
             </>
           ) : (
-            <>You will respawn in the ground-floor lobby near the west elevator bank.</>
+            <>You will respawn at a random open spot on the ground floor.</>
           )}
         </div>
         <div
@@ -168,7 +168,7 @@ export function PlayerDeathOverlay({ conn }: Props) {
                       : "linear-gradient(180deg, rgba(52, 96, 140, 0.92), rgba(28, 52, 88, 0.96))",
                 }}
               >
-                {busyMode === 0 ? "Respawning..." : "Ground floor lobby"}
+                {busyMode === 0 ? "Respawning..." : "Ground floor"}
               </button>
             </>
           ) : (
@@ -186,7 +186,7 @@ export function PlayerDeathOverlay({ conn }: Props) {
                     : "linear-gradient(180deg, rgba(210,60,68,0.95), rgba(148,28,34,0.98))",
               }}
             >
-              {busyMode === 0 ? "Respawning..." : "Ground floor lobby"}
+              {busyMode === 0 ? "Respawning..." : "Ground floor"}
             </button>
           )}
         </div>

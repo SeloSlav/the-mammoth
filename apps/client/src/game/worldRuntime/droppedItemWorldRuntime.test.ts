@@ -25,7 +25,7 @@ describe("fitDroppedWorldItemModelToCatalog", () => {
 
 describe("world loot ground plane (Spacetime anchors)", () => {
   it("MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M matches server WORLD_LOOT_Y_GROUND_FLOOR_M", () => {
-    expect(MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M).toBeCloseTo(0.2, 5);
+    expect(MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M).toBeCloseTo(0.28, 5);
   });
 });
 

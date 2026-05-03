@@ -1,8 +1,8 @@
 /**
- * Ground-plane Y (m) for lobby world-loot anchors: client places the bottom of the fitted mesh here.
- * Keep equal to `WORLD_LOOT_Y_GROUND_FLOOR_M` in `apps/server/src/dropped_item.rs` (lobby walk slab top ≈0.20).
+ * Level-1 corridor world-loot placement Y (m): bottom of the fitted mesh. Matches
+ * `WORLD_LOOT_Y_GROUND_FLOOR_M` in `apps/server/src/dropped_item.rs` (plate + clearance above slab tops).
  */
-export const MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M = 0.2 as const;
+export const MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M = 0.28 as const;
 
 /**
  * World pickup mesh sizing (meters). Dropped-item GLBs are uniformly scaled so their

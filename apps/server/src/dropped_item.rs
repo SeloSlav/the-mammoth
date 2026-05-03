@@ -17,6 +17,7 @@ use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
 };
 use crate::crafting;
+use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::items_catalog;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
@@ -25,17 +26,40 @@ use crate::world_sound;
 const PICKUP_RADIUS_SQ: f32 = 3.5 * 3.5;
 /// Forward offset along look direction when spawning a drop (m).
 const DROP_FORWARD_M: f32 = 0.55;
-/// Lift mesh slightly above replicated foot height to avoid z-fighting (m).
-const DROP_Y_LIFT_M: f32 = 0.08;
+/// Lift mesh slightly above replicated foot height to avoid sinking through thin slabs / Z-fight (m).
+const DROP_Y_LIFT_M: f32 = 0.11;
 /// Remove drops older than this (seconds) during periodic cleanup.
 const DROP_DESPAWN_SECS: i64 = 900;
 /// How often to reroll anchored world loot (random defs/qty/yaw).
 const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 
-/// Top of ground-floor elevator-lobby walk slabs (see `generated_walk_surfaces/part_0000.rs`, ≈0.08..0.20 m Y).
-/// Matches client placement: bottom of the pickup mesh sits on this plane.
-/// **Keep equal to** `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
-const WORLD_LOOT_Y_GROUND_FLOOR_M: f32 = 0.20;
+/// Vertical clearance above each storey’s **plate** Y so pickup mesh bottoms sit clearly above walk slab tops
+/// (avoids Z-fight / mesh sinking on ~0.08–0.20 m slabs). Level-1 reference matches client constant
+/// `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
+const WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M: f32 = 0.28;
+
+#[inline]
+const fn building_plate_world_y(level: u32) -> f32 {
+    let lv = if level < 1 { 1 } else { level };
+    BUILDING_ORIGIN_Y + (lv as f32 - 1.0) * STOREY_SPACING_M
+}
+
+/// Corridor anchors on level 1 (ground spine).
+const WORLD_LOOT_Y_GROUND_FLOOR_M: f32 =
+    building_plate_world_y(1) + WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M;
+
+/// Upper spine anchors authored for typical residential plate **level 2**.
+const WORLD_LOOT_Y_UPPER_SPINE_M: f32 =
+    building_plate_world_y(2) + WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M;
+
+/// `apartments::derive_bounds` sets `bound_min_y = feet_world_y - 0.06`. Undo that pad, then apply the same
+/// clearance as corridor loot (`WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M`).
+const APARTMENT_BOUND_MIN_Y_BELOW_PLATE_M: f32 = 0.06;
+
+#[inline]
+fn apartment_world_loot_floor_y(unit: &ApartmentUnit) -> f32 {
+    unit.bound_min_y + APARTMENT_BOUND_MIN_Y_BELOW_PLATE_M + WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M
+}
 
 /// Sparse hallway anchors — ammo, consumables, **chemical-stock** (service-route pickups). Weapons stay inside units.
 /// Ground-floor points sit on **wide walk slabs** along the spine (see `generated_walk_surfaces/part_0000.rs`),
@@ -46,10 +70,10 @@ const WORLD_LOOT_ANCHORS: &[(f32, f32, f32)] = &[
     (-1.2, WORLD_LOOT_Y_GROUND_FLOOR_M, -22.0),
     (1.2, WORLD_LOOT_Y_GROUND_FLOOR_M, 22.0),
     (-1.0, WORLD_LOOT_Y_GROUND_FLOOR_M, 68.0),
-    (1.1, 3.52, -40.15),
-    (1.05, 3.52, -4.5),
-    (1.55, 3.52, 7.5),
-    (1.25, 3.52, 52.0),
+    (1.1, WORLD_LOOT_Y_UPPER_SPINE_M, -40.15),
+    (1.05, WORLD_LOOT_Y_UPPER_SPINE_M, -4.5),
+    (1.55, WORLD_LOOT_Y_UPPER_SPINE_M, 7.5),
+    (1.25, WORLD_LOOT_Y_UPPER_SPINE_M, 52.0),
 ];
 
 /// Hall / corridor — ammo, consumables, **chemical-stock** (service-route spawns; closet props later).
@@ -493,7 +517,7 @@ fn insert_apartment_scrap_metal(ctx: &ReducerContext, slot: u16, unit: &Apartmen
         APARTMENT_SCRAP_METAL_DEF_ID,
         quantity,
         x,
-        unit.foot_y + 0.02,
+        apartment_world_loot_floor_y(unit),
         z,
         seed,
     );
@@ -558,7 +582,7 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
         };
         let loot_seed = refresh_salt ^ ((slot as u64) << 48) ^ splitmix64(unit_seed);
         let (lx, lz) = apartment_clear_pickup_anchor_xz(&u, loot_seed);
-        let ly = u.foot_y + 0.02;
+        let ly = apartment_world_loot_floor_y(&u);
         insert_world_loot_at_anchor(ctx, slot, lx, ly, lz, UNCLAIMED_APARTMENT_LOOT_TIERS);
         main_loot_rows += 1;
 
