@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { INITIAL_SPACETIME_TABLE_QUERY_BATCHES } from "./chunkedInitialSpacetimeSubscriptions.js";
+import { Identity } from "spacetimedb";
+import type { DbConnection } from "../module_bindings";
+import { buildInitialSubscriptionBatches } from "./chunkedInitialSpacetimeSubscriptions.js";
 
-describe("INITIAL_SPACETIME_TABLE_QUERY_BATCHES", () => {
-  it("keeps parity with legacy single-shot subscribe surface area (exactly 15 SELECT * snapshots)", () => {
-    const flat = INITIAL_SPACETIME_TABLE_QUERY_BATCHES.flat();
-    expect(flat).toHaveLength(15);
+describe("buildInitialSubscriptionBatches", () => {
+  it("keeps parity with legacy single-shot subscribe surface (15 DISTINCT tables)", () => {
+    const batches = buildInitialSubscriptionBatches({
+      identity: Identity.zero(),
+    } as unknown as DbConnection);
+    const flat = batches.flat();
+    expect(batches[0]?.[0]).toMatch(/^SELECT \* FROM user WHERE identity = 0x/);
+    expect(flat.filter((q) => /^SELECT\s+\*\s+FROM\s+user\b/i.test(q))).toHaveLength(2);
+    expect(flat).toHaveLength(16);
 
     /** Normalized table name-only keys for regressions against old monolithic subscriber. */
     const keys = flat.map((q) =>

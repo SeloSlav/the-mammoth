@@ -1,10 +1,9 @@
 /**
- * Mirrors last known guest username from subscriptions for localStorage-backed guest reconnect UX.
- * Used only for initial route UI: unnamed guests bootstrap as `needs_name` without a flash of full-screen connecting.
+ * Mirrors last known guest username from Spacetime `user.username` subscriptions.
+ * Hint only: LoginGate may show reconnect copy while `needs_name`; never derive `phase` from this alone.
  *
- * Cleared when the signed-in `user` row has no username or on guest sign-out.
- */
-const STORAGE_KEY = "mammoth_stdb_guest_last_display_name";
+ * Cleared when the subscribed `user` row has no username or on guest sign-out.
+ */const STORAGE_KEY = "mammoth_stdb_guest_last_display_name";
 
 export function readGuestLastKnownDisplayName(): string | null {
   if (typeof window === "undefined") return null;

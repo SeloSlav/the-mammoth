@@ -4,12 +4,16 @@ import {
 } from "./fpSessionWorldMount.js";
 import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
 
-/** Hub / lobby plate — prioritized for mesh author + GPU merge warmup while other storeys lag behind. */
+/** Hub / lobby plate — prioritized for mesh author + merge while other storeys lag behind. */
 const HUB_PREFETCH_PLATE_LEVELS: readonly number[] = [1];
 
 let megablockInflightBuild: Promise<FpSessionStaticWorld> | null = null;
 
-/** Idempotent kick — overlaps CPU mesh work with lobby typing / baseline once tables are flowing. */
+/**
+ * Starts the static world mesh CPU build. Intentionally **not** invoked from Spacetime baseline while
+ * login UI is up — only from {@link waitMegablockStaticWorldMeshReady} (submit / gameplay mount) so
+ * the name gate stays free of megablock work.
+ */
 export function primeMegablockStaticWorldMeshBuild(): void {
   if (megablockInflightBuild) return;
   megablockInflightBuild = createFpSessionStaticWorldAsync({
@@ -17,7 +21,7 @@ export function primeMegablockStaticWorldMeshBuild(): void {
   });
 }
 
-/** Auth backdrop + gameplay share one merged megablock; second caller hits the warm promise. */
+/** Called from `submitUsername` and `mountFpSession` — second caller shares the same promise. */
 export async function waitMegablockStaticWorldMeshReady(): Promise<FpSessionStaticWorld> {
   primeMegablockStaticWorldMeshBuild();
   return await megablockInflightBuild!;

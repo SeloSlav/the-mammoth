@@ -3,17 +3,15 @@ import { fpLoadingDbgMark } from "../game/fpSession/fpLoadingDebug.js";
 import { yieldToMain } from "../game/fpSession/yieldToMain.js";
 
 /**
- * Full-table snapshots applied in WASM as one batch per subscribe() call — large baselines peg the
- * main thread until they return. Smaller sequential subs + awaits between them allow input/paint
- * between WASM apply bursts.
+ * Full snapshots applied after {@link buildInitialSubscriptionBatches}'s two {@code user} queries.
  *
- * Queries must stay disjoint from narrower follow-up subscriptions in gameplay (filtered
- * {@code player_pose} AOI, etc.) to avoid duplicated server work — see subscriptions docs on overlap.
+ * Largest / highest-churn snapshots stay last so chunked applies keep smaller tables between yields.
  *
- * Largest / highest-churn snapshots are queued last so earlier batches unblock auth UI + smaller tables.
+ * Queries may overlap broader subscriptions elsewhere in this client (e.g. two {@code user} queries);
+ * matching rows unify in the WASM cache—the duplicate full-user snapshot is deliberate so batch 0 stays O(1)
+ * rows for fast name-gate reducer readiness without dropping multiplayer display-name lookups.
  */
-export const INITIAL_SPACETIME_TABLE_QUERY_BATCHES: readonly (readonly string[])[] = [
-  ["SELECT * FROM user"],
+const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR: readonly (readonly string[])[] = [
   [
     "SELECT * FROM inventory_item",
     "SELECT * FROM craft_queue_item",
@@ -36,6 +34,24 @@ export const INITIAL_SPACETIME_TABLE_QUERY_BATCHES: readonly (readonly string[])
   ["SELECT * FROM player_pose"],
 ];
 
+/**
+ * Baseline batches: [**0**] scoped `user` (this connection), [**1**] full `user`, then prior chunks 2+.
+ *
+ * Caller must subscribe with identity already set on {@link DbConnection}.
+ */
+export function buildInitialSubscriptionBatches(
+  cc: DbConnection,
+): readonly (readonly string[])[] {
+  const id = cc.identity;
+  const selfScopedUser: readonly string[] =
+    id != null
+      ? [`SELECT * FROM user WHERE identity = 0x${id.toHexString()}`]
+      : ["SELECT * FROM user"];
+  const fullUser: readonly string[] = ["SELECT * FROM user"];
+
+  return [selfScopedUser, fullUser, ...INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR] as const;
+}
+
 export async function runChunkedInitialSpacetimeSubscriptions(
   cc: DbConnection,
   opts: {
@@ -44,11 +60,13 @@ export async function runChunkedInitialSpacetimeSubscriptions(
     onAllBatchesCommitted: () => void;
   },
 ): Promise<void> {
-  const batches = INITIAL_SPACETIME_TABLE_QUERY_BATCHES;
+  const batches = buildInitialSubscriptionBatches(cc);
   const lastBatchIndex = batches.length - 1;
 
   for (let i = 0; i < batches.length; i++) {
     if (!opts.isActive()) return;
+
+    await yieldToMain();
 
     await new Promise<void>((resolve, reject) => {
       try {

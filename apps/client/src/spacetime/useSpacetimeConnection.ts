@@ -4,8 +4,6 @@ import {
 } from "../game/fpSession/fpLoadingDebug.js";
 import {
   abandonMegablockStaticWorldMeshCache,
-  primeMegablockStaticWorldMeshBuild,
-  waitMegablockStaticWorldMeshReady,
 } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import { clearOidcAccessToken, readOidcAccessToken } from "../auth/env";
 import {
@@ -17,7 +15,7 @@ import type { DbConnection } from "../module_bindings";
 import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
-import { readGuestLastKnownDisplayName, writeGuestLastKnownDisplayName } from "./guestLastKnownDisplayName";
+import { writeGuestLastKnownDisplayName } from "./guestLastKnownDisplayName";
 import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
 import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
 
@@ -41,11 +39,11 @@ function readInitialPhase(): SpacetimePhase {
   if (readOidcAccessToken()) return "connecting";
   if (readGuestConnectionToken()) {
     /**
-     * Unnamed returning guests skip the vacant intercom — same shell as Sneak button. Named guests stay
-     * on lightweight connecting until chunk baseline finishes (avoid name-form flash → intercom regress).
+     * Server truth arrives over the wire — never hoist `phase` to `connecting` from localStorage alone
+     * (stale hints). Returning named guests get a reconnect shell in LoginGate until `user` confirms
+     * `username`.
      */
-    const hinted = readGuestLastKnownDisplayName();
-    return hinted && hinted.length >= 3 ? "connecting" : "needs_name";
+    return "needs_name";
   }
   return "needs_auth";
 }
@@ -251,7 +249,6 @@ export function useSpacetimeConnection(): SpacetimeSession {
             onAllBatchesCommitted: () => {
               if (!active) return;
               fpLoadingDbgMark("spacetime_subscription:baseline_tables_applied");
-              primeMegablockStaticWorldMeshBuild();
               bump();
               queueMicrotask(() => {
                 if (!active) return;
@@ -324,10 +321,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
         return;
       }
       setErrorMsg(null);
-      await Promise.all([
-        conn.reducers.setUsername({ name: trimmed }),
-        waitMegablockStaticWorldMeshReady(),
-      ]);
+      await conn.reducers.setUsername({ name: trimmed });
     },
     [conn, spacetimeUserSnapshotReady],
   );

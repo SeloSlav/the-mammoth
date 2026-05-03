@@ -12,6 +12,53 @@
     var(--ui-page-bg-edge);
 }
 
+/*
+ * Atmospheric layer behind the login panel — animate via transform only (compositor).
+ * No JS RAF / WebGPU on auth (keeps typing + Spacetime off the hook).
+ */
+.backdropAtmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backdropAtmosphere::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  opacity: 0.85;
+  background:
+    radial-gradient(ellipse at 38% 32%, rgba(110, 160, 255, 0.14), transparent 42%),
+    radial-gradient(circle at 76% 18%, color-mix(in srgb, var(--ui-accent) 22%, transparent), transparent 30%),
+    radial-gradient(circle at 18% 88%, rgba(52, 64, 98, 0.35), transparent 38%),
+    linear-gradient(
+      148deg,
+      var(--ui-page-bg-mid) 0%,
+      var(--ui-page-bg-edge) 48%,
+      var(--ui-page-bg-mid) 100%
+    );
+  animation: mammoth-auth-sky-drift 28s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes mammoth-auth-sky-drift {
+  from {
+    transform: translate3d(-2.5%, -1.8%, 0) scale(1.04);
+  }
+
+  to {
+    transform: translate3d(2.5%, 1.8%, 0) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdropAtmosphere::before {
+    animation: none;
+    transform: none;
+  }
+}
+
 .backdropCanvas,
 .backdropFallback,
 .backdropScrim {

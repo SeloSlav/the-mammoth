@@ -229,6 +229,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
 export async function createFpSessionStaticWorldAsync(
   opts?: FpSessionStaticWorldAsyncOpts,
 ): Promise<FpSessionStaticWorld> {
+  await yieldToMain();
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
   const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
@@ -256,6 +257,7 @@ export async function createFpSessionStaticWorldAsync(
     walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
+  await yieldToMain();
 
   let consolidatedCollisionBlockers = blockerAABBs;
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
@@ -305,6 +307,8 @@ export async function createFpSessionStaticWorldAsync(
   });
   buildingRoot.updateMatrixWorld(true);
   const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+
+  await yieldToMain();
 
   if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
     const buildingLocalFootprint = new THREE.Box3()

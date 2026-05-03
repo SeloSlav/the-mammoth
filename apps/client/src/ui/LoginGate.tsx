@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
+import { readGuestLastKnownDisplayName } from "../spacetime/guestLastKnownDisplayName";
 import { MammothAuthBackdrop } from "./MammothAuthBackdrop";
 import styles from "./LoginGate.module.css";
 import { useMammothAuthMenuMusic } from "./useMammothAuthMenuMusic";
@@ -16,6 +17,7 @@ export function LoginGate({ session }: Props) {
   const {
     phase,
     conn,
+    connectionKind,
     errorMsg,
     spacetimeUserSnapshotReady,
     submitUsername,
@@ -36,6 +38,15 @@ export function LoginGate({ session }: Props) {
       setBusy(false);
     }
   };
+
+  /** ≥3 aligns with reducer validation; hint is UX-only until subscriptions confirm username. */
+  const guestReconnectHint =
+    connectionKind === "guest" ? readGuestLastKnownDisplayName() : null;
+  const showGuestReconnectResume =
+    phase === "needs_name" &&
+    connectionKind === "guest" &&
+    guestReconnectHint !== null &&
+    guestReconnectHint.length >= 3;
 
   if (phase === "needs_auth") {
     return (
@@ -88,6 +99,22 @@ export function LoginGate({ session }: Props) {
     );
   }
 
+  if (showGuestReconnectResume) {
+    return (
+      <AuthScreen eyebrow="You're on file">
+        {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
+        <p className={styles.statusCopy}>Reconnecting your saved guest slot…</p>
+        <p className={styles.hint}>
+          We&apos;ll bump you ahead as soon as the tower sync—not picking a fresh name unless the desk
+          says so.
+        </p>
+        <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
+          Use a different key
+        </button>
+      </AuthScreen>
+    );
+  }
+
   if (phase === "connecting" && !errorMsg) {
     return (
       <AuthScreen eyebrow="Almost there">
@@ -121,6 +148,7 @@ export function LoginGate({ session }: Props) {
         Pick the name other players will see on the landing and in chat. Use 3–24 characters:
         letters, numbers, underscores, and hyphens.
       </p>
+      <p className={styles.hint}>You can type anytime; stepping inside waits until reception finishes syncing.</p>
       {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
       {!conn ? (
         <p className={styles.hint}>Connecting to reception—almost there.</p>
@@ -134,7 +162,7 @@ export function LoginGate({ session }: Props) {
           onChange={(ev) => setNameInput(ev.target.value)}
           placeholder="Your callsign on the block"
           className={styles.input}
-          disabled={busy || !conn || !spacetimeUserSnapshotReady}
+          disabled={busy}
           maxLength={24}
           autoComplete="username"
         />
@@ -143,7 +171,13 @@ export function LoginGate({ session }: Props) {
           className={styles.button}
           disabled={busy || !conn || !spacetimeUserSnapshotReady}
         >
-          {busy ? "Saving your name..." : "Step inside"}
+          {busy
+            ? "Saving your name..."
+            : !conn
+              ? "Waiting for reception…"
+              : !spacetimeUserSnapshotReady
+                ? "Syncing roster…"
+                : "Step inside"}
         </button>
       </form>
       <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
