@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { exteriorConcreteWallMaterial } from "./floorPlaceholderMeshMaterials.js";
 import { hoistwayFloor, shaftCeil } from "./shaftHoistwayMaterials.js";
+import { addHoistwayUpViewLintelRing } from "./shaftHoistwayUpViewLintels.js";
 import { addShaftShell } from "./shaftShell.js";
 import {
   SHAFT_DOUBLE_DOOR_H,
@@ -93,8 +94,15 @@ export function tagShaftShellMeshesSkipFloorGeometryMerge(root: THREE.Object3D):
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     const n = obj.name;
-    if (n === "shaft_floor" || n === "shaft_ceiling" || n.startsWith("shaft_wall_")) {
+    if (
+      n === "shaft_floor" ||
+      n === "shaft_ceiling" ||
+      n.startsWith("shaft_wall_") ||
+      n.startsWith("shaft_hoistway_lintel_")
+    ) {
       obj.userData.mammothSkipFloorGeometryMerge = true;
+      /** Match unit `shell_*` tagging — frustum tests drop thin shaft walls when the camera is inside. */
+      obj.frustumCulled = false;
     }
   });
 }
@@ -118,6 +126,17 @@ export function addElevatorShaftPlaceholder(
     exteriorShaftFaces: opts?.shaftExteriorFaces,
     exteriorWallMat: exteriorConcreteWallMaterial,
   });
+  {
+    const wt = 0.11;
+    const hy = sy * 0.5;
+    const topExtend = 0.06;
+    const innerWallH = Math.max(sy - 2 * wt + topExtend, 0.08);
+    const wallCenterY = (-hy + wt) + innerWallH * 0.5;
+    const yWallTop = wallCenterY + innerWallH * 0.5;
+    const vlenX = Math.max(sx - 2 * wt, 0.05);
+    const vlenZ = Math.max(sz - 2 * wt, 0.05);
+    addHoistwayUpViewLintelRing(group, exteriorConcreteWallMaterial, vlenX, vlenZ, yWallTop);
+  }
   /** Skip {@link mergeGroupDescendantsByMaterial}: hoistway walls are thin shells; merge + frustum / WebGPU paths made them vanish while collision stayed valid. */
   tagShaftShellMeshesSkipFloorGeometryMerge(group);
 }

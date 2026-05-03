@@ -18,6 +18,7 @@ import {
   fpElevDoorwayViewFacingDoor,
 } from "./fpElevatorMountVisualAuthoring.js";
 import type {
+  FpElevatorFloorVisibilityBand,
   FpElevatorRideDebugSnapshot,
 } from "../fpElevatorWorldTypes.js";
 
@@ -150,7 +151,7 @@ export function createFpElevatorFloorVisAndCabContext(
     bandEyeWorldZ?: number,
     bandViewDirX?: number,
     bandViewDirZ?: number,
-  ) => {
+  ): FpElevatorFloorVisibilityBand => {
     const sFeet = estimateStoreyFromFeetY(py, storeyOpts);
     const sEye =
       bandEyeWorldY === undefined
@@ -190,7 +191,6 @@ export function createFpElevatorFloorVisAndCabContext(
       if (!row) continue;
       const cabY = getCabY(key);
       if (!Number.isFinite(cabY)) continue;
-      const doorOpen = getDoor(key, nowMs);
       const hoistwayProbe = (wx: number, wy: number, wz: number) =>
         fpElevFeetInHoistwayColumnForFloorStack(wx, wy, wz, {
           buildingWorldOriginX: ox,
@@ -227,8 +227,13 @@ export function createFpElevatorFloorVisAndCabContext(
           cabY,
           vis.inner,
         );
+      /**
+       * Full vertical plate stack whenever feet or eye are inside the hoistway column but not in the
+       * cab chamber. Door openness is irrelevant here — closed landing doors still leave the player
+       * inside the physical shaft (pit, counterweight zone, roof access). Corridor positions fail
+       * the narrow column test.
+       */
       if (
-        doorOpen > DOOR_OPEN_REVEAL_THRESHOLD &&
         (feetInColumn || eyeInColumn) &&
         !feetBlockHoistReveal &&
         !eyeBlockHoistReveal
@@ -248,7 +253,7 @@ export function createFpElevatorFloorVisAndCabContext(
       lowerTarget =
         lowerTarget === undefined ? 1 : Math.min(lowerTarget, 1);
     }
-    return fpBuildingFloorPlateVisibilityBand({
+    const { lo, hi } = fpBuildingFloorPlateVisibilityBand({
       maxLevel,
       playerStorey,
       revealFullStack: false,
@@ -256,6 +261,7 @@ export function createFpElevatorFloorVisAndCabContext(
       upperTargetStorey: upperTarget,
       lowerTargetStorey: lowerTarget,
     });
+    return { lo, hi, hoistwayPlateBoost: elevatorHoistwayPlateBoost };
   };
 
   /**
@@ -458,7 +464,7 @@ export function createFpElevatorFloorVisAndCabContext(
         serverClockOffsetMs: serverClock.estimatedOffsetMs(),
         serverClockRideOffsetMs: getRideClockOffsetMs(row),
         clockHasEstimate: serverClock.hasEstimate(),
-        floorVisBand: { lo: band.lo, hi: band.hi },
+        floorVisBand: band,
       };
     }
     return null;

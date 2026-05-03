@@ -117,8 +117,17 @@ function reattachPreservedMeshesWithSavedWorld(
     _mergePreserveLocal.multiplyMatrices(_mergePreserveParentInv, world);
     _mergePreserveLocal.decompose(m.position, m.quaternion, m.scale);
     m.updateMatrix();
-    const isThinShaftFacadeSkin =
-      m.name.startsWith("shaft_wall_") && m.name.includes("_exterior");
-    m.frustumCulled = !isThinShaftFacadeSkin;
+    /**
+     * All preserved hoistway shells (inner + facade skins) — same failure mode as unit hollow shells:
+     * sphere/frustum intersection misses when the eye sits inside the shaft volume and pitches up.
+     * Previously only `_exterior` skins disabled culling, which hid inner concrete when looking up
+     * the stack (doors from `FpElevatorShaftVisual` stayed on a separate root).
+     */
+    const isShaftHoistwayPreservedMesh =
+      m.name.startsWith("shaft_wall_") ||
+      m.name.startsWith("shaft_hoistway_lintel_") ||
+      m.name === "shaft_floor" ||
+      m.name === "shaft_ceiling";
+    m.frustumCulled = !isShaftHoistwayPreservedMesh;
   }
 }

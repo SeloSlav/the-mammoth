@@ -9,6 +9,7 @@ import {
   fpStairColumnPlateVisibilityBand,
 } from "../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
+import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
 
 type FpStairShaftVisibilityBounds = {
   minX: number;
@@ -78,6 +79,27 @@ export function fpPointNearStairShaftForPlateBand(
     }
   }
   return false;
+}
+
+/**
+ * Stair-core plate caps must not shrink an elevator hoistway band — cores often share XZ adjacency and
+ * `fpStairShaftLocalVisibilityBand` ignores the incoming global range.
+ */
+export function fpMergeStairShaftPlateBandWithElevator(
+  elevatorBand: FpElevatorFloorVisibilityBand,
+  insideStairShaft: boolean,
+  maxLevel: number,
+  playerStorey: number,
+): { lo: number; hi: number } {
+  if (!insideStairShaft || elevatorBand.hoistwayPlateBoost) {
+    return { lo: elevatorBand.lo, hi: elevatorBand.hi };
+  }
+  return fpStairShaftLocalVisibilityBand({
+    globalLo: elevatorBand.lo,
+    globalHi: elevatorBand.hi,
+    maxLevel,
+    playerStorey,
+  });
 }
 
 export type FpSessionFloorPlateVisibilityOpts = {
@@ -197,7 +219,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       floorVisCamDir.z,
     );
     const cabOccludesWorld = typeof occludedCabStorey === "number";
-    let band = fpElevators.getFloorVisibilityBand(
+    const elevVisBand = fpElevators.getFloorVisibilityBand(
       feetPos.x,
       feetPos.y,
       feetPos.z,
@@ -209,6 +231,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       floorVisCamDir.x,
       floorVisCamDir.z,
     );
+    const hoistwayPlateBoost = elevVisBand.hoistwayPlateBoost;
+    let band = { lo: elevVisBand.lo, hi: elevVisBand.hi };
     /**
      * Inset-based "exterior" widens to the full stack so façades do not pop when the camera sits
      * just outside the footprint core — but perimeter corridors often sit **outside** that inset
@@ -278,13 +302,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         stairShaftSpecs,
       );
     if (insideStairShaft) {
-      const stairLocalBand = fpStairShaftLocalVisibilityBand({
-        globalLo: band.lo,
-        globalHi: band.hi,
-        maxLevel: maxBuildingLevel,
+      band = fpMergeStairShaftPlateBandWithElevator(
+        { lo: band.lo, hi: band.hi, hoistwayPlateBoost },
+        true,
+        maxBuildingLevel,
         playerStorey,
-      });
-      band = stairLocalBand;
+      );
     }
 
     const targetBandLo = band.lo;

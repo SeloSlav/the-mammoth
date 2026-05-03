@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fpPointNearStairShaftForPlateBand } from "./fpSessionFloorPlateVisibility.js";
+import {
+  fpPointNearStairShaftForPlateBand,
+  fpMergeStairShaftPlateBandWithElevator,
+} from "./fpSessionFloorPlateVisibility.js";
 import type { BuildingStairShaftSpec } from "@the-mammoth/world";
 
 const SAMPLE_SHAFT: BuildingStairShaftSpec = {
@@ -36,5 +39,40 @@ describe("fpPointNearStairShaftForPlateBand", () => {
     expect(
       fpPointNearStairShaftForPlateBand(0, 1.5, 0, [SAMPLE_SHAFT]),
     ).toBe(false);
+  });
+});
+
+describe("fpMergeStairShaftPlateBandWithElevator", () => {
+  it("keeps a wide elevator/hoistway band when stair-core proximity would otherwise cap storeys", () => {
+    const merged = fpMergeStairShaftPlateBandWithElevator(
+      { lo: 1, hi: 20, hoistwayPlateBoost: true },
+      true,
+      20,
+      5,
+    );
+    expect(merged).toEqual({ lo: 1, hi: 20 });
+  });
+
+  it("applies the stair-local cap when not in a hoistway shell context", () => {
+    const merged = fpMergeStairShaftPlateBandWithElevator(
+      { lo: 4, hi: 8, hoistwayPlateBoost: false },
+      true,
+      20,
+      10,
+    );
+    expect(merged.lo).toBeGreaterThanOrEqual(8);
+    expect(merged.hi).toBeLessThanOrEqual(14);
+    expect(merged.hi - merged.lo).toBeLessThan(8);
+  });
+
+  it("no-ops when not inside a stair shaft probe", () => {
+    expect(
+      fpMergeStairShaftPlateBandWithElevator(
+        { lo: 2, hi: 6, hoistwayPlateBoost: false },
+        false,
+        20,
+        10,
+      ),
+    ).toEqual({ lo: 2, hi: 6 });
   });
 });

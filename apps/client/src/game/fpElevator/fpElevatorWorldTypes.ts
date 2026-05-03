@@ -27,6 +27,18 @@ export type MountFpElevatorWorldOpts = {
   };
 };
 
+/** Per-frame storey band for `buildingRoot` plates plus hoistway context for stair-shaft merge rules. */
+export type FpElevatorFloorVisibilityBand = {
+  lo: number;
+  hi: number;
+  /**
+   * Feet or eye are in an elevator hoistway column and not inside the cab chamber (roof deck still
+   * counts as “not blocking” hoistway reveal). Used so stair-core plate caps do not clobber the
+   * full vertical shaft stack when the cores overlap in XZ.
+   */
+  hoistwayPlateBoost: boolean;
+};
+
 /**
  * Snapshot of replicated + predicted cab state while the local player is inside a **moving** car.
  * Used by `window.__mmElevDebug` to correlate hitches with prediction / clock / visibility band.
@@ -50,7 +62,7 @@ export type FpElevatorRideDebugSnapshot = {
   /** Offset actually used for this moving leg's prediction (prevents mid-ride offset step-ups). */
   serverClockRideOffsetMs: number;
   clockHasEstimate: boolean;
-  floorVisBand: { lo: number; hi: number };
+  floorVisBand: FpElevatorFloorVisibilityBand;
 };
 
 export type MountFpElevatorWorldResult = {
@@ -116,10 +128,7 @@ export type MountFpElevatorWorldResult = {
     /** Camera forward world XZ — used to tell whether the doorway is actually in view from the cab. */
     bandViewDirX?: number,
     bandViewDirZ?: number,
-  ): {
-    lo: number;
-    hi: number;
-  };
+  ): FpElevatorFloorVisibilityBand;
   /**
    * Hide auxiliary landing visuals (hail panels + pick boxes) on every shaft while the current cab
    * view is occluded by the cab walls (sealed or simply not on a doorway sightline). The actual

@@ -11,7 +11,8 @@
  * **Authoring:** `apps/client/public/audio/ui/footstep.wav` … `footstep-6.wav` (any subset); footsteps
  * are **~1.00 s** each (hit early, tail pad OK). **Batch-normalize** after changing assets:
  * `pnpm content:normalize-footsteps` (RMS-match the set + shared peak ceiling; `--dry-run` first).
- * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Melee swing: default
+ * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Dry firearm (no ammo): `unloaded-shot.wav`.
+ * Melee swing: default
  * `weapon-melee-swing*.wav` with legacy fallback to `weapon-crowbar-swing*.wav` (see
  * `meleeSwingSound.ts`). Call {@link LocalGameAudio.unlock} from a **user gesture**.
  */
@@ -44,6 +45,9 @@ const IMPACT_STEMS = [
 ] as const;
 
 const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
+
+/** Empty chamber / trigger pull — local FP feedback when firing with no carried ammo. */
+const FIREARM_UNLOADED_SHOT_STEM = `${UI_STEM}/unloaded-shot` as const;
 
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
@@ -107,6 +111,7 @@ export class LocalGameAudio {
   private consumeEatBuffer: AudioBuffer | null = null;
   private consumeDrinkBuffer: AudioBuffer | null = null;
   private consumeSmokeBuffer: AudioBuffer | null = null;
+  private firearmUnloadedShotBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -193,6 +198,17 @@ export class LocalGameAudio {
       );
     }
 
+    const unloadedUrl = await this.resolveSource(FIREARM_UNLOADED_SHOT_STEM);
+    if (unloadedUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [unloadedUrl]);
+      this.firearmUnloadedShotBuffer = decoded[0] ?? null;
+    }
+    if (!this.firearmUnloadedShotBuffer) {
+      console.warn(
+        "[LocalGameAudio] Missing firearm dry-fire asset: unloaded-shot.wav under public/audio/ui/",
+      );
+    }
+
     if (this.impactBuffers.length === 0) {
       console.warn("[LocalGameAudio] Failed to decode footstep assets.");
       void ctx.close();
@@ -234,6 +250,7 @@ export class LocalGameAudio {
     this.consumeEatBuffer = null;
     this.consumeDrinkBuffer = null;
     this.consumeSmokeBuffer = null;
+    this.firearmUnloadedShotBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
@@ -296,6 +313,26 @@ export class LocalGameAudio {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = 0.99 + Math.random() * 0.04;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
+  }
+
+  /** Local-only click when the player tries to fire a ranged weapon with no carried ammo. */
+  playFirearmDryFireLocal(): void {
+    if (!this.unlocked || !this.ctx || !this.footstepBus || !this.firearmUnloadedShotBuffer) {
+      return;
+    }
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+    const buf = this.firearmUnloadedShotBuffer;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 0.42 * (0.94 + Math.random() * 0.12);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.98 + Math.random() * 0.05;
     src.connect(hitGain);
     hitGain.connect(bus);
     src.start(ctx.currentTime);

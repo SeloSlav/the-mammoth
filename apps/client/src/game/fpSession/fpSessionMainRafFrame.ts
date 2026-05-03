@@ -238,25 +238,29 @@ export function createFpSessionMainRafFrame(
         hb &&
         deps.conn.identity &&
         hotbarDefIdSupportsRangedAttack(hb.defId) &&
-        localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hb.defId) &&
         nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
       ) {
-        mainRaf.lastRangedMs = nowMs;
-        mainRaf.firearmShotSeq += 1;
-        deps.camera.updateMatrixWorld(true);
-        deps.camera.getWorldDirection(deps._aimShotWorldDir);
-        void deps.conn.reducers.submitFirearmShot({
-          aimDirX: deps._aimShotWorldDir.x,
-          aimDirY: deps._aimShotWorldDir.y,
-          aimDirZ: deps._aimShotWorldDir.z,
-        });
-        deps.fpFirearmImpactDecals.spawnForShot({
-          nowMs,
-          camera: deps.camera,
-          aimWorldDir: deps._aimShotWorldDir,
-          heldItemId: hb.defId as HeldItemId,
-          shotSeq: mainRaf.firearmShotSeq,
-        });
+        if (localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hb.defId)) {
+          mainRaf.lastRangedMs = nowMs;
+          mainRaf.firearmShotSeq += 1;
+          deps.camera.updateMatrixWorld(true);
+          deps.camera.getWorldDirection(deps._aimShotWorldDir);
+          void deps.conn.reducers.submitFirearmShot({
+            aimDirX: deps._aimShotWorldDir.x,
+            aimDirY: deps._aimShotWorldDir.y,
+            aimDirZ: deps._aimShotWorldDir.z,
+          });
+          deps.fpFirearmImpactDecals.spawnForShot({
+            nowMs,
+            camera: deps.camera,
+            aimWorldDir: deps._aimShotWorldDir,
+            heldItemId: hb.defId as HeldItemId,
+            shotSeq: mainRaf.firearmShotSeq,
+          });
+        } else {
+          mainRaf.lastRangedMs = nowMs;
+          deps.localAudio.playFirearmDryFireLocal();
+        }
       } else if (
         hb &&
         hotbarDefIdSupportsMeleeAttack(hb.defId) &&
