@@ -1,14 +1,12 @@
 import * as THREE from "three";
 import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import { stairShaftDoorTangentSpanShaftLocal } from "./stairElevatorPlaceholders.js";
-import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import type {
   CardinalFace,
   WallHoleXY,
   WallHoleYZ,
 } from "./wallWithDoorCutout.js";
 import { type StairCorridorSignPlacement } from "./stairwellCorridorSign.js";
-import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
 import type { PlateStairCorridorDoorPunch } from "./floorPlaceholderDoorPunchTypes.js";
 import {
   type CorridorShellWallHoles,

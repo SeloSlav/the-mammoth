@@ -7,8 +7,8 @@ import {
 } from "./index.js";
 
 describe("exterior megablock tree placements (ez-tree presets)", () => {
-  it("global runtime flag defaults off (placement math tests stay independent)", () => {
-    expect(ENABLE_EXTERIOR_PROCEDURAL_TREES).toBe(false);
+  it("global procedural trees flag reflects world package default", () => {
+    expect(ENABLE_EXTERIOR_PROCEDURAL_TREES).toBe(true);
   });
 
   it("scatter hundreds of realistically scaled placements outside the mamutica-like footprint", () => {

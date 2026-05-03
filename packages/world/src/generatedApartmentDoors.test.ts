@@ -35,16 +35,16 @@ function parseRustTemplates(source: string): Array<{
 }> {
   // Sets appear as: static TEMPLATES_<i>: &[...] = &[ ... ];
   // Followed by static TEMPLATE_SETS: &[...] = &[ ... { floor_doc_id: "x", templates: TEMPLATES_<i> }, ... ];
-  const setRe = /static TEMPLATES_(\d+): &\[ApartmentDoorTemplate\] = &\[(.*?)\n\];/gs;
+  const setRe = /static TEMPLATES_(\d+): &\[ApartmentDoorTemplate\] = &\[([\s\S]*?)\];/g;
   const blocks: Record<string, string> = {};
   for (const m of source.matchAll(setRe)) {
     blocks[m[1]!] = m[2]!;
   }
   const tmplRe =
-    /ApartmentDoorTemplate\s*\{\s*template_id:\s*"([^"]+)",\s*unit_id:\s*"([^"]+)",\s*face:\s*(\d+),\s*hinge_x:\s*([-\d.]+),\s*hinge_z:\s*([-\d.]+),\s*feet_y_offset:\s*([-\d.]+),\s*panel_w_m:\s*([-\d.]+),\s*panel_h_m:\s*([-\d.]+)\s*\}/g;
+    /ApartmentDoorTemplate\s*\{\s*template_id:\s*"([^"]+)",\s*unit_id:\s*"([^"]+)",\s*face:\s*(\d+),\s*hinge_x:\s*([-\d.]+),\s*hinge_z:\s*([-\d.]+),\s*feet_y_offset:\s*([-\d.]+),\s*panel_w_m:\s*([-\d.]+),\s*panel_h_m:\s*([-\d.]+)\s*,\s*\}/g;
 
   const setsOrderRe =
-    /ApartmentDoorTemplateSet\s*\{\s*floor_doc_id:\s*"([^"]+)",\s*templates:\s*TEMPLATES_(\d+)\s*\}/g;
+    /ApartmentDoorTemplateSet\s*\{\s*floor_doc_id:\s*"([^"]+)",\s*templates:\s*TEMPLATES_(\d+)\s*,\s*\}/g;
   const ordered: Array<{ floorDocId: string; idx: string }> = [];
   for (const m of source.matchAll(setsOrderRe)) {
     ordered.push({ floorDocId: m[1]!, idx: m[2]! });

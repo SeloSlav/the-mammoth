@@ -1,4 +1,5 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { ensureFpLoadingDebugGlobalObservers } from "../game/fpSession/fpLoadingDebug.js";
 import { useSpacetimeConnection } from "./useSpacetimeConnection";
 import type { SpacetimeSession } from "./useSpacetimeConnection";
 
@@ -12,6 +13,7 @@ const SpacetimeContext = createContext<SpacetimeSession | null>(null);
  */
 export function SpacetimeProvider({ children }: { children: ReactNode }) {
   const session = useSpacetimeConnection();
+  useEffect(() => ensureFpLoadingDebugGlobalObservers(), []);
   return (
     <SpacetimeContext.Provider value={session}>
       {children}

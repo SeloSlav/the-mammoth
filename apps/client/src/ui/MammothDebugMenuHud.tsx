@@ -15,6 +15,7 @@ import {
   LS_FP_COLLISION_DEBUG,
   LS_FP_DOOR_ANIM_SKEW_WARN,
   LS_FP_LEGACY_COLLISION,
+  LS_FP_LOADING_DEBUG,
   LS_FP_PERF_DEBUG,
   LS_FP_PHYSICS_DEBUG,
   LS_FP_RECONCILE_DEBUG,
@@ -50,6 +51,7 @@ type LsFlags = {
   fpReconcileDebug: boolean;
   fpDoorAnimSkewWarn: boolean;
   fpLegacyCollision: boolean;
+  fpLoadingDebug: boolean;
   fpPerfDebug: boolean;
   apartmentUnitBounds: boolean;
   doorDebugAutostart: boolean;
@@ -65,6 +67,7 @@ function readLsFlags(): LsFlags {
     fpDoorAnimSkewWarn: lsToggleIsOn(LS_FP_DOOR_ANIM_SKEW_WARN),
     fpLegacyCollision: lsLegacyCollisionIsOn(),
     fpPerfDebug: lsToggleIsOn(LS_FP_PERF_DEBUG),
+    fpLoadingDebug: lsToggleIsOn(LS_FP_LOADING_DEBUG),
     apartmentUnitBounds: lsToggleIsOn(LS_APARTMENT_UNIT_BOUNDS_DEBUG),
     doorDebugAutostart: lsToggleIsOn(LS_DOOR_DEBUG_AUTOSTART),
     elevDebugAutostart: lsToggleIsOn(LS_ELEV_DEBUG_AUTOSTART),
@@ -391,6 +394,16 @@ export function MammothDebugMenuHud() {
             <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
               Performance
             </div>
+            {rowToggle({
+              label: "Loading / hitch debug (console)",
+              description:
+                "[mmLoadDbg] Spacetime + FP mount timelines, long-task CPU, RAF gaps; ?loaddebug=1 or mammothFpLoadingDebug — refresh to apply observers",
+              on: flags.fpLoadingDebug,
+              onToggle: () => {
+                lsToggleSet(LS_FP_LOADING_DEBUG, !flags.fpLoadingDebug);
+                refreshLs();
+              },
+            })}
             {rowToggle({
               label: "FP render stats (console)",
               description: "FPS · draw calls · triangles (mammothFpDebug)",

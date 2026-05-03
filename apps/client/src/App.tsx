@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { fpLoadingDbgMark } from "./game/fpSession/fpLoadingDebug.js";
 import { mountFpSession } from "./game/mountFpSession";
 import { HudShell } from "./ui/HudShell";
 import LoginGate from "./ui/LoginGate";
@@ -23,6 +24,19 @@ export default function App() {
     let dispose: (() => void) | undefined;
     let cancelled = false;
     setGpuError(null);
+
+    fpLoadingDbgMark("react_app:canvas_mount_effect_run", {
+      canvasW: canvas.clientWidth,
+      canvasH: canvas.clientHeight,
+    });
+    queueMicrotask(() => {
+      fpLoadingDbgMark("react_app:first_microtask_after_mount_effect");
+    });
+    requestAnimationFrame(() => {
+      fpLoadingDbgMark("react_app:first_browser_raf_before_gpu_session_ready");
+    });
+
+    const mountStartedAt = performance.now();
     void mountFpSession(canvas, conn, {
       apartmentClaimsAllowed:
         !REQUIRE_REGISTERED_APARTMENT_CLAIMS || session.connectionKind === "oidc",
@@ -32,10 +46,17 @@ export default function App() {
           d();
           return;
         }
+        fpLoadingDbgMark("react_app:mount_fp_session_resolved", {
+          waitMs: Math.round(performance.now() - mountStartedAt),
+        });
         dispose = d;
       })
       .catch((e: unknown) => {
         if (cancelled) return;
+        fpLoadingDbgMark("react_app:mount_fp_session_rejected", {
+          waitMs: Math.round(performance.now() - mountStartedAt),
+          message: e instanceof Error ? e.message : String(e),
+        });
         setGpuError(e instanceof Error ? e.message : String(e));
       });
     return () => {

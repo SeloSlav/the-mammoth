@@ -1,13 +1,7 @@
 import * as THREE from "three";
-import type {
-  BuildingDoc,
-  FloorDoc,
-  PlacedObject,
-  StairWellDef,
-} from "@the-mammoth/schemas";
+import type { FloorDoc } from "@the-mammoth/schemas";
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import {
-  getBuildingStairShaftSpecs,
   mergeShaftExteriorHints,
   readShaftFacadeHintFaces,
   shaftPlanKey,
@@ -20,40 +14,25 @@ import {
   elevatorGroundDoorOpeningLocals,
   resolveStairWellGroundDoor,
   resolveStairWellSupplementalDoors,
-  stairShaftDoorTangentSpanShaftLocal,
 } from "./stairElevatorPlaceholders.js";
 import {
   exteriorFacesForPlacedObjectInFloor,
   shaftFacesTowardAdjacentElevatorHoistways,
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";
-import {
-  addDoorFrameTrimConstantX,
-  addDoorFrameTrimConstantZ,
-  addWallConstantXWithHoles,
-  addWallConstantZWithHoles,
-  type CardinalFace,
-  type WallHoleXY,
-  type WallHoleYZ,
-} from "./wallWithDoorCutout.js";
+import { type CardinalFace } from "./wallWithDoorCutout.js";
 import {
   collectShaftSlabHoles,
-  hollowShellXZRectsWithShaftCutouts,
   mergeElevatorShaftSlabHolesFromFloorDocs,
-  punchElevatorHolesInShellRects,
-  type RectXZ,
-  type ShaftSlabHole,
 } from "./shaftPlanformClip.js";
 import {
   GROUND_SLAB_MARGIN_XZ,
   GROUND_SLAB_THICKNESS_M,
   addConcreteSlabWithOptionalShaftHoles,
   addGroundFootprintGrassOccluder,
-  applyShellFloorPlanarTopUV,
 } from "./floorSlabPlaceholder.js";
 import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMaterials.js";
 import {
-  collectCorridorOrLobbyFootprintsFromFloor,
   corridorFlushGapForShaftDoor,
   elevatorDoorFaceFromFloorCorridors,
   firstCorridorOrLobbyFromFloor,
@@ -69,35 +48,22 @@ import {
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
 } from "./unitExteriorWindows.js";
-import { shortFloorLabelForRef } from "./buildingFloorLabels.js";
-import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
-import {
-  type StairCorridorSignPlacement,
-  addStairwellCorridorSignMeshes,
-} from "./stairwellCorridorSign.js";
 import { stairwellLitterScatterSeed } from "./stairwellCigaretteLitter.js";
 import type { PlateStairCorridorDoorPunch } from "./floorPlaceholderDoorPunchTypes.js";
-import {
-  type CorridorShellWallHoles,
-  type ElevatorCorridorSignPlacement,
-  type HollowShellOpts,
-  type PlaceholderKind,
-} from "./floorPlaceholderMeshTypes.js";
-import { classifyPrefab, matsFor } from "./floorPlaceholderPrefabKind.js";
+import type { CorridorShellWallHoles } from "./floorPlaceholderMeshTypes.js";
+import { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
 import { manualCorridorShellHoleExtrasForFloor } from "./manualApartmentDoorExtras.js";
 /** Exported for unit tests / tooling; re-exported from prefab classifier. */
 export { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
 export type { PlaceholderKind } from "./floorPlaceholderMeshTypes.js";
 import { addHollowRoomShell } from "./hollowRoomShell.js";
 import {
-  addKoncarElevatorSignMeshes,
   corridorShellHolesFromAdjacentUnitEntries,
   corridorShellHolesFromStairPunches,
   corridorShellWallHoleCount,
   elevatorCorridorSignPlacementsFromPunches,
   mergeCorridorShellWallHoles,
   mergeStairCorridorSignPlacements,
-  resolveCorridorShaftDoorContacts,
   stairCorridorSignPlacementsFromPunches,
   stairSignPlacementsFromCorridorWallHoleSpans,
   unitEntryWallHolesFromFloorAdjacency,

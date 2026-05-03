@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  fpLoadingDbgMark,
+} from "../game/fpSession/fpLoadingDebug.js";
 import { clearOidcAccessToken, readOidcAccessToken } from "../auth/env";
 import {
   completeOidcCallbackFromCurrentUrl,
@@ -116,10 +119,20 @@ export function useSpacetimeConnection(): SpacetimeSession {
   }, []);
 
   useEffect(() => {
+    fpLoadingDbgMark("spacetime_gate", {
+      phase,
+      hasUsername: !!displayName,
+      connectionKind,
+    });
+  }, [phase, displayName, connectionKind]);
+
+  useEffect(() => {
     let active = true;
     let connection: DbConnection | null = null;
 
     void (async () => {
+      fpLoadingDbgMark("spacetime_connect_effect:entered");
+
       if (isOidcCallbackPath()) {
         setPhase("connecting");
         setErrorMsg(null);
@@ -146,6 +159,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
       if (!kind) {
         setConn(null);
         setPhase("needs_auth");
+        fpLoadingDbgMark("spacetime_connect_effect:no_connection_kind_waiting_auth_gate");
         return;
       }
 
@@ -155,12 +169,17 @@ export function useSpacetimeConnection(): SpacetimeSession {
 
       if (!active) return;
 
+      fpLoadingDbgMark("spacetime_ws:building_db_connection", { kind });
+
       connection = DbConnectionClass.builder()
         .withUri(spacetimeUri())
         .withDatabaseName(spacetimeDatabase())
         .withToken(tokenForBuilder)
         .onConnect((cc, _identity, wsToken) => {
           if (!active) return;
+          fpLoadingDbgMark("spacetime_ws:on_connect", {
+            hasWsTokenFromServer: typeof wsToken === "string" && wsToken.length > 0,
+          });
           if (kind === "guest" && typeof wsToken === "string" && wsToken.length > 0) {
             writeGuestConnectionToken(wsToken);
           }
@@ -172,6 +191,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
           };
           cc.subscriptionBuilder()
             .onApplied(() => {
+              fpLoadingDbgMark("spacetime_subscription:baseline_tables_applied");
               bump();
               queueMicrotask(() => {
                 if (!active) return;
@@ -204,6 +224,9 @@ export function useSpacetimeConnection(): SpacetimeSession {
         })
         .onConnectError((_ctx, err) => {
           if (!active) return;
+          fpLoadingDbgMark("spacetime_ws:on_connect_error", {
+            summary: formatSpacetimeConnectError(err).slice(0, 220),
+          });
           setPhase("error");
           setErrorMsg(formatSpacetimeConnectError(err));
           setConn(null);

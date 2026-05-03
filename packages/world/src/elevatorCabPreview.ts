@@ -27,7 +27,6 @@ const CAB_MIRROR_W = 0.72;
 const CAB_MIRROR_H = 1.28;
 const CAB_MIRROR_FRAME_OVERHANG_M = 0.05;
 const CAB_MIRROR_FRAME_THICKNESS_M = 0.024;
-const CAB_MIRROR_SURFACE_GAP_M = 0.005;
 const CAB_MIRROR_CENTER_Y = 1.34;
 const FLOOR_ATLAS_COLS = 5;
 const FLOOR_ATLAS_CELL_W = 64;
@@ -519,7 +518,6 @@ export function buildElevatorCabCarVisual(args: BuildElevatorCabCarVisualArgs): 
   mirrorFrame.name = "cab_mirror_frame";
   mirrorFrame.userData.editorCabPartId = "cab_mirror_frame";
   const mirrorFrameOuterW = CAB_MIRROR_W + CAB_MIRROR_FRAME_OVERHANG_M * 2;
-  const mirrorFrameOuterH = CAB_MIRROR_H + CAB_MIRROR_FRAME_OVERHANG_M * 2;
   const mirrorFrameBarW = CAB_MIRROR_FRAME_OVERHANG_M;
   const addMirrorFrameBar = (
     name: string,

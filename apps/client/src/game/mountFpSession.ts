@@ -138,6 +138,13 @@ import {
 } from "./fpSession/fpSessionConstants.js";
 import type { DecalManager } from "../rendering/decals/DecalManager.js";
 import { isTextInputFocused } from "./isTextInputFocused.js";
+import {
+  fpLoadingDbgCheckRafGap,
+  fpLoadingDbgMark,
+  fpLoadingDbgTimed,
+  fpLoadingDbgTimedSync,
+  isFpLoadingDebugEnabled,
+} from "./fpSession/fpLoadingDebug.js";
 
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
@@ -152,15 +159,21 @@ export async function mountFpSession(
   conn: DbConnection,
   opts: { apartmentClaimsAllowed?: boolean } = {},
 ): Promise<() => void> {
+  const loadDbg = isFpLoadingDebugEnabled();
+  const mountWallClock0 = performance.now();
+  if (loadDbg) fpLoadingDbgMark("mount_fp_session:begin");
+
   installMmWallProbeLoadingStub();
-  await assertWebGpuAdapterOrThrow();
+
+  await fpLoadingDbgTimed("webgpu_adapter_assert", () => assertWebGpuAdapterOrThrow());
+
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: FP_SESSION_WEBGPU_ANTIALIAS,
     forceWebGL: false,
   });
-  await renderer.init();
+  await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
   resetFpSessionGameUiHidden();
@@ -183,7 +196,7 @@ export async function mountFpSession(
     sampleWalkTopBase,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
-  } = createFpSessionStaticWorld();
+  } = fpLoadingDbgTimedSync("fp_static_world_create", () => createFpSessionStaticWorld());
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
@@ -210,7 +223,9 @@ export async function mountFpSession(
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
   };
+  fpLoadingDbgMark("fp_bootstrap_before_first_webgpu_render");
   renderBootstrapFrame();
+  fpLoadingDbgMark("fp_bootstrap_after_first_webgpu_render");
 
   const fpElevators = mountFpElevatorWorld({
     conn,
@@ -243,17 +258,19 @@ export async function mountFpSession(
   const unitInteriorMeshes = collectFpSessionUnitInteriorShellMeshes(buildingRoot);
   const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
 
-  const fpApartmentFurniture = await mountFpApartmentFurniture({
-    conn,
-    buildingRoot,
-    showUnitBoundsDebug: isApartmentUnitBoundsDebugEnabled(),
-    onRebuilt: () => {
-      stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
-      apartmentFurnitureInteriorMeshes.length = 0;
-      appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
-      appendApartmentFurnitureInteriorMeshes(buildingRoot, apartmentFurnitureInteriorMeshes);
-    },
-  });
+  const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
+    mountFpApartmentFurniture({
+      conn,
+      buildingRoot,
+      showUnitBoundsDebug: isApartmentUnitBoundsDebugEnabled(),
+      onRebuilt: () => {
+        stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
+        apartmentFurnitureInteriorMeshes.length = 0;
+        appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
+        appendApartmentFurnitureInteriorMeshes(buildingRoot, apartmentFurnitureInteriorMeshes);
+      },
+    }),
+  );
 
   let sessionDisposed = false;
   let decalManager: DecalManager | null = null;
@@ -299,21 +316,23 @@ export async function mountFpSession(
       )
     : ("unarmed" as const);
 
-  const presentation = await PlayerPresentationManager.create({
-    scene,
-    fpViewModelParent: headPitch,
-    initialEquippedPrimary: initialHeld,
-    onMeleeVisual: (evt) => {
-      const dir = new THREE.Vector3();
-      camera.getWorldDirection(dir);
-      const origin = new THREE.Vector3();
-      camera.getWorldPosition(origin);
-      void evt;
-      void origin;
-      void dir;
-      // TODO: hand off to gameplay hit-scan / server validation — placeholder trace only.
-    },
-  });
+  const presentation = await fpLoadingDbgTimed("player_presentation_manager_create", () =>
+    PlayerPresentationManager.create({
+      scene,
+      fpViewModelParent: headPitch,
+      initialEquippedPrimary: initialHeld,
+      onMeleeVisual: (evt) => {
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        const origin = new THREE.Vector3();
+        camera.getWorldPosition(origin);
+        void evt;
+        void origin;
+        void dir;
+        // TODO: hand off to gameplay hit-scan / server validation — placeholder trace only.
+      },
+    }),
+  );
   const cabMirrorPlaceholders: THREE.Mesh[] = [];
   scene.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
@@ -1097,6 +1116,9 @@ export async function mountFpSession(
 
   let raf = 0;
   let lastFrameMs = performance.now();
+  let rafDiagFrames = 0;
+
+  if (loadDbg) fpLoadingDbgMark("mount_fp_session:start_main_raf_loop");
 
   /**
    * Single RAF driver for the whole FP session. Chrome’s “[Violation] requestAnimationFrame
@@ -1109,11 +1131,21 @@ export async function mountFpSession(
     // Single performance.now() for the whole tick — avoids redundant syscalls and keeps
     // sub-systems consistent with the same timestamp.
     const nowMs = performance.now();
+    if (loadDbg && rafDiagFrames > 12) {
+      fpLoadingDbgCheckRafGap(lastFrameMs, nowMs);
+    }
+    if (loadDbg) rafDiagFrames += 1;
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
     runFrame(nowMs, dt);
   };
   tick();
+
+  if (loadDbg) {
+    fpLoadingDbgMark("mount_fp_session:mount_async_returning_disposer", {
+      totalElapsedMsSinceMountEntered: Math.round(performance.now() - mountWallClock0),
+    });
+  }
 
   return () => {
     sessionDisposed = true;
