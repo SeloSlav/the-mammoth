@@ -8,6 +8,12 @@
  * for the same reason. Logs use one-line `console.info` to avoid Chrome printing huge
  * `requestAnimationFrame` async stacks beside each warning.
  *
+ * **Reading logs**: `fpLoadingDbgTimed` / `TimedSync` register a coarse `phase=…` stack; every
+ * `fpLoadingDbgMark` is captured in a short ring buffer. Long tasks and RAF gaps append
+ * `marksInWindow` (milestones whose timestamp fell inside the stall) plus `lastMarkBefore`
+ * (what you were closest to entering when the stall had no overlapping marks — typical for
+ * between-frame gaps). No Chrome Performance tab required — only console order + these fields.
+ *
  * Enable: `localStorage.setItem("mammothFpLoadingDebug","1")` + refresh,
  * URL `?loaddebug=1`, or the in-game Mammoth Debug menu toggle.
  */
@@ -22,8 +28,85 @@ const RAF_GAP_SEVERE_MS = 400;
 /** Long-task entries are Chromium-only; durations are typically ≥50 ms. */
 let lastRafGapLogMonoMs = 0;
 
+const MILESTONE_RING_CAP = 64;
+/** Bytes-like cap per stored line — keeps heap + logs bounded. */
+const MILESTONE_LABEL_MAX = 220;
+
+/** Monotonic timestamps from `performance.now()`; aligns with Chromium `longtask` entry times. */
+const milestoneRing: { at: number; label: string }[] = [];
+const phaseStack: string[] = [];
+
 let sessionAnchorMs = 0;
 let lastMarkMs = 0;
+
+function truncateDbgLine(label: string, max = MILESTONE_LABEL_MAX): string {
+  return label.length <= max ? label : `${label.slice(0, max - 1)}…`;
+}
+
+function formatMarkRecordLine(
+  label: string,
+  detail?: Record<string, number | string | boolean | null | undefined>,
+): string {
+  if (!detail || Object.keys(detail).length === 0) return truncateDbgLine(label);
+  try {
+    return truncateDbgLine(`${label} ${JSON.stringify(detail)}`);
+  } catch {
+    return truncateDbgLine(label);
+  }
+}
+
+function pushMilestoneRecord(line: string): void {
+  milestoneRing.push({ at: performance.now(), label: line });
+  while (milestoneRing.length > MILESTONE_RING_CAP) milestoneRing.shift();
+}
+
+/**
+ * Builds a readable explanation for the time window **[t0, t1]** (same clock as `performance.now()` /
+ * Chromium `PerformanceEntry`), using milestones + coarse phase stack snapshots (see file header).
+ * Exported so Vitest can lock the formatting down.
+ */
+export function fpLoadingDbgExplainPerfInterval(
+  t0: number,
+  t1: number,
+  ring: readonly { at: number; label: string }[],
+  phases: readonly string[],
+): string {
+  const phase = phases.length ? phases.join(">") : "no_phase";
+
+  let lastBefore: { at: number; label: string } | null = null;
+  for (let i = 0; i < ring.length; i++) {
+    const e = ring[i]!;
+    if (e.at < t0 && (!lastBefore || e.at > lastBefore.at)) lastBefore = e;
+  }
+
+  const inside = ring.filter((e) => e.at >= t0 && e.at <= t1).sort((a, b) => a.at - b.at);
+  const marksIn =
+    inside.length === 0
+      ? "(none)"
+      : inside.map((e) => `${e.label}[+${Math.round(e.at - t0)}ms]`).join(" · ");
+
+  const lastMarkBefore =
+    lastBefore === null
+      ? "(none)"
+      : `${lastBefore.label} (${Math.round(t0 - lastBefore.at)}ms before window)`;
+
+  return `phase=${phase} | marksInWindow=${marksIn} | lastMarkBefore=${lastMarkBefore}`;
+}
+
+function correlationSnapshot(): { ring: readonly { at: number; label: string }[]; phases: readonly string[] } {
+  return { ring: milestoneRing.slice(), phases: phaseStack.slice() };
+}
+
+/** Optional manual nesting (e.g. hot inner loops); `Timed`/`TimedSync` manage this automatically. */
+export function fpLoadingDbgPushPhase(label: string): void {
+  if (!isFpLoadingDebugEnabled()) return;
+  phaseStack.push(label);
+}
+
+export function fpLoadingDbgPopPhase(): void {
+  if (!isFpLoadingDebugEnabled()) return;
+  phaseStack.pop();
+}
 
 export function isFpLoadingDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
