@@ -1,12 +1,13 @@
 //! Public spawn / respawn routing — new joins and bedless respawns land on the **ground-floor lobby**
-//! near the west elevator bank (shared space with world loot anchors), not random stairwells.
+//! near the west elevator bank (not random stairwells). Corridor world loot is placed along **wide spine
+//! slabs** away from the cab threshold (see `WORLD_LOOT_ANCHORS` in `dropped_item.rs`).
 
 use spacetimedb::{Identity, ReducerContext};
 
 use crate::elevator_layout::{support_feet_y_for_level, BUILDING_ORIGIN_Y};
 use crate::pose::{player_pose, PlayerPose};
 
-/// Central lobby walk area (see `WORLD_LOOT_*` anchors in `dropped_item.rs`, ground slab Y ≈ 0.20 m).
+/// Central lobby walk area (ground slab Y ≈ 0.20 m). World loot anchors intentionally avoid this pocket.
 const GROUND_LOBBY_SPAWN_CENTER_XZ: (f32, f32) = (-1.35, -0.35);
 const GROUND_LOBBY_SPAWN_JITTER_X: f32 = 4.8;
 const GROUND_LOBBY_SPAWN_JITTER_Z: f32 = 6.0;
