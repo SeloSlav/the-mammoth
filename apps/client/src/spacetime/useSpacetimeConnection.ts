@@ -17,6 +17,7 @@ import type { DbConnection } from "../module_bindings";
 import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
+import { readGuestLastKnownDisplayName, writeGuestLastKnownDisplayName } from "./guestLastKnownDisplayName";
 import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
 import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
 
@@ -38,7 +39,14 @@ function readInitialPhase(): SpacetimePhase {
   if (typeof window === "undefined") return "needs_auth";
   if (isOidcCallbackPath()) return "connecting";
   if (readOidcAccessToken()) return "connecting";
-  if (readGuestConnectionToken()) return "connecting";
+  if (readGuestConnectionToken()) {
+    /**
+     * Unnamed returning guests skip the vacant intercom — same shell as Sneak button. Named guests stay
+     * on lightweight connecting until chunk baseline finishes (avoid name-form flash → intercom regress).
+     */
+    const hinted = readGuestLastKnownDisplayName();
+    return hinted && hinted.length >= 3 ? "connecting" : "needs_name";
+  }
   return "needs_auth";
 }
 
@@ -114,32 +122,37 @@ export function useSpacetimeConnection(): SpacetimeSession {
   const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(readInitialConnectionKind);
   const [spacetimeUserSnapshotReady, setSpacetimeUserSnapshotReady] = useState(false);
 
-  const refreshRegistration = useCallback((c: DbConnection, baselineFullyHydrated: boolean) => {
-    const id = c.identity;
-    if (!id) return;
-    const row = c.db.user.identity.find(id);
-    if (!row) {
-      return;
-    }
-    const uname = readOptionalString(row.username);
-    if (!uname) {
-      setDisplayName(null);
-      /** Keep the name form visible while later table batches stream — not the empty "connecting" gate. */
-      setPhase("needs_name");
-      setErrorMsg(null);
-      return;
-    }
-    if (!baselineFullyHydrated) {
-      /** Identity row exists early; defer `ready`/canvas until inventory/pose rows are applied. */
+  const refreshRegistration = useCallback(
+    (c: DbConnection, baselineFullyHydrated: boolean, connectionKindSnap: ConnectionKind) => {
+      const id = c.identity;
+      if (!id) return;
+      const row = c.db.user.identity.find(id);
+      if (!row) {
+        return;
+      }
+      const uname = readOptionalString(row.username);
+      if (!uname) {
+        if (connectionKindSnap === "guest") writeGuestLastKnownDisplayName(null);
+        setDisplayName(null);
+        /** Keep the name form visible while later table batches stream — not the empty "connecting" gate. */
+        setPhase("needs_name");
+        setErrorMsg(null);
+        return;
+      }
+      if (connectionKindSnap === "guest") writeGuestLastKnownDisplayName(uname);
+      if (!baselineFullyHydrated) {
+        /** Identity row exists early; defer `ready`/canvas until inventory/pose rows are applied. */
+        setDisplayName(uname);
+        setPhase("connecting");
+        setErrorMsg(null);
+        return;
+      }
       setDisplayName(uname);
-      setPhase("connecting");
+      setPhase("ready");
       setErrorMsg(null);
-      return;
-    }
-    setDisplayName(uname);
-    setPhase("ready");
-    setErrorMsg(null);
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     fpLoadingDbgMark("spacetime_gate", {
@@ -212,7 +225,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
           let baselineHydrationComplete = false;
           const bump = () => {
             if (!active) return;
-            refreshRegistration(cc, baselineHydrationComplete);
+            refreshRegistration(cc, baselineHydrationComplete, kind);
           };
 
           cc.db.user.onInsert((_ctx, row) => {
@@ -278,6 +291,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
   }, []);
 
   const startGuestPlay = useCallback(() => {
+    writeGuestLastKnownDisplayName(null);
     setErrorMsg(null);
     setDisplayName(null);
     setConnectionKind("guest");
@@ -291,6 +305,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
     abandonMegablockStaticWorldMeshCache();
     clearOidcAccessToken();
     writeGuestConnectionToken(null);
+    writeGuestLastKnownDisplayName(null);
     setConn(null);
     setDisplayName(null);
     setErrorMsg(null);
