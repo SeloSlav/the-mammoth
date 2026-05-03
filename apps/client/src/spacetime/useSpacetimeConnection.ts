@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   fpLoadingDbgMark,
 } from "../game/fpSession/fpLoadingDebug.js";
+import {
+  abandonMegablockStaticWorldMeshCache,
+  primeMegablockStaticWorldMeshBuild,
+  waitMegablockStaticWorldMeshReady,
+} from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import { clearOidcAccessToken, readOidcAccessToken } from "../auth/env";
 import {
   completeOidcCallbackFromCurrentUrl,
@@ -13,6 +18,7 @@ import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri } from "./env";
 import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
+import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
 
 function isOidcCallbackPath(): boolean {
   const p = window.location.pathname;
@@ -76,6 +82,12 @@ export type SpacetimeSession = {
   errorMsg: string | null;
   /** How we connected — guest uses anonymous WS token persisted in localStorage. */
   connectionKind: ConnectionKind | null;
+  /**
+   * First baseline batch (at least `user`) applied on the client — safe to call reducers that assume
+   * the local cache has the identity row. UI can show the name form early but keep submit disabled
+   * until this flips true.
+   */
+  spacetimeUserSnapshotReady: boolean;
   /** OpenAuth password flow (redirects away to `apps/auth`). */
   startPasswordSignIn: () => Promise<void>;
   /** Connect without OIDC — requires local node to accept anonymous connections. */
@@ -100,8 +112,9 @@ export function useSpacetimeConnection(): SpacetimeSession {
    * {@link readGuestConnectionToken} has a value — keep in sync with initial connect effect.
    */
   const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(readInitialConnectionKind);
+  const [spacetimeUserSnapshotReady, setSpacetimeUserSnapshotReady] = useState(false);
 
-  const refreshRegistration = useCallback((c: DbConnection) => {
+  const refreshRegistration = useCallback((c: DbConnection, baselineFullyHydrated: boolean) => {
     const id = c.identity;
     if (!id) return;
     const row = c.db.user.identity.find(id);
@@ -109,13 +122,23 @@ export function useSpacetimeConnection(): SpacetimeSession {
       return;
     }
     const uname = readOptionalString(row.username);
-    if (uname) {
-      setDisplayName(uname);
-      setPhase("ready");
-      setErrorMsg(null);
-    } else {
+    if (!uname) {
+      setDisplayName(null);
+      /** Keep the name form visible while later table batches stream — not the empty "connecting" gate. */
       setPhase("needs_name");
+      setErrorMsg(null);
+      return;
     }
+    if (!baselineFullyHydrated) {
+      /** Identity row exists early; defer `ready`/canvas until inventory/pose rows are applied. */
+      setDisplayName(uname);
+      setPhase("connecting");
+      setErrorMsg(null);
+      return;
+    }
+    setDisplayName(uname);
+    setPhase("ready");
+    setErrorMsg(null);
   }, []);
 
   useEffect(() => {
@@ -185,41 +208,48 @@ export function useSpacetimeConnection(): SpacetimeSession {
           }
           setConn(cc);
           setErrorMsg(null);
+          setSpacetimeUserSnapshotReady(false);
+          let baselineHydrationComplete = false;
           const bump = () => {
             if (!active) return;
-            refreshRegistration(cc);
+            refreshRegistration(cc, baselineHydrationComplete);
           };
-          cc.subscriptionBuilder()
-            .onApplied(() => {
+
+          cc.db.user.onInsert((_ctx, row) => {
+            if (cc.identity?.isEqual(row.identity)) {
+              setSpacetimeUserSnapshotReady(true);
+              bump();
+            }
+          });
+          cc.db.user.onUpdate((_ctx, _old, row) => {
+            if (cc.identity?.isEqual(row.identity)) bump();
+          });
+
+          void runChunkedInitialSpacetimeSubscriptions(cc, {
+            isActive: () => active,
+            onBatchApplied: (batchIndex, lastBatchIndex) => {
+              if (!active) return;
+              if (batchIndex === 0) {
+                setSpacetimeUserSnapshotReady(true);
+              }
+              baselineHydrationComplete = batchIndex === lastBatchIndex;
+              bump();
+            },
+            onAllBatchesCommitted: () => {
+              if (!active) return;
               fpLoadingDbgMark("spacetime_subscription:baseline_tables_applied");
+              primeMegablockStaticWorldMeshBuild();
               bump();
               queueMicrotask(() => {
                 if (!active) return;
                 bump();
               });
-            })
-            .subscribe([
-              "SELECT * FROM user",
-              "SELECT * FROM inventory_item",
-              "SELECT * FROM craft_queue_item",
-              "SELECT * FROM hud_toast_event",
-              "SELECT * FROM player_vitals",
-              "SELECT * FROM elevator_car",
-              "SELECT * FROM elevator_landing_door",
-              "SELECT * FROM apartment_unit",
-              "SELECT * FROM apartment_door",
-              "SELECT * FROM apartment_door_gameplay",
-              "SELECT * FROM chat_message",
-              "SELECT * FROM flashlight_charge",
-              "SELECT * FROM dropped_item",
-              "SELECT * FROM player_pose",
-              "SELECT * FROM world_sound_event",
-            ]);
-          cc.db.user.onInsert((_ctx, row) => {
-            if (cc.identity?.isEqual(row.identity)) bump();
-          });
-          cc.db.user.onUpdate((_ctx, _old, row) => {
-            if (cc.identity?.isEqual(row.identity)) bump();
+            },
+          }).catch((err: unknown) => {
+            if (!active) return;
+            console.error("[spacetime] chunked baseline subscription failed", err);
+            setPhase("error");
+            setErrorMsg(err instanceof Error ? err.message : String(err));
           });
         })
         .onConnectError((_ctx, err) => {
@@ -238,6 +268,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
       active = false;
       connection?.disconnect();
       setConn(null);
+      setSpacetimeUserSnapshotReady(false);
     };
   }, [connEpoch, connectionKind, refreshRegistration]);
 
@@ -250,33 +281,40 @@ export function useSpacetimeConnection(): SpacetimeSession {
     setErrorMsg(null);
     setDisplayName(null);
     setConnectionKind("guest");
-    setPhase("connecting");
+    setSpacetimeUserSnapshotReady(false);
+    /** Name form + backdrop render immediately; submit stays disabled until WebSocket + user batch. */
+    setPhase("needs_name");
     setConnEpoch((e) => e + 1);
   }, []);
 
   const signOut = useCallback(() => {
+    abandonMegablockStaticWorldMeshCache();
     clearOidcAccessToken();
     writeGuestConnectionToken(null);
     setConn(null);
     setDisplayName(null);
     setErrorMsg(null);
     setConnectionKind(null);
+    setSpacetimeUserSnapshotReady(false);
     setPhase("needs_auth");
     setConnEpoch((e) => e + 1);
   }, []);
 
   const submitUsername = useCallback(
     async (raw: string) => {
-      if (!conn) return;
+      if (!conn || !spacetimeUserSnapshotReady) return;
       const trimmed = raw.trim();
       if (trimmed.length < 3) {
         setErrorMsg("Username must be at least 3 characters.");
         return;
       }
       setErrorMsg(null);
-      await conn.reducers.setUsername({ name: trimmed });
+      await Promise.all([
+        conn.reducers.setUsername({ name: trimmed }),
+        waitMegablockStaticWorldMeshReady(),
+      ]);
     },
-    [conn],
+    [conn, spacetimeUserSnapshotReady],
   );
 
   return {
@@ -285,6 +323,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
     displayName,
     errorMsg,
     connectionKind,
+    spacetimeUserSnapshotReady,
     startPasswordSignIn,
     startGuestPlay,
     signOut,

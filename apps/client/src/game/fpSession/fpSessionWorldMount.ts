@@ -21,6 +21,7 @@ import {
   GENERATED_WALK_SURFACE_AABBS,
   getBuildingStairShaftSpecs,
   instantiateBuildingFloorStack,
+  instantiateBuildingFloorStackAsync,
   parseBuildingDoc,
   parseCellDoc,
   parseFloorDoc,
@@ -35,7 +36,8 @@ import buildingDoc from "../../../../../content/building/mammoth.json";
 import cellDoc from "../../../../../content/cells/cell_0_0.json";
 import stairWellAuthoringJson from "../../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
-import { mergeStaticFloorGeometries } from "./fpSessionStaticFloorMerge.js";
+import { mergeStaticFloorGeometries, mergeStaticFloorGeometriesYielding } from "./fpSessionStaticFloorMerge.js";
+import { yieldToMain } from "./yieldToMain.js";
 
 /** Stair-shaft core AABB for FP mood lighting; keep darkness inside the actual shaft, not corridors. */
 export type FpStairShaftInteriorLightBounds = {
@@ -83,6 +85,11 @@ export type FpSessionStaticWorld = {
   stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
   /** Stair column specs (ids, segment counts) for client-only features such as stairwell decals. */
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
+};
+
+export type FpSessionStaticWorldAsyncOpts = {
+  /** Prefer mesh + merge ordering for these `BuildingFloorRef.levelIndex` values (hub = 1). */
+  priorityPlateLevelIndices?: readonly number[];
 };
 
 export function createFpSessionStaticWorld(): FpSessionStaticWorld {
@@ -196,6 +203,145 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
       }, exteriorTreePlacements),
     );
   }
+
+  const staticCollisionIndex =
+    buildCollisionSpatialIndex(consolidatedCollisionBlockers);
+
+  const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
+
+  return {
+    building,
+    buildingRoot,
+    buildingBodyWorldBounds,
+    cellRoot,
+    staticCollisionSolids: consolidatedCollisionBlockers,
+    staticCollisionIndex,
+    sampleWalkTopBase,
+    stairShaftInteriorLightBounds,
+    stairShaftSpecs: stairSpecs,
+  };
+}
+
+/**
+ * FP-session world build broken across `yieldToMain()` boundaries so login does not incur one
+ * ~multi-second uninterrupted main-thread task (`long_task`).
+ */
+export async function createFpSessionStaticWorldAsync(
+  opts?: FpSessionStaticWorldAsyncOpts,
+): Promise<FpSessionStaticWorld> {
+  const building = parseBuildingDoc(buildingDoc);
+  const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
+  const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
+  const stairOpeningOverlay = buildStairOpeningCollisionOverlayForBuilding(
+    building,
+    getFloorDoc,
+    stairWellDef,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const stairRuntimeOverlay = buildStairRuntimeOverlayForBuilding(
+    building,
+    getFloorDoc,
+    stairWellDef,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const blockerAABBs = applyStairRuntimeBlockerOverlay(
+    applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, stairOpeningOverlay),
+    stairRuntimeOverlay,
+  );
+  const walkSupportAABBs = applyStairRuntimeWalkSuppressMasks(
+    GENERATED_WALK_SURFACE_AABBS,
+    stairRuntimeOverlay,
+  );
+  const walkFootprint =
+    walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
+    ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
+  const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
+
+  let consolidatedCollisionBlockers = blockerAABBs;
+  const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
+    const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
+      worldX,
+      worldZ,
+      probeTopY,
+      walkFootprint,
+      {
+        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+      },
+    );
+    const stairTop = sampleRuntimeStairSupportTopY(
+      stairRuntimeOverlay.supportSurfaces,
+      worldX,
+      worldZ,
+      probeTopY,
+      {
+        footRadiusXZ: fpLocomotionConstants.walkFootRadiusXZ,
+        stepUpMargin: fpLocomotionConstants.walkStepUpMargin,
+        probeDy: fpLocomotionConstants.walkProbeDy,
+      },
+    );
+    if (!Number.isFinite(stairTop)) return bakedTop;
+    if (!Number.isFinite(bakedTop)) return stairTop;
+    return Math.max(bakedTop, stairTop);
+  };
+
+  const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
+    stairWellDef,
+    yieldAfterEachPlate: yieldToMain,
+    priorityPlateLevelIndices: opts?.priorityPlateLevelIndices,
+  });
+
+  const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+  const stairSpecs = getBuildingStairShaftSpecs(
+    building,
+    getFloorDoc,
+    sortedFloorRefs,
+    DEFAULT_BUILDING_FLOOR_SPACING_M,
+  );
+  const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
+
+  await mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain, {
+    priorityPlateLevelIndices: opts?.priorityPlateLevelIndices,
+  });
+  buildingRoot.updateMatrixWorld(true);
+  const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+
+  if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
+    const buildingLocalFootprint = new THREE.Box3()
+      .setFromObject(buildingRoot)
+      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
+    buildingLocalFootprint.min.y = 0;
+    buildingLocalFootprint.max.y = 1;
+    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
+
+    const treeScatterOpts = {
+      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
+      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
+      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
+    };
+    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(
+      buildingLocalFootprint,
+      treeScatterOpts,
+    );
+    consolidatedCollisionBlockers = [
+      ...consolidatedCollisionBlockers,
+      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
+    ];
+
+    buildingRoot.add(
+      buildExteriorProceduralTreeGroup(
+        buildingLocalFootprint,
+        {
+          groundY: localGroundY,
+          seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+        },
+        exteriorTreePlacements,
+      ),
+    );
+  }
+
+  await yieldToMain();
 
   const staticCollisionIndex =
     buildCollisionSpatialIndex(consolidatedCollisionBlockers);

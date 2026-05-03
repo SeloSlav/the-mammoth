@@ -8,7 +8,9 @@ import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
 } from "../game/fpSession/fpSessionEnvironment.js";
-import { createFpSessionStaticWorld } from "../game/fpSession/fpSessionWorldMount.js";
+import {
+  waitMegablockStaticWorldMeshReady,
+} from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
@@ -45,7 +47,7 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   );
 
   const { buildingRoot, cellRoot, buildingBodyWorldBounds } =
-    createFpSessionStaticWorld();
+    await waitMegablockStaticWorldMeshReady();
   hideUnitInteriorMeshesForExteriorAuthView(buildingRoot);
   scene.add(buildingRoot, cellRoot);
   buildingRoot.updateMatrixWorld(true);
@@ -131,8 +133,6 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     ro.disconnect();
     fpEnvironment.dispose();
     scene.remove(buildingRoot, cellRoot);
-    disposeObjectTree(buildingRoot);
-    disposeObjectTree(cellRoot);
     renderer.dispose();
     scene.clear();
   };
@@ -146,22 +146,3 @@ function hideUnitInteriorMeshesForExteriorAuthView(root: THREE.Object3D): void {
   });
 }
 
-function disposeObjectTree(root: THREE.Object3D): void {
-  const disposedGeometries = new Set<THREE.BufferGeometry>();
-  const disposedMaterials = new Set<THREE.Material>();
-
-  root.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    const geometry = obj.geometry as THREE.BufferGeometry | undefined;
-    if (geometry && !disposedGeometries.has(geometry)) {
-      disposedGeometries.add(geometry);
-      geometry.dispose();
-    }
-    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-    for (const material of materials) {
-      if (!material || disposedMaterials.has(material)) continue;
-      disposedMaterials.add(material);
-      material.dispose();
-    }
-  });
-}

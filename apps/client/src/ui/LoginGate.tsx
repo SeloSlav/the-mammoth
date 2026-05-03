@@ -17,6 +17,7 @@ export function LoginGate({ session }: Props) {
     phase,
     conn,
     errorMsg,
+    spacetimeUserSnapshotReady,
     submitUsername,
     startPasswordSignIn,
     startGuestPlay,
@@ -27,7 +28,7 @@ export function LoginGate({ session }: Props) {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!conn) return;
+    if (!conn || !spacetimeUserSnapshotReady) return;
     setBusy(true);
     try {
       await submitUsername(nameInput);
@@ -121,6 +122,11 @@ export function LoginGate({ session }: Props) {
         letters, numbers, underscores, and hyphens.
       </p>
       {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
+      {!conn ? (
+        <p className={styles.hint}>Connecting to reception—almost there.</p>
+      ) : !spacetimeUserSnapshotReady ? (
+        <p className={styles.hint}>Your key synced; pulling your line from dispatch…</p>
+      ) : null}
       <form className={styles.form} onSubmit={onSubmit}>
         <input
           autoFocus
@@ -128,11 +134,15 @@ export function LoginGate({ session }: Props) {
           onChange={(ev) => setNameInput(ev.target.value)}
           placeholder="Your callsign on the block"
           className={styles.input}
-          disabled={busy || !conn}
+          disabled={busy || !conn || !spacetimeUserSnapshotReady}
           maxLength={24}
           autoComplete="username"
         />
-        <button type="submit" className={styles.button} disabled={busy || !conn}>
+        <button
+          type="submit"
+          className={styles.button}
+          disabled={busy || !conn || !spacetimeUserSnapshotReady}
+        >
           {busy ? "Saving your name..." : "Step inside"}
         </button>
       </form>

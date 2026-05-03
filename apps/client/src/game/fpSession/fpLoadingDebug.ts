@@ -8,11 +8,12 @@
  * for the same reason. Logs use one-line `console.info` to avoid Chrome printing huge
  * `requestAnimationFrame` async stacks beside each warning.
  *
- * **Reading logs**: `fpLoadingDbgTimed` / `TimedSync` register a coarse `phase=…` stack; every
- * `fpLoadingDbgMark` is captured in a short ring buffer. Long tasks and RAF gaps append
- * `marksInWindow` (milestones whose timestamp fell inside the stall) plus `lastMarkBefore`
- * (what you were closest to entering when the stall had no overlapping marks — typical for
- * between-frame gaps). No Chrome Performance tab required — only console order + these fields.
+ * **Reading logs**: Every `fpLoadingDbgMark` is recorded in a short ring buffer. `Timed`/`TimedSync`
+ * also push/pop a coarse `phase` stack and emit `label:start|:done`:
+ * **`raf_frame_gap`** — `phase` reflects the RAF tick **before `runFrame`** (during the stall window);
+ * **`long_task_cpu`** — **`marksInWindow`** / **`lastMarkBefore`** from milestones;
+ * **`inferredTimed`** (guess from `:start`-tagged `Timed` blocks); **`phaseWhenLogDelivered`** is the
+ * live stack **when Chromium delivered the observer** — often unrelated to what ran *inside* the task.
  *
  * Enable: `localStorage.setItem("mammothFpLoadingDebug","1")` + refresh,
  * URL `?loaddebug=1`, or the in-game Mammoth Debug menu toggle.
@@ -61,18 +62,14 @@ function pushMilestoneRecord(line: string): void {
 }
 
 /**
- * Builds a readable explanation for the time window **[t0, t1]** (same clock as `performance.now()` /
- * Chromium `PerformanceEntry`), using milestones + coarse phase stack snapshots (see file header).
- * Exported so Vitest can lock the formatting down.
+ * Describes milestone hits inside **[t0, t1]** (same clock as `performance.now()` /
+ * Chromium `PerformanceEntry`). Used by stall logs and Vitest.
  */
-export function fpLoadingDbgExplainPerfInterval(
+export function fpLoadingDbgStallMarksSummary(
   t0: number,
   t1: number,
   ring: readonly { at: number; label: string }[],
-  phases: readonly string[],
-): string {
-  const phase = phases.length ? phases.join(">") : "no_phase";
-
+): { marksInWindow: string; lastMarkBefore: string } {
   let lastBefore: { at: number; label: string } | null = null;
   for (let i = 0; i < ring.length; i++) {
     const e = ring[i]!;
@@ -80,7 +77,7 @@ export function fpLoadingDbgExplainPerfInterval(
   }
 
   const inside = ring.filter((e) => e.at >= t0 && e.at <= t1).sort((a, b) => a.at - b.at);
-  const marksIn =
+  const marksInWindow =
     inside.length === 0
       ? "(none)"
       : inside.map((e) => `${e.label}[+${Math.round(e.at - t0)}ms]`).join(" · ");
@@ -90,7 +87,65 @@ export function fpLoadingDbgExplainPerfInterval(
       ? "(none)"
       : `${lastBefore.label} (${Math.round(t0 - lastBefore.at)}ms before window)`;
 
-  return `phase=${phase} | marksInWindow=${marksIn} | lastMarkBefore=${lastMarkBefore}`;
+  return { marksInWindow, lastMarkBefore };
+}
+
+export function fpLoadingDbgExplainPerfInterval(
+  t0: number,
+  t1: number,
+  ring: readonly { at: number; label: string }[],
+  phases: readonly string[],
+): string {
+  const phase = phases.length ? phases.join(">") : "no_phase";
+
+  const { marksInWindow, lastMarkBefore } = fpLoadingDbgStallMarksSummary(t0, t1, ring);
+
+  return `phase=${phase} | marksInWindow=${marksInWindow} | lastMarkBefore=${lastMarkBefore}`;
+}
+
+/**
+ * For long tasks: Chromium delivers the observer **after** the hog completes, so live `phaseStack`
+ * often reflects unrelated follow-up work. We infer `:start`-tagged milestones (from `Timed`/`TimedSync`)
+ * that overlap or immediately precede the task window instead.
+ */
+export function fpLoadingDbgInferTimedStartsForPerfWindow(
+  t0: number,
+  t1: number,
+  ring: readonly { at: number; label: string }[],
+): string {
+  let latestBefore: { at: number; base: string } | null = null;
+  let latestInside: { at: number; base: string } | null = null;
+
+  const startToken = ":start";
+
+  for (let ri = 0; ri < ring.length; ri++) {
+    const e = ring[ri]!;
+    const i = e.label.indexOf(startToken);
+    if (i <= 0) continue;
+    const base = truncateDbgLine(e.label.slice(0, i).trimEnd(), 140);
+
+    if (e.at < t0 && (!latestBefore || e.at > latestBefore.at)) {
+      latestBefore = { at: e.at, base };
+    }
+    if (e.at >= t0 && e.at <= t1 && (!latestInside || e.at > latestInside.at)) {
+      latestInside = { at: e.at, base };
+    }
+  }
+
+  const parts: string[] = [];
+
+  const insideGuess = latestInside
+    ? `${latestInside.base}[+${Math.round(latestInside.at - t0)}ms_into_window]`
+    : "(none)";
+  parts.push(`timedStartInsideWindow=${insideGuess}`);
+
+  if (latestBefore) {
+    parts.push(
+      `lastTimedStartBefore=${latestBefore.base}(started ${Math.round(t0 - latestBefore.at)}ms before window_start)`,
+    );
+  }
+
+  return parts.join(" · ");
 }
 
 function correlationSnapshot(): { ring: readonly { at: number; label: string }[]; phases: readonly string[] } {
@@ -123,6 +178,9 @@ export function fpLoadingDebugResetAnchors(reason: string): void {
   const now = performance.now();
   sessionAnchorMs = now;
   lastMarkMs = now;
+  milestoneRing.length = 0;
+  phaseStack.length = 0;
+  lastRafGapLogMonoMs = 0;
   if (!isFpLoadingDebugEnabled()) return;
   console.info(PREFIX, "anchors_reset", { reason, perfTimeOriginMs: Math.round(performance.timeOrigin) });
 }
@@ -142,6 +200,7 @@ export function fpLoadingDbgMark(
     msSincePrevMark: sincePrev,
     ...detail,
   });
+  pushMilestoneRecord(formatMarkRecordLine(label, detail));
 }
 
 /** Async section timing (await boundaries). */
@@ -153,9 +212,10 @@ export async function fpLoadingDbgTimed<T>(
   if (!isFpLoadingDebugEnabled()) {
     return work();
   }
-  fpLoadingDbgMark(`${label}:start`, detail);
+  fpLoadingDbgPushPhase(label);
   const t0 = performance.now();
   try {
+    fpLoadingDbgMark(`${label}:start`, detail);
     const v = await work();
     fpLoadingDbgMark(`${label}:done`, {
       ...detail,
@@ -169,6 +229,8 @@ export async function fpLoadingDbgTimed<T>(
       message: e instanceof Error ? e.message : String(e),
     });
     throw e;
+  } finally {
+    fpLoadingDbgPopPhase();
   }
 }
 
@@ -181,9 +243,10 @@ export function fpLoadingDbgTimedSync<T>(
   if (!isFpLoadingDebugEnabled()) {
     return work();
   }
-  fpLoadingDbgMark(`${label}:start`, detail);
+  fpLoadingDbgPushPhase(label);
   const t0 = performance.now();
   try {
+    fpLoadingDbgMark(`${label}:start`, detail);
     const v = work();
     fpLoadingDbgMark(`${label}:done`, {
       ...detail,
@@ -197,6 +260,8 @@ export function fpLoadingDbgTimedSync<T>(
       message: e instanceof Error ? e.message : String(e),
     });
     throw e;
+  } finally {
+    fpLoadingDbgPopPhase();
   }
 }
 
@@ -241,9 +306,18 @@ export function ensureFpLoadingDebugGlobalObservers(): GlobalCleanup {
       const entries = list.getEntries();
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i]!;
+        const t0 = e.startTime;
+        const t1 = e.startTime + e.duration;
+        const snap = correlationSnapshot();
+        const { marksInWindow, lastMarkBefore } = fpLoadingDbgStallMarksSummary(t0, t1, snap.ring);
+        const inferred = fpLoadingDbgInferTimedStartsForPerfWindow(t0, t1, snap.ring);
+        const livePhase = snap.phases.length ? snap.phases.join(">") : "(none)";
+        const ringOnly = `marksInWindow=${marksInWindow} | lastMarkBefore=${lastMarkBefore}`;
         // Single-line info avoids DevTools attaching a giant async stack (unlike console.warn objects).
         console.info(
-          `${PREFIX} long_task_cpu durationMs=${Math.round(e.duration)} startTimeMs=${Math.round(e.startTime)} name=${e.name}`,
+          `${PREFIX} long_task_cpu durationMs=${Math.round(e.duration)} winMs=${Math.round(t0)}..${Math.round(
+            t1,
+          )} name=${e.name} | ${ringOnly} | inferredTimed=${inferred} | phaseWhenLogDelivered=${livePhase}`,
         );
       }
     });
@@ -294,7 +368,9 @@ export function fpLoadingDbgCheckRafGap(
   if (!severe && now - lastRafGapLogMonoMs < RAF_GAP_LOG_COOLDOWN_MS) return;
   lastRafGapLogMonoMs = now;
   const effFps = gapMs > 0 ? Math.round(1000 / gapMs) : 0;
+  const snap = correlationSnapshot();
+  const ctx = fpLoadingDbgExplainPerfInterval(prevFrameStartMs, frameStartMs, snap.ring, snap.phases);
   console.info(
-    `${PREFIX} raf_frame_gap gapMs=${gapMs} effectiveFps~${effFps}${severe ? " (severe)" : ""}`,
+    `${PREFIX} raf_frame_gap gapMs=${gapMs} effectiveFps~${effFps}${severe ? " (severe)" : ""} winMs=${Math.round(prevFrameStartMs)}..${Math.round(frameStartMs)} | ${ctx}`,
   );
 }

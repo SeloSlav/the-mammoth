@@ -48,6 +48,8 @@ export {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   DEFAULT_EXTERIOR_FACADE_SALT,
   instantiateBuildingFloorStack,
+  instantiateBuildingFloorStackAsync,
+  type InstantiateBuildingFloorStackAsyncOptions,
   type InstantiateBuildingFloorStackOptions,
 } from "./buildingFloorStack.js";
 export {

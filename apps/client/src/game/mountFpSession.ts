@@ -52,7 +52,11 @@ import {
   unregisterFpDebugMenuSessionSnapshot,
 } from "./fpDebugMenuSessionBridge.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
-import { createFpSessionStaticWorld } from "./fpSession/fpSessionWorldMount.js";
+import { disposeStaticWorldObjectTree } from "./fpSession/fpSessionStaticWorldDispose.js";
+import {
+  forgetMegablockStaticWorldMeshCache,
+  waitMegablockStaticWorldMeshReady,
+} from "./fpSession/fpSessionStaticWorldMeshCache.js";
 import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSession/fpSessionRemotePoseFeed.js";
 import { floorPayloadByDocId } from "./fpSession/fpSessionContentLoad.js";
 import { PoseInterpBuffer } from "./fpRemote/poseInterpBuffer.js";
@@ -142,7 +146,8 @@ import {
   fpLoadingDbgCheckRafGap,
   fpLoadingDbgMark,
   fpLoadingDbgTimed,
-  fpLoadingDbgTimedSync,
+  fpLoadingDbgPopPhase,
+  fpLoadingDbgPushPhase,
   isFpLoadingDebugEnabled,
 } from "./fpSession/fpLoadingDebug.js";
 
@@ -187,28 +192,6 @@ export async function mountFpSession(
   scene.add(playerRig);
   void ensureStairwellCigaretteMeshReady();
 
-  const {
-    building,
-    buildingRoot,
-    buildingBodyWorldBounds,
-    cellRoot,
-    staticCollisionIndex,
-    sampleWalkTopBase,
-    stairShaftInteriorLightBounds,
-    stairShaftSpecs,
-  } = fpLoadingDbgTimedSync("fp_static_world_create", () => createFpSessionStaticWorld());
-  scene.add(buildingRoot);
-  scene.add(cellRoot);
-  buildingRoot.updateMatrixWorld(true);
-  cellRoot.updateMatrixWorld(true);
-  const buildingWorldBounds = buildingBodyWorldBounds.clone();
-  const maxBuildingLevel = maxBuildingLevelIndex(building);
-
-  /**
-   * Get something real onto the canvas before async apartment props, decals, and presentation assets
-   * finish. Without this bootstrap frame, React has already swapped to the FP canvas but the browser
-   * only has a cleared black surface until the full RAF driver starts near the end of this mount.
-   */
   const renderBootstrapFrame = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -218,6 +201,32 @@ export async function mountFpSession(
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
   };
+
+  fpLoadingDbgMark("fp_bootstrap_preview_before_webgpu_render");
+  renderBootstrapFrame();
+  fpLoadingDbgMark("fp_bootstrap_preview_after_webgpu_render");
+
+  const {
+    building,
+    buildingRoot,
+    buildingBodyWorldBounds,
+    cellRoot,
+    staticCollisionIndex,
+    sampleWalkTopBase,
+    stairShaftInteriorLightBounds,
+    stairShaftSpecs,
+  } = await fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady());
+  scene.add(buildingRoot);
+  scene.add(cellRoot);
+  buildingRoot.updateMatrixWorld(true);
+  cellRoot.updateMatrixWorld(true);
+  const buildingWorldBounds = buildingBodyWorldBounds.clone();
+  const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  /**
+   * Redraw once the megablock is parented — warms shaders/pipelines against real static geometry before
+   * apartment props/decals/async assets stream in on top of `fp_static_world_create`.
+   */
   fpLoadingDbgMark("fp_bootstrap_before_first_webgpu_render");
   renderBootstrapFrame();
   fpLoadingDbgMark("fp_bootstrap_after_first_webgpu_render");
@@ -1140,7 +1149,12 @@ export async function mountFpSession(
     if (loadDbg) rafDiagFrames += 1;
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
-    runFrame(nowMs, dt);
+    if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
+    try {
+      runFrame(nowMs, dt);
+    } finally {
+      if (loadDbg) fpLoadingDbgPopPhase();
+    }
   };
   tick();
 
@@ -1180,6 +1194,9 @@ export async function mountFpSession(
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     fpEnvironment.dispose();
     decalManager?.dispose();
+    disposeStaticWorldObjectTree(buildingRoot);
+    disposeStaticWorldObjectTree(cellRoot);
+    forgetMegablockStaticWorldMeshCache();
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();

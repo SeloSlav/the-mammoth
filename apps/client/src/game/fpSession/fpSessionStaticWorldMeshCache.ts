@@ -1,0 +1,46 @@
+import {
+  createFpSessionStaticWorldAsync,
+  type FpSessionStaticWorld,
+} from "./fpSessionWorldMount.js";
+import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
+
+/** Hub / lobby plate — prioritized for mesh author + GPU merge warmup while other storeys lag behind. */
+const HUB_PREFETCH_PLATE_LEVELS: readonly number[] = [1];
+
+let megablockInflightBuild: Promise<FpSessionStaticWorld> | null = null;
+
+/** Idempotent kick — overlaps CPU mesh work with lobby typing / baseline once tables are flowing. */
+export function primeMegablockStaticWorldMeshBuild(): void {
+  if (megablockInflightBuild) return;
+  megablockInflightBuild = createFpSessionStaticWorldAsync({
+    priorityPlateLevelIndices: HUB_PREFETCH_PLATE_LEVELS,
+  });
+}
+
+/** Auth backdrop + gameplay share one merged megablock; second caller hits the warm promise. */
+export async function waitMegablockStaticWorldMeshReady(): Promise<FpSessionStaticWorld> {
+  primeMegablockStaticWorldMeshBuild();
+  return await megablockInflightBuild!;
+}
+
+/**
+ * FP session tore down legitimately — allow a future login to build again.
+ * Caller must have already disposed `buildingRoot` / `cellRoot` GPU resources via
+ * {@link disposeStaticWorldObjectTree}.
+ */
+export function forgetMegablockStaticWorldMeshCache(): void {
+  megablockInflightBuild = null;
+}
+
+/** User signed out (or tore down WS) without an active gameplay disposer disposing meshes. */
+export function abandonMegablockStaticWorldMeshCache(): void {
+  const p = megablockInflightBuild;
+  megablockInflightBuild = null;
+  if (!p) return;
+  void p
+    .then((w) => {
+      disposeStaticWorldObjectTree(w.buildingRoot);
+      disposeStaticWorldObjectTree(w.cellRoot);
+    })
+    .catch(() => {});
+}

@@ -24,29 +24,65 @@ const _mergeUnitShellScratch = new THREE.Matrix4();
  * Lives here so `scripts/gen-exterior-tree-collision.ts` mirrors FP without importing `fpSessionWorldMount`
  * (that module pulls ez-tree textures and requires `document`).
  */
+function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
+  const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
+  const isStairColumn = child.userData.mammothStairColumnRoot === true;
+  if (!isFloorPlate && !isStairColumn) return;
+
+  // Tag stair interior meshes as unit-interior before merge; `_exterior` skins stay visible from outside.
+  if (isStairColumn) {
+    for (const seg of (child as THREE.Group).children) {
+      seg.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        if (obj.name.includes("_exterior")) return;
+        obj.userData.mammothUnitInterior = true;
+      });
+      mergeGroupDescendantsByMaterial(seg as THREE.Group);
+    }
+    return;
+  }
+
+  mergeGroupDescendantsByMaterial(child as THREE.Group);
+  if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
+}
+
 export function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
   buildingRoot.updateMatrixWorld(true);
 
   for (const child of buildingRoot.children) {
-    const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
-    const isStairColumn = child.userData.mammothStairColumnRoot === true;
-    if (!isFloorPlate && !isStairColumn) continue;
+    mergeStaticFloorDirectChild(child);
+  }
+}
 
-    // Tag stair interior meshes as unit-interior before merge; `_exterior` skins stay visible from outside.
-    if (isStairColumn) {
-      for (const seg of (child as THREE.Group).children) {
-        seg.traverse((obj) => {
-          if (!(obj instanceof THREE.Mesh)) return;
-          if (obj.name.includes("_exterior")) return;
-          obj.userData.mammothUnitInterior = true;
-        });
-        mergeGroupDescendantsByMaterial(seg as THREE.Group);
-      }
-      continue;
-    }
-
-    mergeGroupDescendantsByMaterial(child as THREE.Group);
-    if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
+/**
+ * Same merges as {@link mergeStaticFloorGeometries}, split across awaits so one floor column / stair
+ * root merge does not create a multi-second-long main-thread task during login.
+ *
+ * Optionally merges prioritized storey plates first ({@link userData.mammothPlateLevelIndex}) so hub
+ * floors warm GPU earlier during progressive idle frames.
+ */
+export async function mergeStaticFloorGeometriesYielding(
+  buildingRoot: THREE.Group,
+  yieldToMain: () => Promise<void>,
+  opts?: { priorityPlateLevelIndices?: readonly number[] },
+): Promise<void> {
+  buildingRoot.updateMatrixWorld(true);
+  const prio = opts?.priorityPlateLevelIndices;
+  let tops = [...buildingRoot.children];
+  if (prio?.length) {
+    const pri = new Map(prio.map((n, i) => [n, i]));
+    const score = (c: THREE.Object3D): number => {
+      if (c.userData.mammothStairColumnRoot === true) return 50_000;
+      const li = c.userData.mammothPlateLevelIndex;
+      if (typeof li === "number" && pri.has(li)) return pri.get(li)!;
+      if (typeof li === "number") return 10_000 + li;
+      return 40_000;
+    };
+    tops = tops.sort((a, b) => score(a) - score(b));
+  }
+  for (const child of tops) {
+    mergeStaticFloorDirectChild(child);
+    await yieldToMain();
   }
 }
 
