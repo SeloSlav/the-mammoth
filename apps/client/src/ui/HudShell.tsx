@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
 import type { DbConnection } from "../module_bindings";
-import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpInteraction/fpPickupPrompt";
+import {
+  getFpActiveStashPanelUnitKey,
+  subscribeFpActiveStashPanelUnitKey,
+} from "../game/fpInteraction/fpActiveStashPanel";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
@@ -35,11 +38,8 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
   );
 
   const stashUnitKey = useSyncExternalStore(
-    subscribeFpPickupPrompt,
-    () => {
-      const p = getFpPickupPrompt();
-      return p?.kind === "apartment_stash" ? p.unitKey : null;
-    },
+    subscribeFpActiveStashPanelUnitKey,
+    getFpActiveStashPanelUnitKey,
     () => null,
   );
 

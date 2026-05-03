@@ -18,6 +18,7 @@ import {
   hotbarInstantConsumeCooldownProgress,
   subscribeHotbarInstantConsumeCooldown,
 } from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
+import { setFpActiveStashPanelUnitKey } from "../game/fpInteraction/fpActiveStashPanel";
 import { onMammothInventoryOpenRequestFromFp } from "../game/fpInteraction/fpInventoryOpenRequest";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
@@ -162,7 +163,10 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
       if (e.code !== "Tab" || e.repeat) return;
       if (isTextInputFocused()) return;
       e.preventDefault();
-      setInvOpen((o) => !o);
+      setInvOpen((o) => {
+        if (o) setFpActiveStashPanelUnitKey(null);
+        return !o;
+      });
       if (document.pointerLockElement) void document.exitPointerLock();
     };
     // Capture so Tab opens inventory even when focus is on the canvas / other controls.

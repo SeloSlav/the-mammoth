@@ -113,6 +113,7 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./worldRuntime/droppedItemWorldRuntime.js";
+import { setFpActiveStashPanelUnitKey } from "./fpInteraction/fpActiveStashPanel.js";
 import { requestMammothInventoryOpenFromFp } from "./fpInteraction/fpInventoryOpenRequest.js";
 import { setFpPickupPrompt } from "./fpInteraction/fpPickupPrompt.js";
 import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
@@ -907,6 +908,7 @@ export async function mountFpSession(
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
       if (aptKey?.kind === "apartment_stash") {
+        setFpActiveStashPanelUnitKey(aptKey.unitKey);
         requestMammothInventoryOpenFromFp();
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
@@ -1136,6 +1138,7 @@ export async function mountFpSession(
     fpApartmentFurniture.dispose();
     fpApartmentDoors.dispose();
     unregisterFpDebugMenuSessionSnapshot();
+    setFpActiveStashPanelUnitKey(null);
     disposeFpSessionDevDebug();
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
