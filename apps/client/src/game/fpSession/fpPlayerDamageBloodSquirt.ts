@@ -99,10 +99,12 @@ export function createFpPlayerDamageBloodSquirt(opts: {
 
     for (let i = 0; i < n; i++) {
       pushVelocity(scratchVel, birth + i * 9973);
-      const hue = 0.02 + rand01(i * 40499) * 0.04;
-      const light = 0.38 + rand01(i * 60149) * 0.22;
+      // Hue 0 = pure red in Three.js; keep a tight band (0–~5°) plus occasional crimson via wrap near 1.0.
+      const hRoll = rand01(i * 40499);
+      const hue = hRoll < 0.72 ? hRoll * 0.014 : 1.0 - (hRoll - 0.72) * 0.06;
+      const light = 0.30 + rand01(i * 60149) * 0.20;
       const mat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color().setHSL(hue, 0.92, light),
+        color: new THREE.Color().setHSL(hue, 0.94, light),
         transparent: true,
         opacity: 0.94,
         depthWrite: false,
