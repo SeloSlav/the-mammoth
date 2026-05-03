@@ -362,6 +362,16 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
             });
         }
     }
+    let stale_keys: Vec<String> = ctx
+        .db
+        .apartment_unit()
+        .iter()
+        .filter(|u| !seen.contains(&u.unit_key))
+        .map(|u| u.unit_key)
+        .collect();
+    for key in stale_keys {
+        ctx.db.apartment_unit().unit_key().delete(key);
+    }
 }
 
 fn template_set_for_floor(floor_doc_id: &str) -> &'static [GenTemplate] {

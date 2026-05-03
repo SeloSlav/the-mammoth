@@ -125,7 +125,7 @@ ${bundles
             FACE_CODE[t.face]
           }, hinge_x: ${fmtFloat(t.hingeX)}, hinge_z: ${fmtFloat(t.hingeZ)}, feet_y_offset: ${fmtFloat(
             t.feetYOffset,
-          )}, panel_w_m: ${fmtFloat(t.panelWidthM)}, panel_h_m: ${fmtFloat(t.panelHeightM)} },`,
+          )}, panel_w_m: ${fmtFloat(t.panelWidthM)}, panel_h_m: ${fmtFloat(t.panelHeightM)}, },`,
       )
       .join("\n");
     return `static ${arrName}: &[ApartmentDoorTemplate] = &[\n${rows}\n];`;
@@ -136,7 +136,7 @@ pub static APARTMENT_DOOR_TEMPLATE_SETS: &[ApartmentDoorTemplateSet] = &[
 ${bundles
   .map(
     (b, i) =>
-      `    ApartmentDoorTemplateSet { floor_doc_id: ${JSON.stringify(b.floorDocId)}, templates: TEMPLATES_${i} },`,
+      `    ApartmentDoorTemplateSet { floor_doc_id: ${JSON.stringify(b.floorDocId)}, templates: TEMPLATES_${i}, },`,
   )
   .join("\n")}
 ];

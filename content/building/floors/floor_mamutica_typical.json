@@ -4,15 +4,13 @@
   "displayName": "Mamutica typical residential plate (generated)",
   "metadata": {
     "mamutica_reference": "Zagreb Mamutica: ~240 m length, ~60 m height, 19 inhabited floors, 1169 apartments (hr.wikipedia).",
-    "generated_corridor_length_m": 232.525,
+    "generated_corridor_length_m": 159.5,
     "inferred_double_loaded_bar_width_m": 21.85,
     "unit_bay_footprint_about_m2": 63.9,
     "core_station_centers_z_m": [
-      -92,
       -46,
       0,
-      46,
-      92
+      46
     ],
     "core_spacing_m": 46,
     "stair_prefab": "stair_well_a",
@@ -31,39 +29,11 @@
       "scale": [
         3.85,
         3.05,
-        232.525
+        159.5
       ],
       "metadata": {
         "note": "Residential corridor; vertical cores offset in unit bays."
       }
-    },
-    {
-      "id": "unit_e_001",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        6.425,
-        1.605,
-        -112.71249999999999
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_e_002",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        6.425,
-        1.605,
-        -105.51249999999999
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
     },
     {
       "id": "unit_e_003",
@@ -226,62 +196,6 @@
         6.425,
         1.605,
         76.2
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_e_015",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        6.425,
-        1.605,
-        105.5125
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_e_016",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        6.425,
-        1.605,
-        112.7125
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_w_001",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        -6.425,
-        1.605,
-        -112.71249999999999
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_w_002",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        -6.425,
-        1.605,
-        -105.51249999999999
       ],
       "scale": [
         9,
@@ -458,70 +372,6 @@
       ]
     },
     {
-      "id": "unit_w_015",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        -6.425,
-        1.605,
-        105.5125
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "unit_w_016",
-      "prefabId": "apartment_unit_small_a",
-      "position": [
-        -6.425,
-        1.605,
-        112.7125
-      ],
-      "scale": [
-        9,
-        3.05,
-        7.1000000000000005
-      ]
-    },
-    {
-      "id": "stair_well_01_e",
-      "prefabId": "stair_well_a",
-      "position": [
-        6.159999999999999,
-        1.6589473684210527,
-        -92
-      ],
-      "scale": [
-        8.35,
-        3.1578947368421053,
-        13.950000000000001
-      ],
-      "metadata": {
-        "coreZ": -92,
-        "side": "east"
-      }
-    },
-    {
-      "id": "elevator_shaft_01_w",
-      "prefabId": "elevator_shaft_a",
-      "position": [
-        -3.1750000000000003,
-        1.6589473684210527,
-        -92
-      ],
-      "scale": [
-        2.38,
-        3.1578947368421053,
-        4
-      ],
-      "metadata": {
-        "coreZ": -92,
-        "side": "west"
-      }
-    },
-    {
       "id": "stair_well_02_e",
       "prefabId": "stair_well_a",
       "position": [
@@ -626,42 +476,6 @@
       ],
       "metadata": {
         "coreZ": 46,
-        "side": "west"
-      }
-    },
-    {
-      "id": "stair_well_05_e",
-      "prefabId": "stair_well_a",
-      "position": [
-        6.159999999999999,
-        1.6589473684210527,
-        92
-      ],
-      "scale": [
-        8.35,
-        3.1578947368421053,
-        13.950000000000001
-      ],
-      "metadata": {
-        "coreZ": 92,
-        "side": "east"
-      }
-    },
-    {
-      "id": "elevator_shaft_05_w",
-      "prefabId": "elevator_shaft_a",
-      "position": [
-        -3.1750000000000003,
-        1.6589473684210527,
-        92
-      ],
-      "scale": [
-        2.38,
-        3.1578947368421053,
-        4
-      ],
-      "metadata": {
-        "coreZ": 92,
         "side": "west"
       }
     }

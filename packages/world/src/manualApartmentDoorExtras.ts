@@ -66,7 +66,7 @@ export type CorridorShellWallHolesLike = {
  * `stair_well_*` `coreZ` metadata.
  */
 export const MAMUTICA_TYPICAL_CORE_STATION_Z_M = [
-  -92, -46, 0, 46, 92,
+  -46, 0, 46,
 ] as const;
 
 /**
@@ -81,6 +81,10 @@ const PANEL = {
   panelWidthM: 1.26,
   panelHeightM: 2.06,
 } as const;
+
+function mamuticaTypicalCoreStationNumber(cz: number): number {
+  return Math.round(cz / 46) + 3;
+}
 
 /**
  * Raises corridor + shaft stairwell swing leaves within the existing wall holes (feet up, panel
@@ -200,12 +204,11 @@ export function apartmentDoorInteractPromptKindFromTemplateId(
 /** Stair-adjacent side only (east interior wall of `corridor_main`); no doors on the far west wall. */
 function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
   const out: ApartmentDoorTemplate[] = [];
-  let i = 1;
   for (const cz of MAMUTICA_TYPICAL_CORE_STATION_Z_M) {
     const zOpenCenter = cz - CORRIDOR_GAP_S_OF_CORE_M;
     /** North (+Z) jamb — matches `apartmentDoorTemplatesForFloor` (`hingeZ = tMid + half`). */
     const hingeZ = zOpenCenter + PANEL.panelWidthM * 0.5;
-    const n = String(i).padStart(2, "0");
+    const n = String(mamuticaTypicalCoreStationNumber(cz)).padStart(2, "0");
     out.push({
       templateId: `${MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX}${n}|w`,
       unitId: `${MANUAL_CORRIDOR_STAIR_DOOR_UNIT_ID_PREFIX}${n}`,
@@ -216,7 +219,6 @@ function mamuticaTypicalCorridorGapDoorTemplates(): ApartmentDoorTemplate[] {
       panelWidthM: PANEL.panelWidthM,
       panelHeightM: PANEL.panelHeightM - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
     });
-    i += 1;
   }
   return out;
 }
@@ -241,9 +243,8 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
     MAMUTICA_STAIR_HUB_PY + resolved.y0Local + STAIRWELL_SWING_DOOR_FEET_LIFT_M;
   const holeSpanYM = Math.max(0.55, resolved.y1Local - resolved.y0Local);
   const out: ApartmentDoorTemplate[] = [];
-  let i = 1;
   for (const cz of MAMUTICA_TYPICAL_CORE_STATION_Z_M) {
-    const n = String(i).padStart(2, "0");
+    const n = String(mamuticaTypicalCoreStationNumber(cz)).padStart(2, "0");
     const uid = `${MANUAL_STAIR_SHAFT_EXIT_DOOR_UNIT_ID_PREFIX}typ_${n}`;
     const { hingeX, hingeZ } = shaftExitSwingDoorHingePlateXZ({
       spx: MAMUTICA_STAIR_HUB_PX,
@@ -265,7 +266,6 @@ function mamuticaTypicalStairShaftExitDoorTemplates(): ApartmentDoorTemplate[] {
       panelHeightM:
         holeSpanYM + STAIR_SHAFT_EXIT_PANEL_HEIGHT_PAD_M - STAIRWELL_SWING_DOOR_FEET_LIFT_M,
     });
-    i += 1;
   }
   return out;
 }

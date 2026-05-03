@@ -23,22 +23,17 @@ const STOREY_SPACING_M = 60 / 19;
 const CORRIDOR_WIDTH_M = 3.85;
 const UNIT_DEPTH_M = 9.0;
 const UNIT_ALONG_Z_M = 7.2;
-const TARGET_CORRIDOR_LENGTH_M = 238;
 const BAY_GAP_M = 0.1;
 
 /** Distance (m) between core station centres along ±Z (symmetric about 0). */
 const CORE_STATION_SPACING_M = 46;
-/** Drives core placement + unit segmentation along Z (layout-only; spine shell length is tightened below). */
-const layoutCorridorLen =
-  Math.max(2, Math.round(TARGET_CORRIDOR_LENGTH_M / UNIT_ALONG_Z_M)) * UNIT_ALONG_Z_M;
-const halfLen = layoutCorridorLen * 0.5;
 const szBay = UNIT_ALONG_Z_M - BAY_GAP_M;
 const unitFootprintM2 = UNIT_DEPTH_M * szBay;
 const barWidthM = CORRIDOR_WIDTH_M + 2 * UNIT_DEPTH_M;
 
 /** Spine / lobby shell length along Z: match occupied unit row so façades do not step past apartment shells. */
 function shellCorridorLenFromUnitCenters(unitCentersZ) {
-  if (unitCentersZ.length === 0) return layoutCorridorLen;
+  if (unitCentersZ.length === 0) return halfLen * 2;
   const zMin = Math.min(...unitCentersZ) - szBay * 0.5;
   const zMax = Math.max(...unitCentersZ) + szBay * 0.5;
   return Math.round((zMax - zMin) * 1e6) / 1e6;
@@ -65,6 +60,16 @@ const ELEV_SZ = 4.0;
 const CORE_CLEAR_HALF_Z = Math.max(2.85, STAIR_SZ * 0.5 + 0.45, ELEV_SZ * 0.5 + 0.45);
 /** Minimum clear margin (m) from a core void or bar end to the first apartment shell. */
 const UNIT_SEGMENT_EDGE_CLEAR_M = 2.2;
+/**
+ * Trim off the far north/south residential wings: the old ±92 m core stations plus the two
+ * apartment bays beyond each station. Keeping the new ends at the old inner edge of those core
+ * voids preserves every remaining unit/core coordinate instead of recentering the plan.
+ */
+const TRIMMED_HALF_LEN_M = CORE_STATION_SPACING_M * 2 - CORE_CLEAR_HALF_Z;
+/** Two apartment bays were removed before the first surviving south unit; keep old unit IDs stable. */
+const TRIMMED_SOUTH_UNIT_BAYS = 2;
+/** Drives core placement + unit segmentation along Z. */
+const halfLen = TRIMMED_HALF_LEN_M;
 
 function collectCoreCentersZ() {
   const centers = [0];
@@ -110,6 +115,17 @@ function collectSegmentedUnitCentersZ(coreZs) {
   return out;
 }
 
+function typicalCoreStationNumber(cz) {
+  return Math.round(cz / CORE_STATION_SPACING_M) + 3;
+}
+
+function groundRemoteElevatorNumber(cz) {
+  if (cz === 0) return 0;
+  return cz < 0
+    ? Math.round(cz / CORE_STATION_SPACING_M) + 3
+    : Math.round(cz / CORE_STATION_SPACING_M) + 2;
+}
+
 function writeTypicalFloor() {
   const coreZs = collectCoreCentersZ();
   const unitCentersZ = collectSegmentedUnitCentersZ(coreZs);
@@ -126,36 +142,37 @@ function writeTypicalFloor() {
   });
 
   for (const [i, z] of unitCentersZ.entries()) {
+    const unitNumber = i + 1 + TRIMMED_SOUTH_UNIT_BAYS;
     objects.push({
-      id: `unit_e_${String(i + 1).padStart(3, "0")}`,
+      id: `unit_e_${String(unitNumber).padStart(3, "0")}`,
       prefabId: "apartment_unit_small_a",
       position: [unitXEast, PY_CENTER, z],
       scale: [UNIT_DEPTH_M, FLOOR_TO_CEILING_M, szBay],
     });
   }
   for (const [i, z] of unitCentersZ.entries()) {
+    const unitNumber = i + 1 + TRIMMED_SOUTH_UNIT_BAYS;
     objects.push({
-      id: `unit_w_${String(i + 1).padStart(3, "0")}`,
+      id: `unit_w_${String(unitNumber).padStart(3, "0")}`,
       prefabId: "apartment_unit_small_a",
       position: [-unitXEast, PY_CENTER, z],
       scale: [UNIT_DEPTH_M, FLOOR_TO_CEILING_M, szBay],
     });
   }
 
-  let k = 0;
   for (const cz of coreZs) {
-    k += 1;
+    const stationNumber = typicalCoreStationNumber(cz);
     const stairX = CORRIDOR_WIDTH_M * 0.5 + STAIR_SX * 0.5 + 0.06;
     const elevX = -(CORRIDOR_WIDTH_M * 0.5 + ELEV_SX * 0.5 + 0.06);
     objects.push({
-      id: `stair_well_${String(k).padStart(2, "0")}_e`,
+      id: `stair_well_${String(stationNumber).padStart(2, "0")}_e`,
       prefabId: "stair_well_a",
       position: [stairX, CORE_PY, cz],
       scale: [STAIR_SX, STOREY_SPACING_M, STAIR_SZ],
       metadata: { coreZ: cz, side: "east" },
     });
     objects.push({
-      id: `elevator_shaft_${String(k).padStart(2, "0")}_w`,
+      id: `elevator_shaft_${String(stationNumber).padStart(2, "0")}_w`,
       prefabId: "elevator_shaft_a",
       position: [elevX, CORE_PY, cz],
       scale: [ELEV_SX, STOREY_SPACING_M, ELEV_SZ],
@@ -238,12 +255,11 @@ function writeGroundFloor() {
    * Peripheral west-bank hoistways at every residential core Z **except** z=0 (hub).
    * Must match typical `elevator_shaft_*` stations or upper slabs cap the shaft (solid underside).
    */
-  let rid = 0;
   for (const cz of coreZs) {
     if (cz === hubZ) continue;
-    rid += 1;
+    const remoteNumber = groundRemoteElevatorNumber(cz);
     objects.push({
-      id: `elev_remote_${String(rid).padStart(2, "0")}`,
+      id: `elev_remote_${String(remoteNumber).padStart(2, "0")}`,
       prefabId: "elevator_shaft_a",
       position: [elevX, CORE_PY, cz],
       scale: elevScale,

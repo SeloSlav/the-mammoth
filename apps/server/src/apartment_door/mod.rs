@@ -174,6 +174,7 @@ fn template_set_for(floor_doc_id: &str) -> &'static [GenTemplate] {
 pub fn seed_apartment_doors(ctx: &ReducerContext) {
     let refs = building_floor_refs();
     let max_lv = max_level();
+    let mut seen = std::collections::HashSet::<String>::new();
     for (level, floor_doc_id) in refs.iter().copied() {
         if level < 1 || level > max_lv {
             continue;
@@ -184,6 +185,7 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
         }
         for t in templates {
             let rk = row_key(floor_doc_id, level, t.template_id);
+            seen.insert(rk.clone());
             if let Some(mut row) = ctx.db.apartment_door().row_key().find(&rk) {
                 if !apartment_door_row_matches_template(&row, level, t) {
                     row.hinge_x = t.hinge_x;
@@ -211,6 +213,16 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                 swing_open_01: 0.0,
             });
         }
+    }
+    let stale_keys: Vec<String> = ctx
+        .db
+        .apartment_door()
+        .iter()
+        .filter(|d| !seen.contains(&d.row_key))
+        .map(|d| d.row_key)
+        .collect();
+    for key in stale_keys {
+        ctx.db.apartment_door().row_key().delete(key);
     }
 }
 

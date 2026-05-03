@@ -165,6 +165,8 @@ function expectRectInside(label: string, rect: Rect, b: Bounds): void {
 }
 
 describe("strict apartment interiors", () => {
+  const TRIMMED_RESIDENTIAL_TEMPLATE_COUNT = 24;
+
   it("residential unit bounds do not overlap adjacent units on the same side", () => {
     for (const set of APARTMENT_DOOR_TEMPLATES) {
       const rows = set.templates
@@ -197,6 +199,6 @@ describe("strict apartment interiors", () => {
         checked += 1;
       }
     }
-    expect(checked).toBe(32);
+    expect(checked).toBe(TRIMMED_RESIDENTIAL_TEMPLATE_COUNT);
   });
 });
