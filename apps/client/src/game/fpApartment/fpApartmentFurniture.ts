@@ -13,6 +13,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   clientMayUseApartmentStash,
   type ApartmentStashPrompt,
@@ -22,7 +23,7 @@ const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
 const BED_URL = "/static/models/objects/bed.glb";
 
-/** Keep apartment prop construction below one noticeable frame hitch while the player is already in-world. */
+/** Max synchronous CPU per scheduler tick **between whole units** (each unit also yields internally). */
 const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
 const FURNITURE_REBUILD_MIN_UNITS_PER_SLICE = 1;
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
@@ -242,6 +243,10 @@ export async function mountFpApartmentFurniture(opts: {
   let templatesLoadFailed = false;
   let disposed = false;
   let buildRaf = 0;
+  /** True while a slice callback is running async work — prevents overlapping demand-build schedules from {@link syncVisibility}. */
+  let furnitureBuildPending = false;
+  /** Incremented when pending/in-flight builds must abort (dispose, cancel demand build, full reset). */
+  let furnitureBuildEpoch = 0;
   let activeBuildJob: ApartmentFurnitureLevelBuildJob | null = null;
   let rowsByLevel = new Map<number, ApartmentUnit[]>();
   const builtLevels = new Map<number, ApartmentFurnitureLevelState>();
@@ -302,11 +307,24 @@ export async function mountFpApartmentFurniture(opts: {
     return next;
   };
 
-  const buildUnitFurniture = (
+  const furnitureBuildNeedsContinue = (): boolean => {
+    if (disposed || !templates) return false;
+    if (queuedLevels.length > 0) return true;
+    const job = activeBuildJob;
+    return job !== null && job.nextIndex < job.rows.length;
+  };
+
+  const bumpFurnitureBuildEpoch = () => {
+    furnitureBuildEpoch += 1;
+  };
+
+  async function buildUnitFurnitureAsync(
     build: ApartmentFurnitureLevelBuildJob,
     u: ApartmentUnit,
     readyTemplates: ApartmentFurnitureTemplates,
-  ) => {
+    epoch: number,
+  ): Promise<void> {
+    if (disposed || furnitureBuildEpoch !== epoch) return;
     /** Matches server floor slab (`mn[1]` / `foot_y`). */
     const floorY = u.footY;
     const levelIdx = u.level;
@@ -317,6 +335,7 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.name = `apartment_furniture_${u.unitKey}`;
     unitGroup.userData.mammothApartmentFurnitureProp = true;
     unitGroup.userData.mammothPlateLevelIndex = levelIdx;
+    plate.add(unitGroup);
 
     const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
     w.scale.setScalar(WARDROBE_VIS_SCALE);
@@ -345,6 +364,9 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.add(wardrobePick);
     build.wardrobePickMeshes.push(wardrobePick);
 
+    await yieldToMain();
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     const f = clonePropScene(readyTemplates.footlocker, levelIdx);
     f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
     f.position.set(u.footX, 0, u.footZ);
@@ -372,6 +394,9 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.add(footlockerPick);
     build.stashPickMeshes.push(footlockerPick);
 
+    await yieldToMain();
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     const b = clonePropScene(readyTemplates.bed, levelIdx);
     b.scale.setScalar(BED_VIS_SCALE);
     b.position.set(u.bedX, 0, u.bedZ);
@@ -380,8 +405,15 @@ export async function mountFpApartmentFurniture(opts: {
     keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
     unitGroup.add(b);
 
+    await yieldToMain();
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     unitGroup.updateMatrixWorld(true);
     mergeGroupDescendantsByMaterial(unitGroup);
+
+    await yieldToMain();
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     unitGroup.updateMatrixWorld(true);
     const unitFurnitureBounds = new THREE.Box3().setFromObject(unitGroup);
     unitFurnitureBounds.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
@@ -415,9 +447,8 @@ export async function mountFpApartmentFurniture(opts: {
       }
     }
 
-    plate.add(unitGroup);
     build.unitGroups.push(unitGroup);
-  };
+  }
 
   const finishLevelBuild = (build: ApartmentFurnitureLevelBuildJob) => {
     build.group.updateMatrixWorld(true);
@@ -460,8 +491,15 @@ export async function mountFpApartmentFurniture(opts: {
   };
 
   const scheduleBuildSlice = () => {
-    if (disposed || buildRaf !== 0 || !templates) return;
-    buildRaf = requestAnimationFrame(runBuildSlice);
+    if (disposed || !templates || furnitureBuildPending || buildRaf !== 0) return;
+    buildRaf = requestAnimationFrame(() => {
+      buildRaf = 0;
+      furnitureBuildPending = true;
+      void runBuildSliceAsync().finally(() => {
+        furnitureBuildPending = false;
+        if (furnitureBuildNeedsContinue()) scheduleBuildSlice();
+      });
+    });
   };
 
   const ensureTemplatesLoading = () => {
@@ -490,8 +528,7 @@ export async function mountFpApartmentFurniture(opts: {
       });
   };
 
-  function runBuildSlice() {
-    buildRaf = 0;
+  async function runBuildSliceAsync(): Promise<void> {
     if (disposed || !templates) {
       disposeBuildJob(activeBuildJob);
       activeBuildJob = null;
@@ -503,11 +540,15 @@ export async function mountFpApartmentFurniture(opts: {
     }
     const build = activeBuildJob;
     if (!build) return;
+
+    const epoch = furnitureBuildEpoch;
     const sliceStart = performance.now();
     let processed = 0;
 
     while (build.nextIndex < build.rows.length) {
-      buildUnitFurniture(build, build.rows[build.nextIndex]!, templates);
+      if (disposed || furnitureBuildEpoch !== epoch) return;
+      await buildUnitFurnitureAsync(build, build.rows[build.nextIndex]!, templates, epoch);
+      if (disposed || furnitureBuildEpoch !== epoch) return;
       build.nextIndex += 1;
       processed += 1;
       if (
@@ -518,15 +559,13 @@ export async function mountFpApartmentFurniture(opts: {
       }
     }
 
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     if (build.nextIndex >= build.rows.length) {
       finishLevelBuild(build);
       activeBuildJob = null;
-      if (queuedLevels.length > 0) scheduleBuildSlice();
-      return;
     }
-
-    scheduleBuildSlice();
-  };
+  }
 
   const requestLevelBuild = (level: number) => {
     if (!templates || builtLevels.has(level) || emptyBuiltLevels.has(level)) return;
@@ -537,6 +576,7 @@ export async function mountFpApartmentFurniture(opts: {
   };
 
   const resetBuiltFurniture = () => {
+    bumpFurnitureBuildEpoch();
     if (buildRaf !== 0) {
       cancelAnimationFrame(buildRaf);
       buildRaf = 0;
@@ -551,6 +591,7 @@ export async function mountFpApartmentFurniture(opts: {
   };
 
   const cancelPendingDemandBuild = () => {
+    bumpFurnitureBuildEpoch();
     if (buildRaf !== 0) {
       cancelAnimationFrame(buildRaf);
       buildRaf = 0;
@@ -649,6 +690,7 @@ export async function mountFpApartmentFurniture(opts: {
     },
     dispose: () => {
       disposed = true;
+      bumpFurnitureBuildEpoch();
       if (buildRaf !== 0) {
         cancelAnimationFrame(buildRaf);
         buildRaf = 0;

@@ -16,8 +16,9 @@ const SPINE_DEPTH_FRAC: f32 = 0.42;
 // --- East/West doorway residential flats (canonical layout) ---
 /// Keep props away from shell edges — matches client furniture merge padding.
 const PROP_WALL_GAP_M: f32 = 0.06;
-const BED_HALF_X_M: f32 = 1.09;
-const BED_HALF_Z_M: f32 = 0.61;
+/// Bed mesh half-extents along local bed axes (matches prop GLB authoring).
+pub(crate) const BED_HALF_X_M: f32 = 1.09;
+pub(crate) const BED_HALF_Z_M: f32 = 0.61;
 const FOOTLOCKER_HALF_X_M: f32 = 0.43;
 const WARDROBE_HALF_X_M: f32 = 0.26;
 const Z_EDGE_M: f32 = BED_HALF_Z_M + PROP_WALL_GAP_M;

@@ -3,11 +3,13 @@
 //! `init`, refreshed on a timer with weighted RNG. Corridor anchors roll **ammo, rations, and chemical-stock**
 //! (custodial/service-cache proxy until janitor closets are anchored). Up to [`MAX_UNCLAIMED_APARTMENT_LOOT_SPOTS`]
 //! **unclaimed** apartment units get weapon-biased loot (sorted by floor) plus a guaranteed scrap-metal pile.
+//! Anchored apartment XZ omits bbox centroids and the bed footprint projection so pickups land in clear living/entry lanes.
 //! Player drops stay `world_spawn_slot = None`; cleanup only ages those rows so server-spawn piles do not silently
 //! despawn mid-session.
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
+use crate::apartment_interior_anchors::{BED_HALF_X_M, BED_HALF_Z_M};
 use crate::apartments::{apartment_unit, ApartmentUnit, UNIT_STATE_UNCLAIMED};
 use crate::auth;
 use crate::inventory::{
@@ -79,6 +81,26 @@ const APARTMENT_SCRAP_METAL_DEF_ID: &str = "scrap-metal";
 const APARTMENT_SCRAP_QTY_MIN: u32 = 1;
 const APARTMENT_SCRAP_QTY_MAX: u32 = 3;
 const APARTMENT_SCRAP_WALL_MARGIN_M: f32 = 0.72;
+/// Horizontal clearance around authored bed extents so loot feet don't sit inside the mattress OBB projection.
+const APARTMENT_BED_KEEPOUT_PAD_M: f32 = 0.38;
+
+#[inline]
+fn bed_world_aabb_half_extents_m(bed_yaw: f32) -> (f32, f32) {
+    let c = bed_yaw.cos().abs();
+    let s = bed_yaw.sin().abs();
+    (
+        BED_HALF_X_M * c + BED_HALF_Z_M * s,
+        BED_HALF_X_M * s + BED_HALF_Z_M * c,
+    )
+}
+
+#[inline]
+fn xz_in_horizontal_bed_keepout(px: f32, pz: f32, unit: &ApartmentUnit, pad_m: f32) -> bool {
+    let (hx, hz) = bed_world_aabb_half_extents_m(unit.bed_yaw);
+    let dx = (px - unit.bed_x).abs();
+    let dz = (pz - unit.bed_z).abs();
+    dx <= hx + pad_m && dz <= hz + pad_m
+}
 
 #[spacetimedb::table(public, accessor = dropped_item)]
 pub struct DroppedItem {
@@ -272,6 +294,104 @@ fn clamp_inside_unit_xz(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
     )
 }
 
+/// Entry / living-strip anchor for anchored apartment pickups — avoids centroid (often overlaps the mattress)
+/// and every candidate is checked against a yaw-aware bed AABB inflated by [`APARTMENT_BED_KEEPOUT_PAD_M`].
+fn apartment_clear_pickup_anchor_xz(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
+    let toward_back_x = if unit.bed_x >= unit.wardrobe_x {
+        1.0
+    } else {
+        -1.0
+    };
+    let toward_door_x = -toward_back_x;
+    let center_z = (unit.bound_min_z + unit.bound_max_z) * 0.5;
+    let away_from_wardrobe_wall_z = if unit.wardrobe_z >= center_z {
+        -1.0
+    } else {
+        1.0
+    };
+    let side_z = if splitmix64(seed ^ 0x51DE_BEEF) & 1 == 0 {
+        1.0
+    } else {
+        -1.0
+    };
+
+    #[inline]
+    fn try_candidates(
+        unit: &ApartmentUnit,
+        cands: [(f32, f32); 6],
+        pad_m: f32,
+    ) -> Option<(f32, f32)> {
+        for (cx, cz) in cands {
+            let (x, z) = clamp_inside_unit_xz(unit, cx, cz);
+            if !xz_in_horizontal_bed_keepout(x, z, unit, pad_m) {
+                return Some((x, z));
+            }
+        }
+        None
+    }
+
+    let cands_row1 = [
+        (
+            (unit.wardrobe_x + unit.foot_x) * 0.5 + toward_door_x * 0.85,
+            center_z + side_z * 1.06,
+        ),
+        (
+            (unit.wardrobe_x + unit.foot_x) * 0.5 + toward_door_x * 0.42,
+            center_z - side_z * 1.12,
+        ),
+        (
+            unit.wardrobe_x + toward_back_x * 0.58,
+            unit.wardrobe_z + away_from_wardrobe_wall_z * 0.54,
+        ),
+        (
+            unit.foot_x + toward_door_x * 0.68,
+            unit.foot_z + side_z * 0.76,
+        ),
+        (
+            (unit.bound_min_x + unit.bound_max_x) * 0.5 + toward_door_x * 2.25,
+            center_z + side_z * 0.72,
+        ),
+        (
+            (unit.bound_min_x + unit.bound_max_x) * 0.5 + toward_door_x * 1.55,
+            center_z - side_z * 0.94,
+        ),
+    ];
+
+    if let Some(xz) = try_candidates(unit, cands_row1, APARTMENT_BED_KEEPOUT_PAD_M) {
+        return xz;
+    }
+
+    // Last resort shove toward the wardrobe / door hemisphere until we leave the inflated bed hull.
+    let (mut x, mut z) = clamp_inside_unit_xz(
+        unit,
+        unit.wardrobe_x + toward_door_x * 1.05,
+        unit.wardrobe_z + side_z * 0.92,
+    );
+    let step_x = toward_door_x * 0.28;
+    let step_z = side_z * 0.26;
+    for _ in 0..14 {
+        if !xz_in_horizontal_bed_keepout(x, z, unit, APARTMENT_BED_KEEPOUT_PAD_M) {
+            return (x, z);
+        }
+        x = clamp_world_coord(
+            x + step_x,
+            unit.bound_min_x + APARTMENT_SCRAP_WALL_MARGIN_M,
+            unit.bound_max_x - APARTMENT_SCRAP_WALL_MARGIN_M,
+        );
+        z = clamp_world_coord(
+            z + step_z,
+            unit.bound_min_z + APARTMENT_SCRAP_WALL_MARGIN_M,
+            unit.bound_max_z - APARTMENT_SCRAP_WALL_MARGIN_M,
+        );
+    }
+
+    clamp_inside_unit_xz(
+        unit,
+        unit.bed_x + toward_door_x * (BED_HALF_X_M + BED_HALF_Z_M + APARTMENT_BED_KEEPOUT_PAD_M + 0.42),
+        unit.bed_z,
+    )
+}
+
 fn apartment_scrap_metal_anchor(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
     let center_z = (unit.bound_min_z + unit.bound_max_z) * 0.5;
     let toward_back_x = if unit.bed_x >= unit.wardrobe_x {
@@ -291,7 +411,7 @@ fn apartment_scrap_metal_anchor(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
         -1.0
     };
 
-    match splitmix64(seed ^ 0xA17C_5C2A) % 4 {
+    let (mut x, mut z) = match splitmix64(seed ^ 0xA17C_5C2A) % 4 {
         // Offcuts by the entry wardrobe / service nook.
         0 => clamp_inside_unit_xz(
             unit,
@@ -304,19 +424,34 @@ fn apartment_scrap_metal_anchor(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
             unit.foot_x + toward_door_x * 0.52,
             unit.foot_z + side_z * 0.78,
         ),
-        // Bent panel under the bed-side wall line.
-        2 => clamp_inside_unit_xz(
-            unit,
-            unit.bed_x + toward_door_x * 0.9,
-            unit.bed_z - side_z * 0.9,
-        ),
+        // Near the bed-head wall line — if that's still inside the mattress keep-out, fall back to the entry strip.
+        2 => {
+            let (ax, az) = clamp_inside_unit_xz(
+                unit,
+                unit.bed_x + toward_door_x * 0.9,
+                unit.bed_z - side_z * 0.9,
+            );
+            if xz_in_horizontal_bed_keepout(ax, az, unit, APARTMENT_BED_KEEPOUT_PAD_M) {
+                clamp_inside_unit_xz(
+                    unit,
+                    (unit.wardrobe_x + unit.foot_x) * 0.5 + toward_door_x * 0.55,
+                    center_z + side_z * 1.08,
+                )
+            } else {
+                (ax, az)
+            }
+        },
         // Small pile in the open strip between entry and furniture.
         _ => clamp_inside_unit_xz(
             unit,
             (unit.wardrobe_x + unit.foot_x) * 0.5,
             center_z + side_z * 1.18,
         ),
+    };
+    if xz_in_horizontal_bed_keepout(x, z, unit, APARTMENT_BED_KEEPOUT_PAD_M) {
+        (x, z) = apartment_clear_pickup_anchor_xz(unit, seed ^ 0x9E37_79B97F4A7C15);
     }
+    (x, z)
 }
 
 fn insert_apartment_scrap_metal(ctx: &ReducerContext, slot: u16, unit: &ApartmentUnit) {
@@ -395,10 +530,10 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
             );
             break;
         };
-        let cx = (u.bound_min_x + u.bound_max_x) * 0.5;
-        let cz = (u.bound_min_z + u.bound_max_z) * 0.5;
-        let cy = u.foot_y + 0.02;
-        insert_world_loot_at_anchor(ctx, slot, cx, cy, cz, UNCLAIMED_APARTMENT_LOOT_TIERS);
+        let loot_seed = ctx.timestamp.to_micros_since_unix_epoch() as u64 ^ ((slot as u64) << 48);
+        let (lx, lz) = apartment_clear_pickup_anchor_xz(&u, loot_seed);
+        let ly = u.foot_y + 0.02;
+        insert_world_loot_at_anchor(ctx, slot, lx, ly, lz, UNCLAIMED_APARTMENT_LOOT_TIERS);
 
         let scrap_idx = UNCLAIMED_APARTMENT_SCRAP_SLOT_BASE.saturating_add(i);
         let Ok(scrap_slot) = u16::try_from(scrap_idx) else {
@@ -650,18 +785,21 @@ mod tests {
         }
     }
 
-    fn assert_scrap_anchor_inside(unit: &ApartmentUnit, seed: u64) {
-        let (x, z) = apartment_scrap_metal_anchor(unit, seed);
+    fn assert_inside_unit_pickup_margin(
+        unit: &ApartmentUnit,
+        label: &str,
+        x: f32,
+        z: f32,
+    ) {
+        let m = APARTMENT_SCRAP_WALL_MARGIN_M;
         assert!(
-            x >= unit.bound_min_x + APARTMENT_SCRAP_WALL_MARGIN_M
-                && x <= unit.bound_max_x - APARTMENT_SCRAP_WALL_MARGIN_M,
-            "x={x} outside unit {}",
+            x >= unit.bound_min_x + m && x <= unit.bound_max_x - m,
+            "{label} x={x} outside unit {}",
             unit.unit_key
         );
         assert!(
-            z >= unit.bound_min_z + APARTMENT_SCRAP_WALL_MARGIN_M
-                && z <= unit.bound_max_z - APARTMENT_SCRAP_WALL_MARGIN_M,
-            "z={z} outside unit {}",
+            z >= unit.bound_min_z + m && z <= unit.bound_max_z - m,
+            "{label} z={z} outside unit {}",
             unit.unit_key
         );
     }
@@ -673,7 +811,44 @@ mod tests {
             sample_unit("unit_e_test", false),
         ] {
             for seed in 0..128 {
-                assert_scrap_anchor_inside(&unit, seed);
+                let (x, z) = apartment_scrap_metal_anchor(&unit, seed);
+                assert_inside_unit_pickup_margin(&unit, "scrap", x, z);
+            }
+        }
+    }
+
+    fn assert_misses_bed_keepout(label: &str, unit: &ApartmentUnit, x: f32, z: f32, seed: u64) {
+        assert!(
+            !xz_in_horizontal_bed_keepout(x, z, unit, APARTMENT_BED_KEEPOUT_PAD_M),
+            "{label}: seed={seed} xz=({x},{z}) overlaps bed keepout for {}",
+            unit.unit_key,
+        );
+    }
+
+    #[test]
+    fn apartment_weapon_loot_anchors_miss_bed_keepout() {
+        for unit in [
+            sample_unit("unit_w_test", true),
+            sample_unit("unit_e_test", false),
+        ] {
+            for seed in 0u64..512 {
+                let (x, z) = apartment_clear_pickup_anchor_xz(&unit, seed);
+                assert_inside_unit_pickup_margin(&unit, "weapon", x, z);
+                assert_misses_bed_keepout("weapon_anchor", &unit, x, z, seed);
+            }
+        }
+    }
+
+    #[test]
+    fn apartment_scrap_anchors_miss_bed_keepout() {
+        for unit in [
+            sample_unit("unit_w_test", true),
+            sample_unit("unit_e_test", false),
+        ] {
+            for seed in 0u64..256 {
+                let (x, z) = apartment_scrap_metal_anchor(&unit, seed);
+                assert_inside_unit_pickup_margin(&unit, "scrap", x, z);
+                assert_misses_bed_keepout("scrap_anchor", &unit, x, z, seed);
             }
         }
     }
