@@ -472,8 +472,8 @@ export function attachFpSessionEnvironment(
   const BASE_HEMI_INTENSITY = 1.05;
   const BASE_FILL_INTENSITY = 0.42;
   const BASE_DIR_INTENSITY = 0.92;
-  /** Multiplies sun fill when `stairwellInteriorDark01` is 1 — keeps stairwells moody vs bright corridors. */
-  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.48;
+  /** Multiplies scene lights when `stairwellInteriorDark01` is 1 — 1 matches hallway brightness. */
+  const STAIRWELL_INTERIOR_LIGHT_SCALE = 1;
 
   const hemi = new THREE.HemisphereLight(
     0xe3e7df,

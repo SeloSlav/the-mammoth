@@ -14,10 +14,10 @@ export const AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED = true;
 export const FLOOR_SHELL_DISABLE_NORMAL_MAPS = false;
 
 /** Stairwell kit: decorative props adjacent to heater stubs on landings. */
-export const ENABLE_STAIRWELL_HEATER_LANDING_PROPS = false;
+export const ENABLE_STAIRWELL_HEATER_LANDING_PROPS = true;
 
 /** Stairwell kit: mixed litter near landings / treads (cigarettes, packs, bottles, cans). */
-export const ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = false;
+export const ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = true;
 
 /**
  * Stairwell graffiti decals on client (projected meshes + decal textures).

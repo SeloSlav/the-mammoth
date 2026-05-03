@@ -6,6 +6,8 @@ import { loadPropTemplate } from "./stairWellLandingProps.js";
 /** FP client URL; legacy single-cigarette litter (included in multi-variant litter). */
 export const STAIRWELL_CIGARETTE_MODEL_URL = "/static/models/objects/used-cigarette.glb";
 
+type LitterPlacementKind = "landing" | "tread";
+
 type StairwellLitterVariantSpec = {
   readonly id: string;
   readonly modelUrl: string;
@@ -46,6 +48,15 @@ const STAIRWELL_LITTER_VARIANTS: readonly StairwellLitterVariantSpec[] = [
 /** Inclusive random count per stair segment (storey); placements may reuse treads/landings. */
 const MIN_LITTER_PER_STAIR_SEGMENT = 5;
 const MAX_LITTER_PER_STAIR_SEGMENT = 10;
+
+/** Base clearance above landing / tread top (merged geometry can sit slightly below the analytic surface). */
+const LITTER_LANDING_LIFT_M = 0.022;
+const LITTER_TREAD_LIFT_M = 0.016;
+/**
+ * After tipping bottles/cans/packs (~90° pitch), mesh origin is often not the resting contact point —
+ * nudge up so instances do not tunnel through treads.
+ */
+const LITTER_ON_SIDE_EXTRA_LIFT_M = 0.012;
 
 const _instDummy = new THREE.Object3D();
 const _instLocal = new THREE.Matrix4();
@@ -95,6 +106,40 @@ function pushLitterInstanceInSegmentSpace(args: {
   _instWorld.copy(parentWorld).multiply(_instDummy.matrix);
   _instLocal.copy(segInv).multiply(_instWorld);
   out.push(_instLocal.clone());
+}
+
+function litterVariantRestsOnSide(variantId: string): boolean {
+  return variantId === "bottle" || variantId === "can" || variantId === "pack";
+}
+
+/**
+ * Bottles, cans, and packs are authored upright (+Y); tip them onto a side with ~90° pitch. Cigarette
+ * butts stay near-flat with small tilt.
+ */
+function litterEulerForVariant(
+  variantId: string,
+  placement: LitterPlacementKind,
+  rng: () => number,
+): { yawRad: number; pitchRad: number; rollRad: number } {
+  if (litterVariantRestsOnSide(variantId)) {
+    return {
+      yawRad: rng() * Math.PI * 2,
+      pitchRad: Math.PI * 0.5 + (rng() - 0.5) * 0.35,
+      rollRad: (rng() - 0.5) * 0.55,
+    };
+  }
+  if (placement === "landing") {
+    return {
+      yawRad: rng() * Math.PI * 2,
+      pitchRad: (rng() - 0.5) * 0.35,
+      rollRad: (rng() - 0.5) * 0.45,
+    };
+  }
+  return {
+    yawRad: (rng() - 0.5) * 1.3,
+    pitchRad: (rng() - 0.5) * 0.25,
+    rollRad: (rng() - 0.5) * 0.35,
+  };
 }
 
 function setInstancedLitterBoundingSphere(
@@ -201,6 +246,26 @@ function resolveTreadMesh(
   return findTreadMeshForIndex(segmentRoot, ti) ?? findTreadMeshForIndex(litterSearchRoot, ti);
 }
 
+/** GLB cans often ship with high metalness; reads as mirror-dark in stair lighting — matte read for litter. */
+function litterMaterialForVariant(spec: StairwellLitterVariantSpec, src: THREE.Material): THREE.Material {
+  if (spec.id !== "can") return src;
+  if (src instanceof THREE.MeshStandardMaterial) {
+    const m = src.clone();
+    m.metalness = 0;
+    m.roughness = Math.min(1, Math.max(m.roughness, 0.9));
+    m.needsUpdate = true;
+    return m;
+  }
+  if (src instanceof THREE.MeshPhysicalMaterial) {
+    const m = src.clone();
+    m.metalness = 0;
+    m.roughness = Math.min(1, Math.max(m.roughness, 0.9));
+    m.needsUpdate = true;
+    return m;
+  }
+  return src;
+}
+
 let loadedVariants: readonly LoadedLitterVariant[] | null = null;
 let sharedInit: Promise<void> | null = null;
 
@@ -221,7 +286,8 @@ async function tryLoadLitterVariant(spec: StairwellLitterVariantSpec): Promise<L
     }
     const frustumOriginPadM = longest * scaleToWorld * 0.62;
     const m = src.material;
-    const material = (Array.isArray(m) ? m[0] : m) as THREE.Material;
+    const raw = (Array.isArray(m) ? m[0] : m) as THREE.Material;
+    const material = litterMaterialForVariant(spec, raw);
     return {
       id: spec.id,
       geometry,
@@ -341,6 +407,8 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
         ? landingPool[Math.floor(rng() * landingPool.length)]!
         : anchors[Math.floor(rng() * anchors.length)]!;
     const variantScale = baseScale * (0.88 + rng() * 0.24);
+    const rot = litterEulerForVariant(v.id, entry.kind === "landing" ? "landing" : "tread", rng);
+    const sideLift = litterVariantRestsOnSide(v.id) ? LITTER_ON_SIDE_EXTRA_LIFT_M : 0;
 
     if (entry.kind === "landing") {
       const lm = resolveLandingMesh(segment, search, entry.cl);
@@ -350,16 +418,16 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
       const lx = (rng() * 2 - 1) * Math.max(0.05, entry.cl.halfW - inset);
       const lz = (rng() * 2 - 1) * Math.max(0.05, entry.cl.halfD - inset);
       const sy = Math.max(1e-6, Math.abs(lm.scale.y));
-      const ly = entry.cl.thicknessHalf * sy + 0.012;
+      const ly = entry.cl.thicknessHalf * sy + LITTER_LANDING_LIFT_M + sideLift;
       pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: lm.matrixWorld,
         lx,
         ly,
         lz,
-        yawRad: rng() * Math.PI * 2,
-        pitchRad: (rng() - 0.5) * 0.35,
-        rollRad: (rng() - 0.5) * 0.45,
+        yawRad: rot.yawRad,
+        pitchRad: rot.pitchRad,
+        rollRad: rot.rollRad,
         uniformScale: variantScale,
         out: buckets[vi]!,
       });
@@ -370,16 +438,16 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
       tm.updateMatrixWorld(true);
       const lx = (rng() * 2 - 1) * tr.halfAlong * 0.62;
       const lz = (rng() * 2 - 1) * tr.halfAcross * 0.42;
-      const ly = tr.riseHalf + 0.004;
+      const ly = tr.riseHalf + LITTER_TREAD_LIFT_M + sideLift;
       pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: tm.matrixWorld,
         lx,
         ly,
         lz,
-        yawRad: (rng() - 0.5) * 1.3,
-        pitchRad: (rng() - 0.5) * 0.25,
-        rollRad: (rng() - 0.5) * 0.35,
+        yawRad: rot.yawRad,
+        pitchRad: rot.pitchRad,
+        rollRad: rot.rollRad,
         uniformScale: variantScale,
         out: buckets[vi]!,
       });
