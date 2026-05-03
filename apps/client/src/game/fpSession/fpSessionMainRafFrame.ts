@@ -70,6 +70,7 @@ import {
 } from "../fpHotbar/fpHotbarResolve.js";
 import type { PoseInterpBuffer } from "../fpRemote/poseInterpBuffer.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
+import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
@@ -731,6 +732,7 @@ export function createFpSessionMainRafFrame(
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
     deps.syncBuildingFloorPlateVisibility(nowMs);
+    publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     deps.fpApartmentFurniture.syncVisibility(
       deps.camera,
       deps.isApartmentFurnitureInteriorVisible(),

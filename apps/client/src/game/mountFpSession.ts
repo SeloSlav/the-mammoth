@@ -80,6 +80,7 @@ import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
 } from "./fpSession/fpSessionEnvironment.js";
+import { resetFpSessionCompassHeading } from "./fpSession/fpSessionCompassHeading.js";
 import { resetFpSessionFpsDisplay } from "./fpSession/fpSessionFpsDisplay.js";
 import {
   resetFpSessionGameUiHidden,
@@ -192,6 +193,7 @@ export async function mountFpSession(
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
   resetFpSessionFpsDisplay();
+  resetFpSessionCompassHeading();
   resetFpSessionGameUiHidden();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
@@ -1222,6 +1224,7 @@ export async function mountFpSession(
     renderer.dispose();
     scene.clear();
     resetFpSessionFpsDisplay();
+    resetFpSessionCompassHeading();
     resetFpSessionGameUiHidden();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();

@@ -12,6 +12,7 @@ import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothStashHud } from "../inventory/MammothStashHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
+import { MammothCompassHud } from "./MammothCompassHud";
 import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothCraftingHud } from "./MammothCraftingHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
@@ -113,6 +114,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
             </button>
           </div>
         </div>
+        <MammothCompassHud />
         <MammothDebugMenuHud />
         {conn ? <MammothCraftingHud conn={conn} /> : null}
         {conn ? <MammothToastHud conn={conn} /> : null}
