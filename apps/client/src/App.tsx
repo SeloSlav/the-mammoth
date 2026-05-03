@@ -4,6 +4,7 @@ import { mountFpSession } from "./game/mountFpSession";
 import { HudShell } from "./ui/HudShell";
 import LoginGate from "./ui/LoginGate";
 import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
+import { GameEnterSplash } from "./ui/GameEnterSplash";
 
 const REQUIRE_REGISTERED_APARTMENT_CLAIMS =
   import.meta.env.VITE_REQUIRE_REGISTERED_APARTMENT_CLAIMS === "true";
@@ -12,9 +13,11 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const session = useSpacetimeSession();
   const [gpuError, setGpuError] = useState<string | null>(null);
+  const [fpSessionMounted, setFpSessionMounted] = useState(false);
 
   useEffect(() => {
     if (session.phase !== "ready" || !session.displayName) {
+      setFpSessionMounted(false);
       return;
     }
     const canvas = canvasRef.current;
@@ -24,6 +27,7 @@ export default function App() {
     let dispose: (() => void) | undefined;
     let cancelled = false;
     setGpuError(null);
+    setFpSessionMounted(false);
 
     fpLoadingDbgMark("react_app:canvas_mount_effect_run", {
       canvasW: canvas.clientWidth,
@@ -50,9 +54,11 @@ export default function App() {
           waitMs: Math.round(performance.now() - mountStartedAt),
         });
         dispose = d;
+        setFpSessionMounted(true);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
+        setFpSessionMounted(false);
         fpLoadingDbgMark("react_app:mount_fp_session_rejected", {
           waitMs: Math.round(performance.now() - mountStartedAt),
           message: e instanceof Error ? e.message : String(e),
@@ -61,6 +67,7 @@ export default function App() {
       });
     return () => {
       cancelled = true;
+      setFpSessionMounted(false);
       dispose?.();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- omit `session.conn`: identity churn remounts the FP session while phase+name unchanged
@@ -72,12 +79,18 @@ export default function App() {
 
   return (
     <>
+      {session.phase === "ready" &&
+      session.displayName &&
+      !gpuError &&
+      !fpSessionMounted ? (
+        <GameEnterSplash />
+      ) : null}
       {gpuError ? (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 20,
+            zIndex: 110,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -99,13 +112,23 @@ export default function App() {
       <canvas
         ref={canvasRef}
         data-mammoth-fp-canvas="1"
-        style={{ position: "fixed", inset: 0 }}
+        aria-hidden={!fpSessionMounted}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 0,
+          opacity: gpuError ? 1 : fpSessionMounted ? 1 : 0,
+          visibility: gpuError || fpSessionMounted ? "visible" : "hidden",
+          pointerEvents: fpSessionMounted ? "auto" : "none",
+        }}
       />
-      <HudShell
-        displayName={session.displayName}
-        onSignOut={session.signOut}
-        conn={session.conn}
-      />
+      {fpSessionMounted ? (
+        <HudShell
+          displayName={session.displayName}
+          onSignOut={session.signOut}
+          conn={session.conn}
+        />
+      ) : null}
     </>
   );
 }

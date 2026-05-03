@@ -4,6 +4,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 /** Scratch for {@link reattachPreservedMeshesWithSavedWorld} (avoid alloc per mesh). */
 const _mergePreserveParentInv = new THREE.Matrix4();
 const _mergePreserveLocal = new THREE.Matrix4();
+/** Scratch for world→group-local transform when cloning mesh geometry during merge gather. */
+const _mergeGatherLocal = new THREE.Matrix4();
 
 /**
  * `BufferGeometryUtils.mergeGeometries()` requires every geometry in a batch to agree on indexed vs
@@ -56,9 +58,10 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     if (!(obj instanceof THREE.Mesh)) return;
     const material = obj.material as THREE.Material;
     obj.updateWorldMatrix(true, false);
+    _mergeGatherLocal.multiplyMatrices(groupWorldInv, obj.matrixWorld);
     const geo = cloneGeometryForMerge(
       obj.geometry as THREE.BufferGeometry,
-      new THREE.Matrix4().multiplyMatrices(groupWorldInv, obj.matrixWorld),
+      _mergeGatherLocal,
     );
     const key = material.uuid;
     const isInterior = obj.userData.mammothUnitInterior === true;

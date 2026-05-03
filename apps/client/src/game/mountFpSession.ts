@@ -170,6 +170,17 @@ export async function mountFpSession(
 
   installMmWallProbeLoadingStub();
 
+  const {
+    building,
+    buildingRoot,
+    buildingBodyWorldBounds,
+    cellRoot,
+    staticCollisionIndex,
+    sampleWalkTopBase,
+    stairShaftInteriorLightBounds,
+    stairShaftSpecs,
+  } = await fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady());
+
   await fpLoadingDbgTimed("webgpu_adapter_assert", () => assertWebGpuAdapterOrThrow());
 
   const scene = new THREE.Scene();
@@ -192,6 +203,13 @@ export async function mountFpSession(
   scene.add(playerRig);
   void ensureStairwellCigaretteMeshReady();
 
+  scene.add(buildingRoot);
+  scene.add(cellRoot);
+  buildingRoot.updateMatrixWorld(true);
+  cellRoot.updateMatrixWorld(true);
+  const buildingWorldBounds = buildingBodyWorldBounds.clone();
+  const maxBuildingLevel = maxBuildingLevelIndex(building);
+
   const renderBootstrapFrame = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -205,23 +223,6 @@ export async function mountFpSession(
   fpLoadingDbgMark("fp_bootstrap_preview_before_webgpu_render");
   renderBootstrapFrame();
   fpLoadingDbgMark("fp_bootstrap_preview_after_webgpu_render");
-
-  const {
-    building,
-    buildingRoot,
-    buildingBodyWorldBounds,
-    cellRoot,
-    staticCollisionIndex,
-    sampleWalkTopBase,
-    stairShaftInteriorLightBounds,
-    stairShaftSpecs,
-  } = await fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady());
-  scene.add(buildingRoot);
-  scene.add(cellRoot);
-  buildingRoot.updateMatrixWorld(true);
-  cellRoot.updateMatrixWorld(true);
-  const buildingWorldBounds = buildingBodyWorldBounds.clone();
-  const maxBuildingLevel = maxBuildingLevelIndex(building);
 
   /**
    * Redraw once the megablock is parented — warms shaders/pipelines against real static geometry before

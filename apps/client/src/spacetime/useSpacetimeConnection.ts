@@ -4,6 +4,7 @@ import {
 } from "../game/fpSession/fpLoadingDebug.js";
 import {
   abandonMegablockStaticWorldMeshCache,
+  primeMegablockStaticWorldMeshBuild,
 } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import { clearOidcAccessToken, readOidcAccessToken } from "../auth/env";
 import {
@@ -159,6 +160,26 @@ export function useSpacetimeConnection(): SpacetimeSession {
       connectionKind,
     });
   }, [phase, displayName, connectionKind]);
+
+  /**
+   * Overlap megablock CPU with later baseline batches + React paint: `mountFpSession` usually waits
+   * on this promise shortly after `ready`, so priming once we know identity + name cuts wall-clock lag.
+   * Covers `connecting` (baseline still draining) **and** `ready` — some hydration paths skip `connecting`
+   * in one commit, canceling an in-flight deferred prime if we keyed only `connecting`.
+   * Idempotent; sign-out clears the shared cache promise.
+   */
+  useEffect(() => {
+    if (
+      !displayName ||
+      (phase !== "connecting" && phase !== "ready")
+    ) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      primeMegablockStaticWorldMeshBuild();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [phase, displayName]);
 
   useEffect(() => {
     let active = true;

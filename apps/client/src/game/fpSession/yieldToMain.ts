@@ -1,20 +1,12 @@
 /**
- * Yields so the browser can service input, paint, and timers between heavy synchronous batches.
- * Uses `scheduler.yield()` when present (Chrome Scheduler); otherwise rAF + microtask.
+ * Yields so the browser can service input, paint, I/O, and timers between heavy synchronous batches.
+ *
+ * Uses a **macrotask** (`setTimeout(0)`), not `requestAnimationFrame` (can pause in background tabs /
+ * stalled compositors) and not `scheduler.yield()` alone (we’ve seen runs where the world build’s
+ * yield loop never resumed while `fp_static_world_create` sat at `:start` with a black canvas).
  */
 export async function yieldToMain(): Promise<void> {
-  const scheduler = (
-    typeof globalThis !== "undefined"
-      ? (globalThis as unknown as { scheduler?: { yield?: () => Promise<void> } }).scheduler
-      : undefined
-  );
-  if (scheduler?.yield) {
-    await scheduler.yield();
-    return;
-  }
   await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => {
-      queueMicrotask(resolve);
-    });
+    setTimeout(resolve, 0);
   });
 }
