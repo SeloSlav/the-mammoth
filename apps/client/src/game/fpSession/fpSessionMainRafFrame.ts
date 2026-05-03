@@ -117,6 +117,8 @@ export type FpSessionMainRafState = {
   headLookYaw: number;
   crouchToggle: boolean;
   meleePressPending: boolean;
+  /** LMB held after a combat-committed pointerdown (cleared on up/cancel/blur / pointer-lock loss). */
+  primaryAttackHeld: boolean;
   fpRigViewSmoothedReady: boolean;
   lastTickElevSupportVyMps: number;
   lastTickHudCabVyMps: number;
@@ -262,7 +264,7 @@ export function createFpSessionMainRafFrame(
     deps.fpPlayerDamageBloodSquirt.tick(nowMs, dt);
 
     // Combat reducers (`submit_firearm_shot`, `submit_melee_swing`) read `player_active_hotbar` on
-    // the server. Sync selected slot before resolving `meleePressPending` so a click right after a
+    // the server. Sync selected slot before resolving primary attack so a click right after a
     // scroll / slot change cannot outrun `set_active_hotbar_slot` (previously synced at frame end).
     deps.syncActiveHotbarSlotToServer();
 
@@ -285,49 +287,51 @@ export function createFpSessionMainRafFrame(
       );
     };
 
-    if (mainRaf.meleePressPending) {
-      mainRaf.meleePressPending = false;
-      const hb = deps.selectedHotbarRow();
-      if (
-        hb &&
-        deps.conn.identity &&
-        hotbarDefIdSupportsRangedAttack(hb.defId) &&
-        nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
-      ) {
-        if (localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hb.defId)) {
-          mainRaf.lastRangedMs = nowMs;
-          mainRaf.firearmShotSeq += 1;
-          deps.camera.updateMatrixWorld(true);
-          deps.camera.getWorldDirection(deps._aimShotWorldDir);
-          flushCombatFacingIntent();
-          void deps.conn.reducers.submitFirearmShot({
-            aimDirX: deps._aimShotWorldDir.x,
-            aimDirY: deps._aimShotWorldDir.y,
-            aimDirZ: deps._aimShotWorldDir.z,
-          });
-          deps.fpFirearmImpactDecals.spawnForShot({
-            nowMs,
-            camera: deps.camera,
-            aimWorldDir: deps._aimShotWorldDir,
-            heldItemId: hb.defId as HeldItemId,
-            shotSeq: mainRaf.firearmShotSeq,
-          });
-        } else {
-          mainRaf.lastRangedMs = nowMs;
-          deps.localAudio.playFirearmDryFireLocal();
-        }
-      } else if (
-        hb &&
-        hotbarDefIdSupportsMeleeAttack(hb.defId) &&
-        nowMs - mainRaf.lastMeleeMs >= MELEE_COOLDOWN_MS
-      ) {
-        mainRaf.lastMeleeMs = nowMs;
-        mainRaf.meleeAttackSeq += 1;
-        deps.localAudio.playMeleeWeaponSwingLocal();
-        if (deps.conn.identity) {
-          flushCombatFacingIntent();
-          void deps.conn.reducers.submitMeleeSwing({});
-        }
+    const primaryPressEdge = mainRaf.meleePressPending;
+    if (mainRaf.meleePressPending) mainRaf.meleePressPending = false;
+    const hbCombat = deps.selectedHotbarRow();
+
+    if (
+      primaryPressEdge &&
+      hbCombat &&
+      deps.conn.identity &&
+      hotbarDefIdSupportsRangedAttack(hbCombat.defId) &&
+      nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
+    ) {
+      if (localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hbCombat.defId)) {
+        mainRaf.lastRangedMs = nowMs;
+        mainRaf.firearmShotSeq += 1;
+        deps.camera.updateMatrixWorld(true);
+        deps.camera.getWorldDirection(deps._aimShotWorldDir);
+        flushCombatFacingIntent();
+        void deps.conn.reducers.submitFirearmShot({
+          aimDirX: deps._aimShotWorldDir.x,
+          aimDirY: deps._aimShotWorldDir.y,
+          aimDirZ: deps._aimShotWorldDir.z,
+        });
+        deps.fpFirearmImpactDecals.spawnForShot({
+          nowMs,
+          camera: deps.camera,
+          aimWorldDir: deps._aimShotWorldDir,
+          heldItemId: hbCombat.defId as HeldItemId,
+          shotSeq: mainRaf.firearmShotSeq,
+        });
+      } else {
+        mainRaf.lastRangedMs = nowMs;
+        deps.localAudio.playFirearmDryFireLocal();
+      }
+    } else if (
+      (primaryPressEdge || mainRaf.primaryAttackHeld) &&
+      hbCombat &&
+      hotbarDefIdSupportsMeleeAttack(hbCombat.defId) &&
+      nowMs - mainRaf.lastMeleeMs >= MELEE_COOLDOWN_MS
+    ) {
+      mainRaf.lastMeleeMs = nowMs;
+      mainRaf.meleeAttackSeq += 1;
+      deps.localAudio.playMeleeWeaponSwingLocal();
+      if (deps.conn.identity) {
+        flushCombatFacingIntent();
+        void deps.conn.reducers.submitMeleeSwing({});
       }
     }
 
@@ -622,7 +626,11 @@ export function createFpSessionMainRafFrame(
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---
-    deps.presentation.update(dt, localState, deps._remoteSnapshots, nowMs);
+    deps.presentation.update(dt, localState, deps._remoteSnapshots, nowMs, {
+      cameraX: deps._floorVisCamWorld.x,
+      cameraY: deps._floorVisCamWorld.y,
+      cameraZ: deps._floorVisCamWorld.z,
+    });
     deps.hotbarConsumableVisual.syncSelected(
       hotbarConsumableDefId,
       deps.presentation.getLocalFpGripAnchorObject(),

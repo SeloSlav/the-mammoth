@@ -3,7 +3,14 @@ import type { LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-ma
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
+import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
 import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
+
+/**
+ * Nearest N other players keep the full skinned `male.glb`; everyone else uses a shared-material
+ * primitive (~36 tris / 6 draws) so crowds stay inside a sane GPU budget.
+ */
+export const REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST = 6;
 
 const REMOTE_PLAYER_MODEL_URI = "/static/models/players/male.glb";
 const REMOTE_PLAYER_YAW_OFFSET_RAD = Math.PI;
@@ -22,6 +29,11 @@ const REMOTE_PLAYER_CLIP_NAMES = {
   run: "Running",
   jump: "Regular_Jump",
 } as const satisfies Record<PlayerBodyClipName, string>;
+/**
+ * Bind-pose bounds sit inside locomotion extremes; inflate the frustum sphere so culling stays on
+ * without clipping animated limbs (avoids `frustumCulled = false`, which submits every remote every frame).
+ */
+const REMOTE_PLAYER_FRUSTUM_SPHERE_RADIUS_MUL = 1.45;
 
 const remotePlayerLoader = new GLTFLoader();
 let remotePlayerTemplatePromise:
@@ -47,10 +59,16 @@ function cloneRemotePlayerScene(template: THREE.Object3D): THREE.Object3D {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
+    /** FP session lighting is unshadowed; skip shadow flags so a future `castShadow` sun cannot multiply skinned cost. */
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
     mesh.geometry = mesh.geometry.clone();
+    mesh.geometry.computeBoundingSphere();
+    const bs = mesh.geometry.boundingSphere;
+    if (bs) {
+      bs.radius *= REMOTE_PLAYER_FRUSTUM_SPHERE_RADIUS_MUL;
+    }
+    mesh.frustumCulled = true;
     const mat = mesh.material;
     mesh.material = Array.isArray(mat)
       ? mat.map((entry) => tuneRemotePlayerMaterial(entry.clone()))
@@ -78,6 +96,20 @@ function tuneRemotePlayerMaterial<T extends THREE.Material>(material: T): T {
   }
   return material;
 }
+
+/** One skin + one cloth material for every low-LOD remote — avoids N× material instances in crowds. */
+const remoteCrowdLodSkinMat = new THREE.MeshStandardMaterial({
+  color: 0x9f7a6b,
+  roughness: 0.72,
+  metalness: 0.06,
+});
+const remoteCrowdLodClothMat = new THREE.MeshStandardMaterial({
+  color: 0x4a5568,
+  roughness: 0.78,
+  metalness: 0.05,
+});
+tuneRemotePlayerMaterial(remoteCrowdLodSkinMat);
+tuneRemotePlayerMaterial(remoteCrowdLodClothMat);
 
 function normalizeRemotePlayerModel(model: THREE.Object3D): void {
   /**
@@ -208,9 +240,15 @@ class AnimatedRemotePlayerBody {
     this.root.visible = visible;
   }
 
-  syncTransform(position: { x: number; y: number; z: number }, yawRad: number): void {
-    this.root.position.set(position.x, position.y, position.z);
-    this.root.rotation.y = yawRad + REMOTE_PLAYER_YAW_OFFSET_RAD;
+  /** Low-LOD path: hide skinned branch and stop mixer work. */
+  freezeForLodLo(): void {
+    this.mixer.stopAllAction();
+    this.activeClip = null;
+  }
+
+  /** After showing the skinned body again, restart from a stable idle pose. */
+  resumeAfterLodHi(): void {
+    this.playClip("idle", true);
   }
 
   updateMotion(args: { grounded: boolean; locomotion: ReplicatedPlayerSnapshot["locomotion"] }, dt: number): void {
@@ -266,13 +304,44 @@ type BodyPose = {
 class WorldPlayerBodyPresenter {
   readonly root: THREE.Group;
   private readonly body: AnimatedRemotePlayerBody;
+  private readonly highBranch: THREE.Group;
+  private readonly lowBranch: THREE.Group;
+  private readonly crowdLod: boolean;
+  private crowdLodHighActive = false;
   private readonly nameTag: THREE.Sprite | null = null;
   private readonly nameTagMaterial: THREE.SpriteMaterial | null = null;
   private nameTagText = "";
 
-  constructor(scene: THREE.Scene, opts: { showNameTag: boolean }) {
+  constructor(scene: THREE.Scene, opts: { showNameTag: boolean; crowdLod: boolean }) {
+    this.crowdLod = opts.crowdLod;
+    this.root = new THREE.Group();
+    this.root.name = "remote_player_world_root";
+
+    this.highBranch = new THREE.Group();
+    this.highBranch.name = "remote_player_high_lod_branch";
+
     this.body = new AnimatedRemotePlayerBody(getRemotePlayerTemplate());
-    this.root = this.body.root;
+    this.highBranch.add(this.body.root);
+
+    this.lowBranch = new THREE.Group();
+    this.lowBranch.name = "remote_player_low_lod_branch";
+    if (opts.crowdLod) {
+      const prim = buildPrimitiveHumanoid({
+        sharedMaterials: { skin: remoteCrowdLodSkinMat, cloth: remoteCrowdLodClothMat },
+        castShadow: false,
+      });
+      prim.root.name = "remote_player_primitive_body";
+      prim.root.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.frustumCulled = true;
+        }
+      });
+      this.lowBranch.add(prim.root);
+    }
+
+    this.root.add(this.highBranch);
+    this.root.add(this.lowBranch);
+
     if (opts.showNameTag) {
       this.nameTagMaterial = new THREE.SpriteMaterial({
         transparent: true,
@@ -288,17 +357,57 @@ class WorldPlayerBodyPresenter {
       this.nameTag.renderOrder = 2000;
       this.root.add(this.nameTag);
     }
+
+    if (opts.crowdLod) {
+      this.crowdLodHighActive = false;
+      this.highBranch.visible = false;
+      this.lowBranch.visible = true;
+      this.body.freezeForLodLo();
+    } else {
+      this.crowdLodHighActive = true;
+      this.highBranch.visible = true;
+      this.lowBranch.visible = false;
+    }
+
     scene.add(this.root);
   }
 
+  /**
+   * When `crowdLod` is false (local mirror), this is a no-op — skinned body stays on.
+   * Otherwise toggles skinned GLB vs shared primitive + freezes/resumes the animation mixer.
+   */
+  setDetailLevel(wantSkinnedGlb: boolean): void {
+    if (!this.crowdLod) {
+      this.highBranch.visible = true;
+      this.lowBranch.visible = false;
+      return;
+    }
+    if (wantSkinnedGlb === this.crowdLodHighActive) return;
+    this.crowdLodHighActive = wantSkinnedGlb;
+    this.highBranch.visible = wantSkinnedGlb;
+    this.lowBranch.visible = !wantSkinnedGlb;
+    if (wantSkinnedGlb) {
+      this.body.resumeAfterLodHi();
+    } else {
+      this.body.freezeForLodLo();
+    }
+  }
+
+  private applyWorldFromPose(pose: BodyPose): void {
+    this.root.position.set(pose.position.x, pose.position.y, pose.position.z);
+    this.root.rotation.y = pose.yawRad + REMOTE_PLAYER_YAW_OFFSET_RAD;
+  }
+
   updateFromPose(pose: BodyPose, dt: number): void {
-    this.body.syncTransform(pose.position, pose.yawRad);
-    this.body.updateMotion({ grounded: pose.grounded, locomotion: pose.locomotion }, dt);
+    this.applyWorldFromPose(pose);
+    if (!this.crowdLod || this.crowdLodHighActive) {
+      this.body.updateMotion({ grounded: pose.grounded, locomotion: pose.locomotion }, dt);
+    }
     this.setNameTagText(pose.displayName ?? "Guest");
   }
 
   setVisible(visible: boolean): void {
-    this.body.setVisible(visible);
+    this.root.visible = visible;
   }
 
   dispose(scene: THREE.Scene): void {
@@ -306,6 +415,13 @@ class WorldPlayerBodyPresenter {
     this.nameTagMaterial?.map?.dispose();
     this.nameTagMaterial?.dispose();
     this.body.dispose();
+    if (this.crowdLod) {
+      this.lowBranch.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.geometry.dispose();
+        }
+      });
+    }
   }
 
   private setNameTagText(displayName: string): void {
@@ -325,8 +441,16 @@ export class RemotePlayerPresenter {
   private readonly presenter: WorldPlayerBodyPresenter;
 
   constructor(scene: THREE.Scene) {
-    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true });
+    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true, crowdLod: true });
     this.root = this.presenter.root;
+  }
+
+  /**
+   * Nearest peers should pass true (skinned GLB); everyone else false (primitive).
+   * No-op cost when the value is unchanged.
+   */
+  setRemoteCrowdDetail(wantSkinnedGlb: boolean): void {
+    this.presenter.setDetailLevel(wantSkinnedGlb);
   }
 
   updateFromSnapshot(snap: ReplicatedPlayerSnapshot, dt: number, nowMs: number): void {
@@ -354,7 +478,7 @@ export class LocalMirrorPlayerPresenter {
   private readonly mirrorPosition = new THREE.Vector3();
 
   constructor(scene: THREE.Scene) {
-    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: false });
+    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: false, crowdLod: false });
     this.root = this.presenter.root;
     this.presenter.setVisible(false);
   }

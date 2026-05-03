@@ -8,7 +8,8 @@
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@the-mammoth/assets": "workspace:*",
@@ -23,6 +24,7 @@
     "@types/three": "^0.183.1",
     "eslint": "^9.39.4",
     "three": "^0.183.2",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^4.1.3"
   }
 }

@@ -37,6 +37,13 @@ const VIS_BAND_NARROW_STOREYS_PER_FRAME = 1;
 /** Widening shows plates — slightly faster so shaft views fill in promptly. */
 const VIS_BAND_EXPAND_STOREYS_PER_FRAME = 3;
 
+/**
+ * Hard snap the smoothed storey band when feet jump (respawn, long vertical move) so we do not keep
+ * submitting dozens of stale plates while easing 1–3 storeys/frame from the old span.
+ */
+const FP_FLOOR_VIS_TELEPORT_SNAP_DY_M = 12;
+const FP_FLOOR_VIS_TELEPORT_SNAP_DXZ_M = 48;
+
 /** Keep heavy stairwell detail close; architecture still uses the wider stair column band. */
 const STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER = 1;
 const STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER = 2;
@@ -157,6 +164,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastStairDetailHi = -999;
   let _visBandSmoothLo = -999;
   let _visBandSmoothHi = -999;
+  let _lastVisFeetSampleX = Number.NaN;
+  let _lastVisFeetSampleY = Number.NaN;
+  let _lastVisFeetSampleZ = Number.NaN;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
   let _lastApartmentFurnitureInteriorVisible = true;
@@ -271,7 +281,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         ch.visible = cameraOutsideBuilding;
       }
     }
-    if (cameraOutsideBuilding && (!feetOnBuildingSlab || playerStorey <= 1)) {
+    /**
+     * Full-stack reveal only for true exteriors (feet off the raw slab): the old
+     * `|| playerStorey <= 1` arm forced the entire merged tower for essentially every ground-floor
+     * respawn whenever the camera sat just outside the 6 m footprint inset — thousands of draws.
+     */
+    if (cameraOutsideBuilding && !feetOnBuildingSlab) {
       band = { lo: 1, hi: maxBuildingLevel };
     }
     if (cabOccludesWorld) {
@@ -312,7 +327,21 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
 
     const targetBandLo = band.lo;
     const targetBandHi = band.hi;
-    if (_visBandSmoothLo < 0) {
+
+    const hadFeetSample =
+      Number.isFinite(_lastVisFeetSampleX) &&
+      Number.isFinite(_lastVisFeetSampleY) &&
+      Number.isFinite(_lastVisFeetSampleZ);
+    const teleportSnap =
+      hadFeetSample &&
+      (Math.abs(feetPos.y - _lastVisFeetSampleY) > FP_FLOOR_VIS_TELEPORT_SNAP_DY_M ||
+        Math.hypot(feetPos.x - _lastVisFeetSampleX, feetPos.z - _lastVisFeetSampleZ) >
+          FP_FLOOR_VIS_TELEPORT_SNAP_DXZ_M);
+    _lastVisFeetSampleX = feetPos.x;
+    _lastVisFeetSampleY = feetPos.y;
+    _lastVisFeetSampleZ = feetPos.z;
+
+    if (_visBandSmoothLo < 0 || teleportSnap) {
       _visBandSmoothLo = targetBandLo;
       _visBandSmoothHi = targetBandHi;
     } else {

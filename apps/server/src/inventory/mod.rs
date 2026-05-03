@@ -449,6 +449,11 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
         return;
     }
 
+    if player_vitals::is_player_dead(ctx, sender) {
+        log::debug!("consume_hotbar_item: dead players cannot consume");
+        return;
+    }
+
     if let Some(mut rail) = ctx.db.player_active_hotbar().identity().find(&sender) {
         if rail.slot_index != ACTIVE_HOTBAR_SLOT_CLEARED {
             rail.slot_index = ACTIVE_HOTBAR_SLOT_CLEARED;

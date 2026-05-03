@@ -81,7 +81,9 @@ pub(crate) fn step_vitals_once(
     hy = clamp_vital(hy - hydration_rate * dt_secs);
 
     let comfort = VITAL_MAX * NEED_COMFORT_FRAC;
-    if hu >= comfort && hy >= comfort && h < VITAL_MAX {
+    // Dead players must not passively regen — otherwise `player_vitals_tick_step` resurrects them
+    // every few seconds while hunger/hydration are comfortable, and the respawn overlay flickers off.
+    if h > 0.0 && hu >= comfort && hy >= comfort && h < VITAL_MAX {
         h = clamp_vital(h + HEALTH_REGEN_PER_SEC * dt_secs);
     }
 

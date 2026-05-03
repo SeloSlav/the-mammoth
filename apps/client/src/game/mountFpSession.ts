@@ -497,6 +497,7 @@ export async function mountFpSession(
     headLookYaw: 0,
     crouchToggle: false,
     meleePressPending: false,
+    primaryAttackHeld: false,
     fpRigViewSmoothedReady: false,
     lastTickElevSupportVyMps: 0,
     lastTickHudCabVyMps: 0,
@@ -670,6 +671,8 @@ export async function mountFpSession(
   const resetTransientInputState = () => {
     commitFreeLookIntoBodyYaw();
     keys.clear();
+    mainRaf.meleePressPending = false;
+    mainRaf.primaryAttackHeld = false;
   };
 
   const onWindowBlur = () => {
@@ -690,6 +693,8 @@ export async function mountFpSession(
   const onPointerLockChange = () => {
     if (document.pointerLockElement !== canvas) {
       commitFreeLookIntoBodyYaw();
+      mainRaf.meleePressPending = false;
+      mainRaf.primaryAttackHeld = false;
     }
   };
 
@@ -1075,12 +1080,21 @@ export async function mountFpSession(
       return;
     }
     mainRaf.meleePressPending = true;
+    mainRaf.primaryAttackHeld = true;
+  };
+
+  const onPrimaryPointerUpOrCancel = (e: PointerEvent) => {
+    if (e.type === "pointercancel" || (e.isPrimary && e.button === 0)) {
+      mainRaf.primaryAttackHeld = false;
+    }
   };
 
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("wheel", onWheelHotbar, { passive: false });
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("pointerup", onPrimaryPointerUpOrCancel);
+  window.addEventListener("pointercancel", onPrimaryPointerUpOrCancel);
   window.addEventListener("blur", onWindowBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
   document.addEventListener("pointerlockchange", onPointerLockChange);
@@ -1205,6 +1219,8 @@ export async function mountFpSession(
     window.removeEventListener("wheel", onWheelHotbar);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("pointerup", onPrimaryPointerUpOrCancel);
+    window.removeEventListener("pointercancel", onPrimaryPointerUpOrCancel);
     window.removeEventListener("blur", onWindowBlur);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     document.removeEventListener("pointerlockchange", onPointerLockChange);

@@ -16,9 +16,17 @@ import {
   LocalMirrorPlayerPresenter,
   preloadRemotePlayerBody,
   RemotePlayerPresenter,
+  REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
 } from "./remote/RemotePlayerPresenter.js";
 import { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
 import type { MeleeCombatVisualSink } from "./combatVisuals.js";
+import { remoteIdsForTopKFullDetail, sortRemoteCrowdRankInPlace } from "./remoteCrowdLod.js";
+
+export type RemotePresentationLodCamera = {
+  cameraX: number;
+  cameraY: number;
+  cameraZ: number;
+};
 
 export type PlayerPresentationManagerOptions = {
   scene: THREE.Scene;
@@ -29,6 +37,11 @@ export type PlayerPresentationManagerOptions = {
   onMeleeVisual?: MeleeCombatVisualSink;
   /** First equipped weapon for FP viewmodel (defaults to unarmed / hands only). */
   initialEquippedPrimary?: HeldItemId;
+  /**
+   * Nearest N remotes use the full skinned GLB; the rest are instanced-ish primitives (~36 tris each).
+   * Default {@link REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST}.
+   */
+  maxFullDetailRemoteBodies?: number;
 };
 
 /**
@@ -41,6 +54,9 @@ export class PlayerPresentationManager {
   private readonly local: LocalFirstPersonPresenter;
   private readonly localMirror: LocalMirrorPlayerPresenter;
   private readonly remotes = new Map<string, RemotePlayerPresenter>();
+  private readonly maxFullDetailRemoteBodies: number;
+  /** Reused each `update()` for crowd LOD ranking — avoids per-frame allocs. */
+  private readonly _remoteLodRankScratch: { id: string; distSq: number }[] = [];
   /** Equip id currently shown on the local FP weapon mesh (may trail gameplay by a frame while a GLB loads). */
   private lastAppliedLocalWeaponVisualEquip: HeldItemId;
   private latestDesiredLocalEquip: HeldItemId;
@@ -55,6 +71,7 @@ export class PlayerPresentationManager {
     local: LocalFirstPersonPresenter,
     localMirror: LocalMirrorPlayerPresenter,
     initialEquipped: HeldItemId,
+    maxFullDetailRemoteBodies: number,
   ) {
     this.scene = scene;
     this.modelRegistry = modelRegistry;
@@ -62,6 +79,7 @@ export class PlayerPresentationManager {
     this.localMirror = localMirror;
     this.lastAppliedLocalWeaponVisualEquip = initialEquipped;
     this.latestDesiredLocalEquip = initialEquipped;
+    this.maxFullDetailRemoteBodies = maxFullDetailRemoteBodies;
   }
 
   /**
@@ -94,12 +112,15 @@ export class PlayerPresentationManager {
     });
     await local.initViewmodel();
     const localMirror = new LocalMirrorPlayerPresenter(opts.scene);
+    const maxFullDetail =
+      opts.maxFullDetailRemoteBodies ?? REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST;
     return new PlayerPresentationManager(
       opts.scene,
       modelRegistry,
       local,
       localMirror,
       initialEquipped,
+      maxFullDetail,
     );
   }
 
@@ -108,6 +129,7 @@ export class PlayerPresentationManager {
     localState: LocalPlayerGameplayState,
     remoteSnapshots: ReadonlyMap<string, ReplicatedPlayerSnapshot>,
     nowMs: number,
+    remoteLod?: RemotePresentationLodCamera,
   ): void {
     this.latestDesiredLocalEquip = localState.equippedPrimary;
     if (
@@ -122,12 +144,36 @@ export class PlayerPresentationManager {
     this.local.update(localState, dt);
     this.localMirror.updateFromLocalState(localState, dt);
     this._keepIds.clear();
+
+    let fullDetailRemotes: Set<string> | null = null;
+    if (remoteLod && remoteSnapshots.size > 0) {
+      const camX = remoteLod.cameraX;
+      const camY = remoteLod.cameraY;
+      const camZ = remoteLod.cameraZ;
+      const rank = this._remoteLodRankScratch;
+      rank.length = 0;
+      for (const [id, snap] of remoteSnapshots) {
+        const p = snap.worldPosition;
+        const dx = p.x - camX;
+        const dy = p.y - camY;
+        const dz = p.z - camZ;
+        rank.push({ id, distSq: dx * dx + dy * dy + dz * dz });
+      }
+      sortRemoteCrowdRankInPlace(rank);
+      fullDetailRemotes = remoteIdsForTopKFullDetail(rank, this.maxFullDetailRemoteBodies);
+    }
+
     for (const [id, snap] of remoteSnapshots) {
       this._keepIds.add(id);
       let rp = this.remotes.get(id);
       if (!rp) {
         rp = new RemotePlayerPresenter(this.scene);
         this.remotes.set(id, rp);
+      }
+      if (fullDetailRemotes) {
+        rp.setRemoteCrowdDetail(fullDetailRemotes.has(id));
+      } else {
+        rp.setRemoteCrowdDetail(true);
       }
       rp.updateFromSnapshot(snap, dt, nowMs);
     }

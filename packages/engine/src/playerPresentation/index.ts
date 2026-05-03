@@ -1,4 +1,8 @@
-export { PlayerPresentationManager, type PlayerPresentationManagerOptions } from "./PlayerPresentationManager.js";
+export {
+  PlayerPresentationManager,
+  type PlayerPresentationManagerOptions,
+  type RemotePresentationLodCamera,
+} from "./PlayerPresentationManager.js";
 export {
   FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
   LocalFirstPersonPresenter,
@@ -9,6 +13,7 @@ export {
   LocalMirrorPlayerPresenter,
   preloadRemotePlayerBody,
   RemotePlayerPresenter,
+  REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
 } from "./remote/RemotePlayerPresenter.js";
 export { buildPrimitiveHumanoid, type PrimitiveHumanoidParts } from "./primitiveHumanoid.js";
 export { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
