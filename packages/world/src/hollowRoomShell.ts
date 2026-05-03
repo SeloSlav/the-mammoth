@@ -411,9 +411,20 @@ export function addHollowRoomShell(
   const usableZ = vlenZ - 0.14;
   const usableX = vlenX - 0.14;
   const czList = lobbyDoorCentersAlong(usableZ);
+  /**
+   * East ground façade shares the stairwell side of the plan. After trimming the far north/south
+   * wings, the two outer lobby bays sit behind stairwell wall mass, so only keep the central pair.
+   */
+  const czListEast = czList.length > 2 ? czList.slice(1, -1) : czList;
   /** N/S façades are the narrow ends of the double-loaded bar — fewer bays than the long E/W spine. */
   const cxList = lobbyDoorCentersAlong(usableX, 2);
-  const lobbyHolesEw: WallHoleYZ[] = czList.map((zc) => ({
+  const lobbyHolesE: WallHoleYZ[] = czListEast.map((zc) => ({
+    z0: zc - halfDoor,
+    z1: zc + halfDoor,
+    y0: yDoor0,
+    y1: yDoor1,
+  }));
+  const lobbyHolesW: WallHoleYZ[] = czList.map((zc) => ({
     z0: zc - halfDoor,
     z1: zc + halfDoor,
     y0: yDoor0,
@@ -425,8 +436,8 @@ export function addHollowRoomShell(
     y0: yDoor0,
     y1: yDoor1,
   }));
-  const holesWallE: WallHoleYZ[] = [...lobbyHolesEw, ...(cw?.e ?? [])];
-  const holesWallW: WallHoleYZ[] = [...lobbyHolesEw, ...(cw?.w ?? [])];
+  const holesWallE: WallHoleYZ[] = [...lobbyHolesE, ...(cw?.e ?? [])];
+  const holesWallW: WallHoleYZ[] = [...lobbyHolesW, ...(cw?.w ?? [])];
   const holesWallN: WallHoleXY[] = [...lobbyHolesNs, ...(cw?.n ?? [])];
   const holesWallS: WallHoleXY[] = [...lobbyHolesNs, ...(cw?.s ?? [])];
   const xE = hx - wt * 0.5;
@@ -508,7 +519,7 @@ export function addHollowRoomShell(
   const extN = exteriorFaces.includes("n");
   const extS = exteriorFaces.includes("s");
   let fi = 0;
-  for (const zc of czList) {
+  for (const zc of czListEast) {
     const z0 = zc - halfDoor;
     const z1 = zc + halfDoor;
     if (!extE) {
@@ -524,6 +535,12 @@ export function addHollowRoomShell(
         `shell_lobby_frame_e_${fi}`,
       );
     }
+    fi += 1;
+  }
+  let fwi = 0;
+  for (const zc of czList) {
+    const z0 = zc - halfDoor;
+    const z1 = zc + halfDoor;
     if (!extW) {
       addDoorFrameTrimConstantX(
         group,
@@ -534,10 +551,10 @@ export function addHollowRoomShell(
         z1,
         yDoor0,
         yDoor1,
-        `shell_lobby_frame_w_${fi}`,
+        `shell_lobby_frame_w_${fwi}`,
       );
     }
-    fi += 1;
+    fwi += 1;
   }
   let fj = 0;
   for (const xc of cxList) {
@@ -575,7 +592,7 @@ export function addHollowRoomShell(
   const lobbyExteriorCladT = 0.035;
   const extFrameM = mat.lobbyDoorFrameExterior;
   let fxi = 0;
-  for (const zc of czList) {
+  for (const zc of czListEast) {
     const z0 = zc - halfDoor;
     const z1 = zc + halfDoor;
     if (extE) {
@@ -591,6 +608,12 @@ export function addHollowRoomShell(
         `shell_lobby_frame_ext_e_${fxi}`,
       );
     }
+    fxi += 1;
+  }
+  let fxwi = 0;
+  for (const zc of czList) {
+    const z0 = zc - halfDoor;
+    const z1 = zc + halfDoor;
     if (extW) {
       addDoorFrameTrimConstantX(
         group,
@@ -601,10 +624,10 @@ export function addHollowRoomShell(
         z1,
         yDoor0,
         yDoor1,
-        `shell_lobby_frame_ext_w_${fxi}`,
+        `shell_lobby_frame_ext_w_${fxwi}`,
       );
     }
-    fxi += 1;
+    fxwi += 1;
   }
   let fxj = 0;
   for (const xc of cxList) {

@@ -27,6 +27,32 @@ describe("classifyPrefab", () => {
     expect(classifyPrefab("UNIT_br")).toBe("unit");
   });
 
+  it("keeps only central east lobby exterior doors", () => {
+    const root = buildFloorMeshes(
+      {
+        id: "floor_lobby_east_doors",
+        version: 1,
+        objects: [
+          {
+            id: "lobby_main_ns",
+            prefabId: "lobby_hall_a",
+            position: [0, 1.605, 0],
+            scale: [21.85, 3.05, 159.5],
+          },
+        ],
+      },
+      { storyLevelIndex: 1 },
+    );
+
+    const names: string[] = [];
+    root.traverse((obj) => {
+      if (obj.name.startsWith("shell_lobby_frame_ext_")) names.push(obj.name);
+    });
+    // Three trim meshes per door: two jambs and one lintel.
+    expect(names.filter((n) => n.startsWith("shell_lobby_frame_ext_e_"))).toHaveLength(6);
+    expect(names.filter((n) => n.startsWith("shell_lobby_frame_ext_w_"))).toHaveLength(12);
+  });
+
   it("classifies stair and elevator cores", () => {
     expect(classifyPrefab("stair_core")).toBe("core");
     expect(classifyPrefab("elevator_bank")).toBe("core");
