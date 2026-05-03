@@ -17,4 +17,8 @@ export type ReplicatedPlayerSnapshot = {
   grounded: boolean;
   locomotion: LocomotionPresentation;
   equippedPrimary: HeldItemId;
+  /** Advances on each authoritative `submit_melee_swing` that emits (server `player_pose.melee_presentation_seq`). */
+  meleePresentationSeq: number;
+  /** Advances on each accepted `submit_firearm_shot` (`player_pose.firearm_presentation_seq`). */
+  firearmPresentationSeq: number;
 };

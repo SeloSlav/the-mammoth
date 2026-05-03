@@ -4,6 +4,9 @@ import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
 import type { InventoryItem } from "../../module_bindings/types";
 
+/** Matches `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
+export const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
+
 /** Keep ammo pairing aligned with `apps/server/src/firearm.rs` (`ammo_def_for_weapon`). */
 const FIREARM_AMMO_DEF_BY_WEAPON: Readonly<Record<string, string>> = {
   pistol: "ammo-9mm",

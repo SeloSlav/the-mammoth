@@ -411,6 +411,8 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         })
     })
 }

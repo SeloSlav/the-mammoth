@@ -243,6 +243,8 @@ export const PlayerPose = __t.object("PlayerPose", {
   velY: __t.f32(),
   velZ: __t.f32(),
   grounded: __t.u8(),
+  meleePresentationSeq: __t.u32(),
+  firearmPresentationSeq: __t.u32(),
 });
 export type PlayerPose = __Infer<typeof PlayerPose>;
 

@@ -1,10 +1,19 @@
 import * as THREE from "three";
-import type { LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
+import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
 import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
 import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
+import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
+import { getWeaponDefinitionForEquippedPrimary } from "../../weapons/weaponRegistry.js";
+import {
+  fpFirearmShotVisualConfigForHeldItem,
+  sampleFpFirearmShotVisual,
+  type FpFirearmShotVisualConfig,
+} from "../local/fpFirearmShotVisuals.js";
+import { FP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
 
 /**
  * Nearest N other players keep the full skinned `male.glb`; everyone else uses a shared-material
@@ -29,11 +38,26 @@ const REMOTE_PLAYER_CLIP_NAMES = {
   run: "Running",
   jump: "Regular_Jump",
 } as const satisfies Record<PlayerBodyClipName, string>;
+
+const REMOTE_TP_MUZZLE_FLASH_COLOR = 0xffc46b;
 /**
  * Bind-pose bounds sit inside locomotion extremes; inflate the frustum sphere so culling stays on
  * without clipping animated limbs (avoids `frustumCulled = false`, which submits every remote every frame).
  */
 const REMOTE_PLAYER_FRUSTUM_SPHERE_RADIUS_MUL = 1.45;
+
+function expectGltfModelRef(ref: ModelRef): Extract<ModelRef, { kind: "gltf" }> {
+  if (ref.kind !== "gltf") throw new Error("[RemotePlayerPresenter] weapon asset must be glTF");
+  return ref;
+}
+
+/**
+ * Approximate third-person wield point in **{@link WorldPlayerBodyPresenter}'s scene root space**
+ * (feet yaw pivot). Floated deliberately — skips skinned LOD / bone quirks; matches “good enough”
+ * mirror-adjacent read at all crowd detail levels.
+ */
+const REMOTE_WEAPON_FLOAT_LOCAL_POS = new THREE.Vector3(0.28, 1.06, 0.12);
+const REMOTE_WEAPON_FLOAT_LOCAL_EULER = new THREE.Euler(0.12, -0.42, -0.14, "XYZ");
 
 const remotePlayerLoader = new GLTFLoader();
 let remotePlayerTemplatePromise:
@@ -293,6 +317,185 @@ export async function preloadRemotePlayerBody(): Promise<void> {
   remotePlayerTemplate = await remotePlayerTemplatePromise;
 }
 
+/** Third-person weapon + swing + muzzle flash replicated from {@link ReplicatedPlayerSnapshot}. */
+class RemoteHeldWeaponPresentation {
+  private readonly modelRegistry: IModelLoadRegistry;
+  private readonly weaponMount = new THREE.Group();
+  private weapon?: WeaponPresenter;
+  private visEquipped: HeldItemId = "unarmed";
+  private lastMeleeSeq = 0;
+  private meleeElapsedS = Number.POSITIVE_INFINITY;
+  private lastFireSeq = 0;
+  private shotCfg: FpFirearmShotVisualConfig | null = null;
+  private shotElapsedS = Number.POSITIVE_INFINITY;
+  private readonly flashRoot = new THREE.Group();
+  private readonly flashMesh: THREE.Mesh;
+
+  constructor(modelRegistry: IModelLoadRegistry) {
+    this.modelRegistry = modelRegistry;
+    const flashGeom = new THREE.PlaneGeometry(1, 1);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: REMOTE_TP_MUZZLE_FLASH_COLOR,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    this.flashMesh = new THREE.Mesh(flashGeom, flashMat);
+    this.flashMesh.name = "remote_muzzle_flash_quad";
+    this.flashRoot.name = "remote_muzzle_flash_root";
+    this.flashRoot.add(this.flashMesh);
+    this.flashRoot.visible = false;
+    this.weaponMount.name = "remote_weapon_mount";
+    this.weaponMount.visible = false;
+  }
+
+  dispose(): void {
+    this.teardownMountedWeapon();
+    this.flashMesh.geometry.dispose();
+    (this.flashMesh.material as THREE.Material).dispose();
+  }
+
+  /** Drop the GLB weapon (keeps the shared muzzle quad alive for the next mount). */
+  private teardownMountedWeapon(): void {
+    if (this.flashRoot.parent) this.flashRoot.parent.remove(this.flashRoot);
+    if (this.weapon) {
+      this.weapon.dispose(this.weaponMount);
+      this.weapon = undefined;
+    }
+    if (this.weaponMount.parent) this.weaponMount.parent.remove(this.weaponMount);
+    this.visEquipped = "unarmed";
+    this.weaponMount.visible = false;
+    this.flashRoot.visible = false;
+    (this.flashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
+  }
+
+  private ensureFloatedOnWorld(worldRoot: THREE.Object3D): void {
+    if (this.weaponMount.parent !== worldRoot) {
+      worldRoot.add(this.weaponMount);
+    }
+    this.weaponMount.position.copy(REMOTE_WEAPON_FLOAT_LOCAL_POS);
+    this.weaponMount.rotation.copy(REMOTE_WEAPON_FLOAT_LOCAL_EULER);
+    this.weaponMount.scale.set(1, 1, 1);
+  }
+
+  sync(snap: ReplicatedPlayerSnapshot, dt: number, worldRoot: THREE.Object3D): void {
+    const nextEquip = snap.equippedPrimary;
+    const weaponDef =
+      nextEquip === "unarmed" ? undefined : getWeaponDefinitionForEquippedPrimary(nextEquip);
+
+    if (!weaponDef) {
+      if (this.visEquipped !== "unarmed" || this.weapon !== undefined) {
+        this.teardownMountedWeapon();
+      }
+      return;
+    }
+
+    this.ensureFloatedOnWorld(worldRoot);
+
+    if (!this.weapon || this.visEquipped !== nextEquip) {
+      if (this.flashRoot.parent) this.flashRoot.parent.remove(this.flashRoot);
+      if (this.weapon) {
+        this.weapon.dispose(this.weaponMount);
+        this.weapon = undefined;
+      }
+      const pr = this.modelRegistry.instantiateLoaded(expectGltfModelRef(weaponDef.modelRef));
+      if (!pr.ok) {
+        console.warn(`[RemoteHeldWeaponPresentation] GLB (${weaponDef.id}): ${pr.error}`);
+        this.weaponMount.visible = false;
+        return;
+      }
+      this.weapon = new WeaponPresenter({
+        definition: weaponDef,
+        role: "remote_third_person",
+        visual: pr.root as THREE.Object3D,
+      });
+      this.weapon.normalizeVisualToMaxEdgeMeters(FP_CROWBAR_GLTF_MAX_EDGE_M);
+      this.weapon.root.traverse((o) => {
+        o.frustumCulled = false;
+      });
+      this.weaponMount.add(this.weapon.root);
+      this.weapon.root.add(this.flashRoot);
+      this.visEquipped = nextEquip;
+      this.weaponMount.visible = true;
+    }
+
+    if (!this.weapon || !this.weaponMount.visible) {
+      return;
+    }
+
+    if (snap.meleePresentationSeq !== this.lastMeleeSeq) {
+      this.lastMeleeSeq = snap.meleePresentationSeq;
+      const rangedCfg = fpFirearmShotVisualConfigForHeldItem(snap.equippedPrimary);
+      if (!rangedCfg && getWeaponDefinitionForEquippedPrimary(snap.equippedPrimary)) {
+        this.meleeElapsedS = 0;
+      }
+    }
+    if (snap.firearmPresentationSeq !== this.lastFireSeq) {
+      this.lastFireSeq = snap.firearmPresentationSeq;
+      const cfg = fpFirearmShotVisualConfigForHeldItem(snap.equippedPrimary);
+      if (cfg) {
+        this.shotCfg = cfg;
+        this.shotElapsedS = 0;
+      }
+    }
+
+    const swingDef = getWeaponDefinitionForEquippedPrimary(snap.equippedPrimary);
+    const swingDur =
+      swingDef?.primitiveSwingDurationS && swingDef.primitiveSwingDurationS > 1e-6
+        ? swingDef.primitiveSwingDurationS
+        : 0.38;
+
+    let meleePhase01 = 0;
+    if (this.meleeElapsedS >= 0 && this.meleeElapsedS < swingDur) {
+      meleePhase01 = this.meleeElapsedS / swingDur;
+      this.meleeElapsedS += dt;
+      if (this.meleeElapsedS >= swingDur) {
+        this.meleeElapsedS = Number.POSITIVE_INFINITY;
+      }
+    }
+
+    this.weapon.resetPose();
+    if (meleePhase01 > 0) {
+      this.weapon.updateMeleeSwing(meleePhase01);
+    }
+
+    if (this.shotCfg !== null && Number.isFinite(this.shotElapsedS) && this.shotElapsedS < this.shotCfg.durationS) {
+      const sample = sampleFpFirearmShotVisual(this.shotCfg, this.shotElapsedS);
+      this.weapon.root.position.x += sample.translationM.x;
+      this.weapon.root.position.y += sample.translationM.y;
+      this.weapon.root.position.z += sample.translationM.z;
+      this.weapon.root.rotation.x += sample.rotationRad.x;
+      this.weapon.root.rotation.y += sample.rotationRad.y;
+      this.weapon.root.rotation.z += sample.rotationRad.z;
+      if (sample.flashAlpha > 0) {
+        this.flashRoot.visible = true;
+        this.flashRoot.position.set(
+          this.shotCfg.flashLocalPositionM.x,
+          this.shotCfg.flashLocalPositionM.y,
+          this.shotCfg.flashLocalPositionM.z,
+        );
+        this.flashRoot.scale.setScalar(sample.flashScaleM);
+        (this.flashMesh.material as THREE.MeshBasicMaterial).opacity = sample.flashAlpha;
+      } else {
+        this.flashRoot.visible = false;
+      }
+      this.shotElapsedS += dt;
+      if (this.shotElapsedS >= this.shotCfg.durationS) {
+        this.shotCfg = null;
+        this.shotElapsedS = Number.POSITIVE_INFINITY;
+        this.flashRoot.visible = false;
+        (this.flashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
+      }
+    } else {
+      this.flashRoot.visible = false;
+      (this.flashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
+    }
+  }
+}
+
 type BodyPose = {
   position: { x: number; y: number; z: number };
   yawRad: number;
@@ -439,8 +642,10 @@ class WorldPlayerBodyPresenter {
 export class RemotePlayerPresenter {
   readonly root: THREE.Group;
   private readonly presenter: WorldPlayerBodyPresenter;
+  private readonly weaponFx: RemoteHeldWeaponPresentation;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, modelRegistry: IModelLoadRegistry) {
+    this.weaponFx = new RemoteHeldWeaponPresentation(modelRegistry);
     this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: true, crowdLod: true });
     this.root = this.presenter.root;
   }
@@ -465,9 +670,11 @@ export class RemotePlayerPresenter {
       },
       dt,
     );
+    this.weaponFx.sync(snap, dt, this.presenter.root);
   }
 
   dispose(scene: THREE.Scene): void {
+    this.weaponFx.dispose();
     this.presenter.dispose(scene);
   }
 }

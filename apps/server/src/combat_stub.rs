@@ -7,6 +7,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::inventory::{find_item_in_hotbar_slot, NUM_PLAYER_HOTBAR_SLOTS};
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
+use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
 use crate::player_vitals;
 use crate::pose::player_pose;
@@ -134,6 +135,92 @@ fn vertical_overlap(a_y: f32, a_h: f32, b_y: f32, b_h: f32) -> bool {
     a_y < b_y + b_h && b_y < a_y + a_h
 }
 
+/// Eye height above feet for firearm / melee headshot rays (matches historic `hitscan` tuning).
+#[inline]
+pub fn eye_y_above_feet(crouch: bool) -> f32 {
+    if crouch {
+        0.92
+    } else {
+        1.62
+    }
+}
+
+#[inline]
+pub fn body_height_from_crouch_bit(bits: u8) -> f32 {
+    if bits & BIT_CROUCH != 0 {
+        PLAYER_BODY_HEIGHT_CROUCH_M
+    } else {
+        PLAYER_BODY_HEIGHT_STAND_M
+    }
+}
+
+/// True when world-space impact `y` lies in the head zone of a feet-rooted capsule.
+#[inline]
+pub fn is_headshot_impact_world_y(feet_y: f32, body_height_m: f32, impact_world_y: f32) -> bool {
+    let head_base = feet_y + body_height_m - PLAYER_HEAD_ZONE_HEIGHT_M;
+    impact_world_y >= head_base - 1e-4 && impact_world_y <= feet_y + body_height_m + 1e-3
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RayAabbHit {
+    pub t_hit: f32,
+}
+
+/// First positive ray entry into an axis-aligned box (`t_hit` along `(dx,dy,dz)`), if any.
+pub fn ray_aabb_intersect_enter(
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    mn_x: f32,
+    mn_y: f32,
+    mn_z: f32,
+    mx_x: f32,
+    mx_y: f32,
+    mx_z: f32,
+) -> Option<RayAabbHit> {
+    fn axis(ox: f32, dir: f32, mn: f32, mx: f32) -> Result<(f32, f32), ()> {
+        const AXIS_EPS: f32 = 1e-14;
+        if dir.abs() < AXIS_EPS {
+            if ox < mn || ox > mx {
+                Err(())
+            } else {
+                Ok((f32::NEG_INFINITY, f32::INFINITY))
+            }
+        } else {
+            let inv = 1.0 / dir;
+            let mut t1 = (mn - ox) * inv;
+            let mut t2 = (mx - ox) * inv;
+            if t1 > t2 {
+                std::mem::swap(&mut t1, &mut t2);
+            }
+            Ok((t1, t2))
+        }
+    }
+
+    let (tx_enter, tx_exit) = axis(ox, dx, mn_x, mx_x).ok()?;
+    let (ty_enter, ty_exit) = axis(oy, dy, mn_y, mx_y).ok()?;
+    let (tz_enter, tz_exit) = axis(oz, dz, mn_z, mx_z).ok()?;
+
+    let t_enter = tx_enter.max(ty_enter).max(tz_enter);
+    let t_exit = tx_exit.min(ty_exit).min(tz_exit);
+
+    if t_enter > t_exit || t_exit < -1e-3 {
+        return None;
+    }
+    let t_hit = if t_enter >= RAY_AABB_T_ENTER_EPS {
+        t_enter
+    } else if t_exit >= RAY_AABB_T_ENTER_EPS {
+        RAY_AABB_T_ENTER_EPS
+    } else {
+        return None;
+    };
+
+    Some(RayAabbHit { t_hit })
+}
+
 /// Selected hotbar item `def_id` when the combat rail points at a melee weapon with authored
 /// catalog damage; otherwise `None`.
 /// Selected hotbar `def_id` when a slot is active, ignoring catalog weapon-vs-consumable rules.
@@ -210,6 +297,9 @@ pub fn resolve_player_player_collisions(samples: &mut [PlayerBodySample]) {
     }
 }
 
+/// Melee hit candidate resolution: horizontal arc picks the victim; optional `aim_dir_world` is a
+/// **normalized** camera-forward vector (same validation as firearms) used only to classify
+/// headshots via a short eye ray against the victim's head AABB.
 pub fn resolve_melee_hit(
     ctx: &ReducerContext,
     attacker: Identity,
@@ -218,10 +308,11 @@ pub fn resolve_melee_hit(
     attacker_z: f32,
     attacker_yaw: f32,
     weapon_def_id: &str,
+    aim_dir_world: Option<(f32, f32, f32)>,
     reach_m: Option<f32>,
     damage_override: Option<f32>,
 ) -> Option<MeleeResolvedHit> {
-    let damage = damage_override.unwrap_or_else(|| melee_damage_for_def_id(weapon_def_id));
+    let mut damage = damage_override.unwrap_or_else(|| melee_damage_for_def_id(weapon_def_id));
     if damage <= 0.0 {
         return None;
     }
@@ -231,12 +322,20 @@ pub fn resolve_melee_hit(
         if pose.identity == attacker || player_vitals::is_player_dead(ctx, pose.identity) {
             continue;
         }
+        let bits = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&pose.identity)
+            .map(|i| i.bits)
+            .unwrap_or(0);
+        let body_height = body_height_from_crouch_bit(bits);
         candidates.push(PlayerBodySample {
             identity: pose.identity,
             x: pose.x,
             y: pose.y,
             z: pose.z,
-            body_height: PLAYER_BODY_HEIGHT_STAND_M,
+            body_height,
         });
     }
     if candidates.is_empty() {
@@ -303,12 +402,54 @@ pub fn resolve_melee_hit(
     }
 
     let target = candidates[best_idx?];
+
+    let mut impact_x = target.x;
+    let mut impact_y = target.y + target.body_height.min(1.58) * 0.62;
+    let mut impact_z = target.z;
+
+    if let Some((adx, ady, adz)) = aim_dir_world {
+        let abits = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&attacker)
+            .map(|i| i.bits)
+            .unwrap_or(0);
+        let eye_y = attacker_y + eye_y_above_feet(abits & BIT_CROUCH != 0);
+        let pr = PLAYER_BODY_RADIUS_M;
+        let h0 = target.y + target.body_height - PLAYER_HEAD_ZONE_HEIGHT_M;
+        let h1 = target.y + target.body_height;
+        let px = target.x;
+        let pz = target.z;
+        if let Some(hit) = ray_aabb_intersect_enter(
+            attacker_x,
+            eye_y,
+            attacker_z,
+            adx,
+            ady,
+            adz,
+            px - pr,
+            h0,
+            pz - pr,
+            px + pr,
+            h1,
+            pz + pr,
+        ) {
+            if hit.t_hit > RAY_AABB_T_ENTER_EPS && hit.t_hit <= reach {
+                damage *= HEADSHOT_DAMAGE_MULTIPLIER;
+                impact_x = attacker_x + adx * hit.t_hit;
+                impact_y = eye_y + ady * hit.t_hit;
+                impact_z = attacker_z + adz * hit.t_hit;
+            }
+        }
+    }
+
     Some(MeleeResolvedHit {
         target: target.identity,
         damage,
-        impact_x: target.x,
-        impact_y: target.y + target.body_height.min(1.58) * 0.62,
-        impact_z: target.z,
+        impact_x,
+        impact_y,
+        impact_z,
     })
 }
 
@@ -350,6 +491,43 @@ mod tests {
         let dx = samples[1].x - samples[0].x;
         let dz = samples[1].z - samples[0].z;
         assert!((dx * dx + dz * dz).sqrt() >= PLAYER_BODY_RADIUS_M * 2.0 - 1e-3);
+    }
+
+    #[test]
+    fn headshot_zone_detects_top_of_capsule() {
+        let feet = 10.0;
+        let h = PLAYER_BODY_HEIGHT_STAND_M;
+        let top = feet + h;
+        assert!(is_headshot_impact_world_y(feet, h, top - 0.01));
+        assert!(!is_headshot_impact_world_y(feet, h, feet + h - PLAYER_HEAD_ZONE_HEIGHT_M - 0.05));
+    }
+
+    #[test]
+    fn headshot_ray_hits_head_box() {
+        let px = 0.0;
+        let pz = 1.0;
+        let feet_y = 0.0;
+        let bh = PLAYER_BODY_HEIGHT_STAND_M;
+        let pr = PLAYER_BODY_RADIUS_M;
+        let h0 = feet_y + bh - PLAYER_HEAD_ZONE_HEIGHT_M;
+        let h1 = feet_y + bh;
+        let hit = ray_aabb_intersect_enter(
+            0.0,
+            1.62,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            px - pr,
+            h0,
+            pz - pr,
+            px + pr,
+            h1,
+            pz + pr,
+        );
+        assert!(hit.is_some());
+        let t = hit.unwrap().t_hit;
+        assert!(t > 0.0 && t < 2.0);
     }
 
     #[test]

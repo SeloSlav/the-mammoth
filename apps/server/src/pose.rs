@@ -18,6 +18,26 @@ pub struct PlayerPose {
     pub vel_z: f32,
     /// 1 = grounded, 0 = airborne.
     pub grounded: u8,
+    /// `submit_melee_swing` increments when a swing is authored (presentation / remote viewers).
+    pub melee_presentation_seq: u32,
+    /// `submit_firearm_shot` increments on each discharged shot accepted by ammo + cooldown gates.
+    pub firearm_presentation_seq: u32,
+}
+
+pub fn bump_melee_presentation_seq(ctx: &ReducerContext, id: Identity) {
+    let Some(mut pose) = ctx.db.player_pose().identity().find(&id) else {
+        return;
+    };
+    pose.melee_presentation_seq = pose.melee_presentation_seq.wrapping_add(1);
+    ctx.db.player_pose().identity().update(pose);
+}
+
+pub fn bump_firearm_presentation_seq(ctx: &ReducerContext, id: Identity) {
+    let Some(mut pose) = ctx.db.player_pose().identity().find(&id) else {
+        return;
+    };
+    pose.firearm_presentation_seq = pose.firearm_presentation_seq.wrapping_add(1);
+    ctx.db.player_pose().identity().update(pose);
 }
 
 pub fn ensure_player_pose_row(ctx: &ReducerContext, id: Identity) {

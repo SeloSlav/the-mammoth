@@ -21,4 +21,6 @@ export default __t.row({
   velY: __t.f32().name("vel_y"),
   velZ: __t.f32().name("vel_z"),
   grounded: __t.u8(),
+  meleePresentationSeq: __t.u32().name("melee_presentation_seq"),
+  firearmPresentationSeq: __t.u32().name("firearm_presentation_seq"),
 });

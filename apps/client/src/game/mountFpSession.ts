@@ -72,7 +72,10 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "./fpHotbar/fpHotbarSelection.js";
-import { getHotbarSlotInventoryItem } from "./fpHotbar/fpHotbarResolve.js";
+import {
+  ACTIVE_HOTBAR_SLOT_CLEARED,
+  getHotbarSlotInventoryItem,
+} from "./fpHotbar/fpHotbarResolve.js";
 import {
   apartmentFurnitureInteriorsPreferOverUnitDoor,
   getApartmentSystemPrompt,
@@ -393,8 +396,6 @@ export async function mountFpSession(
   });
   const hotbarConsumableVisual = new FpHotbarConsumableVisual();
 
-  /** Must match `apps/server/src/loadout.rs` `ACTIVE_HOTBAR_SLOT_CLEARED`. */
-  const ACTIVE_HOTBAR_SLOT_CLEARED = 255;
   let lastSentHotbarRail: number | null | undefined = undefined;
   const syncActiveHotbarSlotToServer = () => {
     if (!conn.identity) return;

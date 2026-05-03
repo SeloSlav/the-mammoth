@@ -35,6 +35,8 @@ export function replicatedPlayerSnapshotFromPlainPose(
     worldPositionOverride?: { x: number; y: number; z: number };
     observedTimeMs?: number;
     equippedPrimary?: HeldItemId;
+    meleePresentationSeq?: number;
+    firearmPresentationSeq?: number;
     displayName?: string;
   },
 ): ReplicatedPlayerSnapshot {
@@ -53,6 +55,8 @@ export function replicatedPlayerSnapshotFromPlainPose(
     velocity: { x: fields.velX, y: fields.velY, z: fields.velZ },
     grounded: fields.grounded,
     locomotion: locomotionFromHorizontalSpeed(fields.velX, fields.velZ),
-    equippedPrimary: options?.equippedPrimary ?? "crowbar",
+    equippedPrimary: options?.equippedPrimary ?? "unarmed",
+    meleePresentationSeq: options?.meleePresentationSeq ?? 0,
+    firearmPresentationSeq: options?.firearmPresentationSeq ?? 0,
   };
 }

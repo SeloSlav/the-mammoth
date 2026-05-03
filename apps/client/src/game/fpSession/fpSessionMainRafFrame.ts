@@ -13,6 +13,10 @@ import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
 import {
+  ACTIVE_HOTBAR_SLOT_CLEARED,
+  resolveHeldItemFromHotbar,
+} from "../fpHotbar/fpHotbarResolve.js";
+import {
   findNearestDroppedPickupsHud,
   MAMMOTH_PICKUP_RADIUS_M,
 } from "../worldRuntime/droppedItemWorldRuntime.js";
@@ -331,7 +335,13 @@ export function createFpSessionMainRafFrame(
       deps.localAudio.playMeleeWeaponSwingLocal();
       if (deps.conn.identity) {
         flushCombatFacingIntent();
-        void deps.conn.reducers.submitMeleeSwing({});
+        deps.camera.updateMatrixWorld(true);
+        deps.camera.getWorldDirection(deps._aimShotWorldDir);
+        void deps.conn.reducers.submitMeleeSwing({
+          aimDirX: deps._aimShotWorldDir.x,
+          aimDirY: deps._aimShotWorldDir.y,
+          aimDirZ: deps._aimShotWorldDir.z,
+        });
       }
     }
 
@@ -574,6 +584,18 @@ export function createFpSessionMainRafFrame(
           continue;
         }
         const displayName = deps.remotePlayerDisplayName(id);
+        const activeRail = deps.conn.db.player_active_hotbar.identity.find(row.identity);
+        const selectedSlot =
+          activeRail &&
+          typeof activeRail.slotIndex === "number" &&
+          activeRail.slotIndex !== ACTIVE_HOTBAR_SLOT_CLEARED
+            ? activeRail.slotIndex
+            : null;
+        const equippedPrimary = resolveHeldItemFromHotbar(
+          deps.conn,
+          row.identity,
+          selectedSlot,
+        );
         const snap = replicatedPlayerSnapshotFromPlainPose(
           {
             playerIdHex: id,
@@ -589,7 +611,9 @@ export function createFpSessionMainRafFrame(
           {
             observedTimeMs: nowMs,
             worldPositionOverride: p ?? undefined,
-            equippedPrimary: "unarmed",
+            equippedPrimary,
+            meleePresentationSeq: row.meleePresentationSeq,
+            firearmPresentationSeq: row.firearmPresentationSeq,
             displayName,
           },
         );

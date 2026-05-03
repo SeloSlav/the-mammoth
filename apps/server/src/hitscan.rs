@@ -9,7 +9,10 @@ use std::hash::{Hash, Hasher};
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartment_door::apartment_door;
-use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
+use crate::combat_stub::{
+    body_height_from_crouch_bit, eye_y_above_feet, is_headshot_impact_world_y,
+    ray_aabb_intersect_enter, HEADSHOT_DAMAGE_MULTIPLIER, PLAYER_BODY_RADIUS_M,
+};
 use crate::generated_collision_solids::{
     COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
     COLLISION_SOLID_FOOTPRINT_MIN_X, COLLISION_SOLID_FOOTPRINT_MIN_Z,
@@ -19,12 +22,6 @@ use crate::movement::BIT_CROUCH;
 use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::pose::PlayerPose;
-
-use crate::combat_stub::PLAYER_BODY_RADIUS_M;
-
-/// Match `movement::PLAYER_HEIGHT_CROUCH_M` (cross-crate API is private).
-const PLAYER_BODY_HEIGHT_CROUCH_M: f32 = 1.2;
-
 pub const RANGE_PISTOL_M: f32 = 48.0;
 pub const RANGE_SHOTGUN_M: f32 = 22.0;
 
@@ -45,24 +42,6 @@ pub struct PlayerDamageEvent {
     pub ix: f32,
     pub iy: f32,
     pub iz: f32,
-}
-
-#[inline]
-fn body_height(bits: u8) -> f32 {
-    if bits & BIT_CROUCH != 0 {
-        PLAYER_BODY_HEIGHT_CROUCH_M
-    } else {
-        PLAYER_BODY_HEIGHT_STAND_M
-    }
-}
-
-#[inline]
-fn eye_y_above_feet(crouch: bool) -> f32 {
-    if crouch {
-        0.92
-    } else {
-        1.62
-    }
 }
 
 /// Normalize `(dx,dy,dz)` and reject gross aim cheats vs the authoritative planar yaw plane.
@@ -95,66 +74,6 @@ pub fn sanitize_client_aim_dir(
     }
 
     Some((nx, ny, nz))
-}
-
-#[derive(Clone, Copy, Debug)]
-struct RayHit {
-    t_hit: f32,
-}
-
-#[inline]
-fn ray_aabb(
-    ox: f32,
-    oy: f32,
-    oz: f32,
-    dx: f32,
-    dy: f32,
-    dz: f32,
-    mn_x: f32,
-    mn_y: f32,
-    mn_z: f32,
-    mx_x: f32,
-    mx_y: f32,
-    mx_z: f32,
-) -> Option<RayHit> {
-    fn axis(ox: f32, dir: f32, mn: f32, mx: f32) -> Result<(f32, f32), ()> {
-        const AXIS_EPS: f32 = 1e-14;
-        if dir.abs() < AXIS_EPS {
-            if ox < mn || ox > mx {
-                Err(())
-            } else {
-                Ok((f32::NEG_INFINITY, f32::INFINITY))
-            }
-        } else {
-            let inv = 1.0 / dir;
-            let mut t1 = (mn - ox) * inv;
-            let mut t2 = (mx - ox) * inv;
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-            Ok((t1, t2))
-        }
-    }
-
-    let (tx_enter, tx_exit) = axis(ox, dx, mn_x, mx_x).ok()?;
-    let (ty_enter, ty_exit) = axis(oy, dy, mn_y, mx_y).ok()?;
-    let (tz_enter, tz_exit) = axis(oz, dz, mn_z, mx_z).ok()?;
-
-    let t_enter = tx_enter.max(ty_enter).max(tz_enter);
-    let t_exit = tx_exit.min(ty_exit).min(tz_exit);
-
-    if t_enter > t_exit || t_exit < -1e-3 {
-        return None;
-    }
-    let t_hit = if t_enter >= RAY_T_EPS {
-        t_enter
-    } else if t_exit >= RAY_T_EPS {
-        RAY_T_EPS
-    } else {
-        return None;
-    };
-
-    Some(RayHit { t_hit })
 }
 
 struct CollQueryLimits {
@@ -208,7 +127,7 @@ fn trace_static_solids(origin: [f32; 3], dir: [f32; 3], max_t: f32) -> Option<f3
             if !lim.intersects_shard_aabb(*mn, *mx) {
                 continue;
             }
-            if let Some(hit) = ray_aabb(
+            if let Some(hit) = ray_aabb_intersect_enter(
                 ox, oy, oz, dx, dy, dz, mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
             ) {
                 if hit.t_hit <= max_t + RAY_T_EPS
@@ -244,7 +163,7 @@ fn trace_apartment_door_firearms(
         if !lim.intersects_shard_aabb(mn, mx) {
             continue;
         }
-        if let Some(hit) = ray_aabb(
+        if let Some(hit) = ray_aabb_intersect_enter(
             ox, oy, oz, dx, dy, dz, mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
         ) {
             if hit.t_hit <= max_t + RAY_T_EPS
@@ -289,8 +208,8 @@ fn trace_best_player_hit(
     dz: f32,
     max_t: f32,
     lateral_inflate: f32,
-) -> Option<(Identity, RayHit)> {
-    let mut best: Option<(Identity, RayHit)> = None;
+) -> Option<(Identity, f32, f32, f32)> {
+    let mut best: Option<(Identity, f32, f32, f32)> = None;
     for pose in ctx.db.player_pose().iter() {
         if pose.identity == attacker || player_vitals::is_player_dead(ctx, pose.identity) {
             continue;
@@ -303,7 +222,7 @@ fn trace_best_player_hit(
             .find(&pose.identity)
             .map(|i| i.bits)
             .unwrap_or(0);
-        let bh = body_height(bits);
+        let bh = body_height_from_crouch_bit(bits);
         let pr = PLAYER_BODY_RADIUS_M + lateral_inflate;
         let px = pose.x;
         let pz = pose.z;
@@ -315,13 +234,15 @@ fn trace_best_player_hit(
         let mx_z = pz + pr;
         let mn_y = py;
         let mx_y = py + bh;
-        if let Some(hit) = ray_aabb(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) {
+        if let Some(hit) =
+            ray_aabb_intersect_enter(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)
+        {
             if hit.t_hit > max_t + RAY_T_EPS {
                 continue;
             }
-            let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1.t_hit;
+            let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1;
             if replace {
-                best = Some((pose.identity, hit));
+                best = Some((pose.identity, hit.t_hit, py, bh));
             }
         }
     }
@@ -364,18 +285,23 @@ fn resolve_pistol_ray(
     let t_wall = trace_world_solids_for_firearms(ctx, origin, dir, max_range_m);
     let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
 
-    let Some((pid, hp)) = phit else {
+    let Some((pid, t_hit, feet_y, body_h)) = phit else {
         return Vec::new();
     };
     if let Some(t_w) = t_wall {
-        if t_w + 1e-3 < hp.t_hit {
+        if t_w + 1e-3 < t_hit {
             return Vec::new();
         }
     }
-    let dist_m = hp.t_hit;
+    let dist_m = t_hit;
     let scale = falloff_factor(dist_m, max_range_m, floor_frac);
-    let dmg = base_damage * scale;
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, dist_m);
+    let hs_mult = if is_headshot_impact_world_y(feet_y, body_h, iy) {
+        HEADSHOT_DAMAGE_MULTIPLIER
+    } else {
+        1.0
+    };
+    let dmg = base_damage * scale * hs_mult;
     Vec::from([PlayerDamageEvent {
         identity: pid,
         damage: dmg,
@@ -419,19 +345,29 @@ fn resolve_shotgun_pellets(
         let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {
-            (Some((pid, pr)), Some(t_w)) => {
-                if t_w + 1e-3 < pr.t_hit {
+            (Some((pid, pr_t, feet_y, body_h)), Some(t_w)) => {
+                if t_w + 1e-3 < *pr_t {
                     None
                 } else {
-                    let scale = falloff_factor(pr.t_hit, max_range_m, floor_frac);
-                    let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, pr.t_hit);
-                    Some((*pid, per * scale, ipt))
+                    let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
+                    let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
+                    let hs_mult = if is_headshot_impact_world_y(*feet_y, *body_h, ipt.1) {
+                        HEADSHOT_DAMAGE_MULTIPLIER
+                    } else {
+                        1.0
+                    };
+                    Some((*pid, per * scale * hs_mult, ipt))
                 }
             }
-            (Some((pid, pr)), None) => {
-                let scale = falloff_factor(pr.t_hit, max_range_m, floor_frac);
-                let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, pr.t_hit);
-                Some((*pid, per * scale, ipt))
+            (Some((pid, pr_t, feet_y, body_h)), None) => {
+                let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
+                let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
+                let hs_mult = if is_headshot_impact_world_y(*feet_y, *body_h, ipt.1) {
+                    HEADSHOT_DAMAGE_MULTIPLIER
+                } else {
+                    1.0
+                };
+                Some((*pid, per * scale * hs_mult, ipt))
             }
             _ => None,
         };

@@ -199,6 +199,8 @@ pub(crate) fn random_public_spawn_pose(ctx: &ReducerContext, id: Identity) -> Pl
         vel_y: 0.0,
         vel_z: 0.0,
         grounded: 1,
+        melee_presentation_seq: 0,
+        firearm_presentation_seq: 0,
     }
 }
 

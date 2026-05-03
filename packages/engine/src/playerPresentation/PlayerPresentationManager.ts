@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mammothCatalogGlbCandidates } from "@the-mammoth/assets";
 import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
 import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
+import { ALL_WEAPON_DEFINITIONS, getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
 import type { WeaponDefinition } from "../weapons/weaponTypes.js";
 import {
   createGltfModelLoadRegistry,
@@ -83,8 +83,8 @@ export class PlayerPresentationManager {
   }
 
   /**
-   * Preload the FP hand + remote body GLBs, optionally the **initial** equipped weapon, then build
-   * the local viewmodel. Other registered weapons load on first equip.
+   * Preload the FP hand + remote body + **all** shipped weapon GLBs (remote third-person meshes),
+   * optionally the initial local equipped weapon, then build the local viewmodel.
    */
   static async create(opts: PlayerPresentationManagerOptions): Promise<PlayerPresentationManager> {
     const modelRegistry = opts.modelRegistry ?? createGltfModelLoadRegistry();
@@ -99,10 +99,21 @@ export class PlayerPresentationManager {
           )
         : modelRegistry.preload(initialDef.modelRef));
 
+    const preloadAllRemoteWeaponGlbs =
+      modelRegistry instanceof GltfModelLoadRegistry
+        ? ALL_WEAPON_DEFINITIONS.map((def) =>
+            modelRegistry.preloadWithUriCandidates(
+              def.modelRef as Extract<ModelRef, { kind: "gltf" }>,
+              mammothCatalogGlbCandidates(def.id),
+            ),
+          )
+        : ALL_WEAPON_DEFINITIONS.map((def) => modelRegistry.preload(def.modelRef));
+
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
       preloadRemotePlayerBody(),
       ...(preloadInitialWeapon ? [preloadInitialWeapon] : []),
+      ...preloadAllRemoteWeaponGlbs,
     ]);
     const local = new LocalFirstPersonPresenter({
       viewModelParent: opts.fpViewModelParent,
@@ -167,7 +178,7 @@ export class PlayerPresentationManager {
       this._keepIds.add(id);
       let rp = this.remotes.get(id);
       if (!rp) {
-        rp = new RemotePlayerPresenter(this.scene);
+        rp = new RemotePlayerPresenter(this.scene, this.modelRegistry);
         this.remotes.set(id, rp);
       }
       if (fullDetailRemotes) {

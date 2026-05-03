@@ -17,6 +17,8 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR: readonly (readonly string[
     "SELECT * FROM craft_queue_item",
     "SELECT * FROM hud_toast_event",
     "SELECT * FROM player_vitals",
+    /** Required for resolving other players’ active hotbar slot → equipped weapon visuals. */
+    "SELECT * FROM player_active_hotbar",
   ],
   [
     "SELECT * FROM elevator_car",

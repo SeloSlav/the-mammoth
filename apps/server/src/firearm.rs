@@ -10,7 +10,7 @@ use crate::inventory::{self, inventory_item};
 use crate::inventory_models::ItemLocation;
 use crate::movement::player_input;
 use crate::player_vitals;
-use crate::pose::player_pose;
+use crate::pose::{bump_firearm_presentation_seq, player_pose};
 use crate::world_sound;
 
 const RANGED_COOLDOWN_MICROS: i64 = 160_000;
@@ -124,6 +124,8 @@ pub fn submit_firearm_shot(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32,
 
     cd.last_shot_micros = now_us;
     ctx.db.player_firearm_cooldown().identity().update(cd);
+
+    bump_firearm_presentation_seq(ctx, id);
 
     let gun_sound_variation = if weapon_def_id == "shotgun-coach" {
         world_sound::FIREARM_VARIATION_SHOTGUN

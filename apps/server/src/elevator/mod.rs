@@ -974,6 +974,8 @@ fn pose_with_feet_xyz(auth: &PlayerPose, x: f32, y: f32, z: f32) -> PlayerPose {
         vel_y: auth.vel_y,
         vel_z: auth.vel_z,
         grounded: auth.grounded,
+        melee_presentation_seq: auth.melee_presentation_seq,
+        firearm_presentation_seq: auth.firearm_presentation_seq,
     }
 }
 
@@ -1338,6 +1340,8 @@ mod exterior_interact_tests {
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         };
         assert!(near_exterior_door_toggle_pose(&pose, spec, 1));
     }
@@ -1397,6 +1401,8 @@ mod exterior_interact_tests {
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         };
         assert!(near_exterior_door_toggle_pose(&pose, &spec, 1));
     }
@@ -1569,6 +1575,8 @@ mod rider_snap_grip_tests {
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         };
         assert!(
             !player_rider_snap_grip(&p, &car),
@@ -1590,6 +1598,8 @@ mod rider_snap_grip_tests {
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         };
         assert!(
             !player_inside_cab(&p, &car),
@@ -1611,6 +1621,8 @@ mod rider_snap_grip_tests {
             vel_y: 0.0,
             vel_z: 0.0,
             grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
         };
         assert!(player_rider_snap_grip(&p, &car));
     }
