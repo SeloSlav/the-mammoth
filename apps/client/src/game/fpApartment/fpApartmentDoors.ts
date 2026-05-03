@@ -26,6 +26,7 @@
  *
  * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual — matches
  *    the server `movement` tick so door thresholds do not rubber-band from client/server skew.
+ *    Only **closed** doors emit a dynamic capsule slab; open swing relies on static doorway holes.
  *
  * 6. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
  *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size) and
@@ -51,6 +52,7 @@ import {
   swingDoorClosedSlabAabb,
   swingDoorClosedSlabActive,
   swingDoorFirearmBarrierAabb,
+  swingDoorMovementBlockingAabb,
   swingDoorOrientationForFace,
   swingDoorParkedLeafAabb,
   swingDoorParkedLeafActive,
@@ -857,27 +859,15 @@ export function mountFpApartmentDoors(
       collisionSlotVisitSeen.add(slot.rowKey);
       /** Blocking matches server: replicated `swing_open_01` stepped at 20 Hz (see `movement::physics_tick_step`). */
       const open01 = slot.swingOpen01;
-      let aabb: CollisionAabb | null = null;
-      if (swingDoorClosedSlabActive(open01)) {
-        aabb = swingDoorClosedSlabAabb({
-          face: slot.face,
-          hingeX: slot.hingeX,
-          hingeZ: slot.hingeZ,
-          feetY: slot.feetY,
-          panelWidthM: slot.panelWidthM,
-          panelHeightM: slot.panelHeightM,
-        });
-      } else if (swingDoorParkedLeafActive(open01)) {
-        aabb = swingDoorParkedLeafAabb({
-          face: slot.face,
-          hingeX: slot.hingeX,
-          hingeZ: slot.hingeZ,
-          feetY: slot.feetY,
-          panelWidthM: slot.panelWidthM,
-          panelHeightM: slot.panelHeightM,
-          swingInward: slot.swingInward,
-        });
-      }
+      const aabb = swingDoorMovementBlockingAabb({
+        open01,
+        face: slot.face,
+        hingeX: slot.hingeX,
+        hingeZ: slot.hingeZ,
+        feetY: slot.feetY,
+        panelWidthM: slot.panelWidthM,
+        panelHeightM: slot.panelHeightM,
+      });
       if (!aabb) return;
       if (aabb.max[0] < x0 || aabb.min[0] > x1) return;
       if (aabb.max[2] < z0 || aabb.min[2] > z1) return;
@@ -968,27 +958,15 @@ export function mountFpApartmentDoors(
       const regime = doorCollisionRegimeFromOpen01(replicatedOpen);
       const serverRegime = regime;
       const visualRegime = doorCollisionRegimeFromOpen01(visualOpen);
-      let emittedAabb: CollisionAabb | null = null;
-      if (swingDoorClosedSlabActive(replicatedOpen)) {
-        emittedAabb = swingDoorClosedSlabAabb({
-          face: slot.face,
-          hingeX: slot.hingeX,
-          hingeZ: slot.hingeZ,
-          feetY: slot.feetY,
-          panelWidthM: slot.panelWidthM,
-          panelHeightM: slot.panelHeightM,
-        });
-      } else if (swingDoorParkedLeafActive(replicatedOpen)) {
-        emittedAabb = swingDoorParkedLeafAabb({
-          face: slot.face,
-          hingeX: slot.hingeX,
-          hingeZ: slot.hingeZ,
-          feetY: slot.feetY,
-          panelWidthM: slot.panelWidthM,
-          panelHeightM: slot.panelHeightM,
-          swingInward: slot.swingInward,
-        });
-      }
+      const emittedAabb = swingDoorMovementBlockingAabb({
+        open01: replicatedOpen,
+        face: slot.face,
+        hingeX: slot.hingeX,
+        hingeZ: slot.hingeZ,
+        feetY: slot.feetY,
+        panelWidthM: slot.panelWidthM,
+        panelHeightM: slot.panelHeightM,
+      });
       out.push({
         rowKey: slot.rowKey,
         level: slot.level,

@@ -187,7 +187,10 @@ export function createFpElevatorFloorVisAndCabContext(
           );
     let elevatorHoistwayPlateBoost = false;
     for (const [key, vis] of visuals) {
-      const cabY = getCabY(key, nowMs);
+      const row = latest.get(key);
+      if (!row) continue;
+      const cabY = getCabY(key);
+      if (!Number.isFinite(cabY)) continue;
       const hoistwayProbe = (wx: number, wy: number, wz: number) =>
         fpElevFeetInHoistwayColumnForFloorStack(wx, wy, wz, {
           buildingWorldOriginX: ox,
@@ -204,27 +207,22 @@ export function createFpElevatorFloorVisAndCabContext(
         bandEyeWorldZ !== undefined &&
         hoistwayProbe(bandEyeWorldX, bandEyeWorldY, bandEyeWorldZ);
       /** HUD “inside cab” includes roof deck; exclude roof so hoistway stacks stay visible there. */
-      const plateX = vis.layout.plateX;
-      const plateZ = vis.layout.plateZ;
-      const lxFeet = px - (ox + plateX);
-      const lzFeet = pz - (oz + plateZ);
-      const feetBlockHoistReveal =
-        Number.isFinite(cabY) &&
-        fpElevBlocksHoistwayFullStackRevealPlateLocal(
-          lxFeet,
-          lzFeet,
-          py,
-          cabY,
-          vis.inner,
-        );
+      const lxFeet = px - (ox + row.plateX);
+      const lzFeet = pz - (oz + row.plateZ);
+      const feetBlockHoistReveal = fpElevBlocksHoistwayFullStackRevealPlateLocal(
+        lxFeet,
+        lzFeet,
+        py,
+        cabY,
+        vis.inner,
+      );
       const eyeBlockHoistReveal =
         bandEyeWorldY !== undefined &&
         bandEyeWorldX !== undefined &&
         bandEyeWorldZ !== undefined &&
-        Number.isFinite(cabY) &&
         fpElevBlocksHoistwayFullStackRevealPlateLocal(
-          bandEyeWorldX - (ox + plateX),
-          bandEyeWorldZ - (oz + plateZ),
+          bandEyeWorldX - (ox + row.plateX),
+          bandEyeWorldZ - (oz + row.plateZ),
           bandEyeWorldY,
           cabY,
           vis.inner,

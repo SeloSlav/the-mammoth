@@ -58,17 +58,18 @@ describe("swingDoor firearm LOS barrier", () => {
     ).toBeNull();
   });
 
-  it("matches parked collision when leaf is parked-open", () => {
-    const parked = swingDoorFirearmBarrierAabb({
-      open01: SWING_DOOR_PARKED_LEAF_MIN_OPEN_01,
-      face: "e",
-      hingeX: -2,
-      hingeZ: 50,
-      feetY: 3.05,
-      panelWidthM: 1.1,
-      panelHeightM: 2.0,
-      swingInward: false,
-    });
-    expect(parked).not.toBeNull();
+  it("clears LOS barrier once passage threshold is reached (including fully parked open)", () => {
+    expect(
+      swingDoorFirearmBarrierAabb({
+        open01: SWING_DOOR_PARKED_LEAF_MIN_OPEN_01,
+        face: "e",
+        hingeX: -2,
+        hingeZ: 50,
+        feetY: 3.05,
+        panelWidthM: 1.1,
+        panelHeightM: 2.0,
+        swingInward: false,
+      }),
+    ).toBeNull();
   });
 });

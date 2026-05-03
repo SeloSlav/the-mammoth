@@ -75,10 +75,8 @@ describe("swingDoorCollision: per-face convention", () => {
   });
 
   /**
-   * Visual-collision parity: at full open the rendered leaf tip must swing toward the same side
-   * the parked-leaf collision AABB occupies. Otherwise the player sees open sky where physics
-   * blocks and vice-versa — the exact "pushed back through an invisible leaf" bug that triggered
-   * this regression.
+   * Visual sanity: at full open the rendered leaf tip swings toward `swingDoorOpenSideNormal`.
+   * (Capsule locomotion omits the parked-leaf AABB; this still guards mesh orientation.)
    */
   it("at full open, tip direction matches open-side normal", () => {
     const maxRad = Math.PI / 2;
@@ -323,13 +321,8 @@ describe("swingDoorPlayerInInteractRange", () => {
 });
 
 /**
- * Regression guard for the "pushed back by an invisible leaf" bug: when a door is fully parked
- * open, the rendered leaf position and the parked-leaf collision AABB must agree — otherwise
- * the player sees clear space where physics blocks (or vice-versa).
- *
- * We check both swing directions:
- * - Outward: tip ends up on the corridor side, inside the parked-leaf AABB.
- * - Inward:  tip ends up on the private (unit) side, inside the parked-leaf AABB.
+ * Regression guard for mesh orientation at full open: tip lies inside the **geometry** AABB used
+ * for decals/debug — capsule locomotion does not mount this volume when past the closed slab.
  */
 describe("visual ↔ collision parity at full open", () => {
   const base = {

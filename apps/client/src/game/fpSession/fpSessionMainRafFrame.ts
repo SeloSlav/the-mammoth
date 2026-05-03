@@ -200,6 +200,11 @@ export type FpSessionMainRafFrameDeps = {
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
   /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI or typing. */
   fpInteractInputBlocked: () => boolean;
+  /**
+   * True when WASD / sprint / jump should be ignored. Narrower than {@link fpInteractInputBlocked}:
+   * inventory stays playable (Tab panel) while crafting/debug menus still freeze locomotion.
+   */
+  fpLocomotionInputBlocked: () => boolean;
   /** Guests can fight/loot, but only registered accounts can claim apartments. */
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
@@ -273,16 +278,16 @@ export function createFpSessionMainRafFrame(
       }
     }
 
-    const inputBlocked = deps.fpInteractInputBlocked();
-    deps._input.forward = inputBlocked ? false : deps.keys.has("KeyW");
-    deps._input.backward = inputBlocked ? false : deps.keys.has("KeyS");
-    deps._input.left = inputBlocked ? false : deps.keys.has("KeyA");
-    deps._input.right = inputBlocked ? false : deps.keys.has("KeyD");
-    deps._input.sprint = inputBlocked
+    const locomotionBlocked = deps.fpLocomotionInputBlocked();
+    deps._input.forward = locomotionBlocked ? false : deps.keys.has("KeyW");
+    deps._input.backward = locomotionBlocked ? false : deps.keys.has("KeyS");
+    deps._input.left = locomotionBlocked ? false : deps.keys.has("KeyA");
+    deps._input.right = locomotionBlocked ? false : deps.keys.has("KeyD");
+    deps._input.sprint = locomotionBlocked
       ? false
       : deps.keys.has("ShiftLeft") || deps.keys.has("ShiftRight");
     deps._input.crouch = mainRaf.crouchToggle;
-    deps._input.jumpHeld = inputBlocked ? false : deps.keys.has("Space");
+    deps._input.jumpHeld = locomotionBlocked ? false : deps.keys.has("Space");
 
     const jumpQueuedBeforeStep = deps.loco.jumpQueued;
     const jumpBlockedInElevatorCab = deps.isInsideElevatorCabHudForJump();

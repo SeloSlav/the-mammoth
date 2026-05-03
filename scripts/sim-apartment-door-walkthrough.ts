@@ -1,7 +1,7 @@
 /**
  * Use the REAL FpCharacterController to sweep a player through each apartment doorway.
  * Reports any door where the character cannot reach a point deep inside the unit when the
- * door is fully open (swing_open_01 = 1.0).
+ * door is fully open (`swing_open_01 = 1`). Open swing omits dynamic leaf volumes — matches production capsule policy.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -18,10 +18,8 @@ import {
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
-  apartmentDoorSwingInwardForTemplateId,
   resolveFpCharacterCollisions,
   swingDoorOpenSideNormal,
-  swingDoorParkedLeafAabb,
   swingDoorTangentRest,
 } from "../packages/world/src/index.ts";
 const FP_PLAYER_COLLISION_RADIUS_M = 0.22;
@@ -73,7 +71,7 @@ function walkToward(
   targetX: number,
   targetZ: number,
   staticIdx: ReturnType<typeof buildCollisionSpatialIndex>,
-  leafAabb: CollisionAabb,
+  leafAabb: CollisionAabb | null,
 ): { finalX: number; finalZ: number; traveled: number } {
   const speed = 4.0; // m/s walk
   const dt = 1 / 60;
@@ -88,6 +86,7 @@ function walkToward(
       z1: number,
       visit: (a: CollisionAabb) => void,
     ): void => {
+      if (!leafAabb) return;
       if (leafAabb.max[0] < x0 || leafAabb.min[0] > x1) return;
       if (leafAabb.max[2] < z0 || leafAabb.min[2] > z1) return;
       visit(leafAabb);
@@ -142,15 +141,6 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
     const feetY = floorY + t.feetYOffset;
     const norm = swingDoorOpenSideNormal(face);
     const tan = swingDoorTangentRest(face);
-    const leaf = swingDoorParkedLeafAabb({
-      face,
-      hingeX: t.hingeX,
-      hingeZ: t.hingeZ,
-      feetY,
-      panelWidthM: t.panelWidthM,
-      panelHeightM: t.panelHeightM,
-      swingInward: apartmentDoorSwingInwardForTemplateId(t.templateId),
-    });
     const staticIdx = buildCollisionSpatialIndex(statics);
 
     // Try 7 lateral approach positions along the corridor-side of the doorway.
@@ -166,7 +156,7 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
       // Target: deep inside the unit directly opposite start.
       const targetX = baseX + norm.x * 1.5;
       const targetZ = baseZ + norm.z * 1.5;
-      const res = walkToward(startX, startZ, feetY + 0.01, targetX, targetZ, staticIdx, leaf);
+      const res = walkToward(startX, startZ, feetY + 0.01, targetX, targetZ, staticIdx, null);
       const dotInto = (res.finalX - baseX) * norm.x + (res.finalZ - baseZ) * norm.z;
       attempts.push({ lat, dotInto });
       // Success = got at least 1.0m past the wall plane (well inside the unit, past any

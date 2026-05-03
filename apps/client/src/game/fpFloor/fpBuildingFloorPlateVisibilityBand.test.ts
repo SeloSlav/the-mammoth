@@ -94,7 +94,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 1, hi: 10 });
   });
 
-  it("hoistway plate boost enables the full floor stack so stacked shaft shells stay mounted", () => {
+  it("hoistway plate boost widens budget vs interior-only caps but stays below full stack", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 80,
@@ -104,7 +104,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         upperTargetStorey: 80,
         lowerTargetStorey: 1,
       }),
-    ).toEqual({ lo: 1, hi: 80 });
+    ).toEqual({ lo: 1, hi: 32 });
   });
 
   it("caps pitch lookahead above the player so stairwell upsights do not submit distant slabs", () => {

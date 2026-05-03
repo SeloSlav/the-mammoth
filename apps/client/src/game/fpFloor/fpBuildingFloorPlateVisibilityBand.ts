@@ -1,9 +1,8 @@
 /**
  * 1-based floor plate index band (`mammothPlateLevelIndex`) for toggling `buildingRoot` children.
  *
- * `revealFullStack: true` is tests / legacy only (every storey on). Runtime FP uses
- * `elevatorHoistwayPlateBoost` for open hoistways so stacked shaft slices stay mounted (full
- * `1..maxLevel` band — cheap vs the previous partial cap because the hoistway volume is tiny).
+ * `revealFullStack: true` is tests / legacy only (every storey on). Runtime FP uses `elevatorHoistwayPlateBoost`
+ * for open hoistways so shaft-adjacent shells stay visible without submitting the entire merged stack.
  */
 
 /**
@@ -150,6 +149,13 @@ const STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 5;
 const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER = 4;
 const STAIR_SHAFT_LOCAL_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER = 2;
 
+/**
+ * Open elevator hoistway with doors visible: wider than {@link STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER}
+ * so landing slabs above/below remain coherent, but far smaller than `maxLevel` for tall stacks.
+ */
+export const HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER = 22;
+export const HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER = 14;
+
 export function fpStairColumnPlateVisibilityBand(input: {
   globalLo: number;
   globalHi: number;
@@ -199,7 +205,8 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   playerStorey: number;
   revealFullStack: boolean;
   /**
-   * Feet or eye in hoistway column (not cab): full `{ lo: 1, hi: maxLevel }` plate band.
+   * Open hoistway, eye/feet in shaft column (not inside cab volume): widen vertical plate budget vs
+   * interior-only caps, without enabling {@link revealFullStack}.
    */
   elevatorHoistwayPlateBoost?: boolean;
   /**
@@ -215,9 +222,6 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
 }): { lo: number; hi: number } {
   const maxLevel = Math.max(1, input.maxLevel);
   if (input.revealFullStack) {
-    return { lo: 1, hi: maxLevel };
-  }
-  if (input.elevatorHoistwayPlateBoost === true) {
     return { lo: 1, hi: maxLevel };
   }
   /**
@@ -238,10 +242,17 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
   }
   /**
    * Pitch lookahead can push `hi` many storeys upward when looking up inside the footprint (stairwell),
-   * while stair-column geometry is already capped via {@link fpStairColumnPlateVisibilityBand}.
+   * while stair-column geometry is already capped via {@link fpStairColumnPlateVisibilityBand}. Hoistway
+   * views need a wider band than interior-only stair caps but must stay bounded vs `{ lo: 1, hi: maxLevel }`.
    */
-  const maxAbove = STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
+  const maxAbove =
+    input.elevatorHoistwayPlateBoost === true
+      ? HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER
+      : STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
   hi = Math.min(hi, input.playerStorey + maxAbove);
+  if (input.elevatorHoistwayPlateBoost === true) {
+    lo = Math.max(lo, input.playerStorey - HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER);
+  }
   lo = Math.max(1, Math.min(maxLevel, lo));
   hi = Math.max(1, Math.min(maxLevel, hi));
   if (lo > hi) [lo, hi] = [hi, lo];

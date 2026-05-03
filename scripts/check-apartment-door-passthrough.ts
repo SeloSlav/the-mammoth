@@ -4,7 +4,7 @@
  * every door whose open-state behaviour disagrees with the elevator-door reference.
  *
  * Includes the full runtime collision stack (baked statics + stair opening + stair runtime
- * overlays + per-door dynamic AABB) — i.e. the same set the live client uses.
+ * overlays). Open swing doors omit dynamic leaf volumes — same as live capsule physics.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,10 +20,8 @@ import {
   parseBuildingDoc,
   parseFloorDoc,
   parseStairWellDef,
-  apartmentDoorSwingInwardForTemplateId,
   swingDoorClosedSlabAabb,
   swingDoorOpenSideNormal,
-  swingDoorParkedLeafAabb,
   swingDoorTangentRest,
 } from "../packages/world/src/index.ts";
 import type { SwingDoorFace } from "../packages/world/src/swingDoorCollision.ts";
@@ -162,25 +160,8 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
     const tipZ = t.hingeZ + tan.z * t.panelWidthM;
     const midX = (t.hingeX + tipX) * 0.5;
     const midZ = (t.hingeZ + tipZ) * 0.5;
-    const slab = swingDoorClosedSlabAabb({
-      face,
-      hingeX: t.hingeX,
-      hingeZ: t.hingeZ,
-      feetY,
-      panelWidthM: t.panelWidthM,
-      panelHeightM: t.panelHeightM,
-    });
-    const leaf = swingDoorParkedLeafAabb({
-      face,
-      hingeX: t.hingeX,
-      hingeZ: t.hingeZ,
-      feetY,
-      panelWidthM: t.panelWidthM,
-      panelHeightM: t.panelHeightM,
-      swingInward: apartmentDoorSwingInwardForTemplateId(t.templateId),
-    });
     const closedSet = [...baseStatics, slab];
-    const openSet = [...baseStatics, leaf];
+    const openSet = [...baseStatics];
     const closed = sweepThroughDoor(closedSet, midX, midZ, norm, feetY);
     const open = sweepThroughDoor(openSet, midX, midZ, norm, feetY);
     if (closed.blocked) closedBlocked++; else closedPassable++;
@@ -194,10 +175,8 @@ for (let levelIndex = 0; levelIndex < building.floorRefs.length; levelIndex++) {
     }
 
     // Stricter check: straight-line corridor approach must be clear for at least 70% of the
-    // doorway width. The hinge-adjacent portion sometimes overlaps the open leaf's thickness
-    // (real physical interaction) and the REAL character controller slides around it — see
-    // `sim-apartment-door-walkthrough.ts` for the full capsule+slide simulation (source of
-    // truth). A blocked fraction above ~22% means something structural is wrong.
+    // doorway width. Where static trims leave tight hinge-adjacent solids, the real controller
+    // slides — see `sim-apartment-door-walkthrough.ts`.
     const widthSweep = sweepDoorAcrossWidth(
       openSet,
       t.hingeX,

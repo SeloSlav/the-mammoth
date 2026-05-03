@@ -197,13 +197,6 @@ export class FpElevatorShaftVisual {
   private lastHailCabFloorPainted = Number.NaN;
   private readonly floorLabelByLevel?: FloorShortLabelMap;
   private readonly exteriorSwingMaxRad: number;
-  /**
-   * Non-plate hoistway shell (open on the landing-door face). World “slice” walls project to zero
-   * area when looking straight up; this liner is parented under `fp_elevator` so it never depends on
-   * `mammothPlateLevelIndex` streaming.
-   */
-  private readonly hoistwayLinerRoot: THREE.Group;
-  private readonly hoistwayLinerMat: THREE.MeshStandardMaterial;
 
   constructor(
     layout: ElevatorShaftLayout,
@@ -291,21 +284,6 @@ export class FpElevatorShaftVisual {
       transparent: true,
       depthWrite: false,
     });
-    this.hoistwayLinerMat = new THREE.MeshStandardMaterial({
-      color: 0x9a9a9a,
-      roughness: 0.9,
-      metalness: 0.06,
-      side: THREE.DoubleSide,
-    });
-    this.hoistwayLinerRoot = FpElevatorShaftVisual.createHoistwayInteriorLiner({
-      pick,
-      layout,
-      innerHx: this.inner.halfX,
-      innerHz: this.inner.halfZ,
-      doorFace: layout.doorFace,
-      material: this.hoistwayLinerMat,
-    });
-    this.root.add(this.hoistwayLinerRoot);
     this.root.add(this.landingRoot);
     this.root.add(this.landingDoorPickRoot);
     this.root.add(this.landingHailPickRoot);
@@ -836,81 +814,6 @@ export class FpElevatorShaftVisual {
     }
   }
 
-  private static createHoistwayInteriorLiner(opts: {
-    pick: {
-      maxLevel: number;
-      floorSpacingM: number;
-      buildingWorldOriginY: number;
-    };
-    layout: ElevatorShaftLayout;
-    innerHx: number;
-    innerHz: number;
-    doorFace: DoorFace;
-    material: THREE.MeshStandardMaterial;
-  }): THREE.Group {
-    const g = new THREE.Group();
-    g.name = "elev_hoistway_interior_liner";
-
-    const { pick, layout, innerHx, innerHz, doorFace, material } = opts;
-
-    const yFeet1 = elevatorSupportFeetWorldY({
-      buildingWorldOriginY: pick.buildingWorldOriginY,
-      levelIndex: 1,
-      floorSpacingM: pick.floorSpacingM,
-      shaftPlateLocalY: layout.plateLocalY,
-      shaftSy: layout.sy,
-    });
-    const yFeetMax = elevatorSupportFeetWorldY({
-      buildingWorldOriginY: pick.buildingWorldOriginY,
-      levelIndex: pick.maxLevel,
-      floorSpacingM: pick.floorSpacingM,
-      shaftPlateLocalY: layout.plateLocalY,
-      shaftSy: layout.sy,
-    });
-
-    const y0 = yFeet1 - 5.5;
-    const y1 = yFeetMax + layout.sy * 2.2 + 3;
-    const h = Math.max(4, y1 - y0);
-    const yMid = (y0 + y1) * 0.5;
-
-    const hx = Math.max(0.1, innerHx * 0.94);
-    const hz = Math.max(0.1, innerHz * 0.94);
-    const tw = 0.14;
-
-    const addWall = (
-      sx: number,
-      sy: number,
-      sz: number,
-      px: number,
-      py: number,
-      pz: number,
-      name: string,
-    ) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
-      mesh.name = name;
-      mesh.position.set(px, py, pz);
-      mesh.frustumCulled = false;
-      mesh.renderOrder = -2;
-      mesh.userData.mammothUnitInterior = true;
-      g.add(mesh);
-    };
-
-    if (doorFace !== "e") {
-      addWall(tw, h, hz * 2, hx - tw * 0.5, yMid, 0, "elev_hoistway_liner_e");
-    }
-    if (doorFace !== "w") {
-      addWall(tw, h, hz * 2, -hx + tw * 0.5, yMid, 0, "elev_hoistway_liner_w");
-    }
-    if (doorFace !== "n") {
-      addWall(hx * 2, h, tw, 0, yMid, hz - tw * 0.5, "elev_hoistway_liner_n");
-    }
-    if (doorFace !== "s") {
-      addWall(hx * 2, h, tw, 0, yMid, -hz + tw * 0.5, "elev_hoistway_liner_s");
-    }
-
-    return g;
-  }
-
   dispose(): void {
     this.floorPickButtons.length = 0;
     const carGeometries = new Set<THREE.BufferGeometry>();
@@ -950,10 +853,6 @@ export class FpElevatorShaftVisual {
     this.hailBtnMatFlash.dispose();
     this.extRedMat.dispose();
     this.extGlassMat.dispose();
-    this.hoistwayLinerRoot.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
-    });
-    this.hoistwayLinerMat.dispose();
     this.hailBtnMatTemplate.dispose();
     this.hailBtnIconMat.dispose();
     this.hailBtnIconTex.dispose();

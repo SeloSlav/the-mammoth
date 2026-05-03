@@ -281,6 +281,7 @@ export {
   swingDoorEffectiveSwingSign,
   expandSwingDoorClosedSlabAabbForFirearmLOS,
   swingDoorFirearmBarrierAabb,
+  swingDoorMovementBlockingAabb,
   swingDoorOpenSideNormal,
   swingDoorOrientationForFace,
   swingDoorParkedLeafAabb,

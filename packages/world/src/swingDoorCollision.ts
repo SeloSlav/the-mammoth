@@ -56,7 +56,7 @@ export const SWING_DOOR_ANIM_SPEED = 4.5;
 /** Open01 below this counts as "essentially closed" for collision purposes. */
 export const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 = 0.025;
 
-/** Open01 at/above this counts as "fully parked open" for the leaf collider. */
+/** Open01 at/above this counts as "fully parked open" for analytics / leaf geometry tests. */
 export const SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 = 0.97;
 
 /** When `open01 >= this` the door no longer obstructs passage. */
@@ -236,9 +236,34 @@ export function swingDoorClosedSlabActive(open01: number): boolean {
   return open01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01;
 }
 
-/** True when the door's `open01` puts the leaf in the parked-open collision regime. */
+/** True when `open01` is in the parked-open band (render / geometry — not capsule blocking). */
 export function swingDoorParkedLeafActive(open01: number): boolean {
   return open01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01;
+}
+
+/**
+ * Player capsule / locomotion: **only** the closed slab blocks. Anything past that relies on
+ * static doorway holes + stair-opening overlays — the parked-leaf AABB is omitted so wide shaft
+ * stair doors do not leave an invisible axis-aligned snag along the landing when left open.
+ */
+export function swingDoorMovementBlockingAabb(opts: {
+  open01: number;
+  face: SwingDoorFace;
+  hingeX: number;
+  hingeZ: number;
+  feetY: number;
+  panelWidthM: number;
+  panelHeightM: number;
+}): CollisionAabb | null {
+  if (!swingDoorClosedSlabActive(opts.open01)) return null;
+  return swingDoorClosedSlabAabb({
+    face: opts.face,
+    hingeX: opts.hingeX,
+    hingeZ: opts.hingeZ,
+    feetY: opts.feetY,
+    panelWidthM: opts.panelWidthM,
+    panelHeightM: opts.panelHeightM,
+  });
 }
 
 /**
@@ -279,8 +304,8 @@ export function expandSwingDoorClosedSlabAabbForFirearmLOS(
  * Authoritative LOS / impact-decal blocker for swing doors. Unlike capsule collision, bullets use an
  * **expanded closed slab** while `open01` stays below passage clearance, bridging jamb-gap cheats.
  *
- * Above {@link SWING_DOOR_PASSAGE_OPEN_THRESH}: no blocker (rays pass like the forgiving movement gap).
- * At {@link SWING_DOOR_PARKED_LEAF_MIN_OPEN_01}+: uses parked-leaf slab (movement parity).
+ * At/above {@link SWING_DOOR_PASSAGE_OPEN_THRESH}: no blocker (aligned with movement — static holes
+ * carry passage). Below that: widened closed slab (partial swing still occludes LOS conservatively).
  */
 export function swingDoorFirearmBarrierAabb(opts: {
   open01: number;
@@ -292,17 +317,7 @@ export function swingDoorFirearmBarrierAabb(opts: {
   panelHeightM: number;
   swingInward?: boolean;
 }): CollisionAabb | null {
-  if (swingDoorParkedLeafActive(opts.open01)) {
-    return swingDoorParkedLeafAabb({
-      face: opts.face,
-      hingeX: opts.hingeX,
-      hingeZ: opts.hingeZ,
-      feetY: opts.feetY,
-      panelWidthM: opts.panelWidthM,
-      panelHeightM: opts.panelHeightM,
-      swingInward: opts.swingInward,
-    });
-  }
+  void opts.swingInward;
   if (opts.open01 >= SWING_DOOR_PASSAGE_OPEN_THRESH) {
     return null;
   }

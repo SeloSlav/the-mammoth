@@ -1067,6 +1067,9 @@ export async function mountFpSession(
   const fpInteractInputBlocked = () =>
     mammothInventoryOpen() || mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
 
+  const fpLocomotionInputBlocked = () =>
+    mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
+
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,
     canvas,
@@ -1122,6 +1125,7 @@ export async function mountFpSession(
     logFpPerf,
     tickFpSessionElevDebug,
     fpInteractInputBlocked,
+    fpLocomotionInputBlocked,
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
     fpFirearmImpactDecals,
