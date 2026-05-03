@@ -1,11 +1,52 @@
+import { useEffect, useRef, useState } from "react";
+import { mountMammothAuthBackdrop } from "./mountMammothAuthBackdrop.js";
 import styles from "./LoginGate.module.css";
 
 /**
- * Compositor-driven atmosphere only — no canvas, no RAF, no WebGPU on this screen.
+ * Dedicated WebGPU/pass on the login canvas: shared megablock mesh cache + orbital framing.
  *
- * Keeps typing + Spacetime baseline on the main thread from fighting a second GPU loop; gameplay still
- * Keeps typing + Spacetime baseline from fighting a GPU menu loop; gameplay mounts via `mountFpSession` / mesh cache.
+ * Separate from gameplay `mountFpSession` so teardown is clean; overlaps mesh CPU with auth typing.
  */
 export function MammothAuthBackdrop() {
-  return <div aria-hidden="true" className={styles.backdropAtmosphere} />;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [webGpuUnavailable, setWebGpuUnavailable] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    let dispose: (() => void) | undefined;
+
+    void mountMammothAuthBackdrop(canvas)
+      .then((d) => {
+        if (cancelled) {
+          d();
+          return;
+        }
+        dispose = d;
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setWebGpuUnavailable(true);
+        console.warn("[MammothAuthBackdrop] WebGPU menu backdrop unavailable", err);
+      });
+
+    return () => {
+      cancelled = true;
+      dispose?.();
+    };
+  }, []);
+
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
+        className={styles.backdropCanvas}
+        data-mammoth-auth-backdrop="1"
+      />
+      {webGpuUnavailable ? <div aria-hidden="true" className={styles.backdropFallback} /> : null}
+    </>
+  );
 }

@@ -10,9 +10,8 @@ const HUB_PREFETCH_PLATE_LEVELS: readonly number[] = [1];
 let megablockInflightBuild: Promise<FpSessionStaticWorld> | null = null;
 
 /**
- * Starts the static world mesh CPU build. Intentionally **not** invoked from Spacetime baseline while
- * login UI is up — only from {@link waitMegablockStaticWorldMeshReady} (submit / gameplay mount) so
- * the name gate stays free of megablock work.
+ * Starts the static world mesh CPU build. Shared by the auth-screen orbit ({@link waitMegablockStaticWorldMeshReady}),
+ * username-submit / gameplay prefetch, and `mountFpSession` — first caller kicks off work; others await the same promise.
  */
 export function primeMegablockStaticWorldMeshBuild(): void {
   if (megablockInflightBuild) return;

@@ -66,6 +66,7 @@ import {
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
+  localPlayerHasCarriedAmmoForWeapon,
 } from "../fpHotbar/fpHotbarResolve.js";
 import type { PoseInterpBuffer } from "../fpRemote/poseInterpBuffer.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
@@ -237,6 +238,7 @@ export function createFpSessionMainRafFrame(
         hb &&
         deps.conn.identity &&
         hotbarDefIdSupportsRangedAttack(hb.defId) &&
+        localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hb.defId) &&
         nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
       ) {
         mainRaf.lastRangedMs = nowMs;
