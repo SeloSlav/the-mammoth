@@ -6,6 +6,7 @@ import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import { elevatorDoorFacesFromGroundFloorDoc } from "./elevatorDoorFacesFromGroundFloorDoc.js";
 import {
   addBuildingStairShaftColumnsToRoot,
+  addBuildingStairShaftColumnsToRootYielding,
   getBuildingStairShaftSpecs,
 } from "./buildingStairShafts.js";
 import {
@@ -118,6 +119,72 @@ function createBuildingFloorStackBuildContext(
   };
 }
 
+async function createBuildingFloorStackBuildContextYielding(
+  building: BuildingDoc,
+  getFloorDoc: (floorDocId: string) => FloorDoc,
+  options: InstantiateBuildingFloorStackOptions | undefined,
+  yieldBetween: () => Promise<void>,
+): Promise<BuildingFloorStackBuildContext> {
+  const spacing = options?.floorSpacingM ?? DEFAULT_BUILDING_FLOOR_SPACING_M;
+  const root = new THREE.Group();
+  root.name = `building:${building.id}`;
+  const o = building.worldOrigin;
+  if (o) root.position.set(o[0], o[1], o[2]);
+
+  const sorted = [...building.floorRefs].sort(
+    (a, b) => a.levelIndex - b.levelIndex,
+  );
+  const resolveDocForRef = (ref: BuildingDoc["floorRefs"][number]) =>
+    resolveFloorDocForLevel({
+      building,
+      ref,
+      getFloorDoc,
+      getFloorOverrideDoc: options?.getFloorOverrideDoc,
+    });
+  await yieldBetween();
+
+  const stairShaftSpecs = getBuildingStairShaftSpecs(
+    building,
+    (floorDocId) => getFloorDoc(floorDocId),
+    sorted,
+    spacing,
+  );
+  await yieldBetween();
+  const stairShaftSkipKeys = new Set(stairShaftSpecs.map((s) => s.planKey));
+
+  const docsForShaftMerge = sorted.map((r) =>
+    withoutElevatorsInStairwells(resolveDocForRef(r)),
+  );
+  await yieldBetween();
+  const shaftHolesPlateMerged = mergeShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+  await yieldBetween();
+  const shaftElevatorsMerged =
+    mergeElevatorShaftSlabHolesFromFloorDocs(docsForShaftMerge);
+  await yieldBetween();
+
+  const groundRef = sorted.find((r) => r.levelIndex === 1);
+  const groundDoc = groundRef ? resolveDocForRef(groundRef) : undefined;
+  const elevatorDoorFaceByShaftKey = groundDoc
+    ? elevatorDoorFacesFromGroundFloorDoc(groundDoc)
+    : undefined;
+  const maxLevelIndex = sorted[sorted.length - 1]!.levelIndex;
+
+  return {
+    root,
+    sorted,
+    resolveDocForRef,
+    stairShaftSpecs,
+    stairShaftSkipKeys,
+    shaftHolesPlateMerged,
+    shaftElevatorsMerged,
+    elevatorDoorFaceByShaftKey,
+    maxLevelIndex,
+    spacing,
+    o,
+    options,
+  };
+}
+
 function addSingleFloorPlateToStack(ctx: BuildingFloorStackBuildContext, ref: BuildingDoc["floorRefs"][number]): void {
   const doc = ctx.resolveDocForRef(ref);
   const o = ctx.o;
@@ -144,6 +211,19 @@ function finalizeBuildingFloorStackStairColumns(ctx: BuildingFloorStackBuildCont
   if (ctx.stairShaftSpecs.length > 0) {
     addBuildingStairShaftColumnsToRoot(ctx.root, ctx.stairShaftSpecs, ctx.options?.stairWellDef);
   }
+}
+
+async function finalizeBuildingFloorStackStairColumnsYielding(
+  ctx: BuildingFloorStackBuildContext,
+  yieldBetweenColumns: () => Promise<void>,
+): Promise<void> {
+  if (ctx.stairShaftSpecs.length === 0) return;
+  await addBuildingStairShaftColumnsToRootYielding(
+    ctx.root,
+    ctx.stairShaftSpecs,
+    ctx.options?.stairWellDef,
+    yieldBetweenColumns,
+  );
 }
 
 function orderFloorRefsByPlatePriority(
@@ -193,13 +273,25 @@ export async function instantiateBuildingFloorStackAsync(
   options?: InstantiateBuildingFloorStackAsyncOptions,
 ): Promise<THREE.Group> {
   const { yieldAfterEachPlate, priorityPlateLevelIndices, ...rest } = options ?? {};
-  const ctx = createBuildingFloorStackBuildContext(building, getFloorDoc, rest);
+  const ctx = yieldAfterEachPlate
+    ? await createBuildingFloorStackBuildContextYielding(
+        building,
+        getFloorDoc,
+        rest,
+        yieldAfterEachPlate,
+      )
+    : createBuildingFloorStackBuildContext(building, getFloorDoc, rest);
+  if (yieldAfterEachPlate) await yieldAfterEachPlate();
   const buildRefs = orderFloorRefsByPlatePriority(ctx.sorted, priorityPlateLevelIndices);
   for (const ref of buildRefs) {
     addSingleFloorPlateToStack(ctx, ref);
     if (yieldAfterEachPlate) await yieldAfterEachPlate();
   }
-  finalizeBuildingFloorStackStairColumns(ctx);
-  if (yieldAfterEachPlate) await yieldAfterEachPlate();
+  if (yieldAfterEachPlate) {
+    await finalizeBuildingFloorStackStairColumnsYielding(ctx, yieldAfterEachPlate);
+    await yieldAfterEachPlate();
+  } else {
+    finalizeBuildingFloorStackStairColumns(ctx);
+  }
   return ctx.root;
 }

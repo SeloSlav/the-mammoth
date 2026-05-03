@@ -173,6 +173,10 @@ export async function mountFpSession(
 
   installMmWallProbeLoadingStub();
 
+  const [world] = await Promise.all([
+    fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady()),
+    fpLoadingDbgTimed("webgpu_adapter_assert", () => assertWebGpuAdapterOrThrow()),
+  ]);
   const {
     building,
     buildingRoot,
@@ -182,9 +186,7 @@ export async function mountFpSession(
     sampleWalkTopBase,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
-  } = await fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady());
-
-  await fpLoadingDbgTimed("webgpu_adapter_assert", () => assertWebGpuAdapterOrThrow());
+  } = world;
 
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGPURenderer({

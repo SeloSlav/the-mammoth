@@ -67,6 +67,7 @@ export {
 } from "./collisionScene.js";
 export {
   addBuildingStairShaftColumnsToRoot,
+  addBuildingStairShaftColumnsToRootYielding,
   getBuildingStairShaftSpecs,
   mergeShaftExteriorHints,
   readShaftFacadeHintFaces,

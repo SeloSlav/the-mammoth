@@ -13,6 +13,7 @@ import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
 } from "../game/fpSession/fpSessionConstants.js";
+import { yieldToMain } from "../game/fpSession/yieldToMain.js";
 
 const AUTH_BACKDROP_CAMERA_FOV_DEG = 38;
 const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
@@ -22,9 +23,21 @@ const AUTH_BACKDROP_BUILDING_YAW_RAD_PER_SEC = 0.032;
 /** Aim-point shift (fraction of building short-axis width) so the block reads on the right while we yaw. */
 const AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC = 0.22;
 
+/**
+ * Conservative AABB for orbital framing before meshes finish — see `content/building/mammoth.json`
+ * `metadata.mamutica_reference.length_m_about` and authored stack height (~20 storeys).
+ * Replaced immediately when {@link waitMegablockStaticWorldMeshReady} resolves.
+ */
+const AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS = new THREE.Box3(
+  new THREE.Vector3(-130, -2, -130),
+  new THREE.Vector3(130, 75, 130),
+);
+
 export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promise<() => void> {
   await assertWebGpuAdapterOrThrow();
+  await yieldToMain();
   await ensureStairwellCigaretteMeshReady();
+  await yieldToMain();
 
   const scene = new THREE.Scene();
   const renderer = new THREE.WebGPURenderer({
@@ -34,6 +47,7 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
+  await yieldToMain();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, FP_SESSION_MAX_PIXEL_RATIO));
 
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
@@ -44,32 +58,13 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     FP_SESSION_SKY_CAMERA_FAR,
   );
 
-  const { buildingRoot, cellRoot, buildingBodyWorldBounds } =
-    await waitMegablockStaticWorldMeshReady();
-  hideUnitInteriorMeshesForExteriorAuthView(buildingRoot);
-  scene.add(buildingRoot, cellRoot);
-  buildingRoot.updateMatrixWorld(true);
-  cellRoot.updateMatrixWorld(true);
+  /** World-space building stack bounds for orbit framing (updated when meshes attach). */
+  const framingBounds = AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS.clone();
 
-  /**
-   * Framing must use the megablock stack only. `buildingRoot` also parents the exterior tree grove
-   * (huge scatter radius) — `setFromObject(buildingRoot)` was pushing the camera to the horizon.
-   */
-  const buildingBounds = buildingBodyWorldBounds.clone();
-  const buildingSize = new THREE.Vector3();
-  const buildingCenter = new THREE.Vector3();
-  buildingBounds.getSize(buildingSize);
-  buildingBounds.getCenter(buildingCenter);
-
-  /** Orbit / distance reference point — vertical band across the façade, not offset in X (framing handles left/right). */
-  const lookTarget = buildingCenter.clone();
-  lookTarget.y = buildingBounds.min.y + buildingSize.y * 0.35;
-
-  const baseCameraOffset = new THREE.Vector3(
-    -Math.max(buildingSize.x * 0.58, 130),
-    Math.max(buildingSize.y * 0.44, 30),
-    Math.max(buildingSize.x * 0.5, 120),
-  );
+  const buildingSizeScratch = new THREE.Vector3();
+  const buildingCenterScratch = new THREE.Vector3();
+  const lookTarget = new THREE.Vector3();
+  const baseCameraOffset = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3();
   const worldUp = new THREE.Vector3(0, 1, 0);
   const framingShiftWorld = new THREE.Vector3();
@@ -90,6 +85,26 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
 
   let disposed = false;
   let raf = 0;
+  let worldAttached = false;
+  let buildingRootForDispose: THREE.Group | null = null;
+
+  void waitMegablockStaticWorldMeshReady()
+    .then(async (world) => {
+      if (disposed) return;
+      hideUnitInteriorMeshesForExteriorAuthView(world.buildingRoot);
+      scene.add(world.buildingRoot, world.cellRoot);
+      await yieldToMain();
+      world.buildingRoot.updateMatrixWorld(true);
+      world.cellRoot.updateMatrixWorld(true);
+      await yieldToMain();
+      framingBounds.copy(world.buildingBodyWorldBounds);
+      worldAttached = true;
+      buildingRootForDispose = world.buildingRoot;
+    })
+    .catch((err: unknown) => {
+      if (disposed) return;
+      console.warn("[MammothAuthBackdrop] megablock mesh failed to attach", err);
+    });
 
   const tick = () => {
     if (disposed) return;
@@ -99,16 +114,26 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     const wobble =
       Math.sin(nowSec * AUTH_BACKDROP_ORBIT_WOBBLE_SPEED_SEC) *
       AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD;
+
+    framingBounds.getSize(buildingSizeScratch);
+    framingBounds.getCenter(buildingCenterScratch);
+    lookTarget.copy(buildingCenterScratch);
+    lookTarget.y = framingBounds.min.y + buildingSizeScratch.y * 0.35;
+
+    baseCameraOffset.set(
+      -Math.max(buildingSizeScratch.x * 0.58, 130),
+      Math.max(buildingSizeScratch.y * 0.44, 30),
+      Math.max(buildingSizeScratch.x * 0.5, 120),
+    );
     cameraOffset.copy(baseCameraOffset).applyAxisAngle(worldUp, yawOrbit + wobble);
     camera.position.copy(lookTarget).add(cameraOffset);
-    // Horizontal “screen right”: in the ground plane, perpendicular to camera→target.
     toCamFlat.subVectors(camera.position, lookTarget);
     toCamFlat.y = 0;
     const horizLenSq = toCamFlat.lengthSq();
     if (horizLenSq > 1e-6) {
       toCamFlat.multiplyScalar(1 / Math.sqrt(horizLenSq));
       framingShiftWorld.crossVectors(worldUp, toCamFlat).normalize();
-      const framingM = buildingSize.x * AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC;
+      const framingM = buildingSizeScratch.x * AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC;
       aimPoint.copy(lookTarget).addScaledVector(framingShiftWorld, -framingM);
       camera.lookAt(aimPoint);
     } else {
@@ -130,10 +155,11 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     cancelAnimationFrame(raf);
     ro.disconnect();
     fpEnvironment.dispose();
-    restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
-    scene.remove(buildingRoot, cellRoot);
-    renderer.dispose();
+    if (worldAttached && buildingRootForDispose) {
+      restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRootForDispose);
+    }
     scene.clear();
+    renderer.dispose();
   };
 }
 

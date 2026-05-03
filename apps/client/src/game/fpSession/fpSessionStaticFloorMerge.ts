@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import {
   cloneGeometryForMerge,
   mergeGroupDescendantsByMaterial,
+  mergeGroupDescendantsByMaterialYielding,
 } from "./fpMergeGroupDescendantsByMaterial.js";
 
 /** Scratch for {@link mergeUnitPreservedShellsByPlacedObject} (avoid alloc per mesh). */
@@ -46,6 +47,36 @@ function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
   if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
 }
 
+async function mergeStaticFloorDirectChildYielding(
+  child: THREE.Object3D,
+  yieldToMain: () => Promise<void>,
+): Promise<void> {
+  const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
+  const isStairColumn = child.userData.mammothStairColumnRoot === true;
+  if (!isFloorPlate && !isStairColumn) return;
+
+  if (isStairColumn) {
+    let stairSegDone = 0;
+    for (const seg of (child as THREE.Group).children) {
+      seg.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        if (obj.name.includes("_exterior")) return;
+        obj.userData.mammothUnitInterior = true;
+      });
+      await mergeGroupDescendantsByMaterialYielding(seg as THREE.Group, yieldToMain);
+      stairSegDone++;
+      /** Inner merge yields often; breathe between shaft segments ~every 5 storeys — avoid timer storms on ≥3 columns. */
+      if (stairSegDone % 5 === 0) await yieldToMain();
+    }
+    return;
+  }
+
+  await mergeGroupDescendantsByMaterialYielding(child as THREE.Group, yieldToMain);
+  if (isFloorPlate) {
+    await mergeUnitPreservedShellsByPlacedObjectYielding(child as THREE.Group, yieldToMain);
+  }
+}
+
 export function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
   buildingRoot.updateMatrixWorld(true);
 
@@ -81,7 +112,7 @@ export async function mergeStaticFloorGeometriesYielding(
     tops = tops.sort((a, b) => score(a) - score(b));
   }
   for (const child of tops) {
-    mergeStaticFloorDirectChild(child);
+    await mergeStaticFloorDirectChildYielding(child, yieldToMain);
     await yieldToMain();
   }
 }
@@ -149,5 +180,74 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       mesh.name = `merged_unit_shell:${placedObjectId}`;
       floorPlateGroup.add(mesh);
     }
+  }
+}
+
+async function mergeUnitPreservedShellsByPlacedObjectYielding(
+  floorPlateGroup: THREE.Group,
+  yieldToMain: () => Promise<void>,
+): Promise<void> {
+  floorPlateGroup.updateMatrixWorld(true);
+  const floorInv = new THREE.Matrix4().copy(floorPlateGroup.matrixWorld).invert();
+
+  const placedIds = new Set<string>();
+  for (const ch of floorPlateGroup.children) {
+    if (!(ch instanceof THREE.Mesh)) continue;
+    if (ch.userData.mammothSkipFloorGeometryMerge !== true) continue;
+    const pid = ch.userData.mammothPlacedObjectId;
+    if (typeof pid === "string") placedIds.add(pid);
+  }
+
+  for (const placedObjectId of placedIds) {
+    const meshes = floorPlateGroup.children.filter(
+      (ch): ch is THREE.Mesh =>
+        ch instanceof THREE.Mesh &&
+        ch.userData.mammothSkipFloorGeometryMerge === true &&
+        ch.userData.mammothPlacedObjectId === placedObjectId,
+    );
+
+    const byMat = new Map<string, { mat: THREE.Material; list: THREE.Mesh[] }>();
+    for (const m of meshes) {
+      if (Array.isArray(m.material)) continue;
+      const mat = m.material as THREE.Material;
+      const key = mat.uuid;
+      let bucket = byMat.get(key);
+      if (!bucket) {
+        bucket = { mat, list: [] };
+        byMat.set(key, bucket);
+      }
+      bucket.list.push(m);
+    }
+
+    for (const { mat, list } of byMat.values()) {
+      if (list.length <= 1) continue;
+      const geos: THREE.BufferGeometry[] = [];
+      for (const m of list) {
+        m.updateWorldMatrix(true, false);
+        _mergeUnitShellScratch.multiplyMatrices(floorInv, m.matrixWorld);
+        const g = cloneGeometryForMerge(
+          m.geometry as THREE.BufferGeometry,
+          _mergeUnitShellScratch,
+        );
+        geos.push(g);
+      }
+      const merged = mergeGeometries(geos, false);
+      for (const g of geos) g.dispose();
+      if (!merged) continue;
+      for (const m of list) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+      merged.computeBoundingSphere();
+      merged.computeBoundingBox();
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.frustumCulled = true;
+      mesh.userData.mammothPlacedObjectId = placedObjectId;
+      mesh.userData.mammothUnitInterior = true;
+      mesh.name = `merged_unit_shell:${placedObjectId}`;
+      floorPlateGroup.add(mesh);
+      await yieldToMain();
+    }
+    await yieldToMain();
   }
 }

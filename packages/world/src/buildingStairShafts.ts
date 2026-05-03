@@ -213,6 +213,71 @@ export function getBuildingStairShaftSpecs(
   return out;
 }
 
+/** One contiguous stair-well column mesh stack (segments per storey); see {@link addBuildingStairShaftColumnsToRoot}. */
+export function addBuildingStairShaftColumnToRoot(
+  root: THREE.Group,
+  s: BuildingStairShaftSpec,
+  stairWellDef?: StairWellDef,
+): void {
+  const col = new THREE.Group();
+  col.name = `stair_shaft:${s.id}`;
+  col.userData.mammothStairColumnRoot = true;
+  col.position.set(s.px, 0, s.pz);
+  for (let i = 0; i < s.storeyCount; i++) {
+    const isTopStorey = i === s.storeyCount - 1;
+    const segment = new THREE.Group();
+    segment.name = `stair_shaft_segment_${i}`;
+    segment.userData.mammothPlateLevelIndex = s.minLevelIndex + i;
+    segment.position.y = s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
+    const authoringScope = i === 0 ? "ground" : "typical";
+    const sySeg = shaftStackSy(s.syPlate, s.storeySpacing);
+    const resolvedDoor = resolveStairWellGroundDoor({
+      sx: s.sx,
+      sy: sySeg,
+      sz: s.sz,
+      context: s.entryDoorContexts[i],
+      def: stairWellDef,
+      authoringScope,
+    });
+    const resolvedGroundDoor = resolvedDoor?.groundDoor;
+    const supplementalDoors = resolveStairWellSupplementalDoors({
+      sx: s.sx,
+      sy: sySeg,
+      sz: s.sz,
+      context: s.entryDoorContexts[i],
+      def: stairWellDef,
+      authoringScope,
+      primaryDoor: resolvedDoor,
+    });
+    const shaftExteriorFaceSet = new Set<CardinalFace>(s.exteriorShaftFaces);
+    if (i === 0) {
+      const f = resolvedGroundDoor?.face;
+      if (f) shaftExteriorFaceSet.add(f);
+      for (const sup of supplementalDoors) {
+        if (sup.face) shaftExteriorFaceSet.add(sup.face);
+      }
+    }
+    col.add(segment);
+    addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
+      omitGroundStoreyCornerLandings: i === 0,
+      def: stairWellDef,
+      authoringScope,
+      groundDoor: resolvedGroundDoor,
+      supplementalDoors,
+      includeCeiling: isTopStorey,
+      omitTreads: isTopStorey,
+      omitTopLanding: isTopStorey,
+      isTopOccupiedStairStorey:
+        s.storeyCount >= 2 && !isTopStorey && i === s.storeyCount - 2,
+      shaftExteriorFaces: [...shaftExteriorFaceSet],
+      interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
+      segmentScatterSeed: stairwellLitterScatterSeed(s.planKey, i),
+      stairGraphicsMergeRoot: col,
+    });
+  }
+  root.add(col);
+}
+
 /** Stair columns: one segment group per storey (band-culled in FP via `mammothPlateLevelIndex`). */
 export function addBuildingStairShaftColumnsToRoot(
   root: THREE.Group,
@@ -220,74 +285,24 @@ export function addBuildingStairShaftColumnsToRoot(
   stairWellDef?: StairWellDef,
 ): void {
   if (specs.length === 0) return;
-
   for (const s of specs) {
-    const col = new THREE.Group();
-    col.name = `stair_shaft:${s.id}`;
-    /**
-     * Per-segment children carry `mammothPlateLevelIndex` so FP can cull off-band storeys instead
-     * of submitting a full-height merged stair (all levels) every frame.
-     */
-    col.userData.mammothStairColumnRoot = true;
-    col.position.set(s.px, 0, s.pz);
-    for (let i = 0; i < s.storeyCount; i++) {
-      const isTopStorey = i === s.storeyCount - 1;
-      const segment = new THREE.Group();
-      segment.name = `stair_shaft_segment_${i}`;
-      segment.userData.mammothPlateLevelIndex = s.minLevelIndex + i;
-      segment.position.y =
-        s.bottomY + STOREY_SPACING_M * 0.5 + i * s.storeySpacing;
-      const authoringScope = i === 0 ? "ground" : "typical";
-      const sySeg = shaftStackSy(s.syPlate, s.storeySpacing);
-      const resolvedDoor = resolveStairWellGroundDoor({
-        sx: s.sx,
-        sy: sySeg,
-        sz: s.sz,
-        context: s.entryDoorContexts[i],
-        def: stairWellDef,
-        authoringScope,
-      });
-      const resolvedGroundDoor = resolvedDoor?.groundDoor;
-      const supplementalDoors = resolveStairWellSupplementalDoors({
-        sx: s.sx,
-        sy: sySeg,
-        sz: s.sz,
-        context: s.entryDoorContexts[i],
-        def: stairWellDef,
-        authoringScope,
-        primaryDoor: resolvedDoor,
-      });
-      const shaftExteriorFaceSet = new Set<CardinalFace>(s.exteriorShaftFaces);
-      /**
-       * Same ground-door façade rule as {@link floorPlaceholderMeshes} per-floor stair rooms:
-       * merged `exteriorShaftFaces` from geometry can miss the entry cardinal; ground segment
-       * would otherwise render interior wall mat on the public door wall.
-       */
-      if (i === 0) {
-        const f = resolvedGroundDoor?.face;
-        if (f) shaftExteriorFaceSet.add(f);
-        for (const sup of supplementalDoors) {
-          if (sup.face) shaftExteriorFaceSet.add(sup.face);
-        }
-      }
-      col.add(segment);
-      addStairWellPlaceholder(segment, s.sx, sySeg, s.sz, {
-        omitGroundStoreyCornerLandings: i === 0,
-        def: stairWellDef,
-        authoringScope,
-        groundDoor: resolvedGroundDoor,
-        supplementalDoors,
-        includeCeiling: isTopStorey,
-        omitTreads: isTopStorey,
-        omitTopLanding: isTopStorey,
-        isTopOccupiedStairStorey:
-          s.storeyCount >= 2 && !isTopStorey && i === s.storeyCount - 2,
-        shaftExteriorFaces: [...shaftExteriorFaceSet],
-        interiorWallUvAlternated: (s.minLevelIndex + i - 1) % 2 === 1,
-        segmentScatterSeed: stairwellLitterScatterSeed(s.planKey, i),
-        stairGraphicsMergeRoot: col,
-      });
-    }
-    root.add(col);
+    addBuildingStairShaftColumnToRoot(root, s, stairWellDef);
+  }
+}
+
+/**
+ * Same meshes as {@link addBuildingStairShaftColumnsToRoot}, yielding between each stair column root
+ * so ground-mesh authoring does not stall the login thread on multi-shaft footprints.
+ */
+export async function addBuildingStairShaftColumnsToRootYielding(
+  root: THREE.Group,
+  specs: readonly BuildingStairShaftSpec[],
+  stairWellDef: StairWellDef | undefined,
+  yieldAfterEachColumn: () => Promise<void>,
+): Promise<void> {
+  if (specs.length === 0) return;
+  for (const s of specs) {
+    addBuildingStairShaftColumnToRoot(root, s, stairWellDef);
+    await yieldAfterEachColumn();
   }
 }

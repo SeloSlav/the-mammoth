@@ -30,7 +30,10 @@ import {
   walkSurfaceAabbXZFootprint,
   type BuildingStairShaftSpec,
 } from "@the-mammoth/world";
-import { buildExteriorProceduralTreeGroup } from "@the-mammoth/world/exterior-procedural-trees.js";
+import {
+  buildExteriorProceduralTreeGroup,
+  buildExteriorProceduralTreeGroupYielding,
+} from "@the-mammoth/world/exterior-procedural-trees.js";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../../content/building/mammoth.json";
 import cellDoc from "../../../../../content/cells/cell_0_0.json";
@@ -233,6 +236,7 @@ export async function createFpSessionStaticWorldAsync(
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
   const stairWellDef = parseStairWellDef(stairWellAuthoringJson);
+  await yieldToMain();
   const stairOpeningOverlay = buildStairOpeningCollisionOverlayForBuilding(
     building,
     getFloorDoc,
@@ -245,6 +249,7 @@ export async function createFpSessionStaticWorldAsync(
     stairWellDef,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
+  await yieldToMain();
   const blockerAABBs = applyStairRuntimeBlockerOverlay(
     applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, stairOpeningOverlay),
     stairRuntimeOverlay,
@@ -305,7 +310,9 @@ export async function createFpSessionStaticWorldAsync(
   await mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain, {
     priorityPlateLevelIndices: opts?.priorityPlateLevelIndices,
   });
+  await yieldToMain();
   buildingRoot.updateMatrixWorld(true);
+  await yieldToMain();
   const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
 
   await yieldToMain();
@@ -333,16 +340,17 @@ export async function createFpSessionStaticWorldAsync(
       ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
     ];
 
-    buildingRoot.add(
-      buildExteriorProceduralTreeGroup(
-        buildingLocalFootprint,
-        {
-          groundY: localGroundY,
-          seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-        },
-        exteriorTreePlacements,
-      ),
+    const treeGroup = await buildExteriorProceduralTreeGroupYielding(
+      buildingLocalFootprint,
+      yieldToMain,
+      {
+        groundY: localGroundY,
+        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      },
+      exteriorTreePlacements,
     );
+    buildingRoot.add(treeGroup);
+    await yieldToMain();
   }
 
   await yieldToMain();
@@ -350,7 +358,11 @@ export async function createFpSessionStaticWorldAsync(
   const staticCollisionIndex =
     buildCollisionSpatialIndex(consolidatedCollisionBlockers);
 
+  await yieldToMain();
+
   const cellRoot = buildCellMeshes(parseCellDoc(cellDoc));
+
+  await yieldToMain();
 
   return {
     building,

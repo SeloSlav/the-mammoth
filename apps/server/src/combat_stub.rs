@@ -7,11 +7,21 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::inventory::{find_item_in_hotbar_slot, NUM_PLAYER_HOTBAR_SLOTS};
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
+use crate::movement::BIT_CROUCH;
 use crate::player_vitals;
 use crate::pose::player_pose;
 
 pub const PLAYER_BODY_RADIUS_M: f32 = 0.22;
 pub const PLAYER_BODY_HEIGHT_STAND_M: f32 = 1.78;
+/// Match `movement::PLAYER_HEIGHT_CROUCH_M` / hitscan victim capsule.
+pub const PLAYER_BODY_HEIGHT_CROUCH_M: f32 = 1.2;
+
+/// Authoritative damage multiplier when the hit resolves inside the head volume.
+pub const HEADSHOT_DAMAGE_MULTIPLIER: f32 = 2.0;
+/// World-space height of the head hit region at the top of the player capsule.
+pub const PLAYER_HEAD_ZONE_HEIGHT_M: f32 = 0.30;
+
+pub const RAY_AABB_T_ENTER_EPS: f32 = 4e-4;
 
 const PLAYER_SPATIAL_CELL_XZ_M: f32 = 1.25;
 const PLAYER_SPATIAL_CELL_Y_M: f32 = 2.0;

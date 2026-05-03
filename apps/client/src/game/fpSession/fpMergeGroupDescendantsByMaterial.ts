@@ -103,6 +103,99 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
   reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
 }
 
+/**
+ * Like {@link mergeGroupDescendantsByMaterial}, but awaits `yieldToMain()` after each merged material
+ * batch so large plates / stair stacks do not monopolize one long browser task during login prefetch.
+ */
+export async function mergeGroupDescendantsByMaterialYielding(
+  group: THREE.Group,
+  yieldToMain: () => Promise<void>,
+): Promise<void> {
+  group.updateMatrixWorld(true);
+  const groupWorldInv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+
+  const preserveMeshes: THREE.Mesh[] = [];
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothSkipFloorGeometryMerge === true) preserveMeshes.push(obj);
+    else if (Array.isArray(obj.material)) preserveMeshes.push(obj);
+  });
+
+  const preserveWorld = new Map<THREE.Mesh, THREE.Matrix4>();
+  for (const m of preserveMeshes) {
+    m.updateMatrixWorld(true);
+    preserveWorld.set(m, m.matrixWorld.clone());
+    m.removeFromParent();
+  }
+
+  const mergeMeshes: THREE.Mesh[] = [];
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (obj.userData.mammothSkipFloorGeometryMerge === true) return;
+    if (Array.isArray(obj.material)) return;
+    mergeMeshes.push(obj);
+  });
+
+  const geosByMat = new Map<
+    string,
+    { mat: THREE.Material; geos: THREE.BufferGeometry[]; allInterior: boolean }
+  >();
+
+  const GATHER_BATCH = 72;
+  for (let i = 0; i < mergeMeshes.length; i += GATHER_BATCH) {
+    const end = Math.min(i + GATHER_BATCH, mergeMeshes.length);
+    for (let j = i; j < end; j++) {
+      const obj = mergeMeshes[j]!;
+      const material = obj.material as THREE.Material;
+      obj.updateWorldMatrix(true, false);
+      _mergeGatherLocal.multiplyMatrices(groupWorldInv, obj.matrixWorld);
+      const geo = cloneGeometryForMerge(
+        obj.geometry as THREE.BufferGeometry,
+        _mergeGatherLocal,
+      );
+      const key = material.uuid;
+      const isInterior = obj.userData.mammothUnitInterior === true;
+      let bucket = geosByMat.get(key);
+      if (!bucket) {
+        bucket = { mat: material, geos: [], allInterior: isInterior };
+        geosByMat.set(key, bucket);
+      } else {
+        bucket.allInterior = bucket.allInterior && isInterior;
+      }
+      bucket.geos.push(geo);
+    }
+    if (end < mergeMeshes.length) await yieldToMain();
+  }
+
+  if (geosByMat.size === 0) {
+    if (preserveMeshes.length === 0) return;
+    while (group.children.length > 0) {
+      group.remove(group.children[0]!);
+    }
+    reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
+    return;
+  }
+
+  while (group.children.length > 0) {
+    group.remove(group.children[0]!);
+  }
+
+  for (const { mat, geos, allInterior } of geosByMat.values()) {
+    const merged = mergeGeometries(geos, false);
+    for (const g of geos) g.dispose();
+    if (!merged) continue;
+    merged.computeBoundingSphere();
+    merged.computeBoundingBox();
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.frustumCulled = true;
+    if (allInterior) mesh.userData.mammothUnitInterior = true;
+    group.add(mesh);
+    await yieldToMain();
+  }
+
+  reattachPreservedMeshesWithSavedWorld(group, preserveMeshes, preserveWorld);
+}
+
 function reattachPreservedMeshesWithSavedWorld(
   group: THREE.Group,
   preserveMeshes: THREE.Mesh[],
