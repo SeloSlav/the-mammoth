@@ -2,6 +2,12 @@
  * Diagnose perceived “black screen / slow login”: Spacetime connect, subscriptions,
  * FP `mountFpSession` async gaps, CPU long tasks, and large RAF deltas.
  *
+ * Interpretation: `long_task_cpu` and `[Violation] requestAnimationFrame handler took …ms`
+ * both mean the main thread was busy (JS parse, WASM, shader compile, layout, slicing work,
+ * GC, DevTools overhead). Matching `raf_frame_gap` timestamps mean the RAF loop stalled
+ * for the same reason. Logs use one-line `console.info` to avoid Chrome printing huge
+ * `requestAnimationFrame` async stacks beside each warning.
+ *
  * Enable: `localStorage.setItem("mammothFpLoadingDebug","1")` + refresh,
  * URL `?loaddebug=1`, or the in-game Mammoth Debug menu toggle.
  */
@@ -10,7 +16,11 @@ import { LS_FP_LOADING_DEBUG } from "../fpDebugMenuStorage.js";
 
 const PREFIX = "[mmLoadDbg]";
 const RAF_GAP_WARN_MS = 120;
+/** Log at most one sub-severe RAF gap / this many ms (severe gaps always log). */
+const RAF_GAP_LOG_COOLDOWN_MS = 750;
+const RAF_GAP_SEVERE_MS = 400;
 /** Long-task entries are Chromium-only; durations are typically ≥50 ms. */
+let lastRafGapLogMonoMs = 0;
 
 let sessionAnchorMs = 0;
 let lastMarkMs = 0;
@@ -148,11 +158,10 @@ export function ensureFpLoadingDebugGlobalObservers(): GlobalCleanup {
       const entries = list.getEntries();
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i]!;
-        console.warn(PREFIX, "long_task_cpu", {
-          durationMs: Math.round(e.duration),
-          startTimeMs: Math.round(e.startTime),
-          name: e.name,
-        });
+        // Single-line info avoids DevTools attaching a giant async stack (unlike console.warn objects).
+        console.info(
+          `${PREFIX} long_task_cpu durationMs=${Math.round(e.duration)} startTimeMs=${Math.round(e.startTime)} name=${e.name}`,
+        );
       }
     });
     longTaskObs.observe({ type: "longtask", buffered: true });
@@ -196,7 +205,13 @@ export function fpLoadingDbgCheckRafGap(
   if (!isFpLoadingDebugEnabled()) return;
   initAnchorsOnce();
   const gapMs = Math.round(frameStartMs - prevFrameStartMs);
-  if (gapMs >= RAF_GAP_WARN_MS) {
-    console.warn(PREFIX, "raf_frame_gap", { gapMs, prevFrameApproxFpsHint: gapMs > 0 ? Math.round(1000 / gapMs) : 0 });
-  }
+  if (gapMs < RAF_GAP_WARN_MS) return;
+  const now = frameStartMs;
+  const severe = gapMs >= RAF_GAP_SEVERE_MS;
+  if (!severe && now - lastRafGapLogMonoMs < RAF_GAP_LOG_COOLDOWN_MS) return;
+  lastRafGapLogMonoMs = now;
+  const effFps = gapMs > 0 ? Math.round(1000 / gapMs) : 0;
+  console.info(
+    `${PREFIX} raf_frame_gap gapMs=${gapMs} effectiveFps~${effFps}${severe ? " (severe)" : ""}`,
+  );
 }

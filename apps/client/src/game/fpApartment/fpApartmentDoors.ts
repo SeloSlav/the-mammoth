@@ -46,11 +46,11 @@ import {
   isGlazedApartmentDoorTemplate,
   SWING_DOOR_ANIM_SPEED,
   SWING_DOOR_DEFAULT_MAX_RAD,
-  SWING_DOOR_INTERACT_RADIUS_M,
   type SwingDoorDimensions,
   type SwingDoorFace,
   swingDoorClosedSlabAabb,
   swingDoorClosedSlabActive,
+  swingDoorFirearmBarrierAabb,
   swingDoorOrientationForFace,
   swingDoorParkedLeafAabb,
   swingDoorParkedLeafActive,
@@ -159,6 +159,16 @@ export type MountFpApartmentDoorsResult = {
     z1: number,
     visit: (aabb: CollisionAabb) => void,
     queryPose?: DynamicCollisionQueryPose,
+  ): void;
+  /**
+   * LOS / impact decals: widened closed slabs + parked leaves (mirrors server `hitscan` apartment pass).
+   */
+  visitFirearmBarrierAabbsInXZ(
+    x0: number,
+    x1: number,
+    z0: number,
+    z1: number,
+    visit: (aabb: CollisionAabb) => void,
   ): void;
   /**
    * Try to open/close the nearest eligible door. Returns true when a reducer was dispatched and
@@ -838,8 +848,9 @@ export function mountFpApartmentDoors(
     z0: number,
     z1: number,
     visit: (aabb: CollisionAabb) => void,
-    _queryPose?: DynamicCollisionQueryPose,
+    queryPose?: DynamicCollisionQueryPose,
   ) => {
+    void queryPose;
     collisionSlotVisitSeen.clear();
     visitBucketedSlots(bucketIndex, x0, x1, z0, z1, (slot) => {
       if (collisionSlotVisitSeen.has(slot.rowKey)) return;
@@ -1001,6 +1012,34 @@ export function mountFpApartmentDoors(
     return out;
   };
 
+  const visitFirearmBarrierAabbsInXZ = (
+    x0: number,
+    x1: number,
+    z0: number,
+    z1: number,
+    visit: (aabb: CollisionAabb) => void,
+  ) => {
+    collisionSlotVisitSeen.clear();
+    visitBucketedSlots(bucketIndex, x0, x1, z0, z1, (slot) => {
+      if (collisionSlotVisitSeen.has(slot.rowKey)) return;
+      collisionSlotVisitSeen.add(slot.rowKey);
+      const aabb = swingDoorFirearmBarrierAabb({
+        open01: slot.swingOpen01,
+        face: slot.face,
+        hingeX: slot.hingeX,
+        hingeZ: slot.hingeZ,
+        feetY: slot.feetY,
+        panelWidthM: slot.panelWidthM,
+        panelHeightM: slot.panelHeightM,
+        swingInward: slot.swingInward,
+      });
+      if (!aabb) return;
+      if (aabb.max[0] < x0 || aabb.min[0] > x1) return;
+      if (aabb.max[2] < z0 || aabb.min[2] > z1) return;
+      visit(aabb);
+    });
+  };
+
   const dispose = () => {
     try {
       sub?.unsubscribe();
@@ -1036,6 +1075,7 @@ export function mountFpApartmentDoors(
     dispose,
     tick,
     visitCollisionAabbsInXZ,
+    visitFirearmBarrierAabbsInXZ,
     consumeInteractKey,
     shouldSuppressEpickup,
     getInteractPrompt,

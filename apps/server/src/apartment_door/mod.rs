@@ -353,9 +353,45 @@ fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Collision: dynamic AABBs for the movement tick (see `generated_player_collision`
-// for the elevator counterpart).
+/// Match `packages/world/src/swingDoorCollision.ts` `SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M`.
+const SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M: f32 = 0.6;
+/// Match `SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M`.
+const SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M: f32 = 0.035;
+/// Match `SWING_DOOR_PASSAGE_OPEN_THRESH` — LOS clears at/above this `swing_open_01`.
+const SWING_DOOR_PASSAGE_OPEN_THRESH_HITSCAN: f32 = 0.85;
+
+fn expanded_closed_slab_firearm_barrier(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
+    let (mut mn, mut mx) = closed_slab_aabb(row);
+    let face = SwingDoorFace::from_u8(row.face);
+    match face {
+        SwingDoorFace::W | SwingDoorFace::E => {
+            mn[2] -= SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M;
+            mx[2] += SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M;
+            mn[0] -= SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M;
+            mx[0] += SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M;
+        }
+        SwingDoorFace::N | SwingDoorFace::S => {
+            mn[0] -= SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M;
+            mx[0] += SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M;
+            mn[2] -= SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M;
+            mx[2] += SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M;
+        }
+    }
+    (mn, mx)
+}
+
+/// Hit-scan / LOS collider separate from capsule movement: widens trimmed jamb gaps; must stay in
+/// lockstep with `swingDoorFirearmBarrierAabb` in `@the-mammoth/world`.
+pub fn apartment_door_firearm_barrier_aabb(row: &ApartmentDoor) -> Option<([f32; 3], [f32; 3])> {
+    if row.swing_open_01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 {
+        return Some(parked_leaf_aabb(row));
+    }
+    if row.swing_open_01 >= SWING_DOOR_PASSAGE_OPEN_THRESH_HITSCAN {
+        return None;
+    }
+    Some(expanded_closed_slab_firearm_barrier(row))
+}
+
 // ---------------------------------------------------------------------------
 
 pub fn collect_apartment_door_collision_aabbs(

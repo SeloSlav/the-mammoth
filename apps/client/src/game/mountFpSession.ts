@@ -204,11 +204,6 @@ export async function mountFpSession(
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
-  const fpFirearmImpactDecals = createFpFirearmImpactDecals({
-    scene,
-    staticCollisionIndex,
-  });
-
   /**
    * Get something real onto the canvas before async apartment props, decals, and presentation assets
    * finish. Without this bootstrap frame, React has already swapped to the FP canvas but the browser
@@ -244,6 +239,14 @@ export async function mountFpSession(
     conn,
     buildingRoot,
     building,
+  });
+
+  const fpFirearmImpactDecals = createFpFirearmImpactDecals({
+    scene,
+    staticCollisionIndex,
+    visitExtraSolidAabbsInXZ: (x0, x1, z0, z1, visit) => {
+      fpApartmentDoors.visitFirearmBarrierAabbsInXZ(x0, x1, z0, z1, visit);
+    },
   });
 
   const fpCollisionDebug = createFpCollisionDebugOverlay({

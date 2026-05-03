@@ -241,6 +241,82 @@ export function swingDoorParkedLeafActive(open01: number): boolean {
   return open01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01;
 }
 
+/**
+ * Matches {@link fpBlockerAABBs}.`DOORWAY_COLLISION_INSET_M` (`fpBlockerAABBs.ts`):
+ * doorway **static** solids are trimmed this far for forgiving capsule movement. The visible jamb +
+ * trimmed region is wider than the thin closed swing slab alone, which lets LOS slip through unless
+ * hit-scan/decals widen the firearm barrier along the doorway tangent (server + client decals).
+ */
+export const SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M = 0.6;
+
+/** Extra closed-slab half-thickness vs movement collision — tightens grazing shots along the wall normal. */
+export const SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M = 0.035;
+
+/** Expands movement `swingDoorClosedSlabAabb` for firearm ray vs decal traces only. */
+export function expandSwingDoorClosedSlabAabbForFirearmLOS(
+  slab: CollisionAabb,
+  face: SwingDoorFace,
+): CollisionAabb {
+  const p = SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M;
+  const e = SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M;
+  const mn: [number, number, number] = [slab.min[0], slab.min[1], slab.min[2]];
+  const mx: [number, number, number] = [slab.max[0], slab.max[1], slab.max[2]];
+  if (face === "w" || face === "e") {
+    mn[2] -= p;
+    mx[2] += p;
+    mn[0] -= e;
+    mx[0] += e;
+  } else {
+    mn[0] -= p;
+    mx[0] += p;
+    mn[2] -= e;
+    mx[2] += e;
+  }
+  return { min: mn, max: mx };
+}
+
+/**
+ * Authoritative LOS / impact-decal blocker for swing doors. Unlike capsule collision, bullets use an
+ * **expanded closed slab** while `open01` stays below passage clearance, bridging jamb-gap cheats.
+ *
+ * Above {@link SWING_DOOR_PASSAGE_OPEN_THRESH}: no blocker (rays pass like the forgiving movement gap).
+ * At {@link SWING_DOOR_PARKED_LEAF_MIN_OPEN_01}+: uses parked-leaf slab (movement parity).
+ */
+export function swingDoorFirearmBarrierAabb(opts: {
+  open01: number;
+  face: SwingDoorFace;
+  hingeX: number;
+  hingeZ: number;
+  feetY: number;
+  panelWidthM: number;
+  panelHeightM: number;
+  swingInward?: boolean;
+}): CollisionAabb | null {
+  if (swingDoorParkedLeafActive(opts.open01)) {
+    return swingDoorParkedLeafAabb({
+      face: opts.face,
+      hingeX: opts.hingeX,
+      hingeZ: opts.hingeZ,
+      feetY: opts.feetY,
+      panelWidthM: opts.panelWidthM,
+      panelHeightM: opts.panelHeightM,
+      swingInward: opts.swingInward,
+    });
+  }
+  if (opts.open01 >= SWING_DOOR_PASSAGE_OPEN_THRESH) {
+    return null;
+  }
+  const closed = swingDoorClosedSlabAabb({
+    face: opts.face,
+    hingeX: opts.hingeX,
+    hingeZ: opts.hingeZ,
+    feetY: opts.feetY,
+    panelWidthM: opts.panelWidthM,
+    panelHeightM: opts.panelHeightM,
+  });
+  return expandSwingDoorClosedSlabAabbForFirearmLOS(closed, opts.face);
+}
+
 /** Player-feet test for E-key interaction eligibility. */
 export function swingDoorPlayerInInteractRange(opts: {
   hingeX: number;

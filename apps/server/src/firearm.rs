@@ -1,4 +1,4 @@
-//! Ranged fire — ammo consumption + authoritative LOS hit-scan (walls + doors via static solids).
+//! Ranged fire — ammo consumption + authoritative LOS hit-scan (walls + firearm widened swing doors via static solids + dynamic rows).
 
 use spacetimedb::{Identity, ReducerContext, Table};
 

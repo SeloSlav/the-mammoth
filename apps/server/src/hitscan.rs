@@ -1,4 +1,6 @@
-//! Authoritative LOS hit-scan for firearms: rays vs baked static collision AABBs and player boxes.
+//! Authoritative LOS hit-scan for firearms: rays vs baked static collision AABBs, apartment-door
+//! firearm barriers (widened slabs — see `apartment_door::apartment_door_firearm_barrier_aabb`),
+//! and player boxes.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -6,6 +8,7 @@ use std::hash::{Hash, Hasher};
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
+use crate::apartment_door::apartment_door;
 use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
 use crate::generated_collision_solids::{
     COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
@@ -219,6 +222,62 @@ fn trace_static_solids(origin: [f32; 3], dir: [f32; 3], max_t: f32) -> Option<f3
     best
 }
 
+fn trace_apartment_door_firearms(
+    ctx: &ReducerContext,
+    origin: [f32; 3],
+    dir: [f32; 3],
+    max_t: f32,
+) -> Option<f32> {
+    let ox = origin[0];
+    let oy = origin[1];
+    let oz = origin[2];
+    let dx = dir[0];
+    let dy = dir[1];
+    let dz = dir[2];
+    let lim = CollQueryLimits::from_ray(ox, oz, dx, dz, max_t);
+    let mut best: Option<f32> = None;
+
+    for row in ctx.db.apartment_door().iter() {
+        let Some((mn, mx)) = crate::apartment_door::apartment_door_firearm_barrier_aabb(&row) else {
+            continue;
+        };
+        if !lim.intersects_shard_aabb(mn, mx) {
+            continue;
+        }
+        if let Some(hit) = ray_aabb(
+            ox, oy, oz, dx, dy, dz, mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
+        ) {
+            if hit.t_hit <= max_t + RAY_T_EPS
+                && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5
+            {
+                best = Some(hit.t_hit);
+            }
+        }
+    }
+    best
+}
+
+#[inline]
+fn merge_ray_wall_hits(a: Option<f32>, b: Option<f32>) -> Option<f32> {
+    match (a, b) {
+        (None, None) => None,
+        (Some(t), None) | (None, Some(t)) => Some(t),
+        (Some(ta), Some(tb)) => Some(ta.min(tb)),
+    }
+}
+
+fn trace_world_solids_for_firearms(
+    ctx: &ReducerContext,
+    origin: [f32; 3],
+    dir: [f32; 3],
+    max_t: f32,
+) -> Option<f32> {
+    merge_ray_wall_hits(
+        trace_static_solids(origin, dir, max_t),
+        trace_apartment_door_firearms(ctx, origin, dir, max_t),
+    )
+}
+
 fn trace_best_player_hit(
     ctx: &ReducerContext,
     attacker: Identity,
@@ -302,7 +361,7 @@ fn resolve_pistol_ray(
 ) -> Vec<PlayerDamageEvent> {
     let origin = [ox, oy, oz];
     let dir = [dx, dy, dz];
-    let t_wall = trace_static_solids(origin, dir, max_range_m);
+    let t_wall = trace_world_solids_for_firearms(ctx, origin, dir, max_range_m);
     let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
 
     let Some((pid, hp)) = phit else {
@@ -356,7 +415,7 @@ fn resolve_shotgun_pellets(
 
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
-        let t_wall = trace_static_solids(origin, [jx, jy, jz], max_range_m);
+        let t_wall = trace_world_solids_for_firearms(ctx, origin, [jx, jy, jz], max_range_m);
         let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {

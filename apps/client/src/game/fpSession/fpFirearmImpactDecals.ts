@@ -6,9 +6,18 @@ import {
   fpFirearmHitscanRangeMForHeldItem,
 } from "@the-mammoth/engine";
 import {
-  type CollisionSpatialIndex,
   FP_OUTDOOR_GROUND_VISUAL_Y,
+  type CollisionAabb,
+  type CollisionSpatialIndex,
 } from "@the-mammoth/world";
+
+export type VisitSolidAabbInXZFn = (
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+  visit: (aabb: CollisionAabb) => void,
+) => void;
 
 const DECAL_GROUP_NAME = "fp_firearm_impact_decals";
 const MAX_DECALS = 56;
@@ -188,6 +197,7 @@ export type FpFirearmImpactDecals = {
 export function createFpFirearmImpactDecals(opts: {
   scene: THREE.Scene;
   staticCollisionIndex: CollisionSpatialIndex;
+  visitExtraSolidAabbsInXZ?: VisitSolidAabbInXZFn;
 }): FpFirearmImpactDecals {
   const group = new THREE.Group();
   group.name = DECAL_GROUP_NAME;
@@ -286,6 +296,15 @@ export function createFpFirearmImpactDecals(opts: {
     let bestMax: readonly [number, number, number] | null = null;
 
     opts.staticCollisionIndex.visitAabbsInXZ(xz.x0, xz.x1, xz.z0, xz.z1, (aabb) => {
+      const t = rayAabbEntryT(ox, oy, oz, dx, dy, dz, range, aabb.min, aabb.max);
+      if (t !== null && t < bestT) {
+        bestT = t;
+        bestMin = aabb.min;
+        bestMax = aabb.max;
+      }
+    });
+
+    opts.visitExtraSolidAabbsInXZ?.(xz.x0, xz.x1, xz.z0, xz.z1, (aabb) => {
       const t = rayAabbEntryT(ox, oy, oz, dx, dy, dz, range, aabb.min, aabb.max);
       if (t !== null && t < bestT) {
         bestT = t;
