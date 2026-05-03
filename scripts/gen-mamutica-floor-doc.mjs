@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Generates Mamutica-inspired floor JSON:
+ * Generates Mamutica-inspired building + floor JSON:
+ * - `mammoth.json` — floor stack references (PR + generated residential plates).
  * - `floor_mamutica_typical.json` — double-loaded residential plate with **symmetric** vertical
  *   cores (stair + elevator) along the spine and **segmented** corridors (no single 240 m tube).
  * - `floor_mamutica_ground.json` — podium / lobby: shell matches residential bar width, **elevator banks**, stair wells.
@@ -17,6 +18,8 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 
+/** Total stack count, including PR / ground. Change this one number, then run `pnpm content:gen-mamutica-floor`. */
+const TOTAL_BUILDING_FLOORS = 20;
 const FLOOR_TO_CEILING_M = 3.05;
 /** Must match `DEFAULT_BUILDING_FLOOR_SPACING_M` in `packages/world/src/index.ts` (stacked plates). */
 const STOREY_SPACING_M = 60 / 19;
@@ -124,6 +127,101 @@ function groundRemoteElevatorNumber(cz) {
   return cz < 0
     ? Math.round(cz / CORE_STATION_SPACING_M) + 3
     : Math.round(cz / CORE_STATION_SPACING_M) + 2;
+}
+
+function residentialFloorCount() {
+  if (!Number.isInteger(TOTAL_BUILDING_FLOORS) || TOTAL_BUILDING_FLOORS < 1) {
+    throw new Error("TOTAL_BUILDING_FLOORS must be an integer >= 1");
+  }
+  return Math.max(0, TOTAL_BUILDING_FLOORS - 1);
+}
+
+function floorRefsForBuilding(totalFloors) {
+  const refs = [
+    {
+      levelIndex: 1,
+      floorDocId: "floor_mamutica_ground",
+      displayLabel: totalFloors === 1 ? "PR / ground / top" : "PR / ground",
+      shortLabel: "PR",
+    },
+  ];
+
+  for (let residentialFloor = 1; residentialFloor < totalFloors; residentialFloor += 1) {
+    const levelIndex = residentialFloor + 1;
+    const isTop = levelIndex === totalFloors;
+    refs.push({
+      levelIndex,
+      floorDocId: "floor_mamutica_typical",
+      displayLabel: `Floor ${residentialFloor}${isTop ? " / top" : ""}`,
+      shortLabel: String(residentialFloor),
+    });
+  }
+
+  return refs;
+}
+
+function writeBuildingDoc() {
+  const residentialFloors = residentialFloorCount();
+  const residentialUnitsPerFloor = collectSegmentedUnitCentersZ(collectCoreCentersZ()).length * 2;
+  const doc = {
+    id: "mammoth_main",
+    version: 1,
+    displayName: "The Mammoth (Mamutica-scale target)",
+    exteriorCellId: "cell_0_0",
+    cores: [
+      {
+        id: "core_stair_east",
+        kind: "stair",
+        interiorDocId: "lobby_central",
+        notes: "Placeholder until dedicated stair/interior docs exist.",
+      },
+    ],
+    floorRefs: floorRefsForBuilding(TOTAL_BUILDING_FLOORS),
+    units: [
+      {
+        address: { wingId: "E", floorIndex: 1, unitIndex: 1 },
+        interiorTemplateId: "lobby_central",
+        notes: "Dev slice until per-bay interiors exist.",
+      },
+      {
+        address: { wingId: "E", floorIndex: 1, unitIndex: 2 },
+        interiorTemplateId: "lobby_central",
+        notes: "Second slot.",
+      },
+    ],
+    slotTemplates: [
+      {
+        wingId: "E",
+        floorRange: residentialFloors > 0 ? [2, TOTAL_BUILDING_FLOORS] : [1, 1],
+        unitIndexRange: [1, residentialUnitsPerFloor],
+        interiorTemplateId: "lobby_central",
+      },
+    ],
+    metadata: {
+      mamutica_reference: {
+        source: "https://hr.wikipedia.org/wiki/Mamutica (infobox)",
+        length_m_about: 240,
+        height_m_about: 60,
+        inhabited_floors: 19,
+        apartments_total: 1169,
+        gross_floor_area_m2_about: 100000,
+        cross_section_note:
+          "Wikipedia cites length/height/apartment count, not slab width. Generated floors use inferred dimensions; cores are schematic.",
+      },
+      generated_total_floors: TOTAL_BUILDING_FLOORS,
+      generated_residential_floors: residentialFloors,
+      gameplay_numbering_note: `Authored stack keeps original storey spacing; labels are PR + typical floors 1..${residentialFloors} (levelIndex 1..${TOTAL_BUILDING_FLOORS}).`,
+      authored_floor_note:
+        "Change TOTAL_BUILDING_FLOORS in scripts/gen-mamutica-floor-doc.mjs, then run `pnpm content:gen-mamutica-floor`, `pnpm content:gen-apartment-doors`, and `pnpm content:gen-walk-aabbs`.",
+      building_access_note:
+        "Hub stairs ~±13 m X; upper stories repeat cores. Placeholder hollow shells punch floor+ceiling plates at every elevator/stair footprint so shafts read as continuous vertical cuts. Walk AABBs: `pnpm content:gen-walk-aabbs` after floor edits.",
+      targetResidentialUnits: residentialUnitsPerFloor * residentialFloors,
+    },
+  };
+
+  const outPath = join(repoRoot, "content/building/mammoth.json");
+  writeFileSync(outPath, `${JSON.stringify(doc, null, 2)}\n`, "utf8");
+  console.log(`Wrote ${outPath} (${TOTAL_BUILDING_FLOORS} total floors).`);
 }
 
 function writeTypicalFloor() {
@@ -285,5 +383,6 @@ function writeGroundFloor() {
   console.log(`Wrote ${outPath} (${objects.length} objects).`);
 }
 
+writeBuildingDoc();
 writeTypicalFloor();
 writeGroundFloor();
