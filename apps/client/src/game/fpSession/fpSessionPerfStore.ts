@@ -24,17 +24,22 @@ const _elevator = new Float32Array(RING);
 const _present = new Float32Array(RING);
 /** Render section wall time: floor visibility + fp environment + `renderer.render`. */
 const _render = new Float32Array(RING);
-/** {@link syncBuildingFloorPlateVisibility} only. */
+/** Stairwell dark sample + elevator shaft visual culling (see {@link fpSessionMainRafFrame}). */
 const _renderFloorVis = new Float32Array(RING);
 /** {@link FpSessionEnvironmentHandle.onFrame} (sky time / resolution). */
 const _renderFpEnv = new Float32Array(RING);
 /** `renderer.render` — WebGPU record/submit and usually the main thread wait for GPU. */
 const _renderThree = new Float32Array(RING);
+/** GPU timer resolve for main render passes (ms), when `trackTimestamp` is enabled; `-1` = no sample. */
+const _renderThreeGpu = new Float32Array(RING);
 
 /** Next write slot (wraps around RING). */
 let _head = 0;
 /** Total frames ever written (capped at RING for oldest/newest logic). */
 let _wrote = 0;
+
+/** Filled when {@link deliverFpSessionGpuRenderMs} runs (async after `resolveTimestampsAsync`). */
+let _pendingGpuRenderMsForNextSample: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Public write API — called once per frame from mountFpSession
@@ -43,9 +48,17 @@ let _wrote = 0;
 export type FpPerfSections = {
   physicsMs: number;
   elevatorMs: number;
+  /**
+   * `_t_elevEnd` → end of {@link PlayerPresentationManager.update}: rig/camera/audio, building
+   * floor-plate + furniture visibility, remote snapshots, presentation. Pickup HUD runs after this
+   * (counted in {@link renderMs}).
+   */
   presentMs: number;
   renderMs: number;
-  /** Split of {@link renderMs}; three values sum to `renderMs` (same wall-clock window). */
+  /**
+   * Split of {@link renderMs}; three values sum to `renderMs`. Stairwell dark target + smoothing
+   * and elevator shaft visual culling (everything before `fpEnvironment.onFrame`).
+   */
   renderFloorPlateVisMs: number;
   renderFpEnvironmentMs: number;
   renderThreeMs: number;
@@ -85,9 +98,21 @@ export function pushFpPerfFrame(
   _renderFloorVis[i] = sections.renderFloorPlateVisMs;
   _renderFpEnv[i] = sections.renderFpEnvironmentMs;
   _renderThree[i] = sections.renderThreeMs;
+  const g = _pendingGpuRenderMsForNextSample;
+  _pendingGpuRenderMsForNextSample = null;
+  _renderThreeGpu[i] = g != null ? g : -1;
   _head = (_head + 1) % RING;
   _wrote += 1;
   _notifyIfNeeded(nowMs);
+}
+
+/**
+ * Called when `resolveTimestampsAsync` completes (typically 1–2 frames after the render).
+ * The value is attached to the **next** {@link pushFpPerfFrame} sample.
+ */
+export function deliverFpSessionGpuRenderMs(ms: number | undefined): void {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return;
+  _pendingGpuRenderMsForNextSample = ms;
 }
 
 export function resetFpPerfStore(): void {
@@ -102,6 +127,8 @@ export function resetFpPerfStore(): void {
   _renderFloorVis.fill(0);
   _renderFpEnv.fill(0);
   _renderThree.fill(0);
+  _renderThreeGpu.fill(-1);
+  _pendingGpuRenderMsForNextSample = null;
   _listeners.clear();
   _lastNotifyMs = 0;
 }
@@ -164,6 +191,8 @@ export type FpPerfStats = {
     renderFloorPlateVisMs: number;
     renderFpEnvironmentMs: number;
     renderThreeMs: number;
+    /** Hardware GPU time for render pass batch when timestamp queries work; `null` if unsupported or no samples. */
+    renderThreeGpuMs: number | null;
   };
   histogram: FpPerfHistBucket[];
 };
@@ -210,6 +239,8 @@ export function computeFpPerfStats(
   let sumRenderFloorVis = 0;
   let sumRenderFpEnv = 0;
   let sumRenderThree = 0;
+  let sumRenderThreeGpu = 0;
+  let gpuSamples = 0;
 
   const hist = new Int32Array(6);
 
@@ -227,6 +258,11 @@ export function computeFpPerfStats(
     sumRenderFloorVis += _renderFloorVis[i]!;
     sumRenderFpEnv += _renderFpEnv[i]!;
     sumRenderThree += _renderThree[i]!;
+    const tg = _renderThreeGpu[i]!;
+    if (tg >= 0) {
+      sumRenderThreeGpu += tg;
+      gpuSamples += 1;
+    }
 
     // Histogram bucket.
     let b = 5;
@@ -292,6 +328,8 @@ export function computeFpPerfStats(
       renderFloorPlateVisMs: Math.round(avgRenderFloorVis * 100) / 100,
       renderFpEnvironmentMs: Math.round(avgRenderFpEnv * 100) / 100,
       renderThreeMs: Math.round(avgRenderThree * 100) / 100,
+      renderThreeGpuMs:
+        gpuSamples > 0 ? Math.round((sumRenderThreeGpu / gpuSamples) * 100) / 100 : null,
     },
     histogram,
   };
@@ -325,6 +363,7 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
     sections.renderFloorPlateVisMs,
     sections.renderFpEnvironmentMs,
     sections.renderThreeMs,
+    sections.renderThreeGpuMs ?? 0,
   );
 
   const lines: string[] = [
@@ -340,9 +379,12 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
     `  elevator  ${sections.elevatorMs.toFixed(2).padStart(6)}ms  ${secBar(sections.elevatorMs, secMax)}`,
     `  present   ${sections.presentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.presentMs, secMax)}`,
     `  render    ${sections.renderMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderMs, secMax)}`,
-    `    floorVis ${sections.renderFloorPlateVisMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFloorPlateVisMs, secMax)}`,
+    `    preEnv   ${sections.renderFloorPlateVisMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFloorPlateVisMs, secMax)}`,
     `    fpEnv    ${sections.renderFpEnvironmentMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderFpEnvironmentMs, secMax)}`,
     `    three.js ${sections.renderThreeMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderThreeMs, secMax)}`,
+    sections.renderThreeGpuMs != null
+      ? `    GPU hw  ${sections.renderThreeGpuMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderThreeGpuMs, secMax)}`
+      : `    GPU hw     n/a  (enable timestamp-query + trackTimestamp)`,
     `  other     ${sections.otherMs.toFixed(2).padStart(6)}ms  ${secBar(sections.otherMs, secMax)}`,
     "",
     "Frame-time histogram:",

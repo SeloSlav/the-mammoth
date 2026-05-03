@@ -9,7 +9,6 @@ import type { FpSessionMoveIntentQueue } from "./fpSessionLocalPrediction.js";
 import type { FpSessionMainRafState } from "./fpSessionMainRafFrame.js";
 import {
   MOVE_INTENT_EDGE_WINDOW_MS,
-  MOVE_INTENT_MOVE_BITS,
   MOVE_INTENT_YAW_EDGE_RAD,
   NET_INTERVAL_MS,
 } from "./fpSessionConstants.js";
@@ -89,11 +88,10 @@ export function createFpSessionMoveIntentChannel(
     }
     if (nowMs < jumpIntentLockUntilMs) return;
     const persistentBits = encodeMoveIntentBits(input, false);
-    const moving = (persistentBits & MOVE_INTENT_MOVE_BITS) !== 0;
     const periodicDue = !hasSentMoveIntent || nowMs - lastMoveIntentMs >= NET_INTERVAL_MS;
     const bitsChanged = !hasSentMoveIntent || persistentBits !== lastSentPersistentBits;
+    /** Publish yaw whenever look moves enough — required while stationary so server melee/firearm yaw stays fresh between ticks. */
     const yawChanged =
-      moving &&
       hasSentMoveIntent &&
       fpShortestAngleDeltaAbsRad(mainRaf.bodyYaw, lastSentAimYaw) >= MOVE_INTENT_YAW_EDGE_RAD;
     if (periodicDue || bitsChanged || yawChanged) {

@@ -40,6 +40,7 @@ import {
   type FpSessionMainRafState,
 } from "./fpSession/fpSessionMainRafFrame.js";
 import { createFpFirearmImpactDecals } from "./fpSession/fpFirearmImpactDecals.js";
+import { createFpPlayerDamageBloodSquirt } from "./fpSession/fpPlayerDamageBloodSquirt.js";
 import {
   wireFpSessionLocomotionPrediction,
 } from "./fpSession/fpSessionLocomotionPredictionWiring.js";
@@ -125,7 +126,8 @@ import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorConstants.js";
 import { poseSeqAsBigint } from "./fpSession/fpSessionPoseSeq.js";
 import { resolveAuthoritativeInteractionPose } from "./fpInteraction/fpInteractionAuthority.js";
-import { resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
+import { deliverFpSessionGpuRenderMs, resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
+import { mountFpSessionUserDisplayNameCache } from "./fpSession/fpSessionUserDisplayNameCache.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
 import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpRendering/fpPlanarMirror.js";
@@ -189,9 +191,18 @@ export async function mountFpSession(
     canvas,
     antialias: FP_SESSION_WEBGPU_ANTIALIAS,
     forceWebGL: false,
+    trackTimestamp: true,
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
+  const fpUserDisplayNameCache = mountFpSessionUserDisplayNameCache(conn);
+  const scheduleGpuTimestampResolve = (): void => {
+    const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
+    if (!backend?.trackTimestamp) return;
+    void renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then((ms) => {
+      deliverFpSessionGpuRenderMs(ms);
+    });
+  };
   resetFpSessionFpsDisplay();
   resetFpSessionCompassHeading();
   resetFpSessionGameUiHidden();
@@ -266,6 +277,9 @@ export async function mountFpSession(
     visitDynamicCollisionAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
       fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
       fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+    },
+    visitRemotePlayerCollisionAabbsInXZ: (x0, x1, z0, z1, visit) => {
+      visitRemotePlayerCollisionAabbsInXZ(conn, x0, x1, z0, z1, visit);
     },
   });
   scene.add(fpCollisionDebug.group);
@@ -403,6 +417,14 @@ export async function mountFpSession(
   const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
+
+  const fpPlayerDamageBloodSquirt = createFpPlayerDamageBloodSquirt({
+    scene,
+    conn,
+    getLocalFeetWorld: (out) => {
+      out.copy(pos);
+    },
+  });
 
   /** Pooled audio movement snapshot — mutated each frame, no object literal per frame. */
   const _audioMovement = {
@@ -1120,6 +1142,7 @@ export async function mountFpSession(
     subscribePoseAoi,
     syncActiveHotbarSlotToServer,
     maybeSendMoveIntent,
+    sendMoveIntent,
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isApartmentFurnitureInteriorVisible,
@@ -1131,6 +1154,9 @@ export async function mountFpSession(
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
     fpFirearmImpactDecals,
+    fpPlayerDamageBloodSquirt,
+    remotePlayerDisplayName: (idHex) => fpUserDisplayNameCache.labelForIdentityHex(idHex),
+    scheduleGpuTimestampResolve,
   });
 
   let raf = 0;
@@ -1197,6 +1223,7 @@ export async function mountFpSession(
     setFpActiveStashPanelUnitKey(null);
     disposeFpSessionDevDebug();
     droppedWorld.dispose();
+    fpUserDisplayNameCache.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     fpEnvironment.dispose();
@@ -1217,6 +1244,7 @@ export async function mountFpSession(
     registerGameAudioPrime(null);
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
+    fpPlayerDamageBloodSquirt.dispose();
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
     for (const mirror of cabMirrors) mirror.dispose();

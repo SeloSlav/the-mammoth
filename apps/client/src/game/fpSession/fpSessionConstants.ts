@@ -22,8 +22,8 @@ export const clampTinyDisplayOffsetComponents = (v: THREE.Vector3) => {
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 export const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**
- * While grounded movement is active, resend aim yaw when turning by roughly 1 degree so the
- * server path does not visibly cut corners between 20 Hz heartbeat publishes.
+ * Resend aim yaw when turning by roughly 1 degree — keeps server facing fresh between 20 Hz
+ * heartbeats (critical while **stationary**: melee reads `player_input.aim_yaw` immediately).
  */
 export const MOVE_INTENT_YAW_EDGE_RAD = 0.02;
 export const MOVE_INTENT_MOVE_BITS = BIT_FORWARD | BIT_BACK | BIT_LEFT | BIT_RIGHT;

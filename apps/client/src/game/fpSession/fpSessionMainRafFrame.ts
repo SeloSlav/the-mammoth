@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
-import type { InventoryItem, User } from "../../module_bindings/types";
+import type { InventoryItem, PlayerVitals } from "../../module_bindings/types";
 import {
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
@@ -74,6 +74,10 @@ import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassH
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
+import type { FpPlayerDamageBloodSquirt } from "./fpPlayerDamageBloodSquirt.js";
+
+/** Squared XZ distance (m²); below this + small dy we may reuse the last dropped-item HUD scan. */
+const HUD_DROP_SCAN_STATIONARY_R2 = 0.28 * 0.28;
 
 const FIREARM_COOLDOWN_MS = 170;
 
@@ -193,6 +197,8 @@ export type FpSessionMainRafFrameDeps = {
   subscribePoseAoi: (cx: number, cy: number, cz: number) => void;
   syncActiveHotbarSlotToServer: () => void;
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
+  /** Immediate intent publish (bypasses periodic coalesce) so combat reducers see fresh `aim_yaw`. */
+  sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isApartmentFurnitureInteriorVisible: () => boolean;
@@ -211,6 +217,11 @@ export type FpSessionMainRafFrameDeps = {
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
+  fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
+  /** Cached Spacetime `user.username` labels keyed by identity hex (no per-frame table finds). */
+  remotePlayerDisplayName: (playerIdentityHex: string) => string;
+  /** No-op when GPU timestamp queries are unavailable. */
+  scheduleGpuTimestampResolve: () => void;
 };
 
 /**
@@ -227,15 +238,52 @@ export function createFpSessionMainRafFrame(
   /** Advances claim bar at wall-clock while E is held; cleared when HUD leaves apartment claim. */
   let claimHoldSmoothState: ApartmentClaimHoldSmooth | null = null;
 
+  let hudHeavyFrame = 0;
+  let cachedDropHud: ReturnType<typeof findNearestDroppedPickupsHud> = {
+    worldAnchor: null,
+    plain: null,
+  };
+  let dropHudCacheFx = 0;
+  let dropHudCacheFy = 0;
+  let dropHudCacheFz = 0;
+
+  let hudAptInitialized = false;
+  let cachedAptSys: ReturnType<typeof getApartmentSystemPrompt> | null = null;
+  let aptSysStashKey: string | null = null;
+  let aptSysWardrobeKey: string | null = null;
+  let aptSysCoarseFx = 0;
+  let aptSysCoarseFy = 0;
+  let aptSysCoarseFz = 0;
+
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
 
     deps.fpFirearmImpactDecals.tick(nowMs);
+    deps.fpPlayerDamageBloodSquirt.tick(nowMs, dt);
 
     // Combat reducers (`submit_firearm_shot`, `submit_melee_swing`) read `player_active_hotbar` on
     // the server. Sync selected slot before resolving `meleePressPending` so a click right after a
     // scroll / slot change cannot outrun `set_active_hotbar_slot` (previously synced at frame end).
     deps.syncActiveHotbarSlotToServer();
+
+    const locomotionBlockedEarly = deps.fpLocomotionInputBlocked();
+    const flushCombatFacingIntent = (): void => {
+      deps.sendMoveIntent(
+        {
+          forward: locomotionBlockedEarly ? false : deps.keys.has("KeyW"),
+          backward: locomotionBlockedEarly ? false : deps.keys.has("KeyS"),
+          left: locomotionBlockedEarly ? false : deps.keys.has("KeyA"),
+          right: locomotionBlockedEarly ? false : deps.keys.has("KeyD"),
+          sprint: locomotionBlockedEarly
+            ? false
+            : deps.keys.has("ShiftLeft") || deps.keys.has("ShiftRight"),
+          crouch: mainRaf.crouchToggle,
+          jumpHeld: locomotionBlockedEarly ? false : deps.keys.has("Space"),
+        },
+        false,
+        nowMs,
+      );
+    };
 
     if (mainRaf.meleePressPending) {
       mainRaf.meleePressPending = false;
@@ -251,6 +299,7 @@ export function createFpSessionMainRafFrame(
           mainRaf.firearmShotSeq += 1;
           deps.camera.updateMatrixWorld(true);
           deps.camera.getWorldDirection(deps._aimShotWorldDir);
+          flushCombatFacingIntent();
           void deps.conn.reducers.submitFirearmShot({
             aimDirX: deps._aimShotWorldDir.x,
             aimDirY: deps._aimShotWorldDir.y,
@@ -275,7 +324,10 @@ export function createFpSessionMainRafFrame(
         mainRaf.lastMeleeMs = nowMs;
         mainRaf.meleeAttackSeq += 1;
         deps.localAudio.playMeleeWeaponSwingLocal();
-        if (deps.conn.identity) void deps.conn.reducers.submitMeleeSwing({});
+        if (deps.conn.identity) {
+          flushCombatFacingIntent();
+          void deps.conn.reducers.submitMeleeSwing({});
+        }
       }
     }
 
@@ -470,15 +522,54 @@ export function createFpSessionMainRafFrame(
       }
     }
 
+    /**
+     * Fills {@link FpSessionMainRafFrameDeps._floorVisCamWorld} / `_floorVisCamDir` and applies
+     * floor/furniture visibility **before** remote snapshot work so we avoid a duplicate
+     * `camera.getWorldPosition` and can cull remotes using the same sample the rest of the frame uses.
+     */
+    deps.syncBuildingFloorPlateVisibility(nowMs);
+    publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
+    deps.fpApartmentFurniture.syncVisibility(
+      deps.camera,
+      deps.isApartmentFurnitureInteriorVisible(),
+    );
+
     deps._remoteSnapshots.clear();
-    deps.camera.getWorldPosition(deps._floorVisCamWorld);
     if (deps.conn.identity) {
+      const bmin = deps.buildingWorldBounds.min;
+      const bmax = deps.buildingWorldBounds.max;
       for (const row of deps.conn.db.player_pose) {
         const id = row.identity.toHexString();
         if (deps.conn.identity.isEqual(row.identity)) continue;
+        const vitalsRow = deps.conn.db.player_vitals.identity.find(row.identity) as
+          | PlayerVitals
+          | undefined;
+        if ((vitalsRow?.health ?? 1) <= 0) continue;
         const p = deps.interp.getInterpolated(id, nowMs);
-        const user = deps.conn.db.user.identity.find(row.identity) as User | undefined;
-        const displayName = user?.username?.trim() || `Guest ${id.slice(0, 6)}`;
+        const rx = p?.x ?? row.x;
+        const ry = p?.y ?? row.y;
+        const rz = p?.z ?? row.z;
+        if (
+          !shouldRenderRemotePlayer({
+            localCameraX: deps._floorVisCamWorld.x,
+            localCameraZ: deps._floorVisCamWorld.z,
+            localFeetX: deps.pos.x,
+            localFeetY: deps.pos.y,
+            localFeetZ: deps.pos.z,
+            remoteFeetX: rx,
+            remoteFeetY: ry,
+            remoteFeetZ: rz,
+            buildingBoundsXz: {
+              minX: bmin.x,
+              maxX: bmax.x,
+              minZ: bmin.z,
+              maxZ: bmax.z,
+            },
+          })
+        ) {
+          continue;
+        }
+        const displayName = deps.remotePlayerDisplayName(id);
         const snap = replicatedPlayerSnapshotFromPlainPose(
           {
             playerIdHex: id,
@@ -498,26 +589,6 @@ export function createFpSessionMainRafFrame(
             displayName,
           },
         );
-        if (
-          !shouldRenderRemotePlayer({
-            localCameraX: deps._floorVisCamWorld.x,
-            localCameraZ: deps._floorVisCamWorld.z,
-            localFeetX: deps.pos.x,
-            localFeetY: deps.pos.y,
-            localFeetZ: deps.pos.z,
-            remoteFeetX: snap.worldPosition.x,
-            remoteFeetY: snap.worldPosition.y,
-            remoteFeetZ: snap.worldPosition.z,
-            buildingBoundsXz: {
-              minX: deps.buildingWorldBounds.min.x,
-              maxX: deps.buildingWorldBounds.max.x,
-              minZ: deps.buildingWorldBounds.min.z,
-              maxZ: deps.buildingWorldBounds.max.z,
-            },
-          })
-        ) {
-          continue;
-        }
         deps._remoteSnapshots.set(id, snap);
       }
     }
@@ -560,21 +631,62 @@ export function createFpSessionMainRafFrame(
 
     if (deps.conn.identity) {
       const ft = deps.fpInteractionFeet();
+      hudHeavyFrame += 1;
 
-      const droppedHud = findNearestDroppedPickupsHud(
-        deps.conn,
-        ft.x,
-        ft.y,
-        ft.z,
-        MAMMOTH_PICKUP_RADIUS_M,
-      );
+      const ddx = ft.x - dropHudCacheFx;
+      const ddy = ft.y - dropHudCacheFy;
+      const ddz = ft.z - dropHudCacheFz;
+      const movedDrops =
+        ddx * ddx + ddz * ddz > HUD_DROP_SCAN_STATIONARY_R2 || Math.abs(ddy) > 0.38;
+      const scanDrops = deps.keys.has("KeyE") || movedDrops || (hudHeavyFrame & 1) === 0;
+      if (scanDrops) {
+        cachedDropHud = findNearestDroppedPickupsHud(
+          deps.conn,
+          ft.x,
+          ft.y,
+          ft.z,
+          MAMMOTH_PICKUP_RADIUS_M,
+        );
+        dropHudCacheFx = ft.x;
+        dropHudCacheFy = ft.y;
+        dropHudCacheFz = ft.z;
+      }
+      const droppedHud = cachedDropHud;
+
       const lookedAtStash = deps.fpApartmentFurniture.getStashPrompt(ft, deps.camera);
-      const lookedAtWardrobeUnitKey = deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera);
-      const aSys = getApartmentSystemPrompt(deps.conn, ft, {
-        apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
-        lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,
-        lookedAtWardrobeUnitKey,
-      });
+      const lookedAtWardrobeUnitKey =
+        deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera);
+      const stashUk = lookedAtStash?.unitKey ?? null;
+      const wardrobeUk = lookedAtWardrobeUnitKey ?? null;
+      const cfx = Math.floor(ft.x * 2);
+      const cfy = Math.floor(ft.y * 2);
+      const cfz = Math.floor(ft.z * 2);
+      const ctxChanged =
+        stashUk !== aptSysStashKey ||
+        wardrobeUk !== aptSysWardrobeKey ||
+        cfx !== aptSysCoarseFx ||
+        cfy !== aptSysCoarseFy ||
+        cfz !== aptSysCoarseFz;
+      const runFullAptSys =
+        !hudAptInitialized ||
+        deps.keys.has("KeyE") ||
+        cachedAptSys != null ||
+        ctxChanged ||
+        (hudHeavyFrame & 1) === 0;
+      if (runFullAptSys) {
+        hudAptInitialized = true;
+        aptSysStashKey = stashUk;
+        aptSysWardrobeKey = wardrobeUk;
+        aptSysCoarseFx = cfx;
+        aptSysCoarseFy = cfy;
+        aptSysCoarseFz = cfz;
+        cachedAptSys = getApartmentSystemPrompt(deps.conn, ft, {
+          apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
+          lookedAtStashUnitKey: stashUk,
+          lookedAtWardrobeUnitKey,
+        });
+      }
+      const aSys = cachedAptSys;
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
         const holdPrompt = aSys;
@@ -731,12 +843,6 @@ export function createFpSessionMainRafFrame(
 
     // --- Render section timing (see pushFpPerfFrame render split) ---
     const _t_renderStart = performance.now();
-    deps.syncBuildingFloorPlateVisibility(nowMs);
-    publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
-    deps.fpApartmentFurniture.syncVisibility(
-      deps.camera,
-      deps.isApartmentFurnitureInteriorVisible(),
-    );
     const darkTarget = fpSampleStairwellInteriorDarkTarget(
       deps._floorVisCamWorld.x,
       deps._floorVisCamWorld.y,
@@ -805,6 +911,7 @@ export function createFpSessionMainRafFrame(
     }
     deps.renderer.info.reset();
     deps.renderer.render(deps.scene, deps.camera);
+    deps.scheduleGpuTimestampResolve();
     const _t_renderEnd = performance.now();
     const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
     const renderFpEnvironmentMs = _t_afterFpEnv - _t_afterFloorVis;

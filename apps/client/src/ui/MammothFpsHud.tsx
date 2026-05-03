@@ -43,9 +43,10 @@ const SECTION_COLORS: Record<string, string> = {
   elevator: "#6b8cae",
   present: "#b89f6b",
   render: "#e87878",
-  "render·floorVis": "#e8a0a0",
+  "render·preEnv": "#e8a0a0",
   "render·fpEnv": "#e8a0a0",
   "render·three": "#e87878",
+  "render·GPU": "#9b8cff",
   other: "#9a9a9a",
 };
 
@@ -395,9 +396,12 @@ export function MammothFpsHud() {
                   ["elevator", stats.sections.elevatorMs],
                   ["present", stats.sections.presentMs],
                   ["render", stats.sections.renderMs],
-                  ["render·floorVis", stats.sections.renderFloorPlateVisMs],
+                  ["render·preEnv", stats.sections.renderFloorPlateVisMs],
                   ["render·fpEnv", stats.sections.renderFpEnvironmentMs],
                   ["render·three", stats.sections.renderThreeMs],
+                  ...(stats.sections.renderThreeGpuMs != null
+                    ? ([["render·GPU", stats.sections.renderThreeGpuMs]] as [string, number][])
+                    : []),
                   ["other", stats.sections.otherMs],
                 ] as [string, number][]
               ).map(([name, ms]) => {

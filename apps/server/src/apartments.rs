@@ -1052,14 +1052,15 @@ pub(crate) fn apply_forward_melee_door_damage(
     ctx: &ReducerContext,
     _attacker: Identity,
     pose: &PlayerPose,
+    forward_yaw: f32,
     dmg: f32,
 ) {
     if dmg <= 0.5 {
         return;
     }
     const REACH: f32 = 2.15;
-    let fx = -pose.yaw.sin();
-    let fz = -pose.yaw.cos();
+    let fx = -forward_yaw.sin();
+    let fz = -forward_yaw.cos();
     let mut best_key: Option<String> = None;
     let mut best_d2 = 1e15_f32;
     for d in ctx.db.apartment_door().iter() {

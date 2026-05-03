@@ -4,6 +4,7 @@
  */
 export const LS_FP_COLLISION_DEBUG = "mammothFpCollisionDebug";
 export const LS_FP_PHYSICS_DEBUG = "mammothFpPhysicsDebug";
+export const LS_FP_REMOTE_PLAYER_COLLISION_DEBUG = "mammothFpRemotePlayerCollisionDebug";
 export const LS_FP_RECONCILE_DEBUG = "mammothFpReconcileDebug";
 export const LS_FP_DOOR_ANIM_SKEW_WARN = "mammothFpDoorAnimSkewWarn";
 export const LS_FP_LEGACY_COLLISION = "mammothFpLegacyCollision";

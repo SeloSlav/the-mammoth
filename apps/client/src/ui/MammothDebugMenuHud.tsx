@@ -18,6 +18,7 @@ import {
   LS_FP_LOADING_DEBUG,
   LS_FP_PERF_DEBUG,
   LS_FP_PHYSICS_DEBUG,
+  LS_FP_REMOTE_PLAYER_COLLISION_DEBUG,
   LS_FP_RECONCILE_DEBUG,
   LS_WALL_PROBE_AUTOSTART,
   lsLegacyCollisionIsOn,
@@ -48,6 +49,7 @@ const DEBUG_MENU_Z_INDEX = 390;
 type LsFlags = {
   fpCollisionDebug: boolean;
   fpPhysicsDebug: boolean;
+  fpRemotePlayerCollisionDebug: boolean;
   fpReconcileDebug: boolean;
   fpDoorAnimSkewWarn: boolean;
   fpLegacyCollision: boolean;
@@ -63,6 +65,7 @@ function readLsFlags(): LsFlags {
   return {
     fpCollisionDebug: lsToggleIsOn(LS_FP_COLLISION_DEBUG),
     fpPhysicsDebug: lsToggleIsOn(LS_FP_PHYSICS_DEBUG),
+    fpRemotePlayerCollisionDebug: lsToggleIsOn(LS_FP_REMOTE_PLAYER_COLLISION_DEBUG),
     fpReconcileDebug: lsToggleIsOn(LS_FP_RECONCILE_DEBUG),
     fpDoorAnimSkewWarn: lsToggleIsOn(LS_FP_DOOR_ANIM_SKEW_WARN),
     fpLegacyCollision: lsLegacyCollisionIsOn(),
@@ -360,6 +363,16 @@ export function MammothDebugMenuHud() {
               on: flags.fpPhysicsDebug,
               onToggle: () => {
                 lsToggleSet(LS_FP_PHYSICS_DEBUG, !flags.fpPhysicsDebug);
+                refreshLs();
+              },
+            })}
+            {rowToggle({
+              label: "Remote player collision boxes",
+              description:
+                "Green AABBs for other players (mammothFpRemotePlayerCollisionDebug) — also toggles debug overlay visibility when used alone",
+              on: flags.fpRemotePlayerCollisionDebug,
+              onToggle: () => {
+                lsToggleSet(LS_FP_REMOTE_PLAYER_COLLISION_DEBUG, !flags.fpRemotePlayerCollisionDebug);
                 refreshLs();
               },
             })}

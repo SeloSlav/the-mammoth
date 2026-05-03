@@ -7,6 +7,7 @@ use crate::auth;
 use crate::combat_stub;
 use crate::combat_stub::melee_damage_for_def_id;
 use crate::dropped_item;
+use crate::movement::player_input;
 use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::world_sound::{
@@ -55,13 +56,24 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
     cd.last_swing_micros = now_us;
     ctx.db.player_melee_cooldown().identity().update(cd);
 
+    // Use latest intent yaw (`player_input.aim_yaw`), not `pose.yaw`. `pose.yaw` only advances on the
+    // physics schedule (~20 Hz), while swings arrive mid-tick — stationary flick-turn would melee
+    // along stale facing and silently miss (no flesh-hit sound).
+    let swing_yaw = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&id)
+        .map(|r| r.aim_yaw)
+        .unwrap_or(pose.yaw);
+
     if let Some(hit) = combat_stub::resolve_melee_hit(
         ctx,
         id,
         pose.x,
         pose.y,
         pose.z,
-        pose.yaw,
+        swing_yaw,
         &weapon_def_id,
         None,
         None,
@@ -77,6 +89,7 @@ pub fn submit_melee_swing(ctx: &ReducerContext) {
             ctx,
             id,
             &pose,
+            swing_yaw,
             melee_damage_for_def_id(&weapon_def_id),
         );
     }
