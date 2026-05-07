@@ -285,12 +285,11 @@ export function commitEditorAttachedTransform(opts: {
     });
 
     pieceRoot.updateMatrixWorld(true);
-    const pW = new THREE.Vector3();
-    const qW = new THREE.Quaternion();
-    const _sWorld = new THREE.Vector3();
-    pieceRoot.matrixWorld.decompose(pW, qW, _sWorld);
-    const euler = new THREE.Euler().setFromQuaternion(qW, "YXZ");
-    const yaw = snapOwnedApartmentYawRad(euler.y);
+    const pW = new THREE.Vector3().setFromMatrixPosition(pieceRoot.matrixWorld);
+    // Doc yaw matches `place*Group`'s group.rotation.y (preview-local). World-quaternion euler drifts when
+    // parents rotate (building shell); that made each store patch rebuild props with the wrong heading.
+    const eulerLocal = new THREE.Euler().setFromQuaternion(pieceRoot.quaternion, "YXZ");
+    const yaw = snapOwnedApartmentYawRad(eulerLocal.y);
 
     const wx = pW.x + m.prefabOriginX;
     const wz = pW.z + m.prefabOriginZ;
