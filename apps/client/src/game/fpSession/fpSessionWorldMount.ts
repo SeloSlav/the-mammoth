@@ -22,6 +22,7 @@ import {
   getBuildingStairShaftSpecs,
   instantiateBuildingFloorStack,
   instantiateBuildingFloorStackAsync,
+  megablockExteriorTreeScatterFrameFromWalkHullWorld,
   parseBuildingDoc,
   parseCellDoc,
   parseFloorDoc,
@@ -97,8 +98,9 @@ export type MegablockBackdropHooks = {
    */
   onFloorPlateInstantiated?: (ctx: { buildingRoot: THREE.Group }) => void | Promise<void>;
   /**
-   * Ez-tree grove just finished generating and was parented under `buildingRoot` — usually **before** plate
-   * merges finish, so the menu can paint forest + ground without waiting on collision merges.
+   * Ez-tree meshing starts as soon as we have a scatter frame (walk-surface XZ hull + `worldOrigin`) —
+   * **before** any floor plate is merged; `onForestReady` runs after the grove is parented (once
+   * `buildingRoot` exists), often while storeys are still stacking.
    */
   onForestReady?: (ctx: { forestRoot: THREE.Group; buildingRoot: THREE.Group }) => void | Promise<void>;
 };
@@ -277,9 +279,9 @@ export async function createFpSessionStaticWorldAsync(
     GENERATED_WALK_SURFACE_AABBS,
     stairRuntimeOverlay,
   );
+  const walkScatterHull = walkSurfaceAabbXZFootprint(walkSupportAABBs);
   const walkFootprint =
-    walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
-    ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
+    walkScatterHull ?? ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
   await yieldToMain();
 
@@ -311,6 +313,59 @@ export async function createFpSessionStaticWorldAsync(
     return Math.max(bakedTop, stairTop);
   };
 
+  let exteriorTreePromise: Promise<THREE.Group> | null = null;
+  let forestAttachTask: Promise<void> = Promise.resolve();
+
+  let resolveBuildingRoot!: (root: THREE.Group) => void;
+  const buildingRootWhenReady = new Promise<THREE.Group>((r) => {
+    resolveBuildingRoot = r;
+  });
+
+  const beginMegablockExteriorForest = (footprint: THREE.Box3, localGroundY: number) => {
+    if (!ENABLE_EXTERIOR_PROCEDURAL_TREES || exteriorTreePromise !== null) return;
+
+    const treeScatterOpts = {
+      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
+      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
+      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
+    };
+    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(footprint, treeScatterOpts);
+    consolidatedCollisionBlockers = [
+      ...consolidatedCollisionBlockers,
+      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
+    ];
+
+    exteriorTreePromise = buildExteriorProceduralTreeGroupYielding(
+      footprint,
+      yieldToMain,
+      {
+        groundY: localGroundY,
+        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
+      },
+      exteriorTreePlacements,
+    );
+
+    forestAttachTask = (async () => {
+      const grove = await exteriorTreePromise!;
+      const planted = grove.children.length > 0;
+      if (!planted) return;
+      const root = await buildingRootWhenReady;
+      if (grove.parent !== root) root.add(grove);
+      const hooks = opts?.getBackdropHooks?.();
+      await hooks?.onForestReady?.({ forestRoot: grove, buildingRoot: root });
+      await yieldToMain();
+    })();
+  };
+
+  if (walkScatterHull !== null) {
+    const { footprintBuildingLocal, localGroundY } = megablockExteriorTreeScatterFrameFromWalkHullWorld(
+      building,
+      walkScatterHull,
+    );
+    beginMegablockExteriorForest(footprintBuildingLocal, localGroundY);
+  }
+
   const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
     stairWellDef,
     yieldAfterEachPlate: yieldToMain,
@@ -323,6 +378,8 @@ export async function createFpSessionStaticWorldAsync(
     },
   });
 
+  resolveBuildingRoot(buildingRoot);
+
   const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
   const stairSpecs = getBuildingStairShaftSpecs(
     building,
@@ -334,8 +391,7 @@ export async function createFpSessionStaticWorldAsync(
 
   await yieldToMain();
 
-  let treeGroupPromise: Promise<THREE.Group> | null = null;
-  if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
+  if (ENABLE_EXTERIOR_PROCEDURAL_TREES && exteriorTreePromise === null) {
     buildingRoot.updateMatrixWorld(true);
     const buildingLocalFootprint = new THREE.Box3()
       .setFromObject(buildingRoot)
@@ -343,46 +399,8 @@ export async function createFpSessionStaticWorldAsync(
     buildingLocalFootprint.min.y = 0;
     buildingLocalFootprint.max.y = 1;
     const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
-
-    const treeScatterOpts = {
-      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
-      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
-      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
-    };
-    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(
-      buildingLocalFootprint,
-      treeScatterOpts,
-    );
-    consolidatedCollisionBlockers = [
-      ...consolidatedCollisionBlockers,
-      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
-    ];
-
-    treeGroupPromise = buildExteriorProceduralTreeGroupYielding(
-      buildingLocalFootprint,
-      yieldToMain,
-      {
-        groundY: localGroundY,
-        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      },
-      exteriorTreePlacements,
-    );
+    beginMegablockExteriorForest(buildingLocalFootprint, localGroundY);
   }
-
-  /** Parent grove as soon as ez-tree meshing finishes — do not block on plate merges (forest stayed invisible). */
-  const forestAttachTask =
-    treeGroupPromise !== null
-      ? (async () => {
-          const tg = await treeGroupPromise;
-          const planted = tg.children.length > 0;
-          if (!planted) return;
-          if (tg.parent !== buildingRoot) buildingRoot.add(tg);
-          const hooks = opts?.getBackdropHooks?.();
-          await hooks?.onForestReady?.({ forestRoot: tg, buildingRoot });
-          await yieldToMain();
-        })()
-      : Promise.resolve();
 
   await Promise.all([mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain), forestAttachTask]);
 

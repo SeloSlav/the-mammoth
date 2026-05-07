@@ -91,6 +91,7 @@ export {
 export {
   buildExteriorEzTreeCollisionAABBs,
   buildExteriorMegablockTreePlacements,
+  megablockExteriorTreeScatterFrameFromWalkHullWorld,
   EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
   EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
   EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,

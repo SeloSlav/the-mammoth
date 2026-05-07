@@ -3,10 +3,21 @@ import { describe, expect, it } from "vitest";
 import {
   buildExteriorEzTreeCollisionAABBs,
   buildExteriorMegablockTreePlacements,
+  megablockExteriorTreeScatterFrameFromWalkHullWorld,
   ENABLE_EXTERIOR_PROCEDURAL_TREES,
 } from "./index.js";
 
 describe("exterior megablock tree placements (ez-tree presets)", () => {
+  it("scatter frame from walk hull matches translation-only worldOrigin math", () => {
+    const { footprintBuildingLocal, localGroundY } = megablockExteriorTreeScatterFrameFromWalkHullWorld(
+      { worldOrigin: [10, 2.5, -30] },
+      { minX: 0, maxX: 20, minZ: -5, maxZ: 5 },
+    );
+    expect(localGroundY).toBeCloseTo(-2.5, 5);
+    expect(footprintBuildingLocal.min.x).toBeCloseTo(-10, 5);
+    expect(footprintBuildingLocal.max.z).toBeCloseTo(35, 5);
+  });
+
   it("global procedural trees flag reflects world package default", () => {
     expect(ENABLE_EXTERIOR_PROCEDURAL_TREES).toBe(true);
   });

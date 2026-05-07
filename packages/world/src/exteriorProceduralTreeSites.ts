@@ -1,6 +1,8 @@
+import type { BuildingDoc } from "@the-mammoth/schemas";
 import * as THREE from "three";
 
 import type { CollisionAabb } from "./collisionScene.js";
+import type { WalkSurfaceXzFootprint } from "./walkSurfaceAABBs.js";
 
 export const EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT = 440;
 
@@ -234,6 +236,32 @@ export function buildExteriorMegablockTreePlacements(
     });
   }
   return placements;
+}
+
+/**
+ * EZ-tree façade scatter frame **without** floor meshes — takes the deterministic walk-volume XZ hull
+ * ({@link WalkSurfaceXzFootprint}, already overlays stair suppress before mesh build).
+ *
+ * Mirrors `scripts/gen-exterior-tree-collision.ts` (merged full stack mesh) when hull XZ tracks podium
+ * shell bounds (Mammoth authoring). Building root uses translation-only `BuildingDoc.worldOrigin`
+ * (same as FP stack bootstrap).
+ */
+export function megablockExteriorTreeScatterFrameFromWalkHullWorld(
+  building: Pick<BuildingDoc, "worldOrigin">,
+  walkHullWorld: WalkSurfaceXzFootprint,
+): { footprintBuildingLocal: THREE.Box3; localGroundY: number } {
+  const ox = building.worldOrigin?.[0] ?? 0;
+  const oy = building.worldOrigin?.[1] ?? 0;
+  const oz = building.worldOrigin?.[2] ?? 0;
+
+  const footprintBuildingLocal = new THREE.Box3(
+    new THREE.Vector3(walkHullWorld.minX - ox, 0, walkHullWorld.minZ - oz),
+    new THREE.Vector3(walkHullWorld.maxX - ox, 1, walkHullWorld.maxZ - oz),
+  );
+  /** Same as {@link THREE.Group.prototype.worldToLocal} of `(0,0,0)` for a translation-only root. */
+  const localGroundY = -oy;
+
+  return { footprintBuildingLocal, localGroundY };
 }
 
 /** Last occupied variant index (+1 = count) — exported for codegen / tooling. */
