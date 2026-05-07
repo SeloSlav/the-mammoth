@@ -21,7 +21,7 @@ function playerHasClaimedApartment(conn: DbConnection): boolean {
 
 export function PlayerDeathOverlay({ conn }: Props) {
   const [ver, setVer] = useState(0);
-  const [busyMode, setBusyMode] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const bump = () => setVer((v) => v + 1);
@@ -57,7 +57,7 @@ export function PlayerDeathOverlay({ conn }: Props) {
 
   useEffect(() => {
     if (!dead) {
-      setBusyMode(null);
+      setBusy(false);
       return;
     }
     void document.exitPointerLock?.();
@@ -67,22 +67,23 @@ export function PlayerDeathOverlay({ conn }: Props) {
     return null;
   }
 
+  const runRespawn = () => {
+    setBusy(true);
+    // `mode` is ignored server-side; apartment-first routing is always used.
+    void conn.reducers.respawnPlayer({ mode: 1 }).finally(() => {
+      setBusy(false);
+    });
+  };
+
   const btnBase: CSSProperties = {
-    minWidth: 148,
+    minWidth: 170,
     padding: "11px 14px",
     borderRadius: 9,
     border: "1px solid rgba(255,255,255,0.14)",
     color: "#fff",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 800,
-    cursor: busyMode !== null ? "default" : "pointer",
-  };
-
-  const runRespawn = (mode: number) => {
-    setBusyMode(mode);
-    void conn.reducers.respawnPlayer({ mode }).finally(() => {
-      setBusyMode(null);
-    });
+    cursor: busy ? "default" : "pointer",
   };
 
   return (
@@ -125,70 +126,31 @@ export function PlayerDeathOverlay({ conn }: Props) {
         <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(226,232,240,0.82)", marginBottom: 22 }}>
           {hasClaimedApartment ? (
             <>
-              You have a claimed apartment. Respawn at your bed — your residential doors lock (including if left open)
-              — or respawn at a random ground-floor walk area, same as players without a unit.
+              You will respawn back in your apartment at your bed. Residential doors snap closed (including ones you
+              left open).
             </>
           ) : (
-            <>You will respawn at a random open spot on the ground floor.</>
+            <>
+              Recovery without a leased unit completes in the building&apos;s ground-level foyer —
+              lease a residence to spawn at your apartment after death instead.
+            </>
           )}
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 10,
-            justifyContent: "center",
-          }}
-        >
-          {hasClaimedApartment ? (
-            <>
-              <button
-                type="button"
-                disabled={busyMode !== null}
-                onClick={() => runRespawn(1)}
-                style={{
-                  ...btnBase,
-                  background:
-                    busyMode !== null
-                      ? "rgba(110, 120, 140, 0.35)"
-                      : "linear-gradient(180deg, rgba(210,60,68,0.95), rgba(148,28,34,0.98))",
-                }}
-              >
-                {busyMode === 1 ? "Respawning..." : "Respawn in apartment"}
-              </button>
-              <button
-                type="button"
-                disabled={busyMode !== null}
-                onClick={() => runRespawn(0)}
-                style={{
-                  ...btnBase,
-                  background:
-                    busyMode !== null
-                      ? "rgba(110, 120, 140, 0.35)"
-                      : "linear-gradient(180deg, rgba(52, 96, 140, 0.92), rgba(28, 52, 88, 0.96))",
-                }}
-              >
-                {busyMode === 0 ? "Respawning..." : "Ground floor"}
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              disabled={busyMode !== null}
-              onClick={() => runRespawn(0)}
-              style={{
-                ...btnBase,
-                minWidth: 170,
-                fontSize: 15,
-                background:
-                  busyMode !== null
-                    ? "rgba(110, 120, 140, 0.35)"
-                    : "linear-gradient(180deg, rgba(210,60,68,0.95), rgba(148,28,34,0.98))",
-              }}
-            >
-              {busyMode === 0 ? "Respawning..." : "Ground floor"}
-            </button>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={runRespawn}
+            style={{
+              ...btnBase,
+              background:
+                busy ?
+                  "rgba(110, 120, 140, 0.35)"
+                : "linear-gradient(180deg, rgba(210,60,68,0.95), rgba(148,28,34,0.98))",
+            }}
+          >
+            {busy ? "Respawning..." : "Respawn"}
+          </button>
         </div>
       </div>
     </div>

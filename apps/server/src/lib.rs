@@ -130,7 +130,7 @@ pub fn ping_world(ctx: &ReducerContext) {
 }
 
 #[spacetimedb::reducer]
-pub fn respawn_player(ctx: &ReducerContext, mode: u8) {
+pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("respawn_player blocked: {e}");
         return;
@@ -149,11 +149,8 @@ pub fn respawn_player(ctx: &ReducerContext, mode: u8) {
         .map(|i| i.intent_seq)
         .unwrap_or(0);
 
-    let bed_pose = if mode == 1 {
-        apartments::spawn_pose_owned_bed(ctx, id)
-    } else {
-        None
-    };
+    // Death recovery is apartment-first whenever the player has a claimed unit (bed_pose path).
+    let bed_pose = apartments::spawn_pose_owned_bed(ctx, id);
     let mut sp = if let Some(bed) = bed_pose {
         apartments::lock_owned_residential_doors(ctx, id);
         bed
