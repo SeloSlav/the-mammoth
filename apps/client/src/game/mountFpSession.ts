@@ -77,6 +77,7 @@ import {
   apartmentFurnitureInteriorsPreferOverUnitDoor,
   getApartmentSystemPrompt,
 } from "./fpApartment/fpApartmentGameplay.js";
+import { APARTMENT_CLAIM_UI_ENABLED } from "../featureFlags";
 import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
@@ -1018,9 +1019,10 @@ export async function mountFpSession(
       const lookedAtStash = conn.identity
         ? fpApartmentFurniture.getStashPrompt(feet, camera)
         : null;
-      const lookedAtWardrobeUnitKey = conn.identity
-        ? fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(feet, camera)
-        : null;
+      const lookedAtWardrobeUnitKey =
+        conn.identity && APARTMENT_CLAIM_UI_ENABLED
+          ? fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(feet, camera)
+          : null;
       const aptKey = conn.identity
         ? getApartmentSystemPrompt(conn, feet, {
             lookedAtStashUnitKey: lookedAtStash?.unitKey ?? null,

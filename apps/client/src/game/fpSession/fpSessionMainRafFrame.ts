@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
 import type { InventoryItem } from "../../module_bindings/types";
+import { APARTMENT_CLAIM_UI_ENABLED } from "../../featureFlags";
 import {
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
@@ -613,8 +614,9 @@ export function createFpSessionMainRafFrame(
       const droppedHud = cachedDropHud;
 
       const lookedAtStash = deps.fpApartmentFurniture.getStashPrompt(ft, deps.camera);
-      const lookedAtWardrobeUnitKey =
-        deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera);
+      const lookedAtWardrobeUnitKey = APARTMENT_CLAIM_UI_ENABLED
+        ? deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
+        : null;
       const stashUk = lookedAtStash?.unitKey ?? null;
       const wardrobeUk = lookedAtWardrobeUnitKey ?? null;
       const cfx = Math.floor(ft.x * 2);

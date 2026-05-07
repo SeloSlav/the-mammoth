@@ -1,16 +1,16 @@
 {
   "version": 1,
   "previewSizeM": 10,
-  "bedFx": 0.8622128943209616,
-  "bedFz": 0.9120544175669605,
+  "bedFx": 0.6579343913313207,
+  "bedFz": 0.8282770320741801,
   "bedDy": 0,
-  "wardrobeFx": 0.06436735330704656,
-  "wardrobeFz": 0.9413596349225507,
-  "footFx": 0.6924616781835501,
-  "footFz": 0.9085345655031289,
+  "wardrobeFx": 0.054358494181704235,
+  "wardrobeFz": 0.8788117264938058,
+  "footFx": 0.5165861547543446,
+  "footFz": 0.8230760377942364,
   "wardrobeDy": 0,
   "footDy": 0,
   "bedYawRad": -1.5707963267948966,
-  "wardrobeYawRad": 3.141592653589793,
-  "footYawRad": -0.008659867564331968
+  "wardrobeYawRad": 0,
+  "footYawRad": -1.5707963267948966
 }

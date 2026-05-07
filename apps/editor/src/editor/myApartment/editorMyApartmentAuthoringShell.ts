@@ -42,6 +42,9 @@ export type OwnedApartmentFractionToPreviewXZ = {
   prefabOriginX: number;
   /** World Z of strict point 0 in preview (prefab min Z on the plate). */
   prefabOriginZ: number;
+  /** Exterior prefab slab size (grey floor box) — matches hollow shell bbox X/Z scale. */
+  prefabFootprintSx: number;
+  prefabFootprintSz: number;
 };
 
 export function ownedApartmentFractionMappingForEditor(args: {
@@ -57,6 +60,8 @@ export function ownedApartmentFractionMappingForEditor(args: {
       spanZ: w,
       prefabOriginX: 0,
       prefabOriginZ: 0,
+      prefabFootprintSx: w,
+      prefabFootprintSz: w,
     };
   }
   const { shellPlan, strictMinX, strictMinZ, spanX, spanZ, unitCenterX, unitCenterZ } =
@@ -70,6 +75,8 @@ export function ownedApartmentFractionMappingForEditor(args: {
     spanZ,
     prefabOriginX: unitCenterX - sx * 0.5,
     prefabOriginZ: unitCenterZ - sz * 0.5,
+    prefabFootprintSx: sx,
+    prefabFootprintSz: sz,
   };
 }
 
@@ -104,6 +111,9 @@ export function buildOwnedApartmentAuthoringShell(args: {
   const spanSlabZ = layout
     ? Math.max(2, 2 * layout.shellPlan.hz)
     : Math.max(2, mapping.spanZ);
+
+  root.userData.editorMyApartmentSlabSx = spanSlabX;
+  root.userData.editorMyApartmentSlabSz = spanSlabZ;
 
   const floorGeom = new THREE.BoxGeometry(spanSlabX, 0.04, spanSlabZ);
   const floorMat = new THREE.MeshStandardMaterial({

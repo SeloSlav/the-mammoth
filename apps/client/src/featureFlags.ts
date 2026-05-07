@@ -10,3 +10,6 @@
 
 /** When `true`, apartment claim HUD/timing assumes ~1 s completion (mirror server). Never ship enabled. */
 export const APARTMENT_CLAIM_FAST_FOR_TESTING = false;
+
+/** When `false`, no apartment claim HUD, hold pulses, or wardrobe aim — reducer remains on server only. */
+export const APARTMENT_CLAIM_UI_ENABLED = false;

@@ -59,8 +59,14 @@ export function isApartmentUnitBoundsDebugEnabled(): boolean {
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 const WARDROBE_BOUNDS_INSET_M = 0.48;
 const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
-/** Keep the actual bed GLB AABB well inside the unit hull so it cannot poke through exterior glass. */
+/**
+ * Replication seed path only: replicated `bed_x/z/y` anchors can graze exterior glass; pull the live
+ * mesh inward before merge. **Not** used for {@link loadOwnedApartmentBuiltinsDocFromContent} poses
+ * — those match editor fractions and need the same light slack as wardrobe/foot.
+ */
 const BED_BOUNDS_INSET_M = 2.95;
+/** When disk JSON supplies fractions, trust authoring; only keep a hairline separation from bounds. */
+const AUTHORING_FURNITURE_BOUNDARY_SLACK_M = 0.06;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
@@ -152,6 +158,10 @@ function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM
     root.position.z += dz;
     root.updateMatrixWorld(true);
   }
+}
+
+function xzInsetForFurnitureClamp(useAuthoringClamp: boolean, seededInsetM: number): number {
+  return useAuthoringClamp ? AUTHORING_FURNITURE_BOUNDARY_SLACK_M : seededInsetM;
 }
 
 function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Object3D {
@@ -372,7 +382,9 @@ export async function mountFpApartmentFurniture(opts: {
       return;
     }
 
+    /** Built-ins JSON fractions only affect this spawn path — meshes are built only for the viewer's claimed unit. */
     const pose = resolveApartmentFurniturePose(u, builtinsFromContent);
+    const useAuthoringClamp = builtinsFromContent != null;
 
     const unitGroup = new THREE.Group();
     unitGroup.name = `apartment_furniture_${u.unitKey}`;
@@ -385,7 +397,7 @@ export async function mountFpApartmentFurniture(opts: {
     w.position.set(pose.wardrobe.x, 0, pose.wardrobe.z);
     w.rotation.y = pose.wardrobe.yaw;
     snapCloneBottomToWorldFloor(w, pose.wardrobe.snapFloorY);
-    keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
+    keepCloneInsideUnitXZ(w, u, xzInsetForFurnitureClamp(useAuthoringClamp, WARDROBE_BOUNDS_INSET_M));
     w.updateMatrixWorld(true);
     const wardrobeBounds = new THREE.Box3().setFromObject(w);
     const wardrobePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -415,7 +427,7 @@ export async function mountFpApartmentFurniture(opts: {
     f.position.set(pose.footlocker.x, 0, pose.footlocker.z);
     f.rotation.y = pose.footlocker.yaw;
     snapCloneBottomToWorldFloor(f, pose.footlocker.snapFloorY);
-    keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
+    keepCloneInsideUnitXZ(f, u, xzInsetForFurnitureClamp(useAuthoringClamp, FOOTLOCKER_BOUNDS_INSET_M));
     f.updateMatrixWorld(true);
     const footlockerBounds = new THREE.Box3().setFromObject(f);
     const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -445,7 +457,7 @@ export async function mountFpApartmentFurniture(opts: {
     b.position.set(pose.bed.x, 0, pose.bed.z);
     b.rotation.y = pose.bed.yaw;
     snapCloneBottomToWorldFloor(b, pose.bed.y);
-    keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
+    keepCloneInsideUnitXZ(b, u, xzInsetForFurnitureClamp(useAuthoringClamp, BED_BOUNDS_INSET_M));
     unitGroup.add(b);
 
     await yieldToMain();

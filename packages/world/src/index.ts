@@ -56,6 +56,7 @@ export {
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
+  UNIT_SHELL_WALL_THICKNESS_M,
 } from "./unitExteriorWindows.js";
 export {
   buildStaticCollisionSceneForBuilding,

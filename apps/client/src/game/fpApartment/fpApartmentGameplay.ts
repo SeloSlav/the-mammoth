@@ -4,7 +4,7 @@
 import type { Identity } from "spacetimedb";
 import type { ApartmentDoor, ApartmentUnit } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
-import { APARTMENT_CLAIM_FAST_FOR_TESTING } from "../../featureFlags";
+import { APARTMENT_CLAIM_FAST_FOR_TESTING, APARTMENT_CLAIM_UI_ENABLED } from "../../featureFlags";
 
 /** Horizontal radius (m); must match server `STASH_INTERACT_SQ = 3.5 * 3.5` (`apartments.rs`). */
 export const APARTMENT_FURNITURE_INTERACT_R_M = 3.5;
@@ -81,17 +81,16 @@ export function apartmentUnitOwnerEqual(
 }
 
 /**
- * Whether wardrobe / bed / footlocker **meshes** should exist for `u` when viewed by `conn`'s identity.
+ * Whether wardrobe / bed / footlocker **meshes** (and subscriber decor) should spawn for `u` for `conn`'s identity.
  *
- * Below {@link RESIDENTIAL_BAND_MIN_LEVEL}: abandoned stack — replicate full props on unclaimed units.
- * On the top residential slab: shells, vacant penthouse stubs, or other people's units stay **empty**;
- * **only YOUR {@link UNIT_STATE_CLAIMED} apartment** renders furniture so neighbor apartments read as inhabited shells.
+ * Only **YOUR** {@link UNIT_STATE_CLAIMED} apartment — any level. Every other apartment stays empty shells
+ * (no seeded props); per-unit authoring is not shipped yet — see wardrobe proxy raycasting in FP furniture
+ * for unclaimed claims.
  */
 export function residentInteriorPropsVisibleForViewer(
   conn: DbConnection | null | undefined,
   u: ApartmentUnit,
 ): boolean {
-  if ((u.level as number) < RESIDENTIAL_BAND_MIN_LEVEL) return true;
   const identity = conn?.identity;
   if (!identity) return false;
   return u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, identity);
@@ -304,8 +303,8 @@ function nearWardrobe(u: ApartmentUnit, x: number, y: number, z: number): boolea
 }
 
 /**
- * Claim UI / hold-E eligibility when the player is aiming at this unit's wardrobe (see
- * {@link mountFpApartmentFurniture} wardrobe pick meshes) — still requires hull + wardrobe proximity.
+ * Claim UI / hold-E eligibility when the player is aiming at this unit's wardrobe pick mesh —
+ * gated by `APARTMENT_CLAIM_UI_ENABLED` ({@link ../../featureFlags}). Requires hull + replicated wardrobe proximity.
  */
 export function unclaimedUnitIfPlayerAimedAtWardrobe(
   conn: DbConnection,
@@ -382,7 +381,8 @@ export function getApartmentSystemPrompt(
   const id = conn.identity;
   if (!id) return null;
 
-  const aimedWardrobeKey = opts.lookedAtWardrobeUnitKey ?? null;
+  const aimedWardrobeKey =
+    APARTMENT_CLAIM_UI_ENABLED ? (opts.lookedAtWardrobeUnitKey ?? null) : null;
   if (aimedWardrobeKey) {
     const claimUnit = unclaimedUnitIfPlayerAimedAtWardrobe(conn, aimedWardrobeKey, pose.x, pose.y, pose.z);
     if (claimUnit) {

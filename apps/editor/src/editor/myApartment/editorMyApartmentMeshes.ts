@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { UNIT_SHELL_WALL_THICKNESS_M } from "@the-mammoth/world";
 import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
@@ -20,18 +21,77 @@ export const EDITOR_MY_APARTMENT_YAW_SNAP_RAD = Math.PI / 4;
 
 const qSnapYawScratch = new THREE.Quaternion();
 
+/** Breath room inside plaster inner faces so thick prop meshes do not plane-fight drywall. */
+const EDITOR_MY_APARTMENT_INTERIOR_SLACK_M = 0.03;
+
+function clampPreviewXZToPlasterInterior(args: {
+  footprintSx: number;
+  footprintSz: number;
+  x: number;
+  z: number;
+}): { x: number; z: number } {
+  const wt = UNIT_SHELL_WALL_THICKNESS_M;
+  const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
+  const ix0 = wt + e;
+  const ix1 = args.footprintSx - wt - e;
+  const iz0 = wt + e;
+  const iz1 = args.footprintSz - wt - e;
+  if (!(ix1 > ix0) || !(iz1 > iz0)) {
+    return {
+      x: THREE.MathUtils.clamp(args.x, 0, args.footprintSx),
+      z: THREE.MathUtils.clamp(args.z, 0, args.footprintSz),
+    };
+  }
+  return {
+    x: THREE.MathUtils.clamp(args.x, ix0, ix1),
+    z: THREE.MathUtils.clamp(args.z, iz0, iz1),
+  };
+}
+
+function readAuthoringShellSlabFromAncestors(
+  o: THREE.Object3D,
+): { sx: number; sz: number } | null {
+  let cur: THREE.Object3D | null = o.parent;
+  while (cur) {
+    const sx = cur.userData.editorMyApartmentSlabSx as number | undefined;
+    const sz = cur.userData.editorMyApartmentSlabSz as number | undefined;
+    if (
+      typeof sx === "number" &&
+      typeof sz === "number" &&
+      sx > 0 &&
+      sz > 0
+    ) {
+      return { sx, sz };
+    }
+    cur = cur.parent;
+  }
+  return null;
+}
+
 export function snapOwnedApartmentYawRad(yRad: number): number {
   const s = EDITOR_MY_APARTMENT_YAW_SNAP_RAD;
   return Math.round(yRad / s) * s;
 }
 
-/** XZ-floor plane only; yaw on world Y; no pitch / roll — call during gizmo drag. */
+/** XZ-floor plane only; yaw on world Y; no pitch / roll; XZ clamped to hollow-shell interior for editor walls. */
 export function constrainMyApartmentFurnitureRootPose(root: THREE.Object3D): void {
   root.position.y = 0;
   const eulerW = new THREE.Euler().setFromQuaternion(root.quaternion, "YXZ");
   const y = snapOwnedApartmentYawRad(eulerW.y);
   qSnapYawScratch.setFromEuler(new THREE.Euler(0, y, 0, "YXZ"));
   root.quaternion.copy(qSnapYawScratch);
+
+  const slab = readAuthoringShellSlabFromAncestors(root);
+  if (slab) {
+    const c = clampPreviewXZToPlasterInterior({
+      footprintSx: slab.sx,
+      footprintSz: slab.sz,
+      x: root.position.x,
+      z: root.position.z,
+    });
+    root.position.x = c.x;
+    root.position.z = c.z;
+  }
 }
 
 export type EditorMyApartmentGltfTemplates = {
@@ -77,22 +137,40 @@ function previewWorldFromDoc(
   const wardrobeSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.wardrobeDy;
   const footSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.footDy;
   const bedSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.bedDy;
+  const wPos = clampPreviewXZToPlasterInterior({
+    footprintSx: m.prefabFootprintSx,
+    footprintSz: m.prefabFootprintSz,
+    x: m.strictMinX + doc.wardrobeFx * m.spanX - m.prefabOriginX,
+    z: m.strictMinZ + doc.wardrobeFz * m.spanZ - m.prefabOriginZ,
+  });
+  const footPos = clampPreviewXZToPlasterInterior({
+    footprintSx: m.prefabFootprintSx,
+    footprintSz: m.prefabFootprintSz,
+    x: m.strictMinX + doc.footFx * m.spanX - m.prefabOriginX,
+    z: m.strictMinZ + doc.footFz * m.spanZ - m.prefabOriginZ,
+  });
+  const bedPos = clampPreviewXZToPlasterInterior({
+    footprintSx: m.prefabFootprintSx,
+    footprintSz: m.prefabFootprintSz,
+    x: m.strictMinX + doc.bedFx * m.spanX - m.prefabOriginX,
+    z: m.strictMinZ + doc.bedFz * m.spanZ - m.prefabOriginZ,
+  });
   return {
     wardrobe: {
-      x: m.strictMinX + doc.wardrobeFx * m.spanX - m.prefabOriginX,
-      z: m.strictMinZ + doc.wardrobeFz * m.spanZ - m.prefabOriginZ,
+      x: wPos.x,
+      z: wPos.z,
       yaw: doc.wardrobeYawRad,
       snapFloorY: wardrobeSnap,
     },
     foot: {
-      x: m.strictMinX + doc.footFx * m.spanX - m.prefabOriginX,
-      z: m.strictMinZ + doc.footFz * m.spanZ - m.prefabOriginZ,
+      x: footPos.x,
+      z: footPos.z,
       yaw: doc.footYawRad,
       snapFloorY: footSnap,
     },
     bed: {
-      x: m.strictMinX + doc.bedFx * m.spanX - m.prefabOriginX,
-      z: m.strictMinZ + doc.bedFz * m.spanZ - m.prefabOriginZ,
+      x: bedPos.x,
+      z: bedPos.z,
       yaw: doc.bedYawRad,
       snapFloorY: bedSnap,
     },

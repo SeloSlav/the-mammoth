@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
+import {
+  getMammothDroppedWorldTargetMaxDimM,
+  MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
+} from "@the-mammoth/assets";
 import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
 import type { DbConnection } from "../../module_bindings";
@@ -22,6 +25,28 @@ export type MammothDroppedPickupBandOpts = {
   floorSpacingM: number;
 };
 const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
+/** Match `apps/server/src/dropped_item.rs` `DROP_Y_LIFT_M` — player drop mesh above replicated feet. */
+const DROP_ITEM_Y_LIFT_M = 0.11;
+
+/**
+ * Anchored loot Y includes clearance above the walk slab; player drops add a smaller lift. Either can sit
+ * just across a discrete {@link mammothVerticalStoryBandIndex} boundary from feet while still being the
+ * same playable floor (common upstairs; ground band 0 is wide enough to hide it).
+ */
+function dropVerticalBandMatchesFeet(
+  feetY: number,
+  dropY: number,
+  verticalBands: MammothDroppedPickupBandOpts,
+): boolean {
+  const oy = verticalBands.buildingWorldOriginY;
+  const spacing = verticalBands.floorSpacingM;
+  const feetBand = mammothVerticalStoryBandIndex(feetY, oy, spacing);
+  const ys = [dropY, dropY - MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M, dropY - DROP_ITEM_Y_LIFT_M];
+  for (const y of ys) {
+    if (mammothVerticalStoryBandIndex(y, oy, spacing) === feetBand) return true;
+  }
+  return false;
+}
 
 /**
  * `DroppedItem.id` is `u64`; the Spacetime client may surface it as `bigint` or `number`. Mixed `===`
@@ -48,18 +73,8 @@ export function droppedPickupWithinServerVolume(
   const dx = dropX - feetX;
   const dz = dropZ - feetZ;
   if (dx * dx + dz * dz > radiusM * radiusM) return false;
-  if (verticalBands != null) {
-    const feetBand = mammothVerticalStoryBandIndex(
-      feetY,
-      verticalBands.buildingWorldOriginY,
-      verticalBands.floorSpacingM,
-    );
-    const dropBand = mammothVerticalStoryBandIndex(
-      dropY,
-      verticalBands.buildingWorldOriginY,
-      verticalBands.floorSpacingM,
-    );
-    if (feetBand !== dropBand) return false;
+  if (verticalBands != null && !dropVerticalBandMatchesFeet(feetY, dropY, verticalBands)) {
+    return false;
   }
   return Math.abs(dropY - feetY) <= maxAbsDyM;
 }

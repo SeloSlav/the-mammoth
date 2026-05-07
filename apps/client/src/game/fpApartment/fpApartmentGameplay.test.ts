@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../featureFlags", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../featureFlags")>()),
+  APARTMENT_CLAIM_UI_ENABLED: true,
+}));
+
 import {
   apartmentDoorMatchesContainingUnit,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
@@ -7,6 +13,7 @@ import {
   feetDeepEnoughFromEntryDoor,
   formatApartmentPublicLabel,
   getApartmentSystemPrompt,
+  residentInteriorPropsVisibleForViewer,
   residentUnitKeyFromDoor,
   residentUnitKeyFromParts,
   UNIT_STATE_CLAIMED,
@@ -76,6 +83,29 @@ function mockConn(apartmentUnits: ApartmentUnit[], defIds: string[] = []) {
 }
 
 describe("fpApartmentGameplay", () => {
+  it("residentInteriorPropsVisibleForViewer renders furniture only for viewer-owned claimed apartments", () => {
+    const ownedLow = apartmentUnit({
+      level: 5,
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+    });
+    const claimedStranger = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_099",
+      unitId: "unit_e_099",
+      state: UNIT_STATE_CLAIMED,
+      owner: otherIdentity as never,
+    });
+    const unclaimed = apartmentUnit({ state: UNIT_STATE_UNCLAIMED });
+    expect(residentInteriorPropsVisibleForViewer(mockConn([ownedLow]), ownedLow)).toBe(true);
+    expect(residentInteriorPropsVisibleForViewer(mockConn([claimedStranger]), claimedStranger)).toBe(false);
+    expect(residentInteriorPropsVisibleForViewer(mockConn([unclaimed]), unclaimed)).toBe(false);
+  });
+
+  it("residentInteriorPropsVisibleForViewer is false without identity", () => {
+    const owned = apartmentUnit({ state: UNIT_STATE_CLAIMED, owner: testIdentity as never });
+    expect(residentInteriorPropsVisibleForViewer(undefined, owned)).toBe(false);
+  });
+
   it("residentUnitKeyFromDoor matches server resident_unit_key_from_door_row", () => {
     const row = {
       rowKey: "d",

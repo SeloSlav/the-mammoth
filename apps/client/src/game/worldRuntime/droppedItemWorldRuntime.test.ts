@@ -97,6 +97,26 @@ describe("droppedPickupWithinServerVolume", () => {
     ).toBe(false);
   });
 
+  it("allows anchored loot resting above walk slab when raw Y straddles storey bands (upper floors)", () => {
+    const spacing = DEFAULT_BUILDING_FLOOR_SPACING_M;
+    const bands = { buildingWorldOriginY: 0, floorSpacingM: spacing };
+    const feetY = 12.63;
+    const dropY = feetY + MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M;
+    expect(
+      droppedPickupWithinServerVolume(
+        0,
+        feetY,
+        0,
+        0,
+        dropY,
+        0,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_M,
+        bands,
+      ),
+    ).toBe(true);
+  });
+
   /**
    * World-anchor `findNearestDroppedPickup` historically omitted `verticalBands` while plain drops used it.
    * |Δy| parachute alone can exceed one storey height, so stacked floors with aligned XZ must use bands.
