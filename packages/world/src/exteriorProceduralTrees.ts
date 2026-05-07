@@ -176,18 +176,22 @@ export function buildExteriorProceduralTreeGroup(
 /**
  * Same output as {@link buildExteriorProceduralTreeGroup}, but occasionally yields (`EXTERIOR_PROCEDURAL_TREE_YIELD_EVERY`)
  * while generating hundreds of ez-trees so the tab stays interactive without enqueueing thousands of timers.
+ *
+ * When `targetRoot` is passed, merged meshes are added under that group (caller may parent it to the scene
+ * immediately so the first finished variant draws while later species still generate).
  */
 export async function buildExteriorProceduralTreeGroupYielding(
   buildingFootprint: THREE.Box3,
   yieldToMain: () => Promise<void>,
   options: ExteriorProceduralTreeOptions = {},
   placementsPrecomputed?: readonly ExteriorProceduralTreePlacement[],
+  targetRoot?: THREE.Group,
 ): Promise<THREE.Group> {
   const countFloored = Math.max(
     0,
     Math.floor(options.count ?? EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT),
   );
-  const root = new THREE.Group();
+  const root = targetRoot ?? new THREE.Group();
   root.name = "exterior_procedural_tree_grove";
   root.userData.mammothExteriorProceduralTrees = true;
   if (buildingFootprint.isEmpty()) {

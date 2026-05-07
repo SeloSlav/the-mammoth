@@ -316,10 +316,16 @@ export async function createFpSessionStaticWorldAsync(
   let exteriorTreePromise: Promise<THREE.Group> | null = null;
   let forestAttachTask: Promise<void> = Promise.resolve();
 
-  let resolveBuildingRoot!: (root: THREE.Group) => void;
-  const buildingRootWhenReady = new Promise<THREE.Group>((r) => {
-    resolveBuildingRoot = r;
+  let resolveForestParentRoot!: (root: THREE.Group) => void;
+  const forestBuildingRootWhenReady = new Promise<THREE.Group>((r) => {
+    resolveForestParentRoot = r;
   });
+  let forestParentRootLatched = false;
+  const latchMegablockRootForForestParent = (root: THREE.Group) => {
+    if (forestParentRootLatched) return;
+    forestParentRootLatched = true;
+    resolveForestParentRoot(root);
+  };
 
   const beginMegablockExteriorForest = (footprint: THREE.Box3, localGroundY: number) => {
     if (!ENABLE_EXTERIOR_PROCEDURAL_TREES || exteriorTreePromise !== null) return;
@@ -336,6 +342,10 @@ export async function createFpSessionStaticWorldAsync(
       ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
     ];
 
+    const groveShell = new THREE.Group();
+    groveShell.name = exteriorTreeGroveName;
+    groveShell.userData.mammothExteriorProceduralTrees = true;
+
     exteriorTreePromise = buildExteriorProceduralTreeGroupYielding(
       footprint,
       yieldToMain,
@@ -344,16 +354,19 @@ export async function createFpSessionStaticWorldAsync(
         seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
       },
       exteriorTreePlacements,
+      groveShell,
     );
 
     forestAttachTask = (async () => {
-      const grove = await exteriorTreePromise!;
-      const planted = grove.children.length > 0;
+      const root = await forestBuildingRootWhenReady;
+      /** Parent before mesh work finishes so each merged variant becomes visible as soon as it lands. */
+      if (groveShell.parent !== root) root.add(groveShell);
+      await yieldToMain();
+      await exteriorTreePromise!;
+      const planted = groveShell.children.length > 0;
       if (!planted) return;
-      const root = await buildingRootWhenReady;
-      if (grove.parent !== root) root.add(grove);
       const hooks = opts?.getBackdropHooks?.();
-      await hooks?.onForestReady?.({ forestRoot: grove, buildingRoot: root });
+      await hooks?.onForestReady?.({ forestRoot: groveShell, buildingRoot: root });
       await yieldToMain();
     })();
   };
@@ -370,6 +383,7 @@ export async function createFpSessionStaticWorldAsync(
     stairWellDef,
     yieldAfterEachPlate: yieldToMain,
     afterEachPlate: async ({ root, plateGroup }) => {
+      latchMegablockRootForForestParent(root);
       if (typeof plateGroup.userData.mammothPlateLevelIndex === "number") {
         await mergeMegablockStaticDirectChildYielding(plateGroup, yieldToMain);
       }
@@ -378,7 +392,7 @@ export async function createFpSessionStaticWorldAsync(
     },
   });
 
-  resolveBuildingRoot(buildingRoot);
+  latchMegablockRootForForestParent(buildingRoot);
 
   const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
   const stairSpecs = getBuildingStairShaftSpecs(
