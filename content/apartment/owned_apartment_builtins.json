@@ -11,6 +11,6 @@
   "wardrobeDy": 0,
   "footDy": 0,
   "bedYawRad": -1.5707963267948966,
-  "wardrobeYawRad": 0,
+  "wardrobeYawRad": -3.141592653589793,
   "footYawRad": -1.5707963267948966
 }

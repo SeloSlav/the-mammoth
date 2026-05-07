@@ -123,12 +123,7 @@ export default function App() {
         }}
       />
       {fpSessionMounted ? (
-        <HudShell
-          displayName={session.displayName}
-          onSignOut={session.signOut}
-          conn={session.conn}
-          connectionKind={session.connectionKind}
-        />
+        <HudShell onSignOut={session.signOut} conn={session.conn} />
       ) : null}
     </>
   );
