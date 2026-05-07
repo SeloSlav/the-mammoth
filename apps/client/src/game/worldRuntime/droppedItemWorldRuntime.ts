@@ -231,6 +231,11 @@ export type MountDroppedItemsWorldOptions = {
    */
   pickupBandOpts?: MammothDroppedPickupBandOpts | null;
   /**
+   * Runs immediately before `pickup_dropped_item`. In solo/local play this publishes the current
+   * client feet so the server reducer validates against what the player is actually standing on.
+   */
+  beforePickup?: () => void | Promise<void>;
+  /**
    * Called after `pickup_dropped_item` settles and the dropped row is gone from the local cache
    * (server granted the stack). Not called when pickup is a no-op (too far, inventory full, etc.).
    */
@@ -254,7 +259,6 @@ export function mountDroppedItemsWorld(
   tryPickupNearest: (x: number, y: number, z: number) => void;
   dispose: () => void;
 } {
-  void aoiHalfM;
   const root = new THREE.Group();
   root.name = "dropped_items";
   scene.add(root);
@@ -268,6 +272,18 @@ export function mountDroppedItemsWorld(
 
   const resolvedBandOpts =
     options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
+
+  let sub: { unsubscribe: () => void } | null = null;
+  try {
+    sub = conn
+      .subscriptionBuilder()
+      .onApplied(() => {
+        syncFromDb();
+      })
+      .subscribe(["SELECT * FROM dropped_item"]);
+  } catch (e) {
+    console.warn("[droppedItems] subscribe failed", e);
+  }
 
   const prepareLoadedSceneForTemplate = (scene: THREE.Group): void => {
     scene.traverse((o) => {
@@ -369,29 +385,20 @@ export function mountDroppedItemsWorld(
     void resolveDefTemplate(row.defId).then((state) => {
       rowVisualInFlight.delete(key);
 
-      if (!droppedItemRowExists(conn, droppedItemId)) {
-        const g = idToGroup.get(key);
-        if (g) {
-          root.remove(g);
-          disposeDroppedVisualBranch(g);
-          idToGroup.delete(key);
-        }
+      const pendingGroup = idToGroup.get(key);
+      if (!pendingGroup) {
+        // Row was deleted while the GLB was loading; delete handling already removed the fallback.
         return;
       }
-
-      const pendingGroup = idToGroup.get(key);
 
       if (state.status === "glb_unavailable") {
-        if (pendingGroup) applyPose(pendingGroup, row);
-        else spawnFallbackBox(key, row);
+        applyPose(pendingGroup, row);
         return;
       }
 
-      if (pendingGroup) {
-        root.remove(pendingGroup);
-        disposeDroppedVisualBranch(pendingGroup);
-        idToGroup.delete(key);
-      }
+      root.remove(pendingGroup);
+      disposeDroppedVisualBranch(pendingGroup);
+      idToGroup.delete(key);
 
       const clone = state.template.root.clone(true);
       fitDroppedWorldItemModelToCatalog(clone, row.defId);
@@ -429,11 +436,11 @@ export function mountDroppedItemsWorld(
   conn.db.dropped_item.onDelete(onRowChange);
 
   /**
-   * Chunked baseline already includes `SELECT * FROM dropped_item` — the local cache holds every row.
-   * A second AOI subscription only added refcount churn on recentre; visuals sync from `conn.db` alone.
-   * Call this after spawn / teleport so meshes catch any rows that landed before listeners were wired.
+   * Stable dropped-item subscription is owned above. AOI calls are kept for the mount API and resync
+   * visuals after spawn / teleport in case rows landed before listeners were wired.
    */
   const subscribeAoi = (_cx: number, _cz: number) => {
+    void aoiHalfM;
     syncFromDb();
   };
 
@@ -455,6 +462,7 @@ export function mountDroppedItemsWorld(
     const droppedItemId = hit.droppedItemId;
     void (async () => {
       try {
+        await options?.beforePickup?.();
         await conn.reducers.pickupDroppedItem({ droppedItemId });
       } catch {
         return;
@@ -469,6 +477,7 @@ export function mountDroppedItemsWorld(
     conn.db.dropped_item.removeOnInsert(onRowChange);
     conn.db.dropped_item.removeOnUpdate(onRowChange);
     conn.db.dropped_item.removeOnDelete(onRowChange);
+    sub?.unsubscribe();
     scene.remove(root);
     for (const g of idToGroup.values()) {
       disposeDroppedVisualBranch(g);

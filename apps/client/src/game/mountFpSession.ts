@@ -432,7 +432,7 @@ export async function mountFpSession(
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
-  /** Replicated-feet probe for loot queries — matches server `pickup_dropped_item` distance checks. */
+  /** Local pickup probe — pickup publishes this pose before server validation. */
   const _pickupAuthorityFeet = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
 
@@ -620,6 +620,20 @@ export async function mountFpSession(
     }),
   });
 
+  const flushLocalPickupPoseToServer = (): Promise<void> => {
+    const locomotionBlocked = fpLocomotionInputBlocked();
+    const pickupInput: FpLocomotionInput = {
+      forward: locomotionBlocked ? false : keys.has("KeyW"),
+      backward: locomotionBlocked ? false : keys.has("KeyS"),
+      left: locomotionBlocked ? false : keys.has("KeyA"),
+      right: locomotionBlocked ? false : keys.has("KeyD"),
+      sprint: locomotionBlocked ? false : keys.has("ShiftLeft") || keys.has("ShiftRight"),
+      crouch: mainRaf.crouchToggle,
+      jumpHeld: locomotionBlocked ? false : keys.has("Space"),
+    };
+    return sendMoveIntent(pickupInput, false, performance.now());
+  };
+
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
   registerHotbarConsumePrimeAudio(() => localAudio.unlock());
@@ -720,12 +734,8 @@ export async function mountFpSession(
   let pendingRespawnAuthoritativeSnap = false;
 
   const getDroppedPickupAuthorityFeet = (): THREE.Vector3 => {
-    if (!spawnSynced) {
-      const p = resolveAuthoritativeInteractionPose(pos, serverPose);
-      _pickupAuthorityFeet.set(p.x, p.y, p.z);
-      return _pickupAuthorityFeet;
-    }
-    _pickupAuthorityFeet.set(serverPose.x, serverPose.y, serverPose.z);
+    const p = resolveAuthoritativeInteractionPose(pos, serverPose);
+    _pickupAuthorityFeet.set(p.x, p.y, p.z);
     return _pickupAuthorityFeet;
   };
 
@@ -795,6 +805,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, DROPPED_ITEM_SUBSCRIBE_HALF_M, {
     pickupBandOpts: mammothDropPickupBands,
+    beforePickup: flushLocalPickupPoseToServer,
     onPickupRemoved: async () => {
       await attachSpatialWorldAudio();
       localAudio.playItemPickLocal();
@@ -1022,7 +1033,14 @@ export async function mountFpSession(
         mammothDropPickupBands,
       );
       if (nearWorld) {
-        void conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
+        void (async () => {
+          try {
+            await flushLocalPickupPoseToServer();
+            await conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
+          } catch {
+            return;
+          }
+        })();
         return;
       }
 
@@ -1048,7 +1066,7 @@ export async function mountFpSession(
         crouch: mainRaf.crouchToggle,
         jumpHeld: keys.has("Space"),
       };
-      sendMoveIntent(jumpInput, true, performance.now());
+      void sendMoveIntent(jumpInput, true, performance.now());
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {

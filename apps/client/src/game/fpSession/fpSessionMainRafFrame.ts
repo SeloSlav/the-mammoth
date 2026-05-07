@@ -199,8 +199,8 @@ export type FpSessionMainRafFrameDeps = {
   syncSpatialAoiFromFeet: (cx: number, cy: number, cz: number) => void;
   syncActiveHotbarSlotToServer: () => void;
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
-  /** Immediate intent publish (bypasses periodic coalesce) so combat reducers see fresh `aim_yaw`. */
-  sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
+  /** Immediate intent publish (bypasses periodic coalesce) so reducers see fresh local pose / `aim_yaw`. */
+  sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => Promise<void>;
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isApartmentFurnitureInteriorVisible: () => boolean;
@@ -218,10 +218,7 @@ export type FpSessionMainRafFrameDeps = {
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
-  /**
-   * Replicated feet for dropped-item HUD / pickup — aligns with server `pickup_dropped_item` so E
-   * and prompts match what the reducer accepts.
-   */
+  /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;

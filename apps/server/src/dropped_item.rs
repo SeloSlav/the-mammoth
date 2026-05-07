@@ -619,6 +619,15 @@ pub fn seed_world_loot_spawns(ctx: &ReducerContext) {
     refresh_world_loot_spawns_inner(ctx);
 }
 
+/// Backfill static world loot for long-lived local dev databases that predate the init seed or had
+/// their anchored rows cleared. Player-dropped rows are left untouched.
+pub fn ensure_world_loot_spawns(ctx: &ReducerContext) {
+    if ctx.db.dropped_item().iter().any(|d| d.world_spawn_slot.is_some()) {
+        return;
+    }
+    refresh_world_loot_spawns_inner(ctx);
+}
+
 #[inline]
 fn forward_from_yaw(yaw: f32) -> (f32, f32) {
     // Same basis as `movement.rs` `integrate_one`.
@@ -707,33 +716,12 @@ fn pickup_dropped_item_inner(
     sender: Identity,
     dropped_item_id: u64,
 ) -> Result<(), String> {
-    let pose = ctx
-        .db
-        .player_pose()
-        .identity()
-        .find(&sender)
-        .ok_or_else(|| "no player pose".to_string())?;
     let dropped = ctx
         .db
         .dropped_item()
         .id()
         .find(dropped_item_id)
         .ok_or_else(|| format!("dropped item {dropped_item_id} not found"))?;
-
-    let dx = pose.x - dropped.x;
-    let dz = pose.z - dropped.z;
-    if dx * dx + dz * dz > PICKUP_RADIUS_SQ {
-        return Err("too far away".to_string());
-    }
-    let pf = mammoth_pickup_vertical_band(pose.y);
-    let df = mammoth_pickup_vertical_band(dropped.y);
-    if pf != df {
-        return Err("too far away".to_string());
-    }
-    let dy = (pose.y - dropped.y).abs();
-    if dy > PICKUP_MAX_ABS_DY_SAME_BAND_M {
-        return Err("too far away".to_string());
-    }
 
     let def_id = dropped.def_id.clone();
     let qty = dropped.quantity;

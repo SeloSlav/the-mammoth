@@ -69,6 +69,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     }
     pose::ensure_player_pose_row(ctx, id);
     movement::ensure_player_input_row(ctx, id, 0.0);
+    dropped_item::ensure_world_loot_spawns(ctx);
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
     apartments::seed_apartment_units(ctx);

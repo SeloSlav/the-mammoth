@@ -15,7 +15,7 @@ import {
 
 export type FpSessionMoveIntentChannel = {
   intentSeq: { current: bigint };
-  sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
+  sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => Promise<void>;
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
 };
 
@@ -54,10 +54,10 @@ export function createFpSessionMoveIntentChannel(
   let hasSentMoveIntent = false;
   let jumpIntentLockUntilMs = 0;
 
-  const sendMoveIntent = (input: FpLocomotionInput, jump: boolean, nowMs: number) => {
-    if (!conn.identity) return;
+  const sendMoveIntent = (input: FpLocomotionInput, jump: boolean, nowMs: number): Promise<void> => {
+    if (!conn.identity) return Promise.resolve();
     const vitals = conn.db.player_vitals.identity.find(conn.identity);
-    if (vitals != null && vitals.health <= 0) return;
+    if (vitals != null && vitals.health <= 0) return Promise.resolve();
     intentSeq.current += 1n;
     const bits = encodeMoveIntentBits(input, jump);
     const replacePendingSameStep =
@@ -84,7 +84,7 @@ export function createFpSessionMoveIntentChannel(
     hasSentMoveIntent = true;
     if (jump) jumpIntentLockUntilMs = nowMs + NET_INTERVAL_MS;
     const p = samplePose();
-    void conn.reducers.submitPlayerLocomotionSnapshot({
+    return conn.reducers.submitPlayerLocomotionSnapshot({
       intentSeq: intentSeq.current,
       bits,
       aimYaw: mainRaf.bodyYaw,
@@ -106,7 +106,7 @@ export function createFpSessionMoveIntentChannel(
   ): void => {
     if (!conn.identity) return;
     if (jump) {
-      sendMoveIntent(input, true, nowMs);
+      void sendMoveIntent(input, true, nowMs);
       return;
     }
     if (nowMs < jumpIntentLockUntilMs) return;
@@ -118,7 +118,7 @@ export function createFpSessionMoveIntentChannel(
       hasSentMoveIntent &&
       fpShortestAngleDeltaAbsRad(mainRaf.bodyYaw, lastSentAimYaw) >= MOVE_INTENT_YAW_EDGE_RAD;
     if (periodicDue || bitsChanged || yawChanged) {
-      sendMoveIntent(input, false, nowMs);
+      void sendMoveIntent(input, false, nowMs);
     }
   };
 
