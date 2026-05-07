@@ -6,6 +6,10 @@ use std::sync::OnceLock;
 /// Match `DEFAULT_BUILDING_FLOOR_SPACING_M` / `STOREY_SPACING_M`.
 pub const STOREY_SPACING_M: f32 = 60.0 / 19.0;
 pub const BUILDING_ORIGIN_Y: f32 = 0.0;
+
+/// With `max_level() == 20`, levels **18–20** are the only “lived-in” residential band; everything
+/// below is abandoned gameplay space (open unit doors in the seeded presentation).
+pub const RESIDENTIAL_BAND_MIN_LEVEL: u32 = 18;
 pub const SHAFT_LOCAL_Y: f32 = 1.6589473684210527;
 pub const SHAFT_SX: f32 = 2.38;
 pub const SHAFT_SY: f32 = 3.1578947368421053;
@@ -146,10 +150,15 @@ pub fn plan_key(px: f32, pz: f32) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::max_level;
+    use super::{max_level, RESIDENTIAL_BAND_MIN_LEVEL};
 
     #[test]
     fn max_level_tracks_authored_building_floor_refs() {
         assert_eq!(max_level(), 20);
+    }
+
+    #[test]
+    fn residential_band_is_top_three_slabs_when_max_20() {
+        assert_eq!(max_level() - RESIDENTIAL_BAND_MIN_LEVEL + 1, 3);
     }
 }

@@ -16,6 +16,8 @@ const INTERACT_FEET_Y_ABOVE_SLACK_M = 2.85;
 export const UNIT_STATE_UNCLAIMED = 0;
 export const UNIT_STATE_CLAIMED = 1;
 export const UNIT_STATE_BROKEN = 2;
+/** NPC façade on the rooftop residential slab — mirrors server `UNIT_STATE_SHELL_OCCUPIED`. */
+export const UNIT_STATE_SHELL_OCCUPIED = 4;
 
 /** Seconds of hold progress to complete claim (30 production, 1 when testing flag matches server). */
 export const APARTMENT_CLAIM_FULL_SECS = APARTMENT_CLAIM_FAST_FOR_TESTING ? 1 : 30;
@@ -89,6 +91,7 @@ export function clientMayToggleApartmentDoor(
   if (!unit) return true;
   if (unit.state === UNIT_STATE_UNCLAIMED) return false;
   if (unit.state === UNIT_STATE_BROKEN) return false;
+  if (unit.state === UNIT_STATE_SHELL_OCCUPIED) return false;
   if (unit.state === UNIT_STATE_CLAIMED) {
     return sameIdentity(unit.owner, identity);
   }

@@ -45,7 +45,7 @@ pub fn init(ctx: &ReducerContext) {
     elevator::seed_elevators(ctx);
     apartment_door::seed_apartment_doors(ctx);
     apartments::seed_apartment_units(ctx);
-    apartments::open_unclaimed_residential_doors(ctx);
+    apartment_door::sync_residential_unit_door_band_presentations(ctx);
     dropped_item::seed_world_loot_spawns(ctx);
     dropped_item::start_world_loot_refresh_schedule(ctx);
     movement::start_physics_schedule(ctx);
@@ -67,12 +67,13 @@ pub fn on_connect(ctx: &ReducerContext) {
             avatar_body: 0,
         });
     }
-    pose::ensure_player_pose_row(ctx, id);
-    movement::ensure_player_input_row(ctx, id, 0.0);
     dropped_item::ensure_world_loot_spawns(ctx);
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
     apartments::seed_apartment_units(ctx);
+    apartments::ensure_player_home_apartment(ctx, id);
+    pose::ensure_player_pose_row(ctx, id);
+    movement::ensure_player_input_row(ctx, id, 0.0);
     world_sound::ensure_player_audio_rows(ctx, id);
     firearm::ensure_player_firearm_cooldown_row(ctx, id);
     player_vitals::ensure_player_vitals_row(ctx, id);

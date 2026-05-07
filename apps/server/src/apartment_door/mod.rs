@@ -17,7 +17,9 @@ use serde::Deserialize;
 use spacetimedb::{ReducerContext, Table};
 
 use crate::auth;
-use crate::elevator_layout::{max_level, BUILDING_ORIGIN_Y, STOREY_SPACING_M};
+use crate::elevator_layout::{
+    max_level, BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M,
+};
 use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
 };
@@ -155,6 +157,41 @@ fn template_set_for(floor_doc_id: &str) -> &'static [GenTemplate] {
     &[]
 }
 
+/// First segment must be `unit_e_*` / `unit_w_*` for double-loaded corridor entries.
+#[inline]
+pub(crate) fn is_residential_corridor_unit_door(template_id: &str) -> bool {
+    let uid = template_id.split('|').next().unwrap_or("");
+    uid.starts_with("unit_e_") || uid.starts_with("unit_w_")
+}
+
+/// Default openness for residential **unit** corridor doors (`unit_e_*`/`unit_w_*`). Other templates
+/// (manual stair shafts, elevators) stay closed (`0`).
+#[inline]
+pub(crate) fn residential_unit_door_default_open01_for_level(level: u32) -> (u8, f32) {
+    if level < RESIDENTIAL_BAND_MIN_LEVEL {
+        (1, 1.0)
+    } else {
+        (0, 0.0)
+    }
+}
+
+/// One-shot sync on module **`init`** (deploy / reset): aligns residential swing doors with the
+/// abandoned-open vs lived-in-band policy. **`client_connected`** only seeds inserts — it does **not**
+/// call this — so runtime player-driven `desired_open` changes persist across reconnects.
+pub fn sync_residential_unit_door_band_presentations(ctx: &ReducerContext) {
+    for mut d in ctx.db.apartment_door().iter() {
+        if !is_residential_corridor_unit_door(&d.template_id) {
+            continue;
+        }
+        let (want_open01, swing) = residential_unit_door_default_open01_for_level(d.level);
+        if d.desired_open != want_open01 || (d.swing_open_01 - swing).abs() > 1e-4 {
+            d.desired_open = want_open01;
+            d.swing_open_01 = swing;
+            ctx.db.apartment_door().row_key().update(d);
+        }
+    }
+}
+
 /// Idempotent: insert one row per `(floor_doc, level_index, template)` if missing.
 pub fn seed_apartment_doors(ctx: &ReducerContext) {
     let refs = building_floor_refs();
@@ -183,6 +220,11 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                 }
                 continue;
             }
+            let (desired_open, swing_open_01) = if is_residential_corridor_unit_door(t.template_id) {
+                residential_unit_door_default_open01_for_level(level)
+            } else {
+                (0, 0.0)
+            };
             let _ = ctx.db.apartment_door().insert(ApartmentDoor {
                 row_key: rk,
                 floor_doc_id: floor_doc_id.to_string(),
@@ -194,8 +236,8 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                 feet_y: feet_world_y(level, t.feet_y_offset),
                 panel_w_m: t.panel_w_m,
                 panel_h_m: t.panel_h_m,
-                desired_open: 0,
-                swing_open_01: 0.0,
+                desired_open,
+                swing_open_01,
             });
         }
     }

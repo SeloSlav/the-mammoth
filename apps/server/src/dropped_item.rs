@@ -11,7 +11,7 @@
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::apartment_interior_anchors::{BED_HALF_X_M, BED_HALF_Z_M};
-use crate::apartments::{apartment_unit, ApartmentUnit, UNIT_STATE_UNCLAIMED};
+use crate::apartments::{apartment_unit, ApartmentUnit, is_vacant_home_pool_unit_row, UNIT_STATE_UNCLAIMED};
 use crate::auth;
 use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
@@ -566,7 +566,9 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
         .db
         .apartment_unit()
         .iter()
-        .filter(|u| u.state == UNIT_STATE_UNCLAIMED)
+        .filter(|u| {
+            u.state == UNIT_STATE_UNCLAIMED && !is_vacant_home_pool_unit_row(u)
+        })
         .collect();
     unclaimed.sort_by(|a, b| {
         a.level

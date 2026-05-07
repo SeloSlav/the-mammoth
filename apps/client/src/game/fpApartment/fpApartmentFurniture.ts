@@ -16,6 +16,7 @@ import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescen
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   clientMayUseApartmentStash,
+  UNIT_STATE_SHELL_OCCUPIED,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 
@@ -60,6 +61,7 @@ const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
   "unitId",
   "level",
+  "state",
   "bedX",
   "bedY",
   "bedZ",
@@ -330,6 +332,36 @@ export async function mountFpApartmentFurniture(opts: {
     const levelIdx = u.level;
     const plate = build.group;
     const furnitureYaw = u.bedYaw;
+
+    if (u.state === UNIT_STATE_SHELL_OCCUPIED) {
+      const unitGroup = new THREE.Group();
+      unitGroup.name = `apartment_furniture_shell:${u.unitKey}`;
+      unitGroup.userData.mammothApartmentFurnitureProp = true;
+      unitGroup.userData.mammothPlateLevelIndex = levelIdx;
+      plate.add(unitGroup);
+      if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
+        const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
+        hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
+        hull.userData.mammothApartmentUnitBoundsDebug = true;
+        hull.userData.mammothApartmentFurnitureProp = true;
+        hull.userData.mammothUnitInterior = true;
+        hull.userData.mammothPlateLevelIndex = levelIdx;
+        hull.renderOrder = -1;
+        const sx = u.boundMaxX - u.boundMinX;
+        const sy = Math.max(0.02, u.boundMaxY - u.boundMinY);
+        const sz = u.boundMaxZ - u.boundMinZ;
+        hull.scale.set(sx, sy, sz);
+        hull.position.set(
+          (u.boundMinX + u.boundMaxX) * 0.5,
+          (u.boundMinY + u.boundMaxY) * 0.5,
+          (u.boundMinZ + u.boundMaxZ) * 0.5,
+        );
+        hull.frustumCulled = false;
+        unitGroup.add(hull);
+      }
+      build.unitGroups.push(unitGroup);
+      return;
+    }
 
     const unitGroup = new THREE.Group();
     unitGroup.name = `apartment_furniture_${u.unitKey}`;

@@ -7,7 +7,9 @@ use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, 
 use crate::auth;
 use crate::crafting;
 use crate::elevator_layout::max_level;
-use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
+use crate::elevator_layout::{
+    BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M,
+};
 use crate::feature_flags;
 use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
@@ -28,6 +30,15 @@ use crate::world_sound;
 pub(crate) const UNIT_STATE_UNCLAIMED: u8 = 0;
 pub(crate) const UNIT_STATE_CLAIMED: u8 = 1;
 pub(crate) const UNIT_STATE_BROKEN: u8 = 2;
+/// Occupied façade on the residential top band (`RESIDENTIAL_BAND_MIN_LEVEL` … `max_level`) — NPC
+/// shell later; players cannot loot-claim (`door-lock`/`screwdriver` hold).
+pub(crate) const UNIT_STATE_SHELL_OCCUPIED: u8 = 4;
+
+pub(crate) const MAMUTICA_TYPICAL_FLOOR_DOC_ID: &str = "floor_mamutica_typical";
+
+/// Roof-slab playable homes on **`floor_mamutica_typical`** (**`unit_e_003` first** — designated
+/// east-wing corner penthouse spawn). Overflow slots prevent multi-player identity starvation in dev.
+const HOME_BAND_UNIT_IDS: &[&str] = &["unit_e_003", "unit_w_003", "unit_e_014", "unit_w_014"];
 
 const CLAIM_FULL_SECS: f32 = if feature_flags::APARTMENT_CLAIM_FAST_FOR_TESTING {
     1.0
@@ -133,6 +144,20 @@ pub struct ApartmentUnit {
     pub bound_max_y: f32,
 }
 
+#[inline]
+pub(crate) fn is_home_candidate_unit_row(u: &ApartmentUnit, max_lv: u32) -> bool {
+    u.floor_doc_id == MAMUTICA_TYPICAL_FLOOR_DOC_ID
+        && u.level == max_lv
+        && HOME_BAND_UNIT_IDS.contains(&u.unit_id.as_str())
+}
+
+/// Idle home slots on the roof slab — omit from procedural apartment-floor loot churn.
+#[inline]
+pub(crate) fn is_vacant_home_pool_unit_row(u: &ApartmentUnit) -> bool {
+    let max_lv = max_level();
+    u.state == UNIT_STATE_UNCLAIMED && is_home_candidate_unit_row(u, max_lv)
+}
+
 #[spacetimedb::table(public, accessor = apartment_door_gameplay)]
 pub struct ApartmentDoorGameplay {
     #[primary_key]
@@ -221,6 +246,85 @@ pub(crate) fn unit_key_containing_feet(
         }
     }
     best.map(|(unit_key, _)| unit_key)
+}
+
+fn refresh_residential_band_unit_states(ctx: &ReducerContext) {
+    let max_lv = max_level();
+    for mut u in ctx.db.apartment_unit().iter() {
+        if !u.unit_id.starts_with("unit_e_") && !u.unit_id.starts_with("unit_w_") {
+            continue;
+        }
+        if u.state == UNIT_STATE_BROKEN {
+            continue;
+        }
+        let in_band = u.level >= RESIDENTIAL_BAND_MIN_LEVEL && u.level <= max_lv;
+        let home_slot = is_home_candidate_unit_row(&u, max_lv);
+
+        if !in_band {
+            if u.state == UNIT_STATE_SHELL_OCCUPIED {
+                u.state = UNIT_STATE_UNCLAIMED;
+                u.owner = None;
+                u.claim_started_by = None;
+                u.claim_progress_secs = 0.0;
+                u.last_claim_pulse_micros = 0;
+                ctx.db.apartment_unit().unit_key().update(u);
+            }
+            continue;
+        }
+
+        if u.state == UNIT_STATE_CLAIMED {
+            continue;
+        }
+
+        if home_slot {
+            if u.state == UNIT_STATE_SHELL_OCCUPIED {
+                u.state = UNIT_STATE_UNCLAIMED;
+                u.owner = None;
+                u.claim_started_by = None;
+                u.claim_progress_secs = 0.0;
+                u.last_claim_pulse_micros = 0;
+                ctx.db.apartment_unit().unit_key().update(u);
+            }
+            continue;
+        }
+
+        if u.state != UNIT_STATE_SHELL_OCCUPIED {
+            u.state = UNIT_STATE_SHELL_OCCUPIED;
+            u.owner = None;
+            u.claim_started_by = None;
+            u.claim_progress_secs = 0.0;
+            u.last_claim_pulse_micros = 0;
+            ctx.db.apartment_unit().unit_key().update(u);
+        }
+    }
+}
+
+/// Auto-grant the first free roof-slab corner home from [`HOME_BAND_UNIT_IDS`] (`max_level`, typical floor).
+pub(crate) fn ensure_player_home_apartment(ctx: &ReducerContext, id: Identity) {
+    for u in ctx.db.apartment_unit().iter() {
+        if u.owner == Some(id) && u.state == UNIT_STATE_CLAIMED {
+            return;
+        }
+    }
+    let max_lv = max_level();
+    for stub_id in HOME_BAND_UNIT_IDS {
+        let uk =
+            unit_key_parts(MAMUTICA_TYPICAL_FLOOR_DOC_ID, max_lv, stub_id);
+        let Some(mut u) = ctx.db.apartment_unit().unit_key().find(&uk) else {
+            continue;
+        };
+        if u.state != UNIT_STATE_UNCLAIMED {
+            continue;
+        }
+        u.state = UNIT_STATE_CLAIMED;
+        u.owner = Some(id);
+        u.claim_progress_secs = 0.0;
+        u.claim_started_by = None;
+        u.last_claim_pulse_micros = 0;
+        ctx.db.apartment_unit().unit_key().update(u);
+        return;
+    }
+    log::warn!("ensure_player_home_apartment: no vacant home slab slot remaining");
 }
 
 pub fn seed_apartment_units(ctx: &ReducerContext) {
@@ -372,6 +476,7 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
     for key in stale_keys {
         ctx.db.apartment_unit().unit_key().delete(key);
     }
+    refresh_residential_band_unit_states(ctx);
 }
 
 fn template_set_for_floor(floor_doc_id: &str) -> &'static [GenTemplate] {
@@ -407,6 +512,29 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
             z: u.bed_z,
             yaw: u.bed_yaw,
             seq: pose_row.seq,
+            vel_x: 0.0,
+            vel_y: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+            melee_presentation_seq: 0,
+            firearm_presentation_seq: 0,
+        })
+    })
+}
+
+/// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
+pub(crate) fn join_pose_from_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
+    ctx.db.apartment_unit().iter().find_map(|u| {
+        if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
+            return None;
+        }
+        Some(PlayerPose {
+            identity: owner,
+            x: u.bed_x,
+            y: u.bed_y + 0.92,
+            z: u.bed_z,
+            yaw: u.bed_yaw,
+            seq: 0,
             vel_x: 0.0,
             vel_y: 0.0,
             vel_z: 0.0,
@@ -1056,6 +1184,7 @@ pub(crate) fn player_may_toggle_door(
         UNIT_STATE_UNCLAIMED => false,
         UNIT_STATE_CLAIMED => unit.owner == Some(actor),
         UNIT_STATE_BROKEN => false,
+        UNIT_STATE_SHELL_OCCUPIED => false,
         _ => false,
     }
 }
@@ -1118,23 +1247,6 @@ pub(crate) fn apply_forward_melee_door_damage(
     }
     ctx.db.apartment_door_gameplay().row_key().update(gp);
     ctx.db.apartment_door().row_key().update(door);
-}
-
-/// Open unclaimed corridor doors visually (desired_open = 1, swing snapped open).
-pub fn open_unclaimed_residential_doors(ctx: &ReducerContext) {
-    for mut d in ctx.db.apartment_door().iter() {
-        if !d.template_id.contains("unit_") {
-            continue;
-        }
-        let uk = crate::apartment_door::resident_unit_key_from_door_row(&d);
-        if let Some(unit) = ctx.db.apartment_unit().unit_key().find(&uk) {
-            if unit.state == UNIT_STATE_UNCLAIMED {
-                d.desired_open = 1;
-                d.swing_open_01 = 1.0;
-                ctx.db.apartment_door().row_key().update(d);
-            }
-        }
-    }
 }
 
 #[cfg(test)]
