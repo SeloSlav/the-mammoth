@@ -10,6 +10,7 @@ import {
   FloorOverrideDocSchema,
   InteriorDocSchema,
   LandingKitDefSchema,
+  OwnedApartmentBuiltinsDocSchema,
   PrefabDefSchema,
   StairWellDefSchema,
 } from "@the-mammoth/schemas";
@@ -27,6 +28,7 @@ import {
   EDITOR_FLOORS_DIR,
   EDITOR_INTERIORS_DIR,
   EDITOR_PREFABS_DIR,
+  EDITOR_OWNED_APT_BUILTINS_FILE,
 } from "../editor/content/editorContentDiscovery.js";
 import {
   collisionArtifactsStampPath,
@@ -321,6 +323,9 @@ export function editorDevMiddleware(
       if (path === "/__editor/save-apartment-kit" && req.method === "POST") {
         return void (await handleSaveApartmentKit(repoRoot, req, res, next));
       }
+      if (path === "/__editor/save-owned-apartment-builtins" && req.method === "POST") {
+        return void (await handleSaveOwnedApartmentBuiltins(repoRoot, req, res, next));
+      }
       if (path === "/__editor/save-stairwell" && req.method === "POST") {
         return void (await handleSaveStairWell(repoRoot, req, res, next));
       }
@@ -460,6 +465,42 @@ async function handleSaveApartmentKit(
     }
     LandingKitDefSchema.parse(JSON.parse(body.json));
     const abs = safeContentFile(repoRoot, EDITOR_APARTMENT_KIT_FILE);
+    if (!abs) {
+      res.statusCode = 403;
+      res.end("bad path");
+      return;
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, body.json, "utf8");
+    sendJson(res, {
+      ok: true,
+      path: abs,
+      collisionArtifactsStatus: await computeCollisionArtifactsStatus(repoRoot),
+    });
+  } catch (e) {
+    res.statusCode = 500;
+    res.end(e instanceof Error ? e.message : "error");
+  }
+}
+
+async function handleSaveOwnedApartmentBuiltins(
+  repoRoot: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: Connect.NextFunction,
+) {
+  void next;
+  if (!ensureEditorSaveEnabled(res)) return;
+  try {
+    const raw = await readJsonBody(req);
+    const body = JSON.parse(raw) as { json?: string };
+    if (typeof body.json !== "string") {
+      res.statusCode = 400;
+      res.end("missing json string");
+      return;
+    }
+    OwnedApartmentBuiltinsDocSchema.parse(JSON.parse(body.json));
+    const abs = safeContentFile(repoRoot, EDITOR_OWNED_APT_BUILTINS_FILE);
     if (!abs) {
       res.statusCode = 403;
       res.end("bad path");

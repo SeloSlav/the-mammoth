@@ -20,6 +20,10 @@ import {
   residentInteriorPropsVisibleForViewer,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
+import {
+  applyOwnedApartmentBuiltinsToViewerUnit,
+  loadOwnedApartmentBuiltinsDocFromContent,
+} from "./fpOwnedApartmentBuiltinsFromContent.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -223,6 +227,8 @@ export async function mountFpApartmentFurniture(opts: {
   showUnitBoundsDebug?: boolean;
 }): Promise<MountFpApartmentFurnitureResult> {
   const loader = new GLTFLoader();
+  const builtinsFromContent = await loadOwnedApartmentBuiltinsDocFromContent();
+
   const managed: THREE.Object3D[] = [];
   const unitFurnitureGroups: THREE.Group[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
@@ -333,11 +339,8 @@ export async function mountFpApartmentFurniture(opts: {
     epoch: number,
   ): Promise<void> {
     if (disposed || furnitureBuildEpoch !== epoch) return;
-    /** Matches server floor slab (`mn[1]` / `foot_y`). */
-    const floorY = u.footY;
     const levelIdx = u.level;
     const plate = build.group;
-    const furnitureYaw = u.bedYaw;
 
     if (!residentInteriorPropsVisibleForViewer(opts.conn, u)) {
       const unitGroup = new THREE.Group();
@@ -369,6 +372,13 @@ export async function mountFpApartmentFurniture(opts: {
       return;
     }
 
+    const uModel =
+      builtinsFromContent !== null
+        ? applyOwnedApartmentBuiltinsToViewerUnit(u, builtinsFromContent)
+        : u;
+    const floorY = uModel.footY;
+    const furnitureYaw = uModel.bedYaw;
+
     const unitGroup = new THREE.Group();
     unitGroup.name = `apartment_furniture_${u.unitKey}`;
     unitGroup.userData.mammothApartmentFurnitureProp = true;
@@ -377,7 +387,7 @@ export async function mountFpApartmentFurniture(opts: {
 
     const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
     w.scale.setScalar(WARDROBE_VIS_SCALE);
-    w.position.set(u.wardrobeX, 0, u.wardrobeZ);
+    w.position.set(uModel.wardrobeX, 0, uModel.wardrobeZ);
     w.rotation.y = furnitureYaw;
     snapCloneBottomToWorldFloor(w, floorY);
     keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
@@ -407,7 +417,7 @@ export async function mountFpApartmentFurniture(opts: {
 
     const f = clonePropScene(readyTemplates.footlocker, levelIdx);
     f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
-    f.position.set(u.footX, 0, u.footZ);
+    f.position.set(uModel.footX, 0, uModel.footZ);
     f.rotation.y = furnitureYaw;
     snapCloneBottomToWorldFloor(f, floorY);
     keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
@@ -437,9 +447,9 @@ export async function mountFpApartmentFurniture(opts: {
 
     const b = clonePropScene(readyTemplates.bed, levelIdx);
     b.scale.setScalar(BED_VIS_SCALE);
-    b.position.set(u.bedX, 0, u.bedZ);
-    b.rotation.y = u.bedYaw;
-    snapCloneBottomToWorldFloor(b, u.bedY);
+    b.position.set(uModel.bedX, 0, uModel.bedZ);
+    b.rotation.y = uModel.bedYaw;
+    snapCloneBottomToWorldFloor(b, uModel.bedY);
     keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
     unitGroup.add(b);
 

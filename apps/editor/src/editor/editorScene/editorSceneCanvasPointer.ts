@@ -16,6 +16,7 @@ import {
   resolveStairWellPartId,
   resolveStairWellPartTarget,
 } from "../placement/editorPlacementKeys.js";
+import { resolveEditorMyApartmentLayoutPick } from "../myApartment/editorMyApartmentPointerResolve.js";
 import {
   isConsumableFpAuthoringState,
   isFpMode,
@@ -134,7 +135,9 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
               ? resolveLandingKitPickId(hit.object, landingKitPickOptions())
               : store.mode === "stairwell_preview"
                 ? resolveStairWellPartId(hit.object)
-                : resolvePlacedId(hit.object, store.floorDocs),
+                : store.mode === "my_apartment_layout"
+                  ? (resolveEditorMyApartmentLayoutPick(hit.object)?.id ?? null)
+                  : resolvePlacedId(hit.object, store.floorDocs),
       target:
         hit == null
           ? null
@@ -144,13 +147,15 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
               ? resolveLandingKitPickTarget(hit.object, landingKitPickOptions())
               : store.mode === "stairwell_preview"
                 ? resolveStairWellPartTarget(hit.object)
-                : null,
+                : store.mode === "my_apartment_layout"
+                  ? (resolveEditorMyApartmentLayoutPick(hit.object)?.target ?? null)
+                  : null,
       hitFloorDocId:
         hit && store.mode === "floor"
           ? resolveGizmoFloorDocId(hit.object, store.activeFloorDocId)
           : null,
       hitLevelIndex:
-        hit && (store.mode === "floor" || store.mode === "floor_override")
+        hit && (store.mode === "floor" || store.mode === "floor_override" || store.mode === "my_apartment_layout")
           ? editorAncestorPlateLevelIndex(hit.object)
           : null,
     });
@@ -251,7 +256,7 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
           .setFocusedStoryLevelIndex(levelCandidate.hitLevelIndex);
       }
     } else if (
-      store.mode === "floor_override" &&
+      (store.mode === "floor_override" || store.mode === "my_apartment_layout") &&
       levelCandidate.hitLevelIndex !== null &&
       levelCandidate.hitLevelIndex !== store.focusedStoryLevelIndex
     ) {

@@ -94,6 +94,14 @@ export function describeEditorSaveTarget(args: {
     };
   }
 
+  if (mode === "my_apartment_layout") {
+    return {
+      kind: "local",
+      title: "Local — OwnedApartmentBuiltinsDoc",
+      detail: "content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker layout)",
+    };
+  }
+
   return {
     kind: "none",
     title: "Unknown mode",

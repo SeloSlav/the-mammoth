@@ -74,5 +74,8 @@ export function selectEditorChromeStore(s: EditorState) {
     duplicatePrefabComponent: s.duplicatePrefabComponent,
     patchBuilding: s.patchBuilding,
     setSelectedId: s.setSelectedId,
+    myApartmentLayoutPiece: s.myApartmentLayoutPiece,
+    enterMyApartmentLayoutMode: s.enterMyApartmentLayoutMode,
+    setMyApartmentLayoutPiece: s.setMyApartmentLayoutPiece,
   };
 }

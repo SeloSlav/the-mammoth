@@ -13,6 +13,7 @@ import {
   serializeLandingKitDefPretty,
   serializePrefabDefPretty,
   serializeStairWellDefPretty,
+  serializeOwnedApartmentBuiltinsDocPretty,
 } from "../../state/editorStore.js";
 import {
   fetchCollisionArtifactsStatus,
@@ -26,6 +27,7 @@ import {
   postSaveLandingKit,
   postSavePrefab,
   postSaveStairWell,
+  postSaveOwnedApartmentBuiltins,
 } from "../editorChromeNetwork.js";
 
 export function useEditorChromeDiskPersistence(
@@ -76,6 +78,8 @@ export function useEditorChromeDiskPersistence(
         return saveLabelSnapshot.activeFloorOverrideDocId
           ? `Save floor override ${saveLabelSnapshot.activeFloorOverrideDocId}`
           : "Save floor override";
+      case "my_apartment_layout":
+        return "Save owned apartment builtins";
       default:
         return "Save to disk";
     }
@@ -94,15 +98,6 @@ export function useEditorChromeDiskPersistence(
   useEffect(() => {
     void refreshCollisionStatus();
   }, [refreshCollisionStatus]);
-
-  const workspace = useEditorStore((s) => s.workspace);
-  const setWorkspace = useEditorStore((s) => s.setWorkspace);
-
-  useEffect(() => {
-    if (workspace === "world") {
-      setWorkspace("landing");
-    }
-  }, [workspace, setWorkspace]);
 
   const onReload = useCallback(async () => {
     setSaveMsg(null);
@@ -168,17 +163,29 @@ export function useEditorChromeDiskPersistence(
             s.floorOverrideDocs[s.activeFloorOverrideDocId]!,
           ),
         );
+      } else if (s.mode === "my_apartment_layout") {
+        await postSaveOwnedApartmentBuiltins(
+          serializeOwnedApartmentBuiltinsDocPretty(s.ownedApartmentBuiltins),
+        );
       }
+
       if (s.workspace === "world") {
         await postSaveBuilding(serializeBuildingDocPretty(s.building));
       }
+
       useEditorStore.getState().setDirty(false);
       await refreshCollisionStatus();
-      setSaveMsg(
-        s.workspace === "world"
-          ? "Saved to content/ (open document + mammoth.json)."
-          : "Saved to content/.",
-      );
+      if (s.mode === "my_apartment_layout") {
+        setSaveMsg(
+          "Saved content/apartment/owned_apartment_builtins.json.",
+        );
+      } else {
+        setSaveMsg(
+          s.workspace === "world"
+            ? "Saved to content/ (open document + mammoth.json)."
+            : "Saved to content/.",
+        );
+      }
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
     }

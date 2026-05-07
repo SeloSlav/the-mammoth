@@ -6,6 +6,7 @@ import type {
   FloorOverrideDoc,
   InteriorDoc,
   LandingKitDef,
+  OwnedApartmentBuiltinsDoc,
   PlacedObject,
   PrefabDef,
   StairWellDef,
@@ -42,11 +43,16 @@ export type EditorMode =
   | "cell"
   | "prefab"
   | "floor_override"
+  /** Full building preview + disk JSON for the three resident built-in props (bed / wardrobe / footlocker). */
+  | "my_apartment_layout"
   | "fp_viewmodel"
   | "fp_consumable"
   | "cab"
   | "landing_preview"
   | "stairwell_preview";
+
+/** Which built-in mesh the editor gizmo is driving in {@link EditorMode.my_apartment_layout}. */
+export type MyApartmentLayoutPiece = "bed" | "wardrobe" | "footlocker";
 
 export type EditorCameraMode = "orbit" | "fly";
 
@@ -84,6 +90,7 @@ export type HistoryEntry = {
   inactiveLandingKitDef: LandingKitDef;
   landingKitVariant: LandingKitVariant;
   stairWellDef: StairWellDef;
+  ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   selectedId: string | null;
   dirty: boolean;
   contentStructureEpoch: number;
@@ -134,6 +141,9 @@ export interface EditorState {
   fpAuthorPickList: readonly FpAuthorPickMeta[];
   fpAuthorWeaponId: FpAuthorWeaponId;
   fpAuthorConsumableId: FpAuthorConsumableId;
+  /** Bed / wardrobe / footlocker fractions + yaws — mirrored to `content/apartment/owned_apartment_builtins.json`. */
+  ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  myApartmentLayoutPiece: MyApartmentLayoutPiece;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -188,6 +198,11 @@ export interface EditorState {
   setFpAuthorWeaponId: (id: FpAuthorWeaponId) => void;
   setFpAuthorConsumableId: (id: FpAuthorConsumableId) => void;
   showFpAuthorToast: (message: string, ttlMs?: number) => void;
+  enterMyApartmentLayoutMode: () => void;
+  setMyApartmentLayoutPiece: (piece: MyApartmentLayoutPiece) => void;
+  patchOwnedApartmentBuiltins: (
+    fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
+  ) => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;
   getActiveInteriorDoc: () => InteriorDoc | undefined;

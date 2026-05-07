@@ -223,6 +223,7 @@ export function subscribeEditorSceneStore(deps: {
           s.transformMode !== prev.transformMode ||
           s.gridSnapM !== prev.gridSnapM ||
           s.mode !== prev.mode ||
+          s.myApartmentLayoutPiece !== prev.myApartmentLayoutPiece ||
           s.activeInteriorDocId !== prev.activeInteriorDocId ||
           s.workspace !== prev.workspace ||
           s.elevatorCabDef !== prev.elevatorCabDef ||

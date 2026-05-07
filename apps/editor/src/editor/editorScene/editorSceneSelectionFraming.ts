@@ -14,6 +14,7 @@ import {
   resolveLandingKitPickId,
   resolveStairWellPartId,
 } from "../placement/editorPlacementKeys.js";
+import { getEditorMyApartmentPieceGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 
 export type EditorSceneSelectionFraming = {
   frameBox(box: THREE.Box3): void;
@@ -87,6 +88,9 @@ export function createEditorSceneSelectionFraming(deps: {
 
   function findBestSelectionTarget(): THREE.Object3D | null {
     const s = useEditorStore.getState();
+    if (s.mode === "my_apartment_layout") {
+      return getEditorMyApartmentPieceGroup(s.myApartmentLayoutPiece);
+    }
     const buildingRoot = getBuildingRoot();
     if (!buildingRoot || !s.selectedId) return null;
     const preferredPreviewSelectionTarget = getPreferredPreviewSelectionTarget();

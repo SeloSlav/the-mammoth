@@ -30,6 +30,7 @@ import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMateria
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeAuthoringIntroAndWorkspace } from "./EditorChromeAuthoringIntroAndWorkspace.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
+import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
 import { useEditorChromeDiskPersistence } from "./hooks/useEditorChromeDiskPersistence.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
 export function EditorChrome() {
@@ -105,6 +106,9 @@ export function EditorChrome() {
     duplicatePrefabComponent,
     patchBuilding,
     setSelectedId,
+    myApartmentLayoutPiece,
+    enterMyApartmentLayoutMode,
+    setMyApartmentLayoutPiece,
   } = useEditorStore(useShallow(selectEditorChromeStore));
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const { saveToDiskLabel, onReload, onSaveDisk } =
@@ -157,6 +161,8 @@ export function EditorChrome() {
     [prefabDefs],
   );
   const euler = useMemo(() => {
+    if (mode === "my_apartment_layout")
+      return [0, 0, 0] as [number, number, number];
     if (mode === "cab" && selectedId) {
       const r = elevatorCabDef.partTransforms?.[selectedId]?.rotation;
       if (r) return quatToEulerDeg(r);
@@ -203,6 +209,7 @@ export function EditorChrome() {
     selectedPrefabComponent,
   ]);
   const updateEuler = (ix: 0 | 1 | 2, v: number) => {
+    if (mode === "my_apartment_layout") return;
     const base = euler;
     const next: [number, number, number] = [...base] as [
       number,
@@ -326,6 +333,14 @@ export function EditorChrome() {
           stairWellAuthorScope={stairWellAuthorScope}
           setStairWellAuthorScope={setStairWellAuthorScope}
         />
+        <EditorChromeMyApartment
+          mode={mode}
+          setMode={setMode}
+          setCameraMode={setCameraMode}
+          enterMyApartmentLayoutMode={enterMyApartmentLayoutMode}
+          myApartmentLayoutPiece={myApartmentLayoutPiece}
+          setMyApartmentLayoutPiece={setMyApartmentLayoutPiece}
+        />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
           <EditorChromeFpViewmodel
             transformMode={transformMode}
@@ -433,6 +448,11 @@ export function EditorChrome() {
               </button>
             </div>
           </>
+        ) : mode === "my_apartment_layout" ? (
+          <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.88, maxWidth: 420 }}>
+            Author bed, wardrobe, and footlocker on the preview floor. Poses serialize to disk JSON
+            and apply to whichever unit the player occupies in FP.
+          </p>
         ) : mode === "interior" ? (
           <>
             <span style={label}>Interior document</span>
@@ -556,6 +576,19 @@ export function EditorChrome() {
                 </button>
               ))}
             </div>
+            {mode === "my_apartment_layout" ? (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 11,
+                  opacity: 0.82,
+                  lineHeight: 1.38,
+                }}
+              >
+                Gizmo <strong>scale</strong> is treated like <strong>translate</strong> here — only
+                position, yaw, and floor offsets are persisted.
+              </p>
+            ) : null}
             {transformMode === "scale" ? (
               <p
                 style={{
@@ -752,7 +785,8 @@ export function EditorChrome() {
             />
             {mode !== "cab" &&
             mode !== "landing_preview" &&
-            mode !== "stairwell_preview" ? (
+            mode !== "stairwell_preview" &&
+            mode !== "my_apartment_layout" ? (
               <>
                 <span style={label}>Prefab palette</span>
                 <select

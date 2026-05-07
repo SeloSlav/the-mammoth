@@ -18,6 +18,8 @@ import {
   type PlacedObject,
   type PrefabDef,
   type StairWellDef,
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
@@ -47,7 +49,12 @@ import type {
   FpAuthorSubjectKind,
   LandingDocKind,
   LandingKitVariant,
+  MyApartmentLayoutPiece,
 } from "./editorStoreTypes.js";
+import {
+  editorMyApartmentSelectedIdForPiece,
+  parseMyApartmentLayoutPieceSelectedId,
+} from "../editor/myApartment/editorMyApartmentSelection.js";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
@@ -57,6 +64,7 @@ export type {
   EditorCameraMode,
   EditorMaterialMeta,
   EditorMode,
+  MyApartmentLayoutPiece,
   EditorState,
   EditorWorkspace,
   FpAuthorCameraKind,
@@ -123,6 +131,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorPickList: [],
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
   fpAuthorConsumableId: FP_AUTHORABLE_CONSUMABLE_IDS[0] as FpAuthorConsumableId,
+  ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  myApartmentLayoutPiece: "bed" as MyApartmentLayoutPiece,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -155,6 +165,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       inactiveLandingKitDef: prev.inactiveLandingKitDef,
       landingKitVariant: prev.landingKitVariant,
       stairWellDef: prev.stairWellDef,
+      ownedApartmentBuiltins: prev.ownedApartmentBuiltins,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
       contentStructureEpoch: prev.contentStructureEpoch ?? 0,
@@ -181,6 +192,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       inactiveLandingKitDef: next.inactiveLandingKitDef,
       landingKitVariant: next.landingKitVariant,
       stairWellDef: next.stairWellDef,
+      ownedApartmentBuiltins: next.ownedApartmentBuiltins,
       selectedId: next.selectedId,
       dirty: next.dirty,
       contentStructureEpoch: next.contentStructureEpoch ?? 0,
@@ -393,7 +405,44 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     ),
   setFocusedStoryLevelIndex: (focusedStoryLevelIndex) =>
     set({ focusedStoryLevelIndex }),
-  setSelectedId: (selectedId) => set({ selectedId }),
+  setSelectedId: (selectedId) =>
+    set(() => {
+      const parsed =
+        typeof selectedId === "string"
+          ? parseMyApartmentLayoutPieceSelectedId(selectedId)
+          : null;
+      if (parsed) return { selectedId, myApartmentLayoutPiece: parsed };
+      return { selectedId };
+    }),
+
+  enterMyApartmentLayoutMode: () =>
+    set((s) => ({
+      mode: "my_apartment_layout",
+      selectedId: editorMyApartmentSelectedIdForPiece(s.myApartmentLayoutPiece),
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+    })),
+
+  setMyApartmentLayoutPiece: (piece) =>
+    set((s) => ({
+      myApartmentLayoutPiece: piece,
+      ...(s.mode === "my_apartment_layout"
+        ? { selectedId: editorMyApartmentSelectedIdForPiece(piece) }
+        : {}),
+    })),
+
+  patchOwnedApartmentBuiltins: (fn) => {
+    maybePushHistory(get, set);
+    set((s) => {
+      const next = OwnedApartmentBuiltinsDocSchema.parse(fn(s.ownedApartmentBuiltins));
+      const bumpPreview = next.previewSizeM !== s.ownedApartmentBuiltins.previewSizeM;
+      return {
+        ownedApartmentBuiltins: next,
+        dirty: true,
+        ...(bumpPreview ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
+      };
+    });
+  },
+
   setDirty: (dirty) => set({ dirty }),
   setCollisionArtifactsStatus: (collisionArtifactsStatus) =>
     set({ collisionArtifactsStatus }),
@@ -989,4 +1038,5 @@ export {
   serializeLandingKitDefPretty,
   serializePrefabDefPretty,
   serializeStairWellDefPretty,
+  serializeOwnedApartmentBuiltinsDocPretty,
 } from "./editorStoreDocSerialize.js";

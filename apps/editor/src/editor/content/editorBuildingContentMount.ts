@@ -7,6 +7,7 @@ import type {
   FloorOverrideDoc,
   InteriorDoc,
   LandingKitDef,
+  OwnedApartmentBuiltinsDoc,
   PrefabDef,
   StairWellDef,
 } from "@the-mammoth/schemas";
@@ -32,6 +33,7 @@ import {
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../../state/editorStore.js";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
+import { buildOwnedApartmentAuthoringShell } from "../myApartment/editorMyApartmentAuthoringShell.js";
 
 function buildPrefabPreview(def: PrefabDef): THREE.Group {
   const root = new THREE.Group();
@@ -69,6 +71,7 @@ function isStairPrefab(prefabId: string): boolean {
 export function buildEditorStructuralRoot(args: {
   mode: EditorMode;
   workspace: EditorWorkspace;
+  ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   building: BuildingDoc;
   floorDocs: Record<string, FloorDoc>;
   floorOverrideDocs: Record<string, FloorOverrideDoc>;
@@ -191,6 +194,10 @@ export function buildEditorStructuralRoot(args: {
     const preview = buildStairWellPreviewRoot(previewArgs);
     root.add(preview);
     return root;
+  }
+
+  if (args.mode === "my_apartment_layout") {
+    return buildOwnedApartmentAuthoringShell(args.ownedApartmentBuiltins.previewSizeM);
   }
 
   if (args.mode === "floor" || args.mode === "floor_override") {

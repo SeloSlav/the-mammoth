@@ -2,6 +2,8 @@ import * as THREE from "three";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import { glassOpeningFromProxyMesh } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
+import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
+import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "../myApartment/editorMyApartmentMeshes.js";
 import { syncDuplicateFloorGroups } from "../placement/editorFloorTransformSync.js";
 import {
   floorPlacedObjectIdForTransformRoot,
@@ -249,6 +251,58 @@ export function commitEditorAttachedTransform(opts: {
             },
           }),
     }));
+    return;
+  }
+
+  if (store.mode === "my_apartment_layout") {
+    let pieceRoot: THREE.Object3D | null = attached;
+    let pieceKey: MyApartmentLayoutPiece | undefined;
+    while (pieceRoot) {
+      pieceKey = pieceRoot.userData.mammothEditorMyApartmentPiece as
+        | MyApartmentLayoutPiece
+        | undefined;
+      if (pieceKey) break;
+      pieceRoot = pieceRoot.parent;
+    }
+    if (!pieceKey || !pieceRoot) return;
+    const doc = store.ownedApartmentBuiltins;
+    const W = doc.previewSizeM;
+
+    pieceRoot.updateMatrixWorld(true);
+    const pW = new THREE.Vector3();
+    const qW = new THREE.Quaternion();
+    const _sWorld = new THREE.Vector3();
+    pieceRoot.matrixWorld.decompose(pW, qW, _sWorld);
+    const euler = new THREE.Euler().setFromQuaternion(qW, "YXZ");
+    const yaw = euler.y;
+
+    const fx = THREE.MathUtils.clamp(pW.x / W, 0, 1);
+    const fz = THREE.MathUtils.clamp(pW.z / W, 0, 1);
+    const dyFromSlab = Math.max(0, pW.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y);
+
+    store.patchOwnedApartmentBuiltins((d) => {
+      if (pieceKey === "bed") {
+        return { ...d, bedFx: fx, bedFz: fz, bedDy: dyFromSlab, yawRad: yaw };
+      }
+      if (pieceKey === "wardrobe") {
+        return {
+          ...d,
+          wardrobeFx: fx,
+          wardrobeFz: fz,
+          furnitureFloorDy: dyFromSlab,
+          yawRad: yaw,
+        };
+      }
+      return {
+        ...d,
+        footFx: fx,
+        footFz: fz,
+        furnitureFloorDy: dyFromSlab,
+        yawRad: yaw,
+      };
+    });
+
+    pieceRoot.scale.set(1, 1, 1);
     return;
   }
 

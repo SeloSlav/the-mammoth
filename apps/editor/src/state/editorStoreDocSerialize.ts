@@ -6,6 +6,7 @@ import {
   FloorOverrideDocSchema,
   InteriorDocSchema,
   LandingKitDefSchema,
+  OwnedApartmentBuiltinsDocSchema,
   PrefabDefSchema,
   StairWellDefSchema,
   type BuildingDoc,
@@ -15,6 +16,7 @@ import {
   type FloorOverrideDoc,
   type InteriorDoc,
   type LandingKitDef,
+  type OwnedApartmentBuiltinsDoc,
   type PrefabDef,
   type StairWellDef,
 } from "@the-mammoth/schemas";
@@ -53,4 +55,10 @@ export function serializeLandingKitDefPretty(doc: LandingKitDef): string {
 
 export function serializeStairWellDefPretty(doc: StairWellDef): string {
   return `${JSON.stringify(StairWellDefSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeOwnedApartmentBuiltinsDocPretty(
+  doc: OwnedApartmentBuiltinsDoc,
+): string {
+  return `${JSON.stringify(OwnedApartmentBuiltinsDocSchema.parse(doc), null, 2)}\n`;
 }

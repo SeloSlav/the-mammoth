@@ -6,8 +6,10 @@ import {
   FloorOverrideDocSchema,
   InteriorDocSchema,
   LandingKitDefSchema,
+  OwnedApartmentBuiltinsDocSchema,
   PrefabDefSchema,
   StairWellDefSchema,
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   type BuildingDoc,
   type CellDoc,
   type FloorDoc,
@@ -22,6 +24,7 @@ import {
   EDITOR_APARTMENT_KIT_FILE,
   EDITOR_BUILDING_FILE,
   EDITOR_ELEVATOR_DIR,
+  EDITOR_OWNED_APT_BUILTINS_FILE,
 } from "../content/editorContentDiscovery.js";
 
 async function fetchJson(path: string): Promise<unknown> {
@@ -138,6 +141,15 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     /* optional */
   }
 
+  let ownedApartmentBuiltins = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC;
+  try {
+    ownedApartmentBuiltins = OwnedApartmentBuiltinsDocSchema.parse(
+      await fetchJson(`/content/${EDITOR_OWNED_APT_BUILTINS_FILE}`),
+    );
+  } catch {
+    /* optional */
+  }
+
   const sorted = [...building.floorRefs].sort(
     (a, b) => a.levelIndex - b.levelIndex,
   );
@@ -151,6 +163,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     prefabDefs,
     floorOverrideDocs,
     contentIndex,
+    ownedApartmentBuiltins,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
     // Bootstrap always lands on the elevator variant so the freshly parsed `landingKitDef` matches
     // what the existing scene-runtime + inspector code expects. Authoring is swapped post-load via

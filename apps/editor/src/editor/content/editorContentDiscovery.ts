@@ -9,6 +9,8 @@ export const EDITOR_ELEVATOR_DIR = "elevator";
 /** Shared-door kits other than the corridor elevator door (currently: apartment unit kit). */
 export const EDITOR_DOOR_DIR = "door";
 export const EDITOR_APARTMENT_KIT_FILE = "door/apartment_unit_kit.json";
+/** Built-in bed / wardrobe / footlocker layout (normalized to unit hull in-game). */
+export const EDITOR_OWNED_APT_BUILTINS_FILE = "apartment/owned_apartment_builtins.json";
 export const EDITOR_COLLISION_STAMP_FILE = "building/.collision-artifacts-stamp.json";
 
 export type EditorContentIndex = {

@@ -40,6 +40,7 @@ export function rebuildEditorStructuralIfNeeded(
   state.buildingRoot = buildEditorStructuralRoot({
     mode: s.mode,
     workspace: s.workspace,
+    ownedApartmentBuiltins: s.ownedApartmentBuiltins,
     building: s.building,
     floorDocs: s.floorDocs,
     floorOverrideDocs: s.floorOverrideDocs,
@@ -63,7 +64,9 @@ export function rebuildEditorStructuralIfNeeded(
   deps.syncTransformAttachment();
   if (state.shouldFrameAfterRebuild) {
     state.shouldFrameAfterRebuild = false;
-    if (s.mode === "floor" || s.mode === "floor_override") {
+    if (s.mode === "my_apartment_layout") {
+      deps.frameObject(state.buildingRoot);
+    } else if (s.mode === "floor" || s.mode === "floor_override") {
       deps.frameFocusedStoryObject();
     } else {
       deps.frameObject(state.buildingRoot);

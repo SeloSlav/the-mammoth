@@ -36,6 +36,9 @@ import { createEditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecy
 import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
+import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
+
+import { getEditorMyApartmentPieceGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   isConsumableFpAuthoringState,
   isFpMode,
@@ -342,6 +345,25 @@ export async function mountEditorScene(
         fp.syncFpTransformAttachment();
         return;
       }
+      if (s.mode === "my_apartment_layout") {
+        const g = getEditorMyApartmentPieceGroup(s.myApartmentLayoutPiece);
+        if (!g) {
+          transformControls.detach();
+          return;
+        }
+        transformControls.attach(g);
+        const effMode =
+          s.transformMode === "scale" ? "translate" : s.transformMode;
+        transformControls.setMode(effMode);
+        const snap = s.gridSnapM;
+        transformControls.setTranslationSnap(snap > 0 ? snap : null);
+        transformControls.setRotationSnap(
+          snap > 0 ? THREE.MathUtils.degToRad(15) : null,
+        );
+        transformControls.setScaleSnap(null);
+        transformControls.setSize(1);
+        return;
+      }
       if (s.mode === "landing_preview" && s.selectedId === "landing_door_kit") {
         if (!apartmentLandingKitUsesWholeDoorGizmo()) return;
       }
@@ -439,8 +461,11 @@ export async function mountEditorScene(
     }
     if (!active) levelEditorTransformGesture = false;
     if (!active) levelEditorAnchoredScaleGesture = null;
-    if (active) useEditorStore.getState().beginTransaction();
-    else useEditorStore.getState().commitTransaction();
+    if (active) {
+      useEditorStore.getState().beginTransaction();
+    } else {
+      useEditorStore.getState().commitTransaction();
+    }
   });
   transformControls.addEventListener("objectChange", () => {
     applyAnchoredScaleGesture();
@@ -538,6 +563,16 @@ export async function mountEditorScene(
     syncTransformAttachment,
   });
 
+  const disposeMyApartmentAuthoring =
+    createEditorSceneMyApartmentLifecycle({
+      getStructuralRoot: () => structuralState.buildingRoot,
+      getShouldHoldReplicaResync: () =>
+        programmaticTransformControlsDepth > 0 ||
+        transformControls.dragging === true ||
+        levelEditorTransformGesture,
+      syncTransformAttachment,
+    }).dispose;
+
   // Subscribers are not invoked on register — cold-start default FP modes must bootstrap here.
   {
     const st = useEditorStore.getState();
@@ -626,6 +661,7 @@ export async function mountEditorScene(
     scene.remove(fpSelectionOutline);
     previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
+    disposeMyApartmentAuthoring();
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
     applyEnvironment(false);
