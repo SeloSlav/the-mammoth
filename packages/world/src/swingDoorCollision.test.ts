@@ -6,7 +6,7 @@ import {
   SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01,
   SWING_DOOR_DEFAULT_MAX_RAD,
   SWING_DOOR_INTERACT_RADIUS_M,
-  SWING_DOOR_INTERACT_Y_HALF_M,
+  SWING_DOOR_INTERACT_FEET_ABOVE_HEAD_SLACK_M,
   SWING_DOOR_OPEN_LEAF_HALF_THICK_M,
   SWING_DOOR_OPEN_LEAF_XZ_PAD_M,
   SWING_DOOR_PARKED_LEAF_MIN_OPEN_01,
@@ -16,6 +16,7 @@ import {
   swingDoorOrientationForFace,
   swingDoorParkedLeafAabb,
   swingDoorParkedLeafActive,
+  swingDoorMovementBlockingAabb,
   swingDoorPlayerInInteractRange,
   swingDoorTangentRest,
   swingDoorYawRad,
@@ -276,10 +277,40 @@ describe("swingDoorClosedSlabActive / swingDoorParkedLeafActive", () => {
     expect(swingDoorParkedLeafActive(SWING_DOOR_PARKED_LEAF_MIN_OPEN_01 - 1e-3)).toBe(false);
   });
 
-  it("regimes don't overlap (mid-swing is 'not blocking')", () => {
+  it("regimes don't overlap at extremes (mid-swing uses hull, not closed slab)", () => {
     for (const u of [0.1, 0.4, 0.5, 0.8]) {
       expect(swingDoorClosedSlabActive(u) && swingDoorParkedLeafActive(u)).toBe(false);
     }
+  });
+});
+
+describe("swingDoorMovementBlockingAabb", () => {
+  const hullDoorBase = {
+    hingeX: 10,
+    hingeZ: -112,
+    feetY: 3,
+    panelWidthM: 1.26,
+    panelHeightM: 2.06,
+    swingInward: false,
+    maxSwingRad: SWING_DOOR_DEFAULT_MAX_RAD,
+  } as const;
+
+  it("uses closed slab when essentially shut", () => {
+    const a = swingDoorMovementBlockingAabb({
+      open01: 0,
+      face: "w",
+      ...hullDoorBase,
+    });
+    expect(a).not.toBeNull();
+  });
+
+  it("returns swinging hull after closed slab regime (parked/open corridor leaf)", () => {
+    const a = swingDoorMovementBlockingAabb({
+      open01: 1,
+      face: "w",
+      ...hullDoorBase,
+    });
+    expect(a).not.toBeNull();
   });
 });
 
@@ -307,13 +338,12 @@ describe("swingDoorPlayerInInteractRange", () => {
     ).toBe(false);
   });
 
-  it("rejects player outside Y band", () => {
-    const cy = base.feetY + base.panelHeightM * 0.5;
+  it("rejects player outside tall-Y eligibility band", () => {
     expect(
       swingDoorPlayerInInteractRange({
         ...base,
         px: 0,
-        py: cy + SWING_DOOR_INTERACT_Y_HALF_M + 0.5,
+        py: base.feetY + base.panelHeightM + SWING_DOOR_INTERACT_FEET_ABOVE_HEAD_SLACK_M + 5,
         pz: 0,
       }),
     ).toBe(false);

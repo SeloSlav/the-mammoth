@@ -7,10 +7,46 @@ import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 
-/** Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ` (√ here). */
+/** Horizontal pickup radius (m). Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ`. */
 export const MAMMOTH_PICKUP_RADIUS_M = 3.5;
+/**
+ * Max |ΔY| (m) between feet and drop for pickup. Matches server `PICKUP_MAX_ABS_DY_M`.
+ * Server uses horizontal radius + this vertical cap so small predicted XZ drift still succeeds.
+ */
+export const MAMMOTH_PICKUP_MAX_ABS_DY_M = 4.0;
 
-const EPS_BB = 1e-6;
+/** Lower bound for longest mesh AABB edge when fitting (avoids insane scale if GLB bounds are degenerate). */
+const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
+
+export function droppedPickupWithinServerVolume(
+  feetX: number,
+  feetY: number,
+  feetZ: number,
+  dropX: number,
+  dropY: number,
+  dropZ: number,
+  radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
+): boolean {
+  const dx = dropX - feetX;
+  const dz = dropZ - feetZ;
+  if (dx * dx + dz * dz > radiusM * radiusM) return false;
+  return Math.abs(dropY - feetY) <= maxAbsDyM;
+}
+
+function disposeDroppedVisualBranch(rootNode: THREE.Object3D): void {
+  rootNode.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.geometry?.dispose();
+    const mat = m.material;
+    if (Array.isArray(mat)) {
+      for (const x of mat) x.dispose();
+    } else if (mat) {
+      mat.dispose();
+    }
+  });
+}
 
 /**
  * Uniform scale + Y shift so the longest AABB edge matches the catalog target (meters) and
@@ -21,7 +57,7 @@ export function fitDroppedWorldItemModelToCatalog(object: THREE.Object3D, defId:
   const box = new THREE.Box3().setFromObject(object);
   const size = new THREE.Vector3();
   box.getSize(size);
-  const maxDim = Math.max(size.x, size.y, size.z, EPS_BB);
+  const maxDim = Math.max(size.x, size.y, size.z, MIN_REASONABLE_MESH_BB_DIM_M);
   const targetM = getMammothDroppedWorldTargetMaxDimM(defId);
   const s = targetM / maxDim;
   object.scale.multiplyScalar(s);
@@ -62,7 +98,7 @@ export function droppedItemIsWorldAnchor(row: DroppedItem): boolean {
   return readOptionalU16(row.worldSpawnSlot) !== undefined;
 }
 
-/** Closest dropped item within `radiusM`; optional `predicate` filters candidates. */
+/** Closest dropped item within pickup volume; optional `predicate` filters candidates first. */
 export function findNearestDroppedPickup(
   conn: DbConnection,
   x: number,
@@ -70,21 +106,22 @@ export function findNearestDroppedPickup(
   z: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
   predicate?: (row: DroppedItem) => boolean,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
 ): NearestDroppedPickup | null {
   const pred = predicate ?? (() => true);
-  const r2 = radiusM * radiusM;
   let best: NearestDroppedPickup | null = null;
-  let bestD = Infinity;
+  let bestDxz = Infinity;
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
     if (!pred(row)) continue;
+    if (!droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM)) {
+      continue;
+    }
     const dx = row.x - x;
-    const dy = row.y - y;
     const dz = row.z - z;
-    const d = dx * dx + dy * dy + dz * dz;
-    if (d > r2) continue;
-    if (d < bestD) {
-      bestD = d;
+    const dxz = dx * dx + dz * dz;
+    if (dxz < bestDxz) {
+      bestDxz = dxz;
       const id = row.id;
       const droppedItemId = typeof id === "bigint" ? id : BigInt(id as number);
       best = { droppedItemId, defId: row.defId };
@@ -93,37 +130,38 @@ export function findNearestDroppedPickup(
   return best;
 }
 
-/** Single pass: nearest world-anchor + nearest plain drop within radius (HUD + hold pulse). */
+/** Single pass: nearest world-anchor + nearest plain drop within pickup volume (HUD + hold pulse). */
 export function findNearestDroppedPickupsHud(
   conn: DbConnection,
   x: number,
   y: number,
   z: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
 ): { worldAnchor: NearestDroppedPickup | null; plain: NearestDroppedPickup | null } {
-  const r2 = radiusM * radiusM;
   let bestWorld: NearestDroppedPickup | null = null;
-  let bestWorldD = Infinity;
+  let bestWorldDxz = Infinity;
   let bestPlain: NearestDroppedPickup | null = null;
-  let bestPlainD = Infinity;
+  let bestPlainDxz = Infinity;
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
+    if (!droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM)) {
+      continue;
+    }
     const dx = row.x - x;
-    const dy = row.y - y;
     const dz = row.z - z;
-    const d = dx * dx + dy * dy + dz * dz;
-    if (d > r2) continue;
+    const dxz = dx * dx + dz * dz;
     const isWorld = droppedItemIsWorldAnchor(row);
     const id = row.id;
     const droppedItemId = typeof id === "bigint" ? id : BigInt(id as number);
     const hit: NearestDroppedPickup = { droppedItemId, defId: row.defId };
     if (isWorld) {
-      if (d < bestWorldD) {
-        bestWorldD = d;
+      if (dxz < bestWorldDxz) {
+        bestWorldDxz = dxz;
         bestWorld = hit;
       }
-    } else if (d < bestPlainD) {
-      bestPlainD = d;
+    } else if (dxz < bestPlainDxz) {
+      bestPlainDxz = dxz;
       bestPlain = hit;
     }
   }
@@ -263,12 +301,17 @@ export function mountDroppedItemsWorld(
 
   const ensureVisual = (row: DroppedItem) => {
     const key = droppedIdKey(row.id);
+    const droppedItemId = typeof row.id === "bigint" ? row.id : BigInt(row.id as number);
     const existing = idToGroup.get(key);
     if (existing) {
       applyPose(existing, row);
       return;
     }
-    if (rowVisualInFlight.has(key)) return;
+    if (rowVisualInFlight.has(key)) {
+      const g = idToGroup.get(key);
+      if (g) applyPose(g, row);
+      return;
+    }
 
     const candidates = [...mammothCatalogGlbCandidates(row.defId)];
     if (candidates.length === 0) {
@@ -277,13 +320,35 @@ export function mountDroppedItemsWorld(
     }
 
     rowVisualInFlight.add(key);
+    spawnFallbackBox(key, row);
+
     void resolveDefTemplate(row.defId).then((state) => {
       rowVisualInFlight.delete(key);
-      if (idToGroup.has(key)) return;
-      if (state.status === "glb_unavailable") {
-        spawnFallbackBox(key, row);
+
+      if (!droppedItemRowExists(conn, droppedItemId)) {
+        const g = idToGroup.get(key);
+        if (g) {
+          root.remove(g);
+          disposeDroppedVisualBranch(g);
+          idToGroup.delete(key);
+        }
         return;
       }
+
+      const pendingGroup = idToGroup.get(key);
+
+      if (state.status === "glb_unavailable") {
+        if (pendingGroup) applyPose(pendingGroup, row);
+        else spawnFallbackBox(key, row);
+        return;
+      }
+
+      if (pendingGroup) {
+        root.remove(pendingGroup);
+        disposeDroppedVisualBranch(pendingGroup);
+        idToGroup.delete(key);
+      }
+
       const clone = state.template.root.clone(true);
       fitDroppedWorldItemModelToCatalog(clone, row.defId);
       const g = new THREE.Group();
@@ -305,6 +370,7 @@ export function mountDroppedItemsWorld(
     for (const [k, g] of idToGroup) {
       if (!seen.has(k)) {
         root.remove(g);
+        disposeDroppedVisualBranch(g);
         idToGroup.delete(k);
       }
     }
@@ -366,7 +432,11 @@ export function mountDroppedItemsWorld(
     conn.db.dropped_item.removeOnUpdate(onRowChange);
     conn.db.dropped_item.removeOnDelete(onRowChange);
     scene.remove(root);
+    for (const g of idToGroup.values()) {
+      disposeDroppedVisualBranch(g);
+    }
     idToGroup.clear();
+    rowVisualInFlight.clear();
     defTemplateState.clear();
     defTemplatePromise.clear();
   };

@@ -127,6 +127,7 @@ export default function App() {
           displayName={session.displayName}
           onSignOut={session.signOut}
           conn={session.conn}
+          connectionKind={session.connectionKind}
         />
       ) : null}
     </>

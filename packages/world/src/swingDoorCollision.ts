@@ -70,8 +70,15 @@ export const SWING_DOOR_DEFAULT_MAX_RAD = 1.55;
 
 /** Interaction radius (world meters) — player must be within this XZ distance of the hinge. */
 export const SWING_DOOR_INTERACT_RADIUS_M = 2.05;
-/** Interaction Y half-window (world meters) — player feet within this band relative to door feet. */
+/** Legacy narrow band (panel mid-Y ± half). Prefer {@link SWING_DOOR_INTERACT_FEET_*_SLACK_M}. */
 export const SWING_DOOR_INTERACT_Y_HALF_M = 1.55;
+/** Feet may sit this far below the door sill (elevator shafts, drops onto cab roofs). */
+export const SWING_DOOR_INTERACT_FEET_BELOW_SLACK_M = 10.0;
+/** Feet may sit this far above the door head (standing on cab roof above landing, tall poses). */
+export const SWING_DOOR_INTERACT_FEET_ABOVE_HEAD_SLACK_M = 4.25;
+
+/** Uniform XZ inflation on parked-open leaf firearm barriers (decals + hit-scan grazing). */
+export const SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M = 0.22;
 
 export type SwingDoorOrientation = {
   baseYaw: number;
@@ -236,15 +243,60 @@ export function swingDoorClosedSlabActive(open01: number): boolean {
   return open01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01;
 }
 
-/** True when `open01` is in the parked-open band (render / geometry — not capsule blocking). */
+/** True when `open01` is in the parked-open band (renderer/analytics — locomotion uses hull collision beyond closed slab). */
 export function swingDoorParkedLeafActive(open01: number): boolean {
   return open01 >= SWING_DOOR_PARKED_LEAF_MIN_OPEN_01;
 }
 
 /**
- * Player capsule / locomotion: **only** the closed slab blocks. Anything past that relies on
- * static doorway holes + stair-opening overlays — the parked-leaf AABB is omitted so wide shaft
- * stair doors do not leave an invisible axis-aligned snag along the landing when left open.
+ * Axis-aligned hull of the swinging leaf for locomotion when the door is no longer in the closed-slab regime.
+ * Matches `(-sin(yaw), -cos(yaw))` tip displacement used by rendering (`swingDoorYawRad`).
+ */
+export function swingDoorSwingingLeafEnclosingAabb(opts: {
+  face: SwingDoorFace;
+  hingeX: number;
+  hingeZ: number;
+  feetY: number;
+  panelWidthM: number;
+  panelHeightM: number;
+  open01: number;
+  maxSwingRad: number;
+  swingInward?: boolean;
+}): CollisionAabb {
+  const ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
+  const pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+  const yaw = swingDoorYawRad(opts.face, opts.open01, opts.maxSwingRad, opts.swingInward);
+  const ux = -Math.sin(yaw);
+  const uz = -Math.cos(yaw);
+  const vx = -uz;
+  const vz = ux;
+  const hx = opts.hingeX;
+  const hz = opts.hingeZ;
+  const corners: [number, number][] = [
+    [hx + vx * ht, hz + vz * ht],
+    [hx - vx * ht, hz - vz * ht],
+    [hx + vx * ht + ux * opts.panelWidthM, hz + vz * ht + uz * opts.panelWidthM],
+    [hx - vx * ht + ux * opts.panelWidthM, hz - vz * ht + uz * opts.panelWidthM],
+  ];
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const [x, z] of corners) {
+    minX = Math.min(minX, x - pad);
+    maxX = Math.max(maxX, x + pad);
+    minZ = Math.min(minZ, z - pad);
+    maxZ = Math.max(maxZ, z + pad);
+  }
+  return {
+    min: [minX, opts.feetY, minZ],
+    max: [maxX, opts.feetY + opts.panelHeightM, maxZ],
+  };
+}
+
+/**
+ * Player capsule / locomotion: closed doorway slab while nearly shut; once it opens, the swinging leaf
+ * hull blocks the parked panel (corridor-outward apartment doors need solid cover).
  */
 export function swingDoorMovementBlockingAabb(opts: {
   open01: number;
@@ -254,15 +306,31 @@ export function swingDoorMovementBlockingAabb(opts: {
   feetY: number;
   panelWidthM: number;
   panelHeightM: number;
+  swingInward?: boolean;
+  /** Kit/authored max swing; defaults to {@link SWING_DOOR_DEFAULT_MAX_RAD}. */
+  maxSwingRad?: number;
 }): CollisionAabb | null {
-  if (!swingDoorClosedSlabActive(opts.open01)) return null;
-  return swingDoorClosedSlabAabb({
+  if (swingDoorClosedSlabActive(opts.open01)) {
+    return swingDoorClosedSlabAabb({
+      face: opts.face,
+      hingeX: opts.hingeX,
+      hingeZ: opts.hingeZ,
+      feetY: opts.feetY,
+      panelWidthM: opts.panelWidthM,
+      panelHeightM: opts.panelHeightM,
+    });
+  }
+  const maxSwingRad = opts.maxSwingRad ?? SWING_DOOR_DEFAULT_MAX_RAD;
+  return swingDoorSwingingLeafEnclosingAabb({
     face: opts.face,
     hingeX: opts.hingeX,
     hingeZ: opts.hingeZ,
     feetY: opts.feetY,
     panelWidthM: opts.panelWidthM,
     panelHeightM: opts.panelHeightM,
+    open01: opts.open01,
+    maxSwingRad,
+    swingInward: opts.swingInward,
   });
 }
 
@@ -300,12 +368,23 @@ export function expandSwingDoorClosedSlabAabbForFirearmLOS(
   return { min: mn, max: mx };
 }
 
+/** Broader pad for parked-open leaf firearm traces (any orientation). */
+export function expandSwingDoorFirearmParkedLeafAabb(leaf: CollisionAabb): CollisionAabb {
+  const e = SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M;
+  const ey = 0.05;
+  return {
+    min: [leaf.min[0] - e, leaf.min[1] - ey, leaf.min[2] - e],
+    max: [leaf.max[0] + e, leaf.max[1] + ey, leaf.max[2] + e],
+  };
+}
+
 /**
- * Authoritative LOS / impact-decal blocker for swing doors. Unlike capsule collision, bullets use an
- * **expanded closed slab** while `open01` stays below passage clearance, bridging jamb-gap cheats.
+ * LOS / impact-decal blocker for swing doors.
  *
- * At/above {@link SWING_DOOR_PASSAGE_OPEN_THRESH}: no blocker (aligned with movement — static holes
- * carry passage). Below that: widened closed slab (partial swing still occludes LOS conservatively).
+ * - Nearly closed: expanded closed slab (jamb-gap cheats).
+ * - Mid swing (between closed slab max and passage): still uses expanded closed slab (conservative).
+ * - At/above passage openness: **parked leaf** volume so shots/decals hit the open panel instead of
+ *   flying through trimmed static doorway holes.
  */
 export function swingDoorFirearmBarrierAabb(opts: {
   open01: number;
@@ -317,11 +396,7 @@ export function swingDoorFirearmBarrierAabb(opts: {
   panelHeightM: number;
   swingInward?: boolean;
 }): CollisionAabb | null {
-  void opts.swingInward;
-  if (opts.open01 >= SWING_DOOR_PASSAGE_OPEN_THRESH) {
-    return null;
-  }
-  const closed = swingDoorClosedSlabAabb({
+  const closedBase = swingDoorClosedSlabAabb({
     face: opts.face,
     hingeX: opts.hingeX,
     hingeZ: opts.hingeZ,
@@ -329,7 +404,25 @@ export function swingDoorFirearmBarrierAabb(opts: {
     panelWidthM: opts.panelWidthM,
     panelHeightM: opts.panelHeightM,
   });
-  return expandSwingDoorClosedSlabAabbForFirearmLOS(closed, opts.face);
+
+  if (opts.open01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01) {
+    return expandSwingDoorClosedSlabAabbForFirearmLOS(closedBase, opts.face);
+  }
+
+  if (opts.open01 >= SWING_DOOR_PASSAGE_OPEN_THRESH) {
+    const leaf = swingDoorParkedLeafAabb({
+      face: opts.face,
+      hingeX: opts.hingeX,
+      hingeZ: opts.hingeZ,
+      feetY: opts.feetY,
+      panelWidthM: opts.panelWidthM,
+      panelHeightM: opts.panelHeightM,
+      swingInward: opts.swingInward,
+    });
+    return expandSwingDoorFirearmParkedLeafAabb(leaf);
+  }
+
+  return expandSwingDoorClosedSlabAabbForFirearmLOS(closedBase, opts.face);
 }
 
 /** Player-feet test for E-key interaction eligibility. */
@@ -347,6 +440,8 @@ export function swingDoorPlayerInInteractRange(opts: {
   const dz = opts.pz - opts.hingeZ;
   const r = SWING_DOOR_INTERACT_RADIUS_M + opts.panelWidthM * 0.5;
   if (dx * dx + dz * dz > r * r) return false;
-  const cy = opts.feetY + opts.panelHeightM * 0.5;
-  return Math.abs(opts.py - cy) <= SWING_DOOR_INTERACT_Y_HALF_M;
+  const yLo = opts.feetY - SWING_DOOR_INTERACT_FEET_BELOW_SLACK_M;
+  const yHi =
+    opts.feetY + opts.panelHeightM + SWING_DOOR_INTERACT_FEET_ABOVE_HEAD_SLACK_M;
+  return opts.py >= yLo && opts.py <= yHi;
 }

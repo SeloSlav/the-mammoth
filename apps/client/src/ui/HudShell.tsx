@@ -27,10 +27,11 @@ type HudProps = {
   displayName: string;
   onSignOut: () => void;
   conn: DbConnection | null;
+  connectionKind: "oidc" | "guest" | null;
 };
 
 /** React shell for HUD / inventory; engine loop stays outside React (see App.tsx). */
-export function HudShell({ displayName, onSignOut, conn }: HudProps) {
+export function HudShell({ displayName, onSignOut, conn, connectionKind }: HudProps) {
   const gameUiHidden = useSyncExternalStore(
     subscribeFpSessionGameUiHidden,
     getFpSessionGameUiHidden,
@@ -109,7 +110,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
                 cursor: "pointer",
               }}
             >
-              Sign out
+              {connectionKind === "guest" ? "Quit to saves" : "Sign out"}
             </button>
           </div>
         </div>

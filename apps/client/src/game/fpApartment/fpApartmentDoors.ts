@@ -24,8 +24,7 @@
  * 4. **Instance matrices are only rewritten when the eased visual `open01` moves materially.**
  *    Idle doors skip `setMatrixAt`; only doors chasing a changing replica pay each frame.
  *
- * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual. Only **closed**
- *    doors emit a dynamic capsule slab; open swing relies on static doorway holes.
+ * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual. Closing stays on the thin doorway slab; past `SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01` we mount the swinging-leaf hull so outward corridor doors stay physical cover when parked open (`swingDoorMovementBlockingAabb`).
  *
  * 6. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
  *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size).
@@ -865,6 +864,8 @@ export function mountFpApartmentDoors(
         feetY: slot.feetY,
         panelWidthM: slot.panelWidthM,
         panelHeightM: slot.panelHeightM,
+        swingInward: slot.swingInward,
+        maxSwingRad: APARTMENT_DOOR_MAX_RAD,
       });
       if (!aabb) return;
       if (aabb.max[0] < x0 || aabb.min[0] > x1) return;
@@ -964,6 +965,8 @@ export function mountFpApartmentDoors(
         feetY: slot.feetY,
         panelWidthM: slot.panelWidthM,
         panelHeightM: slot.panelHeightM,
+        swingInward: slot.swingInward,
+        maxSwingRad: APARTMENT_DOOR_MAX_RAD,
       });
       out.push({
         rowKey: slot.rowKey,

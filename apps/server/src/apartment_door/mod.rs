@@ -3,7 +3,8 @@
 //! Locomotion is client-authored; this module does **not** resolve capsule-vs-door physics.
 //! Shares the "corridor swing door" mechanics with [`crate::elevator`] landing doors:
 //! the door anim, open/close sound kinds, interact radius, **closed-slab** geometry for
-//! firearm LOS when nearly shut (open doors rely on static doorway holes), and the per-face yaw convention all come from the TSL-side
+//! firearm LOS — expanded closed slab while nearly shut; **parked-open leaf** once passage clears
+//! (aligned with `@the-mammoth/world` `swingDoorCollision.ts`), and the per-face yaw convention all come from the TSL-side
 //! `@the-mammoth/world` `swingDoorCollision.ts` module. Shared formulas are covered by
 //! `swingDoorCollision.test.ts` plus this module's unit tests.
 //!
@@ -29,8 +30,10 @@ const SWING_DOOR_ANIM_SPEED: f32 = 4.5;
 const SWING_DOOR_CLOSED_SLAB_HALF_THICK_M: f32 = 0.09;
 /// Match `SWING_DOOR_INTERACT_RADIUS_M`.
 const SWING_DOOR_INTERACT_RADIUS_M: f32 = 2.05;
-/// Match `SWING_DOOR_INTERACT_Y_HALF_M`.
-const SWING_DOOR_INTERACT_Y_HALF_M: f32 = 1.55;
+/// Match `SWING_DOOR_INTERACT_FEET_BELOW_SLACK_M`.
+const INTERACT_FEET_BELOW_SLACK_M: f32 = 10.0;
+/// Match `SWING_DOOR_INTERACT_FEET_ABOVE_HEAD_SLACK_M`.
+const INTERACT_FEET_ABOVE_HEAD_SLACK_M: f32 = 4.25;
 /// Same walk-probe offset used when validating door interactions — recover feet Y from the head probe.
 const WALK_PROBE_DY: f32 = 1.05;
 /// Allow the client's reported feet hint to lead the replicated pose by up to this much.
@@ -288,11 +291,78 @@ fn closed_slab_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
     }
 }
 
+/// Match `SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01`.
+const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01: f32 = 0.025;
+/// Match `SWING_DOOR_OPEN_LEAF_HALF_THICK_M`.
+const SWING_DOOR_OPEN_LEAF_HALF_THICK_M: f32 = 0.07;
+/// Match `SWING_DOOR_OPEN_LEAF_XZ_PAD_M`.
+const SWING_DOOR_OPEN_LEAF_XZ_PAD_M: f32 = 0.04;
+/// Match `SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M`.
+const SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M: f32 = 0.22;
+
+#[inline]
+fn apartment_door_swing_inward_for_template(_template_id: &str) -> bool {
+    false
+}
+
+#[inline]
+fn tip_dir_at_full_open(face: SwingDoorFace, swing_inward: bool) -> (f32, f32) {
+    let (nx, nz) = open_normal(face);
+    if swing_inward {
+        (-nx, -nz)
+    } else {
+        (nx, nz)
+    }
+}
+
+/// Parity with `swingDoorParkedLeafAabb` (`manualApartmentDoorExtras` swing inward flags).
+pub(crate) fn parked_leaf_world_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
+    let face = SwingDoorFace::from_u8(row.face);
+    let swing_inward = apartment_door_swing_inward_for_template(&row.template_id);
+    let (tx, tz) = tip_dir_at_full_open(face, swing_inward);
+    let tip_x = row.hinge_x + tx * row.panel_w_m;
+    let tip_z = row.hinge_z + tz * row.panel_w_m;
+    let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
+    let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
+    let top_y = row.feet_y + row.panel_h_m;
+    match face {
+        SwingDoorFace::W | SwingDoorFace::E => {
+            let x_min = if tx > 0.0 { row.hinge_x } else { tip_x - pad };
+            let x_max = if tx > 0.0 { tip_x + pad } else { row.hinge_x };
+            (
+                [x_min, row.feet_y, row.hinge_z - ht - pad],
+                [x_max, top_y, row.hinge_z + ht + pad],
+            )
+        }
+        SwingDoorFace::N | SwingDoorFace::S => {
+            let z_min = if tz > 0.0 { row.hinge_z } else { tip_z - pad };
+            let z_max = if tz > 0.0 { tip_z + pad } else { row.hinge_z };
+            (
+                [row.hinge_x - ht - pad, row.feet_y, z_min],
+                [row.hinge_x + ht + pad, top_y, z_max],
+            )
+        }
+    }
+}
+
+fn expanded_parked_leaf_firearm_barrier(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
+    let (mut mn, mut mx) = parked_leaf_world_aabb(row);
+    let e = SWING_DOOR_FIREARM_PARKED_LEAF_UNIFORM_PAD_M;
+    let ey = 0.05_f32;
+    mn[0] -= e;
+    mn[1] -= ey;
+    mn[2] -= e;
+    mx[0] += e;
+    mx[1] += ey;
+    mx[2] += e;
+    (mn, mx)
+}
+
 /// Match `packages/world/src/swingDoorCollision.ts` `SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M`.
 const SWING_DOOR_HITSCAN_CLOSED_TANGENT_PAD_M: f32 = 0.6;
 /// Match `SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M`.
 const SWING_DOOR_HITSCAN_CLOSED_NORMAL_HALF_EXTRA_M: f32 = 0.035;
-/// Match `SWING_DOOR_PASSAGE_OPEN_THRESH` — LOS clears at/above this `swing_open_01`.
+/// Match `SWING_DOOR_PASSAGE_OPEN_THRESH` — open door uses parked-leaf firearm volume at/above this.
 const SWING_DOOR_PASSAGE_OPEN_THRESH_HITSCAN: f32 = 0.85;
 
 fn expanded_closed_slab_firearm_barrier(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
@@ -315,11 +385,13 @@ fn expanded_closed_slab_firearm_barrier(row: &ApartmentDoor) -> ([f32; 3], [f32;
     (mn, mx)
 }
 
-/// Hit-scan / LOS collider separate from capsule movement: widens trimmed jamb gaps; must stay in
-/// lockstep with `swingDoorFirearmBarrierAabb` in `@the-mammoth/world`.
+/// Hit-scan / LOS collider — lockstep with `swingDoorFirearmBarrierAabb` in `@the-mammoth/world`.
 pub fn apartment_door_firearm_barrier_aabb(row: &ApartmentDoor) -> Option<([f32; 3], [f32; 3])> {
+    if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
+        return Some(expanded_closed_slab_firearm_barrier(row));
+    }
     if row.swing_open_01 >= SWING_DOOR_PASSAGE_OPEN_THRESH_HITSCAN {
-        return None;
+        return Some(expanded_parked_leaf_firearm_barrier(row));
     }
     Some(expanded_closed_slab_firearm_barrier(row))
 }
@@ -362,8 +434,9 @@ fn player_in_interact_range(row: &ApartmentDoor, px: f32, py: f32, pz: f32) -> b
     if dx * dx + dz * dz > r * r {
         return false;
     }
-    let cy = row.feet_y + row.panel_h_m * 0.5;
-    (py - cy).abs() <= SWING_DOOR_INTERACT_Y_HALF_M
+    let y_lo = row.feet_y - INTERACT_FEET_BELOW_SLACK_M;
+    let y_hi = row.feet_y + row.panel_h_m + INTERACT_FEET_ABOVE_HEAD_SLACK_M;
+    py >= y_lo && py <= y_hi
 }
 
 fn sound_xyz_for_row(row: &ApartmentDoor) -> (f32, f32, f32) {
@@ -501,74 +574,18 @@ pub fn apartment_door_set(
     );
 }
 
-/// Parity with `swingDoorParkedLeafAabb` — compile-time geometry only; capsule physics omits this volume.
+/// Test shim — delegates to production `parked_leaf_world_aabb`.
 #[cfg(test)]
 mod swing_door_parked_leaf_parity {
-    use super::{ApartmentDoor, SwingDoorFace};
-
-    pub(super) const SWING_DOOR_OPEN_LEAF_HALF_THICK_M: f32 = 0.07;
-    pub(super) const SWING_DOOR_OPEN_LEAF_XZ_PAD_M: f32 = 0.04;
-
-    #[inline]
-    fn open_normal(face: SwingDoorFace) -> (f32, f32) {
-        match face {
-            SwingDoorFace::W => (-1.0, 0.0),
-            SwingDoorFace::E => (1.0, 0.0),
-            SwingDoorFace::N => (0.0, 1.0),
-            SwingDoorFace::S => (0.0, -1.0),
-        }
-    }
-
-    /// Match `apartmentDoorSwingInwardForTemplateId` in `manualApartmentDoorExtras.ts`.
-    #[inline]
-    fn apartment_door_swing_inward(_template_id: &str) -> bool {
-        false
-    }
-
-    #[inline]
-    fn tip_dir_at_full_open(face: SwingDoorFace, swing_inward: bool) -> (f32, f32) {
-        let (nx, nz) = open_normal(face);
-        if swing_inward {
-            (-nx, -nz)
-        } else {
-            (nx, nz)
-        }
-    }
-
+    use super::{parked_leaf_world_aabb, ApartmentDoor};
     pub(super) fn parked_leaf_aabb(row: &ApartmentDoor) -> ([f32; 3], [f32; 3]) {
-        let face = SwingDoorFace::from_u8(row.face);
-        let (tx, tz) = tip_dir_at_full_open(face, apartment_door_swing_inward(&row.template_id));
-        let tip_x = row.hinge_x + tx * row.panel_w_m;
-        let tip_z = row.hinge_z + tz * row.panel_w_m;
-        let ht = SWING_DOOR_OPEN_LEAF_HALF_THICK_M;
-        let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
-        let top_y = row.feet_y + row.panel_h_m;
-        match face {
-            SwingDoorFace::W | SwingDoorFace::E => {
-                let x_min = if tx > 0.0 { row.hinge_x } else { tip_x - pad };
-                let x_max = if tx > 0.0 { tip_x + pad } else { row.hinge_x };
-                (
-                    [x_min, row.feet_y, row.hinge_z - ht - pad],
-                    [x_max, top_y, row.hinge_z + ht + pad],
-                )
-            }
-            SwingDoorFace::N | SwingDoorFace::S => {
-                let z_min = if tz > 0.0 { row.hinge_z } else { tip_z - pad };
-                let z_max = if tz > 0.0 { tip_z + pad } else { row.hinge_z };
-                (
-                    [row.hinge_x - ht - pad, row.feet_y, z_min],
-                    [row.hinge_x + ht + pad, top_y, z_max],
-                )
-            }
-        }
+        parked_leaf_world_aabb(row)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::swing_door_parked_leaf_parity::{
-        parked_leaf_aabb, SWING_DOOR_OPEN_LEAF_XZ_PAD_M,
-    };
+    use super::swing_door_parked_leaf_parity::parked_leaf_aabb;
     use super::*;
 
     fn sample_row() -> ApartmentDoor {
@@ -611,12 +628,23 @@ mod tests {
     }
 
     #[test]
-    fn interact_range_rejects_player_on_wrong_floor() {
+    fn interact_range_rejects_player_far_above_door_band() {
         let row = sample_row();
         assert!(!player_in_interact_range(
             &row,
             row.hinge_x - 0.3,
-            row.feet_y + 4.5,
+            row.feet_y + row.panel_h_m + INTERACT_FEET_ABOVE_HEAD_SLACK_M + 6.0,
+            row.hinge_z - 0.3,
+        ));
+    }
+
+    #[test]
+    fn interact_range_rejects_player_far_below_door_band() {
+        let row = sample_row();
+        assert!(!player_in_interact_range(
+            &row,
+            row.hinge_x - 0.3,
+            row.feet_y - INTERACT_FEET_BELOW_SLACK_M - 3.0,
             row.hinge_z - 0.3,
         ));
     }
@@ -633,43 +661,22 @@ mod tests {
         assert!((mx[1] - (row.feet_y + row.panel_h_m)).abs() < 1e-4);
     }
 
-    /// Apartment doors swing INTO the unit. For a W-face door the unit is to the +X side of
-    /// hinge (corridor is -X), so the parked leaf must extend in +X from the hinge — NOT into
-    /// the corridor. The hinge-side AABB edge is flush with the wall plane (no padding across
-    /// the threshold) so a door finishing its swing does not rubber-band a crossing player.
+    /// Mamutica corridor apartment doors swing **outward** (`apartmentDoorSwingInwardForTemplateId`
+    /// is currently always false): parked leaf reaches west (−X) from the hinge.
     #[test]
-    fn parked_leaf_aabb_extends_into_unit_for_inward_west_face() {
+    fn parked_leaf_aabb_extends_into_corridor_for_outward_west_face() {
         let row = sample_row();
         let (mn, mx) = parked_leaf_aabb(&row);
         let pad = SWING_DOOR_OPEN_LEAF_XZ_PAD_M;
-        assert!(
-            (mn[0] - row.hinge_x).abs() < 1e-4,
-            "x_min flush with wall plane (no cross-threshold pad on hinge side)",
-        );
-        assert!(
-            (mx[0] - (row.hinge_x + row.panel_w_m + pad)).abs() < 1e-4,
-            "x_max extends INTO unit by panelWidth + pad (inward swing)",
-        );
+        let tip_x = row.hinge_x - row.panel_w_m;
+        assert!((mx[0] - row.hinge_x).abs() < 1e-4);
+        assert!((mn[0] - (tip_x - pad)).abs() < 1e-4);
+        assert!(mn[0] < row.hinge_x - row.panel_w_m * 0.5);
+        assert!(mx[1] > mn[1]);
+        assert!(mx[2] > mn[2]);
     }
 
-    /// A player whose capsule straddles the wall plane right next to the hinge Z (where the
-    /// leaf lives) must NOT be pushed west — i.e. the AABB must NOT reach across the wall
-    /// into the corridor at all. Regression guard against the pre-fix "rubber-banding at
-    /// the threshold" bug.
-    #[test]
-    fn parked_leaf_aabb_never_extends_into_corridor_for_inward_west_face() {
-        let row = sample_row();
-        let (mn, _mx) = parked_leaf_aabb(&row);
-        assert!(
-            mn[0] >= row.hinge_x - 1e-4,
-            "AABB hinge-side must sit at or east of the wall plane (got {:.4}, wall {:.4})",
-            mn[0],
-            row.hinge_x,
-        );
-    }
-
-    /// Player capsule walking through the centre of a parked-open (inward) doorway must NOT
-    /// overlap the parked-leaf AABB — the leaf is inside the unit, corridor and doorway clear.
+    /// Doorway centre (along opening tangent, near wall plane) stays outside the thin parked-leaf Z span.
     #[test]
     fn parked_leaf_aabb_clears_player_capsule_in_doorway() {
         let row = sample_row();
@@ -691,21 +698,30 @@ mod tests {
         );
     }
 
-    /// Corridor-side traffic (the ORIGINAL bug: open door juts into corridor) is now clear.
-    /// A player walking past the doorway on the corridor side at the hinge's z should NOT
-    /// collide with the parked-leaf AABB because the leaf lives inside the unit.
+    /// Traffic **past** the parked leaf volume west along −X should stay collision-free in XZ with the leaf.
     #[test]
-    fn parked_leaf_aabb_does_not_block_corridor_past_doorway() {
+    fn parked_leaf_aabb_does_not_block_far_corridor_traffic() {
         let row = sample_row();
         let (mn, mx) = parked_leaf_aabb(&row);
         let radius = 0.22_f32;
-        // Player 0.3 m INTO the corridor (west of hinge) and at hinge z.
-        let cx = row.hinge_x - 0.3;
+        let cx = mn[0] - 0.45;
         let cz = row.hinge_z;
         let cap_min = [cx - radius, row.feet_y + 0.25, cz - radius];
         let cap_max = [cx + radius, row.feet_y + 1.72, cz + radius];
         let overlaps =
             cap_max[0] > mn[0] && cap_min[0] < mx[0] && cap_max[2] > mn[2] && cap_min[2] < mx[2];
-        assert!(!overlaps, "parked leaf must not block corridor traffic");
+        assert!(
+            !overlaps,
+            "parked leaf must not reach arbitrarily far into −X corridor traffic"
+        );
+    }
+
+    #[test]
+    fn firearm_barrier_returns_parked_leaf_when_fully_open() {
+        let mut row = sample_row();
+        row.swing_open_01 = 1.0;
+        let aabb = apartment_door_firearm_barrier_aabb(&row).expect("expected firearm barrier");
+        assert!(aabb.1[0] > aabb.0[0]);
+        assert!(aabb.1[2] > aabb.0[2]);
     }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fpLoadingDbgMark,
 } from "../game/fpSession/fpLoadingDebug.js";
@@ -18,6 +18,14 @@ import { readOptionalString } from "./username";
 import { spacetimeDatabase, spacetimeUri, readEnableAccountAuth } from "./env";
 import { writeGuestLastKnownDisplayName } from "./guestLastKnownDisplayName";
 import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
+import {
+  deleteGuestSaveSlot as persistDeleteGuestSaveSlot,
+  guestSaveSummariesSorted,
+  prepareFreshGuestSaveSlot,
+  readGuestSaveRegistry,
+  selectGuestSaveSlot as persistSelectGuestSaveSlot,
+  type GuestSaveSlotSummary,
+} from "./guestSaveRegistry";
 import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
 
 function isOidcCallbackPath(): boolean {
@@ -76,6 +84,7 @@ function formatSpacetimeConnectError(err: unknown): string {
 
 export type SpacetimePhase =
   | "needs_auth"
+  | "guest_save_menu"
   | "connecting"
   | "needs_name"
   | "ready"
@@ -92,6 +101,8 @@ export type SpacetimeSession = {
   errorMsg: string | null;
   /** How we connected — guest uses anonymous WS token persisted in localStorage. */
   connectionKind: ConnectionKind | null;
+  guestSaveSummaries: GuestSaveSlotSummary[];
+  activeGuestSlotId: string | null;
   /**
    * First baseline batch (at least `user`) applied on the client — safe to call reducers that assume
    * the local cache has the identity row. UI can show the name form early but keep submit disabled
@@ -102,8 +113,13 @@ export type SpacetimeSession = {
   startPasswordSignIn: () => Promise<void>;
   /** Connect without OIDC — requires local node to accept anonymous connections. */
   startGuestPlay: () => void;
-  /** Clear OIDC + guest WS token and disconnect from SpacetimeDB. */
+  /** Quit current session — guests return to local save picker (slots kept). */
   signOut: () => void;
+  /** Auth-enabled builds: guest save screen → account vs guest lobby. */
+  signOutToAuthGate: () => void;
+  selectGuestSaveSlot: (slotId: string) => void;
+  startNewGuestSave: () => void;
+  deleteGuestSaveSlot: (slotId: string) => void;
   submitProfile: (args: ProfileSubmitArgs) => Promise<void>;
 };
 
@@ -113,16 +129,29 @@ export type SpacetimeSession = {
  */
 export function useSpacetimeConnection(): SpacetimeSession {
   const [phase, setPhase] = useState<SpacetimePhase>(readInitialPhase);
+  const phaseRef = useRef(phase);
   const [conn, setConn] = useState<DbConnection | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [connEpoch, setConnEpoch] = useState(0);
+  const [guestRegistryTick, setGuestRegistryTick] = useState(0);
   /**
    * Guests resume the same Spacetime identity after refresh when
    * {@link readGuestConnectionToken} has a value — keep in sync with initial connect effect.
    */
   const [connectionKind, setConnectionKind] = useState<ConnectionKind | null>(readInitialConnectionKind);
   const [spacetimeUserSnapshotReady, setSpacetimeUserSnapshotReady] = useState(false);
+
+  const bumpGuestRegistryUi = useCallback(() => setGuestRegistryTick((t) => t + 1), []);
+
+  const { guestSaveSummaries, activeGuestSlotId } = useMemo(() => {
+    void guestRegistryTick;
+    const reg = readGuestSaveRegistry();
+    return {
+      guestSaveSummaries: guestSaveSummariesSorted(reg),
+      activeGuestSlotId: reg.activeSlotId,
+    };
+  }, [guestRegistryTick]);
 
   const refreshRegistration = useCallback(
     (c: DbConnection, baselineFullyHydrated: boolean, connectionKindSnap: ConnectionKind) => {
@@ -184,6 +213,17 @@ export function useSpacetimeConnection(): SpacetimeSession {
     return () => window.clearTimeout(t);
   }, [phase, displayName]);
 
+  /** Keeps {@link phaseRef} aligned without assigning refs during render (eslint react-hooks/refs). */
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  /**
+   * Spacetime WebSocket — keyed by identity/session epoch only.
+   * Do **not** list `phase` here: `refreshRegistration` advances needs_name→connecting→ready while this socket
+   * stays open; re-running the effect on every phase flip disconnects mid-flight (CLOSING/CLOSED `send`
+   * errors + login/connect UI flicker). `guest_save_menu` uses {@link phaseRef} without reconnect churn.
+   */
   useEffect(() => {
     let active = true;
     let connection: DbConnection | null = null;
@@ -207,6 +247,13 @@ export function useSpacetimeConnection(): SpacetimeSession {
       }
 
       if (!active) return;
+
+      /** Ref read — `phase` is intentionally omitted from effect deps (hydration flips would churn WS). */
+      if (phaseRef.current === "guest_save_menu") {
+        fpLoadingDbgMark("spacetime_connect_effect:guest_save_menu_hold");
+        setConn(null);
+        return;
+      }
 
       const jwt = readOidcAccessToken();
       if (jwt) {
@@ -240,6 +287,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
           });
           if (kind === "guest" && typeof wsToken === "string" && wsToken.length > 0) {
             writeGuestConnectionToken(wsToken);
+            bumpGuestRegistryUi();
           }
           setConn(cc);
           setErrorMsg(null);
@@ -304,7 +352,7 @@ export function useSpacetimeConnection(): SpacetimeSession {
       setConn(null);
       setSpacetimeUserSnapshotReady(false);
     };
-  }, [connEpoch, connectionKind, refreshRegistration]);
+  }, [connEpoch, connectionKind, refreshRegistration, bumpGuestRegistryUi]);
 
   const startPasswordSignIn = useCallback(async () => {
     setErrorMsg(null);
@@ -312,7 +360,6 @@ export function useSpacetimeConnection(): SpacetimeSession {
   }, []);
 
   const startGuestPlay = useCallback(() => {
-    writeGuestLastKnownDisplayName(null);
     setErrorMsg(null);
     setDisplayName(null);
     setConnectionKind("guest");
@@ -322,22 +369,62 @@ export function useSpacetimeConnection(): SpacetimeSession {
     setConnEpoch((e) => e + 1);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOutToAuthGate = useCallback(() => {
     abandonMegablockStaticWorldMeshCache();
     clearOidcAccessToken();
-    writeGuestConnectionToken(null);
-    writeGuestLastKnownDisplayName(null);
     setConn(null);
     setDisplayName(null);
     setErrorMsg(null);
     setSpacetimeUserSnapshotReady(false);
-    const authGate = readEnableAccountAuth();
-    if (authGate) {
+    setConnectionKind(null);
+    setPhase("needs_auth");
+    setConnEpoch((e) => e + 1);
+  }, []);
+
+  const selectGuestSaveSlot = useCallback(
+    (slotId: string) => {
+      persistSelectGuestSaveSlot(slotId);
+      bumpGuestRegistryUi();
+      setDisplayName(null);
+      setErrorMsg(null);
+      setPhase("needs_name");
+      setConnEpoch((e) => e + 1);
+    },
+    [bumpGuestRegistryUi],
+  );
+
+  const startNewGuestSave = useCallback(() => {
+    prepareFreshGuestSaveSlot();
+    bumpGuestRegistryUi();
+    setDisplayName(null);
+    setErrorMsg(null);
+    setConnectionKind("guest");
+    setPhase("needs_name");
+    setConnEpoch((e) => e + 1);
+  }, [bumpGuestRegistryUi]);
+
+  const deleteGuestSaveSlot = useCallback(
+    (slotId: string) => {
+      persistDeleteGuestSaveSlot(slotId);
+      bumpGuestRegistryUi();
+    },
+    [bumpGuestRegistryUi],
+  );
+
+  const signOut = useCallback(() => {
+    abandonMegablockStaticWorldMeshCache();
+    const hadOidcJwt = !!readOidcAccessToken();
+    clearOidcAccessToken();
+    setConn(null);
+    setDisplayName(null);
+    setErrorMsg(null);
+    setSpacetimeUserSnapshotReady(false);
+    if (hadOidcJwt) {
       setConnectionKind(null);
       setPhase("needs_auth");
     } else {
       setConnectionKind("guest");
-      setPhase("needs_name");
+      setPhase("guest_save_menu");
     }
     setConnEpoch((e) => e + 1);
   }, []);
@@ -375,10 +462,16 @@ export function useSpacetimeConnection(): SpacetimeSession {
     displayName,
     errorMsg,
     connectionKind,
+    guestSaveSummaries,
+    activeGuestSlotId,
     spacetimeUserSnapshotReady,
     startPasswordSignIn,
     startGuestPlay,
     signOut,
+    signOutToAuthGate,
+    selectGuestSaveSlot,
+    startNewGuestSave,
+    deleteGuestSaveSlot,
     submitProfile,
   };
 }

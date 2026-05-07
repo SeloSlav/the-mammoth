@@ -22,8 +22,12 @@ use crate::items_catalog;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
-/// Squared max distance (m²) from player feet to allow pickup.
+/// Squared max **horizontal** distance (m²) from player feet to drop — matches client
+/// `MAMMOTH_PICKUP_RADIUS_M`. Vertical separation is gated separately so predicted client XZ
+/// (ahead of replicated pose) still succeeds while stacked floors cannot vacuum loot through slabs.
 const PICKUP_RADIUS_SQ: f32 = 3.5 * 3.5;
+/// Max |ΔY| (m) between player feet and drop anchor for pickup; matches client `MAMMOTH_PICKUP_MAX_ABS_DY_M`.
+const PICKUP_MAX_ABS_DY_M: f32 = 4.0;
 /// Forward offset along look direction when spawning a drop (m).
 const DROP_FORWARD_M: f32 = 0.55;
 /// Lift mesh slightly above replicated foot height to avoid sinking through thin slabs / Z-fight (m).
@@ -622,13 +626,6 @@ fn drop_spawn_transform(pose: &PlayerPose) -> (f32, f32, f32, f32) {
     (x, y, z, pose.yaw)
 }
 
-fn dist_sq(ax: f32, ay: f32, az: f32, bx: f32, by: f32, bz: f32) -> f32 {
-    let dx = ax - bx;
-    let dy = ay - by;
-    let dz = az - bz;
-    dx * dx + dy * dy + dz * dz
-}
-
 /// Remove from inventory/hotbar and spawn a [`DroppedItem`] in front of the player.
 #[spacetimedb::reducer]
 pub fn drop_item(ctx: &ReducerContext, item_instance_id: u64, quantity_to_drop: u32) {
@@ -714,8 +711,13 @@ fn pickup_dropped_item_inner(
         .find(dropped_item_id)
         .ok_or_else(|| format!("dropped item {dropped_item_id} not found"))?;
 
-    let d2 = dist_sq(pose.x, pose.y, pose.z, dropped.x, dropped.y, dropped.z);
-    if d2 > PICKUP_RADIUS_SQ {
+    let dx = pose.x - dropped.x;
+    let dz = pose.z - dropped.z;
+    if dx * dx + dz * dz > PICKUP_RADIUS_SQ {
+        return Err("too far away".to_string());
+    }
+    let dy = (pose.y - dropped.y).abs();
+    if dy > PICKUP_MAX_ABS_DY_M {
         return Err("too far away".to_string());
     }
 

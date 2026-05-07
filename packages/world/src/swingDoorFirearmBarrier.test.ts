@@ -44,32 +44,33 @@ describe("swingDoor firearm LOS barrier", () => {
     expect(zSpan).toBeGreaterThan(baseClosed.max[2] - baseClosed.min[2]);
   });
 
-  it("clears when door reaches passage openness", () => {
-    expect(
-      swingDoorFirearmBarrierAabb({
-        open01: SWING_DOOR_PASSAGE_OPEN_THRESH,
-        face: "w",
-        hingeX: 1.25,
-        hingeZ: -10,
-        feetY: 3,
-        panelWidthM: 1.26,
-        panelHeightM: 2.06,
-      }),
-    ).toBeNull();
+  it("returns parked-open leaf barrier once passage openness is reached", () => {
+    const a = swingDoorFirearmBarrierAabb({
+      open01: SWING_DOOR_PASSAGE_OPEN_THRESH,
+      face: "w",
+      hingeX: 1.25,
+      hingeZ: -10,
+      feetY: 3,
+      panelWidthM: 1.26,
+      panelHeightM: 2.06,
+      swingInward: false,
+    });
+    expect(a).not.toBeNull();
+    expect(a!.max[0]).toBeGreaterThan(a!.min[0]);
+    expect(a!.max[2]).toBeGreaterThan(a!.min[2]);
   });
 
-  it("clears LOS barrier once passage threshold is reached (including fully parked open)", () => {
-    expect(
-      swingDoorFirearmBarrierAabb({
-        open01: SWING_DOOR_PARKED_LEAF_MIN_OPEN_01,
-        face: "e",
-        hingeX: -2,
-        hingeZ: 50,
-        feetY: 3.05,
-        panelWidthM: 1.1,
-        panelHeightM: 2.0,
-        swingInward: false,
-      }),
-    ).toBeNull();
+  it("keeps LOS barrier for fully parked open leaves", () => {
+    const a = swingDoorFirearmBarrierAabb({
+      open01: SWING_DOOR_PARKED_LEAF_MIN_OPEN_01,
+      face: "e",
+      hingeX: -2,
+      hingeZ: 50,
+      feetY: 3.05,
+      panelWidthM: 1.1,
+      panelHeightM: 2.0,
+      swingInward: false,
+    });
+    expect(a).not.toBeNull();
   });
 });

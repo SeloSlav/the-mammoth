@@ -5,7 +5,12 @@ import {
   MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
 } from "@the-mammoth/assets";
 import { describe, expect, it } from "vitest";
-import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldRuntime";
+import {
+  droppedPickupWithinServerVolume,
+  fitDroppedWorldItemModelToCatalog,
+  MAMMOTH_PICKUP_MAX_ABS_DY_M,
+  MAMMOTH_PICKUP_RADIUS_M,
+} from "./droppedItemWorldRuntime";
 
 describe("fitDroppedWorldItemModelToCatalog", () => {
   it("scales to target max extent and bottoms out on Y", () => {
@@ -26,6 +31,33 @@ describe("fitDroppedWorldItemModelToCatalog", () => {
 describe("world loot ground plane (Spacetime anchors)", () => {
   it("MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M matches server WORLD_LOOT_Y_GROUND_FLOOR_M", () => {
     expect(MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M).toBeCloseTo(0.28, 5);
+  });
+});
+
+describe("droppedPickupWithinServerVolume", () => {
+  it("allows pickup within horizontal radius regardless of moderate vertical separation", () => {
+    expect(
+      droppedPickupWithinServerVolume(0, 1.6, 0, 1.0, 0.28, 0, MAMMOTH_PICKUP_RADIUS_M),
+    ).toBe(true);
+  });
+
+  it("rejects when horizontal distance exceeds radius", () => {
+    expect(droppedPickupWithinServerVolume(0, 1.6, 0, 10, 0.28, 0)).toBe(false);
+  });
+
+  it("rejects when vertical separation exceeds max abs dy", () => {
+    expect(
+      droppedPickupWithinServerVolume(
+        0,
+        10,
+        0,
+        0,
+        0.28,
+        0,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_M,
+      ),
+    ).toBe(false);
   });
 });
 

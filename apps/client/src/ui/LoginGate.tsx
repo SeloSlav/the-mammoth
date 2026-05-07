@@ -4,6 +4,7 @@ import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
 import { readGuestLastKnownDisplayName } from "../spacetime/guestLastKnownDisplayName";
 import { readEnableAccountAuth } from "../spacetime/env";
 import { MammothAuthBackdrop } from "./MammothAuthBackdrop";
+import { GuestSaveMenu } from "./GuestSaveMenu";
 import { ProfileGate } from "./ProfileGate";
 import styles from "./LoginGate.module.css";
 import { useMammothAuthMenuMusic } from "./useMammothAuthMenuMusic";
@@ -36,6 +37,14 @@ export function LoginGate({ session }: Props) {
     guestReconnectHint.length >= 3;
 
   const accountAuth = readEnableAccountAuth();
+
+  if (phase === "guest_save_menu") {
+    return (
+      <AuthScreen eyebrow="Your saves">
+        <GuestSaveMenu session={session} />
+      </AuthScreen>
+    );
+  }
 
   if (phase === "needs_auth") {
     return (
@@ -109,7 +118,7 @@ export function LoginGate({ session }: Props) {
           says so.
         </p>
         <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
-          Use a different key
+          Pick another save
         </button>
       </AuthScreen>
     );
@@ -141,7 +150,7 @@ export function LoginGate({ session }: Props) {
   }
 
   return (
-    <AuthScreen eyebrow="Your corridor profile">
+    <AuthScreen eyebrow="Your roster name">
       <ProfileGate session={session} />
     </AuthScreen>
   );
