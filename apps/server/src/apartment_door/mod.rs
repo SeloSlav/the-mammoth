@@ -175,9 +175,10 @@ pub(crate) fn residential_unit_door_default_open01_for_level(level: u32) -> (u8,
     }
 }
 
-/// One-shot sync on module **`init`** (deploy / reset): aligns residential swing doors with the
-/// abandoned-open vs lived-in-band policy. **`client_connected`** only seeds inserts — it does **not**
-/// call this — so runtime player-driven `desired_open` changes persist across reconnects.
+/// Aligns residential unit corridor doors with the abandoned-open vs lived-in-band policy.
+/// **`init`** and **`on_connect`** both call this after seeding so stale `desired_open` rows (e.g. from
+/// older modules) do not stay stuck open on levels `RESIDENTIAL_BAND_MIN_LEVEL`..`max_level()`.
+/// Re-applies every reconnect — band doors return to authored defaults; owners can re-open from inside.
 pub fn sync_residential_unit_door_band_presentations(ctx: &ReducerContext) {
     for mut d in ctx.db.apartment_door().iter() {
         if !is_residential_corridor_unit_door(&d.template_id) {
@@ -209,6 +210,7 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
             let rk = row_key(floor_doc_id, level, t.template_id);
             seen.insert(rk.clone());
             if let Some(mut row) = ctx.db.apartment_door().row_key().find(&rk) {
+                let mut changed = false;
                 if !apartment_door_row_matches_template(&row, level, t) {
                     row.hinge_x = t.hinge_x;
                     row.hinge_z = t.hinge_z;
@@ -216,6 +218,21 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                     row.feet_y = feet_world_y(level, t.feet_y_offset);
                     row.panel_w_m = t.panel_w_m;
                     row.panel_h_m = t.panel_h_m;
+                    changed = true;
+                }
+                // Re-apply abandoned-open vs lived-in-band policy on every seed (stale DB rows used to
+                // stay `desired_open=1` from older `open_unclaimed_residential_doors` behavior).
+                if is_residential_corridor_unit_door(t.template_id) {
+                    let (want_open01, swing) = residential_unit_door_default_open01_for_level(level);
+                    if row.desired_open != want_open01
+                        || (row.swing_open_01 - swing).abs() > 1e-4
+                    {
+                        row.desired_open = want_open01;
+                        row.swing_open_01 = swing;
+                        changed = true;
+                    }
+                }
+                if changed {
                     let _ = ctx.db.apartment_door().row_key().update(row);
                 }
                 continue;

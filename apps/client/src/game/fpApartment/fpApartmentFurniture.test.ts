@@ -45,11 +45,15 @@ describe("apartmentFurniturePlacementChanged", () => {
       reinforceProgressSecs: 4.5,
       reinforceBy: {} as never,
       reinforced: 1,
-      state: 1,
-      owner: {} as never,
     });
 
     expect(apartmentFurniturePlacementChanged(oldUnit, newUnit)).toBe(false);
+  });
+
+  it("detects state changes (e.g. top-band claim affecting interior meshes)", () => {
+    expect(
+      apartmentFurniturePlacementChanged(apartmentUnit({ level: 18 }), apartmentUnit({ level: 18, state: 1 })),
+    ).toBe(true);
   });
 
   it("detects furniture placement changes", () => {

@@ -15,8 +15,9 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
+  apartmentUnitOwnerEqual,
   clientMayUseApartmentStash,
-  UNIT_STATE_SHELL_OCCUPIED,
+  residentInteriorPropsVisibleForViewer,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 
@@ -62,6 +63,7 @@ const FURNITURE_PLACEMENT_FIELDS = [
   "unitId",
   "level",
   "state",
+  "owner",
   "bedX",
   "bedY",
   "bedZ",
@@ -94,6 +96,10 @@ export function apartmentFurniturePlacementChanged(
   newUnit: ApartmentUnit,
 ): boolean {
   for (const field of FURNITURE_PLACEMENT_FIELDS) {
+    if (field === "owner") {
+      if (!apartmentUnitOwnerEqual(oldUnit.owner, newUnit.owner)) return true;
+      continue;
+    }
     if (oldUnit[field] !== newUnit[field]) return true;
   }
   return false;
@@ -333,7 +339,7 @@ export async function mountFpApartmentFurniture(opts: {
     const plate = build.group;
     const furnitureYaw = u.bedYaw;
 
-    if (u.state === UNIT_STATE_SHELL_OCCUPIED) {
+    if (!residentInteriorPropsVisibleForViewer(opts.conn, u)) {
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_shell:${u.unitKey}`;
       unitGroup.userData.mammothApartmentFurnitureProp = true;

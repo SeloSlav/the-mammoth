@@ -71,7 +71,9 @@ pub fn on_connect(ctx: &ReducerContext) {
     elevator::seed_elevator_landing_doors(ctx);
     apartment_door::seed_apartment_doors(ctx);
     apartments::seed_apartment_units(ctx);
+    apartment_door::sync_residential_unit_door_band_presentations(ctx);
     apartments::ensure_player_home_apartment(ctx, id);
+    apartments::lock_owned_residential_doors(ctx, id);
     pose::ensure_player_pose_row(ctx, id);
     movement::ensure_player_input_row(ctx, id, 0.0);
     world_sound::ensure_player_audio_rows(ctx, id);

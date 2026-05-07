@@ -435,6 +435,12 @@ export async function mountFpSession(
   /** Local pickup probe — pickup publishes this pose before server validation. */
   const _pickupAuthorityFeet = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
+  /**
+   * Blocks `submit_player_locomotion_snapshot` until `ingestPose` has applied the first replicated
+   * self row (or a respawn authoritative snap). Without this, RAF can publish default guest feet before
+   * `player_pose` arrives and overwrite a server bed / ground spawn on the module.
+   */
+  const moveSnapshotHydrated = { current: false };
 
   const fpPlayerDamageBloodSquirt = createFpPlayerDamageBloodSquirt({
     scene,
@@ -618,6 +624,7 @@ export async function mountFpSession(
       velZ: loco.velocity.z,
       grounded: loco.grounded,
     }),
+    snapshotPublishAllowed: () => moveSnapshotHydrated.current,
   });
 
   const flushLocalPickupPoseToServer = (): Promise<void> => {
@@ -758,6 +765,7 @@ export async function mountFpSession(
     moveIntentQueue.items.length = 0;
     moveIntentQueue.head = 0;
     syncSpatialAoiFromFeet(row.x, row.y, row.z);
+    moveSnapshotHydrated.current = true;
   };
 
   const ingestPose = (row: PlayerPose) => {
@@ -779,6 +787,7 @@ export async function mountFpSession(
       loco.velocity.set(row.velX, row.velY, row.velZ);
       loco.grounded = row.grounded !== 0;
       spawnSynced = true;
+      moveSnapshotHydrated.current = true;
       syncSpatialAoiAfterHydratedSpawn?.(row.x, row.y, row.z);
     } else {
       if (pendingRespawnAuthoritativeSnap) {

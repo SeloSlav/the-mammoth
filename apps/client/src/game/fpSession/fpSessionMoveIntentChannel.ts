@@ -36,6 +36,11 @@ export type CreateFpSessionMoveIntentChannelOpts = {
   maxPendingIntents: number;
   /** Trusted solo snapshot — becomes authoritative `player_pose` on the server (client-side collision). */
   samplePose: () => LocomotionSnapshotPoseSample;
+  /**
+   * When false, snapshots are suppressed (caller usually gates until replicated `player_pose` hydrates
+   * local feet — otherwise the first ~20 Hz snapshot can overwrite a server-authored spawn pose).
+   */
+  snapshotPublishAllowed?: () => boolean;
 };
 
 /**
@@ -45,7 +50,10 @@ export type CreateFpSessionMoveIntentChannelOpts = {
 export function createFpSessionMoveIntentChannel(
   opts: CreateFpSessionMoveIntentChannelOpts,
 ): FpSessionMoveIntentChannel {
-  const { conn, mainRaf, moveIntentQueue, maxPendingIntents, samplePose } = opts;
+  const { conn, mainRaf, moveIntentQueue, maxPendingIntents, samplePose, snapshotPublishAllowed } =
+    opts;
+
+  const canPublish = (): boolean => snapshotPublishAllowed?.() ?? true;
 
   const intentSeq = { current: 0n };
   let lastMoveIntentMs = -Infinity;
@@ -56,6 +64,7 @@ export function createFpSessionMoveIntentChannel(
 
   const sendMoveIntent = (input: FpLocomotionInput, jump: boolean, nowMs: number): Promise<void> => {
     if (!conn.identity) return Promise.resolve();
+    if (!canPublish()) return Promise.resolve();
     const vitals = conn.db.player_vitals.identity.find(conn.identity);
     if (vitals != null && vitals.health <= 0) return Promise.resolve();
     intentSeq.current += 1n;
@@ -105,6 +114,7 @@ export function createFpSessionMoveIntentChannel(
     nowMs: number,
   ): void => {
     if (!conn.identity) return;
+    if (!canPublish()) return;
     if (jump) {
       void sendMoveIntent(input, true, nowMs);
       return;

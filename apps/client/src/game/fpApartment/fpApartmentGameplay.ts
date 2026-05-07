@@ -19,6 +19,9 @@ export const UNIT_STATE_BROKEN = 2;
 /** NPC façade on the rooftop residential slab — mirrors server `UNIT_STATE_SHELL_OCCUPIED`. */
 export const UNIT_STATE_SHELL_OCCUPIED = 4;
 
+/** First building `levelIndex` of the inhabited top band (`floor_mamutica_typical` 18..max). Mirrors `elevator_layout::RESIDENTIAL_BAND_MIN_LEVEL` on the module. */
+export const RESIDENTIAL_BAND_MIN_LEVEL = 18;
+
 /** Seconds of hold progress to complete claim (30 production, 1 when testing flag matches server). */
 export const APARTMENT_CLAIM_FULL_SECS = APARTMENT_CLAIM_FAST_FOR_TESTING ? 1 : 30;
 
@@ -65,6 +68,33 @@ export function apartmentDoorGameplayBreached(conn: DbConnection, rowKey: string
 function sameIdentity(a: Identity | null | undefined, b: Identity | null | undefined): boolean {
   if (!a || !b) return false;
   return a.isEqual(b) || b.isEqual(a);
+}
+
+/** Compare replicated `owner` columns so furniture subscribers don't thrash when identity refs differ for the same key. */
+export function apartmentUnitOwnerEqual(
+  a: ApartmentUnit["owner"],
+  b: ApartmentUnit["owner"],
+): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.isEqual(b);
+}
+
+/**
+ * Whether wardrobe / bed / footlocker **meshes** should exist for `u` when viewed by `conn`'s identity.
+ *
+ * Below {@link RESIDENTIAL_BAND_MIN_LEVEL}: abandoned stack — replicate full props on unclaimed units.
+ * On the top residential slab: shells, vacant penthouse stubs, or other people's units stay **empty**;
+ * **only YOUR {@link UNIT_STATE_CLAIMED} apartment** renders furniture so neighbor apartments read as inhabited shells.
+ */
+export function residentInteriorPropsVisibleForViewer(
+  conn: DbConnection | null | undefined,
+  u: ApartmentUnit,
+): boolean {
+  if ((u.level as number) < RESIDENTIAL_BAND_MIN_LEVEL) return true;
+  const identity = conn?.identity;
+  if (!identity) return false;
+  return u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, identity);
 }
 
 /**
