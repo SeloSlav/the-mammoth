@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DbConnection } from "../module_bindings";
-import type { PlayerPose } from "../module_bindings/types";
+import type { PlayerPose, PlayerVitals } from "../module_bindings/types";
 import {
   bumpGuestFeetAutosaveIfDue,
   persistActiveGuestLastWorldPose,
@@ -705,12 +705,33 @@ export async function mountFpSession(
   /** Latest authoritative self pose from `player_pose`. */
   const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
+  /**
+   * `player_pose` replication lags local prediction; never snap feet by distance (that reads as
+   * rubber-banding). Only snap on respawn (`player_vitals` dead → alive) via
+   * `applyAuthoritativeFeetSnapFromServerRow` / `pendingRespawnAuthoritativeSnap`.
+   */
+  let pendingRespawnAuthoritativeSnap = false;
 
   /**
    * Wired after `mountDroppedItemsWorld`; first authoritative `player_pose` snap must recenter
    * dropped-item AOI even when it arrives only via `syncAllPoses` / handlers (not guest cache).
    */
   let syncSpatialAoiAfterHydratedSpawn: ((cx: number, cy: number, cz: number) => void) | null = null;
+
+  const applyAuthoritativeFeetSnapFromServerRow = (row: PlayerPose) => {
+    const serverSeq = poseSeqAsBigint(row.seq);
+    pos.set(row.x, row.y, row.z);
+    prevPos.copy(pos);
+    mainRaf.bodyYaw = row.yaw;
+    _displayOffset.set(0, 0, 0);
+    mainRaf.fpRigViewSmoothedReady = false;
+    loco.velocity.set(row.velX, row.velY, row.velZ);
+    loco.grounded = row.grounded !== 0;
+    intentSeq.current = serverSeq;
+    moveIntentQueue.items.length = 0;
+    moveIntentQueue.head = 0;
+    syncSpatialAoiFromFeet(row.x, row.y, row.z);
+  };
 
   const ingestPose = (row: PlayerPose) => {
     if (!(conn.identity?.isEqual(row.identity) ?? false)) return;
@@ -721,17 +742,24 @@ export async function mountFpSession(
     serverPose.velX = row.velX;
     serverPose.velY = row.velY;
     serverPose.velZ = row.velZ;
+    const serverSeq = poseSeqAsBigint(row.seq);
     if (!spawnSynced) {
       pos.set(row.x, row.y, row.z);
+      prevPos.copy(pos);
       mainRaf.bodyYaw = row.yaw;
       _displayOffset.set(0, 0, 0);
       mainRaf.fpRigViewSmoothedReady = false;
+      loco.velocity.set(row.velX, row.velY, row.velZ);
+      loco.grounded = row.grounded !== 0;
       spawnSynced = true;
       syncSpatialAoiAfterHydratedSpawn?.(row.x, row.y, row.z);
     } else {
+      if (pendingRespawnAuthoritativeSnap) {
+        applyAuthoritativeFeetSnapFromServerRow(row);
+        pendingRespawnAuthoritativeSnap = false;
+      }
       reconcileLocalPredictionToServer(row);
     }
-    const serverSeq = poseSeqAsBigint(row.seq);
     if (serverSeq > intentSeq.current) intentSeq.current = serverSeq;
   };
 
@@ -770,6 +798,20 @@ export async function mountFpSession(
 
   conn.db.player_pose.onInsert(onPoseInsert);
   conn.db.player_pose.onUpdate(onPoseUpdate);
+
+  const onSelfVitalsUpdate = (_ctx: unknown, oldRow: PlayerVitals, row: PlayerVitals) => {
+    if (!(conn.identity?.isEqual(row.identity) ?? false)) return;
+    const wasDead = oldRow.health <= 0;
+    const nowAlive = row.health > 0;
+    if (!wasDead || !nowAlive || !spawnSynced) return;
+    pendingRespawnAuthoritativeSnap = true;
+    const poseRow = conn.db.player_pose.identity.find(row.identity) as PlayerPose | undefined;
+    if (poseRow) {
+      applyAuthoritativeFeetSnapFromServerRow(poseRow);
+      pendingRespawnAuthoritativeSnap = false;
+    }
+  };
+  conn.db.player_vitals.onUpdate(onSelfVitalsUpdate);
 
   const setSize = () => {
     const w = canvas.clientWidth;
@@ -1216,6 +1258,7 @@ export async function mountFpSession(
     droppedWorld.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
+    conn.db.player_vitals.removeOnUpdate(onSelfVitalsUpdate);
     fpEnvironment.dispose();
     decalManager?.dispose();
     disposeStaticWorldObjectTree(buildingRoot);

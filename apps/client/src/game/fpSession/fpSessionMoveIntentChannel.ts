@@ -56,6 +56,8 @@ export function createFpSessionMoveIntentChannel(
 
   const sendMoveIntent = (input: FpLocomotionInput, jump: boolean, nowMs: number) => {
     if (!conn.identity) return;
+    const vitals = conn.db.player_vitals.identity.find(conn.identity);
+    if (vitals != null && vitals.health <= 0) return;
     intentSeq.current += 1n;
     const bits = encodeMoveIntentBits(input, jump);
     const replacePendingSameStep =

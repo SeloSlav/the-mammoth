@@ -115,8 +115,8 @@ const UNCLAIMED_APARTMENT_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
 /// Hard cap on main (weapon-tier) apartment loot rows per refresh — keeps DB + client AOI load bounded.
 const MAX_APARTMENT_MAIN_LOOT_ROWS: usize = 26;
 /// Per unclaimed unit (stable for a given refresh salt): pass rate before the cap trims the tail.
-/// Many units stay empty even when unclaimed — scavenging is unreliable like real squatters' luck.
-const APARTMENT_LOOT_UNIT_PASS_PERCENT: u64 = 42;
+/// (~62% ⇒ most floors show loot without spamming every unit — cap still bounds DB/replication.)
+const APARTMENT_LOOT_UNIT_PASS_PERCENT: u64 = 62;
 /// After a unit rolls main loot, chance it also gets a scrap pile (rest are firearms/melee/ammo only).
 const APARTMENT_SCRAP_SPAWN_PERCENT: u64 = 60;
 /// First slot index reserved for apartment scrap rows (after the max possible main-apartment block).

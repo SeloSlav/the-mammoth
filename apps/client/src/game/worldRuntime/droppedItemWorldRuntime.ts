@@ -1,11 +1,9 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { and } from "spacetimedb";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
-import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
-import { tables } from "../../module_bindings";
+import type { DbConnection } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 
 /** Horizontal pickup radius (m). Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ`. */
@@ -236,6 +234,7 @@ export type MountDroppedItemsWorldOptions = {
 export function mountDroppedItemsWorld(
   scene: THREE.Scene,
   conn: DbConnection,
+  /** @deprecated Ignored: baseline `SELECT * FROM dropped_item` already replicates all rows. Kept for call-site stability. */
   aoiHalfM: number,
   options?: MountDroppedItemsWorldOptions,
 ): {
@@ -243,6 +242,7 @@ export function mountDroppedItemsWorld(
   tryPickupNearest: (x: number, y: number, z: number) => void;
   dispose: () => void;
 } {
+  void aoiHalfM;
   const root = new THREE.Group();
   root.name = "dropped_items";
   scene.add(root);
@@ -256,8 +256,6 @@ export function mountDroppedItemsWorld(
 
   const resolvedBandOpts =
     options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
-
-  let droppedSub: SubscriptionHandle | null = null;
 
   const prepareLoadedSceneForTemplate = (scene: THREE.Group): void => {
     scene.traverse((o) => {
@@ -314,9 +312,10 @@ export function mountDroppedItemsWorld(
   };
 
   const spawnFallbackBox = (key: string, row: DroppedItem) => {
+    /** Unlit so pickups stay visible in dim interiors / WebGPU without relying on scene fill lights. */
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.14, 0.04, 0.24),
-      new THREE.MeshStandardMaterial({ color: 0x7a8a9a, metalness: 0.2, roughness: 0.75 }),
+      new THREE.MeshBasicMaterial({ color: 0x9aa8b8 }),
     );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -416,22 +415,16 @@ export function mountDroppedItemsWorld(
   conn.db.dropped_item.onUpdate(onRowChange);
   conn.db.dropped_item.onDelete(onRowChange);
 
-  const subscribeAoi = (cx: number, cz: number) => {
-    droppedSub?.unsubscribe();
-    const x0 = cx - aoiHalfM;
-    const x1 = cx + aoiHalfM;
-    const z0 = cz - aoiHalfM;
-    const z1 = cz + aoiHalfM;
-    const query = tables.dropped_item.where((r) =>
-      and(r.x.gte(x0), r.x.lte(x1), r.z.gte(z0), r.z.lte(z1)),
-    );
-    droppedSub = conn
-      .subscriptionBuilder()
-      .onApplied(() => {
-        syncFromDb();
-      })
-      .subscribe(query);
+  /**
+   * Chunked baseline already includes `SELECT * FROM dropped_item` — the local cache holds every row.
+   * A second AOI subscription only added refcount churn on recentre; visuals sync from `conn.db` alone.
+   * Call this after spawn / teleport so meshes catch any rows that landed before listeners were wired.
+   */
+  const subscribeAoi = (_cx: number, _cz: number) => {
+    syncFromDb();
   };
+
+  syncFromDb();
 
   const tryPickupNearest = (x: number, y: number, z: number) => {
     if (!conn.identity) return;
@@ -460,8 +453,6 @@ export function mountDroppedItemsWorld(
   };
 
   const dispose = () => {
-    droppedSub?.unsubscribe();
-    droppedSub = null;
     conn.db.dropped_item.removeOnInsert(onRowChange);
     conn.db.dropped_item.removeOnUpdate(onRowChange);
     conn.db.dropped_item.removeOnDelete(onRowChange);

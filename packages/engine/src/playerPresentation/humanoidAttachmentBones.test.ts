@@ -25,18 +25,41 @@ describe("resolveSkinnedHumanoidHandBone", () => {
     expect(resolveSkinnedHumanoidHandBone(root, "right")).toBe(hand);
   });
 
+  it("falls back to SkinnedMesh.skeleton.bones when the hand is not in the scene graph", () => {
+    const root = new THREE.Group();
+    const hand = new THREE.Bone();
+    hand.name = "RightHand";
+    const mesh = new THREE.SkinnedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial(),
+    );
+    mesh.bind(new THREE.Skeleton([hand]));
+    root.add(mesh);
+    expect(resolveSkinnedHumanoidHandBone(root, "right")).toBe(hand);
+  });
+
   it("returns null when no known name exists", () => {
     const root = new THREE.Group();
     root.add(new THREE.Bone());
     expect(resolveSkinnedHumanoidHandBone(root, "right")).toBeNull();
   });
 
-  it("caches per model root", () => {
+  it("caches successful right-hand hits per model root", () => {
     const root = new THREE.Group();
     const hand = new THREE.Bone();
     hand.name = "RightHand";
     root.add(hand);
     expect(resolveSkinnedHumanoidHandBone(root, "right")).toBe(hand);
+    expect(resolveSkinnedHumanoidHandBone(root, "right")).toBe(hand);
+  });
+
+  it("does not cache null so a later valid rig still resolves", () => {
+    const root = new THREE.Group();
+    root.add(new THREE.Bone());
+    expect(resolveSkinnedHumanoidHandBone(root, "right")).toBeNull();
+    const hand = new THREE.Bone();
+    hand.name = "RightHand";
+    root.add(hand);
     expect(resolveSkinnedHumanoidHandBone(root, "right")).toBe(hand);
   });
 });

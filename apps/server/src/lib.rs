@@ -34,6 +34,7 @@ mod spawn_routing;
 mod stair_runtime_overlay;
 mod world_sound;
 
+use crate::movement::player_input;
 use crate::pose::player_pose;
 use accounts::{user, User};
 use spacetimedb::{ReducerContext, Table};
@@ -134,17 +135,31 @@ pub fn respawn_player(ctx: &ReducerContext, mode: u8) {
     if !player_vitals::is_player_dead(ctx, id) {
         return;
     }
+    let prev_pose = ctx.db.player_pose().identity().find(&id);
+    let base_seq = prev_pose.map(|p| p.seq).unwrap_or(0);
+    let in_seq = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&id)
+        .map(|i| i.intent_seq)
+        .unwrap_or(0);
+
     let bed_pose = if mode == 1 {
         apartments::spawn_pose_owned_bed(ctx, id)
     } else {
         None
     };
-    let sp = if let Some(bed) = bed_pose {
+    let mut sp = if let Some(bed) = bed_pose {
         apartments::lock_owned_residential_doors(ctx, id);
         bed
     } else {
         spawn_routing::random_public_spawn_pose(ctx, id)
     };
+    // Solo client may have advanced `intent_seq` while dead (snapshots rejected). Jump `pose.seq`
+    // past those so the first live snapshot cannot stomp the spawn pose.
+    sp.seq = base_seq.max(in_seq).saturating_add(1);
+
     let yaw = sp.yaw;
     ctx.db.player_pose().identity().update(sp);
     movement::reset_player_input_row(ctx, id, yaw);

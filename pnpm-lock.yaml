@@ -376,6 +376,9 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      '@types/node':
+        specifier: ^24.12.2
+        version: 24.12.2
       '@types/three':
         specifier: ^0.183.1
         version: 0.183.1

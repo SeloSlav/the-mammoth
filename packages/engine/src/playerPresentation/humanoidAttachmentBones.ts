@@ -22,7 +22,8 @@ export const SKINNED_HUMANOID_RIGHT_HAND_BONE_NAMES: readonly string[] = [
   "R_Hand",
 ];
 
-const _rightHandBoneCache = new WeakMap<THREE.Object3D, THREE.Object3D | null>();
+/** Only cache successful hits — never cache `null` (avoids sticky float fallback if resolve ran too early). */
+const _rightHandBoneCache = new WeakMap<THREE.Object3D, THREE.Object3D>();
 
 const SKINNED_HUMANOID_LEFT_HAND_BONE_NAMES: readonly string[] = [
   "LeftHand",
@@ -38,31 +39,84 @@ const SKINNED_HUMANOID_LEFT_HAND_BONE_NAMES: readonly string[] = [
   "L_Hand",
 ];
 
+function isSkinnedMeshObject(obj: THREE.Object3D): obj is THREE.SkinnedMesh {
+  return (obj as THREE.SkinnedMesh).isSkinnedMesh === true;
+}
+
+function isBoneObject(obj: THREE.Object3D): boolean {
+  return (obj as THREE.Bone).isBone === true;
+}
+
+/**
+ * Some GLTF / import paths keep valid bind bones only on {@link THREE.SkinnedMesh#skeleton}; a scene
+ * traversal may not expose every bone the way `getObjectByName` expects. Shipped player bodies still
+ * resolve via the graph, but this covers edge rigs and tests.
+ *
+ * Uses `isSkinnedMesh` instead of `instanceof` so WebGPU and non-WebGPU Three builds both match.
+ */
+function findHandBoneFromSkinnedMeshes(
+  modelRoot: THREE.Object3D,
+  names: readonly string[],
+): THREE.Object3D | null {
+  let result: THREE.Object3D | null = null;
+  modelRoot.traverse((obj) => {
+    if (result !== null) return;
+    if (!isSkinnedMeshObject(obj) || !obj.skeleton?.bones?.length) return;
+    for (const name of names) {
+      const b = obj.skeleton.bones.find((bn) => bn.name === name);
+      if (b) {
+        result = b;
+        break;
+      }
+    }
+  });
+  return result;
+}
+
+function resolveRightHandFromSceneGraph(modelRoot: THREE.Object3D): THREE.Object3D | null {
+  for (const name of SKINNED_HUMANOID_RIGHT_HAND_BONE_NAMES) {
+    const found = modelRoot.getObjectByName(name);
+    if (!found) continue;
+    if (isBoneObject(found)) return found;
+  }
+  return null;
+}
+
+function resolveLeftHandFromSceneGraph(modelRoot: THREE.Object3D): THREE.Object3D | null {
+  for (const name of SKINNED_HUMANOID_LEFT_HAND_BONE_NAMES) {
+    const found = modelRoot.getObjectByName(name);
+    if (!found) continue;
+    if (isBoneObject(found)) return found;
+  }
+  return null;
+}
+
 /**
  * Finds a descendant Object3D (usually a {@link THREE.Bone}) to parent props/weapons for third-person.
- * Cached per `modelRoot` instance (each cloned avatar).
+ * Caches successful right-hand hits per `modelRoot` (each cloned avatar). **Never** caches `null`.
  */
 export function resolveSkinnedHumanoidHandBone(
   modelRoot: THREE.Object3D,
   hand: "right" | "left",
 ): THREE.Object3D | null {
+  const names = hand === "right" ? SKINNED_HUMANOID_RIGHT_HAND_BONE_NAMES : SKINNED_HUMANOID_LEFT_HAND_BONE_NAMES;
+
   if (hand === "right") {
-    const hit = _rightHandBoneCache.get(modelRoot);
-    if (hit !== undefined) return hit;
-    let bone: THREE.Object3D | null = null;
-    for (const name of SKINNED_HUMANOID_RIGHT_HAND_BONE_NAMES) {
-      const found = modelRoot.getObjectByName(name);
-      if (found) {
-        bone = found;
-        break;
-      }
+    const cached = _rightHandBoneCache.get(modelRoot);
+    if (cached) return cached;
+    let bone = resolveRightHandFromSceneGraph(modelRoot);
+    if (!bone) {
+      bone = findHandBoneFromSkinnedMeshes(modelRoot, names);
     }
-    _rightHandBoneCache.set(modelRoot, bone);
+    if (bone) {
+      _rightHandBoneCache.set(modelRoot, bone);
+    }
     return bone;
   }
-  for (const name of SKINNED_HUMANOID_LEFT_HAND_BONE_NAMES) {
-    const found = modelRoot.getObjectByName(name);
-    if (found) return found;
+
+  let bone = resolveLeftHandFromSceneGraph(modelRoot);
+  if (!bone) {
+    bone = findHandBoneFromSkinnedMeshes(modelRoot, names);
   }
-  return null;
+  return bone;
 }

@@ -35,7 +35,10 @@ export const MOVE_INTENT_MOVE_BITS = BIT_FORWARD | BIT_BACK | BIT_LEFT | BIT_RIG
 export const POSE_AOI_HALF = 42;
 /** Slightly wider than pose AOI so swing/foot events at the edge are still subscribed. */
 export const WORLD_SOUND_AOI_HALF = POSE_AOI_HALF + 8;
-/** Megablock yard loot scatters farther than replicated feet AOI — avoid empty drop cache until recenter kicks. */
+/**
+ * Passed into {@link mountDroppedItemsWorld} for API compatibility; ignored (baseline subscribes all `dropped_item`).
+ * Kept in case we later switch to AOI-only replication for scale.
+ */
 export const DROPPED_ITEM_SUBSCRIBE_HALF_M = Math.max(POSE_AOI_HALF, 150);
 /** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
 export const POSE_AOI_RECENTER = 14;

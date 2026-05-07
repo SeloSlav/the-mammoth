@@ -421,6 +421,12 @@ export class RemoteHeldWeaponPresentation {
       this.weaponMount.rotation.copy(REMOTE_WEAPON_FLOAT_LOCAL_EULER);
     }
     this.weaponMount.scale.set(1, 1, 1);
+
+    const layerMask = parent.layers.mask;
+    this.weaponMount.layers.mask = layerMask;
+    this.weaponMount.traverse((o) => {
+      o.layers.mask = layerMask;
+    });
   }
 
   syncWeaponPresentation(
@@ -464,6 +470,10 @@ export class RemoteHeldWeaponPresentation {
       });
       this.weaponMount.add(this.weapon.root);
       this.weapon.root.add(this.flashRoot);
+      const layerMask = this.weaponMount.layers.mask;
+      this.weapon.root.traverse((o) => {
+        o.layers.mask = layerMask;
+      });
       this.visEquipped = nextEquip;
       this.weaponMount.visible = true;
     }
