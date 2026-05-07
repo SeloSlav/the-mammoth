@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { buildOwnedApartmentReferenceEnclosure } from "./editorMyApartmentReferenceEnclosure.js";
 
 /**
  * Minimal preview floor for owned-apartment builtin authoring (no mammoth building graph).
@@ -28,6 +29,9 @@ export function buildOwnedApartmentAuthoringShell(previewSizeM: number): THREE.G
   );
   edge.position.copy(floor.position);
   root.add(edge);
+
+  const referenceRoom = buildOwnedApartmentReferenceEnclosure(W);
+  root.add(referenceRoom);
 
   return root;
 }

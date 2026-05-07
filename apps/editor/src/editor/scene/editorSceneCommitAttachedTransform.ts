@@ -282,23 +282,23 @@ export function commitEditorAttachedTransform(opts: {
 
     store.patchOwnedApartmentBuiltins((d) => {
       if (pieceKey === "bed") {
-        return { ...d, bedFx: fx, bedFz: fz, bedDy: dyFromSlab, yawRad: yaw };
+        return { ...d, bedFx: fx, bedFz: fz, bedDy: dyFromSlab, bedYawRad: yaw };
       }
       if (pieceKey === "wardrobe") {
         return {
           ...d,
           wardrobeFx: fx,
           wardrobeFz: fz,
-          furnitureFloorDy: dyFromSlab,
-          yawRad: yaw,
+          wardrobeDy: dyFromSlab,
+          wardrobeYawRad: yaw,
         };
       }
       return {
         ...d,
         footFx: fx,
         footFz: fz,
-        furnitureFloorDy: dyFromSlab,
-        yawRad: yaw,
+        footDy: dyFromSlab,
+        footYawRad: yaw,
       };
     });
 

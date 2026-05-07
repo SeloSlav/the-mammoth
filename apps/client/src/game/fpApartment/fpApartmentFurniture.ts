@@ -21,7 +21,7 @@ import {
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 import {
-  applyOwnedApartmentBuiltinsToViewerUnit,
+  resolveApartmentFurniturePose,
   loadOwnedApartmentBuiltinsDocFromContent,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
@@ -372,12 +372,7 @@ export async function mountFpApartmentFurniture(opts: {
       return;
     }
 
-    const uModel =
-      builtinsFromContent !== null
-        ? applyOwnedApartmentBuiltinsToViewerUnit(u, builtinsFromContent)
-        : u;
-    const floorY = uModel.footY;
-    const furnitureYaw = uModel.bedYaw;
+    const pose = resolveApartmentFurniturePose(u, builtinsFromContent);
 
     const unitGroup = new THREE.Group();
     unitGroup.name = `apartment_furniture_${u.unitKey}`;
@@ -387,9 +382,9 @@ export async function mountFpApartmentFurniture(opts: {
 
     const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
     w.scale.setScalar(WARDROBE_VIS_SCALE);
-    w.position.set(uModel.wardrobeX, 0, uModel.wardrobeZ);
-    w.rotation.y = furnitureYaw;
-    snapCloneBottomToWorldFloor(w, floorY);
+    w.position.set(pose.wardrobe.x, 0, pose.wardrobe.z);
+    w.rotation.y = pose.wardrobe.yaw;
+    snapCloneBottomToWorldFloor(w, pose.wardrobe.snapFloorY);
     keepCloneInsideUnitXZ(w, u, WARDROBE_BOUNDS_INSET_M);
     w.updateMatrixWorld(true);
     const wardrobeBounds = new THREE.Box3().setFromObject(w);
@@ -417,9 +412,9 @@ export async function mountFpApartmentFurniture(opts: {
 
     const f = clonePropScene(readyTemplates.footlocker, levelIdx);
     f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
-    f.position.set(uModel.footX, 0, uModel.footZ);
-    f.rotation.y = furnitureYaw;
-    snapCloneBottomToWorldFloor(f, floorY);
+    f.position.set(pose.footlocker.x, 0, pose.footlocker.z);
+    f.rotation.y = pose.footlocker.yaw;
+    snapCloneBottomToWorldFloor(f, pose.footlocker.snapFloorY);
     keepCloneInsideUnitXZ(f, u, FOOTLOCKER_BOUNDS_INSET_M);
     f.updateMatrixWorld(true);
     const footlockerBounds = new THREE.Box3().setFromObject(f);
@@ -447,9 +442,9 @@ export async function mountFpApartmentFurniture(opts: {
 
     const b = clonePropScene(readyTemplates.bed, levelIdx);
     b.scale.setScalar(BED_VIS_SCALE);
-    b.position.set(uModel.bedX, 0, uModel.bedZ);
-    b.rotation.y = uModel.bedYaw;
-    snapCloneBottomToWorldFloor(b, uModel.bedY);
+    b.position.set(pose.bed.x, 0, pose.bed.z);
+    b.rotation.y = pose.bed.yaw;
+    snapCloneBottomToWorldFloor(b, pose.bed.y);
     keepCloneInsideUnitXZ(b, u, BED_BOUNDS_INSET_M);
     unitGroup.add(b);
 

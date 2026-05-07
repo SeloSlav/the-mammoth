@@ -54,26 +54,26 @@ function previewWorldFromDoc(
   bed: { x: number; z: number; yaw: number; snapFloorY: number };
 } {
   const W = doc.previewSizeM;
-  const yaw = doc.yawRad;
-  const furnSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.furnitureFloorDy;
+  const wardrobeSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.wardrobeDy;
+  const footSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.footDy;
   const bedSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.bedDy;
   return {
     wardrobe: {
       x: doc.wardrobeFx * W,
       z: doc.wardrobeFz * W,
-      yaw,
-      snapFloorY: furnSnap,
+      yaw: doc.wardrobeYawRad,
+      snapFloorY: wardrobeSnap,
     },
     foot: {
       x: doc.footFx * W,
       z: doc.footFz * W,
-      yaw,
-      snapFloorY: furnSnap,
+      yaw: doc.footYawRad,
+      snapFloorY: footSnap,
     },
     bed: {
       x: doc.bedFx * W,
       z: doc.bedFz * W,
-      yaw,
+      yaw: doc.bedYawRad,
       snapFloorY: bedSnap,
     },
   };

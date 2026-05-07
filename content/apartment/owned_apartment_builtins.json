@@ -8,6 +8,9 @@
   "wardrobeFz": 0.9413596349225515,
   "footFx": 0.6924616781835501,
   "footFz": 0.9085345655031289,
-  "furnitureFloorDy": 0,
-  "yawRad": -0.008659867564331968
+  "wardrobeDy": 0,
+  "footDy": 0,
+  "bedYawRad": -0.008659867564331968,
+  "wardrobeYawRad": -0.008659867564331968,
+  "footYawRad": -0.008659867564331968
 }

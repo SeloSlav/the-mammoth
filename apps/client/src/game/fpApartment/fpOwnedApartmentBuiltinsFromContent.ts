@@ -29,27 +29,59 @@ export async function loadOwnedApartmentBuiltinsDocFromContent(): Promise<OwnedA
   }
 }
 
-export function applyOwnedApartmentBuiltinsToViewerUnit(
+export type ApartmentFurniturePose = {
+  bed: { x: number; y: number; z: number; yaw: number };
+  wardrobe: { x: number; z: number; yaw: number; snapFloorY: number };
+  footlocker: { x: number; z: number; yaw: number; snapFloorY: number };
+};
+
+/**
+ * Resolves world-space furniture pose for one unit, merging authoritative `ApartmentUnit` rows with
+ * optional content JSON overrides.
+ */
+export function resolveApartmentFurniturePose(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
-): ApartmentUnit {
-  if (!doc) return u;
+): ApartmentFurniturePose {
+  if (!doc) {
+    const fy = u.footY;
+    const yw = u.bedYaw;
+    return {
+      bed: { x: u.bedX, y: u.bedY, z: u.bedZ, yaw: yw },
+      wardrobe: {
+        x: u.wardrobeX,
+        z: u.wardrobeZ,
+        yaw: yw,
+        snapFloorY: fy,
+      },
+      footlocker: { x: u.footX, z: u.footZ, yaw: yw, snapFloorY: fy },
+    };
+  }
   const sx = (u.boundMaxX as number) - (u.boundMinX as number);
   const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
-  const yw = doc.yawRad;
+  const wardrobeSnap = bminy + doc.wardrobeDy;
+  const footSnap = bminy + doc.footDy;
   return {
-    ...u,
-    bedX: bminx + doc.bedFx * sx,
-    bedZ: bminz + doc.bedFz * sz,
-    bedY: bminy + doc.bedDy,
-    bedYaw: yw,
-    wardrobeX: bminx + doc.wardrobeFx * sx,
-    wardrobeZ: bminz + doc.wardrobeFz * sz,
-    footX: bminx + doc.footFx * sx,
-    footZ: bminz + doc.footFz * sz,
-    footY: bminy + doc.furnitureFloorDy,
+    bed: {
+      x: bminx + doc.bedFx * sx,
+      y: bminy + doc.bedDy,
+      z: bminz + doc.bedFz * sz,
+      yaw: doc.bedYawRad,
+    },
+    wardrobe: {
+      x: bminx + doc.wardrobeFx * sx,
+      z: bminz + doc.wardrobeFz * sz,
+      yaw: doc.wardrobeYawRad,
+      snapFloorY: wardrobeSnap,
+    },
+    footlocker: {
+      x: bminx + doc.footFx * sx,
+      z: bminz + doc.footFz * sz,
+      yaw: doc.footYawRad,
+      snapFloorY: footSnap,
+    },
   };
 }
