@@ -4,6 +4,7 @@ import type { HudToastEvent } from "../module_bindings/types";
 import {
   HUD_TOAST_KIND_CRAFT_COMPLETE,
   HUD_TOAST_KIND_ITEM_RECEIVED,
+  HUD_TOAST_KIND_NOTICE,
 } from "../game/crafting/fpCraftRecipes";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import {
@@ -81,6 +82,11 @@ export function MammothToastHud({ conn }: { conn: DbConnection }) {
           text: `Crafted ${fmtDef(defId, qty)}`,
           tint: "success",
         });
+      } else if (k === HUD_TOAST_KIND_NOTICE) {
+        const text = defId.trim();
+        if (text.length > 0) {
+          pushToast({ text, tint: "default" });
+        }
       }
     };
 

@@ -31,8 +31,8 @@ import PlayerVitalsTickStepReducer from "../player_vitals_tick_step_reducer";
 import RefreshWorldLootSpawnsReducer from "../refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "../reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "../respawn_player_reducer";
-import SendChatReducer from "../send_chat_reducer";
 import SetActiveHotbarSlotReducer from "../set_active_hotbar_slot_reducer";
+import SetAvatarBodyReducer from "../set_avatar_body_reducer";
 import SetUsernameReducer from "../set_username_reducer";
 import StashMoveItemToSlotReducer from "../stash_move_item_to_slot_reducer";
 import StashPullItemReducer from "../stash_pull_item_reducer";
@@ -42,7 +42,7 @@ import StashPushItemReducer from "../stash_push_item_reducer";
 import StashPushItemToSlotReducer from "../stash_push_item_to_slot_reducer";
 import SubmitFirearmShotReducer from "../submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
-import SubmitMoveIntentReducer from "../submit_move_intent_reducer";
+import SubmitPlayerLocomotionSnapshotReducer from "../submit_player_locomotion_snapshot_reducer";
 import TickCraftQueueStepReducer from "../tick_craft_queue_step_reducer";
 
 export type ApartmentDoorSetParams = __Infer<typeof ApartmentDoorSetReducer>;
@@ -70,8 +70,8 @@ export type PlayerVitalsTickStepParams = __Infer<typeof PlayerVitalsTickStepRedu
 export type RefreshWorldLootSpawnsParams = __Infer<typeof RefreshWorldLootSpawnsReducer>;
 export type ReinforceApartmentPulseParams = __Infer<typeof ReinforceApartmentPulseReducer>;
 export type RespawnPlayerParams = __Infer<typeof RespawnPlayerReducer>;
-export type SendChatParams = __Infer<typeof SendChatReducer>;
 export type SetActiveHotbarSlotParams = __Infer<typeof SetActiveHotbarSlotReducer>;
+export type SetAvatarBodyParams = __Infer<typeof SetAvatarBodyReducer>;
 export type SetUsernameParams = __Infer<typeof SetUsernameReducer>;
 export type StashMoveItemToSlotParams = __Infer<typeof StashMoveItemToSlotReducer>;
 export type StashPullItemParams = __Infer<typeof StashPullItemReducer>;
@@ -81,6 +81,6 @@ export type StashPushItemParams = __Infer<typeof StashPushItemReducer>;
 export type StashPushItemToSlotParams = __Infer<typeof StashPushItemToSlotReducer>;
 export type SubmitFirearmShotParams = __Infer<typeof SubmitFirearmShotReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
-export type SubmitMoveIntentParams = __Infer<typeof SubmitMoveIntentReducer>;
+export type SubmitPlayerLocomotionSnapshotParams = __Infer<typeof SubmitPlayerLocomotionSnapshotReducer>;
 export type TickCraftQueueStepParams = __Infer<typeof TickCraftQueueStepReducer>;
 

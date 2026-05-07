@@ -13,4 +13,5 @@ import {
 export default __t.row({
   identity: __t.identity().primaryKey(),
   username: __t.option(__t.string()),
+  avatarBody: __t.u8().name("avatar_body"),
 });

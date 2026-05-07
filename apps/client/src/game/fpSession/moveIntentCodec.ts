@@ -12,7 +12,7 @@ export const BIT_CROUCH = 1 << 6;
 export const BIT_JUMP_HELD = 1 << 7;
 
 /**
- * Pack WASD / sprint / crouch / jump into the `bits` field for `submit_move_intent`.
+ * Pack WASD / sprint / crouch / jump into `bits` for `submitPlayerLocomotionSnapshot`.
  * `jump` is a one-shot (server applies when grounded); set from `jumpQueued` before integrating.
  */
 export function encodeMoveIntentBits(

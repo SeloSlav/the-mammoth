@@ -26,8 +26,6 @@ pub const RAY_AABB_T_ENTER_EPS: f32 = 4e-4;
 
 const PLAYER_SPATIAL_CELL_XZ_M: f32 = 1.25;
 const PLAYER_SPATIAL_CELL_Y_M: f32 = 2.0;
-const PLAYER_COLLISION_PASSES: usize = 4;
-const PLAYER_COLLISION_EPS_M: f32 = 0.001;
 
 const MELEE_REACH_M: f32 = 1.7;
 const MELEE_HIT_RADIUS_M: f32 = 0.34;
@@ -221,8 +219,6 @@ pub fn ray_aabb_intersect_enter(
     Some(RayAabbHit { t_hit })
 }
 
-/// Selected hotbar item `def_id` when the combat rail points at a melee weapon with authored
-/// catalog damage; otherwise `None`.
 /// Selected hotbar `def_id` when a slot is active, ignoring catalog weapon-vs-consumable rules.
 pub fn active_hotbar_item_def_id(ctx: &ReducerContext, attacker: Identity) -> Option<String> {
     let row = ctx.db.player_active_hotbar().identity().find(&attacker)?;
@@ -244,57 +240,6 @@ pub fn active_hotbar_weapon_def_id(ctx: &ReducerContext, attacker: Identity) -> 
 
 pub fn melee_damage_for_def_id(def_id: &str) -> f32 {
     items_catalog::melee_damage(def_id).unwrap_or(0.0)
-}
-
-pub fn resolve_player_player_collisions(samples: &mut [PlayerBodySample]) {
-    if samples.len() < 2 {
-        return;
-    }
-    let mut nearby = Vec::<usize>::with_capacity(32);
-    let mut seen = vec![false; samples.len()];
-    for _ in 0..PLAYER_COLLISION_PASSES {
-        let grid = PlayerSpatialHash::from_samples(samples);
-        for i in 0..samples.len() {
-            let body = samples[i];
-            grid.gather_indices_in_bounds(
-                body.x - PLAYER_BODY_RADIUS_M * 2.0,
-                body.y,
-                body.z - PLAYER_BODY_RADIUS_M * 2.0,
-                body.x + PLAYER_BODY_RADIUS_M * 2.0,
-                body.y + body.body_height,
-                body.z + PLAYER_BODY_RADIUS_M * 2.0,
-                &mut nearby,
-                &mut seen,
-            );
-            for &j in &nearby {
-                if j <= i {
-                    continue;
-                }
-                let other = samples[j];
-                if !vertical_overlap(body.y, body.body_height, other.y, other.body_height) {
-                    continue;
-                }
-                let dx = samples[j].x - samples[i].x;
-                let dz = samples[j].z - samples[i].z;
-                let dist_sq = dx * dx + dz * dz;
-                let min_dist = PLAYER_BODY_RADIUS_M * 2.0;
-                if dist_sq >= min_dist * min_dist {
-                    continue;
-                }
-                let dist = dist_sq.sqrt();
-                let (nx, nz) = if dist > 1e-5 {
-                    (dx / dist, dz / dist)
-                } else {
-                    (1.0, 0.0)
-                };
-                let push = (min_dist - dist + PLAYER_COLLISION_EPS_M) * 0.5;
-                samples[i].x -= nx * push;
-                samples[i].z -= nz * push;
-                samples[j].x += nx * push;
-                samples[j].z += nz * push;
-            }
-        }
-    }
 }
 
 /// Melee hit candidate resolution: horizontal arc picks the victim; optional `aim_dir_world` is a
@@ -470,30 +415,6 @@ mod tests {
     }
 
     #[test]
-    fn collision_resolution_separates_overlapping_players() {
-        let mut samples = vec![
-            PlayerBodySample {
-                identity: id(1),
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-                body_height: PLAYER_BODY_HEIGHT_STAND_M,
-            },
-            PlayerBodySample {
-                identity: id(2),
-                x: 0.15,
-                y: 0.0,
-                z: 0.0,
-                body_height: PLAYER_BODY_HEIGHT_STAND_M,
-            },
-        ];
-        resolve_player_player_collisions(&mut samples);
-        let dx = samples[1].x - samples[0].x;
-        let dz = samples[1].z - samples[0].z;
-        assert!((dx * dx + dz * dz).sqrt() >= PLAYER_BODY_RADIUS_M * 2.0 - 1e-3);
-    }
-
-    #[test]
     fn headshot_zone_detects_top_of_capsule() {
         let feet = 10.0;
         let h = PLAYER_BODY_HEIGHT_STAND_M;
@@ -530,26 +451,4 @@ mod tests {
         assert!(t > 0.0 && t < 2.0);
     }
 
-    #[test]
-    fn collision_resolution_ignores_players_on_other_floors() {
-        let mut samples = vec![
-            PlayerBodySample {
-                identity: id(1),
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-                body_height: PLAYER_BODY_HEIGHT_STAND_M,
-            },
-            PlayerBodySample {
-                identity: id(2),
-                x: 0.0,
-                y: 4.0,
-                z: 0.0,
-                body_height: PLAYER_BODY_HEIGHT_STAND_M,
-            },
-        ];
-        resolve_player_player_collisions(&mut samples);
-        assert_eq!(samples[0].x, 0.0);
-        assert_eq!(samples[1].x, 0.0);
-    }
 }

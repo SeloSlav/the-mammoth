@@ -1,7 +1,5 @@
 import * as THREE from "three";
-import { and, or } from "spacetimedb";
-import type { DbConnection, SubscriptionHandle } from "../module_bindings";
-import { tables } from "../module_bindings";
+import type { DbConnection } from "../module_bindings";
 import type { PlayerPose } from "../module_bindings/types";
 import {
   assertWebGpuAdapterOrThrow,
@@ -12,9 +10,10 @@ import {
   fpLocomotionConstants,
   queueFpJump,
   PlayerPresentationManager,
+  REMOTE_PLAYER_BODY_URI_FEMALE,
+  REMOTE_PLAYER_BODY_URI_MALE,
   type FpLocomotionInput,
 } from "@the-mammoth/engine";
-import type { ReplicatedPlayerSnapshot } from "@the-mammoth/game";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
@@ -22,11 +21,6 @@ import {
   maxBuildingLevelIndex,
   parseFloorDoc,
 } from "@the-mammoth/world";
-import {
-  POSE_AOI_RECENTER_Y_M,
-  POSE_AOI_Y_HALF_M,
-} from "./fpRemote/remotePlayerVisibility.js";
-import { visitRemotePlayerCollisionAabbsInXZ } from "./fpRemote/remotePlayerCollisionAabbs.js";
 import {
   appendApartmentFurnitureInteriorMeshes,
   collectFpSessionUnitInteriorShellMeshes,
@@ -58,9 +52,7 @@ import {
   forgetMegablockStaticWorldMeshCache,
   waitMegablockStaticWorldMeshReady,
 } from "./fpSession/fpSessionStaticWorldMeshCache.js";
-import { feedRemotePoseSample, type FpRemotePoseLastXZ } from "./fpSession/fpSessionRemotePoseFeed.js";
 import { floorPayloadByDocId } from "./fpSession/fpSessionContentLoad.js";
-import { PoseInterpBuffer } from "./fpRemote/poseInterpBuffer.js";
 import { effectiveDevGameplayEquippedPrimary } from "./fpDev/devGameplayWeaponOverride.js";
 import {
   fpHotbarDigitKeySuppressedByDebounce,
@@ -130,7 +122,6 @@ import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorC
 import { poseSeqAsBigint } from "./fpSession/fpSessionPoseSeq.js";
 import { resolveAuthoritativeInteractionPose } from "./fpInteraction/fpInteractionAuthority.js";
 import { deliverFpSessionGpuRenderMs, resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
-import { mountFpSessionUserDisplayNameCache } from "./fpSession/fpSessionUserDisplayNameCache.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
 import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpRendering/fpPlanarMirror.js";
@@ -157,13 +148,19 @@ import {
   isFpLoadingDebugEnabled,
 } from "./fpSession/fpLoadingDebug.js";
 
+function localMirrorBodyUriForConn(conn: DbConnection): string {
+  const id = conn.identity;
+  if (!id) return REMOTE_PLAYER_BODY_URI_MALE;
+  const row = conn.db.user.identity.find(id);
+  const raw = row?.avatarBody;
+  const n = typeof raw === "bigint" ? Number(raw) : Number(raw ?? 0);
+  return n === 1 ? REMOTE_PLAYER_BODY_URI_FEMALE : REMOTE_PLAYER_BODY_URI_MALE;
+}
+
 /**
- * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync,
- * capsule proxies for other players (interpolation buffer on remotes).
- *
- * **Local player:** client prediction drives immediate feel, but the server remains authoritative.
- * We spawn from the replicated `player_pose`, simulate locally between ticks, then continuously
- * reconcile back toward the server so interact volumes / elevators / reconnect state stay honest.
+ * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync.
+ * Client simulation owns locomotion + collision; snapshots persist on SpacetimeDB for interactions,
+ * audio AOI, and reconnect — no server-side movement reconciliation.
  */
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
@@ -200,7 +197,6 @@ export async function mountFpSession(
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
-  const fpUserDisplayNameCache = mountFpSessionUserDisplayNameCache(conn);
   const scheduleGpuTimestampResolve = (): void => {
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
     if (!backend?.trackTimestamp) return;
@@ -283,9 +279,6 @@ export async function mountFpSession(
       fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
       fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
     },
-    visitRemotePlayerCollisionAabbsInXZ: (x0, x1, z0, z1, visit) => {
-      visitRemotePlayerCollisionAabbsInXZ(conn, x0, x1, z0, z1, visit);
-    },
   });
   scene.add(fpCollisionDebug.group);
 
@@ -354,6 +347,7 @@ export async function mountFpSession(
     PlayerPresentationManager.create({
       scene,
       fpViewModelParent: headPitch,
+      localMirrorBodyUri: localMirrorBodyUriForConn(conn),
       initialEquippedPrimary: initialHeld,
       onMeleeVisual: (evt) => {
         const dir = new THREE.Vector3();
@@ -411,11 +405,9 @@ export async function mountFpSession(
   };
   const unsubHotbarRail = subscribeFpHotbarSelection(syncActiveHotbarSlotToServer);
 
-  const interp = new PoseInterpBuffer();
-  const lastRemote = new Map<string, FpRemotePoseLastXZ>();
-
   /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
   const pos = new THREE.Vector3(0, 1.35, 0);
+  const poseAoiAnchor = { x: pos.x, y: pos.y, z: pos.z };
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
@@ -440,24 +432,10 @@ export async function mountFpSession(
   };
 
   /**
-   * Smooth display offset — applied to `playerRig.position` on top of the physics `pos`.
+   * Smooth display offset — applied to `playerRig.position` on top of locomotion `pos`.
    *
-   * When the server-authoritative reconcile corrects `pos`, we subtract the same correction
-   * from `_displayOffset` so the rendered position doesn't jump.  Each frame we decay
-   * `_displayOffset` toward zero, making corrections invisible to the player.  This is the
-   * same "prediction error smoothing" used by Valve Source Engine / CS:GO.
-   *
-   * Only the render position is offset — `pos` stays accurate so collision checks and
-   * interaction queries always use the physics-correct position.
-   *
-   * Note: if locomotion is allowed to decay toward zero forever instead of snapping to an exact
-   * rest state, this smoothing layer ends up hiding a constant stream of tiny stop-state
-   * corrections. That presents as "hitching while stopping" even when frame time is fine, so keep
-   * the idle-velocity deadzone in client/server locomotion aligned with this reconcile path.
-   *
-   * While WASD is up during the friction coast, **do not decay** offset — shrinking offset moves
-   * `pos + offset` in world space even when `pos` has almost stopped (felt like a camera hitch).
-   * Once fully settled, offset is **baked into** `pos` so physics matches what you were seeing.
+   * Solo Mammoth: replicated pose mirrors client snapshots (no server collision), so reconcile does not
+   * tug the camera — offset stays near zero except reconnect/spawn paths that snap `pos`.
    */
   const _displayOffset = new THREE.Vector3();
   const _rigViewScratch = new THREE.Vector3();
@@ -545,9 +523,6 @@ export async function mountFpSession(
     jumpHeld: false,
   };
 
-  /** Pre-allocated remote snapshot map — cleared each frame instead of constructed anew. */
-  const _remoteSnapshots = new Map<string, ReplicatedPlayerSnapshot>();
-
   /** Reconcile replay pools — reset in place on every server update (20 Hz); avoid 3× Vec3. */
   const _replayPos = new THREE.Vector3();
   const _replayPrevPos = new THREE.Vector3();
@@ -600,11 +575,6 @@ export async function mountFpSession(
       fpElevators,
       fpApartmentDoors,
       staticCollisionIndex,
-      remotePlayers: {
-        visitCollisionAabbsInXZ: (x0, x1, z0, z1, visit) => {
-          visitRemotePlayerCollisionAabbsInXZ(conn, x0, x1, z0, z1, visit);
-        },
-      },
       doorDebugState: __mmDoorDebugState,
       logDoorDebugFrame,
       logDoorDebugReconcile,
@@ -616,6 +586,15 @@ export async function mountFpSession(
     mainRaf,
     moveIntentQueue,
     maxPendingIntents: MAX_PENDING_INTENTS,
+    samplePose: () => ({
+      x: pos.x,
+      y: pos.y,
+      z: pos.z,
+      velX: loco.velocity.x,
+      velY: loco.velocity.y,
+      velZ: loco.velocity.z,
+      grounded: loco.grounded,
+    }),
   });
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
@@ -706,30 +685,25 @@ export async function mountFpSession(
   let spawnSynced = false;
 
   const ingestPose = (row: PlayerPose) => {
-    const id = row.identity.toHexString();
-    const self = conn.identity?.isEqual(row.identity) ?? false;
-    if (self) {
-      serverPose.x = row.x;
-      serverPose.y = row.y;
-      serverPose.z = row.z;
-      serverPose.grounded = row.grounded !== 0;
-      serverPose.velX = row.velX;
-      serverPose.velY = row.velY;
-      serverPose.velZ = row.velZ;
-      if (!spawnSynced) {
-        pos.set(row.x, row.y, row.z);
-        mainRaf.bodyYaw = row.yaw;
-        _displayOffset.set(0, 0, 0);
-        mainRaf.fpRigViewSmoothedReady = false;
-        spawnSynced = true;
-      } else {
-        reconcileLocalPredictionToServer(row);
-      }
-      const serverSeq = poseSeqAsBigint(row.seq);
-      if (serverSeq > intentSeq.current) intentSeq.current = serverSeq;
-      return;
+    if (!(conn.identity?.isEqual(row.identity) ?? false)) return;
+    serverPose.x = row.x;
+    serverPose.y = row.y;
+    serverPose.z = row.z;
+    serverPose.grounded = row.grounded !== 0;
+    serverPose.velX = row.velX;
+    serverPose.velY = row.velY;
+    serverPose.velZ = row.velZ;
+    if (!spawnSynced) {
+      pos.set(row.x, row.y, row.z);
+      mainRaf.bodyYaw = row.yaw;
+      _displayOffset.set(0, 0, 0);
+      mainRaf.fpRigViewSmoothedReady = false;
+      spawnSynced = true;
+    } else {
+      reconcileLocalPredictionToServer(row);
     }
-    feedRemotePoseSample(interp, id, row, lastRemote);
+    const serverSeq = poseSeqAsBigint(row.seq);
+    if (serverSeq > intentSeq.current) intentSeq.current = serverSeq;
   };
 
   const syncAllPoses = () => {
@@ -755,40 +729,7 @@ export async function mountFpSession(
     },
   });
 
-  let poseAoiSub: SubscriptionHandle | null = null;
-  const poseAoiAnchor = { x: pos.x, y: pos.y, z: pos.z };
-
-  const subscribePoseAoi = (cx: number, cy: number, cz: number) => {
-    const selfId = conn.identity;
-    if (!selfId) return;
-    if (poseAoiSub?.isActive()) {
-      poseAoiSub.unsubscribe();
-    }
-    const x0 = cx - POSE_AOI_HALF;
-    const x1 = cx + POSE_AOI_HALF;
-    const y0 = cy - POSE_AOI_Y_HALF_M;
-    const y1 = cy + POSE_AOI_Y_HALF_M;
-    const z0 = cz - POSE_AOI_HALF;
-    const z1 = cz + POSE_AOI_HALF;
-    const query = tables.player_pose.where((r) =>
-      or(
-        r.identity.eq(selfId),
-        and(
-          r.x.gte(x0),
-          r.x.lte(x1),
-          r.y.gte(y0),
-          r.y.lte(y1),
-          r.z.gte(z0),
-          r.z.lte(z1),
-        ),
-      ),
-    );
-    poseAoiSub = conn
-      .subscriptionBuilder()
-      .onApplied(() => {
-        syncAllPoses();
-      })
-      .subscribe(query);
+  const syncSpatialAoiFromFeet = (cx: number, cy: number, cz: number) => {
     poseAoiAnchor.x = cx;
     poseAoiAnchor.y = cy;
     poseAoiAnchor.z = cz;
@@ -796,7 +737,7 @@ export async function mountFpSession(
     droppedWorld.subscribeAoi(cx, cz);
   };
 
-  subscribePoseAoi(poseAoiAnchor.x, poseAoiAnchor.y, poseAoiAnchor.z);
+  syncSpatialAoiFromFeet(poseAoiAnchor.x, poseAoiAnchor.y, poseAoiAnchor.z);
 
   const setSize = () => {
     const w = canvas.clientWidth;
@@ -1149,14 +1090,11 @@ export async function mountFpSession(
     hotbarConsumableVisual,
     cabMirrors,
     fpEnvironment,
-    buildingWorldBounds,
     stairShaftInteriorLightBounds,
-    interp,
-    _remoteSnapshots,
     _floorVisCamWorld,
     _floorVisCamDir,
     poseAoiAnchor,
-    subscribePoseAoi,
+    syncSpatialAoiFromFeet,
     syncActiveHotbarSlotToServer,
     maybeSendMoveIntent,
     sendMoveIntent,
@@ -1172,7 +1110,6 @@ export async function mountFpSession(
     fpInteractionFeet: getInteractionPos,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
-    remotePlayerDisplayName: (idHex) => fpUserDisplayNameCache.labelForIdentityHex(idHex),
     scheduleGpuTimestampResolve,
   });
 
@@ -1230,10 +1167,6 @@ export async function mountFpSession(
     canvas.removeEventListener("click", onClick);
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("contextmenu", onCanvasContextMenu);
-    if (poseAoiSub?.isActive()) {
-      poseAoiSub.unsubscribe();
-    }
-    poseAoiSub = null;
     setFpPickupPrompt(null);
     fpElevators.dispose();
     fpApartmentFurniture.dispose();
@@ -1242,7 +1175,6 @@ export async function mountFpSession(
     setFpActiveStashPanelUnitKey(null);
     disposeFpSessionDevDebug();
     droppedWorld.dispose();
-    fpUserDisplayNameCache.dispose();
     conn.db.player_pose.removeOnInsert(onPoseInsert);
     conn.db.player_pose.removeOnUpdate(onPoseUpdate);
     fpEnvironment.dispose();

@@ -20,7 +20,7 @@ export function primeMegablockStaticWorldMeshBuild(): void {
   });
 }
 
-/** Called from `submitUsername` and `mountFpSession` — second caller shares the same promise. */
+/** Called from profile submit / `mountFpSession` — second caller shares the same promise. */
 export async function waitMegablockStaticWorldMeshReady(): Promise<FpSessionStaticWorld> {
   primeMegablockStaticWorldMeshBuild();
   return await megablockInflightBuild!;

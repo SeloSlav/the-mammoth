@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
   BIT_BACK,
   BIT_FORWARD,
@@ -19,6 +20,8 @@ export const clampTinyDisplayOffsetComponents = (v: THREE.Vector3) => {
   if (Math.abs(v.z) < 1e-5) v.z = 0;
 };
 
+/** Recentre world-sound / dropped-item AOI when vertical drift exceeds this (m). */
+export const POSE_AOI_RECENTER_Y_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.75;
 /** Immediate resend when move bits flip; keeps stop/start from waiting a full server tick. */
 export const MOVE_INTENT_EDGE_WINDOW_MS = NET_INTERVAL_MS;
 /**

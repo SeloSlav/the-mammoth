@@ -15,7 +15,7 @@ import {
 import type { DbConnection } from "../module_bindings";
 import { DbConnection as DbConnectionClass } from "../module_bindings";
 import { readOptionalString } from "./username";
-import { spacetimeDatabase, spacetimeUri } from "./env";
+import { spacetimeDatabase, spacetimeUri, readEnableAccountAuth } from "./env";
 import { writeGuestLastKnownDisplayName } from "./guestLastKnownDisplayName";
 import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken";
 import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
@@ -31,11 +31,12 @@ function readInitialConnectionKind(): ConnectionKind | null {
   /** Completing OpenAuth — ignore any stale guest WS token in storage. */
   if (isOidcCallbackPath()) return "oidc";
   if (readGuestConnectionToken()) return "guest";
+  if (!readEnableAccountAuth()) return "guest";
   return null;
 }
 
 function readInitialPhase(): SpacetimePhase {
-  if (typeof window === "undefined") return "needs_auth";
+  if (typeof window === "undefined") return readEnableAccountAuth() ? "needs_auth" : "needs_name";
   if (isOidcCallbackPath()) return "connecting";
   if (readOidcAccessToken()) return "connecting";
   if (readGuestConnectionToken()) {
@@ -46,7 +47,7 @@ function readInitialPhase(): SpacetimePhase {
      */
     return "needs_name";
   }
-  return "needs_auth";
+  return readEnableAccountAuth() ? "needs_auth" : "needs_name";
 }
 
 /** SpacetimeDB passes the browser `WebSocket` `error` event here, not an `Error` — avoid `[object Event]`. */
@@ -82,6 +83,8 @@ export type SpacetimePhase =
 
 export type ConnectionKind = "oidc" | "guest";
 
+export type ProfileSubmitArgs = { name: string; avatarBody: 0 | 1 };
+
 export type SpacetimeSession = {
   phase: SpacetimePhase;
   conn: DbConnection | null;
@@ -101,7 +104,7 @@ export type SpacetimeSession = {
   startGuestPlay: () => void;
   /** Clear OIDC + guest WS token and disconnect from SpacetimeDB. */
   signOut: () => void;
-  submitUsername: (raw: string) => Promise<void>;
+  submitProfile: (args: ProfileSubmitArgs) => Promise<void>;
 };
 
 /**
@@ -327,22 +330,41 @@ export function useSpacetimeConnection(): SpacetimeSession {
     setConn(null);
     setDisplayName(null);
     setErrorMsg(null);
-    setConnectionKind(null);
     setSpacetimeUserSnapshotReady(false);
-    setPhase("needs_auth");
+    const authGate = readEnableAccountAuth();
+    if (authGate) {
+      setConnectionKind(null);
+      setPhase("needs_auth");
+    } else {
+      setConnectionKind("guest");
+      setPhase("needs_name");
+    }
     setConnEpoch((e) => e + 1);
   }, []);
 
-  const submitUsername = useCallback(
-    async (raw: string) => {
+  const submitProfile = useCallback(
+    async (args: ProfileSubmitArgs) => {
       if (!conn || !spacetimeUserSnapshotReady) return;
-      const trimmed = raw.trim();
+      const trimmed = args.name.trim();
       if (trimmed.length < 3) {
         setErrorMsg("Username must be at least 3 characters.");
         return;
       }
+      if (trimmed.length > 24) {
+        setErrorMsg("Username must be at most 24 characters.");
+        return;
+      }
+      if (!/^[\p{L}\p{N}_-]+$/u.test(trimmed)) {
+        setErrorMsg("Username may only contain letters, numbers, underscores, and hyphens.");
+        return;
+      }
+      if (args.avatarBody !== 0 && args.avatarBody !== 1) {
+        setErrorMsg("Choose a valid body type.");
+        return;
+      }
       setErrorMsg(null);
       await conn.reducers.setUsername({ name: trimmed });
+      await conn.reducers.setAvatarBody({ body: args.avatarBody });
     },
     [conn, spacetimeUserSnapshotReady],
   );
@@ -357,6 +379,6 @@ export function useSpacetimeConnection(): SpacetimeSession {
     startPasswordSignIn,
     startGuestPlay,
     signOut,
-    submitUsername,
+    submitProfile,
   };
 }

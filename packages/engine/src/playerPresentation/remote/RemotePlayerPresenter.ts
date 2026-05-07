@@ -21,7 +21,10 @@ import { FP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
  */
 export const REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST = 6;
 
-const REMOTE_PLAYER_MODEL_URI = "/static/models/players/male.glb";
+export const REMOTE_PLAYER_BODY_URI_MALE = "/static/models/players/male.glb";
+export const REMOTE_PLAYER_BODY_URI_FEMALE = "/static/models/players/female.glb";
+
+const REMOTE_PLAYER_MODEL_URI = REMOTE_PLAYER_BODY_URI_MALE;
 const REMOTE_PLAYER_YAW_OFFSET_RAD = Math.PI;
 const REMOTE_PLAYER_TRANSITION_SEC = 0.18;
 const LOCAL_MIRROR_BODY_FORWARD_OFFSET_M = 0.12;
@@ -60,12 +63,9 @@ const REMOTE_WEAPON_FLOAT_LOCAL_POS = new THREE.Vector3(0.28, 1.06, 0.12);
 const REMOTE_WEAPON_FLOAT_LOCAL_EULER = new THREE.Euler(0.12, -0.42, -0.14, "XYZ");
 
 const remotePlayerLoader = new GLTFLoader();
-let remotePlayerTemplatePromise:
-  | Promise<{ scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }>
-  | null = null;
-let remotePlayerTemplate:
-  | { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] }
-  | null = null;
+type RemoteBodyTemplate = { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] };
+const remoteBodyTemplates = new Map<string, RemoteBodyTemplate>();
+const remoteBodyTemplateLoads = new Map<string, Promise<void>>();
 
 function sanitizeRemotePlayerClip(clip: THREE.AnimationClip): THREE.AnimationClip {
   /**
@@ -300,21 +300,41 @@ class AnimatedRemotePlayerBody {
   }
 }
 
-function getRemotePlayerTemplate(): { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] } {
-  if (!remotePlayerTemplate) throw new Error("Remote player body not preloaded");
-  return remotePlayerTemplate;
-}
-
-export async function preloadRemotePlayerBody(): Promise<void> {
-  if (!remotePlayerTemplatePromise) {
-    remotePlayerTemplatePromise = remotePlayerLoader
-      .loadAsync(REMOTE_PLAYER_MODEL_URI)
-      .then((gltf) => ({
+function loadRemoteBodyTemplate(uri: string): Promise<void> {
+  let load = remoteBodyTemplateLoads.get(uri);
+  if (!load) {
+    load = remotePlayerLoader.loadAsync(uri).then((gltf) => {
+      remoteBodyTemplates.set(uri, {
         scene: gltf.scene,
         animations: gltf.animations.map(sanitizeRemotePlayerClip),
-      }));
+      });
+    });
+    remoteBodyTemplateLoads.set(uri, load);
   }
-  remotePlayerTemplate = await remotePlayerTemplatePromise;
+  return load;
+}
+
+function getRemotePlayerBodyTemplate(uri: string): RemoteBodyTemplate {
+  const resolved =
+    remoteBodyTemplates.get(uri) ??
+    remoteBodyTemplates.get(REMOTE_PLAYER_BODY_URI_MALE);
+  if (!resolved) {
+    throw new Error("[RemotePlayerPresenter] player body GLB not preloaded — call preloadRemotePlayerBody()");
+  }
+  return resolved;
+}
+
+/** Loads male (required) and attempts female (optional); mirrors may use either URI. */
+export async function preloadRemotePlayerBody(): Promise<void> {
+  await loadRemoteBodyTemplate(REMOTE_PLAYER_BODY_URI_MALE);
+  void loadRemoteBodyTemplate(REMOTE_PLAYER_BODY_URI_FEMALE).catch(() => {
+    remoteBodyTemplateLoads.delete(REMOTE_PLAYER_BODY_URI_FEMALE);
+    remoteBodyTemplates.delete(REMOTE_PLAYER_BODY_URI_FEMALE);
+  });
+}
+
+function getRemotePlayerTemplate(): RemoteBodyTemplate {
+  return getRemotePlayerBodyTemplate(REMOTE_PLAYER_MODEL_URI);
 }
 
 /** Third-person weapon + swing + muzzle flash replicated from {@link ReplicatedPlayerSnapshot}. */
@@ -515,7 +535,10 @@ class WorldPlayerBodyPresenter {
   private readonly nameTagMaterial: THREE.SpriteMaterial | null = null;
   private nameTagText = "";
 
-  constructor(scene: THREE.Scene, opts: { showNameTag: boolean; crowdLod: boolean }) {
+  constructor(
+    scene: THREE.Scene,
+    opts: { showNameTag: boolean; crowdLod: boolean; bodyUri?: string },
+  ) {
     this.crowdLod = opts.crowdLod;
     this.root = new THREE.Group();
     this.root.name = "remote_player_world_root";
@@ -523,7 +546,8 @@ class WorldPlayerBodyPresenter {
     this.highBranch = new THREE.Group();
     this.highBranch.name = "remote_player_high_lod_branch";
 
-    this.body = new AnimatedRemotePlayerBody(getRemotePlayerTemplate());
+    const bodyTpl = getRemotePlayerBodyTemplate(opts.bodyUri ?? REMOTE_PLAYER_BODY_URI_MALE);
+    this.body = new AnimatedRemotePlayerBody(bodyTpl);
     this.highBranch.add(this.body.root);
 
     this.lowBranch = new THREE.Group();
@@ -684,8 +708,12 @@ export class LocalMirrorPlayerPresenter {
   private readonly presenter: WorldPlayerBodyPresenter;
   private readonly mirrorPosition = new THREE.Vector3();
 
-  constructor(scene: THREE.Scene) {
-    this.presenter = new WorldPlayerBodyPresenter(scene, { showNameTag: false, crowdLod: false });
+  constructor(scene: THREE.Scene, bodyUri?: string) {
+    this.presenter = new WorldPlayerBodyPresenter(scene, {
+      showNameTag: false,
+      crowdLod: false,
+      bodyUri,
+    });
     this.root = this.presenter.root;
     this.presenter.setVisible(false);
   }

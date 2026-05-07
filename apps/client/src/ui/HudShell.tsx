@@ -18,7 +18,6 @@ import { MammothCraftingHud } from "./MammothCraftingHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { MammothToastHud } from "./MammothToastHud";
-import { MammothChatHud } from "./MammothChatHud";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
@@ -93,7 +92,7 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
           </div>
           <div style={{ fontSize: 11, opacity: 0.78, marginTop: 5, maxWidth: 280 }}>
             {
-              "WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory · B craft · M debug · Enter chat"
+              "Solo flat crawl — WASD move · Shift sprint · C crouch · Space jump · Alt hold free-look · Alt+Z hide HUD · Tab inventory · B craft · M debug"
             }
           </div>
           <div style={{ marginTop: 8, pointerEvents: "auto" }}>
@@ -123,7 +122,6 @@ export function HudShell({ displayName, onSignOut, conn }: HudProps) {
         <MammothFpsHud />
         <MammothPickupPromptHud />
         {conn && stashUnitKey ? <MammothStashHud conn={conn} unitKey={stashUnitKey} /> : null}
-        {conn ? <MammothChatHud conn={conn} localDisplayName={displayName} /> : null}
         <MammothElevatorHud />
         <MammothFpReticule />
       </div>

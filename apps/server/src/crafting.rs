@@ -16,6 +16,10 @@ use crate::player_vitals;
 
 pub const HUD_TOAST_KIND_ITEM_RECEIVED: u8 = 0;
 pub const HUD_TOAST_KIND_CRAFT_COMPLETE: u8 = 1;
+/// Free-text building notice — message stored in `def_id`, `quantity` unused.
+pub const HUD_TOAST_KIND_NOTICE: u8 = 2;
+
+const HUD_NOTICE_BODY_MAX_CHARS: usize = 220;
 
 /// Max queued rows per player (waiting + active).
 const MAX_QUEUE_PER_PLAYER: usize = 14;
@@ -465,4 +469,13 @@ pub fn emit_hud_toast(
         quantity,
         created_at: ctx.timestamp,
     });
+}
+
+pub fn emit_hud_notice(ctx: &ReducerContext, recipient: Identity, message: String) {
+    let trimmed = message.trim();
+    let cut: String = trimmed.chars().take(HUD_NOTICE_BODY_MAX_CHARS).collect();
+    if cut.is_empty() {
+        return;
+    }
+    emit_hud_toast(ctx, recipient, HUD_TOAST_KIND_NOTICE, cut, 0);
 }

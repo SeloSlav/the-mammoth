@@ -8,15 +8,6 @@ import {
   type FpLocomotionWalkOptions,
 } from "@the-mammoth/engine";
 import type { PlayerPose } from "../../module_bindings/types";
-import {
-  DISPLAY_HARD_SNAP_M,
-  ELEV_MOVING_RIDER_RECONCILE_HORIZONTAL_MAX_M,
-  ELEV_MOVING_RIDER_RECONCILE_SNAP_M,
-  ELEV_MOVING_RIDER_RECONCILE_VERTICAL_ONLY_MAX_M,
-  RECONCILE_MAX_CORRECTION_PER_POSE_M,
-  RECONCILE_MAX_EXTRA_PER_HORIZONTAL_MPS,
-} from "./fpSessionReconcileConstants.js";
-import { decodeMoveIntentBitsInto } from "./moveIntentCodec.js";
 import { poseSeqAsBigint } from "./fpSessionPoseSeq.js";
 import {
   FP_PLAYER_COLLISION_HEIGHT_CROUCH_M,
@@ -32,7 +23,6 @@ import {
   type FpKinematicSupportProvider,
   type FpKinematicSupportSampleOpts,
 } from "../fpPhysics/fpKinematicSupport.js";
-import { readFpReconcileDebugLog } from "../fpPhysics/fpCollisionPolicy.js";
 
 export type FpSessionPendingMoveIntent = {
   seq: bigint;
@@ -72,9 +62,6 @@ type ElevDoorCollisionHost = {
   ) => boolean;
 };
 type ApartmentDoorCollisionHost = {
-  visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
-};
-type RemotePlayerCollisionHost = {
   visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
 };
 
@@ -125,7 +112,6 @@ export type FpSessionLocalPredictionDeps = {
   staticCollisionIndex: CollisionSpatialIndex;
   fpElevators: ElevDoorCollisionHost;
   fpApartmentDoors: ApartmentDoorCollisionHost;
-  remotePlayers: RemotePlayerCollisionHost;
   elevatorWalkMergeSkipVy: number;
   elevatorRiderLockSkipUpwardVyMps: number;
   intentQueue: FpSessionMoveIntentQueue;
@@ -211,7 +197,6 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
         visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
           deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-          deps.remotePlayers.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
         },
       },
       opts.locoState.grounded,
@@ -269,171 +254,8 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
       q.items.splice(0, q.head);
       q.head = 0;
     }
-
-    const alignHintMs = performance.now();
-    const inputIdleRecon =
-      !deps.keys.has("KeyW") &&
-      !deps.keys.has("KeyS") &&
-      !deps.keys.has("KeyA") &&
-      !deps.keys.has("KeyD");
-    const onMovingElevatorRider =
-      deps.fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(
-        deps.pos.x,
-        deps.pos.y,
-        deps.pos.z,
-        alignHintMs,
-      );
-    const skipFootPoseReconcile = inputIdleRecon && !onMovingElevatorRider;
-    if (skipFootPoseReconcile) {
-      const rough = Math.hypot(
-        serverRow.x - deps.pos.x,
-        serverRow.y - deps.pos.y,
-        serverRow.z - deps.pos.z,
-      );
-      if (rough <= DISPLAY_HARD_SNAP_M) {
-        return;
-      }
-    }
-
-    deps.reconcilePosBefore.copy(deps.pos);
-
-    const pendingCount = q.items.length - q.head;
-
-    let replayPosForLog: { x: number; y: number; z: number };
-    let crouchForLog: boolean;
-    const ro = deps.replayStepOpts;
-
-    if (pendingCount > 0) {
-      deps.replayPos.set(serverRow.x, serverRow.y, serverRow.z);
-      deps.replayPrevPos.copy(deps.replayPos);
-      deps.replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
-      deps.replayLoco.grounded = serverRow.grounded !== 0;
-      deps.replayLoco.jumpQueued = false;
-
-      for (let i = q.head; i < q.items.length; i++) {
-        const sample = q.items[i]!;
-        const stepNowMs = sample.evalWallClockMs;
-        const isLast = i === q.items.length - 1;
-        let stepDt = deps.netDtSec;
-        if (isLast) {
-          const wallSec = (alignHintMs - stepNowMs) * 0.001;
-          stepDt = Math.min(deps.netDtSec, Math.max(wallSec, 0.001));
-        }
-        deps.fpElevators.syncCabEvalClock(stepNowMs);
-        decodeMoveIntentBitsInto(sample.bits, deps.replayInput);
-        ro.evalWallClockMs = stepNowMs;
-        ro.dtSec = stepDt;
-        ro.crouch = (sample.bits & 64) !== 0;
-        ro.jumpPressedThisFrame = (sample.bits & 16) !== 0;
-        ro.bodyYawRad = sample.aimYaw;
-        simulatePredictedPlayerStep(ro);
-      }
-      replayPosForLog = { x: deps.replayPos.x, y: deps.replayPos.y, z: deps.replayPos.z };
-      crouchForLog = ro.crouch;
-    } else {
-      deps.replayLoco.velocity.set(serverRow.velX, serverRow.velY, serverRow.velZ);
-      deps.replayLoco.grounded = serverRow.grounded !== 0;
-      replayPosForLog = { x: serverRow.x, y: serverRow.y, z: serverRow.z };
-      crouchForLog = deps.getCrouchToggle();
-    }
-
-    const corrX =
-      pendingCount > 0 ? deps.replayPos.x - deps.pos.x : serverRow.x - deps.pos.x;
-    const corrY =
-      pendingCount > 0 ? deps.replayPos.y - deps.pos.y : serverRow.y - deps.pos.y;
-    const corrZ =
-      pendingCount > 0 ? deps.replayPos.z - deps.pos.z : serverRow.z - deps.pos.z;
-    const corrDist = Math.hypot(corrX, corrY, corrZ);
-    const corrHorizontalDist = Math.hypot(corrX, corrZ);
-    const ridingMovingElevatorNow =
-      deps.fpElevators.ignoreSmallPoseReconcileWhileMovingElevatorRider(
-        deps.pos.x,
-        deps.pos.y,
-        deps.pos.z,
-        alignHintMs,
-      );
-    const ignoreSmallElevRiderPhantom =
-      ridingMovingElevatorNow && corrDist < ELEV_MOVING_RIDER_RECONCILE_SNAP_M;
-    const ignoreElevRiderVerticalTimelineMismatch =
-      ridingMovingElevatorNow &&
-      corrHorizontalDist <= ELEV_MOVING_RIDER_RECONCILE_HORIZONTAL_MAX_M &&
-      Math.abs(corrY) <= ELEV_MOVING_RIDER_RECONCILE_VERTICAL_ONLY_MAX_M;
-    const ignoreElevRiderReconcile =
-      ignoreSmallElevRiderPhantom || ignoreElevRiderVerticalTimelineMismatch;
-    deps.logDoorDebugReconcile(
-      serverRow,
-      { x: deps.pos.x, y: deps.pos.y, z: deps.pos.z },
-      replayPosForLog,
-      crouchForLog,
-      pendingCount,
-    );
-
-    if (readFpReconcileDebugLog() && corrDist > 0.02 && !ignoreElevRiderReconcile) {
-      console.info("[mmReconcile]", {
-        corrM: +corrDist.toFixed(4),
-        corrXZM: +corrHorizontalDist.toFixed(4),
-        pendingIntentCount: pendingCount,
-        predictedBefore: {
-          x: +deps.reconcilePosBefore.x.toFixed(3),
-          y: +deps.reconcilePosBefore.y.toFixed(3),
-          z: +deps.reconcilePosBefore.z.toFixed(3),
-        },
-        replayOrAuthRow: {
-          x: +replayPosForLog.x.toFixed(3),
-          y: +replayPosForLog.y.toFixed(3),
-          z: +replayPosForLog.z.toFixed(3),
-        },
-        willHardSnap: corrDist > DISPLAY_HARD_SNAP_M && !ignoreElevRiderVerticalTimelineMismatch,
-      });
-    }
-
-    if (corrDist > DISPLAY_HARD_SNAP_M && !ignoreElevRiderVerticalTimelineMismatch) {
-      if (pendingCount > 0) {
-        deps.pos.copy(deps.replayPos);
-      } else {
-        deps.pos.set(serverRow.x, serverRow.y, serverRow.z);
-      }
-      deps.displayOffset.set(0, 0, 0);
-      deps.loco.velocity.copy(deps.replayLoco.velocity);
-      deps.loco.grounded = deps.replayLoco.grounded;
-    } else if (corrDist > 0.001 && !ignoreElevRiderReconcile) {
-      const hs = Math.hypot(deps.loco.velocity.x, deps.loco.velocity.z);
-      const reconcileMaxM =
-        RECONCILE_MAX_CORRECTION_PER_POSE_M +
-        Math.min(hs, deps.fpLocomotionConstants.sprintSpeedMps) *
-          RECONCILE_MAX_EXTRA_PER_HORIZONTAL_MPS;
-      const t = Math.min(1, reconcileMaxM / corrDist);
-      deps.pos.x += corrX * t;
-      deps.pos.y += corrY * t;
-      deps.pos.z += corrZ * t;
-      deps.displayOffset.x -= corrX * t;
-      deps.displayOffset.y -= corrY * t;
-      deps.displayOffset.z -= corrZ * t;
-      deps.loco.velocity.lerp(deps.replayLoco.velocity, t);
-      deps.loco.grounded = deps.replayLoco.grounded;
-    } else {
-      deps.loco.velocity.copy(deps.replayLoco.velocity);
-      deps.loco.grounded = deps.replayLoco.grounded;
-    }
-
-    if (deps.pos.distanceToSquared(deps.reconcilePosBefore) > 1e-10) {
-      resolvePlayerCollisions(
-        deps.pos,
-        deps.reconcilePosBefore,
-        deps.loco.velocity,
-        deps.getCrouchToggle(),
-        deps.fpLocomotionConstants.walkStepUpMargin,
-        deps.staticCollisionIndex,
-        {
-          visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
-            deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-            deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-            deps.remotePlayers.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
-          },
-        },
-        deps.loco.grounded,
-      );
-    }
+    /** Solo Mammoth: server mirrors trusted snapshots — do not replay intents or rubber-band `pos`. */
+    void serverRow;
   };
 
   return { simulatePredictedPlayerStep, reconcileLocalPredictionToServer };

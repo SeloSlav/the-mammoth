@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
-import type { InventoryItem, PlayerVitals } from "../../module_bindings/types";
+import type { InventoryItem } from "../../module_bindings/types";
 import {
   equippedHeldItemIdFromDefId,
   fpLocomotionConstants,
@@ -8,14 +8,9 @@ import {
   PlayerPresentationManager,
   createFpLocomotionState,
 } from "@the-mammoth/engine";
-import { replicatedPlayerSnapshotFromPlainPose } from "@the-mammoth/net";
-import type { HeldItemId, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import type { HeldItemId } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
-import {
-  ACTIVE_HOTBAR_SLOT_CLEARED,
-  resolveHeldItemFromHotbar,
-} from "../fpHotbar/fpHotbarResolve.js";
 import {
   findNearestDroppedPickupsHud,
   MAMMOTH_PICKUP_RADIUS_M,
@@ -60,8 +55,8 @@ import {
   FP_VIEWMODEL_RENDER_LAYER,
   MELEE_COOLDOWN_MS,
   POSE_AOI_RECENTER,
+  POSE_AOI_RECENTER_Y_M,
 } from "./fpSessionConstants.js";
-import { POSE_AOI_RECENTER_Y_M, shouldRenderRemotePlayer } from "../fpRemote/remotePlayerVisibility.js";
 import {
   fpExpSmoothToward,
   fpSampleStairwellInteriorDarkTarget,
@@ -72,7 +67,6 @@ import {
   hotbarDefIdSupportsRangedAttack,
   localPlayerHasCarriedAmmoForWeapon,
 } from "../fpHotbar/fpHotbarResolve.js";
-import type { PoseInterpBuffer } from "../fpRemote/poseInterpBuffer.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
@@ -193,14 +187,12 @@ export type FpSessionMainRafFrameDeps = {
   hotbarConsumableVisual: FpHotbarConsumableVisual;
   cabMirrors: FpPlanarMirror[];
   fpEnvironment: ReturnType<typeof attachFpSessionEnvironment>;
-  buildingWorldBounds: THREE.Box3;
   stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
-  interp: PoseInterpBuffer;
-  _remoteSnapshots: Map<string, ReplicatedPlayerSnapshot>;
   _floorVisCamWorld: THREE.Vector3;
   _floorVisCamDir: THREE.Vector3;
   poseAoiAnchor: { x: number; y: number; z: number };
-  subscribePoseAoi: (cx: number, cy: number, cz: number) => void;
+  /** Recenters world-sound + dropped-item AOI subscriptions when the feet drift far from the anchor. */
+  syncSpatialAoiFromFeet: (cx: number, cy: number, cz: number) => void;
   syncActiveHotbarSlotToServer: () => void;
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
   /** Immediate intent publish (bypasses periodic coalesce) so combat reducers see fresh `aim_yaw`. */
@@ -224,8 +216,6 @@ export type FpSessionMainRafFrameDeps = {
   fpInteractionFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
-  /** Cached Spacetime `user.username` labels keyed by identity hex (no per-frame table finds). */
-  remotePlayerDisplayName: (playerIdentityHex: string) => string;
   /** No-op when GPU timestamp queries are unavailable. */
   scheduleGpuTimestampResolve: () => void;
 };
@@ -532,14 +522,13 @@ export function createFpSessionMainRafFrame(
       );
       const verticalDrift = Math.abs(deps.pos.y - deps.poseAoiAnchor.y);
       if (drift > POSE_AOI_RECENTER || verticalDrift > POSE_AOI_RECENTER_Y_M) {
-        deps.subscribePoseAoi(deps.pos.x, deps.pos.y, deps.pos.z);
+        deps.syncSpatialAoiFromFeet(deps.pos.x, deps.pos.y, deps.pos.z);
       }
     }
 
     /**
      * Fills {@link FpSessionMainRafFrameDeps._floorVisCamWorld} / `_floorVisCamDir` and applies
-     * floor/furniture visibility **before** remote snapshot work so we avoid a duplicate
-     * `camera.getWorldPosition` and can cull remotes using the same sample the rest of the frame uses.
+     * floor/furniture visibility before presentation work (single camera sample for the frame).
      */
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
@@ -547,79 +536,6 @@ export function createFpSessionMainRafFrame(
       deps.camera,
       deps.isApartmentFurnitureInteriorVisible(),
     );
-
-    deps._remoteSnapshots.clear();
-    if (deps.conn.identity) {
-      const bmin = deps.buildingWorldBounds.min;
-      const bmax = deps.buildingWorldBounds.max;
-      for (const row of deps.conn.db.player_pose) {
-        const id = row.identity.toHexString();
-        if (deps.conn.identity.isEqual(row.identity)) continue;
-        const vitalsRow = deps.conn.db.player_vitals.identity.find(row.identity) as
-          | PlayerVitals
-          | undefined;
-        if ((vitalsRow?.health ?? 1) <= 0) continue;
-        const p = deps.interp.getInterpolated(id, nowMs);
-        const rx = p?.x ?? row.x;
-        const ry = p?.y ?? row.y;
-        const rz = p?.z ?? row.z;
-        if (
-          !shouldRenderRemotePlayer({
-            localCameraX: deps._floorVisCamWorld.x,
-            localCameraZ: deps._floorVisCamWorld.z,
-            localFeetX: deps.pos.x,
-            localFeetY: deps.pos.y,
-            localFeetZ: deps.pos.z,
-            remoteFeetX: rx,
-            remoteFeetY: ry,
-            remoteFeetZ: rz,
-            buildingBoundsXz: {
-              minX: bmin.x,
-              maxX: bmax.x,
-              minZ: bmin.z,
-              maxZ: bmax.z,
-            },
-          })
-        ) {
-          continue;
-        }
-        const displayName = deps.remotePlayerDisplayName(id);
-        const activeRail = deps.conn.db.player_active_hotbar.identity.find(row.identity);
-        const selectedSlot =
-          activeRail &&
-          typeof activeRail.slotIndex === "number" &&
-          activeRail.slotIndex !== ACTIVE_HOTBAR_SLOT_CLEARED
-            ? activeRail.slotIndex
-            : null;
-        const equippedPrimary = resolveHeldItemFromHotbar(
-          deps.conn,
-          row.identity,
-          selectedSlot,
-        );
-        const snap = replicatedPlayerSnapshotFromPlainPose(
-          {
-            playerIdHex: id,
-            x: row.x,
-            y: row.y,
-            z: row.z,
-            yawRad: row.yaw,
-            velX: row.velX,
-            velY: row.velY,
-            velZ: row.velZ,
-            grounded: row.grounded !== 0,
-          },
-          {
-            observedTimeMs: nowMs,
-            worldPositionOverride: p ?? undefined,
-            equippedPrimary,
-            meleePresentationSeq: row.meleePresentationSeq,
-            firearmPresentationSeq: row.firearmPresentationSeq,
-            displayName,
-          },
-        );
-        deps._remoteSnapshots.set(id, snap);
-      }
-    }
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
     const hotbarRow = deps.selectedHotbarRow();
@@ -650,11 +566,7 @@ export function createFpSessionMainRafFrame(
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---
-    deps.presentation.update(dt, localState, deps._remoteSnapshots, nowMs, {
-      cameraX: deps._floorVisCamWorld.x,
-      cameraY: deps._floorVisCamWorld.y,
-      cameraZ: deps._floorVisCamWorld.z,
-    });
+    deps.presentation.update(dt, localState, nowMs);
     deps.hotbarConsumableVisual.syncSelected(
       hotbarConsumableDefId,
       deps.presentation.getLocalFpGripAnchorObject(),

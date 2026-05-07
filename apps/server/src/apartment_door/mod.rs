@@ -1,8 +1,9 @@
-//! Apartment unit entry swing doors — authoritative state + dynamic collision hooks.
+//! Apartment unit entry swing doors — authoritative state, interaction, and hit-scan barriers.
 //!
+//! Locomotion is client-authored; this module does **not** resolve capsule-vs-door physics.
 //! Shares the "corridor swing door" mechanics with [`crate::elevator`] landing doors:
-//! the door anim, open/close sound kinds, interact radius, thin **closed-slab** capsule
-//! blocking only (open doors rely on static doorway holes — no parked-leaf AABB), and the per-face yaw convention all come from the TSL-side
+//! the door anim, open/close sound kinds, interact radius, **closed-slab** geometry for
+//! firearm LOS when nearly shut (open doors rely on static doorway holes), and the per-face yaw convention all come from the TSL-side
 //! `@the-mammoth/world` `swingDoorCollision.ts` module. Shared formulas are covered by
 //! `swingDoorCollision.test.ts` plus this module's unit tests.
 //!
@@ -26,23 +27,14 @@ use crate::world_sound;
 const SWING_DOOR_ANIM_SPEED: f32 = 4.5;
 /// Match `SWING_DOOR_CLOSED_SLAB_HALF_THICK_M`.
 const SWING_DOOR_CLOSED_SLAB_HALF_THICK_M: f32 = 0.09;
-/// Match `SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01`.
-const SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01: f32 = 0.025;
 /// Match `SWING_DOOR_INTERACT_RADIUS_M`.
 const SWING_DOOR_INTERACT_RADIUS_M: f32 = 2.05;
 /// Match `SWING_DOOR_INTERACT_Y_HALF_M`.
 const SWING_DOOR_INTERACT_Y_HALF_M: f32 = 1.55;
-/// Same walk-probe offset used by `movement.rs` — recover feet Y from the head probe.
+/// Same walk-probe offset used when validating door interactions — recover feet Y from the head probe.
 const WALK_PROBE_DY: f32 = 1.05;
 /// Allow the client's reported feet hint to lead the replicated pose by up to this much.
 const CLIENT_FEET_HINT_MAX_SEP_M: f32 = 2.8;
-const WEST_DOOR_DEBUG_ROW_KEY: &str = "floor_mamutica_typical|2|unit_e_008|w";
-const WEST_DOOR_DEBUG_X_MIN: f32 = 0.3;
-const WEST_DOOR_DEBUG_X_MAX: f32 = 2.4;
-const WEST_DOOR_DEBUG_Z_MIN: f32 = -16.9;
-const WEST_DOOR_DEBUG_Z_MAX: f32 = -14.1;
-const WEST_DOOR_DEBUG_Y_MIN: f32 = 3.0;
-const WEST_DOOR_DEBUG_Y_MAX: f32 = 5.7;
 
 /// Face code convention (matches `FACE_CODE` in `swingDoorCollision.ts`):
 /// 0 = N, 1 = S, 2 = E, 3 = W.
@@ -116,16 +108,6 @@ fn apartment_door_row_matches_template(row: &ApartmentDoor, level: u32, t: &GenT
         && (row.feet_y - want_feet).abs() <= EPS
         && (row.panel_w_m - t.panel_w_m).abs() <= EPS
         && (row.panel_h_m - t.panel_h_m).abs() <= EPS
-}
-
-#[inline]
-fn west_door_debug_zone(x: f32, y: f32, z: f32) -> bool {
-    x >= WEST_DOOR_DEBUG_X_MIN
-        && x <= WEST_DOOR_DEBUG_X_MAX
-        && y >= WEST_DOOR_DEBUG_Y_MIN
-        && y <= WEST_DOOR_DEBUG_Y_MAX
-        && z >= WEST_DOOR_DEBUG_Z_MIN
-        && z <= WEST_DOOR_DEBUG_Z_MAX
 }
 
 /// Parse `content/building/mammoth.json` once and cache the floor-ref list
@@ -340,104 +322,6 @@ pub fn apartment_door_firearm_barrier_aabb(row: &ApartmentDoor) -> Option<([f32;
         return None;
     }
     Some(expanded_closed_slab_firearm_barrier(row))
-}
-
-// ---------------------------------------------------------------------------
-
-/// Dynamic capsule blockers for apartment swing doors: **closed slab only**.
-///
-/// Past `SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01`, locomotion uses carved static geometry only — omitting
-/// the parked-leaf AABB prevents wide shaft stair doors from leaving an invisible axis-aligned snag.
-pub fn collect_apartment_door_collision_aabbs(
-    ctx: &ReducerContext,
-    qx0: f32,
-    qx1: f32,
-    qz0: f32,
-    qz1: f32,
-    out: &mut Vec<([f32; 3], [f32; 3])>,
-) {
-    for row in ctx.db.apartment_door().iter() {
-        if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
-            let (mn, mx) = closed_slab_aabb(&row);
-            if qx1 < mn[0] || qx0 > mx[0] || qz1 < mn[2] || qz0 > mx[2] {
-                continue;
-            }
-            out.push((mn, mx));
-        }
-    }
-}
-
-/// Resolve movement into live apartment-door colliders. Call after the elevator pass.
-pub fn resolve_player_apartment_door_collisions(
-    ctx: &ReducerContext,
-    p: &mut PlayerPose,
-    prev_x: f32,
-    prev_y: f32,
-    prev_z: f32,
-    crouch: bool,
-) {
-    let body_h = if crouch { 1.2_f32 } else { 1.78_f32 };
-    let grounded = p.grounded != 0;
-    let mut tuples: Vec<([f32; 3], [f32; 3])> = Vec::with_capacity(16);
-
-    let mut fill = |x0: f32,
-                    x1: f32,
-                    z0: f32,
-                    z1: f32,
-                    _qp: Option<(f32, f32, f32)>,
-                    out: &mut Vec<([f32; 3], [f32; 3])>| {
-        out.clear();
-        collect_apartment_door_collision_aabbs(ctx, x0, x1, z0, z1, out);
-    };
-
-    const FOOT_R: f32 = 0.22;
-    crate::character_controller::resolve_horizontal_character_with_fill(
-        p,
-        prev_x,
-        prev_y,
-        prev_z,
-        body_h,
-        grounded,
-        FOOT_R,
-        &mut fill,
-        &mut tuples,
-    );
-
-    if west_door_debug_zone(p.x, p.y, p.z) || west_door_debug_zone(prev_x, prev_y, prev_z) {
-        if let Some(row) = ctx
-            .db
-            .apartment_door()
-            .row_key()
-            .find(&WEST_DOOR_DEBUG_ROW_KEY.to_string())
-        {
-            let (mn, mx) = if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
-                closed_slab_aabb(&row)
-            } else {
-                ([0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
-            };
-            let regime = if row.swing_open_01 <= SWING_DOOR_CLOSED_SLAB_MAX_OPEN_01 {
-                "closed-slab"
-            } else {
-                "open-no-dynamic-capsule"
-            };
-            log::info!(
-                "[west-door-debug][dynamic] prev=({prev_x:.3},{prev_y:.3},{prev_z:.3}) resolved=({:.3},{:.3},{:.3}) row_key={} desired={} open01={:.3} regime={} aabb=[{:.3},{:.3},{:.3}]→[{:.3},{:.3},{:.3}]",
-                p.x,
-                p.y,
-                p.z,
-                row.row_key,
-                row.desired_open,
-                row.swing_open_01,
-                regime,
-                mn[0],
-                mn[1],
-                mn[2],
-                mx[0],
-                mx[1],
-                mx[2],
-            );
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

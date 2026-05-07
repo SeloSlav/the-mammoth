@@ -19,11 +19,23 @@ export type FpSessionMoveIntentChannel = {
   maybeSendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => void;
 };
 
+export type LocomotionSnapshotPoseSample = {
+  x: number;
+  y: number;
+  z: number;
+  velX: number;
+  velY: number;
+  velZ: number;
+  grounded: boolean;
+};
+
 export type CreateFpSessionMoveIntentChannelOpts = {
   conn: DbConnection;
   mainRaf: FpSessionMainRafState;
   moveIntentQueue: FpSessionMoveIntentQueue;
   maxPendingIntents: number;
+  /** Trusted solo snapshot — becomes authoritative `player_pose` on the server (client-side collision). */
+  samplePose: () => LocomotionSnapshotPoseSample;
 };
 
 /**
@@ -33,7 +45,7 @@ export type CreateFpSessionMoveIntentChannelOpts = {
 export function createFpSessionMoveIntentChannel(
   opts: CreateFpSessionMoveIntentChannelOpts,
 ): FpSessionMoveIntentChannel {
-  const { conn, mainRaf, moveIntentQueue, maxPendingIntents } = opts;
+  const { conn, mainRaf, moveIntentQueue, maxPendingIntents, samplePose } = opts;
 
   const intentSeq = { current: 0n };
   let lastMoveIntentMs = -Infinity;
@@ -69,10 +81,19 @@ export function createFpSessionMoveIntentChannel(
     lastSentAimYaw = mainRaf.bodyYaw;
     hasSentMoveIntent = true;
     if (jump) jumpIntentLockUntilMs = nowMs + NET_INTERVAL_MS;
-    void conn.reducers.submitMoveIntent({
+    const p = samplePose();
+    void conn.reducers.submitPlayerLocomotionSnapshot({
       intentSeq: intentSeq.current,
       bits,
       aimYaw: mainRaf.bodyYaw,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      yaw: mainRaf.bodyYaw,
+      velX: p.velX,
+      velY: p.velY,
+      velZ: p.velZ,
+      grounded: p.grounded ? 1 : 0,
     });
   };
 

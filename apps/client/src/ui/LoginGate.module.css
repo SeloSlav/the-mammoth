@@ -200,6 +200,67 @@
   line-height: 1.45;
 }
 
+.profilePreviewCanvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 260px;
+  margin: 0 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--ui-card-border-strong);
+  background: rgba(0, 0, 0, 0.35);
+  touch-action: none;
+  cursor: grab;
+}
+
+.segmentRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.segmentActive,
+.segmentInactive {
+  flex: 1;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+.segmentActive {
+  border: 0;
+  color: var(--ui-accent-on);
+  background: var(--ui-accent);
+}
+
+.segmentInactive {
+  border: 1px solid var(--ui-input-border);
+  color: var(--ui-secondary-text);
+  background: var(--ui-secondary-bg);
+}
+
+.segmentActive:hover:not(:disabled),
+.segmentInactive:hover:not(:disabled) {
+  opacity: 0.94;
+}
+
+.segmentActive:active:not(:disabled),
+.segmentInactive:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.segmentActive:disabled,
+.segmentInactive:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: minmax(18px, 1fr) minmax(300px, 470px) minmax(18px, 1fr);

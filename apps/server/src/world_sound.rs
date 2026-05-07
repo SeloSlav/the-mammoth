@@ -1,21 +1,9 @@
-//! Replicated one-shot sounds (footsteps, melee weapon swings, world item pickup, elevator / landing-door UI,
+//! Replicated one-shot sounds (melee weapon swings, world item pickup, elevator / landing-door UI,
 //! cab arrival chime) for nearby players.
-//! Cleanup + cadence mirror the vibe survival `sound_events` pattern at a smaller scope.
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
-use crate::movement::PlayerInput;
-use crate::pose::PlayerPose;
-
-// --- Bit layout: keep in sync with `apps/server/src/movement.rs` / `moveIntentCodec.ts` ---
-const BIT_FORWARD: u8 = 1 << 0;
-const BIT_BACK: u8 = 1 << 1;
-const BIT_LEFT: u8 = 1 << 2;
-const BIT_RIGHT: u8 = 1 << 3;
-const BIT_CROUCH: u8 = 1 << 6;
-
 /// `world_sound_event.kind` — client maps to assets / mix.
-pub const KIND_FOOTSTEP: u8 = 0;
 /// Melee weapon swing whoosh — default + optional per-profile stems on client (see `variation`).
 pub const KIND_MELEE_WEAPON_SWING: u8 = 1;
 /// Successful `pickup_dropped_item` — one-shot at the drop’s world position (`variation` unused).
@@ -47,15 +35,8 @@ pub const FIREARM_VARIATION_PISTOL: u8 = 0;
 /// `world_sound_event.variation` for [`KIND_FIREARM_SHOT`]: shotgun discharge.
 pub const FIREARM_VARIATION_SHOTGUN: u8 = 1;
 
-// --- Keep in sync with `movement.rs` / `fpLocomotion.ts` ---
-const SPRINT_SPEED: f32 = 3.35;
-const BOB_SPEED_MAX: f32 = 6.5;
-const V0_FOOT: f32 = 0.15;
-const STRIDE_PHASE_PER_STEP: f32 = std::f32::consts::PI;
-
 /// Multiplier on **world Y** separation for proximity falloff (`sqrt(dx² + dz² + (axis_weight_y·dy)²)`).
 /// `1.0` is spherical; `>1` makes vertical offsets (floors / height) attenuate faster than the same span on XZ.
-pub const AXIS_WEIGHT_Y_FOOTSTEP: f32 = 1.68;
 pub const AXIS_WEIGHT_Y_MELEE: f32 = 1.52;
 pub const AXIS_WEIGHT_Y_ITEM_PICKUP_CONSUME: f32 = 1.48;
 pub const AXIS_WEIGHT_Y_ELEVATOR_DOOR: f32 = 1.26;
@@ -69,8 +50,7 @@ pub struct WorldSoundEvent {
     pub id: u64,
     /// See `KIND_*`.
     pub kind: u8,
-    /// Footsteps: stem index mod 6. Melee swing: low bits = stem A/B; upper bits = sound profile
-    /// (see [`melee_weapon_swing_variation`]). Item pickup / consume: see module docs.
+    /// Kind-specific: melee swing uses [`melee_weapon_swing_variation`]; pickup/consume typically use fixed stems.
     pub variation: u8,
     pub x: f32,
     pub y: f32,
@@ -374,7 +354,7 @@ pub fn emit_melee_flesh_hit_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emi
     );
 }
 
-/// Per-connection rows used by footsteps + melee cooldown.
+/// Per-connection rows for foot cadence (solo client handles locomotion sounds) + melee cooldown.
 pub fn ensure_player_audio_rows(ctx: &ReducerContext, id: Identity) {
     if ctx.db.player_foot_cadence().identity().find(&id).is_none() {
         let _ = ctx.db.player_foot_cadence().insert(PlayerFootCadence {
@@ -403,77 +383,6 @@ pub fn reset_player_melee_cooldown_row(ctx: &ReducerContext, id: Identity) {
         row.last_swing_micros = 0;
         ctx.db.player_melee_cooldown().identity().update(row);
     }
-}
-
-#[inline]
-fn wish_moving(bits: u8) -> bool {
-    let ix = (bits & BIT_RIGHT != 0) as i32 - (bits & BIT_LEFT != 0) as i32;
-    let iy = (bits & BIT_FORWARD != 0) as i32 - (bits & BIT_BACK != 0) as i32;
-    let mut in_x = ix as f32;
-    let mut in_y = iy as f32;
-    let in_len = (in_x * in_x + in_y * in_y).sqrt();
-    if in_len > 1.0 {
-        in_x /= in_len;
-        in_y /= in_len;
-    }
-    in_x * in_x + in_y * in_y > 1e-4
-}
-
-/// Called from the physics tick after pose integration.
-pub fn sync_footsteps_for_tick(
-    ctx: &ReducerContext,
-    id: Identity,
-    input: &PlayerInput,
-    grounded_before: u8,
-    p: &PlayerPose,
-    dt: f32,
-) {
-    let Some(mut cad) = ctx.db.player_foot_cadence().identity().find(&id) else {
-        return;
-    };
-
-    let crouch = input.bits & BIT_CROUCH != 0;
-    let moving = wish_moving(input.bits);
-    let hs = (p.vel_x * p.vel_x + p.vel_z * p.vel_z).sqrt();
-    let grounded = p.grounded != 0;
-
-    // Match client: advance head-bob phase in locomotion, then derive stride cell from phase.
-    if grounded && !crouch && moving && hs > V0_FOOT {
-        let walk_strength = (hs / SPRINT_SPEED).clamp(0.0, 1.0);
-        cad.stride_phase += dt * (BOB_SPEED_MAX * walk_strength);
-    }
-
-    let stride_cell = ((2.0 * cad.stride_phase) / STRIDE_PHASE_PER_STEP).floor() as i32;
-
-    let just_landed = grounded && grounded_before == 0 && !crouch;
-    if just_landed {
-        cad.last_stride_cell = stride_cell;
-        ctx.db.player_foot_cadence().identity().update(cad);
-        return;
-    }
-
-    let can_step = grounded && !crouch && moving && hs > V0_FOOT;
-    if can_step && stride_cell > cad.last_stride_cell {
-        let v = cad.foot_rr % 6;
-        cad.foot_rr = cad.foot_rr.wrapping_add(1);
-        emit_world_sound(
-            ctx,
-            KIND_FOOTSTEP,
-            v,
-            p.x,
-            p.y,
-            p.z,
-            0.48,
-            26.0,
-            AXIS_WEIGHT_Y_FOOTSTEP,
-            id,
-        );
-        cad.last_stride_cell = stride_cell;
-    } else if !can_step {
-        cad.last_stride_cell = stride_cell;
-    }
-
-    ctx.db.player_foot_cadence().identity().update(cad);
 }
 
 /// Low bits of melee swing `variation` — stem index (A/B alternation). Sync with

@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { mammothCatalogGlbCandidates } from "@the-mammoth/assets";
 import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
-import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
-import { ALL_WEAPON_DEFINITIONS, getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
+import type { HeldItemId, LocalPlayerGameplayState } from "@the-mammoth/game";
+import { getWeaponDefinitionForEquippedPrimary } from "../weapons/weaponRegistry.js";
 import type { WeaponDefinition } from "../weapons/weaponTypes.js";
 import {
   createGltfModelLoadRegistry,
@@ -15,19 +15,10 @@ import {
 import {
   LocalMirrorPlayerPresenter,
   preloadRemotePlayerBody,
-  RemotePlayerPresenter,
-  REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
+  REMOTE_PLAYER_BODY_URI_MALE,
 } from "./remote/RemotePlayerPresenter.js";
 import { FP_MELEE_HAND_RIGHT } from "./fpViewmodelRefs.js";
 import type { MeleeCombatVisualSink } from "./combatVisuals.js";
-import { remoteIdsForTopKFullDetail, sortRemoteCrowdRankInPlace } from "./remoteCrowdLod.js";
-
-export type RemotePresentationLodCamera = {
-  cameraX: number;
-  cameraY: number;
-  cameraZ: number;
-};
-
 export type PlayerPresentationManagerOptions = {
   scene: THREE.Scene;
   /** Viewmodel root: pitch on `headPitch`, not Alt yaw (camera uses `headFreeLook` → `headCameraPitch`). */
@@ -38,14 +29,14 @@ export type PlayerPresentationManagerOptions = {
   /** First equipped weapon for FP viewmodel (defaults to unarmed / hands only). */
   initialEquippedPrimary?: HeldItemId;
   /**
-   * Nearest N remotes use the full skinned GLB; the rest are instanced-ish primitives (~36 tris each).
-   * Default {@link REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST}.
+   * GLB URI for the planar-reflection mirror body (defaults to male).
+   * Pass the female player asset URI when `User.avatar_body` requests it.
    */
-  maxFullDetailRemoteBodies?: number;
+  localMirrorBodyUri?: string;
 };
 
 /**
- * Owns local first-person + N remote third-person presenters.
+ * Owns local first-person + mirror third-person body for planar reflections.
  * Apps feed normalized snapshots each frame; SpaceTimeDB stays outside this class.
  */
 export class PlayerPresentationManager {
@@ -53,25 +44,17 @@ export class PlayerPresentationManager {
   private readonly modelRegistry: IModelLoadRegistry;
   private readonly local: LocalFirstPersonPresenter;
   private readonly localMirror: LocalMirrorPlayerPresenter;
-  private readonly remotes = new Map<string, RemotePlayerPresenter>();
-  private readonly maxFullDetailRemoteBodies: number;
-  /** Reused each `update()` for crowd LOD ranking — avoids per-frame allocs. */
-  private readonly _remoteLodRankScratch: { id: string; distSq: number }[] = [];
   /** Equip id currently shown on the local FP weapon mesh (may trail gameplay by a frame while a GLB loads). */
   private lastAppliedLocalWeaponVisualEquip: HeldItemId;
   private latestDesiredLocalEquip: HeldItemId;
   /** True while {@link drainLocalWeaponGlbs} owns the preload chain — never await inside `update()`. */
   private localWeaponGlbDrainRunning = false;
-  /** Pooled set — cleared and reused each update() to avoid per-frame allocation. */
-  private readonly _keepIds = new Set<string>();
-
   private constructor(
     scene: THREE.Scene,
     modelRegistry: IModelLoadRegistry,
     local: LocalFirstPersonPresenter,
     localMirror: LocalMirrorPlayerPresenter,
     initialEquipped: HeldItemId,
-    maxFullDetailRemoteBodies: number,
   ) {
     this.scene = scene;
     this.modelRegistry = modelRegistry;
@@ -79,12 +62,10 @@ export class PlayerPresentationManager {
     this.localMirror = localMirror;
     this.lastAppliedLocalWeaponVisualEquip = initialEquipped;
     this.latestDesiredLocalEquip = initialEquipped;
-    this.maxFullDetailRemoteBodies = maxFullDetailRemoteBodies;
   }
 
   /**
-   * Preload the FP hand + remote body + **all** shipped weapon GLBs (remote third-person meshes),
-   * optionally the initial local equipped weapon, then build the local viewmodel.
+   * Preload the FP hand + mirror body mesh + initial equipped weapon GLB, then build the local viewmodel.
    */
   static async create(opts: PlayerPresentationManagerOptions): Promise<PlayerPresentationManager> {
     const modelRegistry = opts.modelRegistry ?? createGltfModelLoadRegistry();
@@ -99,21 +80,10 @@ export class PlayerPresentationManager {
           )
         : modelRegistry.preload(initialDef.modelRef));
 
-    const preloadAllRemoteWeaponGlbs =
-      modelRegistry instanceof GltfModelLoadRegistry
-        ? ALL_WEAPON_DEFINITIONS.map((def) =>
-            modelRegistry.preloadWithUriCandidates(
-              def.modelRef as Extract<ModelRef, { kind: "gltf" }>,
-              mammothCatalogGlbCandidates(def.id),
-            ),
-          )
-        : ALL_WEAPON_DEFINITIONS.map((def) => modelRegistry.preload(def.modelRef));
-
     await Promise.all([
       modelRegistry.preload(FP_MELEE_HAND_RIGHT),
       preloadRemotePlayerBody(),
       ...(preloadInitialWeapon ? [preloadInitialWeapon] : []),
-      ...preloadAllRemoteWeaponGlbs,
     ]);
     const local = new LocalFirstPersonPresenter({
       viewModelParent: opts.fpViewModelParent,
@@ -122,26 +92,13 @@ export class PlayerPresentationManager {
       onMeleeVisual: opts.onMeleeVisual,
     });
     await local.initViewmodel();
-    const localMirror = new LocalMirrorPlayerPresenter(opts.scene);
-    const maxFullDetail =
-      opts.maxFullDetailRemoteBodies ?? REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST;
-    return new PlayerPresentationManager(
-      opts.scene,
-      modelRegistry,
-      local,
-      localMirror,
-      initialEquipped,
-      maxFullDetail,
-    );
+    const mirrorUri = opts.localMirrorBodyUri ?? REMOTE_PLAYER_BODY_URI_MALE;
+    const localMirror = new LocalMirrorPlayerPresenter(opts.scene, mirrorUri);
+    return new PlayerPresentationManager(opts.scene, modelRegistry, local, localMirror, initialEquipped);
   }
 
-  update(
-    dt: number,
-    localState: LocalPlayerGameplayState,
-    remoteSnapshots: ReadonlyMap<string, ReplicatedPlayerSnapshot>,
-    nowMs: number,
-    remoteLod?: RemotePresentationLodCamera,
-  ): void {
+  update(dt: number, localState: LocalPlayerGameplayState, nowMs: number): void {
+    void nowMs;
     this.latestDesiredLocalEquip = localState.equippedPrimary;
     if (
       !this.localWeaponGlbDrainRunning &&
@@ -154,46 +111,6 @@ export class PlayerPresentationManager {
     }
     this.local.update(localState, dt);
     this.localMirror.updateFromLocalState(localState, dt);
-    this._keepIds.clear();
-
-    let fullDetailRemotes: Set<string> | null = null;
-    if (remoteLod && remoteSnapshots.size > 0) {
-      const camX = remoteLod.cameraX;
-      const camY = remoteLod.cameraY;
-      const camZ = remoteLod.cameraZ;
-      const rank = this._remoteLodRankScratch;
-      rank.length = 0;
-      for (const [id, snap] of remoteSnapshots) {
-        const p = snap.worldPosition;
-        const dx = p.x - camX;
-        const dy = p.y - camY;
-        const dz = p.z - camZ;
-        rank.push({ id, distSq: dx * dx + dy * dy + dz * dz });
-      }
-      sortRemoteCrowdRankInPlace(rank);
-      fullDetailRemotes = remoteIdsForTopKFullDetail(rank, this.maxFullDetailRemoteBodies);
-    }
-
-    for (const [id, snap] of remoteSnapshots) {
-      this._keepIds.add(id);
-      let rp = this.remotes.get(id);
-      if (!rp) {
-        rp = new RemotePlayerPresenter(this.scene, this.modelRegistry);
-        this.remotes.set(id, rp);
-      }
-      if (fullDetailRemotes) {
-        rp.setRemoteCrowdDetail(fullDetailRemotes.has(id));
-      } else {
-        rp.setRemoteCrowdDetail(true);
-      }
-      rp.updateFromSnapshot(snap, dt, nowMs);
-    }
-    for (const [id, rp] of this.remotes) {
-      if (!this._keepIds.has(id)) {
-        rp.dispose(this.scene);
-        this.remotes.delete(id);
-      }
-    }
   }
 
   private async drainLocalWeaponGlbs(): Promise<void> {
@@ -228,8 +145,6 @@ export class PlayerPresentationManager {
   dispose(): void {
     this.local.dispose();
     this.localMirror.dispose(this.scene);
-    for (const rp of this.remotes.values()) rp.dispose(this.scene);
-    this.remotes.clear();
   }
 
   setLocalMirrorAvatarVisible(visible: boolean): void {

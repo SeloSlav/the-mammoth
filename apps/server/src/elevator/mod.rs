@@ -1,4 +1,4 @@
-//! Authoritative elevator cars (shared state) + walk/collision hooks for the movement tick.
+//! Authoritative elevator cars (shared state); kinematics advance on the physics tick.
 
 use std::collections::HashMap;
 
@@ -15,12 +15,6 @@ use crate::world_sound;
 
 mod collision_tuning;
 use collision_tuning::*;
-
-/// Runtime elevator/door colliders for `movement` (live `elevator_*` rows). Baked
-/// `generated_collision_solids` are static only — see file-level docs there.
-mod generated_player_collision;
-
-pub use generated_player_collision::resolve_player_generated_collision_aabbs;
 
 /// Must match `apps/client/src/game/fpElevatorConstants.ts` `ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS`.
 const RIDER_LOCK_SKIP_UPWARD_VY_MPS: f32 = 0.85;

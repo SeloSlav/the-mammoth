@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { ensureFpLoadingDebugGlobalObservers } from "../game/fpSession/fpLoadingDebug.js";
 import { useSpacetimeConnection } from "./useSpacetimeConnection";
-import type { SpacetimeSession } from "./useSpacetimeConnection";
+import type { SpacetimeSession, ProfileSubmitArgs } from "./useSpacetimeConnection";
 
-export type { SpacetimeSession };
+export type { SpacetimeSession, ProfileSubmitArgs };
 
 const SpacetimeContext = createContext<SpacetimeSession | null>(null);
 

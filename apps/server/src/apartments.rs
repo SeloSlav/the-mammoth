@@ -5,7 +5,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::accounts::user;
 use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
 use crate::auth;
-use crate::chat;
+use crate::crafting;
 use crate::elevator_layout::max_level;
 use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::feature_flags;
@@ -85,7 +85,7 @@ fn cancel_other_active_claims_for_player(
     }
 }
 
-/// Human-facing label for chat / logs (`unit_w_005` → "Floor 3, West 5").
+/// Human-facing label for HUD notices / logs (`unit_w_005` → "Floor 3, West 5").
 fn format_apartment_public_label(level: u32, unit_id: &str) -> String {
     let residential_floor = level.saturating_sub(1).max(1);
     if let Some(rest) = unit_id.strip_prefix("unit_w_") {
@@ -573,7 +573,7 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
         if let Some(urow) = ctx.db.user().identity().find(&sender) {
             let dn = crate::auth::display_name_for(&urow);
             let label = format_apartment_public_label(unit.level, &unit.unit_id);
-            chat::post_system_message(ctx, format!("{dn} is claiming apartment {label}"));
+            crafting::emit_hud_notice(ctx, sender, format!("{dn} is claiming apartment {label}"));
         }
     }
 
@@ -585,8 +585,9 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
         unit.claim_started_by = None;
         unit.claim_progress_secs = CLAIM_FULL_SECS;
         ctx.db.apartment_unit().unit_key().update(unit);
-        chat::post_system_message(
+        crafting::emit_hud_notice(
             ctx,
+            sender,
             format!("Claim complete — {unit_label} is now occupied."),
         );
         force_unit_primary_door_open(ctx, &unit_key);

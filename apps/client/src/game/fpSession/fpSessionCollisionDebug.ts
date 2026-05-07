@@ -1,10 +1,6 @@
 import * as THREE from "three";
 import type { CollisionAabb, CollisionSpatialIndex } from "@the-mammoth/world";
-import {
-  readFpCollisionDebugDraw,
-  readFpPhysicsDebugOverlay,
-  readFpRemotePlayerCollisionDebugDraw,
-} from "../fpPhysics/fpCollisionPolicy.js";
+import { readFpCollisionDebugDraw, readFpPhysicsDebugOverlay } from "../fpPhysics/fpCollisionPolicy.js";
 import type { DynamicCollisionQueryPose } from "../fpPhysics/fpPlayerCollision.js";
 import {
   FP_PLAYER_COLLISION_HEIGHT_CROUCH_M,
@@ -15,7 +11,6 @@ import {
 const PHYSICS_DEBUG_QUERY_RADIUS_M = 9;
 const MAX_DEBUG_STATIC_AABBS = 40;
 const MAX_DEBUG_DYNAMIC_AABBS = 24;
-const MAX_DEBUG_REMOTE_PLAYER_AABBS = 20;
 
 export type FpCollisionDebugOverlayContext = {
   staticCollisionIndex: CollisionSpatialIndex;
@@ -26,14 +21,6 @@ export type FpCollisionDebugOverlayContext = {
     z1: number,
     visit: (aabb: CollisionAabb) => void,
     queryPose?: DynamicCollisionQueryPose,
-  ) => void;
-  /** Other players’ movement / server melee hit volumes (`remotePlayerCollisionAabbs`). */
-  visitRemotePlayerCollisionAabbsInXZ: (
-    x0: number,
-    x1: number,
-    z0: number,
-    z1: number,
-    visit: (aabb: CollisionAabb) => void,
   ) => void;
 };
 
@@ -108,15 +95,8 @@ export function createFpCollisionDebugOverlay(ctx: FpCollisionDebugOverlayContex
     opacity: 0.75,
     depthTest: true,
   });
-  const remotePlayerLineMat = new THREE.LineBasicMaterial({
-    color: 0x66ff66,
-    transparent: true,
-    opacity: 0.85,
-    depthTest: true,
-  });
   const staticPool: THREE.LineSegments[] = [];
   const dynamicPool: THREE.LineSegments[] = [];
-  const remotePlayerPool: THREE.LineSegments[] = [];
   for (let i = 0; i < MAX_DEBUG_STATIC_AABBS; i++) {
     const line = new THREE.LineSegments(staticEdgesGeom, staticLineMat);
     line.visible = false;
@@ -130,13 +110,6 @@ export function createFpCollisionDebugOverlay(ctx: FpCollisionDebugOverlayContex
     line.frustumCulled = false;
     group.add(line);
     dynamicPool.push(line);
-  }
-  for (let i = 0; i < MAX_DEBUG_REMOTE_PLAYER_AABBS; i++) {
-    const line = new THREE.LineSegments(staticEdgesGeom, remotePlayerLineMat);
-    line.visible = false;
-    line.frustumCulled = false;
-    group.add(line);
-    remotePlayerPool.push(line);
   }
 
   let loggedPhysicsEngineNote = false;
@@ -196,8 +169,7 @@ export function createFpCollisionDebugOverlay(ctx: FpCollisionDebugOverlayContex
     update(pos, vel, opts) {
       const basicOn = readFpCollisionDebugDraw();
       const physicsOn = readFpPhysicsDebugOverlay();
-      const remotePlayersOn = readFpRemotePlayerCollisionDebugDraw();
-      const anyOn = basicOn || physicsOn || remotePlayersOn;
+      const anyOn = basicOn || physicsOn;
       group.visible = anyOn;
       if (!anyOn) return;
 
@@ -292,41 +264,6 @@ export function createFpCollisionDebugOverlay(ctx: FpCollisionDebugOverlayContex
         rigRing.visible = false;
         for (const line of staticPool) line.visible = false;
         for (const line of dynamicPool) line.visible = false;
-      }
-
-      if (remotePlayersOn && anyOn) {
-        const r = PHYSICS_DEBUG_QUERY_RADIUS_M;
-        const px = pos.x;
-        const pz = pos.z;
-        const remoteDyn: CollisionAabb[] = [];
-        ctx.visitRemotePlayerCollisionAabbsInXZ(px - r, px + r, pz - r, pz + r, (a) => {
-          remoteDyn.push(a);
-        });
-        remoteDyn.sort(
-          (a, b) =>
-            Math.hypot(
-              (a.min[0] + a.max[0]) * 0.5 - px,
-              (a.min[2] + a.max[2]) * 0.5 - pz,
-            ) -
-            Math.hypot(
-              (b.min[0] + b.max[0]) * 0.5 - px,
-              (b.min[2] + b.max[2]) * 0.5 - pz,
-            ),
-        );
-        const bodyHVis = opts.crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
-        let ri = 0;
-        const rlim = Math.min(remoteDyn.length, remotePlayerPool.length);
-        for (; ri < rlim; ri++) {
-          const a = remoteDyn[ri]!;
-          const overlapsSelfVertically =
-            a.max[1] >= pos.y - 0.08 && a.min[1] <= pos.y + bodyHVis + 0.35;
-          placeAabb(remotePlayerPool[ri]!, a, overlapsSelfVertically, pos);
-        }
-        for (; ri < remotePlayerPool.length; ri++) {
-          remotePlayerPool[ri]!.visible = false;
-        }
-      } else {
-        for (const line of remotePlayerPool) line.visible = false;
       }
     },
   };

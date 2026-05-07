@@ -1,7 +1,6 @@
 export {
   PlayerPresentationManager,
   type PlayerPresentationManagerOptions,
-  type RemotePresentationLodCamera,
 } from "./PlayerPresentationManager.js";
 export {
   FP_VIEWMODEL_DEFAULT_RIG_ROOT_AUTHORED,
@@ -13,6 +12,8 @@ export {
   LocalMirrorPlayerPresenter,
   preloadRemotePlayerBody,
   RemotePlayerPresenter,
+  REMOTE_PLAYER_BODY_URI_FEMALE,
+  REMOTE_PLAYER_BODY_URI_MALE,
   REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
 } from "./remote/RemotePlayerPresenter.js";
 export { buildPrimitiveHumanoid, type PrimitiveHumanoidParts } from "./primitiveHumanoid.js";

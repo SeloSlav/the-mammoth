@@ -11,7 +11,7 @@ pub struct PlayerPose {
     pub z: f32,
     /// Body / look yaw (from latest intent).
     pub yaw: f32,
-    /// Last `submit_move_intent` `intent_seq` applied by the server tick.
+    /// Monotonic locomotion snapshot id (`submit_player_locomotion_snapshot`); echoed back replicated.
     pub seq: u64,
     pub vel_x: f32,
     pub vel_y: f32,

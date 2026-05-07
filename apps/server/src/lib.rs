@@ -1,13 +1,15 @@
-//! SpaceTimeDB module — live persistence (presence, auth, intent-driven movement, …).
+//! SpaceTimeDB module — persistence + **trusted-client locomotion** (solo); elevators/apartments/etc.
 //! Run `pnpm client:generate` from the repo root to refresh TypeScript bindings.
+//!
+//! Server-side locomotion integration is off for solo; `elevator` kinematics, stair overlay helpers,
+//! and `movement` input bitmasks still compile as client-synced anchors for future authority.
+#![allow(dead_code)]
 
 mod accounts;
 mod apartment_door;
 mod apartment_interior_anchors;
 mod apartments;
 mod auth;
-mod character_controller;
-mod chat;
 mod combat_stub;
 mod crafting;
 mod dropped_item;
@@ -29,7 +31,6 @@ mod movement;
 mod player_vitals;
 mod pose;
 mod spawn_routing;
-mod stair_opening_collision;
 mod stair_runtime_overlay;
 mod world_sound;
 
@@ -62,6 +63,7 @@ pub fn on_connect(ctx: &ReducerContext) {
         let _ = ctx.db.user().insert(User {
             identity: id,
             username: None,
+            avatar_body: 0,
         });
     }
     pose::ensure_player_pose_row(ctx, id);
@@ -92,6 +94,22 @@ pub fn set_username(ctx: &ReducerContext, name: String) {
         return;
     };
     row.username = Some(name);
+    ctx.db.user().identity().update(row);
+}
+
+/// Male (`0`) or female (`1`) player body — used by client presentation / profile gate.
+#[spacetimedb::reducer]
+pub fn set_avatar_body(ctx: &ReducerContext, body: u8) {
+    if body != 0 && body != 1 {
+        log::warn!("set_avatar_body rejected: invalid body {body}");
+        return;
+    }
+    let id = ctx.sender();
+    let Some(mut row) = ctx.db.user().identity().find(&id) else {
+        log::error!("set_avatar_body: missing user row for {id}");
+        return;
+    };
+    row.avatar_body = body;
     ctx.db.user().identity().update(row);
 }
 

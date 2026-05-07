@@ -3,22 +3,19 @@ import { fpLoadingDbgMark } from "../game/fpSession/fpLoadingDebug.js";
 import { yieldToMain } from "../game/fpSession/yieldToMain.js";
 
 /**
- * Full snapshots applied after {@link buildInitialSubscriptionBatches}'s two {@code user} queries.
+ * Baseline table snapshots after batch **0** (self-scoped {@code user}).
  *
  * Largest / highest-churn snapshots stay last so chunked applies keep smaller tables between yields.
- *
- * Queries may overlap broader subscriptions elsewhere in this client (e.g. two {@code user} queries);
- * matching rows unify in the WASM cache—the duplicate full-user snapshot is deliberate so batch 0 stays O(1)
- * rows for fast name-gate reducer readiness without dropping multiplayer display-name lookups.
  */
-const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR: readonly (readonly string[])[] = [
+const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[])[] = [
   [
     "SELECT * FROM inventory_item",
     "SELECT * FROM craft_queue_item",
     "SELECT * FROM hud_toast_event",
     "SELECT * FROM player_vitals",
-    /** Required for resolving other players’ active hotbar slot → equipped weapon visuals. */
-    "SELECT * FROM player_active_hotbar",
+    "SELECT * FROM flashlight_charge",
+    "SELECT * FROM dropped_item",
+    "SELECT * FROM world_sound_event",
   ],
   [
     "SELECT * FROM elevator_car",
@@ -27,17 +24,11 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR: readonly (readonly string[
     "SELECT * FROM apartment_door",
     "SELECT * FROM apartment_door_gameplay",
   ],
-  [
-    "SELECT * FROM chat_message",
-    "SELECT * FROM flashlight_charge",
-    "SELECT * FROM dropped_item",
-    "SELECT * FROM world_sound_event",
-  ],
-  ["SELECT * FROM player_pose"],
 ];
 
 /**
- * Baseline batches: [**0**] scoped `user` (this connection), [**1**] full `user`, then prior chunks 2+.
+ * Baseline batches: [**0**] scoped {@code user}, then inventory/world, elevators/apartments,
+ * identity-scoped {@code player_pose} + {@code player_active_hotbar}.
  *
  * Caller must subscribe with identity already set on {@link DbConnection}.
  */
@@ -49,9 +40,18 @@ export function buildInitialSubscriptionBatches(
     id != null
       ? [`SELECT * FROM user WHERE identity = 0x${id.toHexString()}`]
       : ["SELECT * FROM user"];
-  const fullUser: readonly string[] = ["SELECT * FROM user"];
 
-  return [selfScopedUser, fullUser, ...INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_USER_PAIR] as const;
+  const poseBatch: readonly string[] =
+    id != null
+      ? [`SELECT * FROM player_pose WHERE identity = 0x${id.toHexString()}`]
+      : ["SELECT * FROM player_pose"];
+
+  const hotbarBatch: readonly string[] =
+    id != null
+      ? [`SELECT * FROM player_active_hotbar WHERE identity = 0x${id.toHexString()}`]
+      : ["SELECT * FROM player_active_hotbar"];
+
+  return [selfScopedUser, ...INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER, poseBatch, hotbarBatch];
 }
 
 export async function runChunkedInitialSpacetimeSubscriptions(

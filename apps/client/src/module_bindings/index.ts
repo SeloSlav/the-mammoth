@@ -57,8 +57,8 @@ import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
 import RefreshWorldLootSpawnsReducer from "./refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "./respawn_player_reducer";
-import SendChatReducer from "./send_chat_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
+import SetAvatarBodyReducer from "./set_avatar_body_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import StashMoveItemToSlotReducer from "./stash_move_item_to_slot_reducer";
 import StashPullItemReducer from "./stash_pull_item_reducer";
@@ -68,7 +68,7 @@ import StashPushItemReducer from "./stash_push_item_reducer";
 import StashPushItemToSlotReducer from "./stash_push_item_to_slot_reducer";
 import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
-import SubmitMoveIntentReducer from "./submit_move_intent_reducer";
+import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
 import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 
 // Import all procedure arg schemas
@@ -77,7 +77,6 @@ import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 import ApartmentDoorRow from "./apartment_door_table";
 import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
 import ApartmentUnitRow from "./apartment_unit_table";
-import ChatMessageRow from "./chat_message_table";
 import CraftQueueItemRow from "./craft_queue_item_table";
 import CraftQueueTickRow from "./craft_queue_tick_table";
 import DroppedItemRow from "./dropped_item_table";
@@ -139,20 +138,6 @@ const tablesSchema = __schema({
       { name: 'apartment_unit_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
     ],
   }, ApartmentUnitRow),
-  chat_message: __table({
-    name: 'chat_message',
-    indexes: [
-      { name: 'created_at', algorithm: 'btree', columns: [
-        'createdAt',
-      ] },
-      { name: 'id', algorithm: 'btree', columns: [
-        'id',
-      ] },
-    ],
-    constraints: [
-      { name: 'chat_message_id_key', constraint: 'unique', columns: ['id'] },
-    ],
-  }, ChatMessageRow),
   craft_queue_item: __table({
     name: 'craft_queue_item',
     indexes: [
@@ -433,8 +418,8 @@ const reducersSchema = __reducers(
   __reducerSchema("refresh_world_loot_spawns", RefreshWorldLootSpawnsReducer),
   __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),
   __reducerSchema("respawn_player", RespawnPlayerReducer),
-  __reducerSchema("send_chat", SendChatReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
+  __reducerSchema("set_avatar_body", SetAvatarBodyReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("stash_move_item_to_slot", StashMoveItemToSlotReducer),
   __reducerSchema("stash_pull_item", StashPullItemReducer),
@@ -444,7 +429,7 @@ const reducersSchema = __reducers(
   __reducerSchema("stash_push_item_to_slot", StashPushItemToSlotReducer),
   __reducerSchema("submit_firearm_shot", SubmitFirearmShotReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
-  __reducerSchema("submit_move_intent", SubmitMoveIntentReducer),
+  __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),
   __reducerSchema("tick_craft_queue_step", TickCraftQueueStepReducer),
 );
 

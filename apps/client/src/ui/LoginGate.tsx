@@ -1,8 +1,10 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { MAMMOTH_LOGO_PUBLIC_PATH } from "@the-mammoth/ui-theme";
 import type { SpacetimeSession } from "../spacetime/SpacetimeProvider";
 import { readGuestLastKnownDisplayName } from "../spacetime/guestLastKnownDisplayName";
+import { readEnableAccountAuth } from "../spacetime/env";
 import { MammothAuthBackdrop } from "./MammothAuthBackdrop";
+import { ProfileGate } from "./ProfileGate";
 import styles from "./LoginGate.module.css";
 import { useMammothAuthMenuMusic } from "./useMammothAuthMenuMusic";
 
@@ -11,33 +13,18 @@ type Props = {
 };
 
 /**
- * Account gate: OpenAuth (`apps/auth`) first, then in-game display name.
+ * Lobby routing: optional OIDC (`VITE_ENABLE_ACCOUNT_AUTH`), then profile gate before gameplay.
  */
 export function LoginGate({ session }: Props) {
   const {
     phase,
-    conn,
     connectionKind,
     errorMsg,
-    spacetimeUserSnapshotReady,
-    submitUsername,
     startPasswordSignIn,
     startGuestPlay,
     signOut,
   } = session;
-  const [nameInput, setNameInput] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!conn || !spacetimeUserSnapshotReady) return;
-    setBusy(true);
-    try {
-      await submitUsername(nameInput);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   /** ≥3 aligns with reducer validation; hint is UX-only until subscriptions confirm username. */
   const guestReconnectHint =
@@ -48,53 +35,66 @@ export function LoginGate({ session }: Props) {
     guestReconnectHint !== null &&
     guestReconnectHint.length >= 3;
 
+  const accountAuth = readEnableAccountAuth();
+
   if (phase === "needs_auth") {
     return (
       <AuthScreen eyebrow="Welcome to the block">
         <p className={styles.subtitle}>
-          Come on up. <strong>The Mammoth</strong> is a multiplayer survival game set in a
-          late-socialist Balkan commie block—long corridors, thin heat, and neighbors who may or may
-          not be on your side. Sign in to keep your flat, stash, and name between visits, or step in
-          as a guest with a key that stays in this browser until you sign out.
+          <strong>The Mammoth</strong> is a solo Balkan apartment complex simulator—long corridors,
+          thin heat, and your own corner of the tower to settle into.
         </p>
         {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
-        <div className={styles.divider} />
-        <div>
-          <button
-            type="button"
-            className={styles.button}
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await startPasswordSignIn();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {busy ? "Opening the stairwell door..." : "Sign in or create an account"}
-          </button>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              try {
-                startGuestPlay();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Sneak in as a guest
-          </button>
-        </div>
-        <p className={styles.microcopy}>
-          Accounts keep your progress across visits. Guests are tied to this browser—fine for a
-          look around the tower.
-        </p>
+        {accountAuth ? (
+          <>
+            <p className={styles.hint}>
+              Sign in to keep your flat and stash tied to an account, or continue as a guest with a key
+              stored in this browser.
+            </p>
+            <div className={styles.divider} />
+            <div>
+              <button
+                type="button"
+                className={styles.button}
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await startPasswordSignIn();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? "Opening the stairwell door..." : "Sign in or create an account"}
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  try {
+                    startGuestPlay();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Continue as guest
+              </button>
+            </div>
+            <p className={styles.microcopy}>
+              Accounts persist across browsers once signed in. Guests stay on this device until you sign
+              out.
+            </p>
+          </>
+        ) : (
+          <p className={styles.hint}>
+            Anonymous access is automatic when account auth is disabled — you should land on the profile
+            screen shortly.
+          </p>
+        )}
       </AuthScreen>
     );
   }
@@ -105,7 +105,7 @@ export function LoginGate({ session }: Props) {
         {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
         <p className={styles.statusCopy}>Reconnecting your saved guest slot…</p>
         <p className={styles.hint}>
-          We&apos;ll bump you ahead as soon as the tower sync—not picking a fresh name unless the desk
+          We&apos;ll bump you ahead as soon as the tower sync—not picking a fresh profile unless the desk
           says so.
         </p>
         <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
@@ -128,13 +128,11 @@ export function LoginGate({ session }: Props) {
     return (
       <AuthScreen eyebrow="Couldn&apos;t get you in">
         <p className={styles.statusCopy}>
-          We couldn&apos;t patch you through to the tower. Something at the front desk turned your
-          key away.
+          We couldn&apos;t patch you through to the tower. Something at the front desk turned your key
+          away.
         </p>
         <p className={styles.hint}>{connectionErrorPlayerMessage(errorMsg)}</p>
-        <p className={styles.hint}>
-          If it keeps happening, wait a minute and try again—or head back and sign in fresh.
-        </p>
+        <p className={styles.hint}>If it keeps happening, wait a minute and try again.</p>
         <button type="button" className={styles.button} onClick={() => signOut()}>
           Back to the lobby
         </button>
@@ -143,46 +141,8 @@ export function LoginGate({ session }: Props) {
   }
 
   return (
-    <AuthScreen eyebrow="Who are you in the halls?">
-      <p className={styles.subtitle}>
-        Pick the name other players will see on the landing and in chat. Use 3–24 characters:
-        letters, numbers, underscores, and hyphens.
-      </p>
-      <p className={styles.hint}>You can type anytime; stepping inside waits until reception finishes syncing.</p>
-      {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
-      {!conn ? (
-        <p className={styles.hint}>Connecting to reception—almost there.</p>
-      ) : !spacetimeUserSnapshotReady ? (
-        <p className={styles.hint}>Your key synced; pulling your line from dispatch…</p>
-      ) : null}
-      <form className={styles.form} onSubmit={onSubmit}>
-        <input
-          autoFocus
-          value={nameInput}
-          onChange={(ev) => setNameInput(ev.target.value)}
-          placeholder="Your callsign on the block"
-          className={styles.input}
-          disabled={busy}
-          maxLength={24}
-          autoComplete="username"
-        />
-        <button
-          type="submit"
-          className={styles.button}
-          disabled={busy || !conn || !spacetimeUserSnapshotReady}
-        >
-          {busy
-            ? "Saving your name..."
-            : !conn
-              ? "Waiting for reception…"
-              : !spacetimeUserSnapshotReady
-                ? "Syncing roster…"
-                : "Step inside"}
-        </button>
-      </form>
-      <button type="button" className={styles.secondaryButton} onClick={() => signOut()}>
-        Different account
-      </button>
+    <AuthScreen eyebrow="Your corridor profile">
+      <ProfileGate session={session} />
     </AuthScreen>
   );
 }

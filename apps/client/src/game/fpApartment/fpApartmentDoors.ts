@@ -24,13 +24,11 @@
  * 4. **Instance matrices are only rewritten when the eased visual `open01` moves materially.**
  *    Idle doors skip `setMatrixAt`; only doors chasing a changing replica pay each frame.
  *
- * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual — matches
- *    the server `movement` tick so door thresholds do not rubber-band from client/server skew.
- *    Only **closed** doors emit a dynamic capsule slab; open swing relies on static doorway holes.
+ * 5. **Prediction collision uses replicated `swing_open_01`**, not the eased visual. Only **closed**
+ *    doors emit a dynamic capsule slab; open swing relies on static doorway holes.
  *
  * 6. **Spatial bucketed collision/interact iteration.** Player prediction queries touch just the
- *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size) and
- *    matches the server's `collect_apartment_door_collision_aabbs` path.
+ *    two buckets adjacent to the query rect, so a corridor full of doors stays O(query size).
  */
 import * as THREE from "three";
 import type { BuildingDoc, LandingKitDef } from "@the-mammoth/schemas";

@@ -64,14 +64,6 @@ export const ApartmentUnit = __t.object("ApartmentUnit", {
 });
 export type ApartmentUnit = __Infer<typeof ApartmentUnit>;
 
-export const ChatMessage = __t.object("ChatMessage", {
-  id: __t.u64(),
-  sender: __t.option(__t.string()),
-  body: __t.string(),
-  createdAt: __t.timestamp(),
-});
-export type ChatMessage = __Infer<typeof ChatMessage>;
-
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
@@ -273,6 +265,7 @@ export type StashLocationData = __Infer<typeof StashLocationData>;
 export const User = __t.object("User", {
   identity: __t.identity(),
   username: __t.option(__t.string()),
+  avatarBody: __t.u8(),
 });
 export type User = __Infer<typeof User>;
 
