@@ -23,6 +23,17 @@ export type MammothDroppedPickupBandOpts = {
 };
 const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
 
+/**
+ * `DroppedItem.id` is `u64`; the Spacetime client may surface it as `bigint` or `number`. Mixed `===`
+ * checks miss, and async GLB loads then delete the fallback mesh thinking the row vanished.
+ */
+export function tryNormalizeDroppedItemId(id: unknown): bigint | null {
+  if (typeof id === "bigint") return id;
+  if (typeof id === "number" && Number.isFinite(id)) return BigInt(Math.trunc(id));
+  if (typeof id === "string" && /^[0-9]+$/.test(id)) return BigInt(id);
+  return null;
+}
+
 export function droppedPickupWithinServerVolume(
   feetX: number,
   feetY: number,
@@ -144,9 +155,9 @@ export function findNearestDroppedPickup(
     const dxz = dx * dx + dz * dz;
     if (dxz < bestDxz) {
       bestDxz = dxz;
-      const id = row.id;
-      const droppedItemId = typeof id === "bigint" ? id : BigInt(id as number);
-      best = { droppedItemId, defId: row.defId };
+      const nid = tryNormalizeDroppedItemId(row.id);
+      if (nid === null) continue;
+      best = { droppedItemId: nid, defId: row.defId };
     }
   }
   return best;
@@ -175,9 +186,9 @@ export function findNearestDroppedPickupsHud(
     const dz = row.z - z;
     const dxz = dx * dx + dz * dz;
     const isWorld = droppedItemIsWorldAnchor(row);
-    const id = row.id;
-    const droppedItemId = typeof id === "bigint" ? id : BigInt(id as number);
-    const hit: NearestDroppedPickup = { droppedItemId, defId: row.defId };
+    const nid = tryNormalizeDroppedItemId(row.id);
+    if (nid === null) continue;
+    const hit: NearestDroppedPickup = { droppedItemId: nid, defId: row.defId };
     if (isWorld) {
       if (dxz < bestWorldDxz) {
         bestWorldDxz = dxz;
@@ -192,14 +203,15 @@ export function findNearestDroppedPickupsHud(
 }
 
 function droppedIdKey(id: DroppedItem["id"]): string {
-  return typeof id === "bigint" ? id.toString() : String(id);
+  const n = tryNormalizeDroppedItemId(id);
+  return n !== null ? n.toString() : String(id);
 }
 
 function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolean {
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
-    const id = typeof row.id === "bigint" ? row.id : BigInt(row.id as number);
-    if (id === droppedItemId) return true;
+    const id = tryNormalizeDroppedItemId(row.id);
+    if (id !== null && id === droppedItemId) return true;
   }
   return false;
 }
@@ -331,8 +343,9 @@ export function mountDroppedItemsWorld(
   };
 
   const ensureVisual = (row: DroppedItem) => {
-    const key = droppedIdKey(row.id);
-    const droppedItemId = typeof row.id === "bigint" ? row.id : BigInt(row.id as number);
+    const droppedItemId = tryNormalizeDroppedItemId(row.id);
+    if (droppedItemId === null) return;
+    const key = droppedItemId.toString();
     const existing = idToGroup.get(key);
     if (existing) {
       applyPose(existing, row);

@@ -11,6 +11,7 @@ import {
   fitDroppedWorldItemModelToCatalog,
   MAMMOTH_PICKUP_MAX_ABS_DY_M,
   MAMMOTH_PICKUP_RADIUS_M,
+  tryNormalizeDroppedItemId,
 } from "./droppedItemWorldRuntime";
 
 describe("fitDroppedWorldItemModelToCatalog", () => {
@@ -32,6 +33,19 @@ describe("fitDroppedWorldItemModelToCatalog", () => {
 describe("world loot ground plane (Spacetime anchors)", () => {
   it("MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M matches server WORLD_LOOT_Y_GROUND_FLOOR_M", () => {
     expect(MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M).toBeCloseTo(0.28, 5);
+  });
+});
+
+describe("tryNormalizeDroppedItemId", () => {
+  it("treats u64-friendly number, bigint, and decimal string as the same key", () => {
+    expect(tryNormalizeDroppedItemId(42n)).toBe(42n);
+    expect(tryNormalizeDroppedItemId(42)).toBe(42n);
+    expect(tryNormalizeDroppedItemId("42")).toBe(42n);
+  });
+
+  it("returns null for unsupported id shapes", () => {
+    expect(tryNormalizeDroppedItemId(undefined)).toBe(null);
+    expect(tryNormalizeDroppedItemId({})).toBe(null);
   });
 });
 
