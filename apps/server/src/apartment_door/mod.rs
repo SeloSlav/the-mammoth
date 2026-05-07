@@ -17,6 +17,7 @@ use serde::Deserialize;
 use spacetimedb::{ReducerContext, Table};
 
 use crate::auth;
+use crate::apartments::apartment_unit;
 use crate::elevator_layout::{
     max_level, BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M,
 };
@@ -38,8 +39,9 @@ const INTERACT_FEET_BELOW_SLACK_M: f32 = 10.0;
 const INTERACT_FEET_ABOVE_HEAD_SLACK_M: f32 = 4.25;
 /// Same walk-probe offset used when validating door interactions — recover feet Y from the head probe.
 const WALK_PROBE_DY: f32 = 1.05;
-/// Allow the client's reported feet hint to lead the replicated pose by up to this much.
-const CLIENT_FEET_HINT_MAX_SEP_M: f32 = 2.8;
+/// Horizontal slack between replicated [`PlayerPose`] feet and the client's reported hint when
+/// validating [`player_in_interact_range`] for apartment doors (deep units + predictor lead).
+const APARTMENT_DOOR_CLIENT_FEET_HINT_MAX_SEP_M: f32 = 14.0;
 
 /// Face code convention (matches `FACE_CODE` in `swingDoorCollision.ts`):
 /// 0 = N, 1 = S, 2 = E, 3 = W.
@@ -464,6 +466,7 @@ fn resolve_interact_target(
     pose: &PlayerPose,
     requested_row_key: &str,
     client_feet_hint: Option<(f32, f32, f32)>,
+    hint_sep_max_m: f32,
 ) -> Option<ApartmentDoor> {
     let row = ctx
         .db
@@ -479,7 +482,7 @@ fn resolve_interact_target(
     }
     if let Some((hx, hy, hz)) = client_feet_hint {
         let sep_xz = ((hx - px).powi(2) + (hz - pz).powi(2)).sqrt();
-        if sep_xz <= CLIENT_FEET_HINT_MAX_SEP_M && player_in_interact_range(&row, hx, hy, hz) {
+        if sep_xz <= hint_sep_max_m && player_in_interact_range(&row, hx, hy, hz) {
             return Some(row);
         }
     }
@@ -513,7 +516,13 @@ fn apply_desired_open(
     desired_open: u8,
     client_feet_hint: Option<(f32, f32, f32)>,
 ) {
-    let Some(mut row) = resolve_interact_target(ctx, pose, requested_row_key, client_feet_hint)
+    let Some(mut row) = resolve_interact_target(
+        ctx,
+        pose,
+        requested_row_key,
+        client_feet_hint,
+        APARTMENT_DOOR_CLIENT_FEET_HINT_MAX_SEP_M,
+    )
     else {
         log::info!(
             "apartment_door: reject not_eligible row_key={requested_row_key:?} identity={} pose=({:.3},{:.3},{:.3})",
@@ -536,6 +545,33 @@ fn apply_desired_open(
         } else {
             world_sound::emit_landing_exterior_door_close_at(ctx, sx, sy, sz, id);
         }
+    }
+}
+
+/// East/west façade templates abut in Z (~0.6 m overlap): [`crate::apartments::unit_key_containing_feet`]
+/// resolves ties by centroid distance and can disagree with toggling THIS door while feet still lie
+/// in that hull. Fall back to hull membership for [`resident_unit_key_from_door_row`].
+fn residential_client_feet_align_door_volume(
+    ctx: &ReducerContext,
+    door: &ApartmentDoor,
+    fx: f32,
+    fy: f32,
+    fz: f32,
+) -> bool {
+    if !door.template_id.contains("unit_") {
+        return true;
+    }
+    let uk_door = resident_unit_key_from_door_row(door);
+    match crate::apartments::unit_key_containing_feet(ctx, fx, fy, fz) {
+        Some(ref best_uk) if best_uk == &uk_door => true,
+        Some(_) => ctx
+            .db
+            .apartment_unit()
+            .unit_key()
+            .find(&uk_door)
+            .map(|unit| crate::apartments::feet_inside_unit(&unit, fx, fy, fz))
+            .unwrap_or(false),
+        None => true,
     }
 }
 
@@ -563,15 +599,8 @@ pub fn apartment_door_toggle(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
-    if let Some(containing_unit_key) = crate::apartments::unit_key_containing_feet(
-        ctx,
-        client_feet_x,
-        client_feet_y,
-        client_feet_z,
-    ) {
-        if crate::apartment_door::resident_unit_key_from_door_row(&dr) != containing_unit_key {
-            return;
-        }
+    if !residential_client_feet_align_door_volume(ctx, &dr, client_feet_x, client_feet_y, client_feet_z) {
+        return;
     }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
         return;
@@ -611,15 +640,8 @@ pub fn apartment_door_set(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
-    if let Some(containing_unit_key) = crate::apartments::unit_key_containing_feet(
-        ctx,
-        client_feet_x,
-        client_feet_y,
-        client_feet_z,
-    ) {
-        if crate::apartment_door::resident_unit_key_from_door_row(&dr) != containing_unit_key {
-            return;
-        }
+    if !residential_client_feet_align_door_volume(ctx, &dr, client_feet_x, client_feet_y, client_feet_z) {
+        return;
     }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
         return;

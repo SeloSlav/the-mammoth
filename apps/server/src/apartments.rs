@@ -218,7 +218,7 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     }
 }
 
-fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+pub(crate) fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
     x >= unit.bound_min_x
         && x <= unit.bound_max_x
         && z >= unit.bound_min_z

@@ -403,4 +403,30 @@ describe("fpApartmentGameplay", () => {
       ),
     ).toBe(true);
   });
+
+  /** East-bay façade boxes abut in Z; centroid containment can disagree with hull membership. */
+  it("still matches the door hull when centroid picks another overlapping east unit", () => {
+    const unitA = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_003",
+      unitId: "unit_e_003",
+      boundMinX: 2,
+      boundMaxX: 14,
+      boundMinZ: -10,
+      boundMaxZ: -3,
+    });
+    const unitB = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_004",
+      unitId: "unit_e_004",
+      boundMinX: 2,
+      boundMaxX: 14,
+      boundMinZ: -8,
+      boundMaxZ: 4,
+    });
+    const conn = mockConn([unitA, unitB]);
+    /** Overlap wedge where centroid picks {@link unitB} but feet still lie in {@link unitA}'s Z span. */
+    const xz = { x: 8, y: 10.5, z: -3.25 };
+    expect(apartmentDoorMatchesContainingUnit(conn, xz, { floorDocId: "floor_a", level: 2, templateId: "unit_e_003|w" })).toBe(
+      true,
+    );
+  });
 });

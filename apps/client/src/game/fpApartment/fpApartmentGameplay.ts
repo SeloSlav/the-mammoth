@@ -202,12 +202,16 @@ export function apartmentDoorMatchesContainingUnit(
   pose: { x: number; y: number; z: number },
   slot: { floorDocId: string; level: number; templateId: string },
 ): boolean {
+  const doorUk = residentUnitKeyFromParts(slot.floorDocId, slot.level, slot.templateId);
   const containingUnit = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
   if (!containingUnit) return true;
-  return (
-    residentUnitKeyFromParts(slot.floorDocId, slot.level, slot.templateId) ===
-    containingUnit.unitKey
-  );
+  if (containingUnit.unitKey === doorUk) return true;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.unitKey !== doorUk) continue;
+    return feetInsideUnitHull(u, pose.x, pose.y, pose.z);
+  }
+  return false;
 }
 
 export function playerOwnsDoorLock(conn: DbConnection, id: Identity): boolean {
