@@ -421,7 +421,10 @@ export function buildFloorMeshes(
         roomExteriorFaces.length > 0 &&
         !skipShaftCutouts
       ) {
-        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces);
+        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces, {
+          floor,
+          placedObject: obj,
+        });
         if (windowFaces.length > 0) {
           const wt = 0.11;
           const vh = Math.max(sy - 2 * wt, 0.05);
@@ -454,6 +457,10 @@ export function buildFloorMeshes(
               gathered.e.push(...plan.holesEw);
             } else if (face === "w") {
               gathered.w.push(...plan.holesEw);
+            } else if (face === "n") {
+              gathered.n.push(...plan.holesNs);
+            } else if (face === "s") {
+              gathered.s.push(...plan.holesNs);
             }
           }
           const anyHole =
@@ -484,7 +491,10 @@ export function buildFloorMeshes(
       if (kind === "unit" && exteriorWindowHoles && tintByExteriorFace) {
         const hx = sx * 0.5;
         const hz = sz * 0.5;
-        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces);
+        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces, {
+          floor,
+          placedObject: obj,
+        });
         addUnitExteriorWindowGlassMeshes(room, {
           faces: glassFaces,
           hx,

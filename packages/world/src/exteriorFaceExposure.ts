@@ -59,6 +59,11 @@ function objectBounds(obj: PlacedObject): {
   };
 }
 
+/** Floor must span at least this along Z before end units get short-end (N/S) window holes. */
+export const BAR_CORNER_Z_SPAN_MIN_FOR_ENDCAP_WINDOWS_M = 24;
+
+const BAR_END_Z_ALIGN_TOL_M = 1.0;
+
 function isUnitPrefab(prefabId: string): boolean {
   const p = prefabId.toLowerCase();
   return p.includes("apartment") || p.includes("unit");
@@ -119,6 +124,39 @@ export function exteriorFacesForPlacedObjectInFloor(
   if (hasMeaningfulGap([a.x0, a.x1], mergeSpans(blockers.n))) out.push("n");
   if (hasMeaningfulGap([a.x0, a.x1], mergeSpans(blockers.s))) out.push("s");
   return out;
+}
+
+/**
+ * Mamutica-like double-loaded bars place one unit row at each corridor end in Z. Those short ends
+ * should get exterior windows on `s` (−Z outward) or `n` (+Z outward) when exposure says the face
+ * is unobstructed — but we only tag **bar ends** so mid-bar N/S “slot” exposures stay solid
+ * (see `unitShellFacesForExteriorWindows`).
+ *
+ * Skips tiny synthetic floors when `zSpan < {@link BAR_CORNER_Z_SPAN_MIN_FOR_ENDCAP_WINDOWS_M}` so
+ * Vitest fixtures with a single unit never request both N+S glass.
+ */
+export function barEndCornerFlagsForApartmentUnit(
+  floor: FloorDoc,
+  obj: PlacedObject,
+): { south: boolean; north: boolean } {
+  if (obj.rotation) return { south: false, north: false };
+  if (!isUnitPrefab(obj.prefabId)) return { south: false, north: false };
+  const a = objectBounds(obj);
+  let globalMinZ = Infinity;
+  let globalMaxZ = -Infinity;
+  for (const other of floor.objects) {
+    if (other.rotation || !isUnitPrefab(other.prefabId)) continue;
+    const b = objectBounds(other);
+    if (b.z0 < globalMinZ) globalMinZ = b.z0;
+    if (b.z1 > globalMaxZ) globalMaxZ = b.z1;
+  }
+  const zSpan = globalMaxZ - globalMinZ;
+  if (!(Number.isFinite(globalMinZ) && zSpan >= BAR_CORNER_Z_SPAN_MIN_FOR_ENDCAP_WINDOWS_M)) {
+    return { south: false, north: false };
+  }
+  const south = Math.abs(a.z0 - globalMinZ) <= BAR_END_Z_ALIGN_TOL_M;
+  const north = Math.abs(a.z1 - globalMaxZ) <= BAR_END_Z_ALIGN_TOL_M;
+  return { south, north };
 }
 
 function spanOverlap1D(a0: number, a1: number, b0: number, b1: number): number {

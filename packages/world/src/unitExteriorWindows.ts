@@ -1,15 +1,25 @@
 import * as THREE from "three";
+import type { FloorDoc, PlacedObject } from "@the-mammoth/schemas";
 import type { CardinalFace, WallHoleXY, WallHoleYZ } from "./wallWithDoorCutout.js";
+import { barEndCornerFlagsForApartmentUnit } from "./exteriorFaceExposure.js";
 
 /**
- * Subset of `exteriorFacesForPlacedObjectInFloor` hits that may receive apartment façade window
- * holes / glass. North/south can still read as exposed (slot between units along Z) but are not
- * primary elevations — keep them solid.
+ * East/west elevations always get façade windows. North/south short ends only on **bar corners**
+ * (−Z “south” end and +Z “north” end among all apartment units on the floor), when
+ * `exteriorFaces` exposes that face — avoids mid-bar N/S slot exposures (see
+ * `exteriorFacesForPlacedObjectInFloor`).
  */
 export function unitShellFacesForExteriorWindows(
   exteriorFaces: readonly CardinalFace[],
+  opts?: { floor: FloorDoc; placedObject: PlacedObject },
 ): CardinalFace[] {
-  return exteriorFaces.filter((f) => f === "e" || f === "w");
+  const ew = exteriorFaces.filter((f) => f === "e" || f === "w");
+  if (!opts) return ew;
+  const flags = barEndCornerFlagsForApartmentUnit(opts.floor, opts.placedObject);
+  const ordered: CardinalFace[] = [...ew];
+  if (flags.south && exteriorFaces.includes("s")) ordered.push("s");
+  if (flags.north && exteriorFaces.includes("n")) ordered.push("n");
+  return ordered;
 }
 
 const EDGE_INSET_M = 0.35;

@@ -91,7 +91,10 @@ function appendUnitExteriorWindowAnalyticSolids(
       const py = obj.position[1];
       const pz = obj.position[2];
 
-      const faces = unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(doc, obj));
+      const faces = unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(doc, obj), {
+        floor: doc,
+        placedObject: obj,
+      });
       if (faces.length === 0) continue;
 
       const wt = UNIT_SHELL_WALL_THICKNESS_M;

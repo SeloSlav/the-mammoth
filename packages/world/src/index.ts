@@ -76,6 +76,8 @@ export {
   type BuildingStairShaftSpec,
 } from "./buildingStairShafts.js";
 export {
+  BAR_CORNER_Z_SPAN_MIN_FOR_ENDCAP_WINDOWS_M,
+  barEndCornerFlagsForApartmentUnit,
   exteriorFacesForPlacedObjectInFloor,
   shaftFacesTowardAdjacentElevatorHoistways,
   shaftFacesTowardAdjacentStairwells,
