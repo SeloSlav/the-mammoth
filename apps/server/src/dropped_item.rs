@@ -23,13 +23,15 @@ use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
 
 /// Squared max **horizontal** distance (m²) from player feet to drop — matches client
-/// `MAMMOTH_PICKUP_RADIUS_M`. Vertical separation is gated separately so predicted client XZ
-/// (ahead of replicated pose) still succeeds while stacked floors cannot vacuum loot through slabs.
+/// `MAMMOTH_PICKUP_RADIUS_M`. Vertical stacking uses the same storey band as FP visibility
+/// (`elevator_layout` storey spacing + −0.25 m pad) so anchors near slab bottoms cannot vacuum the deck above/below when XZ aligns.
 const PICKUP_RADIUS_SQ: f32 = 3.5 * 3.5;
-/// Max |ΔY| (m) between player feet and drop anchor. **Must stay below one storey** (`STOREY_SPACING_M`):
-/// a flat ~4 m cap allowed the deck above/below (~3.16 m apart) when XZ aligned, so players vacuumed
-/// invisible "world" loot from other storeys. Keep in sync with client `MAMMOTH_PICKUP_MAX_ABS_DY_M`.
-const PICKUP_MAX_ABS_DY_M: f32 = STOREY_SPACING_M * 0.85;
+/// Feet sit above slab tops while anchored loot uses `WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M` — comparing raw |Δy|
+/// to a storey fraction under-rejects slabs. Matching discrete bands fixes that; keep a parachute sanity cap.
+/// Keep in sync with client `mammothVerticalStoryBandIndex` / `mammothSameStoreyPickupWindowM`.
+const PICKUP_VERTICAL_STORY_PAD_Y: f32 = 0.25;
+/// Max |ΔY| guard after same-storey band passes (handles rare outliers / regressions).
+const PICKUP_MAX_ABS_DY_SAME_BAND_M: f32 = STOREY_SPACING_M * 1.08;
 /// Forward offset along look direction when spawning a drop (m).
 const DROP_FORWARD_M: f32 = 0.55;
 /// Lift mesh slightly above replicated foot height to avoid sinking through thin slabs / Z-fight (m).
@@ -43,6 +45,11 @@ const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 /// (avoids Z-fight / mesh sinking on ~0.08–0.20 m slabs). Level-1 reference matches client constant
 /// `MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M` in `packages/assets/src/droppedWorldVisual.ts`.
 const WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M: f32 = 0.28;
+
+#[inline]
+fn mammoth_pickup_vertical_band(world_y: f32) -> i32 {
+    (((world_y - BUILDING_ORIGIN_Y - PICKUP_VERTICAL_STORY_PAD_Y) / STOREY_SPACING_M).floor()) as i32
+}
 
 #[inline]
 const fn building_plate_world_y(level: u32) -> f32 {
@@ -718,8 +725,13 @@ fn pickup_dropped_item_inner(
     if dx * dx + dz * dz > PICKUP_RADIUS_SQ {
         return Err("too far away".to_string());
     }
+    let pf = mammoth_pickup_vertical_band(pose.y);
+    let df = mammoth_pickup_vertical_band(dropped.y);
+    if pf != df {
+        return Err("too far away".to_string());
+    }
     let dy = (pose.y - dropped.y).abs();
-    if dy > PICKUP_MAX_ABS_DY_M {
+    if dy > PICKUP_MAX_ABS_DY_SAME_BAND_M {
         return Err("too far away".to_string());
     }
 

@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
-import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
@@ -11,13 +11,18 @@ import type { DroppedItem } from "../../module_bindings/types";
 /** Horizontal pickup radius (m). Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ`. */
 export const MAMMOTH_PICKUP_RADIUS_M = 3.5;
 /**
- * Max |ΔY| (m) between feet and drop for pickup. Matches server `PICKUP_MAX_ABS_DY_M`.
- * Derived as a fraction of storey spacing so it stays **below one storey** (~`60/19` m) — a flat ~4 m
- * cap allowed picking up anchored loot on the deck above/below when XZ matched.
+ * Same-band |ΔY| ceiling after vertical storey matched — parachute guard; aligns with server
+ * `PICKUP_MAX_ABS_DY_SAME_BAND_M`.
  */
-export const MAMMOTH_PICKUP_MAX_ABS_DY_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.85;
+export const MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 1.08;
 
-/** Lower bound for longest mesh AABB edge when fitting (avoids insane scale if GLB bounds are degenerate). */
+/** @deprecated Prefer {@link MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M}; kept for stray imports. */
+export const MAMMOTH_PICKUP_MAX_ABS_DY_M = MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M;
+
+export type MammothDroppedPickupBandOpts = {
+  buildingWorldOriginY: number;
+  floorSpacingM: number;
+};
 const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
 
 export function droppedPickupWithinServerVolume(
@@ -28,11 +33,25 @@ export function droppedPickupWithinServerVolume(
   dropY: number,
   dropZ: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
-  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+  verticalBands?: MammothDroppedPickupBandOpts | null,
 ): boolean {
   const dx = dropX - feetX;
   const dz = dropZ - feetZ;
   if (dx * dx + dz * dz > radiusM * radiusM) return false;
+  if (verticalBands != null) {
+    const feetBand = mammothVerticalStoryBandIndex(
+      feetY,
+      verticalBands.buildingWorldOriginY,
+      verticalBands.floorSpacingM,
+    );
+    const dropBand = mammothVerticalStoryBandIndex(
+      dropY,
+      verticalBands.buildingWorldOriginY,
+      verticalBands.floorSpacingM,
+    );
+    if (feetBand !== dropBand) return false;
+  }
   return Math.abs(dropY - feetY) <= maxAbsDyM;
 }
 
@@ -108,7 +127,8 @@ export function findNearestDroppedPickup(
   z: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
   predicate?: (row: DroppedItem) => boolean,
-  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+  verticalBands?: MammothDroppedPickupBandOpts | null,
 ): NearestDroppedPickup | null {
   const pred = predicate ?? (() => true);
   let best: NearestDroppedPickup | null = null;
@@ -116,7 +136,9 @@ export function findNearestDroppedPickup(
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
     if (!pred(row)) continue;
-    if (!droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM)) {
+    if (
+      !droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM, verticalBands)
+    ) {
       continue;
     }
     const dx = row.x - x;
@@ -139,7 +161,8 @@ export function findNearestDroppedPickupsHud(
   y: number,
   z: number,
   radiusM: number = MAMMOTH_PICKUP_RADIUS_M,
-  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_M,
+  maxAbsDyM: number = MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+  verticalBands?: MammothDroppedPickupBandOpts | null,
 ): { worldAnchor: NearestDroppedPickup | null; plain: NearestDroppedPickup | null } {
   let bestWorld: NearestDroppedPickup | null = null;
   let bestWorldDxz = Infinity;
@@ -147,7 +170,7 @@ export function findNearestDroppedPickupsHud(
   let bestPlainDxz = Infinity;
   for (const r of conn.db.dropped_item) {
     const row = r as DroppedItem;
-    if (!droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM)) {
+    if (!droppedPickupWithinServerVolume(x, y, z, row.x, row.y, row.z, radiusM, maxAbsDyM, verticalBands)) {
       continue;
     }
     const dx = row.x - x;
@@ -194,6 +217,10 @@ type DefTemplateState =
 
 export type MountDroppedItemsWorldOptions = {
   /**
+   * Vertical storey gates for pickups — aligns with {@link mammothVerticalStoryBandIndex}.
+   */
+  pickupBandOpts?: MammothDroppedPickupBandOpts | null;
+  /**
    * Called after `pickup_dropped_item` settles and the dropped row is gone from the local cache
    * (server granted the stack). Not called when pickup is a no-op (too far, inventory full, etc.).
    */
@@ -226,6 +253,9 @@ export function mountDroppedItemsWorld(
   const rowVisualInFlight = new Set<string>();
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
+
+  const resolvedBandOpts =
+    options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
 
   let droppedSub: SubscriptionHandle | null = null;
 
@@ -412,6 +442,8 @@ export function mountDroppedItemsWorld(
       z,
       MAMMOTH_PICKUP_RADIUS_M,
       (row) => !droppedItemIsWorldAnchor(row),
+      MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+      resolvedBandOpts,
     );
     if (!hit) return;
     const droppedItemId = hit.droppedItemId;

@@ -154,7 +154,7 @@ export {
   type ResolveFpCharacterCollisionOpts,
   type Vec3Like,
 } from "./fpCharacterController.js";
-export { estimateStoreyFromFeetY } from "./buildingStory.js";
+export { estimateStoreyFromFeetY, mammothVerticalStoryBandIndex } from "./buildingStory.js";
 export { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 export {
   collectElevatorSlabHoles,

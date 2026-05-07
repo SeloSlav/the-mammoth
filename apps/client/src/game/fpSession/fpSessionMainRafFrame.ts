@@ -13,7 +13,9 @@ import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
 import {
   findNearestDroppedPickupsHud,
+  MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
   MAMMOTH_PICKUP_RADIUS_M,
+  type MammothDroppedPickupBandOpts,
 } from "../worldRuntime/droppedItemWorldRuntime.js";
 import {
   apartmentFurnitureInteriorsPreferOverUnitDoor,
@@ -191,6 +193,8 @@ export type FpSessionMainRafFrameDeps = {
   _floorVisCamWorld: THREE.Vector3;
   _floorVisCamDir: THREE.Vector3;
   poseAoiAnchor: { x: number; y: number; z: number };
+  /** Mammoth building vertical bands for drop HUD proximity (matches server pickup storey gate). */
+  droppedPickupHudBands: MammothDroppedPickupBandOpts;
   /** Recenters world-sound + dropped-item AOI subscriptions when the feet drift far from the anchor. */
   syncSpatialAoiFromFeet: (cx: number, cy: number, cz: number) => void;
   syncActiveHotbarSlotToServer: () => void;
@@ -590,6 +594,8 @@ export function createFpSessionMainRafFrame(
           ft.y,
           ft.z,
           MAMMOTH_PICKUP_RADIUS_M,
+          MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+          deps.droppedPickupHudBands,
         );
         dropHudCacheFx = ft.x;
         dropHudCacheFy = ft.y;

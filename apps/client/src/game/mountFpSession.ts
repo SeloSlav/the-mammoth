@@ -2,6 +2,11 @@ import * as THREE from "three";
 import type { DbConnection } from "../module_bindings";
 import type { PlayerPose } from "../module_bindings/types";
 import {
+  bumpGuestFeetAutosaveIfDue,
+  persistActiveGuestLastWorldPose,
+  readActiveGuestLastWorldPose,
+} from "../spacetime/guestSavedWorldPose.js";
+import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
   createFPRig,
@@ -134,6 +139,7 @@ import {
   MOUSE_SENS,
   NET_DT_SEC,
   PITCH_LIMIT,
+  DROPPED_ITEM_SUBSCRIBE_HALF_M,
   POSE_AOI_HALF,
   WORLD_SOUND_AOI_HALF,
 } from "./fpSession/fpSessionConstants.js";
@@ -223,6 +229,11 @@ export async function mountFpSession(
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
+
+  const mammothDropPickupBands = {
+    buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+    floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+  } as const;
 
   const renderBootstrapFrame = () => {
     const w = canvas.clientWidth;
@@ -405,8 +416,13 @@ export async function mountFpSession(
   };
   const unsubHotbarRail = subscribeFpHotbarSelection(syncActiveHotbarSlotToServer);
 
-  /** Lobby hub (ground floor): near elevators + stairs at z=0 (`floor_mamutica_ground`). */
-  const pos = new THREE.Vector3(0, 1.35, 0);
+  /** Initial feet + AOI — guest slots restore last plaza pose; replicated `player_pose` still merges on hydrate. */
+  const cachedGuestFeet = readActiveGuestLastWorldPose();
+  const pos = new THREE.Vector3(
+    cachedGuestFeet?.x ?? 0,
+    cachedGuestFeet?.y ?? 1.35,
+    cachedGuestFeet?.z ?? 0,
+  );
   const poseAoiAnchor = { x: pos.x, y: pos.y, z: pos.z };
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
@@ -473,7 +489,7 @@ export async function mountFpSession(
   };
 
   const mainRaf: FpSessionMainRafState = {
-    bodyYaw: 0,
+    bodyYaw: cachedGuestFeet?.yaw ?? 0,
     pitch: 0,
     headLookYaw: 0,
     crouchToggle: false,
@@ -664,6 +680,12 @@ export async function mountFpSession(
   const onVisibilityChange = () => {
     if (document.visibilityState === "hidden") {
       resetTransientInputState();
+      persistActiveGuestLastWorldPose({
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        yaw: mainRaf.bodyYaw,
+      });
     }
   };
 
@@ -684,6 +706,12 @@ export async function mountFpSession(
   const serverPose = { x: 0, y: 1.35, z: 0, grounded: true, velX: 0, velY: 0, velZ: 0 };
   let spawnSynced = false;
 
+  /**
+   * Wired after `mountDroppedItemsWorld`; first authoritative `player_pose` snap must recenter
+   * dropped-item AOI even when it arrives only via `syncAllPoses` / handlers (not guest cache).
+   */
+  let syncSpatialAoiAfterHydratedSpawn: ((cx: number, cy: number, cz: number) => void) | null = null;
+
   const ingestPose = (row: PlayerPose) => {
     if (!(conn.identity?.isEqual(row.identity) ?? false)) return;
     serverPose.x = row.x;
@@ -699,6 +727,7 @@ export async function mountFpSession(
       _displayOffset.set(0, 0, 0);
       mainRaf.fpRigViewSmoothedReady = false;
       spawnSynced = true;
+      syncSpatialAoiAfterHydratedSpawn?.(row.x, row.y, row.z);
     } else {
       reconcileLocalPredictionToServer(row);
     }
@@ -719,10 +748,8 @@ export async function mountFpSession(
     ingestPose(row);
   };
 
-  conn.db.player_pose.onInsert(onPoseInsert);
-  conn.db.player_pose.onUpdate(onPoseUpdate);
-
-  const droppedWorld = mountDroppedItemsWorld(scene, conn, POSE_AOI_HALF, {
+  const droppedWorld = mountDroppedItemsWorld(scene, conn, DROPPED_ITEM_SUBSCRIBE_HALF_M, {
+    pickupBandOpts: mammothDropPickupBands,
     onPickupRemoved: async () => {
       await attachSpatialWorldAudio();
       localAudio.playItemPickLocal();
@@ -737,7 +764,12 @@ export async function mountFpSession(
     droppedWorld.subscribeAoi(cx, cz);
   };
 
-  syncSpatialAoiFromFeet(poseAoiAnchor.x, poseAoiAnchor.y, poseAoiAnchor.z);
+  syncSpatialAoiAfterHydratedSpawn = syncSpatialAoiFromFeet;
+  syncAllPoses();
+  syncSpatialAoiFromFeet(pos.x, pos.y, pos.z);
+
+  conn.db.player_pose.onInsert(onPoseInsert);
+  conn.db.player_pose.onUpdate(onPoseUpdate);
 
   const setSize = () => {
     const w = canvas.clientWidth;
@@ -1094,6 +1126,7 @@ export async function mountFpSession(
     _floorVisCamWorld,
     _floorVisCamDir,
     poseAoiAnchor,
+    droppedPickupHudBands: mammothDropPickupBands,
     syncSpatialAoiFromFeet,
     syncActiveHotbarSlotToServer,
     maybeSendMoveIntent,
@@ -1139,6 +1172,12 @@ export async function mountFpSession(
     if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
     try {
       runFrame(nowMs, dt);
+      bumpGuestFeetAutosaveIfDue(nowMs, {
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        yaw: mainRaf.bodyYaw,
+      });
     } finally {
       if (loadDbg) fpLoadingDbgPopPhase();
     }

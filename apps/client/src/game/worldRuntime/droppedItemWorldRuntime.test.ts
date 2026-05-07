@@ -61,11 +61,25 @@ describe("droppedPickupWithinServerVolume", () => {
     ).toBe(false);
   });
 
-  it("rejects same-XZ pickup one storey away (stacked plates)", () => {
+  it("rejects same-XZ pickup one storey away (band gate)", () => {
     const plate0 = 0;
     const plate1 = plate0 + DEFAULT_BUILDING_FLOOR_SPACING_M;
+    const bands = {
+      buildingWorldOriginY: 0,
+      floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+    };
     expect(
-      droppedPickupWithinServerVolume(0, plate0, 0, 0, plate1 + 0.28, 0, MAMMOTH_PICKUP_RADIUS_M),
+      droppedPickupWithinServerVolume(
+        0,
+        plate0,
+        0,
+        0,
+        plate1 + 0.28,
+        0,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_M,
+        bands,
+      ),
     ).toBe(false);
   });
 });

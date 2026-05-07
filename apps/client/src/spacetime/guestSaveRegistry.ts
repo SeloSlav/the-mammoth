@@ -16,6 +16,14 @@ export type GuestSaveSlot = {
   wsToken: string;
   cachedDisplayName: string | null;
   updatedAtMs: number;
+  /** Local pose hint for FP bootstrap — server `player_pose` still wins once replicated. */
+  lastWorldPose?: {
+    x: number;
+    y: number;
+    z: number;
+    yaw?: number;
+    atMs: number;
+  };
 };
 
 export type GuestSaveRegistryV1 = {
@@ -53,12 +61,46 @@ function parseRegistryV1(raw: unknown): GuestSaveRegistryV1 | null {
           : null;
     const updatedAtMs =
       typeof s.updatedAtMs === "number" && Number.isFinite(s.updatedAtMs) ? s.updatedAtMs : Date.now();
-    slots.push({
+
+    let lastWorldPose: GuestSaveSlot["lastWorldPose"];
+    const lwpRaw = s.lastWorldPose;
+    if (
+      lwpRaw &&
+      typeof lwpRaw === "object" &&
+      typeof (lwpRaw as Record<string, unknown>).x === "number" &&
+      Number.isFinite((lwpRaw as Record<string, unknown>).x as number) &&
+      typeof (lwpRaw as Record<string, unknown>).y === "number" &&
+      Number.isFinite((lwpRaw as Record<string, unknown>).y as number) &&
+      typeof (lwpRaw as Record<string, unknown>).z === "number" &&
+      Number.isFinite((lwpRaw as Record<string, unknown>).z as number)
+    ) {
+      const lw = lwpRaw as Record<string, unknown>;
+      const lwAt =
+        typeof lw.atMs === "number" && Number.isFinite(lw.atMs) ? lw.atMs : updatedAtMs;
+      const ly = lw.yaw;
+      const lwYaw =
+        ly === undefined ? undefined : typeof ly === "number" && Number.isFinite(ly) ? ly : undefined;
+      lastWorldPose = {
+        x: lw.x as number,
+        y: lw.y as number,
+        z: lw.z as number,
+        yaw: lwYaw,
+        atMs: lwAt,
+      };
+    } else {
+      lastWorldPose = undefined;
+    }
+
+    const slot: GuestSaveSlot = {
       id: s.id.trim(),
       wsToken: s.wsToken.trim(),
       cachedDisplayName,
       updatedAtMs,
-    });
+    };
+    if (lastWorldPose !== undefined) {
+      slot.lastWorldPose = lastWorldPose;
+    }
+    slots.push(slot);
   }
   const activeRaw = o.activeSlotId;
   const activeSlotId =
