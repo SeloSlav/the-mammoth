@@ -9,4 +9,5 @@ export type {
   Vec3,
 } from "./gameplayState.js";
 export type { ReplicatedPlayerSnapshot } from "./replicatedSnapshot.js";
+export type { ThirdPersonWeaponPresentationDrive } from "./thirdPersonWeaponPresentationDrive.js";
 export { derivePlayerAnimationIntent } from "./deriveAnimationIntent.js";

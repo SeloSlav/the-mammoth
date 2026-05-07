@@ -93,7 +93,7 @@ export class PlayerPresentationManager {
     });
     await local.initViewmodel();
     const mirrorUri = opts.localMirrorBodyUri ?? REMOTE_PLAYER_BODY_URI_MALE;
-    const localMirror = new LocalMirrorPlayerPresenter(opts.scene, mirrorUri);
+    const localMirror = new LocalMirrorPlayerPresenter(opts.scene, modelRegistry, mirrorUri);
     return new PlayerPresentationManager(opts.scene, modelRegistry, local, localMirror, initialEquipped);
   }
 

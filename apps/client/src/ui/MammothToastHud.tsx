@@ -17,6 +17,7 @@ import {
 } from "@the-mammoth/ui-theme";
 import {
   BOTTOM_RIGHT_FP_HUD_INSET,
+  FP_HUD_VITALS_TO_STACK_GAP_PX,
   PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX,
 } from "./PlayerVitalsHud";
 
@@ -28,10 +29,14 @@ type ToastLine = {
 
 const TOAST_MS = 5200;
 const MAX_TOASTS = 6;
-/** Gap between vitals (below) and the bottom of the toast stack. */
-const TOAST_ABOVE_VITALS_GAP_PX = 10;
 
-export function MammothToastHud({ conn }: { conn: DbConnection }) {
+type ToastHudProps = {
+  conn: DbConnection;
+  /** Extra offset above vitals+gap so toasts sit above {@link MammothCraftQueueStrip} (px). */
+  reserveAboveVitalsExtraPx?: number;
+};
+
+export function MammothToastHud({ conn, reserveAboveVitalsExtraPx = 0 }: ToastHudProps) {
   const [toasts, setToasts] = useState<ToastLine[]>([]);
 
   const dismissAfter = useCallback((key: string, ms: number) => {
@@ -101,7 +106,7 @@ export function MammothToastHud({ conn }: { conn: DbConnection }) {
       style={{
         position: "fixed",
         right: "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))",
-        bottom: `calc(${BOTTOM_RIGHT_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${TOAST_ABOVE_VITALS_GAP_PX}px)`,
+        bottom: `calc(${BOTTOM_RIGHT_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${FP_HUD_VITALS_TO_STACK_GAP_PX}px + ${reserveAboveVitalsExtraPx}px)`,
         zIndex: 120,
         display: "flex",
         flexDirection: "column",

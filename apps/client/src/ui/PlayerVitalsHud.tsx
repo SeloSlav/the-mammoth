@@ -9,11 +9,23 @@ const LOW_NEED = 20;
 /** Shared with toast HUD: distance from viewport bottom to this panel’s bottom edge (safe area + pad). */
 export const BOTTOM_RIGHT_FP_HUD_INSET = "max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px))";
 
+/** Vertical gap between the vitals card and the next stacked HUD row (craft strip / toasts). */
+export const FP_HUD_VITALS_TO_STACK_GAP_PX = 10;
+
 /**
  * Approximate outer height for stacking pick-up / craft toasts above vitals.
  * Bump if bars, padding, or title block change.
  */
 export const PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX = 128;
+
+/**
+ * Reserved vertical space for {@link MammothCraftQueueStrip} so toasts stack above it.
+ * Includes padding, two text lines, border, plus a small buffer for font metrics.
+ */
+export const CRAFT_QUEUE_STRIP_BLOCK_HEIGHT_PX = 62;
+
+/** Gap between the craft queue strip and the bottom of the toast stack. */
+export const CRAFT_QUEUE_STRIP_TO_TOAST_GAP_PX = 8;
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",

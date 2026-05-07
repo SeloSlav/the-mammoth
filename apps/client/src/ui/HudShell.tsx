@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import type { DbConnection } from "../module_bindings";
 import {
   getFpActiveStashPanelUnitKey,
@@ -14,6 +14,7 @@ import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
 import { MammothCompassHud } from "./MammothCompassHud";
 import { MammothFpsHud } from "./MammothFpsHud";
+import { MammothCraftQueueStrip } from "./MammothCraftQueueStrip";
 import { MammothCraftingHud } from "./MammothCraftingHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
@@ -43,6 +44,11 @@ export function HudShell({ displayName, onSignOut, conn, connectionKind }: HudPr
     getFpActiveStashPanelUnitKey,
     () => null,
   );
+
+  const [craftStripReserveAboveVitalsPx, setCraftStripReserveAboveVitalsPx] = useState(0);
+  const onCraftStripReserve = useCallback((px: number) => {
+    setCraftStripReserveAboveVitalsPx((prev) => (prev === px ? prev : px));
+  }, []);
 
   return (
     <>
@@ -117,8 +123,11 @@ export function HudShell({ displayName, onSignOut, conn, connectionKind }: HudPr
         <MammothCompassHud />
         <MammothDebugMenuHud />
         {conn ? <MammothCraftingHud conn={conn} /> : null}
-        {conn ? <MammothToastHud conn={conn} /> : null}
+        {conn ? (
+          <MammothToastHud conn={conn} reserveAboveVitalsExtraPx={craftStripReserveAboveVitalsPx} />
+        ) : null}
         {conn ? <MammothInventoryHud conn={conn} activeStashUnitKey={stashUnitKey} /> : null}
+        {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud />
         <MammothPickupPromptHud />

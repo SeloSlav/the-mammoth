@@ -70,8 +70,8 @@ export class WeaponPresenter {
       this.baseRootEuler.set(0.15, 0.55, 0.2, "XYZ");
       this.baseRootScale.set(1, 1, 1);
     } else {
-      this.baseRootPos.set(0.08, 0.02, 0.06);
-      this.baseRootEuler.set(0, 0, -0.35, "XYZ");
+      this.baseRootPos.set(0.035, -0.02, 0.045);
+      this.baseRootEuler.set(0.12, -0.05, -0.38, "XYZ");
       this.baseRootScale.set(1, 1, 1);
     }
     this.syncRootToMount();

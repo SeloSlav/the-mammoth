@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { IModelLoadRegistry, ModelRef } from "@the-mammoth/assets";
-import type { HeldItemId, LocalPlayerGameplayState, ReplicatedPlayerSnapshot } from "@the-mammoth/game";
+import type {
+  HeldItemId,
+  LocalPlayerGameplayState,
+  ReplicatedPlayerSnapshot,
+  ThirdPersonWeaponPresentationDrive,
+} from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
@@ -14,6 +19,7 @@ import {
   type FpFirearmShotVisualConfig,
 } from "../local/fpFirearmShotVisuals.js";
 import { FP_CROWBAR_GLTF_MAX_EDGE_M } from "../viewModelNormalize.js";
+import { resolveSkinnedHumanoidHandBone } from "../humanoidAttachmentBones.js";
 
 /**
  * Nearest N other players keep the full skinned `male.glb`; everyone else uses a shared-material
@@ -55,9 +61,8 @@ function expectGltfModelRef(ref: ModelRef): Extract<ModelRef, { kind: "gltf" }> 
 }
 
 /**
- * Approximate third-person wield point in **{@link WorldPlayerBodyPresenter}'s scene root space**
- * (feet yaw pivot). Floated deliberately — skips skinned LOD / bone quirks; matches “good enough”
- * mirror-adjacent read at all crowd detail levels.
+ * Legacy approximate wield point in **feet / yaw root space** when no rig hand bone was resolved.
+ * Prefer {@link resolveSkinnedHumanoidHandBone} + {@link WorldPlayerBodyPresenter.getThirdPersonWeaponMountHost}.
  */
 const REMOTE_WEAPON_FLOAT_LOCAL_POS = new THREE.Vector3(0.28, 1.06, 0.12);
 const REMOTE_WEAPON_FLOAT_LOCAL_EULER = new THREE.Euler(0.12, -0.42, -0.14, "XYZ");
@@ -280,6 +285,11 @@ class AnimatedRemotePlayerBody {
     this.mixer.update(dt);
   }
 
+  /** Skinned `male.glb` / `female.glb` wrist socket; `null` when this rig uses another naming scheme. */
+  getSkinnedRightHandWeaponBone(): THREE.Object3D | null {
+    return resolveSkinnedHumanoidHandBone(this.modelRoot, "right");
+  }
+
   dispose(): void {
     this.mixer.stopAllAction();
     deepDisposeObject3D(this.root);
@@ -337,8 +347,13 @@ function getRemotePlayerTemplate(): RemoteBodyTemplate {
   return getRemotePlayerBodyTemplate(REMOTE_PLAYER_MODEL_URI);
 }
 
-/** Third-person weapon + swing + muzzle flash replicated from {@link ReplicatedPlayerSnapshot}. */
-class RemoteHeldWeaponPresentation {
+/** Anything that can resolve a weapon parent (skinned hand bone, primitive socket, or feet-root float). */
+type ThirdPersonWeaponMountSource = {
+  getThirdPersonWeaponMountHost(): { parent: THREE.Object3D; identityLocal: boolean };
+};
+
+/** Third-person weapon + swing + muzzle flash — remotes, local mirror, NPCs (same presenter as players). */
+export class RemoteHeldWeaponPresentation {
   private readonly modelRegistry: IModelLoadRegistry;
   private readonly weaponMount = new THREE.Group();
   private weapon?: WeaponPresenter;
@@ -392,17 +407,28 @@ class RemoteHeldWeaponPresentation {
     (this.flashMesh.material as THREE.MeshBasicMaterial).opacity = 0;
   }
 
-  private ensureFloatedOnWorld(worldRoot: THREE.Object3D): void {
-    if (this.weaponMount.parent !== worldRoot) {
-      worldRoot.add(this.weaponMount);
+  private ensureWeaponMountOnHost(hostSrc: ThirdPersonWeaponMountSource): void {
+    const { parent, identityLocal } = hostSrc.getThirdPersonWeaponMountHost();
+    if (this.weaponMount.parent !== parent) {
+      if (this.weaponMount.parent) this.weaponMount.parent.remove(this.weaponMount);
+      parent.add(this.weaponMount);
     }
-    this.weaponMount.position.copy(REMOTE_WEAPON_FLOAT_LOCAL_POS);
-    this.weaponMount.rotation.copy(REMOTE_WEAPON_FLOAT_LOCAL_EULER);
+    if (identityLocal) {
+      this.weaponMount.position.set(0, 0, 0);
+      this.weaponMount.rotation.set(0, 0, 0);
+    } else {
+      this.weaponMount.position.copy(REMOTE_WEAPON_FLOAT_LOCAL_POS);
+      this.weaponMount.rotation.copy(REMOTE_WEAPON_FLOAT_LOCAL_EULER);
+    }
     this.weaponMount.scale.set(1, 1, 1);
   }
 
-  sync(snap: ReplicatedPlayerSnapshot, dt: number, worldRoot: THREE.Object3D): void {
-    const nextEquip = snap.equippedPrimary;
+  syncWeaponPresentation(
+    drive: ThirdPersonWeaponPresentationDrive,
+    dt: number,
+    hostSrc: ThirdPersonWeaponMountSource,
+  ): void {
+    const nextEquip = drive.equippedPrimary;
     const weaponDef =
       nextEquip === "unarmed" ? undefined : getWeaponDefinitionForEquippedPrimary(nextEquip);
 
@@ -413,7 +439,7 @@ class RemoteHeldWeaponPresentation {
       return;
     }
 
-    this.ensureFloatedOnWorld(worldRoot);
+    this.ensureWeaponMountOnHost(hostSrc);
 
     if (!this.weapon || this.visEquipped !== nextEquip) {
       if (this.flashRoot.parent) this.flashRoot.parent.remove(this.flashRoot);
@@ -446,23 +472,23 @@ class RemoteHeldWeaponPresentation {
       return;
     }
 
-    if (snap.meleePresentationSeq !== this.lastMeleeSeq) {
-      this.lastMeleeSeq = snap.meleePresentationSeq;
-      const rangedCfg = fpFirearmShotVisualConfigForHeldItem(snap.equippedPrimary);
-      if (!rangedCfg && getWeaponDefinitionForEquippedPrimary(snap.equippedPrimary)) {
+    if (drive.meleePresentationSeq !== this.lastMeleeSeq) {
+      this.lastMeleeSeq = drive.meleePresentationSeq;
+      const rangedCfg = fpFirearmShotVisualConfigForHeldItem(drive.equippedPrimary);
+      if (!rangedCfg && getWeaponDefinitionForEquippedPrimary(drive.equippedPrimary)) {
         this.meleeElapsedS = 0;
       }
     }
-    if (snap.firearmPresentationSeq !== this.lastFireSeq) {
-      this.lastFireSeq = snap.firearmPresentationSeq;
-      const cfg = fpFirearmShotVisualConfigForHeldItem(snap.equippedPrimary);
+    if (drive.firearmPresentationSeq !== this.lastFireSeq) {
+      this.lastFireSeq = drive.firearmPresentationSeq;
+      const cfg = fpFirearmShotVisualConfigForHeldItem(drive.equippedPrimary);
       if (cfg) {
         this.shotCfg = cfg;
         this.shotElapsedS = 0;
       }
     }
 
-    const swingDef = getWeaponDefinitionForEquippedPrimary(snap.equippedPrimary);
+    const swingDef = getWeaponDefinitionForEquippedPrimary(drive.equippedPrimary);
     const swingDur =
       swingDef?.primitiveSwingDurationS && swingDef.primitiveSwingDurationS > 1e-6
         ? swingDef.primitiveSwingDurationS
@@ -524,13 +550,15 @@ type BodyPose = {
   displayName?: string;
 };
 
-class WorldPlayerBodyPresenter {
+export class WorldPlayerBodyPresenter {
   readonly root: THREE.Group;
   private readonly body: AnimatedRemotePlayerBody;
   private readonly highBranch: THREE.Group;
   private readonly lowBranch: THREE.Group;
   private readonly crowdLod: boolean;
   private crowdLodHighActive = false;
+  /** Present only when {@link crowdLod}; approximate hand socket on the low-LOD primitive. */
+  private readonly primitiveRightHandWeaponSocket: THREE.Object3D | null;
   private readonly nameTag: THREE.Sprite | null = null;
   private readonly nameTagMaterial: THREE.SpriteMaterial | null = null;
   private nameTagText = "";
@@ -552,11 +580,13 @@ class WorldPlayerBodyPresenter {
 
     this.lowBranch = new THREE.Group();
     this.lowBranch.name = "remote_player_low_lod_branch";
+    let primitiveSocket: THREE.Object3D | null = null;
     if (opts.crowdLod) {
       const prim = buildPrimitiveHumanoid({
         sharedMaterials: { skin: remoteCrowdLodSkinMat, cloth: remoteCrowdLodClothMat },
         castShadow: false,
       });
+      primitiveSocket = prim.handAttachRight;
       prim.root.name = "remote_player_primitive_body";
       prim.root.traverse((o) => {
         if (o instanceof THREE.Mesh) {
@@ -565,6 +595,7 @@ class WorldPlayerBodyPresenter {
       });
       this.lowBranch.add(prim.root);
     }
+    this.primitiveRightHandWeaponSocket = primitiveSocket;
 
     this.root.add(this.highBranch);
     this.root.add(this.lowBranch);
@@ -618,6 +649,23 @@ class WorldPlayerBodyPresenter {
     } else {
       this.body.freezeForLodLo();
     }
+  }
+
+  /**
+   * Parent for {@link RemoteHeldWeaponPresentation}'s mount group: real hand bone when skinned body
+   * is visible, primitive {@link buildPrimitiveHumanoid} socket at low LOD, else legacy float on feet root.
+   */
+  getThirdPersonWeaponMountHost(): { parent: THREE.Object3D; identityLocal: boolean } {
+    if (this.crowdLod && !this.crowdLodHighActive && this.primitiveRightHandWeaponSocket) {
+      return { parent: this.primitiveRightHandWeaponSocket, identityLocal: true };
+    }
+    if (!this.crowdLod || this.crowdLodHighActive) {
+      const bone = this.body.getSkinnedRightHandWeaponBone();
+      if (bone) {
+        return { parent: bone, identityLocal: true };
+      }
+    }
+    return { parent: this.root, identityLocal: false };
   }
 
   private applyWorldFromPose(pose: BodyPose): void {
@@ -694,7 +742,15 @@ export class RemotePlayerPresenter {
       },
       dt,
     );
-    this.weaponFx.sync(snap, dt, this.presenter.root);
+    this.weaponFx.syncWeaponPresentation(
+      {
+        equippedPrimary: snap.equippedPrimary,
+        meleePresentationSeq: snap.meleePresentationSeq,
+        firearmPresentationSeq: snap.firearmPresentationSeq,
+      },
+      dt,
+      this.presenter,
+    );
   }
 
   dispose(scene: THREE.Scene): void {
@@ -706,9 +762,11 @@ export class RemotePlayerPresenter {
 export class LocalMirrorPlayerPresenter {
   readonly root: THREE.Group;
   private readonly presenter: WorldPlayerBodyPresenter;
+  private readonly weaponFx: RemoteHeldWeaponPresentation;
   private readonly mirrorPosition = new THREE.Vector3();
 
-  constructor(scene: THREE.Scene, bodyUri?: string) {
+  constructor(scene: THREE.Scene, modelRegistry: IModelLoadRegistry, bodyUri?: string) {
+    this.weaponFx = new RemoteHeldWeaponPresentation(modelRegistry);
     this.presenter = new WorldPlayerBodyPresenter(scene, {
       showNameTag: false,
       crowdLod: false,
@@ -733,6 +791,15 @@ export class LocalMirrorPlayerPresenter {
       },
       dt,
     );
+    this.weaponFx.syncWeaponPresentation(
+      {
+        equippedPrimary: state.equippedPrimary,
+        meleePresentationSeq: state.meleeAttackSeq,
+        firearmPresentationSeq: state.firearmShotSeq,
+      },
+      dt,
+      this.presenter,
+    );
   }
 
   setVisible(visible: boolean): void {
@@ -740,6 +807,7 @@ export class LocalMirrorPlayerPresenter {
   }
 
   dispose(scene: THREE.Scene): void {
+    this.weaponFx.dispose();
     this.presenter.dispose(scene);
   }
 }
