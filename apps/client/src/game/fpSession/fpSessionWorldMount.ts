@@ -39,7 +39,7 @@ import buildingDoc from "../../../../../content/building/mammoth.json";
 import cellDoc from "../../../../../content/cells/cell_0_0.json";
 import stairWellAuthoringJson from "../../../../../content/elevator/stairwell.json";
 import { floorPayloadByDocId } from "./fpSessionContentLoad";
-import { mergeStaticFloorGeometries, mergeStaticFloorGeometriesYielding } from "./fpSessionStaticFloorMerge.js";
+import { mergeStaticFloorGeometries, mergeMegablockStaticDirectChildYielding, mergeStaticFloorGeometriesYielding } from "./fpSessionStaticFloorMerge.js";
 import { yieldToMain } from "./yieldToMain.js";
 
 /** Stair-shaft core AABB for FP mood lighting; keep darkness inside the actual shaft, not corridors. */
@@ -90,9 +90,25 @@ export type FpSessionStaticWorld = {
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
 };
 
+export type MegablockBackdropHooks = {
+  /**
+   * Called after each storey plate is stacked **and** its static geometry is merged — avoids showing raw
+   * placeholders that later disappear when the global merge pass runs.
+   */
+  onFloorPlateInstantiated?: (ctx: { buildingRoot: THREE.Group }) => void | Promise<void>;
+  /**
+   * Ez-tree grove just finished generating and was parented under `buildingRoot` — usually **before** plate
+   * merges finish, so the menu can paint forest + ground without waiting on collision merges.
+   */
+  onForestReady?: (ctx: { forestRoot: THREE.Group; buildingRoot: THREE.Group }) => void | Promise<void>;
+};
+
 export type FpSessionStaticWorldAsyncOpts = {
-  /** Prefer mesh + merge ordering for these `BuildingFloorRef.levelIndex` values (hub = 1). */
-  priorityPlateLevelIndices?: readonly number[];
+  /**
+   * Lazily resolved so hooks can be registered after {@link primeMegablockStaticWorldMeshBuild} starts
+   * (e.g. menu mounts mid-build) without restarting the shared promise.
+   */
+  getBackdropHooks?: () => MegablockBackdropHooks | null | undefined;
 };
 
 export function createFpSessionStaticWorld(): FpSessionStaticWorld {
@@ -232,6 +248,9 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
 export async function createFpSessionStaticWorldAsync(
   opts?: FpSessionStaticWorldAsyncOpts,
 ): Promise<FpSessionStaticWorld> {
+  /** Matches {@link buildExteriorProceduralTreeGroupYielding} root name — detach for stack-only bounds. */
+  const exteriorTreeGroveName = "exterior_procedural_tree_grove";
+
   await yieldToMain();
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
@@ -295,7 +314,13 @@ export async function createFpSessionStaticWorldAsync(
   const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
     stairWellDef,
     yieldAfterEachPlate: yieldToMain,
-    priorityPlateLevelIndices: opts?.priorityPlateLevelIndices,
+    afterEachPlate: async ({ root, plateGroup }) => {
+      if (typeof plateGroup.userData.mammothPlateLevelIndex === "number") {
+        await mergeMegablockStaticDirectChildYielding(plateGroup, yieldToMain);
+      }
+      const hooks = opts?.getBackdropHooks?.();
+      await hooks?.onFloorPlateInstantiated?.({ buildingRoot: root });
+    },
   });
 
   const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
@@ -307,17 +332,11 @@ export async function createFpSessionStaticWorldAsync(
   );
   const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
 
-  await mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain, {
-    priorityPlateLevelIndices: opts?.priorityPlateLevelIndices,
-  });
-  await yieldToMain();
-  buildingRoot.updateMatrixWorld(true);
-  await yieldToMain();
-  const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
-
   await yieldToMain();
 
+  let treeGroupPromise: Promise<THREE.Group> | null = null;
   if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
+    buildingRoot.updateMatrixWorld(true);
     const buildingLocalFootprint = new THREE.Box3()
       .setFromObject(buildingRoot)
       .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
@@ -340,7 +359,7 @@ export async function createFpSessionStaticWorldAsync(
       ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
     ];
 
-    const treeGroup = await buildExteriorProceduralTreeGroupYielding(
+    treeGroupPromise = buildExteriorProceduralTreeGroupYielding(
       buildingLocalFootprint,
       yieldToMain,
       {
@@ -349,12 +368,32 @@ export async function createFpSessionStaticWorldAsync(
       },
       exteriorTreePlacements,
     );
-    buildingRoot.add(treeGroup);
-    await yieldToMain();
   }
 
-  await yieldToMain();
+  /** Parent grove as soon as ez-tree meshing finishes — do not block on plate merges (forest stayed invisible). */
+  const forestAttachTask =
+    treeGroupPromise !== null
+      ? (async () => {
+          const tg = await treeGroupPromise;
+          const planted = tg.children.length > 0;
+          if (!planted) return;
+          if (tg.parent !== buildingRoot) buildingRoot.add(tg);
+          const hooks = opts?.getBackdropHooks?.();
+          await hooks?.onForestReady?.({ forestRoot: tg, buildingRoot });
+          await yieldToMain();
+        })()
+      : Promise.resolve();
 
+  await Promise.all([mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain), forestAttachTask]);
+
+  const grove = buildingRoot.getObjectByName(exteriorTreeGroveName);
+  if (grove) buildingRoot.remove(grove);
+  buildingRoot.updateMatrixWorld(true);
+  await yieldToMain();
+  const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
+  if (grove) buildingRoot.add(grove);
+
+  await yieldToMain();
   const staticCollisionIndex =
     buildCollisionSpatialIndex(consolidatedCollisionBlockers);
 

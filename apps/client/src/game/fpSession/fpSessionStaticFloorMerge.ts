@@ -6,6 +6,9 @@ import {
   mergeGroupDescendantsByMaterialYielding,
 } from "./fpMergeGroupDescendantsByMaterial.js";
 
+/** Per-plate / stair-column root — skips duplicate merges during incremental auth builds + final pass. */
+export const MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD = "mammothStaticFloorMergeComplete" as const;
+
 /** Scratch for {@link mergeUnitPreservedShellsByPlacedObject} (avoid alloc per mesh). */
 const _mergeUnitShellScratch = new THREE.Matrix4();
 
@@ -26,6 +29,8 @@ const _mergeUnitShellScratch = new THREE.Matrix4();
  * (that module pulls ez-tree textures and requires `document`).
  */
 function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
+  if (child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] === true) return;
+
   const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
   const isStairColumn = child.userData.mammothStairColumnRoot === true;
   if (!isFloorPlate && !isStairColumn) return;
@@ -40,17 +45,21 @@ function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
       });
       mergeGroupDescendantsByMaterial(seg as THREE.Group);
     }
+    child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] = true;
     return;
   }
 
   mergeGroupDescendantsByMaterial(child as THREE.Group);
   if (isFloorPlate) mergeUnitPreservedShellsByPlacedObject(child as THREE.Group);
+  child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] = true;
 }
 
 async function mergeStaticFloorDirectChildYielding(
   child: THREE.Object3D,
   yieldToMain: () => Promise<void>,
 ): Promise<void> {
+  if (child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] === true) return;
+
   const isFloorPlate = typeof child.userData.mammothPlateLevelIndex === "number";
   const isStairColumn = child.userData.mammothStairColumnRoot === true;
   if (!isFloorPlate && !isStairColumn) return;
@@ -68,6 +77,7 @@ async function mergeStaticFloorDirectChildYielding(
       /** Inner merge yields often; breathe between shaft segments ~every 5 storeys — avoid timer storms on ≥3 columns. */
       if (stairSegDone % 5 === 0) await yieldToMain();
     }
+    child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] = true;
     return;
   }
 
@@ -75,6 +85,15 @@ async function mergeStaticFloorDirectChildYielding(
   if (isFloorPlate) {
     await mergeUnitPreservedShellsByPlacedObjectYielding(child as THREE.Group, yieldToMain);
   }
+  child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] = true;
+}
+
+/** Merge one newly authored floor plate or stair column root — called incrementally during async stack build. */
+export async function mergeMegablockStaticDirectChildYielding(
+  child: THREE.Object3D,
+  yieldToMain: () => Promise<void>,
+): Promise<void> {
+  await mergeStaticFloorDirectChildYielding(child, yieldToMain);
 }
 
 export function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
@@ -89,28 +108,28 @@ export function mergeStaticFloorGeometries(buildingRoot: THREE.Group): void {
  * Same merges as {@link mergeStaticFloorGeometries}, split across awaits so one floor column / stair
  * root merge does not create a multi-second-long main-thread task during login.
  *
- * Optionally merges prioritized storey plates first ({@link userData.mammothPlateLevelIndex}) so hub
- * floors warm GPU earlier during progressive idle frames.
+ * Visits **lowest {@link userData.mammothPlateLevelIndex} first**, stair shafts **last**. Floor plates
+ * merged incrementally during async stack builds are skipped via {@link MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD}.
  */
 export async function mergeStaticFloorGeometriesYielding(
   buildingRoot: THREE.Group,
   yieldToMain: () => Promise<void>,
-  opts?: { priorityPlateLevelIndices?: readonly number[] },
 ): Promise<void> {
   buildingRoot.updateMatrixWorld(true);
-  const prio = opts?.priorityPlateLevelIndices;
-  let tops = [...buildingRoot.children];
-  if (prio?.length) {
-    const pri = new Map(prio.map((n, i) => [n, i]));
-    const score = (c: THREE.Object3D): number => {
-      if (c.userData.mammothStairColumnRoot === true) return 50_000;
-      const li = c.userData.mammothPlateLevelIndex;
-      if (typeof li === "number" && pri.has(li)) return pri.get(li)!;
-      if (typeof li === "number") return 10_000 + li;
-      return 40_000;
-    };
-    tops = tops.sort((a, b) => score(a) - score(b));
-  }
+  const tops = [...buildingRoot.children].sort((a, b) => {
+    const stairA = a.userData.mammothStairColumnRoot === true;
+    const stairB = b.userData.mammothStairColumnRoot === true;
+    if (stairA !== stairB) return stairA ? 1 : -1;
+    const la =
+      typeof a.userData.mammothPlateLevelIndex === "number"
+        ? (a.userData.mammothPlateLevelIndex as number)
+        : 0;
+    const lb =
+      typeof b.userData.mammothPlateLevelIndex === "number"
+        ? (b.userData.mammothPlateLevelIndex as number)
+        : 0;
+    return la - lb;
+  });
   for (const child of tops) {
     await mergeStaticFloorDirectChildYielding(child, yieldToMain);
     await yieldToMain();

@@ -1,22 +1,24 @@
 import {
   createFpSessionStaticWorldAsync,
   type FpSessionStaticWorld,
+  type MegablockBackdropHooks,
 } from "./fpSessionWorldMount.js";
 import { disposeStaticWorldObjectTree } from "./fpSessionStaticWorldDispose.js";
 
-/** Hub / lobby plate — prioritized for mesh author + merge while other storeys lag behind. */
-const HUB_PREFETCH_PLATE_LEVELS: readonly number[] = [1];
+export type { MegablockBackdropHooks };
 
 let megablockInflightBuild: Promise<FpSessionStaticWorld> | null = null;
 
 /**
- * Starts the static world mesh CPU build. Shared by the auth-screen orbit ({@link waitMegablockStaticWorldMeshReady}),
- * username-submit / gameplay prefetch, and `mountFpSession` — first caller kicks off work; others await the same promise.
+ * Starts the static world mesh CPU build — auth backdrop passes progressive hooks; `mountFpSession`
+ * shares the same promise via {@link waitMegablockStaticWorldMeshReady}.
  */
-export function primeMegablockStaticWorldMeshBuild(): void {
+export function primeMegablockStaticWorldMeshBuild(opts?: {
+  getBackdropHooks?: () => MegablockBackdropHooks | null | undefined;
+}): void {
   if (megablockInflightBuild) return;
   megablockInflightBuild = createFpSessionStaticWorldAsync({
-    priorityPlateLevelIndices: HUB_PREFETCH_PLATE_LEVELS,
+    getBackdropHooks: opts?.getBackdropHooks,
   });
 }
 

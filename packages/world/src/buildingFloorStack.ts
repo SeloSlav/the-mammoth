@@ -37,12 +37,21 @@ export type InstantiateBuildingFloorStackOptions = {
 
 export type InstantiateBuildingFloorStackAsyncOptions = InstantiateBuildingFloorStackOptions & {
   /**
+   * When set, awaited after each floor plate is added so heavy mesh authoring stays chunked
+   * (`yieldAfterEachPlate`) and UI hooks can observe progressive stack assembly (auth backdrop).
+   * `plateGroup` is the new direct child under `root` for this storey (never reorder plates —
+   * build strictly lowest {@link BuildingFloorRef.levelIndex} first unless callers violate authoring).
+   */
+  afterEachPlate?: (ctx: {
+    root: THREE.Group;
+    ref: BuildingDoc["floorRefs"][number];
+    plateGroup: THREE.Object3D;
+  }) => void | Promise<void>;
+  /**
    * When set, awaited after each floor plate is added so long `buildFloorMeshes` work is split
    * across tasks (keeps the tab responsive during initial world build).
    */
   yieldAfterEachPlate?: () => Promise<void>;
-  /** Storey levels ({@link BuildingFloorRef.levelIndex}) to author first — e.g. hub / ground for faster time-to-first-frame. */
-  priorityPlateLevelIndices?: readonly number[];
 };
 
 type BuildingFloorStackBuildContext = {
@@ -226,25 +235,6 @@ async function finalizeBuildingFloorStackStairColumnsYielding(
   );
 }
 
-function orderFloorRefsByPlatePriority(
-  sorted: readonly BuildingDoc["floorRefs"][number][],
-  priorityPlateLevelIndices: readonly number[] | undefined,
-): BuildingDoc["floorRefs"][number][] {
-  if (!priorityPlateLevelIndices?.length) return [...sorted];
-  const head: BuildingDoc["floorRefs"][number][] = [];
-  const usedLevels = new Set<number>();
-  for (const lvl of priorityPlateLevelIndices) {
-    if (usedLevels.has(lvl)) continue;
-    const ref = sorted.find((r) => r.levelIndex === lvl);
-    if (ref) {
-      head.push(ref);
-      usedLevels.add(lvl);
-    }
-  }
-  const tail = sorted.filter((r) => !usedLevels.has(r.levelIndex));
-  return [...head, ...tail];
-}
-
 /**
  * Stacks authored floor plates from a `BuildingDoc` into one group (placeholder boxes).
  * `getFloorDoc` must return the `FloorDoc` for each referenced `floorDocId`.
@@ -272,7 +262,7 @@ export async function instantiateBuildingFloorStackAsync(
   getFloorDoc: (floorDocId: string) => FloorDoc,
   options?: InstantiateBuildingFloorStackAsyncOptions,
 ): Promise<THREE.Group> {
-  const { yieldAfterEachPlate, priorityPlateLevelIndices, ...rest } = options ?? {};
+  const { yieldAfterEachPlate, afterEachPlate, ...rest } = options ?? {};
   const ctx = yieldAfterEachPlate
     ? await createBuildingFloorStackBuildContextYielding(
         building,
@@ -282,10 +272,18 @@ export async function instantiateBuildingFloorStackAsync(
       )
     : createBuildingFloorStackBuildContext(building, getFloorDoc, rest);
   if (yieldAfterEachPlate) await yieldAfterEachPlate();
-  const buildRefs = orderFloorRefsByPlatePriority(ctx.sorted, priorityPlateLevelIndices);
+  const buildRefs = [...ctx.sorted];
   for (const ref of buildRefs) {
+    const childCountBefore = ctx.root.children.length;
     addSingleFloorPlateToStack(ctx, ref);
+    const plateGroup = ctx.root.children[childCountBefore];
     if (yieldAfterEachPlate) await yieldAfterEachPlate();
+    if (afterEachPlate) {
+      if (!plateGroup) {
+        throw new Error(`buildingFloorStack: missing plate child after level ${ref.levelIndex}`);
+      }
+      await afterEachPlate({ root: ctx.root, ref, plateGroup });
+    }
   }
   if (yieldAfterEachPlate) {
     await finalizeBuildingFloorStackStairColumnsYielding(ctx, yieldAfterEachPlate);

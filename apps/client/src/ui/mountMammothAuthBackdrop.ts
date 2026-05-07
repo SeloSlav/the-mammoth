@@ -8,7 +8,11 @@ import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
 } from "../game/fpSession/fpSessionEnvironment.js";
-import { waitMegablockStaticWorldMeshReady } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
+import {
+  primeMegablockStaticWorldMeshBuild,
+  waitMegablockStaticWorldMeshReady,
+  type MegablockBackdropHooks,
+} from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
@@ -24,9 +28,8 @@ const AUTH_BACKDROP_BUILDING_YAW_RAD_PER_SEC = 0.032;
 const AUTH_BACKDROP_RIGHT_FRAMING_WIDTH_FRAC = 0.22;
 
 /**
- * Conservative AABB for orbital framing before meshes finish — see `content/building/mammoth.json`
- * `metadata.mamutica_reference.length_m_about` and authored stack height (~20 storeys).
- * Replaced immediately when {@link waitMegablockStaticWorldMeshReady} resolves.
+ * Fallback orbital framing before meshes arrive — see `content/building/mammoth.json` sizing hints.
+ * Tightened each storey via progressive megablock hooks and finalized when {@link waitMegablockStaticWorldMeshReady} resolves.
  */
 const AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS = new THREE.Box3(
   new THREE.Vector3(-130, -2, -130),
@@ -40,6 +43,34 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   await yieldToMain();
 
   const scene = new THREE.Scene();
+
+  let disposed = false;
+  let raf = 0;
+  let worldAttached = false;
+  let buildingRootForDispose: THREE.Group | null = null;
+
+  /** World-space stack bounds for orbit framing — grows each storey during progressive attach. */
+  const framingBounds = AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS.clone();
+
+  const backdropHooks: MegablockBackdropHooks = {
+    onFloorPlateInstantiated: async ({ buildingRoot }) => {
+      if (disposed) return;
+      if (buildingRoot.parent !== scene) scene.add(buildingRoot);
+      buildingRoot.updateMatrixWorld(true);
+      framingBounds.copy(new THREE.Box3().setFromObject(buildingRoot));
+      worldAttached = true;
+      buildingRootForDispose = buildingRoot;
+    },
+    onForestReady: async () => {
+      if (disposed) return;
+      await yieldToMain();
+    },
+  };
+
+  primeMegablockStaticWorldMeshBuild({
+    getBackdropHooks: () => (disposed ? null : backdropHooks),
+  });
+
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: FP_SESSION_WEBGPU_ANTIALIAS,
@@ -57,9 +88,6 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     0.1,
     FP_SESSION_SKY_CAMERA_FAR,
   );
-
-  /** World-space building stack bounds for orbit framing (updated when meshes attach). */
-  const framingBounds = AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS.clone();
 
   const buildingSizeScratch = new THREE.Vector3();
   const buildingCenterScratch = new THREE.Vector3();
@@ -83,16 +111,13 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
 
-  let disposed = false;
-  let raf = 0;
-  let worldAttached = false;
-  let buildingRootForDispose: THREE.Group | null = null;
-
   void waitMegablockStaticWorldMeshReady()
     .then(async (world) => {
       if (disposed) return;
       hideUnitInteriorMeshesForExteriorAuthView(world.buildingRoot);
-      scene.add(world.buildingRoot, world.cellRoot);
+      await yieldToMain();
+      if (world.buildingRoot.parent !== scene) scene.add(world.buildingRoot);
+      if (world.cellRoot.parent !== scene) scene.add(world.cellRoot);
       await yieldToMain();
       world.buildingRoot.updateMatrixWorld(true);
       world.cellRoot.updateMatrixWorld(true);

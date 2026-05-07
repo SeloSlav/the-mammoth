@@ -1,23 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { primeMegablockStaticWorldMeshBuild } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
 import styles from "./LoginGate.module.css";
 
 /**
- * Dedicated WebGPU/pass on the login canvas: shared megablock mesh cache + orbital framing.
+ * Dedicated WebGPU pass on the login canvas: shared megablock mesh cache + orbital framing.
  *
- * Separate from gameplay `mountFpSession` so teardown is clean. Mesh CPU and WebGPU init are
- * staggered (prime + deferred dynamic import) so first-visit hydration and form input stay responsive.
+ * Megablock CPU work starts inside {@link mountMammothAuthBackdrop} (with progressive storey hooks)
+ * concurrently with `WebGPURenderer.init`, then attaches sky / ground once the renderer is ready.
  */
 export function MammothAuthBackdrop() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [webGpuUnavailable, setWebGpuUnavailable] = useState(false);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      primeMegablockStaticWorldMeshBuild();
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
