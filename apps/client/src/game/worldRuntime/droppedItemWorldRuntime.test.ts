@@ -5,6 +5,7 @@ import {
   MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
 } from "@the-mammoth/assets";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
   droppedPickupWithinServerVolume,
   fitDroppedWorldItemModelToCatalog,
@@ -57,6 +58,14 @@ describe("droppedPickupWithinServerVolume", () => {
         MAMMOTH_PICKUP_RADIUS_M,
         MAMMOTH_PICKUP_MAX_ABS_DY_M,
       ),
+    ).toBe(false);
+  });
+
+  it("rejects same-XZ pickup one storey away (stacked plates)", () => {
+    const plate0 = 0;
+    const plate1 = plate0 + DEFAULT_BUILDING_FLOOR_SPACING_M;
+    expect(
+      droppedPickupWithinServerVolume(0, plate0, 0, 0, plate1 + 0.28, 0, MAMMOTH_PICKUP_RADIUS_M),
     ).toBe(false);
   });
 });

@@ -26,8 +26,10 @@ use crate::world_sound;
 /// `MAMMOTH_PICKUP_RADIUS_M`. Vertical separation is gated separately so predicted client XZ
 /// (ahead of replicated pose) still succeeds while stacked floors cannot vacuum loot through slabs.
 const PICKUP_RADIUS_SQ: f32 = 3.5 * 3.5;
-/// Max |ΔY| (m) between player feet and drop anchor for pickup; matches client `MAMMOTH_PICKUP_MAX_ABS_DY_M`.
-const PICKUP_MAX_ABS_DY_M: f32 = 4.0;
+/// Max |ΔY| (m) between player feet and drop anchor. **Must stay below one storey** (`STOREY_SPACING_M`):
+/// a flat ~4 m cap allowed the deck above/below (~3.16 m apart) when XZ aligned, so players vacuumed
+/// invisible "world" loot from other storeys. Keep in sync with client `MAMMOTH_PICKUP_MAX_ABS_DY_M`.
+const PICKUP_MAX_ABS_DY_M: f32 = STOREY_SPACING_M * 0.85;
 /// Forward offset along look direction when spawning a drop (m).
 const DROP_FORWARD_M: f32 = 0.55;
 /// Lift mesh slightly above replicated foot height to avoid sinking through thin slabs / Z-fight (m).

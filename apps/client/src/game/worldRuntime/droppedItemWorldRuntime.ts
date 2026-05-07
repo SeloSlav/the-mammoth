@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { and } from "spacetimedb";
 import { getMammothDroppedWorldTargetMaxDimM } from "@the-mammoth/assets";
 import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
 import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
@@ -11,9 +12,10 @@ import type { DroppedItem } from "../../module_bindings/types";
 export const MAMMOTH_PICKUP_RADIUS_M = 3.5;
 /**
  * Max |ΔY| (m) between feet and drop for pickup. Matches server `PICKUP_MAX_ABS_DY_M`.
- * Server uses horizontal radius + this vertical cap so small predicted XZ drift still succeeds.
+ * Derived as a fraction of storey spacing so it stays **below one storey** (~`60/19` m) — a flat ~4 m
+ * cap allowed picking up anchored loot on the deck above/below when XZ matched.
  */
-export const MAMMOTH_PICKUP_MAX_ABS_DY_M = 4.0;
+export const MAMMOTH_PICKUP_MAX_ABS_DY_M = DEFAULT_BUILDING_FLOOR_SPACING_M * 0.85;
 
 /** Lower bound for longest mesh AABB edge when fitting (avoids insane scale if GLB bounds are degenerate). */
 const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
