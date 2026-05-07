@@ -44,14 +44,13 @@ export function ProfileGate({ session }: Props) {
   return (
     <>
       <p className={styles.subtitle}>
-        The desk logs this line exactly as typed — 3–24 characters (letters, numbers, underscores,
-        hyphens).
+        Display name: 3–24 characters (letters, numbers, underscores, hyphens).
       </p>
       {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
       {!conn ? (
-        <p className={styles.hint}>Connecting to reception—almost there.</p>
+        <p className={styles.hint}>Connecting…</p>
       ) : !spacetimeUserSnapshotReady ? (
-        <p className={styles.hint}>Your key synced; pulling your line from dispatch…</p>
+        <p className={styles.hint}>Loading your profile…</p>
       ) : null}
 
       <form className={styles.form} onSubmit={onSubmit}>
@@ -59,7 +58,7 @@ export function ProfileGate({ session }: Props) {
           autoFocus
           value={nameInput}
           onChange={(ev) => setNameInput(ev.target.value)}
-          placeholder="Your name on the roster"
+          placeholder="Display name"
           className={styles.input}
           disabled={busy}
           maxLength={24}
@@ -71,12 +70,12 @@ export function ProfileGate({ session }: Props) {
           disabled={busy || !conn || !spacetimeUserSnapshotReady}
         >
           {busy
-            ? "Saving profile..."
+            ? "Saving…"
             : !conn
-              ? "Waiting for reception…"
+              ? "Connecting…"
               : !spacetimeUserSnapshotReady
-                ? "Syncing roster…"
-                : "Enter the building"}
+                ? "Loading…"
+                : "Continue"}
         </button>
       </form>
       <button type="button" className={styles.secondaryButton} onClick={() => signOut()} disabled={busy}>

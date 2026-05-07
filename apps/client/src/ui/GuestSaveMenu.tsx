@@ -34,19 +34,15 @@ export function GuestSaveMenu({ session }: Props) {
 
   return (
     <>
-      <p className={styles.subtitle}>
-        Each browser save keeps its own key—pick who walks through the door, or mint a fresh one at
-        reception.
-      </p>
+      <p className={styles.subtitle}>Guest saves live only in this browser. Pick a slot or create one.</p>
       {errorMsg ? <p className={styles.message}>{errorMsg}</p> : null}
       {sorted.length === 0 ? (
-        <p className={styles.hint}>No saves in this browser yet. Start below—your progress stays tied to the
-          key we stamp next.</p>
+        <p className={styles.hint}>No saves yet. Use New save below.</p>
       ) : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
         {sorted.map((s) => {
           const active = s.id === activeGuestSlotId;
-          const label = s.cachedDisplayName ?? "New roster line — finish naming";
+          const label = s.cachedDisplayName ?? "Unnamed — finish profile";
           return (
             <div
               key={s.id}
@@ -61,7 +57,7 @@ export function GuestSaveMenu({ session }: Props) {
             >
               <div style={{ fontWeight: 750, marginBottom: 4 }}>{label}</div>
               <div style={{ fontSize: "0.8rem", color: "var(--ui-text-muted)", marginBottom: 10 }}>
-                Last touched — {formatLastPlayed(s.updatedAtMs)}
+                Last played {formatLastPlayed(s.updatedAtMs)}
                 {active ? <span style={{ marginLeft: 8, opacity: 0.85 }}>(last loaded)</span> : null}
               </div>
               <button
@@ -79,7 +75,9 @@ export function GuestSaveMenu({ session }: Props) {
                 onClick={() => {
                   if (
                     typeof window !== "undefined" &&
-                    !window.confirm("Remove this save from this browser? Its tower slot stays on the server.")
+                    !window.confirm(
+                      "Remove this save from this browser? The server copy is not deleted.",
+                    )
                   ) {
                     return;
                   }
@@ -98,11 +96,11 @@ export function GuestSaveMenu({ session }: Props) {
         disabled={!canAddSave}
         onClick={() => startNewGuestSave()}
       >
-        {canAddSave ? "New save — mint fresh key" : `Save slots full (${MAX_GUEST_SAVE_SLOTS}/${MAX_GUEST_SAVE_SLOTS})`}
+        {canAddSave ? "New save" : `Save slots full (${MAX_GUEST_SAVE_SLOTS}/${MAX_GUEST_SAVE_SLOTS})`}
       </button>
       {authGate ? (
         <button type="button" className={styles.secondaryButton} onClick={() => session.signOutToAuthGate()}>
-          Back — accounts & sign-in
+          Back to sign-in
         </button>
       ) : null}
     </>
