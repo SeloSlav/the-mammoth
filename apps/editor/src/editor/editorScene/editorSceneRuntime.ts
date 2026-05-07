@@ -37,6 +37,7 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
+import { constrainMyApartmentFurnitureRootPose } from "../myApartment/editorMyApartmentMeshes.js";
 
 import { getEditorMyApartmentPieceGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
@@ -341,6 +342,9 @@ export async function mountEditorScene(
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
       transformControls.detach();
+      transformControls.showX = true;
+      transformControls.showY = true;
+      transformControls.showZ = true;
       if (isFpMode(s.mode)) {
         fp.syncFpTransformAttachment();
         return;
@@ -355,11 +359,18 @@ export async function mountEditorScene(
         const effMode =
           s.transformMode === "scale" ? "translate" : s.transformMode;
         transformControls.setMode(effMode);
+        if (effMode === "translate") {
+          transformControls.showX = true;
+          transformControls.showY = false;
+          transformControls.showZ = true;
+        } else {
+          transformControls.showX = false;
+          transformControls.showY = true;
+          transformControls.showZ = false;
+        }
         const snap = s.gridSnapM;
         transformControls.setTranslationSnap(snap > 0 ? snap : null);
-        transformControls.setRotationSnap(
-          snap > 0 ? THREE.MathUtils.degToRad(15) : null,
-        );
+        transformControls.setRotationSnap(Math.PI / 4);
         transformControls.setScaleSnap(null);
         transformControls.setSize(1);
         return;
@@ -468,6 +479,14 @@ export async function mountEditorScene(
     }
   });
   transformControls.addEventListener("objectChange", () => {
+    const aptSt = useEditorStore.getState();
+    const aptObj = transformControls.object as THREE.Object3D | undefined;
+    if (
+      aptSt.mode === "my_apartment_layout" &&
+      aptObj?.userData.mammothEditorMyApartmentPiece
+    ) {
+      constrainMyApartmentFurnitureRootPose(aptObj);
+    }
     applyAnchoredScaleGesture();
     commitLevelEditorAttachedTransformToStore();
   });

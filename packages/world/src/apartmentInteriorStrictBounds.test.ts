@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { APARTMENT_DOOR_TEMPLATES } from "./generatedApartmentDoors.js";
-import type { UnitEntryFace } from "./unitEntryAdjacency.js";
+import type { ApartmentDoorTemplate } from "./unitEntryAdjacency.js";
+import { residentialUnitStrictBoundsXZ } from "./residentialUnitStrictBoundsXZ.js";
 
-const DEPTH_M = 13;
-const UNIT_HALF_WIDTH_M = 3.3;
-/** Matches `derive_bounds` in `apps/server/src/apartments.rs` for east/west units. */
-const RESIDENTIAL_FAR_WALL_X_INSET_M = 1.38;
 const PROP_WALL_GAP_M = 0.06;
 
 const BED_HALF_X_M = 1.09;
@@ -30,45 +27,16 @@ function isResidential(unitId: string): boolean {
   return unitId.startsWith("unit_e_") || unitId.startsWith("unit_w_");
 }
 
-function boundsForDoor(t: {
-  face: UnitEntryFace;
-  hingeX: number;
-  hingeZ: number;
-}): Bounds {
-  if (t.face === "w") {
-    return {
-      minX: t.hingeX + 0.08,
-      maxX: t.hingeX + DEPTH_M - RESIDENTIAL_FAR_WALL_X_INSET_M,
-      minZ: t.hingeZ - UNIT_HALF_WIDTH_M,
-      maxZ: t.hingeZ + UNIT_HALF_WIDTH_M,
-    };
-  }
-  if (t.face === "e") {
-    return {
-      minX: t.hingeX - DEPTH_M + RESIDENTIAL_FAR_WALL_X_INSET_M,
-      maxX: t.hingeX - 0.08,
-      minZ: t.hingeZ - UNIT_HALF_WIDTH_M,
-      maxZ: t.hingeZ + UNIT_HALF_WIDTH_M,
-    };
-  }
-  return {
-    minX: t.hingeX - UNIT_HALF_WIDTH_M,
-    maxX: t.hingeX + UNIT_HALF_WIDTH_M,
-    minZ: t.hingeZ - DEPTH_M,
-    maxZ: t.hingeZ + UNIT_HALF_WIDTH_M,
-  };
-}
-
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function furnitureRects(t: {
-  face: UnitEntryFace;
-  hingeX: number;
-  hingeZ: number;
-}): { bed: Rect; footlocker: Rect; wardrobe: Rect } {
-  const b = boundsForDoor(t);
+function furnitureRects(t: ApartmentDoorTemplate): {
+  bed: Rect;
+  footlocker: Rect;
+  wardrobe: Rect;
+} {
+  const b = residentialUnitStrictBoundsXZ(t);
   const cz = (b.minZ + b.maxZ) * 0.5;
   const bedZ = clamp(
     cz + BED_CENTER_Z_OFFSET_M,
@@ -171,7 +139,10 @@ describe("strict apartment interiors", () => {
     for (const set of APARTMENT_DOOR_TEMPLATES) {
       const rows = set.templates
         .filter((t) => isResidential(t.unitId))
-        .map((t) => ({ template: t, bounds: boundsForDoor(t) }))
+        .map((t) => ({
+          template: t,
+          bounds: residentialUnitStrictBoundsXZ(t),
+        }))
         .sort((a, b) => a.template.face.localeCompare(b.template.face) || a.template.hingeZ - b.template.hingeZ);
 
       for (let i = 1; i < rows.length; i++) {
@@ -191,7 +162,7 @@ describe("strict apartment interiors", () => {
     for (const set of APARTMENT_DOOR_TEMPLATES) {
       for (const t of set.templates) {
         if (!isResidential(t.unitId)) continue;
-        const b = boundsForDoor(t);
+        const b = residentialUnitStrictBoundsXZ(t);
         const rects = furnitureRects(t);
         expectRectInside(`${t.unitId} bed`, rects.bed, b);
         expectRectInside(`${t.unitId} footlocker`, rects.footlocker, b);

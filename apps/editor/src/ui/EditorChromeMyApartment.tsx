@@ -82,10 +82,11 @@ export function EditorChromeMyApartment(props: {
       </span>
       {body}
       <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.72, maxWidth: 440 }}>
-        The scene adds non-editable reference walls, glazing, and a door frame around the slab (open
-        to the sky for top‑down work). Placement data lives in{" "}
+        The grey slab matches the unit prefab footprint in the floor doc; walls reuse the playable
+        shell hole layout. Placement data lives in{" "}
         <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>
-        {" — "}save writes that file; the game maps fractions into each claimed unit at runtime.
+        {" — "}save writes that file; at runtime fractions map into each unit{"'"}s strict hull (`bound_*`)
+        spans.
       </p>
     </div>
   );

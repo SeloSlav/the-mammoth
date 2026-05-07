@@ -1,9 +1,17 @@
 import * as THREE from "three";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
-import { glassOpeningFromProxyMesh } from "@the-mammoth/world";
+import { glassOpeningFromProxyMesh, TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
 import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
-import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "../myApartment/editorMyApartmentMeshes.js";
+import {
+  ownedApartmentFractionMappingForEditor,
+  resolveOwnedApartmentAuthoringLayoutForEditor,
+} from "../myApartment/editorMyApartmentAuthoringShell.js";
+import {
+  constrainMyApartmentFurnitureRootPose,
+  EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  snapOwnedApartmentYawRad,
+} from "../myApartment/editorMyApartmentMeshes.js";
 import { syncDuplicateFloorGroups } from "../placement/editorFloorTransformSync.js";
 import {
   floorPlacedObjectIdForTransformRoot,
@@ -265,8 +273,16 @@ export function commitEditorAttachedTransform(opts: {
       pieceRoot = pieceRoot.parent;
     }
     if (!pieceKey || !pieceRoot) return;
+    constrainMyApartmentFurnitureRootPose(pieceRoot);
     const doc = store.ownedApartmentBuiltins;
-    const W = doc.previewSizeM;
+    const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
+      floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
+      building: store.building,
+    });
+    const m = ownedApartmentFractionMappingForEditor({
+      layout,
+      builtinsFallbackPreviewM: doc.previewSizeM,
+    });
 
     pieceRoot.updateMatrixWorld(true);
     const pW = new THREE.Vector3();
@@ -274,10 +290,12 @@ export function commitEditorAttachedTransform(opts: {
     const _sWorld = new THREE.Vector3();
     pieceRoot.matrixWorld.decompose(pW, qW, _sWorld);
     const euler = new THREE.Euler().setFromQuaternion(qW, "YXZ");
-    const yaw = euler.y;
+    const yaw = snapOwnedApartmentYawRad(euler.y);
 
-    const fx = THREE.MathUtils.clamp(pW.x / W, 0, 1);
-    const fz = THREE.MathUtils.clamp(pW.z / W, 0, 1);
+    const wx = pW.x + m.prefabOriginX;
+    const wz = pW.z + m.prefabOriginZ;
+    const fx = THREE.MathUtils.clamp((wx - m.strictMinX) / m.spanX, 0, 1);
+    const fz = THREE.MathUtils.clamp((wz - m.strictMinZ) / m.spanZ, 0, 1);
     const dyFromSlab = Math.max(0, pW.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y);
 
     store.patchOwnedApartmentBuiltins((d) => {

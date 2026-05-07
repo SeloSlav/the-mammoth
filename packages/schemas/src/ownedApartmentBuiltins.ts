@@ -29,11 +29,12 @@ export function migrateLegacyOwnedApartmentBuiltinsJson(raw: unknown): unknown {
 /**
  * Authoring-only layout for the three built-in resident props (bed, wardrobe, footlocker).
  * Positions are **normalized** to each live `ApartmentUnit` hull at runtime (`boundMin*`, `boundMax*`).
- * Editor preview uses a square {@link previewSizeM} meter floor so gizmo space matches linearly.
+ * The editor previews those fractions on the **prefab slab** (`floor` JSON `scale` X/Z): the slab
+ * lines up with hollow-shell walls, while **`fx` / `fz` denominators** stay the strict hull spans.
  */
 const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   version: z.literal(1),
-  /** Square preview floor the editor uses (meters). Saved so reopening stays consistent. */
+  /** Preview floor fallback (meters) when the mamutica floor plate is unavailable in the editor. */
   previewSizeM: z.number().positive().max(80).default(10),
   /** 0..1 along unit X span (real: `boundMinX` → `boundMaxX`). */
   bedFx: z.number().min(0).max(1),

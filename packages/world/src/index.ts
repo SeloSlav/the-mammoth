@@ -342,6 +342,22 @@ export {
   APARTMENT_DOOR_TEMPLATE_TOTAL,
   type ApartmentDoorTemplateSet,
 } from "./generatedApartmentDoors.js";
+export { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
+export {
+  RESIDENTIAL_FAR_WALL_X_INSET_M,
+  RESIDENTIAL_UNIT_PLAYABLE_DEPTH_M,
+  RESIDENTIAL_UNIT_PLAYABLE_HALF_WIDTH_M,
+  residentialUnitStrictBoundsXZ,
+  type ResidentialUnitStrictBoundsXZ,
+} from "./residentialUnitStrictBoundsXZ.js";
+export {
+  apartmentDoorTemplateForUnit,
+  appendOwnedApartmentEditorShellWalls,
+  planOwnedApartmentEditorShellForUnit,
+  resolveOwnedApartmentAuthoringPreviewLayout,
+  type OwnedApartmentAuthoringPreviewLayout,
+  type OwnedApartmentEditorShellPlan,
+} from "./ownedApartmentEditorShell.js";
 export {
   applyLandingKitPartTransforms,
   buildLandingDoorPreviewRoot,

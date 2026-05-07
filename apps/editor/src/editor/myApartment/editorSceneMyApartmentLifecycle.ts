@@ -7,6 +7,11 @@ import {
   type EditorMyApartmentFurnitureMount,
   type EditorMyApartmentGltfTemplates,
 } from "./editorMyApartmentMeshes.js";
+import {
+  ownedApartmentFractionMappingForEditor,
+  resolveOwnedApartmentAuthoringLayoutForEditor,
+} from "./editorMyApartmentAuthoringShell.js";
+import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import { setEditorMyApartmentPieceGroups } from "./editorMyApartmentPieceGroupBridge.js";
 
 export type EditorMyApartmentLifecycleDeps = {
@@ -59,10 +64,23 @@ export function createEditorSceneMyApartmentLifecycle(
       const t = await ensureTemplatesLoaded();
       if (disposed || myGen !== syncGeneration) return;
       const doc = st.ownedApartmentBuiltins;
+      const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
+        floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
+        building: st.building,
+      });
+      const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
+        layout,
+        builtinsFallbackPreviewM: doc.previewSizeM,
+      });
       if (!mount) {
-        mount = mountEditorMyApartmentFurnitureUnder(parent, t, doc);
+        mount = mountEditorMyApartmentFurnitureUnder(
+          parent,
+          t,
+          doc,
+          authoringFractionMapping,
+        );
       } else if (!deps.getShouldHoldReplicaResync()) {
-        updateEditorMyApartmentMountFromDoc(mount, t, doc);
+        updateEditorMyApartmentMountFromDoc(mount, t, doc, authoringFractionMapping);
       }
       if (disposed || myGen !== syncGeneration) return;
       if (deps.getShouldHoldReplicaResync()) return;

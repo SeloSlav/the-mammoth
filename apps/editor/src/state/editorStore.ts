@@ -420,6 +420,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       mode: "my_apartment_layout",
       selectedId: editorMyApartmentSelectedIdForPiece(s.myApartmentLayoutPiece),
       contentStructureEpoch: s.contentStructureEpoch + 1,
+      ...(s.transformMode === "scale" ? { transformMode: "translate" as const } : {}),
     })),
 
   setMyApartmentLayoutPiece: (piece) =>

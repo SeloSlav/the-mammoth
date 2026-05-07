@@ -29,6 +29,7 @@ import {
   maxBuildingLevelIndex,
   shaftFacesTowardAdjacentElevatorHoistways,
   shaftDoorTowardPointFromFloorCorridors,
+  TYPICAL_FLOOR_DOC_ID,
 } from "@the-mammoth/world";
 import { applyEditorMaterialsToFloorPlacement } from "./applyEditorMaterials.js";
 import type { EditorMode, EditorWorkspace } from "../../state/editorStore.js";
@@ -197,7 +198,11 @@ export function buildEditorStructuralRoot(args: {
   }
 
   if (args.mode === "my_apartment_layout") {
-    return buildOwnedApartmentAuthoringShell(args.ownedApartmentBuiltins.previewSizeM);
+    return buildOwnedApartmentAuthoringShell({
+      ownedApartmentBuiltins: args.ownedApartmentBuiltins,
+      typicalFloorDoc: args.floorDocs[TYPICAL_FLOOR_DOC_ID],
+      building: args.building,
+    });
   }
 
   if (args.mode === "floor" || args.mode === "floor_override") {

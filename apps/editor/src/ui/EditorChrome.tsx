@@ -560,7 +560,10 @@ export function EditorChrome() {
             </p>
             <span style={label}>Scene / gizmo</span>
             <div>
-              {(["translate", "rotate", "scale"] as const).map((m) => (
+              {(mode === "my_apartment_layout"
+                ? (["translate", "rotate"] as const)
+                : (["translate", "rotate", "scale"] as const)
+              ).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -585,8 +588,8 @@ export function EditorChrome() {
                   lineHeight: 1.38,
                 }}
               >
-                Gizmo <strong>scale</strong> is treated like <strong>translate</strong> here — only
-                position, yaw, and floor offsets are persisted.
+                Move on the floor plane only; rotate around <strong>Y</strong> in{" "}
+                <strong>45°</strong> steps. Pitch/roll handles are disabled.
               </p>
             ) : null}
             {transformMode === "scale" ? (
