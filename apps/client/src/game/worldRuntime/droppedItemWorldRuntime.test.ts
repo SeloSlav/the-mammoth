@@ -82,6 +82,41 @@ describe("droppedPickupWithinServerVolume", () => {
       ),
     ).toBe(false);
   });
+
+  /**
+   * World-anchor `findNearestDroppedPickup` historically omitted `verticalBands` while plain drops used it.
+   * |Δy| parachute alone can exceed one storey height, so stacked floors with aligned XZ must use bands.
+   */
+  it("parachute |Δy| alone does not reject adjacent storey — discrete band does", () => {
+    const spacing = DEFAULT_BUILDING_FLOOR_SPACING_M;
+    const feetY = 0.1;
+    const dropY = feetY + spacing * 0.95;
+    expect(
+      droppedPickupWithinServerVolume(
+        0,
+        feetY,
+        0,
+        0,
+        dropY,
+        0,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_M,
+      ),
+    ).toBe(true);
+    expect(
+      droppedPickupWithinServerVolume(
+        0,
+        feetY,
+        0,
+        0,
+        dropY,
+        0,
+        MAMMOTH_PICKUP_RADIUS_M,
+        MAMMOTH_PICKUP_MAX_ABS_DY_M,
+        { buildingWorldOriginY: 0, floorSpacingM: spacing },
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("dropped world sizing table", () => {

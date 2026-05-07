@@ -116,6 +116,7 @@ import { runFpHotbarInstantConsume } from "./fpHotbar/fpHotbarConsume.js";
 import {
   droppedItemIsWorldAnchor,
   findNearestDroppedPickup,
+  MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./worldRuntime/droppedItemWorldRuntime.js";
@@ -230,8 +231,12 @@ export async function mountFpSession(
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
 
+  /**
+   * Must match `elevator_layout::BUILDING_ORIGIN_Y` (0) — server `mammoth_pickup_vertical_band` does not
+   * use `BuildingDoc.worldOrigin`; using the doc origin desyncs bands vs `pickup_dropped_item`.
+   */
   const mammothDropPickupBands = {
-    buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+    buildingWorldOriginY: 0,
     floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
   } as const;
 
@@ -427,6 +432,8 @@ export async function mountFpSession(
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
   const _interactionPos = new THREE.Vector3();
+  /** Replicated-feet probe for loot queries — matches server `pickup_dropped_item` distance checks. */
+  const _pickupAuthorityFeet = new THREE.Vector3();
   const prevPos = new THREE.Vector3();
 
   const fpPlayerDamageBloodSquirt = createFpPlayerDamageBloodSquirt({
@@ -712,6 +719,16 @@ export async function mountFpSession(
    */
   let pendingRespawnAuthoritativeSnap = false;
 
+  const getDroppedPickupAuthorityFeet = (): THREE.Vector3 => {
+    if (!spawnSynced) {
+      const p = resolveAuthoritativeInteractionPose(pos, serverPose);
+      _pickupAuthorityFeet.set(p.x, p.y, p.z);
+      return _pickupAuthorityFeet;
+    }
+    _pickupAuthorityFeet.set(serverPose.x, serverPose.y, serverPose.z);
+    return _pickupAuthorityFeet;
+  };
+
   /**
    * Wired after `mountDroppedItemsWorld`; first authoritative `player_pose` snap must recenter
    * dropped-item AOI even when it arrives only via `syncAllPoses` / handlers (not guest cache).
@@ -970,8 +987,9 @@ export async function mountFpSession(
       const interiorBeatElevPickup =
         aptKey !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aptKey);
       if (suppressElevPickup && !interiorBeatElevPickup) return;
+      const feetPick = getDroppedPickupAuthorityFeet();
       if (!conn.identity) {
-        droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
+        droppedWorld.tryPickupNearest(feetPick.x, feetPick.y, feetPick.z);
         return;
       }
 
@@ -995,18 +1013,20 @@ export async function mountFpSession(
 
       const nearWorld = findNearestDroppedPickup(
         conn,
-        feet.x,
-        feet.y,
-        feet.z,
+        feetPick.x,
+        feetPick.y,
+        feetPick.z,
         MAMMOTH_PICKUP_RADIUS_M,
         droppedItemIsWorldAnchor,
+        MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+        mammothDropPickupBands,
       );
       if (nearWorld) {
         void conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
         return;
       }
 
-      droppedWorld.tryPickupNearest(feet.x, feet.y, feet.z);
+      droppedWorld.tryPickupNearest(feetPick.x, feetPick.y, feetPick.z);
     }
     if (e.code === "KeyC" && !e.repeat && !isTextInputFocused()) {
       mainRaf.crouchToggle = !mainRaf.crouchToggle;
@@ -1183,6 +1203,7 @@ export async function mountFpSession(
     fpLocomotionInputBlocked,
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
+    fpDroppedPickupFeet: getDroppedPickupAuthorityFeet,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
     scheduleGpuTimestampResolve,

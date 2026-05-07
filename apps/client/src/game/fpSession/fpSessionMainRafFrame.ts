@@ -218,6 +218,11 @@ export type FpSessionMainRafFrameDeps = {
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
+  /**
+   * Replicated feet for dropped-item HUD / pickup — aligns with server `pickup_dropped_item` so E
+   * and prompts match what the reducer accepts.
+   */
+  fpDroppedPickupFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
   /** No-op when GPU timestamp queries are unavailable. */
@@ -579,27 +584,28 @@ export function createFpSessionMainRafFrame(
 
     if (deps.conn.identity) {
       const ft = deps.fpInteractionFeet();
+      const ftPick = deps.fpDroppedPickupFeet();
       hudHeavyFrame += 1;
 
-      const ddx = ft.x - dropHudCacheFx;
-      const ddy = ft.y - dropHudCacheFy;
-      const ddz = ft.z - dropHudCacheFz;
+      const ddx = ftPick.x - dropHudCacheFx;
+      const ddy = ftPick.y - dropHudCacheFy;
+      const ddz = ftPick.z - dropHudCacheFz;
       const movedDrops =
         ddx * ddx + ddz * ddz > HUD_DROP_SCAN_STATIONARY_R2 || Math.abs(ddy) > 0.38;
       const scanDrops = deps.keys.has("KeyE") || movedDrops || (hudHeavyFrame & 1) === 0;
       if (scanDrops) {
         cachedDropHud = findNearestDroppedPickupsHud(
           deps.conn,
-          ft.x,
-          ft.y,
-          ft.z,
+          ftPick.x,
+          ftPick.y,
+          ftPick.z,
           MAMMOTH_PICKUP_RADIUS_M,
           MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
           deps.droppedPickupHudBands,
         );
-        dropHudCacheFx = ft.x;
-        dropHudCacheFy = ft.y;
-        dropHudCacheFz = ft.z;
+        dropHudCacheFx = ftPick.x;
+        dropHudCacheFy = ftPick.y;
+        dropHudCacheFz = ftPick.z;
       }
       const droppedHud = cachedDropHud;
 
