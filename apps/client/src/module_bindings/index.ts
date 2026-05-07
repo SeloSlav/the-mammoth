@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddApartmentUnitDecorReducer from "./add_apartment_unit_decor_reducer";
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
 import CancelWaitingCraftReducer from "./cancel_waiting_craft_reducer";
@@ -42,6 +43,7 @@ import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
 import CleanupOldHudToastsStepReducer from "./cleanup_old_hud_toasts_step_reducer";
 import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
+import DeleteApartmentUnitDecorReducer from "./delete_apartment_unit_decor_reducer";
 import DropItemReducer from "./drop_item_reducer";
 import ElevatorHailReducer from "./elevator_hail_reducer";
 import ElevatorLandingExteriorDoorSetReducer from "./elevator_landing_exterior_door_set_reducer";
@@ -59,6 +61,7 @@ import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer"
 import RespawnPlayerReducer from "./respawn_player_reducer";
 import SetActiveHotbarSlotReducer from "./set_active_hotbar_slot_reducer";
 import SetAvatarBodyReducer from "./set_avatar_body_reducer";
+import SetOwnedApartmentPiecePoseReducer from "./set_owned_apartment_piece_pose_reducer";
 import SetUsernameReducer from "./set_username_reducer";
 import StashMoveItemToSlotReducer from "./stash_move_item_to_slot_reducer";
 import StashPullItemReducer from "./stash_pull_item_reducer";
@@ -70,6 +73,7 @@ import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
 import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
+import UpdateApartmentUnitDecorReducer from "./update_apartment_unit_decor_reducer";
 
 // Import all procedure arg schemas
 
@@ -77,6 +81,7 @@ import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 import ApartmentDoorRow from "./apartment_door_table";
 import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
 import ApartmentUnitRow from "./apartment_unit_table";
+import ApartmentUnitDecorRow from "./apartment_unit_decor_table";
 import CraftQueueItemRow from "./craft_queue_item_table";
 import CraftQueueTickRow from "./craft_queue_tick_table";
 import DroppedItemRow from "./dropped_item_table";
@@ -138,6 +143,17 @@ const tablesSchema = __schema({
       { name: 'apartment_unit_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
     ],
   }, ApartmentUnitRow),
+  apartment_unit_decor: __table({
+    name: 'apartment_unit_decor',
+    indexes: [
+      { name: 'decor_id', algorithm: 'btree', columns: [
+        'decorId',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_unit_decor_decor_id_key', constraint: 'unique', columns: ['decorId'] },
+    ],
+  }, ApartmentUnitDecorRow),
   craft_queue_item: __table({
     name: 'craft_queue_item',
     indexes: [
@@ -395,6 +411,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("add_apartment_unit_decor", AddApartmentUnitDecorReducer),
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
   __reducerSchema("cancel_waiting_craft", CancelWaitingCraftReducer),
@@ -403,6 +420,7 @@ const reducersSchema = __reducers(
   __reducerSchema("cleanup_old_hud_toasts_step", CleanupOldHudToastsStepReducer),
   __reducerSchema("cleanup_old_world_sound_events", CleanupOldWorldSoundEventsReducer),
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
+  __reducerSchema("delete_apartment_unit_decor", DeleteApartmentUnitDecorReducer),
   __reducerSchema("drop_item", DropItemReducer),
   __reducerSchema("elevator_hail", ElevatorHailReducer),
   __reducerSchema("elevator_landing_exterior_door_set", ElevatorLandingExteriorDoorSetReducer),
@@ -420,6 +438,7 @@ const reducersSchema = __reducers(
   __reducerSchema("respawn_player", RespawnPlayerReducer),
   __reducerSchema("set_active_hotbar_slot", SetActiveHotbarSlotReducer),
   __reducerSchema("set_avatar_body", SetAvatarBodyReducer),
+  __reducerSchema("set_owned_apartment_piece_pose", SetOwnedApartmentPiecePoseReducer),
   __reducerSchema("set_username", SetUsernameReducer),
   __reducerSchema("stash_move_item_to_slot", StashMoveItemToSlotReducer),
   __reducerSchema("stash_pull_item", StashPullItemReducer),
@@ -431,6 +450,7 @@ const reducersSchema = __reducers(
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),
   __reducerSchema("tick_craft_queue_step", TickCraftQueueStepReducer),
+  __reducerSchema("update_apartment_unit_decor", UpdateApartmentUnitDecorReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

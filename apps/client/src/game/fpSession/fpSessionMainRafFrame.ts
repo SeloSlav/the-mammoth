@@ -32,6 +32,7 @@ import {
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentFurnitureResult } from "../fpApartment/fpApartmentFurniture.js";
+import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import { LocalGameAudio } from "../audio/localGameAudio.js";
@@ -161,6 +162,7 @@ export type FpSessionMainRafFrameDeps = {
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
   fpApartmentFurniture: MountFpApartmentFurnitureResult;
+  fpApartmentDecorMeshes: MountFpApartmentDecorMeshesResult;
   sampleWalkTopBase: (x: number, z: number, probeTopY: number) => number;
   _elevSupportEval: FpKinematicSupportSampleOpts;
   _displayOffset: THREE.Vector3;
@@ -539,6 +541,10 @@ export function createFpSessionMainRafFrame(
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     deps.fpApartmentFurniture.syncVisibility(
+      deps.camera,
+      deps.isApartmentFurnitureInteriorVisible(),
+    );
+    deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
       deps.isApartmentFurnitureInteriorVisible(),
     );

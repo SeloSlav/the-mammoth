@@ -173,6 +173,166 @@ pub struct FlashlightCharge {
     pub charge: f32,
 }
 
+/// Player-placed GLB props inside a **claimed** apartment — see `add_apartment_unit_decor` / reducers.
+#[spacetimedb::table(public, accessor = apartment_unit_decor)]
+pub struct ApartmentUnitDecor {
+    #[primary_key]
+    #[auto_inc]
+    pub decor_id: u64,
+    pub unit_key: String,
+    /// Repo-relative under site root, e.g. `static/models/objects/chair.glb` (validated server-side).
+    pub model_rel_path: String,
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub pos_z: f32,
+    pub yaw_rad: f32,
+    pub uniform_scale: f32,
+}
+
+/// `set_owned_apartment_piece_pose(..., piece, ...)`.
+pub(crate) const APARTMENT_LAYOUT_PIECE_BED: u8 = 0;
+pub(crate) const APARTMENT_LAYOUT_PIECE_WARDROBE: u8 = 1;
+pub(crate) const APARTMENT_LAYOUT_PIECE_FOOTLOCKER: u8 = 2;
+
+const APARTMENT_LAYOUT_BED_XZ_INSET_M: f32 = 2.95;
+const APARTMENT_LAYOUT_WARDROBE_XZ_INSET_M: f32 = 0.48;
+const APARTMENT_LAYOUT_FOOTLOCKER_XZ_INSET_M: f32 = 0.42;
+/// Keep authored decor away from façade / hull — looser than built-ins.
+const APARTMENT_DECOR_BOUND_INSET_XZ_M: f32 = 0.18;
+
+const APARTMENT_DECOR_COUNT_CAP: usize = 48;
+
+fn clear_apartment_decor_for_unit(ctx: &ReducerContext, unit_key: &str) {
+    let ids: Vec<u64> = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key)
+        .map(|d| d.decor_id)
+        .collect();
+    let decor_table = ctx.db.apartment_unit_decor();
+    for id in ids {
+        decor_table.decor_id().delete(id);
+    }
+}
+
+fn decor_model_rel_path_ok(s: &str) -> bool {
+    let t = s.trim();
+    let t = t.trim_start_matches('/');
+    if !(12..=200).contains(&t.len()) {
+        return false;
+    }
+    if t.contains("..") {
+        return false;
+    }
+    if !t.starts_with("static/models/") || !t.to_ascii_lowercase().ends_with(".glb") {
+        return false;
+    }
+    t.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '-' | '.'))
+}
+
+fn wrap_angle_rad(mut a: f32) -> f32 {
+    use std::f32::consts::PI;
+    let two_pi = 2.0 * PI;
+    while a > PI {
+        a -= two_pi;
+    }
+    while a < -PI {
+        a += two_pi;
+    }
+    a
+}
+
+fn xz_insets_for_piece(piece: u8) -> Option<f32> {
+    match piece {
+        APARTMENT_LAYOUT_PIECE_BED => Some(APARTMENT_LAYOUT_BED_XZ_INSET_M),
+        APARTMENT_LAYOUT_PIECE_WARDROBE => Some(APARTMENT_LAYOUT_WARDROBE_XZ_INSET_M),
+        APARTMENT_LAYOUT_PIECE_FOOTLOCKER => Some(APARTMENT_LAYOUT_FOOTLOCKER_XZ_INSET_M),
+        _ => None,
+    }
+}
+
+fn clamp_piece_world_xz(unit: &ApartmentUnit, piece: u8, x: f32, z: f32) -> Option<(f32, f32)> {
+    let inset = xz_insets_for_piece(piece)?;
+    let min_x = unit.bound_min_x + inset;
+    let max_x = unit.bound_max_x - inset;
+    let min_z = unit.bound_min_z + inset;
+    let max_z = unit.bound_max_z - inset;
+    if min_x > max_x || min_z > max_z {
+        return None;
+    }
+    Some((x.clamp(min_x, max_x), z.clamp(min_z, max_z)))
+}
+
+#[inline]
+fn clamp_bed_world_y(unit: &ApartmentUnit, y: f32) -> f32 {
+    let lo = unit.bound_min_y + 0.004;
+    let hi = unit.bound_min_y + 3.05;
+    y.clamp(lo, hi)
+}
+
+fn clamp_decor_pose(
+    unit: &ApartmentUnit,
+    mut x: f32,
+    mut y: f32,
+    mut z: f32,
+    yaw: f32,
+    scale: f32,
+) -> (f32, f32, f32, f32, f32) {
+    let inset = APARTMENT_DECOR_BOUND_INSET_XZ_M;
+    let min_x = unit.bound_min_x + inset;
+    let max_x = unit.bound_max_x - inset;
+    let min_z = unit.bound_min_z + inset;
+    let max_z = unit.bound_max_z - inset;
+    x = x.clamp(min_x, max_x);
+    z = z.clamp(min_z, max_z);
+    let y_lo = unit.bound_min_y + 0.008;
+    let y_hi = unit.bound_max_y + 2.75;
+    y = y.clamp(y_lo, y_hi);
+    let scale_clamped = scale.clamp(0.08, 5.5);
+    (x, y, z, wrap_angle_rad(yaw), scale_clamped)
+}
+
+fn player_may_layout_owned_apartment(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    require_inside: bool,
+) -> Option<ApartmentUnit> {
+    let sender = ctx.sender();
+    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string())?;
+    if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED {
+        return None;
+    }
+    if require_inside {
+        let pose = ctx.db.player_pose().identity().find(&sender)?;
+        if !feet_inside_unit(&unit, pose.x, pose.y, pose.z) {
+            return None;
+        }
+    }
+    Some(unit)
+}
+
+fn authorize_apartment_decor_row(
+    ctx: &ReducerContext,
+    decor_id: u64,
+) -> Option<(ApartmentUnit, ApartmentUnitDecor)> {
+    let decor = ctx
+        .db
+        .apartment_unit_decor()
+        .decor_id()
+        .find(decor_id)?;
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(decor.unit_key.clone())?;
+    if unit.owner != Some(ctx.sender()) || unit.state != UNIT_STATE_CLAIMED {
+        return None;
+    }
+    Some((unit, decor))
+}
+
 #[inline]
 fn plate_world_y(level: u32) -> f32 {
     BUILDING_ORIGIN_Y + (level.max(1) as f32 - 1.0) * STOREY_SPACING_M
@@ -262,6 +422,7 @@ fn refresh_residential_band_unit_states(ctx: &ReducerContext) {
 
         if !in_band {
             if u.state == UNIT_STATE_SHELL_OCCUPIED {
+                clear_apartment_decor_for_unit(ctx, &u.unit_key);
                 u.state = UNIT_STATE_UNCLAIMED;
                 u.owner = None;
                 u.claim_started_by = None;
@@ -278,6 +439,7 @@ fn refresh_residential_band_unit_states(ctx: &ReducerContext) {
 
         if home_slot {
             if u.state == UNIT_STATE_SHELL_OCCUPIED {
+                clear_apartment_decor_for_unit(ctx, &u.unit_key);
                 u.state = UNIT_STATE_UNCLAIMED;
                 u.owner = None;
                 u.claim_started_by = None;
@@ -289,6 +451,7 @@ fn refresh_residential_band_unit_states(ctx: &ReducerContext) {
         }
 
         if u.state != UNIT_STATE_SHELL_OCCUPIED {
+            clear_apartment_decor_for_unit(ctx, &u.unit_key);
             u.state = UNIT_STATE_SHELL_OCCUPIED;
             u.owner = None;
             u.claim_started_by = None;
@@ -474,6 +637,7 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
         .map(|u| u.unit_key)
         .collect();
     for key in stale_keys {
+        clear_apartment_decor_for_unit(ctx, &key);
         ctx.db.apartment_unit().unit_key().delete(key);
     }
     refresh_residential_band_unit_states(ctx);
@@ -723,6 +887,161 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
     }
 
     ctx.db.apartment_unit().unit_key().update(unit);
+}
+
+#[spacetimedb::reducer]
+pub fn set_owned_apartment_piece_pose(
+    ctx: &ReducerContext,
+    unit_key: String,
+    piece: u8,
+    world_x: f32,
+    world_z: f32,
+    yaw_rad: f32,
+    bed_floor_world_y: f32,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("set_owned_apartment_piece_pose blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let Some(mut unit) = player_may_layout_owned_apartment(ctx, &unit_key, true) else {
+        return;
+    };
+    let yz = wrap_angle_rad(yaw_rad);
+
+    match piece {
+        APARTMENT_LAYOUT_PIECE_BED => {
+            let Some((cx, cz)) = clamp_piece_world_xz(&unit, piece, world_x, world_z) else {
+                return;
+            };
+            unit.bed_x = cx;
+            unit.bed_z = cz;
+            unit.bed_yaw = yz;
+            unit.bed_y = clamp_bed_world_y(&unit, bed_floor_world_y);
+            ctx.db.apartment_unit().unit_key().update(unit);
+        }
+        APARTMENT_LAYOUT_PIECE_WARDROBE => {
+            let Some((cx, cz)) = clamp_piece_world_xz(&unit, piece, world_x, world_z) else {
+                return;
+            };
+            unit.wardrobe_x = cx;
+            unit.wardrobe_z = cz;
+            unit.bed_yaw = yz;
+            ctx.db.apartment_unit().unit_key().update(unit);
+        }
+        APARTMENT_LAYOUT_PIECE_FOOTLOCKER => {
+            let Some((cx, cz)) = clamp_piece_world_xz(&unit, piece, world_x, world_z) else {
+                return;
+            };
+            unit.foot_x = cx;
+            unit.foot_z = cz;
+            unit.bed_yaw = yz;
+            ctx.db.apartment_unit().unit_key().update(unit);
+        }
+        _ => log::warn!("set_owned_apartment_piece_pose: bad piece {piece}"),
+    }
+}
+
+#[spacetimedb::reducer]
+pub fn add_apartment_unit_decor(
+    ctx: &ReducerContext,
+    unit_key: String,
+    model_rel_path: String,
+    pos_x: f32,
+    pos_y: f32,
+    pos_z: f32,
+    yaw_rad: f32,
+    uniform_scale: f32,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("add_apartment_unit_decor blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    if !decor_model_rel_path_ok(&model_rel_path) {
+        log::debug!("add_apartment_unit_decor: rejected model_rel_path");
+        return;
+    }
+    let Some(unit) = player_may_layout_owned_apartment(ctx, &unit_key, true) else {
+        return;
+    };
+    let n = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key.as_str())
+        .count();
+    if n >= APARTMENT_DECOR_COUNT_CAP {
+        log::warn!("add_apartment_unit_decor: unit at cap ({APARTMENT_DECOR_COUNT_CAP})");
+        return;
+    }
+    let (px, py, pz, yw, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, uniform_scale);
+    let _ = ctx.db.apartment_unit_decor().insert(ApartmentUnitDecor {
+        decor_id: 0,
+        unit_key,
+        model_rel_path: model_rel_path.trim().trim_start_matches('/').to_string(),
+        pos_x: px,
+        pos_y: py,
+        pos_z: pz,
+        yaw_rad: yw,
+        uniform_scale: sc,
+    });
+}
+
+#[spacetimedb::reducer]
+pub fn update_apartment_unit_decor(
+    ctx: &ReducerContext,
+    decor_id: u64,
+    pos_x: f32,
+    pos_y: f32,
+    pos_z: f32,
+    yaw_rad: f32,
+    uniform_scale: f32,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("update_apartment_unit_decor blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let Some((unit, mut row)) = authorize_apartment_decor_row(ctx, decor_id) else {
+        return;
+    };
+    if player_may_layout_owned_apartment(ctx, &unit.unit_key, true).is_none() {
+        return;
+    }
+    let (px, py, pz, yw, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, uniform_scale);
+    row.pos_x = px;
+    row.pos_y = py;
+    row.pos_z = pz;
+    row.yaw_rad = yw;
+    row.uniform_scale = sc;
+    ctx.db.apartment_unit_decor().decor_id().update(row);
+}
+
+#[spacetimedb::reducer]
+pub fn delete_apartment_unit_decor(ctx: &ReducerContext, decor_id: u64) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("delete_apartment_unit_decor blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let Some((unit, _row)) = authorize_apartment_decor_row(ctx, decor_id) else {
+        return;
+    };
+    if player_may_layout_owned_apartment(ctx, &unit.unit_key, true).is_none() {
+        return;
+    }
+    ctx.db.apartment_unit_decor().decor_id().delete(decor_id);
 }
 
 #[spacetimedb::reducer]

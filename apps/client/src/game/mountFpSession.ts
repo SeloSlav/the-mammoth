@@ -93,6 +93,8 @@ import {
   isApartmentUnitBoundsDebugEnabled,
   mountFpApartmentFurniture,
 } from "./fpApartment/fpApartmentFurniture.js";
+import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
+import { mountFpApartmentLayoutAuthoring } from "./fpApartment/fpApartmentLayoutAuthoring.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpDev/fpViewmodelAuthoringOverlay.js";
@@ -315,8 +317,15 @@ export async function mountFpSession(
     }),
   );
 
+  const fpApartmentDecorMeshes = mountFpApartmentDecorMeshes({
+    conn,
+    buildingRoot,
+  });
+
+
   let sessionDisposed = false;
   let decalManager: DecalManager | null = null;
+
   if (ENABLE_STAIRWELL_GRAFFITI_DECALS) {
     void (async () => {
       try {
@@ -392,6 +401,10 @@ export async function mountFpSession(
   presentation.setLocalMirrorAvatarVisible(true);
 
   const fpAuthoringActiveRef = { active: false };
+  const apartmentLayoutAuthoringActiveRef = { active: false };
+  const fpAuthorLikePointerOverlayActive = (): boolean =>
+    fpAuthoringActiveRef.active || apartmentLayoutAuthoringActiveRef.active;
+
   const disposeFpAuthoring = mountFpViewmodelAuthoringDevOnly({
     scene,
     camera,
@@ -428,6 +441,17 @@ export async function mountFpSession(
     cachedGuestFeet?.y ?? 1.35,
     cachedGuestFeet?.z ?? 0,
   );
+  const disposeApartmentLayoutAuthoring = mountFpApartmentLayoutAuthoring({
+    conn,
+    scene,
+    camera,
+    canvas,
+    getFeetWorld: (out) => {
+      out.copy(pos);
+    },
+    getDecorObject: (id) => fpApartmentDecorMeshes.getDecorObject(id),
+    activeRef: apartmentLayoutAuthoringActiveRef,
+  });
   const poseAoiAnchor = { x: pos.x, y: pos.y, z: pos.z };
   const _floorVisCamWorld = new THREE.Vector3();
   const _floorVisCamDir = new THREE.Vector3();
@@ -1086,7 +1110,7 @@ export async function mountFpSession(
   };
 
   const onMouseMove = (e: MouseEvent) => {
-    if (fpAuthoringActiveRef.active) return;
+    if (fpAuthorLikePointerOverlayActive()) return;
     if (document.pointerLockElement !== canvas) return;
     const freeLook = keys.has("AltLeft") || keys.has("AltRight");
     if (freeLook) {
@@ -1104,7 +1128,7 @@ export async function mountFpSession(
 
   const onClick = () => {
     void attachSpatialWorldAudio();
-    if (fpAuthoringActiveRef.active) return;
+    if (fpAuthorLikePointerOverlayActive()) return;
     if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
   };
 
@@ -1114,7 +1138,7 @@ export async function mountFpSession(
   };
 
   const onPointerDown = (e: PointerEvent) => {
-    if (fpAuthoringActiveRef.active) return;
+    if (fpAuthorLikePointerOverlayActive()) return;
     if (document.pointerLockElement !== canvas) return;
     // Match server combat rail (`player_active_hotbar`) to HUD selection before enqueueing attack.
     syncActiveHotbarSlotToServer();
@@ -1191,6 +1215,7 @@ export async function mountFpSession(
     fpElevators,
     fpApartmentDoors,
     fpApartmentFurniture,
+    fpApartmentDecorMeshes,
     sampleWalkTopBase,
     _elevSupportEval,
     _displayOffset,
@@ -1298,6 +1323,8 @@ export async function mountFpSession(
     canvas.removeEventListener("contextmenu", onCanvasContextMenu);
     setFpPickupPrompt(null);
     fpElevators.dispose();
+    disposeApartmentLayoutAuthoring();
+    fpApartmentDecorMeshes.dispose();
     fpApartmentFurniture.dispose();
     fpApartmentDoors.dispose();
     unregisterFpDebugMenuSessionSnapshot();

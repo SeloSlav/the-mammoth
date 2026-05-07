@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddApartmentUnitDecorReducer from "../add_apartment_unit_decor_reducer";
 import ApartmentDoorSetReducer from "../apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "../apartment_door_toggle_reducer";
 import CancelWaitingCraftReducer from "../cancel_waiting_craft_reducer";
@@ -14,6 +15,7 @@ import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer"
 import CleanupOldHudToastsStepReducer from "../cleanup_old_hud_toasts_step_reducer";
 import CleanupOldWorldSoundEventsReducer from "../cleanup_old_world_sound_events_reducer";
 import ConsumeHotbarItemReducer from "../consume_hotbar_item_reducer";
+import DeleteApartmentUnitDecorReducer from "../delete_apartment_unit_decor_reducer";
 import DropItemReducer from "../drop_item_reducer";
 import ElevatorHailReducer from "../elevator_hail_reducer";
 import ElevatorLandingExteriorDoorSetReducer from "../elevator_landing_exterior_door_set_reducer";
@@ -33,6 +35,7 @@ import ReinforceApartmentPulseReducer from "../reinforce_apartment_pulse_reducer
 import RespawnPlayerReducer from "../respawn_player_reducer";
 import SetActiveHotbarSlotReducer from "../set_active_hotbar_slot_reducer";
 import SetAvatarBodyReducer from "../set_avatar_body_reducer";
+import SetOwnedApartmentPiecePoseReducer from "../set_owned_apartment_piece_pose_reducer";
 import SetUsernameReducer from "../set_username_reducer";
 import StashMoveItemToSlotReducer from "../stash_move_item_to_slot_reducer";
 import StashPullItemReducer from "../stash_pull_item_reducer";
@@ -44,7 +47,9 @@ import SubmitFirearmShotReducer from "../submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "../submit_player_locomotion_snapshot_reducer";
 import TickCraftQueueStepReducer from "../tick_craft_queue_step_reducer";
+import UpdateApartmentUnitDecorReducer from "../update_apartment_unit_decor_reducer";
 
+export type AddApartmentUnitDecorParams = __Infer<typeof AddApartmentUnitDecorReducer>;
 export type ApartmentDoorSetParams = __Infer<typeof ApartmentDoorSetReducer>;
 export type ApartmentDoorToggleParams = __Infer<typeof ApartmentDoorToggleReducer>;
 export type CancelWaitingCraftParams = __Infer<typeof CancelWaitingCraftReducer>;
@@ -53,6 +58,7 @@ export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItems
 export type CleanupOldHudToastsStepParams = __Infer<typeof CleanupOldHudToastsStepReducer>;
 export type CleanupOldWorldSoundEventsParams = __Infer<typeof CleanupOldWorldSoundEventsReducer>;
 export type ConsumeHotbarItemParams = __Infer<typeof ConsumeHotbarItemReducer>;
+export type DeleteApartmentUnitDecorParams = __Infer<typeof DeleteApartmentUnitDecorReducer>;
 export type DropItemParams = __Infer<typeof DropItemReducer>;
 export type ElevatorHailParams = __Infer<typeof ElevatorHailReducer>;
 export type ElevatorLandingExteriorDoorSetParams = __Infer<typeof ElevatorLandingExteriorDoorSetReducer>;
@@ -72,6 +78,7 @@ export type ReinforceApartmentPulseParams = __Infer<typeof ReinforceApartmentPul
 export type RespawnPlayerParams = __Infer<typeof RespawnPlayerReducer>;
 export type SetActiveHotbarSlotParams = __Infer<typeof SetActiveHotbarSlotReducer>;
 export type SetAvatarBodyParams = __Infer<typeof SetAvatarBodyReducer>;
+export type SetOwnedApartmentPiecePoseParams = __Infer<typeof SetOwnedApartmentPiecePoseReducer>;
 export type SetUsernameParams = __Infer<typeof SetUsernameReducer>;
 export type StashMoveItemToSlotParams = __Infer<typeof StashMoveItemToSlotReducer>;
 export type StashPullItemParams = __Infer<typeof StashPullItemReducer>;
@@ -83,4 +90,5 @@ export type SubmitFirearmShotParams = __Infer<typeof SubmitFirearmShotReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
 export type SubmitPlayerLocomotionSnapshotParams = __Infer<typeof SubmitPlayerLocomotionSnapshotReducer>;
 export type TickCraftQueueStepParams = __Infer<typeof TickCraftQueueStepReducer>;
+export type UpdateApartmentUnitDecorParams = __Infer<typeof UpdateApartmentUnitDecorReducer>;
 

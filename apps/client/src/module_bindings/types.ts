@@ -64,6 +64,18 @@ export const ApartmentUnit = __t.object("ApartmentUnit", {
 });
 export type ApartmentUnit = __Infer<typeof ApartmentUnit>;
 
+export const ApartmentUnitDecor = __t.object("ApartmentUnitDecor", {
+  decorId: __t.u64(),
+  unitKey: __t.string(),
+  modelRelPath: __t.string(),
+  posX: __t.f32(),
+  posY: __t.f32(),
+  posZ: __t.f32(),
+  yawRad: __t.f32(),
+  uniformScale: __t.f32(),
+});
+export type ApartmentUnitDecor = __Infer<typeof ApartmentUnitDecor>;
+
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
