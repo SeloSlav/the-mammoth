@@ -32,13 +32,23 @@ const BED_CENTER_Z_OFFSET_M: f32 = -1.08;
 /// Door-adjacent wardrobe — pushed deeper so hallway poses cannot overlap the wardrobe interact disc.
 const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 1.38;
 const WARDROBE_CENTER_Z_OFFSET_M: f32 = 2.34;
+/// Clearance from hull edges for the starter stove anchor at the interior SW corner (`min X`, `min Z`).
+const STOVE_CORNER_CLEARANCE_M: f32 = 0.38;
 
 #[inline]
 fn clamp(v: f32, lo: f32, hi: f32) -> f32 {
     v.max(lo).min(hi)
 }
 
-/// Bed / footlocker / wardrobe for **SwingDoorFace `W|E`** units (east/west hinged corridor doors).
+/// Interior **south-west** corner (`min X`, `min Z`) with shell clearance — replicated into `ApartmentUnit.stove_*`.
+pub(crate) fn stove_corner_seed_xz(mn: &[f32; 3], mx: &[f32; 3]) -> (f32, f32) {
+    let inset = PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M;
+    let x = clamp(mn[0] + inset, mn[0] + inset, mx[0] - inset);
+    let z = clamp(mn[2] + inset, mn[2] + inset, mx[2] - inset);
+    (x, z)
+}
+
+/// Bed / footlocker / wardrobe / stove for **SwingDoorFace `W|E`** units (east/west hinged corridor doors).
 ///
 /// Authoritative XZ (+ bed yaw rad) seeded into `ApartmentUnit` on init.
 pub(crate) struct EastWestInteriorFurnitureSeed {
@@ -48,6 +58,8 @@ pub(crate) struct EastWestInteriorFurnitureSeed {
     pub foot_z: f32,
     pub wardrobe_x: f32,
     pub wardrobe_z: f32,
+    pub stove_x: f32,
+    pub stove_z: f32,
     pub bed_yaw: f32,
 }
 
@@ -111,6 +123,8 @@ pub(crate) fn east_west_interior_furniture_seed(
         SwingDoorFace::N | SwingDoorFace::S => unreachable!("filtered above"),
     };
 
+    let (stove_x, stove_z) = stove_corner_seed_xz(mn, mx);
+
     Some(EastWestInteriorFurnitureSeed {
         bed_x,
         bed_z,
@@ -118,6 +132,8 @@ pub(crate) fn east_west_interior_furniture_seed(
         foot_z,
         wardrobe_x,
         wardrobe_z,
+        stove_x,
+        stove_z,
         bed_yaw,
     })
 }
@@ -357,6 +373,22 @@ mod tests {
                     WARDROBE_HALF_X_M,
                     WARDROBE_HALF_Z_M,
                 );
+                assert_inside(
+                    &format!("{unit_label} stove"),
+                    &mn,
+                    &mx,
+                    seed.stove_x,
+                    seed.stove_z,
+                );
+                assert_footprint_inside(
+                    &format!("{unit_label} stove"),
+                    &mn,
+                    &mx,
+                    seed.stove_x,
+                    seed.stove_z,
+                    STOVE_CORNER_CLEARANCE_M,
+                    STOVE_CORNER_CLEARANCE_M,
+                );
 
                 checked += 1;
             }
@@ -376,6 +408,14 @@ mod tests {
         assert!(east.wardrobe_z > east.bed_z);
         assert!((east.wardrobe_x - (mn[0] + WARDROBE_CENTER_FROM_BACK_WALL_M)).abs() < 1e-4);
         assert!((east.bed_yaw - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+        assert!(east.stove_x < east.wardrobe_x);
+        assert!(east.stove_z < east.bed_z);
+        assert!(
+            (east.stove_x - (mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
+        );
+        assert!(
+            (east.stove_z - (mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
+        );
 
         let west_mn = [-14.925, 0.0, -117.5825];
         let west_mx = [-2.005, 3.0, -106.5825];
@@ -393,6 +433,15 @@ mod tests {
         assert!(west.wardrobe_z > west.bed_z);
         assert!((west.wardrobe_x - (west_mx[0] - WARDROBE_CENTER_FROM_BACK_WALL_M)).abs() < 1e-4);
         assert!((west.bed_yaw + std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+        assert!(west.stove_x < west.wardrobe_x);
+        assert!(
+            (west.stove_x - (west_mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs()
+                < 0.06
+        );
+        assert!(
+            (west.stove_z - (west_mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs()
+                < 0.06
+        );
     }
 
     #[test]

@@ -6,7 +6,9 @@ use log;
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::auth;
-use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
+use crate::inventory_models::{
+    stash_location_matches, HotbarLocationData, InventoryLocationData, ItemLocation,
+};
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
 use crate::player_vitals;
@@ -67,7 +69,7 @@ pub(crate) const NUM_STASH_SLOTS: u16 = 24;
 pub(crate) fn find_item_in_stash_slot(
     ctx: &ReducerContext,
     owner_identity: Identity,
-    unit_key: &str,
+    stash_key: &str,
     slot: u16,
 ) -> Option<InventoryItem> {
     ctx.db.inventory_item().iter().find(|i| {
@@ -75,7 +77,7 @@ pub(crate) fn find_item_in_stash_slot(
             &i.location,
             ItemLocation::Stash(s)
                 if s.owner_identity == owner_identity
-                    && s.unit_key == unit_key
+                    && stash_location_matches(&s.unit_key, stash_key)
                     && s.slot_index == slot
         )
     })

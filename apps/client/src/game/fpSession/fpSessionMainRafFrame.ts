@@ -617,7 +617,7 @@ export function createFpSessionMainRafFrame(
       const lookedAtWardrobeUnitKey = APARTMENT_CLAIM_UI_ENABLED
         ? deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
         : null;
-      const stashUk = lookedAtStash?.unitKey ?? null;
+      const stashUk = lookedAtStash?.stashKey ?? null;
       const wardrobeUk = lookedAtWardrobeUnitKey ?? null;
       const cfx = Math.floor(ft.x * 2);
       const cfy = Math.floor(ft.y * 2);
@@ -643,7 +643,7 @@ export function createFpSessionMainRafFrame(
         aptSysCoarseFz = cfz;
         cachedAptSys = getApartmentSystemPrompt(deps.conn, ft, {
           apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
-          lookedAtStashUnitKey: stashUk,
+          lookedAtStashKey: stashUk,
           lookedAtWardrobeUnitKey,
         });
       }
@@ -782,7 +782,9 @@ export function createFpSessionMainRafFrame(
         } else if (aSys?.kind === "apartment_stash") {
           setFpPickupPrompt({
             kind: "apartment_stash",
+            stashKey: aSys.stashKey,
             unitKey: aSys.unitKey,
+            stashLabel: aSys.stashLabel,
           });
         } else if (hitPlain) {
           const def = getMammothItemDef(hitPlain.defId);

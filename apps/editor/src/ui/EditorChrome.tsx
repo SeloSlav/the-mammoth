@@ -33,6 +33,7 @@ import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
 import { useEditorChromeDiskPersistence } from "./hooks/useEditorChromeDiskPersistence.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
+import { parseMyApartmentLayoutDecorSelectedId } from "../editor/myApartment/editorMyApartmentSelection.js";
 export function EditorChrome() {
   const {
     workspace,
@@ -144,6 +145,9 @@ export function EditorChrome() {
     activeFloorOverrideDoc,
     selectedId,
   );
+  const myApartmentDecorSelected =
+    mode === "my_apartment_layout" &&
+    parseMyApartmentLayoutDecorSelectedId(selectedId) !== null;
   const floorPrefabIds = useMemo(
     () => collectPrefabIdsFromFloors(floorDocs),
     [floorDocs],
@@ -560,10 +564,7 @@ export function EditorChrome() {
             </p>
             <span style={label}>Scene / gizmo</span>
             <div>
-              {(mode === "my_apartment_layout"
-                ? (["translate", "rotate"] as const)
-                : (["translate", "rotate", "scale"] as const)
-              ).map((m) => (
+              {(["translate", "rotate", "scale"] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -588,8 +589,18 @@ export function EditorChrome() {
                   lineHeight: 1.38,
                 }}
               >
-                Move on the floor plane only; rotate around <strong>Y</strong> in{" "}
-                <strong>45°</strong> steps. Pitch/roll handles are disabled.
+                {myApartmentDecorSelected ? (
+                  <>
+                    Imported decor: move on <strong>X / Y / Z</strong> (Y cannot go below the floor),
+                    rotate around <strong>Y</strong> in <strong>45°</strong> steps, uniform scale.
+                  </>
+                ) : (
+                  <>
+                    Built-ins move on the floor plane only; rotate around <strong>Y</strong> in{" "}
+                    <strong>45°</strong> steps; use <strong>Scale</strong> (center handle) for uniform
+                    size. Pitch/roll handles are disabled.
+                  </>
+                )}
               </p>
             ) : null}
             {transformMode === "scale" ? (

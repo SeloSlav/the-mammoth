@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node ../../scripts/free-local-dev-server-port.mjs --port 5174 --must-include the-mammoth --must-include apps\\editor --must-include vite && cross-env EDITOR_SAVE=1 vite --configLoader runner",
-    "build": "tsc --noEmit && vite build --configLoader runner",
+    "sync:apartment-decor-manifest": "node ../client/scripts/sync-apartment-decor-manifest.mjs",
+    "dev": "pnpm run sync:apartment-decor-manifest && node ../../scripts/free-local-dev-server-port.mjs --port 5174 --must-include the-mammoth --must-include apps\\editor --must-include vite && cross-env EDITOR_SAVE=1 vite --configLoader runner",
+    "build": "pnpm run sync:apartment-decor-manifest && tsc --noEmit && vite build --configLoader runner",
     "preview": "vite preview --configLoader runner",
     "lint": "eslint .",
     "check-types": "tsc --noEmit",

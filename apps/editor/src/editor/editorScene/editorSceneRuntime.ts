@@ -37,9 +37,15 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
-import { constrainMyApartmentFurnitureRootPose } from "../myApartment/editorMyApartmentMeshes.js";
-
-import { getEditorMyApartmentPieceGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+import {
+  constrainMyApartmentDecorRootPose,
+  constrainMyApartmentFurnitureRootPose,
+} from "../myApartment/editorMyApartmentMeshes.js";
+import {
+  getEditorMyApartmentPieceGroup,
+  getEditorMyApartmentSelectionGroup,
+} from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+import { parseMyApartmentLayoutDecorSelectedId } from "../myApartment/editorMyApartmentSelection.js";
 import {
   isConsumableFpAuthoringState,
   isFpMode,
@@ -350,28 +356,33 @@ export async function mountEditorScene(
         return;
       }
       if (s.mode === "my_apartment_layout") {
-        const g = getEditorMyApartmentPieceGroup(s.myApartmentLayoutPiece);
+        const g =
+          getEditorMyApartmentSelectionGroup(s.selectedId) ??
+          getEditorMyApartmentPieceGroup(s.myApartmentLayoutPiece);
         if (!g) {
           transformControls.detach();
           return;
         }
         transformControls.attach(g);
-        const effMode =
-          s.transformMode === "scale" ? "translate" : s.transformMode;
-        transformControls.setMode(effMode);
-        if (effMode === "translate") {
+        const decorSelected = parseMyApartmentLayoutDecorSelectedId(s.selectedId) !== null;
+        transformControls.setMode(s.transformMode);
+        if (s.transformMode === "translate") {
           transformControls.showX = true;
-          transformControls.showY = false;
+          transformControls.showY = decorSelected;
           transformControls.showZ = true;
-        } else {
+        } else if (s.transformMode === "rotate") {
           transformControls.showX = false;
           transformControls.showY = true;
           transformControls.showZ = false;
+        } else {
+          transformControls.showX = true;
+          transformControls.showY = true;
+          transformControls.showZ = true;
         }
         const snap = s.gridSnapM;
         transformControls.setTranslationSnap(snap > 0 ? snap : null);
         transformControls.setRotationSnap(Math.PI / 4);
-        transformControls.setScaleSnap(null);
+        transformControls.setScaleSnap(snap > 0 ? snap : null);
         transformControls.setSize(1);
         return;
       }
@@ -481,11 +492,12 @@ export async function mountEditorScene(
   transformControls.addEventListener("objectChange", () => {
     const aptSt = useEditorStore.getState();
     const aptObj = transformControls.object as THREE.Object3D | undefined;
-    if (
-      aptSt.mode === "my_apartment_layout" &&
-      aptObj?.userData.mammothEditorMyApartmentPiece
-    ) {
-      constrainMyApartmentFurnitureRootPose(aptObj);
+    if (aptSt.mode === "my_apartment_layout" && aptObj) {
+      if (aptObj.userData.mammothEditorMyApartmentPiece) {
+        constrainMyApartmentFurnitureRootPose(aptObj);
+      } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
+        constrainMyApartmentDecorRootPose(aptObj);
+      }
     }
     applyAnchoredScaleGesture();
     commitLevelEditorAttachedTransformToStore();

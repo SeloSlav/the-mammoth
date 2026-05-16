@@ -200,6 +200,19 @@
   line-height: 1.45;
 }
 
+.preloadNotice {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-card-border-strong);
+  border-left: 4px solid var(--ui-accent);
+  border-radius: 14px;
+  background: rgba(8, 10, 14, 0.88);
+  color: var(--ui-text-primary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: minmax(18px, 1fr) minmax(300px, 470px) minmax(18px, 1fr);

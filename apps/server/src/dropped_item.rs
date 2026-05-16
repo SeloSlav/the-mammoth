@@ -837,6 +837,8 @@ mod tests {
             foot_z: -113.1625,
             wardrobe_x,
             wardrobe_z: -109.7425,
+            stove_x: if west_facing { 2.445 } else { -14.485 },
+            stove_z: -117.1425,
             bound_min_x,
             bound_max_x,
             bound_min_z: -117.5825,

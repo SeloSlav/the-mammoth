@@ -55,6 +55,8 @@ export const ApartmentUnit = __t.object("ApartmentUnit", {
   footZ: __t.f32(),
   wardrobeX: __t.f32(),
   wardrobeZ: __t.f32(),
+  stoveX: __t.f32(),
+  stoveZ: __t.f32(),
   boundMinX: __t.f32(),
   boundMaxX: __t.f32(),
   boundMinZ: __t.f32(),

@@ -25,7 +25,8 @@ import { MAMMOTH_STASH_SLOTS, useMammothInventory, useMammothStash } from "./use
 
 type Props = {
   conn: DbConnection;
-  unitKey: string;
+  stashKey: string;
+  stashLabel: string;
 };
 
 const STASH_COLS = 6;
@@ -38,10 +39,10 @@ const NO_SELECT: CSSProperties = {
   msUserSelect: "none",
 };
 
-/** Slot-based footlocker inventory for replicated apartment stash rows. */
-export function MammothStashHud({ conn, unitKey }: Props) {
+/** Slot-based storage for one apartment object (wardrobe or footlocker). */
+export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
   const playerSlots = useMammothInventory(conn);
-  const stash = useMammothStash(conn, unitKey);
+  const stash = useMammothStash(conn, stashKey);
   const baseSlots = useMemo<SlotGrids>(
     () => ({ ...playerSlots, stash }),
     [playerSlots, stash],
@@ -148,14 +149,14 @@ export function MammothStashHud({ conn, unitKey }: Props) {
       try {
         void conn.reducers.stashPullItemToInventorySlot({
           itemInstanceId: toInstanceId(pop),
-          unitKey,
+          unitKey: stashKey,
           targetInventorySlot: destIndex,
         });
       } catch (err) {
         console.warn("[MammothStashHud] quick move to inventory failed", err);
       }
     },
-    [conn, gridsForPrediction, toInstanceId, unitKey],
+    [conn, gridsForPrediction, toInstanceId, stashKey],
   );
 
   const handleDrop = useCallback(
@@ -177,25 +178,25 @@ export function MammothStashHud({ conn, unitKey }: Props) {
         if (target.type === "stash" && src.sourceSlot.type === "stash") {
           void conn.reducers.stashMoveItemToSlot({
             itemInstanceId: instanceId,
-            unitKey,
+            unitKey: stashKey,
             targetStashSlot: target.index,
           });
         } else if (target.type === "stash") {
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
-            unitKey,
+            unitKey: stashKey,
             targetStashSlot: target.index,
           });
         } else if (target.type === "inventory") {
           void conn.reducers.stashPullItemToInventorySlot({
             itemInstanceId: instanceId,
-            unitKey,
+            unitKey: stashKey,
             targetInventorySlot: target.index,
           });
         } else {
           void conn.reducers.stashPullItemToHotbarSlot({
             itemInstanceId: instanceId,
-            unitKey,
+            unitKey: stashKey,
             targetHotbarSlot: target.index,
           });
         }
@@ -203,7 +204,7 @@ export function MammothStashHud({ conn, unitKey }: Props) {
         console.warn("[MammothStashHud] drop/move failed", err);
       }
     },
-    [conn, gridsForPrediction, unitKey],
+    [conn, gridsForPrediction, stashKey],
   );
 
   const slotInner = (pop: MammothPopulatedItem | null) => {
@@ -249,9 +250,9 @@ export function MammothStashHud({ conn, unitKey }: Props) {
       }}
       data-testid="mammoth-stash-panel"
     >
-      <div style={{ color: "#f2d39a", fontSize: 12, marginBottom: 4 }}>Footlocker</div>
+      <div style={{ color: "#f2d39a", fontSize: 12, marginBottom: 4 }}>{`${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`}</div>
       <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
-        Drag items in/out. Right-click footlocker items to move them to your inventory.
+        {`Drag items in/out. Right-click ${stashLabel} items to move them to your inventory.`}
       </div>
       <div
         style={{

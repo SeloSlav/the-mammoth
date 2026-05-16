@@ -1,9 +1,9 @@
 /**
  * Static apartment props — placements match replicated `ApartmentUnit`:
- * wardrobe (`wardrobe_x/z`), footlocker (`foot_x/z`), bed (`bed_x/y/z` + `bed_yaw`).
+ * wardrobe (`wardrobe_x/z`), footlocker (`foot_x/z`), stove (`stove_x/z`), bed (`bed_x/y/z` + `bed_yaw`).
  *
  * GLB pivots vary — each clone is snapped so its **world AABB bottom** meets the floor plane.
- * After placement, each unit’s three props are merged into **one mesh per material** per unit
+ * After placement, each unit’s props are merged into **one mesh per material** per unit
  * (see {@link mergeGroupDescendantsByMaterial}) so draw calls stay bounded while each merged group
  * keeps a tight AABB for frustum culling (merging an entire floor’s units into one mesh made the
  * bounds huge and forced the GPU to draw every apartment on the plate every frame).
@@ -21,6 +21,13 @@ import {
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 import {
+  apartmentStashKey,
+  apartmentStashLabel,
+  APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_STOVE,
+  APARTMENT_STASH_KIND_WARDROBE,
+} from "./fpApartmentStashKey.js";
+import {
   resolveApartmentFurniturePose,
   loadOwnedApartmentBuiltinsDocFromContent,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
@@ -28,6 +35,7 @@ import {
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
 const BED_URL = "/static/models/objects/bed.glb";
+const STOVE_URL = "/static/models/objects/stove.glb";
 
 /** Max synchronous CPU per scheduler tick **between whole units** (each unit also yields internally). */
 const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
@@ -38,6 +46,7 @@ const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
 const BED_VIS_SCALE = 1.14;
+const STOVE_VIS_SCALE = 0.88;
 
 /** Set true to force hull debug in production builds. */
 const FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE = false;
@@ -59,6 +68,7 @@ export function isApartmentUnitBoundsDebugEnabled(): boolean {
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 const WARDROBE_BOUNDS_INSET_M = 0.48;
 const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
+const STOVE_BOUNDS_INSET_M = 0.42;
 /**
  * Replication seed path only: replicated `bed_x/z/y` anchors can graze exterior glass; pull the live
  * mesh inward before merge. **Not** used for {@link loadOwnedApartmentBuiltinsDocFromContent} poses
@@ -83,6 +93,8 @@ const FURNITURE_PLACEMENT_FIELDS = [
   "footZ",
   "wardrobeX",
   "wardrobeZ",
+  "stoveX",
+  "stoveZ",
   "boundMinX",
   "boundMaxX",
   "boundMinZ",
@@ -91,8 +103,6 @@ const FURNITURE_PLACEMENT_FIELDS = [
 
 const _stashRaycaster = new THREE.Raycaster();
 const _screenCenterNdc = new THREE.Vector2(0, 0);
-const _visibleStashPickMeshes: THREE.Object3D[] = [];
-const _visibleWardrobePickMeshes: THREE.Object3D[] = [];
 const _furnitureBoundsScratch = new THREE.Box3();
 const _furnitureSizeScratch = new THREE.Vector3();
 const _furnitureCenterScratch = new THREE.Vector3();
@@ -184,6 +194,10 @@ function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Objec
 export type MountFpApartmentFurnitureResult = {
   dispose: () => void;
   syncVisibility: (camera: THREE.PerspectiveCamera, allowDemandBuild?: boolean) => void;
+  /**
+   * Center-screen ray vs invisible footlocker / wardrobe / stove picks — returns stash prompt when the viewer
+   * owns the unit and {@link clientMayUseApartmentStash} passes (same replicated stash).
+   */
   getStashPrompt: (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
@@ -198,6 +212,7 @@ export type MountFpApartmentFurnitureResult = {
 type ApartmentFurnitureTemplates = {
   wardrobe: THREE.Object3D;
   footlocker: THREE.Object3D;
+  stove: THREE.Object3D;
   bed: THREE.Object3D;
 };
 
@@ -217,13 +232,6 @@ type ApartmentFurnitureLevelBuildJob = {
   stashPickMeshes: THREE.Mesh[];
   wardrobePickMeshes: THREE.Mesh[];
 };
-
-function objectAndAncestorsVisible(obj: THREE.Object3D): boolean {
-  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
-    if (!cur.visible) return false;
-  }
-  return true;
-}
 
 export async function mountFpApartmentFurniture(opts: {
   conn: DbConnection;
@@ -393,7 +401,7 @@ export async function mountFpApartmentFurniture(opts: {
     plate.add(unitGroup);
 
     const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
-    w.scale.setScalar(WARDROBE_VIS_SCALE);
+    w.scale.setScalar(WARDROBE_VIS_SCALE * pose.wardrobe.uniformScale);
     w.position.set(pose.wardrobe.x, 0, pose.wardrobe.z);
     w.rotation.y = pose.wardrobe.yaw;
     snapCloneBottomToWorldFloor(w, pose.wardrobe.snapFloorY);
@@ -411,6 +419,12 @@ export async function mountFpApartmentFurniture(opts: {
       Math.max(0.35, _footlockerPickSizeScratch.z),
     );
     wardrobePick.userData.mammothApartmentWardrobePickUnitKey = u.unitKey;
+    wardrobePick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
+    wardrobePick.userData.mammothApartmentStashKey = apartmentStashKey(
+      u.unitKey,
+      APARTMENT_STASH_KIND_WARDROBE,
+    );
+    wardrobePick.userData.mammothApartmentStashKind = APARTMENT_STASH_KIND_WARDROBE;
     wardrobePick.userData.mammothSkipFloorGeometryMerge = true;
     wardrobePick.userData.mammothApartmentFurnitureProp = true;
     wardrobePick.userData.mammothPlateLevelIndex = levelIdx;
@@ -418,12 +432,13 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.add(w);
     unitGroup.add(wardrobePick);
     build.wardrobePickMeshes.push(wardrobePick);
+    build.stashPickMeshes.push(wardrobePick);
 
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     const f = clonePropScene(readyTemplates.footlocker, levelIdx);
-    f.scale.setScalar(FOOTLOCKER_VIS_SCALE);
+    f.scale.setScalar(FOOTLOCKER_VIS_SCALE * pose.footlocker.uniformScale);
     f.position.set(pose.footlocker.x, 0, pose.footlocker.z);
     f.rotation.y = pose.footlocker.yaw;
     snapCloneBottomToWorldFloor(f, pose.footlocker.snapFloorY);
@@ -441,6 +456,11 @@ export async function mountFpApartmentFurniture(opts: {
       Math.max(0.35, _footlockerPickSizeScratch.z),
     );
     footlockerPick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
+    footlockerPick.userData.mammothApartmentStashKey = apartmentStashKey(
+      u.unitKey,
+      APARTMENT_STASH_KIND_FOOTLOCKER,
+    );
+    footlockerPick.userData.mammothApartmentStashKind = APARTMENT_STASH_KIND_FOOTLOCKER;
     footlockerPick.userData.mammothSkipFloorGeometryMerge = true;
     footlockerPick.userData.mammothApartmentFurnitureProp = true;
     footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
@@ -452,8 +472,43 @@ export async function mountFpApartmentFurniture(opts: {
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
+    const st = clonePropScene(readyTemplates.stove, levelIdx);
+    st.scale.setScalar(STOVE_VIS_SCALE * pose.stove.uniformScale);
+    st.position.set(pose.stove.x, 0, pose.stove.z);
+    st.rotation.y = pose.stove.yaw;
+    snapCloneBottomToWorldFloor(st, pose.stove.snapFloorY);
+    keepCloneInsideUnitXZ(st, u, xzInsetForFurnitureClamp(useAuthoringClamp, STOVE_BOUNDS_INSET_M));
+    st.updateMatrixWorld(true);
+    const stoveBounds = new THREE.Box3().setFromObject(st);
+    const stovePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+    stoveBounds.getSize(_footlockerPickSizeScratch);
+    stoveBounds.getCenter(_footlockerPickCenterScratch);
+    stovePick.name = `apartment_stove_pick:${u.unitKey}`;
+    stovePick.position.copy(_footlockerPickCenterScratch);
+    stovePick.scale.set(
+      Math.max(0.35, _footlockerPickSizeScratch.x),
+      Math.max(0.25, _footlockerPickSizeScratch.y),
+      Math.max(0.35, _footlockerPickSizeScratch.z),
+    );
+    stovePick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
+    stovePick.userData.mammothApartmentStashKey = apartmentStashKey(
+      u.unitKey,
+      APARTMENT_STASH_KIND_STOVE,
+    );
+    stovePick.userData.mammothApartmentStashKind = APARTMENT_STASH_KIND_STOVE;
+    stovePick.userData.mammothSkipFloorGeometryMerge = true;
+    stovePick.userData.mammothApartmentFurnitureProp = true;
+    stovePick.userData.mammothPlateLevelIndex = levelIdx;
+    stovePick.userData.mammothUnitInterior = true;
+    unitGroup.add(st);
+    unitGroup.add(stovePick);
+    build.stashPickMeshes.push(stovePick);
+
+    await yieldToMain();
+    if (disposed || furnitureBuildEpoch !== epoch) return;
+
     const b = clonePropScene(readyTemplates.bed, levelIdx);
-    b.scale.setScalar(BED_VIS_SCALE);
+    b.scale.setScalar(BED_VIS_SCALE * pose.bed.uniformScale);
     b.position.set(pose.bed.x, 0, pose.bed.z);
     b.rotation.y = pose.bed.yaw;
     snapCloneBottomToWorldFloor(b, pose.bed.y);
@@ -563,14 +618,16 @@ export async function mountFpApartmentFurniture(opts: {
     void Promise.all([
       loader.loadAsync(WARDROBE_URL),
       loader.loadAsync(FOOTLOCKER_URL),
+      loader.loadAsync(STOVE_URL),
       loader.loadAsync(BED_URL),
     ])
-      .then(([wardrobeGltf, footGltf, bedGltf]) => {
+      .then(([wardrobeGltf, footGltf, stoveGltf, bedGltf]) => {
         templatesLoading = false;
         if (disposed) return;
         templates = {
           wardrobe: wardrobeGltf.scene,
           footlocker: footGltf.scene,
+          stove: stoveGltf.scene,
           bed: bedGltf.scene,
         };
         rowsByLevel = indexRowsByLevel();
@@ -708,35 +765,45 @@ export async function mountFpApartmentFurniture(opts: {
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
-      _visibleStashPickMeshes.length = 0;
-      for (const m of stashPickMeshes) {
-        if (objectAndAncestorsVisible(m)) _visibleStashPickMeshes.push(m);
-      }
-      if (_visibleStashPickMeshes.length === 0) return null;
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
-      const hits = _stashRaycaster.intersectObjects(_visibleStashPickMeshes, false);
+      /**
+       * Do not gate gameplay picks on ancestor `.visible`: unit furniture groups can be temporarily
+       * render-culled while the player is still inside / beside the stash, which makes the E prompt
+       * feel "stuck". Range + unit-hull checks in `clientMayUseApartmentStash` remain authoritative.
+       */
+      const hits = _stashRaycaster.intersectObjects(stashPickMeshes, false);
       const seen = new Set<string>();
       for (const hit of hits) {
+        const stashKey = hit.object.userData.mammothApartmentStashKey;
         const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
-        if (typeof unitKey !== "string" || seen.has(unitKey)) continue;
-        seen.add(unitKey);
-        if (clientMayUseApartmentStash(opts.conn, opts.conn.identity, unitKey, playerPos)) {
-          return { kind: "apartment_stash", unitKey };
+        const stashKind = hit.object.userData.mammothApartmentStashKind;
+        if (typeof stashKey !== "string" || typeof unitKey !== "string" || seen.has(stashKey)) continue;
+        if (
+          stashKind !== APARTMENT_STASH_KIND_FOOTLOCKER &&
+          stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
+          stashKind !== APARTMENT_STASH_KIND_STOVE
+        ) {
+          continue;
+        }
+        seen.add(stashKey);
+        if (clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos)) {
+          return {
+            kind: "apartment_stash",
+            stashKey,
+            unitKey,
+            stashKind,
+            stashLabel: apartmentStashLabel(stashKind),
+          };
         }
       }
       return null;
     },
     getWardrobeClaimLookAtUnitKey: (_playerPos, camera) => {
       if (wardrobePickMeshes.length === 0) return null;
-      _visibleWardrobePickMeshes.length = 0;
-      for (const m of wardrobePickMeshes) {
-        if (objectAndAncestorsVisible(m)) _visibleWardrobePickMeshes.push(m);
-      }
-      if (_visibleWardrobePickMeshes.length === 0) return null;
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
-      const hits = _stashRaycaster.intersectObjects(_visibleWardrobePickMeshes, false);
+      const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);
       for (const hit of hits) {
         const unitKey = hit.object.userData.mammothApartmentWardrobePickUnitKey;
         if (typeof unitKey === "string" && unitKey.length > 0) return unitKey;

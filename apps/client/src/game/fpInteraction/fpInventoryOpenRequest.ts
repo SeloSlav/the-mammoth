@@ -1,4 +1,4 @@
-/** One-shot "open inventory" from the FP engine (e.g. footlocker E). React HUD subscribes. */
+/** One-shot "open inventory" from the FP engine (e.g. apartment stash E). React HUD subscribes. */
 
 const listeners = new Set<() => void>();
 

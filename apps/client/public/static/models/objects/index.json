@@ -1,0 +1,21 @@
+[
+  "static/models/objects/bed.glb",
+  "static/models/objects/cabinet-horizontal.glb",
+  "static/models/objects/chair.glb",
+  "static/models/objects/chandelier.glb",
+  "static/models/objects/empty-beer-bottle.glb",
+  "static/models/objects/empty-beer-can-ozujsko.glb",
+  "static/models/objects/empty-cigarette-pack.glb",
+  "static/models/objects/footlocker.glb",
+  "static/models/objects/heater-room.glb",
+  "static/models/objects/rug-floor.glb",
+  "static/models/objects/sink.glb",
+  "static/models/objects/stairwell-heater.glb",
+  "static/models/objects/stove.glb",
+  "static/models/objects/table-dining-bare.glb",
+  "static/models/objects/table-dining.glb",
+  "static/models/objects/tv.glb",
+  "static/models/objects/used-cigarette-2.glb",
+  "static/models/objects/used-cigarette.glb",
+  "static/models/objects/wardrobe-closet.glb"
+]

@@ -18,7 +18,10 @@ import {
   hotbarInstantConsumeCooldownProgress,
   subscribeHotbarInstantConsumeCooldown,
 } from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
-import { setFpActiveStashPanelUnitKey } from "../game/fpInteraction/fpActiveStashPanel";
+import {
+  setFpActiveStashPanel,
+  type FpActiveStashPanelState,
+} from "../game/fpInteraction/fpActiveStashPanel";
 import { onMammothInventoryOpenRequestFromFp } from "../game/fpInteraction/fpInventoryOpenRequest";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
@@ -60,10 +63,10 @@ const NO_SELECT: CSSProperties = {
 
 type Props = {
   conn: DbConnection;
-  activeStashUnitKey?: string | null;
+  activeStash?: FpActiveStashPanelState | null;
 };
 
-export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) {
+export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const { hotbar, inventory } = useMammothInventory(conn);
   const baseSlots = useMemo(() => ({ hotbar, inventory }), [hotbar, inventory]);
   const [optimisticSlots, setOptimisticSlots] = useState<typeof baseSlots | null>(null);
@@ -164,7 +167,7 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
       if (isTextInputFocused()) return;
       e.preventDefault();
       setInvOpen((o) => {
-        if (o) setFpActiveStashPanelUnitKey(null);
+        if (o) setFpActiveStashPanel(null);
         return !o;
       });
       if (document.pointerLockElement) void document.exitPointerLock();
@@ -218,17 +221,17 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
 
   const quickMovePlayerItemToStash = useCallback(
     (pop: MammothPopulatedItem) => {
-      if (!activeStashUnitKey || document.body.classList.contains("item-dragging")) return;
+      if (!activeStash || document.body.classList.contains("item-dragging")) return;
       try {
         void conn.reducers.stashPushItem({
           itemInstanceId: toInstanceId(pop),
-          unitKey: activeStashUnitKey,
+          unitKey: activeStash.stashKey,
         });
       } catch (err) {
         console.warn("[MammothInventoryHud] quick move to stash failed", err);
       }
     },
-    [activeStashUnitKey, conn, toInstanceId],
+    [activeStash, conn, toInstanceId],
   );
 
   const quickMoveHotbarToInventory = useCallback(
@@ -282,10 +285,10 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
             targetInventorySlot: target.index,
           });
         } else if (target.type === "stash") {
-          if (!activeStashUnitKey) return;
+          if (!activeStash) return;
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
-            unitKey: activeStashUnitKey,
+            unitKey: activeStash.stashKey,
             targetStashSlot: target.index,
           });
         } else {
@@ -300,7 +303,7 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
         console.warn("[MammothInventoryHud] drop/move failed", err);
       }
     },
-    [activeStashUnitKey, conn, gridsForPrediction],
+    [activeStash, conn, gridsForPrediction],
   );
 
   const onHotbarSlotClick = useCallback(
@@ -421,7 +424,7 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
                       onDragStart={handleDragStart}
                       onDrop={handleDrop}
                       onItemContextMenu={() =>
-                        activeStashUnitKey
+                        activeStash
                           ? quickMovePlayerItemToStash(pop)
                           : quickMoveInventoryToHotbar(pop, i)
                       }
@@ -504,7 +507,7 @@ export function MammothInventoryHud({ conn, activeStashUnitKey = null }: Props) 
                     onDrop={handleDrop}
                     onActivate={() => onHotbarSlotClick(index)}
                     onItemContextMenu={() =>
-                      activeStashUnitKey
+                      activeStash
                         ? quickMovePlayerItemToStash(pop)
                         : quickMoveHotbarToInventory(pop, index)
                     }

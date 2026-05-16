@@ -25,6 +25,8 @@ function apartmentUnit(overrides: Partial<ApartmentUnit> = {}): ApartmentUnit {
     footZ: 4,
     wardrobeX: 5,
     wardrobeZ: 6,
+    stoveX: 2,
+    stoveZ: 2,
     boundMinX: 0,
     boundMaxX: 10,
     boundMinZ: 0,
@@ -62,6 +64,12 @@ describe("apartmentFurniturePlacementChanged", () => {
         apartmentUnit(),
         apartmentUnit({ wardrobeX: 5.25 }),
       ),
+    ).toBe(true);
+  });
+
+  it("detects stove anchor changes", () => {
+    expect(
+      apartmentFurniturePlacementChanged(apartmentUnit(), apartmentUnit({ stoveX: 2.25 })),
     ).toBe(true);
   });
 });

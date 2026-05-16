@@ -132,6 +132,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
   fpAuthorConsumableId: FP_AUTHORABLE_CONSUMABLE_IDS[0] as FpAuthorConsumableId,
   ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ownedApartmentBuiltinsNeedsDiskFlush: false,
   myApartmentLayoutPiece: "bed" as MyApartmentLayoutPiece,
   historyPast: [],
   historyFuture: [],
@@ -168,6 +169,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ownedApartmentBuiltins: prev.ownedApartmentBuiltins,
       selectedId: prev.selectedId,
       dirty: prev.dirty,
+      ownedApartmentBuiltinsNeedsDiskFlush: prev.ownedApartmentBuiltinsNeedsDiskFlush,
       contentStructureEpoch: prev.contentStructureEpoch ?? 0,
     });
   },
@@ -195,6 +197,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ownedApartmentBuiltins: next.ownedApartmentBuiltins,
       selectedId: next.selectedId,
       dirty: next.dirty,
+      ownedApartmentBuiltinsNeedsDiskFlush: next.ownedApartmentBuiltinsNeedsDiskFlush,
       contentStructureEpoch: next.contentStructureEpoch ?? 0,
     });
   },
@@ -439,10 +442,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         ownedApartmentBuiltins: next,
         dirty: true,
+        ownedApartmentBuiltinsNeedsDiskFlush: true,
         ...(bumpPreview ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
       };
     });
   },
+
+  clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
+    set({ ownedApartmentBuiltinsNeedsDiskFlush: false }),
 
   setDirty: (dirty) => set({ dirty }),
   setCollisionArtifactsStatus: (collisionArtifactsStatus) =>

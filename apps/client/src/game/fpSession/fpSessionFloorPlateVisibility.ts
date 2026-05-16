@@ -10,6 +10,7 @@ import {
 } from "../fpFloor/fpBuildingFloorPlateVisibilityBand.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
+import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
 
 type FpStairShaftVisibilityBounds = {
   minX: number;
@@ -121,6 +122,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
     maxLevel: number;
   };
   unitInteriorMeshes: readonly THREE.Mesh[];
+  topFloorResidentialUnitShellMeshes: readonly FpResidentialUnitShellMesh[];
   apartmentFurnitureInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
     MountFpElevatorWorldResult,
@@ -130,6 +132,8 @@ export type FpSessionFloorPlateVisibilityOpts = {
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
   /** Predicted feet position — same reference as session `pos`. */
   feetPos: THREE.Vector3;
+  /** Unit id (`unit_e_003`, etc.) when feet are inside a residential apartment shell. */
+  getContainingResidentialUnitId: () => string | null;
   /** Writable scratch filled each visibility pass; shared with downstream frame logic. */
   floorVisCamWorld: THREE.Vector3;
   floorVisCamDir: THREE.Vector3;
@@ -147,11 +151,13 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     maxBuildingLevel,
     storeyOpts,
     unitInteriorMeshes,
+    topFloorResidentialUnitShellMeshes,
     apartmentFurnitureInteriorMeshes,
     fpElevators,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
     feetPos,
+    getContainingResidentialUnitId,
     floorVisCamWorld,
     floorVisCamDir,
   } = opts;
@@ -172,6 +178,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastApartmentFurnitureInteriorVisible = true;
   let _lastUnitInteriorMeshCount = -1;
   let _lastApartmentFurnitureInteriorMeshCount = -1;
+  let _lastTopFloorResidentialShellOnlyUnitId: string | null = null;
+  let _lastTopFloorResidentialShellMeshCount = -1;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -437,6 +445,40 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
+    /**
+     * The top residential plate's unit ceilings double as the exterior roof silhouette, so the
+     * generic `mammothUnitInterior` hide set intentionally leaves them alone. From inside a top-floor
+     * apartment, though, the neighboring units' roof/ceiling shells are occluded by walls and only
+     * add overdraw when pitching up. Keep just the containing unit's residential shell visible in
+     * that narrow case; exterior/perimeter and non-residential views still keep the full top plate.
+     */
+    const topFloorResidentialShellOnlyUnitId =
+      playerStorey === maxBuildingLevel &&
+      apartmentFurnitureInteriorVisible &&
+      !fpElevators.isInsideAnyCabHud(
+        feetPos.x,
+        feetPos.y,
+        feetPos.z,
+        floorVisCamWorld.x,
+        floorVisCamWorld.y,
+        floorVisCamWorld.z,
+      )
+        ? getContainingResidentialUnitId()
+        : null;
+    const topFloorResidentialShellVisibilityChanged =
+      topFloorResidentialShellOnlyUnitId !== _lastTopFloorResidentialShellOnlyUnitId ||
+      topFloorResidentialUnitShellMeshes.length !== _lastTopFloorResidentialShellMeshCount;
+    if (topFloorResidentialShellVisibilityChanged) {
+      _lastTopFloorResidentialShellOnlyUnitId = topFloorResidentialShellOnlyUnitId;
+      _lastTopFloorResidentialShellMeshCount = topFloorResidentialUnitShellMeshes.length;
+      for (let i = 0; i < topFloorResidentialUnitShellMeshes.length; i++) {
+        const entry = topFloorResidentialUnitShellMeshes[i]!;
+        entry.mesh.visible =
+          topFloorResidentialShellOnlyUnitId === null ||
+          entry.unitId === topFloorResidentialShellOnlyUnitId;
+      }
+    }
+
     const lo = _visBandSmoothLo;
     const hi = _visBandSmoothHi;
     const stairBand = fpStairColumnPlateVisibilityBand({
@@ -459,7 +501,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       stairDetailBand.lo === _lastStairDetailLo &&
       stairDetailBand.hi === _lastStairDetailHi &&
       !unitInteriorVisibilityChanged &&
-      !apartmentFurnitureInteriorVisibilityChanged
+      !apartmentFurnitureInteriorVisibilityChanged &&
+      !topFloorResidentialShellVisibilityChanged
     ) {
       return;
     }

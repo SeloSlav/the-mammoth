@@ -1,41 +1,111 @@
 /**
- * Replica-driven GLB placements for `/static/models/**` authored via `add_apartment_unit_decor`.
+ * Apartment decor placements from two sources:
+ * - authoritative replica rows (`add_apartment_unit_decor`)
+ * - local content authoring fallback (`content/apartment/owned_apartment_builtins.json`)
+ *
+ * Live replica rows win for a unit when present; otherwise the saved content layout is projected into
+ * the viewer-owned claimed unit, matching the standalone editor flow.
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
   residentInteriorPropsVisibleForViewer,
 } from "./fpApartmentGameplay.js";
+import {
+  apartmentDecorFetchPath,
+  apartmentDecorModelExtension,
+} from "./fpApartmentDecorAssets.js";
+import {
+  loadOwnedApartmentBuiltinsDocFromContent,
+  resolveApartmentDecorPoses,
+} from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 
-export function apartmentDecorFetchPath(modelRelPath: string): string {
-  const t = modelRelPath.trim().replace(/^\/+/, "");
-  const q = t.startsWith("static/models/") ? t : `static/models/${t}`;
-  return `/${q}`;
-}
+const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
+const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0.06;
 
-function apartmentUnitByKey(conn: DbConnection, unitKey: string): ApartmentUnit | null {
+type VisibleDecorPlacement = {
+  renderKey: string;
+  decorId: bigint | null;
+  unit: ApartmentUnit;
+  modelRelPath: string;
+  posX: number;
+  posY: number;
+  posZ: number;
+  yawRad: number;
+  uniformScale: number;
+  source: "db" | "content";
+};
+
+function visibleDecorPlacements(
+  conn: DbConnection,
+  builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+): VisibleDecorPlacement[] {
+  const visibleUnits: ApartmentUnit[] = [];
+  const visibleUnitKeys = new Set<string>();
   for (const row of conn.db.apartment_unit) {
-    if (row.unitKey === unitKey) return row as ApartmentUnit;
+    const unit = row as ApartmentUnit;
+    if (!residentInteriorPropsVisibleForViewer(conn, unit)) continue;
+    visibleUnits.push(unit);
+    visibleUnitKeys.add(unit.unitKey);
   }
-  return null;
-}
 
-function visibleDecorRows(conn: DbConnection): ApartmentUnitDecor[] {
-  const out: ApartmentUnitDecor[] = [];
+  const dbRowsByUnitKey = new Map<string, ApartmentUnitDecor[]>();
   for (const row of conn.db.apartment_unit_decor) {
-    const d = row as ApartmentUnitDecor;
-    const unit = apartmentUnitByKey(conn, d.unitKey);
-    if (!unit || !residentInteriorPropsVisibleForViewer(conn, unit)) continue;
-    out.push(d);
+    const decor = row as ApartmentUnitDecor;
+    if (!visibleUnitKeys.has(decor.unitKey)) continue;
+    const arr = dbRowsByUnitKey.get(decor.unitKey);
+    if (arr) {
+      arr.push(decor);
+    } else {
+      dbRowsByUnitKey.set(decor.unitKey, [decor]);
+    }
   }
+
+  const out: VisibleDecorPlacement[] = [];
+  for (const unit of visibleUnits) {
+    const dbRows = dbRowsByUnitKey.get(unit.unitKey);
+    if (dbRows && dbRows.length > 0) {
+      dbRows.sort((a, b) => Number(a.decorId - b.decorId));
+      for (const decor of dbRows) {
+        out.push({
+          renderKey: `db:${decor.decorId.toString()}`,
+          decorId: decor.decorId,
+          unit,
+          modelRelPath: decor.modelRelPath,
+          posX: decor.posX,
+          posY: decor.posY,
+          posZ: decor.posZ,
+          yawRad: decor.yawRad,
+          uniformScale: decor.uniformScale,
+          source: "db",
+        });
+      }
+      continue;
+    }
+
+    for (const decor of resolveApartmentDecorPoses(unit, builtinsFromContent)) {
+      out.push({
+        renderKey: `content:${unit.unitKey}:${decor.id}`,
+        decorId: null,
+        unit,
+        modelRelPath: decor.modelRelPath,
+        posX: decor.x,
+        posY: decor.y,
+        posZ: decor.z,
+        yawRad: decor.yaw,
+        uniformScale: decor.uniformScale,
+        source: "content",
+      });
+    }
+  }
+
   return out;
 }
-
-const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 
 export type MountFpApartmentDecorMeshesResult = {
   dispose: () => void;
@@ -46,15 +116,21 @@ export type MountFpApartmentDecorMeshesResult = {
 export function mountFpApartmentDecorMeshes(opts: {
   conn: DbConnection;
   buildingRoot: THREE.Group;
+  onRebuilt?: () => void;
 }): MountFpApartmentDecorMeshesResult {
   const root = new THREE.Group();
   root.name = "apartment_unit_decor_root";
   root.userData.mammothApartmentFurnitureProp = true;
   opts.buildingRoot.add(root);
 
-  const loader = new GLTFLoader();
+  const gltfLoader = new GLTFLoader();
+  const objLoader = new OBJLoader();
   const templateByUrl = new Map<string, THREE.Object3D>();
+  const groupByRenderKey = new Map<string, THREE.Group>();
   const groupByDecorId = new Map<bigint, THREE.Group>();
+  const _decorBoundsScratch = new THREE.Box3();
+  const _decorSizeScratch = new THREE.Vector3();
+  const _decorCenterScratch = new THREE.Vector3();
 
   let disposed = false;
   let buildEpoch = 0;
@@ -70,18 +146,82 @@ export function mountFpApartmentDecorMeshes(opts: {
   };
 
   const clearAll = () => {
-    for (const g of groupByDecorId.values()) disposeGroupDeep(g);
+    for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
+    groupByRenderKey.clear();
     groupByDecorId.clear();
   };
 
   const _furnitureVisibilityViewProjection = new THREE.Matrix4();
   const _furnitureVisibilityFrustum = new THREE.Frustum();
 
+  function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number): void {
+    root.position.y = 0;
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    root.position.y = floorWorldY - box.min.y;
+    root.updateMatrixWorld(true);
+  }
+
+  function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM: number): void {
+    root.updateMatrixWorld(true);
+    _decorBoundsScratch.setFromObject(root);
+    _decorBoundsScratch.getSize(_decorSizeScratch);
+    _decorBoundsScratch.getCenter(_decorCenterScratch);
+
+    const minX = unit.boundMinX + insetM;
+    const maxX = unit.boundMaxX - insetM;
+    const minZ = unit.boundMinZ + insetM;
+    const maxZ = unit.boundMaxZ - insetM;
+
+    let dx = 0;
+    if (_decorSizeScratch.x > maxX - minX) {
+      dx = (minX + maxX) * 0.5 - _decorCenterScratch.x;
+    } else if (_decorBoundsScratch.min.x < minX) {
+      dx = minX - _decorBoundsScratch.min.x;
+    } else if (_decorBoundsScratch.max.x > maxX) {
+      dx = maxX - _decorBoundsScratch.max.x;
+    }
+
+    let dz = 0;
+    if (_decorSizeScratch.z > maxZ - minZ) {
+      dz = (minZ + maxZ) * 0.5 - _decorCenterScratch.z;
+    } else if (_decorBoundsScratch.min.z < minZ) {
+      dz = minZ - _decorBoundsScratch.min.z;
+    } else if (_decorBoundsScratch.max.z > maxZ) {
+      dz = maxZ - _decorBoundsScratch.max.z;
+    }
+
+    if (dx !== 0 || dz !== 0) {
+      root.position.x += dx;
+      root.position.z += dz;
+      root.updateMatrixWorld(true);
+    }
+  }
+
+  async function loadDecorTemplate(
+    url: string,
+    modelRelPath: string,
+  ): Promise<THREE.Object3D> {
+    switch (apartmentDecorModelExtension(modelRelPath)) {
+      case ".glb":
+        return (await gltfLoader.loadAsync(url)).scene;
+      case ".obj":
+        return await objLoader.loadAsync(url);
+      default:
+        throw new Error(`Unsupported apartment decor asset: ${modelRelPath}`);
+    }
+  }
+
   async function runFullRebuild(epoch: number): Promise<void> {
     await yieldToMain();
     if (disposed || epoch !== buildEpoch) return;
 
-    const rows = visibleDecorRows(opts.conn).sort((a, b) => Number(a.decorId - b.decorId));
+    const builtinsFromContent = await loadOwnedApartmentBuiltinsDocFromContent();
+    if (disposed || epoch !== buildEpoch) return;
+
+    const rows = visibleDecorPlacements(opts.conn, builtinsFromContent).sort((a, b) =>
+      a.renderKey.localeCompare(b.renderKey),
+    );
     clearAll();
 
     for (const d of rows) {
@@ -92,23 +232,25 @@ export function mountFpApartmentDecorMeshes(opts: {
       let template = templateByUrl.get(url);
       if (!template) {
         try {
-          const gltf = await loader.loadAsync(url);
+          template = await loadDecorTemplate(url, d.modelRelPath);
           if (disposed || epoch !== buildEpoch) return;
-          template = gltf.scene;
           template.userData.mammothApartmentDecorTemplate = url;
           templateByUrl.set(url, template);
         } catch {
-          console.warn("[mountFpApartmentDecorMeshes] failed to load decor glb", url);
+          console.warn("[mountFpApartmentDecorMeshes] failed to load decor asset", url);
           continue;
         }
       }
       if (disposed || epoch !== buildEpoch) return;
 
       const g = new THREE.Group();
-      g.name = `apartment_decor:${d.decorId.toString()}`;
+      g.name =
+        d.decorId !== null ? `apartment_decor:${d.decorId.toString()}` : `apartment_decor:${d.renderKey}`;
       g.userData.mammothApartmentDecorProp = true;
-      g.userData.mammothApartmentDecorId = d.decorId;
-      g.userData.mammothApartmentUnitKey = d.unitKey;
+      if (d.decorId !== null) g.userData.mammothApartmentDecorId = d.decorId;
+      g.userData.mammothApartmentUnitKey = d.unit.unitKey;
+      g.userData.mammothApartmentFurnitureProp = true;
+      g.userData.mammothPlateLevelIndex = d.unit.level;
       g.position.set(d.posX, d.posY, d.posZ);
       g.rotation.y = d.yawRad;
       const us = Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1;
@@ -117,12 +259,14 @@ export function mountFpApartmentDecorMeshes(opts: {
       const vis = template!.clone(true);
       vis.userData.mammothApartmentDecorProp = true;
       vis.userData.mammothApartmentDecorId = d.decorId;
-      vis.userData.mammothApartmentUnitKey = d.unitKey;
+      vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.castShadow = false;
           o.receiveShadow = false;
           o.frustumCulled = true;
+          o.userData.mammothUnitInterior = true;
+          o.userData.mammothPlateLevelIndex = d.unit.level;
         }
       });
 
@@ -133,15 +277,21 @@ export function mountFpApartmentDecorMeshes(opts: {
 
       g.add(vis);
       root.add(g);
+      if (d.source === "content") {
+        snapCloneBottomToWorldFloor(g, d.posY);
+        keepCloneInsideUnitXZ(g, d.unit, AUTHORING_DECOR_BOUNDARY_SLACK_M);
+      }
       g.updateMatrixWorld(true);
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
 
-      groupByDecorId.set(d.decorId, g);
+      groupByRenderKey.set(d.renderKey, g);
+      if (d.decorId !== null) groupByDecorId.set(d.decorId, g);
     }
 
     opts.buildingRoot.updateMatrixWorld(true);
+    opts.onRebuilt?.();
   }
 
   const scheduleRebuild = () => {
@@ -186,7 +336,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         camera.matrixWorldInverse,
       );
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
-      for (const g of groupByDecorId.values()) {
+      for (const g of groupByRenderKey.values()) {
         if (!allowDemand) {
           g.visible = false;
           continue;

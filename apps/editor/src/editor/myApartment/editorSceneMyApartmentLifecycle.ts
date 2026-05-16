@@ -2,9 +2,11 @@ import * as THREE from "three";
 import { useEditorStore } from "../../state/editorStore.js";
 import {
   loadEditorMyApartmentGltfTemplates,
+  loadEditorMyApartmentDecorTemplates,
   mountEditorMyApartmentFurnitureUnder,
   updateEditorMyApartmentMountFromDoc,
   type EditorMyApartmentFurnitureMount,
+  type EditorMyApartmentDecorTemplateMap,
   type EditorMyApartmentGltfTemplates,
 } from "./editorMyApartmentMeshes.js";
 import {
@@ -32,6 +34,7 @@ export function createEditorSceneMyApartmentLifecycle(
   let mount: EditorMyApartmentFurnitureMount | null = null;
   let templates: EditorMyApartmentGltfTemplates | null = null;
   let templatesLoad: Promise<EditorMyApartmentGltfTemplates> | null = null;
+  let decorTemplates: EditorMyApartmentDecorTemplateMap = new Map();
 
   async function ensureTemplatesLoaded(): Promise<EditorMyApartmentGltfTemplates> {
     if (templates) return templates;
@@ -64,6 +67,10 @@ export function createEditorSceneMyApartmentLifecycle(
       const t = await ensureTemplatesLoaded();
       if (disposed || myGen !== syncGeneration) return;
       const doc = st.ownedApartmentBuiltins;
+      decorTemplates = await loadEditorMyApartmentDecorTemplates(
+        doc.decorItems.map((item) => item.modelRelPath),
+      );
+      if (disposed || myGen !== syncGeneration) return;
       const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
         floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
         building: st.building,
@@ -76,15 +83,22 @@ export function createEditorSceneMyApartmentLifecycle(
         mount = mountEditorMyApartmentFurnitureUnder(
           parent,
           t,
+          decorTemplates,
           doc,
           authoringFractionMapping,
         );
       } else if (!deps.getShouldHoldReplicaResync()) {
-        updateEditorMyApartmentMountFromDoc(mount, t, doc, authoringFractionMapping);
+        updateEditorMyApartmentMountFromDoc(
+          mount,
+          t,
+          decorTemplates,
+          doc,
+          authoringFractionMapping,
+        );
       }
       if (disposed || myGen !== syncGeneration) return;
       if (deps.getShouldHoldReplicaResync()) return;
-      setEditorMyApartmentPieceGroups(mount.groups);
+      setEditorMyApartmentPieceGroups(mount.selectionGroups);
       deps.syncTransformAttachment();
     } catch {
       teardownFurniture();

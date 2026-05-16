@@ -16,6 +16,7 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     ownedApartmentBuiltins: structuredClone(state.ownedApartmentBuiltins),
     selectedId: state.selectedId,
     dirty: state.dirty,
+    ownedApartmentBuiltinsNeedsDiskFlush: state.ownedApartmentBuiltinsNeedsDiskFlush,
     contentStructureEpoch: state.contentStructureEpoch ?? 0,
   };
 }

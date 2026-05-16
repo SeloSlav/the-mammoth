@@ -52,7 +52,7 @@ export type EditorMode =
   | "stairwell_preview";
 
 /** Which built-in mesh the editor gizmo is driving in {@link EditorMode.my_apartment_layout}. */
-export type MyApartmentLayoutPiece = "bed" | "wardrobe" | "footlocker";
+export type MyApartmentLayoutPiece = "bed" | "wardrobe" | "footlocker" | "stove";
 
 export type EditorCameraMode = "orbit" | "fly";
 
@@ -93,6 +93,8 @@ export type HistoryEntry = {
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   selectedId: string | null;
   dirty: boolean;
+  /** True after in-memory edits to {@link ownedApartmentBuiltins} until successfully written to disk. */
+  ownedApartmentBuiltinsNeedsDiskFlush: boolean;
   contentStructureEpoch: number;
 };
 
@@ -141,8 +143,13 @@ export interface EditorState {
   fpAuthorPickList: readonly FpAuthorPickMeta[];
   fpAuthorWeaponId: FpAuthorWeaponId;
   fpAuthorConsumableId: FpAuthorConsumableId;
-  /** Bed / wardrobe / footlocker fractions + yaws — mirrored to `content/apartment/owned_apartment_builtins.json`. */
+  /** Bed / wardrobe / footlocker fractions plus imported decor — mirrored to `content/apartment/owned_apartment_builtins.json`. */
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
+  /**
+   * Set when `ownedApartmentBuiltins` changes in memory; cleared after a successful save of that JSON.
+   * Lets "Save to disk" persist apartment decor even after leaving {@link EditorMode.my_apartment_layout}.
+   */
+  ownedApartmentBuiltinsNeedsDiskFlush: boolean;
   myApartmentLayoutPiece: MyApartmentLayoutPiece;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
@@ -203,6 +210,7 @@ export interface EditorState {
   patchOwnedApartmentBuiltins: (
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;
+  clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;
   getActiveInteriorDoc: () => InteriorDoc | undefined;

@@ -1,20 +1,25 @@
-/** Footlocker stash side panel — opened explicitly (E), not from proximity / look-at prompts alone. */
+/** Apartment storage side panel (wardrobe / footlocker) — opened explicitly (E). */
 
 const listeners = new Set<() => void>();
 
-let unitKey: string | null = null;
+export type FpActiveStashPanelState = {
+  stashKey: string;
+  stashLabel: string;
+};
 
-export function getFpActiveStashPanelUnitKey(): string | null {
-  return unitKey;
+let state: FpActiveStashPanelState | null = null;
+
+export function getFpActiveStashPanel(): FpActiveStashPanelState | null {
+  return state;
 }
 
-export function setFpActiveStashPanelUnitKey(next: string | null): void {
-  if (unitKey === next) return;
-  unitKey = next;
+export function setFpActiveStashPanel(next: FpActiveStashPanelState | null): void {
+  if (state?.stashKey === next?.stashKey && state?.stashLabel === next?.stashLabel) return;
+  state = next;
   for (const l of listeners) l();
 }
 
-export function subscribeFpActiveStashPanelUnitKey(cb: () => void): () => void {
+export function subscribeFpActiveStashPanel(cb: () => void): () => void {
   listeners.add(cb);
   return () => {
     listeners.delete(cb);

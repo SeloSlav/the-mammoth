@@ -162,6 +162,10 @@ function AuthScreen({ eyebrow, children }: { eyebrow: string; children: ReactNod
             />
           </div>
           {children}
+        <p className={styles.preloadNotice}>
+          The building and game assets keep preloading in the background. If you want the smoothest
+          entry, wait a moment for that preload to finish before continuing.
+        </p>
         </main>
       </div>
     </div>

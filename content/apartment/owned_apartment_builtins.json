@@ -1,16 +1,98 @@
 {
   "version": 1,
   "previewSizeM": 10,
-  "bedFx": 0.6579343913313207,
-  "bedFz": 0.8282770320741801,
+  "bedFx": 0.6154113237458454,
+  "bedFz": 0.7568143614933773,
   "bedDy": 0,
-  "wardrobeFx": 0.05394878699934818,
-  "wardrobeFz": 0.8800128106343157,
-  "footFx": 0.5165861547543446,
-  "footFz": 0.8272803162047192,
+  "wardrobeFx": 0.08136440839541474,
+  "wardrobeFz": 0.878304767366957,
+  "footFx": 0.43414610422490707,
+  "footFz": 0.8007110577838487,
+  "stoveFx": 0.7235481167429968,
+  "stoveFz": 0,
   "wardrobeDy": 0,
   "footDy": 0,
+  "stoveDy": 0,
   "bedYawRad": -1.5707963267948966,
   "wardrobeYawRad": -3.141592653589793,
-  "footYawRad": -1.5707963267948966
+  "footYawRad": -1.5707963267948966,
+  "stoveYawRad": -1.5707963267948966,
+  "bedUniformScale": 1.4971602715277974,
+  "wardrobeUniformScale": 1.2597163561791922,
+  "footUniformScale": 1,
+  "stoveUniformScale": 0.7206756484243182,
+  "decorItems": [
+    {
+      "id": "0577b116-39ee-47a2-8da6-d729d6e1b16f",
+      "modelRelPath": "static/models/objects/cabinet-horizontal.glb",
+      "fx": 0.6689290984040697,
+      "fz": 0.34336970716105636,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 0,
+      "uniformScale": 1
+    },
+    {
+      "id": "896c14cc-c36c-479f-b808-e07f48a0315f",
+      "modelRelPath": "static/models/objects/table-dining.glb",
+      "fx": 0.31504780243669583,
+      "fz": 0.4268637820185613,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 0,
+      "uniformScale": 0.8778936277210995
+    },
+    {
+      "id": "20642f4e-7fc4-4844-97ba-335769211059",
+      "modelRelPath": "static/models/objects/tv.glb",
+      "fx": 0.6645790101784003,
+      "fz": 0.33895666587064677,
+      "dy": 0.7074246222768351,
+      "yawRad": 0,
+      "uniformScale": 0.41536348828836117
+    },
+    {
+      "id": "ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
+      "modelRelPath": "static/models/objects/chair.glb",
+      "fx": 0.4202888611536229,
+      "fz": 0.31149581383620345,
+      "dy": 1.734723475976807e-17,
+      "yawRad": -0.7853981633974483,
+      "uniformScale": 0.6387760114721411
+    },
+    {
+      "id": "ad41807b-e8ff-431e-b80d-c48f43a149cd",
+      "modelRelPath": "static/models/objects/chandelier.glb",
+      "fx": 0.37206250158828214,
+      "fz": 0.5508029988915472,
+      "dy": 2.1514096216412684,
+      "yawRad": 0,
+      "uniformScale": 0.34027693535970077
+    },
+    {
+      "id": "50ff14bb-6ea8-442b-9779-0e77edf5bd58",
+      "modelRelPath": "static/models/objects/rug-floor.glb",
+      "fx": 0.585070114876417,
+      "fz": 0.602390347046352,
+      "dy": 3.469446951953614e-18,
+      "yawRad": 0,
+      "uniformScale": 2.2334062880249177
+    },
+    {
+      "id": "f5c3d103-2cb8-4608-9175-cf6d04d8e4e2",
+      "modelRelPath": "static/models/objects/chair.glb",
+      "fx": 0.270454621124987,
+      "fz": 0.630450887307033,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 2.356194490192345,
+      "uniformScale": 0.6387760114721411
+    },
+    {
+      "id": "1f2a1f94-b6cc-44e1-8e61-4ec41b083ea4",
+      "modelRelPath": "static/models/objects/heater-room.glb",
+      "fx": 0.24707386018774027,
+      "fz": 0.8898847320069064,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 0,
+      "uniformScale": 0.5596451438846985
+    }
+  ]
 }

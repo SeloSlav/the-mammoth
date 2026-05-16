@@ -7,8 +7,8 @@ import {
 } from "react";
 import type { DbConnection } from "../module_bindings";
 import {
-  getFpActiveStashPanelUnitKey,
-  subscribeFpActiveStashPanelUnitKey,
+  getFpActiveStashPanel,
+  subscribeFpActiveStashPanel,
 } from "../game/fpInteraction/fpActiveStashPanel";
 import {
   getFpSessionGameUiHidden,
@@ -42,9 +42,9 @@ export function HudShell({ onSignOut, conn }: HudProps) {
     getFpSessionGameUiHidden,
   );
 
-  const stashUnitKey = useSyncExternalStore(
-    subscribeFpActiveStashPanelUnitKey,
-    getFpActiveStashPanelUnitKey,
+  const activeStash = useSyncExternalStore(
+    subscribeFpActiveStashPanel,
+    getFpActiveStashPanel,
     () => null,
   );
 
@@ -181,12 +181,14 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         {conn ? (
           <MammothToastHud conn={conn} reserveAboveVitalsExtraPx={craftStripReserveAboveVitalsPx} />
         ) : null}
-        {conn ? <MammothInventoryHud conn={conn} activeStashUnitKey={stashUnitKey} /> : null}
+        {conn ? <MammothInventoryHud conn={conn} activeStash={activeStash} /> : null}
         {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud />
         <MammothPickupPromptHud />
-        {conn && stashUnitKey ? <MammothStashHud conn={conn} unitKey={stashUnitKey} /> : null}
+        {conn && activeStash ? (
+          <MammothStashHud conn={conn} stashKey={activeStash.stashKey} stashLabel={activeStash.stashLabel} />
+        ) : null}
         <MammothElevatorHud />
         <MammothFpReticule />
       </div>

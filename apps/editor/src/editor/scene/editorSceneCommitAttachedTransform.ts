@@ -8,10 +8,15 @@ import {
   resolveOwnedApartmentAuthoringLayoutForEditor,
 } from "../myApartment/editorMyApartmentAuthoringShell.js";
 import {
+  clampOwnedApartmentBuiltinUniformScale,
+  constrainMyApartmentDecorRootPose,
   constrainMyApartmentFurnitureRootPose,
+  EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  previewWorldFromNormalizedPlacement,
   snapOwnedApartmentYawRad,
 } from "../myApartment/editorMyApartmentMeshes.js";
+import { parseMyApartmentLayoutDecorSelectedId } from "../myApartment/editorMyApartmentSelection.js";
 import { syncDuplicateFloorGroups } from "../placement/editorFloorTransformSync.js";
 import {
   floorPlacedObjectIdForTransformRoot,
@@ -263,17 +268,18 @@ export function commitEditorAttachedTransform(opts: {
   }
 
   if (store.mode === "my_apartment_layout") {
-    let pieceRoot: THREE.Object3D | null = attached;
+    let targetRoot: THREE.Object3D | null = attached;
     let pieceKey: MyApartmentLayoutPiece | undefined;
-    while (pieceRoot) {
-      pieceKey = pieceRoot.userData.mammothEditorMyApartmentPiece as
+    let decorId: string | undefined;
+    while (targetRoot) {
+      pieceKey = targetRoot.userData.mammothEditorMyApartmentPiece as
         | MyApartmentLayoutPiece
         | undefined;
-      if (pieceKey) break;
-      pieceRoot = pieceRoot.parent;
+      decorId = targetRoot.userData.mammothEditorMyApartmentDecorId as string | undefined;
+      if (pieceKey || decorId) break;
+      targetRoot = targetRoot.parent;
     }
-    if (!pieceKey || !pieceRoot) return;
-    constrainMyApartmentFurnitureRootPose(pieceRoot);
+    if (!targetRoot) return;
     const doc = store.ownedApartmentBuiltins;
     const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
       floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
@@ -284,42 +290,103 @@ export function commitEditorAttachedTransform(opts: {
       builtinsFallbackPreviewM: doc.previewSizeM,
     });
 
-    pieceRoot.updateMatrixWorld(true);
-    const pW = new THREE.Vector3().setFromMatrixPosition(pieceRoot.matrixWorld);
+    if (decorId) {
+      constrainMyApartmentDecorRootPose(targetRoot);
+      targetRoot.updateMatrixWorld(true);
+      const decorBounds = new THREE.Box3().setFromObject(targetRoot);
+      const dy = THREE.MathUtils.clamp(
+        decorBounds.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+        0,
+        EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+      );
+      const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
+      const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
+      const yaw = snapOwnedApartmentYawRad(eulerLocal.y);
+      const wx = pW.x + m.prefabOriginX;
+      const wz = pW.z + m.prefabOriginZ;
+      const fx = THREE.MathUtils.clamp((wx - m.strictMinX) / m.spanX, 0, 1);
+      const fz = THREE.MathUtils.clamp((wz - m.strictMinZ) / m.spanZ, 0, 1);
+      const uniformScale = clampOwnedApartmentBuiltinUniformScale(
+        (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
+      );
+      store.patchOwnedApartmentBuiltins((d) => ({
+        ...d,
+        decorItems: d.decorItems.map((item) =>
+          item.id === decorId
+            ? {
+                ...item,
+                fx,
+                fz,
+                dy,
+                yawRad: yaw,
+                uniformScale,
+              }
+            : item,
+        ),
+      }));
+      targetRoot.scale.setScalar(uniformScale);
+      return;
+    }
+
+    if (!pieceKey) return;
+    constrainMyApartmentFurnitureRootPose(targetRoot);
+    targetRoot.updateMatrixWorld(true);
+    const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
     // Doc yaw matches `place*Group`'s group.rotation.y (preview-local). World-quaternion euler drifts when
     // parents rotate (building shell); that made each store patch rebuild props with the wrong heading.
-    const eulerLocal = new THREE.Euler().setFromQuaternion(pieceRoot.quaternion, "YXZ");
+    const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
     const yaw = snapOwnedApartmentYawRad(eulerLocal.y);
 
     const wx = pW.x + m.prefabOriginX;
     const wz = pW.z + m.prefabOriginZ;
     const fx = THREE.MathUtils.clamp((wx - m.strictMinX) / m.spanX, 0, 1);
     const fz = THREE.MathUtils.clamp((wz - m.strictMinZ) / m.spanZ, 0, 1);
-    const dyFromSlab = Math.max(0, pW.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y);
+    const uniformScale = clampOwnedApartmentBuiltinUniformScale(
+      (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
+    );
+    targetRoot.scale.setScalar(uniformScale);
 
     store.patchOwnedApartmentBuiltins((d) => {
       if (pieceKey === "bed") {
-        return { ...d, bedFx: fx, bedFz: fz, bedDy: dyFromSlab, bedYawRad: yaw };
+        return {
+          ...d,
+          bedFx: fx,
+          bedFz: fz,
+          bedDy: d.bedDy,
+          bedYawRad: yaw,
+          bedUniformScale: uniformScale,
+        };
       }
       if (pieceKey === "wardrobe") {
         return {
           ...d,
           wardrobeFx: fx,
           wardrobeFz: fz,
-          wardrobeDy: dyFromSlab,
+          wardrobeDy: d.wardrobeDy,
           wardrobeYawRad: yaw,
+          wardrobeUniformScale: uniformScale,
+        };
+      }
+      if (pieceKey === "stove") {
+        return {
+          ...d,
+          stoveFx: fx,
+          stoveFz: fz,
+          stoveDy: d.stoveDy,
+          stoveYawRad: yaw,
+          stoveUniformScale: uniformScale,
         };
       }
       return {
         ...d,
         footFx: fx,
         footFz: fz,
-        footDy: dyFromSlab,
+        footDy: d.footDy,
         footYawRad: yaw,
+        footUniformScale: uniformScale,
       };
     });
 
-    pieceRoot.scale.set(1, 1, 1);
     return;
   }
 

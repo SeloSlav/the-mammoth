@@ -140,7 +140,7 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
     ).toEqual({ lo: 18, hi: 24 });
   });
 
-  it("extends the lower band when looking downward (stairs / atrium)", () => {
+  it("caps downward lookahead to a local interior budget", () => {
     expect(
       fpBuildingFloorPlateVisibilityBand({
         maxLevel: 19,
@@ -148,7 +148,19 @@ describe("fpBuildingFloorPlateVisibilityBand", () => {
         revealFullStack: false,
         lowerTargetStorey: 3,
       }),
-    ).toEqual({ lo: 1, hi: 15 });
+    ).toEqual({ lo: 10, hi: 15 });
+  });
+
+  it("keeps the wider downward budget for hoistway views", () => {
+    expect(
+      fpBuildingFloorPlateVisibilityBand({
+        maxLevel: 80,
+        playerStorey: 20,
+        revealFullStack: false,
+        elevatorHoistwayPlateBoost: true,
+        lowerTargetStorey: 1,
+      }),
+    ).toEqual({ lo: 6, hi: 20 });
   });
 
   it("normalizes maxLevel when below 1", () => {

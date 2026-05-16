@@ -1,5 +1,10 @@
 import * as THREE from "three";
 
+export type FpResidentialUnitShellMesh = {
+  mesh: THREE.Mesh;
+  unitId: string;
+};
+
 /**
  * Collect meshes tagged `mammothUnitInterior` for FP exterior fill-rate toggles.
  *
@@ -28,6 +33,38 @@ export function collectFpSessionUnitInteriorShellMeshes(
     unitInteriorMeshes.push(obj);
   });
   return unitInteriorMeshes;
+}
+
+/**
+ * Top-floor residential unit shells are mostly occluded by partition walls when the player is inside
+ * one apartment, but the roof/ceiling path keeps them live for exterior silhouette correctness.
+ * Collect them separately so FP can keep only the current unit's shell visible in that specific case.
+ */
+export function collectFpSessionTopFloorResidentialUnitShellMeshes(
+  buildingRoot: THREE.Object3D,
+): FpResidentialUnitShellMesh[] {
+  let topPlateLevel = -Infinity;
+  for (const ch of buildingRoot.children) {
+    const li = ch.userData.mammothPlateLevelIndex;
+    if (typeof li === "number" && li > topPlateLevel) topPlateLevel = li;
+  }
+  const meshes: FpResidentialUnitShellMesh[] = [];
+  buildingRoot.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const placedObjectId = obj.userData.mammothPlacedObjectId;
+    if (
+      typeof placedObjectId !== "string" ||
+      (!placedObjectId.startsWith("unit_e_") && !placedObjectId.startsWith("unit_w_"))
+    ) {
+      return;
+    }
+    let ancestor: THREE.Object3D | null = obj;
+    while (ancestor && ancestor.parent !== buildingRoot) ancestor = ancestor.parent;
+    const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
+    if (typeof ancestorLevel !== "number" || ancestorLevel !== topPlateLevel) return;
+    meshes.push({ mesh: obj, unitId: placedObjectId });
+  });
+  return meshes;
 }
 
 /** Removes meshes spawned under apartment wardrobe / footlocker props — called before furniture rebuild refreshes. */

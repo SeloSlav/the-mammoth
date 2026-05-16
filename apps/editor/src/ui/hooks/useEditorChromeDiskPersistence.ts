@@ -114,6 +114,8 @@ export function useEditorChromeDiskPersistence(
     setSaveMsg(null);
     try {
       const s = useEditorStore.getState();
+      const needsOwnedAptBuiltinsFlush = s.ownedApartmentBuiltinsNeedsDiskFlush;
+      let wroteOwnedApartmentBuiltins = false;
       if (s.mode === "cab") {
         await postSaveElevatorCab(
           serializeElevatorCabDefPretty(s.elevatorCabDef),
@@ -167,17 +169,38 @@ export function useEditorChromeDiskPersistence(
         await postSaveOwnedApartmentBuiltins(
           serializeOwnedApartmentBuiltinsDocPretty(s.ownedApartmentBuiltins),
         );
+        wroteOwnedApartmentBuiltins = true;
       }
 
       if (s.workspace === "world") {
         await postSaveBuilding(serializeBuildingDocPretty(s.building));
       }
 
+      if (!wroteOwnedApartmentBuiltins && needsOwnedAptBuiltinsFlush) {
+        const st = useEditorStore.getState();
+        await postSaveOwnedApartmentBuiltins(
+          serializeOwnedApartmentBuiltinsDocPretty(st.ownedApartmentBuiltins),
+        );
+        wroteOwnedApartmentBuiltins = true;
+      }
+
+      if (wroteOwnedApartmentBuiltins) {
+        useEditorStore.getState().clearOwnedApartmentBuiltinsDiskFlushFlag();
+      }
+
       useEditorStore.getState().setDirty(false);
       await refreshCollisionStatus();
+      const flushedAptLayoutExtra =
+        wroteOwnedApartmentBuiltins && s.mode !== "my_apartment_layout";
       if (s.mode === "my_apartment_layout") {
         setSaveMsg(
           "Saved content/apartment/owned_apartment_builtins.json.",
+        );
+      } else if (flushedAptLayoutExtra) {
+        setSaveMsg(
+          s.workspace === "world"
+            ? "Saved to content/ (open document + mammoth.json) and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor)."
+            : "Saved to content/ and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor).",
         );
       } else {
         setSaveMsg(

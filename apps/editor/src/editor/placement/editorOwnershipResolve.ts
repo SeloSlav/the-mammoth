@@ -98,7 +98,7 @@ export function describeEditorSaveTarget(args: {
     return {
       kind: "local",
       title: "Local — OwnedApartmentBuiltinsDoc",
-      detail: "content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker layout)",
+      detail: "content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor layout)",
     };
   }
 

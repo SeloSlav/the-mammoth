@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import type { InventoryItem } from "../module_bindings/types";
+import { apartmentStashKeyMatchesRow } from "../game/fpApartment/fpApartmentStashKey";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { getMammothItemDef } from "./mammothItemCatalog";
 
@@ -70,7 +71,7 @@ export function useMammothInventory(conn: DbConnection | null) {
   }, [conn, owner, ver]);
 }
 
-export function useMammothStash(conn: DbConnection | null, unitKey: string | null) {
+export function useMammothStash(conn: DbConnection | null, stashKey: string | null) {
   const [ver, setVer] = useState(0);
   useEffect(() => {
     if (!conn) return;
@@ -91,17 +92,17 @@ export function useMammothStash(conn: DbConnection | null, unitKey: string | nul
       { length: MAMMOTH_STASH_SLOTS },
       () => null,
     );
-    if (!conn || !unitKey) return stash;
+    if (!conn || !stashKey) return stash;
     for (const row of conn.db.inventory_item) {
       const loc = row.location;
       if (loc.tag !== "Stash") continue;
       const v = loc.value;
-      if (v.unitKey !== unitKey) continue;
+      if (!apartmentStashKeyMatchesRow(stashKey, v.unitKey)) continue;
       const p = populateMammothInventoryItem(row as InventoryItem);
       if (p && v.slotIndex < MAMMOTH_STASH_SLOTS) {
         stash[v.slotIndex] = p;
       }
     }
     return stash;
-  }, [conn, unitKey, ver]);
+  }, [conn, stashKey, ver]);
 }

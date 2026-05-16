@@ -114,6 +114,19 @@ export function buildOwnedApartmentAuthoringShell(args: {
 
   root.userData.editorMyApartmentSlabSx = spanSlabX;
   root.userData.editorMyApartmentSlabSz = spanSlabZ;
+  /** Lets pose clamps match fraction encoding (0..1 along strict hull); see `clampPreviewXZToAuthoringInterior`. */
+  root.userData.editorMyApartmentStrictMinX = mapping.strictMinX;
+  root.userData.editorMyApartmentStrictMinZ = mapping.strictMinZ;
+  root.userData.editorMyApartmentStrictSpanX = mapping.spanX;
+  root.userData.editorMyApartmentStrictSpanZ = mapping.spanZ;
+  root.userData.editorMyApartmentPrefabOriginX = mapping.prefabOriginX;
+  root.userData.editorMyApartmentPrefabOriginZ = mapping.prefabOriginZ;
+
+  /** Inner ceiling Y in authoring-shell space (`slabTop + shellPlan.vh`); decor AABB max Y clamps below this minus slack. */
+  if (layout?.shellPlan) {
+    root.userData.editorMyApartmentInteriorCeilingInnerY =
+      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + layout.shellPlan.vh;
+  }
 
   const floorGeom = new THREE.BoxGeometry(spanSlabX, 0.04, spanSlabZ);
   const floorMat = new THREE.MeshStandardMaterial({

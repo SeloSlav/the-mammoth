@@ -47,7 +47,9 @@ export type FpPickupPromptApartmentClaimBlockedGuest = {
 
 export type FpPickupPromptApartmentStash = {
   kind: "apartment_stash";
+  stashKey: string;
   unitKey: string;
+  stashLabel: string;
 };
 
 export type FpPickupPromptState =
@@ -103,7 +105,7 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
     return a.unitKey === b.unitKey && a.displayLabel === b.displayLabel;
   }
   if (a.kind === "apartment_stash" && b.kind === "apartment_stash") {
-    return a.unitKey === b.unitKey;
+    return a.stashKey === b.stashKey;
   }
   return false;
 }

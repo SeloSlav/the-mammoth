@@ -5,8 +5,17 @@ import type { Identity } from "spacetimedb";
 import type { ApartmentDoor, ApartmentUnit } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
 import { APARTMENT_CLAIM_FAST_FOR_TESTING, APARTMENT_CLAIM_UI_ENABLED } from "../../featureFlags";
+import {
+  apartmentStashKey,
+  apartmentStashLabel,
+  APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_STOVE,
+  APARTMENT_STASH_KIND_WARDROBE,
+  parseApartmentStashKey,
+  type ApartmentStashKind,
+} from "./fpApartmentStashKey";
 
-/** Horizontal radius (m); must match server `STASH_INTERACT_SQ = 3.5 * 3.5` (`apartments.rs`). */
+/** Horizontal radius (m); must match server `STASH_INTERACT_SQ = 3.5 * 3.5` (`apartments.rs`). Built-in stashes share this radius. */
 export const APARTMENT_FURNITURE_INTERACT_R_M = 3.5;
 
 /** Feet height slack vs `unit.footY` — keep aligned with server `INTERACT_FEET_Y_*_SLACK_M`. */
@@ -238,17 +247,18 @@ export function playerOwnsScrewdriver(conn: DbConnection, id: Identity): boolean
 export function clientMayUseApartmentStash(
   conn: DbConnection,
   owner: Identity | undefined,
-  unitKey: string,
+  stashKey: string,
   pose: { x: number; y: number; z: number },
 ): boolean {
   if (!owner) return false;
+  const parsed = parseApartmentStashKey(stashKey);
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
-    if (u.unitKey !== unitKey) continue;
+    if (u.unitKey !== parsed.unitKey) continue;
     if (u.state !== UNIT_STATE_CLAIMED) return false;
     if (!sameIdentity(u.owner, owner)) return false;
     if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
-    return nearFootlocker(u, pose.x, pose.y, pose.z);
+    return nearApartmentStashAnchor(u, parsed.stashKind, pose.x, pose.y, pose.z);
   }
   return false;
 }
@@ -270,7 +280,10 @@ export type ApartmentClaimBlockedGuestPrompt = {
 
 export type ApartmentStashPrompt = {
   kind: "apartment_stash";
+  stashKey: string;
   unitKey: string;
+  stashKind: ApartmentStashKind;
+  stashLabel: string;
 };
 
 export type ApartmentSystemPrompt =
@@ -292,14 +305,37 @@ function feetVerticalOkForInteract(unitFloorY: number, y: number): boolean {
   return y >= unitFloorY - INTERACT_FEET_Y_BELOW_SLACK_M && y <= unitFloorY + INTERACT_FEET_Y_ABOVE_SLACK_M;
 }
 
-/** Horizontal cylinder around wardrobe column + vertical slab — matches `claim_apartment_pulse` on server. */
-function nearWardrobe(u: ApartmentUnit, x: number, y: number, z: number): boolean {
+function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind): { x: number; z: number } {
+  switch (stashKind) {
+    case APARTMENT_STASH_KIND_WARDROBE:
+      return { x: u.wardrobeX, z: u.wardrobeZ };
+    case APARTMENT_STASH_KIND_STOVE:
+      return { x: u.stoveX, z: u.stoveZ };
+    default:
+      return { x: u.footX, z: u.footZ };
+  }
+}
+
+/** Horizontal cylinder around stash anchor — matches server `pose_near_horizontal_marker` + vertical slab. */
+function nearApartmentStashAnchor(
+  u: ApartmentUnit,
+  stashKind: ApartmentStashKind,
+  x: number,
+  y: number,
+  z: number,
+): boolean {
   const r = APARTMENT_FURNITURE_INTERACT_R_M;
   const r2 = r * r;
-  const dx = x - u.wardrobeX;
-  const dz = z - u.wardrobeZ;
+  const { x: ax, z: az } = stashInteractAnchorXZ(u, stashKind);
+  const dx = x - ax;
+  const dz = z - az;
   if (dx * dx + dz * dz > r2) return false;
   return feetVerticalOkForInteract(u.footY, y);
+}
+
+/** Horizontal cylinder around wardrobe column + vertical slab — matches `claim_apartment_pulse` on server. */
+function nearWardrobe(u: ApartmentUnit, x: number, y: number, z: number): boolean {
+  return nearApartmentStashAnchor(u, APARTMENT_STASH_KIND_WARDROBE, x, y, z);
 }
 
 /**
@@ -324,37 +360,66 @@ export function unclaimedUnitIfPlayerAimedAtWardrobe(
   return null;
 }
 
-/** `foot_x/z` stash anchor — matches `stash_push` / `stash_pull` range on server. */
+/** `foot_x/z` — matches horizontal stash cylinder on server (`pose_near_horizontal_marker` + foot anchor). */
 function nearFootlocker(u: ApartmentUnit, x: number, y: number, z: number): boolean {
-  const r = APARTMENT_FURNITURE_INTERACT_R_M;
-  const r2 = r * r;
-  const dx = x - u.footX;
-  const dz = z - u.footZ;
-  if (dx * dx + dz * dz > r2) return false;
-  return feetVerticalOkForInteract(u.footY, y);
+  return nearApartmentStashAnchor(u, APARTMENT_STASH_KIND_FOOTLOCKER, x, y, z);
 }
 
-function nearestOwnedClaimedUnitNearFootlocker(
+function apartmentStashPromptFor(
+  unitKey: string,
+  stashKind: ApartmentStashKind,
+): ApartmentStashPrompt {
+  return {
+    kind: "apartment_stash",
+    stashKey: apartmentStashKey(unitKey, stashKind),
+    unitKey,
+    stashKind,
+    stashLabel: apartmentStashLabel(stashKind),
+  };
+}
+
+function stashAnchorDistSqWithinInteract(
+  u: ApartmentUnit,
+  stashKind: ApartmentStashKind,
+  x: number,
+  y: number,
+  z: number,
+): number | null {
+  if (!nearApartmentStashAnchor(u, stashKind, x, y, z)) return null;
+  const { x: ax, z: az } = stashInteractAnchorXZ(u, stashKind);
+  const dx = x - ax;
+  const dz = z - az;
+  return dx * dx + dz * dz;
+}
+
+function nearestOwnedClaimedApartmentStash(
   conn: DbConnection,
   owner: Identity,
   x: number,
   y: number,
   z: number,
-): ApartmentUnit | null {
-  let best: ApartmentUnit | null = null;
+): ApartmentStashPrompt | null {
+  let best: ApartmentStashPrompt | null = null;
   let bestD = Infinity;
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
     if (u.state !== UNIT_STATE_CLAIMED) continue;
     if (!sameIdentity(u.owner, owner)) continue;
     if (!feetInsideUnitHull(u, x, y, z)) continue;
-    if (!nearFootlocker(u, x, y, z)) continue;
-    const dx = x - u.footX;
-    const dz = z - u.footZ;
-    const d = dx * dx + dz * dz;
-    if (d < bestD) {
-      bestD = d;
-      best = u;
+    const footlockerD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_FOOTLOCKER, x, y, z);
+    if (footlockerD !== null && footlockerD < bestD) {
+      bestD = footlockerD;
+      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER);
+    }
+    const wardrobeD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_WARDROBE, x, y, z);
+    if (wardrobeD !== null && wardrobeD < bestD) {
+      bestD = wardrobeD;
+      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_WARDROBE);
+    }
+    const stoveD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_STOVE, x, y, z);
+    if (stoveD !== null && stoveD < bestD) {
+      bestD = stoveD;
+      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_STOVE);
     }
   }
   return best;
@@ -368,7 +433,8 @@ export function getApartmentSystemPrompt(
   pose: { x: number; y: number; z: number },
   opts: {
     apartmentClaimsAllowed?: boolean;
-    lookedAtStashUnitKey?: string | null;
+    /** Ray-hit stash object. Omit when none so wardrobe/footlocker proximity can still offer stash. Pass explicit null to suppress stash entirely. */
+    lookedAtStashKey?: string | null;
     /** Center-screen ray hit on wardrobe pick mesh (`null` / omitted = no claim prompts). */
     lookedAtWardrobeUnitKey?: string | null;
   } = {},
@@ -396,28 +462,22 @@ export function getApartmentSystemPrompt(
     }
   }
 
-  if (opts.lookedAtStashUnitKey === null) return null;
+  /**
+   * Explicit `lookedAtStashKey: null` means “do not offer stash from FP” (used when callers want
+   * look-at-only UX). **Omit** the property when the reticle missed picks so proximity to wardrobe /
+   * footlocker / stove can still offer stash (`mountFpSession` / RAF).
+   */
+  if (opts.lookedAtStashKey === null) return null;
 
-  if (opts.lookedAtStashUnitKey !== undefined) {
-    return clientMayUseApartmentStash(conn, id, opts.lookedAtStashUnitKey, pose)
-      ? { kind: "apartment_stash", unitKey: opts.lookedAtStashUnitKey }
+  if (opts.lookedAtStashKey !== undefined) {
+    const parsed = parseApartmentStashKey(opts.lookedAtStashKey);
+    return clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)
+      ? apartmentStashPromptFor(parsed.unitKey, parsed.stashKind)
       : null;
   }
 
-  const stashUnit = nearestOwnedClaimedUnitNearFootlocker(conn, id, pose.x, pose.y, pose.z);
-  if (stashUnit) {
-    return { kind: "apartment_stash", unitKey: stashUnit.unitKey };
-  }
-
-  const u = apartmentUnitContainingFeet(conn, pose.x, pose.y, pose.z);
-  if (
-    u &&
-    u.state === UNIT_STATE_CLAIMED &&
-    sameIdentity(u.owner, id) &&
-    nearFootlocker(u, pose.x, pose.y, pose.z)
-  ) {
-    return { kind: "apartment_stash", unitKey: u.unitKey };
-  }
+  const stashPrompt = nearestOwnedClaimedApartmentStash(conn, id, pose.x, pose.y, pose.z);
+  if (stashPrompt) return stashPrompt;
 
   return null;
 }

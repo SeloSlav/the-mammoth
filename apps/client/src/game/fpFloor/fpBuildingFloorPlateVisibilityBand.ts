@@ -241,18 +241,20 @@ export function fpBuildingFloorPlateVisibilityBand(input: {
     lo = Math.min(lo, Math.floor(input.lowerTargetStorey) - 2);
   }
   /**
-   * Pitch lookahead can push `hi` many storeys upward when looking up inside the footprint (stairwell),
-   * while stair-column geometry is already capped via {@link fpStairColumnPlateVisibilityBand}. Hoistway
-   * views need a wider band than interior-only stair caps but must stay bounded vs `{ lo: 1, hi: maxLevel }`.
+   * Pitch lookahead can push the global band many storeys upward/downward. Keep ordinary interior
+   * views on a tight local budget so looking at your feet from a perimeter apartment does not
+   * submit the whole tower below; hoistway views still get the wider landing-context budget.
    */
   const maxAbove =
     input.elevatorHoistwayPlateBoost === true
       ? HOISTWAY_PLATE_MAX_STOREYS_ABOVE_PLAYER
       : STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_ABOVE_PLAYER;
+  const maxBelow =
+    input.elevatorHoistwayPlateBoost === true
+      ? HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER
+      : STAIR_COLUMN_PLATE_BAND_MAX_STOREYS_BELOW_PLAYER;
   hi = Math.min(hi, input.playerStorey + maxAbove);
-  if (input.elevatorHoistwayPlateBoost === true) {
-    lo = Math.max(lo, input.playerStorey - HOISTWAY_PLATE_MAX_STOREYS_BELOW_PLAYER);
-  }
+  lo = Math.max(lo, input.playerStorey - maxBelow);
   lo = Math.max(1, Math.min(maxLevel, lo));
   hi = Math.max(1, Math.min(maxLevel, hi));
   if (lo > hi) [lo, hi] = [hi, lo];

@@ -164,6 +164,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     floorOverrideDocs,
     contentIndex,
     ownedApartmentBuiltins,
+    ownedApartmentBuiltinsNeedsDiskFlush: false,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
     // Bootstrap always lands on the elevator variant so the freshly parsed `landingKitDef` matches
     // what the existing scene-runtime + inspector code expects. Authoring is swapped post-load via

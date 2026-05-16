@@ -19,7 +19,9 @@ use crate::inventory::{
     inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS, NUM_STASH_SLOTS,
 };
 use crate::inventory_models::{
-    HotbarLocationData, InventoryLocationData, ItemLocation, StashLocationData,
+    apartment_stash_kind_display_name, parse_apartment_stash_key,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, HotbarLocationData,
+    InventoryLocationData, ItemLocation, StashLocationData,
 };
 use crate::items_catalog;
 use crate::player_vitals;
@@ -46,7 +48,7 @@ const CLAIM_FULL_SECS: f32 = if feature_flags::APARTMENT_CLAIM_FAST_FOR_TESTING 
     30.0
 };
 const REINFORCE_HOLD_SECS: f32 = 22.0;
-/// Horizontal radius² (m²) for wardrobe / footlocker — feet pose is compared on **XZ**
+/// Horizontal radius² (m²) for wardrobe / footlocker / stove — feet pose is compared on **XZ**
 /// against anchor columns; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`).
 const STASH_INTERACT_SQ: f32 = 3.5 * 3.5;
 
@@ -136,6 +138,8 @@ pub struct ApartmentUnit {
     pub foot_z: f32,
     pub wardrobe_x: f32,
     pub wardrobe_z: f32,
+    pub stove_x: f32,
+    pub stove_z: f32,
     pub bound_min_x: f32,
     pub bound_max_x: f32,
     pub bound_min_z: f32,
@@ -173,14 +177,14 @@ pub struct FlashlightCharge {
     pub charge: f32,
 }
 
-/// Player-placed GLB props inside a **claimed** apartment — see `add_apartment_unit_decor` / reducers.
+/// Player-placed decor models inside a **claimed** apartment — see `add_apartment_unit_decor` / reducers.
 #[spacetimedb::table(public, accessor = apartment_unit_decor)]
 pub struct ApartmentUnitDecor {
     #[primary_key]
     #[auto_inc]
     pub decor_id: u64,
     pub unit_key: String,
-    /// Repo-relative under site root, e.g. `static/models/objects/chair.glb` (validated server-side).
+    /// Repo-relative under site root, e.g. `static/models/objects/chair.glb` or `.obj` (validated server-side).
     pub model_rel_path: String,
     pub pos_x: f32,
     pub pos_y: f32,
@@ -193,14 +197,17 @@ pub struct ApartmentUnitDecor {
 pub(crate) const APARTMENT_LAYOUT_PIECE_BED: u8 = 0;
 pub(crate) const APARTMENT_LAYOUT_PIECE_WARDROBE: u8 = 1;
 pub(crate) const APARTMENT_LAYOUT_PIECE_FOOTLOCKER: u8 = 2;
+pub(crate) const APARTMENT_LAYOUT_PIECE_STOVE: u8 = 3;
 
 const APARTMENT_LAYOUT_BED_XZ_INSET_M: f32 = 2.95;
 const APARTMENT_LAYOUT_WARDROBE_XZ_INSET_M: f32 = 0.48;
 const APARTMENT_LAYOUT_FOOTLOCKER_XZ_INSET_M: f32 = 0.42;
+const APARTMENT_LAYOUT_STOVE_XZ_INSET_M: f32 = 0.42;
 /// Keep authored decor away from façade / hull — looser than built-ins.
 const APARTMENT_DECOR_BOUND_INSET_XZ_M: f32 = 0.18;
 
 const APARTMENT_DECOR_COUNT_CAP: usize = 48;
+const APARTMENT_DECOR_MODEL_EXTENSIONS: &[&str] = &[".glb", ".obj"];
 
 fn clear_apartment_decor_for_unit(ctx: &ReducerContext, unit_key: &str) {
     let ids: Vec<u64> = ctx
@@ -225,7 +232,11 @@ fn decor_model_rel_path_ok(s: &str) -> bool {
     if t.contains("..") {
         return false;
     }
-    if !t.starts_with("static/models/") || !t.to_ascii_lowercase().ends_with(".glb") {
+    let lower = t.to_ascii_lowercase();
+    let supported_ext = APARTMENT_DECOR_MODEL_EXTENSIONS
+        .iter()
+        .any(|ext| lower.ends_with(ext));
+    if !t.starts_with("static/models/") || !supported_ext {
         return false;
     }
     t.chars()
@@ -249,6 +260,7 @@ fn xz_insets_for_piece(piece: u8) -> Option<f32> {
         APARTMENT_LAYOUT_PIECE_BED => Some(APARTMENT_LAYOUT_BED_XZ_INSET_M),
         APARTMENT_LAYOUT_PIECE_WARDROBE => Some(APARTMENT_LAYOUT_WARDROBE_XZ_INSET_M),
         APARTMENT_LAYOUT_PIECE_FOOTLOCKER => Some(APARTMENT_LAYOUT_FOOTLOCKER_XZ_INSET_M),
+        APARTMENT_LAYOUT_PIECE_STOVE => Some(APARTMENT_LAYOUT_STOVE_XZ_INSET_M),
         _ => None,
     }
 }
@@ -517,7 +529,7 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
             let sz = mx[2] - mn[2];
             let face = SwingDoorFace::from_u8(t.face);
 
-            let (bed_x, bed_z, bed_yaw, foot_x, foot_z, wardrobe_x, wardrobe_z) =
+            let (bed_x, bed_z, bed_yaw, foot_x, foot_z, wardrobe_x, wardrobe_z, stove_x, stove_z) =
                 if let Some(seed) =
                     crate::apartment_interior_anchors::east_west_interior_furniture_seed(
                         &mn, &mx, t.hinge_x, t.hinge_z, face,
@@ -531,6 +543,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                         seed.foot_z,
                         seed.wardrobe_x,
                         seed.wardrobe_z,
+                        seed.stove_x,
+                        seed.stove_z,
                     )
                 } else {
                     let bed_x_frac = (mn[0] + BED_FRAC_X * sx)
@@ -546,6 +560,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                         crate::apartment_interior_anchors::wardrobe_and_footlocker_xz_for_unit_seed(
                             mn[0], mx[0], mn[2], mx[2], t.hinge_x, t.hinge_z, t.face,
                         );
+                    let (stove_x, stove_z) =
+                        crate::apartment_interior_anchors::stove_corner_seed_xz(&mn, &mx);
                     (
                         bed_x_frac,
                         bed_z_frac,
@@ -554,6 +570,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                         foot_xz[1],
                         wardrobe_xz[0],
                         wardrobe_xz[1],
+                        stove_x,
+                        stove_z,
                     )
                 };
             if let Some(mut row) = existing {
@@ -569,6 +587,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                     || (row.foot_z - foot_z).abs() > 1e-4
                     || (row.wardrobe_x - wardrobe_x).abs() > 1e-4
                     || (row.wardrobe_z - wardrobe_z).abs() > 1e-4
+                    || (row.stove_x - stove_x).abs() > 1e-4
+                    || (row.stove_z - stove_z).abs() > 1e-4
                     || (row.bound_min_x - mn[0]).abs() > 1e-4
                     || (row.bound_max_x - mx[0]).abs() > 1e-4
                     || (row.bound_min_z - mn[2]).abs() > 1e-4
@@ -588,6 +608,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                     row.foot_z = foot_z;
                     row.wardrobe_x = wardrobe_x;
                     row.wardrobe_z = wardrobe_z;
+                    row.stove_x = stove_x;
+                    row.stove_z = stove_z;
                     row.bound_min_x = mn[0];
                     row.bound_max_x = mx[0];
                     row.bound_min_z = mn[2];
@@ -620,6 +642,8 @@ pub fn seed_apartment_units(ctx: &ReducerContext) {
                 foot_z,
                 wardrobe_x,
                 wardrobe_z,
+                stove_x,
+                stove_z,
                 bound_min_x: mn[0],
                 bound_max_x: mx[0],
                 bound_min_z: mn[2],
@@ -650,17 +674,6 @@ fn template_set_for_floor(floor_doc_id: &str) -> &'static [GenTemplate] {
         }
     }
     &[]
-}
-
-fn pose_near_apartment_stash_anchor(
-    _ctx: &ReducerContext,
-    unit: &ApartmentUnit,
-    x: f32,
-    y: f32,
-    z: f32,
-) -> bool {
-    feet_inside_unit(unit, x, y, z)
-        && pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
 }
 
 pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
@@ -940,6 +953,15 @@ pub fn set_owned_apartment_piece_pose(
             unit.bed_yaw = yz;
             ctx.db.apartment_unit().unit_key().update(unit);
         }
+        APARTMENT_LAYOUT_PIECE_STOVE => {
+            let Some((cx, cz)) = clamp_piece_world_xz(&unit, piece, world_x, world_z) else {
+                return;
+            };
+            unit.stove_x = cx;
+            unit.stove_z = cz;
+            unit.bed_yaw = yz;
+            ctx.db.apartment_unit().unit_key().update(unit);
+        }
         _ => log::warn!("set_owned_apartment_piece_pose: bad piece {piece}"),
     }
 }
@@ -1093,21 +1115,49 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     }
 }
 
+fn pose_near_named_apartment_stash_anchor(
+    _ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+    stash_kind: &str,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
+    match stash_kind {
+        APARTMENT_STASH_KIND_WARDROBE => {
+            feet_inside_unit(unit, x, y, z)
+                && pose_near_horizontal_marker(x, y, z, unit.wardrobe_x, unit.wardrobe_z, unit.foot_y)
+        }
+        APARTMENT_STASH_KIND_STOVE => {
+            feet_inside_unit(unit, x, y, z)
+                && pose_near_horizontal_marker(x, y, z, unit.stove_x, unit.stove_z, unit.foot_y)
+        }
+        _ => {
+            feet_inside_unit(unit, x, y, z)
+                && pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
+        }
+    }
+}
+
 fn first_empty_stash_slot(
     ctx: &ReducerContext,
     stash_owner: Identity,
-    unit_key: &str,
+    stash_key: &str,
 ) -> Option<u16> {
     for s in 0..NUM_STASH_SLOTS {
-        if find_item_in_stash_slot(ctx, stash_owner, unit_key, s).is_none() {
+        if find_item_in_stash_slot(ctx, stash_owner, stash_key, s).is_none() {
             return Some(s);
         }
     }
     None
 }
 
-fn apartment_stash_owner_near_sender(ctx: &ReducerContext, unit_key: &str) -> Option<Identity> {
+fn apartment_stash_owner_near_sender(
+    ctx: &ReducerContext,
+    stash_key: &str,
+) -> Option<(Identity, String, &'static str)> {
     let sender = ctx.sender();
+    let (unit_key, stash_kind) = parse_apartment_stash_key(stash_key);
     let unit = ctx
         .db
         .apartment_unit()
@@ -1115,27 +1165,31 @@ fn apartment_stash_owner_near_sender(ctx: &ReducerContext, unit_key: &str) -> Op
         .find(&unit_key.to_string())?;
     let owner_id = unit.owner?;
     let pose = ctx.db.player_pose().identity().find(&sender)?;
-    if !pose_near_apartment_stash_anchor(ctx, &unit, pose.x, pose.y, pose.z) {
+    if !pose_near_named_apartment_stash_anchor(ctx, &unit, stash_kind, pose.x, pose.y, pose.z) {
         return None;
     }
-    Some(owner_id)
+    Some((
+        owner_id,
+        unit_key.to_string(),
+        apartment_stash_kind_display_name(stash_kind),
+    ))
 }
 
 fn owned_apartment_stash_owner_near_sender(
     ctx: &ReducerContext,
-    unit_key: &str,
-) -> Option<Identity> {
-    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)?;
+    stash_key: &str,
+) -> Option<(Identity, String, &'static str)> {
+    let (owner_id, unit_key, stash_kind) = apartment_stash_owner_near_sender(ctx, stash_key)?;
     if owner_id != ctx.sender() {
         return None;
     }
-    Some(owner_id)
+    Some((owner_id, unit_key, stash_kind))
 }
 
 fn stash_item_for_unit(
     ctx: &ReducerContext,
     item_instance_id: u64,
-    unit_key: &str,
+    stash_key: &str,
     owner_id: Identity,
 ) -> Option<inventory::InventoryItem> {
     let row = ctx
@@ -1144,7 +1198,10 @@ fn stash_item_for_unit(
         .instance_id()
         .find(item_instance_id)?;
     match &row.location {
-        ItemLocation::Stash(s) if s.unit_key == unit_key && s.owner_identity == owner_id => {
+        ItemLocation::Stash(s)
+            if crate::inventory_models::stash_location_matches(&s.unit_key, stash_key)
+                && s.owner_identity == owner_id =>
+        {
             Some(row)
         }
         _ => None,
@@ -1238,7 +1295,7 @@ pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
         log::debug!("stash_push blocked: {e}");
         return;
     }
-    let Some(owner_id) = owned_apartment_stash_owner_near_sender(ctx, &unit_key) else {
+    let Some((owner_id, _, _)) = owned_apartment_stash_owner_near_sender(ctx, &unit_key) else {
         return;
     };
     let Some(slot) = first_empty_stash_slot(ctx, owner_id, &unit_key) else {
@@ -1258,7 +1315,7 @@ fn stash_push_item_to_slot_impl(
     if target_stash_slot >= NUM_STASH_SLOTS {
         return Err("bad stash slot".to_string());
     }
-    let owner_id = owned_apartment_stash_owner_near_sender(ctx, unit_key)
+    let (owner_id, _, stash_kind) = owned_apartment_stash_owner_near_sender(ctx, unit_key)
         .ok_or_else(|| "caller may not push to stash".to_string())?;
     let _row = inventory::get_player_item(ctx, item_instance_id)?;
     let target_opt = find_item_in_stash_slot(ctx, owner_id, unit_key, target_stash_slot);
@@ -1272,6 +1329,7 @@ fn stash_push_item_to_slot_impl(
         }),
         target_opt,
     )
+    .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
 
 #[spacetimedb::reducer]
@@ -1302,7 +1360,7 @@ fn stash_pull_item_to_inventory_slot_impl(
         return Err("bad inventory slot".to_string());
     }
     let sender = ctx.sender();
-    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)
+    let (owner_id, _, stash_kind) = apartment_stash_owner_near_sender(ctx, unit_key)
         .ok_or_else(|| "caller may not pull from stash".to_string())?;
     let _row = stash_item_for_unit(ctx, item_instance_id, unit_key, owner_id)
         .ok_or_else(|| "item is not in this stash".to_string())?;
@@ -1316,6 +1374,7 @@ fn stash_pull_item_to_inventory_slot_impl(
         }),
         target_opt,
     )
+    .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
 
 #[spacetimedb::reducer]
@@ -1349,7 +1408,7 @@ fn stash_pull_item_to_hotbar_slot_impl(
         return Err("bad hotbar slot".to_string());
     }
     let sender = ctx.sender();
-    let owner_id = apartment_stash_owner_near_sender(ctx, unit_key)
+    let (owner_id, _, stash_kind) = apartment_stash_owner_near_sender(ctx, unit_key)
         .ok_or_else(|| "caller may not pull from stash".to_string())?;
     let _row = stash_item_for_unit(ctx, item_instance_id, unit_key, owner_id)
         .ok_or_else(|| "item is not in this stash".to_string())?;
@@ -1363,6 +1422,7 @@ fn stash_pull_item_to_hotbar_slot_impl(
         }),
         target_opt,
     )
+    .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
 
 #[spacetimedb::reducer]
@@ -1398,7 +1458,7 @@ pub fn stash_move_item_to_slot(
         log::warn!("stash_move_to_slot: bad stash slot");
         return;
     }
-    let Some(owner_id) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
+    let Some((owner_id, _, _)) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
         return;
     };
     if stash_item_for_unit(ctx, item_instance_id, &unit_key, owner_id).is_none() {
@@ -1426,7 +1486,7 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
         return;
     }
     let sender = ctx.sender();
-    let Some(owner_id) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
+    let Some((owner_id, _, _)) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
         return;
     };
     if stash_item_for_unit(ctx, item_instance_id, &unit_key, owner_id).is_none() {
@@ -1566,6 +1626,31 @@ pub(crate) fn apply_forward_melee_door_damage(
     }
     ctx.db.apartment_door_gameplay().row_key().update(gp);
     ctx.db.apartment_door().row_key().update(door);
+}
+
+#[cfg(test)]
+mod decor_model_rel_path_ok_tests {
+    use super::decor_model_rel_path_ok;
+
+    #[test]
+    fn accepts_glb_under_static_models() {
+        assert!(decor_model_rel_path_ok("static/models/objects/chair.glb"));
+    }
+
+    #[test]
+    fn accepts_obj_under_static_models() {
+        assert!(decor_model_rel_path_ok("static/models/objects/chair.obj"));
+    }
+
+    #[test]
+    fn rejects_unsupported_extensions() {
+        assert!(!decor_model_rel_path_ok("static/models/objects/chair.fbx"));
+    }
+
+    #[test]
+    fn rejects_parent_segments() {
+        assert!(!decor_model_rel_path_ok("static/models/../chair.obj"));
+    }
 }
 
 #[cfg(test)]

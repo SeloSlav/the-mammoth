@@ -19,6 +19,12 @@ import {
   UNIT_STATE_CLAIMED,
   UNIT_STATE_UNCLAIMED,
 } from "./fpApartmentGameplay";
+import {
+  apartmentStashKey,
+  APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_STOVE,
+  APARTMENT_STASH_KIND_WARDROBE,
+} from "./fpApartmentStashKey";
 import type { ApartmentDoor, ApartmentUnit } from "../../module_bindings/types";
 
 const testIdentity = {
@@ -52,6 +58,8 @@ function apartmentUnit(overrides: Partial<ApartmentUnit>): ApartmentUnit {
     footZ: 0,
     wardrobeX: 20,
     wardrobeZ: 20,
+    stoveX: 2,
+    stoveZ: 2,
     boundMinX: 0,
     boundMaxX: 10,
     boundMinZ: 0,
@@ -276,7 +284,13 @@ describe("fpApartmentGameplay", () => {
       boundMaxZ: 10,
     });
     const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 4.2, y: 10, z: 5.2 });
-    expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+    expect(prompt).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
+      stashLabel: "footlocker",
+    });
   });
 
   it("offers owned footlocker stash near the footlocker from inside that unit", () => {
@@ -291,7 +305,85 @@ describe("fpApartmentGameplay", () => {
       boundMaxZ: 6,
     });
     const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 2.2, y: 10, z: 3.1 });
-    expect(prompt).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+    expect(prompt).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
+      stashLabel: "footlocker",
+    });
+  });
+
+  it("offers owned wardrobe stash near the wardrobe when not near the footlocker", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      wardrobeX: 5,
+      wardrobeZ: 5,
+      boundMinX: 0,
+      boundMaxX: 10,
+      boundMinZ: 0,
+      boundMaxZ: 10,
+    });
+    const pose = { x: 5.2, y: 10, z: 5.1 };
+    expect(getApartmentSystemPrompt(mockConn([unit]), pose)).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_WARDROBE),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_WARDROBE,
+      stashLabel: "wardrobe",
+    });
+    expect(
+      clientMayUseApartmentStash(
+        mockConn([unit]),
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_WARDROBE),
+        pose,
+      ),
+    ).toBe(true);
+    expect(
+      clientMayUseApartmentStash(
+        mockConn([unit]),
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+        pose,
+      ),
+    ).toBe(false);
+  });
+
+  it("offers owned stove stash near the stove anchor", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      wardrobeX: 2,
+      wardrobeZ: 2,
+      stoveX: 8,
+      stoveZ: 8,
+      boundMinX: 0,
+      boundMaxX: 10,
+      boundMinZ: 0,
+      boundMaxZ: 10,
+    });
+    const pose = { x: 8.15, y: 10, z: 8.1 };
+    expect(getApartmentSystemPrompt(mockConn([unit]), pose)).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_STOVE),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_STOVE,
+      stashLabel: "stove",
+    });
+    expect(
+      clientMayUseApartmentStash(
+        mockConn([unit]),
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_STOVE),
+        pose,
+      ),
+    ).toBe(true);
   });
 
   it("requires an explicit looked-at stash target when proximity stash prompts are disabled", () => {
@@ -309,14 +401,20 @@ describe("fpApartmentGameplay", () => {
     const pose = { x: 2.2, y: 10, z: 3.1 };
     expect(
       getApartmentSystemPrompt(conn, pose, {
-        lookedAtStashUnitKey: null,
+        lookedAtStashKey: null,
       }),
     ).toBeNull();
     expect(
       getApartmentSystemPrompt(conn, pose, {
-        lookedAtStashUnitKey: unit.unitKey,
+        lookedAtStashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
       }),
-    ).toEqual({ kind: "apartment_stash", unitKey: unit.unitKey });
+    ).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
+      stashLabel: "footlocker",
+    });
   });
 
   it("clientMayUseApartmentStash rejects owned stash unless feet are inside range", () => {
@@ -339,11 +437,28 @@ describe("fpApartmentGameplay", () => {
       }),
     ).toBe(true);
     expect(
-      clientMayUseApartmentStash(conn, testIdentity as never, unit.unitKey, {
-        x: 6.35,
-        y: 10,
-        z: 3.1,
-      }),
+      clientMayUseApartmentStash(
+        conn,
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+        {
+          x: 2.2,
+          y: 10,
+          z: 3.1,
+        },
+      ),
+    ).toBe(true);
+    expect(
+      clientMayUseApartmentStash(
+        conn,
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+        {
+          x: 6.35,
+          y: 10,
+          z: 3.1,
+        },
+      ),
     ).toBe(false);
   });
 
