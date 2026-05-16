@@ -660,7 +660,11 @@ export async function mountFpSession(
       stairShaftSpecs,
       feetPos: pos,
       getContainingResidentialUnit: () => {
-        const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z);
+        const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
+          slackXZ: 0.28,
+          slackYBelow: 1.25,
+          slackYAbove: 2.85,
+        });
         return unit ? { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level } : null;
       },
       floorVisCamWorld: _floorVisCamWorld,
