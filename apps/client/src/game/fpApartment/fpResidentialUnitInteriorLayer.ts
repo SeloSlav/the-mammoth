@@ -13,13 +13,13 @@ export function tagResidentialUnitInteriorMeshesUnder(root: THREE.Object3D): voi
   });
 }
 
-/** Merged hollow-room shells tagged `mammothPlacedObjectId` = `unit_e_*` / `unit_w_*`. */
+/** Merged hollow-room shells tagged `mammothPlacedObjectId` = `unit_*`. */
 export function tagMergedResidentialShellMeshes(buildingRoot: THREE.Object3D): void {
   buildingRoot.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     const pid = obj.userData.mammothPlacedObjectId;
     if (typeof pid !== "string") return;
-    if (!pid.startsWith("unit_e_") && !pid.startsWith("unit_w_")) return;
+    if (!pid.startsWith("unit_")) return;
     tagMeshResidentialUnitInterior(obj);
   });
 }

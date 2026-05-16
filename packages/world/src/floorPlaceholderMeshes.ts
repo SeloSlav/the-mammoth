@@ -517,7 +517,13 @@ export function buildFloorMeshes(
         room.traverse((mesh) => {
           if (!(mesh instanceof THREE.Mesh)) return;
           if (mesh.name.startsWith("shell_exterior_cladding")) return;
-          if (mesh.name.startsWith("unit_exterior_glass_")) return;
+          if (mesh.name.startsWith("unit_exterior_glass_")) {
+            mesh.userData.mammothSkipFloorGeometryMerge = true;
+            mesh.userData.mammothPlacedObjectId = placedObjectId;
+            mesh.userData.mammothUnitInterior = true;
+            mesh.userData.mammothResidentialUnitExteriorGlass = true;
+            return;
+          }
           const isInteriorShell =
             mesh.name.startsWith("shell_wall_") ||
             mesh.name.startsWith("shell_floor") ||

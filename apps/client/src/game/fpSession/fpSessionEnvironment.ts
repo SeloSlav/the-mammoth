@@ -495,12 +495,12 @@ export function attachFpSessionEnvironment(
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.82;
   /**
-   * Unlit flat = only daylight that leaks in from windows + weak diffuse bounce off dusty plaster /
-   * parquet. Keep this static so crossing the doorway does not change the room's brightness.
+   * Abandoned flats should stay noticeably underlit: mostly weak window bleed plus a trace of dusty
+   * plaster bounce. Keep this static so crossing the doorway does not change the room's brightness.
    */
-  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.42;
-  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.11;
-  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.22;
+  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.3;
+  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.06;
+  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.15;
 
   const hemi = new THREE.HemisphereLight(
     0xe3e7df,

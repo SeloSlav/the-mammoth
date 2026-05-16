@@ -26,6 +26,9 @@ const EDGE_INSET_M = 0.35;
 const MULLION_GAP_M = 0.12;
 const MIN_SEGMENT_WIDTH_M = 0.42;
 const SILL_ABOVE_YLO_M = 0.55;
+const WINDOW_BOTTOM_TRIM_M = 0.36;
+const WINDOW_OPENING_HEIGHT_M = 1.78;
+const WINDOW_HEAD_CLEARANCE_M = 0.06;
 /** Bump to reshuffle all unit facade window layouts (see `BuildFloorMeshesOptions.facadeSalt`). */
 export const DEFAULT_EXTERIOR_FACADE_SALT = 1;
 
@@ -145,8 +148,12 @@ export function planUnitExteriorWindowsForFace(opts: {
       ? Math.max(0, opts.vlenZ - 2 * EDGE_INSET_M)
       : Math.max(0, opts.vlenX - 2 * EDGE_INSET_M);
 
-  const y0 = opts.yLo + SILL_ABOVE_YLO_M;
-  const y1 = Math.min(opts.yHi - 0.06, y0 + 1.78);
+  // Trim the opening from the bottom so adjacent units keep a consistent window head line.
+  const y0 = opts.yLo + SILL_ABOVE_YLO_M + WINDOW_BOTTOM_TRIM_M;
+  const y1 = Math.min(
+    opts.yHi - WINDOW_HEAD_CLEARANCE_M,
+    opts.yLo + SILL_ABOVE_YLO_M + WINDOW_OPENING_HEIGHT_M,
+  );
   if (tangentSpan < MIN_SEGMENT_WIDTH_M || y1 <= y0 + 0.4) {
     return { count: 0, tintId: 0, holesEw: [], holesNs: [] };
   }

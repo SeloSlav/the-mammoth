@@ -9,11 +9,12 @@ export type FpSessionUnitInteriorMeshEntry = {
   mesh: THREE.Mesh;
   residentialUnitId: string | null;
   apartmentUnitKey: string | null;
+  residentialExteriorGlass: boolean;
 };
 
 function residentialUnitIdFromPlacedObjectId(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  return value.startsWith("unit_e_") || value.startsWith("unit_w_") ? value : null;
+  return value.startsWith("unit_") ? value : null;
 }
 
 function resolveUnitInteriorMeshEntry(
@@ -22,6 +23,7 @@ function resolveUnitInteriorMeshEntry(
 ): FpSessionUnitInteriorMeshEntry {
   let residentialUnitId: string | null = null;
   let apartmentUnitKey: string | null = null;
+  let residentialExteriorGlass = false;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
     if (residentialUnitId === null) {
       residentialUnitId = residentialUnitIdFromPlacedObjectId(cur.userData.mammothPlacedObjectId);
@@ -32,9 +34,17 @@ function resolveUnitInteriorMeshEntry(
         apartmentUnitKey = unitKey;
       }
     }
-    if (cur === buildingRoot || (residentialUnitId !== null && apartmentUnitKey !== null)) break;
+    if (cur.userData.mammothResidentialUnitExteriorGlass === true) {
+      residentialExteriorGlass = true;
+    }
+    if (
+      cur === buildingRoot ||
+      (residentialUnitId !== null && apartmentUnitKey !== null && residentialExteriorGlass)
+    ) {
+      break;
+    }
   }
-  return { mesh, residentialUnitId, apartmentUnitKey };
+  return { mesh, residentialUnitId, apartmentUnitKey, residentialExteriorGlass };
 }
 
 /**
@@ -92,7 +102,7 @@ export function collectFpSessionTopFloorResidentialUnitShellMeshes(
     const placedObjectId = obj.userData.mammothPlacedObjectId;
     if (
       typeof placedObjectId !== "string" ||
-      (!placedObjectId.startsWith("unit_e_") && !placedObjectId.startsWith("unit_w_"))
+      !placedObjectId.startsWith("unit_")
     ) {
       return;
     }

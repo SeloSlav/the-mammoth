@@ -64,8 +64,29 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.mesh).toBe(shellMesh);
     expect(result[0]?.residentialUnitId).toBe("unit_w_004");
     expect(result[0]?.apartmentUnitKey).toBe(null);
+    expect(result[0]?.residentialExteriorGlass).toBe(false);
     expect(result[1]?.mesh).toBe(propMesh);
     expect(result[1]?.residentialUnitId).toBe(null);
     expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");
+    expect(result[1]?.residentialExteriorGlass).toBe(false);
+  });
+
+  it("recognizes generic unit ids and exterior unit glass", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 7;
+
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    glass.userData.mammothUnitInterior = true;
+    glass.userData.mammothPlacedObjectId = "unit_north";
+    glass.userData.mammothResidentialUnitExteriorGlass = true;
+    floor.add(glass);
+
+    buildingRoot.add(floor);
+
+    const result = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.residentialUnitId).toBe("unit_north");
+    expect(result[0]?.residentialExteriorGlass).toBe(true);
   });
 });

@@ -267,10 +267,10 @@
     {
       "id": "e2159395-e392-44ea-8dff-182f7f443f21",
       "modelRelPath": "static/models/objects/cigarette.glb",
-      "fx": 0.32736627315127276,
-      "fz": 0.6011168082650816,
-      "dy": 1.126879170086827,
-      "yawRad": 0,
+      "fx": 0.3302011746462998,
+      "fz": 0.6152430432106573,
+      "dy": 1.1582417718808533,
+      "yawRad": -0.7853981633974483,
       "pitchRad": 0,
       "uniformScale": 0.08,
       "ignoreSupportSurfaces": true

@@ -377,6 +377,12 @@ export async function mountFpSession(
     frustumTransparentMeshes: 0,
     frustumExteriorTreeRoots: 0,
   };
+  const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
+    for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+      if (!cur.visible) return false;
+    }
+    return true;
+  };
   const getFpPerfSceneCounters = () => {
     const now = performance.now();
     if (now - lastPerfSceneCounterSampleAtMs < PERF_SCENE_COUNTER_SAMPLE_INTERVAL_MS) {
@@ -414,7 +420,7 @@ export async function mountFpSession(
     let frustumUnitInteriorMeshes = 0;
     for (let i = 0; i < unitInteriorMeshes.length; i++) {
       const mesh = unitInteriorMeshes[i]!;
-      if (!mesh.visible) continue;
+      if (!objectVisibleInHierarchy(mesh)) continue;
       visibleUnitInteriorMeshes += 1;
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumUnitInteriorMeshes += 1;
     }
@@ -423,7 +429,7 @@ export async function mountFpSession(
     let frustumApartmentPropMeshes = 0;
     for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
       const mesh = apartmentFurnitureInteriorMeshes[i]!;
-      if (!mesh.visible) continue;
+      if (!objectVisibleInHierarchy(mesh)) continue;
       visibleApartmentPropMeshes += 1;
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumApartmentPropMeshes += 1;
     }
@@ -432,7 +438,7 @@ export async function mountFpSession(
     let frustumTransparentMeshes = 0;
     for (let i = 0; i < transparentBuildingMeshes.length; i++) {
       const mesh = transparentBuildingMeshes[i]!;
-      if (!mesh.visible) continue;
+      if (!objectVisibleInHierarchy(mesh)) continue;
       visibleTransparentMeshes += 1;
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumTransparentMeshes += 1;
     }

@@ -62,6 +62,17 @@ describe("planUnitExteriorWindowsForFace", () => {
     expect(n.holesEw.length).toBe(0);
   });
 
+  it("shortens openings from the bottom while keeping the head height", () => {
+    const p = planUnitExteriorWindowsForFace({ ...base, face: "e" });
+    expect(p.holesEw.length).toBeGreaterThan(0);
+    const first = p.holesEw[0]!;
+    const legacyY0 = base.yLo + 0.55;
+    const legacyY1 = Math.min(base.yHi - 0.06, legacyY0 + 1.78);
+    expect(first.y1).toBeCloseTo(legacyY1);
+    expect(first.y0).toBeCloseTo(legacyY0 + 0.36);
+    expect(first.y1 - first.y0).toBeLessThan(legacyY1 - legacyY0);
+  });
+
   it("allows up to four tangent windows on wide façades (deterministic draw)", () => {
     let foundFour = false;
     for (let facadeSalt = 0; facadeSalt < 500; facadeSalt++) {

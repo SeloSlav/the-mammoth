@@ -360,7 +360,7 @@ export async function mountFpApartmentFurniture(opts: {
     const next = new Map<number, ApartmentUnit[]>();
     for (const row of opts.conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
-      if (!u.unitId.startsWith("unit_e_") && !u.unitId.startsWith("unit_w_")) continue;
+      if (!u.unitId.startsWith("unit_")) continue;
       const arr = next.get(u.level);
       if (arr) {
         arr.push(u);

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { fpApplyResidentialInteriorPlateBandOverride } from "./fpSessionFloorPlateVisibility";
+import {
+  fpApplyResidentialInteriorPlateBandOverride,
+  fpResolveUnitInteriorMeshVisible,
+} from "./fpSessionFloorPlateVisibility";
 
 describe("fpApplyResidentialInteriorPlateBandOverride", () => {
   it("clamps a residential interior view back to the local storey", () => {
@@ -52,6 +55,70 @@ describe("fpApplyResidentialInteriorPlateBandOverride", () => {
         cabOccludesWorld: false,
       }),
     ).toEqual({ lo: 1, hi: 30 });
+  });
+});
+
+describe("fpResolveUnitInteriorMeshVisible", () => {
+  it("keeps exterior unit glass visible outside but hides neighboring glass inside a unit", () => {
+    const glassEntry = {
+      apartmentUnitKey: null,
+      residentialUnitId: "unit_e_004",
+      residentialExteriorGlass: true,
+    };
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: glassEntry,
+        unitInteriorVisible: false,
+        apartmentFurnitureInteriorVisible: false,
+        insideResidentialUnit: false,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: glassEntry,
+        unitInteriorVisible: true,
+        apartmentFurnitureInteriorVisible: true,
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the containing unit shell visible while culling other residential shells indoors", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_003",
+          residentialExteriorGlass: false,
+        },
+        unitInteriorVisible: true,
+        apartmentFurnitureInteriorVisible: true,
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_004",
+          residentialExteriorGlass: false,
+        },
+        unitInteriorVisible: true,
+        apartmentFurnitureInteriorVisible: true,
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(false);
   });
 });
 

@@ -158,6 +158,38 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
   return { lo: clampedStorey, hi: clampedStorey };
 }
 
+export function fpResolveUnitInteriorMeshVisible(input: {
+  entry: Pick<
+    FpSessionUnitInteriorMeshEntry,
+    "apartmentUnitKey" | "residentialUnitId" | "residentialExteriorGlass"
+  >;
+  unitInteriorVisible: boolean;
+  apartmentFurnitureInteriorVisible: boolean;
+  insideResidentialUnit: boolean;
+  containingResidentialUnitId: string | null;
+  containingResidentialUnitKey: string | null;
+}): boolean {
+  const { entry } = input;
+  if (entry.apartmentUnitKey !== null) {
+    return (
+      input.apartmentFurnitureInteriorVisible &&
+      (!input.insideResidentialUnit ||
+        entry.apartmentUnitKey === input.containingResidentialUnitKey)
+    );
+  }
+  if (entry.residentialUnitId !== null) {
+    if (input.insideResidentialUnit) {
+      return entry.residentialUnitId === input.containingResidentialUnitId;
+    }
+    /**
+     * Exterior unit glass is part of the facade, so keep it available for outside/perimeter views.
+     * Once inside a unit, the branch above hides every other unit's transparent glass.
+     */
+    if (entry.residentialExteriorGlass) return true;
+  }
+  return input.unitInteriorVisible;
+}
+
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
@@ -483,15 +515,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
-        let visible = unitInteriorVisible;
-        if (entry.apartmentUnitKey !== null) {
-          visible =
-            apartmentFurnitureInteriorVisible &&
-            (!insideResidentialUnit || entry.apartmentUnitKey === containingResidentialUnitKey);
-        } else if (insideResidentialUnit && entry.residentialUnitId !== null) {
-          visible = entry.residentialUnitId === containingResidentialUnitId;
-        }
-        entry.mesh.visible = visible;
+        entry.mesh.visible = fpResolveUnitInteriorMeshVisible({
+          entry,
+          unitInteriorVisible,
+          apartmentFurnitureInteriorVisible,
+          insideResidentialUnit,
+          containingResidentialUnitId,
+          containingResidentialUnitKey,
+        });
       }
     }
     const apartmentFurnitureInteriorVisibilityChanged =

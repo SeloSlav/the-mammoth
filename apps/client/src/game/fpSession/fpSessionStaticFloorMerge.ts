@@ -185,6 +185,9 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       for (const g of geos) g.dispose();
       // If merge fails, keep originals — otherwise the apartment shell vanishes (only glass remains).
       if (!merged) continue;
+      const allResidentialExteriorGlass = list.every(
+        (m) => m.userData.mammothResidentialUnitExteriorGlass === true,
+      );
       for (const m of list) {
         m.removeFromParent();
         m.geometry.dispose();
@@ -196,6 +199,9 @@ function mergeUnitPreservedShellsByPlacedObject(floorPlateGroup: THREE.Group): v
       mesh.frustumCulled = true;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
+      if (allResidentialExteriorGlass) {
+        mesh.userData.mammothResidentialUnitExteriorGlass = true;
+      }
       mesh.name = `merged_unit_shell:${placedObjectId}`;
       floorPlateGroup.add(mesh);
     }
@@ -253,6 +259,9 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
       const merged = mergeGeometries(geos, false);
       for (const g of geos) g.dispose();
       if (!merged) continue;
+      const allResidentialExteriorGlass = list.every(
+        (m) => m.userData.mammothResidentialUnitExteriorGlass === true,
+      );
       for (const m of list) {
         m.removeFromParent();
         m.geometry.dispose();
@@ -263,6 +272,9 @@ async function mergeUnitPreservedShellsByPlacedObjectYielding(
       mesh.frustumCulled = true;
       mesh.userData.mammothPlacedObjectId = placedObjectId;
       mesh.userData.mammothUnitInterior = true;
+      if (allResidentialExteriorGlass) {
+        mesh.userData.mammothResidentialUnitExteriorGlass = true;
+      }
       mesh.name = `merged_unit_shell:${placedObjectId}`;
       floorPlateGroup.add(mesh);
       await yieldToMain();
