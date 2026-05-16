@@ -7,6 +7,37 @@ const _mergePreserveLocal = new THREE.Matrix4();
 /** Scratch for world→group-local transform when cloning mesh geometry during merge gather. */
 const _mergeGatherLocal = new THREE.Matrix4();
 
+type MergeBucket = {
+  mat: THREE.Material;
+  geos: THREE.BufferGeometry[];
+  isInterior: boolean;
+  genericInteriorVisibleInResidentialUnit: boolean;
+};
+
+function mergeBucketKey(material: THREE.Material, mesh: THREE.Mesh): string {
+  const isInterior = mesh.userData.mammothUnitInterior === true ? 1 : 0;
+  const genericInteriorVisibleInResidentialUnit =
+    mesh.userData.mammothGenericInteriorVisibleInResidentialUnit === true ? 1 : 0;
+  return `${material.uuid}|interior:${isInterior}|genericInUnit:${genericInteriorVisibleInResidentialUnit}`;
+}
+
+function createMergeBucket(material: THREE.Material, mesh: THREE.Mesh): MergeBucket {
+  return {
+    mat: material,
+    geos: [],
+    isInterior: mesh.userData.mammothUnitInterior === true,
+    genericInteriorVisibleInResidentialUnit:
+      mesh.userData.mammothGenericInteriorVisibleInResidentialUnit === true,
+  };
+}
+
+function applyMergedUserData(mesh: THREE.Mesh, bucket: MergeBucket): void {
+  if (bucket.isInterior) mesh.userData.mammothUnitInterior = true;
+  if (bucket.genericInteriorVisibleInResidentialUnit) {
+    mesh.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
+  }
+}
+
 /**
  * `BufferGeometryUtils.mergeGeometries()` requires every geometry in a batch to agree on indexed vs
  * non-indexed layout. Normalize every merge input to **non-indexed** after cloning.
@@ -49,10 +80,7 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     m.removeFromParent();
   }
 
-  const geosByMat = new Map<
-    string,
-    { mat: THREE.Material; geos: THREE.BufferGeometry[]; allInterior: boolean }
-  >();
+  const geosByMat = new Map<string, MergeBucket>();
 
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
@@ -63,14 +91,11 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
       obj.geometry as THREE.BufferGeometry,
       _mergeGatherLocal,
     );
-    const key = material.uuid;
-    const isInterior = obj.userData.mammothUnitInterior === true;
+    const key = mergeBucketKey(material, obj);
     let bucket = geosByMat.get(key);
     if (!bucket) {
-      bucket = { mat: material, geos: [], allInterior: isInterior };
+      bucket = createMergeBucket(material, obj);
       geosByMat.set(key, bucket);
-    } else {
-      bucket.allInterior = bucket.allInterior && isInterior;
     }
     bucket.geos.push(geo);
   });
@@ -88,7 +113,8 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     group.remove(group.children[0]!);
   }
 
-  for (const { mat, geos, allInterior } of geosByMat.values()) {
+  for (const bucket of geosByMat.values()) {
+    const { mat, geos } = bucket;
     const merged = mergeGeometries(geos, false);
     for (const g of geos) g.dispose();
     if (!merged) continue;
@@ -96,7 +122,7 @@ export function mergeGroupDescendantsByMaterial(group: THREE.Group): void {
     merged.computeBoundingBox();
     const mesh = new THREE.Mesh(merged, mat);
     mesh.frustumCulled = true;
-    if (allInterior) mesh.userData.mammothUnitInterior = true;
+    applyMergedUserData(mesh, bucket);
     group.add(mesh);
   }
 
@@ -136,10 +162,7 @@ export async function mergeGroupDescendantsByMaterialYielding(
     mergeMeshes.push(obj);
   });
 
-  const geosByMat = new Map<
-    string,
-    { mat: THREE.Material; geos: THREE.BufferGeometry[]; allInterior: boolean }
-  >();
+  const geosByMat = new Map<string, MergeBucket>();
 
   const GATHER_BATCH = 72;
   for (let i = 0; i < mergeMeshes.length; i += GATHER_BATCH) {
@@ -153,14 +176,11 @@ export async function mergeGroupDescendantsByMaterialYielding(
         obj.geometry as THREE.BufferGeometry,
         _mergeGatherLocal,
       );
-      const key = material.uuid;
-      const isInterior = obj.userData.mammothUnitInterior === true;
+      const key = mergeBucketKey(material, obj);
       let bucket = geosByMat.get(key);
       if (!bucket) {
-        bucket = { mat: material, geos: [], allInterior: isInterior };
+        bucket = createMergeBucket(material, obj);
         geosByMat.set(key, bucket);
-      } else {
-        bucket.allInterior = bucket.allInterior && isInterior;
       }
       bucket.geos.push(geo);
     }
@@ -180,7 +200,8 @@ export async function mergeGroupDescendantsByMaterialYielding(
     group.remove(group.children[0]!);
   }
 
-  for (const { mat, geos, allInterior } of geosByMat.values()) {
+  for (const bucket of geosByMat.values()) {
+    const { mat, geos } = bucket;
     const merged = mergeGeometries(geos, false);
     for (const g of geos) g.dispose();
     if (!merged) continue;
@@ -188,7 +209,7 @@ export async function mergeGroupDescendantsByMaterialYielding(
     merged.computeBoundingBox();
     const mesh = new THREE.Mesh(merged, mat);
     mesh.frustumCulled = true;
-    if (allInterior) mesh.userData.mammothUnitInterior = true;
+    applyMergedUserData(mesh, bucket);
     group.add(mesh);
     await yieldToMain();
   }

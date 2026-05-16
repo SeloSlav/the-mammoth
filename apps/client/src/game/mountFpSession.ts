@@ -639,6 +639,7 @@ export async function mountFpSession(
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
+    getContainingResidentialUnitKey,
     isApartmentFurnitureInteriorVisible,
   } =
     createFpSessionFloorPlateVisibility({
@@ -1400,6 +1401,7 @@ export async function mountFpSession(
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
+    getContainingResidentialUnitKey,
     isApartmentFurnitureInteriorVisible,
     selectedHotbarRow,
     logFpPerf,

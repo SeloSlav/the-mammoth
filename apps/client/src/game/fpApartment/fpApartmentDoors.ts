@@ -619,6 +619,7 @@ export function mountFpApartmentDoors(
      * cost for geometry that cannot possibly contribute to the silhouette.
      */
     mesh.userData.mammothUnitInterior = true;
+    mesh.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
     mesh.frustumCulled = false; // per-level group visibility drives culling, not frustum tests.
     mesh.castShadow = false;
     mesh.receiveShadow = false;
@@ -630,6 +631,7 @@ export function mountFpApartmentDoors(
       glassMesh.name = `apartment_doors_glass:L${levelIndex}`;
       glassMesh.userData.mammothPlateLevelIndex = levelIndex;
       glassMesh.userData.mammothUnitInterior = true;
+      glassMesh.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
       glassMesh.frustumCulled = false;
       glassMesh.castShadow = false;
       glassMesh.receiveShadow = false;

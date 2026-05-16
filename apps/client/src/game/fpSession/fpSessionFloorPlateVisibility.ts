@@ -151,7 +151,7 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
   trueExteriorView: boolean;
   cabOccludesWorld: boolean;
 }): { lo: number; hi: number } {
-  if (!input.insideResidentialUnit || input.trueExteriorView || input.cabOccludesWorld) {
+  if (!input.insideResidentialUnit || input.trueExteriorView) {
     return input.band;
   }
   const clampedStorey = Math.max(1, Math.min(input.maxBuildingLevel, input.playerStorey));
@@ -161,7 +161,10 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
 export function fpResolveUnitInteriorMeshVisible(input: {
   entry: Pick<
     FpSessionUnitInteriorMeshEntry,
-    "apartmentUnitKey" | "residentialUnitId" | "residentialExteriorGlass"
+    | "apartmentUnitKey"
+    | "residentialUnitId"
+    | "residentialExteriorGlass"
+    | "genericInteriorVisibleInResidentialUnit"
   >;
   unitInteriorVisible: boolean;
   apartmentFurnitureInteriorVisible: boolean;
@@ -187,6 +190,9 @@ export function fpResolveUnitInteriorMeshVisible(input: {
      */
     if (entry.residentialExteriorGlass) return true;
   }
+  if (input.insideResidentialUnit) {
+    return entry.genericInteriorVisibleInResidentialUnit && input.unitInteriorVisible;
+  }
   return input.unitInteriorVisible;
 }
 
@@ -194,6 +200,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
+  getContainingResidentialUnitKey: () => string | null;
   isApartmentFurnitureInteriorVisible: () => boolean;
 } {
   const {
@@ -399,9 +406,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       );
     }
     /**
-     * Residential units should not inherit a tall-stack reveal from adjacent elevator/shaft probes.
+     * Residential units should not inherit a tall-stack reveal from adjacent elevator/cab/shaft probes.
      * Once feet are inside a real apartment shell, ordinary views keep only the current storey's plate
-     * band unless we are in one of the explicit broad-view cases above (true exterior or cab occlusion).
+     * band unless this is a true exterior view.
      * Stair-shaft *proximity* uses expanded hulls for doorway lines — it must not disable this clamp or
      * apartments near cores pay for a dozen+ extra storeys every frame.
      */
@@ -621,6 +628,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
+    getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
     isApartmentFurnitureInteriorVisible: () => _lastApartmentFurnitureInteriorVisible,
   };
 }

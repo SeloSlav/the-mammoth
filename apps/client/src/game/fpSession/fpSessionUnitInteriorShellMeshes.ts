@@ -10,6 +10,7 @@ export type FpSessionUnitInteriorMeshEntry = {
   residentialUnitId: string | null;
   apartmentUnitKey: string | null;
   residentialExteriorGlass: boolean;
+  genericInteriorVisibleInResidentialUnit: boolean;
 };
 
 function residentialUnitIdFromPlacedObjectId(value: unknown): string | null {
@@ -24,6 +25,7 @@ function resolveUnitInteriorMeshEntry(
   let residentialUnitId: string | null = null;
   let apartmentUnitKey: string | null = null;
   let residentialExteriorGlass = false;
+  let genericInteriorVisibleInResidentialUnit = false;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
     if (residentialUnitId === null) {
       residentialUnitId = residentialUnitIdFromPlacedObjectId(cur.userData.mammothPlacedObjectId);
@@ -37,14 +39,26 @@ function resolveUnitInteriorMeshEntry(
     if (cur.userData.mammothResidentialUnitExteriorGlass === true) {
       residentialExteriorGlass = true;
     }
+    if (cur.userData.mammothGenericInteriorVisibleInResidentialUnit === true) {
+      genericInteriorVisibleInResidentialUnit = true;
+    }
     if (
       cur === buildingRoot ||
-      (residentialUnitId !== null && apartmentUnitKey !== null && residentialExteriorGlass)
+      (residentialUnitId !== null &&
+        apartmentUnitKey !== null &&
+        residentialExteriorGlass &&
+        genericInteriorVisibleInResidentialUnit)
     ) {
       break;
     }
   }
-  return { mesh, residentialUnitId, apartmentUnitKey, residentialExteriorGlass };
+  return {
+    mesh,
+    residentialUnitId,
+    apartmentUnitKey,
+    residentialExteriorGlass,
+    genericInteriorVisibleInResidentialUnit,
+  };
 }
 
 /**

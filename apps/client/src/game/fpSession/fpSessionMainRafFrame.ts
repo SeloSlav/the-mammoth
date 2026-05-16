@@ -210,6 +210,7 @@ export type FpSessionMainRafFrameDeps = {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
+  getContainingResidentialUnitKey: () => string | null;
   isApartmentFurnitureInteriorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
@@ -557,13 +558,16 @@ export function createFpSessionMainRafFrame(
      */
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
+    const containingResidentialUnitKey = deps.getContainingResidentialUnitKey();
     deps.fpApartmentFurniture.syncVisibility(
       deps.camera,
       deps.isApartmentFurnitureInteriorVisible(),
+      containingResidentialUnitKey,
     );
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
       deps.isApartmentFurnitureInteriorVisible(),
+      containingResidentialUnitKey,
     );
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";

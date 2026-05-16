@@ -43,6 +43,24 @@ describe("mergeGroupDescendantsByMaterial", () => {
     expect(g.children.length).toBe(1);
     expect(g.children[0]).toBe(multi);
   });
+
+  it("does not merge interior-tagged geometry with non-interior geometry sharing a material", () => {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const g = new THREE.Group();
+    const interior = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+    interior.userData.mammothUnitInterior = true;
+    const exterior = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+    g.add(interior, exterior);
+
+    mergeGroupDescendantsByMaterial(g);
+
+    expect(g.children.length).toBe(2);
+    expect(
+      g.children.filter(
+        (child) => child instanceof THREE.Mesh && child.userData.mammothUnitInterior === true,
+      ),
+    ).toHaveLength(1);
+  });
 });
 
 describe("cloneGeometryForMerge", () => {

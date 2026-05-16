@@ -16,6 +16,7 @@ import {
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
+import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
@@ -201,7 +202,11 @@ function compareAuthoringBuildEntries(a: AuthoringBuildEntry, b: AuthoringBuildE
 
 export type MountFpApartmentDecorMeshesResult = {
   dispose: () => void;
-  syncVisibility: (camera: THREE.PerspectiveCamera, allowDemand?: boolean) => void;
+  syncVisibility: (
+    camera: THREE.PerspectiveCamera,
+    allowDemand?: boolean,
+    containingUnitKey?: string | null,
+  ) => void;
   getDecorObject: (decorId: bigint) => THREE.Object3D | undefined;
 };
 
@@ -441,6 +446,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (d.source === "content") {
         centerVisualBoundsOnRoot(g);
       }
+      await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
       root.add(g);
       g.updateMatrixWorld(true);
       const bbox = new THREE.Box3().setFromObject(g);
@@ -491,7 +497,7 @@ export function mountFpApartmentDecorMeshes(opts: {
 
   return {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
-    syncVisibility: (camera, allowDemand = true) => {
+    syncVisibility: (camera, allowDemand = true, containingUnitKey = null) => {
       camera.updateMatrixWorld();
       _furnitureVisibilityViewProjection.multiplyMatrices(
         camera.projectionMatrix,
@@ -500,6 +506,13 @@ export function mountFpApartmentDecorMeshes(opts: {
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
       for (const g of groupByRenderKey.values()) {
         if (!allowDemand) {
+          g.visible = false;
+          continue;
+        }
+        if (
+          containingUnitKey !== null &&
+          g.userData.mammothApartmentUnitKey !== containingUnitKey
+        ) {
           g.visible = false;
           continue;
         }

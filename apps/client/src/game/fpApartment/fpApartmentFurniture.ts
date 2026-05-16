@@ -16,7 +16,7 @@ import {
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
-import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
@@ -225,7 +225,11 @@ function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Objec
 
 export type MountFpApartmentFurnitureResult = {
   dispose: () => void;
-  syncVisibility: (camera: THREE.PerspectiveCamera, allowDemandBuild?: boolean) => void;
+  syncVisibility: (
+    camera: THREE.PerspectiveCamera,
+    allowDemandBuild?: boolean,
+    containingUnitKey?: string | null,
+  ) => void;
   /**
    * Center-screen ray vs invisible footlocker / wardrobe / stove picks — returns stash prompt when the viewer
    * owns the unit and {@link clientMayUseApartmentStash} passes (same replicated stash).
@@ -396,6 +400,7 @@ export async function mountFpApartmentFurniture(opts: {
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_shell:${u.unitKey}`;
       unitGroup.userData.mammothApartmentFurnitureProp = true;
+      unitGroup.userData.mammothApartmentUnitKey = u.unitKey;
       unitGroup.userData.mammothPlateLevelIndex = levelIdx;
       plate.add(unitGroup);
       if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
@@ -430,6 +435,7 @@ export async function mountFpApartmentFurniture(opts: {
     const unitGroup = new THREE.Group();
     unitGroup.name = `apartment_furniture_${u.unitKey}`;
     unitGroup.userData.mammothApartmentFurnitureProp = true;
+    unitGroup.userData.mammothApartmentUnitKey = u.unitKey;
     unitGroup.userData.mammothPlateLevelIndex = levelIdx;
     plate.add(unitGroup);
 
@@ -568,7 +574,7 @@ export async function mountFpApartmentFurniture(opts: {
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     unitGroup.updateMatrixWorld(true);
-    mergeGroupDescendantsByMaterial(unitGroup);
+    await mergeGroupDescendantsByMaterialYielding(unitGroup, yieldToMain);
 
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
@@ -781,7 +787,7 @@ export async function mountFpApartmentFurniture(opts: {
   opts.conn.db.apartment_unit.onDelete(bumpApartmentUnit);
 
   return {
-    syncVisibility: (camera, allowDemandBuild = true) => {
+    syncVisibility: (camera, allowDemandBuild = true, containingUnitKey = null) => {
       if (!allowDemandBuild) {
         cancelPendingDemandBuild();
       }
@@ -805,6 +811,13 @@ export async function mountFpApartmentFurniture(opts: {
       for (let i = 0; i < unitFurnitureGroups.length; i++) {
         const g = unitFurnitureGroups[i]!;
         if (!allowDemandBuild) {
+          g.visible = false;
+          continue;
+        }
+        if (
+          containingUnitKey !== null &&
+          g.userData.mammothApartmentUnitKey !== containingUnitKey
+        ) {
           g.visible = false;
           continue;
         }
