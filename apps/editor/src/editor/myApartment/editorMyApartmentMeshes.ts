@@ -354,6 +354,19 @@ export function centerDecorRootOnVisualBounds(
   root.updateMatrixWorld(true);
 }
 
+export function centerDecorVisualBoundsOnRoot(root: THREE.Object3D): void {
+  root.updateMatrixWorld(true);
+  decorClampBoundsScratch.setFromObject(root);
+  if (decorClampBoundsScratch.isEmpty()) return;
+  decorClampBoundsScratch.getCenter(decorRecenterWorldCenterScratch);
+  decorRecenterLocalCenterScratch.copy(decorRecenterWorldCenterScratch);
+  root.worldToLocal(decorRecenterLocalCenterScratch);
+  for (const child of root.children) {
+    child.position.sub(decorRecenterLocalCenterScratch);
+  }
+  root.updateMatrixWorld(true);
+}
+
 export function getMyApartmentDecorAnchorWorldPosition(root: THREE.Object3D): THREE.Vector3 {
   const raw = root.userData[EDITOR_MY_APARTMENT_DECOR_ANCHOR_LOCAL_OFFSET_USERDATA_KEY];
   if (
@@ -855,7 +868,7 @@ function placeDecorGroup(args: {
     fx: decor.fx,
     fz: decor.fz,
   });
-  group.position.set(pv.x, 0, pv.z);
+  group.position.set(pv.x, EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + decor.dy, pv.z);
   group.rotation.order = "YXZ";
   const yaw = snapOwnedApartmentDecorYawRad(decor.yawRad);
   const pitch = THREE.MathUtils.clamp(
@@ -866,13 +879,8 @@ function placeDecorGroup(args: {
   group.rotation.set(pitch, yaw, 0, "YXZ");
   group.scale.setScalar(decor.uniformScale);
   const vis = cloneProp(template);
-  snapCloneBottomToWorldFloorUnderParentScale(
-    vis,
-    EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + decor.dy,
-    decor.uniformScale,
-  );
   group.add(vis);
-  centerDecorRootOnVisualBounds(group);
+  centerDecorVisualBoundsOnRoot(group);
   constrainMyApartmentDecorRootPose(group);
 }
 

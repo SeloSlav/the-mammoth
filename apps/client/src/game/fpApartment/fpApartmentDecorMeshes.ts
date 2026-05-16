@@ -40,6 +40,9 @@ const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
  * inset inside it.
  */
 const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0;
+const _decorCenterBoundsScratch = new THREE.Box3();
+const _decorCenterWorldScratch = new THREE.Vector3();
+const _decorCenterLocalScratch = new THREE.Vector3();
 
 type VisibleDecorPlacement = {
   renderKey: string;
@@ -54,6 +57,19 @@ type VisibleDecorPlacement = {
   uniformScale: number;
   source: "db" | "content";
 };
+
+function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
+  root.updateMatrixWorld(true);
+  _decorCenterBoundsScratch.setFromObject(root);
+  if (_decorCenterBoundsScratch.isEmpty()) return;
+  _decorCenterBoundsScratch.getCenter(_decorCenterWorldScratch);
+  _decorCenterLocalScratch.copy(_decorCenterWorldScratch);
+  root.worldToLocal(_decorCenterLocalScratch);
+  for (const child of root.children) {
+    child.position.sub(_decorCenterLocalScratch);
+  }
+  root.updateMatrixWorld(true);
+}
 
 function visibleDecorPlacements(
   conn: DbConnection,
@@ -419,15 +435,10 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.updateMatrixWorld(true);
 
       g.add(vis);
-      root.add(g);
       if (d.source === "content") {
-        snapCloneBottomToWorldFloor(g, d.posY);
-        keepCloneInsideUnitXZ(g, d.unit, {
-          insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
-          fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
-          fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
-        });
+        centerVisualBoundsOnRoot(g);
       }
+      root.add(g);
       g.updateMatrixWorld(true);
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
