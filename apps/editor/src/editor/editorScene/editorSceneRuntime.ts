@@ -39,6 +39,7 @@ import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
   constrainMyApartmentDecorRootPose,
+  constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
@@ -63,6 +64,13 @@ export async function mountEditorScene(
   canvas: HTMLCanvasElement,
 ): Promise<() => void> {
   const ORBIT_MAX_DISTANCE = 40;
+  /** “Neutral” feel at this camera–target radius; compensated speeds are softly damped from there. */
+  const ORBIT_INVARIANT_REFERENCE_DISTANCE_M = 6.5;
+  const ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP = 0.82;
+  const ORBIT_ZOOM_SPEED_MIN = 0.65;
+  const ORBIT_ZOOM_SPEED_MAX = 5.5;
+  const ORBIT_ROTATE_SPEED_MIN = 0.7;
+  const ORBIT_ROTATE_SPEED_MAX = 4;
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe8edf4);
@@ -135,6 +143,100 @@ export async function mountEditorScene(
     object: THREE.Object3D;
     meshStart: THREE.Vector3;
   } | null = null;
+  const decorSupportRaycaster = new THREE.Raycaster();
+  const decorSupportBox = new THREE.Box3();
+  const decorSupportSize = new THREE.Vector3();
+  const decorSupportRayOrigin = new THREE.Vector3();
+  const decorSupportRayDirection = new THREE.Vector3(0, -1, 0);
+  const decorSupportNormalMatrix = new THREE.Matrix3();
+  const decorSupportWorldNormal = new THREE.Vector3();
+  const decorSupportSamples = Array.from({ length: 5 }, () => new THREE.Vector3());
+  const DECOR_SUPPORT_SURFACE_EPS_M = 0.01;
+  const DECOR_SUPPORT_RAY_START_ABOVE_M = 3;
+
+  function objectIsDescendantOf(
+    object: THREE.Object3D,
+    ancestor: THREE.Object3D,
+  ): boolean {
+    for (let cur: THREE.Object3D | null = object; cur; cur = cur.parent) {
+      if (cur === ancestor) return true;
+    }
+    return false;
+  }
+
+  function objectAndAncestorsVisible(object: THREE.Object3D): boolean {
+    for (let cur: THREE.Object3D | null = object; cur; cur = cur.parent) {
+      if (!cur.visible) return false;
+    }
+    return true;
+  }
+
+  function supportHitHasUpwardWorldNormal(hit: THREE.Intersection): boolean {
+    if (!hit.face) return false;
+    decorSupportNormalMatrix.getNormalMatrix(hit.object.matrixWorld);
+    decorSupportWorldNormal
+      .copy(hit.face.normal)
+      .applyMatrix3(decorSupportNormalMatrix)
+      .normalize();
+    return decorSupportWorldNormal.y > 0.65;
+  }
+
+  function constrainMyApartmentDecorToSupportSurfaces(root: THREE.Object3D): void {
+    const decorId = root.userData.mammothEditorMyApartmentDecorId;
+    if (typeof decorId === "string") {
+      const item = useEditorStore
+        .getState()
+        .ownedApartmentBuiltins.decorItems.find((decor) => decor.id === decorId);
+      if (item?.ignoreSupportSurfaces === true) return;
+    }
+    const supportRoot = structuralState.buildingRoot;
+    if (!supportRoot) return;
+    root.updateMatrixWorld(true);
+    decorSupportBox.setFromObject(root);
+    if (decorSupportBox.isEmpty()) return;
+    decorSupportBox.getSize(decorSupportSize);
+
+    const minX = decorSupportBox.min.x;
+    const maxX = decorSupportBox.max.x;
+    const minZ = decorSupportBox.min.z;
+    const maxZ = decorSupportBox.max.z;
+    const centerX = (minX + maxX) * 0.5;
+    const centerZ = (minZ + maxZ) * 0.5;
+    const cornerInsetX = Math.min(Math.max(decorSupportSize.x * 0.15, 0.02), decorSupportSize.x * 0.45);
+    const cornerInsetZ = Math.min(Math.max(decorSupportSize.z * 0.15, 0.02), decorSupportSize.z * 0.45);
+    const sampleY = decorSupportBox.max.y + DECOR_SUPPORT_RAY_START_ABOVE_M;
+    decorSupportSamples[0]!.set(centerX, sampleY, centerZ);
+    decorSupportSamples[1]!.set(minX + cornerInsetX, sampleY, minZ + cornerInsetZ);
+    decorSupportSamples[2]!.set(maxX - cornerInsetX, sampleY, minZ + cornerInsetZ);
+    decorSupportSamples[3]!.set(minX + cornerInsetX, sampleY, maxZ - cornerInsetZ);
+    decorSupportSamples[4]!.set(maxX - cornerInsetX, sampleY, maxZ - cornerInsetZ);
+
+    let supportY = -Infinity;
+    const supportProbeMaxY =
+      decorSupportBox.max.y + Math.max(0.25, decorSupportSize.y * 0.5);
+    for (const sample of decorSupportSamples) {
+      decorSupportRayOrigin.copy(sample);
+      decorSupportRaycaster.set(decorSupportRayOrigin, decorSupportRayDirection);
+      decorSupportRaycaster.near = 0;
+      decorSupportRaycaster.far = DECOR_SUPPORT_RAY_START_ABOVE_M + decorSupportSize.y + 4;
+      const hits = decorSupportRaycaster.intersectObject(supportRoot, true);
+      for (const hit of hits) {
+        if (objectIsDescendantOf(hit.object, root)) continue;
+        if (!objectAndAncestorsVisible(hit.object)) continue;
+        if (!supportHitHasUpwardWorldNormal(hit)) continue;
+        if (hit.point.y > supportProbeMaxY) continue;
+        supportY = Math.max(supportY, hit.point.y);
+        break;
+      }
+    }
+
+    if (
+      Number.isFinite(supportY) &&
+      decorSupportBox.min.y < supportY - DECOR_SUPPORT_SURFACE_EPS_M
+    ) {
+      root.position.y += supportY - decorSupportBox.min.y;
+    }
+  }
 
   function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
     const st = useEditorStore.getState();
@@ -257,6 +359,23 @@ export async function mountEditorScene(
   orbitControls.target.set(0, 1.45, 0);
   orbitControls.minDistance = 0.22;
   orbitControls.maxDistance = ORBIT_MAX_DISTANCE;
+  function applyDistanceInvariantOrbitSpeeds(): void {
+    const distance = Math.max(orbitControls.minDistance, camera.position.distanceTo(orbitControls.target));
+    const speedScale =
+      (ORBIT_INVARIANT_REFERENCE_DISTANCE_M / distance) *
+      ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP;
+    orbitControls.zoomSpeed = THREE.MathUtils.clamp(
+      speedScale,
+      ORBIT_ZOOM_SPEED_MIN,
+      ORBIT_ZOOM_SPEED_MAX,
+    );
+    orbitControls.rotateSpeed = THREE.MathUtils.clamp(
+      speedScale,
+      ORBIT_ROTATE_SPEED_MIN,
+      ORBIT_ROTATE_SPEED_MAX,
+    );
+  }
+  applyDistanceInvariantOrbitSpeeds();
   orbitControls.update();
   const flyControls = new FlyControls(camera, canvas);
   flyControls.movementSpeed = useEditorStore.getState().flySpeedMps;
@@ -539,6 +658,10 @@ export async function mountEditorScene(
         constrainMyApartmentFurnitureRootPose(aptObj);
       } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
         constrainMyApartmentDecorRootPose(aptObj);
+        if (aptSt.transformMode !== "rotate") {
+          constrainMyApartmentDecorVerticalBounds(aptObj);
+          constrainMyApartmentDecorToSupportSurfaces(aptObj);
+        }
       } else if (aptObj.userData.mammothEditorMyApartmentWallId) {
         if (aptSt.transformMode === "scale") {
           const axis = (transformControls as unknown as { axis?: string | null })
@@ -740,6 +863,7 @@ export async function mountEditorScene(
     findBestSelectionTarget,
     withProgrammaticTransformControls,
     isFpMode,
+    beforeOrbitControlsUpdate: applyDistanceInvariantOrbitSpeeds,
   });
 
   return () => {

@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { UNIT_SHELL_WALL_THICKNESS_M } from "@the-mammoth/world";
 import {
   centerDecorRootOnVisualBounds,
+  clampOwnedApartmentDecorUniformScale,
   clampPreviewXZToAuthoringInterior,
   constrainMyApartmentDecorRootPose,
+  constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY,
   EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M,
@@ -17,6 +19,11 @@ import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAutho
 const SLACK = 0.03;
 
 describe("owned apartment authoring XZ clamp", () => {
+  it("lowers imported decor uniform scale floor below built-in furniture (0.08)", () => {
+    expect(clampOwnedApartmentDecorUniformScale(0.03)).toBeCloseTo(0.03, 5);
+    expect(clampOwnedApartmentDecorUniformScale(0.005)).toBeCloseTo(0.02, 5);
+  });
+
   it("lets negative fz reach the south plaster edge when the strict hull starts north of it", () => {
     const plasterSouth = UNIT_SHELL_WALL_THICKNESS_M + SLACK;
     /** Mirrors the real end-cap unit layout where the gameplay hull starts well north of the south wall. */
@@ -99,6 +106,54 @@ describe("decor edit pivot centering", () => {
     expect(root.position.distanceTo(beforeCenter)).toBeLessThan(1e-6);
     expect(afterCenter.distanceTo(beforeCenter)).toBeLessThan(1e-6);
     expect(afterAnchor.distanceTo(beforeAnchor)).toBeLessThan(1e-6);
+  });
+});
+
+describe("owned apartment decor vertical bounds", () => {
+  it("keeps translated decor from moving below the apartment floor", () => {
+    const shell = new THREE.Group();
+    const furniture = new THREE.Group();
+    shell.add(furniture);
+
+    const decor = new THREE.Group();
+    furniture.add(decor);
+    const vis = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5));
+    decor.add(vis);
+    decor.position.y = -2;
+
+    constrainMyApartmentDecorVerticalBounds(decor);
+
+    decor.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(decor);
+    expect(box.min.y).toBeCloseTo(EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y, 6);
+  });
+
+  it("keeps translated decor below the apartment ceiling when a ceiling is known", () => {
+    const ceilingInner = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 2.5;
+    const shell = new THREE.Group();
+    shell.userData.editorMyApartmentSlabSx = 8;
+    shell.userData.editorMyApartmentSlabSz = 8;
+    shell.userData.editorMyApartmentStrictMinX = 0;
+    shell.userData.editorMyApartmentStrictMinZ = 0;
+    shell.userData.editorMyApartmentStrictSpanX = 8;
+    shell.userData.editorMyApartmentStrictSpanZ = 8;
+    shell.userData.editorMyApartmentPrefabOriginX = 0;
+    shell.userData.editorMyApartmentPrefabOriginZ = 0;
+    shell.userData.editorMyApartmentInteriorCeilingInnerY = ceilingInner;
+    const furniture = new THREE.Group();
+    shell.add(furniture);
+
+    const decor = new THREE.Group();
+    furniture.add(decor);
+    const vis = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5));
+    decor.add(vis);
+    decor.position.y = ceilingInner + 2;
+
+    constrainMyApartmentDecorVerticalBounds(decor);
+
+    decor.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(decor);
+    expect(box.max.y).toBeCloseTo(ceilingInner - SLACK, 6);
   });
 });
 

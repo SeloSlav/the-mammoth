@@ -30,6 +30,7 @@ export function startEditorSceneRenderLoop(deps: {
   findBestSelectionTarget: () => THREE.Object3D | null;
   withProgrammaticTransformControls: <T>(fn: () => T) => T;
   isFpMode: (mode: ReturnType<typeof useEditorStore.getState>["mode"]) => boolean;
+  beforeOrbitControlsUpdate?: () => void;
 }): () => void {
   const {
     canvas,
@@ -45,6 +46,7 @@ export function startEditorSceneRenderLoop(deps: {
     findBestSelectionTarget,
     withProgrammaticTransformControls,
     isFpMode: isFpModeFn,
+    beforeOrbitControlsUpdate,
   } = deps;
 
   let raf = 0;
@@ -170,10 +172,12 @@ export function startEditorSceneRenderLoop(deps: {
       renderCam;
     if (!tcDragging) {
       if (inFpMode && st.fpAuthorCamera === "orbit") {
+        beforeOrbitControlsUpdate?.();
         orbitControls.update();
       } else if (!inFpMode && st.cameraMode === "fly") {
         flyControls.update(dt);
       } else if (!inFpMode) {
+        beforeOrbitControlsUpdate?.();
         orbitControls.update();
       }
     }

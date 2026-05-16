@@ -14,7 +14,9 @@ import {
 } from "../myApartment/editorMyApartmentAuthoringShell.js";
 import {
   clampOwnedApartmentBuiltinUniformScale,
+  clampOwnedApartmentDecorUniformScale,
   constrainMyApartmentDecorRootPose,
+  constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
@@ -308,6 +310,9 @@ export function commitEditorAttachedTransform(opts: {
 
     if (decorId) {
       constrainMyApartmentDecorRootPose(targetRoot);
+      if (store.transformMode !== "rotate") {
+        constrainMyApartmentDecorVerticalBounds(targetRoot);
+      }
       targetRoot.updateMatrixWorld(true);
       const dy = THREE.MathUtils.clamp(
         resolveMyApartmentDecorCommittedDy({
@@ -336,7 +341,7 @@ export function commitEditorAttachedTransform(opts: {
         OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
         OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
       );
-      const uniformScale = clampOwnedApartmentBuiltinUniformScale(
+      const uniformScale = clampOwnedApartmentDecorUniformScale(
         (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
       );
       store.patchOwnedApartmentBuiltins((d) => ({

@@ -77,6 +77,7 @@ describe("resolveApartmentDecorPoses", () => {
           yawRad: 1.25,
           pitchRad: 0,
           uniformScale: 1.5,
+          ignoreSupportSurfaces: false,
         },
       ],
     };
@@ -130,6 +131,7 @@ describe("resolveApartmentDecorPoses", () => {
           yawRad: 0,
           pitchRad: -0.25,
           uniformScale: 1,
+          ignoreSupportSurfaces: false,
         },
       ],
     };
@@ -149,6 +151,7 @@ describe("resolveApartmentDecorPoses", () => {
           yawRad: 0,
           pitchRad: 0,
           uniformScale: 1,
+          ignoreSupportSurfaces: false,
         },
       ],
     };

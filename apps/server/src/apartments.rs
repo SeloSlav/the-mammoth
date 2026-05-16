@@ -223,6 +223,10 @@ const APARTMENT_DECOR_COUNT_CAP: usize = 48;
 const APARTMENT_DECOR_MODEL_EXTENSIONS: &[&str] = &[".glb", ".obj"];
 /// Keep in sync with `OWNED_APARTMENT_DECOR_PITCH_RAD_MAX` in `@the-mammoth/schemas`.
 const APARTMENT_DECOR_PITCH_LIMIT_RAD: f32 = 1.4;
+/// Keep in sync with `OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN` in `@the-mammoth/schemas`.
+const APARTMENT_DECOR_UNIFORM_SCALE_MIN: f32 = 0.02;
+/// Keep in sync with decor `uniformScale` max in `@the-mammoth/schemas`.
+const APARTMENT_DECOR_UNIFORM_SCALE_MAX: f32 = 5.5;
 
 fn clear_apartment_decor_for_unit(ctx: &ReducerContext, unit_key: &str) {
     let ids: Vec<u64> = ctx
@@ -318,7 +322,7 @@ fn clamp_decor_pose(
     let y_lo = unit.bound_min_y + 0.008;
     let y_hi = unit.bound_max_y + 2.75;
     y = y.clamp(y_lo, y_hi);
-    let scale_clamped = scale.clamp(0.08, 5.5);
+    let scale_clamped = scale.clamp(APARTMENT_DECOR_UNIFORM_SCALE_MIN, APARTMENT_DECOR_UNIFORM_SCALE_MAX);
     let pitch_clamped = pitch.clamp(-APARTMENT_DECOR_PITCH_LIMIT_RAD, APARTMENT_DECOR_PITCH_LIMIT_RAD);
     (
         x,

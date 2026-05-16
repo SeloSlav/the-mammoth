@@ -2,6 +2,8 @@ import { z } from "zod";
 
 /** Matches server `APARTMENT_DECOR_PITCH_LIMIT_RAD` — max tilt for imported decor (rad). */
 export const OWNED_APARTMENT_DECOR_PITCH_RAD_MAX = 1.4 as const;
+/** Minimum uniform scale for imported decor (furniture built-ins stay at 0.08). Sync with server. */
+export const OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN = 0.02 as const;
 /**
  * Authoring can extend slightly beyond the replicated gameplay hull so props can reach visible
  * plaster/window edges on end-cap units. Runtime placement still maps linearly from
@@ -70,7 +72,12 @@ const OwnedApartmentDecorItemSchema = z.object({
     .min(-OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
     .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
     .default(0),
-  uniformScale: z.number().min(0.08).max(5.5),
+  uniformScale: z
+    .number()
+    .min(OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN)
+    .max(5.5),
+  /** When true, editor translate ignores tabletop/object support surfaces for fine manual placement. */
+  ignoreSupportSurfaces: z.boolean().default(false),
 });
 
 /** PBR slot for authored wall slabs (editor + client load URLs under `/static/materials/…`). */

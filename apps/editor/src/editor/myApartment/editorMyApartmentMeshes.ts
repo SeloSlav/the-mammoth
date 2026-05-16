@@ -5,6 +5,7 @@ import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } f
 import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   type OwnedApartmentBuiltinsDoc,
@@ -40,7 +41,7 @@ const qSnapYawScratch = new THREE.Quaternion();
 const EDITOR_MY_APARTMENT_INTERIOR_SLACK_M = 0.03;
 /** Matches `OwnedApartmentDecorItemSchema.dy` max in `@the-mammoth/schemas`. */
 export const EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M = 4;
-/** Matches built-in + decor `uniformScale` ranges in `@the-mammoth/schemas`. */
+/** Built-in furniture `uniformScale` min in `@the-mammoth/schemas` (decor uses a lower minimum). */
 export const EDITOR_MY_APARTMENT_UNIFORM_SCALE_MIN = 0.08;
 export const EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX = 5.5;
 /**
@@ -265,11 +266,20 @@ export function snapOwnedApartmentDecorPitchRad(xRad: number): number {
 const EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY =
   "editorMyApartmentFurnitureSnapFloorY";
 
-/** Clamps built-in / decor gizmo uniform scale to schema bounds. */
+/** Clamps built-in furniture gizmo uniform scale to schema bounds. */
 export function clampOwnedApartmentBuiltinUniformScale(s: number): number {
   return THREE.MathUtils.clamp(
     s,
     EDITOR_MY_APARTMENT_UNIFORM_SCALE_MIN,
+    EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
+  );
+}
+
+/** Clamps imported decor uniform scale (`OwnedApartmentDecorItemSchema`). */
+export function clampOwnedApartmentDecorUniformScale(s: number): number {
+  return THREE.MathUtils.clamp(
+    s,
+    OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
     EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
   );
 }
@@ -317,12 +327,35 @@ export function constrainMyApartmentDecorRootPose(root: THREE.Object3D): void {
   );
   qSnapYawScratch.setFromEuler(new THREE.Euler(x, y, 0, "YXZ"));
   root.quaternion.copy(qSnapYawScratch);
-  const uniform = THREE.MathUtils.clamp(
+  const uniform = clampOwnedApartmentDecorUniformScale(
     (root.scale.x + root.scale.y + root.scale.z) / 3,
-    EDITOR_MY_APARTMENT_UNIFORM_SCALE_MIN,
-    EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
   );
   root.scale.setScalar(uniform);
+}
+
+export function constrainMyApartmentDecorVerticalBounds(root: THREE.Object3D): void {
+  const meta = readAuthoringShellAuthoringMetaFromAncestors(root);
+  const floorY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
+  const ceilY = meta?.interiorCeilingInnerY;
+  const ceilCap =
+    typeof ceilY === "number" && Number.isFinite(ceilY) && ceilY > floorY
+      ? ceilY - EDITOR_MY_APARTMENT_INTERIOR_SLACK_M
+      : undefined;
+
+  for (let pass = 0; pass < 4; pass++) {
+    root.updateMatrixWorld(true);
+    decorClampBoundsScratch.setFromObject(root);
+    if (decorClampBoundsScratch.isEmpty()) return;
+    if (decorClampBoundsScratch.min.y < floorY) {
+      root.position.y += floorY - decorClampBoundsScratch.min.y;
+      continue;
+    }
+    if (ceilCap !== undefined && decorClampBoundsScratch.max.y > ceilCap) {
+      root.position.y -= decorClampBoundsScratch.max.y - ceilCap;
+      continue;
+    }
+    break;
+  }
 }
 
 export function centerDecorRootOnVisualBounds(

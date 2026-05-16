@@ -198,6 +198,7 @@ export function EditorChromeMyApartment(props: {
           yawRad: 0,
           pitchRad: 0,
           uniformScale: 1,
+          ignoreSupportSurfaces: false,
         },
       ],
     }));
@@ -225,6 +226,7 @@ export function EditorChromeMyApartment(props: {
           yawRad: selectedDecor.yawRad,
           pitchRad: selectedDecor.pitchRad,
           uniformScale: selectedDecor.uniformScale,
+          ignoreSupportSurfaces: selectedDecor.ignoreSupportSurfaces,
         },
       ],
     }));
@@ -414,6 +416,29 @@ export function EditorChromeMyApartment(props: {
             Delete selected decor
           </button>
         </div>
+        {selectedDecor ? (
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
+            <input
+              type="checkbox"
+              checked={selectedDecor.ignoreSupportSurfaces === true}
+              onChange={(e) => {
+                const ignoreSupportSurfaces = e.target.checked;
+                patchOwnedApartmentBuiltins((doc) => ({
+                  ...doc,
+                  decorItems: doc.decorItems.map((item) =>
+                    item.id === selectedDecor.id ? { ...item, ignoreSupportSurfaces } : item,
+                  ),
+                }));
+              }}
+            />
+            <span style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.35 }}>
+              Ignore support surfaces while translating
+              <span style={{ display: "block", opacity: 0.65 }}>
+                Use for fine placements like leaning a carton through / against an ashtray.
+              </span>
+            </span>
+          </label>
+        ) : null}
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 14 }}>
           Partition walls (thin slabs)
         </span>
