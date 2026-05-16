@@ -53,6 +53,7 @@ export type ApartmentDecorPose = {
   z: number;
   yaw: number;
   pitch: number;
+  roll: number;
   uniformScale: number;
 };
 
@@ -141,6 +142,7 @@ export function resolveApartmentDecorPoses(
     z: bminz + item.fz * sz,
     yaw: item.yawRad,
     pitch: item.pitchRad,
+    roll: item.rollRad ?? 0,
     uniformScale: item.uniformScale,
   }));
 }

@@ -76,6 +76,7 @@ describe("resolveApartmentDecorPoses", () => {
           dy: 0.4,
           yawRad: 1.25,
           pitchRad: 0,
+          rollRad: 0,
           uniformScale: 1.5,
           ignoreSupportSurfaces: false,
         },
@@ -91,6 +92,7 @@ describe("resolveApartmentDecorPoses", () => {
         z: 206,
         yaw: 1.25,
         pitch: 0,
+        roll: 0,
         uniformScale: 1.5,
       },
     ]);
@@ -130,12 +132,56 @@ describe("resolveApartmentDecorPoses", () => {
           dy: 0,
           yawRad: 0,
           pitchRad: -0.25,
+          rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
         },
       ],
     };
     expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.pitch).toBe(-0.25);
+  });
+
+  it("carries authored roll into world-space decor poses", () => {
+    const doc: OwnedApartmentBuiltinsDoc = {
+      version: 1,
+      previewSizeM: 10,
+      bedFx: 0.5,
+      bedFz: 0.5,
+      bedDy: 0,
+      wardrobeFx: 0.25,
+      wardrobeFz: 0.75,
+      footFx: 0.75,
+      footFz: 0.25,
+      stoveFx: 0.08,
+      stoveFz: 0.08,
+      wardrobeDy: 0,
+      footDy: 0,
+      stoveDy: 0,
+      bedYawRad: 0,
+      wardrobeYawRad: 0,
+      footYawRad: 0,
+      stoveYawRad: 0,
+      bedUniformScale: 1,
+      wardrobeUniformScale: 1,
+      footUniformScale: 1,
+      stoveUniformScale: 1,
+      wallItems: [],
+      decorItems: [
+        {
+          id: "decor_roll",
+          modelRelPath: "static/models/objects/tv.glb",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0.33,
+          uniformScale: 1,
+          ignoreSupportSurfaces: false,
+        },
+      ],
+    };
+    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.roll).toBeCloseTo(0.33, 5);
   });
 
   it("maps slight negative fractions outside the strict hull for wall-edge authoring", () => {
@@ -150,6 +196,7 @@ describe("resolveApartmentDecorPoses", () => {
           dy: 0,
           yawRad: 0,
           pitchRad: 0,
+          rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
         },

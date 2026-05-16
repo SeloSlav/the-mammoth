@@ -197,6 +197,7 @@ export function EditorChromeMyApartment(props: {
           dy: 0,
           yawRad: 0,
           pitchRad: 0,
+          rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
         },
@@ -225,6 +226,7 @@ export function EditorChromeMyApartment(props: {
           dy: selectedDecor.dy,
           yawRad: selectedDecor.yawRad,
           pitchRad: selectedDecor.pitchRad,
+          rollRad: selectedDecor.rollRad ?? 0,
           uniformScale: selectedDecor.uniformScale,
           ignoreSupportSurfaces: selectedDecor.ignoreSupportSurfaces,
         },
@@ -403,7 +405,7 @@ export function EditorChromeMyApartment(props: {
             style={editorChromeRowBtn}
             onClick={cloneSelectedDecor}
             disabled={!selectedDecor}
-            title="Same model, scale, yaw, pitch, and vertical offset (dy); new id and center spawn like Import."
+            title="Same model, scale, yaw/pitch/roll, and vertical offset (dy); new id and center spawn like Import."
           >
             Clone selected decor
           </button>

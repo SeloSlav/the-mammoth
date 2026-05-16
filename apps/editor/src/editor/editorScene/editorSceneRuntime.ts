@@ -38,12 +38,14 @@ import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPoint
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
-  constrainMyApartmentDecorRootPose,
+  applyMyApartmentDecorUniformScale,
+  clampMyApartmentDecorEulerLimits,
   constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
   findEditorMyApartmentWallSlabMesh,
+  snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
 import {
   getEditorMyApartmentPieceGroup,
@@ -499,17 +501,15 @@ export async function mountEditorScene(
         const wallSelected = parseMyApartmentLayoutWallSelectedId(s.selectedId) !== null;
         const apartmentFreeVertical = decorSelected || wallSelected;
         transformControls.setMode(s.transformMode);
-        transformControls.setSpace(
-          s.transformMode === "rotate" ? "local" : "world",
-        );
+        transformControls.setSpace("world");
         if (s.transformMode === "translate") {
           transformControls.showX = true;
           transformControls.showY = apartmentFreeVertical;
           transformControls.showZ = true;
         } else if (s.transformMode === "rotate") {
-          transformControls.showX = apartmentFreeVertical;
+          transformControls.showX = true;
           transformControls.showY = true;
-          transformControls.showZ = false;
+          transformControls.showZ = decorSelected;
         } else {
           transformControls.showX = true;
           transformControls.showY = true;
@@ -657,7 +657,13 @@ export async function mountEditorScene(
       if (aptObj.userData.mammothEditorMyApartmentPiece) {
         constrainMyApartmentFurnitureRootPose(aptObj);
       } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
-        constrainMyApartmentDecorRootPose(aptObj);
+        applyMyApartmentDecorUniformScale(aptObj);
+        if (aptSt.transformMode === "rotate") {
+          clampMyApartmentDecorEulerLimits(aptObj);
+          if (aptSt.gridSnapM > 0) {
+            snapMyApartmentDecorEulerToGrid(aptObj);
+          }
+        }
         if (aptSt.transformMode !== "rotate") {
           constrainMyApartmentDecorVerticalBounds(aptObj);
           constrainMyApartmentDecorToSupportSurfaces(aptObj);

@@ -174,6 +174,8 @@ export type FpSessionEnvironmentHandle = {
       maxY: number;
       maxZ: number;
     } | null;
+    /** 0 = normal exterior/interior balance; 1 = full abandoned-flat dimming while inside a unit. */
+    apartmentInteriorDark01?: number;
     /**
      * 0 = normal exterior fill; 1 = apply full stair-shaft interior dimming (smooth blend in
      * {@link mountFpSession}).
@@ -494,6 +496,9 @@ export function attachFpSessionEnvironment(
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.82;
+  /** Player-in-unit eye adaptation: noticeably darker without crushing all detail to black. */
+  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.38;
+  const APARTMENT_INTERIOR_EXPOSURE = 0.9;
   /**
    * Abandoned flats should stay noticeably underlit: mostly weak window bleed plus a trace of dusty
    * plaster bounce. Keep this static so crossing the doorway does not change the room's brightness.
@@ -556,6 +561,7 @@ export function attachFpSessionEnvironment(
       viewWidthPx,
       viewHeightPx,
       apartmentInteriorBounds: _apartmentInteriorBounds = null,
+      apartmentInteriorDark01 = 0,
       stairwellInteriorDark01 = 0,
     }) => {
       const t0 = performance.now();
@@ -571,12 +577,26 @@ export function attachFpSessionEnvironment(
         STAIRWELL_INTERIOR_LIGHT_SCALE,
         dark01,
       );
+      const apartmentDark01 = THREE.MathUtils.clamp(apartmentInteriorDark01, 0, 1);
+      const residentialScale = THREE.MathUtils.lerp(
+        1,
+        APARTMENT_INTERIOR_LIGHT_SCALE,
+        apartmentDark01,
+      );
       hemi.intensity = BASE_HEMI_INTENSITY * stairwellScale;
       fill.intensity = BASE_FILL_INTENSITY * stairwellScale;
       dir.intensity = BASE_DIR_INTENSITY * stairwellScale;
       dir.position.copy(sunDir).multiplyScalar(120);
+      residentialInteriorSky.intensity = RESIDENTIAL_INTERIOR_SKY_INTENSITY * residentialScale;
+      residentialInteriorFill.intensity = RESIDENTIAL_INTERIOR_FILL_INTENSITY * residentialScale;
+      residentialInteriorDaylight.intensity =
+        RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY * residentialScale;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
-      renderer.toneMappingExposure = 1.06;
+      renderer.toneMappingExposure = THREE.MathUtils.lerp(
+        1.06,
+        APARTMENT_INTERIOR_EXPOSURE,
+        apartmentDark01,
+      );
       const tEnd = performance.now();
       return {
         totalMs: tEnd - t0,

@@ -193,6 +193,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
+  isInsideResidentialUnit: () => boolean;
   isApartmentFurnitureInteriorVisible: () => boolean;
 } {
   const {
@@ -233,6 +234,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastTopFloorResidentialShellMeshCount = -1;
   let _lastContainingResidentialUnitId: string | null = null;
   let _lastContainingResidentialUnitKey: string | null = null;
+  let _lastInsideResidentialUnit = false;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -327,6 +329,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const containingResidentialUnitId = containingResidentialUnit?.unitId ?? null;
     const containingResidentialUnitKey = containingResidentialUnit?.unitKey ?? null;
     const insideResidentialUnit = containingResidentialUnit !== null;
+    _lastInsideResidentialUnit = insideResidentialUnit;
     /** Plate / stair vertical anchor: replicated unit level in-hull, else feet-derived storey. */
     const storeyPlateAnchor =
       insideResidentialUnit && containingResidentialUnit !== null
@@ -617,6 +620,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   return {
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
+    isInsideResidentialUnit: () => _lastInsideResidentialUnit,
     isApartmentFurnitureInteriorVisible: () => _lastApartmentFurnitureInteriorVisible,
   };
 }

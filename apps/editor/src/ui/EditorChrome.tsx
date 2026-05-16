@@ -592,14 +592,15 @@ export function EditorChrome() {
               >
                 {myApartmentDecorSelected ? (
                   <>
-                    Imported decor: move on <strong>X / Y / Z</strong> (Y cannot go below the floor),
-                    rotate around <strong>Y</strong> in <strong>45°</strong> steps, uniform scale.
+                    Imported decor: move on <strong>X / Y / Z</strong> (Y cannot go below the floor).
+                    Rotate uses <strong>world</strong> axes (X / Y / Z rings); optional angle snap matches{" "}
+                    <strong>Grid snap</strong> when set (&quot;deg-ish&quot;). Uniform scale from the gizmo
+                    center handle.
                   </>
                 ) : (
                   <>
                     Built-ins move on the floor plane only; rotate around <strong>Y</strong> in{" "}
-                    <strong>45°</strong> steps; use <strong>Scale</strong> (center handle) for uniform
-                    size. Pitch/roll handles are disabled.
+                    <strong>45°</strong> steps; use <strong>Scale</strong> (center handle) for uniform size.
                   </>
                 )}
               </p>

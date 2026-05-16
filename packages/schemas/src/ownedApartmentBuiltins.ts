@@ -2,6 +2,8 @@ import { z } from "zod";
 
 /** Matches server `APARTMENT_DECOR_PITCH_LIMIT_RAD` — max tilt for imported decor (rad). */
 export const OWNED_APARTMENT_DECOR_PITCH_RAD_MAX = 1.4 as const;
+/** Matches server `APARTMENT_DECOR_ROLL_LIMIT_RAD` — max roll (`YXZ` euler Z) for imported decor (rad). */
+export const OWNED_APARTMENT_DECOR_ROLL_RAD_MAX = 1.4 as const;
 /** Minimum uniform scale for imported decor (furniture built-ins stay at 0.08). Sync with server. */
 export const OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN = 0.02 as const;
 /**
@@ -71,6 +73,12 @@ const OwnedApartmentDecorItemSchema = z.object({
     .number()
     .min(-OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
     .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .default(0),
+  /** Roll around local Z after pitch/yaw (Three.js `YXZ` euler — matches runtime/editor). */
+  rollRad: z
+    .number()
+    .min(-OWNED_APARTMENT_DECOR_ROLL_RAD_MAX)
+    .max(OWNED_APARTMENT_DECOR_ROLL_RAD_MAX)
     .default(0),
   uniformScale: z
     .number()

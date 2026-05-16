@@ -54,6 +54,7 @@ type VisibleDecorPlacement = {
   posZ: number;
   yawRad: number;
   pitchRad: number;
+  rollRad: number;
   uniformScale: number;
   source: "db" | "content";
 };
@@ -112,6 +113,7 @@ function visibleDecorPlacements(
           posZ: decor.posZ,
           yawRad: decor.yawRad,
           pitchRad: decor.pitchRad,
+          rollRad: decor.rollRad,
           uniformScale: decor.uniformScale,
           source: "db",
         });
@@ -130,6 +132,7 @@ function visibleDecorPlacements(
         posZ: decor.z,
         yawRad: decor.yaw,
         pitchRad: decor.pitch,
+        rollRad: decor.roll,
         uniformScale: decor.uniformScale,
         source: "content",
       });
@@ -411,7 +414,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.rotation.order = "YXZ";
       g.rotation.y = d.yawRad;
       g.rotation.x = d.pitchRad;
-      g.rotation.z = 0;
+      g.rotation.z = d.rollRad;
       const us = Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1;
       g.scale.setScalar(us);
 

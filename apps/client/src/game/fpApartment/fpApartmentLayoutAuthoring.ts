@@ -457,6 +457,7 @@ export function mountFpApartmentLayoutAuthoring(
           posZ: _pW.z,
           yawRad: _euler.y,
           pitchRad: _euler.x,
+          rollRad: _euler.z,
           uniformScale: us,
         });
       } catch (e) {
@@ -520,6 +521,7 @@ export function mountFpApartmentLayoutAuthoring(
         posZ: fp.z,
         yawRad: 0,
         pitchRad: 0,
+        rollRad: 0,
         uniformScale: 1,
       });
     } catch (e) {

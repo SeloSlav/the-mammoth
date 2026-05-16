@@ -3,6 +3,7 @@ import type { TransformControls } from "three/addons/controls/TransformControls.
 import { glassOpeningFromProxyMesh, TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
 } from "@the-mammoth/schemas";
@@ -13,15 +14,17 @@ import {
   resolveOwnedApartmentAuthoringLayoutForEditor,
 } from "../myApartment/editorMyApartmentAuthoringShell.js";
 import {
+  applyMyApartmentDecorUniformScale,
+  clampMyApartmentDecorEulerLimits,
   clampOwnedApartmentBuiltinUniformScale,
   clampOwnedApartmentDecorUniformScale,
-  constrainMyApartmentDecorRootPose,
   constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
   findEditorMyApartmentWallSlabMesh,
+  snapMyApartmentDecorEulerToGrid,
   snapOwnedApartmentDecorPitchRad,
   snapOwnedApartmentDecorYawRad,
   snapOwnedApartmentYawRad,
@@ -309,10 +312,12 @@ export function commitEditorAttachedTransform(opts: {
     });
 
     if (decorId) {
-      constrainMyApartmentDecorRootPose(targetRoot);
-      if (store.transformMode !== "rotate") {
-        constrainMyApartmentDecorVerticalBounds(targetRoot);
+      applyMyApartmentDecorUniformScale(targetRoot);
+      clampMyApartmentDecorEulerLimits(targetRoot);
+      if (store.gridSnapM > 0) {
+        snapMyApartmentDecorEulerToGrid(targetRoot);
       }
+      constrainMyApartmentDecorVerticalBounds(targetRoot);
       targetRoot.updateMatrixWorld(true);
       const dy = THREE.MathUtils.clamp(
         resolveMyApartmentDecorCommittedDy({
@@ -322,11 +327,16 @@ export function commitEditorAttachedTransform(opts: {
         EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
       );
       const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
-      const yaw = snapOwnedApartmentDecorYawRad(eulerLocal.y);
+      const yaw = eulerLocal.y;
       const pitch = THREE.MathUtils.clamp(
-        snapOwnedApartmentDecorPitchRad(eulerLocal.x),
+        eulerLocal.x,
         -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
         OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+      );
+      const roll = THREE.MathUtils.clamp(
+        eulerLocal.z,
+        -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+        OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
       );
       const rootWorld = targetRoot.getWorldPosition(new THREE.Vector3());
       const wx = rootWorld.x + m.prefabOriginX;
@@ -355,6 +365,7 @@ export function commitEditorAttachedTransform(opts: {
                 dy,
                 yawRad: yaw,
                 pitchRad: pitch,
+                rollRad: roll,
                 uniformScale,
               }
             : item,

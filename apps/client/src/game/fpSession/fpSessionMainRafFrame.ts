@@ -109,6 +109,8 @@ const PLAYER_RIG_VIEW_Y_ELEV_LERP_MULT = 5.5;
 const PLAYER_RIG_VIEW_LERP_PER_S = 14;
 /** With movement keys up, treat horizontal speed below this (m/s) as fully stopped for view settle. */
 const VIEW_SETTLED_IDLE_MAX_HS = 0.055;
+/** Slight fade-in/out when crossing apartment thresholds so lighting does not hard-pop at doors. */
+const APARTMENT_INTERIOR_DARK_HALF_LIFE_SEC = 0.12;
 
 type FpLocoState = ReturnType<typeof createFpLocomotionState>;
 
@@ -126,6 +128,7 @@ export type FpSessionMainRafState = {
   lastTickHudCabVyMps: number;
   lastTickElevVyBlendAbs: number;
   stairwellInteriorDarkSmoothed: number;
+  apartmentInteriorDarkSmoothed: number;
   meleeAttackSeq: number;
   firearmShotSeq: number;
   lastMeleeMs: number;
@@ -206,6 +209,7 @@ export type FpSessionMainRafFrameDeps = {
   sendMoveIntent: (input: FpLocomotionInput, jump: boolean, nowMs: number) => Promise<void>;
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
+  isInsideResidentialUnit: () => boolean;
   isApartmentFurnitureInteriorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
@@ -830,6 +834,13 @@ export function createFpSessionMainRafFrame(
       dt,
       STAIRWELL_INTERIOR_DARK_HALF_LIFE_SEC,
     );
+    const apartmentDarkTarget = deps.isInsideResidentialUnit() ? 1 : 0;
+    mainRaf.apartmentInteriorDarkSmoothed = fpExpSmoothToward(
+      mainRaf.apartmentInteriorDarkSmoothed,
+      apartmentDarkTarget,
+      dt,
+      APARTMENT_INTERIOR_DARK_HALF_LIFE_SEC,
+    );
     /**
      * Runs every frame (not just band-change frames) because door openness mutates without shifting
      * the plate band. The call is idempotent — each shaft visual no-ops when its landing
@@ -853,6 +864,7 @@ export function createFpSessionMainRafFrame(
       nowSec: nowMs * 0.001,
       viewWidthPx: deps.canvas.clientWidth,
       viewHeightPx: deps.canvas.clientHeight,
+      apartmentInteriorDark01: mainRaf.apartmentInteriorDarkSmoothed,
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();

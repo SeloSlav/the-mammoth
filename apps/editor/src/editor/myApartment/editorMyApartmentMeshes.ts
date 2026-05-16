@@ -5,6 +5,7 @@ import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } f
 import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
   OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
@@ -32,10 +33,11 @@ export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
 
 /** Gizmo + serialized yaw for built-in apartment props (45° steps). */
 export const EDITOR_MY_APARTMENT_YAW_SNAP_RAD = Math.PI / 4;
-/** Imported decor — 15° steps on yaw (world Y) and pitch (local X / `YXZ` euler). */
+/** Imported decor — 15° steps on yaw / pitch / roll when grid snap is on (`YXZ` euler). */
 export const EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD = THREE.MathUtils.degToRad(15);
 
 const qSnapYawScratch = new THREE.Quaternion();
+const decorEulerScratch = new THREE.Euler(0, 0, 0, "YXZ");
 
 /** Breath room inside plaster inner faces so thick prop meshes do not plane-fight drywall. */
 const EDITOR_MY_APARTMENT_INTERIOR_SLACK_M = 0.03;
@@ -262,6 +264,11 @@ export function snapOwnedApartmentDecorPitchRad(xRad: number): number {
   return Math.round(xRad / s) * s;
 }
 
+export function snapOwnedApartmentDecorRollRad(zRad: number): number {
+  const s = EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD;
+  return Math.round(zRad / s) * s;
+}
+
 /** World Y target for mesh bottom — set when mounting built-in preview groups. */
 const EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY =
   "editorMyApartmentFurnitureSnapFloorY";
@@ -317,20 +324,54 @@ export function constrainMyApartmentFurnitureRootPose(root: THREE.Object3D): voi
   snapCloneBottomToWorldFloorUnderParentScale(vis, snapFloorY, uniform);
 }
 
-export function constrainMyApartmentDecorRootPose(root: THREE.Object3D): void {
-  const eulerW = new THREE.Euler().setFromQuaternion(root.quaternion, "YXZ");
-  const y = snapOwnedApartmentDecorYawRad(eulerW.y);
-  const x = THREE.MathUtils.clamp(
-    snapOwnedApartmentDecorPitchRad(eulerW.x),
-    -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
-    OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
-  );
-  qSnapYawScratch.setFromEuler(new THREE.Euler(x, y, 0, "YXZ"));
-  root.quaternion.copy(qSnapYawScratch);
+/** Uniform scale only — keeps drag/commit paths from non-uniform drift without rewriting rotation. */
+export function applyMyApartmentDecorUniformScale(root: THREE.Object3D): void {
   const uniform = clampOwnedApartmentDecorUniformScale(
     (root.scale.x + root.scale.y + root.scale.z) / 3,
   );
   root.scale.setScalar(uniform);
+}
+
+/** Hard limits only — no quantization (grid snap applies separately when enabled). */
+export function clampMyApartmentDecorEulerLimits(root: THREE.Object3D): void {
+  decorEulerScratch.setFromQuaternion(root.quaternion, "YXZ");
+  decorEulerScratch.x = THREE.MathUtils.clamp(
+    decorEulerScratch.x,
+    -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+    OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  );
+  decorEulerScratch.z = THREE.MathUtils.clamp(
+    decorEulerScratch.z,
+    -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+    OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+  );
+  root.quaternion.setFromEuler(decorEulerScratch);
+}
+
+/** Quantize `YXZ` yaw/pitch/roll when grid snap is enabled for decor rotation. */
+export function snapMyApartmentDecorEulerToGrid(root: THREE.Object3D): void {
+  decorEulerScratch.setFromQuaternion(root.quaternion, "YXZ");
+  decorEulerScratch.y = snapOwnedApartmentDecorYawRad(decorEulerScratch.y);
+  decorEulerScratch.x = THREE.MathUtils.clamp(
+    snapOwnedApartmentDecorPitchRad(decorEulerScratch.x),
+    -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+    OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  );
+  decorEulerScratch.z = THREE.MathUtils.clamp(
+    snapOwnedApartmentDecorRollRad(decorEulerScratch.z),
+    -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+    OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+  );
+  root.quaternion.setFromEuler(decorEulerScratch);
+}
+
+/**
+ * Legacy helper: uniform scale + euler limit clamp (no grid quantization).
+ * Prefer {@link applyMyApartmentDecorUniformScale} + explicit clamp/snap at interaction boundaries.
+ */
+export function constrainMyApartmentDecorRootPose(root: THREE.Object3D): void {
+  applyMyApartmentDecorUniformScale(root);
+  clampMyApartmentDecorEulerLimits(root);
 }
 
 export function constrainMyApartmentDecorVerticalBounds(root: THREE.Object3D): void {
@@ -903,18 +944,24 @@ function placeDecorGroup(args: {
   });
   group.position.set(pv.x, EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + decor.dy, pv.z);
   group.rotation.order = "YXZ";
-  const yaw = snapOwnedApartmentDecorYawRad(decor.yawRad);
+  const yaw = decor.yawRad;
   const pitch = THREE.MathUtils.clamp(
-    snapOwnedApartmentDecorPitchRad(decor.pitchRad),
+    decor.pitchRad,
     -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
     OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   );
-  group.rotation.set(pitch, yaw, 0, "YXZ");
+  const roll = THREE.MathUtils.clamp(
+    decor.rollRad ?? 0,
+    -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+    OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+  );
+  group.rotation.set(pitch, yaw, roll, "YXZ");
   group.scale.setScalar(decor.uniformScale);
   const vis = cloneProp(template);
   group.add(vis);
   centerDecorVisualBoundsOnRoot(group);
-  constrainMyApartmentDecorRootPose(group);
+  applyMyApartmentDecorUniformScale(group);
+  clampMyApartmentDecorEulerLimits(group);
 }
 
 export type EditorMyApartmentFurnitureMount = {

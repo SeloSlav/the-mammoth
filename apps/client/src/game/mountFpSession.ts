@@ -638,6 +638,7 @@ export async function mountFpSession(
   const {
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
+    isInsideResidentialUnit,
     isApartmentFurnitureInteriorVisible,
   } =
     createFpSessionFloorPlateVisibility({
@@ -683,6 +684,7 @@ export async function mountFpSession(
     lastTickHudCabVyMps: 0,
     lastTickElevVyBlendAbs: 0,
     stairwellInteriorDarkSmoothed: 0,
+    apartmentInteriorDarkSmoothed: 0,
     meleeAttackSeq: 0,
     firearmShotSeq: 0,
     lastMeleeMs: 0,
@@ -1397,6 +1399,7 @@ export async function mountFpSession(
     sendMoveIntent,
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
+    isInsideResidentialUnit,
     isApartmentFurnitureInteriorVisible,
     selectedHotbarRow,
     logFpPerf,

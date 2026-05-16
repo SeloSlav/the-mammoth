@@ -51,7 +51,7 @@ describe("owned apartment authoring XZ clamp", () => {
     expect(again.z).toBeCloseTo(lz, 5);
   });
 
-  it("does not clamp decor translation while snapping rotation and scale", () => {
+  it("uniformizes decor scale and clamps euler limits without changing translation", () => {
     const freeY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 3.6;
     const shell = new THREE.Group();
     shell.userData.editorMyApartmentSlabSx = 8;
@@ -84,6 +84,10 @@ describe("owned apartment authoring XZ clamp", () => {
     expect(decor.position.z).toBeCloseTo(-4.5, 6);
     expect(decor.scale.x).toBeCloseTo(decor.scale.y, 6);
     expect(decor.scale.y).toBeCloseTo(decor.scale.z, 6);
+    const eulerAfter = new THREE.Euler().setFromQuaternion(decor.quaternion, "YXZ");
+    expect(eulerAfter.x).toBeCloseTo(0.31, 5);
+    expect(eulerAfter.y).toBeCloseTo(0.44, 5);
+    expect(eulerAfter.z).toBeCloseTo(0.12, 5);
   });
 });
 

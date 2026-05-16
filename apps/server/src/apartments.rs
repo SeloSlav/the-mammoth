@@ -203,6 +203,8 @@ pub struct ApartmentUnitDecor {
     pub yaw_rad: f32,
     /// Tilt around local X after yaw (`YXZ` euler — matches Three.js decor roots).
     pub pitch_rad: f32,
+    /// Roll around local Z after pitch/yaw (`YXZ` euler — matches Three.js decor roots).
+    pub roll_rad: f32,
     pub uniform_scale: f32,
 }
 
@@ -223,6 +225,8 @@ const APARTMENT_DECOR_COUNT_CAP: usize = 48;
 const APARTMENT_DECOR_MODEL_EXTENSIONS: &[&str] = &[".glb", ".obj"];
 /// Keep in sync with `OWNED_APARTMENT_DECOR_PITCH_RAD_MAX` in `@the-mammoth/schemas`.
 const APARTMENT_DECOR_PITCH_LIMIT_RAD: f32 = 1.4;
+/// Keep in sync with `OWNED_APARTMENT_DECOR_ROLL_RAD_MAX` in `@the-mammoth/schemas`.
+const APARTMENT_DECOR_ROLL_LIMIT_RAD: f32 = 1.4;
 /// Keep in sync with `OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN` in `@the-mammoth/schemas`.
 const APARTMENT_DECOR_UNIFORM_SCALE_MIN: f32 = 0.02;
 /// Keep in sync with decor `uniformScale` max in `@the-mammoth/schemas`.
@@ -310,8 +314,9 @@ fn clamp_decor_pose(
     mut z: f32,
     yaw: f32,
     pitch: f32,
+    roll: f32,
     scale: f32,
-) -> (f32, f32, f32, f32, f32, f32) {
+) -> (f32, f32, f32, f32, f32, f32, f32) {
     let inset = APARTMENT_DECOR_BOUND_INSET_XZ_M;
     let min_x = unit.bound_min_x + inset;
     let max_x = unit.bound_max_x - inset;
@@ -324,12 +329,14 @@ fn clamp_decor_pose(
     y = y.clamp(y_lo, y_hi);
     let scale_clamped = scale.clamp(APARTMENT_DECOR_UNIFORM_SCALE_MIN, APARTMENT_DECOR_UNIFORM_SCALE_MAX);
     let pitch_clamped = pitch.clamp(-APARTMENT_DECOR_PITCH_LIMIT_RAD, APARTMENT_DECOR_PITCH_LIMIT_RAD);
+    let roll_clamped = roll.clamp(-APARTMENT_DECOR_ROLL_LIMIT_RAD, APARTMENT_DECOR_ROLL_LIMIT_RAD);
     (
         x,
         y,
         z,
         wrap_angle_rad(yaw),
         pitch_clamped,
+        roll_clamped,
         scale_clamped,
     )
 }
@@ -1005,6 +1012,7 @@ pub fn add_apartment_unit_decor(
     pos_z: f32,
     yaw_rad: f32,
     pitch_rad: f32,
+    roll_rad: f32,
     uniform_scale: f32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1031,8 +1039,8 @@ pub fn add_apartment_unit_decor(
         log::warn!("add_apartment_unit_decor: unit at cap ({APARTMENT_DECOR_COUNT_CAP})");
         return;
     }
-    let (px, py, pz, yw, ph, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, uniform_scale);
+    let (px, py, pz, yw, ph, rl, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, roll_rad, uniform_scale);
     let _ = ctx.db.apartment_unit_decor().insert(ApartmentUnitDecor {
         decor_id: 0,
         unit_key,
@@ -1042,6 +1050,7 @@ pub fn add_apartment_unit_decor(
         pos_z: pz,
         yaw_rad: yw,
         pitch_rad: ph,
+        roll_rad: rl,
         uniform_scale: sc,
     });
 }
@@ -1055,6 +1064,7 @@ pub fn update_apartment_unit_decor(
     pos_z: f32,
     yaw_rad: f32,
     pitch_rad: f32,
+    roll_rad: f32,
     uniform_scale: f32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1070,13 +1080,14 @@ pub fn update_apartment_unit_decor(
     if player_may_layout_owned_apartment(ctx, &unit.unit_key, true).is_none() {
         return;
     }
-    let (px, py, pz, yw, ph, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, uniform_scale);
+    let (px, py, pz, yw, ph, rl, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, roll_rad, uniform_scale);
     row.pos_x = px;
     row.pos_y = py;
     row.pos_z = pz;
     row.yaw_rad = yw;
     row.pitch_rad = ph;
+    row.roll_rad = rl;
     row.uniform_scale = sc;
     ctx.db.apartment_unit_decor().decor_id().update(row);
 }
