@@ -11,6 +11,7 @@ import {
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
 import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
+import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
 
 type FpStairShaftVisibilityBounds = {
   minX: number;
@@ -121,7 +122,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
     floorSpacingM: number;
     maxLevel: number;
   };
-  unitInteriorMeshes: readonly THREE.Mesh[];
+  unitInteriorMeshEntries: readonly FpSessionUnitInteriorMeshEntry[];
   topFloorResidentialUnitShellMeshes: readonly FpResidentialUnitShellMesh[];
   apartmentFurnitureInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
@@ -132,8 +133,11 @@ export type FpSessionFloorPlateVisibilityOpts = {
   stairShaftSpecs: readonly BuildingStairShaftSpec[];
   /** Predicted feet position — same reference as session `pos`. */
   feetPos: THREE.Vector3;
-  /** Unit id (`unit_e_003`, etc.) when feet are inside a residential apartment shell. */
-  getContainingResidentialUnitId: () => string | null;
+  /**
+   * Unit id/key and replicated apartment `level` when feet are inside a residential hull.
+   * That `level` matches `userData.mammothPlateLevelIndex` on plates (authoritative for storey clamps).
+   */
+  getContainingResidentialUnit: () => { unitId: string; unitKey: string; level: number } | null;
   /** Writable scratch filled each visibility pass; shared with downstream frame logic. */
   floorVisCamWorld: THREE.Vector3;
   floorVisCamDir: THREE.Vector3;
@@ -144,16 +148,10 @@ export function fpApplyResidentialInteriorPlateBandOverride(input: {
   playerStorey: number;
   maxBuildingLevel: number;
   insideResidentialUnit: boolean;
-  cameraOutsideBuilding: boolean;
+  trueExteriorView: boolean;
   cabOccludesWorld: boolean;
-  insideStairShaft: boolean;
 }): { lo: number; hi: number } {
-  if (
-    !input.insideResidentialUnit ||
-    input.cameraOutsideBuilding ||
-    input.cabOccludesWorld ||
-    input.insideStairShaft
-  ) {
+  if (!input.insideResidentialUnit || input.trueExteriorView || input.cabOccludesWorld) {
     return input.band;
   }
   const clampedStorey = Math.max(1, Math.min(input.maxBuildingLevel, input.playerStorey));
@@ -171,14 +169,14 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     buildingWorldBounds,
     maxBuildingLevel,
     storeyOpts,
-    unitInteriorMeshes,
+    unitInteriorMeshEntries,
     topFloorResidentialUnitShellMeshes,
     apartmentFurnitureInteriorMeshes,
     fpElevators,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
     feetPos,
-    getContainingResidentialUnitId,
+    getContainingResidentialUnit,
     floorVisCamWorld,
     floorVisCamDir,
   } = opts;
@@ -201,6 +199,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastApartmentFurnitureInteriorMeshCount = -1;
   let _lastTopFloorResidentialShellOnlyUnitId: string | null = null;
   let _lastTopFloorResidentialShellMeshCount = -1;
+  let _lastContainingResidentialUnitId: string | null = null;
+  let _lastContainingResidentialUnitKey: string | null = null;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -291,8 +291,15 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMaxZ: buildingWorldBounds.max.z,
     });
     const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
-    const containingResidentialUnitId = getContainingResidentialUnitId();
-    const insideResidentialUnit = containingResidentialUnitId !== null;
+    const containingResidentialUnit = getContainingResidentialUnit();
+    const containingResidentialUnitId = containingResidentialUnit?.unitId ?? null;
+    const containingResidentialUnitKey = containingResidentialUnit?.unitKey ?? null;
+    const insideResidentialUnit = containingResidentialUnit !== null;
+    /** Plate / stair vertical anchor: replicated unit level in-hull, else feet-derived storey. */
+    const storeyPlateAnchor =
+      insideResidentialUnit && containingResidentialUnit !== null
+        ? containingResidentialUnit.level
+        : playerStorey;
     const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
       cameraX: floorVisCamWorld.x,
       cameraZ: floorVisCamWorld.z,
@@ -301,6 +308,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMinZ: buildingWorldBounds.min.z,
       boundsMaxZ: buildingWorldBounds.max.z,
     });
+    const trueExteriorView = cameraOutsideBuilding && !feetOnBuildingSlab;
     /**
      * Merged ez-tree meshes are fill-rate heavy. They used to use `mammothAlwaysVisible` and were
      * rasterised on every interior frame (~1000+ storey stack hidden, trees still drawn). Tie them
@@ -352,23 +360,23 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         { lo: band.lo, hi: band.hi, hoistwayPlateBoost },
         true,
         maxBuildingLevel,
-        playerStorey,
+        storeyPlateAnchor,
       );
     }
     /**
      * Residential units should not inherit a tall-stack reveal from adjacent elevator/shaft probes.
      * Once feet are inside a real apartment shell, ordinary views keep only the current storey's plate
-     * band unless we are in one of the explicit broad-view cases above (true exterior, cab occlusion,
-     * or stair/shaft context).
+     * band unless we are in one of the explicit broad-view cases above (true exterior or cab occlusion).
+     * Stair-shaft *proximity* uses expanded hulls for doorway lines — it must not disable this clamp or
+     * apartments near cores pay for a dozen+ extra storeys every frame.
      */
     band = fpApplyResidentialInteriorPlateBandOverride({
       band,
-      playerStorey,
+      playerStorey: storeyPlateAnchor,
       maxBuildingLevel,
       insideResidentialUnit,
-      cameraOutsideBuilding,
+      trueExteriorView,
       cabOccludesWorld,
-      insideStairShaft,
     });
 
     const targetBandLo = band.lo;
@@ -440,17 +448,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         boundsMaxZ: buildingWorldBounds.max.z,
         nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
       });
-    const unitInteriorVisibilityChanged =
-      unitInteriorVisible !== _lastUnitInteriorVisible ||
-      unitInteriorMeshes.length !== _lastUnitInteriorMeshCount;
-    if (unitInteriorVisibilityChanged) {
-      _lastUnitInteriorVisible = unitInteriorVisible;
-      _lastUnitInteriorMeshCount = unitInteriorMeshes.length;
-      for (let i = 0; i < unitInteriorMeshes.length; i++) {
-        unitInteriorMeshes[i]!.visible = unitInteriorVisible;
-      }
-    }
-
     /**
      * Furniture GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
      * sidewalk/doorway peeks, but only build/render apartment props once the camera is inside.
@@ -472,37 +469,45 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         boundsMinZ: buildingWorldBounds.min.z,
         boundsMaxZ: buildingWorldBounds.max.z,
       });
+    const unitInteriorVisibilityChanged =
+      unitInteriorVisible !== _lastUnitInteriorVisible ||
+      unitInteriorMeshEntries.length !== _lastUnitInteriorMeshCount ||
+      apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
+      containingResidentialUnitId !== _lastContainingResidentialUnitId ||
+      containingResidentialUnitKey !== _lastContainingResidentialUnitKey;
+    if (unitInteriorVisibilityChanged) {
+      _lastUnitInteriorVisible = unitInteriorVisible;
+      _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
+      _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
+      _lastContainingResidentialUnitId = containingResidentialUnitId;
+      _lastContainingResidentialUnitKey = containingResidentialUnitKey;
+      for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
+        const entry = unitInteriorMeshEntries[i]!;
+        let visible = unitInteriorVisible;
+        if (entry.apartmentUnitKey !== null) {
+          visible =
+            apartmentFurnitureInteriorVisible &&
+            (!insideResidentialUnit || entry.apartmentUnitKey === containingResidentialUnitKey);
+        } else if (insideResidentialUnit && entry.residentialUnitId !== null) {
+          visible = entry.residentialUnitId === containingResidentialUnitId;
+        }
+        entry.mesh.visible = visible;
+      }
+    }
     const apartmentFurnitureInteriorVisibilityChanged =
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
       apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount;
     if (apartmentFurnitureInteriorVisibilityChanged) {
-      _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
       _lastApartmentFurnitureInteriorMeshCount = apartmentFurnitureInteriorMeshes.length;
-      for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
-        apartmentFurnitureInteriorMeshes[i]!.visible = apartmentFurnitureInteriorVisible;
-      }
     }
 
     /**
-     * The top residential plate's unit ceilings double as the exterior roof silhouette, so the
-     * generic `mammothUnitInterior` hide set intentionally leaves them alone. From inside a top-floor
-     * apartment, though, the neighboring units' roof/ceiling shells are occluded by walls and only
-     * add overdraw when pitching up. Keep just the containing unit's residential shell visible in
-     * that narrow case; exterior/perimeter and non-residential views still keep the full top plate.
+     * Disabled for now: restricting the top-floor residential shell set to only the containing unit
+     * can punch visible holes at apartment corners because some boundary/roof pieces are owned by the
+     * neighboring unit shell. Keep the full top-floor shell set until we can tag only the truly
+     * redundant roof/ceiling subset.
      */
-    const topFloorResidentialShellOnlyUnitId =
-      playerStorey === maxBuildingLevel &&
-      apartmentFurnitureInteriorVisible &&
-      !fpElevators.isInsideAnyCabHud(
-        feetPos.x,
-        feetPos.y,
-        feetPos.z,
-        floorVisCamWorld.x,
-        floorVisCamWorld.y,
-        floorVisCamWorld.z,
-      )
-        ? containingResidentialUnitId
-        : null;
+    const topFloorResidentialShellOnlyUnitId = null;
     const topFloorResidentialShellVisibilityChanged =
       topFloorResidentialShellOnlyUnitId !== _lastTopFloorResidentialShellOnlyUnitId ||
       topFloorResidentialUnitShellMeshes.length !== _lastTopFloorResidentialShellMeshCount;
@@ -523,11 +528,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       globalLo: lo,
       globalHi: hi,
       maxLevel: maxBuildingLevel,
-      playerStorey,
+      playerStorey: storeyPlateAnchor,
     });
     const stairDetailBand = {
-      lo: Math.max(1, playerStorey - STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER),
-      hi: Math.min(maxBuildingLevel, playerStorey + STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER),
+      lo: Math.max(1, storeyPlateAnchor - STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER),
+      hi: Math.min(maxBuildingLevel, storeyPlateAnchor + STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER),
     };
     if (
       lo === _lastBandLo &&

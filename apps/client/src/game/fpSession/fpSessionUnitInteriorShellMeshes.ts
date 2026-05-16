@@ -5,6 +5,38 @@ export type FpResidentialUnitShellMesh = {
   unitId: string;
 };
 
+export type FpSessionUnitInteriorMeshEntry = {
+  mesh: THREE.Mesh;
+  residentialUnitId: string | null;
+  apartmentUnitKey: string | null;
+};
+
+function residentialUnitIdFromPlacedObjectId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.startsWith("unit_e_") || value.startsWith("unit_w_") ? value : null;
+}
+
+function resolveUnitInteriorMeshEntry(
+  mesh: THREE.Mesh,
+  buildingRoot: THREE.Object3D,
+): FpSessionUnitInteriorMeshEntry {
+  let residentialUnitId: string | null = null;
+  let apartmentUnitKey: string | null = null;
+  for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
+    if (residentialUnitId === null) {
+      residentialUnitId = residentialUnitIdFromPlacedObjectId(cur.userData.mammothPlacedObjectId);
+    }
+    if (apartmentUnitKey === null) {
+      const unitKey = cur.userData.mammothApartmentUnitKey;
+      if (typeof unitKey === "string" && unitKey.length > 0) {
+        apartmentUnitKey = unitKey;
+      }
+    }
+    if (cur === buildingRoot || (residentialUnitId !== null && apartmentUnitKey !== null)) break;
+  }
+  return { mesh, residentialUnitId, apartmentUnitKey };
+}
+
 /**
  * Collect meshes tagged `mammothUnitInterior` for FP exterior fill-rate toggles.
  *
@@ -12,15 +44,15 @@ export type FpResidentialUnitShellMesh = {
  * / landing / hail geometry and swing-door meshes (see `fpElevatorShaftVisual.ts`). Traversing
  * before those mounts leaves interior shaft/door meshes visible from the street.
  */
-export function collectFpSessionUnitInteriorShellMeshes(
+export function collectFpSessionUnitInteriorMeshEntries(
   buildingRoot: THREE.Object3D,
-): THREE.Mesh[] {
+): FpSessionUnitInteriorMeshEntry[] {
   let topPlateLevel = -Infinity;
   for (const ch of buildingRoot.children) {
     const li = ch.userData.mammothPlateLevelIndex;
     if (typeof li === "number" && li > topPlateLevel) topPlateLevel = li;
   }
-  const unitInteriorMeshes: THREE.Mesh[] = [];
+  const unitInteriorMeshes: FpSessionUnitInteriorMeshEntry[] = [];
   buildingRoot.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     if (obj.userData.mammothUnitInterior !== true) return;
@@ -30,9 +62,15 @@ export function collectFpSessionUnitInteriorShellMeshes(
       const ancestorLevel = ancestor?.userData.mammothPlateLevelIndex;
       if (typeof ancestorLevel === "number" && ancestorLevel === topPlateLevel) return;
     }
-    unitInteriorMeshes.push(obj);
+    unitInteriorMeshes.push(resolveUnitInteriorMeshEntry(obj, buildingRoot));
   });
   return unitInteriorMeshes;
+}
+
+export function collectFpSessionUnitInteriorShellMeshes(
+  buildingRoot: THREE.Object3D,
+): THREE.Mesh[] {
+  return collectFpSessionUnitInteriorMeshEntries(buildingRoot).map((entry) => entry.mesh);
 }
 
 /**

@@ -2,12 +2,14 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { UNIT_SHELL_WALL_THICKNESS_M } from "@the-mammoth/world";
 import {
+  centerDecorRootOnVisualBounds,
   clampPreviewXZToAuthoringInterior,
   constrainMyApartmentDecorRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY,
   EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  getMyApartmentDecorAnchorWorldPosition,
   previewWorldFromNormalizedPlacement,
 } from "./editorMyApartmentMeshes.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
@@ -42,7 +44,8 @@ describe("owned apartment authoring XZ clamp", () => {
     expect(again.z).toBeCloseTo(lz, 5);
   });
 
-  it("lets decor AABB reach the south plaster edge without reserving extra empty space", () => {
+  it("does not clamp decor translation while snapping rotation and scale", () => {
+    const freeY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 3.6;
     const shell = new THREE.Group();
     shell.userData.editorMyApartmentSlabSx = 8;
     shell.userData.editorMyApartmentSlabSz = 8;
@@ -62,52 +65,40 @@ describe("owned apartment authoring XZ clamp", () => {
 
     const vis = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4));
     decor.add(vis);
-    decor.position.set(2, EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y, 0);
+    decor.position.set(-3.25, freeY, -4.5);
+    decor.rotation.order = "YXZ";
+    decor.rotation.set(0.31, 0.44, 0.12, "YXZ");
+    decor.scale.set(1.7, 1.4, 1.2);
 
     constrainMyApartmentDecorRootPose(decor);
 
-    decor.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(decor);
-    expect(box.min.z).toBeGreaterThanOrEqual(0.14 - 1e-4);
-    expect(box.min.z).toBeLessThanOrEqual(0.14 + 1e-4);
+    expect(decor.position.x).toBeCloseTo(-3.25, 6);
+    expect(decor.position.y).toBeCloseTo(freeY, 6);
+    expect(decor.position.z).toBeCloseTo(-4.5, 6);
+    expect(decor.scale.x).toBeCloseTo(decor.scale.y, 6);
+    expect(decor.scale.y).toBeCloseTo(decor.scale.z, 6);
   });
 });
 
-describe("owned apartment authoring Y clamp", () => {
-  it("keeps decor world AABB max at or below hollow-shell ceiling minus slack", () => {
-    const vh = 2.5;
-    const ceilingInner = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + vh;
+describe("decor edit pivot centering", () => {
+  it("recenters the decor root on the visual bounds while preserving the serialized anchor", () => {
+    const root = new THREE.Group();
+    const vis = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.6));
+    vis.position.y = 0.6;
+    root.add(vis);
 
-    const shell = new THREE.Group();
-    shell.userData.editorMyApartmentSlabSx = 8;
-    shell.userData.editorMyApartmentSlabSz = 8;
-    shell.userData.editorMyApartmentStrictMinX = 0;
-    shell.userData.editorMyApartmentStrictMinZ = 0;
-    shell.userData.editorMyApartmentStrictSpanX = 8;
-    shell.userData.editorMyApartmentStrictSpanZ = 8;
-    shell.userData.editorMyApartmentPrefabOriginX = 0;
-    shell.userData.editorMyApartmentPrefabOriginZ = 0;
-    shell.userData.editorMyApartmentInteriorCeilingInnerY = ceilingInner;
+    root.updateMatrixWorld(true);
+    const beforeCenter = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+    const beforeAnchor = root.getWorldPosition(new THREE.Vector3());
 
-    const furniture = new THREE.Group();
-    shell.add(furniture);
+    centerDecorRootOnVisualBounds(root);
 
-    const decor = new THREE.Group();
-    decor.userData.mammothEditorMyApartmentDecorId = "test_decor";
-    furniture.add(decor);
-
-    const vis = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2));
-    decor.add(vis);
-    decor.position.set(2, ceilingInner + 0.6, 2);
-
-    constrainMyApartmentDecorRootPose(decor);
-
-    decor.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(decor);
-    expect(box.max.y).toBeLessThanOrEqual(ceilingInner - SLACK + 1e-4);
-    expect(box.min.y).toBeGreaterThanOrEqual(
-      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y - 1e-4,
-    );
+    root.updateMatrixWorld(true);
+    const afterCenter = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+    const afterAnchor = getMyApartmentDecorAnchorWorldPosition(root);
+    expect(root.position.distanceTo(beforeCenter)).toBeLessThan(1e-6);
+    expect(afterCenter.distanceTo(beforeCenter)).toBeLessThan(1e-6);
+    expect(afterAnchor.distanceTo(beforeAnchor)).toBeLessThan(1e-6);
   });
 });
 

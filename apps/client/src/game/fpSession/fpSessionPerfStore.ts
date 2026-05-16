@@ -285,7 +285,13 @@ export type FpPerfStats = {
   /** Actual elapsed time covered by the samples (may be < windowSec early in session). */
   actualElapsedSec: number;
   samples: number;
+  /**
+   * ~`1000 / mean(totalFrameCpuMs)` for samples in-window — aligns with avg frame-ms when the RAF loop
+   * is consistent. Previously this was `(samples / wallClock)` (= profiler ring occupancy rate).
+   */
   fps: number;
+  /** Profiler ring writes per wall-clock second (`samples / actualElapsedSec`) — diagnostics only. */
+  profilerRingSampleHz: number;
   frameMs: {
     avg: number;
     min: number;
@@ -441,9 +447,14 @@ export function computeFpPerfStats(
   const oldestTs = _ts[indices[indices.length - 1]!]!;
   const newestTs = _ts[indices[0]!]!;
   const actualElapsedSec = Math.max(0.001, (newestTs - oldestTs) / 1000);
-  const fps = Math.round((n / actualElapsedSec) * 10) / 10;
+  const profilerRingSampleHz =
+    actualElapsedSec > 0 ? Math.round((n / actualElapsedSec) * 10) / 10 : 0;
 
   const avgTotal = sumTotal / n;
+  const fps =
+    avgTotal >= 1e-6
+      ? Math.min(9999, Math.round((1000 / avgTotal) * 10) / 10)
+      : 0;
   const avgPhysics = sumPhysics / n;
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
@@ -477,6 +488,7 @@ export function computeFpPerfStats(
     actualElapsedSec,
     samples: n,
     fps,
+    profilerRingSampleHz,
     frameMs: {
       avg: Math.round(avgTotal * 10) / 10,
       min: Math.round(minMs * 10) / 10,
@@ -557,7 +569,7 @@ export function exportFpPerfReport(nowMs: number, windowSec: number): string {
     `Scene   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  transparent=${ri.visibleTransparentMeshes}  trees=${ri.visibleExteriorTreeRoots}`,
     `        fr:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  transparent=${ri.frustumTransparentMeshes}  trees=${ri.frustumExteriorTreeRoots}`,
     "",
-    `FPS    avg=${s.fps}  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
+    `FPS   ~${s.fps} (from avg frame cpu)    profiler samples/s=${s.profilerRingSampleHz}  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
     `Frame  avg=${frameMs.avg}ms  p50=${frameMs.p50}ms  p95=${frameMs.p95}ms  p99=${frameMs.p99}ms`,
     "",
     "Section breakdown (avg ms/frame):",

@@ -8,7 +8,7 @@
   "wardrobeFz": 0.878304767366957,
   "footFx": 0.7227862211100964,
   "footFz": 0.1985270451990553,
-  "stoveFx": 0.3355468966860505,
+  "stoveFx": 0.3338257182263653,
   "stoveFz": -0.05453660620513036,
   "wardrobeDy": 0,
   "footDy": 0,
@@ -20,7 +20,7 @@
   "bedUniformScale": 1.3018349780093093,
   "wardrobeUniformScale": 1.2597163561791922,
   "footUniformScale": 1,
-  "stoveUniformScale": 0.5182096457280903,
+  "stoveUniformScale": 0.5459024758546215,
   "decorItems": [
     {
       "id": "0577b116-39ee-47a2-8da6-d729d6e1b16f",
@@ -181,6 +181,56 @@
       "yawRad": 0,
       "pitchRad": 0,
       "uniformScale": 1
+    },
+    {
+      "id": "d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
+      "modelRelPath": "static/models/objects/ashtray.glb",
+      "fx": 0.3220225721416043,
+      "fz": 0.6015558862409816,
+      "dy": 1.115087067596882,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "uniformScale": 0.16720818473328392
+    },
+    {
+      "id": "fee1f1e2-1d21-45ad-ba61-437e6a78f0f7",
+      "modelRelPath": "static/models/objects/family-photo.glb",
+      "fx": 0.6052800059308863,
+      "fz": 0.4172989889389987,
+      "dy": 0.7530241244993187,
+      "yawRad": -1.832595714594046,
+      "pitchRad": -0.2617993877991494,
+      "uniformScale": 0.19171383484397495
+    },
+    {
+      "id": "28512766-a760-4eb3-b88e-63de2ea8bed8",
+      "modelRelPath": "static/models/objects/rakija.glb",
+      "fx": 0.3515373865444065,
+      "fz": 0.558476575484208,
+      "dy": 1.110721416791521,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "uniformScale": 0.21375318679269292
+    },
+    {
+      "id": "969b62c8-fc80-4728-ac4e-60801758eba5",
+      "modelRelPath": "static/models/objects/coffee-cup-empty.glb",
+      "fx": 0.3335517331573933,
+      "fz": 0.5570500231206282,
+      "dy": 1.11870538251501,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "uniformScale": 0.08
+    },
+    {
+      "id": "b1108f66-60ce-436e-99b5-41374572d3ab",
+      "modelRelPath": "static/models/objects/empty-cigarette-pack.glb",
+      "fx": 0.30940951527213173,
+      "fz": 0.5202727336052705,
+      "dy": 1.116608653297844,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "uniformScale": 0.08
     }
   ],
   "wallItems": [
@@ -208,6 +258,22 @@
       "yawRad": 1.5707963267948966,
       "pitchRad": 0,
       "sizeX": 2.487227112461149,
+      "sizeY": 2.8,
+      "sizeZ": 0.07,
+      "material": {
+        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+        "useMetalnessMap": false,
+        "useHeightMap": false
+      }
+    },
+    {
+      "id": "8e1db7b0-34a9-4e83-9760-ff28361510e1",
+      "fx": 0.3500449163606379,
+      "fz": -0.10681818181818381,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "sizeX": 3.6143972075641773,
       "sizeY": 2.8,
       "sizeZ": 0.07,
       "material": {

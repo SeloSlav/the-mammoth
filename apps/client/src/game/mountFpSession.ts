@@ -27,10 +27,8 @@ import {
   parseFloorDoc,
 } from "@the-mammoth/world";
 import {
-  appendApartmentFurnitureInteriorMeshes,
-  collectFpSessionUnitInteriorShellMeshes,
+  collectFpSessionUnitInteriorMeshEntries,
   collectFpSessionTopFloorResidentialUnitShellMeshes,
-  stripApartmentFurnitureInteriorMeshes,
 } from "./fpSession/fpSessionUnitInteriorShellMeshes.js";
 import { installFpSessionTransientDebugConsole } from "./fpSession/fpSessionTransientDebugConsole.js";
 import { createFpSessionFloorPlateVisibility } from "./fpSession/fpSessionFloorPlateVisibility.js";
@@ -76,7 +74,7 @@ import {
 } from "./fpHotbar/fpHotbarResolve.js";
 import {
   apartmentFurnitureInteriorsPreferOverUnitDoor,
-  apartmentUnitContainingFeet,
+  apartmentUnitContainingFeetSlack,
   getApartmentSystemPrompt,
 } from "./fpApartment/fpApartmentGameplay.js";
 import { APARTMENT_CLAIM_UI_ENABLED } from "../featureFlags";
@@ -313,7 +311,8 @@ export async function mountFpSession(
   });
   scene.add(fpCollisionDebug.group);
 
-  const unitInteriorMeshes = collectFpSessionUnitInteriorShellMeshes(buildingRoot);
+  const unitInteriorMeshEntries = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+  const unitInteriorMeshes = unitInteriorMeshEntries.map((entry) => entry.mesh);
   const topFloorResidentialUnitShellMeshes =
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
   const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
@@ -324,6 +323,7 @@ export async function mountFpSession(
   const _perfSceneFrustumViewProjection = new THREE.Matrix4();
   const _perfSceneFrustum = new THREE.Frustum();
   const _perfFloorPlateBoundsScratch = new THREE.Box3();
+  const PERF_SCENE_COUNTER_SAMPLE_INTERVAL_MS = 250;
   const materialContributesTransparentPass = (material: THREE.Material): boolean =>
     material.transparent === true || material.alphaTest > 0 || material.depthWrite === false;
   const refreshPerfTrackedMeshes = (): void => {
@@ -348,20 +348,46 @@ export async function mountFpSession(
     }
   };
   const refreshApartmentInteriorMeshes = () => {
-    stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
+    unitInteriorMeshEntries.length = 0;
+    unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
+    unitInteriorMeshes.length = 0;
+    for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
+      unitInteriorMeshes.push(unitInteriorMeshEntries[i]!.mesh);
+    }
     apartmentFurnitureInteriorMeshes.length = 0;
-    appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
-    appendApartmentFurnitureInteriorMeshes(buildingRoot, apartmentFurnitureInteriorMeshes);
+    for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
+      const entry = unitInteriorMeshEntries[i]!;
+      if (entry.apartmentUnitKey !== null) {
+        apartmentFurnitureInteriorMeshes.push(entry.mesh);
+      }
+    }
     disableShadowsOnUnitInteriorMeshes();
     refreshPerfTrackedMeshes();
   };
+  let lastPerfSceneCounterSampleAtMs = -Infinity;
+  let lastPerfSceneCounters = {
+    visibleFloorPlates: 0,
+    visibleUnitInteriorMeshes: 0,
+    visibleApartmentPropMeshes: 0,
+    visibleTransparentMeshes: 0,
+    visibleExteriorTreeRoots: 0,
+    frustumFloorPlates: 0,
+    frustumUnitInteriorMeshes: 0,
+    frustumApartmentPropMeshes: 0,
+    frustumTransparentMeshes: 0,
+    frustumExteriorTreeRoots: 0,
+  };
   const getFpPerfSceneCounters = () => {
+    const now = performance.now();
+    if (now - lastPerfSceneCounterSampleAtMs < PERF_SCENE_COUNTER_SAMPLE_INTERVAL_MS) {
+      return lastPerfSceneCounters;
+    }
+    lastPerfSceneCounterSampleAtMs = now;
     camera.updateMatrixWorld();
     _perfSceneFrustumViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _perfSceneFrustum.setFromProjectionMatrix(_perfSceneFrustumViewProjection);
 
     let visibleFloorPlates = 0;
-    let visibleExteriorTreeRoots = 0;
     let frustumFloorPlates = 0;
     for (const ch of perfFloorPlateGroups) {
       if (ch.visible) {
@@ -371,13 +397,12 @@ export async function mountFpSession(
           frustumFloorPlates += 1;
         }
       }
-      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
-        visibleExteriorTreeRoots += 1;
-      }
     }
+    let visibleExteriorTreeRoots = 0;
     let frustumExteriorTreeRoots = 0;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
+        visibleExteriorTreeRoots += 1;
         _perfFloorPlateBoundsScratch.setFromObject(ch);
         if (_perfSceneFrustum.intersectsBox(_perfFloorPlateBoundsScratch)) {
           frustumExteriorTreeRoots += 1;
@@ -412,7 +437,7 @@ export async function mountFpSession(
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumTransparentMeshes += 1;
     }
 
-    return {
+    lastPerfSceneCounters = {
       visibleFloorPlates,
       visibleUnitInteriorMeshes,
       visibleApartmentPropMeshes,
@@ -424,6 +449,7 @@ export async function mountFpSession(
       frustumTransparentMeshes,
       frustumExteriorTreeRoots,
     };
+    return lastPerfSceneCounters;
   };
 
   const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
@@ -618,15 +644,17 @@ export async function mountFpSession(
         floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
         maxLevel: maxBuildingLevel,
       },
-      unitInteriorMeshes,
+      unitInteriorMeshEntries,
       topFloorResidentialUnitShellMeshes,
       apartmentFurnitureInteriorMeshes,
       fpElevators,
       stairShaftInteriorLightBounds,
       stairShaftSpecs,
       feetPos: pos,
-      getContainingResidentialUnitId: () =>
-        apartmentUnitContainingFeet(conn, pos.x, pos.y, pos.z)?.unitId ?? null,
+      getContainingResidentialUnit: () => {
+        const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z);
+        return unit ? { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level } : null;
+      },
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
     });

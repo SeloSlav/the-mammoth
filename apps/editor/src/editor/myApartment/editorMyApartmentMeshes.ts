@@ -63,6 +63,13 @@ export const EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY = "mammothEditorMyApartm
 const decorClampBoundsScratch = new THREE.Box3();
 const decorClampSizeScratch = new THREE.Vector3();
 const decorClampCenterScratch = new THREE.Vector3();
+const decorRecenterWorldCenterScratch = new THREE.Vector3();
+const decorRecenterLocalCenterScratch = new THREE.Vector3();
+const decorRecenterParentLocalCenterScratch = new THREE.Vector3();
+const decorAnchorWorldScratch = new THREE.Vector3();
+const decorAnchorLocalScratch = new THREE.Vector3();
+const EDITOR_MY_APARTMENT_DECOR_ANCHOR_LOCAL_OFFSET_USERDATA_KEY =
+  "editorMyApartmentDecorAnchorLocalOffset";
 
 function clampPreviewXZToPlasterInterior(args: {
   footprintSx: number;
@@ -310,81 +317,54 @@ export function constrainMyApartmentDecorRootPose(root: THREE.Object3D): void {
   );
   qSnapYawScratch.setFromEuler(new THREE.Euler(x, y, 0, "YXZ"));
   root.quaternion.copy(qSnapYawScratch);
-
-  const meta = readAuthoringShellAuthoringMetaFromAncestors(root);
-  if (meta) {
-    const c = clampPreviewXZToAuthoringInterior(meta, root.position.x, root.position.z);
-    root.position.x = c.x;
-    root.position.z = c.z;
-  }
   const uniform = THREE.MathUtils.clamp(
     (root.scale.x + root.scale.y + root.scale.z) / 3,
     EDITOR_MY_APARTMENT_UNIFORM_SCALE_MIN,
     EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
   );
   root.scale.setScalar(uniform);
+}
 
-  if (meta) {
-    root.updateMatrixWorld(true);
-    decorClampBoundsScratch.setFromObject(root);
-    decorClampBoundsScratch.getSize(decorClampSizeScratch);
-    decorClampBoundsScratch.getCenter(decorClampCenterScratch);
-    const bounds = previewRepresentableXZBounds(meta);
-    const minX = bounds.minX + EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const maxX = bounds.maxX - EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const minZ = bounds.minZ + EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const maxZ = bounds.maxZ - EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-
-    let dx = 0;
-    if (decorClampSizeScratch.x > maxX - minX) {
-      dx = (minX + maxX) * 0.5 - decorClampCenterScratch.x;
-    } else if (decorClampBoundsScratch.min.x < minX) {
-      dx = minX - decorClampBoundsScratch.min.x;
-    } else if (decorClampBoundsScratch.max.x > maxX) {
-      dx = maxX - decorClampBoundsScratch.max.x;
-    }
-
-    let dz = 0;
-    if (decorClampSizeScratch.z > maxZ - minZ) {
-      dz = (minZ + maxZ) * 0.5 - decorClampCenterScratch.z;
-    } else if (decorClampBoundsScratch.min.z < minZ) {
-      dz = minZ - decorClampBoundsScratch.min.z;
-    } else if (decorClampBoundsScratch.max.z > maxZ) {
-      dz = maxZ - decorClampBoundsScratch.max.z;
-    }
-
-    if (dx !== 0 || dz !== 0) {
-      root.position.x += dx;
-      root.position.z += dz;
-    }
+export function centerDecorRootOnVisualBounds(
+  root: THREE.Object3D,
+): void {
+  root.updateMatrixWorld(true);
+  decorClampBoundsScratch.setFromObject(root);
+  if (decorClampBoundsScratch.isEmpty()) return;
+  decorClampBoundsScratch.getCenter(decorRecenterWorldCenterScratch);
+  decorRecenterLocalCenterScratch.copy(decorRecenterWorldCenterScratch);
+  root.worldToLocal(decorRecenterLocalCenterScratch);
+  root.userData[EDITOR_MY_APARTMENT_DECOR_ANCHOR_LOCAL_OFFSET_USERDATA_KEY] = [
+    -decorRecenterLocalCenterScratch.x,
+    -decorRecenterLocalCenterScratch.y,
+    -decorRecenterLocalCenterScratch.z,
+  ] as const;
+  for (const child of root.children) {
+    child.position.sub(decorRecenterLocalCenterScratch);
   }
-
-  /** Floor slab, optional hollow-shell ceiling (no ceiling mesh yet, same `vh` as walls). */
-  const floorY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
-  const maxBottomY = floorY + EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M;
-  const ceilY = meta?.interiorCeilingInnerY;
-  const ceilCap =
-    typeof ceilY === "number" && ceilY > floorY
-      ? ceilY - EDITOR_MY_APARTMENT_INTERIOR_SLACK_M
-      : undefined;
-
-  for (let pass = 0; pass < 4; pass++) {
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    if (box.min.y < floorY) {
-      root.position.y += floorY - box.min.y;
-      continue;
-    }
-    if (ceilCap !== undefined && box.max.y > ceilCap) {
-      root.position.y -= box.max.y - ceilCap;
-      continue;
-    }
-    if (box.min.y > maxBottomY) {
-      root.position.y -= box.min.y - maxBottomY;
-      continue;
-    }
-    break;
+  const parent = root.parent;
+  if (!parent) {
+    root.position.copy(decorRecenterWorldCenterScratch);
+    return;
   }
+  parent.updateMatrixWorld(true);
+  decorRecenterParentLocalCenterScratch.copy(decorRecenterWorldCenterScratch);
+  parent.worldToLocal(decorRecenterParentLocalCenterScratch);
+  root.position.copy(decorRecenterParentLocalCenterScratch);
+  root.updateMatrixWorld(true);
+}
+
+export function getMyApartmentDecorAnchorWorldPosition(root: THREE.Object3D): THREE.Vector3 {
+  const raw = root.userData[EDITOR_MY_APARTMENT_DECOR_ANCHOR_LOCAL_OFFSET_USERDATA_KEY];
+  if (
+    Array.isArray(raw) &&
+    raw.length >= 3 &&
+    raw.every((value) => typeof value === "number" && Number.isFinite(value))
+  ) {
+    decorAnchorLocalScratch.set(raw[0]!, raw[1]!, raw[2]!);
+    return root.localToWorld(decorAnchorLocalScratch.clone());
+  }
+  return root.getWorldPosition(decorAnchorWorldScratch);
 }
 
 export function findEditorMyApartmentWallSlabMesh(
@@ -892,6 +872,7 @@ function placeDecorGroup(args: {
     decor.uniformScale,
   );
   group.add(vis);
+  centerDecorRootOnVisualBounds(group);
   constrainMyApartmentDecorRootPose(group);
 }
 

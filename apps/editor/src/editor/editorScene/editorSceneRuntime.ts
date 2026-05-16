@@ -135,6 +135,11 @@ export async function mountEditorScene(
     object: THREE.Object3D;
     meshStart: THREE.Vector3;
   } | null = null;
+  let myApartmentDecorTransformGesture: {
+    object: THREE.Object3D;
+    startRootWorldY: number;
+    startDy: number;
+  } | null = null;
 
   function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
     const st = useEditorStore.getState();
@@ -380,6 +385,9 @@ export async function mountEditorScene(
         const wallSelected = parseMyApartmentLayoutWallSelectedId(s.selectedId) !== null;
         const apartmentFreeVertical = decorSelected || wallSelected;
         transformControls.setMode(s.transformMode);
+        transformControls.setSpace(
+          s.transformMode === "rotate" ? "local" : "world",
+        );
         if (s.transformMode === "translate") {
           transformControls.showX = true;
           transformControls.showY = apartmentFreeVertical;
@@ -443,6 +451,7 @@ export async function mountEditorScene(
         programmaticTransformControlsDepth,
       transformControls,
       contentRoot,
+      getMyApartmentDecorTransformGesture: () => myApartmentDecorTransformGesture,
     });
 
   let rewireCanvasPrimaryPointerListeners: () => void = () => {};
@@ -485,6 +494,26 @@ export async function mountEditorScene(
     } else {
       wallSlabScaleGesture = null;
     }
+    if (
+      st.mode === "my_apartment_layout" &&
+      attached?.userData.mammothEditorMyApartmentDecorId
+    ) {
+      const decorId = attached.userData.mammothEditorMyApartmentDecorId as string | undefined;
+      const decorItem =
+        decorId != null
+          ? st.ownedApartmentBuiltins.decorItems.find((item) => item.id === decorId)
+          : undefined;
+      myApartmentDecorTransformGesture =
+        decorId != null && decorItem
+          ? {
+              object: attached,
+              startRootWorldY: attached.getWorldPosition(new THREE.Vector3()).y,
+              startDy: decorItem.dy,
+            }
+          : null;
+    } else {
+      myApartmentDecorTransformGesture = null;
+    }
   });
   transformControls.addEventListener("mouseUp", () => {
     if (isFpMode(useEditorStore.getState().mode)) return;
@@ -493,6 +522,7 @@ export async function mountEditorScene(
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
     wallSlabScaleGesture = null;
+    myApartmentDecorTransformGesture = null;
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
@@ -522,6 +552,7 @@ export async function mountEditorScene(
     }
     if (!active) levelEditorTransformGesture = false;
     if (!active) levelEditorAnchoredScaleGesture = null;
+    if (!active) myApartmentDecorTransformGesture = null;
     if (active) {
       useEditorStore.getState().beginTransaction();
     } else {

@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { collectFpSessionTopFloorResidentialUnitShellMeshes } from "./fpSessionUnitInteriorShellMeshes.js";
+import {
+  collectFpSessionTopFloorResidentialUnitShellMeshes,
+  collectFpSessionUnitInteriorMeshEntries,
+} from "./fpSessionUnitInteriorShellMeshes.js";
 
 describe("collectFpSessionTopFloorResidentialUnitShellMeshes", () => {
   it("collects only top-floor residential unit shell meshes", () => {
@@ -33,5 +36,36 @@ describe("collectFpSessionTopFloorResidentialUnitShellMeshes", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.mesh).toBe(topUnitMesh);
     expect(result[0]?.unitId).toBe("unit_e_003");
+  });
+});
+
+describe("collectFpSessionUnitInteriorMeshEntries", () => {
+  it("resolves residential shell unit ids and apartment prop unit keys from ancestors", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 7;
+
+    const shellMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    shellMesh.userData.mammothUnitInterior = true;
+    shellMesh.userData.mammothPlacedObjectId = "unit_w_004";
+    floor.add(shellMesh);
+
+    const propGroup = new THREE.Group();
+    propGroup.userData.mammothApartmentUnitKey = "floor-7:unit_w_004";
+    const propMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    propMesh.userData.mammothUnitInterior = true;
+    propGroup.add(propMesh);
+    floor.add(propGroup);
+
+    buildingRoot.add(floor);
+
+    const result = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(result).toHaveLength(2);
+    expect(result[0]?.mesh).toBe(shellMesh);
+    expect(result[0]?.residentialUnitId).toBe("unit_w_004");
+    expect(result[0]?.apartmentUnitKey).toBe(null);
+    expect(result[1]?.mesh).toBe(propMesh);
+    expect(result[1]?.residentialUnitId).toBe(null);
+    expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");
   });
 });

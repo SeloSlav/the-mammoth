@@ -9,9 +9,21 @@ describe("fpApplyResidentialInteriorPlateBandOverride", () => {
         playerStorey: 12,
         maxBuildingLevel: 30,
         insideResidentialUnit: true,
-        cameraOutsideBuilding: false,
+        trueExteriorView: false,
         cabOccludesWorld: false,
-        insideStairShaft: false,
+      }),
+    ).toEqual({ lo: 12, hi: 12 });
+  });
+
+  it("still clamps when the camera pokes outside a wall but feet remain indoors", () => {
+    expect(
+      fpApplyResidentialInteriorPlateBandOverride({
+        band: { lo: 1, hi: 30 },
+        playerStorey: 12,
+        maxBuildingLevel: 30,
+        insideResidentialUnit: true,
+        trueExteriorView: false,
+        cabOccludesWorld: false,
       }),
     ).toEqual({ lo: 12, hi: 12 });
   });
@@ -23,9 +35,21 @@ describe("fpApplyResidentialInteriorPlateBandOverride", () => {
         playerStorey: 12,
         maxBuildingLevel: 30,
         insideResidentialUnit: true,
-        cameraOutsideBuilding: false,
+        trueExteriorView: false,
         cabOccludesWorld: true,
-        insideStairShaft: false,
+      }),
+    ).toEqual({ lo: 1, hi: 30 });
+  });
+
+  it("keeps broad bands for a true exterior view", () => {
+    expect(
+      fpApplyResidentialInteriorPlateBandOverride({
+        band: { lo: 1, hi: 30 },
+        playerStorey: 12,
+        maxBuildingLevel: 30,
+        insideResidentialUnit: true,
+        trueExteriorView: true,
+        cabOccludesWorld: false,
       }),
     ).toEqual({ lo: 1, hi: 30 });
   });

@@ -20,12 +20,11 @@ import {
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
   findEditorMyApartmentWallSlabMesh,
-  previewWorldFromNormalizedPlacement,
+  getMyApartmentDecorAnchorWorldPosition,
   snapOwnedApartmentDecorPitchRad,
   snapOwnedApartmentDecorYawRad,
   snapOwnedApartmentYawRad,
 } from "../myApartment/editorMyApartmentMeshes.js";
-import { parseMyApartmentLayoutDecorSelectedId } from "../myApartment/editorMyApartmentSelection.js";
 import { syncDuplicateFloorGroups } from "../placement/editorFloorTransformSync.js";
 import {
   floorPlacedObjectIdForTransformRoot,
@@ -75,10 +74,35 @@ function readStairBaseQuat(
   return [0, 0, 0, 1];
 }
 
+export function resolveMyApartmentDecorCommittedDy(input: {
+  gesture:
+    | {
+        object: THREE.Object3D;
+        startRootWorldY: number;
+        startDy: number;
+      }
+    | null;
+  targetRoot: THREE.Object3D;
+  fallbackDy: number;
+}): number {
+  if (!input.gesture || input.gesture.object !== input.targetRoot) {
+    return input.fallbackDy;
+  }
+  const rootWorld = input.targetRoot.getWorldPosition(new THREE.Vector3());
+  return input.gesture.startDy + (rootWorld.y - input.gesture.startRootWorldY);
+}
+
 export function commitEditorAttachedTransform(opts: {
   getProgrammaticTransformControlsDepth: () => number;
   transformControls: TransformControls;
   contentRoot: THREE.Group;
+  getMyApartmentDecorTransformGesture: () =>
+    | {
+        object: THREE.Object3D;
+        startRootWorldY: number;
+        startDy: number;
+      }
+    | null;
 }): void {
   if (opts.getProgrammaticTransformControlsDepth() > 0) return;
   const store = useEditorStore.getState();
@@ -304,13 +328,17 @@ export function commitEditorAttachedTransform(opts: {
     if (decorId) {
       constrainMyApartmentDecorRootPose(targetRoot);
       targetRoot.updateMatrixWorld(true);
-      const decorBounds = new THREE.Box3().setFromObject(targetRoot);
+      const decorGesture = opts.getMyApartmentDecorTransformGesture();
+      const existingItem = doc.decorItems.find((item) => item.id === decorId) ?? null;
       const dy = THREE.MathUtils.clamp(
-        decorBounds.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+        resolveMyApartmentDecorCommittedDy({
+          gesture: decorGesture,
+          targetRoot,
+          fallbackDy: existingItem?.dy ?? 0,
+        }),
         0,
         EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
       );
-      const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
       const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
       const yaw = snapOwnedApartmentDecorYawRad(eulerLocal.y);
       const pitch = THREE.MathUtils.clamp(
@@ -318,8 +346,9 @@ export function commitEditorAttachedTransform(opts: {
         -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
         OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
       );
-      const wx = pW.x + m.prefabOriginX;
-      const wz = pW.z + m.prefabOriginZ;
+      const anchorWorld = getMyApartmentDecorAnchorWorldPosition(targetRoot);
+      const wx = anchorWorld.x + m.prefabOriginX;
+      const wz = anchorWorld.z + m.prefabOriginZ;
       const fx = THREE.MathUtils.clamp(
         (wx - m.strictMinX) / m.spanX,
         OWNED_APARTMENT_LAYOUT_FRACTION_MIN,

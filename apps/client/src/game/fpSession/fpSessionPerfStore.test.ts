@@ -45,6 +45,7 @@ describe("fpSessionPerfStore", () => {
 
     const stats = computeFpPerfStats(1000, 5);
     expect(stats).not.toBeNull();
+    expect(stats!.fps).toBe(62.5);
     expect(stats?.sections.renderFloorPlateVisMs).toBe(1.5);
     expect(stats?.sections.renderFpEnvironmentMs).toBe(2.5);
     expect(stats?.sections.renderFpEnvironmentSkyMs).toBe(0.75);
