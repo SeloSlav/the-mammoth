@@ -6,9 +6,18 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   OwnedApartmentBuiltinsDocSchema,
   type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
 
 let cached: OwnedApartmentBuiltinsDoc | null | undefined;
+
+/**
+ * Sync read of cached authoring JSON after {@link loadOwnedApartmentBuiltinsDocFromContent} resolves.
+ * Used so stash proximity matches rendered furniture fractions (`resolveApartmentFurniturePose`).
+ */
+export function peekOwnedApartmentBuiltinsDoc(): OwnedApartmentBuiltinsDoc | null | undefined {
+  return cached;
+}
 
 export async function loadOwnedApartmentBuiltinsDocFromContent(): Promise<OwnedApartmentBuiltinsDoc | null> {
   if (cached !== undefined) return cached;
@@ -43,6 +52,7 @@ export type ApartmentDecorPose = {
   y: number;
   z: number;
   yaw: number;
+  pitch: number;
   uniformScale: number;
 };
 
@@ -130,6 +140,47 @@ export function resolveApartmentDecorPoses(
     y: bminy + item.dy,
     z: bminz + item.fz * sz,
     yaw: item.yawRad,
+    pitch: item.pitchRad,
     uniformScale: item.uniformScale,
+  }));
+}
+
+export type ApartmentWallPose = {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  sizeX: number;
+  sizeY: number;
+  sizeZ: number;
+  material: OwnedApartmentWallMaterial;
+};
+
+/**
+ * Resolves authored partition walls from `owned_apartment_builtins.json` into world space for one unit.
+ */
+export function resolveApartmentWallPoses(
+  u: ApartmentUnit,
+  doc: OwnedApartmentBuiltinsDoc | null | undefined,
+): ApartmentWallPose[] {
+  if (!doc || doc.wallItems.length === 0) return [];
+  const sx = (u.boundMaxX as number) - (u.boundMinX as number);
+  const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
+  const bminx = u.boundMinX as number;
+  const bminz = u.boundMinZ as number;
+  const bminy = u.boundMinY as number;
+  return doc.wallItems.map((item) => ({
+    id: item.id,
+    x: bminx + item.fx * sx,
+    y: bminy + item.dy,
+    z: bminz + item.fz * sz,
+    yaw: item.yawRad,
+    pitch: item.pitchRad,
+    sizeX: item.sizeX,
+    sizeY: item.sizeY,
+    sizeZ: item.sizeZ,
+    material: item.material,
   }));
 }

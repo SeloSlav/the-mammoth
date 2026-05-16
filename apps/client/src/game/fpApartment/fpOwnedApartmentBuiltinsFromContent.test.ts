@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ApartmentUnit } from "../../module_bindings/types";
-import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
-import { resolveApartmentDecorPoses } from "./fpOwnedApartmentBuiltinsFromContent";
+import {
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  type OwnedApartmentBuiltinsDoc,
+} from "@the-mammoth/schemas";
+import { resolveApartmentDecorPoses, resolveApartmentWallPoses } from "./fpOwnedApartmentBuiltinsFromContent";
 
 function apartmentUnit(overrides: Partial<ApartmentUnit> = {}): ApartmentUnit {
   return {
@@ -63,6 +66,7 @@ describe("resolveApartmentDecorPoses", () => {
       wardrobeUniformScale: 1,
       footUniformScale: 1,
       stoveUniformScale: 1,
+      wallItems: [],
       decorItems: [
         {
           id: "decor_a",
@@ -71,6 +75,7 @@ describe("resolveApartmentDecorPoses", () => {
           fz: 0.75,
           dy: 0.4,
           yawRad: 1.25,
+          pitchRad: 0,
           uniformScale: 1.5,
         },
       ],
@@ -84,12 +89,117 @@ describe("resolveApartmentDecorPoses", () => {
         y: 30.4,
         z: 206,
         yaw: 1.25,
+        pitch: 0,
         uniformScale: 1.5,
       },
     ]);
   });
 
+  it("carries authored pitch into world-space decor poses", () => {
+    const doc: OwnedApartmentBuiltinsDoc = {
+      version: 1,
+      previewSizeM: 10,
+      bedFx: 0.5,
+      bedFz: 0.5,
+      bedDy: 0,
+      wardrobeFx: 0.25,
+      wardrobeFz: 0.75,
+      footFx: 0.75,
+      footFz: 0.25,
+      stoveFx: 0.08,
+      stoveFz: 0.08,
+      wardrobeDy: 0,
+      footDy: 0,
+      stoveDy: 0,
+      bedYawRad: 0,
+      wardrobeYawRad: 0,
+      footYawRad: 0,
+      stoveYawRad: 0,
+      bedUniformScale: 1,
+      wardrobeUniformScale: 1,
+      footUniformScale: 1,
+      stoveUniformScale: 1,
+      wallItems: [],
+      decorItems: [
+        {
+          id: "decor_pitch",
+          modelRelPath: "static/models/objects/tv.glb",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: -0.25,
+          uniformScale: 1,
+        },
+      ],
+    };
+    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.pitch).toBe(-0.25);
+  });
+
+  it("maps slight negative fractions outside the strict hull for wall-edge authoring", () => {
+    const doc: OwnedApartmentBuiltinsDoc = {
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      decorItems: [
+        {
+          id: "decor_edge",
+          modelRelPath: "static/models/objects/tv.glb",
+          fx: 0.1,
+          fz: -0.1,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          uniformScale: 1,
+        },
+      ],
+    };
+    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]).toMatchObject({
+      id: "decor_edge",
+      x: 101.2,
+      z: 199.2,
+    });
+  });
+
   it("returns no decor when the content file is absent", () => {
     expect(resolveApartmentDecorPoses(apartmentUnit(), null)).toEqual([]);
+  });
+
+  it("maps wall slab items into world-space poses", () => {
+    const doc: OwnedApartmentBuiltinsDoc = {
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      wallItems: [
+        {
+          id: "wall_a",
+          fx: 0.5,
+          fz: 0.25,
+          dy: 0.05,
+          yawRad: 0.1,
+          pitchRad: -0.05,
+          sizeX: 2,
+          sizeY: 2.5,
+          sizeZ: 0.08,
+          material: {
+            mapUrl: "/static/materials/shared/foo.webp",
+            useMetalnessMap: false,
+            useHeightMap: false,
+          },
+        },
+      ],
+    };
+    expect(resolveApartmentWallPoses(apartmentUnit(), doc)[0]).toMatchObject({
+      id: "wall_a",
+      x: 106,
+      y: 30.05,
+      z: 202,
+      yaw: 0.1,
+      pitch: -0.05,
+      sizeX: 2,
+      sizeY: 2.5,
+      sizeZ: 0.08,
+      material: { mapUrl: "/static/materials/shared/foo.webp" },
+    });
+  });
+
+  it("returns no walls when the doc omits wallItems", () => {
+    expect(resolveApartmentWallPoses(apartmentUnit(), null)).toEqual([]);
   });
 });

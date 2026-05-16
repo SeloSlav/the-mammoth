@@ -1,4 +1,36 @@
 import { describe, expect, it } from "vitest";
+import { fpApplyResidentialInteriorPlateBandOverride } from "./fpSessionFloorPlateVisibility";
+
+describe("fpApplyResidentialInteriorPlateBandOverride", () => {
+  it("clamps a residential interior view back to the local storey", () => {
+    expect(
+      fpApplyResidentialInteriorPlateBandOverride({
+        band: { lo: 1, hi: 30 },
+        playerStorey: 12,
+        maxBuildingLevel: 30,
+        insideResidentialUnit: true,
+        cameraOutsideBuilding: false,
+        cabOccludesWorld: false,
+        insideStairShaft: false,
+      }),
+    ).toEqual({ lo: 12, hi: 12 });
+  });
+
+  it("keeps broad bands for stair/cab/exterior cases", () => {
+    expect(
+      fpApplyResidentialInteriorPlateBandOverride({
+        band: { lo: 1, hi: 30 },
+        playerStorey: 12,
+        maxBuildingLevel: 30,
+        insideResidentialUnit: true,
+        cameraOutsideBuilding: false,
+        cabOccludesWorld: true,
+        insideStairShaft: false,
+      }),
+    ).toEqual({ lo: 1, hi: 30 });
+  });
+});
+
 import {
   fpPointNearStairShaftForPlateBand,
   fpMergeStairShaftPlateBandWithElevator,

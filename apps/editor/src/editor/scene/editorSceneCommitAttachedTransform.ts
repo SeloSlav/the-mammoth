@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import { glassOpeningFromProxyMesh, TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
+import {
+  OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+  OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+} from "@the-mammoth/schemas";
 import { useEditorStore } from "../../state/editorStore.js";
 import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
@@ -11,9 +16,13 @@ import {
   clampOwnedApartmentBuiltinUniformScale,
   constrainMyApartmentDecorRootPose,
   constrainMyApartmentFurnitureRootPose,
+  constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  findEditorMyApartmentWallSlabMesh,
   previewWorldFromNormalizedPlacement,
+  snapOwnedApartmentDecorPitchRad,
+  snapOwnedApartmentDecorYawRad,
   snapOwnedApartmentYawRad,
 } from "../myApartment/editorMyApartmentMeshes.js";
 import { parseMyApartmentLayoutDecorSelectedId } from "../myApartment/editorMyApartmentSelection.js";
@@ -271,12 +280,14 @@ export function commitEditorAttachedTransform(opts: {
     let targetRoot: THREE.Object3D | null = attached;
     let pieceKey: MyApartmentLayoutPiece | undefined;
     let decorId: string | undefined;
+    let wallId: string | undefined;
     while (targetRoot) {
       pieceKey = targetRoot.userData.mammothEditorMyApartmentPiece as
         | MyApartmentLayoutPiece
         | undefined;
       decorId = targetRoot.userData.mammothEditorMyApartmentDecorId as string | undefined;
-      if (pieceKey || decorId) break;
+      wallId = targetRoot.userData.mammothEditorMyApartmentWallId as string | undefined;
+      if (pieceKey || decorId || wallId) break;
       targetRoot = targetRoot.parent;
     }
     if (!targetRoot) return;
@@ -301,11 +312,24 @@ export function commitEditorAttachedTransform(opts: {
       );
       const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
       const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
-      const yaw = snapOwnedApartmentYawRad(eulerLocal.y);
+      const yaw = snapOwnedApartmentDecorYawRad(eulerLocal.y);
+      const pitch = THREE.MathUtils.clamp(
+        snapOwnedApartmentDecorPitchRad(eulerLocal.x),
+        -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+        OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+      );
       const wx = pW.x + m.prefabOriginX;
       const wz = pW.z + m.prefabOriginZ;
-      const fx = THREE.MathUtils.clamp((wx - m.strictMinX) / m.spanX, 0, 1);
-      const fz = THREE.MathUtils.clamp((wz - m.strictMinZ) / m.spanZ, 0, 1);
+      const fx = THREE.MathUtils.clamp(
+        (wx - m.strictMinX) / m.spanX,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
+      const fz = THREE.MathUtils.clamp(
+        (wz - m.strictMinZ) / m.spanZ,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
       const uniformScale = clampOwnedApartmentBuiltinUniformScale(
         (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
       );
@@ -319,12 +343,72 @@ export function commitEditorAttachedTransform(opts: {
                 fz,
                 dy,
                 yawRad: yaw,
+                pitchRad: pitch,
                 uniformScale,
               }
             : item,
         ),
       }));
       targetRoot.scale.setScalar(uniformScale);
+      return;
+    }
+
+    if (wallId) {
+      /* During scale drag, `objectChange` keeps mesh/residual root factors split — folding here would
+       * compound sizes (see {@link constrainMyApartmentWallRootPose} `scaleDrag`). */
+      if (!opts.transformControls.dragging) {
+        constrainMyApartmentWallRootPose(targetRoot);
+      }
+      const mesh = findEditorMyApartmentWallSlabMesh(targetRoot);
+      if (!mesh) return;
+      targetRoot.updateMatrixWorld(true);
+      const decorBounds = new THREE.Box3().setFromObject(targetRoot);
+      const dy = THREE.MathUtils.clamp(
+        decorBounds.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+        0,
+        EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+      );
+      const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
+      const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
+      const yaw = snapOwnedApartmentDecorYawRad(eulerLocal.y);
+      const pitch = THREE.MathUtils.clamp(
+        snapOwnedApartmentDecorPitchRad(eulerLocal.x),
+        -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+        OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+      );
+      const wx = pW.x + m.prefabOriginX;
+      const wz = pW.z + m.prefabOriginZ;
+      const fx = THREE.MathUtils.clamp(
+        (wx - m.strictMinX) / m.spanX,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
+      const fz = THREE.MathUtils.clamp(
+        (wz - m.strictMinZ) / m.spanZ,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
+      const sizeX = Math.abs(mesh.scale.x * targetRoot.scale.x);
+      const sizeY = Math.abs(mesh.scale.y * targetRoot.scale.y);
+      const sizeZ = Math.abs(mesh.scale.z * targetRoot.scale.z);
+      store.patchOwnedApartmentBuiltins((d) => ({
+        ...d,
+        wallItems: d.wallItems.map((item) =>
+          item.id === wallId
+            ? {
+                ...item,
+                fx,
+                fz,
+                dy,
+                yawRad: yaw,
+                pitchRad: pitch,
+                sizeX,
+                sizeY,
+                sizeZ,
+              }
+            : item,
+        ),
+      }));
       return;
     }
 
@@ -339,8 +423,16 @@ export function commitEditorAttachedTransform(opts: {
 
     const wx = pW.x + m.prefabOriginX;
     const wz = pW.z + m.prefabOriginZ;
-    const fx = THREE.MathUtils.clamp((wx - m.strictMinX) / m.spanX, 0, 1);
-    const fz = THREE.MathUtils.clamp((wz - m.strictMinZ) / m.spanZ, 0, 1);
+    const fx = THREE.MathUtils.clamp(
+      (wx - m.strictMinX) / m.spanX,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    );
+    const fz = THREE.MathUtils.clamp(
+      (wz - m.strictMinZ) / m.spanZ,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    );
     const uniformScale = clampOwnedApartmentBuiltinUniformScale(
       (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
     );

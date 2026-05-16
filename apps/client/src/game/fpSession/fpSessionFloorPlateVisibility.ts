@@ -139,6 +139,27 @@ export type FpSessionFloorPlateVisibilityOpts = {
   floorVisCamDir: THREE.Vector3;
 };
 
+export function fpApplyResidentialInteriorPlateBandOverride(input: {
+  band: { lo: number; hi: number };
+  playerStorey: number;
+  maxBuildingLevel: number;
+  insideResidentialUnit: boolean;
+  cameraOutsideBuilding: boolean;
+  cabOccludesWorld: boolean;
+  insideStairShaft: boolean;
+}): { lo: number; hi: number } {
+  if (
+    !input.insideResidentialUnit ||
+    input.cameraOutsideBuilding ||
+    input.cabOccludesWorld ||
+    input.insideStairShaft
+  ) {
+    return input.band;
+  }
+  const clampedStorey = Math.max(1, Math.min(input.maxBuildingLevel, input.playerStorey));
+  return { lo: clampedStorey, hi: clampedStorey };
+}
+
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
@@ -270,6 +291,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       boundsMaxZ: buildingWorldBounds.max.z,
     });
     const playerStorey = estimateStoreyFromFeetY(feetPos.y, storeyOpts);
+    const containingResidentialUnitId = getContainingResidentialUnitId();
+    const insideResidentialUnit = containingResidentialUnitId !== null;
     const cameraOutsideBuilding = fpBuildingExteriorViewShouldRevealFullStack({
       cameraX: floorVisCamWorld.x,
       cameraZ: floorVisCamWorld.z,
@@ -332,6 +355,21 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         playerStorey,
       );
     }
+    /**
+     * Residential units should not inherit a tall-stack reveal from adjacent elevator/shaft probes.
+     * Once feet are inside a real apartment shell, ordinary views keep only the current storey's plate
+     * band unless we are in one of the explicit broad-view cases above (true exterior, cab occlusion,
+     * or stair/shaft context).
+     */
+    band = fpApplyResidentialInteriorPlateBandOverride({
+      band,
+      playerStorey,
+      maxBuildingLevel,
+      insideResidentialUnit,
+      cameraOutsideBuilding,
+      cabOccludesWorld,
+      insideStairShaft,
+    });
 
     const targetBandLo = band.lo;
     const targetBandHi = band.hi;
@@ -463,7 +501,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         floorVisCamWorld.y,
         floorVisCamWorld.z,
       )
-        ? getContainingResidentialUnitId()
+        ? containingResidentialUnitId
         : null;
     const topFloorResidentialShellVisibilityChanged =
       topFloorResidentialShellOnlyUnitId !== _lastTopFloorResidentialShellOnlyUnitId ||

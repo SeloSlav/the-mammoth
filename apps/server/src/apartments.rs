@@ -20,8 +20,8 @@ use crate::inventory::{
 };
 use crate::inventory_models::{
     apartment_stash_kind_display_name, parse_apartment_stash_key,
-    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, HotbarLocationData,
-    InventoryLocationData, ItemLocation, StashLocationData,
+    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
+    HotbarLocationData, InventoryLocationData, ItemLocation, StashLocationData,
 };
 use crate::items_catalog;
 use crate::player_vitals;
@@ -48,9 +48,19 @@ const CLAIM_FULL_SECS: f32 = if feature_flags::APARTMENT_CLAIM_FAST_FOR_TESTING 
     30.0
 };
 const REINFORCE_HOLD_SECS: f32 = 22.0;
-/// Horizontal radius² (m²) for wardrobe / footlocker / stove — feet pose is compared on **XZ**
-/// against anchor columns; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`).
-const STASH_INTERACT_SQ: f32 = 3.5 * 3.5;
+/// Horizontal radius² (m²) per built-in stash anchor — feet pose is compared on **XZ** against the
+/// authored column; vertical tolerance is separate (`pose_feet_vertical_ok_for_interact`). Keep
+/// `r = sqrt(r_sq)` aligned with `apartmentBuiltinStashInteractRadiusM` in `fpApartmentGameplay.ts`.
+#[inline]
+fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
+    let r = match stash_kind {
+        APARTMENT_STASH_KIND_WARDROBE => 1.27,
+        APARTMENT_STASH_KIND_STOVE => 1.14,
+        APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
+        _ => 1.10,
+    };
+    r * r
+}
 
 const INTERACT_FEET_Y_BELOW_SLACK_M: f32 = 0.55;
 const INTERACT_FEET_Y_ABOVE_SLACK_M: f32 = 2.85;
@@ -71,10 +81,11 @@ fn pose_near_horizontal_marker(
     ax: f32,
     az: f32,
     unit_floor_y: f32,
+    interact_r_sq: f32,
 ) -> bool {
     let dx = pose_x - ax;
     let dz = pose_z - az;
-    if dx * dx + dz * dz > STASH_INTERACT_SQ {
+    if dx * dx + dz * dz > interact_r_sq {
         return false;
     }
     pose_feet_vertical_ok_for_interact(unit_floor_y, pose_y)
@@ -190,6 +201,8 @@ pub struct ApartmentUnitDecor {
     pub pos_y: f32,
     pub pos_z: f32,
     pub yaw_rad: f32,
+    /// Tilt around local X after yaw (`YXZ` euler — matches Three.js decor roots).
+    pub pitch_rad: f32,
     pub uniform_scale: f32,
 }
 
@@ -208,6 +221,8 @@ const APARTMENT_DECOR_BOUND_INSET_XZ_M: f32 = 0.18;
 
 const APARTMENT_DECOR_COUNT_CAP: usize = 48;
 const APARTMENT_DECOR_MODEL_EXTENSIONS: &[&str] = &[".glb", ".obj"];
+/// Keep in sync with `OWNED_APARTMENT_DECOR_PITCH_RAD_MAX` in `@the-mammoth/schemas`.
+const APARTMENT_DECOR_PITCH_LIMIT_RAD: f32 = 1.4;
 
 fn clear_apartment_decor_for_unit(ctx: &ReducerContext, unit_key: &str) {
     let ids: Vec<u64> = ctx
@@ -290,8 +305,9 @@ fn clamp_decor_pose(
     mut y: f32,
     mut z: f32,
     yaw: f32,
+    pitch: f32,
     scale: f32,
-) -> (f32, f32, f32, f32, f32) {
+) -> (f32, f32, f32, f32, f32, f32) {
     let inset = APARTMENT_DECOR_BOUND_INSET_XZ_M;
     let min_x = unit.bound_min_x + inset;
     let max_x = unit.bound_max_x - inset;
@@ -303,7 +319,15 @@ fn clamp_decor_pose(
     let y_hi = unit.bound_max_y + 2.75;
     y = y.clamp(y_lo, y_hi);
     let scale_clamped = scale.clamp(0.08, 5.5);
-    (x, y, z, wrap_angle_rad(yaw), scale_clamped)
+    let pitch_clamped = pitch.clamp(-APARTMENT_DECOR_PITCH_LIMIT_RAD, APARTMENT_DECOR_PITCH_LIMIT_RAD);
+    (
+        x,
+        y,
+        z,
+        wrap_angle_rad(yaw),
+        pitch_clamped,
+        scale_clamped,
+    )
 }
 
 fn player_may_layout_owned_apartment(
@@ -840,6 +864,7 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
             unit.wardrobe_x,
             unit.wardrobe_z,
             unit.foot_y,
+            stash_interact_radius_sq(APARTMENT_STASH_KIND_WARDROBE),
         );
     if !near_claim {
         unit.claim_progress_secs = 0.0;
@@ -975,6 +1000,7 @@ pub fn add_apartment_unit_decor(
     pos_y: f32,
     pos_z: f32,
     yaw_rad: f32,
+    pitch_rad: f32,
     uniform_scale: f32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1001,8 +1027,8 @@ pub fn add_apartment_unit_decor(
         log::warn!("add_apartment_unit_decor: unit at cap ({APARTMENT_DECOR_COUNT_CAP})");
         return;
     }
-    let (px, py, pz, yw, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, uniform_scale);
+    let (px, py, pz, yw, ph, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, uniform_scale);
     let _ = ctx.db.apartment_unit_decor().insert(ApartmentUnitDecor {
         decor_id: 0,
         unit_key,
@@ -1011,6 +1037,7 @@ pub fn add_apartment_unit_decor(
         pos_y: py,
         pos_z: pz,
         yaw_rad: yw,
+        pitch_rad: ph,
         uniform_scale: sc,
     });
 }
@@ -1023,6 +1050,7 @@ pub fn update_apartment_unit_decor(
     pos_y: f32,
     pos_z: f32,
     yaw_rad: f32,
+    pitch_rad: f32,
     uniform_scale: f32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1038,12 +1066,13 @@ pub fn update_apartment_unit_decor(
     if player_may_layout_owned_apartment(ctx, &unit.unit_key, true).is_none() {
         return;
     }
-    let (px, py, pz, yw, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, uniform_scale);
+    let (px, py, pz, yw, ph, sc) =
+        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, uniform_scale);
     row.pos_x = px;
     row.pos_y = py;
     row.pos_z = pz;
     row.yaw_rad = yw;
+    row.pitch_rad = ph;
     row.uniform_scale = sc;
     ctx.db.apartment_unit_decor().decor_id().update(row);
 }
@@ -1126,15 +1155,39 @@ fn pose_near_named_apartment_stash_anchor(
     match stash_kind {
         APARTMENT_STASH_KIND_WARDROBE => {
             feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(x, y, z, unit.wardrobe_x, unit.wardrobe_z, unit.foot_y)
+                && pose_near_horizontal_marker(
+                    x,
+                    y,
+                    z,
+                    unit.wardrobe_x,
+                    unit.wardrobe_z,
+                    unit.foot_y,
+                    stash_interact_radius_sq(APARTMENT_STASH_KIND_WARDROBE),
+                )
         }
         APARTMENT_STASH_KIND_STOVE => {
             feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(x, y, z, unit.stove_x, unit.stove_z, unit.foot_y)
+                && pose_near_horizontal_marker(
+                    x,
+                    y,
+                    z,
+                    unit.stove_x,
+                    unit.stove_z,
+                    unit.foot_y,
+                    stash_interact_radius_sq(APARTMENT_STASH_KIND_STOVE),
+                )
         }
         _ => {
             feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(x, y, z, unit.foot_x, unit.foot_z, unit.foot_y)
+                && pose_near_horizontal_marker(
+                    x,
+                    y,
+                    z,
+                    unit.foot_x,
+                    unit.foot_z,
+                    unit.foot_y,
+                    stash_interact_radius_sq(APARTMENT_STASH_KIND_FOOTLOCKER),
+                )
         }
     }
 }

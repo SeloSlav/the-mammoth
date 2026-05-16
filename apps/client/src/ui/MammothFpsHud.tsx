@@ -45,6 +45,9 @@ const SECTION_COLORS: Record<string, string> = {
   render: "#e87878",
   "render·preEnv": "#e8a0a0",
   "render·fpEnv": "#e8a0a0",
+  "render·fpEnvSky": "#f0b3b3",
+  "render·fpEnvLight": "#d98e8e",
+  "render·setup": "#d96f6f",
   "render·three": "#e87878",
   "render·GPU": "#9b8cff",
   other: "#9a9a9a",
@@ -339,13 +342,31 @@ export function MammothFpsHud() {
               {(() => {
                 const ri = getLastRendererInfo();
                 return (
-                  <div style={{ ...monoStyle, ...dimStyle, fontSize: 11, marginBottom: 4 }}>
-                    <span style={{ color: ri.drawCalls > 200 ? THEME_ERROR : ri.drawCalls > 80 ? "#e8c47a" : THEME_SUCCESS }}>
-                      {ri.drawCalls} draw calls
-                    </span>
-                    {"  "}
-                    <span>{(ri.triangles / 1000).toFixed(1)}k tris</span>
-                  </div>
+                  <>
+                    <div style={{ ...monoStyle, ...dimStyle, fontSize: 11, marginBottom: 2 }}>
+                      <span
+                        style={{
+                          color:
+                            ri.drawCalls > 200 ? THEME_ERROR : ri.drawCalls > 80 ? "#e8c47a" : THEME_SUCCESS,
+                        }}
+                      >
+                        {ri.drawCalls} draw calls
+                      </span>
+                      {"  "}
+                      <span>{(ri.triangles / 1000).toFixed(1)}k tris</span>
+                    </div>
+                    <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
+                      plates {ri.visibleFloorPlates}/{ri.frustumFloorPlates}
+                      {"  "}
+                      interior {ri.visibleUnitInteriorMeshes}/{ri.frustumUnitInteriorMeshes}
+                      {"  "}
+                      props {ri.visibleApartmentPropMeshes}/{ri.frustumApartmentPropMeshes}
+                      {"  "}
+                      transparent {ri.visibleTransparentMeshes}/{ri.frustumTransparentMeshes}
+                      {"  "}
+                      trees {ri.visibleExteriorTreeRoots}/{ri.frustumExteriorTreeRoots}
+                    </div>
+                  </>
                 );
               })()}
 
@@ -398,6 +419,9 @@ export function MammothFpsHud() {
                   ["render", stats.sections.renderMs],
                   ["render·preEnv", stats.sections.renderFloorPlateVisMs],
                   ["render·fpEnv", stats.sections.renderFpEnvironmentMs],
+                  ["render·fpEnvSky", stats.sections.renderFpEnvironmentSkyMs],
+                  ["render·fpEnvLight", stats.sections.renderFpEnvironmentLightingMs],
+                  ["render·setup", stats.sections.renderSetupMs],
                   ["render·three", stats.sections.renderThreeMs],
                   ...(stats.sections.renderThreeGpuMs != null
                     ? ([["render·GPU", stats.sections.renderThreeGpuMs]] as [string, number][])
@@ -439,6 +463,54 @@ export function MammothFpsHud() {
                   </div>
                 );
               })}
+
+              {/* Frame-time histogram */}
+              <div style={sectionHeaderStyle}>Scene Content (Avg / Frame)</div>
+              {(
+                [
+                  [
+                    "floorPlates",
+                    stats.sceneCounts.visibleFloorPlates,
+                    stats.sceneCounts.frustumFloorPlates,
+                  ],
+                  [
+                    "unitInterior",
+                    stats.sceneCounts.visibleUnitInteriorMeshes,
+                    stats.sceneCounts.frustumUnitInteriorMeshes,
+                  ],
+                  [
+                    "apartmentProps",
+                    stats.sceneCounts.visibleApartmentPropMeshes,
+                    stats.sceneCounts.frustumApartmentPropMeshes,
+                  ],
+                  [
+                    "transparent",
+                    stats.sceneCounts.visibleTransparentMeshes,
+                    stats.sceneCounts.frustumTransparentMeshes,
+                  ],
+                  [
+                    "exteriorTrees",
+                    stats.sceneCounts.visibleExteriorTreeRoots,
+                    stats.sceneCounts.frustumExteriorTreeRoots,
+                  ],
+                ] as [string, number, number][]
+              ).map(([name, visibleValue, frustumValue]) => (
+                <div key={name} style={{ ...rowStyle, ...monoStyle }}>
+                  <span style={{ color: THEME_TEXT_MUTED, minWidth: 88, fontSize: 11 }}>{name}</span>
+                  <span style={{ color: THEME_TEXT_MUTED, minWidth: 20, textAlign: "right" }}>
+                    vis
+                  </span>
+                  <span style={{ color: THEME_TEXT_PRIMARY, minWidth: 42, textAlign: "right" }}>
+                    {visibleValue.toFixed(1)}
+                  </span>
+                  <span style={{ color: THEME_TEXT_MUTED, minWidth: 18, textAlign: "right" }}>
+                    fr
+                  </span>
+                  <span style={{ color: THEME_ACCENT, minWidth: 42, textAlign: "right" }}>
+                    {frustumValue.toFixed(1)}
+                  </span>
+                </div>
+              ))}
 
               {/* Frame-time histogram */}
               <div style={sectionHeaderStyle}>Frame-time histogram</div>

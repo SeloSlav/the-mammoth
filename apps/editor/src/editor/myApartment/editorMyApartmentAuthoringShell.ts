@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BuildingDoc, FloorDoc, OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import {
+  floorPlaceholderMeshMaterials,
   maxBuildingLevelIndex,
   resolveOwnedApartmentAuthoringPreviewLayout,
   TYPICAL_FLOOR_DOC_ID,
@@ -129,12 +130,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   }
 
   const floorGeom = new THREE.BoxGeometry(spanSlabX, 0.04, spanSlabZ);
-  const floorMat = new THREE.MeshStandardMaterial({
-    color: 0xd8dde6,
-    roughness: 0.92,
-    metalness: 0.02,
-  });
-  const floor = new THREE.Mesh(floorGeom, floorMat);
+  const floor = new THREE.Mesh(floorGeom, floorPlaceholderMeshMaterials.unitFloor);
   floor.name = "editor_owned_apartment_floor";
   floor.position.set(
     spanSlabX * 0.5,

@@ -16,5 +16,6 @@ export default {
   posY: __t.f32(),
   posZ: __t.f32(),
   yawRad: __t.f32(),
+  pitchRad: __t.f32(),
   uniformScale: __t.f32(),
 };

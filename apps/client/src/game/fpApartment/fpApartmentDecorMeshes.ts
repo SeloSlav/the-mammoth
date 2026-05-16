@@ -9,7 +9,14 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
+import {
+  OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+  OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+  type OwnedApartmentWallMaterial,
+} from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
+import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
@@ -22,11 +29,17 @@ import {
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
   resolveApartmentDecorPoses,
+  resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
-const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0.06;
+/**
+ * Content-authored decor/walls should preserve editor placement exactly, including flush placement
+ * against windowed exterior faces. Keep the strict hull as a hard stop, but do not reserve extra
+ * inset inside it.
+ */
+const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0;
 
 type VisibleDecorPlacement = {
   renderKey: string;
@@ -37,6 +50,7 @@ type VisibleDecorPlacement = {
   posY: number;
   posZ: number;
   yawRad: number;
+  pitchRad: number;
   uniformScale: number;
   source: "db" | "content";
 };
@@ -81,6 +95,7 @@ function visibleDecorPlacements(
           posY: decor.posY,
           posZ: decor.posZ,
           yawRad: decor.yawRad,
+          pitchRad: decor.pitchRad,
           uniformScale: decor.uniformScale,
           source: "db",
         });
@@ -98,6 +113,7 @@ function visibleDecorPlacements(
         posY: decor.y,
         posZ: decor.z,
         yawRad: decor.yaw,
+        pitchRad: decor.pitch,
         uniformScale: decor.uniformScale,
         source: "content",
       });
@@ -105,6 +121,63 @@ function visibleDecorPlacements(
   }
 
   return out;
+}
+
+type VisibleWallPlacement = {
+  renderKey: string;
+  unit: ApartmentUnit;
+  wallId: string;
+  posX: number;
+  posY: number;
+  posZ: number;
+  yawRad: number;
+  pitchRad: number;
+  sizeX: number;
+  sizeY: number;
+  sizeZ: number;
+  material: OwnedApartmentWallMaterial;
+};
+
+function visibleWallPlacements(
+  conn: DbConnection,
+  builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+): VisibleWallPlacement[] {
+  const visibleUnits: ApartmentUnit[] = [];
+  for (const row of conn.db.apartment_unit) {
+    const unit = row as ApartmentUnit;
+    if (!residentInteriorPropsVisibleForViewer(conn, unit)) continue;
+    visibleUnits.push(unit);
+  }
+  const out: VisibleWallPlacement[] = [];
+  for (const unit of visibleUnits) {
+    for (const wall of resolveApartmentWallPoses(unit, builtinsFromContent)) {
+      out.push({
+        renderKey: `content_wall:${unit.unitKey}:${wall.id}`,
+        unit,
+        wallId: wall.id,
+        posX: wall.x,
+        posY: wall.y,
+        posZ: wall.z,
+        yawRad: wall.yaw,
+        pitchRad: wall.pitch,
+        sizeX: wall.sizeX,
+        sizeY: wall.sizeY,
+        sizeZ: wall.sizeZ,
+        material: wall.material,
+      });
+    }
+  }
+  return out;
+}
+
+type AuthoringBuildEntry =
+  | { kind: "decor"; decor: VisibleDecorPlacement }
+  | { kind: "wall"; wall: VisibleWallPlacement };
+
+function compareAuthoringBuildEntries(a: AuthoringBuildEntry, b: AuthoringBuildEntry): number {
+  const ka = a.kind === "decor" ? a.decor.renderKey : a.wall.renderKey;
+  const kb = b.kind === "decor" ? b.decor.renderKey : b.wall.renderKey;
+  return ka.localeCompare(kb);
 }
 
 export type MountFpApartmentDecorMeshesResult = {
@@ -140,6 +213,12 @@ export function mountFpApartmentDecorMeshes(opts: {
     g.traverse((ch) => {
       if (!(ch instanceof THREE.Mesh)) return;
       if (ch.geometry) ch.geometry.dispose();
+      const mat = ch.material;
+      if (Array.isArray(mat)) {
+        for (const m of mat) m.dispose();
+      } else if (mat) {
+        mat.dispose();
+      }
     });
     g.clear();
     root.remove(g);
@@ -162,16 +241,28 @@ export function mountFpApartmentDecorMeshes(opts: {
     root.updateMatrixWorld(true);
   }
 
-  function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM: number): void {
+  function keepCloneInsideUnitXZ(
+    root: THREE.Object3D,
+    unit: ApartmentUnit,
+    opts: {
+      insetM: number;
+      fractionMin?: number;
+      fractionMax?: number;
+    },
+  ): void {
     root.updateMatrixWorld(true);
     _decorBoundsScratch.setFromObject(root);
     _decorBoundsScratch.getSize(_decorSizeScratch);
     _decorBoundsScratch.getCenter(_decorCenterScratch);
 
-    const minX = unit.boundMinX + insetM;
-    const maxX = unit.boundMaxX - insetM;
-    const minZ = unit.boundMinZ + insetM;
-    const maxZ = unit.boundMaxZ - insetM;
+    const spanX = unit.boundMaxX - unit.boundMinX;
+    const spanZ = unit.boundMaxZ - unit.boundMinZ;
+    const fractionMin = opts.fractionMin ?? 0;
+    const fractionMax = opts.fractionMax ?? 1;
+    const minX = unit.boundMinX + spanX * fractionMin + opts.insetM;
+    const maxX = unit.boundMinX + spanX * fractionMax - opts.insetM;
+    const minZ = unit.boundMinZ + spanZ * fractionMin + opts.insetM;
+    const maxZ = unit.boundMinZ + spanZ * fractionMax - opts.insetM;
 
     let dx = 0;
     if (_decorSizeScratch.x > maxX - minX) {
@@ -219,14 +310,63 @@ export function mountFpApartmentDecorMeshes(opts: {
     const builtinsFromContent = await loadOwnedApartmentBuiltinsDocFromContent();
     if (disposed || epoch !== buildEpoch) return;
 
-    const rows = visibleDecorPlacements(opts.conn, builtinsFromContent).sort((a, b) =>
-      a.renderKey.localeCompare(b.renderKey),
-    );
+    const decorRows = visibleDecorPlacements(opts.conn, builtinsFromContent);
+    const wallRows = visibleWallPlacements(opts.conn, builtinsFromContent);
+    const rows: AuthoringBuildEntry[] = [
+      ...decorRows.map((decor) => ({ kind: "decor" as const, decor })),
+      ...wallRows.map((wall) => ({ kind: "wall" as const, wall })),
+    ].sort(compareAuthoringBuildEntries);
     clearAll();
 
-    for (const d of rows) {
+    for (const entry of rows) {
       await yieldToMain();
       if (disposed || epoch !== buildEpoch) return;
+
+      if (entry.kind === "wall") {
+        const w = entry.wall;
+        const g = new THREE.Group();
+        g.name = `apartment_wall:${w.wallId}`;
+        g.userData.mammothApartmentWallAuthoring = true;
+        g.userData.mammothApartmentFurnitureProp = true;
+        g.userData.mammothApartmentUnitKey = w.unit.unitKey;
+        g.userData.mammothPlateLevelIndex = w.unit.level;
+        g.position.set(w.posX, w.posY, w.posZ);
+        g.rotation.order = "YXZ";
+        g.rotation.y = w.yawRad;
+        g.rotation.x = w.pitchRad;
+        g.rotation.z = 0;
+
+        const geom = new THREE.BoxGeometry(1, 1, 1);
+        const mesh = new THREE.Mesh(
+          geom,
+          new THREE.MeshStandardMaterial({ color: 0xc9c4bc }),
+        );
+        mesh.scale.set(w.sizeX, w.sizeY, w.sizeZ);
+        mesh.position.y = w.sizeY / 2;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.frustumCulled = true;
+        mesh.userData.mammothUnitInterior = true;
+        mesh.userData.mammothPlateLevelIndex = w.unit.level;
+        g.add(mesh);
+        snapCloneBottomToWorldFloor(g, w.posY);
+        keepCloneInsideUnitXZ(g, w.unit, {
+          insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
+          fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+          fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+        });
+        applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
+        g.updateMatrixWorld(true);
+        const bbox = new THREE.Box3().setFromObject(g);
+        bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+        g.userData.mammothApartmentDecorWorldBounds = bbox;
+        tagResidentialUnitInteriorMeshesUnder(g);
+        root.add(g);
+        groupByRenderKey.set(w.renderKey, g);
+        continue;
+      }
+
+      const d = entry.decor;
 
       const url = apartmentDecorFetchPath(d.modelRelPath);
       let template = templateByUrl.get(url);
@@ -252,7 +392,10 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentFurnitureProp = true;
       g.userData.mammothPlateLevelIndex = d.unit.level;
       g.position.set(d.posX, d.posY, d.posZ);
+      g.rotation.order = "YXZ";
       g.rotation.y = d.yawRad;
+      g.rotation.x = d.pitchRad;
+      g.rotation.z = 0;
       const us = Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1;
       g.scale.setScalar(us);
 
@@ -279,12 +422,17 @@ export function mountFpApartmentDecorMeshes(opts: {
       root.add(g);
       if (d.source === "content") {
         snapCloneBottomToWorldFloor(g, d.posY);
-        keepCloneInsideUnitXZ(g, d.unit, AUTHORING_DECOR_BOUNDARY_SLACK_M);
+        keepCloneInsideUnitXZ(g, d.unit, {
+          insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
+          fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+          fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+        });
       }
       g.updateMatrixWorld(true);
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
+      tagResidentialUnitInteriorMeshesUnder(g);
 
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);

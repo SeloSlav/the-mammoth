@@ -225,6 +225,18 @@ export type FpSessionMainRafFrameDeps = {
   fpDroppedPickupFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
+  getFpPerfSceneCounters: () => {
+    visibleFloorPlates: number;
+    visibleUnitInteriorMeshes: number;
+    visibleApartmentPropMeshes: number;
+    visibleTransparentMeshes: number;
+    visibleExteriorTreeRoots: number;
+    frustumFloorPlates: number;
+    frustumUnitInteriorMeshes: number;
+    frustumApartmentPropMeshes: number;
+    frustumTransparentMeshes: number;
+    frustumExteriorTreeRoots: number;
+  };
   /** No-op when GPU timestamp queries are unavailable. */
   scheduleGpuTimestampResolve: () => void;
 };
@@ -643,7 +655,7 @@ export function createFpSessionMainRafFrame(
         aptSysCoarseFz = cfz;
         cachedAptSys = getApartmentSystemPrompt(deps.conn, ft, {
           apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
-          lookedAtStashKey: stashUk,
+          ...(stashUk !== null ? { lookedAtStashKey: stashUk } : {}),
           lookedAtWardrobeUnitKey,
         });
       }
@@ -836,7 +848,7 @@ export function createFpSessionMainRafFrame(
       deps._floorVisCamDir.z,
     );
     const _t_afterFloorVis = performance.now();
-    deps.fpEnvironment.onFrame({
+    const fpEnvTimings = deps.fpEnvironment.onFrame({
       camera: deps.camera,
       nowSec: nowMs * 0.001,
       viewWidthPx: deps.canvas.clientWidth,
@@ -872,13 +884,15 @@ export function createFpSessionMainRafFrame(
         },
       });
     }
+    const _t_beforeThreeRender = performance.now();
     deps.renderer.info.reset();
     deps.renderer.render(deps.scene, deps.camera);
     deps.scheduleGpuTimestampResolve();
     const _t_renderEnd = performance.now();
     const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
     const renderFpEnvironmentMs = _t_afterFpEnv - _t_afterFloorVis;
-    const renderThreeMs = _t_renderEnd - _t_afterFpEnv;
+    const renderSetupMs = _t_beforeThreeRender - _t_afterFpEnv;
+    const renderThreeMs = _t_renderEnd - _t_beforeThreeRender;
     const physicsMs = _t_physicsEnd - nowMs;
     const elevatorMs = _t_elevEnd - _t_physicsEnd;
     const presentMs = _t_presentEnd - _t_elevEnd;
@@ -917,11 +931,15 @@ export function createFpSessionMainRafFrame(
         renderMs,
         renderFloorPlateVisMs,
         renderFpEnvironmentMs,
+        renderFpEnvironmentSkyMs: fpEnvTimings.skyMs,
+        renderFpEnvironmentLightingMs: fpEnvTimings.lightingMs,
+        renderSetupMs,
         renderThreeMs,
       },
       {
         drawCalls: deps.renderer.info.render.calls,
         triangles: deps.renderer.info.render.triangles,
+        ...deps.getFpPerfSceneCounters(),
       },
     );
   };

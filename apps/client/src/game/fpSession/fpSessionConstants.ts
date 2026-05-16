@@ -63,3 +63,8 @@ export const FP_SESSION_WEBGPU_ANTIALIAS = true;
 
 export const FP_VIEWMODEL_RENDER_LAYER = 1;
 export const FP_MIRROR_SELF_RENDER_LAYER = 2;
+/**
+ * Residential flat shells + owned apartment meshes — global sun/fill on layer 0 skips these unless feet
+ * are inside the unit; dim peek ambient lights this layer alone for doorway views from the corridor.
+ */
+export const FP_RESIDENTIAL_UNIT_INTERIOR_LAYER = 3;

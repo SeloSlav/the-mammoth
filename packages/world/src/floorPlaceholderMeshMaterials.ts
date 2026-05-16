@@ -363,25 +363,26 @@ export const buildingCorridorCeilingMaterial = (() => {
 
 /** PBR for apartment **unit** interior shells: walls + ceiling only (`matsFor("unit")`). */
 const APARTMENT_UNIT_INTERIOR_WALL_CEILING_AUTHORING: StandardAuthoringSlot = {
-  name: "apartment-unit-plaster-wall-ceiling",
-  /** Matte plaster — authored roughness scalar only (no roughness map). */
-  roughness: 0.93,
+  name: "apartment-unit-painted-plaster-wall-ceiling",
+  /** Scalar multiplies the roughness map (matte painted plaster). */
+  roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/apartment-unit-interior/basecolor.png",
   normalMapUrl: "/static/materials/apartment-unit-interior/normal.png",
+  roughnessMapUrl: "/static/materials/apartment-unit-interior/roughness.png",
 };
 
 const apartmentUnitInteriorWallCeilingMaterial = (() => {
   const m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.93,
+    roughness: 1,
     metalness: 0,
     side: THREE.DoubleSide,
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_INTERIOR_WALL_CEILING_AUTHORING);
   stripArchitecturalDetailMaps(m, { metalness: 0.02 });
   const rep = 0.28;
-  for (const key of ["map", "normalMap"] as const) {
+  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];
     if (t) {
       t.wrapS = THREE.RepeatWrapping;
@@ -394,9 +395,9 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
   return m;
 })();
 
-/** PBR parquet for apartment **unit** floors only (`matsFor("unit")` floor slot). */
+/** PBR basketweave parquet for apartment **unit** floors only (`matsFor("unit")` floor slot). */
 const APARTMENT_UNIT_FLOOR_AUTHORING: StandardAuthoringSlot = {
-  name: "apartment-unit-parquet-floor",
+  name: "apartment-unit-basketweave-parquet-floor",
   roughness: 1,
   metalness: 0.02,
   mapUrl: "/static/materials/apartment-unit-floor/basecolor.png",
@@ -412,7 +413,7 @@ const apartmentUnitFloorMaterial = (() => {
   });
   applyStandardAuthoringSlot(m, APARTMENT_UNIT_FLOOR_AUTHORING);
   stripArchitecturalDetailMaps(m, { metalness: 0.02 });
-  /** Parquet blocks are small — slightly higher repeat than slab concrete so planks read at room scale. */
+  /** Basketweave cells are small — slightly higher repeat than slab concrete so planks read at room scale. */
   const rep = 0.42;
   for (const key of ["map", "normalMap", "roughnessMap"] as const) {
     const t = m[key];

@@ -344,6 +344,7 @@ export function EditorChrome() {
           enterMyApartmentLayoutMode={enterMyApartmentLayoutMode}
           myApartmentLayoutPiece={myApartmentLayoutPiece}
           setMyApartmentLayoutPiece={setMyApartmentLayoutPiece}
+          contentIndex={contentIndex}
         />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
           <EditorChromeFpViewmodel

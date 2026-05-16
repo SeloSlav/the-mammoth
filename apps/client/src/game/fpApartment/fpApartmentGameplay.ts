@@ -14,9 +14,32 @@ import {
   parseApartmentStashKey,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
+import {
+  peekOwnedApartmentBuiltinsDoc,
+  resolveApartmentFurniturePose,
+} from "./fpOwnedApartmentBuiltinsFromContent.js";
 
-/** Horizontal radius (m); must match server `STASH_INTERACT_SQ = 3.5 * 3.5` (`apartments.rs`). Built-in stashes share this radius. */
-export const APARTMENT_FURNITURE_INTERACT_R_M = 3.5;
+/**
+ * Extra horizontal reach (m) beyond approximate visible mesh half-span so prompts still fire when
+ * standing at the GLB’s apparent edge. Keep numeric agreement with `stash_interact_radius_sq` in
+ * `apps/server/src/apartments.rs`.
+ */
+const APARTMENT_BUILTIN_STASH_REACH_PAD_M = 0.72;
+
+/** ~XZ half-span from replicated anchor to furthest edge of each preview GLB at default vis scales. */
+const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKind, number> = {
+  [APARTMENT_STASH_KIND_WARDROBE]: 0.55,
+  [APARTMENT_STASH_KIND_FOOTLOCKER]: 0.38,
+  [APARTMENT_STASH_KIND_STOVE]: 0.42,
+};
+
+/**
+ * Horizontal cylinder radius (m) for wardrobe / footlocker / stove: model extent + small pad so the
+ * player must be beside the piece, not across the room.
+ */
+export function apartmentBuiltinStashInteractRadiusM(stashKind: ApartmentStashKind): number {
+  return APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND[stashKind] + APARTMENT_BUILTIN_STASH_REACH_PAD_M;
+}
 
 /** Feet height slack vs `unit.footY` — keep aligned with server `INTERACT_FEET_Y_*_SLACK_M`. */
 const INTERACT_FEET_Y_BELOW_SLACK_M = 0.55;
@@ -147,6 +170,25 @@ function feetInsideUnitHull(u: ApartmentUnit, x: number, y: number, z: number): 
   );
 }
 
+function feetInsideUnitHullSlack(
+  u: ApartmentUnit,
+  x: number,
+  y: number,
+  z: number,
+  slackXZ: number,
+  slackYBelow: number,
+  slackYAbove: number,
+): boolean {
+  return (
+    x >= u.boundMinX - slackXZ &&
+    x <= u.boundMaxX + slackXZ &&
+    z >= u.boundMinZ - slackXZ &&
+    z <= u.boundMaxZ + slackXZ &&
+    y >= u.boundMinY - slackYBelow &&
+    y <= u.boundMaxY + slackYAbove
+  );
+}
+
 export function primaryEntryDoorForUnit(conn: DbConnection, unit: ApartmentUnit): ApartmentDoor | null {
   for (const row of conn.db.apartment_door) {
     const d = row as ApartmentDoor;
@@ -194,6 +236,39 @@ export function apartmentUnitContainingFeet(
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
     if (!feetInsideUnitHull(u, x, y, z)) continue;
+    const cx = (u.boundMinX + u.boundMaxX) * 0.5;
+    const cz = (u.boundMinZ + u.boundMaxZ) * 0.5;
+    const d = (x - cx) ** 2 + (z - cz) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = u;
+    }
+  }
+  return best;
+}
+
+/**
+ * Same as {@link apartmentUnitContainingFeet}, but with a slightly expanded hull around **feet only**.
+ * Used for FP apartment lighting so thresholds do not flicker at walls/windows.
+ *
+ * Does **not** use the camera — peeking into a unit from the hallway keeps corridor/global lighting,
+ * so interiors viewed through an open door are not switched into the in-unit rig.
+ */
+export function apartmentUnitContainingFeetSlack(
+  conn: DbConnection,
+  x: number,
+  y: number,
+  z: number,
+  opts?: { slackXZ?: number; slackYBelow?: number; slackYAbove?: number },
+): ApartmentUnit | null {
+  const slackXZ = opts?.slackXZ ?? 0.28;
+  const slackYBelow = opts?.slackYBelow ?? 0.12;
+  const slackYAbove = opts?.slackYAbove ?? 0.35;
+  let best: ApartmentUnit | null = null;
+  let bestD = Infinity;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (!feetInsideUnitHullSlack(u, x, y, z, slackXZ, slackYBelow, slackYAbove)) continue;
     const cx = (u.boundMinX + u.boundMaxX) * 0.5;
     const cz = (u.boundMinZ + u.boundMaxZ) * 0.5;
     const d = (x - cx) ** 2 + (z - cz) ** 2;
@@ -306,6 +381,18 @@ function feetVerticalOkForInteract(unitFloorY: number, y: number): boolean {
 }
 
 function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind): { x: number; z: number } {
+  const builtinsDoc = peekOwnedApartmentBuiltinsDoc();
+  if (builtinsDoc != null) {
+    const pose = resolveApartmentFurniturePose(u, builtinsDoc);
+    switch (stashKind) {
+      case APARTMENT_STASH_KIND_WARDROBE:
+        return { x: pose.wardrobe.x, z: pose.wardrobe.z };
+      case APARTMENT_STASH_KIND_STOVE:
+        return { x: pose.stove.x, z: pose.stove.z };
+      default:
+        return { x: pose.footlocker.x, z: pose.footlocker.z };
+    }
+  }
   switch (stashKind) {
     case APARTMENT_STASH_KIND_WARDROBE:
       return { x: u.wardrobeX, z: u.wardrobeZ };
@@ -324,7 +411,7 @@ function nearApartmentStashAnchor(
   y: number,
   z: number,
 ): boolean {
-  const r = APARTMENT_FURNITURE_INTERACT_R_M;
+  const r = apartmentBuiltinStashInteractRadiusM(stashKind);
   const r2 = r * r;
   const { x: ax, z: az } = stashInteractAnchorXZ(u, stashKind);
   const dx = x - ax;

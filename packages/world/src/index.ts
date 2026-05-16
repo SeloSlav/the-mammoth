@@ -28,7 +28,12 @@ import {
   type BuildFloorMeshesOptions,
 } from "./elevatorDoorFacesFromGroundFloorDoc.js";
 
-export { buildFloorMeshes, elevatorDoorFacesFromGroundFloorDoc, readElevatorDoorFaceOverride };
+export {
+  buildFloorMeshes,
+  elevatorDoorFacesFromGroundFloorDoc,
+  readElevatorDoorFaceOverride,
+};
+export { floorPlaceholderMeshMaterials } from "./floorPlaceholderMeshMaterials.js";
 export type { BuildFloorMeshesOptions };
 export {
   applyStairOpeningCollisionOverlay,
@@ -133,6 +138,7 @@ export {
   buildCollisionSpatialIndex,
   type CollisionSpatialIndex,
 } from "./collisionSpatialIndex.js";
+export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurfaceMaterial.js";
 export {
   buildFpBlockerAABBsForBuilding,
   mergeCoplanarSweepPreheat,

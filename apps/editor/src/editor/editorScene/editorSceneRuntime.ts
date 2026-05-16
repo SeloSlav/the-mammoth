@@ -40,12 +40,18 @@ import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorScen
 import {
   constrainMyApartmentDecorRootPose,
   constrainMyApartmentFurnitureRootPose,
+  constrainMyApartmentWallRootPose,
+  EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
+  findEditorMyApartmentWallSlabMesh,
 } from "../myApartment/editorMyApartmentMeshes.js";
 import {
   getEditorMyApartmentPieceGroup,
   getEditorMyApartmentSelectionGroup,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
-import { parseMyApartmentLayoutDecorSelectedId } from "../myApartment/editorMyApartmentSelection.js";
+import {
+  parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutWallSelectedId,
+} from "../myApartment/editorMyApartmentSelection.js";
 import {
   isConsumableFpAuthoringState,
   isFpMode,
@@ -122,6 +128,12 @@ export async function mountEditorScene(
     axis: AnchoredScaleAxis;
     localBounds: THREE.Box3;
     handleAxisSigns: THREE.Vector3;
+  } | null = null;
+
+  /** Wall slab mesh scale at scale-gesture pointer-down — avoids compounding `mesh *= root` each `objectChange`. */
+  let wallSlabScaleGesture: {
+    object: THREE.Object3D;
+    meshStart: THREE.Vector3;
   } | null = null;
 
   function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
@@ -365,13 +377,15 @@ export async function mountEditorScene(
         }
         transformControls.attach(g);
         const decorSelected = parseMyApartmentLayoutDecorSelectedId(s.selectedId) !== null;
+        const wallSelected = parseMyApartmentLayoutWallSelectedId(s.selectedId) !== null;
+        const apartmentFreeVertical = decorSelected || wallSelected;
         transformControls.setMode(s.transformMode);
         if (s.transformMode === "translate") {
           transformControls.showX = true;
-          transformControls.showY = decorSelected;
+          transformControls.showY = apartmentFreeVertical;
           transformControls.showZ = true;
         } else if (s.transformMode === "rotate") {
-          transformControls.showX = false;
+          transformControls.showX = apartmentFreeVertical;
           transformControls.showY = true;
           transformControls.showZ = false;
         } else {
@@ -381,7 +395,17 @@ export async function mountEditorScene(
         }
         const snap = s.gridSnapM;
         transformControls.setTranslationSnap(snap > 0 ? snap : null);
-        transformControls.setRotationSnap(Math.PI / 4);
+        if (s.transformMode === "rotate") {
+          if (apartmentFreeVertical) {
+            transformControls.setRotationSnap(
+              snap > 0 ? EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD : null,
+            );
+          } else {
+            transformControls.setRotationSnap(Math.PI / 4);
+          }
+        } else {
+          transformControls.setRotationSnap(null);
+        }
         transformControls.setScaleSnap(snap > 0 ? snap : null);
         transformControls.setSize(1);
         return;
@@ -447,6 +471,20 @@ export async function mountEditorScene(
     if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = true;
     primeAnchoredScaleGesture();
+    const st = useEditorStore.getState();
+    const attached = transformControls.object as THREE.Object3D | undefined;
+    if (
+      st.mode === "my_apartment_layout" &&
+      st.transformMode === "scale" &&
+      attached?.userData.mammothEditorMyApartmentWallId
+    ) {
+      const mesh = findEditorMyApartmentWallSlabMesh(attached);
+      wallSlabScaleGesture = mesh
+        ? { object: attached, meshStart: mesh.scale.clone() }
+        : null;
+    } else {
+      wallSlabScaleGesture = null;
+    }
   });
   transformControls.addEventListener("mouseUp", () => {
     if (isFpMode(useEditorStore.getState().mode)) return;
@@ -454,6 +492,7 @@ export async function mountEditorScene(
     levelEditorAnchoredScaleGesture = null;
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
+    wallSlabScaleGesture = null;
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
@@ -497,6 +536,31 @@ export async function mountEditorScene(
         constrainMyApartmentFurnitureRootPose(aptObj);
       } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
         constrainMyApartmentDecorRootPose(aptObj);
+      } else if (aptObj.userData.mammothEditorMyApartmentWallId) {
+        if (aptSt.transformMode === "scale") {
+          const axis = (transformControls as unknown as { axis?: string | null })
+            .axis;
+          if (
+            wallSlabScaleGesture &&
+            wallSlabScaleGesture.object === aptObj &&
+            transformControls.dragging &&
+            axis &&
+            axis !== "XYZ" &&
+            !axis.includes("E")
+          ) {
+            if (axis.indexOf("X") === -1) aptObj.scale.x = 1;
+            if (axis.indexOf("Y") === -1) aptObj.scale.y = 1;
+            if (axis.indexOf("Z") === -1) aptObj.scale.z = 1;
+          }
+        }
+        const scaleDrag =
+          aptSt.transformMode === "scale" &&
+          wallSlabScaleGesture &&
+          wallSlabScaleGesture.object === aptObj &&
+          transformControls.dragging
+            ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
+            : undefined;
+        constrainMyApartmentWallRootPose(aptObj, scaleDrag);
       }
     }
     applyAnchoredScaleGesture();

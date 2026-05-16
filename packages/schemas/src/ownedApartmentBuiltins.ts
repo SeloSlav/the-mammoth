@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+/** Matches server `APARTMENT_DECOR_PITCH_LIMIT_RAD` — max tilt for imported decor (rad). */
+export const OWNED_APARTMENT_DECOR_PITCH_RAD_MAX = 1.4 as const;
+/**
+ * Authoring can extend slightly beyond the replicated gameplay hull so props can reach visible
+ * plaster/window edges on end-cap units. Runtime placement still maps linearly from
+ * `boundMin* + f * span`; the extended range just permits a small overscan.
+ */
+export const OWNED_APARTMENT_LAYOUT_FRACTION_MIN = -0.2 as const;
+export const OWNED_APARTMENT_LAYOUT_FRACTION_MAX = 1.2 as const;
+
 /**
  * Migrate disk JSON from the old single yaw + shared furniture floor dy.
  *
@@ -35,9 +45,11 @@ export function migrateLegacyOwnedApartmentBuiltinsJson(raw: unknown): unknown {
 
 /**
  * Authoring-only layout for built-in resident props (bed, wardrobe, footlocker, stove).
- * Positions are **normalized** to each live `ApartmentUnit` hull at runtime (`boundMin*`, `boundMax*`).
- * The editor previews those fractions on the **prefab slab** (`floor` JSON `scale` X/Z): the slab
- * lines up with hollow-shell walls, while **`fx` / `fz` denominators** stay the strict hull spans.
+ * Positions are **normalized** to each live `ApartmentUnit` hull at runtime (`boundMin*`, `boundMax*`),
+ * with a small overscan beyond `[0,1]` so authored props can still reach visible shell edges where
+ * the gameplay hull sits inset from a windowed wall. The editor previews those fractions on the
+ * **prefab slab** (`floor` JSON `scale` X/Z): the slab lines up with hollow-shell walls, while
+ * **`fx` / `fz` denominators** stay the strict hull spans.
  */
 const OwnedApartmentDecorItemSchema = z.object({
   id: z.string().min(1).max(120),
@@ -46,30 +58,85 @@ const OwnedApartmentDecorItemSchema = z.object({
     .min(14)
     .max(210)
     .regex(/^static\/models\/[a-zA-Z0-9/._-]+\.(glb|obj)$/u),
-  /** 0..1 along unit X span (real: `boundMinX` → `boundMaxX`). */
-  fx: z.number().min(0).max(1),
-  fz: z.number().min(0).max(1),
+  /** Slight overscan around the live unit X/Z hull (`boundMin*` → `boundMax*`) for wall-edge authoring. */
+  fx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  fz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
   /** Meters above `boundMinY` for floor contact / authored placement. */
   dy: z.number().min(0).max(4),
   yawRad: z.number(),
+  /** Tilt around local X after yaw (Three.js `YXZ` root — matches runtime/editor). */
+  pitchRad: z
+    .number()
+    .min(-OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .default(0),
   uniformScale: z.number().min(0.08).max(5.5),
 });
+
+/** PBR slot for authored wall slabs (editor + client load URLs under `/static/materials/…`). */
+export const OwnedApartmentWallMaterialSchema = z.object({
+  mapUrl: z.string().optional(),
+  normalMapUrl: z.string().optional(),
+  roughnessMapUrl: z.string().optional(),
+  metalnessMapUrl: z.string().optional(),
+  bumpMapUrl: z.string().optional(),
+  roughness: z.number().min(0).max(1).optional(),
+  metalness: z.number().min(0).max(1).optional(),
+  useMetalnessMap: z.boolean().default(false),
+  useHeightMap: z.boolean().default(false),
+});
+
+export type OwnedApartmentWallMaterial = z.infer<typeof OwnedApartmentWallMaterialSchema>;
+
+/** Thin box partition wall saved with owned-apartment authoring (not replica decor rows). */
+export const OwnedApartmentWallItemSchema = z.object({
+  id: z.string().min(1).max(120),
+  /** Slight overscan around the live unit X/Z hull (`boundMin*` → `boundMax*`) for wall-edge authoring. */
+  fx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  fz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  /** Meters above `boundMinY` for the slab bottom / floor contact line in preview and runtime. */
+  dy: z.number().min(0).max(4),
+  yawRad: z.number(),
+  pitchRad: z
+    .number()
+    .min(-OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .default(0),
+  /** Local axis extents after `YXZ` yaw/pitch (meters); mesh is unit cube scaled by these values. */
+  sizeX: z.number().min(0.05).max(8),
+  sizeY: z.number().min(0.05).max(8),
+  sizeZ: z.number().min(0.02).max(2),
+  material: OwnedApartmentWallMaterialSchema.default(() => ({
+    useMetalnessMap: false,
+    useHeightMap: false,
+  })),
+});
+
+export type OwnedApartmentWallItem = z.infer<typeof OwnedApartmentWallItemSchema>;
 
 const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   version: z.literal(1),
   /** Preview floor fallback (meters) when the mamutica floor plate is unavailable in the editor. */
   previewSizeM: z.number().positive().max(80).default(10),
-  /** 0..1 along unit X span (real: `boundMinX` → `boundMaxX`). */
-  bedFx: z.number().min(0).max(1),
-  bedFz: z.number().min(0).max(1),
+  /** Slight overscan around the live unit X/Z hull (`boundMin*` → `boundMax*`) for wall-edge authoring. */
+  bedFx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  bedFz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
   /** Meters above `boundMinY` for the bed floor contact (matches `bed_y` slack above slab). */
   bedDy: z.number().min(0).max(4),
-  wardrobeFx: z.number().min(0).max(1),
-  wardrobeFz: z.number().min(0).max(1),
-  footFx: z.number().min(0).max(1),
-  footFz: z.number().min(0).max(1),
-  stoveFx: z.number().min(0).max(1).default(0.08),
-  stoveFz: z.number().min(0).max(1).default(0.08),
+  wardrobeFx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  wardrobeFz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  footFx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  footFz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  stoveFx: z
+    .number()
+    .min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN)
+    .max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX)
+    .default(0.08),
+  stoveFz: z
+    .number()
+    .min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN)
+    .max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX)
+    .default(0.08),
   /** Meters above `boundMinY` for wardrobe floor snap (replaces legacy shared `furnitureFloorDy`). */
   wardrobeDy: z.number().min(0).max(4),
   /** Meters above `boundMinY` for footlocker floor snap. */
@@ -88,6 +155,8 @@ const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   stoveUniformScale: z.number().min(0.08).max(5.5).default(1),
   /** Imported decor previews saved from the editor apartment authoring UI. */
   decorItems: z.array(OwnedApartmentDecorItemSchema).default([]),
+  /** Authored partition walls (thin boxes with PBR materials). */
+  wallItems: z.array(OwnedApartmentWallItemSchema).default([]),
 });
 
 export const OwnedApartmentBuiltinsDocSchema = z.preprocess(
@@ -123,4 +192,5 @@ export const DEFAULT_OWNED_APARTMENT_BUILTINS_DOC: OwnedApartmentBuiltinsDoc =
     footUniformScale: 1,
     stoveUniformScale: 1,
     decorItems: [],
+    wallItems: [],
   });

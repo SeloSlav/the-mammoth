@@ -97,6 +97,7 @@ import {
   mountFpApartmentFurniture,
 } from "./fpApartment/fpApartmentFurniture.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
+import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
 import { mountFpViewmodelAuthoringDevOnly } from "./fpDev/fpViewmodelAuthoringOverlay.js";
@@ -137,6 +138,7 @@ import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDeb
 import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpRendering/fpPlanarMirror.js";
 import {
   FP_MIRROR_SELF_RENDER_LAYER,
+  FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
   FP_VIEWMODEL_RENDER_LAYER,
@@ -208,6 +210,14 @@ export async function mountFpSession(
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
+  const rendererShadowMap = renderer.shadowMap as typeof renderer.shadowMap & {
+    autoUpdate: boolean;
+    needsUpdate: boolean;
+  };
+  rendererShadowMap.enabled = true;
+  rendererShadowMap.autoUpdate = false;
+  rendererShadowMap.needsUpdate = false;
+  rendererShadowMap.type = THREE.PCFSoftShadowMap;
   const scheduleGpuTimestampResolve = (): void => {
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
     if (!backend?.trackTimestamp) return;
@@ -231,6 +241,7 @@ export async function mountFpSession(
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
+  tagMergedResidentialShellMeshes(buildingRoot);
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
@@ -306,11 +317,113 @@ export async function mountFpSession(
   const topFloorResidentialUnitShellMeshes =
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
   const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
+  const perfFloorPlateGroups = buildingRoot.children.filter(
+    (ch): ch is THREE.Object3D => typeof ch.userData.mammothPlateLevelIndex === "number",
+  );
+  const transparentBuildingMeshes: THREE.Mesh[] = [];
+  const _perfSceneFrustumViewProjection = new THREE.Matrix4();
+  const _perfSceneFrustum = new THREE.Frustum();
+  const _perfFloorPlateBoundsScratch = new THREE.Box3();
+  const materialContributesTransparentPass = (material: THREE.Material): boolean =>
+    material.transparent === true || material.alphaTest > 0 || material.depthWrite === false;
+  const refreshPerfTrackedMeshes = (): void => {
+    transparentBuildingMeshes.length = 0;
+    buildingRoot.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const material = obj.material;
+      const contributesTransparentPass = Array.isArray(material)
+        ? material.some(materialContributesTransparentPass)
+        : materialContributesTransparentPass(material);
+      if (contributesTransparentPass) {
+        transparentBuildingMeshes.push(obj);
+      }
+    });
+  };
+  /** Apartment rig used analytic spots only — keep merged shells off the shadow pass (no doorway hitch). */
+  const disableShadowsOnUnitInteriorMeshes = (): void => {
+    for (let i = 0; i < unitInteriorMeshes.length; i++) {
+      const mesh = unitInteriorMeshes[i]!;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+    }
+  };
   const refreshApartmentInteriorMeshes = () => {
     stripApartmentFurnitureInteriorMeshes(unitInteriorMeshes);
     apartmentFurnitureInteriorMeshes.length = 0;
     appendApartmentFurnitureInteriorMeshes(buildingRoot, unitInteriorMeshes);
     appendApartmentFurnitureInteriorMeshes(buildingRoot, apartmentFurnitureInteriorMeshes);
+    disableShadowsOnUnitInteriorMeshes();
+    refreshPerfTrackedMeshes();
+  };
+  const getFpPerfSceneCounters = () => {
+    camera.updateMatrixWorld();
+    _perfSceneFrustumViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    _perfSceneFrustum.setFromProjectionMatrix(_perfSceneFrustumViewProjection);
+
+    let visibleFloorPlates = 0;
+    let visibleExteriorTreeRoots = 0;
+    let frustumFloorPlates = 0;
+    for (const ch of perfFloorPlateGroups) {
+      if (ch.visible) {
+        visibleFloorPlates += 1;
+        _perfFloorPlateBoundsScratch.setFromObject(ch);
+        if (_perfSceneFrustum.intersectsBox(_perfFloorPlateBoundsScratch)) {
+          frustumFloorPlates += 1;
+        }
+      }
+      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
+        visibleExteriorTreeRoots += 1;
+      }
+    }
+    let frustumExteriorTreeRoots = 0;
+    for (const ch of buildingRoot.children) {
+      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
+        _perfFloorPlateBoundsScratch.setFromObject(ch);
+        if (_perfSceneFrustum.intersectsBox(_perfFloorPlateBoundsScratch)) {
+          frustumExteriorTreeRoots += 1;
+        }
+      }
+    }
+
+    let visibleUnitInteriorMeshes = 0;
+    let frustumUnitInteriorMeshes = 0;
+    for (let i = 0; i < unitInteriorMeshes.length; i++) {
+      const mesh = unitInteriorMeshes[i]!;
+      if (!mesh.visible) continue;
+      visibleUnitInteriorMeshes += 1;
+      if (_perfSceneFrustum.intersectsObject(mesh)) frustumUnitInteriorMeshes += 1;
+    }
+
+    let visibleApartmentPropMeshes = 0;
+    let frustumApartmentPropMeshes = 0;
+    for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
+      const mesh = apartmentFurnitureInteriorMeshes[i]!;
+      if (!mesh.visible) continue;
+      visibleApartmentPropMeshes += 1;
+      if (_perfSceneFrustum.intersectsObject(mesh)) frustumApartmentPropMeshes += 1;
+    }
+
+    let visibleTransparentMeshes = 0;
+    let frustumTransparentMeshes = 0;
+    for (let i = 0; i < transparentBuildingMeshes.length; i++) {
+      const mesh = transparentBuildingMeshes[i]!;
+      if (!mesh.visible) continue;
+      visibleTransparentMeshes += 1;
+      if (_perfSceneFrustum.intersectsObject(mesh)) frustumTransparentMeshes += 1;
+    }
+
+    return {
+      visibleFloorPlates,
+      visibleUnitInteriorMeshes,
+      visibleApartmentPropMeshes,
+      visibleTransparentMeshes,
+      visibleExteriorTreeRoots,
+      frustumFloorPlates,
+      frustumUnitInteriorMeshes,
+      frustumApartmentPropMeshes,
+      frustumTransparentMeshes,
+      frustumExteriorTreeRoots,
+    };
   };
 
   const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
@@ -327,6 +440,7 @@ export async function mountFpSession(
     buildingRoot,
     onRebuilt: refreshApartmentInteriorMeshes,
   });
+  refreshApartmentInteriorMeshes();
 
 
   let sessionDisposed = false;
@@ -353,6 +467,8 @@ export async function mountFpSession(
         );
         if (sessionDisposed) return;
         unitInteriorMeshes.push(...dm.getMeshes());
+        disableShadowsOnUnitInteriorMeshes();
+        refreshPerfTrackedMeshes();
       } catch (err) {
         if (!sessionDisposed) {
           console.warn("[mountFpSession] failed to load stairwell decals", err);
@@ -403,6 +519,7 @@ export async function mountFpSession(
   );
   headPitch.traverse((obj) => obj.layers.set(FP_VIEWMODEL_RENDER_LAYER));
   camera.layers.enable(FP_VIEWMODEL_RENDER_LAYER);
+  camera.layers.enable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   presentation.setLocalMirrorAvatarLayer(FP_MIRROR_SELF_RENDER_LAYER);
   presentation.setLocalMirrorAvatarVisible(true);
 
@@ -1019,7 +1136,7 @@ export async function mountFpSession(
           : null;
       const aptKey = conn.identity
         ? getApartmentSystemPrompt(conn, feet, {
-            lookedAtStashKey: lookedAtStash?.stashKey ?? null,
+            ...(lookedAtStash?.stashKey != null ? { lookedAtStashKey: lookedAtStash.stashKey } : {}),
             lookedAtWardrobeUnitKey,
           })
         : null;
@@ -1257,6 +1374,7 @@ export async function mountFpSession(
     fpDroppedPickupFeet: getDroppedPickupAuthorityFeet,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
+    getFpPerfSceneCounters,
     scheduleGpuTimestampResolve,
   });
 

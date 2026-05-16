@@ -18,5 +18,6 @@ export default __t.row({
   posY: __t.f32().name("pos_y"),
   posZ: __t.f32().name("pos_z"),
   yawRad: __t.f32().name("yaw_rad"),
+  pitchRad: __t.f32().name("pitch_rad"),
   uniformScale: __t.f32().name("uniform_scale"),
 });

@@ -3,6 +3,7 @@ import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForPiece,
+  editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
 
 export function resolveEditorMyApartmentLayoutPick(hit: Object3D): {
@@ -23,6 +24,13 @@ export function resolveEditorMyApartmentLayoutPick(hit: Object3D): {
       return {
         target: o,
         id: editorMyApartmentSelectedIdForDecor(decorId),
+      };
+    }
+    const wallId = o.userData.mammothEditorMyApartmentWallId as string | undefined;
+    if (wallId) {
+      return {
+        target: o,
+        id: editorMyApartmentSelectedIdForWall(wallId),
       };
     }
     o = o.parent;

@@ -10,9 +10,14 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+  OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+  OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+} from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterial } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   apartmentUnitOwnerEqual,
@@ -72,11 +77,14 @@ const STOVE_BOUNDS_INSET_M = 0.42;
 /**
  * Replication seed path only: replicated `bed_x/z/y` anchors can graze exterior glass; pull the live
  * mesh inward before merge. **Not** used for {@link loadOwnedApartmentBuiltinsDocFromContent} poses
- * — those match editor fractions and need the same light slack as wardrobe/foot.
+ * — those should preserve the exact authoring edge reach from the editor.
  */
 const BED_BOUNDS_INSET_M = 2.95;
-/** When disk JSON supplies fractions, trust authoring; only keep a hairline separation from bounds. */
-const AUTHORING_FURNITURE_BOUNDARY_SLACK_M = 0.06;
+/**
+ * When disk JSON supplies fractions, preserve the authored placement exactly so props can reach the
+ * same strict-hull edge seen in the editor, including window faces.
+ */
+const AUTHORING_FURNITURE_BOUNDARY_SLACK_M = 0;
 
 const FURNITURE_PLACEMENT_FIELDS = [
   "unitKey",
@@ -134,16 +142,30 @@ function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number):
   root.updateMatrixWorld(true);
 }
 
-function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM: number): void {
+type UnitXZClampOptions = {
+  insetM: number;
+  fractionMin?: number;
+  fractionMax?: number;
+};
+
+function keepCloneInsideUnitXZ(
+  root: THREE.Object3D,
+  unit: ApartmentUnit,
+  opts: UnitXZClampOptions,
+): void {
   root.updateMatrixWorld(true);
   _furnitureBoundsScratch.setFromObject(root);
   _furnitureBoundsScratch.getSize(_furnitureSizeScratch);
   _furnitureBoundsScratch.getCenter(_furnitureCenterScratch);
 
-  const minX = unit.boundMinX + insetM;
-  const maxX = unit.boundMaxX - insetM;
-  const minZ = unit.boundMinZ + insetM;
-  const maxZ = unit.boundMaxZ - insetM;
+  const spanX = unit.boundMaxX - unit.boundMinX;
+  const spanZ = unit.boundMaxZ - unit.boundMinZ;
+  const fractionMin = opts.fractionMin ?? 0;
+  const fractionMax = opts.fractionMax ?? 1;
+  const minX = unit.boundMinX + spanX * fractionMin + opts.insetM;
+  const maxX = unit.boundMinX + spanX * fractionMax - opts.insetM;
+  const minZ = unit.boundMinZ + spanZ * fractionMin + opts.insetM;
+  const maxZ = unit.boundMinZ + spanZ * fractionMax - opts.insetM;
 
   let dx = 0;
   if (_furnitureSizeScratch.x > maxX - minX) {
@@ -170,8 +192,18 @@ function keepCloneInsideUnitXZ(root: THREE.Object3D, unit: ApartmentUnit, insetM
   }
 }
 
-function xzInsetForFurnitureClamp(useAuthoringClamp: boolean, seededInsetM: number): number {
-  return useAuthoringClamp ? AUTHORING_FURNITURE_BOUNDARY_SLACK_M : seededInsetM;
+function xzClampOptionsForFurnitureClamp(
+  useAuthoringClamp: boolean,
+  seededInsetM: number,
+): UnitXZClampOptions {
+  if (useAuthoringClamp) {
+    return {
+      insetM: AUTHORING_FURNITURE_BOUNDARY_SLACK_M,
+      fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+      fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    };
+  }
+  return { insetM: seededInsetM };
 }
 
 function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Object3D {
@@ -386,6 +418,7 @@ export async function mountFpApartmentFurniture(opts: {
         hull.frustumCulled = false;
         unitGroup.add(hull);
       }
+      tagResidentialUnitInteriorMeshesUnder(unitGroup);
       build.unitGroups.push(unitGroup);
       return;
     }
@@ -405,7 +438,11 @@ export async function mountFpApartmentFurniture(opts: {
     w.position.set(pose.wardrobe.x, 0, pose.wardrobe.z);
     w.rotation.y = pose.wardrobe.yaw;
     snapCloneBottomToWorldFloor(w, pose.wardrobe.snapFloorY);
-    keepCloneInsideUnitXZ(w, u, xzInsetForFurnitureClamp(useAuthoringClamp, WARDROBE_BOUNDS_INSET_M));
+    keepCloneInsideUnitXZ(
+      w,
+      u,
+      xzClampOptionsForFurnitureClamp(useAuthoringClamp, WARDROBE_BOUNDS_INSET_M),
+    );
     w.updateMatrixWorld(true);
     const wardrobeBounds = new THREE.Box3().setFromObject(w);
     const wardrobePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -442,7 +479,11 @@ export async function mountFpApartmentFurniture(opts: {
     f.position.set(pose.footlocker.x, 0, pose.footlocker.z);
     f.rotation.y = pose.footlocker.yaw;
     snapCloneBottomToWorldFloor(f, pose.footlocker.snapFloorY);
-    keepCloneInsideUnitXZ(f, u, xzInsetForFurnitureClamp(useAuthoringClamp, FOOTLOCKER_BOUNDS_INSET_M));
+    keepCloneInsideUnitXZ(
+      f,
+      u,
+      xzClampOptionsForFurnitureClamp(useAuthoringClamp, FOOTLOCKER_BOUNDS_INSET_M),
+    );
     f.updateMatrixWorld(true);
     const footlockerBounds = new THREE.Box3().setFromObject(f);
     const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -477,7 +518,11 @@ export async function mountFpApartmentFurniture(opts: {
     st.position.set(pose.stove.x, 0, pose.stove.z);
     st.rotation.y = pose.stove.yaw;
     snapCloneBottomToWorldFloor(st, pose.stove.snapFloorY);
-    keepCloneInsideUnitXZ(st, u, xzInsetForFurnitureClamp(useAuthoringClamp, STOVE_BOUNDS_INSET_M));
+    keepCloneInsideUnitXZ(
+      st,
+      u,
+      xzClampOptionsForFurnitureClamp(useAuthoringClamp, STOVE_BOUNDS_INSET_M),
+    );
     st.updateMatrixWorld(true);
     const stoveBounds = new THREE.Box3().setFromObject(st);
     const stovePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
@@ -512,7 +557,11 @@ export async function mountFpApartmentFurniture(opts: {
     b.position.set(pose.bed.x, 0, pose.bed.z);
     b.rotation.y = pose.bed.yaw;
     snapCloneBottomToWorldFloor(b, pose.bed.y);
-    keepCloneInsideUnitXZ(b, u, xzInsetForFurnitureClamp(useAuthoringClamp, BED_BOUNDS_INSET_M));
+    keepCloneInsideUnitXZ(
+      b,
+      u,
+      xzClampOptionsForFurnitureClamp(useAuthoringClamp, BED_BOUNDS_INSET_M),
+    );
     unitGroup.add(b);
 
     await yieldToMain();
@@ -552,10 +601,12 @@ export async function mountFpApartmentFurniture(opts: {
 
     for (const m of unitGroup.children) {
       if (m instanceof THREE.Mesh) {
+        m.userData.mammothApartmentUnitKey = u.unitKey;
         m.castShadow = false;
         m.receiveShadow = false;
       }
     }
+    tagResidentialUnitInteriorMeshesUnder(unitGroup);
 
     build.unitGroups.push(unitGroup);
   }

@@ -6,6 +6,7 @@ vi.mock("../../featureFlags", async (importOriginal) => ({
 }));
 
 import {
+  apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
   clientMayUseApartmentStash,
@@ -415,6 +416,56 @@ describe("fpApartmentGameplay", () => {
       stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
       stashLabel: "footlocker",
     });
+  });
+
+  it("rejects stash use when feet are inside the unit hull but beyond per-piece horizontal reach", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 2,
+      footZ: 3,
+      wardrobeX: 5,
+      wardrobeZ: 5,
+      stoveX: 8,
+      stoveZ: 8,
+      boundMinX: 0,
+      boundMaxX: 12,
+      boundMinZ: 0,
+      boundMaxZ: 12,
+    });
+    const conn = mockConn([unit]);
+    const footR = apartmentBuiltinStashInteractRadiusM(APARTMENT_STASH_KIND_FOOTLOCKER);
+    const farFootX = 2 + footR + 0.08;
+    expect(
+      clientMayUseApartmentStash(
+        conn,
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER),
+        { x: farFootX, y: 10, z: 3 },
+      ),
+    ).toBe(false);
+
+    const wardR = apartmentBuiltinStashInteractRadiusM(APARTMENT_STASH_KIND_WARDROBE);
+    const farWardX = 5 + wardR + 0.08;
+    expect(
+      clientMayUseApartmentStash(
+        conn,
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_WARDROBE),
+        { x: farWardX, y: 10, z: 5 },
+      ),
+    ).toBe(false);
+
+    const stoveR = apartmentBuiltinStashInteractRadiusM(APARTMENT_STASH_KIND_STOVE);
+    const farStoveX = 8 + stoveR + 0.08;
+    expect(
+      clientMayUseApartmentStash(
+        conn,
+        testIdentity as never,
+        apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_STOVE),
+        { x: farStoveX, y: 10, z: 8 },
+      ),
+    ).toBe(false);
   });
 
   it("clientMayUseApartmentStash rejects owned stash unless feet are inside range", () => {
