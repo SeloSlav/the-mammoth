@@ -214,10 +214,11 @@ export async function mountFpSession(
   assertWebGpuRendererBackend(renderer);
   const rendererShadowMap = renderer.shadowMap as typeof renderer.shadowMap & {
     autoUpdate: boolean;
+    needsUpdate: boolean;
   };
   rendererShadowMap.enabled = true;
-  /** Animated doors / moving props require fresh shadow maps; cost is one directional shadow from {@link attachFpSessionEnvironment}. */
-  rendererShadowMap.autoUpdate = true;
+  rendererShadowMap.autoUpdate = false;
+  rendererShadowMap.needsUpdate = false;
   rendererShadowMap.type = THREE.PCFSoftShadowMap;
   const scheduleGpuTimestampResolve = (): void => {
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
@@ -366,36 +367,14 @@ export async function mountFpSession(
       }
     });
   };
-  /**
-   * Residential interiors use {@link FP_RESIDENTIAL_UNIT_INTERIOR_LAYER} + a shadow-casting directional.
-   * Shell merges skip **casting** (thin merged hulls + door openings caused doorway artifacts) but still
-   * **receive** so props read against plaster/floor. Props cast + receive.
-   */
-  const applyResidentialInteriorShadowFlags = (): void => {
-    for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
-      const entry = unitInteriorMeshEntries[i]!;
-      const mesh = entry.mesh;
-      if (mesh.userData.mammothApartmentStashPickUnitKey !== undefined) {
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
-        continue;
-      }
-      if (mesh.userData.mammothApartmentUnitBoundsDebug === true) {
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
-        continue;
-      }
-      const isOwnedProp = entry.apartmentUnitKey !== null;
-      if (isOwnedProp) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-      } else {
-        mesh.castShadow = false;
-        mesh.receiveShadow = true;
-      }
+  /** Apartment rig used analytic spots only — keep merged shells off the shadow pass (no doorway hitch). */
+  const disableShadowsOnUnitInteriorMeshes = (): void => {
+    for (let i = 0; i < unitInteriorMeshes.length; i++) {
+      const mesh = unitInteriorMeshes[i]!;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
     }
   };
-  applyResidentialInteriorShadowFlags();
   const refreshApartmentInteriorMeshes = () => {
     unitInteriorMeshEntries.length = 0;
     unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
@@ -410,7 +389,7 @@ export async function mountFpSession(
         apartmentFurnitureInteriorMeshes.push(entry.mesh);
       }
     }
-    applyResidentialInteriorShadowFlags();
+    disableShadowsOnUnitInteriorMeshes();
     refreshPerfTrackedMeshes();
     rebuildFpInteriorPartitionSolidMeshes();
   };
@@ -549,7 +528,7 @@ export async function mountFpSession(
         );
         if (sessionDisposed) return;
         unitInteriorMeshes.push(...dm.getMeshes());
-        applyResidentialInteriorShadowFlags();
+        disableShadowsOnUnitInteriorMeshes();
         refreshPerfTrackedMeshes();
       } catch (err) {
         if (!sessionDisposed) {
@@ -1242,11 +1221,11 @@ export async function mountFpSession(
       if (fpElevators.consumeInteractKey(feet, camera)) return;
       const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
       const lookedAtStash = conn.identity
-        ? fpApartmentFurniture.getStashPrompt(feet, camera)
+        ? fpApartmentDecorMeshes.getStashPrompt(feet, camera)
         : null;
       const lookedAtWardrobeUnitKey =
         conn.identity && APARTMENT_CLAIM_UI_ENABLED
-          ? fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(feet, camera)
+          ? fpApartmentDecorMeshes.getWardrobeClaimLookAtUnitKey(feet, camera)
           : null;
       const aptKey = conn.identity
         ? getApartmentSystemPrompt(conn, feet, {

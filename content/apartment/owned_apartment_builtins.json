@@ -1,27 +1,59 @@
 {
-  "version": 1,
+  "version": 2,
   "previewSizeM": 10,
-  "bedFx": 0.64425022076038,
-  "bedFz": 0.005353374008252718,
-  "bedDy": 0,
-  "wardrobeFx": 0.46460554398918325,
-  "wardrobeFz": 0.0027651458718975877,
-  "footFx": 0.7290644781756392,
-  "footFz": 0.1872640906166735,
-  "stoveFx": 0.33446516583746194,
-  "stoveFz": -0.05085161953381605,
-  "wardrobeDy": 0,
-  "footDy": 0,
-  "stoveDy": 0,
-  "bedYawRad": -1.5707963267948966,
-  "wardrobeYawRad": 1.5707963267948966,
-  "footYawRad": -1.5707963267948966,
-  "stoveYawRad": 0,
-  "bedUniformScale": 1.3018349780093093,
-  "wardrobeUniformScale": 1.2597163561791922,
-  "footUniformScale": 1,
-  "stoveUniformScale": 0.5459024758546215,
-  "decorItems": [
+  "placedItems": [
+    {
+      "id": "mammoth_builtin_bed",
+      "modelRelPath": "static/models/objects/bed.glb",
+      "fx": 0.64425022076038,
+      "fz": 0.005353374008252718,
+      "dy": 0.5314846988880992,
+      "yawRad": -1.5707963267948963,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 1.3018349780093093,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "bed"
+    },
+    {
+      "id": "mammoth_builtin_wardrobe",
+      "modelRelPath": "static/models/objects/wardrobe-closet.glb",
+      "fx": 0.46460554398918325,
+      "fz": 0.0027651458718975877,
+      "dy": 1.1765405275348562,
+      "yawRad": 1.5707963267948963,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 1.2597163561791922,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "wardrobe"
+    },
+    {
+      "id": "mammoth_builtin_footlocker",
+      "modelRelPath": "static/models/objects/footlocker.glb",
+      "fx": 0.7290644781756392,
+      "fz": 0.1872640906166735,
+      "dy": 0.35616436004638674,
+      "yawRad": -1.5707963267948963,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "footlocker"
+    },
+    {
+      "id": "mammoth_builtin_stove",
+      "modelRelPath": "static/models/objects/stove.glb",
+      "fx": 0.33446516583746194,
+      "fz": -0.05085161953381605,
+      "dy": 0.45783162000438593,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.5459024758546215,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "stove"
+    },
     {
       "id": "0577b116-39ee-47a2-8da6-d729d6e1b16f",
       "modelRelPath": "static/models/objects/cabinet-horizontal.glb",
@@ -32,19 +64,21 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.9015343208782767,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "896c14cc-c36c-479f-b808-e07f48a0315f",
       "modelRelPath": "static/models/objects/table-dining.glb",
-      "fx": 0.31504780243669583,
-      "fz": 0.53983328673424,
+      "fx": 0.11906018680599244,
+      "fz": 0.6515087026070979,
       "dy": 0.5566294852381909,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.8778936277210995,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "20642f4e-7fc4-4844-97ba-335769211059",
@@ -56,19 +90,21 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.41536348828836117,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.4202888611536229,
-      "fz": 0.42835610897033916,
-      "dy": 0.6874465257694269,
-      "yawRad": -0.7853981633974483,
-      "pitchRad": 0,
-      "rollRad": 0,
+      "fx": 0.2092418406438419,
+      "fz": 0.7917498477337325,
+      "dy": 0.6434121443678599,
+      "yawRad": -2.183542978550241,
+      "pitchRad": 0.0653938094329,
+      "rollRad": -0.057346854830325464,
       "uniformScale": 0.6387760114721411,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "ad41807b-e8ff-431e-b80d-c48f43a149cd",
@@ -80,7 +116,8 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.34027693535970077,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "50ff14bb-6ea8-442b-9779-0e77edf5bd58",
@@ -92,31 +129,34 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 2.2334062880249177,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "f5c3d103-2cb8-4608-9175-cf6d04d8e4e2",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.270454621124987,
-      "fz": 0.7152723895711759,
+      "fx": 0.07446700549428367,
+      "fz": 0.8269478054440337,
       "dy": 0.6087747138737947,
       "yawRad": 2.356194490192345,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6387760114721411,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "1f2a1f94-b6cc-44e1-8e61-4ec41b083ea4",
       "modelRelPath": "static/models/objects/heater-room.glb",
-      "fx": 0.44098657198676605,
-      "fz": 0.8898847320069064,
-      "dy": 0.533360357255926,
-      "yawRad": 0,
+      "fx": 0.7475134050356008,
+      "fz": 0.5516076464464256,
+      "dy": 0.6038711630898627,
+      "yawRad": -1.5707963267948963,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5596451438846985,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "9bc55e52-bc87-434d-b9ca-341d9cb33116",
@@ -128,7 +168,8 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6515191438158092,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "6c989f0f-157f-4206-91b2-1dd248941854",
@@ -140,7 +181,8 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.3922916098188611,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "da671baf-34a9-497a-940a-48291a56ee19",
@@ -152,7 +194,8 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.6105584619117874,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "2ec91584-fb9b-4928-8739-01d33ba33d56",
@@ -164,7 +207,8 @@
       "pitchRad": 0.000123475287050455,
       "rollRad": 0.007166856598369753,
       "uniformScale": 1.0875838849973372,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "3797fcc1-6ad1-4f1a-aaa9-007cd2962e6c",
@@ -176,19 +220,21 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.562436812617749,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "300751cf-8564-4486-916f-c2d10d5ed336",
       "modelRelPath": "static/models/objects/table-side.glb",
-      "fx": 0.45559949155888807,
-      "fz": 0.773669056135839,
-      "dy": 0.3269205564391531,
-      "yawRad": 1.5707963267948966,
+      "fx": 0.45534528704646526,
+      "fz": 0.7708798341706876,
+      "dy": 0.4230749340354199,
+      "yawRad": 1.5707963267948963,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.45519422090843403,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "8fd1c958-c1ef-4b00-9c97-ee588b884eb0",
@@ -200,7 +246,8 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.7465950941587092,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "41df26cd-e227-4765-82ba-a68376e8e7fb",
@@ -212,19 +259,21 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
       "modelRelPath": "static/models/objects/ashtray.glb",
-      "fx": 0.3205444499527348,
-      "fz": 0.6076253735973736,
-      "dy": 1.129203290441255,
+      "fx": 0.1245568343220314,
+      "fz": 0.7193007894702315,
+      "dy": 1.129203285244011,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.1253475248350381,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "fee1f1e2-1d21-45ad-ba61-437e6a78f0f7",
@@ -236,103 +285,99 @@
       "pitchRad": -0.27628907669592623,
       "rollRad": 0.001989681291644851,
       "uniformScale": 0.19171383484397495,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "28512766-a760-4eb3-b88e-63de2ea8bed8",
       "modelRelPath": "static/models/objects/rakija.glb",
-      "fx": 0.3515373865444065,
-      "fz": 0.558476575484208,
+      "fx": 0.15554977091370312,
+      "fz": 0.6701519913570659,
       "dy": 1.3169727258522632,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.21375318679269292,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "969b62c8-fc80-4728-ac4e-60801758eba5",
       "modelRelPath": "static/models/objects/coffee-cup-empty.glb",
-      "fx": 0.3335517331573933,
-      "fz": 0.5570500231206282,
+      "fx": 0.13756411752668987,
+      "fz": 0.6687254389934861,
       "dy": 1.1685230290846316,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.08,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "b1108f66-60ce-436e-99b5-41374572d3ab",
       "modelRelPath": "static/models/objects/empty-cigarette-pack.glb",
-      "fx": 0.24371394026863813,
-      "fz": 0.5202727336052705,
-      "dy": 0.049674859880036976,
+      "fx": 0.04772632463793476,
+      "fz": 0.6319481494781284,
+      "dy": 0.04967485988003707,
       "yawRad": 3.141592653589793,
       "pitchRad": -1.3089969389957474,
       "rollRad": 0,
       "uniformScale": 0.08,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "da2f6e73-9787-461c-b295-48c4cae9db6f",
       "modelRelPath": "static/models/objects/empty-cigarette-pack.glb",
-      "fx": 0.31722163551121685,
-      "fz": 0.5862670598916646,
-      "dy": 1.1543829813631366,
-      "yawRad": -2.803062313890117,
-      "pitchRad": -1.275375514720022,
-      "rollRad": -0.08813294401611077,
+      "fx": 0.12123401988051345,
+      "fz": 0.6979424757645224,
+      "dy": 1.1513536312168309,
+      "yawRad": 3.102149376924656,
+      "pitchRad": -1.0655819805059659,
+      "rollRad": 0.19556525462229501,
       "uniformScale": 0.09626611719109422,
-      "ignoreSupportSurfaces": true
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
     },
     {
       "id": "e2159395-e392-44ea-8dff-182f7f443f21",
       "modelRelPath": "static/models/objects/cigarette.glb",
-      "fx": 0.3258014693397674,
-      "fz": 0.617576798499159,
-      "dy": 1.1412275983490856,
+      "fx": 0.12981385370906404,
+      "fz": 0.7292522143720168,
+      "dy": 1.132899091175022,
       "yawRad": -1.9369983190376134,
-      "pitchRad": -1.0638444896965682,
-      "rollRad": 1.3999999999999997,
-      "uniformScale": 0.046271484393030964,
-      "ignoreSupportSurfaces": true
+      "pitchRad": -1.0638444896965684,
+      "rollRad": 1.4,
+      "uniformScale": 0.04627148439303097,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
     },
     {
       "id": "d1010fba-61c4-49e7-84b1-18d65a8ad987",
       "modelRelPath": "static/models/objects/used-cigarette-2.glb",
-      "fx": 0.3225653287550562,
-      "fz": 0.6090207572741542,
-      "dy": 1.1307496047360128,
+      "fx": 0.12657771312435281,
+      "fz": 0.7206961731470121,
+      "dy": 1.1307495995387689,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.04912865049069664,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     },
     {
       "id": "7174e759-2297-4031-ad43-5b550baa4c83",
       "modelRelPath": "static/models/objects/used-cigarette.glb",
-      "fx": 0.31599283431602243,
-      "fz": 0.6101127006935947,
-      "dy": 1.1312760567611269,
+      "fx": 0.12000521868531905,
+      "fz": 0.7217881165664525,
+      "dy": 1.1312760515638831,
       "yawRad": 1.6631447661275802,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.03757038782453294,
-      "ignoreSupportSurfaces": false
-    },
-    {
-      "id": "a15b8897-e0bb-41d4-90ed-9f263327fac1",
-      "modelRelPath": "static/models/objects/empty-beer-can-ozujsko.glb",
-      "fx": 0.4693208761704091,
-      "fz": 0.7338502758080206,
-      "dy": 0.7376501125150203,
-      "yawRad": 0,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.08812023782903751,
-      "ignoreSupportSurfaces": false
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [
@@ -511,6 +556,42 @@
         "useMetalnessMap": false,
         "useHeightMap": false
       }
+    }
+  ],
+  "objectGroups": [
+    {
+      "id": "4465a206-27bc-4f54-8535-8332aada8195",
+      "name": "Stol",
+      "memberSelectedIds": [
+        "mammoth_editor_my_apartment_decor:28512766-a760-4eb3-b88e-63de2ea8bed8",
+        "mammoth_editor_my_apartment_decor:7174e759-2297-4031-ad43-5b550baa4c83",
+        "mammoth_editor_my_apartment_decor:896c14cc-c36c-479f-b808-e07f48a0315f",
+        "mammoth_editor_my_apartment_decor:969b62c8-fc80-4728-ac4e-60801758eba5",
+        "mammoth_editor_my_apartment_decor:b1108f66-60ce-436e-99b5-41374572d3ab",
+        "mammoth_editor_my_apartment_decor:ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
+        "mammoth_editor_my_apartment_decor:d1010fba-61c4-49e7-84b1-18d65a8ad987",
+        "mammoth_editor_my_apartment_decor:d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
+        "mammoth_editor_my_apartment_decor:da2f6e73-9787-461c-b295-48c4cae9db6f",
+        "mammoth_editor_my_apartment_decor:e2159395-e392-44ea-8dff-182f7f443f21",
+        "mammoth_editor_my_apartment_decor:f5c3d103-2cb8-4608-9175-cf6d04d8e4e2"
+      ]
+    },
+    {
+      "id": "6ba79ef6-4d20-4fa8-ac7e-6b1b8cee5f34",
+      "name": "TV",
+      "memberSelectedIds": [
+        "mammoth_editor_my_apartment_decor:0577b116-39ee-47a2-8da6-d729d6e1b16f",
+        "mammoth_editor_my_apartment_decor:20642f4e-7fc4-4844-97ba-335769211059",
+        "mammoth_editor_my_apartment_decor:fee1f1e2-1d21-45ad-ba61-437e6a78f0f7"
+      ]
+    },
+    {
+      "id": "4dfb6655-3e1a-413b-ae33-6d0c84428b11",
+      "name": "Kitchen",
+      "memberSelectedIds": [
+        "mammoth_editor_my_apartment_decor:8fd1c958-c1ef-4b00-9c97-ee588b884eb0",
+        "mammoth_editor_my_apartment_decor:mammoth_builtin_stove"
+      ]
     }
   ]
 }

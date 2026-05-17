@@ -34,7 +34,6 @@ import {
 } from "./fpApartmentStashKey.js";
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
-  ownedApartmentDocUsesNonPlainPlacedItems,
   resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
@@ -324,13 +323,6 @@ export async function mountFpApartmentFurniture(opts: {
   const queuedLevelSet = new Set<number>();
   const visibleLevelScratch = new Set<number>();
 
-  function apartmentUnitHasDecorRows(unitKey: string): boolean {
-    for (const row of opts.conn.db.apartment_unit_decor) {
-      if (row.unitKey === unitKey) return true;
-    }
-    return false;
-  }
-
   const disposeGeneratedGeometry = (root: THREE.Object3D) => {
     root.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
@@ -436,10 +428,8 @@ export async function mountFpApartmentFurniture(opts: {
       return;
     }
 
-    if (
-      apartmentUnitHasDecorRows(u.unitKey) ||
-      ownedApartmentDocUsesNonPlainPlacedItems(builtinsFromContent)
-    ) {
+    {
+      /** Legacy replicated furniture visuals are retired; placed decor owns all apartment contents. */
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_delegated_decor:${u.unitKey}`;
       unitGroup.userData.mammothApartmentFurnitureProp = true;
@@ -628,7 +618,7 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.userData.mammothApartmentFurnitureWorldBounds = unitFurnitureBounds;
 
     if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
-      const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
+      const hull = new THREE.Mesh(unitBoundsDebugGeometry!, unitBoundsDebugMaterial!);
       hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
       hull.userData.mammothApartmentUnitBoundsDebug = true;
       hull.userData.mammothApartmentFurnitureProp = true;
@@ -651,16 +641,8 @@ export async function mountFpApartmentFurniture(opts: {
     for (const m of unitGroup.children) {
       if (m instanceof THREE.Mesh) {
         m.userData.mammothApartmentUnitKey = u.unitKey;
-        if (
-          m.userData.mammothApartmentStashPickUnitKey !== undefined ||
-          m.userData.mammothApartmentUnitBoundsDebug === true
-        ) {
-          m.castShadow = false;
-          m.receiveShadow = false;
-        } else {
-          m.castShadow = true;
-          m.receiveShadow = true;
-        }
+        m.castShadow = false;
+        m.receiveShadow = false;
       }
     }
     tagResidentialUnitInteriorMeshesUnder(unitGroup);

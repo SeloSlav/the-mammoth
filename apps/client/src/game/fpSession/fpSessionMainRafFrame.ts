@@ -647,9 +647,9 @@ export function createFpSessionMainRafFrame(
       }
       const droppedHud = cachedDropHud;
 
-      const lookedAtStash = deps.fpApartmentFurniture.getStashPrompt(ft, deps.camera);
+      const lookedAtStash = deps.fpApartmentDecorMeshes.getStashPrompt(ft, deps.camera);
       const lookedAtWardrobeUnitKey = APARTMENT_CLAIM_UI_ENABLED
-        ? deps.fpApartmentFurniture.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
+        ? deps.fpApartmentDecorMeshes.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
         : null;
       const stashUk = lookedAtStash?.stashKey ?? null;
       const wardrobeUk = lookedAtWardrobeUnitKey ?? null;

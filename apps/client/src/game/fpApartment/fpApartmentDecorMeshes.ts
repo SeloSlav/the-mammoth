@@ -27,7 +27,9 @@ import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteri
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
+  clientMayUseApartmentStash,
   residentInteriorPropsVisibleForViewer,
+  type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
 import {
   apartmentDecorFetchPath,
@@ -42,6 +44,7 @@ import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
+  apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
@@ -49,12 +52,15 @@ import {
 } from "./fpApartmentStashKey.js";
 
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
+const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 /**
  * Content-authored decor/walls should preserve editor placement exactly, including flush placement
  * against windowed exterior faces. Keep the strict hull as a hard stop, but do not reserve extra
  * inset inside it.
  */
 const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0;
+const _stashRaycaster = new THREE.Raycaster();
+const _screenCenterNdc = new THREE.Vector2(0, 0);
 const _decorCenterBoundsScratch = new THREE.Box3();
 const _decorCenterWorldScratch = new THREE.Vector3();
 const _decorCenterLocalScratch = new THREE.Vector3();
@@ -64,7 +70,6 @@ type VisibleDecorPlacement = {
   decorId: bigint | null;
   unit: ApartmentUnit;
   modelRelPath: string;
-  /** Gameplay role — determines stash picks + (future) claim anchors. */
   placedKind: OwnedApartmentPlacedItemKind;
   posX: number;
   posY: number;
@@ -87,6 +92,13 @@ function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
     child.position.sub(_decorCenterLocalScratch);
   }
   root.updateMatrixWorld(true);
+}
+
+function apartmentStashKindForPlacedKind(k: OwnedApartmentPlacedItemKind): ApartmentStashKind | null {
+  if (k === "wardrobe") return APARTMENT_STASH_KIND_WARDROBE;
+  if (k === "footlocker") return APARTMENT_STASH_KIND_FOOTLOCKER;
+  if (k === "stove" || k === "fridge") return APARTMENT_STASH_KIND_STOVE;
+  return null;
 }
 
 function visibleDecorPlacements(
@@ -208,13 +220,6 @@ function visibleWallPlacements(
   return out;
 }
 
-function apartmentStashKindForPlacedKind(k: OwnedApartmentPlacedItemKind): ApartmentStashKind | null {
-  if (k === "wardrobe") return APARTMENT_STASH_KIND_WARDROBE;
-  if (k === "footlocker") return APARTMENT_STASH_KIND_FOOTLOCKER;
-  if (k === "stove" || k === "fridge") return APARTMENT_STASH_KIND_STOVE;
-  return null;
-}
-
 type AuthoringBuildEntry =
   | { kind: "decor"; decor: VisibleDecorPlacement }
   | { kind: "wall"; wall: VisibleWallPlacement };
@@ -233,6 +238,14 @@ export type MountFpApartmentDecorMeshesResult = {
     containingUnitKey?: string | null,
   ) => void;
   getDecorObject: (decorId: bigint) => THREE.Object3D | undefined;
+  getStashPrompt: (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ) => ApartmentStashPrompt | null;
+  getWardrobeClaimLookAtUnitKey: (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+  ) => string | null;
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -255,7 +268,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   const _decorCenterScratch = new THREE.Vector3();
   const _stashPickSizeScratch = new THREE.Vector3();
   const _stashPickCenterScratch = new THREE.Vector3();
-
+  const stashPickMeshes: THREE.Mesh[] = [];
+  const wardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const stashPickMaterial = new THREE.MeshBasicMaterial({
     transparent: true,
@@ -286,6 +300,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   };
 
   const clearAll = () => {
+    stashPickMeshes.length = 0;
+    wardrobePickMeshes.length = 0;
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
@@ -404,8 +420,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         );
         mesh.scale.set(w.sizeX, w.sizeY, w.sizeZ);
         mesh.position.y = w.sizeY / 2;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
         mesh.frustumCulled = true;
         mesh.userData.mammothUnitInterior = true;
         mesh.userData.mammothPlateLevelIndex = w.unit.level;
@@ -467,8 +483,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
+          o.castShadow = false;
+          o.receiveShadow = false;
           o.frustumCulled = true;
           o.userData.mammothUnitInterior = true;
           o.userData.mammothPlateLevelIndex = d.unit.level;
@@ -487,7 +503,6 @@ export function mountFpApartmentDecorMeshes(opts: {
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
       root.add(g);
       g.updateMatrixWorld(true);
-
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         const sk = apartmentStashKindForPlacedKind(d.placedKind);
         if (sk) {
@@ -511,6 +526,7 @@ export function mountFpApartmentDecorMeshes(opts: {
           pick.userData.mammothApartmentStashKind = sk;
           if (d.placedKind === "wardrobe") {
             pick.userData.mammothApartmentWardrobePickUnitKey = d.unit.unitKey;
+            wardrobePickMeshes.push(pick);
           }
           pick.userData.mammothSkipFloorGeometryMerge = true;
           pick.userData.mammothApartmentFurnitureProp = true;
@@ -518,10 +534,10 @@ export function mountFpApartmentDecorMeshes(opts: {
           pick.userData.mammothPlateLevelIndex = d.unit.level;
           pick.userData.mammothUnitInterior = true;
           g.add(pick);
+          stashPickMeshes.push(pick);
           g.updateMatrixWorld(true);
         }
       }
-
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
@@ -600,6 +616,48 @@ export function mountFpApartmentDecorMeshes(opts: {
         g.visible =
           bb instanceof THREE.Box3 ? _furnitureVisibilityFrustum.intersectsBox(bb) : true;
       }
+    },
+    getStashPrompt: (playerPos, camera) => {
+      if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
+      _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
+      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      const hits = _stashRaycaster.intersectObjects(stashPickMeshes, false);
+      const seen = new Set<string>();
+      for (const hit of hits) {
+        const stashKey = hit.object.userData.mammothApartmentStashKey;
+        const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
+        const stashKind = hit.object.userData.mammothApartmentStashKind;
+        if (typeof stashKey !== "string" || typeof unitKey !== "string" || seen.has(stashKey)) continue;
+        if (
+          stashKind !== APARTMENT_STASH_KIND_FOOTLOCKER &&
+          stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
+          stashKind !== APARTMENT_STASH_KIND_STOVE
+        ) {
+          continue;
+        }
+        seen.add(stashKey);
+        if (clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos)) {
+          return {
+            kind: "apartment_stash",
+            stashKey,
+            unitKey,
+            stashKind,
+            stashLabel: apartmentStashLabel(stashKind),
+          };
+        }
+      }
+      return null;
+    },
+    getWardrobeClaimLookAtUnitKey: (_playerPos, camera) => {
+      if (wardrobePickMeshes.length === 0) return null;
+      _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
+      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);
+      for (const hit of hits) {
+        const unitKey = hit.object.userData.mammothApartmentWardrobePickUnitKey;
+        if (typeof unitKey === "string" && unitKey.length > 0) return unitKey;
+      }
+      return null;
     },
     dispose: () => {
       disposed = true;

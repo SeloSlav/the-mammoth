@@ -4,7 +4,11 @@ import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
-import { resolveApartmentDecorPoses, resolveApartmentWallPoses } from "./fpOwnedApartmentBuiltinsFromContent";
+import {
+  ownedApartmentDocUsesNonPlainPlacedItems,
+  resolveApartmentDecorPoses,
+  resolveApartmentWallPoses,
+} from "./fpOwnedApartmentBuiltinsFromContent";
 
 function apartmentUnit(overrides: Partial<ApartmentUnit> = {}): ApartmentUnit {
   return {
@@ -202,5 +206,51 @@ describe("resolveApartmentDecorPoses", () => {
 
   it("returns no walls when the doc omits wallItems", () => {
     expect(resolveApartmentWallPoses(apartmentUnit(), null)).toEqual([]);
+  });
+});
+
+describe("ownedApartmentDocUsesNonPlainPlacedItems", () => {
+  it("returns true when authored gameplay furniture is present", () => {
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      placedItems: [
+        {
+          id: "authored_bed",
+          modelRelPath: "static/models/objects/bed.glb",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          uniformScale: 1,
+          ignoreSupportSurfaces: false,
+          itemKind: "bed",
+        },
+      ],
+    });
+    expect(ownedApartmentDocUsesNonPlainPlacedItems(doc)).toBe(true);
+  });
+
+  it("returns false when authored items are visual-only decor", () => {
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      placedItems: [
+        {
+          id: "plain_decor",
+          modelRelPath: "static/models/objects/tv.glb",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          uniformScale: 1,
+          ignoreSupportSurfaces: false,
+          itemKind: "plain",
+        },
+      ],
+    });
+    expect(ownedApartmentDocUsesNonPlainPlacedItems(doc)).toBe(false);
   });
 });
