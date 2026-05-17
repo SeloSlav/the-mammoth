@@ -20,4 +20,5 @@ export default {
   pitchRad: __t.f32(),
   rollRad: __t.f32(),
   uniformScale: __t.f32(),
+  itemKind: __t.u8(),
 };

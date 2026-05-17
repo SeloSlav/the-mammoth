@@ -2,16 +2,23 @@
  * MVP apartment claim / reinforcement / stash proximity — mirrors server bbox tests in {@link ApartmentUnit}.
  */
 import type { Identity } from "spacetimedb";
-import type { ApartmentDoor, ApartmentUnit } from "../../module_bindings/types";
+import type { ApartmentDoor, ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
 import { APARTMENT_CLAIM_FAST_FOR_TESTING, APARTMENT_CLAIM_UI_ENABLED } from "../../featureFlags";
 import {
+  APARTMENT_UNIT_DECOR_ITEM_KIND_FOOTLOCKER,
+  APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE,
+  APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE,
+  APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE,
+} from "@the-mammoth/schemas";
+import {
   apartmentStashKey,
+  apartmentStashKeyDecor,
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
-  parseApartmentStashKey,
+  parseApartmentStashKeyFull,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
 import {
@@ -319,6 +326,49 @@ export function playerOwnsScrewdriver(conn: DbConnection, id: Identity): boolean
   return false;
 }
 
+function decorItemKindToClientStashKind(itemKind: number): ApartmentStashKind | null {
+  switch (itemKind) {
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE:
+      return APARTMENT_STASH_KIND_WARDROBE;
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FOOTLOCKER:
+      return APARTMENT_STASH_KIND_FOOTLOCKER;
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE:
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE:
+      return APARTMENT_STASH_KIND_STOVE;
+    default:
+      return null;
+  }
+}
+
+function unitHasDecorStashKind(
+  conn: DbConnection,
+  unitKey: string,
+  kind: ApartmentStashKind,
+): boolean {
+  for (const row of conn.db.apartment_unit_decor) {
+    if (row.unitKey !== unitKey) continue;
+    if (decorItemKindToClientStashKind(row.itemKind) === kind) return true;
+  }
+  return false;
+}
+
+/** Horizontal stash cylinder around an explicit world XZ anchor. */
+function nearPointStashCylinder(
+  u: ApartmentUnit,
+  ax: number,
+  az: number,
+  stashKind: ApartmentStashKind,
+  x: number,
+  y: number,
+  z: number,
+): boolean {
+  const r = apartmentBuiltinStashInteractRadiusM(stashKind);
+  const dx = x - ax;
+  const dz = z - az;
+  if (dx * dx + dz * dz > r * r) return false;
+  return feetVerticalOkForInteract(u.footY, y);
+}
+
 export function clientMayUseApartmentStash(
   conn: DbConnection,
   owner: Identity | undefined,
@@ -326,14 +376,47 @@ export function clientMayUseApartmentStash(
   pose: { x: number; y: number; z: number },
 ): boolean {
   if (!owner) return false;
-  const parsed = parseApartmentStashKey(stashKey);
+  const full = parseApartmentStashKeyFull(stashKey);
+  if (full.tag === "decor") {
+    let decor: ApartmentUnitDecor | null = null;
+    for (const row of conn.db.apartment_unit_decor) {
+      if (row.decorId === full.decorId && row.unitKey === full.unitKey) {
+        decor = row as ApartmentUnitDecor;
+        break;
+      }
+    }
+    if (!decor) return false;
+    const sk = decorItemKindToClientStashKind(decor.itemKind);
+    if (!sk) return false;
+    for (const row of conn.db.apartment_unit) {
+      const u = row as ApartmentUnit;
+      if (u.unitKey !== full.unitKey) continue;
+      if (u.state !== UNIT_STATE_CLAIMED) return false;
+      if (!sameIdentity(u.owner, owner)) return false;
+      if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
+      const r = apartmentBuiltinStashInteractRadiusM(sk);
+      const r2 = r * r;
+      const dx = pose.x - decor.posX;
+      const dz = pose.z - decor.posZ;
+      if (dx * dx + dz * dz > r2) return false;
+      return (
+        pose.y >= u.footY - INTERACT_FEET_Y_BELOW_SLACK_M &&
+        pose.y <= u.footY + INTERACT_FEET_Y_ABOVE_SLACK_M
+      );
+    }
+    return false;
+  }
+
+  const unitKey = full.unitKey;
+  const stashKind: ApartmentStashKind =
+    full.tag === "legacy" ? full.stashKind : APARTMENT_STASH_KIND_FOOTLOCKER;
   for (const row of conn.db.apartment_unit) {
     const u = row as ApartmentUnit;
-    if (u.unitKey !== parsed.unitKey) continue;
+    if (u.unitKey !== unitKey) continue;
     if (u.state !== UNIT_STATE_CLAIMED) return false;
     if (!sameIdentity(u.owner, owner)) return false;
     if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
-    return nearApartmentStashAnchor(u, parsed.stashKind, pose.x, pose.y, pose.z);
+    return nearApartmentStashAnchor(u, stashKind, pose.x, pose.y, pose.z);
   }
   return false;
 }
@@ -441,7 +524,32 @@ export function unclaimedUnitIfPlayerAimedAtWardrobe(
     if (u.unitKey !== unitKey) continue;
     if (u.state !== UNIT_STATE_UNCLAIMED) return null;
     if (!feetInsideUnitHull(u, x, y, z)) return null;
-    if (!nearWardrobe(u, x, y, z)) return null;
+
+    let near = false;
+    if (!unitHasDecorStashKind(conn, unitKey, APARTMENT_STASH_KIND_WARDROBE)) {
+      near = nearWardrobe(u, x, y, z);
+    }
+    if (!near) {
+      for (const drow of conn.db.apartment_unit_decor) {
+        if (drow.unitKey !== unitKey) continue;
+        if (drow.itemKind !== APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE) continue;
+        if (
+          nearPointStashCylinder(
+            u,
+            drow.posX,
+            drow.posZ,
+            APARTMENT_STASH_KIND_WARDROBE,
+            x,
+            y,
+            z,
+          )
+        ) {
+          near = true;
+          break;
+        }
+      }
+    }
+    if (!near) return null;
     return u;
   }
   return null;
@@ -493,21 +601,38 @@ function nearestOwnedClaimedApartmentStash(
     if (u.state !== UNIT_STATE_CLAIMED) continue;
     if (!sameIdentity(u.owner, owner)) continue;
     if (!feetInsideUnitHull(u, x, y, z)) continue;
-    const footlockerD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_FOOTLOCKER, x, y, z);
-    if (footlockerD !== null && footlockerD < bestD) {
-      bestD = footlockerD;
-      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_FOOTLOCKER);
+
+    for (const drow of conn.db.apartment_unit_decor) {
+      if (drow.unitKey !== u.unitKey) continue;
+      const sk = decorItemKindToClientStashKind(drow.itemKind);
+      if (!sk) continue;
+      if (!nearPointStashCylinder(u, drow.posX, drow.posZ, sk, x, y, z)) continue;
+      const dx = x - drow.posX;
+      const dz = z - drow.posZ;
+      const decorD = dx * dx + dz * dz;
+      if (decorD < bestD) {
+        bestD = decorD;
+        best = {
+          kind: "apartment_stash",
+          stashKey: apartmentStashKeyDecor(u.unitKey, drow.decorId),
+          unitKey: u.unitKey,
+          stashKind: sk,
+          stashLabel: apartmentStashLabel(sk),
+        };
+      }
     }
-    const wardrobeD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_WARDROBE, x, y, z);
-    if (wardrobeD !== null && wardrobeD < bestD) {
-      bestD = wardrobeD;
-      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_WARDROBE);
-    }
-    const stoveD = stashAnchorDistSqWithinInteract(u, APARTMENT_STASH_KIND_STOVE, x, y, z);
-    if (stoveD !== null && stoveD < bestD) {
-      bestD = stoveD;
-      best = apartmentStashPromptFor(u.unitKey, APARTMENT_STASH_KIND_STOVE);
-    }
+
+    const tryLegacy = (kind: ApartmentStashKind): void => {
+      if (unitHasDecorStashKind(conn, u.unitKey, kind)) return;
+      const d = stashAnchorDistSqWithinInteract(u, kind, x, y, z);
+      if (d !== null && d < bestD) {
+        bestD = d;
+        best = apartmentStashPromptFor(u.unitKey, kind);
+      }
+    };
+    tryLegacy(APARTMENT_STASH_KIND_FOOTLOCKER);
+    tryLegacy(APARTMENT_STASH_KIND_WARDROBE);
+    tryLegacy(APARTMENT_STASH_KIND_STOVE);
   }
   return best;
 }
@@ -557,10 +682,29 @@ export function getApartmentSystemPrompt(
   if (opts.lookedAtStashKey === null) return null;
 
   if (opts.lookedAtStashKey !== undefined) {
-    const parsed = parseApartmentStashKey(opts.lookedAtStashKey);
-    return clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)
-      ? apartmentStashPromptFor(parsed.unitKey, parsed.stashKind)
-      : null;
+    if (!clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)) return null;
+    const full = parseApartmentStashKeyFull(opts.lookedAtStashKey);
+    if (full.tag === "decor") {
+      let decorRow: ApartmentUnitDecor | null = null;
+      for (const row of conn.db.apartment_unit_decor) {
+        if (row.decorId === full.decorId && row.unitKey === full.unitKey) {
+          decorRow = row as ApartmentUnitDecor;
+          break;
+        }
+      }
+      const sk = decorRow ? decorItemKindToClientStashKind(decorRow.itemKind) : null;
+      if (!sk) return null;
+      return {
+        kind: "apartment_stash",
+        stashKey: opts.lookedAtStashKey,
+        unitKey: full.unitKey,
+        stashKind: sk,
+        stashLabel: apartmentStashLabel(sk),
+      };
+    }
+    const stashKind: ApartmentStashKind =
+      full.tag === "legacy" ? full.stashKind : APARTMENT_STASH_KIND_FOOTLOCKER;
+    return apartmentStashPromptFor(full.unitKey, stashKind);
   }
 
   const stashPrompt = nearestOwnedClaimedApartmentStash(conn, id, pose.x, pose.y, pose.z);

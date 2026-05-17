@@ -20,6 +20,7 @@ import {
   type StairWellDef,
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   OwnedApartmentBuiltinsDocSchema,
+  finalizeOwnedApartmentBuiltinsDoc,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
@@ -49,22 +50,32 @@ import type {
   FpAuthorSubjectKind,
   LandingDocKind,
   LandingKitVariant,
-  MyApartmentLayoutPiece,
 } from "./editorStoreTypes.js";
 import {
-  editorMyApartmentSelectedIdForPiece,
-  parseMyApartmentLayoutPieceSelectedId,
+  editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForSavedObjectGroup,
+  parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutSavedObjectGroupId,
+  parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
+import { computeApartmentPlacementCanvasPick } from "../editor/myApartment/apartmentLayoutSelectionOps.js";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
 } from "./editorWorkspaceMap.js";
 
+function scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush(): void {
+  void import("../editor/persistence/flushOwnedApartmentBuiltinsToDisk.js")
+    .then((m) => m.flushOwnedApartmentBuiltinsToDisk())
+    .catch((err) => {
+      console.warn("[editor] Auto-save owned_apartment_builtins.json failed:", err);
+    });
+}
+
 export type {
   EditorCameraMode,
   EditorMaterialMeta,
   EditorMode,
-  MyApartmentLayoutPiece,
   EditorState,
   EditorWorkspace,
   FpAuthorCameraKind,
@@ -111,6 +122,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeFloorOverrideDocId: null,
   focusedStoryLevelIndex: 1,
   selectedId: null,
+  myApartmentMultiselectExtraIds: [] as readonly string[],
   dirty: false,
   collisionArtifactsStatus: null,
   transformMode: "translate",
@@ -133,7 +145,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorConsumableId: FP_AUTHORABLE_CONSUMABLE_IDS[0] as FpAuthorConsumableId,
   ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   ownedApartmentBuiltinsNeedsDiskFlush: false,
-  myApartmentLayoutPiece: "bed" as MyApartmentLayoutPiece,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -168,6 +179,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       stairWellDef: prev.stairWellDef,
       ownedApartmentBuiltins: prev.ownedApartmentBuiltins,
       selectedId: prev.selectedId,
+      myApartmentMultiselectExtraIds: prev.myApartmentMultiselectExtraIds ?? [],
       dirty: prev.dirty,
       ownedApartmentBuiltinsNeedsDiskFlush: prev.ownedApartmentBuiltinsNeedsDiskFlush,
       contentStructureEpoch: prev.contentStructureEpoch ?? 0,
@@ -196,6 +208,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       stairWellDef: next.stairWellDef,
       ownedApartmentBuiltins: next.ownedApartmentBuiltins,
       selectedId: next.selectedId,
+      myApartmentMultiselectExtraIds: next.myApartmentMultiselectExtraIds ?? [],
       dirty: next.dirty,
       ownedApartmentBuiltinsNeedsDiskFlush: next.ownedApartmentBuiltinsNeedsDiskFlush,
       contentStructureEpoch: next.contentStructureEpoch ?? 0,
@@ -409,40 +422,199 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setFocusedStoryLevelIndex: (focusedStoryLevelIndex) =>
     set({ focusedStoryLevelIndex }),
   setSelectedId: (selectedId) =>
-    set(() => {
-      const parsed =
-        typeof selectedId === "string"
-          ? parseMyApartmentLayoutPieceSelectedId(selectedId)
-          : null;
-      if (parsed) return { selectedId, myApartmentLayoutPiece: parsed };
-      return { selectedId };
+    set((s) => {
+      const clearedMulti =
+        s.mode === "my_apartment_layout"
+          ? { myApartmentMultiselectExtraIds: [] as readonly string[] }
+          : {};
+      return { selectedId, ...clearedMulti };
     }),
 
   enterMyApartmentLayoutMode: () =>
-    set((s) => ({
-      mode: "my_apartment_layout",
-      selectedId: editorMyApartmentSelectedIdForPiece(s.myApartmentLayoutPiece),
-      contentStructureEpoch: s.contentStructureEpoch + 1,
-      ...(s.transformMode === "scale" ? { transformMode: "translate" as const } : {}),
-    })),
+    set((s) => {
+      const items = s.ownedApartmentBuiltins.placedItems;
+      const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
+      const selectedId =
+        sorted.length > 0 ? editorMyApartmentSelectedIdForDecor(sorted[0]!.id) : null;
+      return {
+        mode: "my_apartment_layout",
+        selectedId,
+        myApartmentMultiselectExtraIds: [],
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+        ...(s.transformMode === "scale" ? { transformMode: "translate" as const } : {}),
+      };
+    }),
 
-  setMyApartmentLayoutPiece: (piece) =>
-    set((s) => ({
-      myApartmentLayoutPiece: piece,
-      ...(s.mode === "my_apartment_layout"
-        ? { selectedId: editorMyApartmentSelectedIdForPiece(piece) }
-        : {}),
-    })),
+  pickMyApartmentLayoutFromCanvas: (clickedPlacementId, opts) =>
+    set((s) => {
+      if (s.mode !== "my_apartment_layout") return {};
+      if (clickedPlacementId === null) {
+        return { selectedId: null, myApartmentMultiselectExtraIds: [] as const };
+      }
+      const out = computeApartmentPlacementCanvasPick({
+        clickedId: clickedPlacementId,
+        additive: opts.additive,
+        previousSelectedId: s.selectedId,
+        previousExtras: s.myApartmentMultiselectExtraIds,
+      });
+      const next: Partial<typeof s> = {
+        selectedId: out.selectedId,
+        myApartmentMultiselectExtraIds: out.myApartmentMultiselectExtraIds,
+      };
+      return next;
+    }),
+
+  saveMyApartmentObjectGroupFromSelection: (rawName: string) => {
+    const name = typeof rawName === "string" ? rawName.trim() : "";
+    const st0 = get();
+    if (st0.mode !== "my_apartment_layout" || name.length === 0) return;
+
+    const multiset = new Set<string>();
+    if (typeof st0.selectedId === "string") multiset.add(st0.selectedId);
+    for (const x of st0.myApartmentMultiselectExtraIds) multiset.add(x);
+    const groupable = [...multiset].filter(
+      (id) =>
+        parseMyApartmentLayoutDecorSelectedId(id) !== null ||
+        parseMyApartmentLayoutWallSelectedId(id) !== null,
+    );
+    groupable.sort((a, b) => a.localeCompare(b));
+    if (groupable.length < 2) return;
+
+    maybePushHistory(get, set);
+
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `apt_grp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+    const docBefore = st0.ownedApartmentBuiltins;
+
+    set(() => ({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
+        OwnedApartmentBuiltinsDocSchema.parse({
+          ...docBefore,
+          objectGroups: [
+            ...docBefore.objectGroups,
+            {
+              id,
+              name,
+              memberSelectedIds: [...groupable],
+            },
+          ],
+        }),
+      ),
+      dirty: true,
+      ownedApartmentBuiltinsNeedsDiskFlush: true,
+      selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(id),
+      myApartmentMultiselectExtraIds: [],
+    }));
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+  },
+
+  renameMyApartmentObjectGroup: (groupId, rawName) => {
+    const name = typeof rawName === "string" ? rawName.trim() : "";
+    if (!groupId || name.length === 0) return;
+    const prior = get();
+    if (
+      prior.mode !== "my_apartment_layout" ||
+      !prior.ownedApartmentBuiltins.objectGroups.some((g) => g.id === groupId)
+    ) {
+      return;
+    }
+
+    maybePushHistory(get, set);
+    set((st) => {
+      const next = OwnedApartmentBuiltinsDocSchema.parse({
+        ...st.ownedApartmentBuiltins,
+        objectGroups: st.ownedApartmentBuiltins.objectGroups.map((g) =>
+          g.id === groupId ? { ...g, name } : g,
+        ),
+      });
+      return {
+        ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(next),
+        dirty: true,
+        ownedApartmentBuiltinsNeedsDiskFlush: true,
+      };
+    });
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+  },
+
+  deleteMyApartmentObjectGroup: (groupId) => {
+    if (!groupId) return;
+    const prior = get();
+    if (
+      prior.mode !== "my_apartment_layout" ||
+      !prior.ownedApartmentBuiltins.objectGroups.some((g) => g.id === groupId)
+    ) {
+      return;
+    }
+
+    maybePushHistory(get, set);
+
+    set((st) => {
+      const next = OwnedApartmentBuiltinsDocSchema.parse({
+        ...st.ownedApartmentBuiltins,
+        objectGroups: st.ownedApartmentBuiltins.objectGroups.filter((g) => g.id !== groupId),
+      });
+      let selectedIdNext = st.selectedId;
+      let extrasNext = st.myApartmentMultiselectExtraIds;
+      if (parseMyApartmentLayoutSavedObjectGroupId(selectedIdNext) === groupId) {
+        selectedIdNext = null;
+        extrasNext = [];
+      }
+      return {
+        ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(next),
+        dirty: true,
+        ownedApartmentBuiltinsNeedsDiskFlush: true,
+        selectedId: selectedIdNext,
+        myApartmentMultiselectExtraIds: extrasNext,
+      };
+    });
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+  },
+
+  selectMyApartmentSavedObjectGroup: (groupId) => {
+    if (!groupId) return;
+    set((st) => {
+      if (st.mode !== "my_apartment_layout") return {};
+      const def = st.ownedApartmentBuiltins.objectGroups.find((g) => g.id === groupId);
+      if (!def || def.memberSelectedIds.length === 0) return {};
+
+      return {
+        selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(groupId),
+        myApartmentMultiselectExtraIds: [] as readonly string[],
+      };
+    });
+  },
 
   patchOwnedApartmentBuiltins: (fn) => {
     maybePushHistory(get, set);
     set((s) => {
-      const next = OwnedApartmentBuiltinsDocSchema.parse(fn(s.ownedApartmentBuiltins));
+      const parsedNext = OwnedApartmentBuiltinsDocSchema.parse(fn(s.ownedApartmentBuiltins));
+      const next = finalizeOwnedApartmentBuiltinsDoc(parsedNext);
+
+      let selectedFix = s.selectedId;
+      let extrasFix = s.myApartmentMultiselectExtraIds;
+      if (
+        typeof selectedFix === "string" &&
+        parseMyApartmentLayoutSavedObjectGroupId(selectedFix)
+      ) {
+        const grp = parseMyApartmentLayoutSavedObjectGroupId(selectedFix)!;
+        if (!next.objectGroups.some((g) => g.id === grp)) {
+          selectedFix = null;
+          extrasFix = [];
+        }
+      }
+
       const bumpPreview = next.previewSizeM !== s.ownedApartmentBuiltins.previewSizeM;
       return {
         ownedApartmentBuiltins: next,
         dirty: true,
         ownedApartmentBuiltinsNeedsDiskFlush: true,
+        ...(selectedFix !== s.selectedId ? { selectedId: selectedFix } : {}),
+        ...(extrasFix !== s.myApartmentMultiselectExtraIds
+          ? { myApartmentMultiselectExtraIds: extrasFix }
+          : {}),
         ...(bumpPreview ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
       };
     });

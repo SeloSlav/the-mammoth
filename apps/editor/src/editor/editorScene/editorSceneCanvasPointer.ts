@@ -234,7 +234,12 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
 
     if (!levelCandidate.id) {
       setPreferredPreviewSelectionTarget(null);
-      useEditorStore.getState().setSelectedId(null);
+      const stClear = useEditorStore.getState();
+      if (stClear.mode === "my_apartment_layout") {
+        stClear.pickMyApartmentLayoutFromCanvas(null, { additive: false });
+      } else {
+        useEditorStore.getState().setSelectedId(null);
+      }
       previewSelectionOutline.setFromObject(null);
       syncTransformAttachment();
       return;
@@ -271,7 +276,14 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
     ) {
       useEditorStore.getState().setTransformMode("translate");
     }
-    useEditorStore.getState().setSelectedId(levelCandidate.id);
+    const additivePick = ev.ctrlKey === true || ev.metaKey === true;
+    if (store.mode === "my_apartment_layout") {
+      useEditorStore
+        .getState()
+        .pickMyApartmentLayoutFromCanvas(levelCandidate.id, { additive: additivePick });
+    } else {
+      useEditorStore.getState().setSelectedId(levelCandidate.id);
+    }
     previewSelectionOutline.setFromObject(getPreferredPreviewSelectionTarget());
     syncTransformAttachment();
   };

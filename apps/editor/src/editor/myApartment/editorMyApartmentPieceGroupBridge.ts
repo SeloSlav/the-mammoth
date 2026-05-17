@@ -1,23 +1,62 @@
 import * as THREE from "three";
-import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
-import { editorMyApartmentSelectedIdForPiece } from "./editorMyApartmentSelection.js";
 
+/** Selection groups keyed by {@link editorMyApartmentSelectedIdForDecor} etc.; set by lifecycle. */
 let groupsRef: Record<string, THREE.Group> | null = null;
+
+/** Immediate parent (`editor_my_apartment_furniture` root) of all décor/walls/builtins. */
+let apartmentFurnitureMountRoot: THREE.Group | null = null;
+
+/** Extra roots (saved-group manipulator overlay) keyed by synthetic selection ids. */
+const dynamicSelectionGroupOverlay: Partial<Record<string, THREE.Group>> = {};
+
+export function clearEditorMyApartmentDynamicPlacementOverlays(): void {
+  for (const k of Object.keys(dynamicSelectionGroupOverlay)) {
+    delete dynamicSelectionGroupOverlay[k];
+  }
+}
 
 export function setEditorMyApartmentPieceGroups(
   next: Record<string, THREE.Group> | null,
 ): void {
+  clearEditorMyApartmentDynamicPlacementOverlays();
   groupsRef = next;
+
+  apartmentFurnitureMountRoot = null;
+  if (!groupsRef || Object.keys(groupsRef).length === 0) return;
+  const firstGroup = Object.values(groupsRef)[0];
+  const p = firstGroup?.parent;
+  apartmentFurnitureMountRoot =
+    firstGroup && p instanceof THREE.Group ? p : null;
 }
 
-export function getEditorMyApartmentPieceGroup(
-  piece: MyApartmentLayoutPiece,
-): THREE.Group | null {
-  return groupsRef?.[editorMyApartmentSelectedIdForPiece(piece)] ?? null;
+export function getEditorMyApartmentFurnitureMountRoot(): THREE.Group | null {
+  return apartmentFurnitureMountRoot;
+}
+
+/** @internal Overlay entry for transient saved-group THREE.Group manipulation root. */
+export function registerEditorMyApartmentPlacementGroupOverlay(
+  selectionKey: string,
+  group: THREE.Group | null,
+): void {
+  if (!group) {
+    delete dynamicSelectionGroupOverlay[selectionKey];
+    return;
+  }
+  dynamicSelectionGroupOverlay[selectionKey] = group;
 }
 
 export function getEditorMyApartmentSelectionGroup(
   selectedId: string | null,
 ): THREE.Group | null {
-  return selectedId ? (groupsRef?.[selectedId] ?? null) : null;
+  if (!selectedId) return null;
+  return (
+    dynamicSelectionGroupOverlay[selectedId] ?? groupsRef?.[selectedId] ?? null
+  );
+}
+
+export function getEditorMyApartmentStaticSelectionGroupsMap(): Record<
+  string,
+  THREE.Group
+> | null {
+  return groupsRef;
 }

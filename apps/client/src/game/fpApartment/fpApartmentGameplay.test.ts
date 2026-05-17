@@ -22,6 +22,7 @@ import {
 } from "./fpApartmentGameplay";
 import {
   apartmentStashKey,
+  apartmentStashKeyDecor,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
@@ -71,13 +72,18 @@ function apartmentUnit(overrides: Partial<ApartmentUnit>): ApartmentUnit {
   } as ApartmentUnit;
 }
 
-function mockConn(apartmentUnits: ApartmentUnit[], defIds: string[] = []) {
+function mockConn(
+  apartmentUnits: ApartmentUnit[],
+  defIds: string[] = [],
+  opts?: { apartmentUnitDecor?: unknown[] },
+) {
   return {
     identity: testIdentity,
     db: {
       apartment_unit: apartmentUnits,
       apartment_door: [],
       apartment_door_gameplay: [],
+      apartment_unit_decor: opts?.apartmentUnitDecor ?? [],
       inventory_item: defIds.map((defId, index) => ({
         instanceId: BigInt(index + 1),
         defId,
@@ -415,6 +421,49 @@ describe("fpApartmentGameplay", () => {
       unitKey: unit.unitKey,
       stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
       stashLabel: "footlocker",
+    });
+  });
+
+  it("permits stash use for replica decor-instance keys near that decor row", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      wardrobeX: 9,
+      wardrobeZ: 9,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const decor = {
+      decorId: 42n,
+      unitKey: unit.unitKey,
+      itemKind: 2,
+      modelRelPath: "static/models/objects/wardrobe-closet.glb",
+      posX: 5,
+      posY: 10,
+      posZ: 5,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+    };
+    const conn = mockConn([unit], [], { apartmentUnitDecor: [decor] });
+    const pose = { x: 5.05, y: 10, z: 5.05 };
+    const key = apartmentStashKeyDecor(unit.unitKey, 42n);
+    expect(clientMayUseApartmentStash(conn, testIdentity as never, key, pose)).toBe(true);
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashKey: key,
+      }),
+    ).toEqual({
+      kind: "apartment_stash",
+      stashKey: key,
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_WARDROBE,
+      stashLabel: "wardrobe",
     });
   });
 

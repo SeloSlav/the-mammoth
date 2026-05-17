@@ -4,19 +4,19 @@ overview: Replace the hard split between apartment built-ins and decor with one 
 todos:
   - id: define-shared-item-model
     content: Add a shared placed-item schema/model that can represent ordinary decor plus behavior-bearing items like wardrobe, footlocker, stove, bed, and future fridge.
-    status: pending
+    status: completed
   - id: migrate-editor-authoring
     content: Move the apartment editor from named builtin slots to the same instance list used for imported decor, while keeping selection, gizmos, and disk persistence working.
-    status: pending
+    status: completed
   - id: move-server-gameplay-to-item-instances
     content: Make stash, claim, and spawn logic resolve from placed-item instances and per-instance ids instead of ApartmentUnit singleton anchors and unitKey#kind stash keys.
-    status: pending
+    status: completed
   - id: update-client-runtime
     content: Render and interact with behavior-bearing placed items through the decor pipeline, including per-instance stash prompts and claim/spawn resolution.
-    status: pending
+    status: completed
   - id: compat-and-tests
     content: Add legacy read/migration fallback, regenerate bindings if schema changes, and cover the new behavior-selection and per-instance inventory flows with focused tests.
-    status: pending
+    status: completed
 isProject: false
 ---
 

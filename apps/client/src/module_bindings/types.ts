@@ -77,6 +77,7 @@ export const ApartmentUnitDecor = __t.object("ApartmentUnitDecor", {
   pitchRad: __t.f32(),
   rollRad: __t.f32(),
   uniformScale: __t.f32(),
+  itemKind: __t.u8(),
 });
 export type ApartmentUnitDecor = __Infer<typeof ApartmentUnitDecor>;
 

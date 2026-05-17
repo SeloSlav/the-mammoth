@@ -51,9 +51,6 @@ export type EditorMode =
   | "landing_preview"
   | "stairwell_preview";
 
-/** Which built-in mesh the editor gizmo is driving in {@link EditorMode.my_apartment_layout}. */
-export type MyApartmentLayoutPiece = "bed" | "wardrobe" | "footlocker" | "stove";
-
 export type EditorCameraMode = "orbit" | "fly";
 
 export type FpAuthorCameraKind = "gameplay" | "orbit";
@@ -92,6 +89,8 @@ export type HistoryEntry = {
   stairWellDef: StairWellDef;
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   selectedId: string | null;
+  /** {@link EditorMode.my_apartment_layout} only — additional décor/wall selection ids excluding {@link selectedId}. */
+  myApartmentMultiselectExtraIds: readonly string[];
   dirty: boolean;
   /** True after in-memory edits to {@link ownedApartmentBuiltins} until successfully written to disk. */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
@@ -124,6 +123,8 @@ export interface EditorState {
   activeFloorOverrideDocId: string | null;
   focusedStoryLevelIndex: number;
   selectedId: string | null;
+  /** {@link EditorMode.my_apartment_layout} only — see {@link HistoryEntry.myApartmentMultiselectExtraIds}. */
+  myApartmentMultiselectExtraIds: readonly string[];
   dirty: boolean;
   collisionArtifactsStatus: CollisionArtifactsStatus | null;
   transformMode: TransformMode;
@@ -150,7 +151,6 @@ export interface EditorState {
    * Lets "Save to disk" persist apartment decor even after leaving {@link EditorMode.my_apartment_layout}.
    */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
-  myApartmentLayoutPiece: MyApartmentLayoutPiece;
   contentStructureEpoch: number;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -185,6 +185,18 @@ export interface EditorState {
   setActiveFloorOverrideDocId: (id: string | null) => void;
   setFocusedStoryLevelIndex: (level: number) => void;
   setSelectedId: (id: string | null) => void;
+  /**
+   * Canvas placement picking for apartment authoring. Clears décor/wall multiselection on `null`;
+   * use {@link saveMyApartmentObjectGroupFromSelection} etc. for saved-group ids.
+   */
+  pickMyApartmentLayoutFromCanvas: (
+    clickedPlacementId: string | null,
+    opts: { additive: boolean },
+  ) => void;
+  saveMyApartmentObjectGroupFromSelection: (name: string) => void;
+  renameMyApartmentObjectGroup: (groupId: string, name: string) => void;
+  deleteMyApartmentObjectGroup: (groupId: string) => void;
+  selectMyApartmentSavedObjectGroup: (groupId: string) => void;
   setDirty: (dirty: boolean) => void;
   setCollisionArtifactsStatus: (status: CollisionArtifactsStatus | null) => void;
   setTransformMode: (m: TransformMode) => void;
@@ -206,7 +218,6 @@ export interface EditorState {
   setFpAuthorConsumableId: (id: FpAuthorConsumableId) => void;
   showFpAuthorToast: (message: string, ttlMs?: number) => void;
   enterMyApartmentLayoutMode: () => void;
-  setMyApartmentLayoutPiece: (piece: MyApartmentLayoutPiece) => void;
   patchOwnedApartmentBuiltins: (
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;

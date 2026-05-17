@@ -1,13 +1,11 @@
 import * as THREE from "three";
 import { useEditorStore } from "../../state/editorStore.js";
 import {
-  loadEditorMyApartmentGltfTemplates,
   loadEditorMyApartmentDecorTemplates,
   mountEditorMyApartmentFurnitureUnder,
   updateEditorMyApartmentMountFromDoc,
   type EditorMyApartmentFurnitureMount,
   type EditorMyApartmentDecorTemplateMap,
-  type EditorMyApartmentGltfTemplates,
 } from "./editorMyApartmentMeshes.js";
 import {
   ownedApartmentFractionMappingForEditor,
@@ -15,6 +13,7 @@ import {
 } from "./editorMyApartmentAuthoringShell.js";
 import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import { setEditorMyApartmentPieceGroups } from "./editorMyApartmentPieceGroupBridge.js";
+import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
 
 export type EditorMyApartmentLifecycleDeps = {
   getStructuralRoot: () => THREE.Group | null;
@@ -32,16 +31,7 @@ export function createEditorSceneMyApartmentLifecycle(
   let disposed = false;
   let syncGeneration = 0;
   let mount: EditorMyApartmentFurnitureMount | null = null;
-  let templates: EditorMyApartmentGltfTemplates | null = null;
-  let templatesLoad: Promise<EditorMyApartmentGltfTemplates> | null = null;
   let decorTemplates: EditorMyApartmentDecorTemplateMap = new Map();
-
-  async function ensureTemplatesLoaded(): Promise<EditorMyApartmentGltfTemplates> {
-    if (templates) return templates;
-    if (!templatesLoad) templatesLoad = loadEditorMyApartmentGltfTemplates();
-    templates = await templatesLoad;
-    return templates;
-  }
 
   function teardownFurniture(): void {
     mount?.dispose();
@@ -64,11 +54,10 @@ export function createEditorSceneMyApartmentLifecycle(
     }
 
     try {
-      const t = await ensureTemplatesLoaded();
       if (disposed || myGen !== syncGeneration) return;
       const doc = st.ownedApartmentBuiltins;
       decorTemplates = await loadEditorMyApartmentDecorTemplates(
-        doc.decorItems.map((item) => item.modelRelPath),
+        listMyApartmentPlacedItemModelRelPaths(doc),
       );
       if (disposed || myGen !== syncGeneration) return;
       const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
@@ -82,7 +71,6 @@ export function createEditorSceneMyApartmentLifecycle(
       if (!mount) {
         mount = mountEditorMyApartmentFurnitureUnder(
           parent,
-          t,
           decorTemplates,
           doc,
           authoringFractionMapping,
@@ -90,7 +78,6 @@ export function createEditorSceneMyApartmentLifecycle(
       } else if (!deps.getShouldHoldReplicaResync()) {
         updateEditorMyApartmentMountFromDoc(
           mount,
-          t,
           decorTemplates,
           doc,
           authoringFractionMapping,

@@ -6,6 +6,8 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   OwnedApartmentBuiltinsDocSchema,
   type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentPlacedItem,
+  type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
 
@@ -13,7 +15,7 @@ let cached: OwnedApartmentBuiltinsDoc | null | undefined;
 
 /**
  * Sync read of cached authoring JSON after {@link loadOwnedApartmentBuiltinsDocFromContent} resolves.
- * Used so stash proximity matches rendered furniture fractions (`resolveApartmentFurniturePose`).
+ * Used so stash proximity matches rendered furniture fractions.
  */
 export function peekOwnedApartmentBuiltinsDoc(): OwnedApartmentBuiltinsDoc | null | undefined {
   return cached;
@@ -48,6 +50,7 @@ export type ApartmentFurniturePose = {
 export type ApartmentDecorPose = {
   id: string;
   modelRelPath: string;
+  itemKind: OwnedApartmentPlacedItemKind;
   x: number;
   y: number;
   z: number;
@@ -57,86 +60,110 @@ export type ApartmentDecorPose = {
   uniformScale: number;
 };
 
+function firstPlacedByKind(
+  doc: OwnedApartmentBuiltinsDoc,
+  kind: OwnedApartmentPlacedItemKind,
+): OwnedApartmentPlacedItem | null {
+  const items = doc.placedItems
+    .filter((p) => p.itemKind === kind)
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return items[0] ?? null;
+}
+
 /**
  * Resolves world-space furniture pose for one unit, merging authoritative `ApartmentUnit` rows with
- * optional content JSON overrides.
+ * optional v2 content (`placedItems`). Missing kinds fall back to replicated `ApartmentUnit` seeds.
  */
 export function resolveApartmentFurniturePose(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
 ): ApartmentFurniturePose {
-  if (!doc) {
-    const fy = u.footY;
-    const yw = u.bedYaw;
-    return {
-      bed: { x: u.bedX, y: u.bedY, z: u.bedZ, yaw: yw, uniformScale: 1 },
-      wardrobe: {
-        x: u.wardrobeX,
-        z: u.wardrobeZ,
-        yaw: yw,
-        snapFloorY: fy,
-        uniformScale: 1,
-      },
-      footlocker: { x: u.footX, z: u.footZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
-      stove: { x: u.stoveX, z: u.stoveZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
-    };
-  }
+  const fy = u.footY;
+  const yw = u.bedYaw;
+  const fallback = {
+    bed: { x: u.bedX, y: u.bedY, z: u.bedZ, yaw: yw, uniformScale: 1 },
+    wardrobe: {
+      x: u.wardrobeX,
+      z: u.wardrobeZ,
+      yaw: yw,
+      snapFloorY: fy,
+      uniformScale: 1,
+    },
+    footlocker: { x: u.footX, z: u.footZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
+    stove: { x: u.stoveX, z: u.stoveZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
+  };
+
+  if (!doc) return fallback;
+
   const sx = (u.boundMaxX as number) - (u.boundMinX as number);
   const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
-  const wardrobeSnap = bminy + doc.wardrobeDy;
-  const footSnap = bminy + doc.footDy;
-  const stoveSnap = bminy + doc.stoveDy;
+
+  const bedP = firstPlacedByKind(doc, "bed");
+  const wardrobeP = firstPlacedByKind(doc, "wardrobe");
+  const footP = firstPlacedByKind(doc, "footlocker");
+  const stoveP = firstPlacedByKind(doc, "stove");
+
   return {
-    bed: {
-      x: bminx + doc.bedFx * sx,
-      y: bminy + doc.bedDy,
-      z: bminz + doc.bedFz * sz,
-      yaw: doc.bedYawRad,
-      uniformScale: doc.bedUniformScale,
-    },
-    wardrobe: {
-      x: bminx + doc.wardrobeFx * sx,
-      z: bminz + doc.wardrobeFz * sz,
-      yaw: doc.wardrobeYawRad,
-      snapFloorY: wardrobeSnap,
-      uniformScale: doc.wardrobeUniformScale,
-    },
-    footlocker: {
-      x: bminx + doc.footFx * sx,
-      z: bminz + doc.footFz * sz,
-      yaw: doc.footYawRad,
-      snapFloorY: footSnap,
-      uniformScale: doc.footUniformScale,
-    },
-    stove: {
-      x: bminx + doc.stoveFx * sx,
-      z: bminz + doc.stoveFz * sz,
-      yaw: doc.stoveYawRad,
-      snapFloorY: stoveSnap,
-      uniformScale: doc.stoveUniformScale,
-    },
+    bed: bedP
+      ? {
+          x: bminx + bedP.fx * sx,
+          y: bminy + bedP.dy,
+          z: bminz + bedP.fz * sz,
+          yaw: bedP.yawRad,
+          uniformScale: bedP.uniformScale,
+        }
+      : fallback.bed,
+    wardrobe: wardrobeP
+      ? {
+          x: bminx + wardrobeP.fx * sx,
+          z: bminz + wardrobeP.fz * sz,
+          yaw: wardrobeP.yawRad,
+          snapFloorY: bminy + wardrobeP.dy,
+          uniformScale: wardrobeP.uniformScale,
+        }
+      : fallback.wardrobe,
+    footlocker: footP
+      ? {
+          x: bminx + footP.fx * sx,
+          z: bminz + footP.fz * sz,
+          yaw: footP.yawRad,
+          snapFloorY: bminy + footP.dy,
+          uniformScale: footP.uniformScale,
+        }
+      : fallback.footlocker,
+    stove: stoveP
+      ? {
+          x: bminx + stoveP.fx * sx,
+          z: bminz + stoveP.fz * sz,
+          yaw: stoveP.yawRad,
+          snapFloorY: bminy + stoveP.dy,
+          uniformScale: stoveP.uniformScale,
+        }
+      : fallback.stove,
   };
 }
 
 /**
- * Resolves imported decor authored in `owned_apartment_builtins.json` into world space for one unit.
+ * Resolves all `placedItems` from authoring JSON into world space for one unit.
  */
 export function resolveApartmentDecorPoses(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
 ): ApartmentDecorPose[] {
-  if (!doc || doc.decorItems.length === 0) return [];
+  if (!doc || doc.placedItems.length === 0) return [];
   const sx = (u.boundMaxX as number) - (u.boundMinX as number);
   const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
-  return doc.decorItems.map((item) => ({
+  return doc.placedItems.map((item) => ({
     id: item.id,
     modelRelPath: item.modelRelPath,
+    itemKind: item.itemKind,
     x: bminx + item.fx * sx,
     y: bminy + item.dy,
     z: bminz + item.fz * sz,
@@ -185,4 +212,15 @@ export function resolveApartmentWallPoses(
     sizeZ: item.sizeZ,
     material: item.material,
   }));
+}
+
+/**
+ * True when authoring JSON includes any gameplay-capable placed item (`itemKind !== "plain"`).
+ * In that case {@link mountFpApartmentFurniture} defers meshes + stash picks to the decor pipeline.
+ */
+export function ownedApartmentDocUsesNonPlainPlacedItems(
+  doc: OwnedApartmentBuiltinsDoc | null | undefined,
+): boolean {
+  if (!doc) return false;
+  return doc.placedItems.some((p) => p.itemKind !== "plain");
 }

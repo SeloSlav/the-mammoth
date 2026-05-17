@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { OwnedApartmentWallMaterial } from "@the-mammoth/schemas";
-import type { EditorMode, MyApartmentLayoutPiece } from "../state/editorStoreTypes.js";
+import type { EditorMode } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
 import { workspaceToInitialMode } from "../state/editorWorkspaceMap.js";
 import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
@@ -20,6 +20,7 @@ import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForWall,
   parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
 
@@ -83,8 +84,6 @@ export function EditorChromeMyApartment(props: {
   mode: EditorMode;
   setMode: (m: EditorMode) => void;
   setCameraMode: (m: "orbit") => void;
-  myApartmentLayoutPiece: MyApartmentLayoutPiece;
-  setMyApartmentLayoutPiece: (p: MyApartmentLayoutPiece) => void;
   enterMyApartmentLayoutMode: () => void;
   contentIndex: EditorContentIndex;
 }) {
@@ -92,16 +91,20 @@ export function EditorChromeMyApartment(props: {
     mode,
     setMode,
     setCameraMode,
-    myApartmentLayoutPiece,
-    setMyApartmentLayoutPiece,
     enterMyApartmentLayoutMode,
     contentIndex,
   } = props;
   const {
     ownedApartmentBuiltins,
     selectedId,
+    myApartmentMultiselectExtraIds,
     patchOwnedApartmentBuiltins,
     setSelectedId,
+    pickMyApartmentLayoutFromCanvas,
+    saveMyApartmentObjectGroupFromSelection,
+    renameMyApartmentObjectGroup,
+    deleteMyApartmentObjectGroup,
+    selectMyApartmentSavedObjectGroup,
     transformMode,
     setTransformMode,
     gridSnapM,
@@ -110,8 +113,15 @@ export function EditorChromeMyApartment(props: {
     useShallow((s) => ({
       ownedApartmentBuiltins: s.ownedApartmentBuiltins,
       selectedId: s.selectedId,
+      myApartmentMultiselectExtraIds: s.myApartmentMultiselectExtraIds,
       patchOwnedApartmentBuiltins: s.patchOwnedApartmentBuiltins,
       setSelectedId: s.setSelectedId,
+      pickMyApartmentLayoutFromCanvas: s.pickMyApartmentLayoutFromCanvas,
+      saveMyApartmentObjectGroupFromSelection:
+        s.saveMyApartmentObjectGroupFromSelection,
+      renameMyApartmentObjectGroup: s.renameMyApartmentObjectGroup,
+      deleteMyApartmentObjectGroup: s.deleteMyApartmentObjectGroup,
+      selectMyApartmentSavedObjectGroup: s.selectMyApartmentSavedObjectGroup,
       transformMode: s.transformMode,
       setTransformMode: s.setTransformMode,
       gridSnapM: s.gridSnapM,
@@ -162,7 +172,10 @@ export function EditorChromeMyApartment(props: {
 
   const selectedDecorId = parseMyApartmentLayoutDecorSelectedId(selectedId);
   const selectedWallId = parseMyApartmentLayoutWallSelectedId(selectedId);
-  const decorItems = ownedApartmentBuiltins.decorItems;
+  const placedItems = useMemo(
+    () => [...ownedApartmentBuiltins.placedItems].sort((a, b) => a.id.localeCompare(b.id)),
+    [ownedApartmentBuiltins],
+  );
   const wallItems = ownedApartmentBuiltins.wallItems;
 
   const wallTextureOptions = useMemo(
@@ -175,8 +188,8 @@ export function EditorChromeMyApartment(props: {
     [contentIndex.materialTextureUrls],
   );
   const decorById = useMemo(
-    () => new Map(decorItems.map((item) => [item.id, item] as const)),
-    [decorItems],
+    () => new Map(placedItems.map((item) => [item.id, item] as const)),
+    [placedItems],
   );
   const selectedDecor = selectedDecorId ? (decorById.get(selectedDecorId) ?? null) : null;
 
@@ -186,9 +199,58 @@ export function EditorChromeMyApartment(props: {
   );
   const selectedWall = selectedWallId ? (wallById.get(selectedWallId) ?? null) : null;
 
+  const [newObjectGroupName, setNewObjectGroupName] = useState("Saved group");
+
+  const extrasSelSet = useMemo(
+    () => new Set(myApartmentMultiselectExtraIds),
+    [myApartmentMultiselectExtraIds],
+  );
+
+  function isDecorWallPlacementRowSelected(fullPlacementId: string): boolean {
+    return selectedId === fullPlacementId || extrasSelSet.has(fullPlacementId);
+  }
+
+  function pickDecorWallPlacementFromList(
+    fullPlacementId: string,
+    ev: Pick<MouseEvent, "ctrlKey" | "metaKey">,
+  ): void {
+    pickMyApartmentLayoutFromCanvas(fullPlacementId, {
+      additive: ev.ctrlKey === true || ev.metaKey === true,
+    });
+  }
+
+  const apartmentDecorWallMultisetCount = useMemo(() => {
+    const s = new Set<string>();
+    for (const extra of myApartmentMultiselectExtraIds) {
+      const isDecorExtra = parseMyApartmentLayoutDecorSelectedId(extra) !== null;
+      const isWallExtra = parseMyApartmentLayoutWallSelectedId(extra) !== null;
+      if (isDecorExtra || isWallExtra) {
+        s.add(extra);
+      }
+    }
+    if (typeof selectedId === "string") {
+      const isDecorSel = parseMyApartmentLayoutDecorSelectedId(selectedId) !== null;
+      const isWallSel = parseMyApartmentLayoutWallSelectedId(selectedId) !== null;
+      if (isDecorSel || isWallSel) {
+        s.add(selectedId);
+      }
+    }
+    return s.size;
+  }, [myApartmentMultiselectExtraIds, selectedId]);
+
+  const parsedSavedLayoutObjectGroupId = parseMyApartmentLayoutSavedObjectGroupId(selectedId);
+
+  const sortedLayoutObjectGroups = useMemo(
+    () =>
+      [...ownedApartmentBuiltins.objectGroups].sort((a, b) =>
+        a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+      ),
+    [ownedApartmentBuiltins.objectGroups],
+  );
+
   function importSelectedDecor(): void {
     if (!selectedCatalogModelRelPath) return;
-    const nextIndex = ownedApartmentBuiltins.decorItems.length;
+    const nextIndex = placedItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -196,8 +258,8 @@ export function EditorChromeMyApartment(props: {
     const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
-      decorItems: [
-        ...doc.decorItems,
+      placedItems: [
+        ...doc.placedItems,
         {
           id,
           modelRelPath: selectedCatalogModelRelPath,
@@ -209,6 +271,7 @@ export function EditorChromeMyApartment(props: {
           rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
+          itemKind: "plain",
         },
       ],
     }));
@@ -217,7 +280,7 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedDecor(): void {
     if (!selectedDecor) return;
-    const nextIndex = ownedApartmentBuiltins.decorItems.length;
+    const nextIndex = placedItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -225,8 +288,8 @@ export function EditorChromeMyApartment(props: {
     const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
-      decorItems: [
-        ...doc.decorItems,
+      placedItems: [
+        ...doc.placedItems,
         {
           id,
           modelRelPath: selectedDecor.modelRelPath,
@@ -238,6 +301,7 @@ export function EditorChromeMyApartment(props: {
           rollRad: selectedDecor.rollRad ?? 0,
           uniformScale: selectedDecor.uniformScale,
           ignoreSupportSurfaces: selectedDecor.ignoreSupportSurfaces,
+          itemKind: selectedDecor.itemKind,
         },
       ],
     }));
@@ -248,7 +312,7 @@ export function EditorChromeMyApartment(props: {
     if (!selectedDecorId) return;
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
-      decorItems: doc.decorItems.filter((item) => item.id !== selectedDecorId),
+      placedItems: doc.placedItems.filter((item) => item.id !== selectedDecorId),
     }));
     setSelectedId(null);
   }
@@ -314,6 +378,15 @@ export function EditorChromeMyApartment(props: {
     setSelectedId(null);
   }
 
+  const apartmentSceneGizmoHints: "decor" | "builtins" =
+    mode === "my_apartment_layout" &&
+      (parsedSavedLayoutObjectGroupId !== null ||
+        selectedDecorId !== null ||
+        selectedWallId !== null ||
+        apartmentDecorWallMultisetCount >= 2)
+      ? "decor"
+      : "builtins";
+
   let body: ReactNode = null;
   if (mode === "my_apartment_layout") {
     body = (
@@ -368,28 +441,123 @@ export function EditorChromeMyApartment(props: {
             setTransformMode={setTransformMode}
             gridSnapM={gridSnapM}
             setGridSnapM={setGridSnapM}
-            myApartmentLayoutHints={
-              parseMyApartmentLayoutDecorSelectedId(selectedId) !== null ? "decor" : "builtins"
-            }
+            myApartmentLayoutHints={apartmentSceneGizmoHints}
           />
         </div>
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
-          Prop gizmo
+          Saved object groups
         </span>
-        <select
-          style={{ ...editorChromeInput, marginTop: 6 }}
-          value={myApartmentLayoutPiece}
-          onChange={(e) =>
-            setMyApartmentLayoutPiece(e.target.value as MyApartmentLayoutPiece)
-          }
+        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+          <strong>Ctrl/Cmd-click</strong> multiple imported decor + wall slabs in the scene or lists,
+          enter a label, then save a group so you can move/rotate/scale them together later.{" "}
+          <span style={{ opacity: 0.9 }}>
+            Saving, renaming, or ungrouping tries to write{" "}
+            <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>{" "}
+            immediately (Vite dev middleware with <code style={{ fontSize: 10 }}>EDITOR_SAVE=1</code>) so
+            a refresh keeps groups. If that fails, use <strong>Save owned apartment builtins</strong> in
+            the header.
+          </span>
+        </p>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            marginTop: 8,
+            flexWrap: "wrap",
+            alignItems: "stretch",
+          }}
         >
-          <option value="bed">Bed</option>
-          <option value="wardrobe">Wardrobe</option>
-          <option value="footlocker">Footlocker</option>
-          <option value="stove">Stove</option>
-        </select>
+          <input
+            type="text"
+            value={newObjectGroupName}
+            onChange={(e) => setNewObjectGroupName(e.target.value)}
+            placeholder="Group name…"
+            style={{ ...editorChromeInput, flex: "1 1 160px", minWidth: 120 }}
+          />
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            disabled={apartmentDecorWallMultisetCount < 2}
+            title={
+              apartmentDecorWallMultisetCount < 2
+                ? "Select at least two decor / wall slabs (Ctrl/Cmd-click)."
+                : "Save selection as a named group."
+            }
+            onClick={() =>
+              saveMyApartmentObjectGroupFromSelection(
+                newObjectGroupName.trim().length > 0 ? newObjectGroupName.trim() : "Saved group",
+              )
+            }
+          >
+            Save group ({apartmentDecorWallMultisetCount})
+          </button>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gap: 6,
+            marginTop: 8,
+            maxHeight: 172,
+            overflowY: "auto",
+          }}
+        >
+          {sortedLayoutObjectGroups.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>
+              No saved groups yet — multiselect at least two decor or wall slabs, then Save group.
+            </div>
+          ) : (
+            sortedLayoutObjectGroups.map((g) => {
+              const isActive = parsedSavedLayoutObjectGroupId === g.id;
+              return (
+                <div
+                  key={g.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 6,
+                    padding: "6px 8px",
+                    borderRadius: 6,
+                    background: isActive ? "rgba(53,81,114,0.35)" : "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <label style={{ fontSize: 11, opacity: 0.88, gridColumn: "1 / -1" }}>
+                    <span style={{ display: "block", opacity: 0.72, marginBottom: 4 }}>{g.name}</span>
+                    <input
+                      aria-label={`Rename saved group ${g.name}`}
+                      defaultValue={g.name}
+                      key={`${g.id}:${g.name}`}
+                      style={{ ...editorChromeInput, width: "100%" }}
+                      onBlur={(e) => renameMyApartmentObjectGroup(g.id, e.target.value)}
+                    />
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, gridColumn: "1 / -1" }}>
+                    <button
+                      type="button"
+                      style={editorChromeRowBtn}
+                      onClick={() => selectMyApartmentSavedObjectGroup(g.id)}
+                      title="Select this group"
+                    >
+                      Select
+                    </button>
+                    <button
+                      type="button"
+                      style={editorChromeRowBtn}
+                      onClick={() => deleteMyApartmentObjectGroup(g.id)}
+                      title="Remove the grouping (objects stay in the layout)"
+                    >
+                      Ungroup
+                    </button>
+                  </div>
+                  <span style={{ gridColumn: "1 / -1", fontSize: 10, opacity: 0.62 }}>
+                    {g.memberSelectedIds.length} member{g.memberSelectedIds.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
-          Imported decor
+          Placed items
         </span>
         <div
           style={{
@@ -400,25 +568,29 @@ export function EditorChromeMyApartment(props: {
             overflowY: "auto",
           }}
         >
-          {decorItems.length === 0 ? (
-            <div style={{ fontSize: 11, opacity: 0.68 }}>No imported decor yet.</div>
+          {placedItems.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>No placed items yet.</div>
           ) : (
-            decorItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                style={{
-                  ...editorChromeRowBtn,
-                  textAlign: "left",
-                  background:
-                    selectedDecorId === item.id ? "#355172" : "#2a2a34",
-                }}
-                onClick={() => setSelectedId(editorMyApartmentSelectedIdForDecor(item.id))}
-                title={item.modelRelPath}
-              >
-                {decorCatalogLabel(item.modelRelPath)}
-              </button>
-            ))
+            placedItems.map((item) => {
+              const decorFullId = editorMyApartmentSelectedIdForDecor(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    ...editorChromeRowBtn,
+                    textAlign: "left",
+                    background: isDecorWallPlacementRowSelected(decorFullId)
+                      ? "#355172"
+                      : "#2a2a34",
+                  }}
+                  onClick={(ev) => pickDecorWallPlacementFromList(decorFullId, ev)}
+                  title={item.modelRelPath}
+                >
+                  {decorCatalogLabel(item.modelRelPath)}
+                </button>
+              );
+            })
           )}
         </div>
         <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -449,7 +621,7 @@ export function EditorChromeMyApartment(props: {
                 const ignoreSupportSurfaces = e.target.checked;
                 patchOwnedApartmentBuiltins((doc) => ({
                   ...doc,
-                  decorItems: doc.decorItems.map((item) =>
+                  placedItems: doc.placedItems.map((item) =>
                     item.id === selectedDecor.id ? { ...item, ignoreSupportSurfaces } : item,
                   ),
                 }));
@@ -487,22 +659,27 @@ export function EditorChromeMyApartment(props: {
           {wallItems.length === 0 ? (
             <div style={{ fontSize: 11, opacity: 0.68 }}>No wall slabs yet.</div>
           ) : (
-            wallItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                style={{
-                  ...editorChromeRowBtn,
-                  textAlign: "left",
-                  background: selectedWallId === item.id ? "#355172" : "#2a2a34",
-                }}
-                onClick={() => setSelectedId(editorMyApartmentSelectedIdForWall(item.id))}
-                title={item.id}
-              >
-                Wall {item.id.slice(0, 8)}… ({item.sizeX.toFixed(2)}×{item.sizeY.toFixed(2)}×
-                {item.sizeZ.toFixed(2)} m)
-              </button>
-            ))
+            wallItems.map((item) => {
+              const wallFullId = editorMyApartmentSelectedIdForWall(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    ...editorChromeRowBtn,
+                    textAlign: "left",
+                    background: isDecorWallPlacementRowSelected(wallFullId)
+                      ? "#355172"
+                      : "#2a2a34",
+                  }}
+                  onClick={(ev) => pickDecorWallPlacementFromList(wallFullId, ev)}
+                  title={item.id}
+                >
+                  Wall {item.id.slice(0, 8)}… ({item.sizeX.toFixed(2)}×{item.sizeY.toFixed(2)}×
+                  {item.sizeZ.toFixed(2)} m)
+                </button>
+              );
+            })
           )}
         </div>
         <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>

@@ -214,11 +214,10 @@ export async function mountFpSession(
   assertWebGpuRendererBackend(renderer);
   const rendererShadowMap = renderer.shadowMap as typeof renderer.shadowMap & {
     autoUpdate: boolean;
-    needsUpdate: boolean;
   };
   rendererShadowMap.enabled = true;
-  rendererShadowMap.autoUpdate = false;
-  rendererShadowMap.needsUpdate = false;
+  /** Animated doors / moving props require fresh shadow maps; cost is one directional shadow from {@link attachFpSessionEnvironment}. */
+  rendererShadowMap.autoUpdate = true;
   rendererShadowMap.type = THREE.PCFSoftShadowMap;
   const scheduleGpuTimestampResolve = (): void => {
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
@@ -367,14 +366,36 @@ export async function mountFpSession(
       }
     });
   };
-  /** Apartment rig used analytic spots only — keep merged shells off the shadow pass (no doorway hitch). */
-  const disableShadowsOnUnitInteriorMeshes = (): void => {
-    for (let i = 0; i < unitInteriorMeshes.length; i++) {
-      const mesh = unitInteriorMeshes[i]!;
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
+  /**
+   * Residential interiors use {@link FP_RESIDENTIAL_UNIT_INTERIOR_LAYER} + a shadow-casting directional.
+   * Shell merges skip **casting** (thin merged hulls + door openings caused doorway artifacts) but still
+   * **receive** so props read against plaster/floor. Props cast + receive.
+   */
+  const applyResidentialInteriorShadowFlags = (): void => {
+    for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
+      const entry = unitInteriorMeshEntries[i]!;
+      const mesh = entry.mesh;
+      if (mesh.userData.mammothApartmentStashPickUnitKey !== undefined) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        continue;
+      }
+      if (mesh.userData.mammothApartmentUnitBoundsDebug === true) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        continue;
+      }
+      const isOwnedProp = entry.apartmentUnitKey !== null;
+      if (isOwnedProp) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      } else {
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+      }
     }
   };
+  applyResidentialInteriorShadowFlags();
   const refreshApartmentInteriorMeshes = () => {
     unitInteriorMeshEntries.length = 0;
     unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
@@ -389,7 +410,7 @@ export async function mountFpSession(
         apartmentFurnitureInteriorMeshes.push(entry.mesh);
       }
     }
-    disableShadowsOnUnitInteriorMeshes();
+    applyResidentialInteriorShadowFlags();
     refreshPerfTrackedMeshes();
     rebuildFpInteriorPartitionSolidMeshes();
   };
@@ -528,7 +549,7 @@ export async function mountFpSession(
         );
         if (sessionDisposed) return;
         unitInteriorMeshes.push(...dm.getMeshes());
-        disableShadowsOnUnitInteriorMeshes();
+        applyResidentialInteriorShadowFlags();
         refreshPerfTrackedMeshes();
       } catch (err) {
         if (!sessionDisposed) {

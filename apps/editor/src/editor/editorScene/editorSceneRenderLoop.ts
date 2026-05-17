@@ -10,6 +10,7 @@ import {
 import { objectLivesUnderScene } from "../scene/sceneGraphUtils.js";
 import { FpSelectionAabbOutline } from "../fpAuthoring/fpSelectionAabbOutline.js";
 import type { PreviewSelectionShapeOutline } from "../scene/previewSelectionShapeOutline.js";
+import { apartmentLayoutOutlineTargetGroups } from "../myApartment/editorMyApartmentSelectionHighlight.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import {
   isConsumableFpAuthoringState,
@@ -139,6 +140,11 @@ export function startEditorSceneRenderLoop(deps: {
         st.mode === "stairwell_preview"
       ) {
         previewSelectionOutline.setFromObject(findBestSelectionTarget());
+      } else if (st.mode === "my_apartment_layout") {
+        fpSelectionOutline.setFromObject(null);
+        const targets = apartmentLayoutOutlineTargetGroups(st);
+        if (targets.length === 0) previewSelectionOutline.setFromObject(null);
+        else previewSelectionOutline.setFromRoots(targets);
       } else {
         previewSelectionOutline.setFromObject(null);
       }

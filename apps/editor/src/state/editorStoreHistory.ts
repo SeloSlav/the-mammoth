@@ -15,6 +15,7 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     stairWellDef: structuredClone(state.stairWellDef),
     ownedApartmentBuiltins: structuredClone(state.ownedApartmentBuiltins),
     selectedId: state.selectedId,
+    myApartmentMultiselectExtraIds: [...state.myApartmentMultiselectExtraIds],
     dirty: state.dirty,
     ownedApartmentBuiltinsNeedsDiskFlush: state.ownedApartmentBuiltinsNeedsDiskFlush,
     contentStructureEpoch: state.contentStructureEpoch ?? 0,

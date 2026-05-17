@@ -21,4 +21,5 @@ export default __t.row({
   pitchRad: __t.f32().name("pitch_rad"),
   rollRad: __t.f32().name("roll_rad"),
   uniformScale: __t.f32().name("uniform_scale"),
+  itemKind: __t.u8().name("item_kind"),
 });

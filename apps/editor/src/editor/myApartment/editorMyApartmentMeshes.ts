@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
-import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
@@ -10,18 +9,14 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentPlacedItem,
 } from "@the-mammoth/schemas";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
   editorMyApartmentSelectedIdForDecor,
-  editorMyApartmentSelectedIdForPiece,
   editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
-
-const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
-const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
-const BED_URL = "/static/models/objects/bed.glb";
-const STOVE_URL = "/static/models/objects/stove.glb";
+import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
 const WARDROBE_VIS_SCALE = 0.98;
 const FOOTLOCKER_VIS_SCALE = 0.56;
@@ -269,10 +264,6 @@ export function snapOwnedApartmentDecorRollRad(zRad: number): number {
   return Math.round(zRad / s) * s;
 }
 
-/** World Y target for mesh bottom — set when mounting built-in preview groups. */
-const EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY =
-  "editorMyApartmentFurnitureSnapFloorY";
-
 /** Clamps built-in furniture gizmo uniform scale to schema bounds. */
 export function clampOwnedApartmentBuiltinUniformScale(s: number): number {
   return THREE.MathUtils.clamp(
@@ -289,39 +280,6 @@ export function clampOwnedApartmentDecorUniformScale(s: number): number {
     OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
     EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
   );
-}
-
-/** XZ-floor plane only; yaw on world Y; no pitch / roll; XZ clamped to hollow-shell interior for editor walls. */
-export function constrainMyApartmentFurnitureRootPose(root: THREE.Object3D): void {
-  root.position.y = 0;
-  const eulerW = new THREE.Euler().setFromQuaternion(root.quaternion, "YXZ");
-  const y = snapOwnedApartmentYawRad(eulerW.y);
-  qSnapYawScratch.setFromEuler(new THREE.Euler(0, y, 0, "YXZ"));
-  root.quaternion.copy(qSnapYawScratch);
-
-  const meta = readAuthoringShellAuthoringMetaFromAncestors(root);
-  if (meta) {
-    const c = clampPreviewXZToAuthoringInterior(meta, root.position.x, root.position.z);
-    root.position.x = c.x;
-    root.position.z = c.z;
-  }
-
-  const uniform = clampOwnedApartmentBuiltinUniformScale(
-    (root.scale.x + root.scale.y + root.scale.z) / 3,
-  );
-  root.scale.setScalar(uniform);
-
-  const vis = root.children[0];
-  if (!vis) return;
-
-  const snapFloorRaw = root.userData[EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY] as
-    | number
-    | undefined;
-  const snapFloorY =
-    typeof snapFloorRaw === "number" && Number.isFinite(snapFloorRaw)
-      ? snapFloorRaw
-      : EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
-  snapCloneBottomToWorldFloorUnderParentScale(vis, snapFloorY, uniform);
 }
 
 /** Uniform scale only — keeps drag/commit paths from non-uniform drift without rewriting rotation. */
@@ -662,13 +620,6 @@ export function constrainMyApartmentWallRootPose(
   }
 }
 
-export type EditorMyApartmentGltfTemplates = {
-  wardrobeScene: THREE.Object3D;
-  footScene: THREE.Object3D;
-  stoveScene: THREE.Object3D;
-  bedScene: THREE.Object3D;
-};
-
 export type EditorMyApartmentDecorTemplateMap = Map<string, THREE.Object3D>;
 
 export function previewWorldFromNormalizedPlacement(args: {
@@ -686,27 +637,6 @@ export function previewWorldFromNormalizedPlacement(args: {
     x: pos.x,
     z: pos.z,
   };
-}
-
-function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number): void {
-  root.position.y = 0;
-  root.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(root);
-  root.position.y = floorWorldY - box.min.y;
-  root.updateMatrixWorld(true);
-}
-
-function snapCloneBottomToWorldFloorUnderParentScale(
-  root: THREE.Object3D,
-  floorWorldY: number,
-  parentUniformScale: number,
-): void {
-  root.position.y = 0;
-  root.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(root);
-  const scale = Math.max(1e-6, parentUniformScale);
-  root.position.y = floorWorldY / scale - box.min.y;
-  root.updateMatrixWorld(true);
 }
 
 function disposeGroupSubtreeGeometry(group: THREE.Object3D): void {
@@ -731,149 +661,19 @@ function decorAssetUrl(modelRelPath: string): string {
   return `/${modelRelPath.trim().replace(/^\/+/u, "")}`;
 }
 
-function previewWorldFromDoc(
-  doc: OwnedApartmentBuiltinsDoc,
-  m: OwnedApartmentFractionToPreviewXZ,
-): {
-  wardrobe: { x: number; z: number; yaw: number; snapFloorY: number };
-  foot: { x: number; z: number; yaw: number; snapFloorY: number };
-  stove: { x: number; z: number; yaw: number; snapFloorY: number };
-  bed: { x: number; z: number; yaw: number; snapFloorY: number };
-} {
-  const wardrobeSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.wardrobeDy;
-  const footSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.footDy;
-  const stoveSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.stoveDy;
-  const bedSnap = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + doc.bedDy;
-  const wPos = clampPreviewXZToAuthoringInterior(
-    m,
-    m.strictMinX + doc.wardrobeFx * m.spanX - m.prefabOriginX,
-    m.strictMinZ + doc.wardrobeFz * m.spanZ - m.prefabOriginZ,
-  );
-  const footPos = clampPreviewXZToAuthoringInterior(
-    m,
-    m.strictMinX + doc.footFx * m.spanX - m.prefabOriginX,
-    m.strictMinZ + doc.footFz * m.spanZ - m.prefabOriginZ,
-  );
-  const stovePos = clampPreviewXZToAuthoringInterior(
-    m,
-    m.strictMinX + doc.stoveFx * m.spanX - m.prefabOriginX,
-    m.strictMinZ + doc.stoveFz * m.spanZ - m.prefabOriginZ,
-  );
-  const bedPos = clampPreviewXZToAuthoringInterior(
-    m,
-    m.strictMinX + doc.bedFx * m.spanX - m.prefabOriginX,
-    m.strictMinZ + doc.bedFz * m.spanZ - m.prefabOriginZ,
-  );
-  return {
-    wardrobe: {
-      x: wPos.x,
-      z: wPos.z,
-      yaw: doc.wardrobeYawRad,
-      snapFloorY: wardrobeSnap,
-    },
-    foot: {
-      x: footPos.x,
-      z: footPos.z,
-      yaw: doc.footYawRad,
-      snapFloorY: footSnap,
-    },
-    stove: {
-      x: stovePos.x,
-      z: stovePos.z,
-      yaw: doc.stoveYawRad,
-      snapFloorY: stoveSnap,
-    },
-    bed: {
-      x: bedPos.x,
-      z: bedPos.z,
-      yaw: doc.bedYawRad,
-      snapFloorY: bedSnap,
-    },
-  };
-}
-
-function placeWardrobeGroup(
-  group: THREE.Group,
-  templates: EditorMyApartmentGltfTemplates,
-  doc: OwnedApartmentBuiltinsDoc,
-  spans: OwnedApartmentFractionToPreviewXZ,
-): void {
-  disposeGroupSubtreeGeometry(group);
-  group.clear();
-  group.userData.mammothEditorMyApartmentProp = true;
-  group.userData.mammothEditorMyApartmentPiece = "wardrobe" as const;
-  const pv = previewWorldFromDoc(doc, spans).wardrobe;
-  group.position.set(pv.x, 0, pv.z);
-  group.rotation.y = snapOwnedApartmentYawRad(pv.yaw);
-  group.scale.setScalar(clampOwnedApartmentBuiltinUniformScale(doc.wardrobeUniformScale));
-  group.userData[EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY] = pv.snapFloorY;
-  const vis = cloneProp(templates.wardrobeScene);
-  vis.scale.setScalar(WARDROBE_VIS_SCALE);
-  snapCloneBottomToWorldFloorUnderParentScale(vis, pv.snapFloorY, group.scale.x);
-  group.add(vis);
-}
-
-function placeFootlockerGroup(
-  group: THREE.Group,
-  templates: EditorMyApartmentGltfTemplates,
-  doc: OwnedApartmentBuiltinsDoc,
-  spans: OwnedApartmentFractionToPreviewXZ,
-): void {
-  disposeGroupSubtreeGeometry(group);
-  group.clear();
-  group.userData.mammothEditorMyApartmentProp = true;
-  group.userData.mammothEditorMyApartmentPiece = "footlocker" as const;
-  const pv = previewWorldFromDoc(doc, spans).foot;
-  group.position.set(pv.x, 0, pv.z);
-  group.rotation.y = snapOwnedApartmentYawRad(pv.yaw);
-  group.scale.setScalar(clampOwnedApartmentBuiltinUniformScale(doc.footUniformScale));
-  group.userData[EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY] = pv.snapFloorY;
-  const vis = cloneProp(templates.footScene);
-  vis.scale.setScalar(FOOTLOCKER_VIS_SCALE);
-  snapCloneBottomToWorldFloorUnderParentScale(vis, pv.snapFloorY, group.scale.x);
-  group.add(vis);
-}
-
-function placeStoveGroup(
-  group: THREE.Group,
-  templates: EditorMyApartmentGltfTemplates,
-  doc: OwnedApartmentBuiltinsDoc,
-  spans: OwnedApartmentFractionToPreviewXZ,
-): void {
-  disposeGroupSubtreeGeometry(group);
-  group.clear();
-  group.userData.mammothEditorMyApartmentProp = true;
-  group.userData.mammothEditorMyApartmentPiece = "stove" as const;
-  const pv = previewWorldFromDoc(doc, spans).stove;
-  group.position.set(pv.x, 0, pv.z);
-  group.rotation.y = snapOwnedApartmentYawRad(pv.yaw);
-  group.scale.setScalar(clampOwnedApartmentBuiltinUniformScale(doc.stoveUniformScale));
-  group.userData[EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY] = pv.snapFloorY;
-  const vis = cloneProp(templates.stoveScene);
-  vis.scale.setScalar(STOVE_VIS_SCALE);
-  snapCloneBottomToWorldFloorUnderParentScale(vis, pv.snapFloorY, group.scale.x);
-  group.add(vis);
-}
-
-function placeBedGroup(
-  group: THREE.Group,
-  templates: EditorMyApartmentGltfTemplates,
-  doc: OwnedApartmentBuiltinsDoc,
-  spans: OwnedApartmentFractionToPreviewXZ,
-): void {
-  disposeGroupSubtreeGeometry(group);
-  group.clear();
-  group.userData.mammothEditorMyApartmentProp = true;
-  group.userData.mammothEditorMyApartmentPiece = "bed" as const;
-  const pv = previewWorldFromDoc(doc, spans).bed;
-  group.position.set(pv.x, 0, pv.z);
-  group.rotation.y = snapOwnedApartmentYawRad(pv.yaw);
-  group.scale.setScalar(clampOwnedApartmentBuiltinUniformScale(doc.bedUniformScale));
-  group.userData[EDITOR_MY_APARTMENT_FURNITURE_SNAP_FLOOR_USERDATA_KEY] = pv.snapFloorY;
-  const vis = cloneProp(templates.bedScene);
-  vis.scale.setScalar(BED_VIS_SCALE);
-  snapCloneBottomToWorldFloorUnderParentScale(vis, pv.snapFloorY, group.scale.x);
-  group.add(vis);
+function editorAuthoringVisScaleForPlacedItemKind(kind: OwnedApartmentPlacedItem["itemKind"]): number {
+  switch (kind) {
+    case "bed":
+      return BED_VIS_SCALE;
+    case "wardrobe":
+      return WARDROBE_VIS_SCALE;
+    case "footlocker":
+      return FOOTLOCKER_VIS_SCALE;
+    case "stove":
+      return STOVE_VIS_SCALE;
+    default:
+      return 1;
+  }
 }
 
 function placeWallGroup(args: {
@@ -929,7 +729,7 @@ function placeWallGroup(args: {
 function placeDecorGroup(args: {
   group: THREE.Group;
   template: THREE.Object3D;
-  decor: OwnedApartmentBuiltinsDoc["decorItems"][number];
+  decor: OwnedApartmentPlacedItem;
   spans: OwnedApartmentFractionToPreviewXZ;
 }): void {
   const { group, template, decor, spans } = args;
@@ -958,6 +758,7 @@ function placeDecorGroup(args: {
   group.rotation.set(pitch, yaw, roll, "YXZ");
   group.scale.setScalar(decor.uniformScale);
   const vis = cloneProp(template);
+  vis.scale.setScalar(editorAuthoringVisScaleForPlacedItemKind(decor.itemKind));
   group.add(vis);
   centerDecorVisualBoundsOnRoot(group);
   applyMyApartmentDecorUniformScale(group);
@@ -966,26 +767,9 @@ function placeDecorGroup(args: {
 
 export type EditorMyApartmentFurnitureMount = {
   root: THREE.Group;
-  groups: Record<MyApartmentLayoutPiece, THREE.Group>;
   selectionGroups: Record<string, THREE.Group>;
   dispose: () => void;
 };
-
-export async function loadEditorMyApartmentGltfTemplates(): Promise<EditorMyApartmentGltfTemplates> {
-  const loader = new GLTFLoader();
-  const [wardrobeGltf, footGltf, stoveGltf, bedGltf] = await Promise.all([
-    loader.loadAsync(WARDROBE_URL),
-    loader.loadAsync(FOOTLOCKER_URL),
-    loader.loadAsync(STOVE_URL),
-    loader.loadAsync(BED_URL),
-  ]);
-  return {
-    wardrobeScene: wardrobeGltf.scene,
-    footScene: footGltf.scene,
-    stoveScene: stoveGltf.scene,
-    bedScene: bedGltf.scene,
-  };
-}
 
 const editorMyApartmentDecorTemplatePromises = new Map<string, Promise<THREE.Object3D>>();
 
@@ -1013,7 +797,6 @@ export async function loadEditorMyApartmentDecorTemplates(
 
 export function mountEditorMyApartmentFurnitureUnder(
   parent: THREE.Object3D,
-  templates: EditorMyApartmentGltfTemplates,
   decorTemplates: EditorMyApartmentDecorTemplateMap,
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
@@ -1022,37 +805,13 @@ export function mountEditorMyApartmentFurnitureUnder(
   root.name = "editor_my_apartment_furniture";
   parent.add(root);
 
-  const groups: Record<MyApartmentLayoutPiece, THREE.Group> = {
-    bed: new THREE.Group(),
-    wardrobe: new THREE.Group(),
-    footlocker: new THREE.Group(),
-    stove: new THREE.Group(),
-  };
+  const selectionGroups: Record<string, THREE.Group> = {};
 
-  groups.bed.name = "editor_my_apartment_bed";
-  groups.wardrobe.name = "editor_my_apartment_wardrobe";
-  groups.footlocker.name = "editor_my_apartment_footlocker";
-  groups.stove.name = "editor_my_apartment_stove";
-
-  for (const g of Object.values(groups)) root.add(g);
-
-  placeBedGroup(groups.bed, templates, doc, authoringFractionMapping);
-  placeWardrobeGroup(groups.wardrobe, templates, doc, authoringFractionMapping);
-  placeFootlockerGroup(groups.footlocker, templates, doc, authoringFractionMapping);
-  placeStoveGroup(groups.stove, templates, doc, authoringFractionMapping);
-
-  const selectionGroups: Record<string, THREE.Group> = {
-    [editorMyApartmentSelectedIdForPiece("bed")]: groups.bed,
-    [editorMyApartmentSelectedIdForPiece("wardrobe")]: groups.wardrobe,
-    [editorMyApartmentSelectedIdForPiece("footlocker")]: groups.footlocker,
-    [editorMyApartmentSelectedIdForPiece("stove")]: groups.stove,
-  };
-
-  for (const decor of doc.decorItems) {
+  for (const decor of doc.placedItems) {
     const template = decorTemplates.get(decor.modelRelPath);
     if (!template) continue;
     const group = new THREE.Group();
-    group.name = `editor_my_apartment_decor:${decor.id}`;
+    group.name = `editor_my_apartment_placed:${decor.id}`;
     root.add(group);
     placeDecorGroup({ group, template, decor, spans: authoringFractionMapping });
     selectionGroups[editorMyApartmentSelectedIdForDecor(decor.id)] = group;
@@ -1071,33 +830,32 @@ export function mountEditorMyApartmentFurnitureUnder(
   }
 
   const dispose = (): void => {
+    teardownApartmentSavedObjectGroupManipulator();
     for (const g of Object.values(selectionGroups)) disposeGroupSubtreeGeometry(g);
     parent.remove(root);
     root.clear();
   };
 
-  return { root, groups, selectionGroups, dispose };
+  return { root, selectionGroups, dispose };
 }
 
 export function updateEditorMyApartmentMountFromDoc(
   mount: EditorMyApartmentFurnitureMount,
-  templates: EditorMyApartmentGltfTemplates,
   decorTemplates: EditorMyApartmentDecorTemplateMap,
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
 ): void {
   const parent = mount.root.parent;
   if (!parent) return;
+  teardownApartmentSavedObjectGroupManipulator();
   const rebuilt = mountEditorMyApartmentFurnitureUnder(
     parent,
-    templates,
     decorTemplates,
     doc,
     authoringFractionMapping,
   );
   mount.dispose();
   mount.root = rebuilt.root;
-  mount.groups = rebuilt.groups;
   mount.selectionGroups = rebuilt.selectionGroups;
   mount.dispose = rebuilt.dispose;
 }

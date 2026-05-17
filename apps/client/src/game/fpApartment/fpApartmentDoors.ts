@@ -621,8 +621,8 @@ export function mountFpApartmentDoors(
     mesh.userData.mammothUnitInterior = true;
     mesh.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
     mesh.frustumCulled = false; // per-level group visibility drives culling, not frustum tests.
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     opts.buildingRoot.add(mesh);
 
     let glassMesh: THREE.InstancedMesh | undefined;

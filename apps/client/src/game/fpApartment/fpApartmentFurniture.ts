@@ -33,8 +33,9 @@ import {
   APARTMENT_STASH_KIND_WARDROBE,
 } from "./fpApartmentStashKey.js";
 import {
-  resolveApartmentFurniturePose,
   loadOwnedApartmentBuiltinsDocFromContent,
+  ownedApartmentDocUsesNonPlainPlacedItems,
+  resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
@@ -323,6 +324,13 @@ export async function mountFpApartmentFurniture(opts: {
   const queuedLevelSet = new Set<number>();
   const visibleLevelScratch = new Set<number>();
 
+  function apartmentUnitHasDecorRows(unitKey: string): boolean {
+    for (const row of opts.conn.db.apartment_unit_decor) {
+      if (row.unitKey === unitKey) return true;
+    }
+    return false;
+  }
+
   const disposeGeneratedGeometry = (root: THREE.Object3D) => {
     root.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
@@ -399,6 +407,41 @@ export async function mountFpApartmentFurniture(opts: {
     if (!residentInteriorPropsVisibleForViewer(opts.conn, u)) {
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_shell:${u.unitKey}`;
+      unitGroup.userData.mammothApartmentFurnitureProp = true;
+      unitGroup.userData.mammothApartmentUnitKey = u.unitKey;
+      unitGroup.userData.mammothPlateLevelIndex = levelIdx;
+      plate.add(unitGroup);
+      if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
+        const hull = new THREE.Mesh(unitBoundsDebugGeometry, unitBoundsDebugMaterial);
+        hull.name = `apartment_unit_bounds_debug:${u.unitKey}`;
+        hull.userData.mammothApartmentUnitBoundsDebug = true;
+        hull.userData.mammothApartmentFurnitureProp = true;
+        hull.userData.mammothUnitInterior = true;
+        hull.userData.mammothPlateLevelIndex = levelIdx;
+        hull.renderOrder = -1;
+        const sx = u.boundMaxX - u.boundMinX;
+        const sy = Math.max(0.02, u.boundMaxY - u.boundMinY);
+        const sz = u.boundMaxZ - u.boundMinZ;
+        hull.scale.set(sx, sy, sz);
+        hull.position.set(
+          (u.boundMinX + u.boundMaxX) * 0.5,
+          (u.boundMinY + u.boundMaxY) * 0.5,
+          (u.boundMinZ + u.boundMaxZ) * 0.5,
+        );
+        hull.frustumCulled = false;
+        unitGroup.add(hull);
+      }
+      tagResidentialUnitInteriorMeshesUnder(unitGroup);
+      build.unitGroups.push(unitGroup);
+      return;
+    }
+
+    if (
+      apartmentUnitHasDecorRows(u.unitKey) ||
+      ownedApartmentDocUsesNonPlainPlacedItems(builtinsFromContent)
+    ) {
+      const unitGroup = new THREE.Group();
+      unitGroup.name = `apartment_furniture_delegated_decor:${u.unitKey}`;
       unitGroup.userData.mammothApartmentFurnitureProp = true;
       unitGroup.userData.mammothApartmentUnitKey = u.unitKey;
       unitGroup.userData.mammothPlateLevelIndex = levelIdx;
@@ -608,8 +651,16 @@ export async function mountFpApartmentFurniture(opts: {
     for (const m of unitGroup.children) {
       if (m instanceof THREE.Mesh) {
         m.userData.mammothApartmentUnitKey = u.unitKey;
-        m.castShadow = false;
-        m.receiveShadow = false;
+        if (
+          m.userData.mammothApartmentStashPickUnitKey !== undefined ||
+          m.userData.mammothApartmentUnitBoundsDebug === true
+        ) {
+          m.castShadow = false;
+          m.receiveShadow = false;
+        } else {
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
       }
     }
     tagResidentialUnitInteriorMeshesUnder(unitGroup);

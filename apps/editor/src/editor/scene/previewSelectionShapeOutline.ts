@@ -12,6 +12,7 @@ type OutlineEntry = {
  */
 export class PreviewSelectionShapeOutline extends THREE.Group {
   private sourceRoot: THREE.Object3D | null = null;
+  private multiSourceRoots: THREE.Object3D[] | null = null;
   private entries: OutlineEntry[] = [];
   private readonly shellMaterial: THREE.MeshBasicMaterial;
   private readonly edgeMaterial: THREE.LineBasicMaterial;
@@ -72,6 +73,7 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     this.clear();
     this.entries = [];
     this.sourceRoot = null;
+    this.multiSourceRoots = null;
     this.visible = false;
   }
 
@@ -89,9 +91,9 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     target.visible = source.visible;
   }
 
-  private rebuild(root: THREE.Object3D, meshes: readonly THREE.Mesh[]): void {
+  private rebuildFromMeshes(primaryRoot: THREE.Object3D | null, meshes: readonly THREE.Mesh[]): void {
     this.clearEntries();
-    this.sourceRoot = root;
+    this.sourceRoot = primaryRoot;
     for (const mesh of meshes) {
       const shell = new THREE.Mesh(mesh.geometry, this.shellMaterial);
       shell.matrixAutoUpdate = false;
@@ -110,7 +112,45 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     this.syncFromSource();
   }
 
+  private rebuildMulti(roots: readonly THREE.Object3D[]): void {
+    const ordered = [...roots];
+    const meshes: THREE.Mesh[] = [];
+    for (const root of ordered) meshes.push(...this.collectSourceMeshes(root));
+    if (meshes.length === 0) {
+      this.clearEntries();
+      return;
+    }
+    this.rebuildFromMeshes(null, meshes);
+    this.multiSourceRoots = [...ordered];
+  }
+
+  private rootsMatch(
+    prev: THREE.Object3D[] | null,
+    next: readonly THREE.Object3D[],
+  ): boolean {
+    if (!prev || prev.length !== next.length) return false;
+    for (let i = 0; i < prev.length; i++) {
+      if (prev[i] !== next[i]) return false;
+    }
+    return true;
+  }
+
   private syncFromSource(): void {
+    const multi = this.multiSourceRoots;
+    if (multi && multi.length > 0) {
+      if (this.entries.length === 0) {
+        this.visible = false;
+        return;
+      }
+      let anyVisible = false;
+      for (const entry of this.entries) {
+        this.syncEntryWorldTransform(entry.source, entry.shell, 1.06);
+        this.syncEntryWorldTransform(entry.source, entry.edges, 1.03);
+        if (entry.shell.visible) anyVisible = true;
+      }
+      this.visible = anyVisible;
+      return;
+    }
     if (!this.sourceRoot || this.entries.length === 0) {
       this.visible = false;
       return;
@@ -124,6 +164,25 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     this.visible = anyVisible;
   }
 
+  setFromRoots(roots: readonly THREE.Object3D[] | null): void {
+    if (!roots || roots.length === 0) {
+      this.clearEntries();
+      return;
+    }
+    const meshes: THREE.Mesh[] = [];
+    for (const r of roots) meshes.push(...this.collectSourceMeshes(r));
+    if (meshes.length === 0) {
+      this.clearEntries();
+      return;
+    }
+    const canReuse =
+      this.rootsMatch(this.multiSourceRoots, roots) &&
+      meshes.length === this.entries.length &&
+      meshes.every((mesh, index) => this.entries[index]?.source === mesh);
+    if (!canReuse) this.rebuildMulti(roots);
+    else this.syncFromSource();
+  }
+
   setFromObject(obj: THREE.Object3D | null): void {
     if (!obj) {
       this.clearEntries();
@@ -134,12 +193,13 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
       this.clearEntries();
       return;
     }
+    this.multiSourceRoots = null;
     const canReuse =
       obj === this.sourceRoot &&
       meshes.length === this.entries.length &&
       meshes.every((mesh, index) => this.entries[index]?.source === mesh);
     if (!canReuse) {
-      this.rebuild(obj, meshes);
+      this.rebuildFromMeshes(obj, meshes);
       return;
     }
     this.syncFromSource();

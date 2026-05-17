@@ -42,18 +42,19 @@ import {
   applyMyApartmentDecorUniformScale,
   clampMyApartmentDecorEulerLimits,
   constrainMyApartmentDecorVerticalBounds,
-  constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
   findEditorMyApartmentWallSlabMesh,
   snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
+import { getEditorMyApartmentSelectionGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
-  getEditorMyApartmentPieceGroup,
-  getEditorMyApartmentSelectionGroup,
-} from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+  MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
+  syncApartmentSavedObjectGroupManipulator,
+} from "../myApartment/editorMyApartmentSavedGroupManip.js";
 import {
   parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../myApartment/editorMyApartmentSelection.js";
 import {
@@ -189,7 +190,7 @@ export async function mountEditorScene(
     if (typeof decorId === "string") {
       const item = useEditorStore
         .getState()
-        .ownedApartmentBuiltins.decorItems.find((decor) => decor.id === decorId);
+        .ownedApartmentBuiltins.placedItems.find((placed) => placed.id === decorId);
       if (item?.ignoreSupportSurfaces === true) return;
     }
     const supportRoot = structuralState.buildingRoot;
@@ -478,6 +479,45 @@ export async function mountEditorScene(
     });
   }
 
+  /** Decor / slab wall / saved-group aggregated flags for TransformControls limits in apartment authoring. */
+  function myApartmentGizmoSemantics(st: ReturnType<
+    typeof useEditorStore.getState
+  >): {
+    apartmentFreeVertical: boolean;
+    /** Local Z rotate handle only for décors (matches single-selection behavior). */
+    decorRotateHandleZ: boolean;
+    /** True when walls participate but no décors — governs yaw snap presets. */
+    wallOnlyAggregate: boolean;
+  } {
+    const decorSel = parseMyApartmentLayoutDecorSelectedId(st.selectedId) !== null;
+    const wallSel = parseMyApartmentLayoutWallSelectedId(st.selectedId) !== null;
+    let hasDecorMember = decorSel;
+    let hasWallMember = wallSel;
+
+    const savedGroupKey = parseMyApartmentLayoutSavedObjectGroupId(st.selectedId);
+    if (savedGroupKey) {
+      const def = st.ownedApartmentBuiltins.objectGroups.find((g) => g.id === savedGroupKey);
+      if (def) {
+        hasDecorMember =
+          hasDecorMember ||
+          def.memberSelectedIds.some(
+            (id) => parseMyApartmentLayoutDecorSelectedId(id) !== null,
+          );
+        hasWallMember =
+          hasWallMember ||
+          def.memberSelectedIds.some(
+            (id) => parseMyApartmentLayoutWallSelectedId(id) !== null,
+          );
+      }
+    }
+
+    return {
+      apartmentFreeVertical: hasDecorMember || hasWallMember,
+      decorRotateHandleZ: hasDecorMember,
+      wallOnlyAggregate: hasWallMember && !hasDecorMember,
+    };
+  }
+
   function syncTransformAttachment(): void {
     withProgrammaticTransformControls(() => {
       const s = useEditorStore.getState();
@@ -490,17 +530,18 @@ export async function mountEditorScene(
         return;
       }
       if (s.mode === "my_apartment_layout") {
-        const g =
-          getEditorMyApartmentSelectionGroup(s.selectedId) ??
-          getEditorMyApartmentPieceGroup(s.myApartmentLayoutPiece);
+        syncApartmentSavedObjectGroupManipulator({
+          selectedId: s.selectedId,
+          doc: s.ownedApartmentBuiltins,
+        });
+        const g = getEditorMyApartmentSelectionGroup(s.selectedId);
         if (!g) {
           transformControls.detach();
           return;
         }
         transformControls.attach(g);
-        const decorSelected = parseMyApartmentLayoutDecorSelectedId(s.selectedId) !== null;
-        const wallSelected = parseMyApartmentLayoutWallSelectedId(s.selectedId) !== null;
-        const apartmentFreeVertical = decorSelected || wallSelected;
+        const gx = myApartmentGizmoSemantics(s);
+        const apartmentFreeVertical = gx.apartmentFreeVertical;
         transformControls.setMode(s.transformMode);
         transformControls.setSpace("world");
         if (s.transformMode === "translate") {
@@ -510,7 +551,7 @@ export async function mountEditorScene(
         } else if (s.transformMode === "rotate") {
           transformControls.showX = true;
           transformControls.showY = true;
-          transformControls.showZ = decorSelected;
+          transformControls.showZ = gx.decorRotateHandleZ;
         } else {
           transformControls.showX = true;
           transformControls.showY = true;
@@ -519,10 +560,9 @@ export async function mountEditorScene(
         const snap = s.gridSnapM;
         transformControls.setTranslationSnap(snap > 0 ? snap : null);
         if (s.transformMode === "rotate") {
-          if (decorSelected) {
-            // Imported decor (fridge, etc.): match world floor plan — 15° steps without grid snap.
+          if (gx.decorRotateHandleZ) {
             transformControls.setRotationSnap(EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD);
-          } else if (wallSelected) {
+          } else if (gx.wallOnlyAggregate) {
             transformControls.setRotationSnap(
               snap > 0 ? EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD : null,
             );
@@ -665,8 +705,48 @@ export async function mountEditorScene(
     const aptSt = useEditorStore.getState();
     const aptObj = transformControls.object as THREE.Object3D | undefined;
     if (aptSt.mode === "my_apartment_layout" && aptObj) {
-      if (aptObj.userData.mammothEditorMyApartmentPiece) {
-        constrainMyApartmentFurnitureRootPose(aptObj);
+      if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+        for (const child of [...aptObj.children]) {
+          if (!(child instanceof THREE.Group)) continue;
+          if (child.userData.mammothEditorMyApartmentDecorId) {
+            applyMyApartmentDecorUniformScale(child);
+            if (aptSt.transformMode === "rotate") {
+              clampMyApartmentDecorEulerLimits(child);
+              if (aptSt.gridSnapM > 0) {
+                snapMyApartmentDecorEulerToGrid(child);
+              }
+            }
+            if (aptSt.transformMode !== "rotate") {
+              constrainMyApartmentDecorVerticalBounds(child);
+              constrainMyApartmentDecorToSupportSurfaces(child);
+            }
+          } else if (child.userData.mammothEditorMyApartmentWallId) {
+            if (aptSt.transformMode === "scale") {
+              const axis = (transformControls as unknown as { axis?: string | null })
+                .axis;
+              if (
+                wallSlabScaleGesture &&
+                wallSlabScaleGesture.object === child &&
+                transformControls.dragging &&
+                axis &&
+                axis !== "XYZ" &&
+                !axis.includes("E")
+              ) {
+                if (axis.indexOf("X") === -1) child.scale.x = 1;
+                if (axis.indexOf("Y") === -1) child.scale.y = 1;
+                if (axis.indexOf("Z") === -1) child.scale.z = 1;
+              }
+            }
+            const scaleDrag =
+              aptSt.transformMode === "scale" &&
+              wallSlabScaleGesture &&
+              wallSlabScaleGesture.object === child &&
+              transformControls.dragging
+                ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
+                : undefined;
+            constrainMyApartmentWallRootPose(child, scaleDrag);
+          }
+        }
       } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
         applyMyApartmentDecorUniformScale(aptObj);
         if (aptSt.transformMode === "rotate") {

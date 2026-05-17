@@ -18,6 +18,39 @@ export class FpSelectionAabbOutline extends THREE.LineSegments {
     this.renderOrder = 1000;
   }
 
+  setFromUnionOfObjects(objects: readonly THREE.Object3D[]): void {
+    const list = objects.filter(Boolean);
+    if (list.length === 0) {
+      this.visible = false;
+      return;
+    }
+    const box = new THREE.Box3();
+    let any = false;
+    for (const obj of list) {
+      obj.updateWorldMatrix(true, true);
+      const b = new THREE.Box3().setFromObject(obj);
+      if (!b.isEmpty()) {
+        box.union(b);
+        any = true;
+      }
+    }
+    if (!any) {
+      this.visible = false;
+      return;
+    }
+    this.visible = true;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const edges = new THREE.EdgesGeometry(boxGeo);
+    boxGeo.dispose();
+    this.geometry.dispose();
+    this.geometry = edges;
+    this.position.copy(center);
+    this.quaternion.identity();
+    this.scale.set(1, 1, 1);
+  }
+
   setFromObject(obj: THREE.Object3D | null): void {
     if (!obj) {
       this.visible = false;

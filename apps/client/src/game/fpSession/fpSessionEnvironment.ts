@@ -548,16 +548,16 @@ export function attachFpSessionEnvironment(
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.82;
-  /** Player-in-unit eye adaptation: noticeably darker without crushing all detail to black. */
-  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.38;
-  const APARTMENT_INTERIOR_EXPOSURE = 0.9;
+  /** Player-in-unit eye adaptation: push flats darker than stair cores / exterior fill. */
+  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.26;
+  const APARTMENT_INTERIOR_EXPOSURE = 0.62;
   /**
-   * Abandoned flats should stay noticeably underlit: mostly weak window bleed plus a trace of dusty
-   * plaster bounce. Keep this static so crossing the doorway does not change the room's brightness.
+   * Abandoned flats: weak cool window key + dusty bounce — late-socialist panel “never renovated”.
+   * Scene stays readable; shadows carry most contrast (see residential directional shadow).
    */
-  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.3;
-  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.06;
-  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.15;
+  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.2;
+  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.032;
+  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.175;
 
   const hemi = new THREE.HemisphereLight(
     0xe3e7df,
@@ -579,26 +579,44 @@ export function attachFpSessionEnvironment(
    * room reads consistently from the hallway and after you step through the doorway.
    */
   const residentialInteriorSky = new THREE.HemisphereLight(
-    0xd5d9d4,
-    0x857869,
+    0xb5bcb4,
+    0x3f3934,
     RESIDENTIAL_INTERIOR_SKY_INTENSITY,
   );
   residentialInteriorSky.name = "fp_residential_interior_sky";
   residentialInteriorSky.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   const residentialInteriorFill = new THREE.AmbientLight(
-    0xb7aea1,
+    0x8a837a,
     RESIDENTIAL_INTERIOR_FILL_INTENSITY,
   );
   residentialInteriorFill.name = "fp_residential_interior_fill";
   residentialInteriorFill.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   const residentialInteriorDaylight = new THREE.DirectionalLight(
-    0xe8e4dc,
+    0xc8c0b4,
     RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY,
   );
   residentialInteriorDaylight.name = "fp_residential_interior_daylight";
   residentialInteriorDaylight.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  residentialInteriorDaylight.position.copy(sunDir.clone().multiplyScalar(90));
-  residentialInteriorDaylight.castShadow = false;
+  residentialInteriorDaylight.castShadow = true;
+  const residentialInteriorShadow = residentialInteriorDaylight.shadow;
+  residentialInteriorShadow.mapSize.width = 2048;
+  residentialInteriorShadow.mapSize.height = 2048;
+  residentialInteriorShadow.bias = -0.00028;
+  residentialInteriorShadow.normalBias = 0.042;
+  const residentialInteriorShadowCam =
+    residentialInteriorShadow.camera as THREE.OrthographicCamera;
+  residentialInteriorShadowCam.near = 0.35;
+  residentialInteriorShadowCam.far = 44;
+  residentialInteriorShadowCam.left = -16;
+  residentialInteriorShadowCam.right = 16;
+  residentialInteriorShadowCam.top = 16;
+  residentialInteriorShadowCam.bottom = -16;
+  residentialInteriorShadowCam.updateProjectionMatrix();
+
+  const aptInteriorShadowCenterScratch = new THREE.Vector3();
+  const sunDirScaledScratch = new THREE.Vector3();
+  residentialInteriorDaylight.target.position.set(0, 0, 0);
+  residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
   scene.add(residentialInteriorSky, residentialInteriorFill, residentialInteriorDaylight);
 
   const disposeMaterial = (m: THREE.Material | THREE.Material[]) => {
@@ -644,7 +662,44 @@ export function attachFpSessionEnvironment(
       residentialInteriorFill.intensity = RESIDENTIAL_INTERIOR_FILL_INTENSITY * residentialScale;
       residentialInteriorDaylight.intensity =
         RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY * residentialScale;
-      residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
+
+      const bounds = _apartmentInteriorBounds;
+      const useAptShadowFrustum = bounds !== null && apartmentDark01 > 0.04;
+      if (useAptShadowFrustum) {
+        aptInteriorShadowCenterScratch.set(
+          (bounds.minX + bounds.maxX) * 0.5,
+          (bounds.minY + bounds.maxY) * 0.5,
+          (bounds.minZ + bounds.maxZ) * 0.5,
+        );
+        residentialInteriorDaylight.target.position.copy(aptInteriorShadowCenterScratch);
+        sunDirScaledScratch.copy(sunDir).multiplyScalar(88);
+        residentialInteriorDaylight.position
+          .copy(aptInteriorShadowCenterScratch)
+          .add(sunDirScaledScratch);
+
+        const sx = bounds.maxX - bounds.minX;
+        const sy = bounds.maxY - bounds.minY;
+        const sz = bounds.maxZ - bounds.minZ;
+        const halfExtent = Math.max(sx, sz) * 0.52 + 2.8;
+        residentialInteriorShadowCam.left = -halfExtent;
+        residentialInteriorShadowCam.right = halfExtent;
+        residentialInteriorShadowCam.top = halfExtent;
+        residentialInteriorShadowCam.bottom = -halfExtent;
+        residentialInteriorShadowCam.near = 0.35;
+        residentialInteriorShadowCam.far = Math.max(sy + halfExtent * 1.35, 24);
+        residentialInteriorShadowCam.updateProjectionMatrix();
+      } else {
+        residentialInteriorDaylight.target.position.set(0, 0, 0);
+        residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
+        residentialInteriorShadowCam.left = -18;
+        residentialInteriorShadowCam.right = 18;
+        residentialInteriorShadowCam.top = 18;
+        residentialInteriorShadowCam.bottom = -18;
+        residentialInteriorShadowCam.near = 0.5;
+        residentialInteriorShadowCam.far = 48;
+        residentialInteriorShadowCam.updateProjectionMatrix();
+      }
+
       renderer.toneMappingExposure = THREE.MathUtils.lerp(
         1.06,
         APARTMENT_INTERIOR_EXPOSURE,

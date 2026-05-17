@@ -16,7 +16,10 @@ import {
 import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+  type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
+  apartmentPlacedItemKindFromDecorItemKind,
+  ownedApartmentPlacedItemKindHasStash,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
@@ -36,6 +39,14 @@ import {
   resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
+import {
+  apartmentStashKey,
+  apartmentStashKeyDecor,
+  APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_STOVE,
+  APARTMENT_STASH_KIND_WARDROBE,
+  type ApartmentStashKind,
+} from "./fpApartmentStashKey.js";
 
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 /**
@@ -53,6 +64,8 @@ type VisibleDecorPlacement = {
   decorId: bigint | null;
   unit: ApartmentUnit;
   modelRelPath: string;
+  /** Gameplay role — determines stash picks + (future) claim anchors. */
+  placedKind: OwnedApartmentPlacedItemKind;
   posX: number;
   posY: number;
   posZ: number;
@@ -112,6 +125,7 @@ function visibleDecorPlacements(
           decorId: decor.decorId,
           unit,
           modelRelPath: decor.modelRelPath,
+          placedKind: apartmentPlacedItemKindFromDecorItemKind(decor.itemKind),
           posX: decor.posX,
           posY: decor.posY,
           posZ: decor.posZ,
@@ -131,6 +145,7 @@ function visibleDecorPlacements(
         decorId: null,
         unit,
         modelRelPath: decor.modelRelPath,
+        placedKind: decor.itemKind,
         posX: decor.x,
         posY: decor.y,
         posZ: decor.z,
@@ -193,6 +208,13 @@ function visibleWallPlacements(
   return out;
 }
 
+function apartmentStashKindForPlacedKind(k: OwnedApartmentPlacedItemKind): ApartmentStashKind | null {
+  if (k === "wardrobe") return APARTMENT_STASH_KIND_WARDROBE;
+  if (k === "footlocker") return APARTMENT_STASH_KIND_FOOTLOCKER;
+  if (k === "stove" || k === "fridge") return APARTMENT_STASH_KIND_STOVE;
+  return null;
+}
+
 type AuthoringBuildEntry =
   | { kind: "decor"; decor: VisibleDecorPlacement }
   | { kind: "wall"; wall: VisibleWallPlacement };
@@ -231,6 +253,16 @@ export function mountFpApartmentDecorMeshes(opts: {
   const _decorBoundsScratch = new THREE.Box3();
   const _decorSizeScratch = new THREE.Vector3();
   const _decorCenterScratch = new THREE.Vector3();
+  const _stashPickSizeScratch = new THREE.Vector3();
+  const _stashPickCenterScratch = new THREE.Vector3();
+
+  const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const stashPickMaterial = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  stashPickMaterial.colorWrite = false;
 
   let disposed = false;
   let buildEpoch = 0;
@@ -239,6 +271,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   const disposeGroupDeep = (g: THREE.Group) => {
     g.traverse((ch) => {
       if (!(ch instanceof THREE.Mesh)) return;
+      if (ch.geometry === stashPickGeometry) return;
+      if (ch.material === stashPickMaterial) return;
       if (ch.geometry) ch.geometry.dispose();
       const mat = ch.material;
       if (Array.isArray(mat)) {
@@ -370,8 +404,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         );
         mesh.scale.set(w.sizeX, w.sizeY, w.sizeZ);
         mesh.position.y = w.sizeY / 2;
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         mesh.frustumCulled = true;
         mesh.userData.mammothUnitInterior = true;
         mesh.userData.mammothPlateLevelIndex = w.unit.level;
@@ -433,8 +467,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          o.castShadow = false;
-          o.receiveShadow = false;
+          o.castShadow = true;
+          o.receiveShadow = true;
           o.frustumCulled = true;
           o.userData.mammothUnitInterior = true;
           o.userData.mammothPlateLevelIndex = d.unit.level;
@@ -453,6 +487,41 @@ export function mountFpApartmentDecorMeshes(opts: {
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
       root.add(g);
       g.updateMatrixWorld(true);
+
+      if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
+        const sk = apartmentStashKindForPlacedKind(d.placedKind);
+        if (sk) {
+          g.updateMatrixWorld(true);
+          const stashBounds = new THREE.Box3().setFromObject(g);
+          const pick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+          stashBounds.getSize(_stashPickSizeScratch);
+          stashBounds.getCenter(_stashPickCenterScratch);
+          pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
+          pick.position.copy(_stashPickCenterScratch);
+          pick.scale.set(
+            Math.max(0.35, _stashPickSizeScratch.x),
+            Math.max(0.25, _stashPickSizeScratch.y),
+            Math.max(0.35, _stashPickSizeScratch.z),
+          );
+          pick.userData.mammothApartmentStashPickUnitKey = d.unit.unitKey;
+          pick.userData.mammothApartmentStashKey =
+            d.decorId !== null
+              ? apartmentStashKeyDecor(d.unit.unitKey, d.decorId)
+              : apartmentStashKey(d.unit.unitKey, sk);
+          pick.userData.mammothApartmentStashKind = sk;
+          if (d.placedKind === "wardrobe") {
+            pick.userData.mammothApartmentWardrobePickUnitKey = d.unit.unitKey;
+          }
+          pick.userData.mammothSkipFloorGeometryMerge = true;
+          pick.userData.mammothApartmentFurnitureProp = true;
+          pick.userData.mammothApartmentDecorProp = true;
+          pick.userData.mammothPlateLevelIndex = d.unit.level;
+          pick.userData.mammothUnitInterior = true;
+          g.add(pick);
+          g.updateMatrixWorld(true);
+        }
+      }
+
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
@@ -544,6 +613,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       opts.conn.db.apartment_unit_decor.removeOnUpdate(onDecorBump);
       opts.conn.db.apartment_unit.removeOnUpdate(onUnitUpdateForDecor);
       clearAll();
+      stashPickGeometry.dispose();
+      stashPickMaterial.dispose();
       opts.buildingRoot.remove(root);
     },
   };

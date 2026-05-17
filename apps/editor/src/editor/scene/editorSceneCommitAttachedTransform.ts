@@ -8,7 +8,6 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
 } from "@the-mammoth/schemas";
 import { useEditorStore } from "../../state/editorStore.js";
-import type { MyApartmentLayoutPiece } from "../../state/editorStoreTypes.js";
 import {
   ownedApartmentFractionMappingForEditor,
   resolveOwnedApartmentAuthoringLayoutForEditor,
@@ -16,10 +15,8 @@ import {
 import {
   applyMyApartmentDecorUniformScale,
   clampMyApartmentDecorEulerLimits,
-  clampOwnedApartmentBuiltinUniformScale,
   clampOwnedApartmentDecorUniformScale,
   constrainMyApartmentDecorVerticalBounds,
-  constrainMyApartmentFurnitureRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
@@ -27,7 +24,6 @@ import {
   snapMyApartmentDecorEulerToGrid,
   snapOwnedApartmentDecorPitchRad,
   snapOwnedApartmentDecorYawRad,
-  snapOwnedApartmentYawRad,
 } from "../myApartment/editorMyApartmentMeshes.js";
 import { syncDuplicateFloorGroups } from "../placement/editorFloorTransformSync.js";
 import {
@@ -38,6 +34,9 @@ import {
   resolveGizmoInteriorDocId,
   resolveInteriorPlacementTransformRoot,
 } from "../placement/editorPlacementKeys.js";
+import {
+  MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
+} from "../myApartment/editorMyApartmentSavedGroupManip.js";
 
 function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
   const st = useEditorStore.getState();
@@ -287,20 +286,6 @@ export function commitEditorAttachedTransform(opts: {
   }
 
   if (store.mode === "my_apartment_layout") {
-    let targetRoot: THREE.Object3D | null = attached;
-    let pieceKey: MyApartmentLayoutPiece | undefined;
-    let decorId: string | undefined;
-    let wallId: string | undefined;
-    while (targetRoot) {
-      pieceKey = targetRoot.userData.mammothEditorMyApartmentPiece as
-        | MyApartmentLayoutPiece
-        | undefined;
-      decorId = targetRoot.userData.mammothEditorMyApartmentDecorId as string | undefined;
-      wallId = targetRoot.userData.mammothEditorMyApartmentWallId as string | undefined;
-      if (pieceKey || decorId || wallId) break;
-      targetRoot = targetRoot.parent;
-    }
-    if (!targetRoot) return;
     const doc = store.ownedApartmentBuiltins;
     const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
       floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
@@ -310,6 +295,166 @@ export function commitEditorAttachedTransform(opts: {
       layout,
       builtinsFallbackPreviewM: doc.previewSizeM,
     });
+
+    if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+      for (const child of [...attached.children]) {
+        if (!(child instanceof THREE.Group)) continue;
+        const decorChildId = child.userData.mammothEditorMyApartmentDecorId as
+          | string
+          | undefined;
+        const wallChildId = child.userData.mammothEditorMyApartmentWallId as
+          | string
+          | undefined;
+        if (!decorChildId && !wallChildId) continue;
+
+        if (decorChildId) {
+          const targetRootChild = child;
+          applyMyApartmentDecorUniformScale(targetRootChild);
+          clampMyApartmentDecorEulerLimits(targetRootChild);
+          if (store.gridSnapM > 0) {
+            snapMyApartmentDecorEulerToGrid(targetRootChild);
+          }
+          constrainMyApartmentDecorVerticalBounds(targetRootChild);
+          targetRootChild.updateMatrixWorld(true);
+          const dy = THREE.MathUtils.clamp(
+            resolveMyApartmentDecorCommittedDy({
+              targetRoot: targetRootChild,
+            }),
+            0,
+            EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+          );
+          const eulerLocal = new THREE.Euler().setFromQuaternion(
+            targetRootChild.quaternion,
+            "YXZ",
+          );
+          const yaw = eulerLocal.y;
+          const pitch = THREE.MathUtils.clamp(
+            eulerLocal.x,
+            -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+            OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+          );
+          const roll = THREE.MathUtils.clamp(
+            eulerLocal.z,
+            -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+            OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+          );
+          const rootWorld = targetRootChild.getWorldPosition(new THREE.Vector3());
+          const wx = rootWorld.x + m.prefabOriginX;
+          const wz = rootWorld.z + m.prefabOriginZ;
+          const fx = THREE.MathUtils.clamp(
+            (wx - m.strictMinX) / m.spanX,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const fz = THREE.MathUtils.clamp(
+            (wz - m.strictMinZ) / m.spanZ,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const uniformScale = clampOwnedApartmentDecorUniformScale(
+            (targetRootChild.scale.x +
+              targetRootChild.scale.y +
+              targetRootChild.scale.z) /
+              3,
+          );
+          const decorKey = decorChildId;
+          store.patchOwnedApartmentBuiltins((d) => ({
+            ...d,
+            placedItems: d.placedItems.map((item) =>
+              item.id === decorKey
+                ? {
+                    ...item,
+                    fx,
+                    fz,
+                    dy,
+                    yawRad: yaw,
+                    pitchRad: pitch,
+                    rollRad: roll,
+                    uniformScale,
+                  }
+                : item,
+            ),
+          }));
+          targetRootChild.scale.setScalar(uniformScale);
+          continue;
+        }
+
+        if (wallChildId) {
+          const targetRootChild = child;
+          if (!opts.transformControls.dragging) {
+            constrainMyApartmentWallRootPose(targetRootChild);
+          }
+          const mesh = findEditorMyApartmentWallSlabMesh(targetRootChild);
+          if (!mesh) continue;
+          targetRootChild.updateMatrixWorld(true);
+          const decorBoundsChild = new THREE.Box3().setFromObject(targetRootChild);
+          const dyChild = THREE.MathUtils.clamp(
+            decorBoundsChild.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+            0,
+            EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+          );
+          const pWChild = new THREE.Vector3().setFromMatrixPosition(
+            targetRootChild.matrixWorld,
+          );
+          const eulerLocalWall = new THREE.Euler().setFromQuaternion(
+            targetRootChild.quaternion,
+            "YXZ",
+          );
+          const yawWall = snapOwnedApartmentDecorYawRad(eulerLocalWall.y);
+          const pitchWall = THREE.MathUtils.clamp(
+            snapOwnedApartmentDecorPitchRad(eulerLocalWall.x),
+            -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+            OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+          );
+          const wxw = pWChild.x + m.prefabOriginX;
+          const wzw = pWChild.z + m.prefabOriginZ;
+          const fxw = THREE.MathUtils.clamp(
+            (wxw - m.strictMinX) / m.spanX,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const fzw = THREE.MathUtils.clamp(
+            (wzw - m.strictMinZ) / m.spanZ,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const sizeXw = Math.abs(mesh.scale.x * targetRootChild.scale.x);
+          const sizeYw = Math.abs(mesh.scale.y * targetRootChild.scale.y);
+          const sizeZw = Math.abs(mesh.scale.z * targetRootChild.scale.z);
+          const wallKey = wallChildId;
+          store.patchOwnedApartmentBuiltins((d) => ({
+            ...d,
+            wallItems: d.wallItems.map((item) =>
+              item.id === wallKey
+                ? {
+                    ...item,
+                    fx: fxw,
+                    fz: fzw,
+                    dy: dyChild,
+                    yawRad: yawWall,
+                    pitchRad: pitchWall,
+                    sizeX: sizeXw,
+                    sizeY: sizeYw,
+                    sizeZ: sizeZw,
+                  }
+                : item,
+            ),
+          }));
+        }
+      }
+      return;
+    }
+
+    let targetRoot: THREE.Object3D | null = attached;
+    let decorId: string | undefined;
+    let wallId: string | undefined;
+    while (targetRoot) {
+      decorId = targetRoot.userData.mammothEditorMyApartmentDecorId as string | undefined;
+      wallId = targetRoot.userData.mammothEditorMyApartmentWallId as string | undefined;
+      if (decorId || wallId) break;
+      targetRoot = targetRoot.parent;
+    }
+    if (!targetRoot) return;
 
     if (decorId) {
       applyMyApartmentDecorUniformScale(targetRoot);
@@ -356,7 +501,7 @@ export function commitEditorAttachedTransform(opts: {
       );
       store.patchOwnedApartmentBuiltins((d) => ({
         ...d,
-        decorItems: d.decorItems.map((item) =>
+        placedItems: d.placedItems.map((item) =>
           item.id === decorId
             ? {
                 ...item,
@@ -433,73 +578,6 @@ export function commitEditorAttachedTransform(opts: {
       }));
       return;
     }
-
-    if (!pieceKey) return;
-    constrainMyApartmentFurnitureRootPose(targetRoot);
-    targetRoot.updateMatrixWorld(true);
-    const pW = new THREE.Vector3().setFromMatrixPosition(targetRoot.matrixWorld);
-    // Doc yaw matches `place*Group`'s group.rotation.y (preview-local). World-quaternion euler drifts when
-    // parents rotate (building shell); that made each store patch rebuild props with the wrong heading.
-    const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
-    const yaw = snapOwnedApartmentYawRad(eulerLocal.y);
-
-    const wx = pW.x + m.prefabOriginX;
-    const wz = pW.z + m.prefabOriginZ;
-    const fx = THREE.MathUtils.clamp(
-      (wx - m.strictMinX) / m.spanX,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
-    );
-    const fz = THREE.MathUtils.clamp(
-      (wz - m.strictMinZ) / m.spanZ,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
-    );
-    const uniformScale = clampOwnedApartmentBuiltinUniformScale(
-      (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
-    );
-    targetRoot.scale.setScalar(uniformScale);
-
-    store.patchOwnedApartmentBuiltins((d) => {
-      if (pieceKey === "bed") {
-        return {
-          ...d,
-          bedFx: fx,
-          bedFz: fz,
-          bedDy: d.bedDy,
-          bedYawRad: yaw,
-          bedUniformScale: uniformScale,
-        };
-      }
-      if (pieceKey === "wardrobe") {
-        return {
-          ...d,
-          wardrobeFx: fx,
-          wardrobeFz: fz,
-          wardrobeDy: d.wardrobeDy,
-          wardrobeYawRad: yaw,
-          wardrobeUniformScale: uniformScale,
-        };
-      }
-      if (pieceKey === "stove") {
-        return {
-          ...d,
-          stoveFx: fx,
-          stoveFz: fz,
-          stoveDy: d.stoveDy,
-          stoveYawRad: yaw,
-          stoveUniformScale: uniformScale,
-        };
-      }
-      return {
-        ...d,
-        footFx: fx,
-        footFz: fz,
-        footDy: d.footDy,
-        footYawRad: yaw,
-        footUniformScale: uniformScale,
-      };
-    });
 
     return;
   }

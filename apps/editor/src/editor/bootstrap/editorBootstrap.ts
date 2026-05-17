@@ -185,6 +185,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
         ) ??
         null,
     selectedId: null,
+    myApartmentMultiselectExtraIds: [],
     dirty: false,
     historyPast: [],
     historyFuture: [],

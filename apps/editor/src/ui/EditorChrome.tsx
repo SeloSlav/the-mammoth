@@ -107,9 +107,7 @@ export function EditorChrome() {
     duplicatePrefabComponent,
     patchBuilding,
     setSelectedId,
-    myApartmentLayoutPiece,
     enterMyApartmentLayoutMode,
-    setMyApartmentLayoutPiece,
   } = useEditorStore(useShallow(selectEditorChromeStore));
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const { saveToDiskLabel, onReload, onSaveDisk } =
@@ -339,8 +337,6 @@ export function EditorChrome() {
           setMode={setMode}
           setCameraMode={setCameraMode}
           enterMyApartmentLayoutMode={enterMyApartmentLayoutMode}
-          myApartmentLayoutPiece={myApartmentLayoutPiece}
-          setMyApartmentLayoutPiece={setMyApartmentLayoutPiece}
           contentIndex={contentIndex}
         />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (

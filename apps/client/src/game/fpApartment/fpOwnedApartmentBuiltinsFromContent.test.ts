@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
-  type OwnedApartmentBuiltinsDoc,
+  OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
 import { resolveApartmentDecorPoses, resolveApartmentWallPoses } from "./fpOwnedApartmentBuiltinsFromContent";
 
@@ -43,31 +43,10 @@ function apartmentUnit(overrides: Partial<ApartmentUnit> = {}): ApartmentUnit {
 
 describe("resolveApartmentDecorPoses", () => {
   it("maps normalized decor placements into world-space unit bounds", () => {
-    const doc: OwnedApartmentBuiltinsDoc = {
-      version: 1,
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      version: 2,
       previewSizeM: 10,
-      bedFx: 0.5,
-      bedFz: 0.5,
-      bedDy: 0,
-      wardrobeFx: 0.25,
-      wardrobeFz: 0.75,
-      footFx: 0.75,
-      footFz: 0.25,
-      stoveFx: 0.08,
-      stoveFz: 0.08,
-      wardrobeDy: 0,
-      footDy: 0,
-      stoveDy: 0,
-      bedYawRad: 0,
-      wardrobeYawRad: 0,
-      footYawRad: 0,
-      stoveYawRad: 0,
-      bedUniformScale: 1,
-      wardrobeUniformScale: 1,
-      footUniformScale: 1,
-      stoveUniformScale: 1,
-      wallItems: [],
-      decorItems: [
+      placedItems: [
         {
           id: "decor_a",
           modelRelPath: "static/models/objects/cabinet-horizontal.glb",
@@ -79,14 +58,18 @@ describe("resolveApartmentDecorPoses", () => {
           rollRad: 0,
           uniformScale: 1.5,
           ignoreSupportSurfaces: false,
+          itemKind: "plain",
         },
       ],
-    };
+      wallItems: [],
+      objectGroups: [],
+    });
 
     expect(resolveApartmentDecorPoses(apartmentUnit(), doc)).toEqual([
       {
         id: "decor_a",
         modelRelPath: "static/models/objects/cabinet-horizontal.glb",
+        itemKind: "plain",
         x: 103,
         y: 30.4,
         z: 206,
@@ -99,31 +82,10 @@ describe("resolveApartmentDecorPoses", () => {
   });
 
   it("carries authored pitch into world-space decor poses", () => {
-    const doc: OwnedApartmentBuiltinsDoc = {
-      version: 1,
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      version: 2,
       previewSizeM: 10,
-      bedFx: 0.5,
-      bedFz: 0.5,
-      bedDy: 0,
-      wardrobeFx: 0.25,
-      wardrobeFz: 0.75,
-      footFx: 0.75,
-      footFz: 0.25,
-      stoveFx: 0.08,
-      stoveFz: 0.08,
-      wardrobeDy: 0,
-      footDy: 0,
-      stoveDy: 0,
-      bedYawRad: 0,
-      wardrobeYawRad: 0,
-      footYawRad: 0,
-      stoveYawRad: 0,
-      bedUniformScale: 1,
-      wardrobeUniformScale: 1,
-      footUniformScale: 1,
-      stoveUniformScale: 1,
-      wallItems: [],
-      decorItems: [
+      placedItems: [
         {
           id: "decor_pitch",
           modelRelPath: "static/models/objects/tv.glb",
@@ -135,38 +97,20 @@ describe("resolveApartmentDecorPoses", () => {
           rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
+          itemKind: "plain",
         },
       ],
-    };
+      wallItems: [],
+      objectGroups: [],
+    });
     expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.pitch).toBe(-0.25);
   });
 
   it("carries authored roll into world-space decor poses", () => {
-    const doc: OwnedApartmentBuiltinsDoc = {
-      version: 1,
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      version: 2,
       previewSizeM: 10,
-      bedFx: 0.5,
-      bedFz: 0.5,
-      bedDy: 0,
-      wardrobeFx: 0.25,
-      wardrobeFz: 0.75,
-      footFx: 0.75,
-      footFz: 0.25,
-      stoveFx: 0.08,
-      stoveFz: 0.08,
-      wardrobeDy: 0,
-      footDy: 0,
-      stoveDy: 0,
-      bedYawRad: 0,
-      wardrobeYawRad: 0,
-      footYawRad: 0,
-      stoveYawRad: 0,
-      bedUniformScale: 1,
-      wardrobeUniformScale: 1,
-      footUniformScale: 1,
-      stoveUniformScale: 1,
-      wallItems: [],
-      decorItems: [
+      placedItems: [
         {
           id: "decor_roll",
           modelRelPath: "static/models/objects/tv.glb",
@@ -178,16 +122,20 @@ describe("resolveApartmentDecorPoses", () => {
           rollRad: 0.33,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
+          itemKind: "plain",
         },
       ],
-    };
+      wallItems: [],
+      objectGroups: [],
+    });
     expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.roll).toBeCloseTo(0.33, 5);
   });
 
   it("maps slight negative fractions outside the strict hull for wall-edge authoring", () => {
-    const doc: OwnedApartmentBuiltinsDoc = {
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
-      decorItems: [
+      placedItems: [
+        ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
         {
           id: "decor_edge",
           modelRelPath: "static/models/objects/tv.glb",
@@ -199,10 +147,13 @@ describe("resolveApartmentDecorPoses", () => {
           rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
+          itemKind: "plain",
         },
       ],
-    };
-    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]).toMatchObject({
+    });
+    const poses = resolveApartmentDecorPoses(apartmentUnit(), doc);
+    const edge = poses.find((p) => p.id === "decor_edge");
+    expect(edge).toMatchObject({
       id: "decor_edge",
       x: 101.2,
       z: 199.2,
@@ -214,7 +165,7 @@ describe("resolveApartmentDecorPoses", () => {
   });
 
   it("maps wall slab items into world-space poses", () => {
-    const doc: OwnedApartmentBuiltinsDoc = {
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       wallItems: [
         {
@@ -234,7 +185,7 @@ describe("resolveApartmentDecorPoses", () => {
           },
         },
       ],
-    };
+    });
     expect(resolveApartmentWallPoses(apartmentUnit(), doc)[0]).toMatchObject({
       id: "wall_a",
       x: 106,

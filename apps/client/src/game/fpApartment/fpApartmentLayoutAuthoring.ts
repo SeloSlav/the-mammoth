@@ -523,6 +523,7 @@ export function mountFpApartmentLayoutAuthoring(
         pitchRad: 0,
         rollRad: 0,
         uniformScale: 1,
+        itemKind: 0,
       });
     } catch (e) {
       console.warn("[apartment_layout] addApartmentUnitDecor failed", e);
