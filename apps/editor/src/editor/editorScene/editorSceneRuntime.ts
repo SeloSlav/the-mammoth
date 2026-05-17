@@ -518,7 +518,10 @@ export async function mountEditorScene(
         const snap = s.gridSnapM;
         transformControls.setTranslationSnap(snap > 0 ? snap : null);
         if (s.transformMode === "rotate") {
-          if (apartmentFreeVertical) {
+          if (decorSelected) {
+            // Imported decor (fridge, etc.): match world floor plan — 15° steps without grid snap.
+            transformControls.setRotationSnap(EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD);
+          } else if (wallSelected) {
             transformControls.setRotationSnap(
               snap > 0 ? EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD : null,
             );
@@ -549,10 +552,17 @@ export async function mountEditorScene(
           transformControls.setScaleSnap(null);
         } else {
           const snap = s.gridSnapM;
+          const rotationSnapRad = THREE.MathUtils.degToRad(15);
           transformControls.setTranslationSnap(snap > 0 ? snap : null);
-          transformControls.setRotationSnap(
-            snap > 0 ? THREE.MathUtils.degToRad(15) : null,
-          );
+          if (s.transformMode === "rotate") {
+            const floorPlanMode =
+              s.mode === "floor" || s.mode === "floor_override";
+            transformControls.setRotationSnap(
+              floorPlanMode || snap > 0 ? rotationSnapRad : null,
+            );
+          } else {
+            transformControls.setRotationSnap(null);
+          }
           transformControls.setScaleSnap(snap > 0 ? snap : null);
         }
       }

@@ -317,7 +317,10 @@ export async function mountFpSession(
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
   const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
   const perfFloorPlateGroups = buildingRoot.children.filter(
-    (ch): ch is THREE.Object3D => typeof ch.userData.mammothPlateLevelIndex === "number",
+    (ch): ch is THREE.Group =>
+      ch instanceof THREE.Group &&
+      ch.userData.mammothApartmentFurnitureProp !== true &&
+      typeof ch.userData.mammothPlateLevelIndex === "number",
   );
   const transparentBuildingMeshes: THREE.Mesh[] = [];
   const _perfSceneFrustumViewProjection = new THREE.Matrix4();

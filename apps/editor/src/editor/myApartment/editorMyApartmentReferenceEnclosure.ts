@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import type { OwnedApartmentEditorShellPlan } from "@the-mammoth/world";
-import { appendOwnedApartmentEditorShellWalls } from "@the-mammoth/world";
+import {
+  appendOwnedApartmentEditorShellWalls,
+  floorPlaceholderMeshMaterials,
+} from "@the-mammoth/world";
 import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMeshes.js";
 
 function stripRaycast(mesh: THREE.Mesh): void {
@@ -25,12 +28,8 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
 
   enclosure.position.set(hx, yLift, hz);
 
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: 0xeae6dc,
-    roughness: 0.88,
-    metalness: 0.03,
-    side: THREE.DoubleSide,
-  });
+  /** Same PBR plaster as playable unit hollow shells (`matsFor("unit").wall`). Façade glass unchanged. */
+  const wallMat = floorPlaceholderMeshMaterials.unitWall;
 
   appendOwnedApartmentEditorShellWalls(enclosure, opts.shellPlan, wallMat);
 
