@@ -21,6 +21,7 @@ import {
   type PrefabDef,
   type StairWellDef,
 } from "@the-mammoth/schemas";
+import { MAMMOTH_FP_INTERIOR_PARTITION_SOLID } from "./fpInteriorPartitionSolid.js";
 import { buildFloorMeshes } from "./floorPlaceholderMeshes.js";
 import {
   elevatorDoorFacesFromGroundFloorDoc,
@@ -138,6 +139,7 @@ export {
   buildCollisionSpatialIndex,
   type CollisionSpatialIndex,
 } from "./collisionSpatialIndex.js";
+export { MAMMOTH_FP_INTERIOR_PARTITION_SOLID } from "./fpInteriorPartitionSolid.js";
 export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurfaceMaterial.js";
 export {
   buildFpBlockerAABBsForBuilding,
@@ -429,11 +431,15 @@ function addPlacementMeshes(
   placements: readonly CellPlacement[],
   material: THREE.MeshStandardMaterial,
   streamDocId?: string,
+  opts?: { fpInteriorPartitionSolid?: boolean },
 ): void {
   for (const p of placements) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     mesh.name = p.entityId;
     mesh.userData.placedObjectId = p.entityId;
+    if (opts?.fpInteriorPartitionSolid === true) {
+      mesh.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
+    }
     if (streamDocId) mesh.userData.streamDocId = streamDocId;
     mesh.position.set(p.position[0], p.position[1], p.position[2]);
     if (p.rotation)
@@ -520,7 +526,9 @@ export function buildInteriorMeshes(doc: InteriorDoc): THREE.Group {
     opacity: 0.85,
   });
 
-  addPlacementMeshes(root, doc.placements, propMat, doc.id);
+  addPlacementMeshes(root, doc.placements, propMat, doc.id, {
+    fpInteriorPartitionSolid: true,
+  });
 
   for (const portal of doc.portals) {
     const marker = new THREE.Mesh(

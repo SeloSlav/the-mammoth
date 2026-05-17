@@ -9,7 +9,10 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
-import { applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
+import {
+  applyOwnedApartmentWallSurfaceMaterial,
+  MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
+} from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
@@ -372,6 +375,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         mesh.frustumCulled = true;
         mesh.userData.mammothUnitInterior = true;
         mesh.userData.mammothPlateLevelIndex = w.unit.level;
+        mesh.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
         g.add(mesh);
         snapCloneBottomToWorldFloor(g, w.posY);
         keepCloneInsideUnitXZ(g, w.unit, {

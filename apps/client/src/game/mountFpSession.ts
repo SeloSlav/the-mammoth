@@ -6,6 +6,7 @@ import {
   persistActiveGuestLastWorldPose,
   readActiveGuestLastWorldPose,
 } from "../spacetime/guestSavedWorldPose.js";
+import { InteriorDocSchema } from "@the-mammoth/schemas";
 import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
@@ -25,6 +26,7 @@ import {
   ensureStairwellCigaretteMeshReady,
   maxBuildingLevelIndex,
   parseFloorDoc,
+  buildInteriorMeshes,
 } from "@the-mammoth/world";
 import {
   collectFpSessionUnitInteriorMeshEntries,
@@ -158,6 +160,8 @@ import {
   fpLoadingDbgPushPhase,
   isFpLoadingDebugEnabled,
 } from "./fpSession/fpLoadingDebug.js";
+import lobbyCentralInteriorAuthoringDoc from "../../../../content/interiors/lobby_central.json";
+import { createFpInteriorPartitionSolidCollision } from "./fpPhysics/fpInteriorPartitionSolidCollision.js";
 
 function localMirrorBodyUriForConn(conn: DbConnection): string {
   const id = conn.identity;
@@ -294,11 +298,31 @@ export async function mountFpSession(
     building,
   });
 
+  let fpLobbyInteriorAuthoringRoot: THREE.Group | null = null;
+  try {
+    const lobbyInteriorDoc = InteriorDocSchema.parse(lobbyCentralInteriorAuthoringDoc);
+    fpLobbyInteriorAuthoringRoot = buildInteriorMeshes(lobbyInteriorDoc);
+    fpLobbyInteriorAuthoringRoot.name = "fp_interior_authoring:lobby_central";
+    scene.add(fpLobbyInteriorAuthoringRoot);
+  } catch (err) {
+    console.warn("[mountFpSession] lobby interior authoring mount failed", err);
+  }
+
+  const fpInteriorPartitionSolids = createFpInteriorPartitionSolidCollision();
+  function rebuildFpInteriorPartitionSolidMeshes(): void {
+    fpInteriorPartitionSolids.rebuildFromRoots(
+      fpLobbyInteriorAuthoringRoot !== null
+        ? [buildingRoot, fpLobbyInteriorAuthoringRoot]
+        : [buildingRoot],
+    );
+  }
+
   const fpFirearmImpactDecals = createFpFirearmImpactDecals({
     scene,
     staticCollisionIndex,
     visitExtraSolidAabbsInXZ: (x0, x1, z0, z1, visit) => {
       fpApartmentDoors.visitFirearmBarrierAabbsInXZ(x0, x1, z0, z1, visit);
+      fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit);
     },
   });
 
@@ -307,6 +331,7 @@ export async function mountFpSession(
     visitDynamicCollisionAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
       fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
       fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+      fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
     },
   });
   scene.add(fpCollisionDebug.group);
@@ -366,6 +391,7 @@ export async function mountFpSession(
     }
     disableShadowsOnUnitInteriorMeshes();
     refreshPerfTrackedMeshes();
+    rebuildFpInteriorPartitionSolidMeshes();
   };
   let lastPerfSceneCounterSampleAtMs = -Infinity;
   let lastPerfSceneCounters = {
@@ -801,6 +827,7 @@ export async function mountFpSession(
       sampleWalkTopBase,
       fpElevators,
       fpApartmentDoors,
+      fpInteriorPartitionSolids,
       staticCollisionIndex,
       doorDebugState: __mmDoorDebugState,
       logDoorDebugFrame,

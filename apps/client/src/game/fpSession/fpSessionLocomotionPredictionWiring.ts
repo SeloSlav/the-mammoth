@@ -15,6 +15,7 @@ import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.j
 import type { FpSessionStaticWorld } from "./fpSessionWorldMount.js";
 import {
   createFpSessionLocalPrediction,
+  type ApartmentDoorCollisionHost,
   type FpSessionMoveIntentQueue,
 } from "./fpSessionLocalPrediction.js";
 import type { FpSessionDoorDebugState } from "./fpSessionDevDebugApis.js";
@@ -45,6 +46,7 @@ export type WireFpSessionLocomotionPredictionArgs = {
   sampleWalkTopBase: (worldX: number, worldZ: number, probeTopY: number) => number;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
+  fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
   staticCollisionIndex: FpSessionStaticWorld["staticCollisionIndex"];
   doorDebugState: FpSessionDoorDebugState;
   logDoorDebugFrame: (args: {
@@ -96,6 +98,7 @@ export function wireFpSessionLocomotionPrediction(
     sampleWalkTopBase,
     fpElevators,
     fpApartmentDoors,
+    fpInteriorPartitionSolids,
     staticCollisionIndex,
     doorDebugState,
     logDoorDebugFrame,
@@ -210,6 +213,7 @@ export function wireFpSessionLocomotionPrediction(
       staticCollisionIndex,
       fpElevators,
       fpApartmentDoors,
+      fpInteriorPartitionSolids,
       elevatorWalkMergeSkipVy: ELEVATOR_WALK_MERGE_SKIP_VY,
       elevatorRiderLockSkipUpwardVyMps,
       intentQueue: moveIntentQueue,

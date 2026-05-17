@@ -199,16 +199,21 @@ export function MammothPickupPromptHud() {
   }
 
   if (prompt.kind === "apartment_stash") {
+    const stashTitle =
+      prompt.stashLabel.length === 0
+        ? ""
+        : `${prompt.stashLabel[0]!.toUpperCase()}${prompt.stashLabel.slice(1)}`;
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
-        <span style={{ opacity: 0.92 }}>{`Looking at your ${prompt.stashLabel}: press `}</span>
+        <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ffd8b0 0%, #da9a55 45%, #8a5822 100%)"
           kbdBorderRgb="rgba(255,220,170,0.5)"
           kbdShadowRgb="rgba(255,160,70,0.28)"
           kbdText="#120802"
         />
-        <span style={{ opacity: 0.92 }}>{` to open this ${prompt.stashLabel}'s inventory.`}</span>
+        <span style={{ opacity: 0.92 }}> — </span>
+        <strong style={{ color: "#f0f6ff", fontWeight: 700 }}>{stashTitle === "" ? "Stash" : `Open ${stashTitle}`}</strong>
       </FpBottomInteractPromptFrame>
     );
   }

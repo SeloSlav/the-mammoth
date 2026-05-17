@@ -61,7 +61,7 @@ type ElevDoorCollisionHost = {
     footRadiusM: number,
   ) => boolean;
 };
-type ApartmentDoorCollisionHost = {
+export type ApartmentDoorCollisionHost = {
   visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
 };
 
@@ -112,6 +112,8 @@ export type FpSessionLocalPredictionDeps = {
   staticCollisionIndex: CollisionSpatialIndex;
   fpElevators: ElevDoorCollisionHost;
   fpApartmentDoors: ApartmentDoorCollisionHost;
+  /** Owned-apartment partition slabs + mounted interior authoring boxes (runtime meshes). */
+  fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
   elevatorWalkMergeSkipVy: number;
   elevatorRiderLockSkipUpwardVyMps: number;
   intentQueue: FpSessionMoveIntentQueue;
@@ -136,6 +138,7 @@ export type FpSessionPredictedPlayerStepOpts = {
 };
 
 export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDeps) {
+  const { fpInteriorPartitionSolids } = deps;
   const simulatePredictedPlayerStep = (
     opts: FpSessionPredictedPlayerStepOpts,
   ): number => {
@@ -197,6 +200,7 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
         visitAabbsInXZ: (x0, x1, z0, z1, visit, queryPose) => {
           deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          fpInteriorPartitionSolids?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
         },
       },
       opts.locoState.grounded,
