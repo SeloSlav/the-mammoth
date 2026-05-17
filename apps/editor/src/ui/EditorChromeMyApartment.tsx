@@ -10,6 +10,7 @@ import {
   editorChromeLabel,
   editorChromeRowBtn,
 } from "./editorChromeStyles.js";
+import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
 import {
   filterMaterialTextureUrls,
   MaterialSlotEditor,
@@ -101,12 +102,20 @@ export function EditorChromeMyApartment(props: {
     selectedId,
     patchOwnedApartmentBuiltins,
     setSelectedId,
+    transformMode,
+    setTransformMode,
+    gridSnapM,
+    setGridSnapM,
   } = useEditorStore(
     useShallow((s) => ({
       ownedApartmentBuiltins: s.ownedApartmentBuiltins,
       selectedId: s.selectedId,
       patchOwnedApartmentBuiltins: s.patchOwnedApartmentBuiltins,
       setSelectedId: s.setSelectedId,
+      transformMode: s.transformMode,
+      setTransformMode: s.setTransformMode,
+      gridSnapM: s.gridSnapM,
+      setGridSnapM: s.setGridSnapM,
     })),
   );
   const [catalog, setCatalog] = useState<ApartmentDecorCatalogEntry[]>([]);
@@ -309,20 +318,7 @@ export function EditorChromeMyApartment(props: {
   if (mode === "my_apartment_layout") {
     body = (
       <>
-        <span style={editorChromeLabel}>Prop gizmo</span>
-        <select
-          style={{ ...editorChromeInput, marginTop: 6 }}
-          value={myApartmentLayoutPiece}
-          onChange={(e) =>
-            setMyApartmentLayoutPiece(e.target.value as MyApartmentLayoutPiece)
-          }
-        >
-          <option value="bed">Bed</option>
-          <option value="wardrobe">Wardrobe</option>
-          <option value="footlocker">Footlocker</option>
-          <option value="stove">Stove</option>
-        </select>
-        <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
+        <span style={{ ...editorChromeLabel, display: "block" }}>
           Import decor
         </span>
         <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
@@ -366,6 +362,32 @@ export function EditorChromeMyApartment(props: {
             Import selected model
           </button>
         </div>
+        <div style={{ marginTop: 12 }}>
+          <EditorChromeSceneGizmoBlock
+            transformMode={transformMode}
+            setTransformMode={setTransformMode}
+            gridSnapM={gridSnapM}
+            setGridSnapM={setGridSnapM}
+            myApartmentLayoutHints={
+              parseMyApartmentLayoutDecorSelectedId(selectedId) !== null ? "decor" : "builtins"
+            }
+          />
+        </div>
+        <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
+          Prop gizmo
+        </span>
+        <select
+          style={{ ...editorChromeInput, marginTop: 6 }}
+          value={myApartmentLayoutPiece}
+          onChange={(e) =>
+            setMyApartmentLayoutPiece(e.target.value as MyApartmentLayoutPiece)
+          }
+        >
+          <option value="bed">Bed</option>
+          <option value="wardrobe">Wardrobe</option>
+          <option value="footlocker">Footlocker</option>
+          <option value="stove">Stove</option>
+        </select>
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
           Imported decor
         </span>

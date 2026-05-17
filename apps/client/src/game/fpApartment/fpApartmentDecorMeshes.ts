@@ -509,11 +509,18 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.visible = false;
           continue;
         }
-        if (
+        const isContainingUnit =
           containingUnitKey !== null &&
-          g.userData.mammothApartmentUnitKey !== containingUnitKey
-        ) {
+          g.userData.mammothApartmentUnitKey === containingUnitKey;
+        if (containingUnitKey !== null && !isContainingUnit) {
           g.visible = false;
+          continue;
+        }
+        if (isContainingUnit) {
+          g.visible = true;
+          g.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
+          });
           continue;
         }
         const bb = g.userData.mammothApartmentDecorWorldBounds;

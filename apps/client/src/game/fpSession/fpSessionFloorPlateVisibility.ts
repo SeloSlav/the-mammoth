@@ -525,6 +525,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
+        const isContainingResidentialInterior =
+          (containingResidentialUnitId !== null &&
+            entry.residentialUnitId === containingResidentialUnitId) ||
+          (containingResidentialUnitKey !== null &&
+            entry.apartmentUnitKey === containingResidentialUnitKey) ||
+          (insideResidentialUnit && entry.genericInteriorVisibleInResidentialUnit);
         entry.mesh.visible = fpResolveUnitInteriorMeshVisible({
           entry,
           unitInteriorVisible,
@@ -533,6 +539,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           containingResidentialUnitId,
           containingResidentialUnitKey,
         });
+        entry.mesh.frustumCulled = !(insideResidentialUnit && isContainingResidentialInterior);
       }
     }
     const apartmentFurnitureInteriorVisibilityChanged =

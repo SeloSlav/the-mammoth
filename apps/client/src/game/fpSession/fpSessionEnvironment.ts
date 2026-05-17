@@ -196,10 +196,62 @@ export function attachFpSessionEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGPURenderer,
 ): FpSessionEnvironmentHandle {
+  const clipCompatibleRenderer = renderer as THREE.WebGPURenderer & {
+    localClippingEnabled?: boolean;
+    clippingPlanes?: THREE.Plane[];
+  };
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  clipCompatibleRenderer.localClippingEnabled = true;
   /** Overcast daylight, but bright enough for foliage and facade color to read. */
   renderer.toneMappingExposure = 1.06;
+  const apartmentClipPlanes = [
+    new THREE.Plane(),
+    new THREE.Plane(),
+    new THREE.Plane(),
+    new THREE.Plane(),
+    new THREE.Plane(),
+    new THREE.Plane(),
+  ];
+  const APARTMENT_CLIP_XZ_PAD_M = 0.22;
+  const APARTMENT_CLIP_Y_PAD_BOTTOM_M = 0.1;
+  const APARTMENT_CLIP_Y_PAD_TOP_M = 0.18;
+  const applyApartmentInteriorClip = (
+    bounds:
+      | {
+          minX: number;
+          minY: number;
+          minZ: number;
+          maxX: number;
+          maxY: number;
+          maxZ: number;
+        }
+      | null,
+  ): void => {
+    if (!bounds) {
+      clipCompatibleRenderer.clippingPlanes = [];
+      return;
+    }
+    const minX = bounds.minX - APARTMENT_CLIP_XZ_PAD_M;
+    const maxX = bounds.maxX + APARTMENT_CLIP_XZ_PAD_M;
+    const minY = bounds.minY - APARTMENT_CLIP_Y_PAD_BOTTOM_M;
+    const maxY = bounds.maxY + APARTMENT_CLIP_Y_PAD_TOP_M;
+    const minZ = bounds.minZ - APARTMENT_CLIP_XZ_PAD_M;
+    const maxZ = bounds.maxZ + APARTMENT_CLIP_XZ_PAD_M;
+    apartmentClipPlanes[0]!.normal.set(1, 0, 0);
+    apartmentClipPlanes[0]!.constant = -minX;
+    apartmentClipPlanes[1]!.normal.set(-1, 0, 0);
+    apartmentClipPlanes[1]!.constant = maxX;
+    apartmentClipPlanes[2]!.normal.set(0, 1, 0);
+    apartmentClipPlanes[2]!.constant = -minY;
+    apartmentClipPlanes[3]!.normal.set(0, -1, 0);
+    apartmentClipPlanes[3]!.constant = maxY;
+    apartmentClipPlanes[4]!.normal.set(0, 0, 1);
+    apartmentClipPlanes[4]!.constant = -minZ;
+    apartmentClipPlanes[5]!.normal.set(0, 0, -1);
+    apartmentClipPlanes[5]!.constant = maxZ;
+    clipCompatibleRenderer.clippingPlanes = apartmentClipPlanes;
+  };
 
   const sunDir = new THREE.Vector3();
   /** Low Zagreb afternoon sun with enough elevation to keep exterior trees from silhouetting. */
@@ -565,6 +617,7 @@ export function attachFpSessionEnvironment(
       stairwellInteriorDark01 = 0,
     }) => {
       const t0 = performance.now();
+      applyApartmentInteriorClip(_apartmentInteriorBounds);
       sky.updateTime(nowSec);
       sky.updateSun(sunDir);
       sky.updateCamera(camera);
@@ -605,6 +658,7 @@ export function attachFpSessionEnvironment(
       };
     },
     dispose: () => {
+      clipCompatibleRenderer.clippingPlanes = [];
       scene.background = null;
       scene.environment = null;
 

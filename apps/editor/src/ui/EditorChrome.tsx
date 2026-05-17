@@ -31,9 +31,9 @@ import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeAuthoringIntroAndWorkspace } from "./EditorChromeAuthoringIntroAndWorkspace.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
+import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
 import { useEditorChromeDiskPersistence } from "./hooks/useEditorChromeDiskPersistence.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
-import { parseMyApartmentLayoutDecorSelectedId } from "../editor/myApartment/editorMyApartmentSelection.js";
 export function EditorChrome() {
   const {
     workspace,
@@ -145,9 +145,6 @@ export function EditorChrome() {
     activeFloorOverrideDoc,
     selectedId,
   );
-  const myApartmentDecorSelected =
-    mode === "my_apartment_layout" &&
-    parseMyApartmentLayoutDecorSelectedId(selectedId) !== null;
   const floorPrefabIds = useMemo(
     () => collectPrefabIdsFromFloors(floorDocs),
     [floorDocs],
@@ -563,73 +560,14 @@ export function EditorChrome() {
               Fly camera: hold left mouse to look, then use <code>WASD</code> +{" "}
               <code>R</code>/<code>F</code>.
             </p>
-            <span style={label}>Scene / gizmo</span>
-            <div>
-              {(["translate", "rotate", "scale"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  style={{
-                    ...rowBtn,
-                    background: transformMode === m ? "#2d5a3d" : "#2a2a34",
-                    border: "1px solid #444",
-                    color: "#fff",
-                  }}
-                  onClick={() => setTransformMode(m)}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            {mode === "my_apartment_layout" ? (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  opacity: 0.82,
-                  lineHeight: 1.38,
-                }}
-              >
-                {myApartmentDecorSelected ? (
-                  <>
-                    Imported decor: move on <strong>X / Y / Z</strong> (Y cannot go below the floor).
-                    Rotate uses <strong>world</strong> axes (X / Y / Z rings); optional angle snap matches{" "}
-                    <strong>Grid snap</strong> when set (&quot;deg-ish&quot;). Uniform scale from the gizmo
-                    center handle.
-                  </>
-                ) : (
-                  <>
-                    Built-ins move on the floor plane only; rotate around <strong>Y</strong> in{" "}
-                    <strong>45°</strong> steps; use <strong>Scale</strong> (center handle) for uniform size.
-                  </>
-                )}
-              </p>
+            {mode !== "my_apartment_layout" ? (
+              <EditorChromeSceneGizmoBlock
+                transformMode={transformMode}
+                setTransformMode={setTransformMode}
+                gridSnapM={gridSnapM}
+                setGridSnapM={setGridSnapM}
+              />
             ) : null}
-            {transformMode === "scale" ? (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  fontSize: 11,
-                  opacity: 0.78,
-                  lineHeight: 1.35,
-                }}
-              >
-                Viewport: axis scale handles now stretch from the dragged side
-                while keeping the opposite face fixed. Drag the{" "}
-                <strong>center</strong> scale handle (white cube) for uniform
-                scale from center.
-              </p>
-            ) : null}
-            <span style={label}>Grid snap (m / deg-ish for rotate)</span>
-            <input
-              style={input}
-              type="number"
-              step={0.5}
-              min={0}
-              value={gridSnapM || ""}
-              placeholder="0 = off"
-              onChange={(e) => setGridSnapM(Number(e.target.value) || 0)}
-            />
           </>
         ) : null}
         <label style={{ ...label, textTransform: "none", cursor: "pointer" }}>

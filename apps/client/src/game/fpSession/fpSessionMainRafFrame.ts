@@ -211,6 +211,14 @@ export type FpSessionMainRafFrameDeps = {
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
+  getContainingResidentialUnitBounds: () => {
+    minX: number;
+    minY: number;
+    minZ: number;
+    maxX: number;
+    maxY: number;
+    maxZ: number;
+  } | null;
   isApartmentFurnitureInteriorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
@@ -496,13 +504,6 @@ export function createFpSessionMainRafFrame(
     deps.headPitch.rotation.x = freeLook ? 0 : mainRaf.pitch;
     deps.headCameraPitch.rotation.x = mainRaf.pitch;
     deps.headFreeLook.rotation.y = mainRaf.headLookYaw;
-    if (deps.getWorldAudioReady()) {
-      deps.worldAudio.syncListener();
-      if (deps.getCabMotionAudioReady()) {
-        deps.cabMotionAudio.syncListener();
-        deps.cabMotionAudio.sync(deps.fpElevators.getCabMotionAudioEmitters(nowMs));
-      }
-    }
 
     deps._audioMovement.horizontalSpeed = hs;
     deps._audioMovement.stridePhaseRad = deps.loco.headBobPhase;
@@ -533,6 +534,19 @@ export function createFpSessionMainRafFrame(
       deps.camera.rotation.z = THREE.MathUtils.damp(deps.camera.rotation.z, 0, 10, dt);
       deps.camera.position.x = THREE.MathUtils.damp(deps.camera.position.x, 0, 10, dt);
       deps.camera.position.y = THREE.MathUtils.damp(deps.camera.position.y, 0, 10, dt);
+    }
+    /**
+     * Rig/head/camera transforms above drive culling, mirrors, environment, and spatial audio below.
+     * Update world matrices now so those systems sample the **current** frame's view, not the previous one.
+     */
+    deps.playerRig.updateMatrixWorld(true);
+    deps.camera.updateMatrixWorld(true);
+    if (deps.getWorldAudioReady()) {
+      deps.worldAudio.syncListener();
+      if (deps.getCabMotionAudioReady()) {
+        deps.cabMotionAudio.syncListener();
+        deps.cabMotionAudio.sync(deps.fpElevators.getCabMotionAudioEmitters(nowMs));
+      }
     }
 
     deps.maybeSendMoveIntent(
@@ -868,6 +882,7 @@ export function createFpSessionMainRafFrame(
       nowSec: nowMs * 0.001,
       viewWidthPx: deps.canvas.clientWidth,
       viewHeightPx: deps.canvas.clientHeight,
+      apartmentInteriorBounds: deps.getContainingResidentialUnitBounds(),
       apartmentInteriorDark01: mainRaf.apartmentInteriorDarkSmoothed,
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });

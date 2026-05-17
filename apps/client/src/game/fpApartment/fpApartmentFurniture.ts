@@ -814,11 +814,18 @@ export async function mountFpApartmentFurniture(opts: {
           g.visible = false;
           continue;
         }
-        if (
+        const isContainingUnit =
           containingUnitKey !== null &&
-          g.userData.mammothApartmentUnitKey !== containingUnitKey
-        ) {
+          g.userData.mammothApartmentUnitKey === containingUnitKey;
+        if (containingUnitKey !== null && !isContainingUnit) {
           g.visible = false;
+          continue;
+        }
+        if (isContainingUnit) {
+          g.visible = true;
+          g.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
+          });
           continue;
         }
         const bounds = g.userData.mammothApartmentFurnitureWorldBounds;

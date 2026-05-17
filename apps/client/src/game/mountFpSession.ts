@@ -679,6 +679,22 @@ export async function mountFpSession(
     _interactionPos.set(p.x, p.y, p.z);
     return _interactionPos;
   };
+  const getContainingResidentialUnitBounds = () => {
+    const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
+      slackXZ: 0.28,
+      slackYBelow: 1.25,
+      slackYAbove: 2.85,
+    });
+    if (!unit) return null;
+    return {
+      minX: unit.boundMinX,
+      minY: unit.boundMinY,
+      minZ: unit.boundMinZ,
+      maxX: unit.boundMaxX,
+      maxY: unit.boundMaxY,
+      maxZ: unit.boundMaxZ,
+    };
+  };
 
   const mainRaf: FpSessionMainRafState = {
     bodyYaw: cachedGuestFeet?.yaw ?? 0,
@@ -698,6 +714,8 @@ export async function mountFpSession(
     lastMeleeMs: 0,
     lastRangedMs: 0,
   };
+  let pendingLookDeltaX = 0;
+  let pendingLookDeltaY = 0;
   const moveIntentQueue: FpSessionMoveIntentQueue = { items: [], head: 0 };
   /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
   const MAX_PENDING_INTENTS = 30;
@@ -876,6 +894,8 @@ export async function mountFpSession(
   /** Window hidden / defocused: browsers may omit `keyup` — drop all latched keys. */
   const resetTransientInputState = () => {
     commitFreeLookIntoBodyYaw();
+    pendingLookDeltaX = 0;
+    pendingLookDeltaY = 0;
     keys.clear();
     mainRaf.meleePressPending = false;
     mainRaf.primaryAttackHeld = false;
@@ -905,6 +925,8 @@ export async function mountFpSession(
   const onPointerLockChange = () => {
     if (document.pointerLockElement !== canvas) {
       commitFreeLookIntoBodyYaw();
+      pendingLookDeltaX = 0;
+      pendingLookDeltaY = 0;
       mainRaf.meleePressPending = false;
       mainRaf.primaryAttackHeld = false;
     }
@@ -1272,18 +1294,8 @@ export async function mountFpSession(
   const onMouseMove = (e: MouseEvent) => {
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
-    const freeLook = keys.has("AltLeft") || keys.has("AltRight");
-    if (freeLook) {
-      mainRaf.headLookYaw -= e.movementX * MOUSE_SENS;
-      mainRaf.headLookYaw = Math.max(
-        -FREE_LOOK_YAW_MAX,
-        Math.min(FREE_LOOK_YAW_MAX, mainRaf.headLookYaw),
-      );
-    } else {
-      mainRaf.bodyYaw -= e.movementX * MOUSE_SENS;
-    }
-    mainRaf.pitch -= e.movementY * MOUSE_SENS;
-    mainRaf.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, mainRaf.pitch));
+    pendingLookDeltaX += e.movementX;
+    pendingLookDeltaY += e.movementY;
   };
 
   const onClick = () => {
@@ -1409,6 +1421,7 @@ export async function mountFpSession(
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
     getContainingResidentialUnitKey,
+    getContainingResidentialUnitBounds,
     isApartmentFurnitureInteriorVisible,
     selectedHotbarRow,
     logFpPerf,
@@ -1447,6 +1460,22 @@ export async function mountFpSession(
     if (loadDbg) rafDiagFrames += 1;
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
+    if (pendingLookDeltaX !== 0 || pendingLookDeltaY !== 0) {
+      const freeLook = keys.has("AltLeft") || keys.has("AltRight");
+      if (freeLook) {
+        mainRaf.headLookYaw -= pendingLookDeltaX * MOUSE_SENS;
+        mainRaf.headLookYaw = Math.max(
+          -FREE_LOOK_YAW_MAX,
+          Math.min(FREE_LOOK_YAW_MAX, mainRaf.headLookYaw),
+        );
+      } else {
+        mainRaf.bodyYaw -= pendingLookDeltaX * MOUSE_SENS;
+      }
+      mainRaf.pitch -= pendingLookDeltaY * MOUSE_SENS;
+      mainRaf.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, mainRaf.pitch));
+      pendingLookDeltaX = 0;
+      pendingLookDeltaY = 0;
+    }
     if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
     try {
       runFrame(nowMs, dt);

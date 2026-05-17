@@ -35,6 +35,7 @@ import {
 import { createEditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
+import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
@@ -882,12 +883,17 @@ export async function mountEditorScene(
     beforeOrbitControlsUpdate: applyDistanceInvariantOrbitSpeeds,
   });
 
+  const disposeTransformModeDigitHotkeys = registerEditorTransformModeDigitHotkeys({
+    getTransformControlsDragging: () => transformControls.dragging === true,
+  });
+
   return () => {
     registerEditorSpawnCalculator(null);
     registerEditorNavigationBridge(null);
     fp.teardownFpSession();
     orbitControls.dispose();
     stopRenderLoop();
+    disposeTransformModeDigitHotkeys();
     canvas.removeEventListener("pointerdown", pointers.onPointerDown);
     canvas.removeEventListener("pointerup", pointers.onPointerUp);
     unsub();
