@@ -392,11 +392,13 @@ export type FpPerfStats = {
   /** Actual elapsed time covered by the samples (may be < windowSec early in session). */
   actualElapsedSec: number;
   samples: number;
-  /**
-   * ~`1000 / mean(totalFrameCpuMs)` for samples in-window — aligns with avg frame-ms when the RAF loop
-   * is consistent. Previously this was `(samples / wallClock)` (= profiler ring occupancy rate).
-   */
+  /** Approximate real frame cadence from completed samples in-window (`samples / wallClock`). */
   fps: number;
+  /**
+   * CPU throughput estimate from `1000 / mean(totalFrameCpuMs)`. Useful to distinguish "game logic is
+   * cheap" from "frames are actually being presented smoothly".
+   */
+  cpuFrameThroughputFps: number;
   /** Profiler ring writes per wall-clock second (`samples / actualElapsedSec`) — diagnostics only. */
   profilerRingSampleHz: number;
   frameMs: {
@@ -588,10 +590,11 @@ export function computeFpPerfStats(
     actualElapsedSec > 0 ? Math.round((n / actualElapsedSec) * 10) / 10 : 0;
 
   const avgTotal = sumTotal / n;
-  const fps =
+  const cpuFrameThroughputFps =
     avgTotal >= 1e-6
       ? Math.min(9999, Math.round((1000 / avgTotal) * 10) / 10)
       : 0;
+  const fps = n >= 2 ? profilerRingSampleHz : cpuFrameThroughputFps;
   const avgPhysics = sumPhysics / n;
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
@@ -635,6 +638,7 @@ export function computeFpPerfStats(
     actualElapsedSec,
     samples: n,
     fps,
+    cpuFrameThroughputFps,
     profilerRingSampleHz,
     frameMs: {
       avg: Math.round(avgTotal * 10) / 10,
@@ -917,8 +921,9 @@ export function computeFpPerfStatsFromTimeline(
     actualElapsedSec > 0 ? Math.round((n / actualElapsedSec) * 10) / 10 : 0;
 
   const avgTotal = sumTotal / n;
-  const fps =
+  const cpuFrameThroughputFps =
     avgTotal >= 1e-6 ? Math.min(9999, Math.round((1000 / avgTotal) * 10) / 10) : 0;
+  const fps = n >= 2 ? profilerRingSampleHz : cpuFrameThroughputFps;
   const avgPhysics = sumPhysics / n;
   const avgElev = sumElev / n;
   const avgPresent = sumPresent / n;
@@ -962,6 +967,7 @@ export function computeFpPerfStatsFromTimeline(
     actualElapsedSec,
     samples: n,
     fps,
+    cpuFrameThroughputFps,
     profilerRingSampleHz,
     frameMs: {
       avg: Math.round(avgTotal * 10) / 10,
@@ -1190,7 +1196,9 @@ function formatFpPerfReportMarkdown(
     `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  transparent=${ri.visibleTransparentMeshes}  trees=${ri.visibleExteriorTreeRoots}`,
     `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  transparent=${ri.frustumTransparentMeshes}  trees=${ri.frustumExteriorTreeRoots}`,
     "",
-    `FPS   ~${s.fps} (from avg frame cpu)    profiler samples/s=${s.profilerRingSampleHz}  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
+    `FPS   ~${s.fps} (from completed frame cadence)  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
+    `CPU   ~${s.cpuFrameThroughputFps} (from avg frame cpu)`,
+    `Diag  profiler ring samples/s=${s.profilerRingSampleHz}`,
     `Frame  avg=${frameMs.avg}ms  p50=${frameMs.p50}ms  p95=${frameMs.p95}ms  p99=${frameMs.p99}ms`,
     "",
     "Section breakdown (avg ms/frame):",

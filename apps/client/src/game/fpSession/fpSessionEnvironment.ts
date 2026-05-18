@@ -205,7 +205,7 @@ export function attachFpSessionEnvironment(
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   clipCompatibleRenderer.localClippingEnabled = true;
   /** Overcast daylight, but tuned so panel yards don’t punch past the gritty interior mood on entry. */
-  renderer.toneMappingExposure = 0.9;
+  renderer.toneMappingExposure = 0.82;
   const apartmentClipPlanes = [
     new THREE.Plane(),
     new THREE.Plane(),
@@ -280,8 +280,8 @@ export function attachFpSessionEnvironment(
    * Global IBL scale for dielectrics. Strongly metallic GLB materials attach their own boosted
    * `MeshStandardMaterial.envMapIntensity` when loaded so trims stay readable at these levels.
    */
-  const FP_SESSION_SCENE_IBL_WORLD = 0.42 as const;
-  const FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL = 0.16 as const;
+  const FP_SESSION_SCENE_IBL_WORLD = 0.34 as const;
+  const FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL = 0.12 as const;
   scene.environmentIntensity = FP_SESSION_SCENE_IBL_WORLD;
 
   const viewSize = new THREE.Vector2();
@@ -558,24 +558,26 @@ export function attachFpSessionEnvironment(
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
 
-  const BASE_HEMI_INTENSITY = 0.84;
-  const BASE_FILL_INTENSITY = 0.24;
-  const BASE_DIR_INTENSITY = 0.72;
+  const BASE_HEMI_INTENSITY = 0.72;
+  const BASE_FILL_INTENSITY = 0.17;
+  const BASE_DIR_INTENSITY = 0.58;
   /**
    * Stair cores should feel visibly dimmer than the exterior overcast fill instead of sharing the same
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
-  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.72;
+  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.62;
   /** Player-in-unit eye adaptation: noticeably darker without crushing all detail to black. */
-  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.2;
-  const APARTMENT_INTERIOR_EXPOSURE = 0.68;
+  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.14;
+  const APARTMENT_INTERIOR_EXPOSURE = 0.58;
   /**
-   * Abandoned flats should stay noticeably underlit: mostly weak window bleed plus a trace of dusty
-   * plaster bounce. Keep this static so crossing the doorway does not change the room's brightness.
+   * Keep the residential-only rig effectively off. Some apartment meshes can end up on different
+   * layers (shells vs authored walls/props); a second interior-only light stack makes those
+   * differences visible as uneven bright patches. The apartment mood now comes from the shared dark
+   * rig above plus global exposure / IBL pull-down while inside a unit.
    */
-  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.15;
-  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.028;
-  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.075;
+  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0;
+  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0;
+  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0;
 
   const hemi = new THREE.HemisphereLight(
     0xe3e7df,
@@ -587,15 +589,9 @@ export function attachFpSessionEnvironment(
   dir.position.copy(sunDir.clone().multiplyScalar(120));
   scene.add(hemi, fill, dir);
 
-  /** Corridor/global rig is layer 0 only; residential shells live on {@link FP_RESIDENTIAL_UNIT_INTERIOR_LAYER}. */
-  hemi.layers.disable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  fill.layers.disable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  dir.layers.disable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+  /** Shared dark rig for both corridor and residential layers to avoid per-layer brightness seams. */
 
-  /**
-   * Static daylight-only apartment rig. These lights always affect residential interiors, so the same
-   * room reads consistently from the hallway and after you step through the doorway.
-   */
+  /** Retained as a no-op rig so interior-layer meshes still have a stable future hook if needed. */
   const residentialInteriorSky = new THREE.HemisphereLight(
     0xd5d9d4,
     0x857869,
@@ -680,7 +676,7 @@ export function attachFpSessionEnvironment(
         RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY * residentialScale;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(
-        0.9,
+        0.82,
         APARTMENT_INTERIOR_EXPOSURE,
         apartmentDarkWeighted01,
       );

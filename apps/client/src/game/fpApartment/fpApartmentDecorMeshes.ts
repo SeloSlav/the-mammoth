@@ -274,6 +274,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   const _stashPickCenterScratch = new THREE.Vector3();
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
+  const visibleStashPickMeshes: THREE.Mesh[] = [];
+  const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const stashPickMaterial = new THREE.MeshBasicMaterial({
     transparent: true,
@@ -285,6 +287,21 @@ export function mountFpApartmentDecorMeshes(opts: {
   let disposed = false;
   let buildEpoch = 0;
   let buildRaf = 0;
+
+  const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
+    for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+      if (!cur.visible) return false;
+    }
+    return true;
+  };
+
+  const collectVisiblePickMeshes = (src: readonly THREE.Mesh[], dst: THREE.Mesh[]): void => {
+    dst.length = 0;
+    for (let i = 0; i < src.length; i++) {
+      const mesh = src[i]!;
+      if (objectVisibleInHierarchy(mesh)) dst.push(mesh);
+    }
+  };
 
   const disposeGroupDeep = (g: THREE.Group) => {
     g.traverse((ch) => {
@@ -614,9 +631,6 @@ export function mountFpApartmentDecorMeshes(opts: {
         }
         if (isContainingUnit) {
           g.visible = true;
-          g.traverse((obj) => {
-            if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
-          });
           continue;
         }
         const bb = g.userData.mammothApartmentDecorWorldBounds;
@@ -629,7 +643,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
-      const hits = _stashRaycaster.intersectObjects(stashPickMeshes, false);
+      collectVisiblePickMeshes(stashPickMeshes, visibleStashPickMeshes);
+      const hits = _stashRaycaster.intersectObjects(visibleStashPickMeshes, false);
       const seen = new Set<string>();
       for (const hit of hits) {
         const stashKey = hit.object.userData.mammothApartmentStashKey;
@@ -661,7 +676,8 @@ export function mountFpApartmentDecorMeshes(opts: {
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
-      const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);
+      collectVisiblePickMeshes(wardrobePickMeshes, visibleWardrobePickMeshes);
+      const hits = _stashRaycaster.intersectObjects(visibleWardrobePickMeshes, false);
       for (const hit of hits) {
         const unitKey = hit.object.userData.mammothApartmentWardrobePickUnitKey;
         if (typeof unitKey === "string" && unitKey.length > 0) return unitKey;

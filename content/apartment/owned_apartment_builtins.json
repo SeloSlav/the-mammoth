@@ -124,7 +124,7 @@
       "modelRelPath": "static/models/objects/rug-floor.glb",
       "fx": 0.585070114876417,
       "fz": 0.602390347046352,
-      "dy": 0.06555988762015631,
+      "dy": 0.10052521870350796,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -656,6 +656,16 @@
       "memberSelectedIds": [
         "mammoth_editor_my_apartment_decor:8fd1c958-c1ef-4b00-9c97-ee588b884eb0",
         "mammoth_editor_my_apartment_decor:mammoth_builtin_stove"
+      ]
+    },
+    {
+      "id": "2af4dcab-d862-4c84-8668-68c2f7ecf55c",
+      "name": "Ashtray",
+      "memberSelectedIds": [
+        "mammoth_editor_my_apartment_decor:7174e759-2297-4031-ad43-5b550baa4c83",
+        "mammoth_editor_my_apartment_decor:d1010fba-61c4-49e7-84b1-18d65a8ad987",
+        "mammoth_editor_my_apartment_decor:d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
+        "mammoth_editor_my_apartment_decor:e2159395-e392-44ea-8dff-182f7f443f21"
       ]
     }
   ]

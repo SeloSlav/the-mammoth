@@ -443,7 +443,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     _lastVisFeetSampleY = feetPos.y;
     _lastVisFeetSampleZ = feetPos.z;
 
-    if (_visBandSmoothLo < 0 || teleportSnap) {
+    /**
+     * Once feet are inside an apartment, do not ease down from a previously broad hallway/shaft/exterior
+     * band. The unit walls occlude the rest of the tower, so every transitional frame spent narrowing
+     * still submits floors that cannot contribute pixels.
+     */
+    if (_visBandSmoothLo < 0 || teleportSnap || insideResidentialUnit) {
       _visBandSmoothLo = targetBandLo;
       _visBandSmoothHi = targetBandHi;
     } else {

@@ -283,6 +283,8 @@ export async function mountFpApartmentFurniture(opts: {
   const unitFurnitureGroups: THREE.Group[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
+  const visibleStashPickMeshes: THREE.Mesh[] = [];
+  const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const unitBoundsDebugGeometry = opts.showUnitBoundsDebug ? new THREE.BoxGeometry(1, 1, 1) : null;
   const unitBoundsDebugMaterial =
@@ -318,6 +320,21 @@ export async function mountFpApartmentFurniture(opts: {
   const queuedLevels: number[] = [];
   const queuedLevelSet = new Set<number>();
   const visibleLevelScratch = new Set<number>();
+
+  const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
+    for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+      if (!cur.visible) return false;
+    }
+    return true;
+  };
+
+  const collectVisiblePickMeshes = (src: readonly THREE.Mesh[], dst: THREE.Mesh[]): void => {
+    dst.length = 0;
+    for (let i = 0; i < src.length; i++) {
+      const mesh = src[i]!;
+      if (objectVisibleInHierarchy(mesh)) dst.push(mesh);
+    }
+  };
 
   const disposeGeneratedGeometry = (root: THREE.Object3D) => {
     root.traverse((o) => {
@@ -860,9 +877,6 @@ export async function mountFpApartmentFurniture(opts: {
         }
         if (isContainingUnit) {
           g.visible = true;
-          g.traverse((obj) => {
-            if (obj instanceof THREE.Mesh) obj.frustumCulled = false;
-          });
           continue;
         }
         const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
@@ -876,12 +890,12 @@ export async function mountFpApartmentFurniture(opts: {
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      collectVisiblePickMeshes(stashPickMeshes, visibleStashPickMeshes);
       /**
-       * Do not gate gameplay picks on ancestor `.visible`: unit furniture groups can be temporarily
-       * render-culled while the player is still inside / beside the stash, which makes the E prompt
-       * feel "stuck". Range + unit-hull checks in `clientMayUseApartmentStash` remain authoritative.
+       * Keep the raycast set aligned with the same apartment visibility gate used for rendering so
+       * hidden units do not stay on the per-frame HUD pick path.
        */
-      const hits = _stashRaycaster.intersectObjects(stashPickMeshes, false);
+      const hits = _stashRaycaster.intersectObjects(visibleStashPickMeshes, false);
       const seen = new Set<string>();
       for (const hit of hits) {
         const stashKey = hit.object.userData.mammothApartmentStashKey;
@@ -913,7 +927,8 @@ export async function mountFpApartmentFurniture(opts: {
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
-      const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);
+      collectVisiblePickMeshes(wardrobePickMeshes, visibleWardrobePickMeshes);
+      const hits = _stashRaycaster.intersectObjects(visibleWardrobePickMeshes, false);
       for (const hit of hits) {
         const unitKey = hit.object.userData.mammothApartmentWardrobePickUnitKey;
         if (typeof unitKey === "string" && unitKey.length > 0) return unitKey;
