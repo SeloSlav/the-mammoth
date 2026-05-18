@@ -172,6 +172,17 @@ function localMirrorBodyUriForConn(conn: DbConnection): string {
   return n === 1 ? REMOTE_PLAYER_BODY_URI_FEMALE : REMOTE_PLAYER_BODY_URI_MALE;
 }
 
+function fpGpuTimestampDebugEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("fpgpu")) return true;
+    return window.localStorage.getItem("mammothFpGpuTimestamps") === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync.
  * Client simulation owns locomotion + collision; snapshots persist on SpacetimeDB for interactions,
@@ -204,11 +215,12 @@ export async function mountFpSession(
   } = world;
 
   const scene = new THREE.Scene();
+  const gpuTimestampDebug = fpGpuTimestampDebugEnabled();
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: FP_SESSION_WEBGPU_ANTIALIAS,
     forceWebGL: false,
-    trackTimestamp: true,
+    trackTimestamp: gpuTimestampDebug,
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
@@ -221,6 +233,7 @@ export async function mountFpSession(
   rendererShadowMap.needsUpdate = false;
   rendererShadowMap.type = THREE.PCFSoftShadowMap;
   const scheduleGpuTimestampResolve = (): void => {
+    if (!gpuTimestampDebug) return;
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
     if (!backend?.trackTimestamp) return;
     void renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then((ms) => {

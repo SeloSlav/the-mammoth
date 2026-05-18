@@ -268,21 +268,17 @@ export function attachFpSessionEnvironment(
   scene.background = null;
 
   /**
-   * Neutral studio IBL — without {@link THREE.Scene.environment}, `MeshStandardMaterial` metals
-   * (high metalness, low roughness) reflect **nothing** and read as near-black next to matte props.
-   * Matches the editor’s {@link RoomEnvironment} path so apartment décor + dropped GLBs stay consistent.
+   * Neutral studio PMREM for selectively readable metallic GLBs. Do not install it as the global
+   * `scene.environment`: the fast `ed49c903` path avoided environment sampling on every static
+   * building/interior `MeshStandardMaterial`, which matters far more than a handful of metal props.
    */
   const fpSessionPmrem = new THREE.PMREMGenerator(renderer);
   const fpSessionEnvTarget = fpSessionPmrem.fromScene(new RoomEnvironment(), 0.04);
-  scene.environment = fpSessionEnvTarget.texture;
+  scene.environment = null;
+  scene.userData.mammothFpMetallicReadableEnv = fpSessionEnvTarget.texture;
 
-  /**
-   * Global IBL scale for dielectrics. Strongly metallic GLB materials attach their own boosted
-   * `MeshStandardMaterial.envMapIntensity` when loaded so trims stay readable at these levels.
-   */
-  const FP_SESSION_SCENE_IBL_WORLD = 0.34 as const;
-  const FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL = 0.12 as const;
-  scene.environmentIntensity = FP_SESSION_SCENE_IBL_WORLD;
+  /** Keep the global environment path disabled; selected metallic GLBs receive the PMREM directly. */
+  scene.environmentIntensity = 1;
 
   const viewSize = new THREE.Vector2();
   renderer.getSize(viewSize);
@@ -650,17 +646,6 @@ export function attachFpSessionEnvironment(
        * most of the brighter exterior response until the blend is nearly complete.
        */
       const apartmentDarkWeighted01 = Math.pow(apartmentDark01, 0.72);
-      /** Pull diffuse IBL in inhabited volumes without starving metallic props (those use per-material boosts). */
-      const residentialIbldim01 = THREE.MathUtils.clamp(
-        Math.max(apartmentDarkWeighted01, stair01 * 0.55),
-        0,
-        1,
-      );
-      scene.environmentIntensity = THREE.MathUtils.lerp(
-        FP_SESSION_SCENE_IBL_WORLD,
-        FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL,
-        residentialIbldim01,
-      );
       const residentialScale = THREE.MathUtils.lerp(
         1,
         APARTMENT_INTERIOR_LIGHT_SCALE,
@@ -691,6 +676,7 @@ export function attachFpSessionEnvironment(
       clipCompatibleRenderer.clippingPlanes = [];
       scene.background = null;
       scene.environment = null;
+      delete scene.userData.mammothFpMetallicReadableEnv;
       fpSessionEnvTarget.dispose();
       fpSessionPmrem.dispose();
 

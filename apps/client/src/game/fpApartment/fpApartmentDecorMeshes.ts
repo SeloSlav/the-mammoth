@@ -288,6 +288,11 @@ export function mountFpApartmentDecorMeshes(opts: {
   let buildEpoch = 0;
   let buildRaf = 0;
 
+  const metallicReadableEnv = (): THREE.Texture | null => {
+    const env = opts.scene.userData.mammothFpMetallicReadableEnv;
+    return env instanceof THREE.Texture ? env : (opts.scene.environment ?? null);
+  };
+
   const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
     for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
       if (!cur.visible) return false;
@@ -522,9 +527,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         centerVisualBoundsOnRoot(g);
       }
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
-      if (opts.scene.environment) {
-        bindMammothMetallicReadableEnv(g, opts.scene.environment);
-      }
+      bindMammothMetallicReadableEnv(g, metallicReadableEnv());
       root.add(g);
       g.updateMatrixWorld(true);
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {

@@ -288,6 +288,10 @@ export function mountDroppedItemsWorld(
   const rowVisualInFlight = new Set<string>();
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
+  const metallicReadableEnv = (): THREE.Texture | null => {
+    const env = scene.userData.mammothFpMetallicReadableEnv;
+    return env instanceof THREE.Texture ? env : (scene.environment ?? null);
+  };
 
   const resolvedBandOpts =
     options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
@@ -312,7 +316,7 @@ export function mountDroppedItemsWorld(
         m.receiveShadow = true;
       }
     });
-    bindMammothMetallicReadableEnv(rootGltf, scene.environment ?? null);
+    bindMammothMetallicReadableEnv(rootGltf, metallicReadableEnv());
   };
 
   /**
