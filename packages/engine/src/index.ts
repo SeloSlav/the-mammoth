@@ -162,3 +162,9 @@ export {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
 } from "./webGpuGate.js";
+export {
+  bindMammothMetallicReadableEnv,
+  mammothSpecularReadabilityWeight,
+  MAMMOTH_METALLIC_ENV_READABLE_UD,
+  type MammothMetallicReadableEnvMeta,
+} from "./rendering/bindMammothMetallicReadableEnv.js";

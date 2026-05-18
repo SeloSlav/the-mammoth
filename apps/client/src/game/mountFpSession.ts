@@ -398,15 +398,26 @@ export async function mountFpSession(
     visibleFloorPlates: 0,
     visibleUnitInteriorMeshes: 0,
     visibleApartmentPropMeshes: 0,
+    visibleResidentialShellMeshes: 0,
+    visibleAnonymousInteriorMeshes: 0,
+    visibleGenericInteriorMeshes: 0,
+    visibleExteriorGlassMeshes: 0,
     visibleTransparentMeshes: 0,
+    visibleTransparentExteriorGlassMeshes: 0,
     visibleExteriorTreeRoots: 0,
     frustumFloorPlates: 0,
     frustumUnitInteriorMeshes: 0,
     frustumApartmentPropMeshes: 0,
+    frustumResidentialShellMeshes: 0,
+    frustumAnonymousInteriorMeshes: 0,
+    frustumGenericInteriorMeshes: 0,
+    frustumExteriorGlassMeshes: 0,
     frustumTransparentMeshes: 0,
+    frustumTransparentExteriorGlassMeshes: 0,
     frustumExteriorTreeRoots: 0,
   };
   const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
+    if (!obj.layers.test(camera.layers)) return false;
     for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
       if (!cur.visible) return false;
     }
@@ -447,11 +458,37 @@ export async function mountFpSession(
 
     let visibleUnitInteriorMeshes = 0;
     let frustumUnitInteriorMeshes = 0;
-    for (let i = 0; i < unitInteriorMeshes.length; i++) {
-      const mesh = unitInteriorMeshes[i]!;
+    let visibleResidentialShellMeshes = 0;
+    let frustumResidentialShellMeshes = 0;
+    let visibleAnonymousInteriorMeshes = 0;
+    let frustumAnonymousInteriorMeshes = 0;
+    let visibleGenericInteriorMeshes = 0;
+    let frustumGenericInteriorMeshes = 0;
+    let visibleExteriorGlassMeshes = 0;
+    let frustumExteriorGlassMeshes = 0;
+    for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
+      const entry = unitInteriorMeshEntries[i]!;
+      const mesh = entry.mesh;
       if (!objectVisibleInHierarchy(mesh)) continue;
       visibleUnitInteriorMeshes += 1;
-      if (_perfSceneFrustum.intersectsObject(mesh)) frustumUnitInteriorMeshes += 1;
+      const inFrustum = _perfSceneFrustum.intersectsObject(mesh);
+      if (inFrustum) frustumUnitInteriorMeshes += 1;
+      if (entry.apartmentUnitKey === null && entry.residentialUnitId !== null) {
+        visibleResidentialShellMeshes += 1;
+        if (inFrustum) frustumResidentialShellMeshes += 1;
+      }
+      if (entry.apartmentUnitKey === null && entry.residentialUnitId === null) {
+        visibleAnonymousInteriorMeshes += 1;
+        if (inFrustum) frustumAnonymousInteriorMeshes += 1;
+      }
+      if (entry.genericInteriorVisibleInResidentialUnit) {
+        visibleGenericInteriorMeshes += 1;
+        if (inFrustum) frustumGenericInteriorMeshes += 1;
+      }
+      if (entry.residentialExteriorGlass) {
+        visibleExteriorGlassMeshes += 1;
+        if (inFrustum) frustumExteriorGlassMeshes += 1;
+      }
     }
 
     let visibleApartmentPropMeshes = 0;
@@ -465,23 +502,40 @@ export async function mountFpSession(
 
     let visibleTransparentMeshes = 0;
     let frustumTransparentMeshes = 0;
+    let visibleTransparentExteriorGlassMeshes = 0;
+    let frustumTransparentExteriorGlassMeshes = 0;
     for (let i = 0; i < transparentBuildingMeshes.length; i++) {
       const mesh = transparentBuildingMeshes[i]!;
       if (!objectVisibleInHierarchy(mesh)) continue;
       visibleTransparentMeshes += 1;
-      if (_perfSceneFrustum.intersectsObject(mesh)) frustumTransparentMeshes += 1;
+      const inFrustum = _perfSceneFrustum.intersectsObject(mesh);
+      if (inFrustum) frustumTransparentMeshes += 1;
+      if (mesh.userData.mammothResidentialUnitExteriorGlass === true) {
+        visibleTransparentExteriorGlassMeshes += 1;
+        if (inFrustum) frustumTransparentExteriorGlassMeshes += 1;
+      }
     }
 
     lastPerfSceneCounters = {
       visibleFloorPlates,
       visibleUnitInteriorMeshes,
       visibleApartmentPropMeshes,
+      visibleResidentialShellMeshes,
+      visibleAnonymousInteriorMeshes,
+      visibleGenericInteriorMeshes,
+      visibleExteriorGlassMeshes,
       visibleTransparentMeshes,
+      visibleTransparentExteriorGlassMeshes,
       visibleExteriorTreeRoots,
       frustumFloorPlates,
       frustumUnitInteriorMeshes,
       frustumApartmentPropMeshes,
+      frustumResidentialShellMeshes,
+      frustumAnonymousInteriorMeshes,
+      frustumGenericInteriorMeshes,
+      frustumExteriorGlassMeshes,
       frustumTransparentMeshes,
+      frustumTransparentExteriorGlassMeshes,
       frustumExteriorTreeRoots,
     };
     return lastPerfSceneCounters;
@@ -497,6 +551,7 @@ export async function mountFpSession(
   );
 
   const fpApartmentDecorMeshes = mountFpApartmentDecorMeshes({
+    scene,
     conn,
     buildingRoot,
     onRebuilt: refreshApartmentInteriorMeshes,

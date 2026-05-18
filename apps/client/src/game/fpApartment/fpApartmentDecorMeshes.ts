@@ -20,9 +20,11 @@ import {
   type OwnedApartmentWallMaterial,
   apartmentPlacedItemKindFromDecorItemKind,
   ownedApartmentPlacedItemKindHasStash,
+  ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
@@ -41,6 +43,7 @@ import {
   resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
+import { bindMammothMetallicReadableEnv } from "@the-mammoth/engine";
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
@@ -249,6 +252,7 @@ export type MountFpApartmentDecorMeshesResult = {
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
+  scene: THREE.Scene;
   conn: DbConnection;
   buildingRoot: THREE.Group;
   onRebuilt?: () => void;
@@ -493,7 +497,7 @@ export function mountFpApartmentDecorMeshes(opts: {
 
       vis.position.set(0, 0, 0);
       vis.rotation.set(0, 0, 0);
-      vis.scale.set(1, 1, 1);
+      vis.scale.setScalar(ownedApartmentPlacedItemAuthoringAssetVisScale(d.placedKind));
       vis.updateMatrixWorld(true);
 
       g.add(vis);
@@ -501,6 +505,9 @@ export function mountFpApartmentDecorMeshes(opts: {
         centerVisualBoundsOnRoot(g);
       }
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
+      if (opts.scene.environment) {
+        bindMammothMetallicReadableEnv(g, opts.scene.environment);
+      }
       root.add(g);
       g.updateMatrixWorld(true);
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
@@ -532,7 +539,7 @@ export function mountFpApartmentDecorMeshes(opts: {
           pick.userData.mammothApartmentFurnitureProp = true;
           pick.userData.mammothApartmentDecorProp = true;
           pick.userData.mammothPlateLevelIndex = d.unit.level;
-          pick.userData.mammothUnitInterior = true;
+          pick.layers.set(FP_INTERACTION_PICK_LAYER);
           g.add(pick);
           stashPickMeshes.push(pick);
           g.updateMatrixWorld(true);
@@ -619,6 +626,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
+      _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
       const hits = _stashRaycaster.intersectObjects(stashPickMeshes, false);
@@ -650,6 +658,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     },
     getWardrobeClaimLookAtUnitKey: (_playerPos, camera) => {
       if (wardrobePickMeshes.length === 0) return null;
+      _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
       const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);

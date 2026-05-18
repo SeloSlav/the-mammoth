@@ -124,7 +124,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
-  it("hides unresolved generic interiors indoors unless explicitly opted in", () => {
+  it("hides unresolved anonymous interiors indoors, including generic-tagged ones", () => {
     expect(
       fpResolveUnitInteriorMeshVisible({
         entry: {
@@ -155,7 +155,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

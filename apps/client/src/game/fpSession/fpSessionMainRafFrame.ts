@@ -43,7 +43,7 @@ import {
   getKinematicSupportVerticalVelocityMps,
   type FpKinematicSupportSampleOpts,
 } from "../fpPhysics/fpKinematicSupport.js";
-import { pushFpPerfFrame } from "./fpSessionPerfStore.js";
+import { pushFpPerfFrame, type FpRendererInfo } from "./fpSessionPerfStore.js";
 import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
@@ -77,6 +77,16 @@ import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
 import type { FpPlayerDamageBloodSquirt } from "./fpPlayerDamageBloodSquirt.js";
+
+/** Scratch for world yaw extraction (avoid per-frame alloc). */
+const _fpPerfCamQuat = new THREE.Quaternion();
+const _fpPerfCamEuler = new THREE.Euler();
+
+function fpCameraYawRad(camera: THREE.Camera): number {
+  camera.getWorldQuaternion(_fpPerfCamQuat);
+  _fpPerfCamEuler.setFromQuaternion(_fpPerfCamQuat, "YXZ");
+  return _fpPerfCamEuler.y;
+}
 
 /** Squared XZ distance (m²); below this + small dy we may reuse the last dropped-item HUD scan. */
 const HUD_DROP_SCAN_STATIONARY_R2 = 0.28 * 0.28;
@@ -238,18 +248,8 @@ export type FpSessionMainRafFrameDeps = {
   fpDroppedPickupFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
-  getFpPerfSceneCounters: () => {
-    visibleFloorPlates: number;
-    visibleUnitInteriorMeshes: number;
-    visibleApartmentPropMeshes: number;
-    visibleTransparentMeshes: number;
-    visibleExteriorTreeRoots: number;
-    frustumFloorPlates: number;
-    frustumUnitInteriorMeshes: number;
-    frustumApartmentPropMeshes: number;
-    frustumTransparentMeshes: number;
-    frustumExteriorTreeRoots: number;
-  };
+  /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
+  getFpPerfSceneCounters: () => Omit<FpRendererInfo, "drawCalls" | "triangles">;
   /** No-op when GPU timestamp queries are unavailable. */
   scheduleGpuTimestampResolve: () => void;
 };
@@ -870,6 +870,7 @@ export function createFpSessionMainRafFrame(
       deps.pos.y,
       deps.pos.z,
       nowMs,
+      deps.isInsideResidentialUnit(),
       deps._floorVisCamWorld.x,
       deps._floorVisCamWorld.y,
       deps._floorVisCamWorld.z,
@@ -972,6 +973,7 @@ export function createFpSessionMainRafFrame(
         triangles: deps.renderer.info.render.triangles,
         ...deps.getFpPerfSceneCounters(),
       },
+      fpCameraYawRad(deps.camera),
     );
   };
 

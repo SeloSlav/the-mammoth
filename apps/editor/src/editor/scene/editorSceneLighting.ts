@@ -7,11 +7,25 @@ export type EditorSceneLighting = {
   grid: THREE.GridHelper;
 };
 
+/** Authoritative orbit-rig luminance — keep in sync with HDRI/off-HDRI remapping in the scene runtime. */
+export const EDITOR_ORBIT_LIGHTING_BASE = {
+  hemiIntensity: 0.88,
+  fillIntensity: 0.14,
+  dirIntensity: 1.42,
+} as const;
+
 export function addEditorSceneLighting(scene: THREE.Scene): EditorSceneLighting {
-  const hemi = new THREE.HemisphereLight(0xf2f6fb, 0xd0d8e2, 0.88);
+  const hemi = new THREE.HemisphereLight(
+    0xf2f6fb,
+    0xd0d8e2,
+    EDITOR_ORBIT_LIGHTING_BASE.hemiIntensity,
+  );
   scene.add(hemi);
 
-  const fill = new THREE.AmbientLight(0xe8eef4, 0.14);
+  const fill = new THREE.AmbientLight(
+    0xe8eef4,
+    EDITOR_ORBIT_LIGHTING_BASE.fillIntensity,
+  );
   scene.add(fill);
 
   const sunDir = new THREE.Vector3();
@@ -20,7 +34,10 @@ export function addEditorSceneLighting(scene: THREE.Scene): EditorSceneLighting 
     THREE.MathUtils.degToRad(90 - 58),
     THREE.MathUtils.degToRad(218),
   );
-  const dir = new THREE.DirectionalLight(0xfff8f2, 1.42);
+  const dir = new THREE.DirectionalLight(
+    0xfff8f2,
+    EDITOR_ORBIT_LIGHTING_BASE.dirIntensity,
+  );
   dir.position.copy(sunDir.multiplyScalar(120));
   dir.castShadow = true;
   dir.shadow.mapSize.set(2048, 2048);

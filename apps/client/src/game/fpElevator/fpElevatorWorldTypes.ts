@@ -131,9 +131,10 @@ export type MountFpElevatorWorldResult = {
   ): FpElevatorFloorVisibilityBand;
   /**
    * Hide auxiliary landing visuals (hail panels + pick boxes) on every shaft while the current cab
-   * view is occluded by the cab walls (sealed or simply not on a doorway sightline). The actual
-   * landing door mesh stays visible so the stopped-floor red corridor door does not disappear from
-   * inside the cab. Call once per frame from the same pass that runs
+   * view is occluded by the cab walls (sealed or simply not on a doorway sightline), or while the
+   * player is already inside a residential unit where those helpers are fully occluded by apartment
+   * walls. The actual landing door mesh stays visible so the stopped-floor red corridor door does
+   * not disappear from inside the cab. Call once per frame from the same pass that runs
    * {@link syncBuildingFloorPlateVisibility} — the toggle is a no-op when the state is unchanged.
    */
   syncShaftVisualCulling(
@@ -141,6 +142,7 @@ export type MountFpElevatorWorldResult = {
     py: number,
     pz: number,
     nowMs: number,
+    insideResidentialUnit: boolean,
     eyeWorldX?: number,
     eyeWorldY?: number,
     eyeWorldZ?: number,

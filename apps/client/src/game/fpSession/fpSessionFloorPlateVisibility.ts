@@ -191,7 +191,13 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     if (entry.residentialExteriorGlass) return true;
   }
   if (input.insideResidentialUnit) {
-    return entry.genericInteriorVisibleInResidentialUnit && input.unitInteriorVisible;
+    /**
+     * Once the player is inside a specific apartment, anonymous `mammothUnitInterior` meshes must not
+     * stay visible just because they are "generic residential interior". That broad allowance leaks
+     * neighboring unit/corridor shells into the active apartment render set. In-unit views only keep
+     * meshes with explicit ownership tags (`apartmentUnitKey` / `residentialUnitId`).
+     */
+    return false;
   }
   return input.unitInteriorVisible;
 }
@@ -529,8 +535,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           (containingResidentialUnitId !== null &&
             entry.residentialUnitId === containingResidentialUnitId) ||
           (containingResidentialUnitKey !== null &&
-            entry.apartmentUnitKey === containingResidentialUnitKey) ||
-          (insideResidentialUnit && entry.genericInteriorVisibleInResidentialUnit);
+            entry.apartmentUnitKey === containingResidentialUnitKey);
         entry.mesh.visible = fpResolveUnitInteriorMeshVisible({
           entry,
           unitInteriorVisible,

@@ -403,24 +403,29 @@ export function createFpElevatorFloorVisAndCabContext(
     py: number,
     pz: number,
     nowMs: number,
+    insideResidentialUnit: boolean,
     eyeWorldX?: number,
     eyeWorldY?: number,
     eyeWorldZ?: number,
     viewDirX?: number,
     viewDirZ?: number,
   ): void => {
-    const landingsVisible = !isInsideCabOccludedView(
-      px,
-      py,
-      pz,
-      nowMs,
-      eyeWorldX,
-      eyeWorldY,
-      eyeWorldZ,
-      viewDirX,
-      viewDirZ,
-    );
+    const landingsVisible =
+      !insideResidentialUnit &&
+      !isInsideCabOccludedView(
+        px,
+        py,
+        pz,
+        nowMs,
+        eyeWorldX,
+        eyeWorldY,
+        eyeWorldZ,
+        viewDirX,
+        viewDirZ,
+      );
     for (const vis of visuals.values()) {
+      // Apartment walls fully occlude corridor landing doors; keep them live only for exterior/cab views.
+      vis.landingRoot.visible = !insideResidentialUnit;
       vis.setLandingsVisible(landingsVisible);
     }
   };

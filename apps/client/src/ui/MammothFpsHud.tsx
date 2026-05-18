@@ -14,8 +14,11 @@ import {
   subscribeFpPerf,
   computeFpPerfStats,
   exportFpPerfReport,
+  exportFpPerfRecordingReport,
+  getFpPerfTimeline,
   getLastRendererInfo,
   type FpPerfStats,
+  type FpPerfTimelineSample,
 } from "../game/fpSession/fpSessionPerfStore";
 import {
   THEME_CARD_BG,
@@ -37,6 +40,12 @@ import {
 
 const WINDOW_OPTIONS = [1, 5, 30] as const;
 type WindowSec = (typeof WINDOW_OPTIONS)[number];
+
+const RECORD_DURATION_OPTIONS = [5, 10, 30] as const;
+type RecordDurationSec = (typeof RECORD_DURATION_OPTIONS)[number];
+
+const TIMELINE_CHART_W = 278;
+const TIMELINE_CHART_H = 34;
 
 const SECTION_COLORS: Record<string, string> = {
   physics: "#7bcf9a",
@@ -62,6 +71,129 @@ function fpsColor(fps: number | null): string {
   if (fps >= 55) return THEME_SUCCESS;
   if (fps >= 30) return "#e8c47a";
   return THEME_ERROR;
+}
+
+/** Forward-filled yaw in degrees for sparklines when some frames omit yaw. */
+function yawDegHeldSeries(samples: readonly FpPerfTimelineSample[]): Float64Array {
+  const out = new Float64Array(samples.length);
+  let last = 0;
+  let seeded = false;
+  for (let i = 0; i < samples.length; i++) {
+    const y = samples[i]!.cameraYawRad;
+    if (y != null) {
+      last = (y * 180) / Math.PI;
+      seeded = true;
+    }
+    out[i] = seeded ? last : Number.NaN;
+  }
+  return out;
+}
+
+function TimelineSparklineRow({
+  samples,
+  label,
+  color,
+  pick,
+}: {
+  samples: readonly FpPerfTimelineSample[];
+  label: string;
+  color: string;
+  pick: (s: FpPerfTimelineSample, index: number) => number;
+}) {
+  const w = TIMELINE_CHART_W;
+  const h = TIMELINE_CHART_H;
+  const pad = 3;
+  if (samples.length < 2) {
+    return (
+      <div style={{ fontSize: 10, color: THEME_TEXT_FAINT, marginBottom: 4 }}>
+        {label}: (need ≥2 samples)
+      </div>
+    );
+  }
+  const vals: number[] = [];
+  for (let i = 0; i < samples.length; i++) {
+    vals.push(pick(samples[i]!, i));
+  }
+  const finite = vals.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) {
+    return (
+      <div style={{ fontSize: 10, color: THEME_TEXT_FAINT, marginBottom: 4 }}>
+        {label}: (no data)
+      </div>
+    );
+  }
+  let minV = Math.min(...finite);
+  let maxV = Math.max(...finite);
+  if (maxV - minV < 1e-9) {
+    minV -= 1;
+    maxV += 1;
+  }
+  const pts = samples
+    .map((s, i) => {
+      const x = pad + (i / (samples.length - 1)) * (w - pad * 2);
+      const v = pick(s, i);
+      const vn = Number.isFinite(v) ? v : minV;
+      const y = h - pad - ((vn - minV) / (maxV - minV)) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const lo = minV.toPrecision(3);
+  const hi = maxV.toPrecision(3);
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: 2,
+        }}
+      >
+        <span style={{ fontSize: 10, color: THEME_TEXT_MUTED, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 9, color: THEME_TEXT_FAINT, fontFamily: UI_FONT_MONO }}>
+          {lo} → {hi}
+        </span>
+      </div>
+      <svg width={w} height={h} style={{ display: "block" }}>
+        <polyline fill="none" stroke={color} strokeWidth="1.6" points={pts} vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+}
+
+function FpPerfRecordedTimelines({ samples }: { samples: readonly FpPerfTimelineSample[] }) {
+  const yawHeld = yawDegHeldSeries(samples);
+  return (
+    <div style={{ marginTop: 4, marginBottom: 6 }}>
+      <TimelineSparklineRow samples={samples} label="Total frame ms" color="#e87878" pick={(s) => s.totalMs} />
+      <TimelineSparklineRow samples={samples} label="three.js ms" color="#f0b3b3" pick={(s) => s.renderThreeMs} />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum unit interior"
+        color={THEME_ACCENT}
+        pick={(s) => s.frustumUnitInteriorMeshes}
+      />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum apartment props"
+        color="#7bcf9a"
+        pick={(s) => s.frustumApartmentPropMeshes}
+      />
+      <TimelineSparklineRow samples={samples} label="Draw calls" color="#b89f6b" pick={(s) => s.drawCalls} />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Triangles (k)"
+        color="#9b8cff"
+        pick={(s) => s.triangles / 1000}
+      />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Camera yaw (deg, held)"
+        color="#6b8cae"
+        pick={(_s, i) => yawHeld[i]!}
+      />
+    </div>
+  );
 }
 
 function MiniBar({
@@ -112,8 +244,18 @@ export function MammothFpsHud() {
   const [open, setOpen] = useState(false);
   const [windowSec, setWindowSec] = useState<WindowSec>(5);
   const [stats, setStats] = useState<FpPerfStats | null>(null);
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copiedRolling, setCopiedRolling] = useState(false);
+  const [copiedRecording, setCopiedRecording] = useState(false);
+  const copyRollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyRecordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [recordDurationSec, setRecordDurationSec] = useState<RecordDurationSec>(5);
+  const [recordingEndsAtMs, setRecordingEndsAtMs] = useState<number | null>(null);
+  const [capture, setCapture] = useState<{
+    samples: FpPerfTimelineSample[];
+    windowSec: RecordDurationSec;
+  } | null>(null);
+  const captureWindowSecRef = useRef<RecordDurationSec>(5);
   const backgroundMusicEnabled = useSyncExternalStore(
     subscribeFpBackgroundMusicEnabled,
     getFpBackgroundMusicEnabled,
@@ -131,23 +273,65 @@ export function MammothFpsHud() {
     return unsub;
   }, [open, windowSec]);
 
+  useEffect(() => {
+    if (recordingEndsAtMs == null) return;
+    const win = captureWindowSecRef.current;
+    let raf = 0;
+    const step = () => {
+      const now = performance.now();
+      if (now >= recordingEndsAtMs) {
+        const samples = getFpPerfTimeline(now, win);
+        setCapture({ samples, windowSec: win });
+        setRecordingEndsAtMs(null);
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [recordingEndsAtMs]);
+
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setOpen((v) => !v);
   }, []);
 
-  const handleCopy = useCallback(async () => {
+  const handleCopyRollingWindow = useCallback(async () => {
     const text = exportFpPerfReport(performance.now(), windowSec);
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+      setCopiedRolling(true);
+      setCopiedRecording(false);
+      if (copyRollingTimerRef.current) clearTimeout(copyRollingTimerRef.current);
+      copyRollingTimerRef.current = setTimeout(() => setCopiedRolling(false), 2000);
     } catch {
-      // clipboard denied — fall back to console
-      console.info("[MammothFpsHud] copy fallback:\n" + text);
+      console.info("[MammothFpsHud] copy window fallback:\n" + text);
     }
   }, [windowSec]);
+
+  const handleCopyRecording = useCallback(async () => {
+    if (!capture) return;
+    const text = exportFpPerfRecordingReport(capture.samples, capture.windowSec);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedRecording(true);
+      setCopiedRolling(false);
+      if (copyRecordingTimerRef.current) clearTimeout(copyRecordingTimerRef.current);
+      copyRecordingTimerRef.current = setTimeout(() => setCopiedRecording(false), 2000);
+    } catch {
+      console.info("[MammothFpsHud] copy recording fallback:\n" + text);
+    }
+  }, [capture]);
+
+  const handleStartRecording = useCallback(() => {
+    captureWindowSecRef.current = recordDurationSec;
+    setCapture(null);
+    setRecordingEndsAtMs(performance.now() + recordDurationSec * 1000);
+  }, [recordDurationSec]);
+
+  const handleClearCapture = useCallback(() => {
+    setCapture(null);
+  }, []);
 
   const handleAudioToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -194,7 +378,7 @@ export function MammothFpsHud() {
     padding: "10px 12px",
     backdropFilter: "blur(8px)",
     WebkitBackdropFilter: "blur(8px)",
-    minWidth: 310,
+    minWidth: 320,
   };
 
   const audioButtonStyle: React.CSSProperties = {
@@ -239,6 +423,13 @@ export function MammothFpsHud() {
   };
 
   const dimStyle: React.CSSProperties = { color: THEME_TEXT_MUTED };
+
+  const isRecording = recordingEndsAtMs !== null;
+  const recordStatusLabel = isRecording
+    ? "recording"
+    : capture
+      ? `captured (${capture.samples.length})`
+      : "idle";
 
   // ---------------------------------------------------------------------------
   // Render
@@ -299,6 +490,7 @@ export function MammothFpsHud() {
             {WINDOW_OPTIONS.map((w) => (
               <button
                 key={w}
+                type="button"
                 onClick={() => setWindowSec(w)}
                 style={{
                   padding: "2px 7px",
@@ -316,21 +508,137 @@ export function MammothFpsHud() {
             ))}
             <div style={{ flex: 1 }} />
             <button
-              onClick={handleCopy}
+              type="button"
+              onClick={handleCopyRollingWindow}
+              title={`Rolling-window summary only (${windowSec}s · matches FPS breakdown below)`}
               style={{
                 padding: "2px 9px",
                 borderRadius: 4,
-                border: `1px solid ${copied ? THEME_SUCCESS : THEME_CARD_BORDER}`,
-                background: copied ? "rgba(123,207,154,0.15)" : "transparent",
-                color: copied ? THEME_SUCCESS : THEME_TEXT_MUTED,
+                border: `1px solid ${copiedRolling ? THEME_SUCCESS : THEME_CARD_BORDER}`,
+                background: copiedRolling ? "rgba(123,207,154,0.15)" : "transparent",
+                color: copiedRolling ? THEME_SUCCESS : THEME_TEXT_MUTED,
                 cursor: "pointer",
                 fontSize: 11,
                 fontFamily: UI_FONT_SANS,
               }}
             >
-              {copied ? "✓ Copied" : "Copy"}
+              {copiedRolling ? "✓ Copied" : "Copy window"}
             </button>
           </div>
+
+          <div style={{ ...sectionHeaderStyle, marginTop: 4 }}>Recording</div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <span style={{ color: THEME_TEXT_FAINT, fontSize: 10 }}>Dur</span>
+            {RECORD_DURATION_OPTIONS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                disabled={isRecording}
+                onClick={() => setRecordDurationSec(d)}
+                style={{
+                  padding: "2px 7px",
+                  borderRadius: 4,
+                  border: `1px solid ${d === recordDurationSec ? THEME_ACCENT : THEME_CARD_BORDER}`,
+                  background:
+                    d === recordDurationSec ? "rgba(107,140,174,0.2)" : "transparent",
+                  color: d === recordDurationSec ? THEME_ACCENT : THEME_TEXT_MUTED,
+                  cursor: isRecording ? "not-allowed" : "pointer",
+                  opacity: isRecording ? 0.55 : 1,
+                  fontSize: 11,
+                  fontFamily: UI_FONT_SANS,
+                }}
+              >
+                {d}s
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={isRecording}
+              onClick={handleStartRecording}
+              style={{
+                padding: "2px 10px",
+                borderRadius: 4,
+                border: `1px solid ${THEME_ERROR}`,
+                background: isRecording ? "transparent" : "rgba(232,120,120,0.12)",
+                color: THEME_ERROR,
+                cursor: isRecording ? "not-allowed" : "pointer",
+                opacity: isRecording ? 0.55 : 1,
+                fontSize: 11,
+                fontFamily: UI_FONT_SANS,
+                fontWeight: 600,
+              }}
+              title={isRecording ? "Already recording" : "Capture profiler timeline"}
+            >
+              Record
+            </button>
+            {capture ? (
+              <button
+                type="button"
+                onClick={handleClearCapture}
+                disabled={isRecording}
+                style={{
+                  padding: "2px 9px",
+                  borderRadius: 4,
+                  border: `1px solid ${THEME_CARD_BORDER}`,
+                  background: "transparent",
+                  color: THEME_TEXT_MUTED,
+                  cursor: isRecording ? "not-allowed" : "pointer",
+                  fontSize: 11,
+                  fontFamily: UI_FONT_SANS,
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={!capture || isRecording}
+              onClick={handleCopyRecording}
+              title={
+                capture
+                  ? `Copy frozen ${capture.windowSec}s recording (summary + timeline TSV)`
+                  : "Finish a recording first"
+              }
+              style={{
+                padding: "2px 9px",
+                borderRadius: 4,
+                border: `1px solid ${copiedRecording ? THEME_SUCCESS : THEME_CARD_BORDER}`,
+                background:
+                  copiedRecording ? "rgba(123,207,154,0.15)" : !capture ? "rgba(0,0,0,0.12)" : "transparent",
+                color: copiedRecording ? THEME_SUCCESS : !capture ? THEME_TEXT_FAINT : THEME_TEXT_MUTED,
+                cursor: !capture || isRecording ? "not-allowed" : "pointer",
+                opacity: !capture ? 0.65 : 1,
+                fontSize: 11,
+                fontFamily: UI_FONT_SANS,
+              }}
+            >
+              {copiedRecording ? "✓ Copied" : "Copy recording"}
+            </button>
+            <span
+              style={{
+                ...monoStyle,
+                fontSize: 10,
+                color: isRecording ? THEME_ERROR : capture ? THEME_SUCCESS : THEME_TEXT_FAINT,
+              }}
+            >
+              {recordStatusLabel}
+            </span>
+          </div>
+
+          {capture ? (
+            <>
+              <div style={{ ...sectionHeaderStyle, marginTop: 2 }}>Recorded timeline</div>
+              <FpPerfRecordedTimelines samples={capture.samples} />
+            </>
+          ) : null}
 
           {stats === null ? (
             <div style={{ color: THEME_TEXT_FAINT, padding: "8px 0", textAlign: "center" }}>

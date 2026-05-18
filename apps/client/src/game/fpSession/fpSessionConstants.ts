@@ -68,3 +68,5 @@ export const FP_MIRROR_SELF_RENDER_LAYER = 2;
  * are inside the unit; dim peek ambient lights this layer alone for doorway views from the corridor.
  */
 export const FP_RESIDENTIAL_UNIT_INTERIOR_LAYER = 3;
+/** Invisible interaction helpers (stash picks, helper raycast boxes) excluded from the main camera. */
+export const FP_INTERACTION_PICK_LAYER = 4;

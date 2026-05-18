@@ -13,10 +13,12 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+  ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
+import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
@@ -38,7 +40,7 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
-const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb"; 
+const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
 const BED_URL = "/static/models/objects/bed.glb";
 const STOVE_URL = "/static/models/objects/stove.glb";
 
@@ -46,12 +48,6 @@ const STOVE_URL = "/static/models/objects/stove.glb";
 const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
 const FURNITURE_REBUILD_MIN_UNITS_PER_SLICE = 1;
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
-
-/** Authoring GLBs — tuned against the replicated wall-based furniture anchors. */
-const WARDROBE_VIS_SCALE = 0.98;
-const FOOTLOCKER_VIS_SCALE = 0.56;
-const BED_VIS_SCALE = 1.14;
-const STOVE_VIS_SCALE = 0.88;
 
 /** Set true to force hull debug in production builds. */
 const FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE = false;
@@ -473,7 +469,9 @@ export async function mountFpApartmentFurniture(opts: {
     plate.add(unitGroup);
 
     const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
-    w.scale.setScalar(WARDROBE_VIS_SCALE * pose.wardrobe.uniformScale);
+    w.scale.setScalar(
+      ownedApartmentPlacedItemAuthoringAssetVisScale("wardrobe") * pose.wardrobe.uniformScale,
+    );
     w.position.set(pose.wardrobe.x, 0, pose.wardrobe.z);
     w.rotation.y = pose.wardrobe.yaw;
     snapCloneBottomToWorldFloor(w, pose.wardrobe.snapFloorY);
@@ -504,7 +502,7 @@ export async function mountFpApartmentFurniture(opts: {
     wardrobePick.userData.mammothSkipFloorGeometryMerge = true;
     wardrobePick.userData.mammothApartmentFurnitureProp = true;
     wardrobePick.userData.mammothPlateLevelIndex = levelIdx;
-    wardrobePick.userData.mammothUnitInterior = true;
+    wardrobePick.layers.set(FP_INTERACTION_PICK_LAYER);
     unitGroup.add(w);
     unitGroup.add(wardrobePick);
     build.wardrobePickMeshes.push(wardrobePick);
@@ -514,7 +512,9 @@ export async function mountFpApartmentFurniture(opts: {
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     const f = clonePropScene(readyTemplates.footlocker, levelIdx);
-    f.scale.setScalar(FOOTLOCKER_VIS_SCALE * pose.footlocker.uniformScale);
+    f.scale.setScalar(
+      ownedApartmentPlacedItemAuthoringAssetVisScale("footlocker") * pose.footlocker.uniformScale,
+    );
     f.position.set(pose.footlocker.x, 0, pose.footlocker.z);
     f.rotation.y = pose.footlocker.yaw;
     snapCloneBottomToWorldFloor(f, pose.footlocker.snapFloorY);
@@ -544,7 +544,7 @@ export async function mountFpApartmentFurniture(opts: {
     footlockerPick.userData.mammothSkipFloorGeometryMerge = true;
     footlockerPick.userData.mammothApartmentFurnitureProp = true;
     footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
-    footlockerPick.userData.mammothUnitInterior = true;
+    footlockerPick.layers.set(FP_INTERACTION_PICK_LAYER);
     unitGroup.add(f);
     unitGroup.add(footlockerPick);
     build.stashPickMeshes.push(footlockerPick);
@@ -553,7 +553,9 @@ export async function mountFpApartmentFurniture(opts: {
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     const st = clonePropScene(readyTemplates.stove, levelIdx);
-    st.scale.setScalar(STOVE_VIS_SCALE * pose.stove.uniformScale);
+    st.scale.setScalar(
+      ownedApartmentPlacedItemAuthoringAssetVisScale("stove") * pose.stove.uniformScale,
+    );
     st.position.set(pose.stove.x, 0, pose.stove.z);
     st.rotation.y = pose.stove.yaw;
     snapCloneBottomToWorldFloor(st, pose.stove.snapFloorY);
@@ -583,7 +585,7 @@ export async function mountFpApartmentFurniture(opts: {
     stovePick.userData.mammothSkipFloorGeometryMerge = true;
     stovePick.userData.mammothApartmentFurnitureProp = true;
     stovePick.userData.mammothPlateLevelIndex = levelIdx;
-    stovePick.userData.mammothUnitInterior = true;
+    stovePick.layers.set(FP_INTERACTION_PICK_LAYER);
     unitGroup.add(st);
     unitGroup.add(stovePick);
     build.stashPickMeshes.push(stovePick);
@@ -592,7 +594,9 @@ export async function mountFpApartmentFurniture(opts: {
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     const b = clonePropScene(readyTemplates.bed, levelIdx);
-    b.scale.setScalar(BED_VIS_SCALE * pose.bed.uniformScale);
+    b.scale.setScalar(
+      ownedApartmentPlacedItemAuthoringAssetVisScale("bed") * pose.bed.uniformScale,
+    );
     b.position.set(pose.bed.x, 0, pose.bed.z);
     b.rotation.y = pose.bed.yaw;
     snapCloneBottomToWorldFloor(b, pose.bed.y);
@@ -869,6 +873,7 @@ export async function mountFpApartmentFurniture(opts: {
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
+      _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
       /**
@@ -905,6 +910,7 @@ export async function mountFpApartmentFurniture(opts: {
     },
     getWardrobeClaimLookAtUnitKey: (_playerPos, camera) => {
       if (wardrobePickMeshes.length === 0) return null;
+      _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
       const hits = _stashRaycaster.intersectObjects(wardrobePickMeshes, false);

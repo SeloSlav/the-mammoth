@@ -10,6 +10,7 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
+  ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
@@ -17,11 +18,6 @@ import {
   editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
-
-const WARDROBE_VIS_SCALE = 0.98;
-const FOOTLOCKER_VIS_SCALE = 0.56;
-const BED_VIS_SCALE = 1.14;
-const STOVE_VIS_SCALE = 0.88;
 
 /** Top of authoring shell floor slab — keep in sync with `editorMyApartmentAuthoringShell.ts`. */
 export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
@@ -662,18 +658,7 @@ function decorAssetUrl(modelRelPath: string): string {
 }
 
 function editorAuthoringVisScaleForPlacedItemKind(kind: OwnedApartmentPlacedItem["itemKind"]): number {
-  switch (kind) {
-    case "bed":
-      return BED_VIS_SCALE;
-    case "wardrobe":
-      return WARDROBE_VIS_SCALE;
-    case "footlocker":
-      return FOOTLOCKER_VIS_SCALE;
-    case "stove":
-      return STOVE_VIS_SCALE;
-    default:
-      return 1;
-  }
+  return ownedApartmentPlacedItemAuthoringAssetVisScale(kind);
 }
 
 function placeWallGroup(args: {

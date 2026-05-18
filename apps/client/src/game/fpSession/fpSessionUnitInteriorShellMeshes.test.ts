@@ -89,4 +89,24 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.residentialUnitId).toBe("unit_north");
     expect(result[0]?.residentialExteriorGlass).toBe(true);
   });
+
+  it("inherits generic-in-residential and apartment ownership flags from ancestors", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 7;
+
+    const group = new THREE.Group();
+    group.userData.mammothApartmentUnitKey = "floor-7:unit_e_002";
+    group.userData.mammothGenericInteriorVisibleInResidentialUnit = true;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    mesh.userData.mammothUnitInterior = true;
+    group.add(mesh);
+    floor.add(group);
+    buildingRoot.add(floor);
+
+    const result = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.apartmentUnitKey).toBe("floor-7:unit_e_002");
+    expect(result[0]?.genericInteriorVisibleInResidentialUnit).toBe(true);
+  });
 });

@@ -6,6 +6,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
+  bindMammothMetallicReadableEnv,
   createFPCamera,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
@@ -21,7 +22,10 @@ import {
   anchoredScaleAxisFromTransformAxis,
   computeAnchoredScalePosition,
 } from "../scene/anchoredScaleGizmo.js";
-import { addEditorSceneLighting } from "../scene/editorSceneLighting.js";
+import {
+  addEditorSceneLighting,
+  EDITOR_ORBIT_LIGHTING_BASE,
+} from "../scene/editorSceneLighting.js";
 import { createEditorPmremEnvironment } from "../scene/editorSceneEnvironment.js";
 import { commitEditorAttachedTransform } from "../scene/editorSceneCommitAttachedTransform.js";
 import { createEditorSceneSelectionFraming } from "./editorSceneSelectionFraming.js";
@@ -95,15 +99,48 @@ export async function mountEditorScene(
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-  const { dir, grid } = addEditorSceneLighting(scene);
+  const { hemi, fill, dir, grid } = addEditorSceneLighting(scene);
 
   const textureLoader = new THREE.TextureLoader();
-  const { pmrem, applyEnvironment } = createEditorPmremEnvironment(
-    scene,
-    renderer,
-  );
+  const { pmrem, applyEnvironment: applyPmremEnvironment } =
+    createEditorPmremEnvironment(scene, renderer);
+
+  /**
+   * `RoomEnvironment` already carries omnidirectional diffuse; stacking it under the orbit sun +
+   * hemisphere reads like showroom lighting rather than smoky panel slabs.
+   */
+  const EDITOR_HDRI_SCENE_IBL_INTENSITY = 0.34;
+  const EDITOR_HDRI_KEYLIGHT_FACTOR = {
+    hemi: 0.54,
+    fill: 0.42,
+    dir: 0.46,
+  } as const;
 
   const contentRoot = new THREE.Group();
+
+  const syncEditorHdriLightingStack = (roomEnvOn: boolean): void => {
+    scene.environmentIntensity = roomEnvOn ? EDITOR_HDRI_SCENE_IBL_INTENSITY : 1;
+    const b = EDITOR_ORBIT_LIGHTING_BASE;
+    if (roomEnvOn) {
+      hemi.intensity = b.hemiIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.hemi;
+      fill.intensity = b.fillIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.fill;
+      dir.intensity = b.dirIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.dir;
+    } else {
+      hemi.intensity = b.hemiIntensity;
+      fill.intensity = b.fillIntensity;
+      dir.intensity = b.dirIntensity;
+    }
+    bindMammothMetallicReadableEnv(
+      contentRoot,
+      roomEnvOn && scene.environment ? scene.environment : null,
+    );
+  };
+
+  const applyEnvironment = (on: boolean): void => {
+    applyPmremEnvironment(on);
+    syncEditorHdriLightingStack(on);
+  };
+
   contentRoot.name = "editorContentRoot";
   scene.add(contentRoot);
 
@@ -449,11 +486,8 @@ export async function mountEditorScene(
   function shouldUseEditorHdri(
     st: ReturnType<typeof useEditorStore.getState>,
   ): boolean {
-    return (
-      !isFpMode(st.mode) &&
-      !isSharedPreviewMode(st.mode) &&
-      st.useHdriEnvironment
-    );
+    /** Shared previews keep a fixed look; all other modes obey the HDRI toggle (incl. FP authoring). */
+    return !isSharedPreviewMode(st.mode) && st.useHdriEnvironment;
   }
 
   function shouldShowEditorGrid(
@@ -477,6 +511,10 @@ export async function mountEditorScene(
       frameFocusedStoryObject,
       frameObject,
     });
+    const st = useEditorStore.getState();
+    if (shouldUseEditorHdri(st)) {
+      bindMammothMetallicReadableEnv(contentRoot, scene.environment);
+    }
   }
 
   /** Decor / slab wall / saved-group aggregated flags for TransformControls limits in apartment authoring. */

@@ -50,6 +50,8 @@ type AmbienceLayerSpec = {
   playbackRate: number;
   highpassHz?: number;
   lowpassHz?: number;
+  /** When false, spec stays for future use but is not decoded or played */
+  enabled?: boolean;
 };
 
 type AmbienceLayer = AmbienceLayerSpec & {
@@ -74,6 +76,8 @@ type RandomSoundSpec = {
   highpassHz?: number;
   lowpassHz: number;
   playbackRateJitter: number;
+  /** When false, spec stays for future use but is not decoded or played */
+  enabled?: boolean;
 };
 
 type RandomSound = RandomSoundSpec & {
@@ -102,6 +106,7 @@ const AMBIENCE_LAYERS: readonly AmbienceLayerSpec[] = [
     playbackRate: 1.0,
     highpassHz: 70,
     lowpassHz: 1900,
+    enabled: false, // muted: distant police sirens in bed; toggle to restore
   },
   {
     name: "corridor-life",
@@ -213,6 +218,7 @@ const RANDOM_SOUNDS: readonly RandomSoundSpec[] = [
     highpassHz: 180,
     lowpassHz: 2100,
     playbackRateJitter: 0.018,
+    enabled: false, // muted: toggle to restore distant chant cue
   },
 ] as const;
 
@@ -648,6 +654,7 @@ export class FpBackgroundMusic {
   private async decodeAmbienceLayers(ctx: AudioContext): Promise<AmbienceLayer[]> {
     const layers = await Promise.all(
       AMBIENCE_LAYERS.map(async (layer): Promise<AmbienceLayer | null> => {
+        if (layer.enabled === false) return null;
         const buffer = await this.decodeBuffer(ctx, layer.url);
         if (!buffer) {
           console.warn("[FpBackgroundMusic] Missing or undecodable ambience asset:", layer.url);
@@ -662,6 +669,7 @@ export class FpBackgroundMusic {
   private async decodeRandomSounds(ctx: AudioContext): Promise<RandomSound[]> {
     const sounds = await Promise.all(
       RANDOM_SOUNDS.map(async (sound): Promise<RandomSound | null> => {
+        if (sound.enabled === false) return null;
         const buffers = (
           await Promise.all(sound.urls.map((url) => this.decodeBuffer(ctx, url)))
         ).filter((buffer): buffer is AudioBuffer => buffer !== null);

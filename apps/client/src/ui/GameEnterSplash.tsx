@@ -93,7 +93,7 @@ export function GameEnterSplash() {
           }}
         />
 
-        <div
+        {/* <div
           style={{
             display: "flex",
             alignItems: "flex-start",
@@ -113,7 +113,7 @@ export function GameEnterSplash() {
             Assembling the megablock meshes and WebGPU session. This can take a
             moment on first load.
           </p>
-        </div>
+        </div> */}
       </div>
     </>
   );

@@ -128,7 +128,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   transformMode: "translate",
   gridSnapM: 0,
   shadowsEnabled: false,
-  useHdriEnvironment: false,
+  useHdriEnvironment: true,
   cameraMode: "orbit",
   flySpeedMps: 18,
   stairWellAuthorScope: "typical",

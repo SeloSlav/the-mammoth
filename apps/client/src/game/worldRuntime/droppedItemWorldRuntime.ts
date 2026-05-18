@@ -4,7 +4,11 @@ import {
   getMammothDroppedWorldTargetMaxDimM,
   MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
 } from "@the-mammoth/assets";
-import { loadGltfSceneFirstMatch, mammothCatalogGlbCandidates } from "@the-mammoth/engine";
+import {
+  bindMammothMetallicReadableEnv,
+  loadGltfSceneFirstMatch,
+  mammothCatalogGlbCandidates,
+} from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
 import type { DbConnection } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
@@ -300,14 +304,15 @@ export function mountDroppedItemsWorld(
     console.warn("[droppedItems] subscribe failed", e);
   }
 
-  const prepareLoadedSceneForTemplate = (scene: THREE.Group): void => {
-    scene.traverse((o) => {
+  const prepareLoadedSceneForTemplate = (rootGltf: THREE.Group): void => {
+    rootGltf.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
         m.castShadow = true;
         m.receiveShadow = true;
       }
     });
+    bindMammothMetallicReadableEnv(rootGltf, scene.environment ?? null);
   };
 
   /**
@@ -328,11 +333,11 @@ export function mountDroppedItemsWorld(
     }
 
     const p = loadGltfSceneFirstMatch(loader, candidates)
-      .then(({ scene }) => {
-        prepareLoadedSceneForTemplate(scene);
+      .then(({ scene: loadedScene }) => {
+        prepareLoadedSceneForTemplate(loadedScene);
         const st: DefTemplateState = {
           status: "ready",
-          template: { root: scene },
+          template: { root: loadedScene },
         };
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);

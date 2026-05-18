@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MeshStandardNodeMaterial, NodeMaterial } from "three/webgpu";
 import {
   add,
@@ -203,8 +204,8 @@ export function attachFpSessionEnvironment(
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   clipCompatibleRenderer.localClippingEnabled = true;
-  /** Overcast daylight, but bright enough for foliage and facade color to read. */
-  renderer.toneMappingExposure = 1.06;
+  /** Overcast daylight, but tuned so panel yards don’t punch past the gritty interior mood on entry. */
+  renderer.toneMappingExposure = 0.9;
   const apartmentClipPlanes = [
     new THREE.Plane(),
     new THREE.Plane(),
@@ -265,6 +266,23 @@ export function attachFpSessionEnvironment(
 
   /** Sky + clouds fill the view; no solid clear color. */
   scene.background = null;
+
+  /**
+   * Neutral studio IBL — without {@link THREE.Scene.environment}, `MeshStandardMaterial` metals
+   * (high metalness, low roughness) reflect **nothing** and read as near-black next to matte props.
+   * Matches the editor’s {@link RoomEnvironment} path so apartment décor + dropped GLBs stay consistent.
+   */
+  const fpSessionPmrem = new THREE.PMREMGenerator(renderer);
+  const fpSessionEnvTarget = fpSessionPmrem.fromScene(new RoomEnvironment(), 0.04);
+  scene.environment = fpSessionEnvTarget.texture;
+
+  /**
+   * Global IBL scale for dielectrics. Strongly metallic GLB materials attach their own boosted
+   * `MeshStandardMaterial.envMapIntensity` when loaded so trims stay readable at these levels.
+   */
+  const FP_SESSION_SCENE_IBL_WORLD = 0.42 as const;
+  const FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL = 0.16 as const;
+  scene.environmentIntensity = FP_SESSION_SCENE_IBL_WORLD;
 
   const viewSize = new THREE.Vector2();
   renderer.getSize(viewSize);
@@ -540,24 +558,24 @@ export function attachFpSessionEnvironment(
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
 
-  const BASE_HEMI_INTENSITY = 1.05;
-  const BASE_FILL_INTENSITY = 0.42;
-  const BASE_DIR_INTENSITY = 0.92;
+  const BASE_HEMI_INTENSITY = 0.84;
+  const BASE_FILL_INTENSITY = 0.24;
+  const BASE_DIR_INTENSITY = 0.72;
   /**
    * Stair cores should feel visibly dimmer than the exterior overcast fill instead of sharing the same
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
-  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.82;
+  const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.72;
   /** Player-in-unit eye adaptation: noticeably darker without crushing all detail to black. */
-  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.38;
-  const APARTMENT_INTERIOR_EXPOSURE = 0.9;
+  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.2;
+  const APARTMENT_INTERIOR_EXPOSURE = 0.68;
   /**
    * Abandoned flats should stay noticeably underlit: mostly weak window bleed plus a trace of dusty
    * plaster bounce. Keep this static so crossing the doorway does not change the room's brightness.
    */
-  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.3;
-  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.06;
-  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.15;
+  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0.15;
+  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0.028;
+  const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0.075;
 
   const hemi = new THREE.HemisphereLight(
     0xe3e7df,
@@ -624,17 +642,33 @@ export function attachFpSessionEnvironment(
       sky.updateResolution(viewWidthPx, viewHeightPx);
       const tAfterSky = performance.now();
 
-      const dark01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
+      const stair01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
       const stairwellScale = THREE.MathUtils.lerp(
         1,
         STAIRWELL_INTERIOR_LIGHT_SCALE,
-        dark01,
+        stair01,
       );
       const apartmentDark01 = THREE.MathUtils.clamp(apartmentInteriorDark01, 0, 1);
+      /**
+       * Make the abandoned-flat dimming arrive earlier in the doorway transition instead of keeping
+       * most of the brighter exterior response until the blend is nearly complete.
+       */
+      const apartmentDarkWeighted01 = Math.pow(apartmentDark01, 0.72);
+      /** Pull diffuse IBL in inhabited volumes without starving metallic props (those use per-material boosts). */
+      const residentialIbldim01 = THREE.MathUtils.clamp(
+        Math.max(apartmentDarkWeighted01, stair01 * 0.55),
+        0,
+        1,
+      );
+      scene.environmentIntensity = THREE.MathUtils.lerp(
+        FP_SESSION_SCENE_IBL_WORLD,
+        FP_SESSION_SCENE_IBL_UNDER_RESIDENTIAL,
+        residentialIbldim01,
+      );
       const residentialScale = THREE.MathUtils.lerp(
         1,
         APARTMENT_INTERIOR_LIGHT_SCALE,
-        apartmentDark01,
+        apartmentDarkWeighted01,
       );
       hemi.intensity = BASE_HEMI_INTENSITY * stairwellScale;
       fill.intensity = BASE_FILL_INTENSITY * stairwellScale;
@@ -646,9 +680,9 @@ export function attachFpSessionEnvironment(
         RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY * residentialScale;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(
-        1.06,
+        0.9,
         APARTMENT_INTERIOR_EXPOSURE,
-        apartmentDark01,
+        apartmentDarkWeighted01,
       );
       const tEnd = performance.now();
       return {
@@ -661,6 +695,8 @@ export function attachFpSessionEnvironment(
       clipCompatibleRenderer.clippingPlanes = [];
       scene.background = null;
       scene.environment = null;
+      fpSessionEnvTarget.dispose();
+      fpSessionPmrem.dispose();
 
       scene.remove(sky);
       sky.dispose();
