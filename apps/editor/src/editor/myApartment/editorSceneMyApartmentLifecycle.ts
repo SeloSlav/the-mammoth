@@ -18,6 +18,7 @@ import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSc
 export type EditorMyApartmentLifecycleDeps = {
   getStructuralRoot: () => THREE.Group | null;
   getShouldHoldReplicaResync: () => boolean;
+  syncLightingAttachment: () => void;
   syncTransformAttachment: () => void;
 };
 
@@ -85,6 +86,7 @@ export function createEditorSceneMyApartmentLifecycle(
       }
       if (disposed || myGen !== syncGeneration) return;
       if (deps.getShouldHoldReplicaResync()) return;
+      deps.syncLightingAttachment();
       setEditorMyApartmentPieceGroups(mount.selectionGroups);
       deps.syncTransformAttachment();
     } catch {

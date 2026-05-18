@@ -636,10 +636,6 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.visible = false;
           continue;
         }
-        if (isContainingUnit) {
-          g.visible = true;
-          continue;
-        }
         const bb = g.userData.mammothApartmentDecorWorldBounds;
         g.visible =
           bb instanceof THREE.Box3 ? _furnitureVisibilityFrustum.intersectsBox(bb) : true;

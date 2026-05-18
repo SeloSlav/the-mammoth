@@ -202,6 +202,25 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   return input.unitInteriorVisible;
 }
 
+export function fpShouldDisableContainingInteriorFrustumCulling(input: {
+  insideResidentialUnit: boolean;
+  containingResidentialUnitId: string | null;
+  entry: Pick<FpSessionUnitInteriorMeshEntry, "residentialUnitId" | "apartmentUnitKey">;
+}): boolean {
+  /**
+   * Keep the active apartment shell immune to object-level frustum culling so near walls/ceilings do
+   * not pop while the camera is inside the hollow mesh. Apartment props/decor have tight per-object
+   * bounds and can be culled normally; forcing them on was submitting hundreds of thousands of
+   * off-screen triangles from the containing unit.
+   */
+  return (
+    input.insideResidentialUnit &&
+    input.entry.apartmentUnitKey === null &&
+    input.containingResidentialUnitId !== null &&
+    input.entry.residentialUnitId === input.containingResidentialUnitId
+  );
+}
+
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
   syncBuildingFloorPlateVisibility: (nowMs: number) => void;
   isInsideElevatorCabHudForJump: () => boolean;
@@ -535,11 +554,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
-        const isContainingResidentialInterior =
-          (containingResidentialUnitId !== null &&
-            entry.residentialUnitId === containingResidentialUnitId) ||
-          (containingResidentialUnitKey !== null &&
-            entry.apartmentUnitKey === containingResidentialUnitKey);
         entry.mesh.visible = fpResolveUnitInteriorMeshVisible({
           entry,
           unitInteriorVisible,
@@ -548,7 +562,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           containingResidentialUnitId,
           containingResidentialUnitKey,
         });
-        entry.mesh.frustumCulled = !(insideResidentialUnit && isContainingResidentialInterior);
+        entry.mesh.frustumCulled = !fpShouldDisableContainingInteriorFrustumCulling({
+          insideResidentialUnit,
+          containingResidentialUnitId,
+          entry,
+        });
       }
     }
     const apartmentFurnitureInteriorVisibilityChanged =

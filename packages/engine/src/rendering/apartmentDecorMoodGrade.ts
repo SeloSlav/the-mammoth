@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
 
-const APARTMENT_DECOR_ALBEDO_MOOD = new THREE.Color(0.58, 0.56, 0.52);
-const APARTMENT_DECOR_BASIC_ALBEDO_MOOD = new THREE.Color(0.5, 0.49, 0.46);
-const APARTMENT_DECOR_DIELECTRIC_ROUGHNESS_MIN = 0.78;
-const APARTMENT_DECOR_METALLIC_ROUGHNESS_MIN = 0.38;
-const APARTMENT_DECOR_EMISSIVE_SCALE = 0.18;
+const APARTMENT_DECOR_ALBEDO_MOOD = new THREE.Color(0.86, 0.84, 0.8);
+const APARTMENT_DECOR_BASIC_ALBEDO_MOOD = new THREE.Color(0.82, 0.8, 0.76);
+const APARTMENT_DECOR_DIELECTRIC_ROUGHNESS_MIN = 0.62;
+const APARTMENT_DECOR_METALLIC_ROUGHNESS_MIN = 0.32;
+const APARTMENT_DECOR_EMISSIVE_SCALE = 0.45;
 
 export function moodGradeMammothApartmentDecorMaterial(
   material: THREE.Material,

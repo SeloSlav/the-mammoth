@@ -875,10 +875,6 @@ export async function mountFpApartmentFurniture(opts: {
           g.visible = false;
           continue;
         }
-        if (isContainingUnit) {
-          g.visible = true;
-          continue;
-        }
         const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
         g.visible = bounds instanceof THREE.Box3
           ? _furnitureVisibilityFrustum.intersectsBox(bounds)

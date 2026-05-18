@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   fpApplyResidentialInteriorPlateBandOverride,
   fpResolveUnitInteriorMeshVisible,
+  fpShouldDisableContainingInteriorFrustumCulling,
 } from "./fpSessionFloorPlateVisibility";
 
 describe("fpApplyResidentialInteriorPlateBandOverride", () => {
@@ -154,6 +155,34 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("fpShouldDisableContainingInteriorFrustumCulling", () => {
+  it("keeps containing residential shell meshes uncullable indoors", () => {
+    expect(
+      fpShouldDisableContainingInteriorFrustumCulling({
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        entry: {
+          residentialUnitId: "unit_e_003",
+          apartmentUnitKey: null,
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("leaves apartment props/decor frustum culled even for the containing unit", () => {
+    expect(
+      fpShouldDisableContainingInteriorFrustumCulling({
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        entry: {
+          residentialUnitId: null,
+          apartmentUnitKey: "floor|2|unit_e_003",
+        },
       }),
     ).toBe(false);
   });

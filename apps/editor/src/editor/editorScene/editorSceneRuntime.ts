@@ -195,6 +195,14 @@ export async function mountEditorScene(
     );
   };
 
+  const syncCurrentEditorLightingAttachment = (): void => {
+    const metallicEnv = scene.userData.mammothFpMetallicReadableEnv;
+    bindMammothMetallicReadableEnv(
+      contentRoot,
+      metallicEnv instanceof THREE.Texture ? metallicEnv : scene.environment,
+    );
+  };
+
   contentRoot.name = "editorContentRoot";
   scene.add(contentRoot);
 
@@ -565,12 +573,7 @@ export async function mountEditorScene(
       frameFocusedStoryObject,
       frameObject,
     });
-    const st = useEditorStore.getState();
-    const metallicEnv = scene.userData.mammothFpMetallicReadableEnv;
-    bindMammothMetallicReadableEnv(
-      contentRoot,
-      metallicEnv instanceof THREE.Texture ? metallicEnv : scene.environment,
-    );
+    syncCurrentEditorLightingAttachment();
   }
 
   /** Decor / slab wall / saved-group aggregated flags for TransformControls limits in apartment authoring. */
@@ -981,6 +984,7 @@ export async function mountEditorScene(
         programmaticTransformControlsDepth > 0 ||
         transformControls.dragging === true ||
         levelEditorTransformGesture,
+      syncLightingAttachment: syncCurrentEditorLightingAttachment,
       syncTransformAttachment,
     }).dispose;
 
