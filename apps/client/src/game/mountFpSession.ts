@@ -163,6 +163,13 @@ import {
 import lobbyCentralInteriorAuthoringDoc from "../../../../content/interiors/lobby_central.json";
 import { createFpInteriorPartitionSolidCollision } from "./fpPhysics/fpInteriorPartitionSolidCollision.js";
 
+/**
+ * Visual-only residential containment needs to be wider than gameplay containment: player feet can
+ * ride the edge of facade/window hulls while the camera is still clearly inside the unit. Keep this
+ * below half the usual cross-hall gap so hallway peeks do not become apartment interiors.
+ */
+const FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M = 0.85;
+
 function localMirrorBodyUriForConn(conn: DbConnection): string {
   const id = conn.identity;
   if (!id) return REMOTE_PLAYER_BODY_URI_MALE;
@@ -758,7 +765,7 @@ export async function mountFpSession(
       feetPos: pos,
       getContainingResidentialUnit: () => {
         const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
-          slackXZ: 0.28,
+          slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
           slackYBelow: 1.25,
           slackYAbove: 2.85,
         });
@@ -775,7 +782,7 @@ export async function mountFpSession(
   };
   const getContainingResidentialUnitBounds = () => {
     const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
-      slackXZ: 0.28,
+      slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
       slackYBelow: 1.25,
       slackYAbove: 2.85,
     });

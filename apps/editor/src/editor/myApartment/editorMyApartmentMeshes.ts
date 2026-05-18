@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { moodGradeMammothApartmentDecorMesh } from "@the-mammoth/engine";
 import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
@@ -646,6 +647,7 @@ function cloneProp(template: THREE.Object3D): THREE.Object3D {
   r.userData.mammothEditorMyApartmentProp = true;
   r.traverse((o) => {
     if (o instanceof THREE.Mesh) {
+      moodGradeMammothApartmentDecorMesh(o);
       o.castShadow = false;
       o.receiveShadow = false;
     }

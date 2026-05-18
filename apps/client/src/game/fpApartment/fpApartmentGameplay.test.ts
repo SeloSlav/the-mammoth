@@ -8,6 +8,7 @@ vi.mock("../../featureFlags", async (importOriginal) => ({
 import {
   apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
+  apartmentUnitContainingFeetSlack,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
   clientMayUseApartmentStash,
   clientMayToggleApartmentDoor,
@@ -647,6 +648,41 @@ describe("fpApartmentGameplay", () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it("visual containment slack keeps edge-of-unit feet inside without bridging a cross-hall gap", () => {
+    const westUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_w_001",
+      unitId: "unit_w_001",
+      boundMinX: -12,
+      boundMaxX: -1,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const eastUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_001",
+      unitId: "unit_e_001",
+      boundMinX: 1,
+      boundMaxX: 12,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const conn = mockConn([westUnit, eastUnit]);
+
+    expect(
+      apartmentUnitContainingFeetSlack(conn, -0.25, 10, 0, {
+        slackXZ: 0.85,
+        slackYBelow: 1.25,
+        slackYAbove: 2.85,
+      })?.unitKey,
+    ).toBe(westUnit.unitKey);
+    expect(
+      apartmentUnitContainingFeetSlack(conn, 0, 10, 0, {
+        slackXZ: 0.85,
+        slackYBelow: 1.25,
+        slackYAbove: 2.85,
+      }),
+    ).toBeNull();
   });
 
   /** East-bay façade boxes abut in Z; centroid containment can disagree with hull membership. */

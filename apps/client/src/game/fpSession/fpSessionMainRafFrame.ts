@@ -918,7 +918,11 @@ export function createFpSessionMainRafFrame(
     }
     const _t_beforeThreeRender = performance.now();
     deps.renderer.info.reset();
+    const drawCallsBefore = deps.renderer.info.render.calls;
+    const trianglesBefore = deps.renderer.info.render.triangles;
     deps.renderer.render(deps.scene, deps.camera);
+    const frameDrawCalls = Math.max(0, deps.renderer.info.render.calls - drawCallsBefore);
+    const frameTriangles = Math.max(0, deps.renderer.info.render.triangles - trianglesBefore);
     deps.scheduleGpuTimestampResolve();
     const _t_renderEnd = performance.now();
     const renderFloorPlateVisMs = _t_afterFloorVis - _t_renderStart;
@@ -969,8 +973,8 @@ export function createFpSessionMainRafFrame(
         renderThreeMs,
       },
       {
-        drawCalls: deps.renderer.info.render.calls,
-        triangles: deps.renderer.info.render.triangles,
+        drawCalls: frameDrawCalls,
+        triangles: frameTriangles,
         ...deps.getFpPerfSceneCounters(),
       },
       fpCameraYawRad(deps.camera),

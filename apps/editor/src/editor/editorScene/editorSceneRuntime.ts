@@ -110,35 +110,89 @@ export async function mountEditorScene(
    * hemisphere reads like showroom lighting rather than smoky panel slabs.
    */
   const EDITOR_HDRI_SCENE_IBL_INTENSITY = 0.34;
+  const EDITOR_ORBIT_EXPOSURE = 1.02;
   const EDITOR_HDRI_KEYLIGHT_FACTOR = {
     hemi: 0.54,
     fill: 0.42,
     dir: 0.46,
   } as const;
+  const FP_APARTMENT_PREVIEW_EXPOSURE = 0.58;
+  const FP_APARTMENT_PREVIEW_LIGHTING = {
+    hemiSky: 0xe3e7df,
+    hemiGround: 0xb8bcae,
+    hemiIntensity: 0.72,
+    fill: 0xdce1d8,
+    fillIntensity: 0.17,
+    dir: 0xf0efd9,
+    dirIntensity: 0.58,
+  } as const;
 
   const contentRoot = new THREE.Group();
 
-  const syncEditorHdriLightingStack = (roomEnvOn: boolean): void => {
+  const shouldPreviewFpApartmentLighting = (
+    st: ReturnType<typeof useEditorStore.getState>,
+  ): boolean => st.mode === "my_apartment_layout";
+
+  const syncEditorLightingStack = (
+    st: ReturnType<typeof useEditorStore.getState>,
+    roomEnvOn: boolean,
+  ): void => {
+    renderer.toneMappingExposure = EDITOR_ORBIT_EXPOSURE;
     scene.environmentIntensity = roomEnvOn ? EDITOR_HDRI_SCENE_IBL_INTENSITY : 1;
     const b = EDITOR_ORBIT_LIGHTING_BASE;
-    if (roomEnvOn) {
+    if (shouldPreviewFpApartmentLighting(st)) {
+      renderer.toneMappingExposure = FP_APARTMENT_PREVIEW_EXPOSURE;
+      scene.environmentIntensity = 1;
+      hemi.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.hemiSky);
+      hemi.groundColor.setHex(FP_APARTMENT_PREVIEW_LIGHTING.hemiGround);
+      hemi.intensity = FP_APARTMENT_PREVIEW_LIGHTING.hemiIntensity;
+      fill.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.fill);
+      fill.intensity = FP_APARTMENT_PREVIEW_LIGHTING.fillIntensity;
+      dir.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.dir);
+      dir.intensity = FP_APARTMENT_PREVIEW_LIGHTING.dirIntensity;
+    } else if (roomEnvOn) {
+      hemi.color.setHex(0xf2f6fb);
+      hemi.groundColor.setHex(0xd0d8e2);
       hemi.intensity = b.hemiIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.hemi;
+      fill.color.setHex(0xe8eef4);
       fill.intensity = b.fillIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.fill;
+      dir.color.setHex(0xfff8f2);
       dir.intensity = b.dirIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.dir;
     } else {
+      hemi.color.setHex(0xf2f6fb);
+      hemi.groundColor.setHex(0xd0d8e2);
       hemi.intensity = b.hemiIntensity;
+      fill.color.setHex(0xe8eef4);
       fill.intensity = b.fillIntensity;
+      dir.color.setHex(0xfff8f2);
       dir.intensity = b.dirIntensity;
+    }
+  };
+
+  const syncEditorMetallicEnv = (envTexture: THREE.Texture | null): void => {
+    if (envTexture) {
+      scene.userData.mammothFpMetallicReadableEnv = envTexture;
+    } else {
+      delete scene.userData.mammothFpMetallicReadableEnv;
     }
     bindMammothMetallicReadableEnv(
       contentRoot,
-      roomEnvOn && scene.environment ? scene.environment : null,
+      envTexture,
     );
   };
 
-  const applyEnvironment = (on: boolean): void => {
-    applyPmremEnvironment(on);
-    syncEditorHdriLightingStack(on);
+  const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
+    const fpApartmentPreview = shouldPreviewFpApartmentLighting(st);
+    const globalHdriOn = shouldUseEditorHdri(st);
+    applyPmremEnvironment(fpApartmentPreview || globalHdriOn);
+    const pmremTexture = scene.environment;
+    if (fpApartmentPreview) {
+      scene.environment = null;
+    }
+    syncEditorLightingStack(st, globalHdriOn && !fpApartmentPreview);
+    syncEditorMetallicEnv(
+      fpApartmentPreview ? pmremTexture : globalHdriOn ? scene.environment : null,
+    );
   };
 
   contentRoot.name = "editorContentRoot";
@@ -512,9 +566,11 @@ export async function mountEditorScene(
       frameObject,
     });
     const st = useEditorStore.getState();
-    if (shouldUseEditorHdri(st)) {
-      bindMammothMetallicReadableEnv(contentRoot, scene.environment);
-    }
+    const metallicEnv = scene.userData.mammothFpMetallicReadableEnv;
+    bindMammothMetallicReadableEnv(
+      contentRoot,
+      metallicEnv instanceof THREE.Texture ? metallicEnv : scene.environment,
+    );
   }
 
   /** Decor / slab wall / saved-group aggregated flags for TransformControls limits in apartment authoring. */
@@ -910,7 +966,6 @@ export async function mountEditorScene(
     dir,
     scene,
     applyEnvironment,
-    shouldUseEditorHdri,
     shouldShowEditorGrid,
     fp,
     contentRoot,
@@ -949,7 +1004,7 @@ export async function mountEditorScene(
   }
 
   rebuildStructural();
-  applyEnvironment(shouldUseEditorHdri(useEditorStore.getState()));
+  applyEnvironment(useEditorStore.getState());
   syncTransformAttachment();
 
   const pointers = createEditorSceneCanvasPointerHandlers({
@@ -1026,7 +1081,8 @@ export async function mountEditorScene(
     disposeMyApartmentAuthoring();
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
-    applyEnvironment(false);
+    applyPmremEnvironment(false);
+    syncEditorMetallicEnv(null);
     disposeSceneEnvironment(scene);
     renderer.dispose();
     scene.clear();

@@ -43,7 +43,10 @@ import {
   resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
-import { bindMammothMetallicReadableEnv } from "@the-mammoth/engine";
+import {
+  bindMammothMetallicReadableEnv,
+  moodGradeMammothApartmentDecorMesh,
+} from "@the-mammoth/engine";
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
@@ -509,6 +512,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
+          moodGradeMammothApartmentDecorMesh(o);
           o.castShadow = false;
           o.receiveShadow = false;
           o.frustumCulled = true;

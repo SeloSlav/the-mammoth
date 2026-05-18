@@ -582,6 +582,19 @@ export function EditorChrome() {
           />{" "}
           HDRI room environment
         </label>
+        {mode === "my_apartment_layout" ? (
+          <p
+            style={{
+              margin: "-4px 0 6px",
+              fontSize: 11,
+              opacity: 0.78,
+              lineHeight: 1.35,
+            }}
+          >
+            Apartment layout previews use the in-game FP interior exposure and decor
+            mood grade; metallic highlights still get the FP readability PMREM.
+          </p>
+        ) : null}
         <span style={label}>History</span>
         <div>
           <button

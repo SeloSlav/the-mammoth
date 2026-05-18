@@ -168,3 +168,7 @@ export {
   MAMMOTH_METALLIC_ENV_READABLE_UD,
   type MammothMetallicReadableEnvMeta,
 } from "./rendering/bindMammothMetallicReadableEnv.js";
+export {
+  moodGradeMammothApartmentDecorMaterial,
+  moodGradeMammothApartmentDecorMesh,
+} from "./rendering/apartmentDecorMoodGrade.js";

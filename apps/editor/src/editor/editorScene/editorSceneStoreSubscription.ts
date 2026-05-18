@@ -28,8 +28,7 @@ export function subscribeEditorSceneStore(deps: {
   renderer: THREE.WebGPURenderer;
   dir: THREE.DirectionalLight;
   scene: THREE.Scene;
-  applyEnvironment: (useHdri: boolean) => void;
-  shouldUseEditorHdri: (st: EditorStoreSnapshot) => boolean;
+  applyEnvironment: (st: EditorStoreSnapshot) => void;
   shouldShowEditorGrid: (st: EditorStoreSnapshot) => boolean;
   fp: EditorFpAuthoringLifecycle;
   contentRoot: THREE.Object3D;
@@ -53,7 +52,6 @@ export function subscribeEditorSceneStore(deps: {
     dir,
     scene,
     applyEnvironment,
-    shouldUseEditorHdri,
     shouldShowEditorGrid,
     fp,
     contentRoot,
@@ -273,7 +271,7 @@ export function subscribeEditorSceneStore(deps: {
         s.mode !== prev.mode ||
         s.workspace !== prev.workspace
       ) {
-        applyEnvironment(shouldUseEditorHdri(s));
+        applyEnvironment(s);
         grid.visible = shouldShowEditorGrid(s);
       }
       prev = s;
