@@ -38,7 +38,7 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
-const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
+const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb"; 
 const BED_URL = "/static/models/objects/bed.glb";
 const STOVE_URL = "/static/models/objects/stove.glb";
 
