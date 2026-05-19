@@ -589,10 +589,8 @@ export function attachFpSessionEnvironment(
   residentialInteriorFill.name = "fp_residential_interior_fill";
   residentialInteriorFill.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   residentialInteriorFill.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
-  const residentialInteriorDaylight = new THREE.DirectionalLight(
-    interiorProfile.interiorDirectional.color,
-    0,
-  );
+  /** Kept at intensity 0 inside units — hook only; practical lights carry the flat. */
+  const residentialInteriorDaylight = new THREE.DirectionalLight(0xe6e2d8, 0);
   residentialInteriorDaylight.name = "fp_residential_interior_daylight";
   residentialInteriorDaylight.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   residentialInteriorDaylight.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
@@ -676,11 +674,7 @@ export function attachFpSessionEnvironment(
       residentialInteriorFill.color.setHex(bounce.fill);
       residentialInteriorFill.intensity =
         bounce.fillIntensity * apartmentDarkWeighted01;
-      residentialInteriorDaylight.color.setHex(
-        interiorProfile.interiorDirectional.color,
-      );
-      residentialInteriorDaylight.intensity =
-        interiorProfile.interiorDirectional.intensity * apartmentDarkWeighted01;
+      residentialInteriorDaylight.intensity = 0;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(
         interiorProfile.exposure.exterior,

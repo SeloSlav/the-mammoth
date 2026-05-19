@@ -24,24 +24,17 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     dirIntensity: 0,
   },
   /**
-   * Layer-scoped fill for residential shells + decor (FP `residentialInterior*` rig).
-   * `hemiGround` is **floor bounce** (warm parquet wash), not dirt — a dark ground color makes
-   * vertical walls read as flat black instead of softly shaded.
+   * Layer-scoped rig on residential layers (FP `residentialInterior*`). Intensities stay **zero**
+   * inside units — only {@link practical} lights illuminate the flat. Do not raise hemi/fill to
+   * “fix” dark walls: brown `hemiGround` tints vertical surfaces; use softer practical falloff +
+   * {@link shell.indirectEnvIntensity} (neutral PMREM, not a scene sun).
    */
   interiorBounce: {
-    hemiSky: 0xdce2da,
-    hemiGround: 0x5c5650,
-    hemiIntensity: 0.3,
-    fill: 0xb8b5ae,
-    fillIntensity: 0.15,
-  },
-  /**
-   * Weak directional on interior layers — sells light direction + wall gradients without restoring
-   * full exterior sun wash (see `interiorAmbient` zeros).
-   */
-  interiorDirectional: {
-    color: 0xe6e2d8,
-    intensity: 0.11,
+    hemiSky: 0xe6e4df,
+    hemiGround: 0xe6e4df,
+    hemiIntensity: 0,
+    fill: 0xe6e4df,
+    fillIntensity: 0,
   },
   /** Shell plaster / parquet tints so props sit in the same palette as walls. */
   shell: {
@@ -51,7 +44,8 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
      * FP disables `scene.environment`; shells only had layer bounce + practicals while decor also
      * received PMREM — this closes that gap without re-enabling global IBL.
      */
-    indirectEnvIntensity: 0.4,
+    /** Neutral RoomEnvironment on the material — not layer-0 sun/fill. */
+    indirectEnvIntensity: 0.32,
     /** Shadow albedo floor — walls/floors stay darker than props but not pure black. */
     shadowAlbedoLuminanceMin: 0.11,
   },

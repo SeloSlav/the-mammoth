@@ -9,25 +9,11 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     expect(interiorAmbient.dirIntensity).toBe(0);
   });
 
-  it("provides subtle layer-scoped bounce for shells and props", () => {
+  it("keeps layer-scoped bounce off so only practical lights illuminate units", () => {
     const { interiorBounce } = APARTMENT_INTERIOR_VISUAL_PROFILE;
-    expect(interiorBounce.hemiIntensity).toBeGreaterThan(0);
-    expect(interiorBounce.fillIntensity).toBeGreaterThan(0);
-    expect(interiorBounce.hemiIntensity).toBeLessThan(0.4);
-    const groundLuma =
-      ((interiorBounce.hemiGround >> 16) & 0xff) * 0.2126 +
-      ((interiorBounce.hemiGround >> 8) & 0xff) * 0.7152 +
-      (interiorBounce.hemiGround & 0xff) * 0.0722;
-    expect(groundLuma / 255).toBeGreaterThan(0.28);
-  });
-
-  it("uses a weak interior directional for wall gradients", () => {
-    expect(APARTMENT_INTERIOR_VISUAL_PROFILE.interiorDirectional.intensity).toBeGreaterThan(
-      0,
-    );
-    expect(APARTMENT_INTERIOR_VISUAL_PROFILE.interiorDirectional.intensity).toBeLessThan(
-      0.2,
-    );
+    expect(interiorBounce.hemiIntensity).toBe(0);
+    expect(interiorBounce.fillIntensity).toBe(0);
+    expect(interiorBounce.hemiSky).toBe(interiorBounce.hemiGround);
   });
 
   it("gives shells PMREM fill comparable to decor so plaster is not void-black", () => {
