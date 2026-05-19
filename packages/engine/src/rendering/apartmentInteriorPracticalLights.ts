@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   type ApartmentDecorEmitterKind,
+  type ApartmentUnitWorldBounds,
   apartmentDecorEmitterKindFromModelPath,
 } from "./apartmentInteriorVisualProfile.js";
 
@@ -19,6 +20,22 @@ const _decorBoxScratch = new THREE.Box3();
 const _decorCenterScratch = new THREE.Vector3();
 const _decorSizeScratch = new THREE.Vector3();
 const _decorQuatScratch = new THREE.Quaternion();
+const _glassPosScratch = new THREE.Vector3();
+
+function pointInsideUnitBounds(
+  p: THREE.Vector3,
+  b: ApartmentUnitWorldBounds,
+  padM: number,
+): boolean {
+  return (
+    p.x >= b.minX - padM &&
+    p.x <= b.maxX + padM &&
+    p.y >= b.minY - padM &&
+    p.y <= b.maxY + padM &&
+    p.z >= b.minZ - padM &&
+    p.z <= b.maxZ + padM
+  );
+}
 
 export function apartmentPracticalLightSpecFromDecorGroup(
   group: THREE.Object3D,
@@ -72,15 +89,14 @@ export function apartmentPracticalLightSpecFromDecor(args: {
 
 /**
  * Window glass meshes are named `unit_exterior_glass_{face}_{index}` — derive an inward spot.
+ * Caller must ensure `mesh.matrixWorld` is current (no redundant update here).
  */
 export function apartmentPracticalLightSpecFromWindowGlassMesh(
   mesh: THREE.Mesh,
 ): ApartmentPracticalLightSpec | null {
   const name = mesh.name;
   if (!name.startsWith("unit_exterior_glass_")) return null;
-  mesh.updateMatrixWorld(true);
-  const pos = new THREE.Vector3();
-  mesh.getWorldPosition(pos);
+  mesh.getWorldPosition(_glassPosScratch);
   const face = name.split("_")[3] as "e" | "w" | "n" | "s" | undefined;
   const localDir = _scratchDir.set(0, -0.08, 0);
   switch (face) {
@@ -101,30 +117,60 @@ export function apartmentPracticalLightSpecFromWindowGlassMesh(
   }
   localDir.normalize();
   const worldDir = localDir.clone().transformDirection(mesh.matrixWorld).normalize();
-  return { kind: "window", position: pos, direction: worldDir };
+  return { kind: "window", position: _glassPosScratch.clone(), direction: worldDir };
 }
 
 export function collectApartmentWindowLightSpecsFromRoot(
   root: THREE.Object3D,
   out: ApartmentPracticalLightSpec[],
+  opts?: {
+    maxWindowLights?: number;
+    unitBounds?: ApartmentUnitWorldBounds;
+    boundsPadM?: number;
+  },
 ): void {
+  const max =
+    opts?.maxWindowLights ??
+    APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit;
+  if (max <= 0) return;
+
+  root.updateMatrixWorld(true);
+  const bounds = opts?.unitBounds;
+  const pad = opts?.boundsPadM ?? 0.35;
+  let windowCount = 0;
+
   root.traverse((obj) => {
+    if (windowCount >= max) return;
     if (!(obj instanceof THREE.Mesh)) return;
+    if (!obj.name.startsWith("unit_exterior_glass_")) return;
+    obj.getWorldPosition(_glassPosScratch);
+    if (bounds && !pointInsideUnitBounds(_glassPosScratch, bounds, pad)) return;
     const spec = apartmentPracticalLightSpecFromWindowGlassMesh(obj);
-    if (spec) out.push(spec);
+    if (!spec) return;
+    out.push(spec);
+    windowCount++;
   });
 }
 
 export function syncApartmentInteriorPracticalLighting(args: {
   lightParent: THREE.Object3D;
-  windowScanRoot: THREE.Object3D;
+  /** Omit or set `maxWindowLights: 0` to skip the building traverse entirely. */
+  windowScanRoot?: THREE.Object3D | null;
+  maxWindowLights?: number;
+  unitBounds?: ApartmentUnitWorldBounds;
   decorGroups: readonly THREE.Object3D[];
   previous?: ApartmentPracticalLightsMount | null;
 }): ApartmentPracticalLightsMount {
   args.previous?.dispose();
 
   const specs: ApartmentPracticalLightSpec[] = [];
-  collectApartmentWindowLightSpecsFromRoot(args.windowScanRoot, specs);
+  const maxWindow = args.maxWindowLights ?? 0;
+  if (args.windowScanRoot && maxWindow > 0) {
+    collectApartmentWindowLightSpecsFromRoot(args.windowScanRoot, specs, {
+      maxWindowLights: maxWindow,
+      unitBounds: args.unitBounds,
+    });
+  }
 
   for (const group of args.decorGroups) {
     const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;

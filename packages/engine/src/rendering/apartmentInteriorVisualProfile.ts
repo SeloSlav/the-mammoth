@@ -61,11 +61,11 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     /** Wide horizontal wash from a powered-on TV screen into the room. */
     tv: {
       color: 0x6fa8ff,
-      intensity: 1.85,
-      distance: 5.5,
+      intensity: 5,
+      distance: 24,
       decay: 2,
-      angle: Math.PI / 2.15,
-      penumbra: 0.58,
+      angle: Math.PI / 1.95,
+      penumbra: 0.65,
     },
   },
   contactShadow: {
@@ -74,7 +74,18 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     minRadiusM: 0.18,
     maxRadiusM: 1.35,
   },
+  /** Hard cap — each window spot is expensive; never scan an entire tower unchecked. */
+  maxWindowPracticalLightsPerUnit: 6,
 } as const;
+
+export type ApartmentUnitWorldBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+};
 
 export type ApartmentDecorEmitterKind = "chandelier" | "ceiling" | "tv";
 

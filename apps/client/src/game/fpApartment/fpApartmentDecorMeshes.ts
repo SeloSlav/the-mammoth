@@ -46,10 +46,10 @@ import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   bindMammothMetallicReadableEnv,
   moodGradeMammothApartmentDecorMesh,
-  apartmentDecorContactShadowEligible,
-  attachApartmentDecorContactShadow,
+  APARTMENT_INTERIOR_VISUAL_PROFILE,
   syncApartmentInteriorPracticalLighting,
   type ApartmentPracticalLightsMount,
+  type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
 import {
   apartmentStashKey,
@@ -295,7 +295,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   let buildEpoch = 0;
   let buildRaf = 0;
   let practicalLightsMount: ApartmentPracticalLightsMount | null = null;
-  const contactShadowMeshes: THREE.Mesh[] = [];
+  let practicalLightsUnitKey: string | null = null;
+  let practicalLightsContextUnitKey: string | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -337,15 +338,58 @@ export function mountFpApartmentDecorMeshes(opts: {
   const clearInteriorLighting = (): void => {
     practicalLightsMount?.dispose();
     practicalLightsMount = null;
-    for (const shadow of contactShadowMeshes) {
-      shadow.geometry.dispose();
-      shadow.parent?.remove(shadow);
+    practicalLightsUnitKey = null;
+  };
+
+  const unitBoundsForKey = (unitKey: string): ApartmentUnitWorldBounds | null => {
+    for (const row of opts.conn.db.apartment_unit) {
+      const u = row as ApartmentUnit;
+      if (u.unitKey !== unitKey) continue;
+      return {
+        minX: u.boundMinX as number,
+        maxX: u.boundMaxX as number,
+        minY: u.boundMinY as number,
+        maxY: u.boundMaxY as number,
+        minZ: u.boundMinZ as number,
+        maxZ: u.boundMaxZ as number,
+      };
     }
-    contactShadowMeshes.length = 0;
+    return null;
+  };
+
+  const decorGroupsForUnit = (unitKey: string | null): THREE.Object3D[] => {
+    if (!unitKey) return [];
+    const out: THREE.Object3D[] = [];
+    for (const g of groupByRenderKey.values()) {
+      if (g.userData.mammothApartmentUnitKey === unitKey) out.push(g);
+    }
+    return out;
+  };
+
+  const syncPracticalLightsForUnit = (
+    containingUnitKey: string | null,
+    force = false,
+  ): void => {
+    if (!force && containingUnitKey === practicalLightsUnitKey) return;
+    practicalLightsUnitKey = containingUnitKey;
+
+    if (!containingUnitKey) {
+      clearInteriorLighting();
+      return;
+    }
+
+    const bounds = unitBoundsForKey(containingUnitKey);
+    practicalLightsMount = syncApartmentInteriorPracticalLighting({
+      lightParent: root,
+      windowScanRoot: opts.buildingRoot,
+      maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
+      unitBounds: bounds ?? undefined,
+      decorGroups: decorGroupsForUnit(containingUnitKey),
+      previous: practicalLightsMount,
+    });
   };
 
   const clearAll = () => {
-    clearInteriorLighting();
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
@@ -592,22 +636,13 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentDecorWorldBounds = bbox;
       tagResidentialUnitInteriorMeshesUnder(g);
 
-      if (apartmentDecorContactShadowEligible(d.modelRelPath)) {
-        const floorY = d.unit.boundMinY as number;
-        const shadow = attachApartmentDecorContactShadow(g, floorY);
-        if (shadow) contactShadowMeshes.push(shadow);
-      }
-
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);
     }
 
-    practicalLightsMount = syncApartmentInteriorPracticalLighting({
-      lightParent: root,
-      windowScanRoot: opts.buildingRoot,
-      decorGroups: [...groupByRenderKey.values()],
-      previous: practicalLightsMount,
-    });
+    if (practicalLightsContextUnitKey) {
+      syncPracticalLightsForUnit(practicalLightsContextUnitKey, true);
+    }
 
     opts.buildingRoot.updateMatrixWorld(true);
     opts.onRebuilt?.();
@@ -671,6 +706,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         g.visible =
           bb instanceof THREE.Box3 ? _furnitureVisibilityFrustum.intersectsBox(bb) : true;
       }
+      practicalLightsContextUnitKey = containingUnitKey;
+      syncPracticalLightsForUnit(containingUnitKey);
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;

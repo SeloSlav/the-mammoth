@@ -180,6 +180,7 @@ export {
   apartmentDecorEmitterKindFromModelPath,
   apartmentDecorWarmLightFixtureKind,
   type ApartmentDecorEmitterKind,
+  type ApartmentUnitWorldBounds,
 } from "./rendering/apartmentInteriorVisualProfile.js";
 export {
   apartmentPracticalLightSpecFromDecor,

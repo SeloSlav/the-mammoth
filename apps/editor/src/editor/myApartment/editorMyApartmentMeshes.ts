@@ -4,6 +4,7 @@ import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import {
   moodGradeMammothApartmentDecorMesh,
   moodGradeMammothApartmentShellMesh,
+  APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,
   syncApartmentInteriorPracticalLighting,
@@ -836,6 +837,7 @@ export function mountEditorMyApartmentFurnitureUnder(
   const practicalLights = syncApartmentInteriorPracticalLighting({
     lightParent: root,
     windowScanRoot,
+    maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
     decorGroups: Object.values(selectionGroups),
     previous: null,
   });
