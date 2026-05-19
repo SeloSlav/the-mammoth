@@ -12,6 +12,9 @@ export type ApartmentSittableLocalOffset = {
   z: number;
 };
 
+/** Face opposite decor local +Z (GLB forward vs gameplay forward). */
+export const APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD = Math.PI;
+
 export type ApartmentSittableSpec = {
   modelRelPath: string;
   mode: ApartmentSittableMode;
@@ -33,7 +36,7 @@ const CHAIR_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/chair.glb",
   mode: "sit",
   localSeatOffset: { x: 0, y: 0.42, z: 0.02 },
-  bodyYawOffsetRad: 0,
+  bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.05,
   interactRadiusM: 1.35,
   promptLabel: "Sit",
@@ -44,7 +47,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/sofa.glb",
   mode: "sit",
   localSeatOffset: { x: 0, y: 0.38, z: 0.08 },
-  bodyYawOffsetRad: 0,
+  bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.02,
   interactRadiusM: 1.5,
   promptLabel: "Sit",
@@ -55,7 +58,7 @@ const TOILET_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/toilet.glb",
   mode: "sit",
   localSeatOffset: { x: 0, y: 0.48, z: 0.04 },
-  bodyYawOffsetRad: 0,
+  bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.08,
   interactRadiusM: 1.1,
   promptLabel: "Sit",
@@ -66,7 +69,7 @@ const BED_SPEC: ApartmentSittableSpec = {
   modelRelPath: OWNED_APARTMENT_MODEL_BED,
   mode: "lie",
   localSeatOffset: { x: 0, y: 0.38, z: -0.12 },
-  bodyYawOffsetRad: 0,
+  bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 0.42,
   interactRadiusM: 1.6,
   promptLabel: "Lie down",

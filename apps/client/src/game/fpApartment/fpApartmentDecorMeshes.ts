@@ -44,6 +44,8 @@ import {
   normalizeApartmentDecorModelRelPath,
 } from "./fpApartmentDecorAssets.js";
 import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
+import { getApartmentSittablePrompt } from "./fpApartmentSittablePrompt.js";
+import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
   resolveApartmentDecorPoses,
@@ -317,6 +319,13 @@ export type MountFpApartmentDecorMeshesResult = {
     camera: THREE.PerspectiveCamera,
   ) => string | null;
   getSittablePickMeshes: () => readonly THREE.Mesh[];
+  getSittablePrompt: (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+    objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean,
+    visiblePickScratch: THREE.Mesh[],
+  ) => ApartmentSittablePrompt | null;
+  getSittableDecorRoots: () => readonly THREE.Object3D[];
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -664,6 +673,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentFurnitureProp = true;
       g.userData.mammothPlateLevelIndex = d.unit.level;
       g.userData.mammothApartmentDecorModelRelPath = d.modelRelPath;
+      g.userData.mammothApartmentDecorPlacedKind = d.placedKind;
       g.position.set(d.posX, d.posY, d.posZ);
       g.rotation.order = "YXZ";
       g.rotation.y = d.yawRad;
@@ -882,6 +892,20 @@ export function mountFpApartmentDecorMeshes(opts: {
       return null;
     },
     getSittablePickMeshes: () => sittablePickMeshes,
+    getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
+    getSittablePrompt: (playerPos, camera, objectVisibleInHierarchy, visiblePickScratch) => {
+      if (!opts.conn.identity) return null;
+      return getApartmentSittablePrompt({
+        conn: opts.conn,
+        playerPos,
+        camera,
+        decorPickMeshes: sittablePickMeshes,
+        furniturePickMeshes: [],
+        decorRoots: Array.from(groupByRenderKey.values()),
+        visibleScratch: visiblePickScratch,
+        objectVisibleInHierarchy,
+      });
+    },
     dispose: () => {
       disposed = true;
       buildEpoch++;

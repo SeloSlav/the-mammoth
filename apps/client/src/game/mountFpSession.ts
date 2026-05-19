@@ -98,7 +98,6 @@ import {
   mountFpApartmentFurniture,
 } from "./fpApartment/fpApartmentFurniture.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
-import { getApartmentSittablePrompt } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
@@ -807,15 +806,12 @@ export async function mountFpSession(
   };
   const getApartmentSittablePromptForSession = () => {
     if (!conn.identity) return null;
-    return getApartmentSittablePrompt({
-      conn,
-      playerPos: getInteractionPos(),
+    return fpApartmentDecorMeshes.getSittablePrompt(
+      getInteractionPos(),
       camera,
-      decorPickMeshes: fpApartmentDecorMeshes.getSittablePickMeshes(),
-      furniturePickMeshes: fpApartmentFurniture.getSittablePickMeshes(),
-      visibleScratch: visibleSittablePickScratch,
-      objectVisibleInHierarchy: sittablePickObjectVisible,
-    });
+      sittablePickObjectVisible,
+      visibleSittablePickScratch,
+    );
   };
 
   const mainRaf: FpSessionMainRafState = {
@@ -1348,9 +1344,6 @@ export async function mountFpSession(
         return;
       }
 
-      if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
-
       if (!isFpSitActive()) {
         const sitPrompt = getApartmentSittablePromptForSession();
         if (
@@ -1370,6 +1363,9 @@ export async function mountFpSession(
           return;
         }
       }
+
+      if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
       if (aptKey?.kind === "apartment_stash") {
         setFpActiveStashPanel({

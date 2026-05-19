@@ -100,8 +100,8 @@
       "fz": 0.7917498477337325,
       "dy": 0.6434121443678599,
       "yawRad": -2.183542978550241,
-      "pitchRad": 0.0653938094329,
-      "rollRad": -0.057346854830325464,
+      "pitchRad": 0.06539380943290005,
+      "rollRad": -0.05734685483032551,
       "uniformScale": 0.6387760114721411,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
@@ -523,63 +523,11 @@
       "itemKind": "plain"
     },
     {
-      "id": "ac9d5a76-62c2-4be8-834a-4b3bef73e6fd",
-      "modelRelPath": "static/models/objects/used-cigarette.glb",
-      "fx": 0.18000521868531905,
-      "fz": 0.7817881165664524,
-      "dy": 1.1312760515638831,
-      "yawRad": 1.6631447661275802,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.03757038782453294,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "e5bbd882-3fc1-44e0-8e52-9b6bedc14c32",
-      "modelRelPath": "static/models/objects/used-cigarette-2.glb",
-      "fx": 0.1865777131243528,
-      "fz": 0.7806961731470121,
-      "dy": 1.1307495995387689,
-      "yawRad": 0,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.04912865049069664,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "5ecb3be3-c17a-4e87-92be-74dfad908acc",
-      "modelRelPath": "static/models/objects/ashtray.glb",
-      "fx": 0.1845568343220314,
-      "fz": 0.7793007894702315,
-      "dy": 1.129203285244011,
-      "yawRad": 0,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.1253475248350381,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "97b5bb40-b203-4a43-9742-d49a70b0775e",
-      "modelRelPath": "static/models/objects/cigarette.glb",
-      "fx": 0.18981385370906403,
-      "fz": 0.7892522143720169,
-      "dy": 1.132899091175022,
-      "yawRad": -1.9369983190376134,
-      "pitchRad": -1.0638444896965684,
-      "rollRad": 1.4,
-      "uniformScale": 0.04627148439303097,
-      "ignoreSupportSurfaces": true,
-      "itemKind": "plain"
-    },
-    {
       "id": "4a931895-7781-4dac-a4eb-50bb7aed0cb0",
       "modelRelPath": "static/models/objects/used-cigarette.glb",
-      "fx": 0.18000521868531905,
-      "fz": 0.7817881165664524,
-      "dy": 1.1312760515638831,
+      "fx": 0.4447674312097874,
+      "fz": 0.7430842531362422,
+      "dy": 0.7717936647217026,
       "yawRad": 1.6631447661275802,
       "pitchRad": 0,
       "rollRad": 0,
@@ -590,9 +538,9 @@
     {
       "id": "c7682898-47c3-4516-b30d-1ee2bc7855a1",
       "modelRelPath": "static/models/objects/used-cigarette-2.glb",
-      "fx": 0.1865777131243528,
-      "fz": 0.7806961731470121,
-      "dy": 1.1307495995387689,
+      "fx": 0.4513399256488212,
+      "fz": 0.7419923097168016,
+      "dy": 0.7712672090708209,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -603,27 +551,14 @@
     {
       "id": "fe04228a-c7b8-42d4-af2d-6e30db0eae9f",
       "modelRelPath": "static/models/objects/ashtray.glb",
-      "fx": 0.1845568343220314,
-      "fz": 0.7793007894702315,
-      "dy": 1.129203285244011,
+      "fx": 0.44931904684649976,
+      "fz": 0.7405969260400211,
+      "dy": 0.7741363383983283,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.1253475248350381,
       "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "f26b2f06-40df-4dc3-826a-af2de7a775a0",
-      "modelRelPath": "static/models/objects/cigarette.glb",
-      "fx": 0.18981385370906403,
-      "fz": 0.7892522143720169,
-      "dy": 1.132899091175022,
-      "yawRad": -1.9369983190376134,
-      "pitchRad": -1.0638444896965684,
-      "rollRad": 1.4,
-      "uniformScale": 0.04627148439303097,
-      "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     }
   ],
@@ -864,22 +799,11 @@
       ]
     },
     {
-      "id": "f599b2a1-737d-4281-ab41-90edf2ee77a4",
-      "name": "Ashtray copy",
-      "memberSelectedIds": [
-        "mammoth_editor_my_apartment_decor:5ecb3be3-c17a-4e87-92be-74dfad908acc",
-        "mammoth_editor_my_apartment_decor:97b5bb40-b203-4a43-9742-d49a70b0775e",
-        "mammoth_editor_my_apartment_decor:ac9d5a76-62c2-4be8-834a-4b3bef73e6fd",
-        "mammoth_editor_my_apartment_decor:e5bbd882-3fc1-44e0-8e52-9b6bedc14c32"
-      ]
-    },
-    {
       "id": "faa6c5b8-e2b9-4553-9697-cd8d7e8e8754",
       "name": "Ashtray copy",
       "memberSelectedIds": [
         "mammoth_editor_my_apartment_decor:4a931895-7781-4dac-a4eb-50bb7aed0cb0",
         "mammoth_editor_my_apartment_decor:c7682898-47c3-4516-b30d-1ee2bc7855a1",
-        "mammoth_editor_my_apartment_decor:f26b2f06-40df-4dc3-826a-af2de7a775a0",
         "mammoth_editor_my_apartment_decor:fe04228a-c7b8-42d4-af2d-6e30db0eae9f"
       ]
     }

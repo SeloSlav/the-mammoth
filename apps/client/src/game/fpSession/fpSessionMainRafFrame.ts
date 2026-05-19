@@ -750,19 +750,30 @@ export function createFpSessionMainRafFrame(
       }
 
       let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
+      const sitPromptHud =
+        !isFpSitActive() ? deps.getApartmentSittablePrompt() : null;
       const rawElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
       const doorPrompt =
-        rawElevDoorPrompt !== null &&
-        !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
-          ? rawElevDoorPrompt
-          : null;
+        sitPromptHud !== null
+          ? null
+          : rawElevDoorPrompt !== null &&
+              !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
+            ? rawElevDoorPrompt
+            : null;
       const apartmentDoorHud =
-        doorPrompt !== null
+        doorPrompt !== null || sitPromptHud !== null
           ? null
           : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
             ? null
             : deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
-      if (doorPrompt) {
+      if (sitPromptHud) {
+        setFpPickupPrompt({
+          kind: "apartment_sittable",
+          sittableKey: sitPromptHud.sittableKey,
+          unitKey: sitPromptHud.unitKey,
+          label: sitPromptHud.label,
+        });
+      } else if (doorPrompt) {
         setFpPickupPrompt({
           kind: "elevator_exterior_door",
           willClose: doorPrompt.willClose,
@@ -854,16 +865,7 @@ export function createFpSessionMainRafFrame(
           });
         } else if (isFpSitActive()) {
           setFpPickupPrompt(null);
-        } else {
-          const sitPrompt = deps.getApartmentSittablePrompt();
-          if (sitPrompt) {
-            setFpPickupPrompt({
-              kind: "apartment_sittable",
-              sittableKey: sitPrompt.sittableKey,
-              unitKey: sitPrompt.unitKey,
-              label: sitPrompt.label,
-            });
-          } else if (aSys?.kind === "apartment_stash") {
+        } else if (aSys?.kind === "apartment_stash") {
             setFpPickupPrompt({
               kind: "apartment_stash",
               stashKey: aSys.stashKey,
@@ -881,7 +883,6 @@ export function createFpSessionMainRafFrame(
           } else {
             setFpPickupPrompt(null);
           }
-        }
       }
       claimHoldSmoothState = nextClaimSmoothCarry;
     } else {

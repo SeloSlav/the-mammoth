@@ -299,6 +299,45 @@ export function commitEditorAttachedTransform(opts: {
     });
 
     if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+      const decorPatches = new Map<
+        string,
+        {
+          fx: number;
+          fz: number;
+          dy: number;
+          yawRad: number;
+          pitchRad: number;
+          rollRad: number;
+          uniformScale: number;
+        }
+      >();
+      const mirrorPatches = new Map<
+        string,
+        {
+          fx: number;
+          fz: number;
+          dy: number;
+          yawRad: number;
+          pitchRad: number;
+          rollRad: number;
+          sizeX: number;
+          sizeY: number;
+        }
+      >();
+      const wallPatches = new Map<
+        string,
+        {
+          fx: number;
+          fz: number;
+          dy: number;
+          yawRad: number;
+          pitchRad: number;
+          sizeX: number;
+          sizeY: number;
+          sizeZ: number;
+        }
+      >();
+
       for (const child of [...attached.children]) {
         if (!(child instanceof THREE.Group)) continue;
         const decorChildId = child.userData.mammothEditorMyApartmentDecorId as
@@ -363,23 +402,15 @@ export function commitEditorAttachedTransform(opts: {
               3,
           );
           const decorKey = decorChildId;
-          store.patchOwnedApartmentBuiltins((d) => ({
-            ...d,
-            placedItems: d.placedItems.map((item) =>
-              item.id === decorKey
-                ? {
-                    ...item,
-                    fx,
-                    fz,
-                    dy,
-                    yawRad: yaw,
-                    pitchRad: pitch,
-                    rollRad: roll,
-                    uniformScale,
-                  }
-                : item,
-            ),
-          }));
+          decorPatches.set(decorKey, {
+            fx,
+            fz,
+            dy,
+            yawRad: yaw,
+            pitchRad: pitch,
+            rollRad: roll,
+            uniformScale,
+          });
           targetRootChild.scale.setScalar(uniformScale);
           continue;
         }
@@ -434,24 +465,16 @@ export function commitEditorAttachedTransform(opts: {
           const sizeXMirror = Math.abs(mesh.scale.x * targetRootChild.scale.x);
           const sizeYMirror = Math.abs(mesh.scale.y * targetRootChild.scale.y);
           const mirrorKey = mirrorChildId;
-          store.patchOwnedApartmentBuiltins((d) => ({
-            ...d,
-            mirrorItems: d.mirrorItems.map((item) =>
-              item.id === mirrorKey
-                ? {
-                    ...item,
-                    fx: fxMirror,
-                    fz: fzMirror,
-                    dy: dyChild,
-                    yawRad: yawMirror,
-                    pitchRad: pitchMirror,
-                    rollRad: rollMirror,
-                    sizeX: sizeXMirror,
-                    sizeY: sizeYMirror,
-                  }
-                : item,
-            ),
-          }));
+          mirrorPatches.set(mirrorKey, {
+            fx: fxMirror,
+            fz: fzMirror,
+            dy: dyChild,
+            yawRad: yawMirror,
+            pitchRad: pitchMirror,
+            rollRad: rollMirror,
+            sizeX: sizeXMirror,
+            sizeY: sizeYMirror,
+          });
           continue;
         }
 
@@ -498,25 +521,51 @@ export function commitEditorAttachedTransform(opts: {
           const sizeYw = Math.abs(mesh.scale.y * targetRootChild.scale.y);
           const sizeZw = Math.abs(mesh.scale.z * targetRootChild.scale.z);
           const wallKey = wallChildId;
-          store.patchOwnedApartmentBuiltins((d) => ({
-            ...d,
-            wallItems: d.wallItems.map((item) =>
-              item.id === wallKey
-                ? {
-                    ...item,
-                    fx: fxw,
-                    fz: fzw,
-                    dy: dyChild,
-                    yawRad: yawWall,
-                    pitchRad: pitchWall,
-                    sizeX: sizeXw,
-                    sizeY: sizeYw,
-                    sizeZ: sizeZw,
-                  }
-                : item,
-            ),
-          }));
+          wallPatches.set(wallKey, {
+            fx: fxw,
+            fz: fzw,
+            dy: dyChild,
+            yawRad: yawWall,
+            pitchRad: pitchWall,
+            sizeX: sizeXw,
+            sizeY: sizeYw,
+            sizeZ: sizeZw,
+          });
         }
+      }
+
+      if (
+        decorPatches.size > 0 ||
+        mirrorPatches.size > 0 ||
+        wallPatches.size > 0
+      ) {
+        store.patchOwnedApartmentBuiltins((d) => ({
+          ...d,
+          ...(decorPatches.size > 0
+            ? {
+                placedItems: d.placedItems.map((item) => {
+                  const patch = decorPatches.get(item.id);
+                  return patch ? { ...item, ...patch } : item;
+                }),
+              }
+            : {}),
+          ...(mirrorPatches.size > 0
+            ? {
+                mirrorItems: d.mirrorItems.map((item) => {
+                  const patch = mirrorPatches.get(item.id);
+                  return patch ? { ...item, ...patch } : item;
+                }),
+              }
+            : {}),
+          ...(wallPatches.size > 0
+            ? {
+                wallItems: d.wallItems.map((item) => {
+                  const patch = wallPatches.get(item.id);
+                  return patch ? { ...item, ...patch } : item;
+                }),
+              }
+            : {}),
+        }));
       }
       return;
     }

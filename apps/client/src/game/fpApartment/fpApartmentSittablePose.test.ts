@@ -14,7 +14,7 @@ describe("computeApartmentSittableWorldPose", () => {
     expect(pose.feetX).toBeCloseTo(10 + spec!.localSeatOffset.z, 2);
     expect(pose.feetY).toBeCloseTo(2 + spec!.localSeatOffset.y, 2);
     expect(pose.feetZ).toBeCloseTo(5 - spec!.localSeatOffset.x, 2);
-    expect(pose.bodyYawRad).toBeCloseTo(Math.PI / 2, 2);
+    expect(pose.bodyYawRad).toBeCloseTo(Math.PI / 2 + spec!.bodyYawOffsetRad, 2);
     expect(pose.mode).toBe("sit");
     expect(pose.defaultPitchRad).toBe(0);
   });

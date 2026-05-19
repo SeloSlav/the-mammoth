@@ -53,6 +53,7 @@ export function startEditorSceneRenderLoop(deps: {
   let raf = 0;
   let lastTickMs = performance.now();
   let lastWeaponPresentationPollMs = 0;
+  let lastAptLayoutOutlineSelectionKey = "";
 
   const tick = () => {
     raf = requestAnimationFrame(tick);
@@ -142,9 +143,13 @@ export function startEditorSceneRenderLoop(deps: {
         previewSelectionOutline.setFromObject(findBestSelectionTarget());
       } else if (st.mode === "my_apartment_layout") {
         fpSelectionOutline.setFromObject(null);
-        const targets = apartmentLayoutOutlineTargetGroups(st);
-        if (targets.length === 0) previewSelectionOutline.setFromObject(null);
-        else previewSelectionOutline.setFromRoots(targets);
+        const selectionKey = `${st.selectedId ?? ""}\0${st.myApartmentMultiselectExtraIds.join("\0")}`;
+        if (tcDragging || selectionKey !== lastAptLayoutOutlineSelectionKey) {
+          if (!tcDragging) lastAptLayoutOutlineSelectionKey = selectionKey;
+          const targets = apartmentLayoutOutlineTargetGroups(st);
+          if (targets.length === 0) previewSelectionOutline.setFromObject(null);
+          else previewSelectionOutline.setFromRoots(targets);
+        }
       } else {
         previewSelectionOutline.setFromObject(null);
       }

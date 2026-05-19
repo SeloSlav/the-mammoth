@@ -42,6 +42,7 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
+import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitDistanceInvariantSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
@@ -77,13 +78,8 @@ export async function mountEditorScene(
   canvas: HTMLCanvasElement,
 ): Promise<() => void> {
   const ORBIT_MAX_DISTANCE = 40;
-  /** “Neutral” feel at this camera–target radius; compensated speeds are softly damped from there. */
-  const ORBIT_INVARIANT_REFERENCE_DISTANCE_M = 6.5;
-  const ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP = 0.82;
-  const ORBIT_ZOOM_SPEED_MIN = 0.65;
-  const ORBIT_ZOOM_SPEED_MAX = 5.5;
-  const ORBIT_ROTATE_SPEED_MIN = 0.7;
-  const ORBIT_ROTATE_SPEED_MAX = 4;
+  /** Slightly snappier than OrbitControls default (0.05) while keeping inertia smooth. */
+  const ORBIT_DAMPING_FACTOR = 0.1;
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe8edf4);
@@ -458,24 +454,22 @@ export async function mountEditorScene(
   /** Defer {@link OrbitControls#connect} until after {@link TransformControls#connect} (see `rewireCanvasPrimaryPointerListeners`). */
   const orbitControls = new OrbitControls(camera, null);
   orbitControls.enableDamping = true;
+  orbitControls.dampingFactor = ORBIT_DAMPING_FACTOR;
   orbitControls.target.set(0, 1.45, 0);
-  orbitControls.minDistance = 0.22;
+  orbitControls.minDistance = EDITOR_ORBIT_MIN_DISTANCE_M;
   orbitControls.maxDistance = ORBIT_MAX_DISTANCE;
   function applyDistanceInvariantOrbitSpeeds(): void {
-    const distance = Math.max(orbitControls.minDistance, camera.position.distanceTo(orbitControls.target));
-    const speedScale =
-      (ORBIT_INVARIANT_REFERENCE_DISTANCE_M / distance) *
-      ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP;
-    orbitControls.zoomSpeed = THREE.MathUtils.clamp(
-      speedScale,
-      ORBIT_ZOOM_SPEED_MIN,
-      ORBIT_ZOOM_SPEED_MAX,
+    const distance = Math.max(
+      EDITOR_ORBIT_MIN_DISTANCE_M,
+      camera.position.distanceTo(orbitControls.target),
     );
-    orbitControls.rotateSpeed = THREE.MathUtils.clamp(
-      speedScale,
-      ORBIT_ROTATE_SPEED_MIN,
-      ORBIT_ROTATE_SPEED_MAX,
-    );
+    const speeds = editorOrbitDistanceInvariantSpeeds({
+      distanceM: distance,
+      minDistanceM: EDITOR_ORBIT_MIN_DISTANCE_M,
+    });
+    orbitControls.zoomSpeed = speeds.zoomSpeed;
+    orbitControls.rotateSpeed = speeds.rotateSpeed;
+    orbitControls.panSpeed = speeds.panSpeed;
   }
   applyDistanceInvariantOrbitSpeeds();
   orbitControls.update();

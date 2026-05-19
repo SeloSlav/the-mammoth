@@ -102,7 +102,10 @@ export function EditorChromeMyApartment(props: {
     contentIndex,
   } = props;
   const {
-    ownedApartmentBuiltins,
+    placedItems: placedItemsFromStore,
+    wallItems,
+    mirrorItems,
+    objectGroups,
     selectedId,
     myApartmentMultiselectExtraIds,
     patchOwnedApartmentBuiltins,
@@ -120,7 +123,10 @@ export function EditorChromeMyApartment(props: {
     setGridSnapM,
   } = useEditorStore(
     useShallow((s) => ({
-      ownedApartmentBuiltins: s.ownedApartmentBuiltins,
+      placedItems: s.ownedApartmentBuiltins.placedItems,
+      wallItems: s.ownedApartmentBuiltins.wallItems,
+      mirrorItems: s.ownedApartmentBuiltins.mirrorItems,
+      objectGroups: s.ownedApartmentBuiltins.objectGroups,
       selectedId: s.selectedId,
       myApartmentMultiselectExtraIds: s.myApartmentMultiselectExtraIds,
       patchOwnedApartmentBuiltins: s.patchOwnedApartmentBuiltins,
@@ -185,11 +191,9 @@ export function EditorChromeMyApartment(props: {
   const selectedWallId = parseMyApartmentLayoutWallSelectedId(selectedId);
   const selectedMirrorId = parseMyApartmentLayoutMirrorSelectedId(selectedId);
   const placedItems = useMemo(
-    () => [...ownedApartmentBuiltins.placedItems].sort((a, b) => a.id.localeCompare(b.id)),
-    [ownedApartmentBuiltins],
+    () => [...placedItemsFromStore].sort((a, b) => a.id.localeCompare(b.id)),
+    [placedItemsFromStore],
   );
-  const wallItems = ownedApartmentBuiltins.wallItems;
-  const mirrorItems = ownedApartmentBuiltins.mirrorItems;
 
   const wallTextureOptions = useMemo(
     () =>
@@ -263,10 +267,10 @@ export function EditorChromeMyApartment(props: {
 
   const sortedLayoutObjectGroups = useMemo(
     () =>
-      [...ownedApartmentBuiltins.objectGroups].sort((a, b) =>
+      [...objectGroups].sort((a, b) =>
         a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
       ),
-    [ownedApartmentBuiltins.objectGroups],
+    [objectGroups],
   );
 
   function importSelectedDecor(): void {
@@ -342,7 +346,7 @@ export function EditorChromeMyApartment(props: {
   }
 
   function addWallSlab(): void {
-    const nextIndex = ownedApartmentBuiltins.wallItems.length;
+    const nextIndex = wallItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -371,7 +375,7 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedWall(): void {
     if (!selectedWall) return;
-    const nextIndex = ownedApartmentBuiltins.wallItems.length;
+    const nextIndex = wallItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -399,7 +403,7 @@ export function EditorChromeMyApartment(props: {
   }
 
   function addMirror(): void {
-    const nextIndex = ownedApartmentBuiltins.mirrorItems.length;
+    const nextIndex = mirrorItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
@@ -427,7 +431,7 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedMirror(): void {
     if (!selectedMirror) return;
-    const nextIndex = ownedApartmentBuiltins.mirrorItems.length;
+    const nextIndex = mirrorItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()

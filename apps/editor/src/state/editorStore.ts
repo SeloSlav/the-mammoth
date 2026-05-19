@@ -21,6 +21,7 @@ import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   OwnedApartmentBuiltinsDocSchema,
   finalizeOwnedApartmentBuiltinsDoc,
+  type OwnedApartmentBuiltinsDoc,
 } from "@the-mammoth/schemas";
 import { create } from "zustand";
 import type { FpAuthorWeaponId } from "../editor/fpAuthoring/weaponPresentationDiskSave.js";
@@ -65,17 +66,38 @@ import {
   deleteMyApartmentLayoutPlacementsInDoc,
   deleteMyApartmentObjectGroupMembersInDoc,
 } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
+import { preserveOwnedApartmentMountPlacementRefs } from "../editor/myApartment/preserveOwnedApartmentMountPlacementRefs.js";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
 } from "./editorWorkspaceMap.js";
 
 function scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush(): void {
-  void import("../editor/persistence/flushOwnedApartmentBuiltinsToDisk.js")
-    .then((m) => m.flushOwnedApartmentBuiltinsToDisk())
-    .catch((err) => {
-      console.warn("[editor] Auto-save owned_apartment_builtins.json failed:", err);
-    });
+  ownedApartmentBuiltinsFlushScheduled = true;
+  if (ownedApartmentBuiltinsFlushTimer !== null) return;
+  ownedApartmentBuiltinsFlushTimer = setTimeout(() => {
+    ownedApartmentBuiltinsFlushTimer = null;
+    if (!ownedApartmentBuiltinsFlushScheduled) return;
+    ownedApartmentBuiltinsFlushScheduled = false;
+    void import("../editor/persistence/flushOwnedApartmentBuiltinsToDisk.js")
+      .then((m) => m.flushOwnedApartmentBuiltinsToDisk())
+      .catch((err) => {
+        console.warn("[editor] Auto-save owned_apartment_builtins.json failed:", err);
+      });
+  }, 600);
+}
+
+let ownedApartmentBuiltinsFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let ownedApartmentBuiltinsFlushScheduled = false;
+
+function finalizeOwnedApartmentBuiltinsPreservingMounts(
+  prev: OwnedApartmentBuiltinsDoc,
+  draft: OwnedApartmentBuiltinsDoc,
+): OwnedApartmentBuiltinsDoc {
+  return preserveOwnedApartmentMountPlacementRefs(
+    prev,
+    finalizeOwnedApartmentBuiltinsDoc(OwnedApartmentBuiltinsDocSchema.parse(draft)),
+  );
 }
 
 export type {
@@ -497,8 +519,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const docBefore = st0.ownedApartmentBuiltins;
 
     set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
-        OwnedApartmentBuiltinsDocSchema.parse({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
+        docBefore,
+        {
           ...docBefore,
           objectGroups: [
             ...docBefore.objectGroups,
@@ -508,7 +531,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               memberSelectedIds: [...groupable],
             },
           ],
-        }),
+        },
       ),
       dirty: true,
       ownedApartmentBuiltinsNeedsDiskFlush: true,
@@ -531,14 +554,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     maybePushHistory(get, set);
     set((st) => {
-      const next = OwnedApartmentBuiltinsDocSchema.parse({
+      const next = finalizeOwnedApartmentBuiltinsPreservingMounts(st.ownedApartmentBuiltins, {
         ...st.ownedApartmentBuiltins,
         objectGroups: st.ownedApartmentBuiltins.objectGroups.map((g) =>
           g.id === groupId ? { ...g, name } : g,
         ),
       });
       return {
-        ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(next),
+        ownedApartmentBuiltins: next,
         dirty: true,
         ownedApartmentBuiltinsNeedsDiskFlush: true,
       };
@@ -559,7 +582,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     maybePushHistory(get, set);
 
     set((st) => {
-      const next = OwnedApartmentBuiltinsDocSchema.parse({
+      const next = finalizeOwnedApartmentBuiltinsPreservingMounts(st.ownedApartmentBuiltins, {
         ...st.ownedApartmentBuiltins,
         objectGroups: st.ownedApartmentBuiltins.objectGroups.filter((g) => g.id !== groupId),
       });
@@ -570,7 +593,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         extrasNext = [];
       }
       return {
-        ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(next),
+        ownedApartmentBuiltins: next,
         dirty: true,
         ownedApartmentBuiltinsNeedsDiskFlush: true,
         selectedId: selectedIdNext,
@@ -596,8 +619,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     maybePushHistory(get, set);
 
     set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
-        OwnedApartmentBuiltinsDocSchema.parse(cloned.doc),
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
+        prior.ownedApartmentBuiltins,
+        cloned.doc,
       ),
       dirty: true,
       ownedApartmentBuiltinsNeedsDiskFlush: true,
@@ -620,8 +644,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     maybePushHistory(get, set);
     set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
-        OwnedApartmentBuiltinsDocSchema.parse(nextDoc),
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
+        prior.ownedApartmentBuiltins,
+        nextDoc,
       ),
       dirty: true,
       ownedApartmentBuiltinsNeedsDiskFlush: true,
@@ -653,8 +678,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     maybePushHistory(get, set);
     set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
-        OwnedApartmentBuiltinsDocSchema.parse(nextDoc),
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
+        prior.ownedApartmentBuiltins,
+        nextDoc,
       ),
       dirty: true,
       ownedApartmentBuiltinsNeedsDiskFlush: true,
@@ -683,7 +709,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     maybePushHistory(get, set);
     set((s) => {
       const parsedNext = OwnedApartmentBuiltinsDocSchema.parse(fn(s.ownedApartmentBuiltins));
-      const next = finalizeOwnedApartmentBuiltinsDoc(parsedNext);
+      const finalized = finalizeOwnedApartmentBuiltinsDoc(parsedNext);
+      const next = preserveOwnedApartmentMountPlacementRefs(
+        s.ownedApartmentBuiltins,
+        finalized,
+      );
+      const placementChanged =
+        next.placedItems !== s.ownedApartmentBuiltins.placedItems ||
+        next.wallItems !== s.ownedApartmentBuiltins.wallItems ||
+        next.mirrorItems !== s.ownedApartmentBuiltins.mirrorItems ||
+        next.previewSizeM !== s.ownedApartmentBuiltins.previewSizeM;
 
       let selectedFix = s.selectedId;
       let extrasFix = s.myApartmentMultiselectExtraIds;
@@ -702,7 +737,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         ownedApartmentBuiltins: next,
         dirty: true,
-        ownedApartmentBuiltinsNeedsDiskFlush: true,
+        ...(placementChanged ? { ownedApartmentBuiltinsNeedsDiskFlush: true } : {}),
         ...(selectedFix !== s.selectedId ? { selectedId: selectedFix } : {}),
         ...(extrasFix !== s.myApartmentMultiselectExtraIds
           ? { myApartmentMultiselectExtraIds: extrasFix }

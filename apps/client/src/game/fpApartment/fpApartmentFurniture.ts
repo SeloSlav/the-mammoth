@@ -41,6 +41,7 @@ import {
 } from "./fpApartmentStashKey.js";
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
+  ownedApartmentDocUsesNonPlainPlacedItems,
   resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
@@ -454,8 +455,8 @@ export async function mountFpApartmentFurniture(opts: {
       return;
     }
 
-    {
-      /** Legacy replicated furniture visuals are retired; placed decor owns all apartment contents. */
+    if (ownedApartmentDocUsesNonPlainPlacedItems(builtinsFromContent)) {
+      /** Placed decor (incl. bed/stash roles) is rendered by {@link mountFpApartmentDecorMeshes}. */
       const unitGroup = new THREE.Group();
       unitGroup.name = `apartment_furniture_delegated_decor:${u.unitKey}`;
       unitGroup.userData.mammothApartmentFurnitureProp = true;
