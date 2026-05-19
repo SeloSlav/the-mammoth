@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ownedApartmentPlacedItemKindHasStash,
   OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
 import {
@@ -243,6 +244,13 @@ describe("resolveApartmentDecorPoses", () => {
         sizeY: 1.28,
       },
     ]);
+  });
+});
+
+describe("ownedApartmentPlacedItemKindHasStash", () => {
+  it("includes fridge alongside other storage furniture", () => {
+    expect(ownedApartmentPlacedItemKindHasStash("fridge")).toBe(true);
+    expect(ownedApartmentPlacedItemKindHasStash("plain")).toBe(false);
   });
 });
 

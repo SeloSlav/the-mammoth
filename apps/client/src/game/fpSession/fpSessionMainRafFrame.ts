@@ -48,8 +48,10 @@ import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.j
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
 import {
+  FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
   FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS,
   FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
+  isFpApartmentPlanarMirrorSurface,
   pickCabMirrorPrimaryUpdateIndex,
 } from "../fpRendering/fpCabMirrorReflectionGate.js";
 import {
@@ -269,6 +271,8 @@ export function createFpSessionMainRafFrame(
   deps: FpSessionMainRafFrameDeps,
 ): { runFrame: (nowMs: number, dt: number) => void } {
   const _rigViewScratch = deps._rigViewScratch;
+  const _mirrorViewProjection = new THREE.Matrix4();
+  const _mirrorViewFrustum = new THREE.Frustum();
   let lastApartmentClaimHoldPulseMs = 0;
   let lastCabMirrorReflectionUpdateMs = -Infinity;
   let lastCabMirrorReflectionIdx = -1;
@@ -896,17 +900,29 @@ export function createFpSessionMainRafFrame(
     });
     const _t_afterFpEnv = performance.now();
     const cabMirrors = deps.cabMirrorCollection.mirrors;
+    deps.camera.updateMatrixWorld(true);
+    _mirrorViewProjection.multiplyMatrices(
+      deps.camera.projectionMatrix,
+      deps.camera.matrixWorldInverse,
+    );
+    _mirrorViewFrustum.setFromProjectionMatrix(_mirrorViewProjection);
     const primaryMirrorIdx = pickCabMirrorPrimaryUpdateIndex(cabMirrors, {
       cameraWorld: deps._floorVisCamWorld,
       cameraForward: deps._floorVisCamDir,
-      opts: { maxDistanceM: 4.5, minFacingDot: 0.22 },
+      containingResidentialUnitKey: deps.getContainingResidentialUnitKey(),
+      viewFrustum: _mirrorViewFrustum,
       skipReflectionWhenVerticalLookAboveAbsY: FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y,
     });
+    const primaryIsApartmentMirror =
+      primaryMirrorIdx >= 0 &&
+      isFpApartmentPlanarMirrorSurface(cabMirrors[primaryMirrorIdx]!.surface);
+    const mirrorReflectionIntervalMs = primaryIsApartmentMirror
+      ? FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS
+      : FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS;
     const forceMirrorReflectionUpdate =
       primaryMirrorIdx >= 0 &&
       (primaryMirrorIdx !== lastCabMirrorReflectionIdx ||
-        nowMs - lastCabMirrorReflectionUpdateMs >=
-          FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS);
+        nowMs - lastCabMirrorReflectionUpdateMs >= mirrorReflectionIntervalMs);
     if (forceMirrorReflectionUpdate) {
       lastCabMirrorReflectionUpdateMs = nowMs;
       lastCabMirrorReflectionIdx = primaryMirrorIdx;

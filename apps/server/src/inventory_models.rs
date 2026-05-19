@@ -5,6 +5,7 @@ use spacetimedb::{Identity, SpacetimeType};
 pub(crate) const APARTMENT_STASH_KIND_FOOTLOCKER: &str = "footlocker";
 pub(crate) const APARTMENT_STASH_KIND_WARDROBE: &str = "wardrobe";
 pub(crate) const APARTMENT_STASH_KIND_STOVE: &str = "stove";
+pub(crate) const APARTMENT_STASH_KIND_FRIDGE: &str = "fridge";
 const APARTMENT_STASH_KEY_SEP: &str = "#";
 
 /// Per-instance stash: `{unit_key}#d{decor_id}` (e.g. `floor_mamutica_typical|21|unit_e_003#d7`).
@@ -16,7 +17,7 @@ pub(crate) fn apartment_stash_key_decor(unit_key: &str, decor_id: u64) -> String
 pub(crate) enum ParsedApartmentStashKey<'a> {
     /// Legacy DB rows stored exact `unit_key` string with no `#` suffix (footlocker-only).
     BareUnitKey(&'a str),
-    /// `unit_key` + `#` + `wardrobe` / `footlocker` / `stove`.
+    /// `unit_key` + `#` + `wardrobe` / `footlocker` / `stove` / `fridge`.
     LegacyComposite {
         unit_key: &'a str,
         kind: &'static str,
@@ -43,11 +44,14 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
         if tail == APARTMENT_STASH_KIND_FOOTLOCKER
             || tail == APARTMENT_STASH_KIND_WARDROBE
             || tail == APARTMENT_STASH_KIND_STOVE
+            || tail == APARTMENT_STASH_KIND_FRIDGE
         {
             let kind: &'static str = if tail == APARTMENT_STASH_KIND_WARDROBE {
                 APARTMENT_STASH_KIND_WARDROBE
             } else if tail == APARTMENT_STASH_KIND_STOVE {
                 APARTMENT_STASH_KIND_STOVE
+            } else if tail == APARTMENT_STASH_KIND_FRIDGE {
+                APARTMENT_STASH_KIND_FRIDGE
             } else {
                 APARTMENT_STASH_KIND_FOOTLOCKER
             };
@@ -75,6 +79,7 @@ pub(crate) fn apartment_stash_kind_display_name(stash_kind: &str) -> &'static st
     match stash_kind {
         APARTMENT_STASH_KIND_WARDROBE => "wardrobe",
         APARTMENT_STASH_KIND_STOVE => "stove",
+        APARTMENT_STASH_KIND_FRIDGE => "fridge",
         _ => "footlocker",
     }
 }

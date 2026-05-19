@@ -14,14 +14,18 @@ use crate::feature_flags;
 use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
 };
+use crate::apartment_stash_rules::{
+    apartment_stash_accepts_def_id, apartment_stash_slot_count, apartment_stash_slot_index_valid,
+};
 use crate::inventory::{
     self, find_item_in_hotbar_slot, find_item_in_inventory_slot, find_item_in_stash_slot,
-    inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS, NUM_STASH_SLOTS,
+    inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
 };
 use crate::inventory_models::{
     apartment_stash_kind_display_name, parse_apartment_stash_key_v2,
-    ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_STOVE,
-    APARTMENT_STASH_KIND_WARDROBE, HotbarLocationData, InventoryLocationData, ItemLocation,
+    ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, HotbarLocationData,
+    InventoryLocationData, ItemLocation,
     StashLocationData,
 };
 use crate::items_catalog;
@@ -56,6 +60,7 @@ const REINFORCE_HOLD_SECS: f32 = 22.0;
 fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
     let r = match stash_kind {
         APARTMENT_STASH_KIND_WARDROBE => 1.27,
+        APARTMENT_STASH_KIND_FRIDGE => 1.30,
         APARTMENT_STASH_KIND_STOVE => 1.14,
         APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
         _ => 1.10,
@@ -395,7 +400,7 @@ fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
     match item_kind {
         APARTMENT_DECOR_ITEM_KIND_WARDROBE => APARTMENT_STASH_KIND_WARDROBE,
         APARTMENT_DECOR_ITEM_KIND_STOVE => APARTMENT_STASH_KIND_STOVE,
-        APARTMENT_DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_STOVE,
+        APARTMENT_DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }
@@ -1298,7 +1303,7 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
 }
 
 fn pose_near_named_apartment_stash_anchor(
-    _ctx: &ReducerContext,
+    ctx: &ReducerContext,
     unit: &ApartmentUnit,
     stash_kind: &str,
     x: f32,
@@ -1330,6 +1335,30 @@ fn pose_near_named_apartment_stash_anchor(
                     stash_interact_radius_sq(APARTMENT_STASH_KIND_STOVE),
                 )
         }
+        APARTMENT_STASH_KIND_FRIDGE => {
+            let Some(fridge) = ctx
+                .db
+                .apartment_unit_decor()
+                .iter()
+                .filter(|d| {
+                    d.unit_key.as_str() == unit.unit_key.as_str()
+                        && d.item_kind == APARTMENT_DECOR_ITEM_KIND_FRIDGE
+                })
+                .min_by_key(|d| d.decor_id)
+            else {
+                return false;
+            };
+            feet_inside_unit(unit, x, y, z)
+                && pose_near_horizontal_marker(
+                    x,
+                    y,
+                    z,
+                    fridge.pos_x,
+                    fridge.pos_z,
+                    unit.foot_y,
+                    stash_interact_radius_sq(APARTMENT_STASH_KIND_FRIDGE),
+                )
+        }
         _ => {
             feet_inside_unit(unit, x, y, z)
                 && pose_near_horizontal_marker(
@@ -1345,12 +1374,33 @@ fn pose_near_named_apartment_stash_anchor(
     }
 }
 
+fn apartment_stash_kind_for_stash_key(
+    ctx: &ReducerContext,
+    stash_key: &str,
+) -> Option<&'static str> {
+    match parse_apartment_stash_key_v2(stash_key) {
+        ParsedApartmentStashKey::DecorInstance {
+            unit_key,
+            decor_id,
+        } => {
+            let decor = ctx.db.apartment_unit_decor().decor_id().find(decor_id)?;
+            if decor.unit_key.as_str() != unit_key {
+                return None;
+            }
+            Some(decor_stash_radius_kind(decor.item_kind))
+        }
+        ParsedApartmentStashKey::LegacyComposite { kind, .. } => Some(kind),
+        ParsedApartmentStashKey::BareUnitKey(_) => Some(APARTMENT_STASH_KIND_FOOTLOCKER),
+    }
+}
+
 fn first_empty_stash_slot(
     ctx: &ReducerContext,
     stash_owner: Identity,
     stash_key: &str,
 ) -> Option<u16> {
-    for s in 0..NUM_STASH_SLOTS {
+    let stash_kind = apartment_stash_kind_for_stash_key(ctx, stash_key)?;
+    for s in 0..apartment_stash_slot_count(stash_kind) {
         if find_item_in_stash_slot(ctx, stash_owner, stash_key, s).is_none() {
             return Some(s);
         }
@@ -1580,12 +1630,17 @@ fn stash_push_item_to_slot_impl(
     unit_key: &str,
     target_stash_slot: u16,
 ) -> Result<(), String> {
-    if target_stash_slot >= NUM_STASH_SLOTS {
+    let stash_kind = apartment_stash_kind_for_stash_key(ctx, unit_key)
+        .ok_or_else(|| "unknown stash".to_string())?;
+    if !apartment_stash_slot_index_valid(stash_kind, target_stash_slot) {
         return Err("bad stash slot".to_string());
     }
-    let (owner_id, _, stash_kind) = owned_apartment_stash_owner_near_sender(ctx, unit_key)
+    let (owner_id, _, _) = owned_apartment_stash_owner_near_sender(ctx, unit_key)
         .ok_or_else(|| "caller may not push to stash".to_string())?;
-    let _row = inventory::get_player_item(ctx, item_instance_id)?;
+    let row = inventory::get_player_item(ctx, item_instance_id)?;
+    if !apartment_stash_accepts_def_id(stash_kind, row.def_id.as_str()) {
+        return Err(format!("{stash_kind} stash: item type not allowed"));
+    }
     let target_opt = find_item_in_stash_slot(ctx, owner_id, unit_key, target_stash_slot);
     move_inventory_row_to_location(
         ctx,
@@ -1722,7 +1777,11 @@ pub fn stash_move_item_to_slot(
         log::debug!("stash_move_to_slot blocked: {e}");
         return;
     }
-    if target_stash_slot >= NUM_STASH_SLOTS {
+    let Some(stash_kind) = apartment_stash_kind_for_stash_key(ctx, &unit_key) else {
+        log::warn!("stash_move_to_slot: unknown stash key");
+        return;
+    };
+    if !apartment_stash_slot_index_valid(stash_kind, target_stash_slot) {
         log::warn!("stash_move_to_slot: bad stash slot");
         return;
     }

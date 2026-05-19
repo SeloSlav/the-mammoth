@@ -25,7 +25,17 @@ type DynamicMirrorState = {
 
 const FP_CAB_MIRROR_REFLECTION_RESOLUTION_SCALE = 0.62;
 
-export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): FpPlanarMirror {
+export type CreateFpPlanarMirrorOpts = {
+  /** Reflector RT scale vs main view (lower = cheaper; apartment defaults below cab). */
+  resolutionScale?: number;
+  frustumCulled?: boolean;
+};
+
+export function createFpPlanarMirrorFromPlaceholder(
+  placeholder: THREE.Mesh,
+  opts: CreateFpPlanarMirrorOpts = {},
+): FpPlanarMirror {
+  const resolutionScale = opts.resolutionScale ?? FP_CAB_MIRROR_REFLECTION_RESOLUTION_SCALE;
   const parent = placeholder.parent;
   if (!parent) throw new Error("createFpPlanarMirrorFromPlaceholder: placeholder has no parent");
   const geometry = placeholder.geometry.clone();
@@ -42,7 +52,7 @@ export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): Fp
   surface.scale.copy(placeholder.scale);
   surface.visible = placeholder.visible;
   surface.renderOrder = placeholder.renderOrder;
-  surface.frustumCulled = false;
+  surface.frustumCulled = opts.frustumCulled ?? false;
   surface.userData = { ...placeholder.userData, mammothCabMirror: true };
   parent.add(surface);
   parent.remove(placeholder);
@@ -56,7 +66,7 @@ export function createFpPlanarMirrorFromPlaceholder(placeholder: THREE.Mesh): Fp
   const ensureDynamic = (): DynamicMirrorState => {
     if (dynamic) return dynamic;
     const mirrorNode = reflector({
-      resolutionScale: FP_CAB_MIRROR_REFLECTION_RESOLUTION_SCALE,
+      resolutionScale,
       bounces: false,
       samples: 0,
     });

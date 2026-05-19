@@ -16,6 +16,7 @@ import {
   apartmentStashKeyDecor,
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   parseApartmentStashKeyFull,
@@ -23,6 +24,7 @@ import {
 } from "./fpApartmentStashKey";
 import {
   peekOwnedApartmentBuiltinsDoc,
+  resolveApartmentDecorPoses,
   resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
@@ -38,6 +40,7 @@ const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKi
   [APARTMENT_STASH_KIND_WARDROBE]: 0.55,
   [APARTMENT_STASH_KIND_FOOTLOCKER]: 0.38,
   [APARTMENT_STASH_KIND_STOVE]: 0.42,
+  [APARTMENT_STASH_KIND_FRIDGE]: 0.58,
 };
 
 /**
@@ -333,8 +336,9 @@ function decorItemKindToClientStashKind(itemKind: number): ApartmentStashKind | 
     case APARTMENT_UNIT_DECOR_ITEM_KIND_FOOTLOCKER:
       return APARTMENT_STASH_KIND_FOOTLOCKER;
     case APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE:
-    case APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE:
       return APARTMENT_STASH_KIND_STOVE;
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE:
+      return APARTMENT_STASH_KIND_FRIDGE;
     default:
       return null;
   }
@@ -472,6 +476,11 @@ function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind):
         return { x: pose.wardrobe.x, z: pose.wardrobe.z };
       case APARTMENT_STASH_KIND_STOVE:
         return { x: pose.stove.x, z: pose.stove.z };
+      case APARTMENT_STASH_KIND_FRIDGE: {
+        const fridge = resolveApartmentDecorPoses(u, builtinsDoc).find((d) => d.itemKind === "fridge");
+        if (fridge) return { x: fridge.x, z: fridge.z };
+        return { x: pose.stove.x, z: pose.stove.z };
+      }
       default:
         return { x: pose.footlocker.x, z: pose.footlocker.z };
     }
@@ -480,6 +489,8 @@ function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind):
     case APARTMENT_STASH_KIND_WARDROBE:
       return { x: u.wardrobeX, z: u.wardrobeZ };
     case APARTMENT_STASH_KIND_STOVE:
+      return { x: u.stoveX, z: u.stoveZ };
+    case APARTMENT_STASH_KIND_FRIDGE:
       return { x: u.stoveX, z: u.stoveZ };
     default:
       return { x: u.footX, z: u.footZ };
@@ -633,6 +644,7 @@ function nearestOwnedClaimedApartmentStash(
     tryLegacy(APARTMENT_STASH_KIND_FOOTLOCKER);
     tryLegacy(APARTMENT_STASH_KIND_WARDROBE);
     tryLegacy(APARTMENT_STASH_KIND_STOVE);
+    tryLegacy(APARTMENT_STASH_KIND_FRIDGE);
   }
   return best;
 }

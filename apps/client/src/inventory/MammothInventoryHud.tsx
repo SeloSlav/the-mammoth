@@ -30,6 +30,11 @@ import {
   subscribeFpHotbarSelection,
 } from "../game/fpHotbar/fpHotbarSelection";
 import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "./mammothItemCatalog";
+import {
+  apartmentStashRejectionHint,
+  isApartmentStashSlotIndexValid,
+  mammothItemAllowedInApartmentStash,
+} from "./apartmentStashInventoryRules";
 import type {
   MammothDragSourceSlotInfo,
   MammothDraggedItemInfo,
@@ -222,6 +227,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const quickMovePlayerItemToStash = useCallback(
     (pop: MammothPopulatedItem) => {
       if (!activeStash || document.body.classList.contains("item-dragging")) return;
+      if (!mammothItemAllowedInApartmentStash(activeStash.stashKind, pop.def)) {
+        console.warn("[MammothInventoryHud]", apartmentStashRejectionHint(activeStash.stashKind));
+        return;
+      }
       try {
         void conn.reducers.stashPushItem({
           itemInstanceId: toInstanceId(pop),
@@ -286,6 +295,19 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
           });
         } else if (target.type === "stash") {
           if (!activeStash) return;
+          if (
+            !isApartmentStashSlotIndexValid(activeStash.stashKind, target.index) ||
+            (src.sourceSlot.type !== "stash" &&
+              !mammothItemAllowedInApartmentStash(activeStash.stashKind, src.item.def))
+          ) {
+            console.warn(
+              "[MammothInventoryHud]",
+              apartmentStashRejectionHint(activeStash.stashKind),
+            );
+            return;
+          }
+          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
+          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: activeStash.stashKey,

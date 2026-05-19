@@ -10,6 +10,10 @@ const MIRROR_FRAME_THICKNESS_M = 0.024;
 export const APARTMENT_MIRROR_SURFACE_USERDATA_KEY =
   "mammothApartmentMirrorSurface" as const;
 
+/** Distinguishes apartment-authored mirrors from elevator cab mirrors in FP reflection gating. */
+export const MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY =
+  "mammothApartmentPlanarMirror" as const;
+
 export type BuildApartmentPlanarMirrorVisualArgs = {
   widthM: number;
   heightM: number;
@@ -81,8 +85,10 @@ export function buildApartmentPlanarMirrorVisual(
   surface.position.set(0, heightM / 2, 0);
   surface.castShadow = false;
   surface.receiveShadow = false;
+  surface.frustumCulled = true;
   surface.userData.mammothCabMirror = true;
   surface.userData[APARTMENT_MIRROR_SURFACE_USERDATA_KEY] = true;
+  surface.userData[MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY] = true;
   root.add(surface);
 
   return root;

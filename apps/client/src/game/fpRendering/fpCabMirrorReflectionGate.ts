@@ -1,7 +1,27 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY } from "@the-mammoth/world";
 
 const _mirrorCenter = new THREE.Vector3();
 const _toMirror = new THREE.Vector3();
+const _mirrorBounds = new THREE.Box3();
+
+/** Cab interior — tight volume, mirror is always relevant when facing it. */
+export const FP_CAB_MIRROR_REFLECTION_MAX_DISTANCE_M = 4.5;
+export const FP_CAB_MIRROR_REFLECTION_MIN_FACING_DOT = 0.22;
+
+/**
+ * Apartment mirrors — strict gate: only while inside the same unit, on-screen, and looking at the glass.
+ * Avoids replaying the full FP scene (~2× draw cost) from the living room.
+ */
+export const FP_APARTMENT_MIRROR_REFLECTION_MAX_DISTANCE_M = 2.8;
+export const FP_APARTMENT_MIRROR_REFLECTION_MIN_FACING_DOT = 0.48;
+/** Lower RT resolution than cab (apartment props already heavy). */
+export const FP_APARTMENT_MIRROR_REFLECTION_RESOLUTION_SCALE = 0.38;
+/** ~4 Hz reflection refresh when an apartment mirror is primary (cab stays ~12 Hz). */
+export const FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 250;
+
+/** Score bias so elevator mirrors win when both are eligible. */
+const FP_CAB_MIRROR_SCORE_BIAS = 1000;
 
 export type CabMirrorReflectionGateOpts = {
   maxDistanceM?: number;
@@ -57,7 +77,74 @@ export type CabMirrorPickPrimaryArgs = {
    * draw count (~2× `renderer.info.render.calls`).
    */
   skipReflectionWhenVerticalLookAboveAbsY?: number;
+  /** Required for apartment mirrors — must match `mammothApartmentUnitKey` on the mirror root. */
+  containingResidentialUnitKey?: string | null;
+  /** When set, apartment mirrors must intersect the view frustum (occlusion / off-screen). */
+  viewFrustum?: THREE.Frustum;
 };
+
+function isApartmentPlanarMirrorSurface(surface: THREE.Mesh): boolean {
+  return surface.userData[MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY] === true;
+}
+
+function apartmentMirrorUnitKeyFromSurface(surface: THREE.Mesh): string | null {
+  let o: THREE.Object3D | null = surface;
+  while (o) {
+    const k = o.userData.mammothApartmentUnitKey;
+    if (typeof k === "string" && k.length > 0) return k;
+    o = o.parent;
+  }
+  return null;
+}
+
+function isVisibleInParentChain(obj: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (!cur.visible) return false;
+  }
+  return true;
+}
+
+function mirrorGateOptsForSurface(
+  surface: THREE.Mesh,
+  fallback?: CabMirrorReflectionGateOpts,
+): CabMirrorReflectionGateOpts {
+  if (isApartmentPlanarMirrorSurface(surface)) {
+    return {
+      maxDistanceM: FP_APARTMENT_MIRROR_REFLECTION_MAX_DISTANCE_M,
+      minFacingDot: FP_APARTMENT_MIRROR_REFLECTION_MIN_FACING_DOT,
+    };
+  }
+  return (
+    fallback ?? {
+      maxDistanceM: FP_CAB_MIRROR_REFLECTION_MAX_DISTANCE_M,
+      minFacingDot: FP_CAB_MIRROR_REFLECTION_MIN_FACING_DOT,
+    }
+  );
+}
+
+function apartmentMirrorPassesContextGate(
+  surface: THREE.Mesh,
+  args: CabMirrorPickPrimaryArgs,
+): boolean {
+  if (!isApartmentPlanarMirrorSurface(surface)) return true;
+  const unitKey = apartmentMirrorUnitKeyFromSurface(surface);
+  if (
+    !args.containingResidentialUnitKey ||
+    !unitKey ||
+    unitKey !== args.containingResidentialUnitKey
+  ) {
+    return false;
+  }
+  if (!isVisibleInParentChain(surface)) return false;
+  if (args.viewFrustum) {
+    surface.updateMatrixWorld(true);
+    _mirrorBounds.setFromObject(surface);
+    if (_mirrorBounds.isEmpty() || !args.viewFrustum.intersectsBox(_mirrorBounds)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /** Default gate for {@link CabMirrorPickPrimaryArgs.skipReflectionWhenVerticalLookAboveAbsY}. */
 export const FP_CAB_MIRROR_SKIP_REFLECTION_ABS_FORWARD_Y = 0.62;
@@ -70,13 +157,10 @@ export const FP_CAB_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 83;
  */
 export function pickCabMirrorPrimaryUpdateIndex(
   mirrors: readonly { surface: THREE.Mesh }[],
-  {
-    cameraWorld,
-    cameraForward,
-    opts,
-    skipReflectionWhenVerticalLookAboveAbsY,
-  }: CabMirrorPickPrimaryArgs,
+  pickArgs: CabMirrorPickPrimaryArgs,
 ): number {
+  const { cameraWorld, cameraForward, opts, skipReflectionWhenVerticalLookAboveAbsY } =
+    pickArgs;
   if (
     typeof skipReflectionWhenVerticalLookAboveAbsY === "number" &&
     Number.isFinite(skipReflectionWhenVerticalLookAboveAbsY) &&
@@ -89,11 +173,26 @@ export function pickCabMirrorPrimaryUpdateIndex(
   for (let i = 0; i < mirrors.length; i++) {
     const surface = mirrors[i]!.surface;
     if (!surface.visible) continue;
-    const score = cabMirrorReflectionFacingScore(surface, cameraWorld, cameraForward, opts);
+    if (!apartmentMirrorPassesContextGate(surface, pickArgs)) continue;
+    const gateOpts = mirrorGateOptsForSurface(surface, opts);
+    let score = cabMirrorReflectionFacingScore(
+      surface,
+      cameraWorld,
+      cameraForward,
+      gateOpts,
+    );
+    if (score < 0) continue;
+    if (!isApartmentPlanarMirrorSurface(surface)) {
+      score += FP_CAB_MIRROR_SCORE_BIAS;
+    }
     if (score > bestScore) {
       bestScore = score;
       bestIdx = i;
     }
   }
   return bestIdx;
+}
+
+export function isFpApartmentPlanarMirrorSurface(surface: THREE.Mesh): boolean {
+  return isApartmentPlanarMirrorSurface(surface);
 }

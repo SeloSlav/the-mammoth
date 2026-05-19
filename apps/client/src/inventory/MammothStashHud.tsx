@@ -1,7 +1,12 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  apartmentStashHudGridCols,
+  apartmentStashHudSections,
+} from "@the-mammoth/schemas";
 import type { DbConnection } from "../module_bindings";
+import type { ApartmentStashKind } from "../game/fpApartment/fpApartmentStashKey";
 import type {
   MammothDragSourceSlotInfo,
   MammothDraggedItemInfo,
@@ -14,6 +19,11 @@ import {
   predictSlotMove,
   type SlotGrids,
 } from "./inventoryOptimistic";
+import {
+  apartmentStashRejectionHint,
+  isApartmentStashSlotIndexValid,
+  mammothItemAllowedInApartmentStash,
+} from "./apartmentStashInventoryRules";
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
@@ -21,16 +31,14 @@ import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
-import { MAMMOTH_STASH_SLOTS, useMammothInventory, useMammothStash } from "./useMammothInventory";
+import { useMammothInventory, useMammothStash } from "./useMammothInventory";
 
 type Props = {
   conn: DbConnection;
   stashKey: string;
   stashLabel: string;
+  stashKind: ApartmentStashKind;
 };
-
-const STASH_COLS = 6;
-const STASH_ROWS = MAMMOTH_STASH_SLOTS / STASH_COLS;
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",
@@ -39,10 +47,52 @@ const NO_SELECT: CSSProperties = {
   msUserSelect: "none",
 };
 
-/** Slot-based storage for one apartment object (wardrobe or footlocker). */
-export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
+function renderStashSlot(
+  slotIndex: number,
+  pop: MammothPopulatedItem | null,
+  opts: {
+    toInstanceId: (pop: MammothPopulatedItem) => bigint;
+    handleDragStart: (info: MammothDraggedItemInfo) => void;
+    handleDrop: (result: MammothDropResult) => void;
+    quickMoveStashToInventory: (pop: MammothPopulatedItem, fromStashIndex: number) => void;
+    openItemTooltipForSlot: (
+      slotInfo: MammothDragSourceSlotInfo,
+      pop: MammothPopulatedItem,
+      e: ReactMouseEvent,
+    ) => void;
+    updateTooltipPositionFromHoverEvent: (e: ReactMouseEvent) => void;
+    hideItemTooltip: () => void;
+    slotInner: (pop: MammothPopulatedItem | null) => ReactNode;
+  },
+) {
+  const slotInfo = { type: "stash" as const, index: slotIndex };
+  return (
+    <MammothDroppableSlot key={`stash-${slotIndex}`} slotInfo={slotInfo}>
+      {pop ? (
+        <MammothDraggableItem
+          key={String(opts.toInstanceId(pop))}
+          item={pop}
+          sourceSlot={slotInfo}
+          onDragStart={opts.handleDragStart}
+          onDrop={opts.handleDrop}
+          onItemContextMenu={() => opts.quickMoveStashToInventory(pop, slotIndex)}
+          slotHover={{
+            onEnter: (e) => opts.openItemTooltipForSlot(slotInfo, pop, e),
+            onMove: opts.updateTooltipPositionFromHoverEvent,
+            onLeave: opts.hideItemTooltip,
+          }}
+        >
+          {opts.slotInner(pop)}
+        </MammothDraggableItem>
+      ) : null}
+    </MammothDroppableSlot>
+  );
+}
+
+/** Slot-based storage for one apartment object (wardrobe, footlocker, stove, fridge). */
+export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props) {
   const playerSlots = useMammothInventory(conn);
-  const stash = useMammothStash(conn, stashKey);
+  const stash = useMammothStash(conn, stashKey, stashKind);
   const baseSlots = useMemo<SlotGrids>(
     () => ({ ...playerSlots, stash }),
     [playerSlots, stash],
@@ -54,6 +104,9 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
   const optimisticSlotsRef = useRef<SlotGrids | null>(null);
   baseSlotsRef.current = baseSlots;
   optimisticSlotsRef.current = optimisticSlots;
+
+  const stoveSections = useMemo(() => apartmentStashHudSections(stashKind), [stashKind]);
+  const gridCols = useMemo(() => apartmentStashHudGridCols(stashKind), [stashKind]);
 
   const [itemTooltip, setItemTooltip] = useState<{
     visible: boolean;
@@ -135,6 +188,15 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
     dragRef.current = info;
   }, []);
 
+  const canAcceptItemInStash = useCallback(
+    (item: MammothPopulatedItem, targetSlotIndex: number) => {
+      if (!isApartmentStashSlotIndexValid(stashKind, targetSlotIndex)) return false;
+      if (dragRef.current?.sourceSlot.type === "stash") return true;
+      return mammothItemAllowedInApartmentStash(stashKind, item.def);
+    },
+    [stashKind],
+  );
+
   const quickMoveStashToInventory = useCallback(
     (pop: MammothPopulatedItem, fromStashIndex: number) => {
       if (document.body.classList.contains("item-dragging")) return;
@@ -168,6 +230,11 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
 
       const target = result.slot;
       if (target.type !== "stash" && src.sourceSlot.type !== "stash") return;
+
+      if (target.type === "stash" && !canAcceptItemInStash(src.item, target.index)) {
+        console.warn("[MammothStashHud]", apartmentStashRejectionHint(stashKind));
+        return;
+      }
 
       const id = src.item.instance.instanceId;
       const instanceId = typeof id === "bigint" ? id : BigInt(id as number);
@@ -204,7 +271,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
         console.warn("[MammothStashHud] drop/move failed", err);
       }
     },
-    [conn, gridsForPrediction, stashKey],
+    [canAcceptItemInStash, conn, gridsForPrediction, stashKey, stashKind],
   );
 
   const slotInner = (pop: MammothPopulatedItem | null) => {
@@ -225,6 +292,27 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
         }}
       />
     );
+  };
+
+  const slotRenderOpts = {
+    toInstanceId,
+    handleDragStart,
+    handleDrop,
+    quickMoveStashToInventory,
+    openItemTooltipForSlot,
+    updateTooltipPositionFromHoverEvent,
+    hideItemTooltip,
+    slotInner,
+  };
+
+  const rulesHint =
+    stashKind === "footlocker"
+      ? "General storage — any item."
+      : apartmentStashRejectionHint(stashKind);
+
+  const slotGridStyle: CSSProperties = {
+    display: "grid",
+    gap: 6,
   };
 
   return (
@@ -252,41 +340,29 @@ export function MammothStashHud({ conn, stashKey, stashLabel }: Props) {
     >
       <div style={{ color: "#f2d39a", fontSize: 12, marginBottom: 4 }}>{`${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`}</div>
       <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
-        {`Drag items in/out. Right-click ${stashLabel} items to move them to your inventory.`}
+        Drag items in/out. {rulesHint}
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${STASH_COLS}, 52px)`,
-          gap: 6,
-        }}
-      >
-        {Array.from({ length: STASH_ROWS * STASH_COLS }, (_, i) => {
-          const pop = displaySlots.stash?.[i] ?? null;
-          const slotInfo = { type: "stash" as const, index: i };
-          return (
-            <MammothDroppableSlot key={`stash-${i}`} slotInfo={slotInfo}>
-              {pop ? (
-                <MammothDraggableItem
-                  key={String(toInstanceId(pop))}
-                  item={pop}
-                  sourceSlot={slotInfo}
-                  onDragStart={handleDragStart}
-                  onDrop={handleDrop}
-                  onItemContextMenu={() => quickMoveStashToInventory(pop, i)}
-                  slotHover={{
-                    onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
-                    onMove: updateTooltipPositionFromHoverEvent,
-                    onLeave: hideItemTooltip,
-                  }}
-                >
-                  {slotInner(pop)}
-                </MammothDraggableItem>
-              ) : null}
-            </MammothDroppableSlot>
-          );
-        })}
-      </div>
+
+      {stoveSections ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {stoveSections.map((section) => (
+            <div key={section.label}>
+              <div style={{ fontSize: 11, color: "#c9b896", marginBottom: 6 }}>{section.label}</div>
+              <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${section.cols}, 52px)` }}>
+                {section.slotIndices.map((slotIndex) =>
+                  renderStashSlot(slotIndex, displaySlots.stash?.[slotIndex] ?? null, slotRenderOpts),
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${gridCols}, 52px)` }}>
+          {(displaySlots.stash ?? []).map((pop, slotIndex) =>
+            renderStashSlot(slotIndex, pop, slotRenderOpts),
+          )}
+        </div>
+      )}
 
       {createPortal(
         <MammothItemTooltip

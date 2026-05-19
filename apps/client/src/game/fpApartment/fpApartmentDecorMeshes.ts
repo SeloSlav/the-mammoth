@@ -59,10 +59,12 @@ import {
   apartmentStashKeyDecor,
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey.js";
+import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 
 const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
@@ -105,13 +107,6 @@ function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
     child.position.sub(_decorCenterLocalScratch);
   }
   root.updateMatrixWorld(true);
-}
-
-function apartmentStashKindForPlacedKind(k: OwnedApartmentPlacedItemKind): ApartmentStashKind | null {
-  if (k === "wardrobe") return APARTMENT_STASH_KIND_WARDROBE;
-  if (k === "footlocker") return APARTMENT_STASH_KIND_FOOTLOCKER;
-  if (k === "stove" || k === "fridge") return APARTMENT_STASH_KIND_STOVE;
-  return null;
 }
 
 function visibleDecorPlacements(
@@ -824,7 +819,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         if (
           stashKind !== APARTMENT_STASH_KIND_FOOTLOCKER &&
           stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
-          stashKind !== APARTMENT_STASH_KIND_STOVE
+          stashKind !== APARTMENT_STASH_KIND_STOVE &&
+          stashKind !== APARTMENT_STASH_KIND_FRIDGE
         ) {
           continue;
         }

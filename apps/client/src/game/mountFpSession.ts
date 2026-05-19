@@ -1329,6 +1329,7 @@ export async function mountFpSession(
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
           stashLabel: aptKey.stashLabel,
+          stashKind: aptKey.stashKind,
         });
         requestMammothInventoryOpenFromFp();
         if (document.pointerLockElement) void document.exitPointerLock();

@@ -3,12 +3,16 @@ import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import type { InventoryItem } from "../module_bindings/types";
 import { apartmentStashKeyMatchesRow } from "../game/fpApartment/fpApartmentStashKey";
+import type { ApartmentStashKind } from "../game/fpApartment/fpApartmentStashKey";
+import { APARTMENT_STASH_SLOT_INDEX_MAX } from "@the-mammoth/schemas";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
+import { apartmentStashSlotCount } from "./apartmentStashInventoryRules";
 import { getMammothItemDef } from "./mammothItemCatalog";
 
 export const MAMMOTH_HOTBAR_SLOTS = 6;
 export const MAMMOTH_INVENTORY_SLOTS = 24;
-export const MAMMOTH_STASH_SLOTS = 24;
+/** Legacy max — prefer {@link apartmentStashSlotCount} per furniture type. */
+export const MAMMOTH_STASH_SLOTS = APARTMENT_STASH_SLOT_INDEX_MAX;
 
 export function populateMammothInventoryItem(row: InventoryItem): MammothPopulatedItem | null {
   const def = getMammothItemDef(row.defId);
@@ -71,7 +75,12 @@ export function useMammothInventory(conn: DbConnection | null) {
   }, [conn, owner, ver]);
 }
 
-export function useMammothStash(conn: DbConnection | null, stashKey: string | null) {
+export function useMammothStash(
+  conn: DbConnection | null,
+  stashKey: string | null,
+  stashKind: ApartmentStashKind | null,
+) {
+  const slotCount = stashKind ? apartmentStashSlotCount(stashKind) : MAMMOTH_STASH_SLOTS;
   const [ver, setVer] = useState(0);
   useEffect(() => {
     if (!conn) return;
@@ -88,10 +97,7 @@ export function useMammothStash(conn: DbConnection | null, stashKey: string | nu
 
   return useMemo(() => {
     void ver;
-    const stash: Array<MammothPopulatedItem | null> = Array.from(
-      { length: MAMMOTH_STASH_SLOTS },
-      () => null,
-    );
+    const stash: Array<MammothPopulatedItem | null> = Array.from({ length: slotCount }, () => null);
     if (!conn || !stashKey) return stash;
     for (const row of conn.db.inventory_item) {
       const loc = row.location;
@@ -99,10 +105,10 @@ export function useMammothStash(conn: DbConnection | null, stashKey: string | nu
       const v = loc.value;
       if (!apartmentStashKeyMatchesRow(stashKey, v.unitKey)) continue;
       const p = populateMammothInventoryItem(row as InventoryItem);
-      if (p && v.slotIndex < MAMMOTH_STASH_SLOTS) {
+      if (p && v.slotIndex < slotCount) {
         stash[v.slotIndex] = p;
       }
     }
     return stash;
-  }, [conn, stashKey, ver]);
+  }, [conn, stashKey, slotCount, ver]);
 }

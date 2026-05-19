@@ -25,6 +25,7 @@ import {
   apartmentStashKey,
   apartmentStashKeyDecor,
   APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
 } from "./fpApartmentStashKey";
@@ -465,6 +466,49 @@ describe("fpApartmentGameplay", () => {
       unitKey: unit.unitKey,
       stashKind: APARTMENT_STASH_KIND_WARDROBE,
       stashLabel: "wardrobe",
+    });
+  });
+
+  it("permits stash use for fridge decor rows with their own stash kind", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      stoveX: 9,
+      stoveZ: 9,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const decor = {
+      decorId: 77n,
+      unitKey: unit.unitKey,
+      itemKind: 5,
+      modelRelPath: "static/models/objects/fridge.glb",
+      posX: 3,
+      posY: 10,
+      posZ: 4,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+    };
+    const conn = mockConn([unit], [], { apartmentUnitDecor: [decor] });
+    const pose = { x: 3.05, y: 10, z: 4.05 };
+    const key = apartmentStashKeyDecor(unit.unitKey, 77n);
+    expect(clientMayUseApartmentStash(conn, testIdentity as never, key, pose)).toBe(true);
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashKey: key,
+      }),
+    ).toEqual({
+      kind: "apartment_stash",
+      stashKey: key,
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FRIDGE,
+      stashLabel: "fridge",
     });
   });
 

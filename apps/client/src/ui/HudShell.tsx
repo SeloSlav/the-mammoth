@@ -187,7 +187,12 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         <MammothFpsHud />
         <MammothPickupPromptHud />
         {conn && activeStash ? (
-          <MammothStashHud conn={conn} stashKey={activeStash.stashKey} stashLabel={activeStash.stashLabel} />
+          <MammothStashHud
+            conn={conn}
+            stashKey={activeStash.stashKey}
+            stashLabel={activeStash.stashLabel}
+            stashKind={activeStash.stashKind}
+          />
         ) : null}
         <MammothElevatorHud />
         <MammothFpReticule />
