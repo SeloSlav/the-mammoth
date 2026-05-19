@@ -17,9 +17,11 @@ import {
   clampMyApartmentDecorEulerLimits,
   clampOwnedApartmentDecorUniformScale,
   constrainMyApartmentDecorVerticalBounds,
+  constrainMyApartmentMirrorRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  findEditorMyApartmentMirrorSurfaceMesh,
   findEditorMyApartmentWallSlabMesh,
   snapMyApartmentDecorEulerToGrid,
   snapOwnedApartmentDecorPitchRad,
@@ -305,7 +307,10 @@ export function commitEditorAttachedTransform(opts: {
         const wallChildId = child.userData.mammothEditorMyApartmentWallId as
           | string
           | undefined;
-        if (!decorChildId && !wallChildId) continue;
+        const mirrorChildId = child.userData.mammothEditorMyApartmentMirrorId as
+          | string
+          | undefined;
+        if (!decorChildId && !wallChildId && !mirrorChildId) continue;
 
         if (decorChildId) {
           const targetRootChild = child;
@@ -379,6 +384,77 @@ export function commitEditorAttachedTransform(opts: {
           continue;
         }
 
+        if (mirrorChildId) {
+          const targetRootChild = child;
+          applyMyApartmentDecorUniformScale(targetRootChild);
+          clampMyApartmentDecorEulerLimits(targetRootChild);
+          if (store.gridSnapM > 0) {
+            snapMyApartmentDecorEulerToGrid(targetRootChild);
+          }
+          if (!opts.transformControls.dragging) {
+            constrainMyApartmentMirrorRootPose(targetRootChild);
+          }
+          const mesh = findEditorMyApartmentMirrorSurfaceMesh(targetRootChild);
+          if (!mesh) continue;
+          targetRootChild.updateMatrixWorld(true);
+          const decorBoundsChild = new THREE.Box3().setFromObject(targetRootChild);
+          const dyChild = THREE.MathUtils.clamp(
+            decorBoundsChild.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+            0,
+            EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+          );
+          const eulerLocalMirror = new THREE.Euler().setFromQuaternion(
+            targetRootChild.quaternion,
+            "YXZ",
+          );
+          const yawMirror = eulerLocalMirror.y;
+          const pitchMirror = THREE.MathUtils.clamp(
+            eulerLocalMirror.x,
+            -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+            OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+          );
+          const rollMirror = THREE.MathUtils.clamp(
+            eulerLocalMirror.z,
+            -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+            OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+          );
+          const rootWorldMirror = targetRootChild.getWorldPosition(new THREE.Vector3());
+          const wxMirror = rootWorldMirror.x + m.prefabOriginX;
+          const wzMirror = rootWorldMirror.z + m.prefabOriginZ;
+          const fxMirror = THREE.MathUtils.clamp(
+            (wxMirror - m.strictMinX) / m.spanX,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const fzMirror = THREE.MathUtils.clamp(
+            (wzMirror - m.strictMinZ) / m.spanZ,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+            OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+          );
+          const sizeXMirror = Math.abs(mesh.scale.x * targetRootChild.scale.x);
+          const sizeYMirror = Math.abs(mesh.scale.y * targetRootChild.scale.y);
+          const mirrorKey = mirrorChildId;
+          store.patchOwnedApartmentBuiltins((d) => ({
+            ...d,
+            mirrorItems: d.mirrorItems.map((item) =>
+              item.id === mirrorKey
+                ? {
+                    ...item,
+                    fx: fxMirror,
+                    fz: fzMirror,
+                    dy: dyChild,
+                    yawRad: yawMirror,
+                    pitchRad: pitchMirror,
+                    rollRad: rollMirror,
+                    sizeX: sizeXMirror,
+                    sizeY: sizeYMirror,
+                  }
+                : item,
+            ),
+          }));
+          continue;
+        }
+
         if (wallChildId) {
           const targetRootChild = child;
           if (!opts.transformControls.dragging) {
@@ -448,10 +524,12 @@ export function commitEditorAttachedTransform(opts: {
     let targetRoot: THREE.Object3D | null = attached;
     let decorId: string | undefined;
     let wallId: string | undefined;
+    let mirrorId: string | undefined;
     while (targetRoot) {
       decorId = targetRoot.userData.mammothEditorMyApartmentDecorId as string | undefined;
       wallId = targetRoot.userData.mammothEditorMyApartmentWallId as string | undefined;
-      if (decorId || wallId) break;
+      mirrorId = targetRoot.userData.mammothEditorMyApartmentMirrorId as string | undefined;
+      if (decorId || wallId || mirrorId) break;
       targetRoot = targetRoot.parent;
     }
     if (!targetRoot) return;
@@ -517,6 +595,72 @@ export function commitEditorAttachedTransform(opts: {
         ),
       }));
       targetRoot.scale.setScalar(uniformScale);
+      return;
+    }
+
+    if (mirrorId) {
+      applyMyApartmentDecorUniformScale(targetRoot);
+      clampMyApartmentDecorEulerLimits(targetRoot);
+      if (store.gridSnapM > 0) {
+        snapMyApartmentDecorEulerToGrid(targetRoot);
+      }
+      if (!opts.transformControls.dragging) {
+        constrainMyApartmentMirrorRootPose(targetRoot);
+      }
+      const mesh = findEditorMyApartmentMirrorSurfaceMesh(targetRoot);
+      if (!mesh) return;
+      targetRoot.updateMatrixWorld(true);
+      const mirrorBounds = new THREE.Box3().setFromObject(targetRoot);
+      const dy = THREE.MathUtils.clamp(
+        mirrorBounds.min.y - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+        0,
+        EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
+      );
+      const eulerLocal = new THREE.Euler().setFromQuaternion(targetRoot.quaternion, "YXZ");
+      const yaw = eulerLocal.y;
+      const pitch = THREE.MathUtils.clamp(
+        eulerLocal.x,
+        -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+        OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+      );
+      const roll = THREE.MathUtils.clamp(
+        eulerLocal.z,
+        -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+        OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+      );
+      const rootWorld = targetRoot.getWorldPosition(new THREE.Vector3());
+      const wx = rootWorld.x + m.prefabOriginX;
+      const wz = rootWorld.z + m.prefabOriginZ;
+      const fx = THREE.MathUtils.clamp(
+        (wx - m.strictMinX) / m.spanX,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
+      const fz = THREE.MathUtils.clamp(
+        (wz - m.strictMinZ) / m.spanZ,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+        OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+      );
+      const sizeX = Math.abs(mesh.scale.x * targetRoot.scale.x);
+      const sizeY = Math.abs(mesh.scale.y * targetRoot.scale.y);
+      store.patchOwnedApartmentBuiltins((d) => ({
+        ...d,
+        mirrorItems: d.mirrorItems.map((item) =>
+          item.id === mirrorId
+            ? {
+                ...item,
+                fx,
+                fz,
+                dy,
+                yawRad: yaw,
+                pitchRad: pitch,
+                rollRad: roll,
+                sizeX,
+                sizeY,
+              }
+            : item,
+        ),
+      }));
       return;
     }
 

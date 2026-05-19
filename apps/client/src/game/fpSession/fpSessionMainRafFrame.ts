@@ -203,7 +203,7 @@ export type FpSessionMainRafFrameDeps = {
   localAudio: LocalGameAudio;
   presentation: PlayerPresentationManager;
   hotbarConsumableVisual: FpHotbarConsumableVisual;
-  cabMirrors: FpPlanarMirror[];
+  cabMirrorCollection: { mirrors: readonly FpPlanarMirror[] };
   fpEnvironment: ReturnType<typeof attachFpSessionEnvironment>;
   stairShaftInteriorLightBounds: readonly FpStairShaftInteriorLightBounds[];
   _floorVisCamWorld: THREE.Vector3;
@@ -895,7 +895,8 @@ export function createFpSessionMainRafFrame(
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();
-    const primaryMirrorIdx = pickCabMirrorPrimaryUpdateIndex(deps.cabMirrors, {
+    const cabMirrors = deps.cabMirrorCollection.mirrors;
+    const primaryMirrorIdx = pickCabMirrorPrimaryUpdateIndex(cabMirrors, {
       cameraWorld: deps._floorVisCamWorld,
       cameraForward: deps._floorVisCamDir,
       opts: { maxDistanceM: 4.5, minFacingDot: 0.22 },
@@ -910,8 +911,8 @@ export function createFpSessionMainRafFrame(
       lastCabMirrorReflectionUpdateMs = nowMs;
       lastCabMirrorReflectionIdx = primaryMirrorIdx;
     }
-    for (let i = 0; i < deps.cabMirrors.length; i++) {
-      const mirror = deps.cabMirrors[i]!;
+    for (let i = 0; i < cabMirrors.length; i++) {
+      const mirror = cabMirrors[i]!;
       mirror.syncForCamera({
         camera: deps.camera,
         dynamicActive: i === primaryMirrorIdx,

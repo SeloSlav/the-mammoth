@@ -142,6 +142,12 @@ export {
 export { MAMMOTH_FP_INTERIOR_PARTITION_SOLID } from "./fpInteriorPartitionSolid.js";
 export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurfaceMaterial.js";
 export {
+  APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
+  APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
+  APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
+  buildApartmentPlanarMirrorVisual,
+} from "./apartmentPlanarMirrorVisual.js";
+export {
   buildFpBlockerAABBsForBuilding,
   mergeCoplanarSweepPreheat,
   mergeCoplanarTouchingBlockerAabbs,

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { OwnedApartmentWallMaterial } from "@the-mammoth/schemas";
+import {
+  APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
+  APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
+} from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
 import { workspaceToInitialMode } from "../state/editorWorkspaceMap.js";
@@ -18,8 +22,10 @@ import {
 } from "./editorMaterialSlotEditor.js";
 import {
   editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
   parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutMirrorSelectedId,
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
@@ -172,11 +178,13 @@ export function EditorChromeMyApartment(props: {
 
   const selectedDecorId = parseMyApartmentLayoutDecorSelectedId(selectedId);
   const selectedWallId = parseMyApartmentLayoutWallSelectedId(selectedId);
+  const selectedMirrorId = parseMyApartmentLayoutMirrorSelectedId(selectedId);
   const placedItems = useMemo(
     () => [...ownedApartmentBuiltins.placedItems].sort((a, b) => a.id.localeCompare(b.id)),
     [ownedApartmentBuiltins],
   );
   const wallItems = ownedApartmentBuiltins.wallItems;
+  const mirrorItems = ownedApartmentBuiltins.mirrorItems;
 
   const wallTextureOptions = useMemo(
     () =>
@@ -198,6 +206,12 @@ export function EditorChromeMyApartment(props: {
     [wallItems],
   );
   const selectedWall = selectedWallId ? (wallById.get(selectedWallId) ?? null) : null;
+
+  const mirrorById = useMemo(
+    () => new Map(mirrorItems.map((item) => [item.id, item] as const)),
+    [mirrorItems],
+  );
+  const selectedMirror = selectedMirrorId ? (mirrorById.get(selectedMirrorId) ?? null) : null;
 
   const [newObjectGroupName, setNewObjectGroupName] = useState("Saved group");
 
@@ -224,14 +238,16 @@ export function EditorChromeMyApartment(props: {
     for (const extra of myApartmentMultiselectExtraIds) {
       const isDecorExtra = parseMyApartmentLayoutDecorSelectedId(extra) !== null;
       const isWallExtra = parseMyApartmentLayoutWallSelectedId(extra) !== null;
-      if (isDecorExtra || isWallExtra) {
+      const isMirrorExtra = parseMyApartmentLayoutMirrorSelectedId(extra) !== null;
+      if (isDecorExtra || isWallExtra || isMirrorExtra) {
         s.add(extra);
       }
     }
     if (typeof selectedId === "string") {
       const isDecorSel = parseMyApartmentLayoutDecorSelectedId(selectedId) !== null;
       const isWallSel = parseMyApartmentLayoutWallSelectedId(selectedId) !== null;
-      if (isDecorSel || isWallSel) {
+      const isMirrorSel = parseMyApartmentLayoutMirrorSelectedId(selectedId) !== null;
+      if (isDecorSel || isWallSel || isMirrorSel) {
         s.add(selectedId);
       }
     }
@@ -378,11 +394,71 @@ export function EditorChromeMyApartment(props: {
     setSelectedId(null);
   }
 
+  function addMirror(): void {
+    const nextIndex = ownedApartmentBuiltins.mirrorItems.length;
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `mirror_${Date.now()}_${nextIndex}`;
+    const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      mirrorItems: [
+        ...doc.mirrorItems,
+        {
+          id,
+          fx,
+          fz,
+          dy: 0.9,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          sizeX: APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
+          sizeY: APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
+        },
+      ],
+    }));
+    setSelectedId(editorMyApartmentSelectedIdForMirror(id));
+  }
+
+  function cloneSelectedMirror(): void {
+    if (!selectedMirror) return;
+    const nextIndex = ownedApartmentBuiltins.mirrorItems.length;
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `mirror_${Date.now()}_${nextIndex}`;
+    const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      mirrorItems: [
+        ...doc.mirrorItems,
+        {
+          ...selectedMirror,
+          id,
+          fx,
+          fz,
+        },
+      ],
+    }));
+    setSelectedId(editorMyApartmentSelectedIdForMirror(id));
+  }
+
+  function deleteSelectedMirror(): void {
+    if (!selectedMirrorId) return;
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      mirrorItems: doc.mirrorItems.filter((item) => item.id !== selectedMirrorId),
+    }));
+    setSelectedId(null);
+  }
+
   const apartmentSceneGizmoHints: "decor" | "builtins" =
     mode === "my_apartment_layout" &&
       (parsedSavedLayoutObjectGroupId !== null ||
         selectedDecorId !== null ||
         selectedWallId !== null ||
+        selectedMirrorId !== null ||
         apartmentDecorWallMultisetCount >= 2)
       ? "decor"
       : "builtins";
@@ -635,6 +711,70 @@ export function EditorChromeMyApartment(props: {
             </span>
           </label>
         ) : null}
+        <span style={{ ...editorChromeLabel, display: "block", marginTop: 14 }}>
+          Mirrors (planar)
+        </span>
+        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+          Rectangle glass with a thin frame, same reflective surface as the elevator cab mirror.
+          Move / rotate / scale with the gizmo like décor; axis scale resizes width and height.
+        </p>
+        <div style={{ marginTop: 8 }}>
+          <button type="button" style={editorChromeRowBtn} onClick={addMirror}>
+            Add mirror
+          </button>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gap: 6,
+            marginTop: 8,
+            maxHeight: 120,
+            overflowY: "auto",
+          }}
+        >
+          {mirrorItems.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>No mirrors yet.</div>
+          ) : (
+            mirrorItems.map((item) => {
+              const mirrorFullId = editorMyApartmentSelectedIdForMirror(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    ...editorChromeRowBtn,
+                    textAlign: "left",
+                    background: isDecorWallPlacementRowSelected(mirrorFullId)
+                      ? "#355172"
+                      : "#2a2a34",
+                  }}
+                  onClick={(ev) => pickDecorWallPlacementFromList(mirrorFullId, ev)}
+                  title={item.id}
+                >
+                  Mirror {item.id.slice(0, 8)}… ({item.sizeX.toFixed(2)}×{item.sizeY.toFixed(2)} m)
+                </button>
+              );
+            })
+          )}
+        </div>
+        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={cloneSelectedMirror}
+            disabled={!selectedMirror}
+          >
+            Clone selected mirror
+          </button>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={deleteSelectedMirror}
+            disabled={!selectedMirror}
+          >
+            Delete selected mirror
+          </button>
+        </div>
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 14 }}>
           Partition walls (thin slabs)
         </span>

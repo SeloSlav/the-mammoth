@@ -136,7 +136,7 @@ import { resolveAuthoritativeInteractionPose } from "./fpInteraction/fpInteracti
 import { deliverFpSessionGpuRenderMs, resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
-import { createFpPlanarMirrorFromPlaceholder, type FpPlanarMirror } from "./fpRendering/fpPlanarMirror.js";
+import { FpCabMirrorCollection } from "./fpRendering/fpCabMirrorCollection.js";
 import {
   FP_MIRROR_SELF_RENDER_LAYER,
   FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
@@ -563,6 +563,8 @@ export async function mountFpSession(
     return lastPerfSceneCounters;
   };
 
+  const cabMirrorCollection = new FpCabMirrorCollection(scene);
+
   const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
     mountFpApartmentFurniture({
       conn,
@@ -576,6 +578,7 @@ export async function mountFpSession(
     scene,
     conn,
     buildingRoot,
+    cabMirrorCollection,
     onRebuilt: refreshApartmentInteriorMeshes,
   });
   refreshApartmentInteriorMeshes();
@@ -645,15 +648,6 @@ export async function mountFpSession(
         // TODO: hand off to gameplay hit-scan / server validation — placeholder trace only.
       },
     }),
-  );
-  const cabMirrorPlaceholders: THREE.Mesh[] = [];
-  scene.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    if (obj.userData.mammothCabMirror !== true) return;
-    cabMirrorPlaceholders.push(obj);
-  });
-  const cabMirrors: FpPlanarMirror[] = cabMirrorPlaceholders.map((mesh) =>
-    createFpPlanarMirrorFromPlaceholder(mesh),
   );
   headPitch.traverse((obj) => obj.layers.set(FP_VIEWMODEL_RENDER_LAYER));
   camera.layers.enable(FP_VIEWMODEL_RENDER_LAYER);
@@ -1510,7 +1504,7 @@ export async function mountFpSession(
     localAudio,
     presentation,
     hotbarConsumableVisual,
-    cabMirrors,
+    cabMirrorCollection,
     fpEnvironment,
     stairShaftInteriorLightBounds,
     _floorVisCamWorld,
@@ -1651,7 +1645,7 @@ export async function mountFpSession(
     fpPlayerDamageBloodSquirt.dispose();
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
-    for (const mirror of cabMirrors) mirror.dispose();
+    cabMirrorCollection.dispose();
     presentation.dispose();
     renderer.dispose();
     scene.clear();

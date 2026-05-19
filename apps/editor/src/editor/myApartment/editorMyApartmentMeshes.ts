@@ -10,7 +10,12 @@ import {
   syncApartmentInteriorPracticalLighting,
   type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
-import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
+import {
+  APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
+  UNIT_SHELL_WALL_THICKNESS_M,
+  applyOwnedApartmentWallSurfaceMaterial,
+  buildApartmentPlanarMirrorVisual,
+} from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
@@ -18,12 +23,14 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentMirrorItem,
   type OwnedApartmentPlacedItem,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
   editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
@@ -62,6 +69,9 @@ export const EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M = 0.02;
 export const EDITOR_MY_APARTMENT_WALL_THICKNESS_MAX_M = 2;
 
 export const EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY = "mammothEditorMyApartmentWallMesh" as const;
+/** Matches {@link APARTMENT_MIRROR_SURFACE_USERDATA_KEY} on the reflective plane mesh. */
+export const EDITOR_MY_APARTMENT_MIRROR_SURFACE_USERDATA_KEY =
+  APARTMENT_MIRROR_SURFACE_USERDATA_KEY;
 
 const decorClampBoundsScratch = new THREE.Box3();
 const decorClampSizeScratch = new THREE.Vector3();
@@ -625,6 +635,108 @@ export function constrainMyApartmentWallRootPose(
   }
 }
 
+export function findEditorMyApartmentMirrorSurfaceMesh(
+  root: THREE.Object3D,
+): THREE.Mesh | undefined {
+  let found: THREE.Mesh | undefined;
+  root.traverse((c) => {
+    if (
+      found === undefined &&
+      c instanceof THREE.Mesh &&
+      c.userData[EDITOR_MY_APARTMENT_MIRROR_SURFACE_USERDATA_KEY] === true
+    ) {
+      found = c;
+    }
+  });
+  return found;
+}
+
+export function foldMirrorSurfaceScaleIntoMesh(root: THREE.Group): THREE.Mesh | undefined {
+  const mesh = findEditorMyApartmentMirrorSurfaceMesh(root);
+  if (!mesh) return undefined;
+  const sx = Math.abs(mesh.scale.x * root.scale.x);
+  const sy = Math.abs(mesh.scale.y * root.scale.y);
+  root.scale.set(1, 1, 1);
+  mesh.scale.set(sx, sy, 1);
+  mesh.position.y = sy / 2;
+  return mesh;
+}
+
+export type ConstrainMyApartmentMirrorScaleDrag = {
+  meshScaleAtGestureStart: THREE.Vector3;
+};
+
+export function constrainMyApartmentMirrorRootPose(
+  root: THREE.Object3D,
+  scaleDrag?: ConstrainMyApartmentMirrorScaleDrag,
+): void {
+  if (!(root instanceof THREE.Group)) return;
+
+  const meshAtStart = findEditorMyApartmentMirrorSurfaceMesh(root);
+
+  if (scaleDrag && meshAtStart) {
+    meshAtStart.scale.copy(scaleDrag.meshScaleAtGestureStart);
+    const mx = meshAtStart.scale.x;
+    const my = meshAtStart.scale.y;
+    let ex = Math.abs(mx * root.scale.x);
+    let ey = Math.abs(my * root.scale.y);
+    ex = THREE.MathUtils.clamp(
+      ex,
+      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M,
+      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M,
+    );
+    ey = THREE.MathUtils.clamp(
+      ey,
+      EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M,
+      EDITOR_MY_APARTMENT_WALL_SIZE_Y_MAX_M,
+    );
+    const eps = 1e-9;
+    root.scale.set(mx > eps ? ex / mx : 1, my > eps ? ey / my : 1, 1);
+  } else {
+    foldMirrorSurfaceScaleIntoMesh(root);
+  }
+
+  clampMyApartmentDecorEulerLimits(root);
+
+  const mesh = findEditorMyApartmentMirrorSurfaceMesh(root);
+  if (mesh && !scaleDrag) {
+    mesh.scale.x = THREE.MathUtils.clamp(
+      mesh.scale.x,
+      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M,
+      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M,
+    );
+    mesh.scale.y = THREE.MathUtils.clamp(
+      mesh.scale.y,
+      EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M,
+      EDITOR_MY_APARTMENT_WALL_SIZE_Y_MAX_M,
+    );
+    mesh.position.y = mesh.scale.y / 2;
+  }
+
+  const meta = readAuthoringShellAuthoringMetaFromAncestors(root);
+  if (meta) {
+    const c = clampPreviewXZToAuthoringInterior(meta, root.position.x, root.position.z);
+    root.position.x = c.x;
+    root.position.z = c.z;
+  }
+
+  const floorY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
+  const maxBottomY = floorY + EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M;
+  for (let pass = 0; pass < 4; pass++) {
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    if (box.min.y < floorY) {
+      root.position.y += floorY - box.min.y;
+      continue;
+    }
+    if (box.min.y > maxBottomY) {
+      root.position.y -= box.min.y - maxBottomY;
+      continue;
+    }
+    break;
+  }
+}
+
 export type EditorMyApartmentDecorTemplateMap = Map<string, THREE.Object3D>;
 
 export function previewWorldFromNormalizedPlacement(args: {
@@ -719,6 +831,52 @@ function placeWallGroup(args: {
   group.updateMatrixWorld(true);
 
   applyOwnedApartmentWallSurfaceMaterial(mesh, wall.material);
+}
+
+function placeMirrorGroup(args: {
+  group: THREE.Group;
+  mirror: OwnedApartmentMirrorItem;
+  spans: OwnedApartmentFractionToPreviewXZ;
+}): void {
+  const { group, mirror, spans } = args;
+  disposeGroupSubtreeGeometry(group);
+  group.clear();
+  group.userData.mammothEditorMyApartmentProp = true;
+  group.userData.mammothEditorMyApartmentMirrorId = mirror.id;
+
+  const pv = previewWorldFromNormalizedPlacement({
+    spans,
+    fx: mirror.fx,
+    fz: mirror.fz,
+  });
+  group.position.set(pv.x, 0, pv.z);
+  group.rotation.order = "YXZ";
+  const yaw = mirror.yawRad;
+  const pitch = THREE.MathUtils.clamp(
+    mirror.pitchRad,
+    -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+    OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
+  );
+  const roll = THREE.MathUtils.clamp(
+    mirror.rollRad ?? 0,
+    -OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+    OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+  );
+  group.rotation.set(pitch, yaw, roll, "YXZ");
+
+  const visual = buildApartmentPlanarMirrorVisual({
+    widthM: mirror.sizeX,
+    heightM: mirror.sizeY,
+    includeFrame: true,
+  });
+  group.add(visual);
+  constrainMyApartmentMirrorRootPose(group);
+
+  const slabTop = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + mirror.dy;
+  group.updateMatrixWorld(true);
+  const boxBefore = new THREE.Box3().setFromObject(group);
+  group.position.y += slabTop - boxBefore.min.y;
+  group.updateMatrixWorld(true);
 }
 
 function placeDecorGroup(args: {
@@ -832,6 +990,18 @@ export function mountEditorMyApartmentFurnitureUnder(
       spans: authoringFractionMapping,
     });
     selectionGroups[editorMyApartmentSelectedIdForWall(wall.id)] = group;
+  }
+
+  for (const mirror of doc.mirrorItems) {
+    const group = new THREE.Group();
+    group.name = `editor_my_apartment_mirror:${mirror.id}`;
+    root.add(group);
+    placeMirrorGroup({
+      group,
+      mirror,
+      spans: authoringFractionMapping,
+    });
+    selectionGroups[editorMyApartmentSelectedIdForMirror(mirror.id)] = group;
   }
 
   const practicalLights = syncApartmentInteriorPracticalLighting({

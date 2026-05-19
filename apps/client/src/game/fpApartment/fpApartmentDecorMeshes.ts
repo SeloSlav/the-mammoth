@@ -11,6 +11,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import {
   applyOwnedApartmentWallSurfaceMaterial,
+  buildApartmentPlanarMirrorVisual,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
 import {
@@ -40,8 +41,10 @@ import {
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
   resolveApartmentDecorPoses,
+  resolveApartmentMirrorPoses,
   resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
+import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   bindMammothMetallicReadableEnv,
@@ -198,6 +201,20 @@ type VisibleWallPlacement = {
   material: OwnedApartmentWallMaterial;
 };
 
+type VisibleMirrorPlacement = {
+  renderKey: string;
+  unit: ApartmentUnit;
+  mirrorId: string;
+  posX: number;
+  posY: number;
+  posZ: number;
+  yawRad: number;
+  pitchRad: number;
+  rollRad: number;
+  sizeX: number;
+  sizeY: number;
+};
+
 function visibleWallPlacements(
   conn: DbConnection,
   builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
@@ -230,13 +247,55 @@ function visibleWallPlacements(
   return out;
 }
 
+function visibleMirrorPlacements(
+  conn: DbConnection,
+  builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+): VisibleMirrorPlacement[] {
+  const visibleUnits: ApartmentUnit[] = [];
+  for (const row of conn.db.apartment_unit) {
+    const unit = row as ApartmentUnit;
+    if (!residentInteriorPropsVisibleForViewer(conn, unit)) continue;
+    visibleUnits.push(unit);
+  }
+  const out: VisibleMirrorPlacement[] = [];
+  for (const unit of visibleUnits) {
+    for (const mirror of resolveApartmentMirrorPoses(unit, builtinsFromContent)) {
+      out.push({
+        renderKey: `content_mirror:${unit.unitKey}:${mirror.id}`,
+        unit,
+        mirrorId: mirror.id,
+        posX: mirror.x,
+        posY: mirror.y,
+        posZ: mirror.z,
+        yawRad: mirror.yaw,
+        pitchRad: mirror.pitch,
+        rollRad: mirror.roll,
+        sizeX: mirror.sizeX,
+        sizeY: mirror.sizeY,
+      });
+    }
+  }
+  return out;
+}
+
 type AuthoringBuildEntry =
   | { kind: "decor"; decor: VisibleDecorPlacement }
-  | { kind: "wall"; wall: VisibleWallPlacement };
+  | { kind: "wall"; wall: VisibleWallPlacement }
+  | { kind: "mirror"; mirror: VisibleMirrorPlacement };
 
 function compareAuthoringBuildEntries(a: AuthoringBuildEntry, b: AuthoringBuildEntry): number {
-  const ka = a.kind === "decor" ? a.decor.renderKey : a.wall.renderKey;
-  const kb = b.kind === "decor" ? b.decor.renderKey : b.wall.renderKey;
+  const ka =
+    a.kind === "decor"
+      ? a.decor.renderKey
+      : a.kind === "wall"
+        ? a.wall.renderKey
+        : a.mirror.renderKey;
+  const kb =
+    b.kind === "decor"
+      ? b.decor.renderKey
+      : b.kind === "wall"
+        ? b.wall.renderKey
+        : b.mirror.renderKey;
   return ka.localeCompare(kb);
 }
 
@@ -262,6 +321,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   scene: THREE.Scene;
   conn: DbConnection;
   buildingRoot: THREE.Group;
+  cabMirrorCollection?: FpCabMirrorCollection;
   onRebuilt?: () => void;
 }): MountFpApartmentDecorMeshesResult {
   const root = new THREE.Group();
@@ -479,15 +539,53 @@ export function mountFpApartmentDecorMeshes(opts: {
 
     const decorRows = visibleDecorPlacements(opts.conn, builtinsFromContent);
     const wallRows = visibleWallPlacements(opts.conn, builtinsFromContent);
+    const mirrorRows = visibleMirrorPlacements(opts.conn, builtinsFromContent);
     const rows: AuthoringBuildEntry[] = [
       ...decorRows.map((decor) => ({ kind: "decor" as const, decor })),
       ...wallRows.map((wall) => ({ kind: "wall" as const, wall })),
+      ...mirrorRows.map((mirror) => ({ kind: "mirror" as const, mirror })),
     ].sort(compareAuthoringBuildEntries);
     clearAll();
 
     for (const entry of rows) {
       await yieldToMain();
       if (disposed || epoch !== buildEpoch) return;
+
+      if (entry.kind === "mirror") {
+        const m = entry.mirror;
+        const g = new THREE.Group();
+        g.name = `apartment_mirror:${m.mirrorId}`;
+        g.userData.mammothApartmentMirrorAuthoring = true;
+        g.userData.mammothApartmentFurnitureProp = true;
+        g.userData.mammothApartmentUnitKey = m.unit.unitKey;
+        g.userData.mammothPlateLevelIndex = m.unit.level;
+        g.position.set(m.posX, m.posY, m.posZ);
+        g.rotation.order = "YXZ";
+        g.rotation.y = m.yawRad;
+        g.rotation.x = m.pitchRad;
+        g.rotation.z = m.rollRad;
+
+        const visual = buildApartmentPlanarMirrorVisual({
+          widthM: m.sizeX,
+          heightM: m.sizeY,
+          includeFrame: true,
+        });
+        g.add(visual);
+        snapCloneBottomToWorldFloor(g, m.posY);
+        keepCloneInsideUnitXZ(g, m.unit, {
+          insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
+          fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+          fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+        });
+        g.updateMatrixWorld(true);
+        const bbox = new THREE.Box3().setFromObject(g);
+        bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+        g.userData.mammothApartmentDecorWorldBounds = bbox;
+        tagResidentialUnitInteriorMeshesUnder(g);
+        root.add(g);
+        groupByRenderKey.set(m.renderKey, g);
+        continue;
+      }
 
       if (entry.kind === "wall") {
         const w = entry.wall;
@@ -645,6 +743,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     }
 
     opts.buildingRoot.updateMatrixWorld(true);
+    opts.cabMirrorCollection?.syncApartmentDecorRoot(root);
     opts.onRebuilt?.();
   }
 

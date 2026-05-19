@@ -47,8 +47,10 @@ import {
   applyMyApartmentDecorUniformScale,
   clampMyApartmentDecorEulerLimits,
   constrainMyApartmentDecorVerticalBounds,
+  constrainMyApartmentMirrorRootPose,
   constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
+  findEditorMyApartmentMirrorSurfaceMesh,
   findEditorMyApartmentWallSlabMesh,
   snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
@@ -59,6 +61,7 @@ import {
 } from "../myApartment/editorMyApartmentSavedGroupManip.js";
 import {
   parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutMirrorSelectedId,
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../myApartment/editorMyApartmentSelection.js";
@@ -582,8 +585,9 @@ export async function mountEditorScene(
     wallOnlyAggregate: boolean;
   } {
     const decorSel = parseMyApartmentLayoutDecorSelectedId(st.selectedId) !== null;
+    const mirrorSel = parseMyApartmentLayoutMirrorSelectedId(st.selectedId) !== null;
     const wallSel = parseMyApartmentLayoutWallSelectedId(st.selectedId) !== null;
-    let hasDecorMember = decorSel;
+    let hasDecorMember = decorSel || mirrorSel;
     let hasWallMember = wallSel;
 
     const savedGroupKey = parseMyApartmentLayoutSavedObjectGroupId(st.selectedId);
@@ -593,7 +597,9 @@ export async function mountEditorScene(
         hasDecorMember =
           hasDecorMember ||
           def.memberSelectedIds.some(
-            (id) => parseMyApartmentLayoutDecorSelectedId(id) !== null,
+            (id) =>
+              parseMyApartmentLayoutDecorSelectedId(id) !== null ||
+              parseMyApartmentLayoutMirrorSelectedId(id) !== null,
           );
         hasWallMember =
           hasWallMember ||
@@ -741,9 +747,12 @@ export async function mountEditorScene(
     if (
       st.mode === "my_apartment_layout" &&
       st.transformMode === "scale" &&
-      attached?.userData.mammothEditorMyApartmentWallId
+      (attached?.userData.mammothEditorMyApartmentWallId ||
+        attached?.userData.mammothEditorMyApartmentMirrorId)
     ) {
-      const mesh = findEditorMyApartmentWallSlabMesh(attached);
+      const mesh =
+        findEditorMyApartmentWallSlabMesh(attached) ??
+        findEditorMyApartmentMirrorSurfaceMesh(attached);
       wallSlabScaleGesture = mesh
         ? { object: attached, meshStart: mesh.scale.clone() }
         : null;
@@ -800,7 +809,10 @@ export async function mountEditorScene(
       if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
         for (const child of [...aptObj.children]) {
           if (!(child instanceof THREE.Group)) continue;
-          if (child.userData.mammothEditorMyApartmentDecorId) {
+          if (
+            child.userData.mammothEditorMyApartmentDecorId ||
+            child.userData.mammothEditorMyApartmentMirrorId
+          ) {
             applyMyApartmentDecorUniformScale(child);
             if (aptSt.transformMode === "rotate") {
               clampMyApartmentDecorEulerLimits(child);
@@ -808,9 +820,37 @@ export async function mountEditorScene(
                 snapMyApartmentDecorEulerToGrid(child);
               }
             }
-            if (aptSt.transformMode !== "rotate") {
+            if (
+              aptSt.transformMode !== "rotate" &&
+              child.userData.mammothEditorMyApartmentDecorId
+            ) {
               constrainMyApartmentDecorVerticalBounds(child);
               constrainMyApartmentDecorToSupportSurfaces(child);
+            }
+            if (child.userData.mammothEditorMyApartmentMirrorId) {
+              if (aptSt.transformMode === "scale") {
+                const axis = (transformControls as unknown as { axis?: string | null }).axis;
+                if (
+                  wallSlabScaleGesture &&
+                  wallSlabScaleGesture.object === child &&
+                  transformControls.dragging &&
+                  axis &&
+                  axis !== "XYZ" &&
+                  !axis.includes("E")
+                ) {
+                  if (axis.indexOf("X") === -1) child.scale.x = 1;
+                  if (axis.indexOf("Y") === -1) child.scale.y = 1;
+                  if (axis.indexOf("Z") === -1) child.scale.z = 1;
+                }
+              }
+              const scaleDrag =
+                aptSt.transformMode === "scale" &&
+                wallSlabScaleGesture &&
+                wallSlabScaleGesture.object === child &&
+                transformControls.dragging
+                  ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
+                  : undefined;
+              constrainMyApartmentMirrorRootPose(child, scaleDrag);
             }
           } else if (child.userData.mammothEditorMyApartmentWallId) {
             if (aptSt.transformMode === "scale") {
@@ -839,7 +879,10 @@ export async function mountEditorScene(
             constrainMyApartmentWallRootPose(child, scaleDrag);
           }
         }
-      } else if (aptObj.userData.mammothEditorMyApartmentDecorId) {
+      } else if (
+        aptObj.userData.mammothEditorMyApartmentDecorId ||
+        aptObj.userData.mammothEditorMyApartmentMirrorId
+      ) {
         applyMyApartmentDecorUniformScale(aptObj);
         if (aptSt.transformMode === "rotate") {
           clampMyApartmentDecorEulerLimits(aptObj);
@@ -847,9 +890,34 @@ export async function mountEditorScene(
             snapMyApartmentDecorEulerToGrid(aptObj);
           }
         }
-        if (aptSt.transformMode !== "rotate") {
+        if (aptSt.transformMode !== "rotate" && aptObj.userData.mammothEditorMyApartmentDecorId) {
           constrainMyApartmentDecorVerticalBounds(aptObj);
           constrainMyApartmentDecorToSupportSurfaces(aptObj);
+        }
+        if (aptObj.userData.mammothEditorMyApartmentMirrorId) {
+          if (aptSt.transformMode === "scale") {
+            const axis = (transformControls as unknown as { axis?: string | null }).axis;
+            if (
+              wallSlabScaleGesture &&
+              wallSlabScaleGesture.object === aptObj &&
+              transformControls.dragging &&
+              axis &&
+              axis !== "XYZ" &&
+              !axis.includes("E")
+            ) {
+              if (axis.indexOf("X") === -1) aptObj.scale.x = 1;
+              if (axis.indexOf("Y") === -1) aptObj.scale.y = 1;
+              if (axis.indexOf("Z") === -1) aptObj.scale.z = 1;
+            }
+          }
+          const scaleDrag =
+            aptSt.transformMode === "scale" &&
+            wallSlabScaleGesture &&
+            wallSlabScaleGesture.object === aptObj &&
+            transformControls.dragging
+              ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
+              : undefined;
+          constrainMyApartmentMirrorRootPose(aptObj, scaleDrag);
         }
       } else if (aptObj.userData.mammothEditorMyApartmentWallId) {
         if (aptSt.transformMode === "scale") {

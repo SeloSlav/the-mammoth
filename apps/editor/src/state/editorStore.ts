@@ -55,6 +55,7 @@ import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForSavedObjectGroup,
   parseMyApartmentLayoutDecorSelectedId,
+  parseMyApartmentLayoutMirrorSelectedId,
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
@@ -475,7 +476,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const groupable = [...multiset].filter(
       (id) =>
         parseMyApartmentLayoutDecorSelectedId(id) !== null ||
-        parseMyApartmentLayoutWallSelectedId(id) !== null,
+        parseMyApartmentLayoutWallSelectedId(id) !== null ||
+        parseMyApartmentLayoutMirrorSelectedId(id) !== null,
     );
     groupable.sort((a, b) => a.localeCompare(b));
     if (groupable.length < 2) return;

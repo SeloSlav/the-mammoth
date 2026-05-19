@@ -7,6 +7,7 @@ import {
 import {
   ownedApartmentDocUsesNonPlainPlacedItems,
   resolveApartmentDecorPoses,
+  resolveApartmentMirrorPoses,
   resolveApartmentWallPoses,
 } from "./fpOwnedApartmentBuiltinsFromContent";
 
@@ -206,6 +207,42 @@ describe("resolveApartmentDecorPoses", () => {
 
   it("returns no walls when the doc omits wallItems", () => {
     expect(resolveApartmentWallPoses(apartmentUnit(), null)).toEqual([]);
+  });
+
+  it("resolves mirror fractions into world-space poses", () => {
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      version: 2,
+      previewSizeM: 10,
+      placedItems: [],
+      wallItems: [],
+      mirrorItems: [
+        {
+          id: "mirror_a",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0.9,
+          yawRad: 0.2,
+          pitchRad: 0.1,
+          rollRad: 0,
+          sizeX: 0.72,
+          sizeY: 1.28,
+        },
+      ],
+      objectGroups: [],
+    });
+    expect(resolveApartmentMirrorPoses(apartmentUnit(), doc)).toEqual([
+      {
+        id: "mirror_a",
+        x: 106,
+        y: 30.9,
+        z: 204,
+        yaw: 0.2,
+        pitch: 0.1,
+        roll: 0,
+        sizeX: 0.72,
+        sizeY: 1.28,
+      },
+    ]);
   });
 });
 

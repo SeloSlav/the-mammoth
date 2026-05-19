@@ -249,13 +249,45 @@ export const OwnedApartmentWallItemSchema = z.object({
 
 export type OwnedApartmentWallItem = z.infer<typeof OwnedApartmentWallItemSchema>;
 
+/** Authored planar mirror (rectangle glass + optional frame) saved with owned-apartment layout. */
+export const OwnedApartmentMirrorItemSchema = z.object({
+  id: z.string().min(1).max(120),
+  fx: z
+    .number()
+    .min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN)
+    .max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  fz: z
+    .number()
+    .min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN)
+    .max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  /** Meters above `boundMinY` for the mirror bottom edge. */
+  dy: z.number().min(0).max(4),
+  yawRad: z.number(),
+  pitchRad: z
+    .number()
+    .min(-OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
+    .default(0),
+  rollRad: z
+    .number()
+    .min(-OWNED_APARTMENT_DECOR_ROLL_RAD_MAX)
+    .max(OWNED_APARTMENT_DECOR_ROLL_RAD_MAX)
+    .default(0),
+  /** Mirror rectangle width (local X, meters). */
+  sizeX: z.number().min(0.15).max(8),
+  /** Mirror rectangle height (local Y, meters). */
+  sizeY: z.number().min(0.15).max(8),
+});
+
+export type OwnedApartmentMirrorItem = z.infer<typeof OwnedApartmentMirrorItemSchema>;
+
 /** Saved multi-object selection groups for apartment authoring (decor + wall slabs). */
 export const OwnedApartmentObjectGroupSchema = z.object({
   /** Stable authoring id — store as opaque string alongside decor/wall UUIDs. */
   id: z.string().min(1).max(120),
   /** Author-facing label shown in editor lists. */
   name: z.string().min(1).max(200),
-  /** Full editor selection ids: `mammoth_editor_my_apartment_decor:<uuid>` or `…_wall:…`. */
+  /** Full editor selection ids: `mammoth_editor_my_apartment_decor|wall|mirror:<uuid>`. */
   memberSelectedIds: z.array(z.string().min(1).max(200)).min(1).max(200),
 });
 
@@ -307,6 +339,7 @@ const OwnedApartmentBuiltinsDocV1Schema = z.object({
     )
     .default([]),
   wallItems: z.array(OwnedApartmentWallItemSchema).default([]),
+  mirrorItems: z.array(OwnedApartmentMirrorItemSchema).default([]),
   objectGroups: z.array(OwnedApartmentObjectGroupSchema).default([]),
 });
 
@@ -321,6 +354,7 @@ const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   placedItems: z.array(OwnedApartmentPlacedItemSchema).default([]),
   /** Authored partition walls (thin boxes with PBR materials). */
   wallItems: z.array(OwnedApartmentWallItemSchema).default([]),
+  mirrorItems: z.array(OwnedApartmentMirrorItemSchema).default([]),
   /** Named decor/wall groups for editor-only batch transforms (not replicated independently). */
   objectGroups: z.array(OwnedApartmentObjectGroupSchema).default([]),
 });
@@ -436,6 +470,7 @@ export function migrateOwnedApartmentBuiltinsRawToV2(raw: unknown): unknown {
     previewSizeM: v1.previewSizeM,
     placedItems: migrateV1RecordToV2PlacedItems(v1),
     wallItems: v1.wallItems,
+    mirrorItems: v1.mirrorItems,
     objectGroups: v1.objectGroups,
   };
 }
@@ -447,13 +482,16 @@ export const OwnedApartmentBuiltinsDocSchema = z.preprocess(
 
 const DECOR_SELECTION_PREFIX = "mammoth_editor_my_apartment_decor:";
 const WALL_SELECTION_PREFIX = "mammoth_editor_my_apartment_wall:";
+const MIRROR_SELECTION_PREFIX = "mammoth_editor_my_apartment_mirror:";
 
 /** True if {@link OwnedApartmentObjectGroup.memberSelectedIds} may legally reference this id. */
 export function isOwnedApartmentObjectGroupMemberSelectionId(id: string): boolean {
   return (
     (id.startsWith(DECOR_SELECTION_PREFIX) &&
       id.length > DECOR_SELECTION_PREFIX.length) ||
-    (id.startsWith(WALL_SELECTION_PREFIX) && id.length > WALL_SELECTION_PREFIX.length)
+    (id.startsWith(WALL_SELECTION_PREFIX) && id.length > WALL_SELECTION_PREFIX.length) ||
+    (id.startsWith(MIRROR_SELECTION_PREFIX) &&
+      id.length > MIRROR_SELECTION_PREFIX.length)
   );
 }
 
@@ -466,6 +504,7 @@ export function finalizeOwnedApartmentBuiltinsDoc(
 ): OwnedApartmentBuiltinsDoc {
   const placedIds = new Set(doc.placedItems.map((d) => d.id));
   const wallIds = new Set(doc.wallItems.map((w) => w.id));
+  const mirrorIds = new Set(doc.mirrorItems.map((m) => m.id));
 
   const objectGroups = doc.objectGroups
     .map((g) => {
@@ -481,6 +520,7 @@ export function finalizeOwnedApartmentBuiltinsDoc(
         if (!rest) return false;
         if (selId.startsWith(DECOR_SELECTION_PREFIX)) return placedIds.has(rest);
         if (selId.startsWith(WALL_SELECTION_PREFIX)) return wallIds.has(rest);
+        if (selId.startsWith(MIRROR_SELECTION_PREFIX)) return mirrorIds.has(rest);
         return false;
       });
       return { ...g, memberSelectedIds: kept };
@@ -550,5 +590,6 @@ export const DEFAULT_OWNED_APARTMENT_BUILTINS_DOC: OwnedApartmentBuiltinsDoc =
       },
     ],
     wallItems: [],
+    mirrorItems: [],
     objectGroups: [],
   });

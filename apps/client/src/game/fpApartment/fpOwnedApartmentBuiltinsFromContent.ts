@@ -7,6 +7,7 @@ import {
   OwnedApartmentBuiltinsDocSchema,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
+  type OwnedApartmentMirrorItem,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
@@ -211,6 +212,44 @@ export function resolveApartmentWallPoses(
     sizeY: item.sizeY,
     sizeZ: item.sizeZ,
     material: item.material,
+  }));
+}
+
+export type ApartmentMirrorPose = {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  roll: number;
+  sizeX: number;
+  sizeY: number;
+};
+
+/**
+ * Resolves authored planar mirrors from `owned_apartment_builtins.json` into world space for one unit.
+ */
+export function resolveApartmentMirrorPoses(
+  u: ApartmentUnit,
+  doc: OwnedApartmentBuiltinsDoc | null | undefined,
+): ApartmentMirrorPose[] {
+  if (!doc || doc.mirrorItems.length === 0) return [];
+  const sx = (u.boundMaxX as number) - (u.boundMinX as number);
+  const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
+  const bminx = u.boundMinX as number;
+  const bminz = u.boundMinZ as number;
+  const bminy = u.boundMinY as number;
+  return doc.mirrorItems.map((item: OwnedApartmentMirrorItem) => ({
+    id: item.id,
+    x: bminx + item.fx * sx,
+    y: bminy + item.dy,
+    z: bminz + item.fz * sz,
+    yaw: item.yawRad,
+    pitch: item.pitchRad,
+    roll: item.rollRad ?? 0,
+    sizeX: item.sizeX,
+    sizeY: item.sizeY,
   }));
 }
 

@@ -1,6 +1,7 @@
 import type { Object3D } from "three";
 import {
   editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
 
@@ -22,6 +23,13 @@ export function resolveEditorMyApartmentLayoutPick(hit: Object3D): {
       return {
         target: o,
         id: editorMyApartmentSelectedIdForWall(wallId),
+      };
+    }
+    const mirrorId = o.userData.mammothEditorMyApartmentMirrorId as string | undefined;
+    if (mirrorId) {
+      return {
+        target: o,
+        id: editorMyApartmentSelectedIdForMirror(mirrorId),
       };
     }
     o = o.parent;
