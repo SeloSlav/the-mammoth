@@ -12,7 +12,7 @@ describe("fpDebugRenderIsolation", () => {
   it("defaults all subsystems to enabled", () => {
     resetFpDebugRenderIsolationFlags();
     expect(isFpDebugRenderIsolationSuppressingAnything()).toBe(false);
-    expect(isFpDebugRenderIsolationEnabled("exteriorTrees")).toBe(true);
+    expect(isFpDebugRenderIsolationEnabled("floorPlates")).toBe(true);
   });
 
   it("toggles individual flags", () => {

@@ -433,19 +433,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     });
     const trueExteriorView = cameraOutsideBuilding && !feetOnBuildingSlab;
     /**
-     * Merged ez-tree meshes are fill-rate heavy. Keep them available for true exterior/perimeter
-     * views, but force them off once feet are inside a residential hull; unit walls fully occlude
-     * them even if the camera sits near an exterior footprint inset.
-     */
-    for (const ch of buildingRoot.children) {
-      if (ch.userData.mammothExteriorProceduralTrees === true) {
-        ch.visible =
-          isFpDebugRenderIsolationEnabled("exteriorTrees") &&
-          cameraOutsideBuilding &&
-          !insideResidentialUnit;
-      }
-    }
-    /**
      * Full-stack reveal only for true exteriors (feet off the raw slab): the old
      * `|| playerStorey <= 1` arm forced the entire merged tower for essentially every ground-floor
      * respawn whenever the camera sat just outside the 6 m footprint inset — thousands of draws.

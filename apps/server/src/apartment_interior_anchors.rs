@@ -28,6 +28,8 @@ const Z_EDGE_M: f32 = BED_HALF_Z_M + PROP_WALL_GAP_M;
 const BED_CENTER_FROM_BACK_WALL_M: f32 = 5.15;
 /// Footlocker stays between entryway and bed; keep it beyond the bed foot along the spine.
 const FOOTLOCKER_CENTER_FROM_BACK_WALL_M: f32 = 6.75;
+/// Enclosed balcony bay on east/west units (`residentialUnitBalcony.ts`).
+const RESIDENTIAL_UNIT_BALCONY_OVERHANG_M: f32 = 2.5;
 const BED_CENTER_Z_OFFSET_M: f32 = -1.08;
 /// Door-adjacent wardrobe — pushed deeper so hallway poses cannot overlap the wardrobe interact disc.
 const WARDROBE_CENTER_FROM_BACK_WALL_M: f32 = 1.38;
@@ -81,16 +83,24 @@ pub(crate) fn east_west_interior_furniture_seed(
     let foot_z = bed_z;
     let wardrobe_z = clamp(cz + WARDROBE_CENTER_Z_OFFSET_M, z_lo, z_hi);
 
+    let balcony = if matches!(face, SwingDoorFace::W | SwingDoorFace::E) {
+        RESIDENTIAL_UNIT_BALCONY_OVERHANG_M
+    } else {
+        0.0
+    };
+    let bed_from_back = BED_CENTER_FROM_BACK_WALL_M + balcony;
+    let foot_from_back = FOOTLOCKER_CENTER_FROM_BACK_WALL_M + balcony;
+
     let (bed_x, foot_x, wardrobe_x, bed_yaw) = match face {
         // Door / corridor at low X (mn). Back wall at high X (mx). Bed + footlocker live deep, by mx.
         SwingDoorFace::W => (
             clamp(
-                mx[0] - BED_CENTER_FROM_BACK_WALL_M,
+                mx[0] - bed_from_back,
                 mn[0] + BED_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - BED_HALF_X_M - PROP_WALL_GAP_M,
             ),
             clamp(
-                mx[0] - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mx[0] - foot_from_back,
                 mn[0] + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
             ),
@@ -104,12 +114,12 @@ pub(crate) fn east_west_interior_furniture_seed(
         // Back wall at low X (mn). Corridor at high X (mx). Wardrobe stays door-side toward mx (unchanged).
         SwingDoorFace::E => (
             clamp(
-                mn[0] + BED_CENTER_FROM_BACK_WALL_M,
+                mn[0] + bed_from_back,
                 mn[0] + BED_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - BED_HALF_X_M - PROP_WALL_GAP_M,
             ),
             clamp(
-                mn[0] + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+                mn[0] + foot_from_back,
                 mn[0] + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
                 mx[0] - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
             ),

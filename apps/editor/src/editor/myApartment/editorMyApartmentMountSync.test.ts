@@ -5,6 +5,7 @@ import { DEFAULT_BUILDING } from "../../state/editorStoreSeedValues.js";
 import {
   apartmentMountSyncInputsChanged,
   captureApartmentMountSyncInputs,
+  classifyApartmentMountSyncChange,
 } from "./editorMyApartmentMountSync.js";
 import { editorMyApartmentSelectedIdForDecor } from "./editorMyApartmentSelection.js";
 
@@ -77,5 +78,33 @@ describe("apartmentMountSyncInputsChanged", () => {
       }),
     );
     expect(apartmentMountSyncInputsChanged(prev, next)).toBe(true);
+  });
+
+  it("classifies wall-only edits as incremental sync", () => {
+    const base = baseEditorState();
+    const prev = captureApartmentMountSyncInputs(base);
+    const next = captureApartmentMountSyncInputs(
+      baseEditorState({
+        ownedApartmentBuiltins: {
+          ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+          wallItems: [
+            ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.wallItems,
+            {
+              id: "wall-new",
+              fx: 0.5,
+              fz: 0.5,
+              dy: 0,
+              yawRad: 0,
+              pitchRad: 0,
+              sizeX: 2,
+              sizeY: 2.6,
+              sizeZ: 0.07,
+              material: { useMetalnessMap: false, useHeightMap: false },
+            },
+          ],
+        },
+      }),
+    );
+    expect(classifyApartmentMountSyncChange(prev, next)).toBe("walls-only");
   });
 });

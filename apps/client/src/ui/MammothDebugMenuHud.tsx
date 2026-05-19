@@ -308,11 +308,6 @@ export function MammothDebugMenuHud() {
       description: "Cab + apartment planar reflectors (skip GPU re-render)",
     },
     {
-      key: "exteriorTrees",
-      label: "Exterior trees",
-      description: "Procedural tree grove on Mamutica footprint",
-    },
-    {
       key: "floorPlates",
       label: "Floor plates",
       description: "Per-storey building shell groups",

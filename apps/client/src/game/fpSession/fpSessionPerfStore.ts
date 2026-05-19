@@ -56,8 +56,6 @@ const _visibleExteriorGlassMeshes = new Float32Array(RING);
 const _visibleTransparentMeshes = new Float32Array(RING);
 /** Visible transparent meshes tagged as residential exterior glass. */
 const _visibleTransparentExteriorGlassMeshes = new Float32Array(RING);
-/** Visible exterior tree roots. */
-const _visibleExteriorTreeRoots = new Float32Array(RING);
 /** Frustum-intersected top-level floor plate groups. */
 const _frustumFloorPlates = new Float32Array(RING);
 /** Frustum-intersected meshes tagged `mammothUnitInterior`. */
@@ -76,8 +74,6 @@ const _frustumExteriorGlassMeshes = new Float32Array(RING);
 const _frustumTransparentMeshes = new Float32Array(RING);
 /** Frustum-intersected transparent meshes tagged as residential exterior glass. */
 const _frustumTransparentExteriorGlassMeshes = new Float32Array(RING);
-/** Frustum-intersected exterior tree roots. */
-const _frustumExteriorTreeRoots = new Float32Array(RING);
 /** Draw calls after each frame (`renderer.info.render.calls`). */
 const _drawCalls = new Float32Array(RING);
 /** Submitted triangles after each frame (`renderer.info.render.triangles`). */
@@ -134,7 +130,6 @@ export type FpRendererInfo = {
   visibleExteriorGlassMeshes: number;
   visibleTransparentMeshes: number;
   visibleTransparentExteriorGlassMeshes: number;
-  visibleExteriorTreeRoots: number;
   frustumFloorPlates: number;
   frustumUnitInteriorMeshes: number;
   frustumApartmentPropMeshes: number;
@@ -144,7 +139,6 @@ export type FpRendererInfo = {
   frustumExteriorGlassMeshes: number;
   frustumTransparentMeshes: number;
   frustumTransparentExteriorGlassMeshes: number;
-  frustumExteriorTreeRoots: number;
 };
 
 export type FpPerfHeavyMeshRecord = {
@@ -174,7 +168,6 @@ let _lastVisibleGenericInteriorMeshes = 0;
 let _lastVisibleExteriorGlassMeshes = 0;
 let _lastVisibleTransparentMeshes = 0;
 let _lastVisibleTransparentExteriorGlassMeshes = 0;
-let _lastVisibleExteriorTreeRoots = 0;
 let _lastFrustumFloorPlates = 0;
 let _lastFrustumUnitInteriorMeshes = 0;
 let _lastFrustumApartmentPropMeshes = 0;
@@ -184,7 +177,6 @@ let _lastFrustumGenericInteriorMeshes = 0;
 let _lastFrustumExteriorGlassMeshes = 0;
 let _lastFrustumTransparentMeshes = 0;
 let _lastFrustumTransparentExteriorGlassMeshes = 0;
-let _lastFrustumExteriorTreeRoots = 0;
 
 const HEAVY_MESH_RECORD_LIMIT = 768;
 const _heavyMeshRecords: FpPerfHeavyMeshRecord[] = [];
@@ -202,7 +194,6 @@ export function getLastRendererInfo(): FpRendererInfo {
     visibleExteriorGlassMeshes: _lastVisibleExteriorGlassMeshes,
     visibleTransparentMeshes: _lastVisibleTransparentMeshes,
     visibleTransparentExteriorGlassMeshes: _lastVisibleTransparentExteriorGlassMeshes,
-    visibleExteriorTreeRoots: _lastVisibleExteriorTreeRoots,
     frustumFloorPlates: _lastFrustumFloorPlates,
     frustumUnitInteriorMeshes: _lastFrustumUnitInteriorMeshes,
     frustumApartmentPropMeshes: _lastFrustumApartmentPropMeshes,
@@ -212,7 +203,6 @@ export function getLastRendererInfo(): FpRendererInfo {
     frustumExteriorGlassMeshes: _lastFrustumExteriorGlassMeshes,
     frustumTransparentMeshes: _lastFrustumTransparentMeshes,
     frustumTransparentExteriorGlassMeshes: _lastFrustumTransparentExteriorGlassMeshes,
-    frustumExteriorTreeRoots: _lastFrustumExteriorTreeRoots,
   };
 }
 
@@ -235,7 +225,6 @@ export function pushFpPerfFrame(
     _lastVisibleExteriorGlassMeshes = rendererInfo.visibleExteriorGlassMeshes;
     _lastVisibleTransparentMeshes = rendererInfo.visibleTransparentMeshes;
     _lastVisibleTransparentExteriorGlassMeshes = rendererInfo.visibleTransparentExteriorGlassMeshes;
-    _lastVisibleExteriorTreeRoots = rendererInfo.visibleExteriorTreeRoots;
     _lastFrustumFloorPlates = rendererInfo.frustumFloorPlates;
     _lastFrustumUnitInteriorMeshes = rendererInfo.frustumUnitInteriorMeshes;
     _lastFrustumApartmentPropMeshes = rendererInfo.frustumApartmentPropMeshes;
@@ -246,7 +235,6 @@ export function pushFpPerfFrame(
     _lastFrustumTransparentMeshes = rendererInfo.frustumTransparentMeshes;
     _lastFrustumTransparentExteriorGlassMeshes =
       rendererInfo.frustumTransparentExteriorGlassMeshes;
-    _lastFrustumExteriorTreeRoots = rendererInfo.frustumExteriorTreeRoots;
   }
   const i = _head;
   _ts[i] = nowMs;
@@ -271,7 +259,6 @@ export function pushFpPerfFrame(
   _visibleTransparentMeshes[i] = rendererInfo?.visibleTransparentMeshes ?? 0;
   _visibleTransparentExteriorGlassMeshes[i] =
     rendererInfo?.visibleTransparentExteriorGlassMeshes ?? 0;
-  _visibleExteriorTreeRoots[i] = rendererInfo?.visibleExteriorTreeRoots ?? 0;
   _frustumFloorPlates[i] = rendererInfo?.frustumFloorPlates ?? 0;
   _frustumUnitInteriorMeshes[i] = rendererInfo?.frustumUnitInteriorMeshes ?? 0;
   _frustumApartmentPropMeshes[i] = rendererInfo?.frustumApartmentPropMeshes ?? 0;
@@ -282,7 +269,6 @@ export function pushFpPerfFrame(
   _frustumTransparentMeshes[i] = rendererInfo?.frustumTransparentMeshes ?? 0;
   _frustumTransparentExteriorGlassMeshes[i] =
     rendererInfo?.frustumTransparentExteriorGlassMeshes ?? 0;
-  _frustumExteriorTreeRoots[i] = rendererInfo?.frustumExteriorTreeRoots ?? 0;
   _drawCalls[i] = rendererInfo?.drawCalls ?? 0;
   _triangles[i] = rendererInfo?.triangles ?? 0;
   _cameraYawRad[i] =
@@ -339,7 +325,6 @@ export function resetFpPerfStore(): void {
   _visibleExteriorGlassMeshes.fill(0);
   _visibleTransparentMeshes.fill(0);
   _visibleTransparentExteriorGlassMeshes.fill(0);
-  _visibleExteriorTreeRoots.fill(0);
   _frustumFloorPlates.fill(0);
   _frustumUnitInteriorMeshes.fill(0);
   _frustumApartmentPropMeshes.fill(0);
@@ -349,7 +334,6 @@ export function resetFpPerfStore(): void {
   _frustumExteriorGlassMeshes.fill(0);
   _frustumTransparentMeshes.fill(0);
   _frustumTransparentExteriorGlassMeshes.fill(0);
-  _frustumExteriorTreeRoots.fill(0);
   _drawCalls.fill(0);
   _triangles.fill(0);
   _cameraYawRad.fill(Number.NaN);
@@ -367,7 +351,6 @@ export function resetFpPerfStore(): void {
   _lastVisibleExteriorGlassMeshes = 0;
   _lastVisibleTransparentMeshes = 0;
   _lastVisibleTransparentExteriorGlassMeshes = 0;
-  _lastVisibleExteriorTreeRoots = 0;
   _lastFrustumFloorPlates = 0;
   _lastFrustumUnitInteriorMeshes = 0;
   _lastFrustumApartmentPropMeshes = 0;
@@ -377,7 +360,6 @@ export function resetFpPerfStore(): void {
   _lastFrustumExteriorGlassMeshes = 0;
   _lastFrustumTransparentMeshes = 0;
   _lastFrustumTransparentExteriorGlassMeshes = 0;
-  _lastFrustumExteriorTreeRoots = 0;
   _heavyMeshRecords.length = 0;
 }
 
@@ -463,7 +445,6 @@ export type FpPerfStats = {
     visibleExteriorGlassMeshes: number;
     visibleTransparentMeshes: number;
     visibleTransparentExteriorGlassMeshes: number;
-    visibleExteriorTreeRoots: number;
     frustumFloorPlates: number;
     frustumUnitInteriorMeshes: number;
     frustumApartmentPropMeshes: number;
@@ -473,7 +454,6 @@ export type FpPerfStats = {
     frustumExteriorGlassMeshes: number;
     frustumTransparentMeshes: number;
     frustumTransparentExteriorGlassMeshes: number;
-    frustumExteriorTreeRoots: number;
   };
   histogram: FpPerfHistBucket[];
 };
@@ -534,7 +514,6 @@ export function computeFpPerfStats(
   let sumVisibleExteriorGlassMeshes = 0;
   let sumVisibleTransparentMeshes = 0;
   let sumVisibleTransparentExteriorGlassMeshes = 0;
-  let sumVisibleExteriorTreeRoots = 0;
   let sumFrustumFloorPlates = 0;
   let sumFrustumUnitInteriorMeshes = 0;
   let sumFrustumApartmentPropMeshes = 0;
@@ -544,7 +523,6 @@ export function computeFpPerfStats(
   let sumFrustumExteriorGlassMeshes = 0;
   let sumFrustumTransparentMeshes = 0;
   let sumFrustumTransparentExteriorGlassMeshes = 0;
-  let sumFrustumExteriorTreeRoots = 0;
 
   const hist = new Int32Array(6);
 
@@ -574,7 +552,6 @@ export function computeFpPerfStats(
     sumVisibleExteriorGlassMeshes += _visibleExteriorGlassMeshes[i]!;
     sumVisibleTransparentMeshes += _visibleTransparentMeshes[i]!;
     sumVisibleTransparentExteriorGlassMeshes += _visibleTransparentExteriorGlassMeshes[i]!;
-    sumVisibleExteriorTreeRoots += _visibleExteriorTreeRoots[i]!;
     sumFrustumFloorPlates += _frustumFloorPlates[i]!;
     sumFrustumUnitInteriorMeshes += _frustumUnitInteriorMeshes[i]!;
     sumFrustumApartmentPropMeshes += _frustumApartmentPropMeshes[i]!;
@@ -584,7 +561,6 @@ export function computeFpPerfStats(
     sumFrustumExteriorGlassMeshes += _frustumExteriorGlassMeshes[i]!;
     sumFrustumTransparentMeshes += _frustumTransparentMeshes[i]!;
     sumFrustumTransparentExteriorGlassMeshes += _frustumTransparentExteriorGlassMeshes[i]!;
-    sumFrustumExteriorTreeRoots += _frustumExteriorTreeRoots[i]!;
     const tg = _renderThreeGpu[i]!;
     if (tg >= 0) {
       sumRenderThreeGpu += tg;
@@ -643,7 +619,6 @@ export function computeFpPerfStats(
   const avgVisibleExteriorGlassMeshes = sumVisibleExteriorGlassMeshes / n;
   const avgVisibleTransparentMeshes = sumVisibleTransparentMeshes / n;
   const avgVisibleTransparentExteriorGlassMeshes = sumVisibleTransparentExteriorGlassMeshes / n;
-  const avgVisibleExteriorTreeRoots = sumVisibleExteriorTreeRoots / n;
   const avgFrustumFloorPlates = sumFrustumFloorPlates / n;
   const avgFrustumUnitInteriorMeshes = sumFrustumUnitInteriorMeshes / n;
   const avgFrustumApartmentPropMeshes = sumFrustumApartmentPropMeshes / n;
@@ -653,7 +628,6 @@ export function computeFpPerfStats(
   const avgFrustumExteriorGlassMeshes = sumFrustumExteriorGlassMeshes / n;
   const avgFrustumTransparentMeshes = sumFrustumTransparentMeshes / n;
   const avgFrustumTransparentExteriorGlassMeshes = sumFrustumTransparentExteriorGlassMeshes / n;
-  const avgFrustumExteriorTreeRoots = sumFrustumExteriorTreeRoots / n;
   const avgOther = Math.max(0, avgTotal - avgPhysics - avgElev - avgPresent - avgRender);
 
   const histogram: FpPerfHistBucket[] = HIST_LABELS.map((label, b) => ({
@@ -703,7 +677,6 @@ export function computeFpPerfStats(
       visibleTransparentMeshes: Math.round(avgVisibleTransparentMeshes * 10) / 10,
       visibleTransparentExteriorGlassMeshes:
         Math.round(avgVisibleTransparentExteriorGlassMeshes * 10) / 10,
-      visibleExteriorTreeRoots: Math.round(avgVisibleExteriorTreeRoots * 10) / 10,
       frustumFloorPlates: Math.round(avgFrustumFloorPlates * 10) / 10,
       frustumUnitInteriorMeshes: Math.round(avgFrustumUnitInteriorMeshes * 10) / 10,
       frustumApartmentPropMeshes: Math.round(avgFrustumApartmentPropMeshes * 10) / 10,
@@ -714,7 +687,6 @@ export function computeFpPerfStats(
       frustumTransparentMeshes: Math.round(avgFrustumTransparentMeshes * 10) / 10,
       frustumTransparentExteriorGlassMeshes:
         Math.round(avgFrustumTransparentExteriorGlassMeshes * 10) / 10,
-      frustumExteriorTreeRoots: Math.round(avgFrustumExteriorTreeRoots * 10) / 10,
     },
     histogram,
   };
@@ -750,7 +722,6 @@ export type FpPerfTimelineSample = {
   visibleExteriorGlassMeshes: number;
   visibleTransparentMeshes: number;
   visibleTransparentExteriorGlassMeshes: number;
-  visibleExteriorTreeRoots: number;
   frustumFloorPlates: number;
   frustumUnitInteriorMeshes: number;
   frustumApartmentPropMeshes: number;
@@ -760,7 +731,6 @@ export type FpPerfTimelineSample = {
   frustumExteriorGlassMeshes: number;
   frustumTransparentMeshes: number;
   frustumTransparentExteriorGlassMeshes: number;
-  frustumExteriorTreeRoots: number;
   /** Camera yaw (rad); `null` if not recorded this frame. */
   cameraYawRad: number | null;
 };
@@ -807,7 +777,6 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     visibleExteriorGlassMeshes: _visibleExteriorGlassMeshes[i]!,
     visibleTransparentMeshes: _visibleTransparentMeshes[i]!,
     visibleTransparentExteriorGlassMeshes: _visibleTransparentExteriorGlassMeshes[i]!,
-    visibleExteriorTreeRoots: _visibleExteriorTreeRoots[i]!,
     frustumFloorPlates: _frustumFloorPlates[i]!,
     frustumUnitInteriorMeshes: _frustumUnitInteriorMeshes[i]!,
     frustumApartmentPropMeshes: _frustumApartmentPropMeshes[i]!,
@@ -817,7 +786,6 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     frustumExteriorGlassMeshes: _frustumExteriorGlassMeshes[i]!,
     frustumTransparentMeshes: _frustumTransparentMeshes[i]!,
     frustumTransparentExteriorGlassMeshes: _frustumTransparentExteriorGlassMeshes[i]!,
-    frustumExteriorTreeRoots: _frustumExteriorTreeRoots[i]!,
     cameraYawRad: Number.isFinite(yaw) ? yaw : null,
   };
 }
@@ -868,7 +836,6 @@ export function computeFpPerfStatsFromTimeline(
   let sumVisibleExteriorGlassMeshes = 0;
   let sumVisibleTransparentMeshes = 0;
   let sumVisibleTransparentExteriorGlassMeshes = 0;
-  let sumVisibleExteriorTreeRoots = 0;
   let sumFrustumFloorPlates = 0;
   let sumFrustumUnitInteriorMeshes = 0;
   let sumFrustumApartmentPropMeshes = 0;
@@ -878,7 +845,6 @@ export function computeFpPerfStatsFromTimeline(
   let sumFrustumExteriorGlassMeshes = 0;
   let sumFrustumTransparentMeshes = 0;
   let sumFrustumTransparentExteriorGlassMeshes = 0;
-  let sumFrustumExteriorTreeRoots = 0;
 
   const hist = new Int32Array(6);
 
@@ -908,7 +874,6 @@ export function computeFpPerfStatsFromTimeline(
     sumVisibleExteriorGlassMeshes += row.visibleExteriorGlassMeshes;
     sumVisibleTransparentMeshes += row.visibleTransparentMeshes;
     sumVisibleTransparentExteriorGlassMeshes += row.visibleTransparentExteriorGlassMeshes;
-    sumVisibleExteriorTreeRoots += row.visibleExteriorTreeRoots;
     sumFrustumFloorPlates += row.frustumFloorPlates;
     sumFrustumUnitInteriorMeshes += row.frustumUnitInteriorMeshes;
     sumFrustumApartmentPropMeshes += row.frustumApartmentPropMeshes;
@@ -918,7 +883,6 @@ export function computeFpPerfStatsFromTimeline(
     sumFrustumExteriorGlassMeshes += row.frustumExteriorGlassMeshes;
     sumFrustumTransparentMeshes += row.frustumTransparentMeshes;
     sumFrustumTransparentExteriorGlassMeshes += row.frustumTransparentExteriorGlassMeshes;
-    sumFrustumExteriorTreeRoots += row.frustumExteriorTreeRoots;
     const tg = row.renderThreeGpuMs;
     if (tg != null && tg >= 0) {
       sumRenderThreeGpu += tg;
@@ -972,7 +936,6 @@ export function computeFpPerfStatsFromTimeline(
   const avgVisibleExteriorGlassMeshes = sumVisibleExteriorGlassMeshes / n;
   const avgVisibleTransparentMeshes = sumVisibleTransparentMeshes / n;
   const avgVisibleTransparentExteriorGlassMeshes = sumVisibleTransparentExteriorGlassMeshes / n;
-  const avgVisibleExteriorTreeRoots = sumVisibleExteriorTreeRoots / n;
   const avgFrustumFloorPlates = sumFrustumFloorPlates / n;
   const avgFrustumUnitInteriorMeshes = sumFrustumUnitInteriorMeshes / n;
   const avgFrustumApartmentPropMeshes = sumFrustumApartmentPropMeshes / n;
@@ -982,7 +945,6 @@ export function computeFpPerfStatsFromTimeline(
   const avgFrustumExteriorGlassMeshes = sumFrustumExteriorGlassMeshes / n;
   const avgFrustumTransparentMeshes = sumFrustumTransparentMeshes / n;
   const avgFrustumTransparentExteriorGlassMeshes = sumFrustumTransparentExteriorGlassMeshes / n;
-  const avgFrustumExteriorTreeRoots = sumFrustumExteriorTreeRoots / n;
   const avgOther = Math.max(0, avgTotal - avgPhysics - avgElev - avgPresent - avgRender);
 
   const histogram: FpPerfHistBucket[] = HIST_LABELS.map((label, b) => ({
@@ -1032,7 +994,6 @@ export function computeFpPerfStatsFromTimeline(
       visibleTransparentMeshes: Math.round(avgVisibleTransparentMeshes * 10) / 10,
       visibleTransparentExteriorGlassMeshes:
         Math.round(avgVisibleTransparentExteriorGlassMeshes * 10) / 10,
-      visibleExteriorTreeRoots: Math.round(avgVisibleExteriorTreeRoots * 10) / 10,
       frustumFloorPlates: Math.round(avgFrustumFloorPlates * 10) / 10,
       frustumUnitInteriorMeshes: Math.round(avgFrustumUnitInteriorMeshes * 10) / 10,
       frustumApartmentPropMeshes: Math.round(avgFrustumApartmentPropMeshes * 10) / 10,
@@ -1043,7 +1004,6 @@ export function computeFpPerfStatsFromTimeline(
       frustumTransparentMeshes: Math.round(avgFrustumTransparentMeshes * 10) / 10,
       frustumTransparentExteriorGlassMeshes:
         Math.round(avgFrustumTransparentExteriorGlassMeshes * 10) / 10,
-      frustumExteriorTreeRoots: Math.round(avgFrustumExteriorTreeRoots * 10) / 10,
     },
     histogram,
   };
@@ -1064,7 +1024,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
       visibleExteriorGlassMeshes: 0,
       visibleTransparentMeshes: 0,
       visibleTransparentExteriorGlassMeshes: 0,
-      visibleExteriorTreeRoots: 0,
       frustumFloorPlates: 0,
       frustumUnitInteriorMeshes: 0,
       frustumApartmentPropMeshes: 0,
@@ -1074,7 +1033,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
       frustumExteriorGlassMeshes: 0,
       frustumTransparentMeshes: 0,
       frustumTransparentExteriorGlassMeshes: 0,
-      frustumExteriorTreeRoots: 0,
     };
   }
   let drawCalls = 0;
@@ -1088,7 +1046,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   let visibleExteriorGlassMeshes = 0;
   let visibleTransparentMeshes = 0;
   let visibleTransparentExteriorGlassMeshes = 0;
-  let visibleExteriorTreeRoots = 0;
   let frustumFloorPlates = 0;
   let frustumUnitInteriorMeshes = 0;
   let frustumApartmentPropMeshes = 0;
@@ -1098,7 +1055,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   let frustumExteriorGlassMeshes = 0;
   let frustumTransparentMeshes = 0;
   let frustumTransparentExteriorGlassMeshes = 0;
-  let frustumExteriorTreeRoots = 0;
   for (const s of samples) {
     drawCalls += s.drawCalls;
     triangles += s.triangles;
@@ -1111,7 +1067,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     visibleExteriorGlassMeshes += s.visibleExteriorGlassMeshes;
     visibleTransparentMeshes += s.visibleTransparentMeshes;
     visibleTransparentExteriorGlassMeshes += s.visibleTransparentExteriorGlassMeshes;
-    visibleExteriorTreeRoots += s.visibleExteriorTreeRoots;
     frustumFloorPlates += s.frustumFloorPlates;
     frustumUnitInteriorMeshes += s.frustumUnitInteriorMeshes;
     frustumApartmentPropMeshes += s.frustumApartmentPropMeshes;
@@ -1121,7 +1076,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumExteriorGlassMeshes += s.frustumExteriorGlassMeshes;
     frustumTransparentMeshes += s.frustumTransparentMeshes;
     frustumTransparentExteriorGlassMeshes += s.frustumTransparentExteriorGlassMeshes;
-    frustumExteriorTreeRoots += s.frustumExteriorTreeRoots;
   }
   const r1 = (sum: number) => Math.round((sum / n) * 10) / 10;
   return {
@@ -1136,7 +1090,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     visibleExteriorGlassMeshes: r1(visibleExteriorGlassMeshes),
     visibleTransparentMeshes: r1(visibleTransparentMeshes),
     visibleTransparentExteriorGlassMeshes: r1(visibleTransparentExteriorGlassMeshes),
-    visibleExteriorTreeRoots: r1(visibleExteriorTreeRoots),
     frustumFloorPlates: r1(frustumFloorPlates),
     frustumUnitInteriorMeshes: r1(frustumUnitInteriorMeshes),
     frustumApartmentPropMeshes: r1(frustumApartmentPropMeshes),
@@ -1146,7 +1099,6 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumExteriorGlassMeshes: r1(frustumExteriorGlassMeshes),
     frustumTransparentMeshes: r1(frustumTransparentMeshes),
     frustumTransparentExteriorGlassMeshes: r1(frustumTransparentExteriorGlassMeshes),
-    frustumExteriorTreeRoots: r1(frustumExteriorTreeRoots),
   };
 }
 
@@ -1286,8 +1238,8 @@ function formatFpPerfReportMarkdown(
     "=== The Mammoth — Performance Report ===",
     `Window: ${s.windowSec}s  Samples: ${s.samples}  Elapsed: ${s.actualElapsedSec.toFixed(1)}s`,
     `Renderer${hdrNote}: ${ri.drawCalls} draw calls  ${(ri.triangles / 1000).toFixed(1)}k triangles`,
-    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  transparent=${ri.visibleTransparentMeshes}  trees=${ri.visibleExteriorTreeRoots}`,
-    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  transparent=${ri.frustumTransparentMeshes}  trees=${ri.frustumExteriorTreeRoots}`,
+    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  transparent=${ri.visibleTransparentMeshes}`,
+    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  transparent=${ri.frustumTransparentMeshes}`,
     "",
     `FPS   ~${s.fps} (from completed frame cadence)  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
     `CPU   ~${s.cpuFrameThroughputFps} (from avg frame cpu)`,
@@ -1315,7 +1267,6 @@ function formatFpPerfReportMarkdown(
     `  unitInterior   vis ${sceneCounts.visibleUnitInteriorMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumUnitInteriorMeshes.toFixed(1).padStart(6)}`,
     `  apartmentProps vis ${sceneCounts.visibleApartmentPropMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumApartmentPropMeshes.toFixed(1).padStart(6)}`,
     `  transparent    vis ${sceneCounts.visibleTransparentMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumTransparentMeshes.toFixed(1).padStart(6)}`,
-    `  exteriorTrees  vis ${sceneCounts.visibleExteriorTreeRoots.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumExteriorTreeRoots.toFixed(1).padStart(6)}`,
     "",
     "Leak-debug breakdown (avg / frame):",
     `  unitShells     vis ${sceneCounts.visibleResidentialShellMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumResidentialShellMeshes.toFixed(1).padStart(6)}`,

@@ -58,6 +58,14 @@ export { classifyPrefab } from "./floorPlaceholderPrefabKind.js";
 export type { PlaceholderKind } from "./floorPlaceholderMeshTypes.js";
 import { addHollowRoomShell } from "./hollowRoomShell.js";
 import {
+  residentialBalconyPartitionFace,
+  residentialUnitHasBalconyBay,
+} from "./residentialUnitBalcony.js";
+import {
+  addResidentialBalconyBayShell,
+  residentialBalconyHollowShellExtras,
+} from "./residentialUnitBalconyShell.js";
+import {
   corridorShellHolesFromAdjacentUnitEntries,
   corridorShellHolesFromStairPunches,
   corridorShellWallHoleCount,
@@ -416,15 +424,16 @@ export function buildFloorMeshes(
           : [];
       let exteriorWindowHoles: CorridorShellWallHoles | undefined;
       let tintByExteriorFace: Partial<Record<CardinalFace, number>> | undefined;
+      const partitionFace =
+        kind === "unit" ? residentialBalconyPartitionFace(obj.id) : null;
       if (
         kind === "unit" &&
         roomExteriorFaces.length > 0 &&
         !skipShaftCutouts
       ) {
-        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces, {
-          floor,
-          placedObject: obj,
-        });
+        const windowFaces = unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
+          (face) => face !== partitionFace,
+        );
         if (windowFaces.length > 0) {
           const wt = 0.11;
           const vh = Math.max(sy - 2 * wt, 0.05);
@@ -473,6 +482,7 @@ export function buildFloorMeshes(
           if (!anyHole) tintByExteriorFace = undefined;
         }
       }
+      const balconyShell = residentialBalconyHollowShellExtras(obj.id, sx);
       addHollowRoomShell(room, sx, sy, sz, kind, {
         shaftHolesPlate: shaftHolesPlate,
         roomPx: obj.position[0],
@@ -487,14 +497,14 @@ export function buildFloorMeshes(
         exteriorFaces: roomExteriorFaces,
         exteriorWindowHoles,
         useAuthoringCorridorCeiling,
+        ...balconyShell,
       });
       if (kind === "unit" && exteriorWindowHoles && tintByExteriorFace) {
         const hx = sx * 0.5;
         const hz = sz * 0.5;
-        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces, {
-          floor,
-          placedObject: obj,
-        });
+        const glassFaces = unitShellFacesForExteriorWindows(roomExteriorFaces).filter(
+          (face) => face !== partitionFace,
+        );
         addUnitExteriorWindowGlassMeshes(room, {
           faces: glassFaces,
           hx,
@@ -502,6 +512,13 @@ export function buildFloorMeshes(
           tintByFace: tintByExteriorFace,
           holesEw: { e: exteriorWindowHoles.e, w: exteriorWindowHoles.w },
           holesNs: { n: exteriorWindowHoles.n, s: exteriorWindowHoles.s },
+        });
+      }
+      if (kind === "unit" && !skipShaftCutouts && residentialUnitHasBalconyBay(obj.id)) {
+        addResidentialBalconyBayShell(room, sx, sy, sz, obj.id, {
+          storyLevelIndex: story,
+          floorDocId: floor.id,
+          facadeSalt: opts?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT,
         });
       }
       /**
@@ -527,7 +544,9 @@ export function buildFloorMeshes(
           const isInteriorShell =
             mesh.name.startsWith("shell_wall_") ||
             mesh.name.startsWith("shell_floor") ||
-            mesh.name.startsWith("shell_ceiling");
+            mesh.name.startsWith("shell_ceiling") ||
+            mesh.name.startsWith("balcony_") ||
+            mesh.name.startsWith("balcony_shell_");
           if (!isInteriorShell) return;
           mesh.userData.mammothSkipFloorGeometryMerge = true;
           mesh.userData.mammothPlacedObjectId = placedObjectId;

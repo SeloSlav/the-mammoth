@@ -28,6 +28,7 @@ import {
   type StairTreadSpec,
 } from "./stairWellGeometry.js";
 import { buildUnitExteriorWindowSillLedgeAABBsForBuilding } from "./unitExteriorWindowBlockers.js";
+import { residentialBalconyHollowShellExtras } from "./residentialUnitBalconyShell.js";
 
 /**
  * Axis-aligned walk volume in **world** metres. `max[1]` is the top of the walk surface
@@ -230,8 +231,12 @@ function appendHollowShellFloorWalkAABBs(
   elevMerged: readonly ShaftSlabHole[],
   skipShaftCutouts: boolean,
   localTopY = hollowShellFloorLocalTopY(sy),
+  balconyExtend?: {
+    balconyExtendMaxX?: number;
+    balconyExtendMinX?: number;
+  },
 ): void {
-  const wt = 0.12;
+  const wt = 0.11;
   const thin = wt;
   const top = localTopY;
   const hx = sx * 0.5;
@@ -241,6 +246,19 @@ function appendHollowShellFloorWalkAABBs(
     : hollowShellXZRectsWithShaftCutouts(sx, sz, px, pz, docHoles);
   if (!skipShaftCutouts && elevMerged.length > 0) {
     rects = punchElevatorHolesInShellRects(rects, px, pz, elevMerged);
+  }
+  if (balconyExtend?.balconyExtendMaxX != null || balconyExtend?.balconyExtendMinX != null) {
+    rects = rects.map((r) => ({
+      ...r,
+      x0:
+        balconyExtend.balconyExtendMinX != null
+          ? Math.min(r.x0, balconyExtend.balconyExtendMinX)
+          : r.x0,
+      x1:
+        balconyExtend.balconyExtendMaxX != null
+          ? Math.max(r.x1, balconyExtend.balconyExtendMaxX)
+          : r.x1,
+    }));
   }
   for (const r of rects) {
     const w = r.x1 - r.x0;
@@ -318,6 +336,7 @@ export function walkSurfaceAABBsForFloorDoc(
         }
       }
     } else {
+      const balconyShell = residentialBalconyHollowShellExtras(obj.id, sx);
       appendHollowShellFloorWalkAABBs(
         out,
         sx,
@@ -329,6 +348,8 @@ export function walkSurfaceAABBsForFloorDoc(
         docHoles,
         elevMerged,
         Boolean(obj.rotation),
+        hollowShellFloorLocalTopY(sy),
+        balconyShell ?? undefined,
       );
       if (opts?.includeShellCeilingWalk) {
         appendHollowShellFloorWalkAABBs(

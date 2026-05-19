@@ -4,7 +4,9 @@ import type { BuildingDoc, FloorDoc, OwnedApartmentBuiltinsDoc } from "@the-mamm
 import {
   floorPlaceholderMeshMaterials,
   maxBuildingLevelIndex,
+  RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
   resolveOwnedApartmentAuthoringPreviewLayout,
+  residentialUnitHasBalconyBay,
   TYPICAL_FLOOR_DOC_ID,
   type OwnedApartmentAuthoringPreviewLayout,
 } from "@the-mammoth/world";
@@ -35,6 +37,7 @@ export function resolveOwnedApartmentAuthoringLayoutForEditor(opts: {
  * wall coordinates.
  */
 export type OwnedApartmentFractionToPreviewXZ = {
+  unitId: string;
   strictMinX: number;
   strictMinZ: number;
   spanX: number;
@@ -46,6 +49,8 @@ export type OwnedApartmentFractionToPreviewXZ = {
   /** Exterior prefab slab size (grey floor box) — matches hollow shell bbox X/Z scale. */
   prefabFootprintSx: number;
   prefabFootprintSz: number;
+  /** Authoring slab X extent when it includes a balcony bay (≥ `prefabFootprintSx`). */
+  slabFootprintSx?: number;
 };
 
 export function ownedApartmentFractionMappingForEditor(args: {
@@ -55,6 +60,7 @@ export function ownedApartmentFractionMappingForEditor(args: {
   if (!args.layout) {
     const w = Math.max(2, args.builtinsFallbackPreviewM);
     return {
+      unitId: "",
       strictMinX: 0,
       strictMinZ: 0,
       spanX: w,
@@ -65,11 +71,23 @@ export function ownedApartmentFractionMappingForEditor(args: {
       prefabFootprintSz: w,
     };
   }
-  const { shellPlan, strictMinX, strictMinZ, spanX, spanZ, unitCenterX, unitCenterZ } =
-    args.layout;
+  const {
+    shellPlan,
+    strictMinX,
+    strictMinZ,
+    spanX,
+    spanZ,
+    unitCenterX,
+    unitCenterZ,
+    canonicalUnitId,
+  } = args.layout;
   const sx = 2 * shellPlan.hx;
   const sz = 2 * shellPlan.hz;
+  const balconyM = residentialUnitHasBalconyBay(canonicalUnitId)
+    ? RESIDENTIAL_UNIT_BALCONY_OVERHANG_M
+    : 0;
   return {
+    unitId: canonicalUnitId,
     strictMinX,
     strictMinZ,
     spanX,
@@ -78,6 +96,7 @@ export function ownedApartmentFractionMappingForEditor(args: {
     prefabOriginZ: unitCenterZ - sz * 0.5,
     prefabFootprintSx: sx,
     prefabFootprintSz: sz,
+    slabFootprintSx: sx + balconyM,
   };
 }
 
@@ -106,8 +125,12 @@ export function buildOwnedApartmentAuthoringShell(args: {
     builtinsFallbackPreviewM: args.ownedApartmentBuiltins.previewSizeM,
   });
 
+  const balconyM =
+    layout && residentialUnitHasBalconyBay(layout.canonicalUnitId)
+      ? RESIDENTIAL_UNIT_BALCONY_OVERHANG_M
+      : 0;
   const spanSlabX = layout
-    ? Math.max(2, 2 * layout.shellPlan.hx)
+    ? Math.max(2, 2 * layout.shellPlan.hx + balconyM)
     : Math.max(2, mapping.spanX);
   const spanSlabZ = layout
     ? Math.max(2, 2 * layout.shellPlan.hz)
@@ -116,6 +139,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   root.userData.editorMyApartmentSlabSx = spanSlabX;
   root.userData.editorMyApartmentSlabSz = spanSlabZ;
   /** Lets pose clamps match fraction encoding (0..1 along strict hull); see `clampPreviewXZToAuthoringInterior`. */
+  root.userData.editorMyApartmentUnitId = mapping.unitId;
   root.userData.editorMyApartmentStrictMinX = mapping.strictMinX;
   root.userData.editorMyApartmentStrictMinZ = mapping.strictMinZ;
   root.userData.editorMyApartmentStrictSpanX = mapping.spanX;
@@ -154,10 +178,19 @@ export function buildOwnedApartmentAuthoringShell(args: {
       (o) => o.id === layout.canonicalUnitId,
     );
     if (placed) {
+      const homeBandStoryLevelIndex = Math.max(
+        1,
+        maxBuildingLevelIndex(args.building),
+      );
       root.add(
         buildOwnedApartmentDerivedReferenceRoom({
+          unitId: layout.canonicalUnitId,
           shellPlan: layout.shellPlan,
           slabHalfExtentsXZ: [layout.shellPlan.hx, layout.shellPlan.hz],
+          placedScaleY: placed.scale?.[1] ?? 3.05,
+          placedScaleZ: placed.scale?.[2] ?? 7.1,
+          floorDocId: args.typicalFloorDoc.id,
+          storyLevelIndex: homeBandStoryLevelIndex,
         }),
       );
     }

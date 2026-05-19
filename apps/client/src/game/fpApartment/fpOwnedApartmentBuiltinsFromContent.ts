@@ -17,6 +17,7 @@ import {
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
+import { mapOwnedApartmentLayoutFractionToWorldX } from "@the-mammoth/world";
 
 let cached: OwnedApartmentBuiltinsDoc | null | undefined;
 
@@ -73,11 +74,13 @@ export function resolveApartmentDecorPoses(
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
+  const unitId = u.unitId as string;
+  const bmaxx = u.boundMaxX as number;
   return doc.placedItems.map((item) => ({
     id: item.id,
     modelRelPath: item.modelRelPath,
     itemKind: item.itemKind,
-    x: bminx + item.fx * sx,
+    x: mapOwnedApartmentLayoutFractionToWorldX(bminx, bmaxx, unitId, item.fx),
     y: bminy + item.dy,
     z: bminz + item.fz * sz,
     yaw: item.yawRad,
@@ -135,9 +138,11 @@ export function resolveApartmentWallPoses(
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
+  const unitId = u.unitId as string;
+  const bmaxx = u.boundMaxX as number;
   return doc.wallItems.map((item) => ({
     id: item.id,
-    x: bminx + item.fx * sx,
+    x: mapOwnedApartmentLayoutFractionToWorldX(bminx, bmaxx, unitId, item.fx),
     y: bminy + item.dy,
     z: bminz + item.fz * sz,
     yaw: item.yawRad,
@@ -174,9 +179,11 @@ export function resolveApartmentMirrorPoses(
   const bminx = u.boundMinX as number;
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
+  const unitId = u.unitId as string;
+  const bmaxx = u.boundMaxX as number;
   return doc.mirrorItems.map((item: OwnedApartmentMirrorItem) => ({
     id: item.id,
-    x: bminx + item.fx * sx,
+    x: mapOwnedApartmentLayoutFractionToWorldX(bminx, bmaxx, unitId, item.fx),
     y: bminy + item.dy,
     z: bminz + item.fz * sz,
     yaw: item.yawRad,

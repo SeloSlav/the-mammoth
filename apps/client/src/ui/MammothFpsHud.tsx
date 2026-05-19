@@ -671,8 +671,6 @@ export function MammothFpsHud() {
                       props {ri.visibleApartmentPropMeshes}/{ri.frustumApartmentPropMeshes}
                       {"  "}
                       transparent {ri.visibleTransparentMeshes}/{ri.frustumTransparentMeshes}
-                      {"  "}
-                      trees {ri.visibleExteriorTreeRoots}/{ri.frustumExteriorTreeRoots}
                     </div>
                   </>
                 );
@@ -795,11 +793,6 @@ export function MammothFpsHud() {
                     "transparent",
                     stats.sceneCounts.visibleTransparentMeshes,
                     stats.sceneCounts.frustumTransparentMeshes,
-                  ],
-                  [
-                    "exteriorTrees",
-                    stats.sceneCounts.visibleExteriorTreeRoots,
-                    stats.sceneCounts.frustumExteriorTreeRoots,
                   ],
                 ] as [string, number, number][]
               ).map(([name, visibleValue, frustumValue]) => (

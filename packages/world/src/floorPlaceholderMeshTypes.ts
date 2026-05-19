@@ -45,4 +45,16 @@ export type HollowShellOpts = {
   exteriorWindowHoles?: CorridorShellWallHoles;
   /** Authoring PBR ceiling for ground-storey shells and corridors with apartment entry cuts. */
   useAuthoringCorridorCeiling?: boolean;
+  /** Omit plaster (and unit cladding) on these faces — e.g. living↔balcony partition. */
+  openInteriorFaces?: readonly CardinalFace[];
+  /** Widen the default floor/ceiling slab on +X (east-bar balcony bay). */
+  balconyExtendMaxX?: number;
+  /** Widen the default floor/ceiling slab on −X (west-bar balcony bay). */
+  balconyExtendMinX?: number;
+  /** N/S wall plaster span in room-local X (defaults to inner shell vlen). */
+  wallSpanX?: { min: number; max: number };
+  /** Default true. False when a separate preview floor already covers the footprint (editor authoring slab). */
+  shellFloorSlab?: boolean;
+  /** Default true. */
+  shellCeilingSlab?: boolean;
 };

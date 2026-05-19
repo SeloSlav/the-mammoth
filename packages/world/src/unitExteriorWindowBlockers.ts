@@ -4,6 +4,14 @@ import { resolveFloorDocForLevel, type GetFloorOverrideDoc } from "./resolvedFlo
 import { withoutElevatorsInStairwells } from "./floorCoreSanitize.js";
 import { exteriorFacesForPlacedObjectInFloor } from "./exteriorFaceExposure.js";
 import {
+  residentialBalconyPartitionFace,
+  residentialUnitHasBalconyBay,
+} from "./residentialUnitBalcony.js";
+import {
+  balconyBayPlacedObjectId,
+  residentialBalconyBayFrame,
+} from "./residentialUnitBalconyShell.js";
+import {
   DEFAULT_EXTERIOR_FACADE_SALT,
   planUnitExteriorWindowsForFace,
   UNIT_SHELL_WALL_THICKNESS_M,
@@ -91,11 +99,11 @@ function appendUnitExteriorWindowAnalyticSolids(
       const py = obj.position[1];
       const pz = obj.position[2];
 
-      const faces = unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(doc, obj), {
-        floor: doc,
-        placedObject: obj,
-      });
-      if (faces.length === 0) continue;
+      const partitionFace = residentialBalconyPartitionFace(obj.id);
+      const faces = unitShellFacesForExteriorWindows(
+        exteriorFacesForPlacedObjectInFloor(doc, obj),
+      ).filter((face) => face !== partitionFace);
+      if (faces.length === 0 && !residentialUnitHasBalconyBay(obj.id)) continue;
 
       const wt = UNIT_SHELL_WALL_THICKNESS_M;
       const vh = Math.max(sy - 2 * wt, 0.05);
@@ -105,6 +113,26 @@ function appendUnitExteriorWindowAnalyticSolids(
       const yHi = vh * 0.5;
 
       const baseWy = oy + plateY + py;
+
+      const pushWorld = (
+        lx0: number,
+        lx1: number,
+        ly0: number,
+        ly1: number,
+        lz0: number,
+        lz1: number,
+      ) => {
+        const ax0 = Math.min(lx0, lx1);
+        const ax1 = Math.max(lx0, lx1);
+        const ay0 = Math.min(ly0, ly1);
+        const ay1 = Math.max(ly0, ly1);
+        const az0 = Math.min(lz0, lz1);
+        const az1 = Math.max(lz0, lz1);
+        out.push({
+          min: [ox + px + ax0, baseWy + ay0, oz + pz + az0],
+          max: [ox + px + ax1, baseWy + ay1, oz + pz + az1],
+        });
+      };
 
       for (const face of faces) {
         const plan = planUnitExteriorWindowsForFace({
@@ -120,19 +148,6 @@ function appendUnitExteriorWindowAnalyticSolids(
         });
         const holesEw = face === "e" || face === "w" ? plan.holesEw : [];
         const holesNs = face === "n" || face === "s" ? plan.holesNs : [];
-
-        const pushWorld = (lx0: number, lx1: number, ly0: number, ly1: number, lz0: number, lz1: number) => {
-          const ax0 = Math.min(lx0, lx1);
-          const ax1 = Math.max(lx0, lx1);
-          const ay0 = Math.min(ly0, ly1);
-          const ay1 = Math.max(ly0, ly1);
-          const az0 = Math.min(lz0, lz1);
-          const az1 = Math.max(lz0, lz1);
-          out.push({
-            min: [ox + px + ax0, baseWy + ay0, oz + pz + az0],
-            max: [ox + px + ax1, baseWy + ay1, oz + pz + az1],
-          });
-        };
 
         if (face === "e") {
           const inner = hx - wt;
@@ -259,6 +274,84 @@ function appendUnitExteriorWindowAnalyticSolids(
                 yBottom + sillTopLip,
                 -hz - sillDepth,
                 -hz,
+              );
+            }
+          }
+        }
+      }
+
+      const bayFrame = residentialBalconyBayFrame(obj.id, sx, sz);
+      if (bayFrame) {
+        const bayLenX = bayFrame.x1 - bayFrame.x0;
+        const bayVlenX = Math.max(bayLenX - 2 * wt, 0.05);
+        const bayPlan = planUnitExteriorWindowsForFace({
+          face: bayFrame.exteriorFace,
+          vlenX: bayVlenX,
+          vlenZ,
+          yLo,
+          yHi,
+          facadeSalt: salt,
+          storyLevelIndex: ref.levelIndex,
+          floorDocId: doc.id,
+          placedObjectId: balconyBayPlacedObjectId(obj.id),
+        });
+        const bayHolesEw = bayPlan.holesEw;
+
+        if (bayFrame.exteriorFace === "e") {
+          const inner = bayFrame.x1 - wt;
+          for (const h of bayHolesEw) {
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
+            const zA = Math.min(h.z0, h.z1) - tang;
+            const zB = Math.max(h.z0, h.z1) + tang;
+            const yA = Math.min(h.y0, h.y1);
+            const yB = Math.max(h.y0, h.y1);
+            if (zB - zA < 0.05 || yB - yA < 0.05) continue;
+            if (kind === "interiorSeal") {
+              pushWorld(
+                inner - WINDOW_IMPENETRABLE_INWARD_M,
+                bayFrame.x1 + WINDOW_IMPENETRABLE_OUTWARD_M,
+                yA - WINDOW_IMPENETRABLE_Y_PAD_M,
+                yB + WINDOW_IMPENETRABLE_Y_PAD_M,
+                zA,
+                zB,
+              );
+            } else {
+              pushWorld(
+                bayFrame.x1,
+                bayFrame.x1 + sillDepth,
+                yA - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yA + sillTopLip,
+                zA,
+                zB,
+              );
+            }
+          }
+        } else {
+          const inner = bayFrame.x0 + wt;
+          for (const h of bayHolesEw) {
+            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
+            const zA = Math.min(h.z0, h.z1) - tang;
+            const zB = Math.max(h.z0, h.z1) + tang;
+            const yA = Math.min(h.y0, h.y1);
+            const yB = Math.max(h.y0, h.y1);
+            if (zB - zA < 0.05 || yB - yA < 0.05) continue;
+            if (kind === "interiorSeal") {
+              pushWorld(
+                bayFrame.x0 - WINDOW_IMPENETRABLE_OUTWARD_M,
+                inner + WINDOW_IMPENETRABLE_INWARD_M,
+                yA - WINDOW_IMPENETRABLE_Y_PAD_M,
+                yB + WINDOW_IMPENETRABLE_Y_PAD_M,
+                zA,
+                zB,
+              );
+            } else {
+              pushWorld(
+                bayFrame.x0 - sillDepth,
+                bayFrame.x0,
+                yA - WINDOW_SILL_LEDGE_THICKNESS_M,
+                yA + sillTopLip,
+                zA,
+                zB,
               );
             }
           }

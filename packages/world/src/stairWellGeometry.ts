@@ -860,7 +860,7 @@ export function shaftFloorLocalTopY(sy: number): number {
 
 export function hollowShellFloorLocalTopY(sy: number): number {
   const hy = sy * 0.5;
-  const wt = 0.12;
+  const wt = 0.11;
   return -hy + wt;
 }
 

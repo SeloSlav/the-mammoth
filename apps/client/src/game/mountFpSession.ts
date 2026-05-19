@@ -456,7 +456,6 @@ export async function mountFpSession(
     visibleExteriorGlassMeshes: 0,
     visibleTransparentMeshes: 0,
     visibleTransparentExteriorGlassMeshes: 0,
-    visibleExteriorTreeRoots: 0,
     frustumFloorPlates: 0,
     frustumUnitInteriorMeshes: 0,
     frustumApartmentPropMeshes: 0,
@@ -466,7 +465,6 @@ export async function mountFpSession(
     frustumExteriorGlassMeshes: 0,
     frustumTransparentMeshes: 0,
     frustumTransparentExteriorGlassMeshes: 0,
-    frustumExteriorTreeRoots: 0,
   };
   const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
     if (!obj.layers.test(camera.layers)) return false;
@@ -493,17 +491,6 @@ export async function mountFpSession(
         _perfFloorPlateBoundsScratch.setFromObject(ch);
         if (_perfSceneFrustum.intersectsBox(_perfFloorPlateBoundsScratch)) {
           frustumFloorPlates += 1;
-        }
-      }
-    }
-    let visibleExteriorTreeRoots = 0;
-    let frustumExteriorTreeRoots = 0;
-    for (const ch of buildingRoot.children) {
-      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
-        visibleExteriorTreeRoots += 1;
-        _perfFloorPlateBoundsScratch.setFromObject(ch);
-        if (_perfSceneFrustum.intersectsBox(_perfFloorPlateBoundsScratch)) {
-          frustumExteriorTreeRoots += 1;
         }
       }
     }
@@ -578,7 +565,6 @@ export async function mountFpSession(
       visibleExteriorGlassMeshes,
       visibleTransparentMeshes,
       visibleTransparentExteriorGlassMeshes,
-      visibleExteriorTreeRoots,
       frustumFloorPlates,
       frustumUnitInteriorMeshes,
       frustumApartmentPropMeshes,
@@ -588,7 +574,6 @@ export async function mountFpSession(
       frustumExteriorGlassMeshes,
       frustumTransparentMeshes,
       frustumTransparentExteriorGlassMeshes,
-      frustumExteriorTreeRoots,
     };
     return lastPerfSceneCounters;
   };

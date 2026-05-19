@@ -10,19 +10,11 @@ import {
   buildCellMeshes,
   buildWalkSurfaceSpatialIndex,
   DEFAULT_BUILDING_FLOOR_SPACING_M,
-  buildExteriorEzTreeCollisionAABBs,
-  buildExteriorMegablockTreePlacements,
-  ENABLE_EXTERIOR_PROCEDURAL_TREES,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
   GENERATED_COLLISION_BLOCKER_AABBS,
   GENERATED_WALK_SURFACE_AABBS,
   getBuildingStairShaftSpecs,
   instantiateBuildingFloorStack,
   instantiateBuildingFloorStackAsync,
-  megablockExteriorTreeScatterFrameFromWalkHullWorld,
   parseBuildingDoc,
   parseCellDoc,
   parseFloorDoc,
@@ -31,10 +23,6 @@ import {
   walkSurfaceAabbXZFootprint,
   type BuildingStairShaftSpec,
 } from "@the-mammoth/world";
-import {
-  buildExteriorProceduralTreeGroup,
-  buildExteriorProceduralTreeGroupYielding,
-} from "@the-mammoth/world/exterior-procedural-trees.js";
 import type { BuildingDoc } from "@the-mammoth/schemas";
 import buildingDoc from "../../../../../content/building/mammoth.json";
 import cellDoc from "../../../../../content/cells/cell_0_0.json";
@@ -76,7 +64,7 @@ function stairShaftInteriorLightBoundsFromSpec(s: BuildingStairShaftSpec): FpSta
 export type FpSessionStaticWorld = {
   building: BuildingDoc;
   buildingRoot: THREE.Group;
-  /** Bounds of the authored building stack only; excludes procedural exterior trees. */
+  /** Bounds of the authored building stack only. */
   buildingBodyWorldBounds: THREE.Box3;
   cellRoot: THREE.Group;
   staticCollisionSolids: readonly {
@@ -97,12 +85,6 @@ export type MegablockBackdropHooks = {
    * placeholders that later disappear when the global merge pass runs.
    */
   onFloorPlateInstantiated?: (ctx: { buildingRoot: THREE.Group }) => void | Promise<void>;
-  /**
-   * Ez-tree meshing starts as soon as we have a scatter frame (walk-surface XZ hull + `worldOrigin`) —
-   * **before** any floor plate is merged; `onForestReady` runs after the grove is parented (once
-   * `buildingRoot` exists), often while storeys are still stacking.
-   */
-  onForestReady?: (ctx: { forestRoot: THREE.Group; buildingRoot: THREE.Group }) => void | Promise<void>;
 };
 
 export type FpSessionStaticWorldAsyncOpts = {
@@ -129,7 +111,7 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     stairWellDef,
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
-  const blockerAABBs = applyStairRuntimeBlockerOverlay(
+  const consolidatedCollisionBlockers = applyStairRuntimeBlockerOverlay(
     applyStairOpeningCollisionOverlay(
       GENERATED_COLLISION_BLOCKER_AABBS,
       stairOpeningOverlay,
@@ -145,8 +127,6 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
     ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
 
-  /** Authoritative blocker list (walls + shafts + deterministic exterior tree pillars). Built after meshes merge for footprint parity with server hit-scan codegen. */
-  let consolidatedCollisionBlockers = blockerAABBs;
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
     const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
       worldX,
@@ -194,37 +174,6 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
   buildingRoot.updateMatrixWorld(true);
   const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
 
-  if (ENABLE_EXTERIOR_PROCEDURAL_TREES) {
-    const buildingLocalFootprint = new THREE.Box3()
-      .setFromObject(buildingRoot)
-      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
-    buildingLocalFootprint.min.y = 0;
-    buildingLocalFootprint.max.y = 1;
-    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
-
-    const treeScatterOpts = {
-      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
-      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
-      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
-    };
-    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(
-      buildingLocalFootprint,
-      treeScatterOpts,
-    );
-    consolidatedCollisionBlockers = [
-      ...consolidatedCollisionBlockers,
-      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
-    ];
-
-    buildingRoot.add(
-      buildExteriorProceduralTreeGroup(buildingLocalFootprint, {
-        groundY: localGroundY,
-        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      }, exteriorTreePlacements),
-    );
-  }
-
   const staticCollisionIndex =
     buildCollisionSpatialIndex(consolidatedCollisionBlockers);
 
@@ -250,9 +199,6 @@ export function createFpSessionStaticWorld(): FpSessionStaticWorld {
 export async function createFpSessionStaticWorldAsync(
   opts?: FpSessionStaticWorldAsyncOpts,
 ): Promise<FpSessionStaticWorld> {
-  /** Matches {@link buildExteriorProceduralTreeGroupYielding} root name — detach for stack-only bounds. */
-  const exteriorTreeGroveName = "exterior_procedural_tree_grove";
-
   await yieldToMain();
   const building = parseBuildingDoc(buildingDoc);
   const getFloorDoc = (id: string) => parseFloorDoc(floorPayloadByDocId(id));
@@ -271,7 +217,7 @@ export async function createFpSessionStaticWorldAsync(
     DEFAULT_BUILDING_FLOOR_SPACING_M,
   );
   await yieldToMain();
-  const blockerAABBs = applyStairRuntimeBlockerOverlay(
+  const consolidatedCollisionBlockers = applyStairRuntimeBlockerOverlay(
     applyStairOpeningCollisionOverlay(GENERATED_COLLISION_BLOCKER_AABBS, stairOpeningOverlay),
     stairRuntimeOverlay,
   );
@@ -279,13 +225,12 @@ export async function createFpSessionStaticWorldAsync(
     GENERATED_WALK_SURFACE_AABBS,
     stairRuntimeOverlay,
   );
-  const walkScatterHull = walkSurfaceAabbXZFootprint(walkSupportAABBs);
   const walkFootprint =
-    walkScatterHull ?? ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
+    walkSurfaceAabbXZFootprint(walkSupportAABBs) ??
+    ({ minX: 0, maxX: 0, minZ: 0, maxZ: 0 } as const);
   const walkSpatialIndex = buildWalkSurfaceSpatialIndex(walkSupportAABBs);
   await yieldToMain();
 
-  let consolidatedCollisionBlockers = blockerAABBs;
   const sampleWalkTopBase = (worldX: number, worldZ: number, probeTopY: number) => {
     const bakedTop = walkSpatialIndex.sampleTopYWithExteriorGround(
       worldX,
@@ -313,77 +258,10 @@ export async function createFpSessionStaticWorldAsync(
     return Math.max(bakedTop, stairTop);
   };
 
-  let exteriorTreePromise: Promise<THREE.Group> | null = null;
-  let forestAttachTask: Promise<void> = Promise.resolve();
-
-  let resolveForestParentRoot!: (root: THREE.Group) => void;
-  const forestBuildingRootWhenReady = new Promise<THREE.Group>((r) => {
-    resolveForestParentRoot = r;
-  });
-  let forestParentRootLatched = false;
-  const latchMegablockRootForForestParent = (root: THREE.Group) => {
-    if (forestParentRootLatched) return;
-    forestParentRootLatched = true;
-    resolveForestParentRoot(root);
-  };
-
-  const beginMegablockExteriorForest = (footprint: THREE.Box3, localGroundY: number) => {
-    if (!ENABLE_EXTERIOR_PROCEDURAL_TREES || exteriorTreePromise !== null) return;
-
-    const treeScatterOpts = {
-      count: Math.max(0, Math.floor(EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT)),
-      seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      minFacadeClearanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
-      maxScatterDistanceM: EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
-    };
-    const exteriorTreePlacements = buildExteriorMegablockTreePlacements(footprint, treeScatterOpts);
-    consolidatedCollisionBlockers = [
-      ...consolidatedCollisionBlockers,
-      ...buildExteriorEzTreeCollisionAABBs(exteriorTreePlacements, localGroundY),
-    ];
-
-    const groveShell = new THREE.Group();
-    groveShell.name = exteriorTreeGroveName;
-    groveShell.userData.mammothExteriorProceduralTrees = true;
-
-    exteriorTreePromise = buildExteriorProceduralTreeGroupYielding(
-      footprint,
-      yieldToMain,
-      {
-        groundY: localGroundY,
-        seed: EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-      },
-      exteriorTreePlacements,
-      groveShell,
-    );
-
-    forestAttachTask = (async () => {
-      const root = await forestBuildingRootWhenReady;
-      /** Parent before mesh work finishes so each merged variant becomes visible as soon as it lands. */
-      if (groveShell.parent !== root) root.add(groveShell);
-      await yieldToMain();
-      await exteriorTreePromise!;
-      const planted = groveShell.children.length > 0;
-      if (!planted) return;
-      const hooks = opts?.getBackdropHooks?.();
-      await hooks?.onForestReady?.({ forestRoot: groveShell, buildingRoot: root });
-      await yieldToMain();
-    })();
-  };
-
-  if (walkScatterHull !== null) {
-    const { footprintBuildingLocal, localGroundY } = megablockExteriorTreeScatterFrameFromWalkHullWorld(
-      building,
-      walkScatterHull,
-    );
-    beginMegablockExteriorForest(footprintBuildingLocal, localGroundY);
-  }
-
   const buildingRoot = await instantiateBuildingFloorStackAsync(building, getFloorDoc, {
     stairWellDef,
     yieldAfterEachPlate: yieldToMain,
     afterEachPlate: async ({ root, plateGroup }) => {
-      latchMegablockRootForForestParent(root);
       if (typeof plateGroup.userData.mammothPlateLevelIndex === "number") {
         await mergeMegablockStaticDirectChildYielding(plateGroup, yieldToMain);
       }
@@ -391,8 +269,6 @@ export async function createFpSessionStaticWorldAsync(
       await hooks?.onFloorPlateInstantiated?.({ buildingRoot: root });
     },
   });
-
-  latchMegablockRootForForestParent(buildingRoot);
 
   const sortedFloorRefs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
   const stairSpecs = getBuildingStairShaftSpecs(
@@ -404,26 +280,10 @@ export async function createFpSessionStaticWorldAsync(
   const stairShaftInteriorLightBounds = stairSpecs.map(stairShaftInteriorLightBoundsFromSpec);
 
   await yieldToMain();
-
-  if (ENABLE_EXTERIOR_PROCEDURAL_TREES && exteriorTreePromise === null) {
-    buildingRoot.updateMatrixWorld(true);
-    const buildingLocalFootprint = new THREE.Box3()
-      .setFromObject(buildingRoot)
-      .applyMatrix4(new THREE.Matrix4().copy(buildingRoot.matrixWorld).invert());
-    buildingLocalFootprint.min.y = 0;
-    buildingLocalFootprint.max.y = 1;
-    const localGroundY = buildingRoot.worldToLocal(new THREE.Vector3(0, 0, 0)).y;
-    beginMegablockExteriorForest(buildingLocalFootprint, localGroundY);
-  }
-
-  await Promise.all([mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain), forestAttachTask]);
-
-  const grove = buildingRoot.getObjectByName(exteriorTreeGroveName);
-  if (grove) buildingRoot.remove(grove);
+  await mergeStaticFloorGeometriesYielding(buildingRoot, yieldToMain);
   buildingRoot.updateMatrixWorld(true);
   await yieldToMain();
   const buildingBodyWorldBounds = new THREE.Box3().setFromObject(buildingRoot);
-  if (grove) buildingRoot.add(grove);
 
   await yieldToMain();
   const staticCollisionIndex =

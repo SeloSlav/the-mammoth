@@ -514,10 +514,21 @@ fn unit_key_parts(floor_doc_id: &str, level: u32, unit_id: &str) -> String {
     format!("{floor_doc_id}|{level}|{unit_id}")
 }
 
+/// Matches `RESIDENTIAL_UNIT_BALCONY_OVERHANG_M` in `packages/world/src/residentialUnitBalcony.ts`.
+fn residential_unit_balcony_overhang_m(unit_id: &str) -> f32 {
+    const OVERHANG: f32 = 2.5;
+    if unit_id.starts_with("unit_e_") || unit_id.starts_with("unit_w_") {
+        OVERHANG
+    } else {
+        0.0
+    }
+}
+
 fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
     let feet_y = feet_world_y(level, t.feet_y_offset);
     let top_y = feet_y + 3.0;
     let face = SwingDoorFace::from_u8(t.face);
+    let balcony = residential_unit_balcony_overhang_m(&t.unit_id);
     const DEPTH: f32 = 13.0;
     const HALF_WIDTH: f32 = 3.3;
     // Template depth terminates on the façade plane; playable volume ends short of exterior glass.
@@ -526,14 +537,14 @@ fn derive_bounds(t: &GenTemplate, level: u32) -> ([f32; 3], [f32; 3]) {
         SwingDoorFace::W => (
             [t.hinge_x + 0.08, feet_y - 0.06, t.hinge_z - HALF_WIDTH],
             [
-                t.hinge_x + DEPTH - RESIDENTIAL_FAR_WALL_X_INSET_M,
+                t.hinge_x + DEPTH - RESIDENTIAL_FAR_WALL_X_INSET_M + balcony,
                 top_y,
                 t.hinge_z + HALF_WIDTH,
             ],
         ),
         SwingDoorFace::E => (
             [
-                t.hinge_x - DEPTH + RESIDENTIAL_FAR_WALL_X_INSET_M,
+                t.hinge_x - DEPTH + RESIDENTIAL_FAR_WALL_X_INSET_M - balcony,
                 feet_y - 0.06,
                 t.hinge_z - HALF_WIDTH,
             ],

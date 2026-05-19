@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { APARTMENT_DOOR_TEMPLATES } from "./generatedApartmentDoors.js";
 import type { ApartmentDoorTemplate } from "./unitEntryAdjacency.js";
+import {
+  contractResidentialBoundsXZForBalcony,
+  RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
+} from "./residentialUnitBalcony.js";
 import { residentialUnitStrictBoundsXZ } from "./residentialUnitStrictBoundsXZ.js";
 
 const PROP_WALL_GAP_M = 0.06;
@@ -37,6 +41,7 @@ function furnitureRects(t: ApartmentDoorTemplate): {
   wardrobe: Rect;
 } {
   const b = residentialUnitStrictBoundsXZ(t);
+  const balconyInset = isResidential(t.unitId) ? RESIDENTIAL_UNIT_BALCONY_OVERHANG_M : 0;
   const cz = (b.minZ + b.maxZ) * 0.5;
   const bedZ = clamp(
     cz + BED_CENTER_Z_OFFSET_M,
@@ -53,7 +58,7 @@ function furnitureRects(t: ApartmentDoorTemplate): {
     return {
       bed: {
         x: clamp(
-          b.maxX - BED_CENTER_FROM_BACK_WALL_M,
+          b.maxX - BED_CENTER_FROM_BACK_WALL_M - balconyInset,
           b.minX + BED_HALF_X_M + PROP_WALL_GAP_M,
           b.maxX - BED_HALF_X_M - PROP_WALL_GAP_M,
         ),
@@ -63,7 +68,7 @@ function furnitureRects(t: ApartmentDoorTemplate): {
       },
       footlocker: {
         x: clamp(
-          b.maxX - FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+          b.maxX - FOOTLOCKER_CENTER_FROM_BACK_WALL_M - balconyInset,
           b.minX + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
           b.maxX - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
         ),
@@ -86,7 +91,7 @@ function furnitureRects(t: ApartmentDoorTemplate): {
   return {
     bed: {
       x: clamp(
-        b.minX + BED_CENTER_FROM_BACK_WALL_M,
+        b.minX + BED_CENTER_FROM_BACK_WALL_M + balconyInset,
         b.minX + BED_HALF_X_M + PROP_WALL_GAP_M,
         b.maxX - BED_HALF_X_M - PROP_WALL_GAP_M,
       ),
@@ -96,7 +101,7 @@ function furnitureRects(t: ApartmentDoorTemplate): {
     },
     footlocker: {
       x: clamp(
-        b.minX + FOOTLOCKER_CENTER_FROM_BACK_WALL_M,
+        b.minX + FOOTLOCKER_CENTER_FROM_BACK_WALL_M + balconyInset,
         b.minX + FOOTLOCKER_HALF_X_M + PROP_WALL_GAP_M,
         b.maxX - FOOTLOCKER_HALF_X_M - PROP_WALL_GAP_M,
       ),
@@ -163,10 +168,11 @@ describe("strict apartment interiors", () => {
       for (const t of set.templates) {
         if (!isResidential(t.unitId)) continue;
         const b = residentialUnitStrictBoundsXZ(t);
+        const living = contractResidentialBoundsXZForBalcony(b, t.unitId);
         const rects = furnitureRects(t);
-        expectRectInside(`${t.unitId} bed`, rects.bed, b);
-        expectRectInside(`${t.unitId} footlocker`, rects.footlocker, b);
-        expectRectInside(`${t.unitId} wardrobe`, rects.wardrobe, b);
+        expectRectInside(`${t.unitId} bed`, rects.bed, living);
+        expectRectInside(`${t.unitId} footlocker`, rects.footlocker, living);
+        expectRectInside(`${t.unitId} wardrobe`, rects.wardrobe, living);
         checked += 1;
       }
     }

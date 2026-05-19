@@ -24,9 +24,3 @@ export const ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER = true;
  * When `false`, the FP session skips loading decal assets entirely (no texture fetches).
  */
 export const ENABLE_STAIRWELL_GRAFFITI_DECALS = false;
-
-/**
- * Exterior megablock yard trees (procedural via `@dgreenheck/ez-tree`, merged per species).
- * When `false`, FP skips grove mesh build + client tree collision pillars (toggle here for perf).
- */
-export const ENABLE_EXTERIOR_PROCEDURAL_TREES = true;

@@ -8,6 +8,8 @@ import {
 
   apartmentUnitBoundsFromAuthoringFractionMapping,
   mountEditorMyApartmentFurnitureUnder,
+  syncEditorMyApartmentMirrorsOnMount,
+  syncEditorMyApartmentWallsOnMount,
   updateEditorMyApartmentMountFromDoc,
 
   type EditorMyApartmentFurnitureMount,
@@ -32,10 +34,8 @@ import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSc
 
 import {
 
-  apartmentMountSyncInputsChanged,
-
+  classifyApartmentMountSyncChange,
   captureApartmentMountSyncInputs,
-
   type ApartmentMountSyncInputs,
 
 } from "./editorMyApartmentMountSync.js";
@@ -183,23 +183,14 @@ export function createEditorSceneMyApartmentLifecycle(
         );
 
       } else {
-
         updateEditorMyApartmentMountFromDoc(
-
           mount,
-
           decorTemplates,
-
           doc,
-
           authoringFractionMapping,
-
           parent,
-
           unitBounds,
-
         );
-
       }
 
       if (disposed || myGen !== syncGeneration) return;
@@ -222,14 +213,42 @@ export function createEditorSceneMyApartmentLifecycle(
 
 
 
+  function syncWallsOrMirrorsIncremental(
+    kind: "walls-only" | "mirrors-only",
+  ): void {
+    const parent = deps.getStructuralRoot();
+    if (!parent || !mount) {
+      void reconcile();
+      return;
+    }
+    const st = useEditorStore.getState();
+    const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
+      floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
+      building: st.building,
+    });
+    const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
+      layout,
+      builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
+    });
+    const doc = st.ownedApartmentBuiltins;
+    if (kind === "walls-only") {
+      syncEditorMyApartmentWallsOnMount(mount, doc, authoringFractionMapping);
+    } else {
+      syncEditorMyApartmentMirrorsOnMount(mount, doc, authoringFractionMapping);
+    }
+    setEditorMyApartmentPieceGroups(mount.selectionGroups);
+    deps.syncTransformAttachment();
+  }
+
   function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
-
-    if (!apartmentMountSyncInputsChanged(prevMountInputs, nextMountInputs)) return;
-
+    const kind = classifyApartmentMountSyncChange(prevMountInputs, nextMountInputs);
+    if (kind === "none") return;
     prevMountInputs = nextMountInputs;
-
+    if (kind === "walls-only" || kind === "mirrors-only") {
+      syncWallsOrMirrorsIncremental(kind);
+      return;
+    }
     void reconcile();
-
   }
 
 

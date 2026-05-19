@@ -11,13 +11,13 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/generated_walk_surfaces/part_0007.rs"));
 
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MIN_X: f32 = -12.06500;
+pub const WALK_SURFACE_FOOTPRINT_MIN_X: f32 = -14.56500;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MAX_X: f32 = 12.06500;
+pub const WALK_SURFACE_FOOTPRINT_MAX_X: f32 = 14.56500;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -80.55000;
+pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -80.89000;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 80.55000;
+pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 80.89000;
 
 /// AABBs split across shard files for reviewability.
 pub static WALK_SURFACE_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[

@@ -59,6 +59,7 @@ export {
   type InstantiateBuildingFloorStackOptions,
 } from "./buildingFloorStack.js";
 export {
+  addUnitExteriorWindowGlassMeshes,
   facadeSeedForUnitFace,
   planUnitExteriorWindowsForFace,
   unitShellFacesForExteriorWindows,
@@ -83,34 +84,17 @@ export {
   type BuildingStairShaftSpec,
 } from "./buildingStairShafts.js";
 export {
-  BAR_CORNER_Z_SPAN_MIN_FOR_ENDCAP_WINDOWS_M,
-  barEndCornerFlagsForApartmentUnit,
   exteriorFacesForPlacedObjectInFloor,
   shaftFacesTowardAdjacentElevatorHoistways,
   shaftFacesTowardAdjacentStairwells,
 } from "./exteriorFaceExposure.js";
 export {
-  ENABLE_EXTERIOR_PROCEDURAL_TREES,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
   ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER,
   ENABLE_STAIRWELL_HEATER_LANDING_PROPS,
   AUTHOR_IMPORTED_PBR_TEXTURES_DEFAULT_ENABLED,
   FLOOR_SHELL_DISABLE_NORMAL_MAPS,
 } from "./featureFlags.js";
-export {
-  buildExteriorEzTreeCollisionAABBs,
-  buildExteriorMegablockTreePlacements,
-  megablockExteriorTreeScatterFrameFromWalkHullWorld,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_COUNT,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MAX_SCATTER_M,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_MIN_FACADE_CLEARANCE_M,
-  EXTERIOR_PROCEDURAL_TREE_DEFAULT_SEED,
-  EZ_TREE_MEGABLOCK_VARIANT_COUNT,
-  EZ_TREE_MEGABLOCK_VARIANTS,
-  xzFootprintHalfExtentMForEzTreeSpecies,
-  type ExteriorProceduralTreeOptions,
-  type ExteriorProceduralTreePlacement,
-} from "./exteriorProceduralTreeSites.js";
 export {
   pickCornerLandingHighestY,
   pickCornerLandingOppositePrimaryDoor,
@@ -366,6 +350,34 @@ export {
   residentialUnitStrictBoundsXZ,
   type ResidentialUnitStrictBoundsXZ,
 } from "./residentialUnitStrictBoundsXZ.js";
+export {
+  RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
+  RESIDENTIAL_UNIT_INTERIOR_SHELL_DEPTH_M,
+  contractResidentialBoundsXZForBalcony,
+  extendResidentialBoundsXZForBalcony,
+  livingPlayableSpanX,
+  mapOwnedApartmentLayoutFractionToWorldX,
+  mapOwnedApartmentWorldXToLayoutFraction,
+  residentialBalconyPartitionFace,
+  residentialUnitBalconyExteriorEdge,
+  residentialUnitBalconyFurnitureInsetFromBackWallM,
+  residentialUnitHasBalconyBay,
+} from "./residentialUnitBalcony.js";
+export {
+  addResidentialBalconyBayShell,
+  addResidentialBalconyShellSlabExtensions,
+  appendResidentialBalconyBayFloorWalkAABBs,
+  balconyBayPlacedObjectId,
+  residentialBalconyBayFrame,
+  residentialBalconyExtensionRectXZ,
+  residentialBalconyHollowShellExtras,
+  type ResidentialBalconyBayFrame,
+} from "./residentialUnitBalconyShell.js";
+export {
+  addHollowRoomShell,
+  addShellFloorCeilingPieces,
+  HOLLOW_SHELL_WT_M,
+} from "./hollowRoomShell.js";
 export {
   apartmentDoorTemplateForUnit,
   appendOwnedApartmentEditorShellWalls,

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { FloorDocSchema } from "@the-mammoth/schemas";
 import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
+import { residentialBalconyPartitionFace } from "./residentialUnitBalcony.js";
 import {
   appendOwnedApartmentEditorShellWalls,
   resolveOwnedApartmentAuthoringPreviewLayout,
@@ -37,14 +38,16 @@ describe("owned apartment editor shell (game-derived)", () => {
     expect(shellPlan.corridorWallHoles?.w?.length ?? 0).toBeGreaterThan(0);
 
     expect(shellPlan.exteriorFaces).toContain("e");
+    expect(shellPlan.windowFacesForGlass).not.toContain("e");
     const win = shellPlan.exteriorWindowHoles;
     expect(win).toBeTruthy();
-    const eastCount =
-      (win!.e?.length ?? 0) +
+    expect(win!.e?.length ?? 0).toBe(0);
+    const openingCount =
       (win!.w?.length ?? 0) +
       (win!.n?.length ?? 0) +
       (win!.s?.length ?? 0);
-    expect(eastCount).toBeGreaterThan(0);
+    expect(openingCount).toBeGreaterThan(0);
+    expect(shellPlan.wallSpanX?.max).toBeCloseTo(7, 3);
   });
 
   it("appendOwnedApartmentEditorShellWalls adds exterior concrete cladding on exposed faces", () => {
@@ -57,11 +60,15 @@ describe("owned apartment editor shell (game-derived)", () => {
     expect(layout).not.toBeNull();
 
     const group = new THREE.Group();
+    const partitionFace = residentialBalconyPartitionFace(
+      layout!.canonicalUnitId,
+    );
     appendOwnedApartmentEditorShellWalls(
       group,
       layout!.shellPlan,
       floorPlaceholderMeshMaterials.unitWall,
       floorPlaceholderMeshMaterials.unitExteriorWall,
+      partitionFace ? { openFaces: [partitionFace] } : undefined,
     );
 
     const claddingNames: string[] = [];
@@ -72,9 +79,13 @@ describe("owned apartment editor shell (game-derived)", () => {
     });
     expect(claddingNames.length).toBeGreaterThan(0);
     for (const face of layout!.shellPlan.exteriorFaces) {
+      if (face === partitionFace) continue;
       expect(
         claddingNames.some((n) => n.startsWith(`shell_exterior_cladding_${face}`)),
       ).toBe(true);
     }
+    expect(
+      group.children.some((c) => c.name === "editor_ref_shell_wall_e"),
+    ).toBe(false);
   });
 });

@@ -30,15 +30,6 @@ export function applyFpDebugRenderIsolationForceOff(targets: FpDebugRenderIsolat
     if (decorRoot?.visible) decorRoot.visible = false;
   }
 
-  if (!flags.exteriorTrees) {
-    for (let i = 0; i < targets.buildingRoot.children.length; i++) {
-      const ch = targets.buildingRoot.children[i]!;
-      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
-        ch.visible = false;
-      }
-    }
-  }
-
   if (!flags.transparentMeshes) {
     for (let i = 0; i < targets.transparentBuildingMeshes.length; i++) {
       const mesh = targets.transparentBuildingMeshes[i]!;

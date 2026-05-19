@@ -24,9 +24,6 @@ const _mergeUnitShellScratch = new THREE.Matrix4();
  *    merges per-storey segments so FP can hide off-band storeys.
  *
  * Group nodes stay so floor-plate visibility can toggle segments.
- *
- * Lives here so `scripts/gen-exterior-tree-collision.ts` mirrors FP without importing `fpSessionWorldMount`
- * (that module pulls ez-tree textures and requires `document`).
  */
 function mergeStaticFloorDirectChild(child: THREE.Object3D): void {
   if (child.userData[MAMMOTH_STATIC_FLOOR_MERGE_COMPLETE_UD] === true) return;

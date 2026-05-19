@@ -15,6 +15,7 @@ import {
 } from "@the-mammoth/engine";
 import {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
+  mapOwnedApartmentLayoutFractionToWorldX,
   UNIT_SHELL_WALL_THICKNESS_M,
   applyOwnedApartmentWallSurfaceMaterial,
   buildApartmentPlanarMirrorVisual,
@@ -47,9 +48,13 @@ export function apartmentUnitBoundsFromAuthoringFractionMapping(
   ceilingHeightM: number,
 ): ApartmentUnitWorldBounds {
   const maxY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + Math.max(2, ceilingHeightM);
+  const slabSx =
+    typeof spans.slabFootprintSx === "number" && spans.slabFootprintSx > spans.prefabFootprintSx
+      ? spans.slabFootprintSx
+      : spans.prefabFootprintSx;
   return {
     minX: spans.prefabOriginX,
-    maxX: spans.prefabOriginX + spans.prefabFootprintSx,
+    maxX: spans.prefabOriginX + slabSx,
     minY: EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
     maxY,
     minZ: spans.prefabOriginZ,
@@ -127,6 +132,14 @@ function clampPreviewXZToPlasterInterior(args: {
   };
 }
 
+function authoringPreviewSlabFootprintSx(spans: OwnedApartmentFractionToPreviewXZ): number {
+  const slabSx = spans.slabFootprintSx;
+  if (typeof slabSx === "number" && slabSx > spans.prefabFootprintSx) {
+    return slabSx;
+  }
+  return spans.prefabFootprintSx;
+}
+
 function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPreviewXZ): {
   minX: number;
   maxX: number;
@@ -135,21 +148,29 @@ function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPreviewXZ):
 } {
   const wt = UNIT_SHELL_WALL_THICKNESS_M;
   const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
-  const sx = spans.prefabFootprintSx;
+  const sx = authoringPreviewSlabFootprintSx(spans);
   const sz = spans.prefabFootprintSz;
   const ixPl0 = wt + e;
   const ixPl1 = sx - wt - e;
   const izPl0 = wt + e;
   const izPl1 = sz - wt - e;
 
+  const boundMinX = spans.strictMinX;
+  const boundMaxX = spans.strictMinX + spans.spanX;
   const lxMinR =
-    spans.strictMinX +
-    spans.spanX * OWNED_APARTMENT_LAYOUT_FRACTION_MIN -
-    spans.prefabOriginX;
+    mapOwnedApartmentLayoutFractionToWorldX(
+      boundMinX,
+      boundMaxX,
+      spans.unitId,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+    ) - spans.prefabOriginX;
   const lxMaxR =
-    spans.strictMinX +
-    spans.spanX * OWNED_APARTMENT_LAYOUT_FRACTION_MAX -
-    spans.prefabOriginX;
+    mapOwnedApartmentLayoutFractionToWorldX(
+      boundMinX,
+      boundMaxX,
+      spans.unitId,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    ) - spans.prefabOriginX;
   const lzMinR =
     spans.strictMinZ +
     spans.spanZ * OWNED_APARTMENT_LAYOUT_FRACTION_MIN -
@@ -244,8 +265,10 @@ function readAuthoringShellAuthoringMetaFromAncestors(
         spanZ > 0 &&
         Number.isFinite(prefabOriginX) &&
         Number.isFinite(prefabOriginZ);
+      const unitId = (cur.userData.editorMyApartmentUnitId as string | undefined) ?? "";
       if (haveStrict) {
         return {
+          unitId,
           sx,
           sz,
           strictMinX,
@@ -256,10 +279,12 @@ function readAuthoringShellAuthoringMetaFromAncestors(
           prefabOriginZ,
           prefabFootprintSx: sx,
           prefabFootprintSz: sz,
+          slabFootprintSx: sx,
           interiorCeilingInnerY,
         };
       }
       return {
+        unitId,
         sx,
         sz,
         strictMinX: 0,
@@ -270,6 +295,7 @@ function readAuthoringShellAuthoringMetaFromAncestors(
         prefabOriginZ: 0,
         prefabFootprintSx: sx,
         prefabFootprintSz: sz,
+        slabFootprintSx: sx,
         interiorCeilingInnerY,
       };
     }
@@ -764,9 +790,15 @@ export function previewWorldFromNormalizedPlacement(args: {
   fz: number;
 }): { x: number; z: number } {
   const { spans, fx, fz } = args;
+  const worldX = mapOwnedApartmentLayoutFractionToWorldX(
+    spans.strictMinX,
+    spans.strictMinX + spans.spanX,
+    spans.unitId,
+    fx,
+  );
   const pos = clampPreviewXZToAuthoringInterior(
     spans,
-    spans.strictMinX + fx * spans.spanX - spans.prefabOriginX,
+    worldX - spans.prefabOriginX,
     spans.strictMinZ + fz * spans.spanZ - spans.prefabOriginZ,
   );
   return {
@@ -954,7 +986,75 @@ export type EditorMyApartmentFurnitureMount = {
     unitBounds?: ApartmentUnitWorldBounds,
   ) => void;
   dispose: () => void;
+  /** Wall ids currently represented in `selectionGroups` (incremental sync). */
+  mountedWallIds: Set<string>;
+  mountedMirrorIds: Set<string>;
 };
+
+function mountIdSet(ids: readonly { id: string }[]): Set<string> {
+  return new Set(ids.map((x) => x.id));
+}
+
+/** Add/update/remove wall groups without rebuilding decor/mirror meshes. */
+export function syncEditorMyApartmentWallsOnMount(
+  mount: EditorMyApartmentFurnitureMount,
+  doc: OwnedApartmentBuiltinsDoc,
+  spans: OwnedApartmentFractionToPreviewXZ,
+): void {
+  const nextIds = new Set(doc.wallItems.map((w) => w.id));
+  for (const wall of doc.wallItems) {
+    const selId = editorMyApartmentSelectedIdForWall(wall.id);
+    let group = mount.selectionGroups[selId];
+    if (!group) {
+      group = new THREE.Group();
+      group.name = `editor_my_apartment_wall:${wall.id}`;
+      mount.root.add(group);
+      mount.selectionGroups[selId] = group;
+    }
+    placeWallGroup({ group, wall, spans });
+  }
+  for (const id of mount.mountedWallIds) {
+    if (nextIds.has(id)) continue;
+    const selId = editorMyApartmentSelectedIdForWall(id);
+    const group = mount.selectionGroups[selId];
+    if (group) {
+      disposeGroupSubtreeGeometry(group);
+      mount.root.remove(group);
+      delete mount.selectionGroups[selId];
+    }
+  }
+  mount.mountedWallIds = nextIds;
+}
+
+export function syncEditorMyApartmentMirrorsOnMount(
+  mount: EditorMyApartmentFurnitureMount,
+  doc: OwnedApartmentBuiltinsDoc,
+  spans: OwnedApartmentFractionToPreviewXZ,
+): void {
+  const nextIds = new Set(doc.mirrorItems.map((m) => m.id));
+  for (const mirror of doc.mirrorItems) {
+    const selId = editorMyApartmentSelectedIdForMirror(mirror.id);
+    let group = mount.selectionGroups[selId];
+    if (!group) {
+      group = new THREE.Group();
+      group.name = `editor_my_apartment_mirror:${mirror.id}`;
+      mount.root.add(group);
+      mount.selectionGroups[selId] = group;
+    }
+    placeMirrorGroup({ group, mirror, spans });
+  }
+  for (const id of mount.mountedMirrorIds) {
+    if (nextIds.has(id)) continue;
+    const selId = editorMyApartmentSelectedIdForMirror(id);
+    const group = mount.selectionGroups[selId];
+    if (group) {
+      disposeGroupSubtreeGeometry(group);
+      mount.root.remove(group);
+      delete mount.selectionGroups[selId];
+    }
+  }
+  mount.mountedMirrorIds = nextIds;
+}
 
 const editorMyApartmentDecorTemplatePromises = new Map<string, Promise<THREE.Object3D>>();
 
@@ -1056,7 +1156,15 @@ export function mountEditorMyApartmentFurnitureUnder(
     root.clear();
   };
 
-  return { root, selectionGroups, practicalLights, resyncPracticalLights, dispose };
+  return {
+    root,
+    selectionGroups,
+    practicalLights,
+    resyncPracticalLights,
+    dispose,
+    mountedWallIds: mountIdSet(doc.wallItems),
+    mountedMirrorIds: mountIdSet(doc.mirrorItems),
+  };
 }
 
 export function updateEditorMyApartmentMountFromDoc(
@@ -1084,4 +1192,6 @@ export function updateEditorMyApartmentMountFromDoc(
   mount.practicalLights = rebuilt.practicalLights;
   mount.resyncPracticalLights = rebuilt.resyncPracticalLights;
   mount.dispose = rebuilt.dispose;
+  mount.mountedWallIds = rebuilt.mountedWallIds;
+  mount.mountedMirrorIds = rebuilt.mountedMirrorIds;
 }

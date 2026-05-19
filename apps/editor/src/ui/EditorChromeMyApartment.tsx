@@ -30,6 +30,11 @@ import {
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
 import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
+import {
+  clampOwnedApartmentLayoutFraction,
+  MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FX,
+  MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FZ,
+} from "../editor/myApartment/cloneMyApartmentObjectGroup.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -375,12 +380,10 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedWall(): void {
     if (!selectedWall) return;
-    const nextIndex = wallItems.length;
     const id =
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
-        : `wall_${Date.now()}_${nextIndex}`;
-    const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
+        : `wall_${Date.now()}_${wallItems.length}`;
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
       wallItems: [
@@ -388,8 +391,12 @@ export function EditorChromeMyApartment(props: {
         {
           ...selectedWall,
           id,
-          fx,
-          fz,
+          fx: clampOwnedApartmentLayoutFraction(
+            selectedWall.fx + MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FX,
+          ),
+          fz: clampOwnedApartmentLayoutFraction(
+            selectedWall.fz + MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FZ,
+          ),
           material: { ...selectedWall.material },
         },
       ],
@@ -981,12 +988,10 @@ export function EditorChromeMyApartment(props: {
         The grey slab matches the unit prefab footprint in the floor doc; walls reuse the playable
         shell hole layout. Placement data lives in{" "}
         <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>
-        {" — "}save writes that file; built-ins and imported decor both map into each unit{"'"}s
-        strict hull (`bound_*`) spans. Imported decor and authored wall slabs clamp to the slab top and
-        the unit{"'"}s hollow-shell ceiling height (ceiling slab is not drawn in this preview). You can use the main{" "}
-        <strong>Save</strong> button under Content after leaving this panel — it still flushes{" "}
-        <code style={{ fontSize: 10 }}>owned_apartment_builtins.json</code> when apartment data
-        changed in memory.
+        {" — "}use the main <strong>Save</strong> button under Content to write that file (edits stay
+        in memory until you save). Built-ins and imported decor map into each unit{"'"}s strict hull
+        (`bound_*`) spans. Imported decor and authored wall slabs clamp to the slab top and the
+        unit{"'"}s hollow-shell ceiling height (ceiling slab is not drawn in this preview).
       </p>
     </div>
   );

@@ -23,6 +23,8 @@ import {
 } from "./wallWithDoorCutout.js";
 import { addExteriorWallCladding } from "./hollowRoomShell.js";
 import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
+import { residentialBalconyPartitionFace } from "./residentialUnitBalcony.js";
+import { residentialBalconyHollowShellExtras } from "./residentialUnitBalconyShell.js";
 import { residentialUnitStrictBoundsXZ } from "./residentialUnitStrictBoundsXZ.js";
 
 export function apartmentDoorTemplateForUnit(opts: {
@@ -50,6 +52,8 @@ export type OwnedApartmentEditorShellPlan = {
   exteriorFaces: readonly CardinalFace[];
   windowFacesForGlass: readonly CardinalFace[];
   tintByExteriorFace: Partial<Record<CardinalFace, number>>;
+  /** N/S plaster + cladding span when the unit is lengthened for a balcony bay. */
+  wallSpanX?: { min: number; max: number };
 };
 
 /**
@@ -110,11 +114,12 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
   let exteriorWindowHoles: CorridorShellWallHoles | undefined;
   let windowFacesForGlass: CardinalFace[] = [];
 
+  const partitionFace = residentialBalconyPartitionFace(o.id);
+
   if (exteriorFaces.length > 0) {
-    windowFacesForGlass = unitShellFacesForExteriorWindows(exteriorFaces, {
-      floor: opts.floor,
-      placedObject: o,
-    });
+    windowFacesForGlass = unitShellFacesForExteriorWindows(exteriorFaces).filter(
+      (face) => face !== partitionFace,
+    );
     for (const face of windowFacesForGlass) {
       const planFace = planUnitExteriorWindowsForFace({
         face,
@@ -138,6 +143,8 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
         gathered.s.push(...planFace.holesNs);
       }
     }
+    if (partitionFace === "e") gathered.e = [];
+    if (partitionFace === "w") gathered.w = [];
     const anyHole =
       gathered.e.length +
         gathered.w.length +
@@ -149,6 +156,8 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
       windowFacesForGlass = [];
     }
   }
+
+  const balconyShell = residentialBalconyHollowShellExtras(o.id, sx);
 
   return {
     wt,
@@ -164,6 +173,7 @@ export function planOwnedApartmentEditorShellForUnit(opts: {
     exteriorFaces,
     windowFacesForGlass,
     tintByExteriorFace,
+    wallSpanX: balconyShell?.wallSpanX,
   };
 }
 
@@ -232,12 +242,19 @@ export function resolveOwnedApartmentAuthoringPreviewLayout(opts: {
  * Holed plaster shell + exterior concrete cladding + tinted glass slabs — mirrors
  * {@link addHollowRoomShell} unit wall branches (no floor slab or ceiling).
  */
+export type OwnedApartmentEditorShellWallOpts = {
+  /** Omit plaster / cladding / glass on these faces (editor cutaway into balcony bay). */
+  openFaces?: readonly CardinalFace[];
+};
+
 export function appendOwnedApartmentEditorShellWalls(
   group: THREE.Group,
   plan: OwnedApartmentEditorShellPlan,
   wallMat: THREE.MeshStandardMaterial,
   exteriorWallMat?: THREE.MeshStandardMaterial,
+  opts?: OwnedApartmentEditorShellWallOpts,
 ): void {
+  const openFaces = new Set(opts?.openFaces ?? []);
   const wt = plan.wt;
   const hx = plan.hx;
   const hz = plan.hz;
@@ -254,8 +271,8 @@ export function appendOwnedApartmentEditorShellWalls(
 
   const zMin = -vlenZ * 0.5;
   const zMax = vlenZ * 0.5;
-  const xMin = -vlenX * 0.5;
-  const xMax = vlenX * 0.5;
+  const xMinWall = plan.wallSpanX?.min ?? -vlenX * 0.5;
+  const xMaxWall = plan.wallSpanX?.max ?? vlenX * 0.5;
   const xE = hx - wt * 0.5;
   const xW = -hx + wt * 0.5;
   const zN = hz - wt * 0.5;
@@ -266,54 +283,63 @@ export function appendOwnedApartmentEditorShellWalls(
 
   const vh = yHi - yLo;
   if (stairHoleCount === 0) {
-    const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallMat);
-    east.name = "editor_ref_shell_wall_e";
-    east.position.set(hx - wt * 0.5, 0, 0);
-    group.add(east);
-    const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallMat);
-    west.name = "editor_ref_shell_wall_w";
-    west.position.set(-hx + wt * 0.5, 0, 0);
-    group.add(west);
-    const north = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallMat);
+    if (!openFaces.has("e")) {
+      const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallMat);
+      east.name = "editor_ref_shell_wall_e";
+      east.position.set(hx - wt * 0.5, 0, 0);
+      group.add(east);
+    }
+    if (!openFaces.has("w")) {
+      const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallMat);
+      west.name = "editor_ref_shell_wall_w";
+      west.position.set(-hx + wt * 0.5, 0, 0);
+      group.add(west);
+    }
+    const spanX = xMaxWall - xMinWall;
+    const north = new THREE.Mesh(new THREE.BoxGeometry(spanX, vh, wt), wallMat);
     north.name = "editor_ref_shell_wall_n";
-    north.position.set(0, 0, hz - wt * 0.5);
+    north.position.set((xMinWall + xMaxWall) * 0.5, 0, hz - wt * 0.5);
     group.add(north);
-    const south = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallMat);
+    const south = new THREE.Mesh(new THREE.BoxGeometry(spanX, vh, wt), wallMat);
     south.name = "editor_ref_shell_wall_s";
-    south.position.set(0, 0, -hz + wt * 0.5);
+    south.position.set((xMinWall + xMaxWall) * 0.5, 0, -hz + wt * 0.5);
     group.add(south);
   } else {
-    addWallConstantXWithHoles(
-      group,
-      wallMat,
-      xE,
-      wt,
-      zMin,
-      zMax,
-      yLo,
-      yHi,
-      innerE,
-      "editor_ref_shell_wall_e",
-    );
-    addWallConstantXWithHoles(
-      group,
-      wallMat,
-      xW,
-      wt,
-      zMin,
-      zMax,
-      yLo,
-      yHi,
-      innerW,
-      "editor_ref_shell_wall_w",
-    );
+    if (!openFaces.has("e")) {
+      addWallConstantXWithHoles(
+        group,
+        wallMat,
+        xE,
+        wt,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        innerE,
+        "editor_ref_shell_wall_e",
+      );
+    }
+    if (!openFaces.has("w")) {
+      addWallConstantXWithHoles(
+        group,
+        wallMat,
+        xW,
+        wt,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        innerW,
+        "editor_ref_shell_wall_w",
+      );
+    }
     addWallConstantZWithHoles(
       group,
       wallMat,
       zN,
       wt,
-      xMin,
-      xMax,
+      xMinWall,
+      xMaxWall,
       yLo,
       yHi,
       innerN,
@@ -324,8 +350,8 @@ export function appendOwnedApartmentEditorShellWalls(
       wallMat,
       zS,
       wt,
-      xMin,
-      xMax,
+      xMinWall,
+      xMaxWall,
       yLo,
       yHi,
       innerS,
@@ -333,9 +359,10 @@ export function appendOwnedApartmentEditorShellWalls(
     );
   }
 
-  if (plan.exteriorWindowHoles && plan.windowFacesForGlass.length > 0) {
+  const glassFaces = plan.windowFacesForGlass.filter((face) => !openFaces.has(face));
+  if (plan.exteriorWindowHoles && glassFaces.length > 0) {
     addUnitExteriorWindowGlassMeshes(group, {
-      faces: plan.windowFacesForGlass,
+      faces: glassFaces,
       hx,
       hz,
       tintByFace: plan.tintByExteriorFace,
@@ -350,17 +377,18 @@ export function appendOwnedApartmentEditorShellWalls(
     });
   }
 
-  if (exteriorWallMat && plan.exteriorFaces.length > 0) {
-    const claddingE: WallHoleYZ[] = plan.exteriorFaces.includes("e")
+  const claddingFaces = plan.exteriorFaces.filter((face) => !openFaces.has(face));
+  if (exteriorWallMat && claddingFaces.length > 0) {
+    const claddingE: WallHoleYZ[] = claddingFaces.includes("e")
       ? [...(win?.e ?? [])]
       : [...(cw?.e ?? [])];
-    const claddingW: WallHoleYZ[] = plan.exteriorFaces.includes("w")
+    const claddingW: WallHoleYZ[] = claddingFaces.includes("w")
       ? [...(win?.w ?? [])]
       : [...(cw?.w ?? [])];
-    const claddingN: WallHoleXY[] = plan.exteriorFaces.includes("n")
+    const claddingN: WallHoleXY[] = claddingFaces.includes("n")
       ? [...(win?.n ?? [])]
       : [...(cw?.n ?? [])];
-    const claddingS: WallHoleXY[] = plan.exteriorFaces.includes("s")
+    const claddingS: WallHoleXY[] = claddingFaces.includes("s")
       ? [...(win?.s ?? [])]
       : [...(cw?.s ?? [])];
     addExteriorWallCladding(
@@ -371,7 +399,7 @@ export function appendOwnedApartmentEditorShellWalls(
       vlenZ,
       yLo,
       yHi,
-      plan.exteriorFaces,
+      claddingFaces,
       exteriorWallMat,
       {
         e: claddingE,
@@ -380,6 +408,7 @@ export function appendOwnedApartmentEditorShellWalls(
         s: claddingS,
       },
       0.05,
+      plan.wallSpanX ? { spanX: plan.wallSpanX } : undefined,
     );
   }
 }

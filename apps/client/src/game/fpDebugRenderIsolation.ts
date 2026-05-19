@@ -12,7 +12,6 @@ export type FpDebugRenderIsolationFlags = {
   environmentSky: boolean;
   environmentLighting: boolean;
   mirrors: boolean;
-  exteriorTrees: boolean;
   floorPlates: boolean;
   unitInteriorShells: boolean;
   transparentMeshes: boolean;
@@ -31,7 +30,6 @@ const ALL_ON: FpDebugRenderIsolationFlags = {
   environmentSky: true,
   environmentLighting: true,
   mirrors: true,
-  exteriorTrees: true,
   floorPlates: true,
   unitInteriorShells: true,
   transparentMeshes: true,
@@ -63,7 +61,6 @@ export function isFpDebugRenderIsolationSuppressingAnything(): boolean {
     f.environmentSky &&
     f.environmentLighting &&
     f.mirrors &&
-    f.exteriorTrees &&
     f.floorPlates &&
     f.unitInteriorShells &&
     f.transparentMeshes &&
@@ -102,7 +99,6 @@ export function setAllFpDebugRenderIsolationFlags(enabled: boolean): void {
     environmentSky: enabled,
     environmentLighting: enabled,
     mirrors: enabled,
-    exteriorTrees: enabled,
     floorPlates: enabled,
     unitInteriorShells: enabled,
     transparentMeshes: enabled,

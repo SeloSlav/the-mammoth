@@ -61,10 +61,6 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
       worldAttached = true;
       buildingRootForDispose = buildingRoot;
     },
-    onForestReady: async () => {
-      if (disposed) return;
-      await yieldToMain();
-    },
   };
 
   primeMegablockStaticWorldMeshBuild({

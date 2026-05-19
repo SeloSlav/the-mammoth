@@ -72,24 +72,6 @@ import {
   workspaceToInitialMode,
 } from "./editorWorkspaceMap.js";
 
-function scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush(): void {
-  ownedApartmentBuiltinsFlushScheduled = true;
-  if (ownedApartmentBuiltinsFlushTimer !== null) return;
-  ownedApartmentBuiltinsFlushTimer = setTimeout(() => {
-    ownedApartmentBuiltinsFlushTimer = null;
-    if (!ownedApartmentBuiltinsFlushScheduled) return;
-    ownedApartmentBuiltinsFlushScheduled = false;
-    void import("../editor/persistence/flushOwnedApartmentBuiltinsToDisk.js")
-      .then((m) => m.flushOwnedApartmentBuiltinsToDisk())
-      .catch((err) => {
-        console.warn("[editor] Auto-save owned_apartment_builtins.json failed:", err);
-      });
-  }, 600);
-}
-
-let ownedApartmentBuiltinsFlushTimer: ReturnType<typeof setTimeout> | null = null;
-let ownedApartmentBuiltinsFlushScheduled = false;
-
 function finalizeOwnedApartmentBuiltinsPreservingMounts(
   prev: OwnedApartmentBuiltinsDoc,
   draft: OwnedApartmentBuiltinsDoc,
@@ -534,11 +516,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       ),
       dirty: true,
-      ownedApartmentBuiltinsNeedsDiskFlush: true,
       selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(id),
       myApartmentMultiselectExtraIds: [],
     }));
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
   },
 
   renameMyApartmentObjectGroup: (groupId, rawName) => {
@@ -563,10 +543,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         ownedApartmentBuiltins: next,
         dirty: true,
-        ownedApartmentBuiltinsNeedsDiskFlush: true,
       };
     });
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
   },
 
   deleteMyApartmentObjectGroup: (groupId) => {
@@ -595,12 +573,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         ownedApartmentBuiltins: next,
         dirty: true,
-        ownedApartmentBuiltinsNeedsDiskFlush: true,
         selectedId: selectedIdNext,
         myApartmentMultiselectExtraIds: extrasNext,
       };
     });
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
   },
 
   cloneMyApartmentObjectGroup: (groupId) => {
@@ -624,11 +600,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         cloned.doc,
       ),
       dirty: true,
-      ownedApartmentBuiltinsNeedsDiskFlush: true,
       selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(cloned.newGroupId),
       myApartmentMultiselectExtraIds: [],
     }));
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
   },
 
   deleteMyApartmentObjectGroupMembers: (groupId) => {
@@ -649,11 +623,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         nextDoc,
       ),
       dirty: true,
-      ownedApartmentBuiltinsNeedsDiskFlush: true,
       selectedId: null,
       myApartmentMultiselectExtraIds: [],
     }));
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
     return true;
   },
 
@@ -683,11 +655,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         nextDoc,
       ),
       dirty: true,
-      ownedApartmentBuiltinsNeedsDiskFlush: true,
       selectedId: null,
       myApartmentMultiselectExtraIds: [],
     }));
-    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
     return true;
   },
 

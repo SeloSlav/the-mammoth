@@ -16,7 +16,7 @@ import {
 export const MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FX = 0.06;
 export const MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FZ = 0.06;
 
-function clampLayoutFraction(n: number): number {
+export function clampOwnedApartmentLayoutFraction(n: number): number {
   return Math.min(
     OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
     Math.max(OWNED_APARTMENT_LAYOUT_FRACTION_MIN, n),
@@ -66,8 +66,8 @@ export function cloneMyApartmentObjectGroupInDoc(
       placedItems.push({
         ...item,
         id,
-        fx: clampLayoutFraction(item.fx + offsetFx),
-        fz: clampLayoutFraction(item.fz + offsetFz),
+        fx: clampOwnedApartmentLayoutFraction(item.fx + offsetFx),
+        fz: clampOwnedApartmentLayoutFraction(item.fz + offsetFz),
       });
       newMemberSelectedIds.push(editorMyApartmentSelectedIdForDecor(id));
       continue;
@@ -81,8 +81,8 @@ export function cloneMyApartmentObjectGroupInDoc(
       wallItems.push({
         ...item,
         id,
-        fx: clampLayoutFraction(item.fx + offsetFx),
-        fz: clampLayoutFraction(item.fz + offsetFz),
+        fx: clampOwnedApartmentLayoutFraction(item.fx + offsetFx),
+        fz: clampOwnedApartmentLayoutFraction(item.fz + offsetFz),
         material: { ...item.material },
       });
       newMemberSelectedIds.push(editorMyApartmentSelectedIdForWall(id));
@@ -97,8 +97,8 @@ export function cloneMyApartmentObjectGroupInDoc(
       mirrorItems.push({
         ...item,
         id,
-        fx: clampLayoutFraction(item.fx + offsetFx),
-        fz: clampLayoutFraction(item.fz + offsetFz),
+        fx: clampOwnedApartmentLayoutFraction(item.fx + offsetFx),
+        fz: clampOwnedApartmentLayoutFraction(item.fz + offsetFz),
       });
       newMemberSelectedIds.push(editorMyApartmentSelectedIdForMirror(id));
     }

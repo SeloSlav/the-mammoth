@@ -31,6 +31,7 @@ describe("owned apartment authoring XZ clamp", () => {
     const spanZ = 6.6;
     const sz = 7.1;
     const spans: OwnedApartmentFractionToPreviewXZ = {
+      unitId: "",
       strictMinX: 0,
       strictMinZ,
       spanX: 6,

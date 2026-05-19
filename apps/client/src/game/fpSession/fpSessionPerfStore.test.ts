@@ -40,7 +40,6 @@ const dummyRi = {
   visibleExteriorGlassMeshes: 7,
   visibleTransparentMeshes: 4,
   visibleTransparentExteriorGlassMeshes: 8,
-  visibleExteriorTreeRoots: 0,
   frustumFloorPlates: 1,
   frustumUnitInteriorMeshes: 5,
   frustumApartmentPropMeshes: 6,
@@ -50,7 +49,6 @@ const dummyRi = {
   frustumExteriorGlassMeshes: 10,
   frustumTransparentMeshes: 7,
   frustumTransparentExteriorGlassMeshes: 11,
-  frustumExteriorTreeRoots: 0,
 } as const;
 
 describe("fpSessionPerfStore", () => {
@@ -82,7 +80,6 @@ describe("fpSessionPerfStore", () => {
         visibleExteriorGlassMeshes: 12,
         visibleTransparentMeshes: 44,
         visibleTransparentExteriorGlassMeshes: 17,
-        visibleExteriorTreeRoots: 0,
         frustumFloorPlates: 1,
         frustumUnitInteriorMeshes: 36,
         frustumApartmentPropMeshes: 7,
@@ -92,7 +89,6 @@ describe("fpSessionPerfStore", () => {
         frustumExteriorGlassMeshes: 6,
         frustumTransparentMeshes: 12,
         frustumTransparentExteriorGlassMeshes: 5,
-        frustumExteriorTreeRoots: 0,
       },
     );
 
@@ -113,7 +109,6 @@ describe("fpSessionPerfStore", () => {
     expect(stats?.sceneCounts.visibleExteriorGlassMeshes).toBe(12);
     expect(stats?.sceneCounts.visibleTransparentMeshes).toBe(44);
     expect(stats?.sceneCounts.visibleTransparentExteriorGlassMeshes).toBe(17);
-    expect(stats?.sceneCounts.visibleExteriorTreeRoots).toBe(0);
     expect(stats?.sceneCounts.frustumFloorPlates).toBe(1);
     expect(stats?.sceneCounts.frustumUnitInteriorMeshes).toBe(36);
     expect(stats?.sceneCounts.frustumApartmentPropMeshes).toBe(7);
@@ -122,7 +117,6 @@ describe("fpSessionPerfStore", () => {
     expect(stats?.sceneCounts.frustumExteriorGlassMeshes).toBe(6);
     expect(stats?.sceneCounts.frustumTransparentMeshes).toBe(12);
     expect(stats?.sceneCounts.frustumTransparentExteriorGlassMeshes).toBe(5);
-    expect(stats?.sceneCounts.frustumExteriorTreeRoots).toBe(0);
 
     const report = exportFpPerfReport(1000, 5);
     expect(report).toContain("sky");

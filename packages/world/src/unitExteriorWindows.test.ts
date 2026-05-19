@@ -89,44 +89,6 @@ describe("planUnitExteriorWindowsForFace", () => {
   });
 });
 
-describe("bar end corner façade windows", () => {
-  const unit = (id: string, z: number): PlacedObject => ({
-    id,
-    prefabId: "apartment_unit_small_a",
-    position: [6.425, 1.605, z],
-    scale: [9, 3.05, 7.1],
-  });
-
-  it("adds south-facing window plan for the global −Z end of a long bar floor", () => {
-    const corridor: PlacedObject = {
-      id: "corridor_main",
-      prefabId: "corridor_segment_a",
-      position: [0, 1.605, 0],
-      scale: [3.85, 3.05, 160],
-    };
-    const south = unit("unit_e_003", -76.2);
-    const north = unit("unit_e_014", 76.2);
-    const floor: FloorDoc = {
-      id: "bar_end_test",
-      version: 1,
-      objects: [corridor, south, north],
-    };
-    const extS = exteriorFacesForPlacedObjectInFloor(floor, south);
-    expect(extS).toContain("s");
-    const facesS = unitShellFacesForExteriorWindows(extS, { floor, placedObject: south });
-    expect(facesS).toContain("e");
-    expect(facesS).toContain("s");
-    expect(facesS).not.toContain("n");
-
-    const extN = exteriorFacesForPlacedObjectInFloor(floor, north);
-    expect(extN).toContain("n");
-    const facesN = unitShellFacesForExteriorWindows(extN, { floor, placedObject: north });
-    expect(facesN).toContain("e");
-    expect(facesN).toContain("n");
-    expect(facesN).not.toContain("s");
-  });
-});
-
 describe("facadeSeedForUnitFace", () => {
   it("differs by face for same unit", () => {
     const a = facadeSeedForUnitFace({
@@ -170,10 +132,7 @@ describe("buildFloorMeshes unit exterior windows", () => {
     expect(exteriorFacesForPlacedObjectInFloor(floor, floor.objects[1]!)).toContain("n");
     const unitObj = floor.objects[1]!;
     expect(
-      unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(floor, unitObj), {
-        floor,
-        placedObject: unitObj,
-      }),
+      unitShellFacesForExteriorWindows(exteriorFacesForPlacedObjectInFloor(floor, unitObj)),
     ).toEqual(["e"]);
 
     const root = buildFloorMeshes(floor, { storyLevelIndex: 2, facadeSalt: 42 });

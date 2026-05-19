@@ -32,7 +32,10 @@ const LOBBY_DOUBLE_DOOR_H = 2.16;
 const LOBBY_DOOR_SILL = 0.04;
 /** Minimum centre-to-centre spacing so adjacent double frames read as separate bays. */
 const LOBBY_DOUBLE_DOOR_BAY_SPACING = LOBBY_DOUBLE_DOOR_W + 0.56;
-function addShellFloorCeilingPieces(
+/** Unit / corridor hollow shells (`wt` = 0.11 in {@link addHollowRoomShell}). */
+export const HOLLOW_SHELL_WT_M = 0.11;
+
+export function addShellFloorCeilingPieces(
   group: THREE.Group,
   rects: readonly RectXZ[],
   wt: number,
@@ -41,7 +44,11 @@ function addShellFloorCeilingPieces(
   ceilM: THREE.MeshStandardMaterial,
   roomHalfX: number,
   roomHalfZ: number,
+  namePrefix?: string,
+  slabs: { floor?: boolean; ceiling?: boolean } = {},
 ): void {
+  const wantFloor = slabs.floor !== false;
+  const wantCeil = slabs.ceiling !== false;
   let fi = 0;
   let ci = 0;
   for (const r of rects) {
@@ -49,21 +56,34 @@ function addShellFloorCeilingPieces(
     const d = r.z1 - r.z0;
     const cx = (r.x0 + r.x1) * 0.5;
     const cz = (r.z0 + r.z1) * 0.5;
-    const floorGeom = new THREE.BoxGeometry(w, wt, d);
-    applyShellFloorPlanarTopUV(floorGeom, wt, cx, cz, roomHalfX, roomHalfZ);
-    const floor = new THREE.Mesh(floorGeom, floorM);
-    floor.name = rects.length > 1 ? `shell_floor_${fi}` : "shell_floor";
-    fi += 1;
-    floor.position.set(cx, -hy + wt * 0.5, cz);
-    group.add(floor);
-    const ceilGeom = new THREE.BoxGeometry(w, wt, d);
-    /** Match floor shell: default box UVs are 0..1 per piece and stretch badly on long corridors. */
-    applyShellFloorPlanarTopUV(ceilGeom, wt, cx, cz, roomHalfX, roomHalfZ);
-    const ceiling = new THREE.Mesh(ceilGeom, ceilM);
-    ceiling.name = rects.length > 1 ? `shell_ceiling_${ci}` : "shell_ceiling";
-    ci += 1;
-    ceiling.position.set(cx, hy - wt * 0.5, cz);
-    group.add(ceiling);
+    if (wantFloor) {
+      const floorGeom = new THREE.BoxGeometry(w, wt, d);
+      applyShellFloorPlanarTopUV(floorGeom, wt, cx, cz, roomHalfX, roomHalfZ);
+      const floor = new THREE.Mesh(floorGeom, floorM);
+      const floorName = namePrefix
+        ? `${namePrefix}_floor${rects.length > 1 ? `_${fi}` : ""}`
+        : rects.length > 1
+          ? `shell_floor_${fi}`
+          : "shell_floor";
+      floor.name = floorName;
+      fi += 1;
+      floor.position.set(cx, -hy + wt * 0.5, cz);
+      group.add(floor);
+    }
+    if (wantCeil) {
+      const ceilGeom = new THREE.BoxGeometry(w, wt, d);
+      /** Match floor shell: default box UVs are 0..1 per piece and stretch badly on long corridors. */
+      applyShellFloorPlanarTopUV(ceilGeom, wt, cx, cz, roomHalfX, roomHalfZ);
+      const ceiling = new THREE.Mesh(ceilGeom, ceilM);
+      ceiling.name = namePrefix
+        ? `${namePrefix}_ceiling${rects.length > 1 ? `_${ci}` : ""}`
+        : rects.length > 1
+          ? `shell_ceiling_${ci}`
+          : "shell_ceiling";
+      ci += 1;
+      ceiling.position.set(cx, hy - wt * 0.5, cz);
+      group.add(ceiling);
+    }
   }
 }
 function markNewChildrenNoCollision(
@@ -89,14 +109,15 @@ export function addExteriorWallCladding(
   >,
   /** Push holed façade slabs outward (m) so they do not coplanar-z-fight unit plaster shells. */
   outwardBiasAlongNormalM = 0,
+  claddingOpts?: { spanX?: { min: number; max: number } },
 ): void {
   if (faces.length === 0) return;
   const cladT = 0.035;
   const b = outwardBiasAlongNormalM;
   const zMin = -vlenZ * 0.5;
   const zMax = vlenZ * 0.5;
-  const xMin = -vlenX * 0.5;
-  const xMax = vlenX * 0.5;
+  const xMin = claddingOpts?.spanX?.min ?? -vlenX * 0.5;
+  const xMax = claddingOpts?.spanX?.max ?? vlenX * 0.5;
   for (const face of faces) {
     if (face === "e") {
       const startIdx = group.children.length;
@@ -233,7 +254,23 @@ export function addHollowRoomShell(
       opts.shaftElevatorsMerged,
     );
   }
-  addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM, hx, hz);
+  if (opts.balconyExtendMaxX != null || opts.balconyExtendMinX != null) {
+    rects = rects.map((r) => ({
+      ...r,
+      x0: opts.balconyExtendMinX != null ? Math.min(r.x0, opts.balconyExtendMinX) : r.x0,
+      x1: opts.balconyExtendMaxX != null ? Math.max(r.x1, opts.balconyExtendMaxX) : r.x1,
+    }));
+  }
+  const shellHalfX = Math.max(
+    hx,
+    ...(opts.balconyExtendMaxX != null ? [Math.abs(opts.balconyExtendMaxX)] : []),
+    ...(opts.balconyExtendMinX != null ? [Math.abs(opts.balconyExtendMinX)] : []),
+  );
+  const shellHalfZ = hz;
+  addShellFloorCeilingPieces(group, rects, wt, hy, floorM, ceilM, shellHalfX, shellHalfZ, undefined, {
+    floor: opts.shellFloorSlab !== false,
+    ceiling: opts.shellCeilingSlab !== false,
+  });
   const yLo = -vh * 0.5;
   const yHi = vh * 0.5;
   const yDoor0 = yLo + LOBBY_DOOR_SILL;
@@ -276,71 +313,87 @@ export function addHollowRoomShell(
     exteriorFaces.includes("s") && kind === "unit"
       ? (win?.s ?? [])
       : (cw?.s ?? []);
+  const openInterior = new Set(opts.openInteriorFaces ?? []);
+  const xMinWall = opts.wallSpanX?.min ?? -vlenX * 0.5;
+  const xMaxWall = opts.wallSpanX?.max ?? vlenX * 0.5;
   if (!groundLobby) {
     if (totalWallCuts === 0) {
-      const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
-      east.name = "shell_wall_e";
-      east.position.set(hx - wt * 0.5, 0, 0);
-      group.add(east);
-      const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
-      west.name = "shell_wall_w";
-      west.position.set(-hx + wt * 0.5, 0, 0);
-      group.add(west);
-      const north = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
+      if (!openInterior.has("e")) {
+        const east = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
+        east.name = "shell_wall_e";
+        east.position.set(hx - wt * 0.5, 0, 0);
+        group.add(east);
+      }
+      if (!openInterior.has("w")) {
+        const west = new THREE.Mesh(new THREE.BoxGeometry(wt, vh, vlenZ), wallM);
+        west.name = "shell_wall_w";
+        west.position.set(-hx + wt * 0.5, 0, 0);
+        group.add(west);
+      }
+      const spanX = xMaxWall - xMinWall;
+      const north = new THREE.Mesh(new THREE.BoxGeometry(spanX, vh, wt), wallM);
       north.name = "shell_wall_n";
-      north.position.set(0, 0, hz - wt * 0.5);
+      north.position.set((xMinWall + xMaxWall) * 0.5, 0, hz - wt * 0.5);
       group.add(north);
-      const south = new THREE.Mesh(new THREE.BoxGeometry(vlenX, vh, wt), wallM);
+      const south = new THREE.Mesh(new THREE.BoxGeometry(spanX, vh, wt), wallM);
       south.name = "shell_wall_s";
-      south.position.set(0, 0, -hz + wt * 0.5);
+      south.position.set((xMinWall + xMaxWall) * 0.5, 0, -hz + wt * 0.5);
       group.add(south);
-      addExteriorWallCladding(
-        group,
-        hx,
-        hz,
-        vlenX,
-        vlenZ,
-        yLo,
-        yHi,
-        exteriorFaces,
-        exteriorWallM,
-        undefined,
-        unitCladOutwardBiasM,
-      );
+      const cladFaces = exteriorFaces.filter((f) => !openInterior.has(f));
+      if (cladFaces.length > 0) {
+        addExteriorWallCladding(
+          group,
+          hx,
+          hz,
+          vlenX,
+          vlenZ,
+          yLo,
+          yHi,
+          cladFaces,
+          exteriorWallM,
+          undefined,
+          unitCladOutwardBiasM,
+          opts.wallSpanX ? { spanX: opts.wallSpanX } : undefined,
+        );
+      }
       return;
     }
     const zMin = -vlenZ * 0.5;
     const zMax = vlenZ * 0.5;
-    const xMin = -vlenX * 0.5;
-    const xMax = vlenX * 0.5;
+    const xMin = xMinWall;
+    const xMax = xMaxWall;
     const xE = hx - wt * 0.5;
     const xW = -hx + wt * 0.5;
     const zN = hz - wt * 0.5;
     const zS = -hz + wt * 0.5;
-    addWallConstantXWithHoles(
-      group,
-      wallM,
-      xE,
-      wt,
-      zMin,
-      zMax,
-      yLo,
-      yHi,
-      innerE,
-      "shell_wall_e",
-    );
-    addWallConstantXWithHoles(
-      group,
-      wallM,
-      xW,
-      wt,
-      zMin,
-      zMax,
-      yLo,
-      yHi,
-      innerW,
-      "shell_wall_w",
-    );
+    if (!openInterior.has("e")) {
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xE,
+        wt,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        innerE,
+        "shell_wall_e",
+      );
+    }
+    if (!openInterior.has("w")) {
+      addWallConstantXWithHoles(
+        group,
+        wallM,
+        xW,
+        wt,
+        zMin,
+        zMax,
+        yLo,
+        yHi,
+        innerW,
+        "shell_wall_w",
+      );
+    }
     addWallConstantZWithHoles(
       group,
       wallM,
@@ -365,24 +418,28 @@ export function addHollowRoomShell(
       innerS,
       "shell_wall_s",
     );
-    addExteriorWallCladding(
-      group,
-      hx,
-      hz,
-      vlenX,
-      vlenZ,
-      yLo,
-      yHi,
-      exteriorFaces,
-      exteriorWallM,
-      {
-        e: claddingE,
-        w: claddingW,
-        n: claddingN,
-        s: claddingS,
-      },
-      unitCladOutwardBiasM,
-    );
+    const cladFaces = exteriorFaces.filter((f) => !openInterior.has(f));
+    if (cladFaces.length > 0) {
+      addExteriorWallCladding(
+        group,
+        hx,
+        hz,
+        vlenX,
+        vlenZ,
+        yLo,
+        yHi,
+        cladFaces,
+        exteriorWallM,
+        {
+          e: openInterior.has("e") ? [] : claddingE,
+          w: openInterior.has("w") ? [] : claddingW,
+          n: claddingN,
+          s: claddingS,
+        },
+        unitCladOutwardBiasM,
+        opts.wallSpanX ? { spanX: opts.wallSpanX } : undefined,
+      );
+    }
     addKoncarElevatorSignMeshes(
       group,
       sx,

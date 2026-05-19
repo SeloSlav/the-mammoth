@@ -24,6 +24,7 @@ const FLOOR_TO_CEILING_M = 3.05;
 /** Must match `DEFAULT_BUILDING_FLOOR_SPACING_M` in `packages/world/src/index.ts` (stacked plates). */
 const STOREY_SPACING_M = 60 / 19;
 const CORRIDOR_WIDTH_M = 3.85;
+/** Living shell depth in floor JSON (`scale.x`). The 2.5 m east/west balcony bay is meshed in code — do not stretch this to 11.5. */
 const UNIT_DEPTH_M = 9.0;
 const UNIT_ALONG_Z_M = 7.2;
 const BAY_GAP_M = 0.1;
