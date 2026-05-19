@@ -57,6 +57,7 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
+import { getFpDebugRenderIsolationFlags } from "../fpDebugRenderIsolation.js";
 import {
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
@@ -453,13 +454,16 @@ export function mountFpApartmentDecorMeshes(opts: {
     containingUnitKey: string | null,
     force = false,
   ): void => {
-    if (!force && containingUnitKey === practicalLightsUnitKey) return;
-    practicalLightsUnitKey = containingUnitKey;
-
-    if (!containingUnitKey) {
-      clearInteriorLighting();
+    const lightsEnabled = getFpDebugRenderIsolationFlags().apartmentPracticalLights;
+    if (!lightsEnabled || !containingUnitKey) {
+      if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
+        clearInteriorLighting();
+      }
+      practicalLightsUnitKey = containingUnitKey;
       return;
     }
+    if (!force && containingUnitKey === practicalLightsUnitKey) return;
+    practicalLightsUnitKey = containingUnitKey;
 
     const bounds = unitBoundsForKey(containingUnitKey);
     practicalLightsMount = syncApartmentInteriorPracticalLighting({

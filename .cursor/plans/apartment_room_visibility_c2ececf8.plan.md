@@ -4,28 +4,28 @@ overview: Add CPU-side room/cell visibility for in-unit apartment props using au
 todos:
   - id: engine-room-grid
     content: Add packages/engine/src/spatial/apartmentUnitRoomGrid.ts with build + query API and vitest coverage (T-wall, open plan, strict camera room)
-    status: in_progress
+    status: completed
   - id: export-engine
     content: Export room grid types/functions from packages/engine/src/index.ts
-    status: pending
+    status: completed
   - id: decor-grid-cache
     content: Build per-unit room grid cache in fpApartmentDecorMeshes runFullRebuild; tag decor groups with mammothApartmentPropRoomId (skip walls/mirrors)
-    status: pending
+    status: completed
   - id: visibility-gate
     content: Extend fpApartmentInteriorPropVisibility with propRoomId + visibleRoomIds gate; keep hysteresis + show budget
-    status: pending
+    status: completed
   - id: decor-sync-wire
     content: Pass camera room set from grid into fpApartmentDecorMeshes.syncVisibility
-    status: pending
+    status: completed
   - id: furniture-per-child
     content: Tag furniture children with roomId before merge; syncVisibility toggles per prop child not whole unitGroup
-    status: pending
+    status: completed
   - id: tests-client
     content: Add/extend fpApartmentInteriorPropVisibility.test.ts for room gate behavior
-    status: pending
+    status: completed
   - id: profile-verify
     content: Re-run apartment spin profiler; tune MAX_SHOWS_PER_FRAME if needed; document results
-    status: pending
+    status: completed
 isProject: false
 ---
 

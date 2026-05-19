@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getFpDebugRenderIsolationFlags } from "../fpDebugRenderIsolation.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MeshStandardNodeMaterial, NodeMaterial } from "three/webgpu";
 import {
@@ -605,12 +606,25 @@ export function attachFpSessionEnvironment(
       stairwellInteriorDark01 = 0,
     }) => {
       const t0 = performance.now();
+      const renderIso = getFpDebugRenderIsolationFlags();
       applyApartmentInteriorClip(_apartmentInteriorBounds);
-      sky.updateTime(nowSec);
-      sky.updateSun(sunDir);
-      sky.updateCamera(camera);
-      sky.updateResolution(viewWidthPx, viewHeightPx);
+
+      sky.visible = renderIso.environmentSky;
+      groundPlane.visible = renderIso.environmentSky;
+      if (renderIso.environmentSky) {
+        sky.updateTime(nowSec);
+        sky.updateSun(sunDir);
+        sky.updateCamera(camera);
+        sky.updateResolution(viewWidthPx, viewHeightPx);
+      }
       const tAfterSky = performance.now();
+
+      hemi.visible = renderIso.environmentLighting;
+      fill.visible = renderIso.environmentLighting;
+      dir.visible = renderIso.environmentLighting;
+      apartmentInteriorBounce.bounceHemi.visible = renderIso.environmentLighting;
+      apartmentInteriorBounce.bounceFill.visible = renderIso.environmentLighting;
+      apartmentInteriorBounce.bounceDir.visible = renderIso.environmentLighting;
 
       const stair01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
       const stairwellScale = THREE.MathUtils.lerp(
@@ -618,14 +632,16 @@ export function attachFpSessionEnvironment(
         STAIRWELL_INTERIOR_LIGHT_SCALE,
         stair01,
       );
-      const interior01 = applyMammothApartmentInteriorScene({
-        scene,
-        renderer,
-        interiorProximity01: apartmentInteriorDark01,
-        bounce: apartmentInteriorBounce,
-        global: { hemi, fill, dir },
-        exteriorLightScale: stairwellScale,
-      });
+      const interior01 = renderIso.environmentLighting
+        ? applyMammothApartmentInteriorScene({
+            scene,
+            renderer,
+            interiorProximity01: apartmentInteriorDark01,
+            bounce: apartmentInteriorBounce,
+            global: { hemi, fill, dir },
+            exteriorLightScale: stairwellScale,
+          })
+        : 0;
       syncMammothApartmentInteriorViewLayers(
         { camera },
         interior01 >

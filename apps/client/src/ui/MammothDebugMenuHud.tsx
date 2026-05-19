@@ -6,6 +6,14 @@ import {
   type ReactElement,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  resetFpDebugRenderIsolationFlags,
+  setAllFpDebugRenderIsolationFlags,
+  setFpDebugRenderIsolationFlag,
+  subscribeFpDebugRenderIsolation,
+  getFpDebugRenderIsolationFlags,
+  type FpDebugRenderIsolationKey,
+} from "../game/fpDebugRenderIsolation.js";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import { getFpDebugMenuSessionSnapshot } from "../game/fpDebugMenuSessionBridge.js";
 import {
@@ -213,6 +221,12 @@ export function MammothDebugMenuHud() {
     getFpSessionGameUiHidden,
   );
 
+  const renderIsolation = useSyncExternalStore(
+    subscribeFpDebugRenderIsolation,
+    getFpDebugRenderIsolationFlags,
+    getFpDebugRenderIsolationFlags,
+  );
+
   const refreshLs = useCallback(() => {
     setFlags(readLsFlags());
   }, []);
@@ -257,6 +271,83 @@ export function MammothDebugMenuHud() {
   const w = winDbg();
 
   const bumpSession = () => setSessionBump((n) => n + 1);
+
+  const renderIsolationRows: Array<{
+    key: FpDebugRenderIsolationKey;
+    label: string;
+    description: string;
+  }> = [
+    {
+      key: "apartmentDecor",
+      label: "Apartment decor",
+      description: "Authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
+    },
+    {
+      key: "apartmentFurniture",
+      label: "Apartment furniture",
+      description: "Bed, wardrobe, stove, footlocker per unit",
+    },
+    {
+      key: "apartmentPracticalLights",
+      label: "Apartment practical lights",
+      description: "Window-linked interior spot/fill lights",
+    },
+    {
+      key: "environmentSky",
+      label: "Sky & clouds",
+      description: "Skydome + infinite ground plane updates",
+    },
+    {
+      key: "environmentLighting",
+      label: "Scene lighting",
+      description: "Sun rig, ambient/fill, apartment bounce lights",
+    },
+    {
+      key: "mirrors",
+      label: "Mirrors",
+      description: "Cab + apartment planar reflectors (skip GPU re-render)",
+    },
+    {
+      key: "exteriorTrees",
+      label: "Exterior trees",
+      description: "Procedural tree grove on Mamutica footprint",
+    },
+    {
+      key: "floorPlates",
+      label: "Floor plates",
+      description: "Per-storey building shell groups",
+    },
+    {
+      key: "unitInteriorShells",
+      label: "Unit interior shells",
+      description: "Merged residential unit geometry (not props)",
+    },
+    {
+      key: "transparentMeshes",
+      label: "Transparent meshes",
+      description: "Alpha-tested / transparent building passes",
+    },
+    {
+      key: "lobbyInterior",
+      label: "Lobby interior",
+      description: "Authored lobby_central interior meshes",
+    },
+    {
+      key: "droppedItems",
+      label: "Dropped items",
+      description: "World pickup GLBs",
+    },
+    {
+      key: "decals",
+      label: "Decals",
+      description: "Stairwell graffiti / grime decals",
+    },
+    {
+      key: "localViewmodel",
+      label: "Local viewmodel",
+      description: "FP hands, weapon, consumable mesh",
+    },
+  ];
 
   return createPortal(
     open ? (
@@ -413,6 +504,76 @@ export function MammothDebugMenuHud() {
                 refreshLs();
               },
             })}
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
+              Render isolation
+            </div>
+            <div style={{ fontSize: 11, color: THEME_TEXT_FAINT, marginBottom: 6, lineHeight: 1.4 }}>
+              Turn subsystems off to find lag sources. Applies immediately while in-world (session-only, not saved).
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={() => setAllFpDebugRenderIsolationFlags(true)}
+                style={{
+                  flex: 1,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${THEME_CARD_BORDER}`,
+                  background: "rgba(0,0,0,0.4)",
+                  color: THEME_TEXT_PRIMARY,
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 650,
+                }}
+              >
+                All on
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllFpDebugRenderIsolationFlags(false)}
+                style={{
+                  flex: 1,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${THEME_CARD_BORDER}`,
+                  background: "rgba(0,0,0,0.4)",
+                  color: THEME_TEXT_PRIMARY,
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 650,
+                }}
+              >
+                All off
+              </button>
+              <button
+                type="button"
+                onClick={() => resetFpDebugRenderIsolationFlags()}
+                style={{
+                  flex: 1,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: `1px solid ${THEME_CARD_BORDER}`,
+                  background: "rgba(0,0,0,0.4)",
+                  color: THEME_TEXT_PRIMARY,
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 650,
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            {renderIsolationRows.map((row) =>
+              rowToggle({
+                label: row.label,
+                description: row.description,
+                on: renderIsolation[row.key],
+                onToggle: () => {
+                  setFpDebugRenderIsolationFlag(row.key, !renderIsolation[row.key]);
+                },
+              }),
+            )}
 
             <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
               Apartment authoring

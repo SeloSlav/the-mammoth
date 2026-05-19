@@ -58,6 +58,7 @@ import {
   registerFpDebugMenuSessionSnapshot,
   unregisterFpDebugMenuSessionSnapshot,
 } from "./fpDebugMenuSessionBridge.js";
+import { resetFpDebugRenderIsolationFlags } from "./fpDebugRenderIsolation.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
 import { disposeStaticWorldObjectTree } from "./fpSession/fpSessionStaticWorldDispose.js";
 import {
@@ -261,6 +262,7 @@ export async function mountFpSession(
   resetFpSessionFpsDisplay();
   resetFpSessionCompassHeading();
   resetFpSessionGameUiHidden();
+  resetFpDebugRenderIsolationFlags();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
@@ -1619,6 +1621,11 @@ export async function mountFpSession(
     getFpPerfSceneCounters,
     sampleFpPerfHeavyMeshes,
     scheduleGpuTimestampResolve,
+    buildingRoot,
+    lobbyInteriorRoot: fpLobbyInteriorAuthoringRoot,
+    floorPlateGroups: perfFloorPlateGroups,
+    unitInteriorMeshes,
+    transparentBuildingMeshes,
   });
 
   let raf = 0;
@@ -1739,6 +1746,7 @@ export async function mountFpSession(
     resetFpSessionFpsDisplay();
     resetFpSessionCompassHeading();
     resetFpSessionGameUiHidden();
+    resetFpDebugRenderIsolationFlags();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };
