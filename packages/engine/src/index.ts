@@ -149,6 +149,10 @@ export {
   type FpFirearmShotVisualSample,
 } from "./playerPresentation/index.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
+export {
+  clearStaticModelFetchUrlCache,
+  resolveStaticModelFetchUrl,
+} from "./loaders/staticModelFetchUrl.js";
 export { loadGltfSceneFirstMatch } from "./loaders/gltfLoadFirstMatch.js";
 export {
   mammothCatalogGlbCandidates,

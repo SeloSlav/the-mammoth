@@ -58,6 +58,7 @@ import {
   bindMammothMetallicReadableEnv,
   moodGradeMammothApartmentDecorMesh,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
+  resolveStaticModelFetchUrl,
   syncApartmentInteriorPracticalLighting,
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
@@ -649,7 +650,7 @@ export function mountFpApartmentDecorMeshes(opts: {
 
       const d = entry.decor;
 
-      const url = apartmentDecorFetchPath(d.modelRelPath);
+      const url = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(d.modelRelPath));
       let template = templateByUrl.get(url);
       if (!template) {
         try {

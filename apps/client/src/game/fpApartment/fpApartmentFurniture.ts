@@ -18,6 +18,7 @@ import {
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
+import { resolveStaticModelFetchUrl } from "@the-mammoth/engine";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import {
@@ -734,10 +735,10 @@ export async function mountFpApartmentFurniture(opts: {
     if (templates || templatesLoading || templatesLoadFailed) return;
     templatesLoading = true;
     void Promise.all([
-      loader.loadAsync(WARDROBE_URL),
-      loader.loadAsync(FOOTLOCKER_URL),
-      loader.loadAsync(STOVE_URL),
-      loader.loadAsync(BED_URL),
+      resolveStaticModelFetchUrl(WARDROBE_URL).then((url) => loader.loadAsync(url)),
+      resolveStaticModelFetchUrl(FOOTLOCKER_URL).then((url) => loader.loadAsync(url)),
+      resolveStaticModelFetchUrl(STOVE_URL).then((url) => loader.loadAsync(url)),
+      resolveStaticModelFetchUrl(BED_URL).then((url) => loader.loadAsync(url)),
     ])
       .then(([wardrobeGltf, footGltf, stoveGltf, bedGltf]) => {
         templatesLoading = false;

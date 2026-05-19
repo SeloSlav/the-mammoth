@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { resolveStaticModelFetchUrl } from "@the-mammoth/engine";
 import {
   moodGradeMammothApartmentDecorMesh,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
@@ -942,13 +943,13 @@ export async function loadEditorMyApartmentDecorTemplates(
   const out: EditorMyApartmentDecorTemplateMap = new Map();
   await Promise.all(
     [...new Set(modelRelPaths)].map(async (modelRelPath) => {
-      let pending = editorMyApartmentDecorTemplatePromises.get(modelRelPath);
+      const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));
+      let pending = editorMyApartmentDecorTemplatePromises.get(url);
       if (!pending) {
-        const url = decorAssetUrl(modelRelPath);
         pending = modelRelPath.toLowerCase().endsWith(".obj")
           ? objLoader.loadAsync(url)
           : gltfLoader.loadAsync(url).then((gltf) => gltf.scene);
-        editorMyApartmentDecorTemplatePromises.set(modelRelPath, pending);
+        editorMyApartmentDecorTemplatePromises.set(url, pending);
       }
       out.set(modelRelPath, await pending);
     }),

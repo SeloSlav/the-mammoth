@@ -6,6 +6,10 @@ import react from "@vitejs/plugin-react";
 import checker from "vite-plugin-checker";
 import { mammothGameClientSocialMetaHead } from "../../packages/ui-theme/src/mammothSiteMeta";
 import { contentDevStaticGetMiddleware } from "./src/vite/contentDevMiddleware.js";
+import { devStaticModelMiddleware } from "./src/vite/devStaticModelMiddleware.js";
+import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware.js";
+
+const clientPublicRoot = path.resolve(__dirname, "public");
 
 /**
  * Vite’s default watcher can miss edits under pnpm’s symlinked `node_modules` layout (especially on
@@ -50,8 +54,15 @@ export default defineConfig(({ mode }) => {
       watchWorkspaceUiThemeSrc(),
       {
         name: "content-dev-static-get",
-        configureServer(server) {
-          server.middlewares.use(contentDevStaticGetMiddleware(repoRoot));
+        configureServer: {
+          order: "pre",
+          handler(server) {
+            prependConnectMiddleware(
+              server.middlewares,
+              devStaticModelMiddleware({ clientPublicRoot }),
+            );
+            server.middlewares.use(contentDevStaticGetMiddleware(repoRoot));
+          },
         },
       },
       {
