@@ -46,8 +46,8 @@ const STAIRWELL_LITTER_VARIANTS: readonly StairwellLitterVariantSpec[] = [
 ];
 
 /** Inclusive random count per stair segment (storey); placements may reuse treads/landings. */
-const MIN_LITTER_PER_STAIR_SEGMENT = 5;
-const MAX_LITTER_PER_STAIR_SEGMENT = 10;
+const MIN_LITTER_PER_STAIR_SEGMENT = 4;
+const MAX_LITTER_PER_STAIR_SEGMENT = 8;
 
 /** Base clearance above landing / tread top (merged geometry can sit slightly below the analytic surface). */
 const LITTER_LANDING_LIFT_M = 0.022;
@@ -396,7 +396,16 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
   _instSegInv.copy(segment.matrixWorld).invert();
 
   const weights = variants.map((v) => v.weight);
-  const buckets: THREE.Matrix4[][] = variants.map(() => []);
+  /** One instanced draw per variant per tread/landing so frustum spheres stay tight. */
+  const buckets = new Map<string, { vi: number; matrices: THREE.Matrix4[] }>();
+
+  const poolEntryAnchorKey = (entry: PoolEntry): string => {
+    if (entry.kind === "landing") {
+      const idx = args.L.cornerLandings.indexOf(entry.cl);
+      return `landing:${idx >= 0 ? idx : 0}`;
+    }
+    return `tread:${entry.ti}`;
+  };
 
   for (let i = 0; i < wantCount; i++) {
     const vi = weightedVariantIndex(rng, weights);
@@ -419,6 +428,12 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
       const lz = (rng() * 2 - 1) * Math.max(0.05, entry.cl.halfD - inset);
       const sy = Math.max(1e-6, Math.abs(lm.scale.y));
       const ly = entry.cl.thicknessHalf * sy + LITTER_LANDING_LIFT_M + sideLift;
+      const bucketKey = `${vi}:${poolEntryAnchorKey(entry)}`;
+      let bucket = buckets.get(bucketKey);
+      if (!bucket) {
+        bucket = { vi, matrices: [] };
+        buckets.set(bucketKey, bucket);
+      }
       pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: lm.matrixWorld,
@@ -429,7 +444,7 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
         pitchRad: rot.pitchRad,
         rollRad: rot.rollRad,
         uniformScale: variantScale,
-        out: buckets[vi]!,
+        out: bucket.matrices,
       });
     } else {
       const tr = args.L.treads[entry.ti];
@@ -439,6 +454,12 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
       const lx = (rng() * 2 - 1) * tr.halfAlong * 0.62;
       const lz = (rng() * 2 - 1) * tr.halfAcross * 0.42;
       const ly = tr.riseHalf + LITTER_TREAD_LIFT_M + sideLift;
+      const bucketKey = `${vi}:${poolEntryAnchorKey(entry)}`;
+      let bucket = buckets.get(bucketKey);
+      if (!bucket) {
+        bucket = { vi, matrices: [] };
+        buckets.set(bucketKey, bucket);
+      }
       pushLitterInstanceInSegmentSpace({
         segInv: _instSegInv,
         parentWorld: tm.matrixWorld,
@@ -449,14 +470,14 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
         pitchRad: rot.pitchRad,
         rollRad: rot.rollRad,
         uniformScale: variantScale,
-        out: buckets[vi]!,
+        out: bucket.matrices,
       });
     }
   }
 
-  for (let vi = 0; vi < variants.length; vi++) {
-    const v = variants[vi]!;
-    const instanceMatrices = buckets[vi]!;
+  for (const bucket of buckets.values()) {
+    const v = variants[bucket.vi]!;
+    const instanceMatrices = bucket.matrices;
     const n = instanceMatrices.length;
     if (n === 0) continue;
 
@@ -465,7 +486,6 @@ function placeStairwellLitterSync(args: AttachStairwellCigaretteLitterArgs): voi
     inst.userData.mammothStairwellLitter = true;
     inst.userData.mammothSkipFloorGeometryMerge = true;
     inst.userData.mammothNoCollision = true;
-    inst.userData.mammothUnitInterior = true;
     inst.castShadow = false;
     inst.receiveShadow = false;
     inst.frustumCulled = true;

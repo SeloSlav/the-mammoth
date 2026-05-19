@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fpApplyResidentialInteriorPlateBandOverride,
+  fpResolveStairwellLitterVisible,
   fpResolveUnitInteriorMeshVisible,
   fpShouldDisableContainingInteriorFrustumCulling,
 } from "./fpSessionFloorPlateVisibility";
@@ -155,6 +156,33 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("fpResolveStairwellLitterVisible", () => {
+  it("only shows litter when feet are inside the stair shaft hull", () => {
+    expect(
+      fpResolveStairwellLitterVisible({
+        segmentInDetailBand: true,
+        feetInsideStairShaft: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      fpResolveStairwellLitterVisible({
+        segmentInDetailBand: true,
+        feetInsideStairShaft: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("still respects the stair segment detail band", () => {
+    expect(
+      fpResolveStairwellLitterVisible({
+        segmentInDetailBand: false,
+        feetInsideStairShaft: true,
       }),
     ).toBe(false);
   });

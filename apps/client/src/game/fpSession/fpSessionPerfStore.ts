@@ -147,6 +147,21 @@ export type FpRendererInfo = {
   frustumExteriorTreeRoots: number;
 };
 
+export type FpPerfHeavyMeshRecord = {
+  tMs: number;
+  frameTriangles: number;
+  frameMs: number;
+  cameraYawRad: number | null;
+  meshTriangles: number;
+  label: string;
+  kind: string;
+  unitKey: string | null;
+  placedObjectId: string | null;
+  materialName: string | null;
+  geometryName: string | null;
+  frustumCulled: boolean;
+};
+
 // Last renderer info — read by the UI; updated each frame.
 let _lastDrawCalls = 0;
 let _lastTriangles = 0;
@@ -170,6 +185,9 @@ let _lastFrustumExteriorGlassMeshes = 0;
 let _lastFrustumTransparentMeshes = 0;
 let _lastFrustumTransparentExteriorGlassMeshes = 0;
 let _lastFrustumExteriorTreeRoots = 0;
+
+const HEAVY_MESH_RECORD_LIMIT = 768;
+const _heavyMeshRecords: FpPerfHeavyMeshRecord[] = [];
 
 export function getLastRendererInfo(): FpRendererInfo {
   return {
@@ -286,6 +304,16 @@ export function deliverFpSessionGpuRenderMs(ms: number | undefined): void {
   _pendingGpuRenderMsForNextSample = ms;
 }
 
+export function recordFpPerfHeavyMeshes(records: readonly FpPerfHeavyMeshRecord[]): void {
+  if (records.length === 0) return;
+  for (const record of records) {
+    _heavyMeshRecords.push(record);
+  }
+  if (_heavyMeshRecords.length > HEAVY_MESH_RECORD_LIMIT) {
+    _heavyMeshRecords.splice(0, _heavyMeshRecords.length - HEAVY_MESH_RECORD_LIMIT);
+  }
+}
+
 export function resetFpPerfStore(): void {
   _head = 0;
   _wrote = 0;
@@ -350,6 +378,7 @@ export function resetFpPerfStore(): void {
   _lastFrustumTransparentMeshes = 0;
   _lastFrustumTransparentExteriorGlassMeshes = 0;
   _lastFrustumExteriorTreeRoots = 0;
+  _heavyMeshRecords.length = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,10 +1196,74 @@ function secBar(ms: number, maxMs: number, width = 18): string {
   return bar(maxMs > 0 ? ms / maxMs : 0, width);
 }
 
+type HeavyMeshPeak = FpPerfHeavyMeshRecord & {
+  hits: number;
+};
+
+function heavyMeshPeaksForWindow(nowMs: number, windowSec: number): HeavyMeshPeak[] {
+  const cutoff = nowMs - windowSec * 1000;
+  const byLabel = new Map<string, HeavyMeshPeak>();
+  for (const record of _heavyMeshRecords) {
+    if (record.tMs < cutoff || record.tMs > nowMs) continue;
+    const existing = byLabel.get(record.label);
+    if (!existing) {
+      byLabel.set(record.label, { ...record, hits: 1 });
+      continue;
+    }
+    existing.hits += 1;
+    if (
+      record.meshTriangles > existing.meshTriangles ||
+      (record.meshTriangles === existing.meshTriangles &&
+        record.frameTriangles > existing.frameTriangles)
+    ) {
+      byLabel.set(record.label, { ...record, hits: existing.hits });
+    }
+  }
+  return [...byLabel.values()]
+    .sort((a, b) => b.meshTriangles - a.meshTriangles || b.frameTriangles - a.frameTriangles)
+    .slice(0, 12);
+}
+
+function formatHeavyMeshPeakLines(nowMs: number, windowSec: number): string[] {
+  const peaks = heavyMeshPeaksForWindow(nowMs, windowSec);
+  if (peaks.length === 0) {
+    return [
+      "Heavy mesh peaks:",
+      "  (none captured; spin through the slowdown while frame triangles exceed the sampler threshold)",
+    ];
+  }
+  return [
+    "Heavy mesh peaks (frustum-visible during high-triangle frames):",
+    ...peaks.map((p, i) => {
+      const yawDeg =
+        p.cameraYawRad != null
+          ? `${Math.round((p.cameraYawRad * 180) / Math.PI * 10) / 10}deg`
+          : "n/a";
+      const extras = [
+        p.kind,
+        p.unitKey ? `unit=${p.unitKey}` : "",
+        p.placedObjectId ? `placed=${p.placedObjectId}` : "",
+        p.materialName ? `mat=${p.materialName}` : "",
+        p.geometryName ? `geo=${p.geometryName}` : "",
+        p.frustumCulled ? "culled=yes" : "culled=no",
+      ]
+        .filter(Boolean)
+        .join("  ");
+      return `  ${String(i + 1).padStart(2)}. ${(p.meshTriangles / 1000)
+        .toFixed(1)
+        .padStart(7)}k tri  frame=${(p.frameTriangles / 1000)
+        .toFixed(1)
+        .padStart(7)}k  hits=${String(p.hits).padStart(2)}  yaw=${yawDeg.padStart(
+        8,
+      )}  ${p.label}${extras ? `  [${extras}]` : ""}`;
+    }),
+  ];
+}
+
 function formatFpPerfReportMarkdown(
   s: FpPerfStats,
   ri: FpRendererInfo,
-  opts?: { headerCountsAreTimelineAverage?: boolean },
+  opts?: { headerCountsAreTimelineAverage?: boolean; reportNowMs?: number },
 ): string {
   const { frameMs, sections, sceneCounts, histogram } = s;
   const hdrNote = opts?.headerCountsAreTimelineAverage ? " (avg)" : "";
@@ -1237,6 +1330,8 @@ function formatFpPerfReportMarkdown(
         `  ${b.label.padEnd(7)}  ${(b.frac * 100).toFixed(0).padStart(3)}%  ${bar(b.frac, 28)}  (${b.count})`,
     ),
     "",
+    ...formatHeavyMeshPeakLines(opts?.reportNowMs ?? performance.now(), s.windowSec),
+    "",
     `Generated: ${new Date().toISOString()}`,
   ];
   return lines.join("\n");
@@ -1245,7 +1340,7 @@ function formatFpPerfReportMarkdown(
 export function exportFpPerfReport(nowMs: number, windowSec: number): string {
   const s = computeFpPerfStats(nowMs, windowSec);
   if (!s) return "No profiler data available yet.";
-  return formatFpPerfReportMarkdown(s, getLastRendererInfo());
+  return formatFpPerfReportMarkdown(s, getLastRendererInfo(), { reportNowMs: nowMs });
 }
 
 /** Frozen recording: summary derived from samples + tab-separated timeline dump. */
@@ -1256,7 +1351,10 @@ export function exportFpPerfRecordingReport(
   const s = computeFpPerfStatsFromTimeline(samples, nominalWindowSec);
   if (!s) return "No profiler samples in recording.";
   const ri = timelineSamplesToAverageRendererInfo(samples);
-  const summary = formatFpPerfReportMarkdown(s, ri, { headerCountsAreTimelineAverage: true });
+  const summary = formatFpPerfReportMarkdown(s, ri, {
+    headerCountsAreTimelineAverage: true,
+    reportNowMs: samples[samples.length - 1]!.tMs,
+  });
   const dump = exportFpPerfTimelineDump(samples);
   return `${summary}\n\n=== Timeline (${samples.length} samples · ${nominalWindowSec}s window) ===\n${dump}\n`;
 }

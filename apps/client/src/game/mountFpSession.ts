@@ -91,6 +91,7 @@ import {
   toggleFpSessionGameUiHidden,
 } from "./fpSession/fpSessionGameUiHidden.js";
 import { createFpSessionPerfDebugPostRenderHook } from "./fpSession/fpSessionPerfDebug.js";
+import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMeshProfiler.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
 import {
   isApartmentUnitBoundsDebugEnabled,
@@ -255,6 +256,7 @@ export async function mountFpSession(
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
+  const sampleFpPerfHeavyMeshes = createFpSessionHeavyMeshProfiler({ buildingRoot, camera });
   /** Skydome is a large inner sphere; default rig `far` (900) clips it to black. */
   camera.far = FP_SESSION_SKY_CAMERA_FAR;
   scene.add(playerRig);
@@ -1536,6 +1538,7 @@ export async function mountFpSession(
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
     getFpPerfSceneCounters,
+    sampleFpPerfHeavyMeshes,
     scheduleGpuTimestampResolve,
   });
 

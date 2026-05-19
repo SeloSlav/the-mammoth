@@ -250,6 +250,13 @@ export type FpSessionMainRafFrameDeps = {
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
   /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
   getFpPerfSceneCounters: () => Omit<FpRendererInfo, "drawCalls" | "triangles">;
+  /** Diagnostic sampler for top visible mesh triangle contributors on high-triangle frames. */
+  sampleFpPerfHeavyMeshes: (
+    nowMs: number,
+    frameTriangles: number,
+    frameMs: number,
+    cameraYawRad: number | null,
+  ) => void;
   /** No-op when GPU timestamp queries are unavailable. */
   scheduleGpuTimestampResolve: () => void;
 };
@@ -957,6 +964,8 @@ export function createFpSessionMainRafFrame(
 
     onFpSessionPostRenderFrame(nowMs);
     deps.logFpPerf();
+    const cameraYawRad = fpCameraYawRad(deps.camera);
+    deps.sampleFpPerfHeavyMeshes(nowMs, frameTriangles, totalFrameMs, cameraYawRad);
     pushFpPerfFrame(
       nowMs,
       totalFrameMs,
@@ -977,7 +986,7 @@ export function createFpSessionMainRafFrame(
         triangles: frameTriangles,
         ...deps.getFpPerfSceneCounters(),
       },
-      fpCameraYawRad(deps.camera),
+      cameraYawRad,
     );
   };
 

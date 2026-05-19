@@ -202,6 +202,19 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   return input.unitInteriorVisible;
 }
 
+/**
+ * Stairwell litter is heavy (high-poly GLBs × instancing). Only rasterise it while feet are inside the
+ * stair shaft hull — not corridor door thresholds, not closed apartment interiors, and not when the
+ * camera merely sees stairs through glass. Segment detail may still enable props; this gate is
+ * litter-only so {@link setStairSegmentDetailVisible} does not override interior hide passes.
+ */
+export function fpResolveStairwellLitterVisible(input: {
+  segmentInDetailBand: boolean;
+  feetInsideStairShaft: boolean;
+}): boolean {
+  return input.segmentInDetailBand && input.feetInsideStairShaft;
+}
+
 export function fpShouldDisableContainingInteriorFrustumCulling(input: {
   insideResidentialUnit: boolean;
   containingResidentialUnitId: string | null;
@@ -252,6 +265,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastStairBandHi = -999;
   let _lastStairDetailLo = -999;
   let _lastStairDetailHi = -999;
+  let _lastStairLitterFeetInsideShaft = false;
   let _visBandSmoothLo = -999;
   let _visBandSmoothHi = -999;
   let _lastVisFeetSampleX = Number.NaN;
@@ -285,14 +299,21 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     return false;
   };
 
-  const setStairSegmentDetailVisible = (segment: THREE.Object3D, visible: boolean): void => {
+  const setStairSegmentDetailVisible = (
+    segment: THREE.Object3D,
+    segmentInDetailBand: boolean,
+    litterVisible: boolean,
+  ): void => {
     segment.traverse((obj) => {
       if (
-        obj.name.startsWith("stairwell_prop_") ||
         obj.name.startsWith("stairwell_litter:") ||
         obj.userData?.mammothStairwellLitter === true
       ) {
-        obj.visible = visible;
+        obj.visible = litterVisible;
+        return;
+      }
+      if (obj.name.startsWith("stairwell_prop_")) {
+        obj.visible = segmentInDetailBand;
       }
     });
   };
@@ -609,6 +630,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       lo: Math.max(1, storeyPlateAnchor - STAIR_SHAFT_DETAIL_STOREYS_BELOW_PLAYER),
       hi: Math.min(maxBuildingLevel, storeyPlateAnchor + STAIR_SHAFT_DETAIL_STOREYS_ABOVE_PLAYER),
     };
+    const feetInsideStairShaft = pointInsideStairShaft(
+      feetPos.x,
+      feetPos.y,
+      feetPos.z,
+    );
     if (
       lo === _lastBandLo &&
       hi === _lastBandHi &&
@@ -618,6 +644,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       stairBand.hi === _lastStairBandHi &&
       stairDetailBand.lo === _lastStairDetailLo &&
       stairDetailBand.hi === _lastStairDetailHi &&
+      feetInsideStairShaft === _lastStairLitterFeetInsideShaft &&
       !unitInteriorVisibilityChanged &&
       !apartmentFurnitureInteriorVisibilityChanged &&
       !topFloorResidentialShellVisibilityChanged
@@ -630,6 +657,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     _lastStairBandHi = stairBand.hi;
     _lastStairDetailLo = stairDetailBand.lo;
     _lastStairDetailHi = stairDetailBand.hi;
+    _lastStairLitterFeetInsideShaft = feetInsideStairShaft;
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothStairColumnRoot === true) {
         ch.visible = true;
@@ -637,9 +665,15 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           const li = sub.userData.mammothPlateLevelIndex;
           if (typeof li === "number") {
             sub.visible = li >= stairBand.lo && li <= stairBand.hi;
+            const segmentInDetailBand =
+              li >= stairDetailBand.lo && li <= stairDetailBand.hi;
             setStairSegmentDetailVisible(
               sub,
-              li >= stairDetailBand.lo && li <= stairDetailBand.hi,
+              segmentInDetailBand,
+              fpResolveStairwellLitterVisible({
+                segmentInDetailBand,
+                feetInsideStairShaft,
+              }),
             );
           } else {
             sub.visible = true;

@@ -7,6 +7,7 @@ import {
   exportFpPerfTimelineDump,
   getFpPerfTimeline,
   pushFpPerfFrame,
+  recordFpPerfHeavyMeshes,
   resetFpPerfStore,
 } from "./fpSessionPerfStore";
 
@@ -210,5 +211,31 @@ describe("fpSessionPerfStore", () => {
     expect(full).toContain("Renderer (avg): 1515 draw calls");
     expect(full).toContain("Scene (avg)");
     expect(full).toContain("unitInterior=505");
+  });
+
+  it("includes heavy mesh peaks in exported reports", () => {
+    pushFpPerfFrame(7000, 10, dummySections, { ...dummyRi, triangles: 500_000 }, 1);
+    recordFpPerfHeavyMeshes([
+      {
+        tMs: 7000,
+        frameTriangles: 500_000,
+        frameMs: 10,
+        cameraYawRad: 1,
+        meshTriangles: 420_000,
+        label: "apartmentDecor | decor:42 | apartment_decor:42/Mesh",
+        kind: "apartmentDecor",
+        unitKey: "floor|2|unit_e_003",
+        placedObjectId: null,
+        materialName: "rusty_metal",
+        geometryName: "high_poly_mesh",
+        frustumCulled: true,
+      },
+    ]);
+
+    const report = exportFpPerfReport(7000, 5);
+    expect(report).toContain("Heavy mesh peaks");
+    expect(report).toContain("420.0k tri");
+    expect(report).toContain("decor:42");
+    expect(report).toContain("mat=rusty_metal");
   });
 });
