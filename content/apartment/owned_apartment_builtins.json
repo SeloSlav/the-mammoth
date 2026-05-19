@@ -70,7 +70,7 @@
     {
       "id": "896c14cc-c36c-479f-b808-e07f48a0315f",
       "modelRelPath": "static/models/objects/table-dining.glb",
-      "fx": 0.12235030770222606,
+      "fx": 0.2540107060934034,
       "fz": 0.6515087026070979,
       "dy": 0.5566294852381909,
       "yawRad": 0,
@@ -96,20 +96,20 @@
     {
       "id": "ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.2092418406438419,
+      "fx": 0.34090223903501926,
       "fz": 0.7917498477337325,
-      "dy": 0.6434121443678599,
+      "dy": 0.64341214436786,
       "yawRad": -2.183542978550241,
-      "pitchRad": 0.06539380943290005,
-      "rollRad": -0.05734685483032551,
-      "uniformScale": 0.6387760114721411,
+      "pitchRad": 0.06539380943290031,
+      "rollRad": -0.05734685483032575,
+      "uniformScale": 0.6387760114721412,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
     {
       "id": "ad41807b-e8ff-431e-b80d-c48f43a149cd",
       "modelRelPath": "static/models/objects/chandelier.glb",
-      "fx": 0.12072635386651238,
+      "fx": 0.2538476158640732,
       "fz": 0.6403062172871925,
       "dy": 2.4757048108206345,
       "yawRad": 0,
@@ -135,7 +135,7 @@
     {
       "id": "f5c3d103-2cb8-4608-9175-cf6d04d8e4e2",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.07446700549428367,
+      "fx": 0.206127403885461,
       "fz": 0.8269478054440337,
       "dy": 0.6087747138737947,
       "yawRad": 2.356194490192345,
@@ -265,9 +265,9 @@
     {
       "id": "d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
       "modelRelPath": "static/models/objects/ashtray.glb",
-      "fx": 0.1245568343220314,
+      "fx": 0.25621723271320873,
       "fz": 0.7193007894702315,
-      "dy": 1.129203285244011,
+      "dy": 1.1848949654626302,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -291,7 +291,7 @@
     {
       "id": "28512766-a760-4eb3-b88e-63de2ea8bed8",
       "modelRelPath": "static/models/objects/rakija.glb",
-      "fx": 0.15554977091370312,
+      "fx": 0.28721016930488047,
       "fz": 0.6701519913570659,
       "dy": 1.3169727258522632,
       "yawRad": 0,
@@ -304,7 +304,7 @@
     {
       "id": "969b62c8-fc80-4728-ac4e-60801758eba5",
       "modelRelPath": "static/models/objects/coffee-cup-empty.glb",
-      "fx": 0.13756411752668987,
+      "fx": 0.2692245159178672,
       "fz": 0.6687254389934861,
       "dy": 1.1685230290846316,
       "yawRad": 0,
@@ -317,7 +317,7 @@
     {
       "id": "b1108f66-60ce-436e-99b5-41374572d3ab",
       "modelRelPath": "static/models/objects/empty-cigarette-pack.glb",
-      "fx": 0.04772632463793476,
+      "fx": 0.17938672302911207,
       "fz": 0.6319481494781284,
       "dy": 0.04967485988003707,
       "yawRad": 3.141592653589793,
@@ -330,24 +330,24 @@
     {
       "id": "da2f6e73-9787-461c-b295-48c4cae9db6f",
       "modelRelPath": "static/models/objects/empty-cigarette-pack.glb",
-      "fx": 0.12123401988051345,
+      "fx": 0.2528944182716908,
       "fz": 0.6979424757645224,
       "dy": 1.1513536312168309,
       "yawRad": 3.102149376924656,
-      "pitchRad": -1.0655819805059659,
-      "rollRad": 0.19556525462229501,
-      "uniformScale": 0.09626611719109422,
+      "pitchRad": -1.0655819805059663,
+      "rollRad": 0.19556525462229507,
+      "uniformScale": 0.09626611719109424,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
     {
       "id": "e2159395-e392-44ea-8dff-182f7f443f21",
       "modelRelPath": "static/models/objects/cigarette.glb",
-      "fx": 0.12981385370906404,
+      "fx": 0.26147425210024133,
       "fz": 0.7292522143720168,
       "dy": 1.132899091175022,
       "yawRad": -1.9369983190376134,
-      "pitchRad": -1.0638444896965684,
+      "pitchRad": -1.063844489696568,
       "rollRad": 1.4,
       "uniformScale": 0.04627148439303097,
       "ignoreSupportSurfaces": true,
@@ -356,9 +356,9 @@
     {
       "id": "d1010fba-61c4-49e7-84b1-18d65a8ad987",
       "modelRelPath": "static/models/objects/used-cigarette-2.glb",
-      "fx": 0.12657771312435281,
+      "fx": 0.25823811151553017,
       "fz": 0.7206961731470121,
-      "dy": 1.1307495995387689,
+      "dy": 1.186441279757388,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -369,9 +369,9 @@
     {
       "id": "7174e759-2297-4031-ad43-5b550baa4c83",
       "modelRelPath": "static/models/objects/used-cigarette.glb",
-      "fx": 0.12000521868531905,
+      "fx": 0.2516656170764964,
       "fz": 0.7217881165664525,
-      "dy": 1.1312760515638831,
+      "dy": 1.1869677317825023,
       "yawRad": 1.6631447661275802,
       "pitchRad": 0,
       "rollRad": 0,
@@ -395,9 +395,9 @@
     {
       "id": "f27c3209-98a1-4777-a127-196fe6fb2227",
       "modelRelPath": "static/models/objects/painting-knitted.glb",
-      "fx": 0.007637063307942045,
-      "fz": 0.7291727536866349,
-      "dy": 2.0765850597763085,
+      "fx": 0.15097814738557333,
+      "fz": 0.734386856739543,
+      "dy": 1.9482635330778177,
       "yawRad": 1.5707963267948963,
       "pitchRad": 0,
       "rollRad": 0,
@@ -460,8 +460,8 @@
     {
       "id": "166fe42e-c4ad-4714-b5ba-0757b18c2bce",
       "modelRelPath": "static/models/objects/drying-rack.glb",
-      "fx": 0.32426927813874534,
-      "fz": 0.8238348758332489,
+      "fx": 0.35400494887164047,
+      "fz": 0.36159710084107355,
       "dy": 0.635174435503057,
       "yawRad": 0,
       "pitchRad": 0,
@@ -558,6 +558,32 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.1253475248350381,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "3bb0a390-454b-4a01-bfcc-db3bdc5bf43e",
+      "modelRelPath": "static/models/objects/match-box-open.glb",
+      "fx": 0.4350014778570197,
+      "fz": 0.756379489069812,
+      "dy": 0.759639323036071,
+      "yawRad": -2.617993877991494,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.04738447756663203,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "c087b0dc-08a7-496e-96a0-c5559cc8daa0",
+      "modelRelPath": "static/models/objects/light-ceiling.glb",
+      "fx": 0.08038843976036125,
+      "fz": 0.7133498472153106,
+      "dy": 2.700216462858854,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 7.771561172376096e-16,
+      "uniformScale": 0.19097143292300797,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }
@@ -738,6 +764,38 @@
         "useMetalnessMap": false,
         "useHeightMap": false
       }
+    },
+    {
+      "id": "8a4b3567-9812-43f8-bdeb-af57a94a20e7",
+      "fx": 0.145865874976289,
+      "fz": 0.7404670663271381,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 1.5707963267948966,
+      "pitchRad": 0,
+      "sizeX": 2.60874966954737,
+      "sizeY": 2.8,
+      "sizeZ": 0.07,
+      "material": {
+        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+        "useMetalnessMap": false,
+        "useHeightMap": false
+      }
+    },
+    {
+      "id": "ee7ad948-8865-4ead-9429-4b9601f4e995",
+      "fx": 0.07434636373955125,
+      "fz": 0.5310475166311878,
+      "dy": 2.0944174516502243,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "sizeX": 1.5959140751088434,
+      "sizeY": 0.7055825483497757,
+      "sizeZ": 0.07,
+      "material": {
+        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+        "useMetalnessMap": false,
+        "useHeightMap": false
+      }
     }
   ],
   "mirrorItems": [
@@ -800,7 +858,7 @@
     },
     {
       "id": "faa6c5b8-e2b9-4553-9697-cd8d7e8e8754",
-      "name": "Ashtray copy",
+      "name": "Ashtray by sofa",
       "memberSelectedIds": [
         "mammoth_editor_my_apartment_decor:4a931895-7781-4dac-a4eb-50bb7aed0cb0",
         "mammoth_editor_my_apartment_decor:c7682898-47c3-4516-b30d-1ee2bc7855a1",

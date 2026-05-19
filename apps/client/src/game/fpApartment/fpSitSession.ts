@@ -5,15 +5,13 @@ export type FpSitSession = {
   sittableKey: string;
   unitKey: string;
   mode: ApartmentSittableMode;
-  anchor: { x: number; y: number; z: number };
+  /** Feet world position when sit started — restored every frame until stand. */
+  standFeet: { x: number; y: number; z: number };
   bodyYawRad: number;
   eyeHeightM: number;
 };
 
 let session: FpSitSession | null = null;
-
-/** Meters to nudge forward when standing so the pick does not immediately re-fire. */
-export const FP_SIT_STAND_NUDGE_M = 0.35;
 
 export function isFpSitActive(): boolean {
   return session !== null;

@@ -1,15 +1,9 @@
 import * as THREE from "three";
-import {
-  exitFpSit,
-  FP_SIT_STAND_NUDGE_M,
-  getFpSitSession,
-} from "./fpSitSession.js";
-
-const _forward = new THREE.Vector3();
+import { exitFpSit, getFpSitSession } from "./fpSitSession.js";
 
 export function tryExitFpSitOnMovement(args: {
   keys: Set<string>;
-  mainRaf: { bodyYaw: number; headLookYaw: number };
+  mainRaf: { bodyYaw: number; headLookYaw: number; pitch: number };
   pos: THREE.Vector3;
 }): boolean {
   const moving =
@@ -25,11 +19,11 @@ export function tryExitFpSitOnMovement(args: {
     args.mainRaf.bodyYaw += args.mainRaf.headLookYaw;
     args.mainRaf.headLookYaw = 0;
   }
+  if (sit.mode === "lie") {
+    args.mainRaf.pitch = 0;
+  }
 
-  _forward.set(Math.sin(args.mainRaf.bodyYaw), 0, Math.cos(args.mainRaf.bodyYaw));
-  args.pos.x += _forward.x * FP_SIT_STAND_NUDGE_M;
-  args.pos.z += _forward.z * FP_SIT_STAND_NUDGE_M;
-
+  args.pos.set(sit.standFeet.x, sit.standFeet.y, sit.standFeet.z);
   exitFpSit();
   return true;
 }

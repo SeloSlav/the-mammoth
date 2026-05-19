@@ -423,7 +423,7 @@ export function createFpSessionMainRafFrame(
     let headY: number;
     const sitSession = getFpSitSession();
     if (sitSession) {
-      deps.pos.set(sitSession.anchor.x, sitSession.anchor.y, sitSession.anchor.z);
+      deps.pos.set(sitSession.standFeet.x, sitSession.standFeet.y, sitSession.standFeet.z);
       deps.loco.velocity.set(0, 0, 0);
       mainRaf.bodyYaw = sitSession.bodyYawRad;
       headY = sitSession.eyeHeightM;
