@@ -196,6 +196,9 @@ export interface EditorState {
   saveMyApartmentObjectGroupFromSelection: (name: string) => void;
   renameMyApartmentObjectGroup: (groupId: string, name: string) => void;
   deleteMyApartmentObjectGroup: (groupId: string) => void;
+  cloneMyApartmentObjectGroup: (groupId: string) => void;
+  deleteMyApartmentObjectGroupMembers: (groupId: string) => boolean;
+  deleteMyApartmentLayoutSelection: () => boolean;
   selectMyApartmentSavedObjectGroup: (groupId: string) => void;
   setDirty: (dirty: boolean) => void;
   setCollisionArtifactsStatus: (status: CollisionArtifactsStatus | null) => void;

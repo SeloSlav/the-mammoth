@@ -6,6 +6,7 @@ import {
 } from "@the-mammoth/schemas";
 import {
   editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
 } from "./editorMyApartmentSelection.js";
 
@@ -108,5 +109,35 @@ describe("finalizeOwnedApartmentBuiltinsDoc (objectGroups)", () => {
     );
     expect(out.objectGroups).toHaveLength(1);
     expect(out.objectGroups[0]?.memberSelectedIds).toEqual([d1, d2]);
+  });
+
+  it("keeps mirror members when the mirror row still exists", () => {
+    const d1 = editorMyApartmentSelectedIdForDecor("decor-1");
+    const d2 = editorMyApartmentSelectedIdForDecor("decor-2");
+    const m1 = editorMyApartmentSelectedIdForMirror("mirror-1");
+    const out = finalizeOwnedApartmentBuiltinsDoc({
+      ...docWith([
+        {
+          id: "g-mirror",
+          name: "Mirror mix",
+          memberSelectedIds: [d1, m1, d2],
+        },
+      ]),
+      mirrorItems: [
+        {
+          id: "mirror-1",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 0.9,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          sizeX: 1,
+          sizeY: 1,
+        },
+      ],
+    });
+    expect(out.objectGroups).toHaveLength(1);
+    expect(out.objectGroups[0]?.memberSelectedIds).toEqual([d1, m1, d2]);
   });
 });

@@ -29,6 +29,7 @@ import {
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
+import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -110,6 +111,8 @@ export function EditorChromeMyApartment(props: {
     saveMyApartmentObjectGroupFromSelection,
     renameMyApartmentObjectGroup,
     deleteMyApartmentObjectGroup,
+    cloneMyApartmentObjectGroup,
+    deleteMyApartmentObjectGroupMembers,
     selectMyApartmentSavedObjectGroup,
     transformMode,
     setTransformMode,
@@ -127,6 +130,8 @@ export function EditorChromeMyApartment(props: {
         s.saveMyApartmentObjectGroupFromSelection,
       renameMyApartmentObjectGroup: s.renameMyApartmentObjectGroup,
       deleteMyApartmentObjectGroup: s.deleteMyApartmentObjectGroup,
+      cloneMyApartmentObjectGroup: s.cloneMyApartmentObjectGroup,
+      deleteMyApartmentObjectGroupMembers: s.deleteMyApartmentObjectGroupMembers,
       selectMyApartmentSavedObjectGroup: s.selectMyApartmentSavedObjectGroup,
       transformMode: s.transformMode,
       setTransformMode: s.setTransformMode,
@@ -324,13 +329,16 @@ export function EditorChromeMyApartment(props: {
     setSelectedId(editorMyApartmentSelectedIdForDecor(id));
   }
 
+  function deleteLayoutPlacements(selectedIds: readonly string[]): void {
+    patchOwnedApartmentBuiltins((doc) => {
+      return deleteMyApartmentLayoutPlacementsInDoc(doc, selectedIds) ?? doc;
+    });
+    setSelectedId(null);
+  }
+
   function deleteSelectedDecor(): void {
     if (!selectedDecorId) return;
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      placedItems: doc.placedItems.filter((item) => item.id !== selectedDecorId),
-    }));
-    setSelectedId(null);
+    deleteLayoutPlacements([editorMyApartmentSelectedIdForDecor(selectedDecorId)]);
   }
 
   function addWallSlab(): void {
@@ -387,11 +395,7 @@ export function EditorChromeMyApartment(props: {
 
   function deleteSelectedWall(): void {
     if (!selectedWallId) return;
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      wallItems: doc.wallItems.filter((item) => item.id !== selectedWallId),
-    }));
-    setSelectedId(null);
+    deleteLayoutPlacements([editorMyApartmentSelectedIdForWall(selectedWallId)]);
   }
 
   function addMirror(): void {
@@ -446,11 +450,7 @@ export function EditorChromeMyApartment(props: {
 
   function deleteSelectedMirror(): void {
     if (!selectedMirrorId) return;
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      mirrorItems: doc.mirrorItems.filter((item) => item.id !== selectedMirrorId),
-    }));
-    setSelectedId(null);
+    deleteLayoutPlacements([editorMyApartmentSelectedIdForMirror(selectedMirrorId)]);
   }
 
   const apartmentSceneGizmoHints: "decor" | "builtins" =
@@ -524,8 +524,10 @@ export function EditorChromeMyApartment(props: {
           Saved object groups
         </span>
         <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-          <strong>Ctrl/Cmd-click</strong> multiple imported decor + wall slabs in the scene or lists,
-          enter a label, then save a group so you can move/rotate/scale them together later.{" "}
+          <strong>Ctrl/Cmd-click</strong> multiple imported decor, wall slabs, or mirrors in the scene
+          or lists, enter a label, then save a group so you can move/rotate/scale them together later.
+          Press <strong>Delete</strong> to remove the current selection, including every member of a
+          saved group.{" "}
           <span style={{ opacity: 0.9 }}>
             Saving, renaming, or ungrouping tries to write{" "}
             <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>{" "}
@@ -618,6 +620,22 @@ export function EditorChromeMyApartment(props: {
                     <button
                       type="button"
                       style={editorChromeRowBtn}
+                      onClick={() => cloneMyApartmentObjectGroup(g.id)}
+                      title="Duplicate all members and save as a new group (offset slightly from the original)"
+                    >
+                      Clone
+                    </button>
+                    <button
+                      type="button"
+                      style={editorChromeRowBtn}
+                      onClick={() => deleteMyApartmentObjectGroupMembers(g.id)}
+                      title="Delete every member in this group and remove the saved group"
+                    >
+                      Delete all
+                    </button>
+                    <button
+                      type="button"
+                      style={editorChromeRowBtn}
                       onClick={() => deleteMyApartmentObjectGroup(g.id)}
                       title="Remove the grouping (objects stay in the layout)"
                     >
@@ -632,6 +650,18 @@ export function EditorChromeMyApartment(props: {
             })
           )}
         </div>
+        {parsedSavedLayoutObjectGroupId ? (
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button
+              type="button"
+              style={editorChromeRowBtn}
+              onClick={() => deleteMyApartmentObjectGroupMembers(parsedSavedLayoutObjectGroupId)}
+              title="Delete every member in this group and remove the saved group (Delete key)"
+            >
+              Delete group and all members
+            </button>
+          </div>
+        ) : null}
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
           Placed items
         </span>

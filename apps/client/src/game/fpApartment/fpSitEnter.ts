@@ -2,11 +2,15 @@ import * as THREE from "three";
 import { apartmentSittableSpecFromModelPath } from "@the-mammoth/schemas";
 import type { FpLocomotionInput, FpLocomotionState } from "@the-mammoth/engine";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
+import { clientCanEnterApartmentSittable } from "./fpApartmentSittablePrompt.js";
 import { computeApartmentSittableWorldPose } from "./fpApartmentSittablePose.js";
 import { enterFpSit } from "./fpSitSession.js";
+import type { DbConnection } from "../../module_bindings";
 
 export function tryEnterFpSitFromPrompt(args: {
+  conn: DbConnection;
   prompt: ApartmentSittablePrompt;
+  playerPos: THREE.Vector3;
   pos: THREE.Vector3;
   loco: FpLocomotionState;
   mainRaf: { bodyYaw: number; headLookYaw: number; pitch: number };
@@ -14,6 +18,7 @@ export function tryEnterFpSitFromPrompt(args: {
   nowMs: number;
   crouchToggle: boolean;
 }): boolean {
+  if (!clientCanEnterApartmentSittable(args.conn, args.prompt, args.playerPos)) return false;
   const spec = apartmentSittableSpecFromModelPath(args.prompt.modelRelPath);
   if (!spec) return false;
   const pose = computeApartmentSittableWorldPose(args.prompt.root, spec);

@@ -27,7 +27,10 @@ import {
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
-import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
+import {
+  tagApartmentDecorPropMeshesForMirrorExclusion,
+  tagResidentialUnitInteriorMeshesUnder,
+} from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
@@ -38,7 +41,9 @@ import {
 import {
   apartmentDecorFetchPath,
   apartmentDecorModelExtension,
+  normalizeApartmentDecorModelRelPath,
 } from "./fpApartmentDecorAssets.js";
+import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
 import {
   loadOwnedApartmentBuiltinsDocFromContent,
   resolveApartmentDecorPoses,
@@ -581,6 +586,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
         g.userData.mammothApartmentDecorWorldBounds = bbox;
         tagResidentialUnitInteriorMeshesUnder(g);
+        tagApartmentDecorPropMeshesForMirrorExclusion(g);
         root.add(g);
         groupByRenderKey.set(m.renderKey, g);
         continue;
@@ -626,6 +632,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
         g.userData.mammothApartmentDecorWorldBounds = bbox;
         tagResidentialUnitInteriorMeshesUnder(g);
+        tagApartmentDecorPropMeshesForMirrorExclusion(g);
         root.add(g);
         groupByRenderKey.set(w.renderKey, g);
         continue;
@@ -696,18 +703,9 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         const sk = apartmentStashKindForPlacedKind(d.placedKind);
         if (sk) {
-          g.updateMatrixWorld(true);
-          const stashBounds = new THREE.Box3().setFromObject(g);
           const pick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-          stashBounds.getSize(_stashPickSizeScratch);
-          stashBounds.getCenter(_stashPickCenterScratch);
           pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
-          pick.position.copy(_stashPickCenterScratch);
-          pick.scale.set(
-            Math.max(0.35, _stashPickSizeScratch.x),
-            Math.max(0.25, _stashPickSizeScratch.y),
-            Math.max(0.35, _stashPickSizeScratch.z),
-          );
+          fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
           pick.userData.mammothApartmentStashPickUnitKey = d.unit.unitKey;
           pick.userData.mammothApartmentStashKey =
             d.decorId !== null
@@ -728,27 +726,20 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.updateMatrixWorld(true);
         }
       }
+      const decorModelRelPath =
+        normalizeApartmentDecorModelRelPath(d.modelRelPath) ?? d.modelRelPath;
       const sitSpec = apartmentSittableSpecForPlacedItem({
-        modelRelPath: d.modelRelPath,
+        modelRelPath: decorModelRelPath,
         itemKind: d.placedKind,
       });
       if (sitSpec) {
-        g.updateMatrixWorld(true);
-        const sitBounds = new THREE.Box3().setFromObject(g);
         const sitPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-        sitBounds.getSize(_stashPickSizeScratch);
-        sitBounds.getCenter(_stashPickCenterScratch);
         const sittableKey =
           d.decorId !== null
             ? `decor:${d.decorId.toString()}`
             : `content:${d.unit.unitKey}:${d.renderKey}`;
         sitPick.name = `apartment_sittable_pick:${sittableKey}`;
-        sitPick.position.copy(_stashPickCenterScratch);
-        sitPick.scale.set(
-          Math.max(0.35, _stashPickSizeScratch.x),
-          Math.max(0.25, _stashPickSizeScratch.y),
-          Math.max(0.35, _stashPickSizeScratch.z),
-        );
+        fitApartmentInteractionPickToObject(g, sitPick, { x: 0.35, y: 0.25, z: 0.35 });
         sitPick.userData.mammothApartmentSittableKey = sittableKey;
         sitPick.userData.mammothApartmentSittableUnitKey = d.unit.unitKey;
         sitPick.userData.mammothApartmentSittableModelRelPath = sitSpec.modelRelPath;
@@ -767,6 +758,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
       tagResidentialUnitInteriorMeshesUnder(g);
+      tagApartmentDecorPropMeshesForMirrorExclusion(g);
 
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);

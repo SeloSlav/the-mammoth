@@ -35,7 +35,7 @@ const CHAIR_SPEC: ApartmentSittableSpec = {
   localSeatOffset: { x: 0, y: 0.42, z: 0.02 },
   bodyYawOffsetRad: 0,
   eyeHeightM: 1.05,
-  interactRadiusM: 0.95,
+  interactRadiusM: 1.35,
   promptLabel: "Sit",
   defaultPitchRad: 0,
 };
@@ -46,7 +46,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
   localSeatOffset: { x: 0, y: 0.38, z: 0.08 },
   bodyYawOffsetRad: 0,
   eyeHeightM: 1.02,
-  interactRadiusM: 1.15,
+  interactRadiusM: 1.5,
   promptLabel: "Sit",
   defaultPitchRad: 0,
 };
@@ -57,7 +57,7 @@ const TOILET_SPEC: ApartmentSittableSpec = {
   localSeatOffset: { x: 0, y: 0.48, z: 0.04 },
   bodyYawOffsetRad: 0,
   eyeHeightM: 1.08,
-  interactRadiusM: 0.75,
+  interactRadiusM: 1.1,
   promptLabel: "Sit",
   defaultPitchRad: 0,
 };
@@ -68,7 +68,7 @@ const BED_SPEC: ApartmentSittableSpec = {
   localSeatOffset: { x: 0, y: 0.38, z: -0.12 },
   bodyYawOffsetRad: 0,
   eyeHeightM: 0.42,
-  interactRadiusM: 1.25,
+  interactRadiusM: 1.6,
   promptLabel: "Lie down",
   defaultPitchRad: 1.45,
 };

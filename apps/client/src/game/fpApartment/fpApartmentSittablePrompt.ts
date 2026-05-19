@@ -13,7 +13,7 @@ import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 const _screenCenterNdc = new THREE.Vector2(0, 0);
 const _raycaster = new THREE.Raycaster();
 
-const SITTABLE_PICK_MAX_RAY_M = 5.5;
+const SITTABLE_PICK_MAX_RAY_M = 6.5;
 
 function collectVisiblePickMeshes(
   src: readonly THREE.Mesh[],
@@ -55,20 +55,6 @@ function promptFromPickHit(
         })
       : apartmentSittableSpecFromModelPath(modelRelPath);
   if (!spec) return null;
-  const pose = computeApartmentSittableWorldPose(root, spec);
-  if (
-    !clientMayUseApartmentSittable(
-      conn,
-      id,
-      unitKey,
-      playerPos,
-      pose.feetX,
-      pose.feetZ,
-      spec.interactRadiusM,
-    )
-  ) {
-    return null;
-  }
   return {
     kind: "apartment_sittable",
     sittableKey,
@@ -110,6 +96,28 @@ export function raycastApartmentSittablePrompt(args: {
 }
 
 /** Decor picks first, then builtin furniture bed picks. */
+/** Feet must be in range — call before {@link tryEnterFpSitFromPrompt}. */
+export function clientCanEnterApartmentSittable(
+  conn: DbConnection,
+  prompt: ApartmentSittablePrompt,
+  playerPos: THREE.Vector3,
+): boolean {
+  const id = conn.identity;
+  if (!id) return false;
+  const spec = apartmentSittableSpecFromModelPath(prompt.modelRelPath);
+  if (!spec) return false;
+  const pose = computeApartmentSittableWorldPose(prompt.root, spec);
+  return clientMayUseApartmentSittable(
+    conn,
+    id,
+    prompt.unitKey,
+    playerPos,
+    pose.feetX,
+    pose.feetZ,
+    spec.interactRadiusM,
+  );
+}
+
 export function getApartmentSittablePrompt(args: {
   conn: DbConnection;
   playerPos: THREE.Vector3;

@@ -13,12 +13,12 @@ export const FP_CAB_MIRROR_REFLECTION_MIN_FACING_DOT = 0.22;
  * Apartment mirrors — strict gate: only while inside the same unit, on-screen, and looking at the glass.
  * Avoids replaying the full FP scene (~2× draw cost) from the living room.
  */
-export const FP_APARTMENT_MIRROR_REFLECTION_MAX_DISTANCE_M = 2.8;
-export const FP_APARTMENT_MIRROR_REFLECTION_MIN_FACING_DOT = 0.48;
-/** Lower RT resolution than cab (apartment props already heavy). */
-export const FP_APARTMENT_MIRROR_REFLECTION_RESOLUTION_SCALE = 0.38;
-/** ~4 Hz reflection refresh when an apartment mirror is primary (cab stays ~12 Hz). */
-export const FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 250;
+export const FP_APARTMENT_MIRROR_REFLECTION_MAX_DISTANCE_M = 1.6;
+export const FP_APARTMENT_MIRROR_REFLECTION_MIN_FACING_DOT = 0.62;
+/** Lower RT resolution than cab (reflection omits decor layer but shell pass is still costly). */
+export const FP_APARTMENT_MIRROR_REFLECTION_RESOLUTION_SCALE = 0.28;
+/** ~2.5 Hz reflection refresh when an apartment mirror is primary (cab stays ~12 Hz). */
+export const FP_APARTMENT_MIRROR_REFLECTION_UPDATE_INTERVAL_MS = 400;
 
 /** Score bias so elevator mirrors win when both are eligible. */
 const FP_CAB_MIRROR_SCORE_BIAS = 1000;

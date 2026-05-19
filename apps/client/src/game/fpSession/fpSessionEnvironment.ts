@@ -20,7 +20,10 @@ import {
 import { SkyCloudMesh } from "sky-cloud-3d";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "@the-mammoth/world";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
-import { FP_RESIDENTIAL_UNIT_INTERIOR_LAYER } from "./fpSessionConstants.js";
+import {
+  FP_APARTMENT_DECOR_PROP_LAYER,
+  FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
+} from "./fpSessionConstants.js";
 
 const GRASS_GROUND_TEX_BASE = "/static/materials/grass-ground";
 /** Packed foot-worn soil / mud — basecolor / normal / roughness only (same stem as grass-ground). */
@@ -594,18 +597,21 @@ export function attachFpSessionEnvironment(
   );
   residentialInteriorSky.name = "fp_residential_interior_sky";
   residentialInteriorSky.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+  residentialInteriorSky.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
   const residentialInteriorFill = new THREE.AmbientLight(
     0xb7aea1,
     RESIDENTIAL_INTERIOR_FILL_INTENSITY,
   );
   residentialInteriorFill.name = "fp_residential_interior_fill";
   residentialInteriorFill.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+  residentialInteriorFill.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
   const residentialInteriorDaylight = new THREE.DirectionalLight(
     0xe8e4dc,
     RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY,
   );
   residentialInteriorDaylight.name = "fp_residential_interior_daylight";
   residentialInteriorDaylight.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+  residentialInteriorDaylight.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
   residentialInteriorDaylight.position.copy(sunDir.clone().multiplyScalar(90));
   residentialInteriorDaylight.castShadow = false;
   scene.add(residentialInteriorSky, residentialInteriorFill, residentialInteriorDaylight);

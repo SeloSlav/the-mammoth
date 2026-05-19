@@ -64,6 +64,7 @@ import {
 import {
   CAM_BOB_DIP_Y,
   clampTinyDisplayOffsetComponents,
+  FP_APARTMENT_DECOR_PROP_LAYER,
   FP_MIRROR_SELF_RENDER_LAYER,
   FP_VIEWMODEL_RENDER_LAYER,
   MELEE_COOLDOWN_MS,
@@ -851,13 +852,6 @@ export function createFpSessionMainRafFrame(
             claimProgressSecs: claimProgressHudSecs,
             claimFullSecs: APARTMENT_CLAIM_FULL_SECS,
           });
-        } else if (aSys?.kind === "apartment_stash") {
-          setFpPickupPrompt({
-            kind: "apartment_stash",
-            stashKey: aSys.stashKey,
-            unitKey: aSys.unitKey,
-            stashLabel: aSys.stashLabel,
-          });
         } else if (isFpSitActive()) {
           setFpPickupPrompt(null);
         } else {
@@ -868,6 +862,13 @@ export function createFpSessionMainRafFrame(
               sittableKey: sitPrompt.sittableKey,
               unitKey: sitPrompt.unitKey,
               label: sitPrompt.label,
+            });
+          } else if (aSys?.kind === "apartment_stash") {
+            setFpPickupPrompt({
+              kind: "apartment_stash",
+              stashKey: aSys.stashKey,
+              unitKey: aSys.unitKey,
+              stashLabel: aSys.stashLabel,
             });
           } else if (hitPlain) {
             const def = getMammothItemDef(hitPlain.defId);
@@ -976,6 +977,9 @@ export function createFpSessionMainRafFrame(
           virtualCamera.layers.mask = deps.camera.layers.mask;
           virtualCamera.layers.disable(FP_VIEWMODEL_RENDER_LAYER);
           virtualCamera.layers.enable(FP_MIRROR_SELF_RENDER_LAYER);
+          if (primaryIsApartmentMirror) {
+            virtualCamera.layers.disable(FP_APARTMENT_DECOR_PROP_LAYER);
+          }
         },
       });
     }

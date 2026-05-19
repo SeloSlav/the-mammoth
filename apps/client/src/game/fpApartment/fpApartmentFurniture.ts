@@ -20,7 +20,10 @@ import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
-import { tagResidentialUnitInteriorMeshesUnder } from "./fpResidentialUnitInteriorLayer.js";
+import {
+  tagApartmentDecorPropMeshesForMirrorExclusion,
+  tagResidentialUnitInteriorMeshesUnder,
+} from "./fpResidentialUnitInteriorLayer.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   apartmentUnitOwnerEqual,
@@ -40,6 +43,7 @@ import {
   loadOwnedApartmentBuiltinsDocFromContent,
   resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
+import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -445,6 +449,7 @@ export async function mountFpApartmentFurniture(opts: {
         unitGroup.add(hull);
       }
       tagResidentialUnitInteriorMeshesUnder(unitGroup);
+      tagApartmentDecorPropMeshesForMirrorExclusion(unitGroup);
       build.unitGroups.push(unitGroup);
       return;
     }
@@ -478,6 +483,7 @@ export async function mountFpApartmentFurniture(opts: {
         unitGroup.add(hull);
       }
       tagResidentialUnitInteriorMeshesUnder(unitGroup);
+      tagApartmentDecorPropMeshesForMirrorExclusion(unitGroup);
       build.unitGroups.push(unitGroup);
       return;
     }
@@ -505,18 +511,9 @@ export async function mountFpApartmentFurniture(opts: {
       u,
       xzClampOptionsForFurnitureClamp(useAuthoringClamp, WARDROBE_BOUNDS_INSET_M),
     );
-    w.updateMatrixWorld(true);
-    const wardrobeBounds = new THREE.Box3().setFromObject(w);
     const wardrobePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-    wardrobeBounds.getSize(_footlockerPickSizeScratch);
-    wardrobeBounds.getCenter(_footlockerPickCenterScratch);
     wardrobePick.name = `apartment_wardrobe_pick:${u.unitKey}`;
-    wardrobePick.position.copy(_footlockerPickCenterScratch);
-    wardrobePick.scale.set(
-      Math.max(0.35, _footlockerPickSizeScratch.x),
-      Math.max(0.25, _footlockerPickSizeScratch.y),
-      Math.max(0.35, _footlockerPickSizeScratch.z),
-    );
+    fitApartmentInteractionPickToObject(w, wardrobePick, { x: 0.35, y: 0.25, z: 0.35 });
     wardrobePick.userData.mammothApartmentWardrobePickUnitKey = u.unitKey;
     wardrobePick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
     wardrobePick.userData.mammothApartmentStashKey = apartmentStashKey(
@@ -528,8 +525,8 @@ export async function mountFpApartmentFurniture(opts: {
     wardrobePick.userData.mammothApartmentFurnitureProp = true;
     wardrobePick.userData.mammothPlateLevelIndex = levelIdx;
     wardrobePick.layers.set(FP_INTERACTION_PICK_LAYER);
+    w.add(wardrobePick);
     unitGroup.add(w);
-    unitGroup.add(wardrobePick);
     build.wardrobePickMeshes.push(wardrobePick);
     build.stashPickMeshes.push(wardrobePick);
 
@@ -548,18 +545,9 @@ export async function mountFpApartmentFurniture(opts: {
       u,
       xzClampOptionsForFurnitureClamp(useAuthoringClamp, FOOTLOCKER_BOUNDS_INSET_M),
     );
-    f.updateMatrixWorld(true);
-    const footlockerBounds = new THREE.Box3().setFromObject(f);
     const footlockerPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-    footlockerBounds.getSize(_footlockerPickSizeScratch);
-    footlockerBounds.getCenter(_footlockerPickCenterScratch);
     footlockerPick.name = `apartment_footlocker_pick:${u.unitKey}`;
-    footlockerPick.position.copy(_footlockerPickCenterScratch);
-    footlockerPick.scale.set(
-      Math.max(0.35, _footlockerPickSizeScratch.x),
-      Math.max(0.25, _footlockerPickSizeScratch.y),
-      Math.max(0.35, _footlockerPickSizeScratch.z),
-    );
+    fitApartmentInteractionPickToObject(f, footlockerPick, { x: 0.35, y: 0.25, z: 0.35 });
     footlockerPick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
     footlockerPick.userData.mammothApartmentStashKey = apartmentStashKey(
       u.unitKey,
@@ -570,8 +558,8 @@ export async function mountFpApartmentFurniture(opts: {
     footlockerPick.userData.mammothApartmentFurnitureProp = true;
     footlockerPick.userData.mammothPlateLevelIndex = levelIdx;
     footlockerPick.layers.set(FP_INTERACTION_PICK_LAYER);
+    f.add(footlockerPick);
     unitGroup.add(f);
-    unitGroup.add(footlockerPick);
     build.stashPickMeshes.push(footlockerPick);
 
     await yieldToMain();
@@ -589,18 +577,9 @@ export async function mountFpApartmentFurniture(opts: {
       u,
       xzClampOptionsForFurnitureClamp(useAuthoringClamp, STOVE_BOUNDS_INSET_M),
     );
-    st.updateMatrixWorld(true);
-    const stoveBounds = new THREE.Box3().setFromObject(st);
     const stovePick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-    stoveBounds.getSize(_footlockerPickSizeScratch);
-    stoveBounds.getCenter(_footlockerPickCenterScratch);
     stovePick.name = `apartment_stove_pick:${u.unitKey}`;
-    stovePick.position.copy(_footlockerPickCenterScratch);
-    stovePick.scale.set(
-      Math.max(0.35, _footlockerPickSizeScratch.x),
-      Math.max(0.25, _footlockerPickSizeScratch.y),
-      Math.max(0.35, _footlockerPickSizeScratch.z),
-    );
+    fitApartmentInteractionPickToObject(st, stovePick, { x: 0.35, y: 0.25, z: 0.35 });
     stovePick.userData.mammothApartmentStashPickUnitKey = u.unitKey;
     stovePick.userData.mammothApartmentStashKey = apartmentStashKey(
       u.unitKey,
@@ -611,14 +590,15 @@ export async function mountFpApartmentFurniture(opts: {
     stovePick.userData.mammothApartmentFurnitureProp = true;
     stovePick.userData.mammothPlateLevelIndex = levelIdx;
     stovePick.layers.set(FP_INTERACTION_PICK_LAYER);
+    st.add(stovePick);
     unitGroup.add(st);
-    unitGroup.add(stovePick);
     build.stashPickMeshes.push(stovePick);
 
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
     const b = clonePropScene(readyTemplates.bed, levelIdx);
+    b.userData.mammothSkipFloorGeometryMerge = true;
     b.scale.setScalar(
       ownedApartmentPlacedItemAuthoringAssetVisScale("bed") * pose.bed.uniformScale,
     );
@@ -631,19 +611,10 @@ export async function mountFpApartmentFurniture(opts: {
       xzClampOptionsForFurnitureClamp(useAuthoringClamp, BED_BOUNDS_INSET_M),
     );
     unitGroup.add(b);
-    b.updateMatrixWorld(true);
-    const bedBounds = new THREE.Box3().setFromObject(b);
-    const bedPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
-    bedBounds.getSize(_footlockerPickSizeScratch);
-    bedBounds.getCenter(_footlockerPickCenterScratch);
     const bedSittableKey = `builtin_bed:${u.unitKey}`;
+    const bedPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
     bedPick.name = `apartment_bed_sittable_pick:${u.unitKey}`;
-    bedPick.position.copy(_footlockerPickCenterScratch);
-    bedPick.scale.set(
-      Math.max(0.5, _footlockerPickSizeScratch.x),
-      Math.max(0.35, _footlockerPickSizeScratch.y),
-      Math.max(0.5, _footlockerPickSizeScratch.z),
-    );
+    fitApartmentInteractionPickToObject(b, bedPick, { x: 0.5, y: 0.35, z: 0.5 });
     bedPick.userData.mammothApartmentSittableKey = bedSittableKey;
     bedPick.userData.mammothApartmentSittableUnitKey = u.unitKey;
     bedPick.userData.mammothApartmentSittableModelRelPath = OWNED_APARTMENT_MODEL_BED;
@@ -652,7 +623,7 @@ export async function mountFpApartmentFurniture(opts: {
     bedPick.userData.mammothApartmentFurnitureProp = true;
     bedPick.userData.mammothPlateLevelIndex = levelIdx;
     bedPick.layers.set(FP_INTERACTION_PICK_LAYER);
-    unitGroup.add(bedPick);
+    b.add(bedPick);
     build.sittablePickMeshes.push(bedPick);
 
     await yieldToMain();
@@ -698,6 +669,7 @@ export async function mountFpApartmentFurniture(opts: {
       }
     }
     tagResidentialUnitInteriorMeshesUnder(unitGroup);
+    tagApartmentDecorPropMeshesForMirrorExclusion(unitGroup);
 
     build.unitGroups.push(unitGroup);
   }

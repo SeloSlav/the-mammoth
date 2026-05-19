@@ -60,6 +60,11 @@ import {
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
 import { computeApartmentPlacementCanvasPick } from "../editor/myApartment/apartmentLayoutSelectionOps.js";
+import { cloneMyApartmentObjectGroupInDoc } from "../editor/myApartment/cloneMyApartmentObjectGroup.js";
+import {
+  deleteMyApartmentLayoutPlacementsInDoc,
+  deleteMyApartmentObjectGroupMembersInDoc,
+} from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
@@ -573,6 +578,91 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       };
     });
     scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+  },
+
+  cloneMyApartmentObjectGroup: (groupId) => {
+    if (!groupId) return;
+    const prior = get();
+    if (
+      prior.mode !== "my_apartment_layout" ||
+      !prior.ownedApartmentBuiltins.objectGroups.some((g) => g.id === groupId)
+    ) {
+      return;
+    }
+
+    const cloned = cloneMyApartmentObjectGroupInDoc(prior.ownedApartmentBuiltins, groupId);
+    if (!cloned) return;
+
+    maybePushHistory(get, set);
+
+    set(() => ({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
+        OwnedApartmentBuiltinsDocSchema.parse(cloned.doc),
+      ),
+      dirty: true,
+      ownedApartmentBuiltinsNeedsDiskFlush: true,
+      selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(cloned.newGroupId),
+      myApartmentMultiselectExtraIds: [],
+    }));
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+  },
+
+  deleteMyApartmentObjectGroupMembers: (groupId) => {
+    if (!groupId) return false;
+    const prior = get();
+    if (prior.mode !== "my_apartment_layout") return false;
+
+    const nextDoc = deleteMyApartmentObjectGroupMembersInDoc(
+      prior.ownedApartmentBuiltins,
+      groupId,
+    );
+    if (!nextDoc) return false;
+
+    maybePushHistory(get, set);
+    set(() => ({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
+        OwnedApartmentBuiltinsDocSchema.parse(nextDoc),
+      ),
+      dirty: true,
+      ownedApartmentBuiltinsNeedsDiskFlush: true,
+      selectedId: null,
+      myApartmentMultiselectExtraIds: [],
+    }));
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+    return true;
+  },
+
+  deleteMyApartmentLayoutSelection: () => {
+    const prior = get();
+    if (prior.mode !== "my_apartment_layout") return false;
+
+    const groupId = parseMyApartmentLayoutSavedObjectGroupId(prior.selectedId);
+    if (groupId) {
+      return get().deleteMyApartmentObjectGroupMembers(groupId);
+    }
+
+    const selectedIds: string[] = [];
+    if (typeof prior.selectedId === "string") selectedIds.push(prior.selectedId);
+    for (const extra of prior.myApartmentMultiselectExtraIds) selectedIds.push(extra);
+
+    const nextDoc = deleteMyApartmentLayoutPlacementsInDoc(
+      prior.ownedApartmentBuiltins,
+      selectedIds,
+    );
+    if (!nextDoc) return false;
+
+    maybePushHistory(get, set);
+    set(() => ({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsDoc(
+        OwnedApartmentBuiltinsDocSchema.parse(nextDoc),
+      ),
+      dirty: true,
+      ownedApartmentBuiltinsNeedsDiskFlush: true,
+      selectedId: null,
+      myApartmentMultiselectExtraIds: [],
+    }));
+    scheduleOwnedApartmentBuiltinsObjectGroupDiskFlush();
+    return true;
   },
 
   selectMyApartmentSavedObjectGroup: (groupId) => {

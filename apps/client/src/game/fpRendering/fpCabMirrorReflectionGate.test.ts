@@ -110,7 +110,7 @@ describe("pickCabMirrorPrimaryUpdateIndex", () => {
 
   it("skips apartment mirrors outside the containing unit or view frustum", () => {
     const apt = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.28));
-    apt.position.set(0, 1.4, 2);
+    apt.position.set(0, 1.4, 1.2);
     apt.userData[MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY] = true;
     apt.userData.mammothApartmentUnitKey = "unit_a";
     apt.updateMatrixWorld(true);
@@ -150,7 +150,7 @@ describe("pickCabMirrorPrimaryUpdateIndex", () => {
 
   it("uses stricter distance for apartment mirrors than cab mirrors", () => {
     const apt = new THREE.Mesh();
-    apt.position.set(0, 1.4, 3.5);
+    apt.position.set(0, 1.4, 2.2);
     apt.userData[MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY] = true;
     apt.userData.mammothApartmentUnitKey = "u1";
     apt.updateMatrixWorld(true);

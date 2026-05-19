@@ -70,3 +70,8 @@ export const FP_MIRROR_SELF_RENDER_LAYER = 2;
 export const FP_RESIDENTIAL_UNIT_INTERIOR_LAYER = 3;
 /** Invisible interaction helpers (stash picks, helper raycast boxes) excluded from the main camera. */
 export const FP_INTERACTION_PICK_LAYER = 4;
+/**
+ * Heavy apartment GLB props (decor + builtins). Main camera enables this; apartment planar-mirror
+ * reflection virtual cameras disable it so the reflector pass does not replay ~200k+ furniture tris.
+ */
+export const FP_APARTMENT_DECOR_PROP_LAYER = 5;

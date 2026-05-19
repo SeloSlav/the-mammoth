@@ -41,6 +41,7 @@ import { createEditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecy
 import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
+import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
@@ -1126,6 +1127,9 @@ export async function mountEditorScene(
   const disposeTransformModeDigitHotkeys = registerEditorTransformModeDigitHotkeys({
     getTransformControlsDragging: () => transformControls.dragging === true,
   });
+  const disposeApartmentLayoutDeleteHotkeys = registerEditorApartmentLayoutDeleteHotkeys({
+    getTransformControlsDragging: () => transformControls.dragging === true,
+  });
 
   return () => {
     registerEditorSpawnCalculator(null);
@@ -1134,6 +1138,7 @@ export async function mountEditorScene(
     orbitControls.dispose();
     stopRenderLoop();
     disposeTransformModeDigitHotkeys();
+    disposeApartmentLayoutDeleteHotkeys();
     canvas.removeEventListener("pointerdown", pointers.onPointerDown);
     canvas.removeEventListener("pointerup", pointers.onPointerUp);
     unsub();

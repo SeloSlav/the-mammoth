@@ -141,6 +141,7 @@ import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
 import { FpCabMirrorCollection } from "./fpRendering/fpCabMirrorCollection.js";
 import {
+  FP_APARTMENT_DECOR_PROP_LAYER,
   FP_MIRROR_SELF_RENDER_LAYER,
   FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
   FP_SESSION_MAX_PIXEL_RATIO,
@@ -655,6 +656,7 @@ export async function mountFpSession(
   headPitch.traverse((obj) => obj.layers.set(FP_VIEWMODEL_RENDER_LAYER));
   camera.layers.enable(FP_VIEWMODEL_RENDER_LAYER);
   camera.layers.enable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
+  camera.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
   presentation.setLocalMirrorAvatarLayer(FP_MIRROR_SELF_RENDER_LAYER);
   presentation.setLocalMirrorAvatarVisible(true);
 
@@ -1354,7 +1356,9 @@ export async function mountFpSession(
         if (
           sitPrompt &&
           tryEnterFpSitFromPrompt({
+            conn,
             prompt: sitPrompt,
+            playerPos: feet,
             pos,
             loco,
             mainRaf,

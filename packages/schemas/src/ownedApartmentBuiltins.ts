@@ -516,7 +516,9 @@ export function finalizeOwnedApartmentBuiltinsDoc(
           ? selId.slice(DECOR_SELECTION_PREFIX.length)
           : selId.startsWith(WALL_SELECTION_PREFIX)
             ? selId.slice(WALL_SELECTION_PREFIX.length)
-            : "";
+            : selId.startsWith(MIRROR_SELECTION_PREFIX)
+              ? selId.slice(MIRROR_SELECTION_PREFIX.length)
+              : "";
         if (!rest) return false;
         if (selId.startsWith(DECOR_SELECTION_PREFIX)) return placedIds.has(rest);
         if (selId.startsWith(WALL_SELECTION_PREFIX)) return wallIds.has(rest);
