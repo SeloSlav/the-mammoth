@@ -15,10 +15,17 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
   OWNED_APARTMENT_MODEL_BED,
+  OWNED_APARTMENT_MODEL_FOOTLOCKER,
+  OWNED_APARTMENT_MODEL_STOVE,
+  OWNED_APARTMENT_MODEL_WARDROBE,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
-import { resolveStaticModelFetchUrl } from "@the-mammoth/engine";
+import {
+  bindMammothApartmentPropReadableEnv,
+  moodGradeMammothApartmentDecorMesh,
+  resolveStaticModelFetchUrl,
+} from "@the-mammoth/engine";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import {
@@ -46,6 +53,10 @@ import {
   resolveApartmentFurniturePose,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
+import {
+  APARTMENT_PROP_FRUSTUM_MARGIN_M,
+  resolveApartmentInteriorPropGroupVisible,
+} from "./fpApartmentInteriorPropVisibility.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -55,7 +66,6 @@ const STOVE_URL = "/static/models/objects/stove.glb";
 /** Max synchronous CPU per scheduler tick **between whole units** (each unit also yields internally). */
 const FURNITURE_REBUILD_FRAME_BUDGET_MS = 3.5;
 const FURNITURE_REBUILD_MIN_UNITS_PER_SLICE = 1;
-const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
 
 /** Set true to force hull debug in production builds. */
 const FP_APARTMENT_UNIT_BOUNDS_DEBUG_FORCE = false;
@@ -122,6 +132,8 @@ const _footlockerPickSizeScratch = new THREE.Vector3();
 const _footlockerPickCenterScratch = new THREE.Vector3();
 const _furnitureVisibilityViewProjection = new THREE.Matrix4();
 const _furnitureVisibilityFrustum = new THREE.Frustum();
+const _furnitureVisibilityCamPos = new THREE.Vector3();
+const _furnitureVisibilityCamDir = new THREE.Vector3();
 
 export function apartmentFurniturePlacementChanged(
   oldUnit: ApartmentUnit,
@@ -210,14 +222,20 @@ function xzClampOptionsForFurnitureClamp(
   return { insetM: seededInsetM };
 }
 
-function clonePropScene(template: THREE.Object3D, levelIdx: number): THREE.Object3D {
+function clonePropScene(
+  template: THREE.Object3D,
+  levelIdx: number,
+  modelRelPath: string,
+): THREE.Object3D {
   const root = template.clone(true);
   /** Tag for stripping stale meshes from {@link collectFpSessionUnitInteriorShellMeshes} caches on rebuild. */
   root.userData.mammothApartmentFurnitureProp = true;
   root.userData.mammothPlateLevelIndex = levelIdx;
   root.userData.mammothUnitInterior = true;
+  root.userData.mammothApartmentDecorModelRelPath = modelRelPath;
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
+      moodGradeMammothApartmentDecorMesh(o, { modelRelPath });
       o.castShadow = false;
       o.receiveShadow = false;
       o.userData.mammothPlateLevelIndex = levelIdx;
@@ -278,6 +296,7 @@ type ApartmentFurnitureLevelBuildJob = {
 
 export async function mountFpApartmentFurniture(opts: {
   conn: DbConnection;
+  scene: THREE.Scene;
   buildingRoot: THREE.Group;
   /** Runs after every rebuild so FP can refresh `unitInteriorMeshes` visibility targets. */
   onRebuilt?: () => void;
@@ -501,7 +520,7 @@ export async function mountFpApartmentFurniture(opts: {
     unitGroup.userData.mammothPlateLevelIndex = levelIdx;
     plate.add(unitGroup);
 
-    const w = clonePropScene(readyTemplates.wardrobe, levelIdx);
+    const w = clonePropScene(readyTemplates.wardrobe, levelIdx, OWNED_APARTMENT_MODEL_WARDROBE);
     w.scale.setScalar(
       ownedApartmentPlacedItemAuthoringAssetVisScale("wardrobe") * pose.wardrobe.uniformScale,
     );
@@ -535,7 +554,7 @@ export async function mountFpApartmentFurniture(opts: {
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
-    const f = clonePropScene(readyTemplates.footlocker, levelIdx);
+    const f = clonePropScene(readyTemplates.footlocker, levelIdx, OWNED_APARTMENT_MODEL_FOOTLOCKER);
     f.scale.setScalar(
       ownedApartmentPlacedItemAuthoringAssetVisScale("footlocker") * pose.footlocker.uniformScale,
     );
@@ -567,7 +586,7 @@ export async function mountFpApartmentFurniture(opts: {
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
-    const st = clonePropScene(readyTemplates.stove, levelIdx);
+    const st = clonePropScene(readyTemplates.stove, levelIdx, OWNED_APARTMENT_MODEL_STOVE);
     st.scale.setScalar(
       ownedApartmentPlacedItemAuthoringAssetVisScale("stove") * pose.stove.uniformScale,
     );
@@ -599,7 +618,7 @@ export async function mountFpApartmentFurniture(opts: {
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
-    const b = clonePropScene(readyTemplates.bed, levelIdx);
+    const b = clonePropScene(readyTemplates.bed, levelIdx, OWNED_APARTMENT_MODEL_BED);
     b.userData.mammothSkipFloorGeometryMerge = true;
     b.scale.setScalar(
       ownedApartmentPlacedItemAuthoringAssetVisScale("bed") * pose.bed.uniformScale,
@@ -637,9 +656,15 @@ export async function mountFpApartmentFurniture(opts: {
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
 
+    const readableEnv = opts.scene.userData.mammothFpMetallicReadableEnv;
+    bindMammothApartmentPropReadableEnv(
+      unitGroup,
+      readableEnv instanceof THREE.Texture ? readableEnv : null,
+    );
+
     unitGroup.updateMatrixWorld(true);
     const unitFurnitureBounds = new THREE.Box3().setFromObject(unitGroup);
-    unitFurnitureBounds.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+    unitFurnitureBounds.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
     unitGroup.userData.mammothApartmentFurnitureWorldBounds = unitFurnitureBounds;
 
     if (unitBoundsDebugGeometry && unitBoundsDebugMaterial) {
@@ -865,6 +890,8 @@ export async function mountFpApartmentFurniture(opts: {
       }
       if (unitFurnitureGroups.length === 0) return;
       camera.updateMatrixWorld();
+      camera.getWorldPosition(_furnitureVisibilityCamPos);
+      camera.getWorldDirection(_furnitureVisibilityCamDir);
       _furnitureVisibilityViewProjection.multiplyMatrices(
         camera.projectionMatrix,
         camera.matrixWorldInverse,
@@ -872,21 +899,19 @@ export async function mountFpApartmentFurniture(opts: {
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
       for (let i = 0; i < unitFurnitureGroups.length; i++) {
         const g = unitFurnitureGroups[i]!;
-        if (!allowDemandBuild) {
-          g.visible = false;
-          continue;
-        }
-        const isContainingUnit =
-          containingUnitKey !== null &&
-          g.userData.mammothApartmentUnitKey === containingUnitKey;
-        if (containingUnitKey !== null && !isContainingUnit) {
-          g.visible = false;
-          continue;
-        }
         const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
-        g.visible = bounds instanceof THREE.Box3
-          ? _furnitureVisibilityFrustum.intersectsBox(bounds)
-          : true;
+        g.visible = resolveApartmentInteriorPropGroupVisible({
+          allowDemand: allowDemandBuild,
+          containingUnitKey,
+          groupUnitKey:
+            typeof g.userData.mammothApartmentUnitKey === "string"
+              ? g.userData.mammothApartmentUnitKey
+              : undefined,
+          propWorldBounds: bounds instanceof THREE.Box3 ? bounds : undefined,
+          viewFrustum: _furnitureVisibilityFrustum,
+          cameraWorldPos: _furnitureVisibilityCamPos,
+          cameraWorldDir: _furnitureVisibilityCamDir,
+        });
       }
     },
     getStashPrompt: (playerPos, camera) => {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
+import { upgradeApartmentDecorMaterialToStandard } from "./apartmentDecorMaterialUpgrade.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorEmitterKindFromModelPath,
@@ -35,33 +36,33 @@ export function moodGradeMammothApartmentDecorMaterial(
     modelRelPath != null && apartmentDecorWarmLightFixtureKind(modelRelPath) != null;
   const isTv = emitterKind === "tv";
 
-  const m = material.clone();
-  if (m instanceof THREE.MeshStandardMaterial) {
-    m.color.multiply(cfg.albedoMood);
-    normalizeAlbedoLuminance(m.color);
-    const emissiveScale =
-      isWarmFixture || isTv ? cfg.fixtureEmissiveScale : cfg.emissiveScale;
-    m.emissive.multiplyScalar(emissiveScale);
-    m.emissiveIntensity *= emissiveScale;
+  const standard = upgradeApartmentDecorMaterialToStandard(material);
+  const m = standard.clone();
+  if (standard !== material) {
+    standard.dispose();
+  }
+  m.color.multiply(cfg.albedoMood);
+  normalizeAlbedoLuminance(m.color);
+  if (isWarmFixture || isTv) {
+    m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
+    m.emissiveIntensity *= cfg.fixtureEmissiveScale;
     if (isWarmFixture) {
       m.emissive.lerp(new THREE.Color(0xffe8c8), 0.35);
     } else if (isTv) {
       m.emissive.lerp(new THREE.Color(0x5a9cff), 0.62);
       m.emissiveIntensity *= 1.25;
     }
-    const metalWeight = mammothSpecularReadabilityWeight(m.metalness, m.roughness);
-    m.roughness = Math.max(
-      m.roughness,
-      metalWeight > 0.18 ? cfg.metallicRoughnessMin : cfg.dielectricRoughnessMin,
-    );
-    m.needsUpdate = true;
-    return m;
+  } else {
+    /** Scene lights + PMREM carry non-fixture props — exporter emissive reads as flat/unlit. */
+    m.emissive.setHex(0x000000);
+    m.emissiveIntensity = 1;
   }
-  if (m instanceof THREE.MeshBasicMaterial) {
-    m.color.multiply(cfg.basicAlbedoMood);
-    normalizeAlbedoLuminance(m.color);
-    m.needsUpdate = true;
-  }
+  const metalWeight = mammothSpecularReadabilityWeight(m.metalness, m.roughness);
+  m.roughness = Math.max(
+    m.roughness,
+    metalWeight > 0.18 ? cfg.metallicRoughnessMin : cfg.dielectricRoughnessMin,
+  );
+  m.needsUpdate = true;
   return m;
 }
 

@@ -55,7 +55,7 @@ import {
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
-  bindMammothMetallicReadableEnv,
+  bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   resolveStaticModelFetchUrl,
@@ -75,7 +75,10 @@ import {
 } from "./fpApartmentStashKey.js";
 import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 
-const FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M = 1.5;
+import {
+  APARTMENT_PROP_FRUSTUM_MARGIN_M,
+  resolveApartmentInteriorPropGroupVisible,
+} from "./fpApartmentInteriorPropVisibility.js";
 const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 /**
  * Content-authored decor/walls should preserve editor placement exactly, including flush placement
@@ -473,6 +476,8 @@ export function mountFpApartmentDecorMeshes(opts: {
 
   const _furnitureVisibilityViewProjection = new THREE.Matrix4();
   const _furnitureVisibilityFrustum = new THREE.Frustum();
+  const _furnitureVisibilityCamPos = new THREE.Vector3();
+  const _furnitureVisibilityCamDir = new THREE.Vector3();
 
   function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number): void {
     root.position.y = 0;
@@ -593,7 +598,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         });
         g.updateMatrixWorld(true);
         const bbox = new THREE.Box3().setFromObject(g);
-        bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+        bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
         g.userData.mammothApartmentDecorWorldBounds = bbox;
         tagResidentialUnitInteriorMeshesUnder(g);
         tagApartmentDecorPropMeshesForMirrorExclusion(g);
@@ -639,7 +644,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
         g.updateMatrixWorld(true);
         const bbox = new THREE.Box3().setFromObject(g);
-        bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+        bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
         g.userData.mammothApartmentDecorWorldBounds = bbox;
         tagResidentialUnitInteriorMeshesUnder(g);
         tagApartmentDecorPropMeshesForMirrorExclusion(g);
@@ -708,7 +713,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         centerVisualBoundsOnRoot(g);
       }
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
-      bindMammothMetallicReadableEnv(g, metallicReadableEnv());
+      bindMammothApartmentPropReadableEnv(g, metallicReadableEnv());
       root.add(g);
       g.updateMatrixWorld(true);
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
@@ -766,7 +771,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         g.updateMatrixWorld(true);
       }
       const bbox = new THREE.Box3().setFromObject(g);
-      bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
+      bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
       tagResidentialUnitInteriorMeshesUnder(g);
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
@@ -821,26 +826,27 @@ export function mountFpApartmentDecorMeshes(opts: {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
     syncVisibility: (camera, allowDemand = true, containingUnitKey = null) => {
       camera.updateMatrixWorld();
+      camera.getWorldPosition(_furnitureVisibilityCamPos);
+      camera.getWorldDirection(_furnitureVisibilityCamDir);
       _furnitureVisibilityViewProjection.multiplyMatrices(
         camera.projectionMatrix,
         camera.matrixWorldInverse,
       );
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
       for (const g of groupByRenderKey.values()) {
-        if (!allowDemand) {
-          g.visible = false;
-          continue;
-        }
-        const isContainingUnit =
-          containingUnitKey !== null &&
-          g.userData.mammothApartmentUnitKey === containingUnitKey;
-        if (containingUnitKey !== null && !isContainingUnit) {
-          g.visible = false;
-          continue;
-        }
         const bb = g.userData.mammothApartmentDecorWorldBounds;
-        g.visible =
-          bb instanceof THREE.Box3 ? _furnitureVisibilityFrustum.intersectsBox(bb) : true;
+        g.visible = resolveApartmentInteriorPropGroupVisible({
+          allowDemand,
+          containingUnitKey,
+          groupUnitKey:
+            typeof g.userData.mammothApartmentUnitKey === "string"
+              ? g.userData.mammothApartmentUnitKey
+              : undefined,
+          propWorldBounds: bb instanceof THREE.Box3 ? bb : undefined,
+          viewFrustum: _furnitureVisibilityFrustum,
+          cameraWorldPos: _furnitureVisibilityCamPos,
+          cameraWorldDir: _furnitureVisibilityCamDir,
+        });
       }
       practicalLightsContextUnitKey = containingUnitKey;
       syncPracticalLightsForUnit(containingUnitKey);

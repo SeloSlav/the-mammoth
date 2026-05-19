@@ -9,6 +9,7 @@ import {
   attachApartmentDecorContactShadow,
   syncApartmentInteriorPracticalLighting,
   type ApartmentPracticalLightsMount,
+  type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
 import {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
@@ -37,6 +38,22 @@ import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmen
 
 /** Top of authoring shell floor slab — keep in sync with `editorMyApartmentAuthoringShell.ts`. */
 export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
+
+/** Matches hollow-shell vertical span for window practical-light filtering in layout preview. */
+export function apartmentUnitBoundsFromAuthoringFractionMapping(
+  spans: OwnedApartmentFractionToPreviewXZ,
+  ceilingHeightM: number,
+): ApartmentUnitWorldBounds {
+  const maxY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + Math.max(2, ceilingHeightM);
+  return {
+    minX: spans.prefabOriginX,
+    maxX: spans.prefabOriginX + spans.prefabFootprintSx,
+    minY: EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+    maxY,
+    minZ: spans.prefabOriginZ,
+    maxZ: spans.prefabOriginZ + spans.prefabFootprintSz,
+  };
+}
 
 /** Gizmo + serialized yaw for built-in apartment props (45° steps). */
 export const EDITOR_MY_APARTMENT_YAW_SNAP_RAD = Math.PI / 4;
@@ -930,6 +947,10 @@ export type EditorMyApartmentFurnitureMount = {
   root: THREE.Group;
   selectionGroups: Record<string, THREE.Group>;
   practicalLights: ApartmentPracticalLightsMount | null;
+  resyncPracticalLights: (
+    windowScanRoot: THREE.Object3D,
+    unitBounds?: ApartmentUnitWorldBounds,
+  ) => void;
   dispose: () => void;
 };
 
@@ -963,6 +984,7 @@ export function mountEditorMyApartmentFurnitureUnder(
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
   windowScanRoot: THREE.Object3D,
+  unitBounds?: ApartmentUnitWorldBounds,
 ): EditorMyApartmentFurnitureMount {
   const root = new THREE.Group();
   root.name = "editor_my_apartment_furniture";
@@ -1004,23 +1026,31 @@ export function mountEditorMyApartmentFurnitureUnder(
     selectionGroups[editorMyApartmentSelectedIdForMirror(mirror.id)] = group;
   }
 
-  const practicalLights = syncApartmentInteriorPracticalLighting({
-    lightParent: root,
-    windowScanRoot,
-    maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
-    decorGroups: Object.values(selectionGroups),
-    previous: null,
-  });
+  let practicalLights: ApartmentPracticalLightsMount | null = null;
+  const resyncPracticalLights = (
+    scanRoot: THREE.Object3D,
+    bounds?: ApartmentUnitWorldBounds,
+  ): void => {
+    practicalLights = syncApartmentInteriorPracticalLighting({
+      lightParent: root,
+      windowScanRoot: scanRoot,
+      maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
+      unitBounds: bounds,
+      decorGroups: Object.values(selectionGroups),
+      previous: practicalLights,
+    });
+  };
+  resyncPracticalLights(windowScanRoot, unitBounds);
 
   const dispose = (): void => {
     teardownApartmentSavedObjectGroupManipulator();
-    practicalLights.dispose();
+    practicalLights?.dispose();
     for (const g of Object.values(selectionGroups)) disposeGroupSubtreeGeometry(g);
     parent.remove(root);
     root.clear();
   };
 
-  return { root, selectionGroups, practicalLights, dispose };
+  return { root, selectionGroups, practicalLights, resyncPracticalLights, dispose };
 }
 
 export function updateEditorMyApartmentMountFromDoc(
@@ -1029,6 +1059,7 @@ export function updateEditorMyApartmentMountFromDoc(
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
   windowScanRoot: THREE.Object3D,
+  unitBounds?: ApartmentUnitWorldBounds,
 ): void {
   const parent = mount.root.parent;
   if (!parent) return;
@@ -1039,10 +1070,12 @@ export function updateEditorMyApartmentMountFromDoc(
     doc,
     authoringFractionMapping,
     windowScanRoot,
+    unitBounds,
   );
   mount.dispose();
   mount.root = rebuilt.root;
   mount.selectionGroups = rebuilt.selectionGroups;
   mount.practicalLights = rebuilt.practicalLights;
+  mount.resyncPracticalLights = rebuilt.resyncPracticalLights;
   mount.dispose = rebuilt.dispose;
 }

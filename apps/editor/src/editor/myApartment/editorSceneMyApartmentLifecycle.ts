@@ -1,129 +1,265 @@
-import * as THREE from "three";
-import { useEditorStore } from "../../state/editorStore.js";
-import {
-  loadEditorMyApartmentDecorTemplates,
-  mountEditorMyApartmentFurnitureUnder,
-  updateEditorMyApartmentMountFromDoc,
-  type EditorMyApartmentFurnitureMount,
-  type EditorMyApartmentDecorTemplateMap,
-} from "./editorMyApartmentMeshes.js";
-import {
-  ownedApartmentFractionMappingForEditor,
-  resolveOwnedApartmentAuthoringLayoutForEditor,
-} from "./editorMyApartmentAuthoringShell.js";
-import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
-import { setEditorMyApartmentPieceGroups } from "./editorMyApartmentPieceGroupBridge.js";
-import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
-import {
-  apartmentMountSyncInputsChanged,
-  captureApartmentMountSyncInputs,
-  type ApartmentMountSyncInputs,
-} from "./editorMyApartmentMountSync.js";
-
-export type EditorMyApartmentLifecycleDeps = {
-  getStructuralRoot: () => THREE.Group | null;
-  getShouldHoldReplicaResync: () => boolean;
-  syncLightingAttachment: () => void;
-  syncTransformAttachment: () => void;
-};
-
-/**
- * Owned-apartment GLB previews for {@link EditorMode.my_apartment_layout}.
- * Persisted poses live in disk JSON ({@link OwnedApartmentBuiltinsDoc}), not SpaceTime.
- */
-export function createEditorSceneMyApartmentLifecycle(
-  deps: EditorMyApartmentLifecycleDeps,
-): { dispose: () => void } {
-  let disposed = false;
-  let syncGeneration = 0;
-  let mount: EditorMyApartmentFurnitureMount | null = null;
-  let decorTemplates: EditorMyApartmentDecorTemplateMap = new Map();
-  let prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
-
-  function teardownFurniture(): void {
-    mount?.dispose();
-    mount = null;
-    setEditorMyApartmentPieceGroups(null);
-  }
-
-  async function reconcile(): Promise<void> {
-    if (disposed) return;
-    if (deps.getShouldHoldReplicaResync()) return;
-
-    const myGen = ++syncGeneration;
-    const st = useEditorStore.getState();
-    const parent = deps.getStructuralRoot();
-    if (st.mode !== "my_apartment_layout" || !parent) {
-      teardownFurniture();
-      return;
-    }
-
-    if (mount && mount.root.parent !== parent) {
-      teardownFurniture();
-    }
-
-    try {
-      if (disposed || myGen !== syncGeneration) return;
-      const doc = st.ownedApartmentBuiltins;
-      decorTemplates = await loadEditorMyApartmentDecorTemplates(
-        listMyApartmentPlacedItemModelRelPaths(doc),
-      );
-      if (disposed || myGen !== syncGeneration) return;
-      if (deps.getShouldHoldReplicaResync()) return;
-
-      const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
-        floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
-        building: st.building,
-      });
-      const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
-        layout,
-        builtinsFallbackPreviewM: doc.previewSizeM,
-      });
-      if (!mount) {
-        mount = mountEditorMyApartmentFurnitureUnder(
-          parent,
-          decorTemplates,
-          doc,
-          authoringFractionMapping,
-          parent,
-        );
-      } else {
-        updateEditorMyApartmentMountFromDoc(
-          mount,
-          decorTemplates,
-          doc,
-          authoringFractionMapping,
-          parent,
-        );
-      }
-      if (disposed || myGen !== syncGeneration) return;
-      if (deps.getShouldHoldReplicaResync()) return;
-      deps.syncLightingAttachment();
-      setEditorMyApartmentPieceGroups(mount.selectionGroups);
-      deps.syncTransformAttachment();
-    } catch {
-      teardownFurniture();
-    }
-  }
-
-  function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
-    if (!apartmentMountSyncInputsChanged(prevMountInputs, nextMountInputs)) return;
-    prevMountInputs = nextMountInputs;
-    void reconcile();
-  }
-
-  const unsubStore = useEditorStore.subscribe((s) => {
-    onStoreChange(captureApartmentMountSyncInputs(s));
-  });
-
-  void reconcile();
-
-  return {
-    dispose: () => {
-      disposed = true;
-      unsubStore();
-      teardownFurniture();
-    },
-  };
-}
-
+import * as THREE from "three";
+
+import { useEditorStore } from "../../state/editorStore.js";
+
+import {
+
+  loadEditorMyApartmentDecorTemplates,
+
+  apartmentUnitBoundsFromAuthoringFractionMapping,
+  mountEditorMyApartmentFurnitureUnder,
+  updateEditorMyApartmentMountFromDoc,
+
+  type EditorMyApartmentFurnitureMount,
+
+  type EditorMyApartmentDecorTemplateMap,
+
+} from "./editorMyApartmentMeshes.js";
+
+import {
+
+  ownedApartmentFractionMappingForEditor,
+
+  resolveOwnedApartmentAuthoringLayoutForEditor,
+
+} from "./editorMyApartmentAuthoringShell.js";
+
+import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
+
+import { setEditorMyApartmentPieceGroups } from "./editorMyApartmentPieceGroupBridge.js";
+
+import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
+
+import {
+
+  apartmentMountSyncInputsChanged,
+
+  captureApartmentMountSyncInputs,
+
+  type ApartmentMountSyncInputs,
+
+} from "./editorMyApartmentMountSync.js";
+
+
+
+export type EditorMyApartmentLifecycleDeps = {
+
+  getStructuralRoot: () => THREE.Group | null;
+
+  getShouldHoldReplicaResync: () => boolean;
+
+  syncLightingAttachment: () => void;
+
+  syncTransformAttachment: () => void;
+
+};
+
+
+
+/**
+
+ * Owned-apartment GLB previews for {@link EditorMode.my_apartment_layout}.
+
+ * Persisted poses live in disk JSON ({@link OwnedApartmentBuiltinsDoc}), not SpaceTime.
+
+ */
+
+export function createEditorSceneMyApartmentLifecycle(
+
+  deps: EditorMyApartmentLifecycleDeps,
+
+): { dispose: () => void } {
+
+  let disposed = false;
+
+  let syncGeneration = 0;
+
+  let mount: EditorMyApartmentFurnitureMount | null = null;
+
+  let decorTemplates: EditorMyApartmentDecorTemplateMap = new Map();
+
+  let prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
+
+
+
+  function teardownFurniture(): void {
+
+    mount?.dispose();
+
+    mount = null;
+
+    setEditorMyApartmentPieceGroups(null);
+
+  }
+
+
+
+  async function reconcile(): Promise<void> {
+
+    if (disposed) return;
+
+    if (deps.getShouldHoldReplicaResync()) return;
+
+
+
+    const myGen = ++syncGeneration;
+
+    const st = useEditorStore.getState();
+
+    const parent = deps.getStructuralRoot();
+
+    if (st.mode !== "my_apartment_layout" || !parent) {
+
+      teardownFurniture();
+
+      return;
+
+    }
+
+
+
+    if (mount && mount.root.parent !== parent) {
+
+      teardownFurniture();
+
+    }
+
+
+
+    try {
+
+      if (disposed || myGen !== syncGeneration) return;
+
+      const doc = st.ownedApartmentBuiltins;
+
+      decorTemplates = await loadEditorMyApartmentDecorTemplates(
+
+        listMyApartmentPlacedItemModelRelPaths(doc),
+
+      );
+
+      if (disposed || myGen !== syncGeneration) return;
+
+      if (deps.getShouldHoldReplicaResync()) return;
+
+
+
+      const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
+
+        floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
+
+        building: st.building,
+
+      });
+
+      const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
+
+        layout,
+
+        builtinsFallbackPreviewM: doc.previewSizeM,
+
+      });
+      const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
+        authoringFractionMapping,
+        layout?.shellPlan.vh ?? 3,
+      );
+
+      if (!mount) {
+
+        mount = mountEditorMyApartmentFurnitureUnder(
+
+          parent,
+
+          decorTemplates,
+
+          doc,
+
+          authoringFractionMapping,
+
+          parent,
+
+          unitBounds,
+
+        );
+
+      } else {
+
+        updateEditorMyApartmentMountFromDoc(
+
+          mount,
+
+          decorTemplates,
+
+          doc,
+
+          authoringFractionMapping,
+
+          parent,
+
+          unitBounds,
+
+        );
+
+      }
+
+      if (disposed || myGen !== syncGeneration) return;
+
+      if (deps.getShouldHoldReplicaResync()) return;
+
+      deps.syncLightingAttachment();
+
+      setEditorMyApartmentPieceGroups(mount.selectionGroups);
+
+      deps.syncTransformAttachment();
+
+    } catch {
+
+      teardownFurniture();
+
+    }
+
+  }
+
+
+
+  function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
+
+    if (!apartmentMountSyncInputsChanged(prevMountInputs, nextMountInputs)) return;
+
+    prevMountInputs = nextMountInputs;
+
+    void reconcile();
+
+  }
+
+
+
+  const unsubStore = useEditorStore.subscribe((s) => {
+
+    onStoreChange(captureApartmentMountSyncInputs(s));
+
+  });
+
+
+
+  void reconcile();
+
+
+
+  return {
+
+    dispose: () => {
+
+      disposed = true;
+
+      unsubStore();
+
+      teardownFurniture();
+
+    },
+
+  };
+
+}
+
+

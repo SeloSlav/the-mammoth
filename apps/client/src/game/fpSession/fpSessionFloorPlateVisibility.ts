@@ -12,6 +12,13 @@ import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.j
 import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorldTypes.js";
 import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
+import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
+
+/**
+ * Pad for the active residential shell while indoors — keeps frustum culling on but avoids wall/ceiling
+ * pops when the camera hugs the hull (previously `frustumCulled = false`, which submitted the full shell every frame).
+ */
+export const FP_CONTAINING_RESIDENTIAL_SHELL_FRUSTUM_PAD_M = 2.75;
 
 type FpStairShaftVisibilityBounds = {
   minX: number;
@@ -215,17 +222,11 @@ export function fpResolveStairwellLitterVisible(input: {
   return input.segmentInDetailBand && input.feetInsideStairShaft;
 }
 
-export function fpShouldDisableContainingInteriorFrustumCulling(input: {
+export function fpShouldExpandContainingResidentialShellFrustumBounds(input: {
   insideResidentialUnit: boolean;
   containingResidentialUnitId: string | null;
   entry: Pick<FpSessionUnitInteriorMeshEntry, "residentialUnitId" | "apartmentUnitKey">;
 }): boolean {
-  /**
-   * Keep the active apartment shell immune to object-level frustum culling so near walls/ceilings do
-   * not pop while the camera is inside the hollow mesh. Apartment props/decor have tight per-object
-   * bounds and can be culled normally; forcing them on was submitting hundreds of thousands of
-   * off-screen triangles from the containing unit.
-   */
   return (
     input.insideResidentialUnit &&
     input.entry.apartmentUnitKey === null &&
@@ -583,11 +584,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           containingResidentialUnitId,
           containingResidentialUnitKey,
         });
-        entry.mesh.frustumCulled = !fpShouldDisableContainingInteriorFrustumCulling({
-          insideResidentialUnit,
-          containingResidentialUnitId,
-          entry,
-        });
+        entry.mesh.frustumCulled = true;
+        if (
+          fpShouldExpandContainingResidentialShellFrustumBounds({
+            insideResidentialUnit,
+            containingResidentialUnitId,
+            entry,
+          })
+        ) {
+          expandObjectFrustumBoundsOnce(
+            entry.mesh,
+            FP_CONTAINING_RESIDENTIAL_SHELL_FRUSTUM_PAD_M,
+          );
+        }
       }
     }
     const apartmentFurnitureInteriorVisibilityChanged =

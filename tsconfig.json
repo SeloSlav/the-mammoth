@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "paths": {
+      "three": ["./apps/editor/node_modules/@types/three/src/Three.WebGPU.d.ts"]
+    }
+  },
+  "include": ["apps/editor/src/**/*.ts", "apps/editor/src/**/*.tsx", "apps/editor/vite.config.ts"]
+}

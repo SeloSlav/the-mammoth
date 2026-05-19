@@ -7,19 +7,32 @@ import * as THREE from "three";
 export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
   exposure: {
     exterior: 0.82,
-    /** Full interior adaptation — practical lights carry local pools; keep readable base. */
-    interior: 0.68,
+    /** Dark base — mood comes from window/lamp pools, not a flat global wash. */
+    interior: 0.62,
   },
-  /** Global key/fill when the camera is inside a residential unit (before stairwell scale). */
+  /**
+   * Target for the shared scene rig while the camera is inside a unit. Intensities are zero so
+   * only practical spots/points (windows, chandeliers, ceiling fixtures, TV) illuminate the flat.
+   */
   interiorAmbient: {
     hemiSky: 0xe3e7df,
     hemiGround: 0xb8bcae,
-    /** Softer than the old 0.14 crush — practical lights add mood pools on top. */
-    hemiIntensity: 0.42,
+    hemiIntensity: 0,
     fill: 0xdce1d8,
-    fillIntensity: 0.11,
+    fillIntensity: 0,
     dir: 0xf0efd9,
-    dirIntensity: 0.22,
+    dirIntensity: 0,
+  },
+  /**
+   * Layer-scoped fill for residential shells + decor (FP `residentialInterior*` rig). Keeps
+   * practical pools as the hero while preventing pitch-black floors and unshaded props.
+   */
+  interiorBounce: {
+    hemiSky: 0xd4dbd2,
+    hemiGround: 0x3a3632,
+    hemiIntensity: 0.16,
+    fill: 0xb8b5ae,
+    fillIntensity: 0.075,
   },
   /** Shell plaster / parquet tints so props sit in the same palette as walls. */
   shell: {
@@ -32,7 +45,7 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     /** Clamp normalized albedo luminance into this band after mood multiply. */
     albedoLuminanceMin: 0.14,
     albedoLuminanceMax: 0.62,
-    dielectricRoughnessMin: 0.58,
+    dielectricRoughnessMin: 0.48,
     metallicRoughnessMin: 0.28,
     emissiveScale: 0.55,
     fixtureEmissiveScale: 1.35,
@@ -40,32 +53,39 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
   practical: {
     window: {
       color: 0xd8e8f8,
-      intensity: 2.4,
-      distance: 11,
-      decay: 2,
-      angle: Math.PI / 2.8,
-      penumbra: 0.42,
+      intensity: 3.1,
+      distance: 7.5,
+      decay: 2.2,
+      angle: Math.PI / 3.4,
+      penumbra: 0.38,
     },
     chandelier: {
       color: 0xffe8c8,
-      intensity: 2.8,
-      distance: 6.5,
-      decay: 2,
+      intensity: 3.2,
+      distance: 4.8,
+      decay: 2.2,
     },
     ceiling: {
       color: 0xfff0dc,
-      intensity: 1.75,
-      distance: 4.2,
-      decay: 2,
+      intensity: 2.15,
+      distance: 3.1,
+      decay: 2.2,
     },
-    /** Wide horizontal wash from a powered-on TV screen into the room. */
+    /** Floor lamp — local pool at seating height, shorter reach than ceiling fixtures. */
+    standing: {
+      color: 0xffe8c8,
+      intensity: 2.35,
+      distance: 3.4,
+      decay: 2.2,
+    },
+    /** Horizontal wash from a powered-on TV — tight falloff so it does not flood the unit. */
     tv: {
       color: 0x6fa8ff,
-      intensity: 5,
-      distance: 24,
-      decay: 2,
-      angle: Math.PI / 1.95,
-      penumbra: 0.65,
+      intensity: 4.2,
+      distance: 12,
+      decay: 2.2,
+      angle: Math.PI / 2.35,
+      penumbra: 0.55,
     },
   },
   contactShadow: {
@@ -87,7 +107,11 @@ export type ApartmentUnitWorldBounds = {
   maxZ: number;
 };
 
-export type ApartmentDecorEmitterKind = "chandelier" | "ceiling" | "tv";
+export type ApartmentDecorEmitterKind =
+  | "chandelier"
+  | "ceiling"
+  | "standing"
+  | "tv";
 
 export function apartmentDecorEmitterKindFromModelPath(
   modelRelPath: string,
@@ -95,15 +119,18 @@ export function apartmentDecorEmitterKindFromModelPath(
   const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
   if (lower.includes("chandelier")) return "chandelier";
   if (lower.includes("light-ceiling")) return "ceiling";
+  if (lower.includes("lamp-standing")) return "standing";
   if (lower.endsWith("/tv.glb") || lower.includes("/objects/tv.glb")) return "tv";
   return null;
 }
 
 export function apartmentDecorWarmLightFixtureKind(
   modelRelPath: string,
-): "chandelier" | "ceiling" | null {
+): "chandelier" | "ceiling" | "standing" | null {
   const kind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
-  return kind === "chandelier" || kind === "ceiling" ? kind : null;
+  return kind === "chandelier" || kind === "ceiling" || kind === "standing"
+    ? kind
+    : null;
 }
 
 export function apartmentDecorContactShadowEligible(modelRelPath: string): boolean {

@@ -16,6 +16,9 @@ export type ApartmentPracticalLightSpec = {
 };
 
 const _scratchDir = new THREE.Vector3();
+const _lightParentInv = new THREE.Matrix4();
+const _lightLocalPos = new THREE.Vector3();
+const _lightLocalDir = new THREE.Vector3();
 const _decorBoxScratch = new THREE.Box3();
 const _decorCenterScratch = new THREE.Vector3();
 const _decorSizeScratch = new THREE.Vector3();
@@ -64,6 +67,25 @@ export function apartmentPracticalLightSpecFromDecorGroup(
       kind: "tv",
       position: _decorCenterScratch.clone(),
       direction: _scratchDir.clone(),
+    };
+  }
+
+  if (kind === "standing") {
+    _decorBoxScratch.setFromObject(group);
+    if (_decorBoxScratch.isEmpty()) {
+      group.getWorldPosition(_decorCenterScratch);
+    } else {
+      _decorBoxScratch.getSize(_decorSizeScratch);
+      const shadeInset = Math.max(0.05, _decorSizeScratch.y * 0.1);
+      _decorCenterScratch.set(
+        (_decorBoxScratch.min.x + _decorBoxScratch.max.x) * 0.5,
+        _decorBoxScratch.max.y - shadeInset,
+        (_decorBoxScratch.min.z + _decorBoxScratch.max.z) * 0.5,
+      );
+    }
+    return {
+      kind,
+      position: _decorCenterScratch.clone(),
     };
   }
 
@@ -187,6 +209,32 @@ export type ApartmentPracticalLightsMount = {
   dispose: () => void;
 };
 
+/** FP decor/shell layers — practical lights must illuminate these, not just default layer 0. */
+const APARTMENT_INTERIOR_LIGHT_LAYER_MASK =
+  (1 << 0) | (1 << 3) | (1 << 5);
+
+function enableApartmentInteriorLightLayers(light: THREE.Light): void {
+  light.layers.mask = APARTMENT_INTERIOR_LIGHT_LAYER_MASK;
+}
+
+function worldSpecToLightParentLocal(
+  parent: THREE.Object3D,
+  worldPosition: THREE.Vector3,
+  worldDirection: THREE.Vector3 | undefined,
+): { position: THREE.Vector3; direction?: THREE.Vector3 } {
+  parent.updateMatrixWorld(true);
+  _lightParentInv.copy(parent.matrixWorld).invert();
+  const position = _lightLocalPos.copy(worldPosition).applyMatrix4(_lightParentInv);
+  if (!worldDirection) {
+    return { position };
+  }
+  const direction = _lightLocalDir
+    .copy(worldDirection)
+    .transformDirection(_lightParentInv)
+    .normalize();
+  return { position, direction };
+}
+
 export function mountApartmentPracticalLights(
   parent: THREE.Object3D,
   specs: readonly ApartmentPracticalLightSpec[],
@@ -198,9 +246,14 @@ export function mountApartmentPracticalLights(
 
   for (let i = 0; i < specs.length; i++) {
     const spec = specs[i]!;
+    const local = worldSpecToLightParentLocal(
+      parent,
+      spec.position,
+      spec.direction,
+    );
     if (
       (spec.kind === "window" || spec.kind === "tv") &&
-      spec.direction
+      local.direction
     ) {
       const p = spec.kind === "tv" ? profile.tv : profile.window;
       const spot = new THREE.SpotLight(
@@ -212,16 +265,21 @@ export function mountApartmentPracticalLights(
         p.decay,
       );
       spot.name = `apt_${spec.kind}_light_${i}`;
-      spot.position.copy(spec.position);
-      spot.target.position.copy(spec.position).add(spec.direction);
+      spot.position.copy(local.position);
+      spot.target.position.copy(local.position).add(local.direction);
       spot.castShadow = false;
+      enableApartmentInteriorLightLayers(spot);
       root.add(spot);
       root.add(spot.target);
       continue;
     }
 
     const params =
-      spec.kind === "chandelier" ? profile.chandelier : profile.ceiling;
+      spec.kind === "chandelier"
+        ? profile.chandelier
+        : spec.kind === "standing"
+          ? profile.standing
+          : profile.ceiling;
     const point = new THREE.PointLight(
       params.color,
       params.intensity,
@@ -229,8 +287,9 @@ export function mountApartmentPracticalLights(
       params.decay,
     );
     point.name = `apt_${spec.kind}_light_${i}`;
-    point.position.copy(spec.position);
+    point.position.copy(local.position);
     point.castShadow = false;
+    enableApartmentInteriorLightLayers(point);
     root.add(point);
   }
 

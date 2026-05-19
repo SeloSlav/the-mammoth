@@ -567,14 +567,6 @@ export function attachFpSessionEnvironment(
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.62;
   const interiorProfile = APARTMENT_INTERIOR_VISUAL_PROFILE;
-  /**
-   * Keep the residential-only rig effectively off. Some apartment meshes can end up on different
-   * layers (shells vs authored walls/props); a second interior-only light stack makes those
-   * differences visible as uneven bright patches. The apartment mood now comes from the shared dark
-   * rig above plus global exposure / IBL pull-down while inside a unit.
-   */
-  const RESIDENTIAL_INTERIOR_SKY_INTENSITY = 0;
-  const RESIDENTIAL_INTERIOR_FILL_INTENSITY = 0;
   const RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY = 0;
 
   const hemi = new THREE.HemisphereLight(
@@ -590,18 +582,11 @@ export function attachFpSessionEnvironment(
   /** Shared dark rig for both corridor and residential layers to avoid per-layer brightness seams. */
 
   /** Retained as a no-op rig so interior-layer meshes still have a stable future hook if needed. */
-  const residentialInteriorSky = new THREE.HemisphereLight(
-    0xd5d9d4,
-    0x857869,
-    RESIDENTIAL_INTERIOR_SKY_INTENSITY,
-  );
+  const residentialInteriorSky = new THREE.HemisphereLight(0xd5d9d4, 0x857869, 0);
   residentialInteriorSky.name = "fp_residential_interior_sky";
   residentialInteriorSky.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   residentialInteriorSky.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
-  const residentialInteriorFill = new THREE.AmbientLight(
-    0xb7aea1,
-    RESIDENTIAL_INTERIOR_FILL_INTENSITY,
-  );
+  const residentialInteriorFill = new THREE.AmbientLight(0xb7aea1, 0);
   residentialInteriorFill.name = "fp_residential_interior_fill";
   residentialInteriorFill.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   residentialInteriorFill.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
@@ -652,7 +637,9 @@ export function attachFpSessionEnvironment(
        */
       const apartmentDarkWeighted01 = Math.pow(apartmentDark01, 0.72);
       const ambient = interiorProfile.interiorAmbient;
-      if (apartmentDarkWeighted01 > 0.001) {
+      /** Inside a unit the shared rig fades to zero — only practical lights remain. */
+      const interiorGlobalLight01 = apartmentDarkWeighted01;
+      if (interiorGlobalLight01 > 0.001) {
         hemi.color.setHex(ambient.hemiSky);
         hemi.groundColor.setHex(ambient.hemiGround);
         fill.color.setHex(ambient.fill);
@@ -663,24 +650,33 @@ export function attachFpSessionEnvironment(
         fill.color.setHex(0xdce1d8);
         dir.color.setHex(0xf0efd9);
       }
+      const exteriorHemi = BASE_HEMI_INTENSITY * stairwellScale;
+      const exteriorFill = BASE_FILL_INTENSITY * stairwellScale;
+      const exteriorDir = BASE_DIR_INTENSITY * stairwellScale;
       hemi.intensity = THREE.MathUtils.lerp(
-        BASE_HEMI_INTENSITY * stairwellScale,
+        exteriorHemi,
         ambient.hemiIntensity,
-        apartmentDarkWeighted01,
+        interiorGlobalLight01,
       );
       fill.intensity = THREE.MathUtils.lerp(
-        BASE_FILL_INTENSITY * stairwellScale,
+        exteriorFill,
         ambient.fillIntensity,
-        apartmentDarkWeighted01,
+        interiorGlobalLight01,
       );
       dir.intensity = THREE.MathUtils.lerp(
-        BASE_DIR_INTENSITY * stairwellScale,
+        exteriorDir,
         ambient.dirIntensity,
-        apartmentDarkWeighted01,
+        interiorGlobalLight01,
       );
       dir.position.copy(sunDir).multiplyScalar(120);
-      residentialInteriorSky.intensity = RESIDENTIAL_INTERIOR_SKY_INTENSITY;
-      residentialInteriorFill.intensity = RESIDENTIAL_INTERIOR_FILL_INTENSITY;
+      const bounce = interiorProfile.interiorBounce;
+      residentialInteriorSky.color.setHex(bounce.hemiSky);
+      residentialInteriorSky.groundColor.setHex(bounce.hemiGround);
+      residentialInteriorSky.intensity =
+        bounce.hemiIntensity * apartmentDarkWeighted01;
+      residentialInteriorFill.color.setHex(bounce.fill);
+      residentialInteriorFill.intensity =
+        bounce.fillIntensity * apartmentDarkWeighted01;
       residentialInteriorDaylight.intensity = RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(

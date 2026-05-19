@@ -3,7 +3,7 @@ import {
   fpApplyResidentialInteriorPlateBandOverride,
   fpResolveStairwellLitterVisible,
   fpResolveUnitInteriorMeshVisible,
-  fpShouldDisableContainingInteriorFrustumCulling,
+  fpShouldExpandContainingResidentialShellFrustumBounds,
 } from "./fpSessionFloorPlateVisibility";
 
 describe("fpApplyResidentialInteriorPlateBandOverride", () => {
@@ -188,10 +188,10 @@ describe("fpResolveStairwellLitterVisible", () => {
   });
 });
 
-describe("fpShouldDisableContainingInteriorFrustumCulling", () => {
-  it("keeps containing residential shell meshes uncullable indoors", () => {
+describe("fpShouldExpandContainingResidentialShellFrustumBounds", () => {
+  it("expands containing residential shell bounds indoors", () => {
     expect(
-      fpShouldDisableContainingInteriorFrustumCulling({
+      fpShouldExpandContainingResidentialShellFrustumBounds({
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         entry: {
@@ -202,9 +202,9 @@ describe("fpShouldDisableContainingInteriorFrustumCulling", () => {
     ).toBe(true);
   });
 
-  it("leaves apartment props/decor frustum culled even for the containing unit", () => {
+  it("does not expand apartment props/decor shells", () => {
     expect(
-      fpShouldDisableContainingInteriorFrustumCulling({
+      fpShouldExpandContainingResidentialShellFrustumBounds({
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         entry: {

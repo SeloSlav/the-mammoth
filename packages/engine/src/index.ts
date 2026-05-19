@@ -173,6 +173,11 @@ export {
   type MammothMetallicReadableEnvMeta,
 } from "./rendering/bindMammothMetallicReadableEnv.js";
 export {
+  bindMammothApartmentDecorIndirectEnv,
+  bindMammothApartmentPropReadableEnv,
+} from "./rendering/bindMammothApartmentDecorIndirectEnv.js";
+export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
+export {
   moodGradeMammothApartmentDecorMaterial,
   moodGradeMammothApartmentDecorMesh,
   moodGradeMammothApartmentShellMaterial,
@@ -186,6 +191,11 @@ export {
   type ApartmentDecorEmitterKind,
   type ApartmentUnitWorldBounds,
 } from "./rendering/apartmentInteriorVisualProfile.js";
+export {
+  mountApartmentInteriorPreviewSceneLighting,
+  syncApartmentInteriorPreviewSceneLighting,
+  type ApartmentInteriorPreviewSceneLightingMount,
+} from "./rendering/apartmentInteriorPreviewSceneLighting.js";
 export {
   apartmentPracticalLightSpecFromDecor,
   apartmentPracticalLightSpecFromDecorGroup,

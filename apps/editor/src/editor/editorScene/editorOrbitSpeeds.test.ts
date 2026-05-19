@@ -4,7 +4,7 @@ import {
   EDITOR_ORBIT_MIN_DISTANCE_M,
   EDITOR_ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP,
   editorOrbitDistanceInvariantSpeeds,
-} from "./editorOrbitDistanceInvariantSpeeds.js";
+} from "./editorOrbitSpeeds.js";
 
 describe("editorOrbitDistanceInvariantSpeeds", () => {
   it("raises pan speed when zoomed in close", () => {

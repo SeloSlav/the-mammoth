@@ -571,6 +571,7 @@ export async function mountFpSession(
   const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
     mountFpApartmentFurniture({
       conn,
+      scene,
       buildingRoot,
       showUnitBoundsDebug: isApartmentUnitBoundsDebugEnabled(),
       onRebuilt: refreshApartmentInteriorMeshes,

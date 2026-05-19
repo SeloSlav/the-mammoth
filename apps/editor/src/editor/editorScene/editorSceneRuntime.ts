@@ -6,9 +6,10 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
-  bindMammothMetallicReadableEnv,
+  bindMammothApartmentPropReadableEnv,
   createFPCamera,
-  APARTMENT_INTERIOR_VISUAL_PROFILE,
+  mountApartmentInteriorPreviewSceneLighting,
+  syncApartmentInteriorPreviewSceneLighting,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -42,7 +43,7 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
-import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitDistanceInvariantSpeeds.js";
+import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
@@ -56,7 +57,10 @@ import {
   findEditorMyApartmentWallSlabMesh,
   snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
-import { getEditorMyApartmentSelectionGroup } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+import {
+  getEditorMyApartmentFurnitureMountRoot,
+  getEditorMyApartmentSelectionGroup,
+} from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
   syncApartmentSavedObjectGroupManipulator,
@@ -117,10 +121,8 @@ export async function mountEditorScene(
     fill: 0.42,
     dir: 0.46,
   } as const;
-  const FP_APARTMENT_PREVIEW_EXPOSURE =
-    APARTMENT_INTERIOR_VISUAL_PROFILE.exposure.interior;
-  const FP_APARTMENT_PREVIEW_LIGHTING =
-    APARTMENT_INTERIOR_VISUAL_PROFILE.interiorAmbient;
+  const apartmentInteriorPreviewLighting =
+    mountApartmentInteriorPreviewSceneLighting(scene);
 
   const contentRoot = new THREE.Group();
 
@@ -132,20 +134,33 @@ export async function mountEditorScene(
     st: ReturnType<typeof useEditorStore.getState>,
     roomEnvOn: boolean,
   ): void => {
-    renderer.toneMappingExposure = EDITOR_ORBIT_EXPOSURE;
-    scene.environmentIntensity = roomEnvOn ? EDITOR_HDRI_SCENE_IBL_INTENSITY : 1;
     const b = EDITOR_ORBIT_LIGHTING_BASE;
     if (shouldPreviewFpApartmentLighting(st)) {
-      renderer.toneMappingExposure = FP_APARTMENT_PREVIEW_EXPOSURE;
       scene.environmentIntensity = 1;
-      hemi.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.hemiSky);
-      hemi.groundColor.setHex(FP_APARTMENT_PREVIEW_LIGHTING.hemiGround);
-      hemi.intensity = FP_APARTMENT_PREVIEW_LIGHTING.hemiIntensity;
-      fill.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.fill);
-      fill.intensity = FP_APARTMENT_PREVIEW_LIGHTING.fillIntensity;
-      dir.color.setHex(FP_APARTMENT_PREVIEW_LIGHTING.dir);
-      dir.intensity = FP_APARTMENT_PREVIEW_LIGHTING.dirIntensity;
-    } else if (roomEnvOn) {
+      syncApartmentInteriorPreviewSceneLighting({
+        active: true,
+        renderer,
+        sharedHemi: hemi,
+        sharedFill: fill,
+        sharedDir: dir,
+        bounceHemi: apartmentInteriorPreviewLighting.bounceHemi,
+        bounceFill: apartmentInteriorPreviewLighting.bounceFill,
+      });
+      return;
+    }
+
+    syncApartmentInteriorPreviewSceneLighting({
+      active: false,
+      renderer,
+      sharedHemi: hemi,
+      sharedFill: fill,
+      sharedDir: dir,
+      bounceHemi: apartmentInteriorPreviewLighting.bounceHemi,
+      bounceFill: apartmentInteriorPreviewLighting.bounceFill,
+    });
+    renderer.toneMappingExposure = EDITOR_ORBIT_EXPOSURE;
+    scene.environmentIntensity = roomEnvOn ? EDITOR_HDRI_SCENE_IBL_INTENSITY : 1;
+    if (roomEnvOn) {
       hemi.color.setHex(0xf2f6fb);
       hemi.groundColor.setHex(0xd0d8e2);
       hemi.intensity = b.hemiIntensity * EDITOR_HDRI_KEYLIGHT_FACTOR.hemi;
@@ -170,10 +185,11 @@ export async function mountEditorScene(
     } else {
       delete scene.userData.mammothFpMetallicReadableEnv;
     }
-    bindMammothMetallicReadableEnv(
-      contentRoot,
-      envTexture,
-    );
+    bindMammothApartmentPropReadableEnv(contentRoot, envTexture);
+    const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
+    if (apartmentFurnitureRoot) {
+      bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
+    }
   };
 
   const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
@@ -191,11 +207,15 @@ export async function mountEditorScene(
   };
 
   const syncCurrentEditorLightingAttachment = (): void => {
-    const metallicEnv = scene.userData.mammothFpMetallicReadableEnv;
-    bindMammothMetallicReadableEnv(
-      contentRoot,
-      metallicEnv instanceof THREE.Texture ? metallicEnv : scene.environment,
-    );
+    const envTexture =
+      scene.userData.mammothFpMetallicReadableEnv instanceof THREE.Texture
+        ? scene.userData.mammothFpMetallicReadableEnv
+        : scene.environment;
+    bindMammothApartmentPropReadableEnv(contentRoot, envTexture);
+    const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
+    if (apartmentFurnitureRoot) {
+      bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
+    }
   };
 
   contentRoot.name = "editorContentRoot";
@@ -1145,6 +1165,7 @@ export async function mountEditorScene(
     previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
     disposeMyApartmentAuthoring();
+    apartmentInteriorPreviewLighting.dispose();
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
     applyPmremEnvironment(false);
