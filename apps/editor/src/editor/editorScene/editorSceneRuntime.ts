@@ -8,6 +8,7 @@ import {
   assertWebGpuRendererBackend,
   bindMammothMetallicReadableEnv,
   createFPCamera,
+  APARTMENT_INTERIOR_VISUAL_PROFILE,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -116,16 +117,10 @@ export async function mountEditorScene(
     fill: 0.42,
     dir: 0.46,
   } as const;
-  const FP_APARTMENT_PREVIEW_EXPOSURE = 0.58;
-  const FP_APARTMENT_PREVIEW_LIGHTING = {
-    hemiSky: 0xe3e7df,
-    hemiGround: 0xb8bcae,
-    hemiIntensity: 0.72,
-    fill: 0xdce1d8,
-    fillIntensity: 0.17,
-    dir: 0xf0efd9,
-    dirIntensity: 0.58,
-  } as const;
+  const FP_APARTMENT_PREVIEW_EXPOSURE =
+    APARTMENT_INTERIOR_VISUAL_PROFILE.exposure.interior;
+  const FP_APARTMENT_PREVIEW_LIGHTING =
+    APARTMENT_INTERIOR_VISUAL_PROFILE.interiorAmbient;
 
   const contentRoot = new THREE.Group();
 

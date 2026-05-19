@@ -171,4 +171,25 @@ export {
 export {
   moodGradeMammothApartmentDecorMaterial,
   moodGradeMammothApartmentDecorMesh,
+  moodGradeMammothApartmentShellMaterial,
+  moodGradeMammothApartmentShellMesh,
 } from "./rendering/apartmentDecorMoodGrade.js";
+export {
+  APARTMENT_INTERIOR_VISUAL_PROFILE,
+  apartmentDecorContactShadowEligible,
+  apartmentDecorEmitterKindFromModelPath,
+  apartmentDecorWarmLightFixtureKind,
+  type ApartmentDecorEmitterKind,
+} from "./rendering/apartmentInteriorVisualProfile.js";
+export {
+  apartmentPracticalLightSpecFromDecor,
+  apartmentPracticalLightSpecFromDecorGroup,
+  apartmentPracticalLightSpecFromWindowGlassMesh,
+  collectApartmentWindowLightSpecsFromRoot,
+  mountApartmentPracticalLights,
+  syncApartmentInteriorPracticalLighting,
+  type ApartmentPracticalLightKind,
+  type ApartmentPracticalLightSpec,
+  type ApartmentPracticalLightsMount,
+} from "./rendering/apartmentInteriorPracticalLights.js";
+export { attachApartmentDecorContactShadow } from "./rendering/apartmentInteriorContactShadow.js";

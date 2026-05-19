@@ -591,8 +591,8 @@ export function EditorChrome() {
               lineHeight: 1.35,
             }}
           >
-            Apartment layout previews use the in-game FP interior exposure and decor
-            mood grade; metallic highlights still get the FP readability PMREM.
+            Apartment layout previews use the in-game FP interior profile with window,
+            chandelier, and ceiling practical lights plus shared decor/shell grading.
           </p>
         ) : null}
         <span style={label}>History</span>

@@ -46,6 +46,10 @@ import { yieldToMain } from "../fpSession/yieldToMain.js";
 import {
   bindMammothMetallicReadableEnv,
   moodGradeMammothApartmentDecorMesh,
+  apartmentDecorContactShadowEligible,
+  attachApartmentDecorContactShadow,
+  syncApartmentInteriorPracticalLighting,
+  type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
 import {
   apartmentStashKey,
@@ -290,6 +294,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   let disposed = false;
   let buildEpoch = 0;
   let buildRaf = 0;
+  let practicalLightsMount: ApartmentPracticalLightsMount | null = null;
+  const contactShadowMeshes: THREE.Mesh[] = [];
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -328,7 +334,18 @@ export function mountFpApartmentDecorMeshes(opts: {
     root.remove(g);
   };
 
+  const clearInteriorLighting = (): void => {
+    practicalLightsMount?.dispose();
+    practicalLightsMount = null;
+    for (const shadow of contactShadowMeshes) {
+      shadow.geometry.dispose();
+      shadow.parent?.remove(shadow);
+    }
+    contactShadowMeshes.length = 0;
+  };
+
   const clearAll = () => {
+    clearInteriorLighting();
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
@@ -498,6 +515,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentUnitKey = d.unit.unitKey;
       g.userData.mammothApartmentFurnitureProp = true;
       g.userData.mammothPlateLevelIndex = d.unit.level;
+      g.userData.mammothApartmentDecorModelRelPath = d.modelRelPath;
       g.position.set(d.posX, d.posY, d.posZ);
       g.rotation.order = "YXZ";
       g.rotation.y = d.yawRad;
@@ -512,7 +530,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          moodGradeMammothApartmentDecorMesh(o);
+          moodGradeMammothApartmentDecorMesh(o, { modelRelPath: d.modelRelPath });
           o.castShadow = false;
           o.receiveShadow = false;
           o.frustumCulled = true;
@@ -574,9 +592,22 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentDecorWorldBounds = bbox;
       tagResidentialUnitInteriorMeshesUnder(g);
 
+      if (apartmentDecorContactShadowEligible(d.modelRelPath)) {
+        const floorY = d.unit.boundMinY as number;
+        const shadow = attachApartmentDecorContactShadow(g, floorY);
+        if (shadow) contactShadowMeshes.push(shadow);
+      }
+
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);
     }
+
+    practicalLightsMount = syncApartmentInteriorPracticalLighting({
+      lightParent: root,
+      windowScanRoot: opts.buildingRoot,
+      decorGroups: [...groupByRenderKey.values()],
+      previous: practicalLightsMount,
+    });
 
     opts.buildingRoot.updateMatrixWorld(true);
     opts.onRebuilt?.();
@@ -701,6 +732,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       clearAll();
       stashPickGeometry.dispose();
       stashPickMaterial.dispose();
+      clearInteriorLighting();
       opts.buildingRoot.remove(root);
     },
   };

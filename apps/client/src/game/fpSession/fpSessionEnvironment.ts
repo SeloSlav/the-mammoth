@@ -19,6 +19,7 @@ import {
 } from "three/tsl";
 import { SkyCloudMesh } from "sky-cloud-3d";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "@the-mammoth/world";
+import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import { FP_RESIDENTIAL_UNIT_INTERIOR_LAYER } from "./fpSessionConstants.js";
 
 const GRASS_GROUND_TEX_BASE = "/static/materials/grass-ground";
@@ -205,7 +206,7 @@ export function attachFpSessionEnvironment(
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   clipCompatibleRenderer.localClippingEnabled = true;
   /** Overcast daylight, but tuned so panel yards don’t punch past the gritty interior mood on entry. */
-  renderer.toneMappingExposure = 0.82;
+  renderer.toneMappingExposure = APARTMENT_INTERIOR_VISUAL_PROFILE.exposure.exterior;
   const apartmentClipPlanes = [
     new THREE.Plane(),
     new THREE.Plane(),
@@ -562,9 +563,7 @@ export function attachFpSessionEnvironment(
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.62;
-  /** Player-in-unit eye adaptation: noticeably darker without crushing all detail to black. */
-  const APARTMENT_INTERIOR_LIGHT_SCALE = 0.14;
-  const APARTMENT_INTERIOR_EXPOSURE = 0.58;
+  const interiorProfile = APARTMENT_INTERIOR_VISUAL_PROFILE;
   /**
    * Keep the residential-only rig effectively off. Some apartment meshes can end up on different
    * layers (shells vs authored walls/props); a second interior-only light stack makes those
@@ -646,23 +645,41 @@ export function attachFpSessionEnvironment(
        * most of the brighter exterior response until the blend is nearly complete.
        */
       const apartmentDarkWeighted01 = Math.pow(apartmentDark01, 0.72);
-      const residentialScale = THREE.MathUtils.lerp(
-        1,
-        APARTMENT_INTERIOR_LIGHT_SCALE,
+      const ambient = interiorProfile.interiorAmbient;
+      if (apartmentDarkWeighted01 > 0.001) {
+        hemi.color.setHex(ambient.hemiSky);
+        hemi.groundColor.setHex(ambient.hemiGround);
+        fill.color.setHex(ambient.fill);
+        dir.color.setHex(ambient.dir);
+      } else {
+        hemi.color.setHex(0xe3e7df);
+        hemi.groundColor.setHex(0xb8bcae);
+        fill.color.setHex(0xdce1d8);
+        dir.color.setHex(0xf0efd9);
+      }
+      hemi.intensity = THREE.MathUtils.lerp(
+        BASE_HEMI_INTENSITY * stairwellScale,
+        ambient.hemiIntensity,
         apartmentDarkWeighted01,
       );
-      hemi.intensity = BASE_HEMI_INTENSITY * stairwellScale;
-      fill.intensity = BASE_FILL_INTENSITY * stairwellScale;
-      dir.intensity = BASE_DIR_INTENSITY * stairwellScale;
+      fill.intensity = THREE.MathUtils.lerp(
+        BASE_FILL_INTENSITY * stairwellScale,
+        ambient.fillIntensity,
+        apartmentDarkWeighted01,
+      );
+      dir.intensity = THREE.MathUtils.lerp(
+        BASE_DIR_INTENSITY * stairwellScale,
+        ambient.dirIntensity,
+        apartmentDarkWeighted01,
+      );
       dir.position.copy(sunDir).multiplyScalar(120);
-      residentialInteriorSky.intensity = RESIDENTIAL_INTERIOR_SKY_INTENSITY * residentialScale;
-      residentialInteriorFill.intensity = RESIDENTIAL_INTERIOR_FILL_INTENSITY * residentialScale;
-      residentialInteriorDaylight.intensity =
-        RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY * residentialScale;
+      residentialInteriorSky.intensity = RESIDENTIAL_INTERIOR_SKY_INTENSITY;
+      residentialInteriorFill.intensity = RESIDENTIAL_INTERIOR_FILL_INTENSITY;
+      residentialInteriorDaylight.intensity = RESIDENTIAL_INTERIOR_DAYLIGHT_INTENSITY;
       residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(
-        0.82,
-        APARTMENT_INTERIOR_EXPOSURE,
+        interiorProfile.exposure.exterior,
+        interiorProfile.exposure.interior,
         apartmentDarkWeighted01,
       );
       const tEnd = performance.now();

@@ -1,7 +1,14 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
-import { moodGradeMammothApartmentDecorMesh } from "@the-mammoth/engine";
+import {
+  moodGradeMammothApartmentDecorMesh,
+  moodGradeMammothApartmentShellMesh,
+  apartmentDecorContactShadowEligible,
+  attachApartmentDecorContactShadow,
+  syncApartmentInteriorPracticalLighting,
+  type ApartmentPracticalLightsMount,
+} from "@the-mammoth/engine";
 import { UNIT_SHELL_WALL_THICKNESS_M, applyOwnedApartmentWallSurfaceMaterial } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
@@ -642,12 +649,12 @@ function disposeGroupSubtreeGeometry(group: THREE.Object3D): void {
   });
 }
 
-function cloneProp(template: THREE.Object3D): THREE.Object3D {
+function cloneProp(template: THREE.Object3D, modelRelPath: string): THREE.Object3D {
   const r = template.clone(true);
   r.userData.mammothEditorMyApartmentProp = true;
   r.traverse((o) => {
     if (o instanceof THREE.Mesh) {
-      moodGradeMammothApartmentDecorMesh(o);
+      moodGradeMammothApartmentDecorMesh(o, { modelRelPath });
       o.castShadow = false;
       o.receiveShadow = false;
     }
@@ -724,6 +731,7 @@ function placeDecorGroup(args: {
   group.clear();
   group.userData.mammothEditorMyApartmentProp = true;
   group.userData.mammothEditorMyApartmentDecorId = decor.id;
+  group.userData.mammothApartmentDecorModelRelPath = decor.modelRelPath;
   const pv = previewWorldFromNormalizedPlacement({
     spans,
     fx: decor.fx,
@@ -744,17 +752,25 @@ function placeDecorGroup(args: {
   );
   group.rotation.set(pitch, yaw, roll, "YXZ");
   group.scale.setScalar(decor.uniformScale);
-  const vis = cloneProp(template);
+  const vis = cloneProp(template, decor.modelRelPath);
   vis.scale.setScalar(editorAuthoringVisScaleForPlacedItemKind(decor.itemKind));
   group.add(vis);
   centerDecorVisualBoundsOnRoot(group);
   applyMyApartmentDecorUniformScale(group);
   clampMyApartmentDecorEulerLimits(group);
+
+  if (apartmentDecorContactShadowEligible(decor.modelRelPath)) {
+    attachApartmentDecorContactShadow(
+      group,
+      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+    );
+  }
 }
 
 export type EditorMyApartmentFurnitureMount = {
   root: THREE.Group;
   selectionGroups: Record<string, THREE.Group>;
+  practicalLights: ApartmentPracticalLightsMount | null;
   dispose: () => void;
 };
 
@@ -787,6 +803,7 @@ export function mountEditorMyApartmentFurnitureUnder(
   decorTemplates: EditorMyApartmentDecorTemplateMap,
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
+  windowScanRoot: THREE.Object3D,
 ): EditorMyApartmentFurnitureMount {
   const root = new THREE.Group();
   root.name = "editor_my_apartment_furniture";
@@ -816,14 +833,22 @@ export function mountEditorMyApartmentFurnitureUnder(
     selectionGroups[editorMyApartmentSelectedIdForWall(wall.id)] = group;
   }
 
+  const practicalLights = syncApartmentInteriorPracticalLighting({
+    lightParent: root,
+    windowScanRoot,
+    decorGroups: Object.values(selectionGroups),
+    previous: null,
+  });
+
   const dispose = (): void => {
     teardownApartmentSavedObjectGroupManipulator();
+    practicalLights.dispose();
     for (const g of Object.values(selectionGroups)) disposeGroupSubtreeGeometry(g);
     parent.remove(root);
     root.clear();
   };
 
-  return { root, selectionGroups, dispose };
+  return { root, selectionGroups, practicalLights, dispose };
 }
 
 export function updateEditorMyApartmentMountFromDoc(
@@ -831,6 +856,7 @@ export function updateEditorMyApartmentMountFromDoc(
   decorTemplates: EditorMyApartmentDecorTemplateMap,
   doc: OwnedApartmentBuiltinsDoc,
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
+  windowScanRoot: THREE.Object3D,
 ): void {
   const parent = mount.root.parent;
   if (!parent) return;
@@ -840,9 +866,11 @@ export function updateEditorMyApartmentMountFromDoc(
     decorTemplates,
     doc,
     authoringFractionMapping,
+    windowScanRoot,
   );
   mount.dispose();
   mount.root = rebuilt.root;
   mount.selectionGroups = rebuilt.selectionGroups;
+  mount.practicalLights = rebuilt.practicalLights;
   mount.dispose = rebuilt.dispose;
 }

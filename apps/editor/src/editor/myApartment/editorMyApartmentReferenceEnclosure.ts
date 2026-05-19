@@ -5,6 +5,7 @@ import {
   floorPlaceholderMeshMaterials,
 } from "@the-mammoth/world";
 import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMeshes.js";
+import { moodGradeMammothApartmentShellMesh } from "@the-mammoth/engine";
 
 function stripRaycast(mesh: THREE.Mesh): void {
   mesh.raycast = () => {};
@@ -35,6 +36,8 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
 
   enclosure.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
+    if (o.name.startsWith("unit_exterior_glass")) return;
+    moodGradeMammothApartmentShellMesh(o, "wallCeil");
     o.userData.editorOwnedApartmentReferenceOnly = true;
     stripRaycast(o);
   });

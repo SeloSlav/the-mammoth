@@ -392,6 +392,8 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
   }
   applyShellTextureAnisotropy(m);
   /** Keep tangent detail for plaster; `applyShellNormalMapToggle` would drop it and flatten the read. */
+  /** Keep in sync with {@link APARTMENT_INTERIOR_VISUAL_PROFILE.shell.wallCeilColor} in `@the-mammoth/engine`. */
+  m.color.multiply(new THREE.Color(0.9, 0.88, 0.84));
   return m;
 })();
 
@@ -425,6 +427,8 @@ const apartmentUnitFloorMaterial = (() => {
   }
   applyShellTextureAnisotropy(m);
   applyShellNormalMapToggle(m);
+  /** Keep in sync with {@link APARTMENT_INTERIOR_VISUAL_PROFILE.shell.floorColor} in `@the-mammoth/engine`. */
+  m.color.multiply(new THREE.Color(0.82, 0.78, 0.72));
   return m;
 })();
 

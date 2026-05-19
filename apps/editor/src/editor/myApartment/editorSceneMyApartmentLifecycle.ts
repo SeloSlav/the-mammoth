@@ -75,6 +75,7 @@ export function createEditorSceneMyApartmentLifecycle(
           decorTemplates,
           doc,
           authoringFractionMapping,
+          parent,
         );
       } else if (!deps.getShouldHoldReplicaResync()) {
         updateEditorMyApartmentMountFromDoc(
@@ -82,6 +83,7 @@ export function createEditorSceneMyApartmentLifecycle(
           decorTemplates,
           doc,
           authoringFractionMapping,
+          parent,
         );
       }
       if (disposed || myGen !== syncGeneration) return;
