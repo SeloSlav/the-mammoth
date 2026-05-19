@@ -65,6 +65,7 @@ import {
   resolveApartmentInteriorPropGroupVisible,
   type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
+import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
 const FOOTLOCKER_URL = "/static/models/objects/footlocker.glb";
@@ -884,6 +885,14 @@ export async function mountFpApartmentFurniture(opts: {
 
   return {
     syncVisibility: (camera, allowDemandBuild = true, containingUnitKey = null) => {
+      if (!isFpDebugRenderIsolationEnabled("apartmentFurniture")) {
+        for (let i = 0; i < unitFurnitureGroups.length; i++) {
+          const g = unitFurnitureGroups[i]!;
+          if (g.visible) g.visible = false;
+        }
+        clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
+        return;
+      }
       if (!allowDemandBuild) {
         cancelPendingDemandBuild();
       }

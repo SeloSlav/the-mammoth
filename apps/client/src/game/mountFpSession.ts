@@ -1621,11 +1621,13 @@ export async function mountFpSession(
     getFpPerfSceneCounters,
     sampleFpPerfHeavyMeshes,
     scheduleGpuTimestampResolve,
-    buildingRoot,
-    lobbyInteriorRoot: fpLobbyInteriorAuthoringRoot,
-    floorPlateGroups: perfFloorPlateGroups,
-    unitInteriorMeshes,
-    transparentBuildingMeshes,
+    renderIsolationTargets: {
+      buildingRoot,
+      scene,
+      lobbyInteriorRoot: fpLobbyInteriorAuthoringRoot,
+      transparentBuildingMeshes,
+      localViewmodelRoot: headPitch,
+    },
   });
 
   let raf = 0;

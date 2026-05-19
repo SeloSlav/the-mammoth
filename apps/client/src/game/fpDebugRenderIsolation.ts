@@ -1,6 +1,6 @@
 /**
  * Session-only render isolation toggles (M debug menu). All default ON (normal rendering).
- * Turn a subsystem OFF to see whether it drives frame cost.
+ * Turn a subsystem OFF to force-hide it for lag isolation. Never force-show — normal culling stays in charge.
  */
 
 export type FpDebugRenderIsolationFlags = {
@@ -45,6 +45,31 @@ let flags: FpDebugRenderIsolationFlags = { ...ALL_ON };
 
 export function getFpDebugRenderIsolationFlags(): Readonly<FpDebugRenderIsolationFlags> {
   return flags;
+}
+
+export function isFpDebugRenderIsolationEnabled(key: FpDebugRenderIsolationKey): boolean {
+  return flags[key];
+}
+
+/** True when any category is forced off (cheap early-out for the pre-render pass). */
+export function isFpDebugRenderIsolationSuppressingAnything(): boolean {
+  const f = flags;
+  return !(
+    f.apartmentDecor &&
+    f.apartmentFurniture &&
+    f.apartmentPracticalLights &&
+    f.environmentSky &&
+    f.environmentLighting &&
+    f.mirrors &&
+    f.exteriorTrees &&
+    f.floorPlates &&
+    f.unitInteriorShells &&
+    f.transparentMeshes &&
+    f.lobbyInterior &&
+    f.droppedItems &&
+    f.decals &&
+    f.localViewmodel
+  );
 }
 
 export function subscribeFpDebugRenderIsolation(cb: () => void): () => void {

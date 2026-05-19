@@ -57,7 +57,7 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
-import { getFpDebugRenderIsolationFlags } from "../fpDebugRenderIsolation.js";
+import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import {
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
@@ -454,7 +454,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     containingUnitKey: string | null,
     force = false,
   ): void => {
-    const lightsEnabled = getFpDebugRenderIsolationFlags().apartmentPracticalLights;
+    const lightsEnabled = isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
     if (!lightsEnabled || !containingUnitKey) {
       if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
         clearInteriorLighting();
@@ -838,6 +838,13 @@ export function mountFpApartmentDecorMeshes(opts: {
   return {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
     syncVisibility: (camera, allowDemand = true, containingUnitKey = null) => {
+      if (!isFpDebugRenderIsolationEnabled("apartmentDecor")) {
+        if (root.visible) root.visible = false;
+        clearInteriorLighting();
+        clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
+        return;
+      }
+      if (!root.visible) root.visible = true;
       camera.updateMatrixWorld();
       camera.getWorldPosition(_furnitureVisibilityCamPos);
       camera.getWorldDirection(_furnitureVisibilityCamDir);

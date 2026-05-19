@@ -1,12 +1,13 @@
 import * as THREE from "three";
-import { getFpDebugRenderIsolationFlags } from "./fpDebugRenderIsolation.js";
+import {
+  getFpDebugRenderIsolationFlags,
+  isFpDebugRenderIsolationSuppressingAnything,
+} from "./fpDebugRenderIsolation.js";
 
 export type FpDebugRenderIsolationTargets = {
   buildingRoot: THREE.Group;
   scene: THREE.Scene;
   lobbyInteriorRoot: THREE.Group | null;
-  floorPlateGroups: readonly THREE.Group[];
-  unitInteriorMeshes: readonly THREE.Mesh[];
   transparentBuildingMeshes: readonly THREE.Mesh[];
   localViewmodelRoot: THREE.Object3D;
 };
@@ -14,46 +15,61 @@ export type FpDebugRenderIsolationTargets = {
 const DECOR_ROOT_NAME = "apartment_unit_decor_root";
 const DROPPED_ITEMS_ROOT_NAME = "dropped_items";
 const DECALS_GROUP_NAME = "Decals";
-const EXTERIOR_TREE_GROVE_NAME = "exterior_procedural_tree_grove";
 
-/** Applies M-menu render isolation after normal visibility sync (forces OFF categories hidden). */
-export function applyFpDebugRenderIsolation(targets: FpDebugRenderIsolationTargets): void {
+/**
+ * Final pre-render pass: force-hide disabled categories only.
+ * Never sets `.visible = true` — avoids undoing floor-plate / frustum culling.
+ */
+export function applyFpDebugRenderIsolationForceOff(targets: FpDebugRenderIsolationTargets): void {
+  if (!isFpDebugRenderIsolationSuppressingAnything()) return;
+
   const flags = getFpDebugRenderIsolationFlags();
 
-  const decorRoot = targets.buildingRoot.getObjectByName(DECOR_ROOT_NAME);
-  if (decorRoot) decorRoot.visible = flags.apartmentDecor;
+  if (!flags.apartmentDecor) {
+    const decorRoot = targets.buildingRoot.getObjectByName(DECOR_ROOT_NAME);
+    if (decorRoot?.visible) decorRoot.visible = false;
+  }
 
-  for (let i = 0; i < targets.buildingRoot.children.length; i++) {
-    const ch = targets.buildingRoot.children[i]!;
-    if (ch.name.startsWith("apartment_furniture_plate_")) {
-      ch.visible = flags.apartmentFurniture;
+  if (!flags.apartmentFurniture) {
+    for (let i = 0; i < targets.buildingRoot.children.length; i++) {
+      const ch = targets.buildingRoot.children[i]!;
+      if (ch.name.startsWith("apartment_furniture_plate_") && ch.visible) {
+        ch.visible = false;
+      }
     }
   }
 
-  for (let i = 0; i < targets.floorPlateGroups.length; i++) {
-    targets.floorPlateGroups[i]!.visible = flags.floorPlates;
+  if (!flags.exteriorTrees) {
+    for (let i = 0; i < targets.buildingRoot.children.length; i++) {
+      const ch = targets.buildingRoot.children[i]!;
+      if (ch.userData.mammothExteriorProceduralTrees === true && ch.visible) {
+        ch.visible = false;
+      }
+    }
   }
 
-  for (let i = 0; i < targets.unitInteriorMeshes.length; i++) {
-    targets.unitInteriorMeshes[i]!.visible = flags.unitInteriorShells;
+  if (!flags.transparentMeshes) {
+    for (let i = 0; i < targets.transparentBuildingMeshes.length; i++) {
+      const mesh = targets.transparentBuildingMeshes[i]!;
+      if (mesh.visible) mesh.visible = false;
+    }
   }
 
-  for (let i = 0; i < targets.transparentBuildingMeshes.length; i++) {
-    targets.transparentBuildingMeshes[i]!.visible = flags.transparentMeshes;
+  if (!flags.lobbyInterior && targets.lobbyInteriorRoot?.visible) {
+    targets.lobbyInteriorRoot.visible = false;
   }
 
-  const treeGrove = targets.buildingRoot.getObjectByName(EXTERIOR_TREE_GROVE_NAME);
-  if (treeGrove) treeGrove.visible = flags.exteriorTrees;
-
-  if (targets.lobbyInteriorRoot) {
-    targets.lobbyInteriorRoot.visible = flags.lobbyInterior;
+  if (!flags.droppedItems) {
+    const droppedRoot = targets.scene.getObjectByName(DROPPED_ITEMS_ROOT_NAME);
+    if (droppedRoot?.visible) droppedRoot.visible = false;
   }
 
-  const droppedRoot = targets.scene.getObjectByName(DROPPED_ITEMS_ROOT_NAME);
-  if (droppedRoot) droppedRoot.visible = flags.droppedItems;
+  if (!flags.decals) {
+    const decalsRoot = targets.scene.getObjectByName(DECALS_GROUP_NAME);
+    if (decalsRoot?.visible) decalsRoot.visible = false;
+  }
 
-  const decalsRoot = targets.scene.getObjectByName(DECALS_GROUP_NAME);
-  if (decalsRoot) decalsRoot.visible = flags.decals;
-
-  targets.localViewmodelRoot.visible = flags.localViewmodel;
+  if (!flags.localViewmodel && targets.localViewmodelRoot.visible) {
+    targets.localViewmodelRoot.visible = false;
+  }
 }

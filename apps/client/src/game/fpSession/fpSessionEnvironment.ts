@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { getFpDebugRenderIsolationFlags } from "../fpDebugRenderIsolation.js";
+import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { MeshStandardNodeMaterial, NodeMaterial } from "three/webgpu";
 import {
@@ -606,12 +606,13 @@ export function attachFpSessionEnvironment(
       stairwellInteriorDark01 = 0,
     }) => {
       const t0 = performance.now();
-      const renderIso = getFpDebugRenderIsolationFlags();
+      const renderIsoSky = isFpDebugRenderIsolationEnabled("environmentSky");
+      const renderIsoLighting = isFpDebugRenderIsolationEnabled("environmentLighting");
       applyApartmentInteriorClip(_apartmentInteriorBounds);
 
-      sky.visible = renderIso.environmentSky;
-      groundPlane.visible = renderIso.environmentSky;
-      if (renderIso.environmentSky) {
+      sky.visible = renderIsoSky;
+      groundPlane.visible = renderIsoSky;
+      if (renderIsoSky) {
         sky.updateTime(nowSec);
         sky.updateSun(sunDir);
         sky.updateCamera(camera);
@@ -619,12 +620,12 @@ export function attachFpSessionEnvironment(
       }
       const tAfterSky = performance.now();
 
-      hemi.visible = renderIso.environmentLighting;
-      fill.visible = renderIso.environmentLighting;
-      dir.visible = renderIso.environmentLighting;
-      apartmentInteriorBounce.bounceHemi.visible = renderIso.environmentLighting;
-      apartmentInteriorBounce.bounceFill.visible = renderIso.environmentLighting;
-      apartmentInteriorBounce.bounceDir.visible = renderIso.environmentLighting;
+      hemi.visible = renderIsoLighting;
+      fill.visible = renderIsoLighting;
+      dir.visible = renderIsoLighting;
+      apartmentInteriorBounce.bounceHemi.visible = renderIsoLighting;
+      apartmentInteriorBounce.bounceFill.visible = renderIsoLighting;
+      apartmentInteriorBounce.bounceDir.visible = renderIsoLighting;
 
       const stair01 = THREE.MathUtils.clamp(stairwellInteriorDark01, 0, 1);
       const stairwellScale = THREE.MathUtils.lerp(
@@ -632,7 +633,7 @@ export function attachFpSessionEnvironment(
         STAIRWELL_INTERIOR_LIGHT_SCALE,
         stair01,
       );
-      const interior01 = renderIso.environmentLighting
+      const interior01 = renderIsoLighting
         ? applyMammothApartmentInteriorScene({
             scene,
             renderer,

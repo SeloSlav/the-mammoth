@@ -32,10 +32,10 @@ import {
 } from "../fpApartment/fpApartmentClaimHoldSmooth.js";
 import { attachFpSessionEnvironment } from "./fpSessionEnvironment.js";
 import {
-  applyFpDebugRenderIsolation,
+  applyFpDebugRenderIsolationForceOff,
   type FpDebugRenderIsolationTargets,
 } from "../fpDebugRenderIsolationApply.js";
-import { getFpDebugRenderIsolationFlags } from "../fpDebugRenderIsolation.js";
+import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentFurnitureResult } from "../fpApartment/fpApartmentFurniture.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
@@ -272,11 +272,7 @@ export type FpSessionMainRafFrameDeps = {
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
   /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
   getFpPerfSceneCounters: () => Omit<FpRendererInfo, "drawCalls" | "triangles">;
-  buildingRoot: THREE.Group;
-  lobbyInteriorRoot: THREE.Group | null;
-  floorPlateGroups: readonly THREE.Group[];
-  unitInteriorMeshes: readonly THREE.Mesh[];
-  transparentBuildingMeshes: readonly THREE.Mesh[];
+  renderIsolationTargets: FpDebugRenderIsolationTargets;
   /** Diagnostic sampler for top visible mesh triangle contributors on high-triangle frames. */
   sampleFpPerfHeavyMeshes: (
     nowMs: number,
@@ -651,15 +647,6 @@ export function createFpSessionMainRafFrame(
       deps.isApartmentFurnitureInteriorVisible(),
       containingResidentialUnitKey,
     );
-    applyFpDebugRenderIsolation({
-      buildingRoot: deps.buildingRoot,
-      scene: deps.scene,
-      lobbyInteriorRoot: deps.lobbyInteriorRoot,
-      floorPlateGroups: deps.floorPlateGroups,
-      unitInteriorMeshes: deps.unitInteriorMeshes,
-      transparentBuildingMeshes: deps.transparentBuildingMeshes,
-      localViewmodelRoot: deps.headPitch,
-    });
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
     const hotbarRow = deps.selectedHotbarRow();
@@ -1040,14 +1027,13 @@ export function createFpSessionMainRafFrame(
       lastCabMirrorReflectionUpdateMs = nowMs;
       lastCabMirrorReflectionIdx = primaryMirrorIdx;
     }
-    const mirrorsEnabled = getFpDebugRenderIsolationFlags().mirrors;
+    const mirrorsEnabled = isFpDebugRenderIsolationEnabled("mirrors");
     for (let i = 0; i < cabMirrors.length; i++) {
       const mirror = cabMirrors[i]!;
       if (!mirrorsEnabled) {
         mirror.surface.visible = false;
         continue;
       }
-      mirror.surface.visible = true;
       mirror.syncForCamera({
         camera: deps.camera,
         dynamicActive: i === primaryMirrorIdx,
@@ -1062,6 +1048,7 @@ export function createFpSessionMainRafFrame(
         },
       });
     }
+    applyFpDebugRenderIsolationForceOff(deps.renderIsolationTargets);
     const _t_beforeThreeRender = performance.now();
     deps.renderer.info.reset();
     const drawCallsBefore = deps.renderer.info.render.calls;

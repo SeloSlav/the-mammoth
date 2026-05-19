@@ -509,7 +509,7 @@ export function MammothDebugMenuHud() {
               Render isolation
             </div>
             <div style={{ fontSize: 11, color: THEME_TEXT_FAINT, marginBottom: 6, lineHeight: 1.4 }}>
-              Turn subsystems off to find lag sources. Applies immediately while in-world (session-only, not saved).
+              On = normal rendering. Off = force-hide that subsystem (never force-shows — existing culling still applies when On).
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <button

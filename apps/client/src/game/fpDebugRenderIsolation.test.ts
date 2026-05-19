@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   getFpDebugRenderIsolationFlags,
+  isFpDebugRenderIsolationEnabled,
+  isFpDebugRenderIsolationSuppressingAnything,
   resetFpDebugRenderIsolationFlags,
   setAllFpDebugRenderIsolationFlags,
   setFpDebugRenderIsolationFlag,
@@ -9,16 +11,15 @@ import {
 describe("fpDebugRenderIsolation", () => {
   it("defaults all subsystems to enabled", () => {
     resetFpDebugRenderIsolationFlags();
-    const flags = getFpDebugRenderIsolationFlags();
-    expect(flags.apartmentDecor).toBe(true);
-    expect(flags.environmentLighting).toBe(true);
-    expect(flags.mirrors).toBe(true);
+    expect(isFpDebugRenderIsolationSuppressingAnything()).toBe(false);
+    expect(isFpDebugRenderIsolationEnabled("exteriorTrees")).toBe(true);
   });
 
   it("toggles individual flags", () => {
     resetFpDebugRenderIsolationFlags();
     setFpDebugRenderIsolationFlag("apartmentDecor", false);
-    expect(getFpDebugRenderIsolationFlags().apartmentDecor).toBe(false);
+    expect(isFpDebugRenderIsolationEnabled("apartmentDecor")).toBe(false);
+    expect(isFpDebugRenderIsolationSuppressingAnything()).toBe(true);
     expect(getFpDebugRenderIsolationFlags().apartmentFurniture).toBe(true);
   });
 
@@ -27,5 +28,6 @@ describe("fpDebugRenderIsolation", () => {
     setAllFpDebugRenderIsolationFlags(false);
     const flags = getFpDebugRenderIsolationFlags();
     expect(Object.values(flags).every((v) => v === false)).toBe(true);
+    expect(isFpDebugRenderIsolationSuppressingAnything()).toBe(true);
   });
 });

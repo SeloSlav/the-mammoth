@@ -13,6 +13,7 @@ import type { FpElevatorFloorVisibilityBand } from "../fpElevator/fpElevatorWorl
 import type { FpResidentialUnitShellMesh } from "./fpSessionUnitInteriorShellMeshes.js";
 import type { FpSessionUnitInteriorMeshEntry } from "./fpSessionUnitInteriorShellMeshes.js";
 import { expandObjectFrustumBoundsOnce } from "./fpMeshFrustumBounds.js";
+import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 
 /**
  * Pad for the active residential shell while indoors — keeps frustum culling on but avoids wall/ceiling
@@ -438,7 +439,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
      */
     for (const ch of buildingRoot.children) {
       if (ch.userData.mammothExteriorProceduralTrees === true) {
-        ch.visible = cameraOutsideBuilding && !insideResidentialUnit;
+        ch.visible =
+          isFpDebugRenderIsolationEnabled("exteriorTrees") &&
+          cameraOutsideBuilding &&
+          !insideResidentialUnit;
       }
     }
     /**
@@ -609,14 +613,16 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
       for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
         const entry = unitInteriorMeshEntries[i]!;
-        entry.mesh.visible = fpResolveUnitInteriorMeshVisible({
-          entry,
-          unitInteriorVisible,
-          apartmentFurnitureInteriorVisible,
-          insideResidentialUnit,
-          containingResidentialUnitId,
-          containingResidentialUnitKey,
-        });
+        entry.mesh.visible =
+          isFpDebugRenderIsolationEnabled("unitInteriorShells") &&
+          fpResolveUnitInteriorMeshVisible({
+            entry,
+            unitInteriorVisible,
+            apartmentFurnitureInteriorVisible,
+            insideResidentialUnit,
+            containingResidentialUnitId,
+            containingResidentialUnitKey,
+          });
         entry.mesh.frustumCulled = true;
         if (
           fpShouldExpandContainingResidentialShellFrustumBounds({
@@ -652,11 +658,13 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastTopFloorResidentialShellMeshCount = topFloorResidentialUnitShellMeshes.length;
       for (let i = 0; i < topFloorResidentialUnitShellMeshes.length; i++) {
         const entry = topFloorResidentialUnitShellMeshes[i]!;
-        entry.mesh.visible = fpResolveTopFloorResidentialShellVisible({
-          shellUnitId: entry.unitId,
-          onlyUnitId: topFloorResidentialShellOnlyUnitId,
-          unitInteriorVisible,
-        });
+        entry.mesh.visible =
+          isFpDebugRenderIsolationEnabled("unitInteriorShells") &&
+          fpResolveTopFloorResidentialShellVisible({
+            shellUnitId: entry.unitId,
+            onlyUnitId: topFloorResidentialShellOnlyUnitId,
+            unitInteriorVisible,
+          });
       }
     }
 
@@ -729,7 +737,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
       const li = ch.userData.mammothPlateLevelIndex;
       if (typeof li === "number") {
-        ch.visible = li >= lo && li <= hi;
+        ch.visible =
+          isFpDebugRenderIsolationEnabled("floorPlates") && li >= lo && li <= hi;
       }
     }
   };
