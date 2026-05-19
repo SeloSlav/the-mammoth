@@ -5,8 +5,10 @@ export type FpSitSession = {
   sittableKey: string;
   unitKey: string;
   mode: ApartmentSittableMode;
-  /** Feet world position when sit started — restored every frame until stand. */
-  standFeet: { x: number; y: number; z: number };
+  /** Locked feet while seated/lying (seat anchor). */
+  anchorFeet: { x: number; y: number; z: number };
+  /** Feet when sit started — restored on stand. */
+  exitFeet: { x: number; y: number; z: number };
   bodyYawRad: number;
   eyeHeightM: number;
 };

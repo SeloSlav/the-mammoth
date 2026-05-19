@@ -43,5 +43,7 @@ describe("apartmentSittable", () => {
     });
     expect(spec?.mode).toBe("lie");
     expect(spec?.promptLabel).toBe("Lie down");
+    expect(spec?.interactRadiusM).toBe(1.05);
+    expect(spec?.localSeatOffset.z).toBe(0);
   });
 });

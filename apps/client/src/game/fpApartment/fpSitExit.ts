@@ -23,7 +23,7 @@ export function tryExitFpSitOnMovement(args: {
     args.mainRaf.pitch = 0;
   }
 
-  args.pos.set(sit.standFeet.x, sit.standFeet.y, sit.standFeet.z);
+  args.pos.set(sit.exitFeet.x, sit.exitFeet.y, sit.exitFeet.z);
   exitFpSit();
   return true;
 }

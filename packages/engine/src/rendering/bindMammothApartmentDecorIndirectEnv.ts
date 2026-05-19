@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "./apartmentInteriorVisualProfile.js";
-import { prepareApartmentInteriorShellMaterial } from "./apartmentDecorMoodGrade.js";
 import {
   bindMammothMetallicReadableEnv,
   mammothSpecularReadabilityWeight,
@@ -70,7 +69,12 @@ export function bindMammothResidentialShellIndirectEnv(
     for (let i = 0; i < list.length; i++) {
       const raw = list[i]!;
       if (!(raw instanceof THREE.MeshStandardMaterial)) continue;
-      const prepared = prepareApartmentInteriorShellMaterial(raw);
+      if (
+        raw.userData[MAMMOTH_METALLIC_ENV_READABLE_UD as keyof typeof raw.userData]
+      ) {
+        continue;
+      }
+      const prepared = raw.clone();
       prepared.envMap = envTexture;
       prepared.envMapIntensity = shellIndirect;
       prepared.needsUpdate = true;

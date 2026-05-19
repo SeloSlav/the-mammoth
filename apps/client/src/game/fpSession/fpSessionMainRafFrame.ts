@@ -442,7 +442,7 @@ export function createFpSessionMainRafFrame(
     let headY: number;
     const sitSession = getFpSitSession();
     if (sitSession) {
-      deps.pos.set(sitSession.standFeet.x, sitSession.standFeet.y, sitSession.standFeet.z);
+      deps.pos.set(sitSession.anchorFeet.x, sitSession.anchorFeet.y, sitSession.anchorFeet.z);
       deps.loco.velocity.set(0, 0, 0);
       mainRaf.bodyYaw = sitSession.bodyYawRad;
       headY = sitSession.eyeHeightM;
@@ -819,7 +819,14 @@ export function createFpSessionMainRafFrame(
           : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
             ? null
             : cachedApartmentDoorHud;
-      if (sitPromptHud) {
+      if (aSys?.kind === "apartment_stash") {
+        setFpPickupPrompt({
+          kind: "apartment_stash",
+          stashKey: aSys.stashKey,
+          unitKey: aSys.unitKey,
+          stashLabel: aSys.stashLabel,
+        });
+      } else if (sitPromptHud) {
         setFpPickupPrompt({
           kind: "apartment_sittable",
           sittableKey: sitPromptHud.sittableKey,
@@ -918,14 +925,7 @@ export function createFpSessionMainRafFrame(
           });
         } else if (isFpSitActive()) {
           setFpPickupPrompt(null);
-        } else if (aSys?.kind === "apartment_stash") {
-            setFpPickupPrompt({
-              kind: "apartment_stash",
-              stashKey: aSys.stashKey,
-              unitKey: aSys.unitKey,
-              stashLabel: aSys.stashLabel,
-            });
-          } else if (hitPlain) {
+        } else if (hitPlain) {
             const def = getMammothItemDef(hitPlain.defId);
             setFpPickupPrompt({
               kind: "dropped_item",

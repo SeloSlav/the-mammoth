@@ -182,11 +182,32 @@ export {
   MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD,
 } from "./rendering/bindMammothApartmentDecorIndirectEnv.js";
 export {
+  applyMammothApartmentInteriorLightLayers,
+  MAMMOTH_APARTMENT_DECOR_PROP_LAYER,
+  MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK,
+  MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER,
+  syncMammothApartmentInteriorViewLayers,
+  tagApartmentDecorPropMeshesForInteriorLighting,
+  tagMergedResidentialShellMeshes,
+  tagMeshResidentialUnitInterior,
+  tagResidentialUnitInteriorMeshesUnder,
+} from "./rendering/apartmentInteriorLayers.js";
+export {
   APARTMENT_INTERIOR_PREVIEW_BACKGROUND,
+  applyMammothApartmentInteriorLightLayersToGlobalRig,
+  applyMammothApartmentInteriorScene,
+  captureMammothApartmentInteriorSceneAtmosphere,
+  mountMammothApartmentInteriorBounceRig,
+  mountMammothApartmentInteriorSceneRig,
+  syncMammothApartmentInteriorMetallicEnv,
+  syncMammothApartmentInteriorSceneAtmosphere,
+  syncMammothApartmentInteriorSceneLighting,
+} from "./rendering/apartmentInteriorSceneLighting.js";
+export {
   captureApartmentInteriorPreviewSceneAtmosphere,
+  mountApartmentInteriorPreviewSceneLighting,
   syncApartmentInteriorPreviewSceneAtmosphere,
 } from "./rendering/apartmentInteriorPreviewSceneLighting.js";
-export { prepareApartmentInteriorShellMaterial } from "./rendering/apartmentDecorMoodGrade.js";
 export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
 export {
   moodGradeMammothApartmentDecorMaterial,
@@ -196,17 +217,14 @@ export {
 } from "./rendering/apartmentDecorMoodGrade.js";
 export {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
+  mammothApartmentInteriorBlend01,
   apartmentDecorContactShadowEligible,
   apartmentDecorEmitterKindFromModelPath,
   apartmentDecorWarmLightFixtureKind,
   type ApartmentDecorEmitterKind,
   type ApartmentUnitWorldBounds,
 } from "./rendering/apartmentInteriorVisualProfile.js";
-export {
-  mountApartmentInteriorPreviewSceneLighting,
-  syncApartmentInteriorPreviewSceneLighting,
-  type ApartmentInteriorPreviewSceneLightingMount,
-} from "./rendering/apartmentInteriorPreviewSceneLighting.js";
+export type { ApartmentInteriorPreviewSceneLightingMount } from "./rendering/apartmentInteriorPreviewSceneLighting.js";
 export {
   apartmentPracticalLightSpecFromDecor,
   apartmentPracticalLightSpecFromDecorGroup,

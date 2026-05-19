@@ -16,7 +16,8 @@ describe("fpSitSession", () => {
       sittableKey: "test",
       unitKey: "u1",
       mode: "sit",
-      standFeet: { x: 1, y: 2, z: 3 },
+      anchorFeet: { x: 1, y: 2, z: 3 },
+      exitFeet: { x: 0, y: 0, z: 0 },
       bodyYawRad: 0.5,
       eyeHeightM: 1.05,
     });
@@ -33,7 +34,8 @@ describe("fpSitSession", () => {
       sittableKey: "test",
       unitKey: "u1",
       mode: "sit",
-      standFeet: { x: 0, y: 0, z: 0 },
+      anchorFeet: { x: 0, y: 0, z: 0 },
+      exitFeet: { x: 0, y: 0, z: 0 },
       bodyYawRad: 0,
       eyeHeightM: 1,
     });

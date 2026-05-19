@@ -19,7 +19,12 @@ import {
 } from "three/tsl";
 import { SkyCloudMesh } from "sky-cloud-3d";
 import { FP_OUTDOOR_GROUND_VISUAL_Y } from "@the-mammoth/world";
-import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
+import {
+  APARTMENT_INTERIOR_VISUAL_PROFILE,
+  applyMammothApartmentInteriorLightLayersToGlobalRig,
+  applyMammothApartmentInteriorScene,
+  mountMammothApartmentInteriorBounceRig,
+} from "@the-mammoth/engine";
 import {
   FP_APARTMENT_DECOR_PROP_LAYER,
   FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
@@ -558,45 +563,30 @@ export function attachFpSessionEnvironment(
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
 
-  const BASE_HEMI_INTENSITY = 0.72;
-  const BASE_FILL_INTENSITY = 0.17;
-  const BASE_DIR_INTENSITY = 0.58;
+  const exteriorRig = APARTMENT_INTERIOR_VISUAL_PROFILE.exteriorRig;
   /**
    * Stair cores should feel visibly dimmer than the exterior overcast fill instead of sharing the same
    * exposure curve. This is a global multiplier only; apartment-local lights layer on top below.
    */
   const STAIRWELL_INTERIOR_LIGHT_SCALE = 0.62;
-  const interiorProfile = APARTMENT_INTERIOR_VISUAL_PROFILE;
 
   const hemi = new THREE.HemisphereLight(
-    0xe3e7df,
-    0xb8bcae,
-    BASE_HEMI_INTENSITY,
+    exteriorRig.hemiSky,
+    exteriorRig.hemiGround,
+    exteriorRig.hemiIntensity,
   );
-  const fill = new THREE.AmbientLight(0xdce1d8, BASE_FILL_INTENSITY);
-  const dir = new THREE.DirectionalLight(0xf0efd9, BASE_DIR_INTENSITY);
+  const fill = new THREE.AmbientLight(exteriorRig.fill, exteriorRig.fillIntensity);
+  const dir = new THREE.DirectionalLight(exteriorRig.dir, exteriorRig.dirIntensity);
   dir.position.copy(sunDir.clone().multiplyScalar(120));
+  applyMammothApartmentInteriorLightLayersToGlobalRig({ hemi, fill, dir });
   scene.add(hemi, fill, dir);
 
   /** Shared dark rig for both corridor and residential layers to avoid per-layer brightness seams. */
 
-  /** Retained as a no-op rig so interior-layer meshes still have a stable future hook if needed. */
-  const residentialInteriorSky = new THREE.HemisphereLight(0xd5d9d4, 0x857869, 0);
-  residentialInteriorSky.name = "fp_residential_interior_sky";
-  residentialInteriorSky.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  residentialInteriorSky.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
-  const residentialInteriorFill = new THREE.AmbientLight(0xb7aea1, 0);
-  residentialInteriorFill.name = "fp_residential_interior_fill";
-  residentialInteriorFill.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  residentialInteriorFill.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
-  /** Kept at intensity 0 inside units — hook only; practical lights carry the flat. */
-  const residentialInteriorDaylight = new THREE.DirectionalLight(0xe6e2d8, 0);
-  residentialInteriorDaylight.name = "fp_residential_interior_daylight";
-  residentialInteriorDaylight.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-  residentialInteriorDaylight.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);
-  residentialInteriorDaylight.position.copy(sunDir.clone().multiplyScalar(90));
-  residentialInteriorDaylight.castShadow = false;
-  scene.add(residentialInteriorSky, residentialInteriorFill, residentialInteriorDaylight);
+  const apartmentInteriorBounce = mountMammothApartmentInteriorBounceRig(
+    scene,
+    "fp_residential_interior",
+  );
 
   const disposeMaterial = (m: THREE.Material | THREE.Material[]) => {
     if (Array.isArray(m)) m.forEach((x) => x.dispose());
@@ -627,60 +617,15 @@ export function attachFpSessionEnvironment(
         STAIRWELL_INTERIOR_LIGHT_SCALE,
         stair01,
       );
-      const apartmentDark01 = THREE.MathUtils.clamp(apartmentInteriorDark01, 0, 1);
-      /**
-       * Make the abandoned-flat dimming arrive earlier in the doorway transition instead of keeping
-       * most of the brighter exterior response until the blend is nearly complete.
-       */
-      const apartmentDarkWeighted01 = Math.pow(apartmentDark01, 0.72);
-      const ambient = interiorProfile.interiorAmbient;
-      /** Inside a unit the shared rig fades to zero — only practical lights remain. */
-      const interiorGlobalLight01 = apartmentDarkWeighted01;
-      if (interiorGlobalLight01 > 0.001) {
-        hemi.color.setHex(ambient.hemiSky);
-        hemi.groundColor.setHex(ambient.hemiGround);
-        fill.color.setHex(ambient.fill);
-        dir.color.setHex(ambient.dir);
-      } else {
-        hemi.color.setHex(0xe3e7df);
-        hemi.groundColor.setHex(0xb8bcae);
-        fill.color.setHex(0xdce1d8);
-        dir.color.setHex(0xf0efd9);
-      }
-      const exteriorHemi = BASE_HEMI_INTENSITY * stairwellScale;
-      const exteriorFill = BASE_FILL_INTENSITY * stairwellScale;
-      const exteriorDir = BASE_DIR_INTENSITY * stairwellScale;
-      hemi.intensity = THREE.MathUtils.lerp(
-        exteriorHemi,
-        ambient.hemiIntensity,
-        interiorGlobalLight01,
-      );
-      fill.intensity = THREE.MathUtils.lerp(
-        exteriorFill,
-        ambient.fillIntensity,
-        interiorGlobalLight01,
-      );
-      dir.intensity = THREE.MathUtils.lerp(
-        exteriorDir,
-        ambient.dirIntensity,
-        interiorGlobalLight01,
-      );
+      applyMammothApartmentInteriorScene({
+        scene,
+        renderer,
+        interiorProximity01: apartmentInteriorDark01,
+        bounce: apartmentInteriorBounce,
+        global: { hemi, fill, dir },
+        exteriorLightScale: stairwellScale,
+      });
       dir.position.copy(sunDir).multiplyScalar(120);
-      const bounce = interiorProfile.interiorBounce;
-      residentialInteriorSky.color.setHex(bounce.hemiSky);
-      residentialInteriorSky.groundColor.setHex(bounce.hemiGround);
-      residentialInteriorSky.intensity =
-        bounce.hemiIntensity * apartmentDarkWeighted01;
-      residentialInteriorFill.color.setHex(bounce.fill);
-      residentialInteriorFill.intensity =
-        bounce.fillIntensity * apartmentDarkWeighted01;
-      residentialInteriorDaylight.intensity = 0;
-      residentialInteriorDaylight.position.copy(sunDir).multiplyScalar(90);
-      renderer.toneMappingExposure = THREE.MathUtils.lerp(
-        interiorProfile.exposure.exterior,
-        interiorProfile.exposure.interior,
-        apartmentDarkWeighted01,
-      );
       const tEnd = performance.now();
       return {
         totalMs: tEnd - t0,
@@ -710,16 +655,16 @@ export function attachFpSessionEnvironment(
         hemi,
         fill,
         dir,
-        residentialInteriorSky,
-        residentialInteriorFill,
-        residentialInteriorDaylight,
+        apartmentInteriorBounce.bounceHemi,
+        apartmentInteriorBounce.bounceFill,
+        apartmentInteriorBounce.bounceDir,
       );
       hemi.dispose();
       fill.dispose();
       dir.dispose();
-      residentialInteriorSky.dispose();
-      residentialInteriorFill.dispose();
-      residentialInteriorDaylight.dispose();
+      apartmentInteriorBounce.bounceHemi.dispose();
+      apartmentInteriorBounce.bounceFill.dispose();
+      apartmentInteriorBounce.bounceDir.dispose();
 
       scene.fog = null;
     },

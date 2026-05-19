@@ -18,7 +18,10 @@ export const APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD = Math.PI;
 export type ApartmentSittableSpec = {
   modelRelPath: string;
   mode: ApartmentSittableMode;
-  /** Seat anchor in decor root space; local +Z is the seat forward axis. */
+  /**
+   * Seat anchor in decor root space; local +Z is the seat forward axis.
+   * At runtime, X/Z are taken from the prop bounding-box center; `y` is height above bbox min Y.
+   */
   localSeatOffset: ApartmentSittableLocalOffset;
   /** Added to world forward yaw derived from local +Z. */
   bodyYawOffsetRad: number;
@@ -35,7 +38,8 @@ export type ApartmentSittableSpec = {
 const CHAIR_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/chair.glb",
   mode: "sit",
-  localSeatOffset: { x: 0, y: 0.42, z: 0.02 },
+  /** Height above mesh floor (bbox min Y); XZ come from bbox center at runtime. */
+  localSeatOffset: { x: 0, y: 0.52, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.05,
   interactRadiusM: 1.35,
@@ -46,7 +50,7 @@ const CHAIR_SPEC: ApartmentSittableSpec = {
 const SOFA_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/sofa.glb",
   mode: "sit",
-  localSeatOffset: { x: 0, y: 0.38, z: 0.08 },
+  localSeatOffset: { x: 0, y: 0.38, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.02,
   interactRadiusM: 1.5,
@@ -57,7 +61,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
 const TOILET_SPEC: ApartmentSittableSpec = {
   modelRelPath: "static/models/objects/toilet.glb",
   mode: "sit",
-  localSeatOffset: { x: 0, y: 0.48, z: 0.04 },
+  localSeatOffset: { x: 0, y: 0.48, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 1.08,
   interactRadiusM: 1.1,
@@ -68,10 +72,10 @@ const TOILET_SPEC: ApartmentSittableSpec = {
 const BED_SPEC: ApartmentSittableSpec = {
   modelRelPath: OWNED_APARTMENT_MODEL_BED,
   mode: "lie",
-  localSeatOffset: { x: 0, y: 0.38, z: -0.12 },
+  localSeatOffset: { x: 0, y: 0.5, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   eyeHeightM: 0.42,
-  interactRadiusM: 1.6,
+  interactRadiusM: 1.05,
   promptLabel: "Lie down",
   defaultPitchRad: 1.45,
 };

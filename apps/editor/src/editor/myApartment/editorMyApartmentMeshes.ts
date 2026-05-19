@@ -8,6 +8,8 @@ import {
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,
   syncApartmentInteriorPracticalLighting,
+  tagApartmentDecorPropMeshesForInteriorLighting,
+  tagResidentialUnitInteriorMeshesUnder,
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
@@ -1041,6 +1043,10 @@ export function mountEditorMyApartmentFurnitureUnder(
     });
   };
   resyncPracticalLights(windowScanRoot, unitBounds);
+
+  tagResidentialUnitInteriorMeshesUnder(parent);
+  tagResidentialUnitInteriorMeshesUnder(root);
+  tagApartmentDecorPropMeshesForInteriorLighting(root);
 
   const dispose = (): void => {
     teardownApartmentSavedObjectGroupManipulator();

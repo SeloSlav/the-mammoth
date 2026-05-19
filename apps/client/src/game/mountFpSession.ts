@@ -1357,6 +1357,20 @@ export async function mountFpSession(
         return;
       }
 
+      if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
+      if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
+
+      if (aptKey?.kind === "apartment_stash") {
+        setFpActiveStashPanel({
+          stashKey: aptKey.stashKey,
+          stashLabel: aptKey.stashLabel,
+          stashKind: aptKey.stashKind,
+        });
+        requestMammothInventoryOpenFromFp();
+        if (document.pointerLockElement) void document.exitPointerLock();
+        return;
+      }
+
       if (!isFpSitActive()) {
         const sitPrompt = getApartmentSittablePromptForSession();
         if (
@@ -1375,20 +1389,6 @@ export async function mountFpSession(
         ) {
           return;
         }
-      }
-
-      if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
-      if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
-
-      if (aptKey?.kind === "apartment_stash") {
-        setFpActiveStashPanel({
-          stashKey: aptKey.stashKey,
-          stashLabel: aptKey.stashLabel,
-          stashKind: aptKey.stashKind,
-        });
-        requestMammothInventoryOpenFromFp();
-        if (document.pointerLockElement) void document.exitPointerLock();
-        return;
       }
 
       const nearWorld = findNearestDroppedPickup(

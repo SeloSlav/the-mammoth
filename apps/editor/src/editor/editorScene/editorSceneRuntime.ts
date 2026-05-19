@@ -6,13 +6,13 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
-  bindMammothApartmentPropReadableEnv,
   createFPCamera,
-  bindMammothResidentialShellIndirectEnv,
-  captureApartmentInteriorPreviewSceneAtmosphere,
-  mountApartmentInteriorPreviewSceneLighting,
-  syncApartmentInteriorPreviewSceneAtmosphere,
-  syncApartmentInteriorPreviewSceneLighting,
+  applyMammothApartmentInteriorLightLayersToGlobalRig,
+  applyMammothApartmentInteriorScene,
+  captureMammothApartmentInteriorSceneAtmosphere,
+  mountMammothApartmentInteriorSceneRig,
+  syncMammothApartmentInteriorMetallicEnv,
+  syncMammothApartmentInteriorViewLayers,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -108,6 +108,7 @@ export async function mountEditorScene(
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const { hemi, fill, dir, grid } = addEditorSceneLighting(scene);
+  applyMammothApartmentInteriorLightLayersToGlobalRig({ hemi, fill, dir });
 
   const textureLoader = new THREE.TextureLoader();
   const { pmrem, applyEnvironment: applyPmremEnvironment } =
@@ -124,9 +125,12 @@ export async function mountEditorScene(
     fill: 0.42,
     dir: 0.46,
   } as const;
-  const apartmentInteriorPreviewLighting =
-    mountApartmentInteriorPreviewSceneLighting(scene);
-  const editorStudioAtmosphere = captureApartmentInteriorPreviewSceneAtmosphere(scene);
+  const apartmentInteriorSceneRig = mountMammothApartmentInteriorSceneRig(
+    scene,
+    "editor_apartment_interior",
+  );
+  const editorStudioAtmosphere =
+    captureMammothApartmentInteriorSceneAtmosphere(scene);
 
   const contentRoot = new THREE.Group();
 
@@ -140,29 +144,27 @@ export async function mountEditorScene(
   ): void => {
     const b = EDITOR_ORBIT_LIGHTING_BASE;
     if (shouldPreviewFpApartmentLighting(st)) {
-      scene.environmentIntensity = 1;
-      syncApartmentInteriorPreviewSceneAtmosphere(scene, true, editorStudioAtmosphere);
-      syncApartmentInteriorPreviewSceneLighting({
-        active: true,
+      applyMammothApartmentInteriorScene({
+        scene,
         renderer,
-        sharedHemi: hemi,
-        sharedFill: fill,
-        sharedDir: dir,
-        bounceHemi: apartmentInteriorPreviewLighting.bounceHemi,
-        bounceFill: apartmentInteriorPreviewLighting.bounceFill,
+        interiorProximity01: 1,
+        bounce: apartmentInteriorSceneRig,
+        global: { hemi, fill, dir },
+        atmosphereRestore: editorStudioAtmosphere,
       });
       return;
     }
 
-    syncApartmentInteriorPreviewSceneAtmosphere(scene, false, editorStudioAtmosphere);
-    syncApartmentInteriorPreviewSceneLighting({
-      active: false,
+    applyMammothApartmentInteriorScene({
+      scene,
       renderer,
-      sharedHemi: hemi,
-      sharedFill: fill,
-      sharedDir: dir,
-      bounceHemi: apartmentInteriorPreviewLighting.bounceHemi,
-      bounceFill: apartmentInteriorPreviewLighting.bounceFill,
+      interiorProximity01: 0,
+      bounce: apartmentInteriorSceneRig,
+      global: { hemi, fill, dir },
+      atmosphereRestore: editorStudioAtmosphere,
+      exteriorHemiIntensity: b.hemiIntensity,
+      exteriorFillIntensity: b.fillIntensity,
+      exteriorDirIntensity: b.dirIntensity,
     });
     renderer.toneMappingExposure = EDITOR_ORBIT_EXPOSURE;
     scene.environmentIntensity = roomEnvOn ? EDITOR_HDRI_SCENE_IBL_INTENSITY : 1;
@@ -192,19 +194,17 @@ export async function mountEditorScene(
   };
 
   const syncEditorMetallicEnv = (envTexture: THREE.Texture | null): void => {
-    if (envTexture) {
-      scene.userData.mammothFpMetallicReadableEnv = envTexture;
-    } else {
-      delete scene.userData.mammothFpMetallicReadableEnv;
-    }
-    bindMammothApartmentPropReadableEnv(contentRoot, envTexture);
+    const decorRoots: THREE.Object3D[] = [contentRoot];
     const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
-    if (apartmentFurnitureRoot) {
-      bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
-    }
-    if (structuralState.buildingRoot) {
-      bindMammothResidentialShellIndirectEnv(structuralState.buildingRoot, envTexture);
-    }
+    if (apartmentFurnitureRoot) decorRoots.push(apartmentFurnitureRoot);
+    const shellRoots: THREE.Object3D[] = [];
+    if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
+    syncMammothApartmentInteriorMetallicEnv({
+      scene,
+      envTexture,
+      decorRoots,
+      shellRoots,
+    });
   };
 
   const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
@@ -219,6 +219,10 @@ export async function mountEditorScene(
     syncEditorMetallicEnv(
       fpApartmentPreview ? pmremTexture : globalHdriOn ? scene.environment : null,
     );
+    syncMammothApartmentInteriorViewLayers(
+      { camera, raycasters: [raycaster, decorSupportRaycaster] },
+      fpApartmentPreview,
+    );
   };
 
   const syncCurrentEditorLightingAttachment = (): void => {
@@ -226,14 +230,7 @@ export async function mountEditorScene(
       scene.userData.mammothFpMetallicReadableEnv instanceof THREE.Texture
         ? scene.userData.mammothFpMetallicReadableEnv
         : scene.environment;
-    bindMammothApartmentPropReadableEnv(contentRoot, envTexture);
-    const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
-    if (apartmentFurnitureRoot) {
-      bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
-    }
-    if (structuralState.buildingRoot) {
-      bindMammothResidentialShellIndirectEnv(structuralState.buildingRoot, envTexture);
-    }
+    syncEditorMetallicEnv(envTexture);
   };
 
   contentRoot.name = "editorContentRoot";
@@ -1181,7 +1178,7 @@ export async function mountEditorScene(
     previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
     disposeMyApartmentAuthoring();
-    apartmentInteriorPreviewLighting.dispose();
+    apartmentInteriorSceneRig.dispose();
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
     applyPmremEnvironment(false);

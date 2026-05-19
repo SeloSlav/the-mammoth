@@ -26,6 +26,7 @@ describe("bindMammothResidentialShellIndirectEnv", () => {
 
     const shellMat = shell.material as THREE.MeshStandardMaterial;
     expect(shellMat).not.toBe(shellSource);
+    expect(shellMat.envMap).toBe(env);
     const corridorMat = corridor.material as THREE.MeshStandardMaterial;
     expect(shellMat.envMap).toBe(env);
     expect(shellMat.envMapIntensity).toBe(

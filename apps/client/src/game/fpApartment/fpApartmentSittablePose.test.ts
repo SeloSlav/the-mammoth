@@ -4,16 +4,22 @@ import { apartmentSittableSpecFromModelPath } from "@the-mammoth/schemas";
 import { computeApartmentSittableWorldPose } from "./fpApartmentSittablePose.js";
 
 describe("computeApartmentSittableWorldPose", () => {
-  it("maps local seat offset and yaw from group transform", () => {
+  it("maps bbox-centered seat and yaw from group transform", () => {
     const spec = apartmentSittableSpecFromModelPath("static/models/objects/chair.glb");
     expect(spec).not.toBeNull();
     const g = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 1, 0.5),
+      new THREE.MeshBasicMaterial(),
+    );
+    mesh.position.y = 0.5;
+    g.add(mesh);
     g.position.set(10, 2, 5);
     g.rotation.y = Math.PI / 2;
     const pose = computeApartmentSittableWorldPose(g, spec!);
-    expect(pose.feetX).toBeCloseTo(10 + spec!.localSeatOffset.z, 2);
+    expect(pose.feetX).toBeCloseTo(10, 2);
     expect(pose.feetY).toBeCloseTo(2 + spec!.localSeatOffset.y, 2);
-    expect(pose.feetZ).toBeCloseTo(5 - spec!.localSeatOffset.x, 2);
+    expect(pose.feetZ).toBeCloseTo(5, 2);
     expect(pose.bodyYawRad).toBeCloseTo(Math.PI / 2 + spec!.bodyYawOffsetRad, 2);
     expect(pose.mode).toBe("sit");
     expect(pose.defaultPitchRad).toBe(0);

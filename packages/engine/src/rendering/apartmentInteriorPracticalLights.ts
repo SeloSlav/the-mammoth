@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK } from "./apartmentInteriorLayers.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   type ApartmentDecorEmitterKind,
@@ -209,12 +210,8 @@ export type ApartmentPracticalLightsMount = {
   dispose: () => void;
 };
 
-/** FP decor/shell layers — practical lights must illuminate these, not just default layer 0. */
-const APARTMENT_INTERIOR_LIGHT_LAYER_MASK =
-  (1 << 0) | (1 << 3) | (1 << 5);
-
 function enableApartmentInteriorLightLayers(light: THREE.Light): void {
-  light.layers.mask = APARTMENT_INTERIOR_LIGHT_LAYER_MASK;
+  light.layers.mask = MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK;
 }
 
 function worldSpecToLightParentLocal(

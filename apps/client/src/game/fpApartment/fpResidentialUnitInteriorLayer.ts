@@ -1,24 +1,20 @@
 import * as THREE from "three";
 import {
+  tagMergedResidentialShellMeshes as tagMergedResidentialShellMeshesBase,
+  tagMeshResidentialUnitInterior as tagMeshResidentialUnitInteriorBase,
+  tagResidentialUnitInteriorMeshesUnder as tagResidentialUnitInteriorMeshesUnderBase,
+} from "@the-mammoth/engine";
+import { FP_APARTMENT_DECOR_PROP_LAYER } from "../fpSession/fpSessionConstants.js";
+import {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
   MAMMOTH_APARTMENT_PLANAR_MIRROR_USERDATA_KEY,
 } from "@the-mammoth/world";
-import {
-  FP_APARTMENT_DECOR_PROP_LAYER,
-  FP_RESIDENTIAL_UNIT_INTERIOR_LAYER,
-} from "../fpSession/fpSessionConstants.js";
 
-/** Residential shell / props only — corridor meshes stay on layer 0 so hallway lighting does not “flood” flats through open doors. */
-export function tagMeshResidentialUnitInterior(mesh: THREE.Mesh): void {
-  mesh.layers.set(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
-}
-
-/** Tag every mesh under `root` (post-merge safe — merged furniture meshes default to layer 0). */
-export function tagResidentialUnitInteriorMeshesUnder(root: THREE.Object3D): void {
-  root.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) tagMeshResidentialUnitInterior(obj);
-  });
-}
+export {
+  tagMeshResidentialUnitInteriorBase as tagMeshResidentialUnitInterior,
+  tagResidentialUnitInteriorMeshesUnderBase as tagResidentialUnitInteriorMeshesUnder,
+  tagMergedResidentialShellMeshesBase as tagMergedResidentialShellMeshes,
+};
 
 function isApartmentPlanarMirrorRenderMesh(mesh: THREE.Mesh): boolean {
   return (
@@ -46,22 +42,12 @@ function isApartmentDecorOrFurniturePropAncestor(obj: THREE.Object3D): boolean {
  * Move heavy apartment props off the interior shell layer so mirror reflection cameras can omit them.
  * Call after {@link tagResidentialUnitInteriorMeshesUnder}. Planar mirror glass stays on layer 3.
  */
+/** Planar mirror glass stays on the shell layer; other decor props move to layer 5. */
 export function tagApartmentDecorPropMeshesForMirrorExclusion(root: THREE.Object3D): void {
   root.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     if (isApartmentPlanarMirrorRenderMesh(obj)) return;
     if (!isApartmentDecorOrFurniturePropAncestor(obj)) return;
     obj.layers.set(FP_APARTMENT_DECOR_PROP_LAYER);
-  });
-}
-
-/** Merged hollow-room shells tagged `mammothPlacedObjectId` = `unit_*`. */
-export function tagMergedResidentialShellMeshes(buildingRoot: THREE.Object3D): void {
-  buildingRoot.traverse((obj) => {
-    if (!(obj instanceof THREE.Mesh)) return;
-    const pid = obj.userData.mammothPlacedObjectId;
-    if (typeof pid !== "string") return;
-    if (!pid.startsWith("unit_")) return;
-    tagMeshResidentialUnitInterior(obj);
   });
 }

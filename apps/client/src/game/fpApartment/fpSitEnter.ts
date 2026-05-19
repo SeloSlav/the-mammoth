@@ -22,6 +22,8 @@ export function tryEnterFpSitFromPrompt(args: {
   const spec = apartmentSittableSpecFromModelPath(args.prompt.modelRelPath);
   if (!spec) return false;
   const pose = computeApartmentSittableWorldPose(args.prompt.root, spec);
+  const exitFeet = { x: args.pos.x, y: args.pos.y, z: args.pos.z };
+  args.pos.set(pose.feetX, pose.feetY, pose.feetZ);
   args.loco.velocity.set(0, 0, 0);
   args.mainRaf.bodyYaw = pose.bodyYawRad;
   args.mainRaf.headLookYaw = 0;
@@ -33,7 +35,8 @@ export function tryEnterFpSitFromPrompt(args: {
     sittableKey: args.prompt.sittableKey,
     unitKey: args.prompt.unitKey,
     mode: pose.mode,
-    standFeet: { x: args.pos.x, y: args.pos.y, z: args.pos.z },
+    anchorFeet: { x: pose.feetX, y: pose.feetY, z: pose.feetZ },
+    exitFeet,
     bodyYawRad: pose.bodyYawRad,
     eyeHeightM: pose.eyeHeightM,
   });

@@ -79,22 +79,6 @@ export function moodGradeMammothApartmentDecorMesh(
     : moodGradeMammothApartmentDecorMaterial(material, opts);
 }
 
-/**
- * Clones shared shell mats so FP can tune per mesh without mutating world singletons.
- * Subtle emissive = dim plaster in zero N·L, not a scene fill light.
- */
-export function prepareApartmentInteriorShellMaterial(
-  source: THREE.MeshStandardMaterial,
-): THREE.MeshStandardMaterial {
-  const cfg = APARTMENT_INTERIOR_VISUAL_PROFILE.shell;
-  const m = source.clone();
-  m.roughness = Math.min(m.roughness, cfg.maxRoughness);
-  m.emissive.copy(m.color);
-  m.emissiveIntensity = cfg.shadowEmissiveIntensity;
-  m.needsUpdate = true;
-  return m;
-}
-
 export function moodGradeMammothApartmentShellMaterial(
   material: THREE.Material,
   slot: "wallCeil" | "floor",

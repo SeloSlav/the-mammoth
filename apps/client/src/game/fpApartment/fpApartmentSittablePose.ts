@@ -14,9 +14,12 @@ export type ApartmentSittableWorldPose = {
 const _localSeat = new THREE.Vector3();
 const _worldSeat = new THREE.Vector3();
 const _worldForward = new THREE.Vector3();
+const _boundsScratch = new THREE.Box3();
+const _sizeScratch = new THREE.Vector3();
 
 /**
  * World feet anchor and body yaw for a decor/furniture group from a sittable spec.
+ * Seat XZ use the prop world AABB center; `localSeatOffset.y` is height above AABB floor.
  * Local +Z is the seat forward axis (matches practical-light / TV convention).
  */
 export function computeApartmentSittableWorldPose(
@@ -24,13 +27,20 @@ export function computeApartmentSittableWorldPose(
   spec: ApartmentSittableSpec,
 ): ApartmentSittableWorldPose {
   group.updateMatrixWorld(true);
-  _localSeat.set(
-    spec.localSeatOffset.x,
-    spec.localSeatOffset.y,
-    spec.localSeatOffset.z,
-  );
-  group.localToWorld(_localSeat);
-  _worldSeat.copy(_localSeat);
+  _boundsScratch.setFromObject(group);
+  _boundsScratch.getSize(_sizeScratch);
+  if (_sizeScratch.lengthSq() < 1e-6) {
+    _localSeat.set(
+      spec.localSeatOffset.x,
+      spec.localSeatOffset.y,
+      spec.localSeatOffset.z,
+    );
+    group.localToWorld(_localSeat);
+    _worldSeat.copy(_localSeat);
+  } else {
+    _boundsScratch.getCenter(_worldSeat);
+    _worldSeat.y = _boundsScratch.min.y + spec.localSeatOffset.y;
+  }
 
   group.getWorldQuaternion(_worldQuatScratch);
   _worldForward.set(0, 0, 1).applyQuaternion(_worldQuatScratch);
