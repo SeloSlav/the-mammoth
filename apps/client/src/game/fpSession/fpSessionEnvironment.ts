@@ -151,13 +151,20 @@ const LUMINANCE = vec3(0.2126, 0.7152, 0.0722);
  * scales blue down — it can’t go neutral. Rewrap the final TSL `colorNode` to blend toward luma.
  */
 function wireBrutalistSkyDome(sky: SkyCloudMesh): void {
-  const mat = sky.material as NodeMaterial;
+  const raw = sky.material;
+  if (Array.isArray(raw)) {
+    return;
+  }
+  const mat = raw as unknown as NodeMaterial;
+  if (!mat.isNodeMaterial) {
+    return;
+  }
   const inner = mat.colorNode;
   if (!inner) {
     return;
   }
   // `NodeMaterial.colorNode` is vec4 in TSL; the TS union type doesn’t expose `.xyz`.
-  const c = inner as { xyz: ReturnType<typeof vec3> };
+  const c = inner as unknown as { xyz: ReturnType<typeof vec3> };
   const lumaN = dot(c.xyz, LUMINANCE);
   /**
    * The stock shader lets the densest cloud pockets fall very dark on the underside. Lift only the

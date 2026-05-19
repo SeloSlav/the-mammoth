@@ -16,7 +16,8 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     "content:gen-mamutica-floor": "node scripts/gen-mamutica-floor-doc.mjs",
-    "content:gen-walk-aabbs": "tsx scripts/gen-walk-aabbs.ts",
+    "content:gen-stair-runtime-overlay": "vite-node --config scripts/codegen.vite.config.ts scripts/gen-stair-runtime-overlay.ts",
+    "content:gen-walk-aabbs": "vite-node --config scripts/codegen.vite.config.ts scripts/gen-walk-aabbs.ts",
     "content:gen-exterior-tree-collision": "pnpm --filter @the-mammoth/world run gen-exterior-tree-collision",
     "content:gen-apartment-doors": "tsx scripts/gen-apartment-door-stock.ts",
     "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",
@@ -31,9 +32,16 @@
     "tsx": "^4.19.3",
     "turbo": "^2.9.6",
     "typescript": "~6.0.2",
+    "vite": "6.4.1",
+    "vite-node": "3.2.4",
     "wavefile": "^11.0.0"
   },
   "packageManager": "pnpm@9.0.0",
+  "pnpm": {
+    "overrides": {
+      "@types/three": "0.183.1"
+    }
+  },
   "engines": {
     "node": ">=18"
   }

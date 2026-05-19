@@ -22,7 +22,7 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.12.2",
-    "@types/three": "^0.183.1",
+    "@types/three": "0.183.1",
     "eslint": "^9.39.4",
     "three": "^0.183.2",
     "typescript": "~6.0.2",

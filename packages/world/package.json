@@ -23,7 +23,7 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/three": "^0.183.1",
+    "@types/three": "0.183.1",
     "eslint": "^9.39.4",
     "tsx": "^4.19.3",
     "three": "^0.183.2",

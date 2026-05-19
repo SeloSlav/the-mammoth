@@ -11,5 +11,5 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["gen-exterior-tree-collision.ts"]
+  "include": ["gen-exterior-tree-collision.ts", "gen-stair-runtime-overlay.ts", "gen-walk-aabbs.ts"]
 }

@@ -11,7 +11,9 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "paths": {
-      "three": ["./apps/editor/node_modules/@types/three/src/Three.WebGPU.d.ts"]
+      "three": ["./apps/editor/node_modules/@types/three/src/Three.WebGPU.d.ts"],
+      "three/webgpu": ["./apps/editor/node_modules/@types/three/src/Three.WebGPU.d.ts"],
+      "three/tsl": ["./apps/editor/node_modules/@types/three/src/Three.TSL.d.ts"]
     }
   },
   "include": ["apps/editor/src/**/*.ts", "apps/editor/src/**/*.tsx", "apps/editor/vite.config.ts"]

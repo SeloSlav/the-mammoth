@@ -62,6 +62,10 @@ fn main() {
     );
     println!(
         "cargo:rerun-if-changed={}",
+        repo_root.join("scripts/codegen.vite.config.ts").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
         repo_root
             .join("packages/world/src/stairRuntimeOverlay.ts")
             .display()
@@ -97,22 +101,42 @@ fn main() {
         repo_root.join("content/building/floors").display()
     );
 
-    let node = locate_node_executable();
-    let status = Command::new(&node)
-        .current_dir(repo_root)
-        .args([
-            "--import",
-            "tsx",
-            "scripts/gen-stair-runtime-overlay.ts",
-            out_file.to_string_lossy().as_ref(),
-        ])
-        .status()
-        .unwrap_or_else(|err| {
-            panic!(
-                "failed to spawn {} --import tsx scripts/gen-stair-runtime-overlay.ts: {err}",
-                node.display()
-            )
-        });
+    let vite_node_bin = if cfg!(windows) {
+        repo_root.join("node_modules").join(".bin").join("vite-node.cmd")
+    } else {
+        repo_root.join("node_modules").join(".bin").join("vite-node")
+    };
+    let status = if vite_node_bin.is_file() {
+        Command::new(&vite_node_bin)
+            .current_dir(&repo_root)
+            .args([
+                "--config",
+                "scripts/codegen.vite.config.ts",
+                "scripts/gen-stair-runtime-overlay.ts",
+                out_file.to_string_lossy().as_ref(),
+            ])
+            .status()
+    } else {
+        let node = locate_node_executable();
+        let cli = repo_root
+            .join("node_modules")
+            .join("vite-node")
+            .join("dist")
+            .join("cli.mjs");
+        Command::new(&node)
+            .current_dir(&repo_root)
+            .arg(&cli)
+            .args([
+                "--config",
+                "scripts/codegen.vite.config.ts",
+                "scripts/gen-stair-runtime-overlay.ts",
+                out_file.to_string_lossy().as_ref(),
+            ])
+            .status()
+    }
+    .unwrap_or_else(|err| {
+        panic!("failed to spawn vite-node for scripts/gen-stair-runtime-overlay.ts: {err}")
+    });
     if !status.success() {
         panic!("stair runtime overlay generation failed with status {status}");
     }

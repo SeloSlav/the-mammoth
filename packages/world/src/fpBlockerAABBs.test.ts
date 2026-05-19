@@ -9,7 +9,7 @@ describe("mergeCoplanarTouchingBlockerAabbs", () => {
   it("merges two boxes that share full Z span and touch on X", () => {
     const a: CollisionAabb = {
       min: [0, 0, 0],
-      max: [1, 2, 1],
+    max: [1, 2, 1],
     };
     const b: CollisionAabb = {
       min: [1, 0, 0],

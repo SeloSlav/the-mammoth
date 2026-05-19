@@ -2,13 +2,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BuildingDocSchema,
+  FloorDocSchema,
+  StairWellDefSchema,
+} from "../packages/schemas/src/index.ts";
+import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "../packages/world/src/buildingFloorStack.js";
+import {
   buildStairRuntimeOverlayForBuilding,
-  DEFAULT_BUILDING_FLOOR_SPACING_M,
-  parseBuildingDoc,
-  parseFloorDoc,
-  parseStairWellDef,
   type RuntimeStairSupportSurface,
-} from "../packages/world/src/index.ts";
+} from "../packages/world/src/stairRuntimeOverlay.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
@@ -18,17 +20,17 @@ if (!outPath) {
   throw new Error("expected output path: tsx scripts/gen-stair-runtime-overlay.ts <outPath>");
 }
 
-const building = parseBuildingDoc(
+const building = BuildingDocSchema.parse(
   JSON.parse(readFileSync(join(repoRoot, "content/building/mammoth.json"), "utf8")) as unknown,
 );
-const stairWellDef = parseStairWellDef(
+const stairWellDef = StairWellDefSchema.parse(
   JSON.parse(readFileSync(join(repoRoot, "content/elevator/stairwell.json"), "utf8")) as unknown,
 );
 const floorDir = join(repoRoot, "content/building/floors");
 const overlay = buildStairRuntimeOverlayForBuilding(
   building,
   (id) =>
-    parseFloorDoc(
+    FloorDocSchema.parse(
       JSON.parse(readFileSync(join(floorDir, `${id}.json`), "utf8")) as unknown,
     ),
   stairWellDef,
