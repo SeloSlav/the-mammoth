@@ -19,7 +19,7 @@ import {
   type MammothDroppedPickupBandOpts,
 } from "../worldRuntime/droppedItemWorldRuntime.js";
 import {
-  apartmentFurnitureInteriorsPreferOverUnitDoor,
+  apartmentClaimInteriorsPreferOverUnitDoor,
   getApartmentSystemPrompt,
   APARTMENT_CLAIM_FULL_SECS,
   formatApartmentPublicLabel,
@@ -37,7 +37,6 @@ import {
 } from "../fpDebugRenderIsolationApply.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
-import type { MountFpApartmentFurnitureResult } from "../fpApartment/fpApartmentFurniture.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
@@ -195,7 +194,6 @@ export type FpSessionMainRafFrameDeps = {
   fpCollisionDebug: ReturnType<typeof createFpCollisionDebugOverlay>;
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
-  fpApartmentFurniture: MountFpApartmentFurnitureResult;
   fpApartmentDecorMeshes: MountFpApartmentDecorMeshesResult;
   sampleWalkTopBase: (x: number, z: number, probeTopY: number) => number;
   _elevSupportEval: FpKinematicSupportSampleOpts;
@@ -249,7 +247,7 @@ export type FpSessionMainRafFrameDeps = {
     maxY: number;
     maxZ: number;
   } | null;
-  isApartmentFurnitureInteriorVisible: () => boolean;
+  isApartmentDecorInteriorVisible: () => boolean;
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
@@ -264,7 +262,7 @@ export type FpSessionMainRafFrameDeps = {
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
-  /** Center-screen ray vs sittable furniture picks (decor, then builtin bed). */
+  /** Center-screen ray vs sittable decor picks (mesh picks + decor roots). */
   getApartmentSittablePrompt: () => ApartmentSittablePrompt | null;
   /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
@@ -632,19 +630,14 @@ export function createFpSessionMainRafFrame(
 
     /**
      * Fills {@link FpSessionMainRafFrameDeps._floorVisCamWorld} / `_floorVisCamDir` and applies
-     * floor/furniture visibility before presentation work (single camera sample for the frame).
+     * floor/decor visibility before presentation work (single camera sample for the frame).
      */
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     const containingResidentialUnitKey = deps.getContainingResidentialUnitKey();
-    deps.fpApartmentFurniture.syncVisibility(
-      deps.camera,
-      deps.isApartmentFurnitureInteriorVisible(),
-      containingResidentialUnitKey,
-    );
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
-      deps.isApartmentFurnitureInteriorVisible(),
+      deps.isApartmentDecorInteriorVisible(),
       containingResidentialUnitKey,
     );
 
@@ -788,7 +781,7 @@ export function createFpSessionMainRafFrame(
           deps.fpApartmentDoors.shouldSuppressEpickup(ft, deps.camera);
         const elevatorBlocksClaimHold =
           deps.fpElevators.shouldSuppressEpickup(ft, deps.camera) &&
-          !(holdPrompt !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(holdPrompt));
+          !(holdPrompt !== null && apartmentClaimInteriorsPreferOverUnitDoor(holdPrompt));
         if (
           !elevatorBlocksClaimHold &&
           !doorSuppressBlocksClaimHold
@@ -816,13 +809,13 @@ export function createFpSessionMainRafFrame(
         sitPromptHud !== null
           ? null
           : rawElevDoorPrompt !== null &&
-              !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
+              !(aSys !== null && apartmentClaimInteriorsPreferOverUnitDoor(aSys))
             ? rawElevDoorPrompt
             : null;
       const apartmentDoorHud =
         doorPrompt !== null || sitPromptHud !== null
           ? null
-          : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
+          : apartmentClaimInteriorsPreferOverUnitDoor(aSys)
             ? null
             : cachedApartmentDoorHud;
       if (aSys?.kind === "apartment_stash") {
@@ -907,7 +900,7 @@ export function createFpSessionMainRafFrame(
             !deps.fpInteractInputBlocked() &&
             !(
               deps.fpElevators.shouldSuppressEpickup(ft, deps.camera) &&
-              !(aSys !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aSys))
+              !(aSys !== null && apartmentClaimInteriorsPreferOverUnitDoor(aSys))
             );
           if (aSys?.kind !== "apartment_claim") {
             claimHoldEligible &&= !deps.fpApartmentDoors.shouldSuppressEpickup(ft, deps.camera);

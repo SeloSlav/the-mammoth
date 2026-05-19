@@ -59,6 +59,7 @@ import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection
 import { yieldToMain } from "../fpSession/yieldToMain.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import {
+  apartmentDecorEmitterKindFromModelPath,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
@@ -88,6 +89,54 @@ import {
   resolveApartmentInteriorPropGroupVisible,
   type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
+
+type FixtureEmissiveBackup = {
+  emissive: THREE.Color;
+  emissiveIntensity: number;
+};
+
+function applyDecorFixtureEmissiveDebugIsolation(
+  groups: Iterable<THREE.Object3D>,
+  fixtureLightingEnabled: boolean,
+): void {
+  for (const group of groups) {
+    const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
+    if (typeof modelRelPath !== "string") continue;
+    if (apartmentDecorEmitterKindFromModelPath(modelRelPath) === null) continue;
+
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const material = obj.material;
+      const mats = Array.isArray(material) ? material : [material];
+      for (let i = 0; i < mats.length; i++) {
+        const mat = mats[i];
+        if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
+        if (!fixtureLightingEnabled) {
+          const backup = mat.userData.mammothFixtureEmissiveBackup as
+            | FixtureEmissiveBackup
+            | undefined;
+          if (!backup) {
+            mat.userData.mammothFixtureEmissiveBackup = {
+              emissive: mat.emissive.clone(),
+              emissiveIntensity: mat.emissiveIntensity,
+            };
+          }
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0;
+        } else {
+          const backup = mat.userData.mammothFixtureEmissiveBackup as
+            | FixtureEmissiveBackup
+            | undefined;
+          if (backup) {
+            mat.emissive.copy(backup.emissive);
+            mat.emissiveIntensity = backup.emissiveIntensity;
+          }
+        }
+        mat.needsUpdate = true;
+      }
+    });
+  }
+}
 /**
  * Content-authored decor/walls should preserve editor placement exactly, including flush placement
  * against windowed exterior faces. Keep the strict hull as a hard stop, but do not reserve extra
@@ -349,7 +398,6 @@ export function mountFpApartmentDecorMeshes(opts: {
 }): MountFpApartmentDecorMeshesResult {
   const root = new THREE.Group();
   root.name = "apartment_unit_decor_root";
-  root.userData.mammothApartmentFurnitureProp = true;
   opts.buildingRoot.add(root);
 
   const gltfLoader = new GLTFLoader();
@@ -381,6 +429,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   let practicalLightsMount: ApartmentPracticalLightsMount | null = null;
   let practicalLightsUnitKey: string | null = null;
   let practicalLightsContextUnitKey: string | null = null;
+  let practicalLightsMasterEnabled: boolean | null = null;
+  let practicalLightsDecorEnabled: boolean | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -454,16 +504,35 @@ export function mountFpApartmentDecorMeshes(opts: {
     containingUnitKey: string | null,
     force = false,
   ): void => {
-    const lightsEnabled = isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
-    if (!lightsEnabled || !containingUnitKey) {
+    const masterEnabled = isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
+    const decorFixtureLightsEnabled = isFpDebugRenderIsolationEnabled(
+      "apartmentDecorPracticalLights",
+    );
+
+    applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), decorFixtureLightsEnabled);
+
+    if (!masterEnabled || !containingUnitKey) {
       if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
         clearInteriorLighting();
       }
       practicalLightsUnitKey = containingUnitKey;
+      practicalLightsMasterEnabled = masterEnabled;
+      practicalLightsDecorEnabled = decorFixtureLightsEnabled;
       return;
     }
-    if (!force && containingUnitKey === practicalLightsUnitKey) return;
+
+    if (
+      !force &&
+      containingUnitKey === practicalLightsUnitKey &&
+      masterEnabled === practicalLightsMasterEnabled &&
+      decorFixtureLightsEnabled === practicalLightsDecorEnabled
+    ) {
+      return;
+    }
+
     practicalLightsUnitKey = containingUnitKey;
+    practicalLightsMasterEnabled = masterEnabled;
+    practicalLightsDecorEnabled = decorFixtureLightsEnabled;
 
     const bounds = unitBoundsForKey(containingUnitKey);
     practicalLightsMount = syncApartmentInteriorPracticalLighting({
@@ -471,7 +540,9 @@ export function mountFpApartmentDecorMeshes(opts: {
       windowScanRoot: opts.buildingRoot,
       maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
       unitBounds: bounds ?? undefined,
-      decorGroups: decorGroupsForUnit(containingUnitKey),
+      decorGroups: decorFixtureLightsEnabled
+        ? decorGroupsForUnit(containingUnitKey)
+        : [],
       previous: practicalLightsMount,
     });
   };
@@ -588,7 +659,6 @@ export function mountFpApartmentDecorMeshes(opts: {
         const g = new THREE.Group();
         g.name = `apartment_mirror:${m.mirrorId}`;
         g.userData.mammothApartmentMirrorAuthoring = true;
-        g.userData.mammothApartmentFurnitureProp = true;
         g.userData.mammothApartmentUnitKey = m.unit.unitKey;
         g.userData.mammothPlateLevelIndex = m.unit.level;
         g.position.set(m.posX, m.posY, m.posZ);
@@ -625,7 +695,6 @@ export function mountFpApartmentDecorMeshes(opts: {
         const g = new THREE.Group();
         g.name = `apartment_wall:${w.wallId}`;
         g.userData.mammothApartmentWallAuthoring = true;
-        g.userData.mammothApartmentFurnitureProp = true;
         g.userData.mammothApartmentUnitKey = w.unit.unitKey;
         g.userData.mammothPlateLevelIndex = w.unit.level;
         g.position.set(w.posX, w.posY, w.posZ);
@@ -689,7 +758,6 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.userData.mammothApartmentDecorProp = true;
       if (d.decorId !== null) g.userData.mammothApartmentDecorId = d.decorId;
       g.userData.mammothApartmentUnitKey = d.unit.unitKey;
-      g.userData.mammothApartmentFurnitureProp = true;
       g.userData.mammothPlateLevelIndex = d.unit.level;
       g.userData.mammothApartmentDecorModelRelPath = d.modelRelPath;
       g.userData.mammothApartmentDecorPlacedKind = d.placedKind;
@@ -746,7 +814,6 @@ export function mountFpApartmentDecorMeshes(opts: {
             wardrobePickMeshes.push(pick);
           }
           pick.userData.mammothSkipFloorGeometryMerge = true;
-          pick.userData.mammothApartmentFurnitureProp = true;
           pick.userData.mammothApartmentDecorProp = true;
           pick.userData.mammothPlateLevelIndex = d.unit.level;
           pick.layers.set(FP_INTERACTION_PICK_LAYER);
@@ -775,7 +842,6 @@ export function mountFpApartmentDecorMeshes(opts: {
         sitPick.userData.mammothApartmentSittablePlacedKind = d.placedKind;
         sitPick.userData.mammothApartmentSittableRoot = g;
         sitPick.userData.mammothSkipFloorGeometryMerge = true;
-        sitPick.userData.mammothApartmentFurnitureProp = true;
         sitPick.userData.mammothApartmentDecorProp = true;
         sitPick.userData.mammothPlateLevelIndex = d.unit.level;
         sitPick.layers.set(FP_INTERACTION_PICK_LAYER);
@@ -954,7 +1020,6 @@ export function mountFpApartmentDecorMeshes(opts: {
         playerPos,
         camera,
         decorPickMeshes: sittablePickMeshes,
-        furniturePickMeshes: [],
         decorRoots: Array.from(groupByRenderKey.values()),
         visibleScratch: visiblePickScratch,
         objectVisibleInHierarchy,

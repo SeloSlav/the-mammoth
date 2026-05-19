@@ -42,7 +42,7 @@ const _renderThreeGpu = new Float32Array(RING);
 const _visibleFloorPlates = new Float32Array(RING);
 /** Visible meshes tagged `mammothUnitInterior` (includes apartment props). */
 const _visibleUnitInteriorMeshes = new Float32Array(RING);
-/** Visible apartment prop meshes (`mammothApartmentFurnitureProp` subset). */
+/** Visible apartment decor prop meshes (`mammothApartmentDecorProp` subset). */
 const _visibleApartmentPropMeshes = new Float32Array(RING);
 /** Visible unit-interior meshes owned by a `unit_*` shell id. */
 const _visibleResidentialShellMeshes = new Float32Array(RING);
@@ -62,7 +62,7 @@ const _visibleExteriorTreeRoots = new Float32Array(RING);
 const _frustumFloorPlates = new Float32Array(RING);
 /** Frustum-intersected meshes tagged `mammothUnitInterior`. */
 const _frustumUnitInteriorMeshes = new Float32Array(RING);
-/** Frustum-intersected apartment prop meshes (`mammothApartmentFurnitureProp` subset). */
+/** Frustum-intersected apartment decor prop meshes (`mammothApartmentDecorProp` subset). */
 const _frustumApartmentPropMeshes = new Float32Array(RING);
 /** Frustum-intersected unit-interior meshes owned by a `unit_*` shell id. */
 const _frustumResidentialShellMeshes = new Float32Array(RING);

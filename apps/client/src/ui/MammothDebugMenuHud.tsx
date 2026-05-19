@@ -280,17 +280,17 @@ export function MammothDebugMenuHud() {
     {
       key: "apartmentDecor",
       label: "Apartment decor",
-      description: "Authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
+      description: "All authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
     },
     {
-      key: "apartmentFurniture",
-      label: "Apartment furniture",
-      description: "Bed, wardrobe, stove, footlocker per unit",
+      key: "apartmentDecorPracticalLights",
+      label: "Decor fixture lighting",
+      description: "Lamp/TV/ceiling practical lights + emissive glow (decor meshes stay visible)",
     },
     {
       key: "apartmentPracticalLights",
-      label: "Apartment practical lights",
-      description: "Window-linked interior spot/fill lights",
+      label: "All apartment practical lights",
+      description: "Every interior spot/point light, including window-linked fills",
     },
     {
       key: "environmentSky",

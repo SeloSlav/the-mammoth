@@ -305,7 +305,6 @@ export function getApartmentSittablePrompt(args: {
   playerPos: THREE.Vector3;
   camera: THREE.PerspectiveCamera;
   decorPickMeshes: readonly THREE.Mesh[];
-  furniturePickMeshes: readonly THREE.Mesh[];
   decorRoots: readonly THREE.Object3D[];
   visibleScratch: THREE.Mesh[];
   objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean;
@@ -320,7 +319,6 @@ export function getApartmentSittablePrompt(args: {
   };
   return (
     raycastApartmentSittablePickMeshes({ ...rayArgs, pickMeshes: args.decorPickMeshes }) ??
-    raycastApartmentSittablePickMeshes({ ...rayArgs, pickMeshes: args.furniturePickMeshes }) ??
     raycastApartmentSittableDecorMeshes({
       conn: args.conn,
       playerPos: args.playerPos,

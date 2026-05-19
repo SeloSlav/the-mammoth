@@ -74,9 +74,6 @@ function classifyMesh(mesh: THREE.Mesh): string {
   if (nearestTaggedAncestor(mesh, (obj) => obj.userData.mammothApartmentDecorProp === true)) {
     return "apartmentDecor";
   }
-  if (nearestTaggedAncestor(mesh, (obj) => obj.userData.mammothApartmentFurnitureProp === true)) {
-    return "apartmentFurniture";
-  }
   if (mesh.userData.mammothUnitInterior === true) return "unitInterior";
   if (nearestTaggedAncestor(mesh, (obj) => obj.userData.mammothExteriorProceduralTrees === true)) {
     return "exteriorTrees";

@@ -19,8 +19,9 @@ describe("fpDebugRenderIsolation", () => {
     resetFpDebugRenderIsolationFlags();
     setFpDebugRenderIsolationFlag("apartmentDecor", false);
     expect(isFpDebugRenderIsolationEnabled("apartmentDecor")).toBe(false);
+    expect(isFpDebugRenderIsolationEnabled("apartmentDecorPracticalLights")).toBe(true);
     expect(isFpDebugRenderIsolationSuppressingAnything()).toBe(true);
-    expect(getFpDebugRenderIsolationFlags().apartmentFurniture).toBe(true);
+    expect(getFpDebugRenderIsolationFlags().apartmentPracticalLights).toBe(true);
   });
 
   it("setAllFpDebugRenderIsolationFlags flips every flag", () => {

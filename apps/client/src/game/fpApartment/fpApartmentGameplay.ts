@@ -24,8 +24,7 @@ import {
 } from "./fpApartmentStashKey";
 import {
   peekOwnedApartmentBuiltinsDoc,
-  resolveApartmentDecorPoses,
-  resolveApartmentFurniturePose,
+  resolveApartmentStashAnchorXZ,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 
 /**
@@ -480,7 +479,8 @@ export function clientMayUseApartmentSittable(
   return false;
 }
 
-export function apartmentFurnitureInteriorsPreferOverUnitDoor(p: ApartmentSystemPrompt | null): boolean {
+/** Claim / wardrobe prompts win over the unit-door hold when both are in range. */
+export function apartmentClaimInteriorsPreferOverUnitDoor(p: ApartmentSystemPrompt | null): boolean {
   return (
     p?.kind === "apartment_claim" ||
     p?.kind === "apartment_claim_blocked_gear" ||
@@ -493,33 +493,7 @@ function feetVerticalOkForInteract(unitFloorY: number, y: number): boolean {
 }
 
 function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind): { x: number; z: number } {
-  const builtinsDoc = peekOwnedApartmentBuiltinsDoc();
-  if (builtinsDoc != null) {
-    const pose = resolveApartmentFurniturePose(u, builtinsDoc);
-    switch (stashKind) {
-      case APARTMENT_STASH_KIND_WARDROBE:
-        return { x: pose.wardrobe.x, z: pose.wardrobe.z };
-      case APARTMENT_STASH_KIND_STOVE:
-        return { x: pose.stove.x, z: pose.stove.z };
-      case APARTMENT_STASH_KIND_FRIDGE: {
-        const fridge = resolveApartmentDecorPoses(u, builtinsDoc).find((d) => d.itemKind === "fridge");
-        if (fridge) return { x: fridge.x, z: fridge.z };
-        return { x: pose.stove.x, z: pose.stove.z };
-      }
-      default:
-        return { x: pose.footlocker.x, z: pose.footlocker.z };
-    }
-  }
-  switch (stashKind) {
-    case APARTMENT_STASH_KIND_WARDROBE:
-      return { x: u.wardrobeX, z: u.wardrobeZ };
-    case APARTMENT_STASH_KIND_STOVE:
-      return { x: u.stoveX, z: u.stoveZ };
-    case APARTMENT_STASH_KIND_FRIDGE:
-      return { x: u.stoveX, z: u.stoveZ };
-    default:
-      return { x: u.footX, z: u.footZ };
-  }
+  return resolveApartmentStashAnchorXZ(u, peekOwnedApartmentBuiltinsDoc(), stashKind);
 }
 
 /** Horizontal cylinder around stash anchor — matches server `pose_near_horizontal_marker` + vertical slab. */

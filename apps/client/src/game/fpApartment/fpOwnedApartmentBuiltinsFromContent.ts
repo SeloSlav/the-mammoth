@@ -4,6 +4,12 @@
  */
 import type { ApartmentUnit } from "../../module_bindings/types";
 import {
+  APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_STOVE,
+  APARTMENT_STASH_KIND_WARDROBE,
+  type ApartmentStashKind,
+} from "./fpApartmentStashKey.js";
+import {
   OwnedApartmentBuiltinsDocSchema,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
@@ -16,7 +22,7 @@ let cached: OwnedApartmentBuiltinsDoc | null | undefined;
 
 /**
  * Sync read of cached authoring JSON after {@link loadOwnedApartmentBuiltinsDocFromContent} resolves.
- * Used so stash proximity matches rendered furniture fractions.
+ * Used so stash proximity matches rendered decor placements.
  */
 export function peekOwnedApartmentBuiltinsDoc(): OwnedApartmentBuiltinsDoc | null | undefined {
   return cached;
@@ -41,13 +47,6 @@ export async function loadOwnedApartmentBuiltinsDocFromContent(): Promise<OwnedA
   }
 }
 
-export type ApartmentFurniturePose = {
-  bed: { x: number; y: number; z: number; yaw: number; uniformScale: number };
-  wardrobe: { x: number; z: number; yaw: number; snapFloorY: number; uniformScale: number };
-  footlocker: { x: number; z: number; yaw: number; snapFloorY: number; uniformScale: number };
-  stove: { x: number; z: number; yaw: number; snapFloorY: number; uniformScale: number };
-};
-
 export type ApartmentDecorPose = {
   id: string;
   modelRelPath: string;
@@ -60,93 +59,6 @@ export type ApartmentDecorPose = {
   roll: number;
   uniformScale: number;
 };
-
-function firstPlacedByKind(
-  doc: OwnedApartmentBuiltinsDoc,
-  kind: OwnedApartmentPlacedItemKind,
-): OwnedApartmentPlacedItem | null {
-  const items = doc.placedItems
-    .filter((p) => p.itemKind === kind)
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
-  return items[0] ?? null;
-}
-
-/**
- * Resolves world-space furniture pose for one unit, merging authoritative `ApartmentUnit` rows with
- * optional v2 content (`placedItems`). Missing kinds fall back to replicated `ApartmentUnit` seeds.
- */
-export function resolveApartmentFurniturePose(
-  u: ApartmentUnit,
-  doc: OwnedApartmentBuiltinsDoc | null | undefined,
-): ApartmentFurniturePose {
-  const fy = u.footY;
-  const yw = u.bedYaw;
-  const fallback = {
-    bed: { x: u.bedX, y: u.bedY, z: u.bedZ, yaw: yw, uniformScale: 1 },
-    wardrobe: {
-      x: u.wardrobeX,
-      z: u.wardrobeZ,
-      yaw: yw,
-      snapFloorY: fy,
-      uniformScale: 1,
-    },
-    footlocker: { x: u.footX, z: u.footZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
-    stove: { x: u.stoveX, z: u.stoveZ, yaw: yw, snapFloorY: fy, uniformScale: 1 },
-  };
-
-  if (!doc) return fallback;
-
-  const sx = (u.boundMaxX as number) - (u.boundMinX as number);
-  const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
-  const bminx = u.boundMinX as number;
-  const bminz = u.boundMinZ as number;
-  const bminy = u.boundMinY as number;
-
-  const bedP = firstPlacedByKind(doc, "bed");
-  const wardrobeP = firstPlacedByKind(doc, "wardrobe");
-  const footP = firstPlacedByKind(doc, "footlocker");
-  const stoveP = firstPlacedByKind(doc, "stove");
-
-  return {
-    bed: bedP
-      ? {
-          x: bminx + bedP.fx * sx,
-          y: bminy + bedP.dy,
-          z: bminz + bedP.fz * sz,
-          yaw: bedP.yawRad,
-          uniformScale: bedP.uniformScale,
-        }
-      : fallback.bed,
-    wardrobe: wardrobeP
-      ? {
-          x: bminx + wardrobeP.fx * sx,
-          z: bminz + wardrobeP.fz * sz,
-          yaw: wardrobeP.yawRad,
-          snapFloorY: bminy + wardrobeP.dy,
-          uniformScale: wardrobeP.uniformScale,
-        }
-      : fallback.wardrobe,
-    footlocker: footP
-      ? {
-          x: bminx + footP.fx * sx,
-          z: bminz + footP.fz * sz,
-          yaw: footP.yawRad,
-          snapFloorY: bminy + footP.dy,
-          uniformScale: footP.uniformScale,
-        }
-      : fallback.footlocker,
-    stove: stoveP
-      ? {
-          x: bminx + stoveP.fx * sx,
-          z: bminz + stoveP.fz * sz,
-          yaw: stoveP.yawRad,
-          snapFloorY: bminy + stoveP.dy,
-          uniformScale: stoveP.uniformScale,
-        }
-      : fallback.stove,
-  };
-}
 
 /**
  * Resolves all `placedItems` from authoring JSON into world space for one unit.
@@ -173,6 +85,28 @@ export function resolveApartmentDecorPoses(
     roll: item.rollRad ?? 0,
     uniformScale: item.uniformScale,
   }));
+}
+
+/** World XZ anchor for stash proximity — authored decor poses, else replicated `ApartmentUnit` seeds. */
+export function resolveApartmentStashAnchorXZ(
+  u: ApartmentUnit,
+  doc: OwnedApartmentBuiltinsDoc | null | undefined,
+  stashKind: ApartmentStashKind,
+): { x: number; z: number } {
+  if (doc) {
+    const pose = resolveApartmentDecorPoses(u, doc).find((p) => p.itemKind === stashKind);
+    if (pose) return { x: pose.x, z: pose.z };
+  }
+  switch (stashKind) {
+    case APARTMENT_STASH_KIND_WARDROBE:
+      return { x: u.wardrobeX, z: u.wardrobeZ };
+    case APARTMENT_STASH_KIND_STOVE:
+      return { x: u.stoveX, z: u.stoveZ };
+    case APARTMENT_STASH_KIND_FRIDGE:
+      return { x: u.stoveX, z: u.stoveZ };
+    default:
+      return { x: u.footX, z: u.footZ };
+  }
 }
 
 export type ApartmentWallPose = {
@@ -253,13 +187,3 @@ export function resolveApartmentMirrorPoses(
   }));
 }
 
-/**
- * True when authoring JSON includes any gameplay-capable placed item (`itemKind !== "plain"`).
- * In that case {@link mountFpApartmentFurniture} defers meshes + stash picks to the decor pipeline.
- */
-export function ownedApartmentDocUsesNonPlainPlacedItems(
-  doc: OwnedApartmentBuiltinsDoc | null | undefined,
-): boolean {
-  if (!doc) return false;
-  return doc.placedItems.some((p) => p.itemKind !== "plain");
-}

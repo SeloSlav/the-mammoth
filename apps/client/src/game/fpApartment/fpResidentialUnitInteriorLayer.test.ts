@@ -14,7 +14,7 @@ import {
 describe("tagApartmentDecorPropMeshesForMirrorExclusion", () => {
   it("moves decor props to layer 5 but keeps mirror glass on layer 3", () => {
     const root = new THREE.Group();
-    root.userData.mammothApartmentFurnitureProp = true;
+    root.userData.mammothApartmentDecorProp = true;
 
     const chair = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
     chair.userData.mammothApartmentDecorProp = true;

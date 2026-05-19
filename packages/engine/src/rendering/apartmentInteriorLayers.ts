@@ -74,7 +74,6 @@ function isApartmentDecorOrFurniturePropAncestor(obj: THREE.Object3D): boolean {
   while (cur) {
     if (
       cur.userData.mammothApartmentDecorProp === true ||
-      cur.userData.mammothApartmentFurnitureProp === true ||
       cur.userData.mammothEditorMyApartmentProp === true
     ) {
       return true;

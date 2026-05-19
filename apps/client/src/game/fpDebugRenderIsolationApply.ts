@@ -30,15 +30,6 @@ export function applyFpDebugRenderIsolationForceOff(targets: FpDebugRenderIsolat
     if (decorRoot?.visible) decorRoot.visible = false;
   }
 
-  if (!flags.apartmentFurniture) {
-    for (let i = 0; i < targets.buildingRoot.children.length; i++) {
-      const ch = targets.buildingRoot.children[i]!;
-      if (ch.name.startsWith("apartment_furniture_plate_") && ch.visible) {
-        ch.visible = false;
-      }
-    }
-  }
-
   if (!flags.exteriorTrees) {
     for (let i = 0; i < targets.buildingRoot.children.length; i++) {
       const ch = targets.buildingRoot.children[i]!;

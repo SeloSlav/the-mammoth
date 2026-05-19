@@ -82,7 +82,7 @@ import {
   getHotbarSlotInventoryItem,
 } from "./fpHotbar/fpHotbarResolve.js";
 import {
-  apartmentFurnitureInteriorsPreferOverUnitDoor,
+  apartmentClaimInteriorsPreferOverUnitDoor,
   apartmentUnitContainingFeetSlack,
   getApartmentSystemPrompt,
 } from "./fpApartment/fpApartmentGameplay.js";
@@ -100,12 +100,7 @@ import {
 import { createFpSessionPerfDebugPostRenderHook, fpSessionTrackGpuTimestampsEnabled } from "./fpSession/fpSessionPerfDebug.js";
 import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMeshProfiler.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
-import {
-  isApartmentUnitBoundsDebugEnabled,
-  mountFpApartmentFurniture,
-} from "./fpApartment/fpApartmentFurniture.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
-import { getApartmentSittablePrompt } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
@@ -377,11 +372,10 @@ export async function mountFpSession(
   const unitInteriorMeshes = unitInteriorMeshEntries.map((entry) => entry.mesh);
   const topFloorResidentialUnitShellMeshes =
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
-  const apartmentFurnitureInteriorMeshes: THREE.Mesh[] = [];
+  const apartmentDecorInteriorMeshes: THREE.Mesh[] = [];
   const perfFloorPlateGroups = buildingRoot.children.filter(
     (ch): ch is THREE.Group =>
       ch instanceof THREE.Group &&
-      ch.userData.mammothApartmentFurnitureProp !== true &&
       typeof ch.userData.mammothPlateLevelIndex === "number",
   );
   const transparentBuildingMeshes: THREE.Mesh[] = [];
@@ -440,11 +434,11 @@ export async function mountFpSession(
     for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
       unitInteriorMeshes.push(unitInteriorMeshEntries[i]!.mesh);
     }
-    apartmentFurnitureInteriorMeshes.length = 0;
+    apartmentDecorInteriorMeshes.length = 0;
     for (let i = 0; i < unitInteriorMeshEntries.length; i++) {
       const entry = unitInteriorMeshEntries[i]!;
       if (entry.apartmentUnitKey !== null) {
-        apartmentFurnitureInteriorMeshes.push(entry.mesh);
+        apartmentDecorInteriorMeshes.push(entry.mesh);
       }
     }
     disableShadowsOnUnitInteriorMeshes();
@@ -551,8 +545,8 @@ export async function mountFpSession(
 
     let visibleApartmentPropMeshes = 0;
     let frustumApartmentPropMeshes = 0;
-    for (let i = 0; i < apartmentFurnitureInteriorMeshes.length; i++) {
-      const mesh = apartmentFurnitureInteriorMeshes[i]!;
+    for (let i = 0; i < apartmentDecorInteriorMeshes.length; i++) {
+      const mesh = apartmentDecorInteriorMeshes[i]!;
       if (!objectVisibleInHierarchy(mesh)) continue;
       visibleApartmentPropMeshes += 1;
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumApartmentPropMeshes += 1;
@@ -600,16 +594,6 @@ export async function mountFpSession(
   };
 
   const cabMirrorCollection = new FpCabMirrorCollection(scene);
-
-  const fpApartmentFurniture = await fpLoadingDbgTimed("fp_mount_apartment_furniture", () =>
-    mountFpApartmentFurniture({
-      conn,
-      scene,
-      buildingRoot,
-      showUnitBoundsDebug: isApartmentUnitBoundsDebugEnabled(),
-      onRebuilt: refreshApartmentInteriorMeshes,
-    }),
-  );
 
   const fpApartmentDecorMeshes = mountFpApartmentDecorMeshes({
     scene,
@@ -779,7 +763,7 @@ export async function mountFpSession(
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
     getContainingResidentialUnitKey,
-    isApartmentFurnitureInteriorVisible,
+    isApartmentDecorInteriorVisible,
   } =
     createFpSessionFloorPlateVisibility({
       camera,
@@ -793,7 +777,7 @@ export async function mountFpSession(
       },
       unitInteriorMeshEntries,
       topFloorResidentialUnitShellMeshes,
-      apartmentFurnitureInteriorMeshes,
+      apartmentDecorInteriorMeshes,
       fpElevators,
       stairShaftInteriorLightBounds,
       stairShaftSpecs,
@@ -839,19 +823,13 @@ export async function mountFpSession(
     }
     return true;
   };
-  const getApartmentSittablePromptForSession = () => {
-    if (!conn.identity) return null;
-    return getApartmentSittablePrompt({
-      conn,
-      playerPos: getInteractionPos(),
+  const getApartmentSittablePromptForSession = () =>
+    fpApartmentDecorMeshes.getSittablePrompt(
+      getInteractionPos(),
       camera,
-      decorPickMeshes: fpApartmentDecorMeshes.getSittablePickMeshes(),
-      furniturePickMeshes: fpApartmentFurniture.getSittablePickMeshes(),
-      decorRoots: fpApartmentDecorMeshes.getSittableDecorRoots(),
-      visibleScratch: visibleSittablePickScratch,
-      objectVisibleInHierarchy: sittablePickObjectVisible,
-    });
-  };
+      sittablePickObjectVisible,
+      visibleSittablePickScratch,
+    );
 
   const mainRaf: FpSessionMainRafState = {
     bodyYaw: cachedGuestFeet?.yaw ?? 0,
@@ -1367,7 +1345,7 @@ export async function mountFpSession(
         : null;
       /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */
       const interiorBeatElevPickup =
-        aptKey !== null && apartmentFurnitureInteriorsPreferOverUnitDoor(aptKey);
+        aptKey !== null && apartmentClaimInteriorsPreferOverUnitDoor(aptKey);
       if (suppressElevPickup && !interiorBeatElevPickup) return;
       const feetPick = getDroppedPickupAuthorityFeet();
       if (!conn.identity) {
@@ -1570,7 +1548,6 @@ export async function mountFpSession(
     fpCollisionDebug,
     fpElevators,
     fpApartmentDoors,
-    fpApartmentFurniture,
     fpApartmentDecorMeshes,
     sampleWalkTopBase,
     _elevSupportEval,
@@ -1606,7 +1583,7 @@ export async function mountFpSession(
     isInsideResidentialUnit,
     getContainingResidentialUnitKey,
     getContainingResidentialUnitBounds,
-    isApartmentFurnitureInteriorVisible,
+    isApartmentDecorInteriorVisible,
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,
@@ -1711,7 +1688,6 @@ export async function mountFpSession(
     exitFpSit();
     fpElevators.dispose();
     fpApartmentDecorMeshes.dispose();
-    fpApartmentFurniture.dispose();
     fpApartmentDoors.dispose();
     unregisterFpDebugMenuSessionSnapshot();
     setFpActiveStashPanel(null);

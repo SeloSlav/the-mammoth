@@ -6,7 +6,6 @@ import {
   OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
 import {
-  ownedApartmentDocUsesNonPlainPlacedItems,
   resolveApartmentDecorPoses,
   resolveApartmentMirrorPoses,
   resolveApartmentWallPoses,
@@ -254,48 +253,3 @@ describe("ownedApartmentPlacedItemKindHasStash", () => {
   });
 });
 
-describe("ownedApartmentDocUsesNonPlainPlacedItems", () => {
-  it("returns true when authored gameplay furniture is present", () => {
-    const doc = OwnedApartmentBuiltinsDocSchema.parse({
-      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
-      placedItems: [
-        {
-          id: "authored_bed",
-          modelRelPath: "static/models/objects/bed.glb",
-          fx: 0.5,
-          fz: 0.5,
-          dy: 0,
-          yawRad: 0,
-          pitchRad: 0,
-          rollRad: 0,
-          uniformScale: 1,
-          ignoreSupportSurfaces: false,
-          itemKind: "bed",
-        },
-      ],
-    });
-    expect(ownedApartmentDocUsesNonPlainPlacedItems(doc)).toBe(true);
-  });
-
-  it("returns false when authored items are visual-only decor", () => {
-    const doc = OwnedApartmentBuiltinsDocSchema.parse({
-      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
-      placedItems: [
-        {
-          id: "plain_decor",
-          modelRelPath: "static/models/objects/tv.glb",
-          fx: 0.5,
-          fz: 0.5,
-          dy: 0,
-          yawRad: 0,
-          pitchRad: 0,
-          rollRad: 0,
-          uniformScale: 1,
-          ignoreSupportSurfaces: false,
-          itemKind: "plain",
-        },
-      ],
-    });
-    expect(ownedApartmentDocUsesNonPlainPlacedItems(doc)).toBe(false);
-  });
-});

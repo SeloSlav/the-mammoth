@@ -132,7 +132,7 @@ export type FpSessionFloorPlateVisibilityOpts = {
   };
   unitInteriorMeshEntries: readonly FpSessionUnitInteriorMeshEntry[];
   topFloorResidentialUnitShellMeshes: readonly FpResidentialUnitShellMesh[];
-  apartmentFurnitureInteriorMeshes: readonly THREE.Mesh[];
+  apartmentDecorInteriorMeshes: readonly THREE.Mesh[];
   fpElevators: Pick<
     MountFpElevatorWorldResult,
     "getCabOccludedViewStorey" | "getFloorVisibilityBand" | "isInsideAnyCabHud"
@@ -176,7 +176,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "apartmentSwingDoor"
   >;
   unitInteriorVisible: boolean;
-  apartmentFurnitureInteriorVisible: boolean;
+  apartmentDecorInteriorVisible: boolean;
   insideResidentialUnit: boolean;
   containingResidentialUnitId: string | null;
   containingResidentialUnitKey: string | null;
@@ -192,7 +192,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   }
   if (entry.apartmentUnitKey !== null) {
     return (
-      input.apartmentFurnitureInteriorVisible &&
+      input.apartmentDecorInteriorVisible &&
       (!input.insideResidentialUnit ||
         entry.apartmentUnitKey === input.containingResidentialUnitKey)
     );
@@ -274,7 +274,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
-  isApartmentFurnitureInteriorVisible: () => boolean;
+  isApartmentDecorInteriorVisible: () => boolean;
 } {
   const {
     camera,
@@ -284,7 +284,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     storeyOpts,
     unitInteriorMeshEntries,
     topFloorResidentialUnitShellMeshes,
-    apartmentFurnitureInteriorMeshes,
+    apartmentDecorInteriorMeshes,
     fpElevators,
     stairShaftInteriorLightBounds,
     stairShaftSpecs,
@@ -308,9 +308,9 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastVisFeetSampleZ = Number.NaN;
   /** Gate writes on `unitInteriorMeshes[*].visible` to state transitions only. */
   let _lastUnitInteriorVisible = true;
-  let _lastApartmentFurnitureInteriorVisible = true;
+  let _lastApartmentDecorInteriorVisible = true;
   let _lastUnitInteriorMeshCount = -1;
-  let _lastApartmentFurnitureInteriorMeshCount = -1;
+  let _lastApartmentDecorInteriorMeshCount = -1;
   let _lastTopFloorResidentialShellOnlyUnitId: string | null = null;
   let _lastTopFloorResidentialShellMeshCount = -1;
   let _lastContainingResidentialUnitId: string | null = null;
@@ -579,10 +579,10 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
       });
     /**
-     * Furniture GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
+     * Decor GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
      * sidewalk/doorway peeks, but only build/render apartment props once the camera is inside.
      */
-    const apartmentFurnitureInteriorVisible =
+    const apartmentDecorInteriorVisible =
       fpElevators.isInsideAnyCabHud(
         feetPos.x,
         feetPos.y,
@@ -602,12 +602,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const unitInteriorVisibilityChanged =
       unitInteriorVisible !== _lastUnitInteriorVisible ||
       unitInteriorMeshEntries.length !== _lastUnitInteriorMeshCount ||
-      apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
+      apartmentDecorInteriorVisible !== _lastApartmentDecorInteriorVisible ||
       containingResidentialUnitId !== _lastContainingResidentialUnitId ||
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
-      _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
+      _lastApartmentDecorInteriorVisible = apartmentDecorInteriorVisible;
       _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
       _lastContainingResidentialUnitId = containingResidentialUnitId;
       _lastContainingResidentialUnitKey = containingResidentialUnitKey;
@@ -618,7 +618,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
           fpResolveUnitInteriorMeshVisible({
             entry,
             unitInteriorVisible,
-            apartmentFurnitureInteriorVisible,
+            apartmentDecorInteriorVisible,
             insideResidentialUnit,
             containingResidentialUnitId,
             containingResidentialUnitKey,
@@ -638,11 +638,11 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         }
       }
     }
-    const apartmentFurnitureInteriorVisibilityChanged =
-      apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
-      apartmentFurnitureInteriorMeshes.length !== _lastApartmentFurnitureInteriorMeshCount;
-    if (apartmentFurnitureInteriorVisibilityChanged) {
-      _lastApartmentFurnitureInteriorMeshCount = apartmentFurnitureInteriorMeshes.length;
+    const apartmentDecorInteriorVisibilityChanged =
+      apartmentDecorInteriorVisible !== _lastApartmentDecorInteriorVisible ||
+      apartmentDecorInteriorMeshes.length !== _lastApartmentDecorInteriorMeshCount;
+    if (apartmentDecorInteriorVisibilityChanged) {
+      _lastApartmentDecorInteriorMeshCount = apartmentDecorInteriorMeshes.length;
     }
 
     const topFloorResidentialShellOnlyUnitId = fpResolveTopFloorResidentialShellUnitFilter({
@@ -696,7 +696,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       stairDetailBand.hi === _lastStairDetailHi &&
       feetInsideStairShaft === _lastStairLitterFeetInsideShaft &&
       !unitInteriorVisibilityChanged &&
-      !apartmentFurnitureInteriorVisibilityChanged &&
+      !apartmentDecorInteriorVisibilityChanged &&
       !topFloorResidentialShellVisibilityChanged
     ) {
       return;
@@ -748,6 +748,6 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
-    isApartmentFurnitureInteriorVisible: () => _lastApartmentFurnitureInteriorVisible,
+    isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,
   };
 }
