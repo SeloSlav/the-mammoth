@@ -15,9 +15,9 @@ pub const WALK_SURFACE_FOOTPRINT_MIN_X: f32 = -14.56500;
 #[allow(dead_code)]
 pub const WALK_SURFACE_FOOTPRINT_MAX_X: f32 = 14.56500;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -80.89000;
+pub const WALK_SURFACE_FOOTPRINT_MIN_Z: f32 = -80.55000;
 #[allow(dead_code)]
-pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 80.89000;
+pub const WALK_SURFACE_FOOTPRINT_MAX_Z: f32 = 80.55000;
 
 /// AABBs split across shard files for reviewability.
 pub static WALK_SURFACE_AABB_SHARDS: &[&[([f32; 3], [f32; 3])]] = &[
