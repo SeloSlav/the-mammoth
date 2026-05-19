@@ -18,7 +18,10 @@ import {
   addWallConstantXWithHoles,
   addWallConstantZWithHoles,
   type CardinalFace,
+  type WallHoleXY,
+  type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
+import { addExteriorWallCladding } from "./hollowRoomShell.js";
 import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
 import { residentialUnitStrictBoundsXZ } from "./residentialUnitStrictBoundsXZ.js";
 
@@ -226,13 +229,14 @@ export function resolveOwnedApartmentAuthoringPreviewLayout(opts: {
 }
 
 /**
- * Holed plaster shell + tinted glass slabs — **`addHollowRoomShell` wall branches** trimmed to editor
- * needs (no floor slab, ceiling, or exterior cladding).
+ * Holed plaster shell + exterior concrete cladding + tinted glass slabs — mirrors
+ * {@link addHollowRoomShell} unit wall branches (no floor slab or ceiling).
  */
 export function appendOwnedApartmentEditorShellWalls(
   group: THREE.Group,
   plan: OwnedApartmentEditorShellPlan,
   wallMat: THREE.MeshStandardMaterial,
+  exteriorWallMat?: THREE.MeshStandardMaterial,
 ): void {
   const wt = plan.wt;
   const hx = plan.hx;
@@ -344,5 +348,38 @@ export function appendOwnedApartmentEditorShellWalls(
         s: plan.exteriorWindowHoles.s,
       },
     });
+  }
+
+  if (exteriorWallMat && plan.exteriorFaces.length > 0) {
+    const claddingE: WallHoleYZ[] = plan.exteriorFaces.includes("e")
+      ? [...(win?.e ?? [])]
+      : [...(cw?.e ?? [])];
+    const claddingW: WallHoleYZ[] = plan.exteriorFaces.includes("w")
+      ? [...(win?.w ?? [])]
+      : [...(cw?.w ?? [])];
+    const claddingN: WallHoleXY[] = plan.exteriorFaces.includes("n")
+      ? [...(win?.n ?? [])]
+      : [...(cw?.n ?? [])];
+    const claddingS: WallHoleXY[] = plan.exteriorFaces.includes("s")
+      ? [...(win?.s ?? [])]
+      : [...(cw?.s ?? [])];
+    addExteriorWallCladding(
+      group,
+      hx,
+      hz,
+      vlenX,
+      vlenZ,
+      yLo,
+      yHi,
+      plan.exteriorFaces,
+      exteriorWallMat,
+      {
+        e: claddingE,
+        w: claddingW,
+        n: claddingN,
+        s: claddingS,
+      },
+      0.05,
+    );
   }
 }

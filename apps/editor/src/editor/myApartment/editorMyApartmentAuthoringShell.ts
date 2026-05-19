@@ -9,8 +9,6 @@ import {
 } from "@the-mammoth/world";
 import { buildOwnedApartmentDerivedReferenceRoom } from "./editorMyApartmentReferenceEnclosure.js";
 import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMeshes.js";
-import { moodGradeMammothApartmentShellMesh } from "@the-mammoth/engine";
-
 /**
  * Canonical preview rectangles for fractions in {@link OwnedApartmentBuiltinsDoc} when mamutica
  * content resolves; otherwise callers fall back to the saved square `previewSizeM`.
@@ -140,7 +138,6 @@ export function buildOwnedApartmentAuthoringShell(args: {
   );
   floor.receiveShadow = false;
   floor.castShadow = false;
-  moodGradeMammothApartmentShellMesh(floor, "floor");
   root.add(floor);
 
   const edge = new THREE.LineSegments(

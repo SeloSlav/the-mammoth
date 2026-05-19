@@ -52,6 +52,13 @@ export type FpPickupPromptApartmentStash = {
   stashLabel: string;
 };
 
+export type FpPickupPromptApartmentSittable = {
+  kind: "apartment_sittable";
+  sittableKey: string;
+  unitKey: string;
+  label: string;
+};
+
 export type FpPickupPromptState =
   | FpPickupPromptDroppedItem
   | FpPickupPromptElevatorExteriorDoor
@@ -60,6 +67,7 @@ export type FpPickupPromptState =
   | FpPickupPromptApartmentClaimBlockedGear
   | FpPickupPromptApartmentClaimBlockedGuest
   | FpPickupPromptApartmentStash
+  | FpPickupPromptApartmentSittable
   | null;
 
 const listeners = new Set<() => void>();
@@ -106,6 +114,9 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "apartment_stash" && b.kind === "apartment_stash") {
     return a.stashKey === b.stashKey;
+  }
+  if (a.kind === "apartment_sittable" && b.kind === "apartment_sittable") {
+    return a.sittableKey === b.sittableKey;
   }
   return false;
 }

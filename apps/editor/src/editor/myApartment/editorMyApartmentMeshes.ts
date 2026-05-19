@@ -3,7 +3,6 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import {
   moodGradeMammothApartmentDecorMesh,
-  moodGradeMammothApartmentShellMesh,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,

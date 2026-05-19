@@ -5,7 +5,6 @@ import {
   floorPlaceholderMeshMaterials,
 } from "@the-mammoth/world";
 import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMeshes.js";
-import { moodGradeMammothApartmentShellMesh } from "@the-mammoth/engine";
 
 function stripRaycast(mesh: THREE.Mesh): void {
   mesh.raycast = () => {};
@@ -29,15 +28,21 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
 
   enclosure.position.set(hx, yLift, hz);
 
-  /** Same PBR plaster as playable unit hollow shells (`matsFor("unit").wall`). Façade glass unchanged. */
+  /** Interior plaster + exterior concrete cladding — same pair as `matsFor("unit")` in hollow shells. */
   const wallMat = floorPlaceholderMeshMaterials.unitWall;
+  const exteriorWallMat = floorPlaceholderMeshMaterials.unitExteriorWall;
 
-  appendOwnedApartmentEditorShellWalls(enclosure, opts.shellPlan, wallMat);
+  appendOwnedApartmentEditorShellWalls(
+    enclosure,
+    opts.shellPlan,
+    wallMat,
+    exteriorWallMat,
+  );
 
+  /** Shell mats from `@the-mammoth/world` already bake interior palette tints at creation — do not
+   *  mood-grade again here or PBR albedo reads as flat brown. */
   enclosure.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
-    if (o.name.startsWith("unit_exterior_glass")) return;
-    moodGradeMammothApartmentShellMesh(o, "wallCeil");
     o.userData.editorOwnedApartmentReferenceOnly = true;
     stripRaycast(o);
   });

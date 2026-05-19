@@ -12,3 +12,4 @@ export * from "./stairWellDef.js";
 export * from "./ownedApartmentBuiltins.js";
 export * from "./apartmentStashRules.js";
 export * from "./apartmentAuthoringAssetVisScale.js";
+export * from "./apartmentSittable.js";

@@ -14,6 +14,7 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
+  OWNED_APARTMENT_MODEL_BED,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import type { ApartmentUnit } from "../../module_bindings/types";
@@ -240,6 +241,7 @@ export type MountFpApartmentFurnitureResult = {
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
   ) => string | null;
+  getSittablePickMeshes: () => readonly THREE.Mesh[];
 };
 
 type ApartmentFurnitureTemplates = {
@@ -254,6 +256,7 @@ type ApartmentFurnitureLevelState = {
   unitGroups: THREE.Group[];
   stashPickMeshes: THREE.Mesh[];
   wardrobePickMeshes: THREE.Mesh[];
+  sittablePickMeshes: THREE.Mesh[];
 };
 
 type ApartmentFurnitureLevelBuildJob = {
@@ -264,6 +267,7 @@ type ApartmentFurnitureLevelBuildJob = {
   unitGroups: THREE.Group[];
   stashPickMeshes: THREE.Mesh[];
   wardrobePickMeshes: THREE.Mesh[];
+  sittablePickMeshes: THREE.Mesh[];
 };
 
 export async function mountFpApartmentFurniture(opts: {
@@ -284,6 +288,7 @@ export async function mountFpApartmentFurniture(opts: {
   const unitFurnitureGroups: THREE.Group[] = [];
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
+  const sittablePickMeshes: THREE.Mesh[] = [];
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -354,6 +359,7 @@ export async function mountFpApartmentFurniture(opts: {
     unitFurnitureGroups.length = 0;
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
+    sittablePickMeshes.length = 0;
     builtLevels.clear();
     emptyBuiltLevels.clear();
   };
@@ -364,6 +370,7 @@ export async function mountFpApartmentFurniture(opts: {
     job.unitGroups.length = 0;
     job.stashPickMeshes.length = 0;
     job.wardrobePickMeshes.length = 0;
+    job.sittablePickMeshes.length = 0;
   };
 
   const createFloorGroup = (levelIdx: number): THREE.Group => {
@@ -624,6 +631,29 @@ export async function mountFpApartmentFurniture(opts: {
       xzClampOptionsForFurnitureClamp(useAuthoringClamp, BED_BOUNDS_INSET_M),
     );
     unitGroup.add(b);
+    b.updateMatrixWorld(true);
+    const bedBounds = new THREE.Box3().setFromObject(b);
+    const bedPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+    bedBounds.getSize(_footlockerPickSizeScratch);
+    bedBounds.getCenter(_footlockerPickCenterScratch);
+    const bedSittableKey = `builtin_bed:${u.unitKey}`;
+    bedPick.name = `apartment_bed_sittable_pick:${u.unitKey}`;
+    bedPick.position.copy(_footlockerPickCenterScratch);
+    bedPick.scale.set(
+      Math.max(0.5, _footlockerPickSizeScratch.x),
+      Math.max(0.35, _footlockerPickSizeScratch.y),
+      Math.max(0.5, _footlockerPickSizeScratch.z),
+    );
+    bedPick.userData.mammothApartmentSittableKey = bedSittableKey;
+    bedPick.userData.mammothApartmentSittableUnitKey = u.unitKey;
+    bedPick.userData.mammothApartmentSittableModelRelPath = OWNED_APARTMENT_MODEL_BED;
+    bedPick.userData.mammothApartmentSittableRoot = b;
+    bedPick.userData.mammothSkipFloorGeometryMerge = true;
+    bedPick.userData.mammothApartmentFurnitureProp = true;
+    bedPick.userData.mammothPlateLevelIndex = levelIdx;
+    bedPick.layers.set(FP_INTERACTION_PICK_LAYER);
+    unitGroup.add(bedPick);
+    build.sittablePickMeshes.push(bedPick);
 
     await yieldToMain();
     if (disposed || furnitureBuildEpoch !== epoch) return;
@@ -681,11 +711,13 @@ export async function mountFpApartmentFurniture(opts: {
       unitGroups: build.unitGroups,
       stashPickMeshes: build.stashPickMeshes,
       wardrobePickMeshes: build.wardrobePickMeshes,
+      sittablePickMeshes: build.sittablePickMeshes,
     });
     opts.buildingRoot.updateMatrixWorld(true);
     unitFurnitureGroups.push(...build.unitGroups);
     stashPickMeshes.push(...build.stashPickMeshes);
     wardrobePickMeshes.push(...build.wardrobePickMeshes);
+    sittablePickMeshes.push(...build.sittablePickMeshes);
     opts.onRebuilt?.();
   };
 
@@ -707,6 +739,7 @@ export async function mountFpApartmentFurniture(opts: {
         unitGroups: [],
         stashPickMeshes: [],
         wardrobePickMeshes: [],
+        sittablePickMeshes: [],
       };
     }
     return null;
@@ -933,6 +966,7 @@ export async function mountFpApartmentFurniture(opts: {
       }
       return null;
     },
+    getSittablePickMeshes: () => sittablePickMeshes,
     dispose: () => {
       disposed = true;
       bumpFurnitureBuildEpoch();

@@ -455,6 +455,31 @@ export type ApartmentSystemPrompt =
   | ApartmentStashPrompt;
 
 /** Claim HUD should beat overlapping residential door prompts because claiming is a hold action. */
+/**
+ * Viewer may sit on furniture in their own claimed unit when feet are in the hull and near the seat anchor.
+ */
+export function clientMayUseApartmentSittable(
+  conn: DbConnection,
+  identity: Identity,
+  unitKey: string,
+  pose: { x: number; y: number; z: number },
+  anchorX: number,
+  anchorZ: number,
+  interactRadiusM: number,
+): boolean {
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.unitKey !== unitKey) continue;
+    if (!residentInteriorPropsVisibleForViewer(conn, u)) return false;
+    if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
+    const dx = pose.x - anchorX;
+    const dz = pose.z - anchorZ;
+    if (dx * dx + dz * dz > interactRadiusM * interactRadiusM) return false;
+    return feetVerticalOkForInteract(u.footY, pose.y);
+  }
+  return false;
+}
+
 export function apartmentFurnitureInteriorsPreferOverUnitDoor(p: ApartmentSystemPrompt | null): boolean {
   return (
     p?.kind === "apartment_claim" ||

@@ -22,6 +22,7 @@ import {
   apartmentPlacedItemKindFromDecorItemKind,
   ownedApartmentPlacedItemKindHasStash,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
+  apartmentSittableSpecForPlacedItem,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
@@ -310,6 +311,7 @@ export type MountFpApartmentDecorMeshesResult = {
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
   ) => string | null;
+  getSittablePickMeshes: () => readonly THREE.Mesh[];
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -336,6 +338,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const _stashPickCenterScratch = new THREE.Vector3();
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
+  const sittablePickMeshes: THREE.Mesh[] = [];
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -447,6 +450,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const clearAll = () => {
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
+    sittablePickMeshes.length = 0;
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
@@ -724,6 +728,41 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.updateMatrixWorld(true);
         }
       }
+      const sitSpec = apartmentSittableSpecForPlacedItem({
+        modelRelPath: d.modelRelPath,
+        itemKind: d.placedKind,
+      });
+      if (sitSpec) {
+        g.updateMatrixWorld(true);
+        const sitBounds = new THREE.Box3().setFromObject(g);
+        const sitPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+        sitBounds.getSize(_stashPickSizeScratch);
+        sitBounds.getCenter(_stashPickCenterScratch);
+        const sittableKey =
+          d.decorId !== null
+            ? `decor:${d.decorId.toString()}`
+            : `content:${d.unit.unitKey}:${d.renderKey}`;
+        sitPick.name = `apartment_sittable_pick:${sittableKey}`;
+        sitPick.position.copy(_stashPickCenterScratch);
+        sitPick.scale.set(
+          Math.max(0.35, _stashPickSizeScratch.x),
+          Math.max(0.25, _stashPickSizeScratch.y),
+          Math.max(0.35, _stashPickSizeScratch.z),
+        );
+        sitPick.userData.mammothApartmentSittableKey = sittableKey;
+        sitPick.userData.mammothApartmentSittableUnitKey = d.unit.unitKey;
+        sitPick.userData.mammothApartmentSittableModelRelPath = sitSpec.modelRelPath;
+        sitPick.userData.mammothApartmentSittablePlacedKind = d.placedKind;
+        sitPick.userData.mammothApartmentSittableRoot = g;
+        sitPick.userData.mammothSkipFloorGeometryMerge = true;
+        sitPick.userData.mammothApartmentFurnitureProp = true;
+        sitPick.userData.mammothApartmentDecorProp = true;
+        sitPick.userData.mammothPlateLevelIndex = d.unit.level;
+        sitPick.layers.set(FP_INTERACTION_PICK_LAYER);
+        g.add(sitPick);
+        sittablePickMeshes.push(sitPick);
+        g.updateMatrixWorld(true);
+      }
       const bbox = new THREE.Box3().setFromObject(g);
       bbox.expandByScalar(FURNITURE_VISIBILITY_FRUSTUM_MARGIN_M);
       g.userData.mammothApartmentDecorWorldBounds = bbox;
@@ -850,6 +889,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       }
       return null;
     },
+    getSittablePickMeshes: () => sittablePickMeshes,
     dispose: () => {
       disposed = true;
       buildEpoch++;

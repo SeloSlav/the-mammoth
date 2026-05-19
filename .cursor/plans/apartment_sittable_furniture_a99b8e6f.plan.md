@@ -4,25 +4,25 @@ overview: Add client-side "Press E to sit/lie" for chair, sofa, toilet, and bed 
 todos:
   - id: schema-catalog
     content: Add sittable model catalog + helpers in packages/schemas with unit tests
-    status: pending
+    status: completed
   - id: pose-helper
     content: Implement fpApartmentSittablePose.ts (world feet, body yaw, lie pitch)
-    status: pending
+    status: completed
   - id: pick-meshes
     content: Add sittable pick meshes + getSittablePrompt on decor and furniture bed mounts
-    status: pending
+    status: completed
   - id: sit-session
     content: Implement fpSitSession enter/exit/WASD + mountFpSession KeyE hook
-    status: pending
+    status: completed
   - id: raf-camera
     content: Integrate sit state in fpSessionMainRafFrame (block move, eye height, look, exit)
-    status: pending
+    status: completed
   - id: hud-prompt
     content: Extend fpPickupPrompt + MammothPickupPromptHud for apartment_sittable
-    status: pending
+    status: completed
   - id: tests
     content: Add pose/session/prompt tests; manual tune offsets in owned apartment
-    status: pending
+    status: completed
 isProject: false
 ---
 

@@ -36,6 +36,13 @@ import type { MountFpApartmentFurnitureResult } from "../fpApartment/fpApartment
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
+import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
+import {
+  fpSitBlocksLocomotion,
+  getFpSitSession,
+  isFpSitActive,
+} from "../fpApartment/fpSitSession.js";
+import { tryExitFpSitOnMovement } from "../fpApartment/fpSitExit.js";
 import { LocalGameAudio } from "../audio/localGameAudio.js";
 import { WorldProximityAudio } from "../audio/worldProximityAudio.js";
 import { ElevatorCabMotionAudio } from "../audio/elevatorCabMotionAudio.js";
@@ -246,6 +253,8 @@ export type FpSessionMainRafFrameDeps = {
   apartmentClaimsAllowed: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
+  /** Center-screen ray vs sittable furniture picks (decor, then builtin bed). */
+  getApartmentSittablePrompt: () => ApartmentSittablePrompt | null;
   /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
@@ -307,7 +316,8 @@ export function createFpSessionMainRafFrame(
     // scroll / slot change cannot outrun `set_active_hotbar_slot` (previously synced at frame end).
     deps.syncActiveHotbarSlotToServer();
 
-    const locomotionBlockedEarly = deps.fpLocomotionInputBlocked();
+    const locomotionBlockedEarly =
+      deps.fpLocomotionInputBlocked() || fpSitBlocksLocomotion();
     const flushCombatFacingIntent = (): void => {
       deps.sendMoveIntent(
         {
@@ -380,7 +390,13 @@ export function createFpSessionMainRafFrame(
       }
     }
 
-    const locomotionBlocked = deps.fpLocomotionInputBlocked();
+    tryExitFpSitOnMovement({
+      keys: deps.keys,
+      mainRaf,
+      pos: deps.pos,
+    });
+
+    const locomotionBlocked = deps.fpLocomotionInputBlocked() || fpSitBlocksLocomotion();
     deps._input.forward = locomotionBlocked ? false : deps.keys.has("KeyW");
     deps._input.backward = locomotionBlocked ? false : deps.keys.has("KeyS");
     deps._input.left = locomotionBlocked ? false : deps.keys.has("KeyA");
@@ -403,7 +419,16 @@ export function createFpSessionMainRafFrame(
     deps._mainStepOpts.crouch = mainRaf.crouchToggle;
     deps._mainStepOpts.jumpPressedThisFrame = jumpQueuedBeforeStep && !jumpBlockedInElevatorCab;
     deps._mainStepOpts.bodyYawRad = mainRaf.bodyYaw;
-    const headY = deps.simulatePredictedPlayerStep(deps._mainStepOpts);
+    let headY: number;
+    const sitSession = getFpSitSession();
+    if (sitSession) {
+      deps.pos.set(sitSession.anchor.x, sitSession.anchor.y, sitSession.anchor.z);
+      deps.loco.velocity.set(0, 0, 0);
+      mainRaf.bodyYaw = sitSession.bodyYawRad;
+      headY = sitSession.eyeHeightM;
+    } else {
+      headY = deps.simulatePredictedPlayerStep(deps._mainStepOpts);
+    }
     const _t_physicsEnd = performance.now();
     deps.fpCollisionDebug.update(deps.pos, deps.loco.velocity, {
       crouch: mainRaf.crouchToggle,
@@ -510,8 +535,9 @@ export function createFpSessionMainRafFrame(
     deps.headPivot.position.y = headY;
     deps.headPivot.rotation.set(0, 0, 0);
     const freeLook =
-      !deps.fpInteractInputBlocked() &&
-      (deps.keys.has("AltLeft") || deps.keys.has("AltRight"));
+      isFpSitActive() ||
+      (!deps.fpInteractInputBlocked() &&
+        (deps.keys.has("AltLeft") || deps.keys.has("AltRight")));
     deps.headPitch.rotation.x = freeLook ? 0 : mainRaf.pitch;
     deps.headCameraPitch.rotation.x = mainRaf.pitch;
     deps.headFreeLook.rotation.y = mainRaf.headLookYaw;
@@ -534,6 +560,7 @@ export function createFpSessionMainRafFrame(
       deps.loco.grounded &&
       !mainRaf.crouchToggle &&
       !freeLook &&
+      !isFpSitActive() &&
       hs > 0.12 &&
       !suppressHeadBobForElev
     ) {
@@ -831,16 +858,28 @@ export function createFpSessionMainRafFrame(
             unitKey: aSys.unitKey,
             stashLabel: aSys.stashLabel,
           });
-        } else if (hitPlain) {
-          const def = getMammothItemDef(hitPlain.defId);
-          setFpPickupPrompt({
-            kind: "dropped_item",
-            droppedItemIdStr: hitPlain.droppedItemId.toString(),
-            displayName: def?.displayName ?? hitPlain.defId,
-            worldAnchorSpawn: false,
-          });
-        } else {
+        } else if (isFpSitActive()) {
           setFpPickupPrompt(null);
+        } else {
+          const sitPrompt = deps.getApartmentSittablePrompt();
+          if (sitPrompt) {
+            setFpPickupPrompt({
+              kind: "apartment_sittable",
+              sittableKey: sitPrompt.sittableKey,
+              unitKey: sitPrompt.unitKey,
+              label: sitPrompt.label,
+            });
+          } else if (hitPlain) {
+            const def = getMammothItemDef(hitPlain.defId);
+            setFpPickupPrompt({
+              kind: "dropped_item",
+              droppedItemIdStr: hitPlain.droppedItemId.toString(),
+              displayName: def?.displayName ?? hitPlain.defId,
+              worldAnchorSpawn: false,
+            });
+          } else {
+            setFpPickupPrompt(null);
+          }
         }
       }
       claimHoldSmoothState = nextClaimSmoothCarry;

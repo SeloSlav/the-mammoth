@@ -74,7 +74,7 @@ function markNewChildrenNoCollision(
     group.children[i]!.userData.mammothNoCollision = true;
   }
 }
-function addExteriorWallCladding(
+export function addExteriorWallCladding(
   group: THREE.Group,
   hx: number,
   hz: number,

@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { FloorDocSchema } from "@the-mammoth/schemas";
 import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
-import { resolveOwnedApartmentAuthoringPreviewLayout } from "./ownedApartmentEditorShell.js";
+import {
+  appendOwnedApartmentEditorShellWalls,
+  resolveOwnedApartmentAuthoringPreviewLayout,
+} from "./ownedApartmentEditorShell.js";
+import { floorPlaceholderMeshMaterials } from "./floorPlaceholderMeshMaterials.js";
 
 function readTypicalFloorDoc() {
   const raw = JSON.parse(
@@ -40,5 +45,36 @@ describe("owned apartment editor shell (game-derived)", () => {
       (win!.n?.length ?? 0) +
       (win!.s?.length ?? 0);
     expect(eastCount).toBeGreaterThan(0);
+  });
+
+  it("appendOwnedApartmentEditorShellWalls adds exterior concrete cladding on exposed faces", () => {
+    const floor = readTypicalFloorDoc();
+    const layout = resolveOwnedApartmentAuthoringPreviewLayout({
+      floorDoc: floor,
+      homeBandStoryLevelIndex: 99,
+      facadeSalt: 1,
+    });
+    expect(layout).not.toBeNull();
+
+    const group = new THREE.Group();
+    appendOwnedApartmentEditorShellWalls(
+      group,
+      layout!.shellPlan,
+      floorPlaceholderMeshMaterials.unitWall,
+      floorPlaceholderMeshMaterials.unitExteriorWall,
+    );
+
+    const claddingNames: string[] = [];
+    group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.name.startsWith("shell_exterior_cladding")) {
+        claddingNames.push(o.name);
+      }
+    });
+    expect(claddingNames.length).toBeGreaterThan(0);
+    for (const face of layout!.shellPlan.exteriorFaces) {
+      expect(
+        claddingNames.some((n) => n.startsWith(`shell_exterior_cladding_${face}`)),
+      ).toBe(true);
+    }
   });
 });

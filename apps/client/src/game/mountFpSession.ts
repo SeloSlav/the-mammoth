@@ -98,6 +98,9 @@ import {
   mountFpApartmentFurniture,
 } from "./fpApartment/fpApartmentFurniture.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
+import { getApartmentSittablePrompt } from "./fpApartment/fpApartmentSittablePrompt.js";
+import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
+import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
@@ -793,6 +796,26 @@ export async function mountFpSession(
     };
   };
 
+  const visibleSittablePickScratch: THREE.Mesh[] = [];
+  const sittablePickObjectVisible = (obj: THREE.Object3D): boolean => {
+    for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+      if (!cur.visible) return false;
+    }
+    return true;
+  };
+  const getApartmentSittablePromptForSession = () => {
+    if (!conn.identity) return null;
+    return getApartmentSittablePrompt({
+      conn,
+      playerPos: getInteractionPos(),
+      camera,
+      decorPickMeshes: fpApartmentDecorMeshes.getSittablePickMeshes(),
+      furniturePickMeshes: fpApartmentFurniture.getSittablePickMeshes(),
+      visibleScratch: visibleSittablePickScratch,
+      objectVisibleInHierarchy: sittablePickObjectVisible,
+    });
+  };
+
   const mainRaf: FpSessionMainRafState = {
     bodyYaw: cachedGuestFeet?.yaw ?? 0,
     pitch: 0,
@@ -992,6 +1015,7 @@ export async function mountFpSession(
   /** Window hidden / defocused: browsers may omit `keyup` — drop all latched keys. */
   const resetTransientInputState = () => {
     commitFreeLookIntoBodyYaw();
+    exitFpSit();
     pendingLookDeltaX = 0;
     pendingLookDeltaY = 0;
     keys.clear();
@@ -1325,6 +1349,24 @@ export async function mountFpSession(
       if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
+      if (!isFpSitActive()) {
+        const sitPrompt = getApartmentSittablePromptForSession();
+        if (
+          sitPrompt &&
+          tryEnterFpSitFromPrompt({
+            prompt: sitPrompt,
+            pos,
+            loco,
+            mainRaf,
+            sendMoveIntent,
+            nowMs: performance.now(),
+            crouchToggle: mainRaf.crouchToggle,
+          })
+        ) {
+          return;
+        }
+      }
+
       if (aptKey?.kind === "apartment_stash") {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
@@ -1529,6 +1571,7 @@ export async function mountFpSession(
     fpLocomotionInputBlocked,
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
+    getApartmentSittablePrompt: getApartmentSittablePromptForSession,
     fpDroppedPickupFeet: getDroppedPickupAuthorityFeet,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
@@ -1561,7 +1604,8 @@ export async function mountFpSession(
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
     if (pendingLookDeltaX !== 0 || pendingLookDeltaY !== 0) {
-      const freeLook = keys.has("AltLeft") || keys.has("AltRight");
+      const sitActive = isFpSitActive();
+      const freeLook = sitActive || keys.has("AltLeft") || keys.has("AltRight");
       if (freeLook) {
         mainRaf.headLookYaw -= pendingLookDeltaX * MOUSE_SENS;
         mainRaf.headLookYaw = Math.max(
@@ -1614,6 +1658,7 @@ export async function mountFpSession(
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("contextmenu", onCanvasContextMenu);
     setFpPickupPrompt(null);
+    exitFpSit();
     fpElevators.dispose();
     fpApartmentDecorMeshes.dispose();
     fpApartmentFurniture.dispose();

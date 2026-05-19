@@ -1,0 +1,115 @@
+import {
+  OWNED_APARTMENT_MODEL_BED,
+  type OwnedApartmentPlacedItemKind,
+} from "./ownedApartmentBuiltins.js";
+
+/** How the player uses the furniture after pressing E. */
+export type ApartmentSittableMode = "sit" | "lie";
+
+export type ApartmentSittableLocalOffset = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type ApartmentSittableSpec = {
+  modelRelPath: string;
+  mode: ApartmentSittableMode;
+  /** Seat anchor in decor root space; local +Z is the seat forward axis. */
+  localSeatOffset: ApartmentSittableLocalOffset;
+  /** Added to world forward yaw derived from local +Z. */
+  bodyYawOffsetRad: number;
+  /** Eye height above feet while seated/lying (m). */
+  eyeHeightM: number;
+  /** Horizontal interact cylinder radius from seat anchor (m). */
+  interactRadiusM: number;
+  /** HUD verb, e.g. "Sit" or "Lie down". */
+  promptLabel: string;
+  /** Pitch applied on enter (rad); lie uses ceiling look. */
+  defaultPitchRad: number;
+};
+
+const CHAIR_SPEC: ApartmentSittableSpec = {
+  modelRelPath: "static/models/objects/chair.glb",
+  mode: "sit",
+  localSeatOffset: { x: 0, y: 0.42, z: 0.02 },
+  bodyYawOffsetRad: 0,
+  eyeHeightM: 1.05,
+  interactRadiusM: 0.95,
+  promptLabel: "Sit",
+  defaultPitchRad: 0,
+};
+
+const SOFA_SPEC: ApartmentSittableSpec = {
+  modelRelPath: "static/models/objects/sofa.glb",
+  mode: "sit",
+  localSeatOffset: { x: 0, y: 0.38, z: 0.08 },
+  bodyYawOffsetRad: 0,
+  eyeHeightM: 1.02,
+  interactRadiusM: 1.15,
+  promptLabel: "Sit",
+  defaultPitchRad: 0,
+};
+
+const TOILET_SPEC: ApartmentSittableSpec = {
+  modelRelPath: "static/models/objects/toilet.glb",
+  mode: "sit",
+  localSeatOffset: { x: 0, y: 0.48, z: 0.04 },
+  bodyYawOffsetRad: 0,
+  eyeHeightM: 1.08,
+  interactRadiusM: 0.75,
+  promptLabel: "Sit",
+  defaultPitchRad: 0,
+};
+
+const BED_SPEC: ApartmentSittableSpec = {
+  modelRelPath: OWNED_APARTMENT_MODEL_BED,
+  mode: "lie",
+  localSeatOffset: { x: 0, y: 0.38, z: -0.12 },
+  bodyYawOffsetRad: 0,
+  eyeHeightM: 0.42,
+  interactRadiusM: 1.25,
+  promptLabel: "Lie down",
+  defaultPitchRad: 1.45,
+};
+
+const BY_MODEL_PATH = new Map<string, ApartmentSittableSpec>([
+  [CHAIR_SPEC.modelRelPath, CHAIR_SPEC],
+  [SOFA_SPEC.modelRelPath, SOFA_SPEC],
+  [TOILET_SPEC.modelRelPath, TOILET_SPEC],
+  [BED_SPEC.modelRelPath, BED_SPEC],
+]);
+
+/** Normalize editor / content paths to canonical `static/models/...` keys. */
+export function normalizeApartmentSittableModelRelPath(path: string): string | null {
+  const trimmed = path.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.startsWith("static/models/")) return trimmed;
+  if (trimmed.startsWith("objects/")) return `static/models/${trimmed}`;
+  if (trimmed.startsWith("models/objects/")) return `static/${trimmed}`;
+  return null;
+}
+
+export function apartmentSittableSpecFromModelPath(
+  modelRelPath: string,
+): ApartmentSittableSpec | null {
+  const norm = normalizeApartmentSittableModelRelPath(modelRelPath);
+  if (!norm) return null;
+  return BY_MODEL_PATH.get(norm) ?? null;
+}
+
+export function ownedApartmentPlacedItemKindIsSittable(
+  kind: OwnedApartmentPlacedItemKind,
+): boolean {
+  return kind === "bed";
+}
+
+export function apartmentSittableSpecForPlacedItem(args: {
+  modelRelPath: string;
+  itemKind: OwnedApartmentPlacedItemKind;
+}): ApartmentSittableSpec | null {
+  if (ownedApartmentPlacedItemKindIsSittable(args.itemKind)) {
+    return BED_SPEC;
+  }
+  return apartmentSittableSpecFromModelPath(args.modelRelPath);
+}
