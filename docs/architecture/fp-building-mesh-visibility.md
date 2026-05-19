@@ -37,3 +37,9 @@ For `kind === "unit"`, `addExteriorWallCladding` is called with a small **`outwa
 | `fpCameraOrFeetNearBuildingFootprintXZ` | Expanded footprint (still used by helpers / tests; not used for interior shell visibility toggling in FP mount) |
 
 Tests: `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.
+
+---
+
+## Performance reference (informal)
+
+Commit **`75e72a2cbbe10bbedc340060b57f52d4c0a5e9b9`** (*Refactor apartment render isolation and remove furniture references*, 2026-05-19) is the best first-person FPS we've seen on the current client build so far. Keep it as a regression comparison point when touching apartment visibility, decor, or render-isolation—not a guaranteed floor on every machine.
