@@ -58,7 +58,12 @@ import {
 import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
 import {
   APARTMENT_PROP_FRUSTUM_MARGIN_M,
+  apartmentPropBoundsForwardDot,
+  applyApartmentInteriorPropVisibilityBudget,
+  clearApartmentInteriorPropVisibilityBudgetState,
+  createApartmentInteriorPropVisibilityBudgetState,
   resolveApartmentInteriorPropGroupVisible,
+  type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
 
 const WARDROBE_URL = "/static/models/objects/wardrobe-closet.glb";
@@ -347,6 +352,7 @@ export async function mountFpApartmentFurniture(opts: {
   /** Incremented when pending/in-flight builds must abort (dispose, cancel demand build, full reset). */
   let furnitureBuildEpoch = 0;
   let activeBuildJob: ApartmentFurnitureLevelBuildJob | null = null;
+  const propVisibilityBudget = createApartmentInteriorPropVisibilityBudgetState();
   let rowsByLevel = new Map<number, ApartmentUnit[]>();
   const builtLevels = new Map<number, ApartmentFurnitureLevelState>();
   const emptyBuiltLevels = new Set<number>();
@@ -389,6 +395,7 @@ export async function mountFpApartmentFurniture(opts: {
     sittablePickMeshes.length = 0;
     builtLevels.clear();
     emptyBuiltLevels.clear();
+    clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
   };
 
   const disposeBuildJob = (job: ApartmentFurnitureLevelBuildJob | null) => {
@@ -899,21 +906,53 @@ export async function mountFpApartmentFurniture(opts: {
         camera.matrixWorldInverse,
       );
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
+      const useInUnitBudget = containingUnitKey !== null;
+      const budgetItems: ApartmentInteriorPropVisibilityApplyItem[] = [];
       for (let i = 0; i < unitFurnitureGroups.length; i++) {
         const g = unitFurnitureGroups[i]!;
-        const bounds = g.userData.mammothApartmentFurnitureWorldBounds;
-        g.visible = resolveApartmentInteriorPropGroupVisible({
+        const bounds =
+          g.userData.mammothApartmentFurnitureWorldBounds instanceof THREE.Box3
+            ? g.userData.mammothApartmentFurnitureWorldBounds
+            : undefined;
+        const groupUnitKey =
+          typeof g.userData.mammothApartmentUnitKey === "string"
+            ? g.userData.mammothApartmentUnitKey
+            : undefined;
+        const visibilityKey =
+          groupUnitKey !== undefined ? `${groupUnitKey}:${g.name}` : g.uuid;
+        const wasVisible = propVisibilityBudget.visibleKeys.has(visibilityKey);
+        const desiredVisible = resolveApartmentInteriorPropGroupVisible({
           allowDemand: allowDemandBuild,
           containingUnitKey,
-          groupUnitKey:
-            typeof g.userData.mammothApartmentUnitKey === "string"
-              ? g.userData.mammothApartmentUnitKey
-              : undefined,
-          propWorldBounds: bounds instanceof THREE.Box3 ? bounds : undefined,
+          groupUnitKey,
+          propWorldBounds: bounds,
           viewFrustum: _furnitureVisibilityFrustum,
           cameraWorldPos: _furnitureVisibilityCamPos,
           cameraWorldDir: _furnitureVisibilityCamDir,
+          wasVisible: useInUnitBudget ? wasVisible : undefined,
         });
+        if (useInUnitBudget) {
+          budgetItems.push({
+            key: visibilityKey,
+            object: g,
+            desiredVisible,
+            forwardDot:
+              bounds !== undefined
+                ? apartmentPropBoundsForwardDot(
+                    bounds,
+                    _furnitureVisibilityCamPos,
+                    _furnitureVisibilityCamDir,
+                  )
+                : 1,
+          });
+        } else {
+          g.visible = desiredVisible;
+        }
+      }
+      if (useInUnitBudget) {
+        applyApartmentInteriorPropVisibilityBudget(budgetItems, propVisibilityBudget);
+      } else {
+        clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
       }
     },
     getStashPrompt: (playerPos, camera) => {

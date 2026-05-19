@@ -106,6 +106,7 @@ import {
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
 import { getApartmentSittablePrompt } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
+import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
@@ -1442,6 +1443,10 @@ export async function mountFpSession(
       mainRaf.crouchToggle = !mainRaf.crouchToggle;
     }
     if (e.code === "Space" && !e.repeat && !isTextInputFocused()) {
+      if (tryExitFpSitOnMovement({ keys, mainRaf, pos })) {
+        e.preventDefault();
+        return;
+      }
       if (isInsideElevatorCabHudForJump()) {
         e.preventDefault();
         return;

@@ -6,12 +6,13 @@ export function tryExitFpSitOnMovement(args: {
   mainRaf: { bodyYaw: number; headLookYaw: number; pitch: number };
   pos: THREE.Vector3;
 }): boolean {
-  const moving =
+  const unseat =
     args.keys.has("KeyW") ||
     args.keys.has("KeyS") ||
     args.keys.has("KeyA") ||
-    args.keys.has("KeyD");
-  if (!moving) return false;
+    args.keys.has("KeyD") ||
+    args.keys.has("Space");
+  if (!unseat) return false;
   const sit = getFpSitSession();
   if (!sit) return false;
 
