@@ -20,8 +20,8 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     const { shell, decor } = APARTMENT_INTERIOR_VISUAL_PROFILE;
     expect(shell.indirectEnvIntensity).toBeGreaterThan(0);
     expect(shell.indirectEnvIntensity).toBeGreaterThanOrEqual(decor.indirectEnvIntensity);
-    expect(shell.shadowAlbedoLuminanceMin).toBeGreaterThan(0);
-    expect(shell.shadowAlbedoLuminanceMin).toBeLessThan(decor.albedoLuminanceMin);
+    expect(shell.shadowEmissiveIntensity).toBeGreaterThan(0);
+    expect(shell.shadowEmissiveIntensity).toBeLessThan(0.12);
   });
 
   it("keeps practical pools tighter than corridor-scale washes", () => {

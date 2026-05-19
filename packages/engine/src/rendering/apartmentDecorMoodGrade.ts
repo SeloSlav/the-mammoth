@@ -79,13 +79,20 @@ export function moodGradeMammothApartmentDecorMesh(
     : moodGradeMammothApartmentDecorMaterial(material, opts);
 }
 
-/** Lift shell albedo in deep shadow so floors/walls match decor PMREM response. */
-export function applyMammothApartmentShellShadowFloor(
-  material: THREE.MeshStandardMaterial,
-): void {
-  const min = APARTMENT_INTERIOR_VISUAL_PROFILE.shell.shadowAlbedoLuminanceMin;
-  normalizeAlbedoLuminance(material.color, min);
-  material.needsUpdate = true;
+/**
+ * Clones shared shell mats so FP can tune per mesh without mutating world singletons.
+ * Subtle emissive = dim plaster in zero N·L, not a scene fill light.
+ */
+export function prepareApartmentInteriorShellMaterial(
+  source: THREE.MeshStandardMaterial,
+): THREE.MeshStandardMaterial {
+  const cfg = APARTMENT_INTERIOR_VISUAL_PROFILE.shell;
+  const m = source.clone();
+  m.roughness = Math.min(m.roughness, cfg.maxRoughness);
+  m.emissive.copy(m.color);
+  m.emissiveIntensity = cfg.shadowEmissiveIntensity;
+  m.needsUpdate = true;
+  return m;
 }
 
 export function moodGradeMammothApartmentShellMaterial(
@@ -98,7 +105,6 @@ export function moodGradeMammothApartmentShellMaterial(
       ? APARTMENT_INTERIOR_VISUAL_PROFILE.shell.floorColor
       : APARTMENT_INTERIOR_VISUAL_PROFILE.shell.wallCeilColor;
   material.color.multiply(tint);
-  applyMammothApartmentShellShadowFloor(material);
 }
 
 export function moodGradeMammothApartmentShellMesh(

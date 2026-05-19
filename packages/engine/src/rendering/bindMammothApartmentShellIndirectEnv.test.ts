@@ -11,10 +11,8 @@ describe("bindMammothResidentialShellIndirectEnv", () => {
     const env = new THREE.Texture();
     const root = new THREE.Group();
 
-    const shell = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x050505 }),
-    );
+    const shellSource = new THREE.MeshStandardMaterial({ color: 0xe6e0d8, roughness: 1 });
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shellSource);
     shell.userData.mammothPlacedObjectId = "unit_e_001";
     root.add(shell);
 
@@ -27,6 +25,7 @@ describe("bindMammothResidentialShellIndirectEnv", () => {
     bindMammothResidentialShellIndirectEnv(root, env);
 
     const shellMat = shell.material as THREE.MeshStandardMaterial;
+    expect(shellMat).not.toBe(shellSource);
     const corridorMat = corridor.material as THREE.MeshStandardMaterial;
     expect(shellMat.envMap).toBe(env);
     expect(shellMat.envMapIntensity).toBe(

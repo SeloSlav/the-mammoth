@@ -9,8 +9,28 @@ export const APARTMENT_PROP_FRUSTUM_MARGIN_M = 1.5;
  */
 export const APARTMENT_INTERIOR_PROP_BEHIND_CAMERA_DOT_MAX = 0;
 
+/**
+ * Inside the containing unit, only props near the view axis stay visible. Frustum intersection
+ * uses expanded AABBs, so peripheral decor can stay "frustum visible" while its center sits at a
+ * wide angle — spinning then stacks many high-poly GLBs. cos⁻¹(0.72) ≈ 44° half-angle.
+ */
+export const APARTMENT_INTERIOR_PROP_FORWARD_DOT_MIN = 0.72;
+
 const _boundsCenterScratch = new THREE.Vector3();
 const _toPropScratch = new THREE.Vector3();
+
+export function apartmentPropViewDirectionDot(
+  propWorldBounds: THREE.Box3,
+  cameraWorldPos: THREE.Vector3,
+  cameraWorldDir: THREE.Vector3,
+): number {
+  propWorldBounds.getCenter(_boundsCenterScratch);
+  _toPropScratch.subVectors(_boundsCenterScratch, cameraWorldPos);
+  const distSq = _toPropScratch.lengthSq();
+  if (distSq < 1e-8) return 1;
+  _toPropScratch.multiplyScalar(1 / Math.sqrt(distSq));
+  return _toPropScratch.dot(cameraWorldDir);
+}
 
 export function apartmentPropBehindCameraWhenInterior(
   propWorldBounds: THREE.Box3,
@@ -18,12 +38,22 @@ export function apartmentPropBehindCameraWhenInterior(
   cameraWorldDir: THREE.Vector3,
   behindCameraDotMax = APARTMENT_INTERIOR_PROP_BEHIND_CAMERA_DOT_MAX,
 ): boolean {
-  propWorldBounds.getCenter(_boundsCenterScratch);
-  _toPropScratch.subVectors(_boundsCenterScratch, cameraWorldPos);
-  const distSq = _toPropScratch.lengthSq();
-  if (distSq < 1e-8) return false;
-  _toPropScratch.multiplyScalar(1 / Math.sqrt(distSq));
-  return _toPropScratch.dot(cameraWorldDir) < behindCameraDotMax;
+  return (
+    apartmentPropViewDirectionDot(propWorldBounds, cameraWorldPos, cameraWorldDir) <
+    behindCameraDotMax
+  );
+}
+
+export function apartmentPropOutsideForwardViewWhenInterior(
+  propWorldBounds: THREE.Box3,
+  cameraWorldPos: THREE.Vector3,
+  cameraWorldDir: THREE.Vector3,
+  forwardDotMin = APARTMENT_INTERIOR_PROP_FORWARD_DOT_MIN,
+): boolean {
+  return (
+    apartmentPropViewDirectionDot(propWorldBounds, cameraWorldPos, cameraWorldDir) <
+    forwardDotMin
+  );
 }
 
 export function resolveApartmentInteriorPropGroupVisible(input: {
@@ -43,15 +73,25 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
   const bounds = input.propWorldBounds;
   if (!(bounds instanceof THREE.Box3)) return true;
 
-  if (
-    isContainingUnit &&
-    apartmentPropBehindCameraWhenInterior(
-      bounds,
-      input.cameraWorldPos,
-      input.cameraWorldDir,
-    )
-  ) {
-    return false;
+  if (isContainingUnit) {
+    if (
+      apartmentPropBehindCameraWhenInterior(
+        bounds,
+        input.cameraWorldPos,
+        input.cameraWorldDir,
+      )
+    ) {
+      return false;
+    }
+    if (
+      apartmentPropOutsideForwardViewWhenInterior(
+        bounds,
+        input.cameraWorldPos,
+        input.cameraWorldDir,
+      )
+    ) {
+      return false;
+    }
   }
 
   return input.viewFrustum.intersectsBox(bounds);

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "./apartmentInteriorVisualProfile.js";
-import { applyMammothApartmentShellShadowFloor } from "./apartmentDecorMoodGrade.js";
+import { prepareApartmentInteriorShellMaterial } from "./apartmentDecorMoodGrade.js";
 import {
   bindMammothMetallicReadableEnv,
   mammothSpecularReadabilityWeight,
@@ -67,12 +67,18 @@ export function bindMammothResidentialShellIndirectEnv(
     const list = ([] as THREE.Material[]).concat(
       mesh.material as THREE.Material | THREE.Material[],
     );
-    for (const raw of list) {
+    for (let i = 0; i < list.length; i++) {
+      const raw = list[i]!;
       if (!(raw instanceof THREE.MeshStandardMaterial)) continue;
-      applyMammothApartmentShellShadowFloor(raw);
-      raw.envMap = envTexture;
-      raw.envMapIntensity = shellIndirect;
-      raw.needsUpdate = true;
+      const prepared = prepareApartmentInteriorShellMaterial(raw);
+      prepared.envMap = envTexture;
+      prepared.envMapIntensity = shellIndirect;
+      prepared.needsUpdate = true;
+      if (Array.isArray(mesh.material)) {
+        (mesh.material as THREE.Material[])[i] = prepared;
+      } else {
+        mesh.material = prepared;
+      }
     }
   });
 }

@@ -186,7 +186,7 @@ export {
   captureApartmentInteriorPreviewSceneAtmosphere,
   syncApartmentInteriorPreviewSceneAtmosphere,
 } from "./rendering/apartmentInteriorPreviewSceneLighting.js";
-export { applyMammothApartmentShellShadowFloor } from "./rendering/apartmentDecorMoodGrade.js";
+export { prepareApartmentInteriorShellMaterial } from "./rendering/apartmentDecorMoodGrade.js";
 export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
 export {
   moodGradeMammothApartmentDecorMaterial,

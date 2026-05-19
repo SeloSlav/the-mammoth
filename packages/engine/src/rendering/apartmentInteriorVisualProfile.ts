@@ -45,9 +45,14 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
      * received PMREM — this closes that gap without re-enabling global IBL.
      */
     /** Neutral RoomEnvironment on the material — not layer-0 sun/fill. */
-    indirectEnvIntensity: 0.32,
-    /** Shadow albedo floor — walls/floors stay darker than props but not pure black. */
-    shadowAlbedoLuminanceMin: 0.11,
+    indirectEnvIntensity: 0.3,
+    /**
+     * Per-mesh emissive from plaster albedo (material property, not a scene light). Stops
+     * zero-diffuse faces from reading as flat brown/black while practicals stay the only lamps.
+     */
+    shadowEmissiveIntensity: 0.055,
+    /** Matte plaster picks up a little indirect without looking glossy. */
+    maxRoughness: 0.88,
   },
   decor: {
     albedoMood: new THREE.Color(0.88, 0.86, 0.82),
