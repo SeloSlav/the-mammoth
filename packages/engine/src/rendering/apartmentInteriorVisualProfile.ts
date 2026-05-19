@@ -212,6 +212,9 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   contactShadow: {
 
+    /** Off in editor until batched — legacy path leaked one mesh per drag and tanked FPS. */
+    enabled: false,
+
     opacity: 0.2,
 
     radiusScale: 0.42,

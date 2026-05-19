@@ -246,4 +246,8 @@ export {
   type ApartmentPracticalLightSpec,
   type ApartmentPracticalLightsMount,
 } from "./rendering/apartmentInteriorPracticalLights.js";
-export { attachApartmentDecorContactShadow } from "./rendering/apartmentInteriorContactShadow.js";
+export {
+  attachApartmentDecorContactShadow,
+  computeApartmentDecorContactShadowRadius,
+  disposeLeakedApartmentDecorContactShadows,
+} from "./rendering/apartmentInteriorContactShadow.js";

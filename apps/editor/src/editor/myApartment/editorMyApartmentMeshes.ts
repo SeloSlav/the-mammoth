@@ -7,6 +7,7 @@ import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,
+  disposeLeakedApartmentDecorContactShadows,
   syncApartmentInteriorPracticalLighting,
   prepareMammothApartmentInteriorContentRoots,
   type ApartmentPracticalLightsMount,
@@ -987,6 +988,8 @@ export function mountEditorMyApartmentFurnitureUnder(
   windowScanRoot: THREE.Object3D,
   unitBounds?: ApartmentUnitWorldBounds,
 ): EditorMyApartmentFurnitureMount {
+  disposeLeakedApartmentDecorContactShadows(parent);
+
   const root = new THREE.Group();
   root.name = "editor_my_apartment_furniture";
   parent.add(root);
