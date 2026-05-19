@@ -8,8 +8,7 @@ import {
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,
   syncApartmentInteriorPracticalLighting,
-  tagApartmentDecorPropMeshesForInteriorLighting,
-  tagResidentialUnitInteriorMeshesUnder,
+  prepareMammothApartmentInteriorContentRoots,
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
@@ -1044,9 +1043,7 @@ export function mountEditorMyApartmentFurnitureUnder(
   };
   resyncPracticalLights(windowScanRoot, unitBounds);
 
-  tagResidentialUnitInteriorMeshesUnder(parent);
-  tagResidentialUnitInteriorMeshesUnder(root);
-  tagApartmentDecorPropMeshesForInteriorLighting(root);
+  prepareMammothApartmentInteriorContentRoots({ shellRoot: parent, decorRoot: root });
 
   const dispose = (): void => {
     teardownApartmentSavedObjectGroupManipulator();

@@ -18,7 +18,9 @@ import {
   PlayerPresentationManager,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
+  bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
+  prepareMammothApartmentInteriorContentRoots,
   requestWebGpuAdapter,
   webGpuAdapterSupportsTimestampQuery,
   type FpLocomotionInput,
@@ -271,12 +273,10 @@ export async function mountFpSession(
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
-  tagMergedResidentialShellMeshes(buildingRoot);
+  prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
   const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;
-  bindMammothResidentialShellIndirectEnv(
-    buildingRoot,
-    fpReadableEnv instanceof THREE.Texture ? fpReadableEnv : null,
-  );
+  const fpEnvTex = fpReadableEnv instanceof THREE.Texture ? fpReadableEnv : null;
+  bindMammothResidentialShellIndirectEnv(buildingRoot, fpEnvTex);
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
@@ -409,6 +409,18 @@ export async function mountFpSession(
     }
   };
   const refreshApartmentInteriorMeshes = () => {
+    const decorRoot = scene.getObjectByName("apartment_unit_decor_root");
+    if (decorRoot) {
+      prepareMammothApartmentInteriorContentRoots({
+        shellRoot: buildingRoot,
+        decorRoot,
+      });
+      const tex = scene.userData.mammothFpMetallicReadableEnv;
+      bindMammothApartmentPropReadableEnv(
+        decorRoot,
+        tex instanceof THREE.Texture ? tex : null,
+      );
+    }
     unitInteriorMeshEntries.length = 0;
     unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
     unitInteriorMeshes.length = 0;

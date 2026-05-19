@@ -204,6 +204,13 @@ export {
   syncMammothApartmentInteriorSceneLighting,
 } from "./rendering/apartmentInteriorSceneLighting.js";
 export {
+  applyMammothApartmentInteriorEditorLayoutPresentation,
+  applyMammothApartmentInteriorPresentation,
+  frameMammothApartmentInteriorGameplayPreview,
+  prepareMammothApartmentInteriorContentRoots,
+  tagMammothApartmentInteriorShellRoot,
+} from "./rendering/apartmentInteriorPresentation.js";
+export {
   captureApartmentInteriorPreviewSceneAtmosphere,
   mountApartmentInteriorPreviewSceneLighting,
   syncApartmentInteriorPreviewSceneAtmosphere,

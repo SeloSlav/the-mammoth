@@ -7,12 +7,13 @@ import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
   createFPCamera,
+  applyMammothApartmentInteriorEditorLayoutPresentation,
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
   captureMammothApartmentInteriorSceneAtmosphere,
+  frameMammothApartmentInteriorGameplayPreview,
   mountMammothApartmentInteriorSceneRig,
   syncMammothApartmentInteriorMetallicEnv,
-  syncMammothApartmentInteriorViewLayers,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -131,6 +132,7 @@ export async function mountEditorScene(
   );
   const editorStudioAtmosphere =
     captureMammothApartmentInteriorSceneAtmosphere(scene);
+  let editorCameraFovBeforeApartment: number | null = null;
 
   const contentRoot = new THREE.Group();
 
@@ -144,15 +146,17 @@ export async function mountEditorScene(
   ): void => {
     const b = EDITOR_ORBIT_LIGHTING_BASE;
     if (shouldPreviewFpApartmentLighting(st)) {
-      applyMammothApartmentInteriorScene({
-        scene,
-        renderer,
-        interiorProximity01: 1,
-        bounce: apartmentInteriorSceneRig,
-        global: { hemi, fill, dir },
-        atmosphereRestore: editorStudioAtmosphere,
-      });
+      if (editorCameraFovBeforeApartment == null) {
+        editorCameraFovBeforeApartment = camera.fov;
+      }
+      /** Lighting + PMREM handled in {@link applyEnvironment} via presentation helper. */
       return;
+    }
+
+    if (editorCameraFovBeforeApartment != null) {
+      camera.fov = editorCameraFovBeforeApartment;
+      camera.updateProjectionMatrix();
+      editorCameraFovBeforeApartment = null;
     }
 
     applyMammothApartmentInteriorScene({
@@ -193,7 +197,54 @@ export async function mountEditorScene(
     shouldFrameAfterRebuild: true,
   };
 
-  const syncEditorMetallicEnv = (envTexture: THREE.Texture | null): void => {
+  const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
+    const fpApartmentPreview = shouldPreviewFpApartmentLighting(st);
+    const globalHdriOn = shouldUseEditorHdri(st);
+    applyPmremEnvironment(fpApartmentPreview || globalHdriOn);
+    const pmremTexture = scene.environment;
+
+    syncEditorLightingStack(st, globalHdriOn && !fpApartmentPreview);
+
+    const decorRoots: THREE.Object3D[] = [contentRoot];
+    const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
+    if (apartmentFurnitureRoot) decorRoots.push(apartmentFurnitureRoot);
+    const shellRoots: THREE.Object3D[] = [];
+    if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
+
+    if (fpApartmentPreview) {
+      applyMammothApartmentInteriorEditorLayoutPresentation({
+        scene,
+        renderer,
+        bounce: apartmentInteriorSceneRig,
+        global: { hemi, fill, dir },
+        pmremTexture,
+        shellRoots,
+        decorRoots,
+        view: { camera, raycasters: [raycaster, decorSupportRaycaster] },
+        atmosphereRestore: editorStudioAtmosphere,
+      });
+      if (structuralState.buildingRoot) {
+        frameMammothApartmentInteriorGameplayPreview({
+          camera,
+          orbitControls,
+          shellRoot: structuralState.buildingRoot,
+        });
+      }
+    } else {
+      syncMammothApartmentInteriorMetallicEnv({
+        scene,
+        envTexture: globalHdriOn ? scene.environment : null,
+        decorRoots,
+        shellRoots,
+      });
+    }
+  };
+
+  const syncCurrentEditorLightingAttachment = (): void => {
+    const envTexture =
+      scene.userData.mammothFpMetallicReadableEnv instanceof THREE.Texture
+        ? scene.userData.mammothFpMetallicReadableEnv
+        : scene.environment;
     const decorRoots: THREE.Object3D[] = [contentRoot];
     const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
     if (apartmentFurnitureRoot) decorRoots.push(apartmentFurnitureRoot);
@@ -205,32 +256,6 @@ export async function mountEditorScene(
       decorRoots,
       shellRoots,
     });
-  };
-
-  const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
-    const fpApartmentPreview = shouldPreviewFpApartmentLighting(st);
-    const globalHdriOn = shouldUseEditorHdri(st);
-    applyPmremEnvironment(fpApartmentPreview || globalHdriOn);
-    const pmremTexture = scene.environment;
-    if (fpApartmentPreview) {
-      scene.environment = null;
-    }
-    syncEditorLightingStack(st, globalHdriOn && !fpApartmentPreview);
-    syncEditorMetallicEnv(
-      fpApartmentPreview ? pmremTexture : globalHdriOn ? scene.environment : null,
-    );
-    syncMammothApartmentInteriorViewLayers(
-      { camera, raycasters: [raycaster, decorSupportRaycaster] },
-      fpApartmentPreview,
-    );
-  };
-
-  const syncCurrentEditorLightingAttachment = (): void => {
-    const envTexture =
-      scene.userData.mammothFpMetallicReadableEnv instanceof THREE.Texture
-        ? scene.userData.mammothFpMetallicReadableEnv
-        : scene.environment;
-    syncEditorMetallicEnv(envTexture);
   };
 
   contentRoot.name = "editorContentRoot";
@@ -598,6 +623,14 @@ export async function mountEditorScene(
       syncTransformAttachment,
       frameFocusedStoryObject,
       frameObject,
+      frameApartmentGameplayPreview: (shellRoot) => {
+        if (!shouldPreviewFpApartmentLighting(useEditorStore.getState())) return;
+        frameMammothApartmentInteriorGameplayPreview({
+          camera,
+          orbitControls,
+          shellRoot,
+        });
+      },
     });
     syncCurrentEditorLightingAttachment();
   }
@@ -1182,7 +1215,12 @@ export async function mountEditorScene(
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
     applyPmremEnvironment(false);
-    syncEditorMetallicEnv(null);
+    syncMammothApartmentInteriorMetallicEnv({
+      scene,
+      envTexture: null,
+      decorRoots: [contentRoot],
+      shellRoots: [],
+    });
     disposeSceneEnvironment(scene);
     renderer.dispose();
     scene.clear();

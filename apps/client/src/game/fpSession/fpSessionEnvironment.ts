@@ -24,6 +24,7 @@ import {
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
   mountMammothApartmentInteriorBounceRig,
+  syncMammothApartmentInteriorViewLayers,
 } from "@the-mammoth/engine";
 import {
   FP_APARTMENT_DECOR_PROP_LAYER,
@@ -617,7 +618,7 @@ export function attachFpSessionEnvironment(
         STAIRWELL_INTERIOR_LIGHT_SCALE,
         stair01,
       );
-      applyMammothApartmentInteriorScene({
+      const interior01 = applyMammothApartmentInteriorScene({
         scene,
         renderer,
         interiorProximity01: apartmentInteriorDark01,
@@ -625,6 +626,11 @@ export function attachFpSessionEnvironment(
         global: { hemi, fill, dir },
         exteriorLightScale: stairwellScale,
       });
+      syncMammothApartmentInteriorViewLayers(
+        { camera },
+        interior01 >
+          APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold,
+      );
       dir.position.copy(sunDir).multiplyScalar(120);
       const tEnd = performance.now();
       return {

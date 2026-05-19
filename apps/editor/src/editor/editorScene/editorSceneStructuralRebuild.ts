@@ -23,6 +23,7 @@ export function rebuildEditorStructuralIfNeeded(
     syncTransformAttachment: () => void;
     frameFocusedStoryObject: () => void;
     frameObject: (o: THREE.Object3D | null) => void;
+    frameApartmentGameplayPreview?: (shellRoot: THREE.Object3D) => void;
   },
 ): void {
   const s = useEditorStore.getState();
@@ -65,7 +66,11 @@ export function rebuildEditorStructuralIfNeeded(
   if (state.shouldFrameAfterRebuild) {
     state.shouldFrameAfterRebuild = false;
     if (s.mode === "my_apartment_layout") {
-      deps.frameObject(state.buildingRoot);
+      if (deps.frameApartmentGameplayPreview) {
+        deps.frameApartmentGameplayPreview(state.buildingRoot);
+      } else {
+        deps.frameObject(state.buildingRoot);
+      }
     } else if (s.mode === "floor" || s.mode === "floor_override") {
       deps.frameFocusedStoryObject();
     } else {

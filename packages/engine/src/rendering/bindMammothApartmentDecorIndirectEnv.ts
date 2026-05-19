@@ -14,7 +14,13 @@ export function isApartmentInteriorShellMesh(mesh: THREE.Mesh): boolean {
     return true;
   }
   const pid = mesh.userData.mammothPlacedObjectId;
-  return typeof pid === "string" && pid.startsWith("unit_");
+  if (typeof pid === "string" && pid.startsWith("unit_")) return true;
+  const name = mesh.name;
+  return (
+    name.startsWith("shell_wall_") ||
+    name.startsWith("editor_ref_shell_wall_") ||
+    name === "editor_owned_apartment_floor"
+  );
 }
 
 /**
