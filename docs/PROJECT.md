@@ -2,7 +2,7 @@
 
 Browser-based **first-person persistent multiplayer survival** sandbox: one giant Slavic apartment block (~150 units) plus immediate neighborhood (courtyard, shops, park, church, etc.). Custom **Three.js + TypeScript** runtime; **React** only for UI; **SpaceTimeDB** for live state and sync.
 
-**Documentation index:** [README.md](README.md) (links to architecture deep-dives).
+**Documentation index:** [README.md](README.md) (links to architecture deep-dives). **Game design:** [core-game-loop.md](core-game-loop.md).
 
 ---
 

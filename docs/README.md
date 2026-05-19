@@ -3,6 +3,7 @@
 | Document | What it covers |
 |----------|----------------|
 | [PROJECT.md](PROJECT.md) | Product vision, tech stack, repo map, vertical slice, milestones |
+| [core-game-loop.md](core-game-loop.md) | Core loop, floors, orders, extraction, apartment life, progression, tone |
 | [architecture/world-streaming.md](architecture/world-streaming.md) | One world coordinate system; cells vs building/interior chunks; what loads when |
 | [architecture/editor.md](architecture/editor.md) | Editor role, loading policy, workflows, save behavior |
 | [architecture/persistence.md](architecture/persistence.md) | Disk vs SpaceTimeDB; baseline vs dynamic; document types |
