@@ -70,7 +70,7 @@
     {
       "id": "896c14cc-c36c-479f-b808-e07f48a0315f",
       "modelRelPath": "static/models/objects/table-dining.glb",
-      "fx": 0.11906018680599244,
+      "fx": 0.12235030770222606,
       "fz": 0.6515087026070979,
       "dy": 0.5566294852381909,
       "yawRad": 0,
@@ -109,8 +109,8 @@
     {
       "id": "ad41807b-e8ff-431e-b80d-c48f43a149cd",
       "modelRelPath": "static/models/objects/chandelier.glb",
-      "fx": 0.37206250158828214,
-      "fz": 0.5508029988915472,
+      "fx": 0.12072635386651238,
+      "fz": 0.6403062172871925,
       "dy": 2.4757048108206345,
       "yawRad": 0,
       "pitchRad": 0,
@@ -480,6 +480,45 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.28206636003720065,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "2f48e53d-159e-4140-b061-fced7e9659a4",
+      "modelRelPath": "static/models/objects/light-ceiling.glb",
+      "fx": 0.0630614728430899,
+      "fz": 0.16940804167979745,
+      "dy": 2.700216462858854,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 7.771561172376096e-16,
+      "uniformScale": 0.19097143292300797,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "feb40d48-f289-40e1-a1d8-d4e7587b69e3",
+      "modelRelPath": "static/models/objects/light-ceiling.glb",
+      "fx": 0.5969571705564913,
+      "fz": 0.08684568886706788,
+      "dy": 2.700216462858854,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 7.771561172376096e-16,
+      "uniformScale": 0.19097143292300797,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "a92c76cb-d4f3-4147-81b6-90f263514b89",
+      "modelRelPath": "static/models/objects/light-ceiling.glb",
+      "fx": 0.30380961776522786,
+      "fz": 0.08641500925745746,
+      "dy": 2.700216462858854,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 7.771561172376096e-16,
+      "uniformScale": 0.19097143292300797,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }
