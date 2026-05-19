@@ -65,6 +65,7 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.residentialUnitId).toBe("unit_w_004");
     expect(result[0]?.apartmentUnitKey).toBe(null);
     expect(result[0]?.residentialExteriorGlass).toBe(false);
+    expect(result[0]?.apartmentSwingDoor).toBe(false);
     expect(result[1]?.mesh).toBe(propMesh);
     expect(result[1]?.residentialUnitId).toBe(null);
     expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");
@@ -108,5 +109,25 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.apartmentUnitKey).toBe("floor-7:unit_e_002");
     expect(result[0]?.genericInteriorVisibleInResidentialUnit).toBe(true);
+    expect(result[0]?.apartmentSwingDoor).toBe(false);
+  });
+
+  it("tags instanced apartment swing doors for corridor visibility", () => {
+    const buildingRoot = new THREE.Group();
+    const floor = new THREE.Group();
+    floor.userData.mammothPlateLevelIndex = 20;
+
+    const doorMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    doorMesh.name = "apartment_doors_glazed:L20";
+    doorMesh.userData.mammothUnitInterior = true;
+    doorMesh.userData.mammothApartmentSwingDoor = true;
+    floor.add(doorMesh);
+    buildingRoot.add(floor);
+
+    const result = collectFpSessionUnitInteriorMeshEntries(buildingRoot);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.apartmentSwingDoor).toBe(true);
+    expect(result[0]?.residentialUnitId).toBe(null);
+    expect(result[0]?.apartmentUnitKey).toBe(null);
   });
 });

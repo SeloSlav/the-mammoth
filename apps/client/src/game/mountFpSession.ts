@@ -18,6 +18,9 @@ import {
   PlayerPresentationManager,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
+  bindMammothResidentialShellIndirectEnv,
+  requestWebGpuAdapter,
+  webGpuAdapterSupportsTimestampQuery,
   type FpLocomotionInput,
 } from "@the-mammoth/engine";
 import {
@@ -90,7 +93,7 @@ import {
   resetFpSessionGameUiHidden,
   toggleFpSessionGameUiHidden,
 } from "./fpSession/fpSessionGameUiHidden.js";
-import { createFpSessionPerfDebugPostRenderHook } from "./fpSession/fpSessionPerfDebug.js";
+import { createFpSessionPerfDebugPostRenderHook, fpSessionTrackGpuTimestampsEnabled } from "./fpSession/fpSessionPerfDebug.js";
 import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMeshProfiler.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
 import {
@@ -98,6 +101,7 @@ import {
   mountFpApartmentFurniture,
 } from "./fpApartment/fpApartmentFurniture.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
+import { getApartmentSittablePrompt } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
@@ -184,21 +188,9 @@ function localMirrorBodyUriForConn(conn: DbConnection): string {
 }
 
 function fpGpuTimestampDebugEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("fpgpu")) return true;
-    return window.localStorage.getItem("mammothFpGpuTimestamps") === "1";
-  } catch {
-    return false;
-  }
+  return fpSessionTrackGpuTimestampsEnabled();
 }
 
-/**
- * First-person session: mammoth `BuildingDoc` floor stack + slim cell, SpaceTimeDB `player_pose` sync.
- * Client simulation owns locomotion + collision; snapshots persist on SpacetimeDB for interactions,
- * audio AOI, and reconnect — no server-side movement reconciliation.
- */
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
@@ -210,9 +202,12 @@ export async function mountFpSession(
 
   installMmWallProbeLoadingStub();
 
-  const [world] = await Promise.all([
+  const [world, webGpuAdapter] = await Promise.all([
     fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady()),
-    fpLoadingDbgTimed("webgpu_adapter_assert", () => assertWebGpuAdapterOrThrow()),
+    fpLoadingDbgTimed("webgpu_adapter_assert", async () => {
+      await assertWebGpuAdapterOrThrow();
+      return requestWebGpuAdapter();
+    }),
   ]);
   const {
     building,
@@ -226,12 +221,15 @@ export async function mountFpSession(
   } = world;
 
   const scene = new THREE.Scene();
-  const gpuTimestampDebug = fpGpuTimestampDebugEnabled();
+  const gpuTimestampRequested = fpGpuTimestampDebugEnabled();
+  const gpuTimestampSupported =
+    webGpuAdapter !== null && webGpuAdapterSupportsTimestampQuery(webGpuAdapter);
+  const trackGpuTimestamps = gpuTimestampRequested && gpuTimestampSupported;
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: FP_SESSION_WEBGPU_ANTIALIAS,
     forceWebGL: false,
-    trackTimestamp: gpuTimestampDebug,
+    trackTimestamp: trackGpuTimestamps,
   });
   await fpLoadingDbgTimed("webgpu_renderer_init", () => renderer.init());
   assertWebGpuRendererBackend(renderer);
@@ -244,13 +242,18 @@ export async function mountFpSession(
   rendererShadowMap.needsUpdate = false;
   rendererShadowMap.type = THREE.PCFSoftShadowMap;
   const scheduleGpuTimestampResolve = (): void => {
-    if (!gpuTimestampDebug) return;
+    if (!trackGpuTimestamps) return;
     const backend = (renderer as unknown as { backend?: { trackTimestamp?: boolean } }).backend;
     if (!backend?.trackTimestamp) return;
     void renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then((ms) => {
       deliverFpSessionGpuRenderMs(ms);
     });
   };
+  if (gpuTimestampRequested && !gpuTimestampSupported) {
+    console.info(
+      "[fpSession] GPU timestamp queries unavailable (adapter missing timestamp-query); perf report GPU hw line stays n/a.",
+    );
+  }
   resetFpSessionFpsDisplay();
   resetFpSessionCompassHeading();
   resetFpSessionGameUiHidden();
@@ -269,6 +272,11 @@ export async function mountFpSession(
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
   tagMergedResidentialShellMeshes(buildingRoot);
+  const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;
+  bindMammothResidentialShellIndirectEnv(
+    buildingRoot,
+    fpReadableEnv instanceof THREE.Texture ? fpReadableEnv : null,
+  );
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
@@ -807,12 +815,16 @@ export async function mountFpSession(
   };
   const getApartmentSittablePromptForSession = () => {
     if (!conn.identity) return null;
-    return fpApartmentDecorMeshes.getSittablePrompt(
-      getInteractionPos(),
+    return getApartmentSittablePrompt({
+      conn,
+      playerPos: getInteractionPos(),
       camera,
-      sittablePickObjectVisible,
-      visibleSittablePickScratch,
-    );
+      decorPickMeshes: fpApartmentDecorMeshes.getSittablePickMeshes(),
+      furniturePickMeshes: fpApartmentFurniture.getSittablePickMeshes(),
+      decorRoots: fpApartmentDecorMeshes.getSittableDecorRoots(),
+      visibleScratch: visibleSittablePickScratch,
+      objectVisibleInHierarchy: sittablePickObjectVisible,
+    });
   };
 
   const mainRaf: FpSessionMainRafState = {

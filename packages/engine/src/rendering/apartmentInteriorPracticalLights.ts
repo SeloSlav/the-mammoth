@@ -243,6 +243,7 @@ export function mountApartmentPracticalLights(
   root.name = "apartment_interior_practical_lights";
 
   const profile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical;
+  const lightDecay = APARTMENT_INTERIOR_VISUAL_PROFILE.practicalDecay;
 
   for (let i = 0; i < specs.length; i++) {
     const spec = specs[i]!;
@@ -262,7 +263,7 @@ export function mountApartmentPracticalLights(
         p.distance,
         p.angle,
         p.penumbra,
-        p.decay,
+        lightDecay,
       );
       spot.name = `apt_${spec.kind}_light_${i}`;
       spot.position.copy(local.position);
@@ -284,7 +285,7 @@ export function mountApartmentPracticalLights(
       params.color,
       params.intensity,
       params.distance,
-      params.decay,
+      lightDecay,
     );
     point.name = `apt_${spec.kind}_light_${i}`;
     point.position.copy(local.position);

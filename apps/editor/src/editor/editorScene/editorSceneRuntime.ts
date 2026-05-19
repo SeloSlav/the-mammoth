@@ -8,7 +8,10 @@ import {
   assertWebGpuRendererBackend,
   bindMammothApartmentPropReadableEnv,
   createFPCamera,
+  bindMammothResidentialShellIndirectEnv,
+  captureApartmentInteriorPreviewSceneAtmosphere,
   mountApartmentInteriorPreviewSceneLighting,
+  syncApartmentInteriorPreviewSceneAtmosphere,
   syncApartmentInteriorPreviewSceneLighting,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
@@ -123,6 +126,7 @@ export async function mountEditorScene(
   } as const;
   const apartmentInteriorPreviewLighting =
     mountApartmentInteriorPreviewSceneLighting(scene);
+  const editorStudioAtmosphere = captureApartmentInteriorPreviewSceneAtmosphere(scene);
 
   const contentRoot = new THREE.Group();
 
@@ -137,6 +141,7 @@ export async function mountEditorScene(
     const b = EDITOR_ORBIT_LIGHTING_BASE;
     if (shouldPreviewFpApartmentLighting(st)) {
       scene.environmentIntensity = 1;
+      syncApartmentInteriorPreviewSceneAtmosphere(scene, true, editorStudioAtmosphere);
       syncApartmentInteriorPreviewSceneLighting({
         active: true,
         renderer,
@@ -149,6 +154,7 @@ export async function mountEditorScene(
       return;
     }
 
+    syncApartmentInteriorPreviewSceneAtmosphere(scene, false, editorStudioAtmosphere);
     syncApartmentInteriorPreviewSceneLighting({
       active: false,
       renderer,
@@ -179,6 +185,12 @@ export async function mountEditorScene(
     }
   };
 
+  const structuralState: EditorStructuralState = {
+    buildingRoot: null,
+    lastBuiltContentEpoch: -1,
+    shouldFrameAfterRebuild: true,
+  };
+
   const syncEditorMetallicEnv = (envTexture: THREE.Texture | null): void => {
     if (envTexture) {
       scene.userData.mammothFpMetallicReadableEnv = envTexture;
@@ -189,6 +201,9 @@ export async function mountEditorScene(
     const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
     if (apartmentFurnitureRoot) {
       bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
+    }
+    if (structuralState.buildingRoot) {
+      bindMammothResidentialShellIndirectEnv(structuralState.buildingRoot, envTexture);
     }
   };
 
@@ -216,16 +231,13 @@ export async function mountEditorScene(
     if (apartmentFurnitureRoot) {
       bindMammothApartmentPropReadableEnv(apartmentFurnitureRoot, envTexture);
     }
+    if (structuralState.buildingRoot) {
+      bindMammothResidentialShellIndirectEnv(structuralState.buildingRoot, envTexture);
+    }
   };
 
   contentRoot.name = "editorContentRoot";
   scene.add(contentRoot);
-
-  const structuralState: EditorStructuralState = {
-    buildingRoot: null,
-    lastBuiltContentEpoch: -1,
-    shouldFrameAfterRebuild: true,
-  };
 
   const transformControls = new TransformControls(camera, null);
   patchTransformControlsPointerForCaptureCompat(transformControls);
@@ -568,7 +580,11 @@ export async function mountEditorScene(
   function shouldShowEditorGrid(
     st: ReturnType<typeof useEditorStore.getState>,
   ): boolean {
-    return !isFpMode(st.mode) && !isSharedPreviewMode(st.mode);
+    return (
+      !isFpMode(st.mode) &&
+      !isSharedPreviewMode(st.mode) &&
+      st.mode !== "my_apartment_layout"
+    );
   }
 
   function syncTransformsFromStore(): void {

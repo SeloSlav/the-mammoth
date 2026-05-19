@@ -164,6 +164,8 @@ export {
 export { deepDisposeObject3D } from "./loaders/deepDisposeObject3D.js";
 export {
   assertWebGpuAdapterOrThrow,
+  requestWebGpuAdapter,
+  webGpuAdapterSupportsTimestampQuery,
   assertWebGpuRendererBackend,
 } from "./webGpuGate.js";
 export {
@@ -175,7 +177,16 @@ export {
 export {
   bindMammothApartmentDecorIndirectEnv,
   bindMammothApartmentPropReadableEnv,
+  bindMammothResidentialShellIndirectEnv,
+  isApartmentInteriorShellMesh,
+  MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD,
 } from "./rendering/bindMammothApartmentDecorIndirectEnv.js";
+export {
+  APARTMENT_INTERIOR_PREVIEW_BACKGROUND,
+  captureApartmentInteriorPreviewSceneAtmosphere,
+  syncApartmentInteriorPreviewSceneAtmosphere,
+} from "./rendering/apartmentInteriorPreviewSceneLighting.js";
+export { applyMammothApartmentShellShadowFloor } from "./rendering/apartmentDecorMoodGrade.js";
 export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
 export {
   moodGradeMammothApartmentDecorMaterial,

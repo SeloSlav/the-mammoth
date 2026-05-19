@@ -71,6 +71,11 @@ export const FP_RESIDENTIAL_UNIT_INTERIOR_LAYER = 3;
 /** Invisible interaction helpers (stash picks, helper raycast boxes) excluded from the main camera. */
 export const FP_INTERACTION_PICK_LAYER = 4;
 /**
+ * Max center-screen ray distance (m) for apartment stash / sittable HUD picks. Feet must still be
+ * within each interact cylinder ({@link clientMayUseApartmentStash} / sittable spec radius).
+ */
+export const FP_APARTMENT_INTERACT_PICK_MAX_RAY_M = 5.5;
+/**
  * Heavy apartment GLB props (decor + builtins). Main camera enables this; apartment planar-mirror
  * reflection virtual cameras disable it so the reflector pass does not replay ~200k+ furniture tris.
  */

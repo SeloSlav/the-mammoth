@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD } from "@the-mammoth/engine";
 import type { BuildingDoc, FloorDoc, OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import {
   floorPlaceholderMeshMaterials,
@@ -138,6 +139,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   );
   floor.receiveShadow = false;
   floor.castShadow = false;
+  floor.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] = true;
   root.add(floor);
 
   const edge = new THREE.LineSegments(

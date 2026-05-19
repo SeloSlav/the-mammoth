@@ -1,12 +1,22 @@
 import * as THREE from "three";
+import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "./apartmentInteriorVisualProfile.js";
+import { applyMammothApartmentShellShadowFloor } from "./apartmentDecorMoodGrade.js";
 import {
   bindMammothMetallicReadableEnv,
   mammothSpecularReadabilityWeight,
   MAMMOTH_METALLIC_ENV_READABLE_UD,
 } from "./bindMammothMetallicReadableEnv.js";
 
-/** Subtle PMREM fill so matte props shade like plaster shells, not flat emissive cards. */
-const DECOR_INDIRECT_ENV_INTENSITY = 0.36;
+/** Megablock merged shells and editor authoring/reference enclosure meshes. */
+export const MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD = "mammothApartmentInteriorShellMesh";
+
+export function isApartmentInteriorShellMesh(mesh: THREE.Mesh): boolean {
+  if (mesh.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] === true) {
+    return true;
+  }
+  const pid = mesh.userData.mammothPlacedObjectId;
+  return typeof pid === "string" && pid.startsWith("unit_");
+}
 
 /**
  * Applies low-intensity PMREM to non-metallic apartment decor/furniture PBR materials.
@@ -32,12 +42,36 @@ export function bindMammothApartmentDecorIndirectEnv(
         continue;
       }
       const w = mammothSpecularReadabilityWeight(raw.metalness, raw.roughness);
+      const decorIndirect = APARTMENT_INTERIOR_VISUAL_PROFILE.decor.indirectEnvIntensity;
       raw.envMap = envTexture;
-      raw.envMapIntensity = THREE.MathUtils.lerp(
-        DECOR_INDIRECT_ENV_INTENSITY,
-        0.55,
-        w,
-      );
+      raw.envMapIntensity = THREE.MathUtils.lerp(decorIndirect, 0.55, w);
+      raw.needsUpdate = true;
+    }
+  });
+}
+
+/**
+ * Merged hollow-unit shells (`mammothPlacedObjectId` = `unit_*`) — same PMREM as decor but tuned
+ * for roughness≈1 plaster/parquet so walls and floors share the prop shading model.
+ */
+export function bindMammothResidentialShellIndirectEnv(
+  buildingRoot: THREE.Object3D,
+  envTexture: THREE.Texture | null,
+): void {
+  if (!envTexture) return;
+  const shellIndirect = APARTMENT_INTERIOR_VISUAL_PROFILE.shell.indirectEnvIntensity;
+
+  buildingRoot.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !isApartmentInteriorShellMesh(mesh)) return;
+    const list = ([] as THREE.Material[]).concat(
+      mesh.material as THREE.Material | THREE.Material[],
+    );
+    for (const raw of list) {
+      if (!(raw instanceof THREE.MeshStandardMaterial)) continue;
+      applyMammothApartmentShellShadowFloor(raw);
+      raw.envMap = envTexture;
+      raw.envMapIntensity = shellIndirect;
       raw.needsUpdate = true;
     }
   });

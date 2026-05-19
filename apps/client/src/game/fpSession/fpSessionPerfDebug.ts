@@ -15,6 +15,27 @@ export function isFpSessionPerfDebugEnabled(): boolean {
 }
 
 /**
+ * GPU timestamp queries for the FP perf ring (separates `renderThreeMs` CPU wall time from GPU work).
+ *
+ * On by default when the adapter exposes `timestamp-query`. Opt out with `?fpgpuoff=1` or
+ * `localStorage.setItem("mammothFpGpuTimestamps","0")`. Force on with `?fpgpu=1`.
+ */
+export function fpSessionTrackGpuTimestampsEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("fpgpuoff")) return false;
+    if (params.has("fpgpu")) return true;
+    const stored = window.localStorage.getItem("mammothFpGpuTimestamps");
+    if (stored === "0") return false;
+    if (stored === "1") return true;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Returns a no-op when disabled. When enabled, call the returned function once per frame
  * **after** `renderer.render` so `renderer.info` reflects that frame.
  */

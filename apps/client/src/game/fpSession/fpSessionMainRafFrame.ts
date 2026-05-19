@@ -51,6 +51,11 @@ import {
   type FpKinematicSupportSampleOpts,
 } from "../fpPhysics/fpKinematicSupport.js";
 import { pushFpPerfFrame, type FpRendererInfo } from "./fpSessionPerfStore.js";
+import {
+  fpHudPickRaycastDue,
+  fpHudPickThrottleStateFromSample,
+  type FpHudPickThrottleState,
+} from "./fpSessionHudPickThrottle.js";
 import { FpHotbarConsumableVisual } from "../fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSessionCollisionDebug.js";
 import type { FpPlanarMirror } from "../fpRendering/fpPlanarMirror.js";
@@ -305,6 +310,20 @@ export function createFpSessionMainRafFrame(
   let aptSysCoarseFx = 0;
   let aptSysCoarseFy = 0;
   let aptSysCoarseFz = 0;
+
+  let hudPickThrottleState: FpHudPickThrottleState = fpHudPickThrottleStateFromSample({
+    feetX: 0,
+    feetY: 0,
+    feetZ: 0,
+    cameraYawRad: 0,
+    cameraPitchRad: 0,
+  });
+  let cachedLookedAtStash: ReturnType<MountFpApartmentDecorMeshesResult["getStashPrompt"]> = null;
+  let cachedLookedAtWardrobeUnitKey: string | null = null;
+  let cachedSitPromptHud: ApartmentSittablePrompt | null = null;
+  let cachedElevDoorPrompt: ReturnType<MountFpElevatorWorldResult["getExteriorDoorInteractPrompt"]> =
+    null;
+  let cachedApartmentDoorHud: ReturnType<MountFpApartmentDoorsResult["getInteractPrompt"]> = null;
 
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
@@ -686,10 +705,44 @@ export function createFpSessionMainRafFrame(
       }
       const droppedHud = cachedDropHud;
 
-      const lookedAtStash = deps.fpApartmentDecorMeshes.getStashPrompt(ft, deps.camera);
-      const lookedAtWardrobeUnitKey = APARTMENT_CLAIM_UI_ENABLED
-        ? deps.fpApartmentDecorMeshes.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
-        : null;
+      const hudPickCameraYawRad = mainRaf.bodyYaw + mainRaf.headLookYaw;
+      const hudPickActivePrompt =
+        cachedAptSys !== null ||
+        cachedLookedAtStash !== null ||
+        cachedSitPromptHud !== null ||
+        cachedElevDoorPrompt !== null ||
+        cachedApartmentDoorHud !== null;
+      const hudPickRaycastDue = fpHudPickRaycastDue({
+        state: hudPickThrottleState,
+        frameIndex: hudHeavyFrame,
+        feetX: ft.x,
+        feetY: ft.y,
+        feetZ: ft.z,
+        cameraYawRad: hudPickCameraYawRad,
+        cameraPitchRad: mainRaf.pitch,
+        interactKeyDown: deps.keys.has("KeyE"),
+        activePrompt: hudPickActivePrompt,
+      });
+      if (hudPickRaycastDue) {
+        cachedLookedAtStash = deps.fpApartmentDecorMeshes.getStashPrompt(ft, deps.camera);
+        cachedLookedAtWardrobeUnitKey = APARTMENT_CLAIM_UI_ENABLED
+          ? deps.fpApartmentDecorMeshes.getWardrobeClaimLookAtUnitKey(ft, deps.camera)
+          : null;
+        cachedSitPromptHud = !isFpSitActive()
+          ? deps.getApartmentSittablePrompt()
+          : null;
+        cachedElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
+        cachedApartmentDoorHud = deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
+        hudPickThrottleState = fpHudPickThrottleStateFromSample({
+          feetX: ft.x,
+          feetY: ft.y,
+          feetZ: ft.z,
+          cameraYawRad: hudPickCameraYawRad,
+          cameraPitchRad: mainRaf.pitch,
+        });
+      }
+      const lookedAtStash = cachedLookedAtStash;
+      const lookedAtWardrobeUnitKey = cachedLookedAtWardrobeUnitKey;
       const stashUk = lookedAtStash?.stashKey ?? null;
       const wardrobeUk = lookedAtWardrobeUnitKey ?? null;
       const cfx = Math.floor(ft.x * 2);
@@ -751,8 +804,8 @@ export function createFpSessionMainRafFrame(
 
       let nextClaimSmoothCarry: ApartmentClaimHoldSmooth | null = null;
       const sitPromptHud =
-        !isFpSitActive() ? deps.getApartmentSittablePrompt() : null;
-      const rawElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
+        !isFpSitActive() ? cachedSitPromptHud : null;
+      const rawElevDoorPrompt = cachedElevDoorPrompt;
       const doorPrompt =
         sitPromptHud !== null
           ? null
@@ -765,7 +818,7 @@ export function createFpSessionMainRafFrame(
           ? null
           : apartmentFurnitureInteriorsPreferOverUnitDoor(aSys)
             ? null
-            : deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
+            : cachedApartmentDoorHud;
       if (sitPromptHud) {
         setFpPickupPrompt({
           kind: "apartment_sittable",

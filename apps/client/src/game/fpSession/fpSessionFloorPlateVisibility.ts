@@ -172,6 +172,7 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "residentialUnitId"
     | "residentialExteriorGlass"
     | "genericInteriorVisibleInResidentialUnit"
+    | "apartmentSwingDoor"
   >;
   unitInteriorVisible: boolean;
   apartmentFurnitureInteriorVisible: boolean;
@@ -180,6 +181,14 @@ export function fpResolveUnitInteriorMeshVisible(input: {
   containingResidentialUnitKey: string | null;
 }): boolean {
   const { entry } = input;
+  if (entry.apartmentSwingDoor) {
+    /**
+     * Instanced corridor doors are not tied to a single `residentialUnitId` mesh. They must stay
+     * visible while the player is inside their apartment (exit) and in the hallway — only the
+     * exterior fill-rate gate (`unitInteriorVisible`) applies.
+     */
+    return input.unitInteriorVisible;
+  }
   if (entry.apartmentUnitKey !== null) {
     return (
       input.apartmentFurnitureInteriorVisible &&
@@ -233,6 +242,30 @@ export function fpShouldExpandContainingResidentialShellFrustumBounds(input: {
     input.containingResidentialUnitId !== null &&
     input.entry.residentialUnitId === input.containingResidentialUnitId
   );
+}
+
+/**
+ * While inside a residential unit, only the containing unit's top-floor shell pieces should stay
+ * visible. `null` keeps the full top-floor set for exterior / corridor silhouette correctness.
+ */
+export function fpResolveTopFloorResidentialShellUnitFilter(input: {
+  insideResidentialUnit: boolean;
+  containingResidentialUnitId: string | null;
+}): string | null {
+  if (input.insideResidentialUnit && input.containingResidentialUnitId !== null) {
+    return input.containingResidentialUnitId;
+  }
+  return null;
+}
+
+export function fpResolveTopFloorResidentialShellVisible(input: {
+  shellUnitId: string;
+  onlyUnitId: string | null;
+  unitInteriorVisible: boolean;
+}): boolean {
+  if (!input.unitInteriorVisible) return false;
+  if (input.onlyUnitId === null) return true;
+  return input.shellUnitId === input.onlyUnitId;
 }
 
 export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVisibilityOpts): {
@@ -568,7 +601,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       apartmentFurnitureInteriorVisible !== _lastApartmentFurnitureInteriorVisible ||
       containingResidentialUnitId !== _lastContainingResidentialUnitId ||
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey;
-    if (unitInteriorVisibilityChanged) {
+    if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
       _lastApartmentFurnitureInteriorVisible = apartmentFurnitureInteriorVisible;
       _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
@@ -606,24 +639,24 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       _lastApartmentFurnitureInteriorMeshCount = apartmentFurnitureInteriorMeshes.length;
     }
 
-    /**
-     * Disabled for now: restricting the top-floor residential shell set to only the containing unit
-     * can punch visible holes at apartment corners because some boundary/roof pieces are owned by the
-     * neighboring unit shell. Keep the full top-floor shell set until we can tag only the truly
-     * redundant roof/ceiling subset.
-     */
-    const topFloorResidentialShellOnlyUnitId = null;
+    const topFloorResidentialShellOnlyUnitId = fpResolveTopFloorResidentialShellUnitFilter({
+      insideResidentialUnit,
+      containingResidentialUnitId,
+    });
     const topFloorResidentialShellVisibilityChanged =
       topFloorResidentialShellOnlyUnitId !== _lastTopFloorResidentialShellOnlyUnitId ||
-      topFloorResidentialUnitShellMeshes.length !== _lastTopFloorResidentialShellMeshCount;
-    if (topFloorResidentialShellVisibilityChanged) {
+      topFloorResidentialUnitShellMeshes.length !== _lastTopFloorResidentialShellMeshCount ||
+      unitInteriorVisible !== _lastUnitInteriorVisible;
+    if (topFloorResidentialShellVisibilityChanged || insideResidentialUnit) {
       _lastTopFloorResidentialShellOnlyUnitId = topFloorResidentialShellOnlyUnitId;
       _lastTopFloorResidentialShellMeshCount = topFloorResidentialUnitShellMeshes.length;
       for (let i = 0; i < topFloorResidentialUnitShellMeshes.length; i++) {
         const entry = topFloorResidentialUnitShellMeshes[i]!;
-        entry.mesh.visible =
-          topFloorResidentialShellOnlyUnitId === null ||
-          entry.unitId === topFloorResidentialShellOnlyUnitId;
+        entry.mesh.visible = fpResolveTopFloorResidentialShellVisible({
+          shellUnitId: entry.unitId,
+          onlyUnitId: topFloorResidentialShellOnlyUnitId,
+          unitInteriorVisible,
+        });
       }
     }
 

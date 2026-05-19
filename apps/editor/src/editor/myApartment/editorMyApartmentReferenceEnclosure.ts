@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD } from "@the-mammoth/engine";
 import type { OwnedApartmentEditorShellPlan } from "@the-mammoth/world";
 import {
   appendOwnedApartmentEditorShellWalls,
@@ -44,6 +45,7 @@ export function buildOwnedApartmentDerivedReferenceRoom(opts: {
   enclosure.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     o.userData.editorOwnedApartmentReferenceOnly = true;
+    o.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] = true;
     stripRaycast(o);
   });
 

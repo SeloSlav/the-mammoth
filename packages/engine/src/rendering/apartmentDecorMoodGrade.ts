@@ -13,14 +13,17 @@ function albedoLuminance(color: THREE.Color): number {
   return _lumaScratch.copy(color).r * 0.2126 + color.g * 0.7152 + color.b * 0.0722;
 }
 
-function normalizeAlbedoLuminance(color: THREE.Color): void {
-  const cfg = APARTMENT_INTERIOR_VISUAL_PROFILE.decor;
+function normalizeAlbedoLuminance(
+  color: THREE.Color,
+  min: number,
+  max?: number,
+): void {
   const luma = albedoLuminance(color);
   if (luma <= 1e-6) return;
-  if (luma < cfg.albedoLuminanceMin) {
-    color.multiplyScalar(cfg.albedoLuminanceMin / luma);
-  } else if (luma > cfg.albedoLuminanceMax) {
-    color.multiplyScalar(cfg.albedoLuminanceMax / luma);
+  if (luma < min) {
+    color.multiplyScalar(min / luma);
+  } else if (max != null && luma > max) {
+    color.multiplyScalar(max / luma);
   }
 }
 
@@ -42,7 +45,7 @@ export function moodGradeMammothApartmentDecorMaterial(
     standard.dispose();
   }
   m.color.multiply(cfg.albedoMood);
-  normalizeAlbedoLuminance(m.color);
+  normalizeAlbedoLuminance(m.color, cfg.albedoLuminanceMin, cfg.albedoLuminanceMax);
   if (isWarmFixture || isTv) {
     m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
     m.emissiveIntensity *= cfg.fixtureEmissiveScale;
@@ -76,6 +79,15 @@ export function moodGradeMammothApartmentDecorMesh(
     : moodGradeMammothApartmentDecorMaterial(material, opts);
 }
 
+/** Lift shell albedo in deep shadow so floors/walls match decor PMREM response. */
+export function applyMammothApartmentShellShadowFloor(
+  material: THREE.MeshStandardMaterial,
+): void {
+  const min = APARTMENT_INTERIOR_VISUAL_PROFILE.shell.shadowAlbedoLuminanceMin;
+  normalizeAlbedoLuminance(material.color, min);
+  material.needsUpdate = true;
+}
+
 export function moodGradeMammothApartmentShellMaterial(
   material: THREE.Material,
   slot: "wallCeil" | "floor",
@@ -86,7 +98,7 @@ export function moodGradeMammothApartmentShellMaterial(
       ? APARTMENT_INTERIOR_VISUAL_PROFILE.shell.floorColor
       : APARTMENT_INTERIOR_VISUAL_PROFILE.shell.wallCeilColor;
   material.color.multiply(tint);
-  material.needsUpdate = true;
+  applyMammothApartmentShellShadowFloor(material);
 }
 
 export function moodGradeMammothApartmentShellMesh(

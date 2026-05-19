@@ -26,7 +26,10 @@ import {
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
-import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
+import {
+  FP_APARTMENT_INTERACT_PICK_MAX_RAY_M,
+  FP_INTERACTION_PICK_LAYER,
+} from "../fpSession/fpSessionConstants.js";
 import {
   tagApartmentDecorPropMeshesForMirrorExclusion,
   tagResidentialUnitInteriorMeshesUnder,
@@ -79,7 +82,6 @@ import {
   APARTMENT_PROP_FRUSTUM_MARGIN_M,
   resolveApartmentInteriorPropGroupVisible,
 } from "./fpApartmentInteriorPropVisibility.js";
-const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 /**
  * Content-authored decor/walls should preserve editor placement exactly, including flush placement
  * against windowed exterior faces. Keep the strict hull as a hard stop, but do not reserve extra
@@ -855,7 +857,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
-      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisiblePickMeshes(stashPickMeshes, visibleStashPickMeshes);
       const hits = _stashRaycaster.intersectObjects(visibleStashPickMeshes, false);
       const seen = new Set<string>();
@@ -889,7 +891,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (wardrobePickMeshes.length === 0) return null;
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
-      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisiblePickMeshes(wardrobePickMeshes, visibleWardrobePickMeshes);
       const hits = _stashRaycaster.intersectObjects(visibleWardrobePickMeshes, false);
       for (const hit of hits) {

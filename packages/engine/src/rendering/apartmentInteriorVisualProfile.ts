@@ -24,20 +24,36 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     dirIntensity: 0,
   },
   /**
-   * Layer-scoped fill for residential shells + decor (FP `residentialInterior*` rig). Keeps
-   * practical pools as the hero while preventing pitch-black floors and unshaded props.
+   * Layer-scoped fill for residential shells + decor (FP `residentialInterior*` rig).
+   * `hemiGround` is **floor bounce** (warm parquet wash), not dirt — a dark ground color makes
+   * vertical walls read as flat black instead of softly shaded.
    */
   interiorBounce: {
-    hemiSky: 0xd4dbd2,
-    hemiGround: 0x3a3632,
-    hemiIntensity: 0.16,
+    hemiSky: 0xdce2da,
+    hemiGround: 0x5c5650,
+    hemiIntensity: 0.3,
     fill: 0xb8b5ae,
-    fillIntensity: 0.075,
+    fillIntensity: 0.15,
+  },
+  /**
+   * Weak directional on interior layers — sells light direction + wall gradients without restoring
+   * full exterior sun wash (see `interiorAmbient` zeros).
+   */
+  interiorDirectional: {
+    color: 0xe6e2d8,
+    intensity: 0.11,
   },
   /** Shell plaster / parquet tints so props sit in the same palette as walls. */
   shell: {
     wallCeilColor: new THREE.Color(0.9, 0.88, 0.84),
     floorColor: new THREE.Color(0.82, 0.78, 0.72),
+    /**
+     * FP disables `scene.environment`; shells only had layer bounce + practicals while decor also
+     * received PMREM — this closes that gap without re-enabling global IBL.
+     */
+    indirectEnvIntensity: 0.4,
+    /** Shadow albedo floor — walls/floors stay darker than props but not pure black. */
+    shadowAlbedoLuminanceMin: 0.11,
   },
   decor: {
     albedoMood: new THREE.Color(0.88, 0.86, 0.82),
@@ -47,45 +63,45 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     albedoLuminanceMax: 0.62,
     dielectricRoughnessMin: 0.48,
     metallicRoughnessMin: 0.28,
+    /** Matte prop PMREM — slightly below shell so fixtures do not outshine plaster. */
+    indirectEnvIntensity: 0.28,
     emissiveScale: 0.55,
-    fixtureEmissiveScale: 1.35,
+    /** Lamp/TV mesh emissive — keep glow subtle; scene practicals carry the pool. */
+    fixtureEmissiveScale: 1.05,
   },
+  /** Lower = softer pools and gradual wall shading (less "cut to black"). */
+  practicalDecay: 1.85,
   practical: {
     window: {
       color: 0xd8e8f8,
       intensity: 3.1,
-      distance: 7.5,
-      decay: 2.2,
+      distance: 8.5,
       angle: Math.PI / 3.4,
-      penumbra: 0.38,
+      penumbra: 0.42,
     },
     chandelier: {
       color: 0xffe8c8,
       intensity: 3.2,
-      distance: 4.8,
-      decay: 2.2,
+      distance: 5.6,
     },
     ceiling: {
       color: 0xfff0dc,
       intensity: 2.15,
-      distance: 3.1,
-      decay: 2.2,
+      distance: 3.7,
     },
     /** Floor lamp — local pool at seating height, shorter reach than ceiling fixtures. */
     standing: {
       color: 0xffe8c8,
       intensity: 2.35,
-      distance: 3.4,
-      decay: 2.2,
+      distance: 4.2,
     },
     /** Horizontal wash from a powered-on TV — tight falloff so it does not flood the unit. */
     tv: {
       color: 0x6fa8ff,
       intensity: 4.2,
       distance: 12,
-      decay: 2.2,
       angle: Math.PI / 2.35,
-      penumbra: 0.55,
+      penumbra: 0.58,
     },
   },
   contactShadow: {

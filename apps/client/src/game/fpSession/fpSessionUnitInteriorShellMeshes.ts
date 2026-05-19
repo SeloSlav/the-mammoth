@@ -11,6 +11,8 @@ export type FpSessionUnitInteriorMeshEntry = {
   apartmentUnitKey: string | null;
   residentialExteriorGlass: boolean;
   genericInteriorVisibleInResidentialUnit: boolean;
+  /** Per-floor instanced swing doors (`fpApartmentDoors`) — corridor-facing, not unit-owned shell. */
+  apartmentSwingDoor: boolean;
 };
 
 function residentialUnitIdFromPlacedObjectId(value: unknown): string | null {
@@ -26,7 +28,11 @@ function resolveUnitInteriorMeshEntry(
   let apartmentUnitKey: string | null = null;
   let residentialExteriorGlass = false;
   let genericInteriorVisibleInResidentialUnit = false;
+  let apartmentSwingDoor = false;
   for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
+    if (cur.userData.mammothApartmentSwingDoor === true) {
+      apartmentSwingDoor = true;
+    }
     if (residentialUnitId === null) {
       residentialUnitId = residentialUnitIdFromPlacedObjectId(cur.userData.mammothPlacedObjectId);
     }
@@ -58,6 +64,7 @@ function resolveUnitInteriorMeshEntry(
     apartmentUnitKey,
     residentialExteriorGlass,
     genericInteriorVisibleInResidentialUnit,
+    apartmentSwingDoor,
   };
 }
 

@@ -7,6 +7,7 @@ import {
 import type { DbConnection } from "../../module_bindings";
 import {
   FP_APARTMENT_DECOR_PROP_LAYER,
+  FP_APARTMENT_INTERACT_PICK_MAX_RAY_M,
   FP_INTERACTION_PICK_LAYER,
 } from "../fpSession/fpSessionConstants.js";
 import { normalizeApartmentDecorModelRelPath } from "./fpApartmentDecorAssets.js";
@@ -17,8 +18,6 @@ import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 const _screenCenterNdc = new THREE.Vector2(0, 0);
 const _raycaster = new THREE.Raycaster();
 const _cameraForwardScratch = new THREE.Vector3();
-
-const SITTABLE_PICK_MAX_RAY_M = 6.5;
 
 function configureSittableRaycasterLayers(): void {
   _raycaster.layers.disableAll();
@@ -131,8 +130,18 @@ function promptFromPickHit(
   };
 }
 
+function sittablePromptIfPlayerInRange(
+  conn: DbConnection,
+  prompt: ApartmentSittablePrompt | null,
+  playerPos: THREE.Vector3,
+): ApartmentSittablePrompt | null {
+  if (!prompt) return null;
+  return clientCanEnterApartmentSittable(conn, prompt, playerPos) ? prompt : null;
+}
+
 function raycastApartmentSittablePickMeshes(args: {
   conn: DbConnection;
+  playerPos: THREE.Vector3;
   camera: THREE.PerspectiveCamera;
   pickMeshes: readonly THREE.Mesh[];
   visibleScratch: THREE.Mesh[];
@@ -147,11 +156,15 @@ function raycastApartmentSittablePickMeshes(args: {
   if (args.visibleScratch.length === 0) return null;
   configureSittableRaycasterLayers();
   _raycaster.setFromCamera(_screenCenterNdc, args.camera);
-  _raycaster.far = SITTABLE_PICK_MAX_RAY_M;
+  _raycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
   const hits = _raycaster.intersectObjects(args.visibleScratch, false);
   const seen = new Set<string>();
   for (const hit of hits) {
-    const prompt = promptFromPickHit(args.conn, hit);
+    const prompt = sittablePromptIfPlayerInRange(
+      args.conn,
+      promptFromPickHit(args.conn, hit),
+      args.playerPos,
+    );
     if (!prompt || seen.has(prompt.sittableKey)) continue;
     seen.add(prompt.sittableKey);
     return prompt;
@@ -161,6 +174,7 @@ function raycastApartmentSittablePickMeshes(args: {
 
 function raycastApartmentSittableDecorMeshes(args: {
   conn: DbConnection;
+  playerPos: THREE.Vector3;
   camera: THREE.PerspectiveCamera;
   decorRoots: readonly THREE.Object3D[];
   objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean;
@@ -173,13 +187,17 @@ function raycastApartmentSittableDecorMeshes(args: {
   if (targets.length === 0) return null;
   configureSittableRaycasterLayers();
   _raycaster.setFromCamera(_screenCenterNdc, args.camera);
-  _raycaster.far = SITTABLE_PICK_MAX_RAY_M;
+  _raycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
   const hits = _raycaster.intersectObjects(targets, true);
   const seen = new Set<string>();
   for (const hit of hits) {
     const decor = resolveDecorSittableRoot(hit.object);
     if (!decor || seen.has(decor.sittableKey)) continue;
-    const prompt = promptFromDecorRoot(args.conn, decor);
+    const prompt = sittablePromptIfPlayerInRange(
+      args.conn,
+      promptFromDecorRoot(args.conn, decor),
+      args.playerPos,
+    );
     if (!prompt) continue;
     seen.add(decor.sittableKey);
     return prompt;
@@ -295,6 +313,7 @@ export function getApartmentSittablePrompt(args: {
   if (!args.conn.identity) return null;
   const rayArgs = {
     conn: args.conn,
+    playerPos: args.playerPos,
     camera: args.camera,
     visibleScratch: args.visibleScratch,
     objectVisibleInHierarchy: args.objectVisibleInHierarchy,
@@ -304,6 +323,7 @@ export function getApartmentSittablePrompt(args: {
     raycastApartmentSittablePickMeshes({ ...rayArgs, pickMeshes: args.furniturePickMeshes }) ??
     raycastApartmentSittableDecorMeshes({
       conn: args.conn,
+      playerPos: args.playerPos,
       camera: args.camera,
       decorRoots: args.decorRoots,
       objectVisibleInHierarchy: args.objectVisibleInHierarchy,

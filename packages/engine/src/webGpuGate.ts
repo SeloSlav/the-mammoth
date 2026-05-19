@@ -21,10 +21,19 @@ export async function assertWebGpuAdapterOrThrow(): Promise<void> {
   if (typeof navigator === "undefined" || !navigator.gpu) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }
-  const adapter = await navigator.gpu.requestAdapter(webGpuRequestAdapterOptions());
+  const adapter = await requestWebGpuAdapter();
   if (!adapter) {
     throw new Error(WEBGPU_REQUIRED_MSG);
   }
+}
+
+export async function requestWebGpuAdapter(): Promise<GPUAdapter | null> {
+  if (typeof navigator === "undefined" || !navigator.gpu) return null;
+  return navigator.gpu.requestAdapter(webGpuRequestAdapterOptions());
+}
+
+export function webGpuAdapterSupportsTimestampQuery(adapter: GPUAdapter): boolean {
+  return adapter.features.has("timestamp-query");
 }
 
 export function assertWebGpuRendererBackend(renderer: { backend?: unknown }): void {

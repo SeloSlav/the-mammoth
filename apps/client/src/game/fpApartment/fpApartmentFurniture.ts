@@ -27,7 +27,10 @@ import {
   resolveStaticModelFetchUrl,
 } from "@the-mammoth/engine";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
-import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
+import {
+  FP_APARTMENT_INTERACT_PICK_MAX_RAY_M,
+  FP_INTERACTION_PICK_LAYER,
+} from "../fpSession/fpSessionConstants.js";
 import {
   tagApartmentDecorPropMeshesForMirrorExclusion,
   tagResidentialUnitInteriorMeshesUnder,
@@ -84,7 +87,6 @@ export function isApartmentUnitBoundsDebugEnabled(): boolean {
   }
 }
 
-const FOOTLOCKER_PICK_MAX_RAY_M = 5.5;
 const WARDROBE_BOUNDS_INSET_M = 0.48;
 const FOOTLOCKER_BOUNDS_INSET_M = 0.42;
 const STOVE_BOUNDS_INSET_M = 0.42;
@@ -918,7 +920,7 @@ export async function mountFpApartmentFurniture(opts: {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
-      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisiblePickMeshes(stashPickMeshes, visibleStashPickMeshes);
       /**
        * Keep the raycast set aligned with the same apartment visibility gate used for rendering so
@@ -956,7 +958,7 @@ export async function mountFpApartmentFurniture(opts: {
       if (wardrobePickMeshes.length === 0) return null;
       _stashRaycaster.layers.set(FP_INTERACTION_PICK_LAYER);
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
-      _stashRaycaster.far = FOOTLOCKER_PICK_MAX_RAY_M;
+      _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisiblePickMeshes(wardrobePickMeshes, visibleWardrobePickMeshes);
       const hits = _stashRaycaster.intersectObjects(visibleWardrobePickMeshes, false);
       for (const hit of hits) {

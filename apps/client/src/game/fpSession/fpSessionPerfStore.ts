@@ -1307,7 +1307,7 @@ function formatFpPerfReportMarkdown(
     `    three.js ${sections.renderThreeMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderThreeMs, secMax)}`,
     sections.renderThreeGpuMs != null
       ? `    GPU hw  ${sections.renderThreeGpuMs.toFixed(2).padStart(6)}ms  ${secBar(sections.renderThreeGpuMs, secMax)}`
-      : `    GPU hw     n/a  (enable timestamp-query + trackTimestamp)`,
+      : `    GPU hw     n/a  (adapter missing timestamp-query or disabled via ?fpgpuoff=1)`,
     `  other     ${sections.otherMs.toFixed(2).padStart(6)}ms  ${secBar(sections.otherMs, secMax)}`,
     "",
     "Scene content (avg / frame):",

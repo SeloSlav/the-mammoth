@@ -5,11 +5,13 @@ vi.mock("../../featureFlags", async (importOriginal) => ({
   APARTMENT_CLAIM_UI_ENABLED: true,
 }));
 
+import { apartmentSittableSpecFromModelPath } from "@the-mammoth/schemas";
 import {
   apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
   apartmentUnitContainingFeetSlack,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
+  clientMayUseApartmentSittable,
   clientMayUseApartmentStash,
   clientMayToggleApartmentDoor,
   feetDeepEnoughFromEntryDoor,
@@ -727,6 +729,29 @@ describe("fpApartmentGameplay", () => {
         slackYAbove: 2.85,
       }),
     ).toBeNull();
+  });
+
+  it("permits sittable use only within the seat interact cylinder in an owned claimed unit", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      boundMinX: 0,
+      boundMaxX: 10,
+      boundMinZ: 0,
+      boundMaxZ: 10,
+    });
+    const spec = apartmentSittableSpecFromModelPath("static/models/objects/chair.glb");
+    expect(spec).not.toBeNull();
+    const conn = mockConn([unit]);
+    const anchorX = 4;
+    const anchorZ = 5;
+    const radiusM = spec!.interactRadiusM;
+    expect(
+      clientMayUseApartmentSittable(conn, testIdentity as never, unit.unitKey, { x: 4.2, y: 10, z: 5.1 }, anchorX, anchorZ, radiusM),
+    ).toBe(true);
+    expect(
+      clientMayUseApartmentSittable(conn, testIdentity as never, unit.unitKey, { x: 8, y: 10, z: 8 }, anchorX, anchorZ, radiusM),
+    ).toBe(false);
   });
 
   /** East-bay façade boxes abut in Z; centroid containment can disagree with hull membership. */

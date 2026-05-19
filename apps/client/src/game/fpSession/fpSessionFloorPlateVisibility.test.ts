@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   fpApplyResidentialInteriorPlateBandOverride,
   fpResolveStairwellLitterVisible,
+  fpResolveTopFloorResidentialShellUnitFilter,
+  fpResolveTopFloorResidentialShellVisible,
   fpResolveUnitInteriorMeshVisible,
   fpShouldExpandContainingResidentialShellFrustumBounds,
 } from "./fpSessionFloorPlateVisibility";
@@ -67,6 +69,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
       residentialUnitId: "unit_e_004",
       residentialExteriorGlass: true,
       genericInteriorVisibleInResidentialUnit: false,
+      apartmentSwingDoor: false,
     };
 
     expect(
@@ -100,6 +103,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialUnitId: "unit_e_003",
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
         },
         unitInteriorVisible: true,
         apartmentFurnitureInteriorVisible: true,
@@ -116,6 +120,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialUnitId: "unit_e_004",
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
         },
         unitInteriorVisible: true,
         apartmentFurnitureInteriorVisible: true,
@@ -134,6 +139,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialUnitId: null,
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
         },
         unitInteriorVisible: true,
         apartmentFurnitureInteriorVisible: true,
@@ -150,9 +156,42 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialUnitId: null,
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: true,
+          apartmentSwingDoor: false,
         },
         unitInteriorVisible: true,
         apartmentFurnitureInteriorVisible: true,
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps instanced apartment swing doors visible indoors when near the building footprint", () => {
+    const doorEntry = {
+      apartmentUnitKey: null,
+      residentialUnitId: null,
+      residentialExteriorGlass: false,
+      genericInteriorVisibleInResidentialUnit: false,
+      apartmentSwingDoor: true,
+    };
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: doorEntry,
+        unitInteriorVisible: true,
+        apartmentFurnitureInteriorVisible: true,
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: doorEntry,
+        unitInteriorVisible: false,
+        apartmentFurnitureInteriorVisible: false,
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
@@ -213,6 +252,47 @@ describe("fpShouldExpandContainingResidentialShellFrustumBounds", () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe("fpResolveTopFloorResidentialShell visibility", () => {
+  it("restricts top-floor shells to the containing unit indoors", () => {
+    expect(
+      fpResolveTopFloorResidentialShellUnitFilter({
+        insideResidentialUnit: true,
+        containingResidentialUnitId: "unit_e_003",
+      }),
+    ).toBe("unit_e_003");
+    expect(
+      fpResolveTopFloorResidentialShellVisible({
+        shellUnitId: "unit_e_003",
+        onlyUnitId: "unit_e_003",
+        unitInteriorVisible: true,
+      }),
+    ).toBe(true);
+    expect(
+      fpResolveTopFloorResidentialShellVisible({
+        shellUnitId: "unit_e_004",
+        onlyUnitId: "unit_e_003",
+        unitInteriorVisible: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the full top-floor shell set for exterior views", () => {
+    expect(
+      fpResolveTopFloorResidentialShellUnitFilter({
+        insideResidentialUnit: false,
+        containingResidentialUnitId: null,
+      }),
+    ).toBeNull();
+    expect(
+      fpResolveTopFloorResidentialShellVisible({
+        shellUnitId: "unit_e_004",
+        onlyUnitId: null,
+        unitInteriorVisible: true,
+      }),
+    ).toBe(true);
   });
 });
 

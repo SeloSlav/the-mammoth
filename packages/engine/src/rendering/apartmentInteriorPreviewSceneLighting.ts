@@ -5,6 +5,9 @@ import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "./apartmentInteriorVisualProf
 const APARTMENT_INTERIOR_PREVIEW_LIGHT_LAYER_MASK =
   (1 << 0) | (1 << 3) | (1 << 5);
 
+/** Dark void — matches in-game interior corners; not the orbit editor's light-gray studio. */
+export const APARTMENT_INTERIOR_PREVIEW_BACKGROUND = 0x121110;
+
 export type ApartmentInteriorPreviewSceneLightingMount = {
   bounceHemi: THREE.HemisphereLight;
   bounceFill: THREE.AmbientLight;
@@ -73,4 +76,34 @@ export function syncApartmentInteriorPreviewSceneLighting(input: {
   input.bounceHemi.intensity = bounce.hemiIntensity;
   input.bounceFill.color.setHex(bounce.fill);
   input.bounceFill.intensity = bounce.fillIntensity;
+}
+
+export type ApartmentInteriorPreviewSceneAtmosphereRestore = {
+  background: THREE.Color;
+  fog: THREE.Fog | THREE.FogExp2 | null;
+};
+
+export function captureApartmentInteriorPreviewSceneAtmosphere(
+  scene: THREE.Scene,
+): ApartmentInteriorPreviewSceneAtmosphereRestore {
+  const bg =
+    scene.background instanceof THREE.Color
+      ? scene.background.clone()
+      : new THREE.Color(0xe8edf4);
+  return { background: bg, fog: scene.fog };
+}
+
+/** Drop bright studio fog/background so layout preview reads like the FP flat, not the orbit slab. */
+export function syncApartmentInteriorPreviewSceneAtmosphere(
+  scene: THREE.Scene,
+  active: boolean,
+  restore: ApartmentInteriorPreviewSceneAtmosphereRestore,
+): void {
+  if (active) {
+    scene.background = new THREE.Color(APARTMENT_INTERIOR_PREVIEW_BACKGROUND);
+    scene.fog = null;
+    return;
+  }
+  scene.background = restore.background.clone();
+  scene.fog = restore.fog;
 }
