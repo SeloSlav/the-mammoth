@@ -4,7 +4,7 @@ overview: Add CPU-side room/cell visibility for in-unit apartment props using au
 todos:
   - id: engine-room-grid
     content: Add packages/engine/src/spatial/apartmentUnitRoomGrid.ts with build + query API and vitest coverage (T-wall, open plan, strict camera room)
-    status: pending
+    status: in_progress
   - id: export-engine
     content: Export room grid types/functions from packages/engine/src/index.ts
     status: pending
