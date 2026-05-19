@@ -18,6 +18,7 @@ import {
   PlayerPresentationManager,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
+  bindMammothApartmentInteriorViewmodelEnv,
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
   prepareMammothApartmentInteriorContentRoots,
@@ -408,6 +409,14 @@ export async function mountFpSession(
       mesh.receiveShadow = false;
     }
   };
+  let syncFpViewmodelReadableEnv = (): void => {
+    const tex = scene.userData.mammothFpMetallicReadableEnv;
+    bindMammothApartmentInteriorViewmodelEnv(
+      headPitch,
+      tex instanceof THREE.Texture ? tex : null,
+    );
+  };
+
   const refreshApartmentInteriorMeshes = () => {
     const decorRoot = scene.getObjectByName("apartment_unit_decor_root");
     if (decorRoot) {
@@ -421,6 +430,7 @@ export async function mountFpSession(
         tex instanceof THREE.Texture ? tex : null,
       );
     }
+    syncFpViewmodelReadableEnv();
     unitInteriorMeshEntries.length = 0;
     unitInteriorMeshEntries.push(...collectFpSessionUnitInteriorMeshEntries(buildingRoot));
     unitInteriorMeshes.length = 0;
@@ -674,6 +684,7 @@ export async function mountFpSession(
     }),
   );
   headPitch.traverse((obj) => obj.layers.set(FP_VIEWMODEL_RENDER_LAYER));
+  syncFpViewmodelReadableEnv();
   camera.layers.enable(FP_VIEWMODEL_RENDER_LAYER);
   camera.layers.enable(FP_RESIDENTIAL_UNIT_INTERIOR_LAYER);
   camera.layers.enable(FP_APARTMENT_DECOR_PROP_LAYER);

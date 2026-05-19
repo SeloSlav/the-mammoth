@@ -184,7 +184,9 @@ export {
 export {
   applyMammothApartmentInteriorLightLayers,
   MAMMOTH_APARTMENT_DECOR_PROP_LAYER,
+  MAMMOTH_APARTMENT_INTERIOR_FILL_LIGHT_LAYER_MASK,
   MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK,
+  MAMMOTH_FP_VIEWMODEL_RENDER_LAYER,
   MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER,
   syncMammothApartmentInteriorViewLayers,
   tagApartmentDecorPropMeshesForInteriorLighting,
@@ -206,6 +208,7 @@ export {
 export {
   applyMammothApartmentInteriorEditorLayoutPresentation,
   applyMammothApartmentInteriorPresentation,
+  bindMammothApartmentInteriorViewmodelEnv,
   frameMammothApartmentInteriorGameplayPreview,
   prepareMammothApartmentInteriorContentRoots,
   tagMammothApartmentInteriorShellRoot,

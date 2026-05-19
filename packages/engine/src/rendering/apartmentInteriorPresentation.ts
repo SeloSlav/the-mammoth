@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { fpLocomotionConstants } from "../fpLocomotion.js";
 import {
+  MAMMOTH_FP_VIEWMODEL_RENDER_LAYER,
   tagApartmentDecorPropMeshesForInteriorLighting,
   tagResidentialUnitInteriorMeshesUnder,
   syncMammothApartmentInteriorViewLayers,
 } from "./apartmentInteriorLayers.js";
 import {
+  bindMammothApartmentPropReadableEnv,
   isApartmentInteriorShellMesh,
   MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD,
 } from "./bindMammothApartmentDecorIndirectEnv.js";
@@ -62,12 +64,25 @@ export type MammothApartmentInteriorPresentationInput = {
   pmremTexture: THREE.Texture | null;
   shellRoots: readonly THREE.Object3D[];
   decorRoots: readonly THREE.Object3D[];
+  /** FP hands/weapon on layer {@link MAMMOTH_FP_VIEWMODEL_RENDER_LAYER}. */
+  viewmodelRoots?: readonly THREE.Object3D[];
   view?: {
     camera: THREE.Camera;
     raycasters?: readonly THREE.Raycaster[];
   };
   atmosphereRestore?: MammothApartmentInteriorAtmosphereRestore;
 };
+
+/** Same PMREM as decor/shell so metal/rough PBR on the viewmodel matches the flat. */
+export function bindMammothApartmentInteriorViewmodelEnv(
+  viewmodelRoot: THREE.Object3D,
+  envTexture: THREE.Texture | null,
+): void {
+  viewmodelRoot.traverse((obj) => {
+    obj.layers.enable(MAMMOTH_FP_VIEWMODEL_RENDER_LAYER);
+  });
+  bindMammothApartmentPropReadableEnv(viewmodelRoot, envTexture);
+}
 
 /**
  * **The** editor + FP apartment interior pipeline: scene lights, atmosphere, PMREM, view layers.
@@ -93,6 +108,11 @@ export function applyMammothApartmentInteriorPresentation(
     decorRoots: input.decorRoots,
     shellRoots: input.shellRoots,
   });
+  if (input.viewmodelRoots) {
+    for (const root of input.viewmodelRoots) {
+      bindMammothApartmentInteriorViewmodelEnv(root, input.pmremTexture);
+    }
+  }
 
   const viewActive =
     interior01 > APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold;

@@ -1,15 +1,29 @@
 import * as THREE from "three";
 
-/** Keep in sync with `apps/client` `fpSessionConstants` and practical-light masks. */
+/** Keep in sync with `apps/client` `fpSessionConstants`. */
+export const MAMMOTH_FP_VIEWMODEL_RENDER_LAYER = 1;
 export const MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER = 3;
 export const MAMMOTH_APARTMENT_DECOR_PROP_LAYER = 5;
 
+/**
+ * Window/lamp/TV practicals — world + shell + decor only (not the FP viewmodel layer).
+ */
 export const MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK =
-  (1 << 0) | (1 << MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER) | (1 << MAMMOTH_APARTMENT_DECOR_PROP_LAYER);
+  (1 << 0) |
+  (1 << MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER) |
+  (1 << MAMMOTH_APARTMENT_DECOR_PROP_LAYER);
 
-/** Corridor (0) + residential shell (3) + decor (5) — required for global rig to reach unit meshes. */
+/**
+ * Hemisphere / ambient / directional + interior bounce — includes viewmodel so hands/weapons
+ * match the flat; practical spots stay on {@link MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK}.
+ */
+export const MAMMOTH_APARTMENT_INTERIOR_FILL_LIGHT_LAYER_MASK =
+  MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK |
+  (1 << MAMMOTH_FP_VIEWMODEL_RENDER_LAYER);
+
+/** Global + bounce rigs — corridor (0), viewmodel (1), shell (3), decor (5). */
 export function applyMammothApartmentInteriorLightLayers(light: THREE.Light): void {
-  light.layers.mask = MAMMOTH_APARTMENT_INTERIOR_LIGHT_LAYER_MASK;
+  light.layers.mask = MAMMOTH_APARTMENT_INTERIOR_FILL_LIGHT_LAYER_MASK;
 }
 
 /**
