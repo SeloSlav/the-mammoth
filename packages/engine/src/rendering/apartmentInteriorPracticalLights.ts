@@ -12,9 +12,58 @@ export type ApartmentPracticalLightKind = "window" | ApartmentDecorEmitterKind;
 export type ApartmentPracticalLightSpec = {
   kind: ApartmentPracticalLightKind;
   position: THREE.Vector3;
-  /** Window + TV spots — emission direction in world space. */
+  /** Spot emitters — primary emission direction in world space. */
   direction?: THREE.Vector3;
 };
+
+type ApartmentPracticalSpotParams = {
+  color: number;
+  intensity: number;
+  distance: number;
+  angle: number;
+  penumbra: number;
+};
+
+function apartmentPracticalSpotParams(
+  kind: Extract<
+    ApartmentPracticalLightKind,
+    "window" | "tv" | "computer" | "standing" | "ceiling"
+  >,
+): ApartmentPracticalSpotParams {
+  const profile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical;
+  switch (kind) {
+    case "window":
+      return profile.window;
+    case "tv":
+      return profile.tv;
+    case "computer":
+      return profile.computer;
+    case "standing":
+      return profile.standing;
+    case "ceiling":
+      return profile.ceiling;
+  }
+}
+
+function isApartmentPracticalSpotKind(
+  kind: ApartmentPracticalLightKind,
+): kind is Extract<
+  ApartmentPracticalLightKind,
+  "window" | "tv" | "computer" | "standing" | "ceiling"
+> {
+  return (
+    kind === "window" ||
+    kind === "tv" ||
+    kind === "computer" ||
+    kind === "standing" ||
+    kind === "ceiling"
+  );
+}
+
+/** World-down task/ceiling pool — shade and flush mounts aim into the room, not at walls. */
+function apartmentPracticalDownwardDirection(): THREE.Vector3 {
+  return _scratchDir.set(0, -1, 0).clone();
+}
 
 const _scratchDir = new THREE.Vector3();
 const _lightParentInv = new THREE.Matrix4();
@@ -71,11 +120,11 @@ export function apartmentPracticalLightSpecFromDecorGroup(
     };
   }
 
-  if (kind === "standing") {
+  if (kind === "standing" || kind === "ceiling") {
     _decorBoxScratch.setFromObject(group);
     if (_decorBoxScratch.isEmpty()) {
       group.getWorldPosition(_decorCenterScratch);
-    } else {
+    } else if (kind === "standing") {
       _decorBoxScratch.getSize(_decorSizeScratch);
       const shadeInset = Math.max(0.05, _decorSizeScratch.y * 0.1);
       _decorCenterScratch.set(
@@ -83,14 +132,28 @@ export function apartmentPracticalLightSpecFromDecorGroup(
         _decorBoxScratch.max.y - shadeInset,
         (_decorBoxScratch.min.z + _decorBoxScratch.max.z) * 0.5,
       );
+    } else {
+      _decorBoxScratch.getSize(_decorSizeScratch);
+      const bottomInset = Math.max(0.02, _decorSizeScratch.y * 0.08);
+      _decorCenterScratch.set(
+        (_decorBoxScratch.min.x + _decorBoxScratch.max.x) * 0.5,
+        _decorBoxScratch.min.y + bottomInset,
+        (_decorBoxScratch.min.z + _decorBoxScratch.max.z) * 0.5,
+      );
     }
     return {
       kind,
       position: _decorCenterScratch.clone(),
+      direction: apartmentPracticalDownwardDirection(),
     };
   }
 
-  group.getWorldPosition(_decorCenterScratch);
+  _decorBoxScratch.setFromObject(group);
+  if (_decorBoxScratch.isEmpty()) {
+    group.getWorldPosition(_decorCenterScratch);
+  } else {
+    _decorBoxScratch.getCenter(_decorCenterScratch);
+  }
   return {
     kind,
     position: _decorCenterScratch.clone(),
@@ -249,18 +312,8 @@ export function mountApartmentPracticalLights(
       spec.position,
       spec.direction,
     );
-    if (
-      (spec.kind === "window" ||
-        spec.kind === "tv" ||
-        spec.kind === "computer") &&
-      local.direction
-    ) {
-      const p =
-        spec.kind === "tv"
-          ? profile.tv
-          : spec.kind === "computer"
-            ? profile.computer
-            : profile.window;
+    if (local.direction && isApartmentPracticalSpotKind(spec.kind)) {
+      const p = apartmentPracticalSpotParams(spec.kind);
       const spot = new THREE.SpotLight(
         p.color,
         p.intensity,
@@ -279,12 +332,7 @@ export function mountApartmentPracticalLights(
       continue;
     }
 
-    const params =
-      spec.kind === "chandelier"
-        ? profile.chandelier
-        : spec.kind === "standing"
-          ? profile.standing
-          : profile.ceiling;
+    const params = profile.chandelier;
     const point = new THREE.PointLight(
       params.color,
       params.intensity,

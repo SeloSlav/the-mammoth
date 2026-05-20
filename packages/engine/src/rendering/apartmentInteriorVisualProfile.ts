@@ -178,9 +178,13 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xfff0dc,
 
-      intensity: 2.15,
+      intensity: 2.35,
 
-      distance: 3.7,
+      distance: 3.8,
+
+      angle: Math.PI / 2.35,
+
+      penumbra: 0.52,
 
     },
 
@@ -188,9 +192,13 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xffe8c8,
 
-      intensity: 2.35,
+      intensity: 2.65,
 
-      distance: 4.2,
+      distance: 3.6,
+
+      angle: Math.PI / 3.15,
+
+      penumbra: 0.46,
 
     },
 

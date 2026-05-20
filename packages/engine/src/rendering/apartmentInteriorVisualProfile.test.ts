@@ -31,6 +31,9 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     expect(practical.window.distance).toBeLessThan(10);
     expect(practical.chandelier.distance).toBeLessThan(6.5);
     expect(practical.standing.distance).toBeLessThan(5);
+    expect(practical.standing.angle).toBeGreaterThan(0);
+    expect(practical.standing.penumbra).toBeGreaterThan(0);
+    expect(practical.ceiling.angle).toBeGreaterThan(practical.standing.angle);
     expect(practical.tv.distance).toBeLessThan(14);
     expect(practical.computer.distance).toBeLessThan(12);
     expect(practical.computer.color).toBe(practical.tv.color);
