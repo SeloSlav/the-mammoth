@@ -51,8 +51,6 @@ export type EditorMode =
   | "landing_preview"
   | "stairwell_preview";
 
-export type EditorCameraMode = "orbit" | "fly";
-
 export type FpAuthorCameraKind = "gameplay" | "orbit";
 
 export type FpAuthorSubjectKind = "weapon" | "consumable";
@@ -131,7 +129,6 @@ export interface EditorState {
   gridSnapM: number;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
-  cameraMode: EditorCameraMode;
   flySpeedMps: number;
   stairWellAuthorScope: StairWellAuthoringScope;
   fpAuthorCamera: FpAuthorCameraKind;
@@ -199,15 +196,12 @@ export interface EditorState {
   cloneMyApartmentObjectGroup: (groupId: string) => void;
   deleteMyApartmentObjectGroupMembers: (groupId: string) => boolean;
   deleteMyApartmentLayoutSelection: () => boolean;
+  cloneMyApartmentLayoutSelection: () => boolean;
   selectMyApartmentSavedObjectGroup: (groupId: string) => void;
   setDirty: (dirty: boolean) => void;
   setCollisionArtifactsStatus: (status: CollisionArtifactsStatus | null) => void;
   setTransformMode: (m: TransformMode) => void;
   setGridSnapM: (m: number) => void;
-  setShadowsEnabled: (on: boolean) => void;
-  setUseHdriEnvironment: (on: boolean) => void;
-  setCameraMode: (mode: EditorCameraMode) => void;
-  setFlySpeedMps: (speed: number) => void;
   setStairWellAuthorScope: (scope: StairWellAuthoringScope) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;

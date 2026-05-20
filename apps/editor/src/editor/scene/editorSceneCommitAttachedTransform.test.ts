@@ -1,7 +1,16 @@
-import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { resolveMyApartmentDecorCommittedDy } from "./editorSceneCommitAttachedTransform.js";
-import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "../myApartment/editorMyApartmentMeshes.js";
+import {
+  resolveMyApartmentDecorCommittedDy,
+  resolveMyApartmentWallCommittedDy,
+} from "./editorSceneCommitAttachedTransform.js";
+import {
+  EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY,
+  EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
+  syncEditorMyApartmentWallsOnMount,
+} from "../myApartment/editorMyApartmentMeshes.js";
+import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
+import * as THREE from "three";
+import { editorMyApartmentSelectedIdForWall } from "../myApartment/editorMyApartmentSelection.js";
 
 describe("resolveMyApartmentDecorCommittedDy", () => {
   it("serializes decor dy from the free-space pivot height", () => {
@@ -33,5 +42,103 @@ describe("resolveMyApartmentDecorCommittedDy", () => {
         targetRoot: root,
       }),
     ).toBeCloseTo(2.1 - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y, 6);
+  });
+});
+
+describe("resolveMyApartmentWallCommittedDy", () => {
+  it("serializes wall dy from the slab bottom (world AABB min Y)", () => {
+    const root = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.userData[EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY] = true;
+    mesh.scale.set(2, 0.6, 0.07);
+    mesh.position.y = mesh.scale.y / 2;
+    root.add(mesh);
+    root.position.set(0, EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 1.35, 0);
+    root.updateMatrixWorld(true);
+
+    expect(
+      resolveMyApartmentWallCommittedDy({ targetRoot: root }),
+    ).toBeCloseTo(1.35, 4);
+  });
+});
+
+describe("syncEditorMyApartmentWallsOnMount wall dy", () => {
+  it("restores elevated lintel walls from saved dy when another wall is synced", () => {
+    const root = new THREE.Group();
+    const selectionGroups: Record<string, THREE.Group> = {};
+    const mount = {
+      root,
+      selectionGroups,
+      mountedWallIds: new Set<string>(),
+      mountedMirrorIds: new Set<string>(),
+      mountedDecorIds: new Set<string>(),
+      practicalLights: null,
+      resyncPracticalLights: () => {},
+      dispose: () => {},
+    };
+    const spans = {
+      unitId: "",
+      strictMinX: 0,
+      strictMinZ: 0,
+      spanX: 8,
+      spanZ: 8,
+      prefabOriginX: 0,
+      prefabOriginZ: 0,
+      prefabFootprintSx: 8,
+      prefabFootprintSz: 8,
+    };
+    Object.assign(root.userData, {
+      editorMyApartmentSlabSx: 8,
+      editorMyApartmentSlabSz: 8,
+      editorMyApartmentStrictMinX: 0,
+      editorMyApartmentStrictMinZ: 0,
+      editorMyApartmentStrictSpanX: 8,
+      editorMyApartmentStrictSpanZ: 8,
+      editorMyApartmentPrefabOriginX: 0,
+      editorMyApartmentPrefabOriginZ: 0,
+      editorMyApartmentInteriorCeilingInnerY:
+        EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 2.8,
+    });
+
+    const lintelId = "wall_lintel";
+    const doc = {
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      wallItems: [
+        {
+          id: lintelId,
+          fx: 0.5,
+          fz: 0.5,
+          dy: 1.4,
+          yawRad: 0,
+          pitchRad: 0,
+          sizeX: 1.2,
+          sizeY: 0.5,
+          sizeZ: 0.07,
+          material: { useMetalnessMap: false, useHeightMap: false },
+        },
+        {
+          id: "wall_new",
+          fx: 0.2,
+          fz: 0.2,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          sizeX: 2,
+          sizeY: 2.6,
+          sizeZ: 0.07,
+          material: { useMetalnessMap: false, useHeightMap: false },
+        },
+      ],
+    };
+
+    syncEditorMyApartmentWallsOnMount(mount, doc, spans);
+
+    const lintelGroup = selectionGroups[editorMyApartmentSelectedIdForWall(lintelId)]!;
+    lintelGroup.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(lintelGroup);
+    expect(box.min.y).toBeCloseTo(
+      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + 1.4,
+      3,
+    );
   });
 });

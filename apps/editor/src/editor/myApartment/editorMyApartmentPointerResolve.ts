@@ -1,16 +1,34 @@
-import type { Object3D } from "three";
+import * as THREE from "three";
+import {
+  EDITOR_MY_APARTMENT_WALL_OPENING_PROXY_UD,
+} from "@the-mammoth/world";
 import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
+  editorMyApartmentSelectedIdForWallOpening,
 } from "./editorMyApartmentSelection.js";
 
-export function resolveEditorMyApartmentLayoutPick(hit: Object3D): {
+export function resolveEditorMyApartmentLayoutPick(hit: THREE.Object3D): {
   id: string;
-  target: Object3D;
+  target: THREE.Object3D;
 } | null {
-  let o: Object3D | null = hit;
+  let o: THREE.Object3D | null = hit;
   while (o) {
+    if (o.userData[EDITOR_MY_APARTMENT_WALL_OPENING_PROXY_UD] === true) {
+      const openingId = o.userData.mammothEditorMyApartmentWallOpeningId as string | undefined;
+      let wallWalk: THREE.Object3D | null = o.parent;
+      while (wallWalk) {
+        const wallId = wallWalk.userData.mammothEditorMyApartmentWallId as string | undefined;
+        if (wallId && openingId) {
+          return {
+            target: o,
+            id: editorMyApartmentSelectedIdForWallOpening(wallId, openingId),
+          };
+        }
+        wallWalk = wallWalk.parent;
+      }
+    }
     const decorId = o.userData.mammothEditorMyApartmentDecorId as string | undefined;
     if (decorId) {
       return {

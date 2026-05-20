@@ -8,6 +8,7 @@ import {
 
   apartmentUnitBoundsFromAuthoringFractionMapping,
   mountEditorMyApartmentFurnitureUnder,
+  syncEditorMyApartmentDecorOnMount,
   syncEditorMyApartmentMirrorsOnMount,
   syncEditorMyApartmentWallsOnMount,
   updateEditorMyApartmentMountFromDoc,
@@ -28,7 +29,10 @@ import {
 
 import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 
-import { setEditorMyApartmentPieceGroups } from "./editorMyApartmentPieceGroupBridge.js";
+import {
+  registerEditorMyApartmentWallsMountSyncRequest,
+  setEditorMyApartmentPieceGroups,
+} from "./editorMyApartmentPieceGroupBridge.js";
 
 import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
 
@@ -39,6 +43,7 @@ import {
   type ApartmentMountSyncInputs,
 
 } from "./editorMyApartmentMountSync.js";
+import { collectChangedOwnedApartmentWallIds } from "./preserveOwnedApartmentMountPlacementRefs.js";
 
 
 
@@ -68,7 +73,7 @@ export function createEditorSceneMyApartmentLifecycle(
 
   deps: EditorMyApartmentLifecycleDeps,
 
-): { dispose: () => void } {
+): { dispose: () => void; flushDeferredMountSync: () => void; flushPendingWallsVisualSync: () => void } {
 
   let disposed = false;
 
@@ -79,8 +84,19 @@ export function createEditorSceneMyApartmentLifecycle(
   let decorTemplates: EditorMyApartmentDecorTemplateMap = new Map();
 
   let prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
+  let pendingWallsVisualSync = false;
 
+  function runWallsMountSyncIfReady(): void {
+    if (deps.getShouldHoldReplicaResync()) {
+      pendingWallsVisualSync = true;
+      return;
+    }
+    pendingWallsVisualSync = false;
+    prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
+    syncPlacementIncremental("walls-only");
+  }
 
+  registerEditorMyApartmentWallsMountSyncRequest(runWallsMountSyncIfReady);
 
   function teardownFurniture(): void {
 
@@ -213,9 +229,7 @@ export function createEditorSceneMyApartmentLifecycle(
 
 
 
-  function syncWallsOrMirrorsIncremental(
-    kind: "walls-only" | "mirrors-only",
-  ): void {
+  function syncPlacementIncremental(kind: "decor-only" | "walls-only" | "mirrors-only"): void {
     const parent = deps.getStructuralRoot();
     if (!parent || !mount) {
       void reconcile();
@@ -231,8 +245,21 @@ export function createEditorSceneMyApartmentLifecycle(
       builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
     });
     const doc = st.ownedApartmentBuiltins;
-    if (kind === "walls-only") {
-      syncEditorMyApartmentWallsOnMount(mount, doc, authoringFractionMapping);
+    if (kind === "decor-only") {
+      syncEditorMyApartmentDecorOnMount(
+        mount,
+        decorTemplates,
+        doc,
+        authoringFractionMapping,
+      );
+    } else if (kind === "walls-only") {
+      const changedWallIds = collectChangedOwnedApartmentWallIds(
+        prevMountInputs.wallItems,
+        doc.wallItems,
+      );
+      syncEditorMyApartmentWallsOnMount(mount, doc, authoringFractionMapping, {
+        onlyWallIds: changedWallIds,
+      });
     } else {
       syncEditorMyApartmentMirrorsOnMount(mount, doc, authoringFractionMapping);
     }
@@ -243,12 +270,28 @@ export function createEditorSceneMyApartmentLifecycle(
   function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
     const kind = classifyApartmentMountSyncChange(prevMountInputs, nextMountInputs);
     if (kind === "none") return;
-    prevMountInputs = nextMountInputs;
-    if (kind === "walls-only" || kind === "mirrors-only") {
-      syncWallsOrMirrorsIncremental(kind);
+    if (kind === "decor-only" || kind === "walls-only" || kind === "mirrors-only") {
+      /** Gizmo drags patch the store every frame — rebuilding meshes mid-gesture resets pose. */
+      if (deps.getShouldHoldReplicaResync()) {
+        prevMountInputs = nextMountInputs;
+        return;
+      }
+      prevMountInputs = nextMountInputs;
+      syncPlacementIncremental(kind);
       return;
     }
+    prevMountInputs = nextMountInputs;
     void reconcile();
+  }
+
+  /** Reconcile store → meshes after a held gizmo gesture (commit landed while dragging was still true). */
+  function flushDeferredMountSync(): void {
+    onStoreChange(captureApartmentMountSyncInputs(useEditorStore.getState()));
+  }
+
+  function flushPendingWallsVisualSync(): void {
+    if (!pendingWallsVisualSync) return;
+    runWallsMountSyncIfReady();
   }
 
 
@@ -267,9 +310,15 @@ export function createEditorSceneMyApartmentLifecycle(
 
   return {
 
+    flushDeferredMountSync,
+
+    flushPendingWallsVisualSync,
+
     dispose: () => {
 
       disposed = true;
+
+      registerEditorMyApartmentWallsMountSyncRequest(null);
 
       unsubStore();
 

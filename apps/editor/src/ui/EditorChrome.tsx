@@ -60,10 +60,6 @@ export function EditorChrome() {
     collisionArtifactsStatus,
     transformMode,
     gridSnapM,
-    shadowsEnabled,
-    useHdriEnvironment,
-    cameraMode,
-    flySpeedMps,
     stairWellAuthorScope,
     historyPast,
     historyFuture,
@@ -81,10 +77,6 @@ export function EditorChrome() {
     setFocusedStoryLevelIndex,
     setTransformMode,
     setGridSnapM,
-    setShadowsEnabled,
-    setUseHdriEnvironment,
-    setCameraMode,
-    setFlySpeedMps,
     setStairWellAuthorScope,
     undo,
     redo,
@@ -326,7 +318,6 @@ export function EditorChrome() {
           contentIndex={contentIndex}
           workspace={workspace}
           setWorkspace={setWorkspace}
-          setCameraMode={setCameraMode}
           mode={mode}
           setMode={setMode}
           stairWellAuthorScope={stairWellAuthorScope}
@@ -335,7 +326,6 @@ export function EditorChrome() {
         <EditorChromeMyApartment
           mode={mode}
           setMode={setMode}
-          setCameraMode={setCameraMode}
           enterMyApartmentLayoutMode={enterMyApartmentLayoutMode}
           contentIndex={contentIndex}
         />
@@ -516,84 +506,15 @@ export function EditorChrome() {
             </select>
           </>
         ) : null}
-        {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
-          <>
-            <span style={label}>Camera</span>
-            <div>
-              {(["orbit", "fly"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  style={{
-                    ...rowBtn,
-                    background: cameraMode === m ? "#5a3d2d" : "#2a2a34",
-                    border: "1px solid #444",
-                    color: "#fff",
-                  }}
-                  onClick={() => setCameraMode(m)}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            <span style={label}>Fly speed (m/s)</span>
-            <input
-              style={input}
-              type="number"
-              min={1}
-              step={1}
-              value={flySpeedMps}
-              onChange={(e) => setFlySpeedMps(Number(e.target.value) || 1)}
-            />
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 11,
-                opacity: 0.78,
-                lineHeight: 1.35,
-              }}
-            >
-              Fly camera: hold left mouse to look, then use <code>WASD</code> +{" "}
-              <code>R</code>/<code>F</code>.
-            </p>
-            {mode !== "my_apartment_layout" ? (
-              <EditorChromeSceneGizmoBlock
-                transformMode={transformMode}
-                setTransformMode={setTransformMode}
-                gridSnapM={gridSnapM}
-                setGridSnapM={setGridSnapM}
-              />
-            ) : null}
-          </>
-        ) : null}
-        <label style={{ ...label, textTransform: "none", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={shadowsEnabled}
-            onChange={(e) => setShadowsEnabled(e.target.checked)}
-          />{" "}
-          Shadows (directional)
-        </label>
-        <label style={{ ...label, textTransform: "none", cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={useHdriEnvironment}
-            onChange={(e) => setUseHdriEnvironment(e.target.checked)}
-          />{" "}
-          HDRI room environment
-        </label>
-        {mode === "my_apartment_layout" ? (
-          <p
-            style={{
-              margin: "-4px 0 6px",
-              fontSize: 11,
-              opacity: 0.78,
-              lineHeight: 1.35,
-            }}
-          >
-            Apartment layout previews use the in-game FP interior profile with window,
-            chandelier, and ceiling practical lights plus shared decor/shell grading.
-          </p>
+        {mode !== "fp_viewmodel" &&
+        mode !== "fp_consumable" &&
+        mode !== "my_apartment_layout" ? (
+          <EditorChromeSceneGizmoBlock
+            transformMode={transformMode}
+            setTransformMode={setTransformMode}
+            gridSnapM={gridSnapM}
+            setGridSnapM={setGridSnapM}
+          />
         ) : null}
         <span style={label}>History</span>
         <div>

@@ -84,6 +84,10 @@ export function cloneMyApartmentObjectGroupInDoc(
         fx: clampOwnedApartmentLayoutFraction(item.fx + offsetFx),
         fz: clampOwnedApartmentLayoutFraction(item.fz + offsetFz),
         material: { ...item.material },
+        openings: (item.openings ?? []).map((opening) => ({
+          ...opening,
+          id: createEntityId(),
+        })),
       });
       newMemberSelectedIds.push(editorMyApartmentSelectedIdForWall(id));
       continue;

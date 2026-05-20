@@ -51,7 +51,9 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     if (!obj.geometry) return false;
     if (
       obj !== root &&
-      (obj.userData.editorLandingOpeningProxy === true || obj.userData.editorStairOpeningProxy === true)
+      (obj.userData.editorLandingOpeningProxy === true ||
+        obj.userData.editorStairOpeningProxy === true ||
+        obj.userData.editorMyApartmentWallOpeningProxy === true)
     ) {
       return false;
     }

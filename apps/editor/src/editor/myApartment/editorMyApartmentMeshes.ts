@@ -16,8 +16,16 @@ import {
 import {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
   mapOwnedApartmentLayoutFractionToWorldX,
+  mapOwnedApartmentWorldXToLayoutFraction,
   UNIT_SHELL_WALL_THICKNESS_M,
   applyOwnedApartmentWallSurfaceMaterial,
+  applyOwnedApartmentWallSurfaceMaterialToVisuals,
+  buildOwnedApartmentPartitionWallRefMesh,
+  rebuildOwnedApartmentPartitionWallVisual,
+  readOwnedApartmentPartitionWallLocalExtents,
+  clampOwnedApartmentWallOpeningsForLength,
+  clampWallOpeningTangentOffsetM,
+  syncOwnedApartmentWallOpeningProxies,
   buildApartmentPlanarMirrorVisual,
 } from "@the-mammoth/world";
 import {
@@ -31,11 +39,20 @@ import {
   type OwnedApartmentPlacedItem,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
+import {
+  applyMyApartmentWallSurfaceSnap,
+  maintainWallScalePinnedSpan,
+  previewRepresentableXZBounds,
+  snapOwnedApartmentWallYawRad,
+  type ConstrainMyApartmentWallScaleDrag,
+} from "./editorMyApartmentWallSnap.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
+  editorMyApartmentSelectedIdForWallOpening,
+  parseMyApartmentLayoutWallOpeningSelectedId,
 } from "./editorMyApartmentSelection.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
@@ -132,79 +149,12 @@ function clampPreviewXZToPlasterInterior(args: {
   };
 }
 
-function authoringPreviewSlabFootprintSx(spans: OwnedApartmentFractionToPreviewXZ): number {
-  const slabSx = spans.slabFootprintSx;
-  if (typeof slabSx === "number" && slabSx > spans.prefabFootprintSx) {
-    return slabSx;
-  }
-  return spans.prefabFootprintSx;
-}
-
-function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPreviewXZ): {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-} {
-  const wt = UNIT_SHELL_WALL_THICKNESS_M;
-  const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
-  const sx = authoringPreviewSlabFootprintSx(spans);
-  const sz = spans.prefabFootprintSz;
-  const ixPl0 = wt + e;
-  const ixPl1 = sx - wt - e;
-  const izPl0 = wt + e;
-  const izPl1 = sz - wt - e;
-
-  const boundMinX = spans.strictMinX;
-  const boundMaxX = spans.strictMinX + spans.spanX;
-  const lxMinR =
-    mapOwnedApartmentLayoutFractionToWorldX(
-      boundMinX,
-      boundMaxX,
-      spans.unitId,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
-    ) - spans.prefabOriginX;
-  const lxMaxR =
-    mapOwnedApartmentLayoutFractionToWorldX(
-      boundMinX,
-      boundMaxX,
-      spans.unitId,
-      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
-    ) - spans.prefabOriginX;
-  const lzMinR =
-    spans.strictMinZ +
-    spans.spanZ * OWNED_APARTMENT_LAYOUT_FRACTION_MIN -
-    spans.prefabOriginZ;
-  const lzMaxR =
-    spans.strictMinZ +
-    spans.spanZ * OWNED_APARTMENT_LAYOUT_FRACTION_MAX -
-    spans.prefabOriginZ;
-
-  const ix0 = Math.max(ixPl0, lxMinR);
-  const ix1 = Math.min(ixPl1, lxMaxR);
-  const iz0 = Math.max(izPl0, lzMinR);
-  const iz1 = Math.min(izPl1, lzMaxR);
-
-  if (!(ix1 > ix0) || !(iz1 > iz0)) {
-    return {
-      minX: ixPl0,
-      maxX: ixPl1,
-      minZ: izPl0,
-      maxZ: izPl1,
-    };
-  }
-  return {
-    minX: ix0,
-    maxX: ix1,
-    minZ: iz0,
-    maxZ: iz1,
-  };
-}
-
 /**
  * Clamps prefab-slab XZ so props stay inside drywall and inside the portion of the slab that is
  * representable by the serialized fraction range.
  */
+export { previewRepresentableXZBounds } from "./editorMyApartmentWallSnap.js";
+
 export function clampPreviewXZToAuthoringInterior(
   spans: OwnedApartmentFractionToPreviewXZ,
   x: number,
@@ -496,18 +446,16 @@ export function foldWallSlabScaleIntoMesh(root: THREE.Group): THREE.Mesh | undef
   return mesh;
 }
 
-/**
- * While {@link TransformControls} scales the wall **group**, `object.scale` is the cumulative factor from
- * pointer-down, not a per-frame delta. Folding `mesh *= root` every `objectChange` therefore compounds the
- * active axis and leaks into idle axes — keep mesh fixed at gesture start until drag ends, then fold once.
- */
-export type ConstrainMyApartmentWallScaleDrag = {
-  meshScaleAtGestureStart: THREE.Vector3;
-};
-
+export {
+  applyMyApartmentWallSurfaceSnap,
+  clampWallAabbToUnitShellInterior,
+  snapOwnedApartmentWallYawRad,
+  type ConstrainMyApartmentWallScaleDrag,
+} from "./editorMyApartmentWallSnap.js";
 export function constrainMyApartmentWallRootPose(
   root: THREE.Object3D,
   scaleDrag?: ConstrainMyApartmentWallScaleDrag,
+  wallSnapOpts?: { autoYaw?: boolean; neighborSnap?: boolean },
 ): void {
   if (!(root instanceof THREE.Group)) return;
 
@@ -538,18 +486,16 @@ export function constrainMyApartmentWallRootPose(
     );
     const eps = 1e-9;
     root.scale.set(mx > eps ? ex / mx : 1, my > eps ? ey / my : 1, mz > eps ? ez / mz : 1);
+    if (scaleDrag.pinnedSpan) {
+      maintainWallScalePinnedSpan(root, scaleDrag.pinnedSpan);
+    }
   } else {
     foldWallSlabScaleIntoMesh(root);
   }
 
   const eulerW = new THREE.Euler().setFromQuaternion(root.quaternion, "YXZ");
-  const y = snapOwnedApartmentDecorYawRad(eulerW.y);
-  const x = THREE.MathUtils.clamp(
-    snapOwnedApartmentDecorPitchRad(eulerW.x),
-    -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
-    OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
-  );
-  qSnapYawScratch.setFromEuler(new THREE.Euler(x, y, 0, "YXZ"));
+  const y = snapOwnedApartmentWallYawRad(eulerW.y);
+  qSnapYawScratch.setFromEuler(new THREE.Euler(0, y, 0, "YXZ"));
   root.quaternion.copy(qSnapYawScratch);
 
   const mesh = findEditorMyApartmentWallSlabMesh(root);
@@ -573,48 +519,6 @@ export function constrainMyApartmentWallRootPose(
   }
 
   const meta = readAuthoringShellAuthoringMetaFromAncestors(root);
-  if (meta) {
-    const c = clampPreviewXZToAuthoringInterior(meta, root.position.x, root.position.z);
-    root.position.x = c.x;
-    root.position.z = c.z;
-  }
-
-  if (meta) {
-    root.updateMatrixWorld(true);
-    decorClampBoundsScratch.setFromObject(root);
-    decorClampBoundsScratch.getSize(decorClampSizeScratch);
-    decorClampBoundsScratch.getCenter(decorClampCenterScratch);
-    const bounds = previewRepresentableXZBounds(meta);
-    const minX = bounds.minX + EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const maxX = bounds.maxX - EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const minZ = bounds.minZ + EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-    const maxZ = bounds.maxZ - EDITOR_MY_APARTMENT_AUTHORING_AABB_BOUNDARY_SLACK_M;
-
-    let dx = 0;
-    if (decorClampSizeScratch.x > maxX - minX) {
-      dx = (minX + maxX) * 0.5 - decorClampCenterScratch.x;
-    } else if (decorClampBoundsScratch.min.x < minX) {
-      dx = minX - decorClampBoundsScratch.min.x;
-    } else if (decorClampBoundsScratch.max.x > maxX) {
-      dx = maxX - decorClampBoundsScratch.max.x;
-    }
-
-    let dz = 0;
-    if (decorClampSizeScratch.z > maxZ - minZ) {
-      dz = (minZ + maxZ) * 0.5 - decorClampCenterScratch.z;
-    } else if (decorClampBoundsScratch.min.z < minZ) {
-      dz = minZ - decorClampBoundsScratch.min.z;
-    } else if (decorClampBoundsScratch.max.z > maxZ) {
-      dz = maxZ - decorClampBoundsScratch.max.z;
-    }
-
-    if (dx !== 0 || dz !== 0) {
-      root.position.x += dx;
-      root.position.z += dz;
-    }
-  }
-
-  /** Keep slab top at or below hollow-shell interior ceiling (matches decor + runtime shell `vh`). */
   if (mesh) {
     const ceilY = meta?.interiorCeilingInnerY;
     const ceilCap =
@@ -624,39 +528,36 @@ export function constrainMyApartmentWallRootPose(
         ? ceilY - EDITOR_MY_APARTMENT_INTERIOR_SLACK_M
         : undefined;
     if (ceilCap !== undefined) {
-      for (let pass = 0; pass < 32; pass++) {
+      for (let pass = 0; pass < 8; pass++) {
         root.updateMatrixWorld(true);
         const tallBox = new THREE.Box3().setFromObject(root);
         if (tallBox.max.y <= ceilCap + 1e-4) break;
         const h = tallBox.max.y - tallBox.min.y;
-        if (h <= EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M + 1e-6) break;
-        const over = tallBox.max.y - ceilCap;
-        const factor = (h - over) / h;
-        if (scaleDrag) {
-          const eps = 1e-9;
-          const my = Math.max(mesh.scale.y, eps);
-          const effY = my * root.scale.y;
-          const nextEffY = Math.max(
+        const floorY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
+        const maxAllowedH = ceilCap - floorY;
+        const heightScaleDrag =
+          scaleDrag?.activeWorldAxis === "Y" || scaleDrag?.pinnedSpan?.localAxis === "y";
+
+        if (heightScaleDrag && scaleDrag) {
+          const bottom = Math.max(tallBox.min.y, floorY);
+          const maxH = ceilCap - bottom;
+          const my = Math.max(mesh.scale.y, 1e-9);
+          const desiredH = my * root.scale.y;
+          const nextH = THREE.MathUtils.clamp(
+            desiredH,
             EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M,
-            effY * factor,
+            maxH,
           );
-          if (nextEffY >= effY - 1e-6) {
-            root.scale.y = EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M / my;
-            break;
+          root.scale.y = nextH / my;
+          if (scaleDrag.pinnedSpan?.localAxis === "y") {
+            maintainWallScalePinnedSpan(root, scaleDrag.pinnedSpan);
           }
-          root.scale.y = nextEffY / my;
-        } else {
-          const nextSy = Math.max(
-            EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M,
-            mesh.scale.y * factor,
-          );
-          if (nextSy >= mesh.scale.y - 1e-6) {
-            mesh.scale.y = EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M;
-            mesh.position.y = mesh.scale.y / 2;
-            break;
-          }
-          mesh.scale.y = nextSy;
+          break;
+        } else if (!scaleDrag && h > maxAllowedH + 1e-4) {
+          mesh.scale.y = maxAllowedH;
           mesh.position.y = mesh.scale.y / 2;
+        } else {
+          root.position.y -= tallBox.max.y - ceilCap;
         }
       }
     }
@@ -677,6 +578,17 @@ export function constrainMyApartmentWallRootPose(
       continue;
     }
     break;
+  }
+
+  if (mesh && meta) {
+    applyMyApartmentWallSurfaceSnap(root, mesh, meta, {
+      scaleDrag,
+      autoYaw: wallSnapOpts?.autoYaw === true && !scaleDrag,
+      neighborSnap: wallSnapOpts?.neighborSnap !== false,
+    });
+    if (scaleDrag?.pinnedSpan) {
+      maintainWallScalePinnedSpan(root, scaleDrag.pinnedSpan);
+    }
   }
 }
 
@@ -807,6 +719,36 @@ export function previewWorldFromNormalizedPlacement(args: {
   };
 }
 
+/**
+ * Inverse of {@link previewWorldFromNormalizedPlacement} for gizmo commits — uses balcony-aware
+ * `fx` mapping (must match client {@link mapOwnedApartmentLayoutFractionToWorldX}).
+ */
+export function layoutFractionsFromPreviewWorldPosition(
+  spans: OwnedApartmentFractionToPreviewXZ,
+  previewWorldX: number,
+  previewWorldZ: number,
+): { fx: number; fz: number } {
+  const worldX = previewWorldX + spans.prefabOriginX;
+  const worldZ = previewWorldZ + spans.prefabOriginZ;
+  return {
+    fx: THREE.MathUtils.clamp(
+      mapOwnedApartmentWorldXToLayoutFraction(
+        spans.strictMinX,
+        spans.strictMinX + spans.spanX,
+        spans.unitId,
+        worldX,
+      ),
+      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    ),
+    fz: THREE.MathUtils.clamp(
+      (worldZ - spans.strictMinZ) / spans.spanZ,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+      OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
+    ),
+  };
+}
+
 function disposeGroupSubtreeGeometry(group: THREE.Object3D): void {
   group.traverse((o) => {
     if (o instanceof THREE.Mesh) o.geometry.dispose();
@@ -852,7 +794,7 @@ function placeWallGroup(args: {
   });
   group.position.set(pv.x, 0, pv.z);
   group.rotation.order = "YXZ";
-  const yaw = snapOwnedApartmentDecorYawRad(wall.yawRad);
+  const yaw = snapOwnedApartmentWallYawRad(wall.yawRad);
   const pitch = THREE.MathUtils.clamp(
     snapOwnedApartmentDecorPitchRad(wall.pitchRad),
     -OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
@@ -860,28 +802,111 @@ function placeWallGroup(args: {
   );
   group.rotation.set(pitch, yaw, 0, "YXZ");
 
-  const geom = new THREE.BoxGeometry(1, 1, 1);
-  const mesh = new THREE.Mesh(
-    geom,
-    new THREE.MeshStandardMaterial({ visible: true, color: 0xc9c4bc }),
+  const refMesh = buildOwnedApartmentPartitionWallRefMesh({
+    parent: group,
+    sizeX: wall.sizeX,
+    sizeY: wall.sizeY,
+    sizeZ: wall.sizeZ,
+  });
+  refMesh.userData[EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY] = true;
+  refMesh.userData.mammothEditorMyApartmentProp = true;
+
+  constrainMyApartmentWallRootPose(group, undefined, { neighborSnap: false });
+
+  const extents = readOwnedApartmentPartitionWallLocalExtents(group) ?? {
+    sizeX: wall.sizeX,
+    sizeY: wall.sizeY,
+    sizeZ: wall.sizeZ,
+  };
+  const openings = clampOwnedApartmentWallOpeningsForLength(
+    extents.sizeX,
+    wall.openings ?? [],
   );
-  mesh.userData[EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY] = true;
-  mesh.userData.mammothEditorMyApartmentProp = true;
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  mesh.scale.set(wall.sizeX, wall.sizeY, wall.sizeZ);
-  mesh.position.y = wall.sizeY / 2;
-  group.add(mesh);
+  const wallMat = new THREE.MeshStandardMaterial({ visible: true, color: 0xc9c4bc });
+  rebuildOwnedApartmentPartitionWallVisual({
+    parent: group,
+    sizeX: extents.sizeX,
+    sizeY: extents.sizeY,
+    sizeZ: extents.sizeZ,
+    openings,
+    wallMaterial: wallMat,
+    opts: { editorWallVisual: true },
+  });
 
-  constrainMyApartmentWallRootPose(group);
+  applyOwnedApartmentWallSurfaceMaterialToVisuals(group, (mesh) => {
+    applyOwnedApartmentWallSurfaceMaterial(mesh, wall.material);
+  });
 
-  const slabTop = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + wall.dy;
+  syncOwnedApartmentWallOpeningProxies({
+    wallGroup: group,
+    sizeX: extents.sizeX,
+    sizeY: extents.sizeY,
+    sizeZ: extents.sizeZ,
+    openings,
+  });
+
+  const slabBottom = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + wall.dy;
   group.updateMatrixWorld(true);
   const boxBefore = new THREE.Box3().setFromObject(group);
-  group.position.y += slabTop - boxBefore.min.y;
+  group.position.y += slabBottom - boxBefore.min.y;
   group.updateMatrixWorld(true);
+}
 
-  applyOwnedApartmentWallSurfaceMaterial(mesh, wall.material);
+export function syncWallOpeningSelectionGroups(
+  selectionGroups: Record<string, THREE.Group>,
+  wallId: string,
+  wallGroup: THREE.Group,
+  openings: readonly { id: string }[],
+): void {
+  const keep = new Set(
+    openings.map((o) => editorMyApartmentSelectedIdForWallOpening(wallId, o.id)),
+  );
+  for (const key of Object.keys(selectionGroups)) {
+    const parsed = parseMyApartmentLayoutWallOpeningSelectedId(key);
+    if (parsed?.wallId === wallId && !keep.has(key)) {
+      delete selectionGroups[key];
+    }
+  }
+  for (const opening of openings) {
+    const selId = editorMyApartmentSelectedIdForWallOpening(wallId, opening.id);
+    const proxy = wallGroup.children.find(
+      (c) =>
+        c instanceof THREE.Group &&
+        c.userData.mammothEditorMyApartmentWallOpeningId === opening.id,
+    );
+    if (proxy instanceof THREE.Group) {
+      selectionGroups[selId] = proxy;
+    }
+  }
+}
+
+export function purgeWallOpeningSelectionGroups(
+  selectionGroups: Record<string, THREE.Group>,
+  wallId: string,
+): void {
+  for (const key of Object.keys(selectionGroups)) {
+    const parsed = parseMyApartmentLayoutWallOpeningSelectedId(key);
+    if (parsed?.wallId === wallId) delete selectionGroups[key];
+  }
+}
+
+export function clampMyApartmentWallOpeningProxyPose(
+  proxy: THREE.Object3D,
+  wallRoot: THREE.Object3D,
+  wallItem: OwnedApartmentBuiltinsDoc["wallItems"][number],
+  openingId: string,
+): void {
+  const opening = (wallItem.openings ?? []).find((o) => o.id === openingId);
+  if (!opening) return;
+  const extents = readOwnedApartmentPartitionWallLocalExtents(wallRoot);
+  const ref = findEditorMyApartmentWallSlabMesh(wallRoot);
+  const sizeX = extents?.sizeX ?? (ref ? Math.abs(ref.scale.x) : wallItem.sizeX);
+  const sizeZ = extents?.sizeZ ?? (ref ? Math.abs(ref.scale.z) : wallItem.sizeZ);
+  proxy.position.x = clampWallOpeningTangentOffsetM(sizeX, opening.widthM, proxy.position.x);
+  proxy.position.y = opening.centerYM;
+  proxy.position.z = sizeZ * 0.5 + 0.015;
+  proxy.rotation.set(0, 0, 0);
+  proxy.scale.set(1, 1, 1);
 }
 
 function placeMirrorGroup(args: {
@@ -989,10 +1014,45 @@ export type EditorMyApartmentFurnitureMount = {
   /** Wall ids currently represented in `selectionGroups` (incremental sync). */
   mountedWallIds: Set<string>;
   mountedMirrorIds: Set<string>;
+  mountedDecorIds: Set<string>;
 };
 
 function mountIdSet(ids: readonly { id: string }[]): Set<string> {
   return new Set(ids.map((x) => x.id));
+}
+
+/** Add/update/remove décor groups without rebuilding walls/mirrors or reloading GLB templates. */
+export function syncEditorMyApartmentDecorOnMount(
+  mount: EditorMyApartmentFurnitureMount,
+  decorTemplates: EditorMyApartmentDecorTemplateMap,
+  doc: OwnedApartmentBuiltinsDoc,
+  spans: OwnedApartmentFractionToPreviewXZ,
+): void {
+  const nextIds = new Set(doc.placedItems.map((d) => d.id));
+  for (const decor of doc.placedItems) {
+    const template = decorTemplates.get(decor.modelRelPath);
+    if (!template) continue;
+    const selId = editorMyApartmentSelectedIdForDecor(decor.id);
+    let group = mount.selectionGroups[selId];
+    if (!group) {
+      group = new THREE.Group();
+      group.name = `editor_my_apartment_placed:${decor.id}`;
+      mount.root.add(group);
+      mount.selectionGroups[selId] = group;
+    }
+    placeDecorGroup({ group, template, decor, spans });
+  }
+  for (const id of mount.mountedDecorIds) {
+    if (nextIds.has(id)) continue;
+    const selId = editorMyApartmentSelectedIdForDecor(id);
+    const group = mount.selectionGroups[selId];
+    if (group) {
+      disposeGroupSubtreeGeometry(group);
+      mount.root.remove(group);
+      delete mount.selectionGroups[selId];
+    }
+  }
+  mount.mountedDecorIds = nextIds;
 }
 
 /** Add/update/remove wall groups without rebuilding decor/mirror meshes. */
@@ -1000,9 +1060,13 @@ export function syncEditorMyApartmentWallsOnMount(
   mount: EditorMyApartmentFurnitureMount,
   doc: OwnedApartmentBuiltinsDoc,
   spans: OwnedApartmentFractionToPreviewXZ,
+  opts?: { onlyWallIds?: ReadonlySet<string> },
 ): void {
   const nextIds = new Set(doc.wallItems.map((w) => w.id));
   for (const wall of doc.wallItems) {
+    if (opts?.onlyWallIds && !opts.onlyWallIds.has(wall.id)) {
+      continue;
+    }
     const selId = editorMyApartmentSelectedIdForWall(wall.id);
     let group = mount.selectionGroups[selId];
     if (!group) {
@@ -1012,9 +1076,11 @@ export function syncEditorMyApartmentWallsOnMount(
       mount.selectionGroups[selId] = group;
     }
     placeWallGroup({ group, wall, spans });
+    syncWallOpeningSelectionGroups(mount.selectionGroups, wall.id, group, wall.openings ?? []);
   }
   for (const id of mount.mountedWallIds) {
     if (nextIds.has(id)) continue;
+    purgeWallOpeningSelectionGroups(mount.selectionGroups, id);
     const selId = editorMyApartmentSelectedIdForWall(id);
     const group = mount.selectionGroups[selId];
     if (group) {
@@ -1116,6 +1182,12 @@ export function mountEditorMyApartmentFurnitureUnder(
       spans: authoringFractionMapping,
     });
     selectionGroups[editorMyApartmentSelectedIdForWall(wall.id)] = group;
+    syncWallOpeningSelectionGroups(
+      selectionGroups,
+      wall.id,
+      group,
+      wall.openings ?? [],
+    );
   }
 
   for (const mirror of doc.mirrorItems) {
@@ -1164,6 +1236,7 @@ export function mountEditorMyApartmentFurnitureUnder(
     dispose,
     mountedWallIds: mountIdSet(doc.wallItems),
     mountedMirrorIds: mountIdSet(doc.mirrorItems),
+    mountedDecorIds: mountIdSet(doc.placedItems),
   };
 }
 
@@ -1194,4 +1267,5 @@ export function updateEditorMyApartmentMountFromDoc(
   mount.dispose = rebuilt.dispose;
   mount.mountedWallIds = rebuilt.mountedWallIds;
   mount.mountedMirrorIds = rebuilt.mountedMirrorIds;
+  mount.mountedDecorIds = rebuilt.mountedDecorIds;
 }

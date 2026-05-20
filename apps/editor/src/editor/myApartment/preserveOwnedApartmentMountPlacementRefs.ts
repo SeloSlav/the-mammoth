@@ -32,30 +32,58 @@ function placedItemsEqual(
   return true;
 }
 
-function wallItemsEqual(
+function ownedApartmentWallItemPlacementEqual(
+  left: OwnedApartmentWallItem,
+  right: OwnedApartmentWallItem,
+): boolean {
+  return (
+    left.id === right.id &&
+    left.fx === right.fx &&
+    left.fz === right.fz &&
+    left.dy === right.dy &&
+    left.yawRad === right.yawRad &&
+    left.pitchRad === right.pitchRad &&
+    left.sizeX === right.sizeX &&
+    left.sizeY === right.sizeY &&
+    left.sizeZ === right.sizeZ &&
+    JSON.stringify(left.material) === JSON.stringify(right.material) &&
+    JSON.stringify(left.openings ?? []) === JSON.stringify(right.openings ?? [])
+  );
+}
+
+export function ownedApartmentWallItemsDeepEqual(
   a: readonly OwnedApartmentWallItem[],
   b: readonly OwnedApartmentWallItem[],
 ): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    const left = a[i]!;
-    const right = b[i]!;
-    if (
-      left.id !== right.id ||
-      left.fx !== right.fx ||
-      left.fz !== right.fz ||
-      left.dy !== right.dy ||
-      left.yawRad !== right.yawRad ||
-      left.pitchRad !== right.pitchRad ||
-      left.sizeX !== right.sizeX ||
-      left.sizeY !== right.sizeY ||
-      left.sizeZ !== right.sizeZ ||
-      JSON.stringify(left.material) !== JSON.stringify(right.material)
-    ) {
+    if (!ownedApartmentWallItemPlacementEqual(a[i]!, b[i]!)) {
       return false;
     }
   }
   return true;
+}
+
+/** Wall ids whose placement or openings changed — for incremental mount sync. */
+export function collectChangedOwnedApartmentWallIds(
+  prev: readonly OwnedApartmentWallItem[],
+  next: readonly OwnedApartmentWallItem[],
+): Set<string> {
+  const changed = new Set<string>();
+  const prevById = new Map(prev.map((w) => [w.id, w]));
+  const nextById = new Map(next.map((w) => [w.id, w]));
+  for (const wall of next) {
+    const prior = prevById.get(wall.id);
+    if (!prior || !ownedApartmentWallItemPlacementEqual(prior, wall)) {
+      changed.add(wall.id);
+    }
+  }
+  for (const wall of prev) {
+    if (!nextById.has(wall.id)) {
+      changed.add(wall.id);
+    }
+  }
+  return changed;
 }
 
 function mirrorItemsEqual(
@@ -107,7 +135,8 @@ export function preserveOwnedApartmentMountPlacementRefs(
       ? prev.placedItems
       : next.placedItems;
   const wallItems =
-    prev.wallItems !== next.wallItems && wallItemsEqual(prev.wallItems, next.wallItems)
+    prev.wallItems !== next.wallItems &&
+    ownedApartmentWallItemsDeepEqual(prev.wallItems, next.wallItems)
       ? prev.wallItems
       : next.wallItems;
   const mirrorItems =
@@ -130,4 +159,13 @@ export function preserveOwnedApartmentMountPlacementRefs(
     wallItems,
     mirrorItems,
   };
+}
+
+/** Stable signature for wall opening punches — used to force mesh rebuilds. */
+export function ownedApartmentWallOpeningsSignature(
+  wallItems: readonly OwnedApartmentWallItem[],
+): string {
+  return wallItems
+    .map((w) => `${w.id}\0${JSON.stringify(w.openings ?? [])}`)
+    .join("\n");
 }

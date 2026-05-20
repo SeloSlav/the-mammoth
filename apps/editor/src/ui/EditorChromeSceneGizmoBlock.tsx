@@ -55,9 +55,10 @@ export function EditorChromeSceneGizmoBlock(props: {
             lineHeight: 1.38,
           }}
         >
-          Imported decor: move on <strong>X / Y / Z</strong> (Y cannot go below the floor). Rotate uses{" "}
-          <strong>world</strong> axes (X / Y / Z rings); optional angle snap matches{" "}
-          <strong>Grid snap</strong> when set (&quot;deg-ish&quot;). Uniform scale from the gizmo center handle.
+          Imported decor / wall slabs / mirrors: move on <strong>X / Y / Z</strong> (Y cannot go below the
+          floor). Rotate: décor uses <strong>X / Y / Z</strong> rings; slabs use <strong>Y</strong> (yaw) and{" "}
+          <strong>X</strong> (pitch). Optional angle snap matches <strong>Grid snap</strong> when set.
+          Uniform scale from the gizmo center handle.
         </p>
       ) : myApartmentLayoutHints === "builtins" ? (
         <p

@@ -11,6 +11,9 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import {
   applyOwnedApartmentWallSurfaceMaterial,
+  applyOwnedApartmentWallSurfaceMaterialToVisuals,
+  buildOwnedApartmentPartitionWallInGroup,
+  clampOwnedApartmentWallOpeningsForLength,
   buildApartmentPlanarMirrorVisual,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
@@ -19,6 +22,7 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
+  type OwnedApartmentWallOpening,
   apartmentPlacedItemKindFromDecorItemKind,
   ownedApartmentPlacedItemKindHasStash,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
@@ -263,6 +267,7 @@ type VisibleWallPlacement = {
   sizeY: number;
   sizeZ: number;
   material: OwnedApartmentWallMaterial;
+  openings: OwnedApartmentWallOpening[];
 };
 
 type VisibleMirrorPlacement = {
@@ -305,6 +310,7 @@ function visibleWallPlacements(
         sizeY: wall.sizeY,
         sizeZ: wall.sizeZ,
         material: wall.material,
+        openings: wall.openings,
       });
     }
   }
@@ -703,27 +709,38 @@ export function mountFpApartmentDecorMeshes(opts: {
         g.rotation.x = w.pitchRad;
         g.rotation.z = 0;
 
-        const geom = new THREE.BoxGeometry(1, 1, 1);
-        const mesh = new THREE.Mesh(
-          geom,
-          new THREE.MeshStandardMaterial({ color: 0xc9c4bc }),
+        const openings = clampOwnedApartmentWallOpeningsForLength(
+          w.sizeX,
+          w.openings ?? [],
         );
-        mesh.scale.set(w.sizeX, w.sizeY, w.sizeZ);
-        mesh.position.y = w.sizeY / 2;
-        mesh.castShadow = false;
-        mesh.receiveShadow = false;
-        mesh.frustumCulled = true;
-        mesh.userData.mammothUnitInterior = true;
-        mesh.userData.mammothPlateLevelIndex = w.unit.level;
-        mesh.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
-        g.add(mesh);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xc9c4bc });
+        buildOwnedApartmentPartitionWallInGroup({
+          parent: g,
+          sizeX: w.sizeX,
+          sizeY: w.sizeY,
+          sizeZ: w.sizeZ,
+          openings,
+          wallMaterial: wallMat,
+          opts: { fpInteriorPartitionSolid: true },
+        });
+        applyOwnedApartmentWallSurfaceMaterialToVisuals(g, (mesh) => {
+          applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
+        });
         snapCloneBottomToWorldFloor(g, w.posY);
         keepCloneInsideUnitXZ(g, w.unit, {
           insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
           fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
           fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
         });
-        applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
+        g.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            obj.castShadow = false;
+            obj.receiveShadow = false;
+            obj.frustumCulled = true;
+            obj.userData.mammothUnitInterior = true;
+            obj.userData.mammothPlateLevelIndex = w.unit.level;
+          }
+        });
         g.updateMatrixWorld(true);
         const bbox = new THREE.Box3().setFromObject(g);
         bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);

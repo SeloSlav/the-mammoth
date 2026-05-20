@@ -15,6 +15,7 @@ import {
   serializeStairWellDefPretty,
   serializeOwnedApartmentBuiltinsDocPretty,
 } from "../../state/editorStore.js";
+import { requestEditorMyApartmentLayoutPersistFromScene } from "../../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   fetchCollisionArtifactsStatus,
   postSaveBuilding,
@@ -166,8 +167,10 @@ export function useEditorChromeDiskPersistence(
           ),
         );
       } else if (s.mode === "my_apartment_layout") {
+        requestEditorMyApartmentLayoutPersistFromScene();
+        const stAfterPersist = useEditorStore.getState();
         await postSaveOwnedApartmentBuiltins(
-          serializeOwnedApartmentBuiltinsDocPretty(s.ownedApartmentBuiltins),
+          serializeOwnedApartmentBuiltinsDocPretty(stAfterPersist.ownedApartmentBuiltins),
         );
         wroteOwnedApartmentBuiltins = true;
       }
@@ -177,6 +180,7 @@ export function useEditorChromeDiskPersistence(
       }
 
       if (!wroteOwnedApartmentBuiltins && needsOwnedAptBuiltinsFlush) {
+        requestEditorMyApartmentLayoutPersistFromScene();
         const st = useEditorStore.getState();
         await postSaveOwnedApartmentBuiltins(
           serializeOwnedApartmentBuiltinsDocPretty(st.ownedApartmentBuiltins),

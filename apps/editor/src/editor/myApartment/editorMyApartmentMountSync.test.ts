@@ -80,6 +80,22 @@ describe("apartmentMountSyncInputsChanged", () => {
     expect(apartmentMountSyncInputsChanged(prev, next)).toBe(true);
   });
 
+  it("classifies decor-only edits as incremental sync", () => {
+    const base = baseEditorState();
+    const prev = captureApartmentMountSyncInputs(base);
+    const next = captureApartmentMountSyncInputs(
+      baseEditorState({
+        ownedApartmentBuiltins: {
+          ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+          placedItems: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems.map((item) =>
+            item.id === "mammoth_builtin_bed" ? { ...item, fx: 0.7, fz: 0.55 } : item,
+          ),
+        },
+      }),
+    );
+    expect(classifyApartmentMountSyncChange(prev, next)).toBe("decor-only");
+  });
+
   it("classifies wall-only edits as incremental sync", () => {
     const base = baseEditorState();
     const prev = captureApartmentMountSyncInputs(base);

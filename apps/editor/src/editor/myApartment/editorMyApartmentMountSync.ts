@@ -2,6 +2,7 @@ import type { BuildingDoc, FloorDoc } from "@the-mammoth/schemas";
 import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import type { EditorState } from "../../state/editorStoreTypes.js";
+import { ownedApartmentWallItemsDeepEqual } from "./preserveOwnedApartmentMountPlacementRefs.js";
 
 /** Inputs that require rebuilding the apartment authoring mount (not selection / saved groups). */
 export type ApartmentMountSyncInputs = {
@@ -37,11 +38,12 @@ export function apartmentMountSyncInputsChanged(
 
 export type ApartmentMountSyncChange =
   | "none"
+  | "decor-only"
   | "walls-only"
   | "mirrors-only"
   | "full";
 
-/** Whether the 3D mount must fully remount or can patch walls/mirrors in place. */
+/** Whether the 3D mount must fully remount or can patch placements in place. */
 export function classifyApartmentMountSyncChange(
   prev: ApartmentMountSyncInputs,
   next: ApartmentMountSyncInputs,
@@ -51,14 +53,19 @@ export function classifyApartmentMountSyncChange(
     prev.contentStructureEpoch !== next.contentStructureEpoch ||
     prev.typicalFloorDoc !== next.typicalFloorDoc ||
     prev.building !== next.building ||
-    prev.previewSizeM !== next.previewSizeM ||
-    prev.placedItems !== next.placedItems;
+    prev.previewSizeM !== next.previewSizeM;
   if (structural) return "full";
 
-  const wallsChanged = prev.wallItems !== next.wallItems;
+  const decorChanged = prev.placedItems !== next.placedItems;
+  const wallsChanged =
+    prev.wallItems !== next.wallItems ||
+    !ownedApartmentWallItemsDeepEqual(prev.wallItems, next.wallItems);
   const mirrorsChanged = prev.mirrorItems !== next.mirrorItems;
-  if (!wallsChanged && !mirrorsChanged) return "none";
-  if (wallsChanged && !mirrorsChanged) return "walls-only";
-  if (mirrorsChanged && !wallsChanged) return "mirrors-only";
-  return "full";
+  const changeCount =
+    (decorChanged ? 1 : 0) + (wallsChanged ? 1 : 0) + (mirrorsChanged ? 1 : 0);
+  if (changeCount === 0) return "none";
+  if (changeCount > 1) return "full";
+  if (decorChanged) return "decor-only";
+  if (wallsChanged) return "walls-only";
+  return "mirrors-only";
 }

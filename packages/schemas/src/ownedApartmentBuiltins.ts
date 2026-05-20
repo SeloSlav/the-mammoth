@@ -217,6 +217,19 @@ export const OwnedApartmentWallMaterialSchema = z.object({
 
 export type OwnedApartmentWallMaterial = z.infer<typeof OwnedApartmentWallMaterialSchema>;
 
+/** Rectangular doorway cutout on an authored partition wall (local +X tangent, Y from slab floor). */
+export const OwnedApartmentWallOpeningSchema = z.object({
+  id: z.string().min(1).max(120),
+  /** Hole center offset along wall local length (+X), meters from wall center. */
+  tangentOffsetM: z.number().min(-16).max(16),
+  widthM: z.number().min(0.4).max(4),
+  heightM: z.number().min(0.4).max(4),
+  /** Opening vertical center in wall-local Y (0 = slab floor). */
+  centerYM: z.number().min(0).max(8),
+});
+
+export type OwnedApartmentWallOpening = z.infer<typeof OwnedApartmentWallOpeningSchema>;
+
 /** Thin box partition wall saved with owned-apartment authoring (not replica decor rows). */
 export const OwnedApartmentWallItemSchema = z.object({
   id: z.string().min(1).max(120),
@@ -245,6 +258,8 @@ export const OwnedApartmentWallItemSchema = z.object({
     useMetalnessMap: false,
     useHeightMap: false,
   })),
+  /** Doorway / opening punches along the wall length axis. */
+  openings: z.array(OwnedApartmentWallOpeningSchema).optional(),
 });
 
 export type OwnedApartmentWallItem = z.infer<typeof OwnedApartmentWallItemSchema>;

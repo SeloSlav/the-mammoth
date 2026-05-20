@@ -44,7 +44,6 @@ import {
   EMPTY_CONTENT_INDEX,
 } from "./editorStoreSeedValues.js";
 import type {
-  EditorCameraMode,
   EditorMode,
   EditorState,
   EditorWorkspace,
@@ -62,11 +61,16 @@ import {
 } from "../editor/myApartment/editorMyApartmentSelection.js";
 import { computeApartmentPlacementCanvasPick } from "../editor/myApartment/apartmentLayoutSelectionOps.js";
 import { cloneMyApartmentObjectGroupInDoc } from "../editor/myApartment/cloneMyApartmentObjectGroup.js";
+import { cloneMyApartmentLayoutSelectionInDoc } from "../editor/myApartment/cloneMyApartmentLayoutPlacements.js";
 import {
   deleteMyApartmentLayoutPlacementsInDoc,
   deleteMyApartmentObjectGroupMembersInDoc,
 } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
-import { preserveOwnedApartmentMountPlacementRefs } from "../editor/myApartment/preserveOwnedApartmentMountPlacementRefs.js";
+import {
+  ownedApartmentWallOpeningsSignature,
+  preserveOwnedApartmentMountPlacementRefs,
+} from "../editor/myApartment/preserveOwnedApartmentMountPlacementRefs.js";
+import { requestEditorMyApartmentWallsMountSync } from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
@@ -83,7 +87,6 @@ function finalizeOwnedApartmentBuiltinsPreservingMounts(
 }
 
 export type {
-  EditorCameraMode,
   EditorMaterialMeta,
   EditorMode,
   EditorState,
@@ -139,7 +142,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   shadowsEnabled: false,
   useHdriEnvironment: true,
-  cameraMode: "orbit",
   flySpeedMps: 18,
   stairWellAuthorScope: "typical",
   fpAuthorCamera: "orbit",
@@ -250,11 +252,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
       const bumpEpoch = !touchesFp || exitFp;
-      const cameraMode: EditorCameraMode = "orbit";
       return {
         workspace,
         mode,
-        cameraMode,
         ...(bumpEpoch
           ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
           : {}),
@@ -661,6 +661,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     return true;
   },
 
+  cloneMyApartmentLayoutSelection: () => {
+    const prior = get();
+    if (prior.mode !== "my_apartment_layout") return false;
+
+    const cloned = cloneMyApartmentLayoutSelectionInDoc(prior.ownedApartmentBuiltins, {
+      selectedId: prior.selectedId,
+      myApartmentMultiselectExtraIds: prior.myApartmentMultiselectExtraIds,
+    });
+    if (!cloned) return false;
+
+    maybePushHistory(get, set);
+    set(() => ({
+      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
+        prior.ownedApartmentBuiltins,
+        cloned.doc,
+      ),
+      dirty: true,
+      selectedId: cloned.selectedId,
+      myApartmentMultiselectExtraIds: cloned.myApartmentMultiselectExtraIds,
+    }));
+    return true;
+  },
+
   selectMyApartmentSavedObjectGroup: (groupId) => {
     if (!groupId) return;
     set((st) => {
@@ -677,6 +700,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   patchOwnedApartmentBuiltins: (fn) => {
     maybePushHistory(get, set);
+    const openingsBefore = ownedApartmentWallOpeningsSignature(
+      get().ownedApartmentBuiltins.wallItems,
+    );
     set((s) => {
       const parsedNext = OwnedApartmentBuiltinsDocSchema.parse(fn(s.ownedApartmentBuiltins));
       const finalized = finalizeOwnedApartmentBuiltinsDoc(parsedNext);
@@ -715,6 +741,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...(bumpPreview ? { contentStructureEpoch: s.contentStructureEpoch + 1 } : {}),
       };
     });
+    const openingsAfter = ownedApartmentWallOpeningsSignature(
+      get().ownedApartmentBuiltins.wallItems,
+    );
+    if (openingsBefore !== openingsAfter) {
+      requestEditorMyApartmentWallsMountSync();
+    }
   },
 
   clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
@@ -725,10 +757,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ collisionArtifactsStatus }),
   setTransformMode: (transformMode) => set({ transformMode }),
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
-  setShadowsEnabled: (shadowsEnabled) => set({ shadowsEnabled }),
-  setUseHdriEnvironment: (useHdriEnvironment) => set({ useHdriEnvironment }),
-  setCameraMode: (cameraMode) => set({ cameraMode }),
-  setFlySpeedMps: (flySpeedMps) => set({ flySpeedMps }),
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,

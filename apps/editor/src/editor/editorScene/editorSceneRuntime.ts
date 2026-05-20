@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { MOUSE } from "three";
-import { FlyControls } from "three/addons/controls/FlyControls.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import {
@@ -33,7 +32,10 @@ import {
   EDITOR_ORBIT_LIGHTING_BASE,
 } from "../scene/editorSceneLighting.js";
 import { createEditorPmremEnvironment } from "../scene/editorSceneEnvironment.js";
-import { commitEditorAttachedTransform } from "../scene/editorSceneCommitAttachedTransform.js";
+import {
+  commitEditorAttachedTransform,
+  persistAllMyApartmentWallPlacementsFromScene,
+} from "../scene/editorSceneCommitAttachedTransform.js";
 import { createEditorSceneSelectionFraming } from "./editorSceneSelectionFraming.js";
 import { patchTransformControlsPointerForCaptureCompat } from "./editorScenePatchTransformControls.js";
 import {
@@ -47,6 +49,7 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
+import { createEditorOrbitKeyboardMove } from "./editorOrbitKeyboardMove.js";
 import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
@@ -59,11 +62,18 @@ import {
   EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD,
   findEditorMyApartmentMirrorSurfaceMesh,
   findEditorMyApartmentWallSlabMesh,
+  clampMyApartmentWallOpeningProxyPose,
   snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
 import {
+  captureWallScalePinnedSpanFromGesture,
+  parseTransformControlsWorldScaleAxis,
+  type WallScalePinnedSpan,
+} from "../myApartment/editorMyApartmentWallSnap.js";
+import {
   getEditorMyApartmentFurnitureMountRoot,
   getEditorMyApartmentSelectionGroup,
+  registerEditorMyApartmentLayoutPersistFromSceneRequest,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
@@ -73,6 +83,7 @@ import {
   parseMyApartmentLayoutDecorSelectedId,
   parseMyApartmentLayoutMirrorSelectedId,
   parseMyApartmentLayoutSavedObjectGroupId,
+  parseMyApartmentLayoutWallOpeningSelectedId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../myApartment/editorMyApartmentSelection.js";
 import {
@@ -294,7 +305,45 @@ export async function mountEditorScene(
   let wallSlabScaleGesture: {
     object: THREE.Object3D;
     meshStart: THREE.Vector3;
+    pinnedSpan: WallScalePinnedSpan | null;
   } | null = null;
+
+  function wallSlabScaleDragFor(
+    object: THREE.Object3D,
+    transformMode: ReturnType<typeof useEditorStore.getState>["transformMode"],
+  ) {
+    if (
+      transformMode !== "scale" ||
+      !wallSlabScaleGesture ||
+      wallSlabScaleGesture.object !== object ||
+      !transformControls.dragging
+    ) {
+      return undefined;
+    }
+    return {
+      meshScaleAtGestureStart: wallSlabScaleGesture.meshStart,
+      activeWorldAxis: parseTransformControlsWorldScaleAxis(
+        (transformControls as unknown as { axis?: string | null }).axis,
+      ),
+      pinnedSpan: wallSlabScaleGesture.pinnedSpan,
+    };
+  }
+
+  function mirrorSlabScaleDragFor(
+    object: THREE.Object3D,
+    transformMode: ReturnType<typeof useEditorStore.getState>["transformMode"],
+  ) {
+    if (
+      transformMode !== "scale" ||
+      !wallSlabScaleGesture ||
+      wallSlabScaleGesture.object !== object ||
+      !transformControls.dragging
+    ) {
+      return undefined;
+    }
+    return { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart };
+  }
+
   const decorSupportRaycaster = new THREE.Raycaster();
   const decorSupportBox = new THREE.Box3();
   const decorSupportSize = new THREE.Vector3();
@@ -527,11 +576,12 @@ export async function mountEditorScene(
   }
   applyDistanceInvariantOrbitSpeeds();
   orbitControls.update();
-  const flyControls = new FlyControls(camera, canvas);
-  flyControls.movementSpeed = useEditorStore.getState().flySpeedMps;
-  flyControls.rollSpeed = 0.6;
-  flyControls.dragToLook = true;
-  flyControls.autoForward = false;
+  const orbitKeyboardMove = createEditorOrbitKeyboardMove({
+    camera,
+    orbitControls,
+    getSpeedMps: () => useEditorStore.getState().flySpeedMps,
+    getEnabled: () => orbitControls.enabled,
+  });
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -699,6 +749,20 @@ export async function mountEditorScene(
           return;
         }
         transformControls.attach(g);
+        const openingSel = parseMyApartmentLayoutWallOpeningSelectedId(s.selectedId);
+        if (openingSel) {
+          transformControls.setMode("translate");
+          transformControls.setSpace("local");
+          transformControls.showX = true;
+          transformControls.showY = false;
+          transformControls.showZ = false;
+          const snap = s.gridSnapM;
+          transformControls.setTranslationSnap(snap > 0 ? snap : null);
+          transformControls.setRotationSnap(null);
+          transformControls.setScaleSnap(null);
+          transformControls.setSize(1.35);
+          return;
+        }
         const gx = myApartmentGizmoSemantics(s);
         const apartmentFreeVertical = gx.apartmentFreeVertical;
         transformControls.setMode(s.transformMode);
@@ -708,9 +772,16 @@ export async function mountEditorScene(
           transformControls.showY = apartmentFreeVertical;
           transformControls.showZ = true;
         } else if (s.transformMode === "rotate") {
-          transformControls.showX = true;
-          transformControls.showY = true;
-          transformControls.showZ = gx.decorRotateHandleZ;
+          if (gx.wallOnlyAggregate) {
+            /** Slab walls: yaw on world Y; optional pitch on X (no roll ring). */
+            transformControls.showX = true;
+            transformControls.showY = true;
+            transformControls.showZ = false;
+          } else {
+            transformControls.showX = true;
+            transformControls.showY = true;
+            transformControls.showZ = gx.decorRotateHandleZ;
+          }
         } else {
           transformControls.showX = true;
           transformControls.showY = true;
@@ -722,9 +793,7 @@ export async function mountEditorScene(
           if (gx.decorRotateHandleZ) {
             transformControls.setRotationSnap(EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD);
           } else if (gx.wallOnlyAggregate) {
-            transformControls.setRotationSnap(
-              snap > 0 ? EDITOR_MY_APARTMENT_DECOR_YAW_SNAP_RAD : null,
-            );
+            transformControls.setRotationSnap(Math.PI / 2);
           } else {
             transformControls.setRotationSnap(Math.PI / 4);
           }
@@ -777,6 +846,11 @@ export async function mountEditorScene(
       contentRoot,
     });
 
+  registerEditorMyApartmentLayoutPersistFromSceneRequest(() => {
+    commitLevelEditorAttachedTransformToStore();
+    persistAllMyApartmentWallPlacementsFromScene();
+  });
+
   let rewireCanvasPrimaryPointerListeners: () => void = () => {};
 
   const fp = createEditorFpAuthoringLifecycle({
@@ -814,8 +888,23 @@ export async function mountEditorScene(
       const mesh =
         findEditorMyApartmentWallSlabMesh(attached) ??
         findEditorMyApartmentMirrorSurfaceMesh(attached);
+      const tcAxis = (transformControls as unknown as { axis?: string | null }).axis;
+      const pointStart = (
+        transformControls as unknown as { pointStart?: THREE.Vector3 | null }
+      ).pointStart;
       wallSlabScaleGesture = mesh
-        ? { object: attached, meshStart: mesh.scale.clone() }
+        ? {
+            object: attached,
+            meshStart: mesh.scale.clone(),
+            pinnedSpan:
+              attached.userData.mammothEditorMyApartmentWallId
+                ? captureWallScalePinnedSpanFromGesture({
+                    root: attached,
+                    transformAxis: tcAxis,
+                    pointStart: pointStart ?? null,
+                  })
+                : null,
+          }
         : null;
     } else {
       wallSlabScaleGesture = null;
@@ -847,27 +936,42 @@ export async function mountEditorScene(
       orbitControls.enabled = !active && st.fpAuthorCamera === "orbit";
       return;
     }
-    /** Immediate camera off/on so fly/orbit release before the next Zustand tick. */
-    if (active) {
-      orbitControls.enabled = false;
-      flyControls.enabled = false;
-    } else {
-      orbitControls.enabled = st.cameraMode !== "fly";
-      flyControls.enabled = st.cameraMode === "fly";
-    }
+    /** Immediate camera off so orbit release before the next Zustand tick. */
+    orbitControls.enabled = !active;
     if (!active) levelEditorTransformGesture = false;
     if (!active) levelEditorAnchoredScaleGesture = null;
     if (active) {
       useEditorStore.getState().beginTransaction();
     } else {
       useEditorStore.getState().commitTransaction();
+      if (st.mode === "my_apartment_layout") {
+        myApartmentAuthoring.flushDeferredMountSync();
+        myApartmentAuthoring.flushPendingWallsVisualSync();
+      }
     }
   });
   transformControls.addEventListener("objectChange", () => {
     const aptSt = useEditorStore.getState();
     const aptObj = transformControls.object as THREE.Object3D | undefined;
     if (aptSt.mode === "my_apartment_layout" && aptObj) {
-      if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+      if (aptObj.userData.editorMyApartmentWallOpeningProxy === true) {
+        const openingId = aptObj.userData.mammothEditorMyApartmentWallOpeningId as
+          | string
+          | undefined;
+        let wallRoot: THREE.Object3D | null = aptObj.parent;
+        while (wallRoot && !wallRoot.userData.mammothEditorMyApartmentWallId) {
+          wallRoot = wallRoot.parent;
+        }
+        const wallId = wallRoot?.userData.mammothEditorMyApartmentWallId as string | undefined;
+        if (wallId && openingId && wallRoot) {
+          const wallItem = aptSt.ownedApartmentBuiltins.wallItems.find((w) => w.id === wallId);
+          if (wallItem) {
+            clampMyApartmentWallOpeningProxyPose(aptObj, wallRoot, wallItem, openingId);
+          }
+        }
+        /** Persist on mouseUp only — store sync rebuilds the proxy mesh mid-drag. */
+        return;
+      } else if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
         for (const child of [...aptObj.children]) {
           if (!(child instanceof THREE.Group)) continue;
           if (
@@ -904,13 +1008,7 @@ export async function mountEditorScene(
                   if (axis.indexOf("Z") === -1) child.scale.z = 1;
                 }
               }
-              const scaleDrag =
-                aptSt.transformMode === "scale" &&
-                wallSlabScaleGesture &&
-                wallSlabScaleGesture.object === child &&
-                transformControls.dragging
-                  ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
-                  : undefined;
+              const scaleDrag = mirrorSlabScaleDragFor(child, aptSt.transformMode);
               constrainMyApartmentMirrorRootPose(child, scaleDrag);
             }
           } else if (child.userData.mammothEditorMyApartmentWallId) {
@@ -930,14 +1028,8 @@ export async function mountEditorScene(
                 if (axis.indexOf("Z") === -1) child.scale.z = 1;
               }
             }
-            const scaleDrag =
-              aptSt.transformMode === "scale" &&
-              wallSlabScaleGesture &&
-              wallSlabScaleGesture.object === child &&
-              transformControls.dragging
-                ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
-                : undefined;
-            constrainMyApartmentWallRootPose(child, scaleDrag);
+            const scaleDrag = wallSlabScaleDragFor(child, aptSt.transformMode);
+            constrainMyApartmentWallRootPose(child, scaleDrag, { autoYaw: false });
           }
         }
       } else if (
@@ -971,13 +1063,7 @@ export async function mountEditorScene(
               if (axis.indexOf("Z") === -1) aptObj.scale.z = 1;
             }
           }
-          const scaleDrag =
-            aptSt.transformMode === "scale" &&
-            wallSlabScaleGesture &&
-            wallSlabScaleGesture.object === aptObj &&
-            transformControls.dragging
-              ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
-              : undefined;
+          const scaleDrag = mirrorSlabScaleDragFor(aptObj, aptSt.transformMode);
           constrainMyApartmentMirrorRootPose(aptObj, scaleDrag);
         }
       } else if (aptObj.userData.mammothEditorMyApartmentWallId) {
@@ -997,14 +1083,8 @@ export async function mountEditorScene(
             if (axis.indexOf("Z") === -1) aptObj.scale.z = 1;
           }
         }
-        const scaleDrag =
-          aptSt.transformMode === "scale" &&
-          wallSlabScaleGesture &&
-          wallSlabScaleGesture.object === aptObj &&
-          transformControls.dragging
-            ? { meshScaleAtGestureStart: wallSlabScaleGesture.meshStart }
-            : undefined;
-        constrainMyApartmentWallRootPose(aptObj, scaleDrag);
+        const scaleDrag = wallSlabScaleDragFor(aptObj, aptSt.transformMode);
+        constrainMyApartmentWallRootPose(aptObj, scaleDrag, { autoYaw: false });
       }
     }
     applyAnchoredScaleGesture();
@@ -1086,7 +1166,6 @@ export async function mountEditorScene(
       levelEditorTransformGesture = v;
     },
     orbitControls,
-    flyControls,
     applyFpOrbitMouseButtons,
     applyLevelEditorMouseButtons,
     renderer,
@@ -1101,16 +1180,16 @@ export async function mountEditorScene(
     syncTransformAttachment,
   });
 
-  const disposeMyApartmentAuthoring =
-    createEditorSceneMyApartmentLifecycle({
-      getStructuralRoot: () => structuralState.buildingRoot,
-      getShouldHoldReplicaResync: () =>
-        programmaticTransformControlsDepth > 0 ||
-        transformControls.dragging === true ||
-        levelEditorTransformGesture,
-      syncLightingAttachment: syncCurrentEditorLightingAttachment,
-      syncTransformAttachment,
-    }).dispose;
+  const myApartmentAuthoring = createEditorSceneMyApartmentLifecycle({
+    getStructuralRoot: () => structuralState.buildingRoot,
+    getShouldHoldReplicaResync: () =>
+      programmaticTransformControlsDepth > 0 ||
+      transformControls.dragging === true ||
+      levelEditorTransformGesture,
+    syncLightingAttachment: syncCurrentEditorLightingAttachment,
+    syncTransformAttachment,
+  });
+  const disposeMyApartmentAuthoring = myApartmentAuthoring.dispose;
 
   // Subscribers are not invoked on register — cold-start default FP modes must bootstrap here.
   {
@@ -1174,7 +1253,7 @@ export async function mountEditorScene(
     camera,
     transformControls,
     orbitControls,
-    flyControls,
+    orbitKeyboardMove,
     fp,
     previewSelectionOutline,
     fpSelectionOutline,
@@ -1195,6 +1274,7 @@ export async function mountEditorScene(
     registerEditorSpawnCalculator(null);
     registerEditorNavigationBridge(null);
     fp.teardownFpSession();
+    orbitKeyboardMove.dispose();
     orbitControls.dispose();
     stopRenderLoop();
     disposeTransformModeDigitHotkeys();
@@ -1210,6 +1290,7 @@ export async function mountEditorScene(
     scene.remove(fpSelectionOutline);
     previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
+    registerEditorMyApartmentLayoutPersistFromSceneRequest(null);
     disposeMyApartmentAuthoring();
     apartmentInteriorSceneRig.dispose();
     disposeEditorStructuralRoot(structuralState, contentRoot);

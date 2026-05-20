@@ -1,7 +1,6 @@
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import type {
-  EditorCameraMode,
   EditorMode,
   EditorWorkspace,
 } from "../state/editorStoreTypes.js";
@@ -11,7 +10,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
   contentIndex: EditorContentIndex;
   workspace: EditorWorkspace;
   setWorkspace: (w: EditorWorkspace) => void;
-  setCameraMode: (m: EditorCameraMode) => void;
   mode: EditorMode;
   setMode: (m: EditorMode) => void;
   stairWellAuthorScope: StairWellAuthoringScope;
@@ -21,7 +19,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
     contentIndex,
     workspace,
     setWorkspace,
-    setCameraMode,
     mode,
     setMode,
     stairWellAuthorScope,
@@ -67,7 +64,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           }}
           onClick={() => {
             setWorkspace("stairwell");
-            setCameraMode("orbit");
           }}
         >
           Stairwell
@@ -96,7 +92,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           }}
           onClick={() => {
             setWorkspace("landing");
-            setCameraMode("orbit");
           }}
         >
           Corridor Door
@@ -113,7 +108,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           onClick={() => {
             setWorkspace("world");
             setMode("floor");
-            setCameraMode("orbit");
           }}
         >
           Mammoth world

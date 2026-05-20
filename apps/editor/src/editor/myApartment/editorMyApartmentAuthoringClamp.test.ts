@@ -12,11 +12,61 @@ import {
   EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
   getMyApartmentDecorAnchorWorldPosition,
+  layoutFractionsFromPreviewWorldPosition,
   previewWorldFromNormalizedPlacement,
 } from "./editorMyApartmentMeshes.js";
+import {
+  extendResidentialBoundsXZForBalcony,
+  mapOwnedApartmentLayoutFractionToWorldX,
+  mapOwnedApartmentWorldXToLayoutFraction,
+  RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
+} from "@the-mammoth/world";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 
 const SLACK = 0.03;
+
+describe("layout fraction round-trip (editor commit ↔ placement)", () => {
+  it("matches balcony-aware world X mapping used by the client", () => {
+    const box = { minX: 0, maxX: 10, minZ: -3, maxZ: 3 };
+    const unitId = "unit_e_014";
+    const extended = extendResidentialBoundsXZForBalcony(box, unitId);
+    const spans: OwnedApartmentFractionToPreviewXZ = {
+      unitId,
+      strictMinX: extended.minX,
+      strictMinZ: extended.minZ,
+      spanX: extended.maxX - extended.minX,
+      spanZ: extended.maxZ - extended.minZ,
+      prefabOriginX: 0,
+      prefabOriginZ: 0,
+      prefabFootprintSx: 10,
+      prefabFootprintSz: 6,
+      slabFootprintSx: 10 + RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
+    };
+    const fx = 0.42;
+    const fz = 0.61;
+    const preview = previewWorldFromNormalizedPlacement({ spans, fx, fz });
+    const back = layoutFractionsFromPreviewWorldPosition(spans, preview.x, preview.z);
+    expect(back.fx).toBeCloseTo(fx, 6);
+    expect(back.fz).toBeCloseTo(fz, 6);
+
+    const worldX = mapOwnedApartmentLayoutFractionToWorldX(
+      spans.strictMinX,
+      spans.strictMinX + spans.spanX,
+      unitId,
+      fx,
+    );
+    const linearFx = (worldX - spans.strictMinX) / spans.spanX;
+    expect(linearFx).not.toBeCloseTo(fx, 2);
+    expect(
+      mapOwnedApartmentWorldXToLayoutFraction(
+        spans.strictMinX,
+        spans.strictMinX + spans.spanX,
+        unitId,
+        worldX,
+      ),
+    ).toBeCloseTo(fx, 6);
+  });
+});
 
 describe("owned apartment authoring XZ clamp", () => {
   it("lowers imported decor uniform scale floor below built-in furniture (0.08)", () => {

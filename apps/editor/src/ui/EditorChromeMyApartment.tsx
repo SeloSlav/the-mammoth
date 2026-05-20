@@ -4,6 +4,8 @@ import type { OwnedApartmentWallMaterial } from "@the-mammoth/schemas";
 import {
   APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
   APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
+  clampOwnedApartmentWallOpeningsForLength,
+  defaultOwnedApartmentWallDoorOpening,
 } from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
@@ -28,13 +30,10 @@ import {
   parseMyApartmentLayoutMirrorSelectedId,
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
+  parseMyApartmentLayoutWallOpeningSelectedId,
+  editorMyApartmentSelectedIdForWallOpening,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
 import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
-import {
-  clampOwnedApartmentLayoutFraction,
-  MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FX,
-  MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FZ,
-} from "../editor/myApartment/cloneMyApartmentObjectGroup.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -95,14 +94,12 @@ function authoringSlotPatchToWallMaterial(
 export function EditorChromeMyApartment(props: {
   mode: EditorMode;
   setMode: (m: EditorMode) => void;
-  setCameraMode: (m: "orbit") => void;
   enterMyApartmentLayoutMode: () => void;
   contentIndex: EditorContentIndex;
 }) {
   const {
     mode,
     setMode,
-    setCameraMode,
     enterMyApartmentLayoutMode,
     contentIndex,
   } = props;
@@ -120,6 +117,7 @@ export function EditorChromeMyApartment(props: {
     renameMyApartmentObjectGroup,
     deleteMyApartmentObjectGroup,
     cloneMyApartmentObjectGroup,
+    cloneMyApartmentLayoutSelection,
     deleteMyApartmentObjectGroupMembers,
     selectMyApartmentSavedObjectGroup,
     transformMode,
@@ -142,6 +140,7 @@ export function EditorChromeMyApartment(props: {
       renameMyApartmentObjectGroup: s.renameMyApartmentObjectGroup,
       deleteMyApartmentObjectGroup: s.deleteMyApartmentObjectGroup,
       cloneMyApartmentObjectGroup: s.cloneMyApartmentObjectGroup,
+      cloneMyApartmentLayoutSelection: s.cloneMyApartmentLayoutSelection,
       deleteMyApartmentObjectGroupMembers: s.deleteMyApartmentObjectGroupMembers,
       selectMyApartmentSavedObjectGroup: s.selectMyApartmentSavedObjectGroup,
       transformMode: s.transformMode,
@@ -194,6 +193,7 @@ export function EditorChromeMyApartment(props: {
 
   const selectedDecorId = parseMyApartmentLayoutDecorSelectedId(selectedId);
   const selectedWallId = parseMyApartmentLayoutWallSelectedId(selectedId);
+  const selectedOpeningSel = parseMyApartmentLayoutWallOpeningSelectedId(selectedId);
   const selectedMirrorId = parseMyApartmentLayoutMirrorSelectedId(selectedId);
   const placedItems = useMemo(
     () => [...placedItemsFromStore].sort((a, b) => a.id.localeCompare(b.id)),
@@ -220,6 +220,10 @@ export function EditorChromeMyApartment(props: {
     [wallItems],
   );
   const selectedWall = selectedWallId ? (wallById.get(selectedWallId) ?? null) : null;
+  const selectedOpeningWall = selectedOpeningSel
+    ? (wallById.get(selectedOpeningSel.wallId) ?? null)
+    : null;
+  const activeWallForDoors = selectedWall ?? selectedOpeningWall;
 
   const mirrorById = useMemo(
     () => new Map(mirrorItems.map((item) => [item.id, item] as const)),
@@ -310,32 +314,7 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedDecor(): void {
     if (!selectedDecor) return;
-    const nextIndex = placedItems.length;
-    const id =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `decor_${Date.now()}_${nextIndex}`;
-    const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      placedItems: [
-        ...doc.placedItems,
-        {
-          id,
-          modelRelPath: selectedDecor.modelRelPath,
-          fx,
-          fz,
-          dy: selectedDecor.dy,
-          yawRad: selectedDecor.yawRad,
-          pitchRad: selectedDecor.pitchRad,
-          rollRad: selectedDecor.rollRad ?? 0,
-          uniformScale: selectedDecor.uniformScale,
-          ignoreSupportSurfaces: selectedDecor.ignoreSupportSurfaces,
-          itemKind: selectedDecor.itemKind,
-        },
-      ],
-    }));
-    setSelectedId(editorMyApartmentSelectedIdForDecor(id));
+    cloneMyApartmentLayoutSelection();
   }
 
   function deleteLayoutPlacements(selectedIds: readonly string[]): void {
@@ -380,33 +359,57 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedWall(): void {
     if (!selectedWall) return;
-    const id =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `wall_${Date.now()}_${wallItems.length}`;
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      wallItems: [
-        ...doc.wallItems,
-        {
-          ...selectedWall,
-          id,
-          fx: clampOwnedApartmentLayoutFraction(
-            selectedWall.fx + MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FX,
-          ),
-          fz: clampOwnedApartmentLayoutFraction(
-            selectedWall.fz + MY_APARTMENT_OBJECT_GROUP_CLONE_OFFSET_FZ,
-          ),
-          material: { ...selectedWall.material },
-        },
-      ],
-    }));
-    setSelectedId(editorMyApartmentSelectedIdForWall(id));
+    cloneMyApartmentLayoutSelection();
   }
 
   function deleteSelectedWall(): void {
     if (!selectedWallId) return;
     deleteLayoutPlacements([editorMyApartmentSelectedIdForWall(selectedWallId)]);
+  }
+
+  function addDoorToWall(wallId: string): void {
+    const wall = wallById.get(wallId);
+    if (!wall) return;
+    const openingId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `door_${Date.now()}`;
+    const opening = defaultOwnedApartmentWallDoorOpening(openingId);
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      wallItems: doc.wallItems.map((item) =>
+        item.id === wallId
+          ? {
+              ...item,
+              openings: clampOwnedApartmentWallOpeningsForLength(wall.sizeX, [
+                ...(item.openings ?? []),
+                opening,
+              ]),
+            }
+          : item,
+      ),
+    }));
+    setSelectedId(editorMyApartmentSelectedIdForWallOpening(wallId, openingId));
+  }
+
+  function removeWallOpening(wallId: string, openingId: string): void {
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      wallItems: doc.wallItems.map((item) =>
+        item.id === wallId
+          ? {
+              ...item,
+              openings: (item.openings ?? []).filter((o) => o.id !== openingId),
+            }
+          : item,
+      ),
+    }));
+    setSelectedId(editorMyApartmentSelectedIdForWall(wallId));
+  }
+
+  function deleteSelectedOpening(): void {
+    if (!selectedOpeningSel) return;
+    removeWallOpening(selectedOpeningSel.wallId, selectedOpeningSel.openingId);
   }
 
   function addMirror(): void {
@@ -438,25 +441,7 @@ export function EditorChromeMyApartment(props: {
 
   function cloneSelectedMirror(): void {
     if (!selectedMirror) return;
-    const nextIndex = mirrorItems.length;
-    const id =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : `mirror_${Date.now()}_${nextIndex}`;
-    const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
-    patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      mirrorItems: [
-        ...doc.mirrorItems,
-        {
-          ...selectedMirror,
-          id,
-          fx,
-          fz,
-        },
-      ],
-    }));
-    setSelectedId(editorMyApartmentSelectedIdForMirror(id));
+    cloneMyApartmentLayoutSelection();
   }
 
   function deleteSelectedMirror(): void {
@@ -537,7 +522,8 @@ export function EditorChromeMyApartment(props: {
         <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
           <strong>Ctrl/Cmd-click</strong> multiple imported decor, wall slabs, or mirrors in the scene
           or lists, enter a label, then save a group so you can move/rotate/scale them together later.
-          Press <strong>Delete</strong> to remove the current selection, including every member of a
+          <strong>Ctrl/Cmd+C</strong> clones the selection (décor, wall slab, mirror, or saved group).{" "}
+          <strong>Ctrl/Cmd+X</strong> or <strong>Delete</strong> removes it, including every member of a
           saved group.{" "}
           <span style={{ opacity: 0.9 }}>
             Saving, renaming, or ungrouping tries to write{" "}
@@ -882,6 +868,59 @@ export function EditorChromeMyApartment(props: {
             Delete selected wall
           </button>
         </div>
+        {activeWallForDoors ? (
+          <div style={{ marginTop: 10 }}>
+            <span style={{ ...editorChromeLabel, display: "block" }}>Door openings</span>
+            <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+              Standard doorway (0.9×2.1 m). Drag along the wall with the translate gizmo.
+            </p>
+            <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button
+                type="button"
+                style={editorChromeRowBtn}
+                onClick={() => addDoorToWall(activeWallForDoors.id)}
+              >
+                Add door
+              </button>
+              <button
+                type="button"
+                style={editorChromeRowBtn}
+                onClick={deleteSelectedOpening}
+                disabled={!selectedOpeningSel}
+              >
+                Remove selected door
+              </button>
+            </div>
+            {(activeWallForDoors.openings ?? []).length === 0 ? (
+              <div style={{ fontSize: 11, opacity: 0.68, marginTop: 8 }}>No doors on this wall.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                {(activeWallForDoors.openings ?? []).map((opening) => {
+                  const fullId = editorMyApartmentSelectedIdForWallOpening(
+                    activeWallForDoors.id,
+                    opening.id,
+                  );
+                  return (
+                    <button
+                      key={opening.id}
+                      type="button"
+                      style={{
+                        ...editorChromeRowBtn,
+                        textAlign: "left",
+                        background:
+                          selectedId === fullId ? "#355172" : "#2a2a34",
+                      }}
+                      onClick={() => setSelectedId(fullId)}
+                    >
+                      Door {opening.id.slice(0, 8)}… — offset{" "}
+                      {opening.tangentOffsetM.toFixed(2)} m
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
         {selectedWall ? (
           <div style={{ marginTop: 12 }}>
             <span style={{ ...editorChromeLabel, display: "block" }}>Wall material</span>
@@ -951,7 +990,6 @@ export function EditorChromeMyApartment(props: {
             onClick={() => {
               const st = useEditorStore.getState();
               setMode(workspaceToInitialMode(st.workspace, st.landingDocKind));
-              setCameraMode("orbit");
             }}
           >
             Back to level editor
@@ -969,7 +1007,6 @@ export function EditorChromeMyApartment(props: {
           marginTop: 4,
         }}
         onClick={() => {
-          setCameraMode("orbit");
           enterMyApartmentLayoutMode();
         }}
       >

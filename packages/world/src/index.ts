@@ -126,6 +126,22 @@ export {
 export { MAMMOTH_FP_INTERIOR_PARTITION_SOLID } from "./fpInteriorPartitionSolid.js";
 export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurfaceMaterial.js";
 export {
+  EDITOR_MY_APARTMENT_WALL_OPENING_PROXY_UD,
+  EDITOR_MY_APARTMENT_WALL_VISUAL_UD,
+  OWNED_APARTMENT_STANDARD_DOOR_HEIGHT_M,
+  OWNED_APARTMENT_STANDARD_DOOR_WIDTH_M,
+  applyOwnedApartmentWallSurfaceMaterialToVisuals,
+  buildOwnedApartmentPartitionWallInGroup,
+  buildOwnedApartmentPartitionWallRefMesh,
+  rebuildOwnedApartmentPartitionWallVisual,
+  readOwnedApartmentPartitionWallLocalExtents,
+  clampOwnedApartmentWallOpeningsForLength,
+  clampWallOpeningTangentOffsetM,
+  defaultOwnedApartmentWallDoorOpening,
+  syncOwnedApartmentWallOpeningProxies,
+  wallOpeningToHoleXY,
+} from "./ownedApartmentPartitionWallMesh.js";
+export {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
   APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
   APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,

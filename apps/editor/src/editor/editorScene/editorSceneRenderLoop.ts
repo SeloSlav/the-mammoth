@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { FlyControls } from "three/addons/controls/FlyControls.js";
 import { useEditorStore } from "../../state/editorStore.js";
 import {
   adoptWeaponPresentationFileText,
@@ -24,7 +23,7 @@ export function startEditorSceneRenderLoop(deps: {
   camera: THREE.PerspectiveCamera;
   transformControls: TransformControls;
   orbitControls: OrbitControls;
-  flyControls: FlyControls;
+  orbitKeyboardMove: { update: (dt: number) => void };
   fp: EditorFpAuthoringLifecycle;
   previewSelectionOutline: PreviewSelectionShapeOutline;
   fpSelectionOutline: FpSelectionAabbOutline;
@@ -40,7 +39,7 @@ export function startEditorSceneRenderLoop(deps: {
     camera,
     transformControls,
     orbitControls,
-    flyControls,
+    orbitKeyboardMove,
     fp,
     previewSelectionOutline,
     fpSelectionOutline,
@@ -185,11 +184,11 @@ export function startEditorSceneRenderLoop(deps: {
       if (inFpMode && st.fpAuthorCamera === "orbit") {
         beforeOrbitControlsUpdate?.();
         orbitControls.update();
-      } else if (!inFpMode && st.cameraMode === "fly") {
-        flyControls.update(dt);
+        orbitKeyboardMove.update(dt);
       } else if (!inFpMode) {
         beforeOrbitControlsUpdate?.();
         orbitControls.update();
+        orbitKeyboardMove.update(dt);
       }
     }
     const attached = transformControls.object as THREE.Object3D | undefined;

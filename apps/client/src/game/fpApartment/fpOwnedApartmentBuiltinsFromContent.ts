@@ -16,6 +16,7 @@ import {
   type OwnedApartmentMirrorItem,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
+  type OwnedApartmentWallOpening,
 } from "@the-mammoth/schemas";
 import { mapOwnedApartmentLayoutFractionToWorldX } from "@the-mammoth/world";
 
@@ -123,6 +124,7 @@ export type ApartmentWallPose = {
   sizeY: number;
   sizeZ: number;
   material: OwnedApartmentWallMaterial;
+  openings: OwnedApartmentWallOpening[];
 };
 
 /**
@@ -151,6 +153,7 @@ export function resolveApartmentWallPoses(
     sizeY: item.sizeY,
     sizeZ: item.sizeZ,
     material: item.material,
+    openings: item.openings ?? [],
   }));
 }
 

@@ -22,7 +22,6 @@ export function subscribeEditorSceneStore(deps: {
   getLevelEditorTransformGesture: () => boolean;
   setLevelEditorTransformGesture: (v: boolean) => void;
   orbitControls: OrbitControls;
-  flyControls: { enabled: boolean; movementSpeed: number };
   applyFpOrbitMouseButtons: () => void;
   applyLevelEditorMouseButtons: (st: EditorStoreSnapshot) => void;
   renderer: THREE.WebGPURenderer;
@@ -45,7 +44,6 @@ export function subscribeEditorSceneStore(deps: {
     getLevelEditorTransformGesture,
     setLevelEditorTransformGesture,
     orbitControls,
-    flyControls,
     applyFpOrbitMouseButtons,
     applyLevelEditorMouseButtons,
     renderer,
@@ -239,19 +237,14 @@ export function subscribeEditorSceneStore(deps: {
         syncTransformAttachment();
       }
 
-      flyControls.movementSpeed = s.flySpeedMps;
       /**
-       * While dragging the level-editor gizmo, Orbit + Fly must stay off — both use the primary
-       * button and would steal pointer capture from {@link TransformControls} (especially Fly
-       * `dragToLook` on LMB).
+       * While dragging the level-editor gizmo, Orbit must stay off — it uses the primary
+       * button and would steal pointer capture from {@link TransformControls}.
        */
       const gizmoDragging = transformControls.dragging === true;
       const wantOrbit =
-        (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") ||
-        (!isFpMode(s.mode) && s.cameraMode !== "fly");
-      const wantFly = !isFpMode(s.mode) && s.cameraMode === "fly";
+        (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") || !isFpMode(s.mode);
       orbitControls.enabled = !gizmoDragging && wantOrbit;
-      flyControls.enabled = !gizmoDragging && wantFly;
       if (isFpMode(s.mode) && s.fpAuthorCamera === "orbit") {
         applyFpOrbitMouseButtons();
       } else {

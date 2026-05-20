@@ -3,6 +3,29 @@ import * as THREE from "three";
 /** Selection groups keyed by {@link editorMyApartmentSelectedIdForDecor} etc.; set by lifecycle. */
 let groupsRef: Record<string, THREE.Group> | null = null;
 
+let wallsMountSyncRequest: (() => void) | null = null;
+let layoutPersistFromSceneRequest: (() => void) | null = null;
+
+/** Registered by apartment lifecycle — rebuilds wall meshes from store (openings included). */
+export function registerEditorMyApartmentWallsMountSyncRequest(fn: (() => void) | null): void {
+  wallsMountSyncRequest = fn;
+}
+
+export function requestEditorMyApartmentWallsMountSync(): void {
+  wallsMountSyncRequest?.();
+}
+
+/** Registered by editor scene — copies live wall (and attached gizmo) poses into the store before save. */
+export function registerEditorMyApartmentLayoutPersistFromSceneRequest(
+  fn: (() => void) | null,
+): void {
+  layoutPersistFromSceneRequest = fn;
+}
+
+export function requestEditorMyApartmentLayoutPersistFromScene(): void {
+  layoutPersistFromSceneRequest?.();
+}
+
 /** Immediate parent (`editor_my_apartment_furniture` root) of all décor/walls/builtins. */
 let apartmentFurnitureMountRoot: THREE.Group | null = null;
 
