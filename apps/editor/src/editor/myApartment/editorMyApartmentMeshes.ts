@@ -42,6 +42,7 @@ import {
 import {
   applyMyApartmentWallSurfaceSnap,
   maintainWallScalePinnedSpan,
+  maxWallRunLengthMForRoot,
   previewRepresentableXZBounds,
   snapOwnedApartmentWallYawRad,
   type ConstrainMyApartmentWallScaleDrag,
@@ -55,6 +56,8 @@ import {
   parseMyApartmentLayoutWallOpeningSelectedId,
 } from "./editorMyApartmentSelection.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
+import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
+import { ownedApartmentWallPlacementFieldsEqual } from "./preserveOwnedApartmentMountPlacementRefs.js";
 
 /** Top of authoring shell floor slab — keep in sync with `editorMyApartmentAuthoringShell.ts`. */
 export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
@@ -110,6 +113,9 @@ export const EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M = 0.02;
 export const EDITOR_MY_APARTMENT_WALL_THICKNESS_MAX_M = 2;
 
 export const EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY = "mammothEditorMyApartmentWallMesh" as const;
+/** Cached run length / thickness for door-proxy clamp (avoids `updateMatrixWorld` on holed visuals). */
+export const EDITOR_MY_APARTMENT_WALL_RUN_LENGTH_UD = "editorMyApartmentWallRunLengthM" as const;
+export const EDITOR_MY_APARTMENT_WALL_THICKNESS_UD = "editorMyApartmentWallThicknessM" as const;
 /** Matches {@link APARTMENT_MIRROR_SURFACE_USERDATA_KEY} on the reflective plane mesh. */
 export const EDITOR_MY_APARTMENT_MIRROR_SURFACE_USERDATA_KEY =
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY;
@@ -455,10 +461,15 @@ export {
 export function constrainMyApartmentWallRootPose(
   root: THREE.Object3D,
   scaleDrag?: ConstrainMyApartmentWallScaleDrag,
-  wallSnapOpts?: { autoYaw?: boolean; neighborSnap?: boolean },
+  wallSnapOpts?: {
+    autoYaw?: boolean;
+    neighborSnap?: boolean;
+    fillRunBracket?: boolean;
+  },
 ): void {
   if (!(root instanceof THREE.Group)) return;
 
+  const maxRunLenM = maxWallRunLengthMForRoot(root);
   const meshAtStart = findEditorMyApartmentWallSlabMesh(root);
 
   if (scaleDrag && meshAtStart) {
@@ -472,7 +483,7 @@ export function constrainMyApartmentWallRootPose(
     ex = THREE.MathUtils.clamp(
       ex,
       EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M,
-      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M,
+      maxRunLenM,
     );
     ey = THREE.MathUtils.clamp(
       ey,
@@ -503,7 +514,7 @@ export function constrainMyApartmentWallRootPose(
     mesh.scale.x = THREE.MathUtils.clamp(
       mesh.scale.x,
       EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M,
-      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M,
+      maxRunLenM,
     );
     mesh.scale.y = THREE.MathUtils.clamp(
       mesh.scale.y,
@@ -585,6 +596,7 @@ export function constrainMyApartmentWallRootPose(
       scaleDrag,
       autoYaw: wallSnapOpts?.autoYaw === true && !scaleDrag,
       neighborSnap: wallSnapOpts?.neighborSnap !== false,
+      fillRunBracket: wallSnapOpts?.fillRunBracket === true,
     });
     if (scaleDrag?.pinnedSpan) {
       maintainWallScalePinnedSpan(root, scaleDrag.pinnedSpan);
@@ -818,6 +830,10 @@ function placeWallGroup(args: {
     sizeY: wall.sizeY,
     sizeZ: wall.sizeZ,
   };
+  writeEditorWallSlabExtentsCache(group, {
+    sizeX: extents.sizeX,
+    sizeZ: extents.sizeZ,
+  });
   const openings = clampOwnedApartmentWallOpeningsForLength(
     extents.sizeX,
     wall.openings ?? [],
@@ -890,6 +906,72 @@ export function purgeWallOpeningSelectionGroups(
   }
 }
 
+/** Read wall run length for opening clamp without updating the holed visual subtree. */
+export function readEditorWallSlabExtentsForOpeningClamp(
+  wallRoot: THREE.Object3D,
+  wallItem: Pick<OwnedApartmentBuiltinsDoc["wallItems"][number], "sizeX" | "sizeZ">,
+): { sizeX: number; sizeZ: number } {
+  const cachedX = wallRoot.userData[EDITOR_MY_APARTMENT_WALL_RUN_LENGTH_UD] as number | undefined;
+  const cachedZ = wallRoot.userData[EDITOR_MY_APARTMENT_WALL_THICKNESS_UD] as number | undefined;
+  if (
+    typeof cachedX === "number" &&
+    cachedX > 0 &&
+    typeof cachedZ === "number" &&
+    cachedZ > 0
+  ) {
+    return { sizeX: cachedX, sizeZ: cachedZ };
+  }
+  for (const child of wallRoot.children) {
+    if (child instanceof THREE.Mesh && child.name === "wall_slab_ref") {
+      return {
+        sizeX: Math.abs(child.scale.x * wallRoot.scale.x),
+        sizeZ: Math.abs(child.scale.z * wallRoot.scale.z),
+      };
+    }
+  }
+  return { sizeX: wallItem.sizeX, sizeZ: wallItem.sizeZ };
+}
+
+export function writeEditorWallSlabExtentsCache(
+  wallRoot: THREE.Object3D,
+  extents: { sizeX: number; sizeZ: number },
+): void {
+  wallRoot.userData[EDITOR_MY_APARTMENT_WALL_RUN_LENGTH_UD] = extents.sizeX;
+  wallRoot.userData[EDITOR_MY_APARTMENT_WALL_THICKNESS_UD] = extents.sizeZ;
+}
+
+/** Re-cut door holes + proxies without resetting wall pose (opening drag commit / add door). */
+export function refreshWallOpeningsOnGroup(
+  group: THREE.Group,
+  wall: OwnedApartmentBuiltinsDoc["wallItems"][number],
+): void {
+  const { sizeX, sizeZ } = readEditorWallSlabExtentsForOpeningClamp(group, wall);
+  writeEditorWallSlabExtentsCache(group, { sizeX, sizeZ });
+  const ref = findEditorMyApartmentWallSlabMesh(group);
+  const sizeY = ref ? Math.abs(ref.scale.y * group.scale.y) : wall.sizeY;
+  const openings = clampOwnedApartmentWallOpeningsForLength(sizeX, wall.openings ?? []);
+  const wallMat = new THREE.MeshStandardMaterial({ visible: true, color: 0xc9c4bc });
+  rebuildOwnedApartmentPartitionWallVisual({
+    parent: group,
+    sizeX,
+    sizeY,
+    sizeZ,
+    openings,
+    wallMaterial: wallMat,
+    opts: { editorWallVisual: true },
+  });
+  applyOwnedApartmentWallSurfaceMaterialToVisuals(group, (mesh) => {
+    applyOwnedApartmentWallSurfaceMaterial(mesh, wall.material);
+  });
+  syncOwnedApartmentWallOpeningProxies({
+    wallGroup: group,
+    sizeX,
+    sizeY,
+    sizeZ,
+    openings,
+  });
+}
+
 export function clampMyApartmentWallOpeningProxyPose(
   proxy: THREE.Object3D,
   wallRoot: THREE.Object3D,
@@ -898,10 +980,7 @@ export function clampMyApartmentWallOpeningProxyPose(
 ): void {
   const opening = (wallItem.openings ?? []).find((o) => o.id === openingId);
   if (!opening) return;
-  const extents = readOwnedApartmentPartitionWallLocalExtents(wallRoot);
-  const ref = findEditorMyApartmentWallSlabMesh(wallRoot);
-  const sizeX = extents?.sizeX ?? (ref ? Math.abs(ref.scale.x) : wallItem.sizeX);
-  const sizeZ = extents?.sizeZ ?? (ref ? Math.abs(ref.scale.z) : wallItem.sizeZ);
+  const { sizeX, sizeZ } = readEditorWallSlabExtentsForOpeningClamp(wallRoot, wallItem);
   proxy.position.x = clampWallOpeningTangentOffsetM(sizeX, opening.widthM, proxy.position.x);
   proxy.position.y = opening.centerYM;
   proxy.position.z = sizeZ * 0.5 + 0.015;
@@ -1060,8 +1139,12 @@ export function syncEditorMyApartmentWallsOnMount(
   mount: EditorMyApartmentFurnitureMount,
   doc: OwnedApartmentBuiltinsDoc,
   spans: OwnedApartmentFractionToPreviewXZ,
-  opts?: { onlyWallIds?: ReadonlySet<string> },
+  opts?: {
+    onlyWallIds?: ReadonlySet<string>;
+    prevWallItems?: OwnedApartmentBuiltinsDoc["wallItems"];
+  },
 ): void {
+  const prevById = new Map((opts?.prevWallItems ?? []).map((w) => [w.id, w]));
   const nextIds = new Set(doc.wallItems.map((w) => w.id));
   for (const wall of doc.wallItems) {
     if (opts?.onlyWallIds && !opts.onlyWallIds.has(wall.id)) {
@@ -1075,7 +1158,17 @@ export function syncEditorMyApartmentWallsOnMount(
       mount.root.add(group);
       mount.selectionGroups[selId] = group;
     }
-    placeWallGroup({ group, wall, spans });
+    const prevWall = prevById.get(wall.id);
+    const openingsOnly =
+      prevWall !== undefined &&
+      group.children.length > 0 &&
+      ownedApartmentWallPlacementFieldsEqual(prevWall, wall) &&
+      JSON.stringify(prevWall.openings ?? []) !== JSON.stringify(wall.openings ?? []);
+    if (openingsOnly) {
+      refreshWallOpeningsOnGroup(group, wall);
+    } else {
+      placeWallGroup({ group, wall, spans });
+    }
     syncWallOpeningSelectionGroups(mount.selectionGroups, wall.id, group, wall.openings ?? []);
   }
   for (const id of mount.mountedWallIds) {
@@ -1124,6 +1217,26 @@ export function syncEditorMyApartmentMirrorsOnMount(
 
 const editorMyApartmentDecorTemplatePromises = new Map<string, Promise<THREE.Object3D>>();
 
+export function listMissingEditorDecorTemplatePaths(
+  doc: OwnedApartmentBuiltinsDoc,
+  templates: EditorMyApartmentDecorTemplateMap,
+): string[] {
+  return listMyApartmentPlacedItemModelRelPaths(doc).filter((path) => !templates.has(path));
+}
+
+/** Loads any catalog paths not yet in `templates` (e.g. after Import in the same session). */
+export async function loadMissingEditorDecorTemplates(
+  templates: EditorMyApartmentDecorTemplateMap,
+  modelRelPaths: readonly string[],
+): Promise<void> {
+  const missing = [...new Set(modelRelPaths)].filter((path) => !templates.has(path));
+  if (missing.length === 0) return;
+  const loaded = await loadEditorMyApartmentDecorTemplates(missing);
+  for (const [path, scene] of loaded) {
+    templates.set(path, scene);
+  }
+}
+
 export async function loadEditorMyApartmentDecorTemplates(
   modelRelPaths: readonly string[],
 ): Promise<EditorMyApartmentDecorTemplateMap> {
@@ -1132,15 +1245,26 @@ export async function loadEditorMyApartmentDecorTemplates(
   const out: EditorMyApartmentDecorTemplateMap = new Map();
   await Promise.all(
     [...new Set(modelRelPaths)].map(async (modelRelPath) => {
-      const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));
-      let pending = editorMyApartmentDecorTemplatePromises.get(url);
-      if (!pending) {
-        pending = modelRelPath.toLowerCase().endsWith(".obj")
-          ? objLoader.loadAsync(url)
-          : gltfLoader.loadAsync(url).then((gltf) => gltf.scene);
-        editorMyApartmentDecorTemplatePromises.set(url, pending);
+      try {
+        const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));
+        let pending = editorMyApartmentDecorTemplatePromises.get(url);
+        if (!pending) {
+          const loadPromise = modelRelPath.toLowerCase().endsWith(".obj")
+            ? objLoader.loadAsync(url)
+            : gltfLoader.loadAsync(url).then((gltf) => gltf.scene);
+          pending = loadPromise.catch((err: unknown) => {
+            editorMyApartmentDecorTemplatePromises.delete(url);
+            throw err;
+          });
+          editorMyApartmentDecorTemplatePromises.set(url, pending);
+        }
+        out.set(modelRelPath, await pending);
+      } catch (err) {
+        console.warn(
+          `[editor] Failed to load decor model ${modelRelPath}:`,
+          err instanceof Error ? err.message : err,
+        );
       }
-      out.set(modelRelPath, await pending);
     }),
   );
   return out;

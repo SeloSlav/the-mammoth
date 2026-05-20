@@ -50,7 +50,7 @@ export function apartmentPracticalLightSpecFromDecorGroup(
 
   group.updateMatrixWorld(true);
 
-  if (kind === "tv") {
+  if (kind === "tv" || kind === "computer") {
     _decorBoxScratch.setFromObject(group);
     if (_decorBoxScratch.isEmpty()) return null;
     _decorBoxScratch.getCenter(_decorCenterScratch);
@@ -65,7 +65,7 @@ export function apartmentPracticalLightSpecFromDecorGroup(
     const screenInset = Math.max(0.035, _decorSizeScratch.z * 0.12);
     _decorCenterScratch.addScaledVector(_scratchDir, screenInset);
     return {
-      kind: "tv",
+      kind,
       position: _decorCenterScratch.clone(),
       direction: _scratchDir.clone(),
     };
@@ -250,10 +250,17 @@ export function mountApartmentPracticalLights(
       spec.direction,
     );
     if (
-      (spec.kind === "window" || spec.kind === "tv") &&
+      (spec.kind === "window" ||
+        spec.kind === "tv" ||
+        spec.kind === "computer") &&
       local.direction
     ) {
-      const p = spec.kind === "tv" ? profile.tv : profile.window;
+      const p =
+        spec.kind === "tv"
+          ? profile.tv
+          : spec.kind === "computer"
+            ? profile.computer
+            : profile.window;
       const spot = new THREE.SpotLight(
         p.color,
         p.intensity,

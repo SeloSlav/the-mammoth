@@ -4,6 +4,7 @@ import type {
   OwnedApartmentPlacedItem,
   OwnedApartmentWallItem,
 } from "@the-mammoth/schemas";
+import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 
 function placedItemsEqual(
   a: readonly OwnedApartmentPlacedItem[],
@@ -32,7 +33,8 @@ function placedItemsEqual(
   return true;
 }
 
-function ownedApartmentWallItemPlacementEqual(
+/** Pose/size/material only — ignores door opening list (for lightweight opening refresh). */
+export function ownedApartmentWallPlacementFieldsEqual(
   left: OwnedApartmentWallItem,
   right: OwnedApartmentWallItem,
 ): boolean {
@@ -46,7 +48,16 @@ function ownedApartmentWallItemPlacementEqual(
     left.sizeX === right.sizeX &&
     left.sizeY === right.sizeY &&
     left.sizeZ === right.sizeZ &&
-    JSON.stringify(left.material) === JSON.stringify(right.material) &&
+    JSON.stringify(left.material) === JSON.stringify(right.material)
+  );
+}
+
+function ownedApartmentWallItemPlacementEqual(
+  left: OwnedApartmentWallItem,
+  right: OwnedApartmentWallItem,
+): boolean {
+  return (
+    ownedApartmentWallPlacementFieldsEqual(left, right) &&
     JSON.stringify(left.openings ?? []) === JSON.stringify(right.openings ?? [])
   );
 }
@@ -62,6 +73,31 @@ export function ownedApartmentWallItemsDeepEqual(
     }
   }
   return true;
+}
+
+/** Wall ids whose door/opening list changed (placement fields may match). */
+export function collectOwnedApartmentWallIdsWithOpeningChanges(
+  prev: readonly OwnedApartmentWallItem[],
+  next: readonly OwnedApartmentWallItem[],
+): Set<string> {
+  const changed = new Set<string>();
+  const prevById = new Map(prev.map((w) => [w.id, w]));
+  const nextById = new Map(next.map((w) => [w.id, w]));
+  for (const wall of next) {
+    const prior = prevById.get(wall.id);
+    if (
+      !prior ||
+      JSON.stringify(prior.openings ?? []) !== JSON.stringify(wall.openings ?? [])
+    ) {
+      changed.add(wall.id);
+    }
+  }
+  for (const wall of prev) {
+    if (!nextById.has(wall.id)) {
+      changed.add(wall.id);
+    }
+  }
+  return changed;
 }
 
 /** Wall ids whose placement or openings changed — for incremental mount sync. */
@@ -84,6 +120,22 @@ export function collectChangedOwnedApartmentWallIds(
     }
   }
   return changed;
+}
+
+/** Wall ids that need `placeWallGroup` — data changed and/or no selection group in the mount yet. */
+export function collectWallIdsNeedingEditorMountSync(
+  prevWallItems: readonly OwnedApartmentWallItem[],
+  nextWallItems: readonly OwnedApartmentWallItem[],
+  mountedWallSelectionKeys: ReadonlySet<string>,
+): Set<string> {
+  const ids = collectChangedOwnedApartmentWallIds(prevWallItems, nextWallItems);
+  for (const wall of nextWallItems) {
+    const selId = editorMyApartmentSelectedIdForWall(wall.id);
+    if (!mountedWallSelectionKeys.has(selId)) {
+      ids.add(wall.id);
+    }
+  }
+  return ids;
 }
 
 function mirrorItemsEqual(

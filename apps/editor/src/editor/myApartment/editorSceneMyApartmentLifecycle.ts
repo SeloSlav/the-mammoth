@@ -1,10 +1,13 @@
 import * as THREE from "three";
 
+import { prepareMammothApartmentInteriorContentRoots } from "@the-mammoth/engine";
 import { useEditorStore } from "../../state/editorStore.js";
 
 import {
 
   loadEditorMyApartmentDecorTemplates,
+  listMissingEditorDecorTemplatePaths,
+  loadMissingEditorDecorTemplates,
 
   apartmentUnitBoundsFromAuthoringFractionMapping,
   mountEditorMyApartmentFurnitureUnder,
@@ -43,7 +46,11 @@ import {
   type ApartmentMountSyncInputs,
 
 } from "./editorMyApartmentMountSync.js";
-import { collectChangedOwnedApartmentWallIds } from "./preserveOwnedApartmentMountPlacementRefs.js";
+import {
+  collectOwnedApartmentWallIdsWithOpeningChanges,
+  collectWallIdsNeedingEditorMountSync,
+} from "./preserveOwnedApartmentMountPlacementRefs.js";
+import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 
 
 
@@ -92,8 +99,8 @@ export function createEditorSceneMyApartmentLifecycle(
       return;
     }
     pendingWallsVisualSync = false;
-    prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
     syncPlacementIncremental("walls-only");
+    prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
   }
 
   registerEditorMyApartmentWallsMountSyncRequest(runWallsMountSyncIfReady);
@@ -229,7 +236,25 @@ export function createEditorSceneMyApartmentLifecycle(
 
 
 
-  function syncPlacementIncremental(kind: "decor-only" | "walls-only" | "mirrors-only"): void {
+  function resyncMountPresentationAfterMeshEdit(
+    shellRoot: THREE.Object3D,
+    authoringFractionMapping: ReturnType<typeof ownedApartmentFractionMappingForEditor>,
+    layout: ReturnType<typeof resolveOwnedApartmentAuthoringLayoutForEditor>,
+  ): void {
+    if (!mount) return;
+    prepareMammothApartmentInteriorContentRoots({ shellRoot, decorRoot: mount.root });
+    const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
+      authoringFractionMapping,
+      layout?.shellPlan.vh ?? 3,
+    );
+    mount.resyncPracticalLights(shellRoot, unitBounds);
+    /** `place*Group` rebuilds PBR materials; apartment layout uses per-mesh PMREM, not `scene.environment`. */
+    deps.syncLightingAttachment();
+  }
+
+  async function syncPlacementIncrementalAsync(
+    kind: "decor-only" | "walls-only" | "mirrors-only",
+  ): Promise<void> {
     const parent = deps.getStructuralRoot();
     if (!parent || !mount) {
       void reconcile();
@@ -246,6 +271,11 @@ export function createEditorSceneMyApartmentLifecycle(
     });
     const doc = st.ownedApartmentBuiltins;
     if (kind === "decor-only") {
+      const missing = listMissingEditorDecorTemplatePaths(doc, decorTemplates);
+      if (missing.length > 0) {
+        await loadMissingEditorDecorTemplates(decorTemplates, missing);
+      }
+      if (disposed || deps.getShouldHoldReplicaResync()) return;
       syncEditorMyApartmentDecorOnMount(
         mount,
         decorTemplates,
@@ -253,18 +283,39 @@ export function createEditorSceneMyApartmentLifecycle(
         authoringFractionMapping,
       );
     } else if (kind === "walls-only") {
-      const changedWallIds = collectChangedOwnedApartmentWallIds(
+      if (disposed || deps.getShouldHoldReplicaResync()) return;
+      const mountedWallKeys = new Set<string>();
+      for (const wall of doc.wallItems) {
+        const selId = editorMyApartmentSelectedIdForWall(wall.id);
+        if (mount.selectionGroups[selId]) mountedWallKeys.add(selId);
+      }
+      const changedWallIds = collectWallIdsNeedingEditorMountSync(
         prevMountInputs.wallItems,
         doc.wallItems,
+        mountedWallKeys,
       );
+      for (const wallId of collectOwnedApartmentWallIdsWithOpeningChanges(
+        prevMountInputs.wallItems,
+        doc.wallItems,
+      )) {
+        changedWallIds.add(wallId);
+      }
       syncEditorMyApartmentWallsOnMount(mount, doc, authoringFractionMapping, {
         onlyWallIds: changedWallIds,
+        prevWallItems: prevMountInputs.wallItems,
       });
     } else {
+      if (disposed || deps.getShouldHoldReplicaResync()) return;
       syncEditorMyApartmentMirrorsOnMount(mount, doc, authoringFractionMapping);
     }
+    if (disposed || deps.getShouldHoldReplicaResync()) return;
+    resyncMountPresentationAfterMeshEdit(parent, authoringFractionMapping, layout);
     setEditorMyApartmentPieceGroups(mount.selectionGroups);
     deps.syncTransformAttachment();
+  }
+
+  function syncPlacementIncremental(kind: "decor-only" | "walls-only" | "mirrors-only"): void {
+    void syncPlacementIncrementalAsync(kind);
   }
 
   function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
@@ -272,15 +323,13 @@ export function createEditorSceneMyApartmentLifecycle(
     if (kind === "none") return;
     if (kind === "decor-only" || kind === "walls-only" || kind === "mirrors-only") {
       /** Gizmo drags patch the store every frame — rebuilding meshes mid-gesture resets pose. */
-      if (deps.getShouldHoldReplicaResync()) {
-        prevMountInputs = nextMountInputs;
-        return;
-      }
+      if (deps.getShouldHoldReplicaResync()) return;
       prevMountInputs = nextMountInputs;
       syncPlacementIncremental(kind);
       return;
     }
     prevMountInputs = nextMountInputs;
+    if (deps.getShouldHoldReplicaResync()) return;
     void reconcile();
   }
 

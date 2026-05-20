@@ -37,7 +37,7 @@ export function moodGradeMammothApartmentDecorMaterial(
     modelRelPath != null ? apartmentDecorEmitterKindFromModelPath(modelRelPath) : null;
   const isWarmFixture =
     modelRelPath != null && apartmentDecorWarmLightFixtureKind(modelRelPath) != null;
-  const isTv = emitterKind === "tv";
+  const isScreenGlow = emitterKind === "tv" || emitterKind === "computer";
 
   const standard = upgradeApartmentDecorMaterialToStandard(material);
   const m = standard.clone();
@@ -46,12 +46,12 @@ export function moodGradeMammothApartmentDecorMaterial(
   }
   m.color.multiply(cfg.albedoMood);
   normalizeAlbedoLuminance(m.color, cfg.albedoLuminanceMin, cfg.albedoLuminanceMax);
-  if (isWarmFixture || isTv) {
+  if (isWarmFixture || isScreenGlow) {
     m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
     m.emissiveIntensity *= cfg.fixtureEmissiveScale;
     if (isWarmFixture) {
       m.emissive.lerp(new THREE.Color(0xffe8c8), 0.35);
-    } else if (isTv) {
+    } else if (isScreenGlow) {
       m.emissive.lerp(new THREE.Color(0x5a9cff), 0.62);
       m.emissiveIntensity *= 1.25;
     }

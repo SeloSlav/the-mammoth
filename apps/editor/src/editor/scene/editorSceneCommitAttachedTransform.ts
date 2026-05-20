@@ -18,7 +18,6 @@ import {
   clampOwnedApartmentDecorUniformScale,
   constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentMirrorRootPose,
-  constrainMyApartmentWallRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
   findEditorMyApartmentMirrorSurfaceMesh,
@@ -111,7 +110,7 @@ export type MyApartmentWallPlacementPatch = {
 
 /**
  * Read wall placement for the store from the live scene root.
- * Skips neighbor snap so intentional offsets (e.g. a slight north nudge) are not collapsed on commit/save.
+ * Does not run snap, fill-gap, or shell clamp — the scene pose is persisted as-is.
  */
 export function readMyApartmentWallPlacementPatchFromSceneRoot(
   targetRoot: THREE.Object3D,
@@ -120,10 +119,6 @@ export function readMyApartmentWallPlacementPatchFromSceneRoot(
   if (!(targetRoot instanceof THREE.Group)) return null;
   if (!targetRoot.userData.mammothEditorMyApartmentWallId) return null;
 
-  constrainMyApartmentWallRootPose(targetRoot, undefined, {
-    autoYaw: false,
-    neighborSnap: false,
-  });
   const mesh = findEditorMyApartmentWallSlabMesh(targetRoot);
   if (!mesh) return null;
 

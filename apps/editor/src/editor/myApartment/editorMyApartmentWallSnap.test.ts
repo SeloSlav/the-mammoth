@@ -4,6 +4,8 @@ import {
   applyMyApartmentWallSurfaceSnap,
   clampWallAabbToUnitShellInterior,
   getUnitInteriorShellBounds,
+  expandWallRunToBracketingNeighbors,
+  isWallLengthScaleDrag,
   snapOwnedApartmentWallYawRad,
 } from "./editorMyApartmentWallSnap.js";
 import {
@@ -170,6 +172,206 @@ describe("applyMyApartmentWallSurfaceSnap", () => {
     const boxB = new THREE.Box3().setFromObject(wallB);
     expect(Math.abs(boxA.max.x - boxB.min.x)).toBeLessThan(0.05);
     expect(Math.abs(boxA.max.z - boxB.min.z)).toBeLessThan(0.05);
+  });
+
+  it("fills a through-unit divider to both shell inner faces when interior span exceeds 8m", () => {
+    const divider = mountWall({
+      sizeX: 2,
+      x: 6,
+      z: 6,
+      yaw: Math.PI / 2,
+      id: "through_unit",
+    });
+    const shell = divider.parent!.parent as THREE.Group;
+    Object.assign(shell.userData, {
+      editorMyApartmentSlabSx: 12,
+      editorMyApartmentSlabSz: 12,
+      editorMyApartmentStrictSpanX: 12,
+      editorMyApartmentStrictSpanZ: 12,
+    });
+    constrainMyApartmentWallRootPose(divider);
+
+    const mesh = divider.children[0] as THREE.Mesh;
+    expandWallRunToBracketingNeighbors(divider, mesh, [], undefined);
+
+    divider.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(divider);
+    const bounds = getUnitInteriorShellBounds({
+      ...shellMeta(),
+      prefabFootprintSx: 12,
+      prefabFootprintSz: 12,
+      spanX: 12,
+      spanZ: 12,
+    });
+    const wantSpan = bounds.maxZ - bounds.minZ;
+    expect(box.max.z - box.min.z).toBeGreaterThan(9);
+    expect(Math.abs(box.min.z - bounds.minZ)).toBeLessThan(0.05);
+    expect(Math.abs(box.max.z - bounds.maxZ)).toBeLessThan(0.05);
+    expect(box.max.z - box.min.z).toBeCloseTo(wantSpan, 2);
+  });
+
+  it("fills from a south authored slab to the north unit shell inner face", () => {
+    const south = mountWall({ sizeX: 2, x: 4, z: 1.2, yaw: 0, id: "south_slab" });
+    const divider = mountWall({
+      sizeX: 1.5,
+      x: 4,
+      z: 3,
+      yaw: Math.PI / 2,
+      id: "divider",
+    });
+    south.parent!.add(divider);
+    constrainMyApartmentWallRootPose(south);
+    constrainMyApartmentWallRootPose(divider);
+
+    const meshDiv = divider.children[0] as THREE.Mesh;
+    expandWallRunToBracketingNeighbors(divider, meshDiv, [south], undefined);
+
+    divider.updateMatrixWorld(true);
+    const boxDiv = new THREE.Box3().setFromObject(divider);
+    const boxSouth = new THREE.Box3().setFromObject(south);
+    const bounds = getUnitInteriorShellBounds(shellMeta());
+    expect(Math.abs(boxDiv.min.z - boxSouth.max.z)).toBeLessThan(0.03);
+    expect(Math.abs(boxDiv.max.z - bounds.maxZ)).toBeLessThan(0.05);
+    expect(boxDiv.max.z - boxDiv.min.z).toBeGreaterThan(bounds.maxZ - boxSouth.max.z - 0.1);
+  });
+
+  it("ignores distant perpendicular walls and brackets to the nearest wing faces", () => {
+    const farWest = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 0.6,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wing_far_west",
+    });
+    const nearWest = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 2,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wing_near_west",
+    });
+    const mid = mountWall({ sizeX: 1.2, x: 4.5, z: 2, yaw: 0, id: "divider" });
+    const nearEast = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 6.5,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wing_near_east",
+    });
+    mid.parent!.add(farWest);
+    mid.parent!.add(nearWest);
+    mid.parent!.add(nearEast);
+    constrainMyApartmentWallRootPose(farWest);
+    constrainMyApartmentWallRootPose(nearWest);
+    constrainMyApartmentWallRootPose(mid);
+    constrainMyApartmentWallRootPose(nearEast);
+
+    const meshMid = mid.children[0] as THREE.Mesh;
+    expandWallRunToBracketingNeighbors(
+      mid,
+      meshMid,
+      [farWest, nearWest, nearEast],
+      undefined,
+    );
+
+    mid.updateMatrixWorld(true);
+    nearWest.updateMatrixWorld(true);
+    nearEast.updateMatrixWorld(true);
+    farWest.updateMatrixWorld(true);
+    const boxMid = new THREE.Box3().setFromObject(mid);
+    const boxNearWest = new THREE.Box3().setFromObject(nearWest);
+    const boxNearEast = new THREE.Box3().setFromObject(nearEast);
+    const boxFarWest = new THREE.Box3().setFromObject(farWest);
+    expect(Math.abs(boxMid.min.x - boxNearWest.max.x)).toBeLessThan(0.03);
+    expect(Math.abs(boxMid.max.x - boxNearEast.min.x)).toBeLessThan(0.03);
+    expect(boxMid.min.x).toBeGreaterThan(boxFarWest.max.x + 0.5);
+    expect(boxMid.max.x - boxMid.min.x).toBeLessThan(5);
+  });
+
+  it("fills a wide opening between perpendicular wing walls on the run axis", () => {
+    const left = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 1.5,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wing_left",
+    });
+    const mid = mountWall({ sizeX: 1.2, x: 3, z: 2, yaw: 0, id: "divider" });
+    const right = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 5.5,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wing_right",
+    });
+    mid.parent!.add(left);
+    mid.parent!.add(right);
+    constrainMyApartmentWallRootPose(left);
+    constrainMyApartmentWallRootPose(mid);
+    constrainMyApartmentWallRootPose(right);
+
+    const meshMid = mid.children[0] as THREE.Mesh;
+    expandWallRunToBracketingNeighbors(mid, meshMid, [left, right], undefined);
+
+    mid.updateMatrixWorld(true);
+    left.updateMatrixWorld(true);
+    right.updateMatrixWorld(true);
+    const boxMid = new THREE.Box3().setFromObject(mid);
+    const boxLeft = new THREE.Box3().setFromObject(left);
+    const boxRight = new THREE.Box3().setFromObject(right);
+    expect(Math.abs(boxMid.min.x - boxLeft.max.x)).toBeLessThan(0.03);
+    expect(Math.abs(boxMid.max.x - boxRight.min.x)).toBeLessThan(0.03);
+    expect(boxMid.max.x - boxMid.min.x).toBeGreaterThan(3.5);
+  });
+
+  it("allows lengthening past perpendicular neighbors while scaling along run axis", () => {
+    const left = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 2,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wall_left",
+    });
+    const mid = mountWall({ sizeX: 2, x: 3, z: 2, yaw: 0, id: "wall_mid" });
+    const right = mountWall({
+      sizeX: 0.08,
+      sizeY: 2.4,
+      x: 5,
+      z: 2,
+      yaw: Math.PI / 2,
+      id: "wall_right",
+    });
+    mid.parent!.add(left);
+    mid.parent!.add(right);
+    constrainMyApartmentWallRootPose(left);
+    constrainMyApartmentWallRootPose(mid);
+    constrainMyApartmentWallRootPose(right);
+
+    const meshMid = mid.children[0] as THREE.Mesh;
+    const scaleDrag = {
+      meshScaleAtGestureStart: meshMid.scale.clone(),
+      activeWorldAxis: "X" as const,
+      pinnedSpan: {
+        localAxis: "x" as const,
+        worldAxis: "x" as const,
+        side: "min" as const,
+        plane: 2,
+      },
+    };
+    expect(isWallLengthScaleDrag(mid, scaleDrag)).toBe(true);
+
+    mid.scale.x = 2;
+    constrainMyApartmentWallRootPose(mid, scaleDrag);
+
+    mid.updateMatrixWorld(true);
+    const boxMid = new THREE.Box3().setFromObject(mid);
+    expect(boxMid.max.x - boxMid.min.x).toBeGreaterThan(2.85);
   });
 
   it("keeps the pinned length end fixed while scaling from the opposite handle", () => {

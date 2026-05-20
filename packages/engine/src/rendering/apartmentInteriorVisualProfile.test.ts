@@ -32,6 +32,8 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     expect(practical.chandelier.distance).toBeLessThan(6.5);
     expect(practical.standing.distance).toBeLessThan(5);
     expect(practical.tv.distance).toBeLessThan(14);
+    expect(practical.computer.distance).toBeLessThan(12);
+    expect(practical.computer.color).toBe(practical.tv.color);
   });
 });
 

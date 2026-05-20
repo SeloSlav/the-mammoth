@@ -6,6 +6,7 @@ import {
   APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
   clampOwnedApartmentWallOpeningsForLength,
   defaultOwnedApartmentWallDoorOpening,
+  readOwnedApartmentPartitionWallLocalExtents,
 } from "@the-mammoth/world";
 import type { EditorMode } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
@@ -33,6 +34,10 @@ import {
   parseMyApartmentLayoutWallOpeningSelectedId,
   editorMyApartmentSelectedIdForWallOpening,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
+import {
+  getEditorMyApartmentStaticSelectionGroupsMap,
+  requestEditorFillWallOpening,
+} from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
 
 type ApartmentDecorCatalogEntry = {
@@ -375,13 +380,20 @@ export function EditorChromeMyApartment(props: {
         ? crypto.randomUUID()
         : `door_${Date.now()}`;
     const opening = defaultOwnedApartmentWallDoorOpening(openingId);
+    const wallGroup =
+      getEditorMyApartmentStaticSelectionGroupsMap()?.[
+        editorMyApartmentSelectedIdForWall(wallId)
+      ];
+    const runLengthM =
+      (wallGroup && readOwnedApartmentPartitionWallLocalExtents(wallGroup)?.sizeX) ??
+      wall.sizeX;
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
       wallItems: doc.wallItems.map((item) =>
         item.id === wallId
           ? {
               ...item,
-              openings: clampOwnedApartmentWallOpeningsForLength(wall.sizeX, [
+              openings: clampOwnedApartmentWallOpeningsForLength(runLengthM, [
                 ...(item.openings ?? []),
                 opening,
               ]),
@@ -850,6 +862,17 @@ export function EditorChromeMyApartment(props: {
           )}
         </div>
         <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={() => {
+              if (selectedWallId) requestEditorFillWallOpening(selectedWallId);
+            }}
+            disabled={!selectedWall}
+            title="Stretch length to the nearest authored slab and unit shell walls on each end of the run axis (e.g. south slab + north apartment wall)."
+          >
+            Fill gap
+          </button>
           <button
             type="button"
             style={editorChromeRowBtn}

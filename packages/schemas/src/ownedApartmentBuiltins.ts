@@ -251,7 +251,8 @@ export const OwnedApartmentWallItemSchema = z.object({
     .max(OWNED_APARTMENT_DECOR_PITCH_RAD_MAX)
     .default(0),
   /** Local axis extents after `YXZ` yaw/pitch (meters); mesh is unit cube scaled by these values. */
-  sizeX: z.number().min(0.05).max(8),
+  /** Run length may span full unit interior (see `previewSizeM`), not only short partitions. */
+  sizeX: z.number().min(0.05).max(32),
   sizeY: z.number().min(0.05).max(8),
   sizeZ: z.number().min(0.02).max(2),
   material: OwnedApartmentWallMaterialSchema.default(() => ({

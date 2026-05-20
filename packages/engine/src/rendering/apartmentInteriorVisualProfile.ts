@@ -208,6 +208,21 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     },
 
+    /** Monitor glow — same blue wash as TV, tighter pool for desk scale. */
+    computer: {
+
+      color: 0x6fa8ff,
+
+      intensity: 3.9,
+
+      distance: 9,
+
+      angle: Math.PI / 2.4,
+
+      penumbra: 0.55,
+
+    },
+
   },
 
   contactShadow: {
@@ -265,7 +280,9 @@ export type ApartmentDecorEmitterKind =
 
   | "standing"
 
-  | "tv";
+  | "tv"
+
+  | "computer";
 
 
 
@@ -284,6 +301,10 @@ export function apartmentDecorEmitterKindFromModelPath(
   if (lower.includes("lamp-standing")) return "standing";
 
   if (lower.endsWith("/tv.glb") || lower.includes("/objects/tv.glb")) return "tv";
+
+  if (lower.endsWith("/computer.glb") || lower.includes("/objects/computer.glb")) {
+    return "computer";
+  }
 
   return null;
 

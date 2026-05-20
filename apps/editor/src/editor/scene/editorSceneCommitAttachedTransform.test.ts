@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  readMyApartmentWallPlacementPatchFromSceneRoot,
   resolveMyApartmentDecorCommittedDy,
   resolveMyApartmentWallCommittedDy,
 } from "./editorSceneCommitAttachedTransform.js";
@@ -42,6 +43,67 @@ describe("resolveMyApartmentDecorCommittedDy", () => {
         targetRoot: root,
       }),
     ).toBeCloseTo(2.1 - EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y, 6);
+  });
+});
+
+describe("readMyApartmentWallPlacementPatchFromSceneRoot", () => {
+  const fractionMapping = {
+    unitId: "",
+    strictMinX: 0,
+    strictMinZ: 0,
+    spanX: 8,
+    spanZ: 8,
+    prefabOriginX: 0,
+    prefabOriginZ: 0,
+    prefabFootprintSx: 8,
+    prefabFootprintSz: 8,
+  };
+
+  it("does not move the wall while serializing placement for save", () => {
+    const shell = new THREE.Group();
+    Object.assign(shell.userData, {
+      editorMyApartmentSlabSx: 8,
+      editorMyApartmentSlabSz: 8,
+      editorMyApartmentStrictMinX: 0,
+      editorMyApartmentStrictMinZ: 0,
+      editorMyApartmentStrictSpanX: 8,
+      editorMyApartmentStrictSpanZ: 8,
+      editorMyApartmentPrefabOriginX: 0,
+      editorMyApartmentPrefabOriginZ: 0,
+    });
+    const furniture = new THREE.Group();
+    shell.add(furniture);
+
+    const wallRoot = new THREE.Group();
+    wallRoot.userData.mammothEditorMyApartmentWallId = "wall_save";
+    furniture.add(wallRoot);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.userData[EDITOR_MY_APARTMENT_WALL_MESH_USERDATA_KEY] = true;
+    mesh.scale.set(2.5, 2.4, 0.08);
+    mesh.position.y = mesh.scale.y / 2;
+    wallRoot.add(mesh);
+    wallRoot.rotation.order = "YXZ";
+    wallRoot.rotation.set(0, 0, 0, "YXZ");
+    wallRoot.position.set(3, EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y, 2.18);
+
+    const posBefore = wallRoot.position.clone();
+    const scaleBefore = mesh.scale.clone();
+    const rootScaleBefore = wallRoot.scale.clone();
+
+    const patch = readMyApartmentWallPlacementPatchFromSceneRoot(
+      wallRoot,
+      fractionMapping,
+    );
+
+    expect(patch).not.toBeNull();
+    expect(wallRoot.position.x).toBeCloseTo(posBefore.x, 6);
+    expect(wallRoot.position.y).toBeCloseTo(posBefore.y, 6);
+    expect(wallRoot.position.z).toBeCloseTo(posBefore.z, 6);
+    expect(mesh.scale.x).toBeCloseTo(scaleBefore.x, 6);
+    expect(mesh.scale.y).toBeCloseTo(scaleBefore.y, 6);
+    expect(mesh.scale.z).toBeCloseTo(scaleBefore.z, 6);
+    expect(wallRoot.scale.x).toBeCloseTo(rootScaleBefore.x, 6);
+    expect(patch!.sizeX).toBeCloseTo(2.5, 4);
   });
 });
 

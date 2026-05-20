@@ -9,10 +9,14 @@ import {
 } from "@the-mammoth/world";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 
+/** @see `@the-mammoth/engine` — interior hollow-shell meshes (not authored slabs). */
+const MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD = "mammothApartmentInteriorShellMesh";
+
 /** Matches `editorMyApartmentMeshes.ts` — keep in sync. */
 const EDITOR_MY_APARTMENT_INTERIOR_SLACK_M = 0.03;
 const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
 const EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M = 0.05;
+const EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M = 8;
 const EDITOR_MY_APARTMENT_WALL_SIZE_Y_MIN_M = 0.05;
 const EDITOR_MY_APARTMENT_WALL_THICKNESS_MIN_M = 0.05;
 const EDITOR_MY_APARTMENT_WALL_THICKNESS_MAX_M = 2;
@@ -192,6 +196,25 @@ function authoringPreviewSlabFootprintSx(spans: OwnedApartmentFractionToPreviewX
 }
 
 /** Inner drywall faces of the unit shell (authoring-shell local/world space). */
+/** Playable interior span along the wall run axis (south–north or west–east). */
+export function unitInteriorRunSpanM(meta: WallSnapShellMeta, runAlongX: boolean): number {
+  const b = getUnitInteriorShellBounds(meta);
+  return runAlongX ? b.maxX - b.minX : b.maxZ - b.minZ;
+}
+
+/** Max wall length allowed for this root (unit interior when known, else generic cap). */
+export function maxWallRunLengthMForRoot(root: THREE.Object3D): number {
+  const meta = readWallSnapShellMetaFromAncestors(root);
+  const selfRunsX = wallRunsAlongX(root);
+  if (meta && selfRunsX !== null) {
+    return Math.max(
+      EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M,
+      unitInteriorRunSpanM(meta, selfRunsX),
+    );
+  }
+  return EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M;
+}
+
 export function getUnitInteriorShellBounds(meta: WallSnapShellMeta): UnitInteriorShellBounds {
   const wt = UNIT_SHELL_WALL_THICKNESS_M;
   const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
@@ -319,22 +342,6 @@ function setEffectiveWallLengthX(
   }
 }
 
-function setEffectiveWallLengthZ(
-  root: THREE.Object3D,
-  mesh: THREE.Mesh,
-  lengthM: number,
-  scaleDrag: ConstrainMyApartmentWallScaleDrag | undefined,
-): void {
-  const len = Math.max(EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M, lengthM);
-  const mz = Math.max(Math.abs(mesh.scale.z), 1e-9);
-  if (scaleDrag) {
-    root.scale.z = len / mz;
-  } else {
-    root.scale.z = 1;
-    mesh.scale.z = len;
-  }
-}
-
 function setEffectiveWallHeight(
   root: THREE.Object3D,
   mesh: THREE.Mesh,
@@ -384,8 +391,9 @@ function snapWorldSpanAlongZ(
     applyPinnedSpanResize(root, mesh, pin, freePlane, scaleDrag);
     return;
   }
+  /** Wall length lives in mesh local X (maps to world Z when yaw ≈ ±90°). */
   root.position.z = (minZ + maxZ) * 0.5;
-  setEffectiveWallLengthZ(root, mesh, maxZ - minZ, scaleDrag);
+  setEffectiveWallLengthX(root, mesh, maxZ - minZ, scaleDrag);
 }
 
 function clampWorldSpanAlongX(
@@ -1077,6 +1085,333 @@ function snapPerpendicularWallPair(args: {
   return changed;
 }
 
+/** Plan overlap on wall thickness — allows bracketing across a wide run-axis gap (room opening). */
+function wallNeighborBracketEligible(
+  self: THREE.Box3,
+  nb: THREE.Box3,
+  runAlongX: boolean,
+): boolean {
+  if (!wallYRangesOverlap(self, nb) && yGapBetweenBoxes(self, nb) > EDITOR_MY_APARTMENT_WALL_VERTICAL_SNAP_M) {
+    return false;
+  }
+  if (runAlongX) {
+    return self.min.z < nb.max.z - 1e-4 && self.max.z > nb.min.z + 1e-4;
+  }
+  return self.min.x < nb.max.x - 1e-4 && self.max.x > nb.min.x + 1e-4;
+}
+
+function bracketPlanesFromNeighborPair(
+  self: THREE.Box3,
+  nb: THREE.Box3,
+  runAxis: "x" | "z",
+  selfRunsX: boolean,
+  nRunsX: boolean,
+): { minPlane?: number; maxPlane?: number } {
+  const center =
+    runAxis === "x" ? (self.min.x + self.max.x) * 0.5 : (self.min.z + self.max.z) * 0.5;
+  const nCenter =
+    runAxis === "x" ? (nb.min.x + nb.max.x) * 0.5 : (nb.min.z + nb.max.z) * 0.5;
+
+  const read = (side: "min" | "max"): number =>
+    runAxis === "x"
+      ? side === "min"
+        ? nb.min.x
+        : nb.max.x
+      : side === "min"
+        ? nb.min.z
+        : nb.max.z;
+
+  if (selfRunsX === nRunsX) {
+    if (nCenter < center - 1e-3) {
+      return { minPlane: read("max") };
+    }
+    if (nCenter > center + 1e-3) {
+      return { maxPlane: read("min") };
+    }
+    /** Same run-axis band (beside / coplanar) — not a run-end bracket for this wall. */
+    return {};
+  }
+
+  if (nCenter < center - 1e-3) {
+    return { minPlane: read("max") };
+  }
+  if (nCenter > center + 1e-3) {
+    return { maxPlane: read("min") };
+  }
+  return {};
+}
+
+function readWallSnapShellMetaFromAncestors(
+  o: THREE.Object3D,
+): WallSnapShellMeta | null {
+  let cur: THREE.Object3D | null = o.parent;
+  while (cur) {
+    const sx = cur.userData.editorMyApartmentSlabSx as number | undefined;
+    const sz = cur.userData.editorMyApartmentSlabSz as number | undefined;
+    if (typeof sx !== "number" || typeof sz !== "number" || sx <= 0 || sz <= 0) {
+      cur = cur.parent;
+      continue;
+    }
+    const strictMinX = cur.userData.editorMyApartmentStrictMinX as number | undefined;
+    const strictMinZ = cur.userData.editorMyApartmentStrictMinZ as number | undefined;
+    const spanX = cur.userData.editorMyApartmentStrictSpanX as number | undefined;
+    const spanZ = cur.userData.editorMyApartmentStrictSpanZ as number | undefined;
+    const prefabOriginX = cur.userData.editorMyApartmentPrefabOriginX as number | undefined;
+    const prefabOriginZ = cur.userData.editorMyApartmentPrefabOriginZ as number | undefined;
+    const ceilingYRaw = cur.userData.editorMyApartmentInteriorCeilingInnerY as number | undefined;
+    const interiorCeilingInnerY =
+      typeof ceilingYRaw === "number" && Number.isFinite(ceilingYRaw) && ceilingYRaw > 0
+        ? ceilingYRaw
+        : undefined;
+    const unitId = (cur.userData.editorMyApartmentUnitId as string | undefined) ?? "";
+    const haveStrict =
+      typeof strictMinX === "number" &&
+      typeof strictMinZ === "number" &&
+      typeof spanX === "number" &&
+      typeof spanZ === "number" &&
+      typeof prefabOriginX === "number" &&
+      typeof prefabOriginZ === "number" &&
+      Number.isFinite(strictMinX) &&
+      Number.isFinite(strictMinZ) &&
+      spanX > 0 &&
+      spanZ > 0;
+    if (haveStrict) {
+      return {
+        unitId,
+        strictMinX,
+        strictMinZ,
+        spanX,
+        spanZ,
+        prefabOriginX,
+        prefabOriginZ,
+        prefabFootprintSx: sx,
+        prefabFootprintSz: sz,
+        interiorCeilingInnerY,
+      };
+    }
+    return {
+      unitId,
+      strictMinX: 0,
+      strictMinZ: 0,
+      spanX: sx,
+      spanZ: sz,
+      prefabOriginX: 0,
+      prefabOriginZ: 0,
+      prefabFootprintSx: sx,
+      prefabFootprintSz: sz,
+      interiorCeilingInnerY,
+    };
+  }
+  return null;
+}
+
+function findAuthoringShellRoot(o: THREE.Object3D): THREE.Object3D | null {
+  let cur: THREE.Object3D | null = o;
+  while (cur) {
+    if (cur.name === "editor_owned_apartment_authoring_shell") return cur;
+    cur = cur.parent;
+  }
+  return null;
+}
+
+/** How far past the current run ends we search for bracket faces (opening fill, not whole-unit jump). */
+function bracketReachAlongRunM(runSpanM: number): number {
+  const span = Math.max(runSpanM, EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M);
+  return Math.min(
+    EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MAX_M,
+    span + Math.max(span * 2, EDITOR_MY_APARTMENT_WALL_L_CORNER_SNAP_M * 2),
+  );
+}
+
+function acceptMinRunBracketPlane(
+  plane: number,
+  self: THREE.Box3,
+  runAxis: "x" | "z",
+  center: number,
+  reachM: number,
+): boolean {
+  if (plane >= center - 1e-3) return false;
+  const selfMin = runAxis === "x" ? self.min.x : self.min.z;
+  return selfMin - plane <= reachM + 1e-4;
+}
+
+function acceptMaxRunBracketPlane(
+  plane: number,
+  self: THREE.Box3,
+  runAxis: "x" | "z",
+  center: number,
+  reachM: number,
+): boolean {
+  if (plane <= center + 1e-3) return false;
+  const selfMax = runAxis === "x" ? self.max.x : self.max.z;
+  return plane - selfMax <= reachM + 1e-4;
+}
+
+function pushUnitShellBracketPlaneCandidates(args: {
+  root: THREE.Object3D;
+  runAlongX: boolean;
+  center: number;
+  selfBox: THREE.Box3;
+  reachM: number;
+  minCandidates: number[];
+  maxCandidates: number[];
+}): void {
+  const meta = readWallSnapShellMetaFromAncestors(args.root);
+  const shellReachM =
+    meta !== null
+      ? Math.max(args.reachM, unitInteriorRunSpanM(meta, args.runAlongX))
+      : args.reachM;
+
+  if (meta) {
+    const bounds = getUnitInteriorShellBounds(meta);
+    if (args.runAlongX) {
+      if (bounds.minX < args.center - 1e-3) args.minCandidates.push(bounds.minX);
+      if (bounds.maxX > args.center + 1e-3) args.maxCandidates.push(bounds.maxX);
+    } else {
+      if (bounds.minZ < args.center - 1e-3) args.minCandidates.push(bounds.minZ);
+      if (bounds.maxZ > args.center + 1e-3) args.maxCandidates.push(bounds.maxZ);
+    }
+  }
+
+  const shellRoot = findAuthoringShellRoot(args.root);
+  if (!shellRoot) return;
+
+  const meshBox = new THREE.Box3();
+  shellRoot.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    if (o.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] !== true) return;
+    meshBox.setFromObject(o);
+    if (meshBox.isEmpty()) return;
+
+    const sx = meshBox.max.x - meshBox.min.x;
+    const sy = meshBox.max.y - meshBox.min.y;
+    const sz = meshBox.max.z - meshBox.min.z;
+    if (sy < 0.35 || sy < Math.max(sx, sz) * 0.35) return;
+
+    const nCenter = args.runAlongX
+      ? (meshBox.min.x + meshBox.max.x) * 0.5
+      : (meshBox.min.z + meshBox.max.z) * 0.5;
+    if (args.runAlongX) {
+      if (
+        nCenter < args.center - 1e-3 &&
+        acceptMinRunBracketPlane(meshBox.max.x, args.selfBox, "x", args.center, shellReachM)
+      ) {
+        args.minCandidates.push(meshBox.max.x);
+      } else if (
+        nCenter > args.center + 1e-3 &&
+        acceptMaxRunBracketPlane(meshBox.min.x, args.selfBox, "x", args.center, shellReachM)
+      ) {
+        args.maxCandidates.push(meshBox.min.x);
+      }
+    } else {
+      if (
+        nCenter < args.center - 1e-3 &&
+        acceptMinRunBracketPlane(meshBox.max.z, args.selfBox, "z", args.center, shellReachM)
+      ) {
+        args.minCandidates.push(meshBox.max.z);
+      } else if (
+        nCenter > args.center + 1e-3 &&
+        acceptMaxRunBracketPlane(meshBox.min.z, args.selfBox, "z", args.center, shellReachM)
+      ) {
+        args.maxCandidates.push(meshBox.min.z);
+      }
+    }
+  });
+}
+
+/**
+ * Stretch the wall run axis so both ends meet inner faces of neighbors across an opening
+ * (authored slabs and/or playable unit hollow-shell walls).
+ */
+export function expandWallRunToBracketingNeighbors(
+  root: THREE.Object3D,
+  mesh: THREE.Mesh,
+  neighborRoots: readonly THREE.Object3D[],
+  scaleDrag: ConstrainMyApartmentWallScaleDrag | undefined,
+): boolean {
+  const selfRunsX = wallRunsAlongX(root);
+  if (selfRunsX === null) return false;
+  const runAlongX = selfRunsX;
+  const runAxis: "x" | "z" = runAlongX ? "x" : "z";
+
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return false;
+
+  const center =
+    runAxis === "x" ? (box.min.x + box.max.x) * 0.5 : (box.min.z + box.max.z) * 0.5;
+  const runSpanM = runAxis === "x" ? box.max.x - box.min.x : box.max.z - box.min.z;
+  const reachM = bracketReachAlongRunM(runSpanM);
+  const minCandidates: number[] = [];
+  const maxCandidates: number[] = [];
+
+  for (const neighbor of neighborRoots) {
+    neighbor.updateMatrixWorld(true);
+    const nb = new THREE.Box3().setFromObject(neighbor);
+    if (nb.isEmpty()) continue;
+    if (!wallNeighborBracketEligible(box, nb, runAlongX)) continue;
+
+    const nRunsX = wallRunsAlongX(neighbor);
+    if (nRunsX === null) continue;
+
+    const planes = bracketPlanesFromNeighborPair(box, nb, runAxis, runAlongX, nRunsX);
+    if (
+      planes.minPlane !== undefined &&
+      acceptMinRunBracketPlane(planes.minPlane, box, runAxis, center, reachM)
+    ) {
+      minCandidates.push(planes.minPlane);
+    }
+    if (
+      planes.maxPlane !== undefined &&
+      acceptMaxRunBracketPlane(planes.maxPlane, box, runAxis, center, reachM)
+    ) {
+      maxCandidates.push(planes.maxPlane);
+    }
+  }
+
+  pushUnitShellBracketPlaneCandidates({
+    root,
+    runAlongX,
+    center,
+    selfBox: box,
+    reachM,
+    minCandidates,
+    maxCandidates,
+  });
+
+  if (minCandidates.length === 0 || maxCandidates.length === 0) return false;
+
+  const bracketMin = Math.max(...minCandidates);
+  const bracketMax = Math.min(...maxCandidates);
+  const span = bracketMax - bracketMin;
+  const maxBracketSpanM = maxWallRunLengthMForRoot(root);
+  if (span < EDITOR_MY_APARTMENT_WALL_SIZE_XZ_MIN_M - 1e-6) return false;
+  if (span > maxBracketSpanM + 1e-3) return false;
+
+  const pin = scaleDrag?.pinnedSpan;
+  if (pin?.worldAxis === runAxis) {
+    const freePlane = pin.side === "min" ? bracketMax : bracketMin;
+    applyPinnedSpanResize(root, mesh, pin, freePlane, scaleDrag);
+  } else if (runAxis === "x") {
+    snapWorldSpanAlongX(root, mesh, bracketMin, bracketMax, scaleDrag);
+  } else {
+    snapWorldSpanAlongZ(root, mesh, bracketMin, bracketMax, scaleDrag);
+  }
+  return true;
+}
+
+/** True when the gizmo is scaling wall length (mesh local X), not thickness or height. */
+export function isWallLengthScaleDrag(
+  root: THREE.Object3D,
+  scaleDrag: ConstrainMyApartmentWallScaleDrag | undefined,
+): boolean {
+  const active = scaleDrag?.activeWorldAxis;
+  if (!active) return false;
+  const run = wallRunAxisWorld(root);
+  if (!run) return active === "X";
+  return Math.abs(run.x) >= Math.abs(run.z) ? active === "X" : active === "Z";
+}
+
 function snapToNeighborWalls(args: {
   root: THREE.Object3D;
   mesh: THREE.Mesh;
@@ -1087,9 +1422,17 @@ function snapToNeighborWalls(args: {
   const { root, mesh, neighborRoots, scaleDrag, autoYaw } = args;
   if (neighborRoots.length === 0) return;
 
-  const active = scaleDrag?.activeWorldAxis;
-  /** Local X is always wall length (mesh X), regardless of yaw. */
-  const resizeLength = scaleDrag?.activeWorldAxis === "X";
+  /**
+   * Run-end snap to neighbors pins both faces to adjacent slabs — blocks lengthening a wall
+   * that already sits between perpendicular neighbors (common room divider case).
+   */
+  if (isWallLengthScaleDrag(root, scaleDrag)) {
+    expandWallRunToBracketingNeighbors(root, mesh, neighborRoots, scaleDrag);
+    return;
+  }
+
+  /** Length-scale drags return early; remaining scale axes must not resize run span via snap. */
+  const resizeLength = false;
 
   /** Auto-yaw before parallel centering can collapse L-corner offsets. */
   if (autoYaw) {
@@ -1152,16 +1495,24 @@ export function applyMyApartmentWallSurfaceSnap(
     autoYaw?: boolean;
     /** When false, skip face-to-neighbor snapping (used when persisting / loading authored poses). */
     neighborSnap?: boolean;
+    /** Stretch run axis to span between bracketing neighbors (opening fill). */
+    fillRunBracket?: boolean;
   },
 ): void {
   clampWallAabbToUnitShellInterior(root, mesh, meta, opts?.scaleDrag);
 
+  const excludeWallId = root.userData.mammothEditorMyApartmentWallId as string | undefined;
+  const neighborRoots = collectNeighborWallRoots(root, excludeWallId);
+
+  if (opts?.fillRunBracket === true) {
+    expandWallRunToBracketingNeighbors(root, mesh, neighborRoots, opts?.scaleDrag);
+  }
+
   if (opts?.neighborSnap !== false) {
-    const excludeWallId = root.userData.mammothEditorMyApartmentWallId as string | undefined;
     snapToNeighborWalls({
       root,
       mesh,
-      neighborRoots: collectNeighborWallRoots(root, excludeWallId),
+      neighborRoots,
       scaleDrag: opts?.scaleDrag,
       autoYaw: opts?.autoYaw === true,
     });

@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
 import { defaultOwnedApartmentWallDoorOpening } from "@the-mammoth/world";
 import {
+  collectOwnedApartmentWallIdsWithOpeningChanges,
+  collectWallIdsNeedingEditorMountSync,
   ownedApartmentWallItemsDeepEqual,
   ownedApartmentWallOpeningsSignature,
   preserveOwnedApartmentMountPlacementRefs,
 } from "./preserveOwnedApartmentMountPlacementRefs.js";
-import { editorMyApartmentSelectedIdForDecor } from "./editorMyApartmentSelection.js";
+import {
+  editorMyApartmentSelectedIdForDecor,
+  editorMyApartmentSelectedIdForWall,
+} from "./editorMyApartmentSelection.js";
 import { classifyApartmentMountSyncChange, captureApartmentMountSyncInputs } from "./editorMyApartmentMountSync.js";
 
 describe("preserveOwnedApartmentMountPlacementRefs", () => {
@@ -116,5 +121,71 @@ describe("preserveOwnedApartmentMountPlacementRefs", () => {
       false,
     );
     expect(classifyApartmentMountSyncChange(prevInputs, nextInputs)).toBe("walls-only");
+  });
+});
+
+describe("collectOwnedApartmentWallIdsWithOpeningChanges", () => {
+  it("still detects a new door when prev mount inputs were advanced before diffing", () => {
+    const wallId = "wall_a";
+    const wallBase = {
+      id: wallId,
+      fx: 0.5,
+      fz: 0.5,
+      dy: 0,
+      yawRad: 0,
+      pitchRad: 0,
+      sizeX: 6.82,
+      sizeY: 2.8,
+      sizeZ: 0.07,
+      material: { useMetalnessMap: false, useHeightMap: false },
+    };
+    const withDoor = {
+      ...wallBase,
+      openings: [defaultOwnedApartmentWallDoorOpening("door_a")],
+    };
+    const advanced = [withDoor];
+    const mountedKeys = new Set([editorMyApartmentSelectedIdForWall(wallId)]);
+    expect(
+      collectWallIdsNeedingEditorMountSync(advanced, advanced, mountedKeys).size,
+    ).toBe(0);
+    expect(collectOwnedApartmentWallIdsWithOpeningChanges(advanced, advanced).size).toBe(
+      0,
+    );
+    expect(
+      collectOwnedApartmentWallIdsWithOpeningChanges([wallBase], advanced).has(wallId),
+    ).toBe(true);
+    const mountIds = collectWallIdsNeedingEditorMountSync(
+      [wallBase],
+      advanced,
+      mountedKeys,
+    );
+    expect(mountIds.has(wallId)).toBe(true);
+  });
+});
+
+describe("collectWallIdsNeedingEditorMountSync", () => {
+  it("includes new walls even when prev mount inputs already advanced without a mesh", () => {
+    const prev = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.wallItems;
+    const next = [
+      ...prev,
+      {
+        id: "wall-new",
+        fx: 0.5,
+        fz: 0.5,
+        dy: 0,
+        yawRad: 0,
+        pitchRad: 0,
+        sizeX: 2,
+        sizeY: 2.6,
+        sizeZ: 0.07,
+        material: { useMetalnessMap: false, useHeightMap: false },
+      },
+    ];
+    const mountedKeys = new Set(
+      prev.map((w) => editorMyApartmentSelectedIdForWall(w.id)),
+    );
+    const ids = collectWallIdsNeedingEditorMountSync(prev, next, mountedKeys);
+    expect(ids.has("wall-new")).toBe(true);
+    expect(ids.size).toBe(1);
   });
 });

@@ -74,7 +74,9 @@ import {
   getEditorMyApartmentFurnitureMountRoot,
   getEditorMyApartmentSelectionGroup,
   registerEditorMyApartmentLayoutPersistFromSceneRequest,
+  registerEditorFillWallOpeningRequest,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+import { editorMyApartmentSelectedIdForWall } from "../myApartment/editorMyApartmentSelection.js";
 import {
   MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
   syncApartmentSavedObjectGroupManipulator,
@@ -851,6 +853,19 @@ export async function mountEditorScene(
     persistAllMyApartmentWallPlacementsFromScene();
   });
 
+  registerEditorFillWallOpeningRequest((wallId) => {
+    const group = getEditorMyApartmentSelectionGroup(
+      editorMyApartmentSelectedIdForWall(wallId),
+    );
+    if (!group) return;
+    constrainMyApartmentWallRootPose(group, undefined, {
+      autoYaw: false,
+      neighborSnap: false,
+      fillRunBracket: true,
+    });
+    commitLevelEditorAttachedTransformToStore();
+  });
+
   let rewireCanvasPrimaryPointerListeners: () => void = () => {};
 
   const fp = createEditorFpAuthoringLifecycle({
@@ -1291,6 +1306,7 @@ export async function mountEditorScene(
     previewSelectionOutline.dispose();
     scene.remove(previewSelectionOutline);
     registerEditorMyApartmentLayoutPersistFromSceneRequest(null);
+    registerEditorFillWallOpeningRequest(null);
     disposeMyApartmentAuthoring();
     apartmentInteriorSceneRig.dispose();
     disposeEditorStructuralRoot(structuralState, contentRoot);

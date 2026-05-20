@@ -5,6 +5,7 @@ let groupsRef: Record<string, THREE.Group> | null = null;
 
 let wallsMountSyncRequest: (() => void) | null = null;
 let layoutPersistFromSceneRequest: (() => void) | null = null;
+let fillWallOpeningRequest: ((wallId: string) => void) | null = null;
 
 /** Registered by apartment lifecycle — rebuilds wall meshes from store (openings included). */
 export function registerEditorMyApartmentWallsMountSyncRequest(fn: (() => void) | null): void {
@@ -24,6 +25,17 @@ export function registerEditorMyApartmentLayoutPersistFromSceneRequest(
 
 export function requestEditorMyApartmentLayoutPersistFromScene(): void {
   layoutPersistFromSceneRequest?.();
+}
+
+/** Stretch the selected wall's length to span between neighboring slabs (editor scene registers). */
+export function registerEditorFillWallOpeningRequest(
+  fn: ((wallId: string) => void) | null,
+): void {
+  fillWallOpeningRequest = fn;
+}
+
+export function requestEditorFillWallOpening(wallId: string): void {
+  fillWallOpeningRequest?.(wallId);
 }
 
 /** Immediate parent (`editor_my_apartment_furniture` root) of all décor/walls/builtins. */

@@ -8,7 +8,7 @@ import {
 } from "./apartmentInteriorPracticalLights.js";
 
 describe("apartmentDecorEmitterKindFromModelPath", () => {
-  it("detects chandelier, ceiling, standing lamp, and TV fixtures", () => {
+  it("detects chandelier, ceiling, standing lamp, TV, and computer fixtures", () => {
     expect(
       apartmentDecorEmitterKindFromModelPath("static/models/objects/chandelier.glb"),
     ).toBe("chandelier");
@@ -21,6 +21,9 @@ describe("apartmentDecorEmitterKindFromModelPath", () => {
     expect(
       apartmentDecorEmitterKindFromModelPath("static/models/objects/tv.glb"),
     ).toBe("tv");
+    expect(
+      apartmentDecorEmitterKindFromModelPath("static/models/objects/computer.glb"),
+    ).toBe("computer");
     expect(
       apartmentDecorEmitterKindFromModelPath("static/models/objects/chair.glb"),
     ).toBeNull();
@@ -64,6 +67,24 @@ describe("apartmentPracticalLightSpecFromDecorGroup", () => {
     expect(spec?.direction).toBeDefined();
     expect(Math.abs(spec!.direction!.y)).toBeLessThan(0.01);
     expect(Math.abs(spec!.direction!.x)).toBeGreaterThan(0.9);
+  });
+
+  it("emits a blue monitor wash from the computer screen forward", () => {
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.42, 0.06),
+      new THREE.MeshBasicMaterial(),
+    );
+    group.add(mesh);
+    group.updateMatrixWorld(true);
+
+    const spec = apartmentPracticalLightSpecFromDecorGroup(
+      group,
+      "static/models/objects/computer.glb",
+    );
+    expect(spec?.kind).toBe("computer");
+    expect(spec?.direction).toBeDefined();
+    expect(Math.abs(spec!.direction!.z)).toBeGreaterThan(0.9);
   });
 });
 
