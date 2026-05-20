@@ -10,6 +10,7 @@ import {
   mammothCatalogGlbCandidates,
 } from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
+import { apartmentUnitKeyContainingWorldPoint } from "../fpApartment/fpApartmentGameplay.js";
 import type { DbConnection } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 
@@ -37,7 +38,7 @@ const DROP_ITEM_Y_LIFT_M = 0.11;
  * just across a discrete {@link mammothVerticalStoryBandIndex} boundary from feet while still being the
  * same playable floor (common upstairs; ground band 0 is wide enough to hide it).
  */
-function dropVerticalBandMatchesFeet(
+export function dropVerticalBandMatchesFeet(
   feetY: number,
   dropY: number,
   verticalBands: MammothDroppedPickupBandOpts,
@@ -61,6 +62,36 @@ export function tryNormalizeDroppedItemId(id: unknown): bigint | null {
   if (typeof id === "number" && Number.isFinite(id)) return BigInt(Math.trunc(id));
   if (typeof id === "string" && /^[0-9]+$/.test(id)) return BigInt(id);
   return null;
+}
+
+/**
+ * Render gate for world drops: same vertical storey as feet, and either corridor loot (not inside
+ * any unit hull) or loot inside the viewer's current residential unit. Pickup still uses
+ * {@link droppedPickupWithinServerVolume}; this only culls replicated GLB meshes from the scene.
+ */
+export function resolveDroppedItemVisualVisible(input: {
+  dropX: number;
+  dropY: number;
+  dropZ: number;
+  feetY: number;
+  verticalBands: MammothDroppedPickupBandOpts | null;
+  containingUnitKey: string | null;
+  dropResidentialUnitKey: string | null;
+}): boolean {
+  const sameFloor =
+    input.verticalBands === null ||
+    dropVerticalBandMatchesFeet(input.feetY, input.dropY, input.verticalBands);
+  const sameUnit =
+    input.containingUnitKey !== null &&
+    input.dropResidentialUnitKey !== null &&
+    input.dropResidentialUnitKey === input.containingUnitKey;
+
+  if (sameUnit) return true;
+  if (!sameFloor) return false;
+  if (input.containingUnitKey !== null) {
+    return input.dropResidentialUnitKey === null;
+  }
+  return input.dropResidentialUnitKey === null;
 }
 
 export function droppedPickupWithinServerVolume(
@@ -275,6 +306,10 @@ export function mountDroppedItemsWorld(
   options?: MountDroppedItemsWorldOptions,
 ): {
   subscribeAoi: (cx: number, cz: number) => void;
+  syncDroppedItemVisualVisibility: (
+    feetY: number,
+    containingUnitKey: string | null,
+  ) => void;
   tryPickupNearest: (x: number, y: number, z: number) => void;
   dispose: () => void;
 } {
@@ -451,6 +486,33 @@ export function mountDroppedItemsWorld(
     }
   };
 
+  const syncDroppedItemVisualVisibility = (
+    feetY: number,
+    containingUnitKey: string | null,
+  ): void => {
+    for (const r of conn.db.dropped_item) {
+      const row = r as DroppedItem;
+      const key = droppedIdKey(row.id);
+      const g = idToGroup.get(key);
+      if (!g) continue;
+      const dropResidentialUnitKey = apartmentUnitKeyContainingWorldPoint(
+        conn,
+        row.x,
+        row.y,
+        row.z,
+      );
+      g.visible = resolveDroppedItemVisualVisible({
+        dropX: row.x,
+        dropY: row.y,
+        dropZ: row.z,
+        feetY,
+        verticalBands: resolvedBandOpts,
+        containingUnitKey,
+        dropResidentialUnitKey,
+      });
+    }
+  };
+
   const onRowChange = () => {
     syncFromDb();
   };
@@ -512,5 +574,5 @@ export function mountDroppedItemsWorld(
     defTemplatePromise.clear();
   };
 
-  return { subscribeAoi, tryPickupNearest, dispose };
+  return { subscribeAoi, syncDroppedItemVisualVisibility, tryPickupNearest, dispose };
 }

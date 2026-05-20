@@ -91,6 +91,7 @@ import {
   clearApartmentInteriorPropVisibilityBudgetState,
   createApartmentInteriorPropVisibilityBudgetState,
   resolveApartmentInteriorPropGroupVisible,
+  tagApartmentDecorGroupVisibilityMetadata,
   type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
 
@@ -685,10 +686,7 @@ export function mountFpApartmentDecorMeshes(opts: {
           fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
           fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
         });
-        g.updateMatrixWorld(true);
-        const bbox = new THREE.Box3().setFromObject(g);
-        bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
-        g.userData.mammothApartmentDecorWorldBounds = bbox;
+        tagApartmentDecorGroupVisibilityMetadata(g);
         tagResidentialUnitInteriorMeshesUnder(g);
         tagApartmentDecorPropMeshesForMirrorExclusion(g);
         root.add(g);
@@ -714,37 +712,48 @@ export function mountFpApartmentDecorMeshes(opts: {
           w.openings ?? [],
         );
         const wallMat = new THREE.MeshStandardMaterial({ color: 0xc9c4bc });
-        buildOwnedApartmentPartitionWallInGroup({
-          parent: g,
-          sizeX: w.sizeX,
-          sizeY: w.sizeY,
-          sizeZ: w.sizeZ,
-          openings,
-          wallMaterial: wallMat,
-          opts: { fpInteriorPartitionSolid: true },
-        });
-        applyOwnedApartmentWallSurfaceMaterialToVisuals(g, (mesh) => {
+        if (openings.length === 0) {
+          const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wallMat);
+          mesh.scale.set(w.sizeX, w.sizeY, w.sizeZ);
+          mesh.position.y = w.sizeY / 2;
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
+          mesh.frustumCulled = true;
+          mesh.userData.mammothUnitInterior = true;
+          mesh.userData.mammothPlateLevelIndex = w.unit.level;
+          mesh.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
+          g.add(mesh);
           applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
-        });
+        } else {
+          buildOwnedApartmentPartitionWallInGroup({
+            parent: g,
+            sizeX: w.sizeX,
+            sizeY: w.sizeY,
+            sizeZ: w.sizeZ,
+            openings,
+            wallMaterial: wallMat,
+            opts: { fpInteriorPartitionSolid: true },
+          });
+          applyOwnedApartmentWallSurfaceMaterialToVisuals(g, (mesh) => {
+            applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
+          });
+          g.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) {
+              obj.castShadow = false;
+              obj.receiveShadow = false;
+              obj.frustumCulled = true;
+              obj.userData.mammothUnitInterior = true;
+              obj.userData.mammothPlateLevelIndex = w.unit.level;
+            }
+          });
+        }
         snapCloneBottomToWorldFloor(g, w.posY);
         keepCloneInsideUnitXZ(g, w.unit, {
           insetM: AUTHORING_DECOR_BOUNDARY_SLACK_M,
           fractionMin: OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
           fractionMax: OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
         });
-        g.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) {
-            obj.castShadow = false;
-            obj.receiveShadow = false;
-            obj.frustumCulled = true;
-            obj.userData.mammothUnitInterior = true;
-            obj.userData.mammothPlateLevelIndex = w.unit.level;
-          }
-        });
-        g.updateMatrixWorld(true);
-        const bbox = new THREE.Box3().setFromObject(g);
-        bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
-        g.userData.mammothApartmentDecorWorldBounds = bbox;
+        tagApartmentDecorGroupVisibilityMetadata(g);
         tagResidentialUnitInteriorMeshesUnder(g);
         tagApartmentDecorPropMeshesForMirrorExclusion(g);
         root.add(g);
@@ -866,9 +875,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         sittablePickMeshes.push(sitPick);
         g.updateMatrixWorld(true);
       }
-      const bbox = new THREE.Box3().setFromObject(g);
-      bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
-      g.userData.mammothApartmentDecorWorldBounds = bbox;
+      tagApartmentDecorGroupVisibilityMetadata(g);
       tagResidentialUnitInteriorMeshesUnder(g);
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
 
@@ -941,6 +948,9 @@ export function mountFpApartmentDecorMeshes(opts: {
       for (const [renderKey, g] of groupByRenderKey.entries()) {
         const bb = g.userData.mammothApartmentDecorWorldBounds;
         const bounds = bb instanceof THREE.Box3 ? bb : undefined;
+        const skipInteriorForwardCone =
+          g.userData.mammothApartmentWallAuthoring === true ||
+          g.userData.mammothApartmentMirrorAuthoring === true;
         const wasVisible = propVisibilityBudget.visibleKeys.has(renderKey);
         const desiredVisible = resolveApartmentInteriorPropGroupVisible({
           allowDemand,
@@ -953,8 +963,13 @@ export function mountFpApartmentDecorMeshes(opts: {
           viewFrustum: _furnitureVisibilityFrustum,
           cameraWorldPos: _furnitureVisibilityCamPos,
           cameraWorldDir: _furnitureVisibilityCamDir,
-          wasVisible: useInUnitBudget ? wasVisible : undefined,
+          wasVisible: useInUnitBudget && !skipInteriorForwardCone ? wasVisible : undefined,
+          skipInteriorForwardCone,
         });
+        if (skipInteriorForwardCone) {
+          g.visible = desiredVisible;
+          continue;
+        }
         if (useInUnitBudget) {
           budgetItems.push({
             key: renderKey,

@@ -233,6 +233,16 @@ export function feetInClaimZone(conn: DbConnection, unit: ApartmentUnit, x: numb
   return feetDeepEnoughFromEntryDoor(door, x, z);
 }
 
+/** Residential unit hull containing an arbitrary world position (drops, loot anchors), if any. */
+export function apartmentUnitKeyContainingWorldPoint(
+  conn: DbConnection,
+  x: number,
+  y: number,
+  z: number,
+): string | null {
+  return apartmentUnitContainingFeet(conn, x, y, z)?.unitKey ?? null;
+}
+
 /** Nearest residential unit hull the feet position is inside, if any. */
 export function apartmentUnitContainingFeet(
   conn: DbConnection,

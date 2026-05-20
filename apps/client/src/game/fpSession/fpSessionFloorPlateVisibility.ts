@@ -567,7 +567,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       });
     /**
      * Decor GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
-     * sidewalk/doorway peeks, but only build/render apartment props once the camera is inside.
+     * sidewalk/doorway peeks; furnished props only mount once the camera is inside the building
+     * footprint, and `fpApartmentDecorMeshes.syncVisibility` only shows them inside a unit hull.
      */
     const apartmentDecorInteriorVisible =
       fpElevators.isInsideAnyCabHud(

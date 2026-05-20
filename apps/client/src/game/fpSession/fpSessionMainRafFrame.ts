@@ -266,6 +266,8 @@ export type FpSessionMainRafFrameDeps = {
   getApartmentSittablePrompt: () => ApartmentSittablePrompt | null;
   /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
+  /** Culls replicated drop meshes by storey + residential unit hull. */
+  syncDroppedItemVisualVisibility: (feetY: number, containingUnitKey: string | null) => void;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
   /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
@@ -640,6 +642,7 @@ export function createFpSessionMainRafFrame(
       deps.isApartmentDecorInteriorVisible(),
       containingResidentialUnitKey,
     );
+    deps.syncDroppedItemVisualVisibility(deps.pos.y, containingResidentialUnitKey);
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
     const hotbarRow = deps.selectedHotbarRow();

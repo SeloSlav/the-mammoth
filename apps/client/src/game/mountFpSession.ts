@@ -1578,6 +1578,7 @@ export async function mountFpSession(
     fpInteractionFeet: getInteractionPos,
     getApartmentSittablePrompt: getApartmentSittablePromptForSession,
     fpDroppedPickupFeet: getDroppedPickupAuthorityFeet,
+    syncDroppedItemVisualVisibility: droppedWorld.syncDroppedItemVisualVisibility,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
     getFpPerfSceneCounters,

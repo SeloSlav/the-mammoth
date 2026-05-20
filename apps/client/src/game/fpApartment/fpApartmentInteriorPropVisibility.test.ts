@@ -36,6 +36,20 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
 
+  it("hides all decor when the viewer is not inside any residential unit", () => {
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: true,
+        containingUnitKey: null,
+        groupUnitKey: "unit_a",
+        propWorldBounds: new THREE.Box3(new THREE.Vector3(-1, -1, -2), new THREE.Vector3(1, 1, 2)),
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+      }),
+    ).toBe(false);
+  });
+
   it("hides non-containing units when a containing unit key is set", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
@@ -85,6 +99,36 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
         wasVisible: true,
       }),
     ).toBe(true);
+  });
+
+  it("skips behind-camera cull for walls when skipInteriorForwardCone is set", () => {
+    const behindBounds = new THREE.Box3(
+      new THREE.Vector3(-1, -1, 1),
+      new THREE.Vector3(1, 1, 2),
+    );
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: true,
+        containingUnitKey: "unit_a",
+        groupUnitKey: "unit_a",
+        propWorldBounds: behindBounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+      }),
+    ).toBe(false);
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: true,
+        containingUnitKey: "unit_a",
+        groupUnitKey: "unit_a",
+        propWorldBounds: behindBounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+        skipInteriorForwardCone: true,
+      }),
+    ).toBe(frustum.intersectsBox(behindBounds));
   });
 
   it("defers newly visible in-unit props until they are clearly in front", () => {

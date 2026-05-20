@@ -651,6 +651,32 @@
       "uniformScale": 0.5068560948252686,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "635b0561-051f-45d8-ad35-173c6e5a16ce",
+      "modelRelPath": "static/models/objects/coat-hanger-2.glb",
+      "fx": 0.15889979807854165,
+      "fz": 0.293754636332599,
+      "dy": 1.3690004043332644,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.3783331562089969,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "dea9af17-3d48-437b-b6e1-52ab9805a946",
+      "modelRelPath": "static/models/objects/slippers.glb",
+      "fx": 0.15709464212522614,
+      "fz": 0.3252507024955157,
+      "dy": 0.04746889771109264,
+      "yawRad": 3.141592653589793,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.17967842276127186,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [
@@ -732,7 +758,7 @@
     },
     {
       "id": "335f567b-bb29-460d-a636-6f70ce7196cb",
-      "fx": 0.09855505594129295,
+      "fx": 0.09855505613031645,
       "fz": 0.27003442448648424,
       "dy": 1.734723475976807e-17,
       "yawRad": 0,

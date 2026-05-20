@@ -31,7 +31,7 @@ export function createFpInteriorPartitionSolidCollision(): {
       root.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
         if (obj.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] !== true) return;
-        if (!(obj.geometry instanceof THREE.BoxGeometry)) return;
+        if (obj.userData.mammothNoCollision === true) return;
         meshes.push(obj);
       });
     }

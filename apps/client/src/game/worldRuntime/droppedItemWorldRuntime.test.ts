@@ -8,9 +8,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
   droppedPickupWithinServerVolume,
+  dropVerticalBandMatchesFeet,
   fitDroppedWorldItemModelToCatalog,
   MAMMOTH_PICKUP_MAX_ABS_DY_M,
   MAMMOTH_PICKUP_RADIUS_M,
+  resolveDroppedItemVisualVisible,
   tryNormalizeDroppedItemId,
 } from "./droppedItemWorldRuntime";
 
@@ -150,6 +152,109 @@ describe("droppedPickupWithinServerVolume", () => {
         { buildingWorldOriginY: 0, floorSpacingM: spacing },
       ),
     ).toBe(false);
+  });
+});
+
+describe("resolveDroppedItemVisualVisible", () => {
+  const bands = { buildingWorldOriginY: 0, floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M };
+  const feetY = 12.63;
+  const sameFloorDropY = feetY + MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M;
+
+  it("shows corridor loot on the viewer storey when not inside a unit", () => {
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: sameFloorDropY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: null,
+        dropResidentialUnitKey: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("hides apartment-interior loot from the hallway on the same storey", () => {
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: sameFloorDropY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: null,
+        dropResidentialUnitKey: "floor_a|20|unit_e_003",
+      }),
+    ).toBe(false);
+  });
+
+  it("shows loot inside the containing unit even when band matching is the primary gate", () => {
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: sameFloorDropY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: "floor_a|20|unit_e_003",
+        dropResidentialUnitKey: "floor_a|20|unit_e_003",
+      }),
+    ).toBe(true);
+  });
+
+  it("hides another unit's loot while inside a residential unit on the same storey", () => {
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: sameFloorDropY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: "floor_a|20|unit_a",
+        dropResidentialUnitKey: "floor_a|20|unit_b",
+      }),
+    ).toBe(false);
+  });
+
+  it("still allows corridor loot on the same storey while inside a unit", () => {
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: sameFloorDropY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: "floor_a|20|unit_a",
+        dropResidentialUnitKey: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a different storey unless the drop is in the containing unit", () => {
+    const otherStoreyY = feetY + DEFAULT_BUILDING_FLOOR_SPACING_M + 0.28;
+    expect(dropVerticalBandMatchesFeet(feetY, otherStoreyY, bands)).toBe(false);
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: otherStoreyY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: null,
+        dropResidentialUnitKey: null,
+      }),
+    ).toBe(false);
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 0,
+        dropY: otherStoreyY,
+        dropZ: 0,
+        feetY,
+        verticalBands: bands,
+        containingUnitKey: "floor_a|20|unit_a",
+        dropResidentialUnitKey: "floor_a|20|unit_a",
+      }),
+    ).toBe(true);
   });
 });
 

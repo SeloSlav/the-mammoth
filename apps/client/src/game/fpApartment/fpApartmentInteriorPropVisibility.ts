@@ -23,6 +23,14 @@ export const APARTMENT_INTERIOR_PROP_BEHIND_HIDE_DOT = -0.15;
  */
 export const APARTMENT_INTERIOR_PROP_MAX_SHOWS_PER_FRAME = 6;
 
+/** Frustum / forward-cone culling bounds for a decor group (expanded by {@link APARTMENT_PROP_FRUSTUM_MARGIN_M}). */
+export function tagApartmentDecorGroupVisibilityMetadata(group: THREE.Object3D): void {
+  group.updateMatrixWorld(true);
+  const bbox = new THREE.Box3().setFromObject(group);
+  bbox.expandByScalar(APARTMENT_PROP_FRUSTUM_MARGIN_M);
+  group.userData.mammothApartmentDecorWorldBounds = bbox;
+}
+
 const _boundsCenterScratch = new THREE.Vector3();
 const _toPropScratch = new THREE.Vector3();
 
@@ -90,14 +98,28 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
   cameraWorldDir: THREE.Vector3;
   /** When set, applies in-unit forward hysteresis (used while inside the containing unit). */
   wasVisible?: boolean;
+  /**
+   * Partition walls / mirrors stay visible while in-unit (no behind-camera cull). They are low-poly
+   * vs decor GLBs and must not compete for the per-frame decor show budget.
+   */
+  skipInteriorForwardCone?: boolean;
 }): boolean {
   if (!input.allowDemand) return false;
-  const isContainingUnit =
-    input.containingUnitKey !== null && input.groupUnitKey === input.containingUnitKey;
-  if (input.containingUnitKey !== null && !isContainingUnit) return false;
+  /**
+   * Furnished decor GLBs only while inside a residential unit hull (authoring / living in your
+   * claimed unit). Corridor views keep shells only. In-unit fast turns still ramp via forward cone +
+   * per-frame show budget below — dense units can hit ~500k tris when many props enter view at once.
+   */
+  if (input.containingUnitKey === null) return false;
+  const isContainingUnit = input.groupUnitKey === input.containingUnitKey;
+  if (!isContainingUnit) return false;
 
   const bounds = input.propWorldBounds;
   if (!(bounds instanceof THREE.Box3)) return true;
+
+  if (isContainingUnit && input.skipInteriorForwardCone === true) {
+    return input.viewFrustum.intersectsBox(bounds);
+  }
 
   if (isContainingUnit) {
     const useHysteresis = input.wasVisible !== undefined;
