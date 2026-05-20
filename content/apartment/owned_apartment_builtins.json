@@ -743,6 +743,20 @@
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "03d73c5a-e93a-4e7b-9689-15af14dab62b",
+      "modelRelPath": "static/models/objects/drying-rack-2.glb",
+      "fx": 0.3713957779678235,
+      "fz": 0.3617878776339144,
+      "dy": 0.5879651243255375,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.8012005715278097,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [

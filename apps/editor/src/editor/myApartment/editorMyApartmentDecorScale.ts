@@ -19,19 +19,33 @@ export type MyApartmentDecorScaleGesturePin = {
   startScale: THREE.Vector3;
 };
 
-/** True when the gizmo center handle drives uniform scale (not a single-axis stretch). */
+/** True when the gizmo handle drives uniform scale (not a single-axis stretch). */
 export function isMyApartmentDecorUniformScaleAxis(axis: string | null | undefined): boolean {
   if (!axis) return true;
-  if (axis === "XYZ" || axis.includes("E")) return true;
-  return false;
+  return axis !== "X" && axis !== "Y" && axis !== "Z";
+}
+
+/** Sample a uniform scale factor from the axes the active gizmo handle is allowed to move. */
+export function myApartmentDecorUniformScaleSampleFromGizmo(
+  root: THREE.Object3D,
+  axis?: string | null,
+): number {
+  const { x, y, z } = root.scale;
+  if (axis === "XY") return (x + y) * 0.5;
+  if (axis === "YZ") return (y + z) * 0.5;
+  if (axis === "XZ") return (x + z) * 0.5;
+  return (x + y + z) / 3;
 }
 
 /**
- * Apply uniform scale from the average of X/Y/Z (legacy paths, center gizmo handle).
+ * Apply uniform scale from gizmo drag (center cube, plane squares) or legacy commit paths.
  */
-export function applyMyApartmentDecorUniformScale(root: THREE.Object3D): void {
+export function applyMyApartmentDecorUniformScale(
+  root: THREE.Object3D,
+  axis?: string | null,
+): void {
   const uniform = clampOwnedApartmentDecorUniformScale(
-    (root.scale.x + root.scale.y + root.scale.z) / 3,
+    myApartmentDecorUniformScaleSampleFromGizmo(root, axis),
   );
   root.scale.setScalar(uniform);
 }
@@ -67,7 +81,7 @@ export function constrainMyApartmentDecorScaleFromGizmo(
     return;
   }
   if (isMyApartmentDecorUniformScaleAxis(opts.axis)) {
-    applyMyApartmentDecorUniformScale(root);
+    applyMyApartmentDecorUniformScale(root, opts.axis);
     return;
   }
   const pin = opts.gesturePin;

@@ -8,10 +8,29 @@ import {
 } from "./editorMyApartmentDecorScale.js";
 
 describe("editorMyApartmentDecorScale", () => {
-  it("treats center and XYZ axes as uniform scale", () => {
+  it("treats center, plane squares, and corners as uniform scale", () => {
     expect(isMyApartmentDecorUniformScaleAxis("XYZ")).toBe(true);
+    expect(isMyApartmentDecorUniformScaleAxis("XY")).toBe(true);
+    expect(isMyApartmentDecorUniformScaleAxis("YZ")).toBe(true);
+    expect(isMyApartmentDecorUniformScaleAxis("XZ")).toBe(true);
     expect(isMyApartmentDecorUniformScaleAxis("E")).toBe(true);
     expect(isMyApartmentDecorUniformScaleAxis("Y")).toBe(false);
+    expect(isMyApartmentDecorUniformScaleAxis("X")).toBe(false);
+    expect(isMyApartmentDecorUniformScaleAxis("Z")).toBe(false);
+  });
+
+  it("collapses plane-square drags to uniform scale on all axes", () => {
+    const root = new THREE.Object3D();
+    root.scale.set(2, 2, 1);
+    constrainMyApartmentDecorScaleFromGizmo(root, {
+      transformMode: "scale",
+      axis: "XY",
+      dragging: true,
+      gesturePin: { startScale: new THREE.Vector3(1, 1, 1) },
+    });
+    expect(root.scale.x).toBeCloseTo(2, 4);
+    expect(root.scale.y).toBeCloseTo(2, 4);
+    expect(root.scale.z).toBeCloseTo(2, 4);
   });
 
   it("pins X/Z when dragging the Y handle so only height changes", () => {
