@@ -39,7 +39,7 @@ import {
   mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
-import { showMammothInventoryErrorBar } from "./mammothInventoryErrorBar";
+import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import type {
   MammothDragSourceSlotInfo,
   MammothDraggedItemInfo,
@@ -111,7 +111,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       if (!optimisticSlotsRef.current) return;
       if (inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current)) return;
       setOptimisticSlots(null);
-      showMammothInventoryErrorBar("Could not move item into storage. Try again or move closer.");
+      showGameplayErrorBar("Could not move item into storage. Try again or move closer.");
     }, 900);
     return () => window.clearTimeout(id);
   }, [optimisticSlots, activeStash, baseSlots]);

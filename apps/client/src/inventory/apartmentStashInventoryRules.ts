@@ -11,7 +11,7 @@ import {
 import type { DbConnection } from "../module_bindings";
 import type { MammothItemDef } from "./mammothItemCatalogTypes";
 import { apartmentStashKindForPlacedKind } from "../game/fpApartment/fpApartmentStashResolve";
-import { showMammothInventoryErrorBar } from "./mammothInventoryErrorBar";
+import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 
 export function mammothItemAllowedInApartmentStash(
   stashKind: ApartmentStashKind,
@@ -43,7 +43,7 @@ export function apartmentDecorStashKindResolver(conn: DbConnection): ResolveApar
 }
 
 export function reportApartmentStashRejection(stashKind: ApartmentStashKind): void {
-  showMammothInventoryErrorBar(apartmentStashRejectionHint(stashKind));
+  showGameplayErrorBar(apartmentStashRejectionHint(stashKind));
 }
 
 export {

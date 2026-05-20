@@ -25,7 +25,7 @@ import {
   mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
-import { showMammothInventoryErrorBar } from "./mammothInventoryErrorBar";
+import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
@@ -130,7 +130,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
       if (!optimisticSlotsRef.current) return;
       if (inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current)) return;
       setOptimisticSlots(null);
-      showMammothInventoryErrorBar("Could not move item in storage. Try again.");
+      showGameplayErrorBar("Could not move item in storage. Try again.");
     }, 900);
     return () => window.clearTimeout(id);
   }, [optimisticSlots, baseSlots]);
