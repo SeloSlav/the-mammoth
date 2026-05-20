@@ -6,6 +6,9 @@ import * as THREE from "three";
  */
 export const WALL_SEGMENT_UV_METERS_PER_TILE = 2.75;
 
+/** Set on meshes whose UVs already span world meters / {@link WALL_SEGMENT_UV_METERS_PER_TILE}. */
+export const MAMMOTH_WORLD_METRIC_WALL_UVS_UD = "mammothWorldMetricWallUvs" as const;
+
 /**
  * Replaces default 0–1 box face UVs with world-space planar mapping (meters / tile) so shared
  * `concreteMaterial` textures repeat at a consistent scale on long walls and across adjacent
@@ -120,6 +123,7 @@ function addBox(
   mesh.position.set(x, y, z);
   if (opts?.worldMetricWallUvs) {
     applyWorldMetricUvsToAxisAlignedBoxMesh(mesh);
+    mesh.userData[MAMMOTH_WORLD_METRIC_WALL_UVS_UD] = true;
     /** Still an axis-aligned box; geometry is non-indexed BufferGeometry for per-face UVs. */
     mesh.userData.mammothAxisAlignedCollisionBox = true;
   }

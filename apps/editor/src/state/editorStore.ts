@@ -140,6 +140,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   collisionArtifactsStatus: null,
   transformMode: "translate",
   gridSnapM: 0,
+  decorNeighborAlignSnap: false,
   shadowsEnabled: false,
   useHdriEnvironment: true,
   flySpeedMps: 18,
@@ -757,6 +758,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ collisionArtifactsStatus }),
   setTransformMode: (transformMode) => set({ transformMode }),
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
+  setDecorNeighborAlignSnap: (decorNeighborAlignSnap) => set({ decorNeighborAlignSnap }),
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,

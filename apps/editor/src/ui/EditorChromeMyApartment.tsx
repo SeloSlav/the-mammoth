@@ -132,6 +132,8 @@ export function EditorChromeMyApartment(props: {
     setTransformMode,
     gridSnapM,
     setGridSnapM,
+    decorNeighborAlignSnap,
+    setDecorNeighborAlignSnap,
   } = useEditorStore(
     useShallow((s) => ({
       placedItems: s.ownedApartmentBuiltins.placedItems,
@@ -155,6 +157,8 @@ export function EditorChromeMyApartment(props: {
       setTransformMode: s.setTransformMode,
       gridSnapM: s.gridSnapM,
       setGridSnapM: s.setGridSnapM,
+      decorNeighborAlignSnap: s.decorNeighborAlignSnap,
+      setDecorNeighborAlignSnap: s.setDecorNeighborAlignSnap,
     })),
   );
   const [catalog, setCatalog] = useState<ApartmentDecorCatalogEntry[]>([]);
@@ -528,6 +532,8 @@ export function EditorChromeMyApartment(props: {
             setTransformMode={setTransformMode}
             gridSnapM={gridSnapM}
             setGridSnapM={setGridSnapM}
+            decorNeighborAlignSnap={decorNeighborAlignSnap}
+            setDecorNeighborAlignSnap={setDecorNeighborAlignSnap}
             myApartmentLayoutHints={apartmentSceneGizmoHints}
           />
         </div>

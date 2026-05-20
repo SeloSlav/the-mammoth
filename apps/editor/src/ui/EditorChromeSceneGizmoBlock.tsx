@@ -12,6 +12,8 @@ export function EditorChromeSceneGizmoBlock(props: {
   setTransformMode: (m: TransformMode) => void;
   gridSnapM: number;
   setGridSnapM: (v: number) => void;
+  decorNeighborAlignSnap?: boolean;
+  setDecorNeighborAlignSnap?: (enabled: boolean) => void;
   /** When set, shows apartment-layout helper copy under the translate / rotate / scale buttons. */
   myApartmentLayoutHints?: EditorChromeMyApartmentGizmoHint | null;
 }) {
@@ -20,6 +22,8 @@ export function EditorChromeSceneGizmoBlock(props: {
     setTransformMode,
     gridSnapM,
     setGridSnapM,
+    decorNeighborAlignSnap = false,
+    setDecorNeighborAlignSnap,
     myApartmentLayoutHints = null,
   } = props;
   const label = editorChromeLabel;
@@ -56,9 +60,11 @@ export function EditorChromeSceneGizmoBlock(props: {
           }}
         >
           Imported decor / wall slabs / mirrors: move on <strong>X / Y / Z</strong> (Y cannot go below the
-          floor). Rotate: décor uses <strong>X / Y / Z</strong> rings; slabs use <strong>Y</strong> (yaw) and{" "}
-          <strong>X</strong> (pitch). Optional angle snap matches <strong>Grid snap</strong> when set.
-          Uniform scale from the gizmo center handle.
+          floor). Turn on <strong>Align to décor</strong> when gridding pots or props; leave it off for free
+          placement. With align on, set <strong>Grid snap</strong> to your spacing gap, or leave grid snap off
+          to match gaps already in the layout. Rotate: décor uses <strong>X / Y / Z</strong> rings; slabs use{" "}
+          <strong>Y</strong> (yaw) and <strong>X</strong> (pitch). Optional angle snap matches{" "}
+          <strong>Grid snap</strong> when set. Uniform scale from the gizmo center handle.
         </p>
       ) : myApartmentLayoutHints === "builtins" ? (
         <p
@@ -86,7 +92,26 @@ export function EditorChromeSceneGizmoBlock(props: {
           Drag the <strong>center</strong> scale handle (white cube) for uniform scale from center.
         </p>
       ) : null}
-      <span style={label}>Grid snap (m / deg-ish for rotate)</span>
+      {myApartmentLayoutHints === "decor" && setDecorNeighborAlignSnap ? (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginTop: 8,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={decorNeighborAlignSnap}
+            onChange={(e) => setDecorNeighborAlignSnap(e.target.checked)}
+          />
+          Align to décor (edge / row snap while translating)
+        </label>
+      ) : null}
+      <span style={{ ...label, display: "block", marginTop: 8 }}>Grid snap (m / deg-ish for rotate)</span>
       <input
         style={input}
         type="number"

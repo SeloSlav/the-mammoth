@@ -1,23 +1,37 @@
 import * as THREE from "three";
 import type { OwnedApartmentWallMaterial } from "@the-mammoth/schemas";
-import { WALL_SEGMENT_UV_METERS_PER_TILE } from "./wallWithDoorCutout.js";
+import {
+  MAMMOTH_WORLD_METRIC_WALL_UVS_UD,
+  WALL_SEGMENT_UV_METERS_PER_TILE,
+} from "./wallWithDoorCutout.js";
 import { textureCandidatesFromSpec } from "./pbrTexturePath.js";
 import { pbrTextureLoader } from "./pbrTextureSystem.js";
 
-function syncTextureRepeatsToWorldBounds(
+/** @internal Exported for unit tests — holed-wall lintels rely on repeat (1,1) with metric UVs. */
+export function syncOwnedApartmentWallSurfaceTextureRepeats(
   mesh: THREE.Mesh,
   material: THREE.MeshStandardMaterial,
   metersPerTile: number,
 ): void {
-  mesh.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(mesh);
-  const sx = Math.max(1e-6, box.max.x - box.min.x);
-  const sy = Math.max(1e-6, box.max.y - box.min.y);
-  const sz = Math.max(1e-6, box.max.z - box.min.z);
-  const uAxis = Math.max(sx, sz);
-  const vAxis = sy;
-  const ru = uAxis / Math.max(1e-6, metersPerTile);
-  const rv = vAxis / Math.max(1e-6, metersPerTile);
+  /**
+   * Holed wall fragments (lintels, jambs, sill bands) already carry metric UVs from
+   * {@link applyWorldMetricUvsToAxisAlignedBoxMesh}. Repeating by world AABB again squashes
+   * short pieces (lintel above doorways reads as vertically stretched).
+   */
+  const metricUvs = mesh.userData[MAMMOTH_WORLD_METRIC_WALL_UVS_UD] === true;
+  let ru = 1;
+  let rv = 1;
+  if (!metricUvs) {
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const sx = Math.max(1e-6, box.max.x - box.min.x);
+    const sy = Math.max(1e-6, box.max.y - box.min.y);
+    const sz = Math.max(1e-6, box.max.z - box.min.z);
+    const uAxis = Math.max(sx, sz);
+    const vAxis = sy;
+    ru = uAxis / Math.max(1e-6, metersPerTile);
+    rv = vAxis / Math.max(1e-6, metersPerTile);
+  }
   for (const tex of [
     material.map,
     material.normalMap,
@@ -97,7 +111,7 @@ export function applyOwnedApartmentWallSurfaceMaterial(
     const m = mesh.material;
     if (!(m instanceof THREE.MeshStandardMaterial)) return;
     if (!stillCurrent(mesh, std, gen)) return;
-    syncTextureRepeatsToWorldBounds(mesh, m, metersPerTile);
+    syncOwnedApartmentWallSurfaceTextureRepeats(mesh, m, metersPerTile);
   };
 
   void (async (): Promise<void> => {

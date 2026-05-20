@@ -65,6 +65,7 @@ import {
   clampMyApartmentWallOpeningProxyPose,
   snapMyApartmentDecorEulerToGrid,
 } from "../myApartment/editorMyApartmentMeshes.js";
+import { applyMyApartmentDecorNeighborSnap } from "../myApartment/editorMyApartmentDecorSnap.js";
 import {
   captureWallScalePinnedSpanFromGesture,
   parseTransformControlsWorldScaleAxis,
@@ -439,6 +440,22 @@ export async function mountEditorScene(
     ) {
       root.position.y += supportY - decorSupportBox.min.y;
     }
+  }
+
+  function snapMyApartmentDecorNeighborsDuringTranslate(root: THREE.Object3D): void {
+    if (!root.userData.mammothEditorMyApartmentDecorId) return;
+    const aptSt = useEditorStore.getState();
+    if (
+      aptSt.mode !== "my_apartment_layout" ||
+      aptSt.transformMode !== "translate" ||
+      !aptSt.decorNeighborAlignSnap
+    ) {
+      return;
+    }
+    applyMyApartmentDecorNeighborSnap(root, getEditorMyApartmentFurnitureMountRoot(), {
+      gapM: aptSt.gridSnapM > 0 ? aptSt.gridSnapM : undefined,
+      inferGapFromNeighbors: aptSt.gridSnapM <= 0,
+    });
   }
 
   function apartmentLandingKitUsesWholeDoorGizmo(): boolean {
@@ -1004,6 +1021,7 @@ export async function mountEditorScene(
               aptSt.transformMode !== "rotate" &&
               child.userData.mammothEditorMyApartmentDecorId
             ) {
+              snapMyApartmentDecorNeighborsDuringTranslate(child);
               constrainMyApartmentDecorVerticalBounds(child);
               constrainMyApartmentDecorToSupportSurfaces(child);
             }
@@ -1059,6 +1077,7 @@ export async function mountEditorScene(
           }
         }
         if (aptSt.transformMode !== "rotate" && aptObj.userData.mammothEditorMyApartmentDecorId) {
+          snapMyApartmentDecorNeighborsDuringTranslate(aptObj);
           constrainMyApartmentDecorVerticalBounds(aptObj);
           constrainMyApartmentDecorToSupportSurfaces(aptObj);
         }

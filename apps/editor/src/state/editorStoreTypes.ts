@@ -127,6 +127,8 @@ export interface EditorState {
   collisionArtifactsStatus: CollisionArtifactsStatus | null;
   transformMode: TransformMode;
   gridSnapM: number;
+  /** {@link EditorMode.my_apartment_layout} — edge/row snap to nearby décor while translating. */
+  decorNeighborAlignSnap: boolean;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
   flySpeedMps: number;
@@ -202,6 +204,7 @@ export interface EditorState {
   setCollisionArtifactsStatus: (status: CollisionArtifactsStatus | null) => void;
   setTransformMode: (m: TransformMode) => void;
   setGridSnapM: (m: number) => void;
+  setDecorNeighborAlignSnap: (enabled: boolean) => void;
   setStairWellAuthorScope: (scope: StairWellAuthoringScope) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;
