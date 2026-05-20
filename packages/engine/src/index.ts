@@ -220,10 +220,16 @@ export {
 } from "./rendering/apartmentInteriorPreviewSceneLighting.js";
 export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
 export {
+  applyCeilingFixtureLensGlow,
+  MAMMOTH_CEILING_LENS_GLOW_MESH_UD,
+} from "./rendering/apartmentCeilingFixtureLensGlow.js";
+export {
+  attachApartmentWarmFixtureBulbGlow,
   moodGradeMammothApartmentDecorMaterial,
   moodGradeMammothApartmentDecorMesh,
   moodGradeMammothApartmentShellMaterial,
   moodGradeMammothApartmentShellMesh,
+  MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD,
 } from "./rendering/apartmentDecorMoodGrade.js";
 export {
   APARTMENT_INTERIOR_VISUAL_PROFILE,

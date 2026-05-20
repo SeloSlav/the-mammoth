@@ -393,7 +393,8 @@ const apartmentUnitInteriorWallCeilingMaterial = (() => {
   applyShellTextureAnisotropy(m);
   /** Keep tangent detail for plaster; `applyShellNormalMapToggle` would drop it and flatten the read. */
   /** Keep in sync with {@link APARTMENT_INTERIOR_VISUAL_PROFILE.shell.wallCeilColor} in `@the-mammoth/engine`. */
-  m.color.multiply(new THREE.Color(0.9, 0.88, 0.84));
+  m.color.multiply(new THREE.Color(0.74, 0.72, 0.68));
+  m.normalScale.set(1.14, 1.14);
   return m;
 })();
 
@@ -426,9 +427,10 @@ const apartmentUnitFloorMaterial = (() => {
     }
   }
   applyShellTextureAnisotropy(m);
-  applyShellNormalMapToggle(m);
+  /** Apartment parquet keeps normals — raking lamp light reads plank depth (see profile `floorNormalScale`). */
+  m.normalScale.set(1.26, 1.26);
   /** Keep in sync with {@link APARTMENT_INTERIOR_VISUAL_PROFILE.shell.floorColor} in `@the-mammoth/engine`. */
-  m.color.multiply(new THREE.Color(0.82, 0.78, 0.72));
+  m.color.multiply(new THREE.Color(0.66, 0.61, 0.55));
   return m;
 })();
 

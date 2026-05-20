@@ -4,6 +4,7 @@ import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { resolveStaticModelFetchUrl } from "@the-mammoth/engine";
 import {
   moodGradeMammothApartmentDecorMesh,
+  attachApartmentWarmFixtureBulbGlow,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorContactShadowEligible,
   attachApartmentDecorContactShadow,
@@ -773,6 +774,7 @@ function cloneProp(template: THREE.Object3D, modelRelPath: string): THREE.Object
       o.receiveShadow = false;
     }
   });
+  attachApartmentWarmFixtureBulbGlow(r, modelRelPath);
   return r;
 }
 

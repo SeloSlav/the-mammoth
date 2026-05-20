@@ -16,7 +16,8 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     exterior: 0.82,
 
-    interior: 0.68,
+    /** Dark interior ACES exposure — practicals/windows provide readable pools. */
+    interior: 0.4,
 
   },
 
@@ -80,19 +81,20 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   interiorBounce: {
 
-    hemiSky: 0xe3e7df,
+    hemiSky: 0xd6dad2,
 
-    hemiGround: 0xe3e7df,
+    hemiGround: 0xd6dad2,
 
-    hemiIntensity: 0.26,
+    /** Minimal flat fill — practical spots + normal response carry the read. */
+    hemiIntensity: 0.06,
 
-    fill: 0xe8ebe6,
+    fill: 0xd2d6ce,
 
-    fillIntensity: 0.13,
+    fillIntensity: 0.022,
 
-    dir: 0xf0efe8,
+    dir: 0xe6e2da,
 
-    dirIntensity: 0.08,
+    dirIntensity: 0.015,
 
   },
 
@@ -116,33 +118,42 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   shell: {
 
-    wallCeilColor: new THREE.Color(0.9, 0.88, 0.84),
+    wallCeilColor: new THREE.Color(0.74, 0.72, 0.68),
 
-    floorColor: new THREE.Color(0.82, 0.78, 0.72),
+    floorColor: new THREE.Color(0.66, 0.61, 0.55),
 
-    indirectEnvIntensity: 0.3,
+    /** PMREM on shells reads as ambient — keep low so spots carve form. */
+    indirectEnvIntensity: 0.09,
+
+    /** Boost tangent detail so lamps/windows rake plaster and parquet. */
+    wallCeilNormalScale: 1.14,
+
+    floorNormalScale: 1.26,
 
   },
 
   decor: {
 
-    albedoMood: new THREE.Color(0.88, 0.86, 0.82),
+    albedoMood: new THREE.Color(0.82, 0.8, 0.76),
 
-    basicAlbedoMood: new THREE.Color(0.84, 0.82, 0.78),
+    basicAlbedoMood: new THREE.Color(0.78, 0.76, 0.72),
 
-    albedoLuminanceMin: 0.14,
+    albedoLuminanceMin: 0.1,
 
-    albedoLuminanceMax: 0.62,
+    albedoLuminanceMax: 0.46,
 
     dielectricRoughnessMin: 0.48,
 
     metallicRoughnessMin: 0.28,
 
-    indirectEnvIntensity: 0.28,
+    indirectEnvIntensity: 0.09,
+
+    /** Props with authored normals catch practical raking light. */
+    normalScale: 1.12,
 
     emissiveScale: 0.55,
 
-    fixtureEmissiveScale: 1.05,
+    fixtureEmissiveScale: 1.18,
 
   },
 
@@ -152,15 +163,15 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     window: {
 
-      color: 0xd8e8f8,
+      color: 0xc8dcf0,
 
-      intensity: 3.1,
+      intensity: 4.15,
 
-      distance: 8.5,
+      distance: 9,
 
-      angle: Math.PI / 3.4,
+      angle: Math.PI / 3.2,
 
-      penumbra: 0.42,
+      penumbra: 0.44,
 
     },
 
@@ -168,9 +179,9 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xffe8c8,
 
-      intensity: 3.2,
+      intensity: 4.35,
 
-      distance: 5.6,
+      distance: 5.2,
 
     },
 
@@ -178,9 +189,9 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xfff0dc,
 
-      intensity: 2.35,
+      intensity: 3.05,
 
-      distance: 3.8,
+      distance: 3.6,
 
       angle: Math.PI / 2.35,
 
@@ -190,15 +201,14 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     standing: {
 
-      color: 0xffe8c8,
+      color: 0xfff0d4,
 
-      intensity: 2.65,
+      /** Open-top shade — omni point at bulb center (down + up + sideways). */
+      intensity: 5.85,
 
-      distance: 3.6,
+      distance: 4.6,
 
-      angle: Math.PI / 3.15,
-
-      penumbra: 0.46,
+      decay: 1.45,
 
     },
 
@@ -206,9 +216,9 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0x6fa8ff,
 
-      intensity: 4.2,
+      intensity: 3.75,
 
-      distance: 12,
+      distance: 10.5,
 
       angle: Math.PI / 2.35,
 
@@ -221,9 +231,9 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0x6fa8ff,
 
-      intensity: 3.9,
+      intensity: 3.5,
 
-      distance: 9,
+      distance: 8.5,
 
       angle: Math.PI / 2.4,
 

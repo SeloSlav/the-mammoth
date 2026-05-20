@@ -22,12 +22,20 @@ type ApartmentPracticalSpotParams = {
   distance: number;
   angle: number;
   penumbra: number;
+  decay?: number;
+};
+
+type ApartmentPracticalPointParams = {
+  color: number;
+  intensity: number;
+  distance: number;
+  decay?: number;
 };
 
 function apartmentPracticalSpotParams(
   kind: Extract<
     ApartmentPracticalLightKind,
-    "window" | "tv" | "computer" | "standing" | "ceiling"
+    "window" | "tv" | "computer" | "ceiling"
   >,
 ): ApartmentPracticalSpotParams {
   const profile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical;
@@ -38,31 +46,43 @@ function apartmentPracticalSpotParams(
       return profile.tv;
     case "computer":
       return profile.computer;
-    case "standing":
-      return profile.standing;
     case "ceiling":
       return profile.ceiling;
   }
+}
+
+function apartmentPracticalPointParams(
+  kind: Extract<ApartmentPracticalLightKind, "chandelier" | "standing">,
+): ApartmentPracticalPointParams {
+  return APARTMENT_INTERIOR_VISUAL_PROFILE.practical[kind];
 }
 
 function isApartmentPracticalSpotKind(
   kind: ApartmentPracticalLightKind,
 ): kind is Extract<
   ApartmentPracticalLightKind,
-  "window" | "tv" | "computer" | "standing" | "ceiling"
+  "window" | "tv" | "computer" | "ceiling"
 > {
   return (
     kind === "window" ||
     kind === "tv" ||
     kind === "computer" ||
-    kind === "standing" ||
     kind === "ceiling"
   );
 }
 
-/** World-down task/ceiling pool — shade and flush mounts aim into the room, not at walls. */
-function apartmentPracticalDownwardDirection(): THREE.Vector3 {
-  return _scratchDir.set(0, -1, 0).clone();
+import {
+  apartmentCeilingFixtureBulbWorldPosition,
+  apartmentStandingLampShadeBulbWorldPosition,
+} from "./apartmentStandingLampShadeBulb.js";
+
+/** Bulb sits inside the upper shade — emitter here so the floor pool reads from the glowing shade. */
+function apartmentStandingLampEmitterPosition(
+  box: THREE.Box3,
+  size: THREE.Vector3,
+  out: THREE.Vector3,
+): void {
+  apartmentStandingLampShadeBulbWorldPosition(box, size, out);
 }
 
 const _scratchDir = new THREE.Vector3();
@@ -74,6 +94,11 @@ const _decorCenterScratch = new THREE.Vector3();
 const _decorSizeScratch = new THREE.Vector3();
 const _decorQuatScratch = new THREE.Quaternion();
 const _glassPosScratch = new THREE.Vector3();
+
+/** World-down task/ceiling pool — shade and flush mounts aim into the room, not at walls. */
+function apartmentPracticalDownwardDirection(): THREE.Vector3 {
+  return _scratchDir.set(0, -1, 0).clone();
+}
 
 function pointInsideUnitBounds(
   p: THREE.Vector3,
@@ -120,25 +145,33 @@ export function apartmentPracticalLightSpecFromDecorGroup(
     };
   }
 
-  if (kind === "standing" || kind === "ceiling") {
+  if (kind === "standing") {
     _decorBoxScratch.setFromObject(group);
     if (_decorBoxScratch.isEmpty()) {
       group.getWorldPosition(_decorCenterScratch);
-    } else if (kind === "standing") {
-      _decorBoxScratch.getSize(_decorSizeScratch);
-      const shadeInset = Math.max(0.05, _decorSizeScratch.y * 0.1);
-      _decorCenterScratch.set(
-        (_decorBoxScratch.min.x + _decorBoxScratch.max.x) * 0.5,
-        _decorBoxScratch.max.y - shadeInset,
-        (_decorBoxScratch.min.z + _decorBoxScratch.max.z) * 0.5,
-      );
     } else {
       _decorBoxScratch.getSize(_decorSizeScratch);
-      const bottomInset = Math.max(0.02, _decorSizeScratch.y * 0.08);
-      _decorCenterScratch.set(
-        (_decorBoxScratch.min.x + _decorBoxScratch.max.x) * 0.5,
-        _decorBoxScratch.min.y + bottomInset,
-        (_decorBoxScratch.min.z + _decorBoxScratch.max.z) * 0.5,
+      apartmentStandingLampEmitterPosition(
+        _decorBoxScratch,
+        _decorSizeScratch,
+        _decorCenterScratch,
+      );
+    }
+    return {
+      kind,
+      position: _decorCenterScratch.clone(),
+    };
+  }
+
+  if (kind === "ceiling") {
+    _decorBoxScratch.setFromObject(group);
+    if (_decorBoxScratch.isEmpty()) {
+      group.getWorldPosition(_decorCenterScratch);
+    } else {
+      _decorBoxScratch.getSize(_decorSizeScratch);
+      apartmentCeilingFixtureBulbWorldPosition(
+        _decorBoxScratch,
+        _decorCenterScratch,
       );
     }
     return {
@@ -320,15 +353,31 @@ export function mountApartmentPracticalLights(
         p.distance,
         p.angle,
         p.penumbra,
-        lightDecay,
+        p.decay ?? lightDecay,
       );
       spot.name = `apt_${spec.kind}_light_${i}`;
       spot.position.copy(local.position);
-      spot.target.position.copy(local.position).add(local.direction);
+      spot.target.position.copy(local.position).addScaledVector(local.direction, 2.5);
       spot.castShadow = false;
       enableApartmentInteriorLightLayers(spot);
       root.add(spot);
       root.add(spot.target);
+      continue;
+    }
+
+    if (spec.kind === "standing" || spec.kind === "chandelier") {
+      const p = apartmentPracticalPointParams(spec.kind);
+      const point = new THREE.PointLight(
+        p.color,
+        p.intensity,
+        p.distance,
+        p.decay ?? lightDecay,
+      );
+      point.name = `apt_${spec.kind}_light_${i}`;
+      point.position.copy(local.position);
+      point.castShadow = false;
+      enableApartmentInteriorLightLayers(point);
+      root.add(point);
       continue;
     }
 

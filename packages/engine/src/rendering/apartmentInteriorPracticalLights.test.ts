@@ -31,14 +31,19 @@ describe("apartmentDecorEmitterKindFromModelPath", () => {
 });
 
 describe("apartmentPracticalLightSpecFromDecorGroup", () => {
-  it("places standing-lamp light near the shade top and aims downward", () => {
+  it("places standing-lamp light inside the upper shade band, inset into the room, aiming down", () => {
     const group = new THREE.Group();
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.35, 1.4, 0.35),
+    const pole = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 1.0, 0.08),
       new THREE.MeshBasicMaterial(),
     );
-    mesh.position.y = 0.7;
-    group.add(mesh);
+    pole.position.y = 0.5;
+    const shade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.35, 0.35),
+      new THREE.MeshBasicMaterial(),
+    );
+    shade.position.y = 1.18;
+    group.add(pole, shade);
     group.updateMatrixWorld(true);
 
     const spec = apartmentPracticalLightSpecFromDecorGroup(
@@ -46,11 +51,9 @@ describe("apartmentPracticalLightSpecFromDecorGroup", () => {
       "static/models/objects/lamp-standing.glb",
     );
     expect(spec?.kind).toBe("standing");
-    expect(spec!.position.y).toBeGreaterThan(1.2);
-    expect(spec?.direction).toBeDefined();
-    expect(spec!.direction!.y).toBeLessThan(-0.99);
-    expect(Math.abs(spec!.direction!.x)).toBeLessThan(0.01);
-    expect(Math.abs(spec!.direction!.z)).toBeLessThan(0.01);
+    expect(spec!.position.y).toBeGreaterThan(1.05);
+    expect(spec!.position.y).toBeLessThan(1.25);
+    expect(spec?.direction).toBeUndefined();
   });
 
   it("places ceiling-lamp light at fixture bottom and aims downward", () => {
@@ -68,8 +71,9 @@ describe("apartmentPracticalLightSpecFromDecorGroup", () => {
       "static/models/objects/light-ceiling.glb",
     );
     expect(spec?.kind).toBe("ceiling");
-    expect(spec!.position.y).toBeLessThan(2.42);
-    expect(spec!.position.y).toBeGreaterThan(2.34);
+    expect(spec!.position.x).toBeCloseTo(0, 5);
+    expect(spec!.position.z).toBeCloseTo(0, 5);
+    expect(spec!.position.y).toBeCloseTo(2.4, 3);
     expect(spec!.direction!.y).toBeLessThan(-0.99);
   });
 
@@ -133,7 +137,7 @@ describe("mountApartmentPracticalLights", () => {
     mount.dispose();
   });
 
-  it("mounts standing and ceiling fixtures as downward spot lights", () => {
+  it("mounts standing as omni point and ceiling as downward spot", () => {
     const parent = new THREE.Group();
     parent.updateMatrixWorld(true);
 
@@ -141,7 +145,6 @@ describe("mountApartmentPracticalLights", () => {
       {
         kind: "standing",
         position: new THREE.Vector3(1, 1.5, 2),
-        direction: new THREE.Vector3(0, -1, 0),
       },
       {
         kind: "ceiling",
@@ -150,13 +153,11 @@ describe("mountApartmentPracticalLights", () => {
       },
     ]);
 
-    expect(mount.root.children).toHaveLength(4);
-    const standing = mount.root.children[0] as THREE.SpotLight;
-    const standingTarget = mount.root.children[1] as THREE.Object3D;
-    const ceiling = mount.root.children[2] as THREE.SpotLight;
-    expect(standing.isSpotLight).toBe(true);
+    expect(mount.root.children).toHaveLength(3);
+    const standing = mount.root.children[0] as THREE.PointLight;
+    const ceiling = mount.root.children[1] as THREE.SpotLight;
+    expect(standing.isPointLight).toBe(true);
     expect(ceiling.isSpotLight).toBe(true);
-    expect(standingTarget.position.y).toBeLessThan(standing.position.y);
 
     mount.dispose();
   });

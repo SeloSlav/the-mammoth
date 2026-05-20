@@ -67,6 +67,7 @@ import {
   apartmentDecorEmitterKindFromModelPath,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
+  attachApartmentWarmFixtureBulbGlow,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   resolveStaticModelFetchUrl,
   syncApartmentInteriorPracticalLighting,
@@ -846,6 +847,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         centerVisualBoundsOnRoot(g);
       }
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);
+      attachApartmentWarmFixtureBulbGlow(g, d.modelRelPath);
       bindMammothApartmentPropReadableEnv(g, metallicReadableEnv());
       root.add(g);
       g.updateMatrixWorld(true);
