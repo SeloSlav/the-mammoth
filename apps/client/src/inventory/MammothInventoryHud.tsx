@@ -171,6 +171,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       if (e.code !== "Tab" || e.repeat) return;
       if (isTextInputFocused()) return;
       e.preventDefault();
+      if (activeStash) {
+        setFpActiveStashPanel(null);
+        return;
+      }
       setInvOpen((o) => {
         if (o) setFpActiveStashPanel(null);
         return !o;
@@ -180,7 +184,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     // Capture so Tab opens inventory even when focus is on the canvas / other controls.
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [activeStash]);
 
   useEffect(() => {
     return onMammothInventoryOpenRequestFromFp(() => {

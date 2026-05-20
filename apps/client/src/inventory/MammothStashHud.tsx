@@ -340,7 +340,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     >
       <div style={{ color: "#f2d39a", fontSize: 12, marginBottom: 4 }}>{`${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`}</div>
       <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
-        Drag items in/out. {rulesHint}
+        Drag items in/out. {rulesHint} Tab, Esc, or E to close.
       </div>
 
       {stoveSections ? (

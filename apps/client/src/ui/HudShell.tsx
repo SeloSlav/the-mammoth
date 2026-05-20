@@ -7,9 +7,11 @@ import {
 } from "react";
 import type { DbConnection } from "../module_bindings";
 import {
+  closeFpActiveStashPanel,
   getFpActiveStashPanel,
   subscribeFpActiveStashPanel,
 } from "../game/fpInteraction/fpActiveStashPanel";
+import { isTextInputFocused } from "../game/isTextInputFocused";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
@@ -58,6 +60,17 @@ export function HudShell({ onSignOut, conn }: HudProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [quitModalOpen]);
+
+  useEffect(() => {
+    if (!activeStash) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Escape" || e.repeat || isTextInputFocused()) return;
+      e.preventDefault();
+      closeFpActiveStashPanel();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [activeStash]);
 
   const confirmQuitToMainMenu = useCallback(() => {
     setQuitModalOpen(false);

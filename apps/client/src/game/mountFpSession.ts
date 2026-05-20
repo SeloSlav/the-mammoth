@@ -132,7 +132,11 @@ import {
   MAMMOTH_PICKUP_RADIUS_M,
   mountDroppedItemsWorld,
 } from "./worldRuntime/droppedItemWorldRuntime.js";
-import { setFpActiveStashPanel } from "./fpInteraction/fpActiveStashPanel.js";
+import {
+  closeFpActiveStashPanel,
+  getFpActiveStashPanel,
+  setFpActiveStashPanel,
+} from "./fpInteraction/fpActiveStashPanel.js";
 import { requestMammothInventoryOpenFromFp } from "./fpInteraction/fpInventoryOpenRequest.js";
 import { setFpPickupPrompt } from "./fpInteraction/fpPickupPrompt.js";
 import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
@@ -1302,6 +1306,13 @@ export async function mountFpSession(
       }
     }
     if (e.code === "Escape") void document.exitPointerLock();
+    if (e.code === "KeyE" && !e.repeat && !isTextInputFocused()) {
+      if (getFpActiveStashPanel()) {
+        e.preventDefault();
+        closeFpActiveStashPanel();
+        return;
+      }
+    }
     if (
       e.code === "KeyE" &&
       !e.repeat &&

@@ -16,6 +16,10 @@ export function getFpActiveStashPanel(): FpActiveStashPanelState | null {
   return state;
 }
 
+export function closeFpActiveStashPanel(): void {
+  setFpActiveStashPanel(null);
+}
+
 export function setFpActiveStashPanel(next: FpActiveStashPanelState | null): void {
   if (
     state?.stashKey === next?.stashKey &&
