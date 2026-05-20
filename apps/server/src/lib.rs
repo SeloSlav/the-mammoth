@@ -8,6 +8,7 @@
 mod accounts;
 mod apartment_door;
 mod apartment_interior_anchors;
+mod apartment_stash_location_match;
 mod apartment_stash_rules;
 mod apartments;
 mod auth;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_WATER_TANK,
@@ -40,6 +41,12 @@ describe("mammothItemAllowedInApartmentStash", () => {
       true,
     );
     expect(mammothItemAllowedInApartmentStash(APARTMENT_STASH_KIND_STOVE, def("tool"))).toBe(false);
+  });
+
+  it("allows screwdriver (weapon category) in footlocker", () => {
+    expect(mammothItemAllowedInApartmentStash(APARTMENT_STASH_KIND_FOOTLOCKER, def("weapon", "screwdriver"))).toBe(
+      true,
+    );
   });
 
   it("water tank only allows water-bottle", () => {

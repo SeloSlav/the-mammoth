@@ -1,3 +1,8 @@
+import {
+  apartmentStashLocationsMatch,
+  type ResolveApartmentDecorStashKind,
+} from "@the-mammoth/schemas";
+
 export const APARTMENT_STASH_KIND_FOOTLOCKER = "footlocker";
 export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe";
 export const APARTMENT_STASH_KIND_STOVE = "stove";
@@ -81,26 +86,12 @@ export function apartmentStashLabel(stashKind: ApartmentStashKind): string {
   }
 }
 
-/** Client mirror of server `stash_location_matches` argument order: `(stored, requested)`. */
-function stashLocationMatches(stored: string, requested: string): boolean {
-  if (stored === requested) return true;
-  const sa = parseApartmentStashKeyFull(stored);
-  const sb = parseApartmentStashKeyFull(requested);
-  if (sa.tag === "decor" && sb.tag === "decor") {
-    return sa.unitKey === sb.unitKey && sa.decorId === sb.decorId;
-  }
-  if (sa.tag === "legacy" && sb.tag === "legacy") {
-    return sa.unitKey === sb.unitKey && sa.stashKind === sb.stashKind;
-  }
-  if (sa.tag === "bare" && sb.tag === "legacy") {
-    return sa.unitKey === sb.unitKey && sb.stashKind === APARTMENT_STASH_KIND_FOOTLOCKER;
-  }
-  if (sa.tag === "legacy" && sb.tag === "bare") {
-    return sa.unitKey === sb.unitKey && sa.stashKind === APARTMENT_STASH_KIND_FOOTLOCKER;
-  }
-  return false;
+export function apartmentStashKeyMatchesRow(
+  requestedStashKey: string,
+  storedLocationKey: string,
+  resolveDecorStashKind: ResolveApartmentDecorStashKind,
+): boolean {
+  return apartmentStashLocationsMatch(storedLocationKey, requestedStashKey, resolveDecorStashKind);
 }
 
-export function apartmentStashKeyMatchesRow(requestedStashKey: string, storedLocationKey: string): boolean {
-  return stashLocationMatches(storedLocationKey, requestedStashKey);
-}
+export type { ResolveApartmentDecorStashKind };

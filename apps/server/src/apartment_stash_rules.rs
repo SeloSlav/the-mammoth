@@ -47,6 +47,18 @@ pub(crate) fn apartment_stash_accepts_item_category(
     }
 }
 
+pub(crate) fn apartment_stash_rejection_hint(stash_kind: &str) -> &'static str {
+    match stash_kind {
+        APARTMENT_STASH_KIND_WARDROBE => {
+            "Wardrobe only holds weapons, ammo, tools, and utility gear."
+        }
+        APARTMENT_STASH_KIND_FRIDGE => "Fridge only holds food and consumables.",
+        APARTMENT_STASH_KIND_STOVE => "Stove only holds food (for now).",
+        APARTMENT_STASH_KIND_WATER_TANK => "Water tank only holds a water bottle.",
+        _ => "This item cannot go in this storage.",
+    }
+}
+
 pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> bool {
     if stash_kind == APARTMENT_STASH_KIND_WATER_TANK {
         return WATER_TANK_ALLOWED_DEF_IDS.contains(&def_id);

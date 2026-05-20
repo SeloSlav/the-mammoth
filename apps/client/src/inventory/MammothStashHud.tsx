@@ -23,7 +23,9 @@ import {
   apartmentStashRejectionHint,
   isApartmentStashSlotIndexValid,
   mammothItemAllowedInApartmentStash,
+  reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
+import { showMammothInventoryErrorBar } from "./mammothInventoryErrorBar";
 import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
@@ -121,6 +123,17 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
       setOptimisticSlots(null);
     }
   }, [baseSlots, optimisticSlots]);
+
+  useEffect(() => {
+    if (!optimisticSlots) return;
+    const id = window.setTimeout(() => {
+      if (!optimisticSlotsRef.current) return;
+      if (inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current)) return;
+      setOptimisticSlots(null);
+      showMammothInventoryErrorBar("Could not move item in storage. Try again.");
+    }, 900);
+    return () => window.clearTimeout(id);
+  }, [optimisticSlots, baseSlots]);
 
   const gridsForPrediction = useCallback(
     () => optimisticSlotsRef.current ?? baseSlotsRef.current,
@@ -232,7 +245,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
       if (target.type !== "stash" && src.sourceSlot.type !== "stash") return;
 
       if (target.type === "stash" && !canAcceptItemInStash(src.item, target.index)) {
-        console.warn("[MammothStashHud]", apartmentStashRejectionHint(stashKind));
+        reportApartmentStashRejection(stashKind);
         return;
       }
 

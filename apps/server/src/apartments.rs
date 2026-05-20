@@ -15,7 +15,8 @@ use crate::generated_apartment_doors::{
     ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
 };
 use crate::apartment_stash_rules::{
-    apartment_stash_accepts_def_id, apartment_stash_slot_count, apartment_stash_slot_index_valid,
+    apartment_stash_accepts_def_id, apartment_stash_rejection_hint, apartment_stash_slot_count,
+    apartment_stash_slot_index_valid,
 };
 use crate::inventory::{
     self, find_item_in_hotbar_slot, find_item_in_inventory_slot, find_item_in_stash_slot,
@@ -1668,7 +1669,11 @@ fn stash_item_for_unit(
         .find(item_instance_id)?;
     match &row.location {
         ItemLocation::Stash(s)
-            if crate::inventory_models::stash_location_matches(&s.unit_key, stash_key)
+            if crate::apartment_stash_location_match::apartment_stash_locations_match(
+                ctx,
+                &s.unit_key,
+                stash_key,
+            )
                 && s.owner_identity == owner_id =>
         {
             Some(row)
@@ -1758,6 +1763,11 @@ fn move_inventory_row_to_location(
     Ok(())
 }
 
+fn notify_stash_reducer_failure(ctx: &ReducerContext, message: String) {
+    log::warn!("{message}");
+    crafting::emit_hud_notice(ctx, ctx.sender(), message);
+}
+
 #[spacetimedb::reducer]
 pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: String) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1771,7 +1781,7 @@ pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
         return;
     };
     if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, slot) {
-        log::warn!("stash_push: {e}");
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 
@@ -1790,7 +1800,7 @@ fn stash_push_item_to_slot_impl(
         .ok_or_else(|| "caller may not push to stash".to_string())?;
     let row = inventory::get_player_item(ctx, item_instance_id)?;
     if !apartment_stash_accepts_def_id(stash_kind, row.def_id.as_str()) {
-        return Err(format!("{stash_kind} stash: item type not allowed"));
+        return Err(apartment_stash_rejection_hint(stash_kind).to_string());
     }
     let target_opt = find_item_in_stash_slot(ctx, owner_id, unit_key, target_stash_slot);
     move_inventory_row_to_location(
@@ -1820,7 +1830,7 @@ pub fn stash_push_item_to_slot(
     if let Err(e) =
         stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, target_stash_slot)
     {
-        log::warn!("stash_push_to_slot: {e}");
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 
@@ -1867,8 +1877,8 @@ pub fn stash_pull_item_to_inventory_slot(
         item_instance_id,
         &unit_key,
         target_inventory_slot,
-    ) {
-        log::warn!("stash_pull_to_inventory_slot: {e}");
+    )     {
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 
@@ -1913,7 +1923,7 @@ pub fn stash_pull_item_to_hotbar_slot(
     if let Err(e) =
         stash_pull_item_to_hotbar_slot_impl(ctx, item_instance_id, &unit_key, target_hotbar_slot)
     {
-        log::warn!("stash_pull_to_hotbar_slot: {e}");
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 
@@ -1929,11 +1939,11 @@ pub fn stash_move_item_to_slot(
         return;
     }
     let Some(stash_kind) = apartment_stash_kind_for_stash_key(ctx, &unit_key) else {
-        log::warn!("stash_move_to_slot: unknown stash key");
+        notify_stash_reducer_failure(ctx, "Could not open that storage.".to_string());
         return;
     };
     if !apartment_stash_slot_index_valid(stash_kind, target_stash_slot) {
-        log::warn!("stash_move_to_slot: bad stash slot");
+        notify_stash_reducer_failure(ctx, "That storage slot is invalid.".to_string());
         return;
     }
     let Some((owner_id, _, _)) = apartment_stash_owner_near_sender(ctx, &unit_key) else {
@@ -1953,7 +1963,7 @@ pub fn stash_move_item_to_slot(
         }),
         target_opt,
     ) {
-        log::warn!("stash_move_to_slot: {e}");
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 
@@ -1978,7 +1988,7 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     if let Err(e) =
         stash_pull_item_to_inventory_slot_impl(ctx, item_instance_id, &unit_key, empty_inv)
     {
-        log::warn!("stash_pull: {e}");
+        notify_stash_reducer_failure(ctx, e);
     }
 }
 

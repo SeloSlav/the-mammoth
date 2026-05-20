@@ -7,7 +7,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::auth;
 use crate::inventory_models::{
-    stash_location_matches, HotbarLocationData, InventoryLocationData, ItemLocation,
+    HotbarLocationData, InventoryLocationData, ItemLocation,
 };
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
@@ -77,7 +77,11 @@ pub(crate) fn find_item_in_stash_slot(
             &i.location,
             ItemLocation::Stash(s)
                 if s.owner_identity == owner_identity
-                    && stash_location_matches(&s.unit_key, stash_key)
+                    && crate::apartment_stash_location_match::apartment_stash_locations_match(
+                        ctx,
+                        &s.unit_key,
+                        stash_key,
+                    )
                     && s.slot_index == slot
         )
     })

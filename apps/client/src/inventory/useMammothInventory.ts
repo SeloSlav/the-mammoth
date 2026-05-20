@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../module_bindings";
 import type { InventoryItem } from "../module_bindings/types";
+import type { ApartmentStashKind } from "./apartmentStashInventoryRules";
+import { apartmentDecorStashKindResolver } from "./apartmentStashInventoryRules";
 import { apartmentStashKeyMatchesRow } from "../game/fpApartment/fpApartmentStashKey";
-import type { ApartmentStashKind } from "../game/fpApartment/fpApartmentStashKey";
 import { APARTMENT_STASH_SLOT_INDEX_MAX } from "@the-mammoth/schemas";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { apartmentStashSlotCount } from "./apartmentStashInventoryRules";
@@ -99,11 +100,12 @@ export function useMammothStash(
     void ver;
     const stash: Array<MammothPopulatedItem | null> = Array.from({ length: slotCount }, () => null);
     if (!conn || !stashKey) return stash;
+    const resolveDecor = apartmentDecorStashKindResolver(conn);
     for (const row of conn.db.inventory_item) {
       const loc = row.location;
       if (loc.tag !== "Stash") continue;
       const v = loc.value;
-      if (!apartmentStashKeyMatchesRow(stashKey, v.unitKey)) continue;
+      if (!apartmentStashKeyMatchesRow(stashKey, v.unitKey, resolveDecor)) continue;
       const p = populateMammothInventoryItem(row as InventoryItem);
       if (p && v.slotIndex < slotCount) {
         stash[v.slotIndex] = p;
