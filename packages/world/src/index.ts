@@ -128,6 +128,7 @@ export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurf
 export {
   EDITOR_MY_APARTMENT_WALL_OPENING_PROXY_UD,
   EDITOR_MY_APARTMENT_WALL_VISUAL_UD,
+  OWNED_APARTMENT_WALL_SURFACE_MESH_UD,
   OWNED_APARTMENT_STANDARD_DOOR_HEIGHT_M,
   OWNED_APARTMENT_STANDARD_DOOR_WIDTH_M,
   applyOwnedApartmentWallSurfaceMaterialToVisuals,

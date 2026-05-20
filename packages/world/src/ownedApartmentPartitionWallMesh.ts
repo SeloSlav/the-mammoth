@@ -12,6 +12,8 @@ export const OWNED_APARTMENT_STANDARD_DOOR_HEIGHT_M = 2.1;
 
 export const EDITOR_MY_APARTMENT_WALL_OPENING_PROXY_UD = "editorMyApartmentWallOpeningProxy" as const;
 export const EDITOR_MY_APARTMENT_WALL_VISUAL_UD = "mammothEditorMyApartmentWallVisual" as const;
+/** Holed slab fragments under `wall_visual` — editor + FP runtime share PBR application. */
+export const OWNED_APARTMENT_WALL_SURFACE_MESH_UD = "mammothOwnedApartmentWallSurfaceMesh" as const;
 
 export function wallOpeningToHoleXY(opening: OwnedApartmentWallOpening): WallHoleXY {
   const halfW = opening.widthM * 0.5;
@@ -129,6 +131,7 @@ export function rebuildOwnedApartmentPartitionWallVisual(args: {
 
   for (const child of visualGroup.children) {
     if (!(child instanceof THREE.Mesh)) continue;
+    child.userData[OWNED_APARTMENT_WALL_SURFACE_MESH_UD] = true;
     if (opts?.fpInteriorPartitionSolid === true) {
       child.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
     }
@@ -289,7 +292,7 @@ export function applyOwnedApartmentWallSurfaceMaterialToVisuals(
 ): void {
   wallGroup.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    if (obj.userData[EDITOR_MY_APARTMENT_WALL_VISUAL_UD] !== true) return;
+    if (obj.userData[OWNED_APARTMENT_WALL_SURFACE_MESH_UD] !== true) return;
     apply(obj);
   });
 }

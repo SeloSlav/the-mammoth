@@ -2,9 +2,11 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import {
   buildOwnedApartmentPartitionWallInGroup,
+  applyOwnedApartmentWallSurfaceMaterialToVisuals,
   clampWallOpeningTangentOffsetM,
   defaultOwnedApartmentWallDoorOpening,
   EDITOR_MY_APARTMENT_WALL_VISUAL_UD,
+  OWNED_APARTMENT_WALL_SURFACE_MESH_UD,
   wallOpeningToHoleXY,
 } from "./ownedApartmentPartitionWallMesh.js";
 
@@ -40,8 +42,31 @@ describe("ownedApartmentPartitionWallMesh", () => {
       (c) => c.name === "wall_visual",
     )[0] as THREE.Group;
     const fragments = visuals.children.filter(
-      (c) => c instanceof THREE.Mesh && c.userData[EDITOR_MY_APARTMENT_WALL_VISUAL_UD] === true,
+      (c) =>
+        c instanceof THREE.Mesh &&
+        c.userData[OWNED_APARTMENT_WALL_SURFACE_MESH_UD] === true,
     );
     expect(fragments.length).toBeGreaterThan(1);
+  });
+
+  it("applyOwnedApartmentWallSurfaceMaterialToVisuals includes FP runtime partition solids", () => {
+    const parent = new THREE.Group();
+    buildOwnedApartmentPartitionWallInGroup({
+      parent,
+      sizeX: 2,
+      sizeY: 2.6,
+      sizeZ: 0.08,
+      openings: [],
+      wallMaterial: new THREE.MeshStandardMaterial(),
+      opts: { fpInteriorPartitionSolid: true },
+    });
+    const touched: THREE.Mesh[] = [];
+    applyOwnedApartmentWallSurfaceMaterialToVisuals(parent, (mesh) => {
+      touched.push(mesh);
+    });
+    expect(touched.length).toBeGreaterThan(0);
+    expect(touched.every((m) => m.userData[EDITOR_MY_APARTMENT_WALL_VISUAL_UD] !== true)).toBe(
+      true,
+    );
   });
 });
