@@ -133,11 +133,14 @@ import {
   mountDroppedItemsWorld,
 } from "./worldRuntime/droppedItemWorldRuntime.js";
 import {
-  closeFpActiveStashPanel,
+  closeApartmentStashAndInventory,
   getFpActiveStashPanel,
   setFpActiveStashPanel,
 } from "./fpInteraction/fpActiveStashPanel.js";
-import { requestMammothInventoryOpenFromFp } from "./fpInteraction/fpInventoryOpenRequest.js";
+import {
+  requestMammothInventoryCloseFromFp,
+  requestMammothInventoryOpenFromFp,
+} from "./fpInteraction/fpInventoryOpenRequest.js";
 import { setFpPickupPrompt } from "./fpInteraction/fpPickupPrompt.js";
 import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorConstants.js";
@@ -1309,7 +1312,12 @@ export async function mountFpSession(
     if (e.code === "KeyE" && !e.repeat && !isTextInputFocused()) {
       if (getFpActiveStashPanel()) {
         e.preventDefault();
-        closeFpActiveStashPanel();
+        closeApartmentStashAndInventory();
+        return;
+      }
+      if (mammothInventoryOpen()) {
+        e.preventDefault();
+        requestMammothInventoryCloseFromFp();
         return;
       }
     }

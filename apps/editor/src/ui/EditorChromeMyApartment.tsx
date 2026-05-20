@@ -42,6 +42,7 @@ import {
   requestEditorFillWallOpening,
 } from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
+import { replaceMyApartmentPlacedDecorModelInDoc } from "../editor/myApartment/replaceMyApartmentPlacedDecorModel.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -329,6 +330,19 @@ export function EditorChromeMyApartment(props: {
     cloneMyApartmentLayoutSelection();
   }
 
+  function replaceSelectedDecorModel(modelRelPath = selectedCatalogModelRelPath): void {
+    if (!selectedDecorId || !modelRelPath) return;
+    patchOwnedApartmentBuiltins((doc) => {
+      const next = replaceMyApartmentPlacedDecorModelInDoc(doc, selectedDecorId, modelRelPath);
+      return next?.doc ?? doc;
+    });
+  }
+
+  const replaceDecorDisabled =
+    !selectedDecor ||
+    !selectedCatalogModelRelPath ||
+    selectedDecor.modelRelPath === selectedCatalogModelRelPath;
+
   function deleteLayoutPlacements(selectedIds: readonly string[]): void {
     patchOwnedApartmentBuiltins((doc) => {
       return deleteMyApartmentLayoutPlacementsInDoc(doc, selectedIds) ?? doc;
@@ -487,7 +501,9 @@ export function EditorChromeMyApartment(props: {
         </span>
         <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
           Click a model from <code>public/static/models/objects/</code>, import it into the
-          preview unit, then move it with the gizmo and save the apartment layout JSON.
+          preview unit, then move it with the gizmo and save the apartment layout JSON. Select a
+          placed décor and use <strong>Replace selected décor</strong> (or double-click a catalog
+          model) to swap its GLB without moving it.
         </p>
         <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>{catalogStatus}</div>
         <div
@@ -510,13 +526,21 @@ export function EditorChromeMyApartment(props: {
                   entry.modelRelPath === selectedCatalogModelRelPath ? "#355172" : "#2a2a34",
               }}
               onClick={() => setSelectedCatalogModelRelPath(entry.modelRelPath)}
-              title={entry.modelRelPath}
+              onDoubleClick={() => {
+                setSelectedCatalogModelRelPath(entry.modelRelPath);
+                if (selectedDecorId) replaceSelectedDecorModel(entry.modelRelPath);
+              }}
+              title={
+                selectedDecorId
+                  ? `${entry.modelRelPath} — double-click to replace selected décor`
+                  : entry.modelRelPath
+              }
             >
               {entry.label}
             </button>
           ))}
         </div>
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
           <button
             type="button"
             style={editorChromeRowBtn}
@@ -524,6 +548,19 @@ export function EditorChromeMyApartment(props: {
             disabled={!selectedCatalogModelRelPath}
           >
             Import selected model
+          </button>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={() => replaceSelectedDecorModel()}
+            disabled={replaceDecorDisabled}
+            title={
+              selectedDecor
+                ? "Replace model and gameplay role (itemKind) — same position, rotation, and scale. Unknown GLBs become plain décor (no stash)."
+                : "Select a placed décor in the scene or list first."
+            }
+          >
+            Replace selected décor
           </button>
         </div>
         <div style={{ marginTop: 12 }}>
@@ -736,6 +773,20 @@ export function EditorChromeMyApartment(props: {
             Delete selected decor
           </button>
         </div>
+        {selectedDecor ? (
+          <p style={{ margin: "10px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+            Current: <code style={{ fontSize: 10 }}>{selectedDecor.modelRelPath}</code>
+            {" · "}
+            role <code style={{ fontSize: 10 }}>{selectedDecor.itemKind}</code>
+            {selectedCatalogModelRelPath && selectedCatalogModelRelPath !== selectedDecor.modelRelPath ? (
+              <>
+                {" "}
+                → <code style={{ fontSize: 10 }}>{selectedCatalogModelRelPath}</code>
+                {` (${ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath)} after replace)`}
+              </>
+            ) : null}
+          </p>
+        ) : null}
         {selectedDecor ? (
           <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
             <input

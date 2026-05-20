@@ -3,6 +3,7 @@
 const listeners = new Set<() => void>();
 
 import type { ApartmentStashKind } from "../fpApartment/fpApartmentStashKey.js";
+import { requestMammothInventoryCloseFromFp } from "./fpInventoryOpenRequest.js";
 
 export type FpActiveStashPanelState = {
   stashKey: string;
@@ -18,6 +19,12 @@ export function getFpActiveStashPanel(): FpActiveStashPanelState | null {
 
 export function closeFpActiveStashPanel(): void {
   setFpActiveStashPanel(null);
+}
+
+/** Dismiss stash side panel and player inventory (Tab / Esc / E while stash is open). */
+export function closeApartmentStashAndInventory(): void {
+  closeFpActiveStashPanel();
+  requestMammothInventoryCloseFromFp();
 }
 
 export function setFpActiveStashPanel(next: FpActiveStashPanelState | null): void {

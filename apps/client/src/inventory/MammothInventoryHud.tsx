@@ -19,10 +19,14 @@ import {
   subscribeHotbarInstantConsumeCooldown,
 } from "../game/fpHotbar/fpHotbarInstantConsumeCooldown";
 import {
+  closeApartmentStashAndInventory,
   setFpActiveStashPanel,
   type FpActiveStashPanelState,
 } from "../game/fpInteraction/fpActiveStashPanel";
-import { onMammothInventoryOpenRequestFromFp } from "../game/fpInteraction/fpInventoryOpenRequest";
+import {
+  onMammothInventoryCloseRequestFromFp,
+  onMammothInventoryOpenRequestFromFp,
+} from "../game/fpInteraction/fpInventoryOpenRequest";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
   getFpHotbarSelectedSlot,
@@ -172,7 +176,8 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       if (isTextInputFocused()) return;
       e.preventDefault();
       if (activeStash) {
-        setFpActiveStashPanel(null);
+        closeApartmentStashAndInventory();
+        if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }
       setInvOpen((o) => {
@@ -187,9 +192,26 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   }, [activeStash]);
 
   useEffect(() => {
+    if (!invOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Escape" || e.repeat || isTextInputFocused()) return;
+      e.preventDefault();
+      closeApartmentStashAndInventory();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [invOpen]);
+
+  useEffect(() => {
     return onMammothInventoryOpenRequestFromFp(() => {
       setInvOpen(true);
       if (document.pointerLockElement) void document.exitPointerLock();
+    });
+  }, []);
+
+  useEffect(() => {
+    return onMammothInventoryCloseRequestFromFp(() => {
+      setInvOpen(false);
     });
   }, []);
 

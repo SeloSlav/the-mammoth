@@ -44,14 +44,14 @@
     {
       "id": "mammoth_builtin_stove",
       "modelRelPath": "static/models/objects/stove.glb",
-      "fx": 0.33446516583746194,
-      "fz": -0.05085161953381605,
-      "dy": 0.45783162000438593,
+      "fx": 0.3285454441675201,
+      "fz": -0.04700423124522764,
+      "dy": 0.4578316200043858,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5459024758546215,
-      "ignoreSupportSurfaces": false,
+      "ignoreSupportSurfaces": true,
       "itemKind": "stove"
     },
     {
@@ -238,15 +238,15 @@
     },
     {
       "id": "8fd1c958-c1ef-4b00-9c97-ee588b884eb0",
-      "modelRelPath": "static/models/objects/kitchen-counter.glb",
-      "fx": 0.34606860530734235,
+      "modelRelPath": "static/models/objects/kitchen-counter-2.glb",
+      "fx": 0.3133540480635914,
       "fz": -0.04708787739056119,
-      "dy": 1.0356522822638425,
+      "dy": 0.9369381964217917,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
-      "uniformScale": 1.7465950941587092,
-      "ignoreSupportSurfaces": false,
+      "uniformScale": 1.2905003590527768,
+      "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
     {
@@ -421,26 +421,13 @@
     {
       "id": "dde79a39-4375-46d3-b2f5-f72a1574a68b",
       "modelRelPath": "static/models/objects/box-bread.glb",
-      "fx": 0.39964424964699696,
-      "fz": -0.0744385625656442,
-      "dy": 1.0007366819325512,
+      "fx": 0.39755439666084985,
+      "fz": -0.07648576872971787,
+      "dy": 0.8970342869646889,
       "yawRad": 3.141592653589793,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.20179741183439223,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "10d88bcd-acd7-4d12-bf13-e076d8e2c9a3",
-      "modelRelPath": "static/models/objects/fish-tank.glb",
-      "fx": 0.23345149049536768,
-      "fz": -0.06925448723396638,
-      "dy": 1.0628107065634858,
-      "yawRad": -2.4492935982947064e-16,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.28206636003720065,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -942,7 +929,6 @@
       "id": "f7b4e358-0c1a-4bd4-ab10-eee3348dd414",
       "name": "Side table",
       "memberSelectedIds": [
-        "mammoth_editor_my_apartment_decor:10d88bcd-acd7-4d12-bf13-e076d8e2c9a3",
         "mammoth_editor_my_apartment_decor:300751cf-8564-4486-916f-c2d10d5ed336",
         "mammoth_editor_my_apartment_decor:4a931895-7781-4dac-a4eb-50bb7aed0cb0",
         "mammoth_editor_my_apartment_decor:c7682898-47c3-4516-b30d-1ee2bc7855a1",
