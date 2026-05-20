@@ -432,19 +432,6 @@
       "itemKind": "plain"
     },
     {
-      "id": "166fe42e-c4ad-4714-b5ba-0757b18c2bce",
-      "modelRelPath": "static/models/objects/drying-rack.glb",
-      "fx": 0.38396319636623377,
-      "fz": 0.3482900128165705,
-      "dy": 0.7489625631120874,
-      "yawRad": 0,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.6664766870074978,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
       "id": "10d88bcd-acd7-4d12-bf13-e076d8e2c9a3",
       "modelRelPath": "static/models/objects/fish-tank.glb",
       "fx": 0.23345149049536768,
@@ -636,6 +623,32 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.32709119452241925,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "8e48c06b-c005-4425-9fdc-a527e67168ee",
+      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "fx": 0.8398310759613916,
+      "fz": -0.027594013844333458,
+      "dy": 0.11803518403137526,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.5068560948252686,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "825bca36-e9b8-4fa7-9883-2d57ba0ebe04",
+      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "fx": 0.9273651377782285,
+      "fz": -0.026789220468649344,
+      "dy": 0.11803518403137526,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.5068560948252686,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }

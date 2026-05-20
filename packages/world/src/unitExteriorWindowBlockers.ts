@@ -8,8 +8,10 @@ import {
   residentialUnitHasBalconyBay,
 } from "./residentialUnitBalcony.js";
 import {
+  balconyBayFacadeCladOuterLocalX,
   balconyBayPlacedObjectId,
   residentialBalconyBayFrame,
+  type ResidentialBalconyBayFrame,
 } from "./residentialUnitBalconyShell.js";
 import {
   DEFAULT_EXTERIOR_FACADE_SALT,
@@ -42,6 +44,53 @@ const WINDOW_SILL_TOP_LIP_M = 0.02;
 const WINDOW_SILL_LEDGE_WALK_EXTRA_DEPTH_M = 0.72;
 const WINDOW_SILL_LEDGE_WALK_TANGENT_PAD_M = 0.16;
 const WINDOW_SILL_WALK_EXTRA_TOP_LIP_M = 0.045;
+
+/**
+ * Bay window seals span floor→ceiling (not just the glass hole band) so a capsule standing on
+ * the main floor or the sill lip still overlaps the blocker. Outward extent includes pushed-out
+ * cladding (`balconyBayFacadeCladOuterLocalX`).
+ */
+function pushBalconyBayInteriorSealEw(
+  pushWorld: (
+    lx0: number,
+    lx1: number,
+    ly0: number,
+    ly1: number,
+    lz0: number,
+    lz1: number,
+  ) => void,
+  bayFrame: ResidentialBalconyBayFrame,
+  wt: number,
+  yLo: number,
+  yHi: number,
+  zA: number,
+  zB: number,
+): void {
+  const sealYLo = yLo - WINDOW_IMPENETRABLE_Y_PAD_M;
+  const sealYHi = yHi + WINDOW_IMPENETRABLE_Y_PAD_M;
+  const cladOuter = balconyBayFacadeCladOuterLocalX(bayFrame);
+  if (bayFrame.exteriorFace === "e") {
+    const inner = bayFrame.x1 - wt;
+    pushWorld(
+      inner - WINDOW_IMPENETRABLE_INWARD_M,
+      cladOuter + WINDOW_IMPENETRABLE_OUTWARD_M,
+      sealYLo,
+      sealYHi,
+      zA,
+      zB,
+    );
+  } else {
+    const inner = bayFrame.x0 + wt;
+    pushWorld(
+      cladOuter - WINDOW_IMPENETRABLE_OUTWARD_M,
+      inner + WINDOW_IMPENETRABLE_INWARD_M,
+      sealYLo,
+      sealYHi,
+      zA,
+      zB,
+    );
+  }
+}
 
 type UnitWindowAnalyticKind = "interiorSeal" | "exteriorSill";
 
@@ -297,63 +346,37 @@ function appendUnitExteriorWindowAnalyticSolids(
         });
         const bayHolesEw = bayPlan.holesEw;
 
-        if (bayFrame.exteriorFace === "e") {
-          const inner = bayFrame.x1 - wt;
-          for (const h of bayHolesEw) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
-            const zA = Math.min(h.z0, h.z1) - tang;
-            const zB = Math.max(h.z0, h.z1) + tang;
-            const yA = Math.min(h.y0, h.y1);
-            const yB = Math.max(h.y0, h.y1);
-            if (zB - zA < 0.05 || yB - yA < 0.05) continue;
-            if (kind === "interiorSeal") {
-              pushWorld(
-                inner - WINDOW_IMPENETRABLE_INWARD_M,
-                bayFrame.x1 + WINDOW_IMPENETRABLE_OUTWARD_M,
-                yA - WINDOW_IMPENETRABLE_Y_PAD_M,
-                yB + WINDOW_IMPENETRABLE_Y_PAD_M,
-                zA,
-                zB,
-              );
-            } else {
-              pushWorld(
-                bayFrame.x1,
-                bayFrame.x1 + sillDepth,
-                yA - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yA + sillTopLip,
-                zA,
-                zB,
-              );
-            }
-          }
-        } else {
-          const inner = bayFrame.x0 + wt;
-          for (const h of bayHolesEw) {
-            const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
-            const zA = Math.min(h.z0, h.z1) - tang;
-            const zB = Math.max(h.z0, h.z1) + tang;
-            const yA = Math.min(h.y0, h.y1);
-            const yB = Math.max(h.y0, h.y1);
-            if (zB - zA < 0.05 || yB - yA < 0.05) continue;
-            if (kind === "interiorSeal") {
-              pushWorld(
-                bayFrame.x0 - WINDOW_IMPENETRABLE_OUTWARD_M,
-                inner + WINDOW_IMPENETRABLE_INWARD_M,
-                yA - WINDOW_IMPENETRABLE_Y_PAD_M,
-                yB + WINDOW_IMPENETRABLE_Y_PAD_M,
-                zA,
-                zB,
-              );
-            } else {
-              pushWorld(
-                bayFrame.x0 - sillDepth,
-                bayFrame.x0,
-                yA - WINDOW_SILL_LEDGE_THICKNESS_M,
-                yA + sillTopLip,
-                zA,
-                zB,
-              );
-            }
+        for (const h of bayHolesEw) {
+          const tang = kind === "exteriorSill" ? sillTangPad : WINDOW_IMPENETRABLE_TANG_PAD_M;
+          const zA = Math.min(h.z0, h.z1) - tang;
+          const zB = Math.max(h.z0, h.z1) + tang;
+          const yA = Math.min(h.y0, h.y1);
+          const yB = Math.max(h.y0, h.y1);
+          if (zB - zA < 0.05 || yB - yA < 0.05) continue;
+          if (kind === "interiorSeal") {
+            pushBalconyBayInteriorSealEw(pushWorld, bayFrame, wt, yLo, yHi, zA, zB);
+          } else if (sillWalk) {
+            // Bay sill walk ledges sit at window-bottom height and invite stepping off into the
+            // opening; keep collision sills only (main floor walk covers the bay slab).
+            continue;
+          } else if (bayFrame.exteriorFace === "e") {
+            pushWorld(
+              bayFrame.x1,
+              bayFrame.x1 + sillDepth,
+              yA - WINDOW_SILL_LEDGE_THICKNESS_M,
+              yA + sillTopLip,
+              zA,
+              zB,
+            );
+          } else {
+            pushWorld(
+              bayFrame.x0 - sillDepth,
+              bayFrame.x0,
+              yA - WINDOW_SILL_LEDGE_THICKNESS_M,
+              yA + sillTopLip,
+              zA,
+              zB,
+            );
           }
         }
       }

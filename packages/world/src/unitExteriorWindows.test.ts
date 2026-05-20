@@ -12,6 +12,11 @@ import {
   buildUnitExteriorWindowSealBlockersForBuilding,
   buildUnitExteriorWindowSillLedgeAABBsForBuilding,
 } from "./unitExteriorWindowBlockers.js";
+import {
+  balconyBayFacadeCladOuterLocalX,
+  residentialBalconyBayFrame,
+} from "./residentialUnitBalconyShell.js";
+import { UNIT_SHELL_WALL_THICKNESS_M } from "./unitExteriorWindows.js";
 
 describe("planUnitExteriorWindowsForFace", () => {
   const base = {
@@ -239,5 +244,90 @@ describe("buildFloorMeshes unit exterior windows", () => {
     const maxDxCollision = Math.max(...sills.map((b) => b.max[0] - b.min[0]));
     const maxDxWalk = Math.max(...sillsWalk.map((b) => b.max[0] - b.min[0]));
     expect(maxDxWalk).toBeGreaterThan(maxDxCollision + 0.2);
+  });
+
+  it("balcony bay window seals span shell height, include cladding, and omit walk sills", () => {
+    const spacing = 60 / 19;
+    const building = parseBuildingDoc({
+      id: "b",
+      version: 1,
+      worldOrigin: [0, 0, 0],
+      floorRefs: [{ levelIndex: 20, floorDocId: "win_test_floor" }],
+    });
+    const floor: FloorDoc = {
+      id: "win_test_floor",
+      version: 1,
+      objects: [
+        {
+          id: "unit_e_003",
+          prefabId: "apartment_unit_small_a",
+          position: [6.425, 1.605, -76.2],
+          scale: [9, 3.05, 7.1],
+        },
+      ],
+    };
+    const sx = 9;
+    const sy = 3.05;
+    const wt = UNIT_SHELL_WALL_THICKNESS_M;
+    const vh = Math.max(sy - 2 * wt, 0.05);
+    const yLo = -vh * 0.5;
+    const yHi = vh * 0.5;
+    const px = 6.425;
+    const py = 1.605;
+    const pz = -76.2;
+    const plateY = (20 - 1) * spacing;
+    const baseWy = plateY + py;
+
+    const bayFrame = residentialBalconyBayFrame("unit_e_003", sx, 7.1)!;
+    const cladOuterWorldX = px + balconyBayFacadeCladOuterLocalX(bayFrame);
+
+    const seals = buildUnitExteriorWindowSealBlockersForBuilding(
+      building,
+      () => floor,
+      spacing,
+    );
+    const baySeals = seals.filter(
+      (b) =>
+        b.max[0] >= cladOuterWorldX - 0.05 &&
+        b.min[0] <= px + bayFrame.x1 + 0.05 &&
+        b.min[2] <= pz + 1 &&
+        b.max[2] >= pz - 1,
+    );
+    expect(baySeals.length).toBeGreaterThan(0);
+
+    const tall = baySeals.filter((b) => b.max[1] - b.min[1] > 2.4);
+    expect(tall.length).toBe(baySeals.length);
+
+    for (const s of baySeals) {
+      expect(s.min[1]).toBeLessThanOrEqual(baseWy + yLo + 0.11);
+      expect(s.max[1]).toBeGreaterThanOrEqual(baseWy + yHi - 0.11);
+      expect(s.max[0]).toBeGreaterThanOrEqual(cladOuterWorldX + 0.2);
+    }
+
+    const sillsWalk = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+      building,
+      () => floor,
+      spacing,
+      { sillLedgeForWalkSurfaces: true },
+    );
+    const bayOuterWorldX = px + bayFrame.x1;
+    const bayWalkSills = sillsWalk.filter(
+      (b) => b.min[0] >= bayOuterWorldX - 0.05 && b.max[0] <= bayOuterWorldX + 2,
+    );
+    expect(bayWalkSills.length).toBe(0);
+
+    const sillsCollision = buildUnitExteriorWindowSillLedgeAABBsForBuilding(
+      building,
+      () => floor,
+      spacing,
+    );
+    const bayCollisionSills = sillsCollision.filter(
+      (b) => b.min[0] >= bayOuterWorldX - 0.05 && b.max[0] <= bayOuterWorldX + 1,
+    );
+    expect(bayCollisionSills.length).toBeGreaterThan(0);
+
+    const partitionWorldX = px + sx * 0.5;
+    expect(baySeals.every((s) => s.min[0] > partitionWorldX + 0.4)).toBe(true);
+    expect(baySeals.some((s) => s.min[0] < px + bayFrame.x1)).toBe(true);
   });
 });

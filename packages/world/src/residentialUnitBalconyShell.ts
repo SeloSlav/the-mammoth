@@ -25,6 +25,19 @@ export const SHELL_WT_M = HOLLOW_SHELL_WT_M;
 
 const BALCONY_BAY_ID_SUFFIX = "__balcony_bay";
 
+/** Matches `addResidentialBalconyBayShell` exterior cladding offset (m). */
+export const BALCONY_BAY_FACADE_CLAD_THICKNESS_M = 0.035;
+export const BALCONY_BAY_FACADE_CLAD_BIAS_M = 0.05;
+
+/** Outermost cladding plane in room-local X — sync with analytic window seals. */
+export function balconyBayFacadeCladOuterLocalX(frame: ResidentialBalconyBayFrame): number {
+  const halfClad = BALCONY_BAY_FACADE_CLAD_THICKNESS_M * 0.5;
+  if (frame.exteriorFace === "e") {
+    return frame.x1 + halfClad + BALCONY_BAY_FACADE_CLAD_BIAS_M;
+  }
+  return frame.x0 - halfClad - BALCONY_BAY_FACADE_CLAD_BIAS_M;
+}
+
 export type ResidentialBalconyBayFrame = {
   baySx: number;
   exteriorFace: CardinalFace;
@@ -237,12 +250,8 @@ export function addResidentialBalconyBayShell(
     tagBalconyMesh(facadeMesh, unitId);
   }
 
-  const cladT = 0.035;
-  const cladBias = 0.05;
-  const xClad =
-    frame.exteriorFace === "e"
-      ? frame.x1 + cladT * 0.5 + cladBias
-      : frame.x0 - cladT * 0.5 - cladBias;
+  const cladT = BALCONY_BAY_FACADE_CLAD_THICKNESS_M;
+  const xClad = balconyBayFacadeCladOuterLocalX(frame);
   addWallConstantXWithHoles(
     unitGroup,
     exteriorWallM,
