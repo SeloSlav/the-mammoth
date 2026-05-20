@@ -3,8 +3,8 @@
  * - authoritative replica rows (`add_apartment_unit_decor`)
  * - local content authoring fallback (`content/apartment/owned_apartment_builtins.json`)
  *
- * Live replica rows win for a unit when present; otherwise the saved content layout is projected into
- * the viewer-owned claimed unit, matching the standalone editor flow.
+ * Replica rows render first; authored `placedItems` from disk are merged in when they are not already
+ * covered by a nearby DB row (so JSON-only props like a water tank still appear after claim).
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -23,7 +23,8 @@ import {
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
   type OwnedApartmentWallOpening,
-  apartmentPlacedItemKindFromDecorItemKind,
+  effectiveOwnedApartmentPlacedKind,
+  ownedApartmentDecorRootScaleXYZ,
   ownedApartmentPlacedItemKindHasStash,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
   apartmentSittableSpecForPlacedItem,
@@ -168,6 +169,7 @@ type VisibleDecorPlacement = {
   pitchRad: number;
   rollRad: number;
   uniformScale: number;
+  verticalScaleMul: number;
   source: "db" | "content";
 };
 
@@ -182,6 +184,24 @@ function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
     child.position.sub(_decorCenterLocalScratch);
   }
   root.updateMatrixWorld(true);
+}
+
+/** Skip merging a content placement when a DB row already sits on the same prop (XZ). */
+const CONTENT_DB_DECOR_DEDUPE_XZ_M = 0.4;
+
+function contentDecorCoveredByDbRow(
+  content: { modelRelPath: string; x: number; z: number },
+  dbRows: ApartmentUnitDecor[],
+): boolean {
+  for (const row of dbRows) {
+    if (row.modelRelPath !== content.modelRelPath) continue;
+    const dx = row.posX - content.x;
+    const dz = row.posZ - content.z;
+    if (dx * dx + dz * dz <= CONTENT_DB_DECOR_DEDUPE_XZ_M * CONTENT_DB_DECOR_DEDUPE_XZ_M) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function visibleDecorPlacements(
@@ -211,30 +231,31 @@ function visibleDecorPlacements(
 
   const out: VisibleDecorPlacement[] = [];
   for (const unit of visibleUnits) {
-    const dbRows = dbRowsByUnitKey.get(unit.unitKey);
-    if (dbRows && dbRows.length > 0) {
-      dbRows.sort((a, b) => Number(a.decorId - b.decorId));
-      for (const decor of dbRows) {
-        out.push({
-          renderKey: `db:${decor.decorId.toString()}`,
-          decorId: decor.decorId,
-          unit,
-          modelRelPath: decor.modelRelPath,
-          placedKind: apartmentPlacedItemKindFromDecorItemKind(decor.itemKind),
-          posX: decor.posX,
-          posY: decor.posY,
-          posZ: decor.posZ,
-          yawRad: decor.yawRad,
-          pitchRad: decor.pitchRad,
-          rollRad: decor.rollRad,
-          uniformScale: decor.uniformScale,
-          source: "db",
-        });
-      }
-      continue;
+    const dbRows = [...(dbRowsByUnitKey.get(unit.unitKey) ?? [])].sort((a, b) =>
+      Number(a.decorId - b.decorId),
+    );
+
+    for (const decor of dbRows) {
+      out.push({
+        renderKey: `db:${decor.decorId.toString()}`,
+        decorId: decor.decorId,
+        unit,
+        modelRelPath: decor.modelRelPath,
+        placedKind: effectiveOwnedApartmentPlacedKind(decor.itemKind, decor.modelRelPath),
+        posX: decor.posX,
+        posY: decor.posY,
+        posZ: decor.posZ,
+        yawRad: decor.yawRad,
+        pitchRad: decor.pitchRad,
+        rollRad: decor.rollRad,
+        uniformScale: decor.uniformScale,
+        verticalScaleMul: 1,
+        source: "db",
+      });
     }
 
     for (const decor of resolveApartmentDecorPoses(unit, builtinsFromContent)) {
+      if (contentDecorCoveredByDbRow(decor, dbRows)) continue;
       out.push({
         renderKey: `content:${unit.unitKey}:${decor.id}`,
         decorId: null,
@@ -248,6 +269,7 @@ function visibleDecorPlacements(
         pitchRad: decor.pitch,
         rollRad: decor.roll,
         uniformScale: decor.uniformScale,
+        verticalScaleMul: decor.verticalScaleMul,
         source: "content",
       });
     }
@@ -794,7 +816,10 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.rotation.x = d.pitchRad;
       g.rotation.z = d.rollRad;
       const us = Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1;
-      g.scale.setScalar(us);
+      const yMul =
+        Number.isFinite(d.verticalScaleMul) && d.verticalScaleMul > 0 ? d.verticalScaleMul : 1;
+      const s = ownedApartmentDecorRootScaleXYZ(us, yMul);
+      g.scale.set(s.x, s.y, s.z);
 
       const vis = template!.clone(true);
       vis.userData.mammothApartmentDecorProp = true;
@@ -817,7 +842,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.updateMatrixWorld(true);
 
       g.add(vis);
-      if (d.source === "content") {
+      if (d.source === "content" && !ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         centerVisualBoundsOnRoot(g);
       }
       await mergeGroupDescendantsByMaterialYielding(g, yieldToMain);

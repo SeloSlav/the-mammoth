@@ -4,7 +4,7 @@
  */
 import type { ApartmentUnit } from "../../module_bindings/types";
 import {
-  APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   type ApartmentStashKind,
@@ -60,6 +60,7 @@ export type ApartmentDecorPose = {
   pitch: number;
   roll: number;
   uniformScale: number;
+  verticalScaleMul: number;
 };
 
 /**
@@ -88,10 +89,15 @@ export function resolveApartmentDecorPoses(
     pitch: item.pitchRad,
     roll: item.rollRad ?? 0,
     uniformScale: item.uniformScale,
+    verticalScaleMul: item.verticalScaleMul ?? 1,
   }));
 }
 
-/** World XZ anchor for stash proximity — authored decor poses, else replicated `ApartmentUnit` seeds. */
+/**
+ * World XZ anchor for stash proximity.
+ * - **Fridge / water tank**: `owned_apartment_builtins.json` `placedItems` (no unit columns).
+ * - **Wardrobe / stove / footlocker**: same JSON when present, else replicated `ApartmentUnit` seeds.
+ */
 export function resolveApartmentStashAnchorXZ(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
@@ -106,8 +112,8 @@ export function resolveApartmentStashAnchorXZ(
       return { x: u.wardrobeX, z: u.wardrobeZ };
     case APARTMENT_STASH_KIND_STOVE:
       return { x: u.stoveX, z: u.stoveZ };
-    case APARTMENT_STASH_KIND_FRIDGE:
-      return { x: u.stoveX, z: u.stoveZ };
+    case APARTMENT_STASH_KIND_FOOTLOCKER:
+      return { x: u.footX, z: u.footZ };
     default:
       return { x: u.footX, z: u.footZ };
   }

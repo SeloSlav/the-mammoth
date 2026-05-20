@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   finalizeOwnedApartmentBuiltinsDoc,
+  ownedApartmentBuiltinsDoc,
+  type OwnedApartmentBuiltinsDoc,
 } from "@the-mammoth/schemas";
 import {
   editorMyApartmentSelectedIdForDecor,
@@ -19,7 +20,7 @@ describe("deleteMyApartmentLayoutPlacementsInDoc", () => {
   const modelRelPath = "static/models/objects/obj.glb" as const;
 
   function sampleDoc(): OwnedApartmentBuiltinsDoc {
-    return {
+    return ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
@@ -87,7 +88,7 @@ describe("deleteMyApartmentLayoutPlacementsInDoc", () => {
           ],
         },
       ],
-    };
+    });
   }
 
   it("removes mixed placement selections", () => {

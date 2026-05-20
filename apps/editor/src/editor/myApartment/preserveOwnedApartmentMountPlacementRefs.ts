@@ -24,6 +24,7 @@ function placedItemsEqual(
       left.pitchRad !== right.pitchRad ||
       left.rollRad !== right.rollRad ||
       left.uniformScale !== right.uniformScale ||
+      (left.verticalScaleMul ?? 1) !== (right.verticalScaleMul ?? 1) ||
       left.ignoreSupportSurfaces !== right.ignoreSupportSurfaces ||
       left.itemKind !== right.itemKind
     ) {

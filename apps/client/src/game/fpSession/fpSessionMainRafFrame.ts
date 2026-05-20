@@ -39,6 +39,7 @@ import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
+import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
 import {
@@ -822,11 +823,13 @@ export function createFpSessionMainRafFrame(
             ? null
             : cachedApartmentDoorHud;
       if (aSys?.kind === "apartment_stash") {
+        const activeStash = getFpActiveStashPanel();
         setFpPickupPrompt({
           kind: "apartment_stash",
           stashKey: aSys.stashKey,
           unitKey: aSys.unitKey,
           stashLabel: aSys.stashLabel,
+          willClose: activeStash?.stashKey === aSys.stashKey,
         });
       } else if (sitPromptHud) {
         setFpPickupPrompt({

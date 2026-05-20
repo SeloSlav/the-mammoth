@@ -21,6 +21,10 @@ import {
   type ApartmentLayoutBuiltinPiece,
 } from "./fpApartmentLayoutPieces";
 import {
+  apartmentUnitDecorItemKindFromString,
+  ownedApartmentPlacedItemKindFromModelRelPath,
+} from "@the-mammoth/schemas";
+import {
   apartmentDecorCatalogLabel,
   fetchApartmentDecorCatalog,
   normalizeApartmentDecorModelRelPath,
@@ -512,6 +516,7 @@ export function mountFpApartmentLayoutAuthoring(
     opts.getFeetWorld(fp);
     pendingSpawnModelRelPath = path;
     catalogStatus.textContent = `Importing ${apartmentDecorCatalogLabel(path)}...`;
+    const placedKind = ownedApartmentPlacedItemKindFromModelRelPath(path);
     try {
       void opts.conn.reducers.addApartmentUnitDecor({
         unitKey: unit.unitKey,
@@ -523,7 +528,7 @@ export function mountFpApartmentLayoutAuthoring(
         pitchRad: 0,
         rollRad: 0,
         uniformScale: 1,
-        itemKind: 0,
+        itemKind: apartmentUnitDecorItemKindFromString(placedKind),
       });
     } catch (e) {
       console.warn("[apartment_layout] addApartmentUnitDecor failed", e);

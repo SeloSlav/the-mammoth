@@ -317,6 +317,7 @@ export function EditorChromeMyApartment(props: {
           pitchRad: 0,
           rollRad: 0,
           uniformScale: 1,
+          verticalScaleMul: 1,
           ignoreSupportSurfaces: false,
           itemKind: ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath),
         },

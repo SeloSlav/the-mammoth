@@ -49,6 +49,10 @@ import {
 } from "./editorMyApartmentWallSnap.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
+  applyMyApartmentDecorRootScaleFromDoc,
+  applyMyApartmentDecorUniformScale,
+} from "./editorMyApartmentDecorScale.js";
+import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForMirror,
   editorMyApartmentSelectedIdForWall,
@@ -289,22 +293,14 @@ export function clampOwnedApartmentBuiltinUniformScale(s: number): number {
   );
 }
 
-/** Clamps imported decor uniform scale (`OwnedApartmentDecorItemSchema`). */
-export function clampOwnedApartmentDecorUniformScale(s: number): number {
-  return THREE.MathUtils.clamp(
-    s,
-    OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
-    EDITOR_MY_APARTMENT_UNIFORM_SCALE_MAX,
-  );
-}
-
-/** Uniform scale only — keeps drag/commit paths from non-uniform drift without rewriting rotation. */
-export function applyMyApartmentDecorUniformScale(root: THREE.Object3D): void {
-  const uniform = clampOwnedApartmentDecorUniformScale(
-    (root.scale.x + root.scale.y + root.scale.z) / 3,
-  );
-  root.scale.setScalar(uniform);
-}
+export {
+  applyMyApartmentDecorRootScaleFromDoc,
+  applyMyApartmentDecorUniformScale,
+  clampOwnedApartmentDecorUniformScale,
+  constrainMyApartmentDecorScaleFromGizmo,
+  readMyApartmentDecorCommittedScale,
+  type MyApartmentDecorScaleGesturePin,
+} from "./editorMyApartmentDecorScale.js";
 
 /** Hard limits only — no quantization (grid snap applies separately when enabled). */
 export function clampMyApartmentDecorEulerLimits(root: THREE.Object3D): void {
@@ -1065,12 +1061,15 @@ function placeDecorGroup(args: {
     OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
   );
   group.rotation.set(pitch, yaw, roll, "YXZ");
-  group.scale.setScalar(decor.uniformScale);
+  applyMyApartmentDecorRootScaleFromDoc(
+    group,
+    decor.uniformScale,
+    decor.verticalScaleMul ?? 1,
+  );
   const vis = cloneProp(template, decor.modelRelPath);
   vis.scale.setScalar(editorAuthoringVisScaleForPlacedItemKind(decor.itemKind));
   group.add(vis);
   centerDecorVisualBoundsOnRoot(group);
-  applyMyApartmentDecorUniformScale(group);
   clampMyApartmentDecorEulerLimits(group);
 
   if (apartmentDecorContactShadowEligible(decor.modelRelPath)) {

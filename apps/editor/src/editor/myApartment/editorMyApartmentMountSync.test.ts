@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
+import {
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ownedApartmentBuiltinsDoc,
+} from "@the-mammoth/schemas";
 import type { EditorState } from "../../state/editorStoreTypes.js";
 import { DEFAULT_BUILDING } from "../../state/editorStoreSeedValues.js";
 import {
@@ -56,7 +59,7 @@ describe("apartmentMountSyncInputsChanged", () => {
     const prev = captureApartmentMountSyncInputs(baseEditorState());
     const next = captureApartmentMountSyncInputs(
       baseEditorState({
-        ownedApartmentBuiltins: {
+        ownedApartmentBuiltins: ownedApartmentBuiltinsDoc({
           ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
           placedItems: [
             ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
@@ -74,7 +77,7 @@ describe("apartmentMountSyncInputsChanged", () => {
               itemKind: "plain",
             },
           ],
-        },
+        }),
       }),
     );
     expect(apartmentMountSyncInputsChanged(prev, next)).toBe(true);

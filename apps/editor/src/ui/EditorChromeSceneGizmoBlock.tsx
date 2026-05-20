@@ -64,7 +64,8 @@ export function EditorChromeSceneGizmoBlock(props: {
           placement. With align on, set <strong>Grid snap</strong> to your spacing gap, or leave grid snap off
           to match gaps already in the layout. Rotate: décor uses <strong>X / Y / Z</strong> rings; slabs use{" "}
           <strong>Y</strong> (yaw) and <strong>X</strong> (pitch). Optional angle snap matches{" "}
-          <strong>Grid snap</strong> when set. Uniform scale from the gizmo center handle.
+          <strong>Grid snap</strong> when set. Side scale handles stretch on one axis (green = taller);
+          center handle = uniform scale.
         </p>
       ) : myApartmentLayoutHints === "builtins" ? (
         <p

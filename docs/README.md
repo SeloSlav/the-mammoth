@@ -11,6 +11,7 @@
 | [architecture/fp-prediction-view-smoothing.md](architecture/fp-prediction-view-smoothing.md) | Why FP motion can feel “hitchy” under 20 Hz reconcile; what helped (display + view ease vs physics sub-steps) |
 | [architecture/elevator-runtime-sync.md](architecture/elevator-runtime-sync.md) | Elevator authority, SpaceTimeDB reducers/tables, client replica timing, and why moving rides no longer hitch |
 | [architecture/fp-building-mesh-visibility.md](architecture/fp-building-mesh-visibility.md) | FP floor-plate band + inset full stack; tagged interiors only within expanded XZ “near” margin |
+| [architecture/fp-apartment-interior-performance.md](architecture/fp-apartment-interior-performance.md) | Locked FP perf baseline: spin hitch vs furnished wall; prop visibility budget; capture interpretation |
 | [content-building.md](content-building.md) | After floor/building JSON edits: run `pnpm content:gen-walk-aabbs` so server walk collision stays in sync |
 | [apps/client/README.md](../apps/client/README.md) | Vite dev, optional second port, multiplayer (two browsers / tabs) |
 

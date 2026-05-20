@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
+import {
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ownedApartmentBuiltinsDoc,
+} from "@the-mammoth/schemas";
 import {
   listMissingEditorDecorTemplatePaths,
   type EditorMyApartmentDecorTemplateMap,
@@ -9,7 +12,7 @@ describe("listMissingEditorDecorTemplatePaths", () => {
   it("returns paths that are placed but not yet loaded into the template map", () => {
     const templates: EditorMyApartmentDecorTemplateMap = new Map();
     templates.set("static/models/objects/bed.glb", {} as never);
-    const doc = {
+    const doc = ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         {
@@ -26,7 +29,7 @@ describe("listMissingEditorDecorTemplatePaths", () => {
           itemKind: "plain" as const,
         },
       ],
-    };
+    });
     const missing = listMissingEditorDecorTemplatePaths(doc, templates);
     expect(missing).toEqual(["static/models/objects/desk.glb"]);
   });

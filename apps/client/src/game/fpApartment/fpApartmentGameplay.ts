@@ -11,7 +11,9 @@ import {
   APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE,
   APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE,
   APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK,
+  effectiveOwnedApartmentPlacedKind,
 } from "@the-mammoth/schemas";
+import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
@@ -358,6 +360,15 @@ function decorItemKindToClientStashKind(itemKind: number): ApartmentStashKind | 
   }
 }
 
+/** Stash interact kind for a décor replica row (uses model path when `item_kind` is stale). */
+export function apartmentDecorRowClientStashKind(decor: {
+  itemKind: number;
+  modelRelPath: string;
+}): ApartmentStashKind | null {
+  const placed = effectiveOwnedApartmentPlacedKind(decor.itemKind, decor.modelRelPath);
+  return apartmentStashKindForPlacedKind(placed);
+}
+
 function unitHasDecorStashKind(
   conn: DbConnection,
   unitKey: string,
@@ -365,7 +376,7 @@ function unitHasDecorStashKind(
 ): boolean {
   for (const row of conn.db.apartment_unit_decor) {
     if (row.unitKey !== unitKey) continue;
-    if (decorItemKindToClientStashKind(row.itemKind) === kind) return true;
+    if (apartmentDecorRowClientStashKind(row) === kind) return true;
   }
   return false;
 }
@@ -404,7 +415,7 @@ export function clientMayUseApartmentStash(
       }
     }
     if (!decor) return false;
-    const sk = decorItemKindToClientStashKind(decor.itemKind);
+    const sk = apartmentDecorRowClientStashKind(decor);
     if (!sk) return false;
     for (const row of conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
@@ -629,7 +640,7 @@ function nearestOwnedClaimedApartmentStash(
 
     for (const drow of conn.db.apartment_unit_decor) {
       if (drow.unitKey !== u.unitKey) continue;
-      const sk = decorItemKindToClientStashKind(drow.itemKind);
+      const sk = apartmentDecorRowClientStashKind(drow);
       if (!sk) continue;
       if (!nearPointStashCylinder(u, drow.posX, drow.posZ, sk, x, y, z)) continue;
       const dx = x - drow.posX;
@@ -659,6 +670,7 @@ function nearestOwnedClaimedApartmentStash(
     tryLegacy(APARTMENT_STASH_KIND_WARDROBE);
     tryLegacy(APARTMENT_STASH_KIND_STOVE);
     tryLegacy(APARTMENT_STASH_KIND_FRIDGE);
+    tryLegacy(APARTMENT_STASH_KIND_WATER_TANK);
   }
   return best;
 }
@@ -718,7 +730,7 @@ export function getApartmentSystemPrompt(
           break;
         }
       }
-      const sk = decorRow ? decorItemKindToClientStashKind(decorRow.itemKind) : null;
+      const sk = decorRow ? apartmentDecorRowClientStashKind(decorRow) : null;
       if (!sk) return null;
       return {
         kind: "apartment_stash",

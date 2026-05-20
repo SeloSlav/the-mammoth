@@ -40,6 +40,12 @@ Tests: `apps/client/src/game/fpBuildingFloorPlateVisibilityBand.test.ts`.
 
 ---
 
-## Performance reference (informal)
+## Performance reference
 
-Commit **`75e72a2cbbe10bbedc340060b57f52d4c0a5e9b9`** (*Refactor apartment render isolation and remove furniture references*, 2026-05-19) is the best first-person FPS we've seen on the current client build so far. Keep it as a regression comparison point when touching apartment visibility, decor, or render-isolation—not a guaranteed floor on every machine.
+| Document | What it covers |
+|----------|----------------|
+| **[fp-apartment-interior-performance.md](fp-apartment-interior-performance.md)** | **Locked baseline (2026-05-20):** why spin hitched, why the furnished wall is fine, capture evidence, regression checklist |
+
+Commit **`75e72a2c`** (*Refactor apartment render isolation and remove furniture references*, 2026-05-19) remains a useful comparison point for render-isolation changes.
+
+Commit **`621829ce`** (*add collision to interior apartment walls, and some other FPS fixes*, 2026-05-20) is the **hitch-while-turning fix** baseline: in-unit decor forward cone, hysteresis, and per-frame show budget (`fpApartmentInteriorPropVisibility.ts`). Do not regress without re-measuring spin + static wall holds in a dense unit (e.g. `unit_e_003`).

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
-import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
+import {
+  DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ownedApartmentBuiltinsDoc,
+  type OwnedApartmentBuiltinsDoc,
+} from "@the-mammoth/schemas";
 import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForSavedObjectGroup,
@@ -12,7 +15,7 @@ describe("cloneMyApartmentLayoutSelectionInDoc", () => {
   const modelRelPath = "static/models/objects/obj.glb" as const;
 
   function baseDoc(): OwnedApartmentBuiltinsDoc {
-    return {
+    return ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         {
@@ -43,7 +46,7 @@ describe("cloneMyApartmentLayoutSelectionInDoc", () => {
           material: { useMetalnessMap: true, useHeightMap: false },
         },
       ],
-    };
+    });
   }
 
   it("clones a single décor placement and selects the copy", () => {

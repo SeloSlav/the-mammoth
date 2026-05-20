@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   OWNED_APARTMENT_MODEL_FRIDGE,
+  ownedApartmentBuiltinsDoc,
   ownedApartmentPlacedItemKindHasStash,
 } from "@the-mammoth/schemas";
 import { replaceMyApartmentPlacedDecorModelInDoc } from "./replaceMyApartmentPlacedDecorModel.js";
@@ -11,7 +12,7 @@ describe("replaceMyApartmentPlacedDecorModelInDoc", () => {
   const modelB = "static/models/objects/water-tank.glb" as const;
 
   it("keeps pose and scale, updates model and inferred itemKind", () => {
-    const doc = {
+    const doc = ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         {
@@ -28,7 +29,7 @@ describe("replaceMyApartmentPlacedDecorModelInDoc", () => {
           itemKind: "plain" as const,
         },
       ],
-    };
+    });
 
     const out = replaceMyApartmentPlacedDecorModelInDoc(doc, "decor-1", modelB);
     expect(out).not.toBeNull();
@@ -42,6 +43,7 @@ describe("replaceMyApartmentPlacedDecorModelInDoc", () => {
       pitchRad: 0.15,
       rollRad: -0.05,
       uniformScale: 0.88,
+      verticalScaleMul: 1,
       ignoreSupportSurfaces: true,
       itemKind: "water_tank",
     });
@@ -55,7 +57,7 @@ describe("replaceMyApartmentPlacedDecorModelInDoc", () => {
 
   it("replaces gameplay role — fridge becomes plain décor when swapped to drying rack", () => {
     const dryingRack = "static/models/objects/drying-rack.glb" as const;
-    const doc = {
+    const doc = ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         {
@@ -72,7 +74,7 @@ describe("replaceMyApartmentPlacedDecorModelInDoc", () => {
           itemKind: "fridge" as const,
         },
       ],
-    };
+    });
     expect(ownedApartmentPlacedItemKindHasStash("fridge")).toBe(true);
 
     const out = replaceMyApartmentPlacedDecorModelInDoc(doc, "fridge-1", dryingRack);

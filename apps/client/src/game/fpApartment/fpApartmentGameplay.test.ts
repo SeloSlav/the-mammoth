@@ -5,7 +5,10 @@ vi.mock("../../featureFlags", async (importOriginal) => ({
   APARTMENT_CLAIM_UI_ENABLED: true,
 }));
 
-import { apartmentSittableSpecFromModelPath } from "@the-mammoth/schemas";
+import {
+  apartmentSittableSpecFromModelPath,
+  OwnedApartmentBuiltinsDocSchema,
+} from "@the-mammoth/schemas";
 import {
   apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
@@ -28,6 +31,7 @@ import {
   apartmentStashKeyDecor,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
 } from "./fpApartmentStashKey";
@@ -511,6 +515,97 @@ describe("fpApartmentGameplay", () => {
       unitKey: unit.unitKey,
       stashKind: APARTMENT_STASH_KIND_FRIDGE,
       stashLabel: "fridge",
+    });
+  });
+
+  it("offers water tank stash from builtins json like fridge when no decor row exists", async () => {
+    const builtinsMod = await import("./fpOwnedApartmentBuiltinsFromContent.js");
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const doc = OwnedApartmentBuiltinsDocSchema.parse({
+      version: 2,
+      previewSizeM: 10,
+      placedItems: [
+        {
+          id: "test_water_tank",
+          modelRelPath: "static/models/objects/water-tank.glb",
+          fx: 0.3,
+          fz: 0.4,
+          dy: 0,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          uniformScale: 1,
+          ignoreSupportSurfaces: false,
+          itemKind: "water_tank",
+        },
+      ],
+      wallItems: [],
+      mirrorItems: [],
+      objectGroups: [],
+    });
+    const anchor = builtinsMod.resolveApartmentDecorPoses(unit, doc).find(
+      (p) => p.itemKind === "water_tank",
+    )!;
+    vi.spyOn(builtinsMod, "peekOwnedApartmentBuiltinsDoc").mockReturnValue(doc);
+    const conn = mockConn([unit]);
+    const pose = { x: anchor.x + 0.05, y: 10, z: anchor.z + 0.05 };
+    expect(getApartmentSystemPrompt(conn, pose)).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKey(unit.unitKey, APARTMENT_STASH_KIND_WATER_TANK),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_WATER_TANK,
+      stashLabel: "water tank",
+    });
+    vi.restoreAllMocks();
+  });
+
+  it("permits stash use for water tank when replica itemKind is stale plain", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const decor = {
+      decorId: 88n,
+      unitKey: unit.unitKey,
+      itemKind: 0,
+      modelRelPath: "static/models/objects/water-tank.glb",
+      posX: 6,
+      posY: 10,
+      posZ: 7,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+    };
+    const conn = mockConn([unit], [], { apartmentUnitDecor: [decor] });
+    const pose = { x: 6.05, y: 10, z: 7.05 };
+    const key = apartmentStashKeyDecor(unit.unitKey, 88n);
+    expect(clientMayUseApartmentStash(conn, testIdentity as never, key, pose)).toBe(true);
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashKey: key,
+      }),
+    ).toEqual({
+      kind: "apartment_stash",
+      stashKey: key,
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_WATER_TANK,
+      stashLabel: "water tank",
     });
   });
 

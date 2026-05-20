@@ -1,5 +1,5 @@
 import {
-  apartmentPlacedItemKindFromDecorItemKind,
+  effectiveOwnedApartmentPlacedKind,
   type OwnedApartmentPlacedItemKind,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
@@ -36,7 +36,7 @@ export function resolveApartmentStashKind(
   for (const row of conn.db.apartment_unit_decor) {
     if (row.unitKey !== full.unitKey || row.decorId !== full.decorId) continue;
     const sk = apartmentStashKindForPlacedKind(
-      apartmentPlacedItemKindFromDecorItemKind(row.itemKind),
+      effectiveOwnedApartmentPlacedKind(row.itemKind, row.modelRelPath),
     );
     return sk ?? APARTMENT_STASH_KIND_FOOTLOCKER;
   }

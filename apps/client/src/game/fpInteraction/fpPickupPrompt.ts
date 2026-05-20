@@ -50,6 +50,8 @@ export type FpPickupPromptApartmentStash = {
   stashKey: string;
   unitKey: string;
   stashLabel: string;
+  /** True when this stash panel is already open (E dismisses). */
+  willClose: boolean;
 };
 
 export type FpPickupPromptApartmentSittable = {
@@ -113,7 +115,7 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
     return a.unitKey === b.unitKey && a.displayLabel === b.displayLabel;
   }
   if (a.kind === "apartment_stash" && b.kind === "apartment_stash") {
-    return a.stashKey === b.stashKey;
+    return a.stashKey === b.stashKey && a.willClose === b.willClose;
   }
   if (a.kind === "apartment_sittable" && b.kind === "apartment_sittable") {
     return a.sittableKey === b.sittableKey;

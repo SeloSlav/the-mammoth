@@ -12,6 +12,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.3018349780093093,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "bed"
     },
@@ -25,6 +26,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.2597163561791922,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "wardrobe"
     },
@@ -38,6 +40,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6213117846513727,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "footlocker"
     },
@@ -51,6 +54,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5459024758546215,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "stove"
     },
@@ -64,6 +68,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.9015343208782767,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -77,6 +82,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.8778936277210995,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -90,19 +96,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.41536348828836117,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
-      "id": "ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
-      "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.33047449156113773,
-      "fz": 0.7917498477337325,
-      "dy": 0.6434121443678603,
-      "yawRad": -2.183542978550241,
-      "pitchRad": 0.06539380943290031,
-      "rollRad": -0.05734685483032575,
-      "uniformScale": 0.6387760114721412,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -116,6 +110,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.34027693535970077,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -129,6 +124,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 2.2334062880249177,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -142,6 +138,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6387760114721411,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -155,6 +152,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5596451438846985,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -168,6 +166,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6515191438158092,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -181,6 +180,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.3922916098188611,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -194,6 +194,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.6105584619117874,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -207,6 +208,7 @@
       "pitchRad": 0.000123475287050455,
       "rollRad": 0.007166856598369753,
       "uniformScale": 1.0875838849973372,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "fridge"
     },
@@ -220,6 +222,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.562436812617749,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -233,6 +236,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.45519422090843403,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -241,11 +245,12 @@
       "modelRelPath": "static/models/objects/kitchen-counter-2.glb",
       "fx": 0.3133540480635914,
       "fz": -0.04708787739056119,
-      "dy": 0.9369381964217917,
+      "dy": 1.1673089748880225,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.2905003590527768,
+      "verticalScaleMul": 1.2458761734189374,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -259,6 +264,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -272,6 +278,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.1253475248350381,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -285,6 +292,7 @@
       "pitchRad": -0.2762890766959262,
       "rollRad": 0.0019896812916448798,
       "uniformScale": 0.19171383484397495,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -298,6 +306,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.21375318679269292,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -311,6 +320,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.08,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -324,6 +334,7 @@
       "pitchRad": -1.3089969389957474,
       "rollRad": 0,
       "uniformScale": 0.08,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -337,6 +348,7 @@
       "pitchRad": -1.0655819805059663,
       "rollRad": 0.19556525462229504,
       "uniformScale": 0.09626611719109424,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -350,6 +362,7 @@
       "pitchRad": -1.0638444896965682,
       "rollRad": 1.3999999999999997,
       "uniformScale": 0.04627148439303097,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -363,6 +376,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.04912865049069664,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -376,6 +390,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.03757038782453294,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -389,6 +404,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.11242224924488126,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -402,6 +418,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5574408386464206,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -415,6 +432,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.2780374390037539,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -423,11 +441,12 @@
       "modelRelPath": "static/models/objects/box-bread.glb",
       "fx": 0.39755439666084985,
       "fz": -0.07648576872971787,
-      "dy": 0.8970342869646889,
+      "dy": 1.083317999962938,
       "yawRad": 3.141592653589793,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.20179741183439223,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -441,6 +460,7 @@
       "pitchRad": 0,
       "rollRad": 7.771561172376096e-16,
       "uniformScale": 0.19097143292300797,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -454,6 +474,7 @@
       "pitchRad": 0,
       "rollRad": 7.771561172376096e-16,
       "uniformScale": 0.19097143292300797,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -467,6 +488,7 @@
       "pitchRad": 0,
       "rollRad": 7.771561172376096e-16,
       "uniformScale": 0.19097143292300797,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -480,6 +502,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.03757038782453294,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -493,6 +516,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.04912865049069664,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -506,6 +530,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.1253475248350381,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -519,6 +544,7 @@
       "pitchRad": 0,
       "rollRad": 7.771561172376096e-16,
       "uniformScale": 0.19097143292300797,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -532,6 +558,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.23638635139427056,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -545,6 +572,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "water_tank"
     },
@@ -558,6 +586,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -571,6 +600,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.46653152927738306,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -584,6 +614,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1.076300752191443,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -597,6 +628,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.6387760114721411,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -610,6 +642,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.32709119452241925,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -623,6 +656,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5068560948252686,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -636,6 +670,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5068560948252686,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -649,6 +684,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.3783331562089969,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -662,6 +698,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.17967842276127186,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -675,6 +712,7 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5068560948252686,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     },
@@ -688,6 +726,21 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5068560948252686,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "528e3750-1fa4-4b11-aa38-bc450fe70bf2",
+      "modelRelPath": "static/models/objects/chair.glb",
+      "fx": 0.3277676247544427,
+      "fz": 0.8291634620784815,
+      "dy": 0.6087747138737949,
+      "yawRad": -2.356194490192346,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.6387760114721411,
+      "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }
@@ -881,7 +934,6 @@
         "mammoth_editor_my_apartment_decor:896c14cc-c36c-479f-b808-e07f48a0315f",
         "mammoth_editor_my_apartment_decor:969b62c8-fc80-4728-ac4e-60801758eba5",
         "mammoth_editor_my_apartment_decor:b1108f66-60ce-436e-99b5-41374572d3ab",
-        "mammoth_editor_my_apartment_decor:ccd5b364-c3b4-4aac-b9e6-5f2c73eb812a",
         "mammoth_editor_my_apartment_decor:d1010fba-61c4-49e7-84b1-18d65a8ad987",
         "mammoth_editor_my_apartment_decor:d8b1c7b3-2e52-4c09-b2f5-91d78813ec8e",
         "mammoth_editor_my_apartment_decor:da2f6e73-9787-461c-b295-48c4cae9db6f",

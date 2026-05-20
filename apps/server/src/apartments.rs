@@ -399,6 +399,37 @@ fn authorize_apartment_decor_row(
     Some((unit, decor))
 }
 
+fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
+    let p = model_rel_path.trim().trim_start_matches('/');
+    if p.ends_with("objects/water-tank.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_WATER_TANK;
+    }
+    if p.ends_with("objects/fridge.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_FRIDGE;
+    }
+    if p.ends_with("objects/stove.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_STOVE;
+    }
+    if p.ends_with("objects/footlocker.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER;
+    }
+    if p.ends_with("objects/wardrobe-closet.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_WARDROBE;
+    }
+    if p.ends_with("objects/bed.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_BED;
+    }
+    APARTMENT_DECOR_ITEM_KIND_PLAIN
+}
+
+/// Replica `item_kind` with GLB fallback when rows were saved as plain décor.
+fn effective_decor_item_kind(item_kind: u8, model_rel_path: &str) -> u8 {
+    if item_kind != APARTMENT_DECOR_ITEM_KIND_PLAIN {
+        return item_kind;
+    }
+    infer_decor_item_kind_from_model_rel_path(model_rel_path)
+}
+
 fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
     match item_kind {
         APARTMENT_DECOR_ITEM_KIND_WARDROBE => APARTMENT_STASH_KIND_WARDROBE,
@@ -409,6 +440,10 @@ fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
     }
 }
 
+fn decor_stash_radius_kind_for_row(item_kind: u8, model_rel_path: &str) -> &'static str {
+    decor_stash_radius_kind(effective_decor_item_kind(item_kind, model_rel_path))
+}
+
 fn decor_stash_display_name_static(item_kind: u8) -> &'static str {
     match item_kind {
         APARTMENT_DECOR_ITEM_KIND_WARDROBE => "wardrobe",
@@ -417,6 +452,10 @@ fn decor_stash_display_name_static(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_WATER_TANK => "water tank",
         _ => "footlocker",
     }
+}
+
+fn decor_stash_display_name_for_row(item_kind: u8, model_rel_path: &str) -> &'static str {
+    decor_stash_display_name_static(effective_decor_item_kind(item_kind, model_rel_path))
 }
 
 fn sync_apartment_unit_columns_from_decor(ctx: &ReducerContext, unit_key: &str) {
@@ -1318,6 +1357,69 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     }
 }
 
+/// Layout fraction → world X — keep aligned with `mapOwnedApartmentLayoutFractionToWorldX` in
+/// `packages/world/src/residentialUnitBalcony.ts`.
+fn map_owned_apartment_layout_fraction_to_world_x(
+    bound_min_x: f32,
+    bound_max_x: f32,
+    unit_id: &str,
+    fx: f32,
+) -> f32 {
+    let span_x = bound_max_x - bound_min_x;
+    let overhang = residential_unit_balcony_overhang_m(unit_id);
+    if overhang <= 0.0 {
+        return bound_min_x + fx * span_x;
+    }
+    let living_span_x = span_x - overhang;
+    if unit_id.starts_with("unit_e_") {
+        bound_min_x + fx * living_span_x
+    } else if unit_id.starts_with("unit_w_") {
+        bound_min_x + overhang + fx * living_span_x
+    } else {
+        bound_min_x + fx * span_x
+    }
+}
+
+/// World XZ for stash props authored in `content/apartment/owned_apartment_builtins.json`.
+fn authored_content_stash_anchor_xz(unit: &ApartmentUnit, fx: f32, fz: f32) -> (f32, f32) {
+    let span_z = unit.bound_max_z - unit.bound_min_z;
+    let x = map_owned_apartment_layout_fraction_to_world_x(
+        unit.bound_min_x,
+        unit.bound_max_x,
+        unit.unit_id.as_str(),
+        fx,
+    );
+    let z = unit.bound_min_z + fz * span_z;
+    (x, z)
+}
+
+/// Fallback when no `apartment_unit_decor` row exists (content-only fridge / water tank).
+fn pose_near_authored_content_stash_anchor(
+    unit: &ApartmentUnit,
+    stash_kind: &str,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
+    let (fx, fz) = match stash_kind {
+        // `placedItems` in `content/apartment/owned_apartment_builtins.json`
+        APARTMENT_STASH_KIND_FRIDGE => (0.387_564_86, 0.183_102_12),
+        APARTMENT_STASH_KIND_WATER_TANK => (0.073_722_71, 0.823_220_47),
+        _ => return false,
+    };
+    let (ax, az) = authored_content_stash_anchor_xz(unit, fx, fz);
+    feet_inside_unit(unit, x, y, z)
+        && pose_near_horizontal_marker(
+            x,
+            y,
+            z,
+            ax,
+            az,
+            unit.foot_y,
+            stash_interact_radius_sq(stash_kind),
+        )
+}
+
 fn pose_near_named_apartment_stash_anchor(
     ctx: &ReducerContext,
     unit: &ApartmentUnit,
@@ -1352,52 +1454,58 @@ fn pose_near_named_apartment_stash_anchor(
                 )
         }
         APARTMENT_STASH_KIND_FRIDGE => {
-            let Some(fridge) = ctx
+            if let Some(fridge) = ctx
                 .db
                 .apartment_unit_decor()
                 .iter()
                 .filter(|d| {
                     d.unit_key.as_str() == unit.unit_key.as_str()
-                        && d.item_kind == APARTMENT_DECOR_ITEM_KIND_FRIDGE
+                        && effective_decor_item_kind(
+                            d.item_kind,
+                            d.model_rel_path.as_str(),
+                        ) == APARTMENT_DECOR_ITEM_KIND_FRIDGE
                 })
                 .min_by_key(|d| d.decor_id)
-            else {
-                return false;
-            };
-            feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(
-                    x,
-                    y,
-                    z,
-                    fridge.pos_x,
-                    fridge.pos_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(APARTMENT_STASH_KIND_FRIDGE),
-                )
+            {
+                return feet_inside_unit(unit, x, y, z)
+                    && pose_near_horizontal_marker(
+                        x,
+                        y,
+                        z,
+                        fridge.pos_x,
+                        fridge.pos_z,
+                        unit.foot_y,
+                        stash_interact_radius_sq(APARTMENT_STASH_KIND_FRIDGE),
+                    );
+            }
+            pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)
         }
         APARTMENT_STASH_KIND_WATER_TANK => {
-            let Some(tank) = ctx
+            if let Some(tank) = ctx
                 .db
                 .apartment_unit_decor()
                 .iter()
                 .filter(|d| {
                     d.unit_key.as_str() == unit.unit_key.as_str()
-                        && d.item_kind == APARTMENT_DECOR_ITEM_KIND_WATER_TANK
+                        && effective_decor_item_kind(
+                            d.item_kind,
+                            d.model_rel_path.as_str(),
+                        ) == APARTMENT_DECOR_ITEM_KIND_WATER_TANK
                 })
                 .min_by_key(|d| d.decor_id)
-            else {
-                return false;
-            };
-            feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(
-                    x,
-                    y,
-                    z,
-                    tank.pos_x,
-                    tank.pos_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(APARTMENT_STASH_KIND_WATER_TANK),
-                )
+            {
+                return feet_inside_unit(unit, x, y, z)
+                    && pose_near_horizontal_marker(
+                        x,
+                        y,
+                        z,
+                        tank.pos_x,
+                        tank.pos_z,
+                        unit.foot_y,
+                        stash_interact_radius_sq(APARTMENT_STASH_KIND_WATER_TANK),
+                    );
+            }
+            pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)
         }
         _ => {
             feet_inside_unit(unit, x, y, z)
@@ -1427,7 +1535,10 @@ fn apartment_stash_kind_for_stash_key(
             if decor.unit_key.as_str() != unit_key {
                 return None;
             }
-            Some(decor_stash_radius_kind(decor.item_kind))
+            Some(decor_stash_radius_kind_for_row(
+                decor.item_kind,
+                decor.model_rel_path.as_str(),
+            ))
         }
         ParsedApartmentStashKey::LegacyComposite { kind, .. } => Some(kind),
         ParsedApartmentStashKey::BareUnitKey(_) => Some(APARTMENT_STASH_KIND_FOOTLOCKER),
@@ -1469,7 +1580,7 @@ fn apartment_stash_owner_near_sender(
             }
             let owner_id = unit.owner?;
             let pose = ctx.db.player_pose().identity().find(&sender)?;
-            let rk = decor_stash_radius_kind(decor.item_kind);
+            let rk = decor_stash_radius_kind_for_row(decor.item_kind, decor.model_rel_path.as_str());
             if !feet_inside_unit(&unit, pose.x, pose.y, pose.z)
                 || !pose_near_horizontal_marker(
                     pose.x,
@@ -1486,7 +1597,7 @@ fn apartment_stash_owner_near_sender(
             Some((
                 owner_id,
                 unit_key.to_string(),
-                decor_stash_display_name_static(decor.item_kind),
+                decor_stash_display_name_for_row(decor.item_kind, decor.model_rel_path.as_str()),
             ))
         }
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => {

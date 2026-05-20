@@ -13,10 +13,11 @@ import {
   resolveOwnedApartmentAuthoringLayoutForEditor,
 } from "../myApartment/editorMyApartmentAuthoringShell.js";
 import {
+  applyMyApartmentDecorRootScaleFromDoc,
   applyMyApartmentDecorUniformScale,
   clampMyApartmentDecorEulerLimits,
-  clampOwnedApartmentDecorUniformScale,
   constrainMyApartmentDecorVerticalBounds,
+  readMyApartmentDecorCommittedScale,
   constrainMyApartmentMirrorRootPose,
   EDITOR_MY_APARTMENT_DECOR_DY_SCHEMA_MAX_M,
   EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
@@ -421,6 +422,7 @@ export function commitEditorAttachedTransform(opts: {
           pitchRad: number;
           rollRad: number;
           uniformScale: number;
+          verticalScaleMul: number;
         }
       >();
       const mirrorPatches = new Map<
@@ -465,7 +467,6 @@ export function commitEditorAttachedTransform(opts: {
 
         if (decorChildId) {
           const targetRootChild = child;
-          applyMyApartmentDecorUniformScale(targetRootChild);
           clampMyApartmentDecorEulerLimits(targetRootChild);
           if (store.gridSnapM > 0) {
             snapMyApartmentDecorEulerToGrid(targetRootChild);
@@ -500,12 +501,8 @@ export function commitEditorAttachedTransform(opts: {
             rootWorld.x,
             rootWorld.z,
           );
-          const uniformScale = clampOwnedApartmentDecorUniformScale(
-            (targetRootChild.scale.x +
-              targetRootChild.scale.y +
-              targetRootChild.scale.z) /
-              3,
-          );
+          const { uniformScale, verticalScaleMul } =
+            readMyApartmentDecorCommittedScale(targetRootChild);
           const decorKey = decorChildId;
           decorPatches.set(decorKey, {
             fx,
@@ -515,8 +512,13 @@ export function commitEditorAttachedTransform(opts: {
             pitchRad: pitch,
             rollRad: roll,
             uniformScale,
+            verticalScaleMul,
           });
-          targetRootChild.scale.setScalar(uniformScale);
+          applyMyApartmentDecorRootScaleFromDoc(
+            targetRootChild,
+            uniformScale,
+            verticalScaleMul,
+          );
           continue;
         }
 
@@ -681,7 +683,6 @@ export function commitEditorAttachedTransform(opts: {
     if (!targetRoot) return;
 
     if (decorId) {
-      applyMyApartmentDecorUniformScale(targetRoot);
       clampMyApartmentDecorEulerLimits(targetRoot);
       if (store.gridSnapM > 0) {
         snapMyApartmentDecorEulerToGrid(targetRoot);
@@ -713,9 +714,8 @@ export function commitEditorAttachedTransform(opts: {
         rootWorld.x,
         rootWorld.z,
       );
-      const uniformScale = clampOwnedApartmentDecorUniformScale(
-        (targetRoot.scale.x + targetRoot.scale.y + targetRoot.scale.z) / 3,
-      );
+      const { uniformScale, verticalScaleMul } =
+        readMyApartmentDecorCommittedScale(targetRoot);
       store.patchOwnedApartmentBuiltins((d) => ({
         ...d,
         placedItems: d.placedItems.map((item) =>
@@ -729,11 +729,12 @@ export function commitEditorAttachedTransform(opts: {
                 pitchRad: pitch,
                 rollRad: roll,
                 uniformScale,
+                verticalScaleMul,
               }
             : item,
         ),
       }));
-      targetRoot.scale.setScalar(uniformScale);
+      applyMyApartmentDecorRootScaleFromDoc(targetRoot, uniformScale, verticalScaleMul);
       return;
     }
 

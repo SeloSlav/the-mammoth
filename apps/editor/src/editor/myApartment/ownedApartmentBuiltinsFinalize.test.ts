@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { OwnedApartmentBuiltinsDoc, OwnedApartmentPlacedItem } from "@the-mammoth/schemas";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   finalizeOwnedApartmentBuiltinsDoc,
+  ownedApartmentBuiltinsDoc,
+  ownedApartmentPlacedItem,
+  type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentPlacedItem,
 } from "@the-mammoth/schemas";
 import {
   editorMyApartmentSelectedIdForDecor,
@@ -13,19 +16,20 @@ import {
 describe("finalizeOwnedApartmentBuiltinsDoc (objectGroups)", () => {
   const modelRelPath = "static/models/objects/obj.glb" as const;
 
-  const mkPlain = (id: string): OwnedApartmentPlacedItem => ({
-    id,
-    modelRelPath,
-    fx: 0.5,
-    fz: 0.5,
-    dy: 0,
-    yawRad: 0,
-    pitchRad: 0,
-    rollRad: 0,
-    uniformScale: 1,
-    ignoreSupportSurfaces: false,
-    itemKind: "plain",
-  });
+  const mkPlain = (id: string): OwnedApartmentPlacedItem =>
+    ownedApartmentPlacedItem({
+      id,
+      modelRelPath,
+      fx: 0.5,
+      fz: 0.5,
+      dy: 0,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+      ignoreSupportSurfaces: false,
+      itemKind: "plain",
+    });
 
   const mkWall = (id: string): OwnedApartmentBuiltinsDoc["wallItems"][number] => ({
     id,
@@ -41,7 +45,7 @@ describe("finalizeOwnedApartmentBuiltinsDoc (objectGroups)", () => {
   });
 
   function docWith(groups: OwnedApartmentBuiltinsDoc["objectGroups"]): OwnedApartmentBuiltinsDoc {
-    return {
+    return ownedApartmentBuiltinsDoc({
       ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       placedItems: [
         ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
@@ -50,7 +54,7 @@ describe("finalizeOwnedApartmentBuiltinsDoc (objectGroups)", () => {
       ],
       wallItems: [mkWall("wall-1")],
       objectGroups: groups,
-    };
+    });
   }
 
   it("drops groups with stale or unknown member ids while keeping ≥2 valid members", () => {

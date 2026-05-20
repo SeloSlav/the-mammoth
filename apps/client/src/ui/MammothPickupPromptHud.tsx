@@ -1,5 +1,9 @@
 import type { ApartmentDoorInteractPromptKind } from "@the-mammoth/world";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import {
+  getFpActiveStashPanel,
+  subscribeFpActiveStashPanel,
+} from "../game/fpInteraction/fpActiveStashPanel";
 import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpInteraction/fpPickupPrompt";
 
 function mammothInventoryOpen(): boolean {
@@ -75,7 +79,16 @@ function InteractKeyE(props: {
 /** Bottom interact bar — elevators, pickups, Balkan MVP apartment flows. */
 export function MammothPickupPromptHud() {
   const prompt = useSyncExternalStore(subscribeFpPickupPrompt, getFpPickupPrompt, getFpPickupPrompt);
-  if (!prompt || mammothInventoryOpen()) return null;
+  const activeStash = useSyncExternalStore(
+    subscribeFpActiveStashPanel,
+    getFpActiveStashPanel,
+    getFpActiveStashPanel,
+  );
+  const stashCloseHint =
+    prompt?.kind === "apartment_stash" &&
+    (prompt.willClose ||
+      (activeStash !== null && activeStash.stashKey === prompt.stashKey));
+  if (!prompt || (mammothInventoryOpen() && !stashCloseHint)) return null;
 
   const doorNoun: Record<ApartmentDoorInteractPromptKind, string> = {
     stairwell: "stairwell door",
@@ -203,6 +216,10 @@ export function MammothPickupPromptHud() {
       prompt.stashLabel.length === 0
         ? ""
         : `${prompt.stashLabel[0]!.toUpperCase()}${prompt.stashLabel.slice(1)}`;
+    const willClose =
+      prompt.willClose ||
+      (activeStash !== null && activeStash.stashKey === prompt.stashKey);
+    const action = willClose ? "Close" : "Open";
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>
@@ -213,7 +230,9 @@ export function MammothPickupPromptHud() {
           kbdText="#120802"
         />
         <span style={{ opacity: 0.92 }}> — </span>
-        <strong style={{ color: "#f0f6ff", fontWeight: 700 }}>{stashTitle === "" ? "Stash" : `Open ${stashTitle}`}</strong>
+        <strong style={{ color: "#f0f6ff", fontWeight: 700 }}>
+          {stashTitle === "" ? action : `${action} ${stashTitle}`}
+        </strong>
       </FpBottomInteractPromptFrame>
     );
   }

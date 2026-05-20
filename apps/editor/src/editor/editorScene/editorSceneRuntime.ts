@@ -54,8 +54,9 @@ import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from 
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
-  applyMyApartmentDecorUniformScale,
   clampMyApartmentDecorEulerLimits,
+  constrainMyApartmentDecorScaleFromGizmo,
+  type MyApartmentDecorScaleGesturePin,
   constrainMyApartmentDecorVerticalBounds,
   constrainMyApartmentMirrorRootPose,
   constrainMyApartmentWallRootPose,
@@ -310,6 +311,35 @@ export async function mountEditorScene(
     meshStart: THREE.Vector3;
     pinnedSpan: WallScalePinnedSpan | null;
   } | null = null;
+
+  /** Decor root scale at pointer-down — axis handles pin untouched axes (Y-only stretch, etc.). */
+  const decorScaleGestureStartByUuid = new Map<string, THREE.Vector3>();
+
+  function primeDecorScaleGestureStarts(attached: THREE.Object3D): void {
+    decorScaleGestureStartByUuid.clear();
+    if (attached.userData.mammothEditorMyApartmentDecorId) {
+      decorScaleGestureStartByUuid.set(attached.uuid, attached.scale.clone());
+      return;
+    }
+    if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] !== true) return;
+    for (const child of attached.children) {
+      if (!(child instanceof THREE.Group)) continue;
+      if (!child.userData.mammothEditorMyApartmentDecorId) continue;
+      decorScaleGestureStartByUuid.set(child.uuid, child.scale.clone());
+    }
+  }
+
+  function decorScaleGesturePinFor(
+    object: THREE.Object3D,
+    transformMode: ReturnType<typeof useEditorStore.getState>["transformMode"],
+  ): MyApartmentDecorScaleGesturePin | null {
+    if (transformMode !== "scale" || !transformControls.dragging) {
+      return null;
+    }
+    const startScale = decorScaleGestureStartByUuid.get(object.uuid);
+    if (!startScale) return null;
+    return { startScale };
+  }
 
   function wallSlabScaleDragFor(
     object: THREE.Object3D,
@@ -911,6 +941,11 @@ export async function mountEditorScene(
     primeAnchoredScaleGesture();
     const st = useEditorStore.getState();
     const attached = transformControls.object as THREE.Object3D | undefined;
+    if (st.mode === "my_apartment_layout" && st.transformMode === "scale" && attached) {
+      primeDecorScaleGestureStarts(attached);
+    } else {
+      decorScaleGestureStartByUuid.clear();
+    }
     if (
       st.mode === "my_apartment_layout" &&
       st.transformMode === "scale" &&
@@ -949,6 +984,7 @@ export async function mountEditorScene(
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
     wallSlabScaleGesture = null;
+    decorScaleGestureStartByUuid.clear();
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
@@ -1010,7 +1046,21 @@ export async function mountEditorScene(
             child.userData.mammothEditorMyApartmentDecorId ||
             child.userData.mammothEditorMyApartmentMirrorId
           ) {
-            applyMyApartmentDecorUniformScale(child);
+            if (child.userData.mammothEditorMyApartmentDecorId) {
+              constrainMyApartmentDecorScaleFromGizmo(child, {
+                transformMode: aptSt.transformMode,
+                axis: (transformControls as unknown as { axis?: string | null }).axis,
+                dragging: transformControls.dragging,
+                gesturePin: decorScaleGesturePinFor(child, aptSt.transformMode),
+              });
+            } else {
+              constrainMyApartmentDecorScaleFromGizmo(child, {
+                transformMode: aptSt.transformMode,
+                axis: (transformControls as unknown as { axis?: string | null }).axis,
+                dragging: transformControls.dragging,
+                gesturePin: null,
+              });
+            }
             if (aptSt.transformMode === "rotate") {
               clampMyApartmentDecorEulerLimits(child);
               if (aptSt.gridSnapM > 0) {
@@ -1069,7 +1119,21 @@ export async function mountEditorScene(
         aptObj.userData.mammothEditorMyApartmentDecorId ||
         aptObj.userData.mammothEditorMyApartmentMirrorId
       ) {
-        applyMyApartmentDecorUniformScale(aptObj);
+        if (aptObj.userData.mammothEditorMyApartmentDecorId) {
+          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
+            transformMode: aptSt.transformMode,
+            axis: (transformControls as unknown as { axis?: string | null }).axis,
+            dragging: transformControls.dragging,
+            gesturePin: decorScaleGesturePinFor(aptObj, aptSt.transformMode),
+          });
+        } else {
+          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
+            transformMode: aptSt.transformMode,
+            axis: (transformControls as unknown as { axis?: string | null }).axis,
+            dragging: transformControls.dragging,
+            gesturePin: null,
+          });
+        }
         if (aptSt.transformMode === "rotate") {
           clampMyApartmentDecorEulerLimits(aptObj);
           if (aptSt.gridSnapM > 0) {

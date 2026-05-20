@@ -55,6 +55,29 @@ export function ownedApartmentPlacedItemKindFromModelRelPath(
   return OWNED_APARTMENT_MODEL_TO_PLACED_KIND[norm] ?? "plain";
 }
 
+/**
+ * Resolve gameplay role from replica `item_kind` plus GLB path.
+ * Stale DB rows often keep `item_kind = plain` while the model is a known stash prop.
+ */
+export function effectiveOwnedApartmentPlacedKind(
+  decorItemKind: number,
+  modelRelPath: string,
+): OwnedApartmentPlacedItemKind {
+  const fromReplica = apartmentPlacedItemKindFromDecorItemKind(decorItemKind);
+  if (fromReplica !== "plain") return fromReplica;
+  return ownedApartmentPlacedItemKindFromModelRelPath(modelRelPath);
+}
+
+/** Root scale applied to placed decor in editor + client (`uniformScale` on X/Z, stretch on Y). */
+export function ownedApartmentDecorRootScaleXYZ(
+  uniformScale: number,
+  verticalScaleMul = 1,
+): { x: number; y: number; z: number } {
+  const u = Math.min(5.5, Math.max(0.02, uniformScale));
+  const yMul = Math.min(5.5, Math.max(0.02, verticalScaleMul));
+  return { x: u, y: u * yMul, z: u };
+}
+
 export function ownedApartmentPlacedItemKindHasStash(
   k: OwnedApartmentPlacedItemKind,
 ): boolean {
@@ -208,6 +231,11 @@ const OwnedApartmentPlacedItemSchemaCore = z.object({
     .max(OWNED_APARTMENT_DECOR_ROLL_RAD_MAX)
     .default(0),
   uniformScale: z.number().min(0.02).max(5.5),
+  /**
+   * Extra Y stretch relative to `uniformScale` (1 = no stretch). Set by editor axis scale on the
+   * green handle; center handle resets this to 1.
+   */
+  verticalScaleMul: z.number().min(0.02).max(5.5).default(1),
   /** When true, editor translate ignores tabletop/object support surfaces for fine manual placement. */
   ignoreSupportSurfaces: z.boolean().default(false),
   /** Gameplay role for this instance; `plain` is visual-only decor. */
@@ -229,6 +257,16 @@ export const OwnedApartmentPlacedItemSchema =
   });
 
 export type OwnedApartmentPlacedItem = z.infer<typeof OwnedApartmentPlacedItemSchema>;
+
+/** Input shape — optional fields with schema defaults (e.g. `verticalScaleMul`). */
+export type OwnedApartmentPlacedItemInput = z.input<typeof OwnedApartmentPlacedItemSchema>;
+
+/** Parse one placed item; applies defaults for omitted optional fields. */
+export function ownedApartmentPlacedItem(
+  item: OwnedApartmentPlacedItemInput,
+): OwnedApartmentPlacedItem {
+  return OwnedApartmentPlacedItemSchema.parse(item);
+}
 
 /** @deprecated Use {@link OwnedApartmentPlacedItem}; name kept for incremental refactors. */
 export type OwnedApartmentDecorItem = OwnedApartmentPlacedItem;
@@ -408,6 +446,15 @@ const OwnedApartmentBuiltinsDocSchemaCore = z.object({
 
 export type OwnedApartmentBuiltinsDoc = z.infer<typeof OwnedApartmentBuiltinsDocSchemaCore>;
 
+export type OwnedApartmentBuiltinsDocInput = z.input<typeof OwnedApartmentBuiltinsDocSchemaCore>;
+
+/** Parse a builtins doc; applies defaults for omitted placed-item fields. */
+export function ownedApartmentBuiltinsDoc(
+  doc: OwnedApartmentBuiltinsDocInput,
+): OwnedApartmentBuiltinsDoc {
+  return OwnedApartmentBuiltinsDocSchema.parse(doc);
+}
+
 function migrateV1RecordToV2PlacedItems(
   v1: z.infer<typeof OwnedApartmentBuiltinsDocV1Schema>,
 ): OwnedApartmentPlacedItem[] {
@@ -422,6 +469,7 @@ function migrateV1RecordToV2PlacedItems(
       pitchRad: 0,
       rollRad: 0,
       uniformScale: v1.bedUniformScale,
+      verticalScaleMul: 1,
       ignoreSupportSurfaces: false,
       itemKind: "bed",
     },
@@ -435,6 +483,7 @@ function migrateV1RecordToV2PlacedItems(
       pitchRad: 0,
       rollRad: 0,
       uniformScale: v1.wardrobeUniformScale,
+      verticalScaleMul: 1,
       ignoreSupportSurfaces: false,
       itemKind: "wardrobe",
     },
@@ -448,6 +497,7 @@ function migrateV1RecordToV2PlacedItems(
       pitchRad: 0,
       rollRad: 0,
       uniformScale: v1.footUniformScale,
+      verticalScaleMul: 1,
       ignoreSupportSurfaces: false,
       itemKind: "footlocker",
     },
@@ -461,6 +511,7 @@ function migrateV1RecordToV2PlacedItems(
       pitchRad: 0,
       rollRad: 0,
       uniformScale: v1.stoveUniformScale,
+      verticalScaleMul: 1,
       ignoreSupportSurfaces: false,
       itemKind: "stove",
     },
@@ -476,6 +527,7 @@ function migrateV1RecordToV2PlacedItems(
     pitchRad: d.pitchRad ?? 0,
     rollRad: d.rollRad ?? 0,
     uniformScale: d.uniformScale,
+    verticalScaleMul: 1,
     ignoreSupportSurfaces: d.ignoreSupportSurfaces ?? false,
     itemKind: d.itemKind ?? "plain",
   }));
@@ -489,7 +541,14 @@ export function migrateOwnedApartmentBuiltinsRawToV2(raw: unknown): unknown {
   const o = leg as Record<string, unknown>;
 
   if (o.version === 2) {
-    if (Array.isArray(o.placedItems)) return o;
+    if (Array.isArray(o.placedItems)) {
+      return OwnedApartmentBuiltinsDocSchemaCore.parse({
+        ...o,
+        placedItems: (o.placedItems as unknown[]).map((item) =>
+          OwnedApartmentPlacedItemSchema.parse(item),
+        ),
+      });
+    }
     if (Array.isArray(o.decorItems)) {
       const decor = o.decorItems as OwnedApartmentPlacedItem[];
       const parsed = decor.map((d) => ({
@@ -497,6 +556,7 @@ export function migrateOwnedApartmentBuiltinsRawToV2(raw: unknown): unknown {
         itemKind: d.itemKind ?? "plain",
         pitchRad: d.pitchRad ?? 0,
         rollRad: d.rollRad ?? 0,
+        verticalScaleMul: 1,
         ignoreSupportSurfaces: d.ignoreSupportSurfaces ?? false,
       }));
       return {
