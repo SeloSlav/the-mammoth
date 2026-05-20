@@ -7,12 +7,14 @@ export const APARTMENT_STASH_KIND_FOOTLOCKER = "footlocker" as const;
 export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe" as const;
 export const APARTMENT_STASH_KIND_STOVE = "stove" as const;
 export const APARTMENT_STASH_KIND_FRIDGE = "fridge" as const;
+export const APARTMENT_STASH_KIND_WATER_TANK = "water_tank" as const;
 
 export const APARTMENT_STASH_KINDS = [
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_WATER_TANK,
 ] as const;
 
 export type ApartmentStashKind = (typeof APARTMENT_STASH_KINDS)[number];
@@ -30,12 +32,16 @@ export type ApartmentStashItemCategory =
 /** Hard cap for any apartment stash row index (legacy DB headroom). */
 export const APARTMENT_STASH_SLOT_INDEX_MAX = 24 as const;
 
+/** Def ids allowed in the water tank (consumable slot). */
+export const APARTMENT_STASH_WATER_TANK_ALLOWED_DEF_IDS = ["water-bottle"] as const;
+
 /** Active slot count per furniture type (indices `0 .. count - 1`). */
 export const APARTMENT_STASH_SLOT_COUNT_BY_KIND: Record<ApartmentStashKind, number> = {
   [APARTMENT_STASH_KIND_FOOTLOCKER]: 24,
   [APARTMENT_STASH_KIND_WARDROBE]: 10,
-  [APARTMENT_STASH_KIND_STOVE]: 6,
+  [APARTMENT_STASH_KIND_STOVE]: 3,
   [APARTMENT_STASH_KIND_FRIDGE]: 14,
+  [APARTMENT_STASH_KIND_WATER_TANK]: 1,
 };
 
 export function apartmentStashSlotCount(stashKind: ApartmentStashKind): number {
@@ -77,9 +83,23 @@ export function apartmentStashAcceptsItemCategory(
     case APARTMENT_STASH_KIND_FRIDGE:
     case APARTMENT_STASH_KIND_STOVE:
       return category === "consumable";
+    case APARTMENT_STASH_KIND_WATER_TANK:
+      return category === "consumable";
     default:
       return false;
   }
+}
+
+/** Whether a catalog def id may enter this stash from player inventory/hotbar. */
+export function apartmentStashAcceptsDefId(
+  stashKind: ApartmentStashKind,
+  defId: string,
+  category: ApartmentStashItemCategory,
+): boolean {
+  if (stashKind === APARTMENT_STASH_KIND_WATER_TANK) {
+    return (APARTMENT_STASH_WATER_TANK_ALLOWED_DEF_IDS as readonly string[]).includes(defId);
+  }
+  return apartmentStashAcceptsItemCategory(stashKind, category);
 }
 
 /** Short hint for HUD when a drop is rejected client-side. */
@@ -91,6 +111,8 @@ export function apartmentStashRejectionHint(stashKind: ApartmentStashKind): stri
       return "Fridge only holds food and consumables.";
     case APARTMENT_STASH_KIND_STOVE:
       return "Stove only holds food (for now).";
+    case APARTMENT_STASH_KIND_WATER_TANK:
+      return "Water tank only holds a water bottle.";
     default:
       return "This item cannot go here.";
   }
@@ -102,14 +124,14 @@ export type ApartmentStashHudSection = {
   cols: number;
 };
 
-/** Stove uses 4 burner slots + 2 oven slots; other kinds use a single grid. */
+/** Stove uses 2 burner slots + 1 oven slot; other kinds use a single grid. */
 export function apartmentStashHudSections(
   stashKind: ApartmentStashKind,
 ): ApartmentStashHudSection[] | null {
   if (stashKind !== APARTMENT_STASH_KIND_STOVE) return null;
   return [
-    { label: "Burners", slotIndices: [0, 1, 2, 3], cols: 4 },
-    { label: "Oven", slotIndices: [4, 5], cols: 2 },
+    { label: "Burners", slotIndices: [0, 1], cols: 2 },
+    { label: "Oven", slotIndices: [2], cols: 1 },
   ];
 }
 
@@ -117,11 +139,13 @@ export function apartmentStashHudSections(
 export function apartmentStashHudGridCols(stashKind: ApartmentStashKind): number {
   switch (stashKind) {
     case APARTMENT_STASH_KIND_STOVE:
-      return 4;
+      return 2;
     case APARTMENT_STASH_KIND_WARDROBE:
       return 5;
     case APARTMENT_STASH_KIND_FRIDGE:
       return 7;
+    case APARTMENT_STASH_KIND_WATER_TANK:
+      return 1;
     default:
       return 6;
   }

@@ -4,6 +4,8 @@ import {
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
+  APARTMENT_STASH_KIND_WATER_TANK,
+  apartmentStashAcceptsDefId,
   apartmentStashAcceptsItemCategory,
   apartmentStashHudSections,
   apartmentStashSlotCount,
@@ -14,13 +16,16 @@ describe("apartmentStashSlotCount", () => {
   it("assigns gameplay slot counts per furniture type", () => {
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_FOOTLOCKER)).toBe(24);
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_WARDROBE)).toBe(10);
-    expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_STOVE)).toBe(6);
+    expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_STOVE)).toBe(3);
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_FRIDGE)).toBe(14);
+    expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_WATER_TANK)).toBe(1);
   });
 
   it("rejects out-of-range slot indices", () => {
-    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_STOVE, 5)).toBe(true);
-    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_STOVE, 6)).toBe(false);
+    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_STOVE, 2)).toBe(true);
+    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_STOVE, 3)).toBe(false);
+    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_WATER_TANK, 0)).toBe(true);
+    expect(isApartmentStashSlotIndexValid(APARTMENT_STASH_KIND_WATER_TANK, 1)).toBe(false);
   });
 });
 
@@ -44,12 +49,27 @@ describe("apartmentStashAcceptsItemCategory", () => {
   });
 });
 
+describe("apartmentStashAcceptsDefId", () => {
+  it("water tank only accepts water-bottle", () => {
+    expect(
+      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_WATER_TANK, "water-bottle", "consumable"),
+    ).toBe(true);
+    expect(
+      apartmentStashAcceptsDefId(
+        APARTMENT_STASH_KIND_WATER_TANK,
+        "purification-tablets",
+        "consumable",
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("apartmentStashHudSections", () => {
-  it("models stove as 4 burners + 2 oven slots", () => {
+  it("models stove as 2 burners + 1 oven slot", () => {
     const sections = apartmentStashHudSections(APARTMENT_STASH_KIND_STOVE);
     expect(sections).toEqual([
-      { label: "Burners", slotIndices: [0, 1, 2, 3], cols: 4 },
-      { label: "Oven", slotIndices: [4, 5], cols: 2 },
+      { label: "Burners", slotIndices: [0, 1], cols: 2 },
+      { label: "Oven", slotIndices: [2], cols: 1 },
     ]);
   });
 });

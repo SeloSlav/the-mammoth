@@ -249,6 +249,7 @@ describe("resolveApartmentDecorPoses", () => {
 describe("ownedApartmentPlacedItemKindHasStash", () => {
   it("includes fridge alongside other storage furniture", () => {
     expect(ownedApartmentPlacedItemKindHasStash("fridge")).toBe(true);
+    expect(ownedApartmentPlacedItemKindHasStash("water_tank")).toBe(true);
     expect(ownedApartmentPlacedItemKindHasStash("plain")).toBe(false);
   });
 });

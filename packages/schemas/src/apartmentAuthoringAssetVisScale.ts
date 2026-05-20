@@ -8,6 +8,7 @@ export const OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_BED = 1.14 as const;
 export const OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_WARDROBE = 0.98 as const;
 export const OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_FOOTLOCKER = 0.56 as const;
 export const OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_STOVE = 0.88 as const;
+export const OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_WATER_TANK = 0.92 as const;
 
 export function ownedApartmentPlacedItemAuthoringAssetVisScale(
   kind: OwnedApartmentPlacedItemKind,
@@ -21,6 +22,8 @@ export function ownedApartmentPlacedItemAuthoringAssetVisScale(
       return OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_FOOTLOCKER;
     case "stove":
       return OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_STOVE;
+    case "water_tank":
+      return OWNED_APARTMENT_AUTHORING_ASSET_VIS_SCALE_WATER_TANK;
     default:
       return 1;
   }

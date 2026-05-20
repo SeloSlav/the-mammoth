@@ -6,6 +6,7 @@ pub(crate) const APARTMENT_STASH_KIND_FOOTLOCKER: &str = "footlocker";
 pub(crate) const APARTMENT_STASH_KIND_WARDROBE: &str = "wardrobe";
 pub(crate) const APARTMENT_STASH_KIND_STOVE: &str = "stove";
 pub(crate) const APARTMENT_STASH_KIND_FRIDGE: &str = "fridge";
+pub(crate) const APARTMENT_STASH_KIND_WATER_TANK: &str = "water_tank";
 const APARTMENT_STASH_KEY_SEP: &str = "#";
 
 /// Per-instance stash: `{unit_key}#d{decor_id}` (e.g. `floor_mamutica_typical|21|unit_e_003#d7`).
@@ -45,6 +46,7 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
             || tail == APARTMENT_STASH_KIND_WARDROBE
             || tail == APARTMENT_STASH_KIND_STOVE
             || tail == APARTMENT_STASH_KIND_FRIDGE
+            || tail == APARTMENT_STASH_KIND_WATER_TANK
         {
             let kind: &'static str = if tail == APARTMENT_STASH_KIND_WARDROBE {
                 APARTMENT_STASH_KIND_WARDROBE
@@ -52,6 +54,8 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
                 APARTMENT_STASH_KIND_STOVE
             } else if tail == APARTMENT_STASH_KIND_FRIDGE {
                 APARTMENT_STASH_KIND_FRIDGE
+            } else if tail == APARTMENT_STASH_KIND_WATER_TANK {
+                APARTMENT_STASH_KIND_WATER_TANK
             } else {
                 APARTMENT_STASH_KIND_FOOTLOCKER
             };
@@ -80,6 +84,7 @@ pub(crate) fn apartment_stash_kind_display_name(stash_kind: &str) -> &'static st
         APARTMENT_STASH_KIND_WARDROBE => "wardrobe",
         APARTMENT_STASH_KIND_STOVE => "stove",
         APARTMENT_STASH_KIND_FRIDGE => "fridge",
+        APARTMENT_STASH_KIND_WATER_TANK => "water tank",
         _ => "footlocker",
     }
 }

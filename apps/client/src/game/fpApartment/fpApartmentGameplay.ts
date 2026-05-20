@@ -10,6 +10,7 @@ import {
   APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE,
   APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE,
   APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE,
+  APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK,
 } from "@the-mammoth/schemas";
 import {
   apartmentStashKey,
@@ -19,6 +20,7 @@ import {
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
+  APARTMENT_STASH_KIND_WATER_TANK,
   parseApartmentStashKeyFull,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
@@ -40,6 +42,7 @@ const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKi
   [APARTMENT_STASH_KIND_FOOTLOCKER]: 0.38,
   [APARTMENT_STASH_KIND_STOVE]: 0.42,
   [APARTMENT_STASH_KIND_FRIDGE]: 0.58,
+  [APARTMENT_STASH_KIND_WATER_TANK]: 0.36,
 };
 
 /**
@@ -348,6 +351,8 @@ function decorItemKindToClientStashKind(itemKind: number): ApartmentStashKind | 
       return APARTMENT_STASH_KIND_STOVE;
     case APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE:
       return APARTMENT_STASH_KIND_FRIDGE;
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK:
+      return APARTMENT_STASH_KIND_WATER_TANK;
     default:
       return null;
   }

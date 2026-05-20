@@ -21,6 +21,8 @@ export const OWNED_APARTMENT_MODEL_BED = "static/models/objects/bed.glb" as cons
 export const OWNED_APARTMENT_MODEL_WARDROBE = "static/models/objects/wardrobe-closet.glb" as const;
 export const OWNED_APARTMENT_MODEL_FOOTLOCKER = "static/models/objects/footlocker.glb" as const;
 export const OWNED_APARTMENT_MODEL_STOVE = "static/models/objects/stove.glb" as const;
+export const OWNED_APARTMENT_MODEL_FRIDGE = "static/models/objects/fridge.glb" as const;
+export const OWNED_APARTMENT_MODEL_WATER_TANK = "static/models/objects/water-tank.glb" as const;
 
 export const OWNED_APARTMENT_PLACED_ITEM_KINDS = [
   "plain",
@@ -29,16 +31,39 @@ export const OWNED_APARTMENT_PLACED_ITEM_KINDS = [
   "footlocker",
   "stove",
   "fridge",
+  "water_tank",
 ] as const;
 
 export type OwnedApartmentPlacedItemKind =
   (typeof OWNED_APARTMENT_PLACED_ITEM_KINDS)[number];
 
+/** Canonical decor GLB → gameplay role (`plain` when unknown). */
+const OWNED_APARTMENT_MODEL_TO_PLACED_KIND: Record<string, OwnedApartmentPlacedItemKind> = {
+  [OWNED_APARTMENT_MODEL_BED]: "bed",
+  [OWNED_APARTMENT_MODEL_WARDROBE]: "wardrobe",
+  [OWNED_APARTMENT_MODEL_FOOTLOCKER]: "footlocker",
+  [OWNED_APARTMENT_MODEL_STOVE]: "stove",
+  [OWNED_APARTMENT_MODEL_FRIDGE]: "fridge",
+  [OWNED_APARTMENT_MODEL_WATER_TANK]: "water_tank",
+};
+
+/** Infer `itemKind` when importing décor from the object catalog (editor + JSON authoring). */
+export function ownedApartmentPlacedItemKindFromModelRelPath(
+  modelRelPath: string,
+): OwnedApartmentPlacedItemKind {
+  const norm = modelRelPath.trim().replace(/^\/+/u, "");
+  return OWNED_APARTMENT_MODEL_TO_PLACED_KIND[norm] ?? "plain";
+}
+
 export function ownedApartmentPlacedItemKindHasStash(
   k: OwnedApartmentPlacedItemKind,
 ): boolean {
   return (
-    k === "wardrobe" || k === "footlocker" || k === "stove" || k === "fridge"
+    k === "wardrobe" ||
+    k === "footlocker" ||
+    k === "stove" ||
+    k === "fridge" ||
+    k === "water_tank"
   );
 }
 
@@ -61,6 +86,7 @@ export const APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE = 2 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_FOOTLOCKER = 3 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE = 4 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE = 5 as const;
+export const APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK = 6 as const;
 
 export function apartmentUnitDecorItemKindFromString(
   k: OwnedApartmentPlacedItemKind,
@@ -76,6 +102,8 @@ export function apartmentUnitDecorItemKindFromString(
       return APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE;
     case "fridge":
       return APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE;
+    case "water_tank":
+      return APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK;
     default:
       return APARTMENT_UNIT_DECOR_ITEM_KIND_PLAIN;
   }
@@ -95,6 +123,8 @@ export function apartmentPlacedItemKindFromDecorItemKind(
       return "stove";
     case APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE:
       return "fridge";
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK:
+      return "water_tank";
     default:
       return "plain";
   }
@@ -143,6 +173,7 @@ const OwnedApartmentPlacedItemKindSchema = z.enum([
   "footlocker",
   "stove",
   "fridge",
+  "water_tank",
 ]);
 
 const OwnedApartmentPlacedItemSchemaCore = z.object({
@@ -364,7 +395,7 @@ const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   /** Preview floor fallback (meters) when the mamutica floor plate is unavailable in the editor. */
   previewSizeM: z.number().positive().max(80).default(10),
   /**
-   * All placed apartment items (generic decor plus bed / wardrobe / footlocker / stove / fridge).
+   * All placed apartment items (generic decor plus bed / wardrobe / footlocker / stove / fridge / water_tank).
    * Replaces v1 singleton `bedFx` / `wardrobeFx` / … + separate `decorItems`.
    */
   placedItems: z.array(OwnedApartmentPlacedItemSchema).default([]),

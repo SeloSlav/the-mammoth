@@ -1,5 +1,5 @@
 import {
-  apartmentStashAcceptsItemCategory,
+  apartmentStashAcceptsDefId,
   apartmentStashRejectionHint,
   apartmentStashSlotCount,
   isApartmentStashSlotIndexValid,
@@ -12,8 +12,9 @@ export function mammothItemAllowedInApartmentStash(
   stashKind: ApartmentStashKind,
   def: MammothItemDef,
 ): boolean {
-  return apartmentStashAcceptsItemCategory(
+  return apartmentStashAcceptsDefId(
     stashKind,
+    def.id,
     def.category as ApartmentStashItemCategory,
   );
 }

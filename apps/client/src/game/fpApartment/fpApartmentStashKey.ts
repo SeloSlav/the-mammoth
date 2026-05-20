@@ -2,12 +2,14 @@ export const APARTMENT_STASH_KIND_FOOTLOCKER = "footlocker";
 export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe";
 export const APARTMENT_STASH_KIND_STOVE = "stove";
 export const APARTMENT_STASH_KIND_FRIDGE = "fridge";
+export const APARTMENT_STASH_KIND_WATER_TANK = "water_tank";
 
 export type ApartmentStashKind =
   | typeof APARTMENT_STASH_KIND_FOOTLOCKER
   | typeof APARTMENT_STASH_KIND_WARDROBE
   | typeof APARTMENT_STASH_KIND_STOVE
-  | typeof APARTMENT_STASH_KIND_FRIDGE;
+  | typeof APARTMENT_STASH_KIND_FRIDGE
+  | typeof APARTMENT_STASH_KIND_WATER_TANK;
 
 const APARTMENT_STASH_KEY_SEP = "#";
 
@@ -36,7 +38,8 @@ export function parseApartmentStashKeyFull(stashKey: string): ParsedApartmentSta
       tail === APARTMENT_STASH_KIND_FOOTLOCKER ||
       tail === APARTMENT_STASH_KIND_WARDROBE ||
       tail === APARTMENT_STASH_KIND_STOVE ||
-      tail === APARTMENT_STASH_KIND_FRIDGE
+      tail === APARTMENT_STASH_KIND_FRIDGE ||
+      tail === APARTMENT_STASH_KIND_WATER_TANK
     ) {
       return { tag: "legacy", unitKey, stashKind: tail as ApartmentStashKind };
     }
@@ -71,6 +74,8 @@ export function apartmentStashLabel(stashKind: ApartmentStashKind): string {
       return "stove";
     case APARTMENT_STASH_KIND_FRIDGE:
       return "fridge";
+    case APARTMENT_STASH_KIND_WATER_TANK:
+      return "water tank";
     default:
       return "footlocker";
   }

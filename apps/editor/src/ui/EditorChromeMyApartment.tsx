@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { OwnedApartmentWallMaterial } from "@the-mammoth/schemas";
+import {
+  ownedApartmentPlacedItemKindFromModelRelPath,
+  type OwnedApartmentWallMaterial,
+} from "@the-mammoth/schemas";
 import {
   APARTMENT_PLANAR_MIRROR_DEFAULT_HEIGHT_M,
   APARTMENT_PLANAR_MIRROR_DEFAULT_WIDTH_M,
@@ -310,7 +313,7 @@ export function EditorChromeMyApartment(props: {
           rollRad: 0,
           uniformScale: 1,
           ignoreSupportSurfaces: false,
-          itemKind: "plain",
+          itemKind: ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath),
         },
       ],
     }));

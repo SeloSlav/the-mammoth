@@ -78,6 +78,7 @@ import {
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   type ApartmentStashKind,
@@ -1013,7 +1014,8 @@ export function mountFpApartmentDecorMeshes(opts: {
           stashKind !== APARTMENT_STASH_KIND_FOOTLOCKER &&
           stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
           stashKind !== APARTMENT_STASH_KIND_STOVE &&
-          stashKind !== APARTMENT_STASH_KIND_FRIDGE
+          stashKind !== APARTMENT_STASH_KIND_FRIDGE &&
+          stashKind !== APARTMENT_STASH_KIND_WATER_TANK
         ) {
           continue;
         }

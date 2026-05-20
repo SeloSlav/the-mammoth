@@ -24,7 +24,8 @@ use crate::inventory::{
 use crate::inventory_models::{
     apartment_stash_kind_display_name, parse_apartment_stash_key_v2,
     ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
-    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, HotbarLocationData,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    HotbarLocationData,
     InventoryLocationData, ItemLocation,
     StashLocationData,
 };
@@ -62,6 +63,7 @@ fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
         APARTMENT_STASH_KIND_WARDROBE => 1.27,
         APARTMENT_STASH_KIND_FRIDGE => 1.30,
         APARTMENT_STASH_KIND_STOVE => 1.14,
+        APARTMENT_STASH_KIND_WATER_TANK => 1.08,
         APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
         _ => 1.10,
     };
@@ -212,7 +214,7 @@ pub struct ApartmentUnitDecor {
     /// Roll around local Z after pitch/yaw (`YXZ` euler — matches Three.js decor roots).
     pub roll_rad: f32,
     pub uniform_scale: f32,
-    /// `0` plain decor; `1` bed (spawn anchor); `2` wardrobe (claim + stash); `3` footlocker stash; `4` stove stash; `5` fridge stash.
+    /// `0` plain decor; `1` bed (spawn anchor); `2` wardrobe (claim + stash); `3` footlocker stash; `4` stove stash; `5` fridge stash; `6` water tank stash.
     pub item_kind: u8,
 }
 
@@ -223,6 +225,7 @@ pub(crate) const APARTMENT_DECOR_ITEM_KIND_WARDROBE: u8 = 2;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER: u8 = 3;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_STOVE: u8 = 4;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_FRIDGE: u8 = 5;
+pub(crate) const APARTMENT_DECOR_ITEM_KIND_WATER_TANK: u8 = 6;
 
 /// `set_owned_apartment_piece_pose(..., piece, ...)`.
 pub(crate) const APARTMENT_LAYOUT_PIECE_BED: u8 = 0;
@@ -401,6 +404,7 @@ fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_WARDROBE => APARTMENT_STASH_KIND_WARDROBE,
         APARTMENT_DECOR_ITEM_KIND_STOVE => APARTMENT_STASH_KIND_STOVE,
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
+        APARTMENT_DECOR_ITEM_KIND_WATER_TANK => APARTMENT_STASH_KIND_WATER_TANK,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }
@@ -410,6 +414,7 @@ fn decor_stash_display_name_static(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_WARDROBE => "wardrobe",
         APARTMENT_DECOR_ITEM_KIND_STOVE => "stove",
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => "fridge",
+        APARTMENT_DECOR_ITEM_KIND_WATER_TANK => "water tank",
         _ => "footlocker",
     }
 }
@@ -1168,7 +1173,7 @@ pub fn add_apartment_unit_decor(
     if player_vitals::is_player_dead(ctx, ctx.sender()) {
         return;
     }
-    if item_kind > APARTMENT_DECOR_ITEM_KIND_FRIDGE {
+    if item_kind > APARTMENT_DECOR_ITEM_KIND_WATER_TANK {
         log::debug!("add_apartment_unit_decor: bad item_kind");
         return;
     }
@@ -1368,6 +1373,30 @@ fn pose_near_named_apartment_stash_anchor(
                     fridge.pos_z,
                     unit.foot_y,
                     stash_interact_radius_sq(APARTMENT_STASH_KIND_FRIDGE),
+                )
+        }
+        APARTMENT_STASH_KIND_WATER_TANK => {
+            let Some(tank) = ctx
+                .db
+                .apartment_unit_decor()
+                .iter()
+                .filter(|d| {
+                    d.unit_key.as_str() == unit.unit_key.as_str()
+                        && d.item_kind == APARTMENT_DECOR_ITEM_KIND_WATER_TANK
+                })
+                .min_by_key(|d| d.decor_id)
+            else {
+                return false;
+            };
+            feet_inside_unit(unit, x, y, z)
+                && pose_near_horizontal_marker(
+                    x,
+                    y,
+                    z,
+                    tank.pos_x,
+                    tank.pos_z,
+                    unit.foot_y,
+                    stash_interact_radius_sq(APARTMENT_STASH_KIND_WATER_TANK),
                 )
         }
         _ => {
