@@ -13,4 +13,5 @@ import {
 export default {
   itemInstanceId: __t.u64(),
   targetInventorySlot: __t.u16(),
+  quantityToMove: __t.u32(),
 };

@@ -424,12 +424,13 @@ export function clientMayUseApartmentStash(
   owner: Identity | undefined,
   stashKey: string,
   pose: { x: number; y: number; z: number },
+  opts?: { growTrayAnchorXZ?: { x: number; z: number } },
 ): boolean {
   if (!owner) return false;
   const full = parseApartmentStashKeyFull(stashKey);
   if (full.tag === "grow_tray") {
     /** Balcony trays sit at negative layout fz — outside strict unit AABB without slack. */
-    const hullSlackXz = 2.5;
+    const hullSlackXz = 4.0;
     const radiusSq = BALCONY_GROW_TRAY_INTERACT_RADIUS_M * BALCONY_GROW_TRAY_INTERACT_RADIUS_M;
     for (const row of conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
@@ -449,7 +450,8 @@ export function clientMayUseApartmentStash(
       ) {
         return false;
       }
-      const anchor = resolveBalconyGrowTrayAnchorXZ(conn, u, full.trayId);
+      const anchor =
+        opts?.growTrayAnchorXZ ?? resolveBalconyGrowTrayAnchorXZ(conn, u, full.trayId);
       if (!anchor) return false;
       const dx = pose.x - anchor.x;
       const dz = pose.z - anchor.z;

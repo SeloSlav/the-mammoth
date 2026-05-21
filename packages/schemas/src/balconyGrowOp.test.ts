@@ -4,6 +4,7 @@ import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowSpeedModifier,
   balconyGrowStageFromProgress,
+  balconyGrowSlotOffsetsFromHalfExtents,
   balconyGrowTrayStashKey,
   parseBalconyGrowTrayStashKey,
 } from "./balconyGrowOp.js";
@@ -54,5 +55,13 @@ describe("balconyGrowOp", () => {
     expect(balconyGrowStageFromProgress(0.25)).toBe("sapling");
     expect(balconyGrowStageFromProgress(0.7)).toBe("mid");
     expect(balconyGrowStageFromProgress(1)).toBe("mature");
+  });
+
+  it("spreads slot centers toward tray edges", () => {
+    const slots = balconyGrowSlotOffsetsFromHalfExtents(0.4, 0.3);
+    expect(slots[0]!.x).toBeCloseTo(-0.312, 3);
+    expect(slots[0]!.z).toBeCloseTo(-0.234, 3);
+    expect(slots[3]!.x).toBeCloseTo(0.312, 3);
+    expect(slots[3]!.z).toBeCloseTo(0.234, 3);
   });
 });

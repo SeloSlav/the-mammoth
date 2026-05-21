@@ -14,4 +14,5 @@ export default {
   itemInstanceId: __t.u64(),
   unitKey: __t.string(),
   targetInventorySlot: __t.u16(),
+  quantityToMove: __t.u32(),
 };

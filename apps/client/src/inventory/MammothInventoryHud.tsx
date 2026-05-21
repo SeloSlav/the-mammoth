@@ -58,8 +58,10 @@ import {
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
+import { inventoryReducerQuantityArg } from "./inventoryDragMove";
 import {
   inventorySlotGridsMatch,
+  inventorySlotGridsSemanticallyMatch,
   predictSlotMove,
   predictWorldDrop,
   type SlotGrids,
@@ -103,7 +105,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   useEffect(() => {
     if (!optimisticSlots) return;
-    if (inventorySlotGridsMatch(optimisticSlots, baseSlots)) {
+    if (
+      inventorySlotGridsMatch(optimisticSlots, baseSlots) ||
+      inventorySlotGridsSemanticallyMatch(optimisticSlots, baseSlots)
+    ) {
       setOptimisticSlots(null);
     }
   }, [baseSlots, optimisticSlots]);
@@ -113,7 +118,12 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     if (!optimisticSlots || !activeStash) return;
     const id = window.setTimeout(() => {
       if (!optimisticSlotsRef.current) return;
-      if (inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current)) return;
+      if (
+        inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current) ||
+        inventorySlotGridsSemanticallyMatch(optimisticSlotsRef.current, baseSlotsRef.current)
+      ) {
+        return;
+      }
       setOptimisticSlots(null);
       showGameplayErrorBar("Could not move item into storage. Try again or move closer.");
     }, 900);
@@ -270,6 +280,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         void conn.reducers.moveItemToHotbar({
           itemInstanceId: toInstanceId(pop),
           targetHotbarSlot: destIndex,
+          quantityToMove: 0,
         });
       } catch (err) {
         console.warn("[MammothInventoryHud] quick move to hotbar failed", err);
@@ -294,6 +305,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
           itemInstanceId: toInstanceId(pop),
           unitKey: activeStash.stashKey,
           targetStashSlot: destIndex,
+          quantityToMove: 0,
         });
       } catch (err) {
         console.warn("[MammothInventoryHud] quick move to stash failed", err);
@@ -316,6 +328,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         void conn.reducers.moveItemToInventory({
           itemInstanceId: toInstanceId(pop),
           targetInventorySlot: destIndex,
+          quantityToMove: 0,
         });
       } catch (err) {
         console.warn("[MammothInventoryHud] quick move to inventory failed", err);
@@ -332,25 +345,33 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       if (!src) return;
       const id = src.item.instance.instanceId;
       const instanceId = typeof id === "bigint" ? id : BigInt(id as number);
-      const qty = src.item.instance.quantity;
+      const stackQty = src.item.instance.quantity;
+      const quantityToMove = inventoryReducerQuantityArg(src.dragQuantity, stackQty);
+      const predictQty = quantityToMove === 0 ? undefined : src.dragQuantity;
       try {
         if (result.kind === "cancel") return;
         if (result.kind === "world") {
-          const predicted = predictWorldDrop(gridsForPrediction(), src.sourceSlot, qty);
+          const predicted = predictWorldDrop(gridsForPrediction(), src.sourceSlot, src.dragQuantity);
           if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.dropItem({
             itemInstanceId: instanceId,
-            quantityToDrop: qty,
+            quantityToDrop: src.dragQuantity,
           });
           return;
         }
         const target = result.slot;
+        const predicted = predictSlotMove(
+          gridsForPrediction(),
+          src.sourceSlot,
+          target,
+          predictQty,
+        );
+        if (predicted) setOptimisticSlots(predicted);
         if (target.type === "inventory") {
-          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
-          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.moveItemToInventory({
             itemInstanceId: instanceId,
             targetInventorySlot: target.index,
+            quantityToMove,
           });
         } else if (target.type === "stash") {
           if (!activeStash) return;
@@ -362,19 +383,17 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
             reportApartmentStashRejection(activeStash.stashKind);
             return;
           }
-          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
-          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: activeStash.stashKey,
             targetStashSlot: target.index,
+            quantityToMove,
           });
         } else {
-          const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
-          if (predicted) setOptimisticSlots(predicted);
           void conn.reducers.moveItemToHotbar({
             itemInstanceId: instanceId,
             targetHotbarSlot: target.index,
+            quantityToMove,
           });
         }
       } catch (err) {

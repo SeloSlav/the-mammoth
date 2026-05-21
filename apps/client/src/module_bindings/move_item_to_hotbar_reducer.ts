@@ -13,4 +13,5 @@ import {
 export default {
   itemInstanceId: __t.u64(),
   targetHotbarSlot: __t.u8(),
+  quantityToMove: __t.u32(),
 };

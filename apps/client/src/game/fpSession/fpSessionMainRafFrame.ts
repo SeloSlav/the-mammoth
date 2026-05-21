@@ -41,6 +41,7 @@ import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoor
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { FpBalconyGrowSession } from "../fpBalconyGrow/fpBalconyGrowSession.js";
 import { balconyGrowPromptFromDecorRaycast } from "../fpBalconyGrow/fpBalconyGrowSession.js";
+import { balconyGrowInspectBlocksGrowTrayStash } from "../fpBalconyGrow/fpBalconyGrowInspectState.js";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
@@ -758,7 +759,7 @@ export function createFpSessionMainRafFrame(
             ft,
             deps.camera,
             deps.fpApartmentDecorMeshes,
-            deps.fpBalconyGrowSession.getGrowState(containingResidentialUnitKey),
+            deps.fpBalconyGrowSession.getActiveGrowState(),
           );
         } else {
           cachedBalconyGrowPrompt = null;
@@ -859,8 +860,9 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (
-        lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
-        cachedBalconyGrowPrompt?.kind === "balcony_grow_tray"
+        !balconyGrowInspectBlocksGrowTrayStash() &&
+        (lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
+          cachedBalconyGrowPrompt?.kind === "balcony_grow_tray")
       ) {
         const growStash =
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY

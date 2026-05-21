@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
-import { destIndexForQuickTransfer, firstEmptySlotIndex } from "./inventoryQuickTransfer";
+import {
+  destIndexForQuickTransfer,
+  destPlayerCarrySlotForQuickTransfer,
+  firstEmptySlotIndex,
+} from "./inventoryQuickTransfer";
 
 function mockPop(defId: string, quantity: number, maxStack: number): MammothPopulatedItem {
   return {
@@ -44,5 +48,37 @@ describe("destIndexForQuickTransfer", () => {
     const moving = mockPop("wood", 1, 1);
     const dest = [mockPop("stone", 1, 10), mockPop("ore", 1, 10)];
     expect(destIndexForQuickTransfer(dest, moving)).toBe(0);
+  });
+});
+
+describe("destPlayerCarrySlotForQuickTransfer", () => {
+  it("prefers first empty hotbar slot over empty inventory", () => {
+    const moving = mockPop("bandage", 1, 10);
+    const hotbar = [null, mockPop("knife", 1, 1)];
+    const inventory = [null, null];
+    expect(destPlayerCarrySlotForQuickTransfer(hotbar, inventory, moving)).toEqual({
+      type: "hotbar",
+      index: 0,
+    });
+  });
+
+  it("merges into hotbar before using inventory", () => {
+    const moving = mockPop("ammo-9mm", 5, 30);
+    const hotbar = [mockPop("ammo-9mm", 10, 30), mockPop("knife", 1, 1)];
+    const inventory = [null];
+    expect(destPlayerCarrySlotForQuickTransfer(hotbar, inventory, moving)).toEqual({
+      type: "hotbar",
+      index: 0,
+    });
+  });
+
+  it("falls back to inventory when hotbar has no room", () => {
+    const moving = mockPop("wood", 1, 10);
+    const hotbar = [mockPop("stone", 1, 10), mockPop("ore", 1, 10)];
+    const inventory = [null, mockPop("cloth", 1, 10)];
+    expect(destPlayerCarrySlotForQuickTransfer(hotbar, inventory, moving)).toEqual({
+      type: "inventory",
+      index: 0,
+    });
   });
 });

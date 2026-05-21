@@ -181,6 +181,52 @@ fn first_empty_hotbar_slot(ctx: &ReducerContext, owner: Identity) -> Option<u8> 
     None
 }
 
+/// Lowest-index empty hotbar slot, else lowest-index empty inventory slot.
+pub(crate) fn first_empty_player_carry_slot(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<ItemLocation> {
+    if let Some(slot) = first_empty_hotbar_slot(ctx, owner) {
+        return Some(ItemLocation::Hotbar(HotbarLocationData {
+            owner_id: owner,
+            slot_index: slot,
+        }));
+    }
+    if let Some(slot) = first_empty_inventory_slot(ctx, owner) {
+        return Some(ItemLocation::Inventory(InventoryLocationData {
+            owner_id: owner,
+            slot_index: slot,
+        }));
+    }
+    None
+}
+
+fn merge_grant_into_player_stack(
+    ctx: &ReducerContext,
+    def_id: &str,
+    max_stack: u32,
+    quantity: &mut u32,
+    row: &InventoryItem,
+) -> Result<(), String> {
+    if *quantity == 0 || row.def_id != def_id || row.quantity >= max_stack {
+        return Ok(());
+    }
+    let room = max_stack - row.quantity;
+    let take = (*quantity).min(room);
+    if take == 0 {
+        return Ok(());
+    }
+    let inv = ctx.db.inventory_item();
+    let mut u = inv
+        .instance_id()
+        .find(row.instance_id)
+        .ok_or_else(|| "grant: stale item row".to_string())?;
+    u.quantity += take;
+    *quantity -= take;
+    inv.instance_id().update(u);
+    Ok(())
+}
+
 /// Add [`quantity`] of [`def_id`] into the player's inventory/hotbar (merge into stacks, then empty slots).
 /// New stacks use the lowest-index empty **hotbar** slot before any empty inventory slot (world pickups rely on this).
 pub(crate) fn try_grant_stack_to_player(
@@ -198,34 +244,21 @@ pub(crate) fn try_grant_stack_to_player(
     let max_stack = items_catalog::max_stack_for(&def_id).unwrap_or(1);
     let inv = ctx.db.inventory_item();
 
-    for row in inv.iter() {
-        if row.def_id != def_id {
-            continue;
+    for slot in 0..NUM_PLAYER_HOTBAR_SLOTS {
+        if quantity == 0 {
+            break;
         }
-        let owned = match &row.location {
-            ItemLocation::Inventory(d) => d.owner_id == owner,
-            ItemLocation::Hotbar(d) => d.owner_id == owner,
-            ItemLocation::Stash(_) => false,
-            ItemLocation::Unknown => false,
-        };
-        if !owned || quantity == 0 {
-            continue;
+        if let Some(row) = find_item_in_hotbar_slot(ctx, owner, slot) {
+            merge_grant_into_player_stack(ctx, &def_id, max_stack, &mut quantity, &row)?;
         }
-        if row.quantity >= max_stack {
-            continue;
+    }
+    for slot in 0..NUM_PLAYER_INVENTORY_SLOTS {
+        if quantity == 0 {
+            break;
         }
-        let room = max_stack - row.quantity;
-        let take = quantity.min(room);
-        if take == 0 {
-            continue;
+        if let Some(row) = find_item_in_inventory_slot(ctx, owner, slot) {
+            merge_grant_into_player_stack(ctx, &def_id, max_stack, &mut quantity, &row)?;
         }
-        let mut u = inv
-            .instance_id()
-            .find(row.instance_id)
-            .ok_or_else(|| "grant: stale item row".to_string())?;
-        u.quantity += take;
-        quantity -= take;
-        inv.instance_id().update(u);
     }
 
     while quantity > 0 {
@@ -301,53 +334,96 @@ pub(crate) fn remove_player_item_quantity(
     Ok((def_id, quantity))
 }
 
-pub(crate) fn move_between_player_slots(
+fn effective_move_quantity(source_qty: u32, quantity_to_move: u32) -> Result<u32, String> {
+    if quantity_to_move == 0 {
+        Ok(source_qty)
+    } else if quantity_to_move > source_qty {
+        Err(format!(
+            "cannot move {quantity_to_move} items (only {source_qty} in stack)"
+        ))
+    } else {
+        Ok(quantity_to_move)
+    }
+}
+
+/// Move some or all units from one inventory row into `dest` (empty slot, merge, swap, or split).
+/// `quantity_to_move == 0` means move the entire stack.
+pub(crate) fn transfer_inventory_row_quantity(
     ctx: &ReducerContext,
     item_instance_id: u64,
     dest: ItemLocation,
+    target_opt: Option<InventoryItem>,
+    quantity_to_move: u32,
 ) -> Result<(), String> {
-    let sender = ctx.sender();
     let inv = ctx.db.inventory_item();
+    let item_to_move = inv
+        .instance_id()
+        .find(item_instance_id)
+        .ok_or_else(|| format!("item instance {item_instance_id} not found"))?;
 
-    match &dest {
-        ItemLocation::Inventory(d) => {
-            if d.owner_id != sender {
-                return Err("destination owner mismatch".to_string());
-            }
-            if d.slot_index >= NUM_PLAYER_INVENTORY_SLOTS {
-                return Err("bad inventory slot".to_string());
-            }
-        }
-        ItemLocation::Hotbar(d) => {
-            if d.owner_id != sender {
-                return Err("destination owner mismatch".to_string());
-            }
-            if d.slot_index >= NUM_PLAYER_HOTBAR_SLOTS {
-                return Err("bad hotbar slot".to_string());
-            }
-        }
-        ItemLocation::Stash(_) => {
-            return Err("stash transfers use dedicated reducers".to_string());
-        }
-        ItemLocation::Unknown => return Err("invalid destination".to_string()),
-    };
-
-    let mut item_to_move = get_player_item(ctx, item_instance_id)?;
+    let qty = effective_move_quantity(item_to_move.quantity, quantity_to_move)?;
     let max_stack = items_catalog::max_stack_for(&item_to_move.def_id)
         .ok_or_else(|| format!("unknown def_id {}", item_to_move.def_id))?;
 
-    let original_location = item_to_move.location.clone();
+    if qty < item_to_move.quantity {
+        if max_stack <= 1 {
+            return Err("cannot split this stack".to_string());
+        }
+        if let Some(target_item) = target_opt {
+            if target_item.instance_id == item_instance_id {
+                return Ok(());
+            }
+            if target_item.def_id != item_to_move.def_id {
+                return Err("cannot split onto a different item".to_string());
+            }
+            let room = max_stack.saturating_sub(target_item.quantity);
+            let xfer = qty.min(room);
+            if xfer == 0 {
+                return Err("target stack full".to_string());
+            }
+            let mut tgt = inv
+                .instance_id()
+                .find(target_item.instance_id)
+                .ok_or_else(|| "split merge: target row missing".to_string())?;
+            tgt.quantity += xfer;
+            inv.instance_id().update(tgt);
 
-    let target_opt = match &dest {
-        ItemLocation::Inventory(d) => find_item_in_inventory_slot(ctx, sender, d.slot_index),
-        ItemLocation::Hotbar(d) => find_item_in_hotbar_slot(ctx, sender, d.slot_index),
-        ItemLocation::Stash(_) | ItemLocation::Unknown => None,
-    };
+            let mut src = inv
+                .instance_id()
+                .find(item_instance_id)
+                .ok_or_else(|| "split merge: source row missing".to_string())?;
+            src.quantity -= xfer;
+            inv.instance_id().update(src);
+            return Ok(());
+        }
+
+        let mut src = inv
+            .instance_id()
+            .find(item_instance_id)
+            .ok_or_else(|| "split place: source row missing".to_string())?;
+        src.quantity -= qty;
+        inv.instance_id().update(src);
+
+        let row = inv.insert(InventoryItem {
+            instance_id: 0,
+            def_id: item_to_move.def_id.clone(),
+            quantity: qty,
+            location: dest,
+        });
+        crate::water_container::on_water_bottle_inventory_inserted(ctx, &row);
+        return Ok(());
+    }
+
+    let original_location = item_to_move.location.clone();
 
     if let Some(target_item) = target_opt {
         if target_item.instance_id == item_instance_id {
-            item_to_move.location = dest.clone();
-            inv.instance_id().update(item_to_move);
+            let mut mv = inv
+                .instance_id()
+                .find(item_instance_id)
+                .ok_or_else(|| "same-slot move: item row missing".to_string())?;
+            mv.location = dest.clone();
+            inv.instance_id().update(mv);
             return Ok(());
         }
 
@@ -406,11 +482,54 @@ pub(crate) fn move_between_player_slots(
     Ok(())
 }
 
+pub(crate) fn move_between_player_slots(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    dest: ItemLocation,
+    quantity_to_move: u32,
+) -> Result<(), String> {
+    let sender = ctx.sender();
+
+    match &dest {
+        ItemLocation::Inventory(d) => {
+            if d.owner_id != sender {
+                return Err("destination owner mismatch".to_string());
+            }
+            if d.slot_index >= NUM_PLAYER_INVENTORY_SLOTS {
+                return Err("bad inventory slot".to_string());
+            }
+        }
+        ItemLocation::Hotbar(d) => {
+            if d.owner_id != sender {
+                return Err("destination owner mismatch".to_string());
+            }
+            if d.slot_index >= NUM_PLAYER_HOTBAR_SLOTS {
+                return Err("bad hotbar slot".to_string());
+            }
+        }
+        ItemLocation::Stash(_) => {
+            return Err("stash transfers use dedicated reducers".to_string());
+        }
+        ItemLocation::Unknown => return Err("invalid destination".to_string()),
+    };
+
+    let _item_to_move = get_player_item(ctx, item_instance_id)?;
+
+    let target_opt = match &dest {
+        ItemLocation::Inventory(d) => find_item_in_inventory_slot(ctx, sender, d.slot_index),
+        ItemLocation::Hotbar(d) => find_item_in_hotbar_slot(ctx, sender, d.slot_index),
+        ItemLocation::Stash(_) | ItemLocation::Unknown => None,
+    };
+
+    transfer_inventory_row_quantity(ctx, item_instance_id, dest, target_opt, quantity_to_move)
+}
+
 #[spacetimedb::reducer]
 pub fn move_item_to_inventory(
     ctx: &ReducerContext,
     item_instance_id: u64,
     target_inventory_slot: u16,
+    quantity_to_move: u32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("move_item_to_inventory blocked: {e}");
@@ -420,13 +539,18 @@ pub fn move_item_to_inventory(
         owner_id: ctx.sender(),
         slot_index: target_inventory_slot,
     });
-    if let Err(e) = move_between_player_slots(ctx, item_instance_id, dest) {
+    if let Err(e) = move_between_player_slots(ctx, item_instance_id, dest, quantity_to_move) {
         log::warn!("move_item_to_inventory: {e}");
     }
 }
 
 #[spacetimedb::reducer]
-pub fn move_item_to_hotbar(ctx: &ReducerContext, item_instance_id: u64, target_hotbar_slot: u8) {
+pub fn move_item_to_hotbar(
+    ctx: &ReducerContext,
+    item_instance_id: u64,
+    target_hotbar_slot: u8,
+    quantity_to_move: u32,
+) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("move_item_to_hotbar blocked: {e}");
         return;
@@ -435,7 +559,7 @@ pub fn move_item_to_hotbar(ctx: &ReducerContext, item_instance_id: u64, target_h
         owner_id: ctx.sender(),
         slot_index: target_hotbar_slot,
     });
-    if let Err(e) = move_between_player_slots(ctx, item_instance_id, dest) {
+    if let Err(e) = move_between_player_slots(ctx, item_instance_id, dest, quantity_to_move) {
         log::warn!("move_item_to_hotbar: {e}");
     }
 }

@@ -16,6 +16,8 @@ export type MammothPopulatedItem = {
 export type MammothDraggedItemInfo = {
   item: MammothPopulatedItem;
   sourceSlot: MammothDragSourceSlotInfo;
+  /** Stack units carried while dragging (full stack for left-click, half for middle-click split). */
+  dragQuantity: number;
 };
 
 /** Result of a drag-release from {@link MammothDraggableItem}. */

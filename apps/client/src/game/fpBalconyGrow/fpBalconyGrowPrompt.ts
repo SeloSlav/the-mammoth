@@ -12,7 +12,14 @@ import {
   clientMayUseApartmentStash,
   clientOwnsClaimedApartmentUnit,
 } from "../fpApartment/fpApartmentGameplay.js";
+import { apartmentStashLabel, APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
+import {
+  balconyGrowLivePlantInSlot,
+  growTrayRayHitTargetsLivePlant,
+  resolveBalconyGrowSoilAimedSlotIndex,
+} from "./fpBalconyGrowTrayAim.js";
+import { clientFeetNearGrowTray } from "./fpBalconyGrowTrayAnchor.js";
 
 export type BalconyGrowTrayPrompt =
   | {
@@ -32,6 +39,28 @@ export type BalconyGrowTrayPrompt =
 
 const PHASE_MATURE = 2;
 
+function harvestPromptIfNear(
+  conn: DbConnection,
+  identity: Identity,
+  feet: { x: number; y: number; z: number },
+  unitKey: string,
+  trayId: string,
+  slotIndex: number,
+  cropDisplayName: string,
+  trayRoot?: THREE.Object3D,
+): BalconyGrowTrayPrompt | null {
+  if (!clientFeetNearGrowTray(conn, identity, feet, unitKey, trayId, trayRoot)) {
+    return null;
+  }
+  return {
+    kind: "balcony_grow_harvest",
+    unitKey,
+    trayId,
+    slotIndex,
+    cropDisplayName,
+  };
+}
+
 function growTrayStashPrompt(
   conn: DbConnection,
   identity: Identity,
@@ -39,10 +68,12 @@ function growTrayStashPrompt(
   unitKey: string,
   trayId: string,
   fromRaycastHit: boolean,
+  trayRoot?: THREE.Object3D,
 ): BalconyGrowTrayPrompt | null {
   const stashKey = balconyGrowTrayStashKey(unitKey, trayId);
   const allowed = fromRaycastHit
-    ? clientOwnsClaimedApartmentUnit(conn, identity, unitKey)
+    ? clientOwnsClaimedApartmentUnit(conn, identity, unitKey) &&
+      clientFeetNearGrowTray(conn, identity, feet, unitKey, trayId, trayRoot)
     : clientMayUseApartmentStash(conn, identity, stashKey, feet);
   if (!allowed) {
     return null;
@@ -52,7 +83,7 @@ function growTrayStashPrompt(
     unitKey,
     trayId,
     stashKey,
-    stashLabel: "grow tray fertilizer",
+    stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
   };
 }
 
@@ -60,6 +91,7 @@ export function getBalconyGrowTrayPromptFromHit(
   conn: DbConnection,
   identity: Identity | undefined,
   feet: { x: number; y: number; z: number },
+  camera: THREE.PerspectiveCamera,
   hit: THREE.Intersection,
   growState: BalconyGrowOpUnitState,
 ): BalconyGrowTrayPrompt | null {
@@ -73,21 +105,55 @@ export function getBalconyGrowTrayPromptFromHit(
     const plant = growState.plants.find(
       (p) => p.trayId === trayId && p.slotIndex === slotIndex,
     );
+    const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
     if (plant?.phase === PHASE_MATURE) {
       const cropName =
         getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
-      return {
-        kind: "balcony_grow_harvest",
+      return harvestPromptIfNear(
+        conn,
+        identity,
+        feet,
         unitKey,
         trayId,
         slotIndex,
-        cropDisplayName: cropName,
-      };
+        cropName,
+        trayRoot,
+      );
     }
-    return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, true);
+    if (balconyGrowLivePlantInSlot(growState, trayId, slotIndex)) {
+      return null;
+    }
+    return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, true, trayRoot);
   }
 
-  return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, true);
+  const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+  if (trayRoot) {
+    const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
+    if (aimedSlot !== null) {
+      const plant = growState.plants.find(
+        (p) => p.trayId === trayId && p.slotIndex === aimedSlot,
+      );
+      if (plant?.phase === PHASE_MATURE) {
+        const cropName =
+          getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
+        return harvestPromptIfNear(
+          conn,
+          identity,
+          feet,
+          unitKey,
+          trayId,
+          aimedSlot,
+          cropName,
+          trayRoot,
+        );
+      }
+      if (balconyGrowLivePlantInSlot(growState, trayId, aimedSlot)) {
+        return null;
+      }
+    }
+  }
+
+  return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, true, trayRoot);
 }
 
 const _camPosScratch = new THREE.Vector3();
@@ -133,7 +199,7 @@ export function balconyGrowTrayAimFallbackPrompt(
     if (dist < 0.08) return;
     _toTrayScratch.multiplyScalar(1 / dist);
     const dot = _toTrayScratch.dot(_camDirScratch);
-    if (dot < 0.75) return;
+    if (dot < 0.82) return;
 
     const score = dot - dist * 0.04;
     if (score > bestScore) {
@@ -157,6 +223,9 @@ export function balconyGrowTrayAimFallbackPrompt(
 
   if (bestUnitKey === null || bestTrayId === null) return null;
 
+  const trayMesh = trayPickMeshes.find((mesh) => mesh.userData.mammothGrowTrayId === bestTrayId);
+  const trayRoot = trayMesh?.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+
   if (bestSlotIndex !== undefined) {
     const plant = growState.plants.find(
       (p) => p.trayId === bestTrayId && p.slotIndex === bestSlotIndex,
@@ -164,17 +233,47 @@ export function balconyGrowTrayAimFallbackPrompt(
     if (plant?.phase === PHASE_MATURE) {
       const cropName =
         getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
-      return {
-        kind: "balcony_grow_harvest",
-        unitKey: bestUnitKey,
-        trayId: bestTrayId,
-        slotIndex: bestSlotIndex,
-        cropDisplayName: cropName,
-      };
+      return harvestPromptIfNear(
+        conn,
+        identity,
+        feet,
+        bestUnitKey,
+        bestTrayId,
+        bestSlotIndex,
+        cropName,
+        trayRoot,
+      );
+    }
+    if (balconyGrowLivePlantInSlot(growState, bestTrayId, bestSlotIndex)) {
+      return null;
+    }
+  } else if (trayRoot) {
+    const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
+    if (aimedSlot !== null) {
+      const plant = growState.plants.find(
+        (p) => p.trayId === bestTrayId && p.slotIndex === aimedSlot,
+      );
+      if (plant?.phase === PHASE_MATURE) {
+        const cropName =
+          getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
+        return harvestPromptIfNear(
+          conn,
+          identity,
+          feet,
+          bestUnitKey,
+          bestTrayId,
+          aimedSlot,
+          cropName,
+          trayRoot,
+        );
+      }
+      if (balconyGrowLivePlantInSlot(growState, bestTrayId, aimedSlot)) {
+        return null;
+      }
     }
   }
 
-  return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, true);
+  return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, true, trayRoot);
 }
 
 export function resolveBalconyGrowTrayPrompt(
@@ -187,11 +286,45 @@ export function resolveBalconyGrowTrayPrompt(
   slotPickMeshes: readonly THREE.Mesh[],
   growState: BalconyGrowOpUnitState,
 ): BalconyGrowTrayPrompt | null {
+  if (!identity) return null;
   for (const hit of hits) {
+    if (growTrayRayHitTargetsLivePlant(hit, growState, camera)) {
+      const trayId = hit.object.userData.mammothGrowTrayId as string;
+      const unitKey = hit.object.userData.mammothGrowTrayUnitKey as string;
+      const slotIndex =
+        typeof hit.object.userData.mammothGrowSlotIndex === "number"
+          ? hit.object.userData.mammothGrowSlotIndex
+          : resolveBalconyGrowSoilAimedSlotIndex(
+              camera,
+              hit.object.userData.mammothGrowTrayRoot as THREE.Object3D,
+            );
+      if (slotIndex !== null) {
+        const plant = growState.plants.find(
+          (p) => p.trayId === trayId && p.slotIndex === slotIndex,
+        );
+        if (plant?.phase === PHASE_MATURE) {
+          const cropName =
+            getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
+          const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+          return harvestPromptIfNear(
+            conn,
+            identity,
+            feet,
+            unitKey,
+            trayId,
+            slotIndex,
+            cropName,
+            trayRoot,
+          );
+        }
+      }
+      return null;
+    }
     const prompt = getBalconyGrowTrayPromptFromHit(
       conn,
       identity,
       feet,
+      camera,
       hit,
       growState,
     );

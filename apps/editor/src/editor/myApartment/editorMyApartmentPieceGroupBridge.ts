@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+export const EDITOR_MY_APARTMENT_FURNITURE_ROOT_NAME = "editor_my_apartment_furniture";
+
 /** Selection groups keyed by {@link editorMyApartmentSelectedIdForDecor} etc.; set by lifecycle. */
 let groupsRef: Record<string, THREE.Group> | null = null;
 
@@ -38,8 +40,38 @@ export function requestEditorFillWallOpening(wallId: string): void {
   fillWallOpeningRequest?.(wallId);
 }
 
-/** Immediate parent (`editor_my_apartment_furniture` root) of all décor/walls/builtins. */
+/** `editor_my_apartment_furniture` root — not the transient saved-group manipulator. */
 let apartmentFurnitureMountRoot: THREE.Group | null = null;
+
+/** Walk ancestors until the named furniture mount root (ignores saved-group manip parents). */
+export function resolveEditorMyApartmentFurnitureMountRootFromObject(
+  from: THREE.Object3D | null | undefined,
+): THREE.Group | null {
+  let o: THREE.Object3D | null = from ?? null;
+  while (o) {
+    if (o instanceof THREE.Group && o.name === EDITOR_MY_APARTMENT_FURNITURE_ROOT_NAME) {
+      return o;
+    }
+    o = o.parent;
+  }
+  return null;
+}
+
+function refreshApartmentFurnitureMountRootFromGroups(): void {
+  if (!groupsRef || Object.keys(groupsRef).length === 0) {
+    apartmentFurnitureMountRoot = null;
+    return;
+  }
+  for (const group of Object.values(groupsRef)) {
+    const root = resolveEditorMyApartmentFurnitureMountRootFromObject(group);
+    if (root) {
+      apartmentFurnitureMountRoot = root;
+      return;
+    }
+  }
+  apartmentFurnitureMountRoot = null;
+}
+
 let apartmentFurnitureMountResyncDecorShadows: ((unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds) => void) | null = null;
 let apartmentDecorShadowRenderer: THREE.WebGPURenderer | null = null;
 
@@ -68,16 +100,17 @@ export function setEditorMyApartmentPieceGroups(
   clearEditorMyApartmentDynamicPlacementOverlays();
   groupsRef = next;
 
-  apartmentFurnitureMountRoot = null;
   apartmentFurnitureMountResyncDecorShadows = null;
-  if (!groupsRef || Object.keys(groupsRef).length === 0) return;
-  const firstGroup = Object.values(groupsRef)[0];
-  const p = firstGroup?.parent;
-  apartmentFurnitureMountRoot =
-    firstGroup && p instanceof THREE.Group ? p : null;
+  refreshApartmentFurnitureMountRootFromGroups();
 }
 
 export function getEditorMyApartmentFurnitureMountRoot(): THREE.Group | null {
+  if (
+    apartmentFurnitureMountRoot?.name === EDITOR_MY_APARTMENT_FURNITURE_ROOT_NAME
+  ) {
+    return apartmentFurnitureMountRoot;
+  }
+  refreshApartmentFurnitureMountRootFromGroups();
   return apartmentFurnitureMountRoot;
 }
 

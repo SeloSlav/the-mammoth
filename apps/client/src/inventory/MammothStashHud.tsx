@@ -13,9 +13,11 @@ import type {
   MammothDropResult,
   MammothPopulatedItem,
 } from "./inventoryDragDropTypes";
-import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
+import { destPlayerCarrySlotForQuickTransfer, type MammothPlayerCarrySlot } from "./inventoryQuickTransfer";
+import { inventoryReducerQuantityArg } from "./inventoryDragMove";
 import {
   inventorySlotGridsMatch,
+  inventorySlotGridsSemanticallyMatch,
   predictSlotMove,
   type SlotGrids,
 } from "./inventoryOptimistic";
@@ -66,7 +68,7 @@ function renderStashSlot(
     toInstanceId: (pop: MammothPopulatedItem) => bigint;
     handleDragStart: (info: MammothDraggedItemInfo) => void;
     handleDrop: (result: MammothDropResult) => void;
-    quickMoveStashToInventory: (pop: MammothPopulatedItem, fromStashIndex: number) => void;
+    quickMoveStashToPlayerCarry: (pop: MammothPopulatedItem, fromStashIndex: number) => void;
     openItemTooltipForSlot: (
       slotInfo: MammothDragSourceSlotInfo,
       pop: MammothPopulatedItem,
@@ -87,7 +89,7 @@ function renderStashSlot(
           sourceSlot={slotInfo}
           onDragStart={opts.handleDragStart}
           onDrop={opts.handleDrop}
-          onItemContextMenu={() => opts.quickMoveStashToInventory(pop, slotIndex)}
+          onItemContextMenu={() => opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
           slotHover={{
             onEnter: (e) => opts.openItemTooltipForSlot(slotInfo, pop, e),
             onMove: opts.updateTooltipPositionFromHoverEvent,
@@ -133,7 +135,10 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
 
   useEffect(() => {
     if (!optimisticSlots) return;
-    if (inventorySlotGridsMatch(optimisticSlots, baseSlots)) {
+    if (
+      inventorySlotGridsMatch(optimisticSlots, baseSlots) ||
+      inventorySlotGridsSemanticallyMatch(optimisticSlots, baseSlots)
+    ) {
       setOptimisticSlots(null);
     }
   }, [baseSlots, optimisticSlots]);
@@ -142,7 +147,12 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     if (!optimisticSlots) return;
     const id = window.setTimeout(() => {
       if (!optimisticSlotsRef.current) return;
-      if (inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current)) return;
+      if (
+        inventorySlotGridsMatch(optimisticSlotsRef.current, baseSlotsRef.current) ||
+        inventorySlotGridsSemanticallyMatch(optimisticSlotsRef.current, baseSlotsRef.current)
+      ) {
+        return;
+      }
       setOptimisticSlots(null);
       showGameplayErrorBar("Could not move item in storage. Try again.");
     }, 900);
@@ -224,25 +234,39 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     [stashKind],
   );
 
-  const quickMoveStashToInventory = useCallback(
+  const quickMoveStashToPlayerCarry = useCallback(
     (pop: MammothPopulatedItem, fromStashIndex: number) => {
       if (document.body.classList.contains("item-dragging")) return;
       const g = gridsForPrediction();
-      const destIndex = destIndexForQuickTransfer(g.inventory, pop);
+      const dest: MammothPlayerCarrySlot = destPlayerCarrySlotForQuickTransfer(
+        g.hotbar,
+        g.inventory,
+        pop,
+      );
       const predicted = predictSlotMove(
         g,
         { type: "stash", index: fromStashIndex },
-        { type: "inventory", index: destIndex },
+        dest,
       );
       if (predicted) setOptimisticSlots(predicted);
       try {
-        void conn.reducers.stashPullItemToInventorySlot({
-          itemInstanceId: toInstanceId(pop),
-          unitKey: stashKey,
-          targetInventorySlot: destIndex,
-        });
+        if (dest.type === "hotbar") {
+          void conn.reducers.stashPullItemToHotbarSlot({
+            itemInstanceId: toInstanceId(pop),
+            unitKey: stashKey,
+            targetHotbarSlot: dest.index,
+            quantityToMove: 0,
+          });
+        } else {
+          void conn.reducers.stashPullItemToInventorySlot({
+            itemInstanceId: toInstanceId(pop),
+            unitKey: stashKey,
+            targetInventorySlot: dest.index,
+            quantityToMove: 0,
+          });
+        }
       } catch (err) {
-        console.warn("[MammothStashHud] quick move to inventory failed", err);
+        console.warn("[MammothStashHud] quick move to player carry failed", err);
       }
     },
     [conn, gridsForPrediction, toInstanceId, stashKey],
@@ -265,7 +289,17 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
 
       const id = src.item.instance.instanceId;
       const instanceId = typeof id === "bigint" ? id : BigInt(id as number);
-      const predicted = predictSlotMove(gridsForPrediction(), src.sourceSlot, target);
+      const quantityToMove = inventoryReducerQuantityArg(
+        src.dragQuantity,
+        src.item.instance.quantity,
+      );
+      const predictQty = quantityToMove === 0 ? undefined : src.dragQuantity;
+      const predicted = predictSlotMove(
+        gridsForPrediction(),
+        src.sourceSlot,
+        target,
+        predictQty,
+      );
       if (predicted) setOptimisticSlots(predicted);
 
       try {
@@ -274,24 +308,28 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetStashSlot: target.index,
+            quantityToMove,
           });
         } else if (target.type === "stash") {
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetStashSlot: target.index,
+            quantityToMove,
           });
         } else if (target.type === "inventory") {
           void conn.reducers.stashPullItemToInventorySlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetInventorySlot: target.index,
+            quantityToMove,
           });
         } else {
           void conn.reducers.stashPullItemToHotbarSlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetHotbarSlot: target.index,
+            quantityToMove,
           });
         }
       } catch (err) {
@@ -345,7 +383,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     toInstanceId,
     handleDragStart,
     handleDrop,
-    quickMoveStashToInventory,
+    quickMoveStashToPlayerCarry,
     openItemTooltipForSlot,
     updateTooltipPositionFromHoverEvent,
     hideItemTooltip,

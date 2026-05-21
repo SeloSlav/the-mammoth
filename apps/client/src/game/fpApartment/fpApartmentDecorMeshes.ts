@@ -106,8 +106,12 @@ import {
 } from "../fpBalconyGrow/fpBalconyGrowPrompt.js";
 import {
   collectOwnedBalconyGrowPickMeshes,
+  sortBalconyGrowRaycastHits,
 } from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
+import { syncBalconyGrowTrayDecorVisibility } from "../fpBalconyGrow/fpBalconyGrowPresentation.js";
+import { readBalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
+import { growTrayRayHitTargetsLivePlant } from "../fpBalconyGrow/fpBalconyGrowTrayAim.js";
 import type { Identity } from "spacetimedb";
 import type { BalconyGrowPlant, BalconyGrowTray } from "../../module_bindings/types";
 
@@ -463,6 +467,14 @@ export type MountFpApartmentDecorMeshesResult = {
     trays: readonly BalconyGrowTray[],
     stashHasFertilizer: (unitKey: string, trayId: string) => boolean,
   ) => void;
+  syncBalconyGrowTrayDecorVisibility: (
+    feet: THREE.Vector3,
+    unitKey: string | null,
+  ) => void;
+  collectBalconyGrowPickMeshesForPlayer: (
+    playerPos: THREE.Vector3,
+    dst: THREE.Mesh[],
+  ) => void;
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -493,6 +505,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const sittablePickMeshes: THREE.Mesh[] = [];
   const growTrayPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
+  const growPlantPickMeshes: THREE.Mesh[] = [];
   const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
   const growTrayIndexByUnit = new Map<string, number>();
   const stageTemplateCache = new Map<string, THREE.Object3D>();
@@ -555,6 +568,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       growTrayPickMeshes,
       growSlotPickMeshes,
       visibleGrowPickMeshes,
+      growPlantPickMeshes,
     );
     const growPickSet = new Set(visibleGrowPickMeshes);
     for (let i = 0; i < stashPickMeshes.length; i++) {
@@ -578,12 +592,15 @@ export function mountFpApartmentDecorMeshes(opts: {
       growTrayPickMeshes,
       growSlotPickMeshes,
       visibleGrowPickMeshes,
+      growPlantPickMeshes,
     );
     if (visibleGrowPickMeshes.length === 0) return [];
     configureInteractionPickRaycaster();
     _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
     _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
-    return _stashRaycaster.intersectObjects(visibleGrowPickMeshes, false);
+    return sortBalconyGrowRaycastHits(
+      _stashRaycaster.intersectObjects(visibleGrowPickMeshes, false),
+    );
   };
 
   const disposeGroupDeep = (g: THREE.Group) => {
@@ -1048,8 +1065,11 @@ export function mountFpApartmentDecorMeshes(opts: {
           });
           growTrayPickMeshes.push(...mount.growTrayPickMeshes);
           growSlotPickMeshes.push(...mount.growSlotPickMeshes);
+          growPlantPickMeshes.push(...mount.growPlantPickMeshes);
           stashPickMeshes.push(...mount.growTrayPickMeshes, ...mount.growSlotPickMeshes);
           growSlotVisualsByTrayId.set(trayId, mount.slotVisualsGroup);
+          g.userData.mammothBalconyGrowTrayDecor = true;
+          g.userData.mammothGrowTrayId = trayId;
         }
       }
       const decorModelRelPath =
@@ -1241,6 +1261,10 @@ export function mountFpApartmentDecorMeshes(opts: {
           continue;
         }
         seen.add(stashKey);
+        if (stashKind === APARTMENT_STASH_KIND_GROW_TRAY) {
+          const unitGrowState = readBalconyGrowOpUnitState(opts.conn, unitKey);
+          if (growTrayRayHitTargetsLivePlant(hit, unitGrowState, camera)) continue;
+        }
         const mayUse =
           stashKind === APARTMENT_STASH_KIND_GROW_TRAY
             ? clientOwnsClaimedApartmentUnit(opts.conn, opts.conn.identity, unitKey)
@@ -1304,6 +1328,20 @@ export function mountFpApartmentDecorMeshes(opts: {
           );
         }
       })();
+    },
+    syncBalconyGrowTrayDecorVisibility: (feet, unitKey) => {
+      syncBalconyGrowTrayDecorVisibility(feet, unitKey, growSlotVisualsByTrayId);
+    },
+    collectBalconyGrowPickMeshesForPlayer: (playerPos, dst) => {
+      collectOwnedBalconyGrowPickMeshes(
+        opts.conn,
+        opts.conn.identity,
+        playerPos,
+        growTrayPickMeshes,
+        growSlotPickMeshes,
+        dst,
+        growPlantPickMeshes,
+      );
     },
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
     getSittablePrompt: (playerPos, camera, objectVisibleInHierarchy, visiblePickScratch) => {

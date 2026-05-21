@@ -33,10 +33,10 @@ pub(crate) const PHASE_MATURE: u8 = 2;
 pub(crate) const PHASE_WILTED: u8 = 3;
 
 const GROW_TRAY_MODEL_SUFFIX: &str = "objects/grow-tray.glb";
-const TRAY_INTERACT_RADIUS_M: f32 = 4.0;
+const TRAY_INTERACT_RADIUS_M: f32 = 1.75;
 const TRAY_INTERACT_RADIUS_SQ: f32 = TRAY_INTERACT_RADIUS_M * TRAY_INTERACT_RADIUS_M;
-/// Balcony trays use negative layout `fz`; feet may sit slightly outside strict unit AABB.
-const GROW_TRAY_UNIT_HULL_SLACK_XZ: f32 = 2.5;
+/// Balcony trays use negative layout `fz`; feet may sit outside strict unit AABB.
+const GROW_TRAY_UNIT_HULL_SLACK_XZ: f32 = 4.0;
 const INTERACT_FEET_Y_BELOW_SLACK_M: f32 = 0.35;
 const INTERACT_FEET_Y_ABOVE_SLACK_M: f32 = 2.4;
 

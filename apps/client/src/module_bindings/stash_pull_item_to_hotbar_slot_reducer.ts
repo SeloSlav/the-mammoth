@@ -14,4 +14,5 @@ export default {
   itemInstanceId: __t.u64(),
   unitKey: __t.string(),
   targetHotbarSlot: __t.u8(),
+  quantityToMove: __t.u32(),
 };

@@ -16,13 +16,73 @@ export const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER = 6;
 export const BALCONY_GROW_TICK_INTERVAL_SECS = 5;
 export const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK = 0.04;
 
-/** 2×2 snap offsets in tray local space (meters). */
+export type BalconyGrowStage = "seed" | "sapling" | "mid" | "mature";
+
+/** 2×2 snap offsets in tray local space (meters) — fallback when tray bounds probe unavailable. */
 export const BALCONY_GROW_SLOT_LOCAL_OFFSETS: readonly { x: number; z: number }[] = [
-  { x: -0.11, z: -0.11 },
-  { x: 0.11, z: -0.11 },
-  { x: -0.11, z: 0.11 },
-  { x: 0.11, z: 0.11 },
+  { x: -0.22, z: -0.22 },
+  { x: 0.22, z: -0.22 },
+  { x: -0.22, z: 0.22 },
+  { x: 0.22, z: 0.22 },
 ];
+
+/**
+ * Slot centers sit at this fraction of the (inset) soil half-extent from the tray center —
+ * 0.78 ≈ spread toward the rim without clipping the frame.
+ */
+export const BALCONY_GROW_SLOT_EDGE_FRAC = 0.78 as const;
+
+/** Inset applied to probed tray bounds before slot layout (excludes outer rim/frame). */
+export const BALCONY_GROW_SLOT_SOIL_INSET_FRAC = 0.14 as const;
+
+export type BalconyGrowSlotXZ = { x: number; z: number };
+
+/** Four quadrant centers from soil half-extents in tray-local space. */
+export function balconyGrowSlotOffsetsFromHalfExtents(
+  halfX: number,
+  halfZ: number,
+  centerX = 0,
+  centerZ = 0,
+  edgeFrac = BALCONY_GROW_SLOT_EDGE_FRAC,
+): BalconyGrowSlotXZ[] {
+  const dx = halfX * edgeFrac;
+  const dz = halfZ * edgeFrac;
+  return [
+    { x: centerX - dx, z: centerZ - dz },
+    { x: centerX + dx, z: centerZ - dz },
+    { x: centerX - dx, z: centerZ + dz },
+    { x: centerX + dx, z: centerZ + dz },
+  ];
+}
+
+export function balconyGrowSlotLocalPosition(
+  slotIndex: number,
+  soilLocalY = BALCONY_GROW_SOIL_LOCAL_Y,
+  slotOffsets: readonly BalconyGrowSlotXZ[] = BALCONY_GROW_SLOT_LOCAL_OFFSETS,
+): { x: number; y: number; z: number } {
+  const off = slotOffsets[slotIndex];
+  if (!off) return { x: 0, y: soilLocalY, z: 0 };
+  return { x: off.x, y: soilLocalY, z: off.z };
+}
+
+/** Fallback tray-local soil surface Y when bounds probe is unavailable (after decor centering). */
+export const BALCONY_GROW_SOIL_LOCAL_Y = 0.042;
+
+/** Base visual scale per growth stage in a tray slot (before crop `stageScale`). */
+export const BALCONY_GROW_STAGE_BASE_SCALE: Readonly<Record<BalconyGrowStage, number>> = {
+  seed: 0.14,
+  sapling: 0.2,
+  mid: 0.28,
+  mature: 0.34,
+};
+
+export function balconyGrowStageVisualScale(
+  stage: BalconyGrowStage,
+  cropStageScale = 1,
+): number {
+  const base = BALCONY_GROW_STAGE_BASE_SCALE[stage];
+  return base * (cropStageScale > 0 ? cropStageScale : 1);
+}
 
 export const APARTMENT_STASH_KIND_GROW_TRAY = "grow_tray" as const;
 
@@ -54,10 +114,11 @@ export const BALCONY_GROW_TRAY_AUTHORED_FX_FZ: Readonly<
   "8b770390-544f-4a40-aaa3-ec34d9ed66a7": { fx: 0.8433852563352113, fz: 0.3397828594517517 },
 };
 
-/** Horizontal interact radius for grow-tray stash / plant / harvest. */
-export const BALCONY_GROW_TRAY_INTERACT_RADIUS_M = 4 as const;
+/** Horizontal interact radius (m) — balcony trays: allow lean-in harvest from typical standing positions. Keep in sync with `TRAY_INTERACT_RADIUS_M` in `apps/server/src/balcony_grow_op.rs`. */
+export const BALCONY_GROW_TRAY_INTERACT_RADIUS_M = 1.75 as const;
 
-export type BalconyGrowStage = "seed" | "sapling" | "mid" | "mature";
+/** Show balcony tray decor / plants while the player is on the balcony (outside strict unit hull). */
+export const BALCONY_GROW_TRAY_PRESENTATION_RADIUS_M = 2.75 as const;
 
 export function balconyGrowTrayStashKey(unitKey: string, trayId: string): string {
   return `${unitKey}#grow_tray:${trayId}`;

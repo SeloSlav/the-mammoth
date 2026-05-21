@@ -80,6 +80,45 @@ describe("inventoryOptimistic", () => {
     const next = predictWorldDrop(grids, { type: "hotbar", index: 0 }, 1);
     expect(next?.hotbar[0]).toBeNull();
   });
+
+  it("predictWorldDrop removes partial stack quantity", () => {
+    const grids = {
+      hotbar: [item(302, "bandage", 6, 10), null, null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictWorldDrop(grids, { type: "hotbar", index: 0 }, 3);
+    expect(next?.hotbar[0]?.instance.quantity).toBe(3);
+  });
+
+  it("predictSlotMove splits half a stack into an empty slot", () => {
+    const grids = {
+      hotbar: [item(401, "bandage", 6, 10), null, null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictSlotMove(
+      grids,
+      { type: "hotbar", index: 0 },
+      { type: "hotbar", index: 1 },
+      3,
+    );
+    expect(next?.hotbar[0]?.instance.quantity).toBe(3);
+    expect(next?.hotbar[1]?.instance.quantity).toBe(3);
+  });
+
+  it("predictSlotMove splits into a compatible stack", () => {
+    const grids = {
+      hotbar: [item(501, "bandage", 4, 10), item(502, "bandage", 2, 10), null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictSlotMove(
+      grids,
+      { type: "hotbar", index: 0 },
+      { type: "hotbar", index: 1 },
+      3,
+    );
+    expect(next?.hotbar[0]?.instance.quantity).toBe(1);
+    expect(next?.hotbar[1]?.instance.quantity).toBe(5);
+  });
 });
 
 describe("inventorySlotGridsMatch", () => {

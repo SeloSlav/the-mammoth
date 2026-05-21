@@ -112,6 +112,8 @@ import {
   mountFpBalconyGrowSession,
   runBalconyGrowHarvest,
 } from "./fpBalconyGrow/fpBalconyGrowSession.js";
+import { balconyGrowInspectBlocksGrowTrayStash } from "./fpBalconyGrow/fpBalconyGrowInspectState.js";
+import { APARTMENT_STASH_KIND_GROW_TRAY } from "./fpApartment/fpApartmentStashKey.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
@@ -634,7 +636,7 @@ export async function mountFpSession(
       ensureMammothApartmentDecorShadowRenderer(renderer);
     },
   });
-  const fpBalconyGrow = mountFpBalconyGrowSession({ scene, conn });
+  const fpBalconyGrow = mountFpBalconyGrowSession({ scene, conn, canvas });
   refreshApartmentInteriorMeshes();
 
 
@@ -1414,9 +1416,7 @@ export async function mountFpSession(
       if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
-      const growState = fpBalconyGrow.getGrowState(
-        getContainingResidentialUnitKey?.() ?? null,
-      );
+      const growState = fpBalconyGrow.getActiveGrowState();
       const growPrompt = balconyGrowPromptFromDecorRaycast(
         conn,
         conn.identity,
@@ -1435,7 +1435,13 @@ export async function mountFpSession(
         return;
       }
 
-      if (aptKey?.kind === "apartment_stash") {
+      if (
+        aptKey?.kind === "apartment_stash" &&
+        !(
+          aptKey.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
+          balconyGrowInspectBlocksGrowTrayStash()
+        )
+      ) {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
           stashLabel: aptKey.stashLabel,
@@ -1562,7 +1568,7 @@ export async function mountFpSession(
     const nowMs = performance.now();
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
     if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
-    if (fpBalconyGrow.tryPrimaryPointerDown(conn)) return;
+    if (fpBalconyGrow.tryPrimaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) return;
     const selectedHotbarSlot = getFpHotbarSelectedSlot();
     if (
       conn.identity &&

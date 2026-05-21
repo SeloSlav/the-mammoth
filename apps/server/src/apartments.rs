@@ -20,7 +20,7 @@ use crate::apartment_stash_rules::{
 };
 use crate::inventory::{
     self, find_item_in_hotbar_slot, find_item_in_inventory_slot, find_item_in_stash_slot,
-    inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
+    first_empty_player_carry_slot, inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
 };
 use crate::inventory_models::{
     parse_apartment_stash_key_v2,
@@ -31,7 +31,6 @@ use crate::inventory_models::{
     InventoryLocationData, ItemLocation,
     StashLocationData,
 };
-use crate::items_catalog;
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
@@ -1814,80 +1813,15 @@ fn move_inventory_row_to_location(
     item_instance_id: u64,
     dest: ItemLocation,
     target_opt: Option<inventory::InventoryItem>,
+    quantity_to_move: u32,
 ) -> Result<(), String> {
-    let inv = ctx.db.inventory_item();
-    let item_to_move = inv
-        .instance_id()
-        .find(item_instance_id)
-        .ok_or_else(|| format!("item instance {item_instance_id} not found"))?;
-    let max_stack = items_catalog::max_stack_for(&item_to_move.def_id)
-        .ok_or_else(|| format!("unknown def_id {}", item_to_move.def_id))?;
-    let original_location = item_to_move.location.clone();
-
-    if let Some(target_item) = target_opt {
-        if target_item.instance_id == item_instance_id {
-            let mut mv = inv
-                .instance_id()
-                .find(item_instance_id)
-                .ok_or_else(|| "same-slot move: item row missing".to_string())?;
-            mv.location = dest;
-            inv.instance_id().update(mv);
-            return Ok(());
-        }
-
-        match inventory::try_merge_into(&item_to_move, &target_item, max_stack) {
-            Ok((new_source_qty, new_target_qty, delete_source)) => {
-                let mut tgt = inv
-                    .instance_id()
-                    .find(target_item.instance_id)
-                    .ok_or_else(|| "stash merge: target row missing".to_string())?;
-                tgt.quantity = new_target_qty;
-                inv.instance_id().update(tgt);
-
-                if delete_source {
-                    let mut del = inv
-                        .instance_id()
-                        .find(item_instance_id)
-                        .ok_or_else(|| "stash merge: source row missing".to_string())?;
-                    del.location = ItemLocation::Unknown;
-                    inv.instance_id().update(del);
-                    inv.instance_id().delete(item_instance_id);
-                } else {
-                    let mut src = inv
-                        .instance_id()
-                        .find(item_instance_id)
-                        .ok_or_else(|| "stash merge: source row missing".to_string())?;
-                    src.quantity = new_source_qty;
-                    src.location = original_location;
-                    inv.instance_id().update(src);
-                }
-            }
-            Err(()) => {
-                let mut occ = inv
-                    .instance_id()
-                    .find(target_item.instance_id)
-                    .ok_or_else(|| "stash swap: target row missing".to_string())?;
-                occ.location = original_location;
-                inv.instance_id().update(occ);
-
-                let mut mv = inv
-                    .instance_id()
-                    .find(item_instance_id)
-                    .ok_or_else(|| "stash swap: source row missing".to_string())?;
-                mv.location = dest;
-                inv.instance_id().update(mv);
-            }
-        }
-    } else {
-        let mut mv = inv
-            .instance_id()
-            .find(item_instance_id)
-            .ok_or_else(|| "stash place: item row missing".to_string())?;
-        mv.location = dest;
-        inv.instance_id().update(mv);
-    }
-
-    Ok(())
+    inventory::transfer_inventory_row_quantity(
+        ctx,
+        item_instance_id,
+        dest,
+        target_opt,
+        quantity_to_move,
+    )
 }
 
 pub(crate) fn notify_stash_reducer_failure(ctx: &ReducerContext, message: String) {
@@ -1907,7 +1841,7 @@ pub fn stash_push_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     let Some(slot) = first_empty_stash_slot(ctx, owner_id, &unit_key) else {
         return;
     };
-    if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, slot) {
+    if let Err(e) = stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, slot, 0) {
         notify_stash_reducer_failure(ctx, e);
     }
 }
@@ -1917,6 +1851,7 @@ fn stash_push_item_to_slot_impl(
     item_instance_id: u64,
     unit_key: &str,
     target_stash_slot: u16,
+    quantity_to_move: u32,
 ) -> Result<(), String> {
     let stash_kind = apartment_stash_kind_for_stash_key(ctx, unit_key)
         .ok_or_else(|| "unknown stash".to_string())?;
@@ -1939,6 +1874,7 @@ fn stash_push_item_to_slot_impl(
             slot_index: target_stash_slot,
         }),
         target_opt,
+        quantity_to_move,
     )
     .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
@@ -1949,14 +1885,19 @@ pub fn stash_push_item_to_slot(
     item_instance_id: u64,
     unit_key: String,
     target_stash_slot: u16,
+    quantity_to_move: u32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("stash_push_to_slot blocked: {e}");
         return;
     }
-    if let Err(e) =
-        stash_push_item_to_slot_impl(ctx, item_instance_id, &unit_key, target_stash_slot)
-    {
+    if let Err(e) = stash_push_item_to_slot_impl(
+        ctx,
+        item_instance_id,
+        &unit_key,
+        target_stash_slot,
+        quantity_to_move,
+    ) {
         notify_stash_reducer_failure(ctx, e);
     }
 }
@@ -1966,6 +1907,7 @@ fn stash_pull_item_to_inventory_slot_impl(
     item_instance_id: u64,
     unit_key: &str,
     target_inventory_slot: u16,
+    quantity_to_move: u32,
 ) -> Result<(), String> {
     if target_inventory_slot >= NUM_PLAYER_INVENTORY_SLOTS {
         return Err("bad inventory slot".to_string());
@@ -1984,6 +1926,7 @@ fn stash_pull_item_to_inventory_slot_impl(
             slot_index: target_inventory_slot,
         }),
         target_opt,
+        quantity_to_move,
     )
     .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
@@ -1994,6 +1937,7 @@ pub fn stash_pull_item_to_inventory_slot(
     item_instance_id: u64,
     unit_key: String,
     target_inventory_slot: u16,
+    quantity_to_move: u32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("stash_pull_to_inventory_slot blocked: {e}");
@@ -2004,6 +1948,7 @@ pub fn stash_pull_item_to_inventory_slot(
         item_instance_id,
         &unit_key,
         target_inventory_slot,
+        quantity_to_move,
     )     {
         notify_stash_reducer_failure(ctx, e);
     }
@@ -2014,6 +1959,7 @@ fn stash_pull_item_to_hotbar_slot_impl(
     item_instance_id: u64,
     unit_key: &str,
     target_hotbar_slot: u8,
+    quantity_to_move: u32,
 ) -> Result<(), String> {
     if target_hotbar_slot >= NUM_PLAYER_HOTBAR_SLOTS {
         return Err("bad hotbar slot".to_string());
@@ -2032,6 +1978,7 @@ fn stash_pull_item_to_hotbar_slot_impl(
             slot_index: target_hotbar_slot,
         }),
         target_opt,
+        quantity_to_move,
     )
     .map_err(|e| format!("{stash_kind} stash: {e}"))
 }
@@ -2042,14 +1989,19 @@ pub fn stash_pull_item_to_hotbar_slot(
     item_instance_id: u64,
     unit_key: String,
     target_hotbar_slot: u8,
+    quantity_to_move: u32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("stash_pull_to_hotbar_slot blocked: {e}");
         return;
     }
-    if let Err(e) =
-        stash_pull_item_to_hotbar_slot_impl(ctx, item_instance_id, &unit_key, target_hotbar_slot)
-    {
+    if let Err(e) = stash_pull_item_to_hotbar_slot_impl(
+        ctx,
+        item_instance_id,
+        &unit_key,
+        target_hotbar_slot,
+        quantity_to_move,
+    ) {
         notify_stash_reducer_failure(ctx, e);
     }
 }
@@ -2060,6 +2012,7 @@ pub fn stash_move_item_to_slot(
     item_instance_id: u64,
     unit_key: String,
     target_stash_slot: u16,
+    quantity_to_move: u32,
 ) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("stash_move_to_slot blocked: {e}");
@@ -2089,6 +2042,7 @@ pub fn stash_move_item_to_slot(
             slot_index: target_stash_slot,
         }),
         target_opt,
+        quantity_to_move,
     ) {
         notify_stash_reducer_failure(ctx, e);
     }
@@ -2107,14 +2061,27 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
     if stash_item_for_unit(ctx, item_instance_id, &unit_key, owner_id).is_none() {
         return;
     };
-    let Some(empty_inv) = (0..NUM_PLAYER_INVENTORY_SLOTS)
-        .find(|s| find_item_in_inventory_slot(ctx, sender, *s).is_none())
-    else {
+    let Some(dest) = first_empty_player_carry_slot(ctx, sender) else {
         return;
     };
-    if let Err(e) =
-        stash_pull_item_to_inventory_slot_impl(ctx, item_instance_id, &unit_key, empty_inv)
-    {
+    let pull_result = match dest {
+        ItemLocation::Hotbar(d) => stash_pull_item_to_hotbar_slot_impl(
+            ctx,
+            item_instance_id,
+            &unit_key,
+            d.slot_index,
+            0,
+        ),
+        ItemLocation::Inventory(d) => stash_pull_item_to_inventory_slot_impl(
+            ctx,
+            item_instance_id,
+            &unit_key,
+            d.slot_index,
+            0,
+        ),
+        _ => return,
+    };
+    if let Err(e) = pull_result {
         notify_stash_reducer_failure(ctx, e);
     }
 }

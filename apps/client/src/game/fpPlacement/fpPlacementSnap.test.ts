@@ -13,7 +13,7 @@ describe("nearestBalconyGrowTraySlot", () => {
 
   it("maps negative local aim to slot 0", () => {
     const m = new THREE.Matrix4().identity();
-    const aim = new THREE.Vector3(-0.11, 0, -0.11);
+    const aim = new THREE.Vector3(-0.18, 0, -0.18);
     const snap = nearestBalconyGrowTraySlot(m, aim);
     expect(snap?.slotIndex).toBe(0);
   });

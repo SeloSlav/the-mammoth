@@ -36,6 +36,7 @@ import {
   registerEditorMyApartmentWallsMountSyncRequest,
   setEditorMyApartmentPieceGroups,
 } from "./editorMyApartmentPieceGroupBridge.js";
+import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
 import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
 
@@ -275,6 +276,8 @@ export function createEditorSceneMyApartmentLifecycle(
       void reconcile();
       return;
     }
+    /** Members may still be parented under the centroid manipulator — `place*Group` assumes furniture root. */
+    teardownApartmentSavedObjectGroupManipulator();
     const st = useEditorStore.getState();
     const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
       floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],

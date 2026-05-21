@@ -50,6 +50,30 @@ function slotPopulationMatch(a: MammothPopulatedItem | null, b: MammothPopulated
   );
 }
 
+function slotSemanticMatch(a: MammothPopulatedItem | null, b: MammothPopulatedItem | null): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+  return a.instance.defId === b.instance.defId && a.instance.quantity === b.instance.quantity;
+}
+
+/** Match slot contents by def + quantity (ignores instance id — used after stack splits). */
+export function inventorySlotGridsSemanticallyMatch(a: SlotGrids, b: SlotGrids): boolean {
+  if (a.hotbar.length !== b.hotbar.length || a.inventory.length !== b.inventory.length) return false;
+  for (let i = 0; i < a.hotbar.length; i++) {
+    if (!slotSemanticMatch(a.hotbar[i] ?? null, b.hotbar[i] ?? null)) return false;
+  }
+  for (let i = 0; i < a.inventory.length; i++) {
+    if (!slotSemanticMatch(a.inventory[i] ?? null, b.inventory[i] ?? null)) return false;
+  }
+  if (a.stash || b.stash) {
+    if (!a.stash || !b.stash || a.stash.length !== b.stash.length) return false;
+    for (let i = 0; i < a.stash.length; i++) {
+      if (!slotSemanticMatch(a.stash[i] ?? null, b.stash[i] ?? null)) return false;
+    }
+  }
+  return true;
+}
+
 /** True when replicated grids match an optimistic snapshot (clears client overlay without flicker). */
 export function inventorySlotGridsMatch(a: SlotGrids, b: SlotGrids): boolean {
   if (a.hotbar.length !== b.hotbar.length || a.inventory.length !== b.inventory.length) return false;
@@ -69,18 +93,53 @@ export function inventorySlotGridsMatch(a: SlotGrids, b: SlotGrids): boolean {
 }
 
 /**
- * Client-side prediction matching `apps/server/src/inventory.rs` `move_between_player_slots`
- * (empty slot, merge stacks, or swap).
+ * Client-side prediction matching server slot moves (empty slot, merge stacks, swap, or partial split).
+ * `quantityToMove` defaults to the full source stack.
  */
 export function predictSlotMove(
   grids: SlotGrids,
   source: MammothDragSourceSlotInfo,
   dest: MammothDragSourceSlotInfo,
+  quantityToMove?: number,
 ): SlotGrids | null {
   const g = cloneGrids(grids);
   const moving = getSlot(g, source);
   if (!moving) return null;
   if (source.type === dest.type && source.index === dest.index) return null;
+
+  const moveQty = quantityToMove ?? moving.instance.quantity;
+  if (moveQty <= 0 || moveQty > moving.instance.quantity) return null;
+
+  if (moveQty < moving.instance.quantity) {
+    const target = getSlot(g, dest);
+    if (target && !sameInstance(moving, target)) {
+      if (target.instance.defId !== moving.instance.defId || moving.def.maxStack <= 1) return null;
+      const room = moving.def.maxStack - target.instance.quantity;
+      const xfer = Math.min(moveQty, room);
+      if (xfer <= 0) return null;
+      setSlot(g, dest, {
+        ...target,
+        instance: { ...target.instance, quantity: target.instance.quantity + xfer },
+      });
+      setSlot(g, source, {
+        ...moving,
+        instance: { ...moving.instance, quantity: moving.instance.quantity - xfer },
+      });
+      return g;
+    }
+    const splitStack: MammothPopulatedItem = {
+      ...moving,
+      instance: { ...moving.instance, quantity: moveQty },
+    };
+    setSlot(g, dest, splitStack);
+    const remain = moving.instance.quantity - moveQty;
+    setSlot(
+      g,
+      source,
+      remain > 0 ? { ...moving, instance: { ...moving.instance, quantity: remain } } : null,
+    );
+    return g;
+  }
 
   const target = getSlot(g, dest);
 
@@ -123,7 +182,7 @@ export function predictSlotMove(
   return g;
 }
 
-/** Full stack leaves the grid (matches current HUD world-drop: entire stack). */
+/** Stack leaves the grid (full stack or partial split-drop). */
 export function predictWorldDrop(
   grids: SlotGrids,
   source: MammothDragSourceSlotInfo,
@@ -131,7 +190,14 @@ export function predictWorldDrop(
 ): SlotGrids | null {
   const g = cloneGrids(grids);
   const moving = getSlot(g, source);
-  if (!moving || moving.instance.quantity !== quantityToDrop) return null;
-  setSlot(g, source, null);
+  if (!moving || quantityToDrop <= 0 || quantityToDrop > moving.instance.quantity) return null;
+  if (quantityToDrop === moving.instance.quantity) {
+    setSlot(g, source, null);
+    return g;
+  }
+  setSlot(g, source, {
+    ...moving,
+    instance: { ...moving.instance, quantity: moving.instance.quantity - quantityToDrop },
+  });
   return g;
 }

@@ -1,9 +1,10 @@
-/** Balcony grow-op inspect overlay — read-only tray/slot stats from subscribed rows + catalog. */
+/** Balcony grow-op inspect overlay — anchored above the aimed plant slot in screen space. */
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowSpeedModifier,
+  balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import type { DbConnection } from "../module_bindings";
@@ -11,7 +12,14 @@ import {
   getBalconyGrowInspectTarget,
   subscribeBalconyGrowInspectTarget,
 } from "../game/fpBalconyGrow/fpBalconyGrowInspectState.js";
-import { readBalconyGrowOpUnitState } from "../inventory/balconyGrowOpState.js";
+import {
+  getBalconyGrowInspectScreenAnchor,
+  subscribeBalconyGrowInspectScreenAnchor,
+} from "../game/fpBalconyGrow/fpBalconyGrowInspectPresentation.js";
+import {
+  readBalconyGrowOpUnitState,
+  subscribeBalconyGrowOpTables,
+} from "../inventory/balconyGrowOpState.js";
 
 const PHASE_LABELS: Record<number, string> = {
   0: "Empty",
@@ -31,83 +39,129 @@ function formatEta(matureAtMicros: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function growProgress01(plantedAtMicros: number, matureAtMicros: number): number {
+  const now = Date.now() * 1000;
+  if (matureAtMicros <= plantedAtMicros) return 1;
+  return Math.min(1, Math.max(0, (now - plantedAtMicros) / (matureAtMicros - plantedAtMicros)));
+}
+
 export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
   const target = useSyncExternalStore(
     subscribeBalconyGrowInspectTarget,
     getBalconyGrowInspectTarget,
     getBalconyGrowInspectTarget,
   );
+  const screenAnchor = useSyncExternalStore(
+    subscribeBalconyGrowInspectScreenAnchor,
+    getBalconyGrowInspectScreenAnchor,
+    getBalconyGrowInspectScreenAnchor,
+  );
+  const [liveTick, setLiveTick] = useState(0);
 
-  const growState = useMemo(() => {
-    if (!props.conn || !target) {
-      return { plant: null, tray: null, lightsOn: true, fertilizerPresent: false };
-    }
-    const state = readBalconyGrowOpUnitState(props.conn, target.unitKey);
-    const plant =
-      state.plants.find(
-        (p) => p.trayId === target.trayId && p.slotIndex === target.slotIndex,
-      ) ?? null;
-    const tray = state.trays.find((t) => t.trayId === target.trayId) ?? null;
-    const lightsOn = state.light?.lightsOn !== 0;
-    const stashKey = `${target.unitKey}#grow_tray:${target.trayId}`;
-    let fertilizerPresent = false;
-    for (const row of props.conn.db.inventory_item) {
-      if (row.location.tag !== "Stash") continue;
-      if (row.location.value.unitKey !== stashKey) continue;
-      if (row.defId === "balcony-grow-substrate") fertilizerPresent = true;
-    }
-    return { plant, tray, lightsOn, fertilizerPresent };
-  }, [props.conn, target]);
+  useEffect(() => {
+    if (!props.conn) return;
+    const bump = () => setLiveTick((t) => t + 1);
+    const unsubDb = subscribeBalconyGrowOpTables(props.conn, bump);
+    let raf = 0;
+    const loop = () => {
+      if (getBalconyGrowInspectTarget()) bump();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      unsubDb();
+      cancelAnimationFrame(raf);
+    };
+  }, [props.conn]);
 
-  const { plant, tray, lightsOn, fertilizerPresent } = growState;
+  void liveTick;
+
+  if (!props.conn || !target || !screenAnchor?.visible) return null;
+
+  const state = readBalconyGrowOpUnitState(props.conn, target.unitKey);
+  const plant =
+    state.plants.find(
+      (p) => p.trayId === target.trayId && p.slotIndex === target.slotIndex,
+    ) ?? null;
+  const tray = state.trays.find((t) => t.trayId === target.trayId) ?? null;
+  const lightsOn = state.light?.lightsOn !== 0;
+  const stashKey = balconyGrowTrayStashKey(target.unitKey, target.trayId);
+  let fertilizerPresent = false;
+  for (const row of props.conn.db.inventory_item) {
+    if (row.location.tag !== "Stash") continue;
+    if (row.location.value.unitKey !== stashKey) continue;
+    if (row.defId === "balcony-grow-substrate") fertilizerPresent = true;
+  }
+
   const cropDef = plant ? getMammothItemDef(plant.cropDefId) : undefined;
-
-  if (!target || !plant || !tray || !cropDef) return null;
+  if (!plant || !tray || !cropDef) return null;
 
   const modifier = balconyGrowSpeedModifier({
     lightsOn,
     fertilizerPresent,
     waterLiters: tray.waterLiters,
   });
+  const progress =
+    plant.phase === 1
+      ? growProgress01(Number(plant.plantedAtMicros), Number(plant.matureAtMicros))
+      : plant.phase === 2
+        ? 1
+        : 0;
 
   return (
     <div
       className="mammoth-grow-inspect"
       style={{
         position: "fixed",
-        right: 16,
-        top: "38%",
-        width: 280,
-        padding: "12px 14px",
-        background: "rgba(8, 12, 10, 0.88)",
-        border: "1px solid rgba(120, 180, 120, 0.35)",
+        left: screenAnchor.x,
+        top: screenAnchor.y,
+        transform: "translate(-50%, calc(-100% - 10px))",
+        width: 220,
+        padding: "10px 12px",
+        background: "rgba(8, 14, 11, 0.92)",
+        border: "1px solid rgba(120, 190, 130, 0.45)",
         borderRadius: 8,
         color: "#e8f0e8",
-        fontSize: 13,
-        lineHeight: 1.45,
+        fontSize: 12,
+        lineHeight: 1.4,
         pointerEvents: "none",
-        zIndex: 40,
+        zIndex: 125,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
       }}
     >
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>{cropDef.displayName}</div>
-      <div style={{ opacity: 0.75, marginBottom: 8 }}>{cropDef.description.slice(0, 90)}…</div>
-      <div>Phase: {PHASE_LABELS[plant.phase] ?? "Unknown"}</div>
+      <div style={{ fontWeight: 700, marginBottom: 2, fontSize: 13 }}>{cropDef.displayName}</div>
+      <div style={{ opacity: 0.82, marginBottom: 6 }}>
+        {PHASE_LABELS[plant.phase] ?? "Unknown"}
+        {plant.phase === 1 ? ` · ${formatEta(Number(plant.matureAtMicros))}` : ""}
+      </div>
       {plant.phase === 1 ? (
-        <div>ETA: {formatEta(Number(plant.matureAtMicros))}</div>
+        <div
+          style={{
+            height: 4,
+            borderRadius: 2,
+            background: "rgba(255,255,255,0.1)",
+            marginBottom: 8,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${progress * 100}%`,
+              height: "100%",
+              background: "linear-gradient(90deg, #3d8b4a, #7ecf8a)",
+            }}
+          />
+        </div>
       ) : null}
-      <div style={{ marginTop: 8 }}>
-        Modifiers: {modifier.toFixed(2)}×
-        {lightsOn ? " · Light +15%" : ""}
-        {fertilizerPresent ? " · Fertilizer +20%" : ""}
-        {tray.waterLiters > 0 ? ` · Water ${Math.round(tray.waterLiters * 100) / 100}L` : ""}
+      <div style={{ opacity: 0.9 }}>
+        Growth {modifier.toFixed(2)}×
+        {lightsOn ? " · light" : ""}
+        {fertilizerPresent ? " · fert" : ""}
       </div>
-      <div style={{ marginTop: 6 }}>
-        Tray water: {tray.waterLiters.toFixed(1)} / {BALCONY_GROW_TRAY_MAX_WATER_L} L
-      </div>
-      <div style={{ marginTop: 4, opacity: 0.85 }}>
-        {fertilizerPresent ? "Substrate in tray slot" : "No fertilizer in tray"}
+      <div style={{ marginTop: 4, opacity: 0.82 }}>
+        Tray {tray.waterLiters.toFixed(1)}/{BALCONY_GROW_TRAY_MAX_WATER_L} L
         {" · "}
-        {tray.waterLiters > 0 ? "Soil moist" : "Soil dry"}
+        {fertilizerPresent ? "substrate ok" : "no substrate"}
       </div>
     </div>
   );
