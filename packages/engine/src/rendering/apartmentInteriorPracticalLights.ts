@@ -35,7 +35,7 @@ type ApartmentPracticalPointParams = {
 function apartmentPracticalSpotParams(
   kind: Extract<
     ApartmentPracticalLightKind,
-    "window" | "tv" | "computer" | "ceiling"
+    "window" | "tv" | "computer" | "ceiling" | "growOp"
   >,
 ): ApartmentPracticalSpotParams {
   const profile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical;
@@ -48,6 +48,8 @@ function apartmentPracticalSpotParams(
       return profile.computer;
     case "ceiling":
       return profile.ceiling;
+    case "growOp":
+      return profile.growOp;
   }
 }
 
@@ -61,18 +63,20 @@ function isApartmentPracticalSpotKind(
   kind: ApartmentPracticalLightKind,
 ): kind is Extract<
   ApartmentPracticalLightKind,
-  "window" | "tv" | "computer" | "ceiling"
+  "window" | "tv" | "computer" | "ceiling" | "growOp"
 > {
   return (
     kind === "window" ||
     kind === "tv" ||
     kind === "computer" ||
-    kind === "ceiling"
+    kind === "ceiling" ||
+    kind === "growOp"
   );
 }
 
 import {
   apartmentCeilingFixtureBulbWorldPosition,
+  apartmentGrowOpPanelEmitterWorldPosition,
   apartmentStandingLampShadeBulbWorldPosition,
 } from "./apartmentStandingLampShadeBulb.js";
 
@@ -94,6 +98,12 @@ const _decorCenterScratch = new THREE.Vector3();
 const _decorSizeScratch = new THREE.Vector3();
 const _decorQuatScratch = new THREE.Quaternion();
 const _glassPosScratch = new THREE.Vector3();
+
+/** Fixture-local down — grow panels aim with the hung housing, not world Y only. */
+function apartmentPracticalFixtureDownDirection(group: THREE.Object3D): THREE.Vector3 {
+  group.getWorldQuaternion(_decorQuatScratch);
+  return _scratchDir.set(0, -1, 0).applyQuaternion(_decorQuatScratch).normalize().clone();
+}
 
 /** World-down task/ceiling pool — shade and flush mounts aim into the room, not at walls. */
 function apartmentPracticalDownwardDirection(): THREE.Vector3 {
@@ -178,6 +188,25 @@ export function apartmentPracticalLightSpecFromDecorGroup(
       kind,
       position: _decorCenterScratch.clone(),
       direction: apartmentPracticalDownwardDirection(),
+    };
+  }
+
+  if (kind === "growOp") {
+    _decorBoxScratch.setFromObject(group);
+    if (_decorBoxScratch.isEmpty()) {
+      group.getWorldPosition(_decorCenterScratch);
+    } else {
+      _decorBoxScratch.getSize(_decorSizeScratch);
+      apartmentGrowOpPanelEmitterWorldPosition(
+        _decorBoxScratch,
+        _decorSizeScratch,
+        _decorCenterScratch,
+      );
+    }
+    return {
+      kind,
+      position: _decorCenterScratch.clone(),
+      direction: apartmentPracticalFixtureDownDirection(group),
     };
   }
 
@@ -363,16 +392,16 @@ export function mountApartmentPracticalLights(
       root.add(spot);
       root.add(spot.target);
 
-      if (spec.kind === "ceiling") {
-        const ceiling = APARTMENT_INTERIOR_VISUAL_PROFILE.practical.ceiling;
-        if (ceiling.washIntensity > 0) {
+      if (spec.kind === "ceiling" || spec.kind === "growOp") {
+        const washProfile = APARTMENT_INTERIOR_VISUAL_PROFILE.practical[spec.kind];
+        if (washProfile.washIntensity > 0) {
           const wash = new THREE.PointLight(
-            ceiling.color,
-            ceiling.washIntensity,
-            ceiling.washDistance,
-            ceiling.washDecay ?? lightDecay,
+            washProfile.color,
+            washProfile.washIntensity,
+            washProfile.washDistance,
+            washProfile.washDecay ?? lightDecay,
           );
-          wash.name = `apt_ceiling_wash_${i}`;
+          wash.name = `apt_${spec.kind}_wash_${i}`;
           wash.position.copy(local.position);
           wash.castShadow = false;
           enableApartmentInteriorLightLayers(wash);

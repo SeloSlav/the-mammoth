@@ -77,7 +77,7 @@ function defaultImportedDecorPlacementFractions(nextIndex: number): {
   fz: number;
 } {
   const ringX = ((nextIndex % 4) - 1.5) * 0.08;
-  const ringZ = ((Math.floor(nextIndex / 4) % 4) - 1.5) * 0.08;
+  const ringZ = ((Math.floor(nextIndex / 4) % 4) - 1.5) * 0.08; 
   return {
     fx: Math.min(0.92, Math.max(0.08, 0.5 + ringX)),
     fz: Math.min(0.92, Math.max(0.08, 0.56 + ringZ)),

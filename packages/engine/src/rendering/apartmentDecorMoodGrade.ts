@@ -1,12 +1,11 @@
 import * as THREE from "three";
-import { MAMMOTH_APARTMENT_DECOR_PROP_LAYER } from "./apartmentInteriorLayers.js";
 import {
   isApartmentInteriorShellMesh,
   apartmentInteriorShellMoodSlot,
 } from "./bindMammothApartmentDecorIndirectEnv.js";
-import { apartmentStandingLampShadeBulbWorldPosition } from "./apartmentStandingLampShadeBulb.js";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
 import { upgradeApartmentDecorMaterialToStandard } from "./apartmentDecorMaterialUpgrade.js";
+import { applyGrowOpFixturePanelGlow } from "./apartmentCeilingFixtureLensGlow.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   apartmentDecorEmitterKindFromModelPath,
@@ -14,9 +13,6 @@ import {
 } from "./apartmentInteriorVisualProfile.js";
 
 const _lumaScratch = new THREE.Color();
-const _bulbBoxScratch = new THREE.Box3();
-const _bulbSizeScratch = new THREE.Vector3();
-const _bulbWorldScratch = new THREE.Vector3();
 
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD = "mammothApartmentFixtureBulbGlow";
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD =
@@ -53,6 +49,7 @@ export function moodGradeMammothApartmentDecorMaterial(
     modelRelPath != null ? apartmentDecorEmitterKindFromModelPath(modelRelPath) : null;
   const isWarmFixture =
     modelRelPath != null && apartmentDecorWarmLightFixtureKind(modelRelPath) != null;
+  const isGrowOpFixture = emitterKind === "growOp";
   const isScreenGlow = emitterKind === "tv" || emitterKind === "computer";
 
   const standard = upgradeApartmentDecorMaterialToStandard(material);
@@ -60,14 +57,36 @@ export function moodGradeMammothApartmentDecorMaterial(
   if (standard !== material) {
     standard.dispose();
   }
+  const authoredAlbedoLuma = albedoLuminance(m.color);
   m.color.multiply(cfg.albedoMood);
   normalizeAlbedoLuminance(m.color, cfg.albedoLuminanceMin, cfg.albedoLuminanceMax);
-  if (isWarmFixture || isScreenGlow) {
+  if (isGrowOpFixture) {
+    m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
+    m.emissiveIntensity *= cfg.fixtureEmissiveScale;
+    if (m.emissiveMap) {
+      /** Authored emissive masks — cool LED panel read, not warm apartment wash. */
+      m.emissive.setRGB(0.9, 0.96, 1.0);
+      m.emissiveIntensity *= 2.25;
+    } else {
+      m.emissive.setRGB(0.86, 0.93, 1.0);
+      m.emissiveIntensity *= 1.75;
+    }
+    m.toneMapped = false;
+  } else if (isWarmFixture || isScreenGlow) {
     if (emitterKind === "ceiling") {
-      /** Flush mounts read from practical lights only — authored emissive maps look awkward. */
-      m.emissive.setHex(0x000000);
-      m.emissiveIntensity = 1;
-      m.emissiveMap = null;
+      if (m.emissiveMap) {
+        /** Authored emissive masks (e.g. light-ceiling-2 bulb orbs) — keep hot white, not flat wash. */
+        m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
+        m.emissiveIntensity *= cfg.fixtureEmissiveScale;
+        m.emissive.setRGB(1, 0.99, 0.94);
+        m.emissiveIntensity *= 1.55;
+        m.toneMapped = false;
+      } else {
+        /** Flush mounts without emissive masks — practical lights carry the room read. */
+        m.emissive.setHex(0x000000);
+        m.emissiveIntensity = 1;
+        m.emissiveMap = null;
+      }
     } else {
       m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
       m.emissiveIntensity *= cfg.fixtureEmissiveScale;
@@ -80,6 +99,14 @@ export function moodGradeMammothApartmentDecorMaterial(
           emitterKind === "standing"
             ? 2.15
             : 1.55;
+      } else if (emitterKind === "chandelier" && authoredAlbedoLuma > 0.62) {
+        /** Chandelier white bulb/glass materials often ship without emissive maps. */
+        m.emissive.setRGB(1, 0.98, 0.92);
+        m.emissiveIntensity *= 1.35;
+        m.toneMapped = false;
+      } else if (emitterKind === "chandelier") {
+        m.emissive.setHex(0x000000);
+        m.emissiveIntensity = 1;
       } else {
         m.emissive.lerp(
           new THREE.Color(0xffd090),
@@ -120,9 +147,27 @@ export function moodGradeMammothApartmentDecorMesh(
     : moodGradeMammothApartmentDecorMaterial(material, opts);
 }
 
+function decorRootHasAuthoredEmissiveMap(root: THREE.Object3D): boolean {
+  let found = false;
+  root.traverse((obj) => {
+    if (found || !(obj instanceof THREE.Mesh)) return;
+    const material = obj.material;
+    const mats = Array.isArray(material) ? material : [material];
+    for (const mat of mats) {
+      if (mat instanceof THREE.MeshStandardMaterial && mat.emissiveMap) {
+        found = true;
+        return;
+      }
+    }
+  });
+  return found;
+}
+
 /**
- * Visible lit read for warm fixtures: standing-lamp shade orb.
+ * Visible lit read for warm fixtures.
+ * Grow-op panels use authored emissive or a cool lower-panel split when unauthored.
  * Ceiling flush mounts rely on practical lights only (no emissive lens split).
+ * Standing lamps rely on authored emissive maps and practical lights, not generated bulb orbs.
  * Call after mesh mood grading (and after FP material merge, if any).
  */
 export function attachApartmentWarmFixtureBulbGlow(
@@ -130,49 +175,15 @@ export function attachApartmentWarmFixtureBulbGlow(
   modelRelPath: string,
 ): void {
   const kind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
-  if (kind !== "standing") return;
-  if (root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] === true) return;
-
-  root.updateMatrixWorld(true);
-  _bulbBoxScratch.setFromObject(root);
-  if (_bulbBoxScratch.isEmpty()) return;
-
-  _bulbBoxScratch.getSize(_bulbSizeScratch);
-
-  const bulbRadius = THREE.MathUtils.clamp(
-    Math.min(_bulbSizeScratch.x, _bulbSizeScratch.z) * 0.19,
-    0.05,
-    0.13,
-  );
-  apartmentStandingLampShadeBulbWorldPosition(
-    _bulbBoxScratch,
-    _bulbSizeScratch,
-    _bulbWorldScratch,
-  );
-
-  const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(bulbRadius, 14, 12),
-    new THREE.MeshStandardMaterial({
-      color: 0xfff8f2,
-      emissive: 0xfff6ee,
-      emissiveIntensity: 3.35,
-      roughness: 0.26,
-      metalness: 0,
-      toneMapped: false,
-    }),
-  );
-  glow.name = "apt_standing_shade_bulb_glow";
-  glow.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD] = true;
-  glow.userData.mammothSkipFloorGeometryMerge = true;
-  glow.userData.mammothUnitInterior = true;
-  glow.castShadow = false;
-  glow.receiveShadow = false;
-  glow.layers.set(MAMMOTH_APARTMENT_DECOR_PROP_LAYER);
-
-  root.worldToLocal(_bulbWorldScratch);
-  glow.position.copy(_bulbWorldScratch);
-  root.add(glow);
-  root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] = true;
+  if (kind === "growOp") {
+    if (root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] === true) return;
+    if (!decorRootHasAuthoredEmissiveMap(root)) {
+      applyGrowOpFixturePanelGlow(root);
+    } else {
+      root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] = true;
+    }
+    return;
+  }
 }
 
 export function moodGradeMammothApartmentShellMaterial(

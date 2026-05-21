@@ -29,6 +29,24 @@ function createCeilingLensGlowMaterial(
   return m;
 }
 
+function createGrowOpPanelGlowMaterial(
+  source: THREE.MeshStandardMaterial,
+): THREE.MeshStandardMaterial {
+  const m = source.clone();
+  m.emissive.setRGB(0.88, 0.94, 1.0);
+  m.emissiveIntensity = 6.2;
+  m.toneMapped = false;
+  m.roughness = Math.min(m.roughness, 0.24);
+  m.metalness = 0;
+  m.color.lerp(new THREE.Color(0xf0f6ff), 0.72);
+  m.needsUpdate = true;
+  return m;
+}
+
+type FixtureLensGlowMaterialFactory = (
+  source: THREE.MeshStandardMaterial,
+) => THREE.MeshStandardMaterial;
+
 function buildGeometry(
   positions: number[],
   rootLocalToParentLocal: THREE.Matrix4,
@@ -77,6 +95,7 @@ function splitMeshAtRootLocalY(
   mesh: THREE.Mesh,
   root: THREE.Object3D,
   splitLocalY: number,
+  createGlowMaterial: FixtureLensGlowMaterialFactory,
 ): void {
   if (mesh.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true) return;
   if (!(mesh.material instanceof THREE.MeshStandardMaterial)) return;
@@ -133,7 +152,7 @@ function splitMeshAtRootLocalY(
   const upperGeometry = buildGeometry(upperPositions, rootLocalToParentLocal);
   if (!lowerGeometry) return;
 
-  const lensMaterial = createCeilingLensGlowMaterial(mesh.material);
+  const lensMaterial = createGlowMaterial(mesh.material);
   const lowerMesh = new THREE.Mesh(lowerGeometry, lensMaterial);
   lowerMesh.name = `${mesh.name || "ceiling_fixture"}_lens_glow`;
   lowerMesh.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] = true;
@@ -170,10 +189,13 @@ function splitMeshAtRootLocalY(
 }
 
 /**
- * Splits ceiling-fixture geometry at mid-height and makes the bottom lens emissive.
+ * Splits fixture geometry at mid-height and makes the bottom lens emissive.
  * Replaces the hidden interior orb — the visible dome reads as lit.
  */
-export function applyCeilingFixtureLensGlow(root: THREE.Object3D): void {
+function applyFixtureLensGlow(
+  root: THREE.Object3D,
+  createGlowMaterial: FixtureLensGlowMaterialFactory,
+): void {
   if (root.userData[FIXTURE_GLOW_ATTACHED_UD] === true) return;
 
   root.updateMatrixWorld(true);
@@ -194,8 +216,17 @@ export function applyCeilingFixtureLensGlow(root: THREE.Object3D): void {
   });
 
   for (const mesh of meshes) {
-    splitMeshAtRootLocalY(mesh, root, splitLocalY);
+    splitMeshAtRootLocalY(mesh, root, splitLocalY, createGlowMaterial);
   }
 
   root.userData[FIXTURE_GLOW_ATTACHED_UD] = true;
+}
+
+export function applyCeilingFixtureLensGlow(root: THREE.Object3D): void {
+  applyFixtureLensGlow(root, createCeilingLensGlowMaterial);
+}
+
+/** Cool-white lower-panel emissive for hanging grow-op LED fixtures. */
+export function applyGrowOpFixturePanelGlow(root: THREE.Object3D): void {
+  applyFixtureLensGlow(root, createGrowOpPanelGlowMaterial);
 }

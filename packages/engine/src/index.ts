@@ -222,6 +222,7 @@ export {
 export { upgradeApartmentDecorMaterialToStandard } from "./rendering/apartmentDecorMaterialUpgrade.js";
 export {
   applyCeilingFixtureLensGlow,
+  applyGrowOpFixturePanelGlow,
   MAMMOTH_CEILING_LENS_GLOW_MESH_UD,
 } from "./rendering/apartmentCeilingFixtureLensGlow.js";
 export {

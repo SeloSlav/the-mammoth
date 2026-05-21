@@ -22,6 +22,20 @@ export function apartmentStandingLampShadeBulbWorldPosition(
   );
 }
 
+/** Panel emitter sits in the lower band of the hanging grow fixture. */
+export function apartmentGrowOpPanelEmitterWorldPosition(
+  box: THREE.Box3,
+  size: THREE.Vector3,
+  out: THREE.Vector3,
+): void {
+  const panelBandH = Math.max(0.08, size.y * 0.24);
+  out.set(
+    (box.min.x + box.max.x) * 0.5,
+    box.min.y + panelBandH * 0.42,
+    (box.min.z + box.max.z) * 0.5,
+  );
+}
+
 /** Flush-mount lens orb + emitter at fixture geometric center. */
 export function apartmentCeilingFixtureBulbWorldPosition(
   box: THREE.Box3,

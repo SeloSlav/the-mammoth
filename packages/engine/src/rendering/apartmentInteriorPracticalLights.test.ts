@@ -25,6 +25,9 @@ describe("apartmentDecorEmitterKindFromModelPath", () => {
       apartmentDecorEmitterKindFromModelPath("static/models/objects/computer.glb"),
     ).toBe("computer");
     expect(
+      apartmentDecorEmitterKindFromModelPath("static/models/objects/light-grow-op.glb"),
+    ).toBe("growOp");
+    expect(
       apartmentDecorEmitterKindFromModelPath("static/models/objects/chair.glb"),
     ).toBeNull();
   });
@@ -74,6 +77,31 @@ describe("apartmentPracticalLightSpecFromDecorGroup", () => {
     expect(spec!.position.x).toBeCloseTo(0, 5);
     expect(spec!.position.z).toBeCloseTo(0, 5);
     expect(spec!.position.y).toBeCloseTo(2.4, 3);
+    expect(spec!.direction!.y).toBeLessThan(-0.99);
+  });
+
+  it("places grow-op panel light at the lower fixture band and aims downward", () => {
+    const group = new THREE.Group();
+    const housing = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.08, 0.5),
+      new THREE.MeshBasicMaterial(),
+    );
+    housing.position.y = 2.5;
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.1, 0.48),
+      new THREE.MeshBasicMaterial(),
+    );
+    panel.position.y = 2.08;
+    group.add(housing, panel);
+    group.updateMatrixWorld(true);
+
+    const spec = apartmentPracticalLightSpecFromDecorGroup(
+      group,
+      "static/models/objects/light-grow-op.glb",
+    );
+    expect(spec?.kind).toBe("growOp");
+    expect(spec!.position.y).toBeGreaterThan(2.0);
+    expect(spec!.position.y).toBeLessThan(2.2);
     expect(spec!.direction!.y).toBeLessThan(-0.99);
   });
 
@@ -133,6 +161,29 @@ describe("mountApartmentPracticalLights", () => {
     expect(point.position.x).toBeCloseTo(2, 5);
     expect(point.position.y).toBeCloseTo(2.5, 5);
     expect(point.position.z).toBeCloseTo(2, 5);
+
+    mount.dispose();
+  });
+
+  it("mounts grow-op as cool downward spot with wash", () => {
+    const parent = new THREE.Group();
+    parent.updateMatrixWorld(true);
+
+    const mount = mountApartmentPracticalLights(parent, [
+      {
+        kind: "growOp",
+        position: new THREE.Vector3(2, 2.4, 1),
+        direction: new THREE.Vector3(0, -1, 0),
+      },
+    ]);
+
+    expect(mount.root.children).toHaveLength(3);
+    const spot = mount.root.children[0] as THREE.SpotLight;
+    const wash = mount.root.children[2] as THREE.PointLight;
+    expect(spot.isSpotLight).toBe(true);
+    expect(spot.color.getHex()).toBe(0xf2f7ff);
+    expect(wash.isPointLight).toBe(true);
+    expect(wash.name).toBe("apt_growOp_wash_0");
 
     mount.dispose();
   });

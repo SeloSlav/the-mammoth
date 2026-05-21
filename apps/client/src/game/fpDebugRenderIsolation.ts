@@ -5,12 +5,12 @@
 
 export type FpDebugRenderIsolationFlags = {
   apartmentDecor: boolean;
-  /** Mesh-projected decor grounding shadows on shell floors (separate from decor GLBs). */
+  /** Baked top-down silhouette overlays on shell floors (separate from decor GLBs). */
   apartmentDecorFloorShadows: boolean;
-  /** Point/spot lights + emissive glow from lamp/TV/ceiling/chandelier decor (meshes stay visible). */
-  apartmentDecorPracticalLights: boolean;
-  /** All interior practical lights including window-linked spots. */
+  /** Master: every interior practical light, including window-linked fills. */
   apartmentPracticalLights: boolean;
+  /** Subset: decor fixture spots + emissive glow; window fills unaffected when master stays on. */
+  apartmentDecorPracticalLights: boolean;
   environmentSky: boolean;
   environmentLighting: boolean;
   mirrors: boolean;
@@ -28,8 +28,8 @@ export type FpDebugRenderIsolationKey = keyof FpDebugRenderIsolationFlags;
 const ALL_ON: FpDebugRenderIsolationFlags = {
   apartmentDecor: true,
   apartmentDecorFloorShadows: true,
-  apartmentDecorPracticalLights: true,
   apartmentPracticalLights: true,
+  apartmentDecorPracticalLights: true,
   environmentSky: true,
   environmentLighting: true,
   mirrors: true,
@@ -60,8 +60,8 @@ export function isFpDebugRenderIsolationSuppressingAnything(): boolean {
   return !(
     f.apartmentDecor &&
     f.apartmentDecorFloorShadows &&
-    f.apartmentDecorPracticalLights &&
     f.apartmentPracticalLights &&
+    f.apartmentDecorPracticalLights &&
     f.environmentSky &&
     f.environmentLighting &&
     f.mirrors &&
@@ -99,8 +99,8 @@ export function setAllFpDebugRenderIsolationFlags(enabled: boolean): void {
   flags = {
     apartmentDecor: enabled,
     apartmentDecorFloorShadows: enabled,
-    apartmentDecorPracticalLights: enabled,
     apartmentPracticalLights: enabled,
+    apartmentDecorPracticalLights: enabled,
     environmentSky: enabled,
     environmentLighting: enabled,
     mirrors: enabled,

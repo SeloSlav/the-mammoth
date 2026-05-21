@@ -259,6 +259,30 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     },
 
+    /** Hanging LED panel — cool white task pool over grow trays. */
+    growOp: {
+
+      color: 0xf2f7ff,
+
+      intensity: 4.85,
+
+      distance: 5.8,
+
+      angle: Math.PI / 2.05,
+
+      penumbra: 0.68,
+
+      decay: 1.28,
+
+      /** Soft under-tray fill without washing the whole flat. */
+      washIntensity: 0.72,
+
+      washDistance: 4.2,
+
+      washDecay: 1.22,
+
+    },
+
   },
 
   contactShadow: {
@@ -369,6 +393,8 @@ export type ApartmentDecorEmitterKind =
 
   | "standing"
 
+  | "growOp"
+
   | "tv"
 
   | "computer";
@@ -384,6 +410,8 @@ export function apartmentDecorEmitterKindFromModelPath(
   const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
 
   if (lower.includes("chandelier")) return "chandelier";
+
+  if (lower.includes("light-grow-op")) return "growOp";
 
   if (lower.includes("light-ceiling")) return "ceiling";
 
@@ -441,6 +469,8 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
   if (lower.includes("painting")) return false;
 
   if (lower.includes("coat-hanger")) return false;
+
+  if (lower.includes("cigarette")) return false;
 
   return true;
 

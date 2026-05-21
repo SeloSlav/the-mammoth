@@ -280,32 +280,32 @@ export function MammothDebugMenuHud() {
     {
       key: "apartmentDecor",
       label: "Apartment decor",
-      description: "All authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
+      description: "Authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
     },
     {
       key: "apartmentDecorFloorShadows",
-      label: "Decor floor shadows",
-      description: "Mesh-projected grounding shadows under static decor on shell floors",
-    },
-    {
-      key: "apartmentDecorPracticalLights",
-      label: "Decor fixture lighting",
-      description: "Lamp/TV/ceiling practical lights + emissive glow (decor meshes stay visible)",
+      label: "Baked decor floor shadows",
+      description: "Top-down silhouette overlays on shell floors (not the realtime shadow map)",
     },
     {
       key: "apartmentPracticalLights",
-      label: "All apartment practical lights",
+      label: "Practical lights (all)",
       description: "Every interior spot/point light, including window-linked fills",
+    },
+    {
+      key: "apartmentDecorPracticalLights",
+      label: "Practical lights (decor fixtures)",
+      description: "Lamp/TV/ceiling spots + emissive glow — window fills stay on unless all-practicals is off",
+    },
+    {
+      key: "environmentLighting",
+      label: "Scene lighting",
+      description: "Sun, ambient/fill, interior bounce — not apartment practicals",
     },
     {
       key: "environmentSky",
       label: "Sky & clouds",
       description: "Skydome + infinite ground plane updates",
-    },
-    {
-      key: "environmentLighting",
-      label: "Scene lighting",
-      description: "Sun rig, ambient/fill, apartment bounce lights",
     },
     {
       key: "mirrors",

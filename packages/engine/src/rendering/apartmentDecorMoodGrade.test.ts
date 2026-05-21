@@ -22,18 +22,78 @@ describe("moodGradeMammothApartmentDecorMaterial warm fixtures", () => {
     expect(graded.emissiveIntensity).toBeGreaterThan(2);
   });
 
-  it("strips emissive maps from ceiling fixtures", () => {
+  it("strips emissive from ceiling fixtures without authored emissive maps", () => {
     const graded = moodGradeMammothApartmentDecorMaterial(
       new THREE.MeshStandardMaterial({
         emissive: 0xffffff,
         emissiveIntensity: 2,
-        emissiveMap: new THREE.Texture(),
       }),
       { modelRelPath: "static/models/objects/light-ceiling.glb" },
     ) as THREE.MeshStandardMaterial;
 
     expect(graded.emissive.r).toBe(0);
     expect(graded.emissiveMap).toBeNull();
+  });
+
+  it("preserves authored emissive maps on ceiling fixtures with bulb masks", () => {
+    const graded = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        emissive: 0xffffff,
+        emissiveIntensity: 1,
+        emissiveMap: new THREE.Texture(),
+      }),
+      { modelRelPath: "static/models/objects/light-ceiling-2.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(graded.emissiveMap).not.toBeNull();
+    expect(graded.emissive.r).toBeGreaterThan(0.95);
+    expect(graded.emissiveIntensity).toBeGreaterThan(1.4);
+    expect(graded.toneMapped).toBe(false);
+  });
+
+  it("grades grow-op fixtures with cool white emissive", () => {
+    const graded = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        emissive: 0xffffff,
+        emissiveIntensity: 1,
+        emissiveMap: new THREE.Texture(),
+      }),
+      { modelRelPath: "static/models/objects/light-grow-op.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(graded.emissive.b).toBeGreaterThan(graded.emissive.r);
+    expect(graded.emissiveIntensity).toBeGreaterThan(1.8);
+    expect(graded.toneMapped).toBe(false);
+  });
+
+  it("turns bright chandelier materials into warm-white emissive bulbs", () => {
+    const graded = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0x000000,
+        emissiveIntensity: 1,
+      }),
+      { modelRelPath: "static/models/objects/chandelier.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(graded.emissive.r).toBeGreaterThan(0.95);
+    expect(graded.emissive.g).toBeGreaterThan(0.9);
+    expect(graded.emissiveIntensity).toBeGreaterThan(1.2);
+    expect(graded.toneMapped).toBe(false);
+  });
+
+  it("does not make dark chandelier housing emissive", () => {
+    const graded = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        color: 0x20170f,
+        emissive: 0x000000,
+        emissiveIntensity: 1,
+      }),
+      { modelRelPath: "static/models/objects/chandelier.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(graded.emissive.r).toBe(0);
+    expect(graded.emissiveIntensity).toBe(1);
   });
 });
 
@@ -61,7 +121,7 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
     expect(root.children).toHaveLength(1);
   });
 
-  it("adds an in-shade emissive orb for standing lamps", () => {
+  it("does not add a generated emissive orb for standing lamps", () => {
     const root = new THREE.Group();
     const pole = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 1.0, 0.08),
@@ -84,9 +144,30 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
     const glow = root.children.find(
       (c) => c.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD] === true,
     ) as THREE.Mesh | undefined;
-    expect(glow).toBeDefined();
-    expect(glow!.position.y).toBeGreaterThan(1.0);
-    expect(glow!.name).toBe("apt_standing_shade_bulb_glow");
+    expect(glow).toBeUndefined();
+    expect(root.children).toHaveLength(2);
+  });
+
+  it("adds cool lower-panel emissive for grow-op fixtures without authored emissive", () => {
+    const root = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.28, 0.4),
+      new THREE.MeshStandardMaterial(),
+    );
+    mesh.position.y = 0.14;
+    root.add(mesh);
+    root.updateMatrixWorld(true);
+
+    attachApartmentWarmFixtureBulbGlow(
+      root,
+      "static/models/objects/light-grow-op.glb",
+    );
+
+    expect(
+      root.children.some(
+        (c) => c.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true,
+      ),
+    ).toBe(true);
   });
 
   it("no-ops for non-fixture decor", () => {

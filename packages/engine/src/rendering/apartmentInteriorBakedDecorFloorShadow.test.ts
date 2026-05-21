@@ -77,6 +77,7 @@ describe("apartmentInteriorBakedDecorFloorShadow", () => {
       "static/models/objects/wall-clock.glb",
       "static/models/objects/painting-knitted.glb",
       "static/models/objects/coat-hanger-2.glb",
+      "static/models/objects/cigarette-pack.glb",
     ]) {
       const decor = new THREE.Group();
       decor.userData.mammothApartmentDecorModelRelPath = modelRelPath;
