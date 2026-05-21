@@ -25,7 +25,15 @@ const NO_SELECT: CSSProperties = {
   msUserSelect: "none",
 };
 
-export const MAMMOTH_HUD_PANEL_MIN_WIDTH_PX = 360;
+/**
+ * Canonical dock panel width.
+ *
+ * Derived from the player inventory grid (6 cols × 52px + 5 × 6px gap + 18px L/R padding
+ * + 2px border) so the inventory + stash panels read as matched siblings. Stash kinds with
+ * smaller grids (water tank, grow tray, wardrobe) center their slot grid inside this width.
+ * Fridge (7 cols) opts into a slightly wider variant — see {@link Props.widthPx}.
+ */
+export const MAMMOTH_HUD_PANEL_WIDTH_PX = 380;
 
 type Props = {
   title: string;
@@ -35,11 +43,8 @@ type Props = {
   testid?: string;
   /** Extra DOM markers (e.g. data-mammoth-inventory) the engine reads via querySelector. */
   domMarkers?: Record<string, string>;
-  /**
-   * Optional inline overrides (only for layout — never colors/typography).
-   * Use to bump minWidth for kinds whose slot grid naturally needs more room.
-   */
-  style?: CSSProperties;
+  /** Override the canonical width; reserved for kinds whose slot grid genuinely exceeds it. */
+  widthPx?: number;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
@@ -50,9 +55,10 @@ export function MammothHudPanel({
   children,
   testid,
   domMarkers,
-  style,
+  widthPx,
   onContextMenu,
 }: Props) {
+  const width = widthPx ?? MAMMOTH_HUD_PANEL_WIDTH_PX;
   return (
     <div
       onContextMenu={onContextMenu}
@@ -61,6 +67,8 @@ export function MammothHudPanel({
       {...(domMarkers ?? {})}
       style={{
         pointerEvents: "auto",
+        boxSizing: "border-box",
+        width,
         padding: "16px 18px 18px",
         borderRadius: 14,
         background: THEME_CARD_BG_STRONG,
@@ -68,39 +76,29 @@ export function MammothHudPanel({
         boxShadow: THEME_PANEL_SHADOW,
         color: THEME_TEXT_PRIMARY,
         fontFamily: UI_FONT_SANS,
-        minWidth: MAMMOTH_HUD_PANEL_MIN_WIDTH_PX,
         backdropFilter: "blur(2px)",
         ...NO_SELECT,
-        ...style,
       }}
     >
       <div
         style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 12,
+          fontSize: 14,
+          fontWeight: 600,
+          letterSpacing: "0.02em",
+          color: accent ?? THEME_TEXT_PRIMARY,
           marginBottom: subtitle ? 4 : 12,
         }}
       >
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 600,
-            letterSpacing: "0.02em",
-            color: accent ?? THEME_TEXT_PRIMARY,
-          }}
-        >
-          {title}
-        </div>
+        {title}
       </div>
       {subtitle ? (
         <div
           style={{
             fontSize: 11,
             color: THEME_TEXT_FAINT,
-            lineHeight: 1.45,
+            lineHeight: 1.5,
             marginBottom: 12,
+            overflowWrap: "break-word",
           }}
         >
           {subtitle}
@@ -114,7 +112,7 @@ export function MammothHudPanel({
           opacity: 0.6,
         }}
       />
-      <div style={{ color: THEME_TEXT_MUTED }}>{children}</div>
+      <div style={{ color: THEME_TEXT_MUTED, overflowWrap: "break-word" }}>{children}</div>
     </div>
   );
 }

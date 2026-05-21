@@ -802,6 +802,10 @@ export function createFpSessionMainRafFrame(
           apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
           ...(stashUk !== null ? { lookedAtStashKey: stashUk } : {}),
           lookedAtWardrobeUnitKey,
+          stashLos: {
+            camera: deps.camera,
+            stashRayOcclusion: deps.fpApartmentDecorMeshes.getStashRayOcclusion(),
+          },
         });
       }
       const aSys = cachedAptSys;

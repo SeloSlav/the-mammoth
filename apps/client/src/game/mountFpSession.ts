@@ -477,6 +477,7 @@ export async function mountFpSession(
     disableShadowsOnUnitInteriorMeshes();
     refreshPerfTrackedMeshes();
     rebuildFpInteriorPartitionSolidMeshes();
+    fpApartmentDecorMeshes.rebuildStashRayOcclusion();
   };
   let lastPerfSceneCounterSampleAtMs = -Infinity;
   let lastPerfSceneCounters = {
@@ -1393,6 +1394,10 @@ export async function mountFpSession(
         ? getApartmentSystemPrompt(conn, feet, {
             ...(lookedAtStash?.stashKey != null ? { lookedAtStashKey: lookedAtStash.stashKey } : {}),
             lookedAtWardrobeUnitKey,
+            stashLos: {
+              camera,
+              stashRayOcclusion: fpApartmentDecorMeshes.getStashRayOcclusion(),
+            },
           })
         : null;
       /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as THREE from "three";
 
 vi.mock("../../featureFlags", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../featureFlags")>()),
@@ -327,6 +328,32 @@ describe("fpApartmentGameplay", () => {
       stashKind: APARTMENT_STASH_KIND_FOOTLOCKER,
       stashLabel: "footlocker",
     });
+  });
+
+  it("suppresses proximity footlocker when camera line-of-sight is blocked", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 2,
+      footZ: 3,
+      boundMinX: 0,
+      boundMaxX: 6,
+      boundMinZ: 0,
+      boundMaxZ: 6,
+    });
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 100);
+    camera.position.set(2.2, 11, 3.1);
+    camera.lookAt(2, 10.55, 3);
+    camera.updateMatrixWorld(true);
+    const prompt = getApartmentSystemPrompt(mockConn([unit]), { x: 2.2, y: 10, z: 3.1 }, {
+      stashLos: {
+        camera,
+        stashRayOcclusion: {
+          targetOccludedFromCamera: () => true,
+        } as never,
+      },
+    });
+    expect(prompt).toBeNull();
   });
 
   it("offers owned wardrobe stash near the wardrobe when not near the footlocker", () => {

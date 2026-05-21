@@ -21,6 +21,8 @@ import {
 } from "./fpBalconyGrowTrayAim.js";
 import { clientFeetNearGrowTray } from "./fpBalconyGrowTrayAnchor.js";
 
+import type { FpApartmentStashRayOcclusion } from "../fpApartment/fpApartmentStashRayOcclusion.js";
+
 export type BalconyGrowTrayPrompt =
   | {
       kind: "balcony_grow_harvest";
@@ -170,6 +172,7 @@ export function balconyGrowTrayAimFallbackPrompt(
   trayPickMeshes: readonly THREE.Mesh[],
   slotPickMeshes: readonly THREE.Mesh[],
   growState: BalconyGrowOpUnitState,
+  stashRayOcclusion?: FpApartmentStashRayOcclusion,
 ): BalconyGrowTrayPrompt | null {
   if (!identity || (trayPickMeshes.length === 0 && slotPickMeshes.length === 0)) return null;
 
@@ -190,6 +193,7 @@ export function balconyGrowTrayAimFallbackPrompt(
     if (!clientOwnsClaimedApartmentUnit(conn, identity, unitKey)) return;
 
     mesh.getWorldPosition(_trayCenterScratch);
+    if (stashRayOcclusion?.targetOccludedFromCamera(camera, _trayCenterScratch)) return;
     const dx = feet.x - _trayCenterScratch.x;
     const dz = feet.z - _trayCenterScratch.z;
     if (dx * dx + dz * dz > radiusSq) return;
@@ -285,6 +289,7 @@ export function resolveBalconyGrowTrayPrompt(
   trayPickMeshes: readonly THREE.Mesh[],
   slotPickMeshes: readonly THREE.Mesh[],
   growState: BalconyGrowOpUnitState,
+  stashRayOcclusion?: FpApartmentStashRayOcclusion,
 ): BalconyGrowTrayPrompt | null {
   if (!identity) return null;
   for (const hit of hits) {
@@ -339,6 +344,7 @@ export function resolveBalconyGrowTrayPrompt(
     trayPickMeshes,
     slotPickMeshes,
     growState,
+    stashRayOcclusion,
   );
 }
 

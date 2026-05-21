@@ -1,6 +1,7 @@
 /**
  * MVP apartment claim / reinforcement / stash proximity — mirrors server bbox tests in {@link ApartmentUnit}.
  */
+import * as THREE from "three";
 import type { Identity } from "spacetimedb";
 import type { ApartmentDoor, ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
@@ -35,6 +36,7 @@ import {
   peekOwnedApartmentBuiltinsDoc,
   resolveApartmentStashAnchorXZ,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
+import type { FpApartmentStashRayOcclusion } from "./fpApartmentStashRayOcclusion.js";
 
 /**
  * Extra horizontal reach (m) beyond approximate visible mesh half-span so prompts still fire when
@@ -729,6 +731,80 @@ function nearestOwnedClaimedApartmentStash(
   return best;
 }
 
+const _apartmentStashWorldTargetScratch = new THREE.Vector3();
+
+/** Chest-height world point used for stash line-of-sight checks (proximity + ray hits). */
+export function resolveApartmentStashWorldTarget(
+  conn: DbConnection,
+  stashKey: string,
+): THREE.Vector3 | null {
+  const full = parseApartmentStashKeyFull(stashKey);
+  let unit: ApartmentUnit | null = null;
+  for (const row of conn.db.apartment_unit) {
+    if (row.unitKey === full.unitKey) {
+      unit = row as ApartmentUnit;
+      break;
+    }
+  }
+  if (!unit) return null;
+
+  if (full.tag === "decor") {
+    for (const row of conn.db.apartment_unit_decor) {
+      if (row.decorId === full.decorId && row.unitKey === full.unitKey) {
+        _apartmentStashWorldTargetScratch.set(row.posX, row.posY + 0.55, row.posZ);
+        return _apartmentStashWorldTargetScratch;
+      }
+    }
+    return null;
+  }
+  if (full.tag === "grow_tray") {
+    const anchor = resolveBalconyGrowTrayAnchorXZ(conn, unit, full.trayId);
+    if (!anchor) return null;
+    _apartmentStashWorldTargetScratch.set(anchor.x, unit.footY + 0.45, anchor.z);
+    return _apartmentStashWorldTargetScratch;
+  }
+  const stashKind: ApartmentStashKind =
+    full.tag === "legacy" ? full.stashKind : APARTMENT_STASH_KIND_FOOTLOCKER;
+  const { x, z } = resolveApartmentStashAnchorXZ(unit, peekOwnedApartmentBuiltinsDoc(), stashKind);
+  _apartmentStashWorldTargetScratch.set(x, unit.footY + 0.55, z);
+  return _apartmentStashWorldTargetScratch;
+}
+
+export function apartmentStashPromptOccludedFromCamera(
+  conn: DbConnection,
+  prompt: ApartmentStashPrompt,
+  camera: THREE.PerspectiveCamera,
+  stashRayOcclusion: FpApartmentStashRayOcclusion,
+): boolean {
+  const target = resolveApartmentStashWorldTarget(conn, prompt.stashKey);
+  if (!target) return false;
+  return stashRayOcclusion.targetOccludedFromCamera(camera, target);
+}
+
+function finalizeApartmentStashPrompt(
+  conn: DbConnection,
+  prompt: ApartmentStashPrompt | null,
+  opts: {
+    stashLos?: {
+      camera: THREE.PerspectiveCamera;
+      stashRayOcclusion: FpApartmentStashRayOcclusion;
+    };
+  },
+): ApartmentStashPrompt | null {
+  if (!prompt || !opts.stashLos) return prompt;
+  if (
+    apartmentStashPromptOccludedFromCamera(
+      conn,
+      prompt,
+      opts.stashLos.camera,
+      opts.stashLos.stashRayOcclusion,
+    )
+  ) {
+    return null;
+  }
+  return prompt;
+}
+
 /**
  * Highest-priority apartment prompt for FP HUD (excluding world loot — handled separately).
  */
@@ -741,6 +817,11 @@ export function getApartmentSystemPrompt(
     lookedAtStashKey?: string | null;
     /** Center-screen ray hit on wardrobe pick mesh (`null` / omitted = no claim prompts). */
     lookedAtWardrobeUnitKey?: string | null;
+    /** When set, proximity and ray-hit stash prompts require clear line-of-sight from the camera. */
+    stashLos?: {
+      camera: THREE.PerspectiveCamera;
+      stashRayOcclusion: FpApartmentStashRayOcclusion;
+    };
   } = {},
 ):
   | ApartmentClaimPrompt
@@ -777,13 +858,17 @@ export function getApartmentSystemPrompt(
     const full = parseApartmentStashKeyFull(opts.lookedAtStashKey);
     if (full.tag === "grow_tray") {
       if (!clientOwnsClaimedApartmentUnit(conn, id, full.unitKey)) return null;
-      return {
-        kind: "apartment_stash",
-        stashKey: opts.lookedAtStashKey,
-        unitKey: full.unitKey,
-        stashKind: APARTMENT_STASH_KIND_GROW_TRAY,
-        stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
-      };
+      return finalizeApartmentStashPrompt(
+        conn,
+        {
+          kind: "apartment_stash",
+          stashKey: opts.lookedAtStashKey,
+          unitKey: full.unitKey,
+          stashKind: APARTMENT_STASH_KIND_GROW_TRAY,
+          stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
+        },
+        opts,
+      );
     }
     if (!clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)) return null;
     if (full.tag === "decor") {
@@ -796,21 +881,30 @@ export function getApartmentSystemPrompt(
       }
       const sk = decorRow ? apartmentDecorRowClientStashKind(decorRow) : null;
       if (!sk) return null;
-      return {
-        kind: "apartment_stash",
-        stashKey: opts.lookedAtStashKey,
-        unitKey: full.unitKey,
-        stashKind: sk,
-        stashLabel: apartmentStashLabel(sk),
-      };
+      return finalizeApartmentStashPrompt(
+        conn,
+        {
+          kind: "apartment_stash",
+          stashKey: opts.lookedAtStashKey,
+          unitKey: full.unitKey,
+          stashKind: sk,
+          stashLabel: apartmentStashLabel(sk),
+        },
+        opts,
+      );
     }
     const stashKind: ApartmentStashKind =
       full.tag === "legacy" ? full.stashKind : APARTMENT_STASH_KIND_FOOTLOCKER;
-    return apartmentStashPromptFor(full.unitKey, stashKind);
+    return finalizeApartmentStashPrompt(
+      conn,
+      apartmentStashPromptFor(full.unitKey, stashKind),
+      opts,
+    );
   }
 
-  const stashPrompt = nearestOwnedClaimedApartmentStash(conn, id, pose.x, pose.y, pose.z);
-  if (stashPrompt) return stashPrompt;
-
-  return null;
+  return finalizeApartmentStashPrompt(
+    conn,
+    nearestOwnedClaimedApartmentStash(conn, id, pose.x, pose.y, pose.z),
+    opts,
+  );
 }

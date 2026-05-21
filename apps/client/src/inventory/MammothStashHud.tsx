@@ -37,10 +37,11 @@ import {
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import { MammothDraggableItem } from "./MammothDraggableItem";
-import { MammothHudPanel } from "./MammothHudPanel";
+import { MammothHudPanel, MAMMOTH_HUD_PANEL_WIDTH_PX } from "./MammothHudPanel";
 import { MammothItemIcon } from "./MammothItemIcon";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
+import { APARTMENT_STASH_KIND_FRIDGE } from "../game/fpApartment/fpApartmentStashKey";
 import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
@@ -407,12 +408,20 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     return `Drag items in or out. ${ruleHint} Right-click to quick-transfer.`;
   }, [stashKind]);
 
+  /**
+   * Grids are always centered inside the panel content area so smaller stashes (water tank,
+   * grow tray, wardrobe, stove) don't sit off-center against the symmetric panel chrome.
+   */
   const slotGridStyle: CSSProperties = {
     display: "grid",
     gap: 6,
+    justifyContent: "center",
   };
 
   const titleText = `${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`;
+  /** Fridge has 7 columns; the default panel width fits at most 6 × 52px. */
+  const panelWidthPx =
+    stashKind === APARTMENT_STASH_KIND_FRIDGE ? 440 : MAMMOTH_HUD_PANEL_WIDTH_PX;
 
   return (
     <>
@@ -430,6 +439,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
           title={titleText}
           subtitle={subtitle}
           testid="mammoth-stash-panel"
+          widthPx={panelWidthPx}
           onContextMenu={blockBrowserContextMenu}
         >
           {stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
@@ -456,6 +466,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
                       color: THEME_TEXT_FAINT,
                       marginBottom: 6,
                       fontWeight: 600,
+                      textAlign: "center",
                     }}
                   >
                     {section.label}
@@ -473,26 +484,6 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
                   </div>
                 </div>
               ))}
-            </div>
-          ) : stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
-            <div
-              style={{
-                ...slotGridStyle,
-                gridTemplateColumns: "52px",
-                justifyContent: "center",
-              }}
-            >
-              {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
-            </div>
-          ) : stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
-            <div
-              style={{
-                ...slotGridStyle,
-                gridTemplateColumns: "52px",
-                justifyContent: "center",
-              }}
-            >
-              {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
             </div>
           ) : (
             <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${gridCols}, 52px)` }}>
