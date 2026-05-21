@@ -40,6 +40,23 @@ export const BALCONY_GROW_TRAY_BUILTIN_IDS: readonly string[] = [
   "8b770390-544f-4a40-aaa3-ec34d9ed66a7",
 ] as const;
 
+/** Layout fractions from `owned_apartment_builtins.json` grow-tray rows (by tray id). */
+export const BALCONY_GROW_TRAY_AUTHORED_FX_FZ: Readonly<
+  Record<string, { fx: number; fz: number }>
+> = {
+  "8e48c06b-c005-4425-9fdc-a527e67168ee": { fx: 0.8433852563352113, fz: -0.026789220468649344 },
+  "825bca36-e9b8-4fa7-9883-2d57ba0ebe04": { fx: 0.9273651377782285, fz: -0.026789220468649344 },
+  "5a8db793-b6e6-4266-bd96-8d53a1452e91": { fx: 0.8433852563352113, fz: 0.09540147283815242 },
+  "74e853d2-62cb-42b3-b740-c8ea51c6179f": { fx: 0.9273651377782282, fz: 0.09540147283815242 },
+  "8cf090f7-acfa-460d-8360-f8c48a233557": { fx: 0.8433852563352113, fz: 0.21759216614495205 },
+  "74725d62-5270-4d8f-a1fe-4e08f9215e0d": { fx: 0.9273651377782273, fz: 0.21759216614495205 },
+  "f7b5698a-e331-48bf-b5f2-aab0002b037d": { fx: 0.9273651377782269, fz: 0.3397828594517517 },
+  "8b770390-544f-4a40-aaa3-ec34d9ed66a7": { fx: 0.8433852563352113, fz: 0.3397828594517517 },
+};
+
+/** Horizontal interact radius for grow-tray stash / plant / harvest. */
+export const BALCONY_GROW_TRAY_INTERACT_RADIUS_M = 4 as const;
+
 export type BalconyGrowStage = "seed" | "sapling" | "mid" | "mature";
 
 export function balconyGrowTrayStashKey(unitKey: string, trayId: string): string {

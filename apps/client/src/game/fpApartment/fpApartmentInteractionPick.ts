@@ -25,3 +25,17 @@ export function fitApartmentInteractionPickToObject(
     Math.max(minScale.z, _sizeScratch.z),
   );
 }
+
+/** Tall floor-level pick for balcony grow trays — center-screen rays often pass over flat soil meshes. */
+export function fitBalconyGrowGroundInteractionPick(
+  pick: THREE.Mesh,
+  localX: number,
+  localZ: number,
+  opts?: { width?: number; height?: number; centerY?: number },
+): void {
+  const width = opts?.width ?? 0.78;
+  const height = opts?.height ?? 1.25;
+  const centerY = opts?.centerY ?? height * 0.5;
+  pick.position.set(localX, centerY, localZ);
+  pick.scale.set(width, height, width);
+}

@@ -13,6 +13,10 @@ import {
   APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK,
   effectiveOwnedApartmentPlacedKind,
 } from "@the-mammoth/schemas";
+import {
+  resolveBalconyGrowTrayAnchorXZ,
+  BALCONY_GROW_TRAY_INTERACT_RADIUS_M,
+} from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
 import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 import {
   apartmentStashKey,
@@ -400,6 +404,21 @@ function nearPointStashCylinder(
   return feetVerticalOkForInteract(u.footY, y);
 }
 
+/** True when `identity` owns a claimed apartment with this `unitKey`. */
+export function clientOwnsClaimedApartmentUnit(
+  conn: DbConnection,
+  identity: Identity | undefined,
+  unitKey: string,
+): boolean {
+  if (!identity) return false;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.unitKey !== unitKey) continue;
+    return u.state === UNIT_STATE_CLAIMED && sameIdentity(u.owner, identity);
+  }
+  return false;
+}
+
 export function clientMayUseApartmentStash(
   conn: DbConnection,
   owner: Identity | undefined,
@@ -409,20 +428,33 @@ export function clientMayUseApartmentStash(
   if (!owner) return false;
   const full = parseApartmentStashKeyFull(stashKey);
   if (full.tag === "grow_tray") {
+    /** Balcony trays sit at negative layout fz — outside strict unit AABB without slack. */
+    const hullSlackXz = 2.5;
+    const radiusSq = BALCONY_GROW_TRAY_INTERACT_RADIUS_M * BALCONY_GROW_TRAY_INTERACT_RADIUS_M;
     for (const row of conn.db.apartment_unit) {
       const u = row as ApartmentUnit;
       if (u.unitKey !== full.unitKey) continue;
       if (u.state !== UNIT_STATE_CLAIMED) return false;
       if (!sameIdentity(u.owner, owner)) return false;
-      if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
-      for (const tray of conn.db.balcony_grow_tray) {
-        if (tray.unitKey !== full.unitKey || tray.trayId !== full.trayId) continue;
-        const dx = pose.x - tray.posX;
-        const dz = pose.z - tray.posZ;
-        if (dx * dx + dz * dz > 1.1 * 1.1) return false;
-        return feetVerticalOkForInteract(u.footY, pose.y);
+      if (
+        !feetInsideUnitHullSlack(
+          u,
+          pose.x,
+          pose.y,
+          pose.z,
+          hullSlackXz,
+          INTERACT_FEET_Y_BELOW_SLACK_M,
+          INTERACT_FEET_Y_ABOVE_SLACK_M,
+        )
+      ) {
+        return false;
       }
-      return false;
+      const anchor = resolveBalconyGrowTrayAnchorXZ(conn, u, full.trayId);
+      if (!anchor) return false;
+      const dx = pose.x - anchor.x;
+      const dz = pose.z - anchor.z;
+      if (dx * dx + dz * dz > radiusSq) return false;
+      return feetVerticalOkForInteract(u.footY, pose.y);
     }
     return false;
   }
@@ -740,8 +772,18 @@ export function getApartmentSystemPrompt(
   if (opts.lookedAtStashKey === null) return null;
 
   if (opts.lookedAtStashKey !== undefined) {
-    if (!clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)) return null;
     const full = parseApartmentStashKeyFull(opts.lookedAtStashKey);
+    if (full.tag === "grow_tray") {
+      if (!clientOwnsClaimedApartmentUnit(conn, id, full.unitKey)) return null;
+      return {
+        kind: "apartment_stash",
+        stashKey: opts.lookedAtStashKey,
+        unitKey: full.unitKey,
+        stashKind: APARTMENT_STASH_KIND_GROW_TRAY,
+        stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
+      };
+    }
+    if (!clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)) return null;
     if (full.tag === "decor") {
       let decorRow: ApartmentUnitDecor | null = null;
       for (const row of conn.db.apartment_unit_decor) {
@@ -758,15 +800,6 @@ export function getApartmentSystemPrompt(
         unitKey: full.unitKey,
         stashKind: sk,
         stashLabel: apartmentStashLabel(sk),
-      };
-    }
-    if (full.tag === "grow_tray") {
-      return {
-        kind: "apartment_stash",
-        stashKey: opts.lookedAtStashKey,
-        unitKey: full.unitKey,
-        stashKind: APARTMENT_STASH_KIND_GROW_TRAY,
-        stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
       };
     }
     const stashKind: ApartmentStashKind =

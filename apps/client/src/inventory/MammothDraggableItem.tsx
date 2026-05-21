@@ -65,13 +65,21 @@ export function MammothDraggableItem({
           onDragStartRef.current({ item, sourceSlot });
           const g = document.createElement("div");
           g.style.cssText = `position:fixed;left:${ev.clientX + 8}px;top:${ev.clientY + 8}px;z-index:100000;pointer-events:none;padding:4px;background:rgba(0,0,0,0.75);border-radius:6px;border:1px solid rgba(120,200,255,0.5);box-sizing:border-box;min-width:48px;min-height:48px`;
-          const img = document.createElement("img");
-          img.src = item.def.iconUrl;
-          img.alt = item.def.displayName;
-          img.width = 40;
-          img.height = 40;
-          img.style.objectFit = "contain";
-          g.appendChild(img);
+          if (item.def.iconUrl) {
+            const img = document.createElement("img");
+            img.src = item.def.iconUrl;
+            img.alt = item.def.displayName;
+            img.width = 40;
+            img.height = 40;
+            img.style.objectFit = "contain";
+            g.appendChild(img);
+          } else {
+            const label = document.createElement("span");
+            label.textContent = item.def.displayName.trim().slice(0, 2) || "—";
+            label.style.cssText =
+              "display:flex;align-items:center;justify-content:center;width:40px;height:40px;font-size:10px;font-weight:600;color:rgba(200,210,220,0.75);text-transform:uppercase";
+            g.appendChild(label);
+          }
           if (mammothShowStackQuantityOnSlotIcon(item.def, item.instance.quantity)) {
             const q = document.createElement("div");
             q.textContent = String(item.instance.quantity);

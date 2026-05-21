@@ -27,6 +27,7 @@ import {
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import { MammothDraggableItem } from "./MammothDraggableItem";
+import { MammothItemIcon } from "./MammothItemIcon";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
 import {
@@ -313,19 +314,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     return (
       <div style={{ position: "relative", width: 44, height: 44, margin: "auto" }}>
         {waterFill != null ? <WaterBottleHotbarFillBar fillFraction={waterFill} /> : null}
-        <img
-          src={pop.def.iconUrl}
-          alt={pop.def.displayName}
-          draggable={false}
-          style={{
-            width: 44,
-            height: 44,
-            objectFit: "contain",
-            display: "block",
-            pointerEvents: "none",
-            ...NO_SELECT,
-          }}
-        />
+        <MammothItemIcon def={pop.def} size={44} style={NO_SELECT} />
       </div>
     );
   };

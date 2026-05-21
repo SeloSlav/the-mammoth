@@ -10,7 +10,7 @@ import {
 import { balconyGrowStageGlb } from "@the-mammoth/assets";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
-import { fitApartmentInteractionPickToObject } from "../fpApartment/fpApartmentInteractionPick.js";
+import { fitBalconyGrowGroundInteractionPick } from "../fpApartment/fpApartmentInteractionPick.js";
 import { FP_INTERACTION_PICK_LAYER } from "../fpSession/fpSessionConstants.js";
 import type { BalconyGrowPlant } from "../../module_bindings/types";
 
@@ -57,7 +57,7 @@ export async function mountGrowTrayDecorOnGroup(opts: {
 
   const trayPick = new THREE.Mesh(pickGeometry, pickMaterial);
   trayPick.name = `grow_tray_pick:${trayBuiltinId}`;
-  fitApartmentInteractionPickToObject(decorGroup, trayPick, { x: 0.4, y: 0.2, z: 0.4 });
+  fitBalconyGrowGroundInteractionPick(trayPick, 0, 0, { width: 0.82, height: 1.3 });
   trayPick.userData.mammothGrowTrayId = trayBuiltinId;
   trayPick.userData.mammothGrowTrayUnitKey = unitKey;
   trayPick.userData.mammothGrowTrayRoot = decorGroup;
@@ -75,11 +75,15 @@ export async function mountGrowTrayDecorOnGroup(opts: {
     const off = BALCONY_GROW_SLOT_LOCAL_OFFSETS[slot];
     if (!off) continue;
     const slotPick = new THREE.Mesh(pickGeometry, pickMaterial);
-    slotPick.position.set(off.x, 0.08, off.z);
+    fitBalconyGrowGroundInteractionPick(slotPick, off.x, off.z, {
+      width: 0.42,
+      height: 1.15,
+    });
     slotPick.userData.mammothGrowTrayId = trayBuiltinId;
     slotPick.userData.mammothGrowTrayUnitKey = unitKey;
     slotPick.userData.mammothGrowSlotIndex = slot;
     slotPick.userData.mammothGrowTrayRoot = decorGroup;
+    Object.assign(slotPick.userData, growTrayStashPickUserData(unitKey, trayBuiltinId));
     slotPick.layers.set(FP_INTERACTION_PICK_LAYER);
     decorGroup.add(slotPick);
     growSlotPickMeshes.push(slotPick);

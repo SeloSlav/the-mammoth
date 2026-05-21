@@ -3,7 +3,7 @@
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
-use crate::apartments::{self, apartment_unit, apartment_unit_decor, feet_inside_unit};
+use crate::apartments::{self, apartment_unit, apartment_unit_decor};
 use crate::auth;
 use crate::crafting::emit_hud_notice;
 use crate::inventory::{self, find_item_in_hotbar_slot, find_item_in_stash_slot};
@@ -33,7 +33,10 @@ pub(crate) const PHASE_MATURE: u8 = 2;
 pub(crate) const PHASE_WILTED: u8 = 3;
 
 const GROW_TRAY_MODEL_SUFFIX: &str = "objects/grow-tray.glb";
-const TRAY_INTERACT_RADIUS_SQ: f32 = 1.1 * 1.1;
+const TRAY_INTERACT_RADIUS_M: f32 = 4.0;
+const TRAY_INTERACT_RADIUS_SQ: f32 = TRAY_INTERACT_RADIUS_M * TRAY_INTERACT_RADIUS_M;
+/// Balcony trays use negative layout `fz`; feet may sit slightly outside strict unit AABB.
+const GROW_TRAY_UNIT_HULL_SLACK_XZ: f32 = 2.5;
 const INTERACT_FEET_Y_BELOW_SLACK_M: f32 = 0.35;
 const INTERACT_FEET_Y_ABOVE_SLACK_M: f32 = 2.4;
 
@@ -45,8 +48,8 @@ pub(crate) const BALCONY_GROW_TRAY_BUILTIN_IDS: [&str; BALCONY_GROW_TRAY_COUNT] 
     "74e853d2-62cb-42b3-b740-c8ea51c6179f",
     "8cf090f7-acfa-460d-8360-f8c48a233557",
     "74725d62-5270-4d8f-a1fe-4e08f9215e0d",
-    "8b770390-544f-4a40-aaa3-ec34d9ed66a7",
     "f7b5698a-e331-48bf-b5f2-aab0002b037d",
+    "8b770390-544f-4a40-aaa3-ec34d9ed66a7",
 ];
 
 pub(crate) const BALCONY_GROW_FERTILIZER_DEF_ID: &str = "balcony-grow-substrate";
@@ -165,15 +168,18 @@ pub(crate) fn ensure_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str)
     let tray_positions = resolve_tray_world_positions(ctx, unit_key);
     let tray_table = ctx.db.balcony_grow_tray();
     for (i, tray_id) in BALCONY_GROW_TRAY_BUILTIN_IDS.iter().enumerate() {
-        if tray_table
-            .iter()
-            .any(|r| r.unit_key == unit_key && r.tray_id == *tray_id)
-        {
+        let (pos_x, pos_z) = tray_positions.get(i).copied().unwrap_or((0.0, 0.0));
+        let row_key = tray_row_key(unit_key, tray_id);
+        if let Some(mut row) = tray_table.row_key().find(&row_key) {
+            if (row.pos_x - pos_x).abs() > 0.02 || (row.pos_z - pos_z).abs() > 0.02 {
+                row.pos_x = pos_x;
+                row.pos_z = pos_z;
+                tray_table.row_key().update(row);
+            }
             continue;
         }
-        let (pos_x, pos_z) = tray_positions.get(i).copied().unwrap_or((0.0, 0.0));
         let _ = tray_table.insert(BalconyGrowTray {
-            row_key: tray_row_key(unit_key, tray_id),
+            row_key,
             unit_key: unit_key.to_string(),
             tray_id: (*tray_id).to_string(),
             pos_x,
@@ -195,6 +201,21 @@ fn ensure_grow_light_row(ctx: &ReducerContext, unit_key: &str) {
     });
 }
 
+fn authored_grow_tray_layout_fraction(tray_id: &str) -> Option<(f32, f32)> {
+    let (fx, fz) = match tray_id {
+        "8e48c06b-c005-4425-9fdc-a527e67168ee" => (0.843_385_3, -0.026_789_22),
+        "825bca36-e9b8-4fa7-9883-2d57ba0ebe04" => (0.927_365_1, -0.026_789_22),
+        "5a8db793-b6e6-4266-bd96-8d53a1452e91" => (0.843_385_3, 0.095_401_47),
+        "74e853d2-62cb-42b3-b740-c8ea51c6179f" => (0.927_365_1, 0.095_401_47),
+        "8cf090f7-acfa-460d-8360-f8c48a233557" => (0.843_385_3, 0.217_592_17),
+        "74725d62-5270-4d8f-a1fe-4e08f9215e0d" => (0.927_365_1, 0.217_592_17),
+        "f7b5698a-e331-48bf-b5f2-aab0002b037d" => (0.927_365_1, 0.339_782_86),
+        "8b770390-544f-4a40-aaa3-ec34d9ed66a7" => (0.843_385_3, 0.339_782_86),
+        _ => return None,
+    };
+    Some((fx, fz))
+}
+
 fn resolve_tray_world_positions(ctx: &ReducerContext, unit_key: &str) -> Vec<(f32, f32)> {
     let mut decor_rows: Vec<_> = ctx
         .db
@@ -212,7 +233,53 @@ fn resolve_tray_world_positions(ctx: &ReducerContext, unit_key: &str) -> Vec<(f3
                     .unwrap_or(std::cmp::Ordering::Equal),
             )
     });
-    decor_rows.into_iter().map(|d| (d.pos_x, d.pos_z)).collect()
+    if !decor_rows.is_empty() {
+        return decor_rows.into_iter().map(|d| (d.pos_x, d.pos_z)).collect();
+    }
+    let Some(unit) = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())
+    else {
+        return Vec::new();
+    };
+    BALCONY_GROW_TRAY_BUILTIN_IDS
+        .iter()
+        .map(|tray_id| {
+            let (fx, fz) = authored_grow_tray_layout_fraction(tray_id).unwrap_or((0.0, 0.0));
+            apartments::authored_placed_item_world_xz(&unit, fx, fz)
+        })
+        .collect()
+}
+
+fn feet_inside_unit_grow_tray_slack(unit: &apartments::ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+    let s = GROW_TRAY_UNIT_HULL_SLACK_XZ;
+    x >= unit.bound_min_x - s
+        && x <= unit.bound_max_x + s
+        && z >= unit.bound_min_z - s
+        && z <= unit.bound_max_z + s
+        && y >= unit.bound_min_y - 0.05
+        && y <= unit.bound_max_y + 2.45
+}
+
+fn resolve_tray_world_xz(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    tray_id: &str,
+) -> Option<(f32, f32)> {
+    if let Some(tray) = tray_row(ctx, unit_key, tray_id) {
+        if tray.pos_x.abs() > 0.02 || tray.pos_z.abs() > 0.02 {
+            return Some((tray.pos_x, tray.pos_z));
+        }
+    }
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())?;
+    let (fx, fz) = authored_grow_tray_layout_fraction(tray_id)?;
+    Some(apartments::authored_placed_item_world_xz(&unit, fx, fz))
 }
 
 fn feet_vertical_ok(unit_floor_y: f32, y: f32) -> bool {
@@ -227,7 +294,7 @@ fn pose_near_tray(
     tray_x: f32,
     tray_z: f32,
 ) -> bool {
-    if !feet_inside_unit(unit, pose_x, pose_y, pose_z) {
+    if !feet_inside_unit_grow_tray_slack(unit, pose_x, pose_y, pose_z) {
         return false;
     }
     let dx = pose_x - tray_x;
@@ -258,13 +325,15 @@ fn player_near_tray(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> Resu
         return Err("not your apartment".to_string());
     }
     let tray = tray_row(ctx, unit_key, tray_id).ok_or_else(|| "unknown tray".to_string())?;
+    let (tray_x, tray_z) =
+        resolve_tray_world_xz(ctx, unit_key, tray_id).unwrap_or((tray.pos_x, tray.pos_z));
     let pose = ctx
         .db
         .player_pose()
         .identity()
         .find(&sender)
         .ok_or_else(|| "missing pose".to_string())?;
-    if !pose_near_tray(&unit, pose.x, pose.y, pose.z, tray.pos_x, tray.pos_z) {
+    if !pose_near_tray(&unit, pose.x, pose.y, pose.z, tray_x, tray_z) {
         return Err("move closer to the grow tray".to_string());
     }
     Ok(())

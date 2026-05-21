@@ -5,17 +5,24 @@
 
 import {
   APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_GROW_TRAY,
   type ApartmentStashKind,
 } from "./apartmentStashRules.js";
+import { parseBalconyGrowTrayStashKey } from "./balconyGrowOp.js";
 
 const APARTMENT_STASH_KEY_SEP = "#";
 
 export type ParsedApartmentStashLocationKey =
   | { tag: "bare"; unitKey: string }
   | { tag: "legacy"; unitKey: string; stashKind: ApartmentStashKind }
-  | { tag: "decor"; unitKey: string; decorId: bigint };
+  | { tag: "decor"; unitKey: string; decorId: bigint }
+  | { tag: "grow_tray"; unitKey: string; trayId: string };
 
 export function parseApartmentStashLocationKey(raw: string): ParsedApartmentStashLocationKey {
+  const grow = parseBalconyGrowTrayStashKey(raw);
+  if (grow) {
+    return { tag: "grow_tray", unitKey: grow.unitKey, trayId: grow.trayId };
+  }
   const split = raw.lastIndexOf(APARTMENT_STASH_KEY_SEP);
   if (split > 0) {
     const unitKey = raw.slice(0, split);
@@ -82,6 +89,7 @@ function resolvedStashKind(
 ): ApartmentStashKind | null {
   if (p.tag === "bare") return APARTMENT_STASH_KIND_FOOTLOCKER;
   if (p.tag === "legacy") return p.stashKind;
+  if (p.tag === "grow_tray") return APARTMENT_STASH_KIND_GROW_TRAY;
   return resolveDecor(p.unitKey, p.decorId);
 }
 
@@ -101,6 +109,11 @@ export function apartmentStashLocationsMatch(
 
   if (stored.tag === "legacy" && requested.tag === "legacy") {
     return stored.unitKey === requested.unitKey && stored.stashKind === requested.stashKind;
+  }
+  if (stored.tag === "grow_tray" && requested.tag === "grow_tray") {
+    return (
+      stored.unitKey === requested.unitKey && stored.trayId === requested.trayId
+    );
   }
   if (stored.tag === "bare" && requested.tag === "legacy") {
     return stored.unitKey === requested.unitKey && requested.stashKind === APARTMENT_STASH_KIND_FOOTLOCKER;
@@ -130,6 +143,9 @@ function sameKindStorageAlias(
   stored: ParsedApartmentStashLocationKey,
   requested: ParsedApartmentStashLocationKey,
 ): boolean {
+  if (stored.tag === "grow_tray" && requested.tag === "grow_tray") {
+    return stored.unitKey === requested.unitKey && stored.trayId === requested.trayId;
+  }
   if (stored.tag === "decor" && requested.tag === "decor") {
     return stored.unitKey === requested.unitKey && stored.decorId === requested.decorId;
   }

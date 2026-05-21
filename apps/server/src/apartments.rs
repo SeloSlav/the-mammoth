@@ -23,7 +23,7 @@ use crate::inventory::{
     inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
 };
 use crate::inventory_models::{
-    apartment_stash_kind_display_name, parse_apartment_stash_key_v2,
+    parse_apartment_stash_key_v2,
     ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
     APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
     APARTMENT_STASH_KIND_WATER_TANK,
@@ -1453,6 +1453,11 @@ fn map_owned_apartment_layout_fraction_to_world_x(
     }
 }
 
+/// World XZ for props authored in `owned_apartment_builtins.json` layout fractions.
+pub(crate) fn authored_placed_item_world_xz(unit: &ApartmentUnit, fx: f32, fz: f32) -> (f32, f32) {
+    authored_content_stash_anchor_xz(unit, fx, fz)
+}
+
 /// World XZ for stash props authored in `content/apartment/owned_apartment_builtins.json`.
 fn authored_content_stash_anchor_xz(unit: &ApartmentUnit, fx: f32, fz: f32) -> (f32, f32) {
     let span_z = unit.bound_max_z - unit.bound_min_z;
@@ -1714,7 +1719,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
             Some((
                 owner_id,
                 unit_key.to_string(),
-                decor_stash_display_name_for_row(decor.item_kind, decor.model_rel_path.as_str()),
+                decor_stash_radius_kind_for_row(decor.item_kind, decor.model_rel_path.as_str()),
             ))
         }
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => {
@@ -1728,11 +1733,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
             if !pose_near_named_apartment_stash_anchor(ctx, &unit, kind, pose.x, pose.y, pose.z) {
                 return None;
             }
-            Some((
-                owner_id,
-                unit_key.to_string(),
-                apartment_stash_kind_display_name(kind),
-            ))
+            Some((owner_id, unit_key.to_string(), kind))
         }
         ParsedApartmentStashKey::BareUnitKey(unit_key) => {
             let unit = ctx
@@ -1755,7 +1756,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
             Some((
                 owner_id,
                 unit_key.to_string(),
-                apartment_stash_kind_display_name(APARTMENT_STASH_KIND_FOOTLOCKER),
+                APARTMENT_STASH_KIND_FOOTLOCKER,
             ))
         }
         ParsedApartmentStashKey::GrowTray { unit_key, tray_id } => {
@@ -1765,7 +1766,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
             Some((
                 owner_id,
                 uk,
-                apartment_stash_kind_display_name(APARTMENT_STASH_KIND_GROW_TRAY),
+                APARTMENT_STASH_KIND_GROW_TRAY,
             ))
         }
     }

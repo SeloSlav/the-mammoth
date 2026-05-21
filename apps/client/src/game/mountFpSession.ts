@@ -1430,6 +1430,11 @@ export async function mountFpSession(
         return;
       }
 
+      if (growPrompt?.kind === "balcony_grow_tray" && handleBalconyGrowKeyE(growPrompt)) {
+        if (document.pointerLockElement) void document.exitPointerLock();
+        return;
+      }
+
       if (aptKey?.kind === "apartment_stash") {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
@@ -1437,11 +1442,6 @@ export async function mountFpSession(
           stashKind: aptKey.stashKind,
         });
         requestMammothInventoryOpenFromFp();
-        if (document.pointerLockElement) void document.exitPointerLock();
-        return;
-      }
-
-      if (growPrompt && handleBalconyGrowKeyE(growPrompt)) {
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }

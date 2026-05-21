@@ -34,4 +34,11 @@ describe("apartmentStashLocationsMatch", () => {
     expect(apartmentStashLocationsMatch("u1#wardrobe", "u1#wardrobe", noDecor)).toBe(true);
     expect(apartmentStashLocationsMatch("u1#wardrobe", "u1#footlocker", noDecor)).toBe(false);
   });
+
+  it("matches grow-tray stash keys exactly per tray", () => {
+    const keyA = "u1#grow_tray:8e48c06b-c005-4425-9fdc-a527e67168ee";
+    const keyB = "u1#grow_tray:825bca36-e9b8-4fa7-9883-2d57ba0ebe04";
+    expect(apartmentStashLocationsMatch(keyA, keyA, noDecor)).toBe(true);
+    expect(apartmentStashLocationsMatch(keyA, keyB, noDecor)).toBe(false);
+  });
 });

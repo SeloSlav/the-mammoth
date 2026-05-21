@@ -50,6 +50,7 @@ import type {
   MammothPopulatedItem,
 } from "./inventoryDragDropTypes";
 import { MammothDraggableItem } from "./MammothDraggableItem";
+import { MammothItemIcon } from "./MammothItemIcon";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
 import {
@@ -424,22 +425,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   const slotInner = (pop: MammothDraggedItemInfo["item"] | null) => {
     if (!pop) return null;
-    return (
-      <img
-        src={pop.def.iconUrl}
-        alt={pop.def.displayName}
-        draggable={false}
-        style={{
-          width: 44,
-          height: 44,
-          objectFit: "contain",
-          display: "block",
-          margin: "auto",
-          pointerEvents: "none",
-          ...NO_SELECT,
-        }}
-      />
-    );
+    return <MammothItemIcon def={pop.def} size={44} style={NO_SELECT} />;
   };
 
   const hotbarBottom = "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))";

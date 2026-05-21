@@ -2,19 +2,12 @@ import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import {
-  FP_APARTMENT_INTERACT_PICK_MAX_RAY_M,
-  FP_INTERACTION_PICK_LAYER,
-} from "../fpSession/fpSessionConstants.js";
-import {
   resolveBalconyGrowPlacementFromRay,
   syncBalconyGrowPlacementPreview,
   balconyGrowSeedPreviewGlbUrl,
   type BalconyGrowPlacementRaycast,
 } from "./fpBalconyGrowPlacement.js";
-import {
-  getBalconyGrowTrayPromptFromHit,
-  type BalconyGrowTrayPrompt,
-} from "./fpBalconyGrowPrompt.js";
+import { type BalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import { createFpWorldPlacementPreview, type FpWorldPlacementPreview } from "../fpPlacement/fpWorldPlacementPreview.js";
 import { createBalconyWaterPatchVisuals } from "./fpBalconyGrowWaterPatches.js";
 import { setBalconyGrowInspectTarget } from "./fpBalconyGrowInspectState.js";
@@ -46,18 +39,6 @@ export type FpBalconyGrowSession = {
 
 const _screenCenter = new THREE.Vector2(0, 0);
 const _raycaster = new THREE.Raycaster();
-
-function growRayHits(
-  camera: THREE.PerspectiveCamera,
-  decor: MountFpApartmentDecorMeshesResult,
-): THREE.Intersection[] {
-  _raycaster.layers.set(FP_INTERACTION_PICK_LAYER);
-  _raycaster.setFromCamera(_screenCenter, camera);
-  _raycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
-  const picks = [...decor.getGrowTrayPickMeshes(), ...decor.getGrowSlotPickMeshes()];
-  const visible = picks.filter((m) => m.visible);
-  return _raycaster.intersectObjects(visible, false);
-}
 
 function resolveClaimedUnitKey(conn: DbConnection): string | null {
   if (!conn.identity) return null;
@@ -103,7 +84,7 @@ export function mountFpBalconyGrowSession(opts: {
     updateFrame(camera, feet, decor, unitKey) {
       claimedUnitKey = unitKey ?? resolveClaimedUnitKey(opts.conn);
       const growState = readBalconyGrowOpUnitState(opts.conn, claimedUnitKey);
-      const hits = growRayHits(camera, decor);
+      const hits = [...decor.raycastBalconyGrowTrayHits(feet, camera)];
       cachedPlacement = resolveBalconyGrowPlacementFromRay(
         opts.conn,
         opts.conn.identity,
@@ -169,12 +150,8 @@ export function balconyGrowPromptFromDecorRaycast(
   decor: MountFpApartmentDecorMeshesResult,
   growState: BalconyGrowOpUnitState,
 ): BalconyGrowTrayPrompt | null {
-  const hits = growRayHits(camera, decor);
-  for (const hit of hits) {
-    const prompt = getBalconyGrowTrayPromptFromHit(conn, identity, feet, hit, growState);
-    if (prompt) return prompt;
-  }
-  return null;
+  if (!identity) return null;
+  return decor.getBalconyGrowTrayPrompt(feet, camera, conn, identity, growState);
 }
 
 export function handleBalconyGrowKeyE(prompt: BalconyGrowTrayPrompt): boolean {
