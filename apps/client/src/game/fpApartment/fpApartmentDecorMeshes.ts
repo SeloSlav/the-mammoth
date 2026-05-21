@@ -114,9 +114,7 @@ import {
   sortBalconyGrowRaycastHits,
 } from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
 import { syncBalconyGrowTrayDecorVisibility } from "../fpBalconyGrow/fpBalconyGrowPresentation.js";
-import { readBalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
-import { growTrayRayHitTargetsLivePlant } from "../fpBalconyGrow/fpBalconyGrowTrayAim.js";
 import type { Identity } from "spacetimedb";
 import type { BalconyGrowPlant, BalconyGrowTray } from "../../module_bindings/types";
 
@@ -1292,23 +1290,16 @@ export function mountFpApartmentDecorMeshes(opts: {
           continue;
         }
         seen.add(stashKey);
-        if (stashKind === APARTMENT_STASH_KIND_GROW_TRAY) {
-          const unitGrowState = readBalconyGrowOpUnitState(opts.conn, unitKey);
-          if (growTrayRayHitTargetsLivePlant(hit, unitGrowState, camera)) continue;
+        if (!clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos)) {
+          continue;
         }
-        const mayUse =
-          stashKind === APARTMENT_STASH_KIND_GROW_TRAY
-            ? clientOwnsClaimedApartmentUnit(opts.conn, opts.conn.identity, unitKey)
-            : clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos);
-        if (mayUse) {
-          return {
-            kind: "apartment_stash",
-            stashKey,
-            unitKey,
-            stashKind,
-            stashLabel: apartmentStashLabel(stashKind),
-          };
-        }
+        return {
+          kind: "apartment_stash",
+          stashKey,
+          unitKey,
+          stashKind,
+          stashLabel: apartmentStashLabel(stashKind),
+        };
       }
       return null;
     },

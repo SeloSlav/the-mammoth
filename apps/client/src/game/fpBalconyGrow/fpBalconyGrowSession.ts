@@ -4,11 +4,13 @@ import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartme
 import {
   resolveBalconyGrowPlacement,
   syncBalconyGrowPlacementPreview,
+  balconyGrowPlantPrimaryClickBlockedMessage,
   type BalconyGrowPlacementRaycast,
 } from "./fpBalconyGrowPlacement.js";
 import { type BalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import { createBalconyGrowSeedPreview } from "./fpBalconyGrowSeedPreview.js";
 import { createBalconyWaterPatchVisuals } from "./fpBalconyGrowWaterPatches.js";
+import { showGameplayErrorBar } from "../../ui/gameplayErrorBar.js";
 import { setBalconyGrowInspectTarget } from "./fpBalconyGrowInspectState.js";
 import { syncBalconyGrowInspect } from "./fpBalconyGrowInspectSync.js";
 import { publishBalconyGrowInspectScreenAnchor, clearBalconyGrowInspectPresentation } from "./fpBalconyGrowInspectPresentation.js";
@@ -136,7 +138,12 @@ export function mountFpBalconyGrowSession(opts: {
           decor.getGrowSlotPickMeshes(),
           growState,
         ) ?? cachedPlacement;
-      if (!placement?.valid || !conn.identity) return false;
+      if (!placement || !conn.identity) return false;
+      const blockedMessage = balconyGrowPlantPrimaryClickBlockedMessage(placement);
+      if (blockedMessage) {
+        showGameplayErrorBar(blockedMessage);
+        return true;
+      }
       void conn.reducers.plantBalconyGrowSlot({
         unitKey: placement.unitKey,
         trayId: placement.trayId,

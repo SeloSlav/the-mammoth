@@ -14,6 +14,16 @@ import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.
 import { clientOwnsClaimedApartmentUnit } from "../fpApartment/fpApartmentGameplay.js";
 import { readGrowTraySoilLocalY, readGrowTraySlotLocalOffsets, balconyGrowSlotWorldPosition } from "./fpBalconyGrowStageVisual.js";
 
+export const BALCONY_GROW_SLOT_ALREADY_PLANTED_MESSAGE =
+  "A seed is already planted in this spot.";
+
+export function balconyGrowPlantPrimaryClickBlockedMessage(
+  placement: BalconyGrowPlacementRaycast | null,
+): string | null {
+  if (!placement || placement.valid) return null;
+  return BALCONY_GROW_SLOT_ALREADY_PLANTED_MESSAGE;
+}
+
 export type BalconyGrowPlacementRaycast = {
   unitKey: string;
   trayId: string;

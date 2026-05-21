@@ -67,26 +67,21 @@ export function sortBalconyGrowRaycastHits(hits: THREE.Intersection[]): THREE.In
   });
 }
 
-/** Feet within grow-tray reach — uses decor world position when available (matches rendered tray). */
+/** Feet within grow-tray reach — matches server `player_near_tray` (DB/authored anchor, not rendered slack). */
 export function clientFeetNearGrowTray(
   conn: DbConnection,
   identity: Identity | undefined,
   feet: { x: number; y: number; z: number },
   unitKey: string,
   trayId: string,
-  trayRoot?: THREE.Object3D,
+  _trayRoot?: THREE.Object3D,
 ): boolean {
-  let growTrayAnchorXZ: { x: number; z: number } | undefined;
-  if (trayRoot) {
-    trayRoot.getWorldPosition(_trayNearScratch);
-    growTrayAnchorXZ = { x: _trayNearScratch.x, z: _trayNearScratch.z };
-  }
+  void _trayRoot;
   return clientMayUseApartmentStash(
     conn,
     identity,
     balconyGrowTrayStashKey(unitKey, trayId),
     feet,
-    growTrayAnchorXZ ? { growTrayAnchorXZ } : undefined,
   );
 }
 

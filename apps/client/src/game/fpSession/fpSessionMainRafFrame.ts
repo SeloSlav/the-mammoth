@@ -41,10 +41,10 @@ import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoor
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { FpBalconyGrowSession } from "../fpBalconyGrow/fpBalconyGrowSession.js";
 import { balconyGrowPromptFromDecorRaycast } from "../fpBalconyGrow/fpBalconyGrowSession.js";
-import { balconyGrowInspectBlocksGrowTrayStash } from "../fpBalconyGrow/fpBalconyGrowInspectState.js";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
+import { publishFpInteractionFeet } from "../fpInteraction/fpInteractionFeetState.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
 import {
@@ -656,6 +656,10 @@ export function createFpSessionMainRafFrame(
       deps.fpApartmentDecorMeshes,
       containingResidentialUnitKey,
     );
+    {
+      const ft = deps.fpInteractionFeet();
+      publishFpInteractionFeet({ x: ft.x, y: ft.y, z: ft.z });
+    }
     deps.syncDroppedItemVisualVisibility(deps.pos.y, containingResidentialUnitKey);
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
@@ -864,9 +868,8 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (
-        !balconyGrowInspectBlocksGrowTrayStash() &&
-        (lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
-          cachedBalconyGrowPrompt?.kind === "balcony_grow_tray")
+        lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
+        cachedBalconyGrowPrompt?.kind === "balcony_grow_tray"
       ) {
         const growStash =
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY

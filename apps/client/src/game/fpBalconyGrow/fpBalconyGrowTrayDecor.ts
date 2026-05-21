@@ -153,9 +153,9 @@ function fitGrowPlantInteractionPick(holder: THREE.Group, visual: THREE.Object3D
   holder.getWorldScale(_plantPickWorldScaleScratch);
   plantPick.position.copy(_plantPickCenterScratch);
   plantPick.scale.set(
-    Math.max(0.08, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x),
-    Math.max(0.12, _plantPickSizeScratch.y / _plantPickWorldScaleScratch.y),
-    Math.max(0.08, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z),
+    Math.max(0.14, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x),
+    Math.max(0.18, _plantPickSizeScratch.y / _plantPickWorldScaleScratch.y),
+    Math.max(0.14, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z),
   );
   plantPick.visible = true;
 }

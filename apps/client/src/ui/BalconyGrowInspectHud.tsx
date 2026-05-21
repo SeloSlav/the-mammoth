@@ -94,7 +94,8 @@ export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
   }
 
   const cropDef = plant ? getMammothItemDef(plant.cropDefId) : undefined;
-  if (!plant || !tray || !cropDef) return null;
+  const cropLabel = cropDef?.displayName ?? plant?.cropDefId ?? "Plant";
+  if (!plant || !tray) return null;
 
   const modifier = balconyGrowSpeedModifier({
     lightsOn,
@@ -129,7 +130,7 @@ export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
         boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 2, fontSize: 13 }}>{cropDef.displayName}</div>
+      <div style={{ fontWeight: 700, marginBottom: 2, fontSize: 13 }}>{cropLabel}</div>
       <div style={{ opacity: 0.82, marginBottom: 6 }}>
         {PHASE_LABELS[plant.phase] ?? "Unknown"}
         {plant.phase === 1 ? ` · ${formatEta(Number(plant.matureAtMicros))}` : ""}

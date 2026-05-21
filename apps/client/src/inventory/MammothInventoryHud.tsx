@@ -49,6 +49,8 @@ import { WaterBottleHotbarFillBar } from "./WaterBottleHotbarFillBar";
 import { useWaterBottleFillVersion } from "./useWaterContainerState";
 import { waterBottleFillFraction } from "./waterContainerHelpers";
 import {
+  apartmentStashMoveFailureHint,
+  clientMayPushToActiveApartmentStash,
   isApartmentStashSlotIndexValid,
   mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
@@ -137,7 +139,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         return;
       }
       setOptimisticSlots(null);
-      showGameplayErrorBar("Could not move item into storage. Try again or move closer.");
+      showGameplayErrorBar(apartmentStashMoveFailureHint(activeStash.stashKind));
     }, 900);
     return () => window.clearTimeout(id);
   }, [optimisticSlots, activeStash, baseSlots]);
@@ -314,6 +316,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         reportApartmentStashRejection(activeStash.stashKind);
         return;
       }
+      if (!clientMayPushToActiveApartmentStash(conn, activeStash)) return;
       const g = gridsForPrediction();
       const destIndex = destIndexForQuickTransfer(g.stash ?? [], pop);
       const predicted = predictSlotMove(g, sourceSlot, { type: "stash", index: destIndex });
@@ -401,6 +404,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
             reportApartmentStashRejection(activeStash.stashKind);
             return;
           }
+          if (!clientMayPushToActiveApartmentStash(conn, activeStash)) return;
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: activeStash.stashKey,

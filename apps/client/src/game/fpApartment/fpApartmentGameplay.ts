@@ -858,6 +858,7 @@ export function getApartmentSystemPrompt(
     const full = parseApartmentStashKeyFull(opts.lookedAtStashKey);
     if (full.tag === "grow_tray") {
       if (!clientOwnsClaimedApartmentUnit(conn, id, full.unitKey)) return null;
+      if (!clientMayUseApartmentStash(conn, id, opts.lookedAtStashKey, pose)) return null;
       return finalizeApartmentStashPrompt(
         conn,
         {

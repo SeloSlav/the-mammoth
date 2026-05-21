@@ -101,7 +101,7 @@ function tryInspectFromAimedTrayMeshes(
     if (dist < 0.05) continue;
     _toTrayScratch.multiplyScalar(1 / dist);
     const dot = _toTrayScratch.dot(_camDirScratch);
-    if (dot < 0.78) continue;
+    if (dot < 0.62) continue;
 
     const score = dot - dist * 0.02;
     if (score > bestScore) {

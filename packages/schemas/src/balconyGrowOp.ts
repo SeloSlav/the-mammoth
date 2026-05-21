@@ -117,6 +117,9 @@ export const BALCONY_GROW_TRAY_AUTHORED_FX_FZ: Readonly<
 /** Horizontal interact radius (m) — balcony trays: allow lean-in harvest from typical standing positions. Keep in sync with `TRAY_INTERACT_RADIUS_M` in `apps/server/src/balcony_grow_op.rs`. */
 export const BALCONY_GROW_TRAY_INTERACT_RADIUS_M = 1.75 as const;
 
+export const BALCONY_GROW_TRAY_STASH_PROXIMITY_HINT =
+  "Move closer to the grow tray to use its storage." as const;
+
 /** Show balcony tray decor / plants while the player is on the balcony (outside strict unit hull). */
 export const BALCONY_GROW_TRAY_PRESENTATION_RADIUS_M = 2.75 as const;
 

@@ -30,7 +30,9 @@ import {
   type SlotGrids,
 } from "./inventoryOptimistic";
 import {
+  apartmentStashMoveFailureHint,
   apartmentStashRejectionHint,
+  clientMayPushToActiveApartmentStash,
   isApartmentStashSlotIndexValid,
   mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
@@ -164,7 +166,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
         return;
       }
       setOptimisticSlots(null);
-      showGameplayErrorBar("Could not move item in storage. Try again.");
+      showGameplayErrorBar(apartmentStashMoveFailureHint(stashKind));
     }, 900);
     return () => window.clearTimeout(id);
   }, [optimisticSlots, baseSlots]);
@@ -294,6 +296,15 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
 
       if (target.type === "stash" && !canAcceptItemInStash(src.item, target.index)) {
         reportApartmentStashRejection(stashKind);
+        return;
+      }
+
+      const activeStashPanel = { stashKey, stashLabel, stashKind };
+      if (
+        target.type === "stash" &&
+        src.sourceSlot.type !== "stash" &&
+        !clientMayPushToActiveApartmentStash(conn, activeStashPanel)
+      ) {
         return;
       }
 

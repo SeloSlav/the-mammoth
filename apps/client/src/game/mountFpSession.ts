@@ -112,8 +112,6 @@ import {
   mountFpBalconyGrowSession,
   runBalconyGrowHarvest,
 } from "./fpBalconyGrow/fpBalconyGrowSession.js";
-import { balconyGrowInspectBlocksGrowTrayStash } from "./fpBalconyGrow/fpBalconyGrowInspectState.js";
-import { APARTMENT_STASH_KIND_GROW_TRAY } from "./fpApartment/fpApartmentStashKey.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
@@ -1440,13 +1438,7 @@ export async function mountFpSession(
         return;
       }
 
-      if (
-        aptKey?.kind === "apartment_stash" &&
-        !(
-          aptKey.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
-          balconyGrowInspectBlocksGrowTrayStash()
-        )
-      ) {
+      if (aptKey?.kind === "apartment_stash") {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
           stashLabel: aptKey.stashLabel,
