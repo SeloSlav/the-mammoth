@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   apartmentPropBehindCameraWhenInterior,
+  applyApartmentInteriorPropVisibility,
   applyApartmentInteriorPropVisibilityBudget,
-  clearApartmentInteriorPropVisibilityBudgetState,
-  createApartmentInteriorPropVisibilityBudgetState,
+  clearApartmentInteriorPropVisibilityState,
+  createApartmentInteriorPropVisibilityState,
   resolveApartmentInteriorPropGroupVisible,
+  resolveApartmentInteriorPropWarmUpVisible,
+  syncApartmentInteriorPropVisibilityUnit,
 } from "./fpApartmentInteriorPropVisibility.js";
 
 describe("apartmentPropBehindCameraWhenInterior", () => {
@@ -82,7 +85,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     ).toBe(false);
   });
 
-  it("keeps a visible in-unit prop in the side band until clearly behind", () => {
+  it("shows peripheral in-unit props in steady state without forward-cone hysteresis", () => {
     const peripheralBounds = new THREE.Box3(
       new THREE.Vector3(0.05, -1, -0.53),
       new THREE.Vector3(0.55, 1, 0.47),
@@ -96,7 +99,6 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
         viewFrustum: frustum,
         cameraWorldPos: camPos,
         cameraWorldDir: camDir,
-        wasVisible: true,
       }),
     ).toBe(true);
   });
@@ -131,11 +133,23 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     ).toBe(frustum.intersectsBox(behindBounds));
   });
 
-  it("defers newly visible in-unit props until they are clearly in front", () => {
+  it("supports legacy forward-cone hysteresis when wasVisible is set", () => {
     const peripheralBounds = new THREE.Box3(
       new THREE.Vector3(0.05, -1, -0.53),
       new THREE.Vector3(0.55, 1, 0.47),
     );
+    expect(
+      resolveApartmentInteriorPropGroupVisible({
+        allowDemand: true,
+        containingUnitKey: "unit_a",
+        groupUnitKey: "unit_a",
+        propWorldBounds: peripheralBounds,
+        viewFrustum: frustum,
+        cameraWorldPos: camPos,
+        cameraWorldDir: camDir,
+        wasVisible: true,
+      }),
+    ).toBe(true);
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
@@ -151,9 +165,118 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
   });
 });
 
-describe("applyApartmentInteriorPropVisibilityBudget", () => {
+describe("resolveApartmentInteriorPropWarmUpVisible", () => {
+  it("shows all containing-unit decor during entry warm-up", () => {
+    expect(
+      resolveApartmentInteriorPropWarmUpVisible({
+        allowDemand: true,
+        containingUnitKey: "unit_a",
+        groupUnitKey: "unit_a",
+      }),
+    ).toBe(true);
+    expect(
+      resolveApartmentInteriorPropWarmUpVisible({
+        allowDemand: true,
+        containingUnitKey: "unit_a",
+        groupUnitKey: "unit_b",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("syncApartmentInteriorPropVisibilityUnit", () => {
+  it("clears warm-up state when the containing unit changes", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    state.warmedKeys.add("a");
+    state.visibleKeys.add("a");
+    state.activeUnitKey = "unit_a";
+
+    syncApartmentInteriorPropVisibilityUnit(state, "unit_b");
+
+    expect(state.activeUnitKey).toBe("unit_b");
+    expect(state.warmedKeys.size).toBe(0);
+    expect(state.visibleKeys.size).toBe(0);
+  });
+});
+
+describe("applyApartmentInteriorPropVisibility", () => {
+  it("warms unwarmed props in forward order then applies warmed props immediately", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    const warmed = new THREE.Group();
+    const front = new THREE.Group();
+    const side = new THREE.Group();
+    state.warmedKeys.add("warmed");
+
+    applyApartmentInteriorPropVisibility(
+      [
+        { key: "warmed", object: warmed, desiredVisible: true, forwardDot: 0.1 },
+        { key: "front", object: front, desiredVisible: true, forwardDot: 0.9 },
+        { key: "side", object: side, desiredVisible: true, forwardDot: 0.2 },
+      ],
+      state,
+      1,
+    );
+
+    expect(warmed.visible).toBe(true);
+    expect(front.visible).toBe(true);
+    expect(side.visible).toBe(false);
+    expect(state.warmedKeys.has("front")).toBe(true);
+    expect(state.warmedKeys.has("side")).toBe(false);
+
+    applyApartmentInteriorPropVisibility(
+      [
+        { key: "warmed", object: warmed, desiredVisible: true, forwardDot: 0.1 },
+        { key: "front", object: front, desiredVisible: true, forwardDot: 0.9 },
+        { key: "side", object: side, desiredVisible: true, forwardDot: 0.2 },
+      ],
+      state,
+      1,
+    );
+
+    expect(side.visible).toBe(true);
+    expect(state.warmedKeys.has("side")).toBe(true);
+  });
+
+  it("hides props immediately when they fall out of the desired set", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    const prop = new THREE.Group();
+    state.visibleKeys.add("prop");
+    state.warmedKeys.add("prop");
+    prop.visible = true;
+
+    applyApartmentInteriorPropVisibility(
+      [{ key: "prop", object: prop, desiredVisible: false, forwardDot: -1 }],
+      state,
+    );
+
+    expect(prop.visible).toBe(false);
+    expect(state.visibleKeys.has("prop")).toBe(false);
+  });
+
+  it("shows all warmed props immediately without a per-frame budget", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    const a = new THREE.Group();
+    const b = new THREE.Group();
+    state.warmedKeys.add("a");
+    state.warmedKeys.add("b");
+
+    applyApartmentInteriorPropVisibility(
+      [
+        { key: "a", object: a, desiredVisible: true, forwardDot: 0.9 },
+        { key: "b", object: b, desiredVisible: true, forwardDot: 0.8 },
+      ],
+      state,
+      0,
+    );
+
+    expect(a.visible).toBe(true);
+    expect(b.visible).toBe(true);
+  });
+});
+
+describe("applyApartmentInteriorPropVisibilityBudget (legacy)", () => {
   it("shows only the forward-most pending props within the per-frame budget", () => {
-    const state = createApartmentInteriorPropVisibilityBudgetState();
+    const state = createApartmentInteriorPropVisibilityState();
     const front = new THREE.Group();
     const side = new THREE.Group();
     const back = new THREE.Group();
@@ -188,11 +311,11 @@ describe("applyApartmentInteriorPropVisibilityBudget", () => {
     expect(side.visible).toBe(true);
     expect(back.visible).toBe(false);
 
-    clearApartmentInteriorPropVisibilityBudgetState(state);
+    clearApartmentInteriorPropVisibilityState(state);
   });
 
   it("hides props immediately when they fall out of the desired set", () => {
-    const state = createApartmentInteriorPropVisibilityBudgetState();
+    const state = createApartmentInteriorPropVisibilityState();
     const prop = new THREE.Group();
     state.visibleKeys.add("prop");
     prop.visible = true;

@@ -96,10 +96,12 @@ import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 import {
   APARTMENT_PROP_FRUSTUM_MARGIN_M,
   apartmentPropBoundsForwardDot,
-  applyApartmentInteriorPropVisibilityBudget,
-  clearApartmentInteriorPropVisibilityBudgetState,
-  createApartmentInteriorPropVisibilityBudgetState,
+  applyApartmentInteriorPropVisibility,
+  clearApartmentInteriorPropVisibilityState,
+  createApartmentInteriorPropVisibilityState,
   resolveApartmentInteriorPropGroupVisible,
+  resolveApartmentInteriorPropWarmUpVisible,
+  syncApartmentInteriorPropVisibilityUnit,
   tagApartmentDecorGroupVisibilityMetadata,
   type ApartmentInteriorPropVisibilityApplyItem,
 } from "./fpApartmentInteriorPropVisibility.js";
@@ -652,14 +654,14 @@ export function mountFpApartmentDecorMeshes(opts: {
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
-    clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
+    clearApartmentInteriorPropVisibilityState(propVisibilityState);
   };
 
   const _furnitureVisibilityViewProjection = new THREE.Matrix4();
   const _furnitureVisibilityFrustum = new THREE.Frustum();
   const _furnitureVisibilityCamPos = new THREE.Vector3();
   const _furnitureVisibilityCamDir = new THREE.Vector3();
-  const propVisibilityBudget = createApartmentInteriorPropVisibilityBudgetState();
+  const propVisibilityState = createApartmentInteriorPropVisibilityState();
 
   function snapCloneBottomToWorldFloor(root: THREE.Object3D, floorWorldY: number): void {
     root.position.y = 0;
@@ -1030,10 +1032,11 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (!isFpDebugRenderIsolationEnabled("apartmentDecor")) {
         if (root.visible) root.visible = false;
         clearInteriorLighting();
-        clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
+        clearApartmentInteriorPropVisibilityState(propVisibilityState);
         return;
       }
       if (!root.visible) root.visible = true;
+      syncApartmentInteriorPropVisibilityUnit(propVisibilityState, containingUnitKey);
       camera.updateMatrixWorld();
       camera.getWorldPosition(_furnitureVisibilityCamPos);
       camera.getWorldDirection(_furnitureVisibilityCamDir);
@@ -1042,7 +1045,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         camera.matrixWorldInverse,
       );
       _furnitureVisibilityFrustum.setFromProjectionMatrix(_furnitureVisibilityViewProjection);
-      const useInUnitBudget = containingUnitKey !== null;
+      const useInUnitVisibility = containingUnitKey !== null;
       const budgetItems: ApartmentInteriorPropVisibilityApplyItem[] = [];
       for (const [renderKey, g] of groupByRenderKey.entries()) {
         const bb = g.userData.mammothApartmentDecorWorldBounds;
@@ -1050,26 +1053,35 @@ export function mountFpApartmentDecorMeshes(opts: {
         const skipInteriorForwardCone =
           g.userData.mammothApartmentWallAuthoring === true ||
           g.userData.mammothApartmentMirrorAuthoring === true;
-        const wasVisible = propVisibilityBudget.visibleKeys.has(renderKey);
-        const desiredVisible = resolveApartmentInteriorPropGroupVisible({
-          allowDemand,
-          containingUnitKey,
-          groupUnitKey:
-            typeof g.userData.mammothApartmentUnitKey === "string"
-              ? g.userData.mammothApartmentUnitKey
-              : undefined,
-          propWorldBounds: bounds,
-          viewFrustum: _furnitureVisibilityFrustum,
-          cameraWorldPos: _furnitureVisibilityCamPos,
-          cameraWorldDir: _furnitureVisibilityCamDir,
-          wasVisible: useInUnitBudget && !skipInteriorForwardCone ? wasVisible : undefined,
-          skipInteriorForwardCone,
-        });
+        const groupUnitKey =
+          typeof g.userData.mammothApartmentUnitKey === "string"
+            ? g.userData.mammothApartmentUnitKey
+            : undefined;
+        const needsWarmUp =
+          useInUnitVisibility &&
+          !skipInteriorForwardCone &&
+          !propVisibilityState.warmedKeys.has(renderKey);
+        const desiredVisible = needsWarmUp
+          ? resolveApartmentInteriorPropWarmUpVisible({
+              allowDemand,
+              containingUnitKey,
+              groupUnitKey,
+            })
+          : resolveApartmentInteriorPropGroupVisible({
+              allowDemand,
+              containingUnitKey,
+              groupUnitKey,
+              propWorldBounds: bounds,
+              viewFrustum: _furnitureVisibilityFrustum,
+              cameraWorldPos: _furnitureVisibilityCamPos,
+              cameraWorldDir: _furnitureVisibilityCamDir,
+              skipInteriorForwardCone,
+            });
         if (skipInteriorForwardCone) {
           g.visible = desiredVisible;
           continue;
         }
-        if (useInUnitBudget) {
+        if (useInUnitVisibility) {
           budgetItems.push({
             key: renderKey,
             object: g,
@@ -1087,10 +1099,10 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.visible = desiredVisible;
         }
       }
-      if (useInUnitBudget) {
-        applyApartmentInteriorPropVisibilityBudget(budgetItems, propVisibilityBudget);
+      if (useInUnitVisibility) {
+        applyApartmentInteriorPropVisibility(budgetItems, propVisibilityState);
       } else {
-        clearApartmentInteriorPropVisibilityBudgetState(propVisibilityBudget);
+        clearApartmentInteriorPropVisibilityState(propVisibilityState);
       }
       practicalLightsContextUnitKey = containingUnitKey;
       syncPracticalLightsForUnit(containingUnitKey);

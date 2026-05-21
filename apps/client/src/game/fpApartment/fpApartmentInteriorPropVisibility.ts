@@ -10,18 +10,23 @@ export const APARTMENT_PROP_FRUSTUM_MARGIN_M = 1.5;
 export const APARTMENT_INTERIOR_PROP_BEHIND_CAMERA_DOT_MAX = 0;
 
 /**
- * Hysteresis band for in-unit prop forward culling. Props must be clearly in front before they
- * newly appear; props stay visible until clearly behind — avoids a single fast 180° turn from
- * flipping every decor group in one frame.
+ * Legacy forward-cone hysteresis (show / hide band). Steady-state in-unit culling no longer uses
+ * this — only behind-camera + frustum after entry warm-up. Kept for explicit opt-in via
+ * {@link resolveApartmentInteriorPropGroupVisible} `wasVisible`.
  */
 export const APARTMENT_INTERIOR_PROP_AHEAD_SHOW_DOT = 0.1;
 export const APARTMENT_INTERIOR_PROP_BEHIND_HIDE_DOT = -0.15;
 
 /**
- * Cap how many heavy decor/furniture groups may transition hidden→visible per frame while inside
- * a unit. Spreads WebGPU pipeline warm-up across frames instead of one 100ms+ hitch.
+ * @deprecated Steady state applies visibility immediately. Used only for entry warm-up bursts.
  */
 export const APARTMENT_INTERIOR_PROP_MAX_SHOWS_PER_FRAME = 6;
+
+/**
+ * How many decor groups may transition hidden→visible per frame during entry warm-up. Pays
+ * WebGPU pipeline compilation cost up front on unit entry instead of spreading it across turns.
+ */
+export const APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME = 32;
 
 /** Frustum / forward-cone culling bounds for a decor group (expanded by {@link APARTMENT_PROP_FRUSTUM_MARGIN_M}). */
 export function tagApartmentDecorGroupVisibilityMetadata(group: THREE.Object3D): void {
@@ -34,18 +39,55 @@ export function tagApartmentDecorGroupVisibilityMetadata(group: THREE.Object3D):
 const _boundsCenterScratch = new THREE.Vector3();
 const _toPropScratch = new THREE.Vector3();
 
-export type ApartmentInteriorPropVisibilityBudgetState = {
+export type ApartmentInteriorPropVisibilityState = {
   visibleKeys: Set<string>;
+  /** Decor keys that completed entry warm-up in the current containing unit. */
+  warmedKeys: Set<string>;
+  activeUnitKey: string | null;
 };
 
-export function createApartmentInteriorPropVisibilityBudgetState(): ApartmentInteriorPropVisibilityBudgetState {
-  return { visibleKeys: new Set() };
+/** @deprecated Use {@link ApartmentInteriorPropVisibilityState}. */
+export type ApartmentInteriorPropVisibilityBudgetState = ApartmentInteriorPropVisibilityState;
+
+export function createApartmentInteriorPropVisibilityState(): ApartmentInteriorPropVisibilityState {
+  return { visibleKeys: new Set(), warmedKeys: new Set(), activeUnitKey: null };
 }
 
-export function clearApartmentInteriorPropVisibilityBudgetState(
-  state: ApartmentInteriorPropVisibilityBudgetState,
+/** @deprecated Use {@link createApartmentInteriorPropVisibilityState}. */
+export function createApartmentInteriorPropVisibilityBudgetState(): ApartmentInteriorPropVisibilityState {
+  return createApartmentInteriorPropVisibilityState();
+}
+
+export function clearApartmentInteriorPropVisibilityState(
+  state: ApartmentInteriorPropVisibilityState,
 ): void {
   state.visibleKeys.clear();
+  state.warmedKeys.clear();
+  state.activeUnitKey = null;
+}
+
+/** @deprecated Use {@link clearApartmentInteriorPropVisibilityState}. */
+export function clearApartmentInteriorPropVisibilityBudgetState(
+  state: ApartmentInteriorPropVisibilityState,
+): void {
+  clearApartmentInteriorPropVisibilityState(state);
+}
+
+/**
+ * Resets warm-up tracking when the containing unit changes or the viewer leaves all units.
+ */
+export function syncApartmentInteriorPropVisibilityUnit(
+  state: ApartmentInteriorPropVisibilityState,
+  containingUnitKey: string | null,
+): void {
+  if (containingUnitKey !== state.activeUnitKey) {
+    state.activeUnitKey = containingUnitKey;
+    state.visibleKeys.clear();
+    state.warmedKeys.clear();
+  }
+  if (containingUnitKey === null) {
+    state.visibleKeys.clear();
+  }
 }
 
 export function apartmentPropBoundsForwardDot(
@@ -96,19 +138,18 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
   viewFrustum: THREE.Frustum;
   cameraWorldPos: THREE.Vector3;
   cameraWorldDir: THREE.Vector3;
-  /** When set, applies in-unit forward hysteresis (used while inside the containing unit). */
+  /** When set, applies in-unit forward hysteresis (legacy; not used in steady-state decor sync). */
   wasVisible?: boolean;
   /**
    * Partition walls / mirrors stay visible while in-unit (no behind-camera cull). They are low-poly
-   * vs decor GLBs and must not compete for the per-frame decor show budget.
+   * vs decor GLBs and do not participate in decor entry warm-up.
    */
   skipInteriorForwardCone?: boolean;
 }): boolean {
   if (!input.allowDemand) return false;
   /**
    * Furnished decor GLBs only while inside a residential unit hull (authoring / living in your
-   * claimed unit). Corridor views keep shells only. In-unit fast turns still ramp via forward cone +
-   * per-frame show budget below — dense units can hit ~500k tris when many props enter view at once.
+   * claimed unit). Corridor views keep shells only.
    */
   if (input.containingUnitKey === null) return false;
   const isContainingUnit = input.groupUnitKey === input.containingUnitKey;
@@ -141,6 +182,17 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
   return input.viewFrustum.intersectsBox(bounds);
 }
 
+/** In-unit decor warm-up: eligible groups become visible regardless of camera cone. */
+export function resolveApartmentInteriorPropWarmUpVisible(input: {
+  allowDemand: boolean;
+  containingUnitKey: string | null;
+  groupUnitKey: string | undefined;
+}): boolean {
+  if (!input.allowDemand) return false;
+  if (input.containingUnitKey === null) return false;
+  return input.groupUnitKey === input.containingUnitKey;
+}
+
 export type ApartmentInteriorPropVisibilityApplyItem = {
   key: string;
   object: THREE.Object3D;
@@ -149,11 +201,55 @@ export type ApartmentInteriorPropVisibilityApplyItem = {
 };
 
 /**
- * Applies desired visibility with immediate hides and a per-frame budget on newly shown groups.
+ * Applies desired visibility: immediate hides, entry warm-up burst for unwarmed keys, then
+ * immediate shows for warmed keys (steady state — no per-frame show budget while turning).
+ */
+export function applyApartmentInteriorPropVisibility(
+  items: readonly ApartmentInteriorPropVisibilityApplyItem[],
+  state: ApartmentInteriorPropVisibilityState,
+  warmUpMaxShowsPerFrame = APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME,
+): void {
+  const pendingWarmUp: ApartmentInteriorPropVisibilityApplyItem[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+
+    if (!item.desiredVisible) {
+      item.object.visible = false;
+      state.visibleKeys.delete(item.key);
+      continue;
+    }
+
+    if (!state.warmedKeys.has(item.key)) {
+      pendingWarmUp.push(item);
+      continue;
+    }
+
+    item.object.visible = true;
+    state.visibleKeys.add(item.key);
+  }
+
+  pendingWarmUp.sort((a, b) => b.forwardDot - a.forwardDot);
+
+  const budget = Math.max(0, warmUpMaxShowsPerFrame);
+  for (let i = 0; i < pendingWarmUp.length; i++) {
+    const item = pendingWarmUp[i]!;
+    if (i < budget) {
+      item.object.visible = true;
+      state.visibleKeys.add(item.key);
+      state.warmedKeys.add(item.key);
+    } else {
+      item.object.visible = false;
+    }
+  }
+}
+
+/**
+ * @deprecated Use {@link applyApartmentInteriorPropVisibility}. Kept for tests of legacy budget.
  */
 export function applyApartmentInteriorPropVisibilityBudget(
   items: readonly ApartmentInteriorPropVisibilityApplyItem[],
-  state: ApartmentInteriorPropVisibilityBudgetState,
+  state: ApartmentInteriorPropVisibilityState,
   maxShowsPerFrame = APARTMENT_INTERIOR_PROP_MAX_SHOWS_PER_FRAME,
 ): void {
   const pendingShow: ApartmentInteriorPropVisibilityApplyItem[] = [];

@@ -41,12 +41,12 @@ Implemented in `fpApartmentInteriorPropVisibility.ts` and applied from `fpApartm
 | Mechanism | Constant / behavior | Effect |
 |-----------|---------------------|--------|
 | **Behind-camera cull (in-unit)** | `APARTMENT_INTERIOR_PROP_BEHIND_CAMERA_DOT_MAX = 0` | Props clearly behind the viewer are not drawn while inside the unit. |
-| **Forward cone with hysteresis** | Show when dot > `0.1`; hide when dot < `-0.15` if was visible | A single fast 180° turn does not flip every group in one frame. |
-| **Per-frame show budget** | `APARTMENT_INTERIOR_PROP_MAX_SHOWS_PER_FRAME = 6` | Newly visible heavy groups ramp in over multiple frames; hides are immediate. |
-| **Partition / mirror bypass** | `skipInteriorForwardCone` | Low-poly structural props do not compete for the decor show budget. |
+| **Entry warm-up burst** | `APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME = 32` | On unit entry, all decor groups ramp visible quickly (camera cone ignored) so WebGPU pipelines compile up front instead of during turns. |
+| **Steady-state immediate apply** | After warm-up per decor key | No per-frame show budget or forward-cone hysteresis while turning — only behind-camera + frustum. |
+| **Partition / mirror bypass** | `skipInteriorForwardCone` | Low-poly structural props do not participate in decor warm-up. |
 | **Frustum + bounds** | `APARTMENT_PROP_FRUSTUM_MARGIN_M = 1.5` | Standard frustum test on expanded decor bounds. |
 
-**Design intent:** spread **visibility transitions** over time so triangle count and GPU work do not step-change in one frame during rotation.
+**Design intent:** pay pipeline compilation once on entry, then keep rotation visibility transitions immediate so triangle count does not ramp over many frames during spins.
 
 Tests: `apps/client/src/game/fpApartment/fpApartmentInteriorPropVisibility.test.ts`.
 
