@@ -52,7 +52,7 @@ describe("apartmentStashAcceptsItemCategory", () => {
 describe("apartmentStashAcceptsDefId", () => {
   it("water tank only accepts water-bottle", () => {
     expect(
-      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_WATER_TANK, "water-bottle", "consumable"),
+      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_WATER_TANK, "water-bottle", "tool"),
     ).toBe(true);
     expect(
       apartmentStashAcceptsDefId(
@@ -61,6 +61,16 @@ describe("apartmentStashAcceptsDefId", () => {
         "consumable",
       ),
     ).toBe(false);
+  });
+
+  it("fridge accepts consumables and water bottles (tool)", () => {
+    expect(apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FRIDGE, "apple", "consumable")).toBe(
+      true,
+    );
+    expect(apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FRIDGE, "water-bottle", "tool")).toBe(
+      true,
+    );
+    expect(apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FRIDGE, "knife", "weapon")).toBe(false);
   });
 });
 

@@ -41,6 +41,13 @@ export type MammothMeleeCombat = {
 /** Authored SFX for hotbar instant consume. */
 export type MammothHotbarConsumeSound = "eat" | "drink" | "smoke";
 
+/** Reusable bottle / canteen — partial sips; see server `water_container`. */
+export type MammothWaterContainer = {
+  capacityLiters: number;
+  sipLiters: number;
+  hydrationPerLiter: number;
+};
+
 export type MammothItemDef = {
   id: string;
   displayName: string;
@@ -53,5 +60,7 @@ export type MammothItemDef = {
   consumeOnUse: MammothConsumeOnUse | null;
   /** Authored consume one-shot for this item. */
   hotbarConsumeSound: MammothHotbarConsumeSound | null;
+  /** Present for reusable water bottles (tool category). */
+  waterContainer: MammothWaterContainer | null;
   iconUrl: string;
 };

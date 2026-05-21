@@ -14,6 +14,8 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[
     "SELECT * FROM hud_toast_event",
     "SELECT * FROM player_vitals",
     "SELECT * FROM flashlight_charge",
+    "SELECT * FROM water_bottle_fill",
+    "SELECT * FROM apartment_water_tank",
     "SELECT * FROM dropped_item",
     "SELECT * FROM world_sound_event",
   ],

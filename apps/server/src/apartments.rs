@@ -930,17 +930,62 @@ pub(crate) fn claimed_unit_key_for_owner(ctx: &ReducerContext, owner: Identity) 
 
 /// Stash location key for the unit footlocker — `{unit_key}#d{decor_id}` when replicated, else `{unit_key}#footlocker`.
 pub(crate) fn footlocker_stash_location_key(ctx: &ReducerContext, unit_key: &str) -> String {
-    use crate::inventory_models::{apartment_stash_key, APARTMENT_STASH_KIND_FOOTLOCKER};
+    apartment_decor_stash_location_key(
+        ctx,
+        unit_key,
+        APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER,
+        "objects/footlocker.glb",
+        APARTMENT_STASH_KIND_FOOTLOCKER,
+    )
+}
+
+/// Stash location key for the unit fridge — `{unit_key}#d{decor_id}` when replicated, else `{unit_key}#fridge`.
+pub(crate) fn fridge_stash_location_key(ctx: &ReducerContext, unit_key: &str) -> String {
+    apartment_decor_stash_location_key(
+        ctx,
+        unit_key,
+        APARTMENT_DECOR_ITEM_KIND_FRIDGE,
+        "objects/fridge.glb",
+        APARTMENT_STASH_KIND_FRIDGE,
+    )
+}
+
+fn apartment_decor_stash_location_key(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    item_kind: u8,
+    model_suffix: &str,
+    stash_kind: &str,
+) -> String {
+    use crate::inventory_models::{apartment_stash_key, apartment_stash_key_decor};
 
     if let Some(d) = ctx.db.apartment_unit_decor().iter().find(|d| {
         d.unit_key.as_str() == unit_key
-            && (d.item_kind == APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER
-                || d.model_rel_path.ends_with("objects/footlocker.glb"))
+            && (d.item_kind == item_kind || d.model_rel_path.ends_with(model_suffix))
     }) {
-        return crate::inventory_models::apartment_stash_key_decor(unit_key, d.decor_id);
+        return apartment_stash_key_decor(unit_key, d.decor_id);
     }
 
-    apartment_stash_key(unit_key, APARTMENT_STASH_KIND_FOOTLOCKER)
+    apartment_stash_key(unit_key, stash_kind)
+}
+
+/// Stash location key for the unit water tank — `{unit_key}#d{decor_id}` when replicated, else `{unit_key}#water_tank`.
+pub(crate) fn water_tank_stash_location_key(ctx: &ReducerContext, unit_key: &str) -> String {
+    apartment_decor_stash_location_key(
+        ctx,
+        unit_key,
+        APARTMENT_DECOR_ITEM_KIND_WATER_TANK,
+        "objects/water-tank.glb",
+        APARTMENT_STASH_KIND_WATER_TANK,
+    )
+}
+
+/// One-time water-tank reservoir row for the player's claimed apartment.
+pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, owner: Identity) {
+    let Some(unit_key) = claimed_unit_key_for_owner(ctx, owner) else {
+        return;
+    };
+    crate::water_container::ensure_starter_apartment_water_tank(ctx, unit_key.as_str());
 }
 
 /// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
@@ -1629,7 +1674,7 @@ fn first_empty_stash_slot(
     None
 }
 
-fn apartment_stash_owner_near_sender(
+pub(crate) fn apartment_stash_owner_near_sender(
     ctx: &ReducerContext,
     stash_key: &str,
 ) -> Option<(Identity, String, &'static str)> {
@@ -1832,7 +1877,7 @@ fn move_inventory_row_to_location(
     Ok(())
 }
 
-fn notify_stash_reducer_failure(ctx: &ReducerContext, message: String) {
+pub(crate) fn notify_stash_reducer_failure(ctx: &ReducerContext, message: String) {
     log::warn!("{message}");
     crafting::emit_hud_notice(ctx, ctx.sender(), message);
 }

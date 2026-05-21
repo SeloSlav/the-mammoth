@@ -81,6 +81,18 @@ export const ApartmentUnitDecor = __t.object("ApartmentUnitDecor", {
 });
 export type ApartmentUnitDecor = __Infer<typeof ApartmentUnitDecor>;
 
+export const ApartmentWaterTank = __t.object("ApartmentWaterTank", {
+  unitKey: __t.string(),
+  waterLiters: __t.f32(),
+});
+export type ApartmentWaterTank = __Infer<typeof ApartmentWaterTank>;
+
+export const ApartmentWaterTankSchedule = __t.object("ApartmentWaterTankSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type ApartmentWaterTankSchedule = __Infer<typeof ApartmentWaterTankSchedule>;
+
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
@@ -285,6 +297,12 @@ export const User = __t.object("User", {
   avatarBody: __t.u8(),
 });
 export type User = __Infer<typeof User>;
+
+export const WaterBottleFill = __t.object("WaterBottleFill", {
+  itemInstanceId: __t.u64(),
+  waterLiters: __t.f32(),
+});
+export type WaterBottleFill = __Infer<typeof WaterBottleFill>;
 
 export const WorldLootRefresh = __t.object("WorldLootRefresh", {
   scheduledId: __t.u64(),

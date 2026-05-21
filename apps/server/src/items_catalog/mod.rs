@@ -18,7 +18,9 @@
 mod load;
 mod schema;
 
-pub use schema::{CatalogItem, ConstructionIngredient, HotbarConsumeSound, ItemCategory};
+pub use schema::{
+    CatalogItem, ConstructionIngredient, HotbarConsumeSound, ItemCategory,
+};
 
 pub fn catalog() -> &'static load::ItemCatalog {
     load::catalog()

@@ -37,6 +37,15 @@ pub enum HotbarConsumeSound {
     Smoke,
 }
 
+/// Reusable bottle / canteen — partial sips from hotbar; refill at apartment water tank.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaterContainerSpec {
+    pub capacity_liters: f32,
+    pub sip_liters: f32,
+    pub hydration_per_liter: f32,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -55,6 +64,8 @@ pub struct CatalogItem {
     /// Authored eat-vs-drink one-shot for `consume_hotbar_item`.
     #[serde(default)]
     pub hotbar_consume_sound: Option<HotbarConsumeSound>,
+    #[serde(default)]
+    pub water_container: Option<WaterContainerSpec>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

@@ -33,6 +33,15 @@ import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
+import { APARTMENT_STASH_KIND_WATER_TANK } from "../game/fpApartment/fpApartmentStashKey";
+import { parseApartmentStashKeyFull } from "../game/fpApartment/fpApartmentStashKey";
+import { useApartmentWaterTankLiters, useWaterBottleFillVersion } from "./useWaterContainerState";
+import {
+  APARTMENT_WATER_TANK_CAPACITY_L,
+  mammothItemDefSupportsHotbarWaterDrink,
+  waterBottleFillFraction,
+} from "./waterContainerHelpers";
+import { WaterBottleHotbarFillBar } from "./WaterBottleHotbarFillBar";
 import { useMammothInventory, useMammothStash } from "./useMammothInventory";
 
 type Props = {
@@ -95,6 +104,10 @@ function renderStashSlot(
 export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props) {
   const playerSlots = useMammothInventory(conn);
   const stash = useMammothStash(conn, stashKey, stashKind);
+  const unitKey = useMemo(() => parseApartmentStashKeyFull(stashKey).unitKey, [stashKey]);
+  const tankLiters = useApartmentWaterTankLiters(conn, stashKind === APARTMENT_STASH_KIND_WATER_TANK ? unitKey : null);
+  const waterFillVer = useWaterBottleFillVersion(conn);
+  void waterFillVer;
   const baseSlots = useMemo<SlotGrids>(
     () => ({ ...playerSlots, stash }),
     [playerSlots, stash],
@@ -289,23 +302,55 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
 
   const slotInner = (pop: MammothPopulatedItem | null) => {
     if (!pop) return null;
+    const waterFill =
+      mammothItemDefSupportsHotbarWaterDrink(pop.def) && pop.def.waterContainer
+        ? waterBottleFillFraction(
+            conn,
+            pop.instance.instanceId,
+            pop.def.waterContainer.capacityLiters,
+          )
+        : null;
     return (
-      <img
-        src={pop.def.iconUrl}
-        alt={pop.def.displayName}
-        draggable={false}
-        style={{
-          width: 44,
-          height: 44,
-          objectFit: "contain",
-          display: "block",
-          margin: "auto",
-          pointerEvents: "none",
-          ...NO_SELECT,
-        }}
-      />
+      <div style={{ position: "relative", width: 44, height: 44, margin: "auto" }}>
+        {waterFill != null ? <WaterBottleHotbarFillBar fillFraction={waterFill} /> : null}
+        <img
+          src={pop.def.iconUrl}
+          alt={pop.def.displayName}
+          draggable={false}
+          style={{
+            width: 44,
+            height: 44,
+            objectFit: "contain",
+            display: "block",
+            pointerEvents: "none",
+            ...NO_SELECT,
+          }}
+        />
+      </div>
     );
   };
+
+  const tankBottle = displaySlots.stash?.[0] ?? null;
+  const tankBottleNeedsFill =
+    tankBottle?.def.waterContainer != null &&
+    waterBottleFillFraction(
+      conn,
+      tankBottle.instance.instanceId,
+      tankBottle.def.waterContainer.capacityLiters,
+    ) < 0.999;
+  const canFillBottle =
+    stashKind === APARTMENT_STASH_KIND_WATER_TANK &&
+    tankBottle != null &&
+    tankBottleNeedsFill &&
+    tankLiters > 0.001;
+
+  const onFillBottleAtTank = useCallback(() => {
+    try {
+      void conn.reducers.fillWaterBottleAtTank({ unitKey: stashKey });
+    } catch (err) {
+      console.warn("[MammothStashHud] fillWaterBottleAtTank failed", err);
+    }
+  }, [conn, stashKey]);
 
   const slotRenderOpts = {
     toInstanceId,
@@ -355,6 +400,49 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
       <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
         Drag items in/out. {rulesHint} Tab, Esc, or E to close.
       </div>
+
+      {stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "#9ec8ff", marginBottom: 4 }}>
+            Tank · {(tankLiters).toFixed(1)} / {APARTMENT_WATER_TANK_CAPACITY_L} L
+          </div>
+          <div
+            style={{
+              height: 8,
+              borderRadius: 4,
+              background: "rgba(0,0,0,0.35)",
+              border: "1px solid rgba(100,180,255,0.35)",
+              overflow: "hidden",
+              marginBottom: 8,
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.min(100, (tankLiters / APARTMENT_WATER_TANK_CAPACITY_L) * 100)}%`,
+                background: "linear-gradient(90deg, rgba(0,120,220,0.85), rgba(0,180,255,0.9))",
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            disabled={!canFillBottle}
+            onClick={onFillBottleAtTank}
+            style={{
+              width: "100%",
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid rgba(100,180,255,0.45)",
+              background: canFillBottle ? "rgba(20,60,110,0.85)" : "rgba(30,30,36,0.6)",
+              color: canFillBottle ? "#dff4ff" : "rgba(180,190,210,0.5)",
+              cursor: canFillBottle ? "pointer" : "not-allowed",
+              fontSize: 12,
+            }}
+          >
+            Fill bottle
+          </button>
+        </div>
+      ) : null}
 
       {stoveSections ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

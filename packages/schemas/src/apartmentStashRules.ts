@@ -32,6 +32,9 @@ export type ApartmentStashItemCategory =
 /** Hard cap for any apartment stash row index (legacy DB headroom). */
 export const APARTMENT_STASH_SLOT_INDEX_MAX = 24 as const;
 
+/** Def ids allowed in the fridge beyond consumables (reusable tools stored cold). */
+export const APARTMENT_STASH_FRIDGE_EXTRA_DEF_IDS = ["water-bottle"] as const;
+
 /** Def ids allowed in the water tank (consumable slot). */
 export const APARTMENT_STASH_WATER_TANK_ALLOWED_DEF_IDS = ["water-bottle"] as const;
 
@@ -84,7 +87,7 @@ export function apartmentStashAcceptsItemCategory(
     case APARTMENT_STASH_KIND_STOVE:
       return category === "consumable";
     case APARTMENT_STASH_KIND_WATER_TANK:
-      return category === "consumable";
+      return false;
     default:
       return false;
   }
@@ -98,6 +101,12 @@ export function apartmentStashAcceptsDefId(
 ): boolean {
   if (stashKind === APARTMENT_STASH_KIND_WATER_TANK) {
     return (APARTMENT_STASH_WATER_TANK_ALLOWED_DEF_IDS as readonly string[]).includes(defId);
+  }
+  if (
+    stashKind === APARTMENT_STASH_KIND_FRIDGE &&
+    (APARTMENT_STASH_FRIDGE_EXTRA_DEF_IDS as readonly string[]).includes(defId)
+  ) {
+    return true;
   }
   return apartmentStashAcceptsItemCategory(stashKind, category);
 }

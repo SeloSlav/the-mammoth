@@ -10,6 +10,8 @@ import {
 
   mammothItemDefSupportsHotbarInstantConsume,
 
+  mammothItemDefSupportsHotbarWaterDrink,
+
 } from "./mammothItemCatalog";
 
 import { itemDefIdSupportsHotbarInstantConsume } from "../game/fpInteraction/fpConsumableUse";
@@ -94,7 +96,7 @@ describe("mammothItemCatalog", () => {
 
     expect(apple?.maxStack).toBe(24);
 
-    expect(water?.maxStack).toBe(20);
+    expect(water?.maxStack).toBe(1);
 
     expect(rakija?.maxStack).toBe(12);
 
@@ -140,11 +142,19 @@ describe("mammothItemCatalog", () => {
 
     const water = getMammothItemDef("water-bottle");
 
-    expect(water?.consumeOnUse?.hydrationDelta).toBe(32);
+    expect(water?.category).toBe("tool");
+
+    expect(water?.waterContainer?.capacityLiters).toBe(1);
+
+    expect(water?.waterContainer?.sipLiters).toBe(0.25);
+
+    expect(water?.waterContainer?.hydrationPerLiter).toBe(32);
 
     expect(water?.hotbarConsumeSound).toBe("drink");
 
-    expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(true);
+    expect(mammothItemDefSupportsHotbarInstantConsume(water)).toBe(false);
+
+    expect(mammothItemDefSupportsHotbarWaterDrink(water)).toBe(true);
 
 
 

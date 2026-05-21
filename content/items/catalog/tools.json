@@ -14,6 +14,19 @@
           { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
+    },
+    {
+      "id": "water-bottle",
+      "displayName": "Water bottle",
+      "description": "Reusable bottle. Drink in sips from the hotbar; refill at the apartment water tank.",
+      "category": "tool",
+      "maxStack": 1,
+      "hotbarConsumeSound": "drink",
+      "waterContainer": {
+        "capacityLiters": 1.0,
+        "sipLiters": 0.25,
+        "hydrationPerLiter": 32.0
+      }
     }
   ]
 }

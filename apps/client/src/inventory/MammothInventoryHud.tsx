@@ -9,7 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { DbConnection } from "../module_bindings";
-import { hotbarSlotHasInstantConsume } from "../game/fpHotbar/fpHotbarActivate";
+import { hotbarSlotHasHotbarUseAction } from "../game/fpHotbar/fpHotbarActivate";
 import { runFpHotbarInstantConsume } from "../game/fpHotbar/fpHotbarConsume";
 import { primeHotbarConsumeAudio } from "../game/fpHotbar/hotbarConsumeLocalAudio";
 import { getHotbarSlotInventoryItem } from "../game/fpHotbar/fpHotbarResolve";
@@ -33,7 +33,10 @@ import {
   setFpHotbarSelectedSlot,
   subscribeFpHotbarSelection,
 } from "../game/fpHotbar/fpHotbarSelection";
-import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "./mammothItemCatalog";
+import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume, mammothItemDefSupportsHotbarUseAction, mammothItemDefSupportsHotbarWaterDrink } from "./mammothItemCatalog";
+import { WaterBottleHotbarFillBar } from "./WaterBottleHotbarFillBar";
+import { useWaterBottleFillVersion } from "./useWaterContainerState";
+import { waterBottleFillFraction } from "./waterContainerHelpers";
 import {
   isApartmentStashSlotIndexValid,
   mammothItemAllowedInApartmentStash,
@@ -115,6 +118,8 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     }, 900);
     return () => window.clearTimeout(id);
   }, [optimisticSlots, activeStash, baseSlots]);
+  const waterFillVer = useWaterBottleFillVersion(conn);
+  void waterFillVer;
   const [invOpen, setInvOpen] = useState(false);
   const dragRef = useRef<MammothDraggedItemInfo | null>(null);
   const selectedSlot = useSyncExternalStore(
@@ -384,7 +389,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       const prevSel = getFpHotbarSelectedSlot();
 
       // Broth-style: second activation on the same slot while it holds an instant-use consumable → consume.
-      if (prevSel === index && hotbarSlotHasInstantConsume(conn, conn.identity, index)) {
+      if (prevSel === index && hotbarSlotHasHotbarUseAction(conn, conn.identity, index)) {
         lastHotbarClickRef.current = null;
         void runFpHotbarInstantConsume(
           conn,
@@ -398,7 +403,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
       const netRow = getHotbarSlotInventoryItem(conn, conn.identity, index);
       const def = netRow ? getMammothItemDef(netRow.defId) : undefined;
-      if (netRow && mammothItemDefSupportsHotbarInstantConsume(def)) {
+      if (netRow && mammothItemDefSupportsHotbarUseAction(def)) {
         lastHotbarClickRef.current = { slot: index, t: performance.now() };
         setFpHotbarSelectedSlot(index);
         return;
@@ -540,8 +545,16 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
           const slotInfo = { type: "hotbar" as const, index };
           const sel = selectedSlot === index;
           const consumeCd =
-            pop && mammothItemDefSupportsHotbarInstantConsume(pop.def)
+            pop && mammothItemDefSupportsHotbarUseAction(pop.def)
               ? hotbarInstantConsumeCooldownProgress(index)
+              : null;
+          const waterFill =
+            pop && mammothItemDefSupportsHotbarWaterDrink(pop.def) && pop.def.waterContainer
+              ? waterBottleFillFraction(
+                  conn,
+                  pop.instance.instanceId,
+                  pop.def.waterContainer.capacityLiters,
+                )
               : null;
           return (
             <div key={`hb-${index}`} style={{ position: "relative" }}>
@@ -568,8 +581,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                 style={{
                   outline: sel ? "2px solid #5cf" : undefined,
                   outlineOffset: 1,
+                  position: "relative",
                 }}
               >
+                {waterFill != null ? <WaterBottleHotbarFillBar fillFraction={waterFill} /> : null}
                 {pop ? (
                   <MammothDraggableItem
                     key={String(toInstanceId(pop))}

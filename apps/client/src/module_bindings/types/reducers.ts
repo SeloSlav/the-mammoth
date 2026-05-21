@@ -9,6 +9,7 @@ import { type Infer as __Infer } from "spacetimedb";
 import AddApartmentUnitDecorReducer from "../add_apartment_unit_decor_reducer";
 import ApartmentDoorSetReducer from "../apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "../apartment_door_toggle_reducer";
+import ApartmentWaterTankTickStepReducer from "../apartment_water_tank_tick_step_reducer";
 import CancelWaitingCraftReducer from "../cancel_waiting_craft_reducer";
 import ClaimApartmentPulseReducer from "../claim_apartment_pulse_reducer";
 import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer";
@@ -22,6 +23,7 @@ import ElevatorLandingExteriorDoorSetReducer from "../elevator_landing_exterior_
 import ElevatorLandingExteriorDoorToggleReducer from "../elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "../elevator_select_floor_reducer";
 import EnqueueCraftReducer from "../enqueue_craft_reducer";
+import FillWaterBottleAtTankReducer from "../fill_water_bottle_at_tank_reducer";
 import MoveItemToHotbarReducer from "../move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "../move_item_to_inventory_reducer";
 import OnConnectReducer from "../on_connect_reducer";
@@ -52,6 +54,7 @@ import UpdateApartmentUnitDecorReducer from "../update_apartment_unit_decor_redu
 export type AddApartmentUnitDecorParams = __Infer<typeof AddApartmentUnitDecorReducer>;
 export type ApartmentDoorSetParams = __Infer<typeof ApartmentDoorSetReducer>;
 export type ApartmentDoorToggleParams = __Infer<typeof ApartmentDoorToggleReducer>;
+export type ApartmentWaterTankTickStepParams = __Infer<typeof ApartmentWaterTankTickStepReducer>;
 export type CancelWaitingCraftParams = __Infer<typeof CancelWaitingCraftReducer>;
 export type ClaimApartmentPulseParams = __Infer<typeof ClaimApartmentPulseReducer>;
 export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItemsReducer>;
@@ -65,6 +68,7 @@ export type ElevatorLandingExteriorDoorSetParams = __Infer<typeof ElevatorLandin
 export type ElevatorLandingExteriorDoorToggleParams = __Infer<typeof ElevatorLandingExteriorDoorToggleReducer>;
 export type ElevatorSelectFloorParams = __Infer<typeof ElevatorSelectFloorReducer>;
 export type EnqueueCraftParams = __Infer<typeof EnqueueCraftReducer>;
+export type FillWaterBottleAtTankParams = __Infer<typeof FillWaterBottleAtTankReducer>;
 export type MoveItemToHotbarParams = __Infer<typeof MoveItemToHotbarReducer>;
 export type MoveItemToInventoryParams = __Infer<typeof MoveItemToInventoryReducer>;
 export type OnConnectParams = __Infer<typeof OnConnectReducer>;

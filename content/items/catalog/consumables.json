@@ -39,15 +39,6 @@
       "consumeOnUse": { "hungerDelta": 24 }
     },
     {
-      "id": "water-bottle",
-      "displayName": "Water bottle",
-      "description": "Clear bottle. Restores hydration when consumed (use hook TBD).",
-      "category": "consumable",
-      "maxStack": 20,
-      "hotbarConsumeSound": "drink",
-      "consumeOnUse": { "hydrationDelta": 32 }
-    },
-    {
       "id": "rakija",
       "displayName": "Rakija",
       "description": "Fruit brandy in a dusty bottle. Warms the chest and dries you out; best not to ask which fruit.",

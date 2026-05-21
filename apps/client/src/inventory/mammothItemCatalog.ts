@@ -22,6 +22,10 @@ import chemicalStockIcon from "../../../../content/references/meshy/chemical-sto
 import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
 import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
 
+import {
+  normalizeWaterContainer,
+} from "./waterContainerHelpers";
+
 import type {
   ItemCategory,
   MammothConstruction,
@@ -44,7 +48,13 @@ export type {
   MammothConstructionIngredient,
   MammothConsumeOnUse,
   MammothItemDef,
+  MammothWaterContainer,
 } from "./mammothItemCatalogTypes";
+
+export {
+  mammothItemDefSupportsHotbarWaterDrink,
+  mammothItemDefSupportsHotbarUseAction,
+} from "./waterContainerHelpers";
 
 /** World GLB resolution (re-exported from `@the-mammoth/assets`). */
 export { mammothCatalogGlbCandidates, MAMMOTH_CATALOG_GLB_FALLBACK_URI, MAMMOTH_CATALOG_GLB_PRIMARY_URI };
@@ -75,6 +85,11 @@ type RawItem = {
   meleeCombat?: MammothMeleeCombat;
   consumeOnUse?: MammothConsumeOnUse;
   hotbarConsumeSound?: MammothHotbarConsumeSound;
+  waterContainer?: {
+    capacityLiters?: number;
+    sipLiters?: number;
+    hydrationPerLiter?: number;
+  };
 };
 
 type RawShard = {
@@ -186,6 +201,7 @@ for (const it of mergeRawItems()) {
     construction: normalizeConstruction(it.construction),
     consumeOnUse: normalizeConsumeOnUse(it.consumeOnUse),
     hotbarConsumeSound: normalizeHotbarConsumeSound(it.hotbarConsumeSound),
+    waterContainer: normalizeWaterContainer(it.waterContainer),
     iconUrl: ICONS[it.id] ?? "",
   });
 }

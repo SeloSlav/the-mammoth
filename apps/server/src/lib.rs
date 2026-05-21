@@ -34,6 +34,7 @@ mod player_vitals;
 mod pose;
 mod spawn_routing;
 mod stair_runtime_overlay;
+mod water_container;
 mod world_sound;
 
 use crate::movement::player_input;
@@ -56,6 +57,7 @@ pub fn init(ctx: &ReducerContext) {
     dropped_item::start_dropped_item_cleanup_schedule(ctx);
     crafting::start_craft_queue_tick_schedule(ctx);
     crafting::start_hud_toast_cleanup_schedule(ctx);
+    water_container::start_apartment_water_tank_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -83,6 +85,9 @@ pub fn on_connect(ctx: &ReducerContext) {
     player_vitals::ensure_player_vitals_row(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);
     inventory::ensure_starter_footlocker_grow_op(ctx, id);
+    inventory::ensure_starter_fridge(ctx, id);
+    water_container::backfill_water_bottle_fill_rows(ctx);
+    apartments::ensure_starter_apartment_water_tank(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 

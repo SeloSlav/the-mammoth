@@ -652,7 +652,9 @@ export function createFpSessionMainRafFrame(
       ? equippedHeldItemIdFromDefId(hotbarRow.defId)
       : ("unarmed" as const);
     const hotbarConsumableDefId =
-      hotbarRow && getMammothItemDef(hotbarRow.defId)?.category === "consumable"
+      hotbarRow &&
+      (getMammothItemDef(hotbarRow.defId)?.category === "consumable" ||
+        getMammothItemDef(hotbarRow.defId)?.waterContainer != null)
         ? hotbarRow.defId
         : null;
 

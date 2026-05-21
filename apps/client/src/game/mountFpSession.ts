@@ -75,7 +75,7 @@ import { effectiveDevGameplayEquippedPrimary } from "./fpDev/devGameplayWeaponOv
 import {
   fpHotbarDigitKeySuppressedByDebounce,
   HOTBAR_SLOT_COUNT,
-  hotbarSlotHasInstantConsume,
+  hotbarSlotHasHotbarUseAction,
 } from "./fpHotbar/fpHotbarActivate.js";
 import {
   getFpHotbarSelectedSlot,
@@ -1313,7 +1313,7 @@ export async function mountFpSession(
         }
         const prevSel = getFpHotbarSelectedSlot();
         const willConsume =
-          prevSel === newSlot && hotbarSlotHasInstantConsume(conn, conn.identity, newSlot);
+          prevSel === newSlot && hotbarSlotHasHotbarUseAction(conn, conn.identity, newSlot);
 
         if (
           fpHotbarDigitKeySuppressedByDebounce({
@@ -1534,7 +1534,7 @@ export async function mountFpSession(
     if (
       conn.identity &&
       selectedHotbarSlot !== null &&
-      hotbarSlotHasInstantConsume(conn, conn.identity, selectedHotbarSlot)
+      hotbarSlotHasHotbarUseAction(conn, conn.identity, selectedHotbarSlot)
     ) {
       void runFpHotbarInstantConsume(
         conn,

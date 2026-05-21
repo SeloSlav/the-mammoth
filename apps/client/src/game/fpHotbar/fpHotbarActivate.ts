@@ -1,6 +1,6 @@
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
-import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "../../inventory/mammothItemCatalog";
+import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume, mammothItemDefSupportsHotbarUseAction } from "../../inventory/mammothItemCatalog";
 import { getHotbarSlotInventoryItem } from "./fpHotbarResolve";
 
 /** Hotbar rail size — keep in sync with server `NUM_PLAYER_HOTBAR_SLOTS` and HUD grid. */
@@ -36,7 +36,18 @@ export function fpHotbarDigitKeySuppressedByDebounce(options: {
   );
 }
 
-/** True when this hotbar slot holds a stack whose catalog def supports instant hotbar consume. */
+/** True when this hotbar slot supports left-click / double-tap use (consumable or water bottle). */
+export function hotbarSlotHasHotbarUseAction(
+  conn: DbConnection,
+  owner: Identity,
+  slotIndex: number,
+): boolean {
+  const row = getHotbarSlotInventoryItem(conn, owner, slotIndex);
+  if (!row) return false;
+  return mammothItemDefSupportsHotbarUseAction(getMammothItemDef(row.defId));
+}
+
+/** @deprecated Use {@link hotbarSlotHasHotbarUseAction} — kept for instant-conume-only checks. */
 export function hotbarSlotHasInstantConsume(
   conn: DbConnection,
   owner: Identity,

@@ -2,6 +2,7 @@
 //!
 //! Hotbar: `starter_hotbar!(slot, "def_id", qty)`.
 //! Footlocker grow-op: `starter_footlocker!(slot, "def_id", qty)`.
+//! Fridge pantry: `starter_fridge!(slot, "def_id", qty)`.
 //!
 //! Catalog keys must match `content/items/catalog` `id` fields.
 
@@ -12,8 +13,10 @@ use crate::apartment_stash_rules::apartment_stash_slot_index_valid;
 use crate::apartments;
 use crate::inventory_models::{
     HotbarLocationData, ItemLocation, StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER,
+    APARTMENT_STASH_KIND_FRIDGE,
 };
 use crate::items_catalog;
+use crate::water_container;
 
 use super::{
     delete_all_player_inventory_and_hotbar_items, find_item_in_stash_slot, inventory_item,
@@ -31,7 +34,7 @@ struct StarterRow {
     placement: StarterPlacement,
 }
 
-struct FootlockerStarterRow {
+struct ApartmentStashStarterRow {
     def_id: &'static str,
     quantity: u32,
     slot_index: u16,
@@ -49,7 +52,17 @@ macro_rules! starter_hotbar {
 
 macro_rules! starter_footlocker {
     ($slot:literal, $def:literal, $qty:literal) => {
-        FootlockerStarterRow {
+        ApartmentStashStarterRow {
+            def_id: $def,
+            quantity: $qty,
+            slot_index: $slot,
+        }
+    };
+}
+
+macro_rules! starter_fridge {
+    ($slot:literal, $def:literal, $qty:literal) => {
+        ApartmentStashStarterRow {
             def_id: $def,
             quantity: $qty,
             slot_index: $slot,
@@ -63,7 +76,7 @@ const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[
 ];
 
 /// One-time balcony grow-op pack seeded into the apartment footlocker stash (normal `ItemLocation::Stash` rows).
-const FOOTLOCKER_GROW_OP_STARTER: &[FootlockerStarterRow] = &[
+const FOOTLOCKER_GROW_OP_STARTER: &[ApartmentStashStarterRow] = &[
     starter_footlocker!(0, "balcony-grow-substrate", 6),
     starter_footlocker!(1, "parsley-seeds", 3),
     starter_footlocker!(2, "dill-seeds", 3),
@@ -71,6 +84,15 @@ const FOOTLOCKER_GROW_OP_STARTER: &[FootlockerStarterRow] = &[
     starter_footlocker!(4, "green-onion-sets", 4),
     starter_footlocker!(5, "scented-geranium-cuttings", 2),
     starter_footlocker!(6, "lovage-seeds", 2),
+];
+
+/// One-time pantry seeded into the apartment fridge (tutorial eat/drink before leaving).
+const FRIDGE_STARTER: &[ApartmentStashStarterRow] = &[
+    starter_fridge!(0, "apple", 6),
+    starter_fridge!(1, "water-bottle", 1),
+    starter_fridge!(2, "water-bottle", 1),
+    starter_fridge!(3, "water-bottle", 1),
+    starter_fridge!(4, "water-bottle", 1),
 ];
 
 fn validate_survival_loadout(_ctx: &ReducerContext) -> bool {
@@ -94,29 +116,45 @@ fn validate_survival_loadout(_ctx: &ReducerContext) -> bool {
     true
 }
 
-fn validate_footlocker_grow_op_starter(_ctx: &ReducerContext) -> bool {
-    for row in FOOTLOCKER_GROW_OP_STARTER {
+fn validate_apartment_stash_starter(
+    label: &str,
+    stash_kind: &str,
+    rows: &[ApartmentStashStarterRow],
+) -> bool {
+    for row in rows {
         if !items_catalog::is_known_def(row.def_id) {
-            log::error!("footlocker grow-op starter: catalog missing {}", row.def_id);
+            log::error!("{label}: catalog missing {}", row.def_id);
             return false;
         }
-        if !apartment_stash_slot_index_valid(APARTMENT_STASH_KIND_FOOTLOCKER, row.slot_index) {
+        if !apartment_stash_slot_index_valid(stash_kind, row.slot_index) {
             log::error!(
-                "footlocker grow-op starter: slot {} out of range for {}",
+                "{label}: slot {} out of range for {}",
                 row.slot_index,
                 row.def_id
             );
             return false;
         }
         if row.quantity == 0 {
-            log::error!("footlocker grow-op starter: quantity 0 for {}", row.def_id);
+            log::error!("{label}: quantity 0 for {}", row.def_id);
             return false;
         }
     }
     true
 }
 
-fn footlocker_grow_op_starter_already_granted(
+fn validate_footlocker_grow_op_starter(_ctx: &ReducerContext) -> bool {
+    validate_apartment_stash_starter(
+        "footlocker grow-op starter",
+        APARTMENT_STASH_KIND_FOOTLOCKER,
+        FOOTLOCKER_GROW_OP_STARTER,
+    )
+}
+
+fn validate_fridge_starter(_ctx: &ReducerContext) -> bool {
+    validate_apartment_stash_starter("fridge starter", APARTMENT_STASH_KIND_FRIDGE, FRIDGE_STARTER)
+}
+
+fn apartment_stash_starter_already_granted(
     ctx: &ReducerContext,
     owner: Identity,
     stash_location_key: &str,
@@ -124,13 +162,14 @@ fn footlocker_grow_op_starter_already_granted(
     find_item_in_stash_slot(ctx, owner, stash_location_key, 0).is_some()
 }
 
-fn insert_footlocker_grow_op_starter(
+fn insert_apartment_stash_starter(
     ctx: &ReducerContext,
     owner: Identity,
     stash_location_key: &str,
+    rows: &[ApartmentStashStarterRow],
 ) {
-    for row in FOOTLOCKER_GROW_OP_STARTER {
-        let _ = ctx.db.inventory_item().insert(InventoryItem {
+    for row in rows {
+        let inserted = ctx.db.inventory_item().insert(InventoryItem {
             instance_id: 0,
             def_id: row.def_id.to_string(),
             quantity: row.quantity,
@@ -140,6 +179,7 @@ fn insert_footlocker_grow_op_starter(
                 slot_index: row.slot_index,
             }),
         });
+        water_container::on_water_bottle_inventory_inserted(ctx, &inserted);
     }
 }
 
@@ -153,10 +193,36 @@ pub(crate) fn ensure_starter_footlocker_grow_op(ctx: &ReducerContext, owner: Ide
         return;
     };
     let stash_location_key = apartments::footlocker_stash_location_key(ctx, unit_key.as_str());
-    if footlocker_grow_op_starter_already_granted(ctx, owner, stash_location_key.as_str()) {
+    if apartment_stash_starter_already_granted(ctx, owner, stash_location_key.as_str()) {
         return;
     }
-    insert_footlocker_grow_op_starter(ctx, owner, stash_location_key.as_str());
+    insert_apartment_stash_starter(
+        ctx,
+        owner,
+        stash_location_key.as_str(),
+        FOOTLOCKER_GROW_OP_STARTER,
+    );
+}
+
+/// One-time fridge pantry for the player's claimed apartment.
+pub(crate) fn ensure_starter_fridge(ctx: &ReducerContext, owner: Identity) {
+    if !validate_fridge_starter(ctx) {
+        return;
+    }
+    let Some(unit_key) = apartments::claimed_unit_key_for_owner(ctx, owner) else {
+        log::debug!("ensure_starter_fridge: no claimed unit for {owner}");
+        return;
+    };
+    let stash_location_key = apartments::fridge_stash_location_key(ctx, unit_key.as_str());
+    if apartment_stash_starter_already_granted(ctx, owner, stash_location_key.as_str()) {
+        return;
+    }
+    insert_apartment_stash_starter(
+        ctx,
+        owner,
+        stash_location_key.as_str(),
+        FRIDGE_STARTER,
+    );
 }
 
 fn insert_survival_loadout(ctx: &ReducerContext, owner: Identity) {
@@ -198,17 +264,26 @@ pub(crate) fn reset_player_loadout_for_respawn(ctx: &ReducerContext, owner: Iden
 
 #[cfg(test)]
 mod tests {
-    use super::FOOTLOCKER_GROW_OP_STARTER;
+    use super::{FOOTLOCKER_GROW_OP_STARTER, FRIDGE_STARTER};
 
-    #[test]
-    fn footlocker_grow_op_starter_uses_unique_slots() {
+    fn assert_unique_stash_slots(label: &str, rows: &[super::ApartmentStashStarterRow]) {
         let mut seen = std::collections::HashSet::new();
-        for row in FOOTLOCKER_GROW_OP_STARTER {
+        for row in rows {
             assert!(
                 seen.insert(row.slot_index),
-                "duplicate footlocker slot {}",
+                "duplicate {label} slot {}",
                 row.slot_index
             );
         }
+    }
+
+    #[test]
+    fn footlocker_grow_op_starter_uses_unique_slots() {
+        assert_unique_stash_slots("footlocker", FOOTLOCKER_GROW_OP_STARTER);
+    }
+
+    #[test]
+    fn fridge_starter_uses_unique_slots() {
+        assert_unique_stash_slots("fridge", FRIDGE_STARTER);
     }
 }

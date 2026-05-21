@@ -37,6 +37,7 @@ import {
 import AddApartmentUnitDecorReducer from "./add_apartment_unit_decor_reducer";
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
+import ApartmentWaterTankTickStepReducer from "./apartment_water_tank_tick_step_reducer";
 import CancelWaitingCraftReducer from "./cancel_waiting_craft_reducer";
 import ClaimApartmentPulseReducer from "./claim_apartment_pulse_reducer";
 import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
@@ -50,6 +51,7 @@ import ElevatorLandingExteriorDoorSetReducer from "./elevator_landing_exterior_d
 import ElevatorLandingExteriorDoorToggleReducer from "./elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import EnqueueCraftReducer from "./enqueue_craft_reducer";
+import FillWaterBottleAtTankReducer from "./fill_water_bottle_at_tank_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
@@ -82,6 +84,8 @@ import ApartmentDoorRow from "./apartment_door_table";
 import ApartmentDoorGameplayRow from "./apartment_door_gameplay_table";
 import ApartmentUnitRow from "./apartment_unit_table";
 import ApartmentUnitDecorRow from "./apartment_unit_decor_table";
+import ApartmentWaterTankRow from "./apartment_water_tank_table";
+import ApartmentWaterTankScheduleRow from "./apartment_water_tank_schedule_table";
 import CraftQueueItemRow from "./craft_queue_item_table";
 import CraftQueueTickRow from "./craft_queue_tick_table";
 import DroppedItemRow from "./dropped_item_table";
@@ -102,6 +106,7 @@ import PlayerPoseRow from "./player_pose_table";
 import PlayerVitalsRow from "./player_vitals_table";
 import PlayerVitalsScheduleRow from "./player_vitals_schedule_table";
 import UserRow from "./user_table";
+import WaterBottleFillRow from "./water_bottle_fill_table";
 import WorldLootRefreshRow from "./world_loot_refresh_table";
 import WorldSoundEventRow from "./world_sound_event_table";
 import WorldSoundEventCleanupRow from "./world_sound_event_cleanup_table";
@@ -154,6 +159,28 @@ const tablesSchema = __schema({
       { name: 'apartment_unit_decor_decor_id_key', constraint: 'unique', columns: ['decorId'] },
     ],
   }, ApartmentUnitDecorRow),
+  apartment_water_tank: __table({
+    name: 'apartment_water_tank',
+    indexes: [
+      { name: 'unit_key', algorithm: 'btree', columns: [
+        'unitKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_water_tank_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
+    ],
+  }, ApartmentWaterTankRow),
+  apartment_water_tank_schedule: __table({
+    name: 'apartment_water_tank_schedule',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'apartment_water_tank_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, ApartmentWaterTankScheduleRow),
   craft_queue_item: __table({
     name: 'craft_queue_item',
     indexes: [
@@ -374,6 +401,17 @@ const tablesSchema = __schema({
       { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, UserRow),
+  water_bottle_fill: __table({
+    name: 'water_bottle_fill',
+    indexes: [
+      { name: 'item_instance_id', algorithm: 'btree', columns: [
+        'itemInstanceId',
+      ] },
+    ],
+    constraints: [
+      { name: 'water_bottle_fill_item_instance_id_key', constraint: 'unique', columns: ['itemInstanceId'] },
+    ],
+  }, WaterBottleFillRow),
   world_loot_refresh: __table({
     name: 'world_loot_refresh',
     indexes: [
@@ -414,6 +452,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_apartment_unit_decor", AddApartmentUnitDecorReducer),
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
+  __reducerSchema("apartment_water_tank_tick_step", ApartmentWaterTankTickStepReducer),
   __reducerSchema("cancel_waiting_craft", CancelWaitingCraftReducer),
   __reducerSchema("claim_apartment_pulse", ClaimApartmentPulseReducer),
   __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
@@ -427,6 +466,7 @@ const reducersSchema = __reducers(
   __reducerSchema("elevator_landing_exterior_door_toggle", ElevatorLandingExteriorDoorToggleReducer),
   __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("enqueue_craft", EnqueueCraftReducer),
+  __reducerSchema("fill_water_bottle_at_tank", FillWaterBottleAtTankReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),

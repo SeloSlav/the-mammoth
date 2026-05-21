@@ -22,6 +22,7 @@ function def(
     construction: null,
     consumeOnUse: null,
     hotbarConsumeSound: null,
+    waterContainer: null,
     iconUrl: "",
   };
 }

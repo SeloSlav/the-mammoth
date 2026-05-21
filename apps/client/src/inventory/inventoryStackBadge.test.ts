@@ -13,6 +13,7 @@ function def(maxStack: number): MammothItemDef {
     construction: null,
     consumeOnUse: null,
     hotbarConsumeSound: null,
+    waterContainer: null,
     iconUrl: "",
   };
 }

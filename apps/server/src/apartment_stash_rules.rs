@@ -42,7 +42,7 @@ pub(crate) fn apartment_stash_accepts_item_category(
         APARTMENT_STASH_KIND_FRIDGE | APARTMENT_STASH_KIND_STOVE => {
             category == ItemCategory::Consumable
         }
-        APARTMENT_STASH_KIND_WATER_TANK => category == ItemCategory::Consumable,
+        APARTMENT_STASH_KIND_WATER_TANK => false,
         _ => false,
     }
 }
@@ -62,6 +62,9 @@ pub(crate) fn apartment_stash_rejection_hint(stash_kind: &str) -> &'static str {
 pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> bool {
     if stash_kind == APARTMENT_STASH_KIND_WATER_TANK {
         return WATER_TANK_ALLOWED_DEF_IDS.contains(&def_id);
+    }
+    if stash_kind == APARTMENT_STASH_KIND_FRIDGE && def_id == "water-bottle" {
+        return true;
     }
     let Some(item) = items_catalog::get(def_id) else {
         return false;
@@ -121,14 +124,10 @@ mod tests {
     }
 
     #[test]
-    fn water_tank_only_accepts_water_bottle() {
+    fn fridge_accepts_water_bottle_tool() {
         assert!(apartment_stash_accepts_def_id(
-            APARTMENT_STASH_KIND_WATER_TANK,
+            APARTMENT_STASH_KIND_FRIDGE,
             "water-bottle"
-        ));
-        assert!(!apartment_stash_accepts_def_id(
-            APARTMENT_STASH_KIND_WATER_TANK,
-            "purification-tablets"
         ));
     }
 }

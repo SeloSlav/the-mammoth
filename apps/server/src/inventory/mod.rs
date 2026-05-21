@@ -16,7 +16,8 @@ use crate::pose::player_pose;
 use crate::world_sound;
 
 pub(crate) use starting_item::{
-    ensure_starter_footlocker_grow_op, ensure_starter_loadout, reset_player_loadout_for_respawn,
+    ensure_starter_footlocker_grow_op, ensure_starter_fridge, ensure_starter_loadout,
+    reset_player_loadout_for_respawn,
 };
 
 pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
@@ -230,7 +231,7 @@ pub(crate) fn try_grant_stack_to_player(
     while quantity > 0 {
         let take = quantity.min(max_stack);
         if let Some(slot) = first_empty_hotbar_slot(ctx, owner) {
-            let _ = inv.insert(InventoryItem {
+            let row = inv.insert(InventoryItem {
                 instance_id: 0,
                 def_id: def_id.clone(),
                 quantity: take,
@@ -239,11 +240,12 @@ pub(crate) fn try_grant_stack_to_player(
                     slot_index: slot,
                 }),
             });
+            crate::water_container::on_water_bottle_inventory_inserted(ctx, &row);
             quantity -= take;
             continue;
         }
         if let Some(slot) = first_empty_inventory_slot(ctx, owner) {
-            let _ = inv.insert(InventoryItem {
+            let row = inv.insert(InventoryItem {
                 instance_id: 0,
                 def_id: def_id.clone(),
                 quantity: take,
@@ -252,6 +254,7 @@ pub(crate) fn try_grant_stack_to_player(
                     slot_index: slot,
                 }),
             });
+            crate::water_container::on_water_bottle_inventory_inserted(ctx, &row);
             quantity -= take;
             continue;
         }
@@ -473,6 +476,12 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
         log::debug!("consume_hotbar_item: empty hotbar slot {hotbar_slot}");
         return;
     };
+
+    if crate::water_container::is_water_container_def(&item.def_id) {
+        crate::water_container::drink_water_bottle_from_hotbar(ctx, sender, hotbar_slot);
+        return;
+    }
+
     let Some((dhp, dh, dy)) = items_catalog::instant_hotbar_consume_vital_deltas(&item.def_id)
     else {
         log::debug!(
