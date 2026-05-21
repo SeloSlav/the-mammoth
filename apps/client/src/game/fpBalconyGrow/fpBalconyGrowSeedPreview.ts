@@ -1,24 +1,15 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { deepDisposeObject3D } from "@the-mammoth/engine";
 import { balconyGrowStageVisualScale } from "@the-mammoth/schemas";
-import { bottomAlignGrowStageVisual } from "./fpBalconyGrowStageVisual.js";
+import { mountBalconyGrowPlantVisual } from "./fpBalconyGrowStageVisual.js";
 import type { FpWorldPlacementPreview } from "../fpPlacement/fpWorldPlacementPreview.js";
 
 const VALID_EMISSIVE = new THREE.Color(0x5dffb0);
 const INVALID_EMISSIVE = new THREE.Color(0xff7070);
+const DEFAULT_SAPLING_TINT = "#3d8b4a";
 
-/** Seed ghost — bottom-aligned, scaled via anchor so tray soil does not deform. */
-export async function createBalconyGrowSeedPreview(
-  scene: THREE.Scene,
-  ghostUrl: string,
-): Promise<FpWorldPlacementPreview> {
-  const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync(ghostUrl);
-  const anchor = new THREE.Group();
-  anchor.name = "balcony_grow_seed_preview";
-  const vis = gltf.scene;
-  bottomAlignGrowStageVisual(vis, 1);
-  vis.traverse((o) => {
+function applyPlacementGhostMaterials(root: THREE.Object3D, valid: boolean): void {
+  root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     o.renderOrder = 820;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -27,25 +18,32 @@ export async function createBalconyGrowSeedPreview(
       mat.transparent = true;
       mat.opacity = 0.72;
       mat.depthWrite = false;
-      mat.emissive = INVALID_EMISSIVE.clone();
+      mat.emissive.copy(valid ? VALID_EMISSIVE : INVALID_EMISSIVE);
       mat.emissiveIntensity = 0.55;
     }
   });
-  anchor.add(vis);
+}
+
+/** Sapling placement ghost — procedural, matches live tray slot visuals (never tray GLBs). */
+export function createBalconyGrowSeedPreview(scene: THREE.Scene): FpWorldPlacementPreview {
+  const anchor = new THREE.Group();
+  anchor.name = "balcony_grow_seed_preview";
+  const holder = new THREE.Group();
+  holder.name = "balcony_grow_seed_preview_holder";
+  anchor.add(holder);
   anchor.visible = false;
   scene.add(anchor);
 
+  let lastVisualKey = "";
   let lastValid: boolean | null = null;
 
-  const applyValidTint = (valid: boolean): void => {
-    vis.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const mat of mats) {
-        if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-        mat.emissive.copy(valid ? VALID_EMISSIVE : INVALID_EMISSIVE);
-      }
-    });
+  const rebuildVisual = (stageScale: number, tint: string): void => {
+    while (holder.children.length > 0) {
+      const child = holder.children[0]!;
+      holder.remove(child);
+      deepDisposeObject3D(child);
+    }
+    mountBalconyGrowPlantVisual(holder, "sapling", stageScale, tint, false);
   };
 
   return {
@@ -58,24 +56,32 @@ export async function createBalconyGrowSeedPreview(
         lastValid = null;
         return;
       }
+      const stageScale = target.scale ?? balconyGrowStageVisualScale("sapling");
+      const tint = target.balconyGrowTint ?? DEFAULT_SAPLING_TINT;
+      const visualKey = `${stageScale.toFixed(4)}:${tint}`;
+      if (visualKey !== lastVisualKey) {
+        rebuildVisual(stageScale, tint);
+        lastVisualKey = visualKey;
+        lastValid = null;
+      }
+
       anchor.visible = true;
       anchor.position.copy(target.worldPosition);
       anchor.quaternion.copy(target.worldQuaternion);
-      anchor.scale.setScalar(target.scale ?? balconyGrowStageVisualScale("seed"));
+      anchor.scale.setScalar(1);
+
       if (valid !== lastValid) {
-        applyValidTint(valid);
+        applyPlacementGhostMaterials(holder, valid);
         lastValid = valid;
       }
     },
     dispose() {
       scene.remove(anchor);
-      vis.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.geometry.dispose();
-          const mats = Array.isArray(o.material) ? o.material : [o.material];
-          for (const m of mats) m.dispose();
-        }
-      });
+      while (holder.children.length > 0) {
+        const child = holder.children[0]!;
+        holder.remove(child);
+        deepDisposeObject3D(child);
+      }
     },
   };
 }

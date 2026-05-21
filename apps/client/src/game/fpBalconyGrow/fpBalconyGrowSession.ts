@@ -4,12 +4,10 @@ import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartme
 import {
   resolveBalconyGrowPlacement,
   syncBalconyGrowPlacementPreview,
-  balconyGrowSeedPreviewGlbUrl,
   type BalconyGrowPlacementRaycast,
 } from "./fpBalconyGrowPlacement.js";
 import { type BalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import { createBalconyGrowSeedPreview } from "./fpBalconyGrowSeedPreview.js";
-import type { FpWorldPlacementPreview } from "../fpPlacement/fpWorldPlacementPreview.js";
 import { createBalconyWaterPatchVisuals } from "./fpBalconyGrowWaterPatches.js";
 import { setBalconyGrowInspectTarget } from "./fpBalconyGrowInspectState.js";
 import { syncBalconyGrowInspect } from "./fpBalconyGrowInspectSync.js";
@@ -77,10 +75,7 @@ export function mountFpBalconyGrowSession(opts: {
   conn: DbConnection;
   canvas: HTMLCanvasElement;
 }): FpBalconyGrowSession {
-  let preview: FpWorldPlacementPreview | null = null;
-  void createBalconyGrowSeedPreview(opts.scene, balconyGrowSeedPreviewGlbUrl()).then((p) => {
-    preview = p;
-  });
+  const preview = createBalconyGrowSeedPreview(opts.scene);
   const waterVisuals = createBalconyWaterPatchVisuals(opts.scene);
   let cachedPlacement: BalconyGrowPlacementRaycast | null = null;
   let claimedUnitKey: string | null = null;

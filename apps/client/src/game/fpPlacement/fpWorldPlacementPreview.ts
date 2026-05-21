@@ -5,6 +5,8 @@ export type FpPlacementPreviewTarget = {
   worldPosition: THREE.Vector3;
   worldQuaternion: THREE.Quaternion;
   scale?: number;
+  /** Balcony grow seed placement — per-crop tint for the procedural sapling ghost. */
+  balconyGrowTint?: string;
 };
 
 export type FpWorldPlacementPreview = {

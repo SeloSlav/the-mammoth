@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
-import { balconyGrowStageGlb } from "@the-mammoth/assets";
 import { BALCONY_GROW_TRAY_INTERACT_RADIUS_M, balconyGrowStageVisualScale } from "@the-mammoth/schemas";
 import { getMammothItemDef, mammothItemDefIsPlantableSeed } from "../../inventory/mammothItemCatalog";
 import type { Identity } from "spacetimedb";
@@ -216,12 +215,9 @@ export function syncBalconyGrowPlacementPreview(
     {
       worldPosition: _previewPosScratch,
       worldQuaternion: new THREE.Quaternion().setFromRotationMatrix(placement.trayObject.matrixWorld),
-      scale: balconyGrowStageVisualScale("seed", cropScale),
+      scale: balconyGrowStageVisualScale("sapling", cropScale),
+      balconyGrowTint: def?.balconyGrow?.stageTint ?? "#3d8b4a",
     },
     placement.valid,
   );
-}
-
-export function balconyGrowSeedPreviewGlbUrl(): string {
-  return balconyGrowStageGlb("seed");
 }
