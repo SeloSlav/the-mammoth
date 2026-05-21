@@ -61,7 +61,7 @@ describe("apartmentInteriorBakedDecorFloorShadow", () => {
     const pos = mount!.overlay.geometry.getAttribute("position");
     expect(pos).toBeDefined();
     for (let i = 0; i < pos!.count; i++) {
-      expect(pos!.getY(i)).toBeCloseTo(0.034, 4);
+      expect(pos!.getY(i)).toBeCloseTo(0.042, 4);
     }
     expect(mount!.softOverlay).toBeDefined();
     expect(mount!.softOverlays).toHaveLength(5);
@@ -98,5 +98,59 @@ describe("apartmentInteriorBakedDecorFloorShadow", () => {
       expect(mount).toBeNull();
       decor.removeFromParent();
     }
+  });
+
+  it("keeps screen emitters eligible for grounded baked shadows", () => {
+    const parent = new THREE.Group();
+    const decor = new THREE.Group();
+    decor.userData.mammothApartmentDecorModelRelPath =
+      "static/models/objects/tv.glb";
+    decor.add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(0.9, 0.7, 0.45),
+        new THREE.MeshStandardMaterial(),
+      ),
+    );
+    parent.add(decor);
+
+    const mount = syncApartmentDecorBakedFloorShadowOverlay({
+      renderer: {} as THREE.WebGPURenderer,
+      parent,
+      decorGroups: [decor],
+      floorWorldY: 0.024,
+    });
+
+    expect(mount).not.toBeNull();
+    mount!.dispose();
+  });
+
+  it("bakes simplified top-down hulls instead of flattening source triangle counts", () => {
+    const parent = new THREE.Group();
+    const decor = new THREE.Group();
+    decor.userData.mammothApartmentDecorModelRelPath =
+      "static/models/objects/sofa.glb";
+    const source = new THREE.SphereGeometry(0.65, 96, 48);
+    const mesh = new THREE.Mesh(source, new THREE.MeshStandardMaterial());
+    mesh.scale.set(1.8, 0.35, 0.9);
+    mesh.position.y = 0.4;
+    decor.add(mesh);
+    parent.add(decor);
+
+    const mount = syncApartmentDecorBakedFloorShadowOverlay({
+      renderer: {} as THREE.WebGPURenderer,
+      parent,
+      decorGroups: [decor],
+      floorWorldY: 0.024,
+    });
+
+    expect(mount).not.toBeNull();
+    const sourceTriangleCount = source.index
+      ? source.index.count / 3
+      : source.getAttribute("position").count / 3;
+    const bakedTriangleCount =
+      mount!.overlay.geometry.getAttribute("position").count / 3;
+    expect(bakedTriangleCount).toBeLessThan(sourceTriangleCount / 8);
+    expect(bakedTriangleCount).toBeLessThanOrEqual(96);
+    mount!.dispose();
   });
 });

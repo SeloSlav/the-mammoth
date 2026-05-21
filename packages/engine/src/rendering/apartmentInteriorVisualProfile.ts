@@ -16,8 +16,8 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     exterior: 0.82,
 
-    /** Dark interior ACES exposure — practicals/windows provide readable pools. */
-    interior: 0.39,
+    /** Moody interior ACES exposure — warm bounce keeps plaster readable without washing the flat. */
+    interior: 0.36,
 
   },
 
@@ -81,20 +81,20 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   interiorBounce: {
 
-    hemiSky: 0xdccab0,
+    hemiSky: 0xe8d8c0,
 
-    hemiGround: 0xdccab0,
+    hemiGround: 0xe8d8c0,
 
-    /** Minimal flat fill — practical spots + normal response carry the read. */
-    hemiIntensity: 0.058,
+    /** Warm amber wash — present in shadows, but low enough that practicals still shape the room. */
+    hemiIntensity: 0.055,
 
-    fill: 0xd7b98f,
+    fill: 0xe0c49a,
 
-    fillIntensity: 0.026,
+    fillIntensity: 0.022,
 
-    dir: 0xffd08a,
+    dir: 0xffddb0,
 
-    dirIntensity: 0.014,
+    dirIntensity: 0.012,
 
   },
 
@@ -123,8 +123,13 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     floorColor: new THREE.Color(0.7, 0.6, 0.47),
 
-    /** PMREM on shells reads as ambient — keep low so spots carve form. */
-    indirectEnvIntensity: 0.06,
+    /** Warm shell PMREM — subtle lift in shadow; keep low so practicals carve form. */
+    indirectEnvIntensity: 0.058,
+
+    /** Shadow floor on wall/ceiling — tiny; prevents ACES blue crush without flattening the room. */
+    wallCeilEmissive: new THREE.Color(1, 0.92, 0.78),
+
+    wallCeilEmissiveIntensity: 0.022,
 
     /** Boost tangent detail so lamps/windows rake plaster and parquet. */
     wallCeilNormalScale: 1.14,
@@ -141,7 +146,7 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     albedoLuminanceMin: 0.07,
 
-    albedoLuminanceMax: 0.45,
+    albedoLuminanceMax: 0.46,
 
     dielectricRoughnessMin: 0.48,
 
@@ -180,12 +185,12 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xffca84,
 
-      /** Wide omni wash — soft falloff so corners stay amber-lit, not void-black. */
-      intensity: 7.2,
+      /** Hero pool over dining — brighter core, faster falloff so the foreground can stay moody. */
+      intensity: 4.55,
 
-      distance: 8.5,
+      distance: 6.25,
 
-      decay: 1.22,
+      decay: 1.55,
 
     },
 
@@ -193,23 +198,22 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xffca86,
 
-      /** Down cone — brighter core, wide angle + soft penumbra for floor pool. */
-      intensity: 5.4,
+      intensity: 3.25,
 
-      distance: 6.8,
+      distance: 4.9,
 
       angle: Math.PI / 1.88,
 
       penumbra: 0.78,
 
-      decay: 1.25,
+      decay: 1.48,
 
-      /** Secondary omni at the fixture — fills wall/ceiling shadows away from the spot cone. */
-      washIntensity: 2.35,
+      /** Low omni wash — corners only, not a second sun. */
+      washIntensity: 1.05,
 
-      washDistance: 9.5,
+      washDistance: 6.4,
 
-      washDecay: 1.08,
+      washDecay: 1.32,
 
     },
 
@@ -217,12 +221,12 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0xffc783,
 
-      /** Open-top shade — omni point at bulb center (down + up + sideways). */
-      intensity: 3.05,
+      /** Hot local lamp pool — shade reads bright, but falloff preserves foreground occlusion. */
+      intensity: 3.75,
 
-      distance: 3.55,
+      distance: 3.75,
 
-      decay: 1.55,
+      decay: 1.72,
 
     },
 
@@ -230,7 +234,7 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0x6fa8ff,
 
-      intensity: 3.75,
+      intensity: 2.6,
 
       distance: 10.5,
 
@@ -245,7 +249,7 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
       color: 0x6fa8ff,
 
-      intensity: 3.5,
+      intensity: 2.45,
 
       distance: 8.5,
 
@@ -283,21 +287,25 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     bakedMapSize: 1024,
 
     /** Alpha of warm floor-shadow overlay (normal blend — subtle, not pitch black). */
-    bakedFloorOpacity: 0.3,
+    bakedFloorOpacity: 0.4,
 
     /** Total opacity distributed over expanded penumbra rings. */
-    bakedFloorSoftOpacity: 0.2,
+    bakedFloorSoftOpacity: 0.28,
 
     /** World-space outward expansion of the outermost penumbra mesh. */
-    bakedFloorSoftRadiusM: 0.2,
+    bakedFloorSoftRadiusM: 0.24,
 
     /** More rings make the geometry penumbra read less like a second hard edge. */
     bakedFloorSoftRings: 5,
 
     /** Warm brown shadow tint (not pure black). */
-    bakedFloorShadowTint: 0x1f1b17,
+    bakedFloorShadowTint: 0x17130f,
 
-    bakedFloorOffsetM: 0.004,
+    /** Keep overlays visibly above receiver surfaces at close camera ranges. */
+    bakedFloorOffsetM: 0.012,
+
+    /** Tiny outward spread on the core silhouette so contact remains visible around object feet. */
+    bakedFloorCoreRadiusM: 0.025,
 
     /** Optional realtime shadow map (subtle; washed out by practicals without the bake). */
     realtimeShadowMap: false,
@@ -415,7 +423,14 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
 
   const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
 
-  if (apartmentDecorEmitterKindFromModelPath(modelRelPath)) return false;
+  const emitterKind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
+  if (
+    emitterKind != null &&
+    emitterKind !== "tv" &&
+    emitterKind !== "computer"
+  ) {
+    return false;
+  }
 
   if (lower.includes("rug")) return false;
 

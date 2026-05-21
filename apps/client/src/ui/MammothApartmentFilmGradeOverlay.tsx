@@ -9,13 +9,15 @@ const overlayStyle: CSSProperties = {
   zIndex: 3,
   pointerEvents: "none",
   backgroundImage: [
-    "radial-gradient(ellipse at 50% 44%, transparent 0%, rgba(16, 10, 7, 0.06) 72%, rgba(4, 3, 3, 0.14) 100%)",
+    "radial-gradient(ellipse at 56% 42%, transparent 0%, transparent 42%, rgba(8, 5, 4, 0.1) 74%, rgba(3, 2, 2, 0.28) 100%)",
+    "linear-gradient(180deg, rgba(5, 4, 3, 0.18) 0%, transparent 32%, transparent 68%, rgba(5, 3, 2, 0.2) 100%)",
+    "linear-gradient(90deg, rgba(4, 3, 3, 0.2) 0%, transparent 24%, transparent 76%, rgba(4, 3, 3, 0.16) 100%)",
     grainSvg,
   ].join(", "),
-  backgroundSize: "100% 100%, 96px 96px",
-  backgroundPosition: "center, 0 0",
-  mixBlendMode: "soft-light",
-  opacity: 0.28,
+  backgroundSize: "100% 100%, 100% 100%, 100% 100%, 96px 96px",
+  backgroundPosition: "center, center, center, 0 0",
+  mixBlendMode: "multiply",
+  opacity: 0.42,
 };
 
 /**

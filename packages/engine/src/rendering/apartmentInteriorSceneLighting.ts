@@ -8,6 +8,10 @@ import {
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
 } from "./bindMammothApartmentDecorIndirectEnv.js";
+import {
+  apartmentInteriorShellWarmEnvFromScene,
+  MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
+} from "./apartmentInteriorWarmEnv.js";
 
 export {
   APARTMENT_INTERIOR_PREVIEW_BACKGROUND,
@@ -231,10 +235,11 @@ export function applyMammothApartmentInteriorLightLayersToGlobalRig(
   applyMammothApartmentInteriorLightLayers(rig.dir);
 }
 
-/** Shared PMREM attach — same texture path for editor layout preview and FP session. */
+/** Shared PMREM attach — decor uses neutral readable env; shells prefer warm interior env. */
 export function syncMammothApartmentInteriorMetallicEnv(input: {
   scene: THREE.Scene;
   envTexture: THREE.Texture | null;
+  shellEnvTexture?: THREE.Texture | null;
   decorRoots: readonly THREE.Object3D[];
   shellRoots: readonly THREE.Object3D[];
 }): void {
@@ -243,10 +248,19 @@ export function syncMammothApartmentInteriorMetallicEnv(input: {
   } else {
     delete input.scene.userData.mammothFpMetallicReadableEnv;
   }
+  const shellEnv =
+    input.shellEnvTexture ??
+    apartmentInteriorShellWarmEnvFromScene(input.scene) ??
+    input.envTexture;
+  if (shellEnv) {
+    input.scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD] = shellEnv;
+  } else {
+    delete input.scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD];
+  }
   for (const root of input.decorRoots) {
     bindMammothApartmentPropReadableEnv(root, input.envTexture);
   }
   for (const root of input.shellRoots) {
-    bindMammothResidentialShellIndirectEnv(root, input.envTexture);
+    bindMammothResidentialShellIndirectEnv(root, shellEnv);
   }
 }

@@ -117,14 +117,14 @@
     {
       "id": "50ff14bb-6ea8-442b-9779-0e77edf5bd58",
       "modelRelPath": "static/models/objects/rug-floor.glb",
-      "fx": 0.6131932690077545,
+      "fx": 0.610268725216,
       "fz": 0.602390347046352,
       "dy": 0.10052521870350795,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
-      "uniformScale": 2.2334062880249177,
-      "verticalScaleMul": 1,
+      "uniformScale": 2.1039045190204186,
+      "verticalScaleMul": 1.0615530637601345,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
@@ -824,6 +824,20 @@
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 0.5068560948252686,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "4849fa90-be18-4493-90a1-4d3712fcd415",
+      "modelRelPath": "static/models/objects/family-photo-2.glb",
+      "fx": 0.952125938450414,
+      "fz": 0.8868755270638613,
+      "dy": 1.0801562975909345,
+      "yawRad": -2.356194490192345,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.1430165319488383,
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"

@@ -11,6 +11,7 @@ import {
   isApartmentInteriorShellMesh,
   MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD,
 } from "./bindMammothApartmentDecorIndirectEnv.js";
+import { moodGradeMammothApartmentShellRoot } from "./apartmentDecorMoodGrade.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   mammothApartmentInteriorBlend01,
@@ -48,6 +49,7 @@ export function prepareMammothApartmentInteriorContentRoots(input: {
 }): void {
   tagMammothApartmentInteriorShellRoot(input.shellRoot);
   tagResidentialUnitInteriorMeshesUnder(input.shellRoot);
+  moodGradeMammothApartmentShellRoot(input.shellRoot);
   if (!input.decorRoot) return;
   tagResidentialUnitInteriorMeshesUnder(input.decorRoot);
   tagApartmentDecorPropMeshesForInteriorLighting(input.decorRoot);

@@ -61,6 +61,16 @@ function decorCatalogLabel(modelRelPath: string): string {
   );
 }
 
+function normalizedSearchText(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function searchHaystackMatches(haystack: readonly string[], query: string): boolean {
+  const q = normalizedSearchText(query);
+  if (!q) return true;
+  return haystack.some((value) => value.toLocaleLowerCase().includes(q));
+}
+
 /** Same hull fractions as “Import” so new pieces spawn near room center without stacking. */
 function defaultImportedDecorPlacementFractions(nextIndex: number): {
   fx: number;
@@ -165,6 +175,8 @@ export function EditorChromeMyApartment(props: {
   const [catalog, setCatalog] = useState<ApartmentDecorCatalogEntry[]>([]);
   const [catalogStatus, setCatalogStatus] = useState("Loading decor catalog...");
   const [selectedCatalogModelRelPath, setSelectedCatalogModelRelPath] = useState<string | null>(null);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+  const [placedItemsSearchQuery, setPlacedItemsSearchQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -211,6 +223,28 @@ export function EditorChromeMyApartment(props: {
   const placedItems = useMemo(
     () => [...placedItemsFromStore].sort((a, b) => a.id.localeCompare(b.id)),
     [placedItemsFromStore],
+  );
+  const filteredCatalog = useMemo(
+    () =>
+      catalog.filter((entry) =>
+        searchHaystackMatches([entry.label, entry.modelRelPath], catalogSearchQuery),
+      ),
+    [catalog, catalogSearchQuery],
+  );
+  const filteredPlacedItems = useMemo(
+    () =>
+      placedItems.filter((item) =>
+        searchHaystackMatches(
+          [
+            item.id,
+            item.modelRelPath,
+            decorCatalogLabel(item.modelRelPath),
+            item.itemKind,
+          ],
+          placedItemsSearchQuery,
+        ),
+      ),
+    [placedItems, placedItemsSearchQuery],
   );
 
   const wallTextureOptions = useMemo(
@@ -507,6 +541,13 @@ export function EditorChromeMyApartment(props: {
           model) to swap its GLB without moving it.
         </p>
         <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>{catalogStatus}</div>
+        <input
+          type="search"
+          value={catalogSearchQuery}
+          onChange={(e) => setCatalogSearchQuery(e.target.value)}
+          placeholder="Search import decor..."
+          style={{ ...editorChromeInput, width: "100%", marginTop: 8 }}
+        />
         <div
           style={{
             display: "grid",
@@ -516,30 +557,38 @@ export function EditorChromeMyApartment(props: {
             overflowY: "auto",
           }}
         >
-          {catalog.map((entry) => (
-            <button
-              key={entry.modelRelPath}
-              type="button"
-              style={{
-                ...editorChromeRowBtn,
-                textAlign: "left",
-                background:
-                  entry.modelRelPath === selectedCatalogModelRelPath ? "#355172" : "#2a2a34",
-              }}
-              onClick={() => setSelectedCatalogModelRelPath(entry.modelRelPath)}
-              onDoubleClick={() => {
-                setSelectedCatalogModelRelPath(entry.modelRelPath);
-                if (selectedDecorId) replaceSelectedDecorModel(entry.modelRelPath);
-              }}
-              title={
-                selectedDecorId
-                  ? `${entry.modelRelPath} — double-click to replace selected décor`
-                  : entry.modelRelPath
-              }
-            >
-              {entry.label}
-            </button>
-          ))}
+          {filteredCatalog.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>
+              {catalog.length === 0
+                ? "No importable decor models yet."
+                : `No import decor matches "${catalogSearchQuery}".`}
+            </div>
+          ) : (
+            filteredCatalog.map((entry) => (
+              <button
+                key={entry.modelRelPath}
+                type="button"
+                style={{
+                  ...editorChromeRowBtn,
+                  textAlign: "left",
+                  background:
+                    entry.modelRelPath === selectedCatalogModelRelPath ? "#355172" : "#2a2a34",
+                }}
+                onClick={() => setSelectedCatalogModelRelPath(entry.modelRelPath)}
+                onDoubleClick={() => {
+                  setSelectedCatalogModelRelPath(entry.modelRelPath);
+                  if (selectedDecorId) replaceSelectedDecorModel(entry.modelRelPath);
+                }}
+                title={
+                  selectedDecorId
+                    ? `${entry.modelRelPath} — double-click to replace selected décor`
+                    : entry.modelRelPath
+                }
+              >
+                {entry.label}
+              </button>
+            ))
+          )}
         </div>
         <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
           <button
@@ -721,6 +770,13 @@ export function EditorChromeMyApartment(props: {
         <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
           Placed items
         </span>
+        <input
+          type="search"
+          value={placedItemsSearchQuery}
+          onChange={(e) => setPlacedItemsSearchQuery(e.target.value)}
+          placeholder="Search placed items..."
+          style={{ ...editorChromeInput, width: "100%", marginTop: 6 }}
+        />
         <div
           style={{
             display: "grid",
@@ -732,8 +788,12 @@ export function EditorChromeMyApartment(props: {
         >
           {placedItems.length === 0 ? (
             <div style={{ fontSize: 11, opacity: 0.68 }}>No placed items yet.</div>
+          ) : filteredPlacedItems.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>
+              No placed items match "{placedItemsSearchQuery}".
+            </div>
           ) : (
-            placedItems.map((item) => {
+            filteredPlacedItems.map((item) => {
               const decorFullId = editorMyApartmentSelectedIdForDecor(item.id);
               return (
                 <button

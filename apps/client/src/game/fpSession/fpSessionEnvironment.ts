@@ -24,6 +24,8 @@ import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
+  createApartmentInteriorWarmEnvMap,
+  MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   mountMammothApartmentInteriorBounceRig,
   syncMammothApartmentInteriorViewLayers,
 } from "@the-mammoth/engine";
@@ -294,6 +296,9 @@ export function attachFpSessionEnvironment(
   const fpSessionEnvTarget = fpSessionPmrem.fromScene(new RoomEnvironment(), 0.04);
   scene.environment = null;
   scene.userData.mammothFpMetallicReadableEnv = fpSessionEnvTarget.texture;
+
+  const fpShellWarmEnvMount = createApartmentInteriorWarmEnvMap(renderer);
+  scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD] = fpShellWarmEnvMount.texture;
 
   /** Keep the global environment path disabled; selected metallic GLBs receive the PMREM directly. */
   scene.environmentIntensity = 1;
@@ -668,7 +673,9 @@ export function attachFpSessionEnvironment(
       scene.background = null;
       scene.environment = null;
       delete scene.userData.mammothFpMetallicReadableEnv;
+      delete scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD];
       fpSessionEnvTarget.dispose();
+      fpShellWarmEnvMount.dispose();
       fpSessionPmrem.dispose();
 
       scene.remove(sky);

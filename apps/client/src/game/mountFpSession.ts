@@ -23,6 +23,7 @@ import {
   bindMammothResidentialShellIndirectEnv,
   ensureMammothApartmentDecorShadowRenderer,
   MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
+  MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   prepareMammothApartmentInteriorContentRoots,
   requestWebGpuAdapter,
   webGpuAdapterSupportsTimestampQuery,
@@ -159,14 +160,16 @@ import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
   FP_VIEWMODEL_RENDER_LAYER,
-  FREE_LOOK_YAW_MAX,
-  MOUSE_SENS,
   NET_DT_SEC,
-  PITCH_LIMIT,
   DROPPED_ITEM_SUBSCRIBE_HALF_M,
   POSE_AOI_HALF,
   WORLD_SOUND_AOI_HALF,
 } from "./fpSession/fpSessionConstants.js";
+import {
+  createFpLookInertiaState,
+  resetFpLookInertia,
+  stepFpLookInertia,
+} from "./fpSession/fpSessionCameraLook.js";
 import type { DecalManager } from "../rendering/decals/DecalManager.js";
 import { isTextInputFocused } from "./isTextInputFocused.js";
 import {
@@ -284,7 +287,10 @@ export async function mountFpSession(
   prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
   const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;
   const fpEnvTex = fpReadableEnv instanceof THREE.Texture ? fpReadableEnv : null;
-  bindMammothResidentialShellIndirectEnv(buildingRoot, fpEnvTex);
+  const fpShellWarmEnv = scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD];
+  const fpShellEnvTex =
+    fpShellWarmEnv instanceof THREE.Texture ? fpShellWarmEnv : fpEnvTex;
+  bindMammothResidentialShellIndirectEnv(buildingRoot, fpShellEnvTex);
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
   const maxBuildingLevel = maxBuildingLevelIndex(building);
@@ -866,6 +872,7 @@ export async function mountFpSession(
   };
   let pendingLookDeltaX = 0;
   let pendingLookDeltaY = 0;
+  const lookInertia = createFpLookInertiaState();
   const moveIntentQueue: FpSessionMoveIntentQueue = { items: [], head: 0 };
   /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
   const MAX_PENDING_INTENTS = 30;
@@ -1048,6 +1055,7 @@ export async function mountFpSession(
     exitFpSit();
     pendingLookDeltaX = 0;
     pendingLookDeltaY = 0;
+    resetFpLookInertia(lookInertia);
     keys.clear();
     mainRaf.meleePressPending = false;
     mainRaf.primaryAttackHeld = false;
@@ -1079,6 +1087,7 @@ export async function mountFpSession(
       commitFreeLookIntoBodyYaw();
       pendingLookDeltaX = 0;
       pendingLookDeltaY = 0;
+      resetFpLookInertia(lookInertia);
       mainRaf.meleePressPending = false;
       mainRaf.primaryAttackHeld = false;
     }
@@ -1113,6 +1122,7 @@ export async function mountFpSession(
     mainRaf.bodyYaw = row.yaw;
     _displayOffset.set(0, 0, 0);
     mainRaf.fpRigViewSmoothedReady = false;
+    resetFpLookInertia(lookInertia);
     loco.velocity.set(row.velX, row.velY, row.velZ);
     loco.grounded = row.grounded !== 0;
     intentSeq.current = serverSeq;
@@ -1138,6 +1148,7 @@ export async function mountFpSession(
       mainRaf.bodyYaw = row.yaw;
       _displayOffset.set(0, 0, 0);
       mainRaf.fpRigViewSmoothedReady = false;
+      resetFpLookInertia(lookInertia);
       loco.velocity.set(row.velX, row.velY, row.velZ);
       loco.grounded = row.grounded !== 0;
       spawnSynced = true;
@@ -1477,6 +1488,7 @@ export async function mountFpSession(
     keys.delete(e.code);
     if (e.code === "AltLeft" || e.code === "AltRight") {
       mainRaf.headLookYaw = 0;
+      resetFpLookInertia(lookInertia);
     }
   };
 
@@ -1658,20 +1670,17 @@ export async function mountFpSession(
     if (loadDbg) rafDiagFrames += 1;
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
-    if (pendingLookDeltaX !== 0 || pendingLookDeltaY !== 0) {
+    if (document.pointerLockElement === canvas && !fpAuthoringActiveRef.active) {
       const sitActive = isFpSitActive();
       const freeLook = sitActive || keys.has("AltLeft") || keys.has("AltRight");
-      if (freeLook) {
-        mainRaf.headLookYaw -= pendingLookDeltaX * MOUSE_SENS;
-        mainRaf.headLookYaw = Math.max(
-          -FREE_LOOK_YAW_MAX,
-          Math.min(FREE_LOOK_YAW_MAX, mainRaf.headLookYaw),
-        );
-      } else {
-        mainRaf.bodyYaw -= pendingLookDeltaX * MOUSE_SENS;
-      }
-      mainRaf.pitch -= pendingLookDeltaY * MOUSE_SENS;
-      mainRaf.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, mainRaf.pitch));
+      stepFpLookInertia(
+        lookInertia,
+        mainRaf,
+        pendingLookDeltaX,
+        pendingLookDeltaY,
+        dt,
+        { freeLook },
+      );
       pendingLookDeltaX = 0;
       pendingLookDeltaY = 0;
     }

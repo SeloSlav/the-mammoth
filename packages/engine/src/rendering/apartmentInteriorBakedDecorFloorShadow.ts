@@ -15,6 +15,15 @@ const _parentInvScratch = new THREE.Matrix4();
 const _meshWorldScratch = new THREE.Matrix4();
 const _decorBoundsScratch = new THREE.Box3();
 const _decorCenterScratch = new THREE.Vector3();
+const _shadowPointScratch = new THREE.Vector3();
+
+type ShadowPoint2 = {
+  x: number;
+  z: number;
+};
+
+const SHADOW_POINT_QUANTIZE_M = 0.025;
+const MAX_SHADOW_HULL_POINTS = 96;
 
 export type ApartmentDecorBakedFloorShadowMount = {
   overlay: THREE.Mesh;
@@ -35,40 +44,112 @@ function eligibleDecorGroups(decorGroups: readonly THREE.Object3D[]): THREE.Obje
   return out;
 }
 
-function cloneDecorGeometryForFloorShadow(
+function cross2(o: ShadowPoint2, a: ShadowPoint2, b: ShadowPoint2): number {
+  return (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+}
+
+function convexHull2(points: ShadowPoint2[]): ShadowPoint2[] {
+  if (points.length <= 3) return points;
+  points.sort((a, b) => (a.x === b.x ? a.z - b.z : a.x - b.x));
+  const lower: ShadowPoint2[] = [];
+  for (const p of points) {
+    while (
+      lower.length >= 2 &&
+      cross2(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0
+    ) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+  const upper: ShadowPoint2[] = [];
+  for (let i = points.length - 1; i >= 0; i--) {
+    const p = points[i]!;
+    while (
+      upper.length >= 2 &&
+      cross2(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0
+    ) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+function decimateHull(points: ShadowPoint2[], maxPoints: number): ShadowPoint2[] {
+  if (points.length <= maxPoints) return points;
+  const out: ShadowPoint2[] = [];
+  const step = points.length / maxPoints;
+  for (let i = 0; i < maxPoints; i++) {
+    out.push(points[Math.floor(i * step)]!);
+  }
+  return out;
+}
+
+function projectedHullGeometryForFloorShadow(
   geometry: THREE.BufferGeometry,
   meshWorld: THREE.Matrix4,
   shadowWorldY: number,
   parentWorldInv: THREE.Matrix4,
   softenRadiusM = 0,
   softenCenterWorld?: THREE.Vector3,
-): THREE.BufferGeometry {
-  let geo = geometry.clone();
-  if (geo.index) {
-    const nonIndexed = geo.toNonIndexed();
-    geo.dispose();
-    geo = nonIndexed;
-  }
-  geo.applyMatrix4(meshWorld);
-  const position = geo.getAttribute("position");
+): THREE.BufferGeometry | null {
+  const position = geometry.getAttribute("position");
   if (!position) {
-    geo.dispose();
     throw new Error("decor floor shadow geometry missing position attribute");
   }
+  const unique = new Map<string, ShadowPoint2>();
   for (let i = 0; i < position.count; i++) {
+    _shadowPointScratch
+      .set(position.getX(i), position.getY(i), position.getZ(i))
+      .applyMatrix4(meshWorld);
+    let x = _shadowPointScratch.x;
+    let z = _shadowPointScratch.z;
     if (softenRadiusM > 0 && softenCenterWorld) {
-      const dx = position.getX(i) - softenCenterWorld.x;
-      const dz = position.getZ(i) - softenCenterWorld.z;
+      const dx = x - softenCenterWorld.x;
+      const dz = z - softenCenterWorld.z;
       const len = Math.hypot(dx, dz);
       if (len > 1e-5) {
-        position.setX(i, position.getX(i) + (dx / len) * softenRadiusM);
-        position.setZ(i, position.getZ(i) + (dz / len) * softenRadiusM);
+        x += (dx / len) * softenRadiusM;
+        z += (dz / len) * softenRadiusM;
       }
     }
-    position.setY(i, shadowWorldY);
+    const qx = Math.round(x / SHADOW_POINT_QUANTIZE_M);
+    const qz = Math.round(z / SHADOW_POINT_QUANTIZE_M);
+    unique.set(`${qx},${qz}`, {
+      x: qx * SHADOW_POINT_QUANTIZE_M,
+      z: qz * SHADOW_POINT_QUANTIZE_M,
+    });
   }
-  position.needsUpdate = true;
-  geo.applyMatrix4(parentWorldInv);
+
+  const hull = decimateHull(convexHull2([...unique.values()]), MAX_SHADOW_HULL_POINTS);
+  if (hull.length < 3) return null;
+
+  let centerX = 0;
+  let centerZ = 0;
+  for (const p of hull) {
+    centerX += p.x;
+    centerZ += p.z;
+  }
+  centerX /= hull.length;
+  centerZ /= hull.length;
+
+  const vertices: number[] = [];
+  const pushParentLocal = (x: number, z: number): void => {
+    _shadowPointScratch.set(x, shadowWorldY, z).applyMatrix4(parentWorldInv);
+    vertices.push(_shadowPointScratch.x, _shadowPointScratch.y, _shadowPointScratch.z);
+  };
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i]!;
+    const b = hull[(i + 1) % hull.length]!;
+    pushParentLocal(centerX, centerZ);
+    pushParentLocal(a.x, a.z);
+    pushParentLocal(b.x, b.z);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();
   return geo;
@@ -101,16 +182,15 @@ function collectDecorFloorShadowGeometries(input: {
 
       obj.updateWorldMatrix(true, false);
       _meshWorldScratch.copy(obj.matrixWorld);
-      geos.push(
-        cloneDecorGeometryForFloorShadow(
-          obj.geometry as THREE.BufferGeometry,
-          _meshWorldScratch,
-          shadowWorldY,
-          _parentInvScratch,
-          input.softenRadiusM ?? 0,
-          _decorCenterScratch,
-        ),
+      const geo = projectedHullGeometryForFloorShadow(
+        obj.geometry as THREE.BufferGeometry,
+        _meshWorldScratch,
+        shadowWorldY,
+        _parentInvScratch,
+        input.softenRadiusM ?? 0,
+        _decorCenterScratch,
       );
+      if (geo) geos.push(geo);
     });
   }
   return geos;
@@ -122,13 +202,14 @@ function createFloorShadowOverlayMaterial(
 ): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
     color: tintHex,
+    side: THREE.DoubleSide,
     transparent: true,
     opacity,
     depthWrite: false,
     depthTest: true,
     polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
+    polygonOffsetFactor: -12,
+    polygonOffsetUnits: -12,
     toneMapped: false,
   });
 }
@@ -200,6 +281,7 @@ export function syncApartmentDecorBakedFloorShadowOverlay(input: {
     parent: input.parent,
     floorWorldY,
     floorOffsetM: cfg.bakedFloorOffsetM,
+    softenRadiusM: cfg.bakedFloorCoreRadiusM,
   });
   if (geos.length === 0) {
     return null;

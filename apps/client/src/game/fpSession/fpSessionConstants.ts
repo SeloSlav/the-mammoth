@@ -43,6 +43,10 @@ export const DROPPED_ITEM_SUBSCRIBE_HALF_M = Math.max(POSE_AOI_HALF, 150);
 /** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
 export const POSE_AOI_RECENTER = 14;
 export const MOUSE_SENS = 0.0022;
+/** Fraction of a turn that bleeds into post-flick coast velocity. */
+export const LOOK_INERTIA_COAST_GAIN = 0.28;
+/** Exponential decay rate (1/s) for look coast velocity — lower = longer tail after flicks. */
+export const LOOK_INERTIA_DAMP_PER_S = 10;
 /** ~88° — enough to scan hoistway tops without going full flip. */
 export const PITCH_LIMIT = 1.53;
 /** Alt free-look: head yaw relative to body (radians, clamped per side; ~±135°, not full 180°). */

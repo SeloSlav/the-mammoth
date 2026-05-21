@@ -178,6 +178,7 @@ export {
   bindMammothApartmentDecorIndirectEnv,
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
+  apartmentInteriorShellMoodSlot,
   isApartmentInteriorShellMesh,
   MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD,
 } from "./rendering/bindMammothApartmentDecorIndirectEnv.js";
@@ -229,8 +230,16 @@ export {
   moodGradeMammothApartmentDecorMesh,
   moodGradeMammothApartmentShellMaterial,
   moodGradeMammothApartmentShellMesh,
+  moodGradeMammothApartmentShellRoot,
   MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD,
+  MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD,
 } from "./rendering/apartmentDecorMoodGrade.js";
+export {
+  createApartmentInteriorWarmEnvMap,
+  apartmentInteriorShellWarmEnvFromScene,
+  MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
+  type ApartmentInteriorWarmEnvMount,
+} from "./rendering/apartmentInteriorWarmEnv.js";
 export {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   mammothApartmentInteriorBlend01,

@@ -18,9 +18,26 @@ export function isApartmentInteriorShellMesh(mesh: THREE.Mesh): boolean {
   const name = mesh.name;
   return (
     name.startsWith("shell_wall_") ||
+    name.startsWith("shell_ceiling") ||
+    name.startsWith("shell_floor") ||
     name.startsWith("editor_ref_shell_wall_") ||
     name === "editor_owned_apartment_floor"
   );
+}
+
+/** Wall/ceiling plaster vs parquet for shell mood grading. */
+export function apartmentInteriorShellMoodSlot(
+  mesh: THREE.Mesh,
+): "wallCeil" | "floor" | null {
+  if (!isApartmentInteriorShellMesh(mesh)) return null;
+  const name = mesh.name;
+  if (
+    name.startsWith("shell_floor") ||
+    name === "editor_owned_apartment_floor"
+  ) {
+    return "floor";
+  }
+  return "wallCeil";
 }
 
 /**

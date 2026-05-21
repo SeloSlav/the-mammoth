@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { MAMMOTH_APARTMENT_DECOR_PROP_LAYER } from "./apartmentInteriorLayers.js";
+import {
+  isApartmentInteriorShellMesh,
+  apartmentInteriorShellMoodSlot,
+} from "./bindMammothApartmentDecorIndirectEnv.js";
 import { apartmentStandingLampShadeBulbWorldPosition } from "./apartmentStandingLampShadeBulb.js";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
 import { upgradeApartmentDecorMaterialToStandard } from "./apartmentDecorMaterialUpgrade.js";
@@ -151,7 +155,7 @@ export function attachApartmentWarmFixtureBulbGlow(
     new THREE.MeshStandardMaterial({
       color: 0xfff8f2,
       emissive: 0xfff6ee,
-      emissiveIntensity: 2.75,
+      emissiveIntensity: 3.35,
       roughness: 0.26,
       metalness: 0,
       toneMapped: false,
@@ -179,10 +183,18 @@ export function moodGradeMammothApartmentShellMaterial(
   const shell = APARTMENT_INTERIOR_VISUAL_PROFILE.shell;
   const tint = slot === "floor" ? shell.floorColor : shell.wallCeilColor;
   material.color.multiply(tint);
+  if (slot === "wallCeil") {
+    material.emissive.copy(shell.wallCeilEmissive);
+    material.emissiveIntensity = shell.wallCeilEmissiveIntensity;
+  } else {
+    material.emissive.setHex(0x000000);
+    material.emissiveIntensity = 1;
+  }
   if (material.normalMap) {
     const scale = slot === "floor" ? shell.floorNormalScale : shell.wallCeilNormalScale;
     material.normalScale.set(scale, scale);
   }
+  material.needsUpdate = true;
 }
 
 export function moodGradeMammothApartmentShellMesh(
@@ -191,8 +203,35 @@ export function moodGradeMammothApartmentShellMesh(
 ): void {
   const material = mesh.material;
   if (Array.isArray(material)) {
-    for (const m of material) moodGradeMammothApartmentShellMaterial(m, slot);
-  } else {
-    moodGradeMammothApartmentShellMaterial(material, slot);
+    const graded = material.map((mat) => {
+      if (!(mat instanceof THREE.MeshStandardMaterial)) return mat;
+      const clone = mat.clone();
+      moodGradeMammothApartmentShellMaterial(clone, slot);
+      return clone;
+    });
+    mesh.material = graded;
+    return;
   }
+  if (material instanceof THREE.MeshStandardMaterial) {
+    const clone = material.clone();
+    moodGradeMammothApartmentShellMaterial(clone, slot);
+    mesh.material = clone;
+    return;
+  }
+  moodGradeMammothApartmentShellMaterial(material, slot);
+}
+
+export const MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD = "mammothApartmentShellMoodGraded";
+
+/** Apply profile shell tint + warm emissive floor once per interior shell mesh. */
+export function moodGradeMammothApartmentShellRoot(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (!isApartmentInteriorShellMesh(obj)) return;
+    if (obj.userData[MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD] === true) return;
+    const slot = apartmentInteriorShellMoodSlot(obj);
+    if (!slot) return;
+    moodGradeMammothApartmentShellMesh(obj, slot);
+    obj.userData[MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD] = true;
+  });
 }

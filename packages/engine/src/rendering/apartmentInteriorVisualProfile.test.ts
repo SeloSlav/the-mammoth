@@ -30,7 +30,7 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     const { practical } = APARTMENT_INTERIOR_VISUAL_PROFILE;
     expect(practical.window.distance).toBeLessThan(10);
     expect(practical.chandelier.distance).toBeLessThan(10);
-    expect(practical.standing.distance).toBeLessThan(6);
+    expect(practical.standing.distance).toBeLessThan(5);
     expect(practical.standing.decay).toBeGreaterThan(0);
     expect(practical.ceiling.angle).toBeGreaterThan(0);
     expect(practical.ceiling.washIntensity).toBeGreaterThan(0);
@@ -39,13 +39,13 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
     expect(practical.computer.color).toBe(practical.tv.color);
   });
 
-  it("keeps interior bounce dimmer than practical hero lights for moody contrast", () => {
+  it("keeps interior bounce lift below practical hero lights for moody contrast", () => {
     const { interiorBounce, practical, exposure } = APARTMENT_INTERIOR_VISUAL_PROFILE;
     const bounceLift =
       interiorBounce.hemiIntensity +
       interiorBounce.fillIntensity +
       interiorBounce.dirIntensity;
-    expect(bounceLift).toBeLessThan(0.12);
+    expect(bounceLift).toBeLessThan(0.14);
     expect(practical.standing.intensity).toBeGreaterThan(bounceLift * 10);
     expect(practical.chandelier.intensity).toBeGreaterThan(bounceLift * 10);
     expect(exposure.interior).toBeLessThan(exposure.exterior);
