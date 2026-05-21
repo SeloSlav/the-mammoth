@@ -12,6 +12,17 @@ import { readDecorVisualLocalBounds } from "../fpApartment/fpApartmentInteractio
 
 const _boundsScratch = new THREE.Box3();
 const _sizeScratch = new THREE.Vector3();
+const _seedGeometry = new THREE.SphereGeometry(0.025, 8, 6);
+const _stemGeometry = new THREE.CylinderGeometry(0.012, 0.018, 1, 6);
+const _leafGeometry = new THREE.SphereGeometry(0.05, 8, 6);
+
+const SEED_OFFSETS: readonly [number, number, number][] = [
+  [-0.045, 0.012, -0.025],
+  [-0.012, 0.016, 0.018],
+  [0.026, 0.013, -0.016],
+  [0.052, 0.014, 0.025],
+  [0.006, 0.019, -0.048],
+];
 
 /** Probe merged tray decor for the soil rim height in tray-local space. */
 export function probeGrowTraySoilLocalY(decorGroup: THREE.Object3D): number {
@@ -92,6 +103,99 @@ export function mountBalconyGrowStageVisual(
   });
   holder.add(vis);
   return vis;
+}
+
+/** Small procedural seed cluster; avoids using the plant GLB for the just-planted stage. */
+export function mountBalconyGrowSeedVisual(
+  holder: THREE.Group,
+  stageScale: number,
+  tint: string,
+): THREE.Object3D {
+  const group = new THREE.Group();
+  group.name = "grow_stage_seed_cluster";
+  const tintColor = new THREE.Color(tint);
+  const seedColor = new THREE.Color(0x9a7b4f).lerp(tintColor, 0.16);
+  const scale = Math.max(0.72, stageScale / 0.14);
+
+  for (let i = 0; i < SEED_OFFSETS.length; i++) {
+    const seed = new THREE.Mesh(
+      _seedGeometry,
+      new THREE.MeshStandardMaterial({
+        color: seedColor,
+        roughness: 0.92,
+        metalness: 0,
+      }),
+    );
+    const [x, y, z] = SEED_OFFSETS[i]!;
+    seed.position.set(x * scale, y * scale, z * scale);
+    seed.scale.set(1.0 * scale, 0.48 * scale, 0.72 * scale);
+    seed.rotation.set(0.4 + i * 0.31, i * 0.73, 0.2 - i * 0.17);
+    group.add(seed);
+  }
+
+  holder.add(group);
+  return group;
+}
+
+/** Low-poly plant silhouette for grow stages; cheaper and clearer than reusing one GLB. */
+export function mountBalconyGrowPlantVisual(
+  holder: THREE.Group,
+  stage: Exclude<BalconyGrowStage, "seed">,
+  stageScale: number,
+  tint: string,
+  matureGlow: boolean,
+): THREE.Object3D {
+  const group = new THREE.Group();
+  group.name = `grow_stage_${stage}_procedural`;
+  const scale = Math.max(0.72, stageScale / 0.2);
+  const tintColor = new THREE.Color(tint);
+  const stemColor = new THREE.Color(0x315f2f).lerp(tintColor, 0.25);
+  const leafColor = new THREE.Color(0x4f9b45).lerp(tintColor, 0.55);
+  const stageSpec = {
+    sapling: { stems: 2, height: 0.18, leaf: 0.78 },
+    mid: { stems: 4, height: 0.3, leaf: 1.05 },
+    mature: { stems: 5, height: 0.4, leaf: 1.26 },
+  }[stage];
+
+  for (let i = 0; i < stageSpec.stems; i++) {
+    const angle = (i / stageSpec.stems) * Math.PI * 2 + 0.35;
+    const lean = stage === "sapling" ? 0.018 : 0.032;
+    const height = stageSpec.height * scale * (0.88 + i * 0.045);
+    const stem = new THREE.Mesh(
+      _stemGeometry,
+      new THREE.MeshStandardMaterial({
+        color: stemColor,
+        roughness: 0.86,
+        metalness: 0,
+      }),
+    );
+    stem.position.set(Math.cos(angle) * lean * scale, height * 0.5, Math.sin(angle) * lean * scale);
+    stem.scale.set(0.72 * scale, height, 0.72 * scale);
+    stem.rotation.set(Math.sin(angle) * 0.18, 0, Math.cos(angle) * -0.18);
+    group.add(stem);
+
+    const leaf = new THREE.Mesh(
+      _leafGeometry,
+      new THREE.MeshStandardMaterial({
+        color: leafColor,
+        roughness: 0.8,
+        metalness: 0,
+        emissive: matureGlow ? tintColor : new THREE.Color(0x000000),
+        emissiveIntensity: matureGlow ? 0.08 : 0,
+      }),
+    );
+    leaf.position.set(
+      Math.cos(angle) * (0.045 + lean) * scale,
+      height * (0.82 + (i % 2) * 0.08),
+      Math.sin(angle) * (0.045 + lean) * scale,
+    );
+    leaf.scale.set(0.75 * stageSpec.leaf * scale, 0.18 * stageSpec.leaf * scale, 0.38 * stageSpec.leaf * scale);
+    leaf.rotation.set(0.45, angle, i % 2 === 0 ? 0.38 : -0.38);
+    group.add(leaf);
+  }
+
+  holder.add(group);
+  return group;
 }
 
 export function balconyGrowSlotWorldPosition(

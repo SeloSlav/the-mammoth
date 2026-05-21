@@ -508,7 +508,6 @@ export function mountFpApartmentDecorMeshes(opts: {
   const growPlantPickMeshes: THREE.Mesh[] = [];
   const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
   const growTrayIndexByUnit = new Map<string, number>();
-  const stageTemplateCache = new Map<string, THREE.Object3D>();
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleGrowPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
@@ -1061,7 +1060,6 @@ export function mountFpApartmentDecorMeshes(opts: {
             trayBuiltinId: trayId,
             pickGeometry: stashPickGeometry,
             pickMaterial: stashPickMaterial,
-            loader: gltfLoader,
           });
           growTrayPickMeshes.push(...mount.growTrayPickMeshes);
           growSlotPickMeshes.push(...mount.growSlotPickMeshes);
@@ -1313,21 +1311,17 @@ export function mountFpApartmentDecorMeshes(opts: {
       );
     },
     syncBalconyGrowSlotVisuals: (plants, trays, stashHasFertilizer) => {
-      void (async () => {
-        for (const [trayId, slotGroup] of growSlotVisualsByTrayId) {
-          const tray = trays.find((t) => t.trayId === trayId);
-          const unitKey = tray?.unitKey ?? "";
-          await syncGrowSlotVisuals(
-            slotGroup,
-            plants,
-            trayId,
-            tray?.waterLiters ?? 0,
-            stashHasFertilizer(unitKey, trayId),
-            gltfLoader,
-            stageTemplateCache,
-          );
-        }
-      })();
+      for (const [trayId, slotGroup] of growSlotVisualsByTrayId) {
+        const tray = trays.find((t) => t.trayId === trayId);
+        const unitKey = tray?.unitKey ?? "";
+        syncGrowSlotVisuals(
+          slotGroup,
+          plants,
+          trayId,
+          tray?.waterLiters ?? 0,
+          stashHasFertilizer(unitKey, trayId),
+        );
+      }
     },
     syncBalconyGrowTrayDecorVisibility: (feet, unitKey) => {
       syncBalconyGrowTrayDecorVisibility(feet, unitKey, growSlotVisualsByTrayId);

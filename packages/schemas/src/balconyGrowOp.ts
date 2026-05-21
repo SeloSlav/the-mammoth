@@ -154,6 +154,6 @@ export function balconyGrowSpeedModifier(opts: {
 export function balconyGrowStageFromProgress(progress: number): BalconyGrowStage {
   if (progress >= 1) return "mature";
   if (progress >= 0.66) return "mid";
-  if (progress >= 0.2) return "sapling";
+  if (progress > 0) return "sapling";
   return "seed";
 }

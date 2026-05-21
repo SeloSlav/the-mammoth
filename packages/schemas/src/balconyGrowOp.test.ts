@@ -52,6 +52,7 @@ describe("balconyGrowOp", () => {
 
   it("maps progress to stage labels", () => {
     expect(balconyGrowStageFromProgress(0)).toBe("seed");
+    expect(balconyGrowStageFromProgress(0.01)).toBe("sapling");
     expect(balconyGrowStageFromProgress(0.25)).toBe("sapling");
     expect(balconyGrowStageFromProgress(0.7)).toBe("mid");
     expect(balconyGrowStageFromProgress(1)).toBe("mature");
