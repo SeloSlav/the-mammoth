@@ -62,15 +62,21 @@ import {
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
 import type { FpCabMirrorCollection } from "../fpRendering/fpCabMirrorCollection.js";
 import { yieldToMain } from "../fpSession/yieldToMain.js";
-import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
+import { isFpDebugRenderIsolationEnabled, subscribeFpDebugRenderIsolation } from "../fpDebugRenderIsolation.js";
 import {
   apartmentDecorEmitterKindFromModelPath,
   bindMammothApartmentPropReadableEnv,
   moodGradeMammothApartmentDecorMesh,
   attachApartmentWarmFixtureBulbGlow,
+  applyApartmentDecorCastShadowFlags,
+  applyApartmentInteriorFloorReceiveShadowUnder,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
   resolveStaticModelFetchUrl,
+  syncApartmentDecorShadowRig,
+  syncApartmentDecorBakedFloorShadowOverlay,
   syncApartmentInteriorPracticalLighting,
+  type ApartmentDecorBakedFloorShadowMount,
+  type ApartmentDecorShadowRigMount,
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
@@ -424,8 +430,10 @@ export function mountFpApartmentDecorMeshes(opts: {
   scene: THREE.Scene;
   conn: DbConnection;
   buildingRoot: THREE.Group;
+  renderer: THREE.WebGPURenderer;
   cabMirrorCollection?: FpCabMirrorCollection;
   onRebuilt?: () => void;
+  onRequestShadowMapUpdate?: () => void;
 }): MountFpApartmentDecorMeshesResult {
   const root = new THREE.Group();
   root.name = "apartment_unit_decor_root";
@@ -458,6 +466,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   let buildEpoch = 0;
   let buildRaf = 0;
   let practicalLightsMount: ApartmentPracticalLightsMount | null = null;
+  let decorShadowRig: ApartmentDecorShadowRigMount | null = null;
+  let bakedFloorShadowMount: ApartmentDecorBakedFloorShadowMount | null = null;
   let practicalLightsUnitKey: string | null = null;
   let practicalLightsContextUnitKey: string | null = null;
   let practicalLightsMasterEnabled: boolean | null = null;
@@ -500,10 +510,24 @@ export function mountFpApartmentDecorMeshes(opts: {
     root.remove(g);
   };
 
-  const clearInteriorLighting = (): void => {
+  applyApartmentInteriorFloorReceiveShadowUnder(opts.buildingRoot);
+
+  const clearPracticalLightsOnly = (): void => {
     practicalLightsMount?.dispose();
     practicalLightsMount = null;
     practicalLightsUnitKey = null;
+    decorShadowRig?.dispose();
+    decorShadowRig = null;
+  };
+
+  const clearBakedFloorShadowOnly = (): void => {
+    bakedFloorShadowMount?.dispose();
+    bakedFloorShadowMount = null;
+  };
+
+  const clearInteriorLighting = (): void => {
+    clearPracticalLightsOnly();
+    clearBakedFloorShadowOnly();
   };
 
   const unitBoundsForKey = (unitKey: string): ApartmentUnitWorldBounds | null => {
@@ -531,6 +555,47 @@ export function mountFpApartmentDecorMeshes(opts: {
     return out;
   };
 
+  const resyncDecorShadowsForUnit = (containingUnitKey: string | null): void => {
+    const decorGroups = decorGroupsForUnit(containingUnitKey);
+    decorShadowRig = syncApartmentDecorShadowRig({
+      lightParent: opts.buildingRoot,
+      decorGroups,
+      unitBounds: containingUnitKey
+        ? (unitBoundsForKey(containingUnitKey) ?? undefined)
+        : undefined,
+      previous: decorShadowRig,
+    });
+
+    const decorVisible = isFpDebugRenderIsolationEnabled("apartmentDecor");
+    const floorShadowsVisible = isFpDebugRenderIsolationEnabled("apartmentDecorFloorShadows");
+    if (!decorVisible || !floorShadowsVisible || !containingUnitKey) {
+      clearBakedFloorShadowOnly();
+    } else {
+      const bounds = unitBoundsForKey(containingUnitKey);
+      try {
+        bakedFloorShadowMount = syncApartmentDecorBakedFloorShadowOverlay({
+          renderer: opts.renderer,
+          parent: opts.buildingRoot,
+          decorGroups,
+          unitBounds: bounds ?? undefined,
+          unitKey: containingUnitKey,
+          floorWorldY:
+            bounds !== null
+              ? bounds.minY + APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.bakedFloorOffsetM
+              : undefined,
+          previous: bakedFloorShadowMount,
+        });
+      } catch (err: unknown) {
+        clearBakedFloorShadowOnly();
+        console.warn("[fp] apartment baked floor shadow failed:", err);
+      }
+    }
+
+    if (decorShadowRig) {
+      opts.onRequestShadowMapUpdate?.();
+    }
+  };
+
   const syncPracticalLightsForUnit = (
     containingUnitKey: string | null,
     force = false,
@@ -544,11 +609,12 @@ export function mountFpApartmentDecorMeshes(opts: {
 
     if (!masterEnabled || !containingUnitKey) {
       if (practicalLightsMount !== null || practicalLightsUnitKey !== null) {
-        clearInteriorLighting();
+        clearPracticalLightsOnly();
       }
       practicalLightsUnitKey = containingUnitKey;
       practicalLightsMasterEnabled = masterEnabled;
       practicalLightsDecorEnabled = decorFixtureLightsEnabled;
+      resyncDecorShadowsForUnit(containingUnitKey);
       return;
     }
 
@@ -576,6 +642,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         : [],
       previous: practicalLightsMount,
     });
+    resyncDecorShadowsForUnit(containingUnitKey);
   };
 
   const clearAll = () => {
@@ -829,14 +896,11 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           moodGradeMammothApartmentDecorMesh(o, { modelRelPath: d.modelRelPath });
-          o.castShadow = false;
-          o.receiveShadow = false;
           o.frustumCulled = true;
           o.userData.mammothUnitInterior = true;
           o.userData.mammothPlateLevelIndex = d.unit.level;
         }
       });
-
       vis.position.set(0, 0, 0);
       vis.rotation.set(0, 0, 0);
       vis.scale.setScalar(ownedApartmentPlacedItemAuthoringAssetVisScale(d.placedKind));
@@ -906,6 +970,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       tagApartmentDecorGroupVisibilityMetadata(g);
       tagResidentialUnitInteriorMeshesUnder(g);
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
+      applyApartmentDecorCastShadowFlags(g, d.modelRelPath);
 
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);
@@ -952,6 +1017,12 @@ export function mountFpApartmentDecorMeshes(opts: {
   opts.conn.db.apartment_unit.onUpdate(onUnitUpdateForDecor);
 
   scheduleRebuild();
+
+  const unsubRenderIsolation = subscribeFpDebugRenderIsolation(() => {
+    if (disposed) return;
+    resyncDecorShadowsForUnit(practicalLightsContextUnitKey);
+    opts.onRebuilt?.();
+  });
 
   return {
     getDecorObject: (decorId) => groupByDecorId.get(decorId),
@@ -1101,6 +1172,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       stashPickGeometry.dispose();
       stashPickMaterial.dispose();
       clearInteriorLighting();
+      unsubRenderIsolation();
       opts.buildingRoot.remove(root);
     },
   };

@@ -6,11 +6,15 @@ import {
   moodGradeMammothApartmentDecorMesh,
   attachApartmentWarmFixtureBulbGlow,
   APARTMENT_INTERIOR_VISUAL_PROFILE,
-  apartmentDecorContactShadowEligible,
-  attachApartmentDecorContactShadow,
+  applyApartmentDecorCastShadowFlags,
+  applyApartmentInteriorFloorReceiveShadowUnder,
   disposeLeakedApartmentDecorContactShadows,
+  syncApartmentDecorShadowRig,
+  syncApartmentDecorBakedFloorShadowOverlay,
   syncApartmentInteriorPracticalLighting,
   prepareMammothApartmentInteriorContentRoots,
+  type ApartmentDecorBakedFloorShadowMount,
+  type ApartmentDecorShadowRigMount,
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
@@ -61,6 +65,7 @@ import {
   parseMyApartmentLayoutWallOpeningSelectedId,
 } from "./editorMyApartmentSelection.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
+import { getEditorMyApartmentDecorShadowRenderer } from "./editorMyApartmentPieceGroupBridge.js";
 import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
 import { ownedApartmentWallPlacementFieldsEqual } from "./preserveOwnedApartmentMountPlacementRefs.js";
 
@@ -77,13 +82,14 @@ export function apartmentUnitBoundsFromAuthoringFractionMapping(
     typeof spans.slabFootprintSx === "number" && spans.slabFootprintSx > spans.prefabFootprintSx
       ? spans.slabFootprintSx
       : spans.prefabFootprintSx;
+  /** Authoring shell root is at origin — decor XZ is `[0, footprint]`, not floor-doc world coords. */
   return {
-    minX: spans.prefabOriginX,
-    maxX: spans.prefabOriginX + slabSx,
+    minX: 0,
+    maxX: slabSx,
     minY: EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
     maxY,
-    minZ: spans.prefabOriginZ,
-    maxZ: spans.prefabOriginZ + spans.prefabFootprintSz,
+    minZ: 0,
+    maxZ: spans.prefabFootprintSz,
   };
 }
 
@@ -770,8 +776,6 @@ function cloneProp(template: THREE.Object3D, modelRelPath: string): THREE.Object
   r.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       moodGradeMammothApartmentDecorMesh(o, { modelRelPath });
-      o.castShadow = false;
-      o.receiveShadow = false;
     }
   });
   attachApartmentWarmFixtureBulbGlow(r, modelRelPath);
@@ -1073,23 +1077,28 @@ function placeDecorGroup(args: {
   group.add(vis);
   centerDecorVisualBoundsOnRoot(group);
   clampMyApartmentDecorEulerLimits(group);
+  applyApartmentDecorCastShadowFlags(group, decor.modelRelPath);
+}
 
-  if (apartmentDecorContactShadowEligible(decor.modelRelPath)) {
-    attachApartmentDecorContactShadow(
-      group,
-      EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
-    );
-  }
+function editorMyApartmentDecorGroups(
+  selectionGroups: Record<string, THREE.Group>,
+): THREE.Group[] {
+  return Object.values(selectionGroups).filter(
+    (group) => typeof group.userData.mammothApartmentDecorModelRelPath === "string",
+  );
 }
 
 export type EditorMyApartmentFurnitureMount = {
   root: THREE.Group;
   selectionGroups: Record<string, THREE.Group>;
   practicalLights: ApartmentPracticalLightsMount | null;
+  decorShadowRig: ApartmentDecorShadowRigMount | null;
+  bakedFloorShadowMount: ApartmentDecorBakedFloorShadowMount | null;
   resyncPracticalLights: (
     windowScanRoot: THREE.Object3D,
     unitBounds?: ApartmentUnitWorldBounds,
   ) => void;
+  resyncDecorShadows: (unitBounds?: ApartmentUnitWorldBounds) => void;
   dispose: () => void;
   /** Wall ids currently represented in `selectionGroups` (incremental sync). */
   mountedWallIds: Set<string>;
@@ -1328,6 +1337,40 @@ export function mountEditorMyApartmentFurnitureUnder(
   }
 
   let practicalLights: ApartmentPracticalLightsMount | null = null;
+  let decorShadowRig: ApartmentDecorShadowRigMount | null = null;
+  let bakedFloorShadowMount: ApartmentDecorBakedFloorShadowMount | null = null;
+  const resyncDecorShadows = (bounds?: ApartmentUnitWorldBounds): void => {
+    const decorGroups = editorMyApartmentDecorGroups(selectionGroups);
+    const resolvedBounds = bounds ?? unitBounds;
+    decorShadowRig = syncApartmentDecorShadowRig({
+      lightParent: parent,
+      decorGroups,
+      unitBounds: resolvedBounds,
+      previous: decorShadowRig,
+    });
+    const renderer = getEditorMyApartmentDecorShadowRenderer();
+    if (!renderer) {
+      bakedFloorShadowMount?.dispose();
+      bakedFloorShadowMount = null;
+      return;
+    }
+    try {
+      bakedFloorShadowMount = syncApartmentDecorBakedFloorShadowOverlay({
+        renderer,
+        parent,
+        decorGroups,
+        unitBounds: resolvedBounds,
+        floorWorldY:
+          EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y +
+          APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.bakedFloorOffsetM,
+        previous: bakedFloorShadowMount,
+      });
+    } catch (err: unknown) {
+      bakedFloorShadowMount?.dispose();
+      bakedFloorShadowMount = null;
+      console.warn("[editor] apartment baked floor shadow failed:", err);
+    }
+  };
   const resyncPracticalLights = (
     scanRoot: THREE.Object3D,
     bounds?: ApartmentUnitWorldBounds,
@@ -1337,17 +1380,26 @@ export function mountEditorMyApartmentFurnitureUnder(
       windowScanRoot: scanRoot,
       maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
       unitBounds: bounds,
-      decorGroups: Object.values(selectionGroups),
+      decorGroups: editorMyApartmentDecorGroups(selectionGroups),
       previous: practicalLights,
     });
   };
   resyncPracticalLights(windowScanRoot, unitBounds);
-
   prepareMammothApartmentInteriorContentRoots({ shellRoot: parent, decorRoot: root });
+  applyApartmentInteriorFloorReceiveShadowUnder(parent);
+  for (const group of editorMyApartmentDecorGroups(selectionGroups)) {
+    const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
+    if (typeof modelRelPath === "string") {
+      applyApartmentDecorCastShadowFlags(group, modelRelPath);
+    }
+  }
+  resyncDecorShadows(unitBounds);
 
   const dispose = (): void => {
     teardownApartmentSavedObjectGroupManipulator();
     practicalLights?.dispose();
+    decorShadowRig?.dispose();
+    bakedFloorShadowMount?.dispose();
     for (const g of Object.values(selectionGroups)) disposeGroupSubtreeGeometry(g);
     parent.remove(root);
     root.clear();
@@ -1357,7 +1409,10 @@ export function mountEditorMyApartmentFurnitureUnder(
     root,
     selectionGroups,
     practicalLights,
+    decorShadowRig,
+    bakedFloorShadowMount,
     resyncPracticalLights,
+    resyncDecorShadows,
     dispose,
     mountedWallIds: mountIdSet(doc.wallItems),
     mountedMirrorIds: mountIdSet(doc.mirrorItems),
@@ -1388,7 +1443,10 @@ export function updateEditorMyApartmentMountFromDoc(
   mount.root = rebuilt.root;
   mount.selectionGroups = rebuilt.selectionGroups;
   mount.practicalLights = rebuilt.practicalLights;
+  mount.decorShadowRig = rebuilt.decorShadowRig;
+  mount.bakedFloorShadowMount = rebuilt.bakedFloorShadowMount;
   mount.resyncPracticalLights = rebuilt.resyncPracticalLights;
+  mount.resyncDecorShadows = rebuilt.resyncDecorShadows;
   mount.dispose = rebuilt.dispose;
   mount.mountedWallIds = rebuilt.mountedWallIds;
   mount.mountedMirrorIds = rebuilt.mountedMirrorIds;

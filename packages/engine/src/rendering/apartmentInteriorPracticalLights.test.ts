@@ -153,11 +153,14 @@ describe("mountApartmentPracticalLights", () => {
       },
     ]);
 
-    expect(mount.root.children).toHaveLength(3);
+    expect(mount.root.children).toHaveLength(4);
     const standing = mount.root.children[0] as THREE.PointLight;
     const ceiling = mount.root.children[1] as THREE.SpotLight;
+    const ceilingWash = mount.root.children[3] as THREE.PointLight;
     expect(standing.isPointLight).toBe(true);
     expect(ceiling.isSpotLight).toBe(true);
+    expect(ceilingWash.isPointLight).toBe(true);
+    expect(ceilingWash.name).toBe("apt_ceiling_wash_1");
 
     mount.dispose();
   });

@@ -40,6 +40,18 @@ export function requestEditorFillWallOpening(wallId: string): void {
 
 /** Immediate parent (`editor_my_apartment_furniture` root) of all décor/walls/builtins. */
 let apartmentFurnitureMountRoot: THREE.Group | null = null;
+let apartmentFurnitureMountResyncDecorShadows: ((unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds) => void) | null = null;
+let apartmentDecorShadowRenderer: THREE.WebGPURenderer | null = null;
+
+export function registerEditorMyApartmentDecorShadowRenderer(
+  renderer: THREE.WebGPURenderer | null,
+): void {
+  apartmentDecorShadowRenderer = renderer;
+}
+
+export function getEditorMyApartmentDecorShadowRenderer(): THREE.WebGPURenderer | null {
+  return apartmentDecorShadowRenderer;
+}
 
 /** Extra roots (saved-group manipulator overlay) keyed by synthetic selection ids. */
 const dynamicSelectionGroupOverlay: Partial<Record<string, THREE.Group>> = {};
@@ -57,6 +69,7 @@ export function setEditorMyApartmentPieceGroups(
   groupsRef = next;
 
   apartmentFurnitureMountRoot = null;
+  apartmentFurnitureMountResyncDecorShadows = null;
   if (!groupsRef || Object.keys(groupsRef).length === 0) return;
   const firstGroup = Object.values(groupsRef)[0];
   const p = firstGroup?.parent;
@@ -66,6 +79,18 @@ export function setEditorMyApartmentPieceGroups(
 
 export function getEditorMyApartmentFurnitureMountRoot(): THREE.Group | null {
   return apartmentFurnitureMountRoot;
+}
+
+export function registerEditorMyApartmentDecorShadowResync(
+  fn: ((unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds) => void) | null,
+): void {
+  apartmentFurnitureMountResyncDecorShadows = fn;
+}
+
+export function resyncEditorMyApartmentDecorShadows(
+  unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds,
+): void {
+  apartmentFurnitureMountResyncDecorShadows?.(unitBounds);
 }
 
 /** @internal Overlay entry for transient saved-group THREE.Group manipulation root. */

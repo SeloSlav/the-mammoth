@@ -20,7 +20,7 @@ import type {
 } from "../editor/content/editorContentDiscovery.js";
 
 /** Top-level authoring surface (3-button UX). */
-export type EditorWorkspace = "cab" | "landing" | "stairwell" | "world";
+export type EditorWorkspace = "cab" | "landing" | "stairwell";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";

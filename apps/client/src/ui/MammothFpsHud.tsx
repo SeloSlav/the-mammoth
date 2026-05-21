@@ -179,6 +179,12 @@ function FpPerfRecordedTimelines({ samples }: { samples: readonly FpPerfTimeline
         color="#7bcf9a"
         pick={(s) => s.frustumApartmentPropMeshes}
       />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum decor floor shadows"
+        color="#6b9e7a"
+        pick={(s) => s.frustumApartmentDecorFloorShadowMeshes}
+      />
       <TimelineSparklineRow samples={samples} label="Draw calls" color="#b89f6b" pick={(s) => s.drawCalls} />
       <TimelineSparklineRow
         samples={samples}
@@ -788,6 +794,11 @@ export function MammothFpsHud() {
                     "apartmentProps",
                     stats.sceneCounts.visibleApartmentPropMeshes,
                     stats.sceneCounts.frustumApartmentPropMeshes,
+                  ],
+                  [
+                    "decorFloorShadows",
+                    stats.sceneCounts.visibleApartmentDecorFloorShadowMeshes,
+                    stats.sceneCounts.frustumApartmentDecorFloorShadowMeshes,
                   ],
                   [
                     "transparent",

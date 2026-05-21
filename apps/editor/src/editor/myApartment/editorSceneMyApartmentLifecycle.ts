@@ -1,10 +1,9 @@
 import * as THREE from "three";
 
-import { prepareMammothApartmentInteriorContentRoots } from "@the-mammoth/engine";
+import { prepareMammothApartmentInteriorContentRoots, applyApartmentInteriorFloorReceiveShadowUnder, applyApartmentDecorCastShadowFlags } from "@the-mammoth/engine";
 import { useEditorStore } from "../../state/editorStore.js";
 
 import {
-
   loadEditorMyApartmentDecorTemplates,
   listMissingEditorDecorTemplatePaths,
   loadMissingEditorDecorTemplates,
@@ -33,6 +32,7 @@ import {
 import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 
 import {
+  registerEditorMyApartmentDecorShadowResync,
   registerEditorMyApartmentWallsMountSyncRequest,
   setEditorMyApartmentPieceGroups,
 } from "./editorMyApartmentPieceGroupBridge.js";
@@ -63,6 +63,8 @@ export type EditorMyApartmentLifecycleDeps = {
   syncLightingAttachment: () => void;
 
   syncTransformAttachment: () => void;
+
+  requestDecorShadowMapBake: () => void;
 
 };
 
@@ -110,6 +112,8 @@ export function createEditorSceneMyApartmentLifecycle(
     mount?.dispose();
 
     mount = null;
+
+    registerEditorMyApartmentDecorShadowResync(null);
 
     setEditorMyApartmentPieceGroups(null);
 
@@ -223,6 +227,9 @@ export function createEditorSceneMyApartmentLifecycle(
       deps.syncLightingAttachment();
 
       setEditorMyApartmentPieceGroups(mount.selectionGroups);
+      registerEditorMyApartmentDecorShadowResync((bounds) => {
+        mount?.resyncDecorShadows(bounds);
+      });
 
       deps.syncTransformAttachment();
 
@@ -243,11 +250,19 @@ export function createEditorSceneMyApartmentLifecycle(
   ): void {
     if (!mount) return;
     prepareMammothApartmentInteriorContentRoots({ shellRoot, decorRoot: mount.root });
+    applyApartmentInteriorFloorReceiveShadowUnder(shellRoot);
+    for (const group of Object.values(mount.selectionGroups)) {
+      const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
+      if (typeof modelRelPath !== "string") continue;
+      applyApartmentDecorCastShadowFlags(group, modelRelPath);
+    }
     const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
       authoringFractionMapping,
       layout?.shellPlan.vh ?? 3,
     );
     mount.resyncPracticalLights(shellRoot, unitBounds);
+    mount.resyncDecorShadows(unitBounds);
+    deps.requestDecorShadowMapBake();
     /** `place*Group` rebuilds PBR materials; apartment layout uses per-mesh PMREM, not `scene.environment`. */
     deps.syncLightingAttachment();
   }

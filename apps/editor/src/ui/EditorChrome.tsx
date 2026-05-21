@@ -3,11 +3,6 @@ import {
   isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
-import {
-  frameEditorBuilding,
-  frameEditorSelection,
-  frameFocusedStory,
-} from "../editor/bridges/editorNavigationBridge.js";
 import { spawnInFrontOfCamera } from "../editor/bridges/spawnBridge.js";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -38,7 +33,6 @@ export function EditorChrome() {
   const {
     workspace,
     mode,
-    building,
     floorDocs,
     interiorDocs,
     cellDocs,
@@ -54,7 +48,6 @@ export function EditorChrome() {
     activeCellDocId,
     activePrefabDefId,
     activeFloorOverrideDocId,
-    focusedStoryLevelIndex,
     selectedId,
     dirty,
     collisionArtifactsStatus,
@@ -69,12 +62,10 @@ export function EditorChrome() {
     patchElevatorCabDef,
     patchLandingKitDef,
     patchStairWellDef,
-    setActiveFloorDocId,
     setActiveInteriorDocId,
     setActiveCellDocId,
     setActivePrefabDefId,
     setActiveFloorOverrideDocId,
-    setFocusedStoryLevelIndex,
     setTransformMode,
     setGridSnapM,
     setStairWellAuthorScope,
@@ -97,17 +88,12 @@ export function EditorChrome() {
     addPrefabComponent,
     deletePrefabComponent,
     duplicatePrefabComponent,
-    patchBuilding,
     setSelectedId,
     enterMyApartmentLayoutMode,
   } = useEditorStore(useShallow(selectEditorChromeStore));
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const { saveToDiskLabel, onReload, onSaveDisk } =
     useEditorChromeDiskPersistence(setSaveMsg);
-  const sortedRefs = useMemo(
-    () => [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex),
-    [building.floorRefs],
-  );
   const activeFloorDoc = floorDocs[activeFloorDocId];
   const activeInteriorDoc = interiorDocs[activeInteriorDocId];
   const activeCellDoc = cellDocs[activeCellDocId];
@@ -287,7 +273,6 @@ export function EditorChrome() {
       });
     }
   };
-  const wo = building.worldOrigin ?? [0, 0, 0];
   const label = editorChromeLabel;
   const input = editorChromeInput;
   const rowBtn = editorChromeRowBtn;
@@ -337,106 +322,7 @@ export function EditorChrome() {
             setGridSnapM={setGridSnapM}
           />
         ) : null}
-        {mode === "floor" && workspace === "world" ? (
-          <>
-            <span style={label}>Storey (mammoth floorRefs)</span>
-            <select
-              style={input}
-              value={String(focusedStoryLevelIndex)}
-              onChange={(e) => {
-                const lv = Number(e.target.value);
-                const ref = sortedRefs.find((r) => r.levelIndex === lv);
-                if (ref) {
-                  setFocusedStoryLevelIndex(ref.levelIndex);
-                  setActiveFloorDocId(ref.floorDocId);
-                  requestAnimationFrame(() => frameFocusedStory());
-                }
-              }}
-            >
-              {sortedRefs.map((r) => (
-                <option key={r.levelIndex} value={r.levelIndex}>
-                  L{r.levelIndex} — {r.floorDocId}
-                  {r.displayLabel ? ` (${r.displayLabel})` : ""}
-                </option>
-              ))}
-            </select>
-            <span style={label}>Active floor JSON (edit target)</span>
-            <select
-              style={input}
-              value={activeFloorDocId}
-              onChange={(e) => setActiveFloorDocId(e.target.value)}
-            >
-              {[...new Set(sortedRefs.map((r) => r.floorDocId))].map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-            <span style={label}>Quick picks</span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              <button
-                type="button"
-                style={rowBtn}
-                onClick={() => frameEditorBuilding()}
-              >
-                Frame building
-              </button>
-              <button
-                type="button"
-                style={rowBtn}
-                onClick={() => frameFocusedStory()}
-              >
-                Frame storey
-              </button>
-              <button
-                type="button"
-                style={rowBtn}
-                disabled={!selectedId}
-                onClick={() => frameEditorSelection()}
-              >
-                Frame selection
-              </button>
-              <button
-                type="button"
-                style={rowBtn}
-                disabled={
-                  !activeFloorDoc?.objects.some((o) =>
-                    o.prefabId.toLowerCase().includes("elevator"),
-                  )
-                }
-                onClick={() => {
-                  const firstElevator = activeFloorDoc?.objects.find((o) =>
-                    o.prefabId.toLowerCase().includes("elevator"),
-                  );
-                  if (!firstElevator) return;
-                  setSelectedId(firstElevator.id);
-                  requestAnimationFrame(() => frameEditorSelection());
-                }}
-              >
-                Pick elevator
-              </button>
-              <button
-                type="button"
-                style={rowBtn}
-                disabled={
-                  !activeFloorDoc?.objects.some((o) =>
-                    o.prefabId.toLowerCase().includes("stair"),
-                  )
-                }
-                onClick={() => {
-                  const firstStair = activeFloorDoc?.objects.find((o) =>
-                    o.prefabId.toLowerCase().includes("stair"),
-                  );
-                  if (!firstStair) return;
-                  setSelectedId(firstStair.id);
-                  requestAnimationFrame(() => frameEditorSelection());
-                }}
-              >
-                Pick stair
-              </button>
-            </div>
-          </>
-        ) : mode === "my_apartment_layout" ? (
+        {mode === "my_apartment_layout" ? (
           <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.88, maxWidth: 420 }}>
             Author bed, wardrobe, and footlocker on the preview floor. Poses serialize to disk JSON
             and apply to whichever unit the player occupies in FP.
@@ -557,32 +443,11 @@ export function EditorChrome() {
               type="button"
               style={rowBtn}
               onClick={() => onSaveDisk()}
-              title={
-                workspace === "world"
-                  ? "Writes the open document and mammoth.json under content/."
-                  : "Writes the open document under content/."
-              }
             >
               {saveToDiskLabel}
             </button>
           ) : null}
         </div>
-        {workspace === "world" &&
-        mode !== "fp_viewmodel" &&
-        mode !== "fp_consumable" ? (
-          <p
-            style={{
-              margin: "6px 0 0",
-              fontSize: 11,
-              opacity: 0.75,
-              lineHeight: 1.35,
-            }}
-          >
-            Saving also updates{" "}
-            <code style={{ fontSize: 10 }}>mammoth.json</code> (storey layout
-            and world origin) together with the open document.
-          </p>
-        ) : null}
         <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
         <p
           style={{
@@ -623,36 +488,6 @@ export function EditorChrome() {
         ) : null}
         {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
           <>
-            {workspace === "world" ? (
-              <>
-                <span style={label}>Building origin (world)</span>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: 6,
-                  }}
-                >
-                  {(["X", "Y", "Z"] as const).map((axis, i) => (
-                    <label key={axis} style={{ fontSize: 11 }}>
-                      {axis}
-                      <input
-                        style={{ ...input, marginTop: 4 }}
-                        type="number"
-                        step={0.5}
-                        value={wo[i]}
-                        onChange={(e) => {
-                          const nv = Number(e.target.value);
-                          const next = [...wo] as [number, number, number];
-                          next[i] = Number.isFinite(nv) ? nv : 0;
-                          patchBuilding((b) => ({ ...b, worldOrigin: next }));
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </>
-            ) : null}
             <EditorChromeOutliner
               mode={mode}
               stairWellAuthorScope={stairWellAuthorScope}

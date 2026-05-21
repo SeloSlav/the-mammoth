@@ -579,15 +579,15 @@
     {
       "id": "1fb2f1fe-730e-4e4a-a42b-b117f217ee76",
       "modelRelPath": "static/models/objects/lamp-standing.glb",
-      "fx": 0.44301968674532444,
+      "fx": 0.42256021746048583,
       "fz": 0.8605734707134839,
-      "dy": 1.0911066106850527,
+      "dy": 0.9530330896377563,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
       "uniformScale": 1,
       "verticalScaleMul": 1,
-      "ignoreSupportSurfaces": false,
+      "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     },
     {

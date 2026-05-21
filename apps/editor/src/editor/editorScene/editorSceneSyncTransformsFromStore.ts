@@ -18,13 +18,6 @@ export function syncEditorTransformsFromStore(
 ): void {
   if (s.mode === "floor") {
     syncFloorTransforms(buildingRoot, s.floorDocs);
-    if (s.workspace === "world") {
-      const cellDoc = s.cellDocs[s.activeCellDocId];
-      if (cellDoc) {
-        const cellRoot = buildingRoot.getObjectByName(`cell:${cellDoc.id}`);
-        if (cellRoot) syncCellTransforms(cellRoot, cellDoc);
-      }
-    }
   } else if (s.mode === "interior") {
     const doc = s.interiorDocs[s.activeInteriorDocId];
     if (doc) syncInteriorTransforms(buildingRoot, doc);
@@ -38,13 +31,6 @@ export function syncEditorTransformsFromStore(
     if (doc) syncPrefabTransforms(buildingRoot, doc);
   } else if (s.mode === "floor_override") {
     syncFloorTransforms(buildingRoot, s.floorDocs);
-    if (s.workspace === "world") {
-      const cellDoc = s.cellDocs[s.activeCellDocId];
-      if (cellDoc) {
-        const cellRoot = buildingRoot.getObjectByName(`cell:${cellDoc.id}`);
-        if (cellRoot) syncCellTransforms(cellRoot, cellDoc);
-      }
-    }
   } else if (s.mode === "cab") {
     const cabPreview = buildingRoot.getObjectByName(
       "editor_elevator_cab_preview",

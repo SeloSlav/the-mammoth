@@ -135,7 +135,10 @@ describe("syncEditorMyApartmentWallsOnMount wall dy", () => {
       mountedMirrorIds: new Set<string>(),
       mountedDecorIds: new Set<string>(),
       practicalLights: null,
+      decorShadowRig: null,
+      bakedFloorShadowMount: null,
       resyncPracticalLights: () => {},
+      resyncDecorShadows: () => {},
       dispose: () => {},
     };
     const spans = {

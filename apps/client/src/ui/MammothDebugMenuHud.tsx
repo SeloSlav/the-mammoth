@@ -283,6 +283,11 @@ export function MammothDebugMenuHud() {
       description: "All authored decor GLBs, walls, mirrors (apartment_unit_decor_root)",
     },
     {
+      key: "apartmentDecorFloorShadows",
+      label: "Decor floor shadows",
+      description: "Mesh-projected grounding shadows under static decor on shell floors",
+    },
+    {
       key: "apartmentDecorPracticalLights",
       label: "Decor fixture lighting",
       description: "Lamp/TV/ceiling practical lights + emissive glow (decor meshes stay visible)",

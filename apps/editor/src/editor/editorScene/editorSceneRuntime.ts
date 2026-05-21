@@ -9,9 +9,12 @@ import {
   applyMammothApartmentInteriorEditorLayoutPresentation,
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
+  applyApartmentInteriorFloorReceiveShadowUnder,
   captureMammothApartmentInteriorSceneAtmosphere,
+  ensureMammothApartmentDecorShadowRenderer,
   frameMammothApartmentInteriorGameplayPreview,
   mountMammothApartmentInteriorSceneRig,
+  requestMammothRendererShadowMapUpdate,
   syncMammothApartmentInteriorMetallicEnv,
 } from "@the-mammoth/engine";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
@@ -75,8 +78,10 @@ import {
 import {
   getEditorMyApartmentFurnitureMountRoot,
   getEditorMyApartmentSelectionGroup,
+  registerEditorMyApartmentDecorShadowRenderer,
   registerEditorMyApartmentLayoutPersistFromSceneRequest,
   registerEditorFillWallOpeningRequest,
+  resyncEditorMyApartmentDecorShadows,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import { editorMyApartmentSelectedIdForWall } from "../myApartment/editorMyApartmentSelection.js";
 import {
@@ -116,6 +121,7 @@ export async function mountEditorScene(
   });
   await renderer.init();
   assertWebGpuRendererBackend(renderer);
+  registerEditorMyApartmentDecorShadowRenderer(renderer);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
@@ -227,6 +233,11 @@ export async function mountEditorScene(
     if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
 
     if (fpApartmentPreview) {
+      ensureMammothApartmentDecorShadowRenderer(renderer);
+      dir.castShadow = false;
+      if (structuralState.buildingRoot) {
+        applyApartmentInteriorFloorReceiveShadowUnder(structuralState.buildingRoot);
+      }
       applyMammothApartmentInteriorEditorLayoutPresentation({
         scene,
         renderer,
@@ -238,6 +249,8 @@ export async function mountEditorScene(
         view: { camera, raycasters: [raycaster, decorSupportRaycaster] },
         atmosphereRestore: editorStudioAtmosphere,
       });
+      resyncEditorMyApartmentDecorShadows();
+      ensureMammothApartmentDecorShadowRenderer(renderer);
       if (structuralState.buildingRoot) {
         frameMammothApartmentInteriorGameplayPreview({
           camera,
@@ -1286,6 +1299,9 @@ export async function mountEditorScene(
       levelEditorTransformGesture,
     syncLightingAttachment: syncCurrentEditorLightingAttachment,
     syncTransformAttachment,
+    requestDecorShadowMapBake: () => {
+      requestMammothRendererShadowMapUpdate(renderer);
+    },
   });
   const disposeMyApartmentAuthoring = myApartmentAuthoring.dispose;
 

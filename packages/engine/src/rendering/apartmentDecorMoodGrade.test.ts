@@ -19,12 +19,26 @@ describe("moodGradeMammothApartmentDecorMaterial warm fixtures", () => {
     ) as THREE.MeshStandardMaterial;
 
     expect(graded.emissive.r).toBeGreaterThan(0.95);
-    expect(graded.emissiveIntensity).toBeGreaterThan(3);
+    expect(graded.emissiveIntensity).toBeGreaterThan(2);
+  });
+
+  it("strips emissive maps from ceiling fixtures", () => {
+    const graded = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        emissive: 0xffffff,
+        emissiveIntensity: 2,
+        emissiveMap: new THREE.Texture(),
+      }),
+      { modelRelPath: "static/models/objects/light-ceiling.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(graded.emissive.r).toBe(0);
+    expect(graded.emissiveMap).toBeNull();
   });
 });
 
 describe("attachApartmentWarmFixtureBulbGlow", () => {
-  it("splits ceiling fixture geometry and emissive-glows the bottom lens", () => {
+  it("does not add emissive lens glow to ceiling fixtures", () => {
     const root = new THREE.Group();
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.35, 0.12, 0.35),
@@ -39,19 +53,12 @@ describe("attachApartmentWarmFixtureBulbGlow", () => {
       "static/models/objects/light-ceiling.glb",
     );
 
-    const orb = root.children.find(
-      (c) => c.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD] === true,
-    );
-    expect(orb).toBeUndefined();
-
-    const lens = root.children.find(
-      (c) => c.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true,
-    ) as THREE.Mesh | undefined;
-    expect(lens).toBeDefined();
-    const mat = lens!.material as THREE.MeshStandardMaterial;
-    expect(mat.toneMapped).toBe(false);
-    expect(mat.emissiveIntensity).toBeGreaterThan(3);
-    expect(root.children.some((c) => c.name.endsWith("_housing"))).toBe(true);
+    expect(
+      root.children.some(
+        (c) => c.userData[MAMMOTH_CEILING_LENS_GLOW_MESH_UD] === true,
+      ),
+    ).toBe(false);
+    expect(root.children).toHaveLength(1);
   });
 
   it("adds an in-shade emissive orb for standing lamps", () => {

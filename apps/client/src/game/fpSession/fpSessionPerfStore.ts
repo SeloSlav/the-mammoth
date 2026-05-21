@@ -44,6 +44,8 @@ const _visibleFloorPlates = new Float32Array(RING);
 const _visibleUnitInteriorMeshes = new Float32Array(RING);
 /** Visible apartment decor prop meshes (`mammothApartmentDecorProp` subset). */
 const _visibleApartmentPropMeshes = new Float32Array(RING);
+/** Visible decor floor-shadow overlay meshes (`mammothApartmentBakedFloorShadow`). */
+const _visibleApartmentDecorFloorShadowMeshes = new Float32Array(RING);
 /** Visible unit-interior meshes owned by a `unit_*` shell id. */
 const _visibleResidentialShellMeshes = new Float32Array(RING);
 /** Visible unit-interior meshes with no resolved apartment/unit ownership tags. */
@@ -62,6 +64,8 @@ const _frustumFloorPlates = new Float32Array(RING);
 const _frustumUnitInteriorMeshes = new Float32Array(RING);
 /** Frustum-intersected apartment decor prop meshes (`mammothApartmentDecorProp` subset). */
 const _frustumApartmentPropMeshes = new Float32Array(RING);
+/** Frustum-intersected decor floor-shadow overlay meshes. */
+const _frustumApartmentDecorFloorShadowMeshes = new Float32Array(RING);
 /** Frustum-intersected unit-interior meshes owned by a `unit_*` shell id. */
 const _frustumResidentialShellMeshes = new Float32Array(RING);
 /** Frustum-intersected unit-interior meshes with no resolved apartment/unit ownership tags. */
@@ -124,6 +128,7 @@ export type FpRendererInfo = {
   visibleFloorPlates: number;
   visibleUnitInteriorMeshes: number;
   visibleApartmentPropMeshes: number;
+  visibleApartmentDecorFloorShadowMeshes: number;
   visibleResidentialShellMeshes: number;
   visibleAnonymousInteriorMeshes: number;
   visibleGenericInteriorMeshes: number;
@@ -133,6 +138,7 @@ export type FpRendererInfo = {
   frustumFloorPlates: number;
   frustumUnitInteriorMeshes: number;
   frustumApartmentPropMeshes: number;
+  frustumApartmentDecorFloorShadowMeshes: number;
   frustumResidentialShellMeshes: number;
   frustumAnonymousInteriorMeshes: number;
   frustumGenericInteriorMeshes: number;
@@ -162,6 +168,7 @@ let _lastTriangles = 0;
 let _lastVisibleFloorPlates = 0;
 let _lastVisibleUnitInteriorMeshes = 0;
 let _lastVisibleApartmentPropMeshes = 0;
+let _lastVisibleApartmentDecorFloorShadowMeshes = 0;
 let _lastVisibleResidentialShellMeshes = 0;
 let _lastVisibleAnonymousInteriorMeshes = 0;
 let _lastVisibleGenericInteriorMeshes = 0;
@@ -171,6 +178,7 @@ let _lastVisibleTransparentExteriorGlassMeshes = 0;
 let _lastFrustumFloorPlates = 0;
 let _lastFrustumUnitInteriorMeshes = 0;
 let _lastFrustumApartmentPropMeshes = 0;
+let _lastFrustumApartmentDecorFloorShadowMeshes = 0;
 let _lastFrustumResidentialShellMeshes = 0;
 let _lastFrustumAnonymousInteriorMeshes = 0;
 let _lastFrustumGenericInteriorMeshes = 0;
@@ -188,6 +196,7 @@ export function getLastRendererInfo(): FpRendererInfo {
     visibleFloorPlates: _lastVisibleFloorPlates,
     visibleUnitInteriorMeshes: _lastVisibleUnitInteriorMeshes,
     visibleApartmentPropMeshes: _lastVisibleApartmentPropMeshes,
+    visibleApartmentDecorFloorShadowMeshes: _lastVisibleApartmentDecorFloorShadowMeshes,
     visibleResidentialShellMeshes: _lastVisibleResidentialShellMeshes,
     visibleAnonymousInteriorMeshes: _lastVisibleAnonymousInteriorMeshes,
     visibleGenericInteriorMeshes: _lastVisibleGenericInteriorMeshes,
@@ -197,6 +206,7 @@ export function getLastRendererInfo(): FpRendererInfo {
     frustumFloorPlates: _lastFrustumFloorPlates,
     frustumUnitInteriorMeshes: _lastFrustumUnitInteriorMeshes,
     frustumApartmentPropMeshes: _lastFrustumApartmentPropMeshes,
+    frustumApartmentDecorFloorShadowMeshes: _lastFrustumApartmentDecorFloorShadowMeshes,
     frustumResidentialShellMeshes: _lastFrustumResidentialShellMeshes,
     frustumAnonymousInteriorMeshes: _lastFrustumAnonymousInteriorMeshes,
     frustumGenericInteriorMeshes: _lastFrustumGenericInteriorMeshes,
@@ -219,6 +229,8 @@ export function pushFpPerfFrame(
     _lastVisibleFloorPlates = rendererInfo.visibleFloorPlates;
     _lastVisibleUnitInteriorMeshes = rendererInfo.visibleUnitInteriorMeshes;
     _lastVisibleApartmentPropMeshes = rendererInfo.visibleApartmentPropMeshes;
+    _lastVisibleApartmentDecorFloorShadowMeshes =
+      rendererInfo.visibleApartmentDecorFloorShadowMeshes;
     _lastVisibleResidentialShellMeshes = rendererInfo.visibleResidentialShellMeshes;
     _lastVisibleAnonymousInteriorMeshes = rendererInfo.visibleAnonymousInteriorMeshes;
     _lastVisibleGenericInteriorMeshes = rendererInfo.visibleGenericInteriorMeshes;
@@ -228,6 +240,8 @@ export function pushFpPerfFrame(
     _lastFrustumFloorPlates = rendererInfo.frustumFloorPlates;
     _lastFrustumUnitInteriorMeshes = rendererInfo.frustumUnitInteriorMeshes;
     _lastFrustumApartmentPropMeshes = rendererInfo.frustumApartmentPropMeshes;
+    _lastFrustumApartmentDecorFloorShadowMeshes =
+      rendererInfo.frustumApartmentDecorFloorShadowMeshes;
     _lastFrustumResidentialShellMeshes = rendererInfo.frustumResidentialShellMeshes;
     _lastFrustumAnonymousInteriorMeshes = rendererInfo.frustumAnonymousInteriorMeshes;
     _lastFrustumGenericInteriorMeshes = rendererInfo.frustumGenericInteriorMeshes;
@@ -252,6 +266,8 @@ export function pushFpPerfFrame(
   _visibleFloorPlates[i] = rendererInfo?.visibleFloorPlates ?? 0;
   _visibleUnitInteriorMeshes[i] = rendererInfo?.visibleUnitInteriorMeshes ?? 0;
   _visibleApartmentPropMeshes[i] = rendererInfo?.visibleApartmentPropMeshes ?? 0;
+  _visibleApartmentDecorFloorShadowMeshes[i] =
+    rendererInfo?.visibleApartmentDecorFloorShadowMeshes ?? 0;
   _visibleResidentialShellMeshes[i] = rendererInfo?.visibleResidentialShellMeshes ?? 0;
   _visibleAnonymousInteriorMeshes[i] = rendererInfo?.visibleAnonymousInteriorMeshes ?? 0;
   _visibleGenericInteriorMeshes[i] = rendererInfo?.visibleGenericInteriorMeshes ?? 0;
@@ -262,6 +278,8 @@ export function pushFpPerfFrame(
   _frustumFloorPlates[i] = rendererInfo?.frustumFloorPlates ?? 0;
   _frustumUnitInteriorMeshes[i] = rendererInfo?.frustumUnitInteriorMeshes ?? 0;
   _frustumApartmentPropMeshes[i] = rendererInfo?.frustumApartmentPropMeshes ?? 0;
+  _frustumApartmentDecorFloorShadowMeshes[i] =
+    rendererInfo?.frustumApartmentDecorFloorShadowMeshes ?? 0;
   _frustumResidentialShellMeshes[i] = rendererInfo?.frustumResidentialShellMeshes ?? 0;
   _frustumAnonymousInteriorMeshes[i] = rendererInfo?.frustumAnonymousInteriorMeshes ?? 0;
   _frustumGenericInteriorMeshes[i] = rendererInfo?.frustumGenericInteriorMeshes ?? 0;
@@ -319,6 +337,7 @@ export function resetFpPerfStore(): void {
   _visibleFloorPlates.fill(0);
   _visibleUnitInteriorMeshes.fill(0);
   _visibleApartmentPropMeshes.fill(0);
+  _visibleApartmentDecorFloorShadowMeshes.fill(0);
   _visibleResidentialShellMeshes.fill(0);
   _visibleAnonymousInteriorMeshes.fill(0);
   _visibleGenericInteriorMeshes.fill(0);
@@ -328,6 +347,7 @@ export function resetFpPerfStore(): void {
   _frustumFloorPlates.fill(0);
   _frustumUnitInteriorMeshes.fill(0);
   _frustumApartmentPropMeshes.fill(0);
+  _frustumApartmentDecorFloorShadowMeshes.fill(0);
   _frustumResidentialShellMeshes.fill(0);
   _frustumAnonymousInteriorMeshes.fill(0);
   _frustumGenericInteriorMeshes.fill(0);
@@ -439,6 +459,7 @@ export type FpPerfStats = {
     visibleFloorPlates: number;
     visibleUnitInteriorMeshes: number;
     visibleApartmentPropMeshes: number;
+    visibleApartmentDecorFloorShadowMeshes: number;
     visibleResidentialShellMeshes: number;
     visibleAnonymousInteriorMeshes: number;
     visibleGenericInteriorMeshes: number;
@@ -448,6 +469,7 @@ export type FpPerfStats = {
     frustumFloorPlates: number;
     frustumUnitInteriorMeshes: number;
     frustumApartmentPropMeshes: number;
+    frustumApartmentDecorFloorShadowMeshes: number;
     frustumResidentialShellMeshes: number;
     frustumAnonymousInteriorMeshes: number;
     frustumGenericInteriorMeshes: number;
@@ -508,6 +530,7 @@ export function computeFpPerfStats(
   let sumVisibleFloorPlates = 0;
   let sumVisibleUnitInteriorMeshes = 0;
   let sumVisibleApartmentPropMeshes = 0;
+  let sumVisibleApartmentDecorFloorShadowMeshes = 0;
   let sumVisibleResidentialShellMeshes = 0;
   let sumVisibleAnonymousInteriorMeshes = 0;
   let sumVisibleGenericInteriorMeshes = 0;
@@ -517,6 +540,7 @@ export function computeFpPerfStats(
   let sumFrustumFloorPlates = 0;
   let sumFrustumUnitInteriorMeshes = 0;
   let sumFrustumApartmentPropMeshes = 0;
+  let sumFrustumApartmentDecorFloorShadowMeshes = 0;
   let sumFrustumResidentialShellMeshes = 0;
   let sumFrustumAnonymousInteriorMeshes = 0;
   let sumFrustumGenericInteriorMeshes = 0;
@@ -546,6 +570,7 @@ export function computeFpPerfStats(
     sumVisibleFloorPlates += _visibleFloorPlates[i]!;
     sumVisibleUnitInteriorMeshes += _visibleUnitInteriorMeshes[i]!;
     sumVisibleApartmentPropMeshes += _visibleApartmentPropMeshes[i]!;
+    sumVisibleApartmentDecorFloorShadowMeshes += _visibleApartmentDecorFloorShadowMeshes[i]!;
     sumVisibleResidentialShellMeshes += _visibleResidentialShellMeshes[i]!;
     sumVisibleAnonymousInteriorMeshes += _visibleAnonymousInteriorMeshes[i]!;
     sumVisibleGenericInteriorMeshes += _visibleGenericInteriorMeshes[i]!;
@@ -555,6 +580,7 @@ export function computeFpPerfStats(
     sumFrustumFloorPlates += _frustumFloorPlates[i]!;
     sumFrustumUnitInteriorMeshes += _frustumUnitInteriorMeshes[i]!;
     sumFrustumApartmentPropMeshes += _frustumApartmentPropMeshes[i]!;
+    sumFrustumApartmentDecorFloorShadowMeshes += _frustumApartmentDecorFloorShadowMeshes[i]!;
     sumFrustumResidentialShellMeshes += _frustumResidentialShellMeshes[i]!;
     sumFrustumAnonymousInteriorMeshes += _frustumAnonymousInteriorMeshes[i]!;
     sumFrustumGenericInteriorMeshes += _frustumGenericInteriorMeshes[i]!;
@@ -613,6 +639,7 @@ export function computeFpPerfStats(
   const avgVisibleFloorPlates = sumVisibleFloorPlates / n;
   const avgVisibleUnitInteriorMeshes = sumVisibleUnitInteriorMeshes / n;
   const avgVisibleApartmentPropMeshes = sumVisibleApartmentPropMeshes / n;
+  const avgVisibleApartmentDecorFloorShadowMeshes = sumVisibleApartmentDecorFloorShadowMeshes / n;
   const avgVisibleResidentialShellMeshes = sumVisibleResidentialShellMeshes / n;
   const avgVisibleAnonymousInteriorMeshes = sumVisibleAnonymousInteriorMeshes / n;
   const avgVisibleGenericInteriorMeshes = sumVisibleGenericInteriorMeshes / n;
@@ -622,6 +649,7 @@ export function computeFpPerfStats(
   const avgFrustumFloorPlates = sumFrustumFloorPlates / n;
   const avgFrustumUnitInteriorMeshes = sumFrustumUnitInteriorMeshes / n;
   const avgFrustumApartmentPropMeshes = sumFrustumApartmentPropMeshes / n;
+  const avgFrustumApartmentDecorFloorShadowMeshes = sumFrustumApartmentDecorFloorShadowMeshes / n;
   const avgFrustumResidentialShellMeshes = sumFrustumResidentialShellMeshes / n;
   const avgFrustumAnonymousInteriorMeshes = sumFrustumAnonymousInteriorMeshes / n;
   const avgFrustumGenericInteriorMeshes = sumFrustumGenericInteriorMeshes / n;
@@ -670,6 +698,8 @@ export function computeFpPerfStats(
       visibleFloorPlates: Math.round(avgVisibleFloorPlates * 10) / 10,
       visibleUnitInteriorMeshes: Math.round(avgVisibleUnitInteriorMeshes * 10) / 10,
       visibleApartmentPropMeshes: Math.round(avgVisibleApartmentPropMeshes * 10) / 10,
+      visibleApartmentDecorFloorShadowMeshes:
+        Math.round(avgVisibleApartmentDecorFloorShadowMeshes * 10) / 10,
       visibleResidentialShellMeshes: Math.round(avgVisibleResidentialShellMeshes * 10) / 10,
       visibleAnonymousInteriorMeshes: Math.round(avgVisibleAnonymousInteriorMeshes * 10) / 10,
       visibleGenericInteriorMeshes: Math.round(avgVisibleGenericInteriorMeshes * 10) / 10,
@@ -680,6 +710,8 @@ export function computeFpPerfStats(
       frustumFloorPlates: Math.round(avgFrustumFloorPlates * 10) / 10,
       frustumUnitInteriorMeshes: Math.round(avgFrustumUnitInteriorMeshes * 10) / 10,
       frustumApartmentPropMeshes: Math.round(avgFrustumApartmentPropMeshes * 10) / 10,
+      frustumApartmentDecorFloorShadowMeshes:
+        Math.round(avgFrustumApartmentDecorFloorShadowMeshes * 10) / 10,
       frustumResidentialShellMeshes: Math.round(avgFrustumResidentialShellMeshes * 10) / 10,
       frustumAnonymousInteriorMeshes: Math.round(avgFrustumAnonymousInteriorMeshes * 10) / 10,
       frustumGenericInteriorMeshes: Math.round(avgFrustumGenericInteriorMeshes * 10) / 10,
@@ -716,6 +748,7 @@ export type FpPerfTimelineSample = {
   visibleFloorPlates: number;
   visibleUnitInteriorMeshes: number;
   visibleApartmentPropMeshes: number;
+  visibleApartmentDecorFloorShadowMeshes: number;
   visibleResidentialShellMeshes: number;
   visibleAnonymousInteriorMeshes: number;
   visibleGenericInteriorMeshes: number;
@@ -725,6 +758,7 @@ export type FpPerfTimelineSample = {
   frustumFloorPlates: number;
   frustumUnitInteriorMeshes: number;
   frustumApartmentPropMeshes: number;
+  frustumApartmentDecorFloorShadowMeshes: number;
   frustumResidentialShellMeshes: number;
   frustumAnonymousInteriorMeshes: number;
   frustumGenericInteriorMeshes: number;
@@ -771,6 +805,7 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     visibleFloorPlates: _visibleFloorPlates[i]!,
     visibleUnitInteriorMeshes: _visibleUnitInteriorMeshes[i]!,
     visibleApartmentPropMeshes: _visibleApartmentPropMeshes[i]!,
+    visibleApartmentDecorFloorShadowMeshes: _visibleApartmentDecorFloorShadowMeshes[i]!,
     visibleResidentialShellMeshes: _visibleResidentialShellMeshes[i]!,
     visibleAnonymousInteriorMeshes: _visibleAnonymousInteriorMeshes[i]!,
     visibleGenericInteriorMeshes: _visibleGenericInteriorMeshes[i]!,
@@ -780,6 +815,7 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     frustumFloorPlates: _frustumFloorPlates[i]!,
     frustumUnitInteriorMeshes: _frustumUnitInteriorMeshes[i]!,
     frustumApartmentPropMeshes: _frustumApartmentPropMeshes[i]!,
+    frustumApartmentDecorFloorShadowMeshes: _frustumApartmentDecorFloorShadowMeshes[i]!,
     frustumResidentialShellMeshes: _frustumResidentialShellMeshes[i]!,
     frustumAnonymousInteriorMeshes: _frustumAnonymousInteriorMeshes[i]!,
     frustumGenericInteriorMeshes: _frustumGenericInteriorMeshes[i]!,
@@ -830,6 +866,7 @@ export function computeFpPerfStatsFromTimeline(
   let sumVisibleFloorPlates = 0;
   let sumVisibleUnitInteriorMeshes = 0;
   let sumVisibleApartmentPropMeshes = 0;
+  let sumVisibleApartmentDecorFloorShadowMeshes = 0;
   let sumVisibleResidentialShellMeshes = 0;
   let sumVisibleAnonymousInteriorMeshes = 0;
   let sumVisibleGenericInteriorMeshes = 0;
@@ -839,6 +876,7 @@ export function computeFpPerfStatsFromTimeline(
   let sumFrustumFloorPlates = 0;
   let sumFrustumUnitInteriorMeshes = 0;
   let sumFrustumApartmentPropMeshes = 0;
+  let sumFrustumApartmentDecorFloorShadowMeshes = 0;
   let sumFrustumResidentialShellMeshes = 0;
   let sumFrustumAnonymousInteriorMeshes = 0;
   let sumFrustumGenericInteriorMeshes = 0;
@@ -868,6 +906,7 @@ export function computeFpPerfStatsFromTimeline(
     sumVisibleFloorPlates += row.visibleFloorPlates;
     sumVisibleUnitInteriorMeshes += row.visibleUnitInteriorMeshes;
     sumVisibleApartmentPropMeshes += row.visibleApartmentPropMeshes;
+    sumVisibleApartmentDecorFloorShadowMeshes += row.visibleApartmentDecorFloorShadowMeshes;
     sumVisibleResidentialShellMeshes += row.visibleResidentialShellMeshes;
     sumVisibleAnonymousInteriorMeshes += row.visibleAnonymousInteriorMeshes;
     sumVisibleGenericInteriorMeshes += row.visibleGenericInteriorMeshes;
@@ -877,6 +916,7 @@ export function computeFpPerfStatsFromTimeline(
     sumFrustumFloorPlates += row.frustumFloorPlates;
     sumFrustumUnitInteriorMeshes += row.frustumUnitInteriorMeshes;
     sumFrustumApartmentPropMeshes += row.frustumApartmentPropMeshes;
+    sumFrustumApartmentDecorFloorShadowMeshes += row.frustumApartmentDecorFloorShadowMeshes;
     sumFrustumResidentialShellMeshes += row.frustumResidentialShellMeshes;
     sumFrustumAnonymousInteriorMeshes += row.frustumAnonymousInteriorMeshes;
     sumFrustumGenericInteriorMeshes += row.frustumGenericInteriorMeshes;
@@ -930,6 +970,7 @@ export function computeFpPerfStatsFromTimeline(
   const avgVisibleFloorPlates = sumVisibleFloorPlates / n;
   const avgVisibleUnitInteriorMeshes = sumVisibleUnitInteriorMeshes / n;
   const avgVisibleApartmentPropMeshes = sumVisibleApartmentPropMeshes / n;
+  const avgVisibleApartmentDecorFloorShadowMeshes = sumVisibleApartmentDecorFloorShadowMeshes / n;
   const avgVisibleResidentialShellMeshes = sumVisibleResidentialShellMeshes / n;
   const avgVisibleAnonymousInteriorMeshes = sumVisibleAnonymousInteriorMeshes / n;
   const avgVisibleGenericInteriorMeshes = sumVisibleGenericInteriorMeshes / n;
@@ -939,6 +980,7 @@ export function computeFpPerfStatsFromTimeline(
   const avgFrustumFloorPlates = sumFrustumFloorPlates / n;
   const avgFrustumUnitInteriorMeshes = sumFrustumUnitInteriorMeshes / n;
   const avgFrustumApartmentPropMeshes = sumFrustumApartmentPropMeshes / n;
+  const avgFrustumApartmentDecorFloorShadowMeshes = sumFrustumApartmentDecorFloorShadowMeshes / n;
   const avgFrustumResidentialShellMeshes = sumFrustumResidentialShellMeshes / n;
   const avgFrustumAnonymousInteriorMeshes = sumFrustumAnonymousInteriorMeshes / n;
   const avgFrustumGenericInteriorMeshes = sumFrustumGenericInteriorMeshes / n;
@@ -987,6 +1029,8 @@ export function computeFpPerfStatsFromTimeline(
       visibleFloorPlates: Math.round(avgVisibleFloorPlates * 10) / 10,
       visibleUnitInteriorMeshes: Math.round(avgVisibleUnitInteriorMeshes * 10) / 10,
       visibleApartmentPropMeshes: Math.round(avgVisibleApartmentPropMeshes * 10) / 10,
+      visibleApartmentDecorFloorShadowMeshes:
+        Math.round(avgVisibleApartmentDecorFloorShadowMeshes * 10) / 10,
       visibleResidentialShellMeshes: Math.round(avgVisibleResidentialShellMeshes * 10) / 10,
       visibleAnonymousInteriorMeshes: Math.round(avgVisibleAnonymousInteriorMeshes * 10) / 10,
       visibleGenericInteriorMeshes: Math.round(avgVisibleGenericInteriorMeshes * 10) / 10,
@@ -997,6 +1041,8 @@ export function computeFpPerfStatsFromTimeline(
       frustumFloorPlates: Math.round(avgFrustumFloorPlates * 10) / 10,
       frustumUnitInteriorMeshes: Math.round(avgFrustumUnitInteriorMeshes * 10) / 10,
       frustumApartmentPropMeshes: Math.round(avgFrustumApartmentPropMeshes * 10) / 10,
+      frustumApartmentDecorFloorShadowMeshes:
+        Math.round(avgFrustumApartmentDecorFloorShadowMeshes * 10) / 10,
       frustumResidentialShellMeshes: Math.round(avgFrustumResidentialShellMeshes * 10) / 10,
       frustumAnonymousInteriorMeshes: Math.round(avgFrustumAnonymousInteriorMeshes * 10) / 10,
       frustumGenericInteriorMeshes: Math.round(avgFrustumGenericInteriorMeshes * 10) / 10,
@@ -1018,6 +1064,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
       visibleFloorPlates: 0,
       visibleUnitInteriorMeshes: 0,
       visibleApartmentPropMeshes: 0,
+      visibleApartmentDecorFloorShadowMeshes: 0,
       visibleResidentialShellMeshes: 0,
       visibleAnonymousInteriorMeshes: 0,
       visibleGenericInteriorMeshes: 0,
@@ -1027,6 +1074,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
       frustumFloorPlates: 0,
       frustumUnitInteriorMeshes: 0,
       frustumApartmentPropMeshes: 0,
+      frustumApartmentDecorFloorShadowMeshes: 0,
       frustumResidentialShellMeshes: 0,
       frustumAnonymousInteriorMeshes: 0,
       frustumGenericInteriorMeshes: 0,
@@ -1040,6 +1088,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   let visibleFloorPlates = 0;
   let visibleUnitInteriorMeshes = 0;
   let visibleApartmentPropMeshes = 0;
+  let visibleApartmentDecorFloorShadowMeshes = 0;
   let visibleResidentialShellMeshes = 0;
   let visibleAnonymousInteriorMeshes = 0;
   let visibleGenericInteriorMeshes = 0;
@@ -1049,6 +1098,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   let frustumFloorPlates = 0;
   let frustumUnitInteriorMeshes = 0;
   let frustumApartmentPropMeshes = 0;
+  let frustumApartmentDecorFloorShadowMeshes = 0;
   let frustumResidentialShellMeshes = 0;
   let frustumAnonymousInteriorMeshes = 0;
   let frustumGenericInteriorMeshes = 0;
@@ -1061,6 +1111,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     visibleFloorPlates += s.visibleFloorPlates;
     visibleUnitInteriorMeshes += s.visibleUnitInteriorMeshes;
     visibleApartmentPropMeshes += s.visibleApartmentPropMeshes;
+    visibleApartmentDecorFloorShadowMeshes += s.visibleApartmentDecorFloorShadowMeshes;
     visibleResidentialShellMeshes += s.visibleResidentialShellMeshes;
     visibleAnonymousInteriorMeshes += s.visibleAnonymousInteriorMeshes;
     visibleGenericInteriorMeshes += s.visibleGenericInteriorMeshes;
@@ -1070,6 +1121,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumFloorPlates += s.frustumFloorPlates;
     frustumUnitInteriorMeshes += s.frustumUnitInteriorMeshes;
     frustumApartmentPropMeshes += s.frustumApartmentPropMeshes;
+    frustumApartmentDecorFloorShadowMeshes += s.frustumApartmentDecorFloorShadowMeshes;
     frustumResidentialShellMeshes += s.frustumResidentialShellMeshes;
     frustumAnonymousInteriorMeshes += s.frustumAnonymousInteriorMeshes;
     frustumGenericInteriorMeshes += s.frustumGenericInteriorMeshes;
@@ -1084,6 +1136,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     visibleFloorPlates: r1(visibleFloorPlates),
     visibleUnitInteriorMeshes: r1(visibleUnitInteriorMeshes),
     visibleApartmentPropMeshes: r1(visibleApartmentPropMeshes),
+    visibleApartmentDecorFloorShadowMeshes: r1(visibleApartmentDecorFloorShadowMeshes),
     visibleResidentialShellMeshes: r1(visibleResidentialShellMeshes),
     visibleAnonymousInteriorMeshes: r1(visibleAnonymousInteriorMeshes),
     visibleGenericInteriorMeshes: r1(visibleGenericInteriorMeshes),
@@ -1093,6 +1146,7 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumFloorPlates: r1(frustumFloorPlates),
     frustumUnitInteriorMeshes: r1(frustumUnitInteriorMeshes),
     frustumApartmentPropMeshes: r1(frustumApartmentPropMeshes),
+    frustumApartmentDecorFloorShadowMeshes: r1(frustumApartmentDecorFloorShadowMeshes),
     frustumResidentialShellMeshes: r1(frustumResidentialShellMeshes),
     frustumAnonymousInteriorMeshes: r1(frustumAnonymousInteriorMeshes),
     frustumGenericInteriorMeshes: r1(frustumGenericInteriorMeshes),
@@ -1238,8 +1292,8 @@ function formatFpPerfReportMarkdown(
     "=== The Mammoth — Performance Report ===",
     `Window: ${s.windowSec}s  Samples: ${s.samples}  Elapsed: ${s.actualElapsedSec.toFixed(1)}s`,
     `Renderer${hdrNote}: ${ri.drawCalls} draw calls  ${(ri.triangles / 1000).toFixed(1)}k triangles`,
-    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  transparent=${ri.visibleTransparentMeshes}`,
-    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  transparent=${ri.frustumTransparentMeshes}`,
+    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  decorShadows=${ri.visibleApartmentDecorFloorShadowMeshes}  transparent=${ri.visibleTransparentMeshes}`,
+    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  decorShadows=${ri.frustumApartmentDecorFloorShadowMeshes}  transparent=${ri.frustumTransparentMeshes}`,
     "",
     `FPS   ~${s.fps} (from completed frame cadence)  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
     `CPU   ~${s.cpuFrameThroughputFps} (from avg frame cpu)`,
@@ -1266,6 +1320,7 @@ function formatFpPerfReportMarkdown(
     `  floorPlates    vis ${sceneCounts.visibleFloorPlates.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumFloorPlates.toFixed(1).padStart(6)}`,
     `  unitInterior   vis ${sceneCounts.visibleUnitInteriorMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumUnitInteriorMeshes.toFixed(1).padStart(6)}`,
     `  apartmentProps vis ${sceneCounts.visibleApartmentPropMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumApartmentPropMeshes.toFixed(1).padStart(6)}`,
+    `  decorShadows vis ${sceneCounts.visibleApartmentDecorFloorShadowMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumApartmentDecorFloorShadowMeshes.toFixed(1).padStart(6)}`,
     `  transparent    vis ${sceneCounts.visibleTransparentMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumTransparentMeshes.toFixed(1).padStart(6)}`,
     "",
     "Leak-debug breakdown (avg / frame):",

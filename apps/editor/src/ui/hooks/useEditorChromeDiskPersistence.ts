@@ -4,7 +4,6 @@ import type { CollisionArtifactsStatus } from "../../editor/content/editorConten
 import { reloadEditorFromContent } from "../../editor/bootstrap/editorBootstrap.js";
 import {
   useEditorStore,
-  serializeBuildingDocPretty,
   serializeCellDocPretty,
   serializeElevatorCabDefPretty,
   serializeFloorDocPretty,
@@ -18,7 +17,6 @@ import {
 import { requestEditorMyApartmentLayoutPersistFromScene } from "../../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import {
   fetchCollisionArtifactsStatus,
-  postSaveBuilding,
   postSaveCell,
   postSaveElevatorCab,
   postSaveFloor,
@@ -175,10 +173,6 @@ export function useEditorChromeDiskPersistence(
         wroteOwnedApartmentBuiltins = true;
       }
 
-      if (s.workspace === "world") {
-        await postSaveBuilding(serializeBuildingDocPretty(s.building));
-      }
-
       if (!wroteOwnedApartmentBuiltins && needsOwnedAptBuiltinsFlush) {
         requestEditorMyApartmentLayoutPersistFromScene();
         const st = useEditorStore.getState();
@@ -202,16 +196,10 @@ export function useEditorChromeDiskPersistence(
         );
       } else if (flushedAptLayoutExtra) {
         setSaveMsg(
-          s.workspace === "world"
-            ? "Saved to content/ (open document + mammoth.json) and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor)."
-            : "Saved to content/ and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor).",
+          "Saved to content/ and content/apartment/owned_apartment_builtins.json (bed / wardrobe / footlocker + imported decor).",
         );
       } else {
-        setSaveMsg(
-          s.workspace === "world"
-            ? "Saved to content/ (open document + mammoth.json)."
-            : "Saved to content/.",
-        );
+        setSaveMsg("Saved to content/.");
       }
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));

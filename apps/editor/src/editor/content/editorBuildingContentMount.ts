@@ -222,18 +222,6 @@ export function buildEditorStructuralRoot(args: {
         );
       }
     }
-    if (args.workspace === "world") {
-      const wrap = new THREE.Group();
-      wrap.name = "editor_world_with_cell";
-      wrap.add(buildingRoot);
-      const cellDoc = args.cellDocs[args.activeCellDocId];
-      if (cellDoc) {
-        const cellRoot = buildCellMeshes(cellDoc);
-        cellRoot.name = `cell:${cellDoc.id}`;
-        wrap.add(cellRoot);
-      }
-      return wrap;
-    }
     return buildingRoot;
   }
   if (args.mode === "interior") {

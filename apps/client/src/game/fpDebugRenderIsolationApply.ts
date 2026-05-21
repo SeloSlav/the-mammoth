@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD } from "@the-mammoth/engine";
 import {
   getFpDebugRenderIsolationFlags,
   isFpDebugRenderIsolationSuppressingAnything,
@@ -28,6 +29,14 @@ export function applyFpDebugRenderIsolationForceOff(targets: FpDebugRenderIsolat
   if (!flags.apartmentDecor) {
     const decorRoot = targets.buildingRoot.getObjectByName(DECOR_ROOT_NAME);
     if (decorRoot?.visible) decorRoot.visible = false;
+  }
+
+  if (!flags.apartmentDecorFloorShadows || !flags.apartmentDecor) {
+    targets.buildingRoot.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      if (obj.userData[MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD] !== true) return;
+      if (obj.visible) obj.visible = false;
+    });
   }
 
   if (!flags.transparentMeshes) {

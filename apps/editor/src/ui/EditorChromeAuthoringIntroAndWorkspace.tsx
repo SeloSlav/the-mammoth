@@ -100,22 +100,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           type="button"
           style={{
             ...rowBtn,
-            fontWeight: workspace === "world" ? 700 : 400,
-            background: workspace === "world" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => {
-            setWorkspace("world");
-            setMode("floor");
-          }}
-        >
-          Mammoth world
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
             fontWeight:
               mode === "fp_viewmodel" || mode === "fp_consumable" ? 700 : 400,
             background:

@@ -17,7 +17,7 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     exterior: 0.82,
 
     /** Dark interior ACES exposure — practicals/windows provide readable pools. */
-    interior: 0.4,
+    interior: 0.39,
 
   },
 
@@ -81,20 +81,20 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   interiorBounce: {
 
-    hemiSky: 0xd6dad2,
+    hemiSky: 0xdccab0,
 
-    hemiGround: 0xd6dad2,
+    hemiGround: 0xdccab0,
 
     /** Minimal flat fill — practical spots + normal response carry the read. */
-    hemiIntensity: 0.06,
+    hemiIntensity: 0.058,
 
-    fill: 0xd2d6ce,
+    fill: 0xd7b98f,
 
-    fillIntensity: 0.022,
+    fillIntensity: 0.026,
 
-    dir: 0xe6e2da,
+    dir: 0xffd08a,
 
-    dirIntensity: 0.015,
+    dirIntensity: 0.014,
 
   },
 
@@ -118,12 +118,13 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   shell: {
 
-    wallCeilColor: new THREE.Color(0.74, 0.72, 0.68),
+    /** Keep plaster close to authored color; lighting/post should grade it, not the material tint. */
+    wallCeilColor: new THREE.Color(0.92, 0.89, 0.83),
 
-    floorColor: new THREE.Color(0.66, 0.61, 0.55),
+    floorColor: new THREE.Color(0.7, 0.6, 0.47),
 
     /** PMREM on shells reads as ambient — keep low so spots carve form. */
-    indirectEnvIntensity: 0.09,
+    indirectEnvIntensity: 0.06,
 
     /** Boost tangent detail so lamps/windows rake plaster and parquet. */
     wallCeilNormalScale: 1.14,
@@ -134,26 +135,26 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   decor: {
 
-    albedoMood: new THREE.Color(0.82, 0.8, 0.76),
+    albedoMood: new THREE.Color(0.84, 0.76, 0.66),
 
-    basicAlbedoMood: new THREE.Color(0.78, 0.76, 0.72),
+    basicAlbedoMood: new THREE.Color(0.82, 0.73, 0.62),
 
-    albedoLuminanceMin: 0.1,
+    albedoLuminanceMin: 0.07,
 
-    albedoLuminanceMax: 0.46,
+    albedoLuminanceMax: 0.45,
 
     dielectricRoughnessMin: 0.48,
 
     metallicRoughnessMin: 0.28,
 
-    indirectEnvIntensity: 0.09,
+    indirectEnvIntensity: 0.055,
 
     /** Props with authored normals catch practical raking light. */
     normalScale: 1.12,
 
     emissiveScale: 0.55,
 
-    fixtureEmissiveScale: 1.18,
+    fixtureEmissiveScale: 0.94,
 
   },
 
@@ -163,11 +164,11 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     window: {
 
-      color: 0xc8dcf0,
+      color: 0xe4bd8c,
 
-      intensity: 4.15,
+      intensity: 2.35,
 
-      distance: 9,
+      distance: 7.5,
 
       angle: Math.PI / 3.2,
 
@@ -177,38 +178,51 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
     chandelier: {
 
-      color: 0xffe8c8,
+      color: 0xffca84,
 
-      intensity: 4.35,
+      /** Wide omni wash — soft falloff so corners stay amber-lit, not void-black. */
+      intensity: 7.2,
 
-      distance: 5.2,
+      distance: 8.5,
+
+      decay: 1.22,
 
     },
 
     ceiling: {
 
-      color: 0xfff0dc,
+      color: 0xffca86,
 
-      intensity: 3.05,
+      /** Down cone — brighter core, wide angle + soft penumbra for floor pool. */
+      intensity: 5.4,
 
-      distance: 3.6,
+      distance: 6.8,
 
-      angle: Math.PI / 2.35,
+      angle: Math.PI / 1.88,
 
-      penumbra: 0.52,
+      penumbra: 0.78,
+
+      decay: 1.25,
+
+      /** Secondary omni at the fixture — fills wall/ceiling shadows away from the spot cone. */
+      washIntensity: 2.35,
+
+      washDistance: 9.5,
+
+      washDecay: 1.08,
 
     },
 
     standing: {
 
-      color: 0xfff0d4,
+      color: 0xffc783,
 
       /** Open-top shade — omni point at bulb center (down + up + sideways). */
-      intensity: 5.85,
+      intensity: 3.05,
 
-      distance: 4.6,
+      distance: 3.55,
 
-      decay: 1.45,
+      decay: 1.55,
 
     },
 
@@ -245,16 +259,65 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
 
   contactShadow: {
 
-    /** Off in editor until batched — legacy path leaked one mesh per drag and tanked FPS. */
+    /** Disabled — use {@link decorShadow} silhouette shadows only (no flat circle blobs). */
     enabled: false,
 
-    opacity: 0.2,
+    opacity: 0.4,
 
-    radiusScale: 0.42,
+    radiusScale: 0.46,
 
-    minRadiusM: 0.18,
+    minRadiusM: 0.2,
 
-    maxRadiusM: 1.35,
+    maxRadiusM: 1.45,
+
+  },
+
+  /** Downward shadow map + silhouette bake for static decor on shell floors. */
+  decorShadow: {
+
+    enabled: true,
+
+    /** Mesh-accurate top-down silhouette overlay (primary visible grounding). */
+    bakedFloorOverlay: true,
+
+    bakedMapSize: 1024,
+
+    /** Alpha of warm floor-shadow overlay (normal blend — subtle, not pitch black). */
+    bakedFloorOpacity: 0.3,
+
+    /** Total opacity distributed over expanded penumbra rings. */
+    bakedFloorSoftOpacity: 0.2,
+
+    /** World-space outward expansion of the outermost penumbra mesh. */
+    bakedFloorSoftRadiusM: 0.2,
+
+    /** More rings make the geometry penumbra read less like a second hard edge. */
+    bakedFloorSoftRings: 5,
+
+    /** Warm brown shadow tint (not pure black). */
+    bakedFloorShadowTint: 0x1f1b17,
+
+    bakedFloorOffsetM: 0.004,
+
+    /** Optional realtime shadow map (subtle; washed out by practicals without the bake). */
+    realtimeShadowMap: false,
+
+    mapSize: 1024,
+
+    lightColor: 0xffe0b8,
+
+    /** Small warm top fill — mainly carries the shadow term on floor shells. */
+    lightIntensity: 0.11,
+
+    bias: -0.0006,
+
+    normalBias: 0.016,
+
+    radius: 1.35,
+
+    cameraPaddingM: 0.65,
+
+    cameraHeightM: 5.5,
 
   },
 
@@ -357,6 +420,12 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
   if (lower.includes("rug")) return false;
 
   if (lower.includes("light-")) return false;
+
+  if (lower.includes("wall-clock")) return false;
+
+  if (lower.includes("painting")) return false;
+
+  if (lower.includes("coat-hanger")) return false;
 
   return true;
 

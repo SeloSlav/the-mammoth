@@ -26,6 +26,7 @@ import { MammothCraftingHud } from "./MammothCraftingHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { MammothToastHud } from "./MammothToastHud";
+import { MammothApartmentFilmGradeOverlay } from "./MammothApartmentFilmGradeOverlay";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
@@ -82,6 +83,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
 
   return (
     <>
+      <MammothApartmentFilmGradeOverlay />
       {conn ? <PlayerDeathOverlay conn={conn} /> : null}
       {conn ? <PlayerDamageFeedbackOverlay conn={conn} /> : null}
       <div style={gameUiHidden ? { display: "none" } : undefined}>

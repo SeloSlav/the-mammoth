@@ -41,4 +41,9 @@ export const editorChromeRowBtn: CSSProperties = {
   marginTop: 6,
   padding: "4px 8px",
   cursor: "pointer",
+  border: "1px solid #444",
+  borderRadius: 4,
+  background: "#2a2a34",
+  color: "#fff",
+  outline: "none",
 };

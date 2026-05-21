@@ -1087,7 +1087,6 @@ export function EditorChromeMyApartment(props: {
         type="button"
         style={{
           ...editorChromeRowBtn,
-          background: "#2d4861",
           marginTop: 4,
         }}
         onClick={() => {

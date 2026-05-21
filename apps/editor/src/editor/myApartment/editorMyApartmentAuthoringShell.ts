@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD } from "@the-mammoth/engine";
+import { MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD, APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import type { BuildingDoc, FloorDoc, OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
 import {
   floorPlaceholderMeshMaterials,
@@ -161,7 +161,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
     EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y - 0.02,
     spanSlabZ * 0.5,
   );
-  floor.receiveShadow = false;
+  floor.receiveShadow = APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.enabled;
   floor.castShadow = false;
   floor.userData[MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD] = true;
   root.add(floor);

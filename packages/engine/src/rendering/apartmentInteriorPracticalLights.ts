@@ -362,6 +362,23 @@ export function mountApartmentPracticalLights(
       enableApartmentInteriorLightLayers(spot);
       root.add(spot);
       root.add(spot.target);
+
+      if (spec.kind === "ceiling") {
+        const ceiling = APARTMENT_INTERIOR_VISUAL_PROFILE.practical.ceiling;
+        if (ceiling.washIntensity > 0) {
+          const wash = new THREE.PointLight(
+            ceiling.color,
+            ceiling.washIntensity,
+            ceiling.washDistance,
+            ceiling.washDecay ?? lightDecay,
+          );
+          wash.name = `apt_ceiling_wash_${i}`;
+          wash.position.copy(local.position);
+          wash.castShadow = false;
+          enableApartmentInteriorLightLayers(wash);
+          root.add(wash);
+        }
+      }
       continue;
     }
 

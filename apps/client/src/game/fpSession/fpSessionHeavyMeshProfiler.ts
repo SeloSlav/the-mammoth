@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD } from "@the-mammoth/engine";
 import {
   recordFpPerfHeavyMeshes,
   type FpPerfHeavyMeshRecord,
@@ -71,6 +72,9 @@ function bigintUserDataInAncestors(obj: THREE.Object3D, key: string): string | n
 }
 
 function classifyMesh(mesh: THREE.Mesh): string {
+  if (mesh.userData[MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD] === true) {
+    return "apartmentDecorFloorShadow";
+  }
   if (nearestTaggedAncestor(mesh, (obj) => obj.userData.mammothApartmentDecorProp === true)) {
     return "apartmentDecor";
   }

@@ -256,4 +256,22 @@ export {
   attachApartmentDecorContactShadow,
   computeApartmentDecorContactShadowRadius,
   disposeLeakedApartmentDecorContactShadows,
+  syncApartmentDecorBatchedContactShadows,
+  type ApartmentDecorBatchedContactShadowMount,
 } from "./rendering/apartmentInteriorContactShadow.js";
+export {
+  applyApartmentDecorCastShadowFlags,
+  applyApartmentInteriorFloorReceiveShadowUnder,
+  ensureMammothApartmentDecorShadowRenderer,
+  isApartmentInteriorFloorShellMesh,
+  requestMammothRendererShadowMapUpdate,
+  syncApartmentDecorShadowRig,
+  type ApartmentDecorShadowRigMount,
+} from "./rendering/apartmentInteriorDecorShadow.js";
+export {
+  APARTMENT_BAKED_FLOOR_SHADOW_MESH_NAME,
+  isApartmentBakedFloorShadowMesh,
+  MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
+  syncApartmentDecorBakedFloorShadowOverlay,
+  type ApartmentDecorBakedFloorShadowMount,
+} from "./rendering/apartmentInteriorBakedDecorFloorShadow.js";

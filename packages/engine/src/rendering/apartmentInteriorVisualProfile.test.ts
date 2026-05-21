@@ -29,10 +29,11 @@ describe("APARTMENT_INTERIOR_VISUAL_PROFILE", () => {
   it("keeps practical pools tighter than corridor-scale washes", () => {
     const { practical } = APARTMENT_INTERIOR_VISUAL_PROFILE;
     expect(practical.window.distance).toBeLessThan(10);
-    expect(practical.chandelier.distance).toBeLessThan(6.5);
+    expect(practical.chandelier.distance).toBeLessThan(10);
     expect(practical.standing.distance).toBeLessThan(6);
     expect(practical.standing.decay).toBeGreaterThan(0);
     expect(practical.ceiling.angle).toBeGreaterThan(0);
+    expect(practical.ceiling.washIntensity).toBeGreaterThan(0);
     expect(practical.tv.distance).toBeLessThan(14);
     expect(practical.computer.distance).toBeLessThan(12);
     expect(practical.computer.color).toBe(practical.tv.color);

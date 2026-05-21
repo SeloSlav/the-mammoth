@@ -3,6 +3,7 @@ import { MOUSE } from "three";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import { rebuildStairWellPreviewRoot } from "@the-mammoth/world";
+import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import { useEditorStore } from "../../state/editorStore.js";
 import type { EditorStructuralState } from "./editorSceneStructuralRebuild.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
@@ -253,11 +254,16 @@ export function subscribeEditorSceneStore(deps: {
       }
 
       if (s.shadowsEnabled !== prev.shadowsEnabled) {
-        renderer.shadowMap.enabled = s.shadowsEnabled;
-        dir.castShadow = s.shadowsEnabled;
-        scene.traverse((o) => {
-          if (o instanceof THREE.Mesh) o.castShadow = s.shadowsEnabled;
-        });
+        const apartmentDecorShadows =
+          s.mode === "my_apartment_layout" &&
+          APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow.enabled;
+        renderer.shadowMap.enabled = s.shadowsEnabled || apartmentDecorShadows;
+        dir.castShadow = s.shadowsEnabled && !apartmentDecorShadows;
+        if (!apartmentDecorShadows) {
+          scene.traverse((o) => {
+            if (o instanceof THREE.Mesh) o.castShadow = s.shadowsEnabled;
+          });
+        }
       }
       if (
         s.useHdriEnvironment !== prev.useHdriEnvironment ||

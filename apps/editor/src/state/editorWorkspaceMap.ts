@@ -19,8 +19,12 @@ export function workspaceToInitialMode(
   workspace: EditorWorkspace,
   landingDocKind: LandingDocKind,
 ): EditorMode {
-  if (workspace === "cab") return "cab";
-  if (workspace === "stairwell") return "stairwell_preview";
-  if (workspace === "landing") return landingDocKindToMode(landingDocKind);
-  return "floor";
+  switch (workspace) {
+    case "cab":
+      return "cab";
+    case "stairwell":
+      return "stairwell_preview";
+    case "landing":
+      return landingDocKindToMode(landingDocKind);
+  }
 }

@@ -21,6 +21,8 @@ import {
   bindMammothApartmentInteriorViewmodelEnv,
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
+  ensureMammothApartmentDecorShadowRenderer,
+  MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
   prepareMammothApartmentInteriorContentRoots,
   requestWebGpuAdapter,
   webGpuAdapterSupportsTimestampQuery,
@@ -380,6 +382,7 @@ export async function mountFpSession(
   const topFloorResidentialUnitShellMeshes =
     collectFpSessionTopFloorResidentialUnitShellMeshes(buildingRoot);
   const apartmentDecorInteriorMeshes: THREE.Mesh[] = [];
+  const apartmentDecorFloorShadowMeshes: THREE.Mesh[] = [];
   const perfFloorPlateGroups = buildingRoot.children.filter(
     (ch): ch is THREE.Group =>
       ch instanceof THREE.Group &&
@@ -394,8 +397,12 @@ export async function mountFpSession(
     material.transparent === true || material.alphaTest > 0 || material.depthWrite === false;
   const refreshPerfTrackedMeshes = (): void => {
     transparentBuildingMeshes.length = 0;
+    apartmentDecorFloorShadowMeshes.length = 0;
     buildingRoot.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
+      if (obj.userData[MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD] === true) {
+        apartmentDecorFloorShadowMeshes.push(obj);
+      }
       const material = obj.material;
       const contributesTransparentPass = Array.isArray(material)
         ? material.some(materialContributesTransparentPass)
@@ -457,6 +464,7 @@ export async function mountFpSession(
     visibleFloorPlates: 0,
     visibleUnitInteriorMeshes: 0,
     visibleApartmentPropMeshes: 0,
+    visibleApartmentDecorFloorShadowMeshes: 0,
     visibleResidentialShellMeshes: 0,
     visibleAnonymousInteriorMeshes: 0,
     visibleGenericInteriorMeshes: 0,
@@ -466,6 +474,7 @@ export async function mountFpSession(
     frustumFloorPlates: 0,
     frustumUnitInteriorMeshes: 0,
     frustumApartmentPropMeshes: 0,
+    frustumApartmentDecorFloorShadowMeshes: 0,
     frustumResidentialShellMeshes: 0,
     frustumAnonymousInteriorMeshes: 0,
     frustumGenericInteriorMeshes: 0,
@@ -539,11 +548,19 @@ export async function mountFpSession(
 
     let visibleApartmentPropMeshes = 0;
     let frustumApartmentPropMeshes = 0;
+    let visibleApartmentDecorFloorShadowMeshes = 0;
+    let frustumApartmentDecorFloorShadowMeshes = 0;
     for (let i = 0; i < apartmentDecorInteriorMeshes.length; i++) {
       const mesh = apartmentDecorInteriorMeshes[i]!;
       if (!objectVisibleInHierarchy(mesh)) continue;
       visibleApartmentPropMeshes += 1;
       if (_perfSceneFrustum.intersectsObject(mesh)) frustumApartmentPropMeshes += 1;
+    }
+    for (let i = 0; i < apartmentDecorFloorShadowMeshes.length; i++) {
+      const mesh = apartmentDecorFloorShadowMeshes[i]!;
+      if (!objectVisibleInHierarchy(mesh)) continue;
+      visibleApartmentDecorFloorShadowMeshes += 1;
+      if (_perfSceneFrustum.intersectsObject(mesh)) frustumApartmentDecorFloorShadowMeshes += 1;
     }
 
     let visibleTransparentMeshes = 0;
@@ -566,6 +583,7 @@ export async function mountFpSession(
       visibleFloorPlates,
       visibleUnitInteriorMeshes,
       visibleApartmentPropMeshes,
+      visibleApartmentDecorFloorShadowMeshes,
       visibleResidentialShellMeshes,
       visibleAnonymousInteriorMeshes,
       visibleGenericInteriorMeshes,
@@ -575,6 +593,7 @@ export async function mountFpSession(
       frustumFloorPlates,
       frustumUnitInteriorMeshes,
       frustumApartmentPropMeshes,
+      frustumApartmentDecorFloorShadowMeshes,
       frustumResidentialShellMeshes,
       frustumAnonymousInteriorMeshes,
       frustumGenericInteriorMeshes,
@@ -591,8 +610,12 @@ export async function mountFpSession(
     scene,
     conn,
     buildingRoot,
+    renderer,
     cabMirrorCollection,
     onRebuilt: refreshApartmentInteriorMeshes,
+    onRequestShadowMapUpdate: () => {
+      ensureMammothApartmentDecorShadowRenderer(renderer);
+    },
   });
   refreshApartmentInteriorMeshes();
 

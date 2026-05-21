@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { MAMMOTH_APARTMENT_DECOR_PROP_LAYER } from "./apartmentInteriorLayers.js";
-import { applyCeilingFixtureLensGlow } from "./apartmentCeilingFixtureLensGlow.js";
 import { apartmentStandingLampShadeBulbWorldPosition } from "./apartmentStandingLampShadeBulb.js";
 import { mammothSpecularReadabilityWeight } from "./bindMammothMetallicReadableEnv.js";
 import { upgradeApartmentDecorMaterialToStandard } from "./apartmentDecorMaterialUpgrade.js";
@@ -60,25 +59,30 @@ export function moodGradeMammothApartmentDecorMaterial(
   m.color.multiply(cfg.albedoMood);
   normalizeAlbedoLuminance(m.color, cfg.albedoLuminanceMin, cfg.albedoLuminanceMax);
   if (isWarmFixture || isScreenGlow) {
-    m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
-    m.emissiveIntensity *= cfg.fixtureEmissiveScale;
-    if (isWarmFixture) {
+    if (emitterKind === "ceiling") {
+      /** Flush mounts read from practical lights only — authored emissive maps look awkward. */
+      m.emissive.setHex(0x000000);
+      m.emissiveIntensity = 1;
+      m.emissiveMap = null;
+    } else {
+      m.emissive.multiplyScalar(cfg.fixtureEmissiveScale);
+      m.emissiveIntensity *= cfg.fixtureEmissiveScale;
+    }
+    if (isWarmFixture && emitterKind !== "ceiling") {
       if (m.emissiveMap) {
         /** Authored emissive masks carry bulb/shade glow — keep hot white, don't wash with lerp. */
         m.emissive.setRGB(1, 0.99, 0.94);
         m.emissiveIntensity *=
           emitterKind === "standing"
-            ? 3.1
-            : emitterKind === "ceiling"
-              ? 2.35
-              : 1.75;
+            ? 2.15
+            : 1.55;
       } else {
         m.emissive.lerp(
-          new THREE.Color(0xffe8c8),
+          new THREE.Color(0xffd090),
           emitterKind === "standing" ? 0.42 : 0.35,
         );
         if (emitterKind === "standing") {
-          m.emissiveIntensity *= 1.35;
+          m.emissiveIntensity *= 1.05;
         }
       }
     } else if (isScreenGlow) {
@@ -113,7 +117,8 @@ export function moodGradeMammothApartmentDecorMesh(
 }
 
 /**
- * Visible lit read for warm fixtures: ceiling lens emissive split, standing-lamp shade orb.
+ * Visible lit read for warm fixtures: standing-lamp shade orb.
+ * Ceiling flush mounts rely on practical lights only (no emissive lens split).
  * Call after mesh mood grading (and after FP material merge, if any).
  */
 export function attachApartmentWarmFixtureBulbGlow(
@@ -121,10 +126,6 @@ export function attachApartmentWarmFixtureBulbGlow(
   modelRelPath: string,
 ): void {
   const kind = apartmentDecorEmitterKindFromModelPath(modelRelPath);
-  if (kind === "ceiling") {
-    applyCeilingFixtureLensGlow(root);
-    return;
-  }
   if (kind !== "standing") return;
   if (root.userData[MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD] === true) return;
 
@@ -150,7 +151,7 @@ export function attachApartmentWarmFixtureBulbGlow(
     new THREE.MeshStandardMaterial({
       color: 0xfff8f2,
       emissive: 0xfff6ee,
-      emissiveIntensity: 3.8,
+      emissiveIntensity: 2.75,
       roughness: 0.26,
       metalness: 0,
       toneMapped: false,
