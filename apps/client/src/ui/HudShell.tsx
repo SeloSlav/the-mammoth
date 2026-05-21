@@ -15,6 +15,7 @@ import {
   subscribeFpSessionGameUiHidden,
 } from "../game/fpSession/fpSessionGameUiHidden";
 import { GameplayErrorBarShell } from "./GameplayErrorBarShell";
+import { MammothInventoryDockBackdrop } from "../inventory/MammothInventoryDockBackdrop";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothStashHud } from "../inventory/MammothStashHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
@@ -186,6 +187,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
           <MammothToastHud conn={conn} reserveAboveVitalsExtraPx={craftStripReserveAboveVitalsPx} />
         ) : null}
         <GameplayErrorBarShell conn={conn} activeStash={activeStash} />
+        <MammothInventoryDockBackdrop />
         {conn ? <MammothInventoryHud conn={conn} activeStash={activeStash} /> : null}
         {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}

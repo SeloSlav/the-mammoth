@@ -8,6 +8,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  THEME_ACCENT,
+  THEME_CARD_BG_STRONG,
+  THEME_CARD_BORDER_STRONG,
+  THEME_PANEL_SHADOW,
+  THEME_TEXT_FAINT,
+  UI_FONT_SANS,
+} from "@the-mammoth/ui-theme";
 import type { DbConnection } from "../module_bindings";
 import { hotbarSlotHasHotbarUseAction } from "../game/fpHotbar/fpHotbarActivate";
 import { runFpHotbarInstantConsume } from "../game/fpHotbar/fpHotbarConsume";
@@ -27,6 +35,9 @@ import {
   onMammothInventoryCloseRequestFromFp,
   onMammothInventoryOpenRequestFromFp,
 } from "../game/fpInteraction/fpInventoryOpenRequest";
+import {
+  setFpInventoryDockOpen,
+} from "../game/fpInteraction/fpInventoryDockOpen";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import {
   getFpHotbarSelectedSlot,
@@ -59,6 +70,7 @@ import {
 } from "./mammothItemTooltipContent";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
 import { inventoryReducerQuantityArg } from "./inventoryDragMove";
+import { MammothHudPanel } from "./MammothHudPanel";
 import {
   inventorySlotGridsMatch,
   inventorySlotGridsSemanticallyMatch,
@@ -207,6 +219,12 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       hideItemTooltip();
     }
   }, [invOpen, hideItemTooltip]);
+
+  /** Mirror local panel state into the shared signal so sibling overlays (backdrop, footer) render in lockstep. */
+  useEffect(() => {
+    setFpInventoryDockOpen(invOpen);
+    return () => setFpInventoryDockOpen(false);
+  }, [invOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -451,6 +469,15 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   const { hotbar: hb, inventory: inv } = displaySlots;
 
+  /**
+   * Inventory anchors the LEFT half of the dock when a stash is open (so the pair feels
+   * balanced around the viewport center) and centers fully when opened solo via Tab.
+   * Stash panel uses the mirrored anchor (see MammothStashHud).
+   */
+  const inventoryAnchor: CSSProperties = activeStash
+    ? { right: "calc(50% + 8px)", top: "50%", transform: "translate(0, -50%)" }
+    : { left: "50%", top: "50%", transform: "translate(-50%, -50%)" };
+
   return (
     <div
       data-mammoth-inventory={invOpen ? "open" : "closed"}
@@ -465,64 +492,60 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     >
       {invOpen && (
         <div
-          onContextMenu={blockBrowserContextMenu}
-          onDragStart={(e) => e.preventDefault()}
           style={{
-            pointerEvents: "auto",
             position: "fixed",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            padding: 12,
-            borderRadius: 10,
-            background: "linear-gradient(160deg, rgba(25,28,38,0.96), rgba(12,14,20,0.98))",
-            border: "1px solid rgba(120,200,255,0.35)",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
-            minWidth: 360,
+            ...inventoryAnchor,
             zIndex: 121,
-            ...NO_SELECT,
+            pointerEvents: "auto",
           }}
         >
-          <div style={{ color: "#b8c4d8", fontSize: 12, marginBottom: 8 }}>
-            Inventory — Tab to close
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${INV_COLS}, 52px)`,
-              gap: 6,
-            }}
+          <MammothHudPanel
+            title="Inventory"
+            subtitle={
+              activeStash
+                ? "Drag items in or out. Right-click to quick-transfer."
+                : "Right-click to send an item to the hotbar."
+            }
+            onContextMenu={blockBrowserContextMenu}
           >
-            {Array.from({ length: INV_ROWS * INV_COLS }, (_, i) => {
-              const pop = inv[i] ?? null;
-              const slotInfo = { type: "inventory" as const, index: i };
-              return (
-                <MammothDroppableSlot key={`inv-${i}`} slotInfo={slotInfo}>
-                  {pop ? (
-                    <MammothDraggableItem
-                      key={String(toInstanceId(pop))}
-                      item={pop}
-                      sourceSlot={slotInfo}
-                      onDragStart={handleDragStart}
-                      onDrop={handleDrop}
-                      onItemContextMenu={() =>
-                        activeStash
-                          ? quickMovePlayerItemToStash(pop, slotInfo)
-                          : quickMoveInventoryToHotbar(pop, i)
-                      }
-                      slotHover={{
-                        onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
-                        onMove: updateTooltipPositionFromHoverEvent,
-                        onLeave: hideItemTooltip,
-                      }}
-                    >
-                      {slotInner(pop)}
-                    </MammothDraggableItem>
-                  ) : null}
-                </MammothDroppableSlot>
-              );
-            })}
-          </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${INV_COLS}, 52px)`,
+                gap: 6,
+              }}
+            >
+              {Array.from({ length: INV_ROWS * INV_COLS }, (_, i) => {
+                const pop = inv[i] ?? null;
+                const slotInfo = { type: "inventory" as const, index: i };
+                return (
+                  <MammothDroppableSlot key={`inv-${i}`} slotInfo={slotInfo}>
+                    {pop ? (
+                      <MammothDraggableItem
+                        key={String(toInstanceId(pop))}
+                        item={pop}
+                        sourceSlot={slotInfo}
+                        onDragStart={handleDragStart}
+                        onDrop={handleDrop}
+                        onItemContextMenu={() =>
+                          activeStash
+                            ? quickMovePlayerItemToStash(pop, slotInfo)
+                            : quickMoveInventoryToHotbar(pop, i)
+                        }
+                        slotHover={{
+                          onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
+                          onMove: updateTooltipPositionFromHoverEvent,
+                          onLeave: hideItemTooltip,
+                        }}
+                      >
+                        {slotInner(pop)}
+                      </MammothDraggableItem>
+                    ) : null}
+                  </MammothDroppableSlot>
+                );
+              })}
+            </div>
+          </MammothHudPanel>
         </div>
       )}
 
@@ -537,12 +560,13 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
           transform: "translateX(-50%)",
           display: "flex",
           gap: 6,
-          padding: "6px 10px",
-          borderRadius: 10,
-          background: "rgba(8,10,16,0.88)",
-          border: "1px solid rgba(120,200,255,0.28)",
+          padding: "8px 12px",
+          borderRadius: 12,
+          background: THEME_CARD_BG_STRONG,
+          border: `1px solid ${THEME_CARD_BORDER_STRONG}`,
           zIndex: 122,
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.45)",
+          boxShadow: THEME_PANEL_SHADOW,
+          fontFamily: UI_FONT_SANS,
           ...NO_SELECT,
         }}
       >
@@ -570,7 +594,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                   left: "50%",
                   transform: "translateX(-50%)",
                   fontSize: 10,
-                  color: "rgba(200,210,230,0.75)",
+                  color: THEME_TEXT_FAINT,
                   width: 52,
                   textAlign: "center",
                   ...NO_SELECT,
@@ -584,7 +608,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                 onClick={pop ? undefined : () => onHotbarSlotClick(index)}
                 overlayProgress={consumeCd ?? undefined}
                 style={{
-                  outline: sel ? "2px solid #5cf" : undefined,
+                  outline: sel ? `2px solid ${THEME_ACCENT}` : undefined,
                   outlineOffset: 1,
                   position: "relative",
                 }}

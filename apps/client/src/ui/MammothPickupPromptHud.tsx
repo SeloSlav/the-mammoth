@@ -1,9 +1,5 @@
 import type { ApartmentDoorInteractPromptKind } from "@the-mammoth/world";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import {
-  getFpActiveStashPanel,
-  subscribeFpActiveStashPanel,
-} from "../game/fpInteraction/fpActiveStashPanel";
 import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpInteraction/fpPickupPrompt";
 
 function mammothInventoryOpen(): boolean {
@@ -79,16 +75,11 @@ function InteractKeyE(props: {
 /** Bottom interact bar — elevators, pickups, Balkan MVP apartment flows. */
 export function MammothPickupPromptHud() {
   const prompt = useSyncExternalStore(subscribeFpPickupPrompt, getFpPickupPrompt, getFpPickupPrompt);
-  const activeStash = useSyncExternalStore(
-    subscribeFpActiveStashPanel,
-    getFpActiveStashPanel,
-    getFpActiveStashPanel,
-  );
-  const stashCloseHint =
-    prompt?.kind === "apartment_stash" &&
-    (prompt.willClose ||
-      (activeStash !== null && activeStash.stashKey === prompt.stashKey));
-  if (!prompt || (mammothInventoryOpen() && !stashCloseHint)) return null;
+  /**
+   * Inventory dock has its own unified close-hint footer ({@link MammothInventoryDockBackdrop}).
+   * Suppress the floating bottom prompt entirely while the dock is up so we don't double the legend.
+   */
+  if (!prompt || mammothInventoryOpen()) return null;
 
   const doorNoun: Record<ApartmentDoorInteractPromptKind, string> = {
     stairwell: "stairwell door",
@@ -216,10 +207,10 @@ export function MammothPickupPromptHud() {
       prompt.stashLabel.length === 0
         ? ""
         : `${prompt.stashLabel[0]!.toUpperCase()}${prompt.stashLabel.slice(1)}`;
-    const willClose =
-      prompt.willClose ||
-      (activeStash !== null && activeStash.stashKey === prompt.stashKey);
-    const action = willClose ? "Close" : "Open";
+    // The dock is always closed in this branch (see mammothInventoryOpen guard above), so
+    // prompt.willClose is the authoritative signal — the redundant `activeStash` cross-check
+    // moved out with the floating close hint.
+    const action = prompt.willClose ? "Close" : "Open";
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>

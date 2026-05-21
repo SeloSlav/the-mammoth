@@ -5,6 +5,14 @@ import {
   apartmentStashHudGridCols,
   apartmentStashHudSections,
 } from "@the-mammoth/schemas";
+import {
+  THEME_ACCENT,
+  THEME_CARD_BORDER_STRONG,
+  THEME_DIVIDER,
+  THEME_TEXT_FAINT,
+  THEME_TEXT_MUTED,
+  THEME_TEXT_PRIMARY,
+} from "@the-mammoth/ui-theme";
 import type { DbConnection } from "../module_bindings";
 import type { ApartmentStashKind } from "../game/fpApartment/fpApartmentStashKey";
 import type {
@@ -29,6 +37,7 @@ import {
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
 import { MammothDraggableItem } from "./MammothDraggableItem";
+import { MammothHudPanel } from "./MammothHudPanel";
 import { MammothItemIcon } from "./MammothItemIcon";
 import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
@@ -390,118 +399,110 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     slotInner,
   };
 
-  const rulesHint =
-    stashKind === "footlocker"
-      ? "General storage — any item."
-      : apartmentStashRejectionHint(stashKind);
+  const subtitle = useMemo(() => {
+    const ruleHint =
+      stashKind === "footlocker"
+        ? "General storage — any item."
+        : apartmentStashRejectionHint(stashKind);
+    return `Drag items in or out. ${ruleHint} Right-click to quick-transfer.`;
+  }, [stashKind]);
 
   const slotGridStyle: CSSProperties = {
     display: "grid",
     gap: 6,
   };
 
+  const titleText = `${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`;
+
   return (
-    <div
-      onContextMenu={blockBrowserContextMenu}
-      onDragStart={(e) => e.preventDefault()}
-      style={{
-        position: "fixed",
-        right: 18,
-        top: "50%",
-        transform: "translateY(-50%)",
-        padding: 12,
-        borderRadius: 10,
-        background: "linear-gradient(160deg, rgba(34,28,20,0.96), rgba(12,10,8,0.98))",
-        border: "1px solid rgba(255,210,140,0.35)",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
-        color: "#dfe6f5",
-        fontSize: 13,
-        minWidth: stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? 220 : 360,
-        zIndex: 121,
-        pointerEvents: "auto",
-        ...NO_SELECT,
-      }}
-      data-testid="mammoth-stash-panel"
-    >
-      <div style={{ color: "#f2d39a", fontSize: 12, marginBottom: 4 }}>{`${stashLabel[0]!.toUpperCase()}${stashLabel.slice(1)}`}</div>
-      <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
-        Drag items in/out. {rulesHint} Tab, Esc, or E to close.
-      </div>
+    <>
+      <div
+        style={{
+          position: "fixed",
+          left: "calc(50% + 8px)",
+          top: "50%",
+          transform: "translate(0, -50%)",
+          zIndex: 121,
+          pointerEvents: "auto",
+        }}
+      >
+        <MammothHudPanel
+          title={titleText}
+          subtitle={subtitle}
+          testid="mammoth-stash-panel"
+          onContextMenu={blockBrowserContextMenu}
+        >
+          {stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
+            <GrowTrayDescription />
+          ) : null}
 
-      {stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
-        <div style={{ marginBottom: 10, fontSize: 11, color: "#a8d4a0", lineHeight: 1.45 }}>
-          Drop balcony substrate here. While this slot holds fertilizer, plants in this tray grow
-          20% faster — it is not consumed when you plant.
-        </div>
-      ) : null}
+          {stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
+            <WaterTankReadout
+              tankLiters={tankLiters}
+              canFillBottle={canFillBottle}
+              onFillBottleAtTank={onFillBottleAtTank}
+            />
+          ) : null}
 
-      {stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#9ec8ff", marginBottom: 4 }}>
-            Tank · {(tankLiters).toFixed(1)} / {APARTMENT_WATER_TANK_CAPACITY_L} L
-          </div>
-          <div
-            style={{
-              height: 8,
-              borderRadius: 4,
-              background: "rgba(0,0,0,0.35)",
-              border: "1px solid rgba(100,180,255,0.35)",
-              overflow: "hidden",
-              marginBottom: 8,
-            }}
-          >
+          {stoveSections ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {stoveSections.map((section) => (
+                <div key={section.label}>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: THEME_TEXT_FAINT,
+                      marginBottom: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {section.label}
+                  </div>
+                  <div
+                    style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${section.cols}, 52px)` }}
+                  >
+                    {section.slotIndices.map((slotIndex) =>
+                      renderStashSlot(
+                        slotIndex,
+                        displaySlots.stash?.[slotIndex] ?? null,
+                        slotRenderOpts,
+                      ),
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
             <div
               style={{
-                height: "100%",
-                width: `${Math.min(100, (tankLiters / APARTMENT_WATER_TANK_CAPACITY_L) * 100)}%`,
-                background: "linear-gradient(90deg, rgba(0,120,220,0.85), rgba(0,180,255,0.9))",
+                ...slotGridStyle,
+                gridTemplateColumns: "52px",
+                justifyContent: "center",
               }}
-            />
-          </div>
-          <button
-            type="button"
-            disabled={!canFillBottle}
-            onClick={onFillBottleAtTank}
-            style={{
-              width: "100%",
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid rgba(100,180,255,0.45)",
-              background: canFillBottle ? "rgba(20,60,110,0.85)" : "rgba(30,30,36,0.6)",
-              color: canFillBottle ? "#dff4ff" : "rgba(180,190,210,0.5)",
-              cursor: canFillBottle ? "pointer" : "not-allowed",
-              fontSize: 12,
-            }}
-          >
-            Fill bottle
-          </button>
-        </div>
-      ) : null}
-
-      {stoveSections ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {stoveSections.map((section) => (
-            <div key={section.label}>
-              <div style={{ fontSize: 11, color: "#c9b896", marginBottom: 6 }}>{section.label}</div>
-              <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${section.cols}, 52px)` }}>
-                {section.slotIndices.map((slotIndex) =>
-                  renderStashSlot(slotIndex, displaySlots.stash?.[slotIndex] ?? null, slotRenderOpts),
-                )}
-              </div>
+            >
+              {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
             </div>
-          ))}
-        </div>
-      ) : stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
-        <div style={{ ...slotGridStyle, gridTemplateColumns: "52px", justifyContent: "center" }}>
-          {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
-        </div>
-      ) : (
-        <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${gridCols}, 52px)` }}>
-          {(displaySlots.stash ?? []).map((pop, slotIndex) =>
-            renderStashSlot(slotIndex, pop, slotRenderOpts),
+          ) : stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
+            <div
+              style={{
+                ...slotGridStyle,
+                gridTemplateColumns: "52px",
+                justifyContent: "center",
+              }}
+            >
+              {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
+            </div>
+          ) : (
+            <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${gridCols}, 52px)` }}>
+              {(displaySlots.stash ?? []).map((pop, slotIndex) =>
+                renderStashSlot(slotIndex, pop, slotRenderOpts),
+              )}
+            </div>
           )}
-        </div>
-      )}
+        </MammothHudPanel>
+      </div>
 
       {createPortal(
         <MammothItemTooltip
@@ -511,6 +512,108 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
         />,
         document.body,
       )}
+    </>
+  );
+}
+
+/** Grow tray sub-readout: explains the fertilizer slot behavior. */
+function GrowTrayDescription() {
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: "10px 12px",
+        borderRadius: 8,
+        border: `1px solid ${THEME_CARD_BORDER_STRONG}`,
+        background: "rgba(255,255,255,0.025)",
+        fontSize: 11.5,
+        lineHeight: 1.5,
+        color: THEME_TEXT_MUTED,
+      }}
+    >
+      Drop balcony substrate here. While this slot holds fertilizer, plants in this tray grow
+      <strong style={{ color: THEME_TEXT_PRIMARY, fontWeight: 600 }}> 20% faster</strong> — the
+      fertilizer is not consumed when you plant.
+    </div>
+  );
+}
+
+/** Water tank sub-readout: tank level bar + fill-bottle action. */
+function WaterTankReadout({
+  tankLiters,
+  canFillBottle,
+  onFillBottleAtTank,
+}: {
+  tankLiters: number;
+  canFillBottle: boolean;
+  onFillBottleAtTank: () => void;
+}) {
+  const pct = Math.min(100, (tankLiters / APARTMENT_WATER_TANK_CAPACITY_L) * 100);
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          fontSize: 11,
+          color: THEME_TEXT_MUTED,
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: THEME_TEXT_FAINT,
+            fontWeight: 600,
+          }}
+        >
+          Tank
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums", color: THEME_TEXT_PRIMARY }}>
+          {tankLiters.toFixed(1)} / {APARTMENT_WATER_TANK_CAPACITY_L} L
+        </span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 4,
+          background: "rgba(0,0,0,0.4)",
+          border: `1px solid ${THEME_DIVIDER}`,
+          overflow: "hidden",
+          marginBottom: 12,
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: "linear-gradient(90deg, rgba(46,116,170,0.9), rgba(120,180,225,0.95))",
+            transition: "width 200ms ease-out",
+          }}
+        />
+      </div>
+      <button
+        type="button"
+        disabled={!canFillBottle}
+        onClick={onFillBottleAtTank}
+        style={{
+          width: "100%",
+          padding: "8px 10px",
+          borderRadius: 8,
+          border: `1px solid ${canFillBottle ? THEME_ACCENT : THEME_CARD_BORDER_STRONG}`,
+          background: canFillBottle ? THEME_ACCENT : "rgba(255,255,255,0.04)",
+          color: canFillBottle ? "#0f1218" : THEME_TEXT_FAINT,
+          cursor: canFillBottle ? "pointer" : "not-allowed",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: "0.02em",
+          transition: "background 120ms ease-out, border-color 120ms ease-out",
+        }}
+      >
+        Fill bottle
+      </button>
     </div>
   );
 }

@@ -182,10 +182,12 @@ function applyDecorFixtureEmissiveDebugIsolation(
  */
 const AUTHORING_DECOR_BOUNDARY_SLACK_M = 0;
 const _stashRaycaster = new THREE.Raycaster();
+const _stashWallOcclusionRaycaster = new THREE.Raycaster();
 const _screenCenterNdc = new THREE.Vector2(0, 0);
 const _decorCenterBoundsScratch = new THREE.Box3();
 const _decorCenterWorldScratch = new THREE.Vector3();
 const _decorCenterLocalScratch = new THREE.Vector3();
+const STASH_WALL_OCCLUSION_EPSILON_M = 0.03;
 
 type VisibleDecorPlacement = {
   renderKey: string;
@@ -506,10 +508,12 @@ export function mountFpApartmentDecorMeshes(opts: {
   const growTrayPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
   const growPlantPickMeshes: THREE.Mesh[] = [];
+  const authoredWallOcclusionMeshes: THREE.Mesh[] = [];
   const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
   const growTrayIndexByUnit = new Map<string, number>();
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleGrowPickMeshes: THREE.Mesh[] = [];
+  const visibleWallOcclusionMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const stashPickMaterial = new THREE.MeshBasicMaterial({
@@ -548,6 +552,31 @@ export function mountFpApartmentDecorMeshes(opts: {
       const mesh = src[i]!;
       if (objectVisibleInHierarchy(mesh)) dst.push(mesh);
     }
+  };
+
+  const nearestAuthoredWallOcclusionDistance = (
+    camera: THREE.PerspectiveCamera,
+    maxDistance: number,
+  ): number | null => {
+    collectVisiblePickMeshes(authoredWallOcclusionMeshes, visibleWallOcclusionMeshes);
+    if (visibleWallOcclusionMeshes.length === 0) return null;
+    _stashWallOcclusionRaycaster.layers.enableAll();
+    _stashWallOcclusionRaycaster.setFromCamera(_screenCenterNdc, camera);
+    _stashWallOcclusionRaycaster.far = maxDistance;
+    return _stashWallOcclusionRaycaster.intersectObjects(visibleWallOcclusionMeshes, false)[0]?.distance ?? null;
+  };
+
+  const hitOccludedByAuthoredWall = (
+    hit: THREE.Intersection,
+    nearestWallDistance: number | null,
+  ): boolean =>
+    nearestWallDistance !== null &&
+    nearestWallDistance < hit.distance - STASH_WALL_OCCLUSION_EPSILON_M;
+
+  const maxHitDistance = (hits: readonly THREE.Intersection[]): number => {
+    let maxDistance = 0;
+    for (const hit of hits) maxDistance = Math.max(maxDistance, hit.distance);
+    return maxDistance;
   };
 
   const configureInteractionPickRaycaster = (): void => {
@@ -597,9 +626,12 @@ export function mountFpApartmentDecorMeshes(opts: {
     configureInteractionPickRaycaster();
     _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
     _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
-    return sortBalconyGrowRaycastHits(
+    const hits = sortBalconyGrowRaycastHits(
       _stashRaycaster.intersectObjects(visibleGrowPickMeshes, false),
     );
+    if (hits.length === 0) return hits;
+    const nearestWallDistance = nearestAuthoredWallOcclusionDistance(camera, maxHitDistance(hits));
+    return hits.filter((hit) => !hitOccludedByAuthoredWall(hit, nearestWallDistance));
   };
 
   const disposeGroupDeep = (g: THREE.Group) => {
@@ -758,6 +790,12 @@ export function mountFpApartmentDecorMeshes(opts: {
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
     sittablePickMeshes.length = 0;
+    growTrayPickMeshes.length = 0;
+    growSlotPickMeshes.length = 0;
+    growPlantPickMeshes.length = 0;
+    authoredWallOcclusionMeshes.length = 0;
+    growSlotVisualsByTrayId.clear();
+    growTrayIndexByUnit.clear();
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
@@ -923,6 +961,7 @@ export function mountFpApartmentDecorMeshes(opts: {
           mesh.userData.mammothPlateLevelIndex = w.unit.level;
           mesh.userData[MAMMOTH_FP_INTERIOR_PARTITION_SOLID] = true;
           g.add(mesh);
+          authoredWallOcclusionMeshes.push(mesh);
           applyOwnedApartmentWallSurfaceMaterial(mesh, w.material);
         } else {
           buildOwnedApartmentPartitionWallInGroup({
@@ -944,6 +983,7 @@ export function mountFpApartmentDecorMeshes(opts: {
               obj.frustumCulled = true;
               obj.userData.mammothUnitInterior = true;
               obj.userData.mammothPlateLevelIndex = w.unit.level;
+              authoredWallOcclusionMeshes.push(obj);
             }
           });
         }
@@ -1242,8 +1282,13 @@ export function mountFpApartmentDecorMeshes(opts: {
       _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisibleStashPickMeshes(playerPos, visibleStashPickMeshes);
       const hits = _stashRaycaster.intersectObjects(visibleStashPickMeshes, false);
+      const nearestWallDistance =
+        hits.length > 0
+          ? nearestAuthoredWallOcclusionDistance(camera, maxHitDistance(hits))
+          : null;
       const seen = new Set<string>();
       for (const hit of hits) {
+        if (hitOccludedByAuthoredWall(hit, nearestWallDistance)) continue;
         const stashKey = hit.object.userData.mammothApartmentStashKey;
         const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
         const stashKind = hit.object.userData.mammothApartmentStashKind;
