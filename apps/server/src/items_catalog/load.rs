@@ -34,6 +34,10 @@ const SHARD_SOURCES: &[&str] = &[
         env!("CARGO_MANIFEST_DIR"),
         "/../../content/items/catalog/consumables.json"
     )),
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../content/items/catalog/balcony_grow_op.json"
+    )),
 ];
 
 #[derive(Debug)]

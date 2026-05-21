@@ -1,3 +1,4 @@
+import balconyGrowOpItems from "../../../../content/items/catalog/balcony_grow_op.json";
 import consumableItems from "../../../../content/items/catalog/consumables.json";
 import materialItems from "../../../../content/items/catalog/materials.json";
 import meleeWeapons from "../../../../content/items/catalog/melee_weapons.json";
@@ -56,6 +57,7 @@ const CATALOG_SHARDS = [
   toolItems,
   placeableItems,
   consumableItems,
+  balconyGrowOpItems,
 ] as const;
 
 type RawItem = {

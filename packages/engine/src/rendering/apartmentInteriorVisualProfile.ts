@@ -331,6 +331,33 @@ export const APARTMENT_INTERIOR_VISUAL_PROFILE = {
     /** Tiny outward spread on the core silhouette so contact remains visible around object feet. */
     bakedFloorCoreRadiusM: 0.025,
 
+    /**
+     * Max top-down hull tighten for small tabletop props when their world XZ footprint is large
+     * (chunky mesh hull). Tiny placed instances stay near 1.0 so shadows stay visible.
+     */
+    bakedFloorCompactHullScale: 0.82,
+
+    /** Below this world XZ span (m), compact props use the full mesh hull. */
+    bakedFloorCompactSpanMinM: 0.03,
+
+    /** Above this world XZ span (m), compact props reach {@link bakedFloorCompactHullScale}. */
+    bakedFloorCompactSpanMaxM: 0.14,
+
+    /** Loose cigarettes (not packs) — smaller silhouettes at every footprint. */
+    bakedFloorCigaretteHullScaleMin: 0.62,
+
+    bakedFloorCigaretteHullScale: 0.48,
+
+    bakedFloorCigaretteSpanMinM: 0.008,
+
+    bakedFloorCigaretteSpanMaxM: 0.06,
+
+    /** Finer hull sampling so sub-quantized cigarettes still produce a silhouette. */
+    bakedFloorCigarettePointQuantizeM: 0.006,
+
+    /** Smallest loose-cigarette shadow radius (m) after hull tighten. */
+    bakedFloorCigaretteMinHullRadiusM: 0.014,
+
     /** Optional realtime shadow map (subtle; washed out by practicals without the bake). */
     realtimeShadowMap: false,
 
@@ -470,10 +497,88 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
 
   if (lower.includes("coat-hanger")) return false;
 
-  if (lower.includes("cigarette")) return false;
-
   return true;
 
+}
+
+
+
+/**
+ * Baked floor shadows hug the decor AABB foot by default; these props are often elevated on
+ * counters/tables but should still cast onto the unit shell floor.
+ */
+export function apartmentDecorBakedFloorShadowSnapToShellFloor(
+  modelRelPath: string,
+): boolean {
+  const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
+  return (
+    lower.endsWith("/objects/sink.glb") ||
+    lower.includes("/objects/sink.glb") ||
+    lower.endsWith("/objects/water-tank.glb") ||
+    lower.includes("/objects/water-tank.glb")
+  );
+}
+
+
+
+function apartmentDecorIsCigaretteDecorModel(lower: string): boolean {
+  return (
+    lower.includes("cigarette-pack") ||
+    lower.includes("used-cigarette") ||
+    lower.endsWith("/cigarette.glb")
+  );
+}
+
+/** Single cigarettes / butts — not packs. */
+export function apartmentDecorIsLooseCigaretteDecorModel(modelRelPath: string): boolean {
+  const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
+  if (lower.includes("cigarette-pack")) return false;
+  return lower.endsWith("/cigarette.glb") || lower.includes("used-cigarette");
+}
+
+function apartmentDecorUsesCompactBakedFloorShadow(modelRelPath: string): boolean {
+  const lower = modelRelPath.toLowerCase().replace(/\\/gu, "/");
+  return (
+    lower.includes("/objects/ashtray.glb") ||
+    lower.includes("/objects/beer-can.glb") ||
+    lower.includes("/objects/empty-beer-can-ozujsko.glb") ||
+    lower.includes("/objects/coffee-cup-empty.glb") ||
+    lower.includes("/objects/rakija.glb") ||
+    lower.includes("/objects/rakija-2.glb") ||
+    apartmentDecorIsCigaretteDecorModel(lower)
+  );
+}
+
+/**
+ * Tighter baked floor silhouettes for small props whose convex hull reads oversized.
+ * Shrink amount follows world XZ footprint so tiny placed instances keep visible shadows.
+ */
+export function apartmentDecorBakedFloorShadowHullScale(
+  modelRelPath: string,
+  decorBoundsSize: THREE.Vector3,
+): number {
+  if (!apartmentDecorUsesCompactBakedFloorShadow(modelRelPath)) {
+    return 1;
+  }
+  const cfg = APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow;
+  const looseCigarette = apartmentDecorIsLooseCigaretteDecorModel(modelRelPath);
+  const span = Math.max(decorBoundsSize.x, decorBoundsSize.z);
+  const spanMin = looseCigarette
+    ? cfg.bakedFloorCigaretteSpanMinM
+    : cfg.bakedFloorCompactSpanMinM;
+  const spanMax = looseCigarette
+    ? cfg.bakedFloorCigaretteSpanMaxM
+    : cfg.bakedFloorCompactSpanMaxM;
+  const hullMin = looseCigarette ? cfg.bakedFloorCigaretteHullScaleMin : 1;
+  const hullMax = looseCigarette
+    ? cfg.bakedFloorCigaretteHullScale
+    : cfg.bakedFloorCompactHullScale;
+  const spanRange = spanMax - spanMin;
+  const t =
+    spanRange > 1e-6
+      ? THREE.MathUtils.clamp((span - spanMin) / spanRange, 0, 1)
+      : 1;
+  return THREE.MathUtils.lerp(hullMin, hullMax, t);
 }
 
 

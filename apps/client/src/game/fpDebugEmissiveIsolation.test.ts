@@ -28,16 +28,18 @@ describe("syncFpDebugEmissiveMaterialsIsolation", () => {
     expect(mat.emissiveIntensity).toBe(0.5);
   });
 
-  it("suppresses newly added meshes while isolation stays off", () => {
+  it("stays idle while already suppressed (no per-frame traverse)", () => {
     resetFpDebugEmissiveIsolationState();
     const root = new THREE.Group();
-    syncFpDebugEmissiveMaterialsIsolation(root, false);
-
-    const mat = new THREE.MeshStandardMaterial({ emissive: 0x112233, emissiveIntensity: 2 });
+    const mat = new THREE.MeshStandardMaterial({ emissive: 0xff0000, emissiveIntensity: 1 });
     root.add(new THREE.Mesh(new THREE.BoxGeometry(), mat));
 
     syncFpDebugEmissiveMaterialsIsolation(root, false);
     expect(mat.emissive.getHex()).toBe(0x000000);
-    expect(mat.emissiveIntensity).toBe(0);
+
+    mat.emissive.setHex(0xff0000);
+    mat.emissiveIntensity = 1;
+    syncFpDebugEmissiveMaterialsIsolation(root, false);
+    expect(mat.emissive.getHex()).toBe(0xff0000);
   });
 });

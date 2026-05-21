@@ -15,7 +15,9 @@ use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::world_sound;
 
-pub(crate) use starting_item::{ensure_starter_loadout, reset_player_loadout_for_respawn};
+pub(crate) use starting_item::{
+    ensure_starter_footlocker_grow_op, ensure_starter_loadout, reset_player_loadout_for_respawn,
+};
 
 pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
 pub(crate) const NUM_PLAYER_HOTBAR_SLOTS: u8 = 6;

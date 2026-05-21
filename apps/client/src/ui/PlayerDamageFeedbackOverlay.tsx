@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isFpDebugGameplayFeedbackEnabled } from "../game/fpDebugGameplayFeedback.js";
 import type { DbConnection } from "../module_bindings";
 import type { PlayerVitals } from "../module_bindings/types";
 
@@ -8,6 +9,8 @@ type Props = {
 
 const HIT_FLASH_MS = 520;
 const HEALTH_DROP_EPS = 0.05;
+/** Vitals-tick starvation/dehydration (~<1 HP / 2s); combat hits exceed this — matches blood FX gate. */
+const MIN_COMBAT_DAMAGE_FLASH = 1;
 
 function readLocalHealth(conn: DbConnection): number | null {
   const id = conn.identity;
@@ -32,6 +35,12 @@ export function PlayerDamageFeedbackOverlay({ conn }: Props) {
       if (next == null || prev == null || next >= prev - HEALTH_DROP_EPS) return;
 
       const drop = prev - next;
+      if (
+        !isFpDebugGameplayFeedbackEnabled("starvationDamageFlashes") &&
+        drop < MIN_COMBAT_DAMAGE_FLASH
+      ) {
+        return;
+      }
       setSeverity(Math.min(1, 0.34 + drop / 45));
       setHitSeq((v) => v + 1);
       if (clearRef.current !== null) window.clearTimeout(clearRef.current);

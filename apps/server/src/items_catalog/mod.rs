@@ -5,7 +5,7 @@
 //! duplicate list in Rust.
 //!
 //! ## Shards (authoring)
-//! - `materials.json` (resources, ammo, utilities), `melee_weapons.json`, `ranged_weapons.json`, `tools.json`, `placeables.json`, `consumables.json`
+//! - `materials.json` (resources, ammo, utilities), `melee_weapons.json`, `ranged_weapons.json`, `tools.json`, `placeables.json`, `consumables.json`, `balcony_grow_op.json`
 //!
 //! ## Adding items
 //! 1. Edit or add a shard under `content/items/catalog/`.
@@ -105,5 +105,59 @@ mod hotbar_consume_sound_tests {
         assert_eq!(melee_damage("crowbar"), Some(22.0));
         assert_eq!(melee_damage("screwdriver"), Some(8.0));
         assert_eq!(melee_damage("water-bottle"), None);
+    }
+}
+
+#[cfg(test)]
+mod balcony_grow_op_catalog_tests {
+    use super::{get, instant_hotbar_consume_vital_deltas, is_known_def, ItemCategory};
+
+    const PLANT_DEF_IDS: &[&str] = &[
+        "balcony-grow-substrate",
+        "lovage-seeds",
+        "parsley-seeds",
+        "dill-seeds",
+        "paprika-seedlings",
+        "green-onion-sets",
+        "radish-sprout-seeds",
+        "oyster-mushroom-spore",
+        "scented-geranium-cuttings",
+    ];
+
+    const HARVEST_DEF_IDS: &[&str] = &[
+        "fresh-lovage",
+        "fresh-parsley",
+        "fresh-dill",
+        "fresh-paprika",
+        "fresh-green-onion",
+        "radish-sprouts",
+        "fresh-oyster-mushroom",
+        "dried-oyster-mushroom",
+        "scented-geranium-leaves",
+    ];
+
+    #[test]
+    fn balcony_grow_op_defs_load_from_catalog_shard() {
+        for id in PLANT_DEF_IDS {
+            assert!(is_known_def(id), "missing plant def {id}");
+            assert_eq!(get(id).unwrap().category, ItemCategory::Resource);
+        }
+        for id in HARVEST_DEF_IDS {
+            assert!(is_known_def(id), "missing harvest def {id}");
+            assert_eq!(get(id).unwrap().category, ItemCategory::Consumable);
+        }
+    }
+
+    #[test]
+    fn balcony_edibles_expose_hotbar_consume_hooks() {
+        assert_eq!(
+            instant_hotbar_consume_vital_deltas("radish-sprouts"),
+            Some((0.0, 10.0, 0.0))
+        );
+        assert_eq!(
+            instant_hotbar_consume_vital_deltas("scented-geranium-leaves"),
+            Some((2.0, 0.0, 8.0))
+        );
+        assert!(instant_hotbar_consume_vital_deltas("fresh-parsley").is_none());
     }
 }

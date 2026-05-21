@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "balcony-grow-substrate",
+      "displayName": "Balcony grow substrate",
+      "description": "Tray fertilizer and compost mix for apartment grow trays — fish waste, cardboard, and fungal scraps. Not sterile enough for the communal farm.",
+      "category": "resource",
+      "maxStack": 20
+    },
+    {
+      "id": "lovage-seeds",
+      "displayName": "Lovage seeds",
+      "description": "Libelek seed packet. Balkan soup staple — plant in a balcony tray.",
+      "category": "resource",
+      "maxStack": 40
+    },
+    {
+      "id": "parsley-seeds",
+      "displayName": "Parsley seeds",
+      "description": "Peršin seed packet for balcony trays. Cut often for soup and garnish.",
+      "category": "resource",
+      "maxStack": 40
+    },
+    {
+      "id": "dill-seeds",
+      "displayName": "Dill seeds",
+      "description": "Kopar seed packet. Pairs with fish from the tank and winter preserves.",
+      "category": "resource",
+      "maxStack": 40
+    },
+    {
+      "id": "paprika-seedlings",
+      "displayName": "Paprika seedlings",
+      "description": "Small feferoni starts — slow on the balcony but worth it for ajvar and stew base.",
+      "category": "resource",
+      "maxStack": 24
+    },
+    {
+      "id": "green-onion-sets",
+      "displayName": "Green onion sets",
+      "description": "Mladi luk bulb sets. Fast green tops for soup and ćevap garnish.",
+      "category": "resource",
+      "maxStack": 32
+    },
+    {
+      "id": "radish-sprout-seeds",
+      "displayName": "Radish sprout seeds",
+      "description": "Klica repe — soaked and sown thick. Emergency greens in a few days.",
+      "category": "resource",
+      "maxStack": 48
+    },
+    {
+      "id": "oyster-mushroom-spore",
+      "displayName": "Oyster mushroom spore",
+      "description": "Bukovačica culture syringe. Tray-grown; dry the harvest on the apartment rack.",
+      "category": "resource",
+      "maxStack": 16
+    },
+    {
+      "id": "scented-geranium-cuttings",
+      "displayName": "Scented geranium cuttings",
+      "description": "Pelargonija slips from a neighbour's window box. Dried leaves for čaj.",
+      "category": "resource",
+      "maxStack": 24
+    },
+    {
+      "id": "fresh-lovage",
+      "displayName": "Fresh lovage",
+      "description": "Cut libelek from the balcony. Soup and stew herb — cook for best effect.",
+      "category": "consumable",
+      "maxStack": 16
+    },
+    {
+      "id": "fresh-parsley",
+      "displayName": "Fresh parsley",
+      "description": "Cut peršin from the balcony. Garnish, soup, and trade with civilians.",
+      "category": "consumable",
+      "maxStack": 16
+    },
+    {
+      "id": "fresh-dill",
+      "displayName": "Fresh dill",
+      "description": "Kopar fronds from the balcony. Fish, pickles, and potato soup.",
+      "category": "consumable",
+      "maxStack": 16
+    },
+    {
+      "id": "fresh-paprika",
+      "displayName": "Fresh paprika",
+      "description": "Balcony feferoni. Thin flesh but real heat — roast or stew.",
+      "category": "consumable",
+      "maxStack": 12,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 6 }
+    },
+    {
+      "id": "fresh-green-onion",
+      "displayName": "Fresh green onion",
+      "description": "Mladi luk tops from the balcony. Raw garnish or soup base.",
+      "category": "consumable",
+      "maxStack": 16
+    },
+    {
+      "id": "radish-sprouts",
+      "displayName": "Radish sprouts",
+      "description": "Klica repe from a full tray harvest. Peppery emergency greens.",
+      "category": "consumable",
+      "maxStack": 20,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 10 }
+    },
+    {
+      "id": "fresh-oyster-mushroom",
+      "displayName": "Fresh oyster mushroom",
+      "description": "Balcony bukovačica cluster. Cook now or dry on the rack.",
+      "category": "consumable",
+      "maxStack": 12,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 8 }
+    },
+    {
+      "id": "dried-oyster-mushroom",
+      "displayName": "Dried oyster mushroom",
+      "description": "Rack-dried bukovačica. Rehydrate for soup or chew dry when desperate.",
+      "category": "consumable",
+      "maxStack": 24,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 12 }
+    },
+    {
+      "id": "scented-geranium-leaves",
+      "displayName": "Scented geranium leaves",
+      "description": "Pelargonija leaves from the balcony. Steep for čaj — calming, slightly bitter.",
+      "category": "consumable",
+      "maxStack": 20,
+      "hotbarConsumeSound": "drink",
+      "consumeOnUse": { "hydrationDelta": 8, "healthDelta": 2 }
+    }
+  ]
+}

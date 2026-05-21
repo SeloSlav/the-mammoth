@@ -193,5 +193,46 @@ describe("mammothItemCatalog", () => {
     ).toBe(true);
   });
 
+  it("loads balcony grow-op plant and harvest defs from catalog shard", () => {
+    const plantIds = [
+      "balcony-grow-substrate",
+      "lovage-seeds",
+      "parsley-seeds",
+      "dill-seeds",
+      "paprika-seedlings",
+      "green-onion-sets",
+      "radish-sprout-seeds",
+      "oyster-mushroom-spore",
+      "scented-geranium-cuttings",
+    ] as const;
+    for (const id of plantIds) {
+      expect(getMammothItemDef(id)?.category).toBe("resource");
+    }
+
+    const harvestIds = [
+      "fresh-lovage",
+      "fresh-parsley",
+      "fresh-dill",
+      "fresh-paprika",
+      "fresh-green-onion",
+      "radish-sprouts",
+      "fresh-oyster-mushroom",
+      "dried-oyster-mushroom",
+      "scented-geranium-leaves",
+    ] as const;
+    for (const id of harvestIds) {
+      expect(getMammothItemDef(id)?.category).toBe("consumable");
+    }
+
+    expect(mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("radish-sprouts"))).toBe(
+      true,
+    );
+    expect(
+      mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("scented-geranium-leaves")),
+    ).toBe(true);
+    expect(mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("fresh-dill"))).toBe(
+      false,
+    );
+  });
 });
 

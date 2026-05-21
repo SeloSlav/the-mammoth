@@ -82,6 +82,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     firearm::ensure_player_firearm_cooldown_row(ctx, id);
     player_vitals::ensure_player_vitals_row(ctx, id);
     inventory::ensure_starter_loadout(ctx, id);
+    inventory::ensure_starter_footlocker_grow_op(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 

@@ -229,6 +229,8 @@ Everyone is expected to contribute somehow.
 
 The player may have an assigned grow bay or work section, but this is stewardship, not private ownership.
 
+**Plot progression:** the player’s corner flat includes a small **balcony grow-op** (see [Player apartment](#player-apartment)) — enough to learn planting, cover garnish and soup extras, and buffer bad days. It is **not** a substitute for the farm floor. After contributing labor and earning farm trust (or trading work chits / food vouchers), the player can **rent or buy a grow-bay plot** on the communal floor — significantly higher yield, access to bulk substrate and spore stock, and tie-in to ration quotas. The balcony stays useful for fast herbs and emergency greens; the farm plot is where real food security comes from.
+
 This layer supports:
 
 - food production
@@ -706,6 +708,7 @@ The apartment is where the player:
 - checks equipment
 - recovers
 - processes small materials
+- tends the balcony grow-op
 - watches TV
 - listens to radio
 - looks out at the fungal forest
@@ -744,6 +747,8 @@ Already authored:
 - empty cigarette cartons
 - kitchen cabinets
 - fridge
+- **balcony grow-op** — eight grow trays on the corner balcony, lit by two hanging LED panels (`grow-tray.glb`, `light-grow-op.glb`; already authored in the owned apartment template)
+- drying rack
 
 The fridge stores perishables and temperature-sensitive items:
 
@@ -778,7 +783,7 @@ Supports:
 - cooking
 - cleaning
 - fish tank
-- grow tray
+- balcony grow trays
 - medicine prep
 
 Possible states:
@@ -822,29 +827,49 @@ If neglected:
 - pump fails
 - fish die eventually
 
-#### Grow tray by window
+#### Balcony grow-op
 
-Small personal food growth station.
+The player’s **private starter farm** — not a separate floor, not a menu screen. Eight fixed grow trays on the corner balcony, under two cool-white LED panels. Visible from the living room; part of the flat’s identity.
 
-Not the main farming system.
+**Role in progression**
 
-Used for:
+- **Early game:** learn planting, watering, light cycles, harvest, and spoilage without leaving home.
+- **Mid game:** supplements meals and crafting (herbs for soup, tea, bandage prep) while the player earns access to a **communal grow-bay plot** downstairs.
+- **Late game:** balcony stays worth tending for fast-turn crops and backup greens; the farm plot carries bulk production and ration credit.
 
-- herbs
-- sprouts
-- microgreens
-- medicinal moss
-- small mushrooms
-- emergency food
-- tea herbs
+**Yield (design target)**
 
-Needs:
+Balcony output should feel **meaningful but modest** — roughly an order of magnitude below a tended communal grow bay. A full balcony might cover garnish, occasional soup boosts, and small hunger relief, not reliable daily calories. Neglect wilts trays quickly; good care returns a steady trickle, not a harvest festival.
 
-- water
-- light
-- substrate
-- fertilizer
-- occasional harvesting
+**Tray inputs**
+
+- water (apartment filter / canteen)
+- light (authored panels; optional battery-bank tie-in later)
+- substrate (compost bucket, fish waste, scavenged fiber — low-grade is fine)
+- seeds, cuttings, or culture spores (scavenged, traded, or issued by the farm)
+
+**Plantable crops (starter catalog)**
+
+Each tray holds one crop at a time. Growth times are in in-game days; sleep advances trays (see [Sleep / day advancement](#sleep--day-advancement)). All **`def_id`** values live in `content/items/catalog/balcony_grow_op.json` (server + client catalog).
+
+| Crop (Balkan) | Plant `def_id` | Harvest `def_id` | Days | Primary use |
+|---------------|----------------|------------------|------|-------------|
+| **Lovage** (libelek) | `lovage-seeds` | `fresh-lovage` | 5–6 | soup and stew base |
+| **Parsley** (peršin) | `parsley-seeds` | `fresh-parsley` | 4–5 | garnish, soup, civilian trade |
+| **Dill** (kopar) | `dill-seeds` | `fresh-dill` | 5–6 | fish, pickles, potato soup |
+| **Paprika** (feferoni) | `paprika-seedlings` | `fresh-paprika` | 7–9 | ajvar and stew; modest eat raw |
+| **Green onion** (mladi luk) | `green-onion-sets` | `fresh-green-onion` | 4–5 | soup and ćevap garnish |
+| **Radish sprouts** (klica repe) | `radish-sprout-seeds` | `radish-sprouts` | 2–3 | fast emergency greens |
+| **Oyster mushroom** (bukovačica) | `oyster-mushroom-spore` | `fresh-oyster-mushroom` → `dried-oyster-mushroom` on rack | 7–10 | cook fresh or dry for soup |
+| **Scented geranium** (pelargonija) | `scented-geranium-cuttings` | `scented-geranium-leaves` | 6–8 | **čaj** — balcony tea herb |
+
+Tray substrate item: `balcony-grow-substrate` (compost bucket / fish waste / scavenged fiber).
+
+**Starter footlocker pack** (granted once on first connect): normal footlocker stash rows (`ItemLocation::Stash` on the footlocker's decor stash key) — 6× substrate, plus seed packets for parsley, dill, radish sprouts, green onion, scented geranium, and lovage.
+
+**Not on the balcony (farm floor only):** bulk mycelium beds, ration-grade fungal loaves, armor-fiber cultures, spore quarantine strains, and anything that needs misting corridors or sterile prep rooms.
+
+**Outputs tie to existing inventory buckets:** soup ingredients, tea (pelargonija čaj), dried mushrooms (via drying rack), and fridge/stove consumables — not a parallel item taxonomy.
 
 This supports the player but does not replace the communal fungal farm.
 
@@ -1032,6 +1057,7 @@ Examples:
 - check fridge
 - eat food
 - drink water
+- glance at balcony trays (optional first harvest tutorial hook)
 - fill canteen
 - check footlocker
 - equip clothing from wardrobe
@@ -1045,9 +1071,9 @@ Examples:
 - feed fish
 - clean fish tank
 - collect fish waste
-- water grow tray
-- harvest herbs
-- start drying mushrooms
+- water balcony grow trays
+- harvest lovage / peršin / klica repe / bukovačica
+- start drying mushrooms or herbs
 - empty compost
 - repair flashlight
 - store loot
@@ -1074,7 +1100,7 @@ If neglected for days:
 
 - fish tank water clouds
 - fish die eventually
-- grow tray wilts
+- balcony grow trays wilt
 - compost smells
 - flies appear
 - fridge contents spoil if power fails
@@ -1119,7 +1145,7 @@ When the player sleeps:
 - stamina recovers
 - health may recover depending on food/warmth
 - passive processing completes
-- grow tray advances
+- balcony grow trays advance
 - fish produce waste
 - drying rack progresses
 - compost progresses
@@ -1287,9 +1313,9 @@ Inputs:
 
 The fungal farm is productive but communal.
 
-The player’s apartment grow tray is personal and small.
+The player’s **balcony grow-op** is personal, fixed (eight trays), and low-yield — a tutorial and supplement, not food security.
 
-The farm floor is social, large-scale, and tied to the building economy.
+The farm floor is social, large-scale, and tied to the building economy. **Grow-bay plot access** (rent or purchase with work chits / farm trust) is the step up from balcony gardening.
 
 ---
 
@@ -1519,7 +1545,7 @@ Progression should be:
 - fridge stocked
 - water tank full
 - fish tank producing fertilizer
-- grow tray producing food/herbs
+- balcony grow-op producing herbs / sprouts / mushrooms
 - drying rack processing materials
 - storage organized
 - weapon locker stocked
@@ -1601,7 +1627,7 @@ Learn:
 - food ration system
 - communal labor
 - substrate
-- grow beds
+- grow beds and **grow-bay plot rental**
 - drying racks
 - farm requests
 

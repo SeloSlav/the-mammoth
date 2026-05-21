@@ -14,6 +14,11 @@ import {
   getFpDebugRenderIsolationFlags,
   type FpDebugRenderIsolationKey,
 } from "../game/fpDebugRenderIsolation.js";
+import {
+  getFpDebugGameplayFeedbackFlags,
+  setFpDebugGameplayFeedbackFlag,
+  subscribeFpDebugGameplayFeedback,
+} from "../game/fpDebugGameplayFeedback.js";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import { getFpDebugMenuSessionSnapshot } from "../game/fpDebugMenuSessionBridge.js";
 import {
@@ -225,6 +230,12 @@ export function MammothDebugMenuHud() {
     subscribeFpDebugRenderIsolation,
     getFpDebugRenderIsolationFlags,
     getFpDebugRenderIsolationFlags,
+  );
+
+  const gameplayFeedback = useSyncExternalStore(
+    subscribeFpDebugGameplayFeedback,
+    getFpDebugGameplayFeedbackFlags,
+    getFpDebugGameplayFeedbackFlags,
   );
 
   const refreshLs = useCallback(() => {
@@ -507,6 +518,18 @@ export function MammothDebugMenuHud() {
               onToggle: () => {
                 lsToggleSet(LS_FP_PERF_DEBUG, !flags.fpPerfDebug);
                 refreshLs();
+              },
+            })}
+            {rowToggle({
+              label: "Starvation damage flashes",
+              description:
+                "Red vignette on hunger/thirst health-drain ticks — Off to isolate compositor cost; combat hits still flash",
+              on: gameplayFeedback.starvationDamageFlashes,
+              onToggle: () => {
+                setFpDebugGameplayFeedbackFlag(
+                  "starvationDamageFlashes",
+                  !gameplayFeedback.starvationDamageFlashes,
+                );
               },
             })}
 

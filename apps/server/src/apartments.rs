@@ -917,6 +917,32 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
     })
 }
 
+/// Claimed apartment `unit_key` for `owner`, if any.
+pub(crate) fn claimed_unit_key_for_owner(ctx: &ReducerContext, owner: Identity) -> Option<String> {
+    ctx.db.apartment_unit().iter().find_map(|u| {
+        if u.owner == Some(owner) && u.state == UNIT_STATE_CLAIMED {
+            Some(u.unit_key.clone())
+        } else {
+            None
+        }
+    })
+}
+
+/// Stash location key for the unit footlocker — `{unit_key}#d{decor_id}` when replicated, else `{unit_key}#footlocker`.
+pub(crate) fn footlocker_stash_location_key(ctx: &ReducerContext, unit_key: &str) -> String {
+    use crate::inventory_models::{apartment_stash_key, APARTMENT_STASH_KIND_FOOTLOCKER};
+
+    if let Some(d) = ctx.db.apartment_unit_decor().iter().find(|d| {
+        d.unit_key.as_str() == unit_key
+            && (d.item_kind == APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER
+                || d.model_rel_path.ends_with("objects/footlocker.glb"))
+    }) {
+        return crate::inventory_models::apartment_stash_key_decor(unit_key, d.decor_id);
+    }
+
+    apartment_stash_key(unit_key, APARTMENT_STASH_KIND_FOOTLOCKER)
+}
+
 /// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
 pub(crate) fn join_pose_from_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
     ctx.db.apartment_unit().iter().find_map(|u| {
@@ -1394,7 +1420,9 @@ fn authored_content_stash_anchor_xz(unit: &ApartmentUnit, fx: f32, fz: f32) -> (
     (x, z)
 }
 
-/// Fallback when no `apartment_unit_decor` row exists (content-only fridge / water tank).
+/// Fallback when no `apartment_unit_decor` row exists — fractions from
+/// `content/apartment/owned_apartment_builtins.json` `placedItems` (keep in sync with client
+/// `resolveApartmentStashAnchorXZ`).
 fn pose_near_authored_content_stash_anchor(
     unit: &ApartmentUnit,
     stash_kind: &str,
@@ -1403,7 +1431,9 @@ fn pose_near_authored_content_stash_anchor(
     z: f32,
 ) -> bool {
     let (fx, fz) = match stash_kind {
-        // `placedItems` in `content/apartment/owned_apartment_builtins.json`
+        APARTMENT_STASH_KIND_WARDROBE => (0.474_748_12, 0.030_580_157),
+        APARTMENT_STASH_KIND_FOOTLOCKER => (0.755_258_6, 0.193_950_26),
+        APARTMENT_STASH_KIND_STOVE => (0.328_545_44, -0.047_004_23),
         APARTMENT_STASH_KIND_FRIDGE => (0.387_564_86, 0.183_102_12),
         APARTMENT_STASH_KIND_WATER_TANK => (0.073_722_71, 0.823_220_47),
         _ => return false,
@@ -1421,6 +1451,48 @@ fn pose_near_authored_content_stash_anchor(
         )
 }
 
+fn pose_near_decor_stash_or_fallback(
+    ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+    stash_kind: &str,
+    decor_item_kind: u8,
+    fallback_x: f32,
+    fallback_z: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
+    if !feet_inside_unit(unit, x, y, z) {
+        return false;
+    }
+    let radius_sq = stash_interact_radius_sq(stash_kind);
+    if let Some(decor) = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| {
+            d.unit_key.as_str() == unit.unit_key.as_str()
+                && effective_decor_item_kind(d.item_kind, d.model_rel_path.as_str())
+                    == decor_item_kind
+        })
+        .min_by_key(|d| d.decor_id)
+    {
+        return pose_near_horizontal_marker(
+            x,
+            y,
+            z,
+            decor.pos_x,
+            decor.pos_z,
+            unit.foot_y,
+            radius_sq,
+        );
+    }
+    if pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z) {
+        return true;
+    }
+    pose_near_horizontal_marker(x, y, z, fallback_x, fallback_z, unit.foot_y, radius_sq)
+}
+
 fn pose_near_named_apartment_stash_anchor(
     ctx: &ReducerContext,
     unit: &ApartmentUnit,
@@ -1430,30 +1502,28 @@ fn pose_near_named_apartment_stash_anchor(
     z: f32,
 ) -> bool {
     match stash_kind {
-        APARTMENT_STASH_KIND_WARDROBE => {
-            feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(
-                    x,
-                    y,
-                    z,
-                    unit.wardrobe_x,
-                    unit.wardrobe_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(APARTMENT_STASH_KIND_WARDROBE),
-                )
-        }
-        APARTMENT_STASH_KIND_STOVE => {
-            feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(
-                    x,
-                    y,
-                    z,
-                    unit.stove_x,
-                    unit.stove_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(APARTMENT_STASH_KIND_STOVE),
-                )
-        }
+        APARTMENT_STASH_KIND_WARDROBE => pose_near_decor_stash_or_fallback(
+            ctx,
+            unit,
+            stash_kind,
+            APARTMENT_DECOR_ITEM_KIND_WARDROBE,
+            unit.wardrobe_x,
+            unit.wardrobe_z,
+            x,
+            y,
+            z,
+        ),
+        APARTMENT_STASH_KIND_STOVE => pose_near_decor_stash_or_fallback(
+            ctx,
+            unit,
+            stash_kind,
+            APARTMENT_DECOR_ITEM_KIND_STOVE,
+            unit.stove_x,
+            unit.stove_z,
+            x,
+            y,
+            z,
+        ),
         APARTMENT_STASH_KIND_FRIDGE => {
             if let Some(fridge) = ctx
                 .db
@@ -1508,18 +1578,17 @@ fn pose_near_named_apartment_stash_anchor(
             }
             pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)
         }
-        _ => {
-            feet_inside_unit(unit, x, y, z)
-                && pose_near_horizontal_marker(
-                    x,
-                    y,
-                    z,
-                    unit.foot_x,
-                    unit.foot_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(APARTMENT_STASH_KIND_FOOTLOCKER),
-                )
-        }
+        APARTMENT_STASH_KIND_FOOTLOCKER | _ => pose_near_decor_stash_or_fallback(
+            ctx,
+            unit,
+            APARTMENT_STASH_KIND_FOOTLOCKER,
+            APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER,
+            unit.foot_x,
+            unit.foot_z,
+            x,
+            y,
+            z,
+        ),
     }
 }
 
@@ -1797,7 +1866,7 @@ fn stash_push_item_to_slot_impl(
         return Err("bad stash slot".to_string());
     }
     let (owner_id, _, _) = owned_apartment_stash_owner_near_sender(ctx, unit_key)
-        .ok_or_else(|| "caller may not push to stash".to_string())?;
+        .ok_or_else(|| "Move closer to this storage.".to_string())?;
     let row = inventory::get_player_item(ctx, item_instance_id)?;
     if !apartment_stash_accepts_def_id(stash_kind, row.def_id.as_str()) {
         return Err(apartment_stash_rejection_hint(stash_kind).to_string());

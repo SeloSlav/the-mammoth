@@ -29,6 +29,7 @@ function suppressMaterialEmissive(mat: THREE.MeshStandardMaterial): void {
       emissiveIntensity: mat.emissiveIntensity,
     };
   }
+  if (mat.emissive.getHex() === 0x000000 && mat.emissiveIntensity === 0) return;
   mat.emissive.setHex(0x000000);
   mat.emissiveIntensity = 0;
   mat.needsUpdate = true;
@@ -60,6 +61,8 @@ export function syncFpDebugEmissiveMaterialsIsolation(
     suppressActive = false;
     return;
   }
+
+  if (suppressActive) return;
 
   suppressActive = true;
   buildingRoot.traverse((obj) => {

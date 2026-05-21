@@ -4,7 +4,10 @@ import { tagMeshResidentialUnitInterior } from "./apartmentInteriorLayers.js";
 import { apartmentDecorMeshShouldCastFloorShadow } from "./apartmentInteriorDecorShadow.js";
 import {
   APARTMENT_INTERIOR_VISUAL_PROFILE,
+  apartmentDecorBakedFloorShadowHullScale,
+  apartmentDecorBakedFloorShadowSnapToShellFloor,
   apartmentDecorContactShadowEligible,
+  apartmentDecorIsLooseCigaretteDecorModel,
   type ApartmentUnitWorldBounds,
 } from "./apartmentInteriorVisualProfile.js";
 
@@ -14,6 +17,7 @@ export const MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD = "mammothApartmentBak
 const _parentInvScratch = new THREE.Matrix4();
 const _meshWorldScratch = new THREE.Matrix4();
 const _decorBoundsScratch = new THREE.Box3();
+const _decorBoundsSizeScratch = new THREE.Vector3();
 const _decorCenterScratch = new THREE.Vector3();
 const _shadowPointScratch = new THREE.Vector3();
 
@@ -87,6 +91,38 @@ function decimateHull(points: ShadowPoint2[], maxPoints: number): ShadowPoint2[]
   return out;
 }
 
+function scaleHullTowardCenter(
+  hull: ShadowPoint2[],
+  centerX: number,
+  centerZ: number,
+  scale: number,
+): void {
+  if (scale >= 0.999) return;
+  for (const p of hull) {
+    p.x = centerX + (p.x - centerX) * scale;
+    p.z = centerZ + (p.z - centerZ) * scale;
+  }
+}
+
+function ensureMinHullRadius(
+  hull: ShadowPoint2[],
+  centerX: number,
+  centerZ: number,
+  minRadiusM: number,
+): void {
+  if (minRadiusM <= 0) return;
+  let maxDist = 0;
+  for (const p of hull) {
+    maxDist = Math.max(maxDist, Math.hypot(p.x - centerX, p.z - centerZ));
+  }
+  if (maxDist >= minRadiusM) return;
+  const expand = minRadiusM / Math.max(maxDist, 1e-6);
+  for (const p of hull) {
+    p.x = centerX + (p.x - centerX) * expand;
+    p.z = centerZ + (p.z - centerZ) * expand;
+  }
+}
+
 function projectedHullGeometryForFloorShadow(
   geometry: THREE.BufferGeometry,
   meshWorld: THREE.Matrix4,
@@ -94,6 +130,9 @@ function projectedHullGeometryForFloorShadow(
   parentWorldInv: THREE.Matrix4,
   softenRadiusM = 0,
   softenCenterWorld?: THREE.Vector3,
+  hullScale = 1,
+  pointQuantizeM = SHADOW_POINT_QUANTIZE_M,
+  minHullRadiusM = 0,
 ): THREE.BufferGeometry | null {
   const position = geometry.getAttribute("position");
   if (!position) {
@@ -115,11 +154,11 @@ function projectedHullGeometryForFloorShadow(
         z += (dz / len) * softenRadiusM;
       }
     }
-    const qx = Math.round(x / SHADOW_POINT_QUANTIZE_M);
-    const qz = Math.round(z / SHADOW_POINT_QUANTIZE_M);
+    const qx = Math.round(x / pointQuantizeM);
+    const qz = Math.round(z / pointQuantizeM);
     unique.set(`${qx},${qz}`, {
-      x: qx * SHADOW_POINT_QUANTIZE_M,
-      z: qz * SHADOW_POINT_QUANTIZE_M,
+      x: qx * pointQuantizeM,
+      z: qz * pointQuantizeM,
     });
   }
 
@@ -134,6 +173,8 @@ function projectedHullGeometryForFloorShadow(
   }
   centerX /= hull.length;
   centerZ /= hull.length;
+  scaleHullTowardCenter(hull, centerX, centerZ, hullScale);
+  ensureMinHullRadius(hull, centerX, centerZ, minHullRadiusM);
 
   const vertices: number[] = [];
   const pushParentLocal = (x: number, z: number): void => {
@@ -171,10 +212,34 @@ function collectDecorFloorShadowGeometries(input: {
     _decorBoundsScratch.setFromObject(group);
     if (_decorBoundsScratch.isEmpty()) continue;
     _decorBoundsScratch.getCenter(_decorCenterScratch);
-    const shadowWorldY = Math.max(
-      input.floorWorldY,
-      _decorBoundsScratch.min.y + input.floorOffsetM,
-    );
+    _decorBoundsScratch.getSize(_decorBoundsSizeScratch);
+    const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
+    const snapToShellFloor =
+      typeof modelRelPath === "string" &&
+      apartmentDecorBakedFloorShadowSnapToShellFloor(modelRelPath);
+    const hullScale =
+      typeof modelRelPath === "string"
+        ? apartmentDecorBakedFloorShadowHullScale(
+            modelRelPath,
+            _decorBoundsSizeScratch,
+          )
+        : 1;
+    const shadowWorldY = snapToShellFloor
+      ? input.floorWorldY
+      : Math.max(
+          input.floorWorldY,
+          _decorBoundsScratch.min.y + input.floorOffsetM,
+        );
+    const looseCigarette =
+      typeof modelRelPath === "string" &&
+      apartmentDecorIsLooseCigaretteDecorModel(modelRelPath);
+    const shadowCfg = APARTMENT_INTERIOR_VISUAL_PROFILE.decorShadow;
+    const pointQuantizeM = looseCigarette
+      ? shadowCfg.bakedFloorCigarettePointQuantizeM
+      : SHADOW_POINT_QUANTIZE_M;
+    const minHullRadiusM = looseCigarette
+      ? shadowCfg.bakedFloorCigaretteMinHullRadiusM
+      : 0;
     group.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
       if (!obj.visible) return;
@@ -187,8 +252,11 @@ function collectDecorFloorShadowGeometries(input: {
         _meshWorldScratch,
         shadowWorldY,
         _parentInvScratch,
-        input.softenRadiusM ?? 0,
+        (input.softenRadiusM ?? 0) * hullScale,
         _decorCenterScratch,
+        hullScale,
+        pointQuantizeM,
+        minHullRadiusM,
       );
       if (geo) geos.push(geo);
     });

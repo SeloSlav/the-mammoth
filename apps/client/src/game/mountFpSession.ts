@@ -63,6 +63,7 @@ import {
 } from "./fpDebugMenuSessionBridge.js";
 import { resetFpDebugRenderIsolationFlags } from "./fpDebugRenderIsolation.js";
 import { resetFpDebugEmissiveIsolationState } from "./fpDebugEmissiveIsolation.js";
+import { resetFpDebugGameplayFeedbackFlags } from "./fpDebugGameplayFeedback.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
 import { disposeStaticWorldObjectTree } from "./fpSession/fpSessionStaticWorldDispose.js";
 import {
@@ -273,6 +274,7 @@ export async function mountFpSession(
   resetFpSessionGameUiHidden();
   resetFpDebugRenderIsolationFlags();
   resetFpDebugEmissiveIsolationState();
+  resetFpDebugGameplayFeedbackFlags();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
@@ -1768,6 +1770,7 @@ export async function mountFpSession(
     resetFpSessionGameUiHidden();
     resetFpDebugRenderIsolationFlags();
   resetFpDebugEmissiveIsolationState();
+  resetFpDebugGameplayFeedbackFlags();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };
