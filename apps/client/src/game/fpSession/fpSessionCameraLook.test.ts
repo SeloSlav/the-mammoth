@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   createFpLookInertiaState,
   resetFpLookInertia,
+  stepFpFreeLookRecenter,
   stepFpLookInertia,
   type FpLookAngleState,
 } from "./fpSessionCameraLook.js";
-import { MOUSE_SENS } from "./fpSessionConstants.js";
+import { FREE_LOOK_RECENTER_RATE_PER_S, MOUSE_SENS } from "./fpSessionConstants.js";
 
 const DT = 1 / 60;
 
@@ -71,6 +72,21 @@ describe("fpSessionCameraLook", () => {
 
     expect(angles.bodyYaw).toBe(0.5);
     expect(angles.headLookYaw).not.toBe(0);
+  });
+
+  it("eases head yaw toward zero after Alt free-look ends", () => {
+    const angles: FpLookAngleState = { bodyYaw: 0.4, pitch: 0, headLookYaw: 1.1 };
+    const start = angles.headLookYaw;
+
+    stepFpFreeLookRecenter(angles, DT);
+    expect(angles.bodyYaw).toBe(0.4);
+    expect(Math.abs(angles.headLookYaw)).toBeLessThan(Math.abs(start));
+    expect(angles.headLookYaw).toBeCloseTo(start * Math.exp(-FREE_LOOK_RECENTER_RATE_PER_S * DT), 8);
+
+    for (let i = 0; i < 240; i += 1) {
+      if (!stepFpFreeLookRecenter(angles, DT)) break;
+    }
+    expect(angles.headLookYaw).toBe(0);
   });
 
   it("zeros pitch velocity at the clamp", () => {

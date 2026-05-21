@@ -1,4 +1,6 @@
 import {
+  FREE_LOOK_RECENTER_RATE_PER_S,
+  FREE_LOOK_RECENTER_SNAP_EPS,
   FREE_LOOK_YAW_MAX,
   LOOK_INERTIA_COAST_GAIN,
   LOOK_INERTIA_DAMP_PER_S,
@@ -105,4 +107,31 @@ export function stepFpLookInertia(
   inertia.velPitch *= decay;
   if (Math.abs(inertia.velYaw) < 1e-7) inertia.velYaw = 0;
   if (Math.abs(inertia.velPitch) < 1e-7) inertia.velPitch = 0;
+}
+
+export type StepFpFreeLookRecenterOpts = {
+  recenterRatePerS?: number;
+  snapEpsilon?: number;
+};
+
+/**
+ * After Alt free-look ends, ease head yaw back to body forward instead of snapping instantly.
+ * Returns true while recenter is still in progress.
+ */
+export function stepFpFreeLookRecenter(
+  angles: Pick<FpLookAngleState, "headLookYaw">,
+  dt: number,
+  opts?: StepFpFreeLookRecenterOpts,
+): boolean {
+  if (dt <= 0 || angles.headLookYaw === 0) return false;
+
+  const recenterRatePerS = opts?.recenterRatePerS ?? FREE_LOOK_RECENTER_RATE_PER_S;
+  const snapEpsilon = opts?.snapEpsilon ?? FREE_LOOK_RECENTER_SNAP_EPS;
+  angles.headLookYaw *= Math.exp(-recenterRatePerS * dt);
+
+  if (Math.abs(angles.headLookYaw) < snapEpsilon) {
+    angles.headLookYaw = 0;
+    return false;
+  }
+  return true;
 }

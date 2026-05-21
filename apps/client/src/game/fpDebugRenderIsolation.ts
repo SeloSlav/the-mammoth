@@ -21,6 +21,8 @@ export type FpDebugRenderIsolationFlags = {
   droppedItems: boolean;
   decals: boolean;
   localViewmodel: boolean;
+  /** Shell plaster emissive + decor fixture glow (material emissive channels only). */
+  emissiveMaterials: boolean;
 };
 
 export type FpDebugRenderIsolationKey = keyof FpDebugRenderIsolationFlags;
@@ -40,6 +42,7 @@ const ALL_ON: FpDebugRenderIsolationFlags = {
   droppedItems: true,
   decals: true,
   localViewmodel: true,
+  emissiveMaterials: true,
 };
 
 const listeners = new Set<() => void>();
@@ -71,7 +74,8 @@ export function isFpDebugRenderIsolationSuppressingAnything(): boolean {
     f.lobbyInterior &&
     f.droppedItems &&
     f.decals &&
-    f.localViewmodel
+    f.localViewmodel &&
+    f.emissiveMaterials
   );
 }
 
@@ -111,6 +115,7 @@ export function setAllFpDebugRenderIsolationFlags(enabled: boolean): void {
     droppedItems: enabled,
     decals: enabled,
     localViewmodel: enabled,
+    emissiveMaterials: enabled,
   };
   notify();
 }

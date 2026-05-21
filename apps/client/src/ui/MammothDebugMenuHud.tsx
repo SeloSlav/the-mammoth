@@ -298,6 +298,11 @@ export function MammothDebugMenuHud() {
       description: "Lamp/TV/ceiling spots + emissive glow — window fills stay on unless all-practicals is off",
     },
     {
+      key: "emissiveMaterials",
+      label: "Emissive materials",
+      description: "Shell plaster glow + decor fixture emissive (material channel only — not light nodes)",
+    },
+    {
       key: "environmentLighting",
       label: "Scene lighting",
       description: "Sun, ambient/fill, interior bounce — not apartment practicals",

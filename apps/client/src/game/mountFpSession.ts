@@ -62,6 +62,7 @@ import {
   unregisterFpDebugMenuSessionSnapshot,
 } from "./fpDebugMenuSessionBridge.js";
 import { resetFpDebugRenderIsolationFlags } from "./fpDebugRenderIsolation.js";
+import { resetFpDebugEmissiveIsolationState } from "./fpDebugEmissiveIsolation.js";
 import { installMmWallProbeLoadingStub } from "./fpSession/fpSessionWallProbeStub.js";
 import { disposeStaticWorldObjectTree } from "./fpSession/fpSessionStaticWorldDispose.js";
 import {
@@ -168,6 +169,7 @@ import {
 import {
   createFpLookInertiaState,
   resetFpLookInertia,
+  stepFpFreeLookRecenter,
   stepFpLookInertia,
 } from "./fpSession/fpSessionCameraLook.js";
 import type { DecalManager } from "../rendering/decals/DecalManager.js";
@@ -270,6 +272,7 @@ export async function mountFpSession(
   resetFpSessionCompassHeading();
   resetFpSessionGameUiHidden();
   resetFpDebugRenderIsolationFlags();
+  resetFpDebugEmissiveIsolationState();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
 
@@ -1487,7 +1490,6 @@ export async function mountFpSession(
   const onKeyUp = (e: KeyboardEvent) => {
     keys.delete(e.code);
     if (e.code === "AltLeft" || e.code === "AltRight") {
-      mainRaf.headLookYaw = 0;
       resetFpLookInertia(lookInertia);
     }
   };
@@ -1681,6 +1683,9 @@ export async function mountFpSession(
         dt,
         { freeLook },
       );
+      if (!freeLook && mainRaf.headLookYaw !== 0) {
+        stepFpFreeLookRecenter(mainRaf, dt);
+      }
       pendingLookDeltaX = 0;
       pendingLookDeltaY = 0;
     }
@@ -1762,6 +1767,7 @@ export async function mountFpSession(
     resetFpSessionCompassHeading();
     resetFpSessionGameUiHidden();
     resetFpDebugRenderIsolationFlags();
+  resetFpDebugEmissiveIsolationState();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
   };

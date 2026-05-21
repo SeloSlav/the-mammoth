@@ -35,6 +35,7 @@ import {
   applyFpDebugRenderIsolationForceOff,
   type FpDebugRenderIsolationTargets,
 } from "../fpDebugRenderIsolationApply.js";
+import { syncFpDebugEmissiveMaterialsIsolation } from "../fpDebugEmissiveIsolation.js";
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
@@ -1048,6 +1049,10 @@ export function createFpSessionMainRafFrame(
       });
     }
     applyFpDebugRenderIsolationForceOff(deps.renderIsolationTargets);
+    syncFpDebugEmissiveMaterialsIsolation(
+      deps.renderIsolationTargets.buildingRoot,
+      isFpDebugRenderIsolationEnabled("emissiveMaterials"),
+    );
     const _t_beforeThreeRender = performance.now();
     deps.renderer.info.reset();
     const drawCallsBefore = deps.renderer.info.render.calls;
