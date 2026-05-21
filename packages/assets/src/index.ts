@@ -17,6 +17,8 @@ export {
   MAMMOTH_STATIC_MODEL_BASE,
   mammothCatalogGlbCandidates,
   balconyGrowStageGlb,
+  balconyGrowCatalogPreviewGlb,
+  isBalconyGrowCatalogPreviewDef,
 } from "./catalogGlb.js";
 export {
   getMammothDroppedWorldTargetMaxDimM,

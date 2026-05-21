@@ -26,25 +26,29 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
   apple: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
   "water-bottle": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/water-bottle.glb`,
   rakija: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/rakija.glb`,
-  "balcony-grow-substrate": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "lovage-seeds": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "parsley-seeds": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "dill-seeds": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "paprika-seedlings": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "green-onion-sets": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "radish-sprout-seeds": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "oyster-mushroom-spore": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "scented-geranium-cuttings": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "fresh-lovage": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "fresh-parsley": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "fresh-dill": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "fresh-paprika": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
-  "fresh-green-onion": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "radish-sprouts": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "fresh-oyster-mushroom": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "dried-oyster-mushroom": `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-tray.glb`,
-  "scented-geranium-leaves": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
 };
+
+/** Catalog def ids that share the balcony grow preview mesh (never `grow-tray.glb`). */
+const BALCONY_GROW_CATALOG_PREVIEW_DEF_IDS = new Set<string>([
+  "balcony-grow-substrate",
+  "lovage-seeds",
+  "parsley-seeds",
+  "dill-seeds",
+  "paprika-seedlings",
+  "green-onion-sets",
+  "radish-sprout-seeds",
+  "oyster-mushroom-spore",
+  "scented-geranium-cuttings",
+  "fresh-lovage",
+  "fresh-parsley",
+  "fresh-dill",
+  "fresh-paprika",
+  "fresh-green-onion",
+  "radish-sprouts",
+  "fresh-oyster-mushroom",
+  "dried-oyster-mushroom",
+  "scented-geranium-leaves",
+]);
 
 export type BalconyGrowStageGlb = "seed" | "sapling" | "mid" | "mature";
 
@@ -54,6 +58,15 @@ const BALCONY_GROW_STAGE_GLB: Record<BalconyGrowStageGlb, string> = {
   mid: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-mid.glb`,
   mature: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-mature.glb`,
 };
+
+/** Inventory / dropped-world preview for balcony grow catalog rows. */
+export function balconyGrowCatalogPreviewGlb(): string {
+  return BALCONY_GROW_STAGE_GLB.sapling;
+}
+
+export function isBalconyGrowCatalogPreviewDef(defId: string): boolean {
+  return BALCONY_GROW_CATALOG_PREVIEW_DEF_IDS.has(defId);
+}
 
 /** Shared stage mesh for balcony grow slots (per-crop tint/scale applied at runtime). */
 export function balconyGrowStageGlb(stage: BalconyGrowStageGlb): string {
@@ -74,6 +87,10 @@ function pushUnique(out: string[], seen: Set<string>, url: string): void {
 export function mammothCatalogGlbCandidates(defId: string): readonly string[] {
   const out: string[] = [];
   const seen = new Set<string>();
+
+  if (isBalconyGrowCatalogPreviewDef(defId)) {
+    pushUnique(out, seen, balconyGrowCatalogPreviewGlb());
+  }
 
   const primary = MAMMOTH_CATALOG_GLB_PRIMARY_URI[defId];
   if (primary) pushUnique(out, seen, primary);

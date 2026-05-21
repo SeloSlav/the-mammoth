@@ -217,6 +217,9 @@ describe("mammothItemCatalog", () => {
     ] as const;
     for (const id of plantIds) {
       expect(getMammothItemDef(id)?.category).toBe("resource");
+      expect(getMammothDroppedWorldModelUrl(id)).toBe(
+        "/static/models/objects/grow-stage-sapling.glb",
+      );
     }
 
     const harvestIds = [
@@ -232,6 +235,9 @@ describe("mammothItemCatalog", () => {
     ] as const;
     for (const id of harvestIds) {
       expect(getMammothItemDef(id)?.category).toBe("consumable");
+      expect(getMammothDroppedWorldModelUrl(id)).toBe(
+        "/static/models/objects/grow-stage-sapling.glb",
+      );
     }
 
     expect(mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("radish-sprouts"))).toBe(
