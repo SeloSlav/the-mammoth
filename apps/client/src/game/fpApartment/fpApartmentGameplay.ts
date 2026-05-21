@@ -20,6 +20,7 @@ import {
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_WATER_TANK,
@@ -45,6 +46,7 @@ const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKi
   [APARTMENT_STASH_KIND_STOVE]: 0.42,
   [APARTMENT_STASH_KIND_FRIDGE]: 0.58,
   [APARTMENT_STASH_KIND_WATER_TANK]: 0.36,
+  [APARTMENT_STASH_KIND_GROW_TRAY]: 0.38,
 };
 
 /**
@@ -406,6 +408,24 @@ export function clientMayUseApartmentStash(
 ): boolean {
   if (!owner) return false;
   const full = parseApartmentStashKeyFull(stashKey);
+  if (full.tag === "grow_tray") {
+    for (const row of conn.db.apartment_unit) {
+      const u = row as ApartmentUnit;
+      if (u.unitKey !== full.unitKey) continue;
+      if (u.state !== UNIT_STATE_CLAIMED) return false;
+      if (!sameIdentity(u.owner, owner)) return false;
+      if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
+      for (const tray of conn.db.balcony_grow_tray) {
+        if (tray.unitKey !== full.unitKey || tray.trayId !== full.trayId) continue;
+        const dx = pose.x - tray.posX;
+        const dz = pose.z - tray.posZ;
+        if (dx * dx + dz * dz > 1.1 * 1.1) return false;
+        return feetVerticalOkForInteract(u.footY, pose.y);
+      }
+      return false;
+    }
+    return false;
+  }
   if (full.tag === "decor") {
     let decor: ApartmentUnitDecor | null = null;
     for (const row of conn.db.apartment_unit_decor) {
@@ -738,6 +758,15 @@ export function getApartmentSystemPrompt(
         unitKey: full.unitKey,
         stashKind: sk,
         stashLabel: apartmentStashLabel(sk),
+      };
+    }
+    if (full.tag === "grow_tray") {
+      return {
+        kind: "apartment_stash",
+        stashKey: opts.lookedAtStashKey,
+        unitKey: full.unitKey,
+        stashKind: APARTMENT_STASH_KIND_GROW_TRAY,
+        stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_GROW_TRAY),
       };
     }
     const stashKind: ApartmentStashKind =

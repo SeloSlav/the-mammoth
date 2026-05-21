@@ -4,28 +4,28 @@ overview: "Implement the full balcony grow-op gameplay loop: shared FP placement
 todos:
   - id: schemas-catalog
     content: Add balconyGrowOp constants + extend balcony_grow_op.json/schema.rs with balconyGrow metadata and stage tint/scale
-    status: in_progress
+    status: completed
   - id: server-grow-op
     content: "Create balcony_grow_op.rs: tables, plant/harvest/dump/tick reducers, tray bootstrap, grow_tray fertilizer stash kind"
-    status: pending
+    status: completed
   - id: shared-placement
     content: Build fpWorldPlacementPreview + snap math; wire seed hotbar LMB plant in mountFpSession
-    status: pending
+    status: completed
   - id: tray-visuals
     content: Grow-tray pick meshes, 4-slot stage meshes (shared GLBs), moisture/chalk visuals in fpApartmentDecorMeshes
-    status: pending
+    status: completed
   - id: water-rmb
     content: RMB water bottle dump → patch table + AOE tray water + floor ring decals
-    status: pending
+    status: completed
   - id: ui-harvest
     content: BalconyGrowInspectHud overlay, E harvest prompt, grow_tray fertilizer stash panel
-    status: pending
+    status: completed
   - id: surprise-journal
     content: player_grow_journal + first-harvest HUD toast with crop recipe hints
-    status: pending
+    status: completed
   - id: tests-bindings
     content: Unit tests + pnpm client:generate + republish module
-    status: pending
+    status: completed
 isProject: false
 ---
 

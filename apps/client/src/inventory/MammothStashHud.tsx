@@ -33,7 +33,7 @@ import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
-import { APARTMENT_STASH_KIND_WATER_TANK } from "../game/fpApartment/fpApartmentStashKey";
+import { APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_WATER_TANK } from "../game/fpApartment/fpApartmentStashKey";
 import { parseApartmentStashKeyFull } from "../game/fpApartment/fpApartmentStashKey";
 import { useApartmentWaterTankLiters, useWaterBottleFillVersion } from "./useWaterContainerState";
 import {
@@ -389,7 +389,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
         boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
         color: "#dfe6f5",
         fontSize: 13,
-        minWidth: 360,
+        minWidth: stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? 220 : 360,
         zIndex: 121,
         pointerEvents: "auto",
         ...NO_SELECT,
@@ -400,6 +400,13 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
       <div style={{ fontSize: 11, opacity: 0.75, marginBottom: 8 }}>
         Drag items in/out. {rulesHint} Tab, Esc, or E to close.
       </div>
+
+      {stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
+        <div style={{ marginBottom: 10, fontSize: 11, color: "#a8d4a0", lineHeight: 1.45 }}>
+          Drop balcony substrate here. While this slot holds fertilizer, plants in this tray grow
+          20% faster — it is not consumed when you plant.
+        </div>
+      ) : null}
 
       {stashKind === APARTMENT_STASH_KIND_WATER_TANK ? (
         <div style={{ marginBottom: 10 }}>
@@ -456,6 +463,10 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
               </div>
             </div>
           ))}
+        </div>
+      ) : stashKind === APARTMENT_STASH_KIND_GROW_TRAY ? (
+        <div style={{ ...slotGridStyle, gridTemplateColumns: "52px", justifyContent: "center" }}>
+          {renderStashSlot(0, displaySlots.stash?.[0] ?? null, slotRenderOpts)}
         </div>
       ) : (
         <div style={{ ...slotGridStyle, gridTemplateColumns: `repeat(${gridCols}, 52px)` }}>

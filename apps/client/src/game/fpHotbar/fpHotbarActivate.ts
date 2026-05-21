@@ -1,6 +1,7 @@
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
-import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume, mammothItemDefSupportsHotbarUseAction } from "../../inventory/mammothItemCatalog";
+import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume } from "../../inventory/mammothItemCatalog";
+import { waterBottleFillFraction } from "../../inventory/waterContainerHelpers";
 import { getHotbarSlotInventoryItem } from "./fpHotbarResolve";
 
 /** Hotbar rail size — keep in sync with server `NUM_PLAYER_HOTBAR_SLOTS` and HUD grid. */
@@ -44,7 +45,15 @@ export function hotbarSlotHasHotbarUseAction(
 ): boolean {
   const row = getHotbarSlotInventoryItem(conn, owner, slotIndex);
   if (!row) return false;
-  return mammothItemDefSupportsHotbarUseAction(getMammothItemDef(row.defId));
+  const def = getMammothItemDef(row.defId);
+  if (!def) return false;
+  if (def.waterContainer != null) {
+    return (
+      waterBottleFillFraction(conn, row.instanceId, def.waterContainer.capacityLiters) >
+      0.001
+    );
+  }
+  return mammothItemDefSupportsHotbarInstantConsume(def);
 }
 
 /** @deprecated Use {@link hotbarSlotHasHotbarUseAction} — kept for instant-conume-only checks. */

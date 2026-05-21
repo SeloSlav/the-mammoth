@@ -93,6 +93,54 @@ export const ApartmentWaterTankSchedule = __t.object("ApartmentWaterTankSchedule
 });
 export type ApartmentWaterTankSchedule = __Infer<typeof ApartmentWaterTankSchedule>;
 
+export const BalconyGrowLight = __t.object("BalconyGrowLight", {
+  unitKey: __t.string(),
+  lightsOn: __t.u8(),
+});
+export type BalconyGrowLight = __Infer<typeof BalconyGrowLight>;
+
+export const BalconyGrowPlant = __t.object("BalconyGrowPlant", {
+  rowKey: __t.string(),
+  unitKey: __t.string(),
+  trayId: __t.string(),
+  slotIndex: __t.u8(),
+  cropDefId: __t.string(),
+  plantedAtMicros: __t.i64(),
+  matureAtMicros: __t.i64(),
+  phase: __t.u8(),
+  owner: __t.identity(),
+});
+export type BalconyGrowPlant = __Infer<typeof BalconyGrowPlant>;
+
+export const BalconyGrowTickSchedule = __t.object("BalconyGrowTickSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type BalconyGrowTickSchedule = __Infer<typeof BalconyGrowTickSchedule>;
+
+export const BalconyGrowTray = __t.object("BalconyGrowTray", {
+  rowKey: __t.string(),
+  unitKey: __t.string(),
+  trayId: __t.string(),
+  posX: __t.f32(),
+  posZ: __t.f32(),
+  waterLiters: __t.f32(),
+  dryTicks: __t.u8(),
+});
+export type BalconyGrowTray = __Infer<typeof BalconyGrowTray>;
+
+export const BalconyWaterPatch = __t.object("BalconyWaterPatch", {
+  patchId: __t.u64(),
+  unitKey: __t.string(),
+  posX: __t.f32(),
+  posZ: __t.f32(),
+  radiusM: __t.f32(),
+  waterLiters: __t.f32(),
+  createdAtMicros: __t.i64(),
+  expiresAtMicros: __t.i64(),
+});
+export type BalconyWaterPatch = __Infer<typeof BalconyWaterPatch>;
+
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
@@ -238,6 +286,13 @@ export const PlayerFootCadence = __t.object("PlayerFootCadence", {
   footRr: __t.u8(),
 });
 export type PlayerFootCadence = __Infer<typeof PlayerFootCadence>;
+
+export const PlayerGrowJournal = __t.object("PlayerGrowJournal", {
+  rowKey: __t.string(),
+  identity: __t.identity(),
+  cropDefId: __t.string(),
+});
+export type PlayerGrowJournal = __Infer<typeof PlayerGrowJournal>;
 
 export const PlayerInput = __t.object("PlayerInput", {
   identity: __t.identity(),

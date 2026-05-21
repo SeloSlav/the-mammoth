@@ -106,6 +106,12 @@ import { createFpSessionPerfDebugPostRenderHook, fpSessionTrackGpuTimestampsEnab
 import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMeshProfiler.js";
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
+import {
+  balconyGrowPromptFromDecorRaycast,
+  handleBalconyGrowKeyE,
+  mountFpBalconyGrowSession,
+  runBalconyGrowHarvest,
+} from "./fpBalconyGrow/fpBalconyGrowSession.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
@@ -628,6 +634,7 @@ export async function mountFpSession(
       ensureMammothApartmentDecorShadowRenderer(renderer);
     },
   });
+  const fpBalconyGrow = mountFpBalconyGrowSession({ scene, conn });
   refreshApartmentInteriorMeshes();
 
 
@@ -1407,6 +1414,22 @@ export async function mountFpSession(
       if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
+      const growState = fpBalconyGrow.getGrowState(
+        getContainingResidentialUnitKey?.() ?? null,
+      );
+      const growPrompt = balconyGrowPromptFromDecorRaycast(
+        conn,
+        conn.identity,
+        feet,
+        camera,
+        fpApartmentDecorMeshes,
+        growState,
+      );
+      if (growPrompt?.kind === "balcony_grow_harvest") {
+        runBalconyGrowHarvest(conn, growPrompt);
+        return;
+      }
+
       if (aptKey?.kind === "apartment_stash") {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
@@ -1414,6 +1437,11 @@ export async function mountFpSession(
           stashKind: aptKey.stashKind,
         });
         requestMammothInventoryOpenFromFp();
+        if (document.pointerLockElement) void document.exitPointerLock();
+        return;
+      }
+
+      if (growPrompt && handleBalconyGrowKeyE(growPrompt)) {
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }
@@ -1520,6 +1548,10 @@ export async function mountFpSession(
     // Match server combat rail (`player_active_hotbar`) to HUD selection before enqueueing attack.
     syncActiveHotbarSlotToServer();
     if (e.button === 2) {
+      if (fpBalconyGrow.trySecondaryPointerDown(camera, conn)) {
+        e.preventDefault();
+        return;
+      }
       if (__mmWallProbeState.enabled) {
         e.preventDefault();
         probeWallHit();
@@ -1530,6 +1562,7 @@ export async function mountFpSession(
     const nowMs = performance.now();
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
     if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
+    if (fpBalconyGrow.tryPrimaryPointerDown(conn)) return;
     const selectedHotbarSlot = getFpHotbarSelectedSlot();
     if (
       conn.identity &&
@@ -1592,6 +1625,7 @@ export async function mountFpSession(
     fpElevators,
     fpApartmentDoors,
     fpApartmentDecorMeshes,
+    fpBalconyGrowSession: fpBalconyGrow,
     sampleWalkTopBase,
     _elevSupportEval,
     _displayOffset,
@@ -1732,6 +1766,7 @@ export async function mountFpSession(
     exitFpSit();
     fpElevators.dispose();
     fpApartmentDecorMeshes.dispose();
+    fpBalconyGrow.dispose();
     fpApartmentDoors.dispose();
     unregisterFpDebugMenuSessionSnapshot();
     setFpActiveStashPanel(null);

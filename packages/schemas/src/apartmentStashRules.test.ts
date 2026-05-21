@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_FOOTLOCKER,
+  APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_WATER_TANK,
@@ -71,6 +72,19 @@ describe("apartmentStashAcceptsDefId", () => {
       true,
     );
     expect(apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FRIDGE, "knife", "weapon")).toBe(false);
+  });
+
+  it("grow tray accepts substrate only", () => {
+    expect(
+      apartmentStashAcceptsDefId(
+        APARTMENT_STASH_KIND_GROW_TRAY,
+        "balcony-grow-substrate",
+        "resource",
+      ),
+    ).toBe(true);
+    expect(
+      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_GROW_TRAY, "lovage-seeds", "resource"),
+    ).toBe(false);
   });
 });
 

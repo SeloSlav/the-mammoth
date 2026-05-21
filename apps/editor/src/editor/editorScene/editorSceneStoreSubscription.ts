@@ -4,6 +4,7 @@ import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import { rebuildStairWellPreviewRoot } from "@the-mammoth/world";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
+import { resyncEditorMyApartmentDecorShadows } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import { useEditorStore } from "../../state/editorStore.js";
 import type { EditorStructuralState } from "./editorSceneStructuralRebuild.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
@@ -253,6 +254,12 @@ export function subscribeEditorSceneStore(deps: {
         camera.up.set(0, 1, 0);
       }
 
+      if (
+        s.apartmentBakedFloorShadowsEnabled !== prev.apartmentBakedFloorShadowsEnabled &&
+        s.mode === "my_apartment_layout"
+      ) {
+        resyncEditorMyApartmentDecorShadows();
+      }
       if (s.shadowsEnabled !== prev.shadowsEnabled) {
         const apartmentDecorShadows =
           s.mode === "my_apartment_layout" &&

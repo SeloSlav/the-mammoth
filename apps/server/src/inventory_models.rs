@@ -7,7 +7,9 @@ pub(crate) const APARTMENT_STASH_KIND_WARDROBE: &str = "wardrobe";
 pub(crate) const APARTMENT_STASH_KIND_STOVE: &str = "stove";
 pub(crate) const APARTMENT_STASH_KIND_FRIDGE: &str = "fridge";
 pub(crate) const APARTMENT_STASH_KIND_WATER_TANK: &str = "water_tank";
+pub(crate) const APARTMENT_STASH_KIND_GROW_TRAY: &str = "grow_tray";
 const APARTMENT_STASH_KEY_SEP: &str = "#";
+const GROW_TRAY_STASH_PREFIX: &str = "grow_tray:";
 
 /// Per-instance stash: `{unit_key}#d{decor_id}` (e.g. `floor_mamutica_typical|21|unit_e_003#d7`).
 pub(crate) fn apartment_stash_key_decor(unit_key: &str, decor_id: u64) -> String {
@@ -26,6 +28,11 @@ pub(crate) enum ParsedApartmentStashKey<'a> {
     DecorInstance {
         unit_key: &'a str,
         decor_id: u64,
+    },
+    /// `{unit_key}#grow_tray:{tray_builtin_uuid}` — per-tray fertilizer slot.
+    GrowTray {
+        unit_key: &'a str,
+        tray_id: &'a str,
     },
 }
 
@@ -47,6 +54,7 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
             || tail == APARTMENT_STASH_KIND_STOVE
             || tail == APARTMENT_STASH_KIND_FRIDGE
             || tail == APARTMENT_STASH_KIND_WATER_TANK
+            || tail == APARTMENT_STASH_KIND_GROW_TRAY
         {
             let kind: &'static str = if tail == APARTMENT_STASH_KIND_WARDROBE {
                 APARTMENT_STASH_KIND_WARDROBE
@@ -56,10 +64,20 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
                 APARTMENT_STASH_KIND_FRIDGE
             } else if tail == APARTMENT_STASH_KIND_WATER_TANK {
                 APARTMENT_STASH_KIND_WATER_TANK
+            } else if tail == APARTMENT_STASH_KIND_GROW_TRAY {
+                APARTMENT_STASH_KIND_GROW_TRAY
             } else {
                 APARTMENT_STASH_KIND_FOOTLOCKER
             };
             return ParsedApartmentStashKey::LegacyComposite { unit_key: unit_part, kind };
+        }
+        if let Some(tray_id) = tail.strip_prefix(GROW_TRAY_STASH_PREFIX) {
+            if !tray_id.is_empty() {
+                return ParsedApartmentStashKey::GrowTray {
+                    unit_key: unit_part,
+                    tray_id,
+                };
+            }
         }
     }
     ParsedApartmentStashKey::BareUnitKey(raw)
@@ -72,6 +90,7 @@ pub(crate) fn parse_apartment_stash_key(raw: &str) -> (&str, &str) {
         ParsedApartmentStashKey::BareUnitKey(u) => (u, APARTMENT_STASH_KIND_FOOTLOCKER),
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => (unit_key, kind),
         ParsedApartmentStashKey::DecorInstance { unit_key, .. } => (unit_key, APARTMENT_STASH_KIND_FOOTLOCKER),
+        ParsedApartmentStashKey::GrowTray { unit_key, .. } => (unit_key, APARTMENT_STASH_KIND_GROW_TRAY),
     }
 }
 
@@ -85,6 +104,7 @@ pub(crate) fn apartment_stash_kind_display_name(stash_kind: &str) -> &'static st
         APARTMENT_STASH_KIND_STOVE => "stove",
         APARTMENT_STASH_KIND_FRIDGE => "fridge",
         APARTMENT_STASH_KIND_WATER_TANK => "water tank",
+        APARTMENT_STASH_KIND_GROW_TRAY => "grow tray",
         _ => "footlocker",
     }
 }
@@ -131,6 +151,16 @@ pub(crate) fn stash_location_matches(stored_unit_key: &str, requested_stash_key:
             },
             ParsedApartmentStashKey::BareUnitKey(ru),
         ) => su == ru && sk == APARTMENT_STASH_KIND_FOOTLOCKER,
+        (
+            ParsedApartmentStashKey::GrowTray {
+                unit_key: su,
+                tray_id: st,
+            },
+            ParsedApartmentStashKey::GrowTray {
+                unit_key: ru,
+                tray_id: rt,
+            },
+        ) => su == ru && st == rt,
         _ => false,
     }
 }

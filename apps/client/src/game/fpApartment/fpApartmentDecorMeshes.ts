@@ -86,12 +86,20 @@ import {
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
+  APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey.js";
 import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
+import {
+  growTrayBuiltinIdForPlacement,
+  isGrowTrayModelPath,
+  mountGrowTrayDecorOnGroup,
+  syncGrowSlotVisuals,
+} from "../fpBalconyGrow/fpBalconyGrowTrayDecor.js";
+import type { BalconyGrowPlant, BalconyGrowTray } from "../../module_bindings/types";
 
 import {
   APARTMENT_PROP_FRUSTUM_MARGIN_M,
@@ -426,6 +434,13 @@ export type MountFpApartmentDecorMeshesResult = {
     visiblePickScratch: THREE.Mesh[],
   ) => ApartmentSittablePrompt | null;
   getSittableDecorRoots: () => readonly THREE.Object3D[];
+  getGrowTrayPickMeshes: () => readonly THREE.Mesh[];
+  getGrowSlotPickMeshes: () => readonly THREE.Mesh[];
+  syncBalconyGrowSlotVisuals: (
+    plants: readonly BalconyGrowPlant[],
+    trays: readonly BalconyGrowTray[],
+    stashHasFertilizer: (unitKey: string, trayId: string) => boolean,
+  ) => void;
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -454,6 +469,11 @@ export function mountFpApartmentDecorMeshes(opts: {
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
   const sittablePickMeshes: THREE.Mesh[] = [];
+  const growTrayPickMeshes: THREE.Mesh[] = [];
+  const growSlotPickMeshes: THREE.Mesh[] = [];
+  const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
+  const growTrayIndexByUnit = new Map<string, number>();
+  const stageTemplateCache = new Map<string, THREE.Object3D>();
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -942,6 +962,25 @@ export function mountFpApartmentDecorMeshes(opts: {
           g.updateMatrixWorld(true);
         }
       }
+      if (isGrowTrayModelPath(d.modelRelPath)) {
+        const trayIdx = growTrayIndexByUnit.get(d.unit.unitKey) ?? 0;
+        growTrayIndexByUnit.set(d.unit.unitKey, trayIdx + 1);
+        const trayId = growTrayBuiltinIdForPlacement(d.renderKey, trayIdx);
+        if (trayId) {
+          const mount = await mountGrowTrayDecorOnGroup({
+            decorGroup: g,
+            unitKey: d.unit.unitKey,
+            trayBuiltinId: trayId,
+            pickGeometry: stashPickGeometry,
+            pickMaterial: stashPickMaterial,
+            loader: gltfLoader,
+          });
+          growTrayPickMeshes.push(...mount.growTrayPickMeshes);
+          growSlotPickMeshes.push(...mount.growSlotPickMeshes);
+          stashPickMeshes.push(...mount.growTrayPickMeshes);
+          growSlotVisualsByTrayId.set(trayId, mount.slotVisualsGroup);
+        }
+      }
       const decorModelRelPath =
         normalizeApartmentDecorModelRelPath(d.modelRelPath) ?? d.modelRelPath;
       const sitSpec = apartmentSittableSpecForPlacedItem({
@@ -1125,7 +1164,8 @@ export function mountFpApartmentDecorMeshes(opts: {
           stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
           stashKind !== APARTMENT_STASH_KIND_STOVE &&
           stashKind !== APARTMENT_STASH_KIND_FRIDGE &&
-          stashKind !== APARTMENT_STASH_KIND_WATER_TANK
+          stashKind !== APARTMENT_STASH_KIND_WATER_TANK &&
+          stashKind !== APARTMENT_STASH_KIND_GROW_TRAY
         ) {
           continue;
         }
@@ -1156,6 +1196,25 @@ export function mountFpApartmentDecorMeshes(opts: {
       return null;
     },
     getSittablePickMeshes: () => sittablePickMeshes,
+    getGrowTrayPickMeshes: () => growTrayPickMeshes,
+    getGrowSlotPickMeshes: () => growSlotPickMeshes,
+    syncBalconyGrowSlotVisuals: (plants, trays, stashHasFertilizer) => {
+      void (async () => {
+        for (const [trayId, slotGroup] of growSlotVisualsByTrayId) {
+          const tray = trays.find((t) => t.trayId === trayId);
+          const unitKey = tray?.unitKey ?? "";
+          await syncGrowSlotVisuals(
+            slotGroup,
+            plants,
+            trayId,
+            tray?.waterLiters ?? 0,
+            stashHasFertilizer(unitKey, trayId),
+            gltfLoader,
+            stageTemplateCache,
+          );
+        }
+      })();
+    },
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
     getSittablePrompt: (playerPos, camera, objectVisibleInHierarchy, visiblePickScratch) => {
       if (!opts.conn.identity) return null;

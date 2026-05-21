@@ -1,4 +1,8 @@
 import {
+  APARTMENT_STASH_KIND_GROW_TRAY,
+  parseBalconyGrowTrayStashKey,
+} from "@the-mammoth/schemas";
+import {
   apartmentStashLocationsMatch,
   type ResolveApartmentDecorStashKind,
 } from "@the-mammoth/schemas";
@@ -8,13 +12,15 @@ export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe";
 export const APARTMENT_STASH_KIND_STOVE = "stove";
 export const APARTMENT_STASH_KIND_FRIDGE = "fridge";
 export const APARTMENT_STASH_KIND_WATER_TANK = "water_tank";
+export { APARTMENT_STASH_KIND_GROW_TRAY };
 
 export type ApartmentStashKind =
   | typeof APARTMENT_STASH_KIND_FOOTLOCKER
   | typeof APARTMENT_STASH_KIND_WARDROBE
   | typeof APARTMENT_STASH_KIND_STOVE
   | typeof APARTMENT_STASH_KIND_FRIDGE
-  | typeof APARTMENT_STASH_KIND_WATER_TANK;
+  | typeof APARTMENT_STASH_KIND_WATER_TANK
+  | typeof APARTMENT_STASH_KIND_GROW_TRAY;
 
 const APARTMENT_STASH_KEY_SEP = "#";
 
@@ -27,10 +33,15 @@ export type ParsedApartmentStashKey =
   /** Legacy DB row: exact `unit_key` with no `#` suffix (footlocker-only). */
   | { tag: "bare"; unitKey: string }
   | { tag: "legacy"; unitKey: string; stashKind: ApartmentStashKind }
-  | { tag: "decor"; unitKey: string; decorId: bigint };
+  | { tag: "decor"; unitKey: string; decorId: bigint }
+  | { tag: "grow_tray"; unitKey: string; trayId: string };
 
-/** Full parse — supports `unitKey#wardrobe`, bare `unitKey` (footlocker), and `unitKey#d7`. */
+/** Full parse — supports `unitKey#wardrobe`, bare `unitKey` (footlocker), `unitKey#d7`, `unitKey#grow_tray:{uuid}`. */
 export function parseApartmentStashKeyFull(stashKey: string): ParsedApartmentStashKey {
+  const grow = parseBalconyGrowTrayStashKey(stashKey);
+  if (grow) {
+    return { tag: "grow_tray", unitKey: grow.unitKey, trayId: grow.trayId };
+  }
   const split = stashKey.lastIndexOf(APARTMENT_STASH_KEY_SEP);
   if (split > 0) {
     const unitKey = stashKey.slice(0, split);
@@ -65,6 +76,9 @@ export function parseApartmentStashKey(stashKey: string): {
   if (f.tag === "decor") {
     return { unitKey: f.unitKey, stashKind: APARTMENT_STASH_KIND_FOOTLOCKER };
   }
+  if (f.tag === "grow_tray") {
+    return { unitKey: f.unitKey, stashKind: APARTMENT_STASH_KIND_GROW_TRAY };
+  }
   if (f.tag === "bare") {
     return { unitKey: f.unitKey, stashKind: APARTMENT_STASH_KIND_FOOTLOCKER };
   }
@@ -81,6 +95,8 @@ export function apartmentStashLabel(stashKind: ApartmentStashKind): string {
       return "fridge";
     case APARTMENT_STASH_KIND_WATER_TANK:
       return "water tank";
+    case APARTMENT_STASH_KIND_GROW_TRAY:
+      return "grow tray";
     default:
       return "footlocker";
   }

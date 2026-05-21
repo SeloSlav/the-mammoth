@@ -38,6 +38,7 @@ import AddApartmentUnitDecorReducer from "./add_apartment_unit_decor_reducer";
 import ApartmentDoorSetReducer from "./apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "./apartment_door_toggle_reducer";
 import ApartmentWaterTankTickStepReducer from "./apartment_water_tank_tick_step_reducer";
+import BalconyGrowTickStepReducer from "./balcony_grow_tick_step_reducer";
 import CancelWaitingCraftReducer from "./cancel_waiting_craft_reducer";
 import ClaimApartmentPulseReducer from "./claim_apartment_pulse_reducer";
 import CleanupOldDroppedItemsReducer from "./cleanup_old_dropped_items_reducer";
@@ -46,17 +47,20 @@ import CleanupOldWorldSoundEventsReducer from "./cleanup_old_world_sound_events_
 import ConsumeHotbarItemReducer from "./consume_hotbar_item_reducer";
 import DeleteApartmentUnitDecorReducer from "./delete_apartment_unit_decor_reducer";
 import DropItemReducer from "./drop_item_reducer";
+import DumpWaterFromBottleReducer from "./dump_water_from_bottle_reducer";
 import ElevatorHailReducer from "./elevator_hail_reducer";
 import ElevatorLandingExteriorDoorSetReducer from "./elevator_landing_exterior_door_set_reducer";
 import ElevatorLandingExteriorDoorToggleReducer from "./elevator_landing_exterior_door_toggle_reducer";
 import ElevatorSelectFloorReducer from "./elevator_select_floor_reducer";
 import EnqueueCraftReducer from "./enqueue_craft_reducer";
 import FillWaterBottleAtTankReducer from "./fill_water_bottle_at_tank_reducer";
+import HarvestBalconyGrowSlotReducer from "./harvest_balcony_grow_slot_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PhysicsTickStepReducer from "./physics_tick_step_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
 import PingWorldReducer from "./ping_world_reducer";
+import PlantBalconyGrowSlotReducer from "./plant_balcony_grow_slot_reducer";
 import PlayerVitalsTickStepReducer from "./player_vitals_tick_step_reducer";
 import RefreshWorldLootSpawnsReducer from "./refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "./reinforce_apartment_pulse_reducer";
@@ -86,6 +90,11 @@ import ApartmentUnitRow from "./apartment_unit_table";
 import ApartmentUnitDecorRow from "./apartment_unit_decor_table";
 import ApartmentWaterTankRow from "./apartment_water_tank_table";
 import ApartmentWaterTankScheduleRow from "./apartment_water_tank_schedule_table";
+import BalconyGrowLightRow from "./balcony_grow_light_table";
+import BalconyGrowPlantRow from "./balcony_grow_plant_table";
+import BalconyGrowTickScheduleRow from "./balcony_grow_tick_schedule_table";
+import BalconyGrowTrayRow from "./balcony_grow_tray_table";
+import BalconyWaterPatchRow from "./balcony_water_patch_table";
 import CraftQueueItemRow from "./craft_queue_item_table";
 import CraftQueueTickRow from "./craft_queue_tick_table";
 import DroppedItemRow from "./dropped_item_table";
@@ -100,6 +109,7 @@ import PhysicsTickRow from "./physics_tick_table";
 import PlayerActiveHotbarRow from "./player_active_hotbar_table";
 import PlayerFirearmCooldownRow from "./player_firearm_cooldown_table";
 import PlayerFootCadenceRow from "./player_foot_cadence_table";
+import PlayerGrowJournalRow from "./player_grow_journal_table";
 import PlayerInputRow from "./player_input_table";
 import PlayerMeleeCooldownRow from "./player_melee_cooldown_table";
 import PlayerPoseRow from "./player_pose_table";
@@ -181,6 +191,61 @@ const tablesSchema = __schema({
       { name: 'apartment_water_tank_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
     ],
   }, ApartmentWaterTankScheduleRow),
+  balcony_grow_light: __table({
+    name: 'balcony_grow_light',
+    indexes: [
+      { name: 'unit_key', algorithm: 'btree', columns: [
+        'unitKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'balcony_grow_light_unit_key_key', constraint: 'unique', columns: ['unitKey'] },
+    ],
+  }, BalconyGrowLightRow),
+  balcony_grow_plant: __table({
+    name: 'balcony_grow_plant',
+    indexes: [
+      { name: 'row_key', algorithm: 'btree', columns: [
+        'rowKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'balcony_grow_plant_row_key_key', constraint: 'unique', columns: ['rowKey'] },
+    ],
+  }, BalconyGrowPlantRow),
+  balcony_grow_tick_schedule: __table({
+    name: 'balcony_grow_tick_schedule',
+    indexes: [
+      { name: 'scheduled_id', algorithm: 'btree', columns: [
+        'scheduledId',
+      ] },
+    ],
+    constraints: [
+      { name: 'balcony_grow_tick_schedule_scheduled_id_key', constraint: 'unique', columns: ['scheduledId'] },
+    ],
+  }, BalconyGrowTickScheduleRow),
+  balcony_grow_tray: __table({
+    name: 'balcony_grow_tray',
+    indexes: [
+      { name: 'row_key', algorithm: 'btree', columns: [
+        'rowKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'balcony_grow_tray_row_key_key', constraint: 'unique', columns: ['rowKey'] },
+    ],
+  }, BalconyGrowTrayRow),
+  balcony_water_patch: __table({
+    name: 'balcony_water_patch',
+    indexes: [
+      { name: 'patch_id', algorithm: 'btree', columns: [
+        'patchId',
+      ] },
+    ],
+    constraints: [
+      { name: 'balcony_water_patch_patch_id_key', constraint: 'unique', columns: ['patchId'] },
+    ],
+  }, BalconyWaterPatchRow),
   craft_queue_item: __table({
     name: 'craft_queue_item',
     indexes: [
@@ -335,6 +400,17 @@ const tablesSchema = __schema({
       { name: 'player_foot_cadence_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, PlayerFootCadenceRow),
+  player_grow_journal: __table({
+    name: 'player_grow_journal',
+    indexes: [
+      { name: 'row_key', algorithm: 'btree', columns: [
+        'rowKey',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_grow_journal_row_key_key', constraint: 'unique', columns: ['rowKey'] },
+    ],
+  }, PlayerGrowJournalRow),
   player_input: __table({
     name: 'player_input',
     indexes: [
@@ -453,6 +529,7 @@ const reducersSchema = __reducers(
   __reducerSchema("apartment_door_set", ApartmentDoorSetReducer),
   __reducerSchema("apartment_door_toggle", ApartmentDoorToggleReducer),
   __reducerSchema("apartment_water_tank_tick_step", ApartmentWaterTankTickStepReducer),
+  __reducerSchema("balcony_grow_tick_step", BalconyGrowTickStepReducer),
   __reducerSchema("cancel_waiting_craft", CancelWaitingCraftReducer),
   __reducerSchema("claim_apartment_pulse", ClaimApartmentPulseReducer),
   __reducerSchema("cleanup_old_dropped_items", CleanupOldDroppedItemsReducer),
@@ -461,17 +538,20 @@ const reducersSchema = __reducers(
   __reducerSchema("consume_hotbar_item", ConsumeHotbarItemReducer),
   __reducerSchema("delete_apartment_unit_decor", DeleteApartmentUnitDecorReducer),
   __reducerSchema("drop_item", DropItemReducer),
+  __reducerSchema("dump_water_from_bottle", DumpWaterFromBottleReducer),
   __reducerSchema("elevator_hail", ElevatorHailReducer),
   __reducerSchema("elevator_landing_exterior_door_set", ElevatorLandingExteriorDoorSetReducer),
   __reducerSchema("elevator_landing_exterior_door_toggle", ElevatorLandingExteriorDoorToggleReducer),
   __reducerSchema("elevator_select_floor", ElevatorSelectFloorReducer),
   __reducerSchema("enqueue_craft", EnqueueCraftReducer),
   __reducerSchema("fill_water_bottle_at_tank", FillWaterBottleAtTankReducer),
+  __reducerSchema("harvest_balcony_grow_slot", HarvestBalconyGrowSlotReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("physics_tick_step", PhysicsTickStepReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),
   __reducerSchema("ping_world", PingWorldReducer),
+  __reducerSchema("plant_balcony_grow_slot", PlantBalconyGrowSlotReducer),
   __reducerSchema("player_vitals_tick_step", PlayerVitalsTickStepReducer),
   __reducerSchema("refresh_world_loot_spawns", RefreshWorldLootSpawnsReducer),
   __reducerSchema("reinforce_apartment_pulse", ReinforceApartmentPulseReducer),

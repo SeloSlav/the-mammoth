@@ -129,6 +129,8 @@ export interface EditorState {
   gridSnapM: number;
   /** {@link EditorMode.my_apartment_layout} — edge/row snap to nearby décor while translating. */
   decorNeighborAlignSnap: boolean;
+  /** {@link EditorMode.my_apartment_layout} — mesh-accurate decor floor shadow overlays (off by default for editor perf). */
+  apartmentBakedFloorShadowsEnabled: boolean;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
   flySpeedMps: number;
@@ -205,6 +207,7 @@ export interface EditorState {
   setTransformMode: (m: TransformMode) => void;
   setGridSnapM: (m: number) => void;
   setDecorNeighborAlignSnap: (enabled: boolean) => void;
+  setApartmentBakedFloorShadowsEnabled: (enabled: boolean) => void;
   setStairWellAuthorScope: (scope: StairWellAuthoringScope) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;

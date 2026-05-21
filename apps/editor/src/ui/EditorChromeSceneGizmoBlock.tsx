@@ -14,6 +14,8 @@ export function EditorChromeSceneGizmoBlock(props: {
   setGridSnapM: (v: number) => void;
   decorNeighborAlignSnap?: boolean;
   setDecorNeighborAlignSnap?: (enabled: boolean) => void;
+  apartmentBakedFloorShadowsEnabled?: boolean;
+  setApartmentBakedFloorShadowsEnabled?: (enabled: boolean) => void;
   /** When set, shows apartment-layout helper copy under the translate / rotate / scale buttons. */
   myApartmentLayoutHints?: EditorChromeMyApartmentGizmoHint | null;
 }) {
@@ -24,6 +26,8 @@ export function EditorChromeSceneGizmoBlock(props: {
     setGridSnapM,
     decorNeighborAlignSnap = false,
     setDecorNeighborAlignSnap,
+    apartmentBakedFloorShadowsEnabled = false,
+    setApartmentBakedFloorShadowsEnabled,
     myApartmentLayoutHints = null,
   } = props;
   const label = editorChromeLabel;
@@ -92,6 +96,30 @@ export function EditorChromeSceneGizmoBlock(props: {
           Viewport: axis scale handles now stretch from the dragged side while keeping the opposite face fixed.
           Drag the <strong>center</strong> scale handle (white cube) for uniform scale from center.
         </p>
+      ) : null}
+      {myApartmentLayoutHints != null && setApartmentBakedFloorShadowsEnabled ? (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            marginTop: 8,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={apartmentBakedFloorShadowsEnabled}
+            onChange={(e) => setApartmentBakedFloorShadowsEnabled(e.target.checked)}
+          />
+          <span style={{ lineHeight: 1.35 }}>
+            Show baked floor shadows
+            <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
+              Off by default — rebuilding silhouettes is slow with many props.
+            </span>
+          </span>
+        </label>
       ) : null}
       {myApartmentLayoutHints === "decor" && setDecorNeighborAlignSnap ? (
         <label

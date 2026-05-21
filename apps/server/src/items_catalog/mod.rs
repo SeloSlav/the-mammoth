@@ -19,8 +19,22 @@ mod load;
 mod schema;
 
 pub use schema::{
-    CatalogItem, ConstructionIngredient, HotbarConsumeSound, ItemCategory,
+    BalconyGrowSpec, CatalogItem, ConstructionIngredient, HotbarConsumeSound, ItemCategory,
 };
+
+pub fn balcony_grow_spec(def_id: &str) -> Option<&'static BalconyGrowSpec> {
+    get(def_id)?.balcony_grow.as_ref()
+}
+
+pub fn is_balcony_grow_fertilizer(def_id: &str) -> bool {
+    get(def_id)
+        .and_then(|c| c.balcony_grow_fertilizer)
+        .unwrap_or(false)
+}
+
+pub fn is_plantable_balcony_seed(def_id: &str) -> bool {
+    balcony_grow_spec(def_id).is_some()
+}
 
 pub fn catalog() -> &'static load::ItemCatalog {
     load::catalog()
@@ -143,6 +157,12 @@ mod balcony_grow_op_catalog_tests {
         for id in PLANT_DEF_IDS {
             assert!(is_known_def(id), "missing plant def {id}");
             assert_eq!(get(id).unwrap().category, ItemCategory::Resource);
+            if *id != "balcony-grow-substrate" {
+                assert!(
+                    super::balcony_grow_spec(id).is_some(),
+                    "plant {id} missing balcony_grow metadata"
+                );
+            }
         }
         for id in HARVEST_DEF_IDS {
             assert!(is_known_def(id), "missing harvest def {id}");

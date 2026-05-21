@@ -39,6 +39,9 @@ import { syncFpDebugEmissiveMaterialsIsolation } from "../fpDebugEmissiveIsolati
 import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
+import type { FpBalconyGrowSession } from "../fpBalconyGrow/fpBalconyGrowSession.js";
+import { balconyGrowPromptFromDecorRaycast } from "../fpBalconyGrow/fpBalconyGrowSession.js";
+import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
@@ -197,6 +200,7 @@ export type FpSessionMainRafFrameDeps = {
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
   fpApartmentDecorMeshes: MountFpApartmentDecorMeshesResult;
+  fpBalconyGrowSession?: FpBalconyGrowSession;
   sampleWalkTopBase: (x: number, z: number, probeTopY: number) => number;
   _elevSupportEval: FpKinematicSupportSampleOpts;
   _displayOffset: THREE.Vector3;
@@ -332,6 +336,7 @@ export function createFpSessionMainRafFrame(
   let cachedElevDoorPrompt: ReturnType<MountFpElevatorWorldResult["getExteriorDoorInteractPrompt"]> =
     null;
   let cachedApartmentDoorHud: ReturnType<MountFpApartmentDoorsResult["getInteractPrompt"]> = null;
+  let cachedBalconyGrowPrompt: ReturnType<typeof balconyGrowPromptFromDecorRaycast> = null;
 
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
@@ -644,6 +649,12 @@ export function createFpSessionMainRafFrame(
       deps.isApartmentDecorInteriorVisible(),
       containingResidentialUnitKey,
     );
+    deps.fpBalconyGrowSession?.updateFrame(
+      deps.camera,
+      deps.fpInteractionFeet(),
+      deps.fpApartmentDecorMeshes,
+      containingResidentialUnitKey,
+    );
     deps.syncDroppedItemVisualVisibility(deps.pos.y, containingResidentialUnitKey);
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
@@ -715,6 +726,7 @@ export function createFpSessionMainRafFrame(
       const hudPickActivePrompt =
         cachedAptSys !== null ||
         cachedLookedAtStash !== null ||
+        cachedBalconyGrowPrompt !== null ||
         cachedSitPromptHud !== null ||
         cachedElevDoorPrompt !== null ||
         cachedApartmentDoorHud !== null;
@@ -739,6 +751,18 @@ export function createFpSessionMainRafFrame(
           : null;
         cachedElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
         cachedApartmentDoorHud = deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
+        if (deps.fpBalconyGrowSession && deps.conn.identity) {
+          cachedBalconyGrowPrompt = balconyGrowPromptFromDecorRaycast(
+            deps.conn,
+            deps.conn.identity,
+            ft,
+            deps.camera,
+            deps.fpApartmentDecorMeshes,
+            deps.fpBalconyGrowSession.getGrowState(containingResidentialUnitKey),
+          );
+        } else {
+          cachedBalconyGrowPrompt = null;
+        }
         hudPickThrottleState = fpHudPickThrottleStateFromSample({
           feetX: ft.x,
           feetY: ft.y,
@@ -825,8 +849,34 @@ export function createFpSessionMainRafFrame(
           : apartmentClaimInteriorsPreferOverUnitDoor(aSys)
             ? null
             : cachedApartmentDoorHud;
-      if (aSys?.kind === "apartment_stash") {
-        const activeStash = getFpActiveStashPanel();
+      const activeStash = getFpActiveStashPanel();
+      if (cachedBalconyGrowPrompt?.kind === "balcony_grow_harvest") {
+        setFpPickupPrompt({
+          kind: "balcony_grow_harvest",
+          unitKey: cachedBalconyGrowPrompt.unitKey,
+          trayId: cachedBalconyGrowPrompt.trayId,
+          slotIndex: cachedBalconyGrowPrompt.slotIndex,
+          cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
+        });
+      } else if (
+        lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
+        cachedBalconyGrowPrompt?.kind === "balcony_grow_tray"
+      ) {
+        const growStash =
+          lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY
+            ? lookedAtStash
+            : cachedBalconyGrowPrompt!;
+        setFpPickupPrompt({
+          kind: "apartment_stash",
+          stashKey: growStash.stashKey,
+          unitKey: growStash.unitKey,
+          stashLabel:
+            lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY
+              ? lookedAtStash.stashLabel
+              : cachedBalconyGrowPrompt!.stashLabel,
+          willClose: activeStash?.stashKey === growStash.stashKey,
+        });
+      } else if (aSys?.kind === "apartment_stash") {
         setFpPickupPrompt({
           kind: "apartment_stash",
           stashKey: aSys.stashKey,

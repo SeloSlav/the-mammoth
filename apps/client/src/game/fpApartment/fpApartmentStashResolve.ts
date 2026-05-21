@@ -8,6 +8,7 @@ import {
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
+  APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_WATER_TANK,
   parseApartmentStashKeyFull,
   type ApartmentStashKind,
@@ -31,8 +32,10 @@ export function resolveApartmentStashKind(
 ): ApartmentStashKind {
   const full = parseApartmentStashKeyFull(stashKey);
   if (full.tag === "legacy") return full.stashKind;
+  if (full.tag === "grow_tray") return APARTMENT_STASH_KIND_GROW_TRAY;
   if (full.tag === "bare") return APARTMENT_STASH_KIND_FOOTLOCKER;
   if (!conn) return APARTMENT_STASH_KIND_FOOTLOCKER;
+  if (full.tag !== "decor") return APARTMENT_STASH_KIND_FOOTLOCKER;
   for (const row of conn.db.apartment_unit_decor) {
     if (row.unitKey !== full.unitKey || row.decorId !== full.decorId) continue;
     const sk = apartmentStashKindForPlacedKind(

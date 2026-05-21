@@ -54,6 +54,14 @@ export type FpPickupPromptApartmentStash = {
   willClose: boolean;
 };
 
+export type FpPickupPromptBalconyGrowHarvest = {
+  kind: "balcony_grow_harvest";
+  unitKey: string;
+  trayId: string;
+  slotIndex: number;
+  cropDisplayName: string;
+};
+
 export type FpPickupPromptApartmentSittable = {
   kind: "apartment_sittable";
   sittableKey: string;
@@ -69,6 +77,7 @@ export type FpPickupPromptState =
   | FpPickupPromptApartmentClaimBlockedGear
   | FpPickupPromptApartmentClaimBlockedGuest
   | FpPickupPromptApartmentStash
+  | FpPickupPromptBalconyGrowHarvest
   | FpPickupPromptApartmentSittable
   | null;
 
@@ -116,6 +125,13 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "apartment_stash" && b.kind === "apartment_stash") {
     return a.stashKey === b.stashKey && a.willClose === b.willClose;
+  }
+  if (a.kind === "balcony_grow_harvest" && b.kind === "balcony_grow_harvest") {
+    return (
+      a.unitKey === b.unitKey &&
+      a.trayId === b.trayId &&
+      a.slotIndex === b.slotIndex
+    );
   }
   if (a.kind === "apartment_sittable" && b.kind === "apartment_sittable") {
     return a.sittableKey === b.sittableKey;

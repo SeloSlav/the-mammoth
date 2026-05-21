@@ -23,6 +23,8 @@ function def(
     consumeOnUse: null,
     hotbarConsumeSound: null,
     waterContainer: null,
+    balconyGrow: null,
+    balconyGrowFertilizer: false,
     iconUrl: "",
   };
 }

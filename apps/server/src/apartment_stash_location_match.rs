@@ -6,8 +6,8 @@ use spacetimedb::ReducerContext;
 use crate::apartments::apartment_unit_decor;
 use crate::inventory_models::{
     parse_apartment_stash_key_v2, stash_location_matches, ParsedApartmentStashKey,
-    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_STOVE,
-    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_GROW_TRAY,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 
 const DECOR_ITEM_KIND_PLAIN: u8 = 0;
@@ -60,6 +60,7 @@ fn resolved_stash_kind(
     match parsed {
         ParsedApartmentStashKey::BareUnitKey(_) => Some(APARTMENT_STASH_KIND_FOOTLOCKER),
         ParsedApartmentStashKey::LegacyComposite { kind, .. } => Some(kind),
+        ParsedApartmentStashKey::GrowTray { .. } => Some(APARTMENT_STASH_KIND_GROW_TRAY),
         ParsedApartmentStashKey::DecorInstance {
             unit_key,
             decor_id,
@@ -81,6 +82,7 @@ fn unit_key_from<'a>(parsed: &'a ParsedApartmentStashKey<'a>) -> &'a str {
         ParsedApartmentStashKey::BareUnitKey(u) => u,
         ParsedApartmentStashKey::LegacyComposite { unit_key, .. } => unit_key,
         ParsedApartmentStashKey::DecorInstance { unit_key, .. } => unit_key,
+        ParsedApartmentStashKey::GrowTray { unit_key, .. } => unit_key,
     }
 }
 

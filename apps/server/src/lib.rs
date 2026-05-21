@@ -5,6 +5,7 @@
 //! and `movement` input bitmasks still compile as client-synced anchors for future authority.
 #![allow(dead_code)]
 
+mod balcony_grow_op;
 mod accounts;
 mod apartment_door;
 mod apartment_interior_anchors;
@@ -58,6 +59,7 @@ pub fn init(ctx: &ReducerContext) {
     crafting::start_craft_queue_tick_schedule(ctx);
     crafting::start_hud_toast_cleanup_schedule(ctx);
     water_container::start_apartment_water_tank_schedule(ctx);
+    balcony_grow_op::start_balcony_grow_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -88,6 +90,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     inventory::ensure_starter_fridge(ctx, id);
     water_container::backfill_water_bottle_fill_rows(ctx);
     apartments::ensure_starter_apartment_water_tank(ctx, id);
+    balcony_grow_op::ensure_balcony_grow_for_owner(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 

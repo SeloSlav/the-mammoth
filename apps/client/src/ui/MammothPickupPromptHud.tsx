@@ -237,6 +237,22 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "balcony_grow_harvest") {
+    return (
+      <FpBottomInteractPromptFrame borderRgb="rgba(120,200,120,0.42)" glowRgb="rgba(80,180,90,0.16)">
+        <span style={{ opacity: 0.92 }}>Press </span>
+        <InteractKeyE
+          kbdGradient="linear-gradient(180deg, #b8f0c0 0%, #5cb86a 45%, #2d6b38 100%)"
+          kbdBorderRgb="rgba(160,230,170,0.55)"
+          kbdShadowRgb="rgba(80,200,100,0.28)"
+          kbdText="#081208"
+        />
+        <span style={{ opacity: 0.92 }}> — Harvest </span>
+        <strong style={{ color: "#e8ffe8", fontWeight: 700 }}>{prompt.cropDisplayName}</strong>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   if (prompt.kind === "apartment_sittable") {
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">

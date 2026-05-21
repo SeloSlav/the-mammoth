@@ -25,7 +25,8 @@ use crate::inventory::{
 use crate::inventory_models::{
     apartment_stash_kind_display_name, parse_apartment_stash_key_v2,
     ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
-    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
+    APARTMENT_STASH_KIND_WATER_TANK,
     HotbarLocationData,
     InventoryLocationData, ItemLocation,
     StashLocationData,
@@ -1657,6 +1658,7 @@ fn apartment_stash_kind_for_stash_key(
         }
         ParsedApartmentStashKey::LegacyComposite { kind, .. } => Some(kind),
         ParsedApartmentStashKey::BareUnitKey(_) => Some(APARTMENT_STASH_KIND_FOOTLOCKER),
+        ParsedApartmentStashKey::GrowTray { .. } => Some(APARTMENT_STASH_KIND_GROW_TRAY),
     }
 }
 
@@ -1754,6 +1756,16 @@ pub(crate) fn apartment_stash_owner_near_sender(
                 owner_id,
                 unit_key.to_string(),
                 apartment_stash_kind_display_name(APARTMENT_STASH_KIND_FOOTLOCKER),
+            ))
+        }
+        ParsedApartmentStashKey::GrowTray { unit_key, tray_id } => {
+            let stash_key = crate::balcony_grow_op::grow_tray_stash_key(unit_key, tray_id);
+            let (owner_id, uk) =
+                crate::balcony_grow_op::grow_tray_stash_near_sender(ctx, stash_key.as_str())?;
+            Some((
+                owner_id,
+                uk,
+                apartment_stash_kind_display_name(APARTMENT_STASH_KIND_GROW_TRAY),
             ))
         }
     }

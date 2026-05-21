@@ -25,6 +25,7 @@ import { MammothCraftQueueStrip } from "./MammothCraftQueueStrip";
 import { MammothCraftingHud } from "./MammothCraftingHud";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
+import { BalconyGrowInspectHud } from "./BalconyGrowInspectHud";
 import { MammothToastHud } from "./MammothToastHud";
 import { MammothApartmentFilmGradeOverlay } from "./MammothApartmentFilmGradeOverlay";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
@@ -190,6 +191,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud />
         <MammothPickupPromptHud />
+        {conn ? <BalconyGrowInspectHud conn={conn} /> : null}
         {conn && activeStash ? (
           <MammothStashHud
             conn={conn}

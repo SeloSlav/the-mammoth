@@ -34,6 +34,7 @@ import type {
   MammothHotbarConsumeSound,
   MammothMeleeCombat,
   MammothItemDef,
+  MammothBalconyGrow,
 } from "./mammothItemCatalogTypes";
 
 import {
@@ -48,6 +49,7 @@ export type {
   MammothConstructionIngredient,
   MammothConsumeOnUse,
   MammothItemDef,
+  MammothBalconyGrow,
   MammothWaterContainer,
 } from "./mammothItemCatalogTypes";
 
@@ -90,6 +92,14 @@ type RawItem = {
     sipLiters?: number;
     hydrationPerLiter?: number;
   };
+  balconyGrow?: {
+    harvestDefId?: string;
+    growDaysMin?: number;
+    growDaysMax?: number;
+    stageTint?: string;
+    stageScale?: number;
+  };
+  balconyGrowFertilizer?: boolean;
 };
 
 type RawShard = {
@@ -180,6 +190,19 @@ export function mammothItemDefSupportsHotbarInstantConsume(def: MammothItemDef |
   return def.consumeOnUse !== null;
 }
 
+function normalizeBalconyGrow(raw?: RawItem["balconyGrow"]): MammothBalconyGrow | null {
+  if (!raw?.harvestDefId) return null;
+  const min = raw.growDaysMin ?? 1;
+  const max = Math.max(min, raw.growDaysMax ?? min);
+  return {
+    harvestDefId: raw.harvestDefId,
+    growDaysMin: min,
+    growDaysMax: max,
+    stageTint: raw.stageTint ?? "#3d8b4a",
+    stageScale: raw.stageScale ?? 1,
+  };
+}
+
 function mergeRawItems(): RawItem[] {
   const out: RawItem[] = [];
   for (const shard of CATALOG_SHARDS) {
@@ -202,6 +225,8 @@ for (const it of mergeRawItems()) {
     consumeOnUse: normalizeConsumeOnUse(it.consumeOnUse),
     hotbarConsumeSound: normalizeHotbarConsumeSound(it.hotbarConsumeSound),
     waterContainer: normalizeWaterContainer(it.waterContainer),
+    balconyGrow: normalizeBalconyGrow(it.balconyGrow),
+    balconyGrowFertilizer: it.balconyGrowFertilizer === true,
     iconUrl: ICONS[it.id] ?? "",
   });
 }
@@ -230,4 +255,8 @@ export function getMammothHotbarInstantConsumeDefIds(): string[] {
 
 export function isResourceDefId(defId: string): boolean {
   return getMammothItemDef(defId)?.category === "resource";
+}
+
+export function mammothItemDefIsPlantableSeed(def: MammothItemDef | undefined): boolean {
+  return def?.balconyGrow != null;
 }

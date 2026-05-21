@@ -141,6 +141,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   transformMode: "translate",
   gridSnapM: 0,
   decorNeighborAlignSnap: false,
+  apartmentBakedFloorShadowsEnabled: false,
   shadowsEnabled: false,
   useHdriEnvironment: true,
   flySpeedMps: 18,
@@ -759,6 +760,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTransformMode: (transformMode) => set({ transformMode }),
   setGridSnapM: (gridSnapM) => set({ gridSnapM }),
   setDecorNeighborAlignSnap: (decorNeighborAlignSnap) => set({ decorNeighborAlignSnap }),
+  setApartmentBakedFloorShadowsEnabled: (apartmentBakedFloorShadowsEnabled) =>
+    set({ apartmentBakedFloorShadowsEnabled }),
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,

@@ -46,6 +46,23 @@ pub struct WaterContainerSpec {
     pub hydration_per_liter: f32,
 }
 
+/// Balcony grow-op plant metadata on catalog resource rows.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BalconyGrowSpec {
+    pub harvest_def_id: String,
+    pub grow_days_min: u8,
+    pub grow_days_max: u8,
+    #[serde(default)]
+    pub stage_tint: Option<String>,
+    #[serde(default = "default_stage_scale")]
+    pub stage_scale: f32,
+}
+
+fn default_stage_scale() -> f32 {
+    1.0
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -61,11 +78,14 @@ pub struct CatalogItem {
     pub construction: Option<ConstructionSpec>,
     #[serde(default)]
     pub consume_on_use: Option<ConsumeOnUseSpec>,
-    /// Authored eat-vs-drink one-shot for `consume_hotbar_item`.
     #[serde(default)]
     pub hotbar_consume_sound: Option<HotbarConsumeSound>,
     #[serde(default)]
     pub water_container: Option<WaterContainerSpec>,
+    #[serde(default)]
+    pub balcony_grow: Option<BalconyGrowSpec>,
+    #[serde(default)]
+    pub balcony_grow_fertilizer: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

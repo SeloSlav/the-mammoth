@@ -46,6 +46,20 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
   "scented-geranium-leaves": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
 };
 
+export type BalconyGrowStageGlb = "seed" | "sapling" | "mid" | "mature";
+
+const BALCONY_GROW_STAGE_GLB: Record<BalconyGrowStageGlb, string> = {
+  seed: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-seed.glb`,
+  sapling: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-sapling.glb`,
+  mid: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-mid.glb`,
+  mature: `${MAMMOTH_STATIC_MODEL_BASE}/objects/grow-stage-mature.glb`,
+};
+
+/** Shared stage mesh for balcony grow slots (per-crop tint/scale applied at runtime). */
+export function balconyGrowStageGlb(stage: BalconyGrowStageGlb): string {
+  return BALCONY_GROW_STAGE_GLB[stage];
+}
+
 export const MAMMOTH_CATALOG_GLB_FALLBACK_URI = `${MAMMOTH_STATIC_MODEL_BASE}/weapons/crowbar.glb`;
 
 function pushUnique(out: string[], seen: Set<string>, url: string): void {

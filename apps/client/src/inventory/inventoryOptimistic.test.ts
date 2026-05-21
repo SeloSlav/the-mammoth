@@ -20,8 +20,10 @@ function item(instanceNum: number, defId: string, qty: number, max: number): Mam
       construction: null,
       consumeOnUse: null,
       hotbarConsumeSound: null,
-      waterContainer: null,
-      iconUrl: "",
+    waterContainer: null,
+    balconyGrow: null,
+    balconyGrowFertilizer: false,
+    iconUrl: "",
     },
   };
 }

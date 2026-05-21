@@ -48,6 +48,15 @@ export type MammothWaterContainer = {
   hydrationPerLiter: number;
 };
 
+/** Balcony grow-op plant metadata on seed/cutting resource rows. */
+export type MammothBalconyGrow = {
+  harvestDefId: string;
+  growDaysMin: number;
+  growDaysMax: number;
+  stageTint: string;
+  stageScale: number;
+};
+
 export type MammothItemDef = {
   id: string;
   displayName: string;
@@ -62,5 +71,8 @@ export type MammothItemDef = {
   hotbarConsumeSound: MammothHotbarConsumeSound | null;
   /** Present for reusable water bottles (tool category). */
   waterContainer: MammothWaterContainer | null;
+  /** Present on plantable balcony seeds/cuttings/spores. */
+  balconyGrow: MammothBalconyGrow | null;
+  balconyGrowFertilizer: boolean;
   iconUrl: string;
 };

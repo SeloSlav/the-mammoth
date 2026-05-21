@@ -1,68 +1,125 @@
 {
-  "version": 1,
+  "version": 2,
   "items": [
     {
       "id": "balcony-grow-substrate",
       "displayName": "Balcony grow substrate",
       "description": "Tray fertilizer and compost mix for apartment grow trays — fish waste, cardboard, and fungal scraps. Not sterile enough for the communal farm.",
       "category": "resource",
-      "maxStack": 20
+      "maxStack": 20,
+      "balconyGrowFertilizer": true
     },
     {
       "id": "lovage-seeds",
       "displayName": "Lovage seeds",
       "description": "Libelek seed packet. Balkan soup staple — plant in a balcony tray.",
       "category": "resource",
-      "maxStack": 40
+      "maxStack": 40,
+      "balconyGrow": {
+        "harvestDefId": "fresh-lovage",
+        "growDaysMin": 5,
+        "growDaysMax": 6,
+        "stageTint": "#4a7c59",
+        "stageScale": 1.0
+      }
     },
     {
       "id": "parsley-seeds",
       "displayName": "Parsley seeds",
       "description": "Peršin seed packet for balcony trays. Cut often for soup and garnish.",
       "category": "resource",
-      "maxStack": 40
+      "maxStack": 40,
+      "balconyGrow": {
+        "harvestDefId": "fresh-parsley",
+        "growDaysMin": 4,
+        "growDaysMax": 5,
+        "stageTint": "#3d8b4a",
+        "stageScale": 0.95
+      }
     },
     {
       "id": "dill-seeds",
       "displayName": "Dill seeds",
       "description": "Kopar seed packet. Pairs with fish from the tank and winter preserves.",
       "category": "resource",
-      "maxStack": 40
+      "maxStack": 40,
+      "balconyGrow": {
+        "harvestDefId": "fresh-dill",
+        "growDaysMin": 5,
+        "growDaysMax": 6,
+        "stageTint": "#5a9e6f",
+        "stageScale": 1.05
+      }
     },
     {
       "id": "paprika-seedlings",
       "displayName": "Paprika seedlings",
       "description": "Small feferoni starts — slow on the balcony but worth it for ajvar and stew base.",
       "category": "resource",
-      "maxStack": 24
+      "maxStack": 24,
+      "balconyGrow": {
+        "harvestDefId": "fresh-paprika",
+        "growDaysMin": 7,
+        "growDaysMax": 9,
+        "stageTint": "#6b8c3a",
+        "stageScale": 1.1
+      }
     },
     {
       "id": "green-onion-sets",
       "displayName": "Green onion sets",
       "description": "Mladi luk bulb sets. Fast green tops for soup and ćevap garnish.",
       "category": "resource",
-      "maxStack": 32
+      "maxStack": 32,
+      "balconyGrow": {
+        "harvestDefId": "fresh-green-onion",
+        "growDaysMin": 4,
+        "growDaysMax": 5,
+        "stageTint": "#7cb342",
+        "stageScale": 0.9
+      }
     },
     {
       "id": "radish-sprout-seeds",
       "displayName": "Radish sprout seeds",
       "description": "Klica repe — soaked and sown thick. Emergency greens in a few days.",
       "category": "resource",
-      "maxStack": 48
+      "maxStack": 48,
+      "balconyGrow": {
+        "harvestDefId": "radish-sprouts",
+        "growDaysMin": 2,
+        "growDaysMax": 3,
+        "stageTint": "#8bc34a",
+        "stageScale": 0.85
+      }
     },
     {
       "id": "oyster-mushroom-spore",
       "displayName": "Oyster mushroom spore",
       "description": "Bukovačica culture syringe. Tray-grown; dry the harvest on the apartment rack.",
       "category": "resource",
-      "maxStack": 16
+      "maxStack": 16,
+      "balconyGrow": {
+        "harvestDefId": "fresh-oyster-mushroom",
+        "growDaysMin": 7,
+        "growDaysMax": 10,
+        "stageTint": "#9e9e9e",
+        "stageScale": 1.0
+      }
     },
     {
       "id": "scented-geranium-cuttings",
       "displayName": "Scented geranium cuttings",
       "description": "Pelargonija slips from a neighbour's window box. Dried leaves for čaj.",
       "category": "resource",
-      "maxStack": 24
+      "maxStack": 24,
+      "balconyGrow": {
+        "harvestDefId": "scented-geranium-leaves",
+        "growDaysMin": 6,
+        "growDaysMax": 8,
+        "stageTint": "#689f38",
+        "stageScale": 1.0
+      }
     },
     {
       "id": "fresh-lovage",

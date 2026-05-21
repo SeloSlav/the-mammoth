@@ -18,6 +18,7 @@ import {
   type ApartmentPracticalLightsMount,
   type ApartmentUnitWorldBounds,
 } from "@the-mammoth/engine";
+import { useEditorStore } from "../../state/editorStore.js";
 import {
   APARTMENT_MIRROR_SURFACE_USERDATA_KEY,
   mapOwnedApartmentLayoutFractionToWorldX,
@@ -1348,6 +1349,13 @@ export function mountEditorMyApartmentFurnitureUnder(
       unitBounds: resolvedBounds,
       previous: decorShadowRig,
     });
+    const showBakedFloorShadows =
+      useEditorStore.getState().apartmentBakedFloorShadowsEnabled;
+    if (!showBakedFloorShadows) {
+      bakedFloorShadowMount?.dispose();
+      bakedFloorShadowMount = null;
+      return;
+    }
     const renderer = getEditorMyApartmentDecorShadowRenderer();
     if (!renderer) {
       bakedFloorShadowMount?.dispose();
