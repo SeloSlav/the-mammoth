@@ -14,7 +14,7 @@ function emptyGrowState(): BalconyGrowOpUnitState {
 
 describe("balconyGrowLivePlantInSlot", () => {
   it("returns true for non-empty phase plants", () => {
-    const growState: BalconyGrowOpUnitState = {
+    const growState: BalconyGrowOpUnitState = { 
       ...emptyGrowState(),
       plants: [
         {

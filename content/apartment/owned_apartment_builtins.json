@@ -75,7 +75,7 @@
     {
       "id": "896c14cc-c36c-479f-b808-e07f48a0315f",
       "modelRelPath": "static/models/objects/table-dining.glb",
-      "fx": 0.2540107060934034,
+      "fx": 0.28543512647239744,
       "fz": 0.6534136331100481,
       "dy": 0.5566294852381909,
       "yawRad": 0,
@@ -131,7 +131,7 @@
     {
       "id": "f5c3d103-2cb8-4608-9175-cf6d04d8e4e2",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.206127403885461,
+      "fx": 0.25818760312850625,
       "fz": 0.8269478054440337,
       "dy": 0.6087747138737947,
       "yawRad": 2.356194490192345,
@@ -733,7 +733,7 @@
     {
       "id": "528e3750-1fa4-4b11-aa38-bc450fe70bf2",
       "modelRelPath": "static/models/objects/chair.glb",
-      "fx": 0.3277676247544427,
+      "fx": 0.3435332353791365,
       "fz": 0.8291634620784815,
       "dy": 0.6087747138737949,
       "yawRad": -2.356194490192346,
@@ -869,6 +869,34 @@
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "4e43a2ee-448f-4910-a766-89e153ced77a",
+      "modelRelPath": "static/models/objects/floor-mat.glb",
+      "fx": 0.03935844377339088,
+      "fz": 0.40775353235555,
+      "dy": 0.004534199287617339,
+      "yawRad": 1.5707963267948963,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.4633919950012853,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "14837955-cd7c-4640-886d-f1a11432ba17",
+      "modelRelPath": "static/models/objects/figuirine-tito.glb",
+      "fx": 0.7434130006608075,
+      "fz": 0.35563211101996955,
+      "dy": 0.8090416988376669,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.14175374899327167,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [
@@ -882,23 +910,6 @@
       "sizeX": 2.4872271124611496,
       "sizeY": 2.8,
       "sizeZ": 0.10467226334944235,
-      "material": {
-        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
-        "useMetalnessMap": false,
-        "useHeightMap": false
-      },
-      "openings": []
-    },
-    {
-      "id": "8a4b3567-9812-43f8-bdeb-af57a94a20e7",
-      "fx": 0.15421144720064797,
-      "fz": 0.7274205546933157,
-      "dy": 1.734723475976807e-17,
-      "yawRad": 1.5707963267948966,
-      "pitchRad": 0,
-      "sizeX": 2.315782856146587,
-      "sizeY": 2.8,
-      "sizeZ": 0.07,
       "material": {
         "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
         "useMetalnessMap": false,
@@ -974,31 +985,6 @@
       ]
     },
     {
-      "id": "ccb54149-f0d4-4ecd-9958-03d7bd6bc4af",
-      "fx": 0.07818891312055405,
-      "fz": 0.5388258076443357,
-      "dy": 1.734723475976807e-17,
-      "yawRad": 3.141592653589793,
-      "pitchRad": 0,
-      "sizeX": 1.684600100546466,
-      "sizeY": 2.8000000000000003,
-      "sizeZ": 0.07,
-      "material": {
-        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
-        "useMetalnessMap": false,
-        "useHeightMap": false
-      },
-      "openings": [
-        {
-          "id": "9c6f0a06-5395-4f32-8ea8-b8aca703adc8",
-          "tangentOffsetM": 0,
-          "widthM": 0.9,
-          "heightM": 2.1,
-          "centerYM": 1.05
-        }
-      ]
-    },
-    {
       "id": "d9f46bf3-1ceb-47d2-8c98-698f541f03f4",
       "fx": 0.310872639179889,
       "fz": 0.27003442448648424,
@@ -1042,6 +1028,48 @@
         {
           "id": "11423d0a-ffd1-41f3-b15b-2d23a6a2d885",
           "tangentOffsetM": -0.7175043840675623,
+          "widthM": 0.9,
+          "heightM": 2.1,
+          "centerYM": 1.05
+        }
+      ]
+    },
+    {
+      "id": "f843e787-60c2-4a54-bbb8-e7f7f40a6d70",
+      "fx": 0.19644599859390566,
+      "fz": 0.7327858180710746,
+      "dy": 1.734723475976807e-17,
+      "yawRad": -1.5707963267948966,
+      "pitchRad": 0,
+      "sizeX": 2.4872271124611496,
+      "sizeY": 2.8,
+      "sizeZ": 0.10467226334944235,
+      "material": {
+        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+        "useMetalnessMap": false,
+        "useHeightMap": false
+      },
+      "openings": []
+    },
+    {
+      "id": "4583d5e1-6d93-46f0-8a97-18f27bcbb746",
+      "fx": 0.09855505605768076,
+      "fz": 0.5496625452556374,
+      "dy": 1.734723475976807e-17,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "sizeX": 2.1546506903866285,
+      "sizeY": 2.8000000000000003,
+      "sizeZ": 0.07,
+      "material": {
+        "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
+        "useMetalnessMap": false,
+        "useHeightMap": false
+      },
+      "openings": [
+        {
+          "id": "a5578447-7e75-4212-850f-4f99895b8846",
+          "tangentOffsetM": -0.2693495378517386,
           "widthM": 0.9,
           "heightM": 2.1,
           "centerYM": 1.05

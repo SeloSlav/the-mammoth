@@ -18,6 +18,10 @@ import {
   FP_SESSION_WEBGPU_ANTIALIAS,
 } from "../game/fpSession/fpSessionConstants.js";
 import { yieldToMain } from "../game/fpSession/yieldToMain.js";
+import {
+  hideUnitInteriorMeshesForExteriorAuthView,
+  restoreUnitInteriorMeshVisibilityAfterAuthView,
+} from "./mammothAuthBackdropInteriorVisibility.js";
 
 const AUTH_BACKDROP_CAMERA_FOV_DEG = 38;
 const AUTH_BACKDROP_ORBIT_WOBBLE_AMPLITUDE_RAD = 0.045;
@@ -182,21 +186,4 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     scene.clear();
     renderer.dispose();
   };
-}
-
-function hideUnitInteriorMeshesForExteriorAuthView(root: THREE.Object3D): void {
-  root.traverse((obj) => {
-    if (obj.userData.mammothUnitInterior === true) {
-      obj.visible = false;
-    }
-  });
-}
-
-/** Shared cache roots are reused by `mountFpSession`; reset so FP shell visibility can own the flags. */
-function restoreUnitInteriorMeshVisibilityAfterAuthView(root: THREE.Object3D): void {
-  root.traverse((obj) => {
-    if (obj.userData.mammothUnitInterior === true) {
-      obj.visible = true;
-    }
-  });
 }
