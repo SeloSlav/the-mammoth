@@ -54,6 +54,7 @@
   "static/models/objects/radio.glb",
   "static/models/objects/rakija-2.glb",
   "static/models/objects/rakija.glb",
+  "static/models/objects/remote.glb",
   "static/models/objects/rug-floor.glb",
   "static/models/objects/rug-wall.glb",
   "static/models/objects/shower.glb",
@@ -71,5 +72,6 @@
   "static/models/objects/used-cigarette.glb",
   "static/models/objects/wall-clock.glb",
   "static/models/objects/wardrobe-closet.glb",
-  "static/models/objects/water-tank.glb"
+  "static/models/objects/water-tank.glb",
+  "static/models/objects/window-shutter.glb"
 ]

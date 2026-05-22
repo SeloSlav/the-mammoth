@@ -6,7 +6,9 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::auth;
 use crate::crafting::emit_hud_notice;
-use crate::inventory::{self, find_item_in_hotbar_slot, find_item_in_stash_slot};
+use crate::inventory::{
+    self, find_item_in_hotbar_slot, find_item_in_stash_slot, remove_stash_item_quantity,
+};
 use crate::inventory_models::APARTMENT_STASH_KIND_GROW_TRAY;
 use crate::items_catalog::{self, BalconyGrowSpec};
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
@@ -21,16 +23,20 @@ pub(crate) const BALCONY_GROW_FERTILIZER_BONUS: f32 = 0.20;
 pub(crate) const BALCONY_GROW_WATER_BONUS_PER_HALF_L: f32 = 0.10;
 pub(crate) const BALCONY_WATER_PATCH_RADIUS_M: f32 = 0.55;
 pub(crate) const BALCONY_WATER_PATCH_DUMP_L: f32 = 0.35;
+/// Wet-shadow visual lifetime — fades before the next tending pass.
 pub(crate) const BALCONY_WATER_PATCH_DURATION_SECS: i64 = 45;
-/// Testing baseline: ~60s seed→mature at 1.0× for a 5-day catalog crop. Tune for realism later.
-pub(crate) const BALCONY_GROW_BASELINE_DURATION_SECS: i64 = 60;
+/// Session baseline: ~15 min seed→mature at 1.0× for a 5-day catalog crop (sim time only).
+pub(crate) const BALCONY_GROW_BASELINE_DURATION_SECS: i64 = 900;
 /// Catalog grow-days that map to [`BALCONY_GROW_BASELINE_DURATION_SECS`] at 1.0×.
 pub(crate) const BALCONY_GROW_REFERENCE_DAYS: i64 = 5;
 pub(crate) const BALCONY_GAME_DAY_SECS: i64 =
     BALCONY_GROW_BASELINE_DURATION_SECS / BALCONY_GROW_REFERENCE_DAYS;
-pub(crate) const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER: u8 = 6;
+pub(crate) const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER: u8 = 8;
 pub(crate) const BALCONY_GROW_TICK_INTERVAL_SECS: i64 = 5;
-pub(crate) const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK: f32 = 0.04;
+/// Tray evaporation per 5s tick — ~4 min from full to dry at session crop pacing.
+pub(crate) const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK: f32 = 0.042;
+/// Single substrate stack slot in each grow-tray stash.
+pub(crate) const BALCONY_GROW_FERTILIZER_STASH_SLOT: u16 = 0;
 
 pub(crate) const PHASE_EMPTY: u8 = 0;
 pub(crate) const PHASE_GROWING: u8 = 1;
@@ -378,9 +384,42 @@ fn fertilizer_present(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> bo
     let Some(owner) = unit.and_then(|u| u.owner) else {
         return false;
     };
-    find_item_in_stash_slot(ctx, owner, stash_key.as_str(), 0)
-        .map(|i| i.def_id == BALCONY_GROW_FERTILIZER_DEF_ID)
-        .unwrap_or(false)
+    find_item_in_stash_slot(
+        ctx,
+        owner,
+        stash_key.as_str(),
+        BALCONY_GROW_FERTILIZER_STASH_SLOT,
+    )
+    .map(|i| i.def_id == BALCONY_GROW_FERTILIZER_DEF_ID)
+    .unwrap_or(false)
+}
+
+/// One substrate unit per harvested crop — ties trays to the fish/compost loop.
+fn consume_tray_substrate_on_harvest(
+    ctx: &ReducerContext,
+    owner: Identity,
+    unit_key: &str,
+    tray_id: &str,
+) {
+    let stash_key = grow_tray_stash_key(unit_key, tray_id);
+    let Some(item) = find_item_in_stash_slot(
+        ctx,
+        owner,
+        stash_key.as_str(),
+        BALCONY_GROW_FERTILIZER_STASH_SLOT,
+    ) else {
+        return;
+    };
+    if item.def_id != BALCONY_GROW_FERTILIZER_DEF_ID {
+        return;
+    }
+    let _ = remove_stash_item_quantity(
+        ctx,
+        owner,
+        stash_key.as_str(),
+        BALCONY_GROW_FERTILIZER_STASH_SLOT,
+        1,
+    );
 }
 
 fn lights_on_for_unit(ctx: &ReducerContext, unit_key: &str) -> bool {
@@ -597,6 +636,15 @@ fn harvest_balcony_grow_slot_impl(
         .ok_or_else(|| "unknown crop".to_string())?;
     inventory::try_grant_stack_to_player(ctx, sender, spec.harvest_def_id.clone(), 1)?;
     plant_table.row_key().delete(row_key);
+    if let Some(owner) = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())
+        .and_then(|u| u.owner)
+    {
+        consume_tray_substrate_on_harvest(ctx, owner, unit_key, tray_id);
+    }
     maybe_emit_first_harvest_journal(ctx, sender, plant.crop_def_id.as_str());
     Ok(())
 }
@@ -863,5 +911,28 @@ mod tests {
         assert!((m - 1.55).abs() < 0.001);
         let base = grow_speed_modifier(false, false, 0.0);
         assert!((base - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn tray_water_evap_targets_session_pacing() {
+        use super::{
+            BALCONY_GROW_TICK_INTERVAL_SECS, BALCONY_GROW_TRAY_MAX_WATER_L,
+            BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK, BALCONY_WATER_PATCH_DURATION_SECS,
+        };
+        let ticks = BALCONY_GROW_TRAY_MAX_WATER_L / BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK;
+        let dry_secs = ticks * BALCONY_GROW_TICK_INTERVAL_SECS as f32;
+        assert!((dry_secs - 238.0).abs() < 1.0);
+        assert_eq!(BALCONY_WATER_PATCH_DURATION_SECS, 45);
+    }
+
+    #[test]
+    fn session_baseline_maps_five_catalog_days_to_fifteen_minutes() {
+        use super::{
+            BALCONY_GROW_BASELINE_DURATION_SECS, BALCONY_GROW_REFERENCE_DAYS,
+            BALCONY_GAME_DAY_SECS,
+        };
+        assert_eq!(BALCONY_GROW_BASELINE_DURATION_SECS, 900);
+        assert_eq!(BALCONY_GROW_REFERENCE_DAYS, 5);
+        assert_eq!(BALCONY_GAME_DAY_SECS, 180);
     }
 }

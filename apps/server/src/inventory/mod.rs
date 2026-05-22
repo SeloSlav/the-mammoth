@@ -138,6 +138,36 @@ pub(crate) fn get_player_item(
     Ok(row)
 }
 
+/// Remove [`quantity`] from a stash slot (deletes row when emptied).
+pub(crate) fn remove_stash_item_quantity(
+    ctx: &ReducerContext,
+    owner: Identity,
+    stash_key: &str,
+    slot: u16,
+    quantity: u32,
+) -> Result<(), String> {
+    let item = find_item_in_stash_slot(ctx, owner, stash_key, slot)
+        .ok_or_else(|| "stash slot empty".to_string())?;
+    if quantity == 0 {
+        return Err("cannot remove quantity 0".to_string());
+    }
+    if quantity > item.quantity {
+        return Err(format!(
+            "cannot remove {quantity} items (only {} in stack)",
+            item.quantity
+        ));
+    }
+    let inv = ctx.db.inventory_item();
+    if quantity == item.quantity {
+        inv.instance_id().delete(item.instance_id);
+    } else {
+        let mut row = item;
+        row.quantity -= quantity;
+        inv.instance_id().update(row);
+    }
+    Ok(())
+}
+
 /// `Ok((new_source_qty, new_target_qty, delete_source))` or `Err` if merge is impossible.
 pub(crate) fn try_merge_into(
     source: &InventoryItem,

@@ -10,17 +10,21 @@ export const BALCONY_GROW_FERTILIZER_BONUS = 0.2;
 export const BALCONY_GROW_WATER_BONUS_PER_HALF_L = 0.1;
 export const BALCONY_WATER_PATCH_RADIUS_M = 0.55;
 export const BALCONY_WATER_PATCH_DUMP_L = 0.35;
+/** Wet-shadow visual lifetime — fades before the next tending pass. */
 export const BALCONY_WATER_PATCH_DURATION_SECS = 45;
-/** Testing baseline: ~60s seed→mature at 1.0× for a 5-day catalog crop. Tune for realism later. */
-export const BALCONY_GROW_BASELINE_DURATION_SECS = 60;
+/** Session baseline: ~15 min seed→mature at 1.0× for a 5-day catalog crop (sim time only). */
+export const BALCONY_GROW_BASELINE_DURATION_SECS = 900;
 /** Catalog grow-days that map to {@link BALCONY_GROW_BASELINE_DURATION_SECS} at 1.0×. */
 export const BALCONY_GROW_REFERENCE_DAYS = 5;
 /** Seconds per in-game grow day — keep in sync with `apps/server/src/balcony_grow_op.rs`. */
 export const BALCONY_GAME_DAY_SECS =
   BALCONY_GROW_BASELINE_DURATION_SECS / BALCONY_GROW_REFERENCE_DAYS;
-export const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER = 6;
+export const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER = 8;
 export const BALCONY_GROW_TICK_INTERVAL_SECS = 5;
-export const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK = 0.04;
+/** Tray evaporation per 5s tick — ~4 min from full to dry at session crop pacing. */
+export const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK = 0.042;
+/** Single substrate stack slot in each grow-tray stash. */
+export const BALCONY_GROW_FERTILIZER_STASH_SLOT = 0;
 
 export type BalconyGrowStage = "seed" | "sapling" | "mid" | "mature";
 
@@ -178,4 +182,18 @@ export function balconyGrowStageFromProgress(progress: number): BalconyGrowStage
   if (progress >= 0.66) return "mid";
   if (progress > 0) return "sapling";
   return "seed";
+}
+
+/** Seconds for a full tray to evaporate dry (sim time only — pauses when the game closes). */
+export function balconyGrowTraySecondsToDry(
+  waterLiters = BALCONY_GROW_TRAY_MAX_WATER_L,
+): number {
+  if (BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK <= 0) return Number.POSITIVE_INFINITY;
+  const ticks = waterLiters / BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK;
+  return ticks * BALCONY_GROW_TICK_INTERVAL_SECS;
+}
+
+/** Expected grow duration (seconds) for catalog `growDays` at 1.0× with no tray bonuses. */
+export function balconyGrowCropSecondsAtBaseSpeed(growDays: number): number {
+  return growDays * BALCONY_GAME_DAY_SECS;
 }
