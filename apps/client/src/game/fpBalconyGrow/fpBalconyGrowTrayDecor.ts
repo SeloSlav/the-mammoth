@@ -11,6 +11,7 @@ import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashK
 import {
   balconyGrowSlotPickSizeFromTrayBounds,
   fitBalconyGrowSlotInteractionPick,
+  fitBalconyGrowTrayCenterInteractionPick,
   fitBalconyGrowTrayInteractionPick,
   readDecorVisualLocalBounds,
 } from "../fpApartment/fpApartmentInteractionPick.js";
@@ -56,6 +57,7 @@ export function growTrayIdForPlacement(
 
 export type GrowTrayDecorMount = {
   growTrayPickMeshes: THREE.Mesh[];
+  growTrayCenterPickMeshes: THREE.Mesh[];
   growSlotPickMeshes: THREE.Mesh[];
   growPlantPickMeshes: THREE.Mesh[];
   slotVisualsGroup: THREE.Group;
@@ -71,6 +73,7 @@ export async function mountGrowTrayDecorOnGroup(opts: {
 }): Promise<GrowTrayDecorMount> {
   const { decorGroup, unitKey, trayId, pickGeometry, pickMaterial } = opts;
   const growTrayPickMeshes: THREE.Mesh[] = [];
+  const growTrayCenterPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
   const growPlantPickMeshes: THREE.Mesh[] = [];
 
@@ -134,8 +137,21 @@ export async function mountGrowTrayDecorOnGroup(opts: {
     slotVisualsGroup.add(holder);
   }
 
+  const centerPick = new THREE.Mesh(pickGeometry, pickMaterial);
+  centerPick.name = `grow_tray_center_pick:${trayId}`;
+  fitBalconyGrowTrayCenterInteractionPick(centerPick, slotPickSize);
+  centerPick.userData.mammothGrowTrayId = trayId;
+  centerPick.userData.mammothGrowTrayUnitKey = unitKey;
+  centerPick.userData.mammothGrowTrayRoot = decorGroup;
+  centerPick.userData.mammothGrowTrayCenterPick = true;
+  Object.assign(centerPick.userData, growTrayStashPickUserData(unitKey, trayId));
+  centerPick.layers.set(FP_INTERACTION_PICK_LAYER);
+  decorGroup.add(centerPick);
+  growTrayCenterPickMeshes.push(centerPick);
+
   return {
     growTrayPickMeshes,
+    growTrayCenterPickMeshes,
     growSlotPickMeshes,
     growPlantPickMeshes,
     slotVisualsGroup,

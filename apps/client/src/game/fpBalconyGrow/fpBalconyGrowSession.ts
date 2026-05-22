@@ -21,7 +21,11 @@ import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashK
 import { setFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { requestMammothInventoryOpenFromFp } from "../fpInteraction/fpInventoryOpenRequest.js";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog";
-import { mammothItemDefSupportsHotbarWaterDrink, waterBottleFillFraction } from "../../inventory/waterContainerHelpers";
+import {
+  mammothItemDefSupportsHotbarWaterDrink,
+  waterBottleFillLiters,
+} from "../../inventory/waterContainerHelpers";
+import { resolveBalconyWaterPourAimXz } from "./fpBalconyGrowWaterPourAim.js";
 import type { Identity } from "spacetimedb";
 import { getFpHotbarSelectedSlot } from "../fpHotbar/fpHotbarSelection.js";
 import { getHotbarSlotInventoryItem } from "../fpHotbar/fpHotbarResolve.js";
@@ -40,15 +44,17 @@ export type FpBalconyGrowSession = {
     decor: MountFpApartmentDecorMeshesResult,
     feet: THREE.Vector3,
   ) => boolean;
-  trySecondaryPointerDown: (camera: THREE.PerspectiveCamera, conn: DbConnection) => boolean;
+  trySecondaryPointerDown: (
+    camera: THREE.PerspectiveCamera,
+    conn: DbConnection,
+    decor: MountFpApartmentDecorMeshesResult,
+    feet: THREE.Vector3,
+  ) => boolean;
   getCachedPlacement: () => BalconyGrowPlacementRaycast | null;
   getGrowState: (unitKey: string | null) => BalconyGrowOpUnitState;
   /** Grow state for the player's claimed unit — correct on balcony where containing unit is null. */
   getActiveGrowState: () => BalconyGrowOpUnitState;
 };
-
-const _screenCenter = new THREE.Vector2(0, 0);
-const _raycaster = new THREE.Raycaster();
 
 function resolveClaimedUnitKey(conn: DbConnection): string | null {
   if (!conn.identity) return null;
@@ -160,25 +166,24 @@ export function mountFpBalconyGrowSession(opts: {
       });
       return true;
     },
-    trySecondaryPointerDown(camera, conn) {
+    trySecondaryPointerDown(camera, conn, decor, feet) {
       if (!conn.identity) return false;
       const slot = getFpHotbarSelectedSlot();
       if (slot === null) return false;
       const item = getHotbarSlotInventoryItem(conn, conn.identity, slot);
       const def = getMammothItemDef(item?.defId ?? "");
       if (!item || !mammothItemDefSupportsHotbarWaterDrink(def) || !def?.waterContainer) return false;
-      if (
-        waterBottleFillFraction(conn, item.instanceId, def.waterContainer.capacityLiters) <=
-        0.001
-      ) {
-        return false;
+      const liters = waterBottleFillLiters(conn, item.instanceId);
+      if (liters == null || liters <= 0.001) return false;
+
+      const aim = { x: 0, z: 0 };
+      if (!resolveBalconyWaterPourAimXz(camera, decor, feet, aim)) {
+        showGameplayErrorBar("Aim at a grow tray to pour water.");
+        return true;
       }
-      _raycaster.setFromCamera(_screenCenter, camera);
-      const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const hit = new THREE.Vector3();
-      if (!_raycaster.ray.intersectPlane(floor, hit)) return false;
+
       opts.onWaterPourRequested?.();
-      void conn.reducers.dumpWaterFromBottle({ aimX: hit.x, aimZ: hit.z });
+      void conn.reducers.dumpWaterFromBottle({ aimX: aim.x, aimZ: aim.z });
       return true;
     },
   };

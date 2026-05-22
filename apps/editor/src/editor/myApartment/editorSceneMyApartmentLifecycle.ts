@@ -248,7 +248,7 @@ export function createEditorSceneMyApartmentLifecycle(
 
       deps.syncApartmentLayoutPresentation();
       if (mount && parent) {
-        mount.resyncPracticalLights(parent, unitBounds);
+        mount.resyncPracticalLights(parent);
         mount.resyncDecorShadows(unitBounds);
         deps.requestDecorShadowMapBake();
       }
@@ -304,7 +304,7 @@ export function createEditorSceneMyApartmentLifecycle(
       authoringFractionMapping,
       layout?.shellPlan.vh ?? 3,
     );
-    mount.resyncPracticalLights(shellRoot, unitBounds);
+    mount.resyncPracticalLights(shellRoot);
     mount.resyncDecorShadows(unitBounds);
     deps.requestDecorShadowMapBake();
     deps.syncApartmentLayoutPresentation();

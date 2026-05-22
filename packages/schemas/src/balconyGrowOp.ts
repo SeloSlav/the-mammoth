@@ -11,7 +11,13 @@ export const BALCONY_GROW_WATER_BONUS_PER_HALF_L = 0.1;
 export const BALCONY_WATER_PATCH_RADIUS_M = 0.55;
 export const BALCONY_WATER_PATCH_DUMP_L = 0.35;
 export const BALCONY_WATER_PATCH_DURATION_SECS = 45;
-export const BALCONY_GAME_DAY_SECS = 180;
+/** Testing baseline: ~60s seed→mature at 1.0× for a 5-day catalog crop. Tune for realism later. */
+export const BALCONY_GROW_BASELINE_DURATION_SECS = 60;
+/** Catalog grow-days that map to {@link BALCONY_GROW_BASELINE_DURATION_SECS} at 1.0×. */
+export const BALCONY_GROW_REFERENCE_DAYS = 5;
+/** Seconds per in-game grow day — keep in sync with `apps/server/src/balcony_grow_op.rs`. */
+export const BALCONY_GAME_DAY_SECS =
+  BALCONY_GROW_BASELINE_DURATION_SECS / BALCONY_GROW_REFERENCE_DAYS;
 export const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER = 6;
 export const BALCONY_GROW_TICK_INTERVAL_SECS = 5;
 export const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK = 0.04;

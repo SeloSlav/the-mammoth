@@ -16,7 +16,7 @@ import {
   balconyGrowLivePlantInSlot,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
-import { clientFeetNearGrowTray } from "./fpBalconyGrowTrayAnchor.js";
+import { clientFeetNearGrowTray, isBalconyGrowTrayCenterPick } from "./fpBalconyGrowTrayAnchor.js";
 
 import type { FpApartmentStashRayOcclusion } from "../fpApartment/fpApartmentStashRayOcclusion.js";
 
@@ -120,8 +120,12 @@ export function getBalconyGrowTrayPromptFromHit(
   const slotIndex = hit.object.userData.mammothGrowSlotIndex;
   if (typeof unitKey !== "string" || typeof trayId !== "string") return null;
 
+  const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+  if (isBalconyGrowTrayCenterPick(hit.object)) {
+    return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, trayRoot);
+  }
+
   if (typeof slotIndex === "number") {
-    const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
     const harvest = matureHarvestPromptForSlot(
       conn,
       identity,
@@ -139,7 +143,6 @@ export function getBalconyGrowTrayPromptFromHit(
     return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, trayRoot);
   }
 
-  const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
   if (trayRoot) {
     const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
     if (aimedSlot !== null) {
@@ -178,8 +181,14 @@ export function balconyGrowTrayAimFallbackPrompt(
   slotPickMeshes: readonly THREE.Mesh[],
   growState: BalconyGrowOpUnitState,
   stashRayOcclusion?: FpApartmentStashRayOcclusion,
+  centerPickMeshes: readonly THREE.Mesh[] = [],
 ): BalconyGrowTrayPrompt | null {
-  if (!identity || (trayPickMeshes.length === 0 && slotPickMeshes.length === 0)) return null;
+  if (
+    !identity ||
+    (trayPickMeshes.length === 0 && slotPickMeshes.length === 0 && centerPickMeshes.length === 0)
+  ) {
+    return null;
+  }
 
   camera.getWorldPosition(_camPosScratch);
   camera.getWorldDirection(_camDirScratch);
@@ -219,6 +228,10 @@ export function balconyGrowTrayAimFallbackPrompt(
     }
   };
 
+  for (const mesh of centerPickMeshes) {
+    considerMesh(mesh);
+  }
+
   for (const mesh of trayPickMeshes) {
     considerMesh(mesh);
   }
@@ -231,6 +244,12 @@ export function balconyGrowTrayAimFallbackPrompt(
   }
 
   if (bestUnitKey === null || bestTrayId === null) return null;
+
+  const centerMesh = centerPickMeshes.find((mesh) => mesh.userData.mammothGrowTrayId === bestTrayId);
+  if (centerMesh && bestSlotIndex === undefined) {
+    const trayRoot = centerMesh.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+    return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, trayRoot);
+  }
 
   const trayMesh = trayPickMeshes.find((mesh) => mesh.userData.mammothGrowTrayId === bestTrayId);
   const trayRoot = trayMesh?.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
@@ -283,6 +302,7 @@ export function resolveBalconyGrowTrayPrompt(
   slotPickMeshes: readonly THREE.Mesh[],
   growState: BalconyGrowOpUnitState,
   stashRayOcclusion?: FpApartmentStashRayOcclusion,
+  centerPickMeshes: readonly THREE.Mesh[] = [],
 ): BalconyGrowTrayPrompt | null {
   if (!identity) return null;
   for (const hit of hits) {
@@ -291,6 +311,12 @@ export function resolveBalconyGrowTrayPrompt(
     if (typeof trayId !== "string" || typeof unitKey !== "string") continue;
 
     const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+    if (isBalconyGrowTrayCenterPick(hit.object)) {
+      const stash = growTrayStashPrompt(conn, identity, feet, unitKey, trayId, trayRoot);
+      if (stash) return stash;
+      continue;
+    }
+
     const slotIndex =
       typeof hit.object.userData.mammothGrowSlotIndex === "number"
         ? hit.object.userData.mammothGrowSlotIndex
@@ -331,6 +357,7 @@ export function resolveBalconyGrowTrayPrompt(
     slotPickMeshes,
     growState,
     stashRayOcclusion,
+    centerPickMeshes,
   );
 }
 

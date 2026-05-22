@@ -32,8 +32,10 @@ const PHASE_LABELS: Record<number, string> = {
 function formatEta(matureAtMicros: number): string {
   const now = Date.now() * 1000;
   const remain = Math.max(0, matureAtMicros - now);
-  const mins = Math.ceil(remain / 60_000_000);
-  if (mins <= 0) return "now";
+  const secs = Math.ceil(remain / 1_000_000);
+  if (secs <= 0) return "now";
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.ceil(secs / 60);
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;

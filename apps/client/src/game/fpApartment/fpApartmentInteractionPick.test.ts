@@ -4,6 +4,7 @@ import {
   balconyGrowSlotPickSizeFromTrayBounds,
   fitApartmentInteractionPickToObject,
   fitBalconyGrowSlotInteractionPick,
+  fitBalconyGrowTrayCenterInteractionPick,
   fitBalconyGrowTrayInteractionPick,
 } from "./fpApartmentInteractionPick.js";
 
@@ -75,5 +76,17 @@ describe("fitBalconyGrowSlotInteractionPick", () => {
     expect(pick.position.z).toBeCloseTo(-0.145, 3);
     expect(pick.scale.x).toBeCloseTo(size.width, 3);
     expect(pick.scale.y).toBeCloseTo(size.height, 3);
+  });
+});
+
+describe("fitBalconyGrowTrayCenterInteractionPick", () => {
+  it("centers a hub pick at tray origin between quadrants", () => {
+    const bounds = new THREE.Box3().set(new THREE.Vector3(-0.5, 0, -0.35), new THREE.Vector3(0.5, 0.6, 0.35));
+    const size = balconyGrowSlotPickSizeFromTrayBounds(bounds);
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    fitBalconyGrowTrayCenterInteractionPick(pick, size);
+    expect(pick.position.x).toBeCloseTo(0, 3);
+    expect(pick.position.z).toBeCloseTo(0, 3);
+    expect(pick.scale.x).toBeCloseTo(Math.max(0.1, size.width * 0.52), 3);
   });
 });

@@ -7,6 +7,7 @@ import {
   balconyGrowLivePlantInSlot,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
+import { isBalconyGrowTrayCenterPick } from "./fpBalconyGrowTrayAnchor.js";
 
 const _inspectAnchorScratch = new THREE.Vector3();
 const _boundsScratch = new THREE.Box3();
@@ -251,6 +252,14 @@ export function syncBalconyGrowInspect(
   aimMeshes: readonly THREE.Mesh[],
   trayPickMeshes: readonly THREE.Mesh[] = [],
 ): void {
+  for (const hit of hits) {
+    if (isBalconyGrowTrayCenterPick(hit.object)) {
+      setBalconyGrowInspectTarget(null);
+      publishBalconyGrowInspectScreenAnchor(camera, canvas, null);
+      return;
+    }
+  }
+
   for (const hit of hits) {
     const resolved = resolveLivePlantSlotFromHit(hit, growState, camera);
     if (!resolved) continue;

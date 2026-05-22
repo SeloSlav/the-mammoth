@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  BALCONY_GROW_BASELINE_DURATION_SECS,
+  BALCONY_GROW_REFERENCE_DAYS,
   BALCONY_GROW_TRAY_BUILTIN_IDS,
   BALCONY_GROW_TRAY_MAX_WATER_L,
+  BALCONY_GAME_DAY_SECS,
   balconyGrowDecorTrayId,
   balconyGrowSpeedModifier,
   balconyGrowStageFromProgress,
@@ -65,6 +68,12 @@ describe("balconyGrowOp", () => {
     expect(balconyGrowStageFromProgress(0.25)).toBe("sapling");
     expect(balconyGrowStageFromProgress(0.7)).toBe("mid");
     expect(balconyGrowStageFromProgress(1)).toBe("mature");
+  });
+
+  it("uses a 60s testing baseline for a 5-day reference crop", () => {
+    expect(BALCONY_GROW_BASELINE_DURATION_SECS).toBe(60);
+    expect(BALCONY_GROW_REFERENCE_DAYS).toBe(5);
+    expect(BALCONY_GAME_DAY_SECS).toBe(12);
   });
 
   it("spreads slot centers toward tray edges", () => {

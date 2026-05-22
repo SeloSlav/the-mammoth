@@ -532,6 +532,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const wardrobePickMeshes: THREE.Mesh[] = [];
   const sittablePickMeshes: THREE.Mesh[] = [];
   const growTrayPickMeshes: THREE.Mesh[] = [];
+  const growTrayCenterPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
   const growPlantPickMeshes: THREE.Mesh[] = [];
   const stashRayOcclusion: FpApartmentStashRayOcclusion = createFpApartmentStashRayOcclusion();
@@ -600,6 +601,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       growSlotPickMeshes,
       visibleGrowPickMeshes,
       growPlantPickMeshes,
+      growTrayCenterPickMeshes,
     );
     const growPickSet = new Set(visibleGrowPickMeshes);
     for (let i = 0; i < stashPickMeshes.length; i++) {
@@ -624,6 +626,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       growSlotPickMeshes,
       visibleGrowPickMeshes,
       growPlantPickMeshes,
+      growTrayCenterPickMeshes,
     );
     if (visibleGrowPickMeshes.length === 0) return [];
     configureInteractionPickRaycaster();
@@ -797,6 +800,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     wardrobePickMeshes.length = 0;
     sittablePickMeshes.length = 0;
     growTrayPickMeshes.length = 0;
+    growTrayCenterPickMeshes.length = 0;
     growSlotPickMeshes.length = 0;
     growPlantPickMeshes.length = 0;
     growSlotVisualsByTrayId.clear();
@@ -1117,9 +1121,14 @@ export function mountFpApartmentDecorMeshes(opts: {
             pickMaterial: stashPickMaterial,
           });
           growTrayPickMeshes.push(...mount.growTrayPickMeshes);
+          growTrayCenterPickMeshes.push(...mount.growTrayCenterPickMeshes);
           growSlotPickMeshes.push(...mount.growSlotPickMeshes);
           growPlantPickMeshes.push(...mount.growPlantPickMeshes);
-          stashPickMeshes.push(...mount.growTrayPickMeshes, ...mount.growSlotPickMeshes);
+          stashPickMeshes.push(
+            ...mount.growTrayPickMeshes,
+            ...mount.growTrayCenterPickMeshes,
+            ...mount.growSlotPickMeshes,
+          );
           growSlotVisualsByTrayId.set(trayId, mount.slotVisualsGroup);
           g.userData.mammothBalconyGrowTrayDecor = true;
           g.userData.mammothGrowTrayId = trayId;
@@ -1377,6 +1386,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         growSlotPickMeshes,
         growState,
         stashRayOcclusion,
+        growTrayCenterPickMeshes,
       );
     },
     rebuildStashRayOcclusion,
@@ -1411,6 +1421,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         growSlotPickMeshes,
         dst,
         growPlantPickMeshes,
+        growTrayCenterPickMeshes,
       );
     },
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),

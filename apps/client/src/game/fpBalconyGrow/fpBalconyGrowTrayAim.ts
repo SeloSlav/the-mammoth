@@ -51,6 +51,8 @@ export function growTrayRayHitTargetsLivePlant(
   growState: BalconyGrowOpUnitState,
   camera: THREE.PerspectiveCamera,
 ): boolean {
+  if (hit.object.userData.mammothGrowTrayCenterPick === true) return false;
+
   const trayId = hit.object.userData.mammothGrowTrayId;
   if (typeof trayId !== "string") return false;
 

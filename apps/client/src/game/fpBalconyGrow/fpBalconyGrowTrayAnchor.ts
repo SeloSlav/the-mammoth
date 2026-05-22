@@ -71,11 +71,16 @@ export function resolveBalconyGrowTrayAnchorXZ(
 
 export { BALCONY_GROW_TRAY_INTERACT_RADIUS_M };
 
-/** Plant picks win over slot/tray picks — plants sit above the tray volume. */
+export function isBalconyGrowTrayCenterPick(obj: THREE.Object3D): boolean {
+  return obj.userData.mammothGrowTrayCenterPick === true;
+}
+
+/** Plant picks win over hub/slot/tray picks — plants sit above the tray volume. */
 export function balconyGrowPickRayPriority(obj: THREE.Object3D): number {
   if (obj.userData.mammothGrowPlantPick === true) return 0;
-  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 1;
-  return 2;
+  if (isBalconyGrowTrayCenterPick(obj)) return 1;
+  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 2;
+  return 3;
 }
 
 export function sortBalconyGrowRaycastHits(hits: THREE.Intersection[]): THREE.Intersection[] {
@@ -149,6 +154,7 @@ export function collectOwnedBalconyGrowPickMeshes(
   slotPicks: readonly THREE.Mesh[],
   dst: THREE.Mesh[],
   plantPicks: readonly THREE.Mesh[] = [],
+  centerPicks: readonly THREE.Mesh[] = [],
 ): void {
   dst.length = 0;
   if (!identity) return;
@@ -165,6 +171,7 @@ export function collectOwnedBalconyGrowPickMeshes(
     if (!mesh.visible) continue;
     consider(mesh);
   }
+  for (let i = 0; i < centerPicks.length; i++) consider(centerPicks[i]!);
   for (let i = 0; i < trayPicks.length; i++) consider(trayPicks[i]!);
   for (let i = 0; i < slotPicks.length; i++) consider(slotPicks[i]!);
 }

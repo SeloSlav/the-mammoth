@@ -71,4 +71,29 @@ describe("syncBalconyGrowInspect", () => {
     });
     expect(getBalconyGrowInspectScreenAnchor()?.visible).toBe(true);
   });
+
+  it("clears inspect when the center hub pick is aimed", () => {
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 1.5, 0.55);
+    camera.lookAt(0, 0.25, 0);
+    camera.updateMatrixWorld(true);
+
+    const canvas = { clientWidth: 800, clientHeight: 600 } as HTMLCanvasElement;
+    const centerPick = new THREE.Mesh();
+    centerPick.userData.mammothGrowTrayId = "tray-a";
+    centerPick.userData.mammothGrowTrayUnitKey = "u1";
+    centerPick.userData.mammothGrowTrayCenterPick = true;
+
+    setBalconyGrowInspectTarget({ unitKey: "u1", trayId: "tray-a", slotIndex: 2 });
+    syncBalconyGrowInspect(
+      [{ object: centerPick, distance: 1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() }],
+      growingPlantState(),
+      camera,
+      canvas,
+      [],
+    );
+
+    expect(getBalconyGrowInspectTarget()).toBeNull();
+    expect(getBalconyGrowInspectScreenAnchor()).toBeNull();
+  });
 });

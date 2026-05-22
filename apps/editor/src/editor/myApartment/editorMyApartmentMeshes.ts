@@ -1381,18 +1381,19 @@ export function mountEditorMyApartmentFurnitureUnder(
   };
   const resyncPracticalLights = (
     scanRoot: THREE.Object3D,
-    bounds?: ApartmentUnitWorldBounds,
+    _bounds?: ApartmentUnitWorldBounds,
   ): void => {
     practicalLights = syncApartmentInteriorPracticalLighting({
       lightParent: root,
       windowScanRoot: scanRoot,
       maxWindowLights: APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit,
-      unitBounds: bounds,
+      /** Authoring shell is already one preview unit — skip megablock bounds cull from FP client. */
+      unitBounds: undefined,
       decorGroups: editorMyApartmentDecorGroups(selectionGroups),
       previous: practicalLights,
     });
   };
-  resyncPracticalLights(windowScanRoot, unitBounds);
+  resyncPracticalLights(windowScanRoot);
   prepareMammothApartmentInteriorContentRoots({ shellRoot: parent, decorRoot: root });
   applyApartmentInteriorFloorReceiveShadowUnder(parent);
   for (const group of editorMyApartmentDecorGroups(selectionGroups)) {

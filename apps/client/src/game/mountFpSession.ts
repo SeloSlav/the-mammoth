@@ -1020,7 +1020,10 @@ export async function mountFpSession(
     scene,
     conn,
     canvas,
-    onWaterPourRequested: () => localAudio.playWaterPourLocal(),
+    onWaterPourRequested: () => {
+      void localAudio.unlock();
+      localAudio.playWaterPourLocal();
+    },
   });
   registerHotbarConsumePrimeAudio(() => localAudio.unlock());
   registerHotbarConsumeLocalPlayback((profile) => localAudio.playHotbarConsumeLocal(profile));
@@ -1567,7 +1570,7 @@ export async function mountFpSession(
     // Match server combat rail (`player_active_hotbar`) to HUD selection before enqueueing attack.
     syncActiveHotbarSlotToServer();
     if (e.button === 2) {
-      if (fpBalconyGrow.trySecondaryPointerDown(camera, conn)) {
+      if (fpBalconyGrow.trySecondaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) {
         e.preventDefault();
         return;
       }

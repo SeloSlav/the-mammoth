@@ -27,6 +27,7 @@ import {
   CONSUME_STEM_MEDIA_EXTENSIONS,
 } from "./consumeUiSound.js";
 import { loadMeleeWeaponSwingBuffersByProfile } from "./meleeSwingSoundBuffers";
+import { playUiWavOneShot } from "./uiWavOneShot.js";
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -52,6 +53,7 @@ const FIREARM_UNLOADED_SHOT_STEM = `${UI_STEM}/unloaded-shot` as const;
 
 /** RMB balcony water bottle dump — local feedback when the pour reducer is dispatched. */
 const WATER_POUR_STEM = `${UI_STEM}/water-pour` as const;
+const WATER_POUR_WAV = "water-pour.wav" as const;
 
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
@@ -357,22 +359,23 @@ export class LocalGameAudio {
 
   /** Local feedback when pouring from a filled water bottle (balcony grow RMB). */
   playWaterPourLocal(): void {
-    if (!this.unlocked || !this.ctx || !this.footstepBus || !this.waterPourBuffer) {
+    if (this.unlocked && this.ctx && this.footstepBus && this.waterPourBuffer) {
+      const ctx = this.ctx;
+      const bus = this.footstepBus;
+      const buf = this.waterPourBuffer;
+
+      const hitGain = ctx.createGain();
+      hitGain.gain.value = 0.38 * (0.92 + Math.random() * 0.14);
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = 0.97 + Math.random() * 0.06;
+      src.connect(hitGain);
+      hitGain.connect(bus);
+      src.start(ctx.currentTime);
       return;
     }
-    const ctx = this.ctx;
-    const bus = this.footstepBus;
-    const buf = this.waterPourBuffer;
-
-    const hitGain = ctx.createGain();
-    hitGain.gain.value = 0.38 * (0.92 + Math.random() * 0.14);
-
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = 0.97 + Math.random() * 0.06;
-    src.connect(hitGain);
-    hitGain.connect(bus);
-    src.start(ctx.currentTime);
+    playUiWavOneShot(WATER_POUR_WAV, 0.85);
   }
 
   /** Immediate hotbar consume feedback (local client); others hear replicated `world_sound_event`. */

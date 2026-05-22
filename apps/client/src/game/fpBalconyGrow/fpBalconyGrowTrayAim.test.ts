@@ -60,6 +60,30 @@ describe("growTrayRayHitTargetsLivePlant", () => {
     camera.lookAt(0, 0.5, 0);
     expect(growTrayRayHitTargetsLivePlant({ object: mesh }, growState, camera)).toBe(true);
   });
+
+  it("never treats the center hub pick as a planted slot", () => {
+    const growState: BalconyGrowOpUnitState = {
+      ...emptyGrowState(),
+      plants: [
+        {
+          rowKey: "k",
+          unitKey: "u1",
+          trayId: "tray-a",
+          slotIndex: 1,
+          cropDefId: "seed-tomato",
+          plantedAtMicros: 0n,
+          matureAtMicros: 1n,
+          phase: 1,
+          owner: {} as never,
+        },
+      ],
+    };
+    const mesh = new THREE.Mesh();
+    mesh.userData.mammothGrowTrayId = "tray-a";
+    mesh.userData.mammothGrowTrayCenterPick = true;
+    const camera = new THREE.PerspectiveCamera();
+    expect(growTrayRayHitTargetsLivePlant({ object: mesh }, growState, camera)).toBe(false);
+  });
 });
 
 describe("resolveBalconyGrowSoilAimedSlotIndex", () => {

@@ -8,9 +8,13 @@ vi.mock("../fpApartment/fpApartmentGameplay.js", () => ({
   clientOwnsClaimedApartmentUnit: () => true,
 }));
 
-vi.mock("./fpBalconyGrowTrayAnchor.js", () => ({
-  clientFeetNearGrowTray: () => true,
-}));
+vi.mock("./fpBalconyGrowTrayAnchor.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./fpBalconyGrowTrayAnchor.js")>();
+  return {
+    ...actual,
+    clientFeetNearGrowTray: () => true,
+  };
+});
 
 function growStateWithPlants(): BalconyGrowOpUnitState {
   return {
@@ -54,5 +58,30 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
     );
 
     expect(prompt).toBeNull();
+  });
+
+  it("always opens grow-tray stash from the center hub pick", () => {
+    const mesh = new THREE.Mesh();
+    mesh.userData.mammothGrowTrayId = "tray-a";
+    mesh.userData.mammothGrowTrayUnitKey = "u1";
+    mesh.userData.mammothGrowTrayCenterPick = true;
+    mesh.userData.mammothGrowTrayRoot = new THREE.Group();
+
+    const prompt = getBalconyGrowTrayPromptFromHit(
+      {} as never,
+      {} as never,
+      { x: 0, y: 0, z: 0 },
+      new THREE.PerspectiveCamera(),
+      { object: mesh, distance: 1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() },
+      growStateWithPlants(),
+    );
+
+    expect(prompt).toEqual({
+      kind: "balcony_grow_tray",
+      unitKey: "u1",
+      trayId: "tray-a",
+      stashKey: "u1#grow_tray:tray-a",
+      stashLabel: "grow tray",
+    });
   });
 });
