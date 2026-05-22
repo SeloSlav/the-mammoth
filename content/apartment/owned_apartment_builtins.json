@@ -857,20 +857,6 @@
       "itemKind": "plain"
     },
     {
-      "id": "14837955-cd7c-4640-886d-f1a11432ba17",
-      "modelRelPath": "static/models/objects/figuirine-tito.glb",
-      "fx": 0.7434130006608075,
-      "fz": 0.35563211101996955,
-      "dy": 0.8090416988376669,
-      "yawRad": 0,
-      "pitchRad": 0,
-      "rollRad": 0,
-      "uniformScale": 0.14175374899327167,
-      "verticalScaleMul": 1,
-      "ignoreSupportSurfaces": false,
-      "itemKind": "plain"
-    },
-    {
       "id": "91a2acd6-701e-4350-8494-3b382932b437",
       "modelRelPath": "static/models/objects/cushion.glb",
       "fx": 0.49208525297327216,
@@ -1050,6 +1036,20 @@
       "uniformScale": 0.08,
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "6388e29a-eb2e-4cde-8a91-997d9079282c",
+      "modelRelPath": "static/models/objects/towl.glb",
+      "fx": 0.7497846057988082,
+      "fz": 0.7942218472994585,
+      "dy": 1.0481292073333395,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.20976430023967615,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": true,
       "itemKind": "plain"
     }
   ],
