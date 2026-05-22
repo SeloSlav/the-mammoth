@@ -517,7 +517,7 @@ fn sync_apartment_unit_columns_from_decor(ctx: &ReducerContext, unit_key: &str) 
     ctx.db.apartment_unit().unit_key().update(unit);
 }
 
-fn primary_bed_row_for_unit_key(
+pub(crate) fn primary_bed_row_for_unit_key(
     ctx: &ReducerContext,
     unit_key: &str,
 ) -> Option<ApartmentUnitDecor> {

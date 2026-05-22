@@ -17,7 +17,6 @@ vi.mock("./fpBalconyGrowTrayAnchor.js", async (importOriginal) => {
 });
 
 function growStateWithPlants(): BalconyGrowOpUnitState {
-  const matureAtMicros = BigInt(Date.now()) * 1000n + 60_000_000_000n;
   return {
     trays: [],
     plants: [0, 1, 2, 3].map((slotIndex) => ({
@@ -27,7 +26,9 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
       slotIndex,
       cropDefId: "lovage-seeds",
       plantedAtMicros: 0n,
-      matureAtMicros,
+      matureAtMicros: 0n,
+      targetDays: 5,
+      daysGrown: 1,
       phase: 1,
       owner: {} as never,
     })),
@@ -86,13 +87,12 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
     });
   });
 
-  it("offers harvest when mature time elapsed even before server phase flip", () => {
+  it("offers harvest when days grown reaches target even before server phase flip", () => {
     const mesh = new THREE.Mesh();
     mesh.userData.mammothGrowTrayId = "tray-a";
     mesh.userData.mammothGrowTrayUnitKey = "u1";
     mesh.userData.mammothGrowSlotIndex = 0;
     mesh.userData.mammothGrowTrayRoot = new THREE.Group();
-    const nowMicros = BigInt(Date.now()) * 1000n;
 
     const prompt = getBalconyGrowTrayPromptFromHit(
       {} as never,
@@ -111,8 +111,10 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
             trayId: "tray-a",
             slotIndex: 0,
             cropDefId: "lovage-seeds",
-            plantedAtMicros: nowMicros - 120_000_000_000n,
-            matureAtMicros: nowMicros - 1_000n,
+            plantedAtMicros: 0n,
+            matureAtMicros: 0n,
+            targetDays: 4,
+            daysGrown: 4,
             phase: 1,
             owner: {} as never,
           },

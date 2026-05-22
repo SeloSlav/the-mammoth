@@ -8,8 +8,12 @@ import {
   BALCONY_GAME_DAY_SECS,
   BALCONY_WATER_PATCH_DURATION_SECS,
   balconyGrowCropSecondsAtBaseSpeed,
+  balconyGrowDaysRemaining,
   balconyGrowDecorTrayId,
+  balconyGrowPlantReadyByDays,
+  balconyGrowProgressFromDays,
   balconyGrowSpeedModifier,
+  balconyGrowStageFromDays,
   balconyGrowStageFromProgress,
   balconyGrowSlotOffsetsFromHalfExtents,
   balconyGrowTraySecondsToDry,
@@ -88,6 +92,17 @@ describe("balconyGrowOp", () => {
     expect(BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK).toBe(0.042);
     expect(balconyGrowTraySecondsToDry()).toBeGreaterThan(230);
     expect(balconyGrowTraySecondsToDry()).toBeLessThan(245);
+  });
+
+  it("maps day progress to stages and harvest readiness", () => {
+    expect(balconyGrowProgressFromDays(0, 5)).toBe(0);
+    expect(balconyGrowStageFromDays(0, 5)).toBe("seed");
+    expect(balconyGrowStageFromDays(1, 5)).toBe("sapling");
+    expect(balconyGrowStageFromDays(4, 5)).toBe("mid");
+    expect(balconyGrowStageFromDays(5, 5)).toBe("mature");
+    expect(balconyGrowDaysRemaining(2, 5)).toBe(3);
+    expect(balconyGrowPlantReadyByDays(1, 5, 5)).toBe(true);
+    expect(balconyGrowPlantReadyByDays(1, 2, 5)).toBe(false);
   });
 
   it("spreads slot centers toward tray edges", () => {

@@ -116,7 +116,8 @@ import { APARTMENT_STASH_KIND_GROW_TRAY } from "./fpApartment/fpApartmentStashKe
 import { apartmentSittableScreenNdcFromPointer } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
-import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
+import { exitFpSit, fpSitSessionIsOnBed, getFpSitSession, isFpSitActive } from "./fpApartment/fpSitSession.js";
+import { openFpSleepConfirm } from "./fpApartment/fpSleepConfirmState.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
@@ -1476,6 +1477,12 @@ export async function mountFpSession(
             crouchToggle: mainRaf.crouchToggle,
           })
         ) {
+          return;
+        }
+      } else if (fpSitSessionIsOnBed()) {
+        const sit = getFpSitSession();
+        if (sit) {
+          openFpSleepConfirm({ unitKey: sit.unitKey });
           return;
         }
       }

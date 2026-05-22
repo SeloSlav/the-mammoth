@@ -109,6 +109,8 @@ export const BalconyGrowPlant = __t.object("BalconyGrowPlant", {
   matureAtMicros: __t.i64(),
   phase: __t.u8(),
   owner: __t.identity(),
+  targetDays: __t.u8(),
+  daysGrown: __t.u8(),
 });
 export type BalconyGrowPlant = __Infer<typeof BalconyGrowPlant>;
 
@@ -338,6 +340,12 @@ export const PlayerVitalsSchedule = __t.object("PlayerVitalsSchedule", {
   scheduledAt: __t.scheduleAt(),
 });
 export type PlayerVitalsSchedule = __Infer<typeof PlayerVitalsSchedule>;
+
+export const PlayerWorldProgress = __t.object("PlayerWorldProgress", {
+  identity: __t.identity(),
+  sleepsCount: __t.u32(),
+});
+export type PlayerWorldProgress = __Infer<typeof PlayerWorldProgress>;
 
 export const StashLocationData = __t.object("StashLocationData", {
   ownerIdentity: __t.identity(),

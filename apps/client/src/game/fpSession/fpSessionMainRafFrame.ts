@@ -50,6 +50,7 @@ import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
 import {
   fpSitBlocksLocomotion,
+  fpSitSessionIsOnBed,
   getFpSitSession,
   isFpSitActive,
 } from "../fpApartment/fpSitSession.js";
@@ -987,6 +988,13 @@ export function createFpSessionMainRafFrame(
             claimProgressSecs: claimProgressHudSecs,
             claimFullSecs: APARTMENT_CLAIM_FULL_SECS,
           });
+        } else if (isFpSitActive() && fpSitSessionIsOnBed()) {
+          const sit = getFpSitSession();
+          if (sit) {
+            setFpPickupPrompt({ kind: "apartment_sleep", unitKey: sit.unitKey });
+          } else {
+            setFpPickupPrompt(null);
+          }
         } else if (isFpSitActive()) {
           setFpPickupPrompt(null);
         } else if (hitPlain) {

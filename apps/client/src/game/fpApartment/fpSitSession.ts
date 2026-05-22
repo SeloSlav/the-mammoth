@@ -1,9 +1,11 @@
 import type { ApartmentSittableMode } from "@the-mammoth/schemas";
+import { OWNED_APARTMENT_MODEL_BED } from "@the-mammoth/schemas";
 
 export type FpSitSession = {
   active: true;
   sittableKey: string;
   unitKey: string;
+  modelRelPath: string;
   mode: ApartmentSittableMode;
   /** Locked feet while seated/lying (seat anchor). */
   anchorFeet: { x: number; y: number; z: number };
@@ -33,6 +35,10 @@ export function exitFpSit(): void {
 
 export function fpSitBlocksLocomotion(): boolean {
   return session !== null;
+}
+
+export function fpSitSessionIsOnBed(): boolean {
+  return session?.mode === "lie" && session.modelRelPath === OWNED_APARTMENT_MODEL_BED;
 }
 
 /** Returns true when a movement key edge should end the sit session. */

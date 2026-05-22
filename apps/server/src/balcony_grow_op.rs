@@ -86,9 +86,16 @@ pub struct BalconyGrowPlant {
     pub slot_index: u8,
     pub crop_def_id: String,
     pub planted_at_micros: i64,
+    /// Legacy timestamp field — kept for row migration backfill only.
     pub mature_at_micros: i64,
     pub phase: u8,
     pub owner: Identity,
+    /// Catalog grow-days required at plant (after tray bonuses).
+    #[default(0u8)]
+    pub target_days: u8,
+    /// Whole days elapsed while growing (sleep / death day skips).
+    #[default(0u8)]
+    pub days_grown: u8,
 }
 
 #[spacetimedb::table(public, accessor = balcony_water_patch)]
@@ -460,15 +467,13 @@ fn random_grow_days(ctx: &ReducerContext, spec: &BalconyGrowSpec) -> u8 {
     min + roll as u8
 }
 
-fn compute_mature_at_micros(
+fn compute_target_days(
     ctx: &ReducerContext,
     unit_key: &str,
     tray_id: &str,
     spec: &BalconyGrowSpec,
-    planted_at_micros: i64,
-) -> i64 {
+) -> u8 {
     let days = random_grow_days(ctx, spec);
-    let base_secs = days as i64 * BALCONY_GAME_DAY_SECS;
     let tray = tray_row(ctx, unit_key, tray_id);
     let water = tray.map(|t| t.water_liters).unwrap_or(0.0);
     let modifier = grow_speed_modifier(
@@ -477,8 +482,43 @@ fn compute_mature_at_micros(
         water,
     )
     .max(0.01);
-    let grow_micros = ((base_secs as f32) / modifier * 1_000_000.0) as i64;
-    planted_at_micros + grow_micros
+    ((days as f32 / modifier).ceil() as u8).max(1)
+}
+
+fn maybe_backfill_plant_day_fields(plant: &mut BalconyGrowPlant, now_micros: i64) {
+    if plant.target_days > 0 {
+        return;
+    }
+    if plant.mature_at_micros <= plant.planted_at_micros {
+        plant.target_days = BALCONY_GROW_REFERENCE_DAYS as u8;
+        return;
+    }
+    let grow_secs = (plant.mature_at_micros - plant.planted_at_micros) / 1_000_000;
+    plant.target_days = ((grow_secs as f32 / BALCONY_GAME_DAY_SECS as f32).ceil() as u8).max(1);
+    let elapsed_secs = ((now_micros - plant.planted_at_micros).max(0) as f32) / 1_000_000.0;
+    plant.days_grown = (elapsed_secs / BALCONY_GAME_DAY_SECS as f32)
+        .floor()
+        .clamp(0.0, plant.target_days as f32) as u8;
+}
+
+fn plant_is_mature(plant: &BalconyGrowPlant) -> bool {
+    if plant.phase == PHASE_MATURE {
+        return true;
+    }
+    plant.target_days > 0 && plant.days_grown >= plant.target_days
+}
+
+fn apply_grow_day_credit(plant: &mut BalconyGrowPlant, days: u8) {
+    if plant.phase != PHASE_GROWING || days == 0 || plant.target_days == 0 {
+        return;
+    }
+    plant.days_grown = plant
+        .days_grown
+        .saturating_add(days)
+        .min(plant.target_days);
+    if plant.days_grown >= plant.target_days {
+        plant.phase = PHASE_MATURE;
+    }
 }
 
 fn slot_empty(ctx: &ReducerContext, unit_key: &str, tray_id: &str, slot_index: u8) -> bool {
@@ -562,14 +602,16 @@ fn plant_balcony_grow_slot_impl(
     consume_one_seed_from_hotbar(ctx, sender, hotbar_slot, seed_def_id)?;
 
     let now = ctx.timestamp.to_micros_since_unix_epoch();
-    let mature_at = compute_mature_at_micros(ctx, unit_key, tray_id, spec, now);
+    let target_days = compute_target_days(ctx, unit_key, tray_id, spec);
 
     let row_key = plant_row_key(unit_key, tray_id, slot_index);
     let plant_table = ctx.db.balcony_grow_plant();
     if let Some(mut existing) = plant_table.row_key().find(&row_key) {
         existing.crop_def_id = seed_def_id.to_string();
         existing.planted_at_micros = now;
-        existing.mature_at_micros = mature_at;
+        existing.mature_at_micros = 0;
+        existing.target_days = target_days;
+        existing.days_grown = 0;
         existing.phase = PHASE_GROWING;
         existing.owner = sender;
         plant_table.row_key().update(existing);
@@ -581,9 +623,11 @@ fn plant_balcony_grow_slot_impl(
             slot_index,
             crop_def_id: seed_def_id.to_string(),
             planted_at_micros: now,
-            mature_at_micros: mature_at,
+            mature_at_micros: 0,
             phase: PHASE_GROWING,
             owner: sender,
+            target_days,
+            days_grown: 0,
         });
     }
     Ok(())
@@ -626,11 +670,8 @@ fn harvest_balcony_grow_slot_impl(
         .row_key()
         .find(&row_key)
         .ok_or_else(|| "nothing planted here".to_string())?;
-    if plant.phase != PHASE_MATURE {
-        let now = ctx.timestamp.to_micros_since_unix_epoch();
-        if now < plant.mature_at_micros {
-            return Err("crop is not ready to harvest".to_string());
-        }
+    if !plant_is_mature(&plant) {
+        return Err("crop is not ready to harvest".to_string());
     }
     let spec = items_catalog::balcony_grow_spec(plant.crop_def_id.as_str())
         .ok_or_else(|| "unknown crop".to_string())?;
@@ -789,21 +830,49 @@ fn apply_patch_water_to_trays(
     }
 }
 
-/// Sleep hook stub — subtract `days` worth of grow time from all active plants in a unit.
-pub(crate) fn advance_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str, days: u8) {
+/// Sleep / death day hook — advance balcony plants and dry overnight moisture.
+pub(crate) fn advance_world_day_for_unit(ctx: &ReducerContext, unit_key: &str, days: u8) {
     if days == 0 {
         return;
     }
-    let delta = (days as i64) * BALCONY_GAME_DAY_SECS * 1_000_000;
+    let now = ctx.timestamp.to_micros_since_unix_epoch();
     let plant_table = ctx.db.balcony_grow_plant();
     let plants: Vec<BalconyGrowPlant> = plant_table
         .iter()
         .filter(|p| p.unit_key == unit_key && p.phase == PHASE_GROWING)
         .collect();
     for mut plant in plants {
-        plant.mature_at_micros = plant.mature_at_micros.saturating_sub(delta);
+        maybe_backfill_plant_day_fields(&mut plant, now);
+        apply_grow_day_credit(&mut plant, days);
         plant_table.row_key().update(plant);
     }
+
+    let patch_table = ctx.db.balcony_water_patch();
+    for patch in patch_table
+        .iter()
+        .filter(|p| p.unit_key == unit_key)
+        .collect::<Vec<_>>()
+    {
+        patch_table.patch_id().delete(patch.patch_id);
+    }
+
+    let tray_table = ctx.db.balcony_grow_tray();
+    for mut tray in tray_table
+        .iter()
+        .filter(|t| t.unit_key == unit_key)
+        .collect::<Vec<_>>()
+    {
+        tray.water_liters = (tray.water_liters * 0.65).max(0.0);
+        if tray.water_liters <= 0.001 {
+            tray.dry_ticks = tray.dry_ticks.saturating_add(1);
+        }
+        tray_table.row_key().update(tray);
+    }
+}
+
+/// Legacy alias — prefer [`advance_world_day_for_unit`].
+pub(crate) fn advance_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str, days: u8) {
+    advance_world_day_for_unit(ctx, unit_key, days);
 }
 
 #[spacetimedb::reducer]
@@ -843,22 +912,36 @@ pub fn balcony_grow_tick_step(ctx: &ReducerContext, _arg: BalconyGrowTickSchedul
 
     let plant_table = ctx.db.balcony_grow_plant();
     for mut plant in plant_table.iter().collect::<Vec<_>>() {
-        if plant.phase == PHASE_GROWING && now >= plant.mature_at_micros {
-            plant.phase = PHASE_MATURE;
-            plant_table.row_key().update(plant);
-            continue;
+        let unit_key = plant.unit_key.clone();
+        let tray_id = plant.tray_id.clone();
+        let mut dirty = false;
+
+        if plant.phase == PHASE_GROWING {
+            let old_target = plant.target_days;
+            let old_grown = plant.days_grown;
+            maybe_backfill_plant_day_fields(&mut plant, now);
+            if plant_is_mature(&plant) {
+                plant.phase = PHASE_MATURE;
+            }
+            dirty = plant.target_days != old_target
+                || plant.days_grown != old_grown
+                || plant.phase == PHASE_MATURE;
         }
-        if plant.phase != PHASE_GROWING {
-            continue;
+
+        if plant.phase == PHASE_GROWING {
+            let tray = tray_row(ctx, unit_key.as_str(), tray_id.as_str());
+            let dry = tray.map(|t| t.dry_ticks).unwrap_or(0);
+            let lights = lights_cache
+                .get(unit_key.as_str())
+                .copied()
+                .unwrap_or(true);
+            if dry >= BALCONY_GROW_WILT_TICKS_WITHOUT_WATER && !lights {
+                plant.phase = PHASE_WILTED;
+                dirty = true;
+            }
         }
-        let tray = tray_row(ctx, plant.unit_key.as_str(), plant.tray_id.as_str());
-        let dry = tray.map(|t| t.dry_ticks).unwrap_or(0);
-        let lights = lights_cache
-            .get(plant.unit_key.as_str())
-            .copied()
-            .unwrap_or(true);
-        if dry >= BALCONY_GROW_WILT_TICKS_WITHOUT_WATER && !lights {
-            plant.phase = PHASE_WILTED;
+
+        if dirty {
             plant_table.row_key().update(plant);
         }
     }

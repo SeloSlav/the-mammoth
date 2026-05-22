@@ -3,6 +3,8 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
+  balconyGrowDaysRemaining,
+  balconyGrowProgressFromDays,
   balconyGrowSpeedModifier,
   balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
@@ -29,27 +31,11 @@ const PHASE_LABELS: Record<number, string> = {
   3: "Wilted",
 };
 
-function formatEta(matureAtMicros: number): string {
-  const now = Date.now() * 1000;
-  const remain = Math.max(0, matureAtMicros - now);
-  const secs = Math.ceil(remain / 1_000_000);
-  if (secs <= 0) return "now";
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.ceil(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-function formatPlantedAt(plantedAtMicros: number): string {
-  const d = new Date(plantedAtMicros / 1000);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function formatDayProgress(daysGrown: number, targetDays: number): string {
+  if (targetDays <= 0) return "—";
+  const remain = balconyGrowDaysRemaining(daysGrown, targetDays);
+  if (remain <= 0) return "ready tonight";
+  return remain === 1 ? "1 night left" : `${remain} nights left`;
 }
 
 function waterStatusLabel(liters: number): string {
@@ -59,13 +45,7 @@ function waterStatusLabel(liters: number): string {
   return "ok";
 }
 
-function growProgress01(plantedAtMicros: number, matureAtMicros: number): number {
-  const now = Date.now() * 1000;
-  if (matureAtMicros <= plantedAtMicros) return 1;
-  return Math.min(1, Math.max(0, (now - plantedAtMicros) / (matureAtMicros - plantedAtMicros)));
-}
-
-export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
+function waterStatusLabel(liters: number): string {
   const target = useSyncExternalStore<BalconyGrowInspectTarget | null>(
     subscribeBalconyGrowInspectTarget,
     getBalconyGrowInspectTarget,
@@ -82,16 +62,7 @@ export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
     if (!props.conn) return;
     const bump = () => setLiveTick((t) => t + 1);
     const unsubDb = subscribeBalconyGrowOpTables(props.conn, bump);
-    let raf = 0;
-    const loop = () => {
-      if (getBalconyGrowInspectTarget()) bump();
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      unsubDb();
-      cancelAnimationFrame(raf);
-    };
+    return unsubDb;
   }, [props.conn]);
 
   void liveTick;
@@ -124,9 +95,11 @@ export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
     fertilizerPresent,
     waterLiters: trayWaterLiters,
   });
+  const daysGrown = Number(plant.daysGrown);
+  const targetDays = Number(plant.targetDays);
   const progress =
     plant.phase === 1
-      ? growProgress01(Number(plant.plantedAtMicros), Number(plant.matureAtMicros))
+      ? balconyGrowProgressFromDays(daysGrown, targetDays)
       : plant.phase === 2
         ? 1
         : 0;
@@ -155,11 +128,15 @@ export function BalconyGrowInspectHud(props: { conn: DbConnection | null }) {
       <div style={{ fontWeight: 700, marginBottom: 2, fontSize: 13 }}>{cropLabel}</div>
       <div style={{ opacity: 0.82, marginBottom: 6 }}>
         {PHASE_LABELS[plant.phase] ?? "Unknown"}
-        {plant.phase === 1 ? ` · ~${formatEta(Number(plant.matureAtMicros))} left` : ""}
+        {plant.phase === 1 && targetDays > 0
+          ? ` · day ${daysGrown}/${targetDays} · ${formatDayProgress(daysGrown, targetDays)}`
+          : ""}
       </div>
-      <div style={{ opacity: 0.75, marginBottom: 6, fontSize: 11 }}>
-        Planted {formatPlantedAt(Number(plant.plantedAtMicros))}
-      </div>
+      {plant.phase === 1 && targetDays > 0 ? (
+        <div style={{ opacity: 0.75, marginBottom: 6, fontSize: 11 }}>
+          Grows when you sleep — faster with fertilizer at plant time
+        </div>
+      ) : null}
       {plant.phase === 1 ? (
         <div
           style={{

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowDecorTrayId,
-  balconyGrowStageFromProgress,
+  balconyGrowStageFromDays,
   balconyGrowStageVisualScale,
   balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
@@ -226,7 +226,6 @@ export function syncGrowSlotVisuals(
   trayWaterLiters: number,
   fertilizerPresent: boolean,
 ): void {
-  const now = Date.now() * 1000;
   const plantBySlot = new Map<number, BalconyGrowPlant>();
   for (const plant of plants) {
     if (plant.trayId === trayId) plantBySlot.set(plant.slotIndex, plant);
@@ -255,15 +254,12 @@ export function syncGrowSlotVisuals(
       holder.visible = false;
       continue;
     }
-    const plantedAt = Number(plant.plantedAtMicros);
-    const matureAt = Number(plant.matureAtMicros);
-    const progress =
-      matureAt > plantedAt
-        ? Math.min(1, (now - plantedAt) / (matureAt - plantedAt))
-        : plant.phase === PHASE_MATURE
-          ? 1
-          : 0;
-    const stage = balconyGrowStageFromProgress(progress);
+    const daysGrown = Number(plant.daysGrown);
+    const targetDays = Number(plant.targetDays);
+    const stage =
+      plant.phase === PHASE_MATURE
+        ? "mature"
+        : balconyGrowStageFromDays(daysGrown, targetDays);
     const def = getMammothItemDef(plant.cropDefId);
     const tint = def?.balconyGrow?.stageTint ?? "#3d8b4a";
     const cropScale = def?.balconyGrow?.stageScale ?? 1;

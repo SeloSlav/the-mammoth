@@ -20,4 +20,6 @@ export default __t.row({
   matureAtMicros: __t.i64().name("mature_at_micros"),
   phase: __t.u8(),
   owner: __t.identity(),
+  targetDays: __t.u8().name("target_days"),
+  daysGrown: __t.u8().name("days_grown"),
 });

@@ -69,6 +69,11 @@ export type FpPickupPromptApartmentSittable = {
   label: string;
 };
 
+export type FpPickupPromptApartmentSleep = {
+  kind: "apartment_sleep";
+  unitKey: string;
+};
+
 export type FpPickupPromptState =
   | FpPickupPromptDroppedItem
   | FpPickupPromptElevatorExteriorDoor
@@ -79,6 +84,7 @@ export type FpPickupPromptState =
   | FpPickupPromptApartmentStash
   | FpPickupPromptBalconyGrowHarvest
   | FpPickupPromptApartmentSittable
+  | FpPickupPromptApartmentSleep
   | null;
 
 const listeners = new Set<() => void>();
@@ -135,6 +141,9 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "apartment_sittable" && b.kind === "apartment_sittable") {
     return a.sittableKey === b.sittableKey;
+  }
+  if (a.kind === "apartment_sleep" && b.kind === "apartment_sleep") {
+    return a.unitKey === b.unitKey;
   }
   return false;
 }

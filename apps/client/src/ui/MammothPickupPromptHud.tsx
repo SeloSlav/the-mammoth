@@ -244,6 +244,21 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "apartment_sleep") {
+    return (
+      <FpBottomInteractPromptFrame borderRgb="rgba(120,170,220,0.42)" glowRgb="rgba(90,140,210,0.14)">
+        <span style={{ opacity: 0.92 }}>Press </span>
+        <InteractKeyE
+          kbdGradient="linear-gradient(180deg, #d4e4ff 0%, #6b8cae 45%, #3d5878 100%)"
+          kbdBorderRgb="rgba(180,210,255,0.5)"
+          kbdShadowRgb="rgba(90,140,210,0.28)"
+          kbdText="#060a12"
+        />
+        <span style={{ opacity: 0.92 }}> — Sleep</span>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   if (prompt.kind === "apartment_sittable") {
     return (
       <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">

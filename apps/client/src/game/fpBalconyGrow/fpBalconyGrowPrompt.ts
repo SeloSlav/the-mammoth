@@ -3,6 +3,7 @@ import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
 import {
   BALCONY_GROW_TRAY_INTERACT_RADIUS_M,
+  balconyGrowPlantReadyByDays,
   balconyGrowTrayStashKey,
   parseBalconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
@@ -36,14 +37,12 @@ export type BalconyGrowTrayPrompt =
       stashLabel: string;
     };
 
-const PHASE_MATURE = 2;
-const PHASE_GROWING = 1;
-
 function plantReadyForHarvest(plant: BalconyGrowOpUnitState["plants"][number]): boolean {
-  const phase = Number(plant.phase);
-  if (phase === PHASE_MATURE) return true;
-  if (phase !== PHASE_GROWING) return false;
-  return Date.now() * 1000 >= Number(plant.matureAtMicros);
+  return balconyGrowPlantReadyByDays(
+    Number(plant.phase),
+    Number(plant.daysGrown),
+    Number(plant.targetDays),
+  );
 }
 
 function harvestPromptIfNear(

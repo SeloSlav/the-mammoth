@@ -11,10 +11,10 @@ use crate::movement::{player_input, PlayerInput, BIT_SPRINT};
 pub(crate) const VITAL_MAX: f32 = 100.0;
 pub(crate) const RESPAWN_HUNGER: f32 = VITAL_MAX * 0.82;
 pub(crate) const RESPAWN_HYDRATION: f32 = VITAL_MAX * 0.78;
-/// ~40 minutes from full to empty at 1× drain.
-const HUNGER_FULL_DRAIN_SECS: f32 = 40.0 * 60.0;
-/// Hydration falls faster than hunger (~28 minutes full → empty at 1×).
-const HYDRATION_FULL_DRAIN_SECS: f32 = 28.0 * 60.0;
+/// ~2 hours from full to empty at 1× drain — long apartment sessions before sleep.
+const HUNGER_FULL_DRAIN_SECS: f32 = 120.0 * 60.0;
+/// Hydration falls a bit faster than hunger (~90 minutes full → empty at 1×).
+const HYDRATION_FULL_DRAIN_SECS: f32 = 90.0 * 60.0;
 /// Sprinting increases hunger + hydration drain (not health).
 const SPRINT_DRAIN_MULTIPLIER: f32 = 1.35;
 /// Passive regen when both needs are above this fraction of max (server-side “comfortable”).
@@ -178,13 +178,18 @@ pub fn apply_damage(ctx: &ReducerContext, owner: Identity, amount: f32) -> bool 
 }
 
 pub fn reset_player_vitals_for_respawn(ctx: &ReducerContext, owner: Identity) {
+    restore_player_vitals_full(ctx, owner);
+}
+
+pub fn restore_player_vitals_full(ctx: &ReducerContext, owner: Identity) {
     let Some(mut v) = ctx.db.player_vitals().identity().find(&owner) else {
         ensure_player_vitals_row(ctx, owner);
+        restore_player_vitals_full(ctx, owner);
         return;
     };
     v.health = VITAL_MAX;
-    v.hunger = RESPAWN_HUNGER;
-    v.hydration = RESPAWN_HYDRATION;
+    v.hunger = VITAL_MAX;
+    v.hydration = VITAL_MAX;
     v.last_hotbar_consume_at = None;
     ctx.db.player_vitals().identity().update(v);
 }

@@ -21,6 +21,7 @@ import { MammothStashHud } from "../inventory/MammothStashHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
 import { MammothFpReticule } from "./MammothFpReticule";
 import { MammothCompassHud } from "./MammothCompassHud";
+import { MammothSleepConfirmHud } from "./MammothSleepConfirmHud";
 import { MammothFpsHud } from "./MammothFpsHud";
 import { MammothCraftQueueStrip } from "./MammothCraftQueueStrip";
 import { MammothCraftingHud } from "./MammothCraftingHud";
@@ -87,6 +88,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
     <>
       <MammothApartmentFilmGradeOverlay />
       {conn ? <PlayerDeathOverlay conn={conn} /> : null}
+      {conn ? <MammothSleepConfirmHud conn={conn} /> : null}
       {conn ? <PlayerDamageFeedbackOverlay conn={conn} /> : null}
       <div style={gameUiHidden ? { display: "none" } : undefined}>
         <div
@@ -191,7 +193,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         {conn ? <MammothInventoryHud conn={conn} activeStash={activeStash} /> : null}
         {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
-        <MammothFpsHud />
+        <MammothFpsHud conn={conn} />
         <MammothPickupPromptHud />
         {conn ? <BalconyGrowInspectHud conn={conn} /> : null}
         {conn && activeStash ? (

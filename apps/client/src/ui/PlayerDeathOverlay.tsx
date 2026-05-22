@@ -126,13 +126,13 @@ export function PlayerDeathOverlay({ conn }: Props) {
         <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(226,232,240,0.82)", marginBottom: 22 }}>
           {hasClaimedApartment ? (
             <>
-              You will respawn back in your apartment at your bed. Residential doors snap closed (including ones you
-              left open).
+              Someone on your floor dragged you back inside. A night passes — you wake at your bed with empty pockets
+              (hotbar and backpack cleared). Balcony crops advance one day.
             </>
           ) : (
             <>
-              Recovery without a leased unit completes in the building&apos;s ground-level foyer —
-              lease a residence to spawn at your apartment after death instead.
+              Recovery without a leased unit completes in the building&apos;s ground-level foyer — a night passes and
+              you wake with empty pockets. Lease a residence to recover at your apartment bed instead.
             </>
           )}
         </div>

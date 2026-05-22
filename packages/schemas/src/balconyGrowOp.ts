@@ -12,7 +12,7 @@ export const BALCONY_WATER_PATCH_RADIUS_M = 0.55;
 export const BALCONY_WATER_PATCH_DUMP_L = 0.35;
 /** Wet-shadow visual lifetime — fades before the next tending pass. */
 export const BALCONY_WATER_PATCH_DURATION_SECS = 45;
-/** Session baseline: ~15 min seed→mature at 1.0× for a 5-day catalog crop (sim time only). */
+/** Session baseline: catalog grow-days map to sleep/day skips, not wall-clock seconds. */
 export const BALCONY_GROW_BASELINE_DURATION_SECS = 900;
 /** Catalog grow-days that map to {@link BALCONY_GROW_BASELINE_DURATION_SECS} at 1.0×. */
 export const BALCONY_GROW_REFERENCE_DAYS = 5;
@@ -182,6 +182,31 @@ export function balconyGrowStageFromProgress(progress: number): BalconyGrowStage
   if (progress >= 0.66) return "mid";
   if (progress > 0) return "sapling";
   return "seed";
+}
+
+/** Discrete day ratio for tray visuals and inspect HUD. */
+export function balconyGrowProgressFromDays(daysGrown: number, targetDays: number): number {
+  if (targetDays <= 0) return 0;
+  return Math.min(1, Math.max(0, daysGrown / targetDays));
+}
+
+export function balconyGrowStageFromDays(daysGrown: number, targetDays: number): BalconyGrowStage {
+  return balconyGrowStageFromProgress(balconyGrowProgressFromDays(daysGrown, targetDays));
+}
+
+export function balconyGrowDaysRemaining(daysGrown: number, targetDays: number): number {
+  if (targetDays <= 0) return 0;
+  return Math.max(0, targetDays - daysGrown);
+}
+
+export function balconyGrowPlantReadyByDays(
+  phase: number,
+  daysGrown: number,
+  targetDays: number,
+): boolean {
+  if (phase === 2) return true;
+  if (phase !== 1) return false;
+  return targetDays > 0 && daysGrown >= targetDays;
 }
 
 /** Seconds for a full tray to evaporate dry (sim time only — pauses when the game closes). */

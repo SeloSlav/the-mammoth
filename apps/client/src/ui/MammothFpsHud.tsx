@@ -33,6 +33,8 @@ import {
   UI_FONT_MONO,
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
+import type { DbConnection } from "../module_bindings";
+import { MammothWorldDayHud } from "./MammothWorldDayHud";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -240,7 +242,7 @@ function MiniBar({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function MammothFpsHud() {
+export function MammothFpsHud(props: { conn: DbConnection | null }) {
   const fps = useSyncExternalStore(
     subscribeFpSessionDisplayedFps,
     getFpSessionDisplayedFps,
@@ -484,6 +486,8 @@ export function MammothFpsHud() {
           {backgroundMusicEnabled ? "ON" : "OFF"}
         </span>
       </button>
+
+      <MammothWorldDayHud conn={props.conn} />
 
       {/* Expanded panel */}
       {open && (

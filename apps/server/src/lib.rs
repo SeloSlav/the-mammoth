@@ -37,6 +37,7 @@ mod spawn_routing;
 mod stair_runtime_overlay;
 mod water_container;
 mod world_sound;
+mod world_day;
 
 use crate::movement::player_input;
 use crate::pose::player_pose;
@@ -91,6 +92,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     water_container::backfill_water_bottle_fill_rows(ctx);
     apartments::ensure_starter_apartment_water_tank(ctx, id);
     balcony_grow_op::ensure_balcony_grow_for_owner(ctx, id);
+    world_day::ensure_player_world_progress(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }
 
@@ -177,6 +179,8 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
     movement::reset_player_input_row(ctx, id, yaw);
     inventory::reset_player_loadout_for_respawn(ctx, id);
     loadout::reset_player_active_hotbar_slot_to_first(ctx, id);
-    player_vitals::reset_player_vitals_for_respawn(ctx, id);
+    let unit_key = apartments::claimed_unit_key_for_owner(ctx, id);
+    let _ = world_day::advance_world_day_for_player(ctx, id, unit_key.as_deref());
+    player_vitals::restore_player_vitals_full(ctx, id);
     world_sound::reset_player_melee_cooldown_row(ctx, id);
 }

@@ -38,6 +38,7 @@ export function tryEnterFpSitFromPrompt(args: {
     active: true,
     sittableKey: args.prompt.sittableKey,
     unitKey: args.prompt.unitKey,
+    modelRelPath: args.prompt.modelRelPath,
     mode: pose.mode,
     anchorFeet: { x: pose.feetX, y: pose.feetY, z: pose.feetZ },
     exitFeet,
