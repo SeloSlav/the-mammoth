@@ -22,4 +22,5 @@ export default __t.row({
   owner: __t.identity(),
   targetDays: __t.u8().name("target_days"),
   daysGrown: __t.u8().name("days_grown"),
+  fertilizedAtPlant: __t.u8().name("fertilized_at_plant"),
 });

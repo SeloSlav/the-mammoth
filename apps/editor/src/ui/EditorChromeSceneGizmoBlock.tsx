@@ -22,6 +22,13 @@ export function EditorChromeSceneGizmoBlock(props: {
   clearMyApartmentLayoutHiddenPlacements?: () => void;
   /** When set, shows apartment-layout helper copy under the translate / rotate / scale buttons. */
   myApartmentLayoutHints?: EditorChromeMyApartmentGizmoHint | null;
+  /** Per selected imported décor: skip support-surface raycasts while translating (fine placement). */
+  decorIgnoreSupportSurfacesWhileTranslating?: {
+    checked: boolean;
+    onCheckedChange: (next: boolean) => void;
+  };
+  /** Hide the leading “Scene / gizmo” line when an outer panel already titled this block. */
+  omitSectionHeading?: boolean;
 }) {
   const {
     transformMode,
@@ -37,6 +44,8 @@ export function EditorChromeSceneGizmoBlock(props: {
     myApartmentLayoutHiddenCount = 0,
     clearMyApartmentLayoutHiddenPlacements,
     myApartmentLayoutHints = null,
+    decorIgnoreSupportSurfacesWhileTranslating,
+    omitSectionHeading = false,
   } = props;
   const label = editorChromeLabel;
   const input = editorChromeInput;
@@ -44,7 +53,7 @@ export function EditorChromeSceneGizmoBlock(props: {
 
   return (
     <>
-      <span style={label}>Scene / gizmo</span>
+      {omitSectionHeading ? null : <span style={label}>Scene / gizmo</span>}
       <div>
         {(["translate", "rotate", "scale"] as const).map((m) => (
           <button
@@ -182,6 +191,32 @@ export function EditorChromeSceneGizmoBlock(props: {
             onChange={(e) => setDecorNeighborAlignSnap(e.target.checked)}
           />
           Align to décor (edge / row snap while translating)
+        </label>
+      ) : null}
+      {decorIgnoreSupportSurfacesWhileTranslating ? (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            marginTop: 8,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={decorIgnoreSupportSurfacesWhileTranslating.checked}
+            onChange={(e) =>
+              decorIgnoreSupportSurfacesWhileTranslating.onCheckedChange(e.target.checked)
+            }
+          />
+          <span style={{ lineHeight: 1.35 }}>
+            Ignore support surfaces while translating
+            <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
+              Use for fine placements like leaning a carton through / against an ashtray.
+            </span>
+          </span>
         </label>
       ) : null}
       <span style={{ ...label, display: "block", marginTop: 8 }}>Grid snap (m / deg-ish for rotate)</span>

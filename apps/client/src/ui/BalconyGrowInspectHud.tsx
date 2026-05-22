@@ -4,11 +4,14 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowDaysRemaining,
+  balconyGrowPlantReadyByDays,
   balconyGrowProgressFromDays,
-  balconyGrowSpeedModifier,
   balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
-import { getMammothItemDef } from "../inventory/mammothItemCatalog";
+import {
+  getMammothItemDef,
+  mammothBalconyGrowHarvestDisplayName,
+} from "../inventory/mammothItemCatalog";
 import type { DbConnection } from "../module_bindings";
 import {
   getBalconyGrowInspectTarget,
@@ -31,6 +34,10 @@ const PHASE_LABELS: Record<number, string> = {
   3: "Wilted",
 };
 
+type Props = {
+  conn: DbConnection | null;
+};
+
 function formatDayProgress(daysGrown: number, targetDays: number): string {
   if (targetDays <= 0) return "—";
   const remain = balconyGrowDaysRemaining(daysGrown, targetDays);
@@ -45,7 +52,13 @@ function waterStatusLabel(liters: number): string {
   return "ok";
 }
 
-function waterStatusLabel(liters: number): string {
+function cropInspectLabel(cropDefId: string, phase: number, daysGrown: number, targetDays: number): string {
+  const ready = balconyGrowPlantReadyByDays(phase, daysGrown, targetDays);
+  if (ready) return mammothBalconyGrowHarvestDisplayName(cropDefId);
+  return getMammothItemDef(cropDefId)?.displayName ?? cropDefId;
+}
+
+export function BalconyGrowInspectHud({ conn }: Props) {
   const target = useSyncExternalStore<BalconyGrowInspectTarget | null>(
     subscribeBalconyGrowInspectTarget,
     getBalconyGrowInspectTarget,
@@ -59,17 +72,17 @@ function waterStatusLabel(liters: number): string {
   const [liveTick, setLiveTick] = useState(0);
 
   useEffect(() => {
-    if (!props.conn) return;
+    if (!conn) return;
     const bump = () => setLiveTick((t) => t + 1);
-    const unsubDb = subscribeBalconyGrowOpTables(props.conn, bump);
+    const unsubDb = subscribeBalconyGrowOpTables(conn, bump);
     return unsubDb;
-  }, [props.conn]);
+  }, [conn]);
 
   void liveTick;
 
-  if (!props.conn || !target || !screenAnchor?.visible) return null;
+  if (!conn || !target || !screenAnchor?.visible) return null;
 
-  const state = readBalconyGrowOpUnitState(props.conn, target.unitKey);
+  const state = readBalconyGrowOpUnitState(conn, target.unitKey);
   const plant =
     state.plants.find(
       (p) =>
@@ -79,24 +92,24 @@ function waterStatusLabel(liters: number): string {
   const lightsOn = state.light?.lightsOn !== 0;
   const stashKey = balconyGrowTrayStashKey(target.unitKey, target.trayId);
   let fertilizerPresent = false;
-  for (const row of props.conn.db.inventory_item) {
+  for (const row of conn.db.inventory_item) {
     if (row.location.tag !== "Stash") continue;
     if (row.location.value.unitKey !== stashKey) continue;
     if (row.defId === "balcony-grow-substrate") fertilizerPresent = true;
   }
 
-  const cropDef = plant ? getMammothItemDef(plant.cropDefId) : undefined;
-  const cropLabel = cropDef?.displayName ?? plant?.cropDefId ?? "Plant";
   if (!plant) return null;
 
-  const trayWaterLiters = tray?.waterLiters ?? 0;
-  const modifier = balconyGrowSpeedModifier({
-    lightsOn,
-    fertilizerPresent,
-    waterLiters: trayWaterLiters,
-  });
   const daysGrown = Number(plant.daysGrown);
   const targetDays = Number(plant.targetDays);
+  const plantedWithSubstrate = Number(plant.fertilizedAtPlant) !== 0;
+  const cropLabel = cropInspectLabel(plant.cropDefId, Number(plant.phase), daysGrown, targetDays);
+  const trayWaterLiters = tray?.waterLiters ?? 0;
+  const readyToHarvest = balconyGrowPlantReadyByDays(
+    Number(plant.phase),
+    daysGrown,
+    targetDays,
+  );
   const progress =
     plant.phase === 1
       ? balconyGrowProgressFromDays(daysGrown, targetDays)
@@ -134,7 +147,15 @@ function waterStatusLabel(liters: number): string {
       </div>
       {plant.phase === 1 && targetDays > 0 ? (
         <div style={{ opacity: 0.75, marginBottom: 6, fontSize: 11 }}>
-          Grows when you sleep — faster with fertilizer at plant time
+          {lightsOn
+            ? "Grows when you sleep — keep tray watered for better harvest"
+            : "No grow light — won't advance when you sleep"}
+          {plantedWithSubstrate ? " · planted with substrate" : ""}
+        </div>
+      ) : null}
+      {readyToHarvest ? (
+        <div style={{ opacity: 0.75, marginBottom: 6, fontSize: 11 }}>
+          Well-watered trays can yield extra food and seeds
         </div>
       ) : null}
       {plant.phase === 1 ? (
@@ -157,9 +178,9 @@ function waterStatusLabel(liters: number): string {
         </div>
       ) : null}
       <div style={{ opacity: 0.9 }}>
-        Growth {modifier.toFixed(2)}×
-        {lightsOn ? " · grow light on" : " · no grow light"}
-        {fertilizerPresent ? " · fertilized" : " · no fertilizer"}
+        {lightsOn ? "Grow light on" : "No grow light"}
+        {plantedWithSubstrate ? " · substrate at plant" : ""}
+        {fertilizerPresent ? " · substrate in tray (next plant)" : ""}
       </div>
       <div style={{ marginTop: 4, opacity: 0.82 }}>
         Water {trayWaterLiters.toFixed(1)}/{BALCONY_GROW_TRAY_MAX_WATER_L} L ({waterStatusLabel(trayWaterLiters)})

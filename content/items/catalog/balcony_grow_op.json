@@ -4,7 +4,7 @@
     {
       "id": "balcony-grow-substrate",
       "displayName": "Balcony grow substrate",
-      "description": "Tray fertilizer and compost mix for apartment grow trays — fish waste, cardboard, and fungal scraps. Not sterile enough for the communal farm.",
+      "description": "Tray fertilizer and compost mix for apartment grow trays. Drop in a grow-tray stash slot, then plant — one unit is consumed to speed maturity and improve harvest yields.",
       "category": "resource",
       "maxStack": 20,
       "balconyGrowFertilizer": true
@@ -126,21 +126,27 @@
       "displayName": "Fresh lovage",
       "description": "Cut libelek from the balcony. Soup and stew herb — cook for best effect.",
       "category": "consumable",
-      "maxStack": 16
+      "maxStack": 16,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 5 }
     },
     {
       "id": "fresh-parsley",
       "displayName": "Fresh parsley",
       "description": "Cut peršin from the balcony. Garnish, soup, and trade with civilians.",
       "category": "consumable",
-      "maxStack": 16
+      "maxStack": 16,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 4 }
     },
     {
       "id": "fresh-dill",
       "displayName": "Fresh dill",
       "description": "Kopar fronds from the balcony. Fish, pickles, and potato soup.",
       "category": "consumable",
-      "maxStack": 16
+      "maxStack": 16,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 4 }
     },
     {
       "id": "fresh-paprika",
@@ -156,7 +162,9 @@
       "displayName": "Fresh green onion",
       "description": "Mladi luk tops from the balcony. Raw garnish or soup base.",
       "category": "consumable",
-      "maxStack": 16
+      "maxStack": 16,
+      "hotbarConsumeSound": "eat",
+      "consumeOnUse": { "hungerDelta": 6 }
     },
     {
       "id": "radish-sprouts",

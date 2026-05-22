@@ -11,7 +11,7 @@ import {
 } from "@the-mammoth/engine";
 import type { HeldItemId } from "@the-mammoth/game";
 import { buildLocalPlayerGameplayState } from "./localPlayerGameplay.js";
-import { getMammothItemDef } from "../../inventory/mammothItemCatalog.js";
+import { getMammothItemDef, mammothItemDefSupportsHotbarFpViewmodel } from "../../inventory/mammothItemCatalog.js";
 import {
   findNearestDroppedPickupsHud,
   MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
@@ -671,9 +671,7 @@ export function createFpSessionMainRafFrame(
       ? equippedHeldItemIdFromDefId(hotbarRow.defId)
       : ("unarmed" as const);
     const hotbarConsumableDefId =
-      hotbarRow &&
-      (getMammothItemDef(hotbarRow.defId)?.category === "consumable" ||
-        getMammothItemDef(hotbarRow.defId)?.waterContainer != null)
+      hotbarRow && mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef(hotbarRow.defId))
         ? hotbarRow.defId
         : null;
 

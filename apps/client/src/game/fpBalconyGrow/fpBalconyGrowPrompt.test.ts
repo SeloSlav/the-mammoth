@@ -29,6 +29,7 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
       matureAtMicros: 0n,
       targetDays: 5,
       daysGrown: 1,
+      fertilizedAtPlant: 0,
       phase: 1,
       owner: {} as never,
     })),
@@ -115,6 +116,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
             matureAtMicros: 0n,
             targetDays: 4,
             daysGrown: 4,
+            fertilizedAtPlant: 0,
             phase: 1,
             owner: {} as never,
           },
@@ -127,7 +129,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
       unitKey: "u1",
       trayId: "tray-a",
       slotIndex: 0,
-      cropDisplayName: "Lovage seeds",
+      cropDisplayName: "Fresh lovage",
     });
   });
 });

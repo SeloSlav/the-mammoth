@@ -56,6 +56,7 @@ export type {
 export {
   mammothItemDefSupportsHotbarWaterDrink,
   mammothItemDefSupportsHotbarUseAction,
+  mammothItemDefSupportsHotbarFpViewmodel,
 } from "./waterContainerHelpers";
 
 /** World GLB resolution (re-exported from `@the-mammoth/assets`). */
@@ -259,4 +260,12 @@ export function isResourceDefId(defId: string): boolean {
 
 export function mammothItemDefIsPlantableSeed(def: MammothItemDef | undefined): boolean {
   return def?.balconyGrow != null;
+}
+
+/** Fresh harvest display name for a plantable seed/cutting def (falls back to seed label). */
+export function mammothBalconyGrowHarvestDisplayName(seedDefId: string): string {
+  const seed = getMammothItemDef(seedDefId);
+  const harvestId = seed?.balconyGrow?.harvestDefId;
+  if (!harvestId) return seed?.displayName ?? seedDefId;
+  return getMammothItemDef(harvestId)?.displayName ?? harvestId;
 }

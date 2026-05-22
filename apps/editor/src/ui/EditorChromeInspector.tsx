@@ -20,6 +20,8 @@ import type {
   EditorWorkspace,
   LandingKitVariant,
 } from "../state/editorStore.js";
+import { faSliders } from "@fortawesome/free-solid-svg-icons";
+import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
 
 function readScale(s: [number, number, number] | undefined): [number, number, number] {
   return [s?.[0] ?? 1, s?.[1] ?? 1, s?.[2] ?? 1];
@@ -132,7 +134,7 @@ export function EditorChromeInspector(props: {
 
   return (
     <>
-      <span style={label}>Inspector</span>
+      <EditorChromeSectionTitleIcon icon={faSliders}>Inspector</EditorChromeSectionTitleIcon>
       <div
         style={{
           marginBottom: 10,

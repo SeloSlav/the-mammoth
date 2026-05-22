@@ -533,9 +533,10 @@ function GrowTrayDescription() {
         color: THEME_TEXT_MUTED,
       }}
     >
-      Drop balcony substrate here. While this slot holds fertilizer, plants in this tray grow
-      <strong style={{ color: THEME_TEXT_PRIMARY, fontWeight: 600 }}> 20% faster</strong> — the
-      fertilizer is not consumed when you plant.
+      Drop balcony substrate here before planting. If this slot holds fertilizer when you plant,
+      <strong style={{ color: THEME_TEXT_PRIMARY, fontWeight: 600 }}> one unit is consumed</strong>{" "}
+      to shorten nights to mature and improve harvest yields. Water the tray before sleep; grow
+      lights must be on overnight.
     </div>
   );
 }

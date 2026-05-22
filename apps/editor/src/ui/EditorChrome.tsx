@@ -1,4 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  faArrowsRotate,
+  faCrosshairs,
+  faCubes,
+  faDatabase,
+  faFileLines,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   isStairWellOpeningProxyId,
   LANDING_DOOR_OPENING_PROXY_ID,
@@ -15,10 +22,15 @@ import {
 import { eulerDegToQuat, quatToEulerDeg } from "./editorChromeMath.js";
 import { selectEditorChromeStore } from "./editorChromeSelectors.js";
 import {
+  editorChromeDiskSaveBtn,
+  editorChromeHelp,
   editorChromeInput,
   editorChromeLabel,
   editorChromePanel,
   editorChromeRowBtn,
+  editorChromeSection,
+  editorChromeSubsectionLabel,
+  editorChromeSubsectionLabelFirst,
 } from "./editorChromeStyles.js";
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMaterialPanel.js";
@@ -27,6 +39,7 @@ import { EditorChromeAuthoringIntroAndWorkspace } from "./EditorChromeAuthoringI
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
 import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
+import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
 import { useEditorChromeDiskPersistence } from "./hooks/useEditorChromeDiskPersistence.js";
 import { useEditorChromeSelectionMeta } from "./hooks/useEditorChromeSelectionMeta.js";
 export function EditorChrome() {
@@ -352,96 +365,107 @@ export function EditorChrome() {
           contentIndex={contentIndex}
         />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
-          <EditorChromeFpViewmodel
-            transformMode={transformMode}
-            setTransformMode={setTransformMode}
-            gridSnapM={gridSnapM}
-            setGridSnapM={setGridSnapM}
-          />
+          <div style={editorChromeSection}>
+            <EditorChromeSectionTitleIcon icon={faCrosshairs}>First-person authoring</EditorChromeSectionTitleIcon>
+            <EditorChromeFpViewmodel
+              transformMode={transformMode}
+              setTransformMode={setTransformMode}
+              gridSnapM={gridSnapM}
+              setGridSnapM={setGridSnapM}
+            />
+          </div>
         ) : null}
-        {mode === "my_apartment_layout" ? (
-          <p style={{ margin: "4px 0 0", fontSize: 12, opacity: 0.88, maxWidth: 420 }}>
-            Author bed, wardrobe, and footlocker on the preview floor. Poses serialize to disk JSON
-            and apply to whichever unit the player occupies in FP.
-          </p>
-        ) : mode === "interior" ? (
-          <>
-            <span style={label}>Interior document</span>
-            <select
-              style={input}
-              value={activeInteriorDocId}
-              onChange={(e) => setActiveInteriorDocId(e.target.value)}
-            >
-              {Object.keys(interiorDocs).map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </>
-        ) : mode === "cell" ? (
-          <>
-            <span style={label}>Cell document</span>
-            <select
-              style={input}
-              value={activeCellDocId}
-              onChange={(e) => setActiveCellDocId(e.target.value)}
-            >
-              {Object.keys(cellDocs).map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </>
-        ) : mode === "prefab" ? (
-          <>
-            <span style={label}>Prefab definition</span>
-            <select
-              style={input}
-              value={activePrefabDefId ?? ""}
-              onChange={(e) => setActivePrefabDefId(e.target.value || null)}
-            >
-              <option value="">— pick prefab —</option>
-              {Object.keys(prefabDefs).map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </>
-        ) : mode === "floor_override" ? (
-          <>
-            <span style={label}>Floor override document</span>
-            <select
-              style={input}
-              value={activeFloorOverrideDocId ?? ""}
-              onChange={(e) =>
-                setActiveFloorOverrideDocId(e.target.value || null)
-              }
-            >
-              <option value="">— pick override —</option>
-              {Object.keys(floorOverrideDocs).map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </>
+        {mode === "interior" ||
+        mode === "cell" ||
+        mode === "prefab" ||
+        mode === "floor_override" ? (
+          <div style={editorChromeSection}>
+            <EditorChromeSectionTitleIcon icon={faFileLines}>Active document</EditorChromeSectionTitleIcon>
+            {mode === "interior" ? (
+              <>
+                <span style={{ ...label, marginTop: 0 }}>Interior document</span>
+                <select
+                  style={input}
+                  value={activeInteriorDocId}
+                  onChange={(e) => setActiveInteriorDocId(e.target.value)}
+                >
+                  {Object.keys(interiorDocs).map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : mode === "cell" ? (
+              <>
+                <span style={{ ...label, marginTop: 0 }}>Cell document</span>
+                <select
+                  style={input}
+                  value={activeCellDocId}
+                  onChange={(e) => setActiveCellDocId(e.target.value)}
+                >
+                  {Object.keys(cellDocs).map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : mode === "prefab" ? (
+              <>
+                <span style={{ ...label, marginTop: 0 }}>Prefab definition</span>
+                <select
+                  style={input}
+                  value={activePrefabDefId ?? ""}
+                  onChange={(e) => setActivePrefabDefId(e.target.value || null)}
+                >
+                  <option value="">— pick prefab —</option>
+                  {Object.keys(prefabDefs).map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : mode === "floor_override" ? (
+              <>
+                <span style={{ ...label, marginTop: 0 }}>Floor override document</span>
+                <select
+                  style={input}
+                  value={activeFloorOverrideDocId ?? ""}
+                  onChange={(e) =>
+                    setActiveFloorOverrideDocId(e.target.value || null)
+                  }
+                >
+                  <option value="">— pick override —</option>
+                  {Object.keys(floorOverrideDocs).map((id) => (
+                    <option key={id} value={id}>
+                      {id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : null}
+          </div>
         ) : null}
         {mode !== "fp_viewmodel" &&
         mode !== "fp_consumable" &&
         mode !== "my_apartment_layout" ? (
-          <EditorChromeSceneGizmoBlock
-            transformMode={transformMode}
-            setTransformMode={setTransformMode}
-            gridSnapM={gridSnapM}
-            setGridSnapM={setGridSnapM}
-          />
+          <div style={editorChromeSection}>
+            <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & transform</EditorChromeSectionTitleIcon>
+            <EditorChromeSceneGizmoBlock
+              omitSectionHeading
+              transformMode={transformMode}
+              setTransformMode={setTransformMode}
+              gridSnapM={gridSnapM}
+              setGridSnapM={setGridSnapM}
+            />
+          </div>
         ) : null}
         {workspace !== "apartment" ? (
-          <>
-            <span style={label}>History</span>
+          <div style={editorChromeSection}>
+            <EditorChromeSectionTitleIcon icon={faDatabase}>Save & collision</EditorChromeSectionTitleIcon>
+            <span style={editorChromeSubsectionLabelFirst}>History</span>
             <div>
               <button
                 type="button"
@@ -462,11 +486,7 @@ export function EditorChrome() {
                 Redo
               </button>
             </div>
-          </>
-        ) : null}
-        {workspace !== "apartment" ? (
-          <>
-            <span style={label}>Content (JSON on disk)</span>
+            <span style={editorChromeSubsectionLabel}>Content (JSON on disk)</span>
             <div
               style={{
                 display: "flex",
@@ -486,7 +506,7 @@ export function EditorChrome() {
               {canSaveContentToDisk ? (
                 <button
                   type="button"
-                  style={rowBtn}
+                  style={editorChromeDiskSaveBtn}
                   onClick={() => onSaveDisk()}
                 >
                   {saveToDiskLabel}
@@ -494,24 +514,16 @@ export function EditorChrome() {
               ) : null}
             </div>
             {isUnassignedApartmentLayoutDraft ? (
-              <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.72 }}>
-                Use <strong>Save as new profile</strong> above before writing this
-                apartment draft to disk.
+              <p style={editorChromeHelp}>
+                Use <strong>Save as new profile</strong> above before writing this apartment draft to
+                disk.
               </p>
             ) : null}
-            <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
-            <p
-              style={{
-                margin: "6px 0 0",
-                fontSize: 11,
-                opacity: 0.75,
-                lineHeight: 1.35,
-              }}
-            >
-              Full collision regeneration is intentionally script-only. After saving
-              collision-affecting changes, run{" "}
-              <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code> from
-              the repo root.
+            <span style={editorChromeSubsectionLabel}>Server collision (Rust)</span>
+            <p style={{ ...editorChromeHelp, marginTop: 0 }}>
+              Full collision regeneration is intentionally script-only. After saving collision-affecting
+              changes, run <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code> from the repo
+              root.
             </p>
             {dirty ? (
               <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>
@@ -539,30 +551,33 @@ export function EditorChrome() {
                   : "in sync"}
               </p>
             ) : null}
-          </>
+          </div>
         ) : null}
         {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
           <>
-            <EditorChromeOutliner
-              mode={mode}
-              stairWellAuthorScope={stairWellAuthorScope}
-              landingKitVariant={landingKitVariant}
-              setLandingKitVariant={setLandingKitVariant}
-              activeFloorDoc={activeFloorDoc}
-              activeInteriorDoc={activeInteriorDoc}
-              activeCellDoc={activeCellDoc}
-              activePrefabDef={activePrefabDef}
-              activeFloorOverrideDoc={activeFloorOverrideDoc}
-              selectedId={selectedId}
-              setSelectedId={setSelectedId}
-              label={label}
-            />
+            {mode !== "my_apartment_layout" ? (
+              <div style={editorChromeSection}>
+                <EditorChromeOutliner
+                  mode={mode}
+                  stairWellAuthorScope={stairWellAuthorScope}
+                  landingKitVariant={landingKitVariant}
+                  setLandingKitVariant={setLandingKitVariant}
+                  activeFloorDoc={activeFloorDoc}
+                  activeInteriorDoc={activeInteriorDoc}
+                  activeCellDoc={activeCellDoc}
+                  activePrefabDef={activePrefabDef}
+                  activeFloorOverrideDoc={activeFloorOverrideDoc}
+                  selectedId={selectedId}
+                  setSelectedId={setSelectedId}
+                />
+              </div>
+            ) : null}
             {mode !== "cab" &&
             mode !== "landing_preview" &&
             mode !== "stairwell_preview" &&
             mode !== "my_apartment_layout" ? (
-              <>
-                <span style={label}>Prefab palette</span>
+              <div style={editorChromeSection}>
+                <EditorChromeSectionTitleIcon icon={faCubes}>Prefab palette</EditorChromeSectionTitleIcon>
                 <select
                   style={{ ...input, marginBottom: 6 }}
                   id="editor-prefab-palette"
@@ -669,44 +684,46 @@ export function EditorChrome() {
                     Delete
                   </button>
                 </div>
-              </>
+              </div>
             ) : null}
-            <EditorChromeInspector
-              workspace={workspace}
-              mode={mode}
-              landingKitVariant={landingKitVariant}
-              elevatorCabDef={elevatorCabDef}
-              landingKitDef={landingKitDef}
-              stairWellDef={stairWellDef}
-              stairWellAuthorScope={stairWellAuthorScope}
-              patchElevatorCabDef={patchElevatorCabDef}
-              patchLandingKitDef={patchLandingKitDef}
-              patchStairWellDef={patchStairWellDef}
-              selectedId={selectedId}
-              selectedFloorObj={selectedFloorObj}
-              selectedInteriorPl={selectedInteriorPl}
-              selectedCellPl={selectedCellPl}
-              selectedPrefabComponent={selectedPrefabComponent}
-              selectedFloorOverridePatch={selectedFloorOverridePatch}
-              activeFloorDocId={activeFloorDocId}
-              activeInteriorDocId={activeInteriorDocId}
-              activeCellDocId={activeCellDocId}
-              activePrefabDefId={activePrefabDefId}
-              activeFloorOverrideDocId={activeFloorOverrideDocId}
-              metaText={metaText}
-              setMetaText={setMetaText}
-              metaErr={metaErr}
-              setMetaErr={setMetaErr}
-              euler={euler}
-              updateEuler={updateEuler}
-              updatePlacedObject={updatePlacedObject}
-              updateInteriorPlacement={updateInteriorPlacement}
-              updateCellPlacement={updateCellPlacement}
-              updatePrefabComponent={updatePrefabComponent}
-              updateFloorOverrideObjectPatch={updateFloorOverrideObjectPatch}
-              label={label}
-              input={input}
-            />
+            <div style={editorChromeSection}>
+              <EditorChromeInspector
+                workspace={workspace}
+                mode={mode}
+                landingKitVariant={landingKitVariant}
+                elevatorCabDef={elevatorCabDef}
+                landingKitDef={landingKitDef}
+                stairWellDef={stairWellDef}
+                stairWellAuthorScope={stairWellAuthorScope}
+                patchElevatorCabDef={patchElevatorCabDef}
+                patchLandingKitDef={patchLandingKitDef}
+                patchStairWellDef={patchStairWellDef}
+                selectedId={selectedId}
+                selectedFloorObj={selectedFloorObj}
+                selectedInteriorPl={selectedInteriorPl}
+                selectedCellPl={selectedCellPl}
+                selectedPrefabComponent={selectedPrefabComponent}
+                selectedFloorOverridePatch={selectedFloorOverridePatch}
+                activeFloorDocId={activeFloorDocId}
+                activeInteriorDocId={activeInteriorDocId}
+                activeCellDocId={activeCellDocId}
+                activePrefabDefId={activePrefabDefId}
+                activeFloorOverrideDocId={activeFloorOverrideDocId}
+                metaText={metaText}
+                setMetaText={setMetaText}
+                metaErr={metaErr}
+                setMetaErr={setMetaErr}
+                euler={euler}
+                updateEuler={updateEuler}
+                updatePlacedObject={updatePlacedObject}
+                updateInteriorPlacement={updateInteriorPlacement}
+                updateCellPlacement={updateCellPlacement}
+                updatePrefabComponent={updatePrefabComponent}
+                updateFloorOverrideObjectPatch={updateFloorOverrideObjectPatch}
+                label={label}
+                input={input}
+              />
+            </div>
           </>
         ) : null}
       </div>

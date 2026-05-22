@@ -7,7 +7,7 @@ import {
   balconyGrowTrayStashKey,
   parseBalconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
-import { getMammothItemDef } from "../../inventory/mammothItemCatalog";
+import { mammothBalconyGrowHarvestDisplayName } from "../../inventory/mammothItemCatalog";
 import {
   clientOwnsClaimedApartmentUnit,
 } from "../fpApartment/fpApartmentGameplay.js";
@@ -100,7 +100,7 @@ function matureHarvestPromptForSlot(
     (p) => p.trayId === trayId && Number(p.slotIndex) === Number(slotIndex),
   );
   if (!plant || !plantReadyForHarvest(plant)) return null;
-  const cropName = getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
+  const cropName = mammothBalconyGrowHarvestDisplayName(plant.cropDefId);
   return harvestPromptIfNear(
     conn,
     identity,

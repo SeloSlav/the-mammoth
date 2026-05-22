@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import type {
   CellDoc,
@@ -12,6 +11,8 @@ import {
   STAIR_WELL_EDITOR_PART_IDS,
 } from "@the-mammoth/world";
 import type { EditorMode, LandingKitVariant } from "../state/editorStore.js";
+import { faListUl } from "@fortawesome/free-solid-svg-icons";
+import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
 
 /** Subparts tagged with `userData.editorCabPartId` in the cab preview (see `elevatorCabPreview.ts`). */
 const ELEVATOR_CAB_OUTLINER_PART_IDS = [
@@ -39,7 +40,6 @@ export function EditorChromeOutliner(props: {
   activeFloorOverrideDoc: FloorOverrideDoc | undefined;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
-  label: CSSProperties;
 }) {
   const {
     mode,
@@ -53,7 +53,6 @@ export function EditorChromeOutliner(props: {
     activeFloorOverrideDoc,
     selectedId,
     setSelectedId,
-    label,
   } = props;
 
   const [floorFilter, setFloorFilter] = useState<"all" | "elevator" | "stair" | "core">("all");
@@ -74,7 +73,7 @@ export function EditorChromeOutliner(props: {
 
   return (
     <>
-      <span style={label}>Outliner</span>
+      <EditorChromeSectionTitleIcon icon={faListUl}>Outliner</EditorChromeSectionTitleIcon>
       {mode === "cab" ? (
         <p style={{ margin: "0 0 8px", fontSize: 11, opacity: 0.75, lineHeight: 1.4 }}>
           Cab subparts (shared ElevatorCabDef). Door face follows the first shaft in the building.

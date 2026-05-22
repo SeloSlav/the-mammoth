@@ -9,6 +9,7 @@ describe("tryExitFpSitOnMovement", () => {
       active: true,
       sittableKey: "chair",
       unitKey: "u1",
+      modelRelPath: "static/models/objects/chair.glb",
       mode: "sit",
       anchorFeet: { x: 5, y: 1, z: 5 },
       exitFeet: { x: 4, y: 1, z: 4.5 },

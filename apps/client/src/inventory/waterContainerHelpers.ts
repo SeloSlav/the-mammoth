@@ -35,6 +35,13 @@ export function mammothItemDefSupportsHotbarUseAction(def: MammothItemDef | unde
   return mammothItemDefSupportsHotbarWaterDrink(def);
 }
 
+/** Shipped first-person held meshes — most food/seeds stay hands-only on the hotbar. */
+const HOTBAR_FP_VIEWMODEL_DEF_IDS = new Set<string>(["apple", "water-bottle"]);
+
+export function mammothItemDefSupportsHotbarFpViewmodel(def: MammothItemDef | undefined): boolean {
+  return def != null && HOTBAR_FP_VIEWMODEL_DEF_IDS.has(def.id);
+}
+
 export function waterBottleFillLiters(
   conn: DbConnection | null,
   itemInstanceId: bigint | number,

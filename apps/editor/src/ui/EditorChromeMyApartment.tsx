@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+  faArrowsRotate,
+  faCloudArrowDown,
+  faGripLinesVertical,
+  faObjectGroup,
+  faTableCells,
+  faWindowRestore,
+} from "@fortawesome/free-solid-svg-icons";
+import {
   defaultOwnedApartmentDecorScaleForModel,
   ownedApartmentPlacedItemKindFromModelRelPath,
   type OwnedApartmentWallMaterial,
@@ -16,11 +24,15 @@ import type { EditorMode, EditorWorkspace } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
 import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import {
+  editorChromeHelp,
   editorChromeInput,
   editorChromeLabel,
   editorChromeRowBtn,
+  editorChromeRowBtnCompact,
+  editorChromeSection,
 } from "./editorChromeStyles.js";
 import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
+import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
 import {
   filterMaterialTextureUrls,
   MaterialSlotEditor,
@@ -183,6 +195,8 @@ export function EditorChromeMyApartment(props: {
   const [selectedCatalogModelRelPath, setSelectedCatalogModelRelPath] = useState<string | null>(null);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
   const [placedItemsSearchQuery, setPlacedItemsSearchQuery] = useState("");
+  const [objectGroupsSearchQuery, setObjectGroupsSearchQuery] = useState("");
+  const [groupRenameDraftById, setGroupRenameDraftById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -335,6 +349,30 @@ export function EditorChromeMyApartment(props: {
     [objectGroups],
   );
 
+  useEffect(() => {
+    const valid = new Set(objectGroups.map((g) => g.id));
+    setGroupRenameDraftById((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const [id, v] of Object.entries(prev)) {
+        if (valid.has(id)) {
+          next[id] = v;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [objectGroups]);
+
+  const filteredLayoutObjectGroups = useMemo(
+    () =>
+      sortedLayoutObjectGroups.filter((g) =>
+        searchHaystackMatches([g.name, g.id], objectGroupsSearchQuery),
+      ),
+    [sortedLayoutObjectGroups, objectGroupsSearchQuery],
+  );
+
   function importSelectedDecor(): void {
     if (!selectedCatalogModelRelPath) return;
     const nextIndex = placedItems.length;
@@ -386,6 +424,26 @@ export function EditorChromeMyApartment(props: {
     !selectedDecor ||
     !selectedCatalogModelRelPath ||
     selectedDecor.modelRelPath === selectedCatalogModelRelPath;
+
+  function clearGroupRenameDraft(groupId: string): void {
+    setGroupRenameDraftById((prev) => {
+      if (!(groupId in prev)) return prev;
+      const { [groupId]: _, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  function applySavedGroupRename(groupId: string, canonicalName: string): void {
+    const raw = groupRenameDraftById[groupId] ?? canonicalName;
+    const next = raw.trim();
+    if (next.length === 0) return;
+    if (next === canonicalName) {
+      clearGroupRenameDraft(groupId);
+      return;
+    }
+    renameMyApartmentObjectGroup(groupId, next);
+    clearGroupRenameDraft(groupId);
+  }
 
   function deleteLayoutPlacements(selectedIds: readonly string[]): void {
     patchOwnedApartmentBuiltins((doc) => {
@@ -542,15 +600,14 @@ export function EditorChromeMyApartment(props: {
   }
   body = (
       <>
-        <span style={{ ...editorChromeLabel, display: "block" }}>
-          Import decor
-        </span>
-        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-          Click a model from <code>public/static/models/objects/</code>, import it into the
-          preview unit, then move it with the gizmo and save the apartment layout JSON. Select a
-          placed décor and use <strong>Replace selected décor</strong> (or double-click a catalog
-          model) to swap its GLB without moving it.
-        </p>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faCloudArrowDown}>Import décor</EditorChromeSectionTitleIcon>
+          <p style={{ ...editorChromeHelp, marginTop: 0 }}>
+            Click a model from <code>public/static/models/objects/</code>, import it into the preview
+            unit, then move it with the gizmo and save the apartment layout JSON. Select a placed décor
+            and use <strong>Replace selected décor</strong> (or double-click a catalog model) to swap
+            its GLB without moving it.
+          </p>
         <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>{catalogStatus}</div>
         <input
           type="search"
@@ -624,8 +681,11 @@ export function EditorChromeMyApartment(props: {
             Replace selected décor
           </button>
         </div>
-        <div style={{ marginTop: 12 }}>
+        </div>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & gizmo</EditorChromeSectionTitleIcon>
           <EditorChromeSceneGizmoBlock
+            omitSectionHeading
             transformMode={transformMode}
             setTransformMode={setTransformMode}
             gridSnapM={gridSnapM}
@@ -639,14 +699,30 @@ export function EditorChromeMyApartment(props: {
             myApartmentLayoutHiddenCount={myApartmentLayoutHiddenPlacementIds.length}
             clearMyApartmentLayoutHiddenPlacements={clearMyApartmentLayoutHiddenPlacements}
             myApartmentLayoutHints={apartmentSceneGizmoHints}
+            decorIgnoreSupportSurfacesWhileTranslating={
+              selectedDecor
+                ? {
+                    checked: selectedDecor.ignoreSupportSurfaces === true,
+                    onCheckedChange: (ignoreSupportSurfaces) => {
+                      const decorId = selectedDecor.id;
+                      patchOwnedApartmentBuiltins((doc) => ({
+                        ...doc,
+                        placedItems: doc.placedItems.map((item) =>
+                          item.id === decorId ? { ...item, ignoreSupportSurfaces } : item,
+                        ),
+                      }));
+                    },
+                  }
+                : undefined
+            }
           />
         </div>
-        <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
-          Saved object groups
-        </span>
-        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faObjectGroup}>Saved object groups</EditorChromeSectionTitleIcon>
+          <p style={{ ...editorChromeHelp, marginTop: 0 }}>
           <strong>Ctrl/Cmd-click</strong> multiple imported decor, wall slabs, or mirrors in the scene
           or lists, enter a label, then save a group so you can move/rotate/scale them together later.
+          Edit an existing name and press <strong>Save name</strong> to apply it.{" "}
           <strong>Ctrl/Cmd+C</strong> clones the selection (décor, wall slab, mirror, or saved group).{" "}
           <strong>Ctrl/Cmd+X</strong> or <strong>Delete</strong> removes it, including every member of a
           saved group. <strong>Ctrl+Z</strong> / <strong>Ctrl+Y</strong> undo and redo layout edits.{" "}
@@ -671,12 +747,12 @@ export function EditorChromeMyApartment(props: {
             type="text"
             value={newObjectGroupName}
             onChange={(e) => setNewObjectGroupName(e.target.value)}
-            placeholder="Group name…"
-            style={{ ...editorChromeInput, flex: "1 1 160px", minWidth: 120 }}
+            placeholder="New group name…"
+            style={{ ...editorChromeInput, flex: "1 1 140px", minWidth: 100, padding: "3px 6px", fontSize: 11 }}
           />
           <button
             type="button"
-            style={editorChromeRowBtn}
+            style={editorChromeRowBtnCompact}
             disabled={apartmentDecorWallMultisetCount < 2}
             title={
               apartmentDecorWallMultisetCount < 2
@@ -692,11 +768,25 @@ export function EditorChromeMyApartment(props: {
             Save group ({apartmentDecorWallMultisetCount})
           </button>
         </div>
+        <input
+          type="search"
+          value={objectGroupsSearchQuery}
+          onChange={(e) => setObjectGroupsSearchQuery(e.target.value)}
+          placeholder="Search groups by name…"
+          aria-label="Filter saved groups by name"
+          style={{
+            ...editorChromeInput,
+            width: "100%",
+            marginTop: 8,
+            padding: "3px 6px",
+            fontSize: 11,
+          }}
+        />
         <div
           style={{
             display: "grid",
             gap: 6,
-            marginTop: 8,
+            marginTop: 6,
             maxHeight: 172,
             overflowY: "auto",
           }}
@@ -705,35 +795,71 @@ export function EditorChromeMyApartment(props: {
             <div style={{ fontSize: 11, opacity: 0.68 }}>
               No saved groups yet — multiselect at least two decor or wall slabs, then Save group.
             </div>
+          ) : filteredLayoutObjectGroups.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>
+              No groups match &quot;{objectGroupsSearchQuery}&quot;.
+            </div>
           ) : (
-            sortedLayoutObjectGroups.map((g) => {
+            filteredLayoutObjectGroups.map((g) => {
               const isActive = parsedSavedLayoutObjectGroupId === g.id;
+              const nameField = groupRenameDraftById[g.id] ?? g.name;
+              const trimmedName = nameField.trim();
+              const canApplyRename =
+                trimmedName.length > 0 && trimmedName !== g.name.trim();
               return (
                 <div
                   key={g.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr auto",
                     gap: 6,
-                    padding: "6px 8px",
+                    padding: "6px 7px",
                     borderRadius: 6,
-                    background: isActive ? "rgba(53,81,114,0.35)" : "rgba(255,255,255,0.06)",
+                    background: isActive ? "rgba(53,81,114,0.35)" : "rgba(255,255,255,0.055)",
                   }}
                 >
-                  <label style={{ fontSize: 11, opacity: 0.88, gridColumn: "1 / -1" }}>
-                    <span style={{ display: "block", opacity: 0.72, marginBottom: 4 }}>{g.name}</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <input
-                      aria-label={`Rename saved group ${g.name}`}
-                      defaultValue={g.name}
-                      key={`${g.id}:${g.name}`}
-                      style={{ ...editorChromeInput, width: "100%" }}
-                      onBlur={(e) => renameMyApartmentObjectGroup(g.id, e.target.value)}
+                      aria-label={`Name for saved group (${g.memberSelectedIds.length} members)`}
+                      value={nameField}
+                      style={{
+                        ...editorChromeInput,
+                        flex: "1 1 120px",
+                        minWidth: 0,
+                        padding: "3px 6px",
+                        fontSize: 11,
+                      }}
+                      onChange={(e) =>
+                        setGroupRenameDraftById((prev) => ({
+                          ...prev,
+                          [g.id]: e.target.value,
+                        }))
+                      }
                     />
-                  </label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, gridColumn: "1 / -1" }}>
                     <button
                       type="button"
-                      style={editorChromeRowBtn}
+                      style={editorChromeRowBtnCompact}
+                      disabled={!canApplyRename}
+                      title={
+                        canApplyRename
+                          ? "Apply the name above to this saved group"
+                          : "Change the name text to something different from the current name"
+                      }
+                      onClick={() => applySavedGroupRename(g.id, g.name)}
+                    >
+                      Save name
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
+                      alignItems: "center",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={editorChromeRowBtnCompact}
                       onClick={() => selectMyApartmentSavedObjectGroup(g.id)}
                       title="Select this group"
                     >
@@ -741,7 +867,7 @@ export function EditorChromeMyApartment(props: {
                     </button>
                     <button
                       type="button"
-                      style={editorChromeRowBtn}
+                      style={editorChromeRowBtnCompact}
                       onClick={() => cloneMyApartmentObjectGroup(g.id)}
                       title="Duplicate all members and save as a new group (offset slightly from the original)"
                     >
@@ -749,34 +875,34 @@ export function EditorChromeMyApartment(props: {
                     </button>
                     <button
                       type="button"
-                      style={editorChromeRowBtn}
+                      style={editorChromeRowBtnCompact}
                       onClick={() => deleteMyApartmentObjectGroupMembers(g.id)}
                       title="Delete every member in this group and remove the saved group"
                     >
-                      Delete all
+                      Del all
                     </button>
                     <button
                       type="button"
-                      style={editorChromeRowBtn}
+                      style={editorChromeRowBtnCompact}
                       onClick={() => deleteMyApartmentObjectGroup(g.id)}
                       title="Remove the grouping (objects stay in the layout)"
                     >
                       Ungroup
                     </button>
+                    <span style={{ fontSize: 10, opacity: 0.62, marginLeft: "auto" }}>
+                      {g.memberSelectedIds.length} member{g.memberSelectedIds.length === 1 ? "" : "s"}
+                    </span>
                   </div>
-                  <span style={{ gridColumn: "1 / -1", fontSize: 10, opacity: 0.62 }}>
-                    {g.memberSelectedIds.length} member{g.memberSelectedIds.length === 1 ? "" : "s"}
-                  </span>
                 </div>
               );
             })
           )}
         </div>
         {parsedSavedLayoutObjectGroupId ? (
-          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>
             <button
               type="button"
-              style={editorChromeRowBtn}
+              style={editorChromeRowBtnCompact}
               onClick={() => deleteMyApartmentObjectGroupMembers(parsedSavedLayoutObjectGroupId)}
               title="Delete every member in this group and remove the saved group (Delete key)"
             >
@@ -784,9 +910,9 @@ export function EditorChromeMyApartment(props: {
             </button>
           </div>
         ) : null}
-        <span style={{ ...editorChromeLabel, display: "block", marginTop: 12 }}>
-          Placed items
-        </span>
+        </div>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faTableCells}>Placed décor</EditorChromeSectionTitleIcon>
         <input
           type="search"
           value={placedItemsSearchQuery}
@@ -865,36 +991,13 @@ export function EditorChromeMyApartment(props: {
             ) : null}
           </p>
         ) : null}
-        {selectedDecor ? (
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10 }}>
-            <input
-              type="checkbox"
-              checked={selectedDecor.ignoreSupportSurfaces === true}
-              onChange={(e) => {
-                const ignoreSupportSurfaces = e.target.checked;
-                patchOwnedApartmentBuiltins((doc) => ({
-                  ...doc,
-                  placedItems: doc.placedItems.map((item) =>
-                    item.id === selectedDecor.id ? { ...item, ignoreSupportSurfaces } : item,
-                  ),
-                }));
-              }}
-            />
-            <span style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.35 }}>
-              Ignore support surfaces while translating
-              <span style={{ display: "block", opacity: 0.65 }}>
-                Use for fine placements like leaning a carton through / against an ashtray.
-              </span>
-            </span>
-          </label>
-        ) : null}
-        <span style={{ ...editorChromeLabel, display: "block", marginTop: 14 }}>
-          Mirrors (planar)
-        </span>
-        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-          Rectangle glass with a thin frame, same reflective surface as the elevator cab mirror.
-          Move / rotate / scale with the gizmo like décor; axis scale resizes width and height.
-        </p>
+        </div>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faWindowRestore}>Mirrors (planar)</EditorChromeSectionTitleIcon>
+          <p style={{ ...editorChromeHelp, marginTop: 0 }}>
+            Rectangle glass with a thin frame, same reflective surface as the elevator cab mirror.
+            Move / rotate / scale with the gizmo like décor; axis scale resizes width and height.
+          </p>
         <div style={{ marginTop: 8 }}>
           <button type="button" style={editorChromeRowBtn} onClick={addMirror}>
             Add mirror
@@ -952,13 +1055,15 @@ export function EditorChromeMyApartment(props: {
             Delete selected mirror
           </button>
         </div>
-        <span style={{ ...editorChromeLabel, display: "block", marginTop: 14 }}>
-          Partition walls (thin slabs)
-        </span>
-        <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-          Add boxes, move / rotate / scale with the gizmo, then pick PBR textures (same library as
-          other editor materials).
-        </p>
+        </div>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faGripLinesVertical}>
+            Partition walls (thin slabs)
+          </EditorChromeSectionTitleIcon>
+          <p style={{ ...editorChromeHelp, marginTop: 0 }}>
+            Add boxes, move / rotate / scale with the gizmo, then pick PBR textures (same library as
+            other editor materials).
+          </p>
         <div style={{ marginTop: 8 }}>
           <button type="button" style={editorChromeRowBtn} onClick={addWallSlab}>
             Add wall slab
@@ -1144,7 +1249,7 @@ export function EditorChromeMyApartment(props: {
             </label>
           </div>
         ) : null}
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 12 }}>
           <button
             type="button"
             style={editorChromeRowBtn}
@@ -1153,20 +1258,9 @@ export function EditorChromeMyApartment(props: {
             Switch to stairwell workspace
           </button>
         </div>
+        </div>
       </>
   );
 
-  return (
-    <div style={{ marginTop: 12 }}>
-      {body}
-      <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.72, maxWidth: 440 }}>
-        The grey slab matches the unit prefab footprint in the floor doc; walls reuse the playable
-        shell hole layout. Placement data lives in the active apartment layout JSON; use the{" "}
-        <strong>Disk</strong> buttons in the Apartment unit card to write it (edits stay in memory
-        until you save). Built-ins and imported decor map into each unit{"'"}s strict hull
-        (`bound_*`) spans. Imported decor and authored wall slabs clamp to the slab top and the
-        unit{"'"}s hollow-shell ceiling height (ceiling slab is not drawn in this preview).
-      </p>
-    </div>
-  );
+  return <div style={{ marginTop: 8 }}>{body}</div>;
 }

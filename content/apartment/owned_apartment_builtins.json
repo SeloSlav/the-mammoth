@@ -939,6 +939,62 @@
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "31f4d5df-d4e1-4a89-aea8-9fd744809945",
+      "modelRelPath": "static/models/objects/empty-beer-can-ozujsko.glb",
+      "fx": 0.22967636772297081,
+      "fz": -0.0448356248656634,
+      "dy": 0.8909051258857932,
+      "yawRad": -2.8883310901310635,
+      "pitchRad": -0.7518794142949854,
+      "rollRad": 1.4,
+      "uniformScale": 0.11242224924488126,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
+    },
+    {
+      "id": "a5860943-5e41-4e72-bc18-f9b85759794d",
+      "modelRelPath": "static/models/objects/empty-beer-bottle.glb",
+      "fx": 0.24292017914532074,
+      "fz": -0.03799681868802092,
+      "dy": 0.9384788811438018,
+      "yawRad": 0.266526909868044,
+      "pitchRad": -0.3201455950667736,
+      "rollRad": -1.399999999999999,
+      "uniformScale": 0.1702213304073897,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
+    },
+    {
+      "id": "c4e739de-97e4-4501-a4ce-69e99781ddc5",
+      "modelRelPath": "static/models/objects/empty-beer-can-ozujsko.glb",
+      "fx": 0.22541315023251157,
+      "fz": -0.05821287672656982,
+      "dy": 0.8909051258857932,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 1.4,
+      "uniformScale": 0.11242224924488126,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
+    },
+    {
+      "id": "c03904da-963c-436a-9ebf-516f55987a60",
+      "modelRelPath": "static/models/objects/empty-beer-can-ozujsko.glb",
+      "fx": 0.248799514480632,
+      "fz": -0.04212901427448854,
+      "dy": 0.8909051258857932,
+      "yawRad": -1.8411335389344659,
+      "pitchRad": -0.7518794142949853,
+      "rollRad": 1.3999999999999995,
+      "uniformScale": 0.11242224924488126,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [

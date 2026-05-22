@@ -180,6 +180,10 @@ mod balcony_grow_op_catalog_tests {
             instant_hotbar_consume_vital_deltas("scented-geranium-leaves"),
             Some((2.0, 0.0, 8.0))
         );
-        assert!(instant_hotbar_consume_vital_deltas("fresh-parsley").is_none());
+        assert_eq!(
+            instant_hotbar_consume_vital_deltas("fresh-parsley"),
+            Some((0.0, 4.0, 0.0))
+        );
+        assert!(instant_hotbar_consume_vital_deltas("lovage-seeds").is_none());
     }
 }

@@ -1,4 +1,11 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
+import {
+  faBuilding,
+  faDiagramProject,
+  faFloppyDisk,
+  faRotateLeft,
+  faSitemap,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   apartmentUnitLayoutProfileForUnitKey,
   type ApartmentUnitLayoutProfilesDoc,
@@ -19,32 +26,19 @@ import type {
   EditorWorkspace,
   ApartmentLayoutSource,
 } from "../state/editorStoreTypes.js";
-import { editorChromeInput, editorChromeLabel, editorChromeRowBtn } from "./editorChromeStyles.js";
-
-const sectionCard: CSSProperties = {
-  marginTop: 12,
-  padding: 10,
-  borderRadius: 8,
-  background: "rgba(255,255,255,0.04)",
-  border: "1px solid rgba(255,255,255,0.08)",
-};
-
-const sectionTitle: CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 700,
-  letterSpacing: "0.03em",
-  textTransform: "uppercase",
-  opacity: 0.92,
-  marginBottom: 8,
-};
-
-const subtleHelp: CSSProperties = {
-  margin: "8px 0 0",
-  fontSize: 11,
-  opacity: 0.72,
-  lineHeight: 1.45,
-};
+import {
+  editorChromeDiskSaveBtn,
+  editorChromeHelp,
+  editorChromeInput,
+  editorChromeLabel,
+  editorChromePanelTitle,
+  editorChromeRowBtn,
+  editorChromeSection,
+} from "./editorChromeStyles.js";
+import {
+  EditorChromeGroupTitleIcon,
+  EditorChromeSectionTitleIcon,
+} from "./EditorChromeSectionTitleIcon.js";
 
 export function EditorChromeAuthoringIntroAndWorkspace(props: {
   contentIndex: EditorContentIndex;
@@ -124,15 +118,19 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             unitKey,
           );
           const assignedProfileName = assignedProfile?.name ?? null;
+          const isPlayerSpawnHome =
+            ref.levelIndex === Math.max(...refs.map((r) => r.levelIndex)) &&
+            unit.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID;
           const unitLabel = `Floor ${residentialFloor}, ${unit.label}`;
+          const profileListSuffix =
+            assignedProfileName ??
+            (isPlayerSpawnHome ? "Player owned default" : null);
           return {
             unitKey,
             unitId: unit.unitId,
-            label: assignedProfileName ? `${unitLabel} — ${assignedProfileName}` : unitLabel,
+            label: profileListSuffix ? `${unitLabel} — ${profileListSuffix}` : unitLabel,
             assignedProfileName,
-            isPlayerSpawnHome:
-              ref.levelIndex === Math.max(...refs.map((r) => r.levelIndex)) &&
-              unit.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+            isPlayerSpawnHome,
           };
         });
       });
@@ -157,11 +155,138 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
       : null;
   return (
     <>
-      <strong style={{ fontSize: 15 }}>Authoring</strong>
+      <div style={editorChromePanelTitle}>Authoring</div>
+
+      <div style={editorChromeSection}>
+        <EditorChromeSectionTitleIcon icon={faSitemap}>Workspace</EditorChromeSectionTitleIcon>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight: workspace === "apartment" ? 700 : 400,
+              background: workspace === "apartment" ? "#3a4a7a" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => setWorkspace("apartment")}
+          >
+            Apartment
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight: workspace === "stairwell" ? 700 : 400,
+              background: workspace === "stairwell" ? "#3a4a7a" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => {
+              setWorkspace("stairwell");
+            }}
+          >
+            Stairwell
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight: workspace === "cab" ? 700 : 400,
+              background: workspace === "cab" ? "#3a4a7a" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => setWorkspace("cab")}
+          >
+            Cab
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight: workspace === "landing" ? 700 : 400,
+              background: workspace === "landing" ? "#3a4a7a" : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => {
+              setWorkspace("landing");
+            }}
+          >
+            Corridor Door
+          </button>
+          <button
+            type="button"
+            style={{
+              ...rowBtn,
+              fontWeight:
+                mode === "fp_viewmodel" || mode === "fp_consumable" ? 700 : 400,
+              background:
+                mode === "fp_viewmodel" || mode === "fp_consumable"
+                  ? "#3a4a7a"
+                  : "#2a2a34",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+            onClick={() => setMode("fp_viewmodel")}
+          >
+            FP viewmodel
+          </button>
+        </div>
+
+        {workspace !== "apartment" ? (
+          <p
+            style={{
+              ...editorChromeHelp,
+              marginTop: 10,
+              opacity: 0.82,
+              fontSize: 12,
+            }}
+          >
+            <strong>Apartment</strong> authors owned-unit furniture, décor, and partition walls.{" "}
+            <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
+            shared vertical-core visuals (
+            <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
+            <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
+            <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>
+            ). <strong>FP viewmodel</strong> authors weapons and held consumables.
+          </p>
+        ) : null}
+
+        {workspace === "stairwell" ? (
+          <>
+            <span style={{ ...editorChromeLabel, marginTop: 12 }}>Stairwell scope</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(["typical", "ground"] as const).map((scope) => (
+                <button
+                  key={scope}
+                  type="button"
+                  style={{
+                    ...rowBtn,
+                    fontWeight: stairWellAuthorScope === scope ? 700 : 400,
+                    background:
+                      stairWellAuthorScope === scope ? "#3a4a7a" : "#2a2a34",
+                    border: "1px solid #444",
+                    color: "#fff",
+                  }}
+                  onClick={() => setStairWellAuthorScope(scope)}
+                >
+                  {scope === "typical" ? "Typical Storey" : "Ground Storey"}
+                </button>
+              ))}
+            </div>
+            <p style={editorChromeHelp}>
+              Transform deltas are authored separately for typical and ground stairwells. Materials
+              stay shared across the full shaft.
+            </p>
+          </>
+        ) : null}
+      </div>
 
       {workspace === "apartment" ? (
-        <div style={sectionCard}>
-          <span style={sectionTitle}>Apartment unit</span>
+        <div style={editorChromeSection}>
+          <EditorChromeSectionTitleIcon icon={faBuilding}>Apartment unit</EditorChromeSectionTitleIcon>
           <span style={{ ...label, marginTop: 0 }}>Preview apartment</span>
           <select
             style={input}
@@ -177,7 +302,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               </option>
             ))}
           </select>
-          <p style={subtleHelp}>
+          <p style={editorChromeHelp}>
             {assignedProfileName
               ? `This unit owns layout profile "${assignedProfileName}". Selecting it loads that profile.`
               : previewUnit?.isPlayerSpawnHome
@@ -185,7 +310,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
                 : "No profile assigned yet — this unit starts from an empty draft until you save a new profile."}
           </p>
 
-          <span style={{ ...sectionTitle, marginTop: 14 }}>Layout profile</span>
+          <EditorChromeGroupTitleIcon icon={faDiagramProject}>Layout profile</EditorChromeGroupTitleIcon>
           <span style={{ ...label, marginTop: 0 }}>Editing source</span>
           <select
             style={input}
@@ -211,17 +336,17 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             <option value="unassigned">Unassigned empty draft</option>
           </select>
           {activeProfileName ? (
-            <p style={subtleHelp}>
+            <p style={editorChromeHelp}>
               Editing this unit&apos;s profile <strong>{activeProfileName}</strong>. Saves go to
               unit layout profiles, not the player-owned default.
             </p>
           ) : activeApartmentLayoutSource === "owned_default" ? (
-            <p style={subtleHelp}>
+            <p style={editorChromeHelp}>
               Editing the protected player-owned fallback (
               <code style={{ fontSize: 10 }}>owned_apartment_builtins.json</code>).
             </p>
           ) : (
-            <p style={subtleHelp}>
+            <p style={editorChromeHelp}>
               Empty draft — use <strong>Save as new profile</strong> to create a layout that belongs
               to this unit.
             </p>
@@ -245,18 +370,18 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               Save as new profile
             </button>
           </div>
-          <p style={subtleHelp}>
+          <p style={editorChromeHelp}>
             Create a profile once for a new unit. After that, keep editing the assigned profile and
             use the disk save below to update it.
           </p>
 
-          <span style={{ ...sectionTitle, marginTop: 14 }}>Disk</span>
+          <EditorChromeGroupTitleIcon icon={faFloppyDisk}>Disk</EditorChromeGroupTitleIcon>
           <span style={{ ...label, marginTop: 0 }}>Content (JSON on disk)</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {canSaveContentToDisk ? (
               <button
                 type="button"
-                style={rowBtn}
+                style={editorChromeDiskSaveBtn}
                 onClick={() => void onSaveDisk()}
               >
                 {saveToDiskLabel}
@@ -264,12 +389,12 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             ) : null}
           </div>
           {!canSaveContentToDisk ? (
-            <p style={subtleHelp}>
+            <p style={editorChromeHelp}>
               This empty draft has no disk destination yet. Use <strong>Save as new profile</strong>{" "}
               once to create and assign one.
             </p>
           ) : null}
-          <p style={subtleHelp}>
+          <p style={editorChromeHelp}>
             Collision regeneration is script-only. After saving collision-affecting changes, run{" "}
             <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code>.
           </p>
@@ -298,7 +423,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             </p>
           ) : null}
 
-          <span style={{ ...sectionTitle, marginTop: 14 }}>Edits</span>
+          <EditorChromeGroupTitleIcon icon={faRotateLeft}>Edits</EditorChromeGroupTitleIcon>
           <div>
             <button
               type="button"
@@ -319,137 +444,13 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               Redo
             </button>
           </div>
-          <p style={subtleHelp}>
+          <p style={editorChromeHelp}>
             <strong>Ctrl+Z</strong> undo · <strong>Ctrl+Y</strong> redo · decor import, delete,
             clone, and gizmo moves are tracked while you edit.
           </p>
         </div>
       ) : null}
 
-      <span style={label}>Workspace</span>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            fontWeight: workspace === "apartment" ? 700 : 400,
-            background: workspace === "apartment" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => setWorkspace("apartment")}
-        >
-          Apartment
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            fontWeight: workspace === "stairwell" ? 700 : 400,
-            background: workspace === "stairwell" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => {
-            setWorkspace("stairwell");
-          }}
-        >
-          Stairwell
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            fontWeight: workspace === "cab" ? 700 : 400,
-            background: workspace === "cab" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => setWorkspace("cab")}
-        >
-          Cab
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            fontWeight: workspace === "landing" ? 700 : 400,
-            background: workspace === "landing" ? "#3a4a7a" : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => {
-            setWorkspace("landing");
-          }}
-        >
-          Corridor Door
-        </button>
-        <button
-          type="button"
-          style={{
-            ...rowBtn,
-            fontWeight:
-              mode === "fp_viewmodel" || mode === "fp_consumable" ? 700 : 400,
-            background:
-              mode === "fp_viewmodel" || mode === "fp_consumable"
-                ? "#3a4a7a"
-                : "#2a2a34",
-            border: "1px solid #444",
-            color: "#fff",
-          }}
-          onClick={() => setMode("fp_viewmodel")}
-        >
-          FP viewmodel
-        </button>
-      </div>
-
-      {workspace !== "apartment" ? (
-        <p
-          style={{
-            opacity: 0.8,
-            fontSize: 12,
-            lineHeight: 1.45,
-            margin: "8px 0 0",
-          }}
-        >
-          <strong>Apartment</strong> authors owned-unit furniture, décor, and partition walls.{" "}
-          <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
-          shared vertical-core visuals (
-          <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
-          <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
-          <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>
-          ). <strong>FP viewmodel</strong> authors weapons and held consumables.
-        </p>
-      ) : null}
-
-      {workspace === "stairwell" ? (
-        <>
-          <span style={label}>Stairwell Scope</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {(["typical", "ground"] as const).map((scope) => (
-              <button
-                key={scope}
-                type="button"
-                style={{
-                  ...rowBtn,
-                  fontWeight: stairWellAuthorScope === scope ? 700 : 400,
-                  background:
-                    stairWellAuthorScope === scope ? "#3a4a7a" : "#2a2a34",
-                  border: "1px solid #444",
-                  color: "#fff",
-                }}
-                onClick={() => setStairWellAuthorScope(scope)}
-              >
-                {scope === "typical" ? "Typical Storey" : "Ground Storey"}
-              </button>
-            ))}
-          </div>
-          <p style={subtleHelp}>
-            Transform deltas are authored separately for typical and ground stairwells. Materials stay
-            shared across the full shaft.
-          </p>
-        </>
-      ) : null}
     </>
   );
 }

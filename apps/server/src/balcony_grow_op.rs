@@ -5,7 +5,7 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::auth;
-use crate::crafting::emit_hud_notice;
+use crate::crafting::{emit_hud_notice, emit_hud_toast, HUD_TOAST_KIND_ITEM_RECEIVED};
 use crate::inventory::{
     self, find_item_in_hotbar_slot, find_item_in_stash_slot, remove_stash_item_quantity,
 };
@@ -37,6 +37,19 @@ pub(crate) const BALCONY_GROW_TICK_INTERVAL_SECS: i64 = 5;
 pub(crate) const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK: f32 = 0.042;
 /// Single substrate stack slot in each grow-tray stash.
 pub(crate) const BALCONY_GROW_FERTILIZER_STASH_SLOT: u16 = 0;
+/// Guaranteed seeds returned on every successful harvest.
+pub(crate) const BALCONY_GROW_HARVEST_SEED_BASE: u32 = 1;
+pub(crate) const BALCONY_GROW_HARVEST_FOOD_BASE: u32 = 1;
+/// Per-care-factor roll threshold (0..100) for +1 bonus seed at harvest.
+pub(crate) const BALCONY_GROW_HARVEST_SEED_BONUS_LIGHT_THRESHOLD: u8 = 28;
+pub(crate) const BALCONY_GROW_HARVEST_SEED_BONUS_FERTILIZER_THRESHOLD: u8 = 32;
+pub(crate) const BALCONY_GROW_HARVEST_SEED_BONUS_WATER_OK_THRESHOLD: u8 = 22;
+pub(crate) const BALCONY_GROW_HARVEST_SEED_BONUS_WATER_FULL_THRESHOLD: u8 = 18;
+/// Lower thresholds — food bonus is rarer than seed bonus but uses the same care factors.
+pub(crate) const BALCONY_GROW_HARVEST_FOOD_BONUS_LIGHT_THRESHOLD: u8 = 18;
+pub(crate) const BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD: u8 = 20;
+pub(crate) const BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_OK_THRESHOLD: u8 = 16;
+pub(crate) const BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_FULL_THRESHOLD: u8 = 14;
 
 pub(crate) const PHASE_EMPTY: u8 = 0;
 pub(crate) const PHASE_GROWING: u8 = 1;
@@ -96,6 +109,9 @@ pub struct BalconyGrowPlant {
     /// Whole days elapsed while growing (sleep / death day skips).
     #[default(0u8)]
     pub days_grown: u8,
+    /// Substrate consumed at plant time — speeds maturity and improves harvest rolls.
+    #[default(0u8)]
+    pub fertilized_at_plant: u8,
 }
 
 #[spacetimedb::table(public, accessor = balcony_water_patch)]
@@ -401,13 +417,13 @@ fn fertilizer_present(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> bo
     .unwrap_or(false)
 }
 
-/// One substrate unit per harvested crop — ties trays to the fish/compost loop.
-fn consume_tray_substrate_on_harvest(
+/// Optional: consume one substrate from the tray stash when planting (speed + harvest care).
+fn try_consume_tray_substrate_on_plant(
     ctx: &ReducerContext,
     owner: Identity,
     unit_key: &str,
     tray_id: &str,
-) {
+) -> bool {
     let stash_key = grow_tray_stash_key(unit_key, tray_id);
     let Some(item) = find_item_in_stash_slot(
         ctx,
@@ -415,18 +431,19 @@ fn consume_tray_substrate_on_harvest(
         stash_key.as_str(),
         BALCONY_GROW_FERTILIZER_STASH_SLOT,
     ) else {
-        return;
+        return false;
     };
     if item.def_id != BALCONY_GROW_FERTILIZER_DEF_ID {
-        return;
+        return false;
     }
-    let _ = remove_stash_item_quantity(
+    remove_stash_item_quantity(
         ctx,
         owner,
         stash_key.as_str(),
         BALCONY_GROW_FERTILIZER_STASH_SLOT,
         1,
-    );
+    )
+    .is_ok()
 }
 
 fn lights_on_for_unit(ctx: &ReducerContext, unit_key: &str) -> bool {
@@ -472,13 +489,14 @@ fn compute_target_days(
     unit_key: &str,
     tray_id: &str,
     spec: &BalconyGrowSpec,
+    fertilizer_at_plant: bool,
 ) -> u8 {
     let days = random_grow_days(ctx, spec);
     let tray = tray_row(ctx, unit_key, tray_id);
     let water = tray.map(|t| t.water_liters).unwrap_or(0.0);
     let modifier = grow_speed_modifier(
         lights_on_for_unit(ctx, unit_key),
-        fertilizer_present(ctx, unit_key, tray_id),
+        fertilizer_at_plant,
         water,
     )
     .max(0.01);
@@ -518,6 +536,96 @@ fn apply_grow_day_credit(plant: &mut BalconyGrowPlant, days: u8) {
         .min(plant.target_days);
     if plant.days_grown >= plant.target_days {
         plant.phase = PHASE_MATURE;
+    }
+}
+
+#[derive(Clone, Copy)]
+struct HarvestCareContext {
+    lights_on: bool,
+    fertilized_at_plant: bool,
+    water_liters: f32,
+}
+
+fn harvest_roll_base(ctx: &ReducerContext, slot_index: u8) -> u64 {
+    ctx.timestamp
+        .to_micros_since_unix_epoch()
+        .unsigned_abs()
+        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        .wrapping_add(slot_index as u64)
+}
+
+fn harvest_bonus_count(
+    care: HarvestCareContext,
+    mut roll_base: u64,
+    roll_offset: u64,
+    light_threshold: u8,
+    fertilizer_threshold: u8,
+    water_ok_threshold: u8,
+    water_full_threshold: u8,
+) -> u32 {
+    let mut bonuses = 0u32;
+    let mut next_roll = |idx: u64| -> u8 {
+        roll_base = roll_base
+            .wrapping_mul(0xBF58_476D_1CE4_E5B9)
+            .wrapping_add((roll_offset + idx).wrapping_mul(17));
+        (roll_base % 100) as u8
+    };
+
+    if care.lights_on && next_roll(1) < light_threshold {
+        bonuses += 1;
+    }
+    if care.fertilized_at_plant && next_roll(2) < fertilizer_threshold {
+        bonuses += 1;
+    }
+    if care.water_liters >= 0.5 && next_roll(3) < water_ok_threshold {
+        bonuses += 1;
+    }
+    if care.water_liters >= BALCONY_GROW_TRAY_MAX_WATER_L - 0.05
+        && next_roll(4) < water_full_threshold
+    {
+        bonuses += 1;
+    }
+    bonuses
+}
+
+fn harvest_seed_count(care: HarvestCareContext, roll_base: u64) -> u32 {
+    BALCONY_GROW_HARVEST_SEED_BASE
+        + harvest_bonus_count(
+            care,
+            roll_base,
+            0,
+            BALCONY_GROW_HARVEST_SEED_BONUS_LIGHT_THRESHOLD,
+            BALCONY_GROW_HARVEST_SEED_BONUS_FERTILIZER_THRESHOLD,
+            BALCONY_GROW_HARVEST_SEED_BONUS_WATER_OK_THRESHOLD,
+            BALCONY_GROW_HARVEST_SEED_BONUS_WATER_FULL_THRESHOLD,
+        )
+}
+
+fn harvest_food_count(care: HarvestCareContext, roll_base: u64) -> u32 {
+    BALCONY_GROW_HARVEST_FOOD_BASE
+        + harvest_bonus_count(
+            care,
+            roll_base,
+            100,
+            BALCONY_GROW_HARVEST_FOOD_BONUS_LIGHT_THRESHOLD,
+            BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD,
+            BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_OK_THRESHOLD,
+            BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_FULL_THRESHOLD,
+        )
+}
+
+fn harvest_care_context(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    tray_id: &str,
+    fertilized_at_plant: bool,
+) -> HarvestCareContext {
+    HarvestCareContext {
+        lights_on: lights_on_for_unit(ctx, unit_key),
+        fertilized_at_plant,
+        water_liters: tray_row(ctx, unit_key, tray_id)
+            .map(|t| t.water_liters)
+            .unwrap_or(0.0),
     }
 }
 
@@ -602,7 +710,13 @@ fn plant_balcony_grow_slot_impl(
     consume_one_seed_from_hotbar(ctx, sender, hotbar_slot, seed_def_id)?;
 
     let now = ctx.timestamp.to_micros_since_unix_epoch();
-    let target_days = compute_target_days(ctx, unit_key, tray_id, spec);
+    let substrate_ready = fertilizer_present(ctx, unit_key, tray_id);
+    let target_days = compute_target_days(ctx, unit_key, tray_id, spec, substrate_ready);
+    let fertilized_at_plant = if substrate_ready {
+        try_consume_tray_substrate_on_plant(ctx, sender, unit_key, tray_id)
+    } else {
+        false
+    };
 
     let row_key = plant_row_key(unit_key, tray_id, slot_index);
     let plant_table = ctx.db.balcony_grow_plant();
@@ -612,6 +726,7 @@ fn plant_balcony_grow_slot_impl(
         existing.mature_at_micros = 0;
         existing.target_days = target_days;
         existing.days_grown = 0;
+        existing.fertilized_at_plant = u8::from(fertilized_at_plant);
         existing.phase = PHASE_GROWING;
         existing.owner = sender;
         plant_table.row_key().update(existing);
@@ -628,6 +743,7 @@ fn plant_balcony_grow_slot_impl(
             owner: sender,
             target_days,
             days_grown: 0,
+            fertilized_at_plant: u8::from(fertilized_at_plant),
         });
     }
     Ok(())
@@ -675,17 +791,35 @@ fn harvest_balcony_grow_slot_impl(
     }
     let spec = items_catalog::balcony_grow_spec(plant.crop_def_id.as_str())
         .ok_or_else(|| "unknown crop".to_string())?;
-    inventory::try_grant_stack_to_player(ctx, sender, spec.harvest_def_id.clone(), 1)?;
+    let seed_def_id = plant.crop_def_id.clone();
+    let harvest_def_id = spec.harvest_def_id.clone();
+    let care = harvest_care_context(
+        ctx,
+        unit_key,
+        tray_id,
+        plant.fertilized_at_plant != 0,
+    );
+    let roll_base = harvest_roll_base(ctx, slot_index);
+    let food_qty = harvest_food_count(care, roll_base);
+    let seed_qty = harvest_seed_count(care, roll_base);
+
+    inventory::try_grant_stack_to_player(ctx, sender, harvest_def_id.clone(), food_qty)?;
+    inventory::try_grant_stack_to_player(ctx, sender, seed_def_id.clone(), seed_qty)?;
+    emit_hud_toast(
+        ctx,
+        sender,
+        HUD_TOAST_KIND_ITEM_RECEIVED,
+        harvest_def_id,
+        food_qty,
+    );
+    emit_hud_toast(
+        ctx,
+        sender,
+        HUD_TOAST_KIND_ITEM_RECEIVED,
+        seed_def_id,
+        seed_qty,
+    );
     plant_table.row_key().delete(row_key);
-    if let Some(owner) = ctx
-        .db
-        .apartment_unit()
-        .unit_key()
-        .find(&unit_key.to_string())
-        .and_then(|u| u.owner)
-    {
-        consume_tray_substrate_on_harvest(ctx, owner, unit_key, tray_id);
-    }
     maybe_emit_first_harvest_journal(ctx, sender, plant.crop_def_id.as_str());
     Ok(())
 }
@@ -841,9 +975,12 @@ pub(crate) fn advance_world_day_for_unit(ctx: &ReducerContext, unit_key: &str, d
         .iter()
         .filter(|p| p.unit_key == unit_key && p.phase == PHASE_GROWING)
         .collect();
+    let lights_on = lights_on_for_unit(ctx, unit_key);
     for mut plant in plants {
         maybe_backfill_plant_day_fields(&mut plant, now);
-        apply_grow_day_credit(&mut plant, days);
+        if lights_on {
+            apply_grow_day_credit(&mut plant, days);
+        }
         plant_table.row_key().update(plant);
     }
 
@@ -1017,5 +1154,53 @@ mod tests {
         assert_eq!(BALCONY_GROW_BASELINE_DURATION_SECS, 900);
         assert_eq!(BALCONY_GROW_REFERENCE_DAYS, 5);
         assert_eq!(BALCONY_GAME_DAY_SECS, 180);
+    }
+
+    #[test]
+    fn harvest_seed_base_is_always_one() {
+        use super::BALCONY_GROW_HARVEST_SEED_BASE;
+        assert_eq!(BALCONY_GROW_HARVEST_SEED_BASE, 1);
+    }
+
+    #[test]
+    fn harvest_food_base_is_always_one() {
+        use super::BALCONY_GROW_HARVEST_FOOD_BASE;
+        assert_eq!(BALCONY_GROW_HARVEST_FOOD_BASE, 1);
+    }
+
+    #[test]
+    fn harvest_bonus_rolls_stack_for_well_tended_crops() {
+        use super::{
+            harvest_bonus_count, harvest_food_count, harvest_seed_count, HarvestCareContext,
+        };
+
+        let care = HarvestCareContext {
+            lights_on: true,
+            fertilized_at_plant: true,
+            water_liters: 2.0,
+        };
+        let roll_base = 42;
+        let seed_bonuses = harvest_bonus_count(
+            care,
+            roll_base,
+            0,
+            super::BALCONY_GROW_HARVEST_SEED_BONUS_LIGHT_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_SEED_BONUS_FERTILIZER_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_SEED_BONUS_WATER_OK_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_SEED_BONUS_WATER_FULL_THRESHOLD,
+        );
+        let food_bonuses = harvest_bonus_count(
+            care,
+            roll_base,
+            100,
+            super::BALCONY_GROW_HARVEST_FOOD_BONUS_LIGHT_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_OK_THRESHOLD,
+            super::BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_FULL_THRESHOLD,
+        );
+        assert!(seed_bonuses <= 4);
+        assert!(food_bonuses <= 4);
+        assert_eq!(harvest_seed_count(care, roll_base), 1 + seed_bonuses);
+        assert_eq!(harvest_food_count(care, roll_base), 1 + food_bonuses);
     }
 }
