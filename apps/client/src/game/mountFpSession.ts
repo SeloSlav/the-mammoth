@@ -107,7 +107,6 @@ import { createFpSessionHeavyMeshProfiler } from "./fpSession/fpSessionHeavyMesh
 import { mountFpApartmentDoors } from "./fpApartment/fpApartmentDoors.js";
 import { mountFpApartmentDecorMeshes } from "./fpApartment/fpApartmentDecorMeshes.js";
 import {
-  balconyGrowPromptFromDecorRaycast,
   handleBalconyGrowKeyE,
   mountFpBalconyGrowSession,
   runBalconyGrowHarvest,
@@ -1432,21 +1431,14 @@ export async function mountFpSession(
       if (fpApartmentDoors.consumeInteractKey(feet, camera)) return;
       if (fpApartmentDoors.shouldSuppressEpickup(feet, camera)) return;
 
-      const growState = fpBalconyGrow.getActiveGrowState();
-      const growPrompt = balconyGrowPromptFromDecorRaycast(
-        conn,
-        conn.identity,
-        feet,
-        camera,
-        fpApartmentDecorMeshes,
-        growState,
-      );
+      const growPrompt = fpBalconyGrow.getCachedGrowTrayPrompt();
       if (growPrompt?.kind === "balcony_grow_harvest") {
         runBalconyGrowHarvest(conn, growPrompt);
+        if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }
 
-      if (growPrompt?.kind === "balcony_grow_tray" && handleBalconyGrowKeyE(growPrompt)) {
+      if (growPrompt?.kind === "balcony_grow_tray" && handleBalconyGrowKeyE(conn, growPrompt)) {
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }

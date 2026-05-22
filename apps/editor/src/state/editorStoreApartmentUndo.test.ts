@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC,
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   OWNED_APARTMENT_MODEL_BED,
 } from "@the-mammoth/schemas";
@@ -12,6 +13,8 @@ describe("editorStore apartment undo", () => {
       mode: "my_apartment_layout",
       activeApartmentLayoutSource: "owned_default",
       activeApartmentLayoutProfileId: null,
+      apartmentUnitLayoutProfiles: DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC,
+      apartmentUnitLayoutProfilesNeedsDiskFlush: false,
       ownedApartmentDefaultBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
       historyPast: [],
@@ -102,5 +105,60 @@ describe("editorStore apartment undo", () => {
         .getState()
         .ownedApartmentBuiltins.placedItems.some((item) => item.id === decorId),
     ).toBe(false);
+  });
+
+  it("creates a unit-owned profile and prevents non-owned units from editing the player default", () => {
+    const unitKey = "floor_mamutica_typical|20|unit_e_004";
+    useEditorStore.setState({
+      myApartmentPreviewUnitKey: unitKey,
+      myApartmentPreviewUnitId: "unit_e_004",
+      activeApartmentLayoutSource: "unassigned",
+      activeApartmentLayoutProfileId: null,
+    });
+
+    const profileId = useEditorStore
+      .getState()
+      .createApartmentLayoutProfileFromCurrent("Floor 19 East 4");
+
+    expect(profileId).toBeTruthy();
+    expect(useEditorStore.getState().activeApartmentLayoutSource).toBe("profile");
+    expect(useEditorStore.getState().activeApartmentLayoutProfileId).toBe(profileId);
+    expect(
+      useEditorStore
+        .getState()
+        .apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === unitKey)
+        ?.profileId,
+    ).toBe(profileId);
+
+    useEditorStore.getState().setActiveApartmentLayoutSource("owned_default");
+
+    expect(useEditorStore.getState().activeApartmentLayoutSource).toBe("profile");
+    expect(useEditorStore.getState().activeApartmentLayoutProfileId).toBe(profileId);
+  });
+
+  it("does not let one unit select another unit's assigned profile", () => {
+    const east4UnitKey = "floor_mamutica_typical|20|unit_e_004";
+    const east5UnitKey = "floor_mamutica_typical|20|unit_e_005";
+    useEditorStore.setState({
+      myApartmentPreviewUnitKey: east4UnitKey,
+      myApartmentPreviewUnitId: "unit_e_004",
+      activeApartmentLayoutSource: "unassigned",
+      activeApartmentLayoutProfileId: null,
+    });
+    const east4ProfileId = useEditorStore
+      .getState()
+      .createApartmentLayoutProfileFromCurrent("Floor 19 East 4");
+
+    useEditorStore.setState({
+      myApartmentPreviewUnitKey: east5UnitKey,
+      myApartmentPreviewUnitId: "unit_e_005",
+      activeApartmentLayoutSource: "unassigned",
+      activeApartmentLayoutProfileId: null,
+    });
+
+    useEditorStore.getState().setActiveApartmentLayoutProfileId(east4ProfileId);
+
+    expect(useEditorStore.getState().activeApartmentLayoutSource).toBe("unassigned");
+    expect(useEditorStore.getState().activeApartmentLayoutProfileId).toBeNull();
   });
 });

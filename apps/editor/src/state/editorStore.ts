@@ -102,6 +102,13 @@ function finalizeOwnedApartmentBuiltinsPreservingMounts(
   );
 }
 
+function ownedDefaultApartmentUnitKey(building: BuildingDoc): string {
+  return `${TYPICAL_FLOOR_DOC_ID}|${Math.max(
+    1,
+    maxBuildingLevelIndex(building),
+  )}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+}
+
 export type {
   EditorMaterialMeta,
   EditorMode,
@@ -934,10 +941,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const assignedProfileId =
         s.apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === unitKey)
           ?.profileId ?? null;
-      const ownedDefaultUnitKey = `${TYPICAL_FLOOR_DOC_ID}|${Math.max(
-        1,
-        maxBuildingLevelIndex(s.building),
-      )}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+      const ownedDefaultUnitKey = ownedDefaultApartmentUnitKey(s.building);
       const source: ApartmentLayoutSource = assignedProfileId
         ? "profile"
         : unitKey === ownedDefaultUnitKey
@@ -962,8 +966,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   setActiveApartmentLayoutSource: (activeApartmentLayoutSource) =>
     set((s) => {
+      const ownedDefaultUnitKey = ownedDefaultApartmentUnitKey(s.building);
+      if (
+        activeApartmentLayoutSource === "owned_default" &&
+        s.myApartmentPreviewUnitKey !== ownedDefaultUnitKey
+      ) {
+        return {};
+      }
       const activeProfileId =
         activeApartmentLayoutSource === "profile" ? s.activeApartmentLayoutProfileId : null;
+      const assignedProfileId =
+        s.apartmentUnitLayoutProfiles.assignments.find(
+          (a) => a.unitKey === s.myApartmentPreviewUnitKey,
+        )?.profileId ?? null;
+      if (activeApartmentLayoutSource === "profile" && activeProfileId !== assignedProfileId) {
+        return {};
+      }
       const ownedApartmentBuiltins = syncActiveApartmentLayoutDoc({
         ownedDefault: s.ownedApartmentDefaultBuiltins,
         profilesDoc: s.apartmentUnitLayoutProfiles,
@@ -982,7 +1000,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setActiveApartmentLayoutProfileId: (activeApartmentLayoutProfileId) =>
     set((s) => {
       const normalized = activeApartmentLayoutProfileId || null;
-      const source: ApartmentLayoutSource = normalized ? "profile" : "owned_default";
+      const ownedDefaultUnitKey = ownedDefaultApartmentUnitKey(s.building);
+      const assignedProfileId =
+        s.apartmentUnitLayoutProfiles.assignments.find(
+          (a) => a.unitKey === s.myApartmentPreviewUnitKey,
+        )?.profileId ?? null;
+      if (normalized && normalized !== assignedProfileId) {
+        return {};
+      }
+      const source: ApartmentLayoutSource = normalized
+        ? "profile"
+        : s.myApartmentPreviewUnitKey === ownedDefaultUnitKey
+          ? "owned_default"
+          : "unassigned";
       if (
         normalized === s.activeApartmentLayoutProfileId &&
         source === s.activeApartmentLayoutSource
@@ -1005,13 +1035,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       };
     }),
   createApartmentLayoutProfileFromCurrent: (rawName) => {
-    const name = typeof rawName === "string" && rawName.trim() ? rawName.trim() : "Apartment profile";
-    const idBase = name
+    const st = get();
+    const unitSlug =
+      st.myApartmentPreviewUnitKey
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/gu, "_")
+        .replace(/^_+|_+$/gu, "")
+        .slice(0, 56) || "apartment_unit";
+    const name =
+      typeof rawName === "string" && rawName.trim()
+        ? rawName.trim()
+        : `Layout ${st.myApartmentPreviewUnitKey}`;
+    const idBase = unitSlug
       .toLowerCase()
       .replace(/[^a-z0-9]+/gu, "_")
       .replace(/^_+|_+$/gu, "")
-      .slice(0, 48) || "apartment_profile";
-    const st = get();
+      .slice(0, 72) || "apartment_unit";
     const existing = new Set(st.apartmentUnitLayoutProfiles.profiles.map((p) => p.id));
     let id = idBase;
     for (let i = 2; existing.has(id); i++) id = `${idBase}_${i}`;

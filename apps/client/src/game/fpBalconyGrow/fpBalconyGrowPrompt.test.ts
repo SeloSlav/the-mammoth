@@ -17,6 +17,7 @@ vi.mock("./fpBalconyGrowTrayAnchor.js", async (importOriginal) => {
 });
 
 function growStateWithPlants(): BalconyGrowOpUnitState {
+  const matureAtMicros = BigInt(Date.now()) * 1000n + 60_000_000_000n;
   return {
     trays: [],
     plants: [0, 1, 2, 3].map((slotIndex) => ({
@@ -26,7 +27,7 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
       slotIndex,
       cropDefId: "lovage-seeds",
       plantedAtMicros: 0n,
-      matureAtMicros: 1n,
+      matureAtMicros,
       phase: 1,
       owner: {} as never,
     })),
@@ -82,6 +83,49 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
       trayId: "tray-a",
       stashKey: "u1#grow_tray:tray-a",
       stashLabel: "grow tray",
+    });
+  });
+
+  it("offers harvest when mature time elapsed even before server phase flip", () => {
+    const mesh = new THREE.Mesh();
+    mesh.userData.mammothGrowTrayId = "tray-a";
+    mesh.userData.mammothGrowTrayUnitKey = "u1";
+    mesh.userData.mammothGrowSlotIndex = 0;
+    mesh.userData.mammothGrowTrayRoot = new THREE.Group();
+    const nowMicros = BigInt(Date.now()) * 1000n;
+
+    const prompt = getBalconyGrowTrayPromptFromHit(
+      {} as never,
+      {} as never,
+      { x: 0, y: 0, z: 0 },
+      new THREE.PerspectiveCamera(),
+      { object: mesh, distance: 1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() },
+      {
+        trays: [],
+        light: null,
+        patches: [],
+        plants: [
+          {
+            rowKey: "k-0",
+            unitKey: "u1",
+            trayId: "tray-a",
+            slotIndex: 0,
+            cropDefId: "lovage-seeds",
+            plantedAtMicros: nowMicros - 120_000_000_000n,
+            matureAtMicros: nowMicros - 1_000n,
+            phase: 1,
+            owner: {} as never,
+          },
+        ],
+      },
+    );
+
+    expect(prompt).toEqual({
+      kind: "balcony_grow_harvest",
+      unitKey: "u1",
+      trayId: "tray-a",
+      slotIndex: 0,
+      cropDisplayName: "Lovage seeds",
     });
   });
 });

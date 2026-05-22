@@ -588,7 +588,10 @@ fn harvest_balcony_grow_slot_impl(
         .find(&row_key)
         .ok_or_else(|| "nothing planted here".to_string())?;
     if plant.phase != PHASE_MATURE {
-        return Err("crop is not ready to harvest".to_string());
+        let now = ctx.timestamp.to_micros_since_unix_epoch();
+        if now < plant.mature_at_micros {
+            return Err("crop is not ready to harvest".to_string());
+        }
     }
     let spec = items_catalog::balcony_grow_spec(plant.crop_def_id.as_str())
         .ok_or_else(|| "unknown crop".to_string())?;

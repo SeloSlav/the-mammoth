@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
+import {
+  HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  maxBuildingLevelIndex,
+  TYPICAL_FLOOR_DOC_ID,
+} from "@the-mammoth/world";
 import type { CollisionArtifactsStatus } from "../../editor/content/editorContentDiscovery.js";
 import { reloadEditorFromContent } from "../../editor/bootstrap/editorBootstrap.js";
 import {
@@ -30,6 +35,15 @@ import {
   postSaveApartmentUnitLayoutProfiles,
   postSaveOwnedApartmentBuiltins,
 } from "../editorChromeNetwork.js";
+
+function ownedDefaultApartmentUnitKeyForSave(
+  building: ReturnType<typeof useEditorStore.getState>["building"],
+): string {
+  return `${TYPICAL_FLOOR_DOC_ID}|${Math.max(
+    1,
+    maxBuildingLevelIndex(building),
+  )}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+}
 
 export function useEditorChromeDiskPersistence(
   setSaveMsg: (msg: string | null) => void,
@@ -82,11 +96,9 @@ export function useEditorChromeDiskPersistence(
           ? `Save floor override ${saveLabelSnapshot.activeFloorOverrideDocId}`
           : "Save floor override";
       case "my_apartment_layout":
-        return saveLabelSnapshot.activeApartmentLayoutProfileId
-          ? "Save apartment layout profiles"
-          : saveLabelSnapshot.activeApartmentLayoutSource === "unassigned"
-            ? "Create profile before saving"
-            : "Save owned apartment builtins";
+        return saveLabelSnapshot.activeApartmentLayoutSource === "owned_default"
+          ? "Save owned default to disk"
+          : "Save profile to disk";
       default:
         return "Save to disk";
     }
@@ -188,6 +200,14 @@ export function useEditorChromeDiskPersistence(
           );
           wroteApartmentProfiles = true;
         } else {
+          if (
+            stAfterPersist.myApartmentPreviewUnitKey !==
+            ownedDefaultApartmentUnitKeyForSave(stAfterPersist.building)
+          ) {
+            throw new Error(
+              "Only the player-owned home unit can save owned_apartment_builtins.json. Create this unit's own profile first.",
+            );
+          }
           await postSaveOwnedApartmentBuiltins(
             serializeOwnedApartmentBuiltinsDocPretty(
               stAfterPersist.ownedApartmentDefaultBuiltins,

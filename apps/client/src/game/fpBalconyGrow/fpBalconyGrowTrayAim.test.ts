@@ -6,6 +6,7 @@ import {
   growTrayRayHitTargetsLivePlant,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
+import { sortBalconyGrowRaycastHits } from "./fpBalconyGrowTrayAnchor.js";
 
 function emptyGrowState(): BalconyGrowOpUnitState {
   return { trays: [], plants: [], light: null, patches: [] };
@@ -83,6 +84,24 @@ describe("growTrayRayHitTargetsLivePlant", () => {
     mesh.userData.mammothGrowTrayCenterPick = true;
     const camera = new THREE.PerspectiveCamera();
     expect(growTrayRayHitTargetsLivePlant({ object: mesh }, growState, camera)).toBe(false);
+  });
+});
+
+describe("sortBalconyGrowRaycastHits", () => {
+  it("keeps quadrant slot hits ahead of center hub hits", () => {
+    const slot = new THREE.Mesh();
+    slot.userData.mammothGrowSlotIndex = 2;
+    const center = new THREE.Mesh();
+    center.userData.mammothGrowTrayCenterPick = true;
+    const tray = new THREE.Mesh();
+
+    const hits = sortBalconyGrowRaycastHits([
+      { object: tray, distance: 0.1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() },
+      { object: center, distance: 0.1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() },
+      { object: slot, distance: 0.1, point: new THREE.Vector3(), face: null, faceIndex: 0, uv: undefined, normal: new THREE.Vector3() },
+    ]);
+
+    expect(hits.map((hit) => hit.object)).toEqual([slot, center, tray]);
   });
 });
 

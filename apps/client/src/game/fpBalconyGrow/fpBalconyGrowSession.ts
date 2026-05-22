@@ -54,6 +54,8 @@ export type FpBalconyGrowSession = {
   getGrowState: (unitKey: string | null) => BalconyGrowOpUnitState;
   /** Grow state for the player's claimed unit — correct on balcony where containing unit is null. */
   getActiveGrowState: () => BalconyGrowOpUnitState;
+  /** Raycast prompt from the latest {@link updateFrame} — use for HUD + KeyE parity. */
+  getCachedGrowTrayPrompt: () => BalconyGrowTrayPrompt | null;
 };
 
 function resolveClaimedUnitKey(conn: DbConnection): string | null {
@@ -88,6 +90,7 @@ export function mountFpBalconyGrowSession(opts: {
   const preview = createBalconyGrowSeedPreview(opts.scene);
   const waterVisuals = createBalconyWaterPatchVisuals(opts.scene);
   let cachedPlacement: BalconyGrowPlacementRaycast | null = null;
+  let cachedGrowTrayPrompt: BalconyGrowTrayPrompt | null = null;
   let claimedUnitKey: string | null = null;
 
   return {
@@ -107,9 +110,11 @@ export function mountFpBalconyGrowSession(opts: {
       );
     },
     getCachedPlacement: () => cachedPlacement,
+    getCachedGrowTrayPrompt: () => cachedGrowTrayPrompt,
     updateFrame(camera, feet, decor, unitKey) {
       claimedUnitKey = unitKey ?? resolveClaimedUnitKey(opts.conn);
       const growState = readBalconyGrowOpUnitState(opts.conn, claimedUnitKey);
+      cachedGrowTrayPrompt = null;
 
       decor.syncBalconyGrowTrayDecorVisibility(feet, claimedUnitKey);
       decor.syncBalconyGrowSlotVisuals(growState.plants, growState.trays, (uk, tid) =>
@@ -117,6 +122,15 @@ export function mountFpBalconyGrowSession(opts: {
       );
       decor.collectBalconyGrowPickMeshesForPlayer(feet, _aimPickScratch);
       const hits = [...decor.raycastBalconyGrowTrayHits(feet, camera)];
+      if (opts.conn.identity) {
+        cachedGrowTrayPrompt = decor.getBalconyGrowTrayPrompt(
+          feet,
+          camera,
+          opts.conn,
+          opts.conn.identity,
+          growState,
+        );
+      }
       cachedPlacement = resolveBalconyGrowPlacement(
         opts.conn,
         opts.conn.identity,
@@ -135,6 +149,7 @@ export function mountFpBalconyGrowSession(opts: {
         opts.canvas,
         _aimPickScratch,
         decor.getGrowTrayPickMeshes(),
+        cachedGrowTrayPrompt,
       );
       waterVisuals.sync(growState.patches, feet.y, Date.now() * 1000);
     },
@@ -201,8 +216,12 @@ export function balconyGrowPromptFromDecorRaycast(
   return decor.getBalconyGrowTrayPrompt(feet, camera, conn, identity, growState);
 }
 
-export function handleBalconyGrowKeyE(prompt: BalconyGrowTrayPrompt): boolean {
+export function handleBalconyGrowKeyE(
+  conn: DbConnection,
+  prompt: BalconyGrowTrayPrompt,
+): boolean {
   if (prompt.kind === "balcony_grow_harvest") {
+    runBalconyGrowHarvest(conn, prompt);
     return true;
   }
   if (prompt.kind === "balcony_grow_tray") {

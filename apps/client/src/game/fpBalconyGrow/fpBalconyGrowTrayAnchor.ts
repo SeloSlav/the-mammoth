@@ -75,11 +75,11 @@ export function isBalconyGrowTrayCenterPick(obj: THREE.Object3D): boolean {
   return obj.userData.mammothGrowTrayCenterPick === true;
 }
 
-/** Plant picks win over hub/slot/tray picks — plants sit above the tray volume. */
+/** Plant and slot picks win over the center hub so quadrant aim keeps inspect/harvest behavior. */
 export function balconyGrowPickRayPriority(obj: THREE.Object3D): number {
   if (obj.userData.mammothGrowPlantPick === true) return 0;
-  if (isBalconyGrowTrayCenterPick(obj)) return 1;
-  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 2;
+  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 1;
+  if (isBalconyGrowTrayCenterPick(obj)) return 2;
   return 3;
 }
 

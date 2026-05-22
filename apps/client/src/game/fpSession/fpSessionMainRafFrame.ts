@@ -40,7 +40,7 @@ import { isFpDebugRenderIsolationEnabled } from "../fpDebugRenderIsolation.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { FpBalconyGrowSession } from "../fpBalconyGrow/fpBalconyGrowSession.js";
-import { balconyGrowPromptFromDecorRaycast } from "../fpBalconyGrow/fpBalconyGrowSession.js";
+import type { BalconyGrowTrayPrompt } from "../fpBalconyGrow/fpBalconyGrowPrompt.js";
 import { balconyGrowInspectBlocksGrowTrayStash } from "../fpBalconyGrow/fpBalconyGrowInspectState.js";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
@@ -338,7 +338,7 @@ export function createFpSessionMainRafFrame(
   let cachedElevDoorPrompt: ReturnType<MountFpElevatorWorldResult["getExteriorDoorInteractPrompt"]> =
     null;
   let cachedApartmentDoorHud: ReturnType<MountFpApartmentDoorsResult["getInteractPrompt"]> = null;
-  let cachedBalconyGrowPrompt: ReturnType<typeof balconyGrowPromptFromDecorRaycast> = null;
+  let cachedBalconyGrowPrompt: BalconyGrowTrayPrompt | null = null;
 
   const runFrame = (nowMs: number, dt: number): void => {
     const { mainRaf } = deps;
@@ -657,6 +657,7 @@ export function createFpSessionMainRafFrame(
       deps.fpApartmentDecorMeshes,
       containingResidentialUnitKey,
     );
+    cachedBalconyGrowPrompt = deps.fpBalconyGrowSession?.getCachedGrowTrayPrompt() ?? null;
     {
       const ft = deps.fpInteractionFeet();
       publishFpInteractionFeet({ x: ft.x, y: ft.y, z: ft.z });
@@ -735,8 +736,7 @@ export function createFpSessionMainRafFrame(
         cachedBalconyGrowPrompt !== null ||
         cachedSitPromptHud !== null ||
         cachedElevDoorPrompt !== null ||
-        cachedApartmentDoorHud !== null ||
-        balconyGrowInspectBlocksGrowTrayStash();
+        cachedApartmentDoorHud !== null;
       const hudPickRaycastDue = fpHudPickRaycastDue({
         state: hudPickThrottleState,
         frameIndex: hudHeavyFrame,
@@ -758,18 +758,6 @@ export function createFpSessionMainRafFrame(
           : null;
         cachedElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
         cachedApartmentDoorHud = deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
-        if (deps.fpBalconyGrowSession && deps.conn.identity) {
-          cachedBalconyGrowPrompt = balconyGrowPromptFromDecorRaycast(
-            deps.conn,
-            deps.conn.identity,
-            ft,
-            deps.camera,
-            deps.fpApartmentDecorMeshes,
-            deps.fpBalconyGrowSession.getActiveGrowState(),
-          );
-        } else {
-          cachedBalconyGrowPrompt = null;
-        }
         hudPickThrottleState = fpHudPickThrottleStateFromSample({
           feetX: ft.x,
           feetY: ft.y,
@@ -870,9 +858,9 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (
-        !balconyGrowInspectBlocksGrowTrayStash() &&
-        (lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
-          cachedBalconyGrowPrompt?.kind === "balcony_grow_tray")
+        cachedBalconyGrowPrompt?.kind === "balcony_grow_tray" ||
+        (!balconyGrowInspectBlocksGrowTrayStash() &&
+          lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY)
       ) {
         const growStash =
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY

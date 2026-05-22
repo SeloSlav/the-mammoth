@@ -22,6 +22,7 @@ import {
 } from "./fpApartmentLayoutPieces";
 import {
   apartmentUnitDecorItemKindFromString,
+  defaultOwnedApartmentDecorScaleForModel,
   ownedApartmentPlacedItemKindFromModelRelPath,
 } from "@the-mammoth/schemas";
 import {
@@ -517,6 +518,7 @@ export function mountFpApartmentLayoutAuthoring(
     pendingSpawnModelRelPath = path;
     catalogStatus.textContent = `Importing ${apartmentDecorCatalogLabel(path)}...`;
     const placedKind = ownedApartmentPlacedItemKindFromModelRelPath(path);
+    const { uniformScale } = defaultOwnedApartmentDecorScaleForModel(path);
     try {
       void opts.conn.reducers.addApartmentUnitDecor({
         unitKey: unit.unitKey,
@@ -527,7 +529,7 @@ export function mountFpApartmentLayoutAuthoring(
         yawRad: 0,
         pitchRad: 0,
         rollRad: 0,
-        uniformScale: 1,
+        uniformScale,
         itemKind: apartmentUnitDecorItemKindFromString(placedKind),
       });
     } catch (e) {

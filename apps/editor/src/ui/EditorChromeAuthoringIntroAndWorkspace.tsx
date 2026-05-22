@@ -1,15 +1,19 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import type {
-  ApartmentUnitLayoutProfilesDoc,
-  BuildingDoc,
-  FloorDoc,
+import {
+  apartmentUnitLayoutProfileForUnitKey,
+  type ApartmentUnitLayoutProfilesDoc,
+  type BuildingDoc,
+  type FloorDoc,
 } from "@the-mammoth/schemas";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import {
   HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
   listOwnedApartmentAuthoringPreviewUnits,
 } from "@the-mammoth/world";
-import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
+import type {
+  CollisionArtifactsStatus,
+  EditorContentIndex,
+} from "../editor/content/editorContentDiscovery.js";
 import type {
   EditorMode,
   EditorWorkspace,
@@ -61,6 +65,12 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
   setActiveApartmentLayoutProfileId: (profileId: string | null) => void;
   createApartmentLayoutProfileFromCurrent: (name: string) => string | null;
   assignActiveApartmentLayoutProfileToPreviewUnit: () => void;
+  saveToDiskLabel: string;
+  canSaveContentToDisk: boolean;
+  onSaveDisk: () => Promise<void>;
+  saveMsg: string | null;
+  dirty: boolean;
+  collisionArtifactsStatus: CollisionArtifactsStatus | null;
   historyPastLength: number;
   historyFutureLength: number;
   undo: () => void;
@@ -84,7 +94,12 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
     setActiveApartmentLayoutSource,
     setActiveApartmentLayoutProfileId,
     createApartmentLayoutProfileFromCurrent,
-    assignActiveApartmentLayoutProfileToPreviewUnit,
+    saveToDiskLabel,
+    canSaveContentToDisk,
+    onSaveDisk,
+    saveMsg,
+    dirty,
+    collisionArtifactsStatus,
     historyPastLength,
     historyFutureLength,
     undo,
@@ -103,10 +118,18 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
         if (!floor) return [];
         return listOwnedApartmentAuthoringPreviewUnits(floor).map((unit) => {
           const residentialFloor = Math.max(1, ref.levelIndex - 1);
+          const unitKey = `${ref.floorDocId}|${ref.levelIndex}|${unit.unitId}`;
+          const assignedProfile = apartmentUnitLayoutProfileForUnitKey(
+            apartmentUnitLayoutProfiles,
+            unitKey,
+          );
+          const assignedProfileName = assignedProfile?.name ?? null;
+          const unitLabel = `Floor ${residentialFloor}, ${unit.label}`;
           return {
-            unitKey: `${ref.floorDocId}|${ref.levelIndex}|${unit.unitId}`,
+            unitKey,
             unitId: unit.unitId,
-            label: `Floor ${residentialFloor}, ${unit.label}`,
+            label: assignedProfileName ? `${unitLabel} — ${assignedProfileName}` : unitLabel,
+            assignedProfileName,
             isPlayerSpawnHome:
               ref.levelIndex === Math.max(...refs.map((r) => r.levelIndex)) &&
               unit.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
@@ -114,17 +137,15 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
         });
       });
     },
-    [building.floorRefs, floorDocs],
+    [apartmentUnitLayoutProfiles, building.floorRefs, floorDocs],
   );
   const previewUnit =
     apartmentPreviewUnits.find((unit) => unit.unitKey === myApartmentPreviewUnitKey) ?? null;
-  const assignedProfile =
-    apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === myApartmentPreviewUnitKey)
-      ?.profileId ?? null;
-  const assignedProfileName =
-    assignedProfile != null
-      ? apartmentUnitLayoutProfiles.profiles.find((p) => p.id === assignedProfile)?.name
-      : null;
+  const assignedProfileDoc = apartmentUnitLayoutProfileForUnitKey(
+    apartmentUnitLayoutProfiles,
+    myApartmentPreviewUnitKey,
+  );
+  const assignedProfileName = assignedProfileDoc?.name ?? null;
   const layoutSourceValue =
     activeApartmentLayoutSource === "profile"
       ? `profile:${activeApartmentLayoutProfileId ?? ""}`
@@ -134,7 +155,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
       ? apartmentUnitLayoutProfiles.profiles.find((p) => p.id === activeApartmentLayoutProfileId)
           ?.name
       : null;
-
   return (
     <>
       <strong style={{ fontSize: 15 }}>Authoring</strong>
@@ -154,16 +174,15 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             {apartmentPreviewUnits.map((unit) => (
               <option key={unit.unitKey} value={unit.unitKey}>
                 {unit.label}
-                {unit.isPlayerSpawnHome ? " — player spawn home" : ""}
               </option>
             ))}
           </select>
           <p style={subtleHelp}>
-            {previewUnit?.isPlayerSpawnHome
-              ? "Player spawn home uses the protected owned default unless a profile is assigned."
-              : assignedProfileName
-                ? `Saved layout on disk: "${assignedProfileName}".`
-                : "No profile assigned yet — start from an empty draft or clone another layout."}
+            {assignedProfileName
+              ? `This unit owns layout profile "${assignedProfileName}". Selecting it loads that profile.`
+              : previewUnit?.isPlayerSpawnHome
+                ? "This player-owned unit is using the protected default layout until you assign a profile."
+                : "No profile assigned yet — this unit starts from an empty draft until you save a new profile."}
           </p>
 
           <span style={{ ...sectionTitle, marginTop: 14 }}>Layout profile</span>
@@ -182,18 +201,19 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
               }
             }}
           >
-            <option value="owned_default">Player owned default</option>
-            <option value="unassigned">Unassigned empty draft</option>
-            {apartmentUnitLayoutProfiles.profiles.map((profile) => (
-              <option key={profile.id} value={`profile:${profile.id}`}>
-                {profile.name}
+            {assignedProfileDoc ? (
+              <option value={`profile:${assignedProfileDoc.id}`}>
+                {assignedProfileDoc.name}
               </option>
-            ))}
+            ) : previewUnit?.isPlayerSpawnHome ? (
+              <option value="owned_default">Player owned default</option>
+            ) : null}
+            <option value="unassigned">Unassigned empty draft</option>
           </select>
           {activeProfileName ? (
             <p style={subtleHelp}>
-              Editing profile <strong>{activeProfileName}</strong>. Save profiles separately from
-              the player default.
+              Editing this unit&apos;s profile <strong>{activeProfileName}</strong>. Saves go to
+              unit layout profiles, not the player-owned default.
             </p>
           ) : activeApartmentLayoutSource === "owned_default" ? (
             <p style={subtleHelp}>
@@ -202,7 +222,8 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             </p>
           ) : (
             <p style={subtleHelp}>
-              Empty draft — create a profile to persist this apartment layout.
+              Empty draft — use <strong>Save as new profile</strong> to create a layout that belongs
+              to this unit.
             </p>
           )}
 
@@ -223,20 +244,59 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             >
               Save as new profile
             </button>
-            <button
-              type="button"
-              style={{ ...rowBtn, flex: "1 1 140px" }}
-              disabled={activeApartmentLayoutSource !== "profile" || !activeApartmentLayoutProfileId}
-              title={
-                activeApartmentLayoutSource === "profile" && activeApartmentLayoutProfileId
-                  ? "Assign the active profile to the preview apartment."
-                  : "Select or create a profile first."
-              }
-              onClick={assignActiveApartmentLayoutProfileToPreviewUnit}
-            >
-              Assign to this unit
-            </button>
           </div>
+          <p style={subtleHelp}>
+            Create a profile once for a new unit. After that, keep editing the assigned profile and
+            use the disk save below to update it.
+          </p>
+
+          <span style={{ ...sectionTitle, marginTop: 14 }}>Disk</span>
+          <span style={{ ...label, marginTop: 0 }}>Content (JSON on disk)</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {canSaveContentToDisk ? (
+              <button
+                type="button"
+                style={rowBtn}
+                onClick={() => void onSaveDisk()}
+              >
+                {saveToDiskLabel}
+              </button>
+            ) : null}
+          </div>
+          {!canSaveContentToDisk ? (
+            <p style={subtleHelp}>
+              This empty draft has no disk destination yet. Use <strong>Save as new profile</strong>{" "}
+              once to create and assign one.
+            </p>
+          ) : null}
+          <p style={subtleHelp}>
+            Collision regeneration is script-only. After saving collision-affecting changes, run{" "}
+            <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code>.
+          </p>
+          {dirty ? (
+            <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>
+              {canSaveContentToDisk
+                ? "Unsaved edits — save before running the collision generation script"
+                : "Unsaved draft — save as a profile before running the collision generation script"}
+            </p>
+          ) : null}
+          {saveMsg ? (
+            <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>{saveMsg}</p>
+          ) : null}
+          {collisionArtifactsStatus ? (
+            <p
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8",
+              }}
+            >
+              Generated collision vs disk:{" "}
+              {collisionArtifactsStatus.stale
+                ? "stale (save, then run pnpm content:gen-walk-aabbs)"
+                : "in sync"}
+            </p>
+          ) : null}
 
           <span style={{ ...sectionTitle, marginTop: 14 }}>Edits</span>
           <div>

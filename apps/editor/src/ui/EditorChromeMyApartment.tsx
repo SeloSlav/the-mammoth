@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+  defaultOwnedApartmentDecorScaleForModel,
   ownedApartmentPlacedItemKindFromModelRelPath,
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
@@ -342,6 +343,9 @@ export function EditorChromeMyApartment(props: {
         ? crypto.randomUUID()
         : `decor_${Date.now()}_${nextIndex}`;
     const { fx, fz } = defaultImportedDecorPlacementFractions(nextIndex);
+    const { uniformScale, verticalScaleMul } = defaultOwnedApartmentDecorScaleForModel(
+      selectedCatalogModelRelPath,
+    );
     patchOwnedApartmentBuiltins((doc) => ({
       ...doc,
       placedItems: [
@@ -355,8 +359,8 @@ export function EditorChromeMyApartment(props: {
           yawRad: 0,
           pitchRad: 0,
           rollRad: 0,
-          uniformScale: 1,
-          verticalScaleMul: 1,
+          uniformScale,
+          verticalScaleMul,
           ignoreSupportSurfaces: false,
           itemKind: ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath),
         },
@@ -650,8 +654,8 @@ export function EditorChromeMyApartment(props: {
             Saving, renaming, or ungrouping tries to write{" "}
             <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>{" "}
             immediately (Vite dev middleware with <code style={{ fontSize: 10 }}>EDITOR_SAVE=1</code>) so
-            a refresh keeps groups. If that fails, use <strong>Save owned apartment builtins</strong> in
-            the header.
+            a refresh keeps groups. If that fails, use the <strong>Disk</strong> buttons in the
+            Apartment unit card.
           </span>
         </p>
         <div
@@ -1157,10 +1161,9 @@ export function EditorChromeMyApartment(props: {
       {body}
       <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.72, maxWidth: 440 }}>
         The grey slab matches the unit prefab footprint in the floor doc; walls reuse the playable
-        shell hole layout. Placement data lives in{" "}
-        <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>
-        {" — "}use the main <strong>Save</strong> button under Content to write that file (edits stay
-        in memory until you save). Built-ins and imported decor map into each unit{"'"}s strict hull
+        shell hole layout. Placement data lives in the active apartment layout JSON; use the{" "}
+        <strong>Disk</strong> buttons in the Apartment unit card to write it (edits stay in memory
+        until you save). Built-ins and imported decor map into each unit{"'"}s strict hull
         (`bound_*`) spans. Imported decor and authored wall slabs clamp to the slab top and the
         unit{"'"}s hollow-shell ceiling height (ceiling slab is not drawn in this preview).
       </p>

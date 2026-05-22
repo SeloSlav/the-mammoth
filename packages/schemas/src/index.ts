@@ -14,5 +14,6 @@ export * from "./apartmentUnitLayoutProfiles.js";
 export * from "./apartmentStashRules.js";
 export * from "./apartmentStashLocationMatch.js";
 export * from "./apartmentAuthoringAssetVisScale.js";
+export * from "./ownedApartmentDecorDefaultScale.js";
 export * from "./apartmentSittable.js";
 export * from "./balconyGrowOp.js";

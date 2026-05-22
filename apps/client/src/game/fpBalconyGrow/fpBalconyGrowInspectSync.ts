@@ -3,6 +3,7 @@ import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.
 import { balconyGrowSlotWorldPosition, readGrowTraySoilLocalY } from "./fpBalconyGrowStageVisual.js";
 import { setBalconyGrowInspectTarget } from "./fpBalconyGrowInspectState.js";
 import { publishBalconyGrowInspectScreenAnchor } from "./fpBalconyGrowInspectPresentation.js";
+import type { BalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import {
   balconyGrowLivePlantInSlot,
   resolveBalconyGrowSoilAimedSlotIndex,
@@ -251,7 +252,14 @@ export function syncBalconyGrowInspect(
   canvas: HTMLCanvasElement,
   aimMeshes: readonly THREE.Mesh[],
   trayPickMeshes: readonly THREE.Mesh[] = [],
+  growPrompt: BalconyGrowTrayPrompt | null = null,
 ): void {
+  if (growPrompt?.kind === "balcony_grow_tray") {
+    setBalconyGrowInspectTarget(null);
+    publishBalconyGrowInspectScreenAnchor(camera, canvas, null);
+    return;
+  }
+
   for (const hit of hits) {
     if (isBalconyGrowTrayCenterPick(hit.object)) {
       setBalconyGrowInspectTarget(null);

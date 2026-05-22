@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "floor_mamutica_typical_20_unit_e_004",
+      "name": "Mirjana's apartment",
+      "layout": {
+        "version": 2,
+        "previewSizeM": 10,
+        "placedItems": [
+          {
+            "id": "de1a52e5-33f5-4ea4-b269-06195156dc5b",
+            "modelRelPath": "static/models/objects/chandelier.glb",
+            "fx": 0.38,
+            "fz": 0.43999999999999984,
+            "dy": 2.476370671699332,
+            "yawRad": 0,
+            "pitchRad": 0,
+            "rollRad": 0,
+            "uniformScale": 0.34027693535970077,
+            "verticalScaleMul": 1,
+            "ignoreSupportSurfaces": false,
+            "itemKind": "plain"
+          }
+        ],
+        "wallItems": [],
+        "mirrorItems": [],
+        "objectGroups": []
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "unitKey": "floor_mamutica_typical|20|unit_e_004",
+      "profileId": "floor_mamutica_typical_20_unit_e_004"
+    }
+  ]
+}

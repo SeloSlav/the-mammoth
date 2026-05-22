@@ -96,4 +96,29 @@ describe("syncBalconyGrowInspect", () => {
     expect(getBalconyGrowInspectTarget()).toBeNull();
     expect(getBalconyGrowInspectScreenAnchor()).toBeNull();
   });
+
+  it("clears inspect when grow-tray open prompt is active", () => {
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    const canvas = { clientWidth: 800, clientHeight: 600 } as HTMLCanvasElement;
+
+    setBalconyGrowInspectTarget({ unitKey: "u1", trayId: "tray-a", slotIndex: 2 });
+    syncBalconyGrowInspect(
+      [],
+      growingPlantState(),
+      camera,
+      canvas,
+      [],
+      [],
+      {
+        kind: "balcony_grow_tray",
+        unitKey: "u1",
+        trayId: "tray-a",
+        stashKey: "u1#grow_tray:tray-a",
+        stashLabel: "grow tray",
+      },
+    );
+
+    expect(getBalconyGrowInspectTarget()).toBeNull();
+    expect(getBalconyGrowInspectScreenAnchor()).toBeNull();
+  });
 });

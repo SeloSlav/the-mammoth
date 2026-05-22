@@ -285,6 +285,12 @@ export function EditorChrome() {
   const label = editorChromeLabel;
   const input = editorChromeInput;
   const rowBtn = editorChromeRowBtn;
+  const isUnassignedApartmentLayoutDraft =
+    mode === "my_apartment_layout" && activeApartmentLayoutSource === "unassigned";
+  const canSaveContentToDisk =
+    mode !== "fp_viewmodel" &&
+    mode !== "fp_consumable" &&
+    !isUnassignedApartmentLayoutDraft;
   const paletteIds =
     mode === "floor"
       ? floorPrefabIds
@@ -329,6 +335,12 @@ export function EditorChrome() {
           assignActiveApartmentLayoutProfileToPreviewUnit={
             assignActiveApartmentLayoutProfileToPreviewUnit
           }
+          saveToDiskLabel={saveToDiskLabel}
+          canSaveContentToDisk={canSaveContentToDisk}
+          onSaveDisk={onSaveDisk}
+          saveMsg={saveMsg}
+          dirty={dirty}
+          collisionArtifactsStatus={collisionArtifactsStatus}
           historyPastLength={historyPast.length}
           historyFutureLength={historyFuture.length}
           undo={undo}
@@ -452,70 +464,82 @@ export function EditorChrome() {
             </div>
           </>
         ) : null}
-        <span style={label}>Content (JSON on disk)</span>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-            alignItems: "center",
-          }}
-        >
-          <button
-            type="button"
-            style={rowBtn}
-            onClick={() => onReload()}
-            title="Reload every authoring document from content/ (discards unsaved editor changes)."
-          >
-            Reload from disk
-          </button>
-          {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
-            <button
-              type="button"
-              style={rowBtn}
-              onClick={() => onSaveDisk()}
+        {workspace !== "apartment" ? (
+          <>
+            <span style={label}>Content (JSON on disk)</span>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                alignItems: "center",
+              }}
             >
-              {saveToDiskLabel}
-            </button>
-          ) : null}
-        </div>
-        <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
-        <p
-          style={{
-            margin: "6px 0 0",
-            fontSize: 11,
-            opacity: 0.75,
-            lineHeight: 1.35,
-          }}
-        >
-          Full collision regeneration is intentionally script-only. After saving
-          collision-affecting changes, run{" "}
-          <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code> from
-          the repo root.
-        </p>
-        {dirty ? (
-          <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>
-            Unsaved edits — save before running the collision generation script
-          </p>
-        ) : null}
-        {saveMsg ? (
-          <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>
-            {saveMsg}
-          </p>
-        ) : null}
-        {collisionArtifactsStatus ? (
-          <p
-            style={{
-              margin: "8px 0 0",
-              fontSize: 12,
-              color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8",
-            }}
-          >
-            Generated collision vs disk:{" "}
-            {collisionArtifactsStatus.stale
-              ? "stale (save, then run pnpm content:gen-walk-aabbs)"
-              : "in sync"}
-          </p>
+              <button
+                type="button"
+                style={rowBtn}
+                onClick={() => onReload()}
+                title="Reload every authoring document from content/ (discards unsaved editor changes)."
+              >
+                Reload from disk
+              </button>
+              {canSaveContentToDisk ? (
+                <button
+                  type="button"
+                  style={rowBtn}
+                  onClick={() => onSaveDisk()}
+                >
+                  {saveToDiskLabel}
+                </button>
+              ) : null}
+            </div>
+            {isUnassignedApartmentLayoutDraft ? (
+              <p style={{ margin: "6px 0 0", fontSize: 11, opacity: 0.72 }}>
+                Use <strong>Save as new profile</strong> above before writing this
+                apartment draft to disk.
+              </p>
+            ) : null}
+            <span style={{ ...label, marginTop: 10 }}>Server collision (Rust)</span>
+            <p
+              style={{
+                margin: "6px 0 0",
+                fontSize: 11,
+                opacity: 0.75,
+                lineHeight: 1.35,
+              }}
+            >
+              Full collision regeneration is intentionally script-only. After saving
+              collision-affecting changes, run{" "}
+              <code style={{ fontSize: 10 }}>pnpm content:gen-walk-aabbs</code> from
+              the repo root.
+            </p>
+            {dirty ? (
+              <p style={{ color: "#fa0", margin: "8px 0 0", fontSize: 12 }}>
+                {isUnassignedApartmentLayoutDraft
+                  ? "Unsaved draft — save as a profile before running the collision generation script"
+                  : "Unsaved edits — save before running the collision generation script"}
+              </p>
+            ) : null}
+            {saveMsg ? (
+              <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.9 }}>
+                {saveMsg}
+              </p>
+            ) : null}
+            {collisionArtifactsStatus ? (
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  fontSize: 12,
+                  color: collisionArtifactsStatus.stale ? "#fa0" : "#8f8",
+                }}
+              >
+                Generated collision vs disk:{" "}
+                {collisionArtifactsStatus.stale
+                  ? "stale (save, then run pnpm content:gen-walk-aabbs)"
+                  : "in sync"}
+              </p>
+            ) : null}
+          </>
         ) : null}
         {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
           <>

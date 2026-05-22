@@ -37,6 +37,14 @@ export type BalconyGrowTrayPrompt =
     };
 
 const PHASE_MATURE = 2;
+const PHASE_GROWING = 1;
+
+function plantReadyForHarvest(plant: BalconyGrowOpUnitState["plants"][number]): boolean {
+  const phase = Number(plant.phase);
+  if (phase === PHASE_MATURE) return true;
+  if (phase !== PHASE_GROWING) return false;
+  return Date.now() * 1000 >= Number(plant.matureAtMicros);
+}
 
 function harvestPromptIfNear(
   conn: DbConnection,
@@ -92,7 +100,7 @@ function matureHarvestPromptForSlot(
   const plant = growState.plants.find(
     (p) => p.trayId === trayId && Number(p.slotIndex) === Number(slotIndex),
   );
-  if (plant?.phase !== PHASE_MATURE) return null;
+  if (!plant || !plantReadyForHarvest(plant)) return null;
   const cropName = getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
   return harvestPromptIfNear(
     conn,
@@ -228,10 +236,6 @@ export function balconyGrowTrayAimFallbackPrompt(
     }
   };
 
-  for (const mesh of centerPickMeshes) {
-    considerMesh(mesh);
-  }
-
   for (const mesh of trayPickMeshes) {
     considerMesh(mesh);
   }
@@ -244,12 +248,6 @@ export function balconyGrowTrayAimFallbackPrompt(
   }
 
   if (bestUnitKey === null || bestTrayId === null) return null;
-
-  const centerMesh = centerPickMeshes.find((mesh) => mesh.userData.mammothGrowTrayId === bestTrayId);
-  if (centerMesh && bestSlotIndex === undefined) {
-    const trayRoot = centerMesh.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
-    return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, trayRoot);
-  }
 
   const trayMesh = trayPickMeshes.find((mesh) => mesh.userData.mammothGrowTrayId === bestTrayId);
   const trayRoot = trayMesh?.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
