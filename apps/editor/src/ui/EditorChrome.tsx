@@ -33,6 +33,7 @@ export function EditorChrome() {
   const {
     workspace,
     mode,
+    building,
     floorDocs,
     interiorDocs,
     cellDocs,
@@ -42,12 +43,16 @@ export function EditorChrome() {
     landingKitDef,
     landingKitVariant,
     stairWellDef,
+    apartmentUnitLayoutProfiles,
+    activeApartmentLayoutSource,
+    activeApartmentLayoutProfileId,
     contentIndex,
     activeFloorDocId,
     activeInteriorDocId,
     activeCellDocId,
     activePrefabDefId,
     activeFloorOverrideDocId,
+    myApartmentPreviewUnitKey,
     selectedId,
     dirty,
     collisionArtifactsStatus,
@@ -69,6 +74,11 @@ export function EditorChrome() {
     setTransformMode,
     setGridSnapM,
     setStairWellAuthorScope,
+    setMyApartmentPreviewUnit,
+    setActiveApartmentLayoutSource,
+    setActiveApartmentLayoutProfileId,
+    createApartmentLayoutProfileFromCurrent,
+    assignActiveApartmentLayoutProfileToPreviewUnit,
     undo,
     redo,
     updatePlacedObject,
@@ -89,7 +99,6 @@ export function EditorChrome() {
     deletePrefabComponent,
     duplicatePrefabComponent,
     setSelectedId,
-    enterMyApartmentLayoutMode,
   } = useEditorStore(useShallow(selectEditorChromeStore));
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const { saveToDiskLabel, onReload, onSaveDisk } =
@@ -307,11 +316,27 @@ export function EditorChrome() {
           setMode={setMode}
           stairWellAuthorScope={stairWellAuthorScope}
           setStairWellAuthorScope={setStairWellAuthorScope}
+          building={building}
+          floorDocs={floorDocs}
+          apartmentUnitLayoutProfiles={apartmentUnitLayoutProfiles}
+          activeApartmentLayoutSource={activeApartmentLayoutSource}
+          activeApartmentLayoutProfileId={activeApartmentLayoutProfileId}
+          myApartmentPreviewUnitKey={myApartmentPreviewUnitKey}
+          setMyApartmentPreviewUnit={setMyApartmentPreviewUnit}
+          setActiveApartmentLayoutSource={setActiveApartmentLayoutSource}
+          setActiveApartmentLayoutProfileId={setActiveApartmentLayoutProfileId}
+          createApartmentLayoutProfileFromCurrent={createApartmentLayoutProfileFromCurrent}
+          assignActiveApartmentLayoutProfileToPreviewUnit={
+            assignActiveApartmentLayoutProfileToPreviewUnit
+          }
+          historyPastLength={historyPast.length}
+          historyFutureLength={historyFuture.length}
+          undo={undo}
+          redo={redo}
         />
         <EditorChromeMyApartment
           mode={mode}
-          setMode={setMode}
-          enterMyApartmentLayoutMode={enterMyApartmentLayoutMode}
+          setWorkspace={setWorkspace}
           contentIndex={contentIndex}
         />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
@@ -402,25 +427,31 @@ export function EditorChrome() {
             setGridSnapM={setGridSnapM}
           />
         ) : null}
-        <span style={label}>History</span>
-        <div>
-          <button
-            type="button"
-            style={rowBtn}
-            disabled={historyPast.length === 0}
-            onClick={() => undo()}
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            style={rowBtn}
-            disabled={historyFuture.length === 0}
-            onClick={() => redo()}
-          >
-            Redo
-          </button>
-        </div>
+        {workspace !== "apartment" ? (
+          <>
+            <span style={label}>History</span>
+            <div>
+              <button
+                type="button"
+                style={rowBtn}
+                disabled={historyPast.length === 0}
+                onClick={() => undo()}
+                title="Undo (Ctrl+Z)"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                style={rowBtn}
+                disabled={historyFuture.length === 0}
+                onClick={() => redo()}
+                title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+              >
+                Redo
+              </button>
+            </div>
+          </>
+        ) : null}
         <span style={label}>Content (JSON on disk)</span>
         <div
           style={{

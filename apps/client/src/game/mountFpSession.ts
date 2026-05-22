@@ -112,6 +112,9 @@ import {
   mountFpBalconyGrowSession,
   runBalconyGrowHarvest,
 } from "./fpBalconyGrow/fpBalconyGrowSession.js";
+import { balconyGrowInspectBlocksGrowTrayStash } from "./fpBalconyGrow/fpBalconyGrowInspectState.js";
+import { APARTMENT_STASH_KIND_GROW_TRAY } from "./fpApartment/fpApartmentStashKey.js";
+import { apartmentSittableScreenNdcFromPointer } from "./fpApartment/fpApartmentSittablePrompt.js";
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, isFpSitActive } from "./fpApartment/fpSitSession.js";
@@ -635,7 +638,6 @@ export async function mountFpSession(
       ensureMammothApartmentDecorShadowRenderer(renderer);
     },
   });
-  const fpBalconyGrow = mountFpBalconyGrowSession({ scene, conn, canvas });
   refreshApartmentInteriorMeshes();
 
 
@@ -851,18 +853,20 @@ export async function mountFpSession(
   };
 
   const visibleSittablePickScratch: THREE.Mesh[] = [];
+  const sitPointerNdc = new THREE.Vector2();
   const sittablePickObjectVisible = (obj: THREE.Object3D): boolean => {
     for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
       if (!cur.visible) return false;
     }
     return true;
   };
-  const getApartmentSittablePromptForSession = () =>
+  const getApartmentSittablePromptForSession = (screenNdc?: THREE.Vector2) =>
     fpApartmentDecorMeshes.getSittablePrompt(
       getInteractionPos(),
       camera,
       sittablePickObjectVisible,
       visibleSittablePickScratch,
+      screenNdc,
     );
 
   const mainRaf: FpSessionMainRafState = {
@@ -1012,6 +1016,12 @@ export async function mountFpSession(
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
+  const fpBalconyGrow = mountFpBalconyGrowSession({
+    scene,
+    conn,
+    canvas,
+    onWaterPourRequested: () => localAudio.playWaterPourLocal(),
+  });
   registerHotbarConsumePrimeAudio(() => localAudio.unlock());
   registerHotbarConsumeLocalPlayback((profile) => localAudio.playHotbarConsumeLocal(profile));
   const worldAudio = new WorldProximityAudio(conn, () => camera);
@@ -1438,7 +1448,13 @@ export async function mountFpSession(
         return;
       }
 
-      if (aptKey?.kind === "apartment_stash") {
+      if (
+        aptKey?.kind === "apartment_stash" &&
+        !(
+          aptKey.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
+          balconyGrowInspectBlocksGrowTrayStash()
+        )
+      ) {
         setFpActiveStashPanel({
           stashKey: aptKey.stashKey,
           stashLabel: aptKey.stashLabel,
@@ -1566,6 +1582,31 @@ export async function mountFpSession(
     if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
     if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
     if (fpBalconyGrow.tryPrimaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) return;
+    if (
+      !fpInteractInputBlocked() &&
+      !isFpSitActive() &&
+      conn.identity
+    ) {
+      apartmentSittableScreenNdcFromPointer(canvas, e, sitPointerNdc);
+      const sitPrompt = getApartmentSittablePromptForSession(sitPointerNdc);
+      if (
+        sitPrompt &&
+        tryEnterFpSitFromPrompt({
+          conn,
+          prompt: sitPrompt,
+          playerPos: getInteractionPos(),
+          pos,
+          loco,
+          mainRaf,
+          sendMoveIntent,
+          nowMs,
+          crouchToggle: mainRaf.crouchToggle,
+        })
+      ) {
+        e.preventDefault();
+        return;
+      }
+    }
     const selectedHotbarSlot = getFpHotbarSelectedSlot();
     if (
       conn.identity &&

@@ -56,7 +56,9 @@ import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPic
 import { getApartmentSittablePrompt } from "./fpApartmentSittablePrompt.js";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 import {
+  loadApartmentUnitLayoutProfilesDocFromContent,
   loadOwnedApartmentBuiltinsDocFromContent,
+  resolveApartmentLayoutDocForUnit,
   resolveApartmentDecorPoses,
   resolveApartmentMirrorPoses,
   resolveApartmentWallPoses,
@@ -100,7 +102,7 @@ import {
   type FpApartmentStashRayOcclusion,
 } from "./fpApartmentStashRayOcclusion.js";
 import {
-  growTrayBuiltinIdForPlacement,
+  growTrayIdForPlacement,
   isGrowTrayModelPath,
   mountGrowTrayDecorOnGroup,
   syncGrowSlotVisuals,
@@ -113,6 +115,8 @@ import {
   collectOwnedBalconyGrowPickMeshes,
   sortBalconyGrowRaycastHits,
 } from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
+import { growTrayRayHitTargetsLivePlant } from "../fpBalconyGrow/fpBalconyGrowTrayAim.js";
+import { readBalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import { syncBalconyGrowTrayDecorVisibility } from "../fpBalconyGrow/fpBalconyGrowPresentation.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { Identity } from "spacetimedb";
@@ -241,6 +245,7 @@ function contentDecorCoveredByDbRow(
 function visibleDecorPlacements(
   conn: DbConnection,
   builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+  profilesFromContent: Awaited<ReturnType<typeof loadApartmentUnitLayoutProfilesDocFromContent>>,
 ): VisibleDecorPlacement[] {
   const visibleUnits: ApartmentUnit[] = [];
   const visibleUnitKeys = new Set<string>();
@@ -288,7 +293,12 @@ function visibleDecorPlacements(
       });
     }
 
-    for (const decor of resolveApartmentDecorPoses(unit, builtinsFromContent)) {
+    const layoutDoc = resolveApartmentLayoutDocForUnit(
+      unit,
+      builtinsFromContent,
+      profilesFromContent,
+    );
+    for (const decor of resolveApartmentDecorPoses(unit, layoutDoc)) {
       if (contentDecorCoveredByDbRow(decor, dbRows)) continue;
       out.push({
         renderKey: `content:${unit.unitKey}:${decor.id}`,
@@ -345,6 +355,7 @@ type VisibleMirrorPlacement = {
 function visibleWallPlacements(
   conn: DbConnection,
   builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+  profilesFromContent: Awaited<ReturnType<typeof loadApartmentUnitLayoutProfilesDocFromContent>>,
 ): VisibleWallPlacement[] {
   const visibleUnits: ApartmentUnit[] = [];
   for (const row of conn.db.apartment_unit) {
@@ -354,7 +365,12 @@ function visibleWallPlacements(
   }
   const out: VisibleWallPlacement[] = [];
   for (const unit of visibleUnits) {
-    for (const wall of resolveApartmentWallPoses(unit, builtinsFromContent)) {
+    const layoutDoc = resolveApartmentLayoutDocForUnit(
+      unit,
+      builtinsFromContent,
+      profilesFromContent,
+    );
+    for (const wall of resolveApartmentWallPoses(unit, layoutDoc)) {
       out.push({
         renderKey: `content_wall:${unit.unitKey}:${wall.id}`,
         unit,
@@ -378,6 +394,7 @@ function visibleWallPlacements(
 function visibleMirrorPlacements(
   conn: DbConnection,
   builtinsFromContent: Awaited<ReturnType<typeof loadOwnedApartmentBuiltinsDocFromContent>>,
+  profilesFromContent: Awaited<ReturnType<typeof loadApartmentUnitLayoutProfilesDocFromContent>>,
 ): VisibleMirrorPlacement[] {
   const visibleUnits: ApartmentUnit[] = [];
   for (const row of conn.db.apartment_unit) {
@@ -387,7 +404,12 @@ function visibleMirrorPlacements(
   }
   const out: VisibleMirrorPlacement[] = [];
   for (const unit of visibleUnits) {
-    for (const mirror of resolveApartmentMirrorPoses(unit, builtinsFromContent)) {
+    const layoutDoc = resolveApartmentLayoutDocForUnit(
+      unit,
+      builtinsFromContent,
+      profilesFromContent,
+    );
+    for (const mirror of resolveApartmentMirrorPoses(unit, layoutDoc)) {
       out.push({
         renderKey: `content_mirror:${unit.unitKey}:${mirror.id}`,
         unit,
@@ -449,6 +471,7 @@ export type MountFpApartmentDecorMeshesResult = {
     camera: THREE.PerspectiveCamera,
     objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean,
     visiblePickScratch: THREE.Mesh[],
+    screenNdc?: THREE.Vector2,
   ) => ApartmentSittablePrompt | null;
   getSittableDecorRoots: () => readonly THREE.Object3D[];
   getGrowTrayPickMeshes: () => readonly THREE.Mesh[];
@@ -513,7 +536,6 @@ export function mountFpApartmentDecorMeshes(opts: {
   const growPlantPickMeshes: THREE.Mesh[] = [];
   const stashRayOcclusion: FpApartmentStashRayOcclusion = createFpApartmentStashRayOcclusion();
   const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
-  const growTrayIndexByUnit = new Map<string, number>();
   const visibleStashPickMeshes: THREE.Mesh[] = [];
   const visibleGrowPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
@@ -778,7 +800,6 @@ export function mountFpApartmentDecorMeshes(opts: {
     growSlotPickMeshes.length = 0;
     growPlantPickMeshes.length = 0;
     growSlotVisualsByTrayId.clear();
-    growTrayIndexByUnit.clear();
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
@@ -865,12 +886,27 @@ export function mountFpApartmentDecorMeshes(opts: {
     await yieldToMain();
     if (disposed || epoch !== buildEpoch) return;
 
-    const builtinsFromContent = await loadOwnedApartmentBuiltinsDocFromContent();
+    const [builtinsFromContent, profilesFromContent] = await Promise.all([
+      loadOwnedApartmentBuiltinsDocFromContent(),
+      loadApartmentUnitLayoutProfilesDocFromContent(),
+    ]);
     if (disposed || epoch !== buildEpoch) return;
 
-    const decorRows = visibleDecorPlacements(opts.conn, builtinsFromContent);
-    const wallRows = visibleWallPlacements(opts.conn, builtinsFromContent);
-    const mirrorRows = visibleMirrorPlacements(opts.conn, builtinsFromContent);
+    const decorRows = visibleDecorPlacements(
+      opts.conn,
+      builtinsFromContent,
+      profilesFromContent,
+    );
+    const wallRows = visibleWallPlacements(
+      opts.conn,
+      builtinsFromContent,
+      profilesFromContent,
+    );
+    const mirrorRows = visibleMirrorPlacements(
+      opts.conn,
+      builtinsFromContent,
+      profilesFromContent,
+    );
     const rows: AuthoringBuildEntry[] = [
       ...decorRows.map((decor) => ({ kind: "decor" as const, decor })),
       ...wallRows.map((wall) => ({ kind: "wall" as const, wall })),
@@ -1071,14 +1107,12 @@ export function mountFpApartmentDecorMeshes(opts: {
         }
       }
       if (isGrowTrayModelPath(d.modelRelPath)) {
-        const trayIdx = growTrayIndexByUnit.get(d.unit.unitKey) ?? 0;
-        growTrayIndexByUnit.set(d.unit.unitKey, trayIdx + 1);
-        const trayId = growTrayBuiltinIdForPlacement(d.renderKey, trayIdx);
+        const trayId = growTrayIdForPlacement(d.renderKey, d.decorId);
         if (trayId) {
           const mount = await mountGrowTrayDecorOnGroup({
             decorGroup: g,
             unitKey: d.unit.unitKey,
-            trayBuiltinId: trayId,
+            trayId,
             pickGeometry: stashPickGeometry,
             pickMaterial: stashPickMaterial,
           });
@@ -1264,7 +1298,9 @@ export function mountFpApartmentDecorMeshes(opts: {
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
       collectVisibleStashPickMeshes(playerPos, visibleStashPickMeshes);
-      const hits = _stashRaycaster.intersectObjects(visibleStashPickMeshes, false);
+      const hits = sortBalconyGrowRaycastHits(
+        _stashRaycaster.intersectObjects(visibleStashPickMeshes, false),
+      );
       const nearestWallDistance =
         hits.length > 0
           ? stashRayOcclusion.nearestOccluderDistanceAlongViewRay(
@@ -1292,6 +1328,14 @@ export function mountFpApartmentDecorMeshes(opts: {
         seen.add(stashKey);
         if (!clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos)) {
           continue;
+        }
+        if (stashKind === APARTMENT_STASH_KIND_GROW_TRAY) {
+          const trayUnitKey = hit.object.userData.mammothGrowTrayUnitKey;
+          const resolvedUnitKey = typeof trayUnitKey === "string" ? trayUnitKey : unitKey;
+          const growState = readBalconyGrowOpUnitState(opts.conn, resolvedUnitKey);
+          if (growTrayRayHitTargetsLivePlant(hit, growState, camera)) {
+            continue;
+          }
         }
         return {
           kind: "apartment_stash",
@@ -1340,7 +1384,12 @@ export function mountFpApartmentDecorMeshes(opts: {
     syncBalconyGrowSlotVisuals: (plants, trays, stashHasFertilizer) => {
       for (const [trayId, slotGroup] of growSlotVisualsByTrayId) {
         const tray = trays.find((t) => t.trayId === trayId);
-        const unitKey = tray?.unitKey ?? "";
+        const decorRoot = slotGroup.parent;
+        const unitKey =
+          tray?.unitKey ??
+          (typeof decorRoot?.userData.mammothApartmentUnitKey === "string"
+            ? decorRoot.userData.mammothApartmentUnitKey
+            : "");
         syncGrowSlotVisuals(
           slotGroup,
           plants,
@@ -1365,7 +1414,13 @@ export function mountFpApartmentDecorMeshes(opts: {
       );
     },
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
-    getSittablePrompt: (playerPos, camera, objectVisibleInHierarchy, visiblePickScratch) => {
+    getSittablePrompt: (
+      playerPos,
+      camera,
+      objectVisibleInHierarchy,
+      visiblePickScratch,
+      screenNdc,
+    ) => {
       if (!opts.conn.identity) return null;
       return getApartmentSittablePrompt({
         conn: opts.conn,
@@ -1375,6 +1430,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         decorRoots: Array.from(groupByRenderKey.values()),
         visibleScratch: visiblePickScratch,
         objectVisibleInHierarchy,
+        screenNdc,
       });
     },
     dispose: () => {

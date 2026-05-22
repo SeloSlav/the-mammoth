@@ -16,8 +16,8 @@
 use serde::Deserialize;
 use spacetimedb::{ReducerContext, Table};
 
-use crate::auth;
 use crate::apartments::apartment_unit;
+use crate::auth;
 use crate::elevator_layout::{
     max_level, BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M,
 };
@@ -225,10 +225,9 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                 // Re-apply abandoned-open vs lived-in-band policy on every seed (stale DB rows used to
                 // stay `desired_open=1` from older `open_unclaimed_residential_doors` behavior).
                 if is_residential_corridor_unit_door(t.template_id) {
-                    let (want_open01, swing) = residential_unit_door_default_open01_for_level(level);
-                    if row.desired_open != want_open01
-                        || (row.swing_open_01 - swing).abs() > 1e-4
-                    {
+                    let (want_open01, swing) =
+                        residential_unit_door_default_open01_for_level(level);
+                    if row.desired_open != want_open01 || (row.swing_open_01 - swing).abs() > 1e-4 {
                         row.desired_open = want_open01;
                         row.swing_open_01 = swing;
                         changed = true;
@@ -239,7 +238,8 @@ pub fn seed_apartment_doors(ctx: &ReducerContext) {
                 }
                 continue;
             }
-            let (desired_open, swing_open_01) = if is_residential_corridor_unit_door(t.template_id) {
+            let (desired_open, swing_open_01) = if is_residential_corridor_unit_door(t.template_id)
+            {
                 residential_unit_door_default_open01_for_level(level)
             } else {
                 (0, 0.0)
@@ -522,8 +522,7 @@ fn apply_desired_open(
         requested_row_key,
         client_feet_hint,
         APARTMENT_DOOR_CLIENT_FEET_HINT_MAX_SEP_M,
-    )
-    else {
+    ) else {
         log::info!(
             "apartment_door: reject not_eligible row_key={requested_row_key:?} identity={} pose=({:.3},{:.3},{:.3})",
             ctx.sender(),
@@ -599,7 +598,13 @@ pub fn apartment_door_toggle(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
-    if !residential_client_feet_align_door_volume(ctx, &dr, client_feet_x, client_feet_y, client_feet_z) {
+    if !residential_client_feet_align_door_volume(
+        ctx,
+        &dr,
+        client_feet_x,
+        client_feet_y,
+        client_feet_z,
+    ) {
         return;
     }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {
@@ -640,7 +645,13 @@ pub fn apartment_door_set(
     let Some(dr) = ctx.db.apartment_door().row_key().find(&row_key) else {
         return;
     };
-    if !residential_client_feet_align_door_volume(ctx, &dr, client_feet_x, client_feet_y, client_feet_z) {
+    if !residential_client_feet_align_door_volume(
+        ctx,
+        &dr,
+        client_feet_x,
+        client_feet_y,
+        client_feet_z,
+    ) {
         return;
     }
     if !crate::apartments::player_may_toggle_door(ctx, id, &dr) {

@@ -5,7 +5,6 @@
 //! and `movement` input bitmasks still compile as client-synced anchors for future authority.
 #![allow(dead_code)]
 
-mod balcony_grow_op;
 mod accounts;
 mod apartment_door;
 mod apartment_interior_anchors;
@@ -13,6 +12,7 @@ mod apartment_stash_location_match;
 mod apartment_stash_rules;
 mod apartments;
 mod auth;
+mod balcony_grow_op;
 mod combat_stub;
 mod crafting;
 mod dropped_item;

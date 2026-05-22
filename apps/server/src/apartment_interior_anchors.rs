@@ -420,12 +420,8 @@ mod tests {
         assert!((east.bed_yaw - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
         assert!(east.stove_x < east.wardrobe_x);
         assert!(east.stove_z < east.bed_z);
-        assert!(
-            (east.stove_x - (mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
-        );
-        assert!(
-            (east.stove_z - (mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
-        );
+        assert!((east.stove_x - (mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06);
+        assert!((east.stove_z - (mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06);
 
         let west_mn = [-14.925, 0.0, -117.5825];
         let west_mx = [-2.005, 3.0, -106.5825];
@@ -445,12 +441,10 @@ mod tests {
         assert!((west.bed_yaw + std::f32::consts::FRAC_PI_2).abs() < 1e-4);
         assert!(west.stove_x < west.wardrobe_x);
         assert!(
-            (west.stove_x - (west_mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs()
-                < 0.06
+            (west.stove_x - (west_mn[0] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
         );
         assert!(
-            (west.stove_z - (west_mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs()
-                < 0.06
+            (west.stove_z - (west_mn[2] + PROP_WALL_GAP_M + STOVE_CORNER_CLEARANCE_M)).abs() < 0.06
         );
     }
 

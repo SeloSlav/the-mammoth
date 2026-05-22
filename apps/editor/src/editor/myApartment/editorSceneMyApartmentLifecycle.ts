@@ -35,6 +35,7 @@ import {
   registerEditorMyApartmentDecorShadowResync,
   registerEditorMyApartmentWallsMountSyncRequest,
   setEditorMyApartmentPieceGroups,
+  applyEditorMyApartmentLayoutHiddenPlacements,
 } from "./editorMyApartmentPieceGroupBridge.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
@@ -52,6 +53,7 @@ import {
   collectWallIdsNeedingEditorMountSync,
 } from "./preserveOwnedApartmentMountPlacementRefs.js";
 import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
+import { pruneMyApartmentLayoutHiddenPlacementIds } from "./editorMyApartmentLayoutVisibility.js";
 
 
 
@@ -62,6 +64,9 @@ export type EditorMyApartmentLifecycleDeps = {
   getShouldHoldReplicaResync: () => boolean;
 
   syncLightingAttachment: () => void;
+
+  /** Full FP-matched apartment rig (scene lights, PMREM, layers) after shell/decor remount. */
+  syncApartmentLayoutPresentation: () => void;
 
   syncTransformAttachment: () => void;
 
@@ -120,6 +125,16 @@ export function createEditorSceneMyApartmentLifecycle(
 
   }
 
+  function setApartmentLayoutLoadingMessage(message: string | null): void {
+    useEditorStore.getState().setMyApartmentLayoutLoadingMessage(message);
+  }
+
+  function clearApartmentLayoutLoadingIfCurrent(gen: number): void {
+    if (gen === syncGeneration && !disposed) {
+      setApartmentLayoutLoadingMessage(null);
+    }
+  }
+
 
 
   async function reconcile(): Promise<void> {
@@ -138,6 +153,8 @@ export function createEditorSceneMyApartmentLifecycle(
 
     if (st.mode !== "my_apartment_layout" || !parent) {
 
+      setApartmentLayoutLoadingMessage(null);
+
       teardownFurniture();
 
       return;
@@ -151,6 +168,8 @@ export function createEditorSceneMyApartmentLifecycle(
       teardownFurniture();
 
     }
+
+    setApartmentLayoutLoadingMessage("Loading this apartment's lighting and décor…");
 
 
 
@@ -177,6 +196,8 @@ export function createEditorSceneMyApartmentLifecycle(
         floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
 
         building: st.building,
+
+        previewUnitId: st.myApartmentPreviewUnitId,
 
       });
 
@@ -225,17 +246,25 @@ export function createEditorSceneMyApartmentLifecycle(
 
       if (deps.getShouldHoldReplicaResync()) return;
 
-      deps.syncLightingAttachment();
+      deps.syncApartmentLayoutPresentation();
+      if (mount && parent) {
+        mount.resyncPracticalLights(parent, unitBounds);
+        mount.resyncDecorShadows(unitBounds);
+        deps.requestDecorShadowMapBake();
+      }
 
       setEditorMyApartmentPieceGroups(mount.selectionGroups);
       registerEditorMyApartmentDecorShadowResync((bounds) => {
         mount?.resyncDecorShadows(bounds);
       });
 
+      syncLayoutHiddenPlacementsFromStore();
       deps.syncTransformAttachment();
+      clearApartmentLayoutLoadingIfCurrent(myGen);
 
     } catch {
 
+      clearApartmentLayoutLoadingIfCurrent(myGen);
       teardownFurniture();
 
     }
@@ -243,6 +272,20 @@ export function createEditorSceneMyApartmentLifecycle(
   }
 
 
+
+  function syncLayoutHiddenPlacementsFromStore(): void {
+    const st = useEditorStore.getState();
+    if (st.mode !== "my_apartment_layout" || !mount) return;
+    const knownIds = new Set(Object.keys(mount.selectionGroups));
+    const pruned = pruneMyApartmentLayoutHiddenPlacementIds(
+      st.myApartmentLayoutHiddenPlacementIds,
+      knownIds,
+    );
+    if (pruned !== st.myApartmentLayoutHiddenPlacementIds) {
+      useEditorStore.setState({ myApartmentLayoutHiddenPlacementIds: pruned });
+    }
+    applyEditorMyApartmentLayoutHiddenPlacements(new Set(pruned));
+  }
 
   function resyncMountPresentationAfterMeshEdit(
     shellRoot: THREE.Object3D,
@@ -264,8 +307,8 @@ export function createEditorSceneMyApartmentLifecycle(
     mount.resyncPracticalLights(shellRoot, unitBounds);
     mount.resyncDecorShadows(unitBounds);
     deps.requestDecorShadowMapBake();
-    /** `place*Group` rebuilds PBR materials; apartment layout uses per-mesh PMREM, not `scene.environment`. */
-    deps.syncLightingAttachment();
+    deps.syncApartmentLayoutPresentation();
+    syncLayoutHiddenPlacementsFromStore();
   }
 
   async function syncPlacementIncrementalAsync(
@@ -282,6 +325,7 @@ export function createEditorSceneMyApartmentLifecycle(
     const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
       floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
       building: st.building,
+      previewUnitId: st.myApartmentPreviewUnitId,
     });
     const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
       layout,
@@ -353,6 +397,11 @@ export function createEditorSceneMyApartmentLifecycle(
 
   /** Reconcile store → meshes after a held gizmo gesture (commit landed while dragging was still true). */
   function flushDeferredMountSync(): void {
+    if (!mount && useEditorStore.getState().mode === "my_apartment_layout") {
+      void reconcile();
+      prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
+      return;
+    }
     onStoreChange(captureApartmentMountSyncInputs(useEditorStore.getState()));
   }
 
@@ -384,6 +433,8 @@ export function createEditorSceneMyApartmentLifecycle(
     dispose: () => {
 
       disposed = true;
+
+      setApartmentLayoutLoadingMessage(null);
 
       registerEditorMyApartmentWallsMountSyncRequest(null);
 

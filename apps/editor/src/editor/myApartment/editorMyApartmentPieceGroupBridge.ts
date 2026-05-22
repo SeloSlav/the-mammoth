@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { shouldHideMyApartmentLayoutSelectionGroup } from "./editorMyApartmentLayoutVisibility.js";
 
 export const EDITOR_MY_APARTMENT_FURNITURE_ROOT_NAME = "editor_my_apartment_furniture";
 
@@ -152,4 +153,17 @@ export function getEditorMyApartmentStaticSelectionGroupsMap(): Record<
   THREE.Group
 > | null {
   return groupsRef;
+}
+
+/** Session-only viewport hide — does not mutate persisted apartment JSON. */
+export function applyEditorMyApartmentLayoutHiddenPlacements(
+  hiddenPlacementIds: ReadonlySet<string>,
+): void {
+  if (!groupsRef) return;
+  for (const [selectionId, group] of Object.entries(groupsRef)) {
+    group.visible = !shouldHideMyApartmentLayoutSelectionGroup(
+      selectionId,
+      hiddenPlacementIds,
+    );
+  }
 }

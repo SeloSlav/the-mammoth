@@ -6,6 +6,7 @@ import type {
   FloorOverrideDoc,
   InteriorDoc,
   LandingKitDef,
+  ApartmentUnitLayoutProfilesDoc,
   OwnedApartmentBuiltinsDoc,
   PlacedObject,
   PrefabDef,
@@ -19,8 +20,8 @@ import type {
   EditorContentIndex,
 } from "../editor/content/editorContentDiscovery.js";
 
-/** Top-level authoring surface (3-button UX). */
-export type EditorWorkspace = "cab" | "landing" | "stairwell";
+/** Top-level authoring surface (workspace buttons). */
+export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
@@ -56,6 +57,7 @@ export type FpAuthorCameraKind = "gameplay" | "orbit";
 export type FpAuthorSubjectKind = "weapon" | "consumable";
 
 export type TransformMode = "translate" | "rotate" | "scale";
+export type ApartmentLayoutSource = "owned_default" | "profile" | "unassigned";
 
 export type FpAuthorPickMeta = { id: string; label: string };
 
@@ -85,6 +87,11 @@ export type HistoryEntry = {
   inactiveLandingKitDef: LandingKitDef;
   landingKitVariant: LandingKitVariant;
   stairWellDef: StairWellDef;
+  apartmentUnitLayoutProfiles: ApartmentUnitLayoutProfilesDoc;
+  apartmentUnitLayoutProfilesNeedsDiskFlush: boolean;
+  ownedApartmentDefaultBuiltins: OwnedApartmentBuiltinsDoc;
+  activeApartmentLayoutSource: ApartmentLayoutSource;
+  activeApartmentLayoutProfileId: string | null;
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   selectedId: string | null;
   /** {@link EditorMode.my_apartment_layout} only — additional décor/wall selection ids excluding {@link selectedId}. */
@@ -113,6 +120,12 @@ export interface EditorState {
   /** Parked copy of the non-active kit so a variant swap is just two assignments. */
   inactiveLandingKitDef: LandingKitDef;
   stairWellDef: StairWellDef;
+  apartmentUnitLayoutProfiles: ApartmentUnitLayoutProfilesDoc;
+  apartmentUnitLayoutProfilesNeedsDiskFlush: boolean;
+  /** Existing player-owned fallback doc; kept separate while profile layouts are being edited. */
+  ownedApartmentDefaultBuiltins: OwnedApartmentBuiltinsDoc;
+  activeApartmentLayoutSource: ApartmentLayoutSource;
+  activeApartmentLayoutProfileId: string | null;
   contentIndex: EditorContentIndex;
   activeFloorDocId: string;
   activeInteriorDocId: string;
@@ -131,6 +144,15 @@ export interface EditorState {
   decorNeighborAlignSnap: boolean;
   /** {@link EditorMode.my_apartment_layout} — mesh-accurate decor floor shadow overlays (off by default for editor perf). */
   apartmentBakedFloorShadowsEnabled: boolean;
+  /** {@link EditorMode.my_apartment_layout} — left-click hides décor / walls instead of selecting (viewport only). */
+  myApartmentLayoutHidePickMode: boolean;
+  /** {@link EditorMode.my_apartment_layout} — session-only hidden placement selection ids (not saved to disk). */
+  myApartmentLayoutHiddenPlacementIds: readonly string[];
+  /** Full apartment mount in progress — decor templates, lighting, walls, mirrors. */
+  myApartmentLayoutLoadingMessage: string | null;
+  /** Typical-floor residential slab shown in apartment workspace preview (`unit_e_003` = player spawn home). */
+  myApartmentPreviewUnitId: string;
+  myApartmentPreviewUnitKey: string;
   shadowsEnabled: boolean;
   useHdriEnvironment: boolean;
   flySpeedMps: number;
@@ -208,6 +230,16 @@ export interface EditorState {
   setGridSnapM: (m: number) => void;
   setDecorNeighborAlignSnap: (enabled: boolean) => void;
   setApartmentBakedFloorShadowsEnabled: (enabled: boolean) => void;
+  setMyApartmentLayoutHidePickMode: (enabled: boolean) => void;
+  hideMyApartmentLayoutPlacementFromCanvas: (placementId: string) => void;
+  clearMyApartmentLayoutHiddenPlacements: () => void;
+  setMyApartmentLayoutLoadingMessage: (message: string | null) => void;
+  setMyApartmentPreviewUnitId: (unitId: string) => void;
+  setMyApartmentPreviewUnit: (input: { unitKey: string; unitId: string }) => void;
+  setActiveApartmentLayoutSource: (source: ApartmentLayoutSource) => void;
+  setActiveApartmentLayoutProfileId: (profileId: string | null) => void;
+  createApartmentLayoutProfileFromCurrent: (name: string) => string | null;
+  assignActiveApartmentLayoutProfileToPreviewUnit: () => void;
   setStairWellAuthorScope: (scope: StairWellAuthoringScope) => void;
   setFpAuthorCamera: (c: FpAuthorCameraKind) => void;
   setFpAuthorSubjectKind: (kind: FpAuthorSubjectKind) => void;
@@ -225,6 +257,7 @@ export interface EditorState {
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;
   clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
+  clearApartmentUnitLayoutProfilesDiskFlushFlag: () => void;
 
   getActiveFloorDoc: () => FloorDoc | undefined;
   getActiveInteriorDoc: () => InteriorDoc | undefined;

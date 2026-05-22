@@ -206,9 +206,7 @@ pub(crate) fn random_public_spawn_pose(ctx: &ReducerContext, id: Identity) -> Pl
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ground_spawn_slabs, sample_walk_spawn_xyz, xz_point_hits_elevator_shaft,
-    };
+    use super::{ground_spawn_slabs, sample_walk_spawn_xyz, xz_point_hits_elevator_shaft};
 
     #[test]
     fn ground_spawn_slabs_non_empty() {

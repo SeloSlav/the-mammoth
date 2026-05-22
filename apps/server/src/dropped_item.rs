@@ -11,13 +11,15 @@
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::apartment_interior_anchors::{BED_HALF_X_M, BED_HALF_Z_M};
-use crate::apartments::{apartment_unit, ApartmentUnit, is_vacant_home_pool_unit_row, UNIT_STATE_UNCLAIMED};
+use crate::apartments::{
+    apartment_unit, is_vacant_home_pool_unit_row, ApartmentUnit, UNIT_STATE_UNCLAIMED,
+};
 use crate::auth;
+use crate::crafting;
+use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::inventory::{
     get_player_item, inventory_item, remove_player_item_quantity, try_grant_stack_to_player,
 };
-use crate::crafting;
-use crate::elevator_layout::{BUILDING_ORIGIN_Y, STOREY_SPACING_M};
 use crate::items_catalog;
 use crate::pose::{player_pose, PlayerPose};
 use crate::world_sound;
@@ -48,7 +50,8 @@ const WORLD_LOOT_Y_OFFSET_ABOVE_PLATE_M: f32 = 0.28;
 
 #[inline]
 fn mammoth_pickup_vertical_band(world_y: f32) -> i32 {
-    (((world_y - BUILDING_ORIGIN_Y - PICKUP_VERTICAL_STORY_PAD_Y) / STOREY_SPACING_M).floor()) as i32
+    (((world_y - BUILDING_ORIGIN_Y - PICKUP_VERTICAL_STORY_PAD_Y) / STOREY_SPACING_M).floor())
+        as i32
 }
 
 #[inline]
@@ -442,7 +445,8 @@ fn apartment_clear_pickup_anchor_xz(unit: &ApartmentUnit, seed: u64) -> (f32, f3
 
     clamp_inside_unit_xz(
         unit,
-        unit.bed_x + toward_door_x * (BED_HALF_X_M + BED_HALF_Z_M + APARTMENT_BED_KEEPOUT_PAD_M + 0.42),
+        unit.bed_x
+            + toward_door_x * (BED_HALF_X_M + BED_HALF_Z_M + APARTMENT_BED_KEEPOUT_PAD_M + 0.42),
         unit.bed_z,
     )
 }
@@ -495,7 +499,7 @@ fn apartment_scrap_metal_anchor(unit: &ApartmentUnit, seed: u64) -> (f32, f32) {
             } else {
                 (ax, az)
             }
-        },
+        }
         // Small pile in the open strip between entry and furniture.
         _ => clamp_inside_unit_xz(
             unit,
@@ -566,9 +570,7 @@ fn refresh_world_loot_spawns_inner(ctx: &ReducerContext) {
         .db
         .apartment_unit()
         .iter()
-        .filter(|u| {
-            u.state == UNIT_STATE_UNCLAIMED && !is_vacant_home_pool_unit_row(u)
-        })
+        .filter(|u| u.state == UNIT_STATE_UNCLAIMED && !is_vacant_home_pool_unit_row(u))
         .collect();
     unclaimed.sort_by(|a, b| {
         a.level
@@ -624,7 +626,12 @@ pub fn seed_world_loot_spawns(ctx: &ReducerContext) {
 /// Backfill static world loot for long-lived local dev databases that predate the init seed or had
 /// their anchored rows cleared. Player-dropped rows are left untouched.
 pub fn ensure_world_loot_spawns(ctx: &ReducerContext) {
-    if ctx.db.dropped_item().iter().any(|d| d.world_spawn_slot.is_some()) {
+    if ctx
+        .db
+        .dropped_item()
+        .iter()
+        .any(|d| d.world_spawn_slot.is_some())
+    {
         return;
     }
     refresh_world_loot_spawns_inner(ctx);
@@ -848,12 +855,7 @@ mod tests {
         }
     }
 
-    fn assert_inside_unit_pickup_margin(
-        unit: &ApartmentUnit,
-        label: &str,
-        x: f32,
-        z: f32,
-    ) {
+    fn assert_inside_unit_pickup_margin(unit: &ApartmentUnit, label: &str, x: f32, z: f32) {
         let m = APARTMENT_SCRAP_WALL_MARGIN_M;
         assert!(
             x >= unit.bound_min_x + m && x <= unit.bound_max_x - m,

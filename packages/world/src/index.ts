@@ -398,9 +398,12 @@ export {
 export {
   apartmentDoorTemplateForUnit,
   appendOwnedApartmentEditorShellWalls,
+  formatOwnedApartmentPreviewUnitLabel,
+  listOwnedApartmentAuthoringPreviewUnits,
   planOwnedApartmentEditorShellForUnit,
   resolveOwnedApartmentAuthoringPreviewLayout,
   type OwnedApartmentAuthoringPreviewLayout,
+  type OwnedApartmentAuthoringPreviewUnitOption,
   type OwnedApartmentEditorShellPlan,
 } from "./ownedApartmentEditorShell.js";
 export {

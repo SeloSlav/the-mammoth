@@ -11,9 +11,8 @@ import {
   defaultOwnedApartmentWallDoorOpening,
   readOwnedApartmentPartitionWallLocalExtents,
 } from "@the-mammoth/world";
-import type { EditorMode } from "../state/editorStoreTypes.js";
+import type { EditorMode, EditorWorkspace } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
-import { workspaceToInitialMode } from "../state/editorWorkspaceMap.js";
 import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import {
   editorChromeInput,
@@ -112,16 +111,10 @@ function authoringSlotPatchToWallMaterial(
 
 export function EditorChromeMyApartment(props: {
   mode: EditorMode;
-  setMode: (m: EditorMode) => void;
-  enterMyApartmentLayoutMode: () => void;
+  setWorkspace: (w: EditorWorkspace) => void;
   contentIndex: EditorContentIndex;
 }) {
-  const {
-    mode,
-    setMode,
-    enterMyApartmentLayoutMode,
-    contentIndex,
-  } = props;
+  const { mode, setWorkspace, contentIndex } = props;
   const {
     placedItems: placedItemsFromStore,
     wallItems,
@@ -147,6 +140,10 @@ export function EditorChromeMyApartment(props: {
     setDecorNeighborAlignSnap,
     apartmentBakedFloorShadowsEnabled,
     setApartmentBakedFloorShadowsEnabled,
+    myApartmentLayoutHidePickMode,
+    setMyApartmentLayoutHidePickMode,
+    myApartmentLayoutHiddenPlacementIds,
+    clearMyApartmentLayoutHiddenPlacements,
   } = useEditorStore(
     useShallow((s) => ({
       placedItems: s.ownedApartmentBuiltins.placedItems,
@@ -174,6 +171,10 @@ export function EditorChromeMyApartment(props: {
       setDecorNeighborAlignSnap: s.setDecorNeighborAlignSnap,
       apartmentBakedFloorShadowsEnabled: s.apartmentBakedFloorShadowsEnabled,
       setApartmentBakedFloorShadowsEnabled: s.setApartmentBakedFloorShadowsEnabled,
+      myApartmentLayoutHidePickMode: s.myApartmentLayoutHidePickMode,
+      setMyApartmentLayoutHidePickMode: s.setMyApartmentLayoutHidePickMode,
+      myApartmentLayoutHiddenPlacementIds: s.myApartmentLayoutHiddenPlacementIds,
+      clearMyApartmentLayoutHiddenPlacements: s.clearMyApartmentLayoutHiddenPlacements,
     })),
   );
   const [catalog, setCatalog] = useState<ApartmentDecorCatalogEntry[]>([]);
@@ -532,8 +533,10 @@ export function EditorChromeMyApartment(props: {
       : "builtins";
 
   let body: ReactNode = null;
-  if (mode === "my_apartment_layout") {
-    body = (
+  if (mode !== "my_apartment_layout") {
+    return null;
+  }
+  body = (
       <>
         <span style={{ ...editorChromeLabel, display: "block" }}>
           Import decor
@@ -627,6 +630,10 @@ export function EditorChromeMyApartment(props: {
             setDecorNeighborAlignSnap={setDecorNeighborAlignSnap}
             apartmentBakedFloorShadowsEnabled={apartmentBakedFloorShadowsEnabled}
             setApartmentBakedFloorShadowsEnabled={setApartmentBakedFloorShadowsEnabled}
+            myApartmentLayoutHidePickMode={myApartmentLayoutHidePickMode}
+            setMyApartmentLayoutHidePickMode={setMyApartmentLayoutHidePickMode}
+            myApartmentLayoutHiddenCount={myApartmentLayoutHiddenPlacementIds.length}
+            clearMyApartmentLayoutHiddenPlacements={clearMyApartmentLayoutHiddenPlacements}
             myApartmentLayoutHints={apartmentSceneGizmoHints}
           />
         </div>
@@ -638,7 +645,7 @@ export function EditorChromeMyApartment(props: {
           or lists, enter a label, then save a group so you can move/rotate/scale them together later.
           <strong>Ctrl/Cmd+C</strong> clones the selection (décor, wall slab, mirror, or saved group).{" "}
           <strong>Ctrl/Cmd+X</strong> or <strong>Delete</strong> removes it, including every member of a
-          saved group.{" "}
+          saved group. <strong>Ctrl+Z</strong> / <strong>Ctrl+Y</strong> undo and redo layout edits.{" "}
           <span style={{ opacity: 0.9 }}>
             Saving, renaming, or ungrouping tries to write{" "}
             <code style={{ fontSize: 10 }}>content/apartment/owned_apartment_builtins.json</code>{" "}
@@ -1137,38 +1144,16 @@ export function EditorChromeMyApartment(props: {
           <button
             type="button"
             style={editorChromeRowBtn}
-            onClick={() => {
-              const st = useEditorStore.getState();
-              setMode(workspaceToInitialMode(st.workspace, st.landingDocKind));
-            }}
+            onClick={() => setWorkspace("stairwell")}
           >
-            Back to level editor
+            Switch to stairwell workspace
           </button>
         </div>
       </>
-    );
-  } else {
-    body = (
-      <button
-        type="button"
-        style={{
-          ...editorChromeRowBtn,
-          marginTop: 4,
-        }}
-        onClick={() => {
-          enterMyApartmentLayoutMode();
-        }}
-      >
-        My apartment furniture
-      </button>
-    );
-  }
+  );
 
   return (
     <div style={{ marginTop: 12 }}>
-      <span style={{ ...editorChromeLabel, display: "block", marginBottom: 4 }}>
-        Owned apartment preview
-      </span>
       {body}
       <p style={{ margin: "8px 0 0", fontSize: 11, opacity: 0.72, maxWidth: 440 }}>
         The grey slab matches the unit prefab footprint in the floor doc; walls reuse the playable

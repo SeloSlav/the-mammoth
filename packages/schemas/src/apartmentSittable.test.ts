@@ -12,6 +12,9 @@ describe("apartmentSittable", () => {
     expect(apartmentSittableSpecFromModelPath("static/models/objects/sofa.glb")?.promptLabel).toBe(
       "Sit",
     );
+    expect(apartmentSittableSpecFromModelPath("static/models/objects/sofa.glb")?.lateralSeatCount).toBe(
+      3,
+    );
     expect(apartmentSittableSpecFromModelPath("static/models/objects/toilet.glb")?.mode).toBe(
       "sit",
     );

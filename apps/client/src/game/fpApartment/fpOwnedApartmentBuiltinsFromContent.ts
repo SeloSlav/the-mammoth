@@ -10,7 +10,10 @@ import {
   type ApartmentStashKind,
 } from "./fpApartmentStashKey.js";
 import {
+  apartmentLayoutDocForUnitKey,
+  ApartmentUnitLayoutProfilesDocSchema,
   OwnedApartmentBuiltinsDocSchema,
+  type ApartmentUnitLayoutProfilesDoc,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
   type OwnedApartmentMirrorItem,
@@ -21,6 +24,7 @@ import {
 import { mapOwnedApartmentLayoutFractionToWorldX } from "@the-mammoth/world";
 
 let cached: OwnedApartmentBuiltinsDoc | null | undefined;
+let profilesCached: ApartmentUnitLayoutProfilesDoc | null | undefined;
 
 /**
  * Sync read of cached authoring JSON after {@link loadOwnedApartmentBuiltinsDocFromContent} resolves.
@@ -47,6 +51,40 @@ export async function loadOwnedApartmentBuiltinsDocFromContent(): Promise<OwnedA
     cached = null;
     return null;
   }
+}
+
+export function peekApartmentUnitLayoutProfilesDoc():
+  | ApartmentUnitLayoutProfilesDoc
+  | null
+  | undefined {
+  return profilesCached;
+}
+
+export async function loadApartmentUnitLayoutProfilesDocFromContent(): Promise<ApartmentUnitLayoutProfilesDoc | null> {
+  if (profilesCached !== undefined) return profilesCached;
+  try {
+    const res = await fetch("/content/apartment/unit_layout_profiles.json", {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      profilesCached = null;
+      return null;
+    }
+    const raw = (await res.json()) as unknown;
+    profilesCached = ApartmentUnitLayoutProfilesDocSchema.parse(raw);
+    return profilesCached;
+  } catch {
+    profilesCached = null;
+    return null;
+  }
+}
+
+export function resolveApartmentLayoutDocForUnit(
+  u: ApartmentUnit,
+  ownedDefault: OwnedApartmentBuiltinsDoc | null | undefined,
+  profilesDoc: ApartmentUnitLayoutProfilesDoc | null | undefined,
+): OwnedApartmentBuiltinsDoc | null {
+  return apartmentLayoutDocForUnitKey(profilesDoc, u.unitKey as string, ownedDefault);
 }
 
 export type ApartmentDecorPose = {
@@ -102,9 +140,11 @@ export function resolveApartmentStashAnchorXZ(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
   stashKind: ApartmentStashKind,
+  profilesDoc?: ApartmentUnitLayoutProfilesDoc | null | undefined,
 ): { x: number; z: number } {
-  if (doc) {
-    const pose = resolveApartmentDecorPoses(u, doc).find((p) => p.itemKind === stashKind);
+  const layoutDoc = resolveApartmentLayoutDocForUnit(u, doc, profilesDoc);
+  if (layoutDoc) {
+    const pose = resolveApartmentDecorPoses(u, layoutDoc).find((p) => p.itemKind === stashKind);
     if (pose) return { x: pose.x, z: pose.z };
   }
   switch (stashKind) {

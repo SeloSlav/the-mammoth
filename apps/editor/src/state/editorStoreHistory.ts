@@ -13,6 +13,12 @@ export function cloneHistorySlice(state: EditorState): HistoryEntry {
     inactiveLandingKitDef: structuredClone(state.inactiveLandingKitDef),
     landingKitVariant: state.landingKitVariant,
     stairWellDef: structuredClone(state.stairWellDef),
+    apartmentUnitLayoutProfiles: structuredClone(state.apartmentUnitLayoutProfiles),
+    apartmentUnitLayoutProfilesNeedsDiskFlush:
+      state.apartmentUnitLayoutProfilesNeedsDiskFlush,
+    ownedApartmentDefaultBuiltins: structuredClone(state.ownedApartmentDefaultBuiltins),
+    activeApartmentLayoutSource: state.activeApartmentLayoutSource,
+    activeApartmentLayoutProfileId: state.activeApartmentLayoutProfileId,
     ownedApartmentBuiltins: structuredClone(state.ownedApartmentBuiltins),
     selectedId: state.selectedId,
     myApartmentMultiselectExtraIds: [...state.myApartmentMultiselectExtraIds],

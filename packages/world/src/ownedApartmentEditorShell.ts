@@ -197,6 +197,52 @@ export type OwnedApartmentAuthoringPreviewLayout = {
  *
  * Fail-open callers should revert to deprecated square `OwnedApartmentBuiltinsDoc.previewSizeM` space.
  */
+export type OwnedApartmentAuthoringPreviewUnitOption = {
+  unitId: string;
+  label: string;
+  /** Matches {@link HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID} — first auto-granted player home. */
+  isPlayerSpawnHome: boolean;
+};
+
+export function formatOwnedApartmentPreviewUnitLabel(unitId: string): string {
+  if (unitId.startsWith("unit_e_")) {
+    const n = unitId.slice("unit_e_".length);
+    return `East ${Number.parseInt(n, 10) || n}`;
+  }
+  if (unitId.startsWith("unit_w_")) {
+    const n = unitId.slice("unit_w_".length);
+    return `West ${Number.parseInt(n, 10) || n}`;
+  }
+  return unitId;
+}
+
+function isOwnedApartmentPreviewUnitId(unitId: string): boolean {
+  return unitId.startsWith("unit_e_") || unitId.startsWith("unit_w_");
+}
+
+/** Residential slabs on the typical floor plate that have corridor door templates. */
+export function listOwnedApartmentAuthoringPreviewUnits(
+  floorDoc: FloorDoc,
+): OwnedApartmentAuthoringPreviewUnitOption[] {
+  const out: OwnedApartmentAuthoringPreviewUnitOption[] = [];
+  for (const obj of floorDoc.objects) {
+    if (classifyPrefab(obj.prefabId) !== "unit") continue;
+    if (!isOwnedApartmentPreviewUnitId(obj.id)) continue;
+    if (!apartmentDoorTemplateForUnit({ floorDocId: floorDoc.id, unitId: obj.id })) {
+      continue;
+    }
+    out.push({
+      unitId: obj.id,
+      label: formatOwnedApartmentPreviewUnitLabel(obj.id),
+      isPlayerSpawnHome: obj.id === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+    });
+  }
+  out.sort((a, b) =>
+    a.unitId.localeCompare(b.unitId, undefined, { numeric: true }),
+  );
+  return out;
+}
+
 export function resolveOwnedApartmentAuthoringPreviewLayout(opts: {
   floorDoc: FloorDoc;
   homeBandStoryLevelIndex: number;

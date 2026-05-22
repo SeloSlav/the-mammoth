@@ -21,7 +21,11 @@ export function tryEnterFpSitFromPrompt(args: {
   if (!clientCanEnterApartmentSittable(args.conn, args.prompt, args.playerPos)) return false;
   const spec = apartmentSittableSpecFromModelPath(args.prompt.modelRelPath);
   if (!spec) return false;
-  const pose = computeApartmentSittableWorldPose(args.prompt.root, spec);
+  const pose = computeApartmentSittableWorldPose(
+    args.prompt.root,
+    spec,
+    args.prompt.seatIndex,
+  );
   const exitFeet = { x: args.pos.x, y: args.pos.y, z: args.pos.z };
   args.pos.set(pose.feetX, pose.feetY, pose.feetZ);
   args.loco.velocity.set(0, 0, 0);

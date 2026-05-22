@@ -102,9 +102,15 @@ fn main() {
     );
 
     let vite_node_bin = if cfg!(windows) {
-        repo_root.join("node_modules").join(".bin").join("vite-node.cmd")
+        repo_root
+            .join("node_modules")
+            .join(".bin")
+            .join("vite-node.cmd")
     } else {
-        repo_root.join("node_modules").join(".bin").join("vite-node")
+        repo_root
+            .join("node_modules")
+            .join(".bin")
+            .join("vite-node")
     };
     let status = if vite_node_bin.is_file() {
         Command::new(&vite_node_bin)

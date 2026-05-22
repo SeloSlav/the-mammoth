@@ -163,14 +163,23 @@ pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, unit_key
 }
 
 pub(crate) fn start_apartment_water_tank_schedule(ctx: &ReducerContext) {
-    if ctx.db.apartment_water_tank_schedule().iter().next().is_some() {
+    if ctx
+        .db
+        .apartment_water_tank_schedule()
+        .iter()
+        .next()
+        .is_some()
+    {
         return;
     }
     let interval = TimeDuration::from_micros(TANK_TICK_INTERVAL_MICROS);
-    let _ = ctx.db.apartment_water_tank_schedule().insert(ApartmentWaterTankSchedule {
-        scheduled_id: 0,
-        scheduled_at: interval.into(),
-    });
+    let _ = ctx
+        .db
+        .apartment_water_tank_schedule()
+        .insert(ApartmentWaterTankSchedule {
+            scheduled_id: 0,
+            scheduled_at: interval.into(),
+        });
 }
 
 pub(crate) fn tick_apartment_water_tanks_once(dt_secs: f32, current_liters: f32) -> f32 {
@@ -223,12 +232,7 @@ pub(crate) fn drink_water_bottle_from_hotbar(
 
     let sip = spec.sip_liters.min(current);
     let hydration = sip * spec.hydration_per_liter;
-    set_bottle_fill_liters(
-        ctx,
-        item.instance_id,
-        current - sip,
-        spec.capacity_liters,
-    );
+    set_bottle_fill_liters(ctx, item.instance_id, current - sip, spec.capacity_liters);
     player_vitals::apply_instant_vital_deltas(ctx, sender, 0.0, 0.0, hydration, true);
 
     let kind = match items_catalog::hotbar_consume_sound(&item.def_id) {
@@ -248,8 +252,9 @@ pub(crate) fn fill_bottle_in_water_tank_stash(
 ) -> Result<(), String> {
     auth::ensure_gameplay_unlocked(ctx)?;
     let sender = ctx.sender();
-    let (owner_id, unit_key, stash_kind) = crate::apartments::apartment_stash_owner_near_sender(ctx, stash_key)
-        .ok_or_else(|| "must be at your apartment water tank".to_string())?;
+    let (owner_id, unit_key, stash_kind) =
+        crate::apartments::apartment_stash_owner_near_sender(ctx, stash_key)
+            .ok_or_else(|| "must be at your apartment water tank".to_string())?;
     if owner_id != sender {
         return Err("not your apartment".to_string());
     }
@@ -330,9 +335,7 @@ mod tests {
     fn tank_passive_fill_clamps_at_capacity() {
         let dt = 5.0;
         let add = APARTMENT_WATER_TANK_FILL_RATE_L_PER_SEC * dt;
-        assert!(
-            (tick_apartment_water_tanks_once(dt, 0.0) - add).abs() < 0.0001
-        );
+        assert!((tick_apartment_water_tanks_once(dt, 0.0) - add).abs() < 0.0001);
         assert_eq!(
             tick_apartment_water_tanks_once(dt, APARTMENT_WATER_TANK_CAPACITY_L),
             APARTMENT_WATER_TANK_CAPACITY_L

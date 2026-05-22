@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import {
-  BALCONY_GROW_TRAY_BUILTIN_IDS,
   BALCONY_GROW_TRAY_MAX_WATER_L,
+  balconyGrowDecorTrayId,
   balconyGrowStageFromProgress,
   balconyGrowStageVisualScale,
   balconyGrowTrayStashKey,
@@ -40,19 +40,18 @@ export function isGrowTrayModelPath(modelRelPath: string): boolean {
   return modelRelPath.includes(GROW_TRAY_SUFFIX);
 }
 
-/** Map sorted grow-tray placements in a unit to stable builtin UUIDs. */
-export function growTrayBuiltinIdForPlacement(
+/** Stable grow-tray identity: DB imports use decor id; authored content keeps its content id. */
+export function growTrayIdForPlacement(
   renderKey: string,
-  sortedIndexAmongGrowTrays: number,
+  decorId: bigint | null,
 ): string | null {
+  if (decorId !== null) return balconyGrowDecorTrayId(decorId);
   if (renderKey.startsWith("content:")) {
     const parts = renderKey.split(":");
     const id = parts[2];
-    if (id && (BALCONY_GROW_TRAY_BUILTIN_IDS as readonly string[]).includes(id)) {
-      return id;
-    }
+    if (id) return id;
   }
-  return BALCONY_GROW_TRAY_BUILTIN_IDS[sortedIndexAmongGrowTrays] ?? null;
+  return null;
 }
 
 export type GrowTrayDecorMount = {
@@ -60,17 +59,17 @@ export type GrowTrayDecorMount = {
   growSlotPickMeshes: THREE.Mesh[];
   growPlantPickMeshes: THREE.Mesh[];
   slotVisualsGroup: THREE.Group;
-  trayBuiltinId: string;
+  trayId: string;
 };
 
 export async function mountGrowTrayDecorOnGroup(opts: {
   decorGroup: THREE.Group;
   unitKey: string;
-  trayBuiltinId: string;
+  trayId: string;
   pickGeometry: THREE.BufferGeometry;
   pickMaterial: THREE.Material;
 }): Promise<GrowTrayDecorMount> {
-  const { decorGroup, unitKey, trayBuiltinId, pickGeometry, pickMaterial } = opts;
+  const { decorGroup, unitKey, trayId, pickGeometry, pickMaterial } = opts;
   const growTrayPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
   const growPlantPickMeshes: THREE.Mesh[] = [];
@@ -85,31 +84,31 @@ export async function mountGrowTrayDecorOnGroup(opts: {
   const slotPickSize = balconyGrowSlotPickSizeFromTrayBounds(trayVisualBounds);
 
   const trayPick = new THREE.Mesh(pickGeometry, pickMaterial);
-  trayPick.name = `grow_tray_pick:${trayBuiltinId}`;
+  trayPick.name = `grow_tray_pick:${trayId}`;
   fitBalconyGrowTrayInteractionPick(decorGroup, trayPick);
-  trayPick.userData.mammothGrowTrayId = trayBuiltinId;
+  trayPick.userData.mammothGrowTrayId = trayId;
   trayPick.userData.mammothGrowTrayUnitKey = unitKey;
   trayPick.userData.mammothGrowTrayRoot = decorGroup;
-  Object.assign(trayPick.userData, growTrayStashPickUserData(unitKey, trayBuiltinId));
+  Object.assign(trayPick.userData, growTrayStashPickUserData(unitKey, trayId));
   trayPick.layers.set(FP_INTERACTION_PICK_LAYER);
   decorGroup.add(trayPick);
   growTrayPickMeshes.push(trayPick);
 
   const slotVisualsGroup = new THREE.Group();
-  slotVisualsGroup.name = `grow_slot_visuals:${trayBuiltinId}`;
+  slotVisualsGroup.name = `grow_slot_visuals:${trayId}`;
   decorGroup.add(slotVisualsGroup);
 
   for (let slot = 0; slot < slotOffsets.length; slot++) {
     const off = slotOffsets[slot];
     if (!off) continue;
     const slotPick = new THREE.Mesh(pickGeometry, pickMaterial);
-    slotPick.name = `grow_slot_pick:${trayBuiltinId}:${slot}`;
+    slotPick.name = `grow_slot_pick:${trayId}:${slot}`;
     fitBalconyGrowSlotInteractionPick(slotPick, off.x, off.z, slotPickSize);
-    slotPick.userData.mammothGrowTrayId = trayBuiltinId;
+    slotPick.userData.mammothGrowTrayId = trayId;
     slotPick.userData.mammothGrowTrayUnitKey = unitKey;
     slotPick.userData.mammothGrowSlotIndex = slot;
     slotPick.userData.mammothGrowTrayRoot = decorGroup;
-    Object.assign(slotPick.userData, growTrayStashPickUserData(unitKey, trayBuiltinId));
+    Object.assign(slotPick.userData, growTrayStashPickUserData(unitKey, trayId));
     slotPick.layers.set(FP_INTERACTION_PICK_LAYER);
     decorGroup.add(slotPick);
     growSlotPickMeshes.push(slotPick);
@@ -121,9 +120,9 @@ export async function mountGrowTrayDecorOnGroup(opts: {
     holder.userData.mammothGrowSlotIndex = slot;
 
     const plantPick = new THREE.Mesh(pickGeometry, pickMaterial);
-    plantPick.name = `grow_plant_pick:${trayBuiltinId}:${slot}`;
+    plantPick.name = `grow_plant_pick:${trayId}:${slot}`;
     plantPick.visible = false;
-    plantPick.userData.mammothGrowTrayId = trayBuiltinId;
+    plantPick.userData.mammothGrowTrayId = trayId;
     plantPick.userData.mammothGrowTrayUnitKey = unitKey;
     plantPick.userData.mammothGrowSlotIndex = slot;
     plantPick.userData.mammothGrowTrayRoot = decorGroup;
@@ -140,7 +139,7 @@ export async function mountGrowTrayDecorOnGroup(opts: {
     growSlotPickMeshes,
     growPlantPickMeshes,
     slotVisualsGroup,
-    trayBuiltinId,
+    trayId,
   };
 }
 
@@ -153,9 +152,9 @@ function fitGrowPlantInteractionPick(holder: THREE.Group, visual: THREE.Object3D
   holder.getWorldScale(_plantPickWorldScaleScratch);
   plantPick.position.copy(_plantPickCenterScratch);
   plantPick.scale.set(
-    Math.max(0.14, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x),
-    Math.max(0.18, _plantPickSizeScratch.y / _plantPickWorldScaleScratch.y),
-    Math.max(0.14, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z),
+    Math.max(0.22, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x),
+    Math.max(0.38, _plantPickSizeScratch.y / _plantPickWorldScaleScratch.y),
+    Math.max(0.22, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z),
   );
   plantPick.visible = true;
 }

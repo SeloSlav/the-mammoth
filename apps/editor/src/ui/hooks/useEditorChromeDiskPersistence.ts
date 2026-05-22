@@ -12,6 +12,7 @@ import {
   serializeLandingKitDefPretty,
   serializePrefabDefPretty,
   serializeStairWellDefPretty,
+  serializeApartmentUnitLayoutProfilesDocPretty,
   serializeOwnedApartmentBuiltinsDocPretty,
 } from "../../state/editorStore.js";
 import { requestEditorMyApartmentLayoutPersistFromScene } from "../../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
@@ -26,6 +27,7 @@ import {
   postSaveLandingKit,
   postSavePrefab,
   postSaveStairWell,
+  postSaveApartmentUnitLayoutProfiles,
   postSaveOwnedApartmentBuiltins,
 } from "../editorChromeNetwork.js";
 
@@ -50,6 +52,8 @@ export function useEditorChromeDiskPersistence(
       activeCellDocId: s.activeCellDocId,
       activePrefabDefId: s.activePrefabDefId,
       activeFloorOverrideDocId: s.activeFloorOverrideDocId,
+      activeApartmentLayoutSource: s.activeApartmentLayoutSource,
+      activeApartmentLayoutProfileId: s.activeApartmentLayoutProfileId,
     })),
   );
 
@@ -78,7 +82,11 @@ export function useEditorChromeDiskPersistence(
           ? `Save floor override ${saveLabelSnapshot.activeFloorOverrideDocId}`
           : "Save floor override";
       case "my_apartment_layout":
-        return "Save owned apartment builtins";
+        return saveLabelSnapshot.activeApartmentLayoutProfileId
+          ? "Save apartment layout profiles"
+          : saveLabelSnapshot.activeApartmentLayoutSource === "unassigned"
+            ? "Create profile before saving"
+            : "Save owned apartment builtins";
       default:
         return "Save to disk";
     }
@@ -114,7 +122,9 @@ export function useEditorChromeDiskPersistence(
     try {
       const s = useEditorStore.getState();
       const needsOwnedAptBuiltinsFlush = s.ownedApartmentBuiltinsNeedsDiskFlush;
+      const needsApartmentProfilesFlush = s.apartmentUnitLayoutProfilesNeedsDiskFlush;
       let wroteOwnedApartmentBuiltins = false;
+      let wroteApartmentProfiles = false;
       if (s.mode === "cab") {
         await postSaveElevatorCab(
           serializeElevatorCabDefPretty(s.elevatorCabDef),
@@ -167,30 +177,58 @@ export function useEditorChromeDiskPersistence(
       } else if (s.mode === "my_apartment_layout") {
         requestEditorMyApartmentLayoutPersistFromScene();
         const stAfterPersist = useEditorStore.getState();
-        await postSaveOwnedApartmentBuiltins(
-          serializeOwnedApartmentBuiltinsDocPretty(stAfterPersist.ownedApartmentBuiltins),
-        );
-        wroteOwnedApartmentBuiltins = true;
+        if (stAfterPersist.activeApartmentLayoutSource === "unassigned") {
+          throw new Error("Create or select an apartment layout profile before saving this apartment.");
+        }
+        if (stAfterPersist.activeApartmentLayoutSource === "profile") {
+          await postSaveApartmentUnitLayoutProfiles(
+            serializeApartmentUnitLayoutProfilesDocPretty(
+              stAfterPersist.apartmentUnitLayoutProfiles,
+            ),
+          );
+          wroteApartmentProfiles = true;
+        } else {
+          await postSaveOwnedApartmentBuiltins(
+            serializeOwnedApartmentBuiltinsDocPretty(
+              stAfterPersist.ownedApartmentDefaultBuiltins,
+            ),
+          );
+          wroteOwnedApartmentBuiltins = true;
+        }
       }
 
       if (!wroteOwnedApartmentBuiltins && needsOwnedAptBuiltinsFlush) {
         requestEditorMyApartmentLayoutPersistFromScene();
         const st = useEditorStore.getState();
         await postSaveOwnedApartmentBuiltins(
-          serializeOwnedApartmentBuiltinsDocPretty(st.ownedApartmentBuiltins),
+          serializeOwnedApartmentBuiltinsDocPretty(st.ownedApartmentDefaultBuiltins),
         );
         wroteOwnedApartmentBuiltins = true;
       }
 
+      if (!wroteApartmentProfiles && needsApartmentProfilesFlush) {
+        requestEditorMyApartmentLayoutPersistFromScene();
+        const st = useEditorStore.getState();
+        await postSaveApartmentUnitLayoutProfiles(
+          serializeApartmentUnitLayoutProfilesDocPretty(st.apartmentUnitLayoutProfiles),
+        );
+        wroteApartmentProfiles = true;
+      }
+
       if (wroteOwnedApartmentBuiltins) {
         useEditorStore.getState().clearOwnedApartmentBuiltinsDiskFlushFlag();
+      }
+      if (wroteApartmentProfiles) {
+        useEditorStore.getState().clearApartmentUnitLayoutProfilesDiskFlushFlag();
       }
 
       useEditorStore.getState().setDirty(false);
       await refreshCollisionStatus();
       const flushedAptLayoutExtra =
         wroteOwnedApartmentBuiltins && s.mode !== "my_apartment_layout";
-      if (s.mode === "my_apartment_layout") {
+      if (s.mode === "my_apartment_layout" && wroteApartmentProfiles && !wroteOwnedApartmentBuiltins) {
+        setSaveMsg("Saved content/apartment/unit_layout_profiles.json.");
+      } else if (s.mode === "my_apartment_layout") {
         setSaveMsg(
           "Saved content/apartment/owned_apartment_builtins.json.",
         );

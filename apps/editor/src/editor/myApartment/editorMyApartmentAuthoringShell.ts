@@ -19,6 +19,7 @@ import { EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y } from "./editorMyApartmentMe
 export function resolveOwnedApartmentAuthoringLayoutForEditor(opts: {
   floorDoc: FloorDoc | undefined;
   building: BuildingDoc;
+  previewUnitId?: string;
 }): OwnedApartmentAuthoringPreviewLayout | null {
   if (!opts.floorDoc || opts.floorDoc.id !== TYPICAL_FLOOR_DOC_ID) return null;
   const homeBandStoryLevelIndex = Math.max(
@@ -28,6 +29,7 @@ export function resolveOwnedApartmentAuthoringLayoutForEditor(opts: {
   return resolveOwnedApartmentAuthoringPreviewLayout({
     floorDoc: opts.floorDoc,
     homeBandStoryLevelIndex,
+    canonicalUnitId: opts.previewUnitId,
   });
 }
 
@@ -111,6 +113,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
   typicalFloorDoc: FloorDoc | undefined;
   building: BuildingDoc;
+  previewUnitId?: string;
 }): THREE.Group {
   const root = new THREE.Group();
   root.name = "editor_owned_apartment_authoring_shell";
@@ -118,6 +121,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
     floorDoc: args.typicalFloorDoc,
     building: args.building,
+    previewUnitId: args.previewUnitId,
   });
 
   const mapping = ownedApartmentFractionMappingForEditor({

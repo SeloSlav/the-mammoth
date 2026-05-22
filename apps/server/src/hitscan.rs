@@ -157,7 +157,8 @@ fn trace_apartment_door_firearms(
     let mut best: Option<f32> = None;
 
     for row in ctx.db.apartment_door().iter() {
-        let Some((mn, mx)) = crate::apartment_door::apartment_door_firearm_barrier_aabb(&row) else {
+        let Some((mn, mx)) = crate::apartment_door::apartment_door_firearm_barrier_aabb(&row)
+        else {
             continue;
         };
         if !lim.intersects_shard_aabb(mn, mx) {
@@ -166,9 +167,7 @@ fn trace_apartment_door_firearms(
         if let Some(hit) = ray_aabb_intersect_enter(
             ox, oy, oz, dx, dy, dz, mn[0], mn[1], mn[2], mx[0], mx[1], mx[2],
         ) {
-            if hit.t_hit <= max_t + RAY_T_EPS
-                && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5
-            {
+            if hit.t_hit <= max_t + RAY_T_EPS && hit.t_hit < best.unwrap_or(f32::INFINITY) - 1e-5 {
                 best = Some(hit.t_hit);
             }
         }

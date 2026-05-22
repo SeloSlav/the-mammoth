@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import {
+  BALCONY_GROW_DECOR_TRAY_ID_PREFIX,
   BALCONY_GROW_TRAY_AUTHORED_FX_FZ,
   BALCONY_GROW_TRAY_INTERACT_RADIUS_M,
+  parseBalconyGrowDecorTrayId,
   balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
 import { mapOwnedApartmentLayoutFractionToWorldX } from "@the-mammoth/world";
@@ -10,7 +12,9 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import type { DbConnection } from "../../module_bindings";
 import { clientMayUseApartmentStash, clientOwnsClaimedApartmentUnit } from "../fpApartment/fpApartmentGameplay.js";
 import {
+  peekApartmentUnitLayoutProfilesDoc,
   peekOwnedApartmentBuiltinsDoc,
+  resolveApartmentLayoutDocForUnit,
   resolveApartmentDecorPoses,
 } from "../fpApartment/fpOwnedApartmentBuiltinsFromContent.js";
 
@@ -27,7 +31,22 @@ export function resolveBalconyGrowTrayAnchorXZ(
     }
   }
 
-  const doc = peekOwnedApartmentBuiltinsDoc();
+  const decorId = trayId.startsWith(BALCONY_GROW_DECOR_TRAY_ID_PREFIX)
+    ? parseBalconyGrowDecorTrayId(trayId)
+    : null;
+  if (decorId !== null) {
+    for (const row of conn.db.apartment_unit_decor) {
+      if (row.unitKey === unit.unitKey && row.decorId === decorId) {
+        return { x: row.posX, z: row.posZ };
+      }
+    }
+  }
+
+  const doc = resolveApartmentLayoutDocForUnit(
+    unit,
+    peekOwnedApartmentBuiltinsDoc(),
+    peekApartmentUnitLayoutProfilesDoc(),
+  );
   if (doc) {
     for (const pose of resolveApartmentDecorPoses(unit, doc)) {
       if (pose.id === trayId && pose.modelRelPath.includes("grow-tray.glb")) {

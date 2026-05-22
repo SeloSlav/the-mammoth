@@ -86,25 +86,44 @@ mod tests {
         apartment_stash_slot_count, apartment_stash_slot_index_valid,
     };
     use crate::inventory_models::{
-        APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_STOVE,
-        APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+        APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
+        APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
+        APARTMENT_STASH_KIND_WATER_TANK,
     };
     use crate::items_catalog::ItemCategory;
 
     #[test]
     fn slot_counts_match_client_schema() {
-        assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_FOOTLOCKER), 24);
-        assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_WARDROBE), 10);
+        assert_eq!(
+            apartment_stash_slot_count(APARTMENT_STASH_KIND_FOOTLOCKER),
+            24
+        );
+        assert_eq!(
+            apartment_stash_slot_count(APARTMENT_STASH_KIND_WARDROBE),
+            10
+        );
         assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_STOVE), 3);
         assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_FRIDGE), 14);
-        assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_WATER_TANK), 1);
-        assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_GROW_TRAY), 1);
+        assert_eq!(
+            apartment_stash_slot_count(APARTMENT_STASH_KIND_WATER_TANK),
+            1
+        );
+        assert_eq!(
+            apartment_stash_slot_count(APARTMENT_STASH_KIND_GROW_TRAY),
+            1
+        );
     }
 
     #[test]
     fn stove_slot_three_is_out_of_range() {
-        assert!(apartment_stash_slot_index_valid(APARTMENT_STASH_KIND_STOVE, 2));
-        assert!(!apartment_stash_slot_index_valid(APARTMENT_STASH_KIND_STOVE, 3));
+        assert!(apartment_stash_slot_index_valid(
+            APARTMENT_STASH_KIND_STOVE,
+            2
+        ));
+        assert!(!apartment_stash_slot_index_valid(
+            APARTMENT_STASH_KIND_STOVE,
+            3
+        ));
     }
 
     #[test]

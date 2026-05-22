@@ -12,6 +12,7 @@
  * are **~1.00 s** each (hit early, tail pad OK). **Batch-normalize** after changing assets:
  * `pnpm content:normalize-footsteps` (RMS-match the set + shared peak ceiling; `--dry-run` first).
  * Stride-locked to `headBobPhase`. World pickup: `item-pick.wav`. Dry firearm (no ammo): `unloaded-shot.wav`.
+ * Balcony grow: RMB pour with a filled water bottle — `water-pour.wav` (local client feedback).
  * Melee swing: default
  * `weapon-melee-swing*.wav` with legacy fallback to `weapon-crowbar-swing*.wav` (see
  * `meleeSwingSound.ts`). Call {@link LocalGameAudio.unlock} from a **user gesture**.
@@ -48,6 +49,9 @@ const ITEM_PICK_STEM = `${UI_STEM}/item-pick` as const;
 
 /** Empty chamber / trigger pull — local FP feedback when firing with no carried ammo. */
 const FIREARM_UNLOADED_SHOT_STEM = `${UI_STEM}/unloaded-shot` as const;
+
+/** RMB balcony water bottle dump — local feedback when the pour reducer is dispatched. */
+const WATER_POUR_STEM = `${UI_STEM}/water-pour` as const;
 
 const STRIDE_PHASE_PER_STEP = Math.PI;
 
@@ -112,6 +116,7 @@ export class LocalGameAudio {
   private consumeDrinkBuffer: AudioBuffer | null = null;
   private consumeSmokeBuffer: AudioBuffer | null = null;
   private firearmUnloadedShotBuffer: AudioBuffer | null = null;
+  private waterPourBuffer: AudioBuffer | null = null;
 
   private wasGrounded = true;
   private lastStrideStepCell = Number.NEGATIVE_INFINITY;
@@ -209,6 +214,17 @@ export class LocalGameAudio {
       );
     }
 
+    const waterPourUrl = await this.resolveSource(WATER_POUR_STEM);
+    if (waterPourUrl) {
+      const decoded = await this.decodeImpactBuffers(ctx, [waterPourUrl]);
+      this.waterPourBuffer = decoded[0] ?? null;
+    }
+    if (!this.waterPourBuffer) {
+      console.warn(
+        "[LocalGameAudio] Missing balcony water-pour asset: water-pour.wav under public/audio/ui/",
+      );
+    }
+
     if (this.impactBuffers.length === 0) {
       console.warn("[LocalGameAudio] Failed to decode footstep assets.");
       void ctx.close();
@@ -251,6 +267,7 @@ export class LocalGameAudio {
     this.consumeDrinkBuffer = null;
     this.consumeSmokeBuffer = null;
     this.firearmUnloadedShotBuffer = null;
+    this.waterPourBuffer = null;
     this.sourceCache.clear();
     this.impactUrls = [];
     this.unlocked = false;
@@ -333,6 +350,26 @@ export class LocalGameAudio {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = 0.98 + Math.random() * 0.05;
+    src.connect(hitGain);
+    hitGain.connect(bus);
+    src.start(ctx.currentTime);
+  }
+
+  /** Local feedback when pouring from a filled water bottle (balcony grow RMB). */
+  playWaterPourLocal(): void {
+    if (!this.unlocked || !this.ctx || !this.footstepBus || !this.waterPourBuffer) {
+      return;
+    }
+    const ctx = this.ctx;
+    const bus = this.footstepBus;
+    const buf = this.waterPourBuffer;
+
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 0.38 * (0.92 + Math.random() * 0.14);
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.97 + Math.random() * 0.06;
     src.connect(hitGain);
     hitGain.connect(bus);
     src.start(ctx.currentTime);

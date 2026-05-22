@@ -10,6 +10,8 @@ import {
   PrefabDefSchema,
   StairWellDefSchema,
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC,
+  ApartmentUnitLayoutProfilesDocSchema,
   type BuildingDoc,
   type CellDoc,
   type FloorDoc,
@@ -20,10 +22,17 @@ import {
 import { useEditorStore } from "../../state/editorStore.js";
 import type { LandingKitVariant } from "../../state/editorStoreTypes.js";
 import {
+  HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  maxBuildingLevelIndex,
+  TYPICAL_FLOOR_DOC_ID,
+} from "@the-mammoth/world";
+import { editorMyApartmentSelectedIdForDecor } from "../myApartment/editorMyApartmentSelection.js";
+import {
   type EditorContentIndex,
   EDITOR_APARTMENT_KIT_FILE,
   EDITOR_BUILDING_FILE,
   EDITOR_ELEVATOR_DIR,
+  EDITOR_APARTMENT_UNIT_LAYOUT_PROFILES_FILE,
   EDITOR_OWNED_APT_BUILTINS_FILE,
 } from "../content/editorContentDiscovery.js";
 
@@ -142,9 +151,17 @@ export async function bootstrapEditorFromContent(): Promise<void> {
   }
 
   let ownedApartmentBuiltins = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC;
+  let apartmentUnitLayoutProfiles = DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC;
   try {
     ownedApartmentBuiltins = OwnedApartmentBuiltinsDocSchema.parse(
       await fetchJson(`/content/${EDITOR_OWNED_APT_BUILTINS_FILE}`),
+    );
+  } catch {
+    /* optional */
+  }
+  try {
+    apartmentUnitLayoutProfiles = ApartmentUnitLayoutProfilesDocSchema.parse(
+      await fetchJson(`/content/${EDITOR_APARTMENT_UNIT_LAYOUT_PROFILES_FILE}`),
     );
   } catch {
     /* optional */
@@ -154,6 +171,22 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     (a, b) => a.levelIndex - b.levelIndex,
   );
   const first = sorted[0];
+  const homeStoryLevelIndex = Math.max(1, maxBuildingLevelIndex(building));
+  const initialPreviewUnitKey = `${TYPICAL_FLOOR_DOC_ID}|${homeStoryLevelIndex}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+  const initialAssignedProfileId =
+    apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === initialPreviewUnitKey)
+      ?.profileId ?? null;
+  const initialAssignedProfile = initialAssignedProfileId
+    ? apartmentUnitLayoutProfiles.profiles.find((p) => p.id === initialAssignedProfileId)
+    : null;
+  const initialApartmentLayoutDoc = initialAssignedProfile?.layout ?? ownedApartmentBuiltins;
+  const initialSortedItems = [...initialApartmentLayoutDoc.placedItems].sort((a, b) =>
+    a.id.localeCompare(b.id),
+  );
+  const initialSelectedId =
+    initialSortedItems.length > 0
+      ? editorMyApartmentSelectedIdForDecor(initialSortedItems[0]!.id)
+      : null;
 
   useEditorStore.setState((s) => ({
     building,
@@ -163,7 +196,12 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     prefabDefs,
     floorOverrideDocs,
     contentIndex,
-    ownedApartmentBuiltins,
+    apartmentUnitLayoutProfiles,
+    apartmentUnitLayoutProfilesNeedsDiskFlush: false,
+    ownedApartmentDefaultBuiltins: ownedApartmentBuiltins,
+    activeApartmentLayoutSource: initialAssignedProfile ? "profile" : "owned_default",
+    activeApartmentLayoutProfileId: initialAssignedProfile?.id ?? null,
+    ownedApartmentBuiltins: initialApartmentLayoutDoc,
     ownedApartmentBuiltinsNeedsDiskFlush: false,
     ...(elevatorCabDef ? { elevatorCabDef } : {}),
     // Bootstrap always lands on the elevator variant so the freshly parsed `landingKitDef` matches
@@ -174,7 +212,11 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     ...(apartmentKitDef ? { inactiveLandingKitDef: apartmentKitDef } : {}),
     ...(stairWellDef ? { stairWellDef } : {}),
     activeFloorDocId: first?.floorDocId ?? floorIds[0] ?? "floor_mamutica_ground",
-    focusedStoryLevelIndex: first?.levelIndex ?? 1,
+    focusedStoryLevelIndex: homeStoryLevelIndex,
+    workspace: "apartment",
+    mode: "my_apartment_layout",
+    myApartmentPreviewUnitId: HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+    myApartmentPreviewUnitKey: initialPreviewUnitKey,
     activeInteriorDocId: interiorIds[0] ?? "lobby_central",
       activeCellDocId: contentIndex.cellDocIds[0] ?? "cell_0_0",
       activePrefabDefId: contentIndex.prefabDefIds[0] ?? null,
@@ -184,7 +226,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
           id.startsWith(`${building.id}__L${String(first?.levelIndex ?? 1).padStart(2, "0")}`),
         ) ??
         null,
-    selectedId: null,
+    selectedId: initialSelectedId,
     myApartmentMultiselectExtraIds: [],
     dirty: false,
     historyPast: [],

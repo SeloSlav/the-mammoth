@@ -7,4 +7,6 @@ export type ApartmentSittablePrompt = {
   label: string;
   modelRelPath: string;
   root: THREE.Object3D;
+  /** Lateral seat along decor local +X (`0` = left band when `lateralSeatCount > 1`). */
+  seatIndex: number;
 };

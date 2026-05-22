@@ -41,6 +41,7 @@ import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoor
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { FpBalconyGrowSession } from "../fpBalconyGrow/fpBalconyGrowSession.js";
 import { balconyGrowPromptFromDecorRaycast } from "../fpBalconyGrow/fpBalconyGrowSession.js";
+import { balconyGrowInspectBlocksGrowTrayStash } from "../fpBalconyGrow/fpBalconyGrowInspectState.js";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
@@ -734,7 +735,8 @@ export function createFpSessionMainRafFrame(
         cachedBalconyGrowPrompt !== null ||
         cachedSitPromptHud !== null ||
         cachedElevDoorPrompt !== null ||
-        cachedApartmentDoorHud !== null;
+        cachedApartmentDoorHud !== null ||
+        balconyGrowInspectBlocksGrowTrayStash();
       const hudPickRaycastDue = fpHudPickRaycastDue({
         state: hudPickThrottleState,
         frameIndex: hudHeavyFrame,
@@ -868,8 +870,9 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (
-        lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
-        cachedBalconyGrowPrompt?.kind === "balcony_grow_tray"
+        !balconyGrowInspectBlocksGrowTrayStash() &&
+        (lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY ||
+          cachedBalconyGrowPrompt?.kind === "balcony_grow_tray")
       ) {
         const growStash =
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY
@@ -885,7 +888,13 @@ export function createFpSessionMainRafFrame(
               : cachedBalconyGrowPrompt!.stashLabel,
           willClose: activeStash?.stashKey === growStash.stashKey,
         });
-      } else if (aSys?.kind === "apartment_stash") {
+      } else if (
+        aSys?.kind === "apartment_stash" &&
+        !(
+          aSys.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
+          balconyGrowInspectBlocksGrowTrayStash()
+        )
+      ) {
         setFpPickupPrompt({
           kind: "apartment_stash",
           stashKey: aSys.stashKey,

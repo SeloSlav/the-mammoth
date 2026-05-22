@@ -162,9 +162,10 @@ fn now_micros(ctx: &ReducerContext) -> i64 {
 }
 
 fn owner_has_active_craft(ctx: &ReducerContext, owner: Identity, now: i64) -> bool {
-    ctx.db.craft_queue_item().iter().any(|q| {
-        q.owner == owner && q.start_micros > 0 && q.finish_micros > now
-    })
+    ctx.db
+        .craft_queue_item()
+        .iter()
+        .any(|q| q.owner == owner && q.start_micros > 0 && q.finish_micros > now)
 }
 
 fn next_order_index(ctx: &ReducerContext, owner: Identity) -> u32 {
@@ -253,11 +254,7 @@ fn try_activate_waiting_for_owner(ctx: &ReducerContext, owner: Identity) {
 
     for (mid, amt) in &totals {
         if let Err(e) = consume_carrier_def_quantity(ctx, owner, mid, *amt) {
-            log::warn!(
-                "crafting: consume {:?} failed queue {}: {e}",
-                mid,
-                next.id
-            );
+            log::warn!("crafting: consume {:?} failed queue {}: {e}", mid, next.id);
             ctx.db.craft_queue_item().id().delete(next.id);
             try_activate_waiting_for_owner(ctx, owner);
             return;
@@ -303,12 +300,8 @@ fn complete_craft_job(ctx: &ReducerContext, job: CraftQueueItem) {
 
     let qty = craft_output_quantity(out_item.max_stack, cons.output_quantity);
 
-    if let Err(e) = inventory::try_grant_stack_to_player(
-        ctx,
-        owner,
-        job.output_def_id.clone(),
-        qty,
-    ) {
+    if let Err(e) = inventory::try_grant_stack_to_player(ctx, owner, job.output_def_id.clone(), qty)
+    {
         log::error!(
             "crafting: grant {} x{} failed {:?}: {e}",
             job.output_def_id,
@@ -384,10 +377,13 @@ pub fn start_hud_toast_cleanup_schedule(ctx: &ReducerContext) {
         return;
     }
     let interval = TimeDuration::from_micros(45_000_000);
-    let _ = ctx.db.hud_toast_cleanup_tick().insert(HudToastCleanupSchedule {
-        scheduled_id: 0,
-        scheduled_at: interval.into(),
-    });
+    let _ = ctx
+        .db
+        .hud_toast_cleanup_tick()
+        .insert(HudToastCleanupSchedule {
+            scheduled_id: 0,
+            scheduled_at: interval.into(),
+        });
 }
 
 #[spacetimedb::reducer]

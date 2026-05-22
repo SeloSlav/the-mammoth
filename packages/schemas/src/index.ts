@@ -10,6 +10,7 @@ export * from "./elevatorCabDef.js";
 export * from "./landingKitDef.js";
 export * from "./stairWellDef.js";
 export * from "./ownedApartmentBuiltins.js";
+export * from "./apartmentUnitLayoutProfiles.js";
 export * from "./apartmentStashRules.js";
 export * from "./apartmentStashLocationMatch.js";
 export * from "./apartmentAuthoringAssetVisScale.js";

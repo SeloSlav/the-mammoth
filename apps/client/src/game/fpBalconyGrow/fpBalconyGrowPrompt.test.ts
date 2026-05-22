@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import { getBalconyGrowTrayPromptFromHit } from "./fpBalconyGrowPrompt.js";
+import { growTrayIdForPlacement } from "./fpBalconyGrowTrayDecor.js";
 
 vi.mock("../fpApartment/fpApartmentGameplay.js", () => ({
   clientOwnsClaimedApartmentUnit: () => true,
@@ -31,7 +32,12 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
 }
 
 describe("getBalconyGrowTrayPromptFromHit", () => {
-  it("still offers grow-tray stash when the aimed slot has a growing plant", () => {
+  it("uses decor ids for imported grow trays and content ids for authored trays", () => {
+    expect(growTrayIdForPlacement("db:42", 42n)).toBe("decor:42");
+    expect(growTrayIdForPlacement("content:unit-a:tray-authored", null)).toBe("tray-authored");
+  });
+
+  it("suppresses grow-tray stash when the aimed slot has a growing plant", () => {
     const mesh = new THREE.Mesh();
     mesh.userData.mammothGrowTrayId = "tray-a";
     mesh.userData.mammothGrowTrayUnitKey = "u1";
@@ -47,6 +53,6 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
       growStateWithPlants(),
     );
 
-    expect(prompt?.kind).toBe("balcony_grow_tray");
+    expect(prompt).toBeNull();
   });
 });

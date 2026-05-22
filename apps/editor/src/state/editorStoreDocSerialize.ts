@@ -6,6 +6,7 @@ import {
   FloorOverrideDocSchema,
   InteriorDocSchema,
   LandingKitDefSchema,
+  ApartmentUnitLayoutProfilesDocSchema,
   OwnedApartmentBuiltinsDocSchema,
   PrefabDefSchema,
   StairWellDefSchema,
@@ -16,6 +17,7 @@ import {
   type FloorOverrideDoc,
   type InteriorDoc,
   type LandingKitDef,
+  type ApartmentUnitLayoutProfilesDoc,
   type OwnedApartmentBuiltinsDoc,
   type PrefabDef,
   type StairWellDef,
@@ -61,4 +63,10 @@ export function serializeOwnedApartmentBuiltinsDocPretty(
   doc: OwnedApartmentBuiltinsDoc,
 ): string {
   return `${JSON.stringify(OwnedApartmentBuiltinsDocSchema.parse(doc), null, 2)}\n`;
+}
+
+export function serializeApartmentUnitLayoutProfilesDocPretty(
+  doc: ApartmentUnitLayoutProfilesDoc,
+): string {
+  return `${JSON.stringify(ApartmentUnitLayoutProfilesDocSchema.parse(doc), null, 2)}\n`;
 }

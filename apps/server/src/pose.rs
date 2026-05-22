@@ -44,9 +44,8 @@ pub fn bump_firearm_presentation_seq(ctx: &ReducerContext, id: Identity) {
 
 pub fn ensure_player_pose_row(ctx: &ReducerContext, id: Identity) {
     if ctx.db.player_pose().identity().find(&id).is_none() {
-        let sp = apartments::join_pose_from_owned_bed(ctx, id).unwrap_or_else(|| {
-            crate::spawn_routing::random_public_spawn_pose(ctx, id)
-        });
+        let sp = apartments::join_pose_from_owned_bed(ctx, id)
+            .unwrap_or_else(|| crate::spawn_routing::random_public_spawn_pose(ctx, id));
         let _ = ctx.db.player_pose().insert(sp);
     }
 }

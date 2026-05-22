@@ -56,6 +56,7 @@ export function rebuildEditorStructuralIfNeeded(
     landingKitDef: s.landingKitDef,
     stairWellDef: s.stairWellDef,
     stairWellAuthorScope: s.stairWellAuthorScope,
+    myApartmentPreviewUnitId: s.myApartmentPreviewUnitId,
     textureLoader: deps.textureLoader,
     emptyFloorDoc,
   });

@@ -6,6 +6,7 @@ import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBan
 import { residentialBalconyPartitionFace } from "./residentialUnitBalcony.js";
 import {
   appendOwnedApartmentEditorShellWalls,
+  listOwnedApartmentAuthoringPreviewUnits,
   resolveOwnedApartmentAuthoringPreviewLayout,
 } from "./ownedApartmentEditorShell.js";
 import { floorPlaceholderMeshMaterials } from "./floorPlaceholderMeshMaterials.js";
@@ -87,5 +88,17 @@ describe("owned apartment editor shell (game-derived)", () => {
     expect(
       group.children.some((c) => c.name === "editor_ref_shell_wall_e"),
     ).toBe(false);
+  });
+
+  it("lists every residential slab with a corridor door template on the typical plate", () => {
+    const floor = readTypicalFloorDoc();
+    const units = listOwnedApartmentAuthoringPreviewUnits(floor);
+    expect(units.length).toBeGreaterThan(10);
+    expect(units.some((u) => u.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID)).toBe(
+      true,
+    );
+    expect(
+      units.find((u) => u.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID)?.isPlayerSpawnHome,
+    ).toBe(true);
   });
 });

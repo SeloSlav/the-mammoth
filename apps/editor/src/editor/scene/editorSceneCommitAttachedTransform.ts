@@ -160,6 +160,7 @@ export function persistAllMyApartmentWallPlacementsFromScene(): boolean {
   const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
     floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
     building: store.building,
+    previewUnitId: store.myApartmentPreviewUnitId,
   });
   const fractionMapping = ownedApartmentFractionMappingForEditor({
     layout,
@@ -405,6 +406,7 @@ export function commitEditorAttachedTransform(opts: {
     const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
       floorDoc: store.floorDocs[TYPICAL_FLOOR_DOC_ID],
       building: store.building,
+      previewUnitId: store.myApartmentPreviewUnitId,
     });
     const m = ownedApartmentFractionMappingForEditor({
       layout,

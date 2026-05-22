@@ -6,9 +6,7 @@ use log;
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::auth;
-use crate::inventory_models::{
-    HotbarLocationData, InventoryLocationData, ItemLocation,
-};
+use crate::inventory_models::{HotbarLocationData, InventoryLocationData, ItemLocation};
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
 use crate::player_vitals;

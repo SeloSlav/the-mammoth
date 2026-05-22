@@ -420,7 +420,11 @@ mod tests {
         let h = PLAYER_BODY_HEIGHT_STAND_M;
         let top = feet + h;
         assert!(is_headshot_impact_world_y(feet, h, top - 0.01));
-        assert!(!is_headshot_impact_world_y(feet, h, feet + h - PLAYER_HEAD_ZONE_HEIGHT_M - 0.05));
+        assert!(!is_headshot_impact_world_y(
+            feet,
+            h,
+            feet + h - PLAYER_HEAD_ZONE_HEIGHT_M - 0.05
+        ));
     }
 
     #[test]
@@ -450,5 +454,4 @@ mod tests {
         let t = hit.unwrap().t_hit;
         assert!(t > 0.0 && t < 2.0);
     }
-
 }

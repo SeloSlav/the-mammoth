@@ -33,16 +33,7 @@ const POSITION_CLAMP_ABS_M: f32 = 50_000.0;
 const VELOCITY_CLAMP_ABS_MPS: f32 = 200.0;
 
 #[inline]
-fn finite_pose(
-    x: f32,
-    y: f32,
-    z: f32,
-    yaw: f32,
-    aim_yaw: f32,
-    vx: f32,
-    vy: f32,
-    vz: f32,
-) -> bool {
+fn finite_pose(x: f32, y: f32, z: f32, yaw: f32, aim_yaw: f32, vx: f32, vy: f32, vz: f32) -> bool {
     x.is_finite()
         && y.is_finite()
         && z.is_finite()

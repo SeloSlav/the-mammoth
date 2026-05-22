@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   BALCONY_GROW_TRAY_BUILTIN_IDS,
   BALCONY_GROW_TRAY_MAX_WATER_L,
+  balconyGrowDecorTrayId,
   balconyGrowSpeedModifier,
   balconyGrowStageFromProgress,
   balconyGrowSlotOffsetsFromHalfExtents,
   balconyGrowTrayStashKey,
+  parseBalconyGrowDecorTrayId,
   parseBalconyGrowTrayStashKey,
 } from "./balconyGrowOp.js";
 
@@ -17,6 +19,13 @@ describe("balconyGrowOp", () => {
       trayId: BALCONY_GROW_TRAY_BUILTIN_IDS[0],
     });
     expect(parseBalconyGrowTrayStashKey("unit_a#footlocker")).toBeNull();
+  });
+
+  it("builds decor-backed grow-tray ids", () => {
+    const trayId = balconyGrowDecorTrayId(123n);
+    expect(trayId).toBe("decor:123");
+    expect(parseBalconyGrowDecorTrayId(trayId)).toBe(123n);
+    expect(parseBalconyGrowDecorTrayId("decor:nope")).toBeNull();
   });
 
   it("stacks growth speed modifiers", () => {

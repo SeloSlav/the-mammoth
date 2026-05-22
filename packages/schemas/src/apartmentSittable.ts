@@ -33,6 +33,10 @@ export type ApartmentSittableSpec = {
   promptLabel: string;
   /** Pitch applied on enter (rad); lie uses ceiling look. */
   defaultPitchRad: number;
+  /**
+   * Seats along decor local +X (sofa width). `1` = single center seat (chairs, bed, toilet).
+   */
+  lateralSeatCount?: number;
 };
 
 const CHAIR_SPEC: ApartmentSittableSpec = {
@@ -56,6 +60,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
   interactRadiusM: 1.5,
   promptLabel: "Sit",
   defaultPitchRad: 0,
+  lateralSeatCount: 3,
 };
 
 const TOILET_SPEC: ApartmentSittableSpec = {

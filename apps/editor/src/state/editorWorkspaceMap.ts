@@ -20,6 +20,8 @@ export function workspaceToInitialMode(
   landingDocKind: LandingDocKind,
 ): EditorMode {
   switch (workspace) {
+    case "apartment":
+      return "my_apartment_layout";
     case "cab":
       return "cab";
     case "stairwell":

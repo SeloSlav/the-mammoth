@@ -52,6 +52,7 @@ import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
+import { registerEditorHistoryHotkeys } from "./editorSceneHistoryHotkeys.js";
 import { createEditorOrbitKeyboardMove } from "./editorOrbitKeyboardMove.js";
 import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
@@ -218,6 +219,51 @@ export async function mountEditorScene(
     shouldFrameAfterRebuild: true,
   };
 
+  const applyApartmentEditorLayoutPresentation = (opts?: {
+    reframeCamera?: boolean;
+  }): void => {
+    const st = useEditorStore.getState();
+    if (!shouldPreviewFpApartmentLighting(st)) return;
+
+    applyPmremEnvironment(true);
+    const pmremTexture = scene.environment;
+    syncEditorLightingStack(st, false);
+
+    const decorRoots: THREE.Object3D[] = [contentRoot];
+    const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
+    if (apartmentFurnitureRoot) decorRoots.push(apartmentFurnitureRoot);
+    const shellRoots: THREE.Object3D[] = [];
+    if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
+
+    ensureMammothApartmentDecorShadowRenderer(renderer);
+    dir.castShadow = false;
+    if (structuralState.buildingRoot) {
+      applyApartmentInteriorFloorReceiveShadowUnder(structuralState.buildingRoot);
+    }
+    applyMammothApartmentInteriorEditorLayoutPresentation({
+      scene,
+      renderer,
+      bounce: apartmentInteriorSceneRig,
+      global: { hemi, fill, dir },
+      pmremTexture,
+      shellRoots,
+      decorRoots,
+      view: { camera, raycasters: [raycaster, decorSupportRaycaster] },
+      atmosphereRestore: editorStudioAtmosphere,
+    });
+    resyncEditorMyApartmentDecorShadows();
+    ensureMammothApartmentDecorShadowRenderer(renderer);
+    requestMammothRendererShadowMapUpdate(renderer);
+
+    if (opts?.reframeCamera && structuralState.buildingRoot) {
+      frameMammothApartmentInteriorGameplayPreview({
+        camera,
+        orbitControls,
+        shellRoot: structuralState.buildingRoot,
+      });
+    }
+  };
+
   const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
     const fpApartmentPreview = shouldPreviewFpApartmentLighting(st);
     const globalHdriOn = shouldUseEditorHdri(st);
@@ -233,31 +279,7 @@ export async function mountEditorScene(
     if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
 
     if (fpApartmentPreview) {
-      ensureMammothApartmentDecorShadowRenderer(renderer);
-      dir.castShadow = false;
-      if (structuralState.buildingRoot) {
-        applyApartmentInteriorFloorReceiveShadowUnder(structuralState.buildingRoot);
-      }
-      applyMammothApartmentInteriorEditorLayoutPresentation({
-        scene,
-        renderer,
-        bounce: apartmentInteriorSceneRig,
-        global: { hemi, fill, dir },
-        pmremTexture,
-        shellRoots,
-        decorRoots,
-        view: { camera, raycasters: [raycaster, decorSupportRaycaster] },
-        atmosphereRestore: editorStudioAtmosphere,
-      });
-      resyncEditorMyApartmentDecorShadows();
-      ensureMammothApartmentDecorShadowRenderer(renderer);
-      if (structuralState.buildingRoot) {
-        frameMammothApartmentInteriorGameplayPreview({
-          camera,
-          orbitControls,
-          shellRoot: structuralState.buildingRoot,
-        });
-      }
+      applyApartmentEditorLayoutPresentation({ reframeCamera: true });
     } else {
       syncMammothApartmentInteriorMetallicEnv({
         scene,
@@ -1297,7 +1319,8 @@ export async function mountEditorScene(
       programmaticTransformControlsDepth > 0 ||
       transformControls.dragging === true ||
       levelEditorTransformGesture,
-    syncLightingAttachment: syncCurrentEditorLightingAttachment,
+  syncLightingAttachment: syncCurrentEditorLightingAttachment,
+    syncApartmentLayoutPresentation: () => applyApartmentEditorLayoutPresentation(),
     syncTransformAttachment,
     requestDecorShadowMapBake: () => {
       requestMammothRendererShadowMapUpdate(renderer);
@@ -1325,6 +1348,7 @@ export async function mountEditorScene(
   }
 
   rebuildStructural();
+  myApartmentAuthoring.flushDeferredMountSync();
   applyEnvironment(useEditorStore.getState());
   syncTransformAttachment();
 
@@ -1383,6 +1407,9 @@ export async function mountEditorScene(
   const disposeApartmentLayoutDeleteHotkeys = registerEditorApartmentLayoutDeleteHotkeys({
     getTransformControlsDragging: () => transformControls.dragging === true,
   });
+  const disposeHistoryHotkeys = registerEditorHistoryHotkeys({
+    getTransformControlsDragging: () => transformControls.dragging === true,
+  });
 
   return () => {
     registerEditorSpawnCalculator(null);
@@ -1393,6 +1420,7 @@ export async function mountEditorScene(
     stopRenderLoop();
     disposeTransformModeDigitHotkeys();
     disposeApartmentLayoutDeleteHotkeys();
+    disposeHistoryHotkeys();
     canvas.removeEventListener("pointerdown", pointers.onPointerDown);
     canvas.removeEventListener("pointerup", pointers.onPointerUp);
     unsub();

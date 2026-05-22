@@ -76,6 +76,8 @@ export function mountFpBalconyGrowSession(opts: {
   scene: THREE.Scene;
   conn: DbConnection;
   canvas: HTMLCanvasElement;
+  /** Local client SFX after passing pour checks (`water-pour.wav` via `LocalGameAudio`). */
+  onWaterPourRequested?: () => void;
 }): FpBalconyGrowSession {
   const preview = createBalconyGrowSeedPreview(opts.scene);
   const waterVisuals = createBalconyWaterPatchVisuals(opts.scene);
@@ -104,6 +106,9 @@ export function mountFpBalconyGrowSession(opts: {
       const growState = readBalconyGrowOpUnitState(opts.conn, claimedUnitKey);
 
       decor.syncBalconyGrowTrayDecorVisibility(feet, claimedUnitKey);
+      decor.syncBalconyGrowSlotVisuals(growState.plants, growState.trays, (uk, tid) =>
+        stashHasFertilizer(opts.conn, uk, tid),
+      );
       decor.collectBalconyGrowPickMeshesForPlayer(feet, _aimPickScratch);
       const hits = [...decor.raycastBalconyGrowTrayHits(feet, camera)];
       cachedPlacement = resolveBalconyGrowPlacement(
@@ -117,10 +122,13 @@ export function mountFpBalconyGrowSession(opts: {
         growState,
       );
       syncBalconyGrowPlacementPreview(preview, cachedPlacement);
-      syncBalconyGrowInspect(hits, growState, camera, opts.canvas, _aimPickScratch);
-
-      decor.syncBalconyGrowSlotVisuals(growState.plants, growState.trays, (uk, tid) =>
-        stashHasFertilizer(opts.conn, uk, tid),
+      syncBalconyGrowInspect(
+        hits,
+        growState,
+        camera,
+        opts.canvas,
+        _aimPickScratch,
+        decor.getGrowTrayPickMeshes(),
       );
       waterVisuals.sync(growState.patches, feet.y, Date.now() * 1000);
     },
@@ -169,6 +177,7 @@ export function mountFpBalconyGrowSession(opts: {
       const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
       const hit = new THREE.Vector3();
       if (!_raycaster.ray.intersectPlane(floor, hit)) return false;
+      opts.onWaterPourRequested?.();
       void conn.reducers.dumpWaterFromBottle({ aimX: hit.x, aimZ: hit.z });
       return true;
     },

@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import type { ApartmentSittableSpec } from "@the-mammoth/schemas";
+import {
+  apartmentSittableLateralSeatCount,
+  apartmentSittableLateralSeatLocalX,
+  computeDecorGroupLocalBounds,
+} from "./fpApartmentSittableSeat.js";
 
 export type ApartmentSittableWorldPose = {
   feetX: number;
@@ -25,21 +30,36 @@ const _sizeScratch = new THREE.Vector3();
 export function computeApartmentSittableWorldPose(
   group: THREE.Object3D,
   spec: ApartmentSittableSpec,
+  seatIndex = 0,
 ): ApartmentSittableWorldPose {
   group.updateMatrixWorld(true);
-  _boundsScratch.setFromObject(group);
-  _boundsScratch.getSize(_sizeScratch);
-  if (_sizeScratch.lengthSq() < 1e-6) {
+  const seatCount = apartmentSittableLateralSeatCount(spec);
+  if (seatCount > 1) {
+    computeDecorGroupLocalBounds(group, _boundsScratch);
+    const seatLocalX = apartmentSittableLateralSeatLocalX(_boundsScratch, seatIndex, seatCount);
+    const seatLocalZ = (_boundsScratch.min.z + _boundsScratch.max.z) * 0.5;
     _localSeat.set(
-      spec.localSeatOffset.x,
-      spec.localSeatOffset.y,
-      spec.localSeatOffset.z,
+      seatLocalX + spec.localSeatOffset.x,
+      _boundsScratch.min.y + spec.localSeatOffset.y,
+      seatLocalZ + spec.localSeatOffset.z,
     );
     group.localToWorld(_localSeat);
     _worldSeat.copy(_localSeat);
   } else {
-    _boundsScratch.getCenter(_worldSeat);
-    _worldSeat.y = _boundsScratch.min.y + spec.localSeatOffset.y;
+    _boundsScratch.setFromObject(group);
+    _boundsScratch.getSize(_sizeScratch);
+    if (_sizeScratch.lengthSq() < 1e-6) {
+      _localSeat.set(
+        spec.localSeatOffset.x,
+        spec.localSeatOffset.y,
+        spec.localSeatOffset.z,
+      );
+      group.localToWorld(_localSeat);
+      _worldSeat.copy(_localSeat);
+    } else {
+      _boundsScratch.getCenter(_worldSeat);
+      _worldSeat.y = _boundsScratch.min.y + spec.localSeatOffset.y;
+    }
   }
 
   group.getWorldQuaternion(_worldQuatScratch);

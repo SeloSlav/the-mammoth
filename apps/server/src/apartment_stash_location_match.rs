@@ -6,7 +6,7 @@ use spacetimedb::ReducerContext;
 use crate::apartments::apartment_unit_decor;
 use crate::inventory_models::{
     parse_apartment_stash_key_v2, stash_location_matches, ParsedApartmentStashKey,
-    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_GROW_TRAY,
+    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY,
     APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 
@@ -61,10 +61,7 @@ fn resolved_stash_kind(
         ParsedApartmentStashKey::BareUnitKey(_) => Some(APARTMENT_STASH_KIND_FOOTLOCKER),
         ParsedApartmentStashKey::LegacyComposite { kind, .. } => Some(kind),
         ParsedApartmentStashKey::GrowTray { .. } => Some(APARTMENT_STASH_KIND_GROW_TRAY),
-        ParsedApartmentStashKey::DecorInstance {
-            unit_key,
-            decor_id,
-        } => {
+        ParsedApartmentStashKey::DecorInstance { unit_key, decor_id } => {
             let decor = ctx.db.apartment_unit_decor().decor_id().find(*decor_id)?;
             if decor.unit_key.as_str() != *unit_key {
                 return None;
@@ -101,14 +98,12 @@ fn footlocker_location_alias(
                 decor_id: ri,
             },
         ) => *su == *ru && si == ri,
-        (
-            ParsedApartmentStashKey::DecorInstance { unit_key: su, .. },
-            other,
-        ) => unit_key_from(other) == *su,
-        (
-            other,
-            ParsedApartmentStashKey::DecorInstance { unit_key: ru, .. },
-        ) => unit_key_from(other) == *ru,
+        (ParsedApartmentStashKey::DecorInstance { unit_key: su, .. }, other) => {
+            unit_key_from(other) == *su
+        }
+        (other, ParsedApartmentStashKey::DecorInstance { unit_key: ru, .. }) => {
+            unit_key_from(other) == *ru
+        }
         _ => true,
     }
 }

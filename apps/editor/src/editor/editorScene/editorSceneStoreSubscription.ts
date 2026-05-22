@@ -4,7 +4,10 @@ import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
 import { rebuildStairWellPreviewRoot } from "@the-mammoth/world";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
-import { resyncEditorMyApartmentDecorShadows } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
+import {
+  resyncEditorMyApartmentDecorShadows,
+  applyEditorMyApartmentLayoutHiddenPlacements,
+} from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import { useEditorStore } from "../../state/editorStore.js";
 import type { EditorStructuralState } from "./editorSceneStructuralRebuild.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
@@ -259,6 +262,15 @@ export function subscribeEditorSceneStore(deps: {
         s.mode === "my_apartment_layout"
       ) {
         resyncEditorMyApartmentDecorShadows();
+      }
+      if (
+        s.mode === "my_apartment_layout" &&
+        (s.myApartmentLayoutHiddenPlacementIds !== prev.myApartmentLayoutHiddenPlacementIds ||
+          s.mode !== prev.mode)
+      ) {
+        applyEditorMyApartmentLayoutHiddenPlacements(
+          new Set(s.myApartmentLayoutHiddenPlacementIds),
+        );
       }
       if (s.shadowsEnabled !== prev.shadowsEnabled) {
         const apartmentDecorShadows =

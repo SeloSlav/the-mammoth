@@ -3,7 +3,7 @@
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
-use crate::apartments::{self, apartment_unit, apartment_unit_decor};
+use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::auth;
 use crate::crafting::emit_hud_notice;
 use crate::inventory::{self, find_item_in_hotbar_slot, find_item_in_stash_slot};
@@ -139,6 +139,21 @@ fn journal_row_key(owner: Identity, crop_def_id: &str) -> String {
 
 pub(crate) fn is_known_tray_id(tray_id: &str) -> bool {
     BALCONY_GROW_TRAY_BUILTIN_IDS.contains(&tray_id)
+        || tray_id
+            .strip_prefix("decor:")
+            .and_then(|id| id.parse::<u64>().ok())
+            .is_some()
+}
+
+#[derive(Clone)]
+struct ResolvedGrowTrayPlacement {
+    tray_id: String,
+    pos_x: f32,
+    pos_z: f32,
+}
+
+fn grow_tray_id_for_decor_id(decor_id: u64) -> String {
+    format!("decor:{decor_id}")
 }
 
 fn tick_interval_micros() -> i64 {
@@ -165,15 +180,16 @@ pub(crate) fn ensure_balcony_grow_for_owner(ctx: &ReducerContext, owner: Identit
 
 pub(crate) fn ensure_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str) {
     ensure_grow_light_row(ctx, unit_key);
-    let tray_positions = resolve_tray_world_positions(ctx, unit_key);
+    let tray_placements = resolve_tray_placements(ctx, unit_key);
     let tray_table = ctx.db.balcony_grow_tray();
-    for (i, tray_id) in BALCONY_GROW_TRAY_BUILTIN_IDS.iter().enumerate() {
-        let (pos_x, pos_z) = tray_positions.get(i).copied().unwrap_or((0.0, 0.0));
-        let row_key = tray_row_key(unit_key, tray_id);
+    for placement in tray_placements {
+        let row_key = tray_row_key(unit_key, placement.tray_id.as_str());
         if let Some(mut row) = tray_table.row_key().find(&row_key) {
-            if (row.pos_x - pos_x).abs() > 0.02 || (row.pos_z - pos_z).abs() > 0.02 {
-                row.pos_x = pos_x;
-                row.pos_z = pos_z;
+            if (row.pos_x - placement.pos_x).abs() > 0.02
+                || (row.pos_z - placement.pos_z).abs() > 0.02
+            {
+                row.pos_x = placement.pos_x;
+                row.pos_z = placement.pos_z;
                 tray_table.row_key().update(row);
             }
             continue;
@@ -181,9 +197,9 @@ pub(crate) fn ensure_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str)
         let _ = tray_table.insert(BalconyGrowTray {
             row_key,
             unit_key: unit_key.to_string(),
-            tray_id: (*tray_id).to_string(),
-            pos_x,
-            pos_z,
+            tray_id: placement.tray_id,
+            pos_x: placement.pos_x,
+            pos_z: placement.pos_z,
             water_liters: 0.0,
             dry_ticks: 0,
         });
@@ -216,44 +232,62 @@ fn authored_grow_tray_layout_fraction(tray_id: &str) -> Option<(f32, f32)> {
     Some((fx, fz))
 }
 
-fn resolve_tray_world_positions(ctx: &ReducerContext, unit_key: &str) -> Vec<(f32, f32)> {
+fn content_grow_tray_covered_by_decor(decor_rows: &[ApartmentUnitDecor], x: f32, z: f32) -> bool {
+    const DEDUPE_XZ_M: f32 = 0.4;
+    let dedupe_sq = DEDUPE_XZ_M * DEDUPE_XZ_M;
+    decor_rows.iter().any(|d| {
+        let dx = d.pos_x - x;
+        let dz = d.pos_z - z;
+        dx * dx + dz * dz <= dedupe_sq
+    })
+}
+
+fn resolve_tray_placements(ctx: &ReducerContext, unit_key: &str) -> Vec<ResolvedGrowTrayPlacement> {
     let mut decor_rows: Vec<_> = ctx
         .db
         .apartment_unit_decor()
         .iter()
         .filter(|d| d.unit_key == unit_key && d.model_rel_path.contains(GROW_TRAY_MODEL_SUFFIX))
         .collect();
-    decor_rows.sort_by(|a, b| {
-        a.pos_z
-            .partial_cmp(&b.pos_z)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then(
-                a.pos_x
-                    .partial_cmp(&b.pos_x)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-            )
-    });
-    if !decor_rows.is_empty() {
-        return decor_rows.into_iter().map(|d| (d.pos_x, d.pos_z)).collect();
-    }
+    decor_rows.sort_by(|a, b| a.decor_id.cmp(&b.decor_id));
+    let mut out: Vec<ResolvedGrowTrayPlacement> = decor_rows
+        .iter()
+        .map(|d| ResolvedGrowTrayPlacement {
+            tray_id: grow_tray_id_for_decor_id(d.decor_id),
+            pos_x: d.pos_x,
+            pos_z: d.pos_z,
+        })
+        .collect();
+
     let Some(unit) = ctx
         .db
         .apartment_unit()
         .unit_key()
         .find(&unit_key.to_string())
     else {
-        return Vec::new();
+        return out;
     };
-    BALCONY_GROW_TRAY_BUILTIN_IDS
-        .iter()
-        .map(|tray_id| {
-            let (fx, fz) = authored_grow_tray_layout_fraction(tray_id).unwrap_or((0.0, 0.0));
-            apartments::authored_placed_item_world_xz(&unit, fx, fz)
-        })
-        .collect()
+    for tray_id in BALCONY_GROW_TRAY_BUILTIN_IDS {
+        let (fx, fz) = authored_grow_tray_layout_fraction(tray_id).unwrap_or((0.0, 0.0));
+        let (pos_x, pos_z) = apartments::authored_placed_item_world_xz(&unit, fx, fz);
+        if content_grow_tray_covered_by_decor(&decor_rows, pos_x, pos_z) {
+            continue;
+        }
+        out.push(ResolvedGrowTrayPlacement {
+            tray_id: tray_id.to_string(),
+            pos_x,
+            pos_z,
+        });
+    }
+    out
 }
 
-fn feet_inside_unit_grow_tray_slack(unit: &apartments::ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+fn feet_inside_unit_grow_tray_slack(
+    unit: &apartments::ApartmentUnit,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
     let s = GROW_TRAY_UNIT_HULL_SLACK_XZ;
     x >= unit.bound_min_x - s
         && x <= unit.bound_max_x + s
@@ -263,27 +297,9 @@ fn feet_inside_unit_grow_tray_slack(unit: &apartments::ApartmentUnit, x: f32, y:
         && y <= unit.bound_max_y + 2.45
 }
 
-fn resolve_tray_world_xz(
-    ctx: &ReducerContext,
-    unit_key: &str,
-    tray_id: &str,
-) -> Option<(f32, f32)> {
-    if let Some(tray) = tray_row(ctx, unit_key, tray_id) {
-        if tray.pos_x.abs() > 0.02 || tray.pos_z.abs() > 0.02 {
-            return Some((tray.pos_x, tray.pos_z));
-        }
-    }
-    let unit = ctx
-        .db
-        .apartment_unit()
-        .unit_key()
-        .find(&unit_key.to_string())?;
-    let (fx, fz) = authored_grow_tray_layout_fraction(tray_id)?;
-    Some(apartments::authored_placed_item_world_xz(&unit, fx, fz))
-}
-
 fn feet_vertical_ok(unit_floor_y: f32, y: f32) -> bool {
-    y >= unit_floor_y - INTERACT_FEET_Y_BELOW_SLACK_M && y <= unit_floor_y + INTERACT_FEET_Y_ABOVE_SLACK_M
+    y >= unit_floor_y - INTERACT_FEET_Y_BELOW_SLACK_M
+        && y <= unit_floor_y + INTERACT_FEET_Y_ABOVE_SLACK_M
 }
 
 fn pose_near_tray(
@@ -324,16 +340,24 @@ fn player_near_tray(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> Resu
     if owner != sender {
         return Err("not your apartment".to_string());
     }
-    let tray = tray_row(ctx, unit_key, tray_id).ok_or_else(|| "unknown tray".to_string())?;
-    let (tray_x, tray_z) =
-        resolve_tray_world_xz(ctx, unit_key, tray_id).unwrap_or((tray.pos_x, tray.pos_z));
+    let placement = resolve_tray_placements(ctx, unit_key)
+        .into_iter()
+        .find(|p| p.tray_id == tray_id)
+        .ok_or_else(|| "unknown tray".to_string())?;
     let pose = ctx
         .db
         .player_pose()
         .identity()
         .find(&sender)
         .ok_or_else(|| "missing pose".to_string())?;
-    if !pose_near_tray(&unit, pose.x, pose.y, pose.z, tray_x, tray_z) {
+    if !pose_near_tray(
+        &unit,
+        pose.x,
+        pose.y,
+        pose.z,
+        placement.pos_x,
+        placement.pos_z,
+    ) {
         return Err("move closer to the grow tray".to_string());
     }
     Ok(())
@@ -341,7 +365,11 @@ fn player_near_tray(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> Resu
 
 fn fertilizer_present(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> bool {
     let stash_key = grow_tray_stash_key(unit_key, tray_id);
-    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string());
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string());
     let Some(owner) = unit.and_then(|u| u.owner) else {
         return false;
     };
@@ -464,15 +492,15 @@ fn plant_balcony_grow_slot_impl(
     slot_index: u8,
     seed_def_id: &str,
 ) -> Result<(), String> {
-    if !is_known_tray_id(tray_id) {
-        return Err("invalid tray".to_string());
-    }
     if slot_index >= BALCONY_GROW_SLOTS_PER_TRAY {
         return Err("invalid slot".to_string());
     }
     let spec = items_catalog::balcony_grow_spec(seed_def_id)
         .ok_or_else(|| "not a plantable seed".to_string())?;
     ensure_balcony_grow_for_unit(ctx, unit_key);
+    if tray_row(ctx, unit_key, tray_id).is_none() {
+        return Err("invalid tray".to_string());
+    }
     player_near_tray(ctx, unit_key, tray_id)?;
     if !slot_empty(ctx, unit_key, tray_id, slot_index) {
         return Err("slot already occupied".to_string());
@@ -528,7 +556,8 @@ pub fn harvest_balcony_grow_slot(
         log::debug!("harvest_balcony_grow_slot blocked: {e}");
         return;
     }
-    if let Err(e) = harvest_balcony_grow_slot_impl(ctx, unit_key.as_str(), tray_id.as_str(), slot_index)
+    if let Err(e) =
+        harvest_balcony_grow_slot_impl(ctx, unit_key.as_str(), tray_id.as_str(), slot_index)
     {
         log::debug!("harvest_balcony_grow_slot: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
@@ -541,7 +570,8 @@ fn harvest_balcony_grow_slot_impl(
     tray_id: &str,
     slot_index: u8,
 ) -> Result<(), String> {
-    if !is_known_tray_id(tray_id) || slot_index >= BALCONY_GROW_SLOTS_PER_TRAY {
+    ensure_balcony_grow_for_unit(ctx, unit_key);
+    if slot_index >= BALCONY_GROW_SLOTS_PER_TRAY || tray_row(ctx, unit_key, tray_id).is_none() {
         return Err("invalid tray slot".to_string());
     }
     player_near_tray(ctx, unit_key, tray_id)?;
@@ -557,12 +587,7 @@ fn harvest_balcony_grow_slot_impl(
     }
     let spec = items_catalog::balcony_grow_spec(plant.crop_def_id.as_str())
         .ok_or_else(|| "unknown crop".to_string())?;
-    inventory::try_grant_stack_to_player(
-        ctx,
-        sender,
-        spec.harvest_def_id.clone(),
-        1,
-    )?;
+    inventory::try_grant_stack_to_player(ctx, sender, spec.harvest_def_id.clone(), 1)?;
     plant_table.row_key().delete(row_key);
     maybe_emit_first_harvest_journal(ctx, sender, plant.crop_def_id.as_str());
     Ok(())
@@ -570,16 +595,18 @@ fn harvest_balcony_grow_slot_impl(
 
 fn first_harvest_hint(crop_def_id: &str) -> &'static str {
     match crop_def_id {
-        "lovage-seeds" => {
-            "Libelek goes in Thursday soup — ask the engineer for the communal pot."
-        }
+        "lovage-seeds" => "Libelek goes in Thursday soup — ask the engineer for the communal pot.",
         "parsley-seeds" => "Fresh peršin finishes every pot — stash some for trade day.",
         "dill-seeds" => "Kopar pairs with tank fish — the engineer knows the grill schedule.",
         "paprika-seedlings" => "Feferoni slow-roast best on the stove — save three for ajvar.",
         "green-onion-sets" => "Mladi luk tops any ćevap plate — neighbours pay in cigarettes.",
-        "radish-sprout-seeds" => "Klica repe is emergency greens — eat raw when the fridge runs dry.",
+        "radish-sprout-seeds" => {
+            "Klica repe is emergency greens — eat raw when the fridge runs dry."
+        }
         "oyster-mushroom-spore" => "Dry bukovačica on the rack before soup season.",
-        "scented-geranium-cuttings" => "Pelargonija čaj calms the block — steep after a long shift.",
+        "scented-geranium-cuttings" => {
+            "Pelargonija čaj calms the block — steep after a long shift."
+        }
         _ => "Balcony harvest logged — check the stove for communal recipes.",
     }
 }
@@ -610,11 +637,7 @@ pub fn dump_water_from_bottle(ctx: &ReducerContext, aim_x: f32, aim_z: f32) {
     }
 }
 
-fn dump_water_from_bottle_impl(
-    ctx: &ReducerContext,
-    aim_x: f32,
-    aim_z: f32,
-) -> Result<(), String> {
+fn dump_water_from_bottle_impl(ctx: &ReducerContext, aim_x: f32, aim_z: f32) -> Result<(), String> {
     let sender = ctx.sender();
     let Some(unit_key) = apartments::claimed_unit_key_for_owner(ctx, sender) else {
         return Err("need a claimed apartment".to_string());
@@ -648,6 +671,7 @@ fn dump_water_from_bottle_impl(
 
     let now = ctx.timestamp.to_micros_since_unix_epoch();
     let expires = now + BALCONY_WATER_PATCH_DURATION_SECS * 1_000_000;
+    ensure_balcony_grow_for_unit(ctx, unit_key.as_str());
     let _ = ctx.db.balcony_water_patch().insert(BalconyWaterPatch {
         patch_id: 0,
         unit_key: unit_key.clone(),
@@ -670,10 +694,15 @@ fn apply_patch_water_to_trays(
     patch_z: f32,
     dump_liters: f32,
 ) {
+    let current_tray_ids: std::collections::HashSet<String> =
+        resolve_tray_placements(ctx, unit_key)
+            .into_iter()
+            .map(|p| p.tray_id)
+            .collect();
     let tray_table = ctx.db.balcony_grow_tray();
     let trays: Vec<BalconyGrowTray> = tray_table
         .iter()
-        .filter(|t| t.unit_key == unit_key)
+        .filter(|t| t.unit_key == unit_key && current_tray_ids.contains(t.tray_id.as_str()))
         .collect();
     if trays.is_empty() {
         return;
@@ -788,11 +817,16 @@ pub(crate) fn grow_tray_stash_near_sender(
     let unit_key = stash_key.get(..sep)?;
     let tail = stash_key.get(sep + 1..)?;
     let tray_id = tail.strip_prefix("grow_tray:")?;
-    if !is_known_tray_id(tray_id) {
+    ensure_balcony_grow_for_unit(ctx, unit_key);
+    if tray_row(ctx, unit_key, tray_id).is_none() {
         return None;
     }
     player_near_tray(ctx, unit_key, tray_id).ok()?;
-    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string())?;
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())?;
     let owner = unit.owner?;
     Some((owner, unit_key.to_string()))
 }
@@ -811,6 +845,8 @@ mod tests {
         for id in BALCONY_GROW_TRAY_BUILTIN_IDS {
             assert!(is_known_tray_id(id));
         }
+        assert!(is_known_tray_id("decor:123"));
+        assert!(!is_known_tray_id("decor:nope"));
     }
 
     #[test]

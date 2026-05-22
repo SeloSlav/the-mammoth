@@ -13,9 +13,11 @@ import {
 import { normalizeApartmentDecorModelRelPath } from "./fpApartmentDecorAssets.js";
 import { clientMayUseApartmentSittable } from "./fpApartmentGameplay.js";
 import { computeApartmentSittableWorldPose } from "./fpApartmentSittablePose.js";
+import { resolveApartmentSittableSeatIndexForSpec } from "./fpApartmentSittableSeat.js";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 
 const _screenCenterNdc = new THREE.Vector2(0, 0);
+const _worldAimScratch = new THREE.Vector3();
 const _raycaster = new THREE.Raycaster();
 const _cameraForwardScratch = new THREE.Vector3();
 
@@ -78,6 +80,7 @@ function resolveDecorSittableRoot(obj: THREE.Object3D): DecorSittableRoot | null
 function promptFromDecorRoot(
   conn: DbConnection,
   decor: DecorSittableRoot,
+  worldAimPoint: THREE.Vector3,
 ): ApartmentSittablePrompt | null {
   const spec = apartmentSittableSpecForPlacedItem({
     modelRelPath: decor.modelRelPath,
@@ -91,6 +94,7 @@ function promptFromDecorRoot(
     label: spec.promptLabel,
     modelRelPath: spec.modelRelPath,
     root: decor.root,
+    seatIndex: resolveApartmentSittableSeatIndexForSpec(decor.root, spec, worldAimPoint),
   };
 }
 
@@ -109,7 +113,7 @@ function promptFromPickHit(
     !(root instanceof THREE.Object3D)
   ) {
     const decor = resolveDecorSittableRoot(hit.object);
-    return decor ? promptFromDecorRoot(conn, decor) : null;
+    return decor ? promptFromDecorRoot(conn, decor, hit.point) : null;
   }
   const placedKind = hit.object.userData.mammothApartmentSittablePlacedKind;
   const spec =
@@ -127,6 +131,7 @@ function promptFromPickHit(
     label: spec.promptLabel,
     modelRelPath,
     root,
+    seatIndex: resolveApartmentSittableSeatIndexForSpec(root, spec, hit.point),
   };
 }
 
@@ -143,6 +148,7 @@ function raycastApartmentSittablePickMeshes(args: {
   conn: DbConnection;
   playerPos: THREE.Vector3;
   camera: THREE.PerspectiveCamera;
+  screenNdc: THREE.Vector2;
   pickMeshes: readonly THREE.Mesh[];
   visibleScratch: THREE.Mesh[];
   objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean;
@@ -155,7 +161,7 @@ function raycastApartmentSittablePickMeshes(args: {
   );
   if (args.visibleScratch.length === 0) return null;
   configureSittableRaycasterLayers();
-  _raycaster.setFromCamera(_screenCenterNdc, args.camera);
+  _raycaster.setFromCamera(args.screenNdc, args.camera);
   _raycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
   const hits = _raycaster.intersectObjects(args.visibleScratch, false);
   const seen = new Set<string>();
@@ -176,6 +182,7 @@ function raycastApartmentSittableDecorMeshes(args: {
   conn: DbConnection;
   playerPos: THREE.Vector3;
   camera: THREE.PerspectiveCamera;
+  screenNdc: THREE.Vector2;
   decorRoots: readonly THREE.Object3D[];
   objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean;
 }): ApartmentSittablePrompt | null {
@@ -186,7 +193,7 @@ function raycastApartmentSittableDecorMeshes(args: {
   }
   if (targets.length === 0) return null;
   configureSittableRaycasterLayers();
-  _raycaster.setFromCamera(_screenCenterNdc, args.camera);
+  _raycaster.setFromCamera(args.screenNdc, args.camera);
   _raycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
   const hits = _raycaster.intersectObjects(targets, true);
   const seen = new Set<string>();
@@ -195,7 +202,7 @@ function raycastApartmentSittableDecorMeshes(args: {
     if (!decor || seen.has(decor.sittableKey)) continue;
     const prompt = sittablePromptIfPlayerInRange(
       args.conn,
-      promptFromDecorRoot(args.conn, decor),
+      promptFromDecorRoot(args.conn, decor, hit.point),
       args.playerPos,
     );
     if (!prompt) continue;
@@ -236,7 +243,9 @@ function nearestApartmentSittablePrompt(args: {
       "plain";
     const spec = apartmentSittableSpecForPlacedItem({ modelRelPath, itemKind: placedKind });
     if (!spec) continue;
-    const pose = computeApartmentSittableWorldPose(g, spec);
+    _worldAimScratch.set(args.playerPos.x, args.playerPos.y, args.playerPos.z);
+    const seatIndex = resolveApartmentSittableSeatIndexForSpec(g, spec, _worldAimScratch);
+    const pose = computeApartmentSittableWorldPose(g, spec, seatIndex);
     if (
       !clientMayUseApartmentSittable(
         args.conn,
@@ -272,6 +281,7 @@ function nearestApartmentSittablePrompt(args: {
         label: spec.promptLabel,
         modelRelPath: spec.modelRelPath,
         root: g,
+        seatIndex,
       };
     }
   }
@@ -288,7 +298,7 @@ export function clientCanEnterApartmentSittable(
   if (!id) return false;
   const spec = apartmentSittableSpecFromModelPath(prompt.modelRelPath);
   if (!spec) return false;
-  const pose = computeApartmentSittableWorldPose(prompt.root, spec);
+  const pose = computeApartmentSittableWorldPose(prompt.root, spec, prompt.seatIndex);
   return clientMayUseApartmentSittable(
     conn,
     id,
@@ -308,12 +318,16 @@ export function getApartmentSittablePrompt(args: {
   decorRoots: readonly THREE.Object3D[];
   visibleScratch: THREE.Mesh[];
   objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean;
+  /** Screen-space ray origin; defaults to reticle center. */
+  screenNdc?: THREE.Vector2;
 }): ApartmentSittablePrompt | null {
   if (!args.conn.identity) return null;
+  const screenNdc = args.screenNdc ?? _screenCenterNdc;
   const rayArgs = {
     conn: args.conn,
     playerPos: args.playerPos,
     camera: args.camera,
+    screenNdc,
     visibleScratch: args.visibleScratch,
     objectVisibleInHierarchy: args.objectVisibleInHierarchy,
   };
@@ -323,6 +337,7 @@ export function getApartmentSittablePrompt(args: {
       conn: args.conn,
       playerPos: args.playerPos,
       camera: args.camera,
+      screenNdc,
       decorRoots: args.decorRoots,
       objectVisibleInHierarchy: args.objectVisibleInHierarchy,
     }) ??
@@ -334,4 +349,18 @@ export function getApartmentSittablePrompt(args: {
       objectVisibleInHierarchy: args.objectVisibleInHierarchy,
     })
   );
+}
+
+/** Map a canvas pointer event to normalized device coordinates for sittable rays. */
+export function apartmentSittableScreenNdcFromPointer(
+  canvas: HTMLCanvasElement,
+  e: Pick<PointerEvent, "clientX" | "clientY">,
+  out: THREE.Vector2,
+): THREE.Vector2 {
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(rect.width, 1);
+  const h = Math.max(rect.height, 1);
+  out.x = ((e.clientX - rect.left) / w) * 2 - 1;
+  out.y = -((e.clientY - rect.top) / h) * 2 + 1;
+  return out;
 }

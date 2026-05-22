@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.js";
 import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
+import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
 
 export default function App() {
@@ -103,7 +104,12 @@ export default function App() {
           </div>
         </div>
       ) : null}
-      {ready ? <EditorChrome /> : null}
+      {ready ? (
+        <>
+          <EditorApartmentLayoutLoadingOverlay />
+          <EditorChrome />
+        </>
+      ) : null}
     </>
   );
 }

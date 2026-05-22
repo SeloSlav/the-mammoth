@@ -8,6 +8,11 @@ import {
   LandingKitDefSchema,
   PrefabDefSchema,
   StairWellDefSchema,
+  ApartmentUnitLayoutProfilesDocSchema,
+  DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC,
+  assignApartmentUnitLayoutProfile,
+  createApartmentUnitLayoutProfile,
+  type ApartmentUnitLayoutProfilesDoc,
   type BuildingDoc,
   type CellDoc,
   type ElevatorCabDef,
@@ -47,7 +52,9 @@ import type {
   EditorMode,
   EditorState,
   EditorWorkspace,
+  ApartmentLayoutSource,
   FpAuthorSubjectKind,
+  HistoryEntry,
   LandingDocKind,
   LandingKitVariant,
 } from "./editorStoreTypes.js";
@@ -71,6 +78,15 @@ import {
   preserveOwnedApartmentMountPlacementRefs,
 } from "../editor/myApartment/preserveOwnedApartmentMountPlacementRefs.js";
 import { requestEditorMyApartmentWallsMountSync } from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
+import {
+  isMyApartmentLayoutHidePickTarget,
+  selectionAfterHidingMyApartmentLayoutPlacement,
+} from "../editor/myApartment/editorMyApartmentLayoutVisibility.js";
+import {
+  HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  maxBuildingLevelIndex,
+  TYPICAL_FLOOR_DOC_ID,
+} from "@the-mammoth/world";
 import {
   landingDocKindToMode,
   workspaceToInitialMode,
@@ -112,10 +128,122 @@ const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 /** Default FP gizmo + orbit framing: weapon root vs grip (`firstPerson.mount` in JSON). */
 export const FP_AUTHOR_PREFERRED_TARGET_ID = "weapon";
 
+function myApartmentLayoutInitialSelectedId(
+  placedItems: OwnedApartmentBuiltinsDoc["placedItems"],
+): string | null {
+  const sorted = [...placedItems].sort((a, b) => a.id.localeCompare(b.id));
+  return sorted.length > 0 ? editorMyApartmentSelectedIdForDecor(sorted[0]!.id) : null;
+}
+
+const DEFAULT_MY_APARTMENT_PREVIEW_UNIT_KEY =
+  `${TYPICAL_FLOOR_DOC_ID}|1|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}` as const;
+
+const EMPTY_APARTMENT_LAYOUT_DOC: OwnedApartmentBuiltinsDoc = OwnedApartmentBuiltinsDocSchema.parse({
+  version: 2,
+  previewSizeM: 10,
+  placedItems: [],
+  wallItems: [],
+  mirrorItems: [],
+  objectGroups: [],
+});
+
+function syncActiveApartmentLayoutDoc(args: {
+  ownedDefault: OwnedApartmentBuiltinsDoc;
+  profilesDoc: ApartmentUnitLayoutProfilesDoc;
+  source: ApartmentLayoutSource;
+  activeProfileId: string | null;
+}): OwnedApartmentBuiltinsDoc {
+  if (args.source === "owned_default") return args.ownedDefault;
+  if (args.source === "unassigned") return EMPTY_APARTMENT_LAYOUT_DOC;
+  return (
+    args.profilesDoc.profiles.find((p) => p.id === args.activeProfileId)?.layout ??
+    EMPTY_APARTMENT_LAYOUT_DOC
+  );
+}
+
+function apartmentLayoutDocChanged(
+  before: OwnedApartmentBuiltinsDoc,
+  after: OwnedApartmentBuiltinsDoc,
+): boolean {
+  return (
+    before.placedItems !== after.placedItems ||
+    before.wallItems !== after.wallItems ||
+    before.mirrorItems !== after.mirrorItems ||
+    before.objectGroups !== after.objectGroups ||
+    before.previewSizeM !== after.previewSizeM
+  );
+}
+
+function applyHistoryEntryFields(
+  before: EditorState,
+  entry: HistoryEntry,
+): Partial<EditorState> {
+  const ownedApartmentBuiltins = entry.ownedApartmentBuiltins;
+  const apartmentLayoutChanged =
+    before.mode === "my_apartment_layout" &&
+    apartmentLayoutDocChanged(before.ownedApartmentBuiltins, ownedApartmentBuiltins);
+
+  return {
+    floorDocs: entry.floorDocs,
+    interiorDocs: entry.interiorDocs,
+    cellDocs: entry.cellDocs,
+    prefabDefs: entry.prefabDefs,
+    floorOverrideDocs: entry.floorOverrideDocs,
+    building: entry.building,
+    elevatorCabDef: entry.elevatorCabDef,
+    landingKitDef: entry.landingKitDef,
+    inactiveLandingKitDef: entry.inactiveLandingKitDef,
+    landingKitVariant: entry.landingKitVariant,
+    stairWellDef: entry.stairWellDef,
+    apartmentUnitLayoutProfiles: entry.apartmentUnitLayoutProfiles,
+    apartmentUnitLayoutProfilesNeedsDiskFlush: entry.apartmentUnitLayoutProfilesNeedsDiskFlush,
+    ownedApartmentDefaultBuiltins: entry.ownedApartmentDefaultBuiltins,
+    activeApartmentLayoutSource: entry.activeApartmentLayoutSource,
+    activeApartmentLayoutProfileId: entry.activeApartmentLayoutProfileId,
+    ownedApartmentBuiltins,
+    selectedId: entry.selectedId,
+    myApartmentMultiselectExtraIds: entry.myApartmentMultiselectExtraIds ?? [],
+    dirty: entry.dirty,
+    ownedApartmentBuiltinsNeedsDiskFlush: entry.ownedApartmentBuiltinsNeedsDiskFlush,
+    contentStructureEpoch: apartmentLayoutChanged
+      ? before.contentStructureEpoch + 1
+      : (entry.contentStructureEpoch ?? 0),
+  };
+}
+
+function patchActiveApartmentLayoutState(
+  s: EditorState,
+  next: OwnedApartmentBuiltinsDoc,
+): Partial<EditorState> {
+  if (s.activeApartmentLayoutSource === "owned_default") {
+    return {
+      ownedApartmentDefaultBuiltins: next,
+      ownedApartmentBuiltins: next,
+      ownedApartmentBuiltinsNeedsDiskFlush: true,
+    };
+  }
+  if (s.activeApartmentLayoutSource === "unassigned" || !s.activeApartmentLayoutProfileId) {
+    return {
+      ownedApartmentBuiltins: next,
+    };
+  }
+  const profileId = s.activeApartmentLayoutProfileId;
+  return {
+    apartmentUnitLayoutProfiles: ApartmentUnitLayoutProfilesDocSchema.parse({
+      ...s.apartmentUnitLayoutProfiles,
+      profiles: s.apartmentUnitLayoutProfiles.profiles.map((profile) =>
+        profile.id === profileId ? { ...profile, layout: next } : profile,
+      ),
+    }),
+    apartmentUnitLayoutProfilesNeedsDiskFlush: true,
+    ownedApartmentBuiltins: next,
+  };
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
-  workspace: "stairwell",
+  workspace: "apartment",
   landingDocKind: "kit",
-  mode: "stairwell_preview",
+  mode: "my_apartment_layout",
   building: DEFAULT_BUILDING,
   floorDocs: {},
   interiorDocs: {},
@@ -142,6 +270,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   decorNeighborAlignSnap: false,
   apartmentBakedFloorShadowsEnabled: false,
+  myApartmentLayoutHidePickMode: false,
+  myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
+  myApartmentLayoutLoadingMessage: null,
+  myApartmentPreviewUnitId: HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  myApartmentPreviewUnitKey: DEFAULT_MY_APARTMENT_PREVIEW_UNIT_KEY,
   shadowsEnabled: false,
   useHdriEnvironment: true,
   flySpeedMps: 18,
@@ -157,6 +290,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   fpAuthorPickList: [],
   fpAuthorWeaponId: FP_AUTHOR_DEV_DEFAULT_WEAPON ?? DEFAULT_FP_AUTHOR_WEAPON_ID,
   fpAuthorConsumableId: FP_AUTHORABLE_CONSUMABLE_IDS[0] as FpAuthorConsumableId,
+  apartmentUnitLayoutProfiles: DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC,
+  apartmentUnitLayoutProfilesNeedsDiskFlush: false,
+  ownedApartmentDefaultBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  activeApartmentLayoutSource: "owned_default",
+  activeApartmentLayoutProfileId: null,
   ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   ownedApartmentBuiltinsNeedsDiskFlush: false,
   historyPast: [],
@@ -180,23 +318,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       historyPast: past.slice(0, -1),
       historyFuture: [current, ...get().historyFuture],
-      floorDocs: prev.floorDocs,
-      interiorDocs: prev.interiorDocs,
-      cellDocs: prev.cellDocs,
-      prefabDefs: prev.prefabDefs,
-      floorOverrideDocs: prev.floorOverrideDocs,
-      building: prev.building,
-      elevatorCabDef: prev.elevatorCabDef,
-      landingKitDef: prev.landingKitDef,
-      inactiveLandingKitDef: prev.inactiveLandingKitDef,
-      landingKitVariant: prev.landingKitVariant,
-      stairWellDef: prev.stairWellDef,
-      ownedApartmentBuiltins: prev.ownedApartmentBuiltins,
-      selectedId: prev.selectedId,
-      myApartmentMultiselectExtraIds: prev.myApartmentMultiselectExtraIds ?? [],
-      dirty: prev.dirty,
-      ownedApartmentBuiltinsNeedsDiskFlush: prev.ownedApartmentBuiltinsNeedsDiskFlush,
-      contentStructureEpoch: prev.contentStructureEpoch ?? 0,
+      ...applyHistoryEntryFields(get(), prev),
     });
   },
 
@@ -209,23 +331,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       historyFuture: fut.slice(1),
       historyPast: [...get().historyPast, current],
-      floorDocs: next.floorDocs,
-      interiorDocs: next.interiorDocs,
-      cellDocs: next.cellDocs,
-      prefabDefs: next.prefabDefs,
-      floorOverrideDocs: next.floorOverrideDocs,
-      building: next.building,
-      elevatorCabDef: next.elevatorCabDef,
-      landingKitDef: next.landingKitDef,
-      inactiveLandingKitDef: next.inactiveLandingKitDef,
-      landingKitVariant: next.landingKitVariant,
-      stairWellDef: next.stairWellDef,
-      ownedApartmentBuiltins: next.ownedApartmentBuiltins,
-      selectedId: next.selectedId,
-      myApartmentMultiselectExtraIds: next.myApartmentMultiselectExtraIds ?? [],
-      dirty: next.dirty,
-      ownedApartmentBuiltinsNeedsDiskFlush: next.ownedApartmentBuiltinsNeedsDiskFlush,
-      contentStructureEpoch: next.contentStructureEpoch ?? 0,
+      ...applyHistoryEntryFields(get(), next),
     });
   },
 
@@ -236,10 +342,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         m === "fp_viewmodel" || m === "fp_consumable";
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
+      const exitMyApartmentLayout =
+        s.mode === "my_apartment_layout" && mode !== "my_apartment_layout";
       /** Entering/leaving FP must not rebuild; leaving FP must rebuild so floor/interior mesh matches mode. */
       const bumpEpoch = !touchesFp || exitFp;
       return {
         mode,
+        ...(exitMyApartmentLayout
+          ? {
+              myApartmentLayoutHidePickMode: false,
+              myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
+            }
+          : {}),
         ...(bumpEpoch
           ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
           : {}),
@@ -253,10 +367,30 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         m === "fp_viewmodel" || m === "fp_consumable";
       const touchesFp = isFpMode(s.mode) || isFpMode(mode);
       const exitFp = isFpMode(s.mode) && !isFpMode(mode);
-      const bumpEpoch = !touchesFp || exitFp;
+      const exitApartment =
+        s.workspace === "apartment" && workspace !== "apartment";
+      const enterApartment = workspace === "apartment" && s.workspace !== "apartment";
+      const bumpEpoch = !touchesFp || exitFp || enterApartment;
       return {
         workspace,
         mode,
+        ...(exitApartment
+          ? {
+              myApartmentLayoutHidePickMode: false,
+              myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
+            }
+          : {}),
+        ...(enterApartment
+          ? {
+              selectedId: myApartmentLayoutInitialSelectedId(
+                s.ownedApartmentBuiltins.placedItems,
+              ),
+              myApartmentMultiselectExtraIds: [] as readonly string[],
+              ...(s.transformMode === "scale"
+                ? { transformMode: "translate" as const }
+                : {}),
+            }
+          : {}),
         ...(bumpEpoch
           ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
           : {}),
@@ -444,11 +578,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   enterMyApartmentLayoutMode: () =>
     set((s) => {
-      const items = s.ownedApartmentBuiltins.placedItems;
-      const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id));
-      const selectedId =
-        sorted.length > 0 ? editorMyApartmentSelectedIdForDecor(sorted[0]!.id) : null;
+      const selectedId = myApartmentLayoutInitialSelectedId(
+        s.ownedApartmentBuiltins.placedItems,
+      );
       return {
+        workspace: "apartment",
         mode: "my_apartment_layout",
         selectedId,
         myApartmentMultiselectExtraIds: [],
@@ -502,10 +636,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const docBefore = st0.ownedApartmentBuiltins;
 
-    set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
-        docBefore,
-        {
+    set((st) => ({
+      ...patchActiveApartmentLayoutState(
+        st,
+        finalizeOwnedApartmentBuiltinsPreservingMounts(docBefore, {
           ...docBefore,
           objectGroups: [
             ...docBefore.objectGroups,
@@ -515,7 +649,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
               memberSelectedIds: [...groupable],
             },
           ],
-        },
+        }),
       ),
       dirty: true,
       selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(id),
@@ -543,7 +677,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ),
       });
       return {
-        ownedApartmentBuiltins: next,
+        ...patchActiveApartmentLayoutState(st, next),
         dirty: true,
       };
     });
@@ -573,7 +707,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         extrasNext = [];
       }
       return {
-        ownedApartmentBuiltins: next,
+        ...patchActiveApartmentLayoutState(st, next),
         dirty: true,
         selectedId: selectedIdNext,
         myApartmentMultiselectExtraIds: extrasNext,
@@ -596,10 +730,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     maybePushHistory(get, set);
 
-    set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
-        prior.ownedApartmentBuiltins,
-        cloned.doc,
+    set((st) => ({
+      ...patchActiveApartmentLayoutState(
+        st,
+        finalizeOwnedApartmentBuiltinsPreservingMounts(prior.ownedApartmentBuiltins, cloned.doc),
       ),
       dirty: true,
       selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(cloned.newGroupId),
@@ -619,10 +753,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!nextDoc) return false;
 
     maybePushHistory(get, set);
-    set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
-        prior.ownedApartmentBuiltins,
-        nextDoc,
+    set((st) => ({
+      ...patchActiveApartmentLayoutState(
+        st,
+        finalizeOwnedApartmentBuiltinsPreservingMounts(prior.ownedApartmentBuiltins, nextDoc),
       ),
       dirty: true,
       selectedId: null,
@@ -651,10 +785,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!nextDoc) return false;
 
     maybePushHistory(get, set);
-    set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
-        prior.ownedApartmentBuiltins,
-        nextDoc,
+    set((st) => ({
+      ...patchActiveApartmentLayoutState(
+        st,
+        finalizeOwnedApartmentBuiltinsPreservingMounts(prior.ownedApartmentBuiltins, nextDoc),
       ),
       dirty: true,
       selectedId: null,
@@ -674,10 +808,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!cloned) return false;
 
     maybePushHistory(get, set);
-    set(() => ({
-      ownedApartmentBuiltins: finalizeOwnedApartmentBuiltinsPreservingMounts(
-        prior.ownedApartmentBuiltins,
-        cloned.doc,
+    set((st) => ({
+      ...patchActiveApartmentLayoutState(
+        st,
+        finalizeOwnedApartmentBuiltinsPreservingMounts(prior.ownedApartmentBuiltins, cloned.doc),
       ),
       dirty: true,
       selectedId: cloned.selectedId,
@@ -712,12 +846,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         s.ownedApartmentBuiltins,
         finalized,
       );
-      const placementChanged =
-        next.placedItems !== s.ownedApartmentBuiltins.placedItems ||
-        next.wallItems !== s.ownedApartmentBuiltins.wallItems ||
-        next.mirrorItems !== s.ownedApartmentBuiltins.mirrorItems ||
-        next.previewSizeM !== s.ownedApartmentBuiltins.previewSizeM;
-
       let selectedFix = s.selectedId;
       let extrasFix = s.myApartmentMultiselectExtraIds;
       if (
@@ -733,9 +861,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
       const bumpPreview = next.previewSizeM !== s.ownedApartmentBuiltins.previewSizeM;
       return {
-        ownedApartmentBuiltins: next,
+        ...patchActiveApartmentLayoutState(s, next),
         dirty: true,
-        ...(placementChanged ? { ownedApartmentBuiltinsNeedsDiskFlush: true } : {}),
         ...(selectedFix !== s.selectedId ? { selectedId: selectedFix } : {}),
         ...(extrasFix !== s.myApartmentMultiselectExtraIds
           ? { myApartmentMultiselectExtraIds: extrasFix }
@@ -753,6 +880,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
     set({ ownedApartmentBuiltinsNeedsDiskFlush: false }),
+  clearApartmentUnitLayoutProfilesDiskFlushFlag: () =>
+    set({ apartmentUnitLayoutProfilesNeedsDiskFlush: false }),
 
   setDirty: (dirty) => set({ dirty }),
   setCollisionArtifactsStatus: (collisionArtifactsStatus) =>
@@ -762,6 +891,167 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setDecorNeighborAlignSnap: (decorNeighborAlignSnap) => set({ decorNeighborAlignSnap }),
   setApartmentBakedFloorShadowsEnabled: (apartmentBakedFloorShadowsEnabled) =>
     set({ apartmentBakedFloorShadowsEnabled }),
+  setMyApartmentLayoutHidePickMode: (myApartmentLayoutHidePickMode) =>
+    set({ myApartmentLayoutHidePickMode }),
+  hideMyApartmentLayoutPlacementFromCanvas: (placementId) =>
+    set((s) => {
+      if (s.mode !== "my_apartment_layout") return {};
+      if (!isMyApartmentLayoutHidePickTarget(placementId)) return {};
+      if (s.myApartmentLayoutHiddenPlacementIds.includes(placementId)) return {};
+      const selection = selectionAfterHidingMyApartmentLayoutPlacement(
+        s.selectedId,
+        s.myApartmentMultiselectExtraIds,
+        placementId,
+      );
+      return {
+        myApartmentLayoutHiddenPlacementIds: [
+          ...s.myApartmentLayoutHiddenPlacementIds,
+          placementId,
+        ],
+        ...selection,
+      };
+    }),
+  clearMyApartmentLayoutHiddenPlacements: () =>
+    set({ myApartmentLayoutHiddenPlacementIds: [] as readonly string[] }),
+  setMyApartmentLayoutLoadingMessage: (myApartmentLayoutLoadingMessage) =>
+    set({ myApartmentLayoutLoadingMessage }),
+  setMyApartmentPreviewUnitId: (myApartmentPreviewUnitId) =>
+    set((s) => {
+      if (
+        !myApartmentPreviewUnitId ||
+        s.myApartmentPreviewUnitId === myApartmentPreviewUnitId
+      ) {
+        return {};
+      }
+      return {
+        myApartmentPreviewUnitId,
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+  setMyApartmentPreviewUnit: ({ unitKey, unitId }) =>
+    set((s) => {
+      if (!unitKey || !unitId) return {};
+      const assignedProfileId =
+        s.apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === unitKey)
+          ?.profileId ?? null;
+      const ownedDefaultUnitKey = `${TYPICAL_FLOOR_DOC_ID}|${Math.max(
+        1,
+        maxBuildingLevelIndex(s.building),
+      )}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+      const source: ApartmentLayoutSource = assignedProfileId
+        ? "profile"
+        : unitKey === ownedDefaultUnitKey
+          ? "owned_default"
+          : "unassigned";
+      const ownedApartmentBuiltins = syncActiveApartmentLayoutDoc({
+        ownedDefault: s.ownedApartmentDefaultBuiltins,
+        profilesDoc: s.apartmentUnitLayoutProfiles,
+        source,
+        activeProfileId: assignedProfileId,
+      });
+      return {
+        myApartmentPreviewUnitKey: unitKey,
+        myApartmentPreviewUnitId: unitId,
+        activeApartmentLayoutSource: source,
+        activeApartmentLayoutProfileId: assignedProfileId,
+        ownedApartmentBuiltins,
+        selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+        myApartmentMultiselectExtraIds: [] as readonly string[],
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+  setActiveApartmentLayoutSource: (activeApartmentLayoutSource) =>
+    set((s) => {
+      const activeProfileId =
+        activeApartmentLayoutSource === "profile" ? s.activeApartmentLayoutProfileId : null;
+      const ownedApartmentBuiltins = syncActiveApartmentLayoutDoc({
+        ownedDefault: s.ownedApartmentDefaultBuiltins,
+        profilesDoc: s.apartmentUnitLayoutProfiles,
+        source: activeApartmentLayoutSource,
+        activeProfileId,
+      });
+      return {
+        activeApartmentLayoutSource,
+        activeApartmentLayoutProfileId: activeProfileId,
+        ownedApartmentBuiltins,
+        selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+        myApartmentMultiselectExtraIds: [] as readonly string[],
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+  setActiveApartmentLayoutProfileId: (activeApartmentLayoutProfileId) =>
+    set((s) => {
+      const normalized = activeApartmentLayoutProfileId || null;
+      const source: ApartmentLayoutSource = normalized ? "profile" : "owned_default";
+      if (
+        normalized === s.activeApartmentLayoutProfileId &&
+        source === s.activeApartmentLayoutSource
+      ) {
+        return {};
+      }
+      const ownedApartmentBuiltins = syncActiveApartmentLayoutDoc({
+        ownedDefault: s.ownedApartmentDefaultBuiltins,
+        profilesDoc: s.apartmentUnitLayoutProfiles,
+        source,
+        activeProfileId: normalized,
+      });
+      return {
+        activeApartmentLayoutSource: source,
+        activeApartmentLayoutProfileId: normalized,
+        ownedApartmentBuiltins,
+        selectedId: myApartmentLayoutInitialSelectedId(ownedApartmentBuiltins.placedItems),
+        myApartmentMultiselectExtraIds: [] as readonly string[],
+        contentStructureEpoch: s.contentStructureEpoch + 1,
+      };
+    }),
+  createApartmentLayoutProfileFromCurrent: (rawName) => {
+    const name = typeof rawName === "string" && rawName.trim() ? rawName.trim() : "Apartment profile";
+    const idBase = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, "_")
+      .replace(/^_+|_+$/gu, "")
+      .slice(0, 48) || "apartment_profile";
+    const st = get();
+    const existing = new Set(st.apartmentUnitLayoutProfiles.profiles.map((p) => p.id));
+    let id = idBase;
+    for (let i = 2; existing.has(id); i++) id = `${idBase}_${i}`;
+    maybePushHistory(get, set);
+    set((s) => {
+      const createdDoc = createApartmentUnitLayoutProfile(s.apartmentUnitLayoutProfiles, {
+        id,
+        name,
+        layout: s.ownedApartmentBuiltins,
+      });
+      const profilesDoc = assignApartmentUnitLayoutProfile(
+        createdDoc,
+        s.myApartmentPreviewUnitKey,
+        id,
+      );
+      return {
+        apartmentUnitLayoutProfiles: profilesDoc,
+        apartmentUnitLayoutProfilesNeedsDiskFlush: true,
+        activeApartmentLayoutProfileId: id,
+        activeApartmentLayoutSource: "profile",
+        ownedApartmentBuiltins: profilesDoc.profiles.find((p) => p.id === id)?.layout ?? s.ownedApartmentBuiltins,
+        dirty: true,
+      };
+    });
+    return id;
+  },
+  assignActiveApartmentLayoutProfileToPreviewUnit: () => {
+    const st = get();
+    if (!st.activeApartmentLayoutProfileId) return;
+    maybePushHistory(get, set);
+    set((s) => ({
+      apartmentUnitLayoutProfiles: assignApartmentUnitLayoutProfile(
+        s.apartmentUnitLayoutProfiles,
+        s.myApartmentPreviewUnitKey,
+        st.activeApartmentLayoutProfileId!,
+      ),
+      apartmentUnitLayoutProfilesNeedsDiskFlush: true,
+      dirty: true,
+    }));
+  },
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,
@@ -1348,5 +1638,6 @@ export {
   serializeLandingKitDefPretty,
   serializePrefabDefPretty,
   serializeStairWellDefPretty,
+  serializeApartmentUnitLayoutProfilesDocPretty,
   serializeOwnedApartmentBuiltinsDocPretty,
 } from "./editorStoreDocSerialize.js";

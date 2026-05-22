@@ -36,11 +36,12 @@ export function balconyGrowLivePlantInSlot(
   trayId: string,
   slotIndex: number,
 ): boolean {
+  const slot = Number(slotIndex);
   return growState.plants.some(
     (p) =>
       p.trayId === trayId &&
-      p.slotIndex === slotIndex &&
-      p.phase !== PHASE_EMPTY,
+      Number(p.slotIndex) === slot &&
+      Number(p.phase) !== PHASE_EMPTY,
   );
 }
 

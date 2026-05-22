@@ -33,6 +33,7 @@ import {
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
 import {
+  peekApartmentUnitLayoutProfilesDoc,
   peekOwnedApartmentBuiltinsDoc,
   resolveApartmentStashAnchorXZ,
 } from "./fpOwnedApartmentBuiltinsFromContent.js";
@@ -575,7 +576,12 @@ function feetVerticalOkForInteract(unitFloorY: number, y: number): boolean {
 }
 
 function stashInteractAnchorXZ(u: ApartmentUnit, stashKind: ApartmentStashKind): { x: number; z: number } {
-  return resolveApartmentStashAnchorXZ(u, peekOwnedApartmentBuiltinsDoc(), stashKind);
+  return resolveApartmentStashAnchorXZ(
+    u,
+    peekOwnedApartmentBuiltinsDoc(),
+    stashKind,
+    peekApartmentUnitLayoutProfilesDoc(),
+  );
 }
 
 /** Horizontal cylinder around stash anchor — matches server `pose_near_horizontal_marker` + vertical slab. */
@@ -765,7 +771,12 @@ export function resolveApartmentStashWorldTarget(
   }
   const stashKind: ApartmentStashKind =
     full.tag === "legacy" ? full.stashKind : APARTMENT_STASH_KIND_FOOTLOCKER;
-  const { x, z } = resolveApartmentStashAnchorXZ(unit, peekOwnedApartmentBuiltinsDoc(), stashKind);
+  const { x, z } = resolveApartmentStashAnchorXZ(
+    unit,
+    peekOwnedApartmentBuiltinsDoc(),
+    stashKind,
+    peekApartmentUnitLayoutProfilesDoc(),
+  );
   _apartmentStashWorldTargetScratch.set(x, unit.footY + 0.55, z);
   return _apartmentStashWorldTargetScratch;
 }

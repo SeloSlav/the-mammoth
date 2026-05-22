@@ -28,7 +28,7 @@ export function useBalconyGrowInspectTarget(): BalconyGrowInspectTarget | null {
   return target;
 }
 
-/** @deprecated Inspect no longer suppresses grow-tray stash — harvest prompts take E priority instead. */
+/** Live plant inspect wins over grow-tray stash E when a plant slot is aimed. */
 export function balconyGrowInspectBlocksGrowTrayStash(): boolean {
-  return false;
+  return target !== null;
 }

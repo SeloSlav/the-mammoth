@@ -127,6 +127,19 @@ export function balconyGrowTrayStashKey(unitKey: string, trayId: string): string
   return `${unitKey}#grow_tray:${trayId}`;
 }
 
+export const BALCONY_GROW_DECOR_TRAY_ID_PREFIX = "decor:" as const;
+
+export function balconyGrowDecorTrayId(decorId: bigint | number | string): string {
+  return `${BALCONY_GROW_DECOR_TRAY_ID_PREFIX}${decorId.toString()}`;
+}
+
+export function parseBalconyGrowDecorTrayId(trayId: string): bigint | null {
+  if (!trayId.startsWith(BALCONY_GROW_DECOR_TRAY_ID_PREFIX)) return null;
+  const text = trayId.slice(BALCONY_GROW_DECOR_TRAY_ID_PREFIX.length);
+  if (!/^\d+$/.test(text)) return null;
+  return BigInt(text);
+}
+
 export function parseBalconyGrowTrayStashKey(
   stashKey: string,
 ): { unitKey: string; trayId: string } | null {

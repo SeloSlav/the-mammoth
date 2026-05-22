@@ -16,6 +16,10 @@ export function EditorChromeSceneGizmoBlock(props: {
   setDecorNeighborAlignSnap?: (enabled: boolean) => void;
   apartmentBakedFloorShadowsEnabled?: boolean;
   setApartmentBakedFloorShadowsEnabled?: (enabled: boolean) => void;
+  myApartmentLayoutHidePickMode?: boolean;
+  setMyApartmentLayoutHidePickMode?: (enabled: boolean) => void;
+  myApartmentLayoutHiddenCount?: number;
+  clearMyApartmentLayoutHiddenPlacements?: () => void;
   /** When set, shows apartment-layout helper copy under the translate / rotate / scale buttons. */
   myApartmentLayoutHints?: EditorChromeMyApartmentGizmoHint | null;
 }) {
@@ -28,6 +32,10 @@ export function EditorChromeSceneGizmoBlock(props: {
     setDecorNeighborAlignSnap,
     apartmentBakedFloorShadowsEnabled = false,
     setApartmentBakedFloorShadowsEnabled,
+    myApartmentLayoutHidePickMode = false,
+    setMyApartmentLayoutHidePickMode,
+    myApartmentLayoutHiddenCount = 0,
+    clearMyApartmentLayoutHiddenPlacements,
     myApartmentLayoutHints = null,
   } = props;
   const label = editorChromeLabel;
@@ -120,6 +128,42 @@ export function EditorChromeSceneGizmoBlock(props: {
             </span>
           </span>
         </label>
+      ) : null}
+      {setMyApartmentLayoutHidePickMode ? (
+        <>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              marginTop: 8,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={myApartmentLayoutHidePickMode}
+              onChange={(e) => setMyApartmentLayoutHidePickMode(e.target.checked)}
+            />
+            <span style={{ lineHeight: 1.35 }}>
+              Click to hide (viewport only)
+              <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
+                Left-click décor, wall slabs, or mirrors to hide them while laying out. Does not
+                delete or save — use Show all hidden to restore.
+              </span>
+            </span>
+          </label>
+          {myApartmentLayoutHiddenCount > 0 && clearMyApartmentLayoutHiddenPlacements ? (
+            <button
+              type="button"
+              style={{ ...rowBtn, marginTop: 6 }}
+              onClick={clearMyApartmentLayoutHiddenPlacements}
+            >
+              Show all hidden ({myApartmentLayoutHiddenCount})
+            </button>
+          ) : null}
+        </>
       ) : null}
       {myApartmentLayoutHints === "decor" && setDecorNeighborAlignSnap ? (
         <label

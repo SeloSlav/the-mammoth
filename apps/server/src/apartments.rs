@@ -4,32 +4,28 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::accounts::user;
 use crate::apartment_door::{apartment_door, building_floor_refs, ApartmentDoor, SwingDoorFace};
-use crate::auth;
-use crate::crafting;
-use crate::elevator_layout::max_level;
-use crate::elevator_layout::{
-    BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M,
-};
-use crate::feature_flags;
-use crate::generated_apartment_doors::{
-    ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
-};
 use crate::apartment_stash_rules::{
     apartment_stash_accepts_def_id, apartment_stash_rejection_hint, apartment_stash_slot_count,
     apartment_stash_slot_index_valid,
 };
+use crate::auth;
+use crate::crafting;
+use crate::elevator_layout::max_level;
+use crate::elevator_layout::{BUILDING_ORIGIN_Y, RESIDENTIAL_BAND_MIN_LEVEL, STOREY_SPACING_M};
+use crate::feature_flags;
+use crate::generated_apartment_doors::{
+    ApartmentDoorTemplate as GenTemplate, APARTMENT_DOOR_TEMPLATE_SETS,
+};
 use crate::inventory::{
     self, find_item_in_hotbar_slot, find_item_in_inventory_slot, find_item_in_stash_slot,
-    first_empty_player_carry_slot, inventory_item, NUM_PLAYER_HOTBAR_SLOTS, NUM_PLAYER_INVENTORY_SLOTS,
+    first_empty_player_carry_slot, inventory_item, NUM_PLAYER_HOTBAR_SLOTS,
+    NUM_PLAYER_INVENTORY_SLOTS,
 };
 use crate::inventory_models::{
-    parse_apartment_stash_key_v2,
-    ParsedApartmentStashKey, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
-    APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
-    APARTMENT_STASH_KIND_WATER_TANK,
-    HotbarLocationData,
-    InventoryLocationData, ItemLocation,
-    StashLocationData,
+    parse_apartment_stash_key_v2, HotbarLocationData, InventoryLocationData, ItemLocation,
+    ParsedApartmentStashKey, StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER,
+    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
+    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
@@ -347,9 +343,18 @@ fn clamp_decor_pose(
     let y_lo = unit.bound_min_y + 0.008;
     let y_hi = unit.bound_max_y + 2.75;
     y = y.clamp(y_lo, y_hi);
-    let scale_clamped = scale.clamp(APARTMENT_DECOR_UNIFORM_SCALE_MIN, APARTMENT_DECOR_UNIFORM_SCALE_MAX);
-    let pitch_clamped = pitch.clamp(-APARTMENT_DECOR_PITCH_LIMIT_RAD, APARTMENT_DECOR_PITCH_LIMIT_RAD);
-    let roll_clamped = roll.clamp(-APARTMENT_DECOR_ROLL_LIMIT_RAD, APARTMENT_DECOR_ROLL_LIMIT_RAD);
+    let scale_clamped = scale.clamp(
+        APARTMENT_DECOR_UNIFORM_SCALE_MIN,
+        APARTMENT_DECOR_UNIFORM_SCALE_MAX,
+    );
+    let pitch_clamped = pitch.clamp(
+        -APARTMENT_DECOR_PITCH_LIMIT_RAD,
+        APARTMENT_DECOR_PITCH_LIMIT_RAD,
+    );
+    let roll_clamped = roll.clamp(
+        -APARTMENT_DECOR_ROLL_LIMIT_RAD,
+        APARTMENT_DECOR_ROLL_LIMIT_RAD,
+    );
     (
         x,
         y,
@@ -367,7 +372,11 @@ fn player_may_layout_owned_apartment(
     require_inside: bool,
 ) -> Option<ApartmentUnit> {
     let sender = ctx.sender();
-    let unit = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string())?;
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())?;
     if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED {
         return None;
     }
@@ -384,11 +393,7 @@ fn authorize_apartment_decor_row(
     ctx: &ReducerContext,
     decor_id: u64,
 ) -> Option<(ApartmentUnit, ApartmentUnitDecor)> {
-    let decor = ctx
-        .db
-        .apartment_unit_decor()
-        .decor_id()
-        .find(decor_id)?;
+    let decor = ctx.db.apartment_unit_decor().decor_id().find(decor_id)?;
     let unit = ctx
         .db
         .apartment_unit()
@@ -460,7 +465,12 @@ fn decor_stash_display_name_for_row(item_kind: u8, model_rel_path: &str) -> &'st
 }
 
 fn sync_apartment_unit_columns_from_decor(ctx: &ReducerContext, unit_key: &str) {
-    let Some(mut unit) = ctx.db.apartment_unit().unit_key().find(&unit_key.to_string()) else {
+    let Some(mut unit) = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())
+    else {
         return;
     };
     let rows: Vec<ApartmentUnitDecor> = ctx
@@ -507,7 +517,10 @@ fn sync_apartment_unit_columns_from_decor(ctx: &ReducerContext, unit_key: &str) 
     ctx.db.apartment_unit().unit_key().update(unit);
 }
 
-fn primary_bed_row_for_unit_key(ctx: &ReducerContext, unit_key: &str) -> Option<ApartmentUnitDecor> {
+fn primary_bed_row_for_unit_key(
+    ctx: &ReducerContext,
+    unit_key: &str,
+) -> Option<ApartmentUnitDecor> {
     ctx.db
         .apartment_unit_decor()
         .iter()
@@ -695,8 +708,7 @@ pub(crate) fn ensure_player_home_apartment(ctx: &ReducerContext, id: Identity) {
     }
     let max_lv = max_level();
     for stub_id in HOME_BAND_UNIT_IDS {
-        let uk =
-            unit_key_parts(MAMUTICA_TYPICAL_FLOOR_DOC_ID, max_lv, stub_id);
+        let uk = unit_key_parts(MAMUTICA_TYPICAL_FLOOR_DOC_ID, max_lv, stub_id);
         let Some(mut u) = ctx.db.apartment_unit().unit_key().find(&uk) else {
             continue;
         };
@@ -894,12 +906,11 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz, byaw) =
-            if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
-                (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
-            } else {
-                (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
-            };
+        let (bx, by, bz, byaw) = if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
+            (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
+        } else {
+            (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
+        };
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -989,17 +1000,19 @@ pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, owner: I
 }
 
 /// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
-pub(crate) fn join_pose_from_owned_bed(ctx: &ReducerContext, owner: Identity) -> Option<PlayerPose> {
+pub(crate) fn join_pose_from_owned_bed(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<PlayerPose> {
     ctx.db.apartment_unit().iter().find_map(|u| {
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz, byaw) =
-            if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
-                (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
-            } else {
-                (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
-            };
+        let (bx, by, bz, byaw) = if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
+            (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
+        } else {
+            (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
+        };
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -1305,8 +1318,16 @@ pub fn add_apartment_unit_decor(
         log::warn!("add_apartment_unit_decor: unit at cap ({APARTMENT_DECOR_COUNT_CAP})");
         return;
     }
-    let (px, py, pz, yw, ph, rl, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, roll_rad, uniform_scale);
+    let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
+        &unit,
+        pos_x,
+        pos_y,
+        pos_z,
+        yaw_rad,
+        pitch_rad,
+        roll_rad,
+        uniform_scale,
+    );
     let _ = ctx.db.apartment_unit_decor().insert(ApartmentUnitDecor {
         decor_id: 0,
         unit_key: unit_key.clone(),
@@ -1348,8 +1369,16 @@ pub fn update_apartment_unit_decor(
     if player_may_layout_owned_apartment(ctx, &unit.unit_key, true).is_none() {
         return;
     }
-    let (px, py, pz, yw, ph, rl, sc) =
-        clamp_decor_pose(&unit, pos_x, pos_y, pos_z, yaw_rad, pitch_rad, roll_rad, uniform_scale);
+    let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
+        &unit,
+        pos_x,
+        pos_y,
+        pos_z,
+        yaw_rad,
+        pitch_rad,
+        roll_rad,
+        uniform_scale,
+    );
     row.pos_x = px;
     row.pos_y = py;
     row.pos_z = pz;
@@ -1397,7 +1426,9 @@ pub fn reinforce_apartment_pulse(ctx: &ReducerContext, door_row_key: String) {
     if unit.owner != Some(sender) || unit.state != UNIT_STATE_CLAIMED || unit.reinforced != 0 {
         return;
     }
-    if !inventory_has(ctx, sender, "screwdriver", 1) || !inventory_has(ctx, sender, "scrap-metal", 10) {
+    if !inventory_has(ctx, sender, "screwdriver", 1)
+        || !inventory_has(ctx, sender, "scrap-metal", 10)
+    {
         return;
     }
     let Some(pose) = ctx.db.player_pose().identity().find(&sender) else {
@@ -1581,10 +1612,8 @@ fn pose_near_named_apartment_stash_anchor(
                 .iter()
                 .filter(|d| {
                     d.unit_key.as_str() == unit.unit_key.as_str()
-                        && effective_decor_item_kind(
-                            d.item_kind,
-                            d.model_rel_path.as_str(),
-                        ) == APARTMENT_DECOR_ITEM_KIND_FRIDGE
+                        && effective_decor_item_kind(d.item_kind, d.model_rel_path.as_str())
+                            == APARTMENT_DECOR_ITEM_KIND_FRIDGE
                 })
                 .min_by_key(|d| d.decor_id)
             {
@@ -1608,10 +1637,8 @@ fn pose_near_named_apartment_stash_anchor(
                 .iter()
                 .filter(|d| {
                     d.unit_key.as_str() == unit.unit_key.as_str()
-                        && effective_decor_item_kind(
-                            d.item_kind,
-                            d.model_rel_path.as_str(),
-                        ) == APARTMENT_DECOR_ITEM_KIND_WATER_TANK
+                        && effective_decor_item_kind(d.item_kind, d.model_rel_path.as_str())
+                            == APARTMENT_DECOR_ITEM_KIND_WATER_TANK
                 })
                 .min_by_key(|d| d.decor_id)
             {
@@ -1647,10 +1674,7 @@ fn apartment_stash_kind_for_stash_key(
     stash_key: &str,
 ) -> Option<&'static str> {
     match parse_apartment_stash_key_v2(stash_key) {
-        ParsedApartmentStashKey::DecorInstance {
-            unit_key,
-            decor_id,
-        } => {
+        ParsedApartmentStashKey::DecorInstance { unit_key, decor_id } => {
             let decor = ctx.db.apartment_unit_decor().decor_id().find(decor_id)?;
             if decor.unit_key.as_str() != unit_key {
                 return None;
@@ -1686,10 +1710,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
 ) -> Option<(Identity, String, &'static str)> {
     let sender = ctx.sender();
     match parse_apartment_stash_key_v2(stash_key) {
-        ParsedApartmentStashKey::DecorInstance {
-            unit_key,
-            decor_id,
-        } => {
+        ParsedApartmentStashKey::DecorInstance { unit_key, decor_id } => {
             let unit = ctx
                 .db
                 .apartment_unit()
@@ -1701,7 +1722,8 @@ pub(crate) fn apartment_stash_owner_near_sender(
             }
             let owner_id = unit.owner?;
             let pose = ctx.db.player_pose().identity().find(&sender)?;
-            let rk = decor_stash_radius_kind_for_row(decor.item_kind, decor.model_rel_path.as_str());
+            let rk =
+                decor_stash_radius_kind_for_row(decor.item_kind, decor.model_rel_path.as_str());
             if !feet_inside_unit(&unit, pose.x, pose.y, pose.z)
                 || !pose_near_horizontal_marker(
                     pose.x,
@@ -1762,11 +1784,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
             let stash_key = crate::balcony_grow_op::grow_tray_stash_key(unit_key, tray_id);
             let (owner_id, uk) =
                 crate::balcony_grow_op::grow_tray_stash_near_sender(ctx, stash_key.as_str())?;
-            Some((
-                owner_id,
-                uk,
-                APARTMENT_STASH_KIND_GROW_TRAY,
-            ))
+            Some((owner_id, uk, APARTMENT_STASH_KIND_GROW_TRAY))
         }
     }
 }
@@ -1799,8 +1817,7 @@ fn stash_item_for_unit(
                 ctx,
                 &s.unit_key,
                 stash_key,
-            )
-                && s.owner_identity == owner_id =>
+            ) && s.owner_identity == owner_id =>
         {
             Some(row)
         }
@@ -1949,7 +1966,7 @@ pub fn stash_pull_item_to_inventory_slot(
         &unit_key,
         target_inventory_slot,
         quantity_to_move,
-    )     {
+    ) {
         notify_stash_reducer_failure(ctx, e);
     }
 }
@@ -2065,13 +2082,9 @@ pub fn stash_pull_item(ctx: &ReducerContext, item_instance_id: u64, unit_key: St
         return;
     };
     let pull_result = match dest {
-        ItemLocation::Hotbar(d) => stash_pull_item_to_hotbar_slot_impl(
-            ctx,
-            item_instance_id,
-            &unit_key,
-            d.slot_index,
-            0,
-        ),
+        ItemLocation::Hotbar(d) => {
+            stash_pull_item_to_hotbar_slot_impl(ctx, item_instance_id, &unit_key, d.slot_index, 0)
+        }
         ItemLocation::Inventory(d) => stash_pull_item_to_inventory_slot_impl(
             ctx,
             item_instance_id,

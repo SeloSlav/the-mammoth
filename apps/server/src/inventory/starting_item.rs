@@ -71,9 +71,7 @@ macro_rules! starter_fridge {
 }
 
 /// Survival loadout: screwdriver tool — door lock is crafted only.
-const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[
-    starter_hotbar!(0, "screwdriver", 1),
-];
+const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[starter_hotbar!(0, "screwdriver", 1)];
 
 /// One-time balcony grow-op pack seeded into the apartment footlocker stash (normal `ItemLocation::Stash` rows).
 const FOOTLOCKER_GROW_OP_STARTER: &[ApartmentStashStarterRow] = &[
@@ -151,7 +149,11 @@ fn validate_footlocker_grow_op_starter(_ctx: &ReducerContext) -> bool {
 }
 
 fn validate_fridge_starter(_ctx: &ReducerContext) -> bool {
-    validate_apartment_stash_starter("fridge starter", APARTMENT_STASH_KIND_FRIDGE, FRIDGE_STARTER)
+    validate_apartment_stash_starter(
+        "fridge starter",
+        APARTMENT_STASH_KIND_FRIDGE,
+        FRIDGE_STARTER,
+    )
 }
 
 fn apartment_stash_starter_already_granted(
@@ -217,12 +219,7 @@ pub(crate) fn ensure_starter_fridge(ctx: &ReducerContext, owner: Identity) {
     if apartment_stash_starter_already_granted(ctx, owner, stash_location_key.as_str()) {
         return;
     }
-    insert_apartment_stash_starter(
-        ctx,
-        owner,
-        stash_location_key.as_str(),
-        FRIDGE_STARTER,
-    );
+    insert_apartment_stash_starter(ctx, owner, stash_location_key.as_str(), FRIDGE_STARTER);
 }
 
 fn insert_survival_loadout(ctx: &ReducerContext, owner: Identity) {

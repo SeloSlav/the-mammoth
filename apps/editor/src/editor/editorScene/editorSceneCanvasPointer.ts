@@ -278,6 +278,12 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
     }
     const additivePick = ev.ctrlKey === true || ev.metaKey === true;
     if (store.mode === "my_apartment_layout") {
+      if (store.myApartmentLayoutHidePickMode && levelCandidate.id) {
+        useEditorStore.getState().hideMyApartmentLayoutPlacementFromCanvas(levelCandidate.id);
+        previewSelectionOutline.setFromObject(null);
+        syncTransformAttachment();
+        return;
+      }
       useEditorStore
         .getState()
         .pickMyApartmentLayoutFromCanvas(levelCandidate.id, { additive: additivePick });

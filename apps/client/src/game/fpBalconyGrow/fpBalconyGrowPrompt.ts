@@ -2,7 +2,6 @@ import * as THREE from "three";
 import type { Identity } from "spacetimedb";
 import type { DbConnection } from "../../module_bindings";
 import {
-  BALCONY_GROW_TRAY_BUILTIN_IDS,
   BALCONY_GROW_TRAY_INTERACT_RADIUS_M,
   balconyGrowTrayStashKey,
   parseBalconyGrowTrayStashKey,
@@ -14,6 +13,7 @@ import {
 import { apartmentStashLabel, APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import {
+  balconyGrowLivePlantInSlot,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
 import { clientFeetNearGrowTray } from "./fpBalconyGrowTrayAnchor.js";
@@ -90,7 +90,7 @@ function matureHarvestPromptForSlot(
   trayRoot?: THREE.Object3D,
 ): BalconyGrowTrayPrompt | null {
   const plant = growState.plants.find(
-    (p) => p.trayId === trayId && p.slotIndex === slotIndex,
+    (p) => p.trayId === trayId && Number(p.slotIndex) === Number(slotIndex),
   );
   if (plant?.phase !== PHASE_MATURE) return null;
   const cropName = getMammothItemDef(plant.cropDefId)?.displayName ?? plant.cropDefId;
@@ -133,6 +133,9 @@ export function getBalconyGrowTrayPromptFromHit(
       trayRoot,
     );
     if (harvest) return harvest;
+    if (balconyGrowLivePlantInSlot(growState, trayId, slotIndex)) {
+      return null;
+    }
     return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, trayRoot);
   }
 
@@ -151,6 +154,9 @@ export function getBalconyGrowTrayPromptFromHit(
         trayRoot,
       );
       if (harvest) return harvest;
+      if (balconyGrowLivePlantInSlot(growState, trayId, aimedSlot)) {
+        return null;
+      }
     }
   }
 
@@ -241,6 +247,9 @@ export function balconyGrowTrayAimFallbackPrompt(
       trayRoot,
     );
     if (harvest) return harvest;
+    if (balconyGrowLivePlantInSlot(growState, bestTrayId, bestSlotIndex)) {
+      return null;
+    }
   } else if (trayRoot) {
     const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
     if (aimedSlot !== null) {
@@ -255,6 +264,9 @@ export function balconyGrowTrayAimFallbackPrompt(
         trayRoot,
       );
       if (harvest) return harvest;
+      if (balconyGrowLivePlantInSlot(growState, bestTrayId, aimedSlot)) {
+        return null;
+      }
     }
   }
 
@@ -320,10 +332,6 @@ export function resolveBalconyGrowTrayPrompt(
     growState,
     stashRayOcclusion,
   );
-}
-
-export function isKnownGrowTrayBuiltinId(trayId: string): boolean {
-  return (BALCONY_GROW_TRAY_BUILTIN_IDS as readonly string[]).includes(trayId);
 }
 
 export { parseBalconyGrowTrayStashKey };

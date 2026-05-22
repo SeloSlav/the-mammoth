@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+  ApartmentUnitLayoutProfilesDocSchema,
   ownedApartmentPlacedItemKindHasStash,
   OwnedApartmentBuiltinsDocSchema,
 } from "@the-mammoth/schemas";
 import {
+  resolveApartmentLayoutDocForUnit,
   resolveApartmentDecorPoses,
   resolveApartmentMirrorPoses,
   resolveApartmentWallPoses,
@@ -167,6 +169,27 @@ describe("resolveApartmentDecorPoses", () => {
 
   it("returns no decor when the content file is absent", () => {
     expect(resolveApartmentDecorPoses(apartmentUnit(), null)).toEqual([]);
+  });
+
+  it("resolves assigned unit profile before the owned apartment default", () => {
+    const unit = apartmentUnit();
+    const profileLayout = OwnedApartmentBuiltinsDocSchema.parse({
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+      placedItems: [],
+    });
+    const profiles = ApartmentUnitLayoutProfilesDocSchema.parse({
+      version: 1,
+      profiles: [{ id: "profile_a", name: "Profile A", layout: profileLayout }],
+      assignments: [{ unitKey: unit.unitKey, profileId: "profile_a" }],
+    });
+
+    expect(
+      resolveApartmentLayoutDocForUnit(
+        unit,
+        DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
+        profiles,
+      ),
+    ).toEqual(profileLayout);
   });
 
   it("maps wall slab items into world-space poses", () => {

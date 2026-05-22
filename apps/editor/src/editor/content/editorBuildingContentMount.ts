@@ -87,6 +87,7 @@ export function buildEditorStructuralRoot(args: {
   landingKitDef: LandingKitDef;
   stairWellDef: StairWellDef;
   stairWellAuthorScope: StairWellAuthoringScope;
+  myApartmentPreviewUnitId: string;
   textureLoader: THREE.TextureLoader;
   emptyFloorDoc: (floorDocId: string) => FloorDoc;
 }): THREE.Group {
@@ -202,6 +203,7 @@ export function buildEditorStructuralRoot(args: {
       ownedApartmentBuiltins: args.ownedApartmentBuiltins,
       typicalFloorDoc: args.floorDocs[TYPICAL_FLOOR_DOC_ID],
       building: args.building,
+      previewUnitId: args.myApartmentPreviewUnitId,
     });
   }
 

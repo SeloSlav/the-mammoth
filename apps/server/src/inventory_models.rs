@@ -69,7 +69,10 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
             } else {
                 APARTMENT_STASH_KIND_FOOTLOCKER
             };
-            return ParsedApartmentStashKey::LegacyComposite { unit_key: unit_part, kind };
+            return ParsedApartmentStashKey::LegacyComposite {
+                unit_key: unit_part,
+                kind,
+            };
         }
         if let Some(tray_id) = tail.strip_prefix(GROW_TRAY_STASH_PREFIX) {
             if !tray_id.is_empty() {
@@ -89,8 +92,12 @@ pub(crate) fn parse_apartment_stash_key(raw: &str) -> (&str, &str) {
     match parse_apartment_stash_key_v2(raw) {
         ParsedApartmentStashKey::BareUnitKey(u) => (u, APARTMENT_STASH_KIND_FOOTLOCKER),
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => (unit_key, kind),
-        ParsedApartmentStashKey::DecorInstance { unit_key, .. } => (unit_key, APARTMENT_STASH_KIND_FOOTLOCKER),
-        ParsedApartmentStashKey::GrowTray { unit_key, .. } => (unit_key, APARTMENT_STASH_KIND_GROW_TRAY),
+        ParsedApartmentStashKey::DecorInstance { unit_key, .. } => {
+            (unit_key, APARTMENT_STASH_KIND_FOOTLOCKER)
+        }
+        ParsedApartmentStashKey::GrowTray { unit_key, .. } => {
+            (unit_key, APARTMENT_STASH_KIND_GROW_TRAY)
+        }
     }
 }
 
