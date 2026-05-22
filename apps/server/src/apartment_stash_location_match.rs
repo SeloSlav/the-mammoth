@@ -143,6 +143,16 @@ fn same_kind_storage_alias(
 ) -> bool {
     match (stored, requested) {
         (
+            ParsedApartmentStashKey::GrowTray {
+                unit_key: su,
+                tray_id: st,
+            },
+            ParsedApartmentStashKey::GrowTray {
+                unit_key: ru,
+                tray_id: rt,
+            },
+        ) => *su == *ru && *st == *rt,
+        (
             ParsedApartmentStashKey::DecorInstance {
                 unit_key: su,
                 decor_id: si,
@@ -158,7 +168,7 @@ fn same_kind_storage_alias(
 
 #[cfg(test)]
 mod tests {
-    use super::footlocker_location_alias;
+    use super::{footlocker_location_alias, same_kind_storage_alias};
     use crate::inventory_models::parse_apartment_stash_key_v2;
 
     #[test]
@@ -175,5 +185,14 @@ mod tests {
         let legacy = parse_apartment_stash_key_v2("u1#footlocker");
         let decor = parse_apartment_stash_key_v2("u1#d7");
         assert!(footlocker_location_alias(&legacy, &decor));
+    }
+
+    #[test]
+    fn grow_tray_storage_requires_matching_tray_id() {
+        let a = parse_apartment_stash_key_v2("u1#grow_tray:tray-a");
+        let b = parse_apartment_stash_key_v2("u1#grow_tray:tray-b");
+        let c = parse_apartment_stash_key_v2("u1#grow_tray:tray-a");
+        assert!(!same_kind_storage_alias(&a, &b));
+        assert!(same_kind_storage_alias(&a, &c));
     }
 }

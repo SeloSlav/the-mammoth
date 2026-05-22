@@ -193,7 +193,6 @@ export function mountFpBalconyGrowSession(opts: {
 
       const aim = { x: 0, z: 0 };
       if (!resolveBalconyWaterPourAimXz(camera, decor, feet, aim)) {
-        showGameplayErrorBar("Aim at a grow tray to pour water.");
         return true;
       }
 

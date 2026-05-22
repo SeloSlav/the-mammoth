@@ -1,36 +1,38 @@
 import * as THREE from "three";
-import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
-import { balconyGrowTraySoilAimPoint } from "../fpPlacement/fpPlacementSnap.js";
-import { readGrowTraySoilLocalY } from "./fpBalconyGrowStageVisual.js";
 
 const _aimScratch = new THREE.Vector3();
+const _rayScratch = new THREE.Ray();
+const _fallbackDirScratch = new THREE.Vector3();
+
+const POUR_FALLBACK_DISTANCE_M = 1.35;
 
 /**
- * Center-screen grow-tray raycast → soil-plane intersection (world XZ).
- * Must match server tray positions — never use a fixed y=0 horizontal plane.
+ * Center-screen ray → player's current floor plane (world XZ).
+ * Water is an area patch: trays inside the resulting circular patch receive the benefit.
  */
 export function resolveBalconyWaterPourAimXz(
   camera: THREE.PerspectiveCamera,
-  decor: MountFpApartmentDecorMeshesResult,
+  _decor: unknown,
   feet: THREE.Vector3,
   out: { x: number; z: number },
 ): boolean {
-  const hits = decor.raycastBalconyGrowTrayHits(feet, camera);
-  if (hits.length === 0) return false;
+  _rayScratch.origin.setFromMatrixPosition(camera.matrixWorld);
+  camera.getWorldDirection(_rayScratch.direction);
 
-  const hit = hits[0]!;
-  const trayRoot = hit.object.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
-  if (trayRoot) {
-    trayRoot.updateMatrixWorld(true);
-    const soilY = readGrowTraySoilLocalY(trayRoot);
-    if (balconyGrowTraySoilAimPoint(camera, trayRoot.matrixWorld, soilY, _aimScratch)) {
-      out.x = _aimScratch.x;
-      out.z = _aimScratch.z;
-      return true;
-    }
+  const dy = _rayScratch.direction.y;
+  const t = Math.abs(dy) > 0.0001 ? (feet.y - _rayScratch.origin.y) / dy : Number.NaN;
+  if (Number.isFinite(t) && t > 0.05) {
+    _rayScratch.at(t, _aimScratch);
+    out.x = _aimScratch.x;
+    out.z = _aimScratch.z;
+    return true;
   }
 
-  out.x = hit.point.x;
-  out.z = hit.point.z;
+  camera.getWorldDirection(_fallbackDirScratch);
+  _fallbackDirScratch.y = 0;
+  if (_fallbackDirScratch.lengthSq() < 0.0001) return false;
+  _fallbackDirScratch.normalize();
+  out.x = feet.x + _fallbackDirScratch.x * POUR_FALLBACK_DISTANCE_M;
+  out.z = feet.z + _fallbackDirScratch.z * POUR_FALLBACK_DISTANCE_M;
   return true;
 }

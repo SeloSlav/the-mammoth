@@ -13,14 +13,16 @@ export function createBalconyWaterPatchVisuals(parent: THREE.Object3D): BalconyW
   parent.add(group);
 
   const meshById = new Map<string, THREE.Mesh>();
-  const geo = new THREE.RingGeometry(0.05, BALCONY_WATER_PATCH_RADIUS_M, 32);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0x4aa3df,
-    transparent: true,
-    opacity: 0.35,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
+  const geo = new THREE.CircleGeometry(BALCONY_WATER_PATCH_RADIUS_M, 40);
+
+  const createPatchMaterial = () =>
+    new THREE.MeshBasicMaterial({
+      color: 0x10140f,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
 
   return {
     sync(patches, floorY, nowMicros) {
@@ -30,7 +32,7 @@ export function createBalconyWaterPatchVisuals(parent: THREE.Object3D): BalconyW
         live.add(id);
         let mesh = meshById.get(id);
         if (!mesh) {
-          mesh = new THREE.Mesh(geo, mat);
+          mesh = new THREE.Mesh(geo, createPatchMaterial());
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.y = floorY + 0.01;
           group.add(mesh);
@@ -41,12 +43,13 @@ export function createBalconyWaterPatchVisuals(parent: THREE.Object3D): BalconyW
         const expires = Number(p.expiresAtMicros);
         const age = (nowMicros - created) / Math.max(1, expires - created);
         const fade = 1 - Math.min(1, age);
-        (mesh.material as THREE.MeshBasicMaterial).opacity = 0.15 + fade * 0.35;
-        mesh.scale.setScalar(0.6 + fade * 0.5);
+        (mesh.material as THREE.MeshBasicMaterial).opacity = 0.06 + fade * 0.22;
+        mesh.scale.setScalar(0.96 + fade * 0.04);
       }
       for (const [id, mesh] of meshById) {
         if (!live.has(id)) {
           group.remove(mesh);
+          if (mesh.material instanceof THREE.Material) mesh.material.dispose();
           meshById.delete(id);
         }
       }
@@ -54,7 +57,9 @@ export function createBalconyWaterPatchVisuals(parent: THREE.Object3D): BalconyW
     dispose() {
       parent.remove(group);
       geo.dispose();
-      mat.dispose();
+      for (const mesh of meshById.values()) {
+        if (mesh.material instanceof THREE.Material) mesh.material.dispose();
+      }
       meshById.clear();
     },
   };
