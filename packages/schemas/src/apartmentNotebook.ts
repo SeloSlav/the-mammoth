@@ -3,7 +3,7 @@
 export const OWNED_APARTMENT_MODEL_NOTEBOOK = "static/models/objects/notebook.glb" as const;
 
 /** Horizontal interact cylinder from decor anchor (m). */
-export const APARTMENT_NOTEBOOK_INTERACT_RADIUS_M = 1.1 as const;
+export const APARTMENT_NOTEBOOK_INTERACT_RADIUS_M = 0.85 as const;
 
 export const APARTMENT_NOTEBOOK_PROMPT_LABEL = "Read notebook" as const;
 
