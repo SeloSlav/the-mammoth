@@ -48,6 +48,8 @@ import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { publishFpInteractionFeet } from "../fpInteraction/fpInteractionFeetState.js";
 import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
 import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
+import type { ApartmentNotebookPrompt } from "../fpApartment/fpApartmentNotebookTypes.js";
+import { isFpNotebookTipsPanelOpen } from "../fpApartment/fpNotebookTipsPanelState.js";
 import {
   fpSitBlocksLocomotion,
   fpSitSessionIsOnBed,
@@ -273,6 +275,8 @@ export type FpSessionMainRafFrameDeps = {
   fpInteractionFeet: () => THREE.Vector3;
   /** Center-screen ray vs sittable decor picks (mesh picks + decor roots). */
   getApartmentSittablePrompt: () => ApartmentSittablePrompt | null;
+  /** Center-screen ray vs desk notebook picks. */
+  getApartmentNotebookPrompt: () => ApartmentNotebookPrompt | null;
   /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
   /** Culls replicated drop meshes by storey + residential unit hull. */
@@ -336,6 +340,7 @@ export function createFpSessionMainRafFrame(
   let cachedLookedAtStash: ReturnType<MountFpApartmentDecorMeshesResult["getStashPrompt"]> = null;
   let cachedLookedAtWardrobeUnitKey: string | null = null;
   let cachedSitPromptHud: ApartmentSittablePrompt | null = null;
+  let cachedNotebookPromptHud: ApartmentNotebookPrompt | null = null;
   let cachedElevDoorPrompt: ReturnType<MountFpElevatorWorldResult["getExteriorDoorInteractPrompt"]> =
     null;
   let cachedApartmentDoorHud: ReturnType<MountFpApartmentDoorsResult["getInteractPrompt"]> = null;
@@ -734,6 +739,7 @@ export function createFpSessionMainRafFrame(
         cachedLookedAtStash !== null ||
         cachedBalconyGrowPrompt !== null ||
         cachedSitPromptHud !== null ||
+        cachedNotebookPromptHud !== null ||
         cachedElevDoorPrompt !== null ||
         cachedApartmentDoorHud !== null;
       const hudPickRaycastDue = fpHudPickRaycastDue({
@@ -755,6 +761,7 @@ export function createFpSessionMainRafFrame(
         cachedSitPromptHud = !isFpSitActive()
           ? deps.getApartmentSittablePrompt()
           : null;
+        cachedNotebookPromptHud = deps.getApartmentNotebookPrompt();
         cachedElevDoorPrompt = deps.fpElevators.getExteriorDoorInteractPrompt(ft, deps.camera);
         cachedApartmentDoorHud = deps.fpApartmentDoors.getInteractPrompt(ft, deps.camera);
         hudPickThrottleState = fpHudPickThrottleStateFromSample({
@@ -888,6 +895,14 @@ export function createFpSessionMainRafFrame(
           unitKey: aSys.unitKey,
           stashLabel: aSys.stashLabel,
           willClose: activeStash?.stashKey === aSys.stashKey,
+        });
+      } else if (cachedNotebookPromptHud) {
+        setFpPickupPrompt({
+          kind: "apartment_notebook",
+          notebookKey: cachedNotebookPromptHud.notebookKey,
+          unitKey: cachedNotebookPromptHud.unitKey,
+          label: cachedNotebookPromptHud.label,
+          willClose: isFpNotebookTipsPanelOpen(),
         });
       } else if (sitPromptHud) {
         setFpPickupPrompt({

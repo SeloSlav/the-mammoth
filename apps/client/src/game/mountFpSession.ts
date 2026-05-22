@@ -118,6 +118,12 @@ import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, fpSitSessionIsOnBed, getFpSitSession, isFpSitActive } from "./fpApartment/fpSitSession.js";
 import { openFpSleepConfirm } from "./fpApartment/fpSleepConfirmState.js";
+import {
+  closeFpNotebookTipsPanel,
+  isFpNotebookTipsPanelOpen,
+  openFpNotebookTipsPanel,
+} from "./fpApartment/fpNotebookTipsPanelState.js";
+import type { ApartmentNotebookPrompt } from "./fpApartment/fpApartmentNotebookTypes.js";
 import { tagMergedResidentialShellMeshes } from "./fpApartment/fpResidentialUnitInteriorLayer.js";
 import { ElevatorCabMotionAudio } from "./audio/elevatorCabMotionAudio.js";
 import { mountFpElevatorWorld } from "./fpElevator/fpElevatorWorld.js";
@@ -868,6 +874,20 @@ export async function mountFpSession(
       visibleSittablePickScratch,
       screenNdc,
     );
+  const getApartmentNotebookPromptForSession = (screenNdc?: THREE.Vector2) =>
+    fpApartmentDecorMeshes.getNotebookPrompt(
+      getInteractionPos(),
+      camera,
+      sittablePickObjectVisible,
+      visibleSittablePickScratch,
+      screenNdc,
+    );
+  const tryNotebookInteractFromPrompt = (prompt: ApartmentNotebookPrompt | null): boolean => {
+    if (!prompt || isFpNotebookTipsPanelOpen()) return false;
+    openFpNotebookTipsPanel();
+    if (document.pointerLockElement) void document.exitPointerLock();
+    return true;
+  };
 
   const mainRaf: FpSessionMainRafState = {
     bodyYaw: cachedGuestFeet?.yaw ?? 0,
@@ -1370,6 +1390,11 @@ export async function mountFpSession(
     }
     if (e.code === "Escape") void document.exitPointerLock();
     if (e.code === "KeyE" && !e.repeat && !isTextInputFocused()) {
+      if (isFpNotebookTipsPanelOpen()) {
+        e.preventDefault();
+        closeFpNotebookTipsPanel();
+        return;
+      }
       if (getFpActiveStashPanel()) {
         e.preventDefault();
         closeApartmentStashAndInventory();
@@ -1460,6 +1485,9 @@ export async function mountFpSession(
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }
+
+      const notebookPrompt = getApartmentNotebookPromptForSession();
+      if (tryNotebookInteractFromPrompt(notebookPrompt)) return;
 
       if (!isFpSitActive()) {
         const sitPrompt = getApartmentSittablePromptForSession();
@@ -1590,6 +1618,11 @@ export async function mountFpSession(
       conn.identity
     ) {
       apartmentSittableScreenNdcFromPointer(canvas, e, sitPointerNdc);
+      const notebookPrompt = getApartmentNotebookPromptForSession(sitPointerNdc);
+      if (tryNotebookInteractFromPrompt(notebookPrompt)) {
+        e.preventDefault();
+        return;
+      }
       const sitPrompt = getApartmentSittablePromptForSession(sitPointerNdc);
       if (
         sitPrompt &&
@@ -1715,6 +1748,7 @@ export async function mountFpSession(
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
     fpInteractionFeet: getInteractionPos,
     getApartmentSittablePrompt: getApartmentSittablePromptForSession,
+    getApartmentNotebookPrompt: getApartmentNotebookPromptForSession,
     fpDroppedPickupFeet: getDroppedPickupAuthorityFeet,
     syncDroppedItemVisualVisibility: droppedWorld.syncDroppedItemVisualVisibility,
     fpFirearmImpactDecals,
@@ -1809,6 +1843,7 @@ export async function mountFpSession(
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("contextmenu", onCanvasContextMenu);
     setFpPickupPrompt(null);
+    closeFpNotebookTipsPanel();
     exitFpSit();
     fpElevators.dispose();
     fpApartmentDecorMeshes.dispose();

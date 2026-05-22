@@ -1023,6 +1023,34 @@
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "458d8798-edbc-4d70-99f8-fbb563c34437",
+      "modelRelPath": "static/models/objects/notebook.glb",
+      "fx": 0.920230610742346,
+      "fz": 0.6791787192851177,
+      "dy": 0.9816613292351235,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.16239800099616974,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "51e06929-f36f-48cf-a429-fac213be3f6c",
+      "modelRelPath": "static/models/objects/coffee-cup-empty.glb",
+      "fx": 0.9225174673000187,
+      "fz": 0.6472493603060043,
+      "dy": 0.9946574939008315,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.08,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [

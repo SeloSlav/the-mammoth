@@ -74,6 +74,15 @@ export type FpPickupPromptApartmentSleep = {
   unitKey: string;
 };
 
+export type FpPickupPromptApartmentNotebook = {
+  kind: "apartment_notebook";
+  notebookKey: string;
+  unitKey: string;
+  label: string;
+  /** True when the tips panel is already open (E dismisses). */
+  willClose: boolean;
+};
+
 export type FpPickupPromptState =
   | FpPickupPromptDroppedItem
   | FpPickupPromptElevatorExteriorDoor
@@ -85,6 +94,7 @@ export type FpPickupPromptState =
   | FpPickupPromptBalconyGrowHarvest
   | FpPickupPromptApartmentSittable
   | FpPickupPromptApartmentSleep
+  | FpPickupPromptApartmentNotebook
   | null;
 
 const listeners = new Set<() => void>();
@@ -144,6 +154,12 @@ function same(a: FpPickupPromptState, b: FpPickupPromptState): boolean {
   }
   if (a.kind === "apartment_sleep" && b.kind === "apartment_sleep") {
     return a.unitKey === b.unitKey;
+  }
+  if (a.kind === "apartment_notebook" && b.kind === "apartment_notebook") {
+    return (
+      a.notebookKey === b.notebookKey &&
+      a.willClose === b.willClose
+    );
   }
   return false;
 }

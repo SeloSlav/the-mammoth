@@ -28,6 +28,7 @@ import {
   ownedApartmentPlacedItemKindHasStash,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
   apartmentSittableSpecForPlacedItem,
+  isApartmentNotebookModelRelPath,
 } from "@the-mammoth/schemas";
 import type { DbConnection } from "../../module_bindings";
 import { mergeGroupDescendantsByMaterialYielding } from "../fpSession/fpMergeGroupDescendantsByMaterial.js";
@@ -55,6 +56,8 @@ import {
 import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
 import { getApartmentSittablePrompt } from "./fpApartmentSittablePrompt.js";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
+import { getApartmentNotebookPrompt } from "./fpApartmentNotebookPrompt.js";
+import type { ApartmentNotebookPrompt } from "./fpApartmentNotebookTypes.js";
 import {
   loadApartmentUnitLayoutProfilesDocFromContent,
   loadOwnedApartmentBuiltinsDocFromContent,
@@ -473,6 +476,13 @@ export type MountFpApartmentDecorMeshesResult = {
     visiblePickScratch: THREE.Mesh[],
     screenNdc?: THREE.Vector2,
   ) => ApartmentSittablePrompt | null;
+  getNotebookPrompt: (
+    playerPos: THREE.Vector3,
+    camera: THREE.PerspectiveCamera,
+    objectVisibleInHierarchy: (obj: THREE.Object3D) => boolean,
+    visiblePickScratch: THREE.Mesh[],
+    screenNdc?: THREE.Vector2,
+  ) => ApartmentNotebookPrompt | null;
   getSittableDecorRoots: () => readonly THREE.Object3D[];
   getGrowTrayPickMeshes: () => readonly THREE.Mesh[];
   getGrowSlotPickMeshes: () => readonly THREE.Mesh[];
@@ -531,6 +541,7 @@ export function mountFpApartmentDecorMeshes(opts: {
   const stashPickMeshes: THREE.Mesh[] = [];
   const wardrobePickMeshes: THREE.Mesh[] = [];
   const sittablePickMeshes: THREE.Mesh[] = [];
+  const notebookPickMeshes: THREE.Mesh[] = [];
   const growTrayPickMeshes: THREE.Mesh[] = [];
   const growTrayCenterPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
@@ -799,6 +810,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     stashPickMeshes.length = 0;
     wardrobePickMeshes.length = 0;
     sittablePickMeshes.length = 0;
+    notebookPickMeshes.length = 0;
     growTrayPickMeshes.length = 0;
     growTrayCenterPickMeshes.length = 0;
     growSlotPickMeshes.length = 0;
@@ -1161,6 +1173,25 @@ export function mountFpApartmentDecorMeshes(opts: {
         sittablePickMeshes.push(sitPick);
         g.updateMatrixWorld(true);
       }
+      if (isApartmentNotebookModelRelPath(decorModelRelPath)) {
+        const notebookPick = new THREE.Mesh(stashPickGeometry, stashPickMaterial);
+        const notebookKey =
+          d.decorId !== null
+            ? `decor:${d.decorId.toString()}`
+            : `content:${d.unit.unitKey}:${d.renderKey}`;
+        notebookPick.name = `apartment_notebook_pick:${notebookKey}`;
+        fitApartmentInteractionPickToObject(g, notebookPick, { x: 0.22, y: 0.12, z: 0.22 });
+        notebookPick.userData.mammothApartmentNotebookKey = notebookKey;
+        notebookPick.userData.mammothApartmentNotebookUnitKey = d.unit.unitKey;
+        notebookPick.userData.mammothApartmentNotebookRoot = g;
+        notebookPick.userData.mammothSkipFloorGeometryMerge = true;
+        notebookPick.userData.mammothApartmentDecorProp = true;
+        notebookPick.userData.mammothPlateLevelIndex = d.unit.level;
+        notebookPick.layers.set(FP_INTERACTION_PICK_LAYER);
+        g.add(notebookPick);
+        notebookPickMeshes.push(notebookPick);
+        g.updateMatrixWorld(true);
+      }
       tagApartmentDecorGroupVisibilityMetadata(g);
       tagResidentialUnitInteriorMeshesUnder(g);
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
@@ -1438,6 +1469,25 @@ export function mountFpApartmentDecorMeshes(opts: {
         playerPos,
         camera,
         decorPickMeshes: sittablePickMeshes,
+        decorRoots: Array.from(groupByRenderKey.values()),
+        visibleScratch: visiblePickScratch,
+        objectVisibleInHierarchy,
+        screenNdc,
+      });
+    },
+    getNotebookPrompt: (
+      playerPos,
+      camera,
+      objectVisibleInHierarchy,
+      visiblePickScratch,
+      screenNdc,
+    ) => {
+      if (!opts.conn.identity) return null;
+      return getApartmentNotebookPrompt({
+        conn: opts.conn,
+        playerPos,
+        camera,
+        notebookPickMeshes,
         decorRoots: Array.from(groupByRenderKey.values()),
         visibleScratch: visiblePickScratch,
         objectVisibleInHierarchy,

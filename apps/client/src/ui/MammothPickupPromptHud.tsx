@@ -275,6 +275,23 @@ export function MammothPickupPromptHud() {
     );
   }
 
+  if (prompt.kind === "apartment_notebook") {
+    const label = prompt.willClose ? "Close notebook" : prompt.label;
+    return (
+      <FpBottomInteractPromptFrame borderRgb="rgba(180,200,230,0.38)" glowRgb="rgba(120,160,210,0.14)">
+        <span style={{ opacity: 0.92 }}>Press </span>
+        <InteractKeyE
+          kbdGradient="linear-gradient(180deg, #dce8ff 0%, #8aa8cc 45%, #4a6280 100%)"
+          kbdBorderRgb="rgba(200,220,255,0.5)"
+          kbdShadowRgb="rgba(100,140,200,0.28)"
+          kbdText="#0a0e14"
+        />
+        <span style={{ opacity: 0.92 }}> — </span>
+        <strong style={{ color: "#f0f6ff", fontWeight: 700 }}>{label}</strong>
+      </FpBottomInteractPromptFrame>
+    );
+  }
+
   const _never: never = prompt;
   return _never;
 }
