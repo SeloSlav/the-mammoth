@@ -84,7 +84,7 @@ import {
 } from "../editor/myApartment/editorMyApartmentLayoutVisibility.js";
 import {
   HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
-  maxBuildingLevelIndex,
+  ownedDefaultApartmentUnitKey,
   TYPICAL_FLOOR_DOC_ID,
 } from "@the-mammoth/world";
 import {
@@ -100,13 +100,6 @@ function finalizeOwnedApartmentBuiltinsPreservingMounts(
     prev,
     finalizeOwnedApartmentBuiltinsDoc(OwnedApartmentBuiltinsDocSchema.parse(draft)),
   );
-}
-
-function ownedDefaultApartmentUnitKey(building: BuildingDoc): string {
-  return `${TYPICAL_FLOOR_DOC_ID}|${Math.max(
-    1,
-    maxBuildingLevelIndex(building),
-  )}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
 }
 
 export type {

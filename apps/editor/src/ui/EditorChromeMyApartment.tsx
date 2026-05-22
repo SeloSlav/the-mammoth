@@ -33,6 +33,7 @@ import {
 } from "./editorChromeStyles.js";
 import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
 import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
+import { EDITOR_CHROME_SECTION } from "./editorChromeSectionAnchors.js";
 import {
   filterMaterialTextureUrls,
   MaterialSlotEditor,
@@ -600,7 +601,10 @@ export function EditorChromeMyApartment(props: {
   }
   body = (
       <>
-        <div style={editorChromeSection}>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.importDecor}
+        >
           <EditorChromeSectionTitleIcon icon={faCloudArrowDown}>Import décor</EditorChromeSectionTitleIcon>
           <p style={{ ...editorChromeHelp, marginTop: 0 }}>
             Click a model from <code>public/static/models/objects/</code>, import it into the preview
@@ -682,7 +686,94 @@ export function EditorChromeMyApartment(props: {
           </button>
         </div>
         </div>
-        <div style={editorChromeSection}>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.placedDecor}
+        >
+          <EditorChromeSectionTitleIcon icon={faTableCells}>Placed décor</EditorChromeSectionTitleIcon>
+        <input
+          type="search"
+          value={placedItemsSearchQuery}
+          onChange={(e) => setPlacedItemsSearchQuery(e.target.value)}
+          placeholder="Search placed items..."
+          style={{ ...editorChromeInput, width: "100%", marginTop: 6 }}
+        />
+        <div
+          style={{
+            display: "grid",
+            gap: 6,
+            marginTop: 6,
+            maxHeight: 160,
+            overflowY: "auto",
+          }}
+        >
+          {placedItems.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>No placed items yet.</div>
+          ) : filteredPlacedItems.length === 0 ? (
+            <div style={{ fontSize: 11, opacity: 0.68 }}>
+              No placed items match "{placedItemsSearchQuery}".
+            </div>
+          ) : (
+            filteredPlacedItems.map((item) => {
+              const decorFullId = editorMyApartmentSelectedIdForDecor(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    ...editorChromeRowBtn,
+                    textAlign: "left",
+                    background: isDecorWallPlacementRowSelected(decorFullId)
+                      ? "#355172"
+                      : "#2a2a34",
+                  }}
+                  onClick={(ev) => pickDecorWallPlacementFromList(decorFullId, ev)}
+                  title={item.modelRelPath}
+                >
+                  {decorCatalogLabel(item.modelRelPath)}
+                </button>
+              );
+            })
+          )}
+        </div>
+        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={cloneSelectedDecor}
+            disabled={!selectedDecor}
+            title="Same model, scale, yaw/pitch/roll, and vertical offset (dy); new id and center spawn like Import."
+          >
+            Clone selected decor
+          </button>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={deleteSelectedDecor}
+            disabled={!selectedDecor}
+          >
+            Delete selected decor
+          </button>
+        </div>
+        {selectedDecor ? (
+          <p style={{ margin: "10px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+            Current: <code style={{ fontSize: 10 }}>{selectedDecor.modelRelPath}</code>
+            {" · "}
+            role <code style={{ fontSize: 10 }}>{selectedDecor.itemKind}</code>
+            {selectedCatalogModelRelPath && selectedCatalogModelRelPath !== selectedDecor.modelRelPath ? (
+              <>
+                {" "}
+                → <code style={{ fontSize: 10 }}>{selectedCatalogModelRelPath}</code>
+                {` (${ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath)} after replace)`}
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        </div>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.aptSceneGizmo}
+        >
           <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & gizmo</EditorChromeSectionTitleIcon>
           <EditorChromeSceneGizmoBlock
             omitSectionHeading
@@ -717,7 +808,10 @@ export function EditorChromeMyApartment(props: {
             }
           />
         </div>
-        <div style={editorChromeSection}>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.savedGroups}
+        >
           <EditorChromeSectionTitleIcon icon={faObjectGroup}>Saved object groups</EditorChromeSectionTitleIcon>
           <p style={{ ...editorChromeHelp, marginTop: 0 }}>
           <strong>Ctrl/Cmd-click</strong> multiple imported decor, wall slabs, or mirrors in the scene
@@ -911,88 +1005,10 @@ export function EditorChromeMyApartment(props: {
           </div>
         ) : null}
         </div>
-        <div style={editorChromeSection}>
-          <EditorChromeSectionTitleIcon icon={faTableCells}>Placed décor</EditorChromeSectionTitleIcon>
-        <input
-          type="search"
-          value={placedItemsSearchQuery}
-          onChange={(e) => setPlacedItemsSearchQuery(e.target.value)}
-          placeholder="Search placed items..."
-          style={{ ...editorChromeInput, width: "100%", marginTop: 6 }}
-        />
         <div
-          style={{
-            display: "grid",
-            gap: 6,
-            marginTop: 6,
-            maxHeight: 160,
-            overflowY: "auto",
-          }}
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.mirrors}
         >
-          {placedItems.length === 0 ? (
-            <div style={{ fontSize: 11, opacity: 0.68 }}>No placed items yet.</div>
-          ) : filteredPlacedItems.length === 0 ? (
-            <div style={{ fontSize: 11, opacity: 0.68 }}>
-              No placed items match "{placedItemsSearchQuery}".
-            </div>
-          ) : (
-            filteredPlacedItems.map((item) => {
-              const decorFullId = editorMyApartmentSelectedIdForDecor(item.id);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  style={{
-                    ...editorChromeRowBtn,
-                    textAlign: "left",
-                    background: isDecorWallPlacementRowSelected(decorFullId)
-                      ? "#355172"
-                      : "#2a2a34",
-                  }}
-                  onClick={(ev) => pickDecorWallPlacementFromList(decorFullId, ev)}
-                  title={item.modelRelPath}
-                >
-                  {decorCatalogLabel(item.modelRelPath)}
-                </button>
-              );
-            })
-          )}
-        </div>
-        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <button
-            type="button"
-            style={editorChromeRowBtn}
-            onClick={cloneSelectedDecor}
-            disabled={!selectedDecor}
-            title="Same model, scale, yaw/pitch/roll, and vertical offset (dy); new id and center spawn like Import."
-          >
-            Clone selected decor
-          </button>
-          <button
-            type="button"
-            style={editorChromeRowBtn}
-            onClick={deleteSelectedDecor}
-            disabled={!selectedDecor}
-          >
-            Delete selected decor
-          </button>
-        </div>
-        {selectedDecor ? (
-          <p style={{ margin: "10px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-            Current: <code style={{ fontSize: 10 }}>{selectedDecor.modelRelPath}</code>
-            {" · "}
-            role <code style={{ fontSize: 10 }}>{selectedDecor.itemKind}</code>
-            {selectedCatalogModelRelPath && selectedCatalogModelRelPath !== selectedDecor.modelRelPath ? (
-              <>
-                {" "}
-                → <code style={{ fontSize: 10 }}>{selectedCatalogModelRelPath}</code>
-                {` (${ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath)} after replace)`}
-              </>
-            ) : null}
-          </p>
-        ) : null}
-        </div>
-        <div style={editorChromeSection}>
           <EditorChromeSectionTitleIcon icon={faWindowRestore}>Mirrors (planar)</EditorChromeSectionTitleIcon>
           <p style={{ ...editorChromeHelp, marginTop: 0 }}>
             Rectangle glass with a thin frame, same reflective surface as the elevator cab mirror.
@@ -1056,7 +1072,10 @@ export function EditorChromeMyApartment(props: {
           </button>
         </div>
         </div>
-        <div style={editorChromeSection}>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.partitionWalls}
+        >
           <EditorChromeSectionTitleIcon icon={faGripLinesVertical}>
             Partition walls (thin slabs)
           </EditorChromeSectionTitleIcon>

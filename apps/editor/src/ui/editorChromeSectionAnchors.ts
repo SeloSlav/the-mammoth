@@ -1,0 +1,19 @@
+/** DOM ids for editor rail sections — used by {@link EditorChromeSectionJumpBar} and scroll targets. */
+export const EDITOR_CHROME_SECTION = {
+  authoringTop: "editor-chrome-section-authoring-top",
+  workspace: "editor-chrome-section-workspace",
+  apartmentUnit: "editor-chrome-section-apartment-unit",
+  importDecor: "editor-chrome-section-import-decor",
+  placedDecor: "editor-chrome-section-placed-decor",
+  aptSceneGizmo: "editor-chrome-section-apt-scene-gizmo",
+  savedGroups: "editor-chrome-section-saved-groups",
+  mirrors: "editor-chrome-section-mirrors",
+  partitionWalls: "editor-chrome-section-partition-walls",
+  fpAuthoring: "editor-chrome-section-fp-authoring",
+  activeDocument: "editor-chrome-section-active-document",
+  sceneTransform: "editor-chrome-section-scene-transform",
+  saveCollision: "editor-chrome-section-save-collision",
+  outliner: "editor-chrome-section-outliner",
+  prefabPalette: "editor-chrome-section-prefab-palette",
+  inspector: "editor-chrome-section-inspector",
+} as const;

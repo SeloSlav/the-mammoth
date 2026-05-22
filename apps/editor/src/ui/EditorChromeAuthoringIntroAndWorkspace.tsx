@@ -14,8 +14,8 @@ import {
 } from "@the-mammoth/schemas";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import {
-  HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
   listOwnedApartmentAuthoringPreviewUnits,
+  ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
 import type {
   CollisionArtifactsStatus,
@@ -39,6 +39,7 @@ import {
   EditorChromeGroupTitleIcon,
   EditorChromeSectionTitleIcon,
 } from "./EditorChromeSectionTitleIcon.js";
+import { EDITOR_CHROME_SECTION } from "./editorChromeSectionAnchors.js";
 
 export function EditorChromeAuthoringIntroAndWorkspace(props: {
   contentIndex: EditorContentIndex;
@@ -106,6 +107,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
 
   const apartmentPreviewUnits = useMemo(
     () => {
+      const ownedDefaultPreviewUnitKey = ownedDefaultApartmentUnitKey(building);
       const refs = [...building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
       return refs.flatMap((ref) => {
         const floor = floorDocs[ref.floorDocId];
@@ -118,9 +120,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             unitKey,
           );
           const assignedProfileName = assignedProfile?.name ?? null;
-          const isPlayerSpawnHome =
-            ref.levelIndex === Math.max(...refs.map((r) => r.levelIndex)) &&
-            unit.unitId === HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID;
+          const isPlayerSpawnHome = unitKey === ownedDefaultPreviewUnitKey;
           const unitLabel = `Floor ${residentialFloor}, ${unit.label}`;
           const profileListSuffix =
             assignedProfileName ??
@@ -135,7 +135,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
         });
       });
     },
-    [apartmentUnitLayoutProfiles, building.floorRefs, floorDocs],
+    [apartmentUnitLayoutProfiles, building, floorDocs],
   );
   const previewUnit =
     apartmentPreviewUnits.find((unit) => unit.unitKey === myApartmentPreviewUnitKey) ?? null;
@@ -155,9 +155,14 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
       : null;
   return (
     <>
-      <div style={editorChromePanelTitle}>Authoring</div>
+      <div id={EDITOR_CHROME_SECTION.authoringTop} style={editorChromePanelTitle}>
+        Authoring
+      </div>
 
-      <div style={editorChromeSection}>
+      <div
+        id={EDITOR_CHROME_SECTION.workspace}
+        style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+      >
         <EditorChromeSectionTitleIcon icon={faSitemap}>Workspace</EditorChromeSectionTitleIcon>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           <button
@@ -285,7 +290,10 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
       </div>
 
       {workspace === "apartment" ? (
-        <div style={editorChromeSection}>
+        <div
+          id={EDITOR_CHROME_SECTION.apartmentUnit}
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+        >
           <EditorChromeSectionTitleIcon icon={faBuilding}>Apartment unit</EditorChromeSectionTitleIcon>
           <span style={{ ...label, marginTop: 0 }}>Preview apartment</span>
           <select

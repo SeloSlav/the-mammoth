@@ -1,10 +1,20 @@
 import { useMemo, useState } from "react";
 import {
+  faAnglesUp,
   faArrowsRotate,
+  faBuilding,
+  faCloudArrowDown,
   faCrosshairs,
   faCubes,
   faDatabase,
   faFileLines,
+  faGripLinesVertical,
+  faListUl,
+  faObjectGroup,
+  faSitemap,
+  faSliders,
+  faTableCells,
+  faWindowRestore,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   isStairWellOpeningProxyId,
@@ -27,11 +37,18 @@ import {
   editorChromeInput,
   editorChromeLabel,
   editorChromePanel,
+  editorChromePanelBody,
+  editorChromePanelJumpBarWrap,
   editorChromeRowBtn,
   editorChromeSection,
   editorChromeSubsectionLabel,
   editorChromeSubsectionLabelFirst,
 } from "./editorChromeStyles.js";
+import { EDITOR_CHROME_SECTION } from "./editorChromeSectionAnchors.js";
+import {
+  EditorChromeSectionJumpBar,
+  type EditorChromeJumpBarItem,
+} from "./EditorChromeSectionJumpBar.js";
 import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMaterialPanel.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
@@ -312,6 +329,93 @@ export function EditorChrome() {
         : mode === "cell"
           ? cellPrefabIds
           : knownPrefabIds;
+
+  const chromeJumpItems = useMemo((): EditorChromeJumpBarItem[] => {
+    const items: EditorChromeJumpBarItem[] = [
+      { id: EDITOR_CHROME_SECTION.authoringTop, label: "Authoring", icon: faAnglesUp },
+      { id: EDITOR_CHROME_SECTION.workspace, label: "Workspace", icon: faSitemap },
+    ];
+    if (workspace === "apartment") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.apartmentUnit,
+        label: "Apartment unit",
+        icon: faBuilding,
+      });
+    }
+    if (mode === "my_apartment_layout") {
+      items.push(
+        { id: EDITOR_CHROME_SECTION.importDecor, label: "Import décor", icon: faCloudArrowDown },
+        { id: EDITOR_CHROME_SECTION.placedDecor, label: "Placed décor", icon: faTableCells },
+        { id: EDITOR_CHROME_SECTION.aptSceneGizmo, label: "Scene & gizmo", icon: faArrowsRotate },
+        { id: EDITOR_CHROME_SECTION.savedGroups, label: "Saved groups", icon: faObjectGroup },
+        { id: EDITOR_CHROME_SECTION.mirrors, label: "Mirrors", icon: faWindowRestore },
+        { id: EDITOR_CHROME_SECTION.partitionWalls, label: "Partition walls", icon: faGripLinesVertical },
+      );
+    }
+    if (mode === "fp_viewmodel" || mode === "fp_consumable") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.fpAuthoring,
+        label: "First-person authoring",
+        icon: faCrosshairs,
+      });
+    }
+    if (
+      mode === "interior" ||
+      mode === "cell" ||
+      mode === "prefab" ||
+      mode === "floor_override"
+    ) {
+      items.push({
+        id: EDITOR_CHROME_SECTION.activeDocument,
+        label: "Active document",
+        icon: faFileLines,
+      });
+    }
+    if (mode !== "fp_viewmodel" && mode !== "fp_consumable" && mode !== "my_apartment_layout") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.sceneTransform,
+        label: "Scene & transform",
+        icon: faArrowsRotate,
+      });
+    }
+    if (workspace !== "apartment") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.saveCollision,
+        label: "Save & collision",
+        icon: faDatabase,
+      });
+    }
+    if (mode !== "fp_viewmodel" && mode !== "fp_consumable" && mode !== "my_apartment_layout") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.outliner,
+        label: "Outliner",
+        icon: faListUl,
+      });
+    }
+    if (
+      mode !== "cab" &&
+      mode !== "landing_preview" &&
+      mode !== "stairwell_preview" &&
+      mode !== "my_apartment_layout" &&
+      mode !== "fp_viewmodel" &&
+      mode !== "fp_consumable"
+    ) {
+      items.push({
+        id: EDITOR_CHROME_SECTION.prefabPalette,
+        label: "Prefab palette",
+        icon: faCubes,
+      });
+    }
+    if (mode !== "fp_viewmodel" && mode !== "fp_consumable") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.inspector,
+        label: "Inspector",
+        icon: faSliders,
+      });
+    }
+    return items;
+  }, [workspace, mode]);
+
   return (
     <>
       <EditorChromeSelectedMaterialPanel
@@ -327,6 +431,10 @@ export function EditorChrome() {
         input={input}
       />
       <div style={editorChromePanel}>
+        <div style={editorChromePanelJumpBarWrap}>
+          <EditorChromeSectionJumpBar items={chromeJumpItems} />
+        </div>
+        <div style={editorChromePanelBody}>
         <EditorChromeAuthoringIntroAndWorkspace
           contentIndex={contentIndex}
           workspace={workspace}
@@ -365,7 +473,10 @@ export function EditorChrome() {
           contentIndex={contentIndex}
         />
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
-          <div style={editorChromeSection}>
+          <div
+            id={EDITOR_CHROME_SECTION.fpAuthoring}
+            style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          >
             <EditorChromeSectionTitleIcon icon={faCrosshairs}>First-person authoring</EditorChromeSectionTitleIcon>
             <EditorChromeFpViewmodel
               transformMode={transformMode}
@@ -379,8 +490,10 @@ export function EditorChrome() {
         mode === "cell" ||
         mode === "prefab" ||
         mode === "floor_override" ? (
-          <div style={editorChromeSection}>
-            <EditorChromeSectionTitleIcon icon={faFileLines}>Active document</EditorChromeSectionTitleIcon>
+          <div
+            id={EDITOR_CHROME_SECTION.activeDocument}
+            style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          >
             {mode === "interior" ? (
               <>
                 <span style={{ ...label, marginTop: 0 }}>Interior document</span>
@@ -451,8 +564,10 @@ export function EditorChrome() {
         {mode !== "fp_viewmodel" &&
         mode !== "fp_consumable" &&
         mode !== "my_apartment_layout" ? (
-          <div style={editorChromeSection}>
-            <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & transform</EditorChromeSectionTitleIcon>
+          <div
+            id={EDITOR_CHROME_SECTION.sceneTransform}
+            style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          >
             <EditorChromeSceneGizmoBlock
               omitSectionHeading
               transformMode={transformMode}
@@ -463,8 +578,10 @@ export function EditorChrome() {
           </div>
         ) : null}
         {workspace !== "apartment" ? (
-          <div style={editorChromeSection}>
-            <EditorChromeSectionTitleIcon icon={faDatabase}>Save & collision</EditorChromeSectionTitleIcon>
+          <div
+            id={EDITOR_CHROME_SECTION.saveCollision}
+            style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          >
             <span style={editorChromeSubsectionLabelFirst}>History</span>
             <div>
               <button
@@ -556,7 +673,10 @@ export function EditorChrome() {
         {mode !== "fp_viewmodel" && mode !== "fp_consumable" ? (
           <>
             {mode !== "my_apartment_layout" ? (
-              <div style={editorChromeSection}>
+              <div
+                id={EDITOR_CHROME_SECTION.outliner}
+                style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+              >
                 <EditorChromeOutliner
                   mode={mode}
                   stairWellAuthorScope={stairWellAuthorScope}
@@ -576,7 +696,10 @@ export function EditorChrome() {
             mode !== "landing_preview" &&
             mode !== "stairwell_preview" &&
             mode !== "my_apartment_layout" ? (
-              <div style={editorChromeSection}>
+              <div
+                id={EDITOR_CHROME_SECTION.prefabPalette}
+                style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+              >
                 <EditorChromeSectionTitleIcon icon={faCubes}>Prefab palette</EditorChromeSectionTitleIcon>
                 <select
                   style={{ ...input, marginBottom: 6 }}
@@ -686,7 +809,10 @@ export function EditorChrome() {
                 </div>
               </div>
             ) : null}
-            <div style={editorChromeSection}>
+            <div
+              id={EDITOR_CHROME_SECTION.inspector}
+              style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+            >
               <EditorChromeInspector
                 workspace={workspace}
                 mode={mode}
@@ -726,6 +852,7 @@ export function EditorChrome() {
             </div>
           </>
         ) : null}
+        </div>
       </div>
     </>
   );

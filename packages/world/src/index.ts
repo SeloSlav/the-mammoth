@@ -359,7 +359,10 @@ export {
   APARTMENT_DOOR_TEMPLATE_TOTAL,
   type ApartmentDoorTemplateSet,
 } from "./generatedApartmentDoors.js";
-export { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
+export {
+  HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
+  ownedDefaultApartmentUnitKey,
+} from "./ownedApartmentHomeBand.js";
 export {
   RESIDENTIAL_FAR_WALL_X_INSET_M,
   RESIDENTIAL_UNIT_PLAYABLE_DEPTH_M,

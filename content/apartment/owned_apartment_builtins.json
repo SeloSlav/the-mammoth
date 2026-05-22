@@ -299,8 +299,8 @@
     {
       "id": "28512766-a760-4eb3-b88e-63de2ea8bed8",
       "modelRelPath": "static/models/objects/rakija.glb",
-      "fx": 0.28721016930488047,
-      "fz": 0.6701519913570659,
+      "fx": 0.3052300103022173,
+      "fz": 0.7116328216828878,
       "dy": 1.3169727258522632,
       "yawRad": 0,
       "pitchRad": 0,
@@ -313,9 +313,9 @@
     {
       "id": "969b62c8-fc80-4728-ac4e-60801758eba5",
       "modelRelPath": "static/models/objects/coffee-cup-empty.glb",
-      "fx": 0.2692245159178672,
-      "fz": 0.6687254389934861,
-      "dy": 1.1685230290846316,
+      "fx": 0.279160419458035,
+      "fz": 0.7278021770286321,
+      "dy": 1.1998914359886477,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -994,6 +994,34 @@
       "uniformScale": 0.11242224924488126,
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
+    },
+    {
+      "id": "d804e9f2-0853-4071-8e0e-72de582bfe31",
+      "modelRelPath": "static/models/objects/glass-empty.glb",
+      "fx": 0.32380999931819027,
+      "fz": 0.7125143300179304,
+      "dy": 1.1716661944886955,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.061285726222450015,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "0f597231-3677-469d-984b-379316d6138d",
+      "modelRelPath": "static/models/objects/glass-empty.glb",
+      "fx": 0.2939639044062628,
+      "fz": 0.7388015864443236,
+      "dy": 1.1716661187073283,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.061285726222450015,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }
   ],

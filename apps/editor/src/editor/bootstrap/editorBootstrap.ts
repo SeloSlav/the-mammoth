@@ -24,7 +24,7 @@ import type { LandingKitVariant } from "../../state/editorStoreTypes.js";
 import {
   HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
   maxBuildingLevelIndex,
-  TYPICAL_FLOOR_DOC_ID,
+  ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
 import { editorMyApartmentSelectedIdForDecor } from "../myApartment/editorMyApartmentSelection.js";
 import {
@@ -172,7 +172,7 @@ export async function bootstrapEditorFromContent(): Promise<void> {
   );
   const first = sorted[0];
   const homeStoryLevelIndex = Math.max(1, maxBuildingLevelIndex(building));
-  const initialPreviewUnitKey = `${TYPICAL_FLOOR_DOC_ID}|${homeStoryLevelIndex}|${HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID}`;
+  const initialPreviewUnitKey = ownedDefaultApartmentUnitKey(building);
   const initialAssignedProfileId =
     apartmentUnitLayoutProfiles.assignments.find((a) => a.unitKey === initialPreviewUnitKey)
       ?.profileId ?? null;

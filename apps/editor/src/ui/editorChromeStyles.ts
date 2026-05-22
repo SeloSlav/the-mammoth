@@ -8,13 +8,33 @@ export const editorChromePanel: CSSProperties = {
   width: 312,
   background: "linear-gradient(168deg, #11111a 0%, #0c0c12 48%, #09090e 100%)",
   color: "#ddd",
-  padding: "14px 12px 18px",
+  padding: 0,
   fontSize: 13,
   boxSizing: "border-box",
-  overflowY: "auto",
+  overflow: "visible",
+  display: "flex",
+  flexDirection: "column",
   zIndex: 2,
   fontFamily: "system-ui, sans-serif",
   boxShadow: "-6px 0 28px rgba(0,0,0,0.45)",
+};
+
+/** Jump-to-section toolbar — fixed strip at top of the rail (scroll stays below). */
+export const editorChromePanelJumpBarWrap: CSSProperties = {
+  flexShrink: 0,
+  padding: "8px 10px 10px",
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  background: "linear-gradient(180deg, #13131c 0%, #101018 72%, #0e0e15 100%)",
+  boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.25)",
+};
+
+/** Scrollable column for all authoring cards beneath the jump bar. */
+export const editorChromePanelBody: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
+  padding: "12px 12px 18px",
+  boxSizing: "border-box",
 };
 
 /** Top-of-panel title (e.g. “Authoring”). */
