@@ -102,7 +102,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
 
   const daysGrown = Number(plant.daysGrown);
   const targetDays = Number(plant.targetDays);
-  const plantedWithSubstrate = Number(plant.fertilizedAtPlant) !== 0;
+  const fertilizedOvernight = Number(plant.fertilizedAtPlant) !== 0;
   const cropLabel = cropInspectLabel(plant.cropDefId, Number(plant.phase), daysGrown, targetDays);
   const trayWaterLiters = tray?.waterLiters ?? 0;
   const readyToHarvest = balconyGrowPlantReadyByDays(
@@ -150,7 +150,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
           {lightsOn
             ? "Grows when you sleep — keep tray watered for better harvest"
             : "No grow light — won't advance when you sleep"}
-          {plantedWithSubstrate ? " · planted with substrate" : ""}
+          {fertilizedOvernight ? " · tray fed overnight" : ""}
         </div>
       ) : null}
       {readyToHarvest ? (
@@ -179,8 +179,8 @@ export function BalconyGrowInspectHud({ conn }: Props) {
       ) : null}
       <div style={{ opacity: 0.9 }}>
         {lightsOn ? "Grow light on" : "No grow light"}
-        {plantedWithSubstrate ? " · substrate at plant" : ""}
-        {fertilizerPresent ? " · substrate in tray (next plant)" : ""}
+        {fertilizedOvernight ? " · fed overnight" : ""}
+        {fertilizerPresent ? " · substrate ready (feeds all slots on sleep)" : ""}
       </div>
       <div style={{ marginTop: 4, opacity: 0.82 }}>
         Water {trayWaterLiters.toFixed(1)}/{BALCONY_GROW_TRAY_MAX_WATER_L} L ({waterStatusLabel(trayWaterLiters)})

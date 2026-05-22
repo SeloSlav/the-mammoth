@@ -35,7 +35,7 @@ export const PLAYER_NOTEBOOK_TIPS: readonly PlayerNotebookTipSection[] = [
     lines: [
       "Feed the fish. Clean when water clouds. Pump/filter keeps them alive — neglect = dead fish, algae, shame.",
       "Scoop waste from the tank into balcony-grow substrate (compost bucket item). Same stuff as footlocker starter packs.",
-      "Drop substrate in a grow-tray stash BEFORE you plant. One unit consumed on plant = faster nights + better harvest rolls.",
+      "Drop substrate in a grow-tray stash before you sleep. One unit overnight feeds all four slots in that tray.",
     ],
   },
   {
@@ -43,7 +43,7 @@ export const PLAYER_NOTEBOOK_TIPS: readonly PlayerNotebookTipSection[] = [
     lines: [
       "LED panels must be ON or nothing grows when you sleep.",
       "Plant: seed on hotbar, aim a free tray slot, LMB. Harvest mature plants with E.",
-      "Tray stash (center pick or E on tray): substrate slot only. Water tray before sleep.",
+      "Tray stash (center pick or E on tray): substrate slot only. Water + substrate before sleep.",
       "Good care = extra food/seeds at harvest (light + water + substrate). Radish sprouts = emergency greens (~2–3 nights).",
       "Crops I actually use: peršin/dill garnish, libelek for soup, feferoni slow but real, pelargonija for čaj.",
     ],

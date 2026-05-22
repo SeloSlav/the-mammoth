@@ -109,7 +109,7 @@ pub struct BalconyGrowPlant {
     /// Whole days elapsed while growing (sleep / death day skips).
     #[default(0u8)]
     pub days_grown: u8,
-    /// Substrate consumed at plant time — speeds maturity and improves harvest rolls.
+    /// Substrate fed to the tray before sleep — speeds maturity and improves harvest rolls.
     #[default(0u8)]
     pub fertilized_at_plant: u8,
 }
@@ -417,8 +417,8 @@ fn fertilizer_present(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> bo
     .unwrap_or(false)
 }
 
-/// Optional: consume one substrate from the tray stash when planting (speed + harvest care).
-fn try_consume_tray_substrate_on_plant(
+/// Consume one substrate from the tray stash (sleep feed — one unit benefits all growing slots).
+fn try_consume_tray_substrate(
     ctx: &ReducerContext,
     owner: Identity,
     unit_key: &str,
@@ -444,6 +444,82 @@ fn try_consume_tray_substrate_on_plant(
         1,
     )
     .is_ok()
+}
+
+/// Shrink remaining grow nights after overnight substrate feed (modifier was without fert at plant).
+pub(crate) fn target_days_after_fertilizer(
+    days_grown: u8,
+    target_days: u8,
+    without_fert_modifier: f32,
+    with_fert_modifier: f32,
+) -> u8 {
+    if target_days == 0 || days_grown >= target_days {
+        return target_days;
+    }
+    let remaining = target_days - days_grown;
+    let new_remaining = ((remaining as f32 * without_fert_modifier
+        / with_fert_modifier.max(0.01))
+    .ceil() as u8)
+        .max(1);
+    days_grown.saturating_add(new_remaining)
+}
+
+fn apply_tray_substrate_on_sleep(ctx: &ReducerContext, unit_key: &str) {
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string());
+    let Some(owner) = unit.and_then(|u| u.owner) else {
+        return;
+    };
+
+    let plant_table = ctx.db.balcony_grow_plant();
+    let tray_ids: std::collections::HashSet<String> = plant_table
+        .iter()
+        .filter(|p| {
+            p.unit_key == unit_key && p.phase == PHASE_GROWING && p.fertilized_at_plant == 0
+        })
+        .map(|p| p.tray_id.clone())
+        .collect();
+
+    let lights_on = lights_on_for_unit(ctx, unit_key);
+    for tray_id in tray_ids {
+        if !fertilizer_present(ctx, unit_key, tray_id.as_str()) {
+            continue;
+        }
+        if !try_consume_tray_substrate(ctx, owner, unit_key, tray_id.as_str()) {
+            continue;
+        }
+        let water = tray_row(ctx, unit_key, tray_id.as_str())
+            .map(|t| t.water_liters)
+            .unwrap_or(0.0);
+        let without_fert = grow_speed_modifier(lights_on, false, water);
+        let with_fert = grow_speed_modifier(lights_on, true, water);
+
+        for mut plant in plant_table
+            .iter()
+            .filter(|p| {
+                p.unit_key == unit_key
+                    && p.tray_id == tray_id
+                    && p.phase == PHASE_GROWING
+                    && p.fertilized_at_plant == 0
+            })
+            .collect::<Vec<_>>()
+        {
+            plant.target_days = target_days_after_fertilizer(
+                plant.days_grown,
+                plant.target_days,
+                without_fert,
+                with_fert,
+            );
+            plant.fertilized_at_plant = 1;
+            if plant.days_grown >= plant.target_days {
+                plant.phase = PHASE_MATURE;
+            }
+            plant_table.row_key().update(plant);
+        }
+    }
 }
 
 fn lights_on_for_unit(ctx: &ReducerContext, unit_key: &str) -> bool {
@@ -710,13 +786,7 @@ fn plant_balcony_grow_slot_impl(
     consume_one_seed_from_hotbar(ctx, sender, hotbar_slot, seed_def_id)?;
 
     let now = ctx.timestamp.to_micros_since_unix_epoch();
-    let substrate_ready = fertilizer_present(ctx, unit_key, tray_id);
-    let target_days = compute_target_days(ctx, unit_key, tray_id, spec, substrate_ready);
-    let fertilized_at_plant = if substrate_ready {
-        try_consume_tray_substrate_on_plant(ctx, sender, unit_key, tray_id)
-    } else {
-        false
-    };
+    let target_days = compute_target_days(ctx, unit_key, tray_id, spec, false);
 
     let row_key = plant_row_key(unit_key, tray_id, slot_index);
     let plant_table = ctx.db.balcony_grow_plant();
@@ -726,7 +796,7 @@ fn plant_balcony_grow_slot_impl(
         existing.mature_at_micros = 0;
         existing.target_days = target_days;
         existing.days_grown = 0;
-        existing.fertilized_at_plant = u8::from(fertilized_at_plant);
+        existing.fertilized_at_plant = 0;
         existing.phase = PHASE_GROWING;
         existing.owner = sender;
         plant_table.row_key().update(existing);
@@ -743,7 +813,7 @@ fn plant_balcony_grow_slot_impl(
             owner: sender,
             target_days,
             days_grown: 0,
-            fertilized_at_plant: u8::from(fertilized_at_plant),
+            fertilized_at_plant: 0,
         });
     }
     Ok(())
@@ -969,6 +1039,7 @@ pub(crate) fn advance_world_day_for_unit(ctx: &ReducerContext, unit_key: &str, d
     if days == 0 {
         return;
     }
+    apply_tray_substrate_on_sleep(ctx, unit_key);
     let now = ctx.timestamp.to_micros_since_unix_epoch();
     let plant_table = ctx.db.balcony_grow_plant();
     let plants: Vec<BalconyGrowPlant> = plant_table
@@ -1166,6 +1237,21 @@ mod tests {
     fn harvest_food_base_is_always_one() {
         use super::BALCONY_GROW_HARVEST_FOOD_BASE;
         assert_eq!(BALCONY_GROW_HARVEST_FOOD_BASE, 1);
+    }
+
+    #[test]
+    fn target_days_shrink_when_substrate_applied_overnight() {
+        use super::{grow_speed_modifier, target_days_after_fertilizer};
+
+        let without = grow_speed_modifier(true, false, 1.0);
+        let with_fert = grow_speed_modifier(true, true, 1.0);
+        let adjusted = target_days_after_fertilizer(1, 5, without, with_fert);
+        assert!(adjusted < 5);
+        assert!(adjusted > 1);
+        assert_eq!(
+            target_days_after_fertilizer(5, 5, without, with_fert),
+            5
+        );
     }
 
     #[test]
