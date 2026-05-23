@@ -73,23 +73,22 @@ macro_rules! starter_fridge {
 /// Survival loadout: screwdriver tool — door lock is crafted only.
 const SURVIVAL_SPAWN_LOADOUT: &[StarterRow] = &[starter_hotbar!(0, "screwdriver", 1)];
 
-/// One-time balcony grow-op pack seeded into the apartment footlocker stash (normal `ItemLocation::Stash` rows).
+/// One-time balcony grow-op pack in the footlocker.
+/// Substrate is scarce on purpose — fish-tank feed and harvest seed returns sustain the loop.
 const FOOTLOCKER_GROW_OP_STARTER: &[ApartmentStashStarterRow] = &[
-    starter_footlocker!(0, "balcony-grow-substrate", 6),
-    starter_footlocker!(1, "parsley-seeds", 3),
-    starter_footlocker!(2, "dill-seeds", 3),
-    starter_footlocker!(3, "radish-sprout-seeds", 4),
-    starter_footlocker!(4, "green-onion-sets", 4),
+    starter_footlocker!(0, "balcony-grow-substrate", 3),
+    starter_footlocker!(1, "parsley-seeds", 2),
+    starter_footlocker!(2, "dill-seeds", 2),
+    starter_footlocker!(3, "radish-sprout-seeds", 3),
+    starter_footlocker!(4, "green-onion-sets", 3),
     starter_footlocker!(5, "scented-geranium-cuttings", 2),
 ];
 
-/// One-time pantry seeded into the apartment fridge (tutorial eat/drink before leaving).
+/// One-time pantry in the fridge — enough to eat/drink before leaving; apartment filter refills bottles.
 const FRIDGE_STARTER: &[ApartmentStashStarterRow] = &[
-    starter_fridge!(0, "apple", 6),
+    starter_fridge!(0, "apple", 4),
     starter_fridge!(1, "water-bottle", 1),
     starter_fridge!(2, "water-bottle", 1),
-    starter_fridge!(3, "water-bottle", 1),
-    starter_fridge!(4, "water-bottle", 1),
 ];
 
 fn validate_survival_loadout(_ctx: &ReducerContext) -> bool {
@@ -281,5 +280,24 @@ mod tests {
     #[test]
     fn fridge_starter_uses_unique_slots() {
         assert_unique_stash_slots("fridge", FRIDGE_STARTER);
+    }
+
+    #[test]
+    fn footlocker_starter_substrate_is_scarce_vs_seed_count() {
+        let substrate: u32 = FOOTLOCKER_GROW_OP_STARTER
+            .iter()
+            .filter(|r| r.def_id == "balcony-grow-substrate")
+            .map(|r| r.quantity)
+            .sum();
+        let seed_packets: u32 = FOOTLOCKER_GROW_OP_STARTER
+            .iter()
+            .filter(|r| r.def_id != "balcony-grow-substrate")
+            .map(|r| r.quantity)
+            .sum();
+        assert_eq!(substrate, 3, "three tray-cycles of compost — fish tank renews");
+        assert!(
+            seed_packets > substrate,
+            "seeds should outlast starter compost to teach the renewal loop"
+        );
     }
 }

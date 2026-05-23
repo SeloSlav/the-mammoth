@@ -4,7 +4,7 @@
     {
       "id": "balcony-grow-substrate",
       "displayName": "Tray compost",
-      "description": "Fish waste, scavenged fiber, and compost mix for balcony grow trays. Drop in a tray stash slot before you sleep — one unit feeds all four growing slots overnight and improves harvest yields.",
+      "description": "Fish waste, scavenged fiber, and compost mix for balcony grow trays. Drop one in a tray stash before you sleep — the first sleep of each crop cycle feeds all four slots on that tray (faster finish and better harvest). Fish-tank scraps can produce more overnight.",
       "category": "resource",
       "maxStack": 20,
       "balconyGrowFertilizer": true

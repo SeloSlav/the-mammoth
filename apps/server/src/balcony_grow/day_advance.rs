@@ -49,6 +49,8 @@ pub(crate) fn target_days_after_fertilizer(
 }
 
 /// Apply overnight substrate feed to in-memory plant rows (DB-agnostic).
+/// Consumption is once per tray per crop cycle (first sleep while plants are still unfed),
+/// not once per night for the life of the tray.
 pub(crate) fn apply_substrate_to_plants(
     plants: &mut [BalconyGrowPlant],
     without_fert_modifier: f32,
