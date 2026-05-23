@@ -17,6 +17,9 @@ const _lumaScratch = new THREE.Color();
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD = "mammothApartmentFixtureBulbGlow";
 export const MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD =
   "mammothApartmentFixtureBulbGlowAttached";
+/** Transparent decor surfaces (fish-tank glass/water) — skip albedo mood darkening. */
+export const MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD =
+  "mammothApartmentDecorSkipMoodGrade" as const;
 /** @deprecated Use {@link MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD}. */
 export const MAMMOTH_APARTMENT_CEILING_BULB_GLOW_ATTACHED_UD =
   MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_ATTACHED_UD;
@@ -141,6 +144,7 @@ export function moodGradeMammothApartmentDecorMesh(
   mesh: THREE.Mesh,
   opts?: { modelRelPath?: string },
 ): void {
+  if (mesh.userData[MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD] === true) return;
   const material = mesh.material;
   mesh.material = Array.isArray(material)
     ? material.map((mat) => moodGradeMammothApartmentDecorMaterial(mat, opts))

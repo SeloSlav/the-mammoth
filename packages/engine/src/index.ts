@@ -233,6 +233,7 @@ export {
   moodGradeMammothApartmentShellMesh,
   moodGradeMammothApartmentShellRoot,
   MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD,
+  MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD,
   MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD,
 } from "./rendering/apartmentDecorMoodGrade.js";
 export {

@@ -277,26 +277,6 @@ function addBoltHead(
   root.add(bolt);
 }
 
-function addBarCap(
-  root: THREE.Group,
-  name: string,
-  radius: number,
-  x: number,
-  y: number,
-  z: number,
-  mat: THREE.MeshStandardMaterial,
-): void {
-  const cap = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5),
-    mat,
-  );
-  cap.name = name;
-  cap.position.set(x, y, z);
-  cap.castShadow = true;
-  cap.receiveShadow = false;
-  root.add(cap);
-}
-
 /**
  * Professionally sealed window security shutter built from low-poly primitives.
  * Origin at the panel center; matches legacy GLB bounds for existing apartment placements.
@@ -362,8 +342,8 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
   const barSpan = innerW - FRAME_BAR_W_M * 0.6;
   const barStartX = -barSpan * 0.5;
   const barStep = barSpan / (barCount - 1);
-  const barBottomY = -halfH + FRAME_BAR_W_M + 0.04;
-  const barTopY = halfH - FRAME_BAR_W_M - 0.06;
+  const barBottomY = -halfH + FRAME_BAR_W_M;
+  const barTopY = halfH - FRAME_BAR_W_M;
   const barHeight = barTopY - barBottomY;
 
   for (let i = 0; i < barCount; i++) {
@@ -378,7 +358,6 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
       grilleZ,
       barMat,
     );
-    addBarCap(root, `shutter_bar_cap_${i}`, BAR_RADIUS_M, x, barTopY, grilleZ, barMat);
   }
 
   const railYs = [barBottomY + barHeight * 0.28, barBottomY + barHeight * 0.72];
@@ -395,21 +374,6 @@ export function buildApartmentWindowShutterVisual(): THREE.Group {
       frameMat,
     );
   }
-
-  const archSpan = innerW * 0.88;
-  const archCurve = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(-archSpan * 0.5, barTopY - 0.018, grilleZ),
-    new THREE.Vector3(0, barTopY + 0.042, grilleZ),
-    new THREE.Vector3(archSpan * 0.5, barTopY - 0.018, grilleZ),
-  );
-  const arch = new THREE.Mesh(
-    new THREE.TubeGeometry(archCurve, 14, BAR_RADIUS_M * 0.88, 6, false),
-    barMat,
-  );
-  arch.name = "shutter_top_arch";
-  arch.castShadow = true;
-  arch.receiveShadow = false;
-  root.add(arch);
 
   const haspX = halfW - FRAME_BAR_W_M * 0.55;
   addBox(

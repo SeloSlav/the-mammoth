@@ -33,8 +33,10 @@ import {
   clampWallOpeningTangentOffsetM,
   syncOwnedApartmentWallOpeningProxies,
   buildApartmentPlanarMirrorVisual,
-  buildApartmentWindowShutterVisual,
-  isApartmentWindowShutterModelPath,
+  buildProceduralApartmentDecorVisual,
+  isProceduralApartmentDecorModelPath,
+  tagProceduralApartmentDecorMeshesSkipMerge,
+  mergeApartmentDecorManifestPaths,
 } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
@@ -776,6 +778,9 @@ function disposeGroupSubtreeGeometry(group: THREE.Object3D): void {
 function cloneProp(template: THREE.Object3D, modelRelPath: string): THREE.Object3D {
   const r = template.clone(true);
   r.userData.mammothEditorMyApartmentProp = true;
+  if (isProceduralApartmentDecorModelPath(modelRelPath)) {
+    tagProceduralApartmentDecorMeshesSkipMerge(r);
+  }
   r.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       moodGradeMammothApartmentDecorMesh(o, { modelRelPath });
@@ -1259,8 +1264,9 @@ export async function loadEditorMyApartmentDecorTemplates(
   await Promise.all(
     [...new Set(modelRelPaths)].map(async (modelRelPath) => {
       try {
-        if (isApartmentWindowShutterModelPath(modelRelPath)) {
-          out.set(modelRelPath, buildApartmentWindowShutterVisual());
+        const procedural = buildProceduralApartmentDecorVisual(modelRelPath);
+        if (procedural) {
+          out.set(modelRelPath, procedural);
           return;
         }
         const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));

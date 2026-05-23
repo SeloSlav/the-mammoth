@@ -1,3 +1,5 @@
+import { mergeApartmentDecorManifestPaths } from "@the-mammoth/world";
+
 const APARTMENT_DECOR_MODEL_ROOT = "static/models/";
 const APARTMENT_DECOR_OBJECTS_ROOT = "static/models/objects/";
 const APARTMENT_DECOR_MODEL_EXTENSIONS = [".glb", ".obj"] as const;
@@ -52,14 +54,30 @@ export function apartmentDecorCatalogLabel(modelRelPath: string): string {
   return words.join(" ") || leaf;
 }
 
+function apartmentDecorCatalogFromModelRelPaths(modelRelPaths: readonly string[]): ApartmentDecorCatalogEntry[] {
+  const entries: ApartmentDecorCatalogEntry[] = [];
+  for (const modelRelPath of modelRelPaths) {
+    const normalized = normalizeApartmentDecorModelRelPath(modelRelPath);
+    if (!normalized || !normalized.startsWith(APARTMENT_DECOR_OBJECTS_ROOT)) continue;
+    entries.push({
+      modelRelPath: normalized,
+      label: apartmentDecorCatalogLabel(normalized),
+    });
+  }
+  entries.sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
+  return entries;
+}
+
 export async function fetchApartmentDecorCatalog(): Promise<ApartmentDecorCatalogEntry[]> {
   let payload: unknown = [];
   try {
     const response = await fetch(APARTMENT_DECOR_OBJECTS_MANIFEST_PATH, { cache: "no-store" });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      return apartmentDecorCatalogFromModelRelPaths(mergeApartmentDecorManifestPaths([]));
+    }
     payload = await response.json();
   } catch {
-    return [];
+    return apartmentDecorCatalogFromModelRelPaths(mergeApartmentDecorManifestPaths([]));
   }
 
   const rawEntries = Array.isArray(payload)
@@ -68,17 +86,13 @@ export async function fetchApartmentDecorCatalog(): Promise<ApartmentDecorCatalo
       ? (payload as { entries: unknown[] }).entries
       : [];
 
-  const entries: ApartmentDecorCatalogEntry[] = [];
+  const manifestPaths: string[] = [];
   for (const rawEntry of rawEntries) {
     if (typeof rawEntry !== "string") continue;
     const normalized = normalizeApartmentDecorModelRelPath(rawEntry);
     if (!normalized || !normalized.startsWith(APARTMENT_DECOR_OBJECTS_ROOT)) continue;
-    entries.push({
-      modelRelPath: normalized,
-      label: apartmentDecorCatalogLabel(normalized),
-    });
+    manifestPaths.push(normalized);
   }
 
-  entries.sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
-  return entries;
+  return apartmentDecorCatalogFromModelRelPaths(mergeApartmentDecorManifestPaths(manifestPaths));
 }

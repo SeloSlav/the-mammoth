@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   attachApartmentWarmFixtureBulbGlow,
+  MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD,
   MAMMOTH_APARTMENT_FIXTURE_BULB_GLOW_UD,
   moodGradeMammothApartmentDecorMaterial,
+  moodGradeMammothApartmentDecorMesh,
 } from "./apartmentDecorMoodGrade.js";
 import { MAMMOTH_CEILING_LENS_GLOW_MESH_UD } from "./apartmentCeilingFixtureLensGlow.js";
 
@@ -94,6 +96,26 @@ describe("moodGradeMammothApartmentDecorMaterial warm fixtures", () => {
 
     expect(graded.emissive.r).toBe(0);
     expect(graded.emissiveIntensity).toBe(1);
+  });
+});
+
+describe("moodGradeMammothApartmentDecorMesh skip flag", () => {
+  it("leaves transparent decor materials unchanged when skip userData is set", () => {
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.045,
+      roughness: 0,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+    mesh.userData[MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD] = true;
+
+    moodGradeMammothApartmentDecorMesh(mesh);
+
+    const graded = mesh.material as THREE.MeshStandardMaterial;
+    expect(graded.color.getHex()).toBe(0xffffff);
+    expect(graded.opacity).toBe(0.045);
+    expect(graded.roughness).toBe(0);
   });
 });
 

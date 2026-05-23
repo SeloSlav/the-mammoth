@@ -15,8 +15,9 @@ import {
   buildOwnedApartmentPartitionWallInGroup,
   clampOwnedApartmentWallOpeningsForLength,
   buildApartmentPlanarMirrorVisual,
-  buildApartmentWindowShutterVisual,
-  isApartmentWindowShutterModelPath,
+  buildProceduralApartmentDecorVisual,
+  isProceduralApartmentDecorModelPath,
+  tagProceduralApartmentDecorMeshesSkipMerge,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
 import {
@@ -843,9 +844,8 @@ export function mountFpApartmentDecorMeshes(opts: {
     url: string,
     modelRelPath: string,
   ): Promise<THREE.Object3D> {
-    if (isApartmentWindowShutterModelPath(modelRelPath)) {
-      return buildApartmentWindowShutterVisual();
-    }
+    const procedural = buildProceduralApartmentDecorVisual(modelRelPath);
+    if (procedural) return procedural;
     switch (apartmentDecorModelExtension(modelRelPath)) {
       case ".glb":
         return (await gltfLoader.loadAsync(url)).scene;
@@ -995,7 +995,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       const d = entry.decor;
       const effectiveModelRelPath = resolveGrowTrayDecorModelRelPath(d.modelRelPath);
 
-      const templateCacheKey = isApartmentWindowShutterModelPath(effectiveModelRelPath)
+      const templateCacheKey = isProceduralApartmentDecorModelPath(effectiveModelRelPath)
         ? effectiveModelRelPath
         : await resolveStaticModelFetchUrl(apartmentDecorFetchPath(effectiveModelRelPath));
       let template = templateByUrl.get(templateCacheKey);
@@ -1015,6 +1015,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       }
       if (disposed || epoch !== buildEpoch) return;
 
+      try {
       const g = new THREE.Group();
       g.name =
         d.decorId !== null ? `apartment_decor:${d.decorId.toString()}` : `apartment_decor:${d.renderKey}`;
@@ -1051,6 +1052,10 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.rotation.set(0, 0, 0);
       vis.scale.setScalar(ownedApartmentPlacedItemAuthoringAssetVisScale(d.placedKind));
       vis.updateMatrixWorld(true);
+
+      if (isProceduralApartmentDecorModelPath(effectiveModelRelPath)) {
+        tagProceduralApartmentDecorMeshesSkipMerge(vis);
+      }
 
       g.add(vis);
       if (d.source === "content" && !ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
@@ -1151,6 +1156,13 @@ export function mountFpApartmentDecorMeshes(opts: {
 
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);
+      } catch (err) {
+        console.warn(
+          "[mountFpApartmentDecorMeshes] failed to mount decor",
+          effectiveModelRelPath,
+          err,
+        );
+      }
     }
 
     if (practicalLightsContextUnitKey) {

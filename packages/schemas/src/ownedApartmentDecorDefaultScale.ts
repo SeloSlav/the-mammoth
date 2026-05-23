@@ -194,6 +194,10 @@ export const OWNED_APARTMENT_DECOR_DEFAULT_SCALE_BY_MODEL = {
     uniformScale: 1,
     verticalScaleMul: 1,
   },
+  "static/models/objects/window-shutter.glb": {
+    uniformScale: 1.686652591805788,
+    verticalScaleMul: 1,
+  },
 } as const satisfies Readonly<Record<string, OwnedApartmentDecorDefaultScale>>;
 
 export function normalizeOwnedApartmentDecorModelRelPath(modelRelPath: string): string {

@@ -19,6 +19,7 @@ import {
   clampOwnedApartmentWallOpeningsForLength,
   defaultOwnedApartmentWallDoorOpening,
   readOwnedApartmentPartitionWallLocalExtents,
+  mergeApartmentDecorManifestPaths,
 } from "@the-mammoth/world";
 import type { EditorMode, EditorWorkspace } from "../state/editorStoreTypes.js";
 import { useEditorStore } from "../state/editorStore.js";
@@ -205,12 +206,27 @@ export function EditorChromeMyApartment(props: {
       try {
         const res = await fetch("/static/models/objects/index.json", { cache: "no-store" });
         if (!res.ok) {
-          if (!cancelled) setCatalogStatus("No decor catalog found under public/static/models/objects/.");
+          if (!cancelled) {
+            const entries = mergeApartmentDecorManifestPaths([])
+              .map((modelRelPath) => ({
+                modelRelPath,
+                label: decorCatalogLabel(modelRelPath),
+              }))
+              .sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
+            setCatalog(entries);
+            setSelectedCatalogModelRelPath(entries[0]?.modelRelPath ?? null);
+            setCatalogStatus(
+              entries.length > 0
+                ? `Loaded ${entries.length} procedural model${entries.length === 1 ? "" : "s"}.`
+                : "No decor catalog found under public/static/models/objects/.",
+            );
+          }
           return;
         }
         const raw = (await res.json()) as unknown;
-        const entries = (Array.isArray(raw) ? raw : [])
-          .filter((value): value is string => typeof value === "string")
+        const manifestPaths = (Array.isArray(raw) ? raw : [])
+          .filter((value): value is string => typeof value === "string");
+        const entries = mergeApartmentDecorManifestPaths(manifestPaths)
           .map((modelRelPath) => ({
             modelRelPath,
             label: decorCatalogLabel(modelRelPath),

@@ -26,7 +26,6 @@
   "static/models/objects/family-photo-2.glb",
   "static/models/objects/family-photo.glb",
   "static/models/objects/figuirine-tito.glb",
-  "static/models/objects/fish-tank.glb",
   "static/models/objects/floor-mat.glb",
   "static/models/objects/footlocker.glb",
   "static/models/objects/fridge.glb",
@@ -78,6 +77,5 @@
   "static/models/objects/used-cigarette.glb",
   "static/models/objects/wall-clock.glb",
   "static/models/objects/wardrobe-closet.glb",
-  "static/models/objects/water-tank.glb",
-  "static/models/objects/window-shutter.glb"
+  "static/models/objects/water-tank.glb"
 ]

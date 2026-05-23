@@ -262,11 +262,9 @@ export function createEditorSceneMyApartmentLifecycle(
       deps.syncTransformAttachment();
       clearApartmentLayoutLoadingIfCurrent(myGen);
 
-    } catch {
-
+    } catch (err) {
+      console.error("[editor my apartment] reconcile failed", err);
       clearApartmentLayoutLoadingIfCurrent(myGen);
-      teardownFurniture();
-
     }
 
   }
