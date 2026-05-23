@@ -1,13 +1,22 @@
-//! Combat sim **entry/exit only** — not a separate combat stack.
+//! Combat sim — **entry/exit and arena shell only**, not a separate combat stack.
 //!
-//! Spawns use the same `world_npc` table, AI tick, and damage path as future in-apartment NPCs.
-//! Shooting and melee go through `submit_firearm_shot` / `submit_melee_swing` unchanged.
+//! ## One system with live FP / in-apartment combat
 //!
-//! Arena-specific behavior (not duplicated combat logic):
-//! - `enter_combat_sim`: full combat loadout, bed pose, spawn NPCs tagged with `combat_sim:{unit_key}`
-//! - `shooter_in_combat_sim_open_arena`: skip building firearm LOS while those NPCs are live
-//!   (client mounts an empty plane; server still has baked megablock collision for hitscan)
-//! - `leave_combat_sim`: despawn session NPCs
+//! | Layer | Shared with live game | Combat-sim-only |
+//! |-------|----------------------|-----------------|
+//! | Shooting | `submit_firearm_shot`, hitscan, `world_npc` damage | Open-arena LOS skip while session NPCs live |
+//! | Melee | `submit_melee_swing`, `resolve_melee_swing_vs_npcs` | — |
+//! | NPCs | `world_npc` table, `npc_tick_step`, `apply_npc_damage` | `session_key` prefix `combat_sim:{unit_key}` |
+//! | Client session | `mountFpSession` (locomotion, hotbar, HUD, reducers) | `combatSimMode` → empty arena + inert apartment mounts |
+//!
+//! Client entry: `mountCombatSimSession` → `enter_combat_sim` → `mountFpSession({ combatSimMode: true })`.
+//! Disabled apartment features (elevators, doors, decor, balcony) are **inert stubs** in
+//! `fpSessionInertSubsystems.ts` — same session loop, not a fork.
+//!
+//! ## Arena-specific server behavior
+//! - `enter_combat_sim`: full combat loadout, arena-center pose, spawn NPCs for the session
+//! - `shooter_in_combat_sim_open_arena`: skip megablock firearm LOS while live combat-sim NPCs exist
+//! - `leave_combat_sim`: despawn session NPCs (does not restore prior loadout)
 
 use spacetimedb::{Identity, ReducerContext, Table};
 

@@ -235,6 +235,7 @@ function fpGpuTimestampDebugEnabled(): boolean {
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
+  /** `combatSimMode`: empty arena world + `fpSessionInertSubsystems` stubs; otherwise full megablock. */
   opts: { apartmentClaimsAllowed?: boolean; combatSimMode?: boolean } = {},
 ): Promise<() => void> {
   const loadDbg = isFpLoadingDebugEnabled();
@@ -372,7 +373,7 @@ export async function mountFpSession(
   renderBootstrapFrame();
   fpLoadingDbgMark("fp_bootstrap_after_first_webgpu_render");
 
-  // Combat sim: same FP session — inert apartment subsystems + empty arena world (see mountCombatSimSession).
+  // Combat sim: same FP session — inert apartment subsystems + empty arena (see mountCombatSimSession.ts).
   const fpElevators = isCombatSim
     ? createInertFpElevatorWorld()
     : mountFpElevatorWorld({

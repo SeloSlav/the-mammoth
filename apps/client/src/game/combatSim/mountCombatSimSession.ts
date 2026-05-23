@@ -20,16 +20,18 @@ export type MountCombatSimSessionOptions = {
 /**
  * Combat sim entry — **one gameplay stack**, not a fork.
  *
- * What is shared with live FP (identical code paths):
- * - Client: `mountFpSession` → locomotion, hotbar, `submitFirearmShot` / `submitMeleeSwing`, presentation
- * - Server: `world_npc` AI, hitscan NPC damage, vitals, inventory — same reducers as in-apartment combat
+ * Call chain: `mountCombatSimSession` → server `enter_combat_sim` → `mountFpSession({ combatSimMode: true })`.
+ * Editor combat-sim play and client `?combatSim=1` both use this path.
  *
- * What differs (arena shell only):
- * - Server: `enter_combat_sim` / `leave_combat_sim` (loadout, spawn/despawn, session_key)
- * - Client: `combatSimMode` → empty arena static world + inert apartment subsystems (no megablock)
- * - Server: open-arena firearm LOS while live combat-sim NPCs exist (client has no building mesh)
+ * **Shared with live FP** (same code, same reducers):
+ * - `mountFpSession` — locomotion, hotbar, reticule, vitals, `submitFirearmShot` / `submitMeleeSwing`
+ * - Server — `world_npc` AI tick, hitscan NPC damage, player vitals, inventory
  *
- * Editor and `?combatSim=1` both call this; there is no second combat implementation.
+ * **Arena shell only** (no second combat implementation):
+ * - Server — `enter_combat_sim` / `leave_combat_sim`, loadout grant, `combat_sim:{unit_key}` spawns, open-arena LOS
+ * - Client — `createCombatSimStaticWorld` (concrete pad + walls), outdoor arena lighting
+ * - Client — apartment-only mounts replaced by inert stubs in `fpSession/fpSessionInertSubsystems.ts`
+ *   (elevators, doors, decor meshes, balcony grow). Same interfaces, no-ops where the megablock is absent.
  */
 export async function mountCombatSimSession(
   canvas: HTMLCanvasElement,

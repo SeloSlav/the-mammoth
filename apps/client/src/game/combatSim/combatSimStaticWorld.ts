@@ -41,8 +41,12 @@ function cloneTiledConcreteFloorMaterial(
 }
 
 /**
- * Arena-only `FpSessionStaticWorld` for `combatSimMode` — same interface as the megablock mount,
- * without loading building geometry. Gameplay still runs through `mountFpSession`.
+ * Arena-only `FpSessionStaticWorld` for `combatSimMode`.
+ *
+ * Implements the same `FpSessionStaticWorld` interface as the megablock mount so `mountFpSession`
+ * needs no fork — only a different static world source (concrete pad + perimeter walls vs full building).
+ *
+ * @see mountCombatSimSession.ts
  */
 export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticWorld {
   const unit = findOwnedApartmentUnitForIdentity(conn);

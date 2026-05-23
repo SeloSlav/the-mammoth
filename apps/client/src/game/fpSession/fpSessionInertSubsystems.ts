@@ -1,9 +1,21 @@
 /**
  * Inert implementations of apartment-only FP subsystems.
  *
- * Used when `mountFpSession({ combatSimMode: true })` mounts the **same** session loop as live
- * gameplay but skips building features (elevators, doors, decor, balcony grow) that do not exist
- * on the empty combat arena. This is not a fork of combat or locomotion — only disabled mounts.
+ * `mountFpSession({ combatSimMode: true })` uses the **same** RAF loop, locomotion, and combat reducers
+ * as live gameplay. These stubs satisfy the same mount interfaces where the megablock building does
+ * not exist (combat sim mounts `createCombatSimStaticWorld` instead).
+ *
+ * Stubbed when `combatSimMode`:
+ * - `createInertFpElevatorWorld` — cab motion, shaft culling, floor picks
+ * - `createInertFpApartmentDoors` — swing doors, firearm barriers, interact prompts
+ * - `createInertFpApartmentDecorMeshes` — stash, sit, wardrobe, fish tank, grow tray picks
+ * - `createInertFpBalconyGrowSession` — balcony planting UI / reducers
+ *
+ * Not stubbed (combat sim uses the real implementations): NPC session, firearm/melee presentation,
+ * hotbar, vitals, dropped items, environment sky, move-intent snapshots.
+ *
+ * @see mountCombatSimSession.ts — client entry
+ * @see apps/server/src/combat_sim.rs — server entry / session_key
  */
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
