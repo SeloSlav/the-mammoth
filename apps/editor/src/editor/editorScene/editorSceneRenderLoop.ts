@@ -10,6 +10,7 @@ import { objectLivesUnderScene } from "../scene/sceneGraphUtils.js";
 import { FpSelectionAabbOutline } from "../fpAuthoring/fpSelectionAabbOutline.js";
 import type { PreviewSelectionShapeOutline } from "../scene/previewSelectionShapeOutline.js";
 import { apartmentLayoutOutlineTargetGroups } from "../myApartment/editorMyApartmentSelectionHighlight.js";
+import { getEditorFishTankBridge } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import {
   isConsumableFpAuthoringState,
@@ -175,6 +176,10 @@ export function startEditorSceneRenderLoop(deps: {
         previewSelectionOutline.setFromObject(findBestSelectionTarget());
       } else if (st.mode === "my_apartment_layout") {
         fpSelectionOutline.setFromObject(null);
+        const fishBridge = getEditorFishTankBridge();
+        if (fishBridge?.hasActiveSchools()) {
+          fishBridge.tick(dt);
+        }
         const selectionKey = `${st.selectedId ?? ""}\0${st.myApartmentMultiselectExtraIds.join("\0")}`;
         if (tcDragging || selectionKey !== lastAptLayoutOutlineSelectionKey) {
           if (!tcDragging) lastAptLayoutOutlineSelectionKey = selectionKey;
@@ -248,7 +253,8 @@ export function startEditorSceneRenderLoop(deps: {
     const keepAnimating =
       fpSessionActive ||
       tcDragging ||
-      orbitMotionActive;
+      orbitMotionActive ||
+      (st.mode === "my_apartment_layout" && (getEditorFishTankBridge()?.hasActiveSchools() ?? false));
 
     if (keepAnimating) {
       scheduleFrame();

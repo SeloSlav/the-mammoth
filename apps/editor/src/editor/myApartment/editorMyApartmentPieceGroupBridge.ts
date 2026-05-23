@@ -76,6 +76,7 @@ function refreshApartmentFurnitureMountRootFromGroups(): void {
 let apartmentFurnitureMountResyncDecorShadows: ((unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds) => void) | null = null;
 let apartmentFurnitureMountResyncPracticalLights: ((windowScanRoot: THREE.Object3D) => void) | null = null;
 let apartmentDecorShadowRenderer: THREE.WebGPURenderer | null = null;
+let apartmentFishTankBridge: import("./editorApartmentFishTankBridge.js").EditorApartmentFishTankBridge | null = null;
 
 export function registerEditorMyApartmentDecorShadowRenderer(
   renderer: THREE.WebGPURenderer | null,
@@ -139,6 +140,16 @@ export function resyncEditorMyApartmentPracticalLights(
   windowScanRoot: THREE.Object3D,
 ): void {
   apartmentFurnitureMountResyncPracticalLights?.(windowScanRoot);
+}
+
+export function registerEditorFishTankBridge(
+  bridge: import("./editorApartmentFishTankBridge.js").EditorApartmentFishTankBridge | null,
+): void {
+  apartmentFishTankBridge = bridge;
+}
+
+export function getEditorFishTankBridge(): import("./editorApartmentFishTankBridge.js").EditorApartmentFishTankBridge | null {
+  return apartmentFishTankBridge;
 }
 
 /** @internal Overlay entry for transient saved-group THREE.Group manipulation root. */

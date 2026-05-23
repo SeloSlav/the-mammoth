@@ -9,6 +9,7 @@ import {
   mountEditorMyApartmentFurnitureUnder,
   type EditorMyApartmentDecorTemplateMap,
 } from "./editorMyApartmentMeshes.js";
+import { createEditorApartmentFishTankBridge } from "./editorApartmentFishTankBridge.js";
 import { ownedApartmentFractionMappingForEditor } from "./editorMyApartmentAuthoringShell.js";
 
 describe("updateEditorMyApartmentMountFromDoc", () => {
@@ -27,6 +28,7 @@ describe("updateEditorMyApartmentMountFromDoc", () => {
       doc,
       spans,
       parent,
+      createEditorApartmentFishTankBridge(),
     );
     const rootBefore = mount.root;
     const disposeBefore = mount.dispose;
@@ -84,6 +86,7 @@ describe("updateEditorMyApartmentMountFromDoc", () => {
       doc,
       spans,
       parent,
+      createEditorApartmentFishTankBridge(),
     );
     const mountedMesh = mount.root.getObjectByProperty("isMesh", true) as THREE.Mesh;
 

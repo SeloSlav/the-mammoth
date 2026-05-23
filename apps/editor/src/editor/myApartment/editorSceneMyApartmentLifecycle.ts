@@ -34,12 +34,14 @@ import {
   registerEditorMyApartmentDecorShadowResync,
   registerEditorMyApartmentPracticalLightsResync,
   registerEditorMyApartmentWallsMountSyncRequest,
+  registerEditorFishTankBridge,
   setEditorMyApartmentPieceGroups,
   applyEditorMyApartmentLayoutHiddenPlacements,
 } from "./editorMyApartmentPieceGroupBridge.js";
+import { createEditorApartmentFishTankBridge } from "./editorApartmentFishTankBridge.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
-import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
+import { listMyApartmentDecorTemplateRelPathsWithDeps } from "./editorOwnedApartmentSceneLayout.js";
 
 import {
 
@@ -122,6 +124,7 @@ export function createEditorSceneMyApartmentLifecycle(
 
     registerEditorMyApartmentDecorShadowResync(null);
     registerEditorMyApartmentPracticalLightsResync(null);
+    registerEditorFishTankBridge(null);
 
     setEditorMyApartmentPieceGroups(null);
 
@@ -182,9 +185,7 @@ export function createEditorSceneMyApartmentLifecycle(
       const doc = st.ownedApartmentBuiltins;
 
       decorTemplates = await loadEditorMyApartmentDecorTemplates(
-
-        listMyApartmentPlacedItemModelRelPaths(doc),
-
+        listMyApartmentDecorTemplateRelPathsWithDeps(doc),
       );
 
       if (disposed || myGen !== syncGeneration) return;
@@ -216,6 +217,8 @@ export function createEditorSceneMyApartmentLifecycle(
       );
 
       if (!mount) {
+        const fishTankBridge = createEditorApartmentFishTankBridge();
+        registerEditorFishTankBridge(fishTankBridge);
 
         mount = mountEditorMyApartmentFurnitureUnder(
 
@@ -228,6 +231,8 @@ export function createEditorSceneMyApartmentLifecycle(
           authoringFractionMapping,
 
           parent,
+
+          fishTankBridge,
 
           unitBounds,
 

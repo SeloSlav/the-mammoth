@@ -665,6 +665,7 @@ export function createFpSessionMainRafFrame(
       deps.isApartmentDecorInteriorVisible(),
       containingResidentialUnitKey,
     );
+    deps.fpApartmentDecorMeshes.updateFishTankFish(dt);
     deps.fpBalconyGrowSession?.updateFrame(
       deps.camera,
       deps.fpInteractionFeet(),

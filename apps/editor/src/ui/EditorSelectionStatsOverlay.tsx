@@ -47,7 +47,8 @@ const stackStyle: CSSProperties = {
   marginTop: 10,
   maxHeight: 220,
   overflowY: "auto",
-  paddingRight: 2,
+  paddingRight: 4,
+  overscrollBehavior: "contain",
 };
 
 const entryStyle: CSSProperties = {
@@ -171,12 +172,22 @@ export function EditorSelectionStatsOverlay() {
   const showStack = model.kind !== "single";
 
   return (
-    <div style={panelStyle} aria-live="polite">
+    <div
+      style={{
+        ...panelStyle,
+        pointerEvents: showStack ? "auto" : "none",
+      }}
+      aria-live="polite"
+      onWheel={showStack ? (event) => event.stopPropagation() : undefined}
+    >
       <p style={eyebrowStyle}>{model.eyebrow}</p>
       <p style={titleStyle}>{model.title}</p>
 
       {showStack ? (
-        <div style={stackStyle}>
+        <div
+          style={stackStyle}
+          onWheel={(event) => event.stopPropagation()}
+        >
           {model.entries.map((entry) => (
             <div key={entry.selectionId} style={entryStyle}>
               <p style={entryNameStyle}>{entry.name}</p>

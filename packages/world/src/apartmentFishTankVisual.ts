@@ -5,8 +5,3 @@ export const APARTMENT_FISH_TANK_MODEL_PATH = "static/models/objects/fish-tank.g
 export const APARTMENT_FISH_TANK_WIDTH_M = 1.906;
 export const APARTMENT_FISH_TANK_HEIGHT_M = 1.429;
 export const APARTMENT_FISH_TANK_DEPTH_M = 1.037;
-
-export function isApartmentFishTankModelPath(modelRelPath: string): boolean {
-  const norm = modelRelPath.trim().replace(/^\/+/u, "").toLowerCase();
-  return norm.endsWith("fish-tank.glb");
-}

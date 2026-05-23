@@ -1,8 +1,22 @@
-import type { OwnedApartmentBuiltinsDoc, OwnedApartmentPlacedItem } from "@the-mammoth/schemas";
+import {
+  type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentPlacedItem,
+} from "@the-mammoth/schemas";
+import { apartmentFishTankDecorTemplateDeps } from "@the-mammoth/world";
 
 /** Unique model paths for all {@link OwnedApartmentBuiltinsDoc.placedItems} (templates to load). */
 export function listMyApartmentPlacedItemModelRelPaths(doc: OwnedApartmentBuiltinsDoc): string[] {
   return [...new Set(doc.placedItems.map((p) => p.modelRelPath))];
+}
+
+/** Placed-item paths plus implicit assets needed for authoring (fish mesh for inhabited tanks). */
+export function listMyApartmentDecorTemplateRelPathsWithDeps(doc: OwnedApartmentBuiltinsDoc): string[] {
+  return [
+    ...new Set([
+      ...listMyApartmentPlacedItemModelRelPaths(doc),
+      ...apartmentFishTankDecorTemplateDeps(doc.placedItems.map((p) => p.modelRelPath)),
+    ]),
+  ];
 }
 
 export function findOwnedApartmentPlacedBuiltin(

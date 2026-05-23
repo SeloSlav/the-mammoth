@@ -497,6 +497,8 @@ export function apartmentDecorContactShadowEligible(modelRelPath: string): boole
 
   if (lower.includes("coat-hanger")) return false;
 
+  if (lower.includes("kelp")) return false;
+
   return true;
 
 }

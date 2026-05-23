@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   EDITOR_MY_APARTMENT_FURNITURE_ROOT_NAME,
   getEditorMyApartmentFurnitureMountRoot,
+  getEditorFishTankBridge,
+  registerEditorFishTankBridge,
   resolveEditorMyApartmentFurnitureMountRootFromObject,
   setEditorMyApartmentPieceGroups,
 } from "./editorMyApartmentPieceGroupBridge.js";
+import { createEditorApartmentFishTankBridge } from "./editorApartmentFishTankBridge.js";
 import { MY_APARTMENT_OBJECT_GROUP_MANIP_UD } from "./editorMyApartmentSavedGroupManip.js";
 
 describe("editorMyApartmentPieceGroupBridge furniture root", () => {
@@ -50,5 +53,19 @@ describe("editorMyApartmentPieceGroupBridge furniture root", () => {
     expect(resolveEditorMyApartmentFurnitureMountRootFromObject(manip)).not.toBe(
       manip,
     );
+  });
+});
+
+describe("editorMyApartmentPieceGroupBridge fish tank bridge", () => {
+  it("registers and retrieves the active fish tank bridge", () => {
+    registerEditorFishTankBridge(null);
+    expect(getEditorFishTankBridge()).toBeNull();
+
+    const bridge = createEditorApartmentFishTankBridge();
+    registerEditorFishTankBridge(bridge);
+    expect(getEditorFishTankBridge()).toBe(bridge);
+
+    registerEditorFishTankBridge(null);
+    expect(getEditorFishTankBridge()).toBeNull();
   });
 });

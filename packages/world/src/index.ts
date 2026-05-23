@@ -167,6 +167,28 @@ export {
   type ApartmentProceduralDecorModelPath,
 } from "./apartmentProceduralDecorCatalog.js";
 export {
+  FISH_TANK_SWIM_AABB,
+  fnv1a32,
+  mulberry32,
+  stepFishTankFish,
+  type FishTankSwimAabb,
+  type FishTankSwimFishState,
+} from "./apartmentFishTankSwim.js";
+export {
+  APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH,
+  buildNormalizedFishPrototype,
+  createApartmentFishTankFishSchool,
+  spawnFishInstanceFromPrototype,
+  type CreateApartmentFishTankFishSchoolOptions,
+  type FishTankFishSwimUpdater,
+} from "./apartmentFishTankFishVisual.js";
+export {
+  apartmentFishTankDecorTemplateDeps,
+  mountApartmentFishTankSchool,
+  normalizeApartmentFishTankModelRelPath,
+  type MountApartmentFishTankSchoolOptions,
+} from "./apartmentFishTankDecorRuntime.js";
+export {
   buildFpBlockerAABBsForBuilding,
   mergeCoplanarSweepPreheat,
   mergeCoplanarTouchingBlockerAabbs,

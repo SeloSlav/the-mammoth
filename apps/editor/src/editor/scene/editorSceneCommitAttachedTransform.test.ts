@@ -12,6 +12,7 @@ import {
 import { DEFAULT_OWNED_APARTMENT_BUILTINS_DOC } from "@the-mammoth/schemas";
 import * as THREE from "three";
 import { editorMyApartmentSelectedIdForWall } from "../myApartment/editorMyApartmentSelection.js";
+import { createEditorApartmentFishTankBridge } from "../myApartment/editorApartmentFishTankBridge.js";
 
 describe("resolveMyApartmentDecorCommittedDy", () => {
   it("serializes decor dy from the free-space pivot height", () => {
@@ -131,6 +132,7 @@ describe("syncEditorMyApartmentWallsOnMount wall dy", () => {
     const mount = {
       root,
       selectionGroups,
+      fishTankBridge: createEditorApartmentFishTankBridge(),
       mountedWallIds: new Set<string>(),
       mountedMirrorIds: new Set<string>(),
       mountedDecorIds: new Set<string>(),
