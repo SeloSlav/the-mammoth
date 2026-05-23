@@ -214,12 +214,12 @@ export class WorldNpcPresenterPool {
     this.preloadReady = true;
   }
 
-  private acquirePresenter(): BabushkaNpcPresenter | null {
-    if (!this.preloadReady) return null;
+  private acquirePresenter(): BabushkaNpcPresenter | undefined {
+    if (!this.preloadReady) return undefined;
     try {
       return this.spare.pop() ?? BabushkaNpcPresenter.createSync();
     } catch {
-      return null;
+      return undefined;
     }
   }
 
