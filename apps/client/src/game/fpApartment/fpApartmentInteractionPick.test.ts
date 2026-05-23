@@ -81,7 +81,7 @@ describe("fitBalconyGrowSlotInteractionPick", () => {
 });
 
 describe("fitFishTankStashInteractionPick", () => {
-  it("keeps a minimum world pick volume when the decor root is uniformly scaled down", () => {
+  it("pads the world pick volume when the decor root is uniformly scaled down", () => {
     const parent = new THREE.Group();
     parent.scale.setScalar(0.24);
     parent.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4)));
@@ -92,9 +92,12 @@ describe("fitFishTankStashInteractionPick", () => {
     parent.updateMatrixWorld(true);
 
     const pickSize = new THREE.Box3().setFromObject(pick).getSize(new THREE.Vector3());
-    expect(pickSize.x).toBeGreaterThanOrEqual(1.6);
-    expect(pickSize.z).toBeGreaterThanOrEqual(1.6);
-    expect(pickSize.y).toBeGreaterThanOrEqual(0.8);
+    expect(pickSize.x).toBeGreaterThanOrEqual(0.55);
+    expect(pickSize.x).toBeLessThanOrEqual(1.0);
+    expect(pickSize.z).toBeGreaterThanOrEqual(0.55);
+    expect(pickSize.z).toBeLessThanOrEqual(1.0);
+    expect(pickSize.y).toBeGreaterThanOrEqual(0.45);
+    expect(pickSize.y).toBeLessThanOrEqual(0.9);
   });
 });
 

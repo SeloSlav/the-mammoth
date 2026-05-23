@@ -14,6 +14,7 @@ import {
   faSitemap,
   faSliders,
   faTableCells,
+  faWandMagicSparkles,
   faWindowRestore,
 } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -345,6 +346,7 @@ export function EditorChrome() {
     if (mode === "my_apartment_layout") {
       items.push(
         { id: EDITOR_CHROME_SECTION.importDecor, label: "Import décor", icon: faCloudArrowDown },
+        { id: EDITOR_CHROME_SECTION.modelOptimize, label: "Model optimize", icon: faWandMagicSparkles },
         { id: EDITOR_CHROME_SECTION.aptSceneGizmo, label: "Scene & gizmo", icon: faArrowsRotate },
         { id: EDITOR_CHROME_SECTION.placedDecor, label: "Placed décor", icon: faTableCells },
         { id: EDITOR_CHROME_SECTION.savedGroups, label: "Saved groups", icon: faObjectGroup },

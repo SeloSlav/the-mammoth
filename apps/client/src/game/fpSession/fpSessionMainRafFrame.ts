@@ -878,6 +878,13 @@ export function createFpSessionMainRafFrame(
           slotIndex: cachedBalconyGrowPrompt.slotIndex,
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
+      } else if (sitPromptHud) {
+        setFpPickupPrompt({
+          kind: "apartment_sittable",
+          sittableKey: sitPromptHud.sittableKey,
+          unitKey: sitPromptHud.unitKey,
+          label: sitPromptHud.label,
+        });
       } else if (
         aSys?.kind === "apartment_stash" &&
         !(
@@ -918,13 +925,6 @@ export function createFpSessionMainRafFrame(
           unitKey: cachedNotebookPromptHud.unitKey,
           label: cachedNotebookPromptHud.label,
           willClose: isFpNotebookTipsPanelOpen(),
-        });
-      } else if (sitPromptHud) {
-        setFpPickupPrompt({
-          kind: "apartment_sittable",
-          sittableKey: sitPromptHud.sittableKey,
-          unitKey: sitPromptHud.unitKey,
-          label: sitPromptHud.label,
         });
       } else if (doorPrompt) {
         setFpPickupPrompt({

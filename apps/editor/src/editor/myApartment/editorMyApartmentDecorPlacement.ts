@@ -83,7 +83,7 @@ function editorAuthoringVisScaleForPlacedItemKind(kind: OwnedApartmentPlacedItem
   return ownedApartmentPlacedItemAuthoringAssetVisScale(kind);
 }
 
-function placeDecorGroup(args: {
+export function placeDecorGroup(args: {
   group: THREE.Group;
   template: THREE.Object3D;
   decor: OwnedApartmentPlacedItem;
@@ -299,4 +299,52 @@ export async function loadEditorMyApartmentDecorTemplates(
   return out;
 }
 
-export { placeDecorGroup };
+export async function invalidateEditorMyApartmentDecorTemplateCache(
+  modelRelPath: string,
+): Promise<void> {
+  if (isProceduralApartmentDecorModelPath(modelRelPath)) return;
+  const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));
+  editorMyApartmentDecorTemplatePromises.delete(url);
+}
+
+export async function reloadEditorMyApartmentDecorTemplate(
+  templates: EditorMyApartmentDecorTemplateMap,
+  modelRelPath: string,
+): Promise<THREE.Object3D | null> {
+  await invalidateEditorMyApartmentDecorTemplateCache(modelRelPath);
+  templates.delete(modelRelPath);
+  const loaded = await loadEditorMyApartmentDecorTemplates([modelRelPath]);
+  const template = loaded.get(modelRelPath) ?? null;
+  if (template) templates.set(modelRelPath, template);
+  return template;
+}
+
+export function refreshEditorMyApartmentDecorInstancesForModel(
+  mount: EditorMyApartmentFurnitureMount,
+  decorTemplates: EditorMyApartmentDecorTemplateMap,
+  doc: OwnedApartmentBuiltinsDoc,
+  spans: OwnedApartmentFractionToPreviewXZ,
+  modelRelPath: string,
+): boolean {
+  const template = decorTemplates.get(modelRelPath);
+  if (!template) return false;
+  const fishSwimmerTemplate =
+    decorTemplates.get(APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH) ?? undefined;
+  let structuralRebuild = false;
+  for (const decor of doc.placedItems) {
+    if (decor.modelRelPath !== modelRelPath) continue;
+    const selId = editorMyApartmentSelectedIdForDecor(decor.id);
+    const group = mount.selectionGroups[selId];
+    if (!group) continue;
+    placeDecorGroup({
+      group,
+      template,
+      decor,
+      spans,
+      fishTankBridge: mount.fishTankBridge,
+      fishSwimmerTemplate,
+    });
+    structuralRebuild = true;
+  }
+  return structuralRebuild;
+}

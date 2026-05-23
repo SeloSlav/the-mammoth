@@ -41,6 +41,21 @@ export function requestEditorFillWallOpening(wallId: string): void {
   fillWallOpeningRequest?.(wallId);
 }
 
+let decorModelReloadRequest: ((modelRelPath: string) => Promise<void>) | null = null;
+
+/** Reload a decor GLB from disk after optimize/revert (registered by apartment lifecycle). */
+export function registerEditorMyApartmentDecorModelReloadRequest(
+  fn: ((modelRelPath: string) => Promise<void>) | null,
+): void {
+  decorModelReloadRequest = fn;
+}
+
+export async function requestEditorMyApartmentDecorModelReload(
+  modelRelPath: string,
+): Promise<void> {
+  await decorModelReloadRequest?.(modelRelPath);
+}
+
 /** `editor_my_apartment_furniture` root — not the transient saved-group manipulator. */
 let apartmentFurnitureMountRoot: THREE.Group | null = null;
 

@@ -289,6 +289,45 @@ export async function optimizeGlb({
   };
 }
 
+export function revertGlbFromBackup({ rel, modelsRoot, backupDir }) {
+  const fullPath = path.join(modelsRoot, rel);
+  const backupPath = path.join(backupDir, rel);
+  if (!fs.existsSync(backupPath)) {
+    return { rel, ok: false, reason: "no backup" };
+  }
+  fs.copyFileSync(backupPath, fullPath);
+  const bytes = fs.statSync(fullPath).size;
+  return {
+    rel,
+    ok: true,
+    tris: countTrianglesInGlbFile(fullPath),
+    bytes,
+    kb: Math.round(bytes / 1024),
+  };
+}
+
+export function readGlbOptimizeStatus({ rel, modelsRoot, backupDir }) {
+  const fullPath = path.join(modelsRoot, rel);
+  if (!fs.existsSync(fullPath)) {
+    return { rel, exists: false };
+  }
+  const backupPath = path.join(backupDir, rel);
+  const bytes = fs.statSync(fullPath).size;
+  const hasBackup = fs.existsSync(backupPath);
+  return {
+    rel,
+    exists: true,
+    hasBackup,
+    tris: countTrianglesInGlbFile(fullPath),
+    bytes,
+    kb: Math.round(bytes / 1024),
+    backupTris: hasBackup ? countTrianglesInGlbFile(backupPath) : null,
+    backupBytes: hasBackup ? fs.statSync(backupPath).size : null,
+    backupKb: hasBackup ? Math.round(fs.statSync(backupPath).size / 1024) : null,
+    allWebp: glbUsesOnlyWebpTextures(fullPath),
+  };
+}
+
 export function formatGlbResultLabel(rel) {
   return rel.replace(/^static\/models\/objects\//u, "").replace(/^static\/models\//u, "");
 }

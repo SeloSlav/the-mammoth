@@ -731,28 +731,6 @@ function nearestOwnedClaimedApartmentStash(
       }
     }
 
-    if (!unitHasDecorStashKind(conn, u.unitKey, APARTMENT_STASH_KIND_FISH_TANK)) {
-      const { x: ax, z: az } = stashInteractAnchorXZ(u, APARTMENT_STASH_KIND_FISH_TANK);
-      if (nearPointStashCylinder(u, ax, az, APARTMENT_STASH_KIND_FISH_TANK, x, y, z)) {
-        const key = resolveFishTankDecorStashKeyNear(conn, u.unitKey, ax, az);
-        if (key) {
-          const dx = x - ax;
-          const dz = z - az;
-          const decorD = dx * dx + dz * dz;
-          if (decorD < bestD) {
-            bestD = decorD;
-            best = {
-              kind: "apartment_stash",
-              stashKey: key,
-              unitKey: u.unitKey,
-              stashKind: APARTMENT_STASH_KIND_FISH_TANK,
-              stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_FISH_TANK),
-            };
-          }
-        }
-      }
-    }
-
     if (!feetInsideUnitHull(u, x, y, z)) continue;
 
     const tryLegacy = (kind: ApartmentStashKind): void => {
@@ -853,49 +831,6 @@ function finalizeApartmentStashPrompt(
     return null;
   }
   return prompt;
-}
-
-/** Match server `CONTENT_DECOR_DEDUPE_XZ_M` / client content↔DB dedupe for authored fish tank slot. */
-const FISH_TANK_CONTENT_DB_DEDUPE_XZ_M = 0.4;
-
-/** Resolve `{unit}#d{id}` for a fish-tank decor row near a layout/content anchor. */
-export function resolveFishTankDecorStashKeyNear(
-  conn: DbConnection,
-  unitKey: string,
-  nearX: number,
-  nearZ: number,
-  maxDistM = apartmentBuiltinStashInteractRadiusM(APARTMENT_STASH_KIND_FISH_TANK),
-): string | null {
-  const maxDistSq = maxDistM * maxDistM;
-  let bestKey: string | null = null;
-  let bestD = Infinity;
-  for (const row of conn.db.apartment_unit_decor) {
-    if (row.unitKey !== unitKey) continue;
-    if (apartmentDecorRowClientStashKind(row) !== APARTMENT_STASH_KIND_FISH_TANK) continue;
-    const dx = row.posX - nearX;
-    const dz = row.posZ - nearZ;
-    const d2 = dx * dx + dz * dz;
-    if (d2 > maxDistSq || d2 >= bestD) continue;
-    bestD = d2;
-    bestKey = apartmentStashKeyDecor(unitKey, row.decorId);
-  }
-  return bestKey;
-}
-
-/** Stash key from pick userData — content fish-tank ghosts resolve `{unit}#d{id}` from replica rows. */
-export function resolveApartmentStashKeyFromPickUserData(
-  conn: DbConnection,
-  userData: THREE.Object3D["userData"],
-  pickWorld?: THREE.Vector3,
-): string | null {
-  const direct = userData.mammothApartmentStashKey;
-  if (typeof direct === "string") return direct;
-  if (userData.mammothFishTankResolveStashFromDb !== true) return null;
-  const unitKey = userData.mammothApartmentStashPickUnitKey;
-  const x = pickWorld?.x ?? userData.mammothFishTankResolvePosX;
-  const z = pickWorld?.z ?? userData.mammothFishTankResolvePosZ;
-  if (typeof unitKey !== "string" || typeof x !== "number" || typeof z !== "number") return null;
-  return resolveFishTankDecorStashKeyNear(conn, unitKey, x, z);
 }
 
 /**

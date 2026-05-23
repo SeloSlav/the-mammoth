@@ -22,13 +22,16 @@ import {
   feetDeepEnoughFromEntryDoor,
   formatApartmentPublicLabel,
   getApartmentSystemPrompt,
-  resolveFishTankDecorStashKeyNear,
   residentInteriorPropsVisibleForViewer,
   residentUnitKeyFromDoor,
   residentUnitKeyFromParts,
   UNIT_STATE_CLAIMED,
   UNIT_STATE_UNCLAIMED,
 } from "./fpApartmentGameplay";
+import {
+  resolveDecorStashKeyNear,
+  resolveFishTankDecorStashKeyNear,
+} from "./fpApartmentDecorStashKey.js";
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
@@ -982,8 +985,8 @@ describe("fpApartmentGameplay", () => {
   });
 });
 
-describe("resolveFishTankDecorStashKeyNear", () => {
-  it("binds layout fish tank picks to the nearest fish-tank decor row", () => {
+describe("resolveDecorStashKeyNear", () => {
+  it("binds layout stash picks to the nearest matching decor row", () => {
     const unit = apartmentUnit({
       state: UNIT_STATE_CLAIMED,
       owner: testIdentity as never,
@@ -1005,12 +1008,33 @@ describe("resolveFishTankDecorStashKeyNear", () => {
         },
       ],
     });
+    expect(resolveDecorStashKeyNear(
+      conn,
+      unit.unitKey,
+      APARTMENT_STASH_KIND_FISH_TANK,
+      5.05,
+      6.05,
+    )).toBe(
+      apartmentStashKeyDecor(unit.unitKey, 12n),
+    );
+    expect(resolveDecorStashKeyNear(
+      conn,
+      unit.unitKey,
+      APARTMENT_STASH_KIND_FISH_TANK,
+      5.35,
+      6.35,
+    )).toBe(
+      apartmentStashKeyDecor(unit.unitKey, 12n),
+    );
+    expect(resolveDecorStashKeyNear(
+      conn,
+      unit.unitKey,
+      APARTMENT_STASH_KIND_FISH_TANK,
+      9,
+      9,
+    )).toBeNull();
     expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 5.05, 6.05)).toBe(
       apartmentStashKeyDecor(unit.unitKey, 12n),
     );
-    expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 5.35, 6.35)).toBe(
-      apartmentStashKeyDecor(unit.unitKey, 12n),
-    );
-    expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 9, 9)).toBeNull();
   });
 });

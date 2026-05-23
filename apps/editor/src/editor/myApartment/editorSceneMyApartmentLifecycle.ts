@@ -33,11 +33,16 @@ import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 import {
   registerEditorMyApartmentDecorShadowResync,
   registerEditorMyApartmentPracticalLightsResync,
+  registerEditorMyApartmentDecorModelReloadRequest,
   registerEditorMyApartmentWallsMountSyncRequest,
   registerEditorFishTankBridge,
   setEditorMyApartmentPieceGroups,
   applyEditorMyApartmentLayoutHiddenPlacements,
 } from "./editorMyApartmentPieceGroupBridge.js";
+import {
+  reloadEditorMyApartmentDecorTemplate,
+  refreshEditorMyApartmentDecorInstancesForModel,
+} from "./editorMyApartmentDecorPlacement.js";
 import { createEditorApartmentFishTankBridge } from "./editorApartmentFishTankBridge.js";
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 
@@ -115,6 +120,43 @@ export function createEditorSceneMyApartmentLifecycle(
   }
 
   registerEditorMyApartmentWallsMountSyncRequest(runWallsMountSyncIfReady);
+
+  async function reloadDecorModelFromDisk(modelRelPath: string): Promise<void> {
+    if (!mount || disposed) return;
+    const parent = deps.getStructuralRoot();
+    if (!parent) return;
+    teardownApartmentSavedObjectGroupManipulator();
+    const st = useEditorStore.getState();
+    const layout = resolveOwnedApartmentAuthoringLayoutForEditor({
+      floorDoc: st.floorDocs[TYPICAL_FLOOR_DOC_ID],
+      building: st.building,
+      previewUnitId: st.myApartmentPreviewUnitId,
+    });
+    const authoringFractionMapping = ownedApartmentFractionMappingForEditor({
+      layout,
+      builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
+    });
+    const template = await reloadEditorMyApartmentDecorTemplate(decorTemplates, modelRelPath);
+    if (!template || disposed) return;
+    const structuralRebuild = refreshEditorMyApartmentDecorInstancesForModel(
+      mount,
+      decorTemplates,
+      st.ownedApartmentBuiltins,
+      authoringFractionMapping,
+      modelRelPath,
+    );
+    resyncMountPresentationAfterMeshEdit(
+      parent,
+      authoringFractionMapping,
+      layout,
+      "decor-only",
+      structuralRebuild,
+    );
+    setEditorMyApartmentPieceGroups(mount.selectionGroups);
+    deps.syncTransformAttachment();
+  }
+
+  registerEditorMyApartmentDecorModelReloadRequest(reloadDecorModelFromDisk);
 
   function teardownFurniture(): void {
 
@@ -472,6 +514,8 @@ export function createEditorSceneMyApartmentLifecycle(
       setApartmentLayoutLoadingMessage(null);
 
       registerEditorMyApartmentWallsMountSyncRequest(null);
+
+      registerEditorMyApartmentDecorModelReloadRequest(null);
 
       unsubStore();
 

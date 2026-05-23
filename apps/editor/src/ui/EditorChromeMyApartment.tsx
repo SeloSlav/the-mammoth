@@ -65,6 +65,7 @@ import {
   MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN,
   parseMyApartmentDecorUniformScalePercentInput,
 } from "../editor/myApartment/editorMyApartmentDecorScale.js";
+import { EditorChromeMyApartmentModelOptimize } from "./EditorChromeMyApartmentModelOptimize.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -768,6 +769,9 @@ export function EditorChromeMyApartment(props: {
           </button>
         </div>
         </div>
+        <EditorChromeMyApartmentModelOptimize
+          selectedCatalogModelRelPath={selectedCatalogModelRelPath}
+        />
         <div
           style={{ ...editorChromeSection, scrollMarginTop: 6 }}
           id={EDITOR_CHROME_SECTION.aptSceneGizmo}

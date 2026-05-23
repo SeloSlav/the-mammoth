@@ -39,6 +39,11 @@ import {
 } from "../../../../scripts/worldCollisionArtifacts";
 import { assertValidWeaponPresentationJson } from "./weaponPresentationSaveValidate.js";
 import { assertValidConsumablePresentationJson } from "./consumablePresentationSaveValidate.js";
+import {
+  handleApartmentDecorGlbOptimize,
+  handleApartmentDecorGlbOptimizeStatus,
+  handleApartmentDecorGlbRevert,
+} from "./apartmentDecorGlbOptimizeHandlers.js";
 
 /**
  * IDs accepted by the save-consumable-presentation endpoint.
@@ -340,6 +345,15 @@ export function editorDevMiddleware(
       }
       if (path === "/__editor/consumable-asset-survey" && req.method === "GET") {
         return void (await handleConsumableAssetSurvey(repoRoot, res));
+      }
+      if (path === "/__editor/apartment-decor-glb-status" && req.method === "GET") {
+        return void (await handleApartmentDecorGlbOptimizeStatus(repoRoot, req, res));
+      }
+      if (path === "/__editor/optimize-apartment-decor-glb" && req.method === "POST") {
+        return void (await handleApartmentDecorGlbOptimize(repoRoot, req, res, ensureEditorSaveEnabled));
+      }
+      if (path === "/__editor/revert-apartment-decor-glb" && req.method === "POST") {
+        return void (await handleApartmentDecorGlbRevert(repoRoot, req, res, ensureEditorSaveEnabled));
       }
       if (path === "/__editor/save-consumable-presentation" && req.method === "POST") {
         return void (await handleSaveConsumablePresentation(repoRoot, req, res, next));

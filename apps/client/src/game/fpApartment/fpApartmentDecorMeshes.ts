@@ -30,9 +30,9 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
   clientMayUseApartmentStash,
-  resolveApartmentStashKeyFromPickUserData,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
+import { resolveApartmentStashKeyFromPickUserData } from "./fpApartmentDecorStashKey.js";
 import { requestOwnedApartmentStashDecorSync } from "./fpApartmentStashDecorSync.js";
 import { getApartmentSittablePrompt } from "./fpApartmentSittablePrompt.js";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
@@ -648,7 +648,7 @@ export function mountFpApartmentDecorMeshes(opts: {
         const stashKind = hit.object.userData.mammothApartmentStashKind;
         if (typeof unitKey !== "string" || typeof stashKind !== "string") continue;
         if (typeof stashKey !== "string") {
-          if (hit.object.userData.mammothFishTankResolveStashFromDb === true) {
+          if (hit.object.userData.mammothDecorStashResolveFromDb === true) {
             requestOwnedApartmentStashDecorSync(opts.conn);
           }
           continue;

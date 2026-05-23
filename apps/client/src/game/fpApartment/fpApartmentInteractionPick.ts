@@ -119,9 +119,29 @@ export function fitBalconyGrowTrayCenterInteractionPick(
   pick.scale.set(hub, size.height * 0.88, hub);
 }
 
-/** Min world half-extents for fish-tank reticle picks (~1.7 m full width). */
-const FISH_TANK_STASH_PICK_MIN_WORLD_HALF_XZ = 0.85;
-const FISH_TANK_STASH_PICK_MIN_WORLD_HALF_Y = 0.45;
+/** Extra world-space margin on fish-tank reticle picks beyond visual glass. */
+const FISH_TANK_STASH_PICK_WORLD_PAD_M = 0.28;
+/** Fallback when visual bounds are missing (m, full axis length in world space). */
+const FISH_TANK_STASH_PICK_FALLBACK_WORLD_SIZE_XZ = 0.72;
+const FISH_TANK_STASH_PICK_FALLBACK_WORLD_SIZE_Y = 0.64;
+
+function fishTankStashPickMinLocalSize(
+  worldScale: THREE.Vector3,
+  visualLocalSize: THREE.Vector3,
+): THREE.Vector3 {
+  const wx = Math.max(worldScale.x, 1e-6);
+  const wy = Math.max(worldScale.y, 1e-6);
+  const wz = Math.max(worldScale.z, 1e-6);
+  const pad = 2 * FISH_TANK_STASH_PICK_WORLD_PAD_M;
+  const worldSizeX = visualLocalSize.x * wx;
+  const worldSizeY = visualLocalSize.y * wy;
+  const worldSizeZ = visualLocalSize.z * wz;
+  return _sizeScratch.set(
+    Math.max(visualLocalSize.x, (worldSizeX + pad) / wx),
+    Math.max(visualLocalSize.y, (worldSizeY + pad) / wy),
+    Math.max(visualLocalSize.z, (worldSizeZ + pad) / wz),
+  );
+}
 
 /** Fish-tank stash pick from visual GLB bounds (excludes swim meshes / other picks). */
 export function fitFishTankStashInteractionPick(
@@ -133,24 +153,23 @@ export function fitFishTankStashInteractionPick(
   const wx = Math.max(_worldScaleScratch.x, 1e-6);
   const wy = Math.max(_worldScaleScratch.y, 1e-6);
   const wz = Math.max(_worldScaleScratch.z, 1e-6);
-  const minLocalX = (2 * FISH_TANK_STASH_PICK_MIN_WORLD_HALF_XZ) / wx;
-  const minLocalY = (2 * FISH_TANK_STASH_PICK_MIN_WORLD_HALF_Y) / wy;
-  const minLocalZ = (2 * FISH_TANK_STASH_PICK_MIN_WORLD_HALF_XZ) / wz;
+  const fallbackMinLocal = _sizeScratch.set(
+    FISH_TANK_STASH_PICK_FALLBACK_WORLD_SIZE_XZ / wx,
+    FISH_TANK_STASH_PICK_FALLBACK_WORLD_SIZE_Y / wy,
+    FISH_TANK_STASH_PICK_FALLBACK_WORLD_SIZE_XZ / wz,
+  );
   const bounds = readDecorVisualLocalBounds(decorRoot, new THREE.Box3());
   if (bounds.isEmpty()) {
     fitApartmentInteractionPickToObject(decorRoot, pick, {
-      x: minLocalX,
-      y: minLocalY,
-      z: minLocalZ,
+      x: fallbackMinLocal.x,
+      y: fallbackMinLocal.y,
+      z: fallbackMinLocal.z,
     });
     return;
   }
   bounds.getCenter(_centerScratch);
   bounds.getSize(_sizeScratch);
+  const minLocal = fishTankStashPickMinLocalSize(_worldScaleScratch, _sizeScratch);
   pick.position.copy(_centerScratch);
-  pick.scale.set(
-    Math.max(_sizeScratch.x, minLocalX),
-    Math.max(_sizeScratch.y, minLocalY),
-    Math.max(_sizeScratch.z, minLocalZ),
-  );
+  pick.scale.set(minLocal.x, minLocal.y, minLocal.z);
 }

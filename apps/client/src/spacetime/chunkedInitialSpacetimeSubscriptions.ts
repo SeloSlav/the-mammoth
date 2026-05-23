@@ -28,6 +28,8 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[
     "SELECT * FROM elevator_car",
     "SELECT * FROM elevator_landing_door",
     "SELECT * FROM apartment_unit",
+    /** Required for `{unit}#d{id}` stash keys, editor placements, and layout↔DB dedupe. */
+    "SELECT * FROM apartment_unit_decor",
     "SELECT * FROM apartment_door",
     "SELECT * FROM apartment_door_gameplay",
   ],

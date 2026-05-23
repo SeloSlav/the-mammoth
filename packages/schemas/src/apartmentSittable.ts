@@ -58,7 +58,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
   /** Above seat anchor; 0.38 + 0.62 ≈ 1.0 m absolute eye (matches FP crouch). */
   eyeHeightM: 0.62,
-  interactRadiusM: 1.5,
+  interactRadiusM: 1.2,
   promptLabel: "Sit",
   defaultPitchRad: 0,
   lateralSeatCount: 3,

@@ -35,8 +35,12 @@ import {
   tagResidentialUnitInteriorMeshesUnder,
 } from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
-import { residentInteriorPropsVisibleForViewer, resolveFishTankDecorStashKeyNear } from "./fpApartmentGameplay.js";
+import { residentInteriorPropsVisibleForViewer } from "./fpApartmentGameplay.js";
 import { requestOwnedApartmentStashDecorSync } from "./fpApartmentStashDecorSync.js";
+import {
+  bindApartmentDecorStashPickUserData,
+  contentDecorCoveredByDbRow,
+} from "./fpApartmentDecorStashKey.js";
 import {
   apartmentDecorFetchPath,
   apartmentDecorModelExtension,
@@ -63,11 +67,6 @@ import {
   applyApartmentDecorCastShadowFlags,
   resolveStaticModelFetchUrl,
 } from "@the-mammoth/engine";
-import {
-  apartmentStashKey,
-  apartmentStashKeyDecor,
-} from "./fpApartmentStashKey.js";
-import { apartmentStashKindForPlacedKind } from "./fpApartmentStashResolve.js";
 import {
   growTrayIdForPlacement,
   isGrowTrayModelPath,
@@ -150,7 +149,7 @@ export type AuthoringBuildEntry =
   | { kind: "mirror"; mirror: VisibleMirrorPlacement };
 
 /** Skip merging a content placement when a DB row already sits on the same prop (XZ). */
-const CONTENT_DB_DECOR_DEDUPE_XZ_M = 0.4;
+export { contentDecorCoveredByDbRow } from "./fpApartmentDecorStashKey.js";
 
 export function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
   root.updateMatrixWorld(true);
@@ -163,39 +162,6 @@ export function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
     child.position.sub(_decorCenterLocalScratch);
   }
   root.updateMatrixWorld(true);
-}
-
-export function contentDecorCoveredByDbRow(
-  content: {
-    modelRelPath: string;
-    x: number;
-    z: number;
-    itemKind?: OwnedApartmentPlacedItemKind;
-  },
-  dbRows: ApartmentUnitDecor[],
-): boolean {
-  for (const row of dbRows) {
-    const rowPlaced = effectiveOwnedApartmentPlacedKind(row.itemKind, row.modelRelPath);
-    if (
-      content.itemKind === "fish_tank" ||
-      isApartmentFishTankModelRelPath(content.modelRelPath)
-    ) {
-      if (rowPlaced !== "fish_tank") continue;
-      const dx = row.posX - content.x;
-      const dz = row.posZ - content.z;
-      if (dx * dx + dz * dz <= CONTENT_DB_DECOR_DEDUPE_XZ_M * CONTENT_DB_DECOR_DEDUPE_XZ_M) {
-        return true;
-      }
-      continue;
-    }
-    if (row.modelRelPath !== content.modelRelPath) continue;
-    const dx = row.posX - content.x;
-    const dz = row.posZ - content.z;
-    if (dx * dx + dz * dz <= CONTENT_DB_DECOR_DEDUPE_XZ_M * CONTENT_DB_DECOR_DEDUPE_XZ_M) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function visibleDecorPlacements(
@@ -743,49 +709,30 @@ export async function runFpApartmentDecorFullRebuild(
       ctx.root.add(g);
       g.updateMatrixWorld(true);
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
-        const sk = apartmentStashKindForPlacedKind(d.placedKind);
-        if (sk) {
-          const pick = new THREE.Mesh(ctx.stashPickGeometry, ctx.stashPickMaterial);
-          pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
-          if (d.placedKind === "fish_tank") {
-            fitFishTankStashInteractionPick(g, pick);
-          } else {
-            fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
-          }
-          pick.userData.mammothApartmentStashPickUnitKey = d.unit.unitKey;
-          pick.userData.mammothApartmentStashKind = sk;
-          let resolvedStashKey: string | null = null;
-          if (d.decorId !== null) {
-            resolvedStashKey = apartmentStashKeyDecor(d.unit.unitKey, d.decorId);
-          } else if (d.placedKind === "fish_tank") {
-            resolvedStashKey = resolveFishTankDecorStashKeyNear(
-              ctx.conn,
-              d.unit.unitKey,
-              d.posX,
-              d.posZ,
-            );
-          }
-          if (resolvedStashKey) {
-            pick.userData.mammothApartmentStashKey = resolvedStashKey;
-          } else if (d.placedKind === "fish_tank" && d.decorId === null) {
-            // Layout ghost — bind `{unit}#d{id}` once sync creates the replica row.
-            pick.userData.mammothFishTankResolveStashFromDb = true;
-            pick.userData.mammothFishTankResolvePosX = d.posX;
-            pick.userData.mammothFishTankResolvePosZ = d.posZ;
-          } else {
-            pick.userData.mammothApartmentStashKey = apartmentStashKey(d.unit.unitKey, sk);
-          }
-          if (d.placedKind === "wardrobe") {
-            pick.userData.mammothApartmentWardrobePickUnitKey = d.unit.unitKey;
-            ctx.wardrobePickMeshes.push(pick);
-          }
-          pick.userData.mammothSkipFloorGeometryMerge = true;
-          pick.userData.mammothPlateLevelIndex = d.unit.level;
-          pick.layers.set(FP_INTERACTION_PICK_LAYER);
-          g.add(pick);
-          ctx.stashPickMeshes.push(pick);
-          g.updateMatrixWorld(true);
+        const pick = new THREE.Mesh(ctx.stashPickGeometry, ctx.stashPickMaterial);
+        pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
+        if (d.placedKind === "fish_tank") {
+          fitFishTankStashInteractionPick(g, pick);
+        } else {
+          fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
         }
+        bindApartmentDecorStashPickUserData(ctx.conn, pick, {
+          unitKey: d.unit.unitKey,
+          decorId: d.decorId,
+          placedKind: d.placedKind,
+          posX: d.posX,
+          posZ: d.posZ,
+        });
+        if (d.placedKind === "wardrobe") {
+          pick.userData.mammothApartmentWardrobePickUnitKey = d.unit.unitKey;
+          ctx.wardrobePickMeshes.push(pick);
+        }
+        pick.userData.mammothSkipFloorGeometryMerge = true;
+        pick.userData.mammothPlateLevelIndex = d.unit.level;
+        pick.layers.set(FP_INTERACTION_PICK_LAYER);
+        g.add(pick);
+        ctx.stashPickMeshes.push(pick);
+        g.updateMatrixWorld(true);
       }
       if (isGrowTrayModelPath(d.modelRelPath)) {
         const trayId = growTrayIdForPlacement(d.renderKey, d.decorId);

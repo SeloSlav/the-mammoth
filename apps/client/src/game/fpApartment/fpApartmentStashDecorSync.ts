@@ -29,6 +29,9 @@ export function requestOwnedApartmentStashDecorSync(conn: DbConnection): void {
   syncInFlight = true;
   void conn.reducers
     .syncOwnedApartmentStashDecor({})
+    .catch((err: unknown) => {
+      console.warn("[fpApartment] sync_owned_apartment_stash_decor failed", err);
+    })
     .finally(() => {
       syncInFlight = false;
     });
