@@ -620,7 +620,7 @@
     },
     {
       "id": "8e48c06b-c005-4425-9fdc-a527e67168ee",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.8433852563352113,
       "fz": -0.026789220468649344,
       "dy": 0.11803518403137526,
@@ -634,7 +634,7 @@
     },
     {
       "id": "825bca36-e9b8-4fa7-9883-2d57ba0ebe04",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.9273651377782285,
       "fz": -0.026789220468649344,
       "dy": 0.11803518403137526,
@@ -676,7 +676,7 @@
     },
     {
       "id": "5a8db793-b6e6-4266-bd96-8d53a1452e91",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.8433852563352113,
       "fz": 0.09540147283815242,
       "dy": 0.11803518403137526,
@@ -690,7 +690,7 @@
     },
     {
       "id": "74e853d2-62cb-42b3-b740-c8ea51c6179f",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.9273651377782282,
       "fz": 0.09540147283815242,
       "dy": 0.11803518403137526,
@@ -746,7 +746,7 @@
     },
     {
       "id": "8cf090f7-acfa-460d-8360-f8c48a233557",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.8433852563352113,
       "fz": 0.21759216614495205,
       "dy": 0.11803518403137526,
@@ -760,7 +760,7 @@
     },
     {
       "id": "74725d62-5270-4d8f-a1fe-4e08f9215e0d",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.9273651377782273,
       "fz": 0.21759216614495205,
       "dy": 0.11803518403137532,
@@ -774,7 +774,7 @@
     },
     {
       "id": "f7b5698a-e331-48bf-b5f2-aab0002b037d",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.9273651377782269,
       "fz": 0.3397828594517517,
       "dy": 0.11803518403137526,
@@ -788,7 +788,7 @@
     },
     {
       "id": "8b770390-544f-4a40-aaa3-ec34d9ed66a7",
-      "modelRelPath": "static/models/objects/grow-tray.glb",
+      "modelRelPath": "static/models/objects/grow-tray-empty.glb",
       "fx": 0.8433852563352113,
       "fz": 0.3397828594517517,
       "dy": 0.11803518403137526,

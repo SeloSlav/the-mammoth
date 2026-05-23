@@ -17,6 +17,7 @@ import {
   resolveApartmentLayoutDocForUnit,
   resolveApartmentDecorPoses,
 } from "../fpApartment/fpOwnedApartmentBuiltinsFromContent.js";
+import { isGrowTrayModelPath } from "./fpBalconyGrowTrayDecor.js";
 
 /** World XZ for a grow tray — DB row when valid, else authored JSON fractions. */
 export function resolveBalconyGrowTrayAnchorXZ(
@@ -49,7 +50,7 @@ export function resolveBalconyGrowTrayAnchorXZ(
   );
   if (doc) {
     for (const pose of resolveApartmentDecorPoses(unit, doc)) {
-      if (pose.id === trayId && pose.modelRelPath.includes("grow-tray.glb")) {
+      if (pose.id === trayId && isGrowTrayModelPath(pose.modelRelPath)) {
         return { x: pose.x, z: pose.z };
       }
     }

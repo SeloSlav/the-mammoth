@@ -1,13 +1,20 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowDecorTrayId,
   balconyGrowStageFromDays,
   balconyGrowStageVisualScale,
   balconyGrowTrayStashKey,
+  ownedApartmentPlacedItemAuthoringAssetVisScale,
 } from "@the-mammoth/schemas";
+import {
+  moodGradeMammothApartmentDecorMesh,
+  resolveStaticModelFetchUrl,
+} from "@the-mammoth/engine";
 import { getMammothItemDef } from "../../inventory/mammothItemCatalog";
 import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashKey.js";
+import { apartmentDecorFetchPath } from "../fpApartment/fpApartmentDecorAssets.js";
 import {
   balconyGrowSlotPickSizeFromTrayBounds,
   fitBalconyGrowSlotInteractionPick,
@@ -24,7 +31,13 @@ import {
   probeGrowTraySlotLocalOffsets,
 } from "./fpBalconyGrowStageVisual.js";
 
-const GROW_TRAY_SUFFIX = "grow-tray.glb";
+export const GROW_TRAY_EMPTY_MODEL_PATH = "static/models/objects/grow-tray-empty.glb";
+export const GROW_TRAY_FILLED_MODEL_PATH = "static/models/objects/grow-tray.glb";
+
+type GrowTrayBodyVariant = "empty" | "filled";
+
+const _growTrayBodyGltfLoader = new GLTFLoader();
+const _growTrayBodyTemplateByUrl = new Map<string, THREE.Object3D>();
 const PHASE_MATURE = 2;
 const _traySizeScratch = new THREE.Vector3();
 const _trayBoundsScratch = new THREE.Box3();
@@ -38,7 +51,108 @@ type GrowSlotHolderState = {
 };
 
 export function isGrowTrayModelPath(modelRelPath: string): boolean {
-  return modelRelPath.includes(GROW_TRAY_SUFFIX);
+  return (
+    modelRelPath.includes(GROW_TRAY_EMPTY_MODEL_PATH) ||
+    modelRelPath.includes(GROW_TRAY_FILLED_MODEL_PATH)
+  );
+}
+
+export function growTrayBodyVariantForFertilizer(fertilizerPresent: boolean): GrowTrayBodyVariant {
+  return fertilizerPresent ? "filled" : "empty";
+}
+
+function growTrayModelPathForVariant(variant: GrowTrayBodyVariant): string {
+  return variant === "filled" ? GROW_TRAY_FILLED_MODEL_PATH : GROW_TRAY_EMPTY_MODEL_PATH;
+}
+
+function growTrayBodyVariantFromModelPath(modelRelPath: string | undefined): GrowTrayBodyVariant {
+  if (modelRelPath?.includes(GROW_TRAY_EMPTY_MODEL_PATH)) return "empty";
+  return "filled";
+}
+
+async function loadGrowTrayBodyTemplate(modelRelPath: string): Promise<THREE.Object3D> {
+  const url = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(modelRelPath));
+  let template = _growTrayBodyTemplateByUrl.get(url);
+  if (!template) {
+    template = (await _growTrayBodyGltfLoader.loadAsync(url)).scene;
+    _growTrayBodyTemplateByUrl.set(url, template);
+  }
+  return template;
+}
+
+function ensureGrowTrayBodyRoot(decorGroup: THREE.Group, trayId: string): THREE.Group {
+  const existing = decorGroup.userData.mammothGrowTrayBodyRoot as THREE.Group | undefined;
+  if (existing) return existing;
+
+  const bodyRoot = new THREE.Group();
+  bodyRoot.name = `grow_tray_body:${trayId}`;
+  bodyRoot.userData.mammothGrowTrayBodyRoot = true;
+
+  for (const child of [...decorGroup.children]) {
+    decorGroup.remove(child);
+    bodyRoot.add(child);
+  }
+  decorGroup.add(bodyRoot);
+
+  const modelPath = decorGroup.userData.mammothApartmentDecorModelRelPath as string | undefined;
+  decorGroup.userData.mammothGrowTrayBodyVariant = growTrayBodyVariantFromModelPath(modelPath);
+  return bodyRoot;
+}
+
+function disposeGrowTrayBodyMeshes(bodyRoot: THREE.Group): void {
+  for (const child of [...bodyRoot.children]) {
+    bodyRoot.remove(child);
+    child.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const mat of mats) mat.dispose();
+    });
+  }
+}
+
+function mountGrowTrayBodyClone(
+  template: THREE.Object3D,
+  modelRelPath: string,
+  bodyRoot: THREE.Group,
+): void {
+  const clone = template.clone(true);
+  clone.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      moodGradeMammothApartmentDecorMesh(o, { modelRelPath });
+      o.frustumCulled = true;
+    }
+  });
+  clone.scale.setScalar(ownedApartmentPlacedItemAuthoringAssetVisScale("plain"));
+  bodyRoot.add(clone);
+}
+
+/** Swap tray body mesh between empty soil and compost-filled variants. */
+export function syncGrowTrayBodyVisual(
+  decorGroup: THREE.Object3D,
+  fertilizerPresent: boolean,
+): void {
+  const bodyRoot = decorGroup.userData.mammothGrowTrayBodyRoot as THREE.Group | undefined;
+  if (!bodyRoot) return;
+
+  const target = growTrayBodyVariantForFertilizer(fertilizerPresent);
+  const current = decorGroup.userData.mammothGrowTrayBodyVariant as GrowTrayBodyVariant | undefined;
+  if (current === target) return;
+
+  const swapGeneration = ((decorGroup.userData.mammothGrowTrayBodySwapGen as number | undefined) ?? 0) + 1;
+  decorGroup.userData.mammothGrowTrayBodySwapGen = swapGeneration;
+
+  const modelRelPath = growTrayModelPathForVariant(target);
+  void loadGrowTrayBodyTemplate(modelRelPath)
+    .then((template) => {
+      if (decorGroup.userData.mammothGrowTrayBodySwapGen !== swapGeneration) return;
+      disposeGrowTrayBodyMeshes(bodyRoot);
+      mountGrowTrayBodyClone(template, modelRelPath, bodyRoot);
+      decorGroup.userData.mammothGrowTrayBodyVariant = target;
+      bodyRoot.updateMatrixWorld(true);
+    })
+    .catch((err) => {
+      console.warn("[syncGrowTrayBodyVisual] failed to swap grow-tray body", err);
+    });
 }
 
 /** Stable grow-tray identity: DB imports use decor id; authored content keeps its content id. */
@@ -76,6 +190,8 @@ export async function mountGrowTrayDecorOnGroup(opts: {
   const growTrayCenterPickMeshes: THREE.Mesh[] = [];
   const growSlotPickMeshes: THREE.Mesh[] = [];
   const growPlantPickMeshes: THREE.Mesh[] = [];
+
+  ensureGrowTrayBodyRoot(decorGroup, trayId);
 
   const soilLocalY = probeGrowTraySoilLocalY(decorGroup);
   decorGroup.userData.mammothGrowTraySoilLocalY = soilLocalY;
@@ -292,16 +408,14 @@ export function syncGrowSlotVisuals(
     syncPlantPickForVisual(holder, state);
   }
 
-  decorMoistureAndFertilizerHints(slotVisualsGroup.parent, trayWaterLiters, fertilizerPresent);
+  if (trayRoot) {
+    syncGrowTrayBodyVisual(trayRoot, fertilizerPresent);
+    decorMoistureHints(trayRoot, trayWaterLiters);
+  }
 }
 
-function decorMoistureAndFertilizerHints(
-  trayGroup: THREE.Object3D | null,
-  waterLiters: number,
-  fertilizerPresent: boolean,
-): void {
-  if (!trayGroup) return;
-  const visualKey = `${waterLiters.toFixed(2)}:${fertilizerPresent ? 1 : 0}`;
+function decorMoistureHints(trayGroup: THREE.Object3D, waterLiters: number): void {
+  const visualKey = waterLiters.toFixed(2);
   if (trayGroup.userData.mammothGrowMoistureVisualKey === visualKey) return;
   trayGroup.userData.mammothGrowMoistureVisualKey = visualKey;
   trayGroup.traverse((o) => {
@@ -309,15 +423,10 @@ function decorMoistureAndFertilizerHints(
     if (o.userData.mammothGrowTraySoilMesh !== true) return;
     if (!(o.material instanceof THREE.MeshStandardMaterial)) return;
     const base = o.userData.mammothGrowTraySoilBaseColor as THREE.Color | undefined;
-    if (base) {
-      o.material.color.copy(base);
-      if (waterLiters > 0.3) {
-        o.material.color.lerp(new THREE.Color(0x2a1f14), 0.35);
-      }
-    }
-    if (fertilizerPresent && o.userData.mammothGrowTrayRimMesh === true) {
-      o.material.emissive.set(0xc8b88a);
-      o.material.emissiveIntensity = 0.25;
+    if (!base) return;
+    o.material.color.copy(base);
+    if (waterLiters > 0.3) {
+      o.material.color.lerp(new THREE.Color(0x2a1f14), 0.35);
     }
   });
 }

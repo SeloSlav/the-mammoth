@@ -35,6 +35,7 @@
   "static/models/objects/grow-stage-mid.glb",
   "static/models/objects/grow-stage-sapling.glb",
   "static/models/objects/grow-stage-seed.glb",
+  "static/models/objects/grow-tray-empty.glb",
   "static/models/objects/grow-tray.glb",
   "static/models/objects/heater-room.glb",
   "static/models/objects/kitchen-counter-2.glb",

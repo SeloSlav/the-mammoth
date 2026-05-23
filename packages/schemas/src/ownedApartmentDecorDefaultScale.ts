@@ -94,7 +94,7 @@ export const OWNED_APARTMENT_DECOR_DEFAULT_SCALE_BY_MODEL = {
     uniformScale: 1.0875838849973372,
     verticalScaleMul: 1,
   },
-  "static/models/objects/grow-tray.glb": {
+  "static/models/objects/grow-tray-empty.glb": {
     uniformScale: 0.5068560948252686,
     verticalScaleMul: 1,
   },
