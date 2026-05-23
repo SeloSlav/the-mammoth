@@ -51,7 +51,7 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
     kind: "reference",
     heading: "Ceramic filter / water tank",
     lines: [
-      "Tank in the kitchen refills on its own (~20 L max). Open tank stash with E, slot an empty water bottle, hit Fill bottle.",
+      "Tank in the kitchen refills when you sleep (~20 L max). Open tank stash with E, slot an empty water bottle, hit Fill bottle.",
       "Filled bottle on hotbar: drink from hotbar, or RMB-aim at balcony soil to pour (~0.35 L puddle).",
       "Trays drink from pours and lose ~0.5 L each night you sleep. Dry two nights in a row wilts crops (unless LEDs stay on).",
     ],

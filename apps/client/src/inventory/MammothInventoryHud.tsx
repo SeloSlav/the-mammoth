@@ -71,7 +71,7 @@ import {
 } from "./mammothItemTooltipContent";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
 import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inventoryDragDropHelpers";
-import { beginInventoryDrag, endInventoryDrag } from "./inventoryDragSession";
+import { beginInventoryDrag, endInventoryDrag, getInventoryDragSession } from "./inventoryDragSession";
 import { playInventoryItemDragDropSound } from "./inventoryDragUiSound";
 import { useInventoryDragHoverSlot } from "./useInventoryDragHoverSlot";
 import { MammothHudPanel } from "./MammothHudPanel";
@@ -82,10 +82,13 @@ import {
   type SlotGrids,
 } from "./inventoryOptimistic";
 import {
-  PLAYER_INVENTORY_BASE_SLOTS,
   PLAYER_INVENTORY_GRID_COLS,
 } from "@the-mammoth/schemas";
-import { useMammothInventory, useMammothStash } from "./useMammothInventory";
+import {
+  mammothInventoryHudSlotCount,
+  useMammothInventory,
+  useMammothStash,
+} from "./useMammothInventory";
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",
@@ -121,12 +124,16 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   useEffect(() => {
     if (!optimisticSlots) return;
+    if (getInventoryDragSession()) return;
     if (
       inventorySlotGridsMatch(optimisticSlots, baseSlots) ||
       inventorySlotGridsSemanticallyMatch(optimisticSlots, baseSlots)
     ) {
       setOptimisticSlots(null);
+      return;
     }
+    // Harvest / pickup toasts replicate before stale drag-less optimistic UI clears.
+    setOptimisticSlots(null);
   }, [baseSlots, optimisticSlots]);
 
   /** Drop failed server-side: replicated grids never matched optimistic stash deposit. */
@@ -337,7 +344,9 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       const g = gridsForPrediction();
       const destIndex = destIndexForQuickTransfer(g.stash ?? [], pop);
       const predicted = predictSlotMove(g, sourceSlot, { type: "stash", index: destIndex });
-      if (predicted) setOptimisticSlots(predicted);
+      if (!predicted) return;
+      playInventoryItemDragDropSound();
+      setOptimisticSlots(predicted);
       try {
         void conn.reducers.stashPushItemToSlot({
           itemInstanceId: toInstanceId(pop),
@@ -486,6 +495,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const hotbarBottom = "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))";
 
   const { hotbar: hb, inventory: inv } = displaySlots;
+  const inventoryHudSlots = mammothInventoryHudSlotCount(inv);
 
   /**
    * Inventory anchors the LEFT half of the dock when a stash is open (so the pair feels
@@ -533,7 +543,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                 gap: 6,
               }}
             >
-              {Array.from({ length: PLAYER_INVENTORY_BASE_SLOTS }, (_, i) => {
+              {Array.from({ length: inventoryHudSlots }, (_, i) => {
                 const pop = inv[i] ?? null;
                 const slotInfo = { type: "inventory" as const, index: i };
                 return (

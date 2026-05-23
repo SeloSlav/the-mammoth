@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DbConnection } from "../../module_bindings";
-import { BALCONY_GROW_TRAY_INTERACT_RADIUS_M, balconyGrowStageVisualScale } from "@the-mammoth/schemas";
+import { BALCONY_GROW_TRAY_INTERACT_RADIUS_M } from "@the-mammoth/schemas";
 import { getMammothItemDef, mammothItemDefIsPlantableSeed } from "../../inventory/mammothItemCatalog";
 import type { Identity } from "spacetimedb";
 import { getFpHotbarSelectedSlot } from "../fpHotbar/fpHotbarSelection.js";
@@ -12,7 +12,12 @@ import {
 import type { FpWorldPlacementPreview } from "../fpPlacement/fpWorldPlacementPreview.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import { clientOwnsClaimedApartmentUnit } from "../fpApartment/fpApartmentGameplay.js";
-import { readGrowTraySoilLocalY, readGrowTraySlotLocalOffsets, readGrowTrayDecorUniformScale, balconyGrowSlotWorldPosition } from "./fpBalconyGrowStageVisual.js";
+import {
+  balconyGrowSlotWorldPosition,
+  readGrowTraySoilLocalY,
+  readGrowTraySlotLocalOffsets,
+  resolveBalconyGrowSeedVisualLocalScale,
+} from "./fpBalconyGrowStageVisual.js";
 
 export const BALCONY_GROW_SLOT_ALREADY_PLANTED_MESSAGE =
   "A seed is already planted in this spot.";
@@ -221,14 +226,16 @@ export function syncBalconyGrowPlacementPreview(
     _previewPosScratch,
     placement.trayObject,
   );
-  const decorScale = readGrowTrayDecorUniformScale(placement.trayObject);
-  const seedStageScale =
-    balconyGrowStageVisualScale("seed", cropScale) / Math.max(decorScale, 0.2);
+  const { localScale, decorUniformScale } = resolveBalconyGrowSeedVisualLocalScale(
+    placement.trayObject,
+    cropScale,
+  );
   preview.update(
     {
       worldPosition: _previewPosScratch,
       worldQuaternion: new THREE.Quaternion().setFromRotationMatrix(placement.trayObject.matrixWorld),
-      scale: seedStageScale,
+      scale: localScale,
+      decorUniformScale,
       balconyGrowTint: def?.balconyGrow?.stageTint ?? "#3d8b4a",
     },
     placement.valid,

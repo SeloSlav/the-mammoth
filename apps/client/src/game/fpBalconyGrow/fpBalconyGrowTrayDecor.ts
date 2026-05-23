@@ -22,7 +22,7 @@ import {
   mountBalconyGrowSeedVisual,
   probeGrowTraySoilLocalY,
   probeGrowTraySlotLocalOffsets,
-  readGrowTrayDecorUniformScale,
+  resolveBalconyGrowSeedVisualLocalScale,
 } from "./fpBalconyGrowStageVisual.js";
 import {
   mountGrowTrayCompostPebbles,
@@ -170,6 +170,7 @@ export async function mountGrowTrayDecorOnGroup(opts: {
   centerPick.userData.mammothGrowTrayUnitKey = unitKey;
   centerPick.userData.mammothGrowTrayRoot = decorGroup;
   centerPick.userData.mammothGrowTrayCenterPick = true;
+  decorGroup.userData.mammothGrowTrayCenterHubLocalRadius = centerPick.scale.x * 0.5;
   Object.assign(centerPick.userData, growTrayStashPickUserData(unitKey, trayId));
   centerPick.layers.set(FP_INTERACTION_PICK_LAYER);
   decorGroup.add(centerPick);
@@ -197,7 +198,7 @@ function fitGrowPlantInteractionPick(holder: THREE.Group, visual: THREE.Object3D
     typeof trayRoot?.userData.mammothGrowTraySlotPickWidth === "number"
       ? (trayRoot.userData.mammothGrowTraySlotPickWidth as number)
       : 0.22;
-  const maxPickXZ = slotPickWidth * 0.72;
+  const maxPickXZ = slotPickWidth * 0.5;
   plantPick.position.copy(_plantPickCenterScratch);
   plantPick.scale.set(
     Math.min(Math.max(0.16, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x), maxPickXZ),
@@ -250,6 +251,16 @@ function syncPlantPickForVisual(holder: THREE.Group, state: GrowSlotHolderState)
   fitGrowPlantInteractionPick(holder, state.visual, plantPick);
 }
 
+function setGrowSlotPickVisible(
+  trayRoot: THREE.Object3D,
+  trayId: string,
+  slot: number,
+  visible: boolean,
+): void {
+  const pick = trayRoot.getObjectByName(`grow_slot_pick:${trayId}:${slot}`);
+  if (pick) pick.visible = visible;
+}
+
 export function syncGrowSlotVisuals(
   slotVisualsGroup: THREE.Group,
   plants: readonly BalconyGrowPlant[],
@@ -282,6 +293,7 @@ export function syncGrowSlotVisuals(
     if (!plant || plant.phase === 0) {
       clearGrowStageVisual(holder, state);
       holder.visible = false;
+      if (trayRoot) setGrowSlotPickVisible(trayRoot, trayId, slot, true);
       continue;
     }
     const daysGrown = Number(plant.daysGrown);
@@ -294,15 +306,17 @@ export function syncGrowSlotVisuals(
     const tint = def?.balconyGrow?.stageTint ?? "#3d8b4a";
     const cropScale = def?.balconyGrow?.stageScale ?? 1;
     let stageScale = Math.max(balconyGrowStageVisualScale(stage, cropScale), minStageScale);
-    if (stage === "seed" && trayRoot) {
-      const decorScale = readGrowTrayDecorUniformScale(trayRoot);
-      stageScale = stageScale / Math.max(decorScale, 0.2);
+    if (stage === "seed") {
+      stageScale = resolveBalconyGrowSeedVisualLocalScale(trayRoot ?? slotVisualsGroup, cropScale)
+        .localScale;
     }
     const matureGlow = plant.phase === PHASE_MATURE;
     const visualKey = `${plant.cropDefId}:${stage}:${tint}:${stageScale.toFixed(4)}:${matureGlow ? 1 : 0}`;
     holder.visible = true;
+    if (trayRoot) setGrowSlotPickVisible(trayRoot, trayId, slot, false);
 
     if (state.visualKey === visualKey && state.visual) {
+      if (trayRoot) setGrowSlotPickVisible(trayRoot, trayId, slot, false);
       continue;
     }
 

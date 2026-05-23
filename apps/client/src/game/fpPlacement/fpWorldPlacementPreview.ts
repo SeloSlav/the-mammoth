@@ -5,6 +5,8 @@ export type FpPlacementPreviewTarget = {
   worldPosition: THREE.Vector3;
   worldQuaternion: THREE.Quaternion;
   scale?: number;
+  /** World uniform scale for tray-root decor — seed ghosts inherit this like planted slot holders. */
+  decorUniformScale?: number;
   /** Balcony grow seed placement — per-crop tint for the procedural seed ghost. */
   balconyGrowTint?: string;
 };

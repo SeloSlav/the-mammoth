@@ -68,7 +68,7 @@ export function createBalconyGrowSeedPreview(scene: THREE.Scene): FpWorldPlaceme
       anchor.visible = true;
       anchor.position.copy(target.worldPosition);
       anchor.quaternion.copy(target.worldQuaternion);
-      anchor.scale.setScalar(1);
+      anchor.scale.setScalar(target.decorUniformScale ?? 1);
 
       if (valid !== lastValid) {
         applyPlacementGhostMaterials(holder, valid);

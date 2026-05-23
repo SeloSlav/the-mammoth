@@ -335,6 +335,94 @@ pub(crate) fn try_grant_stack_to_player(
     Ok(())
 }
 
+/// Move backpack rows in inactive slot indices (legacy 24-slot era) into `0..NUM_PLAYER_INVENTORY_SLOTS`.
+pub(crate) fn compact_player_inventory_overflow_slots(ctx: &ReducerContext, owner: Identity) {
+    let table = ctx.db.inventory_item();
+    let overflow: Vec<InventoryItem> = table
+        .iter()
+        .filter(|row| {
+            matches!(
+                &row.location,
+                ItemLocation::Inventory(d)
+                    if d.owner_id == owner && d.slot_index >= NUM_PLAYER_INVENTORY_SLOTS
+            )
+        })
+        .collect();
+    if overflow.is_empty() {
+        return;
+    }
+
+    for row in overflow {
+        if let Err(e) = relocate_inventory_stack_into_active_slots(ctx, owner, row.instance_id) {
+            log::debug!(
+                "compact_player_inventory_overflow_slots: could not move instance {}: {e}",
+                row.instance_id
+            );
+        }
+    }
+}
+
+fn relocate_inventory_stack_into_active_slots(
+    ctx: &ReducerContext,
+    owner: Identity,
+    instance_id: u64,
+) -> Result<(), String> {
+    let table = ctx.db.inventory_item();
+    let row = table
+        .instance_id()
+        .find(instance_id)
+        .ok_or_else(|| "compact: row missing".to_string())?;
+    let ItemLocation::Inventory(data) = &row.location else {
+        return Err("compact: not an inventory row".to_string());
+    };
+    if data.owner_id != owner {
+        return Err("compact: wrong owner".to_string());
+    }
+    if data.slot_index < NUM_PLAYER_INVENTORY_SLOTS {
+        return Ok(());
+    }
+
+    let def_id = row.def_id.clone();
+    let mut quantity = row.quantity;
+    let max_stack = items_catalog::max_stack_for(&def_id).unwrap_or(1);
+
+    for slot in 0..NUM_PLAYER_INVENTORY_SLOTS {
+        if quantity == 0 {
+            break;
+        }
+        if let Some(existing) = find_item_in_inventory_slot(ctx, owner, slot) {
+            merge_grant_into_player_stack(ctx, &def_id, max_stack, &mut quantity, &existing)?;
+        }
+    }
+
+    if quantity == 0 {
+        let mut tmp = table
+            .instance_id()
+            .find(instance_id)
+            .ok_or_else(|| "compact: row missing after merge".to_string())?;
+        tmp.location = ItemLocation::Unknown;
+        table.instance_id().update(tmp);
+        table.instance_id().delete(instance_id);
+        return Ok(());
+    }
+
+    if let Some(slot) = first_empty_inventory_slot(ctx, owner) {
+        let mut moved = table
+            .instance_id()
+            .find(instance_id)
+            .ok_or_else(|| "compact: row missing before move".to_string())?;
+        moved.quantity = quantity;
+        moved.location = ItemLocation::Inventory(InventoryLocationData {
+            owner_id: owner,
+            slot_index: slot,
+        });
+        table.instance_id().update(moved);
+        return Ok(());
+    }
+
+    Err("inventory full".to_string())
+}
+
 /// Remove [`quantity`] from a stack in the caller's inventory/hotbar (deletes row if emptied).
 pub(crate) fn remove_player_item_quantity(
     ctx: &ReducerContext,

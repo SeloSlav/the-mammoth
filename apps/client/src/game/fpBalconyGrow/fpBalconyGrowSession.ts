@@ -91,7 +91,6 @@ export function mountFpBalconyGrowSession(opts: {
   let growStateCacheUnitKey: string | null = null;
   let growStateRevision = 0;
   let growStateCacheRevision = -1;
-  let inspectHeavyFrame = 0;
 
   const bumpGrowState = (): void => {
     growStateRevision += 1;
@@ -134,7 +133,6 @@ export function mountFpBalconyGrowSession(opts: {
       claimedUnitKey = unitKey ?? resolveClaimedUnitKey(opts.conn);
       const growState = readCachedGrowState(claimedUnitKey);
       cachedGrowTrayPrompt = null;
-      inspectHeavyFrame += 1;
 
       if (decor.getGrowTrayPickMeshes().length === 0) {
         cachedGrowTrayHits = _emptyHits;
@@ -177,21 +175,15 @@ export function mountFpBalconyGrowSession(opts: {
         growState,
       );
       syncBalconyGrowPlacementPreview(preview, cachedPlacement);
-      if (
-        cachedGrowTrayHits.length > 0 ||
-        cachedGrowTrayPrompt !== null ||
-        (inspectHeavyFrame & 1) === 0
-      ) {
-        syncBalconyGrowInspect(
-          cachedGrowTrayHits,
-          growState,
-          camera,
-          opts.canvas,
-          _aimPickScratch,
-          decor.getGrowTrayPickMeshes(),
-          cachedGrowTrayPrompt,
-        );
-      }
+      syncBalconyGrowInspect(
+        cachedGrowTrayHits,
+        growState,
+        camera,
+        opts.canvas,
+        _aimPickScratch,
+        decor.getGrowTrayPickMeshes(),
+        cachedGrowTrayPrompt,
+      );
       waterVisuals.sync(growState.patches, feet.y, Date.now() * 1000);
     },
     tryPrimaryPointerDown(camera, conn, decor, feet) {

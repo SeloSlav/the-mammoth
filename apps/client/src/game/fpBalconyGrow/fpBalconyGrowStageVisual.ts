@@ -5,6 +5,7 @@ import {
   BALCONY_GROW_SOIL_LOCAL_Y,
   balconyGrowSlotLocalPosition,
   balconyGrowSlotOffsetsFromHalfExtents,
+  balconyGrowStageVisualScale,
   type BalconyGrowSlotXZ,
   type BalconyGrowStage,
 } from "@the-mammoth/schemas";
@@ -63,6 +64,22 @@ export function probeGrowTraySlotLocalOffsets(decorGroup: THREE.Object3D): Balco
 export function readGrowTrayDecorUniformScale(trayRoot: THREE.Object3D): number {
   trayRoot.getWorldScale(_decorScaleScratch);
   return (_decorScaleScratch.x + _decorScaleScratch.y + _decorScaleScratch.z) / 3;
+}
+
+/** Tray-local seed stage scale — matches planted slot visuals (includes minStageScale ÷ decor scale). */
+export function resolveBalconyGrowSeedVisualLocalScale(
+  trayRoot: THREE.Object3D,
+  cropScale: number,
+): { localScale: number; decorUniformScale: number } {
+  const decorUniformScale = readGrowTrayDecorUniformScale(trayRoot);
+  let minStageScale = 0;
+  const cached = trayRoot.userData.mammothGrowTrayMinStageScale;
+  if (typeof cached === "number" && Number.isFinite(cached)) {
+    minStageScale = cached;
+  }
+  const stageScale = Math.max(balconyGrowStageVisualScale("seed", cropScale), minStageScale);
+  const localScale = stageScale / Math.max(decorUniformScale, 0.2);
+  return { localScale, decorUniformScale };
 }
 
 export function readGrowTraySoilLocalY(trayRoot: THREE.Object3D): number {

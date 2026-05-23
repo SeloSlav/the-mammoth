@@ -11,6 +11,8 @@ import {
 
 const PHASE_EMPTY = 0;
 const _soilAimScratch = new THREE.Vector3();
+const _localAimScratch = new THREE.Vector3();
+const _invTrayScratch = new THREE.Matrix4();
 
 /** Center-screen ray ∩ tray soil plane → nearest slot index. */
 export function resolveBalconyGrowSoilAimedSlotIndex(
@@ -29,6 +31,25 @@ export function resolveBalconyGrowSoilAimedSlotIndex(
     readGrowTraySlotLocalOffsets(trayRoot),
   );
   return snap?.slotIndex ?? null;
+}
+
+/** True when the center-screen soil hit lands in the tray hub (between quadrants). */
+export function isBalconyGrowTrayCenterSoilAim(
+  camera: THREE.PerspectiveCamera,
+  trayRoot: THREE.Object3D,
+): boolean {
+  trayRoot.updateMatrixWorld(true);
+  const soilY = readGrowTraySoilLocalY(trayRoot);
+  if (!balconyGrowTraySoilAimPoint(camera, trayRoot.matrixWorld, soilY, _soilAimScratch)) {
+    return false;
+  }
+  _invTrayScratch.copy(trayRoot.matrixWorld).invert();
+  _localAimScratch.copy(_soilAimScratch).applyMatrix4(_invTrayScratch);
+  const cached = trayRoot.userData.mammothGrowTrayCenterHubLocalRadius;
+  const hubRadius =
+    typeof cached === "number" && Number.isFinite(cached) && cached > 0 ? cached : 0.08;
+  const r2 = hubRadius * hubRadius;
+  return _localAimScratch.x * _localAimScratch.x + _localAimScratch.z * _localAimScratch.z <= r2;
 }
 
 export function balconyGrowLivePlantInSlot(

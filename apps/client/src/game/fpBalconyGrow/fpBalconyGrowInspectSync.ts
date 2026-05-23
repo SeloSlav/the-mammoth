@@ -6,6 +6,7 @@ import { publishBalconyGrowInspectScreenAnchor } from "./fpBalconyGrowInspectPre
 import type { BalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import {
   balconyGrowLivePlantInSlot,
+  isBalconyGrowTrayCenterSoilAim,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
 import { isBalconyGrowTrayCenterPick } from "./fpBalconyGrowTrayAnchor.js";
@@ -20,6 +21,31 @@ const _slotNdcScratch = new THREE.Vector3();
 const _uniqueTrayMeshesScratch: THREE.Mesh[] = [];
 
 const PROJECTED_SLOT_TARGET_RADIUS_PX = 130;
+
+function projectedSlotTargetRadiusPx(canvas: HTMLCanvasElement): number {
+  return Math.min(
+    PROJECTED_SLOT_TARGET_RADIUS_PX,
+    Math.max(64, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.18),
+  );
+}
+
+function slotNearScreenCenter(
+  slotWorld: THREE.Vector3,
+  camera: THREE.PerspectiveCamera,
+  canvas: HTMLCanvasElement,
+): boolean {
+  const radiusPx = projectedSlotTargetRadiusPx(canvas);
+  const radiusSq = radiusPx * radiusPx;
+  const centerX = canvas.clientWidth * 0.5;
+  const centerY = canvas.clientHeight * 0.5;
+  _slotNdcScratch.copy(slotWorld).project(camera);
+  if (_slotNdcScratch.z < -1 || _slotNdcScratch.z > 1) return false;
+  const x = (_slotNdcScratch.x * 0.5 + 0.5) * canvas.clientWidth;
+  const y = (-_slotNdcScratch.y * 0.5 + 0.5) * canvas.clientHeight;
+  const dx = x - centerX;
+  const dy = y - centerY;
+  return dx * dx + dy * dy <= radiusSq;
+}
 
 function publishInspectForPlantedSlot(
   unitKey: string,
@@ -145,6 +171,10 @@ function tryInspectFromSoilAimedTrays(
       trayRoot,
     );
 
+    if (!slotNearScreenCenter(_slotWorldScratch, camera, canvas)) {
+      continue;
+    }
+
     _toTrayScratch.subVectors(_slotWorldScratch, camera.position);
     const dist = _toTrayScratch.length();
     if (dist < 0.05) continue;
@@ -176,10 +206,7 @@ function tryInspectFromProjectedLiveSlots(
   canvas: HTMLCanvasElement,
   trayMeshes: readonly THREE.Mesh[],
 ): boolean {
-  const radiusPx = Math.min(
-    PROJECTED_SLOT_TARGET_RADIUS_PX,
-    Math.max(64, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.18),
-  );
+  const radiusPx = projectedSlotTargetRadiusPx(canvas);
   const radiusSq = radiusPx * radiusPx;
   const centerX = canvas.clientWidth * 0.5;
   const centerY = canvas.clientHeight * 0.5;
@@ -268,6 +295,16 @@ export function syncBalconyGrowInspect(
     }
   }
 
+  const trayMeshes = collectUniqueTrayMeshes(aimMeshes, trayPickMeshes);
+  for (const mesh of trayMeshes) {
+    const trayRoot = mesh.userData.mammothGrowTrayRoot as THREE.Object3D | undefined;
+    if (trayRoot && isBalconyGrowTrayCenterSoilAim(camera, trayRoot)) {
+      setBalconyGrowInspectTarget(null);
+      publishBalconyGrowInspectScreenAnchor(camera, canvas, null);
+      return;
+    }
+  }
+
   for (const hit of hits) {
     const resolved = resolveLivePlantSlotFromHit(hit, growState, camera);
     if (!resolved) continue;
@@ -282,9 +319,8 @@ export function syncBalconyGrowInspect(
     return;
   }
 
-  const trayMeshes = collectUniqueTrayMeshes(aimMeshes, trayPickMeshes);
-  if (tryInspectFromSoilAimedTrays(camera, growState, canvas, trayMeshes)) return;
   if (tryInspectFromProjectedLiveSlots(camera, growState, canvas, trayMeshes)) return;
+  if (tryInspectFromSoilAimedTrays(camera, growState, canvas, trayMeshes)) return;
 
   setBalconyGrowInspectTarget(null);
   publishBalconyGrowInspectScreenAnchor(camera, canvas, null);

@@ -114,9 +114,9 @@ export function fitBalconyGrowTrayCenterInteractionPick(
   pick: THREE.Mesh,
   size: BalconyGrowSlotPickSize,
 ): void {
-  const hub = Math.max(0.14, size.width * 0.72);
+  const hub = Math.max(0.16, size.width * 0.92);
   pick.position.set(0, size.height * 0.42, 0);
-  pick.scale.set(hub, size.height * 0.88, hub);
+  pick.scale.set(hub, size.height * 0.92, hub);
 }
 
 /** Extra world-space margin on fish-tank reticle picks beyond visual glass. */

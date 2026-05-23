@@ -1,10 +1,10 @@
 //! Reusable water bottles (partial sips) and apartment water-tank reservoir.
 //!
 //! Bottles store fill in `water_bottle_fill`; the inventory row is never deleted when empty.
-//! Tank level passively refills over time in `apartment_water_tank_tick_step`.
+//! The apartment tank refills to full when the owner sleeps (`refill_apartment_water_tank_on_sleep`).
 
 use log;
-use spacetimedb::{ReducerContext, ScheduleAt, Table, TimeDuration};
+use spacetimedb::{ReducerContext, ScheduleAt, Table};
 
 use crate::auth;
 use crate::inventory::{find_item_in_stash_slot, inventory_item, InventoryItem};
@@ -23,9 +23,6 @@ pub(crate) const DEFAULT_BOTTLE_HYDRATION_PER_L: f32 = 32.0;
 pub(crate) const APARTMENT_WATER_TANK_CAPACITY_L: f32 = 20.0;
 /// Starting tank volume for a newly seeded apartment tank row.
 pub(crate) const APARTMENT_WATER_TANK_START_L: f32 = 10.0;
-/// Passive refill rate (liters / second) while below capacity.
-const APARTMENT_WATER_TANK_FILL_RATE_L_PER_SEC: f32 = 0.04;
-const TANK_TICK_INTERVAL_MICROS: i64 = 5_000_000;
 
 #[spacetimedb::table(public, accessor = water_bottle_fill)]
 pub struct WaterBottleFill {
@@ -162,32 +159,18 @@ pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, unit_key
     ensure_apartment_water_tank_row(ctx, unit_key);
 }
 
-pub(crate) fn start_apartment_water_tank_schedule(ctx: &ReducerContext) {
-    if ctx
-        .db
-        .apartment_water_tank_schedule()
-        .iter()
-        .next()
-        .is_some()
-    {
+/// Refill the claimed apartment tank to capacity after a slept night.
+pub(crate) fn refill_apartment_water_tank_on_sleep(ctx: &ReducerContext, unit_key: &str) {
+    ensure_apartment_water_tank_row(ctx, unit_key);
+    let table = ctx.db.apartment_water_tank();
+    let Some(mut row) = table.unit_key().find(&unit_key.to_string()) else {
+        return;
+    };
+    if (row.water_liters - APARTMENT_WATER_TANK_CAPACITY_L).abs() < 0.0001 {
         return;
     }
-    let interval = TimeDuration::from_micros(TANK_TICK_INTERVAL_MICROS);
-    let _ = ctx
-        .db
-        .apartment_water_tank_schedule()
-        .insert(ApartmentWaterTankSchedule {
-            scheduled_id: 0,
-            scheduled_at: interval.into(),
-        });
-}
-
-pub(crate) fn tick_apartment_water_tanks_once(dt_secs: f32, current_liters: f32) -> f32 {
-    if current_liters >= APARTMENT_WATER_TANK_CAPACITY_L {
-        return current_liters;
-    }
-    let add = APARTMENT_WATER_TANK_FILL_RATE_L_PER_SEC * dt_secs;
-    (current_liters + add).min(APARTMENT_WATER_TANK_CAPACITY_L)
+    row.water_liters = APARTMENT_WATER_TANK_CAPACITY_L;
+    table.unit_key().update(row);
 }
 
 /// Hotbar left-click / instant-use path for reusable water bottles.
@@ -283,7 +266,7 @@ pub(crate) fn fill_bottle_in_water_tank_stash(
         .find(&unit_key)
         .ok_or_else(|| "water tank unavailable".to_string())?;
     if tank.water_liters <= 0.0001 {
-        return Err("water tank is empty — wait for it to refill".to_string());
+        return Err("water tank is empty — sleep in your bed to refill it".to_string());
     }
 
     let xfer = needed.min(tank.water_liters);
@@ -311,34 +294,16 @@ pub fn apartment_water_tank_tick_step(ctx: &ReducerContext, _arg: ApartmentWater
     if ctx.sender() != ctx.identity() {
         return;
     }
-    let dt_secs = TANK_TICK_INTERVAL_MICROS as f32 / 1_000_000.0;
-    let table = ctx.db.apartment_water_tank();
-    let rows: Vec<ApartmentWaterTank> = table.iter().collect();
-    for mut row in rows {
-        let next = tick_apartment_water_tanks_once(dt_secs, row.water_liters);
-        if (next - row.water_liters).abs() < 0.0001 {
-            continue;
-        }
-        row.water_liters = next;
-        table.unit_key().update(row);
-    }
+    // Legacy scheduled reducer — passive realtime refill removed; sleep refills the tank instead.
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        tick_apartment_water_tanks_once, APARTMENT_WATER_TANK_CAPACITY_L,
-        APARTMENT_WATER_TANK_FILL_RATE_L_PER_SEC,
-    };
+    use super::{APARTMENT_WATER_TANK_CAPACITY_L, APARTMENT_WATER_TANK_START_L};
 
     #[test]
-    fn tank_passive_fill_clamps_at_capacity() {
-        let dt = 5.0;
-        let add = APARTMENT_WATER_TANK_FILL_RATE_L_PER_SEC * dt;
-        assert!((tick_apartment_water_tanks_once(dt, 0.0) - add).abs() < 0.0001);
-        assert_eq!(
-            tick_apartment_water_tanks_once(dt, APARTMENT_WATER_TANK_CAPACITY_L),
-            APARTMENT_WATER_TANK_CAPACITY_L
-        );
+    fn tank_starts_partial_and_sleep_refills_to_capacity() {
+        assert!(APARTMENT_WATER_TANK_START_L < APARTMENT_WATER_TANK_CAPACITY_L);
+        assert_eq!(APARTMENT_WATER_TANK_CAPACITY_L, 20.0);
     }
 }

@@ -1,5 +1,8 @@
 /**
- * One-shots for slot drag in {@link MammothDraggableItem} (inventory / hotbar / stash).
+ * Inventory / stash slot UI one-shots.
+ *
+ * - Pick: drag threshold ({@link MammothDraggableItem}) and click-withdraw from stash.
+ * - Drop: successful drag onto a slot ({@link evaluateInventoryDrop}) and click-deposit into stash.
  *
  * Assets: `apps/client/public/audio/ui/inventory-item-pick.wav`,
  * `apps/client/public/audio/ui/inventory-item-drop.wav`.

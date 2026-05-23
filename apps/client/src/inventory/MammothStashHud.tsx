@@ -24,7 +24,10 @@ import type {
 import { destPlayerCarrySlotForQuickTransfer, type MammothPlayerCarrySlot } from "./inventoryQuickTransfer";
 import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inventoryDragDropHelpers";
 import { beginInventoryDrag, endInventoryDrag } from "./inventoryDragSession";
-import { playInventoryItemDragDropSound } from "./inventoryDragUiSound";
+import {
+  playInventoryItemDragDropSound,
+  playInventoryItemDragPickSound,
+} from "./inventoryDragUiSound";
 import { useInventoryDragHoverSlot } from "./useInventoryDragHoverSlot";
 import {
   inventorySlotGridsMatch,
@@ -106,6 +109,7 @@ function renderStashSlot(
           sourceSlot={slotInfo}
           onDragStart={opts.handleDragStart}
           onDrop={opts.handleDrop}
+          onActivate={() => opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
           onItemContextMenu={() => opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
           slotHover={{
             onEnter: (e) => opts.openItemTooltipForSlot(slotInfo, pop, e),
@@ -270,7 +274,9 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
         { type: "stash", index: fromStashIndex },
         dest,
       );
-      if (predicted) setOptimisticSlots(predicted);
+      if (!predicted) return;
+      playInventoryItemDragPickSound();
+      setOptimisticSlots(predicted);
       try {
         if (dest.type === "hotbar") {
           void conn.reducers.stashPullItemToHotbarSlot({

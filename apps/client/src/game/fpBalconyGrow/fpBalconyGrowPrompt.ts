@@ -15,6 +15,7 @@ import { apartmentStashLabel, APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartm
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import {
   balconyGrowLivePlantInSlot,
+  isBalconyGrowTrayCenterSoilAim,
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
 import { clientFeetNearGrowTray, isBalconyGrowTrayCenterPick } from "./fpBalconyGrowTrayAnchor.js";
@@ -150,6 +151,9 @@ export function getBalconyGrowTrayPromptFromHit(
   }
 
   if (trayRoot) {
+    if (isBalconyGrowTrayCenterSoilAim(camera, trayRoot)) {
+      return growTrayStashPrompt(conn, identity, feet, unitKey, trayId, trayRoot);
+    }
     const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
     if (aimedSlot !== null) {
       const harvest = matureHarvestPromptForSlot(
@@ -267,10 +271,19 @@ export function balconyGrowTrayAimFallbackPrompt(
       trayRoot,
     );
     if (harvest) return harvest;
+    if (
+      trayRoot &&
+      isBalconyGrowTrayCenterSoilAim(camera, trayRoot)
+    ) {
+      return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, trayRoot);
+    }
     if (balconyGrowLivePlantInSlot(growState, bestTrayId, bestSlotIndex)) {
       return null;
     }
   } else if (trayRoot) {
+    if (isBalconyGrowTrayCenterSoilAim(camera, trayRoot)) {
+      return growTrayStashPrompt(conn, identity, feet, bestUnitKey, bestTrayId, trayRoot);
+    }
     const aimedSlot = resolveBalconyGrowSoilAimedSlotIndex(camera, trayRoot);
     if (aimedSlot !== null) {
       const harvest = matureHarvestPromptForSlot(
