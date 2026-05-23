@@ -81,6 +81,9 @@ import {
 } from "../myApartment/editorMyApartmentMeshes.js";
 import { applyMyApartmentDecorNeighborSnap } from "../myApartment/editorMyApartmentDecorSnap.js";
 import {
+  bakeMyApartmentGroupManipScaleIntoDecorChildren,
+} from "../myApartment/editorMyApartmentDecorScale.js";
+import {
   captureWallScalePinnedSpanFromGesture,
   parseTransformControlsWorldScaleAxis,
   type WallScalePinnedSpan,
@@ -357,19 +360,47 @@ export async function mountEditorScene(
 
   /** Decor root scale at pointer-down — axis handles pin untouched axes (Y-only stretch, etc.). */
   const decorScaleGestureStartByUuid = new Map<string, THREE.Vector3>();
+  /** Saved-group manip scale at pointer-down — baked into decor children on mouseUp. */
+  let groupManipScaleGestureStart: THREE.Vector3 | null = null;
 
   function primeDecorScaleGestureStarts(attached: THREE.Object3D): void {
     decorScaleGestureStartByUuid.clear();
-    if (attached.userData.mammothEditorMyApartmentDecorId) {
-      decorScaleGestureStartByUuid.set(attached.uuid, attached.scale.clone());
+    groupManipScaleGestureStart = null;
+    if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+      groupManipScaleGestureStart = attached.scale.clone();
+      for (const child of attached.children) {
+        if (!(child instanceof THREE.Group)) continue;
+        if (!child.userData.mammothEditorMyApartmentDecorId) continue;
+        decorScaleGestureStartByUuid.set(child.uuid, child.scale.clone());
+      }
       return;
     }
-    if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] !== true) return;
-    for (const child of attached.children) {
-      if (!(child instanceof THREE.Group)) continue;
-      if (!child.userData.mammothEditorMyApartmentDecorId) continue;
-      decorScaleGestureStartByUuid.set(child.uuid, child.scale.clone());
+    if (attached.userData.mammothEditorMyApartmentDecorId) {
+      decorScaleGestureStartByUuid.set(attached.uuid, attached.scale.clone());
     }
+  }
+
+  function groupManipScaleGesturePin(): MyApartmentDecorScaleGesturePin | null {
+    if (!groupManipScaleGestureStart) return null;
+    return { startScale: groupManipScaleGestureStart };
+  }
+
+  function bakeGroupManipScaleIntoDecorChildrenIfNeeded(
+    attached: THREE.Object3D | undefined,
+  ): void {
+    if (
+      !attached ||
+      attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] !== true ||
+      !groupManipScaleGestureStart
+    ) {
+      return;
+    }
+    bakeMyApartmentGroupManipScaleIntoDecorChildren(
+      attached,
+      groupManipScaleGestureStart,
+      decorScaleGestureStartByUuid,
+    );
+    groupManipScaleGestureStart = null;
   }
 
   function decorScaleGesturePinFor(
@@ -929,6 +960,7 @@ export async function mountEditorScene(
     commitEditorAttachedTransform({
       getProgrammaticTransformControlsDepth: () =>
         programmaticTransformControlsDepth,
+      getLevelEditorTransformGesture: () => levelEditorTransformGesture,
       transformControls,
       contentRoot,
     });
@@ -1019,10 +1051,13 @@ export async function mountEditorScene(
     if (isFpMode(useEditorStore.getState().mode)) return;
     levelEditorTransformGesture = false;
     levelEditorAnchoredScaleGesture = null;
+    const attached = transformControls.object as THREE.Object3D | undefined;
+    bakeGroupManipScaleIntoDecorChildrenIfNeeded(attached);
     /** No `objectChange` if the pointer never moved; still persist rest pose. */
     commitLevelEditorAttachedTransformToStore();
     wallSlabScaleGesture = null;
     decorScaleGestureStartByUuid.clear();
+    groupManipScaleGestureStart = null;
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
@@ -1079,6 +1114,14 @@ export async function mountEditorScene(
         /** Persist on mouseUp only — store sync rebuilds the proxy mesh mid-drag. */
         return;
       } else if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
+        if (aptSt.transformMode === "scale") {
+          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
+            transformMode: aptSt.transformMode,
+            axis: (transformControls as unknown as { axis?: string | null }).axis,
+            dragging: transformControls.dragging,
+            gesturePin: groupManipScaleGesturePin(),
+          });
+        }
         for (const child of [...aptObj.children]) {
           if (!(child instanceof THREE.Group)) continue;
           if (

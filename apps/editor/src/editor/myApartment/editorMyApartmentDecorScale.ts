@@ -27,6 +27,50 @@ export function isMyApartmentDecorUniformScaleAxis(axis: string | null | undefin
   return axis === "XYZ" || axis === "E" || axis === "XYZE";
 }
 
+/** Plane squares — proportional scale on the active plane (XY / YZ / XZ). */
+export function isMyApartmentDecorPlaneScaleAxis(axis: string | null | undefined): boolean {
+  if (!axis) return false;
+  return axis === "XY" || axis === "YZ" || axis === "XZ";
+}
+
+/** Average scale factor across the active plane axes relative to gesture start. */
+export function myApartmentDecorPlaneUniformScaleFactorFromGizmo(
+  root: THREE.Object3D,
+  axis: string,
+  startScale: THREE.Vector3,
+): number {
+  const ratios: number[] = [];
+  if (axis.includes("X")) ratios.push(root.scale.x / startScale.x);
+  if (axis.includes("Y")) ratios.push(root.scale.y / startScale.y);
+  if (axis.includes("Z")) ratios.push(root.scale.z / startScale.z);
+  if (ratios.length === 0) return 1;
+  return ratios.reduce((sum, ratio) => sum + ratio, 0) / ratios.length;
+}
+
+/** Collapse plane-square drags to uniform scale on the active plane; pin the third axis. */
+export function applyMyApartmentDecorPlaneUniformScale(
+  root: THREE.Object3D,
+  axis: string,
+  startScale: THREE.Vector3,
+): void {
+  const factor = myApartmentDecorPlaneUniformScaleFactorFromGizmo(root, axis, startScale);
+  if (axis.includes("X")) {
+    root.scale.x = clampOwnedApartmentDecorUniformScale(startScale.x * factor);
+  } else {
+    root.scale.x = startScale.x;
+  }
+  if (axis.includes("Y")) {
+    root.scale.y = clampOwnedApartmentDecorUniformScale(startScale.y * factor);
+  } else {
+    root.scale.y = startScale.y;
+  }
+  if (axis.includes("Z")) {
+    root.scale.z = clampOwnedApartmentDecorUniformScale(startScale.z * factor);
+  } else {
+    root.scale.z = startScale.z;
+  }
+}
+
 /** Sample a uniform scale factor from the center-cube gizmo drag. */
 export function myApartmentDecorUniformScaleSampleFromGizmo(
   root: THREE.Object3D,
@@ -82,6 +126,10 @@ export function constrainMyApartmentDecorScaleFromGizmo(
   }
   const pin = opts.gesturePin;
   if (pin && opts.dragging && opts.axis) {
+    if (isMyApartmentDecorPlaneScaleAxis(opts.axis)) {
+      applyMyApartmentDecorPlaneUniformScale(root, opts.axis, pin.startScale);
+      return;
+    }
     if (opts.axis.indexOf("X") === -1) root.scale.x = pin.startScale.x;
     if (opts.axis.indexOf("Y") === -1) root.scale.y = pin.startScale.y;
     if (opts.axis.indexOf("Z") === -1) root.scale.z = pin.startScale.z;
@@ -96,4 +144,30 @@ export function readMyApartmentDecorCommittedScale(
   root: THREE.Object3D,
 ): OwnedApartmentDecorRootScaleFields {
   return ownedApartmentDecorRootScaleFromComponents(root.scale);
+}
+
+/**
+ * Saved-group manipulators scale a transient parent; bake that delta into each decor
+ * child's local scale so commits read the stretched dimensions.
+ */
+export function bakeMyApartmentGroupManipScaleIntoDecorChildren(
+  manip: THREE.Object3D,
+  manipStartScale: THREE.Vector3,
+  decorStartScalesByUuid: ReadonlyMap<string, THREE.Vector3>,
+): void {
+  const sx = manip.scale.x / Math.max(Math.abs(manipStartScale.x), 1e-9);
+  const sy = manip.scale.y / Math.max(Math.abs(manipStartScale.y), 1e-9);
+  const sz = manip.scale.z / Math.max(Math.abs(manipStartScale.z), 1e-9);
+  for (const child of manip.children) {
+    if (!(child instanceof THREE.Group)) continue;
+    if (!child.userData.mammothEditorMyApartmentDecorId) continue;
+    const start = decorStartScalesByUuid.get(child.uuid);
+    if (!start) continue;
+    child.scale.set(
+      clampOwnedApartmentDecorUniformScale(start.x * sx),
+      clampOwnedApartmentDecorUniformScale(start.y * sy),
+      clampOwnedApartmentDecorUniformScale(start.z * sz),
+    );
+  }
+  manip.scale.copy(manipStartScale);
 }

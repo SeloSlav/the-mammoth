@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyMyApartmentDecorUniformScale,
   constrainMyApartmentDecorScaleFromGizmo,
+  isMyApartmentDecorPlaneScaleAxis,
   isMyApartmentDecorUniformScaleAxis,
   readMyApartmentDecorCommittedScale,
 } from "./editorMyApartmentDecorScale.js";
@@ -35,18 +36,23 @@ describe("editorMyApartmentDecorScale", () => {
     expect(root.scale.z).toBeCloseTo(2, 4);
   });
 
-  it("keeps plane-square drags on their active axes only", () => {
+  it("collapses plane-square drags to proportional scale on the active plane", () => {
+    expect(isMyApartmentDecorPlaneScaleAxis("XY")).toBe(true);
+    expect(isMyApartmentDecorPlaneScaleAxis("YZ")).toBe(true);
+    expect(isMyApartmentDecorPlaneScaleAxis("XZ")).toBe(true);
+    expect(isMyApartmentDecorPlaneScaleAxis("X")).toBe(false);
+
     const root = new THREE.Object3D();
     const pin = { startScale: new THREE.Vector3(1, 1, 1.5) };
-    root.scale.set(2, 2, 1.5);
+    root.scale.set(2, 1.25, 1.5);
     constrainMyApartmentDecorScaleFromGizmo(root, {
       transformMode: "scale",
       axis: "XY",
       dragging: true,
       gesturePin: pin,
     });
-    expect(root.scale.x).toBeCloseTo(2, 4);
-    expect(root.scale.y).toBeCloseTo(2, 4);
+    expect(root.scale.x).toBeCloseTo(1.625, 4);
+    expect(root.scale.y).toBeCloseTo(1.625, 4);
     expect(root.scale.z).toBeCloseTo(1.5, 4);
   });
 

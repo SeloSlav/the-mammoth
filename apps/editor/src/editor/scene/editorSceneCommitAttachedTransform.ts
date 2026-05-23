@@ -196,12 +196,18 @@ export function persistAllMyApartmentWallPlacementsFromScene(): boolean {
 function deferMyApartmentLayoutStorePersistWhileDragging(
   store: { mode: string },
   transformControls: TransformControls,
+  getLevelEditorTransformGesture: () => boolean,
 ): boolean {
-  return store.mode === "my_apartment_layout" && transformControls.dragging === true;
+  return (
+    store.mode === "my_apartment_layout" &&
+    transformControls.dragging === true &&
+    getLevelEditorTransformGesture()
+  );
 }
 
 export function commitEditorAttachedTransform(opts: {
   getProgrammaticTransformControlsDepth: () => number;
+  getLevelEditorTransformGesture: () => boolean;
   transformControls: TransformControls;
   contentRoot: THREE.Group;
 }): void {
@@ -519,7 +525,11 @@ export function commitEditorAttachedTransform(opts: {
           });
           if (
             !(
-              deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls) &&
+              deferMyApartmentLayoutStorePersistWhileDragging(
+                store,
+                opts.transformControls,
+                opts.getLevelEditorTransformGesture,
+              ) &&
               store.transformMode === "scale"
             )
           ) {
@@ -593,6 +603,7 @@ export function commitEditorAttachedTransform(opts: {
       const deferPersist = deferMyApartmentLayoutStorePersistWhileDragging(
         store,
         opts.transformControls,
+        opts.getLevelEditorTransformGesture,
       );
       if (
         !deferPersist &&
@@ -723,7 +734,11 @@ export function commitEditorAttachedTransform(opts: {
       );
       const scaleFields = readMyApartmentDecorCommittedScale(targetRoot);
       if (
-        !deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
+        !deferMyApartmentLayoutStorePersistWhileDragging(
+                store,
+                opts.transformControls,
+                opts.getLevelEditorTransformGesture,
+              )
       ) {
         store.patchOwnedApartmentBuiltins((d) => ({
           ...d,
@@ -745,7 +760,11 @@ export function commitEditorAttachedTransform(opts: {
       }
       if (
         !(
-          deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls) &&
+          deferMyApartmentLayoutStorePersistWhileDragging(
+                store,
+                opts.transformControls,
+                opts.getLevelEditorTransformGesture,
+              ) &&
           store.transformMode === "scale"
         )
       ) {
@@ -793,7 +812,11 @@ export function commitEditorAttachedTransform(opts: {
       const sizeX = Math.abs(mesh.scale.x * targetRoot.scale.x);
       const sizeY = Math.abs(mesh.scale.y * targetRoot.scale.y);
       if (
-        !deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
+        !deferMyApartmentLayoutStorePersistWhileDragging(
+                store,
+                opts.transformControls,
+                opts.getLevelEditorTransformGesture,
+              )
       ) {
         store.patchOwnedApartmentBuiltins((d) => ({
           ...d,
@@ -819,7 +842,11 @@ export function commitEditorAttachedTransform(opts: {
 
     if (wallId) {
       if (
-        deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
+        deferMyApartmentLayoutStorePersistWhileDragging(
+                store,
+                opts.transformControls,
+                opts.getLevelEditorTransformGesture,
+              )
       ) {
         return;
       }
