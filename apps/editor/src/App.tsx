@@ -3,7 +3,7 @@ import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.j
 import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
 import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
-import { EditorSelectionStatsOverlay } from "./ui/EditorSelectionStatsOverlay.js";
+import { EditorViewportStatsStack } from "./ui/EditorViewportStatsStack.js";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -108,7 +108,7 @@ export default function App() {
       {ready ? (
         <>
           <EditorApartmentLayoutLoadingOverlay />
-          <EditorSelectionStatsOverlay />
+          <EditorViewportStatsStack />
           <EditorChrome />
         </>
       ) : null}

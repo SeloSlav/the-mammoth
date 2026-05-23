@@ -53,6 +53,7 @@ import StashPushItemToSlotReducer from "../stash_push_item_to_slot_reducer";
 import SubmitFirearmShotReducer from "../submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "../submit_player_locomotion_snapshot_reducer";
+import SyncOwnedApartmentStashDecorReducer from "../sync_owned_apartment_stash_decor_reducer";
 import TickCraftQueueStepReducer from "../tick_craft_queue_step_reducer";
 import UpdateApartmentUnitDecorReducer from "../update_apartment_unit_decor_reducer";
 
@@ -103,6 +104,7 @@ export type StashPushItemToSlotParams = __Infer<typeof StashPushItemToSlotReduce
 export type SubmitFirearmShotParams = __Infer<typeof SubmitFirearmShotReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
 export type SubmitPlayerLocomotionSnapshotParams = __Infer<typeof SubmitPlayerLocomotionSnapshotReducer>;
+export type SyncOwnedApartmentStashDecorParams = __Infer<typeof SyncOwnedApartmentStashDecorReducer>;
 export type TickCraftQueueStepParams = __Infer<typeof TickCraftQueueStepReducer>;
 export type UpdateApartmentUnitDecorParams = __Infer<typeof UpdateApartmentUnitDecorReducer>;
 

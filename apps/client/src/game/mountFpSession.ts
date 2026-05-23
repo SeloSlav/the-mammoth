@@ -1441,10 +1441,14 @@ export async function mountFpSession(
         ? getApartmentSystemPrompt(conn, feet, {
             ...(lookedAtStash?.stashKey != null ? { lookedAtStashKey: lookedAtStash.stashKey } : {}),
             lookedAtWardrobeUnitKey,
-            stashLos: {
-              camera,
-              stashRayOcclusion: fpApartmentDecorMeshes.getStashRayOcclusion(),
-            },
+            ...(lookedAtStash?.stashKey == null
+              ? {
+                  stashLos: {
+                    camera,
+                    stashRayOcclusion: fpApartmentDecorMeshes.getStashRayOcclusion(),
+                  },
+                }
+              : {}),
           })
         : null;
       /** Wardrobe/stash HUD must win overlaps with hoistway/corridor elevator volumes (parity with RAF). */
@@ -1475,11 +1479,6 @@ export async function mountFpSession(
         return;
       }
 
-      if (growPrompt?.kind === "balcony_grow_tray" && handleBalconyGrowKeyE(conn, growPrompt)) {
-        if (document.pointerLockElement) void document.exitPointerLock();
-        return;
-      }
-
       if (
         aptKey?.kind === "apartment_stash" &&
         !(
@@ -1493,6 +1492,11 @@ export async function mountFpSession(
           stashKind: aptKey.stashKind,
         });
         requestMammothInventoryOpenFromFp();
+        if (document.pointerLockElement) void document.exitPointerLock();
+        return;
+      }
+
+      if (growPrompt?.kind === "balcony_grow_tray" && handleBalconyGrowKeyE(conn, growPrompt)) {
         if (document.pointerLockElement) void document.exitPointerLock();
         return;
       }

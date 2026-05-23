@@ -26,6 +26,7 @@ import {
   playerOwnsDoorLock,
   playerOwnsScrewdriver,
 } from "../fpApartment/fpApartmentGameplay.js";
+import { requestOwnedApartmentStashDecorSync } from "../fpApartment/fpApartmentStashDecorSync.js";
 import {
   computeOptimisticClaimProgressSecs,
   type ApartmentClaimHoldSmooth,
@@ -807,14 +808,19 @@ export function createFpSessionMainRafFrame(
         aptSysCoarseFx = cfx;
         aptSysCoarseFy = cfy;
         aptSysCoarseFz = cfz;
+        requestOwnedApartmentStashDecorSync(deps.conn);
         cachedAptSys = getApartmentSystemPrompt(deps.conn, ft, {
           apartmentClaimsAllowed: deps.apartmentClaimsAllowed,
           ...(stashUk !== null ? { lookedAtStashKey: stashUk } : {}),
           lookedAtWardrobeUnitKey,
-          stashLos: {
-            camera: deps.camera,
-            stashRayOcclusion: deps.fpApartmentDecorMeshes.getStashRayOcclusion(),
-          },
+          ...(stashUk === null
+            ? {
+                stashLos: {
+                  camera: deps.camera,
+                  stashRayOcclusion: deps.fpApartmentDecorMeshes.getStashRayOcclusion(),
+                },
+              }
+            : {}),
         });
       }
       const aSys = cachedAptSys;
@@ -873,6 +879,20 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (
+        aSys?.kind === "apartment_stash" &&
+        !(
+          aSys.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
+          balconyGrowInspectBlocksGrowTrayStash()
+        )
+      ) {
+        setFpPickupPrompt({
+          kind: "apartment_stash",
+          stashKey: aSys.stashKey,
+          unitKey: aSys.unitKey,
+          stashLabel: aSys.stashLabel,
+          willClose: activeStash?.stashKey === aSys.stashKey,
+        });
+      } else if (
         cachedBalconyGrowPrompt?.kind === "balcony_grow_tray" ||
         (!balconyGrowInspectBlocksGrowTrayStash() &&
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY)
@@ -890,20 +910,6 @@ export function createFpSessionMainRafFrame(
               ? lookedAtStash.stashLabel
               : cachedBalconyGrowPrompt!.stashLabel,
           willClose: activeStash?.stashKey === growStash.stashKey,
-        });
-      } else if (
-        aSys?.kind === "apartment_stash" &&
-        !(
-          aSys.stashKind === APARTMENT_STASH_KIND_GROW_TRAY &&
-          balconyGrowInspectBlocksGrowTrayStash()
-        )
-      ) {
-        setFpPickupPrompt({
-          kind: "apartment_stash",
-          stashKey: aSys.stashKey,
-          unitKey: aSys.unitKey,
-          stashLabel: aSys.stashLabel,
-          willClose: activeStash?.stashKey === aSys.stashKey,
         });
       } else if (cachedNotebookPromptHud) {
         setFpPickupPrompt({

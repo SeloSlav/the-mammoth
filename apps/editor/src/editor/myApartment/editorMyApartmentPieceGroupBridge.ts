@@ -44,6 +44,9 @@ export function requestEditorFillWallOpening(wallId: string): void {
 /** `editor_my_apartment_furniture` root — not the transient saved-group manipulator. */
 let apartmentFurnitureMountRoot: THREE.Group | null = null;
 
+/** Full preview unit root (shell + mounted décor/walls/mirrors) for viewport stats. */
+let apartmentUnitStatsRoot: THREE.Object3D | null = null;
+
 /** Walk ancestors until the named furniture mount root (ignores saved-group manip parents). */
 export function resolveEditorMyApartmentFurnitureMountRootFromObject(
   from: THREE.Object3D | null | undefined,
@@ -116,6 +119,14 @@ export function getEditorMyApartmentFurnitureMountRoot(): THREE.Group | null {
   }
   refreshApartmentFurnitureMountRootFromGroups();
   return apartmentFurnitureMountRoot;
+}
+
+export function registerEditorMyApartmentUnitStatsRoot(root: THREE.Object3D | null): void {
+  apartmentUnitStatsRoot = root;
+}
+
+export function getEditorMyApartmentUnitStatsRoot(): THREE.Object3D | null {
+  return apartmentUnitStatsRoot;
 }
 
 export function registerEditorMyApartmentDecorShadowResync(

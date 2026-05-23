@@ -79,6 +79,7 @@ import StashPushItemToSlotReducer from "./stash_push_item_to_slot_reducer";
 import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
+import SyncOwnedApartmentStashDecorReducer from "./sync_owned_apartment_stash_decor_reducer";
 import TickCraftQueueStepReducer from "./tick_craft_queue_step_reducer";
 import UpdateApartmentUnitDecorReducer from "./update_apartment_unit_decor_reducer";
 
@@ -583,6 +584,7 @@ const reducersSchema = __reducers(
   __reducerSchema("submit_firearm_shot", SubmitFirearmShotReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),
+  __reducerSchema("sync_owned_apartment_stash_decor", SyncOwnedApartmentStashDecorReducer),
   __reducerSchema("tick_craft_queue_step", TickCraftQueueStepReducer),
   __reducerSchema("update_apartment_unit_decor", UpdateApartmentUnitDecorReducer),
 );

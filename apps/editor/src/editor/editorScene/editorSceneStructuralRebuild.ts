@@ -8,6 +8,7 @@ import { buildEditorStructuralRoot } from "../content/editorBuildingContentMount
 import { syncEditorTransformsFromStore } from "./editorSceneSyncTransformsFromStore.js";
 import { isFpMode } from "./editorStoreModeGuards.js";
 import type { EditorStoreSnapshot } from "./editorStoreModeGuards.js";
+import { registerEditorMyApartmentUnitStatsRoot } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 
 export type EditorStructuralState = {
   buildingRoot: THREE.Group | null;
@@ -36,6 +37,7 @@ export function rebuildEditorStructuralIfNeeded(
     deps.contentRoot.remove(state.buildingRoot);
     disposeSubtreeGpuAssets(state.buildingRoot);
     state.buildingRoot = null;
+    registerEditorMyApartmentUnitStatsRoot(null);
   }
 
   state.buildingRoot = buildEditorStructuralRoot({
@@ -62,6 +64,9 @@ export function rebuildEditorStructuralIfNeeded(
   });
 
   deps.contentRoot.add(state.buildingRoot);
+  registerEditorMyApartmentUnitStatsRoot(
+    s.mode === "my_apartment_layout" ? state.buildingRoot : null,
+  );
   syncEditorTransformsFromStore(state.buildingRoot, s);
   deps.syncTransformAttachment();
   if (state.shouldFrameAfterRebuild) {
@@ -88,6 +93,7 @@ export function disposeEditorStructuralRoot(
   contentRoot.remove(state.buildingRoot);
   disposeSubtreeGpuAssets(state.buildingRoot);
   state.buildingRoot = null;
+  registerEditorMyApartmentUnitStatsRoot(null);
 }
 
 export function syncEditorPlacementTransformsFromStore(

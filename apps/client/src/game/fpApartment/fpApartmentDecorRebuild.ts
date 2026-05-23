@@ -35,13 +35,17 @@ import {
   tagResidentialUnitInteriorMeshesUnder,
 } from "./fpResidentialUnitInteriorLayer.js";
 import type { ApartmentUnit, ApartmentUnitDecor } from "../../module_bindings/types";
-import { residentInteriorPropsVisibleForViewer } from "./fpApartmentGameplay.js";
+import { residentInteriorPropsVisibleForViewer, resolveFishTankDecorStashKeyNear } from "./fpApartmentGameplay.js";
+import { requestOwnedApartmentStashDecorSync } from "./fpApartmentStashDecorSync.js";
 import {
   apartmentDecorFetchPath,
   apartmentDecorModelExtension,
   normalizeApartmentDecorModelRelPath,
 } from "./fpApartmentDecorAssets.js";
-import { fitApartmentInteractionPickToObject } from "./fpApartmentInteractionPick.js";
+import {
+  fitApartmentInteractionPickToObject,
+  fitFishTankStashInteractionPick,
+} from "./fpApartmentInteractionPick.js";
 import {
   loadApartmentUnitLayoutProfilesDocFromContent,
   loadOwnedApartmentBuiltinsDocFromContent,
@@ -162,10 +166,28 @@ export function centerVisualBoundsOnRoot(root: THREE.Object3D): void {
 }
 
 export function contentDecorCoveredByDbRow(
-  content: { modelRelPath: string; x: number; z: number },
+  content: {
+    modelRelPath: string;
+    x: number;
+    z: number;
+    itemKind?: OwnedApartmentPlacedItemKind;
+  },
   dbRows: ApartmentUnitDecor[],
 ): boolean {
   for (const row of dbRows) {
+    const rowPlaced = effectiveOwnedApartmentPlacedKind(row.itemKind, row.modelRelPath);
+    if (
+      content.itemKind === "fish_tank" ||
+      isApartmentFishTankModelRelPath(content.modelRelPath)
+    ) {
+      if (rowPlaced !== "fish_tank") continue;
+      const dx = row.posX - content.x;
+      const dz = row.posZ - content.z;
+      if (dx * dx + dz * dz <= CONTENT_DB_DECOR_DEDUPE_XZ_M * CONTENT_DB_DECOR_DEDUPE_XZ_M) {
+        return true;
+      }
+      continue;
+    }
     if (row.modelRelPath !== content.modelRelPath) continue;
     const dx = row.posX - content.x;
     const dz = row.posZ - content.z;
@@ -723,30 +745,46 @@ export async function runFpApartmentDecorFullRebuild(
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         const sk = apartmentStashKindForPlacedKind(d.placedKind);
         if (sk) {
-          if (d.placedKind === "fish_tank" && d.decorId === null) {
-            // Fish tank feed uses per-decor `{unit}#d{id}` keys only (see ensure_authored_fish_tank_decor).
-          } else {
           const pick = new THREE.Mesh(ctx.stashPickGeometry, ctx.stashPickMaterial);
           pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
-          fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
+          if (d.placedKind === "fish_tank") {
+            fitFishTankStashInteractionPick(g, pick);
+          } else {
+            fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
+          }
           pick.userData.mammothApartmentStashPickUnitKey = d.unit.unitKey;
-          pick.userData.mammothApartmentStashKey =
-            d.decorId !== null
-              ? apartmentStashKeyDecor(d.unit.unitKey, d.decorId)
-              : apartmentStashKey(d.unit.unitKey, sk);
           pick.userData.mammothApartmentStashKind = sk;
+          let resolvedStashKey: string | null = null;
+          if (d.decorId !== null) {
+            resolvedStashKey = apartmentStashKeyDecor(d.unit.unitKey, d.decorId);
+          } else if (d.placedKind === "fish_tank") {
+            resolvedStashKey = resolveFishTankDecorStashKeyNear(
+              ctx.conn,
+              d.unit.unitKey,
+              d.posX,
+              d.posZ,
+            );
+          }
+          if (resolvedStashKey) {
+            pick.userData.mammothApartmentStashKey = resolvedStashKey;
+          } else if (d.placedKind === "fish_tank" && d.decorId === null) {
+            // Layout ghost — bind `{unit}#d{id}` once sync creates the replica row.
+            pick.userData.mammothFishTankResolveStashFromDb = true;
+            pick.userData.mammothFishTankResolvePosX = d.posX;
+            pick.userData.mammothFishTankResolvePosZ = d.posZ;
+          } else {
+            pick.userData.mammothApartmentStashKey = apartmentStashKey(d.unit.unitKey, sk);
+          }
           if (d.placedKind === "wardrobe") {
             pick.userData.mammothApartmentWardrobePickUnitKey = d.unit.unitKey;
             ctx.wardrobePickMeshes.push(pick);
           }
           pick.userData.mammothSkipFloorGeometryMerge = true;
-          pick.userData.mammothApartmentDecorProp = true;
           pick.userData.mammothPlateLevelIndex = d.unit.level;
           pick.layers.set(FP_INTERACTION_PICK_LAYER);
           g.add(pick);
           ctx.stashPickMeshes.push(pick);
           g.updateMatrixWorld(true);
-          }
         }
       }
       if (isGrowTrayModelPath(d.modelRelPath)) {
@@ -831,5 +869,6 @@ export async function runFpApartmentDecorFullRebuild(
   ctx.buildingRoot.updateMatrixWorld(true);
   ctx.rebuildStashRayOcclusion();
   ctx.cabMirrorCollection?.syncApartmentDecorRoot(ctx.root);
+  requestOwnedApartmentStashDecorSync(ctx.conn);
   ctx.onRebuilt?.();
 }

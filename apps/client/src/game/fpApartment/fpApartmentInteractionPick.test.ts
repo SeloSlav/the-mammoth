@@ -6,6 +6,7 @@ import {
   fitBalconyGrowSlotInteractionPick,
   fitBalconyGrowTrayCenterInteractionPick,
   fitBalconyGrowTrayInteractionPick,
+  fitFishTankStashInteractionPick,
 } from "./fpApartmentInteractionPick.js";
 
 describe("fitApartmentInteractionPickToObject", () => {
@@ -76,6 +77,24 @@ describe("fitBalconyGrowSlotInteractionPick", () => {
     expect(pick.position.z).toBeCloseTo(-0.145, 3);
     expect(pick.scale.x).toBeCloseTo(size.width, 3);
     expect(pick.scale.y).toBeCloseTo(size.height, 3);
+  });
+});
+
+describe("fitFishTankStashInteractionPick", () => {
+  it("keeps a minimum world pick volume when the decor root is uniformly scaled down", () => {
+    const parent = new THREE.Group();
+    parent.scale.setScalar(0.24);
+    parent.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4)));
+
+    const pick = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    fitFishTankStashInteractionPick(parent, pick);
+    parent.add(pick);
+    parent.updateMatrixWorld(true);
+
+    const pickSize = new THREE.Box3().setFromObject(pick).getSize(new THREE.Vector3());
+    expect(pickSize.x).toBeGreaterThanOrEqual(1.6);
+    expect(pickSize.z).toBeGreaterThanOrEqual(1.6);
+    expect(pickSize.y).toBeGreaterThanOrEqual(0.8);
   });
 });
 

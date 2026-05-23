@@ -30,8 +30,10 @@ import type { ApartmentUnit } from "../../module_bindings/types";
 import {
   apartmentUnitOwnerEqual,
   clientMayUseApartmentStash,
+  resolveApartmentStashKeyFromPickUserData,
   type ApartmentStashPrompt,
 } from "./fpApartmentGameplay.js";
+import { requestOwnedApartmentStashDecorSync } from "./fpApartmentStashDecorSync.js";
 import { getApartmentSittablePrompt } from "./fpApartmentSittablePrompt.js";
 import type { ApartmentSittablePrompt } from "./fpApartmentSittableTypes.js";
 import { getApartmentNotebookPrompt } from "./fpApartmentNotebookPrompt.js";
@@ -122,6 +124,7 @@ function applyDecorFixtureEmissiveDebugIsolation(
 
 const _stashRaycaster = new THREE.Raycaster();
 const _screenCenterNdc = new THREE.Vector2(0, 0);
+const _stashPickWorldScratch = new THREE.Vector3();
 
 export type MountFpApartmentDecorMeshesResult = {
   dispose: () => void;
@@ -617,6 +620,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;
+      requestOwnedApartmentStashDecorSync(opts.conn);
       configureInteractionPickRaycaster();
       _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
       _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
@@ -634,10 +638,22 @@ export function mountFpApartmentDecorMeshes(opts: {
       const seen = new Set<string>();
       for (const hit of hits) {
         if (stashRayOcclusion.hitOccluded(hit, nearestWallDistance)) continue;
-        const stashKey = hit.object.userData.mammothApartmentStashKey;
+        hit.object.getWorldPosition(_stashPickWorldScratch);
+        let stashKey = resolveApartmentStashKeyFromPickUserData(
+          opts.conn,
+          hit.object.userData,
+          _stashPickWorldScratch,
+        );
         const unitKey = hit.object.userData.mammothApartmentStashPickUnitKey;
         const stashKind = hit.object.userData.mammothApartmentStashKind;
-        if (typeof stashKey !== "string" || typeof unitKey !== "string" || seen.has(stashKey)) continue;
+        if (typeof unitKey !== "string" || typeof stashKind !== "string") continue;
+        if (typeof stashKey !== "string") {
+          if (hit.object.userData.mammothFishTankResolveStashFromDb === true) {
+            requestOwnedApartmentStashDecorSync(opts.conn);
+          }
+          continue;
+        }
+        if (seen.has(stashKey)) continue;
         if (
           stashKind !== APARTMENT_STASH_KIND_FOOTLOCKER &&
           stashKind !== APARTMENT_STASH_KIND_WARDROBE &&

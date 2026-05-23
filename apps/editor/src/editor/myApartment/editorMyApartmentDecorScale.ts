@@ -4,6 +4,7 @@ import {
   ownedApartmentDecorRootScaleFromComponents,
   resolveOwnedApartmentDecorRootScale,
   type OwnedApartmentDecorRootScaleFields,
+  type OwnedApartmentPlacedItem,
 } from "@the-mammoth/schemas";
 
 export const EDITOR_MY_APARTMENT_DECOR_UNIFORM_SCALE_MAX = 5.5 as const;
@@ -15,6 +16,75 @@ export function clampOwnedApartmentDecorUniformScale(s: number): number {
     OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
     EDITOR_MY_APARTMENT_DECOR_UNIFORM_SCALE_MAX,
   );
+}
+
+export const MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN =
+  OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN * 100;
+export const MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MAX =
+  EDITOR_MY_APARTMENT_DECOR_UNIFORM_SCALE_MAX * 100;
+
+export type MyApartmentDecorRootScaleSource = {
+  uniformScale: number;
+  verticalScaleMul?: number;
+  scaleX?: number;
+  scaleY?: number;
+  scaleZ?: number;
+};
+
+/** Average root scale as a percentage (100 = scale factor 1.0). */
+export function myApartmentDecorUniformScalePercentFromItem(
+  item: MyApartmentDecorRootScaleSource,
+): number {
+  const { x, y, z } = resolveOwnedApartmentDecorRootScale(item);
+  return ((x + y + z) / 3) * 100;
+}
+
+export function formatMyApartmentDecorUniformScalePercent(percent: number): string {
+  const rounded = Math.round(percent * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+export function parseMyApartmentDecorUniformScalePercentInput(raw: string): number | null {
+  const trimmed = raw.trim().replace(/%$/u, "");
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+/** Proportional scale on all axes — easier than gizmo plane squares. */
+export function applyMyApartmentDecorUniformScalePercentToPlacedItem(
+  item: OwnedApartmentPlacedItem,
+  targetPercent: number,
+): OwnedApartmentPlacedItem {
+  const clampedPct = THREE.MathUtils.clamp(
+    targetPercent,
+    MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN,
+    MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MAX,
+  );
+  const targetAvg = clampedPct / 100;
+  const current = resolveOwnedApartmentDecorRootScale(item);
+  const currentAvg = (current.x + current.y + current.z) / 3;
+
+  let scaleX: number;
+  let scaleY: number;
+  let scaleZ: number;
+  if (currentAvg < 1e-9) {
+    const uniform = clampOwnedApartmentDecorUniformScale(targetAvg);
+    scaleX = uniform;
+    scaleY = uniform;
+    scaleZ = uniform;
+  } else {
+    const factor = targetAvg / currentAvg;
+    scaleX = clampOwnedApartmentDecorUniformScale(current.x * factor);
+    scaleY = clampOwnedApartmentDecorUniformScale(current.y * factor);
+    scaleZ = clampOwnedApartmentDecorUniformScale(current.z * factor);
+  }
+
+  return {
+    ...item,
+    ...ownedApartmentDecorRootScaleFromComponents({ x: scaleX, y: scaleY, z: scaleZ }),
+  };
 }
 
 export type MyApartmentDecorScaleGesturePin = {
@@ -121,14 +191,6 @@ export function applyMyApartmentDecorSingleAxisScaleFromGesture(
   root.scale.y = startScale.y;
   root.scale.z = clampOwnedApartmentDecorUniformScale(root.scale.z);
 }
-
-export type MyApartmentDecorRootScaleSource = {
-  uniformScale: number;
-  verticalScaleMul?: number;
-  scaleX?: number;
-  scaleY?: number;
-  scaleZ?: number;
-};
 
 /** Apply authored decor scale for reload / commit. */
 export function applyMyApartmentDecorRootScaleFromDoc(

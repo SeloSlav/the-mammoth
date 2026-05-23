@@ -55,7 +55,8 @@ const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKi
   [APARTMENT_STASH_KIND_STOVE]: 0.42,
   [APARTMENT_STASH_KIND_FRIDGE]: 0.58,
   [APARTMENT_STASH_KIND_WATER_TANK]: 0.36,
-  [APARTMENT_STASH_KIND_FISH_TANK]: 0.45,
+  /** ~half of `FISH_TANK_SWIM_AABB` max X (0.76) at default vis scale — tank is wider than 0.45 m. */
+  [APARTMENT_STASH_KIND_FISH_TANK]: 0.78,
   [APARTMENT_STASH_KIND_GROW_TRAY]: 0.38,
 };
 
@@ -484,7 +485,6 @@ export function clientMayUseApartmentStash(
       if (u.unitKey !== full.unitKey) continue;
       if (u.state !== UNIT_STATE_CLAIMED) return false;
       if (!sameIdentity(u.owner, owner)) return false;
-      if (!feetInsideUnitHull(u, pose.x, pose.y, pose.z)) return false;
       const r = apartmentBuiltinStashInteractRadiusM(sk);
       const r2 = r * r;
       const dx = pose.x - decor.posX;
@@ -534,6 +534,13 @@ export type ApartmentStashPrompt = {
   stashKind: ApartmentStashKind;
   stashLabel: string;
 };
+
+/** Ray-hit fridge/fish tank/etc. beats balcony grow-tray fallback prompts. */
+export function aimedApartmentStashBlocksGrowTrayPrompt(
+  lookedAtStash: Pick<ApartmentStashPrompt, "stashKind"> | null,
+): boolean {
+  return lookedAtStash !== null && lookedAtStash.stashKind !== APARTMENT_STASH_KIND_GROW_TRAY;
+}
 
 export type ApartmentSystemPrompt =
   | ApartmentClaimPrompt
@@ -703,7 +710,6 @@ function nearestOwnedClaimedApartmentStash(
     const u = row as ApartmentUnit;
     if (u.state !== UNIT_STATE_CLAIMED) continue;
     if (!sameIdentity(u.owner, owner)) continue;
-    if (!feetInsideUnitHull(u, x, y, z)) continue;
 
     for (const drow of conn.db.apartment_unit_decor) {
       if (drow.unitKey !== u.unitKey) continue;
@@ -724,6 +730,30 @@ function nearestOwnedClaimedApartmentStash(
         };
       }
     }
+
+    if (!unitHasDecorStashKind(conn, u.unitKey, APARTMENT_STASH_KIND_FISH_TANK)) {
+      const { x: ax, z: az } = stashInteractAnchorXZ(u, APARTMENT_STASH_KIND_FISH_TANK);
+      if (nearPointStashCylinder(u, ax, az, APARTMENT_STASH_KIND_FISH_TANK, x, y, z)) {
+        const key = resolveFishTankDecorStashKeyNear(conn, u.unitKey, ax, az);
+        if (key) {
+          const dx = x - ax;
+          const dz = z - az;
+          const decorD = dx * dx + dz * dz;
+          if (decorD < bestD) {
+            bestD = decorD;
+            best = {
+              kind: "apartment_stash",
+              stashKey: key,
+              unitKey: u.unitKey,
+              stashKind: APARTMENT_STASH_KIND_FISH_TANK,
+              stashLabel: apartmentStashLabel(APARTMENT_STASH_KIND_FISH_TANK),
+            };
+          }
+        }
+      }
+    }
+
+    if (!feetInsideUnitHull(u, x, y, z)) continue;
 
     const tryLegacy = (kind: ApartmentStashKind): void => {
       if (unitHasDecorStashKind(conn, u.unitKey, kind)) return;
@@ -808,6 +838,10 @@ function finalizeApartmentStashPrompt(
   },
 ): ApartmentStashPrompt | null {
   if (!prompt || !opts.stashLos) return prompt;
+  const full = parseApartmentStashKeyFull(prompt.stashKey);
+  // Decor / grow-tray stashes use replicated anchors; ray hits already wall-test in getStashPrompt.
+  // LOS to a fixed anchor falsely suppresses wide props (fish tank) on the proximity path.
+  if (full.tag === "decor" || full.tag === "grow_tray") return prompt;
   if (
     apartmentStashPromptOccludedFromCamera(
       conn,
@@ -819,6 +853,49 @@ function finalizeApartmentStashPrompt(
     return null;
   }
   return prompt;
+}
+
+/** Match server `CONTENT_DECOR_DEDUPE_XZ_M` / client content↔DB dedupe for authored fish tank slot. */
+const FISH_TANK_CONTENT_DB_DEDUPE_XZ_M = 0.4;
+
+/** Resolve `{unit}#d{id}` for a fish-tank decor row near a layout/content anchor. */
+export function resolveFishTankDecorStashKeyNear(
+  conn: DbConnection,
+  unitKey: string,
+  nearX: number,
+  nearZ: number,
+  maxDistM = apartmentBuiltinStashInteractRadiusM(APARTMENT_STASH_KIND_FISH_TANK),
+): string | null {
+  const maxDistSq = maxDistM * maxDistM;
+  let bestKey: string | null = null;
+  let bestD = Infinity;
+  for (const row of conn.db.apartment_unit_decor) {
+    if (row.unitKey !== unitKey) continue;
+    if (apartmentDecorRowClientStashKind(row) !== APARTMENT_STASH_KIND_FISH_TANK) continue;
+    const dx = row.posX - nearX;
+    const dz = row.posZ - nearZ;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > maxDistSq || d2 >= bestD) continue;
+    bestD = d2;
+    bestKey = apartmentStashKeyDecor(unitKey, row.decorId);
+  }
+  return bestKey;
+}
+
+/** Stash key from pick userData — content fish-tank ghosts resolve `{unit}#d{id}` from replica rows. */
+export function resolveApartmentStashKeyFromPickUserData(
+  conn: DbConnection,
+  userData: THREE.Object3D["userData"],
+  pickWorld?: THREE.Vector3,
+): string | null {
+  const direct = userData.mammothApartmentStashKey;
+  if (typeof direct === "string") return direct;
+  if (userData.mammothFishTankResolveStashFromDb !== true) return null;
+  const unitKey = userData.mammothApartmentStashPickUnitKey;
+  const x = pickWorld?.x ?? userData.mammothFishTankResolvePosX;
+  const z = pickWorld?.z ?? userData.mammothFishTankResolvePosZ;
+  if (typeof unitKey !== "string" || typeof x !== "number" || typeof z !== "number") return null;
+  return resolveFishTankDecorStashKeyNear(conn, unitKey, x, z);
 }
 
 /**

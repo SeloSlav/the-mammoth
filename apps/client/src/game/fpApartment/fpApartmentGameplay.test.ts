@@ -14,6 +14,7 @@ import {
   apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
   apartmentUnitContainingFeetSlack,
+  aimedApartmentStashBlocksGrowTrayPrompt,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
   clientMayUseApartmentSittable,
   clientMayUseApartmentStash,
@@ -21,6 +22,7 @@ import {
   feetDeepEnoughFromEntryDoor,
   formatApartmentPublicLabel,
   getApartmentSystemPrompt,
+  resolveFishTankDecorStashKeyNear,
   residentInteriorPropsVisibleForViewer,
   residentUnitKeyFromDoor,
   residentUnitKeyFromParts,
@@ -30,6 +32,7 @@ import {
 import {
   apartmentStashKey,
   apartmentStashKeyDecor,
+  APARTMENT_STASH_KIND_FISH_TANK,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_WATER_TANK,
@@ -502,6 +505,82 @@ describe("fpApartmentGameplay", () => {
     });
   });
 
+  it("offers fish tank stash via proximity when not aiming at the pick", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const decor = {
+      decorId: 12n,
+      unitKey: unit.unitKey,
+      itemKind: 7,
+      modelRelPath: "static/models/objects/fish-tank.glb",
+      posX: 5,
+      posY: 10,
+      posZ: 6,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+    };
+    const conn = mockConn([unit], [], { apartmentUnitDecor: [decor] });
+    const pose = { x: 5.8, y: 10, z: 6.05 };
+    expect(getApartmentSystemPrompt(conn, pose)).toEqual({
+      kind: "apartment_stash",
+      stashKey: apartmentStashKeyDecor(unit.unitKey, 12n),
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FISH_TANK,
+      stashLabel: "fish tank",
+    });
+  });
+
+  it("permits stash use for fish tank decor rows with decor stash keys", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      footX: 1,
+      footZ: 1,
+      boundMinX: 0,
+      boundMaxX: 20,
+      boundMinZ: 0,
+      boundMaxZ: 20,
+    });
+    const decor = {
+      decorId: 12n,
+      unitKey: unit.unitKey,
+      itemKind: 7,
+      modelRelPath: "static/models/objects/fish-tank.glb",
+      posX: 5,
+      posY: 10,
+      posZ: 6,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+    };
+    const conn = mockConn([unit], [], { apartmentUnitDecor: [decor] });
+    const pose = { x: 5.8, y: 10, z: 6.05 };
+    const key = apartmentStashKeyDecor(unit.unitKey, 12n);
+    expect(clientMayUseApartmentStash(conn, testIdentity as never, key, pose)).toBe(true);
+    expect(
+      getApartmentSystemPrompt(conn, pose, {
+        lookedAtStashKey: key,
+      }),
+    ).toEqual({
+      kind: "apartment_stash",
+      stashKey: key,
+      unitKey: unit.unitKey,
+      stashKind: APARTMENT_STASH_KIND_FISH_TANK,
+      stashLabel: "fish tank",
+    });
+  });
+
   it("permits stash use for fridge decor rows with their own stash kind", () => {
     const unit = apartmentUnit({
       state: UNIT_STATE_CLAIMED,
@@ -900,5 +979,38 @@ describe("fpApartmentGameplay", () => {
     expect(apartmentDoorMatchesContainingUnit(conn, xz, { floorDocId: "floor_a", level: 2, templateId: "unit_e_003|w" })).toBe(
       true,
     );
+  });
+});
+
+describe("resolveFishTankDecorStashKeyNear", () => {
+  it("binds layout fish tank picks to the nearest fish-tank decor row", () => {
+    const unit = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+    });
+    const conn = mockConn([unit], [], {
+      apartmentUnitDecor: [
+        {
+          decorId: 12n,
+          unitKey: unit.unitKey,
+          itemKind: 7,
+          modelRelPath: "static/models/objects/fish-tank.glb",
+          posX: 5,
+          posY: 10,
+          posZ: 6,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          uniformScale: 0.24,
+        },
+      ],
+    });
+    expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 5.05, 6.05)).toBe(
+      apartmentStashKeyDecor(unit.unitKey, 12n),
+    );
+    expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 5.35, 6.35)).toBe(
+      apartmentStashKeyDecor(unit.unitKey, 12n),
+    );
+    expect(resolveFishTankDecorStashKeyNear(conn, unit.unitKey, 9, 9)).toBeNull();
   });
 });

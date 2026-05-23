@@ -199,10 +199,15 @@ export async function optimizeGlb({
   const beforeBytes = fs.statSync(fullPath).size;
   const texSize = resolveTextureMaxSize(rel);
   const skipReason = shouldSkipEntirely(fullPath, beforeBytes, compressTextures);
-  const willCompress = willCompressTexturesForFile(fullPath, beforeBytes, compressTextures);
+  let willCompress = willCompressTexturesForFile(fullPath, beforeBytes, compressTextures);
   const willSimplify = hasSimplifyOptions(simplifyOptions);
 
+  // WebP skip applies to texture work only — do not block simplify or meshopt reorder.
   if (skipReason) {
+    willCompress = false;
+  }
+
+  if (skipReason && !willSimplify && !reorderIndices && !willCompress) {
     return { rel, skipped: true, reason: skipReason, beforeTris, beforeBytes, texSize };
   }
 

@@ -5,11 +5,15 @@ import {
   applyMyApartmentDecorSingleAxisScaleFromGesture,
   applyMyApartmentDecorUniformScale,
   applyMyApartmentDecorUniformScaleFromGesture,
+  applyMyApartmentDecorUniformScalePercentToPlacedItem,
   constrainMyApartmentDecorScaleFromGizmo,
+  formatMyApartmentDecorUniformScalePercent,
   isMyApartmentDecorPlaneScaleAxis,
   isMyApartmentDecorSingleAxisScaleAxis,
   isMyApartmentDecorUniformScaleAxis,
   myApartmentDecorPointerDistanceScaleFactor,
+  myApartmentDecorUniformScalePercentFromItem,
+  parseMyApartmentDecorUniformScalePercentInput,
   readMyApartmentDecorCommittedScale,
 } from "./editorMyApartmentDecorScale.js";
 
@@ -162,5 +166,71 @@ describe("editorMyApartmentDecorScale", () => {
     expect(root.scale.x).toBeCloseTo(2, 4);
     expect(root.scale.y).toBeCloseTo(1, 4);
     expect(root.scale.z).toBeCloseTo(1.5, 4);
+  });
+
+  it("derives uniform scale percent from average root scale", () => {
+    expect(
+      myApartmentDecorUniformScalePercentFromItem({
+        uniformScale: 1.5,
+        verticalScaleMul: 1,
+      }),
+    ).toBeCloseTo(150, 4);
+    expect(
+      myApartmentDecorUniformScalePercentFromItem({
+        uniformScale: 1,
+        verticalScaleMul: 1,
+        scaleX: 2,
+        scaleY: 1,
+        scaleZ: 1.5,
+      }),
+    ).toBeCloseTo((450 / 3), 4);
+  });
+
+  it("applies proportional percent scale on all axes", () => {
+    const item = {
+      id: "decor-1",
+      modelRelPath: "static/models/objects/chair.glb",
+      fx: 0.5,
+      fz: 0.5,
+      dy: 0,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 2,
+      verticalScaleMul: 1,
+      ignoreSupportSurfaces: false,
+      itemKind: "plain" as const,
+    };
+    const next = applyMyApartmentDecorUniformScalePercentToPlacedItem(item, 100);
+    expect(next.uniformScale).toBeCloseTo(1, 4);
+    expect(next.verticalScaleMul).toBe(1);
+
+    const stretched = {
+      ...item,
+      scaleX: 2,
+      scaleY: 3,
+      scaleZ: 2,
+    };
+    const halvedAvg = applyMyApartmentDecorUniformScalePercentToPlacedItem(stretched, 50);
+    expect(halvedAvg.scaleX! / stretched.scaleX!).toBeCloseTo(
+      halvedAvg.scaleY! / stretched.scaleY!,
+      4,
+    );
+    expect(halvedAvg.scaleX! / stretched.scaleX!).toBeCloseTo(
+      halvedAvg.scaleZ! / stretched.scaleZ!,
+      4,
+    );
+    expect(myApartmentDecorUniformScalePercentFromItem(halvedAvg)).toBeCloseTo(50, 2);
+  });
+
+  it("parses percent input with optional suffix", () => {
+    expect(parseMyApartmentDecorUniformScalePercentInput("75")).toBe(75);
+    expect(parseMyApartmentDecorUniformScalePercentInput("75%")).toBe(75);
+    expect(parseMyApartmentDecorUniformScalePercentInput("")).toBeNull();
+  });
+
+  it("formats percent for the placed-decor input", () => {
+    expect(formatMyApartmentDecorUniformScalePercent(100)).toBe("100");
+    expect(formatMyApartmentDecorUniformScalePercent(125.04)).toBe("125");
   });
 });

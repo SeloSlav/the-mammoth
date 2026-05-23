@@ -62,7 +62,7 @@ fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
         APARTMENT_STASH_KIND_FRIDGE => 1.30,
         APARTMENT_STASH_KIND_STOVE => 1.14,
         APARTMENT_STASH_KIND_WATER_TANK => 1.08,
-        APARTMENT_STASH_KIND_FISH_TANK => 1.05,
+        APARTMENT_STASH_KIND_FISH_TANK => 1.50,
         APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
         _ => 1.10,
     };
@@ -1120,6 +1120,25 @@ pub(crate) fn ensure_authored_fish_tank_decor_for_owner(ctx: &ReducerContext, ow
     ensure_authored_fish_tank_decor_for_unit(ctx, owner, unit_key.as_str());
 }
 
+/// Idempotent backfill for authored stash decor rows (fish tank today; more stash props later).
+#[spacetimedb::reducer]
+pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("sync_owned_apartment_stash_decor blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let sender = ctx.sender();
+    for unit in ctx.db.apartment_unit().iter() {
+        if unit.state != UNIT_STATE_CLAIMED || unit.owner != Some(sender) {
+            continue;
+        }
+        ensure_authored_fish_tank_decor_for_unit(ctx, sender, unit.unit_key.as_str());
+    }
+}
+
 /// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
 pub(crate) fn join_pose_from_owned_bed(
     ctx: &ReducerContext,
@@ -1929,16 +1948,15 @@ pub(crate) fn apartment_stash_owner_near_sender(
             let pose = ctx.db.player_pose().identity().find(&sender)?;
             let rk =
                 decor_stash_radius_kind_for_row(decor.item_kind, decor.model_rel_path.as_str());
-            if !feet_inside_unit(&unit, pose.x, pose.y, pose.z)
-                || !pose_near_horizontal_marker(
-                    pose.x,
-                    pose.y,
-                    pose.z,
-                    decor.pos_x,
-                    decor.pos_z,
-                    unit.foot_y,
-                    stash_interact_radius_sq(rk),
-                )
+            if !pose_near_horizontal_marker(
+                pose.x,
+                pose.y,
+                pose.z,
+                decor.pos_x,
+                decor.pos_z,
+                unit.foot_y,
+                stash_interact_radius_sq(rk),
+            )
             {
                 return None;
             }

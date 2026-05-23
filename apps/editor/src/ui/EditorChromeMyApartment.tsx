@@ -57,6 +57,14 @@ import {
 } from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
 import { deleteMyApartmentLayoutPlacementsInDoc } from "../editor/myApartment/deleteMyApartmentLayoutPlacements.js";
 import { replaceMyApartmentPlacedDecorModelInDoc } from "../editor/myApartment/replaceMyApartmentPlacedDecorModel.js";
+import {
+  applyMyApartmentDecorUniformScalePercentToPlacedItem,
+  formatMyApartmentDecorUniformScalePercent,
+  myApartmentDecorUniformScalePercentFromItem,
+  MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MAX,
+  MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN,
+  parseMyApartmentDecorUniformScalePercentInput,
+} from "../editor/myApartment/editorMyApartmentDecorScale.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -203,6 +211,7 @@ export function EditorChromeMyApartment(props: {
   const [placedItemsSearchQuery, setPlacedItemsSearchQuery] = useState("");
   const [objectGroupsSearchQuery, setObjectGroupsSearchQuery] = useState("");
   const [groupRenameDraftById, setGroupRenameDraftById] = useState<Record<string, string>>({});
+  const [decorScalePercentDraft, setDecorScalePercentDraft] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -302,6 +311,18 @@ export function EditorChromeMyApartment(props: {
     [placedItems],
   );
   const selectedDecor = selectedDecorId ? (decorById.get(selectedDecorId) ?? null) : null;
+
+  useEffect(() => {
+    if (!selectedDecor) {
+      setDecorScalePercentDraft("");
+      return;
+    }
+    setDecorScalePercentDraft(
+      formatMyApartmentDecorUniformScalePercent(
+        myApartmentDecorUniformScalePercentFromItem(selectedDecor),
+      ),
+    );
+  }, [selectedDecorId, selectedDecor]);
 
   const wallById = useMemo(
     () => new Map(wallItems.map((item) => [item.id, item] as const)),
@@ -476,6 +497,47 @@ export function EditorChromeMyApartment(props: {
   function deleteSelectedDecor(): void {
     if (!selectedDecorId) return;
     deleteLayoutPlacements([editorMyApartmentSelectedIdForDecor(selectedDecorId)]);
+  }
+
+  function commitSelectedDecorUniformScalePercent(): void {
+    if (!selectedDecor || !selectedDecorId) return;
+    const parsed = parseMyApartmentDecorUniformScalePercentInput(decorScalePercentDraft);
+    if (parsed === null) {
+      setDecorScalePercentDraft(
+        formatMyApartmentDecorUniformScalePercent(
+          myApartmentDecorUniformScalePercentFromItem(selectedDecor),
+        ),
+      );
+      return;
+    }
+    const nextItem = applyMyApartmentDecorUniformScalePercentToPlacedItem(
+      selectedDecor,
+      parsed,
+    );
+    if (
+      Math.abs(
+        myApartmentDecorUniformScalePercentFromItem(nextItem) -
+          myApartmentDecorUniformScalePercentFromItem(selectedDecor),
+      ) < 0.05
+    ) {
+      setDecorScalePercentDraft(
+        formatMyApartmentDecorUniformScalePercent(
+          myApartmentDecorUniformScalePercentFromItem(selectedDecor),
+        ),
+      );
+      return;
+    }
+    patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      placedItems: doc.placedItems.map((item) =>
+        item.id === selectedDecorId ? nextItem : item,
+      ),
+    }));
+    setDecorScalePercentDraft(
+      formatMyApartmentDecorUniformScalePercent(
+        myApartmentDecorUniformScalePercentFromItem(nextItem),
+      ),
+    );
   }
 
   function addWallSlab(): void {
@@ -816,18 +878,58 @@ export function EditorChromeMyApartment(props: {
           </button>
         </div>
         {selectedDecor ? (
-          <p style={{ margin: "10px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
-            Current: <code style={{ fontSize: 10 }}>{selectedDecor.modelRelPath}</code>
-            {" · "}
-            role <code style={{ fontSize: 10 }}>{selectedDecor.itemKind}</code>
-            {selectedCatalogModelRelPath && selectedCatalogModelRelPath !== selectedDecor.modelRelPath ? (
-              <>
-                {" "}
-                → <code style={{ fontSize: 10 }}>{selectedCatalogModelRelPath}</code>
-                {` (${ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath)} after replace)`}
-              </>
-            ) : null}
-          </p>
+          <>
+            <p style={{ margin: "10px 0 0", fontSize: 11, opacity: 0.78, lineHeight: 1.35 }}>
+              Current: <code style={{ fontSize: 10 }}>{selectedDecor.modelRelPath}</code>
+              {" · "}
+              role <code style={{ fontSize: 10 }}>{selectedDecor.itemKind}</code>
+              {selectedCatalogModelRelPath && selectedCatalogModelRelPath !== selectedDecor.modelRelPath ? (
+                <>
+                  {" "}
+                  → <code style={{ fontSize: 10 }}>{selectedCatalogModelRelPath}</code>
+                  {` (${ownedApartmentPlacedItemKindFromModelRelPath(selectedCatalogModelRelPath)} after replace)`}
+                </>
+              ) : null}
+            </p>
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <label
+                htmlFor="editor-placed-decor-uniform-scale-pct"
+                style={{ ...editorChromeLabel, margin: 0 }}
+              >
+                Uniform scale
+              </label>
+              <input
+                id="editor-placed-decor-uniform-scale-pct"
+                type="number"
+                min={MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN}
+                max={MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MAX}
+                step={1}
+                value={decorScalePercentDraft}
+                onChange={(e) => setDecorScalePercentDraft(e.target.value)}
+                onBlur={commitSelectedDecorUniformScalePercent}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                }}
+                style={{ ...editorChromeInput, width: 88, padding: "3px 6px", fontSize: 11 }}
+                title={`Proportional scale on all axes (${MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MIN}%–${MY_APARTMENT_DECOR_UNIFORM_SCALE_PERCENT_MAX}%). Press Enter or click away to apply.`}
+              />
+              <span style={{ fontSize: 11, opacity: 0.78 }}>%</span>
+            </div>
+            <p style={{ margin: "4px 0 0", fontSize: 10, opacity: 0.65, lineHeight: 1.35 }}>
+              Easier than the gizmo plane squares — scales X, Y, and Z together. Side handles still
+              stretch one axis.
+            </p>
+          </>
         ) : null}
         </div>
         <div
