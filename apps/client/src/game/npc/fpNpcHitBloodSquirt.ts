@@ -9,7 +9,7 @@ export type FpNpcHitBloodSquirt = FpBloodBurstFx & {
 };
 
 export function createFpNpcHitBloodSquirt(scene: THREE.Scene): FpNpcHitBloodSquirt {
-  const fx = createFpBloodBurstFx(scene, "fp_npc_hit_blood_fx");
+  const fx = createFpBloodBurstFx(scene);
   return {
     ...fx,
     spawnAtNpcFeet(feetX, feetY, feetZ, damage = DEFAULT_HIT_DAMAGE_VIS): void {

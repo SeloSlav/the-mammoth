@@ -16,13 +16,13 @@
 //! ## Arena-specific server behavior
 //! - `enter_combat_sim`: full combat loadout, arena-center pose, spawn NPCs for the session
 //! - `shooter_in_combat_sim_open_arena`: skip megablock firearm LOS while live combat-sim NPCs exist
-//! - `leave_combat_sim`: despawn session NPCs (does not restore prior loadout)
+//! - `leave_combat_sim`: despawn session NPCs and teleport owner back to their bed (does not restore prior loadout)
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments::{self, apartment_unit, ApartmentUnit, UNIT_STATE_CLAIMED};
 use crate::auth;
-use crate::inventory::{delete_all_player_inventory_and_hotbar_items, try_grant_stack_to_player};
+use crate::inventory::{delete_all_player_inventory_and_hotbar_items, reset_player_loadout_for_respawn, try_grant_stack_to_player};
 use crate::loadout;
 use crate::movement;
 use crate::combat_sim_npc_spawn;
@@ -100,6 +100,7 @@ pub fn reset_babushka_after_death(ctx: &ReducerContext, row: &mut npc::WorldNpc)
     row.health = npc::BABUSHKA_MAX_HEALTH;
     row.max_health = npc::BABUSHKA_MAX_HEALTH;
     row.state = npc::NPC_STATE_AGGRO;
+    row.chase_identity = Some(owner);
     row.locomotion = npc::NPC_LOCOMOTION_IDLE;
     row.vel_x = 0.0;
     row.vel_z = 0.0;
@@ -107,10 +108,35 @@ pub fn reset_babushka_after_death(ctx: &ReducerContext, row: &mut npc::WorldNpc)
     row.last_melee_micros = 0;
 }
 
-fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
+pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
     let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
     let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
     (cx, unit.foot_y, cz)
+}
+
+/// While live combat-sim NPCs exist, respawn at the arena center (not bed) so recovery stays in-session.
+pub fn respawn_pose_if_in_open_arena(
+    ctx: &ReducerContext,
+    owner: Identity,
+    base_seq: u64,
+    in_seq: u64,
+) -> Option<pose::PlayerPose> {
+    if !shooter_in_combat_sim_open_arena(ctx, owner) {
+        return None;
+    }
+    let unit = owned_claimed_unit(ctx, owner)?;
+    pose::ensure_player_pose_row(ctx, owner);
+    let mut sp = ctx.db.player_pose().identity().find(&owner)?;
+    let (arena_x, arena_y, arena_z) = combat_sim_player_spawn_pose(&unit);
+    sp.x = arena_x;
+    sp.y = arena_y;
+    sp.z = arena_z;
+    sp.vel_x = 0.0;
+    sp.vel_y = 0.0;
+    sp.vel_z = 0.0;
+    sp.grounded = 1;
+    sp.seq = base_seq.max(in_seq).saturating_add(1);
+    Some(sp)
 }
 
 pub fn combat_sim_session_key(unit: &ApartmentUnit) -> String {
@@ -253,12 +279,53 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
     );
 }
 
-/// Tear down combat-sim NPCs for the sender's claimed apartment (does not restore loadout).
+fn player_at_combat_sim_arena(unit: &ApartmentUnit, pose: &pose::PlayerPose) -> bool {
+    let (ax, ay, az) = combat_sim_player_spawn_pose(unit);
+    let dx = pose.x - ax;
+    let dz = pose.z - az;
+    let dy = (pose.y - ay).abs();
+    dx * dx + dz * dz < 2.75 * 2.75 && dy < 1.75
+}
+
+/// Tear down combat-sim NPCs and return the owner to their bed spawn (does not restore prior loadout).
 #[spacetimedb::reducer]
 pub fn leave_combat_sim(ctx: &ReducerContext) {
     let owner = ctx.sender();
     let Some(unit) = owned_claimed_unit(ctx, owner) else {
         return;
     };
-    npc::clear_npcs_for_session(ctx, combat_sim_session_key(&unit).as_str());
+    let session_key = combat_sim_session_key(&unit);
+    let had_session_npcs = ctx
+        .db
+        .world_npc()
+        .iter()
+        .any(|n| n.session_key == session_key);
+    npc::clear_npcs_for_session(ctx, session_key.as_str());
+
+    pose::ensure_player_pose_row(ctx, owner);
+    let Some(sp) = ctx.db.player_pose().identity().find(&owner) else {
+        return;
+    };
+    if !had_session_npcs && !player_at_combat_sim_arena(&unit, &sp) {
+        return;
+    }
+
+    let Some(bed_pose) = apartments::join_pose_from_owned_bed(ctx, owner) else {
+        return;
+    };
+    let mut sp = sp;
+    sp.x = bed_pose.x;
+    sp.y = bed_pose.y;
+    sp.z = bed_pose.z;
+    sp.yaw = bed_pose.yaw;
+    sp.vel_x = 0.0;
+    sp.vel_y = 0.0;
+    sp.vel_z = 0.0;
+    sp.grounded = 1;
+    sp.seq = sp.seq.saturating_add(1);
+    let yaw = sp.yaw;
+    ctx.db.player_pose().identity().update(sp);
+    movement::reset_player_input_row(ctx, owner, yaw);
+    reset_player_loadout_for_respawn(ctx, owner);
+    loadout::reset_player_active_hotbar_slot_to_first(ctx, owner);
 }

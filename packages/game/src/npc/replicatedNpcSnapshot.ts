@@ -31,12 +31,12 @@ export function resolveNpcBodyClipName(args: {
 }): NpcBodyClipName {
   if (args.dead) return "idle";
   if (!args.grounded) return "idle";
+  if (args.locomotion === "run") return "run";
+  if (args.locomotion === "walk") return "walk";
   const speedSq =
     (args.velocity?.x ?? 0) * (args.velocity?.x ?? 0) +
     (args.velocity?.z ?? 0) * (args.velocity?.z ?? 0);
-  if (speedSq < NPC_LOCOMOTION_MIN_SPEED_SQ) return "idle";
-  if (args.locomotion === "run") return "run";
-  if (args.locomotion === "walk") return "walk";
+  if (speedSq >= NPC_LOCOMOTION_MIN_SPEED_SQ) return "walk";
   return "idle";
 }
 

@@ -281,6 +281,10 @@ export type MountDroppedItemsWorldOptions = {
    */
   pickupBandOpts?: MammothDroppedPickupBandOpts | null;
   /**
+   * Combat sim arena: show every replicated drop on the pad (skip residential hull culling).
+   */
+  alwaysShowDroppedItems?: boolean;
+  /**
    * Runs immediately before `pickup_dropped_item`. In solo/local play this publishes the current
    * client feet so the server reducer validates against what the player is actually standing on.
    */
@@ -330,6 +334,7 @@ export function mountDroppedItemsWorld(
 
   const resolvedBandOpts =
     options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
+  const alwaysShowDroppedItems = options?.alwaysShowDroppedItems === true;
 
   let sub: { unsubscribe: () => void } | null = null;
   try {
@@ -495,6 +500,10 @@ export function mountDroppedItemsWorld(
       const key = droppedIdKey(row.id);
       const g = idToGroup.get(key);
       if (!g) continue;
+      if (alwaysShowDroppedItems) {
+        g.visible = true;
+        continue;
+      }
       const dropResidentialUnitKey = apartmentUnitKeyContainingWorldPoint(
         conn,
         row.x,

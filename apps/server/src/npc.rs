@@ -300,125 +300,128 @@ pub fn resolve_melee_swing_vs_npcs(
     })
 }
 
-#[spacetimedb::reducer]
-pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
-    if ctx.sender() != ctx.identity() {
-        return;
-    }
-    let dt = NPC_TICK_INTERVAL_MICROS as f32 / 1_000_000.0;
-    let now_us = ctx.timestamp.to_micros_since_unix_epoch();
+/// Fixed dt for the 250 ms schedule tick.
+pub fn npc_scheduled_tick_dt_sec() -> f32 {
+    NPC_TICK_INTERVAL_MICROS as f32 / 1_000_000.0
+}
 
+/// Authoritative babushka AI step — shared by the schedule and combat-sim locomotion hook.
+pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
+    let now_us = ctx.timestamp.to_micros_since_unix_epoch();
     let npcs: Vec<WorldNpc> = ctx.db.world_npc().iter().collect();
     for mut npc in npcs {
         if npc.state == NPC_STATE_DEAD {
             continue;
         }
+        step_one_world_npc(ctx, &mut npc, dt_sec, now_us);
+        ctx.db.world_npc().npc_id().update(npc);
+    }
+}
 
-        let (target_x, target_z, target_y, target_identity) =
-            ai_target_for_npc(ctx, &npc);
-        let planar_dx = target_x - npc.x;
-        let planar_dz = target_z - npc.z;
-        let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
-        let dist = dist_sq.sqrt();
+#[spacetimedb::reducer]
+pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
+    if ctx.sender() != ctx.identity() {
+        return;
+    }
+    step_all_world_npcs(ctx, npc_scheduled_tick_dt_sec());
+}
 
-        let aggro_range_m = if npc.session_key.starts_with("combat_sim:") {
-            crate::combat_sim::COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M
-        } else {
-            BABUSHKA_AGGRO_RANGE_M
-        };
+fn step_one_world_npc(
+    ctx: &ReducerContext,
+    npc: &mut WorldNpc,
+    dt_sec: f32,
+    now_us: i64,
+) {
+    let combat_sim = npc.session_key.starts_with("combat_sim:");
+    let Some((target_x, target_z, target_y, target_identity)) = ai_target_for_npc(ctx, npc)
+    else {
+        npc.locomotion = NPC_LOCOMOTION_IDLE;
+        npc.vel_x = 0.0;
+        npc.vel_z = 0.0;
+        return;
+    };
 
-        if npc.state == NPC_STATE_IDLE {
-            if dist_sq <= aggro_range_m * aggro_range_m {
-                npc.state = NPC_STATE_AGGRO;
-            }
+    let planar_dx = target_x - npc.x;
+    let planar_dz = target_z - npc.z;
+    let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
+    let dist = dist_sq.sqrt();
+
+    let aggro_range_m = if combat_sim {
+        crate::combat_sim::COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M
+    } else {
+        BABUSHKA_AGGRO_RANGE_M
+    };
+
+    if combat_sim {
+        npc.state = NPC_STATE_AGGRO;
+    } else if npc.state == NPC_STATE_IDLE {
+        if dist_sq <= aggro_range_m * aggro_range_m {
+            npc.state = NPC_STATE_AGGRO;
         }
+    }
 
-        if npc.state == NPC_STATE_AGGRO {
-            if dist_sq > (aggro_range_m * 2.4).powi(2) {
-                npc.state = NPC_STATE_IDLE;
-                npc.locomotion = NPC_LOCOMOTION_IDLE;
-                npc.vel_x = 0.0;
-                npc.vel_z = 0.0;
-            } else if dist > BABUSHKA_MELEE_RANGE_M {
-                let walk_speed = if npc.session_key.starts_with("combat_sim:") {
-                    2.35
-                } else {
-                    BABUSHKA_WALK_SPEED_MPS
-                };
-                let inv = 1.0 / dist.max(1e-4);
-                let vx = planar_dx * inv * walk_speed;
-                let vz = planar_dz * inv * walk_speed;
-                npc.vel_x = vx;
-                npc.vel_z = vz;
-                npc.x += vx * dt;
-                npc.z += vz * dt;
-                npc.y = target_y;
-                npc.yaw = planar_dx.atan2(planar_dz);
-                let speed_sq = vx * vx + vz * vz;
-                npc.locomotion = if speed_sq > 0.04 {
-                    NPC_LOCOMOTION_WALK
-                } else {
-                    NPC_LOCOMOTION_IDLE
-                };
-            } else {
-                npc.vel_x = 0.0;
-                npc.vel_z = 0.0;
-                npc.locomotion = NPC_LOCOMOTION_IDLE;
-                npc.yaw = planar_dx.atan2(planar_dz);
-                if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS {
-                    if let Some(pid) = target_identity {
-                        npc.last_melee_micros = now_us;
-                        npc.melee_presentation_seq = npc.melee_presentation_seq.wrapping_add(1);
-                        crate::player_vitals::apply_damage(ctx, pid, BABUSHKA_MELEE_DAMAGE);
-                    }
-                }
-            }
-        } else {
+    if npc.state == NPC_STATE_AGGRO {
+        if !combat_sim && dist_sq > (aggro_range_m * 2.4).powi(2) {
+            npc.state = NPC_STATE_IDLE;
             npc.locomotion = NPC_LOCOMOTION_IDLE;
             npc.vel_x = 0.0;
             npc.vel_z = 0.0;
+        } else if dist > BABUSHKA_MELEE_RANGE_M {
+            let walk_speed = if combat_sim {
+                2.35
+            } else {
+                BABUSHKA_WALK_SPEED_MPS
+            };
+            let inv = 1.0 / dist.max(1e-4);
+            let vx = planar_dx * inv * walk_speed;
+            let vz = planar_dz * inv * walk_speed;
+            npc.vel_x = vx;
+            npc.vel_z = vz;
+            npc.x += vx * dt_sec;
+            npc.z += vz * dt_sec;
+            npc.y = target_y;
+            npc.yaw = planar_dx.atan2(planar_dz);
+            let speed_sq = vx * vx + vz * vz;
+            npc.locomotion = if speed_sq > 0.04 {
+                NPC_LOCOMOTION_WALK
+            } else {
+                NPC_LOCOMOTION_IDLE
+            };
+        } else {
+            npc.vel_x = 0.0;
+            npc.vel_z = 0.0;
+            npc.locomotion = NPC_LOCOMOTION_IDLE;
+            npc.yaw = planar_dx.atan2(planar_dz);
+            if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS {
+                npc.last_melee_micros = now_us;
+                npc.melee_presentation_seq = npc.melee_presentation_seq.wrapping_add(1);
+                crate::player_vitals::apply_damage(ctx, target_identity, BABUSHKA_MELEE_DAMAGE);
+            }
         }
-
-        ctx.db.world_npc().npc_id().update(npc);
+    } else {
+        npc.locomotion = NPC_LOCOMOTION_IDLE;
+        npc.vel_x = 0.0;
+        npc.vel_z = 0.0;
     }
 }
 
 fn ai_target_for_npc(
     ctx: &ReducerContext,
     npc: &WorldNpc,
-) -> (f32, f32, f32, Option<Identity>) {
+) -> Option<(f32, f32, f32, Identity)> {
     if let Some(id) = npc.chase_identity {
         if !crate::player_vitals::is_player_dead(ctx, id) {
             if let Some(pose) = ctx.db.player_pose().identity().find(&id) {
-                return (pose.x, pose.y, pose.z, Some(id));
+                return Some((pose.x, pose.y, pose.z, id));
             }
         }
-    }
-    let (x, y, z) = nearest_living_player_feet(ctx, npc.x, npc.y, npc.z);
-    let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z);
-    (x, y, z, id)
-}
-
-fn nearest_living_player_feet(
-    ctx: &ReducerContext,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-) -> (f32, f32, f32) {
-    let mut best: Option<(f32, f32, f32, f32)> = None;
-    for pose in ctx.db.player_pose().iter() {
-        if crate::player_vitals::is_player_dead(ctx, pose.identity) {
-            continue;
-        }
-        let dx = pose.x - nx;
-        let dy = pose.y - ny;
-        let dz = pose.z - nz;
-        let d2 = dx * dx + dy * dy + dz * dz;
-        if best.map(|b| d2 < b.3).unwrap_or(true) {
-            best = Some((pose.x, pose.y, pose.z, d2));
+        if npc.session_key.starts_with("combat_sim:") {
+            return None;
         }
     }
-    best.map(|b| (b.0, b.1, b.2)).unwrap_or((nx, ny, nz))
+    let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z)?;
+    let pose = ctx.db.player_pose().identity().find(&id)?;
+    Some((pose.x, pose.y, pose.z, id))
 }
 
 fn nearest_living_player_identity(

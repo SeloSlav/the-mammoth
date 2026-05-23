@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD } from "@the-mammoth/engine";
+import { MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD, MAMMOTH_FP_WORLD_NPC_UD } from "@the-mammoth/engine";
 import {
   recordFpPerfHeavyMeshes,
   type FpPerfHeavyMeshRecord,
@@ -146,6 +146,7 @@ export function createFpSessionHeavyMeshProfiler(input: {
 
     input.buildingRoot.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
+      if (obj.userData[MAMMOTH_FP_WORLD_NPC_UD] === true) return;
       if (!objectVisibleInHierarchy(obj, input.camera)) return;
       if (!_heavyMeshFrustum.intersectsObject(obj)) return;
       const triangles = meshTriangleCount(obj);

@@ -277,8 +277,12 @@ export type FpSessionMainRafFrameDeps = {
    * inventory stays playable (Tab panel) while crafting/debug menus still freeze locomotion.
    */
   fpLocomotionInputBlocked: () => boolean;
+  /** True when local vitals are depleted — locomotion snapshots are rejected server-side. */
+  isLocalPlayerDead: () => boolean;
   /** Guests can fight/loot, but only registered accounts can claim apartments. */
   apartmentClaimsAllowed: boolean;
+  /** Combat sim arena — dropped-item prompts only (no apartment stash / claim / door chain). */
+  combatSimMode: boolean;
   /** Authoritative-blended feet for interaction range queries (elevator/residential/drops HUD). */
   fpInteractionFeet: () => THREE.Vector3;
   /** Center-screen ray vs sittable decor picks (mesh picks + decor roots). */
@@ -445,7 +449,8 @@ export function createFpSessionMainRafFrame(
       pos: deps.pos,
     });
 
-    const locomotionBlocked = deps.fpLocomotionInputBlocked() || fpSitBlocksLocomotion();
+    const locomotionBlocked =
+      deps.fpLocomotionInputBlocked() || fpSitBlocksLocomotion() || deps.isLocalPlayerDead();
     deps._input.forward = locomotionBlocked ? false : deps.keys.has("KeyW");
     deps._input.backward = locomotionBlocked ? false : deps.keys.has("KeyS");
     deps._input.left = locomotionBlocked ? false : deps.keys.has("KeyA");
@@ -802,11 +807,12 @@ export function createFpSessionMainRafFrame(
         cfy !== aptSysCoarseFy ||
         cfz !== aptSysCoarseFz;
       const runFullAptSys =
-        !hudAptInitialized ||
-        deps.keys.has("KeyE") ||
-        cachedAptSys != null ||
-        ctxChanged ||
-        (hudHeavyFrame & 1) === 0;
+        !deps.combatSimMode &&
+        (!hudAptInitialized ||
+          deps.keys.has("KeyE") ||
+          cachedAptSys != null ||
+          ctxChanged ||
+          (hudHeavyFrame & 1) === 0);
       if (runFullAptSys) {
         hudAptInitialized = true;
         aptSysStashKey = stashUk;
@@ -829,7 +835,7 @@ export function createFpSessionMainRafFrame(
             : {}),
         });
       }
-      const aSys = cachedAptSys;
+      const aSys = deps.combatSimMode ? null : cachedAptSys;
 
       if (deps.keys.has("KeyE") && !deps.fpInteractInputBlocked()) {
         const holdPrompt = aSys;
@@ -890,7 +896,29 @@ export function createFpSessionMainRafFrame(
         setFpPickupPrompt(primary);
         syncFpPickupPromptNotebookSecondary(primary, notebookPickupFromCache());
       };
-      if (cachedBalconyGrowPrompt?.kind === "balcony_grow_harvest") {
+      if (deps.combatSimMode) {
+        const hitPlain = droppedHud.plain;
+        const nearWorld = droppedHud.worldAnchor;
+        if (hitPlain) {
+          const def = getMammothItemDef(hitPlain.defId);
+          publishPickup({
+            kind: "dropped_item",
+            droppedItemIdStr: hitPlain.droppedItemId.toString(),
+            displayName: def?.displayName ?? hitPlain.defId,
+            worldAnchorSpawn: false,
+          });
+        } else if (nearWorld) {
+          const def = getMammothItemDef(nearWorld.defId);
+          publishPickup({
+            kind: "dropped_item",
+            droppedItemIdStr: nearWorld.droppedItemId.toString(),
+            displayName: def?.displayName ?? nearWorld.defId,
+            worldAnchorSpawn: true,
+          });
+        } else {
+          clearFpPickupPrompts();
+        }
+      } else if (cachedBalconyGrowPrompt?.kind === "balcony_grow_harvest") {
         publishPickup({
           kind: "balcony_grow_harvest",
           unitKey: cachedBalconyGrowPrompt.unitKey,

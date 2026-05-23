@@ -153,6 +153,7 @@ export {
   WorldNpcPresenterPool,
   preloadBabushkaNpcBody,
   BABUSHKA_NPC_GLB_URI,
+  MAMMOTH_FP_WORLD_NPC_UD,
 } from "./npc/BabushkaNpcPresenter.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
 export {

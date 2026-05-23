@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { DbConnection } from "../module_bindings";
 import type { ApartmentUnit, PlayerVitals } from "../module_bindings/types";
 import { UNIT_STATE_CLAIMED } from "../game/fpApartment/fpApartmentGameplay";
+import { isFpCombatSimMode } from "../game/combatSim/fpCombatSimMode";
 
 type Props = {
   conn: DbConnection;
@@ -54,6 +55,7 @@ export function PlayerDeathOverlay({ conn }: Props) {
   }, [conn, ver]);
 
   const dead = (row?.health ?? 1) <= 0;
+  const inCombatSim = isFpCombatSimMode();
 
   useEffect(() => {
     if (!dead) {
@@ -124,7 +126,12 @@ export function PlayerDeathOverlay({ conn }: Props) {
         </div>
         <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>Respawn Required</div>
         <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(226,232,240,0.82)", marginBottom: 22 }}>
-          {hasClaimedApartment ? (
+          {inCombatSim ? (
+            <>
+              Your gear spilled where you fell. Press E to pick it up, or respawn empty-handed at the arena
+              center and run back for it.
+            </>
+          ) : hasClaimedApartment ? (
             <>
               Someone on your floor dragged you back inside. A night passes — you wake at your bed with basic
               survival supplies. Everything you were carrying spilled where you fell — go back for it. Balcony crops

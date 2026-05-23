@@ -18,6 +18,7 @@ import {
   PlayerPresentationManager,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
+  preloadBabushkaNpcBody,
   bindMammothApartmentInteriorViewmodelEnv,
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
@@ -70,6 +71,7 @@ import {
   forgetMegablockStaticWorldMeshCache,
   waitMegablockStaticWorldMeshReady,
 } from "./fpSession/fpSessionStaticWorldMeshCache.js";
+import { restoreUnitInteriorMeshVisibilityAfterAuthView } from "../ui/mammothAuthBackdropInteriorVisibility.js";
 import { createCombatSimStaticWorld } from "./combatSim/combatSimStaticWorld.js";
 import {
   createInertFpApartmentDecorMeshes,
@@ -255,6 +257,13 @@ export async function mountFpSession(
       await assertWebGpuAdapterOrThrow();
       return requestWebGpuAdapter();
     }),
+    // Must finish before first `player_pose` ingest — combat sim leaves feet at arena center,
+    // which hides megablock interiors and reads as a black void in live play.
+    !isCombatSim
+      ? fpLoadingDbgTimed("leave_combat_sim_before_live_mount", () =>
+          conn.reducers.leaveCombatSim({}),
+        )
+      : Promise.resolve(),
   ]);
   const {
     building,
@@ -327,6 +336,8 @@ export async function mountFpSession(
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
   if (!isCombatSim) {
+    // Auth backdrop may hide unit shells on the shared megablock cache; FP visibility owns them again.
+    restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
     prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
   }
   const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;
@@ -838,7 +849,7 @@ export async function mountFpSession(
   const _aimShotWorldDir = new THREE.Vector3();
 
   const {
-    syncBuildingFloorPlateVisibility,
+    syncBuildingFloorPlateVisibility: syncBuildingFloorPlateVisibilityBase,
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
     getContainingResidentialUnitKey,
@@ -872,6 +883,16 @@ export async function mountFpSession(
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
     });
+  /** Combat sim arena has no megablock plates — keep shared floor-band logic out of live play. */
+  const syncBuildingFloorPlateVisibility = isCombatSim
+    ? (_nowMs: number) => {
+        camera.getWorldPosition(_floorVisCamWorld);
+        camera.getWorldDirection(_floorVisCamDir);
+        for (const ch of buildingRoot.children) {
+          ch.visible = true;
+        }
+      }
+    : syncBuildingFloorPlateVisibilityBase;
 
   const getInteractionPos = () => {
     const p = resolveAuthoritativeInteractionPose(pos, serverPose);
@@ -1097,9 +1118,13 @@ export async function mountFpSession(
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
+  if (isCombatSim) {
+    await preloadBabushkaNpcBody();
+  }
   const fpNpcSession = isCombatSim
     ? createFpNpcSession({
-        scene,
+        worldParent: scene,
+        fxScene: scene,
         conn,
         getAudioContext: () => localAudio.getAudioContext(),
       })
@@ -1291,6 +1316,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, DROPPED_ITEM_SUBSCRIBE_HALF_M, {
     pickupBandOpts: mammothDropPickupBands,
+    alwaysShowDroppedItems: isCombatSim,
     beforePickup: flushLocalPickupPoseToServer,
     onPickupRemoved: async () => {
       await attachSpatialWorldAudio();
@@ -1315,6 +1341,12 @@ export async function mountFpSession(
 
   const onSelfVitalsUpdate = (_ctx: unknown, oldRow: PlayerVitals, row: PlayerVitals) => {
     if (!(conn.identity?.isEqual(row.identity) ?? false)) return;
+    const wasAlive = oldRow.health > 0;
+    const nowDead = row.health <= 0;
+    if (wasAlive && nowDead && spawnSynced) {
+      const poseRow = conn.db.player_pose.identity.find(row.identity) as PlayerPose | undefined;
+      if (poseRow) applyAuthoritativeFeetSnapFromServerRow(poseRow);
+    }
     const wasDead = oldRow.health <= 0;
     const nowAlive = row.health > 0;
     if (!wasDead || !nowAlive || !spawnSynced) return;
@@ -1483,6 +1515,32 @@ export async function mountFpSession(
       e.preventDefault();
       /** Same blend as RAF pickup prompts ({@link resolveAuthoritativeInteractionPose}). */
       const feet = getInteractionPos();
+      const feetPick = getDroppedPickupAuthorityFeet();
+      if (isCombatSim) {
+        const nearWorld = findNearestDroppedPickup(
+          conn,
+          feetPick.x,
+          feetPick.y,
+          feetPick.z,
+          MAMMOTH_PICKUP_RADIUS_M,
+          droppedItemIsWorldAnchor,
+          MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M,
+          mammothDropPickupBands,
+        );
+        if (nearWorld) {
+          void (async () => {
+            try {
+              await flushLocalPickupPoseToServer();
+              await conn.reducers.pickupDroppedItem({ droppedItemId: nearWorld.droppedItemId });
+            } catch {
+              return;
+            }
+          })();
+          return;
+        }
+        droppedWorld.tryPickupNearest(feetPick.x, feetPick.y, feetPick.z);
+        return;
+      }
       if (fpElevators.consumeInteractKey(feet, camera)) return;
       const suppressElevPickup = fpElevators.shouldSuppressEpickup(feet, camera);
       const lookedAtStash = conn.identity
@@ -1510,7 +1568,6 @@ export async function mountFpSession(
       const interiorBeatElevPickup =
         aptKey !== null && apartmentClaimInteriorsPreferOverUnitDoor(aptKey);
       if (suppressElevPickup && !interiorBeatElevPickup) return;
-      const feetPick = getDroppedPickupAuthorityFeet();
       if (!conn.identity) {
         droppedWorld.tryPickupNearest(feetPick.x, feetPick.y, feetPick.z);
         return;
@@ -1758,6 +1815,13 @@ export async function mountFpSession(
   const fpLocomotionInputBlocked = () =>
     mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
 
+  const isLocalPlayerDead = (): boolean => {
+    const id = conn.identity;
+    if (!id) return false;
+    const vitals = conn.db.player_vitals.identity.find(id) as PlayerVitals | undefined;
+    return (vitals?.health ?? 1) <= 0;
+  };
+
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,
     canvas,
@@ -1817,7 +1881,9 @@ export async function mountFpSession(
     tickFpSessionElevDebug,
     fpInteractInputBlocked,
     fpLocomotionInputBlocked,
+    isLocalPlayerDead,
     apartmentClaimsAllowed: opts.apartmentClaimsAllowed !== false,
+    combatSimMode: isCombatSim,
     fpInteractionFeet: getInteractionPos,
     getApartmentSittablePrompt: getApartmentSittablePromptForSession,
     getApartmentNotebookPrompt: getApartmentNotebookPromptForSession,
