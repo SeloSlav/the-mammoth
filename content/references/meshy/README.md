@@ -18,7 +18,7 @@ stylized low-poly brutalist realism, grounded Eastern European aesthetic, PS2-er
 ```
 
 ---
-
+ 
 ## 2. Subject lines (one per asset)
 
 Append **one** of the following after the shared prefix (separated by a blank line).

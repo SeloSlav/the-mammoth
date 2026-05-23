@@ -24,7 +24,7 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
       unitKey: "u1",
       trayId: "tray-a",
       slotIndex,
-      cropDefId: "lovage-seeds",
+      cropDefId: "parsley-seeds",
       plantedAtMicros: 0n,
       matureAtMicros: 0n,
       targetDays: 5,
@@ -113,7 +113,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
             unitKey: "u1",
             trayId: "tray-a",
             slotIndex: 0,
-            cropDefId: "lovage-seeds",
+            cropDefId: "parsley-seeds",
             plantedAtMicros: 0n,
             matureAtMicros: 0n,
             targetDays: 4,
@@ -131,7 +131,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
       unitKey: "u1",
       trayId: "tray-a",
       slotIndex: 0,
-      cropDisplayName: "Fresh lovage",
+      cropDisplayName: "Fresh parsley",
     });
   });
 });

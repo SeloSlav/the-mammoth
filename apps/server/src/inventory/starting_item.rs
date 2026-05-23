@@ -81,7 +81,6 @@ const FOOTLOCKER_GROW_OP_STARTER: &[ApartmentStashStarterRow] = &[
     starter_footlocker!(3, "radish-sprout-seeds", 4),
     starter_footlocker!(4, "green-onion-sets", 4),
     starter_footlocker!(5, "scented-geranium-cuttings", 2),
-    starter_footlocker!(6, "lovage-seeds", 2),
 ];
 
 /// One-time pantry seeded into the apartment fridge (tutorial eat/drink before leaving).

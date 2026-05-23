@@ -166,7 +166,7 @@ mod tests {
         ));
         assert!(!apartment_stash_accepts_def_id(
             APARTMENT_STASH_KIND_GROW_TRAY,
-            "lovage-seeds"
+            "parsley-seeds"
         ));
     }
 }

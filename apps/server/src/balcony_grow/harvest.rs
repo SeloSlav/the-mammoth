@@ -151,7 +151,6 @@ pub(super) fn harvest_balcony_grow_slot_impl(
 
 fn first_harvest_hint(crop_def_id: &str) -> &'static str {
     match crop_def_id {
-        "lovage-seeds" => "Libelek goes in Thursday soup — ask the engineer for the communal pot.",
         "parsley-seeds" => "Fresh peršin finishes every pot — stash some for trade day.",
         "dill-seeds" => "Kopar pairs with tank fish — the engineer knows the grill schedule.",
         "paprika-seedlings" => "Feferoni slow-roast best on the stove — save three for ajvar.",
@@ -159,7 +158,7 @@ fn first_harvest_hint(crop_def_id: &str) -> &'static str {
         "radish-sprout-seeds" => {
             "Klica repe is emergency greens — eat raw when the fridge runs dry."
         }
-        "oyster-mushroom-spore" => "Dry bukovačica on the rack before soup season.",
+        "oyster-mushroom-spore" => "Bukovačica cooks down into soup — ask the engineer for the communal pot.",
         "scented-geranium-cuttings" => {
             "Pelargonija čaj calms the block — steep after a long shift."
         }

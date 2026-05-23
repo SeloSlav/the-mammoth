@@ -185,17 +185,33 @@ describe("resolveApartmentInteriorPropWarmUpVisible", () => {
 });
 
 describe("syncApartmentInteriorPropVisibilityUnit", () => {
-  it("clears warm-up state when the containing unit changes", () => {
+  it("clears visible keys and restores warm-up cache when the containing unit changes", () => {
     const state = createApartmentInteriorPropVisibilityState();
     state.warmedKeys.add("a");
     state.visibleKeys.add("a");
     state.activeUnitKey = "unit_a";
+    state.warmedKeysByUnit.set("unit_b", new Set(["b"]));
 
     syncApartmentInteriorPropVisibilityUnit(state, "unit_b");
 
     expect(state.activeUnitKey).toBe("unit_b");
-    expect(state.warmedKeys.size).toBe(0);
+    expect(state.warmedKeys.has("b")).toBe(true);
+    expect(state.warmedKeys.has("a")).toBe(false);
     expect(state.visibleKeys.size).toBe(0);
+    expect(state.warmedKeysByUnit.get("unit_a")?.has("a")).toBe(true);
+  });
+
+  it("persists warm-up when leaving a unit and restores it on re-entry", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    state.activeUnitKey = "unit_a";
+    state.warmedKeys.add("decor_a");
+
+    syncApartmentInteriorPropVisibilityUnit(state, null);
+    expect(state.warmedKeys.size).toBe(0);
+    expect(state.warmedKeysByUnit.get("unit_a")?.has("decor_a")).toBe(true);
+
+    syncApartmentInteriorPropVisibilityUnit(state, "unit_a");
+    expect(state.warmedKeys.has("decor_a")).toBe(true);
   });
 });
 
@@ -253,8 +269,9 @@ describe("applyApartmentInteriorPropVisibility", () => {
     expect(state.visibleKeys.has("prop")).toBe(false);
   });
 
-  it("shows all warmed props immediately without a per-frame budget", () => {
+  it("rate-limits steady-state hidden→visible transitions for warmed props", () => {
     const state = createApartmentInteriorPropVisibilityState();
+    state.activeUnitKey = "unit_a";
     const a = new THREE.Group();
     const b = new THREE.Group();
     state.warmedKeys.add("a");
@@ -266,7 +283,23 @@ describe("applyApartmentInteriorPropVisibility", () => {
         { key: "b", object: b, desiredVisible: true, forwardDot: 0.8 },
       ],
       state,
-      0,
+      32,
+      1,
+    );
+
+    expect(a.visible).toBe(true);
+    expect(b.visible).toBe(false);
+    expect(state.visibleKeys.has("a")).toBe(true);
+    expect(state.visibleKeys.has("b")).toBe(false);
+
+    applyApartmentInteriorPropVisibility(
+      [
+        { key: "a", object: a, desiredVisible: true, forwardDot: 0.9 },
+        { key: "b", object: b, desiredVisible: true, forwardDot: 0.8 },
+      ],
+      state,
+      32,
+      1,
     );
 
     expect(a.visible).toBe(true);

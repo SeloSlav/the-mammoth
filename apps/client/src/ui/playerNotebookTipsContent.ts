@@ -73,7 +73,7 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
       "Plant: seed on hotbar, aim a free tray slot, LMB. Harvest mature plants with E.",
       "Tray stash (center pick or E on tray): compost slot only. Water + compost before sleep.",
       "Good care = extra food/seeds at harvest (light + water + compost). Radish sprouts = emergency greens (~2–3 nights).",
-      "Crops worth the trouble: peršin/dill garnish, libelek for soup, feferoni slow but real, pelargonija for čaj.",
+      "Crops worth the trouble: peršin/dill garnish, feferoni slow but real, pelargonija for čaj.",
     ],
   },
   {

@@ -35,6 +35,7 @@ import {
   buildApartmentPlanarMirrorVisual,
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
+  postProcessApartmentDecorGltfScene,
   tagProceduralApartmentDecorMeshesSkipMerge,
   mergeApartmentDecorManifestPaths,
 } from "@the-mammoth/world";
@@ -779,8 +780,21 @@ function disposeGroupSubtreeGeometry(group: THREE.Object3D): void {
   });
 }
 
+function cloneApartmentDecorTemplateMeshResources(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry = o.geometry.clone();
+    if (Array.isArray(o.material)) {
+      o.material = o.material.map((material) => material.clone());
+    } else {
+      o.material = o.material.clone();
+    }
+  });
+}
+
 function cloneProp(template: THREE.Object3D, modelRelPath: string): THREE.Object3D {
   const r = template.clone(true);
+  cloneApartmentDecorTemplateMeshResources(r);
   r.userData.mammothEditorMyApartmentProp = true;
   if (isProceduralApartmentDecorModelPath(modelRelPath)) {
     tagProceduralApartmentDecorMeshesSkipMerge(r);
@@ -1306,7 +1320,10 @@ export async function loadEditorMyApartmentDecorTemplates(
         if (!pending) {
           const loadPromise = modelRelPath.toLowerCase().endsWith(".obj")
             ? objLoader.loadAsync(url)
-            : gltfLoader.loadAsync(url).then((gltf) => gltf.scene);
+            : gltfLoader.loadAsync(url).then((gltf) => {
+                postProcessApartmentDecorGltfScene(gltf.scene, modelRelPath);
+                return gltf.scene;
+              });
           pending = loadPromise.catch((err: unknown) => {
             editorMyApartmentDecorTemplatePromises.delete(url);
             throw err;

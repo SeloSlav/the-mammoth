@@ -205,7 +205,6 @@ describe("mammothItemCatalog", () => {
 
   it("loads balcony grow-op plant and harvest defs from catalog shard", () => {
     const plantIds = [
-      "lovage-seeds",
       "parsley-seeds",
       "dill-seeds",
       "paprika-seedlings",
@@ -214,8 +213,11 @@ describe("mammothItemCatalog", () => {
       "oyster-mushroom-spore",
       "scented-geranium-cuttings",
     ] as const;
+    const seedIconUrl = getMammothItemDef("parsley-seeds")?.iconUrl ?? "";
+    expect(seedIconUrl.length).toBeGreaterThan(8);
     for (const id of plantIds) {
       expect(getMammothItemDef(id)?.category).toBe("resource");
+      expect(getMammothItemDef(id)?.iconUrl).toBe(seedIconUrl);
       expect(getMammothDroppedWorldModelUrl(id)).toBe(
         "/static/models/objects/grow-stage-sapling.glb",
       );
@@ -227,14 +229,12 @@ describe("mammothItemCatalog", () => {
     expect(getMammothItemDef("balcony-grow-substrate")?.iconUrl?.length).toBeGreaterThan(8);
 
     const harvestIds = [
-      "fresh-lovage",
       "fresh-parsley",
       "fresh-dill",
       "fresh-paprika",
       "fresh-green-onion",
       "radish-sprouts",
       "fresh-oyster-mushroom",
-      "dried-oyster-mushroom",
       "scented-geranium-leaves",
     ] as const;
     for (const id of harvestIds) {
@@ -250,7 +250,7 @@ describe("mammothItemCatalog", () => {
     expect(
       mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("scented-geranium-leaves")),
     ).toBe(true);
-    expect(mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("fresh-dill"))).toBe(
+    expect(mammothItemDefSupportsHotbarInstantConsume(getMammothItemDef("parsley-seeds"))).toBe(
       false,
     );
   });

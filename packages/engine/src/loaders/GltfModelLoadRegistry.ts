@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /**
  * Minimal GLB cache: `preload` loads once; `instantiateLoaded` returns `scene.clone(true)` clones.
+ * Clones share geometry/materials with the template — never `deepDisposeObject3D` on them.
  * Intended for the client; keep construction in `mountFpSession` (or tests with real files).
  */
 export class GltfModelLoadRegistry implements IModelLoadRegistry {

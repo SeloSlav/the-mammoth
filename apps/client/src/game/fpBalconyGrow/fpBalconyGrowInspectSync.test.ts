@@ -20,7 +20,7 @@ function growingPlantState(): BalconyGrowOpUnitState {
         unitKey: "u1",
         trayId: "tray-a",
         slotIndex: 3,
-        cropDefId: "lovage-seeds",
+        cropDefId: "parsley-seeds",
         plantedAtMicros: 0n,
         matureAtMicros: 0n,
         targetDays: 5,

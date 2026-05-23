@@ -15,6 +15,8 @@ describe("apartmentSittable", () => {
     expect(apartmentSittableSpecFromModelPath("static/models/objects/sofa.glb")?.lateralSeatCount).toBe(
       3,
     );
+    const sofa = apartmentSittableSpecFromModelPath("static/models/objects/sofa.glb");
+    expect(sofa!.localSeatOffset.y + sofa!.eyeHeightM).toBeCloseTo(1.0, 1);
     expect(apartmentSittableSpecFromModelPath("static/models/objects/toilet.glb")?.mode).toBe(
       "sit",
     );

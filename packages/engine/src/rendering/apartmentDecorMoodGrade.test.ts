@@ -97,6 +97,34 @@ describe("moodGradeMammothApartmentDecorMaterial warm fixtures", () => {
     expect(graded.emissive.r).toBe(0);
     expect(graded.emissiveIntensity).toBe(1);
   });
+
+  it("only tints emissive-masked screen areas on TV/computer, not the whole housing", () => {
+    const housingOnly = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        color: 0x444444,
+        emissive: 0xffffff,
+        emissiveIntensity: 1,
+      }),
+      { modelRelPath: "static/models/objects/tv.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(housingOnly.emissive.r).toBe(0);
+    expect(housingOnly.emissiveMap).toBeNull();
+
+    const masked = moodGradeMammothApartmentDecorMaterial(
+      new THREE.MeshStandardMaterial({
+        color: 0x444444,
+        emissive: 0xffffff,
+        emissiveIntensity: 1,
+        emissiveMap: new THREE.Texture(),
+      }),
+      { modelRelPath: "static/models/objects/computer.glb" },
+    ) as THREE.MeshStandardMaterial;
+
+    expect(masked.emissiveMap).not.toBeNull();
+    expect(masked.emissive.b).toBeGreaterThan(masked.emissive.r);
+    expect(masked.toneMapped).toBe(false);
+  });
 });
 
 describe("moodGradeMammothApartmentDecorMesh skip flag", () => {

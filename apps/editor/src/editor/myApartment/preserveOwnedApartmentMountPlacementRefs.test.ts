@@ -4,6 +4,7 @@ import { defaultOwnedApartmentWallDoorOpening } from "@the-mammoth/world";
 import {
   collectOwnedApartmentWallIdsWithOpeningChanges,
   collectWallIdsNeedingEditorMountSync,
+  ownedApartmentPlacedItemsOnlyPoseChanged,
   ownedApartmentWallItemsDeepEqual,
   ownedApartmentWallOpeningsSignature,
   preserveOwnedApartmentMountPlacementRefs,
@@ -187,5 +188,34 @@ describe("collectWallIdsNeedingEditorMountSync", () => {
     const ids = collectWallIdsNeedingEditorMountSync(prev, next, mountedKeys);
     expect(ids.has("wall-new")).toBe(true);
     expect(ids.size).toBe(1);
+  });
+});
+
+describe("ownedApartmentPlacedItemsOnlyPoseChanged", () => {
+  it("treats imported decor as structural so the editor mounts a scene group", () => {
+    const next = [
+      ...DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
+      {
+        id: "decor-new",
+        modelRelPath: "static/models/objects/fish-tank.glb",
+        fx: 0.5,
+        fz: 0.5,
+        dy: 0,
+        yawRad: 0,
+        pitchRad: 0,
+        rollRad: 0,
+        uniformScale: 1,
+        verticalScaleMul: 1,
+        ignoreSupportSurfaces: false,
+        itemKind: "plain" as const,
+      },
+    ];
+
+    expect(
+      ownedApartmentPlacedItemsOnlyPoseChanged(
+        DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
+        next,
+      ),
+    ).toBe(false);
   });
 });

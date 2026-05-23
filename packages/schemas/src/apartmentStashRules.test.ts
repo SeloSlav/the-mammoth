@@ -83,7 +83,7 @@ describe("apartmentStashAcceptsDefId", () => {
       ),
     ).toBe(true);
     expect(
-      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_GROW_TRAY, "lovage-seeds", "resource"),
+      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_GROW_TRAY, "parsley-seeds", "resource"),
     ).toBe(false);
   });
 });

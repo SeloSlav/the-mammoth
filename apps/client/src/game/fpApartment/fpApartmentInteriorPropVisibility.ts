@@ -28,6 +28,13 @@ export const APARTMENT_INTERIOR_PROP_MAX_SHOWS_PER_FRAME = 6;
  */
 export const APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME = 32;
 
+/**
+ * After warm-up, behind-camera cull hides props while turning away. When the viewer turns back,
+ * spreading hidden→visible transitions avoids compiling dozens of WebGPU pipelines in one frame
+ * (multi‑hundred‑ms hitches at ~300k submitted tris).
+ */
+export const APARTMENT_INTERIOR_PROP_STEADY_MAX_SHOWS_PER_FRAME = 8;
+
 /** Frustum / forward-cone culling bounds for a decor group (expanded by {@link APARTMENT_PROP_FRUSTUM_MARGIN_M}). */
 export function tagApartmentDecorGroupVisibilityMetadata(group: THREE.Object3D): void {
   group.updateMatrixWorld(true);
@@ -44,13 +51,20 @@ export type ApartmentInteriorPropVisibilityState = {
   /** Decor keys that completed entry warm-up in the current containing unit. */
   warmedKeys: Set<string>;
   activeUnitKey: string | null;
+  /** Warm-up completion per unit — survives brief exits so re-entry does not replay bursts. */
+  warmedKeysByUnit: Map<string, Set<string>>;
 };
 
 /** @deprecated Use {@link ApartmentInteriorPropVisibilityState}. */
 export type ApartmentInteriorPropVisibilityBudgetState = ApartmentInteriorPropVisibilityState;
 
 export function createApartmentInteriorPropVisibilityState(): ApartmentInteriorPropVisibilityState {
-  return { visibleKeys: new Set(), warmedKeys: new Set(), activeUnitKey: null };
+  return {
+    visibleKeys: new Set(),
+    warmedKeys: new Set(),
+    activeUnitKey: null,
+    warmedKeysByUnit: new Map(),
+  };
 }
 
 /** @deprecated Use {@link createApartmentInteriorPropVisibilityState}. */
@@ -64,6 +78,22 @@ export function clearApartmentInteriorPropVisibilityState(
   state.visibleKeys.clear();
   state.warmedKeys.clear();
   state.activeUnitKey = null;
+  state.warmedKeysByUnit.clear();
+}
+
+function persistWarmedKeysForUnit(
+  state: ApartmentInteriorPropVisibilityState,
+  unitKey: string,
+): void {
+  state.warmedKeysByUnit.set(unitKey, new Set(state.warmedKeys));
+}
+
+function restoreWarmedKeysForUnit(
+  state: ApartmentInteriorPropVisibilityState,
+  unitKey: string,
+): void {
+  const cached = state.warmedKeysByUnit.get(unitKey);
+  state.warmedKeys = cached ? new Set(cached) : new Set();
 }
 
 /** @deprecated Use {@link clearApartmentInteriorPropVisibilityState}. */
@@ -80,14 +110,26 @@ export function syncApartmentInteriorPropVisibilityUnit(
   state: ApartmentInteriorPropVisibilityState,
   containingUnitKey: string | null,
 ): void {
-  if (containingUnitKey !== state.activeUnitKey) {
-    state.activeUnitKey = containingUnitKey;
-    state.visibleKeys.clear();
-    state.warmedKeys.clear();
+  if (containingUnitKey === state.activeUnitKey) {
+    if (containingUnitKey === null) {
+      state.visibleKeys.clear();
+    }
+    return;
   }
+
+  if (state.activeUnitKey !== null) {
+    persistWarmedKeysForUnit(state, state.activeUnitKey);
+  }
+
+  state.activeUnitKey = containingUnitKey;
+  state.visibleKeys.clear();
+
   if (containingUnitKey === null) {
-    state.visibleKeys.clear();
+    state.warmedKeys.clear();
+    return;
   }
+
+  restoreWarmedKeysForUnit(state, containingUnitKey);
 }
 
 export function apartmentPropBoundsForwardDot(
@@ -201,15 +243,17 @@ export type ApartmentInteriorPropVisibilityApplyItem = {
 };
 
 /**
- * Applies desired visibility: immediate hides, entry warm-up burst for unwarmed keys, then
- * immediate shows for warmed keys (steady state — no per-frame show budget while turning).
+ * Applies desired visibility: immediate hides, entry warm-up burst for unwarmed keys, then a
+ * smaller steady-state show budget when warmed props transition hidden→visible after turns.
  */
 export function applyApartmentInteriorPropVisibility(
   items: readonly ApartmentInteriorPropVisibilityApplyItem[],
   state: ApartmentInteriorPropVisibilityState,
   warmUpMaxShowsPerFrame = APARTMENT_INTERIOR_PROP_WARMUP_MAX_SHOWS_PER_FRAME,
+  steadyMaxShowsPerFrame = APARTMENT_INTERIOR_PROP_STEADY_MAX_SHOWS_PER_FRAME,
 ): void {
   const pendingWarmUp: ApartmentInteriorPropVisibilityApplyItem[] = [];
+  const pendingSteadyShow: ApartmentInteriorPropVisibilityApplyItem[] = [];
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
@@ -225,22 +269,43 @@ export function applyApartmentInteriorPropVisibility(
       continue;
     }
 
-    item.object.visible = true;
-    state.visibleKeys.add(item.key);
+    if (state.visibleKeys.has(item.key)) {
+      item.object.visible = true;
+      continue;
+    }
+
+    pendingSteadyShow.push(item);
   }
 
   pendingWarmUp.sort((a, b) => b.forwardDot - a.forwardDot);
 
-  const budget = Math.max(0, warmUpMaxShowsPerFrame);
+  const warmUpBudget = Math.max(0, warmUpMaxShowsPerFrame);
   for (let i = 0; i < pendingWarmUp.length; i++) {
     const item = pendingWarmUp[i]!;
-    if (i < budget) {
+    if (i < warmUpBudget) {
       item.object.visible = true;
       state.visibleKeys.add(item.key);
       state.warmedKeys.add(item.key);
     } else {
       item.object.visible = false;
     }
+  }
+
+  pendingSteadyShow.sort((a, b) => b.forwardDot - a.forwardDot);
+
+  const steadyBudget = Math.max(0, steadyMaxShowsPerFrame);
+  for (let i = 0; i < pendingSteadyShow.length; i++) {
+    const item = pendingSteadyShow[i]!;
+    if (i < steadyBudget) {
+      item.object.visible = true;
+      state.visibleKeys.add(item.key);
+    } else {
+      item.object.visible = false;
+    }
+  }
+
+  if (state.activeUnitKey !== null && state.warmedKeys.size > 0) {
+    persistWarmedKeysForUnit(state, state.activeUnitKey);
   }
 }
 

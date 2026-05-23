@@ -158,18 +158,11 @@ export {
   isApartmentWindowShutterModelPath,
 } from "./apartmentWindowShutterVisual.js";
 export {
-  APARTMENT_FISH_TANK_DEPTH_M,
-  APARTMENT_FISH_TANK_HEIGHT_M,
-  APARTMENT_FISH_TANK_MODEL_PATH,
-  APARTMENT_FISH_TANK_WIDTH_M,
-  buildApartmentFishTankVisual,
-  isApartmentFishTankModelPath,
-} from "./apartmentFishTankVisual.js";
-export {
   APARTMENT_PROCEDURAL_DECOR_MODEL_PATHS,
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
   mergeApartmentDecorManifestPaths,
+  postProcessApartmentDecorGltfScene,
   tagProceduralApartmentDecorMeshesSkipMerge,
   type ApartmentProceduralDecorModelPath,
 } from "./apartmentProceduralDecorCatalog.js";

@@ -20,7 +20,7 @@ describe("waterContainerHelpers", () => {
     expect(mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef("apple"))).toBe(true);
     expect(mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef("water-bottle"))).toBe(true);
     expect(mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef("fresh-parsley"))).toBe(false);
-    expect(mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef("lovage-seeds"))).toBe(false);
+    expect(mammothItemDefSupportsHotbarFpViewmodel(getMammothItemDef("parsley-seeds"))).toBe(false);
   });
 
   it("balcony herbs are consumable without fp viewmodels", () => {

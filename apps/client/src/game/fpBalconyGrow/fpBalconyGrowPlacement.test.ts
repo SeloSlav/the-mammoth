@@ -12,7 +12,7 @@ describe("balconyGrowPlantPrimaryClickBlockedMessage", () => {
         trayId: "tray-a",
         trayObject: {} as never,
         slotIndex: 0,
-        seedDefId: "lovage-seeds",
+        seedDefId: "parsley-seeds",
         valid: false,
       }),
     ).toBe(BALCONY_GROW_SLOT_ALREADY_PLANTED_MESSAGE);
@@ -26,7 +26,7 @@ describe("balconyGrowPlantPrimaryClickBlockedMessage", () => {
         trayId: "tray-a",
         trayObject: {} as never,
         slotIndex: 1,
-        seedDefId: "lovage-seeds",
+        seedDefId: "parsley-seeds",
         valid: true,
       }),
     ).toBeNull();

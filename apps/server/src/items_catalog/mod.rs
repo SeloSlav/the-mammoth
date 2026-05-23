@@ -130,7 +130,6 @@ mod balcony_grow_op_catalog_tests {
 
     const PLANT_DEF_IDS: &[&str] = &[
         "balcony-grow-substrate",
-        "lovage-seeds",
         "parsley-seeds",
         "dill-seeds",
         "paprika-seedlings",
@@ -141,14 +140,12 @@ mod balcony_grow_op_catalog_tests {
     ];
 
     const HARVEST_DEF_IDS: &[&str] = &[
-        "fresh-lovage",
         "fresh-parsley",
         "fresh-dill",
         "fresh-paprika",
         "fresh-green-onion",
         "radish-sprouts",
         "fresh-oyster-mushroom",
-        "dried-oyster-mushroom",
         "scented-geranium-leaves",
     ];
 
@@ -184,6 +181,6 @@ mod balcony_grow_op_catalog_tests {
             instant_hotbar_consume_vital_deltas("fresh-parsley"),
             Some((0.0, 4.0, 0.0))
         );
-        assert!(instant_hotbar_consume_vital_deltas("lovage-seeds").is_none());
+        assert!(instant_hotbar_consume_vital_deltas("parsley-seeds").is_none());
     }
 }

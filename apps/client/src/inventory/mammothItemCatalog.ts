@@ -20,6 +20,7 @@ import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell
 import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
 import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
 import compostIcon from "../../../../content/references/meshy/compost.png?url";
+import seedsIcon from "../../../../content/references/meshy/seeds.png?url";
 import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
 import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
 
@@ -215,6 +216,13 @@ function mergeRawItems(): RawItem[] {
   return out;
 }
 
+function resolveIconUrl(it: RawItem): string {
+  const icon = ICONS[it.id];
+  if (icon) return icon;
+  if (normalizeBalconyGrow(it.balconyGrow)) return seedsIcon;
+  return "";
+}
+
 const byId = new Map<string, MammothItemDef>();
 for (const it of mergeRawItems()) {
   byId.set(it.id, {
@@ -230,7 +238,7 @@ for (const it of mergeRawItems()) {
     waterContainer: normalizeWaterContainer(it.waterContainer),
     balconyGrow: normalizeBalconyGrow(it.balconyGrow),
     balconyGrowFertilizer: it.balconyGrowFertilizer === true,
-    iconUrl: ICONS[it.id] ?? "",
+    iconUrl: resolveIconUrl(it),
   });
 }
 

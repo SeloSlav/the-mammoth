@@ -153,3 +153,11 @@ Copy the 10 s window report from the overlay/export after reproducing the two sc
 - **Do not** treat “274k triangles on one frame” as a failure if rotation no longer hitches: that peak can still happen for a **single** wall glance; the win is **not doing it every frame during a spin**.
 - **Do** treat regressions as: triangle **sawtooth** while rotating in place, rising **8–16 ms** bucket %, or `renderMs >> renderThreeMs` on most frames during slow yaw changes.
 - Content-side reductions (lower-poly decor, fewer placed props) remain valid optimizations but are **not required** for the current “solid” baseline documented here.
+
+### Decor GLB pipeline (2026-05-23)
+
+Safe batch pass (no decimation): `pnpm content:optimize-glbs` / `content:optimize-glbs:apply` — meshopt index reorder + WebP textures at 1024–2048. Audits: `pnpm content:audit-apartment-tris`. Backups: `content/models/glb-source-backups/`.
+
+**KTX2 for decor:** intentionally skipped for now — see [models glb-source-backups README](../../content/models/glb-source-backups/README.md). Building shells already use KTX2; decor stays on embedded WebP until texture-bound or a shared loader exists.
+
+**Procedural decor:** only `window-shutter.glb` (no disk asset). Fish tank uses `static/models/objects/fish-tank.glb`.

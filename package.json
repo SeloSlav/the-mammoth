@@ -23,11 +23,19 @@
     "content:normalize-footsteps": "tsx scripts/normalize-footsteps.ts",
     "content:normalize-footsteps:dry": "tsx scripts/normalize-footsteps.ts --dry-run",
     "check:hand-authored-loc": "node scripts/check-hand-authored-ts-loc.mjs",
-    "check:hand-authored-loc:strict": "node scripts/check-hand-authored-ts-loc.mjs --strict"
+    "check:hand-authored-loc:strict": "node scripts/check-hand-authored-ts-loc.mjs --strict",
+    "content:audit-apartment-tris": "node scripts/audit-apartment-builtin-tris.mjs",
+    "content:optimize-glbs": "node scripts/optimize-glbs.mjs",
+    "content:optimize-glbs:apply": "node scripts/optimize-glbs.mjs --apply"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.3.0",
+    "@gltf-transform/extensions": "^4.3.0",
+    "@gltf-transform/functions": "^4.3.0",
     "@types/node": "^24.12.2",
+    "meshoptimizer": "^1.1.1",
     "prettier": "^3.7.4",
+    "sharp": "^0.34.5",
     "three": "^0.183.2",
     "tsx": "^4.19.3",
     "turbo": "^2.9.6",

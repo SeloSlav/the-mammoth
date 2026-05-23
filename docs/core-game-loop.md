@@ -854,22 +854,21 @@ Each tray holds one crop at a time. Growth times are in in-game days; sleep adva
 
 | Crop (Balkan) | Plant `def_id` | Harvest `def_id` | Days | Primary use |
 |---------------|----------------|------------------|------|-------------|
-| **Lovage** (libelek) | `lovage-seeds` | `fresh-lovage` | 5–6 | soup and stew base |
 | **Parsley** (peršin) | `parsley-seeds` | `fresh-parsley` | 4–5 | garnish, soup, civilian trade |
 | **Dill** (kopar) | `dill-seeds` | `fresh-dill` | 5–6 | fish, pickles, potato soup |
 | **Paprika** (feferoni) | `paprika-seedlings` | `fresh-paprika` | 7–9 | ajvar and stew; modest eat raw |
 | **Green onion** (mladi luk) | `green-onion-sets` | `fresh-green-onion` | 4–5 | soup and ćevap garnish |
 | **Radish sprouts** (klica repe) | `radish-sprout-seeds` | `radish-sprouts` | 2–3 | fast emergency greens |
-| **Oyster mushroom** (bukovačica) | `oyster-mushroom-spore` | `fresh-oyster-mushroom` → `dried-oyster-mushroom` on rack | 7–10 | cook fresh or dry for soup |
+| **Oyster mushroom** (bukovačica) | `oyster-mushroom-spore` | `fresh-oyster-mushroom` | 7–10 | cook fresh for soup |
 | **Scented geranium** (pelargonija) | `scented-geranium-cuttings` | `scented-geranium-leaves` | 6–8 | **čaj** — balcony tea herb |
 
 Tray substrate item: `balcony-grow-substrate` (compost bucket / fish waste / scavenged fiber).
 
-**Starter footlocker pack** (granted once on first connect): normal footlocker stash rows (`ItemLocation::Stash` on the footlocker's decor stash key) — 6× substrate, plus seed packets for parsley, dill, radish sprouts, green onion, scented geranium, and lovage.
+**Starter footlocker pack** (granted once on first connect): normal footlocker stash rows (`ItemLocation::Stash` on the footlocker's decor stash key) — 6× substrate, plus seed packets for parsley, dill, radish sprouts, green onion, and scented geranium.
 
 **Not on the balcony (farm floor only):** bulk mycelium beds, ration-grade fungal loaves, armor-fiber cultures, spore quarantine strains, and anything that needs misting corridors or sterile prep rooms.
 
-**Outputs tie to existing inventory buckets:** soup ingredients, tea (pelargonija čaj), dried mushrooms (via drying rack), and fridge/stove consumables — not a parallel item taxonomy.
+**Outputs tie to existing inventory buckets:** soup ingredients, tea (pelargonija čaj), and fridge/stove consumables — not a parallel item taxonomy.
 
 This supports the player but does not replace the communal fungal farm.
 
@@ -1072,7 +1071,7 @@ Examples:
 - clean fish tank
 - collect fish waste
 - water balcony grow trays
-- harvest lovage / peršin / klica repe / bukovačica
+- harvest peršin / klica repe / bukovačica
 - start drying mushrooms or herbs
 - empty compost
 - repair flashlight

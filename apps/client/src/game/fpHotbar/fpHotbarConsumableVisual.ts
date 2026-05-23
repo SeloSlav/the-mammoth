@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { deepDisposeObject3D } from "@the-mammoth/engine";
+import { detachRegistryCloneSubtree } from "@the-mammoth/engine";
 import { getMammothDroppedWorldModelUrl } from "../../inventory/mammothItemCatalog.js";
 
 type ConsumableMount = {
@@ -110,8 +110,7 @@ export class FpHotbarConsumableVisual {
   private clearCurrent(): void {
     const root = this.currentRoot;
     if (!root) return;
-    root.removeFromParent();
-    deepDisposeObject3D(root);
+    detachRegistryCloneSubtree(root);
     this.currentRoot = null;
   }
 

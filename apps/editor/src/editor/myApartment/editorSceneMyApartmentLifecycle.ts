@@ -108,7 +108,7 @@ export function createEditorSceneMyApartmentLifecycle(
       return;
     }
     pendingWallsVisualSync = false;
-    syncPlacementIncremental("walls-only");
+    syncPlacementIncremental("walls-only", prevMountInputs);
     prevMountInputs = captureApartmentMountSyncInputs(useEditorStore.getState());
   }
 
@@ -323,6 +323,7 @@ export function createEditorSceneMyApartmentLifecycle(
 
   async function syncPlacementIncrementalAsync(
     kind: "decor-only" | "walls-only" | "mirrors-only",
+    previousMountInputs: ApartmentMountSyncInputs,
   ): Promise<void> {
     const parent = deps.getStructuralRoot();
     if (!parent || !mount) {
@@ -350,7 +351,7 @@ export function createEditorSceneMyApartmentLifecycle(
       }
       if (disposed || deps.getShouldHoldReplicaResync()) return;
       const poseOnly = ownedApartmentPlacedItemsOnlyPoseChanged(
-        prevMountInputs.placedItems,
+        previousMountInputs.placedItems,
         doc.placedItems,
       );
       if (!poseOnly) {
@@ -359,7 +360,7 @@ export function createEditorSceneMyApartmentLifecycle(
           decorTemplates,
           doc,
           authoringFractionMapping,
-          prevMountInputs.placedItems,
+          previousMountInputs.placedItems,
         );
         structuralDecorRebuild = decorResult.structuralRebuild;
       }
@@ -371,19 +372,19 @@ export function createEditorSceneMyApartmentLifecycle(
         if (mount.selectionGroups[selId]) mountedWallKeys.add(selId);
       }
       const changedWallIds = collectWallIdsNeedingEditorMountSync(
-        prevMountInputs.wallItems,
+        previousMountInputs.wallItems,
         doc.wallItems,
         mountedWallKeys,
       );
       for (const wallId of collectOwnedApartmentWallIdsWithOpeningChanges(
-        prevMountInputs.wallItems,
+        previousMountInputs.wallItems,
         doc.wallItems,
       )) {
         changedWallIds.add(wallId);
       }
       syncEditorMyApartmentWallsOnMount(mount, doc, authoringFractionMapping, {
         onlyWallIds: changedWallIds,
-        prevWallItems: prevMountInputs.wallItems,
+        prevWallItems: previousMountInputs.wallItems,
       });
     } else {
       if (disposed || deps.getShouldHoldReplicaResync()) return;
@@ -401,18 +402,22 @@ export function createEditorSceneMyApartmentLifecycle(
     deps.syncTransformAttachment();
   }
 
-  function syncPlacementIncremental(kind: "decor-only" | "walls-only" | "mirrors-only"): void {
-    void syncPlacementIncrementalAsync(kind);
+  function syncPlacementIncremental(
+    kind: "decor-only" | "walls-only" | "mirrors-only",
+    previousMountInputs: ApartmentMountSyncInputs,
+  ): void {
+    void syncPlacementIncrementalAsync(kind, previousMountInputs);
   }
 
   function onStoreChange(nextMountInputs: ApartmentMountSyncInputs): void {
+    const previousMountInputs = prevMountInputs;
     const kind = classifyApartmentMountSyncChange(prevMountInputs, nextMountInputs);
     if (kind === "none") return;
     if (kind === "decor-only" || kind === "walls-only" || kind === "mirrors-only") {
       /** Gizmo drags patch the store every frame — rebuilding meshes mid-gesture resets pose. */
       if (deps.getShouldHoldReplicaResync()) return;
       prevMountInputs = nextMountInputs;
-      syncPlacementIncremental(kind);
+      syncPlacementIncremental(kind, previousMountInputs);
       return;
     }
     prevMountInputs = nextMountInputs;

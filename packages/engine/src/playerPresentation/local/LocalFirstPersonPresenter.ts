@@ -19,7 +19,7 @@ import {
   FP_CROWBAR_GLTF_MAX_EDGE_M,
   forceDoubleSidedMeshes,
 } from "../viewModelNormalize.js";
-import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
+import { detachRegistryCloneSubtree } from "../../loaders/deepDisposeObject3D.js";
 import { resolveAuthoringOrbitTargetWorld } from "./localFirstPersonAuthoringOrbit.js";
 import { largestValidAuthoringRigRestStep } from "./localFirstPersonRigAuthoringClamp.js";
 import { computeWeaponGripMountFromDefinition } from "./localFirstPersonWeaponGripLayout.js";
@@ -767,8 +767,7 @@ export class LocalFirstPersonPresenter {
     this.weapon?.dispose(this.fpRoot);
     this.weapon = undefined;
     if (this.handScene) {
-      this.rightHandRig.remove(this.handScene);
-      deepDisposeObject3D(this.handScene);
+      detachRegistryCloneSubtree(this.handScene);
       this.handScene = undefined;
     }
     if (this.weaponGripAnchor) {

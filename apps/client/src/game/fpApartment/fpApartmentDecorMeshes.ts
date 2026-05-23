@@ -17,6 +17,7 @@ import {
   buildApartmentPlanarMirrorVisual,
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
+  postProcessApartmentDecorGltfScene,
   tagProceduralApartmentDecorMeshesSkipMerge,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
@@ -847,8 +848,11 @@ export function mountFpApartmentDecorMeshes(opts: {
     const procedural = buildProceduralApartmentDecorVisual(modelRelPath);
     if (procedural) return procedural;
     switch (apartmentDecorModelExtension(modelRelPath)) {
-      case ".glb":
-        return (await gltfLoader.loadAsync(url)).scene;
+      case ".glb": {
+        const scene = (await gltfLoader.loadAsync(url)).scene;
+        postProcessApartmentDecorGltfScene(scene, modelRelPath);
+        return scene;
+      }
       case ".obj":
         return await objLoader.loadAsync(url);
       default:

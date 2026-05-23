@@ -31,7 +31,6 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
 
 /** Catalog def ids that share the balcony grow preview mesh (never `grow-tray.glb`). */
 const BALCONY_GROW_CATALOG_PREVIEW_DEF_IDS = new Set<string>([
-  "lovage-seeds",
   "parsley-seeds",
   "dill-seeds",
   "paprika-seedlings",
@@ -39,14 +38,12 @@ const BALCONY_GROW_CATALOG_PREVIEW_DEF_IDS = new Set<string>([
   "radish-sprout-seeds",
   "oyster-mushroom-spore",
   "scented-geranium-cuttings",
-  "fresh-lovage",
   "fresh-parsley",
   "fresh-dill",
   "fresh-paprika",
   "fresh-green-onion",
   "radish-sprouts",
   "fresh-oyster-mushroom",
-  "dried-oyster-mushroom",
   "scented-geranium-leaves",
 ]);
 

@@ -120,8 +120,16 @@ export function moodGradeMammothApartmentDecorMaterial(
         }
       }
     } else if (isScreenGlow) {
-      m.emissive.lerp(new THREE.Color(0x5a9cff), 0.62);
-      m.emissiveIntensity *= 1.25;
+      if (m.emissiveMap) {
+        /** Screen mask only — never wash the whole CRT/monitor housing blue. */
+        m.emissive.lerp(new THREE.Color(0x5a9cff), 0.62);
+        m.emissiveIntensity *= 1.25;
+        m.toneMapped = false;
+      } else {
+        m.emissive.setHex(0x000000);
+        m.emissiveIntensity = 1;
+        m.emissiveMap = null;
+      }
     }
   } else {
     /** Scene lights + PMREM carry non-fixture props — exporter emissive reads as flat/unlit. */

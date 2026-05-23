@@ -4,6 +4,7 @@ import {
   type PlayerPresentationManager,
   buildWeaponFirstPersonPresentationMergeFromPickList,
 } from "@the-mammoth/engine";
+import { patchFpTransformControlsPointerForCaptureCompat } from "../fpApartment/fpTransformControlsPointerPatch.js";
 
 export type FpViewmodelAuthoringOpts = {
   scene: THREE.Scene;
@@ -46,6 +47,7 @@ export function mountFpViewmodelAuthoringDevOnly(opts: FpViewmodelAuthoringOpts)
   const { scene, camera, canvas, presentation, activeRef } = opts;
 
   const transformControls = new TransformControls(camera, canvas);
+  patchFpTransformControlsPointerForCaptureCompat(transformControls);
   transformControls.setSize(0.78);
   transformControls.setSpace("world");
   const transformHelper = transformControls.getHelper();

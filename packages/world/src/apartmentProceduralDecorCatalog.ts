@@ -1,10 +1,5 @@
 import * as THREE from "three";
 import {
-  APARTMENT_FISH_TANK_MODEL_PATH,
-  buildApartmentFishTankVisual,
-  isApartmentFishTankModelPath,
-} from "./apartmentFishTankVisual.js";
-import {
   APARTMENT_WINDOW_SHUTTER_MODEL_PATH,
   buildApartmentWindowShutterVisual,
   isApartmentWindowShutterModelPath,
@@ -13,7 +8,6 @@ import {
 /** Catalog paths for decor that is built in code — no GLB/OBJ asset on disk. */
 export const APARTMENT_PROCEDURAL_DECOR_MODEL_PATHS = [
   APARTMENT_WINDOW_SHUTTER_MODEL_PATH,
-  APARTMENT_FISH_TANK_MODEL_PATH,
 ] as const;
 
 export type ApartmentProceduralDecorModelPath =
@@ -43,10 +37,15 @@ export function buildProceduralApartmentDecorVisual(
   if (isApartmentWindowShutterModelPath(modelRelPath)) {
     return buildApartmentWindowShutterVisual();
   }
-  if (isApartmentFishTankModelPath(modelRelPath)) {
-    return buildApartmentFishTankVisual();
-  }
   return null;
+}
+
+/** Post-load fixes for authored GLBs that need runtime material or mesh surgery. */
+export function postProcessApartmentDecorGltfScene(
+  _root: THREE.Object3D,
+  _modelRelPath: string,
+): void {
+  // Authored GLBs are expected to carry their final materials and geometry.
 }
 
 /** Procedural decor uses custom materials (glass/water) — never batch-merge its meshes. */

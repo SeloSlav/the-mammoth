@@ -2,7 +2,6 @@ import * as THREE from "three";
 import type { WeaponDefinition } from "./weaponTypes.js";
 import type { WeaponPresentationRole } from "./weaponTypes.js";
 import { samplePrimitiveMeleeSwing } from "./weaponPrimitiveAuthoring.js";
-import { deepDisposeObject3D } from "../loaders/deepDisposeObject3D.js";
 import { setMaxEdgeUniformScale } from "../playerPresentation/viewModelNormalize.js";
 
 const FP_HAND_MOUNT_DEFAULT_SCALE = new THREE.Vector3(1, 1, 1);
@@ -167,7 +166,7 @@ export class WeaponPresenter {
   dispose(fallbackParent: THREE.Object3D): void {
     const p = this.root.parent ?? fallbackParent;
     p.remove(this.root);
-    deepDisposeObject3D(this.visual);
+    this.root.clear();
   }
 
   /**
