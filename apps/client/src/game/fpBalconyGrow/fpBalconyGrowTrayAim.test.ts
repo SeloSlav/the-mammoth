@@ -9,7 +9,7 @@ import {
 import { sortBalconyGrowRaycastHits } from "./fpBalconyGrowTrayAnchor.js";
 
 function emptyGrowState(): BalconyGrowOpUnitState {
-  return { trays: [], plants: [], light: null, patches: [] };
+  return { trays: [], plants: [], light: null, patches: [], traysWithSubstrate: new Set() };
 }
 
 describe("balconyGrowLivePlantInSlot", () => {
@@ -27,7 +27,7 @@ describe("balconyGrowLivePlantInSlot", () => {
           matureAtMicros: 0n,
           targetDays: 5,
           daysGrown: 1,
-          fertilizedAtPlant: 0,
+          substrateFedOvernight: 0,
           phase: 1,
           owner: {} as never,
         },
@@ -53,7 +53,7 @@ describe("growTrayRayHitTargetsLivePlant", () => {
           matureAtMicros: 0n,
           targetDays: 5,
           daysGrown: 1,
-          fertilizedAtPlant: 0,
+          substrateFedOvernight: 0,
           phase: 1,
           owner: {} as never,
         },
@@ -82,7 +82,7 @@ describe("growTrayRayHitTargetsLivePlant", () => {
           matureAtMicros: 0n,
           targetDays: 5,
           daysGrown: 1,
-          fertilizedAtPlant: 0,
+          substrateFedOvernight: 0,
           phase: 1,
           owner: {} as never,
         },

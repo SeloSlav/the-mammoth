@@ -6,7 +6,6 @@ import {
   balconyGrowDaysRemaining,
   balconyGrowPlantReadyByDays,
   balconyGrowProgressFromDays,
-  balconyGrowTrayStashKey,
 } from "@the-mammoth/schemas";
 import {
   getMammothItemDef,
@@ -90,19 +89,13 @@ export function BalconyGrowInspectHud({ conn }: Props) {
     ) ?? null;
   const tray = state.trays.find((t) => t.trayId === target.trayId) ?? null;
   const lightsOn = state.light?.lightsOn !== 0;
-  const stashKey = balconyGrowTrayStashKey(target.unitKey, target.trayId);
-  let fertilizerPresent = false;
-  for (const row of conn.db.inventory_item) {
-    if (row.location.tag !== "Stash") continue;
-    if (row.location.value.unitKey !== stashKey) continue;
-    if (row.defId === "balcony-grow-substrate") fertilizerPresent = true;
-  }
+  const fertilizerPresent = state.traysWithSubstrate.has(target.trayId);
 
   if (!plant) return null;
 
   const daysGrown = Number(plant.daysGrown);
   const targetDays = Number(plant.targetDays);
-  const fertilizedOvernight = Number(plant.fertilizedAtPlant) !== 0;
+  const fertilizedOvernight = Number(plant.substrateFedOvernight) !== 0;
   const cropLabel = cropInspectLabel(plant.cropDefId, Number(plant.phase), daysGrown, targetDays);
   const trayWaterLiters = tray?.waterLiters ?? 0;
   const readyToHarvest = balconyGrowPlantReadyByDays(
@@ -180,7 +173,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
       <div style={{ opacity: 0.9 }}>
         {lightsOn ? "Grow light on" : "No grow light"}
         {fertilizedOvernight ? " · fed overnight" : ""}
-        {fertilizerPresent ? " · substrate ready (feeds all slots on sleep)" : ""}
+        {fertilizerPresent ? " · compost ready (feeds all slots on sleep)" : ""}
       </div>
       <div style={{ marginTop: 4, opacity: 0.82 }}>
         Water {trayWaterLiters.toFixed(1)}/{BALCONY_GROW_TRAY_MAX_WATER_L} L ({waterStatusLabel(trayWaterLiters)})

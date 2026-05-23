@@ -85,6 +85,13 @@ export async function mountGrowTrayDecorOnGroup(opts: {
 
   const trayVisualBounds = readDecorVisualLocalBounds(decorGroup, new THREE.Box3());
   const slotPickSize = balconyGrowSlotPickSizeFromTrayBounds(trayVisualBounds);
+  if (!trayVisualBounds.isEmpty()) {
+    trayVisualBounds.getSize(_traySizeScratch);
+    decorGroup.userData.mammothGrowTrayMinStageScale = Math.max(
+      _traySizeScratch.y * 0.12,
+      _traySizeScratch.x * 0.06,
+    );
+  }
 
   const trayPick = new THREE.Mesh(pickGeometry, pickMaterial);
   trayPick.name = `grow_tray_pick:${trayId}`;
@@ -233,10 +240,9 @@ export function syncGrowSlotVisuals(
   const trayRoot = slotVisualsGroup.parent;
   let minStageScale = 0;
   if (trayRoot) {
-    readDecorVisualLocalBounds(trayRoot, _trayBoundsScratch);
-    if (!_trayBoundsScratch.isEmpty()) {
-      _trayBoundsScratch.getSize(_traySizeScratch);
-      minStageScale = Math.max(_traySizeScratch.y * 0.12, _traySizeScratch.x * 0.06);
+    const cached = trayRoot.userData.mammothGrowTrayMinStageScale;
+    if (typeof cached === "number" && Number.isFinite(cached)) {
+      minStageScale = cached;
     }
   }
 
@@ -269,7 +275,6 @@ export function syncGrowSlotVisuals(
     holder.visible = true;
 
     if (state.visualKey === visualKey && state.visual) {
-      syncPlantPickForVisual(holder, state);
       continue;
     }
 

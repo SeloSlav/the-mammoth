@@ -21,7 +21,7 @@ export function useBalconyGrowOpState(
   return useMemo(() => {
     void tick;
     if (!conn) {
-      return { trays: [], plants: [], light: null, patches: [] };
+      return { trays: [], plants: [], light: null, patches: [], traysWithSubstrate: new Set() };
     }
     return readBalconyGrowOpUnitState(conn, unitKey);
   }, [conn, unitKey, tick]);

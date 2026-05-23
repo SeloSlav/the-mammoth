@@ -183,6 +183,7 @@ import {
   WORLD_SOUND_AOI_HALF,
 } from "./fpSession/fpSessionConstants.js";
 import {
+  applyFpRigLookRotations,
   createFpLookInertiaState,
   resetFpLookInertia,
   stepFpFreeLookRecenter,
@@ -907,8 +908,6 @@ export async function mountFpSession(
     lastMeleeMs: 0,
     lastRangedMs: 0,
   };
-  let pendingLookDeltaX = 0;
-  let pendingLookDeltaY = 0;
   const lookInertia = createFpLookInertiaState();
   const moveIntentQueue: FpSessionMoveIntentQueue = { items: [], head: 0 };
   /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
@@ -916,6 +915,20 @@ export async function mountFpSession(
 
   const keys = new Set<string>();
   const loco = createFpLocomotionState();
+
+  const resolveFpFreeLook = (): boolean =>
+    isFpSitActive() || keys.has("AltLeft") || keys.has("AltRight");
+
+  /** Pointer events can arrive while RAF is blocked — apply look immediately, not only on the next tick. */
+  const applyLocalFpRigLook = (freeLook: boolean): void => {
+    applyFpRigLookRotations(
+      { playerRig, headPitch, headCameraPitch, headFreeLook },
+      mainRaf,
+      freeLook,
+    );
+    playerRig.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+  };
 
   // ---------------------------------------------------------------------------
   // Object pools — pre-allocated once, mutated in place every frame/tick.
@@ -1099,8 +1112,6 @@ export async function mountFpSession(
   const resetTransientInputState = () => {
     commitFreeLookIntoBodyYaw();
     exitFpSit();
-    pendingLookDeltaX = 0;
-    pendingLookDeltaY = 0;
     resetFpLookInertia(lookInertia);
     keys.clear();
     mainRaf.meleePressPending = false;
@@ -1131,8 +1142,6 @@ export async function mountFpSession(
   const onPointerLockChange = () => {
     if (document.pointerLockElement !== canvas) {
       commitFreeLookIntoBodyYaw();
-      pendingLookDeltaX = 0;
-      pendingLookDeltaY = 0;
       resetFpLookInertia(lookInertia);
       mainRaf.meleePressPending = false;
       mainRaf.primaryAttackHeld = false;
@@ -1576,8 +1585,10 @@ export async function mountFpSession(
   const onMouseMove = (e: MouseEvent) => {
     if (fpAuthoringActiveRef.active) return;
     if (document.pointerLockElement !== canvas) return;
-    pendingLookDeltaX += e.movementX;
-    pendingLookDeltaY += e.movementY;
+    if (e.movementX === 0 && e.movementY === 0) return;
+    const freeLook = resolveFpFreeLook();
+    stepFpLookInertia(lookInertia, mainRaf, e.movementX, e.movementY, 0, { freeLook });
+    applyLocalFpRigLook(freeLook);
   };
 
   const onClick = () => {
@@ -1789,21 +1800,12 @@ export async function mountFpSession(
     const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.05);
     lastFrameMs = nowMs;
     if (document.pointerLockElement === canvas && !fpAuthoringActiveRef.active) {
-      const sitActive = isFpSitActive();
-      const freeLook = sitActive || keys.has("AltLeft") || keys.has("AltRight");
-      stepFpLookInertia(
-        lookInertia,
-        mainRaf,
-        pendingLookDeltaX,
-        pendingLookDeltaY,
-        dt,
-        { freeLook },
-      );
+      const freeLook = resolveFpFreeLook();
+      stepFpLookInertia(lookInertia, mainRaf, 0, 0, dt, { freeLook });
       if (!freeLook && mainRaf.headLookYaw !== 0) {
         stepFpFreeLookRecenter(mainRaf, dt);
       }
-      pendingLookDeltaX = 0;
-      pendingLookDeltaY = 0;
+      applyLocalFpRigLook(freeLook);
     }
     if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
     try {

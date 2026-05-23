@@ -1781,9 +1781,9 @@ pub(crate) fn apartment_stash_owner_near_sender(
             ))
         }
         ParsedApartmentStashKey::GrowTray { unit_key, tray_id } => {
-            let stash_key = crate::balcony_grow_op::grow_tray_stash_key(unit_key, tray_id);
+            let stash_key = crate::balcony_grow::grow_tray_stash_key(unit_key, tray_id);
             let (owner_id, uk) =
-                crate::balcony_grow_op::grow_tray_stash_near_sender(ctx, stash_key.as_str())?;
+                crate::balcony_grow::grow_tray_stash_near_sender(ctx, stash_key.as_str())?;
             Some((owner_id, uk, APARTMENT_STASH_KIND_GROW_TRAY))
         }
     }

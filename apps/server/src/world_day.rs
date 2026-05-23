@@ -5,7 +5,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments::{self, apartment_unit};
 use crate::auth;
-use crate::balcony_grow_op;
+use crate::balcony_grow;
 use crate::crafting::emit_hud_notice;
 use crate::player_vitals;
 use crate::pose::player_pose;
@@ -100,7 +100,7 @@ pub(crate) fn advance_world_day_for_player(
     ctx.db.player_world_progress().identity().update(row);
     player_vitals::restore_player_vitals_full(ctx, owner);
     if let Some(uk) = unit_key {
-        balcony_grow_op::advance_world_day_for_unit(ctx, uk, 1);
+        balcony_grow::advance_world_day_for_unit(ctx, uk, 1);
     }
     Ok(nights)
 }

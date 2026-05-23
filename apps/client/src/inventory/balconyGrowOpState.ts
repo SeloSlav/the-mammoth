@@ -1,3 +1,8 @@
+import {
+  BALCONY_GROW_FERTILIZER_DEF_ID,
+  BALCONY_GROW_FERTILIZER_STASH_SLOT,
+  parseBalconyGrowTrayStashKey,
+} from "@the-mammoth/schemas";
 import type { DbConnection } from "../module_bindings";
 import type {
   BalconyGrowLight,
@@ -11,6 +16,16 @@ export type BalconyGrowOpUnitState = {
   plants: BalconyGrowPlant[];
   light: BalconyGrowLight | null;
   patches: BalconyWaterPatch[];
+  /** trayId → true when stash slot 0 holds balcony-grow-substrate */
+  traysWithSubstrate: ReadonlySet<string>;
+};
+
+const EMPTY_GROW_STATE: BalconyGrowOpUnitState = {
+  trays: [],
+  plants: [],
+  light: null,
+  patches: [],
+  traysWithSubstrate: new Set(),
 };
 
 function collectForUnit<T extends { unitKey: string }>(
@@ -25,12 +40,29 @@ function collectForUnit<T extends { unitKey: string }>(
   return out;
 }
 
+/** One inventory pass — mirrors server `fertilizer_present` (stash slot 0 + substrate def). */
+export function collectGrowTraySubstrateTrayIds(
+  conn: DbConnection,
+  unitKey: string,
+): Set<string> {
+  const out = new Set<string>();
+  for (const row of conn.db.inventory_item) {
+    if (row.location.tag !== "Stash") continue;
+    if (row.defId !== BALCONY_GROW_FERTILIZER_DEF_ID) continue;
+    if (Number(row.location.value.slotIndex) !== BALCONY_GROW_FERTILIZER_STASH_SLOT) continue;
+    const parsed = parseBalconyGrowTrayStashKey(row.location.value.unitKey);
+    if (!parsed || parsed.unitKey !== unitKey) continue;
+    out.add(parsed.trayId);
+  }
+  return out;
+}
+
 export function readBalconyGrowOpUnitState(
   conn: DbConnection,
   unitKey: string | null,
 ): BalconyGrowOpUnitState {
   if (!unitKey) {
-    return { trays: [], plants: [], light: null, patches: [] };
+    return EMPTY_GROW_STATE;
   }
   const trays = collectForUnit(conn.db.balcony_grow_tray, unitKey);
   const plants = collectForUnit(conn.db.balcony_grow_plant, unitKey);
@@ -42,7 +74,13 @@ export function readBalconyGrowOpUnitState(
       break;
     }
   }
-  return { trays, plants, light, patches };
+  return {
+    trays,
+    plants,
+    light,
+    patches,
+    traysWithSubstrate: collectGrowTraySubstrateTrayIds(conn, unitKey),
+  };
 }
 
 export function subscribeBalconyGrowOpTables(conn: DbConnection, bump: () => void): () => void {
@@ -58,6 +96,9 @@ export function subscribeBalconyGrowOpTables(conn: DbConnection, bump: () => voi
   conn.db.balcony_water_patch.onInsert(bump);
   conn.db.balcony_water_patch.onUpdate(bump);
   conn.db.balcony_water_patch.onDelete(bump);
+  conn.db.inventory_item.onInsert(bump);
+  conn.db.inventory_item.onUpdate(bump);
+  conn.db.inventory_item.onDelete(bump);
   return () => {
     conn.db.balcony_grow_tray.removeOnInsert(bump);
     conn.db.balcony_grow_tray.removeOnUpdate(bump);
@@ -71,5 +112,8 @@ export function subscribeBalconyGrowOpTables(conn: DbConnection, bump: () => voi
     conn.db.balcony_water_patch.removeOnInsert(bump);
     conn.db.balcony_water_patch.removeOnUpdate(bump);
     conn.db.balcony_water_patch.removeOnDelete(bump);
+    conn.db.inventory_item.removeOnInsert(bump);
+    conn.db.inventory_item.removeOnUpdate(bump);
+    conn.db.inventory_item.removeOnDelete(bump);
   };
 }

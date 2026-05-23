@@ -12,7 +12,7 @@ mod apartment_stash_location_match;
 mod apartment_stash_rules;
 mod apartments;
 mod auth;
-mod balcony_grow_op;
+mod balcony_grow;
 mod combat_stub;
 mod crafting;
 mod dropped_item;
@@ -60,7 +60,7 @@ pub fn init(ctx: &ReducerContext) {
     crafting::start_craft_queue_tick_schedule(ctx);
     crafting::start_hud_toast_cleanup_schedule(ctx);
     water_container::start_apartment_water_tank_schedule(ctx);
-    balcony_grow_op::start_balcony_grow_schedule(ctx);
+    balcony_grow::start_balcony_grow_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.
@@ -91,7 +91,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     inventory::ensure_starter_fridge(ctx, id);
     water_container::backfill_water_bottle_fill_rows(ctx);
     apartments::ensure_starter_apartment_water_tank(ctx, id);
-    balcony_grow_op::ensure_balcony_grow_for_owner(ctx, id);
+    balcony_grow::ensure_balcony_grow_for_owner(ctx, id);
     world_day::ensure_player_world_progress(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);
 }

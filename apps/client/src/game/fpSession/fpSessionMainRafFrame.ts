@@ -90,6 +90,7 @@ import {
   POSE_AOI_RECENTER,
   POSE_AOI_RECENTER_Y_M,
 } from "./fpSessionConstants.js";
+import { applyFpRigLookRotations } from "./fpSessionCameraLook.js";
 import {
   fpExpSmoothToward,
   fpSampleStairwellInteriorDarkTarget,
@@ -579,9 +580,16 @@ export function createFpSessionMainRafFrame(
       isFpSitActive() ||
       (!deps.fpInteractInputBlocked() &&
         (deps.keys.has("AltLeft") || deps.keys.has("AltRight")));
-    deps.headPitch.rotation.x = freeLook ? 0 : mainRaf.pitch;
-    deps.headCameraPitch.rotation.x = mainRaf.pitch;
-    deps.headFreeLook.rotation.y = mainRaf.headLookYaw;
+    applyFpRigLookRotations(
+      {
+        playerRig: deps.playerRig,
+        headPitch: deps.headPitch,
+        headCameraPitch: deps.headCameraPitch,
+        headFreeLook: deps.headFreeLook,
+      },
+      mainRaf,
+      freeLook,
+    );
 
     deps._audioMovement.horizontalSpeed = hs;
     deps._audioMovement.stridePhaseRad = deps.loco.headBobPhase;

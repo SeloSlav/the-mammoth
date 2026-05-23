@@ -140,7 +140,7 @@ export function apartmentStashRejectionHint(stashKind: ApartmentStashKind): stri
     case APARTMENT_STASH_KIND_WATER_TANK:
       return "Water tank only holds a water bottle.";
     case APARTMENT_STASH_KIND_GROW_TRAY:
-      return "Grow tray only holds balcony substrate fertilizer.";
+      return "Grow tray only holds tray compost.";
     default:
       return "This item cannot go here.";
   }

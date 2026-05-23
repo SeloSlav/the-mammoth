@@ -27,6 +27,9 @@ out/
 build
 dist
 
+# Rust / SpacetimeDB module build output
+apps/server/target/
+
 
 # Debug
 npm-debug.log*

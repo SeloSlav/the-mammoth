@@ -99,4 +99,14 @@ describe("fpSessionCameraLook", () => {
     expect(angles.pitch).toBeLessThanOrEqual(1.53);
     expect(inertia.velPitch).toBe(0);
   });
+
+  it("applies pointer deltas immediately even when dt is zero", () => {
+    const inertia = createFpLookInertiaState();
+    const angles: FpLookAngleState = { bodyYaw: 0, pitch: 0, headLookYaw: 0 };
+
+    stepFpLookInertia(inertia, angles, -12, 4, 0, { freeLook: false });
+
+    expect(angles.bodyYaw).toBeCloseTo(12 * MOUSE_SENS, 8);
+    expect(angles.pitch).toBeCloseTo(-4 * MOUSE_SENS, 8);
+  });
 });

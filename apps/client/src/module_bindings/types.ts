@@ -111,7 +111,7 @@ export const BalconyGrowPlant = __t.object("BalconyGrowPlant", {
   owner: __t.identity(),
   targetDays: __t.u8(),
   daysGrown: __t.u8(),
-  fertilizedAtPlant: __t.u8(),
+  substrateFedOvernight: __t.u8(),
 });
 export type BalconyGrowPlant = __Infer<typeof BalconyGrowPlant>;
 

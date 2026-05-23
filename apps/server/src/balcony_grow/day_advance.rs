@@ -1,0 +1,176 @@
+use spacetimedb::{ReducerContext, Table};
+
+use crate::apartments::apartment_unit;
+
+use super::tables::*;
+use super::tray::{
+    fertilizer_present, grow_speed_modifier, lights_on_for_unit, tray_row, try_consume_tray_substrate,
+};
+
+/// Shrink remaining grow nights after overnight substrate feed (modifier was without fert at plant).
+pub(crate) fn target_days_after_fertilizer(
+    days_grown: u8,
+    target_days: u8,
+    without_fert_modifier: f32,
+    with_fert_modifier: f32,
+) -> u8 {
+    if target_days == 0 || days_grown >= target_days {
+        return target_days;
+    }
+    let remaining = target_days - days_grown;
+    let new_remaining = ((remaining as f32 * without_fert_modifier
+        / with_fert_modifier.max(0.01))
+    .ceil() as u8)
+        .max(1);
+    days_grown.saturating_add(new_remaining)
+}
+
+/// Apply overnight substrate feed to in-memory plant rows (DB-agnostic).
+pub(crate) fn apply_substrate_to_plants(
+    plants: &mut [BalconyGrowPlant],
+    without_fert_modifier: f32,
+    with_fert_modifier: f32,
+) {
+    for plant in plants.iter_mut() {
+        if plant.phase != PHASE_GROWING || plant.substrate_fed_overnight != 0 {
+            continue;
+        }
+        plant.target_days = target_days_after_fertilizer(
+            plant.days_grown,
+            plant.target_days,
+            without_fert_modifier,
+            with_fert_modifier,
+        );
+        plant.substrate_fed_overnight = 1;
+        if plant.days_grown >= plant.target_days {
+            plant.phase = PHASE_MATURE;
+        }
+    }
+}
+
+fn apply_tray_substrate_on_sleep(ctx: &ReducerContext, unit_key: &str) {
+    let unit = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string());
+    let Some(owner) = unit.and_then(|u| u.owner) else {
+        return;
+    };
+
+    let plant_table = ctx.db.balcony_grow_plant();
+    let mut by_tray: std::collections::HashMap<String, Vec<BalconyGrowPlant>> =
+        std::collections::HashMap::new();
+    for plant in plant_table.iter().filter(|p| {
+        p.unit_key == unit_key && p.phase == PHASE_GROWING && p.substrate_fed_overnight == 0
+    }) {
+        by_tray
+            .entry(plant.tray_id.clone())
+            .or_default()
+            .push(plant);
+    }
+
+    let lights_on = lights_on_for_unit(ctx, unit_key);
+    for (tray_id, mut plants) in by_tray {
+        if !fertilizer_present(ctx, unit_key, tray_id.as_str()) {
+            continue;
+        }
+        if !try_consume_tray_substrate(ctx, owner, unit_key, tray_id.as_str()) {
+            continue;
+        }
+        let water = tray_row(ctx, unit_key, tray_id.as_str())
+            .map(|t| t.water_liters)
+            .unwrap_or(0.0);
+        let without_fert = grow_speed_modifier(lights_on, false, water);
+        let with_fert = grow_speed_modifier(lights_on, true, water);
+        apply_substrate_to_plants(&mut plants, without_fert, with_fert);
+        for plant in plants {
+            plant_table.row_key().update(plant);
+        }
+    }
+}
+
+pub(super) fn maybe_backfill_plant_day_fields(plant: &mut BalconyGrowPlant, now_micros: i64) {
+    if plant.target_days > 0 {
+        return;
+    }
+    if plant.mature_at_micros <= plant.planted_at_micros {
+        plant.target_days = BALCONY_GROW_REFERENCE_DAYS as u8;
+        return;
+    }
+    let grow_secs = (plant.mature_at_micros - plant.planted_at_micros) / 1_000_000;
+    plant.target_days = ((grow_secs as f32 / BALCONY_GAME_DAY_SECS as f32).ceil() as u8).max(1);
+    let elapsed_secs = ((now_micros - plant.planted_at_micros).max(0) as f32) / 1_000_000.0;
+    plant.days_grown = (elapsed_secs / BALCONY_GAME_DAY_SECS as f32)
+        .floor()
+        .clamp(0.0, plant.target_days as f32) as u8;
+}
+
+pub(super) fn plant_is_mature(plant: &BalconyGrowPlant) -> bool {
+    if plant.phase == PHASE_MATURE {
+        return true;
+    }
+    plant.target_days > 0 && plant.days_grown >= plant.target_days
+}
+
+pub(super) fn apply_grow_day_credit(plant: &mut BalconyGrowPlant, days: u8) {
+    if plant.phase != PHASE_GROWING || days == 0 || plant.target_days == 0 {
+        return;
+    }
+    plant.days_grown = plant
+        .days_grown
+        .saturating_add(days)
+        .min(plant.target_days);
+    if plant.days_grown >= plant.target_days {
+        plant.phase = PHASE_MATURE;
+    }
+}
+
+/// Sleep / death day hook — advance balcony plants and dry overnight moisture.
+pub(crate) fn advance_world_day_for_unit(ctx: &ReducerContext, unit_key: &str, days: u8) {
+    if days == 0 {
+        return;
+    }
+    apply_tray_substrate_on_sleep(ctx, unit_key);
+    let now = ctx.timestamp.to_micros_since_unix_epoch();
+    let plant_table = ctx.db.balcony_grow_plant();
+    let plants: Vec<BalconyGrowPlant> = plant_table
+        .iter()
+        .filter(|p| p.unit_key == unit_key && p.phase == PHASE_GROWING)
+        .collect();
+    let lights_on = lights_on_for_unit(ctx, unit_key);
+    for mut plant in plants {
+        maybe_backfill_plant_day_fields(&mut plant, now);
+        if lights_on {
+            apply_grow_day_credit(&mut plant, days);
+        }
+        plant_table.row_key().update(plant);
+    }
+
+    let patch_table = ctx.db.balcony_water_patch();
+    for patch in patch_table
+        .iter()
+        .filter(|p| p.unit_key == unit_key)
+        .collect::<Vec<_>>()
+    {
+        patch_table.patch_id().delete(patch.patch_id);
+    }
+
+    let tray_table = ctx.db.balcony_grow_tray();
+    for mut tray in tray_table
+        .iter()
+        .filter(|t| t.unit_key == unit_key)
+        .collect::<Vec<_>>()
+    {
+        tray.water_liters = (tray.water_liters * 0.65).max(0.0);
+        if tray.water_liters <= 0.001 {
+            tray.dry_ticks = tray.dry_ticks.saturating_add(1);
+        }
+        tray_table.row_key().update(tray);
+    }
+}
+
+/// Legacy alias — prefer [`advance_world_day_for_unit`].
+pub(crate) fn advance_balcony_grow_for_unit(ctx: &ReducerContext, unit_key: &str, days: u8) {
+    advance_world_day_for_unit(ctx, unit_key, days);
+}

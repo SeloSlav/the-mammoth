@@ -29,12 +29,13 @@ function growStateWithPlants(): BalconyGrowOpUnitState {
       matureAtMicros: 0n,
       targetDays: 5,
       daysGrown: 1,
-      fertilizedAtPlant: 0,
+      substrateFedOvernight: 0,
       phase: 1,
       owner: {} as never,
     })),
     light: null,
     patches: [],
+    traysWithSubstrate: new Set(),
   };
 }
 
@@ -105,6 +106,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
         trays: [],
         light: null,
         patches: [],
+        traysWithSubstrate: new Set(),
         plants: [
           {
             rowKey: "k-0",
@@ -116,7 +118,7 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
             matureAtMicros: 0n,
             targetDays: 4,
             daysGrown: 4,
-            fertilizedAtPlant: 0,
+            substrateFedOvernight: 0,
             phase: 1,
             owner: {} as never,
           },

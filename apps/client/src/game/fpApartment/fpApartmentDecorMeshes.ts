@@ -92,7 +92,6 @@ import {
   apartmentStashLabel,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_FRIDGE,
-  APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
@@ -107,20 +106,10 @@ import {
 import {
   growTrayIdForPlacement,
   isGrowTrayModelPath,
-  mountGrowTrayDecorOnGroup,
-  syncGrowSlotVisuals,
 } from "../fpBalconyGrow/fpBalconyGrowTrayDecor.js";
-import {
-  resolveBalconyGrowTrayPrompt,
-  type BalconyGrowTrayPrompt,
-} from "../fpBalconyGrow/fpBalconyGrowPrompt.js";
-import {
-  collectOwnedBalconyGrowPickMeshes,
-  sortBalconyGrowRaycastHits,
-} from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
-import { growTrayRayHitTargetsLivePlant } from "../fpBalconyGrow/fpBalconyGrowTrayAim.js";
-import { readBalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
-import { syncBalconyGrowTrayDecorVisibility } from "../fpBalconyGrow/fpBalconyGrowPresentation.js";
+import { type BalconyGrowTrayPrompt } from "../fpBalconyGrow/fpBalconyGrowPrompt.js";
+import { createFpBalconyGrowDecorBridge } from "../fpBalconyGrow/fpBalconyGrowDecorBridge.js";
+import { sortBalconyGrowRaycastHits } from "../fpBalconyGrow/fpBalconyGrowTrayAnchor.js";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { Identity } from "spacetimedb";
 import type { BalconyGrowPlant, BalconyGrowTray } from "../../module_bindings/types";
@@ -490,6 +479,7 @@ export type MountFpApartmentDecorMeshesResult = {
   raycastBalconyGrowTrayHits: (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
+    preCollectedVisiblePicks?: readonly THREE.Mesh[],
   ) => readonly THREE.Intersection[];
   getBalconyGrowTrayPrompt: (
     playerPos: THREE.Vector3,
@@ -497,11 +487,12 @@ export type MountFpApartmentDecorMeshesResult = {
     conn: DbConnection,
     identity: Identity,
     growState: BalconyGrowOpUnitState,
+    hits: readonly THREE.Intersection[],
   ) => BalconyGrowTrayPrompt | null;
   syncBalconyGrowSlotVisuals: (
     plants: readonly BalconyGrowPlant[],
     trays: readonly BalconyGrowTray[],
-    stashHasFertilizer: (unitKey: string, trayId: string) => boolean,
+    traysWithSubstrate: ReadonlySet<string>,
   ) => void;
   syncBalconyGrowTrayDecorVisibility: (
     feet: THREE.Vector3,
@@ -542,14 +533,8 @@ export function mountFpApartmentDecorMeshes(opts: {
   const wardrobePickMeshes: THREE.Mesh[] = [];
   const sittablePickMeshes: THREE.Mesh[] = [];
   const notebookPickMeshes: THREE.Mesh[] = [];
-  const growTrayPickMeshes: THREE.Mesh[] = [];
-  const growTrayCenterPickMeshes: THREE.Mesh[] = [];
-  const growSlotPickMeshes: THREE.Mesh[] = [];
-  const growPlantPickMeshes: THREE.Mesh[] = [];
   const stashRayOcclusion: FpApartmentStashRayOcclusion = createFpApartmentStashRayOcclusion();
-  const growSlotVisualsByTrayId = new Map<string, THREE.Group>();
   const visibleStashPickMeshes: THREE.Mesh[] = [];
-  const visibleGrowPickMeshes: THREE.Mesh[] = [];
   const visibleWardrobePickMeshes: THREE.Mesh[] = [];
   const stashPickGeometry = new THREE.BoxGeometry(1, 1, 1);
   const stashPickMaterial = new THREE.MeshBasicMaterial({
@@ -558,6 +543,14 @@ export function mountFpApartmentDecorMeshes(opts: {
     depthWrite: false,
   });
   stashPickMaterial.colorWrite = false;
+  const growBridge = createFpBalconyGrowDecorBridge({
+    conn: opts.conn,
+    stashRayOcclusion,
+    pickGeometry: stashPickGeometry,
+    pickMaterial: stashPickMaterial,
+    raycaster: _stashRaycaster,
+    screenCenterNdc: _screenCenterNdc,
+  });
 
   let disposed = false;
   let buildEpoch = 0;
@@ -604,23 +597,8 @@ export function mountFpApartmentDecorMeshes(opts: {
     dst: THREE.Mesh[],
   ): void => {
     dst.length = 0;
-    collectOwnedBalconyGrowPickMeshes(
-      opts.conn,
-      opts.conn.identity,
-      playerPos,
-      growTrayPickMeshes,
-      growSlotPickMeshes,
-      visibleGrowPickMeshes,
-      growPlantPickMeshes,
-      growTrayCenterPickMeshes,
-    );
-    const growPickSet = new Set(visibleGrowPickMeshes);
     for (let i = 0; i < stashPickMeshes.length; i++) {
       const mesh = stashPickMeshes[i]!;
-      if (growPickSet.has(mesh)) {
-        dst.push(mesh);
-        continue;
-      }
       if (objectVisibleInHierarchy(mesh)) dst.push(mesh);
     }
   };
@@ -628,31 +606,9 @@ export function mountFpApartmentDecorMeshes(opts: {
   const raycastBalconyGrowTrayHits = (
     playerPos: THREE.Vector3,
     camera: THREE.PerspectiveCamera,
-  ): THREE.Intersection[] => {
-    collectOwnedBalconyGrowPickMeshes(
-      opts.conn,
-      opts.conn.identity,
-      playerPos,
-      growTrayPickMeshes,
-      growSlotPickMeshes,
-      visibleGrowPickMeshes,
-      growPlantPickMeshes,
-      growTrayCenterPickMeshes,
-    );
-    if (visibleGrowPickMeshes.length === 0) return [];
-    configureInteractionPickRaycaster();
-    _stashRaycaster.setFromCamera(_screenCenterNdc, camera);
-    _stashRaycaster.far = FP_APARTMENT_INTERACT_PICK_MAX_RAY_M;
-    const hits = sortBalconyGrowRaycastHits(
-      _stashRaycaster.intersectObjects(visibleGrowPickMeshes, false),
-    );
-    if (hits.length === 0) return hits;
-    const nearestWallDistance = stashRayOcclusion.nearestOccluderDistanceAlongViewRay(
-      camera,
-      maxRaycastHitDistance(hits),
-    );
-    return hits.filter((hit) => !stashRayOcclusion.hitOccluded(hit, nearestWallDistance));
-  };
+    preCollectedVisiblePicks?: readonly THREE.Mesh[],
+  ): THREE.Intersection[] =>
+    growBridge.raycastHits(playerPos, camera, opts.conn.identity, preCollectedVisiblePicks);
 
   const disposeGroupDeep = (g: THREE.Group) => {
     g.traverse((ch) => {
@@ -811,11 +767,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     wardrobePickMeshes.length = 0;
     sittablePickMeshes.length = 0;
     notebookPickMeshes.length = 0;
-    growTrayPickMeshes.length = 0;
-    growTrayCenterPickMeshes.length = 0;
-    growSlotPickMeshes.length = 0;
-    growPlantPickMeshes.length = 0;
-    growSlotVisualsByTrayId.clear();
+    growBridge.clear();
     for (const g of groupByRenderKey.values()) disposeGroupDeep(g);
     groupByRenderKey.clear();
     groupByDecorId.clear();
@@ -1125,23 +1077,11 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (isGrowTrayModelPath(d.modelRelPath)) {
         const trayId = growTrayIdForPlacement(d.renderKey, d.decorId);
         if (trayId) {
-          const mount = await mountGrowTrayDecorOnGroup({
+          await growBridge.mountOnGrowTrayDecorGroup({
             decorGroup: g,
             unitKey: d.unit.unitKey,
             trayId,
-            pickGeometry: stashPickGeometry,
-            pickMaterial: stashPickMaterial,
           });
-          growTrayPickMeshes.push(...mount.growTrayPickMeshes);
-          growTrayCenterPickMeshes.push(...mount.growTrayCenterPickMeshes);
-          growSlotPickMeshes.push(...mount.growSlotPickMeshes);
-          growPlantPickMeshes.push(...mount.growPlantPickMeshes);
-          stashPickMeshes.push(
-            ...mount.growTrayPickMeshes,
-            ...mount.growTrayCenterPickMeshes,
-            ...mount.growSlotPickMeshes,
-          );
-          growSlotVisualsByTrayId.set(trayId, mount.slotVisualsGroup);
           g.userData.mammothBalconyGrowTrayDecor = true;
           g.userData.mammothGrowTrayId = trayId;
         }
@@ -1360,22 +1300,13 @@ export function mountFpApartmentDecorMeshes(opts: {
           stashKind !== APARTMENT_STASH_KIND_WARDROBE &&
           stashKind !== APARTMENT_STASH_KIND_STOVE &&
           stashKind !== APARTMENT_STASH_KIND_FRIDGE &&
-          stashKind !== APARTMENT_STASH_KIND_WATER_TANK &&
-          stashKind !== APARTMENT_STASH_KIND_GROW_TRAY
+          stashKind !== APARTMENT_STASH_KIND_WATER_TANK
         ) {
           continue;
         }
         seen.add(stashKey);
         if (!clientMayUseApartmentStash(opts.conn, opts.conn.identity, stashKey, playerPos)) {
           continue;
-        }
-        if (stashKind === APARTMENT_STASH_KIND_GROW_TRAY) {
-          const trayUnitKey = hit.object.userData.mammothGrowTrayUnitKey;
-          const resolvedUnitKey = typeof trayUnitKey === "string" ? trayUnitKey : unitKey;
-          const growState = readBalconyGrowOpUnitState(opts.conn, resolvedUnitKey);
-          if (growTrayRayHitTargetsLivePlant(hit, growState, camera)) {
-            continue;
-          }
         }
         return {
           kind: "apartment_stash",
@@ -1401,59 +1332,22 @@ export function mountFpApartmentDecorMeshes(opts: {
       return null;
     },
     getSittablePickMeshes: () => sittablePickMeshes,
-    getGrowTrayPickMeshes: () => growTrayPickMeshes,
-    getGrowSlotPickMeshes: () => growSlotPickMeshes,
-    raycastBalconyGrowTrayHits: (playerPos, camera) =>
-      raycastBalconyGrowTrayHits(playerPos, camera),
-    getBalconyGrowTrayPrompt: (playerPos, camera, conn, identity, growState) => {
-      const hits = raycastBalconyGrowTrayHits(playerPos, camera);
-      return resolveBalconyGrowTrayPrompt(
-        conn,
-        identity,
-        playerPos,
-        camera,
-        hits,
-        growTrayPickMeshes,
-        growSlotPickMeshes,
-        growState,
-        stashRayOcclusion,
-        growTrayCenterPickMeshes,
-      );
-    },
+    getGrowTrayPickMeshes: () => growBridge.getGrowTrayPickMeshes(),
+    getGrowSlotPickMeshes: () => growBridge.getGrowSlotPickMeshes(),
+    raycastBalconyGrowTrayHits: (playerPos, camera, preCollectedVisiblePicks) =>
+      raycastBalconyGrowTrayHits(playerPos, camera, preCollectedVisiblePicks),
+    getBalconyGrowTrayPrompt: (playerPos, camera, conn, identity, growState, hits) =>
+      growBridge.resolvePrompt(playerPos, camera, conn, identity, growState, hits),
     rebuildStashRayOcclusion,
     getStashRayOcclusion: () => stashRayOcclusion,
-    syncBalconyGrowSlotVisuals: (plants, trays, stashHasFertilizer) => {
-      for (const [trayId, slotGroup] of growSlotVisualsByTrayId) {
-        const tray = trays.find((t) => t.trayId === trayId);
-        const decorRoot = slotGroup.parent;
-        const unitKey =
-          tray?.unitKey ??
-          (typeof decorRoot?.userData.mammothApartmentUnitKey === "string"
-            ? decorRoot.userData.mammothApartmentUnitKey
-            : "");
-        syncGrowSlotVisuals(
-          slotGroup,
-          plants,
-          trayId,
-          tray?.waterLiters ?? 0,
-          stashHasFertilizer(unitKey, trayId),
-        );
-      }
+    syncBalconyGrowSlotVisuals: (plants, trays, traysWithSubstrate) => {
+      growBridge.syncSlotVisuals(plants, trays, traysWithSubstrate);
     },
     syncBalconyGrowTrayDecorVisibility: (feet, unitKey) => {
-      syncBalconyGrowTrayDecorVisibility(feet, unitKey, growSlotVisualsByTrayId);
+      growBridge.syncVisibility(feet, unitKey);
     },
     collectBalconyGrowPickMeshesForPlayer: (playerPos, dst) => {
-      collectOwnedBalconyGrowPickMeshes(
-        opts.conn,
-        opts.conn.identity,
-        playerPos,
-        growTrayPickMeshes,
-        growSlotPickMeshes,
-        dst,
-        growPlantPickMeshes,
-        growTrayCenterPickMeshes,
-      );
+      growBridge.collectPickMeshesForPlayer(playerPos, opts.conn.identity, dst);
     },
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
     getSittablePrompt: (

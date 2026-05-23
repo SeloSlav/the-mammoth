@@ -3,8 +3,8 @@
   "items": [
     {
       "id": "balcony-grow-substrate",
-      "displayName": "Balcony grow substrate",
-      "description": "Tray fertilizer and compost mix for apartment grow trays. Drop in a grow-tray stash slot, then plant — one unit is consumed to speed maturity and improve harvest yields.",
+      "displayName": "Tray compost",
+      "description": "Fish waste, scavenged fiber, and compost mix for balcony grow trays. Drop in a tray stash slot before you sleep — one unit feeds all four growing slots overnight and improves harvest yields.",
       "category": "resource",
       "maxStack": 20,
       "balconyGrowFertilizer": true

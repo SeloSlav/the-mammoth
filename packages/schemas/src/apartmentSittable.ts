@@ -56,7 +56,7 @@ const SOFA_SPEC: ApartmentSittableSpec = {
   mode: "sit",
   localSeatOffset: { x: 0, y: 0.38, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
-  eyeHeightM: 1.02,
+  eyeHeightM: 0.88,
   interactRadiusM: 1.5,
   promptLabel: "Sit",
   defaultPitchRad: 0,

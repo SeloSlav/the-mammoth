@@ -82,7 +82,7 @@ export function MammothSleepConfirmHud({ conn }: Props) {
         </div>
         <p style={{ margin: "0 0 16px", color: THEME_TEXT_MUTED, lineHeight: 1.5, fontSize: 14 }}>
           Time skips forward. You wake with full health, food, and water. Balcony crops advance one
-          day; tray substrate in stash feeds all growing slots overnight.
+          day; tray compost in stash feeds all growing slots overnight.
         </p>
         <div style={{ display: "flex", gap: 10 }}>
           <button
