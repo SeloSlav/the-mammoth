@@ -1,11 +1,13 @@
 import type { DbConnection } from "../../module_bindings";
 import { mountFpSession } from "../mountFpSession.js";
+import { preloadBabushkaNpcBody } from "@the-mammoth/engine";
 import {
   findOwnedApartmentUnitForIdentity,
   loadAuthoredNpcCombatSpawnsFromContent,
   prepareAndEnterCombatSim,
   type CombatSimUnitContext,
 } from "./combatSimEnter.js";
+import { waitForCombatSimBabushkaRow } from "./waitForCombatSimWorldNpc.js";
 import type { OwnedApartmentNpcCombatSpawn } from "@the-mammoth/schemas";
 
 export type MountCombatSimSessionOptions = {
@@ -48,6 +50,17 @@ export async function mountCombatSimSession(
     await prepareAndEnterCombatSim(conn, unit, spawns);
   } else {
     await conn.reducers.enterCombatSim({});
+  }
+
+  report("wait_combat_npc");
+  const [, babushkaRow] = await Promise.all([
+    preloadBabushkaNpcBody(),
+    waitForCombatSimBabushkaRow(conn),
+  ]);
+  if (!babushkaRow) {
+    console.warn(
+      "[combatSim] no babushka world_npc row after enter_combat_sim — check claimed apartment / server deploy",
+    );
   }
 
   report("load_fp_session");

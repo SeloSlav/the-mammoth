@@ -225,11 +225,14 @@ export type AttachFpSessionEnvironmentOpts = {
   outdoorCombatArena?: boolean;
 };
 
+const COMBAT_ARENA_ENV_INTENSITY = 0.34;
+
 export function attachFpSessionEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGPURenderer,
   opts?: AttachFpSessionEnvironmentOpts,
 ): FpSessionEnvironmentHandle {
+  const outdoorCombatArena = opts?.outdoorCombatArena === true;
   const clipCompatibleRenderer = renderer as THREE.WebGPURenderer & {
     localClippingEnabled?: boolean;
     clippingPlanes?: THREE.Plane[];
@@ -309,12 +312,19 @@ export function attachFpSessionEnvironment(
   const fpSessionEnvTarget = fpSessionPmrem.fromScene(new RoomEnvironment(), 0.04);
   scene.environment = null;
   scene.userData.mammothFpMetallicReadableEnv = fpSessionEnvTarget.texture;
+  if (outdoorCombatArena) {
+    /** Open arena has few static meshes — global IBL keeps skinned NPCs readable without per-mesh env binds. */
+    scene.environment = fpSessionEnvTarget.texture;
+    scene.environmentIntensity = COMBAT_ARENA_ENV_INTENSITY;
+  }
 
   const fpShellWarmEnvMount = createApartmentInteriorWarmEnvMap(renderer);
   scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD] = fpShellWarmEnvMount.texture;
 
-  /** Keep the global environment path disabled; selected metallic GLBs receive the PMREM directly. */
-  scene.environmentIntensity = 1;
+  /** Keep the global environment path disabled in the megablock; combat arena opts in above. */
+  if (!outdoorCombatArena) {
+    scene.environmentIntensity = 1;
+  }
 
   const viewSize = new THREE.Vector2();
   renderer.getSize(viewSize);
@@ -363,7 +373,6 @@ export function attachFpSessionEnvironment(
   scene.fog = new THREE.Fog(0xd0d4cf, 120, 1350);
 
   const skipOutdoorGroundPlane = opts?.skipOutdoorGroundPlane === true;
-  const outdoorCombatArena = opts?.outdoorCombatArena === true;
   type LoadedTex = THREE.Texture;
   const groundTextures: LoadedTex[] = [];
   let groundPlaneDisposed = false;

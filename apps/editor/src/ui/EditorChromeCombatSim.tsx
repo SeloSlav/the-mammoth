@@ -10,6 +10,8 @@ import { faCrosshairs } from "@fortawesome/free-solid-svg-icons";
 import { useEditorStore } from "../state/editorStore.js";
 import { useShallow } from "zustand/react/shallow";
 
+const COMBAT_SIM_CLIENT_URL = "http://localhost:5173/?combatSim=1";
+
 const DEFAULT_BABUSHKA_SPAWN = {
   archetype: "babushka" as const,
   fx: 0.72,
@@ -18,23 +20,15 @@ const DEFAULT_BABUSHKA_SPAWN = {
 };
 
 export function EditorChromeCombatSim() {
-  const {
-    npcCombatSpawns,
-    combatSimPlayActive,
-    addNpcCombatSpawn,
-    removeNpcCombatSpawn,
-    patchOwnedApartmentBuiltins,
-    setCombatSimPlayActive,
-  } = useEditorStore(
-    useShallow((s) => ({
-      npcCombatSpawns: s.ownedApartmentBuiltins.npcCombatSpawns,
-      combatSimPlayActive: s.combatSimPlayActive,
-      addNpcCombatSpawn: s.addNpcCombatSpawn,
-      removeNpcCombatSpawn: s.removeNpcCombatSpawn,
-      patchOwnedApartmentBuiltins: s.patchOwnedApartmentBuiltins,
-      setCombatSimPlayActive: s.setCombatSimPlayActive,
-    })),
-  );
+  const { npcCombatSpawns, addNpcCombatSpawn, removeNpcCombatSpawn, patchOwnedApartmentBuiltins } =
+    useEditorStore(
+      useShallow((s) => ({
+        npcCombatSpawns: s.ownedApartmentBuiltins.npcCombatSpawns,
+        addNpcCombatSpawn: s.addNpcCombatSpawn,
+        removeNpcCombatSpawn: s.removeNpcCombatSpawn,
+        patchOwnedApartmentBuiltins: s.patchOwnedApartmentBuiltins,
+      })),
+    );
 
   return (
     <div
@@ -43,23 +37,27 @@ export function EditorChromeCombatSim() {
     >
       <EditorChromeSectionTitleIcon icon={faCrosshairs}>Combat sim</EditorChromeSectionTitleIcon>
       <p style={{ ...editorChromeHelp, fontSize: 12, marginTop: 6 }}>
-        Place NPC spawns in layout fractions (same as décor). Play mounts the same FP session and
-        server reducers as the game client — save layout JSON so spawns persist to disk.
+        Author NPC spawn points here (layout fractions, same as décor). Save layout JSON so spawns
+        persist to disk. Live combat runs in the game client — not duplicated in the editor.
       </p>
       <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {!combatSimPlayActive ? (
-          <button type="button" style={editorChromeRowBtn} onClick={() => setCombatSimPlayActive(true)}>
-            Play combat sim
-          </button>
-        ) : (
-          <button type="button" style={editorChromeRowBtn} onClick={() => setCombatSimPlayActive(false)}>
-            Stop (layout mode)
-          </button>
-        )}
+        <a
+          href={COMBAT_SIM_CLIENT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            ...editorChromeRowBtn,
+            display: "inline-flex",
+            alignItems: "center",
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          Test in game client
+        </a>
         <button
           type="button"
           style={editorChromeRowBtn}
-          disabled={combatSimPlayActive}
           onClick={() =>
             addNpcCombatSpawn({
               ...DEFAULT_BABUSHKA_SPAWN,
@@ -86,7 +84,6 @@ export function EditorChromeCombatSim() {
               <button
                 type="button"
                 style={{ ...editorChromeRowBtn, marginLeft: 8, padding: "2px 8px", fontSize: 11 }}
-                disabled={combatSimPlayActive}
                 onClick={() =>
                   patchOwnedApartmentBuiltins((doc) => ({
                     ...doc,
@@ -101,7 +98,6 @@ export function EditorChromeCombatSim() {
               <button
                 type="button"
                 style={{ ...editorChromeRowBtn, marginLeft: 4, padding: "2px 8px", fontSize: 11 }}
-                disabled={combatSimPlayActive}
                 onClick={() => removeNpcCombatSpawn(spawn.id)}
               >
                 Remove

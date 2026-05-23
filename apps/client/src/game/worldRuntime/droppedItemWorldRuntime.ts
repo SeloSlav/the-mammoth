@@ -11,6 +11,7 @@ import {
 } from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
 import { apartmentUnitKeyContainingWorldPoint } from "../fpApartment/fpApartmentGameplay.js";
+import { POSE_AOI_RECENTER } from "../fpSession/fpSessionConstants.js";
 import type { DbConnection } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
 
@@ -32,6 +33,10 @@ export type MammothDroppedPickupBandOpts = {
 const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
 /** Match `apps/server/src/dropped_item.rs` `DROP_Y_LIFT_M` — player drop mesh above replicated feet. */
 const DROP_ITEM_Y_LIFT_M = 0.11;
+
+const _dropInstPos = new THREE.Matrix4();
+const _dropInstYaw = new THREE.Matrix4();
+const _dropInstOut = new THREE.Matrix4();
 
 /**
  * Anchored loot Y includes clearance above the walk slab; player drops add a smaller lift. Either can sit
@@ -114,18 +119,9 @@ export function droppedPickupWithinServerVolume(
   return Math.abs(dropY - feetY) <= maxAbsDyM;
 }
 
-function disposeDroppedVisualBranch(rootNode: THREE.Object3D): void {
-  rootNode.traverse((obj) => {
-    const m = obj as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.geometry?.dispose();
-    const mat = m.material;
-    if (Array.isArray(mat)) {
-      for (const x of mat) x.dispose();
-    } else if (mat) {
-      mat.dispose();
-    }
-  });
+/** Removes an instanced draw batch without disposing shared template geometry/material. */
+function detachInstancedMesh(inst: THREE.InstancedMesh): void {
+  inst.removeFromParent();
 }
 
 /**
@@ -266,14 +262,98 @@ function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolea
   return false;
 }
 
-type DroppedGlbTemplate = {
-  /** Un-parented master; each drop uses {@link THREE.Object3D.clone}. */
-  root: THREE.Object3D;
+type DropMeshLayer = {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  /** Mesh transform relative to the catalog-fitted drop anchor (yaw + world position applied per instance). */
+  localMatrix: THREE.Matrix4;
 };
 
 type DefTemplateState =
-  | { status: "ready"; template: DroppedGlbTemplate }
+  | { status: "ready"; layers: DropMeshLayer[] }
   | { status: "glb_unavailable" };
+
+type CachedDropRow = {
+  row: DroppedItem;
+  dropUnitKey: string | null;
+};
+
+type DefInstancedPool = {
+  layers: DropMeshLayer[];
+  meshes: THREE.InstancedMesh[];
+  capacity: number;
+};
+
+type FallbackInstancedPool = {
+  mesh: THREE.InstancedMesh;
+  capacity: number;
+};
+
+function extractDropMeshLayers(fittedRoot: THREE.Object3D, defId: string): DropMeshLayer[] {
+  fitDroppedWorldItemModelToCatalog(fittedRoot, defId);
+  fittedRoot.updateWorldMatrix(true, true);
+  const layers: DropMeshLayer[] = [];
+  fittedRoot.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material;
+    const material = (Array.isArray(mat) ? mat[0] : mat) as THREE.Material;
+    if (!material) return;
+    // Full matrix under the catalog-fitted root at origin — must not re-base with inv(root)
+    // or direct-child meshes lose the uniform shrink from {@link fitDroppedWorldItemModelToCatalog}.
+    layers.push({
+      geometry: m.geometry as THREE.BufferGeometry,
+      material,
+      localMatrix: m.matrixWorld.clone(),
+    });
+  });
+  return layers;
+}
+
+function composeDropInstanceMatrix(
+  row: DroppedItem,
+  localMatrix: THREE.Matrix4,
+  out: THREE.Matrix4,
+): THREE.Matrix4 {
+  _dropInstPos.makeTranslation(row.x, row.y, row.z);
+  _dropInstYaw.makeRotationY(row.yaw);
+  out.multiplyMatrices(_dropInstPos, _dropInstYaw);
+  out.multiply(localMatrix);
+  return out;
+}
+
+function resizeInstancedMesh(
+  parent: THREE.Object3D,
+  prev: THREE.InstancedMesh | null,
+  geometry: THREE.BufferGeometry,
+  material: THREE.Material,
+  needed: number,
+  name: string,
+): { mesh: THREE.InstancedMesh; capacity: number } {
+  const capacity = Math.max(needed, prev ? prev.count : 0, 8);
+  if (
+    prev &&
+    prev.instanceMatrix.count >= needed &&
+    prev.geometry === geometry &&
+    prev.material === material
+  ) {
+    prev.count = needed;
+    prev.visible = needed > 0;
+    return { mesh: prev, capacity: prev.instanceMatrix.count };
+  }
+  if (prev) {
+    detachInstancedMesh(prev);
+  }
+  const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+  mesh.name = name;
+  mesh.count = needed;
+  mesh.visible = needed > 0;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = true;
+  parent.add(mesh);
+  return { mesh, capacity };
+}
 
 export type MountDroppedItemsWorldOptions = {
   /**
@@ -311,7 +391,9 @@ export function mountDroppedItemsWorld(
 ): {
   subscribeAoi: (cx: number, cz: number) => void;
   syncDroppedItemVisualVisibility: (
+    feetX: number,
     feetY: number,
+    feetZ: number,
     containingUnitKey: string | null,
   ) => void;
   tryPickupNearest: (x: number, y: number, z: number) => void;
@@ -322,11 +404,23 @@ export function mountDroppedItemsWorld(
   scene.add(root);
 
   const loader = new GLTFLoader();
-  const idToGroup = new Map<string, THREE.Group>();
-  /** Drop rows currently resolving a visual (avoid duplicate async work per id). */
-  const rowVisualInFlight = new Set<string>();
+  const rowCache = new Map<string, CachedDropRow>();
   const defTemplateState = new Map<string, DefTemplateState>();
   const defTemplatePromise = new Map<string, Promise<DefTemplateState>>();
+  const defInstancedPools = new Map<string, DefInstancedPool>();
+  const fallbackLocalByDefId = new Map<string, THREE.Matrix4>();
+  let fallbackPool: FallbackInstancedPool | null = null;
+  let sharedFallbackGeometry: THREE.BoxGeometry | null = null;
+  let sharedFallbackMaterial: THREE.MeshBasicMaterial | null = null;
+
+  let dbDirty = true;
+  let lastVisGate = {
+    feetBand: Number.NaN,
+    containingUnitKey: null as string | null,
+    cellX: Number.NaN,
+    cellZ: Number.NaN,
+  };
+
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = scene.userData.mammothFpMetallicReadableEnv;
     return env instanceof THREE.Texture ? env : (scene.environment ?? null);
@@ -352,17 +446,13 @@ export function mountDroppedItemsWorld(
     rootGltf.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
-        m.castShadow = true;
-        m.receiveShadow = true;
+        m.castShadow = false;
+        m.receiveShadow = false;
       }
     });
     bindMammothMetallicReadableEnv(rootGltf, metallicReadableEnv());
   };
 
-  /**
-   * One GLB load + parse per `def_id` for the whole session; every dropped row clones the template.
-   * Failed catalogs (missing GLB) are remembered so subscription churn does not re-hit the network.
-   */
   const resolveDefTemplate = (defId: string): Promise<DefTemplateState> => {
     const settled = defTemplateState.get(defId);
     if (settled) return Promise.resolve(settled);
@@ -379,12 +469,17 @@ export function mountDroppedItemsWorld(
     const p = loadGltfSceneFirstMatch(loader, candidates)
       .then(({ scene: loadedScene }) => {
         prepareLoadedSceneForTemplate(loadedScene);
-        const st: DefTemplateState = {
-          status: "ready",
-          template: { root: loadedScene },
-        };
+        const layers = extractDropMeshLayers(loadedScene, defId);
+        if (layers.length === 0) {
+          const st: DefTemplateState = { status: "glb_unavailable" };
+          defTemplateState.set(defId, st);
+          defTemplatePromise.delete(defId);
+          return st;
+        }
+        const st: DefTemplateState = { status: "ready", layers };
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);
+        dbDirty = true;
         return st;
       })
       .catch(() => {
@@ -398,128 +493,219 @@ export function mountDroppedItemsWorld(
     return p;
   };
 
-  const applyPose = (g: THREE.Group, row: DroppedItem) => {
-    g.position.set(row.x, row.y, row.z);
-    g.rotation.y = row.yaw;
-  };
-
-  const spawnFallbackBox = (key: string, row: DroppedItem) => {
-    /** Unlit so pickups stay visible in dim interiors / WebGPU without relying on scene fill lights. */
+  const ensureFallbackLocalMatrix = (defId: string): THREE.Matrix4 => {
+    const cached = fallbackLocalByDefId.get(defId);
+    if (cached) return cached;
+    const staging = new THREE.Group();
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.14, 0.04, 0.24),
       new THREE.MeshBasicMaterial({ color: 0x9aa8b8 }),
     );
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    const inner = new THREE.Group();
-    inner.add(mesh);
-    fitDroppedWorldItemModelToCatalog(inner, row.defId);
-    const g = new THREE.Group();
-    g.name = `drop_${key}`;
-    g.add(inner);
-    applyPose(g, row);
-    root.add(g);
-    idToGroup.set(key, g);
+    staging.add(mesh);
+    fitDroppedWorldItemModelToCatalog(staging, defId);
+    staging.updateWorldMatrix(true, true);
+    const local = staging.matrix.clone();
+    fallbackLocalByDefId.set(defId, local);
+    return local;
   };
 
-  const ensureVisual = (row: DroppedItem) => {
-    const droppedItemId = tryNormalizeDroppedItemId(row.id);
-    if (droppedItemId === null) return;
-    const key = droppedItemId.toString();
-    const existing = idToGroup.get(key);
-    if (existing) {
-      applyPose(existing, row);
-      return;
+  const ensureSharedFallbackAssets = (): {
+    geometry: THREE.BoxGeometry;
+    material: THREE.MeshBasicMaterial;
+  } => {
+    if (!sharedFallbackGeometry) {
+      sharedFallbackGeometry = new THREE.BoxGeometry(0.14, 0.04, 0.24);
     }
-    if (rowVisualInFlight.has(key)) {
-      const g = idToGroup.get(key);
-      if (g) applyPose(g, row);
-      return;
+    if (!sharedFallbackMaterial) {
+      sharedFallbackMaterial = new THREE.MeshBasicMaterial({ color: 0x9aa8b8 });
     }
+    return { geometry: sharedFallbackGeometry, material: sharedFallbackMaterial };
+  };
 
-    const candidates = [...mammothCatalogGlbCandidates(row.defId)];
-    if (candidates.length === 0) {
-      spawnFallbackBox(key, row);
-      return;
+  const visGateChanged = (
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+    containingUnitKey: string | null,
+  ): boolean => {
+    const feetBand =
+      resolvedBandOpts === null
+        ? 0
+        : mammothVerticalStoryBandIndex(
+            feetY,
+            resolvedBandOpts.buildingWorldOriginY,
+            resolvedBandOpts.floorSpacingM,
+          );
+    const cellX = Math.floor(feetX / POSE_AOI_RECENTER);
+    const cellZ = Math.floor(feetZ / POSE_AOI_RECENTER);
+    if (
+      feetBand === lastVisGate.feetBand &&
+      containingUnitKey === lastVisGate.containingUnitKey &&
+      cellX === lastVisGate.cellX &&
+      cellZ === lastVisGate.cellZ
+    ) {
+      return false;
     }
+    lastVisGate = { feetBand, containingUnitKey, cellX, cellZ };
+    return true;
+  };
 
-    rowVisualInFlight.add(key);
-    spawnFallbackBox(key, row);
-
-    void resolveDefTemplate(row.defId).then((state) => {
-      rowVisualInFlight.delete(key);
-
-      const pendingGroup = idToGroup.get(key);
-      if (!pendingGroup) {
-        // Row was deleted while the GLB was loading; delete handling already removed the fallback.
-        return;
-      }
-
-      if (state.status === "glb_unavailable") {
-        applyPose(pendingGroup, row);
-        return;
-      }
-
-      root.remove(pendingGroup);
-      disposeDroppedVisualBranch(pendingGroup);
-      idToGroup.delete(key);
-
-      const clone = state.template.root.clone(true);
-      fitDroppedWorldItemModelToCatalog(clone, row.defId);
-      const g = new THREE.Group();
-      g.name = `drop_${key}`;
-      g.add(clone);
-      applyPose(g, row);
-      root.add(g);
-      idToGroup.set(key, g);
+  const rowShouldRender = (
+    cached: CachedDropRow,
+    feetY: number,
+    containingUnitKey: string | null,
+  ): boolean => {
+    if (alwaysShowDroppedItems) return true;
+    const row = cached.row;
+    return resolveDroppedItemVisualVisible({
+      dropX: row.x,
+      dropY: row.y,
+      dropZ: row.z,
+      feetY,
+      verticalBands: resolvedBandOpts,
+      containingUnitKey,
+      dropResidentialUnitKey: cached.dropUnitKey,
     });
+  };
+
+  const rebuildInstances = (
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+    containingUnitKey: string | null,
+  ): void => {
+    const glbRowsByDef = new Map<string, DroppedItem[]>();
+    const fallbackRows: DroppedItem[] = [];
+
+    for (const cached of rowCache.values()) {
+      if (!rowShouldRender(cached, feetY, containingUnitKey)) continue;
+      const defId = cached.row.defId;
+      void resolveDefTemplate(defId);
+      const state = defTemplateState.get(defId);
+      if (state?.status === "ready") {
+        let bucket = glbRowsByDef.get(defId);
+        if (!bucket) {
+          bucket = [];
+          glbRowsByDef.set(defId, bucket);
+        }
+        bucket.push(cached.row);
+      } else {
+        fallbackRows.push(cached.row);
+      }
+    }
+
+    for (const [defId, pool] of defInstancedPools) {
+      const rows = glbRowsByDef.get(defId) ?? [];
+      glbRowsByDef.delete(defId);
+      const needed = rows.length;
+      for (let li = 0; li < pool.layers.length; li++) {
+        const layer = pool.layers[li]!;
+        const prev = pool.meshes[li] ?? null;
+        const resized = resizeInstancedMesh(
+          root,
+          prev,
+          layer.geometry,
+          layer.material,
+          needed,
+          `drop_inst:${defId}:${li}`,
+        );
+        pool.meshes[li] = resized.mesh;
+        pool.capacity = resized.capacity;
+        for (let i = 0; i < needed; i++) {
+          composeDropInstanceMatrix(rows[i]!, layer.localMatrix, _dropInstOut);
+          resized.mesh.setMatrixAt(i, _dropInstOut);
+        }
+        if (needed > 0) {
+          resized.mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+    }
+
+    for (const [defId, rows] of glbRowsByDef) {
+      const state = defTemplateState.get(defId);
+      if (state?.status !== "ready") continue;
+      const pool: DefInstancedPool = {
+        layers: state.layers,
+        meshes: [],
+        capacity: 0,
+      };
+      defInstancedPools.set(defId, pool);
+      const needed = rows.length;
+      for (let li = 0; li < state.layers.length; li++) {
+        const layer = state.layers[li]!;
+        const resized = resizeInstancedMesh(
+          root,
+          null,
+          layer.geometry,
+          layer.material,
+          needed,
+          `drop_inst:${defId}:${li}`,
+        );
+        pool.meshes[li] = resized.mesh;
+        pool.capacity = resized.capacity;
+        for (let i = 0; i < needed; i++) {
+          composeDropInstanceMatrix(rows[i]!, layer.localMatrix, _dropInstOut);
+          resized.mesh.setMatrixAt(i, _dropInstOut);
+        }
+        if (needed > 0) {
+          resized.mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
+    }
+
+    const fallbackNeeded = fallbackRows.length;
+    if (fallbackNeeded > 0) {
+      const { geometry, material } = ensureSharedFallbackAssets();
+      const prev = fallbackPool?.mesh ?? null;
+      const resized = resizeInstancedMesh(
+        root,
+        prev,
+        geometry,
+        material,
+        fallbackNeeded,
+        "drop_inst:fallback",
+      );
+      fallbackPool = { mesh: resized.mesh, capacity: resized.capacity };
+      for (let i = 0; i < fallbackNeeded; i++) {
+        const row = fallbackRows[i]!;
+        const local = ensureFallbackLocalMatrix(row.defId);
+        composeDropInstanceMatrix(row, local, _dropInstOut);
+        resized.mesh.setMatrixAt(i, _dropInstOut);
+      }
+      resized.mesh.instanceMatrix.needsUpdate = true;
+    } else if (fallbackPool) {
+      fallbackPool.mesh.count = 0;
+      fallbackPool.mesh.visible = false;
+    }
   };
 
   const syncFromDb = () => {
     const seen = new Set<string>();
     for (const r of conn.db.dropped_item) {
       const row = r as DroppedItem;
-      seen.add(droppedIdKey(row.id));
-      ensureVisual(row);
+      const key = droppedIdKey(row.id);
+      seen.add(key);
+      rowCache.set(key, {
+        row,
+        dropUnitKey: apartmentUnitKeyContainingWorldPoint(conn, row.x, row.y, row.z),
+      });
+      void resolveDefTemplate(row.defId);
     }
-    for (const [k, g] of idToGroup) {
-      if (!seen.has(k)) {
-        root.remove(g);
-        disposeDroppedVisualBranch(g);
-        idToGroup.delete(k);
-      }
+    for (const k of rowCache.keys()) {
+      if (!seen.has(k)) rowCache.delete(k);
     }
+    dbDirty = true;
   };
 
   const syncDroppedItemVisualVisibility = (
+    feetX: number,
     feetY: number,
+    feetZ: number,
     containingUnitKey: string | null,
   ): void => {
-    for (const r of conn.db.dropped_item) {
-      const row = r as DroppedItem;
-      const key = droppedIdKey(row.id);
-      const g = idToGroup.get(key);
-      if (!g) continue;
-      if (alwaysShowDroppedItems) {
-        g.visible = true;
-        continue;
-      }
-      const dropResidentialUnitKey = apartmentUnitKeyContainingWorldPoint(
-        conn,
-        row.x,
-        row.y,
-        row.z,
-      );
-      g.visible = resolveDroppedItemVisualVisible({
-        dropX: row.x,
-        dropY: row.y,
-        dropZ: row.z,
-        feetY,
-        verticalBands: resolvedBandOpts,
-        containingUnitKey,
-        dropResidentialUnitKey,
-      });
-    }
+    if (!dbDirty && !visGateChanged(feetX, feetY, feetZ, containingUnitKey)) return;
+    dbDirty = false;
+    rebuildInstances(feetX, feetY, feetZ, containingUnitKey);
   };
 
   const onRowChange = () => {
@@ -574,13 +760,24 @@ export function mountDroppedItemsWorld(
     conn.db.dropped_item.removeOnDelete(onRowChange);
     sub?.unsubscribe();
     scene.remove(root);
-    for (const g of idToGroup.values()) {
-      disposeDroppedVisualBranch(g);
+    for (const pool of defInstancedPools.values()) {
+      for (const mesh of pool.meshes) {
+        detachInstancedMesh(mesh);
+      }
     }
-    idToGroup.clear();
-    rowVisualInFlight.clear();
+    defInstancedPools.clear();
+    if (fallbackPool) {
+      detachInstancedMesh(fallbackPool.mesh);
+      fallbackPool = null;
+    }
+    sharedFallbackGeometry?.dispose();
+    sharedFallbackGeometry = null;
+    sharedFallbackMaterial?.dispose();
+    sharedFallbackMaterial = null;
+    rowCache.clear();
     defTemplateState.clear();
     defTemplatePromise.clear();
+    fallbackLocalByDefId.clear();
   };
 
   return { subscribeAoi, syncDroppedItemVisualVisibility, tryPickupNearest, dispose };

@@ -1,12 +1,7 @@
-import { useEditorStore } from "../state/editorStore.js";
+const COMBAT_SIM_CLIENT_URL = "http://localhost:5173/?combatSim=1";
 
-/** Center-screen entry when combat sim workspace is in layout (not play) mode. */
+/** Center-screen hint when combat sim workspace is in layout (spawn authoring) mode. */
 export function EditorCombatSimViewportPrompt() {
-  const combatSimPlayActive = useEditorStore((s) => s.combatSimPlayActive);
-  const setCombatSimPlayActive = useEditorStore((s) => s.setCombatSimPlayActive);
-
-  if (combatSimPlayActive) return null;
-
   return (
     <div
       style={{
@@ -27,12 +22,18 @@ export function EditorCombatSimViewportPrompt() {
         fontSize: 13,
         boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
         pointerEvents: "auto",
+        maxWidth: 420,
+        textAlign: "center",
       }}
     >
-      <span style={{ opacity: 0.9 }}>Combat sim layout — place NPC spawns, then play</span>
-      <button
-        type="button"
-        onClick={() => setCombatSimPlayActive(true)}
+      <span style={{ opacity: 0.9 }}>
+        Place NPC spawns in the sidebar, save layout JSON, then fight in the game client (same FP
+        stack + server reducers).
+      </span>
+      <a
+        href={COMBAT_SIM_CLIENT_URL}
+        target="_blank"
+        rel="noopener noreferrer"
         style={{
           padding: "10px 22px",
           background: "#6a3a5a",
@@ -42,10 +43,11 @@ export function EditorCombatSimViewportPrompt() {
           cursor: "pointer",
           fontSize: 14,
           fontWeight: 600,
+          textDecoration: "none",
         }}
       >
-        Play combat sim
-      </button>
+        Open combat sim in game client
+      </a>
     </div>
   );
 }

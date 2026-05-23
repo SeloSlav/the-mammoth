@@ -4,19 +4,15 @@ import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
 import { useEditorStore } from "./state/editorStore.js";
 import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
-import { EditorCombatSimPlayLayer } from "./ui/EditorCombatSimPlayLayer.js";
 import { EditorCombatSimViewportPrompt } from "./ui/EditorCombatSimViewportPrompt.js";
 import { EditorViewportStatsStack } from "./ui/EditorViewportStatsStack.js";
 
 export default function App() {
   const editorCanvasRef = useRef<HTMLCanvasElement>(null);
-  const combatCanvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [gpuError, setGpuError] = useState<string | null>(null);
-  const combatSimPlayActive = useEditorStore((s) => s.combatSimPlayActive);
   const workspace = useEditorStore((s) => s.workspace);
-  const setCombatSimPlayActive = useEditorStore((s) => s.setCombatSimPlayActive);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,25 +63,11 @@ export default function App() {
         <canvas
           ref={editorCanvasRef}
           style={{
-            display: combatSimPlayActive ? "none" : "block",
+            display: "block",
             width: "100%",
             height: "100%",
           }}
         />
-        {combatSimPlayActive ? (
-          <canvas
-            ref={combatCanvasRef}
-            data-mammoth-fp-canvas="1"
-            style={{
-              display: "block",
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-              inset: 0,
-              zIndex: 1,
-            }}
-          />
-        ) : null}
       </div>
       {loadError ? (
         <div
@@ -105,7 +87,7 @@ export default function App() {
           <p style={{ margin: "8px 0 0" }}>{loadError}</p>
         </div>
       ) : null}
-      {gpuError && !combatSimPlayActive ? (
+      {gpuError ? (
         <div
           style={{
             position: "fixed",
@@ -129,13 +111,7 @@ export default function App() {
           </div>
         </div>
       ) : null}
-      {ready && combatSimPlayActive ? (
-        <EditorCombatSimPlayLayer
-          canvasRef={combatCanvasRef}
-          onExit={() => setCombatSimPlayActive(false)}
-        />
-      ) : null}
-      {ready && !combatSimPlayActive ? (
+      {ready ? (
         <>
           <EditorApartmentLayoutLoadingOverlay />
           <EditorViewportStatsStack />

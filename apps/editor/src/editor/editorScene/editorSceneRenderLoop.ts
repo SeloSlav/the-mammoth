@@ -89,9 +89,7 @@ export function startEditorSceneRenderLoop(deps: {
     const now = performance.now();
     const dt = Math.min((now - lastTickMs) / 1000, 0.05);
     lastTickMs = now;
-    const st = useEditorStore.getState();
-    if (st.combatSimPlayActive) return;
-    const tcDragging = transformControls.dragging === true;
+    const st = useEditorStore.getState();    const tcDragging = transformControls.dragging === true;
     const inFpMode = isFpModeFn(st.mode);
     const fpSessionActive =
       (isWeaponFpAuthoringState(st) && fp.getFpSession()?.getPresenter()) ||

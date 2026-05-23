@@ -18,7 +18,6 @@ import {
   PlayerPresentationManager,
   REMOTE_PLAYER_BODY_URI_FEMALE,
   REMOTE_PLAYER_BODY_URI_MALE,
-  preloadBabushkaNpcBody,
   bindMammothApartmentInteriorViewmodelEnv,
   bindMammothApartmentPropReadableEnv,
   bindMammothResidentialShellIndirectEnv,
@@ -1118,15 +1117,16 @@ export async function mountFpSession(
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
-  if (isCombatSim) {
-    await preloadBabushkaNpcBody();
-  }
   const fpNpcSession = isCombatSim
-    ? createFpNpcSession({
+    ? await createFpNpcSession({
         worldParent: scene,
         fxScene: scene,
         conn,
         getAudioContext: () => localAudio.getAudioContext(),
+        getReadableEnvTexture: () => {
+          const tex = scene.userData.mammothFpMetallicReadableEnv;
+          return tex instanceof THREE.Texture ? tex : null;
+        },
       })
     : null;
   const fpBalconyGrow = isCombatSim

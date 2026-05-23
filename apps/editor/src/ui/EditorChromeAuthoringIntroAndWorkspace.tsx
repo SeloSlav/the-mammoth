@@ -272,8 +272,9 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
 
         {workspace === "combat_sim" ? (
           <p style={{ ...editorChromeHelp, marginTop: 10, fontSize: 12, opacity: 0.9 }}>
-            Switches to live FP combat (shotgun + babushka). Use <strong>Stop</strong> in the sidebar
-            or HUD to return here and edit NPC spawn anchors. Requires SpacetimeDB on port 3000.
+            Author NPC spawn anchors here, save layout JSON, then test at{" "}
+            <code>http://localhost:5173/?combatSim=1</code> (same FP session + server reducers as
+            live play).
           </p>
         ) : null}
 

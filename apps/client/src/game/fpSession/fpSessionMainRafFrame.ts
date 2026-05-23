@@ -292,7 +292,12 @@ export type FpSessionMainRafFrameDeps = {
   /** Local feet for dropped-item HUD / pickup; pickup publishes this pose before reducer validation. */
   fpDroppedPickupFeet: () => THREE.Vector3;
   /** Culls replicated drop meshes by storey + residential unit hull. */
-  syncDroppedItemVisualVisibility: (feetY: number, containingUnitKey: string | null) => void;
+  syncDroppedItemVisualVisibility: (
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+    containingUnitKey: string | null,
+  ) => void;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
   /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
@@ -689,7 +694,12 @@ export function createFpSessionMainRafFrame(
       const ft = deps.fpInteractionFeet();
       publishFpInteractionFeet({ x: ft.x, y: ft.y, z: ft.z });
     }
-    deps.syncDroppedItemVisualVisibility(deps.pos.y, containingResidentialUnitKey);
+    deps.syncDroppedItemVisualVisibility(
+      deps.pos.x,
+      deps.pos.y,
+      deps.pos.z,
+      containingResidentialUnitKey,
+    );
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
     const hotbarRow = deps.selectedHotbarRow();

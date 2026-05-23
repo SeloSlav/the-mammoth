@@ -178,7 +178,6 @@ export interface EditorState {
    */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
   contentStructureEpoch: number;
-  combatSimPlayActive: boolean;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
 
@@ -263,7 +262,6 @@ export interface EditorState {
   ) => void;
   addNpcCombatSpawn: (spawn: OwnedApartmentNpcCombatSpawn) => void;
   removeNpcCombatSpawn: (spawnId: string) => void;
-  setCombatSimPlayActive: (active: boolean) => void;
   clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () => void;
 
