@@ -404,6 +404,7 @@ export const WorldNpc = __t.object("WorldNpc", {
   meleePresentationSeq: __t.u32(),
   hitPresentationSeq: __t.u32(),
   lastMeleeMicros: __t.i64(),
+  chaseIdentity: __t.option(__t.identity()),
 });
 export type WorldNpc = __Infer<typeof WorldNpc>;
 

@@ -49,6 +49,9 @@ pub struct WorldNpc {
     /// Increments on damage taken (client hit SFX).
     pub hit_presentation_seq: u32,
     pub last_melee_micros: i64,
+    /// When set, AI chases this player identity (combat-sim owner).
+    #[default(None::<Identity>)]
+    pub chase_identity: Option<Identity>,
 }
 
 #[spacetimedb::table(
@@ -94,7 +97,9 @@ pub fn spawn_babushka(
     y: f32,
     z: f32,
     yaw: f32,
+    chase_identity: Option<Identity>,
 ) -> u64 {
+    let combat_sim = session_key.starts_with("combat_sim:");
     let row = WorldNpc {
         npc_id: 0,
         archetype: NPC_ARCHETYPE_BABUSHKA.to_string(),
@@ -108,11 +113,16 @@ pub fn spawn_babushka(
         grounded: 1,
         health: BABUSHKA_MAX_HEALTH,
         max_health: BABUSHKA_MAX_HEALTH,
-        state: NPC_STATE_IDLE,
+        state: if combat_sim && chase_identity.is_some() {
+            NPC_STATE_AGGRO
+        } else {
+            NPC_STATE_IDLE
+        },
         locomotion: NPC_LOCOMOTION_IDLE,
         melee_presentation_seq: 0,
         hit_presentation_seq: 0,
         last_melee_micros: 0,
+        chase_identity,
     };
     ctx.db.world_npc().insert(row).npc_id
 }
@@ -330,9 +340,14 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
                 npc.vel_x = 0.0;
                 npc.vel_z = 0.0;
             } else if dist > BABUSHKA_MELEE_RANGE_M {
+                let walk_speed = if npc.session_key.starts_with("combat_sim:") {
+                    2.35
+                } else {
+                    BABUSHKA_WALK_SPEED_MPS
+                };
                 let inv = 1.0 / dist.max(1e-4);
-                let vx = planar_dx * inv * BABUSHKA_WALK_SPEED_MPS;
-                let vz = planar_dz * inv * BABUSHKA_WALK_SPEED_MPS;
+                let vx = planar_dx * inv * walk_speed;
+                let vz = planar_dz * inv * walk_speed;
                 npc.vel_x = vx;
                 npc.vel_z = vz;
                 npc.x += vx * dt;
@@ -372,17 +387,12 @@ fn ai_target_for_npc(
     ctx: &ReducerContext,
     npc: &WorldNpc,
 ) -> (f32, f32, f32, Option<Identity>) {
-    if npc.session_key.starts_with("combat_sim:") {
-        if let Some(owner) =
-            crate::combat_sim::session_owner_for_session_key(ctx, &npc.session_key)
-        {
-            if !crate::player_vitals::is_player_dead(ctx, owner) {
-                if let Some(pose) = ctx.db.player_pose().identity().find(&owner) {
-                    return (pose.x, pose.y, pose.z, Some(owner));
-                }
+    if let Some(id) = npc.chase_identity {
+        if !crate::player_vitals::is_player_dead(ctx, id) {
+            if let Some(pose) = ctx.db.player_pose().identity().find(&id) {
+                return (pose.x, pose.y, pose.z, Some(id));
             }
         }
-        return (npc.x, npc.y, npc.z, None);
     }
     let (x, y, z) = nearest_living_player_feet(ctx, npc.x, npc.y, npc.z);
     let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z);

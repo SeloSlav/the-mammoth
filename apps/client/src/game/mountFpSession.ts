@@ -77,7 +77,6 @@ import {
   createInertFpBalconyGrowSession,
   createInertFpElevatorWorld,
 } from "./fpSession/fpSessionInertSubsystems.js";
-import { visitCombatSimNpcFirearmTargetsInXZ } from "./combatSim/combatSimFirearmTargets.js";
 import { floorPayloadByDocId } from "./fpSession/fpSessionContentLoad.js";
 import { effectiveDevGameplayEquippedPrimary } from "./fpDev/devGameplayWeaponOverride.js";
 import {
@@ -424,9 +423,7 @@ export async function mountFpSession(
     visitExtraSolidAabbsInXZ: (x0, x1, z0, z1, visit) => {
       fpApartmentDoors.visitFirearmBarrierAabbsInXZ(x0, x1, z0, z1, visit);
       fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit);
-      if (isCombatSim) {
-        visitCombatSimNpcFirearmTargetsInXZ(conn, x0, x1, z0, z1, visit);
-      }
+      // Combat sim NPCs must not occlude decals — impact marks are wall/ground-only.
     },
   });
 

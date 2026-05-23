@@ -28,8 +28,16 @@ type NpcBodyTemplate = { scene: THREE.Object3D; animations: readonly THREE.Anima
 let babushkaTemplate: NpcBodyTemplate | null = null;
 let babushkaLoad: Promise<void> | null = null;
 
+function isRootMotionPositionTrack(trackName: string): boolean {
+  if (!trackName.endsWith(".position")) return false;
+  const bone = trackName.slice(0, -".position".length);
+  return bone === "Hips" || bone === "Armature" || bone.endsWith("Hips");
+}
+
 function sanitizeNpcClip(clip: THREE.AnimationClip): THREE.AnimationClip {
-  const tracks = clip.tracks.filter((track) => !track.name.endsWith(".scale"));
+  const tracks = clip.tracks.filter(
+    (track) => !track.name.endsWith(".scale") && !isRootMotionPositionTrack(track.name),
+  );
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
@@ -165,8 +173,11 @@ class AnimatedBabushkaBody {
 export class BabushkaNpcPresenter {
   readonly root = new THREE.Group();
   private readonly body: AnimatedBabushkaBody;
+  private readonly serverPos = new THREE.Vector3();
+  private readonly serverVel = new THREE.Vector3();
   private displayPos = new THREE.Vector3();
   private displayYaw = 0;
+  private displayReady = false;
 
   private constructor(body: AnimatedBabushkaBody) {
     this.root.name = "babushka_npc_root";
@@ -187,8 +198,24 @@ export class BabushkaNpcPresenter {
   }
 
   applySnapshot(snapshot: ReplicatedNpcSnapshot, dt: number): void {
-    this.displayPos.set(snapshot.worldPosition.x, snapshot.worldPosition.y, snapshot.worldPosition.z);
+    this.serverPos.set(snapshot.worldPosition.x, snapshot.worldPosition.y, snapshot.worldPosition.z);
+    this.serverVel.set(snapshot.velocity.x, 0, snapshot.velocity.z);
     this.displayYaw = snapshot.yawRad;
+
+    if (!this.displayReady) {
+      this.displayPos.copy(this.serverPos);
+      this.displayReady = true;
+    } else {
+      this.displayPos.x += this.serverVel.x * dt;
+      this.displayPos.z += this.serverVel.z * dt;
+      if (this.displayPos.distanceToSquared(this.serverPos) > 2.25) {
+        this.displayPos.copy(this.serverPos);
+      } else {
+        const alpha = 1 - Math.exp(-14 * Math.max(0, dt));
+        this.displayPos.lerp(this.serverPos, alpha);
+      }
+    }
+
     this.root.position.copy(this.displayPos);
     this.root.rotation.y = this.displayYaw + NPC_YAW_OFFSET_RAD;
     this.body.update(snapshot, dt);

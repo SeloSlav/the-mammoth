@@ -164,6 +164,14 @@ export function createFpNpcSession(opts: {
   return {
     update(dt, nowMs) {
       bloodFx.tick(nowMs, dt);
+      for (const row of opts.conn.db.world_npc.iter()) {
+        const key = row.npcId.toString();
+        if (row.state === NPC_STATE_DEAD || row.health <= 0) {
+          rows.delete(key);
+          continue;
+        }
+        rows.set(key, row);
+      }
       pool.sync(rebuildSnapshots(nowMs), dt);
     },
     dispose() {

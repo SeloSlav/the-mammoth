@@ -45,7 +45,7 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
 ];
 
 /// Minimum planar distance from the player spawn to the babushka (outside default aggro).
-const BABUSHKA_SPAWN_SEPARATION_M: f32 = 5.0;
+const BABUSHKA_SPAWN_SEPARATION_M: f32 = 4.0;
 /// Combat-sim arena uses a wider leash so the lone test NPC keeps pressure on the owner.
 pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = 14.0;
 
@@ -99,7 +99,7 @@ pub fn reset_babushka_after_death(ctx: &ReducerContext, row: &mut npc::WorldNpc)
 
     row.health = npc::BABUSHKA_MAX_HEALTH;
     row.max_health = npc::BABUSHKA_MAX_HEALTH;
-    row.state = npc::NPC_STATE_IDLE;
+    row.state = npc::NPC_STATE_AGGRO;
     row.locomotion = npc::NPC_LOCOMOTION_IDLE;
     row.vel_x = 0.0;
     row.vel_z = 0.0;
@@ -230,7 +230,7 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
     );
     let npc_count = if authored.is_empty() {
         let (bx, by, bz, byaw) = babushka_spawn_xz(&unit, player_x, player_z);
-        let _npc_id = npc::spawn_babushka(ctx, session_key, bx, by, bz, byaw);
+        let _npc_id = npc::spawn_babushka(ctx, session_key, bx, by, bz, byaw, Some(owner));
         1
     } else {
         let count = authored.len();
@@ -242,6 +242,7 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
                 row.y,
                 row.z,
                 row.yaw,
+                Some(owner),
             );
         }
         count

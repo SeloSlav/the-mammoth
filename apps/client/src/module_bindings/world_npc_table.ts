@@ -28,4 +28,5 @@ export default __t.row({
   meleePresentationSeq: __t.u32().name("melee_presentation_seq"),
   hitPresentationSeq: __t.u32().name("hit_presentation_seq"),
   lastMeleeMicros: __t.i64().name("last_melee_micros"),
+  chaseIdentity: __t.option(__t.identity()).name("chase_identity"),
 });
