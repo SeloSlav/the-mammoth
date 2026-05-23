@@ -412,7 +412,7 @@ fn ai_target_for_npc(
     if let Some(id) = npc.chase_identity {
         if !crate::player_vitals::is_player_dead(ctx, id) {
             if let Some(pose) = ctx.db.player_pose().identity().find(&id) {
-                return Some((pose.x, pose.y, pose.z, id));
+                return Some((pose.x, pose.z, pose.y, id));
             }
         }
         if npc.session_key.starts_with("combat_sim:") {
@@ -421,7 +421,7 @@ fn ai_target_for_npc(
     }
     let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z)?;
     let pose = ctx.db.player_pose().identity().find(&id)?;
-    Some((pose.x, pose.y, pose.z, id))
+    Some((pose.x, pose.z, pose.y, id))
 }
 
 fn nearest_living_player_identity(

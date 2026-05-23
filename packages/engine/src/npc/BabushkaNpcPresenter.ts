@@ -14,15 +14,11 @@ export const BABUSHKA_NPC_GLB_URI = "/static/models/npcs/babushka.glb";
 /** Scene-graph tag — skip megablock perf probes / floor-plate walks. */
 export const MAMMOTH_FP_WORLD_NPC_UD = "mammothFpWorldNpc";
 
-const NPC_YAW_OFFSET_RAD = Math.PI;
+const NPC_YAW_OFFSET_RAD = 0;
 export const BABUSHKA_NPC_AUTHORITATIVE_HEIGHT_M = 1.55;
 const NPC_CLIP_TRANSITION_SEC = 0.18;
 const NPC_STATE_DEAD = 2;
 const NPC_FALLBACK_SKIN_HEX = 0xb8927a;
-const NPC_PROXY_BODY_COLOR = 0x7a2f25;
-const NPC_PROXY_HEAD_COLOR = 0xe0b394;
-const NPC_PROXY_HEIGHT_M = BABUSHKA_NPC_AUTHORITATIVE_HEIGHT_M;
-const NPC_PROXY_RADIUS_M = 0.28;
 
 const BABUSHKA_CLIP_NAMES = {
   idle: "Idle_4",
@@ -132,43 +128,6 @@ function cloneNpcScene(template: THREE.Object3D): THREE.Object3D {
   return root;
 }
 
-function createNpcProxyBody(): THREE.Group {
-  const root = new THREE.Group();
-  root.name = "babushka_npc_visible_proxy";
-  root.userData[MAMMOTH_FP_WORLD_NPC_UD] = true;
-
-  const bodyHeight = NPC_PROXY_HEIGHT_M - NPC_PROXY_RADIUS_M * 2;
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(NPC_PROXY_RADIUS_M, bodyHeight, 8, 16),
-    new THREE.MeshBasicMaterial({
-      color: NPC_PROXY_BODY_COLOR,
-      toneMapped: false,
-    }),
-  );
-  body.name = "babushka_npc_visible_proxy_body";
-  body.position.y = NPC_PROXY_HEIGHT_M * 0.5;
-  body.frustumCulled = false;
-  body.castShadow = false;
-  body.receiveShadow = false;
-  root.add(body);
-
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 16, 12),
-    new THREE.MeshBasicMaterial({
-      color: NPC_PROXY_HEAD_COLOR,
-      toneMapped: false,
-    }),
-  );
-  head.name = "babushka_npc_visible_proxy_head";
-  head.position.set(0, NPC_PROXY_HEIGHT_M + 0.08, -0.03);
-  head.frustumCulled = false;
-  head.castShadow = false;
-  head.receiveShadow = false;
-  root.add(head);
-
-  return root;
-}
-
 /** Bind session PMREM env so outdoor combat arena lighting matches remote players. */
 export function bindNpcOutdoorReadableEnv(root: THREE.Object3D, envTexture: THREE.Texture | null): void {
   if (!envTexture) return;
@@ -226,7 +185,6 @@ export function seedBabushkaNpcBodyTemplateForTests(template: NpcBodyTemplate): 
 
 class AnimatedBabushkaBody {
   readonly root = new THREE.Group();
-  private readonly proxyRoot = createNpcProxyBody();
   private readonly modelRoot: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions = new Map<NpcBodyClipName, THREE.AnimationAction>();
@@ -236,7 +194,6 @@ class AnimatedBabushkaBody {
 
   constructor(template: NpcBodyTemplate) {
     this.root.name = "babushka_npc_body";
-    this.root.add(this.proxyRoot);
     this.modelRoot = cloneNpcScene(template.scene);
     this.modelRoot.name = "babushka_npc_model";
     normalizeNpcHumanoidModel(this.modelRoot);
