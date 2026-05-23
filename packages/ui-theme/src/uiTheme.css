@@ -32,4 +32,10 @@
   --ui-focus-ring: rgba(107, 140, 174, 0.35);
   --ui-backdrop-scrim: rgba(9, 11, 16, 0.46);
   --ui-backdrop-vignette: rgba(0, 0, 0, 0.64);
+  --ui-font-notebook: "Patrick Hand", "Segoe Print", "Bradley Hand ITC", "Comic Sans MS", sans-serif;
+  --ui-notebook-paper: #f3ead8;
+  --ui-notebook-ink: #2a2620;
+  --ui-notebook-rule: rgba(92, 132, 168, 0.34);
+  --ui-notebook-margin: #c94c4c;
+  --ui-notebook-overlay: rgba(28, 22, 16, 0.58);
 }

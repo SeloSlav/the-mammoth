@@ -49,6 +49,22 @@ export const UI_FONT_SANS =
 /** Optional monospace for diagnostics / code in UI. */
 export const UI_FONT_MONO = 'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace';
 
+/** Diegetic apartment notebook — upright print handwriting (not cursive). */
+export const UI_FONT_NOTEBOOK =
+  '"Patrick Hand", "Segoe Print", "Bradley Hand ITC", "Comic Sans MS", sans-serif';
+
+export const THEME_NOTEBOOK_PAPER = "#f3ead8";
+export const THEME_NOTEBOOK_PAPER_SHADOW = "#ddd0b8";
+export const THEME_NOTEBOOK_SPINE = "#3d4248";
+export const THEME_NOTEBOOK_SPIRAL = "#8a9098";
+export const THEME_NOTEBOOK_SPIRAL_HIGHLIGHT = "#c8ccd2";
+export const THEME_NOTEBOOK_INK = "#2a2620";
+export const THEME_NOTEBOOK_INK_MUTED = "rgba(42, 38, 32, 0.78)";
+export const THEME_NOTEBOOK_INK_FAINT = "rgba(42, 38, 32, 0.52)";
+export const THEME_NOTEBOOK_RULE = "rgba(92, 132, 168, 0.34)";
+export const THEME_NOTEBOOK_MARGIN = "#c94c4c";
+export const THEME_NOTEBOOK_OVERLAY = "rgba(28, 22, 16, 0.58)";
+
 /**
  * Inject into `<style>` or prepend to a stylesheet so `var(--ui-*)` resolves app-wide.
  */
@@ -84,5 +100,11 @@ export function uiRootStyleBlock(): string {
   --ui-focus-ring: ${THEME_FOCUS_RING};
   --ui-backdrop-scrim: ${THEME_BACKDROP_SCRIM};
   --ui-backdrop-vignette: ${THEME_BACKDROP_VIGNETTE};
+  --ui-font-notebook: ${UI_FONT_NOTEBOOK};
+  --ui-notebook-paper: ${THEME_NOTEBOOK_PAPER};
+  --ui-notebook-ink: ${THEME_NOTEBOOK_INK};
+  --ui-notebook-rule: ${THEME_NOTEBOOK_RULE};
+  --ui-notebook-margin: ${THEME_NOTEBOOK_MARGIN};
+  --ui-notebook-overlay: ${THEME_NOTEBOOK_OVERLAY};
 }`;
 }
