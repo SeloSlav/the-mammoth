@@ -9,11 +9,18 @@ import {
 /** Matches ruled line height in {@link MammothNotebookTipsHud}. */
 export const NOTEBOOK_RULE_STEP_PX = 32;
 
-/** Body lines that fit in the fixed content pane (no scrollbar). */
-export const NOTEBOOK_CONTENT_LINES_PER_PAGE = 16;
-
-/** Notebook shell width — keep in sync with `MammothNotebookTipsHud`. */
+/** Notebook shell — keep in sync with `MammothNotebookTipsHud`. */
 export const NOTEBOOK_SHELL_WIDTH_PX = 540;
+export const NOTEBOOK_SHELL_HEIGHT_PX = 680;
+export const NOTEBOOK_FOOTER_HEIGHT_PX = 56;
+export const NOTEBOOK_CONTENT_PAD_TOP_PX = 4;
+
+/** Body lines that fit in the fixed content pane (no scrollbar). */
+export const NOTEBOOK_CONTENT_LINES_PER_PAGE = Math.floor(
+  (NOTEBOOK_SHELL_HEIGHT_PX - NOTEBOOK_FOOTER_HEIGHT_PX - NOTEBOOK_CONTENT_PAD_TOP_PX) /
+    NOTEBOOK_RULE_STEP_PX,
+);
+
 export const NOTEBOOK_SPINE_WIDTH_PX = 38;
 export const NOTEBOOK_CONTENT_PAD_LEFT_PX = 64;
 export const NOTEBOOK_CONTENT_PAD_RIGHT_PX = 28;
@@ -37,19 +44,25 @@ export const NOTEBOOK_FONT_DIARY_HEADING = `400 26px ${FONT_FAMILY}`;
 export const NOTEBOOK_FONT_DIARY_BODY = `400 20px ${FONT_FAMILY}`;
 export const NOTEBOOK_FONT_DIVIDER = `400 20px ${FONT_FAMILY}`;
 
+type NotebookLayoutBlockBase = { sectionStart?: boolean };
+
 export type NotebookLayoutBlock =
-  | { type: "ref-heading"; text: string }
-  | { type: "ref-heading-rule" }
-  | { type: "ref-bullet"; text: string }
-  | { type: "diary-divider-bar" }
-  | { type: "diary-divider-label"; text: string }
-  | { type: "diary-date"; text: string }
-  | { type: "diary-heading"; text: string }
-  | { type: "diary-line"; text: string };
+  | ({ type: "ref-heading"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "ref-heading-rule" } & NotebookLayoutBlockBase)
+  | ({ type: "ref-bullet"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "diary-divider-bar" } & NotebookLayoutBlockBase)
+  | ({ type: "diary-divider-label"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "diary-date"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "diary-heading"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "diary-line"; text: string } & NotebookLayoutBlockBase);
 
 /** One layout block = exactly one ruled row in the HUD. */
 export function blockLineCount(_block: NotebookLayoutBlock): number {
   return 1;
+}
+
+export function isSectionStartBlock(block: NotebookLayoutBlock): boolean {
+  return block.sectionStart === true;
 }
 
 function wrapTextLines(text: string, font: string, maxWidth: number): string[] {
@@ -75,15 +88,25 @@ function pushWrappedLines(
 
 function flattenSection(section: PlayerNotebookSection, showDiaryDivider: boolean): NotebookLayoutBlock[] {
   const blocks: NotebookLayoutBlock[] = [];
+  let markedSectionStart = false;
+
+  const push = (block: NotebookLayoutBlock) => {
+    if (!markedSectionStart) {
+      markedSectionStart = true;
+      blocks.push({ ...block, sectionStart: true });
+      return;
+    }
+    blocks.push(block);
+  };
 
   if (showDiaryDivider) {
-    blocks.push({ type: "diary-divider-bar" });
+    push({ type: "diary-divider-bar" });
     blocks.push({ type: "diary-divider-label", text: "private pages" });
   }
 
   if (section.kind === "reference") {
     for (const line of wrapTextLines(section.heading, NOTEBOOK_FONT_REF_HEADING, NOTEBOOK_TEXT_WIDTH_PX)) {
-      blocks.push({ type: "ref-heading", text: line });
+      push({ type: "ref-heading", text: line });
     }
     blocks.push({ type: "ref-heading-rule" });
     for (const line of section.lines) {
@@ -94,12 +117,12 @@ function flattenSection(section: PlayerNotebookSection, showDiaryDivider: boolea
 
   if (section.dateLabel) {
     for (const line of wrapTextLines(section.dateLabel, NOTEBOOK_FONT_DIARY_DATE, NOTEBOOK_TEXT_WIDTH_PX)) {
-      blocks.push({ type: "diary-date", text: line });
+      push({ type: "diary-date", text: line });
     }
   }
 
   for (const line of wrapTextLines(section.heading, NOTEBOOK_FONT_DIARY_HEADING, NOTEBOOK_TEXT_WIDTH_PX)) {
-    blocks.push({ type: "diary-heading", text: line });
+    push({ type: "diary-heading", text: line });
   }
 
   for (const paragraph of section.lines) {
@@ -143,6 +166,11 @@ export function paginateNotebookBlocks(
 
   for (const block of blocks) {
     const cost = blockLineCount(block);
+
+    if (isSectionStartBlock(block) && usedLines > 0) {
+      flush();
+    }
+
     if (cost > linesPerPage) {
       flush();
       pages.push([block]);

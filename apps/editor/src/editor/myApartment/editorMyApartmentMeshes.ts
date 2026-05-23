@@ -33,6 +33,8 @@ import {
   clampWallOpeningTangentOffsetM,
   syncOwnedApartmentWallOpeningProxies,
   buildApartmentPlanarMirrorVisual,
+  buildApartmentWindowShutterVisual,
+  isApartmentWindowShutterModelPath,
 } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
@@ -1257,6 +1259,10 @@ export async function loadEditorMyApartmentDecorTemplates(
   await Promise.all(
     [...new Set(modelRelPaths)].map(async (modelRelPath) => {
       try {
+        if (isApartmentWindowShutterModelPath(modelRelPath)) {
+          out.set(modelRelPath, buildApartmentWindowShutterVisual());
+          return;
+        }
         const url = await resolveStaticModelFetchUrl(decorAssetUrl(modelRelPath));
         let pending = editorMyApartmentDecorTemplatePromises.get(url);
         if (!pending) {

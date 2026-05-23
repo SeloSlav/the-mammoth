@@ -15,6 +15,8 @@ import {
   buildOwnedApartmentPartitionWallInGroup,
   clampOwnedApartmentWallOpeningsForLength,
   buildApartmentPlanarMirrorVisual,
+  buildApartmentWindowShutterVisual,
+  isApartmentWindowShutterModelPath,
   MAMMOTH_FP_INTERIOR_PARTITION_SOLID,
 } from "@the-mammoth/world";
 import {
@@ -841,6 +843,9 @@ export function mountFpApartmentDecorMeshes(opts: {
     url: string,
     modelRelPath: string,
   ): Promise<THREE.Object3D> {
+    if (isApartmentWindowShutterModelPath(modelRelPath)) {
+      return buildApartmentWindowShutterVisual();
+    }
     switch (apartmentDecorModelExtension(modelRelPath)) {
       case ".glb":
         return (await gltfLoader.loadAsync(url)).scene;
@@ -990,16 +995,21 @@ export function mountFpApartmentDecorMeshes(opts: {
       const d = entry.decor;
       const effectiveModelRelPath = resolveGrowTrayDecorModelRelPath(d.modelRelPath);
 
-      const url = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(effectiveModelRelPath));
-      let template = templateByUrl.get(url);
+      const templateCacheKey = isApartmentWindowShutterModelPath(effectiveModelRelPath)
+        ? effectiveModelRelPath
+        : await resolveStaticModelFetchUrl(apartmentDecorFetchPath(effectiveModelRelPath));
+      let template = templateByUrl.get(templateCacheKey);
       if (!template) {
         try {
-          template = await loadDecorTemplate(url, effectiveModelRelPath);
+          template = await loadDecorTemplate(templateCacheKey, effectiveModelRelPath);
           if (disposed || epoch !== buildEpoch) return;
-          template.userData.mammothApartmentDecorTemplate = url;
-          templateByUrl.set(url, template);
+          template.userData.mammothApartmentDecorTemplate = templateCacheKey;
+          templateByUrl.set(templateCacheKey, template);
         } catch {
-          console.warn("[mountFpApartmentDecorMeshes] failed to load decor asset", url);
+          console.warn(
+            "[mountFpApartmentDecorMeshes] failed to load decor asset",
+            templateCacheKey,
+          );
           continue;
         }
       }

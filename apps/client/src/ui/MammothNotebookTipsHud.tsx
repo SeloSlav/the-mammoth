@@ -21,15 +21,15 @@ import {
 import {
   buildNotebookSpreads,
   NOTEBOOK_CONTENT_LINES_PER_PAGE,
+  NOTEBOOK_FOOTER_HEIGHT_PX,
   NOTEBOOK_OWNER,
   NOTEBOOK_RULE_STEP_PX,
+  NOTEBOOK_SHELL_HEIGHT_PX,
   type NotebookLayoutBlock,
   type NotebookSpread,
 } from "./playerNotebookLayout";
 
 const MARGIN_X_PX = 56;
-const NOTEBOOK_HEIGHT_PX = 680;
-const FOOTER_HEIGHT_PX = 56;
 const CONTENT_HEIGHT_PX = NOTEBOOK_CONTENT_LINES_PER_PAGE * NOTEBOOK_RULE_STEP_PX;
 
 const overlayStyle: CSSProperties = {
@@ -46,7 +46,7 @@ const overlayStyle: CSSProperties = {
 
 const notebookShellStyle: CSSProperties = {
   width: "min(92vw, 540px)",
-  height: NOTEBOOK_HEIGHT_PX,
+  height: NOTEBOOK_SHELL_HEIGHT_PX,
   maxHeight: "min(84vh, 680px)",
   display: "flex",
   transform: "rotate(-0.65deg)",
@@ -444,7 +444,7 @@ export function MammothNotebookTipsHud() {
 
           <footer
             style={{
-              height: FOOTER_HEIGHT_PX,
+              height: NOTEBOOK_FOOTER_HEIGHT_PX,
               boxSizing: "border-box",
               padding: `8px 22px 12px ${MARGIN_X_PX + 8}px`,
               borderTop: `1px solid ${THEME_NOTEBOOK_RULE}`,

@@ -33,6 +33,15 @@ describe("playerNotebookLayout", () => {
     }
   });
 
+  it("starts a new page before each section heading", () => {
+    const pages = paginateNotebookBlocks(flattenNotebookSections(), NOTEBOOK_CONTENT_LINES_PER_PAGE);
+    for (const page of pages) {
+      for (let i = 1; i < page.length; i++) {
+        expect(page[i]?.sectionStart).not.toBe(true);
+      }
+    }
+  });
+
   it("includes a cover spread plus content spreads", () => {
     const spreads = buildNotebookSpreads();
     expect(spreads[0]?.cover).toBe(true);

@@ -150,6 +150,14 @@ export {
   buildApartmentPlanarMirrorVisual,
 } from "./apartmentPlanarMirrorVisual.js";
 export {
+  APARTMENT_WINDOW_SHUTTER_DEPTH_M,
+  APARTMENT_WINDOW_SHUTTER_HEIGHT_M,
+  APARTMENT_WINDOW_SHUTTER_MODEL_PATH,
+  APARTMENT_WINDOW_SHUTTER_WIDTH_M,
+  buildApartmentWindowShutterVisual,
+  isApartmentWindowShutterModelPath,
+} from "./apartmentWindowShutterVisual.js";
+export {
   buildFpBlockerAABBsForBuilding,
   mergeCoplanarSweepPreheat,
   mergeCoplanarTouchingBlockerAabbs,
