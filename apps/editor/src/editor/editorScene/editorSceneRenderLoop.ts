@@ -17,10 +17,6 @@ import {
 } from "./editorStoreModeGuards.js";
 import { registerEditorSceneRenderWake } from "./editorSceneRenderDemand.js";
 
-const CAMERA_MOTION_EPS_SQ = 1e-10;
-/** Extra frames after motion stops (damping tail). */
-const SETTLE_FRAMES_BEFORE_IDLE = 2;
-
 export function startEditorSceneRenderLoop(deps: {
   canvas: HTMLCanvasElement;
   scene: THREE.Scene;
@@ -62,12 +58,6 @@ export function startEditorSceneRenderLoop(deps: {
   let lastTransformControlsCamera: THREE.Camera | null = null;
 
   let orbitPointerDown = false;
-  let settleFrames = SETTLE_FRAMES_BEFORE_IDLE;
-
-  const lastCamPos = new THREE.Vector3();
-  const lastOrbitTarget = new THREE.Vector3();
-  lastCamPos.copy(camera.position);
-  lastOrbitTarget.copy(orbitControls.target);
 
   const scheduleFrame = (): void => {
     if (raf !== 0) return;
@@ -76,13 +66,11 @@ export function startEditorSceneRenderLoop(deps: {
 
   const onOrbitStart = (): void => {
     orbitPointerDown = true;
-    settleFrames = 0;
     scheduleFrame();
   };
 
   const onOrbitEnd = (): void => {
     orbitPointerDown = false;
-    settleFrames = 0;
     scheduleFrame();
   };
 
@@ -248,32 +236,14 @@ export function startEditorSceneRenderLoop(deps: {
       }
     }
 
-    const camMoved =
-      camera.position.distanceToSquared(lastCamPos) > CAMERA_MOTION_EPS_SQ ||
-      orbitControls.target.distanceToSquared(lastOrbitTarget) >
-        CAMERA_MOTION_EPS_SQ;
-    if (camMoved) {
-      lastCamPos.copy(camera.position);
-      lastOrbitTarget.copy(orbitControls.target);
-      settleFrames = 0;
-    } else {
-      settleFrames = Math.min(
-        settleFrames + 1,
-        SETTLE_FRAMES_BEFORE_IDLE + 1,
-      );
-    }
-
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (attached && !objectLivesUnderScene(attached, scene)) {
       withProgrammaticTransformControls(() => transformControls.detach());
     }
     renderer.render(scene, renderCam);
 
-    const keyboardFlying = orbitKeyboardMove.isActive();
     const orbitMotionActive =
-      orbitPointerDown ||
-      keyboardFlying ||
-      settleFrames < SETTLE_FRAMES_BEFORE_IDLE;
+      orbitPointerDown || orbitKeyboardMove.isActive();
 
     const keepAnimating =
       fpSessionActive ||

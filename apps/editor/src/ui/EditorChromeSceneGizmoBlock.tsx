@@ -41,7 +41,7 @@ export function EditorChromeSceneGizmoBlock(props: {
     setDecorNeighborAlignSnap,
     apartmentBakedFloorShadowsEnabled = false,
     setApartmentBakedFloorShadowsEnabled,
-    apartmentPracticalLightsEnabled = false,
+    apartmentPracticalLightsEnabled = true,
     setApartmentPracticalLightsEnabled,
     myApartmentLayoutHidePickMode = false,
     setMyApartmentLayoutHidePickMode,
@@ -161,8 +161,7 @@ export function EditorChromeSceneGizmoBlock(props: {
           <span style={{ lineHeight: 1.35 }}>
             Show practical lights
             <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
-              Off by default — lamps, screens, and window pools are costly while
-              authoring.
+              Uncheck to disable lamps, screens, and window pools while authoring.
             </span>
           </span>
         </label>

@@ -108,8 +108,6 @@ export async function mountEditorScene(
   canvas: HTMLCanvasElement,
 ): Promise<() => void> {
   const ORBIT_MAX_DISTANCE = 40;
-  /** Slightly snappier than OrbitControls default (0.05) while keeping inertia smooth. */
-  const ORBIT_DAMPING_FACTOR = 0.1;
   await assertWebGpuAdapterOrThrow();
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe8edf4);
@@ -642,8 +640,8 @@ export async function mountEditorScene(
 
   /** Defer {@link OrbitControls#connect} until after {@link TransformControls#connect} (see `rewireCanvasPrimaryPointerListeners`). */
   const orbitControls = new OrbitControls(camera, null);
-  orbitControls.enableDamping = true;
-  orbitControls.dampingFactor = ORBIT_DAMPING_FACTOR;
+  /** Snap on release — no FP-style orbit inertia while authoring. */
+  orbitControls.enableDamping = false;
   orbitControls.target.set(0, 1.45, 0);
   orbitControls.minDistance = EDITOR_ORBIT_MIN_DISTANCE_M;
   orbitControls.maxDistance = ORBIT_MAX_DISTANCE;

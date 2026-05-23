@@ -270,7 +270,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   decorNeighborAlignSnap: false,
   apartmentBakedFloorShadowsEnabled: false,
-  apartmentPracticalLightsEnabled: false,
+  apartmentPracticalLightsEnabled: true,
   myApartmentLayoutHidePickMode: false,
   myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
   myApartmentLayoutLoadingMessage: null,

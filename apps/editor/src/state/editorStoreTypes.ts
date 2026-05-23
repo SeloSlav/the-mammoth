@@ -144,7 +144,7 @@ export interface EditorState {
   decorNeighborAlignSnap: boolean;
   /** {@link EditorMode.my_apartment_layout} — mesh-accurate decor floor shadow overlays (off by default for editor perf). */
   apartmentBakedFloorShadowsEnabled: boolean;
-  /** {@link EditorMode.my_apartment_layout} — TV/lamp/window practical lights (off by default for editor perf). */
+  /** {@link EditorMode.my_apartment_layout} — TV/lamp/window practical lights (disable via Scene & gizmo for perf). */
   apartmentPracticalLightsEnabled: boolean;
   /** {@link EditorMode.my_apartment_layout} — left-click hides décor / walls instead of selecting (viewport only). */
   myApartmentLayoutHidePickMode: boolean;
