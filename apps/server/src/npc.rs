@@ -130,17 +130,16 @@ pub fn apply_npc_damage(ctx: &ReducerContext, npc_id: u64, amount: f32) -> bool 
     row.health = (row.health - amount).max(0.0);
     row.hit_presentation_seq = row.hit_presentation_seq.wrapping_add(1);
     if row.health <= 0.0 {
+        if row.session_key.starts_with("combat_sim:") {
+            crate::combat_sim::reset_babushka_after_death(ctx, &mut row);
+            ctx.db.world_npc().npc_id().update(row);
+            return true;
+        }
         row.state = NPC_STATE_DEAD;
         row.locomotion = NPC_LOCOMOTION_IDLE;
         row.vel_x = 0.0;
         row.vel_z = 0.0;
-        let session_key = row.session_key.clone();
-        let npc_id = row.npc_id;
         ctx.db.world_npc().npc_id().update(row);
-        ctx.db.world_npc().npc_id().delete(&npc_id);
-        if session_key.starts_with("combat_sim:") {
-            crate::combat_sim::respawn_babushka_for_session(ctx, &session_key);
-        }
         return true;
     }
     if row.state == NPC_STATE_IDLE {
@@ -312,14 +311,20 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
         let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
         let dist = dist_sq.sqrt();
 
+        let aggro_range_m = if npc.session_key.starts_with("combat_sim:") {
+            crate::combat_sim::COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M
+        } else {
+            BABUSHKA_AGGRO_RANGE_M
+        };
+
         if npc.state == NPC_STATE_IDLE {
-            if dist_sq <= BABUSHKA_AGGRO_RANGE_M * BABUSHKA_AGGRO_RANGE_M {
+            if dist_sq <= aggro_range_m * aggro_range_m {
                 npc.state = NPC_STATE_AGGRO;
             }
         }
 
         if npc.state == NPC_STATE_AGGRO {
-            if dist_sq > (BABUSHKA_AGGRO_RANGE_M * 2.4).powi(2) {
+            if dist_sq > (aggro_range_m * 2.4).powi(2) {
                 npc.state = NPC_STATE_IDLE;
                 npc.locomotion = NPC_LOCOMOTION_IDLE;
                 npc.vel_x = 0.0;

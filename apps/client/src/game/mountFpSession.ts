@@ -310,6 +310,7 @@ export async function mountFpSession(
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
   const fpEnvironment = attachFpSessionEnvironment(scene, renderer, {
     skipOutdoorGroundPlane: isCombatSim,
+    outdoorCombatArena: isCombatSim,
   });
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
@@ -880,6 +881,7 @@ export async function mountFpSession(
     return _interactionPos;
   };
   const getContainingResidentialUnitBounds = () => {
+    if (isCombatSim) return null;
     const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
       slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
       slackYBelow: 1.25,
@@ -895,6 +897,15 @@ export async function mountFpSession(
       maxZ: unit.boundMaxZ,
     };
   };
+  const isInsideResidentialUnitForFrame = isCombatSim
+    ? () => false
+    : isInsideResidentialUnit;
+  const isApartmentDecorInteriorVisibleForFrame = isCombatSim
+    ? () => false
+    : isApartmentDecorInteriorVisible;
+  const getContainingResidentialUnitBoundsForFrame = isCombatSim
+    ? () => null
+    : getContainingResidentialUnitBounds;
 
   const visibleSittablePickScratch: THREE.Mesh[] = [];
   const sitPointerNdc = new THREE.Vector2();
@@ -1799,10 +1810,10 @@ export async function mountFpSession(
     sendMoveIntent,
     syncBuildingFloorPlateVisibility,
     isInsideElevatorCabHudForJump,
-    isInsideResidentialUnit,
+    isInsideResidentialUnit: isInsideResidentialUnitForFrame,
     getContainingResidentialUnitKey,
-    getContainingResidentialUnitBounds,
-    isApartmentDecorInteriorVisible,
+    getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
+    isApartmentDecorInteriorVisible: isApartmentDecorInteriorVisibleForFrame,
     selectedHotbarRow,
     logFpPerf,
     tickFpSessionElevDebug,

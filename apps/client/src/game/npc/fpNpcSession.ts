@@ -86,7 +86,6 @@ export function createFpNpcSession(opts: {
   getAudioContext: () => AudioContext | null;
 }): FpNpcSession {
   const pool = new WorldNpcPresenterPool(opts.scene);
-  void pool.ensureReady();
   const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.scene);
 
   const rows = new Map<string, WorldNpc>();
@@ -100,6 +99,10 @@ export function createFpNpcSession(opts: {
     }
     return out;
   };
+
+  void pool.ensureReady().then(() => {
+    pool.sync(rebuildSnapshots(performance.now()), 0);
+  });
 
   const onRow = (row: WorldNpc) => {
     const key = row.npcId.toString();

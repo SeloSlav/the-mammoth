@@ -221,6 +221,8 @@ export type FpSessionEnvironmentFrameTimings = {
 export type AttachFpSessionEnvironmentOpts = {
   /** Combat sim uses its own arena plane — skip the 6 km textured outdoor ground + PBR loads. */
   skipOutdoorGroundPlane?: boolean;
+  /** Open-air combat arena — never apply apartment interior clip or darkening. */
+  outdoorCombatArena?: boolean;
 };
 
 export function attachFpSessionEnvironment(
@@ -361,6 +363,7 @@ export function attachFpSessionEnvironment(
   scene.fog = new THREE.Fog(0xd0d4cf, 120, 1350);
 
   const skipOutdoorGroundPlane = opts?.skipOutdoorGroundPlane === true;
+  const outdoorCombatArena = opts?.outdoorCombatArena === true;
   type LoadedTex = THREE.Texture;
   const groundTextures: LoadedTex[] = [];
   let groundPlaneDisposed = false;
@@ -637,7 +640,9 @@ export function attachFpSessionEnvironment(
       const t0 = performance.now();
       const renderIsoSky = isFpDebugRenderIsolationEnabled("environmentSky");
       const renderIsoLighting = isFpDebugRenderIsolationEnabled("environmentLighting");
-      applyApartmentInteriorClip(_apartmentInteriorBounds);
+      const interiorBounds = outdoorCombatArena ? null : _apartmentInteriorBounds;
+      const interiorDark01 = outdoorCombatArena ? 0 : apartmentInteriorDark01;
+      applyApartmentInteriorClip(interiorBounds);
 
       sky.visible = renderIsoSky;
       if (groundPlane) {
@@ -668,7 +673,7 @@ export function attachFpSessionEnvironment(
         ? applyMammothApartmentInteriorScene({
             scene,
             renderer,
-            interiorProximity01: apartmentInteriorDark01,
+            interiorProximity01: interiorDark01,
             bounce: apartmentInteriorBounce,
             global: { hemi, fill, dir },
             exteriorLightScale: stairwellScale,

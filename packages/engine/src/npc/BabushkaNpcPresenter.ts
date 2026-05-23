@@ -174,10 +174,16 @@ export class BabushkaNpcPresenter {
     this.root.add(body.root);
   }
 
+  static createSync(): BabushkaNpcPresenter {
+    if (!babushkaTemplate) {
+      throw new Error("[BabushkaNpcPresenter] call preloadBabushkaNpcBody() before createSync()");
+    }
+    return new BabushkaNpcPresenter(new AnimatedBabushkaBody(babushkaTemplate));
+  }
+
   static async create(): Promise<BabushkaNpcPresenter> {
     await preloadBabushkaNpcBody();
-    if (!babushkaTemplate) throw new Error("[BabushkaNpcPresenter] babushka GLB not loaded");
-    return new BabushkaNpcPresenter(new AnimatedBabushkaBody(babushkaTemplate));
+    return BabushkaNpcPresenter.createSync();
   }
 
   applySnapshot(snapshot: ReplicatedNpcSnapshot, dt: number): void {
@@ -196,6 +202,8 @@ export class BabushkaNpcPresenter {
 export class WorldNpcPresenterPool {
   private readonly scene: THREE.Scene;
   private readonly byId = new Map<string, BabushkaNpcPresenter>();
+  private readonly spare: BabushkaNpcPresenter[] = [];
+  private preloadReady = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -203,6 +211,25 @@ export class WorldNpcPresenterPool {
 
   async ensureReady(): Promise<void> {
     await preloadBabushkaNpcBody();
+    this.preloadReady = true;
+  }
+
+  private acquirePresenter(): BabushkaNpcPresenter | null {
+    if (!this.preloadReady) return null;
+    try {
+      return this.spare.pop() ?? BabushkaNpcPresenter.createSync();
+    } catch {
+      return null;
+    }
+  }
+
+  private releasePresenter(pres: BabushkaNpcPresenter): void {
+    this.scene.remove(pres.root);
+    if (this.spare.length < 2) {
+      this.spare.push(pres);
+      return;
+    }
+    pres.dispose();
   }
 
   sync(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
@@ -213,23 +240,16 @@ export class WorldNpcPresenterPool {
       let pres = this.byId.get(key);
       if (!pres) {
         if (snap.archetype !== "babushka") continue;
-        void BabushkaNpcPresenter.create().then((created) => {
-          if (this.byId.has(key)) {
-            created.dispose();
-            return;
-          }
-          this.byId.set(key, created);
-          this.scene.add(created.root);
-          created.applySnapshot(snap, dt);
-        });
-        continue;
+        pres = this.acquirePresenter();
+        if (!pres) continue;
+        this.byId.set(key, pres);
+        this.scene.add(pres.root);
       }
       pres.applySnapshot(snap, dt);
     }
     for (const [key, pres] of this.byId) {
       if (!live.has(key)) {
-        this.scene.remove(pres.root);
-        pres.dispose();
+        this.releasePresenter(pres);
         this.byId.delete(key);
       }
     }
@@ -240,6 +260,10 @@ export class WorldNpcPresenterPool {
       this.scene.remove(pres.root);
       pres.dispose();
     }
+    for (const pres of this.spare) {
+      pres.dispose();
+    }
     this.byId.clear();
+    this.spare.length = 0;
   }
 }

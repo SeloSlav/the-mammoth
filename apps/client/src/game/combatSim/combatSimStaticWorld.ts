@@ -79,6 +79,18 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   plane.castShadow = false;
   buildingRoot.add(plane);
 
+  const arenaFill = new THREE.HemisphereLight(0xd8e4f4, 0x4a5058, 0.62);
+  arenaFill.name = "combat_sim_arena_fill";
+  arenaFill.position.set(cx, footY + 6, cz);
+  buildingRoot.add(arenaFill);
+
+  const arenaSun = new THREE.DirectionalLight(0xfff5eb, 0.38);
+  arenaSun.name = "combat_sim_arena_sun";
+  arenaSun.position.set(cx + 18, footY + 22, cz + 12);
+  arenaSun.target.position.set(cx, footY, cz);
+  buildingRoot.add(arenaSun);
+  buildingRoot.add(arenaSun.target);
+
   const cellRoot = new THREE.Group();
   cellRoot.name = "combat_sim_cell_root";
 
