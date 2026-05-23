@@ -16,11 +16,14 @@ import {
 } from "../inventory/mammothItemCatalog";
 import type {
   ItemCategory,
-  MammothConstructionIngredient,
   MammothItemDef,
 } from "../inventory/mammothItemCatalogTypes";
-import type { MammothPopulatedItem } from "../inventory/inventoryDragDropTypes";
 import { useMammothInventory } from "../inventory/useMammothInventory";
+import {
+  aggregatedCraftMaterialTotals,
+  carrierCountForDef,
+  MAX_CRAFT_QUEUE_PER_PLAYER,
+} from "../inventory/mammothCraftEligibility";
 import {
   getFpSessionGameUiHidden,
   subscribeFpSessionGameUiHidden,
@@ -39,7 +42,7 @@ import {
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
 
-const MAX_QUEUE_PER_PLAYER = 14;
+const MAX_QUEUE_PER_PLAYER = MAX_CRAFT_QUEUE_PER_PLAYER;
 
 /** Above inventory / pickup / toasts / vitals; keep below {@link PlayerDeathOverlay} (400). */
 const CRAFTING_OVERLAY_Z_INDEX = 380;
@@ -63,30 +66,6 @@ const CATEGORY_LABEL: Record<ItemCategory, string> = {
   resource: "Resources",
   consumable: "Consumables",
 };
-
-function carrierCountForDef(
-  grids: { hotbar: (MammothPopulatedItem | null)[]; inventory: (MammothPopulatedItem | null)[] },
-  defId: string,
-): number {
-  let n = 0;
-  for (const pop of grids.hotbar) {
-    if (pop?.instance.defId === defId)
-      n += typeof pop.instance.quantity === "bigint" ? Number(pop.instance.quantity) : (pop.instance.quantity ?? 0);
-  }
-  for (const pop of grids.inventory) {
-    if (pop?.instance.defId === defId)
-      n += typeof pop.instance.quantity === "bigint" ? Number(pop.instance.quantity) : (pop.instance.quantity ?? 0);
-  }
-  return n;
-}
-
-function aggregatedMaterialTotals(materials: MammothConstructionIngredient[]): [string, number][] {
-  const m = new Map<string, number>();
-  for (const ing of materials) {
-    m.set(ing.itemId, (m.get(ing.itemId) ?? 0) + ing.quantity);
-  }
-  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
 
 type Props = {
   conn: DbConnection;
@@ -152,7 +131,7 @@ export function MammothCraftingHud({ conn }: Props) {
   const grids = useMemo(() => ({ hotbar, inventory }), [hotbar, inventory]);
 
   const matsAgg = useMemo(
-    () => (cons ? aggregatedMaterialTotals(cons.materials) : []),
+    () => (cons ? aggregatedCraftMaterialTotals(cons.materials) : []),
     [cons],
   );
 

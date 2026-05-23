@@ -28,11 +28,26 @@ const NO_SELECT: CSSProperties = {
 /**
  * Canonical dock panel width.
  *
- * Derived from the player inventory grid (6 cols × 52px + 5 × 6px gap + 18px L/R padding
- * + 2px border) so the inventory + stash panels read as matched siblings. Stash kinds with
- * smaller grids (water tank, grow tray, wardrobe) center their slot grid inside this width.
- * Fridge (7 cols) opts into a slightly wider variant — see {@link Props.widthPx}.
+ * Derived from slot grid width + horizontal chrome. Inventory and quick-craft panels use
+ * {@link mammothHudPanelWidthForGridCols}; stash kinds with wider grids opt into overrides.
  */
+export const MAMMOTH_HUD_SLOT_PX = 52;
+export const MAMMOTH_HUD_SLOT_GAP_PX = 6;
+/** Left + right padding (18×2) + 1px border each side. */
+export const MAMMOTH_HUD_PANEL_HORIZONTAL_CHROME_PX = 38;
+
+export function mammothHudPanelWidthForGridCols(cols: number): number {
+  const gridW = cols * MAMMOTH_HUD_SLOT_PX + Math.max(0, cols - 1) * MAMMOTH_HUD_SLOT_GAP_PX;
+  return gridW + MAMMOTH_HUD_PANEL_HORIZONTAL_CHROME_PX;
+}
+
+/** Player inventory panel — 4 columns × 3 rows, no dead space. */
+export const MAMMOTH_INVENTORY_PANEL_WIDTH_PX = mammothHudPanelWidthForGridCols(4);
+
+/** Quick craft icon grid beside inventory (Tab). */
+export const MAMMOTH_QUICK_CRAFT_PANEL_WIDTH_PX = mammothHudPanelWidthForGridCols(4);
+
+/** Legacy default for stash panels that center smaller grids inside a wider card. */
 export const MAMMOTH_HUD_PANEL_WIDTH_PX = 380;
 
 type Props = {

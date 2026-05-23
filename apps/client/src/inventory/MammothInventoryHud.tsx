@@ -45,7 +45,6 @@ import {
   subscribeFpHotbarSelection,
 } from "../game/fpHotbar/fpHotbarSelection";
 import { getMammothItemDef, mammothItemDefSupportsHotbarInstantConsume, mammothItemDefSupportsHotbarUseAction, mammothItemDefSupportsHotbarWaterDrink } from "./mammothItemCatalog";
-import { WaterBottleHotbarFillBar } from "./WaterBottleHotbarFillBar";
 import { useWaterBottleFillVersion } from "./useWaterContainerState";
 import { waterBottleFillFraction } from "./waterContainerHelpers";
 import {
@@ -78,7 +77,16 @@ import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inv
 import { beginInventoryDrag, endInventoryDrag, getInventoryDragSession } from "./inventoryDragSession";
 import { playInventoryItemDragDropSound } from "./inventoryDragUiSound";
 import { useInventoryDragHoverSlot } from "./useInventoryDragHoverSlot";
-import { MammothHudPanel } from "./MammothHudPanel";
+import {
+  buildMammothQuickCraftTooltipContent,
+} from "./mammothCraftEligibility";
+import { MammothHudPanel, MAMMOTH_INVENTORY_PANEL_WIDTH_PX } from "./MammothHudPanel";
+import {
+  countPlayerCraftQueueRows,
+  MammothQuickCraftPanel,
+} from "./MammothQuickCraftPanel";
+import type { MammothItemDef } from "./mammothItemCatalogTypes";
+import { WaterBottleHotbarFillBar } from "./WaterBottleHotbarFillBar";
 import {
   inventorySlotGridsMatch,
   inventorySlotGridsSemanticallyMatch,
@@ -86,13 +94,16 @@ import {
   type SlotGrids,
 } from "./inventoryOptimistic";
 import {
+  isPlayerInventorySlotLocked,
   PLAYER_INVENTORY_GRID_COLS,
+  PLAYER_INVENTORY_LOCKED_SLOT_HINT,
+  playerInventoryHudSlotCount,
 } from "@the-mammoth/schemas";
 import {
-  mammothInventoryHudSlotCount,
   useMammothInventory,
   useMammothStash,
 } from "./useMammothInventory";
+import { MammothLockedInventorySlot } from "./MammothLockedInventorySlot";
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",
@@ -189,6 +200,9 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const lastHotbarClickRef = useRef<{ slot: number; t: number } | null>(null);
 
   const hoveredTooltipSlotRef = useRef<MammothDragSourceSlotInfo | null>(null);
+  const hoveredLockedInventorySlotRef = useRef<number | null>(null);
+  const hoveredQuickCraftDefIdRef = useRef<string | null>(null);
+  const [craftQueueTick, setCraftQueueTick] = useState(0);
   const [itemTooltip, setItemTooltip] = useState<{
     visible: boolean;
     content: MammothItemTooltipContentModel | null;
@@ -197,7 +211,22 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   const hideItemTooltip = useCallback(() => {
     hoveredTooltipSlotRef.current = null;
+    hoveredLockedInventorySlotRef.current = null;
+    hoveredQuickCraftDefIdRef.current = null;
     setItemTooltip({ visible: false, content: null, position: { x: 0, y: 0 } });
+  }, []);
+
+  const updateTooltipPositionFromElement = useCallback((e: ReactMouseEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    setItemTooltip((prev) =>
+      prev.visible
+        ? {
+            ...prev,
+            position: { x: rect.left - 10, y: rect.top + rect.height / 2 },
+          }
+        : prev,
+    );
   }, []);
 
   const updateTooltipPositionFromHoverEvent = useCallback((e: ReactMouseEvent) => {
@@ -229,8 +258,65 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     [],
   );
 
+  const openLockedInventorySlotTooltip = useCallback(
+    (slotIndex: number, e: ReactMouseEvent) => {
+      const slotEl = e.currentTarget.closest("[data-slot-type]") as HTMLElement | null;
+      if (!slotEl) return;
+      const rect = slotEl.getBoundingClientRect();
+      hoveredTooltipSlotRef.current = null;
+      hoveredLockedInventorySlotRef.current = slotIndex;
+      setItemTooltip({
+        visible: true,
+        content: {
+          name: "Locked pocket",
+          description: PLAYER_INVENTORY_LOCKED_SLOT_HINT,
+        },
+        position: { x: rect.left - 10, y: rect.top + rect.height / 2 },
+      });
+    },
+    [],
+  );
+
+  const openQuickCraftTooltip = useCallback(
+    (def: MammothItemDef, e: ReactMouseEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      hoveredTooltipSlotRef.current = null;
+      hoveredLockedInventorySlotRef.current = null;
+      hoveredQuickCraftDefIdRef.current = def.id;
+      const grids = { hotbar: displaySlots.hotbar, inventory: displaySlots.inventory };
+      setItemTooltip({
+        visible: true,
+        content: buildMammothQuickCraftTooltipContent(
+          def,
+          grids,
+          countPlayerCraftQueueRows(conn),
+        ),
+        position: { x: rect.left - 10, y: rect.top + rect.height / 2 },
+      });
+    },
+    [conn, displaySlots.hotbar, displaySlots.inventory],
+  );
+
   useEffect(() => {
-    if (!itemTooltip.visible || !hoveredTooltipSlotRef.current) return;
+    if (!itemTooltip.visible || hoveredLockedInventorySlotRef.current !== null) return;
+    if (hoveredQuickCraftDefIdRef.current) {
+      const def = getMammothItemDef(hoveredQuickCraftDefIdRef.current);
+      if (!def) {
+        hideItemTooltip();
+        return;
+      }
+      const grids = { hotbar: displaySlots.hotbar, inventory: displaySlots.inventory };
+      setItemTooltip((prev) => ({
+        ...prev,
+        content: buildMammothQuickCraftTooltipContent(
+          def,
+          grids,
+          countPlayerCraftQueueRows(conn),
+        ),
+      }));
+      return;
+    }
+    if (!hoveredTooltipSlotRef.current) return;
     const slot = hoveredTooltipSlotRef.current;
     const arr = slot.type === "hotbar" ? displaySlots.hotbar : displaySlots.inventory;
     const pop = arr[slot.index] ?? null;
@@ -242,10 +328,22 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
       ...prev,
       content: buildMammothItemTooltipContent(pop),
     }));
-  }, [displaySlots, itemTooltip.visible, hideItemTooltip]);
+  }, [conn, displaySlots, itemTooltip.visible, hideItemTooltip]);
 
   useEffect(() => {
-    if (!invOpen && hoveredTooltipSlotRef.current?.type === "inventory") {
+    const bump = () => setCraftQueueTick((t) => t + 1);
+    conn.db.craft_queue_item.onInsert(bump);
+    conn.db.craft_queue_item.onUpdate(bump);
+    conn.db.craft_queue_item.onDelete(bump);
+    return () => {
+      conn.db.craft_queue_item.removeOnInsert(bump);
+      conn.db.craft_queue_item.removeOnUpdate(bump);
+      conn.db.craft_queue_item.removeOnDelete(bump);
+    };
+  }, [conn]);
+
+  useEffect(() => {
+    if (!invOpen && (hoveredTooltipSlotRef.current?.type === "inventory" || hoveredQuickCraftDefIdRef.current)) {
       hideItemTooltip();
     }
   }, [invOpen, hideItemTooltip]);
@@ -499,7 +597,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const hotbarBottom = "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))";
 
   const { hotbar: hb, inventory: inv } = displaySlots;
-  const inventoryHudSlots = mammothInventoryHudSlotCount(inv);
+  const inventoryHudSlots = playerInventoryHudSlotCount();
   const hotLoot = useMammothHotLoot();
   const hotLootBanner = mammothHotLootActiveLabel(hotLoot.isHotLootActive);
   const stashSubtitleSuffix = mammothHotLootSubtitle(hotLoot.enabled);
@@ -513,14 +611,76 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
     [openItemTooltipForSlot, updateTooltipPositionFromHoverEvent, hideItemTooltip],
   );
 
+  const craftQueueLength = useMemo(() => {
+    void craftQueueTick;
+    return countPlayerCraftQueueRows(conn);
+  }, [conn, craftQueueTick]);
+
   /**
    * Inventory anchors the LEFT half of the dock when a stash is open (so the pair feels
-   * balanced around the viewport center) and centers fully when opened solo via Tab.
+   * balanced around the viewport center) and centers inventory + quick craft when opened solo via Tab.
    * Stash panel uses the mirrored anchor (see MammothStashHud).
    */
-  const inventoryAnchor: CSSProperties = activeStash
+  const inventoryDockAnchor: CSSProperties = activeStash
     ? { right: "calc(50% + 8px)", top: "50%", transform: "translate(0, -50%)" }
     : { left: "50%", top: "50%", transform: "translate(-50%, -50%)" };
+
+  const inventoryPanel = (
+    <MammothHudPanel
+      title="Inventory"
+      subtitle={
+        hotLootBanner ??
+        (activeStash
+          ? `Drag items in or out. Right-click to quick-transfer.${stashSubtitleSuffix}`
+          : "Right-click to send an item to the hotbar.")
+      }
+      widthPx={MAMMOTH_INVENTORY_PANEL_WIDTH_PX}
+      onContextMenu={blockBrowserContextMenu}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${PLAYER_INVENTORY_GRID_COLS}, 52px)`,
+          gap: 6,
+        }}
+      >
+        {Array.from({ length: inventoryHudSlots }, (_, i) => {
+          if (isPlayerInventorySlotLocked(i)) {
+            return (
+              <MammothLockedInventorySlot
+                key={`inv-locked-${i}`}
+                slotIndex={i}
+                onHoverStart={openLockedInventorySlotTooltip}
+                onHoverMove={updateTooltipPositionFromHoverEvent}
+                onHoverEnd={hideItemTooltip}
+              />
+            );
+          }
+          const pop = inv[i] ?? null;
+          const slotInfo = { type: "inventory" as const, index: i };
+          return (
+            <MammothPlayerCarrySlotCell
+              key={`inv-${i}`}
+              slotPrefix={`inv-${i}`}
+              pop={pop}
+              slotInfo={slotInfo}
+              isDraggingOver={isDragHoverSlot(slotInfo)}
+              tooltip={tooltipHandlers}
+              onDragStart={handleDragStart}
+              onDrop={handleDrop}
+              onItemContextMenu={() =>
+                activeStash
+                  ? quickMovePlayerItemToStash(pop!, slotInfo)
+                  : quickMoveInventoryToHotbar(pop!, i)
+              }
+              slotInner={slotInner}
+              toInstanceId={toInstanceId}
+            />
+          );
+        })}
+      </div>
+    </MammothHudPanel>
+  );
 
   return (
     <div
@@ -538,53 +698,25 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
         <div
           style={{
             position: "fixed",
-            ...inventoryAnchor,
+            ...inventoryDockAnchor,
             zIndex: 121,
             pointerEvents: "auto",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
           }}
         >
-          <MammothHudPanel
-            title="Inventory"
-            subtitle={
-              hotLootBanner ??
-              (activeStash
-                ? `Drag items in or out. Right-click to quick-transfer.${stashSubtitleSuffix}`
-                : "Right-click to send an item to the hotbar.")
-            }
-            onContextMenu={blockBrowserContextMenu}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `repeat(${PLAYER_INVENTORY_GRID_COLS}, 52px)`,
-                gap: 6,
-              }}
-            >
-              {Array.from({ length: inventoryHudSlots }, (_, i) => {
-                const pop = inv[i] ?? null;
-                const slotInfo = { type: "inventory" as const, index: i };
-                return (
-                  <MammothPlayerCarrySlotCell
-                    key={`inv-${i}`}
-                    slotPrefix={`inv-${i}`}
-                    pop={pop}
-                    slotInfo={slotInfo}
-                    isDraggingOver={isDragHoverSlot(slotInfo)}
-                    tooltip={tooltipHandlers}
-                    onDragStart={handleDragStart}
-                    onDrop={handleDrop}
-                    onItemContextMenu={() =>
-                      activeStash
-                        ? quickMovePlayerItemToStash(pop!, slotInfo)
-                        : quickMoveInventoryToHotbar(pop!, i)
-                    }
-                    slotInner={slotInner}
-                    toInstanceId={toInstanceId}
-                  />
-                );
-              })}
-            </div>
-          </MammothHudPanel>
+          {inventoryPanel}
+          {!activeStash ? (
+            <MammothQuickCraftPanel
+              conn={conn}
+              queueLength={craftQueueLength}
+              onHoverRecipe={openQuickCraftTooltip}
+              onHoverMove={updateTooltipPositionFromElement}
+              onHoverEnd={hideItemTooltip}
+              onContextMenu={blockBrowserContextMenu}
+            />
+          ) : null}
         </div>
       )}
 

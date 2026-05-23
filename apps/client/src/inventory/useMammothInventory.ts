@@ -7,8 +7,8 @@ import { apartmentDecorStashKindResolver } from "./apartmentStashInventoryRules"
 import { apartmentStashKeyMatchesRow } from "../game/fpApartment/fpApartmentStashKey";
 import {
   APARTMENT_STASH_SLOT_INDEX_MAX,
-  PLAYER_INVENTORY_BASE_SLOTS,
   PLAYER_INVENTORY_MAX_SLOTS,
+  playerInventoryHudSlotCount,
 } from "@the-mammoth/schemas";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { apartmentStashSlotCount } from "./apartmentStashInventoryRules";
@@ -17,16 +17,12 @@ import { getMammothItemDef } from "./mammothItemCatalog";
 export const MAMMOTH_HOTBAR_SLOTS = 6;
 /** Read grid size — includes legacy overflow slots until server compacts them on connect. */
 export const MAMMOTH_INVENTORY_SLOTS = PLAYER_INVENTORY_MAX_SLOTS;
-/** Default HUD pocket rows (4×2). Overflow slots 8–11 appear only when occupied. */
-export const MAMMOTH_INVENTORY_VISIBLE_SLOTS = PLAYER_INVENTORY_BASE_SLOTS;
 
+/** @deprecated Prefer {@link playerInventoryHudSlotCount} from `@the-mammoth/schemas`. */
 export function mammothInventoryHudSlotCount(
-  inventory: readonly (MammothPopulatedItem | null)[],
+  _inventory: readonly (MammothPopulatedItem | null)[],
 ): number {
-  for (let i = PLAYER_INVENTORY_MAX_SLOTS - 1; i >= PLAYER_INVENTORY_BASE_SLOTS; i--) {
-    if (inventory[i]) return PLAYER_INVENTORY_MAX_SLOTS;
-  }
-  return PLAYER_INVENTORY_BASE_SLOTS;
+  return playerInventoryHudSlotCount();
 }
 /** Legacy max — prefer {@link apartmentStashSlotCount} per furniture type. */
 export const MAMMOTH_STASH_SLOTS = APARTMENT_STASH_SLOT_INDEX_MAX;

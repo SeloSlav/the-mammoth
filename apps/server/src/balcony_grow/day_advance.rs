@@ -53,7 +53,7 @@ pub(crate) fn target_days_after_fertilizer(
 /// not once per night for the life of the tray.
 pub(crate) fn apply_substrate_to_plants(
     plants: &mut [BalconyGrowPlant],
-    without_fert_modifier: f32,
+    without_fert_modifier: f32, 
     with_fert_modifier: f32,
 ) {
     for plant in plants.iter_mut() {
