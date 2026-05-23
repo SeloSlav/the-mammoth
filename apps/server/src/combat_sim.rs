@@ -1,4 +1,13 @@
-//! Apartment combat-sim entry — shotgun loadout + idle babushka outside aggro range.
+//! Combat sim **entry/exit only** — not a separate combat stack.
+//!
+//! Spawns use the same `world_npc` table, AI tick, and damage path as future in-apartment NPCs.
+//! Shooting and melee go through `submit_firearm_shot` / `submit_melee_swing` unchanged.
+//!
+//! Arena-specific behavior (not duplicated combat logic):
+//! - `enter_combat_sim`: loadout, bed pose, spawn NPCs tagged with `combat_sim:{unit_key}`
+//! - `shooter_in_combat_sim_open_arena`: skip building firearm LOS while those NPCs are live
+//!   (client mounts an empty plane; server still has baked megablock collision for hitscan)
+//! - `leave_combat_sim`: despawn session NPCs
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
@@ -10,7 +19,7 @@ use crate::items_catalog;
 use crate::loadout;
 use crate::movement;
 use crate::combat_sim_npc_spawn;
-use crate::npc;
+use crate::npc::{self, world_npc};
 use crate::player_vitals;
 use crate::pose::{self, player_pose};
 
@@ -22,14 +31,26 @@ const COMBAT_SIM_HOTBAR: &[(&str, u32, u8)] = &[
 /// Minimum planar distance from the player spawn to the babushka (outside default aggro).
 const BABUSHKA_SPAWN_SEPARATION_M: f32 = 7.5;
 
-fn combat_sim_session_key(unit: &ApartmentUnit) -> String {
+pub fn combat_sim_session_key(unit: &ApartmentUnit) -> String {
     format!("combat_sim:{}", unit.unit_key)
 }
 
-fn owned_claimed_unit(ctx: &ReducerContext, owner: Identity) -> Option<ApartmentUnit> {
+pub fn owned_claimed_unit(ctx: &ReducerContext, owner: Identity) -> Option<ApartmentUnit> {
     ctx.db.apartment_unit().iter().find(|u| {
         u.owner == Some(owner) && u.state == UNIT_STATE_CLAIMED
     })
+}
+
+/// True while this player has live combat-sim NPCs — skip megablock firearm LOS (see module docs).
+pub fn shooter_in_combat_sim_open_arena(ctx: &ReducerContext, shooter: Identity) -> bool {
+    let Some(unit) = owned_claimed_unit(ctx, shooter) else {
+        return false;
+    };
+    let session_key = combat_sim_session_key(&unit);
+    ctx.db
+        .world_npc()
+        .iter()
+        .any(|n| n.session_key == session_key && n.state != npc::NPC_STATE_DEAD && n.health > 0.0)
 }
 
 fn grant_combat_sim_hotbar(ctx: &ReducerContext, owner: Identity) {

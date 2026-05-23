@@ -1,3 +1,10 @@
+/**
+ * Inert implementations of apartment-only FP subsystems.
+ *
+ * Used when `mountFpSession({ combatSimMode: true })` mounts the **same** session loop as live
+ * gameplay but skips building features (elevators, doors, decor, balcony grow) that do not exist
+ * on the empty combat arena. This is not a fork of combat or locomotion — only disabled mounts.
+ */
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
 import type { MountFpApartmentDecorMeshesResult } from "../fpApartment/fpApartmentDecorMeshes.js";
 import type { MountFpApartmentDoorsResult } from "../fpApartment/fpApartmentDoors.js";
@@ -26,31 +33,31 @@ const EMPTY_GROW_STATE: BalconyGrowOpUnitState = {
   traysWithSubstrate: new Set(),
 };
 
-const COMBAT_SIM_FLOOR_BAND: FpElevatorFloorVisibilityBand = {
+const INERT_FLOOR_BAND: FpElevatorFloorVisibilityBand = {
   lo: 0,
   hi: 0,
   hoistwayPlateBoost: false,
 };
 
-const noopKinematicSupport: FpKinematicSupportProvider = {
+const inertKinematicSupport: FpKinematicSupportProvider = {
   sampleSupportSurface: () => null,
   resolveAttachment: () => null,
 };
 
-export function createCombatSimFpElevatorsNoop(): MountFpElevatorWorldResult {
+export function createInertFpElevatorWorld(): MountFpElevatorWorldResult {
   return {
     dispose: noop,
     syncCabEvalClock: noop,
     tick: noop,
     syncLandingHailUi: noop,
-    kinematicSupport: noopKinematicSupport,
+    kinematicSupport: inertKinematicSupport,
     tryRaycastFloorPick: () => false,
     consumeInteractKey: () => false,
     shouldSuppressEpickup: () => false,
     getExteriorDoorInteractPrompt: () => null,
     visitCollisionAabbsInXZ: noop,
     applyCabRoofFeetSnap: () => false,
-    getFloorVisibilityBand: () => COMBAT_SIM_FLOOR_BAND,
+    getFloorVisibilityBand: () => INERT_FLOOR_BAND,
     syncShaftVisualCulling: noop,
     isInsideCabOccludedView: () => false,
     isInsideAnyCabHud: () => false,
@@ -62,7 +69,7 @@ export function createCombatSimFpElevatorsNoop(): MountFpElevatorWorldResult {
   };
 }
 
-export function createCombatSimFpApartmentDoorsNoop(): MountFpApartmentDoorsResult {
+export function createInertFpApartmentDoors(): MountFpApartmentDoorsResult {
   return {
     dispose: noop,
     tick: noop,
@@ -75,7 +82,7 @@ export function createCombatSimFpApartmentDoorsNoop(): MountFpApartmentDoorsResu
   };
 }
 
-export function createCombatSimFpApartmentDecorMeshesNoop(): MountFpApartmentDecorMeshesResult {
+export function createInertFpApartmentDecorMeshes(): MountFpApartmentDecorMeshesResult {
   return {
     dispose: noop,
     syncVisibility: noop,
@@ -99,7 +106,7 @@ export function createCombatSimFpApartmentDecorMeshesNoop(): MountFpApartmentDec
   };
 }
 
-export function createCombatSimFpBalconyGrowNoop(): FpBalconyGrowSession {
+export function createInertFpBalconyGrowSession(): FpBalconyGrowSession {
   return {
     dispose: noop,
     updateFrame: noop,

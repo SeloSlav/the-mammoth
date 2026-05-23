@@ -216,6 +216,31 @@ export function formatOwnedApartmentPreviewUnitLabel(unitId: string): string {
   return unitId;
 }
 
+/**
+ * Heading for `{@link FloorDoc}.id`|`storyLevelIndex`|`unitId` keys (owned-apartment authoring).
+ * Residential floor number uses `Math.max(1, storyLevelIndex - 1)` so it matches gameplay floor labels.
+ */
+export function formatOwnedApartmentPreviewUnitKeyHeading(
+  unitKey: string,
+  unitIdFallback?: string,
+): string {
+  const segments = unitKey.trim().split("|");
+  if (segments.length === 3) {
+    const levelStr = segments[1]!;
+    const unitId = segments[2]!.trim();
+    const storyLevelIndex = Number.parseInt(levelStr, 10);
+    if (Number.isFinite(storyLevelIndex) && unitId) {
+      const residentialFloor = Math.max(1, storyLevelIndex - 1);
+      return `Floor ${residentialFloor}, ${formatOwnedApartmentPreviewUnitLabel(unitId)}`;
+    }
+  }
+  const raw = unitIdFallback?.trim() ?? "";
+  if (!raw) return "Apartment unit";
+  const wing = formatOwnedApartmentPreviewUnitLabel(raw);
+  if (wing !== raw) return wing;
+  return raw.replace(/_/gu, " ").toUpperCase();
+}
+
 function isOwnedApartmentPreviewUnitId(unitId: string): boolean {
   return unitId.startsWith("unit_e_") || unitId.startsWith("unit_w_");
 }

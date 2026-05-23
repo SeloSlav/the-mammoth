@@ -14,6 +14,7 @@ import {
 } from "@the-mammoth/schemas";
 import type { StairWellAuthoringScope } from "@the-mammoth/world";
 import {
+  formatOwnedApartmentPreviewUnitKeyHeading,
   listOwnedApartmentAuthoringPreviewUnits,
   ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
@@ -113,7 +114,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
         const floor = floorDocs[ref.floorDocId];
         if (!floor) return [];
         return listOwnedApartmentAuthoringPreviewUnits(floor).map((unit) => {
-          const residentialFloor = Math.max(1, ref.levelIndex - 1);
           const unitKey = `${ref.floorDocId}|${ref.levelIndex}|${unit.unitId}`;
           const assignedProfile = apartmentUnitLayoutProfileForUnitKey(
             apartmentUnitLayoutProfiles,
@@ -121,7 +121,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           );
           const assignedProfileName = assignedProfile?.name ?? null;
           const isPlayerSpawnHome = unitKey === ownedDefaultPreviewUnitKey;
-          const unitLabel = `Floor ${residentialFloor}, ${unit.label}`;
+          const unitLabel = formatOwnedApartmentPreviewUnitKeyHeading(unitKey, unit.unitId);
           const profileListSuffix =
             assignedProfileName ??
             (isPlayerSpawnHome ? "Player owned default" : null);

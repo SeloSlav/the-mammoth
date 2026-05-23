@@ -83,6 +83,16 @@ pub fn submit_melee_swing(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32, 
     ) {
         player_vitals::apply_damage(ctx, hit.target, hit.damage);
         emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
+    } else if let Some(hit) = crate::npc::resolve_melee_swing_vs_npcs(
+        ctx,
+        pose.x,
+        pose.y,
+        pose.z,
+        swing_yaw,
+        weapon_def_id.as_str(),
+    ) {
+        crate::npc::apply_npc_damage(ctx, hit.npc_id, hit.damage);
+        emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
     } else {
         apartments::apply_forward_melee_door_damage(
             ctx,

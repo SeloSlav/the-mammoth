@@ -195,6 +195,93 @@ fn body_dims_for_archetype(archetype: &str) -> (f32, f32) {
     }
 }
 
+const MELEE_REACH_M: f32 = 1.7;
+const MELEE_HIT_RADIUS_M: f32 = 0.34;
+const MELEE_ARC_DOT_MIN: f32 = 0.2;
+const MELEE_HIT_MIN_Y_OFFSET_M: f32 = 0.2;
+const MELEE_HIT_MAX_Y_OFFSET_M: f32 = 1.45;
+
+pub struct NpcMeleeResolvedHit {
+    pub npc_id: u64,
+    pub damage: f32,
+    pub impact_x: f32,
+    pub impact_y: f32,
+    pub impact_z: f32,
+}
+
+/// Horizontal arc melee vs the nearest living world NPC (mirrors `combat_stub::resolve_melee_hit`).
+pub fn resolve_melee_swing_vs_npcs(
+    ctx: &ReducerContext,
+    attacker_x: f32,
+    attacker_y: f32,
+    attacker_z: f32,
+    attacker_yaw: f32,
+    weapon_def_id: &str,
+) -> Option<NpcMeleeResolvedHit> {
+    let damage = crate::combat_stub::melee_damage_for_def_id(weapon_def_id);
+    if damage <= 0.0 {
+        return None;
+    }
+
+    let forward_x = -attacker_yaw.sin();
+    let forward_z = -attacker_yaw.cos();
+    let right_x = -forward_z;
+    let right_z = forward_x;
+
+    let mut best: Option<(u64, f32, f32)> = None;
+
+    for npc in ctx.db.world_npc().iter() {
+        if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
+            continue;
+        }
+        let (body_radius, body_height) = body_dims_for_archetype(npc.archetype.as_str());
+        let target_y = npc.y;
+        let attacker_min_y = attacker_y + MELEE_HIT_MIN_Y_OFFSET_M;
+        let attacker_max_y = attacker_y + MELEE_HIT_MAX_Y_OFFSET_M;
+        let target_max_y = target_y + body_height;
+        if attacker_max_y < target_y || attacker_min_y > target_max_y {
+            continue;
+        }
+
+        let dx = npc.x - attacker_x;
+        let dz = npc.z - attacker_z;
+        let dist = (dx * dx + dz * dz).sqrt();
+        if dist > MELEE_REACH_M + body_radius + MELEE_HIT_RADIUS_M {
+            continue;
+        }
+        let forward = dx * forward_x + dz * forward_z;
+        if forward < 0.0 || forward > MELEE_REACH_M + body_radius {
+            continue;
+        }
+        let dot = if dist > 1e-5 { forward / dist } else { 1.0 };
+        if dot < MELEE_ARC_DOT_MIN {
+            continue;
+        }
+        let lateral = (dx * right_x + dz * right_z).abs();
+        if lateral > body_radius + MELEE_HIT_RADIUS_M {
+            continue;
+        }
+
+        let replace = best.is_none()
+            || lateral < best.as_ref().unwrap().1 - 1e-4
+            || ((lateral - best.as_ref().unwrap().1).abs() <= 1e-4
+                && forward < best.as_ref().unwrap().2);
+        if replace {
+            best = Some((npc.npc_id, lateral, forward));
+        }
+    }
+
+    let (npc_id, _, forward) = best?;
+    let impact_y = attacker_y + 1.0;
+    Some(NpcMeleeResolvedHit {
+        npc_id,
+        damage,
+        impact_x: attacker_x + forward_x * forward * 0.92,
+        impact_y,
+        impact_z: attacker_z + forward_z * forward * 0.92,
+    })
+}
+
 #[spacetimedb::reducer]
 pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
     if ctx.sender() != ctx.identity() {

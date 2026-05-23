@@ -195,10 +195,14 @@ fn merge_ray_wall_hits(a: Option<f32>, b: Option<f32>) -> Option<f32> {
 
 fn trace_world_solids_for_firearms(
     ctx: &ReducerContext,
+    attacker: Identity,
     origin: [f32; 3],
     dir: [f32; 3],
     max_t: f32,
 ) -> Option<f32> {
+    if crate::combat_sim::shooter_in_combat_sim_open_arena(ctx, attacker) {
+        return None;
+    }
     merge_ray_wall_hits(
         trace_static_solids(origin, dir, max_t),
         trace_apartment_door_firearms(ctx, origin, dir, max_t),
@@ -290,7 +294,7 @@ fn resolve_pistol_ray(
 ) -> Vec<PlayerDamageEvent> {
     let origin = [ox, oy, oz];
     let dir = [dx, dy, dz];
-    let t_wall = trace_world_solids_for_firearms(ctx, origin, dir, max_range_m);
+    let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, dir, max_range_m);
     let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
 
     let Some((pid, t_hit, feet_y, body_h)) = phit else {
@@ -349,7 +353,7 @@ fn resolve_shotgun_pellets(
 
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
-        let t_wall = trace_world_solids_for_firearms(ctx, origin, [jx, jy, jz], max_range_m);
+        let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
         let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {
@@ -558,6 +562,7 @@ pub fn firearm_hitscan_weapon(
 
 fn resolve_pistol_ray_npcs(
     ctx: &ReducerContext,
+    attacker: Identity,
     ox: f32,
     oy: f32,
     oz: f32,
@@ -568,7 +573,7 @@ fn resolve_pistol_ray_npcs(
     floor_frac: f32,
     base_damage: f32,
 ) -> Vec<NpcDamageEvent> {
-    let t_wall = trace_world_solids_for_firearms(ctx, [ox, oy, oz], [dx, dy, dz], max_range_m);
+    let t_wall = trace_world_solids_for_firearms(ctx, attacker, [ox, oy, oz], [dx, dy, dz], max_range_m);
     let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
     let Some((nid, t_hit, feet_y, body_h)) = nhit else {
         return Vec::new();
@@ -623,7 +628,7 @@ fn resolve_shotgun_pellets_npcs(
         let jz = bz + jr[2] * seed.spread_rx + jp[2] * seed.spread_ry;
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
-        let t_wall = trace_world_solids_for_firearms(ctx, origin, [jx, jy, jz], max_range_m);
+        let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
         let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (nhit.as_ref(), t_wall) {
@@ -715,7 +720,17 @@ pub fn firearm_hitscan_npcs(
 
     match weapon_def_id {
         "pistol" => resolve_pistol_ray_npcs(
-            ctx, ox, oy, oz, dx, dy, dz, RANGE_PISTOL_M, FALL_MIN_FRAC_PISTOL, 20.0,
+            ctx,
+            shooter_pose.identity,
+            ox,
+            oy,
+            oz,
+            dx,
+            dy,
+            dz,
+            RANGE_PISTOL_M,
+            FALL_MIN_FRAC_PISTOL,
+            20.0,
         ),
         "shotgun-coach" => resolve_shotgun_pellets_npcs(
             ctx,

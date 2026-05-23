@@ -445,6 +445,7 @@ export {
 export {
   apartmentDoorTemplateForUnit,
   appendOwnedApartmentEditorShellWalls,
+  formatOwnedApartmentPreviewUnitKeyHeading,
   formatOwnedApartmentPreviewUnitLabel,
   listOwnedApartmentAuthoringPreviewUnits,
   planOwnedApartmentEditorShellForUnit,

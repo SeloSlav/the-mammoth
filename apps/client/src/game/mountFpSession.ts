@@ -72,11 +72,12 @@ import {
 } from "./fpSession/fpSessionStaticWorldMeshCache.js";
 import { createCombatSimStaticWorld } from "./combatSim/combatSimStaticWorld.js";
 import {
-  createCombatSimFpApartmentDecorMeshesNoop,
-  createCombatSimFpApartmentDoorsNoop,
-  createCombatSimFpBalconyGrowNoop,
-  createCombatSimFpElevatorsNoop,
-} from "./combatSim/combatSimFpNoops.js";
+  createInertFpApartmentDecorMeshes,
+  createInertFpApartmentDoors,
+  createInertFpBalconyGrowSession,
+  createInertFpElevatorWorld,
+} from "./fpSession/fpSessionInertSubsystems.js";
+import { visitCombatSimNpcFirearmTargetsInXZ } from "./combatSim/combatSimFirearmTargets.js";
 import { floorPayloadByDocId } from "./fpSession/fpSessionContentLoad.js";
 import { effectiveDevGameplayEquippedPrimary } from "./fpDev/devGameplayWeaponOverride.js";
 import {
@@ -369,8 +370,9 @@ export async function mountFpSession(
   renderBootstrapFrame();
   fpLoadingDbgMark("fp_bootstrap_after_first_webgpu_render");
 
+  // Combat sim: same FP session — inert apartment subsystems + empty arena world (see mountCombatSimSession).
   const fpElevators = isCombatSim
-    ? createCombatSimFpElevatorsNoop()
+    ? createInertFpElevatorWorld()
     : mountFpElevatorWorld({
         conn,
         buildingRoot,
@@ -385,7 +387,7 @@ export async function mountFpSession(
       });
 
   const fpApartmentDoors = isCombatSim
-    ? createCombatSimFpApartmentDoorsNoop()
+    ? createInertFpApartmentDoors()
     : mountFpApartmentDoors({
         conn,
         buildingRoot,
@@ -419,6 +421,9 @@ export async function mountFpSession(
     visitExtraSolidAabbsInXZ: (x0, x1, z0, z1, visit) => {
       fpApartmentDoors.visitFirearmBarrierAabbsInXZ(x0, x1, z0, z1, visit);
       fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit);
+      if (isCombatSim) {
+        visitCombatSimNpcFirearmTargetsInXZ(conn, x0, x1, z0, z1, visit);
+      }
     },
   });
 
@@ -663,7 +668,7 @@ export async function mountFpSession(
   const cabMirrorCollection = new FpCabMirrorCollection(scene);
 
   const fpApartmentDecorMeshes = isCombatSim
-    ? createCombatSimFpApartmentDecorMeshesNoop()
+    ? createInertFpApartmentDecorMeshes()
     : mountFpApartmentDecorMeshes({
         scene,
         conn,
@@ -1090,7 +1095,7 @@ export async function mountFpSession(
       })
     : null;
   const fpBalconyGrow = isCombatSim
-    ? createCombatSimFpBalconyGrowNoop()
+    ? createInertFpBalconyGrowSession()
     : mountFpBalconyGrowSession({
         scene,
         conn,

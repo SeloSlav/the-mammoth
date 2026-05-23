@@ -6,6 +6,7 @@ import {
   type EditorSelectionMeshStats,
 } from "../editor/scene/editorSelectionMeshStats.js";
 import { getEditorMyApartmentUnitStatsRoot } from "../editor/myApartment/editorMyApartmentPieceGroupBridge.js";
+import { formatOwnedApartmentPreviewUnitKeyHeading } from "@the-mammoth/world";
 import { useEditorStore } from "../state/editorStore.js";
 import {
   editorViewportStatsCardStyle,
@@ -29,18 +30,14 @@ function readApartmentUnitStats(): EditorSelectionMeshStats {
   return measureEditorSelectionMeshStats(root);
 }
 
-function formatUnitTitle(unitId: string): string {
-  const trimmed = unitId.trim();
-  if (!trimmed) return "Apartment unit";
-  return trimmed.replace(/_/gu, " ").toUpperCase();
-}
-
 /** Top-left viewport badge for the preview apartment unit's total mesh complexity. */
 export function EditorApartmentUnitStatsOverlay() {
-  const { mode, myApartmentPreviewUnitId, contentStructureEpoch } = useEditorStore(
+  const { mode, myApartmentPreviewUnitId, myApartmentPreviewUnitKey, contentStructureEpoch } =
+    useEditorStore(
     useShallow((s) => ({
       mode: s.mode,
       myApartmentPreviewUnitId: s.myApartmentPreviewUnitId,
+      myApartmentPreviewUnitKey: s.myApartmentPreviewUnitKey,
       contentStructureEpoch: s.contentStructureEpoch,
     })),
   );
@@ -67,14 +64,19 @@ export function EditorApartmentUnitStatsOverlay() {
     sync();
     const retry = window.setInterval(sync, 250);
     return () => window.clearInterval(retry);
-  }, [mode, myApartmentPreviewUnitId, contentStructureEpoch]);
+  }, [mode, myApartmentPreviewUnitKey, myApartmentPreviewUnitId, contentStructureEpoch]);
 
   if (mode !== "my_apartment_layout") return null;
 
   return (
     <div style={editorViewportStatsPanelStyle} aria-live="polite">
       <p style={editorViewportStatsEyebrowStyle}>Apartment unit</p>
-      <p style={editorViewportStatsTitleStyle}>{formatUnitTitle(myApartmentPreviewUnitId)}</p>
+      <p style={editorViewportStatsTitleStyle}>
+        {formatOwnedApartmentPreviewUnitKeyHeading(
+          myApartmentPreviewUnitKey,
+          myApartmentPreviewUnitId,
+        )}
+      </p>
       <div style={editorViewportStatsRowStyle}>
         <div style={editorViewportStatsCardStyle}>
           <span style={editorViewportStatsLabelStyle}>Triangles</span>

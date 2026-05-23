@@ -17,8 +17,8 @@ const COMBAT_SIM_WALL_HEIGHT_M = 4;
 const COMBAT_SIM_WALL_THICKNESS_M = 0.35;
 
 /**
- * Minimal FP static world for combat sim: flat arena plane at the claimed unit's foot Y,
- * invisible boundary walls, no megablock building mesh.
+ * Arena-only `FpSessionStaticWorld` for `combatSimMode` — same interface as the megablock mount,
+ * without loading building geometry. Gameplay still runs through `mountFpSession`.
  */
 export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticWorld {
   const unit = findOwnedApartmentUnitForIdentity(conn);

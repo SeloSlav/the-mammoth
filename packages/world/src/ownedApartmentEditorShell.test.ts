@@ -6,6 +6,7 @@ import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBan
 import { residentialBalconyPartitionFace } from "./residentialUnitBalcony.js";
 import {
   appendOwnedApartmentEditorShellWalls,
+  formatOwnedApartmentPreviewUnitKeyHeading,
   listOwnedApartmentAuthoringPreviewUnits,
   resolveOwnedApartmentAuthoringPreviewLayout,
 } from "./ownedApartmentEditorShell.js";
@@ -20,6 +21,26 @@ function readTypicalFloorDoc() {
   );
   return FloorDocSchema.parse(raw);
 }
+
+describe("formatOwnedApartmentPreviewUnitKeyHeading", () => {
+  it("includes residential floor and east/west wing label from composite key", () => {
+    expect(
+      formatOwnedApartmentPreviewUnitKeyHeading("floor_mamutica_typical|20|unit_e_003"),
+    ).toBe("Floor 19, East 3");
+    expect(
+      formatOwnedApartmentPreviewUnitKeyHeading("any|2|unit_w_004", "unit_w_004"),
+    ).toBe("Floor 1, West 4");
+  });
+
+  it("clamps ground story to residential floor 1", () => {
+    expect(formatOwnedApartmentPreviewUnitKeyHeading("f|1|unit_e_001")).toBe("Floor 1, East 1");
+  });
+
+  it("falls back to unit id when key is not pipe-delimited", () => {
+    expect(formatOwnedApartmentPreviewUnitKeyHeading("bogus", "unit_e_010")).toBe("East 10");
+    expect(formatOwnedApartmentPreviewUnitKeyHeading("", "custom_unit_id")).toBe("CUSTOM UNIT ID");
+  });
+});
 
 describe("owned apartment editor shell (game-derived)", () => {
   it("unit_e_003 west entry matches corridor adjacency carve + seeded façade openings", () => {

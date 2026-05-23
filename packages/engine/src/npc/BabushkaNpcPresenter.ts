@@ -10,8 +10,9 @@ import { deepDisposeObject3D } from "../loaders/deepDisposeObject3D.js";
 
 export const BABUSHKA_NPC_GLB_URI = "/static/models/npcs/babushka.glb";
 
-const NPC_TARGET_HEIGHT_M = 1.55;
 const NPC_YAW_OFFSET_RAD = Math.PI;
+/** Authoritative combat height (server `BABUSHKA_BODY_HEIGHT_M`); Meshy GLB is ~1.7 m without extra root scale. */
+export const BABUSHKA_NPC_AUTHORITATIVE_HEIGHT_M = 1.55;
 const NPC_CLIP_TRANSITION_SEC = 0.18;
 const NPC_STATE_DEAD = 2;
 
@@ -33,17 +34,15 @@ function sanitizeNpcClip(clip: THREE.AnimationClip): THREE.AnimationClip {
 }
 
 function normalizeNpcHumanoidModel(model: THREE.Object3D): void {
+  /**
+   * Meshy humanoids bake cm→m on `Armature.scale` (~0.01), same as `male.glb`. Scaling the cloned
+   * scene root again multiplies animated hip translations during locomotion clips — hips reach tens
+   * of meters while bind-pose bounds still read ~1.5 m (combat-sim "giant babushka"). Recentre only.
+   */
   model.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(model);
-  const height = box.max.y - box.min.y;
-  if (height > 1e-6) {
-    const s = NPC_TARGET_HEIGHT_M / height;
-    model.scale.setScalar(s);
-  }
-  model.updateWorldMatrix(true, true);
-  const grounded = new THREE.Box3().setFromObject(model);
-  const center = grounded.getCenter(new THREE.Vector3());
-  model.position.set(-center.x, -grounded.min.y, -center.z);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.set(-center.x, -box.min.y, -center.z);
   model.updateMatrixWorld(true);
 }
 
