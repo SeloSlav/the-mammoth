@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { BalconyGrowOpUnitState } from "../../inventory/balconyGrowOpState.js";
-import { getBalconyGrowTrayPromptFromHit } from "./fpBalconyGrowPrompt.js";
+import { getBalconyGrowTrayPromptFromHit, resolveBalconyGrowTrayPrompt } from "./fpBalconyGrowPrompt.js";
 import { growTrayIdForPlacement } from "./fpBalconyGrowTrayDecor.js";
 
 vi.mock("../fpApartment/fpApartmentGameplay.js", () => ({
@@ -132,6 +132,66 @@ describe("getBalconyGrowTrayPromptFromHit", () => {
       trayId: "tray-a",
       slotIndex: 0,
       cropDisplayName: "Fresh parsley",
+    });
+  });
+});
+
+describe("resolveBalconyGrowTrayPrompt", () => {
+  it("prefers the center hub over a planted quadrant when both are hit", () => {
+    const trayRoot = new THREE.Group();
+    const plantHit = {
+      object: Object.assign(new THREE.Mesh(), {
+        userData: {
+          mammothGrowTrayId: "tray-a",
+          mammothGrowTrayUnitKey: "u1",
+          mammothGrowSlotIndex: 0,
+          mammothGrowPlantPick: true,
+          mammothGrowTrayRoot: trayRoot,
+        },
+      }),
+      distance: 0.8,
+      point: new THREE.Vector3(),
+      face: null,
+      faceIndex: 0,
+      uv: undefined,
+      normal: new THREE.Vector3(),
+    } as THREE.Intersection;
+    const centerHit = {
+      object: Object.assign(new THREE.Mesh(), {
+        userData: {
+          mammothGrowTrayId: "tray-a",
+          mammothGrowTrayUnitKey: "u1",
+          mammothGrowTrayCenterPick: true,
+          mammothGrowTrayRoot: trayRoot,
+        },
+      }),
+      distance: 1.1,
+      point: new THREE.Vector3(),
+      face: null,
+      faceIndex: 0,
+      uv: undefined,
+      normal: new THREE.Vector3(),
+    } as THREE.Intersection;
+
+    const prompt = resolveBalconyGrowTrayPrompt(
+      {} as never,
+      {} as never,
+      { x: 0, y: 0, z: 0 },
+      new THREE.PerspectiveCamera(),
+      [plantHit, centerHit],
+      [],
+      [],
+      growStateWithPlants(),
+      undefined,
+      [centerHit.object as THREE.Mesh],
+    );
+
+    expect(prompt).toEqual({
+      kind: "balcony_grow_tray",
+      unitKey: "u1",
+      trayId: "tray-a",
+      stashKey: "u1#grow_tray:tray-a",
+      stashLabel: "grow tray",
     });
   });
 });

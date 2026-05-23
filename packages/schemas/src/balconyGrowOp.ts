@@ -19,10 +19,10 @@ export const BALCONY_GROW_REFERENCE_DAYS = 5;
 /** Seconds per in-game grow day — keep in sync with `apps/server/src/balcony_grow_op.rs`. */
 export const BALCONY_GAME_DAY_SECS =
   BALCONY_GROW_BASELINE_DURATION_SECS / BALCONY_GROW_REFERENCE_DAYS;
-export const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER = 8;
+export const BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER = 2;
 export const BALCONY_GROW_TICK_INTERVAL_SECS = 5;
-/** Tray evaporation per 5s tick — ~4 min from full to dry at session crop pacing. */
-export const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK = 0.042;
+/** Liters lost from each tray per slept night — full tray stays moist after one sleep. */
+export const BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L = 0.5;
 /** Single substrate stack slot in each grow-tray stash. */
 export const BALCONY_GROW_FERTILIZER_STASH_SLOT = 0;
 
@@ -209,13 +209,12 @@ export function balconyGrowPlantReadyByDays(
   return targetDays > 0 && daysGrown >= targetDays;
 }
 
-/** Seconds for a full tray to evaporate dry (sim time only — pauses when the game closes). */
-export function balconyGrowTraySecondsToDry(
+/** Nights for a tray to dry out if never watered again after sleep losses begin. */
+export function balconyGrowTrayNightsToDry(
   waterLiters = BALCONY_GROW_TRAY_MAX_WATER_L,
 ): number {
-  if (BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK <= 0) return Number.POSITIVE_INFINITY;
-  const ticks = waterLiters / BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK;
-  return ticks * BALCONY_GROW_TICK_INTERVAL_SECS;
+  if (BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L <= 0) return Number.POSITIVE_INFINITY;
+  return Math.ceil(waterLiters / BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L);
 }
 
 /** Expected grow duration (seconds) for catalog `growDays` at 1.0× with no tray bonuses. */

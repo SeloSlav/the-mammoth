@@ -22,10 +22,11 @@ use crate::inventory::{
     NUM_PLAYER_INVENTORY_SLOTS,
 };
 use crate::inventory_models::{
-    parse_apartment_stash_key_v2, HotbarLocationData, InventoryLocationData, ItemLocation,
-    ParsedApartmentStashKey, StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER,
-    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
-    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK,
+    apartment_stash_key, apartment_stash_key_decor, parse_apartment_stash_key_v2,
+    HotbarLocationData, InventoryLocationData, ItemLocation, ParsedApartmentStashKey,
+    StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
+    APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
+    APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK,
 };
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
@@ -913,10 +914,7 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz) = bed_world_anchor_xyz(ctx, &u);
-        let byaw = primary_bed_row_for_unit_key(ctx, &u.unit_key)
-            .map(|b| b.yaw_rad)
-            .unwrap_or(u.bed_yaw);
+        let (bx, by, bz, byaw) = replicated_bed_spawn_anchor(ctx, &u);
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -1005,6 +1003,123 @@ pub(crate) fn ensure_starter_apartment_water_tank(ctx: &ReducerContext, owner: I
     crate::water_container::ensure_starter_apartment_water_tank(ctx, unit_key.as_str());
 }
 
+/// Default fish tank in `owned_apartment_builtins.json` — keep in sync with client layout doc.
+const AUTHORED_FISH_TANK_FX: f32 = 0.578_635_23;
+const AUTHORED_FISH_TANK_FZ: f32 = 0.578_048_38;
+const AUTHORED_FISH_TANK_DY: f32 = 0.904_784_48;
+const AUTHORED_FISH_TANK_UNIFORM_SCALE: f32 = 0.240_045_06;
+const AUTHORED_FISH_TANK_MODEL: &str = "static/models/objects/fish-tank.glb";
+const CONTENT_DECOR_DEDUPE_XZ_M: f32 = 0.4;
+
+fn authored_fish_tank_world_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
+    let (x, z) = authored_placed_item_world_xz(unit, AUTHORED_FISH_TANK_FX, AUTHORED_FISH_TANK_FZ);
+    let y = unit.bound_min_y + AUTHORED_FISH_TANK_DY;
+    (x, y, z)
+}
+
+fn fish_tank_decor_covers_authored_slot(unit: &ApartmentUnit, decor: &ApartmentUnitDecor) -> bool {
+    if effective_decor_item_kind(decor.item_kind, decor.model_rel_path.as_str())
+        != APARTMENT_DECOR_ITEM_KIND_FISH_TANK
+    {
+        return false;
+    }
+    let (ax, _ay, az) = authored_fish_tank_world_pose(unit);
+    let dx = decor.pos_x - ax;
+    let dz = decor.pos_z - az;
+    dx * dx + dz * dz <= CONTENT_DECOR_DEDUPE_XZ_M * CONTENT_DECOR_DEDUPE_XZ_M
+}
+
+fn migrate_legacy_fish_tank_stash_to_decor(
+    ctx: &ReducerContext,
+    owner: Identity,
+    unit_key: &str,
+    decor_id: u64,
+) {
+    let legacy_key = apartment_stash_key(unit_key, APARTMENT_STASH_KIND_FISH_TANK);
+    let decor_key = apartment_stash_key_decor(unit_key, decor_id);
+    let inv = ctx.db.inventory_item();
+    for mut row in inv.iter().collect::<Vec<_>>() {
+        let ItemLocation::Stash(s) = &row.location else {
+            continue;
+        };
+        if s.owner_identity != owner || s.unit_key.as_str() != legacy_key.as_str() {
+            continue;
+        }
+        row.location = ItemLocation::Stash(StashLocationData {
+            owner_identity: owner,
+            unit_key: decor_key.clone(),
+            slot_index: s.slot_index,
+        });
+        inv.instance_id().update(row);
+    }
+}
+
+fn ensure_authored_fish_tank_decor_for_unit(
+    ctx: &ReducerContext,
+    owner: Identity,
+    unit_key: &str,
+) {
+    let Some(unit) = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())
+    else {
+        return;
+    };
+    if unit.state != UNIT_STATE_CLAIMED || unit.owner != Some(owner) {
+        return;
+    }
+
+    let decor_id = if let Some(existing) = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key && fish_tank_decor_covers_authored_slot(&unit, d))
+        .min_by_key(|d| d.decor_id)
+    {
+        existing.decor_id
+    } else {
+        let (px, py, pz) = authored_fish_tank_world_pose(&unit);
+        let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
+            &unit,
+            px,
+            py,
+            pz,
+            0.0,
+            0.0,
+            0.0,
+            AUTHORED_FISH_TANK_UNIFORM_SCALE,
+        );
+        ctx.db
+            .apartment_unit_decor()
+            .insert(ApartmentUnitDecor {
+                decor_id: 0,
+                unit_key: unit_key.to_string(),
+                model_rel_path: AUTHORED_FISH_TANK_MODEL.to_string(),
+                pos_x: px,
+                pos_y: py,
+                pos_z: pz,
+                yaw_rad: yw,
+                pitch_rad: ph,
+                roll_rad: rl,
+                uniform_scale: sc,
+                item_kind: APARTMENT_DECOR_ITEM_KIND_FISH_TANK,
+            })
+            .decor_id
+    };
+
+    migrate_legacy_fish_tank_stash_to_decor(ctx, owner, unit_key, decor_id);
+}
+
+/// Ensures the layout fish tank has a per-decor stash row (`{unit}#d{id}`), not legacy `{unit}#fish_tank`.
+pub(crate) fn ensure_authored_fish_tank_decor_for_owner(ctx: &ReducerContext, owner: Identity) {
+    let Some(unit_key) = claimed_unit_key_for_owner(ctx, owner) else {
+        return;
+    };
+    ensure_authored_fish_tank_decor_for_unit(ctx, owner, unit_key.as_str());
+}
+
 /// First join before a `player_pose` row exists — uses `seq = 0` (movement will align on first intent).
 pub(crate) fn join_pose_from_owned_bed(
     ctx: &ReducerContext,
@@ -1014,10 +1129,7 @@ pub(crate) fn join_pose_from_owned_bed(
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz) = bed_world_anchor_xyz(ctx, &u);
-        let byaw = primary_bed_row_for_unit_key(ctx, &u.unit_key)
-            .map(|b| b.yaw_rad)
-            .unwrap_or(u.bed_yaw);
+        let (bx, by, bz, byaw) = replicated_bed_spawn_anchor(ctx, &u);
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -1210,6 +1322,7 @@ pub fn claim_apartment_pulse(ctx: &ReducerContext, unit_key: String) {
             sender,
             format!("Claim complete — {unit_label} is now occupied."),
         );
+        ensure_authored_fish_tank_decor_for_unit(ctx, sender, unit_key.as_str());
         force_unit_primary_door_open(ctx, &unit_key);
         return;
     }
@@ -1511,7 +1624,19 @@ fn authored_content_bed_world_xyz(unit: &ApartmentUnit) -> (f32, f32, f32) {
     (ax, ay, az)
 }
 
-/// Replicated decor row when present; otherwise authored layout fractions (not legacy `unit.bed_*` seeds).
+/// Join / respawn feet anchor — replicated decor row when present, else seeded `ApartmentUnit.bed_*`.
+fn replicated_bed_spawn_anchor(
+    ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+) -> (f32, f32, f32, f32) {
+    if let Some(b) = primary_bed_row_for_unit_key(ctx, unit.unit_key.as_str()) {
+        (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
+    } else {
+        (unit.bed_x, unit.bed_y, unit.bed_z, unit.bed_yaw)
+    }
+}
+
+/// Sleep proximity + interact checks — authored layout when no decor row (matches client builtins).
 pub(crate) fn bed_world_anchor_xyz(ctx: &ReducerContext, unit: &ApartmentUnit) -> (f32, f32, f32) {
     if let Some(b) = primary_bed_row_for_unit_key(ctx, unit.unit_key.as_str()) {
         (b.pos_x, b.pos_y, b.pos_z)
@@ -1733,7 +1858,7 @@ fn pose_near_named_apartment_stash_anchor(
                         stash_interact_radius_sq(APARTMENT_STASH_KIND_FISH_TANK),
                     );
             }
-            pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)
+            false
         }
         APARTMENT_STASH_KIND_FOOTLOCKER | _ => pose_near_decor_stash_or_fallback(
             ctx,
@@ -1824,6 +1949,9 @@ pub(crate) fn apartment_stash_owner_near_sender(
             ))
         }
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => {
+            if kind == APARTMENT_STASH_KIND_FISH_TANK {
+                return None;
+            }
             let unit = ctx
                 .db
                 .apartment_unit()

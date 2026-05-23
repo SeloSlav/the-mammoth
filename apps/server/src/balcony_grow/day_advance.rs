@@ -7,6 +7,29 @@ use super::tray::{
     fertilizer_present, grow_speed_modifier, lights_on_for_unit, tray_row, try_consume_tray_substrate,
 };
 
+pub(crate) fn tray_water_after_sleep_nights(water_liters: f32, nights: u8) -> f32 {
+    if nights == 0 {
+        return water_liters.max(0.0);
+    }
+    (water_liters - BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L * nights as f32).max(0.0)
+}
+
+pub(crate) fn tray_dry_nights_after_sleep(
+    water_liters: f32,
+    prev_dry_nights: u8,
+    nights: u8,
+) -> u8 {
+    if nights == 0 {
+        return prev_dry_nights;
+    }
+    let after = tray_water_after_sleep_nights(water_liters, nights);
+    if after > 0.001 {
+        0
+    } else {
+        prev_dry_nights.saturating_add(nights)
+    }
+}
+
 /// Shrink remaining grow nights after overnight substrate feed (modifier was without fert at plant).
 pub(crate) fn target_days_after_fertilizer(
     days_grown: u8,
@@ -162,11 +185,25 @@ pub(crate) fn advance_world_day_for_unit(ctx: &ReducerContext, unit_key: &str, d
         .filter(|t| t.unit_key == unit_key)
         .collect::<Vec<_>>()
     {
-        tray.water_liters = (tray.water_liters * 0.65).max(0.0);
-        if tray.water_liters <= 0.001 {
-            tray.dry_ticks = tray.dry_ticks.saturating_add(1);
-        }
+        tray.dry_ticks = tray_dry_nights_after_sleep(tray.water_liters, tray.dry_ticks, days);
+        tray.water_liters = tray_water_after_sleep_nights(tray.water_liters, days);
         tray_table.row_key().update(tray);
+    }
+
+    if !lights_on {
+        let wilted: Vec<BalconyGrowPlant> = plant_table
+            .iter()
+            .filter(|p| p.unit_key == unit_key && p.phase == PHASE_GROWING)
+            .filter(|p| {
+                tray_row(ctx, unit_key, p.tray_id.as_str())
+                    .map(|t| t.dry_ticks >= BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER)
+                    .unwrap_or(false)
+            })
+            .collect();
+        for mut plant in wilted {
+            plant.phase = PHASE_WILTED;
+            plant_table.row_key().update(plant);
+        }
     }
 }
 

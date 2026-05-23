@@ -76,11 +76,11 @@ export function isBalconyGrowTrayCenterPick(obj: THREE.Object3D): boolean {
   return obj.userData.mammothGrowTrayCenterPick === true;
 }
 
-/** Plant and slot picks win over the center hub so quadrant aim keeps inspect/harvest behavior. */
+/** Plant and slot picks win over the full tray for quadrant inspect/harvest; center hub opens stash. */
 export function balconyGrowPickRayPriority(obj: THREE.Object3D): number {
-  if (obj.userData.mammothGrowPlantPick === true) return 0;
-  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 1;
-  if (isBalconyGrowTrayCenterPick(obj)) return 2;
+  if (isBalconyGrowTrayCenterPick(obj)) return 0;
+  if (obj.userData.mammothGrowPlantPick === true) return 1;
+  if (typeof obj.userData.mammothGrowSlotIndex === "number") return 2;
   return 3;
 }
 

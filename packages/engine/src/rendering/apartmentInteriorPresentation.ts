@@ -4,6 +4,7 @@ import {
   MAMMOTH_FP_VIEWMODEL_RENDER_LAYER,
   tagApartmentDecorPropMeshesForInteriorLighting,
   tagResidentialUnitInteriorMeshesUnder,
+  tagResidentialUnitInteriorShellMeshesUnder,
   syncMammothApartmentInteriorViewLayers,
 } from "./apartmentInteriorLayers.js";
 import {
@@ -48,7 +49,7 @@ export function prepareMammothApartmentInteriorContentRoots(input: {
   decorRoot?: THREE.Object3D | null;
 }): void {
   tagMammothApartmentInteriorShellRoot(input.shellRoot);
-  tagResidentialUnitInteriorMeshesUnder(input.shellRoot);
+  tagResidentialUnitInteriorShellMeshesUnder(input.shellRoot);
   moodGradeMammothApartmentShellRoot(input.shellRoot);
   if (!input.decorRoot) return;
   tagResidentialUnitInteriorMeshesUnder(input.decorRoot);

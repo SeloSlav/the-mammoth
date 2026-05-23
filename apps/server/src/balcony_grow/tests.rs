@@ -2,8 +2,10 @@ use spacetimedb::Identity;
 
 use super::{
     apply_substrate_to_plants, grow_speed_modifier, harvest_bonus_count, harvest_food_count,
-    harvest_seed_count, is_known_tray_id, target_days_after_fertilizer, BalconyGrowPlant,
-    HarvestCareContext, BALCONY_GROW_TRAY_BUILTIN_IDS,
+    harvest_seed_count, is_known_tray_id, target_days_after_fertilizer, tray_dry_nights_after_sleep,
+    tray_water_after_sleep_nights, BalconyGrowPlant, HarvestCareContext,
+    BALCONY_GROW_TRAY_BUILTIN_IDS, BALCONY_GROW_TRAY_MAX_WATER_L,
+    BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L, BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER,
     BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD,
     BALCONY_GROW_HARVEST_FOOD_BONUS_LIGHT_THRESHOLD,
     BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_FULL_THRESHOLD,
@@ -34,14 +36,17 @@ fn grow_speed_modifier_stacks_bonuses() {
 }
 
 #[test]
-fn tray_water_evap_targets_session_pacing() {
-    use super::{
-        BALCONY_GROW_TICK_INTERVAL_SECS, BALCONY_GROW_TRAY_MAX_WATER_L,
-        BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK, BALCONY_WATER_PATCH_DURATION_SECS,
-    };
-    let ticks = BALCONY_GROW_TRAY_MAX_WATER_L / BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK;
-    let dry_secs = ticks * BALCONY_GROW_TICK_INTERVAL_SECS as f32;
-    assert!((dry_secs - 238.0).abs() < 1.0);
+fn tray_water_loss_is_sleep_only_and_balanced() {
+    use super::BALCONY_WATER_PATCH_DURATION_SECS;
+
+    assert_eq!(BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L, 0.5);
+    assert_eq!(BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER, 2);
+    assert!((tray_water_after_sleep_nights(BALCONY_GROW_TRAY_MAX_WATER_L, 1) - 1.5).abs() < 0.001);
+    assert!((tray_water_after_sleep_nights(1.5, 1) - 1.0).abs() < 0.001);
+    assert!((tray_water_after_sleep_nights(0.4, 1)).abs() < 0.001);
+    assert_eq!(tray_dry_nights_after_sleep(BALCONY_GROW_TRAY_MAX_WATER_L, 0, 1), 0);
+    assert_eq!(tray_dry_nights_after_sleep(0.4, 0, 1), 1);
+    assert_eq!(tray_dry_nights_after_sleep(0.0, 1, 1), 2);
     assert_eq!(BALCONY_WATER_PATCH_DURATION_SECS, 45);
 }
 

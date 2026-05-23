@@ -139,8 +139,30 @@ pub(crate) fn apartment_stash_locations_match(
     if sk == APARTMENT_STASH_KIND_FOOTLOCKER {
         return footlocker_location_alias(&stored, &requested);
     }
+    if sk == APARTMENT_STASH_KIND_FISH_TANK {
+        return fish_tank_storage_alias(&stored, &requested);
+    }
 
     same_kind_storage_alias(&stored, &requested)
+}
+
+fn fish_tank_storage_alias(
+    stored: &ParsedApartmentStashKey<'_>,
+    requested: &ParsedApartmentStashKey<'_>,
+) -> bool {
+    match (stored, requested) {
+        (
+            ParsedApartmentStashKey::DecorInstance {
+                unit_key: su,
+                decor_id: si,
+            },
+            ParsedApartmentStashKey::DecorInstance {
+                unit_key: ru,
+                decor_id: ri,
+            },
+        ) => *su == *ru && si == ri,
+        _ => false,
+    }
 }
 
 fn same_kind_storage_alias(

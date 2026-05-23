@@ -92,6 +92,7 @@ pub fn on_connect(ctx: &ReducerContext) {
     inventory::ensure_starter_fridge(ctx, id);
     water_container::backfill_water_bottle_fill_rows(ctx);
     apartments::ensure_starter_apartment_water_tank(ctx, id);
+    apartments::ensure_authored_fish_tank_decor_for_owner(ctx, id);
     balcony_grow::ensure_balcony_grow_for_owner(ctx, id);
     world_day::ensure_player_world_progress(ctx, id);
     loadout::ensure_player_active_hotbar_row(ctx, id);

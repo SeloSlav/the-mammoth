@@ -16,9 +16,11 @@ pub(crate) const BALCONY_GROW_BASELINE_DURATION_SECS: i64 = 900;
 pub(crate) const BALCONY_GROW_REFERENCE_DAYS: i64 = 5;
 pub(crate) const BALCONY_GROW_GAME_DAY_SECS: i64 =
     BALCONY_GROW_BASELINE_DURATION_SECS / BALCONY_GROW_REFERENCE_DAYS;
-pub(crate) const BALCONY_GROW_WILT_TICKS_WITHOUT_WATER: u8 = 8;
+/// Consecutive dry nights (tray empty after sleep) before wilt when grow lights are off.
+pub(crate) const BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER: u8 = 2;
 pub(crate) const BALCONY_GROW_TICK_INTERVAL_SECS: i64 = 5;
-pub(crate) const BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK: f32 = 0.042;
+/// Liters lost from each tray per slept night — full tray (~2 L) stays moist after one sleep.
+pub(crate) const BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L: f32 = 0.5;
 pub(crate) const BALCONY_GROW_FERTILIZER_STASH_SLOT: u16 = 0;
 pub(crate) const BALCONY_GROW_HARVEST_SEED_BASE: u32 = 1;
 pub(crate) const BALCONY_GROW_HARVEST_FOOD_BASE: u32 = 1;

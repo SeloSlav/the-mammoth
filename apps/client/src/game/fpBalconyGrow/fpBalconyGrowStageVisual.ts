@@ -12,6 +12,7 @@ import { readDecorVisualLocalBounds } from "../fpApartment/fpApartmentInteractio
 
 const _boundsScratch = new THREE.Box3();
 const _sizeScratch = new THREE.Vector3();
+const _decorScaleScratch = new THREE.Vector3();
 const _seedGeometry = new THREE.SphereGeometry(0.025, 8, 6);
 const _stemGeometry = new THREE.CylinderGeometry(0.012, 0.018, 1, 6);
 const _leafGeometry = new THREE.SphereGeometry(0.05, 8, 6);
@@ -56,6 +57,12 @@ export function probeGrowTraySlotLocalOffsets(decorGroup: THREE.Object3D): Balco
     centerX,
     centerZ,
   );
+}
+
+/** Uniform world scale on the tray decor root — placed slot visuals inherit this. */
+export function readGrowTrayDecorUniformScale(trayRoot: THREE.Object3D): number {
+  trayRoot.getWorldScale(_decorScaleScratch);
+  return (_decorScaleScratch.x + _decorScaleScratch.y + _decorScaleScratch.z) / 3;
 }
 
 export function readGrowTraySoilLocalY(trayRoot: THREE.Object3D): number {
@@ -115,7 +122,7 @@ export function mountBalconyGrowSeedVisual(
   group.name = "grow_stage_seed_cluster";
   const tintColor = new THREE.Color(tint);
   const seedColor = new THREE.Color(0x9a7b4f).lerp(tintColor, 0.16);
-  const scale = Math.max(0.72, stageScale / 0.14);
+  const scale = Math.max(0.92, stageScale / 0.14) * 1.08;
 
   for (let i = 0; i < SEED_OFFSETS.length; i++) {
     const seed = new THREE.Mesh(

@@ -87,6 +87,7 @@ describe("fitBalconyGrowTrayCenterInteractionPick", () => {
     fitBalconyGrowTrayCenterInteractionPick(pick, size);
     expect(pick.position.x).toBeCloseTo(0, 3);
     expect(pick.position.z).toBeCloseTo(0, 3);
-    expect(pick.scale.x).toBeCloseTo(Math.max(0.1, size.width * 0.52), 3);
+    expect(pick.scale.x).toBeCloseTo(Math.max(0.14, size.width * 0.72), 3);
+    expect(pick.scale.y).toBeCloseTo(size.height * 0.88, 3);
   });
 });

@@ -4,7 +4,8 @@ import {
   BALCONY_GROW_REFERENCE_DAYS,
   BALCONY_GROW_TRAY_BUILTIN_IDS,
   BALCONY_GROW_TRAY_MAX_WATER_L,
-  BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK,
+  BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L,
+  BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER,
   BALCONY_GAME_DAY_SECS,
   BALCONY_WATER_PATCH_DURATION_SECS,
   balconyGrowCropSecondsAtBaseSpeed,
@@ -16,7 +17,7 @@ import {
   balconyGrowStageFromDays,
   balconyGrowStageFromProgress,
   balconyGrowSlotOffsetsFromHalfExtents,
-  balconyGrowTraySecondsToDry,
+  balconyGrowTrayNightsToDry,
   balconyGrowTrayStashKey,
   parseBalconyGrowDecorTrayId,
   parseBalconyGrowTrayStashKey,
@@ -87,11 +88,13 @@ describe("balconyGrowOp", () => {
     expect(balconyGrowCropSecondsAtBaseSpeed(9)).toBe(1620);
   });
 
-  it("tunes water pacing for session-based balcony play", () => {
+  it("tunes overnight tray water loss for sleep-based balcony play", () => {
     expect(BALCONY_WATER_PATCH_DURATION_SECS).toBe(45);
-    expect(BALCONY_GROW_TRAY_WATER_EVAP_PER_TICK).toBe(0.042);
-    expect(balconyGrowTraySecondsToDry()).toBeGreaterThan(230);
-    expect(balconyGrowTraySecondsToDry()).toBeLessThan(245);
+    expect(BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L).toBe(0.5);
+    expect(BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER).toBe(2);
+    expect(balconyGrowTrayNightsToDry()).toBe(4);
+    expect(balconyGrowTrayNightsToDry(1.5)).toBe(3);
+    expect(balconyGrowTrayNightsToDry(0.4)).toBe(1);
   });
 
   it("maps day progress to stages and harvest readiness", () => {

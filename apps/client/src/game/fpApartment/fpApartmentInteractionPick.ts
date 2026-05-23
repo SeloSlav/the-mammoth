@@ -109,12 +109,12 @@ export function fitBalconyGrowSlotInteractionPick(
   pick.scale.set(size.width, size.height, size.width);
 }
 
-/** Hub pick at tray center — opens fertilizer stash without blocking on planted quadrants. */
+/** Hub pick at tray center — opens fertilizer stash; keep wide enough to reach between four plants. */
 export function fitBalconyGrowTrayCenterInteractionPick(
   pick: THREE.Mesh,
   size: BalconyGrowSlotPickSize,
 ): void {
-  const hub = Math.max(0.1, size.width * 0.52);
-  pick.position.set(0, size.height * 0.5, 0);
-  pick.scale.set(hub, size.height, hub);
+  const hub = Math.max(0.14, size.width * 0.72);
+  pick.position.set(0, size.height * 0.42, 0);
+  pick.scale.set(hub, size.height * 0.88, hub);
 }

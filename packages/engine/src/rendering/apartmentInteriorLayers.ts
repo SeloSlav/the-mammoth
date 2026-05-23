@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { isApartmentInteriorShellMesh } from "./bindMammothApartmentDecorIndirectEnv.js";
 
 /** Keep in sync with `apps/client` `fpSessionConstants`. */
 export const MAMMOTH_FP_VIEWMODEL_RENDER_LAYER = 1;
@@ -63,9 +64,30 @@ export function tagMeshResidentialUnitInterior(mesh: THREE.Mesh): void {
   mesh.layers.set(MAMMOTH_RESIDENTIAL_UNIT_INTERIOR_LAYER);
 }
 
+/**
+ * Megablock / full-building shell roots include exterior cladding on the default layer (0).
+ * Only hollow shells, corridor/stair tagged interiors, and merged `unit_*` plaster move to layer 3.
+ */
+export function isResidentialUnitInteriorRenderLayerMesh(mesh: THREE.Mesh): boolean {
+  if (mesh.userData.mammothResidentialUnitExteriorGlass === true) return false;
+  if (mesh.userData.mammothUnitInterior === true) return true;
+  return isApartmentInteriorShellMesh(mesh);
+}
+
+/** Tag every mesh under a decor / owned-apartment preview root (all props are interior-only). */
 export function tagResidentialUnitInteriorMeshesUnder(root: THREE.Object3D): void {
   root.traverse((obj) => {
     if (obj instanceof THREE.Mesh) tagMeshResidentialUnitInterior(obj);
+  });
+}
+
+/** Tag only interior-shell meshes under a megablock `buildingRoot` — keeps facade on layer 0. */
+export function tagResidentialUnitInteriorShellMeshesUnder(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    if (isResidentialUnitInteriorRenderLayerMesh(obj)) {
+      tagMeshResidentialUnitInterior(obj);
+    }
   });
 }
 

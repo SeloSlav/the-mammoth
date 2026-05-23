@@ -20,6 +20,13 @@ import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell
 import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
 import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
 import compostIcon from "../../../../content/references/meshy/compost.png?url";
+import freshOysterMushroomIcon from "../../../../content/references/meshy/fresh-oyster-mushroom.png?url";
+import freshDillIcon from "../../../../content/references/meshy/fresh-dill.png?url";
+import freshGreenOnionIcon from "../../../../content/references/meshy/fresh-green-onion.png?url";
+import freshPaprikaIcon from "../../../../content/references/meshy/fresh-paprika.png?url";
+import freshParsleyIcon from "../../../../content/references/meshy/fresh-parsley.png?url";
+import radishSproutsIcon from "../../../../content/references/meshy/radish-sprouts.png?url";
+import scentedGeraniumCuttingsIcon from "../../../../content/references/meshy/scented-geranium-cuttings.png?url";
 import seedsIcon from "../../../../content/references/meshy/seeds.png?url";
 import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
 import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
@@ -129,6 +136,13 @@ const ICONS: Record<string, string> = {
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
   "balcony-grow-substrate": compostIcon,
+  "fresh-parsley": freshParsleyIcon,
+  "fresh-dill": freshDillIcon,
+  "fresh-paprika": freshPaprikaIcon,
+  "fresh-green-onion": freshGreenOnionIcon,
+  "radish-sprouts": radishSproutsIcon,
+  "fresh-oyster-mushroom": freshOysterMushroomIcon,
+  "scented-geranium-leaves": scentedGeraniumCuttingsIcon,
 };
 
 /** First candidate URL (preview / legacy). World mesh load uses the full candidate list. */

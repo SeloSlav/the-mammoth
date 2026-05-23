@@ -5,9 +5,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::inventory::{find_item_in_stash_slot, inventory_item, remove_stash_item_quantity, InventoryItem};
-use crate::inventory_models::{
-    apartment_stash_key_decor, ItemLocation, StashLocationData,
-};
+use crate::inventory_models::{apartment_stash_key_decor, ItemLocation, StashLocationData};
 use crate::items_catalog::{self, ItemCategory};
 
 pub(crate) const BALCONY_GROW_FERTILIZER_DEF_ID: &str = "balcony-grow-substrate";
@@ -134,14 +132,13 @@ fn grant_fish_tank_substrate(
     });
 }
 
-fn process_fish_tank_on_sleep(
+fn process_fish_tank_feed_slot(
     ctx: &ReducerContext,
     owner: Identity,
-    decor: &ApartmentUnitDecor,
+    stash_key: &str,
+    roll_seed: u64,
 ) {
-    let stash_key = fish_tank_stash_key(decor);
-    let Some(item) = find_item_in_stash_slot(ctx, owner, stash_key.as_str(), FISH_TANK_FEED_SLOT)
-    else {
+    let Some(item) = find_item_in_stash_slot(ctx, owner, stash_key, FISH_TANK_FEED_SLOT) else {
         return;
     };
     if item.def_id == BALCONY_GROW_FERTILIZER_DEF_ID {
@@ -150,19 +147,26 @@ fn process_fish_tank_on_sleep(
     let Some(yield_profile) = fish_tank_feed_yield(item.def_id.as_str()) else {
         return;
     };
-    if remove_stash_item_quantity(ctx, owner, stash_key.as_str(), FISH_TANK_FEED_SLOT, 1).is_err()
-    {
+    if remove_stash_item_quantity(ctx, owner, stash_key, FISH_TANK_FEED_SLOT, 1).is_err() {
         return;
     }
-    let seed = decor.decor_id.wrapping_mul(0x9E37).wrapping_add(0xF15_0001);
-    if roll_fish_tank_success(ctx, seed, yield_profile.success_pct) {
-        grant_fish_tank_substrate(
-            ctx,
-            owner,
-            stash_key.as_str(),
-            yield_profile.output_qty,
-        );
+    if roll_fish_tank_success(ctx, roll_seed, yield_profile.success_pct) {
+        grant_fish_tank_substrate(ctx, owner, stash_key, yield_profile.output_qty);
     }
+}
+
+fn process_fish_tank_on_sleep(
+    ctx: &ReducerContext,
+    owner: Identity,
+    decor: &ApartmentUnitDecor,
+) {
+    let roll_seed = decor.decor_id.wrapping_mul(0x9E37).wrapping_add(0xF15_0001);
+    process_fish_tank_feed_slot(
+        ctx,
+        owner,
+        fish_tank_stash_key(decor).as_str(),
+        roll_seed,
+    );
 }
 
 /// Sleep / death day hook — digest feed slot and maybe leave tray compost.
@@ -214,4 +218,5 @@ mod tests {
         let rations = fish_tank_feed_yield("field-rations").unwrap();
         assert!(rakija.success_pct < rations.success_pct);
     }
+
 }

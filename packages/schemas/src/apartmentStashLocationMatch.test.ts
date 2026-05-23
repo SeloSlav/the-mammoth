@@ -41,4 +41,12 @@ describe("apartmentStashLocationsMatch", () => {
     expect(apartmentStashLocationsMatch(keyA, keyA, noDecor)).toBe(true);
     expect(apartmentStashLocationsMatch(keyA, keyB, noDecor)).toBe(false);
   });
+
+  it("fish tank stashes require matching decor instance ids", () => {
+    const fishTankDecor = (unitKey: string, decorId: bigint) =>
+      unitKey === "u1" && decorId === 12n ? "fish_tank" : null;
+    expect(apartmentStashLocationsMatch("u1#d12", "u1#d12", fishTankDecor)).toBe(true);
+    expect(apartmentStashLocationsMatch("u1#d12", "u1#d13", fishTankDecor)).toBe(false);
+    expect(apartmentStashLocationsMatch("u1#fish_tank", "u1#d12", fishTankDecor)).toBe(false);
+  });
 });

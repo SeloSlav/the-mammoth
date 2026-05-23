@@ -194,6 +194,8 @@ export {
   tagMergedResidentialShellMeshes,
   tagMeshResidentialUnitInterior,
   tagResidentialUnitInteriorMeshesUnder,
+  tagResidentialUnitInteriorShellMeshesUnder,
+  isResidentialUnitInteriorRenderLayerMesh,
 } from "./rendering/apartmentInteriorLayers.js";
 export {
   APARTMENT_INTERIOR_PREVIEW_BACKGROUND,

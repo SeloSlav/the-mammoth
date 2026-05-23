@@ -1084,6 +1084,8 @@ export function createFpSessionMainRafFrame(
       viewHeightPx: deps.canvas.clientHeight,
       apartmentInteriorBounds: deps.getContainingResidentialUnitBounds(),
       apartmentInteriorDark01: mainRaf.apartmentInteriorDarkSmoothed,
+      interiorRenderLayersEnabled:
+        deps.isInsideResidentialUnit() || deps.isApartmentDecorInteriorVisible(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();

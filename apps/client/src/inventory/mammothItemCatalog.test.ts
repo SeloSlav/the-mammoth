@@ -239,6 +239,7 @@ describe("mammothItemCatalog", () => {
     ] as const;
     for (const id of harvestIds) {
       expect(getMammothItemDef(id)?.category).toBe("consumable");
+      expect(getMammothItemDef(id)?.iconUrl?.length).toBeGreaterThan(8);
       expect(getMammothDroppedWorldModelUrl(id)).toBe(
         "/static/models/objects/grow-stage-sapling.glb",
       );

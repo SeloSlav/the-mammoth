@@ -89,7 +89,7 @@ export function mountGrowTrayCompostPebbles(
     const u = trayScatter01(trayId, i, 0x1e01a2b3);
     const v = trayScatter01(trayId, i, 0x2e02c3d4);
     const w = trayScatter01(trayId, i, 0x3e03e4f5);
-    const size = THREE.MathUtils.lerp(0.006, 0.016, w);
+    const size = THREE.MathUtils.lerp(0.009, 0.024, w);
 
     const pebble = new THREE.Mesh(
       _pebbleGeometry,
@@ -112,9 +112,9 @@ export function mountGrowTrayCompostPebbles(
       trayScatter01(trayId, i, 0x6a03b003) * Math.PI * 2,
     );
     pebble.scale.set(
-      size * THREE.MathUtils.lerp(0.75, 1.15, w),
-      size * THREE.MathUtils.lerp(0.55, 0.95, u),
-      size * THREE.MathUtils.lerp(0.8, 1.25, v),
+      size * THREE.MathUtils.lerp(0.82, 1.22, w),
+      size * THREE.MathUtils.lerp(0.62, 1.02, u),
+      size * THREE.MathUtils.lerp(0.86, 1.32, v),
     );
     pebble.castShadow = true;
     pebble.receiveShadow = true;

@@ -723,6 +723,9 @@ export async function runFpApartmentDecorFullRebuild(
       if (ownedApartmentPlacedItemKindHasStash(d.placedKind)) {
         const sk = apartmentStashKindForPlacedKind(d.placedKind);
         if (sk) {
+          if (d.placedKind === "fish_tank" && d.decorId === null) {
+            // Fish tank feed uses per-decor `{unit}#d{id}` keys only (see ensure_authored_fish_tank_decor).
+          } else {
           const pick = new THREE.Mesh(ctx.stashPickGeometry, ctx.stashPickMaterial);
           pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
           fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
@@ -743,6 +746,7 @@ export async function runFpApartmentDecorFullRebuild(
           g.add(pick);
           ctx.stashPickMeshes.push(pick);
           g.updateMatrixWorld(true);
+          }
         }
       }
       if (isGrowTrayModelPath(d.modelRelPath)) {

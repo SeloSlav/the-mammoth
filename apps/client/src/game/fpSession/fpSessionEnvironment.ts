@@ -198,6 +198,11 @@ export type FpSessionEnvironmentHandle = {
     /** 0 = normal exterior/interior balance; 1 = full abandoned-flat dimming while inside a unit. */
     apartmentInteriorDark01?: number;
     /**
+     * When true, camera raycasts + renders residential shell (layer 3) and decor props (layer 5).
+     * Needed for hallways / doorway peeks before {@link apartmentInteriorDark01} reaches atmosphere threshold.
+     */
+    interiorRenderLayersEnabled?: boolean;
+    /**
      * 0 = normal exterior fill; 1 = apply full stair-shaft interior dimming (smooth blend in
      * {@link mountFpSession}).
      */
@@ -615,6 +620,7 @@ export function attachFpSessionEnvironment(
       viewHeightPx,
       apartmentInteriorBounds: _apartmentInteriorBounds = null,
       apartmentInteriorDark01 = 0,
+      interiorRenderLayersEnabled = false,
       stairwellInteriorDark01 = 0,
     }) => {
       const t0 = performance.now();
@@ -657,8 +663,8 @@ export function attachFpSessionEnvironment(
         : 0;
       syncMammothApartmentInteriorViewLayers(
         { camera },
-        interior01 >
-          APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold,
+        interiorRenderLayersEnabled ||
+          interior01 > APARTMENT_INTERIOR_VISUAL_PROFILE.scene.atmosphereActiveThreshold,
       );
       dir.position.copy(sunDir).multiplyScalar(120);
       const tEnd = performance.now();

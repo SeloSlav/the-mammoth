@@ -4,6 +4,7 @@
  */
 
 import {
+  APARTMENT_STASH_KIND_FISH_TANK,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_GROW_TRAY,
   type ApartmentStashKind,
@@ -136,7 +137,23 @@ export function apartmentStashLocationsMatch(
     return footlockerLocationAlias(stored, requested);
   }
 
+  if (storedKind === APARTMENT_STASH_KIND_FISH_TANK) {
+    return fishTankStorageAlias(stored, requested);
+  }
+
   return sameKindStorageAlias(stored, requested);
+}
+
+function fishTankStorageAlias(
+  stored: ParsedApartmentStashLocationKey,
+  requested: ParsedApartmentStashLocationKey,
+): boolean {
+  return (
+    stored.tag === "decor" &&
+    requested.tag === "decor" &&
+    stored.unitKey === requested.unitKey &&
+    stored.decorId === requested.decorId
+  );
 }
 
 /** Legacy kind suffix and per-decor keys for one furniture type on a unit share one volume. */

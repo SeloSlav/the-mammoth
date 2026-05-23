@@ -22,6 +22,7 @@ import {
   mountBalconyGrowSeedVisual,
   probeGrowTraySoilLocalY,
   probeGrowTraySlotLocalOffsets,
+  readGrowTrayDecorUniformScale,
 } from "./fpBalconyGrowStageVisual.js";
 import {
   mountGrowTrayCompostPebbles,
@@ -102,6 +103,7 @@ export async function mountGrowTrayDecorOnGroup(opts: {
 
   const trayVisualBounds = readDecorVisualLocalBounds(decorGroup, new THREE.Box3());
   const slotPickSize = balconyGrowSlotPickSizeFromTrayBounds(trayVisualBounds);
+  decorGroup.userData.mammothGrowTraySlotPickWidth = slotPickSize.width;
   if (!trayVisualBounds.isEmpty()) {
     trayVisualBounds.getSize(_traySizeScratch);
     decorGroup.userData.mammothGrowTrayMinStageScale = Math.max(
@@ -190,11 +192,17 @@ function fitGrowPlantInteractionPick(holder: THREE.Group, visual: THREE.Object3D
   _trayBoundsScratch.getCenter(_plantPickCenterScratch);
   holder.worldToLocal(_plantPickCenterScratch);
   holder.getWorldScale(_plantPickWorldScaleScratch);
+  const trayRoot = holder.parent?.parent;
+  const slotPickWidth =
+    typeof trayRoot?.userData.mammothGrowTraySlotPickWidth === "number"
+      ? (trayRoot.userData.mammothGrowTraySlotPickWidth as number)
+      : 0.22;
+  const maxPickXZ = slotPickWidth * 0.72;
   plantPick.position.copy(_plantPickCenterScratch);
   plantPick.scale.set(
-    Math.max(0.22, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x),
-    Math.max(0.38, _plantPickSizeScratch.y / _plantPickWorldScaleScratch.y),
-    Math.max(0.22, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z),
+    Math.min(Math.max(0.16, _plantPickSizeScratch.x / _plantPickWorldScaleScratch.x), maxPickXZ),
+    Math.max(0.28, Math.min(_plantPickSizeScratch.y / _plantPickWorldScaleScratch.y, slotPickWidth * 1.05)),
+    Math.min(Math.max(0.16, _plantPickSizeScratch.z / _plantPickWorldScaleScratch.z), maxPickXZ),
   );
   plantPick.visible = true;
 }
@@ -285,7 +293,11 @@ export function syncGrowSlotVisuals(
     const def = getMammothItemDef(plant.cropDefId);
     const tint = def?.balconyGrow?.stageTint ?? "#3d8b4a";
     const cropScale = def?.balconyGrow?.stageScale ?? 1;
-    const stageScale = Math.max(balconyGrowStageVisualScale(stage, cropScale), minStageScale);
+    let stageScale = Math.max(balconyGrowStageVisualScale(stage, cropScale), minStageScale);
+    if (stage === "seed" && trayRoot) {
+      const decorScale = readGrowTrayDecorUniformScale(trayRoot);
+      stageScale = stageScale / Math.max(decorScale, 0.2);
+    }
     const matureGlow = plant.phase === PHASE_MATURE;
     const visualKey = `${plant.cropDefId}:${stage}:${tint}:${stageScale.toFixed(4)}:${matureGlow ? 1 : 0}`;
     holder.visible = true;

@@ -18,7 +18,6 @@ import {
   resolveBalconyGrowSoilAimedSlotIndex,
 } from "./fpBalconyGrowTrayAim.js";
 import { clientFeetNearGrowTray, isBalconyGrowTrayCenterPick } from "./fpBalconyGrowTrayAnchor.js";
-
 import type { FpApartmentStashRayOcclusion } from "../fpApartment/fpApartmentStashRayOcclusion.js";
 
 export type BalconyGrowTrayPrompt =
@@ -226,7 +225,8 @@ export function balconyGrowTrayAimFallbackPrompt(
     const dot = _toTrayScratch.dot(_camDirScratch);
     if (dot < 0.82) return;
 
-    const score = dot - dist * 0.04;
+    const centerBonus = isBalconyGrowTrayCenterPick(mesh) ? 0.12 : 0;
+    const score = dot - dist * 0.04 + centerBonus;
     if (score > bestScore) {
       bestScore = score;
       bestUnitKey = unitKey;
@@ -234,6 +234,10 @@ export function balconyGrowTrayAimFallbackPrompt(
       bestSlotIndex = slotIndex;
     }
   };
+
+  for (const mesh of centerPickMeshes) {
+    considerMesh(mesh);
+  }
 
   for (const mesh of trayPickMeshes) {
     considerMesh(mesh);

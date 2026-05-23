@@ -738,7 +738,6 @@ function nearestOwnedClaimedApartmentStash(
     tryLegacy(APARTMENT_STASH_KIND_STOVE);
     tryLegacy(APARTMENT_STASH_KIND_FRIDGE);
     tryLegacy(APARTMENT_STASH_KIND_WATER_TANK);
-    tryLegacy(APARTMENT_STASH_KIND_FISH_TANK);
   }
   return best;
 }

@@ -15,7 +15,7 @@ mod tests;
 pub(crate) use tables::*;
 pub(crate) use day_advance::{
     advance_balcony_grow_for_unit, advance_world_day_for_unit, apply_substrate_to_plants,
-    target_days_after_fertilizer,
+    target_days_after_fertilizer, tray_dry_nights_after_sleep, tray_water_after_sleep_nights,
 };
 pub(crate) use harvest::{
     harvest_bonus_count, harvest_food_count, harvest_seed_count, HarvestCareContext,
