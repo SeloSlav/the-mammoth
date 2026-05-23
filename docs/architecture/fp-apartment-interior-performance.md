@@ -156,7 +156,7 @@ Copy the 10 s window report from the overlay/export after reproducing the two sc
 
 ### Decor GLB pipeline (2026-05-23)
 
-Safe batch pass (no decimation): `pnpm content:optimize-glbs` / `content:optimize-glbs:apply` — meshopt index reorder + WebP textures at 1024–2048. Audits: `pnpm content:audit-apartment-tris`. Backups: `content/models/glb-source-backups/`.
+Safe batch pass (no decimation): `pnpm content:optimize-apartment-glbs` / `content:optimize-apartment-glbs:apply` — meshopt index reorder only (textures unchanged). Single-model test: `node scripts/optimize-glb-one.mjs <name>.glb [--apply]`. Audits: `pnpm content:audit-apartment-tris`. Backups: `content/models/glb-source-backups/`.
 
 **KTX2 for decor:** intentionally skipped for now — see [models glb-source-backups README](../../content/models/glb-source-backups/README.md). Building shells already use KTX2; decor stays on embedded WebP until texture-bound or a shared loader exists.
 

@@ -25,8 +25,9 @@
     "check:hand-authored-loc": "node scripts/check-hand-authored-ts-loc.mjs",
     "check:hand-authored-loc:strict": "node scripts/check-hand-authored-ts-loc.mjs --strict",
     "content:audit-apartment-tris": "node scripts/audit-apartment-builtin-tris.mjs",
-    "content:optimize-glbs": "node scripts/optimize-glbs.mjs",
-    "content:optimize-glbs:apply": "node scripts/optimize-glbs.mjs --apply"
+    "content:optimize-apartment-glbs": "node scripts/optimize-apartment-glbs.mjs",
+    "content:optimize-apartment-glbs:apply": "node scripts/optimize-apartment-glbs.mjs --apply",
+    "content:optimize-glb-one": "node scripts/optimize-glb-one.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.3.0",

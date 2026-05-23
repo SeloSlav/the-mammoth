@@ -2,7 +2,7 @@
 
 Pre-optimization Meshy GLBs from an **aborted decimation pass** (2026-05-23). Kept as archival originals only.
 
-Current optimization uses `pnpm content:optimize-glbs:apply` (reorder + WebP, no decimation). New backups go to `content/models/glb-source-backups/`.
+Current optimization uses `pnpm content:optimize-apartment-glbs:apply` (meshopt reorder, no decimation, textures unchanged). New backups go to `content/models/glb-source-backups/`.
 
 To restore a single asset from this tree:
 
