@@ -1427,6 +1427,11 @@ export function mountEditorMyApartmentFurnitureUnder(
     scanRoot: THREE.Object3D,
     _bounds?: ApartmentUnitWorldBounds,
   ): void => {
+    if (!useEditorStore.getState().apartmentPracticalLightsEnabled) {
+      practicalLights?.dispose();
+      practicalLights = null;
+      return;
+    }
     practicalLights = syncApartmentInteriorPracticalLighting({
       lightParent: root,
       windowScanRoot: scanRoot,

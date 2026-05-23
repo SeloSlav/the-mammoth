@@ -144,6 +144,8 @@ export interface EditorState {
   decorNeighborAlignSnap: boolean;
   /** {@link EditorMode.my_apartment_layout} — mesh-accurate decor floor shadow overlays (off by default for editor perf). */
   apartmentBakedFloorShadowsEnabled: boolean;
+  /** {@link EditorMode.my_apartment_layout} — TV/lamp/window practical lights (off by default for editor perf). */
+  apartmentPracticalLightsEnabled: boolean;
   /** {@link EditorMode.my_apartment_layout} — left-click hides décor / walls instead of selecting (viewport only). */
   myApartmentLayoutHidePickMode: boolean;
   /** {@link EditorMode.my_apartment_layout} — session-only hidden placement selection ids (not saved to disk). */
@@ -230,6 +232,7 @@ export interface EditorState {
   setGridSnapM: (m: number) => void;
   setDecorNeighborAlignSnap: (enabled: boolean) => void;
   setApartmentBakedFloorShadowsEnabled: (enabled: boolean) => void;
+  setApartmentPracticalLightsEnabled: (enabled: boolean) => void;
   setMyApartmentLayoutHidePickMode: (enabled: boolean) => void;
   hideMyApartmentLayoutPlacementFromCanvas: (placementId: string) => void;
   clearMyApartmentLayoutHiddenPlacements: () => void;

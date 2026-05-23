@@ -270,6 +270,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gridSnapM: 0,
   decorNeighborAlignSnap: false,
   apartmentBakedFloorShadowsEnabled: false,
+  apartmentPracticalLightsEnabled: false,
   myApartmentLayoutHidePickMode: false,
   myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
   myApartmentLayoutLoadingMessage: null,
@@ -891,6 +892,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setDecorNeighborAlignSnap: (decorNeighborAlignSnap) => set({ decorNeighborAlignSnap }),
   setApartmentBakedFloorShadowsEnabled: (apartmentBakedFloorShadowsEnabled) =>
     set({ apartmentBakedFloorShadowsEnabled }),
+  setApartmentPracticalLightsEnabled: (apartmentPracticalLightsEnabled) =>
+    set({ apartmentPracticalLightsEnabled }),
   setMyApartmentLayoutHidePickMode: (myApartmentLayoutHidePickMode) =>
     set({ myApartmentLayoutHidePickMode }),
   hideMyApartmentLayoutPlacementFromCanvas: (placementId) =>

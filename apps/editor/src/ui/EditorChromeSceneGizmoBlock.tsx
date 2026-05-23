@@ -16,6 +16,8 @@ export function EditorChromeSceneGizmoBlock(props: {
   setDecorNeighborAlignSnap?: (enabled: boolean) => void;
   apartmentBakedFloorShadowsEnabled?: boolean;
   setApartmentBakedFloorShadowsEnabled?: (enabled: boolean) => void;
+  apartmentPracticalLightsEnabled?: boolean;
+  setApartmentPracticalLightsEnabled?: (enabled: boolean) => void;
   myApartmentLayoutHidePickMode?: boolean;
   setMyApartmentLayoutHidePickMode?: (enabled: boolean) => void;
   myApartmentLayoutHiddenCount?: number;
@@ -39,6 +41,8 @@ export function EditorChromeSceneGizmoBlock(props: {
     setDecorNeighborAlignSnap,
     apartmentBakedFloorShadowsEnabled = false,
     setApartmentBakedFloorShadowsEnabled,
+    apartmentPracticalLightsEnabled = false,
+    setApartmentPracticalLightsEnabled,
     myApartmentLayoutHidePickMode = false,
     setMyApartmentLayoutHidePickMode,
     myApartmentLayoutHiddenCount = 0,
@@ -134,6 +138,31 @@ export function EditorChromeSceneGizmoBlock(props: {
             Show baked floor shadows
             <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
               Off by default — rebuilding silhouettes is slow with many props.
+            </span>
+          </span>
+        </label>
+      ) : null}
+      {myApartmentLayoutHints != null && setApartmentPracticalLightsEnabled ? (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            marginTop: 8,
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={apartmentPracticalLightsEnabled}
+            onChange={(e) => setApartmentPracticalLightsEnabled(e.target.checked)}
+          />
+          <span style={{ lineHeight: 1.35 }}>
+            Show practical lights
+            <span style={{ display: "block", fontSize: 11, opacity: 0.72 }}>
+              Off by default — lamps, screens, and window pools are costly while
+              authoring.
             </span>
           </span>
         </label>

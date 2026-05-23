@@ -74,6 +74,7 @@ function refreshApartmentFurnitureMountRootFromGroups(): void {
 }
 
 let apartmentFurnitureMountResyncDecorShadows: ((unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds) => void) | null = null;
+let apartmentFurnitureMountResyncPracticalLights: ((windowScanRoot: THREE.Object3D) => void) | null = null;
 let apartmentDecorShadowRenderer: THREE.WebGPURenderer | null = null;
 
 export function registerEditorMyApartmentDecorShadowRenderer(
@@ -102,6 +103,7 @@ export function setEditorMyApartmentPieceGroups(
   groupsRef = next;
 
   apartmentFurnitureMountResyncDecorShadows = null;
+  apartmentFurnitureMountResyncPracticalLights = null;
   refreshApartmentFurnitureMountRootFromGroups();
 }
 
@@ -125,6 +127,18 @@ export function resyncEditorMyApartmentDecorShadows(
   unitBounds?: import("@the-mammoth/engine").ApartmentUnitWorldBounds,
 ): void {
   apartmentFurnitureMountResyncDecorShadows?.(unitBounds);
+}
+
+export function registerEditorMyApartmentPracticalLightsResync(
+  fn: ((windowScanRoot: THREE.Object3D) => void) | null,
+): void {
+  apartmentFurnitureMountResyncPracticalLights = fn;
+}
+
+export function resyncEditorMyApartmentPracticalLights(
+  windowScanRoot: THREE.Object3D,
+): void {
+  apartmentFurnitureMountResyncPracticalLights?.(windowScanRoot);
 }
 
 /** @internal Overlay entry for transient saved-group THREE.Group manipulation root. */

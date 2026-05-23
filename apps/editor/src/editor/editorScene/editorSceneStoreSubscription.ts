@@ -6,6 +6,7 @@ import { rebuildStairWellPreviewRoot } from "@the-mammoth/world";
 import { APARTMENT_INTERIOR_VISUAL_PROFILE } from "@the-mammoth/engine";
 import {
   resyncEditorMyApartmentDecorShadows,
+  resyncEditorMyApartmentPracticalLights,
   applyEditorMyApartmentLayoutHiddenPlacements,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import { useEditorStore } from "../../state/editorStore.js";
@@ -268,6 +269,13 @@ export function subscribeEditorSceneStore(deps: {
         resyncEditorMyApartmentDecorShadows();
       }
       if (
+        s.apartmentPracticalLightsEnabled !== prev.apartmentPracticalLightsEnabled &&
+        s.mode === "my_apartment_layout"
+      ) {
+        const shellRoot = getBuildingRoot();
+        if (shellRoot) resyncEditorMyApartmentPracticalLights(shellRoot);
+      }
+      if (
         s.mode === "my_apartment_layout" &&
         (s.myApartmentLayoutHiddenPlacementIds !== prev.myApartmentLayoutHiddenPlacementIds ||
           s.mode !== prev.mode)
@@ -301,6 +309,7 @@ export function subscribeEditorSceneStore(deps: {
         s.contentStructureEpoch !== prev.contentStructureEpoch ||
         s.shadowsEnabled !== prev.shadowsEnabled ||
         s.apartmentBakedFloorShadowsEnabled !== prev.apartmentBakedFloorShadowsEnabled ||
+        s.apartmentPracticalLightsEnabled !== prev.apartmentPracticalLightsEnabled ||
         s.myApartmentLayoutHiddenPlacementIds !== prev.myApartmentLayoutHiddenPlacementIds
       ) {
         demandEditorSceneRender();

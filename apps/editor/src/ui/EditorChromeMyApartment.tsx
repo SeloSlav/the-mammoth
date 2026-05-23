@@ -155,6 +155,8 @@ export function EditorChromeMyApartment(props: {
     setDecorNeighborAlignSnap,
     apartmentBakedFloorShadowsEnabled,
     setApartmentBakedFloorShadowsEnabled,
+    apartmentPracticalLightsEnabled,
+    setApartmentPracticalLightsEnabled,
     myApartmentLayoutHidePickMode,
     setMyApartmentLayoutHidePickMode,
     myApartmentLayoutHiddenPlacementIds,
@@ -186,6 +188,8 @@ export function EditorChromeMyApartment(props: {
       setDecorNeighborAlignSnap: s.setDecorNeighborAlignSnap,
       apartmentBakedFloorShadowsEnabled: s.apartmentBakedFloorShadowsEnabled,
       setApartmentBakedFloorShadowsEnabled: s.setApartmentBakedFloorShadowsEnabled,
+      apartmentPracticalLightsEnabled: s.apartmentPracticalLightsEnabled,
+      setApartmentPracticalLightsEnabled: s.setApartmentPracticalLightsEnabled,
       myApartmentLayoutHidePickMode: s.myApartmentLayoutHidePickMode,
       setMyApartmentLayoutHidePickMode: s.setMyApartmentLayoutHidePickMode,
       myApartmentLayoutHiddenPlacementIds: s.myApartmentLayoutHiddenPlacementIds,
@@ -801,6 +805,8 @@ export function EditorChromeMyApartment(props: {
             setDecorNeighborAlignSnap={setDecorNeighborAlignSnap}
             apartmentBakedFloorShadowsEnabled={apartmentBakedFloorShadowsEnabled}
             setApartmentBakedFloorShadowsEnabled={setApartmentBakedFloorShadowsEnabled}
+            apartmentPracticalLightsEnabled={apartmentPracticalLightsEnabled}
+            setApartmentPracticalLightsEnabled={setApartmentPracticalLightsEnabled}
             myApartmentLayoutHidePickMode={myApartmentLayoutHidePickMode}
             setMyApartmentLayoutHidePickMode={setMyApartmentLayoutHidePickMode}
             myApartmentLayoutHiddenCount={myApartmentLayoutHiddenPlacementIds.length}

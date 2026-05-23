@@ -32,6 +32,7 @@ import { TYPICAL_FLOOR_DOC_ID } from "@the-mammoth/world";
 
 import {
   registerEditorMyApartmentDecorShadowResync,
+  registerEditorMyApartmentPracticalLightsResync,
   registerEditorMyApartmentWallsMountSyncRequest,
   setEditorMyApartmentPieceGroups,
   applyEditorMyApartmentLayoutHiddenPlacements,
@@ -120,6 +121,7 @@ export function createEditorSceneMyApartmentLifecycle(
     mount = null;
 
     registerEditorMyApartmentDecorShadowResync(null);
+    registerEditorMyApartmentPracticalLightsResync(null);
 
     setEditorMyApartmentPieceGroups(null);
 
@@ -260,6 +262,9 @@ export function createEditorSceneMyApartmentLifecycle(
       setEditorMyApartmentPieceGroups(mount.selectionGroups);
       registerEditorMyApartmentDecorShadowResync((bounds) => {
         mount?.resyncDecorShadows(bounds);
+      });
+      registerEditorMyApartmentPracticalLightsResync((scanRoot) => {
+        mount?.resyncPracticalLights(scanRoot);
       });
 
       syncLayoutHiddenPlacementsFromStore();
