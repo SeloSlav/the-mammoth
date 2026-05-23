@@ -26,3 +26,14 @@ export function subscribeFpSleepConfirm(cb: () => void): () => void {
     listeners.delete(cb);
   };
 }
+
+let flushPoseBeforeSleep: (() => Promise<void>) | null = null;
+
+/** FP session registers locomotion snapshot flush before `sleep_in_bed`. */
+export function registerFpSleepPoseFlush(fn: (() => Promise<void>) | null): void {
+  flushPoseBeforeSleep = fn;
+}
+
+export async function flushPoseBeforeFpSleep(): Promise<void> {
+  if (flushPoseBeforeSleep) await flushPoseBeforeSleep();
+}

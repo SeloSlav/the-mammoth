@@ -11,11 +11,6 @@ use crate::fish_tank;
 use crate::player_vitals;
 use crate::pose::player_pose;
 
-const BED_INTERACT_RADIUS_M: f32 = 2.25;
-const BED_INTERACT_RADIUS_SQ: f32 = BED_INTERACT_RADIUS_M * BED_INTERACT_RADIUS_M;
-const BED_FEET_Y_BELOW_M: f32 = 0.35;
-const BED_FEET_Y_ABOVE_M: f32 = 2.5;
-
 #[spacetimedb::table(public, accessor = player_world_progress)]
 pub struct PlayerWorldProgress {
     #[primary_key]
@@ -69,18 +64,7 @@ fn player_near_unit_bed(
         .identity()
         .find(&owner)
         .ok_or_else(|| "missing player pose".to_string())?;
-    let (bx, by, bz) = if let Some(b) = apartments::primary_bed_row_for_unit_key(ctx, unit_key) {
-        (b.pos_x, b.pos_y, b.pos_z)
-    } else {
-        (unit.bed_x, unit.bed_y, unit.bed_z)
-    };
-    let dx = pose.x - bx;
-    let dz = pose.z - bz;
-    if dx * dx + dz * dz > BED_INTERACT_RADIUS_SQ {
-        return Err("Move closer to your bed.".to_string());
-    }
-    let dy = pose.y - by;
-    if dy < -BED_FEET_Y_BELOW_M || dy > BED_FEET_Y_ABOVE_M {
+    if !apartments::player_pose_near_unit_bed(ctx, &unit, pose.x, pose.y, pose.z) {
         return Err("Move closer to your bed.".to_string());
     }
     Ok(())
@@ -144,7 +128,7 @@ fn sleep_in_bed_impl(ctx: &ReducerContext, unit_key: &str) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     #[test]
-    fn bed_interact_radius_is_reasonable() {
-        assert!(super::BED_INTERACT_RADIUS_M >= 1.5);
+    fn bed_sleep_interact_radius_is_reasonable() {
+        assert!(crate::apartments::bed_sleep_interact_radius_sq() >= 1.5_f32 * 1.5_f32);
     }
 }

@@ -913,11 +913,10 @@ pub(crate) fn spawn_pose_owned_bed(ctx: &ReducerContext, owner: Identity) -> Opt
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz, byaw) = if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
-            (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
-        } else {
-            (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
-        };
+        let (bx, by, bz) = bed_world_anchor_xyz(ctx, &u);
+        let byaw = primary_bed_row_for_unit_key(ctx, &u.unit_key)
+            .map(|b| b.yaw_rad)
+            .unwrap_or(u.bed_yaw);
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -1015,11 +1014,10 @@ pub(crate) fn join_pose_from_owned_bed(
         if u.owner != Some(owner) || u.state != UNIT_STATE_CLAIMED {
             return None;
         }
-        let (bx, by, bz, byaw) = if let Some(b) = primary_bed_row_for_unit_key(ctx, &u.unit_key) {
-            (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
-        } else {
-            (u.bed_x, u.bed_y, u.bed_z, u.bed_yaw)
-        };
+        let (bx, by, bz) = bed_world_anchor_xyz(ctx, &u);
+        let byaw = primary_bed_row_for_unit_key(ctx, &u.unit_key)
+            .map(|b| b.yaw_rad)
+            .unwrap_or(u.bed_yaw);
         Some(PlayerPose {
             identity: owner,
             x: bx,
@@ -1493,6 +1491,55 @@ fn map_owned_apartment_layout_fraction_to_world_x(
 /// World XZ for props authored in `owned_apartment_builtins.json` layout fractions.
 pub(crate) fn authored_placed_item_world_xz(unit: &ApartmentUnit, fx: f32, fz: f32) -> (f32, f32) {
     authored_content_stash_anchor_xz(unit, fx, fz)
+}
+
+/// `mammoth_builtin_bed` in `content/apartment/owned_apartment_builtins.json` — keep in sync with client
+/// `resolveApartmentDecorPoses`.
+const AUTHORED_BED_FX: f32 = 0.654_638_93;
+const AUTHORED_BED_FZ: f32 = 0.013_169_777;
+const AUTHORED_BED_DY: f32 = 0.531_484_7;
+const BED_SLEEP_INTERACT_RADIUS_M: f32 = 2.25;
+
+#[inline]
+pub(crate) fn bed_sleep_interact_radius_sq() -> f32 {
+    BED_SLEEP_INTERACT_RADIUS_M * BED_SLEEP_INTERACT_RADIUS_M
+}
+
+fn authored_content_bed_world_xyz(unit: &ApartmentUnit) -> (f32, f32, f32) {
+    let (ax, az) = authored_placed_item_world_xz(unit, AUTHORED_BED_FX, AUTHORED_BED_FZ);
+    let ay = unit.bound_min_y + AUTHORED_BED_DY;
+    (ax, ay, az)
+}
+
+/// Replicated decor row when present; otherwise authored layout fractions (not legacy `unit.bed_*` seeds).
+pub(crate) fn bed_world_anchor_xyz(ctx: &ReducerContext, unit: &ApartmentUnit) -> (f32, f32, f32) {
+    if let Some(b) = primary_bed_row_for_unit_key(ctx, unit.unit_key.as_str()) {
+        (b.pos_x, b.pos_y, b.pos_z)
+    } else {
+        authored_content_bed_world_xyz(unit)
+    }
+}
+
+pub(crate) fn player_pose_near_unit_bed(
+    ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+    pose_x: f32,
+    pose_y: f32,
+    pose_z: f32,
+) -> bool {
+    if !feet_inside_unit(unit, pose_x, pose_y, pose_z) {
+        return false;
+    }
+    let (bx, _by, bz) = bed_world_anchor_xyz(ctx, unit);
+    pose_near_horizontal_marker(
+        pose_x,
+        pose_y,
+        pose_z,
+        bx,
+        bz,
+        unit.foot_y,
+        bed_sleep_interact_radius_sq(),
+    )
 }
 
 /// World XZ for stash props authored in `content/apartment/owned_apartment_builtins.json`.
@@ -2254,6 +2301,58 @@ pub(crate) fn apply_forward_melee_door_damage(
     }
     ctx.db.apartment_door_gameplay().row_key().update(gp);
     ctx.db.apartment_door().row_key().update(door);
+}
+
+#[cfg(test)]
+mod authored_bed_anchor_tests {
+    use super::{authored_placed_item_world_xz, AUTHORED_BED_FX, AUTHORED_BED_FZ};
+
+    fn sample_unit() -> super::ApartmentUnit {
+        super::ApartmentUnit {
+            unit_key: "floor_mamutica_typical|18|unit_e_004".to_string(),
+            floor_doc_id: "floor_mamutica_typical".to_string(),
+            level: 18,
+            unit_id: "unit_e_004".to_string(),
+            state: super::UNIT_STATE_CLAIMED,
+            owner: None,
+            claim_started_by: None,
+            claim_progress_secs: 0.0,
+            last_claim_pulse_micros: 0,
+            reinforce_progress_secs: 0.0,
+            reinforce_by: None,
+            reinforced: 0,
+            bound_min_x: 10.0,
+            bound_max_x: 18.0,
+            bound_min_y: 50.0,
+            bound_max_y: 53.0,
+            bound_min_z: -120.0,
+            bound_max_z: -115.0,
+            bed_x: 14.0,
+            bed_y: 50.01,
+            bed_z: -117.6,
+            bed_yaw: 0.0,
+            wardrobe_x: 11.0,
+            wardrobe_z: -119.0,
+            foot_x: 15.0,
+            foot_y: 50.0,
+            foot_z: -118.0,
+            stove_x: 10.5,
+            stove_z: -119.5,
+        }
+    }
+
+    #[test]
+    fn authored_bed_anchor_uses_layout_fractions_not_legacy_seed() {
+        let unit = sample_unit();
+        let (ax, az) = authored_placed_item_world_xz(&unit, AUTHORED_BED_FX, AUTHORED_BED_FZ);
+        let legacy_fz = 0.48;
+        let legacy_z = unit.bound_min_z + legacy_fz * (unit.bound_max_z - unit.bound_min_z);
+        assert!(
+            (az - legacy_z).abs() > 1.0,
+            "authored bed Z should differ from legacy 0.48 seed"
+        );
+        assert!((ax - unit.bed_x).abs() > 0.05 || (az - unit.bed_z).abs() > 0.5);
+    }
 }
 
 #[cfg(test)]

@@ -117,7 +117,7 @@ import { apartmentSittableScreenNdcFromPointer } from "./fpApartment/fpApartment
 import { tryEnterFpSitFromPrompt } from "./fpApartment/fpSitEnter.js";
 import { tryExitFpSitOnMovement } from "./fpApartment/fpSitExit.js";
 import { exitFpSit, fpSitSessionIsOnBed, getFpSitSession, isFpSitActive } from "./fpApartment/fpSitSession.js";
-import { openFpSleepConfirm } from "./fpApartment/fpSleepConfirmState.js";
+import { openFpSleepConfirm, registerFpSleepPoseFlush } from "./fpApartment/fpSleepConfirmState.js";
 import {
   closeFpNotebookTipsPanel,
   isFpNotebookTipsPanelOpen,
@@ -1047,6 +1047,8 @@ export async function mountFpSession(
     return sendMoveIntent(pickupInput, false, performance.now());
   };
 
+  registerFpSleepPoseFlush(flushLocalPickupPoseToServer);
+
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
   const fpBalconyGrow = mountFpBalconyGrowSession({
@@ -1847,6 +1849,7 @@ export async function mountFpSession(
     setFpPickupPrompt(null);
     closeFpNotebookTipsPanel();
     exitFpSit();
+    registerFpSleepPoseFlush(null);
     fpElevators.dispose();
     fpApartmentDecorMeshes.dispose();
     fpBalconyGrow.dispose();

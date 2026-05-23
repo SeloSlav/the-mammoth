@@ -2,6 +2,7 @@ import { useSyncExternalStore, type CSSProperties } from "react";
 import type { DbConnection } from "../module_bindings";
 import {
   closeFpSleepConfirm,
+  flushPoseBeforeFpSleep,
   getFpSleepConfirmState,
   subscribeFpSleepConfirm,
 } from "../game/fpApartment/fpSleepConfirmState";
@@ -62,10 +63,17 @@ export function MammothSleepConfirmHud({ conn }: Props) {
   if (!conn || !pending) return null;
 
   const runSleep = () => {
+    const unitKey = pending.unitKey;
     closeFpSleepConfirm();
-    exitFpSit();
-    void document.exitPointerLock?.();
-    void conn.reducers.sleepInBed({ unitKey: pending.unitKey });
+    void (async () => {
+      await flushPoseBeforeFpSleep();
+      try {
+        await conn.reducers.sleepInBed({ unitKey });
+      } finally {
+        exitFpSit();
+        void document.exitPointerLock?.();
+      }
+    })();
   };
 
   return (
