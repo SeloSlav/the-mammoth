@@ -175,6 +175,7 @@ export function predictSlotMove(
         });
       return g;
     }
+    return null;
   }
 
   setSlot(g, dest, moving);

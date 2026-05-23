@@ -51,7 +51,6 @@ import { waterBottleFillFraction } from "./waterContainerHelpers";
 import {
   apartmentStashMoveFailureHint,
   clientMayPushToActiveApartmentStash,
-  isApartmentStashSlotIndexValid,
   mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
@@ -71,13 +70,15 @@ import {
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
-import { inventoryReducerQuantityArg } from "./inventoryDragMove";
+import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inventoryDragDropHelpers";
+import { beginInventoryDrag, endInventoryDrag } from "./inventoryDragSession";
+import { playInventoryItemDragDropSound } from "./inventoryDragUiSound";
+import { useInventoryDragHoverSlot } from "./useInventoryDragHoverSlot";
 import { MammothHudPanel } from "./MammothHudPanel";
 import {
   inventorySlotGridsMatch,
   inventorySlotGridsSemanticallyMatch,
   predictSlotMove,
-  predictWorldDrop,
   type SlotGrids,
 } from "./inventoryOptimistic";
 import { useMammothInventory, useMammothStash } from "./useMammothInventory";
@@ -146,7 +147,22 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   const waterFillVer = useWaterBottleFillVersion(conn);
   void waterFillVer;
   const [invOpen, setInvOpen] = useState(false);
-  const dragRef = useRef<MammothDraggedItemInfo | null>(null);
+  const dragDropRules = useMemo(
+    (): InventoryDragDropRulesContext => ({
+      conn,
+      activeStash,
+      ...(activeStash
+        ? { openStash: { stashKey: activeStash.stashKey, stashKind: activeStash.stashKind } }
+        : {}),
+    }),
+    [conn, activeStash],
+  );
+  const dragHoverSlot = useInventoryDragHoverSlot(gridsForPrediction, dragDropRules);
+  const isDragHoverSlot = useCallback(
+    (slot: MammothDragSourceSlotInfo) =>
+      dragHoverSlot?.type === slot.type && dragHoverSlot.index === slot.index,
+    [dragHoverSlot],
+  );
   const selectedSlot = useSyncExternalStore(
     subscribeFpHotbarSelection,
     getFpHotbarSelectedSlot,
@@ -274,7 +290,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
   }, []);
 
   const handleDragStart = useCallback((info: MammothDraggedItemInfo) => {
-    dragRef.current = info;
+    beginInventoryDrag(info);
   }, []);
 
   const blockBrowserContextMenu = useCallback((e: ReactMouseEvent) => {
@@ -360,69 +376,66 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   const handleDrop = useCallback(
     (result: MammothDropResult) => {
-      const src = dragRef.current;
-      dragRef.current = null;
+      const src = endInventoryDrag();
       document.body.classList.remove("item-dragging");
       if (!src) return;
+
+      const evaluation = evaluateInventoryDrop({
+        grids: gridsForPrediction(),
+        src,
+        result,
+        rules: dragDropRules,
+      });
+
+      if (evaluation.kind === "cancel" || evaluation.kind === "noop") return;
+      if (evaluation.kind === "rejectStash") {
+        reportApartmentStashRejection(evaluation.stashKind);
+        return;
+      }
+
+      playInventoryItemDragDropSound();
+
       const id = src.item.instance.instanceId;
       const instanceId = typeof id === "bigint" ? id : BigInt(id as number);
-      const stackQty = src.item.instance.quantity;
-      const quantityToMove = inventoryReducerQuantityArg(src.dragQuantity, stackQty);
-      const predictQty = quantityToMove === 0 ? undefined : src.dragQuantity;
+
       try {
-        if (result.kind === "cancel") return;
-        if (result.kind === "world") {
-          const predicted = predictWorldDrop(gridsForPrediction(), src.sourceSlot, src.dragQuantity);
-          if (predicted) setOptimisticSlots(predicted);
+        if (evaluation.kind === "world") {
+          setOptimisticSlots(evaluation.predicted);
           void conn.reducers.dropItem({
             itemInstanceId: instanceId,
-            quantityToDrop: src.dragQuantity,
+            quantityToDrop: evaluation.quantityToDrop,
           });
           return;
         }
-        const target = result.slot;
-        const predicted = predictSlotMove(
-          gridsForPrediction(),
-          src.sourceSlot,
-          target,
-          predictQty,
-        );
-        if (predicted) setOptimisticSlots(predicted);
+
+        setOptimisticSlots(evaluation.predicted);
+        const target = evaluation.target;
         if (target.type === "inventory") {
           void conn.reducers.moveItemToInventory({
             itemInstanceId: instanceId,
             targetInventorySlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         } else if (target.type === "stash") {
           if (!activeStash) return;
-          if (
-            !isApartmentStashSlotIndexValid(activeStash.stashKind, target.index) ||
-            (src.sourceSlot.type !== "stash" &&
-              !mammothItemAllowedInApartmentStash(activeStash.stashKind, src.item.def))
-          ) {
-            reportApartmentStashRejection(activeStash.stashKind);
-            return;
-          }
-          if (!clientMayPushToActiveApartmentStash(conn, activeStash)) return;
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: activeStash.stashKey,
             targetStashSlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         } else {
           void conn.reducers.moveItemToHotbar({
             itemInstanceId: instanceId,
             targetHotbarSlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         }
       } catch (err) {
         console.warn("[MammothInventoryHud] drop/move failed", err);
       }
     },
-    [activeStash, conn, gridsForPrediction],
+    [activeStash, conn, dragDropRules, gridsForPrediction],
   );
 
   const onHotbarSlotClick = useCallback(
@@ -523,7 +536,11 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                 const pop = inv[i] ?? null;
                 const slotInfo = { type: "inventory" as const, index: i };
                 return (
-                  <MammothDroppableSlot key={`inv-${i}`} slotInfo={slotInfo}>
+                  <MammothDroppableSlot
+                    key={`inv-${i}`}
+                    slotInfo={slotInfo}
+                    isDraggingOver={isDragHoverSlot(slotInfo)}
+                  >
                     {pop ? (
                       <MammothDraggableItem
                         key={String(toInstanceId(pop))}
@@ -608,7 +625,7 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
               </div>
               <MammothDroppableSlot
                 slotInfo={slotInfo}
-                isDraggingOver={false}
+                isDraggingOver={isDragHoverSlot(slotInfo)}
                 onClick={pop ? undefined : () => onHotbarSlotClick(index)}
                 overlayProgress={consumeCd ?? undefined}
                 style={{

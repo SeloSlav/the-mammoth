@@ -19,6 +19,7 @@ import shotgunCoachIcon from "../../../../content/references/meshy/shotgun-coach
 import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell.png?url";
 import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
 import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
+import compostIcon from "../../../../content/references/meshy/compost.png?url";
 import srbosjekIcon from "../../../../content/references/meshy/srbosjek.png?url";
 import waterBottleIcon from "../../../../content/references/meshy/water-bottle.png?url";
 
@@ -126,6 +127,7 @@ const ICONS: Record<string, string> = {
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
   screwdriver: screwdriverIcon,
+  "balcony-grow-substrate": compostIcon,
 };
 
 /** First candidate URL (preview / legacy). World mesh load uses the full candidate list. */

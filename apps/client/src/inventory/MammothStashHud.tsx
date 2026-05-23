@@ -22,7 +22,10 @@ import type {
   MammothPopulatedItem,
 } from "./inventoryDragDropTypes";
 import { destPlayerCarrySlotForQuickTransfer, type MammothPlayerCarrySlot } from "./inventoryQuickTransfer";
-import { inventoryReducerQuantityArg } from "./inventoryDragMove";
+import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inventoryDragDropHelpers";
+import { beginInventoryDrag, endInventoryDrag } from "./inventoryDragSession";
+import { playInventoryItemDragDropSound } from "./inventoryDragUiSound";
+import { useInventoryDragHoverSlot } from "./useInventoryDragHoverSlot";
 import {
   inventorySlotGridsMatch,
   inventorySlotGridsSemanticallyMatch,
@@ -32,9 +35,6 @@ import {
 import {
   apartmentStashMoveFailureHint,
   apartmentStashRejectionHint,
-  clientMayPushToActiveApartmentStash,
-  isApartmentStashSlotIndexValid,
-  mammothItemAllowedInApartmentStash,
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
@@ -89,11 +89,16 @@ function renderStashSlot(
     updateTooltipPositionFromHoverEvent: (e: ReactMouseEvent) => void;
     hideItemTooltip: () => void;
     slotInner: (pop: MammothPopulatedItem | null) => ReactNode;
+    isDragHoverSlot: (slot: MammothDragSourceSlotInfo) => boolean;
   },
 ) {
   const slotInfo = { type: "stash" as const, index: slotIndex };
   return (
-    <MammothDroppableSlot key={`stash-${slotIndex}`} slotInfo={slotInfo}>
+    <MammothDroppableSlot
+      key={`stash-${slotIndex}`}
+      slotInfo={slotInfo}
+      isDraggingOver={opts.isDragHoverSlot(slotInfo)}
+    >
       {pop ? (
         <MammothDraggableItem
           key={String(opts.toInstanceId(pop))}
@@ -129,7 +134,6 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
   );
   const [optimisticSlots, setOptimisticSlots] = useState<SlotGrids | null>(null);
   const displaySlots = optimisticSlots ?? baseSlots;
-  const dragRef = useRef<MammothDraggedItemInfo | null>(null);
   const baseSlotsRef = useRef(baseSlots);
   const optimisticSlotsRef = useRef<SlotGrids | null>(null);
   baseSlotsRef.current = baseSlots;
@@ -174,6 +178,21 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
   const gridsForPrediction = useCallback(
     () => optimisticSlotsRef.current ?? baseSlotsRef.current,
     [],
+  );
+
+  const dragDropRules = useMemo(
+    (): InventoryDragDropRulesContext => ({
+      conn,
+      activeStash: { stashKey, stashLabel, stashKind },
+      openStash: { stashKey, stashKind },
+    }),
+    [conn, stashKey, stashKind, stashLabel],
+  );
+  const dragHoverSlot = useInventoryDragHoverSlot(gridsForPrediction, dragDropRules, true);
+  const isDragHoverSlot = useCallback(
+    (slot: MammothDragSourceSlotInfo) =>
+      dragHoverSlot?.type === slot.type && dragHoverSlot.index === slot.index,
+    [dragHoverSlot],
   );
 
   const hideItemTooltip = useCallback(() => {
@@ -234,17 +253,8 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
   }, []);
 
   const handleDragStart = useCallback((info: MammothDraggedItemInfo) => {
-    dragRef.current = info;
+    beginInventoryDrag(info);
   }, []);
-
-  const canAcceptItemInStash = useCallback(
-    (item: MammothPopulatedItem, targetSlotIndex: number) => {
-      if (!isApartmentStashSlotIndexValid(stashKind, targetSlotIndex)) return false;
-      if (dragRef.current?.sourceSlot.type === "stash") return true;
-      return mammothItemAllowedInApartmentStash(stashKind, item.def);
-    },
-    [stashKind],
-  );
 
   const quickMoveStashToPlayerCarry = useCallback(
     (pop: MammothPopulatedItem, fromStashIndex: number) => {
@@ -286,42 +296,32 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
 
   const handleDrop = useCallback(
     (result: MammothDropResult) => {
-      const src = dragRef.current;
-      dragRef.current = null;
+      const src = endInventoryDrag();
       document.body.classList.remove("item-dragging");
       if (!src || result.kind !== "slot") return;
 
-      const target = result.slot;
-      if (target.type !== "stash" && src.sourceSlot.type !== "stash") return;
+      const evaluation = evaluateInventoryDrop({
+        grids: gridsForPrediction(),
+        src,
+        result,
+        rules: dragDropRules,
+        requireStashInvolvement: true,
+      });
 
-      if (target.type === "stash" && !canAcceptItemInStash(src.item, target.index)) {
-        reportApartmentStashRejection(stashKind);
+      if (evaluation.kind === "cancel" || evaluation.kind === "noop") return;
+      if (evaluation.kind === "rejectStash") {
+        reportApartmentStashRejection(evaluation.stashKind);
         return;
       }
+      if (evaluation.kind === "world") return;
 
-      const activeStashPanel = { stashKey, stashLabel, stashKind };
-      if (
-        target.type === "stash" &&
-        src.sourceSlot.type !== "stash" &&
-        !clientMayPushToActiveApartmentStash(conn, activeStashPanel)
-      ) {
-        return;
-      }
+      playInventoryItemDragDropSound();
 
       const id = src.item.instance.instanceId;
       const instanceId = typeof id === "bigint" ? id : BigInt(id as number);
-      const quantityToMove = inventoryReducerQuantityArg(
-        src.dragQuantity,
-        src.item.instance.quantity,
-      );
-      const predictQty = quantityToMove === 0 ? undefined : src.dragQuantity;
-      const predicted = predictSlotMove(
-        gridsForPrediction(),
-        src.sourceSlot,
-        target,
-        predictQty,
-      );
-      if (predicted) setOptimisticSlots(predicted);
+      const target = evaluation.target;
+
+      setOptimisticSlots(evaluation.predicted);
 
       try {
         if (target.type === "stash" && src.sourceSlot.type === "stash") {
@@ -329,35 +329,35 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetStashSlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         } else if (target.type === "stash") {
           void conn.reducers.stashPushItemToSlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetStashSlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         } else if (target.type === "inventory") {
           void conn.reducers.stashPullItemToInventorySlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetInventorySlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         } else {
           void conn.reducers.stashPullItemToHotbarSlot({
             itemInstanceId: instanceId,
             unitKey: stashKey,
             targetHotbarSlot: target.index,
-            quantityToMove,
+            quantityToMove: evaluation.quantityToMove,
           });
         }
       } catch (err) {
         console.warn("[MammothStashHud] drop/move failed", err);
       }
     },
-    [canAcceptItemInStash, conn, gridsForPrediction, stashKey, stashKind],
+    [conn, dragDropRules, gridsForPrediction, stashKey],
   );
 
   const slotInner = (pop: MammothPopulatedItem | null) => {
@@ -409,6 +409,7 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     updateTooltipPositionFromHoverEvent,
     hideItemTooltip,
     slotInner,
+    isDragHoverSlot,
   };
 
   const subtitle = useMemo(() => {

@@ -14,7 +14,7 @@ export function playInventoryItemDragPickSound(): void {
   playUiWavOneShot("inventory-item-pick.wav", DEFAULT_VOLUME);
 }
 
-/** Fires when the drag ends (slot target, cancel, or world-drop). */
+/** Fires when a drag ends on a valid drop target (handled by inventory HUD drop logic). */
 export function playInventoryItemDragDropSound(): void {
   playUiWavOneShot("inventory-item-drop.wav", DEFAULT_VOLUME);
 }

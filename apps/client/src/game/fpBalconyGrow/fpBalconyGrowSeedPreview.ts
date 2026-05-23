@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { deepDisposeObject3D } from "@the-mammoth/engine";
 import { balconyGrowStageVisualScale } from "@the-mammoth/schemas";
-import { mountBalconyGrowPlantVisual } from "./fpBalconyGrowStageVisual.js";
+import { mountBalconyGrowSeedVisual } from "./fpBalconyGrowStageVisual.js";
 import type { FpWorldPlacementPreview } from "../fpPlacement/fpWorldPlacementPreview.js";
 
 const VALID_EMISSIVE = new THREE.Color(0x5dffb0);
 const INVALID_EMISSIVE = new THREE.Color(0xff7070);
-const DEFAULT_SAPLING_TINT = "#3d8b4a";
+const DEFAULT_SEED_TINT = "#3d8b4a";
 
 function applyPlacementGhostMaterials(root: THREE.Object3D, valid: boolean): void {
   root.traverse((o) => {
@@ -24,7 +24,7 @@ function applyPlacementGhostMaterials(root: THREE.Object3D, valid: boolean): voi
   });
 }
 
-/** Sapling placement ghost — procedural, matches live tray slot visuals (never tray GLBs). */
+/** Seed-cluster placement ghost — matches day-0 tray slot visuals after plant. */
 export function createBalconyGrowSeedPreview(scene: THREE.Scene): FpWorldPlacementPreview {
   const anchor = new THREE.Group();
   anchor.name = "balcony_grow_seed_preview";
@@ -43,7 +43,7 @@ export function createBalconyGrowSeedPreview(scene: THREE.Scene): FpWorldPlaceme
       holder.remove(child);
       deepDisposeObject3D(child);
     }
-    mountBalconyGrowPlantVisual(holder, "sapling", stageScale, tint, false);
+    mountBalconyGrowSeedVisual(holder, stageScale, tint);
   };
 
   return {
@@ -56,8 +56,8 @@ export function createBalconyGrowSeedPreview(scene: THREE.Scene): FpWorldPlaceme
         lastValid = null;
         return;
       }
-      const stageScale = target.scale ?? balconyGrowStageVisualScale("sapling");
-      const tint = target.balconyGrowTint ?? DEFAULT_SAPLING_TINT;
+      const stageScale = target.scale ?? balconyGrowStageVisualScale("seed");
+      const tint = target.balconyGrowTint ?? DEFAULT_SEED_TINT;
       const visualKey = `${stageScale.toFixed(4)}:${tint}`;
       if (visualKey !== lastVisualKey) {
         rebuildVisual(stageScale, tint);

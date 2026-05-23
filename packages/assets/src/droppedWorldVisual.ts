@@ -36,6 +36,7 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   "scrap-metal": 0.38,
   "chemical-stock": 0.12,
   cigarettes: 0.18,
+  "balcony-grow-substrate": 0.38,
 
   // Keys / hardware
   "door-lock": 0.085,

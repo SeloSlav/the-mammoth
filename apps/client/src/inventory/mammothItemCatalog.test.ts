@@ -205,7 +205,6 @@ describe("mammothItemCatalog", () => {
 
   it("loads balcony grow-op plant and harvest defs from catalog shard", () => {
     const plantIds = [
-      "balcony-grow-substrate",
       "lovage-seeds",
       "parsley-seeds",
       "dill-seeds",
@@ -221,6 +220,11 @@ describe("mammothItemCatalog", () => {
         "/static/models/objects/grow-stage-sapling.glb",
       );
     }
+    expect(getMammothItemDef("balcony-grow-substrate")?.category).toBe("resource");
+    expect(getMammothDroppedWorldModelUrl("balcony-grow-substrate")).toBe(
+      "/static/models/objects/compost.glb",
+    );
+    expect(getMammothItemDef("balcony-grow-substrate")?.iconUrl?.length).toBeGreaterThan(8);
 
     const harvestIds = [
       "fresh-lovage",

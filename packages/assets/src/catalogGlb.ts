@@ -26,11 +26,11 @@ export const MAMMOTH_CATALOG_GLB_PRIMARY_URI: Readonly<Record<string, string>> =
   apple: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/apple.glb`,
   "water-bottle": `${MAMMOTH_STATIC_MODEL_BASE}/consumables/water-bottle.glb`,
   rakija: `${MAMMOTH_STATIC_MODEL_BASE}/consumables/rakija.glb`,
+  "balcony-grow-substrate": `${MAMMOTH_STATIC_MODEL_BASE}/objects/compost.glb`,
 };
 
 /** Catalog def ids that share the balcony grow preview mesh (never `grow-tray.glb`). */
 const BALCONY_GROW_CATALOG_PREVIEW_DEF_IDS = new Set<string>([
-  "balcony-grow-substrate",
   "lovage-seeds",
   "parsley-seeds",
   "dill-seeds",

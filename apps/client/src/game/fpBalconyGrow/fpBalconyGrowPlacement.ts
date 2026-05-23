@@ -225,7 +225,7 @@ export function syncBalconyGrowPlacementPreview(
     {
       worldPosition: _previewPosScratch,
       worldQuaternion: new THREE.Quaternion().setFromRotationMatrix(placement.trayObject.matrixWorld),
-      scale: balconyGrowStageVisualScale("sapling", cropScale),
+      scale: balconyGrowStageVisualScale("seed", cropScale),
       balconyGrowTint: def?.balconyGrow?.stageTint ?? "#3d8b4a",
     },
     placement.valid,

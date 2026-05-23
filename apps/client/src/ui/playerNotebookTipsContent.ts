@@ -7,6 +7,16 @@ export type PlayerNotebookTipSection = {
 
 export const PLAYER_NOTEBOOK_TIPS: readonly PlayerNotebookTipSection[] = [
   {
+    heading: "Inventory & hotbar (Tab)",
+    lines: [
+      "Tab opens pockets + hotbar. Drag between slots, stash panels, and the world.",
+      "LMB drag = whole stack. MMB drag = half stack (stackables only). RMB drag = one item.",
+      "RMB click (no drag) = quick-transfer to hotbar or open stash.",
+      "Drop same item onto same item = stacks merge up to the stack limit.",
+      "Hotbar: click a slot to select. Click again on food/drink/smokes to use.",
+    ],
+  },
+  {
     heading: "Don't forget the basics",
     lines: [
       "E = use thing you're looking at. Tab = inventory + hotbar.",

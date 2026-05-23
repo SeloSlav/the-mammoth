@@ -12,13 +12,13 @@ import type {
 
 } from "./inventoryDragDropTypes";
 
-import { mammothHalfStackDragQuantity } from "./inventoryStackSplit";
+import { mammothInventoryResolveDropResult } from "./inventoryDragDropHelpers";
+
+import { mammothHalfStackDragQuantity, mammothSingleUnitDragQuantity } from "./inventoryStackSplit";
 
 import { mammothShowStackQuantityOnSlotIcon } from "./inventoryStackBadge";
 
 import {
-
-  playInventoryItemDragDropSound,
 
   playInventoryItemDragPickSound,
 
@@ -38,8 +38,7 @@ type Props = {
 
   onActivate?: () => void;
 
-  /** Right-click: browser menu suppressed; used for quick move (inventory ↔ hotbar). */
-
+  /** Right-click without drag: quick move (inventory ↔ hotbar / stash). Right-click drag moves one unit. */
   onItemContextMenu?: () => void;
 
   /** Inventory/hotbar hover tooltip — cleared when drag starts. */
@@ -170,7 +169,7 @@ export function MammothDraggableItem({
 
   const onMouseDown = (e: React.MouseEvent) => {
 
-      if (e.button !== 0 && e.button !== 1) return;
+      if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
 
       const splitDrag =
 
@@ -180,11 +179,17 @@ export function MammothDraggableItem({
 
           : null;
 
+      const singleUnitDrag =
+
+        e.button === 2 ? mammothSingleUnitDragQuantity(item.instance.quantity) : null;
+
       if (e.button === 1 && splitDrag == null) return;
 
+      if (e.button === 2 && singleUnitDrag == null) return;
 
 
-      if (e.button === 1) {
+
+      if (e.button === 1 || e.button === 2) {
 
         e.preventDefault();
 
@@ -194,7 +199,7 @@ export function MammothDraggableItem({
 
 
 
-      const dragQuantity = splitDrag ?? item.instance.quantity;
+      const dragQuantity = splitDrag ?? singleUnitDrag ?? item.instance.quantity;
 
       draggingRef.current = false;
 
@@ -256,11 +261,11 @@ export function MammothDraggableItem({
 
           if (ev.button === 0 && onActivateRef.current) onActivateRef.current();
 
+          else if (ev.button === 2 && onItemContextMenuRef.current) onItemContextMenuRef.current();
+
           return;
 
         }
-
-        playInventoryItemDragDropSound();
 
         draggingRef.current = false;
 
@@ -268,37 +273,7 @@ export function MammothDraggableItem({
 
         if (ref.current) ref.current.style.opacity = "1";
 
-        let result: MammothDropResult = { kind: "world" };
-
-        const el = document.elementFromPoint(ev.clientX, ev.clientY);
-
-        const slot = el?.closest("[data-slot-type]") as HTMLElement | null;
-
-        if (slot) {
-
-          const type = slot.getAttribute("data-slot-type") as MammothDragSourceSlotInfo["type"] | null;
-
-          const idx = slot.getAttribute("data-slot-index");
-
-          if ((type === "inventory" || type === "hotbar" || type === "stash") && idx !== null) {
-
-            const index = Number.parseInt(idx, 10);
-
-            if (!Number.isNaN(index)) {
-
-              const targetSlot: MammothDragSourceSlotInfo = { type, index };
-
-              const same =
-
-                targetSlot.type === sourceSlot.type && targetSlot.index === sourceSlot.index;
-
-              result = same ? { kind: "cancel" } : { kind: "slot", slot: targetSlot };
-
-            }
-
-          }
-
-        }
+        const result = mammothInventoryResolveDropResult(ev.clientX, ev.clientY, sourceSlot);
 
         const g = ghostRef.current;
 
@@ -325,10 +300,6 @@ export function MammothDraggableItem({
     e.preventDefault();
 
     e.stopPropagation();
-
-    if (document.body.classList.contains("item-dragging")) return;
-
-    onItemContextMenuRef.current?.();
 
   };
 

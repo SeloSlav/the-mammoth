@@ -106,6 +106,7 @@ import {
 import {
   growTrayIdForPlacement,
   isGrowTrayModelPath,
+  resolveGrowTrayDecorModelRelPath,
 } from "../fpBalconyGrow/fpBalconyGrowTrayDecor.js";
 import { type BalconyGrowTrayPrompt } from "../fpBalconyGrow/fpBalconyGrowPrompt.js";
 import { createFpBalconyGrowDecorBridge } from "../fpBalconyGrow/fpBalconyGrowDecorBridge.js";
@@ -987,12 +988,13 @@ export function mountFpApartmentDecorMeshes(opts: {
       }
 
       const d = entry.decor;
+      const effectiveModelRelPath = resolveGrowTrayDecorModelRelPath(d.modelRelPath);
 
-      const url = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(d.modelRelPath));
+      const url = await resolveStaticModelFetchUrl(apartmentDecorFetchPath(effectiveModelRelPath));
       let template = templateByUrl.get(url);
       if (!template) {
         try {
-          template = await loadDecorTemplate(url, d.modelRelPath);
+          template = await loadDecorTemplate(url, effectiveModelRelPath);
           if (disposed || epoch !== buildEpoch) return;
           template.userData.mammothApartmentDecorTemplate = url;
           templateByUrl.set(url, template);
@@ -1010,7 +1012,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (d.decorId !== null) g.userData.mammothApartmentDecorId = d.decorId;
       g.userData.mammothApartmentUnitKey = d.unit.unitKey;
       g.userData.mammothPlateLevelIndex = d.unit.level;
-      g.userData.mammothApartmentDecorModelRelPath = d.modelRelPath;
+      g.userData.mammothApartmentDecorModelRelPath = effectiveModelRelPath;
       g.userData.mammothApartmentDecorPlacedKind = d.placedKind;
       g.position.set(d.posX, d.posY, d.posZ);
       g.rotation.order = "YXZ";
@@ -1029,7 +1031,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       vis.userData.mammothApartmentUnitKey = d.unit.unitKey;
       vis.traverse((o) => {
         if (o instanceof THREE.Mesh) {
-          moodGradeMammothApartmentDecorMesh(o, { modelRelPath: d.modelRelPath });
+          moodGradeMammothApartmentDecorMesh(o, { modelRelPath: effectiveModelRelPath });
           o.frustumCulled = true;
           o.userData.mammothUnitInterior = true;
           o.userData.mammothPlateLevelIndex = d.unit.level;
@@ -1120,7 +1122,7 @@ export function mountFpApartmentDecorMeshes(opts: {
             ? `decor:${d.decorId.toString()}`
             : `content:${d.unit.unitKey}:${d.renderKey}`;
         notebookPick.name = `apartment_notebook_pick:${notebookKey}`;
-        fitApartmentInteractionPickToObject(g, notebookPick, { x: 0.22, y: 0.12, z: 0.22 });
+        fitApartmentInteractionPickToObject(g, notebookPick, { x: 0.16, y: 0.1, z: 0.16 });
         notebookPick.userData.mammothApartmentNotebookKey = notebookKey;
         notebookPick.userData.mammothApartmentNotebookUnitKey = d.unit.unitKey;
         notebookPick.userData.mammothApartmentNotebookRoot = g;
@@ -1135,7 +1137,7 @@ export function mountFpApartmentDecorMeshes(opts: {
       tagApartmentDecorGroupVisibilityMetadata(g);
       tagResidentialUnitInteriorMeshesUnder(g);
       tagApartmentDecorPropMeshesForMirrorExclusion(g);
-      applyApartmentDecorCastShadowFlags(g, d.modelRelPath);
+      applyApartmentDecorCastShadowFlags(g, effectiveModelRelPath);
 
       groupByRenderKey.set(d.renderKey, g);
       if (d.decorId !== null) groupByDecorId.set(d.decorId, g);

@@ -483,6 +483,9 @@ pub(crate) fn transfer_inventory_row_quantity(
                 }
             }
             Err(()) => {
+                if item_to_move.def_id == target_item.def_id && max_stack > 1 {
+                    return Ok(());
+                }
                 let mut occ = inv
                     .instance_id()
                     .find(target_item.instance_id)
@@ -658,5 +661,55 @@ pub fn consume_hotbar_item(ctx: &ReducerContext, hotbar_slot: u8) {
     };
     if let Some(pose) = ctx.db.player_pose().identity().find(&sender) {
         world_sound::emit_hotbar_consume_at(ctx, kind, pose.x, pose.y + 0.92, pose.z, sender);
+    }
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::try_merge_into;
+    use crate::inventory::InventoryItem;
+    use crate::inventory::ItemLocation;
+
+    fn row(id: u64, def_id: &str, quantity: u32) -> InventoryItem {
+        InventoryItem {
+            instance_id: id,
+            def_id: def_id.to_string(),
+            quantity,
+            location: ItemLocation::Unknown,
+        }
+    }
+
+    #[test]
+    fn try_merge_into_combines_compatible_stacks() {
+        let source = row(1, "bandage", 4);
+        let target = row(2, "bandage", 3);
+        let (new_source, new_target, delete_source) = try_merge_into(&source, &target, 10).unwrap();
+        assert_eq!(new_source, 0);
+        assert_eq!(new_target, 7);
+        assert!(delete_source);
+    }
+
+    #[test]
+    fn try_merge_into_respects_stack_limit() {
+        let source = row(1, "bandage", 5);
+        let target = row(2, "bandage", 8);
+        let (new_source, new_target, delete_source) = try_merge_into(&source, &target, 10).unwrap();
+        assert_eq!(new_source, 3);
+        assert_eq!(new_target, 10);
+        assert!(!delete_source);
+    }
+
+    #[test]
+    fn try_merge_into_rejects_full_target() {
+        let source = row(1, "bandage", 4);
+        let target = row(2, "bandage", 10);
+        assert!(try_merge_into(&source, &target, 10).is_err());
+    }
+
+    #[test]
+    fn try_merge_into_rejects_different_items() {
+        let source = row(1, "bandage", 4);
+        let target = row(2, "apple", 3);
+        assert!(try_merge_into(&source, &target, 10).is_err());
     }
 }

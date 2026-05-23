@@ -119,6 +119,45 @@ describe("inventoryOptimistic", () => {
     expect(next?.hotbar[0]?.instance.quantity).toBe(1);
     expect(next?.hotbar[1]?.instance.quantity).toBe(5);
   });
+
+  it("predictSlotMove merges a full stack into a compatible stack", () => {
+    const grids = {
+      hotbar: [item(601, "bandage", 4, 10), item(602, "bandage", 3, 10), null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictSlotMove(
+      grids,
+      { type: "hotbar", index: 0 },
+      { type: "hotbar", index: 1 },
+    );
+    expect(next?.hotbar[0]).toBeNull();
+    expect(next?.hotbar[1]?.instance.instanceId).toBe(602n);
+    expect(next?.hotbar[1]?.instance.quantity).toBe(7);
+  });
+
+  it("predictSlotMove partially merges when the target only has partial room", () => {
+    const grids = {
+      hotbar: [item(701, "bandage", 5, 10), item(702, "bandage", 8, 10), null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    const next = predictSlotMove(
+      grids,
+      { type: "hotbar", index: 0 },
+      { type: "hotbar", index: 1 },
+    );
+    expect(next?.hotbar[0]?.instance.quantity).toBe(3);
+    expect(next?.hotbar[1]?.instance.quantity).toBe(10);
+  });
+
+  it("predictSlotMove cancels when dropping onto a full stack of the same item", () => {
+    const grids = {
+      hotbar: [item(801, "bandage", 4, 10), item(802, "bandage", 10, 10), null, null, null, null],
+      inventory: Array.from({ length: 24 }, () => null),
+    };
+    expect(
+      predictSlotMove(grids, { type: "hotbar", index: 0 }, { type: "hotbar", index: 1 }),
+    ).toBeNull();
+  });
 });
 
 describe("inventorySlotGridsMatch", () => {
