@@ -708,6 +708,46 @@ export function EditorChromeMyApartment(props: {
         </div>
         <div
           style={{ ...editorChromeSection, scrollMarginTop: 6 }}
+          id={EDITOR_CHROME_SECTION.aptSceneGizmo}
+        >
+          <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & gizmo</EditorChromeSectionTitleIcon>
+          <EditorChromeSceneGizmoBlock
+            omitSectionHeading
+            transformMode={transformMode}
+            setTransformMode={setTransformMode}
+            gridSnapM={gridSnapM}
+            setGridSnapM={setGridSnapM}
+            decorNeighborAlignSnap={decorNeighborAlignSnap}
+            setDecorNeighborAlignSnap={setDecorNeighborAlignSnap}
+            apartmentBakedFloorShadowsEnabled={apartmentBakedFloorShadowsEnabled}
+            setApartmentBakedFloorShadowsEnabled={setApartmentBakedFloorShadowsEnabled}
+            apartmentPracticalLightsEnabled={apartmentPracticalLightsEnabled}
+            setApartmentPracticalLightsEnabled={setApartmentPracticalLightsEnabled}
+            myApartmentLayoutHidePickMode={myApartmentLayoutHidePickMode}
+            setMyApartmentLayoutHidePickMode={setMyApartmentLayoutHidePickMode}
+            myApartmentLayoutHiddenCount={myApartmentLayoutHiddenPlacementIds.length}
+            clearMyApartmentLayoutHiddenPlacements={clearMyApartmentLayoutHiddenPlacements}
+            myApartmentLayoutHints={apartmentSceneGizmoHints}
+            decorIgnoreSupportSurfacesWhileTranslating={
+              selectedDecor
+                ? {
+                    checked: selectedDecor.ignoreSupportSurfaces === true,
+                    onCheckedChange: (ignoreSupportSurfaces) => {
+                      const decorId = selectedDecor.id;
+                      patchOwnedApartmentBuiltins((doc) => ({
+                        ...doc,
+                        placedItems: doc.placedItems.map((item) =>
+                          item.id === decorId ? { ...item, ignoreSupportSurfaces } : item,
+                        ),
+                      }));
+                    },
+                  }
+                : undefined
+            }
+          />
+        </div>
+        <div
+          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
           id={EDITOR_CHROME_SECTION.placedDecor}
         >
           <EditorChromeSectionTitleIcon icon={faTableCells}>Placed décor</EditorChromeSectionTitleIcon>
@@ -789,46 +829,6 @@ export function EditorChromeMyApartment(props: {
             ) : null}
           </p>
         ) : null}
-        </div>
-        <div
-          style={{ ...editorChromeSection, scrollMarginTop: 6 }}
-          id={EDITOR_CHROME_SECTION.aptSceneGizmo}
-        >
-          <EditorChromeSectionTitleIcon icon={faArrowsRotate}>Scene & gizmo</EditorChromeSectionTitleIcon>
-          <EditorChromeSceneGizmoBlock
-            omitSectionHeading
-            transformMode={transformMode}
-            setTransformMode={setTransformMode}
-            gridSnapM={gridSnapM}
-            setGridSnapM={setGridSnapM}
-            decorNeighborAlignSnap={decorNeighborAlignSnap}
-            setDecorNeighborAlignSnap={setDecorNeighborAlignSnap}
-            apartmentBakedFloorShadowsEnabled={apartmentBakedFloorShadowsEnabled}
-            setApartmentBakedFloorShadowsEnabled={setApartmentBakedFloorShadowsEnabled}
-            apartmentPracticalLightsEnabled={apartmentPracticalLightsEnabled}
-            setApartmentPracticalLightsEnabled={setApartmentPracticalLightsEnabled}
-            myApartmentLayoutHidePickMode={myApartmentLayoutHidePickMode}
-            setMyApartmentLayoutHidePickMode={setMyApartmentLayoutHidePickMode}
-            myApartmentLayoutHiddenCount={myApartmentLayoutHiddenPlacementIds.length}
-            clearMyApartmentLayoutHiddenPlacements={clearMyApartmentLayoutHiddenPlacements}
-            myApartmentLayoutHints={apartmentSceneGizmoHints}
-            decorIgnoreSupportSurfacesWhileTranslating={
-              selectedDecor
-                ? {
-                    checked: selectedDecor.ignoreSupportSurfaces === true,
-                    onCheckedChange: (ignoreSupportSurfaces) => {
-                      const decorId = selectedDecor.id;
-                      patchOwnedApartmentBuiltins((doc) => ({
-                        ...doc,
-                        placedItems: doc.placedItems.map((item) =>
-                          item.id === decorId ? { ...item, ignoreSupportSurfaces } : item,
-                        ),
-                      }));
-                    },
-                  }
-                : undefined
-            }
-          />
         </div>
         <div
           style={{ ...editorChromeSection, scrollMarginTop: 6 }}

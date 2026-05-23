@@ -345,8 +345,8 @@ export function EditorChrome() {
     if (mode === "my_apartment_layout") {
       items.push(
         { id: EDITOR_CHROME_SECTION.importDecor, label: "Import décor", icon: faCloudArrowDown },
-        { id: EDITOR_CHROME_SECTION.placedDecor, label: "Placed décor", icon: faTableCells },
         { id: EDITOR_CHROME_SECTION.aptSceneGizmo, label: "Scene & gizmo", icon: faArrowsRotate },
+        { id: EDITOR_CHROME_SECTION.placedDecor, label: "Placed décor", icon: faTableCells },
         { id: EDITOR_CHROME_SECTION.savedGroups, label: "Saved groups", icon: faObjectGroup },
         { id: EDITOR_CHROME_SECTION.mirrors, label: "Mirrors", icon: faWindowRestore },
         { id: EDITOR_CHROME_SECTION.partitionWalls, label: "Partition walls", icon: faGripLinesVertical },

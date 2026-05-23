@@ -28,7 +28,7 @@ import {
   type OwnedApartmentWallMaterial,
   type OwnedApartmentWallOpening,
   effectiveOwnedApartmentPlacedKind,
-  ownedApartmentDecorRootScaleXYZ,
+  resolveOwnedApartmentDecorRootScale,
   ownedApartmentPlacedItemKindHasStash,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
   apartmentSittableSpecForPlacedItem,
@@ -205,6 +205,9 @@ type VisibleDecorPlacement = {
   rollRad: number;
   uniformScale: number;
   verticalScaleMul: number;
+  scaleX?: number;
+  scaleY?: number;
+  scaleZ?: number;
   source: "db" | "content";
 };
 
@@ -311,6 +314,9 @@ function visibleDecorPlacements(
         rollRad: decor.roll,
         uniformScale: decor.uniformScale,
         verticalScaleMul: decor.verticalScaleMul,
+        scaleX: decor.scaleX,
+        scaleY: decor.scaleY,
+        scaleZ: decor.scaleZ,
         source: "content",
       });
     }
@@ -1034,10 +1040,14 @@ export function mountFpApartmentDecorMeshes(opts: {
       g.rotation.y = d.yawRad;
       g.rotation.x = d.pitchRad;
       g.rotation.z = d.rollRad;
-      const us = Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1;
-      const yMul =
-        Number.isFinite(d.verticalScaleMul) && d.verticalScaleMul > 0 ? d.verticalScaleMul : 1;
-      const s = ownedApartmentDecorRootScaleXYZ(us, yMul);
+      const s = resolveOwnedApartmentDecorRootScale({
+        uniformScale: Number.isFinite(d.uniformScale) && d.uniformScale > 0 ? d.uniformScale : 1,
+        verticalScaleMul:
+          Number.isFinite(d.verticalScaleMul) && d.verticalScaleMul > 0 ? d.verticalScaleMul : 1,
+        scaleX: d.scaleX,
+        scaleY: d.scaleY,
+        scaleZ: d.scaleZ,
+      });
       g.scale.set(s.x, s.y, s.z);
 
       const vis = template!.clone(true);

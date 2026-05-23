@@ -99,6 +99,9 @@ export type ApartmentDecorPose = {
   roll: number;
   uniformScale: number;
   verticalScaleMul: number;
+  scaleX?: number;
+  scaleY?: number;
+  scaleZ?: number;
 };
 
 /**
@@ -128,6 +131,9 @@ export function resolveApartmentDecorPoses(
     roll: item.rollRad ?? 0,
     uniformScale: item.uniformScale,
     verticalScaleMul: item.verticalScaleMul ?? 1,
+    scaleX: item.scaleX,
+    scaleY: item.scaleY,
+    scaleZ: item.scaleZ,
   }));
 }
 

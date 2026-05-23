@@ -68,7 +68,7 @@ export function effectiveOwnedApartmentPlacedKind(
   return ownedApartmentPlacedItemKindFromModelRelPath(modelRelPath);
 }
 
-/** Root scale applied to placed decor in editor + client (`uniformScale` on X/Z, stretch on Y). */
+/** Root scale applied to placed decor in editor + client. Prefer `scaleX`/`scaleY`/`scaleZ` when set. */
 export function ownedApartmentDecorRootScaleXYZ(
   uniformScale: number,
   verticalScaleMul = 1,
@@ -76,6 +76,61 @@ export function ownedApartmentDecorRootScaleXYZ(
   const u = Math.min(5.5, Math.max(0.02, uniformScale));
   const yMul = Math.min(5.5, Math.max(0.02, verticalScaleMul));
   return { x: u, y: u * yMul, z: u };
+}
+
+export function clampOwnedApartmentDecorScaleComponent(s: number): number {
+  return Math.min(5.5, Math.max(0.02, s));
+}
+
+export type OwnedApartmentDecorRootScaleFields = {
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  uniformScale: number;
+  verticalScaleMul: number;
+};
+
+export function resolveOwnedApartmentDecorRootScale(item: {
+  uniformScale: number;
+  verticalScaleMul?: number;
+  scaleX?: number;
+  scaleY?: number;
+  scaleZ?: number;
+}): { x: number; y: number; z: number } {
+  if (
+    typeof item.scaleX === "number" &&
+    typeof item.scaleY === "number" &&
+    typeof item.scaleZ === "number"
+  ) {
+    return {
+      x: clampOwnedApartmentDecorScaleComponent(item.scaleX),
+      y: clampOwnedApartmentDecorScaleComponent(item.scaleY),
+      z: clampOwnedApartmentDecorScaleComponent(item.scaleZ),
+    };
+  }
+  return ownedApartmentDecorRootScaleXYZ(item.uniformScale, item.verticalScaleMul ?? 1);
+}
+
+/** Map a decor root's live scale into JSON fields (per-axis + legacy aggregates). */
+export function ownedApartmentDecorRootScaleFromComponents(scale: {
+  x: number;
+  y: number;
+  z: number;
+}): OwnedApartmentDecorRootScaleFields {
+  const scaleX = clampOwnedApartmentDecorScaleComponent(scale.x);
+  const scaleY = clampOwnedApartmentDecorScaleComponent(scale.y);
+  const scaleZ = clampOwnedApartmentDecorScaleComponent(scale.z);
+  const nearUniform =
+    Math.abs(scaleX - scaleY) < 1e-3 && Math.abs(scaleY - scaleZ) < 1e-3;
+  if (nearUniform) {
+    const uniformScale = (scaleX + scaleY + scaleZ) / 3;
+    return { scaleX, scaleY, scaleZ, uniformScale, verticalScaleMul: 1 };
+  }
+  const uniformScale = (scaleX + scaleZ) * 0.5;
+  const verticalScaleMul = clampOwnedApartmentDecorScaleComponent(
+    scaleY / Math.max(uniformScale, 1e-9),
+  );
+  return { scaleX, scaleY, scaleZ, uniformScale, verticalScaleMul };
 }
 
 export function ownedApartmentPlacedItemKindHasStash(
@@ -232,10 +287,14 @@ const OwnedApartmentPlacedItemSchemaCore = z.object({
     .default(0),
   uniformScale: z.number().min(0.02).max(5.5),
   /**
-   * Extra Y stretch relative to `uniformScale` (1 = no stretch). Set by editor axis scale on the
-   * green handle; center handle resets this to 1.
+   * Extra Y stretch relative to `uniformScale` (1 = no stretch). Legacy aggregate when `scaleY`
+   * is omitted — prefer explicit `scaleX` / `scaleY` / `scaleZ` from the editor gizmo.
    */
   verticalScaleMul: z.number().min(0.02).max(5.5).default(1),
+  /** Per-axis root scale from the editor gizmo (optional — falls back to uniformScale + verticalScaleMul). */
+  scaleX: z.number().min(0.02).max(5.5).optional(),
+  scaleY: z.number().min(0.02).max(5.5).optional(),
+  scaleZ: z.number().min(0.02).max(5.5).optional(),
   /** When true, editor translate ignores tabletop/object support surfaces for fine manual placement. */
   ignoreSupportSurfaces: z.boolean().default(false),
   /** Gameplay role for this instance; `plain` is visual-only decor. */

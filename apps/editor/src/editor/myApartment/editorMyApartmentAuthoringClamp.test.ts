@@ -133,8 +133,9 @@ describe("owned apartment authoring XZ clamp", () => {
     expect(decor.position.x).toBeCloseTo(-3.25, 6);
     expect(decor.position.y).toBeCloseTo(freeY, 6);
     expect(decor.position.z).toBeCloseTo(-4.5, 6);
-    expect(decor.scale.x).toBeCloseTo(decor.scale.y, 6);
-    expect(decor.scale.y).toBeCloseTo(decor.scale.z, 6);
+    expect(decor.scale.x).toBeCloseTo(1.7, 6);
+    expect(decor.scale.y).toBeCloseTo(1.4, 6);
+    expect(decor.scale.z).toBeCloseTo(1.2, 6);
     const eulerAfter = new THREE.Euler().setFromQuaternion(decor.quaternion, "YXZ");
     expect(eulerAfter.x).toBeCloseTo(0.31, 5);
     expect(eulerAfter.y).toBeCloseTo(0.44, 5);

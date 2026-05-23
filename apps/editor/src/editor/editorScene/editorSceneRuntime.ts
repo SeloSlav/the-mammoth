@@ -21,6 +21,10 @@ import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
 import { disposeSceneEnvironment } from "../scene/disposeSubtree.js";
 import { registerEditorSpawnCalculator } from "../bridges/spawnBridge.js";
+import {
+  registerEditorSelectionTargetResolver,
+  unregisterEditorSelectionTargetResolver,
+} from "../scene/editorSelectionTargetBridge.js";
 import { registerEditorNavigationBridge } from "../bridges/editorNavigationBridge.js";
 import { FpSelectionAabbOutline } from "../fpAuthoring/fpSelectionAabbOutline.js";
 import { PreviewSelectionShapeOutline } from "../scene/previewSelectionShapeOutline.js";
@@ -694,6 +698,11 @@ export async function mountEditorScene(
       },
       landingKitPickOptions,
     });
+
+  registerEditorSelectionTargetResolver(() => {
+    const attached = transformControls.object as THREE.Object3D | undefined;
+    return findBestSelectionTarget() ?? attached ?? null;
+  });
 
   registerEditorNavigationBridge({
     frameEditorBuilding: () => frameObject(structuralState.buildingRoot),
@@ -1431,6 +1440,7 @@ export async function mountEditorScene(
     scene.remove(previewSelectionOutline);
     registerEditorMyApartmentLayoutPersistFromSceneRequest(null);
     registerEditorFillWallOpeningRequest(null);
+    unregisterEditorSelectionTargetResolver();
     disposeMyApartmentAuthoring();
     apartmentInteriorSceneRig.dispose();
     disposeEditorStructuralRoot(structuralState, contentRoot);

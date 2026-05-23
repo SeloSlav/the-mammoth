@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import {
   OWNED_APARTMENT_DECOR_UNIFORM_SCALE_MIN,
-  ownedApartmentDecorRootScaleXYZ,
+  ownedApartmentDecorRootScaleFromComponents,
+  resolveOwnedApartmentDecorRootScale,
+  type OwnedApartmentDecorRootScaleFields,
 } from "@the-mammoth/schemas";
 
 export const EDITOR_MY_APARTMENT_DECOR_UNIFORM_SCALE_MAX = 5.5 as const;
@@ -19,53 +21,48 @@ export type MyApartmentDecorScaleGesturePin = {
   startScale: THREE.Vector3;
 };
 
-/** True when the gizmo handle drives uniform scale (not a single-axis stretch). */
+/** Center cube only — proportional scale on all three axes. */
 export function isMyApartmentDecorUniformScaleAxis(axis: string | null | undefined): boolean {
-  if (!axis) return true;
-  return axis !== "X" && axis !== "Y" && axis !== "Z";
+  if (!axis) return false;
+  return axis === "XYZ" || axis === "E" || axis === "XYZE";
 }
 
-/** Sample a uniform scale factor from the axes the active gizmo handle is allowed to move. */
+/** Sample a uniform scale factor from the center-cube gizmo drag. */
 export function myApartmentDecorUniformScaleSampleFromGizmo(
   root: THREE.Object3D,
-  axis?: string | null,
 ): number {
   const { x, y, z } = root.scale;
-  if (axis === "XY") return (x + y) * 0.5;
-  if (axis === "YZ") return (y + z) * 0.5;
-  if (axis === "XZ") return (x + z) * 0.5;
   return (x + y + z) / 3;
 }
 
-/**
- * Apply uniform scale from gizmo drag (center cube, plane squares) or legacy commit paths.
- */
-export function applyMyApartmentDecorUniformScale(
-  root: THREE.Object3D,
-  axis?: string | null,
-): void {
+/** Apply proportional scale from the center cube (all axes equal). */
+export function applyMyApartmentDecorUniformScale(root: THREE.Object3D): void {
   const uniform = clampOwnedApartmentDecorUniformScale(
-    myApartmentDecorUniformScaleSampleFromGizmo(root, axis),
+    myApartmentDecorUniformScaleSampleFromGizmo(root),
   );
   root.scale.setScalar(uniform);
 }
 
-/** Apply authored `uniformScale` + optional vertical stretch for reload / commit. */
+export type MyApartmentDecorRootScaleSource = {
+  uniformScale: number;
+  verticalScaleMul?: number;
+  scaleX?: number;
+  scaleY?: number;
+  scaleZ?: number;
+};
+
+/** Apply authored decor scale for reload / commit. */
 export function applyMyApartmentDecorRootScaleFromDoc(
   root: THREE.Object3D,
-  uniformScale: number,
-  verticalScaleMul = 1,
+  scaleSource: MyApartmentDecorRootScaleSource,
 ): void {
-  const { x, y, z } = ownedApartmentDecorRootScaleXYZ(
-    clampOwnedApartmentDecorUniformScale(uniformScale),
-    clampOwnedApartmentDecorUniformScale(verticalScaleMul),
-  );
+  const { x, y, z } = resolveOwnedApartmentDecorRootScale(scaleSource);
   root.scale.set(x, y, z);
 }
 
 /**
- * During scale drags: center handle stays uniform; axis handles stretch one dimension
- * (e.g. green Y handle → taller, X/Z pinned to gesture start).
+ * During scale drags: axis handles stretch one dimension; plane squares scale their plane;
+ * center cube scales proportionally on X/Y/Z.
  */
 export function constrainMyApartmentDecorScaleFromGizmo(
   root: THREE.Object3D,
@@ -77,18 +74,17 @@ export function constrainMyApartmentDecorScaleFromGizmo(
   },
 ): void {
   if (opts.transformMode !== "scale") {
-    applyMyApartmentDecorUniformScale(root);
     return;
   }
   if (isMyApartmentDecorUniformScaleAxis(opts.axis)) {
-    applyMyApartmentDecorUniformScale(root, opts.axis);
+    applyMyApartmentDecorUniformScale(root);
     return;
   }
   const pin = opts.gesturePin;
-  if (pin && opts.dragging) {
-    if (opts.axis!.indexOf("X") === -1) root.scale.x = pin.startScale.x;
-    if (opts.axis!.indexOf("Y") === -1) root.scale.y = pin.startScale.y;
-    if (opts.axis!.indexOf("Z") === -1) root.scale.z = pin.startScale.z;
+  if (pin && opts.dragging && opts.axis) {
+    if (opts.axis.indexOf("X") === -1) root.scale.x = pin.startScale.x;
+    if (opts.axis.indexOf("Y") === -1) root.scale.y = pin.startScale.y;
+    if (opts.axis.indexOf("Z") === -1) root.scale.z = pin.startScale.z;
   }
   root.scale.x = clampOwnedApartmentDecorUniformScale(root.scale.x);
   root.scale.y = clampOwnedApartmentDecorUniformScale(root.scale.y);
@@ -96,22 +92,8 @@ export function constrainMyApartmentDecorScaleFromGizmo(
 }
 
 /** Map root scale after a gizmo session into JSON fields. */
-export function readMyApartmentDecorCommittedScale(root: THREE.Object3D): {
-  uniformScale: number;
-  verticalScaleMul: number;
-} {
-  const sx = root.scale.x;
-  const sy = root.scale.y;
-  const sz = root.scale.z;
-  const nearUniform =
-    Math.abs(sx - sy) < 1e-3 && Math.abs(sy - sz) < 1e-3;
-  if (nearUniform) {
-    const uniformScale = clampOwnedApartmentDecorUniformScale((sx + sy + sz) / 3);
-    return { uniformScale, verticalScaleMul: 1 };
-  }
-  const uniformScale = clampOwnedApartmentDecorUniformScale((sx + sz) * 0.5);
-  const verticalScaleMul = clampOwnedApartmentDecorUniformScale(
-    sy / Math.max(uniformScale, 1e-9),
-  );
-  return { uniformScale, verticalScaleMul };
+export function readMyApartmentDecorCommittedScale(
+  root: THREE.Object3D,
+): OwnedApartmentDecorRootScaleFields {
+  return ownedApartmentDecorRootScaleFromComponents(root.scale);
 }

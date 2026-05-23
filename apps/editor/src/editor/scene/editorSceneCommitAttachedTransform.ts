@@ -425,6 +425,9 @@ export function commitEditorAttachedTransform(opts: {
           rollRad: number;
           uniformScale: number;
           verticalScaleMul: number;
+          scaleX: number;
+          scaleY: number;
+          scaleZ: number;
         }
       >();
       const mirrorPatches = new Map<
@@ -503,8 +506,7 @@ export function commitEditorAttachedTransform(opts: {
             rootWorld.x,
             rootWorld.z,
           );
-          const { uniformScale, verticalScaleMul } =
-            readMyApartmentDecorCommittedScale(targetRootChild);
+          const scaleFields = readMyApartmentDecorCommittedScale(targetRootChild);
           const decorKey = decorChildId;
           decorPatches.set(decorKey, {
             fx,
@@ -513,14 +515,16 @@ export function commitEditorAttachedTransform(opts: {
             yawRad: yaw,
             pitchRad: pitch,
             rollRad: roll,
-            uniformScale,
-            verticalScaleMul,
+            ...scaleFields,
           });
-          applyMyApartmentDecorRootScaleFromDoc(
-            targetRootChild,
-            uniformScale,
-            verticalScaleMul,
-          );
+          if (
+            !(
+              deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls) &&
+              store.transformMode === "scale"
+            )
+          ) {
+            applyMyApartmentDecorRootScaleFromDoc(targetRootChild, scaleFields);
+          }
           continue;
         }
 
@@ -717,8 +721,7 @@ export function commitEditorAttachedTransform(opts: {
         rootWorld.x,
         rootWorld.z,
       );
-      const { uniformScale, verticalScaleMul } =
-        readMyApartmentDecorCommittedScale(targetRoot);
+      const scaleFields = readMyApartmentDecorCommittedScale(targetRoot);
       if (
         !deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
       ) {
@@ -734,14 +737,20 @@ export function commitEditorAttachedTransform(opts: {
                   yawRad: yaw,
                   pitchRad: pitch,
                   rollRad: roll,
-                  uniformScale,
-                  verticalScaleMul,
+                  ...scaleFields,
                 }
               : item,
           ),
         }));
       }
-      applyMyApartmentDecorRootScaleFromDoc(targetRoot, uniformScale, verticalScaleMul);
+      if (
+        !(
+          deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls) &&
+          store.transformMode === "scale"
+        )
+      ) {
+        applyMyApartmentDecorRootScaleFromDoc(targetRoot, scaleFields);
+      }
       return;
     }
 

@@ -357,7 +357,6 @@ export function snapMyApartmentDecorEulerToGrid(root: THREE.Object3D): void {
  * Prefer {@link applyMyApartmentDecorUniformScale} + explicit clamp/snap at interaction boundaries.
  */
 export function constrainMyApartmentDecorRootPose(root: THREE.Object3D): void {
-  applyMyApartmentDecorUniformScale(root);
   clampMyApartmentDecorEulerLimits(root);
 }
 
@@ -1109,11 +1108,13 @@ export function applyDecorGroupPoseFromDoc(args: {
     OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
   );
   group.rotation.set(pitch, yaw, roll, "YXZ");
-  applyMyApartmentDecorRootScaleFromDoc(
-    group,
-    decor.uniformScale,
-    decor.verticalScaleMul ?? 1,
-  );
+  applyMyApartmentDecorRootScaleFromDoc(group, {
+    uniformScale: decor.uniformScale,
+    verticalScaleMul: decor.verticalScaleMul ?? 1,
+    scaleX: decor.scaleX,
+    scaleY: decor.scaleY,
+    scaleZ: decor.scaleZ,
+  });
 }
 
 function editorMyApartmentDecorGroups(

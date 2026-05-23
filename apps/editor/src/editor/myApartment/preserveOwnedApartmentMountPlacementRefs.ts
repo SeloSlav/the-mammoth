@@ -1,8 +1,9 @@
-import type {
-  OwnedApartmentBuiltinsDoc,
-  OwnedApartmentMirrorItem,
-  OwnedApartmentPlacedItem,
-  OwnedApartmentWallItem,
+import {
+  resolveOwnedApartmentDecorRootScale,
+  type OwnedApartmentBuiltinsDoc,
+  type OwnedApartmentMirrorItem,
+  type OwnedApartmentPlacedItem,
+  type OwnedApartmentWallItem,
 } from "@the-mammoth/schemas";
 import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 
@@ -10,11 +11,14 @@ export function ownedApartmentPlacedItemStructuralEqual(
   left: OwnedApartmentPlacedItem,
   right: OwnedApartmentPlacedItem,
 ): boolean {
+  const leftScale = resolveOwnedApartmentDecorRootScale(left);
+  const rightScale = resolveOwnedApartmentDecorRootScale(right);
   return (
     left.id === right.id &&
     left.modelRelPath === right.modelRelPath &&
-    left.uniformScale === right.uniformScale &&
-    (left.verticalScaleMul ?? 1) === (right.verticalScaleMul ?? 1) &&
+    leftScale.x === rightScale.x &&
+    leftScale.y === rightScale.y &&
+    leftScale.z === rightScale.z &&
     left.ignoreSupportSurfaces === right.ignoreSupportSurfaces &&
     left.itemKind === right.itemKind
   );
@@ -57,6 +61,8 @@ function placedItemsEqual(
   for (let i = 0; i < a.length; i++) {
     const left = a[i]!;
     const right = b[i]!;
+    const leftScale = resolveOwnedApartmentDecorRootScale(left);
+    const rightScale = resolveOwnedApartmentDecorRootScale(right);
     if (
       left.id !== right.id ||
       left.modelRelPath !== right.modelRelPath ||
@@ -66,8 +72,9 @@ function placedItemsEqual(
       left.yawRad !== right.yawRad ||
       left.pitchRad !== right.pitchRad ||
       left.rollRad !== right.rollRad ||
-      left.uniformScale !== right.uniformScale ||
-      (left.verticalScaleMul ?? 1) !== (right.verticalScaleMul ?? 1) ||
+      leftScale.x !== rightScale.x ||
+      leftScale.y !== rightScale.y ||
+      leftScale.z !== rightScale.z ||
       left.ignoreSupportSurfaces !== right.ignoreSupportSurfaces ||
       left.itemKind !== right.itemKind
     ) {
