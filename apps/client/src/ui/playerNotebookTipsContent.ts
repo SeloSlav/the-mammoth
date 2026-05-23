@@ -41,9 +41,8 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
   },
   {
     kind: "reference",
-    heading: "This flat (if you claimed it)",
+    heading: "This flat",
     lines: [
-      "Unclaimed unit: hold E at the wardrobe with a door lock + screwdriver in inventory.",
       "Footlocker = junk/tools. Wardrobe = clothes/wearables. Fridge = food that rots. Stove = cook stash.",
       "Everything opens with E when you're close enough — same dock as your pockets.",
     ],
@@ -147,7 +146,7 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
     heading: "This flat",
     dateLabel: "17. ožujka — godina?",
     lines: [
-      "Claimed the unit with a lock kit and a screwdriver. Wardrobe still had a coat with a transit tag — 1988 faded to pink. Like the building forgot to update itself when the world stopped.",
+      "Wardrobe still had a coat with a transit tag — 1988 faded to pink. Like the building forgot to update itself when the world stopped.",
       "Footlocker tools fit my hands. Fridge smells of old cold. Stove discs heat slow — nothing like gas, nothing like Marta's paprikaš.",
       "I planted the balcony because idle soil makes me think. Fish tank because noise is company. Notebook because talking to the wall is how they find you odd on inspection days.",
       "If they come back — Marta with her keys, Iva loud, Dario underfoot — this flat should feel lived-in, not like a camp.",

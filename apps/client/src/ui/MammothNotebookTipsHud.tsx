@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import {
   THEME_NOTEBOOK_INK,
   THEME_NOTEBOOK_INK_FAINT,
@@ -19,13 +19,18 @@ import {
   subscribeFpNotebookTipsPanel,
 } from "../game/fpApartment/fpNotebookTipsPanelState";
 import {
+  buildNotebookSpreads,
+  NOTEBOOK_CONTENT_LINES_PER_PAGE,
   NOTEBOOK_OWNER,
-  PLAYER_NOTEBOOK_PAGES,
-  type PlayerNotebookSection,
-} from "./playerNotebookTipsContent";
+  NOTEBOOK_RULE_STEP_PX,
+  type NotebookLayoutBlock,
+  type NotebookSpread,
+} from "./playerNotebookLayout";
 
-const RULE_STEP_PX = 32;
 const MARGIN_X_PX = 56;
+const NOTEBOOK_HEIGHT_PX = 680;
+const FOOTER_HEIGHT_PX = 56;
+const CONTENT_HEIGHT_PX = NOTEBOOK_CONTENT_LINES_PER_PAGE * NOTEBOOK_RULE_STEP_PX;
 
 const overlayStyle: CSSProperties = {
   position: "fixed",
@@ -41,6 +46,7 @@ const overlayStyle: CSSProperties = {
 
 const notebookShellStyle: CSSProperties = {
   width: "min(92vw, 540px)",
+  height: NOTEBOOK_HEIGHT_PX,
   maxHeight: "min(84vh, 680px)",
   display: "flex",
   transform: "rotate(-0.65deg)",
@@ -52,9 +58,9 @@ const ruledPaperBackground = `
   repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent ${RULE_STEP_PX - 1}px,
-    ${THEME_NOTEBOOK_RULE} ${RULE_STEP_PX - 1}px,
-    ${THEME_NOTEBOOK_RULE} ${RULE_STEP_PX}px
+    transparent ${NOTEBOOK_RULE_STEP_PX - 1}px,
+    ${THEME_NOTEBOOK_RULE} ${NOTEBOOK_RULE_STEP_PX - 1}px,
+    ${THEME_NOTEBOOK_RULE} ${NOTEBOOK_RULE_STEP_PX}px
   ),
   linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, transparent 18%),
   ${THEME_NOTEBOOK_PAPER}
@@ -75,25 +81,38 @@ const pageStyle: CSSProperties = {
   overflow: "hidden",
 };
 
-const scrollStyle: CSSProperties = {
-  overflowY: "auto",
-  flex: 1,
-  padding: `8px 28px 12px ${MARGIN_X_PX + 8}px`,
+const contentPaneStyle: CSSProperties = {
+  height: CONTENT_HEIGHT_PX,
+  overflow: "hidden",
+  padding: `4px 28px 0 ${MARGIN_X_PX + 8}px`,
   backgroundImage: ruledPaperBackground,
+  boxSizing: "border-box",
 };
 
-const closeBtnStyle: CSSProperties = {
+const navBtnStyle: CSSProperties = {
   background: "transparent",
   border: "none",
-  padding: "4px 2px",
+  padding: "4px 8px",
   color: THEME_NOTEBOOK_INK,
   cursor: "pointer",
   fontFamily: UI_FONT_NOTEBOOK,
-  fontSize: 22,
-  lineHeight: 1,
+  fontSize: 20,
+  lineHeight: 1.2,
+};
+
+const navBtnDisabledStyle: CSSProperties = {
+  ...navBtnStyle,
+  color: THEME_NOTEBOOK_INK_FAINT,
+  cursor: "default",
+  textDecoration: "none",
+};
+
+const closeBtnStyle: CSSProperties = {
+  ...navBtnStyle,
   textDecoration: "underline",
   textDecorationThickness: 1.5,
   textUnderlineOffset: 5,
+  marginLeft: 12,
 };
 
 const SPIRAL_COUNT = 12;
@@ -133,128 +152,230 @@ function NotebookSpine() {
   );
 }
 
-function sectionKey(section: PlayerNotebookSection): string {
-  return `${section.kind}:${section.dateLabel ?? ""}:${section.heading}`;
+function blockKey(block: NotebookLayoutBlock, index: number): string {
+  return `${block.type}:${index}:${"text" in block ? block.text : ""}`;
 }
 
-function ReferenceSection({ section }: { section: PlayerNotebookSection }) {
-  return (
-    <section style={{ marginBottom: 10 }}>
-      <h2
-        style={{
-          margin: 0,
-          paddingTop: 6,
-          fontSize: 24,
-          fontWeight: 400,
-          lineHeight: `${RULE_STEP_PX}px`,
-          color: THEME_NOTEBOOK_INK,
-          borderBottom: `1.5px solid ${THEME_NOTEBOOK_INK_MUTED}`,
-          display: "inline-block",
-          paddingBottom: 2,
-          marginBottom: 2,
-        }}
-      >
-        {section.heading}
-      </h2>
-      <ul
-        style={{
-          margin: 0,
-          padding: 0,
-          listStyle: "none",
-          fontSize: 20,
-          lineHeight: `${RULE_STEP_PX}px`,
-          color: THEME_NOTEBOOK_INK_MUTED,
-        }}
-      >
-        {section.lines.map((line) => (
-          <li
-            key={line}
-            style={{
-              position: "relative",
-              paddingLeft: 18,
-              minHeight: RULE_STEP_PX,
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                color: THEME_NOTEBOOK_INK_FAINT,
-              }}
-            >
-              –
-            </span>
-            {line}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+const ruledRowStyle: CSSProperties = {
+  height: NOTEBOOK_RULE_STEP_PX,
+  minHeight: NOTEBOOK_RULE_STEP_PX,
+  maxHeight: NOTEBOOK_RULE_STEP_PX,
+  overflow: "hidden",
+  lineHeight: `${NOTEBOOK_RULE_STEP_PX}px`,
+  boxSizing: "border-box",
+};
 
-function DiarySection({ section }: { section: PlayerNotebookSection }) {
-  return (
-    <section style={{ marginBottom: 16 }}>
-      {section.dateLabel ? (
-        <div
-          style={{
-            fontSize: 18,
-            lineHeight: `${RULE_STEP_PX}px`,
-            color: THEME_NOTEBOOK_INK_FAINT,
-            marginBottom: 0,
-          }}
-        >
-          {section.dateLabel}
-        </div>
-      ) : null}
-      <h2
-        style={{
-          margin: 0,
-          fontSize: 26,
-          fontWeight: 400,
-          lineHeight: `${RULE_STEP_PX}px`,
-          color: THEME_NOTEBOOK_INK,
-          fontStyle: "normal",
-        }}
-      >
-        {section.heading}
-      </h2>
-      <div
-        style={{
-          fontSize: 20,
-          lineHeight: `${RULE_STEP_PX}px`,
-          color: THEME_NOTEBOOK_INK_MUTED,
-        }}
-      >
-        {section.lines.map((line) => (
-          <p key={line} style={{ margin: `0 0 ${RULE_STEP_PX}px`, minHeight: RULE_STEP_PX }}>
-            {line}
-          </p>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function DiaryDivider() {
+function NotebookCoverPage() {
   return (
     <div
-      aria-hidden
       style={{
-        margin: "18px 0 14px",
-        paddingTop: 4,
-        borderTop: `2px double ${THEME_NOTEBOOK_INK_FAINT}`,
-        color: THEME_NOTEBOOK_INK_FAINT,
-        fontSize: 20,
-        lineHeight: `${RULE_STEP_PX}px`,
-        letterSpacing: "0.06em",
+        ...contentPaneStyle,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        paddingLeft: MARGIN_X_PX + 8,
       }}
     >
-      private pages
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 12,
+          lineHeight: `${NOTEBOOK_RULE_STEP_PX}px`,
+        }}
+      >
+        <h1
+          id="mammoth-notebook-title"
+          style={{
+            margin: 0,
+            fontSize: 34,
+            fontWeight: 400,
+            letterSpacing: "0.02em",
+          }}
+        >
+          {NOTEBOOK_OWNER.fullName}
+        </h1>
+        <span
+          style={{
+            fontSize: 28,
+            color: THEME_NOTEBOOK_INK_FAINT,
+            letterSpacing: "0.12em",
+          }}
+        >
+          {NOTEBOOK_OWNER.initials}
+        </span>
+      </div>
+      <p
+        style={{
+          margin: "4px 0 0",
+          fontSize: 22,
+          lineHeight: `${NOTEBOOK_RULE_STEP_PX}px`,
+          color: THEME_NOTEBOOK_INK,
+        }}
+      >
+        {NOTEBOOK_OWNER.dateLabel}
+      </p>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 20,
+          lineHeight: `${NOTEBOOK_RULE_STEP_PX}px`,
+          color: THEME_NOTEBOOK_INK_FAINT,
+          maxWidth: "92%",
+        }}
+      >
+        {NOTEBOOK_OWNER.dateNote}
+      </p>
+      <p
+        style={{
+          marginTop: NOTEBOOK_RULE_STEP_PX,
+          fontSize: 18,
+          lineHeight: `${NOTEBOOK_RULE_STEP_PX}px`,
+          color: THEME_NOTEBOOK_INK_FAINT,
+        }}
+      >
+        Next → or arrow keys to turn the page.
+      </p>
     </div>
   );
+}
+
+function NotebookContentPage({ blocks }: { blocks: readonly NotebookLayoutBlock[] }) {
+  return (
+    <div style={contentPaneStyle}>
+      {blocks.map((block, index) => {
+        switch (block.type) {
+          case "ref-heading":
+            return (
+              <h2
+                key={blockKey(block, index)}
+                style={{
+                  ...ruledRowStyle,
+                  margin: 0,
+                  paddingTop: index === 0 ? 2 : 0,
+                  fontSize: 24,
+                  fontWeight: 400,
+                  color: THEME_NOTEBOOK_INK,
+                }}
+              >
+                {block.text}
+              </h2>
+            );
+          case "ref-heading-rule":
+            return (
+              <div
+                key={blockKey(block, index)}
+                aria-hidden
+                style={{
+                  ...ruledRowStyle,
+                  borderBottom: `1.5px solid ${THEME_NOTEBOOK_INK_MUTED}`,
+                }}
+              />
+            );
+          case "ref-bullet":
+            return (
+              <div
+                key={blockKey(block, index)}
+                style={{
+                  ...ruledRowStyle,
+                  position: "relative",
+                  paddingLeft: 18,
+                  fontSize: 20,
+                  color: THEME_NOTEBOOK_INK_MUTED,
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    color: THEME_NOTEBOOK_INK_FAINT,
+                  }}
+                >
+                  –
+                </span>
+                {block.text}
+              </div>
+            );
+          case "diary-divider-bar":
+            return (
+              <div
+                key={blockKey(block, index)}
+                aria-hidden
+                style={{
+                  ...ruledRowStyle,
+                  borderTop: `2px double ${THEME_NOTEBOOK_INK_FAINT}`,
+                }}
+              />
+            );
+          case "diary-divider-label":
+            return (
+              <div
+                key={blockKey(block, index)}
+                aria-hidden
+                style={{
+                  ...ruledRowStyle,
+                  color: THEME_NOTEBOOK_INK_FAINT,
+                  fontSize: 20,
+                  letterSpacing: "0.06em",
+                }}
+              >
+                {block.text}
+              </div>
+            );
+          case "diary-date":
+            return (
+              <div
+                key={blockKey(block, index)}
+                style={{
+                  ...ruledRowStyle,
+                  fontSize: 18,
+                  color: THEME_NOTEBOOK_INK_FAINT,
+                }}
+              >
+                {block.text}
+              </div>
+            );
+          case "diary-heading":
+            return (
+              <h2
+                key={blockKey(block, index)}
+                style={{
+                  ...ruledRowStyle,
+                  margin: 0,
+                  fontSize: 26,
+                  fontWeight: 400,
+                  color: THEME_NOTEBOOK_INK,
+                }}
+              >
+                {block.text}
+              </h2>
+            );
+          case "diary-line":
+            return (
+              <p
+                key={blockKey(block, index)}
+                style={{
+                  ...ruledRowStyle,
+                  margin: 0,
+                  fontSize: 20,
+                  color: THEME_NOTEBOOK_INK_MUTED,
+                }}
+              >
+                {block.text || "\u00A0"}
+              </p>
+            );
+        }
+      })}
+    </div>
+  );
+}
+
+function renderSpread(spread: NotebookSpread) {
+  if (spread.cover) return <NotebookCoverPage />;
+  return <NotebookContentPage blocks={spread.blocks} />;
 }
 
 export function MammothNotebookTipsHud() {
@@ -263,17 +384,51 @@ export function MammothNotebookTipsHud() {
     isFpNotebookTipsPanelOpen,
     isFpNotebookTipsPanelOpen,
   );
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+  const spreads = useMemo(() => buildNotebookSpreads(), [layoutEpoch]);
+  const [pageIndex, setPageIndex] = useState(0);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    let cancelled = false;
+    void document.fonts.ready.then(() => {
+      if (!cancelled) setLayoutEpoch((n) => n + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open) setPageIndex(0);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeFpNotebookTipsPanel();
+      if (e.key === "Escape") {
+        closeFpNotebookTipsPanel();
+        return;
+      }
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        setPageIndex((i) => Math.min(i + 1, spreads.length - 1));
+      }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        setPageIndex((i) => Math.max(i - 1, 0));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, spreads.length]);
 
   if (!open) return null;
+
+  const pageCount = spreads.length;
+  const atStart = pageIndex <= 0;
+  const atEnd = pageIndex >= pageCount - 1;
+  const spread = spreads[pageIndex]!;
 
   return (
     <div style={overlayStyle} onClick={() => closeFpNotebookTipsPanel()}>
@@ -285,92 +440,52 @@ export function MammothNotebookTipsHud() {
           aria-labelledby="mammoth-notebook-title"
           style={pageStyle}
         >
-          <header
-            style={{
-              padding: `18px 28px 6px ${MARGIN_X_PX + 8}px`,
-              borderBottom: `1px solid ${THEME_NOTEBOOK_RULE}`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                gap: 12,
-                lineHeight: `${RULE_STEP_PX}px`,
-              }}
-            >
-              <h1
-                id="mammoth-notebook-title"
-                style={{
-                  margin: 0,
-                  fontSize: 34,
-                  fontWeight: 400,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                {NOTEBOOK_OWNER.fullName}
-              </h1>
-              <span
-                style={{
-                  fontSize: 28,
-                  color: THEME_NOTEBOOK_INK_FAINT,
-                  letterSpacing: "0.12em",
-                }}
-              >
-                {NOTEBOOK_OWNER.initials}
-              </span>
-            </div>
-            <p
-              style={{
-                margin: "2px 0 0",
-                fontSize: 20,
-                lineHeight: `${RULE_STEP_PX}px`,
-                color: THEME_NOTEBOOK_INK,
-              }}
-            >
-              {NOTEBOOK_OWNER.dateLabel}
-            </p>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 18,
-                lineHeight: `${RULE_STEP_PX}px`,
-                color: THEME_NOTEBOOK_INK_FAINT,
-              }}
-            >
-              {NOTEBOOK_OWNER.dateNote}
-            </p>
-          </header>
-
-          <div style={scrollStyle}>
-            {PLAYER_NOTEBOOK_PAGES.map((section, index) => {
-              const prev = index > 0 ? PLAYER_NOTEBOOK_PAGES[index - 1] : null;
-              const showDivider = section.kind === "diary" && prev?.kind === "reference";
-              return (
-                <div key={sectionKey(section)}>
-                  {showDivider ? <DiaryDivider /> : null}
-                  {section.kind === "diary" ? (
-                    <DiarySection section={section} />
-                  ) : (
-                    <ReferenceSection section={section} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {renderSpread(spread)}
 
           <footer
             style={{
-              padding: `8px 28px 18px ${MARGIN_X_PX + 8}px`,
-              display: "flex",
-              justifyContent: "flex-end",
+              height: FOOTER_HEIGHT_PX,
+              boxSizing: "border-box",
+              padding: `8px 22px 12px ${MARGIN_X_PX + 8}px`,
               borderTop: `1px solid ${THEME_NOTEBOOK_RULE}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              flexShrink: 0,
             }}
           >
-            <button type="button" autoFocus style={closeBtnStyle} onClick={() => closeFpNotebookTipsPanel()}>
-              Close (Esc)
+            <button
+              type="button"
+              style={atStart ? navBtnDisabledStyle : navBtnStyle}
+              disabled={atStart}
+              onClick={() => setPageIndex((i) => Math.max(i - 1, 0))}
+            >
+              ← Back
             </button>
+            <span
+              style={{
+                fontSize: 18,
+                color: THEME_NOTEBOOK_INK_FAINT,
+                lineHeight: 1.2,
+                userSelect: "none",
+              }}
+            >
+              {pageIndex + 1} / {pageCount}
+            </span>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <button
+                type="button"
+                style={atEnd ? navBtnDisabledStyle : navBtnStyle}
+                disabled={atEnd}
+                onClick={() => setPageIndex((i) => Math.min(i + 1, pageCount - 1))}
+              >
+                Next →
+              </button>
+              <button type="button" autoFocus style={closeBtnStyle} onClick={() => closeFpNotebookTipsPanel()}>
+                Close
+              </button>
+            </div>
           </footer>
         </div>
       </div>
