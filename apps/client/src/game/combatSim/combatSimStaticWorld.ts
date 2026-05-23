@@ -3,6 +3,7 @@ import { fpLocomotionConstants } from "@the-mammoth/engine";
 import {
   buildCollisionSpatialIndex,
   buildWalkSurfaceSpatialIndex,
+  floorPlaceholderMeshMaterials,
   parseBuildingDoc,
   type CollisionAabb,
 } from "@the-mammoth/world";
@@ -15,6 +16,29 @@ const COMBAT_SIM_ARENA_PAD_M = 6;
 const COMBAT_SIM_FALLBACK_HALF_EXTENT_M = 14;
 const COMBAT_SIM_WALL_HEIGHT_M = 4;
 const COMBAT_SIM_WALL_THICKNESS_M = 0.35;
+/** Matches shell interior concrete tiling (~2.75 m per UV unit at repeat 0.3). */
+const COMBAT_SIM_CONCRETE_TILE_SPAN_M = 2.75 / 0.3;
+
+function cloneTiledConcreteFloorMaterial(
+  widthM: number,
+  depthM: number,
+): THREE.MeshStandardMaterial {
+  const base = floorPlaceholderMeshMaterials.corridorFloor;
+  const mat = base.clone();
+  const repeatX = widthM / COMBAT_SIM_CONCRETE_TILE_SPAN_M;
+  const repeatZ = depthM / COMBAT_SIM_CONCRETE_TILE_SPAN_M;
+  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
+    const src = base[key];
+    if (!src) continue;
+    const cloned = src.clone();
+    cloned.wrapS = THREE.RepeatWrapping;
+    cloned.wrapT = THREE.RepeatWrapping;
+    cloned.repeat.set(repeatX, repeatZ);
+    cloned.needsUpdate = true;
+    mat[key] = cloned;
+  }
+  return mat;
+}
 
 /**
  * Arena-only `FpSessionStaticWorld` for `combatSimMode` — same interface as the megablock mount,
@@ -42,13 +66,12 @@ export function createCombatSimStaticWorld(conn: DbConnection): FpSessionStaticW
   const buildingRoot = new THREE.Group();
   buildingRoot.name = "combat_sim_arena_root";
 
-  const planeGeo = new THREE.PlaneGeometry(width, depth);
+  const planeSegW = Math.min(32, Math.max(4, Math.ceil(width / 4)));
+  const planeSegD = Math.min(32, Math.max(4, Math.ceil(depth / 4)));
+  const planeGeo = new THREE.PlaneGeometry(width, depth, planeSegW, planeSegD);
   planeGeo.rotateX(-Math.PI / 2);
-  const planeMat = new THREE.MeshStandardMaterial({
-    color: 0x8a8f94,
-    roughness: 0.92,
-    metalness: 0.02,
-  });
+  const planeMat = cloneTiledConcreteFloorMaterial(width, depth);
+  planeMat.color.setHex(0xffffff);
   const plane = new THREE.Mesh(planeGeo, planeMat);
   plane.name = "combat_sim_ground_plane";
   plane.position.set(cx, footY, cz);

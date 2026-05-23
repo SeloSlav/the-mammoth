@@ -75,6 +75,7 @@ export default function App() {
         {combatSimPlayActive ? (
           <canvas
             ref={combatCanvasRef}
+            data-mammoth-fp-canvas="1"
             style={{
               display: "block",
               width: "100%",

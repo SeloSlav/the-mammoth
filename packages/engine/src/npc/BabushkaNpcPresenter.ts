@@ -121,6 +121,7 @@ class AnimatedBabushkaBody {
           grounded: snapshot.grounded,
           locomotion: snapshot.locomotion,
           dead,
+          velocity: snapshot.velocity,
         }),
         false,
       );

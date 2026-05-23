@@ -18,7 +18,7 @@ pub const NPC_LOCOMOTION_RUN: u8 = 2;
 pub const BABUSHKA_MAX_HEALTH: f32 = 120.0;
 pub const BABUSHKA_BODY_RADIUS_M: f32 = 0.28;
 pub const BABUSHKA_BODY_HEIGHT_M: f32 = 1.55;
-pub const BABUSHKA_AGGRO_RANGE_M: f32 = 5.5;
+pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
 pub const BABUSHKA_WALK_SPEED_MPS: f32 = 1.45;
 pub const BABUSHKA_MELEE_DAMAGE: f32 = 14.0;
@@ -134,7 +134,16 @@ pub fn apply_npc_damage(ctx: &ReducerContext, npc_id: u64, amount: f32) -> bool 
         row.locomotion = NPC_LOCOMOTION_IDLE;
         row.vel_x = 0.0;
         row.vel_z = 0.0;
-    } else if row.state == NPC_STATE_IDLE {
+        let session_key = row.session_key.clone();
+        let npc_id = row.npc_id;
+        ctx.db.world_npc().npc_id().update(row);
+        ctx.db.world_npc().npc_id().delete(&npc_id);
+        if session_key.starts_with("combat_sim:") {
+            crate::combat_sim::respawn_babushka_for_session(ctx, &session_key);
+        }
+        return true;
+    }
+    if row.state == NPC_STATE_IDLE {
         row.state = NPC_STATE_AGGRO;
     }
     ctx.db.world_npc().npc_id().update(row);
@@ -296,7 +305,8 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
             continue;
         }
 
-        let (target_x, target_z, target_y) = nearest_living_player_feet(ctx, npc.x, npc.y, npc.z);
+        let (target_x, target_z, target_y, target_identity) =
+            ai_target_for_npc(ctx, &npc);
         let planar_dx = target_x - npc.x;
         let planar_dz = target_z - npc.z;
         let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
@@ -324,14 +334,19 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
                 npc.z += vz * dt;
                 npc.y = target_y;
                 npc.yaw = planar_dx.atan2(planar_dz);
-                npc.locomotion = NPC_LOCOMOTION_WALK;
+                let speed_sq = vx * vx + vz * vz;
+                npc.locomotion = if speed_sq > 0.04 {
+                    NPC_LOCOMOTION_WALK
+                } else {
+                    NPC_LOCOMOTION_IDLE
+                };
             } else {
                 npc.vel_x = 0.0;
                 npc.vel_z = 0.0;
                 npc.locomotion = NPC_LOCOMOTION_IDLE;
                 npc.yaw = planar_dx.atan2(planar_dz);
                 if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS {
-                    if let Some(pid) = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z) {
+                    if let Some(pid) = target_identity {
                         npc.last_melee_micros = now_us;
                         npc.melee_presentation_seq = npc.melee_presentation_seq.wrapping_add(1);
                         crate::player_vitals::apply_damage(ctx, pid, BABUSHKA_MELEE_DAMAGE);
@@ -346,6 +361,27 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
 
         ctx.db.world_npc().npc_id().update(npc);
     }
+}
+
+fn ai_target_for_npc(
+    ctx: &ReducerContext,
+    npc: &WorldNpc,
+) -> (f32, f32, f32, Option<Identity>) {
+    if npc.session_key.starts_with("combat_sim:") {
+        if let Some(owner) =
+            crate::combat_sim::session_owner_for_session_key(ctx, &npc.session_key)
+        {
+            if !crate::player_vitals::is_player_dead(ctx, owner) {
+                if let Some(pose) = ctx.db.player_pose().identity().find(&owner) {
+                    return (pose.x, pose.y, pose.z, Some(owner));
+                }
+            }
+        }
+        return (npc.x, npc.y, npc.z, None);
+    }
+    let (x, y, z) = nearest_living_player_feet(ctx, npc.x, npc.y, npc.z);
+    let id = nearest_living_player_identity(ctx, npc.x, npc.y, npc.z);
+    (x, y, z, id)
 }
 
 fn nearest_living_player_feet(

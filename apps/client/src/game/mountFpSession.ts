@@ -243,6 +243,7 @@ export async function mountFpSession(
 
   const isCombatSim = opts.combatSimMode === true;
   setFpCombatSimMode(isCombatSim);
+  canvas.dataset.mammothFpCanvas = "1";
 
   installMmWallProbeLoadingStub();
 
@@ -1948,5 +1949,6 @@ export async function mountFpSession(
   resetFpDebugGameplayFeedbackFlags();
     resetFpPerfStore();
     if (document.pointerLockElement === canvas) void document.exitPointerLock();
+    delete canvas.dataset.mammothFpCanvas;
   };
 }

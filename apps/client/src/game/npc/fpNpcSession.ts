@@ -6,8 +6,11 @@ import {
   type ReplicatedNpcSnapshot,
 } from "@the-mammoth/game";
 import { WorldNpcPresenterPool } from "@the-mammoth/engine";
+import { createFpBloodBurstFx, type FpBloodBurstFx } from "../fpSession/fpBloodBurstFx.js";
 
 const NPC_STATE_DEAD = 2;
+const TORSO_Y_ABOVE_FEET_M = 1.04;
+const MIN_NPC_HIT_BLOOD_DAMAGE = 1;
 
 const BABUSHKA_AUDIO = {
   aggro: "/audio/npc/babushka-aggro.wav",
@@ -24,6 +27,7 @@ function archetypeFromRow(archetype: string): NpcArchetypeId | null {
 function snapshotFromRow(row: WorldNpc, observedTimeMs: number): ReplicatedNpcSnapshot | null {
   const archetype = archetypeFromRow(row.archetype);
   if (!archetype) return null;
+  if (row.state === NPC_STATE_DEAD || row.health <= 0) return null;
   return {
     npcId: row.npcId,
     archetype,
@@ -83,6 +87,7 @@ export function createFpNpcSession(opts: {
 }): FpNpcSession {
   const pool = new WorldNpcPresenterPool(opts.scene);
   void pool.ensureReady();
+  const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.scene);
 
   const rows = new Map<string, WorldNpc>();
   const audioTrack = new Map<string, NpcAudioTrack>();
@@ -112,6 +117,13 @@ export function createFpNpcSession(opts: {
       }
       if (row.hitPresentationSeq > prev.hitSeq) {
         playNpcOneShot(ctx, BABUSHKA_AUDIO.hit);
+        const damage = Math.max(MIN_NPC_HIT_BLOOD_DAMAGE, prev.health - row.health);
+        bloodFx.spawnBurstAt(
+          row.x,
+          row.y + TORSO_Y_ABOVE_FEET_M,
+          row.z,
+          damage,
+        );
       }
       if (row.meleePresentationSeq > prev.meleeSeq) {
         playNpcOneShot(ctx, BABUSHKA_AUDIO.punch);
@@ -121,6 +133,11 @@ export function createFpNpcSession(opts: {
       }
     }
     audioTrack.set(key, nextTrack);
+    if (row.state === NPC_STATE_DEAD || row.health <= 0) {
+      rows.delete(key);
+      audioTrack.delete(key);
+      return;
+    }
     rows.set(key, row);
   };
 
@@ -143,12 +160,14 @@ export function createFpNpcSession(opts: {
 
   return {
     update(dt, nowMs) {
+      bloodFx.tick(nowMs, dt);
       pool.sync(rebuildSnapshots(nowMs), dt);
     },
     dispose() {
       opts.conn.db.world_npc.removeOnInsert(onInsertCb);
       opts.conn.db.world_npc.removeOnUpdate(onUpdateCb);
       opts.conn.db.world_npc.removeOnDelete(onDeleteCb);
+      bloodFx.dispose();
       pool.dispose();
       rows.clear();
       audioTrack.clear();

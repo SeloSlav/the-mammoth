@@ -21,13 +21,20 @@ export type ReplicatedNpcSnapshot = {
   observedTimeMs: number;
 };
 
+const NPC_LOCOMOTION_MIN_SPEED_SQ = 0.04;
+
 export function resolveNpcBodyClipName(args: {
   grounded: boolean;
   locomotion: LocomotionPresentation;
   dead: boolean;
+  velocity?: { x: number; z: number };
 }): NpcBodyClipName {
   if (args.dead) return "idle";
   if (!args.grounded) return "idle";
+  const speedSq =
+    (args.velocity?.x ?? 0) * (args.velocity?.x ?? 0) +
+    (args.velocity?.z ?? 0) * (args.velocity?.z ?? 0);
+  if (speedSq < NPC_LOCOMOTION_MIN_SPEED_SQ) return "idle";
   if (args.locomotion === "run") return "run";
   if (args.locomotion === "walk") return "walk";
   return "idle";
