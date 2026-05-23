@@ -170,6 +170,41 @@ export function setFpPickupPrompt(next: FpPickupPromptState): void {
   for (const l of listeners) l();
 }
 
+let secondaryState: FpPickupPromptState = null;
+const secondaryListeners = new Set<() => void>();
+
+export function getFpPickupPromptSecondary(): FpPickupPromptState {
+  return secondaryState;
+}
+
+export function setFpPickupPromptSecondary(next: FpPickupPromptState): void {
+  if (same(secondaryState, next)) return;
+  secondaryState = next;
+  for (const l of secondaryListeners) l();
+}
+
+/** Notebook rides alongside a higher-priority primary prompt (grow tray, sit, etc.). */
+export function syncFpPickupPromptNotebookSecondary(
+  primary: FpPickupPromptState,
+  notebook: FpPickupPromptApartmentNotebook | null,
+): void {
+  const secondary =
+    notebook && primary?.kind !== "apartment_notebook" ? notebook : null;
+  setFpPickupPromptSecondary(secondary);
+}
+
+export function clearFpPickupPrompts(): void {
+  setFpPickupPrompt(null);
+  setFpPickupPromptSecondary(null);
+}
+
+export function subscribeFpPickupPromptSecondary(cb: () => void): () => void {
+  secondaryListeners.add(cb);
+  return () => {
+    secondaryListeners.delete(cb);
+  };
+}
+
 export function subscribeFpPickupPrompt(cb: () => void): () => void {
   listeners.add(cb);
   return () => {

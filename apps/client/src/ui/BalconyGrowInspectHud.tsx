@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
+  getFpPlayerMenuHudOpen,
+  subscribeFpPlayerMenuHudOpen,
+} from "../game/fpInteraction/fpPlayerMenuHudOpen";
+import {
   BALCONY_GROW_TRAY_MAX_WATER_L,
   balconyGrowDaysRemaining,
   balconyGrowPlantReadyByDays,
@@ -58,6 +62,11 @@ function cropInspectLabel(cropDefId: string, phase: number, daysGrown: number, t
 }
 
 export function BalconyGrowInspectHud({ conn }: Props) {
+  const playerMenuOpen = useSyncExternalStore(
+    subscribeFpPlayerMenuHudOpen,
+    getFpPlayerMenuHudOpen,
+    getFpPlayerMenuHudOpen,
+  );
   const target = useSyncExternalStore<BalconyGrowInspectTarget | null>(
     subscribeBalconyGrowInspectTarget,
     getBalconyGrowInspectTarget,
@@ -79,6 +88,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
 
   void liveTick;
 
+  if (playerMenuOpen) return null;
   if (!conn || !target || !screenAnchor?.visible) return null;
 
   const state = readBalconyGrowOpUnitState(conn, target.unitKey);
@@ -127,7 +137,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
         fontSize: 12,
         lineHeight: 1.4,
         pointerEvents: "none",
-        zIndex: 125,
+        zIndex: 110,
         boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
       }}
     >

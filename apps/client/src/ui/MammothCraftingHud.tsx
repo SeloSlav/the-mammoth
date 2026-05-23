@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import type { DbConnection } from "../module_bindings";
 import type { CraftQueueItem as CraftQueueRow } from "../module_bindings/types";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
+import { setFpCraftingPanelOpen } from "../game/fpInteraction/fpCraftingPanelOpen";
 import {
   getMammothItemDef,
   listMammothCraftableItemDefs,
@@ -180,6 +181,11 @@ export function MammothCraftingHud({ conn }: Props) {
       conn.db.craft_queue_item.removeOnDelete(bump);
     };
   }, [conn]);
+
+  useEffect(() => {
+    setFpCraftingPanelOpen(open);
+    return () => setFpCraftingPanelOpen(false);
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

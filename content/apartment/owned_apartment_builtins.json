@@ -1152,17 +1152,17 @@
     {
       "id": "8a40a44b-c978-46bf-80ec-8f7bf8b56d2e",
       "modelRelPath": "static/models/objects/shelf-storage.glb",
-      "fx": 0.17010210966709924,
+      "fx": 0.15934423660504388,
       "fz": 0.7346489530601457,
       "dy": 0.9939903693348757,
       "yawRad": -1.5707963267948963,
       "pitchRad": 0,
       "rollRad": 0,
-      "uniformScale": 1.0827149090885477,
-      "verticalScaleMul": 2.223341961804835,
+      "uniformScale": 1.3906682215791686,
+      "verticalScaleMul": 1.7309991360230665,
       "scaleX": 1.1654298181770957,
       "scaleY": 2.4072454900482754,
-      "scaleZ": 1,
+      "scaleZ": 1.6159066249812413,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }

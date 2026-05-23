@@ -1,15 +1,21 @@
 import type { ApartmentDoorInteractPromptKind } from "@the-mammoth/world";
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { getFpPickupPrompt, subscribeFpPickupPrompt } from "../game/fpInteraction/fpPickupPrompt";
+import {
+  getFpPickupPrompt,
+  getFpPickupPromptSecondary,
+  subscribeFpPickupPrompt,
+  subscribeFpPickupPromptSecondary,
+  type FpPickupPromptState,
+} from "../game/fpInteraction/fpPickupPrompt";
+import { getFpPlayerMenuHudOpen, subscribeFpPlayerMenuHudOpen } from "../game/fpInteraction/fpPlayerMenuHudOpen";
 
-function mammothInventoryOpen(): boolean {
-  return document.querySelector('[data-mammoth-inventory="open"]') !== null;
+function fpPlayerMenuHudOpen(): boolean {
+  return getFpPlayerMenuHudOpen();
 }
 
 const frameBase: CSSProperties = {
   position: "fixed",
   left: "50%",
-  bottom: "max(22%, calc(env(safe-area-inset-bottom, 0px) + 140px))",
   transform: "translateX(-50%)",
   zIndex: 124,
   pointerEvents: "none",
@@ -24,15 +30,23 @@ const frameBase: CSSProperties = {
   fontFamily: "system-ui, Segoe UI, Roboto, sans-serif",
 };
 
+function promptStackBottom(stackIndex: number): string {
+  const base = "max(22%, calc(env(safe-area-inset-bottom, 0px) + 140px))";
+  if (stackIndex <= 0) return base;
+  return `calc(${base} + ${stackIndex * 86}px)`;
+}
+
 function FpBottomInteractPromptFrame(props: {
   borderRgb: string;
   glowRgb: string;
+  stackIndex?: number;
   children: ReactNode;
 }) {
   return (
     <div
       style={{
         ...frameBase,
+        bottom: promptStackBottom(props.stackIndex ?? 0),
         border: `1px solid ${props.borderRgb}`,
         boxShadow: `0 0 0 1px rgba(255,255,255,0.06) inset, 0 12px 40px rgba(0,0,0,0.55), 0 0 28px ${props.glowRgb}`,
       }}
@@ -74,13 +88,41 @@ function InteractKeyE(props: {
 
 /** Bottom interact bar — elevators, pickups, Balkan MVP apartment flows. */
 export function MammothPickupPromptHud() {
+  const menuOpen = useSyncExternalStore(
+    subscribeFpPlayerMenuHudOpen,
+    fpPlayerMenuHudOpen,
+    fpPlayerMenuHudOpen,
+  );
   const prompt = useSyncExternalStore(subscribeFpPickupPrompt, getFpPickupPrompt, getFpPickupPrompt);
+  const secondaryPrompt = useSyncExternalStore(
+    subscribeFpPickupPromptSecondary,
+    getFpPickupPromptSecondary,
+    getFpPickupPromptSecondary,
+  );
   /**
-   * Inventory dock has its own unified close-hint footer ({@link MammothInventoryDockBackdrop}).
-   * Suppress the floating bottom prompt entirely while the dock is up so we don't double the legend.
+   * Inventory/crafting panels have their own close-hint footer ({@link MammothInventoryDockBackdrop}).
+   * Suppress floating bottom prompts while those menus are up.
    */
-  if (!prompt || mammothInventoryOpen()) return null;
+  if (menuOpen) return null;
+  if (!prompt && !secondaryPrompt) return null;
 
+  return (
+    <>
+      {secondaryPrompt ? (
+        <PickupPromptBody prompt={secondaryPrompt} stackIndex={prompt ? 1 : 0} />
+      ) : null}
+      {prompt ? <PickupPromptBody prompt={prompt} stackIndex={0} /> : null}
+    </>
+  );
+}
+
+function PickupPromptBody({
+  prompt,
+  stackIndex,
+}: {
+  prompt: NonNullable<FpPickupPromptState>;
+  stackIndex: number;
+}) {
   const doorNoun: Record<ApartmentDoorInteractPromptKind, string> = {
     stairwell: "stairwell door",
     hallway: "hallway door",
@@ -89,7 +131,11 @@ export function MammothPickupPromptHud() {
 
   if (prompt.kind === "elevator_exterior_door") {
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(255,120,120,0.45)" glowRgb="rgba(255,100,100,0.15)">
+      <FpBottomInteractPromptFrame
+        stackIndex={stackIndex}
+        borderRgb="rgba(255,120,120,0.45)"
+        glowRgb="rgba(255,100,100,0.15)"
+      >
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ff8a7a 0%, #d6453c 45%, #a82822 100%)"
@@ -108,7 +154,11 @@ export function MammothPickupPromptHud() {
   if (prompt.kind === "dropped_item") {
     const isWorld = prompt.worldAnchorSpawn === true;
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(120,200,255,0.45)" glowRgb="rgba(92,200,255,0.18)">
+      <FpBottomInteractPromptFrame
+        stackIndex={stackIndex}
+        borderRgb="rgba(120,200,255,0.45)"
+        glowRgb="rgba(92,200,255,0.18)"
+      >
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #6ad0ff 0%, #2a9fd6 45%, #1a7cb0 100%)"
@@ -125,7 +175,7 @@ export function MammothPickupPromptHud() {
   if (prompt.kind === "apartment_door") {
     const openClose = prompt.willClose ? "close" : "open";
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(210,170,110,0.45)" glowRgb="rgba(210,160,90,0.18)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(210,170,110,0.45)" glowRgb="rgba(210,160,90,0.18)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #e9c285 0%, #b98645 45%, #855f2d 100%)"
@@ -148,7 +198,7 @@ export function MammothPickupPromptHud() {
           ? "Door lock missing — craft one from 5× scrap metal in the B crafting panel (keep a screwdriver in inventory or hotbar)."
           : "You need a screwdriver (inventory or hotbar) to install the lock when claiming.";
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(255,110,110,0.55)" glowRgb="rgba(255,70,70,0.18)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(255,110,110,0.55)" glowRgb="rgba(255,70,70,0.18)">
         <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffb8b8" }}>{prompt.displayLabel}</div>
         <div style={{ color: "#ff8a8a", fontWeight: 600 }}>{msg}</div>
         <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>
@@ -160,7 +210,7 @@ export function MammothPickupPromptHud() {
 
   if (prompt.kind === "apartment_claim_blocked_guest") {
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(255,150,90,0.55)" glowRgb="rgba(255,100,40,0.16)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(255,150,90,0.55)" glowRgb="rgba(255,100,40,0.16)">
         <div style={{ marginBottom: 8, fontWeight: 700, color: "#ffd0b0" }}>{prompt.displayLabel}</div>
         <div style={{ color: "#ffad82", fontWeight: 650 }}>Guests cannot claim apartments.</div>
         <div style={{ opacity: 0.82, marginTop: 6, fontSize: 12 }}>
@@ -175,7 +225,7 @@ export function MammothPickupPromptHud() {
     const pct = Math.min(1, Math.max(0, prompt.claimProgressSecs / prompt.claimFullSecs));
     const secUi = remain >= 10 ? remain.toFixed(0) : remain.toFixed(1);
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(200,230,170,0.45)" glowRgb="rgba(120,200,100,0.16)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(200,230,170,0.45)" glowRgb="rgba(120,200,100,0.16)">
         <div style={{ marginBottom: 10, fontWeight: 700, color: "#e8f4dc" }}>{prompt.displayLabel}</div>
         <div
           style={{
@@ -212,7 +262,7 @@ export function MammothPickupPromptHud() {
     // moved out with the floating close hint.
     const action = prompt.willClose ? "Close" : "Open";
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ffd8b0 0%, #da9a55 45%, #8a5822 100%)"
@@ -230,7 +280,7 @@ export function MammothPickupPromptHud() {
 
   if (prompt.kind === "balcony_grow_harvest") {
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(120,200,120,0.42)" glowRgb="rgba(80,180,90,0.16)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(120,200,120,0.42)" glowRgb="rgba(80,180,90,0.16)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #b8f0c0 0%, #5cb86a 45%, #2d6b38 100%)"
@@ -246,7 +296,7 @@ export function MammothPickupPromptHud() {
 
   if (prompt.kind === "apartment_sleep") {
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(120,170,220,0.42)" glowRgb="rgba(90,140,210,0.14)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(120,170,220,0.42)" glowRgb="rgba(90,140,210,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #d4e4ff 0%, #6b8cae 45%, #3d5878 100%)"
@@ -261,7 +311,7 @@ export function MammothPickupPromptHud() {
 
   if (prompt.kind === "apartment_sittable") {
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(255,200,140,0.38)" glowRgb="rgba(255,180,100,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #ffd8b0 0%, #da9a55 45%, #8a5822 100%)"
@@ -278,7 +328,7 @@ export function MammothPickupPromptHud() {
   if (prompt.kind === "apartment_notebook") {
     const label = prompt.willClose ? "Close notebook" : prompt.label;
     return (
-      <FpBottomInteractPromptFrame borderRgb="rgba(180,200,230,0.38)" glowRgb="rgba(120,160,210,0.14)">
+      <FpBottomInteractPromptFrame stackIndex={stackIndex} borderRgb="rgba(180,200,230,0.38)" glowRgb="rgba(120,160,210,0.14)">
         <span style={{ opacity: 0.92 }}>Press </span>
         <InteractKeyE
           kbdGradient="linear-gradient(180deg, #dce8ff 0%, #8aa8cc 45%, #4a6280 100%)"

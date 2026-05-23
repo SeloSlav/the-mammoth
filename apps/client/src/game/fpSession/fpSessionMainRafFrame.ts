@@ -47,7 +47,13 @@ import { APARTMENT_STASH_KIND_GROW_TRAY } from "../fpApartment/fpApartmentStashK
 import type { MountFpElevatorWorldResult } from "../fpElevator/fpElevatorWorld.js";
 import { getFpActiveStashPanel } from "../fpInteraction/fpActiveStashPanel.js";
 import { publishFpInteractionFeet } from "../fpInteraction/fpInteractionFeetState.js";
-import { setFpPickupPrompt } from "../fpInteraction/fpPickupPrompt.js";
+import {
+  clearFpPickupPrompts,
+  setFpPickupPrompt,
+  syncFpPickupPromptNotebookSecondary,
+  type FpPickupPromptApartmentNotebook,
+  type FpPickupPromptState,
+} from "../fpInteraction/fpPickupPrompt.js";
 import type { ApartmentSittablePrompt } from "../fpApartment/fpApartmentSittableTypes.js";
 import type { ApartmentNotebookPrompt } from "../fpApartment/fpApartmentNotebookTypes.js";
 import { isFpNotebookTipsPanelOpen } from "../fpApartment/fpNotebookTipsPanelState.js";
@@ -870,8 +876,22 @@ export function createFpSessionMainRafFrame(
             ? null
             : cachedApartmentDoorHud;
       const activeStash = getFpActiveStashPanel();
+      const notebookPickupFromCache = (): FpPickupPromptApartmentNotebook | null => {
+        if (!cachedNotebookPromptHud) return null;
+        return {
+          kind: "apartment_notebook",
+          notebookKey: cachedNotebookPromptHud.notebookKey,
+          unitKey: cachedNotebookPromptHud.unitKey,
+          label: cachedNotebookPromptHud.label,
+          willClose: isFpNotebookTipsPanelOpen(),
+        };
+      };
+      const publishPickup = (primary: FpPickupPromptState) => {
+        setFpPickupPrompt(primary);
+        syncFpPickupPromptNotebookSecondary(primary, notebookPickupFromCache());
+      };
       if (cachedBalconyGrowPrompt?.kind === "balcony_grow_harvest") {
-        setFpPickupPrompt({
+        publishPickup({
           kind: "balcony_grow_harvest",
           unitKey: cachedBalconyGrowPrompt.unitKey,
           trayId: cachedBalconyGrowPrompt.trayId,
@@ -879,7 +899,7 @@ export function createFpSessionMainRafFrame(
           cropDisplayName: cachedBalconyGrowPrompt.cropDisplayName,
         });
       } else if (sitPromptHud) {
-        setFpPickupPrompt({
+        publishPickup({
           kind: "apartment_sittable",
           sittableKey: sitPromptHud.sittableKey,
           unitKey: sitPromptHud.unitKey,
@@ -892,7 +912,7 @@ export function createFpSessionMainRafFrame(
           balconyGrowInspectBlocksGrowTrayStash()
         )
       ) {
-        setFpPickupPrompt({
+        publishPickup({
           kind: "apartment_stash",
           stashKey: aSys.stashKey,
           unitKey: aSys.unitKey,
@@ -908,7 +928,7 @@ export function createFpSessionMainRafFrame(
           lookedAtStash?.stashKind === APARTMENT_STASH_KIND_GROW_TRAY
             ? lookedAtStash
             : cachedBalconyGrowPrompt!;
-        setFpPickupPrompt({
+        publishPickup({
           kind: "apartment_stash",
           stashKey: growStash.stashKey,
           unitKey: growStash.unitKey,
@@ -919,21 +939,15 @@ export function createFpSessionMainRafFrame(
           willClose: activeStash?.stashKey === growStash.stashKey,
         });
       } else if (cachedNotebookPromptHud) {
-        setFpPickupPrompt({
-          kind: "apartment_notebook",
-          notebookKey: cachedNotebookPromptHud.notebookKey,
-          unitKey: cachedNotebookPromptHud.unitKey,
-          label: cachedNotebookPromptHud.label,
-          willClose: isFpNotebookTipsPanelOpen(),
-        });
+        publishPickup(notebookPickupFromCache());
       } else if (doorPrompt) {
-        setFpPickupPrompt({
+        publishPickup({
           kind: "elevator_exterior_door",
           willClose: doorPrompt.willClose,
           floorLabel: doorPrompt.floorLabel,
         });
       } else if (apartmentDoorHud) {
-        setFpPickupPrompt({
+        publishPickup({
           kind: "apartment_door",
           willClose: apartmentDoorHud.willClose,
           promptKind: apartmentDoorHud.promptKind,
@@ -944,7 +958,7 @@ export function createFpSessionMainRafFrame(
         const aptSystemBeatsWorldAnchor = aSys !== null;
         if (!aptSystemBeatsWorldAnchor && nearWorld) {
           const def = getMammothItemDef(nearWorld.defId);
-          setFpPickupPrompt({
+          publishPickup({
             kind: "dropped_item",
             droppedItemIdStr: nearWorld.droppedItemId.toString(),
             displayName: def?.displayName ?? nearWorld.defId,
@@ -959,7 +973,7 @@ export function createFpSessionMainRafFrame(
             }
           }
           const id = deps.conn.identity!;
-          setFpPickupPrompt({
+          publishPickup({
             kind: "apartment_claim_blocked_gear",
             unitKey: aSys.unitKey,
             displayLabel,
@@ -974,7 +988,7 @@ export function createFpSessionMainRafFrame(
               break;
             }
           }
-          setFpPickupPrompt({
+          publishPickup({
             kind: "apartment_claim_blocked_guest",
             unitKey: aSys.unitKey,
             displayLabel,
@@ -1009,7 +1023,7 @@ export function createFpSessionMainRafFrame(
               prevSmooth: claimHoldSmoothState,
             });
           nextClaimSmoothCarry = nextSmooth;
-          setFpPickupPrompt({
+          publishPickup({
             kind: "apartment_claim",
             unitKey: aSys.unitKey,
             displayLabel,
@@ -1019,27 +1033,27 @@ export function createFpSessionMainRafFrame(
         } else if (isFpSitActive() && fpSitSessionIsOnBed()) {
           const sit = getFpSitSession();
           if (sit) {
-            setFpPickupPrompt({ kind: "apartment_sleep", unitKey: sit.unitKey });
+            publishPickup({ kind: "apartment_sleep", unitKey: sit.unitKey });
           } else {
-            setFpPickupPrompt(null);
+            clearFpPickupPrompts();
           }
         } else if (isFpSitActive()) {
-          setFpPickupPrompt(null);
+          publishPickup(notebookPickupFromCache());
         } else if (hitPlain) {
             const def = getMammothItemDef(hitPlain.defId);
-            setFpPickupPrompt({
+            publishPickup({
               kind: "dropped_item",
               droppedItemIdStr: hitPlain.droppedItemId.toString(),
               displayName: def?.displayName ?? hitPlain.defId,
               worldAnchorSpawn: false,
             });
           } else {
-            setFpPickupPrompt(null);
+            clearFpPickupPrompts();
           }
       }
       claimHoldSmoothState = nextClaimSmoothCarry;
     } else {
-      setFpPickupPrompt(null);
+      clearFpPickupPrompts();
       claimHoldSmoothState = null;
     }
 

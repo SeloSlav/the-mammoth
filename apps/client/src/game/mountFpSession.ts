@@ -161,7 +161,7 @@ import {
   requestMammothInventoryCloseFromFp,
   requestMammothInventoryOpenFromFp,
 } from "./fpInteraction/fpInventoryOpenRequest.js";
-import { setFpPickupPrompt } from "./fpInteraction/fpPickupPrompt.js";
+import { clearFpPickupPrompts } from "./fpInteraction/fpPickupPrompt.js";
 import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorConstants.js";
 import { poseSeqAsBigint } from "./fpSession/fpSessionPoseSeq.js";
@@ -1850,7 +1850,7 @@ export async function mountFpSession(
     canvas.removeEventListener("click", onClick);
     canvas.removeEventListener("pointerdown", onPointerDown);
     canvas.removeEventListener("contextmenu", onCanvasContextMenu);
-    setFpPickupPrompt(null);
+    clearFpPickupPrompts();
     closeFpNotebookTipsPanel();
     exitFpSit();
     registerFpSleepPoseFlush(null);
