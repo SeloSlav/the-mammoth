@@ -38,6 +38,7 @@ function watchWorkspaceUiThemeSrc(): Plugin {
 
 const repoRoot = path.resolve(__dirname, "../..");
 const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
+const spacetimeClientSrc = path.resolve(repoRoot, "packages/spacetime-client/src/index.ts");
 
 const require = createRequire(import.meta.url);
 /** Resolved path to `build/three.webgpu.js` via package export `three/webgpu`. */
@@ -92,6 +93,10 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@the-mammoth\/ui-theme$/,
           replacement: path.join(uiThemeSrc, "index.ts"),
+        },
+        {
+          find: /^@the-mammoth\/spacetime-client$/,
+          replacement: spacetimeClientSrc,
         },
         { find: "@", replacement: path.resolve(__dirname, "src") },
       ],

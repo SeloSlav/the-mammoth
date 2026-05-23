@@ -13,6 +13,7 @@ const repoRoot = path.resolve(configDir, "../..");
 const clientPublicRoot = path.resolve(repoRoot, "apps/client/public");
 const clientSrc = path.resolve(repoRoot, "apps/client/src");
 const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
+const spacetimeClientSrc = path.resolve(repoRoot, "packages/spacetime-client/src/index.ts");
 
 const require = createRequire(import.meta.url);
 const threeWebgpu = require.resolve("three/webgpu");
@@ -77,6 +78,10 @@ export default defineConfig({
       {
         find: /^@the-mammoth\/ui-theme$/,
         replacement: path.join(uiThemeSrc, "index.ts"),
+      },
+      {
+        find: /^@the-mammoth\/spacetime-client$/,
+        replacement: spacetimeClientSrc,
       },
     ],
   },
