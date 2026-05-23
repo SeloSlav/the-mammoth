@@ -33,6 +33,23 @@ describe("playerNotebookLayout", () => {
     }
   });
 
+  it("marks only the first wrapped line of each reference bullet with a dash", () => {
+    const blocks = flattenNotebookSections();
+    let priorWasBullet = false;
+    for (const block of blocks) {
+      if (block.type !== "ref-bullet") {
+        priorWasBullet = false;
+        continue;
+      }
+      if (block.bulletLead !== false) {
+        expect(block.bulletLead).toBe(true);
+      } else {
+        expect(priorWasBullet).toBe(true);
+      }
+      priorWasBullet = true;
+    }
+  });
+
   it("starts a new page before each section heading", () => {
     const pages = paginateNotebookBlocks(flattenNotebookSections(), NOTEBOOK_CONTENT_LINES_PER_PAGE);
     for (const page of pages) {

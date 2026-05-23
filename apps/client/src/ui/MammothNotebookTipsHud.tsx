@@ -20,7 +20,9 @@ import {
 } from "../game/fpApartment/fpNotebookTipsPanelState";
 import {
   buildNotebookSpreads,
-  NOTEBOOK_CONTENT_LINES_PER_PAGE,
+  NOTEBOOK_CONTENT_HEIGHT_PX,
+  NOTEBOOK_CONTENT_PAD_TOP_PX,
+  NOTEBOOK_CONTENT_BOTTOM_PAD_PX,
   NOTEBOOK_FOOTER_HEIGHT_PX,
   NOTEBOOK_OWNER,
   NOTEBOOK_RULE_STEP_PX,
@@ -30,7 +32,6 @@ import {
 } from "./playerNotebookLayout";
 
 const MARGIN_X_PX = 56;
-const CONTENT_HEIGHT_PX = NOTEBOOK_CONTENT_LINES_PER_PAGE * NOTEBOOK_RULE_STEP_PX;
 
 const overlayStyle: CSSProperties = {
   position: "fixed",
@@ -82,9 +83,9 @@ const pageStyle: CSSProperties = {
 };
 
 const contentPaneStyle: CSSProperties = {
-  height: CONTENT_HEIGHT_PX,
+  height: NOTEBOOK_CONTENT_HEIGHT_PX,
   overflow: "hidden",
-  padding: `4px 28px 0 ${MARGIN_X_PX + 8}px`,
+  padding: `${NOTEBOOK_CONTENT_PAD_TOP_PX}px 28px ${NOTEBOOK_CONTENT_BOTTOM_PAD_PX}px ${MARGIN_X_PX + 8}px`,
   backgroundImage: ruledPaperBackground,
   boxSizing: "border-box",
 };
@@ -153,7 +154,8 @@ function NotebookSpine() {
 }
 
 function blockKey(block: NotebookLayoutBlock, index: number): string {
-  return `${block.type}:${index}:${"text" in block ? block.text : ""}`;
+  const lead = block.type === "ref-bullet" && block.bulletLead ? ":lead" : "";
+  return `${block.type}:${index}:${"text" in block ? block.text : ""}${lead}`;
 }
 
 const ruledRowStyle: CSSProperties = {
@@ -285,17 +287,19 @@ function NotebookContentPage({ blocks }: { blocks: readonly NotebookLayoutBlock[
                   color: THEME_NOTEBOOK_INK_MUTED,
                 }}
               >
-                <span
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    color: THEME_NOTEBOOK_INK_FAINT,
-                  }}
-                >
-                  –
-                </span>
+                {block.bulletLead !== false ? (
+                  <span
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      color: THEME_NOTEBOOK_INK_FAINT,
+                    }}
+                  >
+                    –
+                  </span>
+                ) : null}
                 {block.text}
               </div>
             );
@@ -419,8 +423,21 @@ export function MammothNotebookTipsHud() {
         setPageIndex((i) => Math.max(i - 1, 0));
       }
     };
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        setPageIndex((i) => Math.min(i + 1, spreads.length - 1));
+      } else if (e.deltaY < 0) {
+        setPageIndex((i) => Math.max(i - 1, 0));
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("wheel", onWheel);
+    };
   }, [open, spreads.length]);
 
   if (!open) return null;

@@ -7,19 +7,29 @@ import {
 } from "./playerNotebookTipsContent";
 
 /** Matches ruled line height in {@link MammothNotebookTipsHud}. */
-export const NOTEBOOK_RULE_STEP_PX = 32;
+export const NOTEBOOK_RULE_STEP_PX = 28;
 
 /** Notebook shell — keep in sync with `MammothNotebookTipsHud`. */
 export const NOTEBOOK_SHELL_WIDTH_PX = 540;
 export const NOTEBOOK_SHELL_HEIGHT_PX = 680;
 export const NOTEBOOK_FOOTER_HEIGHT_PX = 56;
 export const NOTEBOOK_CONTENT_PAD_TOP_PX = 4;
+export const NOTEBOOK_CONTENT_BOTTOM_PAD_PX = 12;
 
 /** Body lines that fit in the fixed content pane (no scrollbar). */
 export const NOTEBOOK_CONTENT_LINES_PER_PAGE = Math.floor(
-  (NOTEBOOK_SHELL_HEIGHT_PX - NOTEBOOK_FOOTER_HEIGHT_PX - NOTEBOOK_CONTENT_PAD_TOP_PX) /
+  (NOTEBOOK_SHELL_HEIGHT_PX -
+    NOTEBOOK_FOOTER_HEIGHT_PX -
+    NOTEBOOK_CONTENT_PAD_TOP_PX -
+    NOTEBOOK_CONTENT_BOTTOM_PAD_PX) /
     NOTEBOOK_RULE_STEP_PX,
 );
+
+/** Content pane height including top/bottom padding (border-box). */
+export const NOTEBOOK_CONTENT_HEIGHT_PX =
+  NOTEBOOK_CONTENT_LINES_PER_PAGE * NOTEBOOK_RULE_STEP_PX +
+  NOTEBOOK_CONTENT_PAD_TOP_PX +
+  NOTEBOOK_CONTENT_BOTTOM_PAD_PX;
 
 export const NOTEBOOK_SPINE_WIDTH_PX = 38;
 export const NOTEBOOK_CONTENT_PAD_LEFT_PX = 64;
@@ -49,7 +59,7 @@ type NotebookLayoutBlockBase = { sectionStart?: boolean };
 export type NotebookLayoutBlock =
   | ({ type: "ref-heading"; text: string } & NotebookLayoutBlockBase)
   | ({ type: "ref-heading-rule" } & NotebookLayoutBlockBase)
-  | ({ type: "ref-bullet"; text: string } & NotebookLayoutBlockBase)
+  | ({ type: "ref-bullet"; text: string; bulletLead?: boolean } & NotebookLayoutBlockBase)
   | ({ type: "diary-divider-bar" } & NotebookLayoutBlockBase)
   | ({ type: "diary-divider-label"; text: string } & NotebookLayoutBlockBase)
   | ({ type: "diary-date"; text: string } & NotebookLayoutBlockBase)
@@ -74,15 +84,26 @@ function wrapTextLines(text: string, font: string, maxWidth: number): string[] {
   return lines.map((line) => line.text);
 }
 
-function pushWrappedLines(
+function pushWrappedDiaryLines(
   blocks: NotebookLayoutBlock[],
-  type: "ref-bullet" | "diary-line",
   text: string,
   font: string,
   maxWidth: number,
 ): void {
   for (const line of wrapTextLines(text, font, maxWidth)) {
-    blocks.push({ type, text: line });
+    blocks.push({ type: "diary-line", text: line });
+  }
+}
+
+function pushWrappedBullets(
+  blocks: NotebookLayoutBlock[],
+  text: string,
+  font: string,
+  maxWidth: number,
+): void {
+  const lines = wrapTextLines(text, font, maxWidth);
+  for (let i = 0; i < lines.length; i++) {
+    blocks.push({ type: "ref-bullet", text: lines[i]!, bulletLead: i === 0 });
   }
 }
 
@@ -110,7 +131,7 @@ function flattenSection(section: PlayerNotebookSection, showDiaryDivider: boolea
     }
     blocks.push({ type: "ref-heading-rule" });
     for (const line of section.lines) {
-      pushWrappedLines(blocks, "ref-bullet", line, NOTEBOOK_FONT_REF_BULLET, NOTEBOOK_BULLET_TEXT_WIDTH_PX);
+      pushWrappedBullets(blocks, line, NOTEBOOK_FONT_REF_BULLET, NOTEBOOK_BULLET_TEXT_WIDTH_PX);
     }
     return blocks;
   }
@@ -126,13 +147,7 @@ function flattenSection(section: PlayerNotebookSection, showDiaryDivider: boolea
   }
 
   for (const paragraph of section.lines) {
-    pushWrappedLines(blocks, "diary-line", paragraph, NOTEBOOK_FONT_DIARY_BODY, NOTEBOOK_TEXT_WIDTH_PX);
-    blocks.push({ type: "diary-line", text: "" });
-  }
-
-  const last = blocks.at(-1);
-  if (last?.type === "diary-line" && last.text === "") {
-    blocks.pop();
+    pushWrappedDiaryLines(blocks, paragraph, NOTEBOOK_FONT_DIARY_BODY, NOTEBOOK_TEXT_WIDTH_PX);
   }
 
   return blocks;
