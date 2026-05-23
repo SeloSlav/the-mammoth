@@ -24,6 +24,7 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
     heading: "Inventory & hotbar (Tab)",
     lines: [
       "Tab opens pockets + hotbar. Drag between slots, stash panels, and the world.",
+      "With a stash open: hold H and sweep the mouse over slots — pockets/hotbar deposit, stash slots withdraw.",
       "LMB drag = whole stack. MMB drag = half stack (stackables only). RMB drag = one item.",
       "RMB click (no drag) = quick-transfer to hotbar or open stash.",
       "Drop same item onto same item = stacks merge up to the stack limit.",

@@ -41,10 +41,14 @@ import {
   reportApartmentStashRejection,
 } from "./apartmentStashInventoryRules";
 import { showGameplayErrorBar } from "../ui/gameplayErrorBar";
-import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothHudPanel, MAMMOTH_HUD_PANEL_WIDTH_PX } from "./MammothHudPanel";
 import { MammothItemIcon } from "./MammothItemIcon";
-import { MammothDroppableSlot } from "./MammothDroppableSlot";
+import { MammothStashSlotCell } from "./MammothHotLootSlotCells";
+import {
+  mammothHotLootActiveLabel,
+  mammothHotLootSubtitle,
+} from "./mammothHotLootSlotBindings";
+import { useMammothHotLoot } from "./MammothHotLootContext";
 import { MammothItemTooltip } from "./MammothItemTooltip";
 import { APARTMENT_STASH_KIND_FRIDGE } from "../game/fpApartment/fpApartmentStashKey";
 import {
@@ -95,32 +99,23 @@ function renderStashSlot(
     isDragHoverSlot: (slot: MammothDragSourceSlotInfo) => boolean;
   },
 ) {
-  const slotInfo = { type: "stash" as const, index: slotIndex };
   return (
-    <MammothDroppableSlot
+    <MammothStashSlotCell
       key={`stash-${slotIndex}`}
-      slotInfo={slotInfo}
-      isDraggingOver={opts.isDragHoverSlot(slotInfo)}
-    >
-      {pop ? (
-        <MammothDraggableItem
-          key={String(opts.toInstanceId(pop))}
-          item={pop}
-          sourceSlot={slotInfo}
-          onDragStart={opts.handleDragStart}
-          onDrop={opts.handleDrop}
-          onActivate={() => opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
-          onItemContextMenu={() => opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
-          slotHover={{
-            onEnter: (e) => opts.openItemTooltipForSlot(slotInfo, pop, e),
-            onMove: opts.updateTooltipPositionFromHoverEvent,
-            onLeave: opts.hideItemTooltip,
-          }}
-        >
-          {opts.slotInner(pop)}
-        </MammothDraggableItem>
-      ) : null}
-    </MammothDroppableSlot>
+      slotIndex={slotIndex}
+      pop={pop}
+      isDraggingOver={opts.isDragHoverSlot({ type: "stash", index: slotIndex })}
+      tooltip={{
+        openItemTooltipForSlot: opts.openItemTooltipForSlot,
+        updateTooltipPositionFromHoverEvent: opts.updateTooltipPositionFromHoverEvent,
+        hideItemTooltip: opts.hideItemTooltip,
+      }}
+      onDragStart={opts.handleDragStart}
+      onDrop={opts.handleDrop}
+      onItemContextMenu={() => pop && opts.quickMoveStashToPlayerCarry(pop, slotIndex)}
+      slotInner={opts.slotInner}
+      toInstanceId={opts.toInstanceId}
+    />
   );
 }
 
@@ -418,13 +413,18 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     isDragHoverSlot,
   };
 
+  const hotLoot = useMammothHotLoot();
+  const hotLootBanner = mammothHotLootActiveLabel(hotLoot.isHotLootActive);
+  const hotLootSubtitleSuffix = mammothHotLootSubtitle(hotLoot.enabled);
+
   const subtitle = useMemo(() => {
+    if (hotLootBanner) return hotLootBanner;
     const ruleHint =
       stashKind === "footlocker"
         ? "General storage — any item."
         : apartmentStashRejectionHint(stashKind);
-    return `Drag items in or out. ${ruleHint} Right-click to quick-transfer.`;
-  }, [stashKind]);
+    return `Drag items in or out. ${ruleHint} Right-click to quick-transfer.${hotLootSubtitleSuffix}`;
+  }, [hotLootBanner, hotLootSubtitleSuffix, stashKind]);
 
   /**
    * Grids are always centered inside the panel content area so smaller stashes (water tank,

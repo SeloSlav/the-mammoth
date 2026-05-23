@@ -16,6 +16,7 @@ import {
 } from "../game/fpSession/fpSessionGameUiHidden";
 import { GameplayErrorBarShell } from "./GameplayErrorBarShell";
 import { MammothInventoryDockBackdrop } from "../inventory/MammothInventoryDockBackdrop";
+import { MammothHotLootProvider } from "../inventory/MammothHotLootContext";
 import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothStashHud } from "../inventory/MammothStashHud";
 import { MammothElevatorHud } from "./MammothElevatorHud";
@@ -191,21 +192,25 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         ) : null}
         <GameplayErrorBarShell conn={conn} activeStash={activeStash} />
         <MammothInventoryDockBackdrop />
-        {conn ? <MammothInventoryHud conn={conn} activeStash={activeStash} /> : null}
+        {conn ? (
+          <MammothHotLootProvider conn={conn} activeStash={activeStash}>
+            <MammothInventoryHud conn={conn} activeStash={activeStash} />
+            {activeStash ? (
+              <MammothStashHud
+                conn={conn}
+                stashKey={activeStash.stashKey}
+                stashLabel={activeStash.stashLabel}
+                stashKind={activeStash.stashKind}
+              />
+            ) : null}
+          </MammothHotLootProvider>
+        ) : null}
         {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
         <MammothFpsHud conn={conn} />
         <MammothPickupPromptHud />
         <MammothNotebookTipsHud />
         {conn ? <BalconyGrowInspectHud conn={conn} /> : null}
-        {conn && activeStash ? (
-          <MammothStashHud
-            conn={conn}
-            stashKey={activeStash.stashKey}
-            stashLabel={activeStash.stashLabel}
-            stashKind={activeStash.stashKind}
-          />
-        ) : null}
         <MammothElevatorHud />
         <MammothFpReticule />
       </div>

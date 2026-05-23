@@ -61,14 +61,18 @@ import type {
   MammothDropResult,
   MammothPopulatedItem,
 } from "./inventoryDragDropTypes";
-import { MammothDraggableItem } from "./MammothDraggableItem";
 import { MammothItemIcon } from "./MammothItemIcon";
-import { MammothDroppableSlot } from "./MammothDroppableSlot";
 import { MammothItemTooltip } from "./MammothItemTooltip";
 import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
+import {
+  mammothHotLootActiveLabel,
+  mammothHotLootSubtitle,
+} from "./mammothHotLootSlotBindings";
+import { useMammothHotLoot } from "./MammothHotLootContext";
+import { MammothPlayerCarrySlotCell } from "./MammothHotLootSlotCells";
 import { destIndexForQuickTransfer } from "./inventoryQuickTransfer";
 import { evaluateInventoryDrop, type InventoryDragDropRulesContext } from "./inventoryDragDropHelpers";
 import { beginInventoryDrag, endInventoryDrag, getInventoryDragSession } from "./inventoryDragSession";
@@ -496,6 +500,18 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
 
   const { hotbar: hb, inventory: inv } = displaySlots;
   const inventoryHudSlots = mammothInventoryHudSlotCount(inv);
+  const hotLoot = useMammothHotLoot();
+  const hotLootBanner = mammothHotLootActiveLabel(hotLoot.isHotLootActive);
+  const stashSubtitleSuffix = mammothHotLootSubtitle(hotLoot.enabled);
+
+  const tooltipHandlers = useMemo(
+    () => ({
+      openItemTooltipForSlot,
+      updateTooltipPositionFromHoverEvent,
+      hideItemTooltip,
+    }),
+    [openItemTooltipForSlot, updateTooltipPositionFromHoverEvent, hideItemTooltip],
+  );
 
   /**
    * Inventory anchors the LEFT half of the dock when a stash is open (so the pair feels
@@ -530,9 +546,10 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
           <MammothHudPanel
             title="Inventory"
             subtitle={
-              activeStash
-                ? "Drag items in or out. Right-click to quick-transfer."
-                : "Right-click to send an item to the hotbar."
+              hotLootBanner ??
+              (activeStash
+                ? `Drag items in or out. Right-click to quick-transfer.${stashSubtitleSuffix}`
+                : "Right-click to send an item to the hotbar.")
             }
             onContextMenu={blockBrowserContextMenu}
           >
@@ -547,33 +564,23 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
                 const pop = inv[i] ?? null;
                 const slotInfo = { type: "inventory" as const, index: i };
                 return (
-                  <MammothDroppableSlot
+                  <MammothPlayerCarrySlotCell
                     key={`inv-${i}`}
+                    slotPrefix={`inv-${i}`}
+                    pop={pop}
                     slotInfo={slotInfo}
                     isDraggingOver={isDragHoverSlot(slotInfo)}
-                  >
-                    {pop ? (
-                      <MammothDraggableItem
-                        key={String(toInstanceId(pop))}
-                        item={pop}
-                        sourceSlot={slotInfo}
-                        onDragStart={handleDragStart}
-                        onDrop={handleDrop}
-                        onItemContextMenu={() =>
-                          activeStash
-                            ? quickMovePlayerItemToStash(pop, slotInfo)
-                            : quickMoveInventoryToHotbar(pop, i)
-                        }
-                        slotHover={{
-                          onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
-                          onMove: updateTooltipPositionFromHoverEvent,
-                          onLeave: hideItemTooltip,
-                        }}
-                      >
-                        {slotInner(pop)}
-                      </MammothDraggableItem>
-                    ) : null}
-                  </MammothDroppableSlot>
+                    tooltip={tooltipHandlers}
+                    onDragStart={handleDragStart}
+                    onDrop={handleDrop}
+                    onItemContextMenu={() =>
+                      activeStash
+                        ? quickMovePlayerItemToStash(pop!, slotInfo)
+                        : quickMoveInventoryToHotbar(pop!, i)
+                    }
+                    slotInner={slotInner}
+                    toInstanceId={toInstanceId}
+                  />
                 );
               })}
             </div>
@@ -634,41 +641,33 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
               >
                 {index + 1}
               </div>
-              <MammothDroppableSlot
+              <MammothPlayerCarrySlotCell
+                slotPrefix={`hb-${index}`}
+                pop={pop}
                 slotInfo={slotInfo}
                 isDraggingOver={isDragHoverSlot(slotInfo)}
-                onClick={pop ? undefined : () => onHotbarSlotClick(index)}
+                tooltip={tooltipHandlers}
+                onDragStart={handleDragStart}
+                onDrop={handleDrop}
+                onActivate={() => onHotbarSlotClick(index)}
+                onItemContextMenu={() =>
+                  activeStash
+                    ? quickMovePlayerItemToStash(pop!, slotInfo)
+                    : quickMoveHotbarToInventory(pop!, index)
+                }
+                slotInner={slotInner}
+                toInstanceId={toInstanceId}
                 overlayProgress={consumeCd ?? undefined}
-                style={{
+                onClick={pop ? undefined : () => onHotbarSlotClick(index)}
+                droppableStyle={{
                   outline: sel ? `2px solid ${THEME_ACCENT}` : undefined,
                   outlineOffset: 1,
                   position: "relative",
                 }}
-              >
-                {waterFill != null ? <WaterBottleHotbarFillBar fillFraction={waterFill} /> : null}
-                {pop ? (
-                  <MammothDraggableItem
-                    key={String(toInstanceId(pop))}
-                    item={pop}
-                    sourceSlot={slotInfo}
-                    onDragStart={handleDragStart}
-                    onDrop={handleDrop}
-                    onActivate={() => onHotbarSlotClick(index)}
-                    onItemContextMenu={() =>
-                      activeStash
-                        ? quickMovePlayerItemToStash(pop, slotInfo)
-                        : quickMoveHotbarToInventory(pop, index)
-                    }
-                    slotHover={{
-                      onEnter: (e) => openItemTooltipForSlot(slotInfo, pop, e),
-                      onMove: updateTooltipPositionFromHoverEvent,
-                      onLeave: hideItemTooltip,
-                    }}
-                  >
-                    {slotInner(pop)}
-                  </MammothDraggableItem>
-                ) : null}
-              </MammothDroppableSlot>
+                slotOverlay={
+                  waterFill != null ? <WaterBottleHotbarFillBar fillFraction={waterFill} /> : null
+                }
+              />
             </div>
           );
         })}
