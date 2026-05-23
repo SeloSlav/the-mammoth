@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { evaluateInventoryDrop } from "./inventoryDragDropHelpers";
 import type { SlotGrids } from "./inventoryOptimistic";
+import { MAMMOTH_INVENTORY_SLOTS } from "./useMammothInventory";
 
 function item(instanceNum: number, defId: string, qty: number, max: number): MammothPopulatedItem {
   return {
@@ -35,7 +36,7 @@ describe("evaluateInventoryDrop", () => {
   it("returns noop when merge prediction fails (full target stack)", () => {
     const grids: SlotGrids = {
       hotbar: [item(1, "bandage", 4, 10), item(2, "bandage", 10, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const src = {
       item: grids.hotbar[0]!,
@@ -54,7 +55,7 @@ describe("evaluateInventoryDrop", () => {
   it("returns slot when merge succeeds", () => {
     const grids: SlotGrids = {
       hotbar: [item(1, "bandage", 4, 10), item(2, "bandage", 3, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const src = {
       item: grids.hotbar[0]!,

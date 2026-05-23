@@ -25,7 +25,7 @@ use crate::inventory_models::{
     parse_apartment_stash_key_v2, HotbarLocationData, InventoryLocationData, ItemLocation,
     ParsedApartmentStashKey, StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER,
     APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
-    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK,
 };
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
@@ -61,6 +61,7 @@ fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
         APARTMENT_STASH_KIND_FRIDGE => 1.30,
         APARTMENT_STASH_KIND_STOVE => 1.14,
         APARTMENT_STASH_KIND_WATER_TANK => 1.08,
+        APARTMENT_STASH_KIND_FISH_TANK => 1.05,
         APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
         _ => 1.10,
     };
@@ -223,6 +224,7 @@ pub(crate) const APARTMENT_DECOR_ITEM_KIND_FOOTLOCKER: u8 = 3;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_STOVE: u8 = 4;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_FRIDGE: u8 = 5;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_WATER_TANK: u8 = 6;
+pub(crate) const APARTMENT_DECOR_ITEM_KIND_FISH_TANK: u8 = 7;
 
 /// `set_owned_apartment_piece_pose(..., piece, ...)`.
 pub(crate) const APARTMENT_LAYOUT_PIECE_BED: u8 = 0;
@@ -425,11 +427,14 @@ fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
     if p.ends_with("objects/bed.glb") {
         return APARTMENT_DECOR_ITEM_KIND_BED;
     }
+    if p.ends_with("objects/fish-tank.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_FISH_TANK;
+    }
     APARTMENT_DECOR_ITEM_KIND_PLAIN
 }
 
 /// Replica `item_kind` with GLB fallback when rows were saved as plain décor.
-fn effective_decor_item_kind(item_kind: u8, model_rel_path: &str) -> u8 {
+pub(crate) fn effective_decor_item_kind(item_kind: u8, model_rel_path: &str) -> u8 {
     if item_kind != APARTMENT_DECOR_ITEM_KIND_PLAIN {
         return item_kind;
     }
@@ -442,6 +447,7 @@ fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_STOVE => APARTMENT_STASH_KIND_STOVE,
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
         APARTMENT_DECOR_ITEM_KIND_WATER_TANK => APARTMENT_STASH_KIND_WATER_TANK,
+        APARTMENT_DECOR_ITEM_KIND_FISH_TANK => APARTMENT_STASH_KIND_FISH_TANK,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }
@@ -456,6 +462,7 @@ fn decor_stash_display_name_static(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_STOVE => "stove",
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => "fridge",
         APARTMENT_DECOR_ITEM_KIND_WATER_TANK => "water tank",
+        APARTMENT_DECOR_ITEM_KIND_FISH_TANK => "fish tank",
         _ => "footlocker",
     }
 }
@@ -1297,7 +1304,7 @@ pub fn add_apartment_unit_decor(
     if player_vitals::is_player_dead(ctx, ctx.sender()) {
         return;
     }
-    if item_kind > APARTMENT_DECOR_ITEM_KIND_WATER_TANK {
+    if item_kind > APARTMENT_DECOR_ITEM_KIND_FISH_TANK {
         log::debug!("add_apartment_unit_decor: bad item_kind");
         return;
     }
@@ -1517,6 +1524,7 @@ fn pose_near_authored_content_stash_anchor(
         APARTMENT_STASH_KIND_STOVE => (0.328_545_44, -0.047_004_23),
         APARTMENT_STASH_KIND_FRIDGE => (0.387_564_86, 0.183_102_12),
         APARTMENT_STASH_KIND_WATER_TANK => (0.073_722_71, 0.823_220_47),
+        APARTMENT_STASH_KIND_FISH_TANK => (0.578_635_23, 0.578_435_87),
         _ => return false,
     };
     let (ax, az) = authored_content_stash_anchor_xz(unit, fx, fz);
@@ -1651,6 +1659,31 @@ fn pose_near_named_apartment_stash_anchor(
                         tank.pos_z,
                         unit.foot_y,
                         stash_interact_radius_sq(APARTMENT_STASH_KIND_WATER_TANK),
+                    );
+            }
+            pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)
+        }
+        APARTMENT_STASH_KIND_FISH_TANK => {
+            if let Some(tank) = ctx
+                .db
+                .apartment_unit_decor()
+                .iter()
+                .filter(|d| {
+                    d.unit_key.as_str() == unit.unit_key.as_str()
+                        && effective_decor_item_kind(d.item_kind, d.model_rel_path.as_str())
+                            == APARTMENT_DECOR_ITEM_KIND_FISH_TANK
+                })
+                .min_by_key(|d| d.decor_id)
+            {
+                return feet_inside_unit(unit, x, y, z)
+                    && pose_near_horizontal_marker(
+                        x,
+                        y,
+                        z,
+                        tank.pos_x,
+                        tank.pos_z,
+                        unit.foot_y,
+                        stash_interact_radius_sq(APARTMENT_STASH_KIND_FISH_TANK),
                     );
             }
             pose_near_authored_content_stash_anchor(unit, stash_kind, x, y, z)

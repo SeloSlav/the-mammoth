@@ -12,6 +12,7 @@ export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe";
 export const APARTMENT_STASH_KIND_STOVE = "stove";
 export const APARTMENT_STASH_KIND_FRIDGE = "fridge";
 export const APARTMENT_STASH_KIND_WATER_TANK = "water_tank";
+export const APARTMENT_STASH_KIND_FISH_TANK = "fish_tank";
 export { APARTMENT_STASH_KIND_GROW_TRAY };
 
 export type ApartmentStashKind =
@@ -20,6 +21,7 @@ export type ApartmentStashKind =
   | typeof APARTMENT_STASH_KIND_STOVE
   | typeof APARTMENT_STASH_KIND_FRIDGE
   | typeof APARTMENT_STASH_KIND_WATER_TANK
+  | typeof APARTMENT_STASH_KIND_FISH_TANK
   | typeof APARTMENT_STASH_KIND_GROW_TRAY;
 
 const APARTMENT_STASH_KEY_SEP = "#";
@@ -55,7 +57,8 @@ export function parseApartmentStashKeyFull(stashKey: string): ParsedApartmentSta
       tail === APARTMENT_STASH_KIND_WARDROBE ||
       tail === APARTMENT_STASH_KIND_STOVE ||
       tail === APARTMENT_STASH_KIND_FRIDGE ||
-      tail === APARTMENT_STASH_KIND_WATER_TANK
+      tail === APARTMENT_STASH_KIND_WATER_TANK ||
+      tail === APARTMENT_STASH_KIND_FISH_TANK
     ) {
       return { tag: "legacy", unitKey, stashKind: tail as ApartmentStashKind };
     }
@@ -95,6 +98,8 @@ export function apartmentStashLabel(stashKind: ApartmentStashKind): string {
       return "fridge";
     case APARTMENT_STASH_KIND_WATER_TANK:
       return "water tank";
+    case APARTMENT_STASH_KIND_FISH_TANK:
+      return "fish tank";
     case APARTMENT_STASH_KIND_GROW_TRAY:
       return "grow tray";
     default:

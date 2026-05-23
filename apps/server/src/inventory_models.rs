@@ -7,6 +7,7 @@ pub(crate) const APARTMENT_STASH_KIND_WARDROBE: &str = "wardrobe";
 pub(crate) const APARTMENT_STASH_KIND_STOVE: &str = "stove";
 pub(crate) const APARTMENT_STASH_KIND_FRIDGE: &str = "fridge";
 pub(crate) const APARTMENT_STASH_KIND_WATER_TANK: &str = "water_tank";
+pub(crate) const APARTMENT_STASH_KIND_FISH_TANK: &str = "fish_tank";
 pub(crate) const APARTMENT_STASH_KIND_GROW_TRAY: &str = "grow_tray";
 const APARTMENT_STASH_KEY_SEP: &str = "#";
 const GROW_TRAY_STASH_PREFIX: &str = "grow_tray:";
@@ -54,6 +55,7 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
             || tail == APARTMENT_STASH_KIND_STOVE
             || tail == APARTMENT_STASH_KIND_FRIDGE
             || tail == APARTMENT_STASH_KIND_WATER_TANK
+            || tail == APARTMENT_STASH_KIND_FISH_TANK
             || tail == APARTMENT_STASH_KIND_GROW_TRAY
         {
             let kind: &'static str = if tail == APARTMENT_STASH_KIND_WARDROBE {
@@ -64,6 +66,8 @@ pub(crate) fn parse_apartment_stash_key_v2(raw: &str) -> ParsedApartmentStashKey
                 APARTMENT_STASH_KIND_FRIDGE
             } else if tail == APARTMENT_STASH_KIND_WATER_TANK {
                 APARTMENT_STASH_KIND_WATER_TANK
+            } else if tail == APARTMENT_STASH_KIND_FISH_TANK {
+                APARTMENT_STASH_KIND_FISH_TANK
             } else if tail == APARTMENT_STASH_KIND_GROW_TRAY {
                 APARTMENT_STASH_KIND_GROW_TRAY
             } else {
@@ -111,6 +115,7 @@ pub(crate) fn apartment_stash_kind_display_name(stash_kind: &str) -> &'static st
         APARTMENT_STASH_KIND_STOVE => "stove",
         APARTMENT_STASH_KIND_FRIDGE => "fridge",
         APARTMENT_STASH_KIND_WATER_TANK => "water tank",
+        APARTMENT_STASH_KIND_FISH_TANK => "fish tank",
         APARTMENT_STASH_KIND_GROW_TRAY => "grow tray",
         _ => "footlocker",
     }

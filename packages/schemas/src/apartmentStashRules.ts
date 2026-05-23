@@ -7,8 +7,13 @@ import {
   APARTMENT_STASH_KIND_GROW_TRAY,
   BALCONY_GROW_FERTILIZER_DEF_ID,
 } from "./balconyGrowOp.js";
+import {
+  APARTMENT_STASH_KIND_FISH_TANK,
+  apartmentFishTankAcceptsFeedDefId,
+} from "./apartmentFishTank.js";
 
 export { APARTMENT_STASH_KIND_GROW_TRAY, BALCONY_GROW_FERTILIZER_DEF_ID };
+export { APARTMENT_STASH_KIND_FISH_TANK } from "./apartmentFishTank.js";
 
 export const APARTMENT_STASH_KIND_FOOTLOCKER = "footlocker" as const;
 export const APARTMENT_STASH_KIND_WARDROBE = "wardrobe" as const;
@@ -22,6 +27,7 @@ export const APARTMENT_STASH_KINDS = [
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_WATER_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK,
   APARTMENT_STASH_KIND_GROW_TRAY,
 ] as const;
 
@@ -56,6 +62,7 @@ export const APARTMENT_STASH_SLOT_COUNT_BY_KIND: Record<ApartmentStashKind, numb
   [APARTMENT_STASH_KIND_STOVE]: 3,
   [APARTMENT_STASH_KIND_FRIDGE]: 14,
   [APARTMENT_STASH_KIND_WATER_TANK]: 1,
+  [APARTMENT_STASH_KIND_FISH_TANK]: 1,
   [APARTMENT_STASH_KIND_GROW_TRAY]: 1,
 };
 
@@ -100,6 +107,8 @@ export function apartmentStashAcceptsItemCategory(
       return category === "consumable";
     case APARTMENT_STASH_KIND_WATER_TANK:
       return false;
+    case APARTMENT_STASH_KIND_FISH_TANK:
+      return false;
     case APARTMENT_STASH_KIND_GROW_TRAY:
       return false;
     default:
@@ -118,6 +127,9 @@ export function apartmentStashAcceptsDefId(
   }
   if (stashKind === APARTMENT_STASH_KIND_GROW_TRAY) {
     return (APARTMENT_STASH_GROW_TRAY_ALLOWED_DEF_IDS as readonly string[]).includes(defId);
+  }
+  if (stashKind === APARTMENT_STASH_KIND_FISH_TANK) {
+    return apartmentFishTankAcceptsFeedDefId(defId, category);
   }
   if (
     stashKind === APARTMENT_STASH_KIND_FRIDGE &&
@@ -139,6 +151,8 @@ export function apartmentStashRejectionHint(stashKind: ApartmentStashKind): stri
       return "Stove only holds food (for now).";
     case APARTMENT_STASH_KIND_WATER_TANK:
       return "Water tank only holds a water bottle.";
+    case APARTMENT_STASH_KIND_FISH_TANK:
+      return "Fish tank only holds food for the fish.";
     case APARTMENT_STASH_KIND_GROW_TRAY:
       return "Grow tray only holds tray compost.";
     default:
@@ -173,6 +187,8 @@ export function apartmentStashHudGridCols(stashKind: ApartmentStashKind): number
     case APARTMENT_STASH_KIND_FRIDGE:
       return 7;
     case APARTMENT_STASH_KIND_WATER_TANK:
+      return 1;
+    case APARTMENT_STASH_KIND_FISH_TANK:
       return 1;
     case APARTMENT_STASH_KIND_GROW_TRAY:
       return 1;

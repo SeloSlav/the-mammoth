@@ -1,16 +1,10 @@
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { resolveEditorSelectionDisplayName } from "../editor/scene/editorSelectionDisplayName.js";
-import {
-  formatEditorSelectionStat,
-  measureEditorSelectionMeshStats,
-  type EditorSelectionMeshStats,
-} from "../editor/scene/editorSelectionMeshStats.js";
+import { buildEditorSelectionOverlayModel } from "../editor/scene/editorSelectionOverlayModel.js";
+import { formatEditorSelectionStat } from "../editor/scene/editorSelectionMeshStats.js";
 import { getEditorSelectionTarget } from "../editor/scene/editorSelectionTargetBridge.js";
 import { useEditorStore } from "../state/editorStore.js";
-
-type OverlayStats = EditorSelectionMeshStats & { name: string };
 
 const panelStyle: CSSProperties = {
   position: "fixed",
@@ -20,7 +14,7 @@ const panelStyle: CSSProperties = {
   pointerEvents: "none",
   fontFamily: "system-ui, sans-serif",
   minWidth: 200,
-  maxWidth: 320,
+  maxWidth: 340,
   padding: "12px 14px",
   borderRadius: 12,
   background: "linear-gradient(165deg, rgba(14, 16, 24, 0.92) 0%, rgba(8, 10, 16, 0.88) 100%)",
@@ -38,13 +32,46 @@ const eyebrowStyle: CSSProperties = {
   color: "rgba(180, 196, 220, 0.72)",
 };
 
-const nameStyle: CSSProperties = {
+const titleStyle: CSSProperties = {
   margin: "6px 0 0",
   fontSize: 15,
   fontWeight: 650,
   lineHeight: 1.25,
   color: "#f3f6fb",
   wordBreak: "break-word",
+};
+
+const stackStyle: CSSProperties = {
+  display: "grid",
+  gap: 8,
+  marginTop: 10,
+  maxHeight: 220,
+  overflowY: "auto",
+  paddingRight: 2,
+};
+
+const entryStyle: CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "rgba(255, 255, 255, 0.045)",
+  border: "1px solid rgba(255, 255, 255, 0.08)",
+};
+
+const entryNameStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  lineHeight: 1.25,
+  color: "#eef3fb",
+  wordBreak: "break-word",
+};
+
+const entryMetaStyle: CSSProperties = {
+  margin: "4px 0 0",
+  fontSize: 11,
+  fontWeight: 500,
+  color: "rgba(170, 186, 210, 0.82)",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const statsRowStyle: CSSProperties = {
@@ -79,63 +106,96 @@ const statValueStyle: CSSProperties = {
   color: "#dce8ff",
 };
 
-function readSelectionStats(selectedId: string | null): OverlayStats | null {
-  if (!selectedId) return null;
-  const target = getEditorSelectionTarget();
-  if (!target) return null;
-  const meshStats = measureEditorSelectionMeshStats(target);
-  return {
-    name: resolveEditorSelectionDisplayName(target, selectedId),
-    ...meshStats,
-  };
+function formatEntryStats(triangles: number, vertices: number): string {
+  return `${formatEditorSelectionStat(triangles)} faces · ${formatEditorSelectionStat(vertices)} verts`;
 }
 
 /** Top-left viewport badge for the current selection's mesh complexity. */
 export function EditorSelectionStatsOverlay() {
-  const { selectedId, mode } = useEditorStore(
+  const selectionState = useEditorStore(
     useShallow((s) => ({
       selectedId: s.selectedId,
       mode: s.mode,
+      myApartmentMultiselectExtraIds: s.myApartmentMultiselectExtraIds,
+      objectGroups: s.ownedApartmentBuiltins.objectGroups,
+      placedItems: s.ownedApartmentBuiltins.placedItems,
     })),
   );
-  const [stats, setStats] = useState<OverlayStats | null>(() => readSelectionStats(selectedId));
+
+  const [model, setModel] = useState(() =>
+    buildEditorSelectionOverlayModel({
+      ...selectionState,
+      fallbackTarget: getEditorSelectionTarget(),
+    }),
+  );
 
   useEffect(() => {
-    setStats(readSelectionStats(selectedId));
-    if (!selectedId) return;
+    const read = () =>
+      buildEditorSelectionOverlayModel({
+        ...selectionState,
+        fallbackTarget: getEditorSelectionTarget(),
+      });
+
+    setModel(read());
+    if (!selectionState.selectedId) return;
+
     const retry = window.setInterval(() => {
-      setStats((prev) => {
-        const next = readSelectionStats(selectedId);
+      setModel((prev) => {
+        const next = read();
         if (!next) return prev;
         if (
           prev &&
-          prev.name === next.name &&
-          prev.triangles === next.triangles &&
-          prev.vertices === next.vertices &&
-          prev.meshCount === next.meshCount
+          prev.kind === next.kind &&
+          prev.title === next.title &&
+          prev.entries.length === next.entries.length &&
+          prev.totals.triangles === next.totals.triangles &&
+          prev.totals.vertices === next.totals.vertices &&
+          prev.entries.every(
+            (entry, index) =>
+              entry.name === next.entries[index]?.name &&
+              entry.stats.triangles === next.entries[index]?.stats.triangles &&
+              entry.stats.vertices === next.entries[index]?.stats.vertices,
+          )
         ) {
           return prev;
         }
         return next;
       });
     }, 250);
-    return () => window.clearInterval(retry);
-  }, [selectedId, mode]);
 
-  if (!selectedId || !stats) return null;
+    return () => window.clearInterval(retry);
+  }, [selectionState]);
+
+  if (!selectionState.selectedId || !model) return null;
+
+  const showStack = model.kind !== "single";
 
   return (
     <div style={panelStyle} aria-live="polite">
-      <p style={eyebrowStyle}>Selected object</p>
-      <p style={nameStyle}>{stats.name}</p>
+      <p style={eyebrowStyle}>{model.eyebrow}</p>
+      <p style={titleStyle}>{model.title}</p>
+
+      {showStack ? (
+        <div style={stackStyle}>
+          {model.entries.map((entry) => (
+            <div key={entry.selectionId} style={entryStyle}>
+              <p style={entryNameStyle}>{entry.name}</p>
+              <p style={entryMetaStyle}>
+                {formatEntryStats(entry.stats.triangles, entry.stats.vertices)}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div style={statsRowStyle}>
         <div style={statCardStyle}>
-          <span style={statLabelStyle}>Faces</span>
-          <span style={statValueStyle}>{formatEditorSelectionStat(stats.triangles)}</span>
+          <span style={statLabelStyle}>{showStack ? "Total faces" : "Faces"}</span>
+          <span style={statValueStyle}>{formatEditorSelectionStat(model.totals.triangles)}</span>
         </div>
         <div style={statCardStyle}>
-          <span style={statLabelStyle}>Vertices</span>
-          <span style={statValueStyle}>{formatEditorSelectionStat(stats.vertices)}</span>
+          <span style={statLabelStyle}>{showStack ? "Total vertices" : "Vertices"}</span>
+          <span style={statValueStyle}>{formatEditorSelectionStat(model.totals.vertices)}</span>
         </div>
       </div>
     </div>

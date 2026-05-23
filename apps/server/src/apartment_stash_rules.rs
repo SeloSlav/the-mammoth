@@ -3,7 +3,8 @@
 
 use crate::inventory_models::{
     APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY,
-    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
+    APARTMENT_STASH_KIND_WATER_TANK,
 };
 use crate::items_catalog::{self, ItemCategory};
 
@@ -20,6 +21,7 @@ pub(crate) fn apartment_stash_slot_count(stash_kind: &str) -> u16 {
         APARTMENT_STASH_KIND_STOVE => 3,
         APARTMENT_STASH_KIND_FRIDGE => 14,
         APARTMENT_STASH_KIND_WATER_TANK => 1,
+        APARTMENT_STASH_KIND_FISH_TANK => 1,
         APARTMENT_STASH_KIND_GROW_TRAY => 1,
         _ => 24,
     }
@@ -45,6 +47,7 @@ pub(crate) fn apartment_stash_accepts_item_category(
             category == ItemCategory::Consumable
         }
         APARTMENT_STASH_KIND_WATER_TANK => false,
+        APARTMENT_STASH_KIND_FISH_TANK => false,
         APARTMENT_STASH_KIND_GROW_TRAY => false,
         _ => false,
     }
@@ -58,6 +61,7 @@ pub(crate) fn apartment_stash_rejection_hint(stash_kind: &str) -> &'static str {
         APARTMENT_STASH_KIND_FRIDGE => "Fridge only holds food and consumables.",
         APARTMENT_STASH_KIND_STOVE => "Stove only holds food (for now).",
         APARTMENT_STASH_KIND_WATER_TANK => "Water tank only holds a water bottle.",
+        APARTMENT_STASH_KIND_FISH_TANK => "Fish tank only holds food for the fish.",
         APARTMENT_STASH_KIND_GROW_TRAY => "Grow tray only holds balcony substrate fertilizer.",
         _ => "This item cannot go in this storage.",
     }
@@ -69,6 +73,9 @@ pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> 
     }
     if stash_kind == APARTMENT_STASH_KIND_GROW_TRAY {
         return GROW_TRAY_ALLOWED_DEF_IDS.contains(&def_id);
+    }
+    if stash_kind == APARTMENT_STASH_KIND_FISH_TANK {
+        return crate::fish_tank::is_fish_tank_feed_def_id(def_id);
     }
     if stash_kind == APARTMENT_STASH_KIND_FRIDGE && def_id == "water-bottle" {
         return true;
@@ -88,7 +95,7 @@ mod tests {
     use crate::inventory_models::{
         APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
         APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
-        APARTMENT_STASH_KIND_WATER_TANK,
+        APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK,
     };
     use crate::items_catalog::ItemCategory;
 
@@ -106,6 +113,10 @@ mod tests {
         assert_eq!(apartment_stash_slot_count(APARTMENT_STASH_KIND_FRIDGE), 14);
         assert_eq!(
             apartment_stash_slot_count(APARTMENT_STASH_KIND_WATER_TANK),
+            1
+        );
+        assert_eq!(
+            apartment_stash_slot_count(APARTMENT_STASH_KIND_FISH_TANK),
             1
         );
         assert_eq!(
@@ -167,6 +178,18 @@ mod tests {
         assert!(!apartment_stash_accepts_def_id(
             APARTMENT_STASH_KIND_GROW_TRAY,
             "parsley-seeds"
+        ));
+    }
+
+    #[test]
+    fn fish_tank_accepts_food_not_medicine() {
+        assert!(apartment_stash_accepts_def_id(
+            APARTMENT_STASH_KIND_FISH_TANK,
+            "apple"
+        ));
+        assert!(!apartment_stash_accepts_def_id(
+            APARTMENT_STASH_KIND_FISH_TANK,
+            "bandage-roll"
         ));
     }
 }

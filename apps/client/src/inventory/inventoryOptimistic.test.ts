@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { inventorySlotGridsMatch, predictSlotMove, predictWorldDrop } from "./inventoryOptimistic";
+import { MAMMOTH_INVENTORY_SLOTS } from "./useMammothInventory";
 
 function item(instanceNum: number, defId: string, qty: number, max: number): MammothPopulatedItem {
   return {
@@ -32,7 +33,7 @@ describe("inventoryOptimistic", () => {
   it("moves into an empty slot", () => {
     const grids = {
       hotbar: [item(101, "knife", 1, 1), null, null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -46,7 +47,7 @@ describe("inventoryOptimistic", () => {
   it("swaps two different items", () => {
     const grids = {
       hotbar: [item(201, "knife", 1, 1), item(202, "crowbar", 1, 1), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -75,7 +76,7 @@ describe("inventoryOptimistic", () => {
   it("predictWorldDrop clears source", () => {
     const grids = {
       hotbar: [item(301, "knife", 1, 1), null, null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictWorldDrop(grids, { type: "hotbar", index: 0 }, 1);
     expect(next?.hotbar[0]).toBeNull();
@@ -84,7 +85,7 @@ describe("inventoryOptimistic", () => {
   it("predictWorldDrop removes partial stack quantity", () => {
     const grids = {
       hotbar: [item(302, "bandage", 6, 10), null, null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictWorldDrop(grids, { type: "hotbar", index: 0 }, 3);
     expect(next?.hotbar[0]?.instance.quantity).toBe(3);
@@ -93,7 +94,7 @@ describe("inventoryOptimistic", () => {
   it("predictSlotMove splits half a stack into an empty slot", () => {
     const grids = {
       hotbar: [item(401, "bandage", 6, 10), null, null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -108,7 +109,7 @@ describe("inventoryOptimistic", () => {
   it("predictSlotMove splits into a compatible stack", () => {
     const grids = {
       hotbar: [item(501, "bandage", 4, 10), item(502, "bandage", 2, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -123,7 +124,7 @@ describe("inventoryOptimistic", () => {
   it("predictSlotMove merges a full stack into a compatible stack", () => {
     const grids = {
       hotbar: [item(601, "bandage", 4, 10), item(602, "bandage", 3, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -138,7 +139,7 @@ describe("inventoryOptimistic", () => {
   it("predictSlotMove partially merges when the target only has partial room", () => {
     const grids = {
       hotbar: [item(701, "bandage", 5, 10), item(702, "bandage", 8, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     const next = predictSlotMove(
       grids,
@@ -152,7 +153,7 @@ describe("inventoryOptimistic", () => {
   it("predictSlotMove cancels when dropping onto a full stack of the same item", () => {
     const grids = {
       hotbar: [item(801, "bandage", 4, 10), item(802, "bandage", 10, 10), null, null, null, null],
-      inventory: Array.from({ length: 24 }, () => null),
+      inventory: Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null),
     };
     expect(
       predictSlotMove(grids, { type: "hotbar", index: 0 }, { type: "hotbar", index: 1 }),
@@ -161,7 +162,7 @@ describe("inventoryOptimistic", () => {
 });
 
 describe("inventorySlotGridsMatch", () => {
-  const emptyInv = () => Array.from({ length: 24 }, () => null);
+  const emptyInv = () => Array.from({ length: MAMMOTH_INVENTORY_SLOTS }, () => null);
 
   it("returns true for identical slot populations", () => {
     const a = {

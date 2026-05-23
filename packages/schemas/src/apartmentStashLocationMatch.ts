@@ -37,6 +37,7 @@ export function parseApartmentStashLocationKey(raw: string): ParsedApartmentStas
       "stove",
       "fridge",
       "water_tank",
+      "fish_tank",
     ];
     if ((kinds as string[]).includes(tail)) {
       return { tag: "legacy", unitKey, stashKind: tail as ApartmentStashKind };

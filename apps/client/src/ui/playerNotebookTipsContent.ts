@@ -60,9 +60,10 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
     kind: "reference",
     heading: "Fish tank → fertilizer",
     lines: [
-      "Feed the fish. Clean when water clouds. Pump/filter keeps them alive — neglect = dead fish, algae, shame.",
-      "Scoop waste from the tank into tray compost. Same stuff as footlocker starter packs.",
-      "Drop compost in a grow-tray stash before you sleep. One unit overnight feeds all four slots in that tray.",
+      "Main tank (not castle/sand props): E opens the feed slot — drop any food item before you sleep.",
+      "Overnight the fish digest scraps; you may find tray compost in the same slot. Take it out, then feed again.",
+      "Better food tends to convert more reliably — fish love fresh kopar and mushroom scraps; rakija is a bad idea.",
+      "Move compost to a grow-tray stash before the next sleep. One unit feeds all four slots in that tray.",
     ],
   },
   {

@@ -18,8 +18,19 @@ pub(crate) use starting_item::{
     reset_player_loadout_for_respawn,
 };
 
-pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = 24;
 pub(crate) const NUM_PLAYER_HOTBAR_SLOTS: u8 = 6;
+
+/// Active backpack slots at spawn (no upgrades). Sync with `PLAYER_INVENTORY_BASE_SLOTS` in `@the-mammoth/schemas`.
+pub(crate) const PLAYER_INVENTORY_BASE_SLOTS: u16 = 8;
+/// First upgrade tier (+2). Not wired yet — sync with `PLAYER_INVENTORY_UPGRADE_1_SLOTS`.
+#[allow(dead_code)]
+pub(crate) const PLAYER_INVENTORY_UPGRADE_1_SLOTS: u16 = 10;
+/// Planned max with all backpack upgrades. Sync with `PLAYER_INVENTORY_MAX_SLOTS`.
+#[allow(dead_code)]
+pub(crate) const PLAYER_INVENTORY_MAX_SLOTS: u16 = 12;
+
+/// Valid inventory slot indices are `0 .. NUM_PLAYER_INVENTORY_SLOTS` (until upgrade hook expands this).
+pub(crate) const NUM_PLAYER_INVENTORY_SLOTS: u16 = PLAYER_INVENTORY_BASE_SLOTS;
 
 #[spacetimedb::table(public, accessor = inventory_item)]
 pub struct InventoryItem {

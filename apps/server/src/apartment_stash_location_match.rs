@@ -8,6 +8,7 @@ use crate::inventory_models::{
     parse_apartment_stash_key_v2, stash_location_matches, ParsedApartmentStashKey,
     APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY,
     APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_FISH_TANK,
 };
 
 const DECOR_ITEM_KIND_PLAIN: u8 = 0;
@@ -15,11 +16,15 @@ const DECOR_ITEM_KIND_WARDROBE: u8 = 2;
 const DECOR_ITEM_KIND_STOVE: u8 = 4;
 const DECOR_ITEM_KIND_FRIDGE: u8 = 5;
 const DECOR_ITEM_KIND_WATER_TANK: u8 = 6;
+const DECOR_ITEM_KIND_FISH_TANK: u8 = 7;
 
 fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
     let p = model_rel_path.trim().trim_start_matches('/');
     if p.ends_with("objects/water-tank.glb") {
         return DECOR_ITEM_KIND_WATER_TANK;
+    }
+    if p.ends_with("objects/fish-tank.glb") {
+        return DECOR_ITEM_KIND_FISH_TANK;
     }
     if p.ends_with("objects/fridge.glb") {
         return DECOR_ITEM_KIND_FRIDGE;
@@ -49,6 +54,7 @@ fn decor_stash_kind_for_row(item_kind: u8, model_rel_path: &str) -> &'static str
         DECOR_ITEM_KIND_STOVE => APARTMENT_STASH_KIND_STOVE,
         DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
         DECOR_ITEM_KIND_WATER_TANK => APARTMENT_STASH_KIND_WATER_TANK,
+        DECOR_ITEM_KIND_FISH_TANK => APARTMENT_STASH_KIND_FISH_TANK,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }

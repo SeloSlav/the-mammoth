@@ -10,6 +10,7 @@ import {
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_WATER_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK,
   parseApartmentStashKeyFull,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
@@ -22,6 +23,7 @@ export function apartmentStashKindForPlacedKind(
   if (k === "stove") return APARTMENT_STASH_KIND_STOVE;
   if (k === "fridge") return APARTMENT_STASH_KIND_FRIDGE;
   if (k === "water_tank") return APARTMENT_STASH_KIND_WATER_TANK;
+  if (k === "fish_tank") return APARTMENT_STASH_KIND_FISH_TANK;
   return null;
 }
 

@@ -81,10 +81,11 @@ import {
   predictSlotMove,
   type SlotGrids,
 } from "./inventoryOptimistic";
+import {
+  PLAYER_INVENTORY_BASE_SLOTS,
+  PLAYER_INVENTORY_GRID_COLS,
+} from "@the-mammoth/schemas";
 import { useMammothInventory, useMammothStash } from "./useMammothInventory";
-
-const INV_COLS = 6;
-const INV_ROWS = 4;
 
 const NO_SELECT: CSSProperties = {
   userSelect: "none",
@@ -528,11 +529,11 @@ export function MammothInventoryHud({ conn, activeStash = null }: Props) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: `repeat(${INV_COLS}, 52px)`,
+                gridTemplateColumns: `repeat(${PLAYER_INVENTORY_GRID_COLS}, 52px)`,
                 gap: 6,
               }}
             >
-              {Array.from({ length: INV_ROWS * INV_COLS }, (_, i) => {
+              {Array.from({ length: PLAYER_INVENTORY_BASE_SLOTS }, (_, i) => {
                 const pop = inv[i] ?? null;
                 const slotInfo = { type: "inventory" as const, index: i };
                 return (

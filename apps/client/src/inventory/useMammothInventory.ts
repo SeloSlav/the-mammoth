@@ -5,13 +5,13 @@ import type { InventoryItem } from "../module_bindings/types";
 import type { ApartmentStashKind } from "./apartmentStashInventoryRules";
 import { apartmentDecorStashKindResolver } from "./apartmentStashInventoryRules";
 import { apartmentStashKeyMatchesRow } from "../game/fpApartment/fpApartmentStashKey";
-import { APARTMENT_STASH_SLOT_INDEX_MAX } from "@the-mammoth/schemas";
+import { APARTMENT_STASH_SLOT_INDEX_MAX, PLAYER_INVENTORY_BASE_SLOTS } from "@the-mammoth/schemas";
 import type { MammothPopulatedItem } from "./inventoryDragDropTypes";
 import { apartmentStashSlotCount } from "./apartmentStashInventoryRules";
 import { getMammothItemDef } from "./mammothItemCatalog";
 
 export const MAMMOTH_HOTBAR_SLOTS = 6;
-export const MAMMOTH_INVENTORY_SLOTS = 24;
+export const MAMMOTH_INVENTORY_SLOTS = PLAYER_INVENTORY_BASE_SLOTS;
 /** Legacy max — prefer {@link apartmentStashSlotCount} per furniture type. */
 export const MAMMOTH_STASH_SLOTS = APARTMENT_STASH_SLOT_INDEX_MAX;
 

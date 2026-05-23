@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OWNED_APARTMENT_MODEL_FISH_TANK } from "./apartmentFishTank.js";
 
 /** Matches server `APARTMENT_DECOR_PITCH_LIMIT_RAD` — max tilt for imported decor (rad). */
 export const OWNED_APARTMENT_DECOR_PITCH_RAD_MAX = 1.4 as const;
@@ -23,6 +24,7 @@ export const OWNED_APARTMENT_MODEL_FOOTLOCKER = "static/models/objects/footlocke
 export const OWNED_APARTMENT_MODEL_STOVE = "static/models/objects/stove.glb" as const;
 export const OWNED_APARTMENT_MODEL_FRIDGE = "static/models/objects/fridge.glb" as const;
 export const OWNED_APARTMENT_MODEL_WATER_TANK = "static/models/objects/water-tank.glb" as const;
+export { OWNED_APARTMENT_MODEL_FISH_TANK } from "./apartmentFishTank.js";
 
 export const OWNED_APARTMENT_PLACED_ITEM_KINDS = [
   "plain",
@@ -32,6 +34,7 @@ export const OWNED_APARTMENT_PLACED_ITEM_KINDS = [
   "stove",
   "fridge",
   "water_tank",
+  "fish_tank",
 ] as const;
 
 export type OwnedApartmentPlacedItemKind =
@@ -45,6 +48,7 @@ const OWNED_APARTMENT_MODEL_TO_PLACED_KIND: Record<string, OwnedApartmentPlacedI
   [OWNED_APARTMENT_MODEL_STOVE]: "stove",
   [OWNED_APARTMENT_MODEL_FRIDGE]: "fridge",
   [OWNED_APARTMENT_MODEL_WATER_TANK]: "water_tank",
+  [OWNED_APARTMENT_MODEL_FISH_TANK]: "fish_tank",
 };
 
 /** Infer `itemKind` when importing décor from the object catalog (editor + JSON authoring). */
@@ -141,7 +145,8 @@ export function ownedApartmentPlacedItemKindHasStash(
     k === "footlocker" ||
     k === "stove" ||
     k === "fridge" ||
-    k === "water_tank"
+    k === "water_tank" ||
+    k === "fish_tank"
   );
 }
 
@@ -165,6 +170,7 @@ export const APARTMENT_UNIT_DECOR_ITEM_KIND_FOOTLOCKER = 3 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE = 4 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE = 5 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK = 6 as const;
+export const APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK = 7 as const;
 
 export function apartmentUnitDecorItemKindFromString(
   k: OwnedApartmentPlacedItemKind,
@@ -182,6 +188,8 @@ export function apartmentUnitDecorItemKindFromString(
       return APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE;
     case "water_tank":
       return APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK;
+    case "fish_tank":
+      return APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK;
     default:
       return APARTMENT_UNIT_DECOR_ITEM_KIND_PLAIN;
   }
@@ -203,6 +211,8 @@ export function apartmentPlacedItemKindFromDecorItemKind(
       return "fridge";
     case APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK:
       return "water_tank";
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK:
+      return "fish_tank";
     default:
       return "plain";
   }
@@ -252,6 +262,7 @@ const OwnedApartmentPlacedItemKindSchema = z.enum([
   "stove",
   "fridge",
   "water_tank",
+  "fish_tank",
 ]);
 
 const OwnedApartmentPlacedItemSchemaCore = z.object({

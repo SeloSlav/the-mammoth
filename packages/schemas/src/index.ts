@@ -18,3 +18,5 @@ export * from "./ownedApartmentDecorDefaultScale.js";
 export * from "./apartmentSittable.js";
 export * from "./apartmentNotebook.js";
 export * from "./balconyGrowOp.js";
+export * from "./apartmentFishTank.js";
+export * from "./playerInventory.js";

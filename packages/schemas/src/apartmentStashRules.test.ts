@@ -6,12 +6,13 @@ import {
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_WATER_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK,
   apartmentStashAcceptsDefId,
   apartmentStashAcceptsItemCategory,
   apartmentStashHudSections,
   apartmentStashSlotCount,
   isApartmentStashSlotIndexValid,
-} from "./apartmentStashRules";
+} from "./apartmentStashRules.js";
 
 describe("apartmentStashSlotCount", () => {
   it("assigns gameplay slot counts per furniture type", () => {
@@ -20,6 +21,7 @@ describe("apartmentStashSlotCount", () => {
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_STOVE)).toBe(3);
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_FRIDGE)).toBe(14);
     expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_WATER_TANK)).toBe(1);
+    expect(apartmentStashSlotCount(APARTMENT_STASH_KIND_FISH_TANK)).toBe(1);
   });
 
   it("rejects out-of-range slot indices", () => {
@@ -84,6 +86,15 @@ describe("apartmentStashAcceptsDefId", () => {
     ).toBe(true);
     expect(
       apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_GROW_TRAY, "parsley-seeds", "resource"),
+    ).toBe(false);
+  });
+
+  it("fish tank accepts consumable food", () => {
+    expect(apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FISH_TANK, "apple", "consumable")).toBe(
+      true,
+    );
+    expect(
+      apartmentStashAcceptsDefId(APARTMENT_STASH_KIND_FISH_TANK, "bandage-roll", "consumable"),
     ).toBe(false);
   });
 });
