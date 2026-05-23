@@ -53,6 +53,7 @@ import EnqueueCraftReducer from "./enqueue_craft_reducer";
 import EnterCombatSimReducer from "./enter_combat_sim_reducer";
 import FillWaterBottleAtTankReducer from "./fill_water_bottle_at_tank_reducer";
 import HarvestBalconyGrowSlotReducer from "./harvest_balcony_grow_slot_reducer";
+import LeaveCombatSimReducer from "./leave_combat_sim_reducer";
 import MoveItemToHotbarReducer from "./move_item_to_hotbar_reducer";
 import MoveItemToInventoryReducer from "./move_item_to_inventory_reducer";
 import PickupDroppedItemReducer from "./pickup_dropped_item_reducer";
@@ -588,6 +589,7 @@ const reducersSchema = __reducers(
   __reducerSchema("enter_combat_sim", EnterCombatSimReducer),
   __reducerSchema("fill_water_bottle_at_tank", FillWaterBottleAtTankReducer),
   __reducerSchema("harvest_balcony_grow_slot", HarvestBalconyGrowSlotReducer),
+  __reducerSchema("leave_combat_sim", LeaveCombatSimReducer),
   __reducerSchema("move_item_to_hotbar", MoveItemToHotbarReducer),
   __reducerSchema("move_item_to_inventory", MoveItemToInventoryReducer),
   __reducerSchema("pickup_dropped_item", PickupDroppedItemReducer),

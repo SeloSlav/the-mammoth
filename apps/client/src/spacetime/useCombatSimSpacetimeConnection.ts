@@ -4,10 +4,11 @@ import type { DbConnection } from "../module_bindings";
 import { spacetimeDatabase, spacetimeUri } from "@the-mammoth/spacetime-client";
 import { runChunkedInitialSpacetimeSubscriptions } from "./chunkedInitialSpacetimeSubscriptions.js";
 import { readOptionalString } from "./username.js";
-import { writeGuestConnectionToken } from "./guestConnectionToken.js";
+import { readGuestConnectionToken, writeGuestConnectionToken } from "./guestConnectionToken.js";
 import { prepareFreshGuestSaveSlot } from "./guestSaveRegistry.js";
+import { formatSpacetimeConnectError } from "./useSpacetimeConnection.js";
 
-export type CombatSimSpacetimePhase = "connecting" | "needs_name" | "ready" | "error";
+export type CombatSimSpacetimePhase = "idle" | "connecting" | "needs_name" | "ready" | "error";
 
 export type CombatSimSpacetimeSession = {
   phase: CombatSimSpacetimePhase;
@@ -20,17 +21,26 @@ export type CombatSimSpacetimeSession = {
 
 const DEFAULT_COMBAT_SIM_USERNAME = "CombatSim";
 
+export type UseCombatSimSpacetimeConnectionOptions = {
+  /** When false, no socket is opened (editor layout mode). Default true. */
+  enabled?: boolean;
+};
+
 /**
  * Minimal guest SpacetimeDB session for editor combat sim (and dev harnesses).
- * Skips OIDC / save-slot UI — auto guest token + single username gate.
+ * Skips OIDC / save-slot UI — reuses guest WS token when present.
  */
-export function useCombatSimSpacetimeConnection(): CombatSimSpacetimeSession {
-  const [phase, setPhase] = useState<CombatSimSpacetimePhase>("connecting");
+export function useCombatSimSpacetimeConnection(
+  options: UseCombatSimSpacetimeConnectionOptions = {},
+): CombatSimSpacetimeSession {
+  const enabled = options.enabled !== false;
+  const [phase, setPhase] = useState<CombatSimSpacetimePhase>(enabled ? "connecting" : "idle");
   const [conn, setConn] = useState<DbConnection | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [connEpoch, setConnEpoch] = useState(0);
   const userReadyRef = useRef(false);
+  const connectionRef = useRef<DbConnection | null>(null);
 
   const refreshRegistration = useCallback((cc: DbConnection, baselineDone: boolean) => {
     if (!baselineDone || !userReadyRef.current) return;
@@ -48,24 +58,40 @@ export function useCombatSimSpacetimeConnection(): CombatSimSpacetimeSession {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      userReadyRef.current = false;
+      connectionRef.current?.disconnect();
+      connectionRef.current = null;
+      setConn(null);
+      setDisplayName(null);
+      setErrorMsg(null);
+      setPhase("idle");
+      return;
+    }
+
     let active = true;
-    let connection: DbConnection | null = null;
     userReadyRef.current = false;
     setPhase("connecting");
     setConn(null);
     setErrorMsg(null);
 
-    prepareFreshGuestSaveSlot();
+    const existingToken = readGuestConnectionToken();
+    if (!existingToken) {
+      prepareFreshGuestSaveSlot();
+    }
 
-    connection = DbConnectionClass.builder()
+    const tokenForBuilder = readGuestConnectionToken() ?? undefined;
+
+    const connection = DbConnectionClass.builder()
       .withUri(spacetimeUri())
       .withDatabaseName(spacetimeDatabase())
-      .withToken(undefined)
+      .withToken(tokenForBuilder)
       .onConnect((cc, _identity, wsToken) => {
         if (!active) return;
         if (typeof wsToken === "string" && wsToken.length > 0) {
           writeGuestConnectionToken(wsToken);
         }
+        connectionRef.current = cc;
         setConn(cc);
         setErrorMsg(null);
         let baselineHydrationComplete = false;
@@ -105,17 +131,23 @@ export function useCombatSimSpacetimeConnection(): CombatSimSpacetimeSession {
       .onConnectError((_ctx, err) => {
         if (!active) return;
         setPhase("error");
-        setErrorMsg(err instanceof Error ? err.message : String(err));
+        setErrorMsg(formatSpacetimeConnectError(err));
         setConn(null);
+        connectionRef.current = null;
       })
       .build();
 
+    connectionRef.current = connection;
+
     return () => {
       active = false;
-      connection?.disconnect();
+      connection.disconnect();
+      if (connectionRef.current === connection) {
+        connectionRef.current = null;
+      }
       setConn(null);
     };
-  }, [connEpoch, refreshRegistration]);
+  }, [connEpoch, refreshRegistration, enabled]);
 
   const submitUsername = useCallback(
     async (name: string) => {

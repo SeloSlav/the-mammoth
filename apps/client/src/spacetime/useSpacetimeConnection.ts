@@ -58,7 +58,7 @@ function readInitialPhase(): SpacetimePhase {
 }
 
 /** SpacetimeDB passes the browser `WebSocket` `error` event here, not an `Error` — avoid `[object Event]`. */
-function formatSpacetimeConnectError(err: unknown): string {
+export function formatSpacetimeConnectError(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof ErrorEvent !== "undefined" && err instanceof ErrorEvent && err.message) {
     return err.message;

@@ -91,6 +91,8 @@ export default function App() {
   }
 
   const exitCombatSim = () => {
+    const conn = session.conn;
+    if (conn) void conn.reducers.leaveCombatSim({});
     const url = new URL(window.location.href);
     url.searchParams.delete("combatSim");
     window.location.replace(url.toString());

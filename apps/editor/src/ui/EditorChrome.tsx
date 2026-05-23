@@ -477,12 +477,12 @@ export function EditorChrome() {
           undo={undo}
           redo={redo}
         />
+        {workspace === "combat_sim" ? <EditorChromeCombatSim /> : null}
         <EditorChromeMyApartment
           mode={mode}
           setWorkspace={setWorkspace}
           contentIndex={contentIndex}
         />
-        {workspace === "combat_sim" ? <EditorChromeCombatSim /> : null}
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
           <div
             id={EDITOR_CHROME_SECTION.fpAuthoring}

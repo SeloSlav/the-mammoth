@@ -90,6 +90,7 @@ export function startEditorSceneRenderLoop(deps: {
     const dt = Math.min((now - lastTickMs) / 1000, 0.05);
     lastTickMs = now;
     const st = useEditorStore.getState();
+    if (st.combatSimPlayActive) return;
     const tcDragging = transformControls.dragging === true;
     const inFpMode = isFpModeFn(st.mode);
     const fpSessionActive =

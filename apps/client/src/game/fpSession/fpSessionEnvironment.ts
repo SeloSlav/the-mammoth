@@ -218,9 +218,15 @@ export type FpSessionEnvironmentFrameTimings = {
   lightingMs: number;
 };
 
+export type AttachFpSessionEnvironmentOpts = {
+  /** Combat sim uses its own arena plane — skip the 6 km textured outdoor ground + PBR loads. */
+  skipOutdoorGroundPlane?: boolean;
+};
+
 export function attachFpSessionEnvironment(
   scene: THREE.Scene,
   renderer: THREE.WebGPURenderer,
+  opts?: AttachFpSessionEnvironmentOpts,
 ): FpSessionEnvironmentHandle {
   const clipCompatibleRenderer = renderer as THREE.WebGPURenderer & {
     localClippingEnabled?: boolean;
@@ -354,9 +360,13 @@ export function attachFpSessionEnvironment(
    */
   scene.fog = new THREE.Fog(0xd0d4cf, 120, 1350);
 
+  const skipOutdoorGroundPlane = opts?.skipOutdoorGroundPlane === true;
   type LoadedTex = THREE.Texture;
   const groundTextures: LoadedTex[] = [];
   let groundPlaneDisposed = false;
+  let groundPlane: THREE.Mesh | null = null;
+
+  if (!skipOutdoorGroundPlane) {
 
   const pushTerrainTexture = (t: LoadedTex): void => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -565,7 +575,7 @@ export function attachFpSessionEnvironment(
     }
   })();
 
-  const groundPlane = new THREE.Mesh(
+  groundPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(
       FP_GROUND_PLANE_SIZE,
       FP_GROUND_PLANE_SIZE,
@@ -581,6 +591,7 @@ export function attachFpSessionEnvironment(
   groundPlane.castShadow = false;
   groundPlane.receiveShadow = false;
   scene.add(groundPlane);
+  }
 
   const exteriorRig = APARTMENT_INTERIOR_VISUAL_PROFILE.exteriorRig;
   /**
@@ -629,7 +640,9 @@ export function attachFpSessionEnvironment(
       applyApartmentInteriorClip(_apartmentInteriorBounds);
 
       sky.visible = renderIsoSky;
-      groundPlane.visible = renderIsoSky;
+      if (groundPlane) {
+        groundPlane.visible = renderIsoSky;
+      }
       if (renderIsoSky) {
         sky.updateTime(nowSec);
         sky.updateSun(sunDir);
@@ -688,11 +701,13 @@ export function attachFpSessionEnvironment(
       sky.dispose();
 
       groundPlaneDisposed = true;
-      scene.remove(groundPlane);
-      groundPlane.geometry.dispose();
-      for (const t of groundTextures) t.dispose();
-      groundTextures.length = 0;
-      disposeMaterial(groundPlane.material);
+      if (groundPlane) {
+        scene.remove(groundPlane);
+        groundPlane.geometry.dispose();
+        for (const t of groundTextures) t.dispose();
+        groundTextures.length = 0;
+        disposeMaterial(groundPlane.material);
+      }
 
       scene.remove(
         hemi,

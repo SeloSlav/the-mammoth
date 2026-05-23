@@ -70,6 +70,13 @@ import {
   forgetMegablockStaticWorldMeshCache,
   waitMegablockStaticWorldMeshReady,
 } from "./fpSession/fpSessionStaticWorldMeshCache.js";
+import { createCombatSimStaticWorld } from "./combatSim/combatSimStaticWorld.js";
+import {
+  createCombatSimFpApartmentDecorMeshesNoop,
+  createCombatSimFpApartmentDoorsNoop,
+  createCombatSimFpBalconyGrowNoop,
+  createCombatSimFpElevatorsNoop,
+} from "./combatSim/combatSimFpNoops.js";
 import { floorPayloadByDocId } from "./fpSession/fpSessionContentLoad.js";
 import { effectiveDevGameplayEquippedPrimary } from "./fpDev/devGameplayWeaponOverride.js";
 import {
@@ -233,12 +240,15 @@ export async function mountFpSession(
   const mountWallClock0 = performance.now();
   if (loadDbg) fpLoadingDbgMark("mount_fp_session:begin");
 
-  setFpCombatSimMode(opts.combatSimMode === true);
+  const isCombatSim = opts.combatSimMode === true;
+  setFpCombatSimMode(isCombatSim);
 
   installMmWallProbeLoadingStub();
 
   const [world, webGpuAdapter] = await Promise.all([
-    fpLoadingDbgTimed("fp_static_world_create", async () => waitMegablockStaticWorldMeshReady()),
+    fpLoadingDbgTimed("fp_static_world_create", async () =>
+      isCombatSim ? createCombatSimStaticWorld(conn) : waitMegablockStaticWorldMeshReady(),
+    ),
     fpLoadingDbgTimed("webgpu_adapter_assert", async () => {
       await assertWebGpuAdapterOrThrow();
       return requestWebGpuAdapter();
@@ -296,7 +306,9 @@ export async function mountFpSession(
   resetFpDebugEmissiveIsolationState();
   resetFpDebugGameplayFeedbackFlags();
   const logFpPerf = createFpSessionPerfDebugPostRenderHook(renderer);
-  const fpEnvironment = attachFpSessionEnvironment(scene, renderer);
+  const fpEnvironment = attachFpSessionEnvironment(scene, renderer, {
+    skipOutdoorGroundPlane: isCombatSim,
+  });
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
@@ -304,21 +316,27 @@ export async function mountFpSession(
   /** Skydome is a large inner sphere; default rig `far` (900) clips it to black. */
   camera.far = FP_SESSION_SKY_CAMERA_FAR;
   scene.add(playerRig);
-  void ensureStairwellCigaretteMeshReady();
+  if (!isCombatSim) {
+    void ensureStairwellCigaretteMeshReady();
+  }
 
   scene.add(buildingRoot);
   scene.add(cellRoot);
   buildingRoot.updateMatrixWorld(true);
-  prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
+  if (!isCombatSim) {
+    prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
+  }
   const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;
   const fpEnvTex = fpReadableEnv instanceof THREE.Texture ? fpReadableEnv : null;
   const fpShellWarmEnv = scene.userData[MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD];
   const fpShellEnvTex =
     fpShellWarmEnv instanceof THREE.Texture ? fpShellWarmEnv : fpEnvTex;
-  bindMammothResidentialShellIndirectEnv(buildingRoot, fpShellEnvTex);
+  if (!isCombatSim) {
+    bindMammothResidentialShellIndirectEnv(buildingRoot, fpShellEnvTex);
+  }
   cellRoot.updateMatrixWorld(true);
   const buildingWorldBounds = buildingBodyWorldBounds.clone();
-  const maxBuildingLevel = maxBuildingLevelIndex(building);
+  const maxBuildingLevel = isCombatSim ? 0 : maxBuildingLevelIndex(building);
 
   /**
    * Must match `elevator_layout::BUILDING_ORIGIN_Y` (0) — server `mammoth_pickup_vertical_band` does not
@@ -351,33 +369,39 @@ export async function mountFpSession(
   renderBootstrapFrame();
   fpLoadingDbgMark("fp_bootstrap_after_first_webgpu_render");
 
-  const fpElevators = mountFpElevatorWorld({
-    conn,
-    buildingRoot,
-    building,
-    getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
-    floorVisPitchLookaheadWorldBoundsXz: {
-      minX: buildingWorldBounds.min.x,
-      maxX: buildingWorldBounds.max.x,
-      minZ: buildingWorldBounds.min.z,
-      maxZ: buildingWorldBounds.max.z,
-    },
-  });
+  const fpElevators = isCombatSim
+    ? createCombatSimFpElevatorsNoop()
+    : mountFpElevatorWorld({
+        conn,
+        buildingRoot,
+        building,
+        getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+        floorVisPitchLookaheadWorldBoundsXz: {
+          minX: buildingWorldBounds.min.x,
+          maxX: buildingWorldBounds.max.x,
+          minZ: buildingWorldBounds.min.z,
+          maxZ: buildingWorldBounds.max.z,
+        },
+      });
 
-  const fpApartmentDoors = mountFpApartmentDoors({
-    conn,
-    buildingRoot,
-    building,
-  });
+  const fpApartmentDoors = isCombatSim
+    ? createCombatSimFpApartmentDoorsNoop()
+    : mountFpApartmentDoors({
+        conn,
+        buildingRoot,
+        building,
+      });
 
   let fpLobbyInteriorAuthoringRoot: THREE.Group | null = null;
-  try {
-    const lobbyInteriorDoc = InteriorDocSchema.parse(lobbyCentralInteriorAuthoringDoc);
-    fpLobbyInteriorAuthoringRoot = buildInteriorMeshes(lobbyInteriorDoc);
-    fpLobbyInteriorAuthoringRoot.name = "fp_interior_authoring:lobby_central";
-    scene.add(fpLobbyInteriorAuthoringRoot);
-  } catch (err) {
-    console.warn("[mountFpSession] lobby interior authoring mount failed", err);
+  if (!isCombatSim) {
+    try {
+      const lobbyInteriorDoc = InteriorDocSchema.parse(lobbyCentralInteriorAuthoringDoc);
+      fpLobbyInteriorAuthoringRoot = buildInteriorMeshes(lobbyInteriorDoc);
+      fpLobbyInteriorAuthoringRoot.name = "fp_interior_authoring:lobby_central";
+      scene.add(fpLobbyInteriorAuthoringRoot);
+    } catch (err) {
+      console.warn("[mountFpSession] lobby interior authoring mount failed", err);
+    }
   }
 
   const fpInteriorPartitionSolids = createFpInteriorPartitionSolidCollision();
@@ -638,24 +662,27 @@ export async function mountFpSession(
 
   const cabMirrorCollection = new FpCabMirrorCollection(scene);
 
-  const fpApartmentDecorMeshes = mountFpApartmentDecorMeshes({
-    scene,
-    conn,
-    buildingRoot,
-    renderer,
-    cabMirrorCollection,
-    onRebuilt: refreshApartmentInteriorMeshes,
-    onRequestShadowMapUpdate: () => {
-      ensureMammothApartmentDecorShadowRenderer(renderer);
-    },
-  });
-  refreshApartmentInteriorMeshes();
-
+  const fpApartmentDecorMeshes = isCombatSim
+    ? createCombatSimFpApartmentDecorMeshesNoop()
+    : mountFpApartmentDecorMeshes({
+        scene,
+        conn,
+        buildingRoot,
+        renderer,
+        cabMirrorCollection,
+        onRebuilt: refreshApartmentInteriorMeshes,
+        onRequestShadowMapUpdate: () => {
+          ensureMammothApartmentDecorShadowRenderer(renderer);
+        },
+      });
+  if (!isCombatSim) {
+    refreshApartmentInteriorMeshes();
+  }
 
   let sessionDisposed = false;
   let decalManager: DecalManager | null = null;
 
-  if (ENABLE_STAIRWELL_GRAFFITI_DECALS) {
+  if (!isCombatSim && ENABLE_STAIRWELL_GRAFFITI_DECALS) {
     void (async () => {
       try {
         const { DecalManager: DecalManagerCtor, DECAL_MANIFEST, generateStairwellDecalPlacements } =
@@ -1055,20 +1082,24 @@ export async function mountFpSession(
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
-  const fpNpcSession = createFpNpcSession({
-    scene,
-    conn,
-    getAudioContext: () => localAudio.getAudioContext(),
-  });
-  const fpBalconyGrow = mountFpBalconyGrowSession({
-    scene,
-    conn,
-    canvas,
-    onWaterPourRequested: () => {
-      void localAudio.unlock();
-      localAudio.playWaterPourLocal();
-    },
-  });
+  const fpNpcSession = isCombatSim
+    ? createFpNpcSession({
+        scene,
+        conn,
+        getAudioContext: () => localAudio.getAudioContext(),
+      })
+    : null;
+  const fpBalconyGrow = isCombatSim
+    ? createCombatSimFpBalconyGrowNoop()
+    : mountFpBalconyGrowSession({
+        scene,
+        conn,
+        canvas,
+        onWaterPourRequested: () => {
+          void localAudio.unlock();
+          localAudio.playWaterPourLocal();
+        },
+      });
   registerHotbarConsumePrimeAudio(() => localAudio.unlock());
   registerHotbarConsumeLocalPlayback((profile) => localAudio.playHotbarConsumeLocal(profile));
   const worldAudio = new WorldProximityAudio(conn, () => camera);
@@ -1825,7 +1856,7 @@ export async function mountFpSession(
     if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
     try {
       runFrame(nowMs, dt);
-      fpNpcSession.update(dt, nowMs);
+      fpNpcSession?.update(dt, nowMs);
       bumpGuestFeetAutosaveIfDue(nowMs, {
         x: pos.x,
         y: pos.y,
@@ -1880,7 +1911,9 @@ export async function mountFpSession(
     decalManager?.dispose();
     disposeStaticWorldObjectTree(buildingRoot);
     disposeStaticWorldObjectTree(cellRoot);
-    forgetMegablockStaticWorldMeshCache();
+    if (!isCombatSim) {
+      forgetMegablockStaticWorldMeshCache();
+    }
     disposeFpAuthoring();
     disposeWeaponPresentationHotReload();
     disposeWorldContentHotReload();
@@ -1894,7 +1927,7 @@ export async function mountFpSession(
     registerGameAudioPrime(null);
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
-    fpNpcSession.dispose();
+    fpNpcSession?.dispose();
     fpPlayerDamageBloodSquirt.dispose();
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();

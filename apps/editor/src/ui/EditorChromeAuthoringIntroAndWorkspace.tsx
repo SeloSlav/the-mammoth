@@ -272,9 +272,8 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
 
         {workspace === "combat_sim" ? (
           <p style={{ ...editorChromeHelp, marginTop: 10, fontSize: 12, opacity: 0.9 }}>
-            Preview the apartment layout here; use <strong>Play combat sim</strong> below for live FP
-            fighting (SpacetimeDB guest session, shotgun loadout, babushka NPC). Same harness as{" "}
-            <code>?combatSim=1</code> on the game client.
+            Switches to live FP combat (shotgun + babushka). Use <strong>Stop</strong> in the sidebar
+            or HUD to return here and edit NPC spawn anchors. Requires SpacetimeDB on port 3000.
           </p>
         ) : null}
 

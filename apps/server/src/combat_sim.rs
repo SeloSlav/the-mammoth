@@ -146,3 +146,13 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
         "enter_combat_sim: owner={owner} npc_count={npc_count}",
     );
 }
+
+/// Tear down combat-sim NPCs for the sender's claimed apartment (does not restore loadout).
+#[spacetimedb::reducer]
+pub fn leave_combat_sim(ctx: &ReducerContext) {
+    let owner = ctx.sender();
+    let Some(unit) = owned_claimed_unit(ctx, owner) else {
+        return;
+    };
+    npc::clear_npcs_for_session(ctx, combat_sim_session_key(&unit).as_str());
+}

@@ -5,14 +5,17 @@ import { useEditorStore } from "./state/editorStore.js";
 import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
 import { EditorCombatSimPlayLayer } from "./ui/EditorCombatSimPlayLayer.js";
+import { EditorCombatSimViewportPrompt } from "./ui/EditorCombatSimViewportPrompt.js";
 import { EditorViewportStatsStack } from "./ui/EditorViewportStatsStack.js";
 
 export default function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const editorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const combatCanvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [gpuError, setGpuError] = useState<string | null>(null);
   const combatSimPlayActive = useEditorStore((s) => s.combatSimPlayActive);
+  const workspace = useEditorStore((s) => s.workspace);
   const setCombatSimPlayActive = useEditorStore((s) => s.setCombatSimPlayActive);
 
   useEffect(() => {
@@ -32,8 +35,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!ready || combatSimPlayActive) return;
-    const canvas = canvasRef.current;
+    if (!ready) return;
+    const canvas = editorCanvasRef.current;
     if (!canvas) return;
     let dispose: (() => void) | undefined;
     let cancelled = false;
@@ -49,7 +52,7 @@ export default function App() {
       cancelled = true;
       dispose?.();
     };
-  }, [ready, combatSimPlayActive]);
+  }, [ready]);
 
   return (
     <>
@@ -61,7 +64,27 @@ export default function App() {
           overflow: "hidden",
         }}
       >
-        <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "100%" }} />
+        <canvas
+          ref={editorCanvasRef}
+          style={{
+            display: combatSimPlayActive ? "none" : "block",
+            width: "100%",
+            height: "100%",
+          }}
+        />
+        {combatSimPlayActive ? (
+          <canvas
+            ref={combatCanvasRef}
+            style={{
+              display: "block",
+              width: "100%",
+              height: "100%",
+              position: "absolute",
+              inset: 0,
+              zIndex: 1,
+            }}
+          />
+        ) : null}
       </div>
       {loadError ? (
         <div
@@ -79,10 +102,6 @@ export default function App() {
         >
           <strong>Load failed</strong>
           <p style={{ margin: "8px 0 0" }}>{loadError}</p>
-          <p style={{ margin: "8px 0 0", opacity: 0.85 }}>
-            Ensure the dev server is running so `/content/**` is served from the repo
-            (see Vite plugin in apps/editor/vite.config.ts).
-          </p>
         </div>
       ) : null}
       {gpuError && !combatSimPlayActive ? (
@@ -111,7 +130,7 @@ export default function App() {
       ) : null}
       {ready && combatSimPlayActive ? (
         <EditorCombatSimPlayLayer
-          canvasRef={canvasRef}
+          canvasRef={combatCanvasRef}
           onExit={() => setCombatSimPlayActive(false)}
         />
       ) : null}
@@ -119,6 +138,7 @@ export default function App() {
         <>
           <EditorApartmentLayoutLoadingOverlay />
           <EditorViewportStatsStack />
+          {workspace === "combat_sim" ? <EditorCombatSimViewportPrompt /> : null}
           <EditorChrome />
         </>
       ) : null}

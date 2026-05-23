@@ -376,7 +376,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         workspace,
         mode,
-        ...(workspace !== "combat_sim" ? { combatSimPlayActive: false } : {}),
+        combatSimPlayActive: workspace === "combat_sim",
         ...(exitApartment
           ? {
               myApartmentLayoutHidePickMode: false,

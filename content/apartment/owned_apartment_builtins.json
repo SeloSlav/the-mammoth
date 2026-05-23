@@ -119,7 +119,7 @@
       "modelRelPath": "static/models/objects/rug-floor.glb",
       "fx": 0.598774245627593,
       "fz": 0.5844357926819541,
-      "dy": 0.06302575177396828,
+      "dy": 0.06302575177396831,
       "yawRad": 0,
       "pitchRad": 0,
       "rollRad": 0,
@@ -1165,6 +1165,23 @@
       "scaleZ": 1.6159066249812413,
       "ignoreSupportSurfaces": false,
       "itemKind": "plain"
+    },
+    {
+      "id": "83642433-7188-42b5-98ad-887456f39573",
+      "modelRelPath": "static/models/objects/fish-tank-filter.glb",
+      "fx": 0.6075450020784235,
+      "fz": 0.5802037566068708,
+      "dy": 0.8912635181274313,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.15227231729779228,
+      "verticalScaleMul": 0.9552318371825571,
+      "scaleX": 0.1454553654044154,
+      "scaleY": 0.1454553654044154,
+      "scaleZ": 0.1590892691911692,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [
@@ -1402,5 +1419,6 @@
         "mammoth_editor_my_apartment_decor:bb89c471-21b1-42d0-8c77-97e9a2e21952"
       ]
     }
-  ]
+  ],
+  "npcCombatSpawns": []
 }
