@@ -7,6 +7,15 @@ export const EDITOR_ORBIT_INVARIANT_REFERENCE_DISTANCE_M = 6.5;
 /** Softens compensation so close-up controls do not feel twitchy. */
 export const EDITOR_ORBIT_SPEED_DISTANCE_COMPENSATION_DAMP = 0.82;
 
+/**
+ * Fraction of pending orbit delta applied per {@link OrbitControls#update} while dragging.
+ * Higher = tighter tracking; lower = smoother but laggier drag.
+ */
+export const EDITOR_ORBIT_DRAG_SMOOTH_FACTOR = 0.34;
+
+/** Rebind distance-scaled orbit speeds after this relative distance change. */
+export const EDITOR_ORBIT_SPEED_DISTANCE_REBIND_RATIO = 0.02;
+
 export const EDITOR_ORBIT_ZOOM_SPEED_MIN = 0.65;
 export const EDITOR_ORBIT_ZOOM_SPEED_MAX = 5.5;
 export const EDITOR_ORBIT_ROTATE_SPEED_MIN = 0.7;

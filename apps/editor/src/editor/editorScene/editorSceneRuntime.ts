@@ -54,7 +54,11 @@ import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformM
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
 import { registerEditorHistoryHotkeys } from "./editorSceneHistoryHotkeys.js";
 import { createEditorOrbitKeyboardMove } from "./editorOrbitKeyboardMove.js";
-import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
+import {
+  attachEditorOrbitSnappyFeel,
+} from "./editorOrbitSnappyFeel.js";
+import { createEditorOrbitDistanceSpeedBinder } from "./editorOrbitDistanceSpeedBinder.js";
+import { EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
 import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
@@ -640,25 +644,15 @@ export async function mountEditorScene(
 
   /** Defer {@link OrbitControls#connect} until after {@link TransformControls#connect} (see `rewireCanvasPrimaryPointerListeners`). */
   const orbitControls = new OrbitControls(camera, null);
-  /** Snap on release — no FP-style orbit inertia while authoring. */
-  orbitControls.enableDamping = false;
   orbitControls.target.set(0, 1.45, 0);
   orbitControls.minDistance = EDITOR_ORBIT_MIN_DISTANCE_M;
   orbitControls.maxDistance = ORBIT_MAX_DISTANCE;
-  function applyDistanceInvariantOrbitSpeeds(): void {
-    const distance = Math.max(
-      EDITOR_ORBIT_MIN_DISTANCE_M,
-      camera.position.distanceTo(orbitControls.target),
-    );
-    const speeds = editorOrbitDistanceInvariantSpeeds({
-      distanceM: distance,
-      minDistanceM: EDITOR_ORBIT_MIN_DISTANCE_M,
-    });
-    orbitControls.zoomSpeed = speeds.zoomSpeed;
-    orbitControls.rotateSpeed = speeds.rotateSpeed;
-    orbitControls.panSpeed = speeds.panSpeed;
-  }
+  const applyDistanceInvariantOrbitSpeeds = createEditorOrbitDistanceSpeedBinder({
+    camera,
+    orbitControls,
+  });
   applyDistanceInvariantOrbitSpeeds();
+  const detachOrbitSnappyFeel = attachEditorOrbitSnappyFeel(orbitControls);
   orbitControls.update();
   const orbitKeyboardMove = createEditorOrbitKeyboardMove({
     camera,
@@ -1418,6 +1412,7 @@ export async function mountEditorScene(
     registerEditorNavigationBridge(null);
     fp.teardownFpSession();
     orbitKeyboardMove.dispose();
+    detachOrbitSnappyFeel();
     orbitControls.dispose();
     stopRenderLoop();
     disposeTransformModeDigitHotkeys();

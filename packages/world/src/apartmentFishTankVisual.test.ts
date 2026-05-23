@@ -40,10 +40,24 @@ describe("buildApartmentFishTankVisual", () => {
     expect(meshTriangleCount(root)).toBeLessThan(2500);
   });
 
-  it("includes sand and water volumes", () => {
+  it("includes sand, water, and perimeter frame corners", () => {
     const root = buildApartmentFishTankVisual();
     expect(root.getObjectByName("fish_tank_sand")).not.toBeNull();
     expect(root.getObjectByName("fish_tank_water")).not.toBeNull();
+    expect(root.getObjectByName("fish_tank_frame_corner_fl")).not.toBeNull();
+    expect(root.getObjectByName("fish_tank_sand_mound_0")).not.toBeNull();
+  });
+
+  it("tags all meshes to skip apartment mood darkening", () => {
+    const root = buildApartmentFishTankVisual();
+    const skipUd = "mammothApartmentDecorSkipMoodGrade";
+    let meshCount = 0;
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      meshCount += 1;
+      expect(obj.userData[skipUd]).toBe(true);
+    });
+    expect(meshCount).toBeGreaterThan(10);
   });
 
   it("tags glass and water meshes to skip apartment mood darkening", () => {
@@ -59,6 +73,5 @@ describe("buildApartmentFishTankVisual", () => {
       const mesh = root.getObjectByName(name);
       expect(mesh?.userData[skipUd]).toBe(true);
     }
-    expect(root.getObjectByName("fish_tank_sand")?.userData[skipUd]).toBeUndefined();
   });
 });

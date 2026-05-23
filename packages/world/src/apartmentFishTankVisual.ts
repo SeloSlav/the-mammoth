@@ -9,9 +9,12 @@ export const APARTMENT_FISH_TANK_HEIGHT_M = 1.429;
 export const APARTMENT_FISH_TANK_DEPTH_M = 1.037;
 
 const FRAME_H_M = 0.065;
+const CORNER_POST_M = 0.058;
 const GLASS_T_M = 0.008;
 const SAND_DEPTH_M = 0.12;
 const WATER_FILL_FRAC = 0.92;
+const GLASS_OPACITY = 0.14;
+const WATER_OPACITY = 0.22;
 
 /** Must match {@link MAMMOTH_APARTMENT_DECOR_SKIP_MOOD_GRADE_UD} in `@the-mammoth/engine`. */
 const FISH_TANK_SKIP_MOOD_GRADE_UD = "mammothApartmentDecorSkipMoodGrade";
@@ -210,6 +213,125 @@ function createConcreteTextures(): {
   return { map, roughnessMap };
 }
 
+function createStoneTextures(): {
+  map: THREE.Texture;
+  roughnessMap: THREE.Texture;
+} | null {
+  const pair = createCanvasPair(256);
+  if (!pair) return null;
+  const [colorCanvas, roughCanvas] = pair;
+  const colorCtx = colorCanvas.getContext("2d");
+  const roughCtx = roughCanvas.getContext("2d");
+  if (!colorCtx || !roughCtx) return null;
+
+  const rand = mulberry32(0x53544f4e);
+
+  colorCtx.fillStyle = "#6a7078";
+  colorCtx.fillRect(0, 0, 256, 256);
+  roughCtx.fillStyle = "#b0b0b0";
+  roughCtx.fillRect(0, 0, 256, 256);
+
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      const bx = col * 52 + rand() * 4;
+      const by = row * 52 + rand() * 4;
+      const shade = 96 + Math.floor(rand() * 28);
+      colorCtx.fillStyle = `rgb(${shade}, ${shade + 2}, ${shade + 5})`;
+      colorCtx.fillRect(bx, by, 48 + rand() * 4, 48 + rand() * 4);
+      colorCtx.strokeStyle = `rgba(40, 42, 48, ${0.25 + rand() * 0.2})`;
+      colorCtx.lineWidth = 1.5;
+      colorCtx.strokeRect(bx, by, 48 + rand() * 4, 48 + rand() * 4);
+    }
+  }
+
+  for (let i = 0; i < 600; i++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const shade = 88 + Math.floor(rand() * 24);
+    colorCtx.fillStyle = `rgba(${shade}, ${shade + 2}, ${shade + 4}, ${0.05 + rand() * 0.07})`;
+    colorCtx.fillRect(x, y, 1 + rand() * 2, 1 + rand() * 2);
+  }
+
+  const map = new THREE.CanvasTexture(colorCanvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(1.8, 1.8);
+
+  const roughnessMap = new THREE.CanvasTexture(roughCanvas);
+  roughnessMap.wrapS = THREE.RepeatWrapping;
+  roughnessMap.wrapT = THREE.RepeatWrapping;
+  roughnessMap.repeat.copy(map.repeat);
+
+  return { map, roughnessMap };
+}
+
+function createPlantTextures(): {
+  map: THREE.Texture;
+  roughnessMap: THREE.Texture;
+} | null {
+  const pair = createCanvasPair(256);
+  if (!pair) return null;
+  const [colorCanvas, roughCanvas] = pair;
+  const colorCtx = colorCanvas.getContext("2d");
+  const roughCtx = roughCanvas.getContext("2d");
+  if (!colorCtx || !roughCtx) return null;
+
+  const rand = mulberry32(0x504c4e54);
+
+  colorCtx.fillStyle = "#6a7838";
+  colorCtx.fillRect(0, 0, 256, 256);
+  roughCtx.fillStyle = "#b0a898";
+  roughCtx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 1200; i++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const r = 2 + rand() * 8;
+    const v = rand();
+    if (v < 0.55) {
+      const g = 100 + Math.floor(rand() * 40);
+      colorCtx.fillStyle = `rgba(${g - 30}, ${g + 10}, ${g - 50}, ${0.12 + rand() * 0.18})`;
+    } else if (v < 0.82) {
+      const g = 70 + Math.floor(rand() * 30);
+      colorCtx.fillStyle = `rgba(${g + 20}, ${g - 10}, ${g - 30}, ${0.1 + rand() * 0.16})`;
+    } else {
+      const g = 90 + Math.floor(rand() * 35);
+      colorCtx.fillStyle = `rgba(${g + 30}, ${g - 20}, ${g - 40}, ${0.14 + rand() * 0.2})`;
+    }
+    colorCtx.beginPath();
+    colorCtx.arc(x, y, r, 0, Math.PI * 2);
+    colorCtx.fill();
+  }
+
+  for (let i = 0; i < 320; i++) {
+    const x = rand() * 256;
+    const y = rand() * 256;
+    const r = 1 + rand() * 4;
+    colorCtx.fillStyle = `rgba(118, 82, 48, ${0.08 + rand() * 0.14})`;
+    colorCtx.beginPath();
+    colorCtx.arc(x, y, r, 0, Math.PI * 2);
+    colorCtx.fill();
+    roughCtx.fillStyle = `rgba(140, 120, 90, ${0.06 + rand() * 0.1})`;
+    roughCtx.beginPath();
+    roughCtx.arc(x, y, r * 1.1, 0, Math.PI * 2);
+    roughCtx.fill();
+  }
+
+  const map = new THREE.CanvasTexture(colorCanvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(1.4, 1.4);
+
+  const roughnessMap = new THREE.CanvasTexture(roughCanvas);
+  roughnessMap.wrapS = THREE.RepeatWrapping;
+  roughnessMap.wrapT = THREE.RepeatWrapping;
+  roughnessMap.repeat.copy(map.repeat);
+
+  return { map, roughnessMap };
+}
+
 function createRustBeamTextures(): {
   map: THREE.Texture;
   roughnessMap: THREE.Texture;
@@ -320,10 +442,12 @@ function rustBeamMaterial(): THREE.MeshStandardMaterial {
 
 function stoneMaterial(): THREE.MeshStandardMaterial {
   if (cachedStoneMat) return cachedStoneMat;
+  const tex = createStoneTextures();
   cachedStoneMat = new THREE.MeshStandardMaterial({
-    color: 0x6c727a,
+    color: 0xffffff,
     roughness: 0.92,
     metalness: 0.04,
+    ...(tex ? { map: tex.map, roughnessMap: tex.roughnessMap } : { color: 0x6c727a }),
   });
   return cachedStoneMat;
 }
@@ -331,11 +455,11 @@ function stoneMaterial(): THREE.MeshStandardMaterial {
 function glassMaterial(): THREE.MeshStandardMaterial {
   if (cachedGlassMat) return cachedGlassMat;
   cachedGlassMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0,
-    metalness: 0,
+    color: 0xd4e8f0,
+    roughness: 0.04,
+    metalness: 0.02,
     transparent: true,
-    opacity: 0.045,
+    opacity: GLASS_OPACITY,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -345,11 +469,11 @@ function glassMaterial(): THREE.MeshStandardMaterial {
 function waterMaterial(): THREE.MeshStandardMaterial {
   if (cachedWaterMat) return cachedWaterMat;
   cachedWaterMat = new THREE.MeshStandardMaterial({
-    color: 0xe8f4f6,
-    roughness: 0.04,
+    color: 0xb8dce8,
+    roughness: 0.06,
     metalness: 0,
     transparent: true,
-    opacity: 0.075,
+    opacity: WATER_OPACITY,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -358,11 +482,13 @@ function waterMaterial(): THREE.MeshStandardMaterial {
 
 function plantMaterial(): THREE.MeshStandardMaterial {
   if (cachedPlantMat) return cachedPlantMat;
+  const tex = createPlantTextures();
   cachedPlantMat = new THREE.MeshStandardMaterial({
-    color: 0x7a8a48,
+    color: 0xffffff,
     roughness: 0.82,
     metalness: 0,
     side: THREE.DoubleSide,
+    ...(tex ? { map: tex.map, roughnessMap: tex.roughnessMap } : { color: 0x7a8a48 }),
   });
   return cachedPlantMat;
 }
@@ -615,7 +741,7 @@ function addSeaweedCluster(
   group.position.set(x, y, z);
   const rand = mulberry32(seed);
 
-  const tints = [0x6a7a3a, 0x808a48, 0x556037, 0x9a8a44];
+  const tints = [0xf0f4e8, 0xe8eed8, 0xdde8cc, 0xf2eed8];
   for (let i = 0; i < bladeCount; i++) {
     const tint = tints[i % tints.length]!;
     const mat = baseMat.clone();
@@ -641,6 +767,64 @@ function addSeaweedCluster(
   }
 
   root.add(group);
+}
+
+function addFrameCornerPosts(
+  root: THREE.Group,
+  halfW: number,
+  halfD: number,
+  innerH: number,
+  innerCenterY: number,
+  mat: THREE.MeshStandardMaterial,
+): void {
+  const post = CORNER_POST_M;
+  const corners: ReadonlyArray<[string, number, number]> = [
+    ["fish_tank_frame_corner_fl", -halfW + post * 0.5, halfD - post * 0.5],
+    ["fish_tank_frame_corner_fr", halfW - post * 0.5, halfD - post * 0.5],
+    ["fish_tank_frame_corner_bl", -halfW + post * 0.5, -halfD + post * 0.5],
+    ["fish_tank_frame_corner_br", halfW - post * 0.5, -halfD + post * 0.5],
+  ];
+  for (const [name, x, z] of corners) {
+    addBox(root, name, post, innerH, post, x, innerCenterY, z, mat);
+  }
+}
+
+function addSandMounds(
+  root: THREE.Group,
+  sandTopY: number,
+  sandW: number,
+  sandD: number,
+  mat: THREE.MeshStandardMaterial,
+): void {
+  const rand = mulberry32(0x4d4f554e);
+  const moundCount = 7;
+  for (let i = 0; i < moundCount; i++) {
+    const sx = 0.08 + rand() * 0.14;
+    const sy = 0.012 + rand() * 0.022;
+    const sz = 0.07 + rand() * 0.12;
+    const x = (rand() - 0.5) * sandW * 0.82;
+    const z = (rand() - 0.5) * sandD * 0.82;
+    addBox(
+      root,
+      `fish_tank_sand_mound_${i}`,
+      sx,
+      sy,
+      sz,
+      x,
+      sandTopY + sy * 0.5,
+      z,
+      mat,
+      { castShadow: true },
+    );
+  }
+}
+
+function tagFishTankMeshesSkipMoodGrade(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.userData[FISH_TANK_SKIP_MOOD_GRADE_UD] = true;
+    }
+  });
 }
 
 /**
@@ -673,6 +857,8 @@ export function buildApartmentFishTankVisual(): THREE.Group {
   const innerH = h - FRAME_H_M * 2;
   const innerCenterY = 0;
   const innerBottomY = -halfH + FRAME_H_M;
+
+  addFrameCornerPosts(root, halfW, halfD, innerH, innerCenterY, frameMat);
 
   addBox(
     root,
@@ -738,6 +924,7 @@ export function buildApartmentFishTankVisual(): THREE.Group {
     0,
     sandMat,
   );
+  addSandMounds(root, sandTopY, sandW, sandD, sandMat);
 
   const waterColumnH = innerH - SAND_DEPTH_M;
   const waterH = waterColumnH * WATER_FILL_FRAC;
@@ -795,5 +982,6 @@ export function buildApartmentFishTankVisual(): THREE.Group {
     addSeaweedCluster(root, sw.name, sw.x, decorBaseY, sw.z, sw.h, sw.blades, sw.seed, plantMat);
   }
 
+  tagFishTankMeshesSkipMoodGrade(root);
   return root;
 }
