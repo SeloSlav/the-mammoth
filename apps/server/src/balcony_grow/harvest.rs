@@ -1,7 +1,7 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::crafting::{emit_hud_notice, emit_hud_toast, HUD_TOAST_KIND_ITEM_RECEIVED};
-use crate::inventory;
+use crate::dropped_item::grant_stack_to_player_spilling_at_feet;
 
 use super::tables::*;
 use super::tray::{lights_on_for_unit, tray_row};
@@ -128,22 +128,37 @@ pub(super) fn harvest_balcony_grow_slot_impl(
     let food_qty = harvest_food_count(care, roll_base);
     let seed_qty = harvest_seed_count(care, roll_base);
 
-    inventory::try_grant_stack_to_player(ctx, sender, harvest_def_id.clone(), food_qty)?;
-    inventory::try_grant_stack_to_player(ctx, sender, seed_def_id.clone(), seed_qty)?;
-    emit_hud_toast(
-        ctx,
-        sender,
-        HUD_TOAST_KIND_ITEM_RECEIVED,
-        harvest_def_id,
-        food_qty,
-    );
-    emit_hud_toast(
-        ctx,
-        sender,
-        HUD_TOAST_KIND_ITEM_RECEIVED,
-        seed_def_id,
-        seed_qty,
-    );
+    let food_remaining =
+        grant_stack_to_player_spilling_at_feet(ctx, sender, harvest_def_id.clone(), food_qty)?;
+    let seed_remaining =
+        grant_stack_to_player_spilling_at_feet(ctx, sender, seed_def_id.clone(), seed_qty)?;
+    let food_granted = food_qty.saturating_sub(food_remaining);
+    let seed_granted = seed_qty.saturating_sub(seed_remaining);
+    if food_granted > 0 {
+        emit_hud_toast(
+            ctx,
+            sender,
+            HUD_TOAST_KIND_ITEM_RECEIVED,
+            harvest_def_id.clone(),
+            food_granted,
+        );
+    }
+    if seed_granted > 0 {
+        emit_hud_toast(
+            ctx,
+            sender,
+            HUD_TOAST_KIND_ITEM_RECEIVED,
+            seed_def_id.clone(),
+            seed_granted,
+        );
+    }
+    if food_remaining > 0 || seed_remaining > 0 {
+        emit_hud_notice(
+            ctx,
+            sender,
+            "Inventory full — harvest dropped at your feet".to_string(),
+        );
+    }
     plant_table.row_key().delete(row_key);
     maybe_emit_first_harvest_journal(ctx, sender, plant.crop_def_id.as_str());
     Ok(())

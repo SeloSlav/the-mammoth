@@ -2,9 +2,7 @@
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::apartments;
 use crate::auth;
-use crate::dropped_item;
 use crate::hitscan;
 use crate::inventory::{self, inventory_item};
 use crate::inventory_models::ItemLocation;
@@ -145,11 +143,7 @@ pub fn submit_firearm_shot(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32,
     );
 
     for h in hits {
-        let killed = player_vitals::apply_damage(ctx, h.identity, h.damage);
+        player_vitals::apply_damage(ctx, h.identity, h.damage);
         world_sound::emit_melee_flesh_hit_at(ctx, h.ix, h.iy, h.iz, id);
-        if killed {
-            dropped_item::scatter_carrier_inventory_at_death(ctx, h.identity);
-            apartments::on_player_killed_cancel_claim(ctx, h.identity);
-        }
     }
 }

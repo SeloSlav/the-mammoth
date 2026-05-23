@@ -174,7 +174,16 @@ pub fn apply_damage(ctx: &ReducerContext, owner: Identity, amount: f32) -> bool 
     v.health = clamp_vital(v.health - amount);
     let killed = v.health <= 0.0;
     ctx.db.player_vitals().identity().update(v);
+    if killed {
+        on_player_death(ctx, owner);
+    }
     killed
+}
+
+/// Spill carried hotbar/inventory at the death pose and run apartment claim side effects.
+pub(crate) fn on_player_death(ctx: &ReducerContext, owner: Identity) {
+    crate::dropped_item::scatter_carrier_inventory_at_death(ctx, owner);
+    crate::apartments::on_player_killed_cancel_claim(ctx, owner);
 }
 
 pub fn reset_player_vitals_for_respawn(ctx: &ReducerContext, owner: Identity) {
@@ -245,9 +254,14 @@ pub fn player_vitals_tick_step(ctx: &ReducerContext, _arg: PlayerVitalsSchedule)
             continue;
         }
 
+        let owner = row.identity;
+        let was_alive = row.health > 0.0;
         row.health = nh;
         row.hunger = nhu;
         row.hydration = nhy;
         ctx.db.player_vitals().identity().update(row);
+        if was_alive && nh <= 0.0 {
+            on_player_death(ctx, owner);
+        }
     }
 }

@@ -653,6 +653,54 @@ fn drop_spawn_transform(pose: &PlayerPose) -> (f32, f32, f32, f32) {
     (x, y, z, pose.yaw)
 }
 
+/// Spawn a player-origin drop slightly in front of the feet (intentional drop / inventory spill).
+pub(crate) fn spawn_dropped_stack_at_player_feet(
+    ctx: &ReducerContext,
+    pose: &PlayerPose,
+    def_id: String,
+    quantity: u32,
+    jitter_index: u32,
+) -> Result<(), String> {
+    if quantity == 0 {
+        return Ok(());
+    }
+    let jitter = ((jitter_index % 9) as f32) * 0.11 - 0.44;
+    let (fx, fz) = forward_from_yaw(pose.yaw);
+    let x = pose.x + fx * (0.45 + jitter * 0.15) + (jitter_index as f32 * 0.02);
+    let z = pose.z + fz * (0.45 + jitter * 0.15);
+    let y = pose.y + DROP_Y_LIFT_M;
+    let _ = ctx.db.dropped_item().insert(DroppedItem {
+        id: 0,
+        def_id,
+        quantity,
+        x,
+        y,
+        z,
+        yaw: pose.yaw,
+        created_at: ctx.timestamp,
+        world_spawn_slot: None,
+    });
+    Ok(())
+}
+
+/// Grant into hotbar/inventory; spill any remainder as a world drop at the player's feet.
+pub(crate) fn grant_stack_to_player_spilling_at_feet(
+    ctx: &ReducerContext,
+    owner: Identity,
+    def_id: String,
+    quantity: u32,
+) -> Result<u32, String> {
+    let remaining = try_grant_stack_to_player(ctx, owner, def_id.clone(), quantity)?;
+    if remaining == 0 {
+        return Ok(0);
+    }
+    let Some(pose) = ctx.db.player_pose().identity().find(&owner) else {
+        return Err("no pose for inventory spill".to_string());
+    };
+    spawn_dropped_stack_at_player_feet(ctx, &pose, def_id, remaining, 0)?;
+    Ok(remaining)
+}
+
 /// Remove from inventory/hotbar and spawn a [`DroppedItem`] in front of the player.
 #[spacetimedb::reducer]
 pub fn drop_item(ctx: &ReducerContext, item_instance_id: u64, quantity_to_drop: u32) {
@@ -737,22 +785,39 @@ fn pickup_dropped_item_inner(
     let px = dropped.x;
     let py = dropped.y;
     let pz = dropped.z;
-    try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
+    let remaining = try_grant_stack_to_player(ctx, sender, def_id.clone(), qty)?;
+    let granted = qty.saturating_sub(remaining);
+    if granted == 0 {
+        crafting::emit_hud_notice(ctx, sender, "Inventory full".to_string());
+        return Err("inventory full".to_string());
+    }
     crafting::emit_hud_toast(
         ctx,
         sender,
         crafting::HUD_TOAST_KIND_ITEM_RECEIVED,
         def_id.clone(),
-        qty,
+        granted,
     );
     world_sound::emit_item_pickup_at(ctx, px, py, pz, sender);
-    ctx.db.dropped_item().id().delete(dropped_item_id);
+    if remaining == 0 {
+        ctx.db.dropped_item().id().delete(dropped_item_id);
+    } else {
+        let mut partial = dropped;
+        partial.quantity = remaining;
+        ctx.db.dropped_item().id().update(partial);
+        crafting::emit_hud_notice(
+            ctx,
+            sender,
+            "Inventory full — left the rest on the ground".to_string(),
+        );
+    }
     log::info!(
-        "pickup_dropped_item: {:?} picked up {}×{} (id {})",
+        "pickup_dropped_item: {:?} picked up {}×{} (id {}, {} left on ground)",
         sender,
-        qty,
+        granted,
         def_id,
-        dropped_item_id
+        dropped_item_id,
+        remaining
     );
     Ok(())
 }
@@ -785,24 +850,9 @@ pub(crate) fn scatter_carrier_inventory_at_death(ctx: &ReducerContext, victim: I
     let inv_tbl = ctx.db.inventory_item();
 
     for (instance_id, def_id, qty) in rows {
-        let jitter = ((idx % 9) as f32) * 0.11 - 0.44;
         idx += 1;
-        let (fx, fz) = forward_from_yaw(pose.yaw);
-        let x = pose.x + fx * (0.45 + jitter * 0.15) + (idx as f32 * 0.02);
-        let z = pose.z + fz * (0.45 + jitter * 0.15);
-        let y = pose.y + DROP_Y_LIFT_M;
         inv_tbl.instance_id().delete(instance_id);
-        let _ = ctx.db.dropped_item().insert(DroppedItem {
-            id: 0,
-            def_id,
-            quantity: qty,
-            x,
-            y,
-            z,
-            yaw: pose.yaw,
-            created_at: ctx.timestamp,
-            world_spawn_slot: None,
-        });
+        let _ = spawn_dropped_stack_at_player_feet(ctx, &pose, def_id, qty, idx);
     }
 }
 

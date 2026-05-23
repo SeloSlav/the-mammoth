@@ -6,7 +6,6 @@ use crate::apartments;
 use crate::auth;
 use crate::combat_stub;
 use crate::combat_stub::melee_damage_for_def_id;
-use crate::dropped_item;
 use crate::hitscan;
 use crate::movement::player_input;
 use crate::player_vitals;
@@ -82,12 +81,8 @@ pub fn submit_melee_swing(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32, 
         None,
         None,
     ) {
-        let killed = player_vitals::apply_damage(ctx, hit.target, hit.damage);
+        player_vitals::apply_damage(ctx, hit.target, hit.damage);
         emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
-        if killed {
-            dropped_item::scatter_carrier_inventory_at_death(ctx, hit.target);
-            apartments::on_player_killed_cancel_claim(ctx, hit.target);
-        }
     } else {
         apartments::apply_forward_melee_door_damage(
             ctx,

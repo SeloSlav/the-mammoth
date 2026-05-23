@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
 
 use crate::auth;
+use crate::dropped_item::grant_stack_to_player_spilling_at_feet;
 use crate::inventory::{self, inventory_item};
 use crate::inventory_models::ItemLocation;
 use crate::items_catalog;
@@ -300,26 +301,43 @@ fn complete_craft_job(ctx: &ReducerContext, job: CraftQueueItem) {
 
     let qty = craft_output_quantity(out_item.max_stack, cons.output_quantity);
 
-    if let Err(e) = inventory::try_grant_stack_to_player(ctx, owner, job.output_def_id.clone(), qty)
-    {
-        log::error!(
-            "crafting: grant {} x{} failed {:?}: {e}",
-            job.output_def_id,
-            qty,
-            owner
-        );
-        ctx.db.craft_queue_item().id().delete(job.id);
-        try_activate_waiting_for_owner(ctx, owner);
-        return;
-    }
-
-    emit_hud_toast(
+    let remaining = match grant_stack_to_player_spilling_at_feet(
         ctx,
         owner,
-        HUD_TOAST_KIND_CRAFT_COMPLETE,
         job.output_def_id.clone(),
         qty,
-    );
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!(
+                "crafting: grant {} x{} failed {:?}: {e}",
+                job.output_def_id,
+                qty,
+                owner
+            );
+            ctx.db.craft_queue_item().id().delete(job.id);
+            try_activate_waiting_for_owner(ctx, owner);
+            return;
+        }
+    };
+    let granted = qty.saturating_sub(remaining);
+
+    if granted > 0 {
+        emit_hud_toast(
+            ctx,
+            owner,
+            HUD_TOAST_KIND_CRAFT_COMPLETE,
+            job.output_def_id.clone(),
+            granted,
+        );
+    }
+    if remaining > 0 {
+        emit_hud_notice(
+            ctx,
+            owner,
+            "Inventory full — crafted output dropped at your feet".to_string(),
+        );
+    }
     ctx.db.craft_queue_item().id().delete(job.id);
     try_activate_waiting_for_owner(ctx, owner);
 }

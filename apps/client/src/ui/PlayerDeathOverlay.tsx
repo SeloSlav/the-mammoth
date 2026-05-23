@@ -126,13 +126,15 @@ export function PlayerDeathOverlay({ conn }: Props) {
         <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(226,232,240,0.82)", marginBottom: 22 }}>
           {hasClaimedApartment ? (
             <>
-              Someone on your floor dragged you back inside. A night passes — you wake at your bed with empty pockets
-              (hotbar and backpack cleared). Balcony crops advance one day.
+              Someone on your floor dragged you back inside. A night passes — you wake at your bed with basic
+              survival supplies. Everything you were carrying spilled where you fell — go back for it. Balcony crops
+              advance one day.
             </>
           ) : (
             <>
               Recovery without a leased unit completes in the building&apos;s ground-level foyer — a night passes and
-              you wake with empty pockets. Lease a residence to recover at your apartment bed instead.
+              you wake with basic survival supplies. Your gear spilled where you died — return to collect it. Lease a
+              residence to recover at your apartment bed instead.
             </>
           )}
         </div>

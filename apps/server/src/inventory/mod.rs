@@ -268,12 +268,13 @@ fn merge_grant_into_player_stack(
 
 /// Add [`quantity`] of [`def_id`] into the player's inventory/hotbar (merge into stacks, then empty slots).
 /// New stacks use the lowest-index empty **hotbar** slot before any empty inventory slot (world pickups rely on this).
+/// Returns **remaining** quantity that could not fit (`0` = fully granted).
 pub(crate) fn try_grant_stack_to_player(
     ctx: &ReducerContext,
     owner: Identity,
     def_id: String,
     mut quantity: u32,
-) -> Result<(), String> {
+) -> Result<u32, String> {
     if quantity == 0 {
         return Err("quantity must be positive".to_string());
     }
@@ -330,9 +331,9 @@ pub(crate) fn try_grant_stack_to_player(
             quantity -= take;
             continue;
         }
-        return Err("inventory full".to_string());
+        return Ok(quantity);
     }
-    Ok(())
+    Ok(0)
 }
 
 /// Move backpack rows in inactive slot indices (legacy 24-slot era) into `0..NUM_PLAYER_INVENTORY_SLOTS`.
