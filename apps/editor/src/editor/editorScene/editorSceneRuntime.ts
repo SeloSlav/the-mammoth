@@ -56,6 +56,7 @@ import { registerEditorHistoryHotkeys } from "./editorSceneHistoryHotkeys.js";
 import { createEditorOrbitKeyboardMove } from "./editorOrbitKeyboardMove.js";
 import { editorOrbitDistanceInvariantSpeeds, EDITOR_ORBIT_MIN_DISTANCE_M } from "./editorOrbitSpeeds.js";
 import { startEditorSceneRenderLoop } from "./editorSceneRenderLoop.js";
+import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 import { createEditorSceneMyApartmentLifecycle } from "../myApartment/editorSceneMyApartmentLifecycle.js";
 import {
   clampMyApartmentDecorEulerLimits,
@@ -126,7 +127,8 @@ export async function mountEditorScene(
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.02;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const EDITOR_REST_PIXEL_RATIO = Math.min(window.devicePixelRatio, 2);
+  renderer.setPixelRatio(EDITOR_REST_PIXEL_RATIO);
   renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -1048,6 +1050,7 @@ export async function mountEditorScene(
     } else {
       useEditorStore.getState().commitTransaction();
       if (st.mode === "my_apartment_layout") {
+        commitLevelEditorAttachedTransformToStore();
         myApartmentAuthoring.flushDeferredMountSync();
         myApartmentAuthoring.flushPendingWallsVisualSync();
       }
@@ -1260,6 +1263,7 @@ export async function mountEditorScene(
       g.aspect = w / h;
       g.updateProjectionMatrix();
     }
+    demandEditorSceneRender();
   };
   setSize();
   const ro = new ResizeObserver(setSize);

@@ -6,6 +6,49 @@ import type {
 } from "@the-mammoth/schemas";
 import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 
+export function ownedApartmentPlacedItemStructuralEqual(
+  left: OwnedApartmentPlacedItem,
+  right: OwnedApartmentPlacedItem,
+): boolean {
+  return (
+    left.id === right.id &&
+    left.modelRelPath === right.modelRelPath &&
+    left.uniformScale === right.uniformScale &&
+    (left.verticalScaleMul ?? 1) === (right.verticalScaleMul ?? 1) &&
+    left.ignoreSupportSurfaces === right.ignoreSupportSurfaces &&
+    left.itemKind === right.itemKind
+  );
+}
+
+export function ownedApartmentPlacedItemPoseEqual(
+  left: OwnedApartmentPlacedItem,
+  right: OwnedApartmentPlacedItem,
+): boolean {
+  return (
+    left.fx === right.fx &&
+    left.fz === right.fz &&
+    left.dy === right.dy &&
+    left.yawRad === right.yawRad &&
+    left.pitchRad === right.pitchRad &&
+    (left.rollRad ?? 0) === (right.rollRad ?? 0)
+  );
+}
+
+export function ownedApartmentPlacedItemsOnlyPoseChanged(
+  prev: readonly OwnedApartmentPlacedItem[],
+  next: readonly OwnedApartmentPlacedItem[],
+): boolean {
+  if (prev.length !== next.length) return false;
+  const prevById = new Map(prev.map((item) => [item.id, item]));
+  for (const item of next) {
+    const prior = prevById.get(item.id);
+    if (!prior || !ownedApartmentPlacedItemStructuralEqual(prior, item)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function placedItemsEqual(
   a: readonly OwnedApartmentPlacedItem[],
   b: readonly OwnedApartmentPlacedItem[],

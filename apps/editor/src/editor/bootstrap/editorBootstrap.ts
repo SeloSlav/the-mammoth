@@ -152,12 +152,18 @@ export async function bootstrapEditorFromContent(): Promise<void> {
 
   let ownedApartmentBuiltins = DEFAULT_OWNED_APARTMENT_BUILTINS_DOC;
   let apartmentUnitLayoutProfiles = DEFAULT_APARTMENT_UNIT_LAYOUT_PROFILES_DOC;
+  let ownedApartmentBuiltinsLoadFailed = false;
   try {
     ownedApartmentBuiltins = OwnedApartmentBuiltinsDocSchema.parse(
       await fetchJson(`/content/${EDITOR_OWNED_APT_BUILTINS_FILE}`),
     );
-  } catch {
-    /* optional */
+  } catch (err) {
+    ownedApartmentBuiltinsLoadFailed = true;
+    console.error(
+      `[editor bootstrap] Failed to parse content/${EDITOR_OWNED_APT_BUILTINS_FILE}; ` +
+        "using built-in default until reload. Saving owned default now would overwrite disk with ~5 items.",
+      err,
+    );
   }
   try {
     apartmentUnitLayoutProfiles = ApartmentUnitLayoutProfilesDocSchema.parse(
@@ -180,6 +186,18 @@ export async function bootstrapEditorFromContent(): Promise<void> {
     ? apartmentUnitLayoutProfiles.profiles.find((p) => p.id === initialAssignedProfileId)
     : null;
   const initialApartmentLayoutDoc = initialAssignedProfile?.layout ?? ownedApartmentBuiltins;
+  if (
+    ownedApartmentBuiltinsLoadFailed &&
+    initialAssignedProfile &&
+    initialAssignedProfile.layout.placedItems.length >
+      DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems.length
+  ) {
+    ownedApartmentBuiltins = initialAssignedProfile.layout;
+    console.warn(
+      "[editor bootstrap] Recovered owned_apartment_builtins from the assigned unit profile " +
+        "after disk JSON failed to parse.",
+    );
+  }
   const initialSortedItems = [...initialApartmentLayoutDoc.placedItems].sort((a, b) =>
     a.id.localeCompare(b.id),
   );

@@ -15,6 +15,7 @@ import {
   PrefabDefSchema,
   StairWellDefSchema,
 } from "@the-mammoth/schemas";
+import { isDestructiveOwnedApartmentBuiltinsOverwrite } from "../editor/persistence/resolveOwnedApartmentBuiltinsForDiskWrite.js";
 // Repo-relative: `@the-mammoth/engine` entry pulls `index.ts` → Node config load dies on `./fpLocomotion.js` specifiers.
 import {
   ALL_WEAPON_DEFINITIONS,
@@ -504,11 +505,36 @@ async function handleSaveOwnedApartmentBuiltins(
       res.end("missing json string");
       return;
     }
-    OwnedApartmentBuiltinsDocSchema.parse(JSON.parse(body.json));
+    const nextDoc = OwnedApartmentBuiltinsDocSchema.parse(JSON.parse(body.json));
     const abs = safeContentFile(repoRoot, EDITOR_OWNED_APT_BUILTINS_FILE);
     if (!abs) {
       res.statusCode = 403;
       res.end("bad path");
+      return;
+    }
+    let existingPlacedCount = 0;
+    try {
+      const existingRaw = await fs.readFile(abs, "utf8");
+      const existingParsed = OwnedApartmentBuiltinsDocSchema.safeParse(
+        JSON.parse(existingRaw),
+      );
+      if (existingParsed.success) {
+        existingPlacedCount = existingParsed.data.placedItems.length;
+      }
+    } catch {
+      /* new file */
+    }
+    if (
+      isDestructiveOwnedApartmentBuiltinsOverwrite({
+        existingPlacedCount,
+        nextPlacedCount: nextDoc.placedItems.length,
+      })
+    ) {
+      res.statusCode = 409;
+      res.end(
+        `Refusing save: would replace ${existingPlacedCount} placed items with ` +
+          `${nextDoc.placedItems.length} (built-in default doc). Reload the editor from disk and retry.`,
+      );
       return;
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });

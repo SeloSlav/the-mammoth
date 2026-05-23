@@ -72,7 +72,11 @@ import {
 import { teardownApartmentSavedObjectGroupManipulator } from "./editorMyApartmentSavedGroupManip.js";
 import { getEditorMyApartmentDecorShadowRenderer } from "./editorMyApartmentPieceGroupBridge.js";
 import { listMyApartmentPlacedItemModelRelPaths } from "./editorOwnedApartmentSceneLayout.js";
-import { ownedApartmentWallPlacementFieldsEqual } from "./preserveOwnedApartmentMountPlacementRefs.js";
+import {
+  ownedApartmentPlacedItemPoseEqual,
+  ownedApartmentPlacedItemStructuralEqual,
+  ownedApartmentWallPlacementFieldsEqual,
+} from "./preserveOwnedApartmentMountPlacementRefs.js";
 
 /** Top of authoring shell floor slab — keep in sync with `editorMyApartmentAuthoringShell.ts`. */
 export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
@@ -1056,6 +1060,22 @@ function placeDecorGroup(args: {
   group.userData.mammothEditorMyApartmentProp = true;
   group.userData.mammothEditorMyApartmentDecorId = decor.id;
   group.userData.mammothApartmentDecorModelRelPath = decor.modelRelPath;
+  applyDecorGroupPoseFromDoc({ group, decor, spans });
+  const vis = cloneProp(template, decor.modelRelPath);
+  vis.scale.setScalar(editorAuthoringVisScaleForPlacedItemKind(decor.itemKind));
+  group.add(vis);
+  centerDecorVisualBoundsOnRoot(group);
+  clampMyApartmentDecorEulerLimits(group);
+  applyApartmentDecorCastShadowFlags(group, decor.modelRelPath);
+}
+
+/** Pose-only update — keeps meshes/materials (and PMREM env bind) intact. */
+export function applyDecorGroupPoseFromDoc(args: {
+  group: THREE.Group;
+  decor: OwnedApartmentPlacedItem;
+  spans: OwnedApartmentFractionToPreviewXZ;
+}): void {
+  const { group, decor, spans } = args;
   const pv = previewWorldFromNormalizedPlacement({
     spans,
     fx: decor.fx,
@@ -1080,12 +1100,6 @@ function placeDecorGroup(args: {
     decor.uniformScale,
     decor.verticalScaleMul ?? 1,
   );
-  const vis = cloneProp(template, decor.modelRelPath);
-  vis.scale.setScalar(editorAuthoringVisScaleForPlacedItemKind(decor.itemKind));
-  group.add(vis);
-  centerDecorVisualBoundsOnRoot(group);
-  clampMyApartmentDecorEulerLimits(group);
-  applyApartmentDecorCastShadowFlags(group, decor.modelRelPath);
 }
 
 function editorMyApartmentDecorGroups(
@@ -1124,23 +1138,40 @@ export function syncEditorMyApartmentDecorOnMount(
   decorTemplates: EditorMyApartmentDecorTemplateMap,
   doc: OwnedApartmentBuiltinsDoc,
   spans: OwnedApartmentFractionToPreviewXZ,
-): void {
+  prevPlacedItems?: readonly OwnedApartmentPlacedItem[],
+): { structuralRebuild: boolean } {
+  const prevById = new Map((prevPlacedItems ?? []).map((item) => [item.id, item]));
+  let structuralRebuild = false;
   const nextIds = new Set(doc.placedItems.map((d) => d.id));
   for (const decor of doc.placedItems) {
     const template = decorTemplates.get(decor.modelRelPath);
     if (!template) continue;
     const selId = editorMyApartmentSelectedIdForDecor(decor.id);
     let group = mount.selectionGroups[selId];
+    const prev = prevById.get(decor.id);
     if (!group) {
       group = new THREE.Group();
       group.name = `editor_my_apartment_placed:${decor.id}`;
       mount.root.add(group);
       mount.selectionGroups[selId] = group;
+      placeDecorGroup({ group, template, decor, spans });
+      structuralRebuild = true;
+      continue;
     }
-    placeDecorGroup({ group, template, decor, spans });
+    if (!prev || !ownedApartmentPlacedItemStructuralEqual(prev, decor)) {
+      placeDecorGroup({ group, template, decor, spans });
+      structuralRebuild = true;
+      continue;
+    }
+    if (!ownedApartmentPlacedItemPoseEqual(prev, decor)) {
+      applyDecorGroupPoseFromDoc({ group, decor, spans });
+      centerDecorVisualBoundsOnRoot(group);
+      clampMyApartmentDecorEulerLimits(group);
+    }
   }
   for (const id of mount.mountedDecorIds) {
     if (nextIds.has(id)) continue;
+    structuralRebuild = true;
     const selId = editorMyApartmentSelectedIdForDecor(id);
     const group = mount.selectionGroups[selId];
     if (group) {
@@ -1150,6 +1181,7 @@ export function syncEditorMyApartmentDecorOnMount(
     }
   }
   mount.mountedDecorIds = nextIds;
+  return { structuralRebuild };
 }
 
 /** Add/update/remove wall groups without rebuilding decor/mirror meshes. */
@@ -1441,35 +1473,3 @@ export function mountEditorMyApartmentFurnitureUnder(
   };
 }
 
-export function updateEditorMyApartmentMountFromDoc(
-  mount: EditorMyApartmentFurnitureMount,
-  decorTemplates: EditorMyApartmentDecorTemplateMap,
-  doc: OwnedApartmentBuiltinsDoc,
-  authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
-  windowScanRoot: THREE.Object3D,
-  unitBounds?: ApartmentUnitWorldBounds,
-): void {
-  const parent = mount.root.parent;
-  if (!parent) return;
-  teardownApartmentSavedObjectGroupManipulator();
-  const rebuilt = mountEditorMyApartmentFurnitureUnder(
-    parent,
-    decorTemplates,
-    doc,
-    authoringFractionMapping,
-    windowScanRoot,
-    unitBounds,
-  );
-  mount.dispose();
-  mount.root = rebuilt.root;
-  mount.selectionGroups = rebuilt.selectionGroups;
-  mount.practicalLights = rebuilt.practicalLights;
-  mount.decorShadowRig = rebuilt.decorShadowRig;
-  mount.bakedFloorShadowMount = rebuilt.bakedFloorShadowMount;
-  mount.resyncPracticalLights = rebuilt.resyncPracticalLights;
-  mount.resyncDecorShadows = rebuilt.resyncDecorShadows;
-  mount.dispose = rebuilt.dispose;
-  mount.mountedWallIds = rebuilt.mountedWallIds;
-  mount.mountedMirrorIds = rebuilt.mountedMirrorIds;
-  mount.mountedDecorIds = rebuilt.mountedDecorIds;
-}

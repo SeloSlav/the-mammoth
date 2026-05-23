@@ -888,8 +888,8 @@
       "id": "193519a1-4860-4ec6-832b-f32fdef78ab4",
       "modelRelPath": "static/models/objects/window-shutter.glb",
       "fx": 0.9774696707105718,
-      "fz": 0.1754176077070513,
-      "dy": 1.749028924895451,
+      "fz": 0.1754260738235218,
+      "dy": 1.7568053722194503,
       "yawRad": -1.5707963267948963,
       "pitchRad": 0,
       "rollRad": 0,
@@ -1050,6 +1050,20 @@
       "uniformScale": 0.20976430023967615,
       "verticalScaleMul": 1,
       "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
+    },
+    {
+      "id": "5399ea91-6ad6-4c22-9e44-6b0b3f2f5b58",
+      "modelRelPath": "static/models/objects/fish-tank.glb",
+      "fx": 0.5766547717184417,
+      "fz": 0.6078640974204949,
+      "dy": 0.9241519268758394,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.24004505933091325,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
       "itemKind": "plain"
     }
   ],

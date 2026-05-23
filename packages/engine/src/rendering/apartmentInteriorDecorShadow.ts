@@ -176,7 +176,7 @@ function configureDecorShadowLight(light: THREE.DirectionalLight): void {
   light.shadow.bias = cfg.bias;
   light.shadow.normalBias = cfg.normalBias;
   light.shadow.radius = cfg.radius;
-  light.shadow.autoUpdate = true;
+  light.shadow.autoUpdate = false;
   light.shadow.needsUpdate = true;
 }
 

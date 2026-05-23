@@ -192,8 +192,8 @@ export function persistAllMyApartmentWallPlacementsFromScene(): boolean {
   return true;
 }
 
-/** Avoid Zod parse + full wall mesh rebuild every `objectChange` tick while the gizmo is active. */
-function deferMyApartmentWallStorePersistWhileDragging(
+/** Avoid mount resync + full mesh rebuild every `objectChange` tick while the gizmo is active. */
+function deferMyApartmentLayoutStorePersistWhileDragging(
   store: { mode: string },
   transformControls: TransformControls,
 ): boolean {
@@ -586,14 +586,15 @@ export function commitEditorAttachedTransform(opts: {
         }
       }
 
-      const deferWallPersist = deferMyApartmentWallStorePersistWhileDragging(
+      const deferPersist = deferMyApartmentLayoutStorePersistWhileDragging(
         store,
         opts.transformControls,
       );
       if (
-        decorPatches.size > 0 ||
-        mirrorPatches.size > 0 ||
-        (!deferWallPersist && wallPatches.size > 0)
+        !deferPersist &&
+        (decorPatches.size > 0 ||
+          mirrorPatches.size > 0 ||
+          wallPatches.size > 0)
       ) {
         store.patchOwnedApartmentBuiltins((d) => ({
           ...d,
@@ -613,7 +614,7 @@ export function commitEditorAttachedTransform(opts: {
                 }),
               }
             : {}),
-          ...(!deferWallPersist && wallPatches.size > 0
+          ...(wallPatches.size > 0
             ? {
                 wallItems: d.wallItems.map((item) => {
                   const patch = wallPatches.get(item.id);
@@ -718,24 +719,28 @@ export function commitEditorAttachedTransform(opts: {
       );
       const { uniformScale, verticalScaleMul } =
         readMyApartmentDecorCommittedScale(targetRoot);
-      store.patchOwnedApartmentBuiltins((d) => ({
-        ...d,
-        placedItems: d.placedItems.map((item) =>
-          item.id === decorId
-            ? {
-                ...item,
-                fx,
-                fz,
-                dy,
-                yawRad: yaw,
-                pitchRad: pitch,
-                rollRad: roll,
-                uniformScale,
-                verticalScaleMul,
-              }
-            : item,
-        ),
-      }));
+      if (
+        !deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
+      ) {
+        store.patchOwnedApartmentBuiltins((d) => ({
+          ...d,
+          placedItems: d.placedItems.map((item) =>
+            item.id === decorId
+              ? {
+                  ...item,
+                  fx,
+                  fz,
+                  dy,
+                  yawRad: yaw,
+                  pitchRad: pitch,
+                  rollRad: roll,
+                  uniformScale,
+                  verticalScaleMul,
+                }
+              : item,
+          ),
+        }));
+      }
       applyMyApartmentDecorRootScaleFromDoc(targetRoot, uniformScale, verticalScaleMul);
       return;
     }
@@ -778,30 +783,34 @@ export function commitEditorAttachedTransform(opts: {
       );
       const sizeX = Math.abs(mesh.scale.x * targetRoot.scale.x);
       const sizeY = Math.abs(mesh.scale.y * targetRoot.scale.y);
-      store.patchOwnedApartmentBuiltins((d) => ({
-        ...d,
-        mirrorItems: d.mirrorItems.map((item) =>
-          item.id === mirrorId
-            ? {
-                ...item,
-                fx,
-                fz,
-                dy,
-                yawRad: yaw,
-                pitchRad: pitch,
-                rollRad: roll,
-                sizeX,
-                sizeY,
-              }
-            : item,
-        ),
-      }));
+      if (
+        !deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
+      ) {
+        store.patchOwnedApartmentBuiltins((d) => ({
+          ...d,
+          mirrorItems: d.mirrorItems.map((item) =>
+            item.id === mirrorId
+              ? {
+                  ...item,
+                  fx,
+                  fz,
+                  dy,
+                  yawRad: yaw,
+                  pitchRad: pitch,
+                  rollRad: roll,
+                  sizeX,
+                  sizeY,
+                }
+              : item,
+          ),
+        }));
+      }
       return;
     }
 
     if (wallId) {
       if (
-        deferMyApartmentWallStorePersistWhileDragging(store, opts.transformControls)
+        deferMyApartmentLayoutStorePersistWhileDragging(store, opts.transformControls)
       ) {
         return;
       }

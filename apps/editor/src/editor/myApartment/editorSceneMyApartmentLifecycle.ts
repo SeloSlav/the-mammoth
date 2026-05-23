@@ -1,25 +1,24 @@
 import * as THREE from "three";
 
-import { prepareMammothApartmentInteriorContentRoots, applyApartmentInteriorFloorReceiveShadowUnder, applyApartmentDecorCastShadowFlags } from "@the-mammoth/engine";
 import { useEditorStore } from "../../state/editorStore.js";
+import { demandEditorSceneRender } from "../editorScene/editorSceneRenderDemand.js";
 
 import {
   loadEditorMyApartmentDecorTemplates,
   listMissingEditorDecorTemplatePaths,
   loadMissingEditorDecorTemplates,
-
   apartmentUnitBoundsFromAuthoringFractionMapping,
   mountEditorMyApartmentFurnitureUnder,
   syncEditorMyApartmentDecorOnMount,
   syncEditorMyApartmentMirrorsOnMount,
   syncEditorMyApartmentWallsOnMount,
-  updateEditorMyApartmentMountFromDoc,
-
   type EditorMyApartmentFurnitureMount,
-
   type EditorMyApartmentDecorTemplateMap,
-
 } from "./editorMyApartmentMeshes.js";
+import {
+  updateEditorMyApartmentMountFromDoc,
+  resyncEditorMyApartmentMountPresentationAfterEdit,
+} from "./editorMyApartmentMountUpdate.js";
 
 import {
 
@@ -51,6 +50,7 @@ import {
 import {
   collectOwnedApartmentWallIdsWithOpeningChanges,
   collectWallIdsNeedingEditorMountSync,
+  ownedApartmentPlacedItemsOnlyPoseChanged,
 } from "./preserveOwnedApartmentMountPlacementRefs.js";
 import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 import { pruneMyApartmentLayoutHiddenPlacementIds } from "./editorMyApartmentLayoutVisibility.js";
@@ -232,13 +232,17 @@ export function createEditorSceneMyApartmentLifecycle(
         );
 
       } else {
+        const syncKind = classifyApartmentMountSyncChange(
+          prevMountInputs,
+          captureApartmentMountSyncInputs(st),
+        );
         updateEditorMyApartmentMountFromDoc(
           mount,
           decorTemplates,
           doc,
           authoringFractionMapping,
-          parent,
-          unitBounds,
+          syncKind === "none" ? "full" : syncKind,
+          prevMountInputs.placedItems,
         );
       }
 
@@ -261,6 +265,7 @@ export function createEditorSceneMyApartmentLifecycle(
       syncLayoutHiddenPlacementsFromStore();
       deps.syncTransformAttachment();
       clearApartmentLayoutLoadingIfCurrent(myGen);
+      demandEditorSceneRender();
 
     } catch (err) {
       console.error("[editor my apartment] reconcile failed", err);
@@ -289,24 +294,26 @@ export function createEditorSceneMyApartmentLifecycle(
     shellRoot: THREE.Object3D,
     authoringFractionMapping: ReturnType<typeof ownedApartmentFractionMappingForEditor>,
     layout: ReturnType<typeof resolveOwnedApartmentAuthoringLayoutForEditor>,
+    kind: "decor-only" | "walls-only" | "mirrors-only",
+    structuralDecorRebuild: boolean,
   ): void {
     if (!mount) return;
-    prepareMammothApartmentInteriorContentRoots({ shellRoot, decorRoot: mount.root });
-    applyApartmentInteriorFloorReceiveShadowUnder(shellRoot);
-    for (const group of Object.values(mount.selectionGroups)) {
-      const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
-      if (typeof modelRelPath !== "string") continue;
-      applyApartmentDecorCastShadowFlags(group, modelRelPath);
-    }
     const unitBounds = apartmentUnitBoundsFromAuthoringFractionMapping(
       authoringFractionMapping,
       layout?.shellPlan.vh ?? 3,
     );
-    mount.resyncPracticalLights(shellRoot);
-    mount.resyncDecorShadows(unitBounds);
-    deps.requestDecorShadowMapBake();
-    deps.syncApartmentLayoutPresentation();
+    resyncEditorMyApartmentMountPresentationAfterEdit(kind, {
+      mount,
+      shellRoot,
+      unitBounds,
+      structuralDecorRebuild,
+      resyncPracticalLights: (scanRoot) => mount!.resyncPracticalLights(scanRoot),
+      resyncDecorShadows: (bounds) => mount!.resyncDecorShadows(bounds),
+      requestDecorShadowMapBake: deps.requestDecorShadowMapBake,
+      syncMetallicEnv: deps.syncLightingAttachment,
+    });
     syncLayoutHiddenPlacementsFromStore();
+    demandEditorSceneRender();
   }
 
   async function syncPlacementIncrementalAsync(
@@ -330,18 +337,27 @@ export function createEditorSceneMyApartmentLifecycle(
       builtinsFallbackPreviewM: st.ownedApartmentBuiltins.previewSizeM,
     });
     const doc = st.ownedApartmentBuiltins;
+    let structuralDecorRebuild = false;
     if (kind === "decor-only") {
       const missing = listMissingEditorDecorTemplatePaths(doc, decorTemplates);
       if (missing.length > 0) {
         await loadMissingEditorDecorTemplates(decorTemplates, missing);
       }
       if (disposed || deps.getShouldHoldReplicaResync()) return;
-      syncEditorMyApartmentDecorOnMount(
-        mount,
-        decorTemplates,
-        doc,
-        authoringFractionMapping,
+      const poseOnly = ownedApartmentPlacedItemsOnlyPoseChanged(
+        prevMountInputs.placedItems,
+        doc.placedItems,
       );
+      if (!poseOnly) {
+        const decorResult = syncEditorMyApartmentDecorOnMount(
+          mount,
+          decorTemplates,
+          doc,
+          authoringFractionMapping,
+          prevMountInputs.placedItems,
+        );
+        structuralDecorRebuild = decorResult.structuralRebuild;
+      }
     } else if (kind === "walls-only") {
       if (disposed || deps.getShouldHoldReplicaResync()) return;
       const mountedWallKeys = new Set<string>();
@@ -369,7 +385,13 @@ export function createEditorSceneMyApartmentLifecycle(
       syncEditorMyApartmentMirrorsOnMount(mount, doc, authoringFractionMapping);
     }
     if (disposed || deps.getShouldHoldReplicaResync()) return;
-    resyncMountPresentationAfterMeshEdit(parent, authoringFractionMapping, layout);
+    resyncMountPresentationAfterMeshEdit(
+      parent,
+      authoringFractionMapping,
+      layout,
+      kind,
+      structuralDecorRebuild,
+    );
     setEditorMyApartmentPieceGroups(mount.selectionGroups);
     deps.syncTransformAttachment();
   }

@@ -9,6 +9,7 @@ import {
   applyEditorMyApartmentLayoutHiddenPlacements,
 } from "../myApartment/editorMyApartmentPieceGroupBridge.js";
 import { useEditorStore } from "../../state/editorStore.js";
+import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 import type { EditorStructuralState } from "./editorSceneStructuralRebuild.js";
 import type { EditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import {
@@ -161,6 +162,7 @@ export function subscribeEditorSceneStore(deps: {
         }
         if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
           rebuildStructural();
+          demandEditorSceneRender();
         } else {
           const placementDataChanged =
             s.floorDocs !== prev.floorDocs ||
@@ -200,6 +202,7 @@ export function subscribeEditorSceneStore(deps: {
               rebuildStairWellPreviewRoot(stairPreviewRoot, s.stairWellDef);
             }
             syncTransformsFromStore();
+            demandEditorSceneRender();
           }
         }
       }
@@ -240,6 +243,7 @@ export function subscribeEditorSceneStore(deps: {
         tcLevel && !transformControls.dragging && !getLevelEditorTransformGesture();
       if (tcFp || shouldSyncLevelAttachment) {
         syncTransformAttachment();
+        demandEditorSceneRender();
       }
 
       /**
@@ -291,6 +295,15 @@ export function subscribeEditorSceneStore(deps: {
       ) {
         applyEnvironment(s);
         grid.visible = shouldShowEditorGrid(s);
+        demandEditorSceneRender();
+      }
+      if (
+        s.contentStructureEpoch !== prev.contentStructureEpoch ||
+        s.shadowsEnabled !== prev.shadowsEnabled ||
+        s.apartmentBakedFloorShadowsEnabled !== prev.apartmentBakedFloorShadowsEnabled ||
+        s.myApartmentLayoutHiddenPlacementIds !== prev.myApartmentLayoutHiddenPlacementIds
+      ) {
+        demandEditorSceneRender();
       }
       prev = s;
     } finally {

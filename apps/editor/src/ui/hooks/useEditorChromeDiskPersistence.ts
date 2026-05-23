@@ -31,6 +31,7 @@ import {
   postSaveApartmentUnitLayoutProfiles,
   postSaveOwnedApartmentBuiltins,
 } from "../editorChromeNetwork.js";
+import { resolveOwnedApartmentBuiltinsForDiskWrite } from "../../editor/persistence/resolveOwnedApartmentBuiltinsForDiskWrite.js";
 
 export function useEditorChromeDiskPersistence(
   setSaveMsg: (msg: string | null) => void,
@@ -197,7 +198,7 @@ export function useEditorChromeDiskPersistence(
           }
           await postSaveOwnedApartmentBuiltins(
             serializeOwnedApartmentBuiltinsDocPretty(
-              stAfterPersist.ownedApartmentDefaultBuiltins,
+              resolveOwnedApartmentBuiltinsForDiskWrite(stAfterPersist),
             ),
           );
           wroteOwnedApartmentBuiltins = true;
@@ -208,7 +209,9 @@ export function useEditorChromeDiskPersistence(
         requestEditorMyApartmentLayoutPersistFromScene();
         const st = useEditorStore.getState();
         await postSaveOwnedApartmentBuiltins(
-          serializeOwnedApartmentBuiltinsDocPretty(st.ownedApartmentDefaultBuiltins),
+          serializeOwnedApartmentBuiltinsDocPretty(
+            resolveOwnedApartmentBuiltinsForDiskWrite(st),
+          ),
         );
         wroteOwnedApartmentBuiltins = true;
       }

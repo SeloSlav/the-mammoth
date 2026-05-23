@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { editorKeyboardTargetIsFormField } from "./editorSceneTransformModeHotkeys.js";
+import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 
 type OrbitMoveAxis = "forward" | "back" | "left" | "right" | "up" | "down";
 
@@ -18,7 +19,7 @@ export function createEditorOrbitKeyboardMove(deps: {
   orbitControls: OrbitControls;
   getSpeedMps: () => number;
   getEnabled: () => boolean;
-}): { update: (dt: number) => void; dispose: () => void } {
+}): { update: (dt: number) => void; isActive: () => boolean; dispose: () => void } {
   const { camera, orbitControls, getSpeedMps, getEnabled } = deps;
 
   const moveState: Record<OrbitMoveAxis, number> = {
@@ -45,6 +46,7 @@ export function createEditorOrbitKeyboardMove(deps: {
     const axis = ORBIT_MOVE_KEY_CODES[ev.code];
     if (!axis) return;
     setAxis(axis, true);
+    demandEditorSceneRender();
     ev.preventDefault();
   };
 
@@ -56,6 +58,15 @@ export function createEditorOrbitKeyboardMove(deps: {
 
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
+
+  const isActive = (): boolean =>
+    moveState.forward +
+      moveState.back +
+      moveState.left +
+      moveState.right +
+      moveState.up +
+      moveState.down >
+    0;
 
   const update = (dt: number): void => {
     if (!getEnabled()) return;
@@ -88,5 +99,5 @@ export function createEditorOrbitKeyboardMove(deps: {
     window.removeEventListener("keyup", onKeyUp);
   };
 
-  return { update, dispose };
+  return { update, isActive, dispose };
 }

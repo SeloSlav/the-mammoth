@@ -15,6 +15,11 @@ import {
   isConsumableFpAuthoringState,
   isWeaponFpAuthoringState,
 } from "./editorStoreModeGuards.js";
+import { registerEditorSceneRenderWake } from "./editorSceneRenderDemand.js";
+
+const CAMERA_MOTION_EPS_SQ = 1e-10;
+/** Extra frames after motion stops (damping tail). */
+const SETTLE_FRAMES_BEFORE_IDLE = 2;
 
 export function startEditorSceneRenderLoop(deps: {
   canvas: HTMLCanvasElement;
@@ -23,7 +28,7 @@ export function startEditorSceneRenderLoop(deps: {
   camera: THREE.PerspectiveCamera;
   transformControls: TransformControls;
   orbitControls: OrbitControls;
-  orbitKeyboardMove: { update: (dt: number) => void };
+  orbitKeyboardMove: { update: (dt: number) => void; isActive: () => boolean };
   fp: EditorFpAuthoringLifecycle;
   previewSelectionOutline: PreviewSelectionShapeOutline;
   fpSelectionOutline: FpSelectionAabbOutline;
@@ -53,15 +58,55 @@ export function startEditorSceneRenderLoop(deps: {
   let lastTickMs = performance.now();
   let lastWeaponPresentationPollMs = 0;
   let lastAptLayoutOutlineSelectionKey = "";
+  let lastRenderAspect = 0;
+  let lastTransformControlsCamera: THREE.Camera | null = null;
+
+  let orbitPointerDown = false;
+  let settleFrames = SETTLE_FRAMES_BEFORE_IDLE;
+
+  const lastCamPos = new THREE.Vector3();
+  const lastOrbitTarget = new THREE.Vector3();
+  lastCamPos.copy(camera.position);
+  lastOrbitTarget.copy(orbitControls.target);
+
+  const scheduleFrame = (): void => {
+    if (raf !== 0) return;
+    raf = requestAnimationFrame(tick);
+  };
+
+  const onOrbitStart = (): void => {
+    orbitPointerDown = true;
+    settleFrames = 0;
+    scheduleFrame();
+  };
+
+  const onOrbitEnd = (): void => {
+    orbitPointerDown = false;
+    settleFrames = 0;
+    scheduleFrame();
+  };
+
+  orbitControls.addEventListener("start", onOrbitStart);
+  orbitControls.addEventListener("end", onOrbitEnd);
+  orbitControls.addEventListener("change", scheduleFrame);
+
+  transformControls.addEventListener("dragging-changed", scheduleFrame);
+  transformControls.addEventListener("change", scheduleFrame);
+
+  const unregisterWake = registerEditorSceneRenderWake(scheduleFrame);
 
   const tick = () => {
-    raf = requestAnimationFrame(tick);
+    raf = 0;
     const now = performance.now();
     const dt = Math.min((now - lastTickMs) / 1000, 0.05);
     lastTickMs = now;
     const st = useEditorStore.getState();
     const tcDragging = transformControls.dragging === true;
     const inFpMode = isFpModeFn(st.mode);
+    const fpSessionActive =
+      (isWeaponFpAuthoringState(st) && fp.getFpSession()?.getPresenter()) ||
+      (isConsumableFpAuthoringState(st) && fp.getFpConsumableSession()?.isReady());
+
     if (isWeaponFpAuthoringState(st) && fp.getFpSession()?.getPresenter()) {
       previewSelectionOutline.setFromObject(null);
       const pres = fp.getFpSession()!.getPresenter()!;
@@ -176,10 +221,21 @@ export function startEditorSceneRenderLoop(deps: {
     ) {
       fp.getFpConsumableSession()!.syncWorldMatrices();
     }
-    renderCam.aspect = canvas.clientWidth / canvas.clientHeight;
-    renderCam.updateProjectionMatrix();
-    (transformControls as unknown as { camera: THREE.Camera }).camera =
-      renderCam;
+    const nextAspect = canvas.clientWidth / canvas.clientHeight;
+    if (
+      Number.isFinite(nextAspect) &&
+      nextAspect > 0 &&
+      nextAspect !== lastRenderAspect
+    ) {
+      lastRenderAspect = nextAspect;
+      renderCam.aspect = nextAspect;
+      renderCam.updateProjectionMatrix();
+    }
+    if (lastTransformControlsCamera !== renderCam) {
+      lastTransformControlsCamera = renderCam;
+      (transformControls as unknown as { camera: THREE.Camera }).camera =
+        renderCam;
+    }
     if (!tcDragging) {
       if (inFpMode && st.fpAuthorCamera === "orbit") {
         beforeOrbitControlsUpdate?.();
@@ -191,16 +247,51 @@ export function startEditorSceneRenderLoop(deps: {
         orbitKeyboardMove.update(dt);
       }
     }
+
+    const camMoved =
+      camera.position.distanceToSquared(lastCamPos) > CAMERA_MOTION_EPS_SQ ||
+      orbitControls.target.distanceToSquared(lastOrbitTarget) >
+        CAMERA_MOTION_EPS_SQ;
+    if (camMoved) {
+      lastCamPos.copy(camera.position);
+      lastOrbitTarget.copy(orbitControls.target);
+      settleFrames = 0;
+    } else {
+      settleFrames = Math.min(
+        settleFrames + 1,
+        SETTLE_FRAMES_BEFORE_IDLE + 1,
+      );
+    }
+
     const attached = transformControls.object as THREE.Object3D | undefined;
     if (attached && !objectLivesUnderScene(attached, scene)) {
       withProgrammaticTransformControls(() => transformControls.detach());
     }
     renderer.render(scene, renderCam);
+
+    const keyboardFlying = orbitKeyboardMove.isActive();
+    const orbitMotionActive =
+      orbitPointerDown ||
+      keyboardFlying ||
+      settleFrames < SETTLE_FRAMES_BEFORE_IDLE;
+
+    const keepAnimating =
+      fpSessionActive ||
+      tcDragging ||
+      orbitMotionActive;
+
+    if (keepAnimating) {
+      scheduleFrame();
+    }
   };
 
-  tick();
+  scheduleFrame();
 
   return () => {
     cancelAnimationFrame(raf);
+    unregisterWake();
+    orbitControls.removeEventListener("start", onOrbitStart);
+    orbitControls.removeEventListener("end", onOrbitEnd);
+    orbitControls.removeEventListener("change", scheduleFrame);
   };
 }
