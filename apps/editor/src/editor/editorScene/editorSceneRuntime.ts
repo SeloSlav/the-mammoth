@@ -359,30 +359,49 @@ export async function mountEditorScene(
   } | null = null;
 
   /** Decor root scale at pointer-down — axis handles pin untouched axes (Y-only stretch, etc.). */
-  const decorScaleGestureStartByUuid = new Map<string, THREE.Vector3>();
+  const decorScaleGestureStartByUuid = new Map<string, MyApartmentDecorScaleGesturePin>();
   /** Saved-group manip scale at pointer-down — baked into decor children on mouseUp. */
-  let groupManipScaleGestureStart: THREE.Vector3 | null = null;
+  let groupManipScaleGesturePin: MyApartmentDecorScaleGesturePin | null = null;
+
+  function readTransformControlsPointerStart(): THREE.Vector3 {
+    const pointStart = (
+      transformControls as unknown as { pointStart?: THREE.Vector3 | null }
+    ).pointStart;
+    return pointStart?.clone() ?? new THREE.Vector3(1, 0, 0);
+  }
+
+  function readTransformControlsPointerEnd(): THREE.Vector3 | null {
+    const pointEnd = (
+      transformControls as unknown as { pointEnd?: THREE.Vector3 | null }
+    ).pointEnd;
+    return pointEnd?.clone() ?? null;
+  }
+
+  function makeDecorScaleGesturePin(object: THREE.Object3D): MyApartmentDecorScaleGesturePin {
+    return {
+      startScale: object.scale.clone(),
+      pointerStart: readTransformControlsPointerStart(),
+    };
+  }
 
   function primeDecorScaleGestureStarts(attached: THREE.Object3D): void {
     decorScaleGestureStartByUuid.clear();
-    groupManipScaleGestureStart = null;
+    groupManipScaleGesturePin = null;
+    const pinFor = (object: THREE.Object3D) => makeDecorScaleGesturePin(object);
     if (attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
-      groupManipScaleGestureStart = attached.scale.clone();
+      groupManipScaleGesturePin = pinFor(attached);
       for (const child of attached.children) {
         if (!(child instanceof THREE.Group)) continue;
         if (!child.userData.mammothEditorMyApartmentDecorId) continue;
-        decorScaleGestureStartByUuid.set(child.uuid, child.scale.clone());
+        decorScaleGestureStartByUuid.set(child.uuid, pinFor(child));
       }
       return;
     }
-    if (attached.userData.mammothEditorMyApartmentDecorId) {
-      decorScaleGestureStartByUuid.set(attached.uuid, attached.scale.clone());
-    }
+    decorScaleGestureStartByUuid.set(attached.uuid, pinFor(attached));
   }
 
-  function groupManipScaleGesturePin(): MyApartmentDecorScaleGesturePin | null {
-    if (!groupManipScaleGestureStart) return null;
-    return { startScale: groupManipScaleGestureStart };
+  function groupManipScaleGesturePinFor(): MyApartmentDecorScaleGesturePin | null {
+    return groupManipScaleGesturePin;
   }
 
   function bakeGroupManipScaleIntoDecorChildrenIfNeeded(
@@ -391,16 +410,20 @@ export async function mountEditorScene(
     if (
       !attached ||
       attached.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] !== true ||
-      !groupManipScaleGestureStart
+      !groupManipScaleGesturePin
     ) {
       return;
     }
+    const decorStarts = new Map<string, THREE.Vector3>();
+    for (const [uuid, pin] of decorScaleGestureStartByUuid) {
+      decorStarts.set(uuid, pin.startScale);
+    }
     bakeMyApartmentGroupManipScaleIntoDecorChildren(
       attached,
-      groupManipScaleGestureStart,
-      decorScaleGestureStartByUuid,
+      groupManipScaleGesturePin.startScale,
+      decorStarts,
     );
-    groupManipScaleGestureStart = null;
+    groupManipScaleGesturePin = null;
   }
 
   function decorScaleGesturePinFor(
@@ -410,9 +433,23 @@ export async function mountEditorScene(
     if (transformMode !== "scale" || !transformControls.dragging) {
       return null;
     }
-    const startScale = decorScaleGestureStartByUuid.get(object.uuid);
-    if (!startScale) return null;
-    return { startScale };
+    return decorScaleGestureStartByUuid.get(object.uuid) ?? null;
+  }
+
+  function constrainDecorScaleFromGizmo(
+    root: THREE.Object3D,
+    transformMode: ReturnType<typeof useEditorStore.getState>["transformMode"],
+    gesturePin: MyApartmentDecorScaleGesturePin | null,
+  ): void {
+    withProgrammaticTransformControls(() => {
+      constrainMyApartmentDecorScaleFromGizmo(root, {
+        transformMode,
+        axis: (transformControls as unknown as { axis?: string | null }).axis,
+        dragging: transformControls.dragging,
+        gesturePin,
+        pointerEnd: readTransformControlsPointerEnd(),
+      });
+    });
   }
 
   function wallSlabScaleDragFor(
@@ -1057,7 +1094,7 @@ export async function mountEditorScene(
     commitLevelEditorAttachedTransformToStore();
     wallSlabScaleGesture = null;
     decorScaleGestureStartByUuid.clear();
-    groupManipScaleGestureStart = null;
+    groupManipScaleGesturePin = null;
     /** After `dragging` flips false, subscriber may skip sync; realign mesh ↔ store once. */
     queueMicrotask(() => {
       const m = useEditorStore.getState().mode;
@@ -1115,12 +1152,11 @@ export async function mountEditorScene(
         return;
       } else if (aptObj.userData[MY_APARTMENT_OBJECT_GROUP_MANIP_UD] === true) {
         if (aptSt.transformMode === "scale") {
-          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
-            transformMode: aptSt.transformMode,
-            axis: (transformControls as unknown as { axis?: string | null }).axis,
-            dragging: transformControls.dragging,
-            gesturePin: groupManipScaleGesturePin(),
-          });
+          constrainDecorScaleFromGizmo(
+            aptObj,
+            aptSt.transformMode,
+            groupManipScaleGesturePinFor(),
+          );
         }
         for (const child of [...aptObj.children]) {
           if (!(child instanceof THREE.Group)) continue;
@@ -1128,21 +1164,6 @@ export async function mountEditorScene(
             child.userData.mammothEditorMyApartmentDecorId ||
             child.userData.mammothEditorMyApartmentMirrorId
           ) {
-            if (child.userData.mammothEditorMyApartmentDecorId) {
-              constrainMyApartmentDecorScaleFromGizmo(child, {
-                transformMode: aptSt.transformMode,
-                axis: (transformControls as unknown as { axis?: string | null }).axis,
-                dragging: transformControls.dragging,
-                gesturePin: decorScaleGesturePinFor(child, aptSt.transformMode),
-              });
-            } else {
-              constrainMyApartmentDecorScaleFromGizmo(child, {
-                transformMode: aptSt.transformMode,
-                axis: (transformControls as unknown as { axis?: string | null }).axis,
-                dragging: transformControls.dragging,
-                gesturePin: null,
-              });
-            }
             if (aptSt.transformMode === "rotate") {
               clampMyApartmentDecorEulerLimits(child);
               if (aptSt.gridSnapM > 0) {
@@ -1202,19 +1223,13 @@ export async function mountEditorScene(
         aptObj.userData.mammothEditorMyApartmentMirrorId
       ) {
         if (aptObj.userData.mammothEditorMyApartmentDecorId) {
-          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
-            transformMode: aptSt.transformMode,
-            axis: (transformControls as unknown as { axis?: string | null }).axis,
-            dragging: transformControls.dragging,
-            gesturePin: decorScaleGesturePinFor(aptObj, aptSt.transformMode),
-          });
-        } else {
-          constrainMyApartmentDecorScaleFromGizmo(aptObj, {
-            transformMode: aptSt.transformMode,
-            axis: (transformControls as unknown as { axis?: string | null }).axis,
-            dragging: transformControls.dragging,
-            gesturePin: null,
-          });
+          constrainDecorScaleFromGizmo(
+            aptObj,
+            aptSt.transformMode,
+            decorScaleGesturePinFor(aptObj, aptSt.transformMode),
+          );
+        } else if (aptSt.transformMode === "scale") {
+          constrainDecorScaleFromGizmo(aptObj, aptSt.transformMode, null);
         }
         if (aptSt.transformMode === "rotate") {
           clampMyApartmentDecorEulerLimits(aptObj);

@@ -28,13 +28,18 @@ export function ownedApartmentPlacedItemPoseEqual(
   left: OwnedApartmentPlacedItem,
   right: OwnedApartmentPlacedItem,
 ): boolean {
+  const leftScale = resolveOwnedApartmentDecorRootScale(left);
+  const rightScale = resolveOwnedApartmentDecorRootScale(right);
   return (
     left.fx === right.fx &&
     left.fz === right.fz &&
     left.dy === right.dy &&
     left.yawRad === right.yawRad &&
     left.pitchRad === right.pitchRad &&
-    (left.rollRad ?? 0) === (right.rollRad ?? 0)
+    (left.rollRad ?? 0) === (right.rollRad ?? 0) &&
+    leftScale.x === rightScale.x &&
+    leftScale.y === rightScale.y &&
+    leftScale.z === rightScale.z
   );
 }
 
