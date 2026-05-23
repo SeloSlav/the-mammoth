@@ -15,8 +15,11 @@
 //!    (see [`instant_hotbar_consume_vital_deltas`]). Author `hotbarConsumeSound` for local / world
 //!    consume SFX: `eat`, `drink`, or `smoke`.
 
+mod drop_despawn;
 mod load;
 mod schema;
+
+pub use drop_despawn::world_drop_despawn_secs;
 
 pub use schema::{
     BalconyGrowSpec, CatalogItem, ConstructionIngredient, HotbarConsumeSound, ItemCategory,

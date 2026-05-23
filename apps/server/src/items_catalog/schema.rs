@@ -86,6 +86,9 @@ pub struct CatalogItem {
     pub balcony_grow: Option<BalconyGrowSpec>,
     #[serde(default)]
     pub balcony_grow_fertilizer: Option<bool>,
+    /// Optional override for player-origin world drops (seconds). Clamped to 300–1800 at load.
+    #[serde(default)]
+    pub drop_despawn_secs: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

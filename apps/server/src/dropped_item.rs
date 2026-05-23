@@ -5,7 +5,8 @@
 //! units get weapon-biased loot (sorted by floor); many stay empty each refresh. Scrap metal is common but
 //! not guaranteed on every looted unit — fewer rows, clearer scavenging, less subscription/render load.
 //! Anchored apartment XZ omits bbox centroids and the bed footprint projection so pickups land in clear living/entry lanes.
-//! Player drops stay `world_spawn_slot = None`; cleanup only ages those rows so server-spawn piles do not silently
+//! Player drops stay `world_spawn_slot = None`; cleanup ages those rows on a per-item schedule
+//! (see [`crate::items_catalog::world_drop_despawn_secs`]) so server-spawn piles do not silently
 //! despawn mid-session.
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp};
@@ -38,8 +39,8 @@ const PICKUP_MAX_ABS_DY_SAME_BAND_M: f32 = STOREY_SPACING_M * 1.08;
 const DROP_FORWARD_M: f32 = 0.55;
 /// Lift mesh slightly above replicated foot height to avoid sinking through thin slabs / Z-fight (m).
 const DROP_Y_LIFT_M: f32 = 0.11;
-/// Remove drops older than this (seconds) during periodic cleanup.
-const DROP_DESPAWN_SECS: i64 = 900;
+/// How often the cleanup reducer scans player-origin drops (µs).
+const DROP_CLEANUP_INTERVAL_MICROS: i64 = 120_000_000;
 /// How often to reroll anchored world loot (random defs/qty/yaw).
 const WORLD_LOOT_REFRESH_MICROS: i64 = 180 * 1_000_000;
 
@@ -196,12 +197,11 @@ pub fn cleanup_old_dropped_items(ctx: &ReducerContext, _arg: DroppedItemCleanup)
     if ctx.sender() != ctx.identity() {
         return;
     }
-    let cutoff = ctx.timestamp - TimeDuration::from_micros(DROP_DESPAWN_SECS * 1_000_000);
     let ids: Vec<u64> = ctx
         .db
         .dropped_item()
         .iter()
-        .filter(|d| d.world_spawn_slot.is_none() && d.created_at < cutoff)
+        .filter(|d| player_origin_drop_expired(ctx, d))
         .map(|d| d.id)
         .collect();
     for id in ids {
@@ -209,11 +209,21 @@ pub fn cleanup_old_dropped_items(ctx: &ReducerContext, _arg: DroppedItemCleanup)
     }
 }
 
+/// Player drops and death scatter (`world_spawn_slot = None`) age out per catalog item lifetime.
+fn player_origin_drop_expired(ctx: &ReducerContext, drop: &DroppedItem) -> bool {
+    if drop.world_spawn_slot.is_some() {
+        return false;
+    }
+    let despawn_secs = items_catalog::world_drop_despawn_secs(&drop.def_id);
+    let cutoff = ctx.timestamp - TimeDuration::from_micros(despawn_secs * 1_000_000);
+    drop.created_at < cutoff
+}
+
 pub fn start_dropped_item_cleanup_schedule(ctx: &ReducerContext) {
     if ctx.db.dropped_item_cleanup().iter().next().is_some() {
         return;
     }
-    let interval = TimeDuration::from_micros(120_000_000); // 2 minutes
+    let interval = TimeDuration::from_micros(DROP_CLEANUP_INTERVAL_MICROS);
     let _ = ctx.db.dropped_item_cleanup().insert(DroppedItemCleanup {
         scheduled_id: 0,
         scheduled_at: interval.into(),

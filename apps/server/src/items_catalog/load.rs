@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use super::drop_despawn;
 use super::schema::{
     CatalogItem, CatalogShard, ConstructionIngredient, ConstructionSpec, ItemCategory,
 };
@@ -161,6 +162,28 @@ fn load_catalog() -> ItemCatalog {
         }
         if let Some(ref c) = it.construction {
             validate_construction(it.id.as_str(), c, &by_id);
+        }
+        let despawn = drop_despawn::world_drop_despawn_secs_for_item(it);
+        if despawn < drop_despawn::DROP_DESPAWN_MIN_SECS
+            || despawn > drop_despawn::DROP_DESPAWN_MAX_SECS
+        {
+            panic!(
+                "catalog item {}: drop despawn {despawn}s outside {}–{}s band",
+                it.id,
+                drop_despawn::DROP_DESPAWN_MIN_SECS,
+                drop_despawn::DROP_DESPAWN_MAX_SECS
+            );
+        }
+        if let Some(raw) = it.drop_despawn_secs {
+            let clamped = drop_despawn::clamp_drop_despawn_secs(raw as i64);
+            if clamped != raw as i64 {
+                panic!(
+                    "catalog item {}: dropDespawnSecs {raw} must be within {}–{}",
+                    it.id,
+                    drop_despawn::DROP_DESPAWN_MIN_SECS,
+                    drop_despawn::DROP_DESPAWN_MAX_SECS
+                );
+            }
         }
     }
     ItemCatalog { by_id }
