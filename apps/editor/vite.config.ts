@@ -11,6 +11,8 @@ import { prependConnectMiddleware } from "./src/vite/prependConnectMiddleware";
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(configDir, "../..");
 const clientPublicRoot = path.resolve(repoRoot, "apps/client/public");
+const clientSrc = path.resolve(repoRoot, "apps/client/src");
+const uiThemeSrc = path.resolve(repoRoot, "packages/ui-theme/src");
 
 const require = createRequire(import.meta.url);
 const threeWebgpu = require.resolve("three/webgpu");
@@ -65,6 +67,20 @@ export default defineConfig({
     strictPort: true,
   },
   resolve: {
-    alias: [{ find: /^three$/, replacement: threeWebgpu }],
+    alias: [
+      { find: /^three$/, replacement: threeWebgpu },
+      { find: "@the-mammoth/client", replacement: clientSrc },
+      {
+        find: /^@the-mammoth\/ui-theme\/uiTheme\.css$/,
+        replacement: path.join(uiThemeSrc, "uiTheme.css"),
+      },
+      {
+        find: /^@the-mammoth\/ui-theme$/,
+        replacement: path.join(uiThemeSrc, "index.ts"),
+      },
+    ],
+  },
+  optimizeDeps: {
+    exclude: ["@the-mammoth/world", "@the-mammoth/ui-theme"],
   },
 });

@@ -498,6 +498,20 @@ const OwnedApartmentBuiltinsDocV1Schema = z.object({
   objectGroups: z.array(OwnedApartmentObjectGroupSchema).default([]),
 });
 
+export const NPC_COMBAT_ARCHETYPES = ["babushka"] as const;
+export type NpcCombatArchetype = (typeof NPC_COMBAT_ARCHETYPES)[number];
+
+/** Authored combat-sim NPC feet anchor in apartment layout fractions (same space as decor `fx`/`fz`). */
+export const OwnedApartmentNpcCombatSpawnSchema = z.object({
+  id: z.string().min(1).max(120),
+  archetype: z.enum(NPC_COMBAT_ARCHETYPES),
+  fx: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  fz: z.number().min(OWNED_APARTMENT_LAYOUT_FRACTION_MIN).max(OWNED_APARTMENT_LAYOUT_FRACTION_MAX),
+  yawRad: z.number().default(0),
+});
+
+export type OwnedApartmentNpcCombatSpawn = z.infer<typeof OwnedApartmentNpcCombatSpawnSchema>;
+
 const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   version: z.literal(2),
   /** Preview floor fallback (meters) when the mamutica floor plate is unavailable in the editor. */
@@ -512,6 +526,8 @@ const OwnedApartmentBuiltinsDocSchemaCore = z.object({
   mirrorItems: z.array(OwnedApartmentMirrorItemSchema).default([]),
   /** Named decor/wall groups for editor-only batch transforms (not replicated independently). */
   objectGroups: z.array(OwnedApartmentObjectGroupSchema).default([]),
+  /** Combat-sim / gameplay NPC spawn anchors (layout fractions). */
+  npcCombatSpawns: z.array(OwnedApartmentNpcCombatSpawnSchema).default([]),
 });
 
 export type OwnedApartmentBuiltinsDoc = z.infer<typeof OwnedApartmentBuiltinsDocSchemaCore>;

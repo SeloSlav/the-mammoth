@@ -1,5 +1,6 @@
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useMemo } from "react";
+import { THEME_TEXT_FAINT, THEME_TEXT_PRIMARY } from "@the-mammoth/ui-theme";
 import type { DbConnection } from "../module_bindings";
 import type { CraftQueueItem as CraftQueueRow } from "../module_bindings/types";
 import { listMammothCraftableItemDefs } from "./mammothItemCatalog";
@@ -68,11 +69,12 @@ export function MammothQuickCraftPanel({
       >
         {craftables.map((def) => {
           const ready = canEnqueueCraft(def, grids, queueLength);
+          const hasIcon = def.iconUrl.length > 0;
           return (
             <button
               key={def.id}
               type="button"
-              disabled={!ready}
+              aria-disabled={!ready}
               aria-label={def.displayName}
               onMouseEnter={(e) => onHoverRecipe(def, e)}
               onMouseMove={onHoverMove}
@@ -81,22 +83,42 @@ export function MammothQuickCraftPanel({
               style={{
                 position: "relative",
                 width: 52,
-                height: 52,
-                padding: 0,
+                minHeight: hasIcon ? 72 : 52,
+                padding: hasIcon ? "4px 2px 3px" : "4px 3px",
                 borderRadius: 6,
                 border: `2px solid ${ready ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.1)"}`,
                 background: ready ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.28)",
                 boxSizing: "border-box",
                 cursor: ready ? "pointer" : "not-allowed",
-                opacity: ready ? 1 : 0.42,
+                opacity: ready ? 1 : 0.72,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
+                justifyContent: hasIcon ? "flex-start" : "center",
+                gap: hasIcon ? 2 : 0,
                 overflow: "hidden",
+                color: ready ? THEME_TEXT_PRIMARY : THEME_TEXT_FAINT,
                 ...NO_SELECT,
               }}
             >
-              <MammothItemIcon def={def} size={44} style={NO_SELECT} />
+              {hasIcon ? <MammothItemIcon def={def} size={32} style={NO_SELECT} /> : null}
+              <span
+                aria-hidden
+                style={{
+                  width: "100%",
+                  fontSize: hasIcon ? 8 : 9,
+                  lineHeight: 1.15,
+                  fontWeight: 600,
+                  textAlign: "center",
+                  display: "-webkit-box",
+                  WebkitLineClamp: hasIcon ? 2 : 3,
+                  WebkitBoxOrient: "vertical" as const,
+                  overflow: "hidden",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {def.displayName}
+              </span>
             </button>
           );
         })}

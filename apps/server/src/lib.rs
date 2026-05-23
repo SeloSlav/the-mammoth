@@ -32,6 +32,9 @@ mod kinematic_support;
 mod loadout;
 mod melee_turn;
 mod movement;
+mod combat_sim;
+mod combat_sim_npc_spawn;
+mod npc;
 mod player_vitals;
 mod pose;
 mod spawn_routing;
@@ -61,6 +64,7 @@ pub fn init(ctx: &ReducerContext) {
     crafting::start_craft_queue_tick_schedule(ctx);
     crafting::start_hud_toast_cleanup_schedule(ctx);
     balcony_grow::start_balcony_grow_schedule(ctx);
+    npc::start_world_npc_schedule(ctx);
 }
 
 /// Ensure `user`, `player_pose`, and `player_input` rows exist.

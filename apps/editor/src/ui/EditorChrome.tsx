@@ -54,6 +54,7 @@ import { EditorChromeInspector } from "./EditorChromeInspector.js";
 import { EditorChromeSelectedMaterialPanel } from "./EditorChromeSelectedMaterialPanel.js";
 import { EditorChromeOutliner } from "./EditorChromeOutliner.js";
 import { EditorChromeAuthoringIntroAndWorkspace } from "./EditorChromeAuthoringIntroAndWorkspace.js";
+import { EditorChromeCombatSim } from "./EditorChromeCombatSim.js";
 import { EditorChromeFpViewmodel } from "./EditorChromeFpViewmodel.js";
 import { EditorChromeMyApartment } from "./EditorChromeMyApartment.js";
 import { EditorChromeSceneGizmoBlock } from "./EditorChromeSceneGizmoBlock.js";
@@ -343,6 +344,13 @@ export function EditorChrome() {
         icon: faBuilding,
       });
     }
+    if (workspace === "combat_sim") {
+      items.push({
+        id: EDITOR_CHROME_SECTION.combatSim,
+        label: "Combat sim",
+        icon: faCrosshairs,
+      });
+    }
     if (mode === "my_apartment_layout") {
       items.push(
         { id: EDITOR_CHROME_SECTION.importDecor, label: "Import décor", icon: faCloudArrowDown },
@@ -474,6 +482,7 @@ export function EditorChrome() {
           setWorkspace={setWorkspace}
           contentIndex={contentIndex}
         />
+        {workspace === "combat_sim" ? <EditorChromeCombatSim /> : null}
         {mode === "fp_viewmodel" || mode === "fp_consumable" ? (
           <div
             id={EDITOR_CHROME_SECTION.fpAuthoring}

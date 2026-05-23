@@ -8,6 +8,7 @@ import type {
   LandingKitDef,
   ApartmentUnitLayoutProfilesDoc,
   OwnedApartmentBuiltinsDoc,
+  OwnedApartmentNpcCombatSpawn,
   PlacedObject,
   PrefabDef,
   StairWellDef,
@@ -21,7 +22,7 @@ import type {
 } from "../editor/content/editorContentDiscovery.js";
 
 /** Top-level authoring surface (workspace buttons). */
-export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell";
+export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell" | "combat_sim";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
@@ -177,6 +178,7 @@ export interface EditorState {
    */
   ownedApartmentBuiltinsNeedsDiskFlush: boolean;
   contentStructureEpoch: number;
+  combatSimPlayActive: boolean;
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
 
@@ -259,6 +261,9 @@ export interface EditorState {
   patchOwnedApartmentBuiltins: (
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;
+  addNpcCombatSpawn: (spawn: OwnedApartmentNpcCombatSpawn) => void;
+  removeNpcCombatSpawn: (spawnId: string) => void;
+  setCombatSimPlayActive: (active: boolean) => void;
   clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () => void;
 

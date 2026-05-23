@@ -28,5 +28,7 @@ export function workspaceToInitialMode(
       return "stairwell_preview";
     case "landing":
       return landingDocKindToMode(landingDocKind);
+    case "combat_sim":
+      return "my_apartment_layout";
   }
 }

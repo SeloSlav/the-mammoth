@@ -22,6 +22,7 @@
     "@the-mammoth/game": "workspace:*",
     "@the-mammoth/net": "workspace:*",
     "@the-mammoth/schemas": "workspace:*",
+    "@the-mammoth/spacetime-client": "workspace:*",
     "@the-mammoth/ui-theme": "workspace:*",
     "@the-mammoth/world": "workspace:*",
     "idb-keyval": "^6.2.2",

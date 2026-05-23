@@ -18,6 +18,12 @@ export {
   REMOTE_PLAYER_BODY_URI_MALE,
   REMOTE_PLAYER_CROWD_FULL_DETAIL_NEAREST,
 } from "./remote/RemotePlayerPresenter.js";
+export {
+  BabushkaNpcPresenter,
+  WorldNpcPresenterPool,
+  preloadBabushkaNpcBody,
+  BABUSHKA_NPC_GLB_URI,
+} from "../npc/BabushkaNpcPresenter.js";
 export { buildPrimitiveHumanoid, type PrimitiveHumanoidParts } from "./primitiveHumanoid.js";
 export {
   resolveSkinnedHumanoidHandBone,

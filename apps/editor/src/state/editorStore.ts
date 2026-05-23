@@ -298,6 +298,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeApartmentLayoutProfileId: null,
   ownedApartmentBuiltins: DEFAULT_OWNED_APARTMENT_BUILTINS_DOC,
   ownedApartmentBuiltinsNeedsDiskFlush: false,
+  combatSimPlayActive: false,
   historyPast: [],
   historyFuture: [],
   contentStructureEpoch: 0,
@@ -375,6 +376,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         workspace,
         mode,
+        ...(workspace !== "combat_sim" ? { combatSimPlayActive: false } : {}),
         ...(exitApartment
           ? {
               myApartmentLayoutHidePickMode: false,
@@ -878,6 +880,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       requestEditorMyApartmentWallsMountSync();
     }
   },
+
+  addNpcCombatSpawn: (spawn) => {
+    get().patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      npcCombatSpawns: [...doc.npcCombatSpawns, spawn],
+    }));
+  },
+
+  removeNpcCombatSpawn: (spawnId) => {
+    get().patchOwnedApartmentBuiltins((doc) => ({
+      ...doc,
+      npcCombatSpawns: doc.npcCombatSpawns.filter((s) => s.id !== spawnId),
+    }));
+  },
+
+  setCombatSimPlayActive: (combatSimPlayActive) => set({ combatSimPlayActive }),
 
   clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
     set({ ownedApartmentBuiltinsNeedsDiskFlush: false }),

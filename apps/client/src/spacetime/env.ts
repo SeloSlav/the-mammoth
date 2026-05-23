@@ -1,12 +1,4 @@
-/** Local SpaceTimeDB defaults; override with `.env` (see `.env.example`). */
-export function spacetimeUri(): string {
-  return import.meta.env.VITE_SPACETIME_URI ?? "http://127.0.0.1:3000";
-}
-
-/** Published database / module name (`spacetime publish … <name>`). */
-export function spacetimeDatabase(): string {
-  return import.meta.env.VITE_SPACETIME_DATABASE ?? "mammoth-local";
-}
+export { spacetimeDatabase, spacetimeUri } from "@the-mammoth/spacetime-client";
 
 /** When false (default), the client connects as guest immediately and hides OIDC UI. */
 export function readEnableAccountAuth(): boolean {

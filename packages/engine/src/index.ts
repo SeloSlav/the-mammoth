@@ -148,6 +148,12 @@ export {
   type FpFirearmShotVisualConfig,
   type FpFirearmShotVisualSample,
 } from "./playerPresentation/index.js";
+export {
+  BabushkaNpcPresenter,
+  WorldNpcPresenterPool,
+  preloadBabushkaNpcBody,
+  BABUSHKA_NPC_GLB_URI,
+} from "./npc/BabushkaNpcPresenter.js";
 export { createGltfModelLoadRegistry, GltfModelLoadRegistry } from "./loaders/GltfModelLoadRegistry.js";
 export {
   clearStaticModelFetchUrlCache,

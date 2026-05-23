@@ -6,3 +6,4 @@ export type ApartmentClaimIntent = {
 
 export * from "./apartmentInteriorAnchors.js";
 export * from "./player/index.js";
+export * from "./npc/replicatedNpcSnapshot.js";

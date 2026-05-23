@@ -36,6 +36,15 @@ const PLANAR_AIM_DOT_MIN: f32 = 0.18;
 const RAY_EPS2: f32 = 1e-18;
 
 #[derive(Clone, Debug)]
+pub struct NpcDamageEvent {
+    pub npc_id: u64,
+    pub damage: f32,
+    pub ix: f32,
+    pub iy: f32,
+    pub iz: f32,
+}
+
+#[derive(Clone, Debug)]
 pub struct PlayerDamageEvent {
     pub identity: Identity,
     pub damage: f32,
@@ -535,6 +544,180 @@ pub fn firearm_hitscan_weapon(
             20.0,
         ),
         "shotgun-coach" => resolve_shotgun_pellets(
+            ctx,
+            attacker,
+            origin,
+            [dx, dy, dz],
+            RANGE_SHOTGUN_M,
+            FALL_MIN_FRAC_SHOTGUN,
+            11.0,
+        ),
+        _ => Vec::new(),
+    }
+}
+
+fn resolve_pistol_ray_npcs(
+    ctx: &ReducerContext,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    max_range_m: f32,
+    floor_frac: f32,
+    base_damage: f32,
+) -> Vec<NpcDamageEvent> {
+    let t_wall = trace_world_solids_for_firearms(ctx, [ox, oy, oz], [dx, dy, dz], max_range_m);
+    let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
+    let Some((nid, t_hit, feet_y, body_h)) = nhit else {
+        return Vec::new();
+    };
+    if let Some(t_w) = t_wall {
+        if t_w + 1e-3 < t_hit {
+            return Vec::new();
+        }
+    }
+    let scale = falloff_factor(t_hit, max_range_m, floor_frac);
+    let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, t_hit);
+    let hs_mult = if crate::npc::is_npc_headshot(feet_y, body_h, iy) {
+        HEADSHOT_DAMAGE_MULTIPLIER
+    } else {
+        1.0
+    };
+    Vec::from([NpcDamageEvent {
+        npc_id: nid,
+        damage: base_damage * scale * hs_mult,
+        ix,
+        iy,
+        iz,
+    }])
+}
+
+fn resolve_shotgun_pellets_npcs(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    origin: [f32; 3],
+    base_dir: [f32; 3],
+    max_range_m: f32,
+    floor_frac: f32,
+    base_damage_total: f32,
+) -> Vec<NpcDamageEvent> {
+    let per = base_damage_total / SHOTGUN_PELLET_COUNT as f32;
+    let ox = origin[0];
+    let oy = origin[1];
+    let oz = origin[2];
+    let bx = base_dir[0];
+    let by = base_dir[1];
+    let bz = base_dir[2];
+
+    let mut damage_by_npc: HashMap<u64, f32> = HashMap::new();
+    let mut impact_by_npc: HashMap<u64, (f32, f32, f32)> = HashMap::new();
+
+    let (jr, jp) = orthonormal_screen_axes(bx, by, bz);
+
+    for pellet_idx in 0..SHOTGUN_PELLET_COUNT {
+        let seed = shotgun_seed(attacker, pellet_idx);
+        let jx = bx + jr[0] * seed.spread_rx + jp[0] * seed.spread_ry;
+        let jy = by + jr[1] * seed.spread_rx + jp[1] * seed.spread_ry;
+        let jz = bz + jr[2] * seed.spread_rx + jp[2] * seed.spread_ry;
+        let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
+
+        let t_wall = trace_world_solids_for_firearms(ctx, origin, [jx, jy, jz], max_range_m);
+        let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
+
+        let dmg_this = match (nhit.as_ref(), t_wall) {
+            (Some((nid, n_t, feet_y, body_h)), Some(t_w)) => {
+                if t_w + 1e-3 < *n_t {
+                    None
+                } else {
+                    let scale = falloff_factor(*n_t, max_range_m, floor_frac);
+                    let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
+                    let hs_mult = if crate::npc::is_npc_headshot(*feet_y, *body_h, ipt.1) {
+                        HEADSHOT_DAMAGE_MULTIPLIER
+                    } else {
+                        1.0
+                    };
+                    Some((*nid, per * scale * hs_mult, ipt))
+                }
+            }
+            (Some((nid, n_t, feet_y, body_h)), None) => {
+                let scale = falloff_factor(*n_t, max_range_m, floor_frac);
+                let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
+                let hs_mult = if crate::npc::is_npc_headshot(*feet_y, *body_h, ipt.1) {
+                    HEADSHOT_DAMAGE_MULTIPLIER
+                } else {
+                    1.0
+                };
+                Some((*nid, per * scale * hs_mult, ipt))
+            }
+            _ => None,
+        };
+
+        if let Some((nid, dmg, ipt)) = dmg_this {
+            *damage_by_npc.entry(nid).or_insert(0.0) += dmg;
+            impact_by_npc.insert(nid, ipt);
+        }
+    }
+
+    damage_by_npc
+        .into_iter()
+        .map(|(npc_id, damage)| {
+            let (ix, iy, iz) = impact_by_npc.remove(&npc_id).unwrap_or((
+                ox + bx * max_range_m * 0.35,
+                oy,
+                oz + bz * max_range_m * 0.35,
+            ));
+            NpcDamageEvent {
+                npc_id,
+                damage,
+                ix,
+                iy,
+                iz,
+            }
+        })
+        .collect()
+}
+
+pub fn firearm_hitscan_npcs(
+    ctx: &ReducerContext,
+    shooter_pose: &PlayerPose,
+    weapon_def_id: &str,
+    aim_dir_x: f32,
+    aim_dir_y: f32,
+    aim_dir_z: f32,
+) -> Vec<NpcDamageEvent> {
+    let attacker = shooter_pose.identity;
+    let yaw = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&attacker)
+        .map(|r| r.aim_yaw)
+        .unwrap_or(shooter_pose.yaw);
+
+    let Some((dx, dy, dz)) = sanitize_client_aim_dir(yaw, aim_dir_x, aim_dir_y, aim_dir_z) else {
+        return Vec::new();
+    };
+
+    let bits = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&attacker)
+        .map(|r| r.bits)
+        .unwrap_or(0);
+    let feet_y = shooter_pose.y;
+    let oy = feet_y + eye_y_above_feet(bits & BIT_CROUCH != 0);
+    let ox = shooter_pose.x;
+    let oz = shooter_pose.z;
+    let origin = [ox, oy, oz];
+
+    match weapon_def_id {
+        "pistol" => resolve_pistol_ray_npcs(
+            ctx, ox, oy, oz, dx, dy, dz, RANGE_PISTOL_M, FALL_MIN_FRAC_PISTOL, 20.0,
+        ),
+        "shotgun-coach" => resolve_shotgun_pellets_npcs(
             ctx,
             attacker,
             origin,

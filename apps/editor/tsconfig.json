@@ -2,6 +2,7 @@
   "extends": "@repo/typescript-config/vite-app.json",
   "compilerOptions": {
     "paths": {
+      "@the-mammoth/client/*": ["../client/src/*"],
       "three": ["./node_modules/@types/three/src/Three.WebGPU.d.ts"],
       "three/webgpu": ["./node_modules/@types/three/src/Three.WebGPU.d.ts"],
       "three/tsl": ["./node_modules/@types/three/src/Three.TSL.d.ts"]
@@ -11,5 +12,5 @@
     "declarationMap": false,
     "composite": false
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../client/src/types/sky-cloud-3d.d.ts"]
 }

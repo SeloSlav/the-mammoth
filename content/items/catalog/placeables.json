@@ -4,39 +4,92 @@
     {
       "id": "brick-oven",
       "displayName": "Brick oven",
-      "description": "Heavy shell for retained heat. For baking and slow roasts once placed (world hook TBD).",
+      "description": "Heavy retained-heat chamber for baking and slow roasts. These are anchored in communal kitchens or militia logistics bays — salvage on-site rather than improvised in occupied stacks.",
       "category": "placeable",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 45,
-        "materials": [{ "itemId": "scrap-metal", "quantity": 24 }]
-      }
+      "maxStack": 1
     },
     {
       "id": "reloading-press",
       "displayName": "Reloading press",
-      "description": "Bench-mounted press for sizing brass, seating bullets, and crimping. Anchor near a sturdy surface (crafting hook TBD).",
+      "description": "Bench press for sizing brass and seating bullets. Production gear lives in guarded armory wings — not corridor craft fodder.",
       "category": "placeable",
-      "maxStack": 1,
-      "construction": {
-        "buildTimeSecs": 60,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 32 },
-          { "itemId": "chemical-stock", "quantity": 8 }
-        ]
-      }
+      "maxStack": 1
     },
     {
       "id": "gunsmith-workbench",
       "displayName": "Gunsmith workbench",
-      "description": "Vise, pin punches, and reference gauges for stripping receivers and aligning optics. Pairs with the reloading press for a full ballistic pipeline (crafting hook TBD).",
+      "description": "Vised receiver work surface with gauges and punches. Militia benches stay bolted down; hauling one up from surplus is loot logic, not a quick build.",
+      "category": "placeable",
+      "maxStack": 1
+    },
+    {
+      "id": "improvised-cook-fire",
+      "displayName": "Improvised cook fire",
+      "description": "Scrap grate, pierced drum skirt, and a skimmed accelerant sump. Enough to simmer tins on the lower tiers when the mains are dead — world heat hook TBD.",
       "category": "placeable",
       "maxStack": 1,
       "construction": {
-        "buildTimeSecs": 90,
+        "buildTimeSecs": 30,
         "materials": [
-          { "itemId": "scrap-metal", "quantity": 42 },
-          { "itemId": "chemical-stock", "quantity": 12 }
+          { "itemId": "scrap-metal", "quantity": 8 },
+          { "itemId": "chemical-stock", "quantity": 3 }
+        ]
+      }
+    },
+    {
+      "id": "trench-candle",
+      "displayName": "Trench candle",
+      "description": "Tin reservoir, scav wax melt, twisted cotton wick. Stale-air stairs and blackout landings — low light without burning batteries.",
+      "category": "placeable",
+      "maxStack": 3,
+      "construction": {
+        "buildTimeSecs": 22,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 4 },
+          { "itemId": "chemical-stock", "quantity": 5 }
+        ]
+      }
+    },
+    {
+      "id": "bulkhead-drip-runner",
+      "displayName": "Bulkhead drip runner",
+      "description": "Bent sheet trough with pop-riveted end caps screwed along a leaky riser cheek or bulkhead seam—bleeds condensation past bedding instead of tarp circus acts. Routed drips hook TBD.",
+      "category": "placeable",
+      "maxStack": 2,
+      "construction": {
+        "buildTimeSecs": 28,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 10 },
+          { "itemId": "chemical-stock", "quantity": 4 }
+        ]
+      }
+    },
+    {
+      "id": "heat-retention-brick",
+      "displayName": "Heat retention brick",
+      "description": "Fire-facing clay brick slabs lashed with scrap banding and scav cloth so they hold warmth against a blackout sleep roll—the low-tech alternative to duvets.",
+      "category": "placeable",
+      "maxStack": 2,
+      "construction": {
+        "buildTimeSecs": 24,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 5 },
+          { "itemId": "balcony-grow-substrate", "quantity": 4 }
+        ]
+      }
+    },
+    {
+      "id": "snap-rat-trap",
+      "displayName": "Rat trap",
+      "description": "Classic spring-loaded snap jaws on a battered wooden base baited from custodial stock—narrow corridor choke, snap audio, infestation hook TBD.",
+      "category": "placeable",
+      "maxStack": 3,
+      "construction": {
+        "buildTimeSecs": 18,
+        "materials": [
+          { "itemId": "scrap-metal", "quantity": 4 },
+          { "itemId": "balcony-grow-substrate", "quantity": 1 },
+          { "itemId": "chemical-stock", "quantity": 2 }
         ]
       }
     }

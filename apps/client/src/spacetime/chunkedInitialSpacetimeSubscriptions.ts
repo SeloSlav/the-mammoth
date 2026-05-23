@@ -22,6 +22,7 @@ const INITIAL_TABLE_SNAPSHOT_BATCHES_AFTER_SELF_USER: readonly (readonly string[
     "SELECT * FROM balcony_grow_light",
     "SELECT * FROM balcony_water_patch",
     "SELECT * FROM dropped_item",
+    "SELECT * FROM world_npc",
     "SELECT * FROM world_sound_event",
   ],
   [

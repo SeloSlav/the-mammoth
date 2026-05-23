@@ -144,6 +144,18 @@ export const BalconyWaterPatch = __t.object("BalconyWaterPatch", {
 });
 export type BalconyWaterPatch = __Infer<typeof BalconyWaterPatch>;
 
+export const CombatSimNpcSpawn = __t.object("CombatSimNpcSpawn", {
+  rowId: __t.u64(),
+  owner: __t.identity(),
+  unitKey: __t.string(),
+  archetype: __t.string(),
+  x: __t.f32(),
+  y: __t.f32(),
+  z: __t.f32(),
+  yaw: __t.f32(),
+});
+export type CombatSimNpcSpawn = __Infer<typeof CombatSimNpcSpawn>;
+
 export const CraftQueueItem = __t.object("CraftQueueItem", {
   id: __t.u64(),
   owner: __t.identity(),
@@ -373,6 +385,33 @@ export const WorldLootRefresh = __t.object("WorldLootRefresh", {
   scheduledAt: __t.scheduleAt(),
 });
 export type WorldLootRefresh = __Infer<typeof WorldLootRefresh>;
+
+export const WorldNpc = __t.object("WorldNpc", {
+  npcId: __t.u64(),
+  archetype: __t.string(),
+  sessionKey: __t.string(),
+  x: __t.f32(),
+  y: __t.f32(),
+  z: __t.f32(),
+  yaw: __t.f32(),
+  velX: __t.f32(),
+  velZ: __t.f32(),
+  grounded: __t.u8(),
+  health: __t.f32(),
+  maxHealth: __t.f32(),
+  state: __t.u8(),
+  locomotion: __t.u8(),
+  meleePresentationSeq: __t.u32(),
+  hitPresentationSeq: __t.u32(),
+  lastMeleeMicros: __t.i64(),
+});
+export type WorldNpc = __Infer<typeof WorldNpc>;
+
+export const WorldNpcSchedule = __t.object("WorldNpcSchedule", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type WorldNpcSchedule = __Infer<typeof WorldNpcSchedule>;
 
 export const WorldSoundEvent = __t.object("WorldSoundEvent", {
   id: __t.u64(),

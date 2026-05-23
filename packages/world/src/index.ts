@@ -423,6 +423,11 @@ export {
   residentialUnitHasBalconyBay,
 } from "./residentialUnitBalcony.js";
 export {
+  ownedApartmentNpcCombatSpawnWorldPosition,
+  resolveOwnedApartmentNpcCombatSpawnsWorld,
+  type NpcCombatSpawnWorldPosition,
+} from "./combatNpcSpawn.js";
+export {
   addResidentialBalconyBayShell,
   addResidentialBalconyShellSlabExtensions,
   appendResidentialBalconyBayFloorWalkAABBs,

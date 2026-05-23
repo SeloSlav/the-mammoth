@@ -89,6 +89,58 @@ upright flip-top cigarette pack, heavily weathered dirty beige cardboard with cr
 upright empty longneck beer bottle facet-cut low-poly body and tapered neck dull olive green translucent glass with crown rim and no cap, fine scratches dull grime bottom interior dried residue ring torn rectangular paper label with abstract muted green tan reddish-brown blotches only no legible branding, grounded bar litter prop matched to gritty reference silhouette, centered and fully visible
 ```
 
+**Placeables — militia / workshop (world loot anchors).** Salvage-grade workshop props with readable mass and chunky silhouettes for interior anchors.
+
+### Brick oven (`brick-oven.png`)
+
+```
+heavy retained-heat bread oven chamber, squat rectangular brick cavity with soot-blackened mouth and chipped arch lintel, dingy beige firebrick tones with patches of rust-brown scaling and spilled ash near the sill, welded scrap angle feet or squat concrete pad base suggesting permanent install, soot streaks upward from the firing opening, grounded Eastern European communal kitchen scale, prop read as anchored not portable, clean low-poly silhouette, centered and fully visible
+```
+
+### Reloading press (`reloading-press.png`)
+
+```
+cast-iron reloading press bolted flat to industrial bench plate, chunky C-frame linkage with tarnished crank handle olive drab chipped paint exposing bare metal casting, faint oil stains and grime in recesses, small spent brass catcher tray or drip ledge hinted at simplified geometry only, militarized surplus workshop clutter, grounded ballistics tooling no loose accessories, readable mechanical silhouette optimized for placement on a tabletop, centered and fully visible
+```
+
+### Gunsmith workbench (`gunsmith-workbench.png`)
+
+```
+sturdy battered gunsmith pine-topped bench with steel corner brackets and chipped gray-green legs, underside cross-bracing hinted with simple planks, tabletop holds fixed steel bench vise on one corner and shallow loose-tray gouges only suggesting tool use, gouged wood edges oil rings and grime no loose tools included, militarized improvised workshop centerpiece, tabletop reads flat for future prop attachment, centered and fully visible
+```
+
+**Placeables — improvised stack survival.** Portable lower-floor rigs; handheld-to-suitcase scale, corrugated or scrap-built where noted.
+
+### Improvised cook fire (`improvised-cook-fire.png`)
+
+```
+improvised cook fire kit as separate prop not lit, perforated steel barrel skirt halves or scrap plating forming a squat wind collar with rusty tie wire lashing, welded angle-iron grate sitting above ashes bed optional cold charcoal lumps as simple low-poly shapes, dribbled chemical-stain grime on underside plates, scavenged bunker cooking rig for stairwell squatters, burnt metal patina chipped paint no open flame no smoke FX, handheld camp scale not full drum height, centered and fully visible
+```
+
+### Trench candle (`trench-candle.png`)
+
+```
+small trench candle improvised from shallow dented tuna-tin reservoir dull steel with grime lip, chunky off-white scav wax mound with softened edges and dark char ring hint at melted pool only, twisted natural fiber wick standing upright centered unlit blunt tip slightly blackened tip only, blackout landing emergency light tabletop scale comparable to fist sized, grounded PS2 grime prop centered and fully visible
+```
+
+### Bulkhead drip runner (`bulkhead-drip-runner.png`)
+
+```
+improvised bulkhead drip runner bent galvanized or steel sheet formed into a shallow half-round gutter channel with visible pop-rivet line along the seam and squashed end cap crimped smaller outlet spout, olive drab primer chips and rust streaks along the fold line, simple angle brackets or bent tabs for wall screw holes, meant to catch stairwell or riser seep and bleed it sideways, prop length about forearm to short armspan scale not a full room gutter, clean low-poly game silhouette centered and fully visible
+```
+
+### Heat retention brick (`heat-retention-brick.png`)
+
+```
+heat retention sleeper bundle reclaimed firebrick slabs or heavy clay pavers stacked shallow two or three high lashed horizontally with rusty steel band strap and scav baling wire, outer wrap of dirty frayed beige-gray burlap or felt strip tucked under the bands soot smudges on corners from prior heating not glowing not emissive cracked edges and grime, improvised cold-stack bed warmer handheld bundle silhouette not a masonry wall centered and fully visible
+```
+
+### Snap rat trap (`snap-rat-trap.png`)
+
+```
+classic sprung snap-bar rat trap single traditional wooden plank base chipped gray-brown varnish with grain read as low-poly faceting, rusty steel bait pedal trip plate hinged spring arm and snapping kill bar wire loop at free end restrained in cocked-ready pose with visible coil spring block, petite dull brass finish bait cleat spike center line with tiny abstract crumb lure only no readable labels, gouged chew marks at wood corners, gritty Eastern European basement vermin gear readable silhouette from slight three-quarter angle full trap in frame handheld scale centered and fully visible
+```
+
 ---
 
 ## 3. Adding a new reference

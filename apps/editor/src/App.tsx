@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.js";
 import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
+import { useEditorStore } from "./state/editorStore.js";
 import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
+import { EditorCombatSimPlayLayer } from "./ui/EditorCombatSimPlayLayer.js";
 import { EditorViewportStatsStack } from "./ui/EditorViewportStatsStack.js";
 
 export default function App() {
@@ -10,6 +12,8 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [gpuError, setGpuError] = useState<string | null>(null);
+  const combatSimPlayActive = useEditorStore((s) => s.combatSimPlayActive);
+  const setCombatSimPlayActive = useEditorStore((s) => s.setCombatSimPlayActive);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +32,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || combatSimPlayActive) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     let dispose: (() => void) | undefined;
@@ -45,7 +49,7 @@ export default function App() {
       cancelled = true;
       dispose?.();
     };
-  }, [ready]);
+  }, [ready, combatSimPlayActive]);
 
   return (
     <>
@@ -81,7 +85,7 @@ export default function App() {
           </p>
         </div>
       ) : null}
-      {gpuError ? (
+      {gpuError && !combatSimPlayActive ? (
         <div
           style={{
             position: "fixed",
@@ -105,7 +109,13 @@ export default function App() {
           </div>
         </div>
       ) : null}
-      {ready ? (
+      {ready && combatSimPlayActive ? (
+        <EditorCombatSimPlayLayer
+          canvasRef={canvasRef}
+          onExit={() => setCombatSimPlayActive(false)}
+        />
+      ) : null}
+      {ready && !combatSimPlayActive ? (
         <>
           <EditorApartmentLayoutLoadingOverlay />
           <EditorViewportStatsStack />

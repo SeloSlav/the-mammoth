@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fpLoadingDbgMark } from "./game/fpSession/fpLoadingDebug.js";
 import { mountFpSession } from "./game/mountFpSession";
+import { mountCombatSimSession } from "./game/combatSim";
 import { HudShell } from "./ui/HudShell";
+import { CombatSimMinimalHud } from "./ui/CombatSimMinimalHud";
 import LoginGate from "./ui/LoginGate";
 import { useSpacetimeSession } from "./spacetime/SpacetimeProvider";
 import { GameEnterSplash } from "./ui/GameEnterSplash";
@@ -9,9 +11,14 @@ import { GameEnterSplash } from "./ui/GameEnterSplash";
 const REQUIRE_REGISTERED_APARTMENT_CLAIMS =
   import.meta.env.VITE_REQUIRE_REGISTERED_APARTMENT_CLAIMS === "true";
 
+function readCombatSimUrlFlag(): boolean {
+  return new URLSearchParams(window.location.search).get("combatSim") === "1";
+}
+
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const session = useSpacetimeSession();
+  const combatSimMode = useMemo(() => readCombatSimUrlFlag(), []);
   const [gpuError, setGpuError] = useState<string | null>(null);
   const [fpSessionMounted, setFpSessionMounted] = useState(false);
 
@@ -32,6 +39,7 @@ export default function App() {
     fpLoadingDbgMark("react_app:canvas_mount_effect_run", {
       canvasW: canvas.clientWidth,
       canvasH: canvas.clientHeight,
+      combatSimMode,
     });
     queueMicrotask(() => {
       fpLoadingDbgMark("react_app:first_microtask_after_mount_effect");
@@ -41,10 +49,14 @@ export default function App() {
     });
 
     const mountStartedAt = performance.now();
-    void mountFpSession(canvas, conn, {
-      apartmentClaimsAllowed:
-        !REQUIRE_REGISTERED_APARTMENT_CLAIMS || session.connectionKind === "oidc",
-    })
+    const mountPromise = combatSimMode
+      ? mountCombatSimSession(canvas, conn)
+      : mountFpSession(canvas, conn, {
+          apartmentClaimsAllowed:
+            !REQUIRE_REGISTERED_APARTMENT_CLAIMS || session.connectionKind === "oidc",
+        });
+
+    void mountPromise
       .then((d) => {
         if (cancelled) {
           d();
@@ -52,6 +64,7 @@ export default function App() {
         }
         fpLoadingDbgMark("react_app:mount_fp_session_resolved", {
           waitMs: Math.round(performance.now() - mountStartedAt),
+          combatSimMode,
         });
         dispose = d;
         setFpSessionMounted(true);
@@ -71,11 +84,17 @@ export default function App() {
       dispose?.();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- omit `session.conn`: identity churn remounts the FP session while phase+name unchanged
-  }, [session.phase, session.displayName]);
+  }, [session.phase, session.displayName, combatSimMode]);
 
   if (session.phase !== "ready" || !session.displayName) {
     return <LoginGate session={session} />;
   }
+
+  const exitCombatSim = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("combatSim");
+    window.location.replace(url.toString());
+  };
 
   return (
     <>
@@ -122,8 +141,12 @@ export default function App() {
           pointerEvents: fpSessionMounted ? "auto" : "none",
         }}
       />
-      {fpSessionMounted ? (
-        <HudShell onSignOut={session.signOut} conn={session.conn} />
+      {fpSessionMounted && session.conn ? (
+        combatSimMode ? (
+          <CombatSimMinimalHud conn={session.conn} onExit={exitCombatSim} />
+        ) : (
+          <HudShell onSignOut={session.signOut} conn={session.conn} />
+        )
       ) : null}
     </>
   );

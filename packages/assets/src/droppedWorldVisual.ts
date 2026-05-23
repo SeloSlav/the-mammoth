@@ -54,10 +54,17 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   screwdriver: 0.22,
   multimeter: 0.19,
 
-  // Placeables (until dedicated world mesh; keep under human height)
+  // Placeables — workshop anchors (loot / faction sites; not corridor-crafted)
   "brick-oven": 0.65,
   "reloading-press": 0.55,
   "gunsmith-workbench": 0.85,
+
+  // Placeables — lower-stack survival rigs (until dedicated meshes)
+  "improvised-cook-fire": 0.42,
+  "trench-candle": 0.12,
+  "bulkhead-drip-runner": 0.62,
+  "heat-retention-brick": 0.26,
+  "snap-rat-trap": 0.18,
 };
 
 /** When `def_id` is missing from the table (new item or typo). */

@@ -132,6 +132,8 @@ import { mountWeaponPresentationDevHotReload } from "./fpDev/weaponPresentationD
 import { mountWorldContentDevReload } from "./fpDev/fpWorldContentDevReload.js";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
+import { createFpNpcSession } from "./npc/fpNpcSession.js";
+import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
   primeHotbarConsumeAudio,
   registerHotbarConsumeLocalPlayback,
@@ -225,11 +227,13 @@ function fpGpuTimestampDebugEnabled(): boolean {
 export async function mountFpSession(
   canvas: HTMLCanvasElement,
   conn: DbConnection,
-  opts: { apartmentClaimsAllowed?: boolean } = {},
+  opts: { apartmentClaimsAllowed?: boolean; combatSimMode?: boolean } = {},
 ): Promise<() => void> {
   const loadDbg = isFpLoadingDebugEnabled();
   const mountWallClock0 = performance.now();
   if (loadDbg) fpLoadingDbgMark("mount_fp_session:begin");
+
+  setFpCombatSimMode(opts.combatSimMode === true);
 
   installMmWallProbeLoadingStub();
 
@@ -1051,6 +1055,11 @@ export async function mountFpSession(
 
   /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
   const localAudio = new LocalGameAudio();
+  const fpNpcSession = createFpNpcSession({
+    scene,
+    conn,
+    getAudioContext: () => localAudio.getAudioContext(),
+  });
   const fpBalconyGrow = mountFpBalconyGrowSession({
     scene,
     conn,
@@ -1816,6 +1825,7 @@ export async function mountFpSession(
     if (loadDbg) fpLoadingDbgPushPhase("fp.raf.tick");
     try {
       runFrame(nowMs, dt);
+      fpNpcSession.update(dt, nowMs);
       bumpGuestFeetAutosaveIfDue(nowMs, {
         x: pos.x,
         y: pos.y,
@@ -1835,6 +1845,7 @@ export async function mountFpSession(
   }
 
   return () => {
+    setFpCombatSimMode(false);
     sessionDisposed = true;
     cancelAnimationFrame(raf);
     ro.disconnect();
@@ -1883,6 +1894,7 @@ export async function mountFpSession(
     registerGameAudioPrime(null);
     unregisterHotbarConsumeLocalAudio();
     localAudio.dispose();
+    fpNpcSession.dispose();
     fpPlayerDamageBloodSquirt.dispose();
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
