@@ -37,8 +37,8 @@ pub const SHOTGUN_SPREAD_RAD: f32 = 0.055;
 /// Five shots = 120 — one full mag on a babushka at medium skill.
 pub const FIREARM_DAMAGE_PISTOL: f32 = 24.0;
 /// Total pellet damage per shotgun trigger pull at point blank (split across `SHOTGUN_PELLET_COUNT`).
-/// Two solid close blasts (~full pellet connect) drop a babushka; pistol wins at range.
-pub const FIREARM_DAMAGE_SHOTGUN_TOTAL: f32 = 48.0;
+/// Two full close blasts drop a 120 HP babushka; pistol wins at range.
+pub const FIREARM_DAMAGE_SHOTGUN_TOTAL: f32 = 64.0;
 
 const RAY_T_EPS: f32 = 4e-4;
 const PLANAR_AIM_DOT_MIN: f32 = 0.18;
@@ -874,7 +874,7 @@ mod balance_tests {
         let pistol_shots = (babushka / FIREARM_DAMAGE_PISTOL).ceil() as u32;
         let shotgun_blasts = (babushka / FIREARM_DAMAGE_SHOTGUN_TOTAL).ceil() as u32;
         assert_eq!(pistol_shots, 5, "pistol: five body hits on 120 HP babushka");
-        assert_eq!(shotgun_blasts, 3, "shotgun: three full close blasts on 120 HP babushka");
+        assert_eq!(shotgun_blasts, 2, "shotgun: two full close blasts on 120 HP babushka");
         assert!(shotgun_blasts < pistol_shots);
     }
 }
