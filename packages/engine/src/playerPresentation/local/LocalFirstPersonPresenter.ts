@@ -378,6 +378,7 @@ export class LocalFirstPersonPresenter {
       this.rigAimEuler.set(authored.eulerRad.x, authored.eulerRad.y, authored.eulerRad.z, "XYZ");
       return;
     }
+
     const derived = deriveFpFirearmAimRigRootFromHip(
       { x: this.rigRestPos.x, y: this.rigRestPos.y, z: this.rigRestPos.z },
       { x: this.rigRestEuler.x, y: this.rigRestEuler.y, z: this.rigRestEuler.z },
@@ -505,8 +506,9 @@ export class LocalFirstPersonPresenter {
     if (this.weaponDefinition) {
       this.equipWeaponFromDefinition();
     }
-    this.applyFpHandMeshVisibility();
     this.viewmodelReady = true;
+    this.refreshRigAimFromDefinition();
+    this.applyFpHandMeshVisibility();
   }
 
   /**
@@ -659,6 +661,7 @@ export class LocalFirstPersonPresenter {
     this.handScene.scale.copy(lay.handScale);
     this.syncGripAnchorFromLiveHandHierarchy();
     this.equipWeaponFromDefinition();
+    this.refreshRigAimFromDefinition();
     this.applyFpHandMeshVisibility();
   }
 

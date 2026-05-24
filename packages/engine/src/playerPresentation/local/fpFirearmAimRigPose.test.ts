@@ -12,7 +12,7 @@ describe("deriveFpFirearmAimRigRootFromHip", () => {
     );
     expect(Math.abs(aim.positionM.x)).toBeLessThan(0.2437);
     expect(aim.positionM.z).toBeLessThan(-0.4104);
-    expect(Math.abs(aim.eulerRad.z)).toBeGreaterThan(1.4);
+    expect(Math.abs(aim.eulerRad.z)).toBeGreaterThan(1.5);
     expect(Math.abs(aim.eulerRad.z)).toBeLessThan(1.8344);
   });
 });
