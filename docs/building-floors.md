@@ -335,7 +335,7 @@ Three floors sharing generic ids is acceptable — **navigation and hazard** dif
 
 ## Implementation notes
 
-1. **`mammoth.json`** today uses one typical floor doc for all `levelIndex` values — theme differentiation is **content/authored loot + dressing**, not separate floor doc ids yet.
+1. **`mammoth.json`** today uses one typical floor doc for most `levelIndex` values — theme differentiation is **content/authored loot + dressing**, not separate floor doc ids yet. **Exception:** vertical slice targets `floor_mamutica_storage_13` at `levelIndex` 14 — see [vertical-slice-day1-storage-run.md](vertical-slice-day1-storage-run.md).
 2. **Server loot tiers** (`apps/server/src/dropped_item.rs`) still use generic weapon/food pools — wire per-floor tables when interior authoring lands.
 3. After changing floor metadata in JSON, run `pnpm content:gen-walk-aabbs` ([content-building.md](content-building.md)).
 

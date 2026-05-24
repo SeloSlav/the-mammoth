@@ -385,6 +385,20 @@ Do not use a generic quest board as the main interface.
 
 Orders should come from social and physical hubs.
 
+### Quest pacing vs world days
+
+**World days** (sleep advances) drive simulation: balcony grow stages, rot, ration ticks, NPC schedules. **Work orders do not use day-number gates.**
+
+**Slot discipline:** one active work order at a time. Finish it → receive the **next offer**. No timers; NPCs do not care if you slept through ten days first.
+
+**Three phases on a new save:**
+
+1. **Tutorial extraction** — one scripted storage run (floor 13) teaches radio → elevator → fetch → home. See [vertical-slice-day1-storage-run.md](vertical-slice-day1-storage-run.md).
+2. **Orientation (scripted linear)** — after storage, **fixed hub introductions** in order: **farm (18)** → **boiler room (−1)** → **militia (17)**. Familiarize the player with food, heat, and the security frontier before throwing random danger at them.
+3. **Open loop (random)** — after orientation completes, **extraction on abandoned floors 16…1** and routine hub jobs roll from **pools**. Same job shape, variable floor/item. Lore / hardcore arcs enter only when progression gates are met (**TBD**).
+
+**Implementation:** `tutorial_*` flags, `orientation_step` (O1→O3), `orientation_complete`, then pool tables — not `world_day == N`.
+
 ### 1. Maintenance / geothermal hub
 
 Formal work orders.
@@ -1596,6 +1610,8 @@ The player becomes more capable without the building becoming safe.
 ---
 
 ## First hour suggested flow
+
+**Note:** “Day 1 / Day 2 / Day 3” below maps loosely to **quest phases** (tutorial extract → orientation hubs → random loop) — not calendar days and not a permanent fixed quest list. See [Quest pacing vs world days](#quest-pacing-vs-world-days).
 
 ### Day 1
 

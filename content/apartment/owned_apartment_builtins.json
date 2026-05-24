@@ -1199,6 +1199,37 @@
       "scaleZ": 0.3,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
+    },
+    {
+      "id": "6ae14ff1-bdb4-4743-a01e-93b2ce0717cb",
+      "modelRelPath": "static/models/objects/ashtray.glb",
+      "fx": 0.62,
+      "fz": 0.44000000000000006,
+      "dy": 0,
+      "yawRad": 0,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.1253475248350381,
+      "verticalScaleMul": 1,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
+    },
+    {
+      "id": "305056da-c501-450a-8e4d-f14be8b617e6",
+      "modelRelPath": "static/models/objects/radio.glb",
+      "fx": 0.3113999744787683,
+      "fz": 0.6517272423223187,
+      "dy": 1.2712824643477445,
+      "yawRad": 0.7853981633974484,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.25,
+      "verticalScaleMul": 1,
+      "scaleX": 0.25,
+      "scaleY": 0.25,
+      "scaleZ": 0.25,
+      "ignoreSupportSurfaces": false,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [
