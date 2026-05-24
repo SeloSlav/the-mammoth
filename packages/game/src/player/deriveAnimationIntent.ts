@@ -18,12 +18,18 @@ export function derivePlayerAnimationIntent(input: {
   stance: PlayerStance;
   /** When true, locomotion action is overridden as an attack overlay for FP viewmodels. */
   meleeSwingActive: boolean;
+  /** When true, upper-body overlay uses reload (blocks ADS blend). */
+  reloadActive?: boolean;
   aimWeight01?: number;
 }): PlayerAnimationIntent {
-  const aimWeight01 = input.aimWeight01 ?? 0;
+  const aimWeight01 = input.reloadActive ? 0 : (input.aimWeight01 ?? 0);
   return {
     locomotion: locomotionToAction(input.locomotion, input.stance),
-    overlay: input.meleeSwingActive ? "attack_light" : undefined,
+    overlay: input.reloadActive
+      ? "reload"
+      : input.meleeSwingActive
+        ? "attack_light"
+        : undefined,
     aimWeight01,
   };
 }

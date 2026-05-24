@@ -1792,7 +1792,9 @@ export async function mountFpSession(
       !fpInteractInputBlocked() &&
       !isLocalPlayerDead() &&
       hbAim &&
-      hotbarDefIdSupportsRangedAttack(hbAim.defId)
+      hotbarDefIdSupportsRangedAttack(hbAim.defId) &&
+      conn.identity &&
+      !getLocalFirearmChamberView(conn, conn.identity, hbAim.defId).isReloading
     ) {
       mainRaf.combatAimHeld = true;
     }

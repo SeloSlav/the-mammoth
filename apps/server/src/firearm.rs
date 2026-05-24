@@ -112,6 +112,15 @@ fn reload_duration_micros_for_weapon(weapon: &str) -> i64 {
     }
 }
 
+/// Scales the weapon's full-mag reload time by rounds actually chambered this reload.
+fn reload_duration_micros_for_rounds(weapon: &str, rounds_to_load: u32, capacity: u8) -> i64 {
+    let full = reload_duration_micros_for_weapon(weapon);
+    if capacity == 0 || rounds_to_load == 0 {
+        return 0;
+    }
+    full * rounds_to_load as i64 / capacity as i64
+}
+
 fn ranged_damage(weapon: &str) -> f32 {
     match weapon {
         "pistol" => crate::hitscan::FIREARM_DAMAGE_PISTOL,
@@ -367,11 +376,14 @@ pub fn submit_firearm_reload(ctx: &ReducerContext) {
     }
 
     let ammo_def = ammo_def_for_weapon(&weapon_def_id).expect("validated");
-    if count_carried_ammo(ctx, id, ammo_def) == 0 {
+    let carried = count_carried_ammo(ctx, id, ammo_def);
+    if carried == 0 {
         return;
     }
 
-    let duration = reload_duration_micros_for_weapon(&weapon_def_id);
+    let needed = (cap - chamber.chamber_count) as u32;
+    let rounds_to_load = needed.min(carried);
+    let duration = reload_duration_micros_for_rounds(&weapon_def_id, rounds_to_load, cap);
     if duration <= 0 {
         return;
     }
@@ -419,6 +431,22 @@ mod chamber_tests {
             SHOTGUN_CHAMBER_CAPACITY
         );
         assert_eq!(chamber_capacity_for_weapon("crowbar"), 0);
+    }
+
+    #[test]
+    fn partial_reload_duration_scales_with_rounds() {
+        assert_eq!(
+            reload_duration_micros_for_rounds("shotgun-coach", 1, SHOTGUN_CHAMBER_CAPACITY),
+            RELOAD_SHOTGUN_MICROS / 2
+        );
+        assert_eq!(
+            reload_duration_micros_for_rounds("pistol", 3, PISTOL_CHAMBER_CAPACITY),
+            RELOAD_PISTOL_MICROS / 2
+        );
+        assert_eq!(
+            reload_duration_micros_for_rounds("pistol", 6, PISTOL_CHAMBER_CAPACITY),
+            RELOAD_PISTOL_MICROS
+        );
     }
 
     #[test]

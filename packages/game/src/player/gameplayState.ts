@@ -35,6 +35,11 @@ export type LocalPlayerGameplayState = {
   meleeAttackSeq: number;
   /** Monotonic counter: presentation fires ranged recoil / muzzle flash when this advances. */
   firearmShotSeq: number;
+  /** Stepped FP reload cue while chambering (local client; omitted when idle). */
+  firearmReload?: {
+    progress01: number;
+    roundsToLoad: number;
+  };
   primaryAction: PlayerPrimaryAction;
   life: PlayerLifePhase;
   animation: PlayerAnimationIntent;

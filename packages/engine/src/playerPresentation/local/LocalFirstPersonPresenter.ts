@@ -28,6 +28,7 @@ import {
   sampleFpFirearmShotVisual,
   type FpFirearmShotVisualConfig,
 } from "./fpFirearmShotVisuals.js";
+import { sampleFpFirearmReloadVisual } from "./fpFirearmReloadVisual.js";
 import {
   deriveFpFirearmAimRigRootFromHip,
   smoothStep01,
@@ -701,6 +702,21 @@ export class LocalFirstPersonPresenter {
     this.firearmShotElapsedS = 0;
   }
 
+  private applyFirearmReloadVisual(state: LocalPlayerGameplayState): void {
+    const reload = state.firearmReload;
+    if (!reload || !fpFirearmShotVisualConfigForHeldItem(state.equippedPrimary)) return;
+    const sample = sampleFpFirearmReloadVisual(reload.progress01, reload.roundsToLoad);
+    const knockRad = sample.rotationRad.x;
+    const liftM = sample.translationM.y;
+    if (knockRad <= 1e-9 && liftM <= 1e-9) return;
+
+    this.fpRoot.updateMatrixWorld(true);
+    this._vmMountRight.set(1, 0, 0).transformDirection(this.fpRoot.matrixWorld).normalize();
+    this._vmMountUp.set(0, 1, 0).transformDirection(this.fpRoot.matrixWorld).normalize();
+    this.rightHandRig.rotateOnWorldAxis(this._vmMountRight, knockRad);
+    this.rightHandRig.position.addScaledVector(this._vmMountUp, liftM);
+  }
+
   private applyFirearmShotVisual(dt: number): void {
     const config = this.firearmShotConfig;
     if (!config) {
@@ -795,8 +811,13 @@ export class LocalFirstPersonPresenter {
     const cos2 = Math.cos(stride * 2);
     const runMul = state.locomotion === "run" ? 1.2 : 1;
 
-    const armSwing = moving ? sin2 * 0.1 * runMul * (1 - this.aimBlend01) : 0;
-    const armSway = moving ? cos2 * 0.045 * runMul * (1 - this.aimBlend01) : 0;
+    const reloadActive = state.firearmReload != null;
+    const armSwing = moving
+      ? sin2 * 0.1 * runMul * (1 - this.aimBlend01) * (reloadActive ? 0 : 1)
+      : 0;
+    const armSway = moving
+      ? cos2 * 0.045 * runMul * (1 - this.aimBlend01) * (reloadActive ? 0 : 1)
+      : 0;
 
     const fpSwing = this.resolveFpMeleeSwingTrack();
     if (fpSwing && phase > 0) {
@@ -822,6 +843,7 @@ export class LocalFirstPersonPresenter {
       );
     }
     this.applyRightHandRigPoseWithAimBlend(this._rigHipPos, this._rigHipEuler, state, dt);
+    this.applyFirearmReloadVisual(state);
     if (this.fpAuthorGripAnchoredToLiveHandPose) {
       this.syncGripAnchorFromLiveHandHierarchy();
     }

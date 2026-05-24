@@ -18,6 +18,8 @@ export function buildLocalPlayerGameplayState(args: {
   firearmShotSeq: number;
   /** True while holding ADS with a ranged hotbar weapon (drives viewmodel aim blend). */
   firearmAimActive?: boolean;
+  /** Stepped reload presentation while chambering. */
+  firearmReload?: { progress01: number; roundsToLoad: number };
   /** From hotbar + item `defId` (before dev-only override). */
   equippedPrimaryFromHotbar: HeldItemId;
 }): LocalPlayerGameplayState {
@@ -26,10 +28,12 @@ export function buildLocalPlayerGameplayState(args: {
     args.vel.x,
     args.vel.z,
   );
+  const reloadActive = args.firearmReload != null;
   const animation = derivePlayerAnimationIntent({
     locomotion,
     stance,
     meleeSwingActive: false,
+    reloadActive,
     aimWeight01: args.firearmAimActive ? 1 : 0,
   });
   return {
@@ -47,6 +51,7 @@ export function buildLocalPlayerGameplayState(args: {
     equippedPrimary: effectiveDevGameplayEquippedPrimary(args.equippedPrimaryFromHotbar),
     meleeAttackSeq: args.meleeAttackSeq,
     firearmShotSeq: args.firearmShotSeq,
+    firearmReload: args.firearmReload,
     primaryAction: "none",
     life: "alive",
     animation,

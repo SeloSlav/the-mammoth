@@ -107,7 +107,8 @@ import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
 } from "../fpHotbar/fpHotbarResolve.js";
-import { localPlayerCanFireChamberedRound } from "../fpHotbar/fpFirearmChamber.js";
+import { getLocalFirearmChamberView, localPlayerCanFireChamberedRound } from "../fpHotbar/fpFirearmChamber.js";
+import { snapshotFpFirearmReloadPresentation } from "./fpFirearmReloadPresentation.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
 import {
@@ -405,16 +406,16 @@ export function createFpSessionMainRafFrame(
 
     const primaryPressEdge = mainRaf.meleePressPending;
     if (mainRaf.meleePressPending) mainRaf.meleePressPending = false;
-    const hbCombat = deps.selectedHotbarRow();
+    const hotbarRow = deps.selectedHotbarRow();
 
     if (
       primaryPressEdge &&
-      hbCombat &&
+      hotbarRow &&
       deps.conn.identity &&
-      hotbarDefIdSupportsRangedAttack(hbCombat.defId) &&
+      hotbarDefIdSupportsRangedAttack(hotbarRow.defId) &&
       nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
     ) {
-      if (localPlayerCanFireChamberedRound(deps.conn, deps.conn.identity, hbCombat.defId)) {
+      if (localPlayerCanFireChamberedRound(deps.conn, deps.conn.identity, hotbarRow.defId)) {
         mainRaf.lastRangedMs = nowMs;
         mainRaf.firearmShotSeq += 1;
         deps.camera.updateMatrixWorld(true);
@@ -429,7 +430,7 @@ export function createFpSessionMainRafFrame(
           nowMs,
           camera: deps.camera,
           aimWorldDir: deps._aimShotWorldDir,
-          heldItemId: hbCombat.defId as HeldItemId,
+          heldItemId: hotbarRow.defId as HeldItemId,
           shotSeq: mainRaf.firearmShotSeq,
         });
       } else {
@@ -438,8 +439,8 @@ export function createFpSessionMainRafFrame(
       }
     } else if (
       (primaryPressEdge || mainRaf.primaryAttackHeld) &&
-      hbCombat &&
-      hotbarDefIdSupportsMeleeAttack(hbCombat.defId) &&
+      hotbarRow &&
+      hotbarDefIdSupportsMeleeAttack(hotbarRow.defId) &&
       nowMs - mainRaf.lastMeleeMs >= MELEE_COOLDOWN_MS
     ) {
       mainRaf.lastMeleeMs = nowMs;
@@ -631,10 +632,24 @@ export function createFpSessionMainRafFrame(
     );
     const suppressHeadBobForElev =
       Math.abs(mainRaf.lastTickHudCabVyMps) >= ELEV_HEAD_BOB_SUPPRESS_MIN_HUD_CAB_VY_MPS;
+    const combatWeaponDefId =
+      hotbarRow && hotbarDefIdSupportsRangedAttack(hotbarRow.defId) ? hotbarRow.defId : null;
+    let firearmReload: { progress01: number; roundsToLoad: number } | undefined;
+    if (deps.conn.identity && combatWeaponDefId) {
+      const chamberView = getLocalFirearmChamberView(
+        deps.conn,
+        deps.conn.identity,
+        combatWeaponDefId,
+      );
+      if (chamberView.isReloading) {
+        mainRaf.combatAimHeld = false;
+        firearmReload = snapshotFpFirearmReloadPresentation(combatWeaponDefId, chamberView);
+      }
+    }
     const combatAimActive =
       mainRaf.combatAimHeld &&
-      !!hbCombat &&
-      hotbarDefIdSupportsRangedAttack(hbCombat.defId);
+      !!combatWeaponDefId &&
+      firearmReload == null;
     publishFpSessionCombatAiming(combatAimActive);
     stepFpCombatAimFov(deps.camera, combatAimActive, dt);
 
@@ -644,6 +659,7 @@ export function createFpSessionMainRafFrame(
       !freeLook &&
       !isFpSitActive() &&
       !combatAimActive &&
+      !firearmReload &&
       hs > 0.12 &&
       !suppressHeadBobForElev
     ) {
@@ -720,7 +736,6 @@ export function createFpSessionMainRafFrame(
     );
 
     const localId = deps.conn.identity?.toHexString() ?? "local-unknown";
-    const hotbarRow = deps.selectedHotbarRow();
     const hotbarHeld = hotbarRow
       ? equippedHeldItemIdFromDefId(hotbarRow.defId)
       : ("unarmed" as const);
@@ -746,6 +761,7 @@ export function createFpSessionMainRafFrame(
       meleeAttackSeq: mainRaf.meleeAttackSeq,
       firearmShotSeq: mainRaf.firearmShotSeq,
       firearmAimActive: isFpSessionCombatAiming(),
+      firearmReload,
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---

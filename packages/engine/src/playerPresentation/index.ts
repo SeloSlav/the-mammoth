@@ -48,6 +48,14 @@ export {
   type FpFirearmShotVisualConfig,
   type FpFirearmShotVisualSample,
 } from "./local/fpFirearmShotVisuals.js";
+export {
+  FP_FIREARM_RELOAD_KNOCK_PEAK_FRAC,
+  FP_FIREARM_RELOAD_LIFT_MAX_M,
+  FP_FIREARM_RELOAD_PITCH_MAX_RAD,
+  knockWave01,
+  sampleFpFirearmReloadVisual,
+  type FpFirearmReloadVisualSample,
+} from "./local/fpFirearmReloadVisual.js";
 export type {
   HitTracePlaceholder,
   MeleeCombatVisualEvent,

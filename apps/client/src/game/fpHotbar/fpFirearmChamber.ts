@@ -27,6 +27,17 @@ export function reloadDurationMsForWeapon(weaponDefId: string): number {
   return 0;
 }
 
+/** Full-mag reload time scaled by rounds actually loaded this reload. */
+export function scaledReloadDurationMsForPartial(
+  weaponDefId: string,
+  roundsToLoad: number,
+  capacity: number,
+): number {
+  const fullMs = reloadDurationMsForWeapon(weaponDefId);
+  if (capacity <= 0 || roundsToLoad <= 0) return 0;
+  return (fullMs * roundsToLoad) / capacity;
+}
+
 /** Sum carried reserve ammo (inventory + hotbar) for the weapon’s ammo type. */
 export function countCarriedAmmoForWeapon(
   conn: DbConnection,
