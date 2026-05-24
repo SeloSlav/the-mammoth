@@ -125,7 +125,7 @@ export function buildProceduralDropRoot(defId: string): THREE.Group | null {
  */
 export function buildDropMeshLayersFromObject(root: THREE.Object3D, defId: string): DropMeshLayer[] {
   fitDroppedWorldItemModelToCatalog(root, defId);
-  root.updateMatrixWorld(true, true);
+  root.updateWorldMatrix(true, true);
   const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
 
   const buckets = new Map<
