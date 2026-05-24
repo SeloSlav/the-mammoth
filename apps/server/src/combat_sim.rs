@@ -93,15 +93,16 @@ pub fn random_babushka_pose_in_unit(unit: &ApartmentUnit, salt: u64) -> (f32, f3
 }
 
 /// After corpse linger, delete the dead row and spawn a fresh babushka at a random arena spot.
-pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNpc, now_us: i64) {
+/// Returns `true` when the corpse row was deleted (caller must not update that `npc_id`).
+pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNpc, now_us: i64) -> bool {
     if npc.state != npc::NPC_STATE_DEAD {
-        return;
+        return false;
     }
     let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
-        return;
+        return false;
     };
     if now_us - npc.last_melee_micros < BABUSHKA_CORPSE_TOTAL_MICROS {
-        return;
+        return false;
     }
     let Some(unit) = ctx
         .db
@@ -109,10 +110,10 @@ pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNp
         .iter()
         .find(|u| u.unit_key == unit_key)
     else {
-        return;
+        return false;
     };
     let Some(owner) = unit.owner else {
-        return;
+        return false;
     };
     let session_key = npc.session_key.clone();
     let salt = now_us as u64 ^ npc.npc_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
@@ -130,6 +131,7 @@ pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNp
     let npc_id = npc.npc_id;
     ctx.db.world_npc().npc_id().delete(&npc_id);
     let _ = npc::spawn_babushka(ctx, session_key, x, y, z, yaw, Some(owner));
+    true
 }
 
 pub fn combat_sim_arena_center(unit: &ApartmentUnit) -> (f32, f32, f32) {

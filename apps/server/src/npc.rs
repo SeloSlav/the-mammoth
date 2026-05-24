@@ -447,12 +447,12 @@ pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
         }
     }
     for npc in npcs {
-        if npc.state == NPC_STATE_DEAD {
-            if npc.session_key.starts_with("combat_sim:") {
-                crate::combat_sim::maybe_despawn_corpse_and_respawn(ctx, &npc, now_us);
-            }
+        let despawned = npc.state == NPC_STATE_DEAD
+            && npc.session_key.starts_with("combat_sim:")
+            && crate::combat_sim::maybe_despawn_corpse_and_respawn(ctx, &npc, now_us);
+        if !despawned {
+            ctx.db.world_npc().npc_id().update(npc);
         }
-        ctx.db.world_npc().npc_id().update(npc);
     }
 }
 
