@@ -168,7 +168,7 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
         .map(|i| i.intent_seq)
         .unwrap_or(0);
 
-    let in_combat_sim = combat_sim::shooter_in_combat_sim_open_arena(ctx, id);
+    let in_combat_sim = combat_sim::player_in_combat_sim(ctx, id);
 
     // Death recovery is apartment-first whenever the player has a claimed unit (bed_pose path).
     let bed_pose = apartments::spawn_pose_owned_bed(ctx, id);
@@ -179,7 +179,7 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
             apartments::lock_owned_residential_doors(ctx, id);
             bed
         } else {
-            spawn_routing::random_public_spawn_pose(ctx, id)
+            spawn_routing::random_public_spawn_pose(ctx, id)    
         };
     // Solo client may have advanced `intent_seq` while dead (snapshots rejected). Jump `pose.seq`
     // past those so the first live snapshot cannot stomp the spawn pose.
@@ -191,11 +191,11 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
     ctx.db.player_pose().identity().update(sp);
     movement::reset_player_input_row(ctx, id, yaw);
     if in_combat_sim {
-        inventory::delete_all_player_inventory_and_hotbar_items(ctx, id);
+        combat_sim::grant_combat_sim_loadout(ctx, id);
     } else {
         inventory::reset_player_loadout_for_respawn(ctx, id);
+        loadout::reset_player_active_hotbar_slot_to_first(ctx, id);
     }
-    loadout::reset_player_active_hotbar_slot_to_first(ctx, id);
     let unit_key = apartments::claimed_unit_key_for_owner(ctx, id);
     let _ = world_day::advance_world_day_for_player(ctx, id, unit_key.as_deref());
     player_vitals::restore_player_vitals_full(ctx, id);

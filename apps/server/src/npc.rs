@@ -5,9 +5,9 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 use crate::apartments::apartment_unit;
 use crate::combat_stub::{
     body_height_from_crouch_bit, eye_y_above_feet, melee_headshot_from_aim_ray,
-    ray_aabb_intersect_enter, vertical_overlap, HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN,
-    MELEE_HIT_MAX_Y_OFFSET_M, MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M,
-    RAY_AABB_T_ENTER_EPS,
+    ray_aabb_intersect_enter, vertical_overlap, victim_hit_trace_max_y,
+    HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN, MELEE_HIT_MAX_Y_OFFSET_M,
+    MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M, RAY_AABB_T_ENTER_EPS,
 };
 use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
@@ -170,8 +170,8 @@ pub fn trace_best_npc_hit(
     dz: f32,
     max_t: f32,
     lateral_inflate: f32,
-) -> Option<(u64, f32, f32, f32)> {
-    let mut best: Option<(u64, f32, f32, f32)> = None;
+) -> Option<(u64, f32, f32, f32, f32, f32)> {
+    let mut best: Option<(u64, f32, f32, f32, f32, f32)> = None;
     for npc in ctx.db.world_npc().iter() {
         if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
             continue;
@@ -186,7 +186,7 @@ pub fn trace_best_npc_hit(
         let mn_z = pz - pr;
         let mx_z = pz + pr;
         let mn_y = py;
-        let mx_y = py + height;
+        let mx_y = victim_hit_trace_max_y(py, height);
         if let Some(hit) =
             ray_aabb_intersect_enter(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)
         {
@@ -195,7 +195,7 @@ pub fn trace_best_npc_hit(
             }
             let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1;
             if replace {
-                best = Some((npc.npc_id, hit.t_hit, py, height));
+                best = Some((npc.npc_id, hit.t_hit, px, py, pz, height));
             }
         }
     }
@@ -568,15 +568,35 @@ mod tests {
     use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
 
     #[test]
-    fn babushka_firearm_headshot_uses_shared_head_zone() {
-        use crate::combat_stub::is_headshot_impact_world_y;
-        let feet = 60.0;
+    fn babushka_firearm_headshot_uses_square_head_box() {
+        use crate::combat_stub::{head_hit_box_aabb, is_headshot_impact_world};
+        let feet_x = 4.0;
+        let feet_y = 60.0;
+        let feet_z = -2.0;
         let h = BABUSHKA_BODY_HEIGHT_M;
-        let head_base = feet + h - crate::combat_stub::PLAYER_HEAD_ZONE_HEIGHT_M;
-        assert!(is_headshot_impact_world_y(feet, h, head_base + 0.05));
-        assert!(is_headshot_impact_world_y(feet, h, feet + h - 0.01));
-        assert!(!is_headshot_impact_world_y(feet, h, head_base - 0.05));
-        assert!(!is_headshot_impact_world_y(feet, h, feet + h * 0.5));
+        let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) = head_hit_box_aabb(feet_x, feet_y, feet_z, h);
+        let cx = (mn_x + mx_x) * 0.5;
+        let cy = (mn_y + mx_y) * 0.5;
+        let cz = (mn_z + mx_z) * 0.5;
+        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, cx, cy, cz));
+        assert!(!is_headshot_impact_world(
+            feet_x,
+            feet_y,
+            feet_z,
+            h,
+            mx_x + 0.05,
+            cy,
+            cz
+        ));
+        assert!(!is_headshot_impact_world(
+            feet_x,
+            feet_y,
+            feet_z,
+            h,
+            cx,
+            mn_y - 0.05,
+            cz
+        ));
     }
 
     #[test]

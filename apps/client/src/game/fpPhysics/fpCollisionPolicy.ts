@@ -9,6 +9,7 @@
  * - `mammothFpCollisionDebug` = `"1"` — feet ring + horizontal velocity arrow at physics feet.
  * - `mammothFpPhysicsDebug` = `"1"` — adds wireframe AABBs (static + elevator + apartment doors
  *   near the player), approximate capsule sticks, and rig vs physics feet marker when offset is non-zero.
+ * - `mammothFpNpcHitDebug` = `"1"` — legacy localStorage alias; prefer M menu → Combat sim → NPC hit volumes.
  * - `mammothFpReconcileDebug` = `"1"` — `console.info` on every prediction reconcile that applies
  *   a non-trivial correction (client vs replayed/server pose).
  * - `mammothFpDoorAnimSkewWarn` = `"1"` — throttled `console.warn` when apartment-door

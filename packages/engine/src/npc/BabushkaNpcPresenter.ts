@@ -12,6 +12,7 @@ import {
   type NpcVisualAnimationState,
   type NpcVisualSmoothingState,
 } from "./NpcVisualSmoothingState.js";
+import { NpcHitDebugOverlay } from "./NpcHitDebugOverlay.js";
 
 export const BABUSHKA_NPC_GLB_URI = "/static/models/npcs/babushka.glb";
 
@@ -532,6 +533,7 @@ export class BabushkaNpcPresenter {
   private readonly body: AnimatedBabushkaBody;
   /** Presentation-only pose — authoritative position lives in replicated snapshots. */
   private readonly visualSmoothing: NpcVisualSmoothingState = createNpcVisualSmoothingState();
+  private hitDebug: NpcHitDebugOverlay | null = null;
 
   private constructor(body: AnimatedBabushkaBody) {
     this.root.name = "babushka_npc_root";
@@ -545,6 +547,22 @@ export class BabushkaNpcPresenter {
       throw new Error("[BabushkaNpcPresenter] call preloadBabushkaNpcBody() before createSync()");
     }
     return new BabushkaNpcPresenter(new AnimatedBabushkaBody(babushkaTemplate));
+  }
+
+  /** Dev-only — attach or remove authoritative hit-volume wireframes at runtime. */
+  setHitDebugVolumesEnabled(enabled: boolean): void {
+    if (enabled) {
+      if (!this.hitDebug) {
+        this.hitDebug = new NpcHitDebugOverlay();
+        this.root.add(this.hitDebug.root);
+      }
+      this.hitDebug.root.visible = true;
+      return;
+    }
+    if (!this.hitDebug) return;
+    this.hitDebug.dispose();
+    this.root.remove(this.hitDebug.root);
+    this.hitDebug = null;
   }
 
   static async create(): Promise<BabushkaNpcPresenter> {
@@ -573,8 +591,14 @@ export class BabushkaNpcPresenter {
     const { animationState } = stepNpcVisualSmoothing(this.visualSmoothing, dt);
     this.root.position.copy(this.visualSmoothing.visualPosition);
     this.root.quaternion.copy(this.visualSmoothing.smoothedRotation);
+    this.hitDebug?.tick(dt);
     this.body.update(snapshot, dt, animationState);
     this.root.updateMatrixWorld(true);
+  }
+
+  /** Dev-only — flashes BODY / HEADSHOT label over the authoritative hit volumes. */
+  flashHitDebug(headshot: boolean): void {
+    this.hitDebug?.flashHit(headshot);
   }
 
   applySnapshot(snapshot: ReplicatedNpcSnapshot, dt: number, envTexture: THREE.Texture | null = null): void {
@@ -583,6 +607,7 @@ export class BabushkaNpcPresenter {
   }
 
   dispose(): void {
+    this.setHitDebugVolumesEnabled(false);
     this.body.dispose();
   }
 }
@@ -591,9 +616,18 @@ export class WorldNpcPresenterPool {
   private readonly parent: THREE.Object3D;
   private readonly byId = new Map<string, BabushkaNpcPresenter>();
   private envTextureProvider: (() => THREE.Texture | null) | null = null;
+  private showHitDebugVolumes = false;
 
   constructor(parent: THREE.Object3D) {
     this.parent = parent;
+  }
+
+  setShowHitDebugVolumes(enabled: boolean): void {
+    if (this.showHitDebugVolumes === enabled) return;
+    this.showHitDebugVolumes = enabled;
+    for (const pres of this.byId.values()) {
+      pres.setHitDebugVolumesEnabled(enabled);
+    }
   }
 
   setEnvTextureProvider(provider: (() => THREE.Texture | null) | null): void {
@@ -623,6 +657,9 @@ export class WorldNpcPresenterPool {
       if (!pres) {
         try {
           pres = BabushkaNpcPresenter.createSync();
+          if (this.showHitDebugVolumes) {
+            pres.setHitDebugVolumesEnabled(true);
+          }
           this.byId.set(key, pres);
           this.parent.add(pres.root);
         } catch (err) {
@@ -654,6 +691,23 @@ export class WorldNpcPresenterPool {
   sync(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
     this.ingestAuthoritative(snapshots);
     this.tickVisual(snapshots, dt);
+  }
+
+  /** Match replicated flesh-impact one-shots to the nearest NPC debug overlay. */
+  flashHitDebugAtWorld(x: number, y: number, z: number, headshot: boolean): void {
+    if (!this.showHitDebugVolumes) return;
+    let best: { pres: BabushkaNpcPresenter; distSq: number } | null = null;
+    for (const pres of this.byId.values()) {
+      const dx = pres.root.position.x - x;
+      const dy = pres.root.position.y - y;
+      const dz = pres.root.position.z - z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq > 3.5 * 3.5) continue;
+      if (!best || distSq < best.distSq) {
+        best = { pres, distSq };
+      }
+    }
+    best?.pres.flashHitDebug(headshot);
   }
 
   dispose(): void {

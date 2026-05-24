@@ -10,7 +10,8 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartment_door::apartment_door;
 use crate::combat_stub::{
-    body_height_from_crouch_bit, eye_y_above_feet, is_headshot_impact_world_y,
+    body_height_from_crouch_bit, eye_y_above_feet, is_headshot_impact_world,
+    victim_hit_trace_max_y,
     ray_aabb_intersect_enter, HEADSHOT_DAMAGE_MULTIPLIER, PLAYER_BODY_RADIUS_M,
 };
 use crate::generated_collision_solids::{
@@ -222,8 +223,8 @@ fn trace_best_player_hit(
     dz: f32,
     max_t: f32,
     lateral_inflate: f32,
-) -> Option<(Identity, f32, f32, f32)> {
-    let mut best: Option<(Identity, f32, f32, f32)> = None;
+) -> Option<(Identity, f32, f32, f32, f32, f32)> {
+    let mut best: Option<(Identity, f32, f32, f32, f32, f32)> = None;
     for pose in ctx.db.player_pose().iter() {
         if pose.identity == attacker || player_vitals::is_player_dead(ctx, pose.identity) {
             continue;
@@ -247,7 +248,7 @@ fn trace_best_player_hit(
         let mn_z = pz - pr;
         let mx_z = pz + pr;
         let mn_y = py;
-        let mx_y = py + bh;
+        let mx_y = victim_hit_trace_max_y(py, bh);
         if let Some(hit) =
             ray_aabb_intersect_enter(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)
         {
@@ -256,7 +257,7 @@ fn trace_best_player_hit(
             }
             let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1;
             if replace {
-                best = Some((pose.identity, hit.t_hit, py, bh));
+                best = Some((pose.identity, hit.t_hit, px, py, pz, bh));
             }
         }
     }
@@ -299,7 +300,7 @@ fn resolve_pistol_ray(
     let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, dir, max_range_m);
     let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
 
-    let Some((pid, t_hit, feet_y, body_h)) = phit else {
+    let Some((pid, t_hit, feet_x, feet_y, feet_z, body_h)) = phit else {
         return Vec::new();
     };
     if let Some(t_w) = t_wall {
@@ -310,7 +311,7 @@ fn resolve_pistol_ray(
     let dist_m = t_hit;
     let scale = falloff_factor(dist_m, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, dist_m);
-    let headshot = is_headshot_impact_world_y(feet_y, body_h, iy);
+    let headshot = is_headshot_impact_world(feet_x, feet_y, feet_z, body_h, ix, iy, iz);
     let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
@@ -363,13 +364,14 @@ fn resolve_shotgun_pellets(
         let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {
-            (Some((pid, pr_t, feet_y, body_h)), Some(t_w)) => {
+            (Some((pid, pr_t, feet_x, feet_y, feet_z, body_h)), Some(t_w)) => {
                 if t_w + 1e-3 < *pr_t {
                     None
                 } else {
                     let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                    let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                    let headshot =
+                        is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
                     let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
@@ -378,10 +380,11 @@ fn resolve_shotgun_pellets(
                     Some((*pid, per * scale * hs_mult, ipt, headshot))
                 }
             }
-            (Some((pid, pr_t, feet_y, body_h)), None) => {
+            (Some((pid, pr_t, feet_x, feet_y, feet_z, body_h)), None) => {
                 let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                let headshot =
+                    is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
                 let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {
@@ -588,7 +591,7 @@ fn resolve_pistol_ray_npcs(
     let t_wall =
         trace_world_solids_for_firearms(ctx, attacker, [ox, oy, oz], [dx, dy, dz], max_range_m);
     let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
-    let Some((nid, t_hit, feet_y, body_h)) = nhit else {
+    let Some((nid, t_hit, feet_x, feet_y, feet_z, body_h)) = nhit else {
         return Vec::new();
     };
     if let Some(t_w) = t_wall {
@@ -598,7 +601,7 @@ fn resolve_pistol_ray_npcs(
     }
     let scale = falloff_factor(t_hit, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, t_hit);
-    let headshot = is_headshot_impact_world_y(feet_y, body_h, iy);
+    let headshot = is_headshot_impact_world(feet_x, feet_y, feet_z, body_h, ix, iy, iz);
     let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
@@ -649,13 +652,14 @@ fn resolve_shotgun_pellets_npcs(
         let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (nhit.as_ref(), t_wall) {
-            (Some((nid, n_t, feet_y, body_h)), Some(t_w)) => {
+            (Some((nid, n_t, feet_x, feet_y, feet_z, body_h)), Some(t_w)) => {
                 if t_w + 1e-3 < *n_t {
                     None
                 } else {
                     let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                    let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                    let headshot =
+                        is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
                     let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
@@ -664,10 +668,11 @@ fn resolve_shotgun_pellets_npcs(
                     Some((*nid, per * scale * hs_mult, ipt, headshot))
                 }
             }
-            (Some((nid, n_t, feet_y, body_h)), None) => {
+            (Some((nid, n_t, feet_x, feet_y, feet_z, body_h)), None) => {
                 let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                let headshot =
+                    is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
                 let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {

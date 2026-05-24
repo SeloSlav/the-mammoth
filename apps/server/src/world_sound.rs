@@ -372,6 +372,11 @@ pub fn emit_melee_flesh_hit_at(
     emitter: Identity,
     variation: u8,
 ) {
+    let volume = if variation == FLESH_IMPACT_VAR_HEADSHOT {
+        1.65
+    } else {
+        1.05
+    };
     emit_world_sound(
         ctx,
         KIND_MELEE_FLESH_HIT,
@@ -379,8 +384,8 @@ pub fn emit_melee_flesh_hit_at(
         x,
         y,
         z,
-        0.72,
-        18.0,
+        volume,
+        24.0,
         AXIS_WEIGHT_Y_MELEE,
         emitter,
     );

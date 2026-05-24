@@ -5,6 +5,7 @@ import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
+import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
 
 type Props = {
   conn: DbConnection;
@@ -22,9 +23,14 @@ export function CombatSimMinimalHud({ conn, onExit }: Props) {
           right: 12,
           zIndex: 50,
           display: "flex",
-          gap: 8,
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 6,
         }}
       >
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", userSelect: "none" }}>
+          M · debug menu
+        </div>
         <button
           type="button"
           onClick={onExit}
@@ -41,6 +47,7 @@ export function CombatSimMinimalHud({ conn, onExit }: Props) {
           Exit combat sim
         </button>
       </div>
+      <MammothDebugMenuHud />
       <MammothFpReticule />
       <PlayerVitalsHud conn={conn} />
       <PlayerDamageFeedbackOverlay conn={conn} />

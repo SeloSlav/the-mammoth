@@ -156,6 +156,18 @@ export {
   MAMMOTH_FP_WORLD_NPC_UD,
 } from "./npc/BabushkaNpcPresenter.js";
 export {
+  NpcHitDebugOverlay,
+  BABUSHKA_HIT_BODY_RADIUS_M,
+  BABUSHKA_HIT_BODY_HEIGHT_M,
+  BABUSHKA_HIT_HEAD_BOX_M,
+  BABUSHKA_HIT_HEAD_LIFT_ABOVE_BODY_M,
+  BABUSHKA_HIT_HEAD_BOX_CROWN_INSET_M,
+  BABUSHKA_HIT_BODY_GAP_M,
+  babushkaHeadHitBoxTopY,
+  babushkaHeadHitBoxCenterY,
+  babushkaBodyHitTorsoHeightM,
+} from "./npc/NpcHitDebugOverlay.js";
+export {
   createNpcVisualSmoothingState,
   ingestNpcAuthoritativeTransform,
   stepNpcVisualSmoothing,

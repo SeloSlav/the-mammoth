@@ -19,8 +19,16 @@ pub const PLAYER_BODY_HEIGHT_CROUCH_M: f32 = 1.2;
 
 /// Authoritative damage multiplier when the hit resolves inside the head volume.
 pub const HEADSHOT_DAMAGE_MULTIPLIER: f32 = 2.0;
-/// World-space height of the head hit region at the top of the player capsule.
+/// World-space height of the legacy Y-only head band (superseded by [`PLAYER_HEAD_HIT_BOX_M`]).
 pub const PLAYER_HEAD_ZONE_HEIGHT_M: f32 = 0.30;
+/// Square head hit volume — same extent on X, Y, and Z.
+pub const PLAYER_HEAD_HIT_BOX_M: f32 = 0.32;
+/// Head box top sits this far above the nominal body crown (before crown inset).
+pub const PLAYER_HEAD_HIT_BOX_LIFT_ABOVE_BODY_M: f32 = 0.14;
+/// Trim from the lifted crown so the cube sits on the skull, not floating above it.
+pub const PLAYER_HEAD_HIT_BOX_CROWN_INSET_M: f32 = 0.04;
+/// Vertical gap between torso body volume and head hit box (no overlap).
+pub const PLAYER_HEAD_HIT_BODY_GAP_M: f32 = 0.02;
 
 pub const RAY_AABB_T_ENTER_EPS: f32 = 4e-4;
 
@@ -154,6 +162,73 @@ pub fn body_height_from_crouch_bit(bits: u8) -> f32 {
     }
 }
 
+/// World-space Y of the head hit box top (feet-rooted).
+#[inline]
+pub fn head_hit_box_top_y(feet_y: f32, body_height_m: f32) -> f32 {
+    feet_y + body_height_m + PLAYER_HEAD_HIT_BOX_LIFT_ABOVE_BODY_M
+        - PLAYER_HEAD_HIT_BOX_CROWN_INSET_M
+}
+
+/// World-space Y of the head hit box center (feet-rooted).
+#[inline]
+pub fn head_hit_box_center_y(feet_y: f32, body_height_m: f32) -> f32 {
+    head_hit_box_top_y(feet_y, body_height_m) - PLAYER_HEAD_HIT_BOX_M * 0.5
+}
+
+/// Torso-only body hit height (feet to neck) — excludes head box and gap.
+#[inline]
+pub fn body_hit_torso_height_m(body_height_m: f32) -> f32 {
+    let head_bottom = head_hit_box_center_y(0.0, body_height_m) - PLAYER_HEAD_HIT_BOX_M * 0.5;
+    (head_bottom - PLAYER_HEAD_HIT_BODY_GAP_M).max(0.0)
+}
+
+/// Ray-trace AABB crown — includes lifted head volume.
+#[inline]
+pub fn victim_hit_trace_max_y(feet_y: f32, body_height_m: f32) -> f32 {
+    head_hit_box_top_y(feet_y, body_height_m)
+}
+
+/// Axis-aligned head hit box for a feet-rooted body (square on X/Z/Y).
+#[inline]
+pub fn head_hit_box_aabb(
+    feet_x: f32,
+    feet_y: f32,
+    feet_z: f32,
+    body_height_m: f32,
+) -> (f32, f32, f32, f32, f32, f32) {
+    let half = PLAYER_HEAD_HIT_BOX_M * 0.5;
+    let center_y = head_hit_box_center_y(feet_y, body_height_m);
+    (
+        feet_x - half,
+        center_y - half,
+        feet_z - half,
+        feet_x + half,
+        center_y + half,
+        feet_z + half,
+    )
+}
+
+/// True when world-space impact lies inside the square head hit box.
+#[inline]
+pub fn is_headshot_impact_world(
+    feet_x: f32,
+    feet_y: f32,
+    feet_z: f32,
+    body_height_m: f32,
+    impact_x: f32,
+    impact_y: f32,
+    impact_z: f32,
+) -> bool {
+    let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) =
+        head_hit_box_aabb(feet_x, feet_y, feet_z, body_height_m);
+    impact_x >= mn_x - 1e-4
+        && impact_x <= mx_x + 1e-4
+        && impact_y >= mn_y - 1e-4
+        && impact_y <= mx_y + 1e-3
+        && impact_z >= mn_z - 1e-4
+        && impact_z <= mx_z + 1e-4
+}
+
 /// True when world-space impact `y` lies in the head zone of a feet-rooted capsule.
 #[inline]
 pub fn is_headshot_impact_world_y(feet_y: f32, body_height_m: f32, impact_world_y: f32) -> bool {
@@ -257,7 +332,7 @@ pub fn melee_headshot_from_aim_ray(
     victim_x: f32,
     victim_feet_y: f32,
     victim_z: f32,
-    body_radius: f32,
+    _body_radius: f32,
     body_height: f32,
     reach_m: f32,
     fallback_impact: (f32, f32, f32),
@@ -265,8 +340,8 @@ pub fn melee_headshot_from_aim_ray(
     let (mut impact_x, mut impact_y, mut impact_z) = fallback_impact;
     let mut headshot = false;
     let (adx, ady, adz) = aim_dir;
-    let h0 = victim_feet_y + body_height - PLAYER_HEAD_ZONE_HEIGHT_M;
-    let h1 = victim_feet_y + body_height;
+    let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) =
+        head_hit_box_aabb(victim_x, victim_feet_y, victim_z, body_height);
     if let Some(hit) = ray_aabb_intersect_enter(
         attacker_x,
         attacker_eye_y,
@@ -274,12 +349,12 @@ pub fn melee_headshot_from_aim_ray(
         adx,
         ady,
         adz,
-        victim_x - body_radius,
-        h0,
-        victim_z - body_radius,
-        victim_x + body_radius,
-        h1,
-        victim_z + body_radius,
+        mn_x,
+        mn_y,
+        mn_z,
+        mx_x,
+        mx_y,
+        mx_z,
     ) {
         if hit.t_hit > RAY_AABB_T_ENTER_EPS && hit.t_hit <= reach_m {
             headshot = true;
@@ -469,15 +544,34 @@ mod tests {
     }
 
     #[test]
-    fn headshot_zone_detects_top_of_capsule() {
-        let feet = 10.0;
+    fn headshot_zone_detects_square_head_box() {
+        let feet_x = 2.0;
+        let feet_y = 10.0;
+        let feet_z = -1.0;
         let h = PLAYER_BODY_HEIGHT_STAND_M;
-        let top = feet + h;
-        assert!(is_headshot_impact_world_y(feet, h, top - 0.01));
-        assert!(!is_headshot_impact_world_y(
-            feet,
+        let (mn_x, mn_y, _mn_z, mx_x, mx_y, _mx_z) = head_hit_box_aabb(feet_x, feet_y, feet_z, h);
+        let cx = (mn_x + mx_x) * 0.5;
+        let cy = (mn_y + mx_y) * 0.5;
+        let torso_h = body_hit_torso_height_m(h);
+        assert!(torso_h + PLAYER_HEAD_HIT_BODY_GAP_M <= mn_y - feet_y + 1e-4);
+        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, cx, cy, feet_z));
+        assert!(!is_headshot_impact_world(
+            feet_x,
+            feet_y,
+            feet_z,
             h,
-            feet + h - PLAYER_HEAD_ZONE_HEIGHT_M - 0.05
+            mx_x + 0.05,
+            cy,
+            feet_z
+        ));
+        assert!(!is_headshot_impact_world(
+            feet_x,
+            feet_y,
+            feet_z,
+            h,
+            cx,
+            mn_y - 0.05,
+            feet_z
         ));
     }
 
@@ -487,9 +581,7 @@ mod tests {
         let pz = 1.0;
         let feet_y = 0.0;
         let bh = PLAYER_BODY_HEIGHT_STAND_M;
-        let pr = PLAYER_BODY_RADIUS_M;
-        let h0 = feet_y + bh - PLAYER_HEAD_ZONE_HEIGHT_M;
-        let h1 = feet_y + bh;
+        let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) = head_hit_box_aabb(px, feet_y, pz, bh);
         let hit = ray_aabb_intersect_enter(
             0.0,
             1.62,
@@ -497,12 +589,12 @@ mod tests {
             0.0,
             0.0,
             1.0,
-            px - pr,
-            h0,
-            pz - pr,
-            px + pr,
-            h1,
-            pz + pr,
+            mn_x,
+            mn_y,
+            mn_z,
+            mx_x,
+            mx_y,
+            mx_z,
         );
         assert!(hit.is_some());
         let t = hit.unwrap().t_hit;

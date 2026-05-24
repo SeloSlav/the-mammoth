@@ -19,6 +19,7 @@ import {
   setFpDebugGameplayFeedbackFlag,
   subscribeFpDebugGameplayFeedback,
 } from "../game/fpDebugGameplayFeedback.js";
+import { isFpCombatSimMode } from "../game/combatSim/fpCombatSimMode.js";
 import { isTextInputFocused } from "../game/isTextInputFocused.js";
 import { getFpDebugMenuSessionSnapshot } from "../game/fpDebugMenuSessionBridge.js";
 import {
@@ -532,6 +533,26 @@ export function MammothDebugMenuHud() {
                 );
               },
             })}
+
+            {isFpCombatSimMode() ? (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
+                  Combat sim
+                </div>
+                {rowToggle({
+                  label: "NPC hit volumes",
+                  description:
+                    "Green body + red headshot AABBs; flashes BODY / HEADSHOT on flesh impacts",
+                  on: gameplayFeedback.npcHitDebugVolumes,
+                  onToggle: () => {
+                    setFpDebugGameplayFeedbackFlag(
+                      "npcHitDebugVolumes",
+                      !gameplayFeedback.npcHitDebugVolumes,
+                    );
+                  },
+                })}
+              </>
+            ) : null}
 
             <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
               Render isolation

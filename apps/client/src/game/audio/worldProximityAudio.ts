@@ -372,8 +372,21 @@ export class WorldProximityAudio {
 
     const pan = worldSoundVirtualPannerPosition(lx, ly, lz, row.x, row.y, row.z, dEff);
 
+    const headshotFlesh =
+      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT &&
+      row.variation === WORLD_SOUND_FLESH_IMPACT_VAR_HEADSHOT;
+    const ownHeadshotFlesh = headshotFlesh && selfId.isEqual(row.emitter);
+
     const dry = ctx.createGain();
-    dry.gain.value = Math.min(1.15, row.volume);
+    const fleshBoost =
+      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT
+        ? headshotFlesh
+          ? 3.4
+          : 1.42
+        : 1.0;
+    dry.gain.value = ownHeadshotFlesh
+      ? 2.35
+      : Math.min(headshotFlesh ? 2.1 : 1.35, row.volume * fleshBoost);
 
     const panner = ctx.createPanner();
     try {
@@ -382,9 +395,9 @@ export class WorldProximityAudio {
       panner.panningModel = "equalpower";
     }
     panner.distanceModel = "inverse";
-    panner.refDistance = 0.4;
+    panner.refDistance = ownHeadshotFlesh ? 1.2 : 0.4;
     panner.maxDistance = Math.max(2.0, row.maxDistanceM);
-    panner.rolloffFactor = 1.1;
+    panner.rolloffFactor = ownHeadshotFlesh ? 0.35 : 1.1;
     panner.positionX.setValueAtTime(pan.x, t);
     panner.positionY.setValueAtTime(pan.y, t);
     panner.positionZ.setValueAtTime(pan.z, t);
@@ -405,9 +418,15 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT ||
       row.kind === WORLD_SOUND_KIND_FIREARM_SHOT
     ) {
-      src.playbackRate.value = 0.99 + Math.random() * 0.04;
+      src.playbackRate.value = headshotFlesh ? 1.08 + Math.random() * 0.04 : 0.99 + Math.random() * 0.04;
     }
     src.connect(dry);
+    if (ownHeadshotFlesh) {
+      const punch = ctx.createGain();
+      punch.gain.value = 1.25;
+      src.connect(punch);
+      punch.connect(ctx.destination);
+    }
     dry.connect(panner);
     panner.connect(out);
     src.start(t);

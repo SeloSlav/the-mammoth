@@ -1125,6 +1125,7 @@ export async function mountFpSession(
         fxScene: scene,
         conn,
         getAudioContext: () => localAudio.getAudioContext(),
+        getCamera: () => camera,
         getReadableEnvTexture: () => {
           const tex = scene.userData.mammothFpMetallicReadableEnv;
           return tex instanceof THREE.Texture ? tex : null;

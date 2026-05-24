@@ -6,12 +6,15 @@
 export type FpDebugGameplayFeedbackFlags = {
   /** Red vignette on hunger/thirst health-drain ticks (~<1 HP / server vitals step). */
   starvationDamageFlashes: boolean;
+  /** Authoritative NPC body/head AABBs + BODY/HEADSHOT flash labels (combat sim). */
+  npcHitDebugVolumes: boolean;
 };
 
 export type FpDebugGameplayFeedbackKey = keyof FpDebugGameplayFeedbackFlags;
 
 const ALL_ON: FpDebugGameplayFeedbackFlags = {
   starvationDamageFlashes: true,
+  npcHitDebugVolumes: false,
 };
 
 const listeners = new Set<() => void>();

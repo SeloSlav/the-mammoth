@@ -16,6 +16,7 @@
 //! ## Arena-specific server behavior
 //! - `enter_combat_sim`: full combat loadout, arena-center pose, spawn NPCs for the session
 //! - `shooter_in_combat_sim_open_arena`: skip megablock firearm LOS while live combat-sim NPCs exist
+//! - Combat-sim death: no world item drops; respawn restores the full combat loadout in-arena
 //! - `leave_combat_sim`: despawn session NPCs and teleport owner back to their bed (does not restore prior loadout)
 
 use spacetimedb::{Identity, ReducerContext, Table};
@@ -118,14 +119,34 @@ pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
     (cx, unit.foot_y, cz)
 }
 
-/// While live combat-sim NPCs exist, respawn at the arena center (not bed) so recovery stays in-session.
+/// True while the player is still in an active combat-sim session (live NPCs or arena pose).
+pub fn player_in_combat_sim(ctx: &ReducerContext, owner: Identity) -> bool {
+    let Some(unit) = owned_claimed_unit(ctx, owner) else {
+        return false;
+    };
+    let session_key = combat_sim_session_key(&unit);
+    if ctx
+        .db
+        .world_npc()
+        .iter()
+        .any(|n| n.session_key == session_key)
+    {
+        return true;
+    }
+    let Some(sp) = ctx.db.player_pose().identity().find(&owner) else {
+        return false;
+    };
+    player_at_combat_sim_arena(&unit, &sp)
+}
+
+/// While in combat sim, respawn at the arena center (not bed) so recovery stays in-session.
 pub fn respawn_pose_if_in_open_arena(
     ctx: &ReducerContext,
     owner: Identity,
     base_seq: u64,
     in_seq: u64,
 ) -> Option<pose::PlayerPose> {
-    if !shooter_in_combat_sim_open_arena(ctx, owner) {
+    if !player_in_combat_sim(ctx, owner) {
         return None;
     }
     let unit = owned_claimed_unit(ctx, owner)?;
@@ -166,7 +187,7 @@ pub fn shooter_in_combat_sim_open_arena(ctx: &ReducerContext, shooter: Identity)
         .any(|n| n.session_key == session_key && n.state != npc::NPC_STATE_DEAD && n.health > 0.0)
 }
 
-fn grant_combat_sim_loadout(ctx: &ReducerContext, owner: Identity) {
+pub(crate) fn grant_combat_sim_loadout(ctx: &ReducerContext, owner: Identity) {
     delete_all_player_inventory_and_hotbar_items(ctx, owner);
     for &(def_id, qty) in COMBAT_SIM_LOADOUT {
         match try_grant_stack_to_player(ctx, owner, def_id.to_string(), qty) {
