@@ -231,6 +231,24 @@ function localMirrorBodyUriForConn(conn: DbConnection): string {
   return n === 1 ? REMOTE_PLAYER_BODY_URI_FEMALE : REMOTE_PLAYER_BODY_URI_MALE;
 }
 
+function isPromiseWithCatch(value: unknown): value is Promise<void> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "catch" in value &&
+    typeof value.catch === "function"
+  );
+}
+
+function requestCanvasPointerLock(canvas: HTMLCanvasElement): void {
+  const result = canvas.requestPointerLock();
+  if (!isPromiseWithCatch(result)) return;
+  void result.catch((err: unknown) => {
+    if (err instanceof DOMException && err.name === "SecurityError") return;
+    console.warn("[mountFpSession] requestPointerLock failed", err);
+  });
+}
+
 function fpGpuTimestampDebugEnabled(): boolean {
   return fpSessionTrackGpuTimestampsEnabled();
 }
@@ -1739,7 +1757,7 @@ export async function mountFpSession(
   const onClick = () => {
     void attachSpatialWorldAudio();
     if (fpAuthoringActiveRef.active) return;
-    if (document.pointerLockElement !== canvas) void canvas.requestPointerLock();
+    if (document.pointerLockElement !== canvas) requestCanvasPointerLock(canvas);
   };
 
   /** HUD layers use `pointer-events: none` in gaps; suppress the browser menu on the world view. */

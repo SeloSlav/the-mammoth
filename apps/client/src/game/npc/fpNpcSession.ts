@@ -34,6 +34,9 @@ const NPC_STATE_IDLE = 0;
 const TORSO_Y_ABOVE_FEET_M = 1.04;
 const MIN_NPC_HIT_BLOOD_DAMAGE = 1;
 const BABUSHKA_HIT_VOLUME = 1.15;
+const BABUSHKA_SPORE_TRAIL_INTERVAL_MS = 120;
+const BABUSHKA_SPORE_TRAIL_MIN_SPEED_SQ = 0.08 * 0.08;
+const BABUSHKA_SPORE_TRAIL_BACKSTEP_M = 0.34;
 
 function archetypeFromRow(archetype: string): NpcArchetypeId | null {
   if (archetype === "babushka") return "babushka";
@@ -105,6 +108,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const rows = new Map<string, WorldNpc>();
   const audioTrack = new Map<string, NpcAudioTrack>();
   const idleAudioTrack = new Map<string, BabushkaIdleAudioTrack>();
+  const sporeTrailNextAtMs = new Map<string, number>();
   let lastEpitaphClipIndex = -1;
   let audioLoadStarted = false;
   let snapshotsDirty = true;
@@ -195,6 +199,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     rows.delete(key);
     audioTrack.delete(key);
     idleAudioTrack.delete(key);
+    sporeTrailNextAtMs.delete(key);
     snapshotsDirty = true;
   };
 
@@ -233,8 +238,24 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       const camera = opts.getCamera();
       for (const row of rows.values()) {
         if (archetypeFromRow(row.archetype) !== "babushka") continue;
-        if (row.state !== NPC_STATE_IDLE || row.health <= 0) continue;
         const key = row.npcId.toString();
+        const speedSq = row.velX * row.velX + row.velZ * row.velZ;
+        if (row.health > 0 && speedSq >= BABUSHKA_SPORE_TRAIL_MIN_SPEED_SQ) {
+          const nextTrailAt = sporeTrailNextAtMs.get(key) ?? 0;
+          if (nowMs >= nextTrailAt) {
+            const invSpeed = 1 / Math.sqrt(speedSq);
+            sporeFx.spawnTrailAt(
+              row.x - row.velX * invSpeed * BABUSHKA_SPORE_TRAIL_BACKSTEP_M,
+              row.y + TORSO_Y_ABOVE_FEET_M * 0.78,
+              row.z - row.velZ * invSpeed * BABUSHKA_SPORE_TRAIL_BACKSTEP_M,
+              nowMs,
+            );
+            sporeTrailNextAtMs.set(key, nowMs + BABUSHKA_SPORE_TRAIL_INTERVAL_MS);
+          }
+        } else {
+          sporeTrailNextAtMs.delete(key);
+        }
+        if (row.state !== NPC_STATE_IDLE || row.health <= 0) continue;
         let idleTrack = idleAudioTrack.get(key);
         if (!idleTrack) {
           idleTrack = {
@@ -276,6 +297,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       rows.clear();
       audioTrack.clear();
       idleAudioTrack.clear();
+      sporeTrailNextAtMs.clear();
     },
   };
 }

@@ -2,9 +2,10 @@ import * as THREE from "three";
 
 const GROUP_NAME = "fp_babushka_spore_burst_fx";
 const TTL_MS = 1150;
-const MAX_SPORES = 72;
+const MAX_SPORES = 112;
 const MIN_SPORES = 12;
 const SPORE_OPACITY = 0.82;
+const TRAIL_SPORE_OPACITY = 0.46;
 const SPORE_SIZE_MIN_M = 0.045;
 const SPORE_SIZE_MAX_M = 0.105;
 const UPWARD_DRIFT_MPS = 0.72;
@@ -22,10 +23,12 @@ type SporeSlot = {
   vz: number;
   swirl: number;
   size: number;
+  opacity: number;
 };
 
 export type FpBabushkaSporeBurstFx = {
   spawnBurstAt: (worldX: number, worldY: number, worldZ: number, damage: number) => void;
+  spawnTrailAt: (worldX: number, worldY: number, worldZ: number, nowMs: number) => void;
   tick: (nowMs: number, dtSec: number) => void;
   dispose: () => void;
 };
@@ -107,18 +110,23 @@ export function createFpBabushkaSporeBurstFx(scene: THREE.Scene): FpBabushkaSpor
       vz: 0,
       swirl: 0,
       size: SPORE_SIZE_MIN_M,
+      opacity: SPORE_OPACITY,
     });
   }
 
   let nextSlot = 0;
 
+  const nextSporeSlot = (): SporeSlot => {
+    const slot = slots[nextSlot]!;
+    nextSlot = (nextSlot + 1) % MAX_SPORES;
+    return slot;
+  };
+
   const spawnBurstAt = (worldX: number, worldY: number, worldZ: number, damage: number): void => {
     const n = sporeCountForDamage(damage);
     const birth = performance.now();
     for (let i = 0; i < n; i += 1) {
-      const slot = slots[nextSlot]!;
-      nextSlot = (nextSlot + 1) % MAX_SPORES;
-
+      const slot = nextSporeSlot();
       const salt = birth + i * 7919;
       const angle = rand01(salt + 11) * Math.PI * 2;
       const spread = 0.18 + rand01(salt + 23) * 0.56;
@@ -130,6 +138,7 @@ export function createFpBabushkaSporeBurstFx(scene: THREE.Scene): FpBabushkaSpor
       slot.vz = Math.sin(angle) * spread;
       slot.swirl = (rand01(salt + 53) - 0.5) * 2.2;
       slot.size = size;
+      slot.opacity = SPORE_OPACITY;
       slot.material.opacity = SPORE_OPACITY;
       slot.sprite.visible = true;
       slot.sprite.scale.setScalar(size);
@@ -141,8 +150,34 @@ export function createFpBabushkaSporeBurstFx(scene: THREE.Scene): FpBabushkaSpor
     }
   };
 
+  const spawnTrailAt = (worldX: number, worldY: number, worldZ: number, nowMs: number): void => {
+    const slot = nextSporeSlot();
+    const salt = nowMs + nextSlot * 1543;
+    const angle = rand01(salt + 13) * Math.PI * 2;
+    const drift = 0.05 + rand01(salt + 29) * 0.14;
+    const size = SPORE_SIZE_MIN_M + rand01(salt + 43) * 0.035;
+
+    slot.active = true;
+    slot.birthMs = nowMs;
+    slot.vx = Math.cos(angle) * drift;
+    slot.vy = 0.42 + rand01(salt + 47) * 0.35;
+    slot.vz = Math.sin(angle) * drift;
+    slot.swirl = (rand01(salt + 59) - 0.5) * 1.6;
+    slot.size = size;
+    slot.opacity = TRAIL_SPORE_OPACITY;
+    slot.material.opacity = TRAIL_SPORE_OPACITY;
+    slot.sprite.visible = true;
+    slot.sprite.scale.setScalar(size);
+    slot.sprite.position.set(
+      worldX + (rand01(salt + 67) - 0.5) * 0.22,
+      worldY + (rand01(salt + 79) - 0.35) * 0.32,
+      worldZ + (rand01(salt + 89) - 0.5) * 0.22,
+    );
+  };
+
   return {
     spawnBurstAt,
+    spawnTrailAt,
     tick(nowMs: number, dtSec: number): void {
       const dt = Math.min(0.05, Math.max(0, dtSec));
       const drag = Math.max(0, 1 - DRAG_PER_SEC * dt);
@@ -157,7 +192,7 @@ export function createFpBabushkaSporeBurstFx(scene: THREE.Scene): FpBabushkaSpor
 
         const fade = Math.sin((1 - u) * Math.PI * 0.5);
         const swirlPhase = u * Math.PI * 2 + slot.swirl;
-        slot.material.opacity = fade * SPORE_OPACITY;
+        slot.material.opacity = fade * slot.opacity;
         slot.vx *= drag;
         slot.vz *= drag;
         slot.sprite.position.x += (slot.vx + Math.cos(swirlPhase) * 0.08) * dt;

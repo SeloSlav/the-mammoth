@@ -46,6 +46,8 @@ export class PlayerPresentationManager {
   private readonly localMirror: LocalMirrorPlayerPresenter;
   /** Equip id currently shown on the local FP weapon mesh (may trail gameplay by a frame while a GLB loads). */
   private lastAppliedLocalWeaponVisualEquip: HeldItemId;
+  /** Equip id safe for the third-person mirror path; only advances after its GLB is cached. */
+  private lastLoadedMirrorWeaponVisualEquip: HeldItemId;
   private latestDesiredLocalEquip: HeldItemId;
   /** True while {@link drainLocalWeaponGlbs} owns the preload chain — never await inside `update()`. */
   private localWeaponGlbDrainRunning = false;
@@ -61,6 +63,7 @@ export class PlayerPresentationManager {
     this.local = local;
     this.localMirror = localMirror;
     this.lastAppliedLocalWeaponVisualEquip = initialEquipped;
+    this.lastLoadedMirrorWeaponVisualEquip = initialEquipped;
     this.latestDesiredLocalEquip = initialEquipped;
   }
 
@@ -110,7 +113,14 @@ export class PlayerPresentationManager {
       });
     }
     this.local.update(localState, dt);
-    this.localMirror.updateFromLocalState(localState, dt);
+    const mirrorState =
+      localState.equippedPrimary === this.lastLoadedMirrorWeaponVisualEquip
+        ? localState
+        : {
+            ...localState,
+            equippedPrimary: this.lastLoadedMirrorWeaponVisualEquip,
+          };
+    this.localMirror.updateFromLocalState(mirrorState, dt);
   }
 
   private async drainLocalWeaponGlbs(): Promise<void> {
@@ -138,6 +148,7 @@ export class PlayerPresentationManager {
         continue;
       }
       this.local.setWeaponDefinition(visualDef);
+      this.lastLoadedMirrorWeaponVisualEquip = visualDef ? targetEquip : "unarmed";
       this.lastAppliedLocalWeaponVisualEquip = targetEquip;
     }
   }
