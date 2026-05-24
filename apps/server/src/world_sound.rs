@@ -364,8 +364,8 @@ pub fn emit_firearm_reload_at(
         x,
         y,
         z,
-        0.98,
-        48.0,
+        0.84,
+        40.0,
         AXIS_WEIGHT_Y_GUNFIRE,
         emitter,
     );
@@ -397,9 +397,9 @@ pub fn emit_melee_flesh_hit_at(
     variation: u8,
 ) {
     let volume = if variation == FLESH_IMPACT_VAR_HEADSHOT {
-        1.65
+        1.78
     } else {
-        1.05
+        1.22
     };
     emit_world_sound(
         ctx,
@@ -409,7 +409,7 @@ pub fn emit_melee_flesh_hit_at(
         y,
         z,
         volume,
-        24.0,
+        30.0,
         AXIS_WEIGHT_Y_MELEE,
         emitter,
     );

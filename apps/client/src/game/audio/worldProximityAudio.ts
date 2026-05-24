@@ -392,6 +392,10 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT &&
       row.variation === WORLD_SOUND_FLESH_IMPACT_VAR_HEADSHOT;
     const ownHeadshotFlesh = headshotFlesh && selfId.isEqual(row.emitter);
+    const ownFleshHit =
+      row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT &&
+      selfId.isEqual(row.emitter) &&
+      !headshotFlesh;
     const ownFirearmReload =
       row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD && selfId.isEqual(row.emitter);
 
@@ -399,15 +403,17 @@ export class WorldProximityAudio {
     const fleshBoost =
       row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT
         ? headshotFlesh
-          ? 3.4
-          : 1.42
+          ? 3.5
+          : 1.55
         : 1.0;
-    const reloadBoost = row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD ? 1.75 : 1.0;
+    const reloadBoost = row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD ? 1.35 : 1.0;
     dry.gain.value = ownHeadshotFlesh
-      ? 2.35
+      ? 2.5
+      : ownFleshHit
+        ? 1.78
       : ownFirearmReload
-        ? 2.65
-        : Math.min(headshotFlesh ? 2.1 : 1.35, row.volume * fleshBoost * reloadBoost);
+        ? 2.05
+        : Math.min(headshotFlesh ? 2.25 : 1.5, row.volume * fleshBoost * reloadBoost);
 
     const panner = ctx.createPanner();
     try {
@@ -416,9 +422,11 @@ export class WorldProximityAudio {
       panner.panningModel = "equalpower";
     }
     panner.distanceModel = "inverse";
-    panner.refDistance = ownHeadshotFlesh || ownFirearmReload ? 1.2 : 0.4;
+    panner.refDistance =
+      ownHeadshotFlesh || ownFirearmReload ? 1.2 : ownFleshHit ? 0.85 : 0.4;
     panner.maxDistance = Math.max(2.0, row.maxDistanceM);
-    panner.rolloffFactor = ownHeadshotFlesh || ownFirearmReload ? 0.35 : 1.1;
+    panner.rolloffFactor =
+      ownHeadshotFlesh || ownFirearmReload ? 0.35 : ownFleshHit ? 0.52 : 1.1;
     panner.positionX.setValueAtTime(pan.x, t);
     panner.positionY.setValueAtTime(pan.y, t);
     panner.positionZ.setValueAtTime(pan.z, t);
@@ -445,13 +453,19 @@ export class WorldProximityAudio {
     src.connect(dry);
     if (ownHeadshotFlesh) {
       const punch = ctx.createGain();
-      punch.gain.value = 1.25;
+      punch.gain.value = 1.28;
+      src.connect(punch);
+      punch.connect(ctx.destination);
+    }
+    if (ownFleshHit) {
+      const punch = ctx.createGain();
+      punch.gain.value = 1.08;
       src.connect(punch);
       punch.connect(ctx.destination);
     }
     if (ownFirearmReload) {
       const punch = ctx.createGain();
-      punch.gain.value = 1.4;
+      punch.gain.value = 1.12;
       src.connect(punch);
       punch.connect(ctx.destination);
     }
