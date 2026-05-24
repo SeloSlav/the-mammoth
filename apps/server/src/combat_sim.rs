@@ -203,6 +203,7 @@ pub fn shooter_in_combat_sim_open_arena(ctx: &ReducerContext, shooter: Identity)
 
 pub(crate) fn grant_combat_sim_loadout(ctx: &ReducerContext, owner: Identity) {
     delete_all_player_inventory_and_hotbar_items(ctx, owner);
+    crate::firearm::reset_player_firearm_chamber(ctx, owner);
     for &(def_id, qty) in COMBAT_SIM_LOADOUT {
         match try_grant_stack_to_player(ctx, owner, def_id.to_string(), qty) {
             Ok(remaining) if remaining > 0 => {

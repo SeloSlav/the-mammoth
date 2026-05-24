@@ -14,9 +14,10 @@ import {
 } from "@the-mammoth/ui-theme";
 import { formatCraftQueueCountdown } from "./craftQueueCountdownFormat";
 import {
-  BOTTOM_RIGHT_FP_HUD_INSET,
+  BOTTOM_FP_HUD_INSET,
   CRAFT_QUEUE_STRIP_BLOCK_HEIGHT_PX,
   CRAFT_QUEUE_STRIP_TO_TOAST_GAP_PX,
+  FP_HUD_LEFT_INSET,
   FP_HUD_VITALS_TO_STACK_GAP_PX,
   PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX,
 } from "./PlayerVitalsHud";
@@ -110,14 +111,14 @@ export function MammothCraftQueueStrip({
     }
   }
 
-  const right = "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))";
+  const left = FP_HUD_LEFT_INSET;
 
   return (
     <div
       style={{
         position: "fixed",
-        right,
-        bottom: `calc(${BOTTOM_RIGHT_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${FP_HUD_VITALS_TO_STACK_GAP_PX}px)`,
+        left,
+        bottom: `calc(${BOTTOM_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${FP_HUD_VITALS_TO_STACK_GAP_PX}px)`,
         zIndex: 119,
         minWidth: 220,
         maxWidth: 340,

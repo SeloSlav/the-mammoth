@@ -106,8 +106,8 @@ import {
 import {
   hotbarDefIdSupportsMeleeAttack,
   hotbarDefIdSupportsRangedAttack,
-  localPlayerHasCarriedAmmoForWeapon,
 } from "../fpHotbar/fpHotbarResolve.js";
+import { localPlayerCanFireChamberedRound } from "../fpHotbar/fpFirearmChamber.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
@@ -407,7 +407,7 @@ export function createFpSessionMainRafFrame(
       hotbarDefIdSupportsRangedAttack(hbCombat.defId) &&
       nowMs - mainRaf.lastRangedMs >= FIREARM_COOLDOWN_MS
     ) {
-      if (localPlayerHasCarriedAmmoForWeapon(deps.conn, deps.conn.identity, hbCombat.defId)) {
+      if (localPlayerCanFireChamberedRound(deps.conn, deps.conn.identity, hbCombat.defId)) {
         mainRaf.lastRangedMs = nowMs;
         mainRaf.firearmShotSeq += 1;
         deps.camera.updateMatrixWorld(true);

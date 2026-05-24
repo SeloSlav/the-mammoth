@@ -38,7 +38,7 @@ export function firearmAmmoDefIdForWeapon(weaponDefId: string): string | undefin
 
 /**
  * True when the player has at least one round of the correct ammo in **inventory grid or hotbar**
- * (matches server `submit_firearm_shot` carry eligibility — excludes stash).
+ * (matches server reserve eligibility for reload — excludes stash).
  */
 export function localPlayerHasCarriedAmmoForWeapon(
   conn: DbConnection,

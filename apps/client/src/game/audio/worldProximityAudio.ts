@@ -67,6 +67,8 @@ export const WORLD_SOUND_KIND_FIREARM_SHOT = 12;
 export const WORLD_SOUND_FIREARM_VARIATION_PISTOL = 0;
 /** Matches `world_sound::FIREARM_VARIATION_SHOTGUN`. */
 export const WORLD_SOUND_FIREARM_VARIATION_SHOTGUN = 1;
+/** Keep in sync with `apps/server/src/world_sound.rs` `KIND_FIREARM_RELOAD`. */
+export const WORLD_SOUND_KIND_FIREARM_RELOAD = 14;
 
 const AUDIO_ROOT =
   `${(import.meta.env.BASE_URL || "/").replace(/\/$/, "")}/audio`;
@@ -84,6 +86,8 @@ const FLESH_BULLET_IMPACT_STEM = `${UI_STEM}/flesh-bullet-1` as const;
 const FLESH_HEADSHOT_IMPACT_STEM = `${UI_STEM}/flesh-headshot` as const;
 const PISTOL_SHOT_STEM = `${UI_STEM}/pistol-shot` as const;
 const SHOTGUN_SHOT_STEM = `${UI_STEM}/shotgun-shot` as const;
+const PISTOL_RELOAD_STEM = `${UI_STEM}/reload-pistol` as const;
+const SHOTGUN_RELOAD_STEM = `${UI_STEM}/reload-shotgun` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
 
 const WORLD_BUS_GAIN = 0.38;
@@ -109,6 +113,8 @@ export class WorldProximityAudio {
   private fleshHeadshotImpactBuffer: AudioBuffer | null = null;
   private pistolShotBuffer: AudioBuffer | null = null;
   private shotgunShotBuffer: AudioBuffer | null = null;
+  private pistolReloadBuffer: AudioBuffer | null = null;
+  private shotgunReloadBuffer: AudioBuffer | null = null;
   /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
   private pendingRows: WorldSoundEvent[] = [];
   private static readonly PENDING_CAP = 64;
@@ -174,6 +180,8 @@ export class WorldProximityAudio {
     this.fleshHeadshotImpactBuffer = await this.decodeSingleStem(ctx, FLESH_HEADSHOT_IMPACT_STEM);
     this.pistolShotBuffer = await this.decodeSingleStem(ctx, PISTOL_SHOT_STEM);
     this.shotgunShotBuffer = await this.decodeSingleStem(ctx, SHOTGUN_SHOT_STEM);
+    this.pistolReloadBuffer = await this.decodeSingleStem(ctx, PISTOL_RELOAD_STEM);
+    this.shotgunReloadBuffer = await this.decodeSingleStem(ctx, SHOTGUN_RELOAD_STEM);
 
     if (!this.worldGain) {
       const g = ctx.createGain();
@@ -299,7 +307,8 @@ export class WorldProximityAudio {
         row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL ||
         row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT ||
         row.kind === WORLD_SOUND_KIND_DOOR_REINFORCE ||
-        row.kind === WORLD_SOUND_KIND_FIREARM_SHOT;
+        row.kind === WORLD_SOUND_KIND_FIREARM_SHOT ||
+        row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD;
       if (!hearOwnSpatial) return;
     }
 
@@ -356,6 +365,13 @@ export class WorldProximityAudio {
       }
       if (!buf) buf = this.itemPickBuffer;
       if (!buf) return;
+    } else if (row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD) {
+      if (row.variation === WORLD_SOUND_FIREARM_VARIATION_SHOTGUN) {
+        buf = this.shotgunReloadBuffer ?? this.pistolReloadBuffer;
+      } else {
+        buf = this.pistolReloadBuffer ?? this.shotgunReloadBuffer;
+      }
+      if (!buf) return;
     } else {
       return;
     }
@@ -376,6 +392,8 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT &&
       row.variation === WORLD_SOUND_FLESH_IMPACT_VAR_HEADSHOT;
     const ownHeadshotFlesh = headshotFlesh && selfId.isEqual(row.emitter);
+    const ownFirearmReload =
+      row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD && selfId.isEqual(row.emitter);
 
     const dry = ctx.createGain();
     const fleshBoost =
@@ -384,9 +402,12 @@ export class WorldProximityAudio {
           ? 3.4
           : 1.42
         : 1.0;
+    const reloadBoost = row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD ? 1.75 : 1.0;
     dry.gain.value = ownHeadshotFlesh
       ? 2.35
-      : Math.min(headshotFlesh ? 2.1 : 1.35, row.volume * fleshBoost);
+      : ownFirearmReload
+        ? 2.65
+        : Math.min(headshotFlesh ? 2.1 : 1.35, row.volume * fleshBoost * reloadBoost);
 
     const panner = ctx.createPanner();
     try {
@@ -395,9 +416,9 @@ export class WorldProximityAudio {
       panner.panningModel = "equalpower";
     }
     panner.distanceModel = "inverse";
-    panner.refDistance = ownHeadshotFlesh ? 1.2 : 0.4;
+    panner.refDistance = ownHeadshotFlesh || ownFirearmReload ? 1.2 : 0.4;
     panner.maxDistance = Math.max(2.0, row.maxDistanceM);
-    panner.rolloffFactor = ownHeadshotFlesh ? 0.35 : 1.1;
+    panner.rolloffFactor = ownHeadshotFlesh || ownFirearmReload ? 0.35 : 1.1;
     panner.positionX.setValueAtTime(pan.x, t);
     panner.positionY.setValueAtTime(pan.y, t);
     panner.positionZ.setValueAtTime(pan.z, t);
@@ -416,7 +437,8 @@ export class WorldProximityAudio {
       row.kind === WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE ||
       row.kind === WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL ||
       row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT ||
-      row.kind === WORLD_SOUND_KIND_FIREARM_SHOT
+      row.kind === WORLD_SOUND_KIND_FIREARM_SHOT ||
+      row.kind === WORLD_SOUND_KIND_FIREARM_RELOAD
     ) {
       src.playbackRate.value = headshotFlesh ? 1.08 + Math.random() * 0.04 : 0.99 + Math.random() * 0.04;
     }
@@ -424,6 +446,12 @@ export class WorldProximityAudio {
     if (ownHeadshotFlesh) {
       const punch = ctx.createGain();
       punch.gain.value = 1.25;
+      src.connect(punch);
+      punch.connect(ctx.destination);
+    }
+    if (ownFirearmReload) {
+      const punch = ctx.createGain();
+      punch.gain.value = 1.4;
       src.connect(punch);
       punch.connect(ctx.destination);
     }

@@ -288,6 +288,14 @@ export const PlayerActiveHotbar = __t.object("PlayerActiveHotbar", {
 });
 export type PlayerActiveHotbar = __Infer<typeof PlayerActiveHotbar>;
 
+export const PlayerFirearmChamber = __t.object("PlayerFirearmChamber", {
+  identity: __t.identity(),
+  weaponDefId: __t.string(),
+  chamberCount: __t.u8(),
+  reloadCompleteMicros: __t.i64(),
+});
+export type PlayerFirearmChamber = __Infer<typeof PlayerFirearmChamber>;
+
 export const PlayerFirearmCooldown = __t.object("PlayerFirearmCooldown", {
   identity: __t.identity(),
   lastShotMicros: __t.i64(),

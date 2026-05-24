@@ -160,6 +160,7 @@ pub fn physics_tick_step(ctx: &ReducerContext, _arg: PhysicsTick) {
 
     elevator::tick_all_elevators(ctx, TICK_DT);
     crate::apartment_door::tick_apartment_doors(ctx, TICK_DT);
+    crate::firearm::tick_firearm_reloads(ctx);
 }
 
 /// Insert repeating physics schedule (call from `init`).

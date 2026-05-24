@@ -254,6 +254,7 @@ pub(crate) fn reset_player_loadout_for_respawn(ctx: &ReducerContext, owner: Iden
         return;
     }
     delete_all_player_inventory_and_hotbar_items(ctx, owner);
+    crate::firearm::reset_player_firearm_chamber(ctx, owner);
     insert_survival_loadout(ctx, owner);
 }
 

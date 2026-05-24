@@ -3,6 +3,7 @@ import { MammothInventoryHud } from "../inventory/MammothInventoryHud";
 import { MammothFpReticule } from "./MammothFpReticule";
 import { MammothPickupPromptHud } from "./MammothPickupPromptHud";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
+import { FirearmAmmoHud } from "./FirearmAmmoHud";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
@@ -20,17 +21,10 @@ export function CombatSimMinimalHud({ conn, onExit }: Props) {
         style={{
           position: "fixed",
           top: 12,
-          right: 12,
+          left: 12,
           zIndex: 50,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 6,
         }}
       >
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", userSelect: "none" }}>
-          M · debug menu
-        </div>
         <button
           type="button"
           onClick={onExit}
@@ -50,6 +44,7 @@ export function CombatSimMinimalHud({ conn, onExit }: Props) {
       <MammothDebugMenuHud />
       <MammothFpReticule />
       <PlayerVitalsHud conn={conn} />
+      <FirearmAmmoHud conn={conn} />
       <PlayerDamageFeedbackOverlay conn={conn} />
       <PlayerDeathOverlay conn={conn} />
       {/*

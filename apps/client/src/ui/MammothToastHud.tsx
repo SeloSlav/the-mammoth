@@ -16,7 +16,8 @@ import {
   UI_FONT_SANS,
 } from "@the-mammoth/ui-theme";
 import {
-  BOTTOM_RIGHT_FP_HUD_INSET,
+  BOTTOM_FP_HUD_INSET,
+  FP_HUD_LEFT_INSET,
   FP_HUD_VITALS_TO_STACK_GAP_PX,
   PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX,
 } from "./PlayerVitalsHud";
@@ -105,13 +106,13 @@ export function MammothToastHud({ conn, reserveAboveVitalsExtraPx = 0 }: ToastHu
     <div
       style={{
         position: "fixed",
-        right: "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))",
-        bottom: `calc(${BOTTOM_RIGHT_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${FP_HUD_VITALS_TO_STACK_GAP_PX}px + ${reserveAboveVitalsExtraPx}px)`,
+        left: FP_HUD_LEFT_INSET,
+        bottom: `calc(${BOTTOM_FP_HUD_INSET} + ${PLAYER_VITALS_HUD_LAYOUT_HEIGHT_PX}px + ${FP_HUD_VITALS_TO_STACK_GAP_PX}px + ${reserveAboveVitalsExtraPx}px)`,
         zIndex: 120,
         display: "flex",
         flexDirection: "column",
         gap: 8,
-        alignItems: "flex-end",
+        alignItems: "flex-start",
         maxWidth: 340,
         pointerEvents: "none",
         fontFamily: UI_FONT_SANS,

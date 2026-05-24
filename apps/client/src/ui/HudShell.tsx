@@ -35,6 +35,7 @@ import { MammothApartmentFilmGradeOverlay } from "./MammothApartmentFilmGradeOve
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerVitalsHud } from "./PlayerVitalsHud";
+import { FirearmAmmoHud } from "./FirearmAmmoHud";
 
 type HudProps = {
   onSignOut: () => void;
@@ -207,6 +208,7 @@ export function HudShell({ onSignOut, conn }: HudProps) {
         ) : null}
         {conn ? <MammothCraftQueueStrip conn={conn} onReserveAboveVitalsExtraPx={onCraftStripReserve} /> : null}
         {conn ? <PlayerVitalsHud conn={conn} /> : null}
+        {conn ? <FirearmAmmoHud conn={conn} /> : null}
         <MammothFpsHud conn={conn} />
         <MammothPickupPromptHud />
         <MammothNotebookTipsHud />

@@ -94,7 +94,9 @@ import {
 import {
   ACTIVE_HOTBAR_SLOT_CLEARED,
   getHotbarSlotInventoryItem,
+  hotbarDefIdSupportsRangedAttack,
 } from "./fpHotbar/fpHotbarResolve.js";
+import { getLocalFirearmChamberView } from "./fpHotbar/fpFirearmChamber.js";
 import {
   apartmentClaimInteriorsPreferOverUnitDoor,
   apartmentUnitContainingFeetSlack,
@@ -1679,6 +1681,20 @@ export async function mountFpSession(
     }
     if (e.code === "KeyC" && !e.repeat && !isTextInputFocused()) {
       mainRaf.crouchToggle = !mainRaf.crouchToggle;
+    }
+    if (e.code === "KeyR" && !e.repeat && !isTextInputFocused() && conn.identity) {
+      syncActiveHotbarSlotToServer();
+      const hbReload = selectedHotbarRow();
+      if (hbReload && hotbarDefIdSupportsRangedAttack(hbReload.defId)) {
+        const view = getLocalFirearmChamberView(conn, conn.identity, hbReload.defId);
+        if (
+          !view.isReloading &&
+          view.chamberCount < view.capacity &&
+          view.reserveCount > 0
+        ) {
+          void conn.reducers.submitFirearmReload({});
+        }
+      }
     }
     if (e.code === "Space" && !e.repeat && !isTextInputFocused()) {
       if (tryExitFpSitOnMovement({ keys, mainRaf, pos })) {

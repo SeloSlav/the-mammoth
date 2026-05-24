@@ -42,6 +42,8 @@ pub const KIND_FIREARM_SHOT: u8 = 12;
 pub const FIREARM_VARIATION_PISTOL: u8 = 0;
 /// `world_sound_event.variation` for [`KIND_FIREARM_SHOT`]: shotgun discharge.
 pub const FIREARM_VARIATION_SHOTGUN: u8 = 1;
+/// Magazine / tube reload — client maps WAV by `variation`: [`FIREARM_VARIATION_*`].
+pub const KIND_FIREARM_RELOAD: u8 = 14;
 
 /// Multiplier on **world Y** separation for proximity falloff (`sqrt(dx² + dz² + (axis_weight_y·dy)²)`).
 /// `1.0` is spherical; `>1` makes vertical offsets (floors / height) attenuate faster than the same span on XZ.
@@ -342,6 +344,28 @@ pub fn emit_gunfire_at(
         z,
         0.88,
         56.0,
+        AXIS_WEIGHT_Y_GUNFIRE,
+        emitter,
+    );
+}
+
+pub fn emit_firearm_reload_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+    variation: u8,
+) {
+    emit_world_sound(
+        ctx,
+        KIND_FIREARM_RELOAD,
+        variation,
+        x,
+        y,
+        z,
+        0.98,
+        48.0,
         AXIS_WEIGHT_Y_GUNFIRE,
         emitter,
     );

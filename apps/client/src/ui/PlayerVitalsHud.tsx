@@ -6,8 +6,14 @@ const VITAL_MAX = 100;
 /** Aligned with Broth & Bullets low-need UX on a 0–100 scale. */
 const LOW_NEED = 20;
 
-/** Shared with toast HUD: distance from viewport bottom to this panel’s bottom edge (safe area + pad). */
-export const BOTTOM_RIGHT_FP_HUD_INSET = "max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px))";
+/** Shared distance from viewport bottom to bottom-anchored FP HUD panels (safe area + pad). */
+export const BOTTOM_FP_HUD_INSET = "max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px))";
+
+/** @deprecated Use {@link BOTTOM_FP_HUD_INSET}. */
+export const BOTTOM_RIGHT_FP_HUD_INSET = BOTTOM_FP_HUD_INSET;
+
+export const FP_HUD_LEFT_INSET = "max(16px, calc(env(safe-area-inset-left, 0px) + 10px))";
+export const FP_HUD_RIGHT_INSET = "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))";
 
 /** Vertical gap between the vitals card and the next stacked HUD row (craft strip / toasts). */
 export const FP_HUD_VITALS_TO_STACK_GAP_PX = 10;
@@ -139,15 +145,15 @@ export function PlayerVitalsHud({ conn }: Props) {
     return null;
   }
 
-  const bottom = BOTTOM_RIGHT_FP_HUD_INSET;
-  const right = "max(16px, calc(env(safe-area-inset-right, 0px) + 10px))";
+  const bottom = BOTTOM_FP_HUD_INSET;
+  const left = FP_HUD_LEFT_INSET;
 
   return (
     <div
       style={{
         position: "fixed",
         bottom,
-        right,
+        left,
         zIndex: 118,
         minWidth: 236,
         padding: "12px 14px 10px",

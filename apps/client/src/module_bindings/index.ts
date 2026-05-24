@@ -81,6 +81,7 @@ import StashPullItemToHotbarSlotReducer from "./stash_pull_item_to_hotbar_slot_r
 import StashPullItemToInventorySlotReducer from "./stash_pull_item_to_inventory_slot_reducer";
 import StashPushItemReducer from "./stash_push_item_reducer";
 import StashPushItemToSlotReducer from "./stash_push_item_to_slot_reducer";
+import SubmitFirearmReloadReducer from "./submit_firearm_reload_reducer";
 import SubmitFirearmShotReducer from "./submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "./submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "./submit_player_locomotion_snapshot_reducer";
@@ -115,6 +116,7 @@ import HudToastEventRow from "./hud_toast_event_table";
 import InventoryItemRow from "./inventory_item_table";
 import PhysicsTickRow from "./physics_tick_table";
 import PlayerActiveHotbarRow from "./player_active_hotbar_table";
+import PlayerFirearmChamberRow from "./player_firearm_chamber_table";
 import PlayerFirearmCooldownRow from "./player_firearm_cooldown_table";
 import PlayerFootCadenceRow from "./player_foot_cadence_table";
 import PlayerGrowJournalRow from "./player_grow_journal_table";
@@ -400,6 +402,17 @@ const tablesSchema = __schema({
       { name: 'player_active_hotbar_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, PlayerActiveHotbarRow),
+  player_firearm_chamber: __table({
+    name: 'player_firearm_chamber',
+    indexes: [
+      { name: 'identity', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'player_firearm_chamber_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, PlayerFirearmChamberRow),
   player_firearm_cooldown: __table({
     name: 'player_firearm_cooldown',
     indexes: [
@@ -627,6 +640,7 @@ const reducersSchema = __reducers(
   __reducerSchema("stash_pull_item_to_inventory_slot", StashPullItemToInventorySlotReducer),
   __reducerSchema("stash_push_item", StashPushItemReducer),
   __reducerSchema("stash_push_item_to_slot", StashPushItemToSlotReducer),
+  __reducerSchema("submit_firearm_reload", SubmitFirearmReloadReducer),
   __reducerSchema("submit_firearm_shot", SubmitFirearmShotReducer),
   __reducerSchema("submit_melee_swing", SubmitMeleeSwingReducer),
   __reducerSchema("submit_player_locomotion_snapshot", SubmitPlayerLocomotionSnapshotReducer),

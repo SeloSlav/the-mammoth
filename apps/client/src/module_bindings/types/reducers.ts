@@ -55,6 +55,7 @@ import StashPullItemToHotbarSlotReducer from "../stash_pull_item_to_hotbar_slot_
 import StashPullItemToInventorySlotReducer from "../stash_pull_item_to_inventory_slot_reducer";
 import StashPushItemReducer from "../stash_push_item_reducer";
 import StashPushItemToSlotReducer from "../stash_push_item_to_slot_reducer";
+import SubmitFirearmReloadReducer from "../submit_firearm_reload_reducer";
 import SubmitFirearmShotReducer from "../submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "../submit_player_locomotion_snapshot_reducer";
@@ -111,6 +112,7 @@ export type StashPullItemToHotbarSlotParams = __Infer<typeof StashPullItemToHotb
 export type StashPullItemToInventorySlotParams = __Infer<typeof StashPullItemToInventorySlotReducer>;
 export type StashPushItemParams = __Infer<typeof StashPushItemReducer>;
 export type StashPushItemToSlotParams = __Infer<typeof StashPushItemToSlotReducer>;
+export type SubmitFirearmReloadParams = __Infer<typeof SubmitFirearmReloadReducer>;
 export type SubmitFirearmShotParams = __Infer<typeof SubmitFirearmShotReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
 export type SubmitPlayerLocomotionSnapshotParams = __Infer<typeof SubmitPlayerLocomotionSnapshotReducer>;
