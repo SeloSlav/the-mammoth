@@ -21,6 +21,7 @@ import {
   type ConstrainMyApartmentWallScaleDrag,
 } from "./editorMyApartmentWallSnap.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
+import { authoringPreviewSlabBoundsX } from "./editorMyApartmentAuthoringShell.js";
 
 /** Top of authoring shell floor slab — keep in sync with `editorMyApartmentAuthoringShell.ts`. */
 export const EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y = 0.02;
@@ -31,14 +32,11 @@ export function apartmentUnitBoundsFromAuthoringFractionMapping(
   ceilingHeightM: number,
 ): ApartmentUnitWorldBounds {
   const maxY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y + Math.max(2, ceilingHeightM);
-  const slabSx =
-    typeof spans.slabFootprintSx === "number" && spans.slabFootprintSx > spans.prefabFootprintSx
-      ? spans.slabFootprintSx
-      : spans.prefabFootprintSx;
-  /** Authoring shell root is at origin — decor XZ is `[0, footprint]`, not floor-doc world coords. */
+  const slab = authoringPreviewSlabBoundsX(spans);
+  /** Authoring shell root is at origin — decor XZ is preview slab space, not floor-doc world coords. */
   return {
-    minX: 0,
-    maxX: slabSx,
+    minX: slab.minX,
+    maxX: slab.maxX,
     minY: EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y,
     maxY,
     minZ: 0,

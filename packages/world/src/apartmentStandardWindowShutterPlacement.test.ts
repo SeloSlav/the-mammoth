@@ -29,6 +29,25 @@ function readTypicalFloorDoc() {
 }
 
 describe("mirrorEastBalconyWindowShutterFxForWestUnit", () => {
+  it("places west shutters on the bay exterior, not the interior partition", () => {
+    const floor = readTypicalFloorDoc();
+    const unitId = "unit_w_003";
+    const template = apartmentDoorTemplateForUnit({ floorDocId: floor.id, unitId })!;
+    const xz = residentialUnitStrictBoundsXZ(template);
+    const placed = floor.objects.find((o) => o.id === unitId)!;
+    const prefabOriginX = placed.position[0]! - placed.scale![0]! * 0.5;
+    const fx = mirrorEastBalconyWindowShutterFxForWestUnit(
+      EAST_FX,
+      xz.minX,
+      xz.maxX,
+      unitId,
+    );
+    const previewShutterX =
+      mapOwnedApartmentLayoutFractionToWorldX(xz.minX, xz.maxX, unitId, fx) -
+      prefabOriginX;
+    expect(previewShutterX).toBeLessThan(-1);
+  });
+
   it("matches east shutter inset from the bay façade on west units", () => {
     const floor = readTypicalFloorDoc();
     for (const unitId of ["unit_e_003", "unit_w_003"] as const) {

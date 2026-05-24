@@ -5,9 +5,12 @@ import {
 } from "@the-mammoth/schemas";
 import {
   mapOwnedApartmentLayoutFractionToWorldX,
+  mapOwnedApartmentWorldXToLayoutFraction,
+  residentialUnitBalconyExteriorEdge,
   UNIT_SHELL_WALL_THICKNESS_M,
 } from "@the-mammoth/world";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
+import { authoringPreviewSlabBoundsX } from "./editorMyApartmentAuthoringShell.js";
 
 /** @see `@the-mammoth/engine` — interior hollow-shell meshes (not authored slabs). */
 const MAMMOTH_APARTMENT_INTERIOR_SHELL_MESH_UD = "mammothApartmentInteriorShellMesh";
@@ -187,14 +190,6 @@ export function snapOwnedApartmentWallYawRad(yRad: number): number {
   return Math.round(yRad / step) * step;
 }
 
-function authoringPreviewSlabFootprintSx(spans: OwnedApartmentFractionToPreviewXZ): number {
-  const slabSx = spans.slabFootprintSx;
-  if (typeof slabSx === "number" && slabSx > spans.prefabFootprintSx) {
-    return slabSx;
-  }
-  return spans.prefabFootprintSx;
-}
-
 /** Inner drywall faces of the unit shell (authoring-shell local/world space). */
 /** Playable interior span along the wall run axis (south–north or west–east). */
 export function unitInteriorRunSpanM(meta: WallSnapShellMeta, runAlongX: boolean): number {
@@ -218,7 +213,7 @@ export function maxWallRunLengthMForRoot(root: THREE.Object3D): number {
 export function getUnitInteriorShellBounds(meta: WallSnapShellMeta): UnitInteriorShellBounds {
   const wt = UNIT_SHELL_WALL_THICKNESS_M;
   const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
-  const sx = authoringPreviewSlabFootprintSx(meta);
+  const slab = authoringPreviewSlabBoundsX(meta);
   const sz = meta.prefabFootprintSz;
   const floorY = EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y;
   const ceilRaw = meta.interiorCeilingInnerY;
@@ -229,8 +224,8 @@ export function getUnitInteriorShellBounds(meta: WallSnapShellMeta): UnitInterio
       ? ceilRaw - e
       : undefined;
   return {
-    minX: wt + e,
-    maxX: sx - wt - e,
+    minX: slab.minX + wt + e,
+    maxX: slab.maxX - wt - e,
     minZ: wt + e,
     maxZ: sz - wt - e,
     floorY,
@@ -247,10 +242,10 @@ export function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPrev
   const shell = getUnitInteriorShellBounds(spans);
   const wt = UNIT_SHELL_WALL_THICKNESS_M;
   const e = EDITOR_MY_APARTMENT_INTERIOR_SLACK_M;
-  const sx = authoringPreviewSlabFootprintSx(spans);
+  const slab = authoringPreviewSlabBoundsX(spans);
   const sz = spans.prefabFootprintSz;
-  const ixPl0 = wt + e;
-  const ixPl1 = sx - wt - e;
+  const ixPl0 = slab.minX + wt + e;
+  const ixPl1 = slab.maxX - wt - e;
   const izPl0 = wt + e;
   const izPl1 = sz - wt - e;
 
@@ -279,7 +274,8 @@ export function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPrev
     spans.spanZ * OWNED_APARTMENT_LAYOUT_FRACTION_MAX -
     spans.prefabOriginZ;
 
-  const ix0 = Math.max(ixPl0, lxMinR);
+  const westBay = residentialUnitBalconyExteriorEdge(spans.unitId) === "minX";
+  const ix0 = westBay ? Math.min(lxMinR, ixPl0) : Math.max(ixPl0, lxMinR);
   const ix1 = Math.min(ixPl1, lxMaxR);
   const iz0 = Math.max(izPl0, lzMinR);
   const iz1 = Math.min(izPl1, lzMaxR);
@@ -288,7 +284,7 @@ export function previewRepresentableXZBounds(spans: OwnedApartmentFractionToPrev
     return { minX: shell.minX, maxX: shell.maxX, minZ: shell.minZ, maxZ: shell.maxZ };
   }
   return {
-    minX: Math.max(shell.minX, ix0),
+    minX: westBay ? ix0 : Math.max(shell.minX, ix0),
     maxX: Math.min(shell.maxX, ix1),
     minZ: Math.max(shell.minZ, iz0),
     maxZ: Math.min(shell.maxZ, iz1),

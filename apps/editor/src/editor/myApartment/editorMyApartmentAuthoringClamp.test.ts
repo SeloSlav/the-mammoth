@@ -1,6 +1,12 @@
 import * as THREE from "three";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { UNIT_SHELL_WALL_THICKNESS_M } from "@the-mammoth/world";
+import { FloorDocSchema } from "@the-mammoth/schemas";
+import {
+  mirrorEastBalconyWindowShutterFxForWestUnit,
+  resolveOwnedApartmentAuthoringPreviewLayout,
+  UNIT_SHELL_WALL_THICKNESS_M,
+} from "@the-mammoth/world";
 import {
   centerDecorRootOnVisualBounds,
   clampOwnedApartmentDecorUniformScale,
@@ -15,15 +21,32 @@ import {
   layoutFractionsFromPreviewWorldPosition,
   previewWorldFromNormalizedPlacement,
 } from "./editorMyApartmentMeshes.js";
+import { getUnitInteriorShellBounds } from "./editorMyApartmentWallSnap.js";
 import {
   extendResidentialBoundsXZForBalcony,
   mapOwnedApartmentLayoutFractionToWorldX,
   mapOwnedApartmentWorldXToLayoutFraction,
   RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
 } from "@the-mammoth/world";
+import {
+  ownedApartmentFractionMappingForEditor,
+  authoringPreviewSlabBoundsX,
+  authoringPreviewSlabFloorCenterX,
+} from "./editorMyApartmentAuthoringShell.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 
 const SLACK = 0.03;
+const EAST_SHUTTER_FX = 0.9774696707105718;
+
+function readTypicalFloorDoc() {
+  const raw = JSON.parse(
+    readFileSync(
+      new URL("../../../../../content/building/floors/floor_mamutica_typical.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  return FloorDocSchema.parse(raw);
+}
 
 describe("layout fraction round-trip (editor commit ↔ placement)", () => {
   it("matches balcony-aware world X mapping used by the client", () => {
@@ -72,6 +95,73 @@ describe("owned apartment authoring XZ clamp", () => {
   it("lowers imported decor uniform scale floor below built-in furniture (0.08)", () => {
     expect(clampOwnedApartmentDecorUniformScale(0.03)).toBeCloseTo(0.03, 5);
     expect(clampOwnedApartmentDecorUniformScale(0.005)).toBeCloseTo(0.02, 5);
+  });
+
+  it("offsets the west authoring slab over the balcony bay", () => {
+    const floor = readTypicalFloorDoc();
+    const layout = resolveOwnedApartmentAuthoringPreviewLayout({
+      floorDoc: floor,
+      homeBandStoryLevelIndex: 20,
+      canonicalUnitId: "unit_w_003",
+    });
+    expect(layout).not.toBeNull();
+    const spans = ownedApartmentFractionMappingForEditor({
+      layout,
+      builtinsFallbackPreviewM: 8,
+    });
+    const westSlab = authoringPreviewSlabBoundsX(spans);
+    expect(westSlab.minX).toBeCloseTo(-RESIDENTIAL_UNIT_BALCONY_OVERHANG_M, 5);
+    expect(westSlab.maxX).toBeCloseTo(spans.prefabFootprintSx, 5);
+    expect(authoringPreviewSlabFloorCenterX(spans)).toBeCloseTo(
+      (westSlab.minX + westSlab.maxX) * 0.5,
+      5,
+    );
+
+    const eastLayout = resolveOwnedApartmentAuthoringPreviewLayout({
+      floorDoc: floor,
+      homeBandStoryLevelIndex: 20,
+      canonicalUnitId: "unit_e_003",
+    });
+    const eastSpans = ownedApartmentFractionMappingForEditor({
+      layout: eastLayout,
+      builtinsFallbackPreviewM: 8,
+    });
+    const eastSlab = authoringPreviewSlabBoundsX(eastSpans);
+    expect(eastSlab.minX).toBe(0);
+    expect(eastSlab.maxX).toBeCloseTo(eastSpans.slabFootprintSx!, 5);
+    expect(getUnitInteriorShellBounds(eastSpans).maxX).toBeGreaterThan(
+      eastSpans.prefabFootprintSx,
+    );
+  });
+
+  it("keeps west bay window shutters on the balcony façade instead of clamping to x≈0", () => {
+    const floor = readTypicalFloorDoc();
+    const layout = resolveOwnedApartmentAuthoringPreviewLayout({
+      floorDoc: floor,
+      homeBandStoryLevelIndex: 20,
+      canonicalUnitId: "unit_w_003",
+    });
+    expect(layout).not.toBeNull();
+    const spans = ownedApartmentFractionMappingForEditor({
+      layout,
+      builtinsFallbackPreviewM: 8,
+    });
+    const fx = mirrorEastBalconyWindowShutterFxForWestUnit(
+      EAST_SHUTTER_FX,
+      spans.strictMinX,
+      spans.strictMinX + spans.spanX,
+      spans.unitId,
+    );
+    const unclampedX =
+      mapOwnedApartmentLayoutFractionToWorldX(
+        spans.strictMinX,
+        spans.strictMinX + spans.spanX,
+        spans.unitId,
+        fx,
+      ) - spans.prefabOriginX;
+    const preview = previewWorldFromNormalizedPlacement({ spans, fx, fz: 0.2 });
+    expect(unclampedX).toBeLessThan(-1);
+    expect(preview.x).toBeCloseTo(unclampedX, 3);
   });
 
   it("lets negative fz reach the south plaster edge when the strict hull starts north of it", () => {

@@ -6,6 +6,7 @@ import {
   maxBuildingLevelIndex,
   RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
   resolveOwnedApartmentAuthoringPreviewLayout,
+  residentialUnitBalconyExteriorEdge,
   residentialUnitHasBalconyBay,
   TYPICAL_FLOOR_DOC_ID,
   type OwnedApartmentAuthoringPreviewLayout,
@@ -102,6 +103,29 @@ export function ownedApartmentFractionMappingForEditor(args: {
   };
 }
 
+/** Grey authoring slab X extent in preview space (origin = prefab south-west corner). */
+export function authoringPreviewSlabBoundsX(
+  spans: Pick<OwnedApartmentFractionToPreviewXZ, "unitId" | "prefabFootprintSx" | "slabFootprintSx">,
+): { minX: number; maxX: number; spanX: number } {
+  const prefabSx = spans.prefabFootprintSx;
+  const spanX =
+    typeof spans.slabFootprintSx === "number" && spans.slabFootprintSx > prefabSx
+      ? spans.slabFootprintSx
+      : prefabSx;
+  const balconyM = spanX - prefabSx;
+  if (balconyM > 0 && residentialUnitBalconyExteriorEdge(spans.unitId) === "minX") {
+    return { minX: -balconyM, maxX: prefabSx, spanX };
+  }
+  return { minX: 0, maxX: spanX, spanX };
+}
+
+export function authoringPreviewSlabFloorCenterX(
+  spans: Pick<OwnedApartmentFractionToPreviewXZ, "unitId" | "prefabFootprintSx" | "slabFootprintSx">,
+): number {
+  const { minX, maxX } = authoringPreviewSlabBoundsX(spans);
+  return (minX + maxX) * 0.5;
+}
+
 /**
  * Preview floor + game-derived reference perimeter for owned‑apartment builtin authoring.
  *
@@ -161,7 +185,7 @@ export function buildOwnedApartmentAuthoringShell(args: {
   const floor = new THREE.Mesh(floorGeom, floorPlaceholderMeshMaterials.unitFloor);
   floor.name = "editor_owned_apartment_floor";
   floor.position.set(
-    spanSlabX * 0.5,
+    authoringPreviewSlabFloorCenterX(mapping),
     EDITOR_OWNED_APARTMENT_PREVIEW_SLAB_TOP_Y - 0.02,
     spanSlabZ * 0.5,
   );
