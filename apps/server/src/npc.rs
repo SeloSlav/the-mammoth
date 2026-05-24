@@ -4,11 +4,11 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::apartments::apartment_unit;
 use crate::combat_stub::{
-    body_height_from_crouch_bit, body_hit_torso_height_m, eye_y_above_feet,
-    head_hit_box_aabb, melee_headshot_from_aim_ray,
-    ray_aabb_intersect_enter, vertical_overlap, victim_hit_trace_max_y,
-    HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN, MELEE_HIT_MAX_Y_OFFSET_M,
-    MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M, RAY_AABB_T_ENTER_EPS,
+    body_height_from_crouch_bit, body_hit_torso_height_m, eye_y_above_feet, head_hit_box_aabb,
+    melee_headshot_from_aim_ray, ray_aabb_intersect_enter, vertical_overlap,
+    victim_hit_trace_max_y, HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN,
+    MELEE_HIT_MAX_Y_OFFSET_M, MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M,
+    RAY_AABB_T_ENTER_EPS,
 };
 use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
@@ -38,6 +38,33 @@ pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 const NPC_TICK_INTERVAL_MICROS: i64 = 250_000;
 /// Forgiving head raycast — square head box is smaller than the visible mesh bun.
 const NPC_HEAD_TRACE_INFLATE_M: f32 = 0.06;
+/// Planar radius within which babushkas steer away from each other (boid separation).
+const BABUSHKA_PEER_SEPARATION_RADIUS_M: f32 = 1.55;
+const BABUSHKA_PEER_SEPARATION_STRENGTH: f32 = 3.4;
+const BABUSHKA_PEER_OVERLAP_RESOLVE_PASSES: usize = 2;
+
+#[derive(Clone)]
+struct BabushkaPeerSnap {
+    npc_id: u64,
+    session_key: String,
+    archetype: String,
+    state: u8,
+    health: f32,
+    x: f32,
+    z: f32,
+}
+
+fn babushka_peer_snap(row: &WorldNpc) -> BabushkaPeerSnap {
+    BabushkaPeerSnap {
+        npc_id: row.npc_id,
+        session_key: row.session_key.clone(),
+        archetype: row.archetype.clone(),
+        state: row.state,
+        health: row.health,
+        x: row.x,
+        z: row.z,
+    }
+}
 
 #[spacetimedb::table(public, accessor = world_npc)]
 pub struct WorldNpc {
@@ -356,8 +383,7 @@ pub fn resolve_melee_swing_vs_npcs(
             .find(&ctx.sender())
             .map(|row| row.bits)
             .unwrap_or(0);
-        let eye_y =
-            attacker_y + eye_y_above_feet(abits & BIT_CROUCH != 0);
+        let eye_y = attacker_y + eye_y_above_feet(abits & BIT_CROUCH != 0);
         if let Some(npc) = ctx.db.world_npc().npc_id().find(&npc_id) {
             let (body_radius, _) = body_dims_for_archetype(npc.archetype.as_str());
             let hs = melee_headshot_from_aim_ray(
@@ -398,19 +424,34 @@ pub fn npc_scheduled_tick_dt_sec() -> f32 {
     NPC_TICK_INTERVAL_MICROS as f32 / 1_000_000.0
 }
 
+/// Minimum planar center distance between two babushka body capsules (+ small gap).
+pub fn babushka_min_peer_center_distance_m() -> f32 {
+    BABUSHKA_BODY_RADIUS_M * 2.0 + 0.10
+}
+
 /// Authoritative babushka AI step — shared by the schedule and combat-sim locomotion hook.
 pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
     let now_us = ctx.timestamp.to_micros_since_unix_epoch();
-    let npcs: Vec<WorldNpc> = ctx.db.world_npc().iter().collect();
+    let mut npcs: Vec<WorldNpc> = ctx.db.world_npc().iter().collect();
+    let peer_snapshot: Vec<BabushkaPeerSnap> = npcs.iter().map(babushka_peer_snap).collect();
+    for npc in npcs.iter_mut() {
+        if npc.state == NPC_STATE_DEAD {
+            continue;
+        }
+        step_one_world_npc(ctx, npc, dt_sec, now_us, &peer_snapshot);
+    }
+    babushka_resolve_peer_overlaps(&mut npcs);
+    for npc in npcs.iter_mut() {
+        if npc.state != NPC_STATE_DEAD && npc.session_key.starts_with("combat_sim:") {
+            clamp_babushka_to_combat_arena(ctx, npc);
+        }
+    }
     for npc in npcs {
         if npc.state == NPC_STATE_DEAD {
             if npc.session_key.starts_with("combat_sim:") {
                 crate::combat_sim::maybe_despawn_corpse_and_respawn(ctx, &npc, now_us);
             }
-            continue;
         }
-        let mut npc = npc;
-        step_one_world_npc(ctx, &mut npc, dt_sec, now_us);
         ctx.db.world_npc().npc_id().update(npc);
     }
 }
@@ -423,7 +464,135 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
     step_all_world_npcs(ctx, npc_scheduled_tick_dt_sec());
 }
 
-fn step_one_world_npc(ctx: &ReducerContext, npc: &mut WorldNpc, dt_sec: f32, now_us: i64) {
+fn babushka_is_living_peer_snap(a: &WorldNpc, b: &BabushkaPeerSnap) -> bool {
+    a.npc_id != b.npc_id
+        && a.session_key == b.session_key
+        && a.archetype == NPC_ARCHETYPE_BABUSHKA
+        && b.archetype == NPC_ARCHETYPE_BABUSHKA
+        && b.state != NPC_STATE_DEAD
+        && b.health > 0.0
+}
+
+fn babushka_is_living_peer_pair(a: &WorldNpc, b: &WorldNpc) -> bool {
+    a.npc_id != b.npc_id
+        && a.session_key == b.session_key
+        && a.archetype == NPC_ARCHETYPE_BABUSHKA
+        && b.archetype == NPC_ARCHETYPE_BABUSHKA
+        && b.state != NPC_STATE_DEAD
+        && b.health > 0.0
+}
+
+fn babushka_peer_separation_steering(npc: &WorldNpc, peers: &[BabushkaPeerSnap]) -> (f32, f32) {
+    if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let mut sep_x = 0.0;
+    let mut sep_z = 0.0;
+    let radius = BABUSHKA_PEER_SEPARATION_RADIUS_M;
+    for peer in peers {
+        if !babushka_is_living_peer_snap(npc, peer) {
+            continue;
+        }
+        let dx = npc.x - peer.x;
+        let dz = npc.z - peer.z;
+        let dist_sq = dx * dx + dz * dz;
+        if dist_sq < 1e-8 {
+            let angle = (npc.npc_id.wrapping_mul(0x9e37_79b9) as f32) * 0.001;
+            sep_x += angle.cos();
+            sep_z += angle.sin();
+            continue;
+        }
+        let dist = dist_sq.sqrt();
+        if dist >= radius {
+            continue;
+        }
+        let push = (radius - dist) / radius;
+        sep_x += (dx / dist) * push;
+        sep_z += (dz / dist) * push;
+    }
+    (
+        sep_x * BABUSHKA_PEER_SEPARATION_STRENGTH,
+        sep_z * BABUSHKA_PEER_SEPARATION_STRENGTH,
+    )
+}
+
+fn babushka_cap_planar_speed(vx: f32, vz: f32, max_speed: f32) -> (f32, f32) {
+    let speed_sq = vx * vx + vz * vz;
+    let max_sq = max_speed * max_speed;
+    if speed_sq <= max_sq || speed_sq <= 1e-8 {
+        return (vx, vz);
+    }
+    let scale = max_speed / speed_sq.sqrt();
+    (vx * scale, vz * scale)
+}
+
+fn babushka_apply_planar_motion(
+    npc: &mut WorldNpc,
+    vx: f32,
+    vz: f32,
+    dt_sec: f32,
+    locomotion_run: bool,
+) {
+    npc.vel_x = vx;
+    npc.vel_z = vz;
+    npc.x += vx * dt_sec;
+    npc.z += vz * dt_sec;
+    let speed_sq = vx * vx + vz * vz;
+    npc.locomotion = if speed_sq > 0.04 {
+        if locomotion_run {
+            NPC_LOCOMOTION_RUN
+        } else {
+            NPC_LOCOMOTION_WALK
+        }
+    } else {
+        NPC_LOCOMOTION_IDLE
+    };
+}
+
+fn babushka_resolve_peer_overlaps(npcs: &mut [WorldNpc]) {
+    let min_dist = babushka_min_peer_center_distance_m();
+    let min_dist_sq = min_dist * min_dist;
+    for _ in 0..BABUSHKA_PEER_OVERLAP_RESOLVE_PASSES {
+        for i in 0..npcs.len() {
+            if npcs[i].state == NPC_STATE_DEAD || npcs[i].health <= 0.0 {
+                continue;
+            }
+            for j in (i + 1)..npcs.len() {
+                if !babushka_is_living_peer_pair(&npcs[i], &npcs[j]) {
+                    continue;
+                }
+                let dx = npcs[i].x - npcs[j].x;
+                let dz = npcs[i].z - npcs[j].z;
+                let dist_sq = dx * dx + dz * dz;
+                if dist_sq >= min_dist_sq {
+                    continue;
+                }
+                let (ux, uz, dist) = if dist_sq < 1e-8 {
+                    let angle = ((npcs[i].npc_id ^ npcs[j].npc_id).wrapping_mul(0x517c_c1b7)
+                        as f32)
+                        * 0.001;
+                    (angle.cos(), angle.sin(), 1e-4_f32)
+                } else {
+                    let dist = dist_sq.sqrt();
+                    (dx / dist, dz / dist, dist)
+                };
+                let half = (min_dist - dist) * 0.5;
+                npcs[i].x += ux * half;
+                npcs[i].z += uz * half;
+                npcs[j].x -= ux * half;
+                npcs[j].z -= uz * half;
+            }
+        }
+    }
+}
+
+fn step_one_world_npc(
+    ctx: &ReducerContext,
+    npc: &mut WorldNpc,
+    dt_sec: f32,
+    now_us: i64,
+    peers: &[BabushkaPeerSnap],
+) {
     let combat_sim = npc.session_key.starts_with("combat_sim:");
     let Some((target_x, target_z, target_y, target_identity)) = ai_target_for_npc(ctx, npc) else {
         npc.locomotion = NPC_LOCOMOTION_IDLE;
@@ -455,27 +624,31 @@ fn step_one_world_npc(ctx: &ReducerContext, npc: &mut WorldNpc, dt_sec: f32, now
         if dist > BABUSHKA_MELEE_RANGE_M {
             let run_speed = BABUSHKA_RUN_SPEED_MPS;
             let inv = 1.0 / dist.max(1e-4);
-            let vx = planar_dx * inv * run_speed;
-            let vz = planar_dz * inv * run_speed;
-            npc.vel_x = vx;
-            npc.vel_z = vz;
-            npc.x += vx * dt_sec;
-            npc.z += vz * dt_sec;
+            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (vx, vz) = babushka_cap_planar_speed(
+                planar_dx * inv * run_speed + sep_x,
+                planar_dz * inv * run_speed + sep_z,
+                run_speed,
+            );
+            babushka_apply_planar_motion(npc, vx, vz, dt_sec, true);
             if combat_sim {
                 npc.y = target_y;
-                clamp_babushka_to_combat_arena(ctx, npc);
             }
             npc.yaw = planar_dx.atan2(planar_dz);
-            let speed_sq = vx * vx + vz * vz;
-            npc.locomotion = if speed_sq > 0.04 {
-                NPC_LOCOMOTION_RUN
-            } else {
-                NPC_LOCOMOTION_IDLE
-            };
         } else {
-            npc.vel_x = 0.0;
-            npc.vel_z = 0.0;
-            npc.locomotion = NPC_LOCOMOTION_IDLE;
+            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let sep_mag_sq = sep_x * sep_x + sep_z * sep_z;
+            if sep_mag_sq > 1e-6 {
+                let sep_mag = sep_mag_sq.sqrt();
+                let spread_speed = BABUSHKA_WALK_SPEED_MPS;
+                let vx = (sep_x / sep_mag) * spread_speed.min(sep_mag);
+                let vz = (sep_z / sep_mag) * spread_speed.min(sep_mag);
+                babushka_apply_planar_motion(npc, vx, vz, dt_sec, false);
+            } else {
+                npc.vel_x = 0.0;
+                npc.vel_z = 0.0;
+                npc.locomotion = NPC_LOCOMOTION_IDLE;
+            }
             npc.yaw = planar_dx.atan2(planar_dz);
             if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS
                 && babushka_melee_vertical_overlap_with_player(
@@ -495,17 +668,14 @@ fn step_one_world_npc(ctx: &ReducerContext, npc: &mut WorldNpc, dt_sec: f32, now
         if wandering {
             let old_x = npc.x;
             let old_z = npc.z;
-            let vx = dir_x * BABUSHKA_WALK_SPEED_MPS;
-            let vz = dir_z * BABUSHKA_WALK_SPEED_MPS;
-            npc.vel_x = vx;
-            npc.vel_z = vz;
-            npc.x += vx * dt_sec;
-            npc.z += vz * dt_sec;
+            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (vx, vz) = babushka_cap_planar_speed(
+                dir_x * BABUSHKA_WALK_SPEED_MPS + sep_x,
+                dir_z * BABUSHKA_WALK_SPEED_MPS + sep_z,
+                BABUSHKA_WALK_SPEED_MPS,
+            );
+            babushka_apply_planar_motion(npc, vx, vz, dt_sec, false);
             npc.yaw = dir_x.atan2(dir_z);
-            npc.locomotion = NPC_LOCOMOTION_WALK;
-            if combat_sim {
-                clamp_babushka_to_combat_arena(ctx, npc);
-            }
             let moved_x = npc.x - old_x;
             let moved_z = npc.z - old_z;
             if moved_x * moved_x + moved_z * moved_z < 0.01 * 0.01 {
@@ -549,13 +719,9 @@ fn clamp_babushka_to_combat_arena(ctx: &ReducerContext, npc: &mut WorldNpc) {
     else {
         return;
     };
-    let inset = 0.55;
-    npc.x = npc
-        .x
-        .clamp(unit.bound_min_x + inset, unit.bound_max_x - inset);
-    npc.z = npc
-        .z
-        .clamp(unit.bound_min_z + inset, unit.bound_max_z - inset);
+    let (x, z) = crate::combat_sim::clamp_babushka_xz_in_combat_arena(&unit, npc.x, npc.z);
+    npc.x = x;
+    npc.z = z;
 }
 
 /// True when babushka's body capsule overlaps the target player's capsule (same rules as PvP melee).
@@ -629,7 +795,9 @@ mod tests {
         let cx = (mn_x + mx_x) * 0.5;
         let cy = (mn_y + mx_y) * 0.5;
         let cz = (mn_z + mx_z) * 0.5;
-        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, cx, cy, cz));
+        assert!(is_headshot_impact_world(
+            feet_x, feet_y, feet_z, h, cx, cy, cz
+        ));
         assert!(!is_headshot_impact_world(
             feet_x,
             feet_y,
@@ -648,6 +816,65 @@ mod tests {
             mn_y - 0.05,
             cz
         ));
+    }
+
+    fn test_babushka_row(npc_id: u64, session_key: &str, x: f32, z: f32) -> WorldNpc {
+        WorldNpc {
+            npc_id,
+            archetype: NPC_ARCHETYPE_BABUSHKA.to_string(),
+            session_key: session_key.to_string(),
+            x,
+            y: 0.0,
+            z,
+            yaw: 0.0,
+            vel_x: 0.0,
+            vel_z: 0.0,
+            grounded: 1,
+            health: BABUSHKA_MAX_HEALTH,
+            max_health: BABUSHKA_MAX_HEALTH,
+            state: NPC_STATE_IDLE,
+            locomotion: NPC_LOCOMOTION_IDLE,
+            melee_presentation_seq: 0,
+            hit_presentation_seq: 0,
+            last_melee_micros: 0,
+            chase_identity: None,
+        }
+    }
+
+    #[test]
+    fn babushka_peer_overlap_resolve_pushes_stacked_npcs_apart() {
+        let session = "combat_sim:test";
+        let mut npcs = vec![
+            test_babushka_row(1, session, 0.0, 0.0),
+            test_babushka_row(2, session, 0.05, 0.0),
+        ];
+        babushka_resolve_peer_overlaps(&mut npcs);
+        let dx = npcs[0].x - npcs[1].x;
+        let dz = npcs[0].z - npcs[1].z;
+        let dist = (dx * dx + dz * dz).sqrt();
+        assert!(
+            dist + 1e-4 >= babushka_min_peer_center_distance_m(),
+            "resolved dist {dist}"
+        );
+    }
+
+    #[test]
+    fn babushka_peer_separation_steers_away_from_nearby_peer() {
+        let session = "combat_sim:test";
+        let self_npc = test_babushka_row(1, session, 0.0, 0.0);
+        let peer = BabushkaPeerSnap {
+            npc_id: 2,
+            session_key: session.to_string(),
+            archetype: NPC_ARCHETYPE_BABUSHKA.to_string(),
+            state: NPC_STATE_IDLE,
+            health: BABUSHKA_MAX_HEALTH,
+            x: 0.35,
+            z: 0.0,
+        };
+        let peers = [peer];
+        let (sep_x, sep_z) = babushka_peer_separation_steering(&self_npc, &peers);
+        assert!(sep_x < 0.0, "expected left push, got ({sep_x}, {sep_z})");
+        assert!(sep_z.abs() < 0.2);
     }
 
     #[test]

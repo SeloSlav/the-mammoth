@@ -53,6 +53,46 @@ describe("classifyPrefab", () => {
     expect(names.filter((n) => n.startsWith("shell_lobby_frame_ext_w_"))).toHaveLength(12);
   });
 
+  it("fills PR lobby exterior door holes with closed apartment corridor leaves", () => {
+    const root = buildFloorMeshes(
+      {
+        id: "floor_lobby_east_doors",
+        version: 1,
+        objects: [
+          {
+            id: "lobby_main_ns",
+            prefabId: "lobby_hall_a",
+            position: [0, 1.605, 0],
+            scale: [21.85, 3.05, 159.5],
+          },
+        ],
+      },
+      { storyLevelIndex: 1 },
+    );
+
+    const closedDoors: THREE.Object3D[] = [];
+    root.traverse((obj) => {
+      if (obj.name.startsWith("shell_lobby_closed_door_")) closedDoors.push(obj);
+    });
+    // 2 east + 4 west + 2 north + 2 south = 10 non-openable exterior bays.
+    expect(closedDoors).toHaveLength(10);
+    for (const door of closedDoors) {
+      expect(door.userData.mammothLobbyClosedDoor).toBe(true);
+      let leafMeshes = 0;
+      door.traverse((child) => {
+        if (child instanceof THREE.Mesh) leafMeshes += 1;
+      });
+      expect(leafMeshes).toBeGreaterThan(0);
+    }
+
+    const collisionAabbs = collectCollisionAabbsFromObject3D(root);
+    const doorCollision = collisionAabbs.filter((b) => {
+      const cy = (b.min[1] + b.max[1]) * 0.5;
+      return cy > 1.2 && cy < 3.5;
+    });
+    expect(doorCollision.length).toBeGreaterThan(0);
+  });
+
   it("classifies stair and elevator cores", () => {
     expect(classifyPrefab("stair_core")).toBe("core");
     expect(classifyPrefab("elevator_bank")).toBe("core");

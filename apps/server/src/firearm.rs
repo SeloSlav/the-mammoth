@@ -65,12 +65,15 @@ pub fn ensure_player_firearm_chamber_row(ctx: &ReducerContext, id: Identity) {
         .find(&id)
         .is_none()
     {
-        let _ = ctx.db.player_firearm_chamber().insert(PlayerFirearmChamber {
-            identity: id,
-            weapon_def_id: String::new(),
-            chamber_count: 0,
-            reload_complete_micros: 0,
-        });
+        let _ = ctx
+            .db
+            .player_firearm_chamber()
+            .insert(PlayerFirearmChamber {
+                identity: id,
+                weapon_def_id: String::new(),
+                chamber_count: 0,
+                reload_complete_micros: 0,
+            });
     }
 }
 
@@ -407,7 +410,10 @@ mod chamber_tests {
 
     #[test]
     fn chamber_capacities_match_catalog_weapons() {
-        assert_eq!(chamber_capacity_for_weapon("pistol"), PISTOL_CHAMBER_CAPACITY);
+        assert_eq!(
+            chamber_capacity_for_weapon("pistol"),
+            PISTOL_CHAMBER_CAPACITY
+        );
         assert_eq!(
             chamber_capacity_for_weapon("shotgun-coach"),
             SHOTGUN_CHAMBER_CAPACITY
@@ -417,7 +423,10 @@ mod chamber_tests {
 
     #[test]
     fn reload_durations_are_weapon_specific() {
-        assert_eq!(reload_duration_micros_for_weapon("pistol"), RELOAD_PISTOL_MICROS);
+        assert_eq!(
+            reload_duration_micros_for_weapon("pistol"),
+            RELOAD_PISTOL_MICROS
+        );
         assert_eq!(
             reload_duration_micros_for_weapon("shotgun-coach"),
             RELOAD_SHOTGUN_MICROS

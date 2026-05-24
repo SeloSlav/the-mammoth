@@ -36,6 +36,26 @@ describe("apartmentWindowShutters", () => {
     expect(west[0]!.fz).toBeCloseTo(east[0]!.fz, 6);
     expect(west[0]!.yawRad).toBeCloseTo(-east[0]!.yawRad, 6);
     expect(APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES).toHaveLength(2);
+    expect(APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES[0]).toMatchObject({
+      fx: 0.9774696707105714,
+      fz: 0.16169746083300776,
+      dy: 1.601049521076354,
+      uniformScale: 1.7485030380530002,
+      verticalScaleMul: 0.8024663311843774,
+      scaleX: 1.8103534843002127,
+      scaleY: 1.4031148180111288,
+      scaleZ: 1.686652591805788,
+    });
+    expect(APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES[1]).toMatchObject({
+      fx: 0.9774696707105714,
+      fz: 0.6699791785869178,
+      dy: 1.602608473496812,
+      uniformScale: 1.6498272281962265,
+      verticalScaleMul: 0.8499628264360659,
+      scaleX: 1.6130018645866648,
+      scaleY: 1.402291814008845,
+      scaleZ: 1.686652591805788,
+    });
   });
 
   it("uses authored shutter rows as the canonical replicated template", () => {

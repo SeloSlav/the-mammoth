@@ -181,7 +181,7 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
             apartments::lock_owned_residential_doors(ctx, id);
             bed
         } else {
-            spawn_routing::random_public_spawn_pose(ctx, id)    
+            spawn_routing::random_public_spawn_pose(ctx, id)
         };
     // Solo client may have advanced `intent_seq` while dead (snapshots rejected). Jump `pose.seq`
     // past those so the first live snapshot cannot stomp the spawn pose.

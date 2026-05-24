@@ -14,7 +14,7 @@
 //! `fpSessionInertSubsystems.ts` — same session loop, not a fork.
 //!
 //! ## Arena-specific server behavior
-//! - `enter_combat_sim`: full combat loadout, arena-center pose, spawn NPCs for the session
+//! - `enter_combat_sim`: full combat loadout, safe player spawn outside babushka aggro, session NPCs
 //! - `shooter_in_combat_sim_open_arena`: skip megablock firearm LOS while live combat-sim NPCs exist
 //! - Combat-sim death: no world item drops; respawn restores the full combat loadout in-arena
 //! - `leave_combat_sim`: despawn session NPCs and teleport owner back to their bed (does not restore prior loadout)
@@ -62,6 +62,8 @@ pub const BABUSHKA_PLAYER_MIN_SEPARATION_M: f32 =
 
 /// Death clip (~2.47 s) + die one-shot + epitaph MP3 — keep corpse until voice lines finish.
 const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 22_000_000;
+const COMBAT_SIM_DEFAULT_BABUSHKA_COUNT: usize = 5;
+const COMBAT_SIM_DEFAULT_BABUSHKA_CENTER_RING_M: f32 = 2.25;
 
 pub fn session_owner_for_session_key(ctx: &ReducerContext, session_key: &str) -> Option<Identity> {
     let unit_key = session_key.strip_prefix("combat_sim:")?;
@@ -121,20 +123,141 @@ pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNp
         .find(&owner)
         .map(|pose| (pose.x, pose.z))
         .unwrap_or_else(|| {
-            let (cx, _, cz) = combat_sim_player_spawn_pose(&unit);
-            (cx, cz)
+            let (px, _, pz) = combat_sim_player_spawn_pose(&unit);
+            (px, pz)
         });
-    let (x, y, z, yaw) =
-        babushka_pose_separated_from_player(&unit, player_x, player_z, salt);
+    let (x, y, z, yaw) = babushka_pose_separated_from_player(&unit, player_x, player_z, salt);
     let npc_id = npc.npc_id;
     ctx.db.world_npc().npc_id().delete(&npc_id);
     let _ = npc::spawn_babushka(ctx, session_key, x, y, z, yaw, Some(owner));
 }
 
-pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
+pub fn combat_sim_arena_center(unit: &ApartmentUnit) -> (f32, f32, f32) {
     let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
     let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
     (cx, unit.foot_y, cz)
+}
+
+fn clamp_player_xz_in_combat_arena(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
+    clamp_babushka_xz_in_combat_arena(unit, x, z)
+}
+
+/// Push the player spawn away from a babushka threat point along the arena long axis.
+fn player_spawn_xz_separated_from(
+    unit: &ApartmentUnit,
+    threat_x: f32,
+    threat_z: f32,
+) -> (f32, f32) {
+    let (dx, dz) = separation_direction_toward_arena_edge(unit, threat_x, threat_z);
+    let px = threat_x + dx * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    let pz = threat_z + dz * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    clamp_player_xz_in_combat_arena(unit, px, pz)
+}
+
+fn separation_direction_toward_arena_edge(
+    unit: &ApartmentUnit,
+    from_x: f32,
+    from_z: f32,
+) -> (f32, f32) {
+    let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
+    let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
+    let width = unit.bound_max_x - unit.bound_min_x;
+    let depth = unit.bound_max_z - unit.bound_min_z;
+    if width >= depth {
+        if from_x >= cx {
+            (1.0, 0.0)
+        } else {
+            (-1.0, 0.0)
+        }
+    } else if from_z >= cz {
+        (0.0, 1.0)
+    } else {
+        (0.0, -1.0)
+    }
+}
+
+fn cardinal_player_spawn_candidates(
+    unit: &ApartmentUnit,
+    threat_x: f32,
+    threat_z: f32,
+) -> [(f32, f32); 4] {
+    let inset = 0.55;
+    let min_x = unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset;
+    let max_x = unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset;
+    let min_z = unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset;
+    let max_z = unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset;
+    [
+        clamp_player_xz_in_combat_arena(unit, max_x, threat_z),
+        clamp_player_xz_in_combat_arena(unit, min_x, threat_z),
+        clamp_player_xz_in_combat_arena(unit, threat_x, max_z),
+        clamp_player_xz_in_combat_arena(unit, threat_x, min_z),
+    ]
+}
+
+fn player_spawn_xz_farthest_from_babushkas(
+    unit: &ApartmentUnit,
+    threat_x: f32,
+    threat_z: f32,
+) -> (f32, f32) {
+    let min_sep_sq = BABUSHKA_PLAYER_MIN_SEPARATION_M * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    let mut best: Option<(f32, f32, f32)> = None;
+    for (x, z) in cardinal_player_spawn_candidates(unit, threat_x, threat_z) {
+        let d_sq = planar_distance_sq(x, z, threat_x, threat_z);
+        if d_sq >= min_sep_sq && best.map(|b| d_sq > b.2).unwrap_or(true) {
+            best = Some((x, z, d_sq));
+        }
+    }
+    if let Some((x, z, _)) = best {
+        return (x, z);
+    }
+    player_spawn_xz_separated_from(unit, threat_x, threat_z)
+}
+
+fn nearest_living_babushka_xz_near(
+    ctx: &ReducerContext,
+    session_key: &str,
+    near_x: f32,
+    near_z: f32,
+) -> Option<(f32, f32)> {
+    let mut best: Option<(f32, f32, f32)> = None;
+    for npc in ctx.db.world_npc().iter() {
+        if npc.session_key != session_key
+            || npc.archetype != npc::NPC_ARCHETYPE_BABUSHKA
+            || npc.state == npc::NPC_STATE_DEAD
+            || npc.health <= 0.0
+        {
+            continue;
+        }
+        let d_sq = planar_distance_sq(npc.x, npc.z, near_x, near_z);
+        if best.map(|b| d_sq < b.2).unwrap_or(true) {
+            best = Some((npc.x, npc.z, d_sq));
+        }
+    }
+    best.map(|b| (b.0, b.1))
+}
+
+/// Default combat-sim player feet — outside aggro from the arena-center babushka cluster.
+pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
+    let (cx, _, cz) = combat_sim_arena_center(unit);
+    let (px, pz) = player_spawn_xz_separated_from(unit, cx, cz);
+    (px, unit.foot_y, pz)
+}
+
+/// Respawn feet — farthest safe padded-arena point from the nearest living session babushka.
+pub fn combat_sim_player_respawn_pose(
+    ctx: &ReducerContext,
+    unit: &ApartmentUnit,
+    session_key: &str,
+    from_x: f32,
+    from_z: f32,
+) -> (f32, f32, f32) {
+    let (threat_x, threat_z) = nearest_living_babushka_xz_near(ctx, session_key, from_x, from_z)
+        .unwrap_or_else(|| {
+            let (cx, _, cz) = combat_sim_arena_center(unit);
+            (cx, cz)
+        });
+    let (px, pz) = player_spawn_xz_farthest_from_babushkas(unit, threat_x, threat_z);
+    (px, unit.foot_y, pz)
 }
 
 /// True while the player is still in an active combat-sim session (live NPCs or arena pose).
@@ -154,7 +277,7 @@ pub fn player_in_combat_sim(ctx: &ReducerContext, owner: Identity) -> bool {
     player_at_combat_sim_arena(&unit, &sp)
 }
 
-/// While in combat sim, respawn at the arena center (not bed) so recovery stays in-session.
+/// While in combat sim, respawn at a safe arena point outside babushka aggro (not bed).
 pub fn respawn_pose_if_in_open_arena(
     ctx: &ReducerContext,
     owner: Identity,
@@ -164,10 +287,16 @@ pub fn respawn_pose_if_in_open_arena(
     if !player_in_combat_sim(ctx, owner) {
         return None;
     }
-    let CombatSimArena { unit, .. } = resolve_combat_sim_arena(ctx, owner);
+    let CombatSimArena { unit, session_key } = resolve_combat_sim_arena(ctx, owner);
     pose::ensure_player_pose_row(ctx, owner);
     let mut sp = ctx.db.player_pose().identity().find(&owner)?;
-    let (arena_x, arena_y, arena_z) = combat_sim_player_spawn_pose(&unit);
+    let (arena_x, arena_y, arena_z) =
+        combat_sim_player_respawn_pose(ctx, &unit, &session_key, sp.x, sp.z);
+    let (threat_x, threat_z) = nearest_living_babushka_xz_near(ctx, &session_key, sp.x, sp.z)
+        .unwrap_or_else(|| {
+            let (cx, _, cz) = combat_sim_arena_center(&unit);
+            (cx, cz)
+        });
     sp.x = arena_x;
     sp.y = arena_y;
     sp.z = arena_z;
@@ -175,6 +304,7 @@ pub fn respawn_pose_if_in_open_arena(
     sp.vel_y = 0.0;
     sp.vel_z = 0.0;
     sp.grounded = 1;
+    sp.yaw = (threat_x - arena_x).atan2(threat_z - arena_z);
     sp.seq = base_seq.max(in_seq).saturating_add(1);
     Some(sp)
 }
@@ -306,6 +436,21 @@ fn clamp_babushka_xz_in_unit(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32)
     )
 }
 
+/// Clamp NPC locomotion to the same padded combat arena shell authored on the client.
+pub fn clamp_babushka_xz_in_combat_arena(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
+    let inset = 0.55;
+    (
+        x.clamp(
+            unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset,
+            unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset,
+        ),
+        z.clamp(
+            unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset,
+            unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset,
+        ),
+    )
+}
+
 /// Push babushka away from the player along the arena long axis fallback.
 fn babushka_spawn_xz(unit: &ApartmentUnit, player_x: f32, player_z: f32) -> (f32, f32, f32, f32) {
     let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
@@ -333,6 +478,20 @@ fn babushka_spawn_xz(unit: &ApartmentUnit, player_x: f32, player_z: f32) -> (f32
     (nx, nz) = clamp_babushka_xz_in_unit(unit, nx, nz);
     let yaw = (player_x - nx).atan2(player_z - nz);
     (nx, unit.foot_y, nz, yaw)
+}
+
+fn default_center_babushka_pose(unit: &ApartmentUnit, index: usize) -> (f32, f32, f32, f32) {
+    let (cx, _, cz) = combat_sim_arena_center(unit);
+    let count = COMBAT_SIM_DEFAULT_BABUSHKA_COUNT as f32;
+    let min_ring = npc::babushka_min_peer_center_distance_m()
+        / (2.0 * (std::f32::consts::PI / count).sin().max(0.01));
+    let ring = COMBAT_SIM_DEFAULT_BABUSHKA_CENTER_RING_M.max(min_ring);
+    let angle = index as f32 / count * std::f32::consts::TAU;
+    let x = cx + angle.sin() * ring;
+    let z = cz + angle.cos() * ring;
+    let (x, z) = clamp_babushka_xz_in_combat_arena(unit, x, z);
+    let yaw = (cx - x).atan2(cz - z);
+    (x, unit.foot_y, z, yaw)
 }
 
 /// Random arena pose at least `BABUSHKA_PLAYER_MIN_SEPARATION_M` from the player when possible.
@@ -384,8 +543,9 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
             .expect("pose row after ensure")
     });
 
-    let player_yaw = bed_pose.yaw;
     let (arena_x, arena_y, arena_z) = combat_sim_player_spawn_pose(&unit);
+    let (cluster_x, _, cluster_z) = combat_sim_arena_center(&unit);
+    let face_cluster_yaw = (cluster_x - arena_x).atan2(cluster_z - arena_z);
     let mut sp = bed_pose;
     sp.x = arena_x;
     sp.y = arena_y;
@@ -395,10 +555,9 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
     sp.vel_z = 0.0;
     sp.grounded = 1;
     sp.seq = sp.seq.saturating_add(1);
-    let player_x = sp.x;
-    let player_z = sp.z;
+    sp.yaw = face_cluster_yaw;
     ctx.db.player_pose().identity().update(sp);
-    movement::reset_player_input_row(ctx, owner, player_yaw);
+    movement::reset_player_input_row(ctx, owner, face_cluster_yaw);
 
     grant_combat_sim_loadout(ctx, owner);
     player_vitals::restore_player_vitals_full(ctx, owner);
@@ -406,9 +565,12 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
     let authored =
         combat_sim_npc_spawn::authored_spawns_for_owner_unit(ctx, owner, unit.unit_key.as_str());
     let npc_count = if authored.is_empty() {
-        let (bx, by, bz, byaw) = babushka_spawn_xz(&unit, player_x, player_z);
-        let _npc_id = npc::spawn_babushka(ctx, session_key, bx, by, bz, byaw, Some(owner));
-        1
+        for i in 0..COMBAT_SIM_DEFAULT_BABUSHKA_COUNT {
+            let (bx, by, bz, byaw) = default_center_babushka_pose(&unit, i);
+            let _npc_id =
+                npc::spawn_babushka(ctx, session_key.clone(), bx, by, bz, byaw, Some(owner));
+        }
+        COMBAT_SIM_DEFAULT_BABUSHKA_COUNT
     } else {
         let count = authored.len();
         for row in authored {
@@ -429,11 +591,13 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
 }
 
 fn player_at_combat_sim_arena(unit: &ApartmentUnit, pose: &pose::PlayerPose) -> bool {
-    let (ax, ay, az) = combat_sim_player_spawn_pose(unit);
-    let dx = pose.x - ax;
-    let dz = pose.z - az;
-    let dy = (pose.y - ay).abs();
-    dx * dx + dz * dz < 2.75 * 2.75 && dy < 1.75
+    let inset = 0.55;
+    let min_x = unit.bound_min_x - COMBAT_SIM_ARENA_PAD_M + inset;
+    let max_x = unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - inset;
+    let min_z = unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + inset;
+    let max_z = unit.bound_max_z + COMBAT_SIM_ARENA_PAD_M - inset;
+    let dy = (pose.y - unit.foot_y).abs();
+    pose.x >= min_x && pose.x <= max_x && pose.z >= min_z && pose.z <= max_z && dy < 1.75
 }
 
 /// Tear down combat-sim NPCs and return the owner to their bed spawn (does not restore prior loadout).
@@ -525,7 +689,25 @@ mod tests {
     }
 
     #[test]
-    fn initial_babushka_spawn_is_outside_aggro_from_arena_center() {
+    fn player_spawn_is_outside_aggro_from_center_babushka_cluster() {
+        let unit = test_unit();
+        let (px, _, pz) = combat_sim_player_spawn_pose(&unit);
+        let (cx, _, cz) = combat_sim_arena_center(&unit);
+        let cluster_edge = COMBAT_SIM_DEFAULT_BABUSHKA_CENTER_RING_M;
+        let to_center = planar_distance_sq(px, pz, cx, cz).sqrt();
+        assert!(
+            to_center >= BABUSHKA_PLAYER_MIN_SEPARATION_M - 0.05,
+            "player spawn {to_center}m from cluster center"
+        );
+        let to_nearest_babushka = (to_center - cluster_edge).max(0.0);
+        assert!(
+            to_nearest_babushka > COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M,
+            "player {to_nearest_babushka}m from nearest default-cluster babushka"
+        );
+    }
+
+    #[test]
+    fn initial_babushka_spawn_is_outside_aggro_from_player_spawn() {
         let unit = test_unit();
         let (px, _, pz) = combat_sim_player_spawn_pose(&unit);
         let (bx, _, bz, _) = babushka_spawn_xz(&unit, px, pz);
@@ -547,5 +729,37 @@ mod tests {
             d >= COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 1.5,
             "respawn pose {d}m from player"
         );
+    }
+
+    #[test]
+    fn farthest_player_spawn_from_center_babushka_is_outside_aggro() {
+        let unit = test_unit();
+        let (cx, _, cz) = combat_sim_arena_center(&unit);
+        let (px, pz) = player_spawn_xz_farthest_from_babushkas(&unit, cx, cz);
+        let d = planar_distance_sq(px, pz, cx, cz).sqrt();
+        assert!(
+            d >= BABUSHKA_PLAYER_MIN_SEPARATION_M - 0.05,
+            "respawn dist {d}"
+        );
+    }
+
+    #[test]
+    fn combat_arena_npc_clamp_matches_client_padded_bounds() {
+        let unit = test_unit();
+        let (x, z) = clamp_babushka_xz_in_combat_arena(&unit, 99.0, -99.0);
+        assert!((x - (unit.bound_max_x + COMBAT_SIM_ARENA_PAD_M - 0.55)).abs() < 1e-4);
+        assert!((z - (unit.bound_min_z - COMBAT_SIM_ARENA_PAD_M + 0.55)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn default_combat_sim_babushkas_spawn_in_center_cluster() {
+        let unit = test_unit();
+        let (cx, _, cz) = combat_sim_arena_center(&unit);
+        for i in 0..COMBAT_SIM_DEFAULT_BABUSHKA_COUNT {
+            let (x, y, z, _) = default_center_babushka_pose(&unit, i);
+            let d = planar_distance_sq(x, z, cx, cz).sqrt();
+            assert!((y - unit.foot_y).abs() < 1e-4);
+            assert!(d <= COMBAT_SIM_DEFAULT_BABUSHKA_CENTER_RING_M + 1e-4);
+        }
     }
 }

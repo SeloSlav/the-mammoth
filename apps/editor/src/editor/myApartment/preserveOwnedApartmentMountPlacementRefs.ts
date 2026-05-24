@@ -1,4 +1,5 @@
 import {
+  isOwnedApartmentWindowShutterModelRelPath,
   resolveOwnedApartmentDecorRootScale,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentMirrorItem,
@@ -56,6 +57,27 @@ export function ownedApartmentPlacedItemsOnlyPoseChanged(
     }
   }
   return true;
+}
+
+export function ownedApartmentStandardWindowShutterPoseChanged(
+  prev: readonly OwnedApartmentPlacedItem[],
+  next: readonly OwnedApartmentPlacedItem[],
+): boolean {
+  const prevShutters = prev.filter((item) =>
+    isOwnedApartmentWindowShutterModelRelPath(item.modelRelPath),
+  );
+  const nextShutters = next.filter((item) =>
+    isOwnedApartmentWindowShutterModelRelPath(item.modelRelPath),
+  );
+  if (prevShutters.length !== nextShutters.length) return true;
+  const prevById = new Map(prevShutters.map((item) => [item.id, item]));
+  for (const item of nextShutters) {
+    const prior = prevById.get(item.id);
+    if (!prior || !ownedApartmentPlacedItemPoseEqual(prior, item)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function placedItemsEqual(

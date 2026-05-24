@@ -5,6 +5,7 @@ import {
   collectOwnedApartmentWallIdsWithOpeningChanges,
   collectWallIdsNeedingEditorMountSync,
   ownedApartmentPlacedItemsOnlyPoseChanged,
+  ownedApartmentStandardWindowShutterPoseChanged,
   ownedApartmentWallItemsDeepEqual,
   ownedApartmentWallOpeningsSignature,
   preserveOwnedApartmentMountPlacementRefs,
@@ -215,6 +216,59 @@ describe("ownedApartmentPlacedItemsOnlyPoseChanged", () => {
       ownedApartmentPlacedItemsOnlyPoseChanged(
         DEFAULT_OWNED_APARTMENT_BUILTINS_DOC.placedItems,
         next,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("ownedApartmentStandardWindowShutterPoseChanged", () => {
+  const baseItems = [
+    {
+      id: "shutter-a",
+      modelRelPath: "static/models/objects/window-shutter.glb",
+      fx: 0.97,
+      fz: 0.18,
+      dy: 1.75,
+      yawRad: -Math.PI / 2,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1.68,
+      verticalScaleMul: 1,
+      ignoreSupportSurfaces: false,
+      itemKind: "plain" as const,
+    },
+    {
+      id: "chair-a",
+      modelRelPath: "static/models/objects/chair.glb",
+      fx: 0.4,
+      fz: 0.4,
+      dy: 0,
+      yawRad: 0,
+      pitchRad: 0,
+      rollRad: 0,
+      uniformScale: 1,
+      verticalScaleMul: 1,
+      ignoreSupportSurfaces: false,
+      itemKind: "plain" as const,
+    },
+  ];
+
+  it("detects authored shutter pose changes that generated preview units must mirror", () => {
+    expect(
+      ownedApartmentStandardWindowShutterPoseChanged(
+        baseItems,
+        baseItems.map((item) =>
+          item.id === "shutter-a" ? { ...item, fx: 0.965, uniformScale: 1.7 } : item,
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores pose-only edits to non-shutter decor", () => {
+    expect(
+      ownedApartmentStandardWindowShutterPoseChanged(
+        baseItems,
+        baseItems.map((item) => (item.id === "chair-a" ? { ...item, fx: 0.45 } : item)),
       ),
     ).toBe(false);
   });

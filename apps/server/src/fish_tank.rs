@@ -160,7 +160,8 @@ pub(crate) fn process_fish_tank_on_sleep_for_decor(
     decor: &ApartmentUnitDecor,
     tank_decor_id: u64,
 ) {
-    let success_scale = crate::fish_tank_filter::fish_tank_feed_success_multiplier(ctx, tank_decor_id);
+    let success_scale =
+        crate::fish_tank_filter::fish_tank_feed_success_multiplier(ctx, tank_decor_id);
     if success_scale <= 0.001 {
         return;
     }

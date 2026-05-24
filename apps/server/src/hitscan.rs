@@ -11,16 +11,16 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartment_door::apartment_door;
 use crate::combat_stub::{
     body_height_from_crouch_bit, eye_y_above_feet, is_headshot_firearm_ray,
-    victim_hit_trace_max_y,
-    ray_aabb_intersect_enter, HEADSHOT_DAMAGE_MULTIPLIER, PLAYER_BODY_RADIUS_M,
+    ray_aabb_intersect_enter, victim_hit_trace_max_y, HEADSHOT_DAMAGE_MULTIPLIER,
+    PLAYER_BODY_RADIUS_M,
 };
-use crate::npc::BABUSHKA_BODY_RADIUS_M;
 use crate::generated_collision_solids::{
     COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
     COLLISION_SOLID_FOOTPRINT_MIN_X, COLLISION_SOLID_FOOTPRINT_MIN_Z,
 };
 use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
+use crate::npc::BABUSHKA_BODY_RADIUS_M;
 use crate::player_vitals;
 use crate::pose::player_pose;
 use crate::pose::PlayerPose;

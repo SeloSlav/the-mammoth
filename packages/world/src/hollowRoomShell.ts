@@ -22,10 +22,11 @@ import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMate
 import { matsFor } from "./floorPlaceholderPrefabKind.js";
 import { addKoncarElevatorSignMeshes } from "./floorCorridorPlateSignage.js";
 import { addOppositeCorridorKatSignMeshes } from "./elevatorLandingKatSign.js";
+import { addLobbyClosedApartmentSwingDoors } from "./lobbyClosedSwingDoors.js";
 import { addStairwellCorridorSignMeshes } from "./stairwellCorridorSign.js";
 /**
  * Ground storey corridor / lobby: **double-door frame bays** (m clear).
- * Panels/doors are not modeled yet — openings + trim only.
+ * Closed apartment corridor leaves fill non-openable PR exterior bays — see {@link addLobbyClosedApartmentSwingDoors}.
  */
 const LOBBY_DOUBLE_DOOR_W = 1.84;
 const LOBBY_DOUBLE_DOOR_H = 2.16;
@@ -718,6 +719,15 @@ export function addHollowRoomShell(
     }
     fxj += 1;
   }
+  addLobbyClosedApartmentSwingDoors(group, {
+    hx,
+    hz,
+    wt,
+    sy,
+    czListEast,
+    czListWest: czList,
+    cxListNs: cxList,
+  });
   addKoncarElevatorSignMeshes(
     group,
     sx,

@@ -6,7 +6,9 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
 use crate::auth;
 use crate::fish_tank;
-use crate::inventory::{find_item_in_hotbar_slot, find_item_in_stash_slot, remove_stash_item_quantity};
+use crate::inventory::{
+    find_item_in_hotbar_slot, find_item_in_stash_slot, remove_stash_item_quantity,
+};
 use crate::inventory_models::apartment_stash_key_decor;
 use crate::water_container;
 
@@ -88,21 +90,19 @@ fn decor_belongs_to_claimed_owner(
     owner: Identity,
     decor: &ApartmentUnitDecor,
 ) -> bool {
-    let unit = ctx
-        .db
-        .apartment_unit()
-        .unit_key()
-        .find(&decor.unit_key);
+    let unit = ctx.db.apartment_unit().unit_key().find(&decor.unit_key);
     unit.map(|u| u.owner == Some(owner) && u.state == apartments::UNIT_STATE_CLAIMED)
         .unwrap_or(false)
 }
 
 /// Multiplier for overnight feed conversion (0.0–1.0) from linked ecosystem state.
-pub(crate) fn fish_tank_feed_success_multiplier(
-    ctx: &ReducerContext,
-    tank_decor_id: u64,
-) -> f32 {
-    let Some(eco) = ctx.db.fish_tank_ecosystem().tank_decor_id().find(tank_decor_id) else {
+pub(crate) fn fish_tank_feed_success_multiplier(ctx: &ReducerContext, tank_decor_id: u64) -> f32 {
+    let Some(eco) = ctx
+        .db
+        .fish_tank_ecosystem()
+        .tank_decor_id()
+        .find(tank_decor_id)
+    else {
         return 0.55;
     };
     let water_frac = if FISH_TANK_WATER_CAPACITY_L > 0.0 {
@@ -155,7 +155,9 @@ pub(crate) fn bind_fish_tank_filter_impl(
     let link_table = ctx.db.fish_tank_filter_link();
     if let Some(existing_tank) = link_table
         .iter()
-        .find(|l| l.unit_key.as_str() == filter.unit_key.as_str() && l.tank_decor_id == tank_decor_id)
+        .find(|l| {
+            l.unit_key.as_str() == filter.unit_key.as_str() && l.tank_decor_id == tank_decor_id
+        })
         .filter(|l| l.filter_decor_id != filter_decor_id)
     {
         let _ = existing_tank;
@@ -178,11 +180,7 @@ pub(crate) fn bind_fish_tank_filter_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn bind_fish_tank_filter(
-    ctx: &ReducerContext,
-    filter_decor_id: u64,
-    tank_decor_id: u64,
-) {
+pub fn bind_fish_tank_filter(ctx: &ReducerContext, filter_decor_id: u64, tank_decor_id: u64) {
     if let Err(e) = bind_fish_tank_filter_impl(ctx, ctx.sender(), filter_decor_id, tank_decor_id) {
         log::debug!("bind_fish_tank_filter: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
@@ -260,8 +258,9 @@ pub(crate) fn top_off_fish_tank_from_bottle_impl(
         return Err("not a fish tank filter".to_string());
     }
     player_near_filter_stash(ctx, sender, filter_stash_key(&filter).as_str())?;
-    let link = filter_link_for_decor(ctx, filter_decor_id)
-        .ok_or_else(|| "filter is not linked to a fish tank — set the link in the apartment editor".to_string())?;
+    let link = filter_link_for_decor(ctx, filter_decor_id).ok_or_else(|| {
+        "filter is not linked to a fish tank — set the link in the apartment editor".to_string()
+    })?;
 
     sip_bottle_liters(ctx, sender, hotbar_slot, TOP_OFF_LITERS)?;
 
@@ -276,11 +275,7 @@ pub(crate) fn top_off_fish_tank_from_bottle_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn top_off_fish_tank_from_bottle(
-    ctx: &ReducerContext,
-    filter_decor_id: u64,
-    hotbar_slot: u8,
-) {
+pub fn top_off_fish_tank_from_bottle(ctx: &ReducerContext, filter_decor_id: u64, hotbar_slot: u8) {
     if let Err(e) = top_off_fish_tank_from_bottle_impl(ctx, filter_decor_id, hotbar_slot) {
         log::debug!("top_off_fish_tank_from_bottle: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
@@ -320,11 +315,7 @@ pub(crate) fn rinse_fish_tank_filter_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn rinse_fish_tank_filter(
-    ctx: &ReducerContext,
-    filter_decor_id: u64,
-    hotbar_slot: u8,
-) {
+pub fn rinse_fish_tank_filter(ctx: &ReducerContext, filter_decor_id: u64, hotbar_slot: u8) {
     if let Err(e) = rinse_fish_tank_filter_impl(ctx, filter_decor_id, hotbar_slot) {
         log::debug!("rinse_fish_tank_filter: {e}");
         apartments::notify_stash_reducer_failure(ctx, e);
@@ -350,8 +341,13 @@ pub(crate) fn apply_fish_filter_patch_impl(
     player_near_filter_stash(ctx, sender, stash_key.as_str())?;
     let link = filter_link_for_decor(ctx, filter_decor_id)
         .ok_or_else(|| "filter is not linked to a fish tank".to_string())?;
-    let item = find_item_in_stash_slot(ctx, sender, stash_key.as_str(), FISH_TANK_FILTER_MAINTENANCE_SLOT)
-        .ok_or_else(|| "place a filter sponge cartridge in the maintenance slot first".to_string())?;
+    let item = find_item_in_stash_slot(
+        ctx,
+        sender,
+        stash_key.as_str(),
+        FISH_TANK_FILTER_MAINTENANCE_SLOT,
+    )
+    .ok_or_else(|| "place a filter sponge cartridge in the maintenance slot first".to_string())?;
     if item.def_id != FISH_TANK_FILTER_PATCH_DEF_ID {
         return Err("filter maintenance slot only accepts a filter sponge cartridge".to_string());
     }
@@ -456,7 +452,10 @@ mod tests {
     #[test]
     fn ecosystem_starts_partial_water() {
         assert!(FISH_TANK_WATER_START_L < FISH_TANK_WATER_CAPACITY_L);
-        assert_eq!(clamp_water(FISH_TANK_WATER_CAPACITY_L + 1.0), FISH_TANK_WATER_CAPACITY_L);
+        assert_eq!(
+            clamp_water(FISH_TANK_WATER_CAPACITY_L + 1.0),
+            FISH_TANK_WATER_CAPACITY_L
+        );
     }
 
     #[test]

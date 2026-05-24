@@ -25,9 +25,8 @@ use crate::inventory_models::{
     apartment_stash_key, apartment_stash_key_decor, parse_apartment_stash_key_v2,
     HotbarLocationData, InventoryLocationData, ItemLocation, ParsedApartmentStashKey,
     StashLocationData, APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FISH_TANK_FILTER,
-    APARTMENT_STASH_KIND_FOOTLOCKER,
-    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
-    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
@@ -1101,15 +1100,9 @@ fn ensure_authored_fish_tank_decor_for_unit(ctx: &ReducerContext, owner: Identit
             ctx.db.apartment_unit_decor().decor_id().update(row);
         }
         existing.decor_id
-    } else if let Some(by_id) = ctx
-        .db
-        .apartment_unit_decor()
-        .iter()
-        .find(|d| {
-            d.unit_key.as_str() == unit_key
-                && d.authored_id.as_str() == AUTHORED_FISH_TANK_AUTHORING_ID
-        })
-    {
+    } else if let Some(by_id) = ctx.db.apartment_unit_decor().iter().find(|d| {
+        d.unit_key.as_str() == unit_key && d.authored_id.as_str() == AUTHORED_FISH_TANK_AUTHORING_ID
+    }) {
         by_id.decor_id
     } else {
         let (px, py, pz) = authored_fish_tank_world_pose(&unit);
@@ -1175,7 +1168,11 @@ pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
 }
 
 fn authored_filter_world_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
-    let (x, z) = authored_placed_item_world_xz(unit, AUTHORED_FISH_TANK_FILTER_FX, AUTHORED_FISH_TANK_FILTER_FZ);
+    let (x, z) = authored_placed_item_world_xz(
+        unit,
+        AUTHORED_FISH_TANK_FILTER_FX,
+        AUTHORED_FISH_TANK_FILTER_FZ,
+    );
     let y = unit.bound_min_y + AUTHORED_FISH_TANK_FILTER_DY;
     (x, y, z)
 }
@@ -1380,7 +1377,11 @@ pub fn sync_apartment_authored_stash_layout(
         )
         .cloned()
         {
-            row.model_rel_path = entry.model_rel_path.trim().trim_start_matches('/').to_string();
+            row.model_rel_path = entry
+                .model_rel_path
+                .trim()
+                .trim_start_matches('/')
+                .to_string();
             row.pos_x = px;
             row.pos_y = py;
             row.pos_z = pz;
@@ -1396,7 +1397,11 @@ pub fn sync_apartment_authored_stash_layout(
         let _ = decor_table.insert(ApartmentUnitDecor {
             decor_id: 0,
             unit_key: unit_key.clone(),
-            model_rel_path: entry.model_rel_path.trim().trim_start_matches('/').to_string(),
+            model_rel_path: entry
+                .model_rel_path
+                .trim()
+                .trim_start_matches('/')
+                .to_string(),
             pos_x: px,
             pos_y: py,
             pos_z: pz,

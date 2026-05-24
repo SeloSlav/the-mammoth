@@ -312,9 +312,8 @@ pub fn ray_aabb_intersect_enter(
     mx_y: f32,
     mx_z: f32,
 ) -> Option<RayAabbHit> {
-    let interval = ray_aabb_intersect_interval(
-        ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
-    )?;
+    let interval =
+        ray_aabb_intersect_interval(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)?;
     let t_hit = if interval.t_enter >= RAY_AABB_T_ENTER_EPS {
         interval.t_enter
     } else if interval.t_exit >= RAY_AABB_T_ENTER_EPS {
@@ -355,9 +354,9 @@ pub fn is_headshot_firearm_ray(
 ) -> bool {
     let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) =
         head_hit_box_aabb(feet_x, feet_y, feet_z, body_height_m);
-    let Some(interval) = ray_aabb_intersect_interval(
-        ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
-    ) else {
+    let Some(interval) =
+        ray_aabb_intersect_interval(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)
+    else {
         return false;
     };
     if interval.t_exit < RAY_AABB_T_ENTER_EPS {
@@ -625,7 +624,9 @@ mod tests {
         let cy = (mn_y + mx_y) * 0.5;
         let torso_h = body_hit_torso_height_m(h);
         assert!(torso_h + PLAYER_HEAD_HIT_BODY_GAP_M <= mn_y - feet_y + 1e-4);
-        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, cx, cy, feet_z));
+        assert!(is_headshot_impact_world(
+            feet_x, feet_y, feet_z, h, cx, cy, feet_z
+        ));
         assert!(!is_headshot_impact_world(
             feet_x,
             feet_y,
@@ -654,18 +655,7 @@ mod tests {
         let bh = PLAYER_BODY_HEIGHT_STAND_M;
         let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) = head_hit_box_aabb(px, feet_y, pz, bh);
         let hit = ray_aabb_intersect_enter(
-            0.0,
-            1.62,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            mn_x,
-            mn_y,
-            mn_z,
-            mx_x,
-            mx_y,
-            mx_z,
+            0.0, 1.62, 0.0, 0.0, 0.0, 1.0, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
         );
         assert!(hit.is_some());
         let t = hit.unwrap().t_hit;
@@ -682,12 +672,10 @@ mod tests {
         let body_r = PLAYER_BODY_RADIUS_M;
 
         // Frontal head shot — entry impact lies inside the head box.
-        let (ix, iy, iz) = (
-            feet_x,
-            head_cy,
-            feet_z + PLAYER_BODY_RADIUS_M,
-        );
-        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, ix, iy, iz));
+        let (ix, iy, iz) = (feet_x, head_cy, feet_z + PLAYER_BODY_RADIUS_M);
+        assert!(is_headshot_impact_world(
+            feet_x, feet_y, feet_z, h, ix, iy, iz
+        ));
         assert!(is_headshot_firearm_ray(
             feet_x,
             head_cy + 0.05,

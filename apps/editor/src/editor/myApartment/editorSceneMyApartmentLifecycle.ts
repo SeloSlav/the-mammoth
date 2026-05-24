@@ -59,6 +59,7 @@ import {
   collectOwnedApartmentWallIdsWithOpeningChanges,
   collectWallIdsNeedingEditorMountSync,
   ownedApartmentPlacedItemsOnlyPoseChanged,
+  ownedApartmentStandardWindowShutterPoseChanged,
 } from "./preserveOwnedApartmentMountPlacementRefs.js";
 import { editorMyApartmentSelectedIdForWall } from "./editorMyApartmentSelection.js";
 import { pruneMyApartmentLayoutHiddenPlacementIds } from "./editorMyApartmentLayoutVisibility.js";
@@ -404,7 +405,13 @@ export function createEditorSceneMyApartmentLifecycle(
         previousMountInputs.placedItems,
         doc.placedItems,
       );
-      if (!poseOnly) {
+      const shouldResyncStandardShutters =
+        poseOnly &&
+        ownedApartmentStandardWindowShutterPoseChanged(
+          previousMountInputs.placedItems,
+          doc.placedItems,
+        );
+      if (!poseOnly || shouldResyncStandardShutters) {
         const decorResult = syncEditorMyApartmentDecorOnMount(
           mount,
           decorTemplates,

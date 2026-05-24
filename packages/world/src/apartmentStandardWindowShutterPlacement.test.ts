@@ -16,7 +16,7 @@ import {
 } from "./residentialUnitBalconyShell.js";
 import { finalizeStandardWindowShutterPlacedItemsForUnit } from "./apartmentStandardWindowShutterPlacement.js";
 
-const EAST_FX = 0.9774696707105718;
+const EAST_FX = 0.9774696707105714;
 
 function readTypicalFloorDoc() {
   const raw = JSON.parse(
