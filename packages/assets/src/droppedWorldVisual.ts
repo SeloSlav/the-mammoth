@@ -54,15 +54,9 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   screwdriver: 0.22,
   multimeter: 0.19,
 
-  // Placeables — workshop anchors (loot / faction sites; not corridor-crafted)
-  "brick-oven": 0.65,
-  "reloading-press": 0.55,
-  "gunsmith-workbench": 0.85,
-
-  // Placeables — lower-stack survival rigs (until dedicated meshes)
+  // Carried placeables (player deploy / drop)
   "improvised-cook-fire": 0.42,
   "trench-candle": 0.12,
-  "bulkhead-drip-runner": 0.62,
   "heat-retention-brick": 0.26,
   "snap-rat-trap": 0.18,
 };

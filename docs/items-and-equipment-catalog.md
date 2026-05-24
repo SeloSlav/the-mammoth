@@ -18,7 +18,8 @@ This document lists **everything in the live catalog**, what has **3D coverage**
 | **Tools** | 2 | 2 | Complete |
 | **Ammo / craft materials** | 5 | 5 | Complete |
 | **Consumables (general)** | 7 | 4 + fallbacks | 4 survival consumables have hooks but often use crowbar fallback until GLBs land |
-| **Placeables** | 8 | 3 + fallbacks | Workshop anchors + survival rigs; several refs new, GLB pipeline catching up |
+| **Run stations** | 3 | fallback | World-spawned interactables on extraction floors — **not** inventory placeables |
+| **Placeables** | 4 | 2 + fallbacks | Player-crafted / carried deployables (cook fire, candle, heat brick, rat trap) |
 | **Balcony grow-op** | 15 | Shared stage meshes | Seeds/harvests share `grow-stage-*.glb`; individual seed-packet meshes optional |
 | **Armor / clothing** | **0** | **0** | **Not implemented** — design calls for a **single fungal suit slot** (Rust rad-suit model), not armor sets |
 | **Extraction-only props** | Partial | Partial | Many maintenance/loot props exist as concept art only; not yet catalog ids |
@@ -41,7 +42,19 @@ This document lists **everything in the live catalog**, what has **3D coverage**
 
 ---
 
-## Catalog inventory (44 items)
+## Item kinds (taxonomy)
+
+| Kind | Player carries? | Deploys at home? | Spawned in world? | Example |
+|------|-----------------|------------------|---------------------|---------|
+| **Run station** | No | No | Yes — authored on extraction floors | `brick-oven`, `reloading-press`, `gunsmith-workbench` |
+| **Placeable** | Yes (stack) | Craft + place (TBD) | Optional player deploy | `improvised-cook-fire`, `trench-candle` |
+| **Pickup / resource** | Yes | Stash | Dropped loot piles | `scrap-metal`, `field-rations` |
+
+Run stations are **fixed world props you use during a run** (craft bench UI, reload ammo, bake rations). They stay in the building; you do not haul them back to the apartment. Catalog rows exist so interactions, tooltips, and GLB paths share one id — **`category: placeable` in JSON is legacy** until a `run_station` category lands.
+
+---
+
+## Catalog inventory (43 items)
 
 ### Melee weapons (`melee_weapons.json`)
 
@@ -96,18 +109,26 @@ No magazines in catalog — chamber + inventory stacks only.
 
 Fish-tank feed whitelist (`packages/schemas/src/apartmentFishTank.ts`): `apple`, `fresh-*` harvests, **not** bandage/iodine/caffeine.
 
-### Placeables (`placeables.json`)
+### Run stations (`placeables.json` — world-spawned, not carried)
 
-| `def_id` | Source | Craft | GLB | Meshy ref |
-|----------|--------|-------|-----|-----------|
-| `brick-oven` | World loot anchor | — | fallback | yes (new) |
-| `reloading-press` | World loot anchor | — | fallback | yes (new) |
-| `gunsmith-workbench` | World loot anchor | — | fallback | yes (new) |
-| `improvised-cook-fire` | Craft | scrap ×8, chemical ×3 | `objects/improvised-cook-fire.glb` | yes |
-| `trench-candle` | Craft | scrap ×4, chemical ×5 | `objects/trench-candle.glb` | yes |
-| `bulkhead-drip-runner` | Craft | scrap ×10, chemical ×4 | fallback | yes (new) |
-| `heat-retention-brick` | Craft | scrap ×5, substrate ×4 | fallback | yes (new) |
-| `snap-rat-trap` | Craft | scrap ×4, substrate ×1, chemical ×2 | fallback | yes |
+Authored on extraction / militia / communal floors. Interact in situ; **not** apartment placeables and **not** extraction carry loot.
+
+| `def_id` | Role on a run | GLB | Meshy ref |
+|----------|---------------|-----|-----------|
+| `brick-oven` | Bake / cook station (communal kitchen, logistics bay) | fallback | yes |
+| `reloading-press` | Size brass, seat bullets (armory wing) | fallback | yes |
+| `gunsmith-workbench` | Vise work, light gunsmith actions (militia bench) | fallback | yes |
+
+Meshes live under `static/models/objects/`; placement comes from world content (cells / interiors), not player inventory.
+
+### Placeables (`placeables.json` — crafted / carried)
+
+| `def_id` | Craft | GLB | Meshy ref |
+|----------|-------|-----|-----------|
+| `improvised-cook-fire` | scrap ×8, chemical ×3 | `objects/improvised-cook-fire.glb` | yes |
+| `trench-candle` | scrap ×4, chemical ×5 | `objects/trench-candle.glb` | yes |
+| `heat-retention-brick` | scrap ×5, substrate ×4 | fallback | yes |
+| `snap-rat-trap` | scrap ×4, substrate ×1, chemical ×2 | fallback | yes |
 
 ### Balcony grow-op (`balcony_grow_op.json`)
 
@@ -147,7 +168,82 @@ Starter footlocker pack: substrate ×3, seeds/cuttings (see `apps/server/src/inv
 |-------------------|------|
 | `fungal-suit` | Equippable; zone gate; monolithic slot |
 | `fungal-suit-filter` | Consumable; restores suit durability / spore resistance |
-| `fungal-armor-fiber` | Resource; farm output → craft higher tier (from `core-game-loop.md`) |
+
+---
+
+## Fungal farm catalog (planned v1)
+
+**Status:** Concept art + Meshy prompts exist; **no** `content/items/catalog/` shard yet. See [core-game-loop.md — Fungal farm gameplay](core-game-loop.md#fungal-farm-gameplay) for yield balance.
+
+### Carry loot (farm floor extraction)
+
+| `def_id` | Category | Role | Meshy ref |
+|----------|----------|------|-----------|
+| `fungal-loaf` | consumable | Farm food output; fridge perishable; beats `field-rations` on hunger | yes |
+| `mycelium-harvest-block` | resource | Raw bed harvest; bulky; dry/craft at rack | yes |
+| `fungal-armor-fiber` | resource | Suit tier craft; low drop rate | yes |
+| `quarantine-spore-culture` | resource | Lab strain; trust / medic hook | yes |
+| `nutrient-puck` | resource | Bed **input** (farm-issued or bought); rarely worth hauling out | yes |
+
+### Zone / wear (farm adjacency)
+
+| `def_id` | Category | Role | Meshy ref |
+|----------|----------|------|-----------|
+| `fungal-suit` | wearable | Spore zones; monolithic armor slot | yes |
+| `fungal-suit-filter` | consumable | Suit upkeep cartridge | yes |
+| `spore-sample-jar` | resource | Field sample → farm turn-in (not balcony syringe) | yes |
+| `antifungal-spray` | consumable | Optional pre-suit debuff cushion; **defer** until suit tiers exist | yes |
+
+### Processing chains (no extra items)
+
+| Goal | Chain |
+|------|--------|
+| Bandage material | `mycelium-harvest-block` + drying rack → craft `bandage-roll` |
+| Suit upgrade | `fungal-armor-fiber` + `scrap-metal` + `fungal-suit-filter` → tier bump |
+| Substrate | apartment compost → `balcony-grow-substrate`; farm beds eat `nutrient-puck` + water |
+
+### World-only (not catalog)
+
+Bulk mycelium beds, misting corridors, sterilizer, UV rigs, humidity controls — **authored run stations / props**, same pattern as `brick-oven`.
+
+### Intentionally not adding
+
+| Design-doc mention | Resolution |
+|--------------------|------------|
+| Adhesives | `chemical-stock` |
+| Insulation material | `heat-retention-brick` / building props |
+| Clean containers | `fungal-culture-box` decor / station mesh only |
+| Tubing, UV bulbs | MEP props; not inventory |
+| Separate medicinal pill | Reuse `quarantine-spore-culture` or `iodine-tablets` |
+| Work chits / farm trust | Currency table, not `def_id` |
+
+**Verdict:** Farm **item roster is complete for v1**. Further items = feature creep unless a new mechanic (e.g. strain experiment minigame) needs a dedicated id.
+
+---
+
+## Run extraction recoverables (planned v1)
+
+**Per-floor assignment:** [building-floors.md](building-floors.md) — primary/secondary loot for all 16 abandoned decks, PR, farm, militia, and basement.
+
+Weapons excluded (catalog complete). Items with concept art, not yet in JSON shards:
+
+| `def_id` | Category | Loop |
+|----------|----------|------|
+| `flashlight` | tool | Blackout stairs / basement |
+| `battery-4-pack` | resource | Flashlight / radio upkeep |
+| `fish-food-tin` | consumable | Fish tank |
+| `ceramic-water-filter` | utility | Water tank repair |
+| `fuse-wire-pack` | resource | MEP / maintenance runs |
+| `disinfectant-bottle` | consumable | Med layer distinct from bandage/iodine |
+| `pump-impeller` | resource | Basement pump work orders |
+| `pressure-gauge` | tool | Basement tutorial interact *(carry only if quest requires)* |
+| `valve-wheel` | utility | Same |
+| `patrol-lamp` | utility | Militia contract loot — floor **6** |
+| `duct-tape-roll` | resource | Storage / generic repair — floor **13** |
+| `metal-pipe` | melee | Collapsed / workshop — floors **8**, **10** |
+| `improvised-spear` | melee | Collapsed — floor **8** |
+
+**Run station ids (in catalog, not carried):** `brick-oven`, `reloading-press`, `gunsmith-workbench`.
 
 ---
 
@@ -161,8 +257,8 @@ Items players can already pick up in code; ship meshes before adding new ids:
 
 - Survival consumables: `field-rations`, `iodine-tablets`, `bandage-roll`, `caffeine-gum`
 - Craft materials: `scrap-metal`, `chemical-stock`, ammo stacks
-- Workshop anchors: `brick-oven`, `reloading-press`, `gunsmith-workbench`
-- Survival placeables: `bulkhead-drip-runner`, `heat-retention-brick`, `snap-rat-trap`
+- Carried placeables: `heat-retention-brick`, `snap-rat-trap` (+ cook fire / trench candle GLBs shipped)
+- **Run station GLBs** (world-authored, not drops): `brick-oven`, `reloading-press`, `gunsmith-workbench`
 
 ### Tier B — Concept art exists; not in catalog yet
 
@@ -185,15 +281,15 @@ Good **extraction return** candidates when systems land (maintenance tutorial, z
 
 ### Tier C — Design-doc extraction themes still uncovered
 
-Minimal set worth **one mesh each** when extraction floors go live (not 20 variants):
+Most themes now have a planned `def_id` + meshy ref — see [Run extraction recoverables (planned v1)](#run-extraction-recoverables-planned-v1) and [Fungal farm catalog (planned v1)](#fungal-farm-catalog-planned-v1).
 
-| Theme | 1–2 props max | Notes |
-|-------|---------------|-------|
-| **Maintenance** | `pressure-gauge` (handheld), `valve-wheel` (small) | Basement tutorial from `core-game-loop.md` |
-| **Farm / fungal** | `fungal-loaf`, `nutrient-puck` | Ration-grade food; ties farm floor to apartment fridge |
-| **Medicine** | reuse `bandage-roll` + `iodine-tablets`; add `disinfectant-bottle` only if effect differs | Avoid pill variety |
-| **Comfort trade** | reuse `cigarettes`, `rakija`, `pioneer-neckerchief` decor | Already covered |
-| **Combat salvage** | reuse ammo + `ammo-tin`; **no new weapons** | Weapon parts as `scrap-metal` stack visually |
+| Theme | Status |
+|-------|--------|
+| **Maintenance** | `pressure-gauge`, `valve-wheel`, `pump-impeller`, `fuse-wire-pack` — covered |
+| **Farm / fungal** | Five farm loot ids + suit/filter — covered |
+| **Medicine** | `bandage-roll`, `iodine-tablets`, `disinfectant-bottle` — covered |
+| **Comfort trade** | reuse `cigarettes`, `rakija` — covered |
+| **Combat salvage** | ammo stacks + `scrap-metal` — no new weapons |
 
 ---
 
@@ -220,7 +316,7 @@ Minimal set worth **one mesh each** when extraction floors go live (not 20 varia
 When adding or finishing an item:
 
 1. Add or confirm row in `content/items/catalog/*.json`
-2. Add `droppedWorldVisual` size in `packages/assets/src/droppedWorldVisual.ts` if it can be dropped
+2. Add `droppedWorldVisual` size in `packages/assets/src/droppedWorldVisual.ts` if it can appear as a **dropped loot pile** (not run stations — those are world-authored props)
 3. Add `MAMMOTH_CATALOG_GLB_PRIMARY_URI` override if filename ≠ `def_id`
 4. Concept PNG in `content/references/meshy/<slug>.png` + subject in `content/references/meshy/README.md`
 5. Ship GLB under `apps/client/public/static/models/{weapons,consumables,objects,items}/`
@@ -232,18 +328,15 @@ When adding or finishing an item:
 
 ## Recommended next steps (minimal variety)
 
-1. **Ship GLBs** for Tier A catalog rows that still fallback (consumables + new placeables + extraction tools when cataloged).
-2. **Add 3 catalog ids** when ready to implement systems:
-   - `fungal-suit` (wearable)
-   - `fungal-suit-filter` (consumable)
-   - `flashlight` (tool)
-3. **Add 2–3 extraction resources** when basement/maintenance loop ships: `fuse-wire-pack`, `ceramic-water-filter`, `spore-sample-jar` (or reuse as stack variants of existing materials).
-4. **Hold** on: extra weapons, armor sets, seed-packet mesh per crop, duplicate food tins, map-board as item.
+1. Add **`content/items/catalog/fungal_farm.json`** (or extend shards) with the [farm v1 table](#fungal-farm-catalog-planned-v1) when implementing farm shifts.
+2. Add **`wearables.json`** or extend tools for `fungal-suit`, `flashlight`, and run recoverables — one shard, ~15 rows total.
+3. **Hold** on: extra weapons, armor sets, `antifungal-spray` until suit tiers ship, duplicate food tins, map-board as item, farm-only adhesives/insulation ids.
 
 ---
 
 ## Related docs
 
+- [building-floors.md](building-floors.md) — elevator stack, PR, per-floor recoverable profiles
 - [core-game-loop.md](core-game-loop.md) — extraction philosophy, apartment rituals, farm outputs
 - [weapon-authoring.md](weapon-authoring.md) — FP/TP weapon presentation
 - [content/references/meshy/README.md](../content/references/meshy/README.md) — concept prompt house style

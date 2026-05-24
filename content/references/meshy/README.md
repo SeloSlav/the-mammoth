@@ -89,7 +89,7 @@ upright flip-top cigarette pack, heavily weathered dirty beige cardboard with cr
 upright empty longneck beer bottle facet-cut low-poly body and tapered neck dull olive green translucent glass with crown rim and no cap, fine scratches dull grime bottom interior dried residue ring torn rectangular paper label with abstract muted green tan reddish-brown blotches only no legible branding, grounded bar litter prop matched to gritty reference silhouette, centered and fully visible
 ```
 
-**Placeables — militia / workshop (world loot anchors).** Salvage-grade workshop props with readable mass and chunky silhouettes for interior anchors.
+**Run stations — militia / workshop (world-spawned, interact on a run).** Fixed floor props with readable mass and chunky silhouettes; not inventory placeables.
 
 ### Brick oven (`brick-oven.png`)
 
@@ -123,12 +123,6 @@ improvised cook fire kit as separate prop not lit, perforated steel barrel skirt
 small trench candle improvised from shallow dented tuna-tin reservoir dull steel with grime lip, chunky off-white scav wax mound with softened edges and dark char ring hint at melted pool only, twisted natural fiber wick standing upright centered unlit blunt tip slightly blackened tip only, blackout landing emergency light tabletop scale comparable to fist sized, grounded PS2 grime prop centered and fully visible
 ```
 
-### Bulkhead drip runner (`bulkhead-drip-runner.png`)
-
-```
-improvised bulkhead drip runner bent galvanized or steel sheet formed into a shallow half-round gutter channel with visible pop-rivet line along the seam and squashed end cap crimped smaller outlet spout, olive drab primer chips and rust streaks along the fold line, simple angle brackets or bent tabs for wall screw holes, meant to catch stairwell or riser seep and bleed it sideways, prop length about forearm to short armspan scale not a full room gutter, clean low-poly game silhouette centered and fully visible
-```
-
 ### Heat retention brick (`heat-retention-brick.png`)
 
 ```
@@ -139,6 +133,104 @@ heat retention sleeper bundle reclaimed firebrick slabs or heavy clay pavers sta
 
 ```
 classic sprung snap-bar rat trap single traditional wooden plank base chipped gray-brown varnish with grain read as low-poly faceting, rusty steel bait pedal trip plate hinged spring arm and snapping kill bar wire loop at free end restrained in cocked-ready pose with visible coil spring block, petite dull brass finish bait cleat spike center line with tiny abstract crumb lure only no readable labels, gouged chew marks at wood corners, gritty Eastern European basement vermin gear readable silhouette from slight three-quarter angle full trap in frame handheld scale centered and fully visible
+```
+
+**Wearables / run maintenance.**
+
+### Fungal suit (`fungal-suit.png`)
+
+```
+full-body sealed spore-protection coveralls in neutral A-pose arms slightly out from body legs straight feet shoulder-width, Eastern European farm or maintenance issue hazmat-style one-piece suit not glossy modern NBC, dull olive drab or gray-green rubberized fabric and taped seam bands at ankles wrists and zipper flap, integrated hood and helmet up over head with scuffed clear visor panel or taped face seal rim and dull rubber neck gasket, chest-mounted filter socket port with blank cap plate no hose, scuffed knees and spore dust smudges on thighs, thick rubber boot covers over simple work shoes, clean topology suitable for rigging, realistic human proportions under suit slightly stylized, no weapon no backpack, centered and fully visible
+```
+
+### Fungal suit filter (`fungal-suit-filter.png`)
+
+```
+replaceable fungal suit filter canister cartridge for chest or back mount, short squat cylinder with threaded neck and bayonet twist-lock base plate, olive drab metal end caps and pleated HEPA-style filter band as simple low-poly rings not micro mesh, faint spore grime on intake face, small rubber gasket lip, consumable spare part scale about one forearm long and fist diameter, no full suit no hose assembly, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Pressure gauge (`pressure-gauge.png`)
+
+```
+industrial pressure gauge for basement MEP checks, round dial face with scratched glass lens and rusty bezel, single pipe stub or sweat coupling on the back or bottom suggesting panel mount, needle frozen at mid scale as abstract tick marks only no legible numbers, dingy beige or gray metal case with oil smudge, handheld maintenance prop scale about palm wide, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Valve wheel (`valve-wheel.png`)
+
+```
+manual pipe valve wheel for geothermal or riser shutoff, circular cast-iron or brass handwheel with four spokes and worn knurl rim, short valve body stub with threaded pipe ends capped simple cylinders only, mineral scale and rust streaks on the body, practical Soviet-era plumbing look not modern chrome, maintenance tutorial prop scale about two palms across the wheel, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+**Melee — improvised / found (future catalog).**
+
+### Metal pipe (`metal-pipe.png`)
+
+```
+short galvanized steel pipe club improvised melee weapon, thick plumbing pipe segment about forearm length with one end crushed flat or capped with welded plate and the other end rough cut burr, dull zinc-gray with rust freckles and dried stain streaks, no tape wrap no chain, stairwell scavenger blunt weapon readable silhouette heavier than a knife lighter than a bat, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Improvised spear (`improvised-spear.png`)
+
+```
+improvised spear assembled from rebar or sharpened flat steel on a pipe handle, long narrow total length about two forearms with tapered rusty spike head and electrical tape or wire lashing at the socket joint, chipped olive drab duct tape bands not bright silver, wobble in the head alignment slightly bent from prying use, low-tier reach weapon for stairwell militia not a proper bayonet, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+**Fungal farm floor — recoverable outputs (communal grow beds; not balcony crops).**
+
+### Fungal loaf (`fungal-loaf.png`)
+
+```
+dense ration-grade fungal loaf for communal farm output, squat rectangular mycelium bread block with cracked gray-beige crust and darker damp crumb visible at one torn corner, wrapped in wax paper or thin cellulose sheet with grease stains and fold creases, no bakery branding no slice exposed, heavy calorie brick scale about two palms long and one palm thick, distinct from military field-rations foil brick, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Fungal armor fiber (`fungal-armor-fiber.png`)
+
+```
+bundle of cultivated fungal armor fiber sheets for suit reinforcement crafting, two or three layered pale gray mycelium-leather strips with fibrous edge read as low-poly fringe, lashed with twine or rubber band, faint spore dust on surfaces, farm quarantine lab output not animal hide, handheld bundle scale about forearm length, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Nutrient puck (`nutrient-puck.png`)
+
+```
+dry nutrient puck for bulk mycelium bed feeding, compressed brown-green disk cake with chalky surface and chipped edge exposing darker core, stacked two high optional second puck offset, faint chemical salt crust, farm input prop scale about fist diameter and two fingers thick, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Mycelium harvest block (`mycelium-harvest-block.png`)
+
+```
+raw mycelium harvest block cut from communal grow bed, irregular chunky slab of pale gray-white fungal mass with torn underside showing stringy root-like strands simplified as low-poly planes, damp sheen not glowing not emissive, bits of substrate grit clinging to the base, farm floor resource loot scale about two fists wide, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Quarantine spore culture (`quarantine-spore-culture.png`)
+
+```
+sealed quarantine spore culture vessel from farm sterile prep room, small rigid plastic bio box or metal canister with amber viewing window and red-white hazard stripe blocks only no legible text, rubber gasket lid clamped shut, faint condensation inside, distinct from field sample jar by heavier lab packaging and square profile, handheld loot scale about one forearm tall, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+**Extraction run recoverables.**
+
+### Disinfectant bottle (`disinfectant-bottle.png`)
+
+```
+plastic disinfectant bottle for field wound cleaning and surface wipe-down, squat amber or cloudy white bottle with screw cap and narrow neck, peeling paper label as abstract green-gray smudge blocks only no legible text, dried splash residue on the shoulders, distinct from iodine tablet strips and bandage roll, handheld med loot scale about palm tall, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Pump impeller (`pump-impeller.png`)
+
+```
+small centrifugal pump impeller spare part for basement MEP maintenance, bronze or dull brass curved vane wheel with central keyed bore and chipped leading edges, light oil staining in the hub recess, no full pump housing no motor, maintenance salvage loot scale about fist diameter, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Battery 4-pack (`battery-4-pack.png`)
+
+```
+blister pack of four cylindrical batteries for blackout flashlights and radios, clear or yellowed plastic blister on faded cardboard backing with abstract red-black print blocks only no legible brand, four AA-scale cells visible through the blister two rows of two, corners dog-eared and dusty, utility loot scale about two palms wide, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
+```
+
+### Patrol lamp (`patrol-lamp.png`)
+
+```
+heavy militia patrol lantern for dark stairwell and checkpoint sweeps, squat rectangular metal body in chipped olive drab or faded gray-green with dented corner plates and rusty screw feet, front wire safety cage around a frosted glass or yellowed plastic lens panel not glowing not emissive, top bail handle plus side pistol-grip stub for one-hand carry, short rubberized power cable coiled and zip-tied to the back with frayed insulation at the plug end cap only no wall socket, abstract red-white hazard stripe blocks on one side panel no legible stencils, belt clip hook on the rear bracket, distinct from slim personal flashlight and from improvised trench candle tin, institutional Red Belt gear about two palms tall and one palm deep, clean low-poly geometry optimized for game use, strong readable silhouette, centered and fully visible
 ```
 
 ---

@@ -291,30 +291,11 @@ They are a dangerous source of opportunity.
 
 These are the main extraction zones.
 
-They include roughly 16 floors between the security frontier and the ground level.
+They include **16 floors** between the security frontier (elevator **17**) and the deepest passenger deck (elevator **1**), with **PR** as the ground lobby hub below that stack — not a seventeenth extraction deck.
 
-They are not all identical apartment floors.
+They are not all identical apartment floors. Some are residential; others were converted during the sealed-building civilization period.
 
-Some are residential. Others were converted during the sealed-building civilization period.
-
-Potential floor themes:
-
-- abandoned residential floor
-- flooded residential floor
-- school / daycare floor
-- clinic / medical floor
-- grocery / ration storage floor
-- failed militia outpost
-- maintenance-heavy utility floor
-- collapsed floor
-- religious / elderly resident floor
-- workshop floor
-- laundry / textile floor
-- archive / records floor
-- storage floor
-- quarantine floor
-- black-market floor
-- fungus-bloom floor
+**Locked assignment (elevator label → theme → recoverables):** see [building-floors.md](building-floors.md). Canonical flavor text lives in the player notebook Floor ledger (`apps/client/src/ui/playerNotebookTipsContent.ts`).
 
 Each floor should have its own identity, mood, navigation problem, loot profile, and hazard style.
 
@@ -324,15 +305,24 @@ Runs should target specific rooms, systems, or objects.
 
 ### Basement geothermal / boiler / generator levels
 
-These levels are part of the player’s work life and the building’s lore.
+Four **service levels beneath PR** (not on the passenger elevator panel — access via PR service stairs and boot-card landings). Heat and utility flow **upward** from the deep source; the player’s daily rota is the top of this stack.
 
-**Important clarification:** The geothermal / boiler / generator levels are **not** combat dungeons, especially not early.
+| Level | Crew name (diegetic) | Function | Access / gameplay phase |
+|-------|----------------------|----------|-------------------------|
+| **−1** | Kotlovnica (boiler hall) | Heat **distribution** — ceramic buffers, riser manifolds, domestic hot water, steam to radiators | **Early game hub.** Player’s official workplace. Work orders, tutorials, valves/gauges/fuses. |
+| **−2** | Pumparna / switchgear | **Circulation & power** — main pumps, backup generators, elevator power routing, ventilation tie-ins | **Mid-early.** Escorted runner clearance. Pump repair, temporary power reroute, impeller retrieval. |
+| **−3** | Geotermalna dvorana | **Geothermal plant** — brine loops, primary heat exchangers, turbine hall (ORC / building generation) | **Mid-game.** Supervised tech work. Brine pressure, turbine load, exchanger maintenance. Lore + schematics. |
+| **−4** | Galerija / source intake | **Deep wellheads & intake gallery** — connection to the geothermal reservoir; pre-seal council infrastructure | **Late game.** Council-sealed. Story unlock or major escalation. Not an early combat floor. |
+
+**Important clarification:** Levels **−1 through −3** are **not** combat dungeons, especially not early.
 
 They are maintained, defended, and contained.
 
 They do not initially have fungal infestation or enemies.
 
-The player works there.
+The player works on **−1** and visits deeper levels with clearance.
+
+**−4** is the **late-stage** basement band: council keys, intake secrets, and (if the story demands it) the first fungal or structural breach *from below* — catastrophic because the player has learned these areas are supposed to be sacred and protected.
 
 These levels explain why the building still has:
 
@@ -385,7 +375,7 @@ They provide:
 - building schematics
 - repair training
 
-Late in the game, fungal contamination or sabotage could threaten these levels, but that should feel like a major escalation because the player has learned these areas are supposed to be safe and protected.
+Late in the game, fungal contamination or sabotage could threaten these levels — especially **−4 (intake gallery)**, where bedrock fissures and pre-seal council infrastructure meet the outside geology — but that should feel like a major escalation because the player has learned **−1 through −3** are supposed to be safe and protected.
 
 ---
 
@@ -1315,6 +1305,40 @@ The fungal farm is productive but communal.
 The player’s **balcony grow-op** is personal, fixed (eight trays), and low-yield — a tutorial and supplement, not food security.
 
 The farm floor is social, large-scale, and tied to the building economy. **Grow-bay plot access** (rent or purchase with work chits / farm trust) is the step up from balcony gardening.
+
+### Catalog mapping (v1 — items only)
+
+**Design rule:** one mesh per *role*, not per design-doc bullet. Processing chains reuse apartment stations (drying rack, stove, fridge) instead of parallel item types.
+
+| Design output / input | `def_id` (planned or live) | Notes |
+|------------------------|---------------------------|--------|
+| Food / ration packs (farm) | `fungal-loaf` | Communal calories — **~8–12× hunger** vs balcony harvest; fridge perishable |
+| Ration packs (military loot) | `field-rations` | Shelf-stable; corridor/apartment loot — **not** farm output |
+| Raw harvest | `mycelium-harvest-block` | Bulky carry; process on farm or at apartment drying rack |
+| Nutrient powder / bed feed | `nutrient-puck` | Farm **input**; issued or bought on-site; low home stash value |
+| Substrate (apartment) | `balcony-grow-substrate` | Balcony + compost loop; farm beds consume pucks + water at scale |
+| Spores / strains (lab) | `quarantine-spore-culture` | Farm sterile output; high trust / trade value |
+| Spores (field sample) | `spore-sample-jar` | Extraction turn-in → farm trust (not balcony spore syringe) |
+| Fungal leather / armor padding | `fungal-armor-fiber` | Craft input for **`fungal-suit`** tier upgrade + filter efficiency |
+| Bandage material | *(chain)* | `mycelium-harvest-block` → drying rack → craft **`bandage-roll`** — no third item |
+| Medicinal compounds | `quarantine-spore-culture` *or* consume hook on harvest | Reuse one culture id; avoid pill sprawl |
+| Armor / spore zones | `fungal-suit`, `fungal-suit-filter` | Single wearable slot; filter burn = repeat farm visits |
+| Compost | `balcony-grow-substrate` | Same compost id; farm consumes in bulk |
+| Trade goods | `cigarettes`, `rakija`, cultures | No farm-only trade crate |
+| Adhesives / insulation | `chemical-stock`, `heat-retention-brick` | Fold into existing ids |
+| Water | `water-bottle` | Farm shifts sip canteen; beds need volume |
+| Tools | `screwdriver`, `multimeter` | Already in catalog |
+| UV / sterilizer / beds | *world props* | Authored run stations — **not** backpack items |
+
+**Yield balance (targets):**
+
+- **Balcony:** garnish + emergency greens; ~**5–15%** of daily hunger if fully tended.
+- **Farm shift (one good run):** should cover **1–2 days** hunger *or* one suit/filter resupply *or* one armor-fiber bundle — player picks (extraction choice).
+- **`mycelium-harvest-block`:** high stack weight / low stack max (e.g. `maxStack: 3`) so hauling raw vs processing on-site matters.
+- **`fungal-loaf`:** best hunger efficiency but spoils in fridge; **`field-rations`:** worse hunger, infinite shelf fantasy.
+- **`fungal-armor-fiber` / `quarantine-spore-culture`:** low drop rate, high trust — not spammable every shift.
+
+**v1 complete?** Item *identities* yes. Deferred as **non-items:** work chits (currency), humidity UI, bulk bed meshes, sterilizer station, UV rigs, tubing, adhesives as separate loot.
 
 ---
 

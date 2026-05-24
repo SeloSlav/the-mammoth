@@ -268,6 +268,6 @@ describe("dropped world sizing table", () => {
   it("covers common loot / drop ids", () => {
     expect(getMammothDroppedWorldTargetMaxDimM("ammo-9mm")).toBeLessThan(getMammothDroppedWorldTargetMaxDimM("crowbar"));
     expect(getMammothDroppedWorldTargetMaxDimM("crowbar")).toBeLessThan(1);
-    expect(getMammothDroppedWorldTargetMaxDimM("gunsmith-workbench")).toBeGreaterThan(0.5);
+    expect(getMammothDroppedWorldTargetMaxDimM("improvised-cook-fire")).toBeGreaterThan(0.35);
   });
 });

@@ -4,21 +4,21 @@
     {
       "id": "brick-oven",
       "displayName": "Brick oven",
-      "description": "Heavy retained-heat chamber for baking and slow roasts. These are anchored in communal kitchens or militia logistics bays — salvage on-site rather than improvised in occupied stacks.",
+      "description": "Heavy retained-heat chamber for baking and slow roasts. Fixed run station in communal kitchens or militia logistics bays — interact on-site during a run; not carried home.",
       "category": "placeable",
       "maxStack": 1
     },
     {
       "id": "reloading-press",
       "displayName": "Reloading press",
-      "description": "Bench press for sizing brass and seating bullets. Production gear lives in guarded armory wings — not corridor craft fodder.",
+      "description": "Bench press for sizing brass and seating bullets. Fixed run station in guarded armory wings — use during a run; not a portable placeable.",
       "category": "placeable",
       "maxStack": 1
     },
     {
       "id": "gunsmith-workbench",
       "displayName": "Gunsmith workbench",
-      "description": "Vised receiver work surface with gauges and punches. Militia benches stay bolted down; hauling one up from surplus is loot logic, not a quick build.",
+      "description": "Vised receiver work surface with gauges and punches. Fixed militia run station — interact on-site during a run; not hauled to the apartment.",
       "category": "placeable",
       "maxStack": 1
     },
@@ -47,20 +47,6 @@
         "materials": [
           { "itemId": "scrap-metal", "quantity": 4 },
           { "itemId": "chemical-stock", "quantity": 5 }
-        ]
-      }
-    },
-    {
-      "id": "bulkhead-drip-runner",
-      "displayName": "Bulkhead drip runner",
-      "description": "Bent sheet trough with pop-riveted end caps screwed along a leaky riser cheek or bulkhead seam—bleeds condensation past bedding instead of tarp circus acts. Routed drips hook TBD.",
-      "category": "placeable",
-      "maxStack": 2,
-      "construction": {
-        "buildTimeSecs": 28,
-        "materials": [
-          { "itemId": "scrap-metal", "quantity": 10 },
-          { "itemId": "chemical-stock", "quantity": 4 }
         ]
       }
     },
