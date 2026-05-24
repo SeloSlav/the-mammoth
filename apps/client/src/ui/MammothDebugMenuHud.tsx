@@ -3,6 +3,7 @@ import {
   useEffect,
   useState,
   useSyncExternalStore,
+  Fragment,
   type ReactElement,
 } from "react";
 import { createPortal } from "react-dom";
@@ -613,16 +614,18 @@ export function MammothDebugMenuHud() {
                 Reset
               </button>
             </div>
-            {renderIsolationRows.map((row) =>
-              rowToggle({
-                label: row.label,
-                description: row.description,
-                on: renderIsolation[row.key],
-                onToggle: () => {
-                  setFpDebugRenderIsolationFlag(row.key, !renderIsolation[row.key]);
-                },
-              }),
-            )}
+            {renderIsolationRows.map((row) => (
+              <Fragment key={row.key}>
+                {rowToggle({
+                  label: row.label,
+                  description: row.description,
+                  on: renderIsolation[row.key],
+                  onToggle: () => {
+                    setFpDebugRenderIsolationFlag(row.key, !renderIsolation[row.key]);
+                  },
+                })}
+              </Fragment>
+            ))}
 
             <div style={{ fontSize: 12, fontWeight: 700, color: THEME_TEXT_MUTED, marginTop: 16 }}>
               Apartment authoring

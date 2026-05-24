@@ -29,11 +29,9 @@ const XZ_QUERY_PAD_M = 1.0;
 const RAY_DIR_EPS = 1e-12;
 const RAY_MIN_T_M = 0.04;
 
-type ActiveDecal = {
-  mesh: THREE.Mesh<
-    THREE.CircleGeometry,
-    THREE.MeshBasicMaterial
-  >;
+type DecalSlot = {
+  mesh: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
+  active: boolean;
   birthMs: number;
 };
 
@@ -205,8 +203,29 @@ export function createFpFirearmImpactDecals(opts: {
 
   const sharedGeomPistol = new THREE.CircleGeometry(PISTOL_RADIUS_M, 24);
   const sharedGeomPellet = new THREE.CircleGeometry(SHOTGUN_PELLET_RADIUS_M, 18);
+  const sharedMaterial = new THREE.MeshBasicMaterial({
+    color: 0x1a1816,
+    transparent: true,
+    opacity: 1,
+    depthWrite: false,
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1.25,
+    polygonOffsetUnits: -1.25,
+  });
 
-  const actives: ActiveDecal[] = [];
+  const pool: DecalSlot[] = [];
+  for (let i = 0; i < MAX_DECALS; i += 1) {
+    const mesh = new THREE.Mesh(sharedGeomPistol, sharedMaterial.clone());
+    mesh.name = "fp_firearm_impact_decal";
+    mesh.renderOrder = 2;
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    pool.push({ mesh, active: false, birthMs: 0 });
+  }
+
+  const actives: DecalSlot[] = [];
 
   const scratch = {
     origin: new THREE.Vector3(),
@@ -223,9 +242,20 @@ export function createFpFirearmImpactDecals(opts: {
   const trimExcess = (): void => {
     while (actives.length > MAX_DECALS) {
       const old = actives.shift()!;
-      group.remove(old.mesh);
-      old.mesh.material.dispose();
+      old.active = false;
+      old.mesh.visible = false;
     }
+  };
+
+  const acquireSlot = (): DecalSlot | null => {
+    for (const slot of pool) {
+      if (!slot.active) return slot;
+    }
+    if (actives.length === 0) return null;
+    const recycled = actives.shift()!;
+    recycled.active = false;
+    recycled.mesh.visible = false;
+    return recycled;
   };
 
   const spawnOneAt = (
@@ -241,6 +271,9 @@ export function createFpFirearmImpactDecals(opts: {
     radiusGeom: THREE.CircleGeometry,
     birthMs: number,
   ): void => {
+    const slot = acquireSlot();
+    if (!slot) return;
+
     scratch.normal.set(nx, ny, nz);
     if (scratch.normal.lengthSq() < 1e-12) {
       scratch.normal.set(-shotDirX, -shotDirY, -shotDirZ).normalize();
@@ -255,27 +288,18 @@ export function createFpFirearmImpactDecals(opts: {
     }
     scratch.pos.set(px, py, pz).addScaledVector(scratch.normal, SURFACE_BIAS_M);
 
-    const mesh = new THREE.Mesh(
-      radiusGeom,
-      new THREE.MeshBasicMaterial({
-        color: 0x1a1816,
-        transparent: true,
-        opacity: 1,
-        depthWrite: false,
-        toneMapped: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1.25,
-        polygonOffsetUnits: -1.25,
-      }),
-    );
-    mesh.name = "fp_firearm_impact_decal";
-    mesh.renderOrder = 2;
+    const mesh = slot.mesh;
+    if (mesh.geometry !== radiusGeom) {
+      mesh.geometry = radiusGeom;
+    }
     mesh.position.copy(scratch.pos);
     scratch.quat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), scratch.normal);
     mesh.quaternion.copy(scratch.quat);
+    mesh.visible = true;
 
-    actives.push({ mesh, birthMs });
-    group.add(mesh);
+    slot.active = true;
+    slot.birthMs = birthMs;
+    actives.push(slot);
     trimExcess();
   };
 
@@ -421,8 +445,8 @@ export function createFpFirearmImpactDecals(opts: {
         const d = actives[i]!;
         const u = (nowMs - d.birthMs) / DECAL_TTL_MS;
         if (u >= 1) {
-          group.remove(d.mesh);
-          d.mesh.material.dispose();
+          d.active = false;
+          d.mesh.visible = false;
           actives.splice(i, 1);
           continue;
         }
@@ -431,11 +455,15 @@ export function createFpFirearmImpactDecals(opts: {
     },
 
     dispose(): void {
-      for (const d of actives) {
-        group.remove(d.mesh);
-        d.mesh.material.dispose();
+      for (const slot of pool) {
+        slot.active = false;
+        slot.mesh.visible = false;
+        slot.mesh.material.dispose();
+        group.remove(slot.mesh);
       }
+      pool.length = 0;
       actives.length = 0;
+      sharedMaterial.dispose();
       opts.scene.remove(group);
       sharedGeomPistol.dispose();
       sharedGeomPellet.dispose();

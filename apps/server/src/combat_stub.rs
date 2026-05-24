@@ -29,6 +29,9 @@ pub const PLAYER_HEAD_HIT_BOX_LIFT_ABOVE_BODY_M: f32 = 0.14;
 pub const PLAYER_HEAD_HIT_BOX_CROWN_INSET_M: f32 = 0.04;
 /// Vertical gap between torso body volume and head hit box (no overlap).
 pub const PLAYER_HEAD_HIT_BODY_GAP_M: f32 = 0.02;
+/// Extra ray depth after wide-body entry before head-box entry still counts as headshot
+/// (side clips where the body AABB is wider than the head cube).
+pub const PLAYER_HEAD_HIT_FIREARM_ENTRY_SLACK_M: f32 = 0.02;
 
 pub const RAY_AABB_T_ENTER_EPS: f32 = 4e-4;
 
@@ -241,6 +244,59 @@ pub struct RayAabbHit {
     pub t_hit: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct RayAabbInterval {
+    pub t_enter: f32,
+    pub t_exit: f32,
+}
+
+fn ray_aabb_axis_interval(ox: f32, dir: f32, mn: f32, mx: f32) -> Result<(f32, f32), ()> {
+    const AXIS_EPS: f32 = 1e-14;
+    if dir.abs() < AXIS_EPS {
+        if ox < mn || ox > mx {
+            Err(())
+        } else {
+            Ok((f32::NEG_INFINITY, f32::INFINITY))
+        }
+    } else {
+        let inv = 1.0 / dir;
+        let mut t1 = (mn - ox) * inv;
+        let mut t2 = (mx - ox) * inv;
+        if t1 > t2 {
+            std::mem::swap(&mut t1, &mut t2);
+        }
+        Ok((t1, t2))
+    }
+}
+
+/// Ray overlap interval with an axis-aligned box (`t_enter` / `t_exit` along unit `(dx,dy,dz)`).
+pub fn ray_aabb_intersect_interval(
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    mn_x: f32,
+    mn_y: f32,
+    mn_z: f32,
+    mx_x: f32,
+    mx_y: f32,
+    mx_z: f32,
+) -> Option<RayAabbInterval> {
+    let (tx_enter, tx_exit) = ray_aabb_axis_interval(ox, dx, mn_x, mx_x).ok()?;
+    let (ty_enter, ty_exit) = ray_aabb_axis_interval(oy, dy, mn_y, mx_y).ok()?;
+    let (tz_enter, tz_exit) = ray_aabb_axis_interval(oz, dz, mn_z, mx_z).ok()?;
+
+    let t_enter = tx_enter.max(ty_enter).max(tz_enter);
+    let t_exit = tx_exit.min(ty_exit).min(tz_exit);
+
+    if t_enter > t_exit || t_exit < -1e-3 {
+        return None;
+    }
+    Some(RayAabbInterval { t_enter, t_exit })
+}
+
 /// First positive ray entry into an axis-aligned box (`t_hit` along `(dx,dy,dz)`), if any.
 pub fn ray_aabb_intersect_enter(
     ox: f32,
@@ -256,44 +312,59 @@ pub fn ray_aabb_intersect_enter(
     mx_y: f32,
     mx_z: f32,
 ) -> Option<RayAabbHit> {
-    fn axis(ox: f32, dir: f32, mn: f32, mx: f32) -> Result<(f32, f32), ()> {
-        const AXIS_EPS: f32 = 1e-14;
-        if dir.abs() < AXIS_EPS {
-            if ox < mn || ox > mx {
-                Err(())
-            } else {
-                Ok((f32::NEG_INFINITY, f32::INFINITY))
-            }
-        } else {
-            let inv = 1.0 / dir;
-            let mut t1 = (mn - ox) * inv;
-            let mut t2 = (mx - ox) * inv;
-            if t1 > t2 {
-                std::mem::swap(&mut t1, &mut t2);
-            }
-            Ok((t1, t2))
-        }
-    }
-
-    let (tx_enter, tx_exit) = axis(ox, dx, mn_x, mx_x).ok()?;
-    let (ty_enter, ty_exit) = axis(oy, dy, mn_y, mx_y).ok()?;
-    let (tz_enter, tz_exit) = axis(oz, dz, mn_z, mx_z).ok()?;
-
-    let t_enter = tx_enter.max(ty_enter).max(tz_enter);
-    let t_exit = tx_exit.min(ty_exit).min(tz_exit);
-
-    if t_enter > t_exit || t_exit < -1e-3 {
-        return None;
-    }
-    let t_hit = if t_enter >= RAY_AABB_T_ENTER_EPS {
-        t_enter
-    } else if t_exit >= RAY_AABB_T_ENTER_EPS {
+    let interval = ray_aabb_intersect_interval(
+        ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
+    )?;
+    let t_hit = if interval.t_enter >= RAY_AABB_T_ENTER_EPS {
+        interval.t_enter
+    } else if interval.t_exit >= RAY_AABB_T_ENTER_EPS {
         RAY_AABB_T_ENTER_EPS
     } else {
         return None;
     };
 
     Some(RayAabbHit { t_hit })
+}
+
+/// Slack along the aim ray between wide-body entry and narrow head-box entry.
+#[inline]
+pub fn head_hit_firearm_entry_slack_m(body_lateral_radius_m: f32) -> f32 {
+    (body_lateral_radius_m - PLAYER_HEAD_HIT_BOX_M * 0.5).max(0.02)
+        + PLAYER_HEAD_HIT_BODY_GAP_M
+        + PLAYER_HEAD_HIT_FIREARM_ENTRY_SLACK_M
+}
+
+/// Firearm headshot: aim ray reaches the head box on its path to the body-surface hit.
+///
+/// Uses ray–AABB overlap, not the body-entry impact point. The wide body trace volume is
+/// often first hit on a side face outside the narrow head cube even when aimed at the head.
+#[inline]
+pub fn is_headshot_firearm_ray(
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    dx: f32,
+    dy: f32,
+    dz: f32,
+    feet_x: f32,
+    feet_y: f32,
+    feet_z: f32,
+    body_height_m: f32,
+    body_lateral_radius_m: f32,
+    body_hit_t: f32,
+) -> bool {
+    let (mn_x, mn_y, mn_z, mx_x, mx_y, mx_z) =
+        head_hit_box_aabb(feet_x, feet_y, feet_z, body_height_m);
+    let Some(interval) = ray_aabb_intersect_interval(
+        ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z,
+    ) else {
+        return false;
+    };
+    if interval.t_exit < RAY_AABB_T_ENTER_EPS {
+        return false;
+    }
+    let slack = head_hit_firearm_entry_slack_m(body_lateral_radius_m);
+    interval.t_enter <= body_hit_t + slack
 }
 
 /// Selected hotbar `def_id` when a slot is active, ignoring catalog weapon-vs-consumable rules.
@@ -599,5 +670,72 @@ mod tests {
         assert!(hit.is_some());
         let t = hit.unwrap().t_hit;
         assert!(t > 0.0 && t < 2.0);
+    }
+
+    #[test]
+    fn firearm_headshot_uses_ray_not_body_entry_point() {
+        let feet_x = 0.0;
+        let feet_y = 0.0;
+        let feet_z = 0.0;
+        let h = PLAYER_BODY_HEIGHT_STAND_M;
+        let head_cy = head_hit_box_center_y(feet_y, h);
+        let body_r = PLAYER_BODY_RADIUS_M;
+
+        // Frontal head shot — entry impact lies inside the head box.
+        let (ix, iy, iz) = (
+            feet_x,
+            head_cy,
+            feet_z + PLAYER_BODY_RADIUS_M,
+        );
+        assert!(is_headshot_impact_world(feet_x, feet_y, feet_z, h, ix, iy, iz));
+        assert!(is_headshot_firearm_ray(
+            feet_x,
+            head_cy + 0.05,
+            feet_z - 4.0,
+            0.0,
+            0.0,
+            1.0,
+            feet_x,
+            feet_y,
+            feet_z,
+            h,
+            body_r,
+            4.0 - PLAYER_BODY_RADIUS_M,
+        ));
+
+        // Side clip at head height — body entry is on the wide side face, outside head X.
+        let ox = feet_x + 3.0;
+        let oy = head_cy;
+        let oz = feet_z;
+        let dx = feet_x - ox;
+        let dy = 0.0;
+        let dz = 0.0;
+        let len = (dx * dx + dy * dy + dz * dz).sqrt();
+        let (dx, dy, dz) = (dx / len, dy / len, dz / len);
+        let body_hit_t = len - body_r;
+        let side_ix = feet_x + body_r;
+        assert!(!is_headshot_impact_world(
+            feet_x, feet_y, feet_z, h, side_ix, oy, oz
+        ));
+        assert!(is_headshot_firearm_ray(
+            ox, oy, oz, dx, dy, dz, feet_x, feet_y, feet_z, h, body_r, body_hit_t,
+        ));
+
+        // Chest shot — ray should not reach the head box before body entry.
+        let chest_y = feet_y + h * 0.45;
+        assert!(!is_headshot_firearm_ray(
+            feet_x,
+            chest_y + 0.05,
+            feet_z - 4.0,
+            0.0,
+            0.0,
+            1.0,
+            feet_x,
+            feet_y,
+            feet_z,
+            h,
+            body_r,
+            4.0 - body_r,
+        ));
     }
 }

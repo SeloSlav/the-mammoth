@@ -3,16 +3,34 @@ import * as THREE from "three";
 const GROUP_NAME = "fp_blood_burst_fx";
 const TTL_MS = 400;
 const GRAVITY_MPS2 = 11;
-const MAX_DROPLETS = 72;
-const MIN_DROPLETS = 8;
-const POINT_SIZE = 0.055;
+const MAX_DROPLETS = 48;
+const MIN_DROPLETS = 10;
+const DROPLET_RADIUS_M = 0.028;
+const DROPLET_OPACITY = 0.94;
+
+let sharedSphereGeom: THREE.SphereGeometry | null = null;
+
+function sphereGeom(): THREE.SphereGeometry {
+  if (!sharedSphereGeom) {
+    sharedSphereGeom = new THREE.SphereGeometry(DROPLET_RADIUS_M, 6, 4);
+  }
+  return sharedSphereGeom;
+}
+
+function createDropletMaterial(): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color: new THREE.Color().setHSL(0.01, 0.94, 0.36),
+    transparent: true,
+    opacity: DROPLET_OPACITY,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
 
 type DropletSlot = {
+  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   active: boolean;
   birthMs: number;
-  x: number;
-  y: number;
-  z: number;
   vx: number;
   vy: number;
   vz: number;
@@ -40,8 +58,8 @@ function pushVelocity(out: THREE.Vector3, salt: number): void {
 }
 
 function clampDropletCount(damage: number): number {
-  const n = MIN_DROPLETS + Math.floor(damage / 5);
-  return Math.min(24, Math.max(MIN_DROPLETS, n));
+  const n = MIN_DROPLETS + Math.floor(damage / 4);
+  return Math.min(22, Math.max(MIN_DROPLETS, n));
 }
 
 export type FpBloodBurstFx = {
@@ -50,64 +68,29 @@ export type FpBloodBurstFx = {
   dispose: () => void;
 };
 
-/** GPU-stable blood specks — one Points object, no mesh/material churn per hit. */
+/** Pooled mesh droplets — shared geometry, per-slot materials (opacity per droplet). */
 export function createFpBloodBurstFx(scene: THREE.Scene): FpBloodBurstFx {
   const root = new THREE.Group();
   root.name = GROUP_NAME;
   root.frustumCulled = false;
   scene.add(root);
 
-  const slots: DropletSlot[] = Array.from({ length: MAX_DROPLETS }, () => ({
-    active: false,
-    birthMs: 0,
-    x: 0,
-    y: 0,
-    z: 0,
-    vx: 0,
-    vy: 0,
-    vz: 0,
-  }));
-
-  const positions = new Float32Array(MAX_DROPLETS * 3);
-  const geometry = new THREE.BufferGeometry();
-  const positionAttr = new THREE.BufferAttribute(positions, 3);
-  positionAttr.setUsage(THREE.DynamicDrawUsage);
-  geometry.setAttribute("position", positionAttr);
-
-  const material = new THREE.PointsMaterial({
-    color: 0x8a0a0a,
-    size: POINT_SIZE,
-    transparent: true,
-    opacity: 0.92,
-    depthWrite: false,
-    toneMapped: false,
-    sizeAttenuation: true,
-  });
-
-  const points = new THREE.Points(geometry, material);
-  points.name = "fp_blood_droplet_points";
-  points.renderOrder = 500;
-  points.frustumCulled = false;
-  root.add(points);
+  const geom = sphereGeom();
+  const materialTemplate = createDropletMaterial();
+  const slots: DropletSlot[] = [];
+  for (let i = 0; i < MAX_DROPLETS; i += 1) {
+    const mesh = new THREE.Mesh(geom, materialTemplate.clone());
+    mesh.name = "fp_blood_droplet";
+    mesh.renderOrder = 500;
+    mesh.visible = false;
+    mesh.frustumCulled = false;
+    root.add(mesh);
+    slots.push({ mesh, active: false, birthMs: 0, vx: 0, vy: 0, vz: 0 });
+  }
+  materialTemplate.dispose();
 
   const scratchVel = new THREE.Vector3();
   let nextSlot = 0;
-
-  const syncGeometry = (): void => {
-    for (let i = 0; i < MAX_DROPLETS; i += 1) {
-      const slot = slots[i]!;
-      const o = i * 3;
-      if (slot.active) {
-        positions[o] = slot.x;
-        positions[o + 1] = slot.y;
-        positions[o + 2] = slot.z;
-      } else {
-        positions[o] = positions[o + 1] = positions[o + 2] = 0;
-      }
-    }
-    positionAttr.needsUpdate = true;
-    geometry.setDrawRange(0, MAX_DROPLETS);
-  };
 
   const spawnBurstAt = (worldX: number, worldY: number, worldZ: number, damage: number): void => {
     const n = clampDropletCount(damage);
@@ -118,47 +101,47 @@ export function createFpBloodBurstFx(scene: THREE.Scene): FpBloodBurstFx {
       pushVelocity(scratchVel, birth + i * 9973);
       slot.active = true;
       slot.birthMs = birth;
-      slot.x = worldX + (rand01(i * 13171) - 0.5) * 0.07;
-      slot.y = worldY + (rand01(i * 23171) - 0.35) * 0.11;
-      slot.z = worldZ + (rand01(i * 33171) - 0.5) * 0.07;
       slot.vx = scratchVel.x;
       slot.vy = scratchVel.y;
       slot.vz = scratchVel.z;
+      slot.mesh.material.opacity = DROPLET_OPACITY;
+      slot.mesh.visible = true;
+      slot.mesh.position.set(
+        worldX + (rand01(i * 13171) - 0.5) * 0.07,
+        worldY + (rand01(i * 23171) - 0.35) * 0.11,
+        worldZ + (rand01(i * 33171) - 0.5) * 0.07,
+      );
     }
-    syncGeometry();
   };
 
   return {
     spawnBurstAt,
     tick(nowMs: number, dtSec: number): void {
       const dt = Math.min(0.05, Math.max(0, dtSec));
-      let anyActive = false;
-      let maxFade = 0;
       for (const slot of slots) {
         if (!slot.active) continue;
         const u = (nowMs - slot.birthMs) / TTL_MS;
         if (u >= 1) {
           slot.active = false;
+          slot.mesh.visible = false;
           continue;
         }
-        anyActive = true;
-        maxFade = Math.max(maxFade, Math.max(0, 1 - u * u));
+        const fade = Math.max(0, 1 - u * u);
+        slot.mesh.material.opacity = fade * DROPLET_OPACITY;
         slot.vy -= GRAVITY_MPS2 * dt;
-        slot.x += slot.vx * dt;
-        slot.y += slot.vy * dt;
-        slot.z += slot.vz * dt;
-      }
-      material.opacity = anyActive ? maxFade * 0.92 : 0;
-      if (anyActive) {
-        syncGeometry();
+        slot.mesh.position.x += slot.vx * dt;
+        slot.mesh.position.y += slot.vy * dt;
+        slot.mesh.position.z += slot.vz * dt;
       }
     },
     dispose(): void {
       for (const slot of slots) {
         slot.active = false;
+        slot.mesh.visible = false;
+        slot.mesh.material.dispose();
+        root.remove(slot.mesh);
       }
-      geometry.dispose();
-      material.dispose();
+      slots.length = 0;
       scene.remove(root);
     },
   };

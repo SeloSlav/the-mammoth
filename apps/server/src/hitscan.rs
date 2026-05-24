@@ -10,10 +10,11 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartment_door::apartment_door;
 use crate::combat_stub::{
-    body_height_from_crouch_bit, eye_y_above_feet, is_headshot_impact_world,
+    body_height_from_crouch_bit, eye_y_above_feet, is_headshot_firearm_ray,
     victim_hit_trace_max_y,
     ray_aabb_intersect_enter, HEADSHOT_DAMAGE_MULTIPLIER, PLAYER_BODY_RADIUS_M,
 };
+use crate::npc::BABUSHKA_BODY_RADIUS_M;
 use crate::generated_collision_solids::{
     COLLISION_SOLID_AABB_SHARDS, COLLISION_SOLID_FOOTPRINT_MAX_X, COLLISION_SOLID_FOOTPRINT_MAX_Z,
     COLLISION_SOLID_FOOTPRINT_MIN_X, COLLISION_SOLID_FOOTPRINT_MIN_Z,
@@ -311,7 +312,20 @@ fn resolve_pistol_ray(
     let dist_m = t_hit;
     let scale = falloff_factor(dist_m, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, dist_m);
-    let headshot = is_headshot_impact_world(feet_x, feet_y, feet_z, body_h, ix, iy, iz);
+    let headshot = is_headshot_firearm_ray(
+        ox,
+        oy,
+        oz,
+        dx,
+        dy,
+        dz,
+        feet_x,
+        feet_y,
+        feet_z,
+        body_h,
+        PLAYER_BODY_RADIUS_M,
+        dist_m,
+    );
     let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
@@ -370,8 +384,20 @@ fn resolve_shotgun_pellets(
                 } else {
                     let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                    let headshot =
-                        is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
+                    let headshot = is_headshot_firearm_ray(
+                        ox,
+                        oy,
+                        oz,
+                        jx,
+                        jy,
+                        jz,
+                        *feet_x,
+                        *feet_y,
+                        *feet_z,
+                        *body_h,
+                        PLAYER_BODY_RADIUS_M,
+                        *pr_t,
+                    );
                     let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
@@ -383,8 +409,20 @@ fn resolve_shotgun_pellets(
             (Some((pid, pr_t, feet_x, feet_y, feet_z, body_h)), None) => {
                 let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                let headshot =
-                    is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
+                let headshot = is_headshot_firearm_ray(
+                    ox,
+                    oy,
+                    oz,
+                    jx,
+                    jy,
+                    jz,
+                    *feet_x,
+                    *feet_y,
+                    *feet_z,
+                    *body_h,
+                    PLAYER_BODY_RADIUS_M,
+                    *pr_t,
+                );
                 let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {
@@ -601,7 +639,20 @@ fn resolve_pistol_ray_npcs(
     }
     let scale = falloff_factor(t_hit, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, t_hit);
-    let headshot = is_headshot_impact_world(feet_x, feet_y, feet_z, body_h, ix, iy, iz);
+    let headshot = is_headshot_firearm_ray(
+        ox,
+        oy,
+        oz,
+        dx,
+        dy,
+        dz,
+        feet_x,
+        feet_y,
+        feet_z,
+        body_h,
+        BABUSHKA_BODY_RADIUS_M,
+        t_hit,
+    );
     let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
@@ -658,8 +709,20 @@ fn resolve_shotgun_pellets_npcs(
                 } else {
                     let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                    let headshot =
-                        is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
+                    let headshot = is_headshot_firearm_ray(
+                        ox,
+                        oy,
+                        oz,
+                        jx,
+                        jy,
+                        jz,
+                        *feet_x,
+                        *feet_y,
+                        *feet_z,
+                        *body_h,
+                        BABUSHKA_BODY_RADIUS_M,
+                        *n_t,
+                    );
                     let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
@@ -671,8 +734,20 @@ fn resolve_shotgun_pellets_npcs(
             (Some((nid, n_t, feet_x, feet_y, feet_z, body_h)), None) => {
                 let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                let headshot =
-                    is_headshot_impact_world(*feet_x, *feet_y, *feet_z, *body_h, ipt.0, ipt.1, ipt.2);
+                let headshot = is_headshot_firearm_ray(
+                    ox,
+                    oy,
+                    oz,
+                    jx,
+                    jy,
+                    jz,
+                    *feet_x,
+                    *feet_y,
+                    *feet_z,
+                    *body_h,
+                    BABUSHKA_BODY_RADIUS_M,
+                    *n_t,
+                );
                 let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {
