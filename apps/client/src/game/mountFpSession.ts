@@ -108,6 +108,10 @@ import {
   FP_SESSION_SKY_CAMERA_FAR,
 } from "./fpSession/fpSessionEnvironment.js";
 import { resetFpSessionCompassHeading } from "./fpSession/fpSessionCompassHeading.js";
+import {
+  FP_COMBAT_HIP_FOV_DEG,
+  resetFpSessionCombatAiming,
+} from "./fpSession/fpSessionCombatAim.js";
 import { resetFpSessionFpsDisplay } from "./fpSession/fpSessionFpsDisplay.js";
 import {
   resetFpSessionGameUiHidden,
@@ -985,6 +989,7 @@ export async function mountFpSession(
     crouchToggle: false,
     meleePressPending: false,
     primaryAttackHeld: false,
+    combatAimHeld: false,
     fpRigViewSmoothedReady: false,
     lastTickElevSupportVyMps: 0,
     lastTickHudCabVyMps: 0,
@@ -1221,6 +1226,7 @@ export async function mountFpSession(
     keys.clear();
     mainRaf.meleePressPending = false;
     mainRaf.primaryAttackHeld = false;
+    mainRaf.combatAimHeld = false;
   };
 
   const onWindowBlur = () => {
@@ -1250,6 +1256,7 @@ export async function mountFpSession(
       resetFpLookInertia(lookInertia);
       mainRaf.meleePressPending = false;
       mainRaf.primaryAttackHeld = false;
+      mainRaf.combatAimHeld = false;
     }
   };
 
@@ -1779,6 +1786,16 @@ export async function mountFpSession(
         e.preventDefault();
         probeWallHit();
       }
+      const hbAim = selectedHotbarRow();
+      if (
+        !fpInteractInputBlocked() &&
+        !isLocalPlayerDead() &&
+        hbAim &&
+        hotbarDefIdSupportsRangedAttack(hbAim.defId)
+      ) {
+        mainRaf.combatAimHeld = true;
+        e.preventDefault();
+      }
       return;
     }
     if (!e.isPrimary || e.button !== 0) return;
@@ -1836,6 +1853,9 @@ export async function mountFpSession(
   };
 
   const onPrimaryPointerUpOrCancel = (e: PointerEvent) => {
+    if (e.button === 2) {
+      mainRaf.combatAimHeld = false;
+    }
     if (e.type === "pointercancel" || (e.isPrimary && e.button === 0)) {
       mainRaf.primaryAttackHeld = false;
     }
@@ -2062,6 +2082,9 @@ export async function mountFpSession(
     scene.clear();
     resetFpSessionFpsDisplay();
     resetFpSessionCompassHeading();
+    resetFpSessionCombatAiming();
+    camera.fov = FP_COMBAT_HIP_FOV_DEG;
+    camera.updateProjectionMatrix();
     resetFpSessionGameUiHidden();
     resetFpDebugRenderIsolationFlags();
   resetFpDebugEmissiveIsolationState();

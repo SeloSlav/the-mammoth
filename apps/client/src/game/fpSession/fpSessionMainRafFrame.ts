@@ -110,6 +110,10 @@ import {
 import { localPlayerCanFireChamberedRound } from "../fpHotbar/fpFirearmChamber.js";
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
+import {
+  publishFpSessionCombatAiming,
+  stepFpCombatAimFov,
+} from "./fpSessionCombatAim.js";
 import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
@@ -171,6 +175,8 @@ export type FpSessionMainRafState = {
   meleePressPending: boolean;
   /** LMB held after a combat-committed pointerdown (cleared on up/cancel/blur / pointer-lock loss). */
   primaryAttackHeld: boolean;
+  /** RMB held while aiming down sights with a ranged hotbar weapon (cleared on up/cancel/blur / pointer-lock loss). */
+  combatAimHeld: boolean;
   fpRigViewSmoothedReady: boolean;
   lastTickElevSupportVyMps: number;
   lastTickHudCabVyMps: number;
@@ -624,11 +630,19 @@ export function createFpSessionMainRafFrame(
     );
     const suppressHeadBobForElev =
       Math.abs(mainRaf.lastTickHudCabVyMps) >= ELEV_HEAD_BOB_SUPPRESS_MIN_HUD_CAB_VY_MPS;
+    const combatAimActive =
+      mainRaf.combatAimHeld &&
+      !!hbCombat &&
+      hotbarDefIdSupportsRangedAttack(hbCombat.defId);
+    publishFpSessionCombatAiming(combatAimActive);
+    stepFpCombatAimFov(deps.camera, combatAimActive, dt);
+
     if (
       deps.loco.grounded &&
       !mainRaf.crouchToggle &&
       !freeLook &&
       !isFpSitActive() &&
+      !combatAimActive &&
       hs > 0.12 &&
       !suppressHeadBobForElev
     ) {
