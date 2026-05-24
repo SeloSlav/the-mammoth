@@ -21,6 +21,8 @@ export const MAMMOTH_FP_WORLD_NPC_UD = "mammothFpWorldNpc";
 const NPC_YAW_OFFSET_RAD = 0;
 export const BABUSHKA_NPC_AUTHORITATIVE_HEIGHT_M = 1.55;
 const NPC_CLIP_TRANSITION_SEC = 0.18;
+const NPC_LOCOMOTION_SWITCH_STABLE_SEC = 0.16;
+const NPC_MOVING_CLIP_MIN_HOLD_SEC = 0.65;
 const NPC_STATE_DEAD = 2;
 const NPC_FALLBACK_SKIN_HEX = 0xb8927a;
 const IDLE_AIR_SQUAT_ROLL_MOD = 100;
@@ -37,30 +39,19 @@ type BabushkaClipKey =
   | "punch5";
 
 const PUNCH_VARIANTS: readonly BabushkaClipKey[] = ["punch", "punch1", "punch5"];
+const PUNCH_CLIP_KEYS = new Set<BabushkaClipKey>(PUNCH_VARIANTS);
 
-/** Meshy UI labels and GLB export names — resolve with normalized matching.
- *
- * The current babushka GLB was exported with shifted animation names:
- * - `Hit_Reaction_to_Waist` contains Running
- * - `Walking` contains Idle_4
- * - `Idle_4` contains air_squat
- * - `Punch_Combo_1` contains Hit_Reaction_to_Waist
- * - `Dead` contains Punch_Combo
- * - `air_squat` contains Punch_Combo_1
- * - `Punch_Combo` contains Walking
- * - `Punch_Combo_5` is correct
- * - `Running` contains Dead
- */
+/** Meshy UI labels and GLB export names — resolve with normalized matching. */
 const BABUSHKA_CLIP_CANDIDATES: Record<BabushkaClipKey, readonly string[]> = {
-  idle: ["Walking"],
-  airSquat: ["Idle 4", "Idle_4"],
-  walk: ["Punch Combo", "Punch_Combo"],
-  run: ["Hit Reaction to Waist", "Hit_Reaction_to_Waist"],
-  punch: ["Dead"],
-  punch1: ["Air Squat", "air_squat", "Air_Squat"],
+  idle: ["Idle"],
+  airSquat: ["Air Squat", "Air_Squat"],
+  walk: ["Walking"],
+  run: ["Running"],
+  punch: ["Punch Combo", "Punch_Combo"],
+  punch1: ["Punch Combo 1", "Punch_Combo_1"],
   punch5: ["Punch Combo 5", "Punch_Combo_5"],
-  hit: ["Punch Combo 1", "Punch_Combo_1"],
-  dead: ["Running"],
+  hit: ["Hit Reaction to Waist", "Hit_Reaction_to_Waist"],
+  dead: ["Dead"],
 };
 
 const LOCOMOTION_CLIP_KEYS = new Set<BabushkaClipKey>(["idle", "airSquat", "walk", "run"]);
@@ -252,6 +243,9 @@ class AnimatedBabushkaBody {
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions = new Map<BabushkaClipKey, THREE.AnimationAction>();
   private locomotionClip: BabushkaClipKey | null = null;
+  private locomotionClipAgeSec = 0;
+  private pendingLocomotionClip: BabushkaClipKey | null = null;
+  private pendingLocomotionSec = 0;
   private overlayClip: BabushkaClipKey | null = null;
   private overlayTimeLeftSec = 0;
   private lastMeleeSeq = 0;
@@ -310,10 +304,13 @@ class AnimatedBabushkaBody {
         (Number(snapshot.npcId) % Math.ceil(IDLE_VARIANT_MAX_SEC - IDLE_VARIANT_MIN_SEC));
     }
 
+    this.locomotionClipAgeSec += dt;
+
     // Keep a base locomotion action alive every frame. If one-shots fail or finish, the rig never
     // falls back to bind/A-pose.
     // Locomotion clips follow smoothed visual speed — not raw SpaceTimeDB update cadence.
-    this.playLocomotion(this.resolveLocomotionClip(snapshot, visualLocomotion), false);
+    const requestedLocomotion = this.resolveLocomotionClip(snapshot, visualLocomotion);
+    this.playLocomotion(this.resolveStableLocomotionClip(requestedLocomotion, dt), false);
 
     const meleeTriggered = snapshot.meleePresentationSeq > this.lastMeleeSeq;
     const hitTriggered = snapshot.hitPresentationSeq > this.lastHitSeq;
@@ -323,7 +320,9 @@ class AnimatedBabushkaBody {
       if (hitTriggered) {
         this.lastHitSeq = snapshot.hitPresentationSeq;
       }
-      this.playOverlay(this.selectPunchVariant(snapshot));
+      if (!this.isMeleeOverlayPlaying()) {
+        this.playOverlay(this.selectPunchVariant(snapshot));
+      }
     } else if (hitTriggered) {
       this.lastHitSeq = snapshot.hitPresentationSeq;
       this.playOverlay("hit");
@@ -391,6 +390,7 @@ class AnimatedBabushkaBody {
       this.locomotionClip !== null ? this.actions.get(this.locomotionClip) : undefined;
 
     this.locomotionClip = next;
+    this.locomotionClipAgeSec = 0;
     nextAction.enabled = true;
     nextAction.paused = false;
     nextAction.setEffectiveTimeScale(1);
@@ -412,6 +412,50 @@ class AnimatedBabushkaBody {
       nextAction.fadeIn(NPC_CLIP_TRANSITION_SEC);
     }
     nextAction.play();
+  }
+
+  private resolveStableLocomotionClip(next: BabushkaClipKey, dt: number): BabushkaClipKey {
+    const current = this.locomotionClip;
+    if (current === null || current === next) {
+      this.pendingLocomotionClip = null;
+      this.pendingLocomotionSec = 0;
+      return next;
+    }
+
+    const currentMoving = current === "walk" || current === "run";
+    const nextMoving = next === "walk" || next === "run";
+    if (!currentMoving && nextMoving) {
+      this.pendingLocomotionClip = null;
+      this.pendingLocomotionSec = 0;
+      return next;
+    }
+
+    if (currentMoving && this.locomotionClipAgeSec < NPC_MOVING_CLIP_MIN_HOLD_SEC) {
+      return current;
+    }
+
+    if (this.pendingLocomotionClip !== next) {
+      this.pendingLocomotionClip = next;
+      this.pendingLocomotionSec = 0;
+      return current;
+    }
+
+    this.pendingLocomotionSec += dt;
+    if (this.pendingLocomotionSec < NPC_LOCOMOTION_SWITCH_STABLE_SEC) {
+      return current;
+    }
+
+    this.pendingLocomotionClip = null;
+    this.pendingLocomotionSec = 0;
+    return next;
+  }
+
+  private isMeleeOverlayPlaying(): boolean {
+    return (
+      this.overlayClip !== null &&
+      PUNCH_CLIP_KEYS.has(this.overlayClip) &&
+      this.overlayTimeLeftSec > 0
+    );
   }
 
   private playOverlay(key: BabushkaClipKey): void {

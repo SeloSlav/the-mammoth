@@ -29,7 +29,8 @@ pub const BABUSHKA_BODY_HEIGHT_M: f32 = 1.55;
 pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
 pub const BABUSHKA_WALK_SPEED_MPS: f32 = 1.45;
-pub const BABUSHKA_RUN_SPEED_MPS: f32 = 3.0;
+/// Fast enough to punish backpedaling/walking, but below melee range per 250ms tick.
+pub const BABUSHKA_RUN_SPEED_MPS: f32 = 5.2;
 pub const BABUSHKA_MELEE_DAMAGE: f32 = 14.0;
 pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 
