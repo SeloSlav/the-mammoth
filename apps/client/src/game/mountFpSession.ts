@@ -112,6 +112,7 @@ import {
   FP_COMBAT_HIP_FOV_DEG,
   resetFpSessionCombatAiming,
 } from "./fpSession/fpSessionCombatAim.js";
+import { detectPointerButtonEdges } from "./fpSession/fpSessionPointerButtons.js";
 import { resetFpSessionFpsDisplay } from "./fpSession/fpSessionFpsDisplay.js";
 import {
   resetFpSessionGameUiHidden,
@@ -183,6 +184,10 @@ import { WorldProximityAudio } from "./audio/worldProximityAudio.js";
 import { ELEVATOR_RIDER_LOCK_SKIP_UPWARD_VY_MPS } from "./fpElevator/fpElevatorConstants.js";
 import { poseSeqAsBigint } from "./fpSession/fpSessionPoseSeq.js";
 import { resolveAuthoritativeInteractionPose } from "./fpInteraction/fpInteractionAuthority.js";
+import {
+  formatFpSceneTriangleBuckets,
+  summarizeFpSessionSceneTriangles,
+} from "./fpSession/fpSessionSceneTriangleCount.js";
 import { deliverFpSessionGpuRenderMs, resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
@@ -348,7 +353,7 @@ export async function mountFpSession(
 
   const { rig: playerRig, headPivot, headPitch, headCameraPitch, headFreeLook, camera } =
     createFPRig(fpLocomotionConstants.eyeStand);
-  const sampleFpPerfHeavyMeshes = createFpSessionHeavyMeshProfiler({ buildingRoot, camera });
+  const sampleFpPerfHeavyMeshes = createFpSessionHeavyMeshProfiler({ sceneRoot: scene, buildingRoot, camera });
   /** Skydome is a large inner sphere; default rig `far` (900) clips it to black. */
   camera.far = FP_SESSION_SKY_CAMERA_FAR;
   scene.add(playerRig);
@@ -557,6 +562,8 @@ export async function mountFpSession(
   };
   let lastPerfSceneCounterSampleAtMs = -Infinity;
   let lastPerfSceneCounters = {
+    sceneGraphVisibleTriangles: 0,
+    sceneGraphBreakdown: "",
     visibleFloorPlates: 0,
     visibleUnitInteriorMeshes: 0,
     visibleApartmentPropMeshes: 0,
@@ -675,7 +682,10 @@ export async function mountFpSession(
       }
     }
 
+    const sceneGraphSummary = summarizeFpSessionSceneTriangles(scene);
     lastPerfSceneCounters = {
+      sceneGraphVisibleTriangles: sceneGraphSummary.totalVisibleTriangles,
+      sceneGraphBreakdown: formatFpSceneTriangleBuckets(sceneGraphSummary.buckets),
       visibleFloorPlates,
       visibleUnitInteriorMeshes,
       visibleApartmentPropMeshes,
@@ -1002,6 +1012,8 @@ export async function mountFpSession(
     lastRangedMs: 0,
   };
   const lookInertia = createFpLookInertiaState();
+  /** Last seen `PointerEvent.buttons` mask — chorded clicks (RMB then LMB) only update via `pointermove`. */
+  let trackedPointerButtons = 0;
   const moveIntentQueue: FpSessionMoveIntentQueue = { items: [], head: 0 };
   /** Max un-acked intents to retain (1.5 s buffer); older ones are compacted away. */
   const MAX_PENDING_INTENTS = 30;
@@ -1227,6 +1239,7 @@ export async function mountFpSession(
     mainRaf.meleePressPending = false;
     mainRaf.primaryAttackHeld = false;
     mainRaf.combatAimHeld = false;
+    trackedPointerButtons = 0;
   };
 
   const onWindowBlur = () => {
@@ -1257,6 +1270,7 @@ export async function mountFpSession(
       mainRaf.meleePressPending = false;
       mainRaf.primaryAttackHeld = false;
       mainRaf.combatAimHeld = false;
+      trackedPointerButtons = 0;
     }
   };
 
@@ -1346,7 +1360,7 @@ export async function mountFpSession(
 
   const droppedWorld = mountDroppedItemsWorld(scene, conn, DROPPED_ITEM_SUBSCRIBE_HALF_M, {
     pickupBandOpts: mammothDropPickupBands,
-    alwaysShowDroppedItems: isCombatSim,
+    // Combat sim uses the same corridor/same-floor band gate as live FP — do not bypass (renders entire DB).
     beforePickup: flushLocalPickupPoseToServer,
     onPickupRemoved: async () => {
       await attachSpatialWorldAudio();
@@ -1772,92 +1786,136 @@ export async function mountFpSession(
     e.preventDefault();
   };
 
-  const onPointerDown = (e: PointerEvent) => {
-    if (fpAuthoringActiveRef.active) return;
-    if (document.pointerLockElement !== canvas) return;
-    // Match server combat rail (`player_active_hotbar`) to HUD selection before enqueueing attack.
+  const tryEnterCombatAim = (): void => {
+    const hbAim = selectedHotbarRow();
+    if (
+      !fpInteractInputBlocked() &&
+      !isLocalPlayerDead() &&
+      hbAim &&
+      hotbarDefIdSupportsRangedAttack(hbAim.defId)
+    ) {
+      mainRaf.combatAimHeld = true;
+    }
+  };
+
+  const tryCommitPrimaryCombatPress = (
+    e: PointerEvent,
+    nowMs: number,
+    combatPriority: boolean,
+  ): void => {
     syncActiveHotbarSlotToServer();
-    if (e.button === 2) {
-      if (fpBalconyGrow.trySecondaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) {
+    if (!combatPriority) {
+      if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
+      if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
+      if (fpBalconyGrow.tryPrimaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) {
+        return;
+      }
+      if (!fpInteractInputBlocked() && !isFpSitActive() && conn.identity) {
+        apartmentSittableScreenNdcFromPointer(canvas, e, sitPointerNdc);
+        const notebookPrompt = getApartmentNotebookPromptForSession(sitPointerNdc);
+        if (tryNotebookInteractFromPrompt(notebookPrompt)) {
+          e.preventDefault();
+          return;
+        }
+        const sitPrompt = getApartmentSittablePromptForSession(sitPointerNdc);
+        if (
+          sitPrompt &&
+          tryEnterFpSitFromPrompt({
+            conn,
+            prompt: sitPrompt,
+            playerPos: getInteractionPos(),
+            pos,
+            loco,
+            mainRaf,
+            sendMoveIntent,
+            nowMs,
+            crouchToggle: mainRaf.crouchToggle,
+          })
+        ) {
+          e.preventDefault();
+          return;
+        }
+      }
+      const selectedHotbarSlot = getFpHotbarSelectedSlot();
+      if (
+        conn.identity &&
+        selectedHotbarSlot !== null &&
+        hotbarSlotHasHotbarUseAction(conn, conn.identity, selectedHotbarSlot)
+      ) {
+        void runFpHotbarInstantConsume(
+          conn,
+          conn.identity,
+          selectedHotbarSlot,
+          primeHotbarConsumeAudio,
+          "mountFpSession",
+        );
+        return;
+      }
+    }
+    mainRaf.meleePressPending = true;
+    mainRaf.primaryAttackHeld = true;
+  };
+
+  /**
+   * Pointer Events omit chorded `pointerdown` for the second mouse button — pressing LMB while
+   * holding RMB only updates `buttons` on `pointermove`. Track edges from the bitmask instead.
+   */
+  const applyPointerButtonTransitions = (e: PointerEvent, nowMs: number): void => {
+    const prevButtons = trackedPointerButtons;
+    const nextButtons = e.buttons;
+    const edges = detectPointerButtonEdges(prevButtons, nextButtons);
+    trackedPointerButtons = nextButtons;
+
+    if (edges.secondaryPress) {
+      if (
+        fpBalconyGrow.trySecondaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())
+      ) {
         e.preventDefault();
         return;
       }
       if (__mmWallProbeState.enabled) {
         e.preventDefault();
         probeWallHit();
-      }
-      const hbAim = selectedHotbarRow();
-      if (
-        !fpInteractInputBlocked() &&
-        !isLocalPlayerDead() &&
-        hbAim &&
-        hotbarDefIdSupportsRangedAttack(hbAim.defId)
-      ) {
-        mainRaf.combatAimHeld = true;
-        e.preventDefault();
-      }
-      return;
-    }
-    if (!e.isPrimary || e.button !== 0) return;
-    const nowMs = performance.now();
-    if (fpElevators.tryRaycastFloorPick(camera, pos, nowMs)) return;
-    if (conn.identity && fpApartmentDoors.consumeInteractKey(getInteractionPos(), camera)) return;
-    if (fpBalconyGrow.tryPrimaryPointerDown(camera, conn, fpApartmentDecorMeshes, getInteractionPos())) return;
-    if (
-      !fpInteractInputBlocked() &&
-      !isFpSitActive() &&
-      conn.identity
-    ) {
-      apartmentSittableScreenNdcFromPointer(canvas, e, sitPointerNdc);
-      const notebookPrompt = getApartmentNotebookPromptForSession(sitPointerNdc);
-      if (tryNotebookInteractFromPrompt(notebookPrompt)) {
-        e.preventDefault();
         return;
       }
-      const sitPrompt = getApartmentSittablePromptForSession(sitPointerNdc);
-      if (
-        sitPrompt &&
-        tryEnterFpSitFromPrompt({
-          conn,
-          prompt: sitPrompt,
-          playerPos: getInteractionPos(),
-          pos,
-          loco,
-          mainRaf,
-          sendMoveIntent,
-          nowMs,
-          crouchToggle: mainRaf.crouchToggle,
-        })
-      ) {
-        e.preventDefault();
-        return;
-      }
+      tryEnterCombatAim();
+      e.preventDefault();
     }
-    const selectedHotbarSlot = getFpHotbarSelectedSlot();
-    if (
-      conn.identity &&
-      selectedHotbarSlot !== null &&
-      hotbarSlotHasHotbarUseAction(conn, conn.identity, selectedHotbarSlot)
-    ) {
-      void runFpHotbarInstantConsume(
-        conn,
-        conn.identity,
-        selectedHotbarSlot,
-        primeHotbarConsumeAudio,
-        "mountFpSession",
-      );
-      return;
-    }
-    mainRaf.meleePressPending = true;
-    mainRaf.primaryAttackHeld = true;
-  };
 
-  const onPrimaryPointerUpOrCancel = (e: PointerEvent) => {
-    if (e.button === 2) {
+    if (edges.secondaryRelease) {
       mainRaf.combatAimHeld = false;
     }
-    if (e.type === "pointercancel" || (e.isPrimary && e.button === 0)) {
+
+    if (edges.primaryPress) {
+      const combatPriority = (prevButtons & 2) !== 0 || mainRaf.combatAimHeld;
+      tryCommitPrimaryCombatPress(e, nowMs, combatPriority);
+    }
+
+    if (edges.primaryRelease) {
       mainRaf.primaryAttackHeld = false;
+    }
+  };
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (fpAuthoringActiveRef.active) return;
+    if (document.pointerLockElement !== canvas) return;
+    applyPointerButtonTransitions(e, performance.now());
+  };
+
+  const onPointerMoveButtons = (e: PointerEvent) => {
+    if (fpAuthoringActiveRef.active) return;
+    if (document.pointerLockElement !== canvas) return;
+    applyPointerButtonTransitions(e, performance.now());
+  };
+
+  const onPointerUpOrCancel = (e: PointerEvent) => {
+    if (fpAuthoringActiveRef.active) return;
+    if (document.pointerLockElement !== canvas && e.type !== "pointercancel") return;
+    applyPointerButtonTransitions(e, performance.now());
+    if (e.type === "pointercancel") {
+      mainRaf.primaryAttackHeld = false;
+      mainRaf.combatAimHeld = false;
+      trackedPointerButtons = 0;
     }
   };
 
@@ -1865,8 +1923,9 @@ export async function mountFpSession(
   window.addEventListener("wheel", onWheelHotbar, { passive: false });
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("mousemove", onMouseMove);
-  window.addEventListener("pointerup", onPrimaryPointerUpOrCancel);
-  window.addEventListener("pointercancel", onPrimaryPointerUpOrCancel);
+  window.addEventListener("pointermove", onPointerMoveButtons);
+  window.addEventListener("pointerup", onPointerUpOrCancel);
+  window.addEventListener("pointercancel", onPointerUpOrCancel);
   window.addEventListener("blur", onWindowBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
   document.addEventListener("pointerlockchange", onPointerLockChange);
@@ -2028,8 +2087,9 @@ export async function mountFpSession(
     window.removeEventListener("wheel", onWheelHotbar);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("mousemove", onMouseMove);
-    window.removeEventListener("pointerup", onPrimaryPointerUpOrCancel);
-    window.removeEventListener("pointercancel", onPrimaryPointerUpOrCancel);
+    window.removeEventListener("pointermove", onPointerMoveButtons);
+    window.removeEventListener("pointerup", onPointerUpOrCancel);
+    window.removeEventListener("pointercancel", onPointerUpOrCancel);
     window.removeEventListener("blur", onWindowBlur);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     document.removeEventListener("pointerlockchange", onPointerLockChange);

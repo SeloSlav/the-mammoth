@@ -4,6 +4,7 @@ import {
   recordFpPerfHeavyMeshes,
   type FpPerfHeavyMeshRecord,
 } from "./fpSessionPerfStore.js";
+import { meshTriangleCount } from "./fpSessionSceneTriangleCount.js";
 
 const HEAVY_FRAME_TRIANGLE_THRESHOLD = 250_000;
 const HEAVY_MESH_SAMPLE_MIN_INTERVAL_MS = 80;
@@ -21,19 +22,6 @@ type HeavyMeshCandidate = {
 const _heavyMeshViewProjection = new THREE.Matrix4();
 const _heavyMeshFrustum = new THREE.Frustum();
 const _heavyMeshCandidates: HeavyMeshCandidate[] = [];
-
-function geometryTriangleCount(geometry: THREE.BufferGeometry): number {
-  const index = geometry.index;
-  if (index) return Math.floor(index.count / 3);
-  const position = geometry.getAttribute("position");
-  return position ? Math.floor(position.count / 3) : 0;
-}
-
-function meshTriangleCount(mesh: THREE.Mesh): number {
-  const base = geometryTriangleCount(mesh.geometry as THREE.BufferGeometry);
-  const instanceCount = mesh instanceof THREE.InstancedMesh ? mesh.count : 1;
-  return base * Math.max(1, instanceCount);
-}
 
 function objectVisibleInHierarchy(obj: THREE.Object3D, camera: THREE.Camera): boolean {
   if (!obj.layers.test(camera.layers)) return false;
@@ -71,7 +59,29 @@ function bigintUserDataInAncestors(obj: THREE.Object3D, key: string): string | n
   return null;
 }
 
+function isRenderableMesh(obj: THREE.Object3D): obj is THREE.Mesh {
+  return (obj as THREE.Mesh).isMesh === true;
+}
+
+function hasTaggedAncestor(obj: THREE.Object3D, key: string): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (cur.userData[key] === true) return true;
+  }
+  return false;
+}
+
+function isDroppedItemMesh(mesh: THREE.Mesh): boolean {
+  if (mesh.name.startsWith("drop_inst:")) return true;
+  for (let cur: THREE.Object3D | null = mesh; cur; cur = cur.parent) {
+    if (cur.name === "dropped_items") return true;
+  }
+  return false;
+}
+
 function classifyMesh(mesh: THREE.Mesh): string {
+  if (hasTaggedAncestor(mesh, MAMMOTH_FP_WORLD_NPC_UD)) return "worldNpc";
+  if (isDroppedItemMesh(mesh)) return "droppedItem";
+  if (mesh.userData.isSkyCloudMesh === true) return "environmentSky";
   if (mesh.userData[MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD] === true) {
     return "apartmentDecorFloorShadow";
   }
@@ -126,7 +136,15 @@ function materialName(mesh: THREE.Mesh): string | null {
   return material.name || null;
 }
 
+function isDescendantOf(obj: THREE.Object3D, ancestor: THREE.Object3D): boolean {
+  for (let cur: THREE.Object3D | null = obj; cur; cur = cur.parent) {
+    if (cur === ancestor) return true;
+  }
+  return false;
+}
+
 export function createFpSessionHeavyMeshProfiler(input: {
+  sceneRoot: THREE.Object3D;
   buildingRoot: THREE.Object3D;
   camera: THREE.Camera;
 }): (nowMs: number, frameTriangles: number, frameMs: number, cameraYawRad: number | null) => void {
@@ -145,8 +163,8 @@ export function createFpSessionHeavyMeshProfiler(input: {
     _heavyMeshCandidates.length = 0;
 
     input.buildingRoot.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return;
-      if (obj.userData[MAMMOTH_FP_WORLD_NPC_UD] === true) return;
+      if (!isRenderableMesh(obj)) return;
+      if (hasTaggedAncestor(obj, MAMMOTH_FP_WORLD_NPC_UD)) return;
       if (!objectVisibleInHierarchy(obj, input.camera)) return;
       if (!_heavyMeshFrustum.intersectsObject(obj)) return;
       const triangles = meshTriangleCount(obj);
@@ -154,6 +172,24 @@ export function createFpSessionHeavyMeshProfiler(input: {
       const candidate = describeMesh(obj, input.buildingRoot);
       candidate.triangles = triangles;
       _heavyMeshCandidates.push(candidate);
+    });
+
+    input.sceneRoot.traverse((obj) => {
+      if (!isRenderableMesh(obj)) return;
+      if (input.buildingRoot === obj || isDescendantOf(obj, input.buildingRoot)) return;
+      if (!objectVisibleInHierarchy(obj, input.camera)) return;
+      if (!_heavyMeshFrustum.intersectsObject(obj)) return;
+      const triangles = meshTriangleCount(obj);
+      if (triangles <= 0) return;
+      const kind = classifyMesh(obj);
+      _heavyMeshCandidates.push({
+        mesh: obj,
+        triangles,
+        kind,
+        label: [kind, obj.name || obj.type].filter(Boolean).join(" | "),
+        unitKey: null,
+        placedObjectId: null,
+      });
     });
 
     _heavyMeshCandidates.sort((a, b) => b.triangles - a.triangles);

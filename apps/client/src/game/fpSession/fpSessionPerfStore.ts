@@ -82,6 +82,10 @@ const _frustumTransparentExteriorGlassMeshes = new Float32Array(RING);
 const _drawCalls = new Float32Array(RING);
 /** Submitted triangles after each frame (`renderer.info.render.triangles`). */
 const _triangles = new Float32Array(RING);
+/** Scene-graph visible mesh triangles (honest geometry, not GPU pass inflation). */
+const _sceneGraphVisibleTriangles = new Float32Array(RING);
+/** Top scene-graph buckets per frame (e.g. `droppedItem=650k worldNpc=65k`). */
+const _sceneGraphBreakdown: string[] = Array.from({ length: RING }, () => "");
 /** Camera yaw (rad); `NaN` when not sampled. */
 const _cameraYawRad = new Float32Array(RING);
 
@@ -125,6 +129,10 @@ export type FpPerfSections = {
 export type FpRendererInfo = {
   drawCalls: number;
   triangles: number;
+  /** Sum of visible mesh tris in the scene graph (instanced meshes count base × instance count). */
+  sceneGraphVisibleTriangles: number;
+  /** Top buckets from {@link summarizeFpSessionSceneTriangles}, e.g. `droppedItem=650k worldNpc=65k`. */
+  sceneGraphBreakdown: string;
   visibleFloorPlates: number;
   visibleUnitInteriorMeshes: number;
   visibleApartmentPropMeshes: number;
@@ -165,6 +173,8 @@ export type FpPerfHeavyMeshRecord = {
 // Last renderer info — read by the UI; updated each frame.
 let _lastDrawCalls = 0;
 let _lastTriangles = 0;
+let _lastSceneGraphVisibleTriangles = 0;
+let _lastSceneGraphBreakdown = "";
 let _lastVisibleFloorPlates = 0;
 let _lastVisibleUnitInteriorMeshes = 0;
 let _lastVisibleApartmentPropMeshes = 0;
@@ -193,6 +203,8 @@ export function getLastRendererInfo(): FpRendererInfo {
   return {
     drawCalls: _lastDrawCalls,
     triangles: _lastTriangles,
+    sceneGraphVisibleTriangles: _lastSceneGraphVisibleTriangles,
+    sceneGraphBreakdown: _lastSceneGraphBreakdown,
     visibleFloorPlates: _lastVisibleFloorPlates,
     visibleUnitInteriorMeshes: _lastVisibleUnitInteriorMeshes,
     visibleApartmentPropMeshes: _lastVisibleApartmentPropMeshes,
@@ -226,6 +238,8 @@ export function pushFpPerfFrame(
   if (rendererInfo) {
     _lastDrawCalls = rendererInfo.drawCalls;
     _lastTriangles = rendererInfo.triangles;
+    _lastSceneGraphVisibleTriangles = rendererInfo.sceneGraphVisibleTriangles;
+    _lastSceneGraphBreakdown = rendererInfo.sceneGraphBreakdown;
     _lastVisibleFloorPlates = rendererInfo.visibleFloorPlates;
     _lastVisibleUnitInteriorMeshes = rendererInfo.visibleUnitInteriorMeshes;
     _lastVisibleApartmentPropMeshes = rendererInfo.visibleApartmentPropMeshes;
@@ -289,6 +303,8 @@ export function pushFpPerfFrame(
     rendererInfo?.frustumTransparentExteriorGlassMeshes ?? 0;
   _drawCalls[i] = rendererInfo?.drawCalls ?? 0;
   _triangles[i] = rendererInfo?.triangles ?? 0;
+  _sceneGraphVisibleTriangles[i] = rendererInfo?.sceneGraphVisibleTriangles ?? 0;
+  _sceneGraphBreakdown[i] = rendererInfo?.sceneGraphBreakdown ?? "";
   _cameraYawRad[i] =
     typeof cameraYawRad === "number" && Number.isFinite(cameraYawRad) ? cameraYawRad : Number.NaN;
   const g = _pendingGpuRenderMsForNextSample;
@@ -356,12 +372,16 @@ export function resetFpPerfStore(): void {
   _frustumTransparentExteriorGlassMeshes.fill(0);
   _drawCalls.fill(0);
   _triangles.fill(0);
+  _sceneGraphVisibleTriangles.fill(0);
+  _sceneGraphBreakdown.fill("");
   _cameraYawRad.fill(Number.NaN);
   _pendingGpuRenderMsForNextSample = null;
   _listeners.clear();
   _lastNotifyMs = 0;
   _lastDrawCalls = 0;
   _lastTriangles = 0;
+  _lastSceneGraphVisibleTriangles = 0;
+  _lastSceneGraphBreakdown = "";
   _lastVisibleFloorPlates = 0;
   _lastVisibleUnitInteriorMeshes = 0;
   _lastVisibleApartmentPropMeshes = 0;
@@ -745,6 +765,8 @@ export type FpPerfTimelineSample = {
   renderThreeGpuMs: number | null;
   drawCalls: number;
   triangles: number;
+  sceneGraphVisibleTriangles: number;
+  sceneGraphBreakdown: string;
   visibleFloorPlates: number;
   visibleUnitInteriorMeshes: number;
   visibleApartmentPropMeshes: number;
@@ -802,6 +824,8 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     renderThreeGpuMs: tg >= 0 ? tg : null,
     drawCalls: _drawCalls[i]!,
     triangles: _triangles[i]!,
+    sceneGraphVisibleTriangles: _sceneGraphVisibleTriangles[i]!,
+    sceneGraphBreakdown: _sceneGraphBreakdown[i] ?? "",
     visibleFloorPlates: _visibleFloorPlates[i]!,
     visibleUnitInteriorMeshes: _visibleUnitInteriorMeshes[i]!,
     visibleApartmentPropMeshes: _visibleApartmentPropMeshes[i]!,
@@ -1061,6 +1085,8 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     return {
       drawCalls: 0,
       triangles: 0,
+      sceneGraphVisibleTriangles: 0,
+      sceneGraphBreakdown: "",
       visibleFloorPlates: 0,
       visibleUnitInteriorMeshes: 0,
       visibleApartmentPropMeshes: 0,
@@ -1085,6 +1111,8 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   }
   let drawCalls = 0;
   let triangles = 0;
+  let sceneGraphVisibleTriangles = 0;
+  let sceneGraphBreakdown = "";
   let visibleFloorPlates = 0;
   let visibleUnitInteriorMeshes = 0;
   let visibleApartmentPropMeshes = 0;
@@ -1108,6 +1136,8 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   for (const s of samples) {
     drawCalls += s.drawCalls;
     triangles += s.triangles;
+    sceneGraphVisibleTriangles += s.sceneGraphVisibleTriangles;
+    if ((s.sceneGraphBreakdown ?? "").length > 0) sceneGraphBreakdown = s.sceneGraphBreakdown ?? "";
     visibleFloorPlates += s.visibleFloorPlates;
     visibleUnitInteriorMeshes += s.visibleUnitInteriorMeshes;
     visibleApartmentPropMeshes += s.visibleApartmentPropMeshes;
@@ -1133,6 +1163,8 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   return {
     drawCalls: Math.round(drawCalls / n),
     triangles: Math.round(triangles / n),
+    sceneGraphVisibleTriangles: Math.round(sceneGraphVisibleTriangles / n),
+    sceneGraphBreakdown,
     visibleFloorPlates: r1(visibleFloorPlates),
     visibleUnitInteriorMeshes: r1(visibleUnitInteriorMeshes),
     visibleApartmentPropMeshes: r1(visibleApartmentPropMeshes),
@@ -1291,7 +1323,13 @@ function formatFpPerfReportMarkdown(
   const lines: string[] = [
     "=== The Mammoth — Performance Report ===",
     `Window: ${s.windowSec}s  Samples: ${s.samples}  Elapsed: ${s.actualElapsedSec.toFixed(1)}s`,
-    `Renderer${hdrNote}: ${ri.drawCalls} draw calls  ${(ri.triangles / 1000).toFixed(1)}k triangles`,
+    `Renderer${hdrNote}: ${ri.drawCalls} draw calls  ${(ri.triangles / 1000).toFixed(1)}k GPU tris`,
+    ri.sceneGraphVisibleTriangles > 0
+      ? `Scene graph${hdrNote}: ${(ri.sceneGraphVisibleTriangles / 1000).toFixed(1)}k mesh tris (instanced base×count)  |  GPU ${(ri.triangles / 1000).toFixed(1)}k`
+      : `Scene graph${hdrNote}: n/a  (run __fpDebug.auditScene() in console)`,
+    ...(ri.sceneGraphBreakdown.length > 0
+      ? [`Scene graph breakdown${hdrNote}: ${ri.sceneGraphBreakdown}`]
+      : []),
     `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  decorShadows=${ri.visibleApartmentDecorFloorShadowMeshes}  transparent=${ri.visibleTransparentMeshes}`,
     `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  decorShadows=${ri.frustumApartmentDecorFloorShadowMeshes}  transparent=${ri.frustumTransparentMeshes}`,
     "",

@@ -54,7 +54,8 @@ export function createFpSessionPerfDebugPostRenderHook(
     const fps = frames / dt;
     console.info("[fpSessionPerf]", {
       fps: Math.round(fps * 10) / 10,
-      drawCalls: ri.calls,
+      drawCalls: ri.drawCalls,
+      renderPasses: ri.calls,
       triangles: ri.triangles,
       points: ri.points,
       lines: ri.lines,

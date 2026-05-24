@@ -31,6 +31,8 @@ const dummySections = {
 const dummyRi = {
   drawCalls: 10,
   triangles: 1000,
+  sceneGraphVisibleTriangles: 100,
+  sceneGraphBreakdown: "",
   visibleFloorPlates: 1,
   visibleUnitInteriorMeshes: 2,
   visibleApartmentPropMeshes: 3,
@@ -73,6 +75,8 @@ describe("fpSessionPerfStore", () => {
       {
         drawCalls: 321,
         triangles: 654_321,
+        sceneGraphVisibleTriangles: 95_000,
+        sceneGraphBreakdown: "droppedItem=650.0k  worldNpc=65.0k",
         visibleFloorPlates: 3,
         visibleUnitInteriorMeshes: 120,
         visibleApartmentPropMeshes: 18,

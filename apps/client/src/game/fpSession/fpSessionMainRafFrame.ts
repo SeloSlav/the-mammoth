@@ -1222,10 +1222,10 @@ export function createFpSessionMainRafFrame(
     );
     const _t_beforeThreeRender = performance.now();
     deps.renderer.info.reset();
-    const drawCallsBefore = deps.renderer.info.render.calls;
+    const drawCallsBefore = deps.renderer.info.render.drawCalls;
     const trianglesBefore = deps.renderer.info.render.triangles;
     deps.renderer.render(deps.scene, deps.camera);
-    const frameDrawCalls = Math.max(0, deps.renderer.info.render.calls - drawCallsBefore);
+    const frameDrawCalls = Math.max(0, deps.renderer.info.render.drawCalls - drawCallsBefore);
     const frameTriangles = Math.max(0, deps.renderer.info.render.triangles - trianglesBefore);
     deps.scheduleGpuTimestampResolve();
     const _t_renderEnd = performance.now();

@@ -1,4 +1,8 @@
 import * as THREE from "three";
+import {
+  meshTriangleCount,
+  summarizeFpSessionSceneTriangles,
+} from "./fpSessionSceneTriangleCount.js";
 
 export type InstallFpSessionTransientDebugConsoleArgs = {
   scene: THREE.Scene;
@@ -13,10 +17,11 @@ export type InstallFpSessionTransientDebugConsoleArgs = {
  *
  * Usage in console:
  *   __fpDebug.list()                           // print all top-level scene children w/ names + tris
+ *   __fpDebug.auditScene()                     // scene-graph tris vs renderer.info (honest reconcile)
  *   __fpDebug.toggle("buildingRoot")           // hide / show by name or index
  *   __fpDebug.onlyShow("ground")               // hide everything except this one
  *   __fpDebug.showAll()                        // restore all visibility
- *   __fpDebug.info()                           // renderer.info.render counters for the next frame
+ *   __fpDebug.info()                           // renderer.info.render counters for the last frame
  */
 export function installFpSessionTransientDebugConsole(
   args: InstallFpSessionTransientDebugConsoleArgs,
@@ -36,22 +41,40 @@ export function installFpSessionTransientDebugConsole(
       (debugHandles as Record<string, unknown>)[key];
     return named instanceof THREE.Object3D ? named : null;
   };
+  const countSubtreeTriangles = (root: THREE.Object3D): number => {
+    let tris = 0;
+    root.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.visible) tris += meshTriangleCount(o);
+    });
+    return tris;
+  };
   (globalThis as unknown as { __fpDebug?: unknown }).__fpDebug = {
     ...debugHandles,
     list: () => {
       scene.children.forEach((c, i) => {
-        let tris = 0;
-        c.traverse((o) => {
-          if (o instanceof THREE.Mesh && o.visible) {
-            const g = o.geometry as THREE.BufferGeometry | undefined;
-            if (g?.index) tris += g.index.count / 3;
-            else if (g?.attributes?.position) tris += g.attributes.position.count / 3;
-          }
-        });
+        const tris = countSubtreeTriangles(c);
         console.log(
           `[${i}] visible=${c.visible} type=${c.type} name="${c.name}" ~tris=${Math.round(tris)}`,
         );
       });
+    },
+    auditScene: () => {
+      const summary = summarizeFpSessionSceneTriangles(scene);
+      const ri = renderer.info.render;
+      const report = {
+        sceneGraphVisibleTriangles: summary.totalVisibleTriangles,
+        rendererSubmittedTriangles: ri.triangles,
+        rendererDrawCalls: ri.drawCalls,
+        rendererRenderPasses: ri.calls,
+        inflationFactor:
+          summary.totalVisibleTriangles > 0
+            ? Math.round((ri.triangles / summary.totalVisibleTriangles) * 100) / 100
+            : null,
+        buckets: summary.buckets,
+      };
+      console.table(summary.buckets);
+      console.info("[fpDebug.auditScene]", report);
+      return report;
     },
     toggle: (key: string | number) => {
       const obj = pickByKey(key);
@@ -69,7 +92,8 @@ export function installFpSessionTransientDebugConsole(
       for (const c of scene.children) c.visible = true;
     },
     info: () => ({
-      calls: renderer.info.render.calls,
+      drawCalls: renderer.info.render.drawCalls,
+      renderPasses: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
     }),
   };
