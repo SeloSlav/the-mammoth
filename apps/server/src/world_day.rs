@@ -119,9 +119,7 @@ fn sleep_in_bed_impl(ctx: &ReducerContext, unit_key: &str) -> Result<(), String>
     emit_hud_notice(
         ctx,
         sender,
-        format!(
-            "Morning. You lost track of the calendar long ago — night {nights} in the block."
-        ),
+        format!("Morning. You lost track of the calendar long ago — night {nights} in the block."),
     );
     Ok(())
 }

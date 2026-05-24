@@ -1,15 +1,13 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
+use super::harvest::harvest_balcony_grow_slot_impl;
+use super::tables::*;
+use super::tray::{compute_target_days, ensure_balcony_grow_for_unit, player_near_tray, tray_row};
 use crate::apartments;
 use crate::auth;
 use crate::inventory::{find_item_in_hotbar_slot, remove_player_item_quantity};
 use crate::items_catalog;
 use crate::loadout::{player_active_hotbar, ACTIVE_HOTBAR_SLOT_CLEARED};
-use super::harvest::harvest_balcony_grow_slot_impl;
-use super::tables::*;
-use super::tray::{
-    compute_target_days, ensure_balcony_grow_for_unit, player_near_tray, tray_row,
-};
 
 #[spacetimedb::reducer]
 pub fn plant_balcony_grow_slot(
@@ -126,7 +124,12 @@ fn plant_balcony_grow_slot_impl(
 }
 
 #[spacetimedb::reducer]
-pub fn harvest_balcony_grow_slot(ctx: &ReducerContext, unit_key: String, tray_id: String, slot_index: u8) {
+pub fn harvest_balcony_grow_slot(
+    ctx: &ReducerContext,
+    unit_key: String,
+    tray_id: String,
+    slot_index: u8,
+) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
         log::debug!("harvest_balcony_grow_slot blocked: {e}");
         return;

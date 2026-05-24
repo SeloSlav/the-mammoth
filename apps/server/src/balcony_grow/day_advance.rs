@@ -4,7 +4,8 @@ use crate::apartments::apartment_unit;
 
 use super::tables::*;
 use super::tray::{
-    fertilizer_present, grow_speed_modifier, lights_on_for_unit, tray_row, try_consume_tray_substrate,
+    fertilizer_present, grow_speed_modifier, lights_on_for_unit, tray_row,
+    try_consume_tray_substrate,
 };
 
 pub(crate) fn tray_water_after_sleep_nights(water_liters: f32, nights: u8) -> f32 {
@@ -41,9 +42,8 @@ pub(crate) fn target_days_after_fertilizer(
         return target_days;
     }
     let remaining = target_days - days_grown;
-    let new_remaining = ((remaining as f32 * without_fert_modifier
-        / with_fert_modifier.max(0.01))
-    .ceil() as u8)
+    let new_remaining = ((remaining as f32 * without_fert_modifier / with_fert_modifier.max(0.01))
+        .ceil() as u8)
         .max(1);
     days_grown.saturating_add(new_remaining)
 }
@@ -53,7 +53,7 @@ pub(crate) fn target_days_after_fertilizer(
 /// not once per night for the life of the tray.
 pub(crate) fn apply_substrate_to_plants(
     plants: &mut [BalconyGrowPlant],
-    without_fert_modifier: f32, 
+    without_fert_modifier: f32,
     with_fert_modifier: f32,
 ) {
     for plant in plants.iter_mut() {
@@ -142,10 +142,7 @@ pub(super) fn apply_grow_day_credit(plant: &mut BalconyGrowPlant, days: u8) {
     if plant.phase != PHASE_GROWING || days == 0 || plant.target_days == 0 {
         return;
     }
-    plant.days_grown = plant
-        .days_grown
-        .saturating_add(days)
-        .min(plant.target_days);
+    plant.days_grown = plant.days_grown.saturating_add(days).min(plant.target_days);
     if plant.days_grown >= plant.target_days {
         plant.phase = PHASE_MATURE;
     }

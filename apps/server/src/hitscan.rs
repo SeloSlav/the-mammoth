@@ -353,7 +353,8 @@ fn resolve_shotgun_pellets(
 
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
-        let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
+        let t_wall =
+            trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
         let phit = trace_best_player_hit(ctx, attacker, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (phit.as_ref(), t_wall) {
@@ -573,7 +574,8 @@ fn resolve_pistol_ray_npcs(
     floor_frac: f32,
     base_damage: f32,
 ) -> Vec<NpcDamageEvent> {
-    let t_wall = trace_world_solids_for_firearms(ctx, attacker, [ox, oy, oz], [dx, dy, dz], max_range_m);
+    let t_wall =
+        trace_world_solids_for_firearms(ctx, attacker, [ox, oy, oz], [dx, dy, dz], max_range_m);
     let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, dx, dy, dz, max_range_m, 0.0);
     let Some((nid, t_hit, feet_y, body_h)) = nhit else {
         return Vec::new();
@@ -628,7 +630,8 @@ fn resolve_shotgun_pellets_npcs(
         let jz = bz + jr[2] * seed.spread_rx + jp[2] * seed.spread_ry;
         let (jx, jy, jz) = normalize_or_fallback(jx, jy, jz);
 
-        let t_wall = trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
+        let t_wall =
+            trace_world_solids_for_firearms(ctx, attacker, origin, [jx, jy, jz], max_range_m);
         let nhit = crate::npc::trace_best_npc_hit(ctx, ox, oy, oz, jx, jy, jz, max_range_m, 0.04);
 
         let dmg_this = match (nhit.as_ref(), t_wall) {

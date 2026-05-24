@@ -301,25 +301,21 @@ fn complete_craft_job(ctx: &ReducerContext, job: CraftQueueItem) {
 
     let qty = craft_output_quantity(out_item.max_stack, cons.output_quantity);
 
-    let remaining = match grant_stack_to_player_spilling_at_feet(
-        ctx,
-        owner,
-        job.output_def_id.clone(),
-        qty,
-    ) {
-        Ok(r) => r,
-        Err(e) => {
-            log::error!(
-                "crafting: grant {} x{} failed {:?}: {e}",
-                job.output_def_id,
-                qty,
-                owner
-            );
-            ctx.db.craft_queue_item().id().delete(job.id);
-            try_activate_waiting_for_owner(ctx, owner);
-            return;
-        }
-    };
+    let remaining =
+        match grant_stack_to_player_spilling_at_feet(ctx, owner, job.output_def_id.clone(), qty) {
+            Ok(r) => r,
+            Err(e) => {
+                log::error!(
+                    "crafting: grant {} x{} failed {:?}: {e}",
+                    job.output_def_id,
+                    qty,
+                    owner
+                );
+                ctx.db.craft_queue_item().id().delete(job.id);
+                try_activate_waiting_for_owner(ctx, owner);
+                return;
+            }
+        };
     let granted = qty.saturating_sub(remaining);
 
     if granted > 0 {

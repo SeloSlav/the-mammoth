@@ -173,7 +173,9 @@ fn first_harvest_hint(crop_def_id: &str) -> &'static str {
         "radish-sprout-seeds" => {
             "Klica repe is emergency greens — eat raw when the fridge runs dry."
         }
-        "oyster-mushroom-spore" => "Bukovačica cooks down into soup — ask the engineer for the communal pot.",
+        "oyster-mushroom-spore" => {
+            "Bukovačica cooks down into soup — ask the engineer for the communal pot."
+        }
         "scented-geranium-cuttings" => {
             "Pelargonija čaj calms the block — steep after a long shift."
         }

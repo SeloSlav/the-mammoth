@@ -270,7 +270,7 @@ export type FpSessionMainRafFrameDeps = {
   selectedHotbarRow: () => InventoryItem | undefined;
   logFpPerf: () => void;
   tickFpSessionElevDebug: (ctx: FpSessionElevDebugTickCtx) => void;
-  /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI or typing. */
+  /** True when interact (e.g. hold-to-claim) should ignore KeyE — inventory UI, typing, or death. */
   fpInteractInputBlocked: () => boolean;
   /**
    * True when WASD / sprint / jump should be ignored. Narrower than {@link fpInteractInputBlocked}:
@@ -906,7 +906,9 @@ export function createFpSessionMainRafFrame(
         setFpPickupPrompt(primary);
         syncFpPickupPromptNotebookSecondary(primary, notebookPickupFromCache());
       };
-      if (deps.combatSimMode) {
+      if (deps.isLocalPlayerDead()) {
+        clearFpPickupPrompts();
+      } else if (deps.combatSimMode) {
         const hitPlain = droppedHud.plain;
         const nearWorld = droppedHud.worldAnchor;
         if (hitPlain) {

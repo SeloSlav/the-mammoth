@@ -294,7 +294,10 @@ mod tests {
             .filter(|r| r.def_id != "balcony-grow-substrate")
             .map(|r| r.quantity)
             .sum();
-        assert_eq!(substrate, 3, "three tray-cycles of compost — fish tank renews");
+        assert_eq!(
+            substrate, 3,
+            "three tray-cycles of compost — fish tank renews"
+        );
         assert!(
             seed_packets > substrate,
             "seeds should outlast starter compost to teach the renewal loop"

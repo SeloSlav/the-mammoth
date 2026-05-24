@@ -83,7 +83,12 @@ pub(super) fn resolve_tray_placements(
     out
 }
 
-fn feet_inside_unit_grow_tray_slack(unit: &apartments::ApartmentUnit, x: f32, y: f32, z: f32) -> bool {
+fn feet_inside_unit_grow_tray_slack(
+    unit: &apartments::ApartmentUnit,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> bool {
     let s = GROW_TRAY_UNIT_HULL_SLACK_XZ;
     x >= unit.bound_min_x - s
         && x <= unit.bound_max_x + s
@@ -117,14 +122,22 @@ pub(super) fn pose_near_tray(
     feet_vertical_ok(unit.foot_y, pose_y)
 }
 
-pub(super) fn tray_row(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> Option<BalconyGrowTray> {
+pub(super) fn tray_row(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    tray_id: &str,
+) -> Option<BalconyGrowTray> {
     ctx.db
         .balcony_grow_tray()
         .row_key()
         .find(&tray_row_key(unit_key, tray_id))
 }
 
-pub(super) fn player_near_tray(ctx: &ReducerContext, unit_key: &str, tray_id: &str) -> Result<(), String> {
+pub(super) fn player_near_tray(
+    ctx: &ReducerContext,
+    unit_key: &str,
+    tray_id: &str,
+) -> Result<(), String> {
     let sender = ctx.sender();
     let unit = ctx
         .db
@@ -169,9 +182,14 @@ pub(super) fn fertilizer_present(ctx: &ReducerContext, unit_key: &str, tray_id: 
     let Some(owner) = unit.and_then(|u| u.owner) else {
         return false;
     };
-    find_item_in_stash_slot(ctx, owner, stash_key.as_str(), BALCONY_GROW_FERTILIZER_STASH_SLOT)
-        .map(|i| i.def_id == BALCONY_GROW_FERTILIZER_DEF_ID)
-        .unwrap_or(false)
+    find_item_in_stash_slot(
+        ctx,
+        owner,
+        stash_key.as_str(),
+        BALCONY_GROW_FERTILIZER_STASH_SLOT,
+    )
+    .map(|i| i.def_id == BALCONY_GROW_FERTILIZER_DEF_ID)
+    .unwrap_or(false)
 }
 
 pub(super) fn try_consume_tray_substrate(
@@ -211,7 +229,11 @@ pub(super) fn lights_on_for_unit(ctx: &ReducerContext, unit_key: &str) -> bool {
         .unwrap_or(true)
 }
 
-pub(crate) fn grow_speed_modifier(lights_on: bool, fertilizer_present: bool, water_liters: f32) -> f32 {
+pub(crate) fn grow_speed_modifier(
+    lights_on: bool,
+    fertilizer_present: bool,
+    water_liters: f32,
+) -> f32 {
     let mut m = 1.0_f32;
     if lights_on {
         m += BALCONY_GROW_LIGHT_BONUS;
@@ -245,8 +267,7 @@ pub(super) fn compute_target_days(
     let days = random_grow_days(ctx, spec);
     let tray = tray_row(ctx, unit_key, tray_id);
     let water = tray.map(|t| t.water_liters).unwrap_or(0.0);
-    let modifier =
-        grow_speed_modifier(lights_on_for_unit(ctx, unit_key), false, water).max(0.01);
+    let modifier = grow_speed_modifier(lights_on_for_unit(ctx, unit_key), false, water).max(0.01);
     ((days as f32 / modifier).ceil() as u8).max(1)
 }
 

@@ -24,9 +24,9 @@ use crate::inventory::{
 use crate::inventory_models::{
     apartment_stash_key, apartment_stash_key_decor, parse_apartment_stash_key_v2,
     HotbarLocationData, InventoryLocationData, ItemLocation, ParsedApartmentStashKey,
-    StashLocationData, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
-    APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
-    APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK,
+    StashLocationData, APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FOOTLOCKER,
+    APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
+    APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 use crate::player_vitals;
 use crate::pose::{player_pose, PlayerPose};
@@ -1054,11 +1054,7 @@ fn migrate_legacy_fish_tank_stash_to_decor(
     }
 }
 
-fn ensure_authored_fish_tank_decor_for_unit(
-    ctx: &ReducerContext,
-    owner: Identity,
-    unit_key: &str,
-) {
+fn ensure_authored_fish_tank_decor_for_unit(ctx: &ReducerContext, owner: Identity, unit_key: &str) {
     let Some(unit) = ctx
         .db
         .apartment_unit()
@@ -1075,7 +1071,9 @@ fn ensure_authored_fish_tank_decor_for_unit(
         .db
         .apartment_unit_decor()
         .iter()
-        .filter(|d| d.unit_key.as_str() == unit_key && fish_tank_decor_covers_authored_slot(&unit, d))
+        .filter(|d| {
+            d.unit_key.as_str() == unit_key && fish_tank_decor_covers_authored_slot(&unit, d)
+        })
         .min_by_key(|d| d.decor_id)
     {
         existing.decor_id
@@ -1644,10 +1642,7 @@ fn authored_content_bed_world_xyz(unit: &ApartmentUnit) -> (f32, f32, f32) {
 }
 
 /// Join / respawn feet anchor — replicated decor row when present, else seeded `ApartmentUnit.bed_*`.
-fn replicated_bed_spawn_anchor(
-    ctx: &ReducerContext,
-    unit: &ApartmentUnit,
-) -> (f32, f32, f32, f32) {
+fn replicated_bed_spawn_anchor(ctx: &ReducerContext, unit: &ApartmentUnit) -> (f32, f32, f32, f32) {
     if let Some(b) = primary_bed_row_for_unit_key(ctx, unit.unit_key.as_str()) {
         (b.pos_x, b.pos_y, b.pos_z, b.yaw_rad)
     } else {
@@ -1956,8 +1951,7 @@ pub(crate) fn apartment_stash_owner_near_sender(
                 decor.pos_z,
                 unit.foot_y,
                 stash_interact_radius_sq(rk),
-            )
-            {
+            ) {
                 return None;
             }
             Some((

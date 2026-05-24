@@ -1,8 +1,8 @@
 //! Per-item world-drop lifetime for player-origin piles (death scatter, spill, manual drop).
 //! Anchored world loot (`world_spawn_slot = Some(_)`) is never aged out here.
 
-use super::schema::{CatalogItem, ItemCategory};
 use super::get;
+use super::schema::{CatalogItem, ItemCategory};
 
 /// Shortest allowed player-drop lifetime (5 minutes).
 pub const DROP_DESPAWN_MIN_SECS: i64 = 300;

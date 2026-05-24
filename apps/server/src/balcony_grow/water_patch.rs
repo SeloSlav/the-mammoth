@@ -1,8 +1,8 @@
 use spacetimedb::{ReducerContext, Table};
 
-use crate::loadout::player_active_hotbar;
-use crate::auth;
 use crate::apartments;
+use crate::auth;
+use crate::loadout::player_active_hotbar;
 use crate::loadout::ACTIVE_HOTBAR_SLOT_CLEARED;
 use crate::water_container::{self, WATER_BOTTLE_DEF_ID};
 
@@ -21,7 +21,11 @@ pub fn dump_water_from_bottle(ctx: &ReducerContext, aim_x: f32, aim_z: f32) {
     }
 }
 
-pub(super) fn dump_water_from_bottle_impl(ctx: &ReducerContext, aim_x: f32, aim_z: f32) -> Result<(), String> {
+pub(super) fn dump_water_from_bottle_impl(
+    ctx: &ReducerContext,
+    aim_x: f32,
+    aim_z: f32,
+) -> Result<(), String> {
     use crate::inventory::find_item_in_hotbar_slot;
 
     let sender = ctx.sender();

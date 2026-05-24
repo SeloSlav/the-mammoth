@@ -1,9 +1,6 @@
 ﻿import * as THREE from "three";
 import type { ReplicatedNpcSnapshot } from "@the-mammoth/game";
-import {
-  resolveNpcBodyClipName,
-  type NpcBodyClipName,
-} from "@the-mammoth/game";
+import type { NpcBodyClipName } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { deepDisposeObject3D } from "../loaders/deepDisposeObject3D.js";
@@ -32,19 +29,35 @@ type BabushkaClipKey =
   | "punch1"
   | "punch5";
 
-const BABUSHKA_CLIP_NAMES = {
-  idle: "Idle_4",
-  airSquat: "air_squat",
-  walk: "Walking",
-  run: "Running",
-  punch: "Punch_Combo",
-  punch1: "Punch_Combo_1",
-  punch5: "Punch_Combo_5",
-  hit: "Hit_Reaction_to_Waist",
-  dead: "Dead",
-} as const satisfies Record<BabushkaClipKey, string>;
-
 const PUNCH_VARIANTS: readonly BabushkaClipKey[] = ["punch", "punch1", "punch5"];
+
+/** Meshy UI labels and GLB export names — resolve with normalized matching.
+ *
+ * The current babushka GLB was exported with shifted animation names:
+ * - `Hit_Reaction_to_Waist` contains Running
+ * - `Walking` contains Idle_4
+ * - `Idle_4` contains air_squat
+ * - `Punch_Combo_1` contains Hit_Reaction_to_Waist
+ * - `Dead` contains Punch_Combo
+ * - `air_squat` contains Punch_Combo_1
+ * - `Punch_Combo` contains Walking
+ * - `Punch_Combo_5` is correct
+ * - `Running` contains Dead
+ */
+const BABUSHKA_CLIP_CANDIDATES: Record<BabushkaClipKey, readonly string[]> = {
+  idle: ["Walking"],
+  airSquat: ["Idle 4", "Idle_4"],
+  walk: ["Punch Combo", "Punch_Combo"],
+  run: ["Hit Reaction to Waist", "Hit_Reaction_to_Waist"],
+  punch: ["Dead"],
+  punch1: ["Air Squat", "air_squat", "Air_Squat"],
+  punch5: ["Punch Combo 5", "Punch_Combo_5"],
+  hit: ["Punch Combo 1", "Punch_Combo_1"],
+  dead: ["Running"],
+};
+
+const LOCOMOTION_CLIP_KEYS = new Set<BabushkaClipKey>(["idle", "airSquat", "walk", "run"]);
+const OVERLAY_CLIP_KEYS = new Set<BabushkaClipKey>(["punch", "punch1", "punch5", "hit", "dead"]);
 
 const npcLoader = new GLTFLoader();
 type NpcBodyTemplate = { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] };
@@ -163,19 +176,40 @@ export function bindNpcOutdoorReadableEnv(root: THREE.Object3D, envTexture: THRE
   });
 }
 
-function createLoopingAction(
-  mixer: THREE.AnimationMixer,
-  clips: Map<string, THREE.AnimationClip>,
-  name: string,
-  loop: THREE.AnimationActionLoopStyles,
-): THREE.AnimationAction | null {
-  const clip = clips.get(name);
-  if (!clip) return null;
-  const action = mixer.clipAction(clip);
-  action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
-  if (loop === THREE.LoopOnce) {
-    action.clampWhenFinished = true;
+function normalizeClipLabel(name: string): string {
+  return name.toLowerCase().replace(/[\s_]+/g, "");
+}
+
+function buildNormalizedClipLibrary(
+  animations: readonly THREE.AnimationClip[],
+): Map<string, THREE.AnimationClip> {
+  const library = new Map<string, THREE.AnimationClip>();
+  for (const clip of animations) {
+    library.set(normalizeClipLabel(clip.name), clip);
   }
+  return library;
+}
+
+function resolveBabushkaClip(
+  library: Map<string, THREE.AnimationClip>,
+  candidates: readonly string[],
+): THREE.AnimationClip | null {
+  for (const candidate of candidates) {
+    const clip = library.get(normalizeClipLabel(candidate));
+    if (clip) return clip;
+  }
+  return null;
+}
+
+function createNpcAction(
+  mixer: THREE.AnimationMixer,
+  clip: THREE.AnimationClip,
+  loop: THREE.AnimationActionLoopStyles,
+): THREE.AnimationAction {
+  const action = mixer.clipAction(clip);
+  action.enabled = true;
+  action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
+  action.clampWhenFinished = loop === THREE.LoopOnce;
   return action;
 }
 
@@ -210,11 +244,13 @@ class AnimatedBabushkaBody {
   private readonly modelRoot: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
   private readonly actions = new Map<BabushkaClipKey, THREE.AnimationAction>();
-  private activeClip: BabushkaClipKey | null = null;
+  private locomotionClip: BabushkaClipKey | null = null;
+  private overlayClip: BabushkaClipKey | null = null;
+  private overlayTimeLeftSec = 0;
   private lastMeleeSeq = 0;
   private lastHitSeq = 0;
-  private deadPlayed = false;
-  private oneShotActive: BabushkaClipKey | null = null;
+  private lastPunchVariant: BabushkaClipKey | null = null;
+  private deadLocked = false;
   private idleVariantTimerSec = IDLE_VARIANT_MIN_SEC;
   private idleVariant: "idle" | "airSquat" = "idle";
 
@@ -225,50 +261,30 @@ class AnimatedBabushkaBody {
     normalizeNpcHumanoidModel(this.modelRoot);
     this.root.add(this.modelRoot);
     this.mixer = new THREE.AnimationMixer(this.modelRoot);
-    const clipLibrary = new Map(template.animations.map((clip) => [clip.name, clip] as const));
-    for (const [key, clipName] of Object.entries(BABUSHKA_CLIP_NAMES) as [BabushkaClipKey, string][]) {
-      const loop =
-        key === "punch" || key === "punch1" || key === "punch5" || key === "hit" || key === "dead"
-          ? THREE.LoopOnce
-          : THREE.LoopRepeat;
-      const action = createLoopingAction(this.mixer, clipLibrary, clipName, loop);
-      if (action) this.actions.set(key, action);
+    const clipLibrary = buildNormalizedClipLibrary(template.animations);
+    for (const key of Object.keys(BABUSHKA_CLIP_CANDIDATES) as BabushkaClipKey[]) {
+      const clip = resolveBabushkaClip(clipLibrary, BABUSHKA_CLIP_CANDIDATES[key]);
+      if (!clip) {
+        console.warn(`[BabushkaNpcPresenter] missing clip for ${key}`, BABUSHKA_CLIP_CANDIDATES[key]);
+        continue;
+      }
+      const loop = OVERLAY_CLIP_KEYS.has(key) ? THREE.LoopOnce : THREE.LoopRepeat;
+      this.actions.set(key, createNpcAction(this.mixer, clip, loop));
     }
-    this.playLocomotionClip("idle", true);
+    this.playLocomotion("idle", true);
   }
 
   update(snapshot: ReplicatedNpcSnapshot, dt: number): void {
     const dead = snapshot.state === NPC_STATE_DEAD || snapshot.health <= 0;
 
     if (dead) {
-      if (!this.deadPlayed) {
-        this.deadPlayed = true;
-        this.playOneShot("dead");
+      if (!this.deadLocked) {
+        this.deadLocked = true;
+        this.playDeath();
       }
       this.mixer.update(dt);
       updateNpcSkinnedMeshes(this.modelRoot);
       return;
-    }
-
-    if (snapshot.hitPresentationSeq > this.lastHitSeq) {
-      this.lastHitSeq = snapshot.hitPresentationSeq;
-      this.playOneShot("hit");
-    }
-
-    if (snapshot.meleePresentationSeq > this.lastMeleeSeq) {
-      this.lastMeleeSeq = snapshot.meleePresentationSeq;
-      const variant = PUNCH_VARIANTS[snapshot.meleePresentationSeq % PUNCH_VARIANTS.length] ?? "punch";
-      this.playOneShot(variant);
-    }
-
-    if (this.oneShotActive) {
-      const oneShot = this.actions.get(this.oneShotActive);
-      if (oneShot?.isRunning()) {
-        this.mixer.update(dt);
-        updateNpcSkinnedMeshes(this.modelRoot);
-        return;
-      }
-      this.oneShotActive = null;
     }
 
     this.idleVariantTimerSec -= dt;
@@ -283,8 +299,34 @@ class AnimatedBabushkaBody {
         (Number(snapshot.npcId) % Math.ceil(IDLE_VARIANT_MAX_SEC - IDLE_VARIANT_MIN_SEC));
     }
 
-    const locomotionClip = this.resolveLocomotionClip(snapshot);
-    this.playLocomotionClip(locomotionClip, false);
+    // Keep a base locomotion action alive every frame. If one-shots fail or finish, the rig never
+    // falls back to bind/A-pose.
+    this.playLocomotion(this.resolveLocomotionClip(snapshot), false);
+
+    const meleeTriggered = snapshot.meleePresentationSeq > this.lastMeleeSeq;
+    const hitTriggered = snapshot.hitPresentationSeq > this.lastHitSeq;
+
+    if (meleeTriggered) {
+      this.lastMeleeSeq = snapshot.meleePresentationSeq;
+      if (hitTriggered) {
+        this.lastHitSeq = snapshot.hitPresentationSeq;
+      }
+      this.playOverlay(this.selectPunchVariant(snapshot));
+    } else if (hitTriggered) {
+      this.lastHitSeq = snapshot.hitPresentationSeq;
+      this.playOverlay("hit");
+    }
+
+    if (this.overlayTimeLeftSec > 0) {
+      this.overlayTimeLeftSec = Math.max(0, this.overlayTimeLeftSec - dt);
+      if (this.overlayTimeLeftSec > 0) {
+        this.mixer.update(dt);
+        updateNpcSkinnedMeshes(this.modelRoot);
+        return;
+      }
+      this.stopOverlay();
+    }
+
     this.mixer.update(dt);
     updateNpcSkinnedMeshes(this.modelRoot);
   }
@@ -295,12 +337,13 @@ class AnimatedBabushkaBody {
   }
 
   private resolveLocomotionClip(snapshot: ReplicatedNpcSnapshot): BabushkaClipKey {
-    const base = resolveNpcBodyClipName({
-      grounded: snapshot.grounded,
-      locomotion: snapshot.locomotion,
-      dead: false,
-      velocity: snapshot.velocity,
-    });
+    const base: NpcBodyClipName = !snapshot.grounded
+      ? "idle"
+      : snapshot.locomotion === "run"
+        ? "run"
+        : snapshot.locomotion === "walk"
+          ? "walk"
+          : "idle";
 
     if (base !== "idle" || snapshot.state !== 0) {
       return base;
@@ -312,34 +355,107 @@ class AnimatedBabushkaBody {
     return "idle";
   }
 
-  private playLocomotionClip(next: BabushkaClipKey, immediate: boolean): void {
-    if (next === "punch" || next === "punch1" || next === "punch5" || next === "hit" || next === "dead") {
+  private playLocomotion(next: BabushkaClipKey, immediate: boolean): void {
+    if (!LOCOMOTION_CLIP_KEYS.has(next)) return;
+    const nextAction = this.actions.get(next);
+    if (!nextAction) {
+      console.warn(`[BabushkaNpcPresenter] locomotion clip not loaded: ${next}`);
+      if (next !== "idle") {
+        this.playLocomotion("idle", true);
+      }
       return;
     }
-    if (this.activeClip === next) return;
-    const nextAction = this.actions.get(next);
-    if (!nextAction) return;
-    const prevAction = this.activeClip ? this.actions.get(this.activeClip) : null;
-    this.activeClip = next;
-    if (prevAction && prevAction !== nextAction) {
-      prevAction.fadeOut(immediate ? 0 : NPC_CLIP_TRANSITION_SEC);
+    if (this.locomotionClip === next && nextAction.isRunning()) {
+      nextAction.enabled = true;
+      nextAction.paused = false;
+      nextAction.setEffectiveTimeScale(1);
+      nextAction.setEffectiveWeight(1);
+      return;
     }
+
+    for (const key of LOCOMOTION_CLIP_KEYS) {
+      if (key === next) continue;
+      this.actions.get(key)?.stop();
+    }
+
+    this.locomotionClip = next;
+    nextAction.enabled = true;
+    nextAction.paused = false;
     nextAction.reset();
-    nextAction.fadeIn(immediate ? 0 : NPC_CLIP_TRANSITION_SEC);
+    nextAction.setLoop(THREE.LoopRepeat, Infinity);
+    nextAction.setEffectiveTimeScale(1);
+    nextAction.setEffectiveWeight(1);
+    if (!immediate) {
+      nextAction.fadeIn(NPC_CLIP_TRANSITION_SEC);
+    }
     nextAction.play();
   }
 
-  private playOneShot(key: BabushkaClipKey): void {
+  private playOverlay(key: BabushkaClipKey): void {
     const action = this.actions.get(key);
-    if (!action) return;
+    if (!action) {
+      console.warn(`[BabushkaNpcPresenter] overlay clip not loaded: ${key}`);
+      return;
+    }
     for (const [clipKey, clipAction] of this.actions) {
-      if (clipKey !== key) clipAction.fadeOut(0.06);
+      if (clipKey === key) continue;
+      if (key === "dead" || OVERLAY_CLIP_KEYS.has(clipKey)) clipAction.stop();
     }
     action.reset();
-    action.fadeIn(0.04);
+    action.setEffectiveWeight(1);
+    action.fadeIn(0.05);
     action.play();
-    this.oneShotActive = key;
-    this.activeClip = key;
+    this.overlayClip = key;
+    this.overlayTimeLeftSec = action.getClip().duration;
+    if (key === "dead") {
+      this.overlayTimeLeftSec = Number.POSITIVE_INFINITY;
+    }
+  }
+
+  private selectPunchVariant(snapshot: ReplicatedNpcSnapshot): BabushkaClipKey {
+    const available = PUNCH_VARIANTS.filter((key) => this.actions.has(key));
+    if (available.length === 0) return "punch";
+    if (available.length === 1) return available[0] ?? "punch";
+
+    const seed =
+      Number(snapshot.npcId % 997n) * 31 +
+      snapshot.meleePresentationSeq * 17 +
+      Math.floor(snapshot.observedTimeMs / 137);
+    let variant = available[Math.abs(seed) % available.length] ?? available[0] ?? "punch";
+    if (variant === this.lastPunchVariant) {
+      const idx = available.indexOf(variant);
+      variant = available[(idx + 1) % available.length] ?? variant;
+    }
+    this.lastPunchVariant = variant;
+    return variant;
+  }
+
+  private playDeath(): void {
+    const action = this.actions.get("dead");
+    if (!action) {
+      console.warn("[BabushkaNpcPresenter] death clip not loaded");
+      return;
+    }
+    this.mixer.stopAllAction();
+    action.enabled = true;
+    action.paused = false;
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.setEffectiveTimeScale(1);
+    action.setEffectiveWeight(1);
+    action.play();
+    this.overlayClip = "dead";
+    this.overlayTimeLeftSec = Number.POSITIVE_INFINITY;
+  }
+
+  private stopOverlay(): void {
+    if (this.overlayClip) {
+      this.actions.get(this.overlayClip)?.stop();
+      this.overlayClip = null;
+    }
+    this.overlayTimeLeftSec = 0;
+    this.locomotionClip = null;
   }
 }
 

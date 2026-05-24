@@ -2,19 +2,18 @@ use spacetimedb::Identity;
 
 use super::{
     apply_substrate_to_plants, grow_speed_modifier, harvest_bonus_count, harvest_food_count,
-    harvest_seed_count, is_known_tray_id, target_days_after_fertilizer, tray_dry_nights_after_sleep,
-    tray_water_after_sleep_nights, BalconyGrowPlant, HarvestCareContext,
-    BALCONY_GROW_TRAY_BUILTIN_IDS, BALCONY_GROW_TRAY_MAX_WATER_L,
-    BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L, BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER,
-    BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD,
+    harvest_seed_count, is_known_tray_id, plant_row_key, target_days_after_fertilizer,
+    tray_dry_nights_after_sleep, tray_water_after_sleep_nights, BalconyGrowPlant,
+    HarvestCareContext, BALCONY_GROW_HARVEST_FOOD_BONUS_FERTILIZER_THRESHOLD,
     BALCONY_GROW_HARVEST_FOOD_BONUS_LIGHT_THRESHOLD,
     BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_FULL_THRESHOLD,
     BALCONY_GROW_HARVEST_FOOD_BONUS_WATER_OK_THRESHOLD,
     BALCONY_GROW_HARVEST_SEED_BONUS_FERTILIZER_THRESHOLD,
     BALCONY_GROW_HARVEST_SEED_BONUS_LIGHT_THRESHOLD,
     BALCONY_GROW_HARVEST_SEED_BONUS_WATER_FULL_THRESHOLD,
-    BALCONY_GROW_HARVEST_SEED_BONUS_WATER_OK_THRESHOLD, PHASE_EMPTY, PHASE_GROWING,
-    plant_row_key,
+    BALCONY_GROW_HARVEST_SEED_BONUS_WATER_OK_THRESHOLD, BALCONY_GROW_TRAY_BUILTIN_IDS,
+    BALCONY_GROW_TRAY_MAX_WATER_L, BALCONY_GROW_TRAY_WATER_LOSS_PER_SLEEP_L,
+    BALCONY_GROW_WILT_NIGHTS_WITHOUT_WATER, PHASE_EMPTY, PHASE_GROWING,
 };
 
 #[test]
@@ -44,7 +43,10 @@ fn tray_water_loss_is_sleep_only_and_balanced() {
     assert!((tray_water_after_sleep_nights(BALCONY_GROW_TRAY_MAX_WATER_L, 1) - 1.5).abs() < 0.001);
     assert!((tray_water_after_sleep_nights(1.5, 1) - 1.0).abs() < 0.001);
     assert!((tray_water_after_sleep_nights(0.4, 1)).abs() < 0.001);
-    assert_eq!(tray_dry_nights_after_sleep(BALCONY_GROW_TRAY_MAX_WATER_L, 0, 1), 0);
+    assert_eq!(
+        tray_dry_nights_after_sleep(BALCONY_GROW_TRAY_MAX_WATER_L, 0, 1),
+        0
+    );
     assert_eq!(tray_dry_nights_after_sleep(0.4, 0, 1), 1);
     assert_eq!(tray_dry_nights_after_sleep(0.0, 1, 1), 2);
     assert_eq!(BALCONY_WATER_PATCH_DURATION_SECS, 45);
@@ -53,7 +55,7 @@ fn tray_water_loss_is_sleep_only_and_balanced() {
 #[test]
 fn session_baseline_maps_five_catalog_days_to_fifteen_minutes() {
     use super::{
-        BALCONY_GROW_BASELINE_DURATION_SECS, BALCONY_GROW_REFERENCE_DAYS, BALCONY_GAME_DAY_SECS,
+        BALCONY_GAME_DAY_SECS, BALCONY_GROW_BASELINE_DURATION_SECS, BALCONY_GROW_REFERENCE_DAYS,
     };
     assert_eq!(BALCONY_GROW_BASELINE_DURATION_SECS, 900);
     assert_eq!(BALCONY_GROW_REFERENCE_DAYS, 5);
@@ -79,10 +81,7 @@ fn target_days_shrink_when_substrate_applied_overnight() {
     let adjusted = target_days_after_fertilizer(1, 5, without, with_fert);
     assert!(adjusted < 5);
     assert!(adjusted > 1);
-    assert_eq!(
-        target_days_after_fertilizer(5, 5, without, with_fert),
-        5
-    );
+    assert_eq!(target_days_after_fertilizer(5, 5, without, with_fert), 5);
 }
 
 #[test]

@@ -1380,6 +1380,13 @@ export async function mountFpSession(
   const mammothDebugMenuOpen = () =>
     document.querySelector('[data-mammoth-debug-menu="open"]') !== null;
 
+  const isLocalPlayerDead = (): boolean => {
+    const id = conn.identity;
+    if (!id) return false;
+    const vitals = conn.db.player_vitals.identity.find(id) as PlayerVitals | undefined;
+    return (vitals?.health ?? 1) <= 0;
+  };
+
   /** Same `DigitN` / slot within debounce window — ignored unless instant-consume or same-slot unequip. */
   const digitKeyDebounce = { code: "", at: 0, slot: -1 };
 
@@ -1510,7 +1517,8 @@ export async function mountFpSession(
       !mammothInventoryOpen() &&
       !mammothCraftingOpen() &&
       !mammothDebugMenuOpen() &&
-      !isTextInputFocused()
+      !isTextInputFocused() &&
+      !isLocalPlayerDead()
     ) {
       e.preventDefault();
       /** Same blend as RAF pickup prompts ({@link resolveAuthoritativeInteractionPose}). */
@@ -1810,17 +1818,14 @@ export async function mountFpSession(
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
 
   const fpInteractInputBlocked = () =>
-    mammothInventoryOpen() || mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
+    mammothInventoryOpen() ||
+    mammothCraftingOpen() ||
+    mammothDebugMenuOpen() ||
+    isTextInputFocused() ||
+    isLocalPlayerDead();
 
   const fpLocomotionInputBlocked = () =>
     mammothCraftingOpen() || mammothDebugMenuOpen() || isTextInputFocused();
-
-  const isLocalPlayerDead = (): boolean => {
-    const id = conn.identity;
-    if (!id) return false;
-    const vitals = conn.db.player_vitals.identity.find(id) as PlayerVitals | undefined;
-    return (vitals?.health ?? 1) <= 0;
-  };
 
   const { runFrame } = createFpSessionMainRafFrame({
     mainRaf,

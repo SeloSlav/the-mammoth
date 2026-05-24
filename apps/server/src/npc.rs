@@ -30,6 +30,7 @@ pub const BABUSHKA_MELEE_DAMAGE: f32 = 14.0;
 pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 
 const NPC_TICK_INTERVAL_MICROS: i64 = 250_000;
+const BABUSHKA_DAMAGE_CHASE_MICROS: i64 = 12_000_000;
 
 #[spacetimedb::table(public, accessor = world_npc)]
 pub struct WorldNpc {
@@ -148,9 +149,8 @@ pub fn apply_npc_damage(ctx: &ReducerContext, npc_id: u64, amount: f32) -> bool 
         ctx.db.world_npc().npc_id().update(row);
         return true;
     }
-    if row.state == NPC_STATE_IDLE {
-        row.state = NPC_STATE_AGGRO;
-    }
+    row.state = NPC_STATE_AGGRO;
+    row.last_melee_micros = ctx.timestamp.to_micros_since_unix_epoch();
     ctx.db.world_npc().npc_id().update(row);
     true
 }
@@ -326,15 +326,9 @@ pub fn npc_tick_step(ctx: &ReducerContext, _arg: WorldNpcSchedule) {
     step_all_world_npcs(ctx, npc_scheduled_tick_dt_sec());
 }
 
-fn step_one_world_npc(
-    ctx: &ReducerContext,
-    npc: &mut WorldNpc,
-    dt_sec: f32,
-    now_us: i64,
-) {
+fn step_one_world_npc(ctx: &ReducerContext, npc: &mut WorldNpc, dt_sec: f32, now_us: i64) {
     let combat_sim = npc.session_key.starts_with("combat_sim:");
-    let Some((target_x, target_z, target_y, target_identity)) = ai_target_for_npc(ctx, npc)
-    else {
+    let Some((target_x, target_z, target_y, target_identity)) = ai_target_for_npc(ctx, npc) else {
         npc.locomotion = NPC_LOCOMOTION_IDLE;
         npc.vel_x = 0.0;
         npc.vel_z = 0.0;
@@ -346,7 +340,11 @@ fn step_one_world_npc(
     let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
     let dist = dist_sq.sqrt();
 
-    let aggro_range_m = BABUSHKA_AGGRO_RANGE_M;
+    let aggro_range_m = if combat_sim {
+        crate::combat_sim::COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M
+    } else {
+        BABUSHKA_AGGRO_RANGE_M
+    };
 
     if npc.state == NPC_STATE_IDLE {
         if dist_sq <= aggro_range_m * aggro_range_m {
@@ -355,7 +353,14 @@ fn step_one_world_npc(
     }
 
     if npc.state == NPC_STATE_AGGRO {
-        if dist_sq > (aggro_range_m * 2.4).powi(2) {
+        let damage_chase_active = npc.last_melee_micros > 0
+            && now_us - npc.last_melee_micros < BABUSHKA_DAMAGE_CHASE_MICROS;
+        let leash_range_m = if damage_chase_active {
+            aggro_range_m.max(18.0)
+        } else {
+            aggro_range_m * 2.4
+        };
+        if dist_sq > leash_range_m.powi(2) {
             npc.state = NPC_STATE_IDLE;
             npc.locomotion = NPC_LOCOMOTION_IDLE;
             npc.vel_x = 0.0;
@@ -401,6 +406,8 @@ fn step_one_world_npc(
     } else {
         let (dir_x, dir_z, wandering) = babushka_idle_wander_heading(npc.npc_id, now_us);
         if wandering {
+            let old_x = npc.x;
+            let old_z = npc.z;
             let vx = dir_x * BABUSHKA_WALK_SPEED_MPS;
             let vz = dir_z * BABUSHKA_WALK_SPEED_MPS;
             npc.vel_x = vx;
@@ -412,6 +419,13 @@ fn step_one_world_npc(
             if combat_sim {
                 clamp_babushka_to_combat_arena(ctx, npc);
             }
+            let moved_x = npc.x - old_x;
+            let moved_z = npc.z - old_z;
+            if moved_x * moved_x + moved_z * moved_z < 0.01 * 0.01 {
+                npc.locomotion = NPC_LOCOMOTION_IDLE;
+                npc.vel_x = 0.0;
+                npc.vel_z = 0.0;
+            }
         } else {
             npc.locomotion = NPC_LOCOMOTION_IDLE;
             npc.vel_x = 0.0;
@@ -421,11 +435,14 @@ fn step_one_world_npc(
 }
 
 fn babushka_idle_wander_heading(npc_id: u64, now_us: i64) -> (f32, f32, bool) {
-    const WANDER_BUCKET_MICROS: i64 = 3_500_000;
+    const WANDER_BUCKET_MICROS: i64 = 4_500_000;
     let bucket = now_us.div_euclid(WANDER_BUCKET_MICROS) as u64;
-    let seed = npc_id.wrapping_mul(0x517c_c1b7_2722_0e95).wrapping_add(bucket);
+    let seed = npc_id
+        .wrapping_mul(0x517c_c1b7_2722_0e95)
+        .wrapping_add(bucket);
     let roll = (seed & 0xff) as u32;
-    if roll >= 192 {
+    // Roam sometimes, but spend most non-aggro time idling/air-squatting.
+    if roll >= 90 {
         return (0.0, 1.0, false);
     }
     let angle_seed = (seed >> 8) & 0xffff;
@@ -471,10 +488,7 @@ fn babushka_melee_vertical_overlap_with_player(
     vertical_overlap(npc_y, BABUSHKA_BODY_HEIGHT_M, target_y, player_h)
 }
 
-fn ai_target_for_npc(
-    ctx: &ReducerContext,
-    npc: &WorldNpc,
-) -> Option<(f32, f32, f32, Identity)> {
+fn ai_target_for_npc(ctx: &ReducerContext, npc: &WorldNpc) -> Option<(f32, f32, f32, Identity)> {
     if let Some(id) = npc.chase_identity {
         if !crate::player_vitals::is_player_dead(ctx, id) {
             if let Some(pose) = ctx.db.player_pose().identity().find(&id) {

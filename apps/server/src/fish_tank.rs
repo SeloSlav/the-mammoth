@@ -4,7 +4,9 @@
 use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
-use crate::inventory::{find_item_in_stash_slot, inventory_item, remove_stash_item_quantity, InventoryItem};
+use crate::inventory::{
+    find_item_in_stash_slot, inventory_item, remove_stash_item_quantity, InventoryItem,
+};
 use crate::inventory_models::{apartment_stash_key_decor, ItemLocation, StashLocationData};
 use crate::items_catalog::{self, ItemCategory};
 
@@ -95,8 +97,7 @@ fn roll_fish_tank_success(ctx: &ReducerContext, seed: u64, success_pct: u8) -> b
         return true;
     }
     let roll = splitmix64(
-        seed
-            .wrapping_add(ctx.timestamp.to_micros_since_unix_epoch() as u64)
+        seed.wrapping_add(ctx.timestamp.to_micros_since_unix_epoch() as u64)
             .wrapping_add(0xF15_0000),
     ) % 100;
     roll < pct as u64
@@ -111,12 +112,7 @@ fn fish_tank_stash_key(decor: &ApartmentUnitDecor) -> String {
     apartment_stash_key_decor(decor.unit_key.as_str(), decor.decor_id)
 }
 
-fn grant_fish_tank_substrate(
-    ctx: &ReducerContext,
-    owner: Identity,
-    stash_key: &str,
-    qty: u32,
-) {
+fn grant_fish_tank_substrate(ctx: &ReducerContext, owner: Identity, stash_key: &str, qty: u32) {
     if qty == 0 {
         return;
     }
@@ -155,18 +151,9 @@ fn process_fish_tank_feed_slot(
     }
 }
 
-fn process_fish_tank_on_sleep(
-    ctx: &ReducerContext,
-    owner: Identity,
-    decor: &ApartmentUnitDecor,
-) {
+fn process_fish_tank_on_sleep(ctx: &ReducerContext, owner: Identity, decor: &ApartmentUnitDecor) {
     let roll_seed = decor.decor_id.wrapping_mul(0x9E37).wrapping_add(0xF15_0001);
-    process_fish_tank_feed_slot(
-        ctx,
-        owner,
-        fish_tank_stash_key(decor).as_str(),
-        roll_seed,
-    );
+    process_fish_tank_feed_slot(ctx, owner, fish_tank_stash_key(decor).as_str(), roll_seed);
 }
 
 /// Sleep / death day hook — digest feed slot and maybe leave tray compost.
@@ -218,5 +205,4 @@ mod tests {
         let rations = fish_tank_feed_yield("field-rations").unwrap();
         assert!(rakija.success_pct < rations.success_pct);
     }
-
 }

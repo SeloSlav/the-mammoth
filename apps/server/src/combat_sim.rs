@@ -22,10 +22,13 @@ use spacetimedb::{Identity, ReducerContext, Table};
 
 use crate::apartments::{self, apartment_unit, ApartmentUnit, UNIT_STATE_CLAIMED};
 use crate::auth;
-use crate::inventory::{delete_all_player_inventory_and_hotbar_items, reset_player_loadout_for_respawn, try_grant_stack_to_player};
+use crate::combat_sim_npc_spawn;
+use crate::inventory::{
+    delete_all_player_inventory_and_hotbar_items, reset_player_loadout_for_respawn,
+    try_grant_stack_to_player,
+};
 use crate::loadout;
 use crate::movement;
-use crate::combat_sim_npc_spawn;
 use crate::npc::{self, world_npc};
 use crate::player_vitals;
 use crate::pose::{self, player_pose};
@@ -44,8 +47,10 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
     ("ammo-9mm", 60),
 ];
 
-/// Minimum planar distance from the player spawn to the babushka (outside default aggro).
-const BABUSHKA_SPAWN_SEPARATION_M: f32 = npc::BABUSHKA_AGGRO_RANGE_M + 1.75;
+/// Combat sim keeps aggro intentionally tight so animation states are easy to inspect.
+pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = 2.75;
+/// Minimum planar distance from the player spawn to the babushka (outside combat-sim aggro).
+const BABUSHKA_SPAWN_SEPARATION_M: f32 = COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 1.75;
 
 /// Death clip (~2.47 s) plus corpse linger before despawn + fresh spawn elsewhere in the arena.
 const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 6_500_000;
@@ -143,9 +148,10 @@ pub fn combat_sim_session_key(unit: &ApartmentUnit) -> String {
 }
 
 pub fn owned_claimed_unit(ctx: &ReducerContext, owner: Identity) -> Option<ApartmentUnit> {
-    ctx.db.apartment_unit().iter().find(|u| {
-        u.owner == Some(owner) && u.state == UNIT_STATE_CLAIMED
-    })
+    ctx.db
+        .apartment_unit()
+        .iter()
+        .find(|u| u.owner == Some(owner) && u.state == UNIT_STATE_CLAIMED)
 }
 
 /// True while this player has live combat-sim NPCs — skip megablock firearm LOS (see module docs).
@@ -248,11 +254,8 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
     grant_combat_sim_loadout(ctx, owner);
     player_vitals::restore_player_vitals_full(ctx, owner);
 
-    let authored = combat_sim_npc_spawn::authored_spawns_for_owner_unit(
-        ctx,
-        owner,
-        unit.unit_key.as_str(),
-    );
+    let authored =
+        combat_sim_npc_spawn::authored_spawns_for_owner_unit(ctx, owner, unit.unit_key.as_str());
     let npc_count = if authored.is_empty() {
         let (bx, by, bz, byaw) = babushka_spawn_xz(&unit, player_x, player_z);
         let _npc_id = npc::spawn_babushka(ctx, session_key, bx, by, bz, byaw, Some(owner));
@@ -273,9 +276,7 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
         count
     };
 
-    log::info!(
-        "enter_combat_sim: owner={owner} npc_count={npc_count}",
-    );
+    log::info!("enter_combat_sim: owner={owner} npc_count={npc_count}",);
 }
 
 fn player_at_combat_sim_arena(unit: &ApartmentUnit, pose: &pose::PlayerPose) -> bool {

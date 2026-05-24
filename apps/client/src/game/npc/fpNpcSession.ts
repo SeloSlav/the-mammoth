@@ -122,10 +122,11 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     };
     const ctx = opts.getAudioContext();
     if (prev) {
-      if (prev.state === 0 && row.state === 1) {
+      const tookDamage = row.hitPresentationSeq > prev.hitSeq;
+      if (prev.state === 0 && row.state === 1 && !tookDamage) {
         playNpcOneShot(ctx, BABUSHKA_AUDIO.aggro);
       }
-      if (row.hitPresentationSeq > prev.hitSeq) {
+      if (tookDamage) {
         playNpcOneShot(ctx, BABUSHKA_AUDIO.hit);
         const damage = Math.max(MIN_NPC_HIT_BLOOD_DAMAGE, prev.health - row.health);
         bloodFx.spawnBurstAt(row.x, row.y + TORSO_Y_ABOVE_FEET_M, row.z, damage);

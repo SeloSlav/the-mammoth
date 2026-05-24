@@ -13,14 +13,16 @@ mod apartment_stash_rules;
 mod apartments;
 mod auth;
 mod balcony_grow;
+mod combat_sim;
+mod combat_sim_npc_spawn;
 mod combat_stub;
 mod crafting;
 mod dropped_item;
 mod elevator;
 mod elevator_layout;
 mod feature_flags;
-mod fish_tank;
 mod firearm;
+mod fish_tank;
 mod generated_apartment_doors;
 mod generated_collision_solids;
 mod generated_walk_surfaces;
@@ -32,16 +34,14 @@ mod kinematic_support;
 mod loadout;
 mod melee_turn;
 mod movement;
-mod combat_sim;
-mod combat_sim_npc_spawn;
 mod npc;
 mod player_vitals;
 mod pose;
 mod spawn_routing;
 mod stair_runtime_overlay;
 mod water_container;
-mod world_sound;
 mod world_day;
+mod world_sound;
 
 use crate::movement::player_input;
 use crate::pose::player_pose;
@@ -172,16 +172,15 @@ pub fn respawn_player(ctx: &ReducerContext, _mode: u8) {
 
     // Death recovery is apartment-first whenever the player has a claimed unit (bed_pose path).
     let bed_pose = apartments::spawn_pose_owned_bed(ctx, id);
-    let mut sp = if let Some(arena) =
-        combat_sim::respawn_pose_if_in_open_arena(ctx, id, base_seq, in_seq)
-    {
-        arena
-    } else if let Some(bed) = bed_pose {
-        apartments::lock_owned_residential_doors(ctx, id);
-        bed
-    } else {
-        spawn_routing::random_public_spawn_pose(ctx, id)
-    };
+    let mut sp =
+        if let Some(arena) = combat_sim::respawn_pose_if_in_open_arena(ctx, id, base_seq, in_seq) {
+            arena
+        } else if let Some(bed) = bed_pose {
+            apartments::lock_owned_residential_doors(ctx, id);
+            bed
+        } else {
+            spawn_routing::random_public_spawn_pose(ctx, id)
+        };
     // Solo client may have advanced `intent_seq` while dead (snapshots rejected). Jump `pose.seq`
     // past those so the first live snapshot cannot stomp the spawn pose.
     if !in_combat_sim {
