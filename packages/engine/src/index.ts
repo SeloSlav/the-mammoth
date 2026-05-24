@@ -153,6 +153,7 @@ export {
   WorldNpcPresenterPool,
   preloadBabushkaNpcBody,
   BABUSHKA_NPC_GLB_URI,
+  BABUSHKA_NPC_DEATH_CLIP_SEC,
   MAMMOTH_FP_WORLD_NPC_UD,
 } from "./npc/BabushkaNpcPresenter.js";
 export {

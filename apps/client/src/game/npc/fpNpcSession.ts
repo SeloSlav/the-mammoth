@@ -5,7 +5,7 @@ import {
   type NpcArchetypeId,
   type ReplicatedNpcSnapshot,
 } from "@the-mammoth/game";
-import { WorldNpcPresenterPool } from "@the-mammoth/engine";
+import { BABUSHKA_NPC_DEATH_CLIP_SEC, WorldNpcPresenterPool } from "@the-mammoth/engine";
 import type * as THREE from "three";
 import type { WorldSoundEvent } from "../../module_bindings/types";
 import { createFpBloodBurstFx, type FpBloodBurstFx } from "../fpSession/fpBloodBurstFx.js";
@@ -20,6 +20,7 @@ import {
 import {
   babushkaIdleNextAtMs,
   createBabushkaNpcAudio,
+  rollBabushkaEpitaphOnDeath,
 } from "./babushkaNpcAudio.js";
 import { createBabushkaCombatAudio } from "./babushkaCombatAudio.js";
 
@@ -102,6 +103,14 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   let lastEpitaphClipIndex = -1;
   let audioLoadStarted = false;
   let snapshotsDirty = true;
+  const epitaphTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const clearEpitaphTimer = (npcKey: string): void => {
+    const timer = epitaphTimers.get(npcKey);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    epitaphTimers.delete(npcKey);
+  };
 
   const rowInScope = (row: WorldNpc): boolean =>
     opts.sessionKeyPrefix === undefined || row.sessionKey.startsWith(opts.sessionKeyPrefix);
@@ -144,18 +153,26 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
         const deathY = row.y;
         const deathZ = row.z;
         if (ctx) {
-          combatAudio.play(ctx, "die", 0.85, () => {
-            void (async () => {
-              await babushkaVoice.ensureLoaded(ctx);
-              lastEpitaphClipIndex = babushkaVoice.playEpitaph(
-                opts.getCamera(),
-                deathX,
-                deathY,
-                deathZ,
-                lastEpitaphClipIndex,
-              );
-            })();
-          });
+          combatAudio.play(ctx, "die", 0.85);
+          clearEpitaphTimer(key);
+          if (rollBabushkaEpitaphOnDeath()) {
+            epitaphTimers.set(
+              key,
+              setTimeout(() => {
+                epitaphTimers.delete(key);
+                void (async () => {
+                  await babushkaVoice.ensureLoaded(ctx);
+                  lastEpitaphClipIndex = babushkaVoice.playEpitaph(
+                    opts.getCamera(),
+                    deathX,
+                    deathY,
+                    deathZ,
+                    lastEpitaphClipIndex,
+                  );
+                })();
+              }, BABUSHKA_NPC_DEATH_CLIP_SEC * 1000),
+            );
+          }
         }
         idleAudioTrack.delete(key);
       }
@@ -168,6 +185,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   const onDelete = (row: WorldNpc) => {
     if (!rowInScope(row)) return;
     const key = row.npcId.toString();
+    clearEpitaphTimer(key);
     rows.delete(key);
     audioTrack.delete(key);
     idleAudioTrack.delete(key);
@@ -236,6 +254,10 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       pool.tickVisual(snapshots, dt);
     },
     dispose() {
+      for (const timer of epitaphTimers.values()) {
+        clearTimeout(timer);
+      }
+      epitaphTimers.clear();
       unsubHitDebug();
       opts.conn.db.world_sound_event.removeOnInsert(onFleshImpact);
       opts.conn.db.world_npc.removeOnInsert(onInsertCb);

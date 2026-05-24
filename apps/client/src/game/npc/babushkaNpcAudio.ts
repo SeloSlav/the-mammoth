@@ -37,6 +37,12 @@ const EPITAPH_VOLUME = 1.0;
 const EPITAPH_MAX_DISTANCE_M = 28;
 const EPITAPH_REF_DISTANCE_M = 1.5;
 const EPITAPH_ROLLOFF = 0.6;
+/** Rare post-death voice line — ~1-in-6 kills so it stays a spooky beat, not wallpaper. */
+export const BABUSHKA_EPITAPH_ROLL_CHANCE = 0.18;
+
+export function rollBabushkaEpitaphOnDeath(): boolean {
+  return Math.random() < BABUSHKA_EPITAPH_ROLL_CHANCE;
+}
 
 const VOICE_BUS_GAIN = 1.05;
 const PLAYBACK_JITTER = 0.04;

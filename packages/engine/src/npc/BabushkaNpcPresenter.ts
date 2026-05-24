@@ -16,6 +16,9 @@ import { NpcHitDebugOverlay } from "./NpcHitDebugOverlay.js";
 
 export const BABUSHKA_NPC_GLB_URI = "/static/models/npcs/babushka.glb";
 
+/** Dead clip duration (s) — client epitaph scheduling; refreshed from GLB on preload. */
+export let BABUSHKA_NPC_DEATH_CLIP_SEC = 2.97;
+
 /** Scene-graph tag — skip megablock perf probes / floor-plate walks. */
 export const MAMMOTH_FP_WORLD_NPC_UD = "mammothFpWorldNpc";
 
@@ -217,6 +220,12 @@ export async function preloadBabushkaNpcBody(): Promise<void> {
   if (!babushkaLoad) {
     babushkaLoad = npcLoader.loadAsync(BABUSHKA_NPC_GLB_URI).then(
       (gltf) => {
+        const deadClip = gltf.animations.find(
+          (clip) => normalizeClipLabel(clip.name) === normalizeClipLabel("Dead"),
+        );
+        if (deadClip && deadClip.duration > 0) {
+          BABUSHKA_NPC_DEATH_CLIP_SEC = deadClip.duration;
+        }
         babushkaTemplate = {
           scene: gltf.scene,
           animations: gltf.animations.map(sanitizeNpcClip),
