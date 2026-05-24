@@ -27,11 +27,12 @@ pub const RAY_AABB_T_ENTER_EPS: f32 = 4e-4;
 const PLAYER_SPATIAL_CELL_XZ_M: f32 = 1.25;
 const PLAYER_SPATIAL_CELL_Y_M: f32 = 2.0;
 
-const MELEE_REACH_M: f32 = 1.7;
-const MELEE_HIT_RADIUS_M: f32 = 0.34;
-const MELEE_ARC_DOT_MIN: f32 = 0.2;
-const MELEE_HIT_MIN_Y_OFFSET_M: f32 = 0.2;
-const MELEE_HIT_MAX_Y_OFFSET_M: f32 = 1.45;
+/// Shared melee reach / arc tuning (also used by NPC melee in `npc.rs`).
+pub const MELEE_REACH_M: f32 = 1.7;
+pub const MELEE_HIT_RADIUS_M: f32 = 0.34;
+pub const MELEE_ARC_DOT_MIN: f32 = 0.2;
+pub const MELEE_HIT_MIN_Y_OFFSET_M: f32 = 0.2;
+pub const MELEE_HIT_MAX_Y_OFFSET_M: f32 = 1.45;
 
 #[derive(Clone, Copy, Debug)]
 pub struct PlayerBodySample {
@@ -49,6 +50,7 @@ pub struct MeleeResolvedHit {
     pub impact_x: f32,
     pub impact_y: f32,
     pub impact_z: f32,
+    pub headshot: bool,
 }
 
 type CellKey = (i32, i32, i32);
@@ -238,6 +240,62 @@ pub fn active_hotbar_weapon_def_id(ctx: &ReducerContext, attacker: Identity) -> 
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MeleeHeadshotRayResult {
+    pub headshot: bool,
+    pub impact_x: f32,
+    pub impact_y: f32,
+    pub impact_z: f32,
+}
+
+/// Classify melee headshots via eye ray vs victim head AABB (shared by PvP and NPC melee).
+pub fn melee_headshot_from_aim_ray(
+    attacker_x: f32,
+    attacker_eye_y: f32,
+    attacker_z: f32,
+    aim_dir: (f32, f32, f32),
+    victim_x: f32,
+    victim_feet_y: f32,
+    victim_z: f32,
+    body_radius: f32,
+    body_height: f32,
+    reach_m: f32,
+    fallback_impact: (f32, f32, f32),
+) -> MeleeHeadshotRayResult {
+    let (mut impact_x, mut impact_y, mut impact_z) = fallback_impact;
+    let mut headshot = false;
+    let (adx, ady, adz) = aim_dir;
+    let h0 = victim_feet_y + body_height - PLAYER_HEAD_ZONE_HEIGHT_M;
+    let h1 = victim_feet_y + body_height;
+    if let Some(hit) = ray_aabb_intersect_enter(
+        attacker_x,
+        attacker_eye_y,
+        attacker_z,
+        adx,
+        ady,
+        adz,
+        victim_x - body_radius,
+        h0,
+        victim_z - body_radius,
+        victim_x + body_radius,
+        h1,
+        victim_z + body_radius,
+    ) {
+        if hit.t_hit > RAY_AABB_T_ENTER_EPS && hit.t_hit <= reach_m {
+            headshot = true;
+            impact_x = attacker_x + adx * hit.t_hit;
+            impact_y = attacker_eye_y + ady * hit.t_hit;
+            impact_z = attacker_z + adz * hit.t_hit;
+        }
+    }
+    MeleeHeadshotRayResult {
+        headshot,
+        impact_x,
+        impact_y,
+        impact_z,
+    }
+}
+
 pub fn melee_damage_for_def_id(def_id: &str) -> f32 {
     items_catalog::melee_damage(def_id).unwrap_or(0.0)
 }
@@ -351,6 +409,7 @@ pub fn resolve_melee_hit(
     let mut impact_x = target.x;
     let mut impact_y = target.y + target.body_height.min(1.58) * 0.62;
     let mut impact_z = target.z;
+    let mut headshot = false;
 
     if let Some((adx, ady, adz)) = aim_dir_world {
         let abits = ctx
@@ -361,32 +420,26 @@ pub fn resolve_melee_hit(
             .map(|i| i.bits)
             .unwrap_or(0);
         let eye_y = attacker_y + eye_y_above_feet(abits & BIT_CROUCH != 0);
-        let pr = PLAYER_BODY_RADIUS_M;
-        let h0 = target.y + target.body_height - PLAYER_HEAD_ZONE_HEIGHT_M;
-        let h1 = target.y + target.body_height;
-        let px = target.x;
-        let pz = target.z;
-        if let Some(hit) = ray_aabb_intersect_enter(
+        let hs = melee_headshot_from_aim_ray(
             attacker_x,
             eye_y,
             attacker_z,
-            adx,
-            ady,
-            adz,
-            px - pr,
-            h0,
-            pz - pr,
-            px + pr,
-            h1,
-            pz + pr,
-        ) {
-            if hit.t_hit > RAY_AABB_T_ENTER_EPS && hit.t_hit <= reach {
-                damage *= HEADSHOT_DAMAGE_MULTIPLIER;
-                impact_x = attacker_x + adx * hit.t_hit;
-                impact_y = eye_y + ady * hit.t_hit;
-                impact_z = attacker_z + adz * hit.t_hit;
-            }
+            (adx, ady, adz),
+            target.x,
+            target.y,
+            target.z,
+            PLAYER_BODY_RADIUS_M,
+            target.body_height,
+            reach,
+            (impact_x, impact_y, impact_z),
+        );
+        if hs.headshot {
+            damage *= HEADSHOT_DAMAGE_MULTIPLIER;
+            headshot = true;
         }
+        impact_x = hs.impact_x;
+        impact_y = hs.impact_y;
+        impact_z = hs.impact_z;
     }
 
     Some(MeleeResolvedHit {
@@ -395,6 +448,7 @@ pub fn resolve_melee_hit(
         impact_x,
         impact_y,
         impact_z,
+        headshot,
     })
 }
 

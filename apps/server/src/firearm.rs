@@ -144,7 +144,14 @@ pub fn submit_firearm_shot(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32,
 
     for h in hits {
         player_vitals::apply_damage(ctx, h.identity, h.damage);
-        world_sound::emit_melee_flesh_hit_at(ctx, h.ix, h.iy, h.iz, id);
+        world_sound::emit_melee_flesh_hit_at(
+            ctx,
+            h.ix,
+            h.iy,
+            h.iz,
+            id,
+            world_sound::flesh_impact_variation_for_hit(h.headshot, true, ""),
+        );
     }
 
     let npc_hits = hitscan::firearm_hitscan_npcs(
@@ -157,6 +164,13 @@ pub fn submit_firearm_shot(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32,
     );
     for h in npc_hits {
         crate::npc::apply_npc_damage(ctx, h.npc_id, h.damage);
-        world_sound::emit_melee_flesh_hit_at(ctx, h.ix, h.iy, h.iz, id);
+        world_sound::emit_melee_flesh_hit_at(
+            ctx,
+            h.ix,
+            h.iy,
+            h.iz,
+            id,
+            world_sound::flesh_impact_variation_for_hit(h.headshot, true, ""),
+        );
     }
 }

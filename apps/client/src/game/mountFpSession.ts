@@ -50,6 +50,7 @@ import {
 } from "./fpSession/fpSessionMainRafFrame.js";
 import { createFpFirearmImpactDecals } from "./fpSession/fpFirearmImpactDecals.js";
 import { createFpPlayerDamageBloodSquirt } from "./fpSession/fpPlayerDamageBloodSquirt.js";
+import { createFpPlayerDamageScreenShake } from "./fpSession/fpPlayerDamageScreenShake.js";
 import {
   wireFpSessionLocomotionPrediction,
 } from "./fpSession/fpSessionLocomotionPredictionWiring.js";
@@ -826,6 +827,7 @@ export async function mountFpSession(
       out.copy(pos);
     },
   });
+  const fpPlayerDamageScreenShake = createFpPlayerDamageScreenShake({ conn });
 
   /** Pooled audio movement snapshot — mutated each frame, no object literal per frame. */
   const _audioMovement = {
@@ -1896,6 +1898,7 @@ export async function mountFpSession(
     syncDroppedItemVisualVisibility: droppedWorld.syncDroppedItemVisualVisibility,
     fpFirearmImpactDecals,
     fpPlayerDamageBloodSquirt,
+    fpPlayerDamageScreenShake,
     getFpPerfSceneCounters,
     sampleFpPerfHeavyMeshes,
     scheduleGpuTimestampResolve,
@@ -2015,6 +2018,7 @@ export async function mountFpSession(
     localAudio.dispose();
     fpNpcSession?.dispose();
     fpPlayerDamageBloodSquirt.dispose();
+    fpPlayerDamageScreenShake.dispose();
     fpFirearmImpactDecals.dispose();
     hotbarConsumableVisual.dispose();
     cabMirrorCollection.dispose();

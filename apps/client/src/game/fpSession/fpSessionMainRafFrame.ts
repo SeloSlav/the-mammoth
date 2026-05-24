@@ -114,6 +114,7 @@ import { onFpSessionPostRenderFrame } from "./fpSessionFpsDisplay.js";
 import type { FpStairShaftInteriorLightBounds } from "./fpSessionWorldMount.js";
 import type { FpFirearmImpactDecals } from "./fpFirearmImpactDecals.js";
 import type { FpPlayerDamageBloodSquirt } from "./fpPlayerDamageBloodSquirt.js";
+import type { FpPlayerDamageScreenShake } from "./fpPlayerDamageScreenShake.js";
 
 /** Scratch for world yaw extraction (avoid per-frame alloc). */
 const _fpPerfCamQuat = new THREE.Quaternion();
@@ -300,6 +301,7 @@ export type FpSessionMainRafFrameDeps = {
   ) => void;
   fpFirearmImpactDecals: FpFirearmImpactDecals;
   fpPlayerDamageBloodSquirt: FpPlayerDamageBloodSquirt;
+  fpPlayerDamageScreenShake: FpPlayerDamageScreenShake;
   /** Scene visibility/frustum counts sampled on an interval; excludes drawCalls/triangles (from renderer.info). */
   getFpPerfSceneCounters: () => Omit<FpRendererInfo, "drawCalls" | "triangles">;
   renderIsolationTargets: FpDebugRenderIsolationTargets;
@@ -639,6 +641,7 @@ export function createFpSessionMainRafFrame(
       deps.camera.position.x = THREE.MathUtils.damp(deps.camera.position.x, 0, 10, dt);
       deps.camera.position.y = THREE.MathUtils.damp(deps.camera.position.y, 0, 10, dt);
     }
+    deps.fpPlayerDamageScreenShake.applyToCamera(deps.camera, nowMs, dt);
     /**
      * Rig/head/camera transforms above drive culling, mirrors, environment, and spatial audio below.
      * Update world matrices now so those systems sample the **current** frame's view, not the previous one.

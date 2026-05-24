@@ -54,6 +54,11 @@ export const WORLD_SOUND_KIND_LANDING_EXTERIOR_DOOR_CLOSE = 8;
 export const WORLD_SOUND_KIND_ELEVATOR_CAB_ARRIVAL = 9;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_MELEE_FLESH_HIT`. */
 export const WORLD_SOUND_KIND_MELEE_FLESH_HIT = 10;
+/** Keep in sync with `apps/server/src/world_sound.rs` `FLESH_IMPACT_VAR_*`. */
+export const WORLD_SOUND_FLESH_IMPACT_VAR_BLUNT = 0;
+export const WORLD_SOUND_FLESH_IMPACT_VAR_SHARP = 1;
+export const WORLD_SOUND_FLESH_IMPACT_VAR_BULLET = 2;
+export const WORLD_SOUND_FLESH_IMPACT_VAR_HEADSHOT = 3;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_DOOR_REINFORCE`. */
 export const WORLD_SOUND_KIND_DOOR_REINFORCE = 11;
 /** Keep in sync with `apps/server/src/world_sound.rs` `KIND_FIREARM_SHOT`. */
@@ -73,6 +78,10 @@ const DOOR_OPEN_STEM = `${UI_STEM}/door-open` as const;
 const DOOR_CLOSE_STEM = `${UI_STEM}/door-close` as const;
 const ELEVATOR_CAB_ARRIVAL_STEM = `${UI_STEM}/elevator-arrival` as const;
 const MELEE_FLESH_HIT_STEM = `${UI_STEM}/melee-weapon-flesh` as const;
+const FLESH_BLUNT_IMPACT_STEM = `${UI_STEM}/flesh-blunt-1` as const;
+const FLESH_SHARP_IMPACT_STEM = `${UI_STEM}/flesh-sharp-1` as const;
+const FLESH_BULLET_IMPACT_STEM = `${UI_STEM}/flesh-bullet-1` as const;
+const FLESH_HEADSHOT_IMPACT_STEM = `${UI_STEM}/flesh-headshot` as const;
 const PISTOL_SHOT_STEM = `${UI_STEM}/pistol-shot` as const;
 const SHOTGUN_SHOT_STEM = `${UI_STEM}/shotgun-shot` as const;
 const AUDIO_EXTENSIONS = ["wav", "ogg", "mp3"] as const;
@@ -94,6 +103,10 @@ export class WorldProximityAudio {
   private doorCloseBuffer: AudioBuffer | null = null;
   private elevatorCabArrivalBuffer: AudioBuffer | null = null;
   private meleeFleshHitBuffer: AudioBuffer | null = null;
+  private fleshBluntImpactBuffer: AudioBuffer | null = null;
+  private fleshSharpImpactBuffer: AudioBuffer | null = null;
+  private fleshBulletImpactBuffer: AudioBuffer | null = null;
+  private fleshHeadshotImpactBuffer: AudioBuffer | null = null;
   private pistolShotBuffer: AudioBuffer | null = null;
   private shotgunShotBuffer: AudioBuffer | null = null;
   /** Rows replicated before `worldGain`/buffers are ready (including during async `attachSharedContext`). */
@@ -155,6 +168,10 @@ export class WorldProximityAudio {
     this.doorCloseBuffer = await this.decodeSingleStem(ctx, DOOR_CLOSE_STEM);
     this.elevatorCabArrivalBuffer = await this.decodeSingleStem(ctx, ELEVATOR_CAB_ARRIVAL_STEM);
     this.meleeFleshHitBuffer = await this.decodeSingleStem(ctx, MELEE_FLESH_HIT_STEM);
+    this.fleshBluntImpactBuffer = await this.decodeSingleStem(ctx, FLESH_BLUNT_IMPACT_STEM);
+    this.fleshSharpImpactBuffer = await this.decodeSingleStem(ctx, FLESH_SHARP_IMPACT_STEM);
+    this.fleshBulletImpactBuffer = await this.decodeSingleStem(ctx, FLESH_BULLET_IMPACT_STEM);
+    this.fleshHeadshotImpactBuffer = await this.decodeSingleStem(ctx, FLESH_HEADSHOT_IMPACT_STEM);
     this.pistolShotBuffer = await this.decodeSingleStem(ctx, PISTOL_SHOT_STEM);
     this.shotgunShotBuffer = await this.decodeSingleStem(ctx, SHOTGUN_SHOT_STEM);
 
@@ -248,6 +265,10 @@ export class WorldProximityAudio {
     this.doorCloseBuffer = null;
     this.elevatorCabArrivalBuffer = null;
     this.meleeFleshHitBuffer = null;
+    this.fleshBluntImpactBuffer = null;
+    this.fleshSharpImpactBuffer = null;
+    this.fleshBulletImpactBuffer = null;
+    this.fleshHeadshotImpactBuffer = null;
     this.pistolShotBuffer = null;
     this.shotgunShotBuffer = null;
     this.pendingRows.length = 0;
@@ -322,8 +343,8 @@ export class WorldProximityAudio {
       if (!this.elevatorCabArrivalBuffer) return;
       buf = this.elevatorCabArrivalBuffer;
     } else if (row.kind === WORLD_SOUND_KIND_MELEE_FLESH_HIT) {
-      if (!this.meleeFleshHitBuffer) return;
-      buf = this.meleeFleshHitBuffer;
+      buf = this.fleshImpactBufferForVariation(row.variation);
+      if (!buf) return;
     } else if (row.kind === WORLD_SOUND_KIND_DOOR_REINFORCE) {
       if (!this.doorCloseBuffer) return;
       buf = this.doorCloseBuffer;
@@ -390,6 +411,24 @@ export class WorldProximityAudio {
     dry.connect(panner);
     panner.connect(out);
     src.start(t);
+  }
+
+  private fleshImpactBufferForVariation(variation: number): AudioBuffer | null {
+    if (variation === WORLD_SOUND_FLESH_IMPACT_VAR_HEADSHOT) {
+      return (
+        this.fleshHeadshotImpactBuffer ??
+        this.fleshBulletImpactBuffer ??
+        this.fleshBluntImpactBuffer ??
+        this.meleeFleshHitBuffer
+      );
+    }
+    if (variation === WORLD_SOUND_FLESH_IMPACT_VAR_SHARP) {
+      return this.fleshSharpImpactBuffer ?? this.fleshBluntImpactBuffer ?? this.meleeFleshHitBuffer;
+    }
+    if (variation === WORLD_SOUND_FLESH_IMPACT_VAR_BULLET) {
+      return this.fleshBulletImpactBuffer ?? this.fleshBluntImpactBuffer ?? this.meleeFleshHitBuffer;
+    }
+    return this.fleshBluntImpactBuffer ?? this.meleeFleshHitBuffer;
   }
 
   private async decodeItemPickBuffer(ctx: AudioContext): Promise<AudioBuffer | null> {

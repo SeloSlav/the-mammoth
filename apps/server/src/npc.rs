@@ -4,9 +4,13 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::apartments::apartment_unit;
 use crate::combat_stub::{
-    body_height_from_crouch_bit, ray_aabb_intersect_enter, vertical_overlap, RAY_AABB_T_ENTER_EPS,
+    body_height_from_crouch_bit, eye_y_above_feet, melee_headshot_from_aim_ray,
+    ray_aabb_intersect_enter, vertical_overlap, HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN,
+    MELEE_HIT_MAX_Y_OFFSET_M, MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M,
+    RAY_AABB_T_ENTER_EPS,
 };
 use crate::movement::player_input;
+use crate::movement::BIT_CROUCH;
 use crate::pose::player_pose;
 
 pub const NPC_ARCHETYPE_BABUSHKA: &str = "babushka";
@@ -197,11 +201,6 @@ pub fn trace_best_npc_hit(
     best
 }
 
-pub fn is_npc_headshot(feet_y: f32, body_h: f32, impact_y: f32) -> bool {
-    let head_min = feet_y + body_h - 0.28;
-    impact_y >= head_min
-}
-
 fn body_dims_for_archetype(archetype: &str) -> (f32, f32) {
     match archetype {
         NPC_ARCHETYPE_BABUSHKA => (BABUSHKA_BODY_RADIUS_M, BABUSHKA_BODY_HEIGHT_M),
@@ -209,18 +208,13 @@ fn body_dims_for_archetype(archetype: &str) -> (f32, f32) {
     }
 }
 
-const MELEE_REACH_M: f32 = 1.7;
-const MELEE_HIT_RADIUS_M: f32 = 0.34;
-const MELEE_ARC_DOT_MIN: f32 = 0.2;
-const MELEE_HIT_MIN_Y_OFFSET_M: f32 = 0.2;
-const MELEE_HIT_MAX_Y_OFFSET_M: f32 = 1.45;
-
 pub struct NpcMeleeResolvedHit {
     pub npc_id: u64,
     pub damage: f32,
     pub impact_x: f32,
     pub impact_y: f32,
     pub impact_z: f32,
+    pub headshot: bool,
 }
 
 /// Horizontal arc melee vs the nearest living world NPC (mirrors `combat_stub::resolve_melee_hit`).
@@ -231,8 +225,9 @@ pub fn resolve_melee_swing_vs_npcs(
     attacker_z: f32,
     attacker_yaw: f32,
     weapon_def_id: &str,
+    aim_dir_world: Option<(f32, f32, f32)>,
 ) -> Option<NpcMeleeResolvedHit> {
-    let damage = crate::combat_stub::melee_damage_for_def_id(weapon_def_id);
+    let mut damage = crate::combat_stub::melee_damage_for_def_id(weapon_def_id);
     if damage <= 0.0 {
         return None;
     }
@@ -242,7 +237,7 @@ pub fn resolve_melee_swing_vs_npcs(
     let right_x = -forward_z;
     let right_z = forward_x;
 
-    let mut best: Option<(u64, f32, f32)> = None;
+    let mut best: Option<(u64, f32, f32, f32, f32)> = None;
 
     for npc in ctx.db.world_npc().iter() {
         if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
@@ -281,18 +276,58 @@ pub fn resolve_melee_swing_vs_npcs(
             || ((lateral - best.as_ref().unwrap().1).abs() <= 1e-4
                 && forward < best.as_ref().unwrap().2);
         if replace {
-            best = Some((npc.npc_id, lateral, forward));
+            best = Some((npc.npc_id, lateral, forward, target_y, body_height));
         }
     }
 
-    let (npc_id, _, forward) = best?;
-    let impact_y = attacker_y + 1.0;
+    let (npc_id, _, forward, target_y, body_height) = best?;
+    let mut impact_x = attacker_x + forward_x * forward * 0.92;
+    let mut impact_y = attacker_y + 1.0;
+    let mut impact_z = attacker_z + forward_z * forward * 0.92;
+    let mut headshot = false;
+
+    if let Some((adx, ady, adz)) = aim_dir_world {
+        let abits = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&ctx.sender())
+            .map(|row| row.bits)
+            .unwrap_or(0);
+        let eye_y =
+            attacker_y + eye_y_above_feet(abits & BIT_CROUCH != 0);
+        if let Some(npc) = ctx.db.world_npc().npc_id().find(&npc_id) {
+            let (body_radius, _) = body_dims_for_archetype(npc.archetype.as_str());
+            let hs = melee_headshot_from_aim_ray(
+                attacker_x,
+                eye_y,
+                attacker_z,
+                (adx, ady, adz),
+                npc.x,
+                target_y,
+                npc.z,
+                body_radius,
+                body_height,
+                MELEE_REACH_M,
+                (impact_x, impact_y, impact_z),
+            );
+            if hs.headshot {
+                damage *= HEADSHOT_DAMAGE_MULTIPLIER;
+                headshot = true;
+            }
+            impact_x = hs.impact_x;
+            impact_y = hs.impact_y;
+            impact_z = hs.impact_z;
+        }
+    }
+
     Some(NpcMeleeResolvedHit {
         npc_id,
         damage,
-        impact_x: attacker_x + forward_x * forward * 0.92,
+        impact_x,
         impact_y,
-        impact_z: attacker_z + forward_z * forward * 0.92,
+        impact_z,
+        headshot,
     })
 }
 
@@ -530,6 +565,18 @@ fn nearest_living_player_identity(
 mod tests {
     use super::*;
     use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
+
+    #[test]
+    fn babushka_firearm_headshot_uses_shared_head_zone() {
+        use crate::combat_stub::is_headshot_impact_world_y;
+        let feet = 60.0;
+        let h = BABUSHKA_BODY_HEIGHT_M;
+        let head_base = feet + h - crate::combat_stub::PLAYER_HEAD_ZONE_HEIGHT_M;
+        assert!(is_headshot_impact_world_y(feet, h, head_base + 0.05));
+        assert!(is_headshot_impact_world_y(feet, h, feet + h - 0.01));
+        assert!(!is_headshot_impact_world_y(feet, h, head_base - 0.05));
+        assert!(!is_headshot_impact_world_y(feet, h, feet + h * 0.5));
+    }
 
     #[test]
     fn babushka_melee_requires_vertical_capsule_overlap() {

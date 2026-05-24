@@ -42,6 +42,7 @@ pub struct NpcDamageEvent {
     pub ix: f32,
     pub iy: f32,
     pub iz: f32,
+    pub headshot: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -51,6 +52,7 @@ pub struct PlayerDamageEvent {
     pub ix: f32,
     pub iy: f32,
     pub iz: f32,
+    pub headshot: bool,
 }
 
 /// Normalize `(dx,dy,dz)` and reject gross aim cheats vs the authoritative planar yaw plane.
@@ -308,7 +310,8 @@ fn resolve_pistol_ray(
     let dist_m = t_hit;
     let scale = falloff_factor(dist_m, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, dist_m);
-    let hs_mult = if is_headshot_impact_world_y(feet_y, body_h, iy) {
+    let headshot = is_headshot_impact_world_y(feet_y, body_h, iy);
+    let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
         1.0
@@ -320,6 +323,7 @@ fn resolve_pistol_ray(
         ix,
         iy,
         iz,
+        headshot,
     }])
 }
 
@@ -342,6 +346,7 @@ fn resolve_shotgun_pellets(
 
     let mut damage_by_player: HashMap<Identity, f32> = HashMap::new();
     let mut impact_by_player: HashMap<Identity, (f32, f32, f32)> = HashMap::new();
+    let mut headshot_by_player: HashMap<Identity, bool> = HashMap::new();
 
     let (jr, jp) = orthonormal_screen_axes(bx, by, bz);
 
@@ -364,30 +369,35 @@ fn resolve_shotgun_pellets(
                 } else {
                     let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                    let hs_mult = if is_headshot_impact_world_y(*feet_y, *body_h, ipt.1) {
+                    let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                    let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
                         1.0
                     };
-                    Some((*pid, per * scale * hs_mult, ipt))
+                    Some((*pid, per * scale * hs_mult, ipt, headshot))
                 }
             }
             (Some((pid, pr_t, feet_y, body_h)), None) => {
                 let scale = falloff_factor(*pr_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *pr_t);
-                let hs_mult = if is_headshot_impact_world_y(*feet_y, *body_h, ipt.1) {
+                let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {
                     1.0
                 };
-                Some((*pid, per * scale * hs_mult, ipt))
+                Some((*pid, per * scale * hs_mult, ipt, headshot))
             }
             _ => None,
         };
 
-        if let Some((pid, dmg, ipt)) = dmg_this {
+        if let Some((pid, dmg, ipt, headshot)) = dmg_this {
             *damage_by_player.entry(pid).or_insert(0.0) += dmg;
             impact_by_player.entry(pid).or_insert(ipt);
+            if headshot {
+                headshot_by_player.insert(pid, true);
+            }
         }
     }
 
@@ -405,6 +415,7 @@ fn resolve_shotgun_pellets(
                 ix,
                 iy,
                 iz,
+                headshot: headshot_by_player.get(&identity).copied().unwrap_or(false),
             }
         })
         .collect();
@@ -587,7 +598,8 @@ fn resolve_pistol_ray_npcs(
     }
     let scale = falloff_factor(t_hit, max_range_m, floor_frac);
     let (ix, iy, iz) = pellet_impact_px(ox, oy, oz, dx, dy, dz, t_hit);
-    let hs_mult = if crate::npc::is_npc_headshot(feet_y, body_h, iy) {
+    let headshot = is_headshot_impact_world_y(feet_y, body_h, iy);
+    let hs_mult = if headshot {
         HEADSHOT_DAMAGE_MULTIPLIER
     } else {
         1.0
@@ -598,6 +610,7 @@ fn resolve_pistol_ray_npcs(
         ix,
         iy,
         iz,
+        headshot,
     }])
 }
 
@@ -620,6 +633,7 @@ fn resolve_shotgun_pellets_npcs(
 
     let mut damage_by_npc: HashMap<u64, f32> = HashMap::new();
     let mut impact_by_npc: HashMap<u64, (f32, f32, f32)> = HashMap::new();
+    let mut headshot_by_npc: HashMap<u64, bool> = HashMap::new();
 
     let (jr, jp) = orthonormal_screen_axes(bx, by, bz);
 
@@ -641,30 +655,35 @@ fn resolve_shotgun_pellets_npcs(
                 } else {
                     let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                     let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                    let hs_mult = if crate::npc::is_npc_headshot(*feet_y, *body_h, ipt.1) {
+                    let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                    let hs_mult = if headshot {
                         HEADSHOT_DAMAGE_MULTIPLIER
                     } else {
                         1.0
                     };
-                    Some((*nid, per * scale * hs_mult, ipt))
+                    Some((*nid, per * scale * hs_mult, ipt, headshot))
                 }
             }
             (Some((nid, n_t, feet_y, body_h)), None) => {
                 let scale = falloff_factor(*n_t, max_range_m, floor_frac);
                 let ipt = pellet_impact_px(ox, oy, oz, jx, jy, jz, *n_t);
-                let hs_mult = if crate::npc::is_npc_headshot(*feet_y, *body_h, ipt.1) {
+                let headshot = is_headshot_impact_world_y(*feet_y, *body_h, ipt.1);
+                let hs_mult = if headshot {
                     HEADSHOT_DAMAGE_MULTIPLIER
                 } else {
                     1.0
                 };
-                Some((*nid, per * scale * hs_mult, ipt))
+                Some((*nid, per * scale * hs_mult, ipt, headshot))
             }
             _ => None,
         };
 
-        if let Some((nid, dmg, ipt)) = dmg_this {
+        if let Some((nid, dmg, ipt, headshot)) = dmg_this {
             *damage_by_npc.entry(nid).or_insert(0.0) += dmg;
             impact_by_npc.insert(nid, ipt);
+            if headshot {
+                headshot_by_npc.insert(nid, true);
+            }
         }
     }
 
@@ -682,6 +701,7 @@ fn resolve_shotgun_pellets_npcs(
                 ix,
                 iy,
                 iz,
+                headshot: headshot_by_npc.get(&npc_id).copied().unwrap_or(false),
             }
         })
         .collect()

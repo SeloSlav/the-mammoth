@@ -24,8 +24,16 @@ pub const KIND_LANDING_EXTERIOR_DOOR_OPEN: u8 = 7;
 pub const KIND_LANDING_EXTERIOR_DOOR_CLOSE: u8 = 8;
 /// Elevator car finished a travel leg — docked at `move_to_level` (`variation` unused).
 pub const KIND_ELEVATOR_CAB_ARRIVAL: u8 = 9;
-/// Melee hit landed on another player (`variation` unused).
+/// Melee hit landed on another player (`variation` = [`FLESH_IMPACT_VAR_*`]).
 pub const KIND_MELEE_FLESH_HIT: u8 = 10;
+/// `world_sound_event.variation` for [`KIND_MELEE_FLESH_HIT`]: blunt impact (crowbar, bat, …).
+pub const FLESH_IMPACT_VAR_BLUNT: u8 = 0;
+/// `world_sound_event.variation` for [`KIND_MELEE_FLESH_HIT`]: sharp/stab impact (knife, screwdriver, …).
+pub const FLESH_IMPACT_VAR_SHARP: u8 = 1;
+/// `world_sound_event.variation` for [`KIND_MELEE_FLESH_HIT`]: bullet impact.
+pub const FLESH_IMPACT_VAR_BULLET: u8 = 2;
+/// `world_sound_event.variation` for [`KIND_MELEE_FLESH_HIT`]: headshot impact.
+pub const FLESH_IMPACT_VAR_HEADSHOT: u8 = 3;
 /// Door boarding / reinforcement (`variation` unused until assets land).
 pub const KIND_DOOR_REINFORCE: u8 = 11;
 /// Gunshot — client maps WAV by `variation`: [`FIREARM_VARIATION_*`].
@@ -339,11 +347,35 @@ pub fn emit_gunfire_at(
     );
 }
 
-pub fn emit_melee_flesh_hit_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
+pub fn flesh_impact_variation_for_melee_weapon(def_id: &str) -> u8 {
+    match def_id {
+        "knife" | "screwdriver" | "srbosjek" => FLESH_IMPACT_VAR_SHARP,
+        _ => FLESH_IMPACT_VAR_BLUNT,
+    }
+}
+
+pub fn flesh_impact_variation_for_hit(headshot: bool, firearm: bool, melee_weapon: &str) -> u8 {
+    if headshot {
+        return FLESH_IMPACT_VAR_HEADSHOT;
+    }
+    if firearm {
+        return FLESH_IMPACT_VAR_BULLET;
+    }
+    flesh_impact_variation_for_melee_weapon(melee_weapon)
+}
+
+pub fn emit_melee_flesh_hit_at(
+    ctx: &ReducerContext,
+    x: f32,
+    y: f32,
+    z: f32,
+    emitter: Identity,
+    variation: u8,
+) {
     emit_world_sound(
         ctx,
         KIND_MELEE_FLESH_HIT,
-        0,
+        variation,
         x,
         y,
         z,
@@ -352,6 +384,11 @@ pub fn emit_melee_flesh_hit_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emi
         AXIS_WEIGHT_Y_MELEE,
         emitter,
     );
+}
+
+/// Back-compat helper — blunt flesh impact.
+pub fn emit_blunt_flesh_hit_at(ctx: &ReducerContext, x: f32, y: f32, z: f32, emitter: Identity) {
+    emit_melee_flesh_hit_at(ctx, x, y, z, emitter, FLESH_IMPACT_VAR_BLUNT);
 }
 
 /// Per-connection rows for foot cadence (solo client handles locomotion sounds) + melee cooldown.
@@ -403,6 +440,31 @@ pub fn melee_weapon_swing_sound_profile_for_def_id(def_id: &str) -> u8 {
 pub fn melee_weapon_swing_variation(profile: u8, stem_jitter: u8) -> u8 {
     let profile = profile.min(63);
     (profile << 2) | (stem_jitter & MELEE_SWING_VARIATION_STEM_MASK)
+}
+
+#[cfg(test)]
+mod flesh_impact_variation_tests {
+    use super::*;
+
+    #[test]
+    fn headshot_overrides_firearm_and_melee_variations() {
+        assert_eq!(
+            flesh_impact_variation_for_hit(true, true, "knife"),
+            FLESH_IMPACT_VAR_HEADSHOT
+        );
+        assert_eq!(
+            flesh_impact_variation_for_hit(true, false, "crowbar"),
+            FLESH_IMPACT_VAR_HEADSHOT
+        );
+        assert_eq!(
+            flesh_impact_variation_for_hit(false, true, ""),
+            FLESH_IMPACT_VAR_BULLET
+        );
+        assert_eq!(
+            flesh_impact_variation_for_hit(false, false, "knife"),
+            FLESH_IMPACT_VAR_SHARP
+        );
+    }
 }
 
 #[cfg(test)]

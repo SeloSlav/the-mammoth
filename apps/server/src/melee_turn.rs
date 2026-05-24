@@ -11,9 +11,10 @@ use crate::movement::player_input;
 use crate::player_vitals;
 use crate::pose::{bump_melee_presentation_seq, player_pose};
 use crate::world_sound::{
-    emit_melee_flesh_hit_at, emit_world_sound, melee_weapon_swing_sound_profile_for_def_id,
-    melee_weapon_swing_variation, player_melee_cooldown, PlayerMeleeCooldown, AXIS_WEIGHT_Y_MELEE,
-    KIND_MELEE_WEAPON_SWING, MELEE_SWING_VARIATION_STEM_MASK,
+    emit_melee_flesh_hit_at, emit_world_sound, flesh_impact_variation_for_hit,
+    melee_weapon_swing_sound_profile_for_def_id, melee_weapon_swing_variation,
+    player_melee_cooldown, PlayerMeleeCooldown, AXIS_WEIGHT_Y_MELEE, KIND_MELEE_WEAPON_SWING,
+    MELEE_SWING_VARIATION_STEM_MASK,
 };
 
 const MELEE_COOLDOWN_MICROS: i64 = 480_000;
@@ -82,7 +83,14 @@ pub fn submit_melee_swing(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32, 
         None,
     ) {
         player_vitals::apply_damage(ctx, hit.target, hit.damage);
-        emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
+        emit_melee_flesh_hit_at(
+            ctx,
+            hit.impact_x,
+            hit.impact_y,
+            hit.impact_z,
+            id,
+            flesh_impact_variation_for_hit(hit.headshot, false, weapon_def_id.as_str()),
+        );
     } else if let Some(hit) = crate::npc::resolve_melee_swing_vs_npcs(
         ctx,
         pose.x,
@@ -90,9 +98,17 @@ pub fn submit_melee_swing(ctx: &ReducerContext, aim_dir_x: f32, aim_dir_y: f32, 
         pose.z,
         swing_yaw,
         weapon_def_id.as_str(),
+        aim_world,
     ) {
         crate::npc::apply_npc_damage(ctx, hit.npc_id, hit.damage);
-        emit_melee_flesh_hit_at(ctx, hit.impact_x, hit.impact_y, hit.impact_z, id);
+        emit_melee_flesh_hit_at(
+            ctx,
+            hit.impact_x,
+            hit.impact_y,
+            hit.impact_z,
+            id,
+            flesh_impact_variation_for_hit(hit.headshot, false, weapon_def_id.as_str()),
+        );
     } else {
         apartments::apply_forward_melee_door_damage(
             ctx,
