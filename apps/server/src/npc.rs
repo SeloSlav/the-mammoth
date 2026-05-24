@@ -36,7 +36,6 @@ pub const BABUSHKA_MELEE_DAMAGE: f32 = 14.0;
 pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 
 const NPC_TICK_INTERVAL_MICROS: i64 = 250_000;
-const BABUSHKA_DAMAGE_CHASE_MICROS: i64 = 12_000_000;
 /// Forgiving head raycast — square head box is smaller than the visible mesh bun.
 const NPC_HEAD_TRACE_INFLATE_M: f32 = 0.06;
 
@@ -451,19 +450,9 @@ fn step_one_world_npc(ctx: &ReducerContext, npc: &mut WorldNpc, dt_sec: f32, now
     }
 
     if npc.state == NPC_STATE_AGGRO {
-        let damage_chase_active = npc.last_melee_micros > 0
-            && now_us - npc.last_melee_micros < BABUSHKA_DAMAGE_CHASE_MICROS;
-        let leash_range_m = if damage_chase_active {
-            aggro_range_m.max(18.0)
-        } else {
-            aggro_range_m * 2.4
-        };
-        if dist_sq > leash_range_m.powi(2) {
-            npc.state = NPC_STATE_IDLE;
-            npc.locomotion = NPC_LOCOMOTION_IDLE;
-            npc.vel_x = 0.0;
-            npc.vel_z = 0.0;
-        } else if dist > BABUSHKA_MELEE_RANGE_M {
+        // TODO: Add a proper long-distance leash once combat arenas have authored escape bounds.
+        // Until then, combat state is sticky so Babushka cannot visibly calm down mid-fight.
+        if dist > BABUSHKA_MELEE_RANGE_M {
             let run_speed = BABUSHKA_RUN_SPEED_MPS;
             let inv = 1.0 / dist.max(1e-4);
             let vx = planar_dx * inv * run_speed;

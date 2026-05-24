@@ -7,6 +7,7 @@ import { FirearmAmmoHud } from "./FirearmAmmoHud";
 import { PlayerDamageFeedbackOverlay } from "./PlayerDamageFeedbackOverlay";
 import { PlayerDeathOverlay } from "./PlayerDeathOverlay";
 import { MammothDebugMenuHud } from "./MammothDebugMenuHud";
+import { MammothFpsHud } from "./MammothFpsHud";
 
 type Props = {
   conn: DbConnection;
@@ -42,6 +43,7 @@ export function CombatSimMinimalHud({ conn, onExit }: Props) {
         </button>
       </div>
       <MammothDebugMenuHud />
+      <MammothFpsHud conn={conn} />
       <MammothFpReticule />
       <PlayerVitalsHud conn={conn} />
       <FirearmAmmoHud conn={conn} />

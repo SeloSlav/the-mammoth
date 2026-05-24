@@ -61,6 +61,7 @@ export class NpcHitDebugOverlay {
   readonly root = new THREE.Group();
   private readonly flashSprite: THREE.Sprite;
   private readonly flashMaterial: THREE.SpriteMaterial;
+  private readonly retiredFlashTextures: THREE.Texture[] = [];
   private flashSec = 0;
 
   constructor() {
@@ -124,7 +125,7 @@ export class NpcHitDebugOverlay {
     const prev = this.flashMaterial.map;
     this.flashMaterial.map = makeFlashTexture(label, color);
     this.flashMaterial.needsUpdate = true;
-    prev?.dispose();
+    if (prev) this.retiredFlashTextures.push(prev);
     this.flashSprite.visible = true;
     this.flashSec = FLASH_SEC;
   }
@@ -139,6 +140,10 @@ export class NpcHitDebugOverlay {
 
   dispose(): void {
     this.flashMaterial.map?.dispose();
+    for (const tex of this.retiredFlashTextures) {
+      tex.dispose();
+    }
+    this.retiredFlashTextures.length = 0;
     this.flashMaterial.dispose();
     this.root.traverse((obj) => {
       const mesh = obj as THREE.Mesh;

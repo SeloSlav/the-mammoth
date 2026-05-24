@@ -3,7 +3,7 @@ import type { ReplicatedNpcSnapshot } from "@the-mammoth/game";
 import type { NpcBodyClipName } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
-import { deepDisposeObject3D, detachSkinnedModelCloneSubtree } from "../loaders/deepDisposeObject3D.js";
+import { detachSkinnedModelCloneSubtree } from "../loaders/deepDisposeObject3D.js";
 import { upgradeApartmentDecorMaterialToStandard } from "../rendering/apartmentDecorMaterialUpgrade.js";
 import {
   createNpcVisualSmoothingState,
@@ -588,9 +588,7 @@ export class BabushkaNpcPresenter {
       return;
     }
     if (!this.hitDebug) return;
-    this.hitDebug.dispose();
-    this.root.remove(this.hitDebug.root);
-    this.hitDebug = null;
+    this.hitDebug.root.visible = false;
   }
 
   static async create(): Promise<BabushkaNpcPresenter> {
@@ -635,7 +633,11 @@ export class BabushkaNpcPresenter {
   }
 
   dispose(): void {
-    this.setHitDebugVolumesEnabled(false);
+    if (this.hitDebug) {
+      this.root.remove(this.hitDebug.root);
+      this.hitDebug.dispose();
+      this.hitDebug = null;
+    }
     this.body.dispose();
   }
 }
@@ -643,6 +645,7 @@ export class BabushkaNpcPresenter {
 export class WorldNpcPresenterPool {
   private readonly parent: THREE.Object3D;
   private readonly byId = new Map<string, BabushkaNpcPresenter>();
+  private readonly retired = new Set<BabushkaNpcPresenter>();
   private envTextureProvider: (() => THREE.Texture | null) | null = null;
   private showHitDebugVolumes = false;
 
@@ -700,7 +703,7 @@ export class WorldNpcPresenterPool {
     for (const [key, pres] of this.byId) {
       if (!live.has(key)) {
         this.parent.remove(pres.root);
-        pres.dispose();
+        this.retired.add(pres);
         this.byId.delete(key);
       }
     }
@@ -744,5 +747,9 @@ export class WorldNpcPresenterPool {
       pres.dispose();
     }
     this.byId.clear();
+    for (const pres of this.retired) {
+      pres.dispose();
+    }
+    this.retired.clear();
   }
 }

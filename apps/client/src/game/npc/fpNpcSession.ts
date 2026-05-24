@@ -23,6 +23,10 @@ import {
   rollBabushkaEpitaphOnDeath,
 } from "./babushkaNpcAudio.js";
 import { createBabushkaCombatAudio } from "./babushkaCombatAudio.js";
+import {
+  createFpBabushkaSporeBurstFx,
+  type FpBabushkaSporeBurstFx,
+} from "./fpBabushkaSporeBurstFx.js";
 
 /** Matches `apps/server/src/npc.rs` `NPC_STATE_IDLE`. */
 const NPC_STATE_IDLE = 0;
@@ -95,6 +99,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   await pool.ensureReady();
 
   const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.fxScene);
+  const sporeFx: FpBabushkaSporeBurstFx = createFpBabushkaSporeBurstFx(opts.fxScene);
   const combatAudio = createBabushkaCombatAudio();
   const babushkaVoice = createBabushkaNpcAudio();
   const rows = new Map<string, WorldNpc>();
@@ -144,6 +149,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
         if (ctx) combatAudio.play(ctx, "hit", BABUSHKA_HIT_VOLUME);
         const damage = Math.max(MIN_NPC_HIT_BLOOD_DAMAGE, prev.health - row.health);
         bloodFx.spawnBurstAt(row.x, row.y + TORSO_Y_ABOVE_FEET_M, row.z, damage);
+        sporeFx.spawnBurstAt(row.x, row.y + TORSO_Y_ABOVE_FEET_M, row.z, damage);
       }
       if (row.meleePresentationSeq > prev.meleeSeq) {
         if (ctx) combatAudio.play(ctx, "punch");
@@ -217,6 +223,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   return {
     update(dt, nowMs) {
       bloodFx.tick(nowMs, dt);
+      sporeFx.tick(nowMs, dt);
       const ctx = opts.getAudioContext();
       if (ctx && !audioLoadStarted) {
         audioLoadStarted = true;
@@ -264,6 +271,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       opts.conn.db.world_npc.removeOnUpdate(onUpdateCb);
       opts.conn.db.world_npc.removeOnDelete(onDeleteCb);
       bloodFx.dispose();
+      sporeFx.dispose();
       pool.dispose();
       rows.clear();
       audioTrack.clear();
