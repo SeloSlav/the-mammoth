@@ -48,6 +48,10 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
     ("ammo-9mm", 60),
 ];
 
+/// Match client `combatSimStaticWorld.ts` fallback arena when no owned unit row is synced yet.
+const COMBAT_SIM_FALLBACK_HALF_EXTENT_M: f32 = 14.0;
+const COMBAT_SIM_ARENA_PAD_M: f32 = 6.0;
+
 /// Match live-world babushka aggro so combat sim behaves like the real apartment encounter.
 pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = npc::BABUSHKA_AGGRO_RANGE_M;
 /// Planar buffer beyond aggro — player and babushka must start/respawn outside this gap.
@@ -135,10 +139,7 @@ pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
 
 /// True while the player is still in an active combat-sim session (live NPCs or arena pose).
 pub fn player_in_combat_sim(ctx: &ReducerContext, owner: Identity) -> bool {
-    let Some(unit) = owned_claimed_unit(ctx, owner) else {
-        return false;
-    };
-    let session_key = combat_sim_session_key(&unit);
+    let CombatSimArena { unit, session_key } = resolve_combat_sim_arena(ctx, owner);
     if ctx
         .db
         .world_npc()
@@ -163,7 +164,7 @@ pub fn respawn_pose_if_in_open_arena(
     if !player_in_combat_sim(ctx, owner) {
         return None;
     }
-    let unit = owned_claimed_unit(ctx, owner)?;
+    let CombatSimArena { unit, .. } = resolve_combat_sim_arena(ctx, owner);
     pose::ensure_player_pose_row(ctx, owner);
     let mut sp = ctx.db.player_pose().identity().find(&owner)?;
     let (arena_x, arena_y, arena_z) = combat_sim_player_spawn_pose(&unit);
@@ -182,6 +183,80 @@ pub fn combat_sim_session_key(unit: &ApartmentUnit) -> String {
     format!("combat_sim:{}", unit.unit_key)
 }
 
+pub fn fallback_combat_sim_session_key(owner: Identity) -> String {
+    format!("combat_sim:fallback:{owner}")
+}
+
+fn fallback_combat_sim_unit() -> ApartmentUnit {
+    let half = COMBAT_SIM_FALLBACK_HALF_EXTENT_M + COMBAT_SIM_ARENA_PAD_M;
+    ApartmentUnit {
+        unit_key: "combat_sim:fallback".to_string(),
+        floor_doc_id: String::new(),
+        level: 0,
+        unit_id: "combat_sim_fallback".to_string(),
+        state: UNIT_STATE_CLAIMED,
+        owner: None,
+        claim_started_by: None,
+        claim_progress_secs: 0.0,
+        last_claim_pulse_micros: 0,
+        reinforce_progress_secs: 0.0,
+        reinforce_by: None,
+        reinforced: 0,
+        bed_x: 0.0,
+        bed_y: 0.0,
+        bed_z: 0.0,
+        bed_yaw: 0.0,
+        foot_x: 0.0,
+        foot_y: 0.0,
+        foot_z: 0.0,
+        wardrobe_x: 0.0,
+        wardrobe_z: 0.0,
+        stove_x: 0.0,
+        stove_z: 0.0,
+        bound_min_x: -half,
+        bound_max_x: half,
+        bound_min_y: 0.0,
+        bound_max_y: 4.0,
+        bound_min_z: -half,
+        bound_max_z: half,
+    }
+}
+
+struct CombatSimArena {
+    unit: ApartmentUnit,
+    session_key: String,
+}
+
+/// Claimed apartment bounds when available; otherwise a fixed open arena (dev / no home slot).
+fn resolve_combat_sim_arena(ctx: &ReducerContext, owner: Identity) -> CombatSimArena {
+    apartments::ensure_player_home_apartment(ctx, owner);
+    if let Some(unit) = owned_claimed_unit(ctx, owner) {
+        return CombatSimArena {
+            session_key: combat_sim_session_key(&unit),
+            unit,
+        };
+    }
+    log::warn!("enter_combat_sim: no claimed apartment for {owner} — using fallback arena");
+    CombatSimArena {
+        unit: fallback_combat_sim_unit(),
+        session_key: fallback_combat_sim_session_key(owner),
+    }
+}
+
+fn combat_sim_session_key_for_owner(ctx: &ReducerContext, owner: Identity) -> String {
+    owned_claimed_unit(ctx, owner)
+        .map(|unit| combat_sim_session_key(&unit))
+        .unwrap_or_else(|| fallback_combat_sim_session_key(owner))
+}
+
+fn combat_sim_session_keys_for_owner(ctx: &ReducerContext, owner: Identity) -> Vec<String> {
+    let mut keys = vec![fallback_combat_sim_session_key(owner)];
+    if let Some(unit) = owned_claimed_unit(ctx, owner) {
+        keys.push(combat_sim_session_key(&unit));
+    }
+    keys
+}
+
 pub fn owned_claimed_unit(ctx: &ReducerContext, owner: Identity) -> Option<ApartmentUnit> {
     ctx.db
         .apartment_unit()
@@ -191,10 +266,7 @@ pub fn owned_claimed_unit(ctx: &ReducerContext, owner: Identity) -> Option<Apart
 
 /// True while this player has live combat-sim NPCs — skip megablock firearm LOS (see module docs).
 pub fn shooter_in_combat_sim_open_arena(ctx: &ReducerContext, shooter: Identity) -> bool {
-    let Some(unit) = owned_claimed_unit(ctx, shooter) else {
-        return false;
-    };
-    let session_key = combat_sim_session_key(&unit);
+    let session_key = combat_sim_session_key_for_owner(ctx, shooter);
     ctx.db
         .world_npc()
         .iter()
@@ -299,16 +371,8 @@ pub fn enter_combat_sim(ctx: &ReducerContext) {
         return;
     }
     let owner = ctx.sender();
-    if player_vitals::is_player_dead(ctx, owner) {
-        return;
-    }
-    apartments::ensure_player_home_apartment(ctx, owner);
-    let Some(unit) = owned_claimed_unit(ctx, owner) else {
-        log::warn!("enter_combat_sim: no claimed apartment for {owner}");
-        return;
-    };
-
-    let session_key = combat_sim_session_key(&unit);
+    // Dead players may re-enter combat sim — vitals are restored below (no bed respawn gate).
+    let CombatSimArena { unit, session_key } = resolve_combat_sim_arena(ctx, owner);
     npc::clear_npcs_for_session(ctx, &session_key);
 
     let bed_pose = apartments::join_pose_from_owned_bed(ctx, owner).unwrap_or_else(|| {
@@ -376,16 +440,17 @@ fn player_at_combat_sim_arena(unit: &ApartmentUnit, pose: &pose::PlayerPose) -> 
 #[spacetimedb::reducer]
 pub fn leave_combat_sim(ctx: &ReducerContext) {
     let owner = ctx.sender();
-    let Some(unit) = owned_claimed_unit(ctx, owner) else {
-        return;
-    };
-    let session_key = combat_sim_session_key(&unit);
-    let had_session_npcs = ctx
-        .db
-        .world_npc()
-        .iter()
-        .any(|n| n.session_key == session_key);
-    npc::clear_npcs_for_session(ctx, session_key.as_str());
+    apartments::ensure_player_home_apartment(ctx, owner);
+    let session_keys = combat_sim_session_keys_for_owner(ctx, owner);
+    let unit = owned_claimed_unit(ctx, owner).unwrap_or_else(fallback_combat_sim_unit);
+    let had_session_npcs = ctx.db.world_npc().iter().any(|n| {
+        session_keys
+            .iter()
+            .any(|session_key| n.session_key == *session_key)
+    });
+    for session_key in &session_keys {
+        npc::clear_npcs_for_session(ctx, session_key.as_str());
+    }
 
     pose::ensure_player_pose_row(ctx, owner);
     let Some(sp) = ctx.db.player_pose().identity().find(&owner) else {

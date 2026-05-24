@@ -48,6 +48,17 @@ function apartmentUnit(overrides: Partial<ApartmentUnit> = {}): ApartmentUnit {
   } as ApartmentUnit;
 }
 
+/** Display floor 12 — below the standard shutter band (13–19). */
+function apartmentUnitWithoutStandardShutters(
+  overrides: Partial<ApartmentUnit> = {},
+): ApartmentUnit {
+  return apartmentUnit({
+    unitKey: "floor_a|13|unit_w_001",
+    level: 13,
+    ...overrides,
+  });
+}
+
 describe("resolveApartmentDecorPoses", () => {
   it("maps normalized decor placements into world-space unit bounds", () => {
     const doc = OwnedApartmentBuiltinsDocSchema.parse({
@@ -72,18 +83,22 @@ describe("resolveApartmentDecorPoses", () => {
       objectGroups: [],
     });
 
-    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)).toEqual([
+    expect(resolveApartmentDecorPoses(apartmentUnitWithoutStandardShutters(), doc)).toEqual([
       {
         id: "decor_a",
         modelRelPath: "static/models/objects/cabinet-horizontal.glb",
         itemKind: "plain",
-        x: 103,
+        x: 104.875,
         y: 30.4,
         z: 206,
         yaw: 1.25,
         pitch: 0,
         roll: 0,
         uniformScale: 1.5,
+        verticalScaleMul: 1,
+        scaleX: undefined,
+        scaleY: undefined,
+        scaleZ: undefined,
       },
     ]);
   });
@@ -110,7 +125,7 @@ describe("resolveApartmentDecorPoses", () => {
       wallItems: [],
       objectGroups: [],
     });
-    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.pitch).toBe(-0.25);
+    expect(resolveApartmentDecorPoses(apartmentUnitWithoutStandardShutters(), doc)[0]?.pitch).toBe(-0.25);
   });
 
   it("carries authored roll into world-space decor poses", () => {
@@ -135,7 +150,7 @@ describe("resolveApartmentDecorPoses", () => {
       wallItems: [],
       objectGroups: [],
     });
-    expect(resolveApartmentDecorPoses(apartmentUnit(), doc)[0]?.roll).toBeCloseTo(0.33, 5);
+    expect(resolveApartmentDecorPoses(apartmentUnitWithoutStandardShutters(), doc)[0]?.roll).toBeCloseTo(0.33, 5);
   });
 
   it("maps slight negative fractions outside the strict hull for wall-edge authoring", () => {
@@ -158,17 +173,34 @@ describe("resolveApartmentDecorPoses", () => {
         },
       ],
     });
-    const poses = resolveApartmentDecorPoses(apartmentUnit(), doc);
+    const poses = resolveApartmentDecorPoses(apartmentUnitWithoutStandardShutters(), doc);
     const edge = poses.find((p) => p.id === "decor_edge");
     expect(edge).toMatchObject({
       id: "decor_edge",
-      x: 101.2,
+      x: 103.45,
       z: 199.2,
     });
   });
 
-  it("returns no decor when the content file is absent", () => {
-    expect(resolveApartmentDecorPoses(apartmentUnit(), null)).toEqual([]);
+  it("returns standard façade shutters for qualifying units even without a layout doc", () => {
+    const west = resolveApartmentDecorPoses(apartmentUnit(), null);
+    expect(west).toHaveLength(2);
+    expect(west.every((pose) => pose.modelRelPath.endsWith("window-shutter.glb"))).toBe(true);
+
+    const east = resolveApartmentDecorPoses(
+      apartmentUnit({ unitId: "unit_e_001", unitKey: "floor_a|18|unit_e_001" }),
+      null,
+    );
+    expect(east[0]!.x).toBeGreaterThan(west[0]!.x);
+  });
+
+  it("returns no decor for units outside the shutter floor band", () => {
+    expect(
+      resolveApartmentDecorPoses(
+        apartmentUnit({ unitKey: "floor_a|13|unit_w_001", level: 13 }),
+        null,
+      ),
+    ).toEqual([]);
   });
 
   it("resolves assigned unit profile before the owned apartment default", () => {
@@ -214,9 +246,9 @@ describe("resolveApartmentDecorPoses", () => {
         },
       ],
     });
-    expect(resolveApartmentWallPoses(apartmentUnit(), doc)[0]).toMatchObject({
+    expect(resolveApartmentWallPoses(apartmentUnitWithoutStandardShutters(), doc)[0]).toMatchObject({
       id: "wall_a",
-      x: 106,
+      x: 107.25,
       y: 30.05,
       z: 202,
       yaw: 0.1,
@@ -253,10 +285,10 @@ describe("resolveApartmentDecorPoses", () => {
       ],
       objectGroups: [],
     });
-    expect(resolveApartmentMirrorPoses(apartmentUnit(), doc)).toEqual([
+    expect(resolveApartmentMirrorPoses(apartmentUnitWithoutStandardShutters(), doc)).toEqual([
       {
         id: "mirror_a",
-        x: 106,
+        x: 107.25,
         y: 30.9,
         z: 204,
         yaw: 0.2,

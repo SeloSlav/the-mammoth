@@ -23,6 +23,7 @@ mod elevator_layout;
 mod feature_flags;
 mod firearm;
 mod fish_tank;
+mod fish_tank_filter;
 mod generated_apartment_doors;
 mod generated_collision_solids;
 mod generated_walk_surfaces;

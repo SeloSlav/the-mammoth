@@ -1181,7 +1181,8 @@
       "scaleY": 0.1454553654044154,
       "scaleZ": 0.1590892691911692,
       "ignoreSupportSurfaces": true,
-      "itemKind": "plain"
+      "itemKind": "fish_tank_filter",
+      "linkedFishTankDecorId": "5399ea91-6ad6-4c22-9e44-6b0b3f2f5b58"
     },
     {
       "id": "d5dd6e6f-1bbb-4bba-9e30-170735d2ffa6",

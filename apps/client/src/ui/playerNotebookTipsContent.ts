@@ -61,6 +61,17 @@ export const PLAYER_NOTEBOOK_PAGES: readonly PlayerNotebookSection[] = [
   },
   {
     kind: "reference",
+    heading: "Fish filter → tank loop",
+    lines: [
+      "Look at the filter unit beside the tank and press E — same stash dock as the kitchen tank.",
+      "Filter must be linked to your main fish tank in the apartment editor (one filter per tank).",
+      "Top off tank water or rinse the filter using a water bottle on hotbar slot 1.",
+      "Filter sponge cartridge in the maintenance slot restores filter health to full.",
+      "Feed the main fish tank before sleep; compost yield scales with tank water and filter health.",
+    ],
+  },
+  {
+    kind: "reference",
     heading: "Fish tank → fertilizer",
     lines: [
       "Main tank (not castle/sand props): E opens the feed slot — drop any food item before you sleep.",

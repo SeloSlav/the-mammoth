@@ -2,9 +2,9 @@
 //! Keep in sync with `packages/schemas/src/apartmentStashRules.ts`.
 
 use crate::inventory_models::{
-    APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
-    APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
-    APARTMENT_STASH_KIND_WATER_TANK,
+    APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FISH_TANK_FILTER,
+    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY,
+    APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
 use crate::items_catalog::{self, ItemCategory};
 
@@ -13,6 +13,7 @@ pub(crate) const APARTMENT_STASH_SLOT_INDEX_MAX: u16 = 24;
 
 const WATER_TANK_ALLOWED_DEF_IDS: &[&str] = &["water-bottle"];
 const GROW_TRAY_ALLOWED_DEF_IDS: &[&str] = &["balcony-grow-substrate"];
+const FISH_TANK_FILTER_ALLOWED_DEF_IDS: &[&str] = &["fish-filter-sponge"];
 
 pub(crate) fn apartment_stash_slot_count(stash_kind: &str) -> u16 {
     match stash_kind {
@@ -22,6 +23,7 @@ pub(crate) fn apartment_stash_slot_count(stash_kind: &str) -> u16 {
         APARTMENT_STASH_KIND_FRIDGE => 14,
         APARTMENT_STASH_KIND_WATER_TANK => 1,
         APARTMENT_STASH_KIND_FISH_TANK => 1,
+        APARTMENT_STASH_KIND_FISH_TANK_FILTER => 1,
         APARTMENT_STASH_KIND_GROW_TRAY => 1,
         _ => 24,
     }
@@ -48,6 +50,7 @@ pub(crate) fn apartment_stash_accepts_item_category(
         }
         APARTMENT_STASH_KIND_WATER_TANK => false,
         APARTMENT_STASH_KIND_FISH_TANK => false,
+        APARTMENT_STASH_KIND_FISH_TANK_FILTER => false,
         APARTMENT_STASH_KIND_GROW_TRAY => false,
         _ => false,
     }
@@ -62,6 +65,9 @@ pub(crate) fn apartment_stash_rejection_hint(stash_kind: &str) -> &'static str {
         APARTMENT_STASH_KIND_STOVE => "Stove only holds food (for now).",
         APARTMENT_STASH_KIND_WATER_TANK => "Water tank only holds a water bottle.",
         APARTMENT_STASH_KIND_FISH_TANK => "Fish tank only holds food for the fish.",
+        APARTMENT_STASH_KIND_FISH_TANK_FILTER => {
+            "Fish filter only holds a filter sponge cartridge."
+        }
         APARTMENT_STASH_KIND_GROW_TRAY => "Grow tray only holds balcony substrate fertilizer.",
         _ => "This item cannot go in this storage.",
     }
@@ -76,6 +82,9 @@ pub(crate) fn apartment_stash_accepts_def_id(stash_kind: &str, def_id: &str) -> 
     }
     if stash_kind == APARTMENT_STASH_KIND_FISH_TANK {
         return crate::fish_tank::is_fish_tank_feed_def_id(def_id);
+    }
+    if stash_kind == APARTMENT_STASH_KIND_FISH_TANK_FILTER {
+        return FISH_TANK_FILTER_ALLOWED_DEF_IDS.contains(&def_id);
     }
     if stash_kind == APARTMENT_STASH_KIND_FRIDGE && def_id == "water-bottle" {
         return true;

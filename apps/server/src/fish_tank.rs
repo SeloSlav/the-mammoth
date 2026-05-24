@@ -3,7 +3,7 @@
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
-use crate::apartments::{self, apartment_unit, apartment_unit_decor, ApartmentUnitDecor};
+use crate::apartments::{self, ApartmentUnitDecor};
 use crate::inventory::{
     find_item_in_stash_slot, inventory_item, remove_stash_item_quantity, InventoryItem,
 };
@@ -133,6 +133,7 @@ fn process_fish_tank_feed_slot(
     owner: Identity,
     stash_key: &str,
     roll_seed: u64,
+    success_scale: f32,
 ) {
     let Some(item) = find_item_in_stash_slot(ctx, owner, stash_key, FISH_TANK_FEED_SLOT) else {
         return;
@@ -146,37 +147,31 @@ fn process_fish_tank_feed_slot(
     if remove_stash_item_quantity(ctx, owner, stash_key, FISH_TANK_FEED_SLOT, 1).is_err() {
         return;
     }
-    if roll_fish_tank_success(ctx, roll_seed, yield_profile.success_pct) {
+    let scaled_pct = ((yield_profile.success_pct as f32) * success_scale.clamp(0.0, 1.0)) as u8;
+    if roll_fish_tank_success(ctx, roll_seed, scaled_pct) {
         grant_fish_tank_substrate(ctx, owner, stash_key, yield_profile.output_qty);
     }
 }
 
-fn process_fish_tank_on_sleep(ctx: &ReducerContext, owner: Identity, decor: &ApartmentUnitDecor) {
-    let roll_seed = decor.decor_id.wrapping_mul(0x9E37).wrapping_add(0xF15_0001);
-    process_fish_tank_feed_slot(ctx, owner, fish_tank_stash_key(decor).as_str(), roll_seed);
-}
-
-/// Sleep / death day hook — digest feed slot and maybe leave tray compost.
-pub(crate) fn advance_fish_tanks_for_unit(ctx: &ReducerContext, unit_key: &str) {
-    let unit = ctx
-        .db
-        .apartment_unit()
-        .unit_key()
-        .find(&unit_key.to_string());
-    let Some(owner) = unit.and_then(|u| u.owner) else {
+/// Overnight digest for one tank — gated by linked filter ecosystem (`fish_tank_filter`).
+pub(crate) fn process_fish_tank_on_sleep_for_decor(
+    ctx: &ReducerContext,
+    owner: Identity,
+    decor: &ApartmentUnitDecor,
+    tank_decor_id: u64,
+) {
+    let success_scale = crate::fish_tank_filter::fish_tank_feed_success_multiplier(ctx, tank_decor_id);
+    if success_scale <= 0.001 {
         return;
-    };
-
-    let tanks: Vec<ApartmentUnitDecor> = ctx
-        .db
-        .apartment_unit_decor()
-        .iter()
-        .filter(|d| d.unit_key.as_str() == unit_key && is_fish_tank_decor_row(d))
-        .collect();
-
-    for decor in tanks {
-        process_fish_tank_on_sleep(ctx, owner, &decor);
     }
+    let roll_seed = decor.decor_id.wrapping_mul(0x9E37).wrapping_add(0xF15_0001);
+    process_fish_tank_feed_slot(
+        ctx,
+        owner,
+        fish_tank_stash_key(decor).as_str(),
+        roll_seed,
+        success_scale,
+    );
 }
 
 #[cfg(test)]

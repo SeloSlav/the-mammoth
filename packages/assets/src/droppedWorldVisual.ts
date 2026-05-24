@@ -47,7 +47,7 @@ const BY_DEF_ID: Readonly<Record<string, number>> = {
   rakija: 0.31,
   "field-rations": 0.2,
   "iodine-tablets": 0.06,
-  "bandage-roll": 0.13,
+  "fish-filter-sponge": 0.12,
   "caffeine-gum": 0.08,
 
   // Tools

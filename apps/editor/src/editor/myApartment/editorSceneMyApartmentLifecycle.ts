@@ -278,6 +278,8 @@ export function createEditorSceneMyApartmentLifecycle(
 
           unitBounds,
 
+          st.myApartmentPreviewUnitKey,
+
         );
 
       } else {
@@ -292,6 +294,7 @@ export function createEditorSceneMyApartmentLifecycle(
           authoringFractionMapping,
           syncKind === "none" ? "full" : syncKind,
           prevMountInputs.placedItems,
+          st.myApartmentPreviewUnitKey,
         );
       }
 
@@ -408,6 +411,7 @@ export function createEditorSceneMyApartmentLifecycle(
           doc,
           authoringFractionMapping,
           previousMountInputs.placedItems,
+          st.myApartmentPreviewUnitKey,
         );
         structuralDecorRebuild = decorResult.structuralRebuild;
       }

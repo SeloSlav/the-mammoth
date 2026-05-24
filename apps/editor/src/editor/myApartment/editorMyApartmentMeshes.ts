@@ -16,8 +16,12 @@ import {
 import { useEditorStore } from "../../state/editorStore.js";
 import {
   APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH,
+  finalizeStandardWindowShutterPlacedItemsForUnit,
 } from "@the-mammoth/world";
-import type { OwnedApartmentBuiltinsDoc } from "@the-mammoth/schemas";
+import {
+  mergeStandardApartmentWindowShuttersIntoPlacedItems,
+  type OwnedApartmentBuiltinsDoc,
+} from "@the-mammoth/schemas";
 import type { EditorApartmentFishTankBridge } from "./editorApartmentFishTankBridge.js";
 import type { OwnedApartmentFractionToPreviewXZ } from "./editorMyApartmentAuthoringShell.js";
 import {
@@ -70,6 +74,7 @@ export function mountEditorMyApartmentFurnitureUnder(
   windowScanRoot: THREE.Object3D,
   fishTankBridge: EditorApartmentFishTankBridge,
   unitBounds?: ApartmentUnitWorldBounds,
+  previewUnitKey?: string,
 ): EditorMyApartmentFurnitureMount {
   disposeLeakedApartmentDecorContactShadows(parent);
 
@@ -81,7 +86,18 @@ export function mountEditorMyApartmentFurnitureUnder(
   const fishSwimmerTemplate =
     decorTemplates.get(APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH) ?? undefined;
 
-  for (const decor of doc.placedItems) {
+  const placedItems = finalizeStandardWindowShutterPlacedItemsForUnit(
+    authoringFractionMapping.unitId,
+    mergeStandardApartmentWindowShuttersIntoPlacedItems(
+      previewUnitKey ?? "",
+      authoringFractionMapping.unitId,
+      doc.placedItems,
+    ),
+    authoringFractionMapping.strictMinX,
+    authoringFractionMapping.strictMinX + authoringFractionMapping.spanX,
+  );
+
+  for (const decor of placedItems) {
     const template = decorTemplates.get(decor.modelRelPath);
     if (!template) continue;
     const group = new THREE.Group();
@@ -225,7 +241,7 @@ export function mountEditorMyApartmentFurnitureUnder(
     dispose,
     mountedWallIds: mountIdSet(doc.wallItems),
     mountedMirrorIds: mountIdSet(doc.mirrorItems),
-    mountedDecorIds: mountIdSet(doc.placedItems),
+    mountedDecorIds: mountIdSet(placedItems),
   };
 }
 

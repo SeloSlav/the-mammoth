@@ -78,6 +78,7 @@ export const ApartmentUnitDecor = __t.object("ApartmentUnitDecor", {
   rollRad: __t.f32(),
   uniformScale: __t.f32(),
   itemKind: __t.u8(),
+  authoredId: __t.string(),
 });
 export type ApartmentUnitDecor = __Infer<typeof ApartmentUnitDecor>;
 
@@ -92,6 +93,21 @@ export const ApartmentWaterTankSchedule = __t.object("ApartmentWaterTankSchedule
   scheduledAt: __t.scheduleAt(),
 });
 export type ApartmentWaterTankSchedule = __Infer<typeof ApartmentWaterTankSchedule>;
+
+export const AuthoredStashDecorSyncEntry = __t.object("AuthoredStashDecorSyncEntry", {
+  authoredId: __t.string(),
+  modelRelPath: __t.string(),
+  itemKind: __t.u8(),
+  fx: __t.f32(),
+  fz: __t.f32(),
+  dy: __t.f32(),
+  yawRad: __t.f32(),
+  pitchRad: __t.f32(),
+  rollRad: __t.f32(),
+  uniformScale: __t.f32(),
+  linkedFishTankAuthoredId: __t.string(),
+});
+export type AuthoredStashDecorSyncEntry = __Infer<typeof AuthoredStashDecorSyncEntry>;
 
 export const BalconyGrowLight = __t.object("BalconyGrowLight", {
   unitKey: __t.string(),
@@ -216,6 +232,21 @@ export const ElevatorLandingDoor = __t.object("ElevatorLandingDoor", {
   swingOpen01: __t.f32(),
 });
 export type ElevatorLandingDoor = __Infer<typeof ElevatorLandingDoor>;
+
+export const FishTankEcosystem = __t.object("FishTankEcosystem", {
+  tankDecorId: __t.u64(),
+  unitKey: __t.string(),
+  waterLiters: __t.f32(),
+  filterHealth: __t.u8(),
+});
+export type FishTankEcosystem = __Infer<typeof FishTankEcosystem>;
+
+export const FishTankFilterLink = __t.object("FishTankFilterLink", {
+  filterDecorId: __t.u64(),
+  unitKey: __t.string(),
+  tankDecorId: __t.u64(),
+});
+export type FishTankFilterLink = __Infer<typeof FishTankFilterLink>;
 
 export const FlashlightCharge = __t.object("FlashlightCharge", {
   itemInstanceId: __t.u64(),

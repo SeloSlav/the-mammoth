@@ -1,4 +1,5 @@
 import {
+  OWNED_APARTMENT_MODEL_WINDOW_SHUTTER,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
 } from "@the-mammoth/schemas";
@@ -15,6 +16,7 @@ export function listMyApartmentDecorTemplateRelPathsWithDeps(doc: OwnedApartment
     ...new Set([
       ...listMyApartmentPlacedItemModelRelPaths(doc),
       ...apartmentFishTankDecorTemplateDeps(doc.placedItems.map((p) => p.modelRelPath)),
+      OWNED_APARTMENT_MODEL_WINDOW_SHUTTER,
     ]),
   ];
 }

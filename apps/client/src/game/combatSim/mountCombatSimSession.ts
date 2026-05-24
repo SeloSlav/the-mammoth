@@ -5,6 +5,7 @@ import {
   findOwnedApartmentUnitForIdentity,
   loadAuthoredNpcCombatSpawnsFromContent,
   prepareAndEnterCombatSim,
+  waitForOwnedApartmentUnit,
   type CombatSimUnitContext,
 } from "./combatSimEnter.js";
 import { waitForCombatSimBabushkaRow } from "./waitForCombatSimWorldNpc.js";
@@ -44,7 +45,10 @@ export async function mountCombatSimSession(
   report("sync_spawns");
   const spawns =
     opts.npcSpawns ?? (await loadAuthoredNpcCombatSpawnsFromContent());
-  const unit = opts.unitContext ?? findOwnedApartmentUnitForIdentity(conn);
+  const unit =
+    opts.unitContext ??
+    (await waitForOwnedApartmentUnit(conn)) ??
+    findOwnedApartmentUnitForIdentity(conn);
   report("enter_combat_sim");
   if (unit) {
     await prepareAndEnterCombatSim(conn, unit, spawns);
@@ -58,9 +62,13 @@ export async function mountCombatSimSession(
     waitForCombatSimBabushkaRow(conn),
   ]);
   if (!babushkaRow) {
-    console.warn(
-      "[combatSim] no babushka world_npc row after enter_combat_sim — check claimed apartment / server deploy",
-    );
+    await conn.reducers.enterCombatSim({});
+    const retryRow = await waitForCombatSimBabushkaRow(conn, 5_000);
+    if (!retryRow) {
+      console.warn(
+        "[combatSim] no babushka world_npc row after enter_combat_sim — republish server module if this persists",
+      );
+    }
   }
 
   report("load_fp_session");

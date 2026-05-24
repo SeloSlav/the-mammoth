@@ -83,6 +83,38 @@ export function mapOwnedApartmentWorldXToLayoutFraction(
   return (worldX - boundMinX - RESIDENTIAL_UNIT_BALCONY_OVERHANG_M) / livingSpanX;
 }
 
+/**
+ * West-bay façade: match the east reference shutter's inset from the exterior shell edge.
+ * East maps `fx → boundMin + fx·livingSpan` (exterior at `boundMax`); west maps with a
+ * `+balcony` term (exterior at `boundMin`). Simple `1 - fx` preserves the same world-space
+ * offset from each wing's outer wall.
+ */
+export function mirrorEastBalconyWindowShutterFxForWestUnit(
+  eastReferenceFx: number,
+  boundMinX: number,
+  boundMaxX: number,
+  westUnitId: string,
+): number {
+  const eastUnitId = westUnitId.replace(/^unit_w_/, "unit_e_");
+  if (!eastUnitId.startsWith("unit_e_")) {
+    return 1 - eastReferenceFx;
+  }
+  const eastShutterWorldX = mapOwnedApartmentLayoutFractionToWorldX(
+    boundMinX,
+    boundMaxX,
+    eastUnitId,
+    eastReferenceFx,
+  );
+  const insetFromEastExterior = boundMaxX - eastShutterWorldX;
+  const westShutterWorldX = boundMinX + insetFromEastExterior;
+  return mapOwnedApartmentWorldXToLayoutFraction(
+    boundMinX,
+    boundMaxX,
+    westUnitId,
+    westShutterWorldX,
+  );
+}
+
 /** Former exterior face of the 9 m shell — solid partition; windows live on the bay façade. */
 export function residentialBalconyPartitionFace(unitId: string): "e" | "w" | null {
   const edge = residentialUnitBalconyExteriorEdge(unitId);

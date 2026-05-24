@@ -10,6 +10,7 @@ import {
 import {
   APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH,
   buildProceduralApartmentDecorVisual,
+  finalizeStandardWindowShutterPlacedItemsForUnit,
   isProceduralApartmentDecorModelPath,
   postProcessApartmentDecorGltfScene,
   tagProceduralApartmentDecorMeshesSkipMerge,
@@ -17,6 +18,7 @@ import {
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
+  mergeStandardApartmentWindowShuttersIntoPlacedItems,
   type OwnedApartmentBuiltinsDoc,
   type OwnedApartmentPlacedItem,
   ownedApartmentPlacedItemAuthoringAssetVisScale,
@@ -174,13 +176,24 @@ export function syncEditorMyApartmentDecorOnMount(
   doc: OwnedApartmentBuiltinsDoc,
   spans: OwnedApartmentFractionToPreviewXZ,
   prevPlacedItems?: readonly OwnedApartmentPlacedItem[],
+  previewUnitKey?: string,
 ): { structuralRebuild: boolean } {
+  const placedItems = finalizeStandardWindowShutterPlacedItemsForUnit(
+    spans.unitId,
+    mergeStandardApartmentWindowShuttersIntoPlacedItems(
+      previewUnitKey ?? "",
+      spans.unitId,
+      doc.placedItems,
+    ),
+    spans.strictMinX,
+    spans.strictMinX + spans.spanX,
+  );
   const fishSwimmerTemplate =
     decorTemplates.get(APARTMENT_FISH_TANK_SWIMMER_MODEL_REL_PATH) ?? undefined;
   const prevById = new Map((prevPlacedItems ?? []).map((item) => [item.id, item]));
   let structuralRebuild = false;
-  const nextIds = new Set(doc.placedItems.map((d) => d.id));
-  for (const decor of doc.placedItems) {
+  const nextIds = new Set(placedItems.map((d) => d.id));
+  for (const decor of placedItems) {
     const template = decorTemplates.get(decor.modelRelPath);
     if (!template) continue;
     const selId = editorMyApartmentSelectedIdForDecor(decor.id);

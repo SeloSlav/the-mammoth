@@ -11,6 +11,7 @@ import {
   APARTMENT_STASH_KIND_GROW_TRAY,
   APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   parseApartmentStashKeyFull,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
@@ -24,6 +25,7 @@ export function apartmentStashKindForPlacedKind(
   if (k === "fridge") return APARTMENT_STASH_KIND_FRIDGE;
   if (k === "water_tank") return APARTMENT_STASH_KIND_WATER_TANK;
   if (k === "fish_tank") return APARTMENT_STASH_KIND_FISH_TANK;
+  if (k === "fish_tank_filter") return APARTMENT_STASH_KIND_FISH_TANK_FILTER;
   return null;
 }
 

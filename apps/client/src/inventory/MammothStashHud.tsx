@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import {
   apartmentStashHudGridCols,
   apartmentStashHudSections,
+  FISH_TANK_FILTER_PATCH_DEF_ID,
 } from "@the-mammoth/schemas";
 import {
   THEME_ACCENT,
@@ -55,9 +56,13 @@ import {
   buildMammothItemTooltipContent,
   type MammothItemTooltipContentModel,
 } from "./mammothItemTooltipContent";
-import { APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_WATER_TANK } from "../game/fpApartment/fpApartmentStashKey";
+import { APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_WATER_TANK, APARTMENT_STASH_KIND_FISH_TANK_FILTER } from "../game/fpApartment/fpApartmentStashKey";
 import { parseApartmentStashKeyFull } from "../game/fpApartment/fpApartmentStashKey";
 import { useApartmentWaterTankLiters, useWaterBottleFillVersion } from "./useWaterContainerState";
+import {
+  FISH_TANK_ECOSYSTEM_WATER_CAPACITY_L,
+  useFishTankEcosystemForFilterStash,
+} from "./useFishTankEcosystemState";
 import {
   APARTMENT_WATER_TANK_CAPACITY_L,
   mammothItemDefSupportsHotbarWaterDrink,
@@ -125,6 +130,15 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
   const stash = useMammothStash(conn, stashKey, stashKind);
   const unitKey = useMemo(() => parseApartmentStashKeyFull(stashKey).unitKey, [stashKey]);
   const tankLiters = useApartmentWaterTankLiters(conn, stashKind === APARTMENT_STASH_KIND_WATER_TANK ? unitKey : null);
+  const fishEco = useFishTankEcosystemForFilterStash(
+    conn,
+    stashKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER ? stashKey : null,
+  );
+  const filterDecorId = useMemo(() => {
+    if (stashKind !== APARTMENT_STASH_KIND_FISH_TANK_FILTER) return null;
+    const parsed = parseApartmentStashKeyFull(stashKey);
+    return parsed.tag === "decor" ? parsed.decorId : null;
+  }, [stashKey, stashKind]);
   const waterFillVer = useWaterBottleFillVersion(conn);
   void waterFillVer;
   const baseSlots = useMemo<SlotGrids>(
@@ -401,6 +415,55 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
     }
   }, [conn, stashKey]);
 
+  const hotbarHasWater = useMemo(() => {
+    for (const pop of playerSlots.hotbar) {
+      if (!pop?.def.waterContainer) continue;
+      const fill = waterBottleFillFraction(
+        conn,
+        pop.instance.instanceId,
+        pop.def.waterContainer.capacityLiters,
+      );
+      if (fill > 0.001) return true;
+    }
+    return false;
+  }, [conn, playerSlots.hotbar, waterFillVer]);
+
+  const onTopOffFishTank = useCallback(() => {
+    if (filterDecorId == null) return;
+    try {
+      void conn.reducers.topOffFishTankFromBottle({
+        filterDecorId,
+        hotbarSlot: 0,
+      });
+    } catch (err) {
+      console.warn("[MammothStashHud] topOffFishTankFromBottle failed", err);
+    }
+  }, [conn, filterDecorId]);
+
+  const onRinseFishFilter = useCallback(() => {
+    if (filterDecorId == null) return;
+    try {
+      void conn.reducers.rinseFishTankFilter({
+        filterDecorId,
+        hotbarSlot: 0,
+      });
+    } catch (err) {
+      console.warn("[MammothStashHud] rinseFishTankFilter failed", err);
+    }
+  }, [conn, filterDecorId]);
+
+  const onApplyFishFilterPatch = useCallback(() => {
+    if (filterDecorId == null) return;
+    try {
+      void conn.reducers.applyFishFilterPatch({ filterDecorId });
+    } catch (err) {
+      console.warn("[MammothStashHud] applyFishFilterPatch failed", err);
+    }
+  }, [conn, filterDecorId]);
+
+  const filterHasCartridge =
+    (displaySlots.stash?.[0]?.def.id ?? "") === FISH_TANK_FILTER_PATCH_DEF_ID;
+
   const slotRenderOpts = {
     toInstanceId,
     handleDragStart,
@@ -469,6 +532,17 @@ export function MammothStashHud({ conn, stashKey, stashLabel, stashKind }: Props
               tankLiters={tankLiters}
               canFillBottle={canFillBottle}
               onFillBottleAtTank={onFillBottleAtTank}
+            />
+          ) : null}
+
+          {stashKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER ? (
+            <FishFilterReadout
+              eco={fishEco}
+              hotbarHasWater={hotbarHasWater}
+              filterHasCartridge={filterHasCartridge}
+              onTopOff={onTopOffFishTank}
+              onRinse={onRinseFishFilter}
+              onApplyPatch={onApplyFishFilterPatch}
             />
           ) : null}
 
@@ -545,6 +619,165 @@ function GrowTrayDescription() {
       and all four growing slots in this tray get faster nights and better harvest rolls. Water the
       tray before sleep; grow lights must be on overnight.
     </div>
+  );
+}
+
+/** Fish filter sub-readout: linked tank water + filter health + maintenance actions. */
+function FishFilterReadout({
+  eco,
+  hotbarHasWater,
+  filterHasCartridge,
+  onTopOff,
+  onRinse,
+  onApplyPatch,
+}: {
+  eco: ReturnType<typeof useFishTankEcosystemForFilterStash>;
+  hotbarHasWater: boolean;
+  filterHasCartridge: boolean;
+  onTopOff: () => void;
+  onRinse: () => void;
+  onApplyPatch: () => void;
+}) {
+  if (!eco?.linked) {
+    return (
+      <div
+        style={{
+          marginBottom: 14,
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: `1px solid ${THEME_CARD_BORDER_STRONG}`,
+          background: "rgba(255,255,255,0.025)",
+          fontSize: 11.5,
+          lineHeight: 1.5,
+          color: THEME_TEXT_MUTED,
+        }}
+      >
+        Not linked to a fish tank. Open the apartment editor, select this filter, and choose which
+        tank it serves.
+      </div>
+    );
+  }
+
+  const waterPct = Math.min(
+    100,
+    (eco.waterLiters / FISH_TANK_ECOSYSTEM_WATER_CAPACITY_L) * 100,
+  );
+  const filterPct = Math.min(100, eco.filterHealth);
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <MetricBar label="Tank water" value={`${eco.waterLiters.toFixed(1)} / ${FISH_TANK_ECOSYSTEM_WATER_CAPACITY_L} L`} pct={waterPct} gradient="linear-gradient(90deg, rgba(46,116,170,0.9), rgba(120,180,225,0.95))" />
+      <MetricBar label="Filter" value={`${eco.filterHealth}%`} pct={filterPct} gradient="linear-gradient(90deg, rgba(72,140,90,0.9), rgba(140,200,120,0.95))" />
+      <p style={{ margin: "0 0 10px", fontSize: 10.5, color: THEME_TEXT_FAINT, lineHeight: 1.45 }}>
+        Hold a water bottle on hotbar slot 1. Feed the main fish tank before sleep — compost yield
+        depends on water and filter health.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <FishFilterActionButton
+          label="Top off tank (0.5 L from hotbar slot 1)"
+          disabled={!hotbarHasWater}
+          onClick={onTopOff}
+        />
+        <FishFilterActionButton
+          label="Rinse filter (1 L from hotbar slot 1)"
+          disabled={!hotbarHasWater}
+          onClick={onRinse}
+        />
+        <FishFilterActionButton
+          label="Install sponge cartridge from slot"
+          disabled={!filterHasCartridge}
+          onClick={onApplyPatch}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricBar({
+  label,
+  value,
+  pct,
+  gradient,
+}: {
+  label: string;
+  value: string;
+  pct: number;
+  gradient: string;
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          fontSize: 11,
+          color: THEME_TEXT_MUTED,
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: THEME_TEXT_FAINT,
+            fontWeight: 600,
+          }}
+        >
+          {label}
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums", color: THEME_TEXT_PRIMARY }}>{value}</span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 4,
+          background: "rgba(0,0,0,0.4)",
+          border: `1px solid ${THEME_DIVIDER}`,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: gradient,
+            transition: "width 200ms ease-out",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FishFilterActionButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        width: "100%",
+        padding: "8px 10px",
+        borderRadius: 8,
+        border: `1px solid ${disabled ? THEME_CARD_BORDER_STRONG : THEME_ACCENT}`,
+        background: disabled ? "rgba(255,255,255,0.04)" : THEME_ACCENT,
+        color: disabled ? THEME_TEXT_FAINT : "#0f1218",
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 12,
+        fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

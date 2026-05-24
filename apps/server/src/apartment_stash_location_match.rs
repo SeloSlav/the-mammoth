@@ -6,7 +6,8 @@ use spacetimedb::ReducerContext;
 use crate::apartments::apartment_unit_decor;
 use crate::inventory_models::{
     parse_apartment_stash_key_v2, stash_location_matches, ParsedApartmentStashKey,
-    APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
+    APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FISH_TANK_FILTER,
+    APARTMENT_STASH_KIND_FOOTLOCKER, APARTMENT_STASH_KIND_FRIDGE,
     APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE, APARTMENT_STASH_KIND_WARDROBE,
     APARTMENT_STASH_KIND_WATER_TANK,
 };
@@ -17,6 +18,7 @@ const DECOR_ITEM_KIND_STOVE: u8 = 4;
 const DECOR_ITEM_KIND_FRIDGE: u8 = 5;
 const DECOR_ITEM_KIND_WATER_TANK: u8 = 6;
 const DECOR_ITEM_KIND_FISH_TANK: u8 = 7;
+const DECOR_ITEM_KIND_FISH_TANK_FILTER: u8 = 8;
 
 fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
     let p = model_rel_path.trim().trim_start_matches('/');
@@ -25,6 +27,9 @@ fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
     }
     if p.ends_with("objects/fish-tank.glb") {
         return DECOR_ITEM_KIND_FISH_TANK;
+    }
+    if p.ends_with("objects/fish-tank-filter.glb") {
+        return DECOR_ITEM_KIND_FISH_TANK_FILTER;
     }
     if p.ends_with("objects/fridge.glb") {
         return DECOR_ITEM_KIND_FRIDGE;
@@ -55,6 +60,7 @@ fn decor_stash_kind_for_row(item_kind: u8, model_rel_path: &str) -> &'static str
         DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
         DECOR_ITEM_KIND_WATER_TANK => APARTMENT_STASH_KIND_WATER_TANK,
         DECOR_ITEM_KIND_FISH_TANK => APARTMENT_STASH_KIND_FISH_TANK,
+        DECOR_ITEM_KIND_FISH_TANK_FILTER => APARTMENT_STASH_KIND_FISH_TANK_FILTER,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }
@@ -139,7 +145,7 @@ pub(crate) fn apartment_stash_locations_match(
     if sk == APARTMENT_STASH_KIND_FOOTLOCKER {
         return footlocker_location_alias(&stored, &requested);
     }
-    if sk == APARTMENT_STASH_KIND_FISH_TANK {
+    if sk == APARTMENT_STASH_KIND_FISH_TANK || sk == APARTMENT_STASH_KIND_FISH_TANK_FILTER {
         return fish_tank_storage_alias(&stored, &requested);
     }
 

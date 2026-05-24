@@ -12,16 +12,19 @@ import {
 import {
   apartmentLayoutDocForUnitKey,
   ApartmentUnitLayoutProfilesDocSchema,
+  mergeStandardApartmentWindowShuttersIntoPlacedItems,
   OwnedApartmentBuiltinsDocSchema,
   type ApartmentUnitLayoutProfilesDoc,
   type OwnedApartmentBuiltinsDoc,
-  type OwnedApartmentPlacedItem,
   type OwnedApartmentMirrorItem,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
   type OwnedApartmentWallOpening,
 } from "@the-mammoth/schemas";
-import { mapOwnedApartmentLayoutFractionToWorldX } from "@the-mammoth/world";
+import {
+  finalizeStandardWindowShutterPlacedItemsForUnit,
+  mapOwnedApartmentLayoutFractionToWorldX,
+} from "@the-mammoth/world";
 
 let cached: OwnedApartmentBuiltinsDoc | null | undefined;
 let profilesCached: ApartmentUnitLayoutProfilesDoc | null | undefined;
@@ -111,15 +114,25 @@ export function resolveApartmentDecorPoses(
   u: ApartmentUnit,
   doc: OwnedApartmentBuiltinsDoc | null | undefined,
 ): ApartmentDecorPose[] {
-  if (!doc || doc.placedItems.length === 0) return [];
-  const sx = (u.boundMaxX as number) - (u.boundMinX as number);
-  const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
+  const unitKey = u.unitKey as string;
+  const unitId = u.unitId as string;
   const bminx = u.boundMinX as number;
+  const bmaxx = u.boundMaxX as number;
+  const placedItems = finalizeStandardWindowShutterPlacedItemsForUnit(
+    unitId,
+    mergeStandardApartmentWindowShuttersIntoPlacedItems(
+      unitKey,
+      unitId,
+      doc?.placedItems ?? [],
+    ),
+    bminx,
+    bmaxx,
+  );
+  if (placedItems.length === 0) return [];
+  const sz = (u.boundMaxZ as number) - (u.boundMinZ as number);
   const bminz = u.boundMinZ as number;
   const bminy = u.boundMinY as number;
-  const unitId = u.unitId as string;
-  const bmaxx = u.boundMaxX as number;
-  return doc.placedItems.map((item) => ({
+  return placedItems.map((item) => ({
     id: item.id,
     modelRelPath: item.modelRelPath,
     itemKind: item.itemKind,

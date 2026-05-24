@@ -5,6 +5,7 @@
 
 import {
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   APARTMENT_STASH_KIND_FOOTLOCKER,
   APARTMENT_STASH_KIND_GROW_TRAY,
   type ApartmentStashKind,
@@ -39,6 +40,7 @@ export function parseApartmentStashLocationKey(raw: string): ParsedApartmentStas
       "fridge",
       "water_tank",
       "fish_tank",
+      "fish_tank_filter",
     ];
     if ((kinds as string[]).includes(tail)) {
       return { tag: "legacy", unitKey, stashKind: tail as ApartmentStashKind };
@@ -137,7 +139,7 @@ export function apartmentStashLocationsMatch(
     return footlockerLocationAlias(stored, requested);
   }
 
-  if (storedKind === APARTMENT_STASH_KIND_FISH_TANK) {
+  if (storedKind === APARTMENT_STASH_KIND_FISH_TANK || storedKind === APARTMENT_STASH_KIND_FISH_TANK_FILTER) {
     return fishTankStorageAlias(stored, requested);
   }
 

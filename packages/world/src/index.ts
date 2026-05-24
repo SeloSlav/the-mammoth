@@ -158,6 +158,10 @@ export {
   isApartmentWindowShutterModelPath,
 } from "./apartmentWindowShutterVisual.js";
 export {
+  finalizeStandardWindowShutterPlacedItemsForUnit,
+  resolveStandardWindowShutterFxForUnit,
+} from "./apartmentStandardWindowShutterPlacement.js";
+export {
   APARTMENT_PROCEDURAL_DECOR_MODEL_PATHS,
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,
@@ -417,6 +421,7 @@ export {
   livingPlayableSpanX,
   mapOwnedApartmentLayoutFractionToWorldX,
   mapOwnedApartmentWorldXToLayoutFraction,
+  mirrorEastBalconyWindowShutterFxForWestUnit,
   residentialBalconyPartitionFace,
   residentialUnitBalconyExteriorEdge,
   residentialUnitBalconyFurnitureInsetFromBackWallM,

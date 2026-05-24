@@ -16,6 +16,7 @@ import {
 import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
+  apartmentUnitQualifiesForStandardWindowShutters,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
   type OwnedApartmentWallOpening,
@@ -171,11 +172,19 @@ export function visibleDecorPlacements(
 ): VisibleDecorPlacement[] {
   const visibleUnits: ApartmentUnit[] = [];
   const visibleUnitKeys = new Set<string>();
+  const shutterOnlyUnitKeys = new Set<string>();
   for (const row of conn.db.apartment_unit) {
     const unit = row as ApartmentUnit;
-    if (!residentInteriorPropsVisibleForViewer(conn, unit)) continue;
-    visibleUnits.push(unit);
-    visibleUnitKeys.add(unit.unitKey);
+    if (residentInteriorPropsVisibleForViewer(conn, unit)) {
+      visibleUnits.push(unit);
+      visibleUnitKeys.add(unit.unitKey);
+      continue;
+    }
+    if (apartmentUnitQualifiesForStandardWindowShutters(unit.unitKey as string)) {
+      visibleUnits.push(unit);
+      visibleUnitKeys.add(unit.unitKey);
+      shutterOnlyUnitKeys.add(unit.unitKey);
+    }
   }
 
   const dbRowsByUnitKey = new Map<string, ApartmentUnitDecor[]>();
@@ -192,9 +201,12 @@ export function visibleDecorPlacements(
 
   const out: VisibleDecorPlacement[] = [];
   for (const unit of visibleUnits) {
-    const dbRows = [...(dbRowsByUnitKey.get(unit.unitKey) ?? [])].sort((a, b) =>
-      Number(a.decorId - b.decorId),
-    );
+    const shutterOnly = shutterOnlyUnitKeys.has(unit.unitKey);
+    const dbRows = shutterOnly
+      ? []
+      : [...(dbRowsByUnitKey.get(unit.unitKey) ?? [])].sort((a, b) =>
+          Number(a.decorId - b.decorId),
+        );
 
     for (const decor of dbRows) {
       out.push({
@@ -215,11 +227,13 @@ export function visibleDecorPlacements(
       });
     }
 
-    const layoutDoc = resolveApartmentLayoutDocForUnit(
-      unit,
-      builtinsFromContent,
-      profilesFromContent,
-    );
+    const layoutDoc = shutterOnly
+      ? null
+      : resolveApartmentLayoutDocForUnit(
+          unit,
+          builtinsFromContent,
+          profilesFromContent,
+        );
     for (const decor of resolveApartmentDecorPoses(unit, layoutDoc)) {
       if (contentDecorCoveredByDbRow(decor, dbRows)) continue;
       out.push({
@@ -713,6 +727,8 @@ export async function runFpApartmentDecorFullRebuild(
         pick.name = `apartment_decor_stash_pick:${d.renderKey}`;
         if (d.placedKind === "fish_tank") {
           fitFishTankStashInteractionPick(g, pick);
+        } else if (d.placedKind === "fish_tank_filter") {
+          fitApartmentInteractionPickToObject(g, pick, { x: 0.28, y: 0.32, z: 0.22 });
         } else {
           fitApartmentInteractionPickToObject(g, pick, { x: 0.35, y: 0.25, z: 0.35 });
         }

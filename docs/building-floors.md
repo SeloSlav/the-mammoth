@@ -125,7 +125,7 @@ Checkpoints, bunks, ammo benches, contract board. **Not** a free-loot floor.
 | **8** | Collapsed | Detours, breath dust, bad carry weight | `metal-pipe` *(planned)*, `improvised-spear` *(planned)* | `flashlight` *(planned)*, `scrap-metal` |
 | **7** | Maintenance-heavy utility | Fuse rooms, pipe chase, elevator fault rumors | `fuse-wire-pack` *(planned)*, `valve-wheel` *(planned)* | `multimeter`, `pressure-gauge` *(planned)* |
 | **6** | Failed militia outpost | Rot barricades, spent shells, guilt | `ammo-9mm`, `patrol-lamp` *(planned)* | `ammo-shotgun-shell`, `gunsmith-workbench` *(station)* |
-| **5** | Grocery / ration storage | Empty freezers, vinegar smell | `field-rations` | `fish-food-tin` *(planned)*, `apple` |
+| **5** | Grocery / ration storage | Empty freezers, vinegar smell | `field-rations` | `fish-food-tin` *(planned)*, `fish-filter-sponge`, `apple` |
 | **4** | Clinic / medical | Stripped cabinets, low light | `bandage-roll`, `iodine-tablets` | `disinfectant-bottle` *(planned)*, `caffeine-gum` |
 | **3** | School / daycare | Tiny desks, chalk dust, science room | `iodine-tablets`, `caffeine-gum` | `field-rations` (low), `fish-food-tin` *(planned)* |
 | **2** | Flooded residential | Knee water, cold, quiet splashes | `ceramic-water-filter` *(planned)*, `valve-wheel` *(planned)* | `water-bottle`, `scrap-metal` |

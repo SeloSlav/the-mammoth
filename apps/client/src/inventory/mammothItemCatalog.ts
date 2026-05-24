@@ -21,6 +21,7 @@ import shotgunShellIcon from "../../../../content/references/meshy/shotgun-shell
 import scrapMetalIcon from "../../../../content/references/meshy/scrap-metal.png?url";
 import chemicalStockIcon from "../../../../content/references/meshy/chemical-stock.png?url";
 import compostIcon from "../../../../content/references/meshy/compost.png?url";
+import fishFilterSpongeIcon from "../../../../content/references/meshy/fish-filter-sponge.png?url";
 import freshOysterMushroomIcon from "../../../../content/references/meshy/fresh-oyster-mushroom.png?url";
 import freshDillIcon from "../../../../content/references/meshy/fresh-dill.png?url";
 import freshGreenOnionIcon from "../../../../content/references/meshy/fresh-green-onion.png?url";
@@ -138,6 +139,7 @@ const ICONS: Record<string, string> = {
   "chemical-stock": chemicalStockIcon,
   cigarettes: cigaretteIcon,
   "door-lock": doorLockIcon,
+  "fish-filter-sponge": fishFilterSpongeIcon,
   multimeter: multimeterIcon,
   screwdriver: screwdriverIcon,
   "balcony-grow-substrate": compostIcon,

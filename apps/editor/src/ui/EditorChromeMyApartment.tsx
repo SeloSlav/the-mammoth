@@ -12,6 +12,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import {
   defaultOwnedApartmentDecorScaleForModel,
+  finalizeOwnedApartmentBuiltinsDoc,
   ownedApartmentPlacedItemKindFromModelRelPath,
   type OwnedApartmentWallMaterial,
 } from "@the-mammoth/schemas";
@@ -342,6 +343,23 @@ export function EditorChromeMyApartment(props: {
     [placedItems],
   );
   const selectedDecor = selectedDecorId ? (decorById.get(selectedDecorId) ?? null) : null;
+  const [filterLinkError, setFilterLinkError] = useState<string | null>(null);
+
+  const fishTankLinkOptions = useMemo(
+    () => placedItems.filter((item) => item.itemKind === "fish_tank"),
+    [placedItems],
+  );
+
+  const filterLinkedToSelectedTank = useMemo(() => {
+    if (!selectedDecor || selectedDecor.itemKind !== "fish_tank") return null;
+    return (
+      placedItems.find(
+        (item) =>
+          item.itemKind === "fish_tank_filter" &&
+          item.linkedFishTankDecorId === selectedDecor.id,
+      ) ?? null
+    );
+  }, [placedItems, selectedDecor]);
 
   useEffect(() => {
     if (!selectedDecor) {
@@ -981,6 +999,74 @@ export function EditorChromeMyApartment(props: {
               Easier than the gizmo plane squares — scales X, Y, and Z together. Side handles still
               stretch one axis.
             </p>
+            {selectedDecor.itemKind === "fish_tank_filter" ? (
+              <div style={{ marginTop: 12 }}>
+                <label htmlFor="editor-filter-tank-link" style={{ ...editorChromeLabel, margin: 0 }}>
+                  Linked fish tank
+                </label>
+                <select
+                  id="editor-filter-tank-link"
+                  value={selectedDecor.linkedFishTankDecorId ?? ""}
+                  onChange={(e) => {
+                    const tankId = e.target.value.trim();
+                    if (!selectedDecorId) return;
+                    if (tankId) {
+                      const occupied = placedItems.find(
+                        (item) =>
+                          item.itemKind === "fish_tank_filter" &&
+                          item.id !== selectedDecorId &&
+                          item.linkedFishTankDecorId === tankId,
+                      );
+                      if (occupied) {
+                        setFilterLinkError(
+                          "That fish tank already has a filter linked. Unlink the other filter first.",
+                        );
+                        return;
+                      }
+                    }
+                    setFilterLinkError(null);
+                    patchOwnedApartmentBuiltins((doc) =>
+                      finalizeOwnedApartmentBuiltinsDoc({
+                        ...doc,
+                        placedItems: doc.placedItems.map((item) => {
+                          if (item.id !== selectedDecorId) return item;
+                          if (!tankId) {
+                            const { linkedFishTankDecorId: _drop, ...rest } = item;
+                            return rest;
+                          }
+                          return { ...item, linkedFishTankDecorId: tankId };
+                        }),
+                      }),
+                    );
+                  }}
+                  style={{ ...editorChromeInput, width: "100%", marginTop: 6, fontSize: 11 }}
+                >
+                  <option value="">— select fish tank —</option>
+                  {fishTankLinkOptions.map((tank) => (
+                    <option key={tank.id} value={tank.id}>
+                      {decorCatalogLabel(tank.modelRelPath)} ({tank.id.slice(0, 8)})
+                    </option>
+                  ))}
+                </select>
+                {filterLinkError ? (
+                  <p style={{ margin: "6px 0 0", fontSize: 10, color: "#f0a070", lineHeight: 1.35 }}>
+                    {filterLinkError}
+                  </p>
+                ) : (
+                  <p style={{ margin: "6px 0 0", fontSize: 10, opacity: 0.65, lineHeight: 1.35 }}>
+                    Each filter connects to exactly one main fish tank. Each tank can only have one
+                    filter.
+                  </p>
+                )}
+              </div>
+            ) : null}
+            {selectedDecor.itemKind === "fish_tank" ? (
+              <p style={{ margin: "10px 0 0", fontSize: 10, opacity: 0.72, lineHeight: 1.35 }}>
+                {filterLinkedToSelectedTank
+                  ? `Linked filter: ${filterLinkedToSelectedTank.id.slice(0, 8)} (${decorCatalogLabel(filterLinkedToSelectedTank.modelRelPath)})`
+                  : "No filter linked — select the filter unit and choose this tank."}
+              </p>
+            ) : null}
           </>
         ) : null}
         </div>

@@ -232,6 +232,7 @@ Weapons excluded (catalog complete). Items with concept art, not yet in JSON sha
 | `flashlight` | tool | Blackout stairs / basement |
 | `battery-4-pack` | resource | Flashlight / radio upkeep |
 | `fish-food-tin` | consumable | Fish tank |
+| `fish-filter-sponge` | utility | Fish filter cartridge — floor **5** (extraction) |
 | `ceramic-water-filter` | utility | Water tank repair |
 | `fuse-wire-pack` | resource | MEP / maintenance runs |
 | `disinfectant-bottle` | consumable | Med layer distinct from bandage/iodine |
@@ -269,6 +270,7 @@ Good **extraction return** candidates when systems land (maintenance tutorial, z
 | `flashlight` | Blackout stairs, basement work orders | **Yes** — tool |
 | `ceramic-water-filter` | Water tank repair loop | **Yes** — utility/resource |
 | `fish-food-tin` | Fish-tank ritual | **Yes** — consumable |
+| `fish-filter-sponge` | Fish-filter cartridge swap | **Yes** — utility (extraction) |
 | `canned-soup-tin` | Generic food loot | Optional — overlaps `field-rations` |
 | `ammo-tin` | Militia stash container (opens to ammo) | Optional — container mechanic |
 | `fuse-wire-pack` | Basement tutorial / MEP repair | **Yes** — resource |

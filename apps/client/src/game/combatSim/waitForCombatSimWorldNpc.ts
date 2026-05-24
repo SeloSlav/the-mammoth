@@ -1,15 +1,16 @@
 import type { DbConnection } from "../../module_bindings";
+import type { Identity } from "spacetimedb";
 import type { WorldNpc } from "../../module_bindings/types";
 
 const COMBAT_SIM_SESSION_PREFIX = "combat_sim:";
 const BABUSHKA_ARCHETYPE = "babushka";
 const DEFAULT_WAIT_MS = 10_000;
 
-function isCombatSimBabushkaRow(row: WorldNpc): boolean {
-  return (
-    row.archetype === BABUSHKA_ARCHETYPE &&
-    row.sessionKey.startsWith(COMBAT_SIM_SESSION_PREFIX)
-  );
+function isCombatSimBabushkaRow(row: WorldNpc, owner: Identity | null | undefined): boolean {
+  if (row.archetype !== BABUSHKA_ARCHETYPE) return false;
+  if (!row.sessionKey.startsWith(COMBAT_SIM_SESSION_PREFIX)) return false;
+  if (!owner) return true;
+  return row.chaseIdentity?.isEqual(owner) ?? false;
 }
 
 /**
@@ -19,10 +20,11 @@ function isCombatSimBabushkaRow(row: WorldNpc): boolean {
 export function waitForCombatSimBabushkaRow(
   conn: DbConnection,
   timeoutMs = DEFAULT_WAIT_MS,
+  owner: Identity | null | undefined = conn.identity,
 ): Promise<WorldNpc | null> {
   return new Promise((resolve) => {
     for (const row of conn.db.world_npc.iter()) {
-      if (isCombatSimBabushkaRow(row)) {
+      if (isCombatSimBabushkaRow(row, owner)) {
         resolve(row);
         return;
       }
@@ -39,7 +41,7 @@ export function waitForCombatSimBabushkaRow(
     };
 
     const onInsert = (_ctx: unknown, row: WorldNpc) => {
-      if (isCombatSimBabushkaRow(row)) {
+      if (isCombatSimBabushkaRow(row, owner)) {
         finish(row);
       }
     };
@@ -48,7 +50,7 @@ export function waitForCombatSimBabushkaRow(
     const deadline = performance.now() + timeoutMs;
     poll = setInterval(() => {
       for (const row of conn.db.world_npc.iter()) {
-        if (isCombatSimBabushkaRow(row)) {
+        if (isCombatSimBabushkaRow(row, owner)) {
           finish(row);
           return;
         }

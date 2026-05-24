@@ -18,6 +18,7 @@ import {
   apartmentStashKey,
   apartmentStashKeyDecor,
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey.js";
 
@@ -27,6 +28,7 @@ export const CONTENT_DECOR_DB_DEDUPE_XZ_M = 0.4;
 /** Stash kinds that require a replica row — no legacy `{unit}#kind` fallback on client. */
 export const DECOR_INSTANCE_ONLY_STASH_KINDS: readonly ApartmentStashKind[] = [
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
 ];
 
 export function isDecorInstanceOnlyStashKind(kind: ApartmentStashKind): boolean {

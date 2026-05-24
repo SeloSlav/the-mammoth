@@ -11,7 +11,9 @@ import AddCombatSimNpcSpawnReducer from "../add_combat_sim_npc_spawn_reducer";
 import ApartmentDoorSetReducer from "../apartment_door_set_reducer";
 import ApartmentDoorToggleReducer from "../apartment_door_toggle_reducer";
 import ApartmentWaterTankTickStepReducer from "../apartment_water_tank_tick_step_reducer";
+import ApplyFishFilterPatchReducer from "../apply_fish_filter_patch_reducer";
 import BalconyGrowTickStepReducer from "../balcony_grow_tick_step_reducer";
+import BindFishTankFilterReducer from "../bind_fish_tank_filter_reducer";
 import CancelWaitingCraftReducer from "../cancel_waiting_craft_reducer";
 import ClaimApartmentPulseReducer from "../claim_apartment_pulse_reducer";
 import CleanupOldDroppedItemsReducer from "../cleanup_old_dropped_items_reducer";
@@ -44,6 +46,7 @@ import PlayerVitalsTickStepReducer from "../player_vitals_tick_step_reducer";
 import RefreshWorldLootSpawnsReducer from "../refresh_world_loot_spawns_reducer";
 import ReinforceApartmentPulseReducer from "../reinforce_apartment_pulse_reducer";
 import RespawnPlayerReducer from "../respawn_player_reducer";
+import RinseFishTankFilterReducer from "../rinse_fish_tank_filter_reducer";
 import SetActiveHotbarSlotReducer from "../set_active_hotbar_slot_reducer";
 import SetAvatarBodyReducer from "../set_avatar_body_reducer";
 import SetOwnedApartmentPiecePoseReducer from "../set_owned_apartment_piece_pose_reducer";
@@ -59,8 +62,10 @@ import SubmitFirearmReloadReducer from "../submit_firearm_reload_reducer";
 import SubmitFirearmShotReducer from "../submit_firearm_shot_reducer";
 import SubmitMeleeSwingReducer from "../submit_melee_swing_reducer";
 import SubmitPlayerLocomotionSnapshotReducer from "../submit_player_locomotion_snapshot_reducer";
+import SyncApartmentAuthoredStashLayoutReducer from "../sync_apartment_authored_stash_layout_reducer";
 import SyncOwnedApartmentStashDecorReducer from "../sync_owned_apartment_stash_decor_reducer";
 import TickCraftQueueStepReducer from "../tick_craft_queue_step_reducer";
+import TopOffFishTankFromBottleReducer from "../top_off_fish_tank_from_bottle_reducer";
 import UpdateApartmentUnitDecorReducer from "../update_apartment_unit_decor_reducer";
 
 export type AddApartmentUnitDecorParams = __Infer<typeof AddApartmentUnitDecorReducer>;
@@ -68,7 +73,9 @@ export type AddCombatSimNpcSpawnParams = __Infer<typeof AddCombatSimNpcSpawnRedu
 export type ApartmentDoorSetParams = __Infer<typeof ApartmentDoorSetReducer>;
 export type ApartmentDoorToggleParams = __Infer<typeof ApartmentDoorToggleReducer>;
 export type ApartmentWaterTankTickStepParams = __Infer<typeof ApartmentWaterTankTickStepReducer>;
+export type ApplyFishFilterPatchParams = __Infer<typeof ApplyFishFilterPatchReducer>;
 export type BalconyGrowTickStepParams = __Infer<typeof BalconyGrowTickStepReducer>;
+export type BindFishTankFilterParams = __Infer<typeof BindFishTankFilterReducer>;
 export type CancelWaitingCraftParams = __Infer<typeof CancelWaitingCraftReducer>;
 export type ClaimApartmentPulseParams = __Infer<typeof ClaimApartmentPulseReducer>;
 export type CleanupOldDroppedItemsParams = __Infer<typeof CleanupOldDroppedItemsReducer>;
@@ -101,6 +108,7 @@ export type PlayerVitalsTickStepParams = __Infer<typeof PlayerVitalsTickStepRedu
 export type RefreshWorldLootSpawnsParams = __Infer<typeof RefreshWorldLootSpawnsReducer>;
 export type ReinforceApartmentPulseParams = __Infer<typeof ReinforceApartmentPulseReducer>;
 export type RespawnPlayerParams = __Infer<typeof RespawnPlayerReducer>;
+export type RinseFishTankFilterParams = __Infer<typeof RinseFishTankFilterReducer>;
 export type SetActiveHotbarSlotParams = __Infer<typeof SetActiveHotbarSlotReducer>;
 export type SetAvatarBodyParams = __Infer<typeof SetAvatarBodyReducer>;
 export type SetOwnedApartmentPiecePoseParams = __Infer<typeof SetOwnedApartmentPiecePoseReducer>;
@@ -116,7 +124,9 @@ export type SubmitFirearmReloadParams = __Infer<typeof SubmitFirearmReloadReduce
 export type SubmitFirearmShotParams = __Infer<typeof SubmitFirearmShotReducer>;
 export type SubmitMeleeSwingParams = __Infer<typeof SubmitMeleeSwingReducer>;
 export type SubmitPlayerLocomotionSnapshotParams = __Infer<typeof SubmitPlayerLocomotionSnapshotReducer>;
+export type SyncApartmentAuthoredStashLayoutParams = __Infer<typeof SyncApartmentAuthoredStashLayoutReducer>;
 export type SyncOwnedApartmentStashDecorParams = __Infer<typeof SyncOwnedApartmentStashDecorReducer>;
 export type TickCraftQueueStepParams = __Infer<typeof TickCraftQueueStepReducer>;
+export type TopOffFishTankFromBottleParams = __Infer<typeof TopOffFishTankFromBottleReducer>;
 export type UpdateApartmentUnitDecorParams = __Infer<typeof UpdateApartmentUnitDecorReducer>;
 

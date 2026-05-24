@@ -22,4 +22,5 @@ export default __t.row({
   rollRad: __t.f32().name("roll_rad"),
   uniformScale: __t.f32().name("uniform_scale"),
   itemKind: __t.u8().name("item_kind"),
+  authoredId: __t.string().name("authored_id"),
 });

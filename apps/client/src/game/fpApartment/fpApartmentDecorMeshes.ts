@@ -47,6 +47,7 @@ import {
   APARTMENT_STASH_KIND_FRIDGE,
   APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   APARTMENT_STASH_KIND_STOVE,
   APARTMENT_STASH_KIND_WARDROBE,
 } from "./fpApartmentStashKey.js";
@@ -660,7 +661,8 @@ export function mountFpApartmentDecorMeshes(opts: {
           stashKind !== APARTMENT_STASH_KIND_STOVE &&
           stashKind !== APARTMENT_STASH_KIND_FRIDGE &&
           stashKind !== APARTMENT_STASH_KIND_WATER_TANK &&
-          stashKind !== APARTMENT_STASH_KIND_FISH_TANK
+          stashKind !== APARTMENT_STASH_KIND_FISH_TANK &&
+          stashKind !== APARTMENT_STASH_KIND_FISH_TANK_FILTER
         ) {
           continue;
         }

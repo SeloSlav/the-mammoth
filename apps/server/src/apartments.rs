@@ -24,7 +24,8 @@ use crate::inventory::{
 use crate::inventory_models::{
     apartment_stash_key, apartment_stash_key_decor, parse_apartment_stash_key_v2,
     HotbarLocationData, InventoryLocationData, ItemLocation, ParsedApartmentStashKey,
-    StashLocationData, APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FOOTLOCKER,
+    StashLocationData, APARTMENT_STASH_KIND_FISH_TANK, APARTMENT_STASH_KIND_FISH_TANK_FILTER,
+    APARTMENT_STASH_KIND_FOOTLOCKER,
     APARTMENT_STASH_KIND_FRIDGE, APARTMENT_STASH_KIND_GROW_TRAY, APARTMENT_STASH_KIND_STOVE,
     APARTMENT_STASH_KIND_WARDROBE, APARTMENT_STASH_KIND_WATER_TANK,
 };
@@ -63,6 +64,7 @@ fn stash_interact_radius_sq(stash_kind: &str) -> f32 {
         APARTMENT_STASH_KIND_STOVE => 1.14,
         APARTMENT_STASH_KIND_WATER_TANK => 1.08,
         APARTMENT_STASH_KIND_FISH_TANK => 1.50,
+        APARTMENT_STASH_KIND_FISH_TANK_FILTER => 1.20,
         APARTMENT_STASH_KIND_FOOTLOCKER => 1.10,
         _ => 1.10,
     };
@@ -197,6 +199,7 @@ pub struct FlashlightCharge {
 
 /// Player-placed decor models inside a **claimed** apartment — see `add_apartment_unit_decor` / reducers.
 #[spacetimedb::table(public, accessor = apartment_unit_decor)]
+#[derive(Clone)]
 pub struct ApartmentUnitDecor {
     #[primary_key]
     #[auto_inc]
@@ -215,6 +218,8 @@ pub struct ApartmentUnitDecor {
     pub uniform_scale: f32,
     /// `0` plain decor; `1` bed (spawn anchor); `2` wardrobe (claim + stash); `3` footlocker stash; `4` stove stash; `5` fridge stash; `6` water tank stash.
     pub item_kind: u8,
+    /// Editor `placedItems.id` — stable link target across decor re-sync.
+    pub authored_id: String,
 }
 
 /// Keep in sync with `@the-mammoth/schemas` `APARTMENT_UNIT_DECOR_ITEM_KIND_*`.
@@ -226,6 +231,7 @@ pub(crate) const APARTMENT_DECOR_ITEM_KIND_STOVE: u8 = 4;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_FRIDGE: u8 = 5;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_WATER_TANK: u8 = 6;
 pub(crate) const APARTMENT_DECOR_ITEM_KIND_FISH_TANK: u8 = 7;
+pub(crate) const APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER: u8 = 8;
 
 /// `set_owned_apartment_piece_pose(..., piece, ...)`.
 pub(crate) const APARTMENT_LAYOUT_PIECE_BED: u8 = 0;
@@ -431,6 +437,9 @@ fn infer_decor_item_kind_from_model_rel_path(model_rel_path: &str) -> u8 {
     if p.ends_with("objects/fish-tank.glb") {
         return APARTMENT_DECOR_ITEM_KIND_FISH_TANK;
     }
+    if p.ends_with("objects/fish-tank-filter.glb") {
+        return APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER;
+    }
     APARTMENT_DECOR_ITEM_KIND_PLAIN
 }
 
@@ -449,6 +458,7 @@ fn decor_stash_radius_kind(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => APARTMENT_STASH_KIND_FRIDGE,
         APARTMENT_DECOR_ITEM_KIND_WATER_TANK => APARTMENT_STASH_KIND_WATER_TANK,
         APARTMENT_DECOR_ITEM_KIND_FISH_TANK => APARTMENT_STASH_KIND_FISH_TANK,
+        APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER => APARTMENT_STASH_KIND_FISH_TANK_FILTER,
         _ => APARTMENT_STASH_KIND_FOOTLOCKER,
     }
 }
@@ -464,6 +474,7 @@ fn decor_stash_display_name_static(item_kind: u8) -> &'static str {
         APARTMENT_DECOR_ITEM_KIND_FRIDGE => "fridge",
         APARTMENT_DECOR_ITEM_KIND_WATER_TANK => "water tank",
         APARTMENT_DECOR_ITEM_KIND_FISH_TANK => "fish tank",
+        APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER => "fish filter",
         _ => "footlocker",
     }
 }
@@ -1009,6 +1020,14 @@ const AUTHORED_FISH_TANK_FZ: f32 = 0.578_048_38;
 const AUTHORED_FISH_TANK_DY: f32 = 0.904_784_48;
 const AUTHORED_FISH_TANK_UNIFORM_SCALE: f32 = 0.240_045_06;
 const AUTHORED_FISH_TANK_MODEL: &str = "static/models/objects/fish-tank.glb";
+const AUTHORED_FISH_TANK_AUTHORING_ID: &str = "5399ea91-6ad6-4c22-9e44-6b0b3f2f5b58";
+
+const AUTHORED_FISH_TANK_FILTER_FX: f32 = 0.607_545_002_078_423_5;
+const AUTHORED_FISH_TANK_FILTER_FZ: f32 = 0.580_203_756_606_870_8;
+const AUTHORED_FISH_TANK_FILTER_DY: f32 = 0.891_263_518_127_431_3;
+const AUTHORED_FISH_TANK_FILTER_UNIFORM_SCALE: f32 = 0.152_272_317_297_792_28;
+const AUTHORED_FISH_TANK_FILTER_MODEL: &str = "static/models/objects/fish-tank-filter.glb";
+const AUTHORED_FISH_TANK_FILTER_AUTHORING_ID: &str = "83642433-7188-42b5-98ad-887456f39573";
 const CONTENT_DECOR_DEDUPE_XZ_M: f32 = 0.4;
 
 fn authored_fish_tank_world_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
@@ -1076,7 +1095,22 @@ fn ensure_authored_fish_tank_decor_for_unit(ctx: &ReducerContext, owner: Identit
         })
         .min_by_key(|d| d.decor_id)
     {
+        if existing.authored_id.is_empty() {
+            let mut row = existing.clone();
+            row.authored_id = AUTHORED_FISH_TANK_AUTHORING_ID.to_string();
+            ctx.db.apartment_unit_decor().decor_id().update(row);
+        }
         existing.decor_id
+    } else if let Some(by_id) = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .find(|d| {
+            d.unit_key.as_str() == unit_key
+                && d.authored_id.as_str() == AUTHORED_FISH_TANK_AUTHORING_ID
+        })
+    {
+        by_id.decor_id
     } else {
         let (px, py, pz) = authored_fish_tank_world_pose(&unit);
         let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
@@ -1103,6 +1137,7 @@ fn ensure_authored_fish_tank_decor_for_unit(ctx: &ReducerContext, owner: Identit
                 roll_rad: rl,
                 uniform_scale: sc,
                 item_kind: APARTMENT_DECOR_ITEM_KIND_FISH_TANK,
+                authored_id: AUTHORED_FISH_TANK_AUTHORING_ID.to_string(),
             })
             .decor_id
     };
@@ -1118,7 +1153,7 @@ pub(crate) fn ensure_authored_fish_tank_decor_for_owner(ctx: &ReducerContext, ow
     ensure_authored_fish_tank_decor_for_unit(ctx, owner, unit_key.as_str());
 }
 
-/// Idempotent backfill for authored stash decor rows (fish tank today; more stash props later).
+/// Idempotent backfill for authored stash decor rows (fish tank + filter today).
 #[spacetimedb::reducer]
 pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
     if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
@@ -1134,6 +1169,278 @@ pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
             continue;
         }
         ensure_authored_fish_tank_decor_for_unit(ctx, sender, unit.unit_key.as_str());
+        ensure_authored_fish_tank_filter_decor_for_unit(ctx, sender, unit.unit_key.as_str());
+        try_bind_default_fish_filter_link(ctx, sender, unit.unit_key.as_str());
+    }
+}
+
+fn authored_filter_world_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {
+    let (x, z) = authored_placed_item_world_xz(unit, AUTHORED_FISH_TANK_FILTER_FX, AUTHORED_FISH_TANK_FILTER_FZ);
+    let y = unit.bound_min_y + AUTHORED_FISH_TANK_FILTER_DY;
+    (x, y, z)
+}
+
+fn filter_decor_covers_authored_slot(unit: &ApartmentUnit, decor: &ApartmentUnitDecor) -> bool {
+    if effective_decor_item_kind(decor.item_kind, decor.model_rel_path.as_str())
+        != APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER
+    {
+        return false;
+    }
+    let (ax, _ay, az) = authored_filter_world_pose(unit);
+    let dx = decor.pos_x - ax;
+    let dz = decor.pos_z - az;
+    dx * dx + dz * dz <= CONTENT_DECOR_DEDUPE_XZ_M * CONTENT_DECOR_DEDUPE_XZ_M
+}
+
+fn find_decor_by_authored_id<'a>(
+    decor_rows: &'a [ApartmentUnitDecor],
+    unit_key: &str,
+    authored_id: &str,
+) -> Option<&'a ApartmentUnitDecor> {
+    if authored_id.is_empty() {
+        return None;
+    }
+    decor_rows
+        .iter()
+        .find(|d| d.unit_key.as_str() == unit_key && d.authored_id.as_str() == authored_id)
+}
+
+fn ensure_authored_fish_tank_filter_decor_for_unit(
+    ctx: &ReducerContext,
+    owner: Identity,
+    unit_key: &str,
+) {
+    let Some(unit) = ctx
+        .db
+        .apartment_unit()
+        .unit_key()
+        .find(&unit_key.to_string())
+    else {
+        return;
+    };
+    if unit.state != UNIT_STATE_CLAIMED || unit.owner != Some(owner) {
+        return;
+    }
+
+    let decor_table = ctx.db.apartment_unit_decor();
+    let existing: Vec<ApartmentUnitDecor> = decor_table
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key)
+        .collect();
+
+    if find_decor_by_authored_id(
+        existing.as_slice(),
+        unit_key,
+        AUTHORED_FISH_TANK_FILTER_AUTHORING_ID,
+    )
+    .is_some()
+    {
+        return;
+    }
+
+    if let Some(existing) = existing
+        .iter()
+        .find(|d| filter_decor_covers_authored_slot(&unit, d))
+    {
+        if existing.authored_id.is_empty() {
+            let mut row = existing.clone();
+            row.authored_id = AUTHORED_FISH_TANK_FILTER_AUTHORING_ID.to_string();
+            decor_table.decor_id().update(row);
+        }
+        return;
+    }
+
+    let (px, py, pz) = authored_filter_world_pose(&unit);
+    let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
+        &unit,
+        px,
+        py,
+        pz,
+        0.0,
+        0.0,
+        0.0,
+        AUTHORED_FISH_TANK_FILTER_UNIFORM_SCALE,
+    );
+    let _ = decor_table.insert(ApartmentUnitDecor {
+        decor_id: 0,
+        unit_key: unit_key.to_string(),
+        model_rel_path: AUTHORED_FISH_TANK_FILTER_MODEL.to_string(),
+        pos_x: px,
+        pos_y: py,
+        pos_z: pz,
+        yaw_rad: yw,
+        pitch_rad: ph,
+        roll_rad: rl,
+        uniform_scale: sc,
+        item_kind: APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER,
+        authored_id: AUTHORED_FISH_TANK_FILTER_AUTHORING_ID.to_string(),
+    });
+}
+
+fn try_bind_default_fish_filter_link(ctx: &ReducerContext, owner: Identity, unit_key: &str) {
+    let decor_rows: Vec<ApartmentUnitDecor> = ctx
+        .db
+        .apartment_unit_decor()
+        .iter()
+        .filter(|d| d.unit_key.as_str() == unit_key)
+        .collect();
+    let Some(filter) = find_decor_by_authored_id(
+        decor_rows.as_slice(),
+        unit_key,
+        AUTHORED_FISH_TANK_FILTER_AUTHORING_ID,
+    ) else {
+        return;
+    };
+    let Some(tank) = find_decor_by_authored_id(
+        decor_rows.as_slice(),
+        unit_key,
+        AUTHORED_FISH_TANK_AUTHORING_ID,
+    ) else {
+        return;
+    };
+    let _ = crate::fish_tank_filter::bind_fish_tank_filter_impl(
+        ctx,
+        owner,
+        filter.decor_id,
+        tank.decor_id,
+    );
+}
+
+#[derive(spacetimedb::SpacetimeType, Clone, Debug)]
+pub struct AuthoredStashDecorSyncEntry {
+    pub authored_id: String,
+    pub model_rel_path: String,
+    pub item_kind: u8,
+    pub fx: f32,
+    pub fz: f32,
+    pub dy: f32,
+    pub yaw_rad: f32,
+    pub pitch_rad: f32,
+    pub roll_rad: f32,
+    pub uniform_scale: f32,
+    pub linked_fish_tank_authored_id: String,
+}
+
+/// Client pushes authored fish tank / filter layout (from `owned_apartment_builtins.json`).
+#[spacetimedb::reducer]
+pub fn sync_apartment_authored_stash_layout(
+    ctx: &ReducerContext,
+    unit_key: String,
+    entries: Vec<AuthoredStashDecorSyncEntry>,
+) {
+    if let Err(e) = auth::ensure_gameplay_unlocked(ctx) {
+        log::debug!("sync_apartment_authored_stash_layout blocked: {e}");
+        return;
+    }
+    if player_vitals::is_player_dead(ctx, ctx.sender()) {
+        return;
+    }
+    let sender = ctx.sender();
+    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key) else {
+        return;
+    };
+    if unit.state != UNIT_STATE_CLAIMED || unit.owner != Some(sender) {
+        return;
+    }
+
+    let decor_table = ctx.db.apartment_unit_decor();
+    for entry in &entries {
+        if entry.authored_id.is_empty() {
+            continue;
+        }
+        if entry.item_kind != APARTMENT_DECOR_ITEM_KIND_FISH_TANK
+            && entry.item_kind != APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER
+        {
+            continue;
+        }
+        if !decor_model_rel_path_ok(entry.model_rel_path.as_str()) {
+            continue;
+        }
+        let (px, pz) = authored_placed_item_world_xz(&unit, entry.fx, entry.fz);
+        let py = unit.bound_min_y + entry.dy;
+        let (px, py, pz, yw, ph, rl, sc) = clamp_decor_pose(
+            &unit,
+            px,
+            py,
+            pz,
+            entry.yaw_rad,
+            entry.pitch_rad,
+            entry.roll_rad,
+            entry.uniform_scale,
+        );
+
+        let existing: Vec<ApartmentUnitDecor> = decor_table
+            .iter()
+            .filter(|d| d.unit_key.as_str() == unit_key.as_str())
+            .collect();
+        if let Some(mut row) = find_decor_by_authored_id(
+            existing.as_slice(),
+            unit_key.as_str(),
+            entry.authored_id.as_str(),
+        )
+        .cloned()
+        {
+            row.model_rel_path = entry.model_rel_path.trim().trim_start_matches('/').to_string();
+            row.pos_x = px;
+            row.pos_y = py;
+            row.pos_z = pz;
+            row.yaw_rad = yw;
+            row.pitch_rad = ph;
+            row.roll_rad = rl;
+            row.uniform_scale = sc;
+            row.item_kind = entry.item_kind;
+            decor_table.decor_id().update(row);
+            continue;
+        }
+
+        let _ = decor_table.insert(ApartmentUnitDecor {
+            decor_id: 0,
+            unit_key: unit_key.clone(),
+            model_rel_path: entry.model_rel_path.trim().trim_start_matches('/').to_string(),
+            pos_x: px,
+            pos_y: py,
+            pos_z: pz,
+            yaw_rad: yw,
+            pitch_rad: ph,
+            roll_rad: rl,
+            uniform_scale: sc,
+            item_kind: entry.item_kind,
+            authored_id: entry.authored_id.clone(),
+        });
+    }
+
+    for entry in entries {
+        if entry.item_kind != APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER {
+            continue;
+        }
+        let tank_authored = entry.linked_fish_tank_authored_id.trim();
+        if tank_authored.is_empty() {
+            continue;
+        }
+        let decor_rows: Vec<ApartmentUnitDecor> = decor_table
+            .iter()
+            .filter(|d| d.unit_key.as_str() == unit_key.as_str())
+            .collect();
+        let Some(filter) = find_decor_by_authored_id(
+            decor_rows.as_slice(),
+            unit_key.as_str(),
+            entry.authored_id.as_str(),
+        ) else {
+            continue;
+        };
+        let Some(tank) =
+            find_decor_by_authored_id(decor_rows.as_slice(), unit_key.as_str(), tank_authored)
+        else {
+            continue;
+        };
+        if let Err(e) = crate::fish_tank_filter::bind_fish_tank_filter_impl(
+            ctx,
+            sender,
+            filter.decor_id,
+            tank.decor_id,
+        ) {
+            log::debug!("sync layout bind filter: {e}");
+        }
     }
 }
 
@@ -1432,7 +1739,7 @@ pub fn add_apartment_unit_decor(
     if player_vitals::is_player_dead(ctx, ctx.sender()) {
         return;
     }
-    if item_kind > APARTMENT_DECOR_ITEM_KIND_FISH_TANK {
+    if item_kind > APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER {
         log::debug!("add_apartment_unit_decor: bad item_kind");
         return;
     }
@@ -1475,6 +1782,7 @@ pub fn add_apartment_unit_decor(
         roll_rad: rl,
         uniform_scale: sc,
         item_kind,
+        authored_id: String::new(),
     });
     sync_apartment_unit_columns_from_decor(ctx, &unit_key);
 }
@@ -1961,7 +2269,9 @@ pub(crate) fn apartment_stash_owner_near_sender(
             ))
         }
         ParsedApartmentStashKey::LegacyComposite { unit_key, kind } => {
-            if kind == APARTMENT_STASH_KIND_FISH_TANK {
+            if kind == APARTMENT_STASH_KIND_FISH_TANK
+                || kind == APARTMENT_STASH_KIND_FISH_TANK_FILTER
+            {
                 return None;
             }
             let unit = ctx

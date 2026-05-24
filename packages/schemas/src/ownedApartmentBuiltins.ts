@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OWNED_APARTMENT_MODEL_FISH_TANK } from "./apartmentFishTank.js";
+import { OWNED_APARTMENT_MODEL_FISH_TANK_FILTER } from "./apartmentFishTankFilter.js";
 
 /** Matches server `APARTMENT_DECOR_PITCH_LIMIT_RAD` — max tilt for imported decor (rad). */
 export const OWNED_APARTMENT_DECOR_PITCH_RAD_MAX = 1.4 as const;
@@ -35,6 +36,7 @@ export const OWNED_APARTMENT_PLACED_ITEM_KINDS = [
   "fridge",
   "water_tank",
   "fish_tank",
+  "fish_tank_filter",
 ] as const;
 
 export type OwnedApartmentPlacedItemKind =
@@ -49,6 +51,7 @@ const OWNED_APARTMENT_MODEL_TO_PLACED_KIND: Record<string, OwnedApartmentPlacedI
   [OWNED_APARTMENT_MODEL_FRIDGE]: "fridge",
   [OWNED_APARTMENT_MODEL_WATER_TANK]: "water_tank",
   [OWNED_APARTMENT_MODEL_FISH_TANK]: "fish_tank",
+  [OWNED_APARTMENT_MODEL_FISH_TANK_FILTER]: "fish_tank_filter",
 };
 
 /** Infer `itemKind` when importing décor from the object catalog (editor + JSON authoring). */
@@ -146,7 +149,8 @@ export function ownedApartmentPlacedItemKindHasStash(
     k === "stove" ||
     k === "fridge" ||
     k === "water_tank" ||
-    k === "fish_tank"
+    k === "fish_tank" ||
+    k === "fish_tank_filter"
   );
 }
 
@@ -171,6 +175,7 @@ export const APARTMENT_UNIT_DECOR_ITEM_KIND_STOVE = 4 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_FRIDGE = 5 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK = 6 as const;
 export const APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK = 7 as const;
+export const APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK_FILTER = 8 as const;
 
 export function apartmentUnitDecorItemKindFromString(
   k: OwnedApartmentPlacedItemKind,
@@ -190,6 +195,8 @@ export function apartmentUnitDecorItemKindFromString(
       return APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK;
     case "fish_tank":
       return APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK;
+    case "fish_tank_filter":
+      return APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK_FILTER;
     default:
       return APARTMENT_UNIT_DECOR_ITEM_KIND_PLAIN;
   }
@@ -213,6 +220,8 @@ export function apartmentPlacedItemKindFromDecorItemKind(
       return "water_tank";
     case APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK:
       return "fish_tank";
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK_FILTER:
+      return "fish_tank_filter";
     default:
       return "plain";
   }
@@ -263,6 +272,7 @@ const OwnedApartmentPlacedItemKindSchema = z.enum([
   "fridge",
   "water_tank",
   "fish_tank",
+  "fish_tank_filter",
 ]);
 
 const OwnedApartmentPlacedItemSchemaCore = z.object({
@@ -310,6 +320,8 @@ const OwnedApartmentPlacedItemSchemaCore = z.object({
   ignoreSupportSurfaces: z.boolean().default(false),
   /** Gameplay role for this instance; `plain` is visual-only decor. */
   itemKind: OwnedApartmentPlacedItemKindSchema.default("plain"),
+  /** When `itemKind` is `fish_tank_filter`, links to a `fish_tank` placed item id. */
+  linkedFishTankDecorId: z.string().min(1).max(120).optional(),
 });
 
 export const OwnedApartmentPlacedItemSchema =
@@ -722,7 +734,52 @@ export function finalizeOwnedApartmentBuiltinsDoc(
     })
     .filter((g) => g.memberSelectedIds.length >= 2);
 
-  return { ...doc, objectGroups };
+  const placedItems = doc.placedItems.map((item) => {
+    if (item.itemKind !== "fish_tank_filter") {
+      if (item.linkedFishTankDecorId !== undefined) {
+        const { linkedFishTankDecorId: _drop, ...rest } = item;
+        return rest;
+      }
+      return item;
+    }
+    const link = item.linkedFishTankDecorId?.trim();
+    if (!link || !placedIds.has(link)) {
+      const { linkedFishTankDecorId: _drop, ...rest } = item;
+      return rest;
+    }
+    const tank = doc.placedItems.find((p) => p.id === link);
+    if (!tank || tank.itemKind !== "fish_tank") {
+      const { linkedFishTankDecorId: _drop, ...rest } = item;
+      return rest;
+    }
+    return { ...item, linkedFishTankDecorId: link };
+  });
+
+  const filterLinks = new Map<string, string>();
+  for (const item of placedItems) {
+    if (item.itemKind !== "fish_tank_filter") continue;
+    const link =
+      "linkedFishTankDecorId" in item && typeof item.linkedFishTankDecorId === "string"
+        ? item.linkedFishTankDecorId.trim()
+        : "";
+    if (!link) continue;
+    if (filterLinks.has(link)) {
+      return {
+        ...doc,
+        placedItems: placedItems.map((p) => {
+          if (p.id !== item.id) return p;
+          const { linkedFishTankDecorId: _d, ...rest } = p as OwnedApartmentPlacedItem & {
+            linkedFishTankDecorId?: string;
+          };
+          return rest;
+        }),
+        objectGroups,
+      };
+    }
+    filterLinks.set(link, item.id);
+  }
+
+  return { ...doc, placedItems, objectGroups };
 }
 
 /** Editor + client default until `content/apartment/owned_apartment_builtins.json` exists. */

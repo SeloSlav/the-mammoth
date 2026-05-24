@@ -13,6 +13,7 @@ import {
   APARTMENT_UNIT_DECOR_ITEM_KIND_WARDROBE,
   APARTMENT_UNIT_DECOR_ITEM_KIND_WATER_TANK,
   APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK,
+  APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK_FILTER,
   effectiveOwnedApartmentPlacedKind,
 } from "@the-mammoth/schemas";
 import {
@@ -31,6 +32,7 @@ import {
   APARTMENT_STASH_KIND_WARDROBE,
   APARTMENT_STASH_KIND_WATER_TANK,
   APARTMENT_STASH_KIND_FISH_TANK,
+  APARTMENT_STASH_KIND_FISH_TANK_FILTER,
   parseApartmentStashKeyFull,
   type ApartmentStashKind,
 } from "./fpApartmentStashKey";
@@ -57,6 +59,7 @@ const APARTMENT_BUILTIN_STASH_MODEL_HALF_EXTENT_BY_KIND: Record<ApartmentStashKi
   [APARTMENT_STASH_KIND_WATER_TANK]: 0.36,
   /** ~half of `FISH_TANK_SWIM_AABB` max X (0.76) at default vis scale — tank is wider than 0.45 m. */
   [APARTMENT_STASH_KIND_FISH_TANK]: 0.78,
+  [APARTMENT_STASH_KIND_FISH_TANK_FILTER]: 0.48,
   [APARTMENT_STASH_KIND_GROW_TRAY]: 0.38,
 };
 
@@ -370,6 +373,8 @@ function decorItemKindToClientStashKind(itemKind: number): ApartmentStashKind | 
       return APARTMENT_STASH_KIND_WATER_TANK;
     case APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK:
       return APARTMENT_STASH_KIND_FISH_TANK;
+    case APARTMENT_UNIT_DECOR_ITEM_KIND_FISH_TANK_FILTER:
+      return APARTMENT_STASH_KIND_FISH_TANK_FILTER;
     default:
       return null;
   }

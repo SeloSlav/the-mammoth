@@ -7,7 +7,7 @@ use crate::apartments::{self, apartment_unit};
 use crate::auth;
 use crate::balcony_grow;
 use crate::crafting::emit_hud_notice;
-use crate::fish_tank;
+use crate::fish_tank_filter;
 use crate::player_vitals;
 use crate::pose::player_pose;
 
@@ -87,7 +87,7 @@ pub(crate) fn advance_world_day_for_player(
     if let Some(uk) = unit_key {
         crate::water_container::refill_apartment_water_tank_on_sleep(ctx, uk);
         balcony_grow::advance_world_day_for_unit(ctx, uk, 1);
-        fish_tank::advance_fish_tanks_for_unit(ctx, uk);
+        fish_tank_filter::advance_fish_tank_filters_for_unit(ctx, uk);
     }
     Ok(nights)
 }

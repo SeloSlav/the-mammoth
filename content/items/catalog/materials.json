@@ -56,6 +56,13 @@
         "requiredTools": ["screwdriver"],
         "materials": [{ "itemId": "scrap-metal", "quantity": 5 }]
       }
+    },
+    {
+      "id": "fish-filter-sponge",
+      "displayName": "Filter sponge cartridge",
+      "description": "Replaceable foam insert for the apartment fish-tank filter. Scavenged from pet-supply aisles and maintenance closets — install from the filter maintenance slot for a full cartridge swap.",
+      "category": "utility",
+      "maxStack": 3
     }
   ]
 }

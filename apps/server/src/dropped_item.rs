@@ -101,6 +101,7 @@ const WORLD_LOOT_TIERS: &[(&str, u32, u32, u32)] = &[
     ("chemical-stock", 2, 6, 8),
     ("apple", 2, 6, 6),
     ("water-bottle", 1, 3, 6),
+    ("fish-filter-sponge", 1, 2, 4),
 ];
 
 /// Unclaimed residential units — biased toward weapons so new players find fighting gear inside lootable apartments.

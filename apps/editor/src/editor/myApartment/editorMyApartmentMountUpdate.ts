@@ -25,6 +25,7 @@ export function updateEditorMyApartmentMountFromDoc(
   authoringFractionMapping: OwnedApartmentFractionToPreviewXZ,
   syncKind: ApartmentMountSyncChange,
   prevPlacedItems?: readonly OwnedApartmentPlacedItem[],
+  previewUnitKey?: string,
 ): { structuralDecorRebuild: boolean } {
   if (syncKind === "none") return { structuralDecorRebuild: false };
 
@@ -38,6 +39,7 @@ export function updateEditorMyApartmentMountFromDoc(
       doc,
       authoringFractionMapping,
       prevPlacedItems,
+      previewUnitKey,
     );
     structuralDecorRebuild = decorResult.structuralRebuild;
   }
