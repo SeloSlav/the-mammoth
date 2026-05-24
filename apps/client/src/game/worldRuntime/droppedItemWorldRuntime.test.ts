@@ -7,14 +7,17 @@ import {
 import { describe, expect, it } from "vitest";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M } from "@the-mammoth/world";
 import {
+  droppedItemSubscriptionYBounds,
   droppedPickupWithinServerVolume,
   dropVerticalBandMatchesFeet,
-  fitDroppedWorldItemModelToCatalog,
+  droppedItemWithinRenderHorizontalRange,
+  MAMMOTH_DROPPED_RENDER_MAX_HORIZONTAL_M,
   MAMMOTH_PICKUP_MAX_ABS_DY_M,
   MAMMOTH_PICKUP_RADIUS_M,
   resolveDroppedItemVisualVisible,
   tryNormalizeDroppedItemId,
 } from "./droppedItemWorldRuntime";
+import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
 
 describe("fitDroppedWorldItemModelToCatalog", () => {
   it("scales to target max extent and bottoms out on Y", () => {
@@ -255,6 +258,41 @@ describe("resolveDroppedItemVisualVisible", () => {
         dropResidentialUnitKey: "floor_a|20|unit_a",
       }),
     ).toBe(true);
+  });
+});
+
+describe("droppedItemWithinRenderHorizontalRange", () => {
+  it("culls far corridor loot on the same storey", () => {
+    expect(droppedItemWithinRenderHorizontalRange(0, 0, 80, 0)).toBe(false);
+    expect(droppedItemWithinRenderHorizontalRange(0, 0, 10, 0)).toBe(true);
+  });
+
+  it("resolveDroppedItemVisualVisible applies horizontal cull for corridor loot", () => {
+    const bands = { buildingWorldOriginY: 0, floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M };
+    expect(
+      resolveDroppedItemVisualVisible({
+        dropX: 80,
+        dropY: 12.91,
+        dropZ: 0,
+        feetX: 0,
+        feetZ: 0,
+        feetY: 12.63,
+        verticalBands: bands,
+        containingUnitKey: null,
+        dropResidentialUnitKey: null,
+        maxHorizontalM: MAMMOTH_DROPPED_RENDER_MAX_HORIZONTAL_M,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("droppedItemSubscriptionYBounds", () => {
+  it("returns a storey window around feet Y", () => {
+    const bands = { buildingWorldOriginY: 0, floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M };
+    const b = droppedItemSubscriptionYBounds(12.63, bands);
+    expect(b).not.toBeNull();
+    expect(b!.yMin).toBeLessThan(12.63);
+    expect(b!.yMax).toBeGreaterThan(12.63);
   });
 });
 

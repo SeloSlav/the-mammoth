@@ -607,9 +607,9 @@ mod tests {
 
     #[test]
     fn catalog_driven_melee_damage_matches_weapon_defs() {
-        assert_eq!(melee_damage_for_def_id("knife"), 12.0);
-        assert_eq!(melee_damage_for_def_id("crowbar"), 22.0);
-        assert_eq!(melee_damage_for_def_id("screwdriver"), 8.0);
+        assert_eq!(melee_damage_for_def_id("knife"), 16.0);
+        assert_eq!(melee_damage_for_def_id("crowbar"), 32.0);
+        assert_eq!(melee_damage_for_def_id("screwdriver"), 10.0);
         assert_eq!(melee_damage_for_def_id("water-bottle"), 0.0);
     }
 

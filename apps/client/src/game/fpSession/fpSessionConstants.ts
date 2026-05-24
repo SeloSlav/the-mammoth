@@ -35,11 +35,16 @@ export const MOVE_INTENT_MOVE_BITS = BIT_FORWARD | BIT_BACK | BIT_LEFT | BIT_RIG
 export const POSE_AOI_HALF = 42;
 /** Slightly wider than pose AOI so swing/foot events at the edge are still subscribed. */
 export const WORLD_SOUND_AOI_HALF = POSE_AOI_HALF + 8;
+/** Max horizontal distance (m) to instance a replicated drop on the same storey / unit gate. */
+export const DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M = 52;
 /**
- * Passed into {@link mountDroppedItemsWorld} for API compatibility; ignored (baseline subscribes all `dropped_item`).
- * Kept in case we later switch to AOI-only replication for scale.
+ * Horizontal half-extent (m) for spatial `dropped_item` replication (XZ + storey Y band).
+ * Slightly wider than render cull so rows exist before they enter view.
  */
-export const DROPPED_ITEM_SUBSCRIBE_HALF_M = Math.max(POSE_AOI_HALF, 150);
+export const DROPPED_ITEM_SUBSCRIBE_HALF_M = Math.max(
+  POSE_AOI_HALF + 8,
+  DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M,
+);
 /** Recentre AOI when predicted position moves this far from the last subscription anchor (m). */
 export const POSE_AOI_RECENTER = 14;
 export const MOUSE_SENS = 0.0022;

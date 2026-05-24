@@ -114,8 +114,8 @@ fn reload_duration_micros_for_weapon(weapon: &str) -> i64 {
 
 fn ranged_damage(weapon: &str) -> f32 {
     match weapon {
-        "pistol" => 20.0,
-        "shotgun-coach" => 11.0,
+        "pistol" => crate::hitscan::FIREARM_DAMAGE_PISTOL,
+        "shotgun-coach" => crate::hitscan::FIREARM_DAMAGE_SHOTGUN_TOTAL,
         _ => 0.0,
     }
 }

@@ -7,7 +7,7 @@
       "description": "Compact blade for close work. Fast swings, low reach.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": { "damage": 12 },
+      "meleeCombat": { "damage": 16 },
       "construction": {
         "buildTimeSecs": 10,
         "materials": [{ "itemId": "scrap-metal", "quantity": 3 }]
@@ -19,7 +19,7 @@
       "description": "Heavy pry bar. Slower swings, high impact.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": { "damage": 22 },
+      "meleeCombat": { "damage": 32 },
       "construction": {
         "buildTimeSecs": 18,
         "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]
@@ -31,7 +31,7 @@
       "description": "Regional improvised cutting tool. Balanced between speed and heft.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": { "damage": 18 },
+      "meleeCombat": { "damage": 22 },
       "construction": {
         "buildTimeSecs": 22,
         "materials": [
@@ -46,7 +46,7 @@
       "description": "Tape-wrapped slugger built from welded salvage — wide swing arc, blunt trauma.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": { "damage": 20 },
+      "meleeCombat": { "damage": 26 },
       "construction": {
         "buildTimeSecs": 10,
         "materials": [{ "itemId": "scrap-metal", "quantity": 8 }]
@@ -58,7 +58,7 @@
       "description": "Compact stabbing tool, also required with a door lock cylinder to claim an apartment.",
       "category": "weapon",
       "maxStack": 1,
-      "meleeCombat": { "damage": 8 },
+      "meleeCombat": { "damage": 10 },
       "construction": {
         "buildTimeSecs": 14,
         "materials": [{ "itemId": "scrap-metal", "quantity": 6 }]

@@ -28,6 +28,10 @@ import {
   sampleFpFirearmShotVisual,
   type FpFirearmShotVisualConfig,
 } from "./fpFirearmShotVisuals.js";
+import {
+  deriveFpFirearmAimRigRootFromHip,
+  smoothStep01,
+} from "./fpFirearmAimRigPose.js";
 
 export type LocalFirstPersonPresenterOptions = {
   /** Where `fpRoot` attaches — use `headPitch` from {@link createFPRig}, not the camera. */
@@ -86,6 +90,8 @@ const DEFAULT_FP_HAND_EULER = new THREE.Euler(1.5708, 0, 3.1416, "XYZ");
 const DEFAULT_FP_HAND_SCALE = new THREE.Vector3(-0.1679, 0.1679, 0.1679);
 const DEFAULT_FP_WEAPON_VISUAL_SCALE = new THREE.Vector3(0.2762, 0.2762, 0.2762);
 const FIREARM_FLASH_COLOR = 0xffc46b;
+/** Exponential ease (1/s) for hip ↔ ADS viewmodel blend. */
+const FP_FIREARM_AIM_BLEND_DAMP_PER_S = 14;
 
 function vec3FromAuthorOr(
   v: WeaponAuthorVec3 | undefined,
@@ -162,6 +168,16 @@ export class LocalFirstPersonPresenter {
   private readonly rigRestPos = new THREE.Vector3();
   private readonly rigRestEuler = new THREE.Euler(0, 0, 0, "XYZ");
   private readonly rigRestScale = new THREE.Vector3(1, 1, 1);
+  /** ADS target pose for `rigRoot` (authored or derived from hip rest). */
+  private readonly rigAimPos = new THREE.Vector3();
+  private readonly rigAimEuler = new THREE.Euler(0, 0, 0, "XYZ");
+  /** Smoothed 0..1 blend toward {@link rigAimPos} while aiming. */
+  private aimBlend01 = 0;
+  private readonly _rigHipEuler = new THREE.Euler(0, 0, 0, "XYZ");
+  private readonly _rigHipQuat = new THREE.Quaternion();
+  private readonly _rigAimQuat = new THREE.Quaternion();
+  private readonly _rigBlendedQuat = new THREE.Quaternion();
+  private readonly _rigHipPos = new THREE.Vector3();
   private handScene?: THREE.Object3D;
   private weaponGripAnchor?: THREE.Group;
   private authoringFrozen = false;
@@ -350,6 +366,54 @@ export class LocalFirstPersonPresenter {
     } else {
       this.rigRestScale.set(1, 1, 1);
     }
+    this.refreshRigAimFromDefinition();
+  }
+
+  private refreshRigAimFromDefinition(): void {
+    const fp = this.fpLayoutDefinition().primitivePresentation?.firstPerson?.fpViewmodel;
+    const authored = fp?.aimRigRoot;
+    if (authored?.positionM && authored.eulerRad) {
+      this.rigAimPos.set(authored.positionM.x, authored.positionM.y, authored.positionM.z);
+      clampFpRigRootPositionInPlace(this.rigAimPos);
+      this.rigAimEuler.set(authored.eulerRad.x, authored.eulerRad.y, authored.eulerRad.z, "XYZ");
+      return;
+    }
+    const derived = deriveFpFirearmAimRigRootFromHip(
+      { x: this.rigRestPos.x, y: this.rigRestPos.y, z: this.rigRestPos.z },
+      { x: this.rigRestEuler.x, y: this.rigRestEuler.y, z: this.rigRestEuler.z },
+    );
+    this.rigAimPos.set(derived.positionM.x, derived.positionM.y, derived.positionM.z);
+    clampFpRigRootPositionInPlace(this.rigAimPos);
+    this.rigAimEuler.set(derived.eulerRad.x, derived.eulerRad.y, derived.eulerRad.z, "XYZ");
+  }
+
+  private applyRightHandRigPoseWithAimBlend(
+    hipPos: THREE.Vector3,
+    hipEuler: THREE.Euler,
+    state: LocalPlayerGameplayState,
+    dt: number,
+  ): void {
+    const firearm = fpFirearmShotVisualConfigForHeldItem(state.equippedPrimary);
+    const aimTarget = firearm ? state.animation.aimWeight01 : 0;
+    this.aimBlend01 = THREE.MathUtils.damp(
+      this.aimBlend01,
+      aimTarget,
+      FP_FIREARM_AIM_BLEND_DAMP_PER_S,
+      dt,
+    );
+    const blend = smoothStep01(this.aimBlend01);
+    if (blend <= 1e-5) {
+      this.rightHandRig.position.copy(hipPos);
+      this.rightHandRig.rotation.copy(hipEuler);
+      this.rightHandRig.scale.copy(this.rigRestScale);
+      return;
+    }
+    this._rigHipQuat.setFromEuler(hipEuler);
+    this._rigAimQuat.setFromEuler(this.rigAimEuler);
+    this._rigBlendedQuat.copy(this._rigHipQuat).slerp(this._rigAimQuat, blend);
+    this.rightHandRig.position.copy(hipPos).lerp(this.rigAimPos, blend);
+    this.rightHandRig.rotation.setFromQuaternion(this._rigBlendedQuat);
+    this.rightHandRig.scale.copy(this.rigRestScale);
   }
 
   private applyRigRestToRightHandRig(): void {
@@ -587,6 +651,7 @@ export class LocalFirstPersonPresenter {
   reloadWeaponPresentationLayout(): void {
     if (!this.viewmodelReady || !this.handScene || !this.weaponGripAnchor) return;
     this.refreshRigRestFromDefinition();
+    this.aimBlend01 = 0;
     this.applyRigRestToRightHandRig();
     const lay = this.resolveFpViewmodelLayout();
     this.handScene.position.copy(lay.handPosition);
@@ -727,36 +792,33 @@ export class LocalFirstPersonPresenter {
     const cos2 = Math.cos(stride * 2);
     const runMul = state.locomotion === "run" ? 1.2 : 1;
 
-    const armSwing = moving ? sin2 * 0.1 * runMul : 0;
-    const armSway = moving ? cos2 * 0.045 * runMul : 0;
+    const armSwing = moving ? sin2 * 0.1 * runMul * (1 - this.aimBlend01) : 0;
+    const armSway = moving ? cos2 * 0.045 * runMul * (1 - this.aimBlend01) : 0;
 
     const fpSwing = this.resolveFpMeleeSwingTrack();
     if (fpSwing && phase > 0) {
       const p = samplePrimitiveMeleeSwing(fpSwing, phase);
-      this.rightHandRig.position.set(
+      this._rigHipPos.set(
         this.rigRestPos.x + p.translationM.x,
         this.rigRestPos.y + p.translationM.y,
         this.rigRestPos.z + p.translationM.z,
       );
-      this.rightHandRig.rotation.set(
+      this._rigHipEuler.set(
         this.rigRestEuler.x + p.rotationRad.x,
         this.rigRestEuler.y + p.rotationRad.y,
         this.rigRestEuler.z + p.rotationRad.z,
+        "XYZ",
       );
-      this.rightHandRig.scale.copy(this.rigRestScale);
     } else {
-      this.rightHandRig.position.set(
-        this.rigRestPos.x,
-        this.rigRestPos.y,
-        this.rigRestPos.z,
-      );
-      this.rightHandRig.rotation.set(
+      this._rigHipPos.set(this.rigRestPos.x, this.rigRestPos.y, this.rigRestPos.z);
+      this._rigHipEuler.set(
         this.rigRestEuler.x + -armSwing * 0.95,
         this.rigRestEuler.y,
         this.rigRestEuler.z + -armSway * 0.75,
+        "XYZ",
       );
-      this.rightHandRig.scale.copy(this.rigRestScale);
     }
+    this.applyRightHandRigPoseWithAimBlend(this._rigHipPos, this._rigHipEuler, state, dt);
     if (this.fpAuthorGripAnchoredToLiveHandPose) {
       this.syncGripAnchorFromLiveHandHierarchy();
     }

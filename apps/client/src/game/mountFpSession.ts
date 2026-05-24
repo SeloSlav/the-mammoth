@@ -1373,7 +1373,7 @@ export async function mountFpSession(
     poseAoiAnchor.y = cy;
     poseAoiAnchor.z = cz;
     refreshWorldSoundSubscription();
-    droppedWorld.subscribeAoi(cx, cz);
+    droppedWorld.subscribeAoi(cx, cy, cz);
   };
 
   syncSpatialAoiAfterHydratedSpawn = syncSpatialAoiFromFeet;

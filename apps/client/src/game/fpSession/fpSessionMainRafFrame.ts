@@ -111,6 +111,7 @@ import { localPlayerCanFireChamberedRound } from "../fpHotbar/fpFirearmChamber.j
 import type { FpSessionElevDebugTickCtx } from "./fpSessionDevDebugApis.js";
 import { publishFpSessionCompassHeadingFromForwardXZ } from "./fpSessionCompassHeading.js";
 import {
+  isFpSessionCombatAiming,
   publishFpSessionCombatAiming,
   stepFpCombatAimFov,
 } from "./fpSessionCombatAim.js";
@@ -744,6 +745,7 @@ export function createFpSessionMainRafFrame(
       crouch: mainRaf.crouchToggle,
       meleeAttackSeq: mainRaf.meleeAttackSeq,
       firearmShotSeq: mainRaf.firearmShotSeq,
+      firearmAimActive: isFpSessionCombatAiming(),
       equippedPrimaryFromHotbar: hotbarHeld,
     });
     // --- Presentation section timing ---

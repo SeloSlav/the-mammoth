@@ -16,6 +16,8 @@ export function buildLocalPlayerGameplayState(args: {
   crouch: boolean;
   meleeAttackSeq: number;
   firearmShotSeq: number;
+  /** True while holding ADS with a ranged hotbar weapon (drives viewmodel aim blend). */
+  firearmAimActive?: boolean;
   /** From hotbar + item `defId` (before dev-only override). */
   equippedPrimaryFromHotbar: HeldItemId;
 }): LocalPlayerGameplayState {
@@ -28,6 +30,7 @@ export function buildLocalPlayerGameplayState(args: {
     locomotion,
     stance,
     meleeSwingActive: false,
+    aimWeight01: args.firearmAimActive ? 1 : 0,
   });
   return {
     kind: "local",

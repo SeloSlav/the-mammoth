@@ -1,9 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import {
-  getMammothDroppedWorldTargetMaxDimM,
-  MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M,
-} from "@the-mammoth/assets";
+import { and } from "spacetimedb";
+import { MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M } from "@the-mammoth/assets";
 import {
   bindMammothMetallicReadableEnv,
   loadGltfSceneFirstMatch,
@@ -11,9 +9,32 @@ import {
 } from "@the-mammoth/engine";
 import { DEFAULT_BUILDING_FLOOR_SPACING_M, mammothVerticalStoryBandIndex } from "@the-mammoth/world";
 import { apartmentUnitKeyContainingWorldPoint } from "../fpApartment/fpApartmentGameplay.js";
-import { POSE_AOI_RECENTER } from "../fpSession/fpSessionConstants.js";
-import type { DbConnection } from "../../module_bindings";
+import { DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M, POSE_AOI_RECENTER } from "../fpSession/fpSessionConstants.js";
+import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
+import { tables } from "../../module_bindings";
 import type { DroppedItem } from "../../module_bindings/types";
+import { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
+import {
+  buildDropMeshLayersFromGltf,
+  buildProceduralDropMeshLayers,
+  type DropMeshLayer,
+} from "./droppedItemWorldMesh.js";
+import {
+  addRowToDefPool,
+  addRowToFallbackPool,
+  createDefInstancedPool,
+  createFallbackPool,
+  disposeDefInstancedPools,
+  detachFallbackMesh,
+  rebuildDefPoolFromRows,
+  rebuildFallbackPoolFromRows,
+  removeRowFromDefPool,
+  removeRowFromFallbackPool,
+  type DefInstancedPool,
+  type FallbackInstancedPool,
+} from "./droppedItemWorldInstancing.js";
+
+export { fitDroppedWorldItemModelToCatalog } from "./droppedItemWorldFit.js";
 
 /** Horizontal pickup radius (m). Keep in sync with `apps/server/src/dropped_item.rs` `PICKUP_RADIUS_SQ`. */
 export const MAMMOTH_PICKUP_RADIUS_M = 3.5;
@@ -26,23 +47,17 @@ export const MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M = DEFAULT_BUILDING_FLOOR_SPAC
 /** @deprecated Prefer {@link MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M}; kept for stray imports. */
 export const MAMMOTH_PICKUP_MAX_ABS_DY_M = MAMMOTH_PICKUP_MAX_ABS_DY_SAME_BAND_M;
 
+/** Max horizontal distance (m) to instance a drop on the same storey / unit gate. */
+export const MAMMOTH_DROPPED_RENDER_MAX_HORIZONTAL_M = DROPPED_ITEM_RENDER_MAX_HORIZONTAL_M;
+
+/** Match `apps/server/src/dropped_item.rs` `DROP_Y_LIFT_M` — player drop mesh above replicated feet. */
+const DROP_ITEM_Y_LIFT_M = 0.11;
+
 export type MammothDroppedPickupBandOpts = {
   buildingWorldOriginY: number;
   floorSpacingM: number;
 };
-const MIN_REASONABLE_MESH_BB_DIM_M = 0.02;
-/** Match `apps/server/src/dropped_item.rs` `DROP_Y_LIFT_M` — player drop mesh above replicated feet. */
-const DROP_ITEM_Y_LIFT_M = 0.11;
 
-const _dropInstPos = new THREE.Matrix4();
-const _dropInstYaw = new THREE.Matrix4();
-const _dropInstOut = new THREE.Matrix4();
-
-/**
- * Anchored loot Y includes clearance above the walk slab; player drops add a smaller lift. Either can sit
- * just across a discrete {@link mammothVerticalStoryBandIndex} boundary from feet while still being the
- * same playable floor (common upstairs; ground band 0 is wide enough to hide it).
- */
 export function dropVerticalBandMatchesFeet(
   feetY: number,
   dropY: number,
@@ -58,10 +73,32 @@ export function dropVerticalBandMatchesFeet(
   return false;
 }
 
-/**
- * `DroppedItem.id` is `u64`; the Spacetime client may surface it as `bigint` or `number`. Mixed `===`
- * checks miss, and async GLB loads then delete the fallback mesh thinking the row vanished.
- */
+/** Y window for spatial `dropped_item` subscriptions around the viewer's storey. */
+export function droppedItemSubscriptionYBounds(
+  feetY: number,
+  verticalBands: MammothDroppedPickupBandOpts | null,
+): { yMin: number; yMax: number } | null {
+  if (verticalBands === null) return null;
+  const { buildingWorldOriginY: oy, floorSpacingM: spacing } = verticalBands;
+  const band = mammothVerticalStoryBandIndex(feetY, oy, spacing);
+  const yMin = oy + band * spacing - 0.75;
+  const yMax =
+    oy + (band + 1) * spacing + spacing * 0.12 + MAMMOTH_WORLD_LOOT_GROUND_PLANE_Y_M + DROP_ITEM_Y_LIFT_M;
+  return { yMin, yMax };
+}
+
+export function droppedItemWithinRenderHorizontalRange(
+  feetX: number,
+  feetZ: number,
+  dropX: number,
+  dropZ: number,
+  maxHorizontalM: number = MAMMOTH_DROPPED_RENDER_MAX_HORIZONTAL_M,
+): boolean {
+  const dx = dropX - feetX;
+  const dz = dropZ - feetZ;
+  return dx * dx + dz * dz <= maxHorizontalM * maxHorizontalM;
+}
+
 export function tryNormalizeDroppedItemId(id: unknown): bigint | null {
   if (typeof id === "bigint") return id;
   if (typeof id === "number" && Number.isFinite(id)) return BigInt(Math.trunc(id));
@@ -69,19 +106,17 @@ export function tryNormalizeDroppedItemId(id: unknown): bigint | null {
   return null;
 }
 
-/**
- * Render gate for world drops: same vertical storey as feet, and either corridor loot (not inside
- * any unit hull) or loot inside the viewer's current residential unit. Pickup still uses
- * {@link droppedPickupWithinServerVolume}; this only culls replicated GLB meshes from the scene.
- */
 export function resolveDroppedItemVisualVisible(input: {
   dropX: number;
   dropY: number;
   dropZ: number;
+  feetX?: number;
+  feetZ?: number;
   feetY: number;
   verticalBands: MammothDroppedPickupBandOpts | null;
   containingUnitKey: string | null;
   dropResidentialUnitKey: string | null;
+  maxHorizontalM?: number;
 }): boolean {
   const sameFloor =
     input.verticalBands === null ||
@@ -91,12 +126,34 @@ export function resolveDroppedItemVisualVisible(input: {
     input.dropResidentialUnitKey !== null &&
     input.dropResidentialUnitKey === input.containingUnitKey;
 
-  if (sameUnit) return true;
-  if (!sameFloor) return false;
-  if (input.containingUnitKey !== null) {
-    return input.dropResidentialUnitKey === null;
+  if (sameUnit) {
+    if (input.feetX !== undefined && input.feetZ !== undefined) {
+      return droppedItemWithinRenderHorizontalRange(
+        input.feetX,
+        input.feetZ,
+        input.dropX,
+        input.dropZ,
+        input.maxHorizontalM,
+      );
+    }
+    return true;
   }
-  return input.dropResidentialUnitKey === null;
+  if (!sameFloor) return false;
+  let corridorLoot = false;
+  if (input.containingUnitKey !== null) {
+    corridorLoot = input.dropResidentialUnitKey === null;
+  } else {
+    corridorLoot = input.dropResidentialUnitKey === null;
+  }
+  if (!corridorLoot) return false;
+  if (input.feetX === undefined || input.feetZ === undefined) return true;
+  return droppedItemWithinRenderHorizontalRange(
+    input.feetX,
+    input.feetZ,
+    input.dropX,
+    input.dropZ,
+    input.maxHorizontalM,
+  );
 }
 
 export function droppedPickupWithinServerVolume(
@@ -119,36 +176,11 @@ export function droppedPickupWithinServerVolume(
   return Math.abs(dropY - feetY) <= maxAbsDyM;
 }
 
-/** Removes an instanced draw batch without disposing shared template geometry/material. */
-function detachInstancedMesh(inst: THREE.InstancedMesh): void {
-  inst.removeFromParent();
-}
-
-/**
- * Uniform scale + Y shift so the longest AABB edge matches the catalog target (meters) and
- * the mesh rests on the placement Y from the server (`@the-mammoth/assets` sizing table).
- */
-export function fitDroppedWorldItemModelToCatalog(object: THREE.Object3D, defId: string): void {
-  object.updateWorldMatrix(true, true);
-  const box = new THREE.Box3().setFromObject(object);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  const maxDim = Math.max(size.x, size.y, size.z, MIN_REASONABLE_MESH_BB_DIM_M);
-  const targetM = getMammothDroppedWorldTargetMaxDimM(defId);
-  const s = targetM / maxDim;
-  object.scale.multiplyScalar(s);
-
-  object.updateWorldMatrix(true, true);
-  const boxAfter = new THREE.Box3().setFromObject(object);
-  object.position.y -= boxAfter.min.y;
-}
-
 export type NearestDroppedPickup = {
   droppedItemId: bigint;
   defId: string;
 };
 
-/** Decode `Option<u16>` subscription row shapes — mirrors `username.readOptionalString`. */
 export function readOptionalU16(value: unknown): number | undefined {
   if (value == null || value === undefined) return undefined;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -169,12 +201,10 @@ export function readOptionalU16(value: unknown): number | undefined {
   return undefined;
 }
 
-/** `true` for server-scheduled anchored world piles (`DroppedItem.world_spawn_slot`). */
 export function droppedItemIsWorldAnchor(row: DroppedItem): boolean {
   return readOptionalU16(row.worldSpawnSlot) !== undefined;
 }
 
-/** Closest dropped item within pickup volume; optional `predicate` filters candidates first. */
 export function findNearestDroppedPickup(
   conn: DbConnection,
   x: number,
@@ -209,7 +239,6 @@ export function findNearestDroppedPickup(
   return best;
 }
 
-/** Single pass: nearest world-anchor + nearest plain drop within pickup volume (HUD + hold pulse). */
 export function findNearestDroppedPickupsHud(
   conn: DbConnection,
   x: number,
@@ -262,13 +291,6 @@ function droppedItemRowExists(conn: DbConnection, droppedItemId: bigint): boolea
   return false;
 }
 
-type DropMeshLayer = {
-  geometry: THREE.BufferGeometry;
-  material: THREE.Material;
-  /** Mesh transform relative to the catalog-fitted drop anchor (yaw + world position applied per instance). */
-  localMatrix: THREE.Matrix4;
-};
-
 type DefTemplateState =
   | { status: "ready"; layers: DropMeshLayer[] }
   | { status: "glb_unavailable" };
@@ -278,118 +300,21 @@ type CachedDropRow = {
   dropUnitKey: string | null;
 };
 
-type DefInstancedPool = {
-  layers: DropMeshLayer[];
-  meshes: THREE.InstancedMesh[];
-  capacity: number;
-};
-
-type FallbackInstancedPool = {
-  mesh: THREE.InstancedMesh;
-  capacity: number;
-};
-
-function extractDropMeshLayers(fittedRoot: THREE.Object3D, defId: string): DropMeshLayer[] {
-  fitDroppedWorldItemModelToCatalog(fittedRoot, defId);
-  fittedRoot.updateWorldMatrix(true, true);
-  const layers: DropMeshLayer[] = [];
-  fittedRoot.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    const mat = m.material;
-    const material = (Array.isArray(mat) ? mat[0] : mat) as THREE.Material;
-    if (!material) return;
-    // Full matrix under the catalog-fitted root at origin — must not re-base with inv(root)
-    // or direct-child meshes lose the uniform shrink from {@link fitDroppedWorldItemModelToCatalog}.
-    layers.push({
-      geometry: m.geometry as THREE.BufferGeometry,
-      material,
-      localMatrix: m.matrixWorld.clone(),
-    });
-  });
-  return layers;
-}
-
-function composeDropInstanceMatrix(
-  row: DroppedItem,
-  localMatrix: THREE.Matrix4,
-  out: THREE.Matrix4,
-): THREE.Matrix4 {
-  _dropInstPos.makeTranslation(row.x, row.y, row.z);
-  _dropInstYaw.makeRotationY(row.yaw);
-  out.multiplyMatrices(_dropInstPos, _dropInstYaw);
-  out.multiply(localMatrix);
-  return out;
-}
-
-function resizeInstancedMesh(
-  parent: THREE.Object3D,
-  prev: THREE.InstancedMesh | null,
-  geometry: THREE.BufferGeometry,
-  material: THREE.Material,
-  needed: number,
-  name: string,
-): { mesh: THREE.InstancedMesh; capacity: number } {
-  const capacity = Math.max(needed, prev ? prev.count : 0, 8);
-  if (
-    prev &&
-    prev.instanceMatrix.count >= needed &&
-    prev.geometry === geometry &&
-    prev.material === material
-  ) {
-    prev.count = needed;
-    prev.visible = needed > 0;
-    return { mesh: prev, capacity: prev.instanceMatrix.count };
-  }
-  if (prev) {
-    detachInstancedMesh(prev);
-  }
-  const mesh = new THREE.InstancedMesh(geometry, material, capacity);
-  mesh.name = name;
-  mesh.count = needed;
-  mesh.visible = needed > 0;
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  mesh.frustumCulled = true;
-  parent.add(mesh);
-  return { mesh, capacity };
-}
-
 export type MountDroppedItemsWorldOptions = {
-  /**
-   * Vertical storey gates for pickups — aligns with {@link mammothVerticalStoryBandIndex}.
-   */
   pickupBandOpts?: MammothDroppedPickupBandOpts | null;
-  /**
-   * Combat sim arena: show every replicated drop on the pad (skip residential hull culling).
-   */
+  /** @deprecated Combat sim uses the normal band + horizontal gate. */
   alwaysShowDroppedItems?: boolean;
-  /**
-   * Runs immediately before `pickup_dropped_item`. In solo/local play this publishes the current
-   * client feet so the server reducer validates against what the player is actually standing on.
-   */
   beforePickup?: () => void | Promise<void>;
-  /**
-   * Called after `pickup_dropped_item` settles and the dropped row is gone from the local cache
-   * (server granted the stack). Not called when pickup is a no-op (too far, inventory full, etc.).
-   */
   onPickupRemoved?: () => void | Promise<void>;
 };
 
-/**
- * Subscribes to dropped items in an XZ AOI, renders GLB (or fallback box), and supports E pickup.
- *
- * Server world-anchor spawns use the **same** table (`world_spawn_slot`): pickup prefers those over
- * player drops inside the reducer path here (mirror legacy world_loot precedence).
- */
 export function mountDroppedItemsWorld(
   scene: THREE.Scene,
   conn: DbConnection,
-  /** @deprecated Ignored: baseline `SELECT * FROM dropped_item` already replicates all rows. Kept for call-site stability. */
   aoiHalfM: number,
   options?: MountDroppedItemsWorldOptions,
 ): {
-  subscribeAoi: (cx: number, cz: number) => void;
+  subscribeAoi: (cx: number, cy: number, cz: number) => void;
   syncDroppedItemVisualVisibility: (
     feetX: number,
     feetY: number,
@@ -413,36 +338,37 @@ export function mountDroppedItemsWorld(
   let sharedFallbackGeometry: THREE.BoxGeometry | null = null;
   let sharedFallbackMaterial: THREE.MeshBasicMaterial | null = null;
 
-  let dbDirty = true;
+  let templateReloadPending = false;
+  let subscriptionFullRebuildPending = true;
   let lastVisGate = {
     feetBand: Number.NaN,
     containingUnitKey: null as string | null,
     cellX: Number.NaN,
     cellZ: Number.NaN,
   };
+  let lastSubAnchor = { cellX: Number.NaN, cellZ: Number.NaN, feetBand: Number.NaN };
+  let lastRebuildFeet = { x: Number.NaN, z: Number.NaN };
+  const RENDER_REBUILD_TRAVEL_M = 12;
+  let lastRenderFeet = { x: 0, y: 0, z: 0, unitKey: null as string | null };
+  let dropSub: SubscriptionHandle | null = null;
 
-  const metallicReadableEnv = (): THREE.Texture | null => {
-    const env = scene.userData.mammothFpMetallicReadableEnv;
-    return env instanceof THREE.Texture ? env : (scene.environment ?? null);
+  const renderAnchorMoved = (feetX: number, feetZ: number): boolean => {
+    if (!Number.isFinite(lastRebuildFeet.x)) return true;
+    const dx = feetX - lastRebuildFeet.x;
+    const dz = feetZ - lastRebuildFeet.z;
+    return dx * dx + dz * dz >= RENDER_REBUILD_TRAVEL_M * RENDER_REBUILD_TRAVEL_M;
   };
 
   const resolvedBandOpts =
     options?.pickupBandOpts === undefined ? null : options.pickupBandOpts;
   const alwaysShowDroppedItems = options?.alwaysShowDroppedItems === true;
 
-  let sub: { unsubscribe: () => void } | null = null;
-  try {
-    sub = conn
-      .subscriptionBuilder()
-      .onApplied(() => {
-        syncFromDb();
-      })
-      .subscribe(["SELECT * FROM dropped_item"]);
-  } catch (e) {
-    console.warn("[droppedItems] subscribe failed", e);
-  }
+  const metallicReadableEnv = (): THREE.Texture | null => {
+    const env = scene.userData.mammothFpMetallicReadableEnv;
+    return env instanceof THREE.Texture ? env : (scene.environment ?? null);
+  };
 
-  const prepareLoadedSceneForTemplate = (rootGltf: THREE.Group): void => {
+  const prepareLoadedSceneForTemplate = (rootGltf: THREE.Object3D): void => {
     rootGltf.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
@@ -459,6 +385,21 @@ export function mountDroppedItemsWorld(
     const inflight = defTemplatePromise.get(defId);
     if (inflight) return inflight;
 
+    const procedural = buildProceduralDropMeshLayers(defId);
+    if (procedural && procedural.length > 0) {
+      const staging = new THREE.Group();
+      for (const layer of procedural) {
+        const mesh = new THREE.Mesh(layer.geometry, layer.material);
+        mesh.applyMatrix4(layer.localMatrix);
+        staging.add(mesh);
+      }
+      prepareLoadedSceneForTemplate(staging);
+      const st: DefTemplateState = { status: "ready", layers: procedural };
+      defTemplateState.set(defId, st);
+      templateReloadPending = true;
+      return Promise.resolve(st);
+    }
+
     const candidates = [...mammothCatalogGlbCandidates(defId)];
     if (candidates.length === 0) {
       const st: DefTemplateState = { status: "glb_unavailable" };
@@ -469,7 +410,7 @@ export function mountDroppedItemsWorld(
     const p = loadGltfSceneFirstMatch(loader, candidates)
       .then(({ scene: loadedScene }) => {
         prepareLoadedSceneForTemplate(loadedScene);
-        const layers = extractDropMeshLayers(loadedScene, defId);
+        const layers = buildDropMeshLayersFromGltf(loadedScene, defId);
         if (layers.length === 0) {
           const st: DefTemplateState = { status: "glb_unavailable" };
           defTemplateState.set(defId, st);
@@ -479,7 +420,7 @@ export function mountDroppedItemsWorld(
         const st: DefTemplateState = { status: "ready", layers };
         defTemplateState.set(defId, st);
         defTemplatePromise.delete(defId);
-        dbDirty = true;
+        templateReloadPending = true;
         return st;
       })
       .catch(() => {
@@ -552,15 +493,21 @@ export function mountDroppedItemsWorld(
 
   const rowShouldRender = (
     cached: CachedDropRow,
+    feetX: number,
     feetY: number,
+    feetZ: number,
     containingUnitKey: string | null,
   ): boolean => {
-    if (alwaysShowDroppedItems) return true;
     const row = cached.row;
+    if (alwaysShowDroppedItems) {
+      return droppedItemWithinRenderHorizontalRange(feetX, feetZ, row.x, row.z);
+    }
     return resolveDroppedItemVisualVisible({
       dropX: row.x,
       dropY: row.y,
       dropZ: row.z,
+      feetX,
+      feetZ,
       feetY,
       verticalBands: resolvedBandOpts,
       containingUnitKey,
@@ -568,133 +515,263 @@ export function mountDroppedItemsWorld(
     });
   };
 
-  const rebuildInstances = (
+  const ensureDefPool = (defId: string, layers: DropMeshLayer[]): DefInstancedPool => {
+    let pool = defInstancedPools.get(defId);
+    if (!pool) {
+      pool = createDefInstancedPool(layers);
+      defInstancedPools.set(defId, pool);
+    }
+    return pool;
+  };
+
+  const ensureFallbackPoolObj = (): FallbackInstancedPool => {
+    const { geometry, material } = ensureSharedFallbackAssets();
+    if (!fallbackPool) {
+      const mesh = new THREE.InstancedMesh(geometry, material, 8);
+      mesh.name = "drop_inst:fallback";
+      mesh.visible = false;
+      mesh.count = 0;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      root.add(mesh);
+      fallbackPool = createFallbackPool(mesh, 8);
+    }
+    return fallbackPool;
+  };
+
+  const removeVisibleRow = (rowKey: string, defId: string): void => {
+    const pool = defInstancedPools.get(defId);
+    if (pool?.slotByKey.has(rowKey)) {
+      removeRowFromDefPool(pool, rowKey);
+      return;
+    }
+    if (fallbackPool?.slotByKey.has(rowKey)) {
+      removeRowFromFallbackPool(fallbackPool, rowKey);
+    }
+  };
+
+  const addVisibleRow = (rowKey: string, row: DroppedItem): void => {
+    const state = defTemplateState.get(row.defId);
+    if (state?.status === "ready") {
+      const pool = ensureDefPool(row.defId, state.layers);
+      addRowToDefPool(root, pool, row.defId, rowKey, row);
+      return;
+    }
+    const fb = ensureFallbackPoolObj();
+    const { geometry, material } = ensureSharedFallbackAssets();
+    addRowToFallbackPool(root, fb, rowKey, row, ensureFallbackLocalMatrix(row.defId), geometry, material);
+  };
+
+  const fullRebuildInstances = (
     feetX: number,
     feetY: number,
     feetZ: number,
     containingUnitKey: string | null,
   ): void => {
-    const glbRowsByDef = new Map<string, DroppedItem[]>();
+    const glbRowsByDef = new Map<string, { rows: DroppedItem[]; keys: string[] }>();
     const fallbackRows: DroppedItem[] = [];
+    const fallbackKeys: string[] = [];
 
-    for (const cached of rowCache.values()) {
-      if (!rowShouldRender(cached, feetY, containingUnitKey)) continue;
+    for (const [key, cached] of rowCache) {
+      if (!rowShouldRender(cached, feetX, feetY, feetZ, containingUnitKey)) continue;
       const defId = cached.row.defId;
       void resolveDefTemplate(defId);
       const state = defTemplateState.get(defId);
       if (state?.status === "ready") {
         let bucket = glbRowsByDef.get(defId);
         if (!bucket) {
-          bucket = [];
+          bucket = { rows: [], keys: [] };
           glbRowsByDef.set(defId, bucket);
         }
-        bucket.push(cached.row);
+        bucket.rows.push(cached.row);
+        bucket.keys.push(key);
       } else {
         fallbackRows.push(cached.row);
+        fallbackKeys.push(key);
       }
     }
 
     for (const [defId, pool] of defInstancedPools) {
-      const rows = glbRowsByDef.get(defId) ?? [];
-      glbRowsByDef.delete(defId);
-      const needed = rows.length;
-      for (let li = 0; li < pool.layers.length; li++) {
-        const layer = pool.layers[li]!;
-        const prev = pool.meshes[li] ?? null;
-        const resized = resizeInstancedMesh(
-          root,
-          prev,
-          layer.geometry,
-          layer.material,
-          needed,
-          `drop_inst:${defId}:${li}`,
-        );
-        pool.meshes[li] = resized.mesh;
-        pool.capacity = resized.capacity;
-        for (let i = 0; i < needed; i++) {
-          composeDropInstanceMatrix(rows[i]!, layer.localMatrix, _dropInstOut);
-          resized.mesh.setMatrixAt(i, _dropInstOut);
-        }
-        if (needed > 0) {
-          resized.mesh.instanceMatrix.needsUpdate = true;
-        }
+      const bucket = glbRowsByDef.get(defId);
+      if (bucket) {
+        rebuildDefPoolFromRows(root, pool, defId, bucket.rows, bucket.keys);
+        glbRowsByDef.delete(defId);
+      } else {
+        clearDefPoolOnly(pool);
       }
     }
 
-    for (const [defId, rows] of glbRowsByDef) {
+    for (const [defId, bucket] of glbRowsByDef) {
       const state = defTemplateState.get(defId);
       if (state?.status !== "ready") continue;
-      const pool: DefInstancedPool = {
-        layers: state.layers,
-        meshes: [],
-        capacity: 0,
-      };
-      defInstancedPools.set(defId, pool);
-      const needed = rows.length;
-      for (let li = 0; li < state.layers.length; li++) {
-        const layer = state.layers[li]!;
-        const resized = resizeInstancedMesh(
-          root,
-          null,
-          layer.geometry,
-          layer.material,
-          needed,
-          `drop_inst:${defId}:${li}`,
-        );
-        pool.meshes[li] = resized.mesh;
-        pool.capacity = resized.capacity;
-        for (let i = 0; i < needed; i++) {
-          composeDropInstanceMatrix(rows[i]!, layer.localMatrix, _dropInstOut);
-          resized.mesh.setMatrixAt(i, _dropInstOut);
-        }
-        if (needed > 0) {
-          resized.mesh.instanceMatrix.needsUpdate = true;
-        }
-      }
+      const pool = ensureDefPool(defId, state.layers);
+      rebuildDefPoolFromRows(root, pool, defId, bucket.rows, bucket.keys);
     }
 
-    const fallbackNeeded = fallbackRows.length;
-    if (fallbackNeeded > 0) {
-      const { geometry, material } = ensureSharedFallbackAssets();
-      const prev = fallbackPool?.mesh ?? null;
-      const resized = resizeInstancedMesh(
+    const { geometry, material } = ensureSharedFallbackAssets();
+    if (fallbackRows.length > 0) {
+      const fb = ensureFallbackPoolObj();
+      rebuildFallbackPoolFromRows(
         root,
-        prev,
+        fb,
+        fallbackRows,
+        fallbackKeys,
+        (row) => ensureFallbackLocalMatrix(row.defId),
         geometry,
         material,
-        fallbackNeeded,
-        "drop_inst:fallback",
       );
-      fallbackPool = { mesh: resized.mesh, capacity: resized.capacity };
-      for (let i = 0; i < fallbackNeeded; i++) {
-        const row = fallbackRows[i]!;
-        const local = ensureFallbackLocalMatrix(row.defId);
-        composeDropInstanceMatrix(row, local, _dropInstOut);
-        resized.mesh.setMatrixAt(i, _dropInstOut);
-      }
-      resized.mesh.instanceMatrix.needsUpdate = true;
     } else if (fallbackPool) {
-      fallbackPool.mesh.count = 0;
-      fallbackPool.mesh.visible = false;
+      clearFallbackPoolOnly(fallbackPool);
     }
   };
 
-  const syncFromDb = () => {
-    const seen = new Set<string>();
+  function clearDefPoolOnly(pool: DefInstancedPool): void {
+    pool.rows.length = 0;
+    pool.rowKeys.length = 0;
+    pool.slotByKey.clear();
+    for (const mesh of pool.meshes) {
+      mesh.count = 0;
+      mesh.visible = false;
+    }
+  }
+
+  function clearFallbackPoolOnly(pool: FallbackInstancedPool): void {
+    pool.rows.length = 0;
+    pool.rowKeys.length = 0;
+    pool.slotByKey.clear();
+    pool.mesh.count = 0;
+    pool.mesh.visible = false;
+  }
+
+  const syncVisibleAtFeet = (
+    feetX: number,
+    feetY: number,
+    feetZ: number,
+    containingUnitKey: string | null,
+    forceFullRebuild: boolean,
+  ): void => {
+    lastRenderFeet = { x: feetX, y: feetY, z: feetZ, unitKey: containingUnitKey };
+    if (
+      forceFullRebuild ||
+      templateReloadPending ||
+      subscriptionFullRebuildPending ||
+      visGateChanged(feetX, feetY, feetZ, containingUnitKey) ||
+      renderAnchorMoved(feetX, feetZ)
+    ) {
+      templateReloadPending = false;
+      subscriptionFullRebuildPending = false;
+      fullRebuildInstances(feetX, feetY, feetZ, containingUnitKey);
+      lastRebuildFeet = { x: feetX, z: feetZ };
+    }
+  };
+
+  const cacheRow = (row: DroppedItem): CachedDropRow => {
+    const cached: CachedDropRow = {
+      row,
+      dropUnitKey: apartmentUnitKeyContainingWorldPoint(conn, row.x, row.y, row.z),
+    };
+    rowCache.set(droppedIdKey(row.id), cached);
+    return cached;
+  };
+
+  const fullResyncFromDb = (): void => {
+    rowCache.clear();
     for (const r of conn.db.dropped_item) {
       const row = r as DroppedItem;
-      const key = droppedIdKey(row.id);
-      seen.add(key);
-      rowCache.set(key, {
-        row,
-        dropUnitKey: apartmentUnitKeyContainingWorldPoint(conn, row.x, row.y, row.z),
-      });
+      cacheRow(row);
       void resolveDefTemplate(row.defId);
     }
-    for (const k of rowCache.keys()) {
-      if (!seen.has(k)) rowCache.delete(k);
+    subscriptionFullRebuildPending = true;
+  };
+
+  const onInsert = (_ctx: unknown, row: DroppedItem) => {
+    const key = droppedIdKey(row.id);
+    const cached = cacheRow(row);
+    void resolveDefTemplate(row.defId);
+    if (rowShouldRender(cached, lastRenderFeet.x, lastRenderFeet.y, lastRenderFeet.z, lastRenderFeet.unitKey)) {
+      addVisibleRow(key, row);
     }
-    dbDirty = true;
+  };
+
+  const onUpdate = (_ctx: unknown, _old: DroppedItem, row: DroppedItem) => {
+    const key = droppedIdKey(row.id);
+    removeVisibleRow(key, _old.defId);
+    const cached = cacheRow(row);
+    void resolveDefTemplate(row.defId);
+    if (rowShouldRender(cached, lastRenderFeet.x, lastRenderFeet.y, lastRenderFeet.z, lastRenderFeet.unitKey)) {
+      addVisibleRow(key, row);
+    }
+  };
+
+  const onDelete = (_ctx: unknown, row: DroppedItem) => {
+    const key = droppedIdKey(row.id);
+    removeVisibleRow(key, row.defId);
+    rowCache.delete(key);
+  };
+
+  const buildDropSubscriptionQuery = (cx: number, cy: number, cz: number) => {
+    const half = aoiHalfM;
+    const x0 = cx - half;
+    const x1 = cx + half;
+    const z0 = cz - half;
+    const z1 = cz + half;
+    const yBounds = droppedItemSubscriptionYBounds(cy, resolvedBandOpts);
+    if (yBounds) {
+      return tables.dropped_item.where((r) =>
+        and(
+          and(and(r.x.gte(x0), r.x.lte(x1)), and(r.z.gte(z0), r.z.lte(z1))),
+          and(r.y.gte(yBounds.yMin), r.y.lte(yBounds.yMax)),
+        ),
+      );
+    }
+    return tables.dropped_item.where((r) =>
+      and(and(r.x.gte(x0), r.x.lte(x1)), and(r.z.gte(z0), r.z.lte(z1))),
+    );
+  };
+
+  const subscribeAoi = (cx: number, cy: number, cz: number): void => {
+    const cellX = Math.floor(cx / POSE_AOI_RECENTER);
+    const cellZ = Math.floor(cz / POSE_AOI_RECENTER);
+    const feetBand =
+      resolvedBandOpts === null
+        ? 0
+        : mammothVerticalStoryBandIndex(
+            cy,
+            resolvedBandOpts.buildingWorldOriginY,
+            resolvedBandOpts.floorSpacingM,
+          );
+    if (
+      cellX === lastSubAnchor.cellX &&
+      cellZ === lastSubAnchor.cellZ &&
+      feetBand === lastSubAnchor.feetBand &&
+      dropSub?.isActive()
+    ) {
+      return;
+    }
+    lastSubAnchor = { cellX, cellZ, feetBand };
+
+    if (dropSub?.isActive()) {
+      dropSub.unsubscribe();
+    }
+    conn.db.dropped_item.removeOnInsert(onInsert);
+    conn.db.dropped_item.removeOnUpdate(onUpdate);
+    conn.db.dropped_item.removeOnDelete(onDelete);
+
+    try {
+      dropSub = conn
+        .subscriptionBuilder()
+        .onApplied(() => {
+          fullResyncFromDb();
+          syncVisibleAtFeet(lastRenderFeet.x, lastRenderFeet.y, lastRenderFeet.z, lastRenderFeet.unitKey, true);
+        })
+        .subscribe(buildDropSubscriptionQuery(cx, cy, cz));
+    } catch (e) {
+      console.warn("[droppedItems] spatial subscribe failed", e);
+    }
+
+    conn.db.dropped_item.onInsert(onInsert);
+    conn.db.dropped_item.onUpdate(onUpdate);
+    conn.db.dropped_item.onDelete(onDelete);
   };
 
   const syncDroppedItemVisualVisibility = (
@@ -703,29 +780,8 @@ export function mountDroppedItemsWorld(
     feetZ: number,
     containingUnitKey: string | null,
   ): void => {
-    if (!dbDirty && !visGateChanged(feetX, feetY, feetZ, containingUnitKey)) return;
-    dbDirty = false;
-    rebuildInstances(feetX, feetY, feetZ, containingUnitKey);
+    syncVisibleAtFeet(feetX, feetY, feetZ, containingUnitKey, false);
   };
-
-  const onRowChange = () => {
-    syncFromDb();
-  };
-
-  conn.db.dropped_item.onInsert(onRowChange);
-  conn.db.dropped_item.onUpdate(onRowChange);
-  conn.db.dropped_item.onDelete(onRowChange);
-
-  /**
-   * Stable dropped-item subscription is owned above. AOI calls are kept for the mount API and resync
-   * visuals after spawn / teleport in case rows landed before listeners were wired.
-   */
-  const subscribeAoi = (_cx: number, _cz: number) => {
-    void aoiHalfM;
-    syncFromDb();
-  };
-
-  syncFromDb();
 
   const tryPickupNearest = (x: number, y: number, z: number) => {
     if (!conn.identity) return;
@@ -755,21 +811,18 @@ export function mountDroppedItemsWorld(
   };
 
   const dispose = () => {
-    conn.db.dropped_item.removeOnInsert(onRowChange);
-    conn.db.dropped_item.removeOnUpdate(onRowChange);
-    conn.db.dropped_item.removeOnDelete(onRowChange);
-    sub?.unsubscribe();
+    conn.db.dropped_item.removeOnInsert(onInsert);
+    conn.db.dropped_item.removeOnUpdate(onUpdate);
+    conn.db.dropped_item.removeOnDelete(onDelete);
+    if (dropSub?.isActive()) {
+      dropSub.unsubscribe();
+    }
+    dropSub = null;
     scene.remove(root);
-    for (const pool of defInstancedPools.values()) {
-      for (const mesh of pool.meshes) {
-        detachInstancedMesh(mesh);
-      }
-    }
+    disposeDefInstancedPools(defInstancedPools.values());
     defInstancedPools.clear();
-    if (fallbackPool) {
-      detachInstancedMesh(fallbackPool.mesh);
-      fallbackPool = null;
-    }
+    detachFallbackMesh(fallbackPool);
+    fallbackPool = null;
     sharedFallbackGeometry?.dispose();
     sharedFallbackGeometry = null;
     sharedFallbackMaterial?.dispose();

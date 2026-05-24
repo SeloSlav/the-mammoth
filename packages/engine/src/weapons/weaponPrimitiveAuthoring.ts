@@ -26,6 +26,12 @@ export type FpViewmodelAuthoringDoc = {
     eulerRad?: WeaponAuthorVec3;
     scaleM?: WeaponAuthorVec3;
   };
+  /** ADS pose for `rigRoot` — optional; derived from hip rest when omitted (firearms only). */
+  aimRigRoot?: {
+    positionM: WeaponAuthorVec3;
+    eulerRad: WeaponAuthorVec3;
+    scaleM?: WeaponAuthorVec3;
+  };
   gripAnchorPositionM?: WeaponAuthorVec3;
   hand?: {
     positionM: WeaponAuthorVec3;
@@ -158,6 +164,26 @@ function parseOptionalFpViewmodel(raw: unknown): FpViewmodelAuthoringDoc | undef
         rigRoot.scaleM = rr.scaleM;
       }
       out.rigRoot = rigRoot;
+    }
+  }
+  if ("aimRigRoot" in o && o.aimRigRoot !== undefined) {
+    if (typeof o.aimRigRoot !== "object" || !o.aimRigRoot) {
+      throw new Error("weapon presentation: firstPerson.fpViewmodel.aimRigRoot must be an object");
+    }
+    const ar = o.aimRigRoot as Record<string, unknown>;
+    assertVec3("firstPerson.fpViewmodel.aimRigRoot.positionM", ar.positionM);
+    assertVec3("firstPerson.fpViewmodel.aimRigRoot.eulerRad", ar.eulerRad);
+    const aimPos = ar.positionM as WeaponAuthorVec3;
+    if (isFpRigRootPositionAuthorable(aimPos)) {
+      const aimRigRoot: NonNullable<FpViewmodelAuthoringDoc["aimRigRoot"]> = {
+        positionM: aimPos,
+        eulerRad: ar.eulerRad as WeaponAuthorVec3,
+      };
+      if ("scaleM" in ar && ar.scaleM !== undefined) {
+        assertVec3("firstPerson.fpViewmodel.aimRigRoot.scaleM", ar.scaleM);
+        aimRigRoot.scaleM = ar.scaleM;
+      }
+      out.aimRigRoot = aimRigRoot;
     }
   }
   if ("gripAnchorPositionM" in o && o.gripAnchorPositionM !== undefined) {

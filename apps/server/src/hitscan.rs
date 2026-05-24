@@ -33,6 +33,13 @@ const FALL_MIN_FRAC_SHOTGUN: f32 = 0.35;
 pub const SHOTGUN_PELLET_COUNT: u32 = 8;
 pub const SHOTGUN_SPREAD_RAD: f32 = 0.055;
 
+/// Body-hit damage per pistol shot at point blank (before falloff / headshot).
+/// Five shots = 120 — one full mag on a babushka at medium skill.
+pub const FIREARM_DAMAGE_PISTOL: f32 = 24.0;
+/// Total pellet damage per shotgun trigger pull at point blank (split across `SHOTGUN_PELLET_COUNT`).
+/// Two solid close blasts (~full pellet connect) drop a babushka; pistol wins at range.
+pub const FIREARM_DAMAGE_SHOTGUN_TOTAL: f32 = 48.0;
+
 const RAY_T_EPS: f32 = 4e-4;
 const PLANAR_AIM_DOT_MIN: f32 = 0.18;
 const RAY_EPS2: f32 = 1e-18;
@@ -598,7 +605,7 @@ pub fn firearm_hitscan_weapon(
             dz,
             RANGE_PISTOL_M,
             FALL_MIN_FRAC_PISTOL,
-            20.0,
+            FIREARM_DAMAGE_PISTOL,
         ),
         "shotgun-coach" => resolve_shotgun_pellets(
             ctx,
@@ -607,7 +614,7 @@ pub fn firearm_hitscan_weapon(
             [dx, dy, dz],
             RANGE_SHOTGUN_M,
             FALL_MIN_FRAC_SHOTGUN,
-            11.0,
+            FIREARM_DAMAGE_SHOTGUN_TOTAL,
         ),
         _ => Vec::new(),
     }
@@ -833,7 +840,7 @@ pub fn firearm_hitscan_npcs(
             dz,
             RANGE_PISTOL_M,
             FALL_MIN_FRAC_PISTOL,
-            20.0,
+            FIREARM_DAMAGE_PISTOL,
         ),
         "shotgun-coach" => resolve_shotgun_pellets_npcs(
             ctx,
@@ -842,8 +849,32 @@ pub fn firearm_hitscan_npcs(
             [dx, dy, dz],
             RANGE_SHOTGUN_M,
             FALL_MIN_FRAC_SHOTGUN,
-            11.0,
+            FIREARM_DAMAGE_SHOTGUN_TOTAL,
         ),
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod balance_tests {
+    use super::*;
+    use crate::npc::BABUSHKA_MAX_HEALTH;
+
+    #[test]
+    fn shotgun_point_blank_beats_pistol_per_trigger_pull() {
+        assert!(
+            FIREARM_DAMAGE_SHOTGUN_TOTAL > FIREARM_DAMAGE_PISTOL,
+            "shotgun must out-damage pistol when pellets connect"
+        );
+    }
+
+    #[test]
+    fn babushka_ttk_targets_are_achievable_at_point_blank() {
+        let babushka = BABUSHKA_MAX_HEALTH;
+        let pistol_shots = (babushka / FIREARM_DAMAGE_PISTOL).ceil() as u32;
+        let shotgun_blasts = (babushka / FIREARM_DAMAGE_SHOTGUN_TOTAL).ceil() as u32;
+        assert_eq!(pistol_shots, 5, "pistol: five body hits on 120 HP babushka");
+        assert_eq!(shotgun_blasts, 3, "shotgun: three full close blasts on 120 HP babushka");
+        assert!(shotgun_blasts < pistol_shots);
     }
 }
