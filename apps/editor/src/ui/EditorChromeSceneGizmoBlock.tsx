@@ -1,4 +1,5 @@
 import type { TransformMode } from "../state/editorStoreTypes.js";
+import { flipEditorOrbitView } from "../editor/bridges/editorNavigationBridge.js";
 import {
   editorChromeInput,
   editorChromeLabel,
@@ -247,6 +248,25 @@ export function EditorChromeSceneGizmoBlock(props: {
           </span>
         </label>
       ) : null}
+      <button
+        type="button"
+        style={{ ...rowBtn, marginTop: 8, width: "100%" }}
+        onClick={() => flipEditorOrbitView()}
+        title="Turn the viewport 180° in place (shortcut: H)"
+      >
+        Flip view 180°
+      </button>
+      <p
+        style={{
+          margin: "6px 0 0",
+          fontSize: 11,
+          opacity: 0.78,
+          lineHeight: 1.35,
+        }}
+      >
+        Viewport fly: <strong>W A S D</strong> move, <strong>Q / E</strong> down / up. Shortcut:{" "}
+        <strong>H</strong> flips the view 180°.
+      </p>
       <span style={{ ...label, display: "block", marginTop: 8 }}>Grid snap (m / deg-ish for rotate)</span>
       <input
         style={input}

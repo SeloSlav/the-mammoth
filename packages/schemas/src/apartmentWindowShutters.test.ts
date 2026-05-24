@@ -38,7 +38,44 @@ describe("apartmentWindowShutters", () => {
     expect(APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES).toHaveLength(2);
   });
 
-  it("replaces authored shutters with canonical placements for qualifying units", () => {
+  it("uses authored shutter rows as the canonical replicated template", () => {
+    const authored = [
+      {
+        id: "authored-shutter-a",
+        modelRelPath: "static/models/objects/window-shutter.glb",
+        fx: 0.96,
+        fz: 0.18,
+        dy: 1.81,
+        yawRad: -Math.PI / 2,
+        pitchRad: 0.01,
+        rollRad: -0.02,
+        uniformScale: 1.7,
+        verticalScaleMul: 1.02,
+        scaleX: 1.69,
+        scaleY: 1.72,
+        scaleZ: 1.68,
+        ignoreSupportSurfaces: false,
+        itemKind: "plain",
+      },
+    ] as const;
+    const [west] = standardApartmentWindowShutterPlacedItemsForUnit("unit_w_003", authored);
+    expect(west).toMatchObject({
+      id: "authored-shutter-a",
+      fx: 0.96,
+      fz: 0.18,
+      dy: 1.81,
+      yawRad: Math.PI / 2,
+      pitchRad: 0.01,
+      rollRad: -0.02,
+      uniformScale: 1.7,
+      verticalScaleMul: 1.02,
+      scaleX: 1.69,
+      scaleY: 1.72,
+      scaleZ: 1.68,
+    });
+  });
+
+  it("replicates authored shutter placements for qualifying units", () => {
     const merged = mergeStandardApartmentWindowShuttersIntoPlacedItems(
       "floor_mamutica_typical|20|unit_e_003",
       "unit_e_003",
@@ -73,18 +110,21 @@ describe("apartmentWindowShutters", () => {
         },
       ],
     );
-    expect(merged.filter((item) => item.modelRelPath.endsWith("window-shutter.glb"))).toHaveLength(2);
-    expect(merged.some((item) => item.id === "old-shutter")).toBe(false);
+    expect(merged.filter((item) => item.modelRelPath.endsWith("window-shutter.glb"))).toHaveLength(1);
+    expect(merged.some((item) => item.id === "old-shutter")).toBe(true);
     expect(merged.some((item) => item.id === "keep-chair")).toBe(true);
-    expect(merged[2]!.fx).toBeCloseTo(
+    expect(merged[1]!.fx).toBeCloseTo(
       adaptStandardWindowShutterPlacementForUnit(
         {
-          id: "mammoth_standard_window_shutter_0",
-          fx: 0.9774696707105718,
-          fz: 0.1754260738235218,
-          dy: 1.7568053722194503,
-          yawRad: -Math.PI / 2,
-          uniformScale: 1.686652591805788,
+          id: "old-shutter",
+          fx: 0.5,
+          fz: 0.5,
+          dy: 1,
+          yawRad: 0,
+          pitchRad: 0,
+          rollRad: 0,
+          uniformScale: 1,
+          verticalScaleMul: 1,
         },
         "unit_e_003",
       ).fx,

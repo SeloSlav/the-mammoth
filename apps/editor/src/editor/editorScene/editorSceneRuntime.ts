@@ -54,6 +54,8 @@ import {
 import { createEditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
+import { registerEditorArrowNudgeHotkeys } from "./editorSceneArrowNudgeHotkeys.js";
+import { flipEditorOrbitView180, registerEditorOrbitFlipViewHotkey } from "./editorOrbitFlipView.js";
 import { registerEditorTransformModeDigitHotkeys } from "./editorSceneTransformModeHotkeys.js";
 import { registerEditorApartmentLayoutDeleteHotkeys } from "./editorSceneApartmentDeleteHotkeys.js";
 import { registerEditorHistoryHotkeys } from "./editorSceneHistoryHotkeys.js";
@@ -773,9 +775,15 @@ export async function mountEditorScene(
     return findBestSelectionTarget() ?? attached ?? null;
   });
 
+  const performEditorOrbitViewFlip = (): void => {
+    flipEditorOrbitView180(camera, orbitControls);
+    demandEditorSceneRender();
+  };
+
   registerEditorNavigationBridge({
     frameEditorBuilding: () => frameObject(structuralState.buildingRoot),
     frameEditorSelection: () => frameObject(findBestSelectionTarget()),
+    flipEditorOrbitView: performEditorOrbitViewFlip,
     frameFocusedStory: frameFocusedStoryObject,
   });
 
@@ -1473,6 +1481,25 @@ export async function mountEditorScene(
   const disposeTransformModeDigitHotkeys = registerEditorTransformModeDigitHotkeys({
     getTransformControlsDragging: () => transformControls.dragging === true,
   });
+  const disposeArrowNudgeHotkeys = registerEditorArrowNudgeHotkeys({
+    getTransformControlsDragging: () => transformControls.dragging === true,
+    getAttachedObject: () => transformControls.object as THREE.Object3D | undefined,
+    getCamera: () => camera,
+    dispatchTransformObjectChange: () => {
+      transformControls.dispatchEvent({ type: "objectChange" });
+    },
+    requestRender: demandEditorSceneRender,
+  });
+  const disposeOrbitFlipViewHotkey = registerEditorOrbitFlipViewHotkey({
+    getCanFlip: () => {
+      if (transformControls.dragging === true) return false;
+      const st = useEditorStore.getState();
+      return !(isFpMode(st.mode) && st.fpAuthorCamera === "gameplay");
+    },
+    getCamera: () => camera,
+    getOrbitControls: () => orbitControls,
+    requestRender: demandEditorSceneRender,
+  });
   const disposeApartmentLayoutDeleteHotkeys = registerEditorApartmentLayoutDeleteHotkeys({
     getTransformControlsDragging: () => transformControls.dragging === true,
   });
@@ -1489,6 +1516,8 @@ export async function mountEditorScene(
     orbitControls.dispose();
     stopRenderLoop();
     disposeTransformModeDigitHotkeys();
+    disposeArrowNudgeHotkeys();
+    disposeOrbitFlipViewHotkey();
     disposeApartmentLayoutDeleteHotkeys();
     disposeHistoryHotkeys();
     canvas.removeEventListener("pointerdown", pointers.onPointerDown);

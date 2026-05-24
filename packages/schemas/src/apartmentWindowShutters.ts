@@ -8,7 +8,23 @@ export const OWNED_APARTMENT_MODEL_WINDOW_SHUTTER =
 export const APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MIN = 13 as const;
 export const APARTMENT_STANDARD_WINDOW_SHUTTER_FLOOR_MAX = 19 as const;
 
-/** Authored reference unit: floor 19 east 3 (`owned_apartment_builtins.json`). */
+export type StandardWindowShutterTemplate = Pick<
+  OwnedApartmentPlacedItem,
+  | "id"
+  | "fx"
+  | "fz"
+  | "dy"
+  | "yawRad"
+  | "pitchRad"
+  | "rollRad"
+  | "uniformScale"
+  | "verticalScaleMul"
+  | "scaleX"
+  | "scaleY"
+  | "scaleZ"
+>;
+
+/** Fallback reference unit: floor 19 east 3 (`owned_apartment_builtins.json`). */
 export const APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES = [
   {
     id: "mammoth_standard_window_shutter_0",
@@ -16,7 +32,10 @@ export const APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES = [
     fz: 0.1754260738235218,
     dy: 1.7568053722194503,
     yawRad: -Math.PI / 2,
+    pitchRad: 0,
+    rollRad: 0,
     uniformScale: 1.686652591805788,
+    verticalScaleMul: 1,
   },
   {
     id: "mammoth_standard_window_shutter_1",
@@ -24,9 +43,12 @@ export const APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES = [
     fz: 0.6749804574576809,
     dy: 1.7569815645250846,
     yawRad: -Math.PI / 2,
+    pitchRad: 0,
+    rollRad: 0,
     uniformScale: 1.686652591805788,
+    verticalScaleMul: 1,
   },
-] as const;
+] as const satisfies readonly StandardWindowShutterTemplate[];
 
 const EAST_REFERENCE_WINDOW_SHUTTER_TEMPLATES = APARTMENT_STANDARD_WINDOW_SHUTTER_EAST_TEMPLATES;
 
@@ -65,9 +87,22 @@ export function apartmentUnitQualifiesForStandardWindowShutters(unitKey: string)
   );
 }
 
-/** Mirror east-authored shutter fractions/yaw onto west-balcony units. */
+export function standardApartmentWindowShutterReferenceItemsFromPlacedItems(
+  placedItems: readonly OwnedApartmentPlacedItem[],
+): OwnedApartmentPlacedItem[] {
+  const authored = placedItems.filter((item) =>
+    isOwnedApartmentWindowShutterModelRelPath(item.modelRelPath),
+  );
+  return authored.length > 0
+    ? authored
+    : EAST_REFERENCE_WINDOW_SHUTTER_TEMPLATES.map((template) =>
+        adaptStandardWindowShutterPlacementForUnit(template, "unit_e_reference"),
+      );
+}
+
+/** Mirror east-authored shutter transforms onto west-balcony units. */
 export function adaptStandardWindowShutterPlacementForUnit(
-  template: (typeof EAST_REFERENCE_WINDOW_SHUTTER_TEMPLATES)[number],
+  template: StandardWindowShutterTemplate,
   unitId: string,
 ): OwnedApartmentPlacedItem {
   const isWest = unitId.startsWith("unit_w_");
@@ -79,10 +114,13 @@ export function adaptStandardWindowShutterPlacementForUnit(
     fz: template.fz,
     dy: template.dy,
     yawRad: isWest ? -template.yawRad : template.yawRad,
-    pitchRad: 0,
-    rollRad: 0,
+    pitchRad: template.pitchRad,
+    rollRad: template.rollRad,
     uniformScale: template.uniformScale,
-    verticalScaleMul: 1,
+    verticalScaleMul: template.verticalScaleMul,
+    ...(template.scaleX !== undefined ? { scaleX: template.scaleX } : {}),
+    ...(template.scaleY !== undefined ? { scaleY: template.scaleY } : {}),
+    ...(template.scaleZ !== undefined ? { scaleZ: template.scaleZ } : {}),
     ignoreSupportSurfaces: false,
     itemKind: "plain",
   };
@@ -90,15 +128,16 @@ export function adaptStandardWindowShutterPlacementForUnit(
 
 export function standardApartmentWindowShutterPlacedItemsForUnit(
   unitId: string,
+  referencePlacedItems: readonly OwnedApartmentPlacedItem[] = [],
 ): OwnedApartmentPlacedItem[] {
   if (!unitId.startsWith("unit_e_") && !unitId.startsWith("unit_w_")) return [];
-  return EAST_REFERENCE_WINDOW_SHUTTER_TEMPLATES.map((template) =>
-    adaptStandardWindowShutterPlacementForUnit(template, unitId),
+  return standardApartmentWindowShutterReferenceItemsFromPlacedItems(referencePlacedItems).map(
+    (template) => adaptStandardWindowShutterPlacementForUnit(template, unitId),
   );
 }
 
 /**
- * Replace any authored shutter rows with the canonical east-reference pair, mirrored for west units.
+ * Replace authored shutter rows with the current reference pair, mirrored for west units.
  * Non-qualifying units keep their layout unchanged.
  */
 export function mergeStandardApartmentWindowShuttersIntoPlacedItems(
@@ -114,7 +153,7 @@ export function mergeStandardApartmentWindowShuttersIntoPlacedItems(
   );
   return [
     ...withoutShutters,
-    ...standardApartmentWindowShutterPlacedItemsForUnit(unitId),
+    ...standardApartmentWindowShutterPlacedItemsForUnit(unitId, placedItems),
   ];
 }
 

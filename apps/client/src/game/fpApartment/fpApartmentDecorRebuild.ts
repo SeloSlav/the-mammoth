@@ -17,6 +17,7 @@ import {
   OWNED_APARTMENT_LAYOUT_FRACTION_MAX,
   OWNED_APARTMENT_LAYOUT_FRACTION_MIN,
   apartmentUnitQualifiesForStandardWindowShutters,
+  standardApartmentWindowShutterReferenceItemsFromPlacedItems,
   type OwnedApartmentPlacedItemKind,
   type OwnedApartmentWallMaterial,
   type OwnedApartmentWallOpening,
@@ -228,7 +229,16 @@ export function visibleDecorPlacements(
     }
 
     const layoutDoc = shutterOnly
-      ? null
+      ? builtinsFromContent && {
+          ...builtinsFromContent,
+          placedItems: standardApartmentWindowShutterReferenceItemsFromPlacedItems(
+            builtinsFromContent.placedItems,
+          ),
+          wallItems: [],
+          mirrorItems: [],
+          objectGroups: [],
+          npcCombatSpawns: [],
+        }
       : resolveApartmentLayoutDocForUnit(
           unit,
           builtinsFromContent,
