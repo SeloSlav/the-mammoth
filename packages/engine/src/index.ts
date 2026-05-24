@@ -189,7 +189,7 @@ export {
   MAMMOTH_CATALOG_GLB_SEARCH_ROOTS,
   MAMMOTH_STATIC_MODEL_BASE,
 } from "@the-mammoth/assets";
-export { deepDisposeObject3D, detachRegistryCloneSubtree } from "./loaders/deepDisposeObject3D.js";
+export { deepDisposeObject3D, detachRegistryCloneSubtree, detachSkinnedModelCloneSubtree } from "./loaders/deepDisposeObject3D.js";
 export {
   assertWebGpuAdapterOrThrow,
   requestWebGpuAdapter,

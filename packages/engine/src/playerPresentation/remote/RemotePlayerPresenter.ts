@@ -8,7 +8,7 @@ import type {
 } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
-import { deepDisposeObject3D } from "../../loaders/deepDisposeObject3D.js";
+import { detachSkinnedModelCloneSubtree } from "../../loaders/deepDisposeObject3D.js";
 import { buildPrimitiveHumanoid } from "../primitiveHumanoid.js";
 import { resolvePlayerBodyClipName, type PlayerBodyClipName } from "./playerBodyMotion.js";
 import { WeaponPresenter } from "../../weapons/WeaponPresenter.js";
@@ -292,7 +292,7 @@ class AnimatedRemotePlayerBody {
 
   dispose(): void {
     this.mixer.stopAllAction();
-    deepDisposeObject3D(this.root);
+    detachSkinnedModelCloneSubtree(this.root);
   }
 
   private playClip(next: PlayerBodyClipName, immediate: boolean): void {

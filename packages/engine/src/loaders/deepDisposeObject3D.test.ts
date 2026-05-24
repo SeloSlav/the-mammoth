@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { deepDisposeObject3D, detachRegistryCloneSubtree } from "./deepDisposeObject3D.js";
+import { deepDisposeObject3D, detachRegistryCloneSubtree, detachSkinnedModelCloneSubtree } from "./deepDisposeObject3D.js";
 
 describe("deepDisposeObject3D / detachRegistryCloneSubtree", () => {
   it("deepDisposeObject3D disposes owned mesh GPU resources", () => {
@@ -43,5 +43,23 @@ describe("deepDisposeObject3D / detachRegistryCloneSubtree", () => {
     deepDisposeObject3D(clone);
 
     expect(geoDispose).toHaveBeenCalledOnce();
+  });
+
+  it("detachSkinnedModelCloneSubtree disposes clone materials but keeps shared geometry", () => {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const templateMat = new THREE.MeshStandardMaterial();
+    const template = new THREE.Mesh(geo, templateMat);
+    const cloneRoot = new THREE.Group();
+    const cloneMesh = template.clone(true);
+    cloneMesh.material = templateMat.clone();
+    cloneRoot.add(cloneMesh);
+    const geoDispose = vi.spyOn(geo, "dispose");
+    const cloneMatDispose = vi.spyOn(cloneMesh.material as THREE.Material, "dispose");
+
+    detachSkinnedModelCloneSubtree(cloneRoot);
+
+    expect(cloneMatDispose).toHaveBeenCalledOnce();
+    expect(geoDispose).not.toHaveBeenCalled();
+    expect(cloneRoot.parent).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import type { ReplicatedNpcSnapshot } from "@the-mammoth/game";
 import type { NpcBodyClipName } from "@the-mammoth/game";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
-import { deepDisposeObject3D } from "../loaders/deepDisposeObject3D.js";
+import { deepDisposeObject3D, detachSkinnedModelCloneSubtree } from "../loaders/deepDisposeObject3D.js";
 import { upgradeApartmentDecorMaterialToStandard } from "../rendering/apartmentDecorMaterialUpgrade.js";
 import {
   createNpcVisualSmoothingState,
@@ -373,7 +373,7 @@ class AnimatedBabushkaBody {
 
   dispose(): void {
     this.mixer.stopAllAction();
-    deepDisposeObject3D(this.root);
+    detachSkinnedModelCloneSubtree(this.root);
   }
 
   private resolveLocomotionClip(
