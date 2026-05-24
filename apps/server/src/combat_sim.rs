@@ -48,10 +48,13 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
     ("ammo-9mm", 60),
 ];
 
-/// Combat sim keeps aggro intentionally tight so animation states are easy to inspect.
-pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = 2.75;
-/// Minimum planar distance from the player spawn to the babushka (outside combat-sim aggro).
-const BABUSHKA_SPAWN_SEPARATION_M: f32 = COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 1.75;
+/// Match live-world babushka aggro so combat sim behaves like the real apartment encounter.
+pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = npc::BABUSHKA_AGGRO_RANGE_M;
+/// Planar buffer beyond aggro — player and babushka must start/respawn outside this gap.
+const BABUSHKA_PLAYER_SPAWN_BUFFER_M: f32 = 4.0;
+/// Minimum planar distance from the player to babushka on enter + corpse respawn.
+pub const BABUSHKA_PLAYER_MIN_SEPARATION_M: f32 =
+    COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + BABUSHKA_PLAYER_SPAWN_BUFFER_M;
 
 /// Death clip (~2.47 s) plus corpse linger before despawn + fresh spawn elsewhere in the arena.
 const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 6_500_000;
@@ -107,7 +110,18 @@ pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNp
     };
     let session_key = npc.session_key.clone();
     let salt = now_us as u64 ^ npc.npc_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    let (x, y, z, yaw) = random_babushka_pose_in_unit(&unit, salt);
+    let (player_x, player_z) = ctx
+        .db
+        .player_pose()
+        .identity()
+        .find(&owner)
+        .map(|pose| (pose.x, pose.z))
+        .unwrap_or_else(|| {
+            let (cx, _, cz) = combat_sim_player_spawn_pose(&unit);
+            (cx, cz)
+        });
+    let (x, y, z, yaw) =
+        babushka_pose_separated_from_player(&unit, player_x, player_z, salt);
     let npc_id = npc.npc_id;
     ctx.db.world_npc().npc_id().delete(&npc_id);
     let _ = npc::spawn_babushka(ctx, session_key, x, y, z, yaw, Some(owner));
@@ -205,26 +219,75 @@ pub(crate) fn grant_combat_sim_loadout(ctx: &ReducerContext, owner: Identity) {
     loadout::reset_player_active_hotbar_slot_to_first(ctx, owner);
 }
 
+fn planar_distance_sq(ax: f32, az: f32, bx: f32, bz: f32) -> f32 {
+    let dx = ax - bx;
+    let dz = az - bz;
+    dx * dx + dz * dz
+}
+
+fn clamp_babushka_xz_in_unit(unit: &ApartmentUnit, x: f32, z: f32) -> (f32, f32) {
+    let inset = 0.55;
+    (
+        x.clamp(unit.bound_min_x + inset, unit.bound_max_x - inset),
+        z.clamp(unit.bound_min_z + inset, unit.bound_max_z - inset),
+    )
+}
+
+/// Push babushka away from the player along the arena long axis fallback.
 fn babushka_spawn_xz(unit: &ApartmentUnit, player_x: f32, player_z: f32) -> (f32, f32, f32, f32) {
     let cx = (unit.bound_min_x + unit.bound_max_x) * 0.5;
     let cz = (unit.bound_min_z + unit.bound_max_z) * 0.5;
-    let mut dx = cx - player_x;
-    let mut dz = cz - player_z;
-    let len = (dx * dx + dz * dz).sqrt();
-    if len < 1e-3 {
-        dx = 0.0;
-        dz = 1.0;
+    let width = unit.bound_max_x - unit.bound_min_x;
+    let depth = unit.bound_max_z - unit.bound_min_z;
+    let mut dx = if width >= depth {
+        if player_x >= cx {
+            -1.0
+        } else {
+            1.0
+        }
+    } else if player_z >= cz {
+        -1.0
     } else {
-        dx /= len;
-        dz /= len;
+        1.0
+    };
+    let mut dz = 0.0;
+    if width < depth {
+        dx = 0.0;
+        dz = if player_z >= cz { -1.0 } else { 1.0 };
     }
-    let mut nx = player_x + dx * BABUSHKA_SPAWN_SEPARATION_M;
-    let mut nz = player_z + dz * BABUSHKA_SPAWN_SEPARATION_M;
-    let inset = 0.55;
-    nx = nx.clamp(unit.bound_min_x + inset, unit.bound_max_x - inset);
-    nz = nz.clamp(unit.bound_min_z + inset, unit.bound_max_z - inset);
+    let mut nx = player_x + dx * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    let mut nz = player_z + dz * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    (nx, nz) = clamp_babushka_xz_in_unit(unit, nx, nz);
     let yaw = (player_x - nx).atan2(player_z - nz);
     (nx, unit.foot_y, nz, yaw)
+}
+
+/// Random arena pose at least `BABUSHKA_PLAYER_MIN_SEPARATION_M` from the player when possible.
+pub fn babushka_pose_separated_from_player(
+    unit: &ApartmentUnit,
+    player_x: f32,
+    player_z: f32,
+    salt: u64,
+) -> (f32, f32, f32, f32) {
+    let min_sep_sq = BABUSHKA_PLAYER_MIN_SEPARATION_M * BABUSHKA_PLAYER_MIN_SEPARATION_M;
+    let mut best: Option<(f32, f32, f32, f32, f32)> = None;
+    for attempt in 0..16 {
+        let sample_salt = salt.wrapping_add((attempt as u64).wrapping_mul(0x517c_c1b7_2722_0e95));
+        let (x, y, z, yaw) = random_babushka_pose_in_unit(unit, sample_salt);
+        let d_sq = planar_distance_sq(x, z, player_x, player_z);
+        if d_sq >= min_sep_sq {
+            return (x, y, z, yaw);
+        }
+        if best.map(|b| d_sq > b.4).unwrap_or(true) {
+            best = Some((x, y, z, yaw, d_sq));
+        }
+    }
+    if let Some((x, y, z, yaw, d_sq)) = best {
+        if d_sq >= min_sep_sq * 0.64 {
+            return (x, y, z, yaw);
+        }
+    }
+    babushka_spawn_xz(unit, player_x, player_z)
 }
 
 /// Teleport into the combat sim arena, grant full weapons + ammo, spawn one idle babushka out of aggro.
@@ -349,4 +412,74 @@ pub fn leave_combat_sim(ctx: &ReducerContext) {
     movement::reset_player_input_row(ctx, owner, yaw);
     reset_player_loadout_for_respawn(ctx, owner);
     loadout::reset_player_active_hotbar_slot_to_first(ctx, owner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apartments::ApartmentUnit;
+
+    fn test_unit() -> ApartmentUnit {
+        ApartmentUnit {
+            unit_key: "combat_sim_test".to_string(),
+            floor_doc_id: "floor_test".to_string(),
+            level: 1,
+            unit_id: "unit_test".to_string(),
+            state: UNIT_STATE_CLAIMED,
+            owner: None,
+            claim_started_by: None,
+            claim_progress_secs: 0.0,
+            last_claim_pulse_micros: 0,
+            reinforce_progress_secs: 0.0,
+            reinforce_by: None,
+            reinforced: 0,
+            bound_min_x: -6.0,
+            bound_max_x: 6.0,
+            bound_min_y: 0.0,
+            bound_max_y: 3.0,
+            bound_min_z: -5.0,
+            bound_max_z: 5.0,
+            bed_x: 0.0,
+            bed_y: 0.0,
+            bed_z: 0.0,
+            bed_yaw: 0.0,
+            foot_x: 0.0,
+            foot_y: 0.0,
+            foot_z: 0.0,
+            wardrobe_x: -4.0,
+            wardrobe_z: -4.0,
+            stove_x: 4.0,
+            stove_z: 4.0,
+        }
+    }
+
+    #[test]
+    fn combat_sim_aggro_matches_live_world_babushka() {
+        assert!((COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M - npc::BABUSHKA_AGGRO_RANGE_M).abs() < 1e-4);
+    }
+
+    #[test]
+    fn initial_babushka_spawn_is_outside_aggro_from_arena_center() {
+        let unit = test_unit();
+        let (px, _, pz) = combat_sim_player_spawn_pose(&unit);
+        let (bx, _, bz, _) = babushka_spawn_xz(&unit, px, pz);
+        let d = planar_distance_sq(bx, bz, px, pz).sqrt();
+        assert!(
+            d >= COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 2.0,
+            "babushka spawned {d}m from player (min expected {})",
+            COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 2.0
+        );
+    }
+
+    #[test]
+    fn respawn_pose_prefers_separation_from_player() {
+        let unit = test_unit();
+        let (px, _, pz) = combat_sim_player_spawn_pose(&unit);
+        let (bx, _, bz, _) = babushka_pose_separated_from_player(&unit, px, pz, 0xdead_beef);
+        let d = planar_distance_sq(bx, bz, px, pz).sqrt();
+        assert!(
+            d >= COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + 1.5,
+            "respawn pose {d}m from player"
+        );
+    }
 }
