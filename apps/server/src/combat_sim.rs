@@ -56,8 +56,8 @@ const BABUSHKA_PLAYER_SPAWN_BUFFER_M: f32 = 4.0;
 pub const BABUSHKA_PLAYER_MIN_SEPARATION_M: f32 =
     COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M + BABUSHKA_PLAYER_SPAWN_BUFFER_M;
 
-/// Death clip (~2.47 s) plus corpse linger before despawn + fresh spawn elsewhere in the arena.
-const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 6_500_000;
+/// Death clip (~2.47 s) + die one-shot + epitaph MP3 — keep corpse until voice lines finish.
+const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 22_000_000;
 
 pub fn session_owner_for_session_key(ctx: &ReducerContext, session_key: &str) -> Option<Identity> {
     let unit_key = session_key.strip_prefix("combat_sim:")?;

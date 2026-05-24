@@ -4,7 +4,8 @@ use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
 use crate::apartments::apartment_unit;
 use crate::combat_stub::{
-    body_height_from_crouch_bit, eye_y_above_feet, melee_headshot_from_aim_ray,
+    body_height_from_crouch_bit, body_hit_torso_height_m, eye_y_above_feet,
+    head_hit_box_aabb, melee_headshot_from_aim_ray,
     ray_aabb_intersect_enter, vertical_overlap, victim_hit_trace_max_y,
     HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN, MELEE_HIT_MAX_Y_OFFSET_M,
     MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M, RAY_AABB_T_ENTER_EPS,
@@ -36,6 +37,8 @@ pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 
 const NPC_TICK_INTERVAL_MICROS: i64 = 250_000;
 const BABUSHKA_DAMAGE_CHASE_MICROS: i64 = 12_000_000;
+/// Forgiving head raycast — square head box is smaller than the visible mesh bun.
+const NPC_HEAD_TRACE_INFLATE_M: f32 = 0.06;
 
 #[spacetimedb::table(public, accessor = world_npc)]
 pub struct WorldNpc {
@@ -181,21 +184,80 @@ pub fn trace_best_npc_hit(
         let px = npc.x;
         let pz = npc.z;
         let py = npc.y;
-        let mn_x = px - pr;
-        let mx_x = px + pr;
-        let mn_z = pz - pr;
-        let mx_z = pz + pr;
-        let mn_y = py;
-        let mx_y = victim_hit_trace_max_y(py, height);
-        if let Some(hit) =
-            ray_aabb_intersect_enter(ox, oy, oz, dx, dy, dz, mn_x, mn_y, mn_z, mx_x, mx_y, mx_z)
-        {
-            if hit.t_hit > max_t + RAY_AABB_T_ENTER_EPS {
-                continue;
+
+        let mut best_t: Option<f32> = None;
+
+        let (hmn_x, hmn_y, hmn_z, hmx_x, hmx_y, hmx_z) = head_hit_box_aabb(px, py, pz, height);
+        let inf = NPC_HEAD_TRACE_INFLATE_M;
+        if let Some(hit) = ray_aabb_intersect_enter(
+            ox,
+            oy,
+            oz,
+            dx,
+            dy,
+            dz,
+            hmn_x - inf,
+            hmn_y - inf,
+            hmn_z - inf,
+            hmx_x + inf,
+            hmx_y + inf,
+            hmx_z + inf,
+        ) {
+            if hit.t_hit <= max_t + RAY_AABB_T_ENTER_EPS {
+                best_t = Some(hit.t_hit);
             }
-            let replace = best.is_none() || hit.t_hit + 1e-4 < best.as_ref().unwrap().1;
+        }
+
+        let torso_top = py + body_hit_torso_height_m(height);
+        if let Some(hit) = ray_aabb_intersect_enter(
+            ox,
+            oy,
+            oz,
+            dx,
+            dy,
+            dz,
+            px - pr,
+            py,
+            pz - pr,
+            px + pr,
+            torso_top,
+            pz + pr,
+        ) {
+            if hit.t_hit <= max_t + RAY_AABB_T_ENTER_EPS {
+                let replace = best_t.is_none() || hit.t_hit + 1e-4 < best_t.unwrap();
+                if replace {
+                    best_t = Some(hit.t_hit);
+                }
+            }
+        }
+
+        let full_top = victim_hit_trace_max_y(py, height);
+        if let Some(hit) = ray_aabb_intersect_enter(
+            ox,
+            oy,
+            oz,
+            dx,
+            dy,
+            dz,
+            px - pr,
+            py,
+            pz - pr,
+            px + pr,
+            full_top,
+            pz + pr,
+        ) {
+            if hit.t_hit <= max_t + RAY_AABB_T_ENTER_EPS {
+                let replace = best_t.is_none() || hit.t_hit + 1e-4 < best_t.unwrap();
+                if replace {
+                    best_t = Some(hit.t_hit);
+                }
+            }
+        }
+
+        if let Some(t_hit) = best_t {
+            let replace = best.is_none() || t_hit + 1e-4 < best.as_ref().unwrap().1;
             if replace {
-                best = Some((npc.npc_id, hit.t_hit, px, py, pz, height));
+                best = Some((npc.npc_id, t_hit, px, py, pz, height));
             }
         }
     }

@@ -21,6 +21,7 @@ import {
   babushkaIdleNextAtMs,
   createBabushkaNpcAudio,
 } from "./babushkaNpcAudio.js";
+import { createBabushkaCombatAudio } from "./babushkaCombatAudio.js";
 
 /** Matches `apps/server/src/npc.rs` `NPC_STATE_IDLE`. */
 const NPC_STATE_IDLE = 0;
@@ -28,13 +29,6 @@ const NPC_STATE_IDLE = 0;
 const TORSO_Y_ABOVE_FEET_M = 1.04;
 const MIN_NPC_HIT_BLOOD_DAMAGE = 1;
 const BABUSHKA_HIT_VOLUME = 1.15;
-
-const BABUSHKA_AUDIO = {
-  aggro: "/audio/npc/babushka-aggro.wav",
-  hit: "/audio/npc/babushka-hit.wav",
-  punch: "/audio/npc/babushka-punch.wav",
-  die: "/audio/npc/babushka-die.wav",
-} as const;
 
 function archetypeFromRow(archetype: string): NpcArchetypeId | null {
   if (archetype === "babushka") return "babushka";
@@ -59,33 +53,6 @@ function snapshotFromRow(row: WorldNpc, observedTimeMs: number): ReplicatedNpcSn
     hitPresentationSeq: row.hitPresentationSeq,
     observedTimeMs,
   };
-}
-
-function playNpcOneShot(
-  audioContext: AudioContext | null,
-  url: string,
-  volume = 0.85,
-  onEnded?: () => void,
-): void {
-  if (!audioContext) return;
-  void fetch(url)
-    .then((r) => r.arrayBuffer())
-    .then((buf) => audioContext.decodeAudioData(buf))
-    .then((decoded) => {
-      const src = audioContext.createBufferSource();
-      src.buffer = decoded;
-      if (onEnded) {
-        src.onended = onEnded;
-      }
-      const gain = audioContext.createGain();
-      gain.gain.value = volume;
-      src.connect(gain);
-      gain.connect(audioContext.destination);
-      src.start();
-    })
-    .catch(() => {
-      /* optional assets during dev */
-    });
 }
 
 type NpcAudioTrack = {
@@ -127,12 +94,14 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   await pool.ensureReady();
 
   const bloodFx: FpBloodBurstFx = createFpBloodBurstFx(opts.fxScene);
+  const combatAudio = createBabushkaCombatAudio();
   const babushkaVoice = createBabushkaNpcAudio();
   const rows = new Map<string, WorldNpc>();
   const audioTrack = new Map<string, NpcAudioTrack>();
   const idleAudioTrack = new Map<string, BabushkaIdleAudioTrack>();
   let lastEpitaphClipIndex = -1;
-  let voiceLoadStarted = false;
+  let audioLoadStarted = false;
+  let snapshotsDirty = true;
 
   const rowInScope = (row: WorldNpc): boolean =>
     opts.sessionKeyPrefix === undefined || row.sessionKey.startsWith(opts.sessionKeyPrefix);
@@ -160,39 +129,40 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     if (prev) {
       const tookDamage = row.hitPresentationSeq > prev.hitSeq;
       if (prev.state === 0 && row.state === 1 && !tookDamage) {
-        playNpcOneShot(ctx, BABUSHKA_AUDIO.aggro);
+        if (ctx) combatAudio.play(ctx, "aggro");
       }
       if (tookDamage) {
-        playNpcOneShot(ctx, BABUSHKA_AUDIO.hit, BABUSHKA_HIT_VOLUME);
+        if (ctx) combatAudio.play(ctx, "hit", BABUSHKA_HIT_VOLUME);
         const damage = Math.max(MIN_NPC_HIT_BLOOD_DAMAGE, prev.health - row.health);
         bloodFx.spawnBurstAt(row.x, row.y + TORSO_Y_ABOVE_FEET_M, row.z, damage);
       }
       if (row.meleePresentationSeq > prev.meleeSeq) {
-        playNpcOneShot(ctx, BABUSHKA_AUDIO.punch);
+        if (ctx) combatAudio.play(ctx, "punch");
       }
       if (prev.health > 0 && row.health <= 0) {
         const deathX = row.x;
         const deathY = row.y;
         const deathZ = row.z;
-        playNpcOneShot(ctx, BABUSHKA_AUDIO.die, 0.85, () => {
-          void (async () => {
-            if (ctx) await babushkaVoice.ensureLoaded(ctx);
-            lastEpitaphClipIndex = babushkaVoice.playEpitaph(
-              opts.getCamera(),
-              deathX,
-              deathY,
-              deathZ,
-              lastEpitaphClipIndex,
-            );
-          })();
-        });
+        if (ctx) {
+          combatAudio.play(ctx, "die", 0.85, () => {
+            void (async () => {
+              await babushkaVoice.ensureLoaded(ctx);
+              lastEpitaphClipIndex = babushkaVoice.playEpitaph(
+                opts.getCamera(),
+                deathX,
+                deathY,
+                deathZ,
+                lastEpitaphClipIndex,
+              );
+            })();
+          });
+        }
         idleAudioTrack.delete(key);
       }
     }
     audioTrack.set(key, nextTrack);
     rows.set(key, row);
-    const snapshots = rebuildSnapshots(performance.now());
-    pool.ingestAuthoritative(snapshots);
+    snapshotsDirty = true;
   };
 
   const onDelete = (row: WorldNpc) => {
@@ -201,8 +171,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     rows.delete(key);
     audioTrack.delete(key);
     idleAudioTrack.delete(key);
-    const snapshots = rebuildSnapshots(performance.now());
-    pool.ingestAuthoritative(snapshots);
+    snapshotsDirty = true;
   };
 
   const onInsertCb = (_ctx: unknown, row: WorldNpc) => onRow(row);
@@ -231,8 +200,9 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     update(dt, nowMs) {
       bloodFx.tick(nowMs, dt);
       const ctx = opts.getAudioContext();
-      if (ctx && !voiceLoadStarted) {
-        voiceLoadStarted = true;
+      if (ctx && !audioLoadStarted) {
+        audioLoadStarted = true;
+        void combatAudio.ensureLoaded(ctx);
         void babushkaVoice.ensureLoaded(ctx);
       }
       const camera = opts.getCamera();
@@ -259,6 +229,10 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
         idleTrack.nextAtMs = babushkaIdleNextAtMs(nowMs, row.npcId);
       }
       const snapshots = rebuildSnapshots(nowMs);
+      if (snapshotsDirty) {
+        pool.ingestAuthoritative(snapshots);
+        snapshotsDirty = false;
+      }
       pool.tickVisual(snapshots, dt);
     },
     dispose() {
