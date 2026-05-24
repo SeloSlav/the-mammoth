@@ -129,7 +129,7 @@ fn cell_key(x: f32, y: f32, z: f32) -> CellKey {
 }
 
 #[inline]
-fn vertical_overlap(a_y: f32, a_h: f32, b_y: f32, b_h: f32) -> bool {
+pub fn vertical_overlap(a_y: f32, a_h: f32, b_y: f32, b_h: f32) -> bool {
     a_y < b_y + b_h && b_y < a_y + a_h
 }
 

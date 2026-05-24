@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowsRotate,
   faCloudArrowDown,
   faGripLinesVertical,
   faObjectGroup,
+  faRotate,
   faTableCells,
   faWindowRestore,
 } from "@fortawesome/free-solid-svg-icons";
@@ -66,6 +68,7 @@ import {
   parseMyApartmentDecorUniformScalePercentInput,
 } from "../editor/myApartment/editorMyApartmentDecorScale.js";
 import { EditorChromeMyApartmentModelOptimize } from "./EditorChromeMyApartmentModelOptimize.js";
+import { postSyncApartmentDecorManifest } from "./editorApartmentDecorManifestNetwork.js";
 
 type ApartmentDecorCatalogEntry = {
   modelRelPath: string;
@@ -209,44 +212,23 @@ export function EditorChromeMyApartment(props: {
   const [catalogStatus, setCatalogStatus] = useState("Loading decor catalog...");
   const [selectedCatalogModelRelPath, setSelectedCatalogModelRelPath] = useState<string | null>(null);
   const [catalogSearchQuery, setCatalogSearchQuery] = useState("");
+  const [catalogSyncBusy, setCatalogSyncBusy] = useState(false);
+  const [catalogSyncError, setCatalogSyncError] = useState<string | null>(null);
   const [placedItemsSearchQuery, setPlacedItemsSearchQuery] = useState("");
   const [objectGroupsSearchQuery, setObjectGroupsSearchQuery] = useState("");
   const [groupRenameDraftById, setGroupRenameDraftById] = useState<Record<string, string>>({});
   const [decorScalePercentDraft, setDecorScalePercentDraft] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/static/models/objects/index.json", { cache: "no-store" });
-        if (!res.ok) {
-          if (!cancelled) {
-            const entries = mergeApartmentDecorManifestPaths([])
-              .map((modelRelPath) => ({
-                modelRelPath,
-                label: decorCatalogLabel(modelRelPath),
-              }))
-              .sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
-            setCatalog(entries);
-            setSelectedCatalogModelRelPath(entries[0]?.modelRelPath ?? null);
-            setCatalogStatus(
-              entries.length > 0
-                ? `Loaded ${entries.length} procedural model${entries.length === 1 ? "" : "s"}.`
-                : "No decor catalog found under public/static/models/objects/.",
-            );
-          }
-          return;
-        }
-        const raw = (await res.json()) as unknown;
-        const manifestPaths = (Array.isArray(raw) ? raw : [])
-          .filter((value): value is string => typeof value === "string");
-        const entries = mergeApartmentDecorManifestPaths(manifestPaths)
+  const refreshDecorCatalog = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/static/models/objects/index.json", { cache: "no-store" });
+      if (!res.ok) {
+        const entries = mergeApartmentDecorManifestPaths([])
           .map((modelRelPath) => ({
             modelRelPath,
             label: decorCatalogLabel(modelRelPath),
           }))
           .sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
-        if (cancelled) return;
         setCatalog(entries);
         setSelectedCatalogModelRelPath((prev) =>
           prev && entries.some((entry) => entry.modelRelPath === prev)
@@ -255,17 +237,65 @@ export function EditorChromeMyApartment(props: {
         );
         setCatalogStatus(
           entries.length > 0
-            ? `Loaded ${entries.length} model${entries.length === 1 ? "" : "s"}.`
-            : "No .glb or .obj models found in public/static/models/objects/.",
+            ? `Loaded ${entries.length} procedural model${entries.length === 1 ? "" : "s"}.`
+            : "No decor catalog found under public/static/models/objects/.",
         );
-      } catch {
-        if (!cancelled) setCatalogStatus("Failed to load decor catalog.");
+        return false;
       }
+      const raw = (await res.json()) as unknown;
+      const manifestPaths = (Array.isArray(raw) ? raw : []).filter(
+        (value): value is string => typeof value === "string",
+      );
+      const entries = mergeApartmentDecorManifestPaths(manifestPaths)
+        .map((modelRelPath) => ({
+          modelRelPath,
+          label: decorCatalogLabel(modelRelPath),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label) || a.modelRelPath.localeCompare(b.modelRelPath));
+      setCatalog(entries);
+      setSelectedCatalogModelRelPath((prev) =>
+        prev && entries.some((entry) => entry.modelRelPath === prev)
+          ? prev
+          : (entries[0]?.modelRelPath ?? null),
+      );
+      setCatalogStatus(
+        entries.length > 0
+          ? `Loaded ${entries.length} model${entries.length === 1 ? "" : "s"}.`
+          : "No .glb or .obj models found in public/static/models/objects/.",
+      );
+      return true;
+    } catch {
+      setCatalogStatus("Failed to load decor catalog.");
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await refreshDecorCatalog();
+      if (cancelled) return;
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshDecorCatalog]);
+
+  async function syncDecorCatalogFromDisk(): Promise<void> {
+    setCatalogSyncBusy(true);
+    setCatalogSyncError(null);
+    try {
+      const result = await postSyncApartmentDecorManifest();
+      await refreshDecorCatalog();
+      setCatalogStatus(
+        `Synced ${result.entryCount} model${result.entryCount === 1 ? "" : "s"} from disk.`,
+      );
+    } catch (err) {
+      setCatalogSyncError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCatalogSyncBusy(false);
+    }
+  }
 
   const selectedDecorId = parseMyApartmentLayoutDecorSelectedId(selectedId);
   const selectedWallId = parseMyApartmentLayoutWallSelectedId(selectedId);
@@ -696,6 +726,23 @@ export function EditorChromeMyApartment(props: {
             its GLB without moving it.
           </p>
         <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>{catalogStatus}</div>
+        {catalogSyncError ? (
+          <div style={{ marginTop: 6, fontSize: 11, color: "#f0a0a0", lineHeight: 1.35 }}>
+            {catalogSyncError}
+          </div>
+        ) : null}
+        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            style={editorChromeRowBtn}
+            onClick={() => void syncDecorCatalogFromDisk()}
+            disabled={catalogSyncBusy}
+            title="Scan public/static/models/objects/ and regenerate index.json (same as sync-apartment-decor-manifest script)"
+          >
+            <FontAwesomeIcon icon={faRotate} style={{ marginRight: 6 }} />
+            {catalogSyncBusy ? "Syncing catalog…" : "Sync catalog from disk"}
+          </button>
+        </div>
         <input
           type="search"
           value={catalogSearchQuery}

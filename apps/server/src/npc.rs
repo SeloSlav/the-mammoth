@@ -2,7 +2,10 @@
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
-use crate::combat_stub::{ray_aabb_intersect_enter, RAY_AABB_T_ENTER_EPS};
+use crate::combat_stub::{
+    body_height_from_crouch_bit, ray_aabb_intersect_enter, vertical_overlap, RAY_AABB_T_ENTER_EPS,
+};
+use crate::movement::player_input;
 use crate::pose::player_pose;
 
 pub const NPC_ARCHETYPE_BABUSHKA: &str = "babushka";
@@ -379,7 +382,10 @@ fn step_one_world_npc(
             npc.vel_z = vz;
             npc.x += vx * dt_sec;
             npc.z += vz * dt_sec;
-            npc.y = target_y;
+            // Flat combat arena only — never snap Y across apartment storeys while chasing.
+            if combat_sim {
+                npc.y = target_y;
+            }
             npc.yaw = planar_dx.atan2(planar_dz);
             let speed_sq = vx * vx + vz * vz;
             npc.locomotion = if speed_sq > 0.04 {
@@ -392,7 +398,14 @@ fn step_one_world_npc(
             npc.vel_z = 0.0;
             npc.locomotion = NPC_LOCOMOTION_IDLE;
             npc.yaw = planar_dx.atan2(planar_dz);
-            if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS {
+            if now_us - npc.last_melee_micros >= BABUSHKA_MELEE_COOLDOWN_MICROS
+                && babushka_melee_vertical_overlap_with_player(
+                    ctx,
+                    npc.y,
+                    target_identity,
+                    target_y,
+                )
+            {
                 npc.last_melee_micros = now_us;
                 npc.melee_presentation_seq = npc.melee_presentation_seq.wrapping_add(1);
                 crate::player_vitals::apply_damage(ctx, target_identity, BABUSHKA_MELEE_DAMAGE);
@@ -403,6 +416,23 @@ fn step_one_world_npc(
         npc.vel_x = 0.0;
         npc.vel_z = 0.0;
     }
+}
+
+/// True when babushka's body capsule overlaps the target player's capsule (same rules as PvP melee).
+fn babushka_melee_vertical_overlap_with_player(
+    ctx: &ReducerContext,
+    npc_y: f32,
+    target_identity: Identity,
+    target_y: f32,
+) -> bool {
+    let player_h = ctx
+        .db
+        .player_input()
+        .identity()
+        .find(&target_identity)
+        .map(|row| body_height_from_crouch_bit(row.bits))
+        .unwrap_or(crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M);
+    vertical_overlap(npc_y, BABUSHKA_BODY_HEIGHT_M, target_y, player_h)
 }
 
 fn ai_target_for_npc(
@@ -444,4 +474,31 @@ fn nearest_living_player_identity(
         }
     }
     best.map(|b| b.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M;
+
+    #[test]
+    fn babushka_melee_requires_vertical_capsule_overlap() {
+        let npc_y = 60.0;
+        let player_y_same_floor = 60.0;
+        assert!(vertical_overlap(
+            npc_y,
+            BABUSHKA_BODY_HEIGHT_M,
+            player_y_same_floor,
+            PLAYER_BODY_HEIGHT_STAND_M,
+        ));
+
+        // One full storey above (~3.16 m) — no overlap even when XZ aligns.
+        let player_y_upper_floor = npc_y + 3.2;
+        assert!(!vertical_overlap(
+            npc_y,
+            BABUSHKA_BODY_HEIGHT_M,
+            player_y_upper_floor,
+            PLAYER_BODY_HEIGHT_STAND_M,
+        ));
+    }
 }

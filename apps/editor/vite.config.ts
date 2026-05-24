@@ -18,8 +18,37 @@ const spacetimeClientSrc = path.resolve(repoRoot, "packages/spacetime-client/src
 const require = createRequire(import.meta.url);
 const threeWebgpu = require.resolve("three/webgpu");
 
+const editorViteDir = path.resolve(configDir, "src/vite");
+const editorMiddlewareRestartWatchRoots = [
+  editorViteDir,
+  path.resolve(repoRoot, "scripts/lib"),
+  path.resolve(repoRoot, "apps/client/src/vite"),
+];
+
+function shouldRestartEditorDevServerForFile(file: string): boolean {
+  const normalized = file.split(path.sep).join("/");
+  if (normalized.endsWith(".test.ts")) return false;
+  return editorMiddlewareRestartWatchRoots.some((root) => {
+    const rel = path.relative(root, file).split(path.sep).join("/");
+    return rel !== "" && !rel.startsWith("..");
+  });
+}
+
 export default defineConfig({
   plugins: [
+    {
+      name: "editor-dev-middleware-restart",
+      configureServer(server) {
+        server.watcher.on("change", (file) => {
+          if (!shouldRestartEditorDevServerForFile(file)) return;
+          server.config.logger.info(
+            "Editor dev middleware changed — restarting dev server…",
+            { timestamp: true },
+          );
+          void server.restart();
+        });
+      },
+    },
     /**
      * `configureServer` + `order: "pre"` is not always enough: Vite’s own middleware can still sit
      * earlier in Connect’s stack. We **prepend** so editor `/content` + `/__editor` handlers run

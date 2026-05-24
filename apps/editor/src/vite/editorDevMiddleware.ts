@@ -44,6 +44,7 @@ import {
   handleApartmentDecorGlbOptimizeStatus,
   handleApartmentDecorGlbRevert,
 } from "./apartmentDecorGlbOptimizeHandlers.js";
+import { handleSyncApartmentDecorManifest } from "./syncApartmentDecorManifestHandlers.js";
 
 /**
  * IDs accepted by the save-consumable-presentation endpoint.
@@ -354,6 +355,9 @@ export function editorDevMiddleware(
       }
       if (path === "/__editor/revert-apartment-decor-glb" && req.method === "POST") {
         return void (await handleApartmentDecorGlbRevert(repoRoot, req, res, ensureEditorSaveEnabled));
+      }
+      if (path === "/__editor/sync-apartment-decor-manifest" && req.method === "POST") {
+        return void (await handleSyncApartmentDecorManifest(repoRoot, res, ensureEditorSaveEnabled));
       }
       if (path === "/__editor/save-consumable-presentation" && req.method === "POST") {
         return void (await handleSaveConsumablePresentation(repoRoot, req, res, next));
