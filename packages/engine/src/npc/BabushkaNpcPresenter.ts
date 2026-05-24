@@ -121,8 +121,8 @@ function measureNpcModelWorldBox(model: THREE.Object3D): THREE.Box3 {
 function normalizeNpcHumanoidModel(model: THREE.Object3D): void {
   /**
    * Meshy humanoids bake cm→m on `Armature.scale` (~0.01), same as `male.glb`. Never apply an extra
-   * root scale — it multiplies walk hip keys into giants. Ground feet using skinned bounds, not bind-pose
-   * stubs from `setFromObject` alone (those read ~1–2 cm and bury the mesh).
+   * root scale — it multiplies walk hip keys into giants. Bottom-pivot in bind pose here; animated
+   * squat/death offsets are corrected each frame via {@link snapNpcModelFeetToLocalGround}.
    */
   let box = measureNpcModelWorldBox(model);
   const height = box.max.y - box.min.y;
@@ -142,6 +142,18 @@ function normalizeNpcHumanoidModel(model: THREE.Object3D): void {
   model.position.x += -center.x;
   model.position.y += -box.min.y;
   model.position.z += -center.z;
+  model.updateMatrixWorld(true);
+}
+
+/** Keep animated skinned bounds pinned so feet stay on Y=0 (squat / death lower the rig). */
+export function snapNpcModelFeetToLocalGround(model: THREE.Object3D, groundParent: THREE.Object3D): void {
+  const box = measureNpcModelWorldBox(model);
+  if (box.isEmpty()) return;
+  groundParent.updateMatrixWorld(true);
+  const minLocal = box.min.clone();
+  groundParent.worldToLocal(minLocal);
+  if (Math.abs(minLocal.y) <= 0.002) return;
+  model.position.y -= minLocal.y;
   model.updateMatrixWorld(true);
 }
 
@@ -285,6 +297,10 @@ class AnimatedBabushkaBody {
     this.playLocomotion("idle", true);
   }
 
+  private snapFeetToGround(): void {
+    snapNpcModelFeetToLocalGround(this.modelRoot, this.root);
+  }
+
   update(
     snapshot: ReplicatedNpcSnapshot,
     dt: number,
@@ -299,6 +315,7 @@ class AnimatedBabushkaBody {
       }
       this.mixer.update(dt);
       updateNpcSkinnedMeshes(this.modelRoot);
+      this.snapFeetToGround();
       return;
     }
 
@@ -343,6 +360,7 @@ class AnimatedBabushkaBody {
       if (this.overlayTimeLeftSec > 0) {
         this.mixer.update(dt);
         updateNpcSkinnedMeshes(this.modelRoot);
+        this.snapFeetToGround();
         return;
       }
       this.stopOverlay();
@@ -350,6 +368,7 @@ class AnimatedBabushkaBody {
 
     this.mixer.update(dt);
     updateNpcSkinnedMeshes(this.modelRoot);
+    this.snapFeetToGround();
   }
 
   dispose(): void {

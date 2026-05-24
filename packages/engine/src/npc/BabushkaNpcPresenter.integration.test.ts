@@ -40,9 +40,8 @@ describe("babushka.glb integration", () => {
     const THREE = await import("three");
     const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
     const { clone: cloneSkeleton } = await import("three/addons/utils/SkeletonUtils.js");
-    const { BabushkaNpcPresenter, seedBabushkaNpcBodyTemplateForTests } = await import(
-      "./BabushkaNpcPresenter.js"
-    );
+    const { BabushkaNpcPresenter, seedBabushkaNpcBodyTemplateForTests, snapNpcModelFeetToLocalGround } =
+      await import("./BabushkaNpcPresenter.js");
 
     const loader = new GLTFLoader();
     const buf = readFileSync(BABUSHKA_GLB);
@@ -137,6 +136,47 @@ describe("babushka.glb integration", () => {
 
     expect(maxHipsY).toBeGreaterThan(0.4);
     expect(maxHipsY).toBeLessThan(2.5);
+
+    const resolveClipByLabel = (label: string): THREE.AnimationClip | undefined => {
+      const norm = label.toLowerCase().replace(/[\s_]+/g, "");
+      return gltf.animations
+        .map((c) => {
+          const tracks = c.tracks.filter(
+            (track) =>
+              !track.name.endsWith(".scale") &&
+              !(
+                track.name.endsWith(".position") &&
+                (() => {
+                  const bone = track.name.slice(0, -".position".length);
+                  return bone === "Hips" || bone === "Armature" || bone.endsWith("Hips");
+                })()
+              ),
+          );
+          return new THREE.AnimationClip(c.name, c.duration, tracks);
+        })
+        .find((c) => c.name.toLowerCase().replace(/[\s_]+/g, "") === norm);
+    };
+
+    const assertFeetStayGroundedThroughClip = (clipLabel: string, frameCount: number): void => {
+      const clip = resolveClipByLabel(clipLabel);
+      expect(clip).toBeDefined();
+      const bodyRoot = modelRoot!.parent!;
+      expect(bodyRoot).not.toBeNull();
+      modelRoot!.position.set(0, 0, 0);
+      const clipMixer = new THREE.AnimationMixer(modelRoot!);
+      clipMixer.clipAction(clip!).play();
+      for (let i = 0; i < frameCount; i++) {
+        clipMixer.update(1 / 30);
+        updateNpcSkinnedMeshesForTest(modelRoot!);
+        snapNpcModelFeetToLocalGround(modelRoot!, bodyRoot);
+        const box = measureWorldSkinnedBox(modelRoot!);
+        expect(box.min.y).toBeGreaterThan(-0.08);
+        expect(box.min.y).toBeLessThan(0.08);
+      }
+    };
+
+    assertFeetStayGroundedThroughClip("Air Squat", 120);
+    assertFeetStayGroundedThroughClip("Dead", 90);
     presenter.dispose();
   });
 
