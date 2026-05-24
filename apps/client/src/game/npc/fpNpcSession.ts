@@ -141,7 +141,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     audioTrack.set(key, nextTrack);
     rows.set(key, row);
     const snapshots = rebuildSnapshots(performance.now());
-    pool.sync(snapshots, 0);
+    pool.ingestAuthoritative(snapshots);
   };
 
   const onDelete = (row: WorldNpc) => {
@@ -150,7 +150,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     rows.delete(key);
     audioTrack.delete(key);
     const snapshots = rebuildSnapshots(performance.now());
-    pool.sync(snapshots, 0);
+    pool.ingestAuthoritative(snapshots);
   };
 
   const onInsertCb = (_ctx: unknown, row: WorldNpc) => onRow(row);
@@ -163,14 +163,12 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
   for (const row of opts.conn.db.world_npc.iter()) {
     onRow(row);
   }
-  const initialSnapshots = rebuildSnapshots(performance.now());
-  pool.sync(initialSnapshots, 0);
 
   return {
     update(dt, nowMs) {
       bloodFx.tick(nowMs, dt);
       const snapshots = rebuildSnapshots(nowMs);
-      pool.sync(snapshots, dt);
+      pool.tickVisual(snapshots, dt);
     },
     dispose() {
       opts.conn.db.world_npc.removeOnInsert(onInsertCb);

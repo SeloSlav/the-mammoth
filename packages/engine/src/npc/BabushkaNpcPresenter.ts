@@ -5,6 +5,13 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import { deepDisposeObject3D } from "../loaders/deepDisposeObject3D.js";
 import { upgradeApartmentDecorMaterialToStandard } from "../rendering/apartmentDecorMaterialUpgrade.js";
+import {
+  createNpcVisualSmoothingState,
+  ingestNpcAuthoritativeTransform,
+  stepNpcVisualSmoothing,
+  type NpcVisualAnimationState,
+  type NpcVisualSmoothingState,
+} from "./NpcVisualSmoothingState.js";
 
 export const BABUSHKA_NPC_GLB_URI = "/static/models/npcs/babushka.glb";
 
@@ -274,7 +281,11 @@ class AnimatedBabushkaBody {
     this.playLocomotion("idle", true);
   }
 
-  update(snapshot: ReplicatedNpcSnapshot, dt: number): void {
+  update(
+    snapshot: ReplicatedNpcSnapshot,
+    dt: number,
+    visualLocomotion: NpcVisualAnimationState,
+  ): void {
     const dead = snapshot.state === NPC_STATE_DEAD || snapshot.health <= 0;
 
     if (dead) {
@@ -301,7 +312,8 @@ class AnimatedBabushkaBody {
 
     // Keep a base locomotion action alive every frame. If one-shots fail or finish, the rig never
     // falls back to bind/A-pose.
-    this.playLocomotion(this.resolveLocomotionClip(snapshot), false);
+    // Locomotion clips follow smoothed visual speed — not raw SpaceTimeDB update cadence.
+    this.playLocomotion(this.resolveLocomotionClip(snapshot, visualLocomotion), false);
 
     const meleeTriggered = snapshot.meleePresentationSeq > this.lastMeleeSeq;
     const hitTriggered = snapshot.hitPresentationSeq > this.lastHitSeq;
@@ -336,12 +348,15 @@ class AnimatedBabushkaBody {
     deepDisposeObject3D(this.root);
   }
 
-  private resolveLocomotionClip(snapshot: ReplicatedNpcSnapshot): BabushkaClipKey {
+  private resolveLocomotionClip(
+    snapshot: ReplicatedNpcSnapshot,
+    visualLocomotion: NpcVisualAnimationState,
+  ): BabushkaClipKey {
     const base: NpcBodyClipName = !snapshot.grounded
       ? "idle"
-      : snapshot.locomotion === "run"
+      : visualLocomotion === "run"
         ? "run"
-        : snapshot.locomotion === "walk"
+        : visualLocomotion === "walk"
           ? "walk"
           : "idle";
 
@@ -369,7 +384,20 @@ class AnimatedBabushkaBody {
       nextAction.enabled = true;
       nextAction.paused = false;
       nextAction.setEffectiveTimeScale(1);
-      nextAction.setEffectiveWeight(1);
+      return;
+    }
+
+    const prevAction =
+      this.locomotionClip !== null ? this.actions.get(this.locomotionClip) : undefined;
+
+    this.locomotionClip = next;
+    nextAction.enabled = true;
+    nextAction.paused = false;
+    nextAction.setEffectiveTimeScale(1);
+    nextAction.setEffectiveWeight(1);
+    if (prevAction && prevAction !== nextAction && prevAction.isRunning() && !immediate) {
+      nextAction.reset().play();
+      prevAction.crossFadeTo(nextAction, NPC_CLIP_TRANSITION_SEC, true);
       return;
     }
 
@@ -378,13 +406,8 @@ class AnimatedBabushkaBody {
       this.actions.get(key)?.stop();
     }
 
-    this.locomotionClip = next;
-    nextAction.enabled = true;
-    nextAction.paused = false;
     nextAction.reset();
     nextAction.setLoop(THREE.LoopRepeat, Infinity);
-    nextAction.setEffectiveTimeScale(1);
-    nextAction.setEffectiveWeight(1);
     if (!immediate) {
       nextAction.fadeIn(NPC_CLIP_TRANSITION_SEC);
     }
@@ -463,6 +486,8 @@ export class BabushkaNpcPresenter {
   readonly root = new THREE.Group();
 
   private readonly body: AnimatedBabushkaBody;
+  /** Presentation-only pose — authoritative position lives in replicated snapshots. */
+  private readonly visualSmoothing: NpcVisualSmoothingState = createNpcVisualSmoothingState();
 
   private constructor(body: AnimatedBabushkaBody) {
     this.root.name = "babushka_npc_root";
@@ -483,17 +508,34 @@ export class BabushkaNpcPresenter {
     return BabushkaNpcPresenter.createSync();
   }
 
-  applySnapshot(snapshot: ReplicatedNpcSnapshot, dt: number, envTexture: THREE.Texture | null = null): void {
-    this.root.visible = true;
-    this.root.position.set(
-      snapshot.worldPosition.x,
-      snapshot.worldPosition.y,
-      snapshot.worldPosition.z,
+  /** SpaceTimeDB row ingest — updates authoritative network pose only. */
+  ingestAuthoritativeSnapshot(snapshot: ReplicatedNpcSnapshot): void {
+    ingestNpcAuthoritativeTransform(
+      this.visualSmoothing,
+      snapshot.worldPosition,
+      snapshot.yawRad + NPC_YAW_OFFSET_RAD,
     );
-    this.root.rotation.y = snapshot.yawRad + NPC_YAW_OFFSET_RAD;
+  }
+
+  /** Per-frame visual follow — never snaps the mesh to raw network updates (except teleports). */
+  tickVisualSnapshot(
+    snapshot: ReplicatedNpcSnapshot,
+    dt: number,
+    envTexture: THREE.Texture | null = null,
+  ): void {
+    this.root.visible = true;
     bindNpcOutdoorReadableEnv(this.root, envTexture);
-    this.body.update(snapshot, dt);
+
+    const { animationState } = stepNpcVisualSmoothing(this.visualSmoothing, dt);
+    this.root.position.copy(this.visualSmoothing.visualPosition);
+    this.root.quaternion.copy(this.visualSmoothing.smoothedRotation);
+    this.body.update(snapshot, dt, animationState);
     this.root.updateMatrixWorld(true);
+  }
+
+  applySnapshot(snapshot: ReplicatedNpcSnapshot, dt: number, envTexture: THREE.Texture | null = null): void {
+    this.ingestAuthoritativeSnapshot(snapshot);
+    this.tickVisualSnapshot(snapshot, dt, envTexture);
   }
 
   dispose(): void {
@@ -526,9 +568,8 @@ export class WorldNpcPresenterPool {
     return this.envTextureProvider?.() ?? null;
   }
 
-  sync(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
+  ingestAuthoritative(snapshots: readonly ReplicatedNpcSnapshot[]): void {
     if (!babushkaTemplate) return;
-    const envTexture = this.envTexture();
     const live = new Set<string>();
     for (const snap of snapshots) {
       const key = snap.npcId.toString();
@@ -545,7 +586,7 @@ export class WorldNpcPresenterPool {
           continue;
         }
       }
-      pres.applySnapshot(snap, dt, envTexture);
+      pres.ingestAuthoritativeSnapshot(snap);
     }
     for (const [key, pres] of this.byId) {
       if (!live.has(key)) {
@@ -554,6 +595,21 @@ export class WorldNpcPresenterPool {
         this.byId.delete(key);
       }
     }
+  }
+
+  tickVisual(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
+    if (!babushkaTemplate) return;
+    const envTexture = this.envTexture();
+    for (const snap of snapshots) {
+      if (snap.archetype !== "babushka") continue;
+      const pres = this.byId.get(snap.npcId.toString());
+      pres?.tickVisualSnapshot(snap, dt, envTexture);
+    }
+  }
+
+  sync(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
+    this.ingestAuthoritative(snapshots);
+    this.tickVisual(snapshots, dt);
   }
 
   dispose(): void {
