@@ -4,6 +4,5 @@ import { workspaceToInitialMode } from "./editorWorkspaceMap.js";
 describe("workspaceToInitialMode", () => {
   it("opens apartment workspace in layout mode", () => {
     expect(workspaceToInitialMode("apartment", "kit")).toBe("my_apartment_layout");
-    expect(workspaceToInitialMode("combat_sim", "kit")).toBe("my_apartment_layout");
   });
 });

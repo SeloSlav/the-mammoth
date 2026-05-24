@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { bootstrapEditorFromContent } from "./editor/bootstrap/editorBootstrap.js";
 import { mountEditorScene } from "./editor/editorScene/editorSceneRuntime.js";
-import { useEditorStore } from "./state/editorStore.js";
 import { EditorApartmentLayoutLoadingOverlay } from "./ui/EditorApartmentLayoutLoadingOverlay.js";
 import { EditorChrome } from "./ui/EditorChrome.js";
-import { EditorCombatSimViewportPrompt } from "./ui/EditorCombatSimViewportPrompt.js";
 import { EditorViewportStatsStack } from "./ui/EditorViewportStatsStack.js";
 
 export default function App() {
@@ -12,7 +10,6 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [gpuError, setGpuError] = useState<string | null>(null);
-  const workspace = useEditorStore((s) => s.workspace);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +112,6 @@ export default function App() {
         <>
           <EditorApartmentLayoutLoadingOverlay />
           <EditorViewportStatsStack />
-          {workspace === "combat_sim" ? <EditorCombatSimViewportPrompt /> : null}
           <EditorChrome />
         </>
       ) : null}

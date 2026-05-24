@@ -1182,6 +1182,23 @@
       "scaleZ": 0.1590892691911692,
       "ignoreSupportSurfaces": true,
       "itemKind": "plain"
+    },
+    {
+      "id": "d5dd6e6f-1bbb-4bba-9e30-170735d2ffa6",
+      "modelRelPath": "static/models/objects/marian-portrait.glb",
+      "fx": 0.6574574195625202,
+      "fz": 0.2518682550802493,
+      "dy": 1.6217449816513356,
+      "yawRad": 3.141592653589793,
+      "pitchRad": 0,
+      "rollRad": 0,
+      "uniformScale": 0.3,
+      "verticalScaleMul": 1,
+      "scaleX": 0.3,
+      "scaleY": 0.3,
+      "scaleZ": 0.3,
+      "ignoreSupportSurfaces": true,
+      "itemKind": "plain"
     }
   ],
   "wallItems": [

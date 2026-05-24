@@ -66,7 +66,7 @@ import {
   parseMyApartmentLayoutSavedObjectGroupId,
   parseMyApartmentLayoutWallSelectedId,
 } from "../editor/myApartment/editorMyApartmentSelection.js";
-import { computeApartmentPlacementCanvasPick } from "../editor/myApartment/apartmentLayoutSelectionOps.js";
+import { computeApartmentPlacementCanvasPick, resolveApartmentLayoutPlacementActivation } from "../editor/myApartment/apartmentLayoutSelectionOps.js";
 import { cloneMyApartmentObjectGroupInDoc } from "../editor/myApartment/cloneMyApartmentObjectGroup.js";
 import { cloneMyApartmentLayoutSelectionInDoc } from "../editor/myApartment/cloneMyApartmentLayoutPlacements.js";
 import {
@@ -129,10 +129,9 @@ const DEFAULT_FP_AUTHOR_WEAPON_ID: FpAuthorWeaponId = "crowbar";
 export const FP_AUTHOR_PREFERRED_TARGET_ID = "weapon";
 
 function myApartmentLayoutInitialSelectedId(
-  placedItems: OwnedApartmentBuiltinsDoc["placedItems"],
+  _placedItems: OwnedApartmentBuiltinsDoc["placedItems"],
 ): string | null {
-  const sorted = [...placedItems].sort((a, b) => a.id.localeCompare(b.id));
-  return sorted.length > 0 ? editorMyApartmentSelectedIdForDecor(sorted[0]!.id) : null;
+  return null;
 }
 
 const DEFAULT_MY_APARTMENT_PREVIEW_UNIT_KEY =
@@ -272,6 +271,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   apartmentBakedFloorShadowsEnabled: false,
   apartmentPracticalLightsEnabled: true,
   myApartmentLayoutHidePickMode: false,
+  myApartmentLayoutTransformArmed: false,
   myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
   myApartmentLayoutLoadingMessage: null,
   myApartmentPreviewUnitId: HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID,
@@ -352,6 +352,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...(exitMyApartmentLayout
           ? {
               myApartmentLayoutHidePickMode: false,
+              myApartmentLayoutTransformArmed: false,
               myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
             }
           : {}),
@@ -378,15 +379,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...(exitApartment
           ? {
               myApartmentLayoutHidePickMode: false,
+              myApartmentLayoutTransformArmed: false,
               myApartmentLayoutHiddenPlacementIds: [] as readonly string[],
             }
           : {}),
         ...(enterApartment
           ? {
-              selectedId: myApartmentLayoutInitialSelectedId(
-                s.ownedApartmentBuiltins.placedItems,
-              ),
+              selectedId: null,
               myApartmentMultiselectExtraIds: [] as readonly string[],
+              myApartmentLayoutTransformArmed: false,
               ...(s.transformMode === "scale"
                 ? { transformMode: "translate" as const }
                 : {}),
@@ -578,37 +579,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   enterMyApartmentLayoutMode: () =>
-    set((s) => {
-      const selectedId = myApartmentLayoutInitialSelectedId(
-        s.ownedApartmentBuiltins.placedItems,
-      );
-      return {
-        workspace: "apartment",
-        mode: "my_apartment_layout",
-        selectedId,
-        myApartmentMultiselectExtraIds: [],
-        contentStructureEpoch: s.contentStructureEpoch + 1,
-        ...(s.transformMode === "scale" ? { transformMode: "translate" as const } : {}),
-      };
-    }),
+    set((s) => ({
+      workspace: "apartment",
+      mode: "my_apartment_layout",
+      selectedId: null,
+      myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: false,
+      contentStructureEpoch: s.contentStructureEpoch + 1,
+      ...(s.transformMode === "scale" ? { transformMode: "translate" as const } : {}),
+    })),
 
   pickMyApartmentLayoutFromCanvas: (clickedPlacementId, opts) =>
     set((s) => {
       if (s.mode !== "my_apartment_layout") return {};
-      if (clickedPlacementId === null) {
-        return { selectedId: null, myApartmentMultiselectExtraIds: [] as const };
-      }
-      const out = computeApartmentPlacementCanvasPick({
+      const out = resolveApartmentLayoutPlacementActivation({
         clickedId: clickedPlacementId,
         additive: opts.additive,
-        previousSelectedId: s.selectedId,
+        selectedId: s.selectedId,
         previousExtras: s.myApartmentMultiselectExtraIds,
+        transformArmed: s.myApartmentLayoutTransformArmed,
       });
-      const next: Partial<typeof s> = {
+      return {
         selectedId: out.selectedId,
         myApartmentMultiselectExtraIds: out.myApartmentMultiselectExtraIds,
+        myApartmentLayoutTransformArmed: out.myApartmentLayoutTransformArmed,
       };
-      return next;
     }),
 
   saveMyApartmentObjectGroupFromSelection: (rawName: string) => {
@@ -655,6 +650,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: true,
       selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(id),
       myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: false,
     }));
   },
 
@@ -831,6 +827,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         selectedId: editorMyApartmentSelectedIdForSavedObjectGroup(groupId),
         myApartmentMultiselectExtraIds: [] as readonly string[],
+        myApartmentLayoutTransformArmed: false,
       };
     });
   },
@@ -879,20 +876,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   },
 
-  addNpcCombatSpawn: (spawn) => {
-    get().patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      npcCombatSpawns: [...doc.npcCombatSpawns, spawn],
-    }));
-  },
-
-  removeNpcCombatSpawn: (spawnId) => {
-    get().patchOwnedApartmentBuiltins((doc) => ({
-      ...doc,
-      npcCombatSpawns: doc.npcCombatSpawns.filter((s) => s.id !== spawnId),
-    }));
-  },
-
   clearOwnedApartmentBuiltinsDiskFlushFlag: () =>
     set({ ownedApartmentBuiltinsNeedsDiskFlush: false }),
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () =>
@@ -910,6 +893,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ apartmentPracticalLightsEnabled }),
   setMyApartmentLayoutHidePickMode: (myApartmentLayoutHidePickMode) =>
     set({ myApartmentLayoutHidePickMode }),
+  setMyApartmentLayoutTransformArmed: (myApartmentLayoutTransformArmed) =>
+    set({ myApartmentLayoutTransformArmed }),
   hideMyApartmentLayoutPlacementFromCanvas: (placementId) =>
     set((s) => {
       if (s.mode !== "my_apartment_layout") return {};

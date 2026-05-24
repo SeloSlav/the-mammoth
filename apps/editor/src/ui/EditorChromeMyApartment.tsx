@@ -723,7 +723,8 @@ export function EditorChromeMyApartment(props: {
             Click a model from <code>public/static/models/objects/</code>, import it into the preview
             unit, then move it with the gizmo and save the apartment layout JSON. Select a placed décor
             and use <strong>Replace selected décor</strong> (or double-click a catalog model) to swap
-            its GLB without moving it.
+            its GLB without moving it. Click once to select a placed piece; click the same piece
+            again to show the move gizmo.
           </p>
         <div style={{ marginTop: 6, fontSize: 11, opacity: 0.72 }}>{catalogStatus}</div>
         {catalogSyncError ? (
@@ -901,7 +902,7 @@ export function EditorChromeMyApartment(props: {
                       : "#2a2a34",
                   }}
                   onClick={(ev) => pickDecorWallPlacementFromList(decorFullId, ev)}
-                  title={item.modelRelPath}
+                  title={`${item.modelRelPath} — click twice to move`}
                 >
                   {decorCatalogLabel(item.modelRelPath)}
                 </button>

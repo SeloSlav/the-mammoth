@@ -182,19 +182,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             type="button"
             style={{
               ...rowBtn,
-              fontWeight: workspace === "combat_sim" ? 700 : 400,
-              background: workspace === "combat_sim" ? "#5a3a4a" : "#2a2a34",
-              border: "1px solid #444",
-              color: "#fff",
-            }}
-            onClick={() => setWorkspace("combat_sim")}
-          >
-            Combat sim
-          </button>
-          <button
-            type="button"
-            style={{
-              ...rowBtn,
               fontWeight: workspace === "stairwell" ? 700 : 400,
               background: workspace === "stairwell" ? "#3a4a7a" : "#2a2a34",
               border: "1px solid #444",
@@ -267,14 +254,6 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             <code>{contentIndex.landingKitRelPath ?? "elevator/landing_kit.json"}</code>,{" "}
             <code>{contentIndex.stairWellRelPath ?? "elevator/stairwell.json"}</code>
             ). <strong>FP viewmodel</strong> authors weapons and held consumables.
-          </p>
-        ) : null}
-
-        {workspace === "combat_sim" ? (
-          <p style={{ ...editorChromeHelp, marginTop: 10, fontSize: 12, opacity: 0.9 }}>
-            Author NPC spawn anchors here, save layout JSON, then test at{" "}
-            <code>http://localhost:5173/?combatSim=1</code> (same FP session + server reducers as
-            live play).
           </p>
         ) : null}
 

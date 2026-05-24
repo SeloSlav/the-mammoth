@@ -9,7 +9,6 @@ import { WorldNpcPresenterPool } from "@the-mammoth/engine";
 import type * as THREE from "three";
 import { createFpBloodBurstFx, type FpBloodBurstFx } from "../fpSession/fpBloodBurstFx.js";
 
-const NPC_STATE_DEAD = 2;
 const TORSO_Y_ABOVE_FEET_M = 1.04;
 const MIN_NPC_HIT_BLOOD_DAMAGE = 1;
 
@@ -28,7 +27,6 @@ function archetypeFromRow(archetype: string): NpcArchetypeId | null {
 function snapshotFromRow(row: WorldNpc, observedTimeMs: number): ReplicatedNpcSnapshot | null {
   const archetype = archetypeFromRow(row.archetype);
   if (!archetype) return null;
-  if (row.state === NPC_STATE_DEAD) return null;
   return {
     npcId: row.npcId,
     archetype,
@@ -140,13 +138,6 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       }
     }
     audioTrack.set(key, nextTrack);
-    if (row.state === NPC_STATE_DEAD) {
-      rows.delete(key);
-      audioTrack.delete(key);
-      const snapshots = rebuildSnapshots(performance.now());
-      pool.sync(snapshots, 0);
-      return;
-    }
     rows.set(key, row);
     const snapshots = rebuildSnapshots(performance.now());
     pool.sync(snapshots, 0);
@@ -190,8 +181,4 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       audioTrack.clear();
     },
   };
-}
-
-export async function enterCombatSim(conn: DbConnection): Promise<void> {
-  await conn.reducers.enterCombatSim({});
 }

@@ -49,4 +49,21 @@ describe("PreviewSelectionShapeOutline", () => {
     outline.dispose();
     proxy.geometry.dispose();
   });
+
+  it("can draw a sparse wireframe-only outline for apartment décor picks", () => {
+    const root = new THREE.Group();
+    const meshA = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    const meshB = new THREE.Mesh(new THREE.SphereGeometry(0.5));
+    root.add(meshA, meshB);
+    const outline = new PreviewSelectionShapeOutline();
+
+    outline.setFromObject(root, { meshIncludeRatio: 0.5, wireframeOnly: true });
+
+    expect(outline.visible).toBe(true);
+    expect(outline.children.length).toBe(1);
+
+    outline.dispose();
+    meshA.geometry.dispose();
+    meshB.geometry.dispose();
+  });
 });

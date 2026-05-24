@@ -2,6 +2,7 @@
 
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
 
+use crate::apartments::apartment_unit;
 use crate::combat_stub::{
     body_height_from_crouch_bit, ray_aabb_intersect_enter, vertical_overlap, RAY_AABB_T_ENTER_EPS,
 };
@@ -24,6 +25,7 @@ pub const BABUSHKA_BODY_HEIGHT_M: f32 = 1.55;
 pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
 pub const BABUSHKA_WALK_SPEED_MPS: f32 = 1.45;
+pub const BABUSHKA_RUN_SPEED_MPS: f32 = 3.0;
 pub const BABUSHKA_MELEE_DAMAGE: f32 = 14.0;
 pub const BABUSHKA_MELEE_COOLDOWN_MICROS: i64 = 900_000;
 
@@ -102,7 +104,6 @@ pub fn spawn_babushka(
     yaw: f32,
     chase_identity: Option<Identity>,
 ) -> u64 {
-    let combat_sim = session_key.starts_with("combat_sim:");
     let row = WorldNpc {
         npc_id: 0,
         archetype: NPC_ARCHETYPE_BABUSHKA.to_string(),
@@ -116,11 +117,7 @@ pub fn spawn_babushka(
         grounded: 1,
         health: BABUSHKA_MAX_HEALTH,
         max_health: BABUSHKA_MAX_HEALTH,
-        state: if combat_sim && chase_identity.is_some() {
-            NPC_STATE_AGGRO
-        } else {
-            NPC_STATE_IDLE
-        },
+        state: NPC_STATE_IDLE,
         locomotion: NPC_LOCOMOTION_IDLE,
         melee_presentation_seq: 0,
         hit_presentation_seq: 0,
@@ -143,15 +140,11 @@ pub fn apply_npc_damage(ctx: &ReducerContext, npc_id: u64, amount: f32) -> bool 
     row.health = (row.health - amount).max(0.0);
     row.hit_presentation_seq = row.hit_presentation_seq.wrapping_add(1);
     if row.health <= 0.0 {
-        if row.session_key.starts_with("combat_sim:") {
-            crate::combat_sim::reset_babushka_after_death(ctx, &mut row);
-            ctx.db.world_npc().npc_id().update(row);
-            return true;
-        }
         row.state = NPC_STATE_DEAD;
         row.locomotion = NPC_LOCOMOTION_IDLE;
         row.vel_x = 0.0;
         row.vel_z = 0.0;
+        row.last_melee_micros = ctx.timestamp.to_micros_since_unix_epoch();
         ctx.db.world_npc().npc_id().update(row);
         return true;
     }
@@ -312,10 +305,14 @@ pub fn npc_scheduled_tick_dt_sec() -> f32 {
 pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
     let now_us = ctx.timestamp.to_micros_since_unix_epoch();
     let npcs: Vec<WorldNpc> = ctx.db.world_npc().iter().collect();
-    for mut npc in npcs {
+    for npc in npcs {
         if npc.state == NPC_STATE_DEAD {
+            if npc.session_key.starts_with("combat_sim:") {
+                crate::combat_sim::maybe_despawn_corpse_and_respawn(ctx, &npc, now_us);
+            }
             continue;
         }
+        let mut npc = npc;
         step_one_world_npc(ctx, &mut npc, dt_sec, now_us);
         ctx.db.world_npc().npc_id().update(npc);
     }
@@ -349,47 +346,37 @@ fn step_one_world_npc(
     let dist_sq = planar_dx * planar_dx + planar_dz * planar_dz;
     let dist = dist_sq.sqrt();
 
-    let aggro_range_m = if combat_sim {
-        crate::combat_sim::COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M
-    } else {
-        BABUSHKA_AGGRO_RANGE_M
-    };
+    let aggro_range_m = BABUSHKA_AGGRO_RANGE_M;
 
-    if combat_sim {
-        npc.state = NPC_STATE_AGGRO;
-    } else if npc.state == NPC_STATE_IDLE {
+    if npc.state == NPC_STATE_IDLE {
         if dist_sq <= aggro_range_m * aggro_range_m {
             npc.state = NPC_STATE_AGGRO;
         }
     }
 
     if npc.state == NPC_STATE_AGGRO {
-        if !combat_sim && dist_sq > (aggro_range_m * 2.4).powi(2) {
+        if dist_sq > (aggro_range_m * 2.4).powi(2) {
             npc.state = NPC_STATE_IDLE;
             npc.locomotion = NPC_LOCOMOTION_IDLE;
             npc.vel_x = 0.0;
             npc.vel_z = 0.0;
         } else if dist > BABUSHKA_MELEE_RANGE_M {
-            let walk_speed = if combat_sim {
-                2.35
-            } else {
-                BABUSHKA_WALK_SPEED_MPS
-            };
+            let run_speed = BABUSHKA_RUN_SPEED_MPS;
             let inv = 1.0 / dist.max(1e-4);
-            let vx = planar_dx * inv * walk_speed;
-            let vz = planar_dz * inv * walk_speed;
+            let vx = planar_dx * inv * run_speed;
+            let vz = planar_dz * inv * run_speed;
             npc.vel_x = vx;
             npc.vel_z = vz;
             npc.x += vx * dt_sec;
             npc.z += vz * dt_sec;
-            // Flat combat arena only — never snap Y across apartment storeys while chasing.
             if combat_sim {
                 npc.y = target_y;
+                clamp_babushka_to_combat_arena(ctx, npc);
             }
             npc.yaw = planar_dx.atan2(planar_dz);
             let speed_sq = vx * vx + vz * vz;
             npc.locomotion = if speed_sq > 0.04 {
-                NPC_LOCOMOTION_WALK
+                NPC_LOCOMOTION_RUN
             } else {
                 NPC_LOCOMOTION_IDLE
             };
@@ -412,10 +399,59 @@ fn step_one_world_npc(
             }
         }
     } else {
-        npc.locomotion = NPC_LOCOMOTION_IDLE;
-        npc.vel_x = 0.0;
-        npc.vel_z = 0.0;
+        let (dir_x, dir_z, wandering) = babushka_idle_wander_heading(npc.npc_id, now_us);
+        if wandering {
+            let vx = dir_x * BABUSHKA_WALK_SPEED_MPS;
+            let vz = dir_z * BABUSHKA_WALK_SPEED_MPS;
+            npc.vel_x = vx;
+            npc.vel_z = vz;
+            npc.x += vx * dt_sec;
+            npc.z += vz * dt_sec;
+            npc.yaw = dir_x.atan2(dir_z);
+            npc.locomotion = NPC_LOCOMOTION_WALK;
+            if combat_sim {
+                clamp_babushka_to_combat_arena(ctx, npc);
+            }
+        } else {
+            npc.locomotion = NPC_LOCOMOTION_IDLE;
+            npc.vel_x = 0.0;
+            npc.vel_z = 0.0;
+        }
     }
+}
+
+fn babushka_idle_wander_heading(npc_id: u64, now_us: i64) -> (f32, f32, bool) {
+    const WANDER_BUCKET_MICROS: i64 = 3_500_000;
+    let bucket = now_us.div_euclid(WANDER_BUCKET_MICROS) as u64;
+    let seed = npc_id.wrapping_mul(0x517c_c1b7_2722_0e95).wrapping_add(bucket);
+    let roll = (seed & 0xff) as u32;
+    if roll >= 192 {
+        return (0.0, 1.0, false);
+    }
+    let angle_seed = (seed >> 8) & 0xffff;
+    let angle = angle_seed as f32 / 65535.0 * std::f32::consts::TAU;
+    (angle.sin(), angle.cos(), true)
+}
+
+fn clamp_babushka_to_combat_arena(ctx: &ReducerContext, npc: &mut WorldNpc) {
+    let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
+        return;
+    };
+    let Some(unit) = ctx
+        .db
+        .apartment_unit()
+        .iter()
+        .find(|u| u.unit_key == unit_key)
+    else {
+        return;
+    };
+    let inset = 0.55;
+    npc.x = npc
+        .x
+        .clamp(unit.bound_min_x + inset, unit.bound_max_x - inset);
+    npc.z = npc
+        .z
+        .clamp(unit.bound_min_z + inset, unit.bound_max_z - inset);
 }
 
 /// True when babushka's body capsule overlaps the target player's capsule (same rules as PvP melee).

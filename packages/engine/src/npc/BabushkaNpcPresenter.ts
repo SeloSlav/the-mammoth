@@ -19,13 +19,32 @@ export const BABUSHKA_NPC_AUTHORITATIVE_HEIGHT_M = 1.55;
 const NPC_CLIP_TRANSITION_SEC = 0.18;
 const NPC_STATE_DEAD = 2;
 const NPC_FALLBACK_SKIN_HEX = 0xb8927a;
+const IDLE_AIR_SQUAT_ROLL_MOD = 100;
+const IDLE_AIR_SQUAT_CHANCE = 14;
+const IDLE_VARIANT_MIN_SEC = 4.5;
+const IDLE_VARIANT_MAX_SEC = 9;
+
+type BabushkaClipKey =
+  | NpcBodyClipName
+  | "airSquat"
+  | "hit"
+  | "dead"
+  | "punch1"
+  | "punch5";
 
 const BABUSHKA_CLIP_NAMES = {
   idle: "Idle_4",
+  airSquat: "air_squat",
   walk: "Walking",
   run: "Running",
   punch: "Punch_Combo",
-} as const satisfies Record<NpcBodyClipName, string>;
+  punch1: "Punch_Combo_1",
+  punch5: "Punch_Combo_5",
+  hit: "Hit_Reaction_to_Waist",
+  dead: "Dead",
+} as const satisfies Record<BabushkaClipKey, string>;
+
+const PUNCH_VARIANTS: readonly BabushkaClipKey[] = ["punch", "punch1", "punch5"];
 
 const npcLoader = new GLTFLoader();
 type NpcBodyTemplate = { scene: THREE.Object3D; animations: readonly THREE.AnimationClip[] };
@@ -154,6 +173,9 @@ function createLoopingAction(
   if (!clip) return null;
   const action = mixer.clipAction(clip);
   action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
+  if (loop === THREE.LoopOnce) {
+    action.clampWhenFinished = true;
+  }
   return action;
 }
 
@@ -187,10 +209,14 @@ class AnimatedBabushkaBody {
   readonly root = new THREE.Group();
   private readonly modelRoot: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
-  private readonly actions = new Map<NpcBodyClipName, THREE.AnimationAction>();
-  private activeClip: NpcBodyClipName | null = null;
+  private readonly actions = new Map<BabushkaClipKey, THREE.AnimationAction>();
+  private activeClip: BabushkaClipKey | null = null;
   private lastMeleeSeq = 0;
-  private punchAction: THREE.AnimationAction | null = null;
+  private lastHitSeq = 0;
+  private deadPlayed = false;
+  private oneShotActive: BabushkaClipKey | null = null;
+  private idleVariantTimerSec = IDLE_VARIANT_MIN_SEC;
+  private idleVariant: "idle" | "airSquat" = "idle";
 
   constructor(template: NpcBodyTemplate) {
     this.root.name = "babushka_npc_body";
@@ -200,32 +226,65 @@ class AnimatedBabushkaBody {
     this.root.add(this.modelRoot);
     this.mixer = new THREE.AnimationMixer(this.modelRoot);
     const clipLibrary = new Map(template.animations.map((clip) => [clip.name, clip] as const));
-    for (const [key, clipName] of Object.entries(BABUSHKA_CLIP_NAMES) as [NpcBodyClipName, string][]) {
-      const loop = key === "punch" ? THREE.LoopOnce : THREE.LoopRepeat;
+    for (const [key, clipName] of Object.entries(BABUSHKA_CLIP_NAMES) as [BabushkaClipKey, string][]) {
+      const loop =
+        key === "punch" || key === "punch1" || key === "punch5" || key === "hit" || key === "dead"
+          ? THREE.LoopOnce
+          : THREE.LoopRepeat;
       const action = createLoopingAction(this.mixer, clipLibrary, clipName, loop);
       if (action) this.actions.set(key, action);
-      if (key === "punch") this.punchAction = action;
     }
     this.playLocomotionClip("idle", true);
   }
 
   update(snapshot: ReplicatedNpcSnapshot, dt: number): void {
     const dead = snapshot.state === NPC_STATE_DEAD || snapshot.health <= 0;
+
+    if (dead) {
+      if (!this.deadPlayed) {
+        this.deadPlayed = true;
+        this.playOneShot("dead");
+      }
+      this.mixer.update(dt);
+      updateNpcSkinnedMeshes(this.modelRoot);
+      return;
+    }
+
+    if (snapshot.hitPresentationSeq > this.lastHitSeq) {
+      this.lastHitSeq = snapshot.hitPresentationSeq;
+      this.playOneShot("hit");
+    }
+
     if (snapshot.meleePresentationSeq > this.lastMeleeSeq) {
       this.lastMeleeSeq = snapshot.meleePresentationSeq;
-      this.playPunchOnce();
+      const variant = PUNCH_VARIANTS[snapshot.meleePresentationSeq % PUNCH_VARIANTS.length] ?? "punch";
+      this.playOneShot(variant);
     }
-    if (!this.punchAction?.isRunning()) {
-      this.playLocomotionClip(
-        resolveNpcBodyClipName({
-          grounded: snapshot.grounded,
-          locomotion: snapshot.locomotion,
-          dead,
-          velocity: snapshot.velocity,
-        }),
-        false,
-      );
+
+    if (this.oneShotActive) {
+      const oneShot = this.actions.get(this.oneShotActive);
+      if (oneShot?.isRunning()) {
+        this.mixer.update(dt);
+        updateNpcSkinnedMeshes(this.modelRoot);
+        return;
+      }
+      this.oneShotActive = null;
     }
+
+    this.idleVariantTimerSec -= dt;
+    if (this.idleVariantTimerSec <= 0) {
+      const bucket = Math.floor(snapshot.observedTimeMs / 1000);
+      const roll =
+        (Number(snapshot.npcId) + bucket * 17 + Math.floor(snapshot.observedTimeMs / 250)) %
+        IDLE_AIR_SQUAT_ROLL_MOD;
+      this.idleVariant = roll < IDLE_AIR_SQUAT_CHANCE ? "airSquat" : "idle";
+      this.idleVariantTimerSec =
+        IDLE_VARIANT_MIN_SEC +
+        (Number(snapshot.npcId) % Math.ceil(IDLE_VARIANT_MAX_SEC - IDLE_VARIANT_MIN_SEC));
+    }
+
+    const locomotionClip = this.resolveLocomotionClip(snapshot);
+    this.playLocomotionClip(locomotionClip, false);
     this.mixer.update(dt);
     updateNpcSkinnedMeshes(this.modelRoot);
   }
@@ -235,8 +294,28 @@ class AnimatedBabushkaBody {
     deepDisposeObject3D(this.root);
   }
 
-  private playLocomotionClip(next: NpcBodyClipName, immediate: boolean): void {
-    if (next === "punch") return;
+  private resolveLocomotionClip(snapshot: ReplicatedNpcSnapshot): BabushkaClipKey {
+    const base = resolveNpcBodyClipName({
+      grounded: snapshot.grounded,
+      locomotion: snapshot.locomotion,
+      dead: false,
+      velocity: snapshot.velocity,
+    });
+
+    if (base !== "idle" || snapshot.state !== 0) {
+      return base;
+    }
+
+    if (this.idleVariant === "airSquat" && this.actions.has("airSquat")) {
+      return "airSquat";
+    }
+    return "idle";
+  }
+
+  private playLocomotionClip(next: BabushkaClipKey, immediate: boolean): void {
+    if (next === "punch" || next === "punch1" || next === "punch5" || next === "hit" || next === "dead") {
+      return;
+    }
     if (this.activeClip === next) return;
     const nextAction = this.actions.get(next);
     if (!nextAction) return;
@@ -250,16 +329,17 @@ class AnimatedBabushkaBody {
     nextAction.play();
   }
 
-  private playPunchOnce(): void {
-    const punch = this.punchAction;
-    if (!punch) return;
-    for (const action of this.actions.values()) {
-      if (action !== punch) action.fadeOut(0.06);
+  private playOneShot(key: BabushkaClipKey): void {
+    const action = this.actions.get(key);
+    if (!action) return;
+    for (const [clipKey, clipAction] of this.actions) {
+      if (clipKey !== key) clipAction.fadeOut(0.06);
     }
-    punch.reset();
-    punch.fadeIn(0.04);
-    punch.play();
-    this.activeClip = "punch";
+    action.reset();
+    action.fadeIn(0.04);
+    action.play();
+    this.oneShotActive = key;
+    this.activeClip = key;
   }
 }
 

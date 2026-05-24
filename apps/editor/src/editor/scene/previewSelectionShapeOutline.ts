@@ -1,10 +1,19 @@
 import * as THREE from "three";
 
+export type PreviewSelectionOutlineOptions = {
+  /** Include a stable fraction of source meshes (0–1). Default 1 = all meshes. */
+  meshIncludeRatio?: number;
+  /** Skip the translucent shell — draw edge wireframe only. */
+  wireframeOnly?: boolean;
+};
+
 type OutlineEntry = {
   source: THREE.Mesh;
-  shell: THREE.Mesh;
+  shell: THREE.Mesh | null;
   edges: THREE.LineSegments;
 };
+
+const DEFAULT_OUTLINE_OPTIONS: PreviewSelectionOutlineOptions = {};
 
 /**
  * Pink selection shell that follows the actual preview meshes, not just their world AABB.
@@ -14,6 +23,7 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
   private sourceRoot: THREE.Object3D | null = null;
   private multiSourceRoots: THREE.Object3D[] | null = null;
   private entries: OutlineEntry[] = [];
+  private outlineOptions: PreviewSelectionOutlineOptions = DEFAULT_OUTLINE_OPTIONS;
   private readonly shellMaterial: THREE.MeshBasicMaterial;
   private readonly edgeMaterial: THREE.LineBasicMaterial;
   private readonly tempPos = new THREE.Vector3();
@@ -68,6 +78,23 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     return meshes;
   }
 
+  private selectMeshesForOutline(
+    meshes: readonly THREE.Mesh[],
+    ratio: number,
+  ): THREE.Mesh[] {
+    if (meshes.length <= 1 || ratio >= 1) return [...meshes];
+    const clamped = Math.max(0.1, Math.min(1, ratio));
+    const stride = Math.max(2, Math.round(1 / clamped));
+    return meshes.filter((_, index) => index % stride === 0);
+  }
+
+  private optionsMatch(next: PreviewSelectionOutlineOptions): boolean {
+    return (
+      (this.outlineOptions.meshIncludeRatio ?? 1) === (next.meshIncludeRatio ?? 1) &&
+      (this.outlineOptions.wireframeOnly ?? false) === (next.wireframeOnly ?? false)
+    );
+  }
+
   private clearEntries(): void {
     for (const entry of this.entries) {
       entry.edges.geometry.dispose();
@@ -76,6 +103,7 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     this.entries = [];
     this.sourceRoot = null;
     this.multiSourceRoots = null;
+    this.outlineOptions = DEFAULT_OUTLINE_OPTIONS;
     this.visible = false;
   }
 
@@ -93,28 +121,45 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     target.visible = source.visible;
   }
 
-  private rebuildFromMeshes(primaryRoot: THREE.Object3D | null, meshes: readonly THREE.Mesh[]): void {
+  private rebuildFromMeshes(
+    primaryRoot: THREE.Object3D | null,
+    meshes: readonly THREE.Mesh[],
+    options: PreviewSelectionOutlineOptions = DEFAULT_OUTLINE_OPTIONS,
+  ): void {
     this.clearEntries();
     this.sourceRoot = primaryRoot;
-    for (const mesh of meshes) {
-      const shell = new THREE.Mesh(mesh.geometry, this.shellMaterial);
-      shell.matrixAutoUpdate = false;
-      shell.frustumCulled = false;
-      shell.renderOrder = 1000;
-      shell.raycast = () => {};
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), this.edgeMaterial);
+    this.outlineOptions = options;
+    const ratio = options.meshIncludeRatio ?? 1;
+    const wireframeOnly = options.wireframeOnly === true;
+    const selectedMeshes = this.selectMeshesForOutline(meshes, ratio);
+    for (const mesh of selectedMeshes) {
+      let shell: THREE.Mesh | null = null;
+      if (!wireframeOnly) {
+        shell = new THREE.Mesh(mesh.geometry, this.shellMaterial);
+        shell.matrixAutoUpdate = false;
+        shell.frustumCulled = false;
+        shell.renderOrder = 1000;
+        shell.raycast = () => {};
+        this.add(shell);
+      }
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mesh.geometry),
+        this.edgeMaterial,
+      );
       edges.matrixAutoUpdate = false;
       edges.frustumCulled = false;
       edges.renderOrder = 1001;
       edges.raycast = () => {};
-      this.add(shell);
       this.add(edges);
       this.entries.push({ source: mesh, shell, edges });
     }
     this.syncFromSource();
   }
 
-  private rebuildMulti(roots: readonly THREE.Object3D[]): void {
+  private rebuildMulti(
+    roots: readonly THREE.Object3D[],
+    options: PreviewSelectionOutlineOptions = DEFAULT_OUTLINE_OPTIONS,
+  ): void {
     const ordered = [...roots];
     const meshes: THREE.Mesh[] = [];
     for (const root of ordered) meshes.push(...this.collectSourceMeshes(root));
@@ -122,7 +167,7 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
       this.clearEntries();
       return;
     }
-    this.rebuildFromMeshes(null, meshes);
+    this.rebuildFromMeshes(null, meshes, options);
     this.multiSourceRoots = [...ordered];
   }
 
@@ -146,9 +191,11 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
       }
       let anyVisible = false;
       for (const entry of this.entries) {
-        this.syncEntryWorldTransform(entry.source, entry.shell, 1.06);
+        if (entry.shell) {
+          this.syncEntryWorldTransform(entry.source, entry.shell, 1.06);
+        }
         this.syncEntryWorldTransform(entry.source, entry.edges, 1.03);
-        if (entry.shell.visible) anyVisible = true;
+        if (entry.shell?.visible || entry.edges.visible) anyVisible = true;
       }
       this.visible = anyVisible;
       return;
@@ -159,14 +206,19 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
     }
     let anyVisible = false;
     for (const entry of this.entries) {
-      this.syncEntryWorldTransform(entry.source, entry.shell, 1.06);
+      if (entry.shell) {
+        this.syncEntryWorldTransform(entry.source, entry.shell, 1.06);
+      }
       this.syncEntryWorldTransform(entry.source, entry.edges, 1.03);
-      if (entry.shell.visible) anyVisible = true;
+      if (entry.shell?.visible || entry.edges.visible) anyVisible = true;
     }
     this.visible = anyVisible;
   }
 
-  setFromRoots(roots: readonly THREE.Object3D[] | null): void {
+  setFromRoots(
+    roots: readonly THREE.Object3D[] | null,
+    options: PreviewSelectionOutlineOptions = DEFAULT_OUTLINE_OPTIONS,
+  ): void {
     if (!roots || roots.length === 0) {
       this.clearEntries();
       return;
@@ -177,15 +229,23 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
       this.clearEntries();
       return;
     }
+    const selectedMeshes = this.selectMeshesForOutline(meshes, options.meshIncludeRatio ?? 1);
     const canReuse =
       this.rootsMatch(this.multiSourceRoots, roots) &&
-      meshes.length === this.entries.length &&
-      meshes.every((mesh, index) => this.entries[index]?.source === mesh);
-    if (!canReuse) this.rebuildMulti(roots);
-    else this.syncFromSource();
+      this.optionsMatch(options) &&
+      selectedMeshes.length === this.entries.length &&
+      selectedMeshes.every((mesh, index) => this.entries[index]?.source === mesh);
+    if (!canReuse) this.rebuildMulti(roots, options);
+    else {
+      this.outlineOptions = options;
+      this.syncFromSource();
+    }
   }
 
-  setFromObject(obj: THREE.Object3D | null): void {
+  setFromObject(
+    obj: THREE.Object3D | null,
+    options: PreviewSelectionOutlineOptions = DEFAULT_OUTLINE_OPTIONS,
+  ): void {
     if (!obj) {
       this.clearEntries();
       return;
@@ -196,14 +256,17 @@ export class PreviewSelectionShapeOutline extends THREE.Group {
       return;
     }
     this.multiSourceRoots = null;
+    const selectedMeshes = this.selectMeshesForOutline(meshes, options.meshIncludeRatio ?? 1);
     const canReuse =
       obj === this.sourceRoot &&
-      meshes.length === this.entries.length &&
-      meshes.every((mesh, index) => this.entries[index]?.source === mesh);
+      this.optionsMatch(options) &&
+      selectedMeshes.length === this.entries.length &&
+      selectedMeshes.every((mesh, index) => this.entries[index]?.source === mesh);
     if (!canReuse) {
-      this.rebuildFromMeshes(obj, meshes);
+      this.rebuildFromMeshes(obj, meshes, options);
       return;
     }
+    this.outlineOptions = options;
     this.syncFromSource();
   }
 

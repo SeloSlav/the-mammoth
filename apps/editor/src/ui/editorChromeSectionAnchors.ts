@@ -10,7 +10,6 @@ export const EDITOR_CHROME_SECTION = {
   savedGroups: "editor-chrome-section-saved-groups",
   mirrors: "editor-chrome-section-mirrors",
   partitionWalls: "editor-chrome-section-partition-walls",
-  combatSim: "editor-chrome-section-combat-sim",
   fpAuthoring: "editor-chrome-section-fp-authoring",
   activeDocument: "editor-chrome-section-active-document",
   sceneTransform: "editor-chrome-section-scene-transform",

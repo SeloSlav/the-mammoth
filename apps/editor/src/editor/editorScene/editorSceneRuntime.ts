@@ -100,6 +100,7 @@ import { editorMyApartmentSelectedIdForWall } from "../myApartment/editorMyApart
 import {
   MY_APARTMENT_OBJECT_GROUP_MANIP_UD,
   syncApartmentSavedObjectGroupManipulator,
+  teardownApartmentSavedObjectGroupManipulator,
 } from "../myApartment/editorMyApartmentSavedGroupManip.js";
 import {
   parseMyApartmentLayoutDecorSelectedId,
@@ -894,6 +895,11 @@ export async function mountEditorScene(
         return;
       }
       if (s.mode === "my_apartment_layout") {
+        if (!s.myApartmentLayoutTransformArmed) {
+          teardownApartmentSavedObjectGroupManipulator();
+          transformControls.detach();
+          return;
+        }
         syncApartmentSavedObjectGroupManipulator({
           selectedId: s.selectedId,
           doc: s.ownedApartmentBuiltins,

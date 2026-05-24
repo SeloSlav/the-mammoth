@@ -226,6 +226,7 @@ export function subscribeEditorSceneStore(deps: {
         !isFpMode(s.mode) &&
         (s.selectedId !== prev.selectedId ||
           s.myApartmentMultiselectExtraIds !== prev.myApartmentMultiselectExtraIds ||
+          s.myApartmentLayoutTransformArmed !== prev.myApartmentLayoutTransformArmed ||
           s.transformMode !== prev.transformMode ||
           s.gridSnapM !== prev.gridSnapM ||
           s.mode !== prev.mode ||

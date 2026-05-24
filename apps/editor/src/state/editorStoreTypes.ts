@@ -8,7 +8,6 @@ import type {
   LandingKitDef,
   ApartmentUnitLayoutProfilesDoc,
   OwnedApartmentBuiltinsDoc,
-  OwnedApartmentNpcCombatSpawn,
   PlacedObject,
   PrefabDef,
   StairWellDef,
@@ -22,7 +21,7 @@ import type {
 } from "../editor/content/editorContentDiscovery.js";
 
 /** Top-level authoring surface (workspace buttons). */
-export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell" | "combat_sim";
+export type EditorWorkspace = "apartment" | "cab" | "landing" | "stairwell";
 
 /** Landing workspace: shared door kit vs streamed documents. */
 export type LandingDocKind = "kit" | "interior" | "cell" | "prefab" | "floor_override";
@@ -149,6 +148,8 @@ export interface EditorState {
   apartmentPracticalLightsEnabled: boolean;
   /** {@link EditorMode.my_apartment_layout} — left-click hides décor / walls instead of selecting (viewport only). */
   myApartmentLayoutHidePickMode: boolean;
+  /** {@link EditorMode.my_apartment_layout} — re-click on the selected placement arms the transform gizmo. */
+  myApartmentLayoutTransformArmed: boolean;
   /** {@link EditorMode.my_apartment_layout} — session-only hidden placement selection ids (not saved to disk). */
   myApartmentLayoutHiddenPlacementIds: readonly string[];
   /** Full apartment mount in progress — decor templates, lighting, walls, mirrors. */
@@ -212,8 +213,8 @@ export interface EditorState {
   setFocusedStoryLevelIndex: (level: number) => void;
   setSelectedId: (id: string | null) => void;
   /**
-   * Canvas placement picking for apartment authoring. Clears décor/wall multiselection on `null`;
-   * use {@link saveMyApartmentObjectGroupFromSelection} etc. for saved-group ids.
+   * Canvas/list placement picking for apartment authoring (two-step: select, then re-click to arm).
+   * Pass `null` to clear selection.
    */
   pickMyApartmentLayoutFromCanvas: (
     clickedPlacementId: string | null,
@@ -235,6 +236,7 @@ export interface EditorState {
   setApartmentBakedFloorShadowsEnabled: (enabled: boolean) => void;
   setApartmentPracticalLightsEnabled: (enabled: boolean) => void;
   setMyApartmentLayoutHidePickMode: (enabled: boolean) => void;
+  setMyApartmentLayoutTransformArmed: (armed: boolean) => void;
   hideMyApartmentLayoutPlacementFromCanvas: (placementId: string) => void;
   clearMyApartmentLayoutHiddenPlacements: () => void;
   setMyApartmentLayoutLoadingMessage: (message: string | null) => void;
@@ -260,8 +262,6 @@ export interface EditorState {
   patchOwnedApartmentBuiltins: (
     fn: (d: OwnedApartmentBuiltinsDoc) => OwnedApartmentBuiltinsDoc,
   ) => void;
-  addNpcCombatSpawn: (spawn: OwnedApartmentNpcCombatSpawn) => void;
-  removeNpcCombatSpawn: (spawnId: string) => void;
   clearOwnedApartmentBuiltinsDiskFlushFlag: () => void;
   clearApartmentUnitLayoutProfilesDiskFlushFlag: () => void;
 

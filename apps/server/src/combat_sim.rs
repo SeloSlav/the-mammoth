@@ -45,9 +45,10 @@ const COMBAT_SIM_LOADOUT: &[(&str, u32)] = &[
 ];
 
 /// Minimum planar distance from the player spawn to the babushka (outside default aggro).
-const BABUSHKA_SPAWN_SEPARATION_M: f32 = 4.0;
-/// Combat-sim arena uses a wider leash so the lone test NPC keeps pressure on the owner.
-pub const COMBAT_SIM_BABUSHKA_AGGRO_RANGE_M: f32 = 14.0;
+const BABUSHKA_SPAWN_SEPARATION_M: f32 = npc::BABUSHKA_AGGRO_RANGE_M + 1.75;
+
+/// Death clip (~2.47 s) plus corpse linger before despawn + fresh spawn elsewhere in the arena.
+const BABUSHKA_CORPSE_TOTAL_MICROS: i64 = 6_500_000;
 
 pub fn session_owner_for_session_key(ctx: &ReducerContext, session_key: &str) -> Option<Identity> {
     let unit_key = session_key.strip_prefix("combat_sim:")?;
@@ -58,11 +59,35 @@ pub fn session_owner_for_session_key(ctx: &ReducerContext, session_key: &str) ->
         .and_then(|u| u.owner)
 }
 
-/// Reset a combat-sim babushka in place (same `npc_id`) after a lethal hit.
-pub fn reset_babushka_after_death(ctx: &ReducerContext, row: &mut npc::WorldNpc) {
-    let Some(unit_key) = row.session_key.strip_prefix("combat_sim:") else {
+fn hash_u64_to_unit(seed: u64) -> f32 {
+    let mixed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+    (mixed & 0xffff) as f32 / 65535.0
+}
+
+/// Random babushka pose inside the combat arena (inset from bounds).
+pub fn random_babushka_pose_in_unit(unit: &ApartmentUnit, salt: u64) -> (f32, f32, f32, f32) {
+    let inset = 0.75;
+    let min_x = unit.bound_min_x + inset;
+    let max_x = unit.bound_max_x - inset;
+    let min_z = unit.bound_min_z + inset;
+    let max_z = unit.bound_max_z - inset;
+    let x = min_x + hash_u64_to_unit(salt) * (max_x - min_x);
+    let z = min_z + hash_u64_to_unit(salt.wrapping_mul(31)) * (max_z - min_z);
+    let yaw = hash_u64_to_unit(salt.wrapping_mul(97)) * std::f32::consts::TAU;
+    (x, unit.foot_y, z, yaw)
+}
+
+/// After corpse linger, delete the dead row and spawn a fresh babushka at a random arena spot.
+pub fn maybe_despawn_corpse_and_respawn(ctx: &ReducerContext, npc: &npc::WorldNpc, now_us: i64) {
+    if npc.state != npc::NPC_STATE_DEAD {
+        return;
+    }
+    let Some(unit_key) = npc.session_key.strip_prefix("combat_sim:") else {
         return;
     };
+    if now_us - npc.last_melee_micros < BABUSHKA_CORPSE_TOTAL_MICROS {
+        return;
+    }
     let Some(unit) = ctx
         .db
         .apartment_unit()
@@ -74,38 +99,12 @@ pub fn reset_babushka_after_death(ctx: &ReducerContext, row: &mut npc::WorldNpc)
     let Some(owner) = unit.owner else {
         return;
     };
-    pose::ensure_player_pose_row(ctx, owner);
-    let Some(pose) = ctx.db.player_pose().identity().find(&owner) else {
-        return;
-    };
-
-    let authored = combat_sim_npc_spawn::authored_spawns_for_owner_unit(
-        ctx,
-        owner,
-        unit_key,
-    );
-    if let Some(spawn) = authored.first() {
-        row.x = spawn.x;
-        row.y = spawn.y;
-        row.z = spawn.z;
-        row.yaw = spawn.yaw;
-    } else {
-        let (bx, by, bz, byaw) = babushka_spawn_xz(&unit, pose.x, pose.z);
-        row.x = bx;
-        row.y = by;
-        row.z = bz;
-        row.yaw = byaw;
-    }
-
-    row.health = npc::BABUSHKA_MAX_HEALTH;
-    row.max_health = npc::BABUSHKA_MAX_HEALTH;
-    row.state = npc::NPC_STATE_AGGRO;
-    row.chase_identity = Some(owner);
-    row.locomotion = npc::NPC_LOCOMOTION_IDLE;
-    row.vel_x = 0.0;
-    row.vel_z = 0.0;
-    row.grounded = 1;
-    row.last_melee_micros = 0;
+    let session_key = npc.session_key.clone();
+    let salt = now_us as u64 ^ npc.npc_id.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let (x, y, z, yaw) = random_babushka_pose_in_unit(&unit, salt);
+    let npc_id = npc.npc_id;
+    ctx.db.world_npc().npc_id().delete(&npc_id);
+    let _ = npc::spawn_babushka(ctx, session_key, x, y, z, yaw, Some(owner));
 }
 
 pub fn combat_sim_player_spawn_pose(unit: &ApartmentUnit) -> (f32, f32, f32) {

@@ -4,6 +4,7 @@ import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { useEditorStore } from "../../state/editorStore.js";
 import { getFpViewmodelAuthoringPicks } from "../fpAuthoring/fpViewmodelAuthoringBridge.js";
 import { resolveFpAuthorPickId } from "../fpAuthoring/fpAuthorPickResolve.js";
+import { demandEditorSceneRender } from "./editorSceneRenderDemand.js";
 import { PreviewSelectionShapeOutline } from "../scene/previewSelectionShapeOutline.js";
 import { editorAncestorPlateLevelIndex } from "./editorAncestorLevelIndex.js";
 import {
@@ -278,19 +279,23 @@ export function createEditorSceneCanvasPointerHandlers(deps: {
     }
     const additivePick = ev.ctrlKey === true || ev.metaKey === true;
     if (store.mode === "my_apartment_layout") {
-      if (store.myApartmentLayoutHidePickMode && levelCandidate.id) {
-        useEditorStore.getState().hideMyApartmentLayoutPlacementFromCanvas(levelCandidate.id);
+      const pickId = levelCandidate.id;
+
+      if (store.myApartmentLayoutHidePickMode && pickId) {
+        useEditorStore.getState().hideMyApartmentLayoutPlacementFromCanvas(pickId);
+        useEditorStore.getState().setMyApartmentLayoutTransformArmed(false);
         previewSelectionOutline.setFromObject(null);
         syncTransformAttachment();
         return;
       }
       useEditorStore
         .getState()
-        .pickMyApartmentLayoutFromCanvas(levelCandidate.id, { additive: additivePick });
+        .pickMyApartmentLayoutFromCanvas(pickId, { additive: additivePick });
+      demandEditorSceneRender();
     } else {
       useEditorStore.getState().setSelectedId(levelCandidate.id);
+      previewSelectionOutline.setFromObject(getPreferredPreviewSelectionTarget());
     }
-    previewSelectionOutline.setFromObject(getPreferredPreviewSelectionTarget());
     syncTransformAttachment();
   };
 

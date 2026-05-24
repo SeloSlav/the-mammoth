@@ -11,9 +11,9 @@ import { waitForCombatSimBabushkaRow } from "./waitForCombatSimWorldNpc.js";
 import type { OwnedApartmentNpcCombatSpawn } from "@the-mammoth/schemas";
 
 export type MountCombatSimSessionOptions = {
-  /** When set, sync these spawns before enter (editor builtins). Otherwise server default spawn. */
+  /** When set, sync these spawns before enter. Otherwise loads from owned apartment builtins JSON. */
   npcSpawns?: readonly OwnedApartmentNpcCombatSpawn[];
-  /** Pre-resolved unit context (editor preview unit). Falls back to owned claimed unit. */
+  /** Pre-resolved unit context. Falls back to owned claimed unit. */
   unitContext?: CombatSimUnitContext | null;
   apartmentClaimsAllowed?: boolean;
   onMountPhase?: (phase: string) => void;
@@ -23,7 +23,7 @@ export type MountCombatSimSessionOptions = {
  * Combat sim entry — **one gameplay stack**, not a fork.
  *
  * Call chain: `mountCombatSimSession` → server `enter_combat_sim` → `mountFpSession({ combatSimMode: true })`.
- * Editor combat-sim play and client `?combatSim=1` both use this path.
+ * Client entry: `http://localhost:5173/?combatSim=1`.
  *
  * **Shared with live FP** (same code, same reducers):
  * - `mountFpSession` — locomotion, hotbar, reticule, vitals, `submitFirearmShot` / `submitMeleeSwing`

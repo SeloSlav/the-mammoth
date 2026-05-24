@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeApartmentPlacementCanvasPick } from "./apartmentLayoutSelectionOps.js";
+import {
+  computeApartmentPlacementCanvasPick,
+  resolveApartmentLayoutPlacementActivation,
+} from "./apartmentLayoutSelectionOps.js";
 import {
   editorMyApartmentSelectedIdForDecor,
   editorMyApartmentSelectedIdForSavedObjectGroup,
@@ -111,5 +114,58 @@ describe("computeApartmentPlacementCanvasPick", () => {
     expect(new Set(step3.myApartmentMultiselectExtraIds).size).toBe(
       step3.myApartmentMultiselectExtraIds.length,
     );
+  });
+});
+
+describe("resolveApartmentLayoutPlacementActivation", () => {
+  const dA = editorMyApartmentSelectedIdForDecor("decor-a");
+  const dB = editorMyApartmentSelectedIdForDecor("decor-b");
+
+  it("first click selects without arming", () => {
+    expect(
+      resolveApartmentLayoutPlacementActivation({
+        clickedId: dA,
+        additive: false,
+        selectedId: null,
+        previousExtras: [],
+        transformArmed: false,
+      }),
+    ).toEqual({
+      selectedId: dA,
+      myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: false,
+    });
+  });
+
+  it("second click on the same placement arms transform", () => {
+    expect(
+      resolveApartmentLayoutPlacementActivation({
+        clickedId: dA,
+        additive: false,
+        selectedId: dA,
+        previousExtras: [],
+        transformArmed: false,
+      }),
+    ).toEqual({
+      selectedId: dA,
+      myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: true,
+    });
+  });
+
+  it("clicking a different placement re-selects and disarms", () => {
+    expect(
+      resolveApartmentLayoutPlacementActivation({
+        clickedId: dB,
+        additive: false,
+        selectedId: dA,
+        previousExtras: [],
+        transformArmed: true,
+      }),
+    ).toEqual({
+      selectedId: dB,
+      myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: false,
+    });
   });
 });

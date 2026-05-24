@@ -26,7 +26,6 @@ import {
   maxBuildingLevelIndex,
   ownedDefaultApartmentUnitKey,
 } from "@the-mammoth/world";
-import { editorMyApartmentSelectedIdForDecor } from "../myApartment/editorMyApartmentSelection.js";
 import {
   type EditorContentIndex,
   EDITOR_APARTMENT_KIT_FILE,
@@ -198,13 +197,6 @@ export async function bootstrapEditorFromContent(): Promise<void> {
         "after disk JSON failed to parse.",
     );
   }
-  const initialSortedItems = [...initialApartmentLayoutDoc.placedItems].sort((a, b) =>
-    a.id.localeCompare(b.id),
-  );
-  const initialSelectedId =
-    initialSortedItems.length > 0
-      ? editorMyApartmentSelectedIdForDecor(initialSortedItems[0]!.id)
-      : null;
 
   useEditorStore.setState((s) => ({
     building,
@@ -244,8 +236,9 @@ export async function bootstrapEditorFromContent(): Promise<void> {
           id.startsWith(`${building.id}__L${String(first?.levelIndex ?? 1).padStart(2, "0")}`),
         ) ??
         null,
-    selectedId: initialSelectedId,
+    selectedId: null,
     myApartmentMultiselectExtraIds: [],
+    myApartmentLayoutTransformArmed: false,
     dirty: false,
     historyPast: [],
     historyFuture: [],

@@ -11,7 +11,7 @@ type Props = {
   onExit: () => void;
 };
 
-/** Trimmed HUD for editor + dev combat sim (hotbar, reticule, vitals, combat feedback). */
+/** Trimmed HUD for `?combatSim=1` (hotbar, reticule, vitals, combat feedback). */
 export function CombatSimMinimalHud({ conn, onExit }: Props) {
   return (
     <>

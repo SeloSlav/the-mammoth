@@ -8,6 +8,66 @@ export type ApartmentPlacementPickOutcome = {
   myApartmentMultiselectExtraIds: readonly string[];
 };
 
+export type ApartmentPlacementActivationOutcome = ApartmentPlacementPickOutcome & {
+  myApartmentLayoutTransformArmed: boolean;
+};
+
+/**
+ * Two-step apartment placement pick:
+ * - 1st click on a placement → select only (no gizmo / pink outline)
+ * - 2nd click on the same placement → arm transform + pink wireframe outline
+ */
+export function resolveApartmentLayoutPlacementActivation(opts: {
+  clickedId: string | null;
+  additive: boolean;
+  selectedId: string | null;
+  previousExtras: readonly string[];
+  transformArmed: boolean;
+}): ApartmentPlacementActivationOutcome {
+  const { clickedId, additive, selectedId, previousExtras, transformArmed } = opts;
+
+  if (!clickedId) {
+    return {
+      selectedId: null,
+      myApartmentMultiselectExtraIds: [],
+      myApartmentLayoutTransformArmed: false,
+    };
+  }
+
+  if (additive) {
+    const out = computeApartmentPlacementCanvasPick({
+      clickedId,
+      additive: true,
+      previousSelectedId: selectedId,
+      previousExtras,
+    });
+    return { ...out, myApartmentLayoutTransformArmed: false };
+  }
+
+  if (clickedId === selectedId) {
+    if (!transformArmed) {
+      return {
+        selectedId,
+        myApartmentMultiselectExtraIds: previousExtras,
+        myApartmentLayoutTransformArmed: true,
+      };
+    }
+    return {
+      selectedId,
+      myApartmentMultiselectExtraIds: previousExtras,
+      myApartmentLayoutTransformArmed: true,
+    };
+  }
+
+  const out = computeApartmentPlacementCanvasPick({
+    clickedId,
+    additive: false,
+    previousSelectedId: selectedId,
+    previousExtras,
+  });
+  return { ...out, myApartmentLayoutTransformArmed: false };
+}
+
 /** Lex-sort placement ids so history/tests stay deterministic (extras exclude primary). */
 function sortExtras(ids: readonly string[]): readonly string[] {
   return [...new Set(ids)].filter(Boolean).slice().sort((a, b) => a.localeCompare(b));

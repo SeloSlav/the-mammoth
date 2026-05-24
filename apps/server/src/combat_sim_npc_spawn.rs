@@ -1,4 +1,4 @@
-//! Authoritative combat-sim NPC spawn anchors synced from client/editor before `enter_combat_sim`.
+//! Authoritative combat-sim NPC spawn anchors synced from client before `enter_combat_sim`.
 
 use spacetimedb::{Identity, ReducerContext, Table};
 
