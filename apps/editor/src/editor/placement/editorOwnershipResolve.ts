@@ -98,8 +98,8 @@ export function describeEditorSaveTarget(args: {
     if (workspace === "corridor") {
       return {
         kind: "local",
-        title: "Local — Floor 19 corridor builtins",
-        detail: "content/apartment/floor_19_corridor_builtins.json (corridor décor and ceiling fixtures)",
+        title: "Local — Floor 19 builtins",
+        detail: "content/apartment/floor_19_corridor_builtins.json (floor décor and ceiling fixtures)",
       };
     }
     return {

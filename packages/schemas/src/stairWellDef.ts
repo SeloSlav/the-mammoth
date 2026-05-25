@@ -107,6 +107,32 @@ export const StairWellLandingPropSchema = z.object({
 
 export type StairWellLandingProp = z.infer<typeof StairWellLandingPropSchema>;
 
+export const StairWellCeilingPropAnchorSchema = z.object({
+  /** Shaft-local X offset from segment center (m). */
+  offsetXM: z.number().optional(),
+  /** Shaft-local Z offset from segment center (m). */
+  offsetZM: z.number().optional(),
+  /** Drop below the interior ceiling plane (m). */
+  dropM: z.number().optional(),
+  /** Yaw around +Y in shaft-local space. */
+  yawRad: z.number().optional(),
+  /** Uniform scale on the loaded GLB root. */
+  uniformScale: z.number().optional(),
+});
+
+export type StairWellCeilingPropAnchor = z.infer<typeof StairWellCeilingPropAnchorSchema>;
+
+/** Flush ceiling fixtures in shaft-local space (same placement on typical + ground segments). */
+export const StairWellCeilingPropSchema = z.object({
+  id: z.string(),
+  /** Client URL, e.g. `/static/models/objects/light-ceiling-2.glb`. */
+  modelUrl: z.string(),
+  applyToScopes: z.array(z.enum(["typical", "ground"])).optional(),
+  anchor: StairWellCeilingPropAnchorSchema,
+});
+
+export type StairWellCeilingProp = z.infer<typeof StairWellCeilingPropSchema>;
+
 /**
  * Shared stairwell visual definition (one file affects every stairwell placeholder / shaft column).
  *
@@ -151,6 +177,12 @@ export const StairWellDefSchema = z.object({
   secondaryEntryOpening: StairWellEntryOpeningSchema.optional(),
   /** Props (GLB) placed on corner landings — shaft-relative, scales with stair authoring. */
   landingProps: z.array(StairWellLandingPropSchema).optional(),
+  /** Ceiling-mounted fixtures (e.g. corridor-style flush lights) per typical stair segment. */
+  ceilingProps: z.array(StairWellCeilingPropSchema).optional(),
+  /**
+   * Ground-storey-only ceiling fixture overrides. Falls back to {@link ceilingProps} when omitted.
+   */
+  groundCeilingProps: z.array(StairWellCeilingPropSchema).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 

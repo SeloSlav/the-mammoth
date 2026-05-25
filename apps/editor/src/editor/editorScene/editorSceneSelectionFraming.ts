@@ -144,8 +144,18 @@ export function createEditorSceneSelectionFraming(deps: {
     }
     if (s.mode === "stairwell_preview") {
       buildingRoot.traverse((o) => {
+        const scope =
+          (o.userData.editorStairAuthoringScope as "typical" | "ground" | undefined) ??
+          "typical";
+        if (scope !== s.stairWellAuthorScope || target !== null) return;
+        const ceilingPropId = o.userData.editorStairCeilingPropId as string | undefined;
+        if (typeof ceilingPropId === "string" && ceilingPropId.length > 0) {
+          const pickId = o.userData.editorStairPickId as string | undefined;
+          if (pickId === s.selectedId) target = o;
+          return;
+        }
         const pid = o.userData.editorStairPartId as string | undefined;
-        if (pid === s.selectedId && target === null) target = o;
+        if (pid === s.selectedId) target = o;
       });
       return target;
     }

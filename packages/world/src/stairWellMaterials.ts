@@ -43,5 +43,17 @@ export function createStairWellMaterials(def: StairWellDef | undefined): StairWe
   tread.roughness = Math.min(1, tread.roughness + 0.07);
   landing.roughness = Math.min(1, landing.roughness + 0.06);
   floor.roughness = Math.min(1, floor.roughness + 0.06);
+  /**
+   * Stair shafts are enclosed concrete volumes. A tiny non-directional lift keeps authored
+   * concrete and tread texture legible without turning the shaft into a lit corridor.
+   */
+  wall.emissive.setHex(0x2a2823);
+  wall.emissiveIntensity = Math.max(wall.emissiveIntensity, 0.04);
+  floor.emissive.setHex(0x211f1c);
+  floor.emissiveIntensity = Math.max(floor.emissiveIntensity, 0.03);
+  tread.emissive.setHex(0x211f1c);
+  tread.emissiveIntensity = Math.max(tread.emissiveIntensity, 0.035);
+  landing.emissive.setHex(0x211f1c);
+  landing.emissiveIntensity = Math.max(landing.emissiveIntensity, 0.03);
   return { wall, floor, tread, landing, railing };
 }

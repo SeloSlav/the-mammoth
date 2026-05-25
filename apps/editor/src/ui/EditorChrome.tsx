@@ -18,7 +18,11 @@ import {
   faWindowRestore,
 } from "@fortawesome/free-solid-svg-icons";
 import {
+  isStairWellCeilingPropEditorId,
   isStairWellOpeningProxyId,
+  parseStairWellCeilingPropEditorId,
+  patchStairWellCeilingPropAnchorInDef,
+  resolveStairWellCeilingPropsForScope,
   FLOOR_19_GAMEPLAY_LEVEL_INDEX,
   LANDING_DOOR_OPENING_PROXY_ID,
 } from "@the-mammoth/world";
@@ -203,6 +207,17 @@ export function EditorChrome() {
     if (
       mode === "stairwell_preview" &&
       selectedId &&
+      isStairWellCeilingPropEditorId(selectedId)
+    ) {
+      const propId = parseStairWellCeilingPropEditorId(selectedId);
+      const props = resolveStairWellCeilingPropsForScope(stairWellDef, stairWellAuthorScope);
+      const prop = propId ? props.find((entry) => entry.id === propId) : undefined;
+      const yawRad = prop?.anchor.yawRad ?? 0;
+      return [0, (yawRad * 180) / Math.PI, 0] as [number, number, number];
+    }
+    if (
+      mode === "stairwell_preview" &&
+      selectedId &&
       !isStairWellOpeningProxyId(selectedId)
     ) {
       const r =
@@ -269,6 +284,20 @@ export function EditorChrome() {
           },
         },
       }));
+      return;
+    }
+    if (
+      mode === "stairwell_preview" &&
+      selectedId &&
+      isStairWellCeilingPropEditorId(selectedId)
+    ) {
+      const propId = parseStairWellCeilingPropEditorId(selectedId);
+      if (!propId) return;
+      patchStairWellDef((d) =>
+        patchStairWellCeilingPropAnchorInDef(d, stairWellAuthorScope, propId, {
+          yawRad: (next[1] * Math.PI) / 180,
+        }),
+      );
       return;
     }
     if (
@@ -438,10 +467,8 @@ export function EditorChrome() {
         contentIndex={contentIndex}
         elevatorCabDef={elevatorCabDef}
         landingKitDef={landingKitDef}
-        stairWellDef={stairWellDef}
         patchElevatorCabDef={patchElevatorCabDef}
         patchLandingKitDef={patchLandingKitDef}
-        patchStairWellDef={patchStairWellDef}
         input={input}
       />
       <div style={editorChromePanel}>
@@ -696,6 +723,7 @@ export function EditorChrome() {
                 <EditorChromeOutliner
                   mode={mode}
                   stairWellAuthorScope={stairWellAuthorScope}
+                  stairWellDef={stairWellDef}
                   landingKitVariant={landingKitVariant}
                   setLandingKitVariant={setLandingKitVariant}
                   activeFloorDoc={activeFloorDoc}
@@ -832,6 +860,7 @@ export function EditorChrome() {
               <EditorChromeInspector
                 workspace={workspace}
                 mode={mode}
+                contentIndex={contentIndex}
                 landingKitVariant={landingKitVariant}
                 elevatorCabDef={elevatorCabDef}
                 landingKitDef={landingKitDef}

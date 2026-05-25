@@ -1264,9 +1264,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setStairWellAuthorScope: (stairWellAuthorScope) =>
     set((s) => ({
       stairWellAuthorScope,
-      ...(s.mode === "stairwell_preview"
-        ? { contentStructureEpoch: s.contentStructureEpoch + 1 }
-        : {}),
       ...((stairWellAuthorScope === "ground" &&
         (s.selectedId === "stair_landing_lower" ||
           s.selectedId === "stair_corner_landing" ||

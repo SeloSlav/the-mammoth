@@ -25,14 +25,18 @@ import {
   MAMMOTH_APARTMENT_BAKED_FLOOR_SHADOW_MESH_UD,
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
   prepareMammothApartmentInteriorContentRoots,
+  syncMammothStairwellCeilingFixturePresentation,
   requestWebGpuAdapter,
   webGpuAdapterSupportsTimestampQuery,
+  type ApartmentPracticalLightsMount,
   type FpLocomotionInput,
 } from "@the-mammoth/engine";
 import {
   DEFAULT_BUILDING_FLOOR_SPACING_M,
   ENABLE_STAIRWELL_GRAFFITI_DECALS,
+  collectStairwellCeilingLightGroups,
   ensureStairwellCigaretteMeshReady,
+  subscribeStairwellCeilingPropReady,
   maxBuildingLevelIndex,
   parseFloorDoc,
   buildInteriorMeshes,
@@ -547,6 +551,29 @@ export async function mountFpSession(
     );
   };
 
+  let stairwellCeilingPracticalLights: ApartmentPracticalLightsMount | null = null;
+  const syncStairwellCeilingFixturePresentation = (): void => {
+    if (isCombatSim) return;
+    stairwellCeilingPracticalLights = syncMammothStairwellCeilingFixturePresentation({
+      buildingRoot,
+      lightParent: scene,
+      previous: stairwellCeilingPracticalLights,
+    });
+    const tex = scene.userData.mammothFpMetallicReadableEnv;
+    const envTexture = tex instanceof THREE.Texture ? tex : null;
+    for (const group of collectStairwellCeilingLightGroups(buildingRoot)) {
+      prepareMammothApartmentInteriorContentRoots({
+        shellRoot: buildingRoot,
+        decorRoot: group,
+      });
+      bindMammothApartmentPropReadableEnv(group, envTexture);
+    }
+  };
+  const unsubscribeStairwellCeilingPropReady = subscribeStairwellCeilingPropReady(() => {
+    syncStairwellCeilingFixturePresentation();
+    refreshApartmentInteriorMeshes();
+  });
+
   const refreshApartmentInteriorMeshes = () => {
     const tex = scene.userData.mammothFpMetallicReadableEnv;
     const envTexture = tex instanceof THREE.Texture ? tex : null;
@@ -747,6 +774,7 @@ export async function mountFpSession(
       });
   if (!isCombatSim) {
     refreshApartmentInteriorMeshes();
+    syncStairwellCeilingFixturePresentation();
     if (floor19CorridorCeilingLights) {
       void floor19CorridorCeilingLights.ready.then(() => {
         refreshApartmentInteriorMeshes();
@@ -970,6 +998,7 @@ export async function mountFpSession(
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit,
     isInsideApartmentInteriorLightingZone,
+    isInsideStairwellShaft,
     getContainingResidentialUnitKey,
     isApartmentDecorInteriorVisible,
   } =
@@ -1058,6 +1087,9 @@ export async function mountFpSession(
   const isInsideApartmentInteriorLightingZoneForFrame = isCombatSim
     ? () => false
     : isInsideApartmentInteriorLightingZone;
+  const isInsideStairwellShaftForFrame = isCombatSim
+    ? () => false
+    : isInsideStairwellShaft;
   const isApartmentDecorInteriorVisibleForFrame = isCombatSim
     ? () => false
     : isApartmentDecorInteriorVisible;
@@ -2121,6 +2153,7 @@ export async function mountFpSession(
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: isInsideResidentialUnitForFrame,
     isInsideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame,
+    isInsideStairwellShaft: isInsideStairwellShaftForFrame,
     getContainingResidentialUnitKey,
     getActiveApartmentDecorUnitKey: getActiveApartmentDecorUnitKeyForFrame,
     getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
@@ -2233,6 +2266,9 @@ export async function mountFpSession(
     fpBalconyGrow.dispose();
     fpApartmentDoors.dispose();
     floor19CorridorCeilingLights?.dispose();
+    unsubscribeStairwellCeilingPropReady();
+    stairwellCeilingPracticalLights?.dispose();
+    stairwellCeilingPracticalLights = null;
     unregisterFpDebugMenuSessionSnapshot();
     setFpActiveStashPanel(null);
     disposeFpSessionDevDebug();

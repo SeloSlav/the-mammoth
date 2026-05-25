@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ENABLE_STAIRWELL_HEATER_CIGARETTE_LITTER } from "./featureFlags.js";
 import type { StairCornerLanding, StairSwitchbackLayout } from "./stairWellGeometry.js";
 import { loadPropTemplate } from "./stairWellLandingProps.js";
+import { canonicalOwnedApartmentUniformScaleForClientModelUrl } from "./stairwellLitterCanonicalScale.js";
 
 /** FP client URL; legacy single-cigarette litter (included in multi-variant litter). */
 export const STAIRWELL_CIGARETTE_MODEL_URL = "/static/models/objects/used-cigarette.glb";
@@ -11,8 +12,6 @@ type LitterPlacementKind = "landing" | "tread";
 type StairwellLitterVariantSpec = {
   readonly id: string;
   readonly modelUrl: string;
-  /** Longest local bbox axis is scaled so it is about this many meters in world units. */
-  readonly targetMaxExtentM: number;
   /** Sampling weight vs other variants (relative; normalized after load failures). */
   readonly weight: number;
 };
@@ -22,25 +21,21 @@ const STAIRWELL_LITTER_VARIANTS: readonly StairwellLitterVariantSpec[] = [
   {
     id: "cigarette",
     modelUrl: STAIRWELL_CIGARETTE_MODEL_URL,
-    targetMaxExtentM: 0.08,
     weight: 4,
   },
   {
     id: "pack",
     modelUrl: "/static/models/objects/empty-cigarette-pack.glb",
-    targetMaxExtentM: 0.12,
     weight: 2,
   },
   {
     id: "bottle",
     modelUrl: "/static/models/objects/empty-beer-bottle.glb",
-    targetMaxExtentM: 0.28,
     weight: 2,
   },
   {
     id: "can",
     modelUrl: "/static/models/objects/empty-beer-can-ozujsko.glb",
-    targetMaxExtentM: 0.13,
     weight: 2,
   },
 ];
@@ -74,16 +69,12 @@ type LoadedLitterVariant = {
   weight: number;
 };
 
-function computeScaleToWorld(geometry: THREE.BufferGeometry, targetMaxExtentM: number): number {
-  geometry.computeBoundingBox();
-  const bb = geometry.boundingBox;
-  if (!bb || bb.isEmpty()) return 0.05;
-  const dx = bb.max.x - bb.min.x;
-  const dy = bb.max.y - bb.min.y;
-  const dz = bb.max.z - bb.min.z;
-  const longest = Math.max(dx, dy, dz);
-  if (longest < 1e-8) return 0.05;
-  return THREE.MathUtils.clamp(targetMaxExtentM / longest, 0.0005, 0.5);
+function litterUniformScaleForModelUrl(modelUrl: string): number {
+  return canonicalOwnedApartmentUniformScaleForClientModelUrl(modelUrl);
+}
+
+function computeLitterWorldScale(geometry: THREE.BufferGeometry, uniformScale: number): number {
+  return THREE.MathUtils.clamp(uniformScale, 0.0005, 0.5);
 }
 
 function pushLitterInstanceInSegmentSpace(args: {
@@ -278,7 +269,9 @@ async function tryLoadLitterVariant(spec: StairwellLitterVariantSpec): Promise<L
       return null;
     }
     const geometry = src.geometry.clone();
-    const scaleToWorld = computeScaleToWorld(geometry, spec.targetMaxExtentM);
+    const uniformScale = litterUniformScaleForModelUrl(spec.modelUrl);
+    const scaleToWorld = computeLitterWorldScale(geometry, uniformScale);
+    geometry.computeBoundingBox();
     const bb = geometry.boundingBox;
     let longest = 0.05;
     if (bb && !bb.isEmpty()) {

@@ -274,6 +274,7 @@ export type FpSessionMainRafFrameDeps = {
   isInsideElevatorCabHudForJump: () => boolean;
   isInsideResidentialUnit: () => boolean;
   isInsideApartmentInteriorLightingZone: () => boolean;
+  isInsideStairwellShaft: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
   getActiveApartmentDecorUnitKey: (containingResidentialUnitKey: string | null) => string | null;
   getContainingResidentialUnitBounds: () => {
@@ -1225,7 +1226,9 @@ export function createFpSessionMainRafFrame(
         ? mainRaf.apartmentInteriorDarkSmoothed
         : 0,
       interiorRenderLayersEnabled:
-        deps.isInsideResidentialUnit() || deps.isApartmentDecorInteriorVisible(),
+        deps.isInsideResidentialUnit() ||
+        deps.isApartmentDecorInteriorVisible() ||
+        deps.isInsideStairwellShaft(),
       stairwellInteriorDark01: mainRaf.stairwellInteriorDarkSmoothed,
     });
     const _t_afterFpEnv = performance.now();

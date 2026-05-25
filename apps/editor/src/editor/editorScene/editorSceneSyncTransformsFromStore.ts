@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   applyElevatorCabPartTransforms,
   rebuildLandingDoorPreviewSwing,
+  applyStairWellCeilingPropAnchors,
   applyStairWellPartTransforms,
 } from "@the-mammoth/world";
 import {
@@ -43,5 +44,6 @@ export function syncEditorTransformsFromStore(
     }
   } else if (s.mode === "stairwell_preview") {
     applyStairWellPartTransforms(buildingRoot, s.stairWellDef);
+    applyStairWellCeilingPropAnchors(buildingRoot, s.stairWellDef);
   }
 }

@@ -14,6 +14,7 @@ import {
   resolveGlassOpening,
 } from "@the-mammoth/world";
 import { describeEditorSaveTarget } from "../editor/placement/editorOwnershipResolve.js";
+import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import type {
   EditorState,
   EditorMode,
@@ -22,6 +23,9 @@ import type {
 } from "../state/editorStore.js";
 import { faSliders } from "@fortawesome/free-solid-svg-icons";
 import { EditorChromeSectionTitleIcon } from "./EditorChromeSectionTitleIcon.js";
+import { MaterialSlotEditor } from "./editorMaterialSlotEditor.js";
+import { resolveStairwellMaterialPanelState } from "./editorStairwellMaterialPanel.js";
+import { editorChromeSection } from "./editorChromeStyles.js";
 
 function readScale(s: [number, number, number] | undefined): [number, number, number] {
   return [s?.[0] ?? 1, s?.[1] ?? 1, s?.[2] ?? 1];
@@ -36,6 +40,7 @@ function isElevatorFace(value: unknown): value is ElevatorDoorFace {
 export function EditorChromeInspector(props: {
   workspace: EditorWorkspace;
   mode: EditorMode;
+  contentIndex: EditorContentIndex;
   landingKitVariant: LandingKitVariant;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
@@ -72,9 +77,12 @@ export function EditorChromeInspector(props: {
   const {
     workspace,
     mode,
+    contentIndex,
     landingKitVariant,
     landingKitDef,
+    stairWellDef,
     stairWellAuthorScope,
+    patchStairWellDef,
     patchLandingKitDef,
     selectedId,
     selectedFloorObj,
@@ -339,6 +347,45 @@ export function EditorChromeInspector(props: {
           </div>
         </>
       ) : null}
+
+      {mode === "stairwell_preview" ? (() => {
+        const { panel, emptyMessage } = resolveStairwellMaterialPanelState({
+          selectedId,
+          stairWellDef,
+          materialTextureUrls: contentIndex.materialTextureUrls,
+          patchStairWellDef,
+        });
+        return (
+          <div
+            style={{ ...editorChromeSection, marginTop: 12, scrollMarginTop: 6 }}
+          >
+            <EditorChromeSectionTitleIcon icon={faSliders}>
+              Part material
+            </EditorChromeSectionTitleIcon>
+            {panel ? (
+              <>
+                <p style={{ opacity: 0.82, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
+                  <strong>{panel.title}</strong>
+                  <br />
+                  {panel.detail}
+                </p>
+                <div style={{ marginTop: 12 }}>
+                  <MaterialSlotEditor
+                    slot={panel.slot}
+                    textureOptions={panel.textureOptions}
+                    input={input}
+                    onPatch={panel.onPatch}
+                  />
+                </div>
+              </>
+            ) : (
+              <p style={{ opacity: 0.75, fontSize: 12, lineHeight: 1.45, margin: "8px 0 0" }}>
+                {emptyMessage}
+              </p>
+            )}
+          </div>
+        );
+      })() : null}
 
       {mode === "landing_preview" && selectedId === "landing_door_kit" ? (
         <p style={{ fontSize: 12, opacity: 0.8, margin: "8px 0 0" }}>

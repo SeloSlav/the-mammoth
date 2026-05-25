@@ -306,6 +306,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   isInsideResidentialUnit: () => boolean;
   /** Corridor / lobby / cab / stair — same dark interior rig as apartment units. */
   isInsideApartmentInteriorLightingZone: () => boolean;
+  /** Feet inside a stair shaft AABB (for interior render layers + ceiling practicals). */
+  isInsideStairwellShaft: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
   /** Last unit feet occupied — retained in corridor lighting zone for seamless practical-light remount. */
   getLastVisitedResidentialUnitKey: () => string | null;
@@ -354,6 +356,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastVisitedResidentialUnitKey: string | null = null;
   let _lastRetainedResidentialUnitId: string | null = null;
   let _lastInsideResidentialUnit = false;
+  let _lastInsideStairwellShaft = false;
   let _lastInsideApartmentInteriorLightingZone = false;
   let _lastExteriorShellPlasterVisible = false;
   let _lastTrueExteriorView = false;
@@ -379,6 +382,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     segment: THREE.Object3D,
     segmentInDetailBand: boolean,
     litterVisible: boolean,
+    feetInsideStairShaft: boolean,
   ): void => {
     segment.traverse((obj) => {
       if (
@@ -388,8 +392,12 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         obj.visible = litterVisible;
         return;
       }
-      if (obj.name.startsWith("stairwell_prop_")) {
-        obj.visible = segmentInDetailBand;
+      if (
+        obj.name.startsWith("stairwell_prop_") ||
+        obj.name.startsWith("stairwell_ceiling_light_") ||
+        obj.userData?.mammothStairwellCeilingLight === true
+      ) {
+        obj.visible = segmentInDetailBand || feetInsideStairShaft;
       }
     });
   };
@@ -460,6 +468,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     const retainedResidentialUnitId = getRetainedResidentialUnitId();
     const insideResidentialUnit = containingResidentialUnit !== null;
     _lastInsideResidentialUnit = insideResidentialUnit;
+    _lastInsideStairwellShaft = pointInsideStairShaft(feetPos.x, feetPos.y, feetPos.z);
     /** Plate / stair vertical anchor: replicated unit level in-hull, else feet-derived storey. */
     const storeyPlateAnchor =
       insideResidentialUnit && containingResidentialUnit !== null
@@ -802,6 +811,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
                 segmentInDetailBand,
                 feetInsideStairShaft,
               }),
+              feetInsideStairShaft,
             );
           } else {
             sub.visible = true;
@@ -826,6 +836,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
     isInsideElevatorCabHudForJump,
     isInsideResidentialUnit: () => _lastInsideResidentialUnit,
     isInsideApartmentInteriorLightingZone: () => _lastInsideApartmentInteriorLightingZone,
+    isInsideStairwellShaft: () => _lastInsideStairwellShaft,
     getContainingResidentialUnitKey: () => _lastContainingResidentialUnitKey,
     getLastVisitedResidentialUnitKey: () => _lastVisitedResidentialUnitKey,
     isApartmentDecorInteriorVisible: () => _lastApartmentDecorInteriorVisible,

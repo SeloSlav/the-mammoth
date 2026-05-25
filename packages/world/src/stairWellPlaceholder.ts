@@ -37,6 +37,7 @@ import {
   type StairWellGroundDoorContext,
 } from "./stairWellGroundDoorResolve.js";
 import { attachStairWellLandingProps } from "./stairWellLandingProps.js";
+import { attachStairWellCeilingProps } from "./stairWellCeilingProps.js";
 import { attachStairwellCigaretteLitter } from "./stairwellCigaretteLitter.js";
 import { tagShaftShellMeshesSkipFloorGeometryMerge } from "./elevatorShaftPlaceholder.js";
 
@@ -459,6 +460,12 @@ export function addStairWellPlaceholder(
     isTopOccupiedStairStorey: opts?.isTopOccupiedStairStorey,
     skipTypicalLandingProps:
       opts?.omitTopLanding === true && authoringScope === "typical",
+  });
+  attachStairWellCeilingProps({
+    root: group,
+    def: opts?.def,
+    authoringScope,
+    sy,
   });
   if (opts?.omitStairwellCigaretteLitter !== true) {
     const litterSearchRoot = opts?.stairGraphicsMergeRoot ?? group.parent ?? group;

@@ -9,6 +9,7 @@ import {
   type StairSwitchbackLayout,
 } from "./stairWellGeometry.js";
 import { ENABLE_STAIRWELL_HEATER_LANDING_PROPS } from "./featureFlags.js";
+import { canonicalStairwellLandingPropUniformScale } from "./stairwellLitterCanonicalScale.js";
 
 /** Matches `content/elevator/stairwell.json` heater `landingProps` entries. */
 const STAIRWELL_HEATER_LANDING_PROP_MODEL_URL =
@@ -448,7 +449,10 @@ export function attachStairWellLandingProps(args: {
     wrap.position.copy(localPos);
     const yaw = prop.anchor.yawRad ?? 0;
     if (yaw !== 0) wrap.rotation.y = yaw;
-    const u = prop.anchor.uniformScale ?? 1;
+    const u = canonicalStairwellLandingPropUniformScale({
+      modelUrl: prop.modelUrl,
+      authoredUniformScale: prop.anchor.uniformScale,
+    });
     if (u !== 1) wrap.scale.set(u, u, u);
 
     landingMesh.add(wrap);

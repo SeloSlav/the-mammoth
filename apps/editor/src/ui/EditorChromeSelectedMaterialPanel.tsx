@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { ElevatorCabDef, LandingKitDef, StairWellDef } from "@the-mammoth/schemas";
+import type { ElevatorCabDef, LandingKitDef } from "@the-mammoth/schemas";
 import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
 import type { EditorContentIndex } from "../editor/content/editorContentDiscovery.js";
 import type { EditorMode, EditorState } from "../state/editorStore.js";
@@ -30,24 +30,6 @@ function cabSlotForSelectedId(
   return null;
 }
 
-function stairSlotForSelectedId(
-  selectedId: string | null,
-): "wall" | "floor" | "tread" | "landing" | null {
-  if (selectedId === "shaft_wall") return "wall";
-  if (selectedId === "shaft_floor") return "floor";
-  if (
-    selectedId === "stair_flights" ||
-    selectedId === "stair_flight_lower" ||
-    selectedId === "stair_flight_upper"
-  ) {
-    return "tread";
-  }
-  if (selectedId === "stair_landing_lower" || selectedId === "stair_landing_upper") {
-    return "landing";
-  }
-  return null;
-}
-
 type MaterialPanelState = {
   title: string;
   detail: string;
@@ -63,10 +45,8 @@ export function EditorChromeSelectedMaterialPanel(props: {
   contentIndex: EditorContentIndex;
   elevatorCabDef: ElevatorCabDef;
   landingKitDef: LandingKitDef;
-  stairWellDef: StairWellDef;
   patchElevatorCabDef: EditorState["patchElevatorCabDef"];
   patchLandingKitDef: EditorState["patchLandingKitDef"];
-  patchStairWellDef: EditorState["patchStairWellDef"];
   input: CSSProperties;
 }) {
   const {
@@ -75,21 +55,16 @@ export function EditorChromeSelectedMaterialPanel(props: {
     contentIndex,
     elevatorCabDef,
     landingKitDef,
-    stairWellDef,
     patchElevatorCabDef,
     patchLandingKitDef,
-    patchStairWellDef,
     input,
   } = props;
 
-  if (mode !== "cab" && mode !== "landing_preview" && mode !== "stairwell_preview") return null;
+  if (mode !== "cab" && mode !== "landing_preview") return null;
 
   const cabTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, ["cab"]);
   const corridorDoorTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, [
     "corridor-door",
-  ]);
-  const stairwellTextureOptions = filterMaterialTextureUrls(contentIndex.materialTextureUrls, [
-    "stairwell",
   ]);
 
   let materialPanelState: MaterialPanelState | null = null;
@@ -157,30 +132,6 @@ export function EditorChromeSelectedMaterialPanel(props: {
       };
     } else if (selectedId === "landing_door_kit") {
       emptyMessage = "Select the corridor-door frame or glass in the viewport to edit its material.";
-    }
-  } else if (mode === "stairwell_preview") {
-    const slot = stairSlotForSelectedId(selectedId);
-    if (slot) {
-      materialPanelState = {
-        title: selectedId ?? "stair part",
-        detail: `Editing shared stairwell ${slot} material.`,
-        slot: stairWellDef.materials?.[slot],
-        textureOptions: stairwellTextureOptions,
-        onPatch: (patch) => {
-          patchStairWellDef((d) => ({
-            ...d,
-            materials: {
-              ...d.materials,
-              [slot]: { ...d.materials?.[slot], ...patch },
-            },
-          }));
-        },
-      };
-    } else if (selectedId) {
-      emptyMessage =
-        selectedId === "stair_entry_opening_proxy"
-          ? "The opening proxy edits geometry only. Select a wall, floor, flight, or landing to edit material."
-          : "That selected stairwell item does not have its own material slot.";
     }
   }
 

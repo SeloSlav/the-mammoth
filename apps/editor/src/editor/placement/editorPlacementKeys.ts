@@ -215,9 +215,13 @@ export function resolveLandingKitPickId(
   return null;
 }
 
-/** Walks parents for `userData.editorStairPartId` (shared stairwell workspace picking). */
+/** Walks parents for stairwell gizmo targets (parts, ceiling props, opening proxies). */
 export function resolveStairWellPartTarget(hit: THREE.Object3D | null): THREE.Object3D | null {
   return (
+    resolveAncestor(hit, (obj) => {
+      const ceilingId = obj.userData.editorStairCeilingPropId;
+      return typeof ceilingId === "string" && ceilingId.length > 0;
+    }) ??
     resolveAncestor(hit, (obj) => {
       const pickId = obj.userData.editorStairPickId;
       return typeof pickId === "string" && pickId.length > 0;
@@ -239,6 +243,10 @@ export function resolveStairWellPartId(hit: THREE.Object3D | null): string | nul
     if (typeof openingId === "string" && openingId.length > 0) return openingId;
     if (typeof target.name === "string" && target.name.length > 0) return target.name;
     return null;
+  }
+  const ceilingId = target.userData.editorStairCeilingPropId;
+  if (typeof ceilingId === "string" && ceilingId.length > 0) {
+    return target.userData.editorStairPickId as string;
   }
   const pickId = target.userData.editorStairPickId;
   if (typeof pickId === "string" && pickId.length > 0) return pickId;

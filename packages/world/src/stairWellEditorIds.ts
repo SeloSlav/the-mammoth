@@ -26,3 +26,22 @@ export function isStairWellOpeningProxyId(
 
 export type StairWellEditorPartId = (typeof STAIR_WELL_EDITOR_PART_IDS)[number];
 export type StairWellAuthoringScope = "typical" | "ground";
+
+/** Outliner / gizmo selection id prefix for {@link StairWellDef.ceilingProps}. */
+export const STAIR_WELL_CEILING_PROP_ID_PREFIX = "ceiling_prop:" as const;
+
+export function stairWellCeilingPropEditorId(propId: string): string {
+  return `${STAIR_WELL_CEILING_PROP_ID_PREFIX}${propId}`;
+}
+
+export function parseStairWellCeilingPropEditorId(
+  selectionId: string,
+): string | null {
+  if (!selectionId.startsWith(STAIR_WELL_CEILING_PROP_ID_PREFIX)) return null;
+  const propId = selectionId.slice(STAIR_WELL_CEILING_PROP_ID_PREFIX.length);
+  return propId.length > 0 ? propId : null;
+}
+
+export function isStairWellCeilingPropEditorId(selectionId: string): boolean {
+  return parseStairWellCeilingPropEditorId(selectionId) !== null;
+}

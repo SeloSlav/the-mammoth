@@ -74,6 +74,10 @@ export const OWNED_APARTMENT_DECOR_DEFAULT_SCALE_BY_MODEL = {
     uniformScale: 0.11242224924488126,
     verticalScaleMul: 1,
   },
+  "static/models/objects/empty-beer-bottle.glb": {
+    uniformScale: 0.1702213304073897,
+    verticalScaleMul: 1,
+  },
   "static/models/objects/empty-cigarette-pack.glb": {
     uniformScale: 0.08,
     verticalScaleMul: 1,

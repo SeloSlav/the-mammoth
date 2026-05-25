@@ -4,7 +4,11 @@ import {
   disposeSubtreeGpuAssets,
 } from "../scene/disposeSubtree.js";
 import { emptyFloorDoc } from "../placement/editorEmptyFloorDoc.js";
-import { buildEditorStructuralRoot } from "../content/editorBuildingContentMount.js";
+import {
+  buildEditorStructuralRoot,
+  buildStairwellEditorPreviewGroup,
+  type BuildEditorStructuralRootArgs,
+} from "../content/editorBuildingContentMount.js";
 import { syncEditorTransformsFromStore } from "./editorSceneSyncTransformsFromStore.js";
 import { isFpMode } from "./editorStoreModeGuards.js";
 import type { EditorStoreSnapshot } from "./editorStoreModeGuards.js";
@@ -15,6 +19,14 @@ export type EditorStructuralState = {
   lastBuiltContentEpoch: number;
   shouldFrameAfterRebuild: boolean;
 };
+
+function disposeSubtreeGpuAssetsAfterSubmittedFrames(root: THREE.Object3D): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      disposeSubtreeGpuAssets(root);
+    });
+  });
+}
 
 export function rebuildEditorStructuralIfNeeded(
   state: EditorStructuralState,
@@ -35,7 +47,7 @@ export function rebuildEditorStructuralIfNeeded(
 
   if (state.buildingRoot) {
     deps.contentRoot.remove(state.buildingRoot);
-    disposeSubtreeGpuAssets(state.buildingRoot);
+    disposeSubtreeGpuAssetsAfterSubmittedFrames(state.buildingRoot);
     state.buildingRoot = null;
     registerEditorMyApartmentUnitStatsRoot(null);
   }
@@ -73,7 +85,7 @@ export function rebuildEditorStructuralIfNeeded(
   deps.syncTransformAttachment();
   if (state.shouldFrameAfterRebuild) {
     state.shouldFrameAfterRebuild = false;
-    if (s.mode === "my_apartment_layout") {
+    if (s.mode === "my_apartment_layout" || s.mode === "stairwell_preview") {
       if (deps.frameApartmentGameplayPreview) {
         deps.frameApartmentGameplayPreview(state.buildingRoot);
       } else {
@@ -85,6 +97,30 @@ export function rebuildEditorStructuralIfNeeded(
       deps.frameObject(state.buildingRoot);
     }
   }
+}
+
+/** Swap typical ↔ ground preview without disposing shared/cached WebGPU resources. */
+export function rebuildEditorStairwellScopePreview(
+  state: Pick<EditorStructuralState, "buildingRoot">,
+  args: Pick<
+    BuildEditorStructuralRootArgs,
+    "building" | "floorDocs" | "emptyFloorDoc" | "stairWellDef" | "stairWellAuthorScope"
+  >,
+  deps: {
+    syncTransformAttachment: () => void;
+  },
+): boolean {
+  if (!state.buildingRoot) return false;
+  const preview = buildStairwellEditorPreviewGroup(args);
+  const existing = state.buildingRoot.getObjectByName("editor_stair_well_preview");
+  if (existing) {
+    state.buildingRoot.remove(existing);
+  }
+  if (preview) state.buildingRoot.add(preview);
+  const s = useEditorStore.getState();
+  syncEditorTransformsFromStore(state.buildingRoot, s);
+  deps.syncTransformAttachment();
+  return preview !== null;
 }
 
 export function disposeEditorStructuralRoot(

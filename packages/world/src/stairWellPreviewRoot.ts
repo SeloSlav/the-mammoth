@@ -32,7 +32,6 @@ import {
   type StairWellGroundDoorContext,
 } from "./stairWellGroundDoorResolve.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
-import { disposeObject3D } from "./threeDispose.js";
 
 export type BuildStairWellPreviewRootArgs = {
   sx: number;
@@ -67,10 +66,6 @@ export function buildStairWellPreviewRoot(args: BuildStairWellPreviewRootArgs): 
   return root;
 }
 
-function disposeObject3DTree(root: THREE.Object3D): void {
-  disposeObject3D(root);
-}
-
 export function rebuildStairWellPreviewRoot(
   root: THREE.Group,
   def: StairWellDef | undefined,
@@ -80,7 +75,6 @@ export function rebuildStairWellPreviewRoot(
   while (root.children.length > 0) {
     const child = root.children[0]!;
     root.remove(child);
-    disposeObject3DTree(child);
   }
   addStairWellPlaceholder(root, args.sx, args.sy, args.sz, {
     def,
@@ -225,7 +219,6 @@ export function rebuildStairWellPreviewOpening(
   }
   for (const child of doomed) {
     root.remove(child);
-    disposeObject3DTree(child);
   }
   const mats = createStairWellMaterials(def);
   addShaftShell(root, args.sx, args.sy, args.sz, mats.wall, shaftCeil, {
@@ -268,7 +261,6 @@ export function rebuildStairWellPreviewOpening(
   }
   for (const orphan of proxyById.values()) {
     root.remove(orphan);
-    disposeObject3DTree(orphan);
   }
   if (openings[0]) {
     root.userData.editorStairPreviewGroundDoor = {

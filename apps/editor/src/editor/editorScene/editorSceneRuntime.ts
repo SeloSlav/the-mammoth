@@ -10,14 +10,18 @@ import {
   applyMammothApartmentInteriorLightLayersToGlobalRig,
   applyMammothApartmentInteriorScene,
   applyApartmentInteriorFloorReceiveShadowUnder,
+  bindMammothApartmentPropReadableEnv,
   captureMammothApartmentInteriorSceneAtmosphere,
   ensureMammothApartmentDecorShadowRenderer,
   frameMammothApartmentInteriorGameplayPreview,
   mountMammothApartmentInteriorSceneRig,
+  prepareMammothApartmentInteriorContentRoots,
   requestMammothRendererShadowMapUpdate,
   syncMammothApartmentInteriorMetallicEnv,
+  syncMammothStairwellCeilingFixturePresentation,
+  type ApartmentPracticalLightsMount,
 } from "@the-mammoth/engine";
-import { LANDING_DOOR_OPENING_PROXY_ID } from "@the-mammoth/world";
+import { LANDING_DOOR_OPENING_PROXY_ID, collectStairwellCeilingLightGroups, subscribeStairwellCeilingPropReady } from "@the-mammoth/world";
 import { useEditorStore } from "../../state/editorStore.js";
 import { disposeSceneEnvironment } from "../scene/disposeSubtree.js";
 import { registerEditorSpawnCalculator } from "../bridges/spawnBridge.js";
@@ -47,10 +51,13 @@ import { createEditorSceneSelectionFraming } from "./editorSceneSelectionFraming
 import { patchTransformControlsPointerForCaptureCompat } from "./editorScenePatchTransformControls.js";
 import {
   disposeEditorStructuralRoot,
+  rebuildEditorStairwellScopePreview,
   rebuildEditorStructuralIfNeeded,
   syncEditorPlacementTransformsFromStore,
   type EditorStructuralState,
 } from "./editorSceneStructuralRebuild.js";
+import { emptyFloorDoc } from "../placement/editorEmptyFloorDoc.js";
+import type { BuildEditorStructuralRootArgs } from "../content/editorBuildingContentMount.js";
 import { createEditorFpAuthoringLifecycle } from "./editorSceneFpAuthoringLifecycle.js";
 import { subscribeEditorSceneStore } from "./editorSceneStoreSubscription.js";
 import { createEditorSceneCanvasPointerHandlers } from "./editorSceneCanvasPointer.js";
@@ -172,16 +179,25 @@ export async function mountEditorScene(
 
   const contentRoot = new THREE.Group();
 
-  const shouldPreviewFpApartmentLighting = (
+  const shouldPreviewFpInteriorLighting = (
     st: ReturnType<typeof useEditorStore.getState>,
   ): boolean => st.mode === "my_apartment_layout";
+
+  const shouldPreviewStairwellInteriorLighting = (
+    st: ReturnType<typeof useEditorStore.getState>,
+  ): boolean => st.mode === "stairwell_preview";
+
+  const usesInteriorAuthoringPresentation = (
+    st: ReturnType<typeof useEditorStore.getState>,
+  ): boolean =>
+    shouldPreviewFpInteriorLighting(st) || shouldPreviewStairwellInteriorLighting(st);
 
   const syncEditorLightingStack = (
     st: ReturnType<typeof useEditorStore.getState>,
     roomEnvOn: boolean,
   ): void => {
     const b = EDITOR_ORBIT_LIGHTING_BASE;
-    if (shouldPreviewFpApartmentLighting(st)) {
+    if (usesInteriorAuthoringPresentation(st)) {
       if (editorCameraFovBeforeApartment == null) {
         editorCameraFovBeforeApartment = camera.fov;
       }
@@ -233,11 +249,139 @@ export async function mountEditorScene(
     shouldFrameAfterRebuild: true,
   };
 
+  let editorStairwellCeilingPracticalLights: ApartmentPracticalLightsMount | null = null;
+  const disposeEditorStairwellCeilingPracticalLights = (): void => {
+    editorStairwellCeilingPracticalLights?.dispose();
+    editorStairwellCeilingPracticalLights = null;
+  };
+  const syncEditorStairwellCeilingFixturePresentation = (): void => {
+    const st = useEditorStore.getState();
+    if (st.mode !== "stairwell_preview" || !structuralState.buildingRoot) {
+      disposeEditorStairwellCeilingPracticalLights();
+      return;
+    }
+    editorStairwellCeilingPracticalLights = syncMammothStairwellCeilingFixturePresentation({
+      buildingRoot: structuralState.buildingRoot,
+      lightParent: scene,
+      previous: editorStairwellCeilingPracticalLights,
+    });
+    const tex = scene.userData.mammothFpMetallicReadableEnv;
+    const envTexture = tex instanceof THREE.Texture ? tex : null;
+    for (const group of collectStairwellCeilingLightGroups(structuralState.buildingRoot)) {
+      prepareMammothApartmentInteriorContentRoots({
+        shellRoot: structuralState.buildingRoot,
+        decorRoot: group,
+      });
+      bindMammothApartmentPropReadableEnv(group, envTexture);
+    }
+  };
+  const unsubscribeStairwellCeilingPropReady = subscribeStairwellCeilingPropReady(() => {
+    scheduleEditorStairwellCeilingSync();
+  });
+  let editorStairwellCeilingSyncRaf = 0;
+  const scheduleEditorStairwellCeilingSync = (): void => {
+    if (editorStairwellCeilingSyncRaf !== 0) return;
+    editorStairwellCeilingSyncRaf = requestAnimationFrame(() => {
+      editorStairwellCeilingSyncRaf = 0;
+      syncEditorStairwellCeilingFixturePresentation();
+      demandEditorSceneRender();
+    });
+  };
+
+  const applyStairwellEditorLayoutPresentation = (opts?: {
+    reframeCamera?: boolean;
+  }): void => {
+    const st = useEditorStore.getState();
+    if (!shouldPreviewStairwellInteriorLighting(st)) return;
+
+    applyPmremEnvironment(true);
+    const pmremTexture = scene.environment;
+    syncEditorLightingStack(st, false);
+
+    const decorRoots: THREE.Object3D[] = [contentRoot];
+    const shellRoots: THREE.Object3D[] = [];
+    if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
+
+    ensureMammothApartmentDecorShadowRenderer(renderer);
+    dir.castShadow = false;
+    if (structuralState.buildingRoot) {
+      prepareMammothApartmentInteriorContentRoots({
+        shellRoot: structuralState.buildingRoot,
+        decorRoot: structuralState.buildingRoot,
+      });
+      applyApartmentInteriorFloorReceiveShadowUnder(structuralState.buildingRoot);
+    }
+    applyMammothApartmentInteriorEditorLayoutPresentation({
+      scene,
+      renderer,
+      bounce: apartmentInteriorSceneRig,
+      global: { hemi, fill, dir },
+      pmremTexture,
+      shellRoots,
+      decorRoots,
+      view: { camera, raycasters: [raycaster, decorSupportRaycaster] },
+      atmosphereRestore: editorStudioAtmosphere,
+    });
+    syncEditorStairwellCeilingFixturePresentation();
+    requestMammothRendererShadowMapUpdate(renderer);
+
+    if (opts?.reframeCamera && structuralState.buildingRoot) {
+      frameMammothApartmentInteriorGameplayPreview({
+        camera,
+        orbitControls,
+        shellRoot: structuralState.buildingRoot,
+      });
+    }
+  };
+
+  const buildEditorStructuralRootArgsFromStore = (
+    st: ReturnType<typeof useEditorStore.getState>,
+  ): BuildEditorStructuralRootArgs => ({
+    mode: st.mode,
+    workspace: st.workspace,
+    ownedApartmentBuiltins: st.ownedApartmentBuiltins,
+    building: st.building,
+    floorDocs: st.floorDocs,
+    floorOverrideDocs: st.floorOverrideDocs,
+    activeInteriorDocId: st.activeInteriorDocId,
+    interiorDocs: st.interiorDocs,
+    activeCellDocId: st.activeCellDocId,
+    cellDocs: st.cellDocs,
+    activePrefabDefId: st.activePrefabDefId,
+    prefabDefs: st.prefabDefs,
+    activeFloorOverrideDocId: st.activeFloorOverrideDocId,
+    elevatorCabDef: st.elevatorCabDef,
+    landingKitDef: st.landingKitDef,
+    stairWellDef: st.stairWellDef,
+    stairWellAuthorScope: st.stairWellAuthorScope,
+    myApartmentPreviewUnitId: st.myApartmentPreviewUnitId,
+    myApartmentAuthoringTarget: st.myApartmentAuthoringTarget,
+    myApartmentCorridorLevelIndex: st.myApartmentCorridorLevelIndex,
+    textureLoader,
+    emptyFloorDoc,
+  });
+
+  const refreshStairwellEditorPresentation = (): void => {
+    applyStairwellEditorLayoutPresentation();
+  };
+
+  const rebuildStairwellAuthorScopePreview = (): void => {
+    const st = useEditorStore.getState();
+    if (st.mode !== "stairwell_preview") return;
+    disposeEditorStairwellCeilingPracticalLights();
+    rebuildEditorStairwellScopePreview(
+      structuralState,
+      buildEditorStructuralRootArgsFromStore(st),
+      { syncTransformAttachment },
+    );
+    refreshStairwellEditorPresentation();
+  };
+
   const applyApartmentEditorLayoutPresentation = (opts?: {
     reframeCamera?: boolean;
   }): void => {
     const st = useEditorStore.getState();
-    if (!shouldPreviewFpApartmentLighting(st)) return;
+    if (!shouldPreviewFpInteriorLighting(st)) return;
 
     applyPmremEnvironment(true);
     const pmremTexture = scene.environment;
@@ -252,6 +396,10 @@ export async function mountEditorScene(
     ensureMammothApartmentDecorShadowRenderer(renderer);
     dir.castShadow = false;
     if (structuralState.buildingRoot) {
+      prepareMammothApartmentInteriorContentRoots({
+        shellRoot: structuralState.buildingRoot,
+        decorRoot: structuralState.buildingRoot,
+      });
       applyApartmentInteriorFloorReceiveShadowUnder(structuralState.buildingRoot);
     }
     applyMammothApartmentInteriorEditorLayoutPresentation({
@@ -279,12 +427,12 @@ export async function mountEditorScene(
   };
 
   const applyEnvironment = (st: ReturnType<typeof useEditorStore.getState>): void => {
-    const fpApartmentPreview = shouldPreviewFpApartmentLighting(st);
+    const interiorAuthoringPreview = usesInteriorAuthoringPresentation(st);
     const globalHdriOn = shouldUseEditorHdri(st);
-    applyPmremEnvironment(fpApartmentPreview || globalHdriOn);
+    applyPmremEnvironment(interiorAuthoringPreview || globalHdriOn);
     const pmremTexture = scene.environment;
 
-    syncEditorLightingStack(st, globalHdriOn && !fpApartmentPreview);
+    syncEditorLightingStack(st, globalHdriOn && !interiorAuthoringPreview);
 
     const decorRoots: THREE.Object3D[] = [contentRoot];
     const apartmentFurnitureRoot = getEditorMyApartmentFurnitureMountRoot();
@@ -292,8 +440,10 @@ export async function mountEditorScene(
     const shellRoots: THREE.Object3D[] = [];
     if (structuralState.buildingRoot) shellRoots.push(structuralState.buildingRoot);
 
-    if (fpApartmentPreview) {
+    if (shouldPreviewFpInteriorLighting(st)) {
       applyApartmentEditorLayoutPresentation({ reframeCamera: true });
+    } else if (shouldPreviewStairwellInteriorLighting(st)) {
+      applyStairwellEditorLayoutPresentation({ reframeCamera: true });
     } else {
       syncMammothApartmentInteriorMetallicEnv({
         scene,
@@ -831,6 +981,7 @@ export async function mountEditorScene(
   }
 
   function rebuildStructural(): void {
+    disposeEditorStairwellCeilingPracticalLights();
     rebuildEditorStructuralIfNeeded(structuralState, {
       contentRoot,
       textureLoader,
@@ -838,7 +989,7 @@ export async function mountEditorScene(
       frameFocusedStoryObject,
       frameObject,
       frameApartmentGameplayPreview: (shellRoot) => {
-        if (!shouldPreviewFpApartmentLighting(useEditorStore.getState())) return;
+        if (!usesInteriorAuthoringPresentation(useEditorStore.getState())) return;
         frameMammothApartmentInteriorGameplayPreview({
           camera,
           orbitControls,
@@ -847,6 +998,10 @@ export async function mountEditorScene(
       },
     });
     syncCurrentEditorLightingAttachment();
+    if (useEditorStore.getState().mode === "stairwell_preview") {
+      refreshStairwellEditorPresentation();
+      demandEditorSceneRender();
+    }
   }
 
   /** Decor / slab wall / saved-group aggregated flags for TransformControls limits in apartment authoring. */
@@ -1297,7 +1452,9 @@ export async function mountEditorScene(
       }
     }
     applyAnchoredScaleGesture();
-    commitLevelEditorAttachedTransformToStore();
+    if (aptSt.mode !== "stairwell_preview") {
+      commitLevelEditorAttachedTransformToStore();
+    }
   });
   transformControls.addEventListener("change", () => {
     if (programmaticTransformControlsDepth > 0) return;
@@ -1368,6 +1525,7 @@ export async function mountEditorScene(
   const unsub = subscribeEditorSceneStore({
     structuralState,
     rebuildStructural,
+    rebuildStairwellAuthorScopePreview,
     syncTransformsFromStore,
     getBuildingRoot: () => structuralState.buildingRoot,
     transformControls,
@@ -1536,6 +1694,12 @@ export async function mountEditorScene(
     unregisterEditorSelectionTargetResolver();
     disposeMyApartmentAuthoring();
     apartmentInteriorSceneRig.dispose();
+    disposeEditorStairwellCeilingPracticalLights();
+    if (editorStairwellCeilingSyncRaf !== 0) {
+      cancelAnimationFrame(editorStairwellCeilingSyncRaf);
+      editorStairwellCeilingSyncRaf = 0;
+    }
+    unsubscribeStairwellCeilingPropReady();
     disposeEditorStructuralRoot(structuralState, contentRoot);
     pmrem.dispose();
     applyPmremEnvironment(false);

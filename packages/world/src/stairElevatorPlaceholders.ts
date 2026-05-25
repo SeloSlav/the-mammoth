@@ -1,11 +1,15 @@
 /** Barrel: stair shafts, elevator placeholders, stair-well previews — see submodules for implementations. */
 
 export {
+  STAIR_WELL_CEILING_PROP_ID_PREFIX,
   STAIR_WELL_EDITOR_PART_IDS,
   STAIR_WELL_OPENING_PROXY_ID,
   STAIR_WELL_SECONDARY_OPENING_PROXY_ID,
   STAIR_WELL_OPENING_PROXY_IDS,
+  isStairWellCeilingPropEditorId,
   isStairWellOpeningProxyId,
+  parseStairWellCeilingPropEditorId,
+  stairWellCeilingPropEditorId,
   type StairWellAuthoringScope,
   type StairWellEditorPartId,
   type StairWellOpeningProxyId,

@@ -90,8 +90,8 @@ export function useEditorChromeDiskPersistence(
       case "my_apartment_layout":
         return saveLabelSnapshot.workspace === "corridor"
           ? saveLabelSnapshot.myApartmentCorridorLevelIndex === FLOOR_19_GAMEPLAY_LEVEL_INDEX
-            ? "Save corridor to disk"
-            : "Corridor floor (preview only)"
+            ? "Save floor to disk"
+            : "Floor (preview only)"
           : saveLabelSnapshot.activeApartmentLayoutSource === "owned_default"
             ? "Save owned default to disk"
             : "Save profile to disk";
@@ -190,7 +190,7 @@ export function useEditorChromeDiskPersistence(
         if (stAfterPersist.workspace === "corridor") {
           if (stAfterPersist.myApartmentCorridorLevelIndex !== FLOOR_19_GAMEPLAY_LEVEL_INDEX) {
             throw new Error(
-              "Only Floor 19 corridor layout can be saved to disk today. Select Floor 19 in the Corridor workspace.",
+              "Only Floor 19 layout can be saved to disk today. Select Floor 19 in the Floors workspace.",
             );
           }
           await postSaveFloor19CorridorBuiltins(

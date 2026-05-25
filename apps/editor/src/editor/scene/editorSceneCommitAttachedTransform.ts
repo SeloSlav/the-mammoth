@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { TransformControls } from "three/addons/controls/TransformControls.js";
-import { glassOpeningFromProxyMesh, TYPICAL_FLOOR_DOC_ID, clampOwnedApartmentWallOpeningsForLength } from "@the-mammoth/world";
+import { glassOpeningFromProxyMesh, TYPICAL_FLOOR_DOC_ID, clampOwnedApartmentWallOpeningsForLength, patchStairWellCeilingPropAnchorInDef, readStairWellCeilingPropAnchorFromTransform } from "@the-mammoth/world";
 import {
   OWNED_APARTMENT_DECOR_PITCH_RAD_MAX,
   OWNED_APARTMENT_DECOR_ROLL_RAD_MAX,
@@ -344,17 +344,38 @@ export function commitEditorAttachedTransform(opts: {
 
   if (store.mode === "stairwell_preview") {
     let o: THREE.Object3D | null = attached;
-    while (o) {
-      o = o.parent;
-    }
-    o = attached;
+    let ceilingPropRoot: THREE.Object3D | null = null;
+    let ceilingPropId: string | undefined;
+    let partRoot: THREE.Object3D | null = null;
     let partId: string | undefined;
     while (o) {
-      partId = o.userData.editorStairPartId as string | undefined;
-      if (partId) break;
+      if (!ceilingPropId) {
+        const id = o.userData.editorStairCeilingPropId as string | undefined;
+        if (id) {
+          ceilingPropId = id;
+          ceilingPropRoot = o;
+        }
+      }
+      if (!partId) {
+        const id = o.userData.editorStairPartId as string | undefined;
+        if (id) {
+          partId = id;
+          partRoot = o;
+        }
+      }
       o = o.parent;
     }
-    if (!partId || !o) return;
+    if (ceilingPropId && ceilingPropRoot) {
+      const anchorPatch = readStairWellCeilingPropAnchorFromTransform(ceilingPropRoot);
+      if (!anchorPatch) return;
+      const scope = store.stairWellAuthorScope;
+      store.patchStairWellDef((d) =>
+        patchStairWellCeilingPropAnchorInDef(d, scope, ceilingPropId!, anchorPatch),
+      );
+      return;
+    }
+    if (!partId || !partRoot) return;
+    o = partRoot;
     const basePos = readStairBaseVec3(o, "editorStairBasePosition", [0, 0, 0]);
     const baseScale = readStairBaseVec3(o, "editorStairBaseScale", [1, 1, 1]);
     const baseRot = readStairBaseQuat(o);

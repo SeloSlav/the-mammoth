@@ -205,7 +205,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             }}
             onClick={() => setWorkspace("corridor")}
           >
-            Corridor
+            Floors
           </button>
           <button
             type="button"
@@ -277,7 +277,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             }}
           >
             <strong>Apartment</strong> authors owned-unit furniture, décor, and partition walls.{" "}
-            <strong>Corridor</strong> authors shared corridor décor and ceiling fixtures.{" "}
+            <strong>Floors</strong> authors shared floor décor and ceiling fixtures.{" "}
             <strong>Cab</strong>, <strong>Corridor Door</strong>, and <strong>Stairwell</strong> edit
             shared vertical-core visuals (
             <code>{contentIndex.elevatorCabRelPath ?? "elevator/cab.json"}</code>,{" "}
@@ -314,13 +314,13 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
             <p style={editorChromeHelp}>
               {activeCorridorFloor?.hasPersistedBuiltins ? (
                 <>
-                  Editing corridor props for {activeCorridorFloor.label}. Saves to{" "}
+                  Editing floor props for {activeCorridorFloor.label}. Saves to{" "}
                   <code style={{ fontSize: 10 }}>floor_19_corridor_builtins.json</code>.
                 </>
               ) : (
                 <>
                   Previewing {activeCorridorFloor?.label ?? "this floor"} — placement is session-only
-                  until more floors get disk-backed corridor docs.
+                  until more floors get disk-backed floor docs.
                 </>
               )}
             </p>
@@ -470,7 +470,7 @@ export function EditorChromeAuthoringIntroAndWorkspace(props: {
           ) : null}
           {!canSaveContentToDisk && workspace === "corridor" ? (
             <p style={editorChromeHelp}>
-              Only Floor 19 has a disk-backed corridor doc today. Other floors are preview-only.
+              Only Floor 19 has a disk-backed floor doc today. Other floors are preview-only.
             </p>
           ) : null}
           <p style={editorChromeHelp}>

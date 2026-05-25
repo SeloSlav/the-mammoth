@@ -56,6 +56,8 @@ export function startEditorSceneRenderLoop(deps: {
   let lastWeaponPresentationPollMs = 0;
   let lastRenderAspect = 0;
   let lastTransformControlsCamera: THREE.Camera | null = null;
+  let previewOutlineFrame = 0;
+  let lastPreviewOutlineSelectedId: string | null = null;
 
   const renderCamForward = new THREE.Vector3();
 
@@ -90,7 +92,8 @@ export function startEditorSceneRenderLoop(deps: {
     const now = performance.now();
     const dt = Math.min((now - lastTickMs) / 1000, 0.05);
     lastTickMs = now;
-    const st = useEditorStore.getState();    const tcDragging = transformControls.dragging === true;
+    const st = useEditorStore.getState();
+    const tcDragging = transformControls.dragging === true;
     const inFpMode = isFpModeFn(st.mode);
     const fpSessionActive =
       (isWeaponFpAuthoringState(st) && fp.getFpSession()?.getPresenter()) ||
@@ -173,7 +176,18 @@ export function startEditorSceneRenderLoop(deps: {
         st.mode === "landing_preview" ||
         st.mode === "stairwell_preview"
       ) {
-        previewSelectionOutline.setFromObject(findBestSelectionTarget());
+        if (st.mode === "stairwell_preview") {
+          previewOutlineFrame += 1;
+          if (
+            previewOutlineFrame % 4 === 0 ||
+            st.selectedId !== lastPreviewOutlineSelectedId
+          ) {
+            lastPreviewOutlineSelectedId = st.selectedId;
+            previewSelectionOutline.setFromObject(findBestSelectionTarget());
+          }
+        } else {
+          previewSelectionOutline.setFromObject(findBestSelectionTarget());
+        }
       } else if (st.mode === "my_apartment_layout") {
         fpSelectionOutline.setFromObject(null);
         const fishBridge = getEditorFishTankBridge();

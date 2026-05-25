@@ -267,6 +267,10 @@ export {
   MAMMOTH_APARTMENT_SHELL_MOOD_GRADED_UD,
 } from "./rendering/apartmentDecorMoodGrade.js";
 export {
+  applyMammothStairwellCeilingFixtureVisual,
+  syncMammothStairwellCeilingFixturePresentation,
+} from "./rendering/stairwellCeilingFixturePresentation.js";
+export {
   createApartmentInteriorWarmEnvMap,
   apartmentInteriorShellWarmEnvFromScene,
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,

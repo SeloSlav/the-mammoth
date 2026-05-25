@@ -5,9 +5,12 @@ import type {
   FloorOverrideDoc,
   InteriorDoc,
   PrefabDef,
+  StairWellDef,
 } from "@the-mammoth/schemas";
 import {
   LANDING_DOOR_OPENING_PROXY_ID,
+  resolveStairWellCeilingPropsForScope,
+  stairWellCeilingPropEditorId,
   STAIR_WELL_EDITOR_PART_IDS,
 } from "@the-mammoth/world";
 import type { EditorMode, LandingKitVariant } from "../state/editorStore.js";
@@ -31,6 +34,7 @@ const ELEVATOR_CAB_OUTLINER_PART_IDS = [
 export function EditorChromeOutliner(props: {
   mode: EditorMode;
   stairWellAuthorScope: "typical" | "ground";
+  stairWellDef: StairWellDef;
   landingKitVariant: LandingKitVariant;
   setLandingKitVariant: (variant: LandingKitVariant) => void;
   activeFloorDoc: FloorDoc | undefined;
@@ -44,6 +48,7 @@ export function EditorChromeOutliner(props: {
   const {
     mode,
     stairWellAuthorScope,
+    stairWellDef,
     landingKitVariant,
     setLandingKitVariant,
     activeFloorDoc,
@@ -70,6 +75,17 @@ export function EditorChromeOutliner(props: {
       );
     });
   }, [activeFloorDoc, floorFilter]);
+
+  const stairwellCeilingOutlinerProps = useMemo(() => {
+    if (mode !== "stairwell_preview") return [];
+    return resolveStairWellCeilingPropsForScope(stairWellDef, stairWellAuthorScope).filter(
+      (prop) => {
+        const scopes = prop.applyToScopes;
+        if (!scopes || scopes.length === 0) return true;
+        return scopes.includes(stairWellAuthorScope);
+      },
+    );
+  }, [mode, stairWellAuthorScope, stairWellDef]);
 
   return (
     <>
@@ -264,6 +280,34 @@ export function EditorChromeOutliner(props: {
                 {id}
               </button>
             ))
+          : null}
+        {mode === "stairwell_preview"
+          ? stairwellCeilingOutlinerProps.map((prop) => {
+              const id = stairWellCeilingPropEditorId(prop.id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSelectedId(id)}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "6px 8px",
+                    border: "none",
+                    borderBottom: "1px solid #282830",
+                    background:
+                      selectedId === id ? "rgba(60,90,140,0.35)" : "transparent",
+                    color: "#ddd",
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  {prop.id}{" "}
+                  <span style={{ opacity: 0.65 }}>(ceiling light)</span>
+                </button>
+              );
+            })
           : null}
         {mode === "floor" && activeFloorDoc
           ? floorObjects.map((o) => (

@@ -23,6 +23,7 @@ import {
 export function subscribeEditorSceneStore(deps: {
   structuralState: EditorStructuralState;
   rebuildStructural: () => void;
+  rebuildStairwellAuthorScopePreview: () => void;
   syncTransformsFromStore: () => void;
   getBuildingRoot: () => THREE.Group | null;
   transformControls: TransformControls;
@@ -45,6 +46,7 @@ export function subscribeEditorSceneStore(deps: {
   const {
     structuralState,
     rebuildStructural,
+    rebuildStairwellAuthorScopePreview,
     syncTransformsFromStore,
     getBuildingRoot,
     transformControls,
@@ -163,6 +165,12 @@ export function subscribeEditorSceneStore(deps: {
         }
         if (s.contentStructureEpoch !== prev.contentStructureEpoch) {
           rebuildStructural();
+          demandEditorSceneRender();
+        } else if (
+          s.stairWellAuthorScope !== prev.stairWellAuthorScope &&
+          s.mode === "stairwell_preview"
+        ) {
+          rebuildStairwellAuthorScopePreview();
           demandEditorSceneRender();
         } else {
           const placementDataChanged =

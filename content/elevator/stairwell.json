@@ -5,12 +5,15 @@
     "wall": {
       "roughness": 0.93,
       "metalness": 0.02,
-      "mapUrl": "/static/materials/apartment-unit-interior/basecolor.png",
-      "normalMapUrl": "/static/materials/apartment-unit-interior/normal.png"
+      "colorHex": "#d6d8d4",
+      "mapUrl": "/static/materials/stairwell/patina-wall/basecolor.png",
+      "normalMapUrl": "/static/materials/stairwell/patina-wall/normal.png",
+      "roughnessMapUrl": "/static/materials/stairwell/patina-wall/roughness.png"
     },
     "floor": {
       "roughness": 1,
       "metalness": 0.02,
+      "colorHex": "#d4d7d9",
       "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
       "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png"
@@ -18,6 +21,7 @@
     "tread": {
       "roughness": 1,
       "metalness": 0.02,
+      "colorHex": "#d7d9dc",
       "mapUrl": "/static/materials/stairwell/patina-tread/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-tread/normal.png",
       "roughnessMapUrl": "/static/materials/stairwell/patina-tread/roughness.png"
@@ -25,6 +29,7 @@
     "landing": {
       "roughness": 1,
       "metalness": 0.02,
+      "colorHex": "#d4d7d9",
       "mapUrl": "/static/materials/stairwell/patina-landing/basecolor.png",
       "normalMapUrl": "/static/materials/stairwell/patina-landing/normal.png",
       "roughnessMapUrl": "/static/materials/stairwell/patina-landing/roughness.png"
@@ -228,7 +233,7 @@
         "insetZM": 0.3,
         "liftM": 0.02,
         "yawRad": 0,
-        "uniformScale": 0.5
+        "uniformScale": 0.5596451438846985
       }
     },
     {
@@ -247,7 +252,7 @@
         "insetZM": 3.5,
         "liftM": 0.02,
         "yawRad": 0,
-        "uniformScale": 0.5
+        "uniformScale": 0.5596451438846985
       }
     },
     {
@@ -267,7 +272,7 @@
         "insetZM": 0.3,
         "liftM": 0.02,
         "yawRad": 0,
-        "uniformScale": 0.5
+        "uniformScale": 0.5596451438846985
       }
     },
     {
@@ -285,7 +290,39 @@
         "insetZM": 0.3,
         "liftM": 0.02,
         "yawRad": 0,
-        "uniformScale": 0.5
+        "uniformScale": 0.5596451438846985
+      }
+    }
+  ],
+  "ceilingProps": [
+    {
+      "id": "stairwell_ceiling_light_w",
+      "modelUrl": "/static/models/objects/light-ceiling-2.glb",
+      "applyToScopes": [
+        "typical",
+        "ground"
+      ],
+      "anchor": {
+        "offsetXM": -0.85,
+        "offsetZM": 0,
+        "dropM": 0.06,
+        "yawRad": 0,
+        "uniformScale": 0.19097143292300797
+      }
+    },
+    {
+      "id": "stairwell_ceiling_light_e",
+      "modelUrl": "/static/models/objects/light-ceiling-2.glb",
+      "applyToScopes": [
+        "typical",
+        "ground"
+      ],
+      "anchor": {
+        "offsetXM": 0.85,
+        "offsetZM": 0,
+        "dropM": 0.06,
+        "yawRad": 0,
+        "uniformScale": 0.19097143292300797
       }
     }
   ]

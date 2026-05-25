@@ -70,7 +70,7 @@ function isStairPrefab(prefabId: string): boolean {
   return pid.includes("stair_well") || pid.includes("stairwell");
 }
 
-export function buildEditorStructuralRoot(args: {
+export type BuildEditorStructuralRootArgs = {
   mode: EditorMode;
   workspace: EditorWorkspace;
   ownedApartmentBuiltins: OwnedApartmentBuiltinsDoc;
@@ -93,7 +93,78 @@ export function buildEditorStructuralRoot(args: {
   myApartmentCorridorLevelIndex: number;
   textureLoader: THREE.TextureLoader;
   emptyFloorDoc: (floorDocId: string) => FloorDoc;
-}): THREE.Group {
+};
+
+/** Shared stairwell preview mount used by structural rebuild and scope toggles. */
+export function buildStairwellEditorPreviewGroup(
+  args: Pick<
+    BuildEditorStructuralRootArgs,
+    "building" | "floorDocs" | "emptyFloorDoc" | "stairWellDef" | "stairWellAuthorScope"
+  >,
+): THREE.Group | null {
+  const sortedRefs = [...args.building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
+  const preferredRefs =
+    args.stairWellAuthorScope === "ground"
+      ? sortedRefs.filter((ref) => ref.levelIndex === 1)
+      : sortedRefs.filter((ref) => ref.levelIndex !== 1);
+  const stairEntry =
+    preferredRefs
+      .flatMap((ref) => {
+        const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
+        return doc.objects.map((obj) => ({ doc, obj }));
+      })
+      .find(({ obj }) => isStairPrefab(obj.prefabId)) ??
+    sortedRefs
+      .flatMap((ref) => {
+        const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
+        return doc.objects.map((obj) => ({ doc, obj }));
+      })
+      .find(({ obj }) => isStairPrefab(obj.prefabId));
+  if (!stairEntry) return null;
+  const { doc: stairDoc, obj: stairObj } = stairEntry;
+  const sx = stairObj.scale?.[0] ?? 4.2;
+  const sy = stairObj.scale?.[1] ?? 3.2;
+  const sz = stairObj.scale?.[2] ?? 4.2;
+  const towardPlateXZ = (() => {
+    if (stairDoc.objects.length === 0) {
+      return [stairObj.position[0], stairObj.position[2]] as const;
+    }
+    let sumX = 0;
+    let sumZ = 0;
+    for (const obj of stairDoc.objects) {
+      sumX += obj.position[0];
+      sumZ += obj.position[2];
+    }
+    return shaftDoorTowardPointFromFloorCorridors(
+      stairObj.position[0],
+      stairObj.position[2],
+      stairDoc,
+      sumX / stairDoc.objects.length,
+      sumZ / stairDoc.objects.length,
+    );
+  })();
+  const previewArgs: BuildStairWellPreviewRootArgs = {
+    sx,
+    sy,
+    sz,
+    def: args.stairWellDef,
+    authoringScope: args.stairWellAuthorScope,
+    towardPlateXZ,
+    shaftPlateXZ: [stairObj.position[0], stairObj.position[2]],
+    shaftExteriorFaces: [
+      ...new Set([
+        ...mergeShaftExteriorHints(
+          exteriorFacesForPlacedObjectInFloor(stairDoc, stairObj),
+          readShaftFacadeHintFaces(stairObj.metadata),
+        ),
+        ...shaftFacesTowardAdjacentElevatorHoistways(stairDoc, stairObj),
+      ]),
+    ],
+  };
+  return buildStairWellPreviewRoot(previewArgs);
+}
+
+export function buildEditorStructuralRoot(args: BuildEditorStructuralRootArgs): THREE.Group {
   if (args.mode === "cab") {
     const root = new THREE.Group();
     root.name = "editor_workspace:cab";
@@ -137,67 +208,8 @@ export function buildEditorStructuralRoot(args: {
   if (args.mode === "stairwell_preview") {
     const root = new THREE.Group();
     root.name = "editor_workspace:stairwell";
-    const sortedRefs = [...args.building.floorRefs].sort((a, b) => a.levelIndex - b.levelIndex);
-    const preferredRefs =
-      args.stairWellAuthorScope === "ground"
-        ? sortedRefs.filter((ref) => ref.levelIndex === 1)
-        : sortedRefs.filter((ref) => ref.levelIndex !== 1);
-    const stairEntry =
-      preferredRefs
-        .flatMap((ref) => {
-          const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
-          return doc.objects.map((obj) => ({ doc, obj }));
-        })
-        .find(({ obj }) => isStairPrefab(obj.prefabId)) ??
-      sortedRefs
-        .flatMap((ref) => {
-          const doc = args.floorDocs[ref.floorDocId] ?? args.emptyFloorDoc(ref.floorDocId);
-          return doc.objects.map((obj) => ({ doc, obj }));
-        })
-        .find(({ obj }) => isStairPrefab(obj.prefabId));
-    if (!stairEntry) return root;
-    const { doc: stairDoc, obj: stairObj } = stairEntry;
-    const sx = stairObj.scale?.[0] ?? 4.2;
-    const sy = stairObj.scale?.[1] ?? 3.2;
-    const sz = stairObj.scale?.[2] ?? 4.2;
-    const towardPlateXZ = (() => {
-      if (stairDoc.objects.length === 0) {
-        return [stairObj.position[0], stairObj.position[2]] as const;
-      }
-      let sumX = 0;
-      let sumZ = 0;
-      for (const obj of stairDoc.objects) {
-        sumX += obj.position[0];
-        sumZ += obj.position[2];
-      }
-      return shaftDoorTowardPointFromFloorCorridors(
-        stairObj.position[0],
-        stairObj.position[2],
-        stairDoc,
-        sumX / stairDoc.objects.length,
-        sumZ / stairDoc.objects.length,
-      );
-    })();
-    const previewArgs: BuildStairWellPreviewRootArgs = {
-      sx,
-      sy,
-      sz,
-      def: args.stairWellDef,
-      authoringScope: args.stairWellAuthorScope,
-      towardPlateXZ,
-      shaftPlateXZ: [stairObj.position[0], stairObj.position[2]],
-      shaftExteriorFaces: [
-        ...new Set([
-          ...mergeShaftExteriorHints(
-            exteriorFacesForPlacedObjectInFloor(stairDoc, stairObj),
-            readShaftFacadeHintFaces(stairObj.metadata),
-          ),
-          ...shaftFacesTowardAdjacentElevatorHoistways(stairDoc, stairObj),
-        ]),
-      ],
-    };
-    const preview = buildStairWellPreviewRoot(previewArgs);
-    root.add(preview);
+    const preview = buildStairwellEditorPreviewGroup(args);
+    if (preview) root.add(preview);
     return root;
   }
 

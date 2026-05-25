@@ -100,9 +100,27 @@ export {
   pickCornerLandingOppositePrimaryDoor,
 } from "./stairWellLandingProps.js";
 export {
+  STAIRWELL_CEILING_LIGHT_MODEL_URL,
+  allStairwellCeilingLightGroupsReady,
+  applyStairWellCeilingPropAnchors,
+  attachStairWellCeilingProps,
+  collectStairwellCeilingLightGroups,
+  patchStairWellCeilingPropAnchorInDef,
+  readStairWellCeilingPropAnchorFromTransform,
+  resolveStairWellCeilingPropsForScope,
+  shaftInteriorCeilingYLocal,
+  subscribeStairwellCeilingPropReady,
+} from "./stairWellCeilingProps.js";
+export {
   ensureStairwellCigaretteMeshReady,
   ensureStairwellLitterMeshesReady,
 } from "./stairwellCigaretteLitter.js";
+export {
+  canonicalOwnedApartmentUniformScaleForClientModelUrl,
+  canonicalStairwellHeaterUniformScale,
+  canonicalStairwellLandingPropUniformScale,
+  STAIRWELL_HEATER_ROOM_REFERENCE_MODEL_PATH,
+} from "./stairwellLitterCanonicalScale.js";
 export {
   sampleWalkGroundTopY,
   sampleWalkGroundTopYWithExteriorGround,
@@ -491,10 +509,14 @@ export {
 export {
   applyStairWellPartTransforms,
   buildStairWellPreviewRoot,
+  isStairWellCeilingPropEditorId,
   isStairWellOpeningProxyId,
+  parseStairWellCeilingPropEditorId,
   rebuildStairWellPreviewOpening,
   rebuildStairWellPreviewRoot,
+  stairWellCeilingPropEditorId,
   stairWellEntryOpeningFromProxyMesh,
+  STAIR_WELL_CEILING_PROP_ID_PREFIX,
   STAIR_WELL_EDITOR_PART_IDS,
   STAIR_WELL_OPENING_PROXY_ID,
   STAIR_WELL_OPENING_PROXY_IDS,
