@@ -305,6 +305,28 @@ export {
   type ApartmentPracticalLightsMount,
 } from "./rendering/apartmentInteriorPracticalLights.js";
 export {
+  bakeApartmentShellMeshLightmap,
+  bakeApartmentUnitShellLighting,
+  applyApartmentShellBakedLightmap,
+  clearApartmentShellBakedLightmap,
+  clearApartmentUnitShellBakedLighting,
+  MAMMOTH_APARTMENT_SHELL_BAKED_LIGHTMAP_UD,
+  type ApartmentShellBakedLightingMount,
+} from "./rendering/apartmentShellBakedLighting.js";
+export {
+  getApartmentShellBakedLightingBounceScale,
+  setApartmentShellBakedLightingBounceScale,
+} from "./rendering/apartmentShellBakedLightingState.js";
+export {
+  apartmentShellLightingLayoutHashInput,
+  hashApartmentShellLightingLayout,
+  type ApartmentShellLightingLayoutItem,
+} from "./rendering/apartmentShellLightingLayoutHash.js";
+export {
+  collectApartmentShellBakeLightSpecs,
+  evaluateApartmentShellLightingAtPoint,
+} from "./rendering/apartmentShellLightingEvaluate.js";
+export {
   attachApartmentDecorContactShadow,
   computeApartmentDecorContactShadowRadius,
   disposeLeakedApartmentDecorContactShadows,

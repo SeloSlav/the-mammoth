@@ -16,6 +16,13 @@ import {
   syncApartmentDecorShadowRig,
   syncApartmentDecorBakedFloorShadowOverlay,
   syncApartmentInteriorPracticalLighting,
+  bakeApartmentUnitShellLighting,
+  collectApartmentShellBakeLightSpecs,
+  hashApartmentShellLightingLayout,
+  apartmentShellLightingLayoutHashInput,
+  setApartmentShellBakedLightingBounceScale,
+  type ApartmentShellBakedLightingMount,
+  type ApartmentShellLightingLayoutItem,
   type ApartmentDecorBakedFloorShadowMount,
   type ApartmentDecorShadowRigMount,
   type ApartmentPracticalLightsMount,
@@ -79,7 +86,9 @@ import {
   subscribeApartmentUnitUtilities,
 } from "./fpApartmentUnitUtilities.js";
 import { runFpApartmentDecorFullRebuild } from "./fpApartmentDecorRebuild.js";
+import { collectFpSessionUnitInteriorMeshEntries } from "../fpSession/fpSessionUnitInteriorShellMeshes.js";
 import {
+  ENABLE_APARTMENT_BAKED_SHELL_LIGHTING,
   ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
   ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
   ENABLE_RUNTIME_WINDOW_FILL_LIGHTS,
@@ -269,6 +278,9 @@ export function mountFpApartmentDecorMeshes(opts: {
   let practicalLightsDecorEnabled: boolean | null = null;
   let practicalLightsUnitPowerOn: boolean | null = null;
   let practicalLightsIntensityScale: number | null = null;
+  let bakedShellLightingMount: ApartmentShellBakedLightingMount | null = null;
+  let bakedShellLayoutHash: string | null = null;
+  let bakedShellUnitKey: string | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -350,9 +362,53 @@ export function mountFpApartmentDecorMeshes(opts: {
     bakedFloorShadowMount = null;
   };
 
+  const clearBakedShellLightingOnly = (): void => {
+    bakedShellLightingMount?.dispose();
+    bakedShellLightingMount = null;
+    bakedShellLayoutHash = null;
+    bakedShellUnitKey = null;
+    setApartmentShellBakedLightingBounceScale(1);
+  };
+
   const clearInteriorLighting = (): void => {
     clearPracticalLightsOnly();
     clearBakedFloorShadowOnly();
+    clearBakedShellLightingOnly();
+  };
+
+  const unitIdForKey = (unitKey: string): string | null => {
+    for (const row of opts.conn.db.apartment_unit) {
+      const u = row as ApartmentUnit;
+      if (u.unitKey === unitKey) return u.unitId;
+    }
+    return null;
+  };
+
+  const shellMeshesForUnitId = (unitId: string): THREE.Mesh[] => {
+    return collectFpSessionUnitInteriorMeshEntries(opts.buildingRoot)
+      .filter((entry) => entry.isResidentialShellPlaster && entry.residentialUnitId === unitId)
+      .map((entry) => entry.mesh);
+  };
+
+  const layoutItemsForDecorGroups = (
+    groups: readonly THREE.Object3D[],
+  ): ApartmentShellLightingLayoutItem[] => {
+    const items: ApartmentShellLightingLayoutItem[] = [];
+    for (const group of groups) {
+      const modelRelPath = group.userData.mammothApartmentDecorModelRelPath;
+      if (typeof modelRelPath !== "string") continue;
+      group.updateMatrixWorld(true);
+      items.push({
+        modelRelPath,
+        x: group.position.x,
+        y: group.position.y,
+        z: group.position.z,
+        yawRad: group.rotation.y,
+        pitchRad: group.rotation.x,
+        rollRad: group.rotation.z,
+      });
+    }
+    return items;
   };
 
   const unitBoundsForKey = (unitKey: string): ApartmentUnitWorldBounds | null => {
@@ -378,6 +434,57 @@ export function mountFpApartmentDecorMeshes(opts: {
       if (g.userData.mammothApartmentUnitKey === unitKey) out.push(g);
     }
     return out;
+  };
+
+  const syncBakedShellLightingForUnit = (
+    containingUnitKey: string | null,
+    unitPowerOn: boolean,
+  ): void => {
+    if (!ENABLE_APARTMENT_BAKED_SHELL_LIGHTING || !containingUnitKey || !unitPowerOn) {
+      clearBakedShellLightingOnly();
+      return;
+    }
+
+    const decorGroups = decorGroupsForUnit(containingUnitKey);
+    const layoutHash = hashApartmentShellLightingLayout(
+      apartmentShellLightingLayoutHashInput({
+        unitKey: containingUnitKey,
+        items: layoutItemsForDecorGroups(decorGroups),
+      }),
+    );
+
+    if (
+      bakedShellLightingMount !== null &&
+      bakedShellUnitKey === containingUnitKey &&
+      bakedShellLayoutHash === layoutHash
+    ) {
+      setApartmentShellBakedLightingBounceScale(0.12);
+      return;
+    }
+
+    clearBakedShellLightingOnly();
+    const unitId = unitIdForKey(containingUnitKey);
+    if (!unitId) return;
+
+    const shellMeshes = shellMeshesForUnitId(unitId);
+    if (shellMeshes.length === 0) return;
+
+    const bounds = unitBoundsForKey(containingUnitKey);
+    const specs = collectApartmentShellBakeLightSpecs({
+      decorGroups,
+      windowScanRoot: opts.buildingRoot,
+      unitBounds: bounds ?? undefined,
+    });
+
+    bakedShellLightingMount = bakeApartmentUnitShellLighting({
+      shellMeshes,
+      specs,
+      layoutHash,
+      unitKey: containingUnitKey,
+    });
+    bakedShellUnitKey = containingUnitKey;
+    bakedShellLayoutHash = layoutHash;
+    setApartmentShellBakedLightingBounceScale(0.12);
   };
 
   const setPracticalLightsIntensityScale = (scale: number): void => {
@@ -444,18 +551,23 @@ export function mountFpApartmentDecorMeshes(opts: {
     const dynamicRuntimeEnabled =
       ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS &&
       isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
+    const bakedShellActive = ENABLE_APARTMENT_BAKED_SHELL_LIGHTING;
+    const unitPowerOn = containingUnitKey
+      ? readApartmentUnitUtilities(opts.conn, containingUnitKey).powerOn
+      : true;
+    syncBakedShellLightingForUnit(containingUnitKey, unitPowerOn);
+
     const staticRuntimeEnabled =
+      !bakedShellActive &&
       ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS &&
       isFpDebugRenderIsolationEnabled("apartmentPracticalLights") &&
       isFpDebugRenderIsolationEnabled("apartmentDecorPracticalLights");
     const windowRuntimeEnabled =
+      !bakedShellActive &&
       ENABLE_RUNTIME_WINDOW_FILL_LIGHTS &&
       isFpDebugRenderIsolationEnabled("apartmentPracticalLights");
     const runtimePracticalEnabled =
       dynamicRuntimeEnabled || staticRuntimeEnabled || windowRuntimeEnabled;
-    const unitPowerOn = containingUnitKey
-      ? readApartmentUnitUtilities(opts.conn, containingUnitKey).powerOn
-      : true;
     const emissiveMaterialsEnabled = isFpDebugRenderIsolationEnabled("emissiveMaterials");
 
     applyDecorFixtureEmissiveDebugIsolation(groupByRenderKey.values(), {

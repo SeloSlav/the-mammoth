@@ -42,9 +42,12 @@ export const ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS = true;
  */
 export const ENABLE_RUNTIME_WINDOW_FILL_LIGHTS = true;
 
+/** When true, in-unit shell uses programmatically baked lightmaps instead of static practical lights. */
+export const ENABLE_APARTMENT_BAKED_SHELL_LIGHTING = false;
+
 /**
  * Per-fixture practical pools inside the player's apartment unit (ceiling, chandelier,
- * standing, grow-op). Scoped to one unit at a time — cheap vs building-wide stairwell lights.
+ * standing, grow-op). Ignored for static fixtures when {@link ENABLE_APARTMENT_BAKED_SHELL_LIGHTING} is on.
  */
 export const ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS = true;
 
