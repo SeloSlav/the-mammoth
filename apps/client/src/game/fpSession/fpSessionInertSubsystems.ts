@@ -91,6 +91,7 @@ export function createInertFpApartmentDoors(): MountFpApartmentDoorsResult {
     shouldSuppressEpickup: () => false,
     getInteractPrompt: () => null,
     debugSnapshot: () => [],
+    collectCorridorPvsDoorEntries: () => [],
   };
 }
 

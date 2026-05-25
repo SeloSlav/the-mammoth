@@ -43,7 +43,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: null,
+        visibleUnitKeys: null,
         groupUnitKey: "unit_a",
         propWorldBounds: new THREE.Box3(new THREE.Vector3(-1, -1, -2), new THREE.Vector3(1, 1, 2)),
         viewFrustum: frustum,
@@ -57,7 +57,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_b",
         propWorldBounds: new THREE.Box3(new THREE.Vector3(-1, -1, -2), new THREE.Vector3(1, 1, -1)),
         viewFrustum: frustum,
@@ -75,7 +75,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: behindBounds,
         viewFrustum: frustum,
@@ -93,7 +93,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: peripheralBounds,
         viewFrustum: frustum,
@@ -113,7 +113,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: retainedUnitKey,
+        visibleUnitKeys: new Set([retainedUnitKey]),
         groupUnitKey: retainedUnitKey,
         propWorldBounds: doorwayBounds,
         viewFrustum: frustum,
@@ -131,7 +131,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: behindBounds,
         viewFrustum: frustum,
@@ -142,7 +142,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: behindBounds,
         viewFrustum: frustum,
@@ -161,7 +161,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: peripheralBounds,
         viewFrustum: frustum,
@@ -173,7 +173,7 @@ describe("resolveApartmentInteriorPropGroupVisible", () => {
     expect(
       resolveApartmentInteriorPropGroupVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
         propWorldBounds: peripheralBounds,
         viewFrustum: frustum,
@@ -190,14 +190,14 @@ describe("resolveApartmentInteriorPropWarmUpVisible", () => {
     expect(
       resolveApartmentInteriorPropWarmUpVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_a",
       }),
     ).toBe(true);
     expect(
       resolveApartmentInteriorPropWarmUpVisible({
         allowDemand: true,
-        containingUnitKey: "unit_a",
+        visibleUnitKeys: new Set(["unit_a"]),
         groupUnitKey: "unit_b",
       }),
     ).toBe(false);

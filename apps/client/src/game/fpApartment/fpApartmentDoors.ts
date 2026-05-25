@@ -57,6 +57,7 @@ import {
   swingDoorTangentRest,
   createSwingDoorMaterials,
   type ApartmentDoorInteractPromptKind,
+  type BuildingCorridorPvsDoorEntry,
 } from "@the-mammoth/world";
 import apartmentKitAuthoringJson from "../../../../../content/door/apartment_unit_kit.json";
 import type { DbConnection, SubscriptionHandle } from "../../module_bindings";
@@ -66,6 +67,7 @@ import { readFpDoorAnimSkewWarn } from "../fpPhysics/fpCollisionPolicy.js";
 import {
   apartmentDoorMatchesContainingUnit,
   clientMayToggleApartmentDoor,
+  residentUnitKeyFromParts,
 } from "./fpApartmentGameplay.js";
 
 function parseApartmentKit(): LandingKitDef | undefined {
@@ -183,6 +185,8 @@ export type MountFpApartmentDoorsResult = {
   ): { willClose: boolean; promptKind: ApartmentDoorInteractPromptKind } | null;
   /** Returns every apartment door within `radiusM` of `(x,z)` with its live collision state. */
   debugSnapshot(x: number, z: number, radiusM: number): ApartmentDoorDebugSlot[];
+  /** Replicated door open state for corridor render PVS. */
+  collectCorridorPvsDoorEntries(): readonly BuildingCorridorPvsDoorEntry[];
 };
 
 /**
@@ -1061,6 +1065,23 @@ export function mountFpApartmentDoors(
     shouldSuppressEpickup,
     getInteractPrompt,
     debugSnapshot,
+    collectCorridorPvsDoorEntries: (): readonly BuildingCorridorPvsDoorEntry[] => {
+      const out: BuildingCorridorPvsDoorEntry[] = [];
+      for (let i = 0; i < allSlots.length; i++) {
+        const slot = allSlots[i]!;
+        if (!slot.templateId.includes("unit_")) continue;
+        const unitId = slot.templateId.split("|")[0] ?? "";
+        if (!unitId.startsWith("unit_")) continue;
+        out.push({
+          unitKey: residentUnitKeyFromParts(slot.floorDocId, slot.level, slot.templateId),
+          unitId,
+          level: slot.level,
+          open01: slot.swingOpen01,
+          isResidentialUnitDoor: true,
+        });
+      }
+      return out;
+    },
   };
 }
 

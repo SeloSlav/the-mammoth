@@ -141,6 +141,95 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
     ).toBe(false);
   });
 
+  it("keeps anonymous corridor shells visible in the hallway lighting zone", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("hides anonymous corridor shells only once feet are strictly inside a unit hull", () => {
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: null,
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: true,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: "unit_e_003",
+        containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("shows plaster for corridor PVS-visible units in the hallway", () => {
+    const pvsIds = new Set(["unit_e_004"]);
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_004",
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        corridorPvsVisibleUnitIds: pvsIds,
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: {
+          apartmentUnitKey: null,
+          residentialUnitId: "unit_e_005",
+          residentialExteriorGlass: false,
+          genericInteriorVisibleInResidentialUnit: false,
+          apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
+        },
+        unitInteriorVisible: true,
+        apartmentDecorInteriorVisible: true,
+        insideResidentialUnit: false,
+        insideApartmentInteriorLightingZone: true,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+        exteriorShellPlasterVisible: false,
+        corridorPvsVisibleUnitIds: pvsIds,
+      }),
+    ).toBe(false);
+  });
+
   it("keeps the containing unit shell visible while culling other residential shells indoors", () => {
     expect(
       fpResolveUnitInteriorMeshVisible({

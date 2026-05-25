@@ -90,7 +90,6 @@ export {
 } from "./exteriorFaceExposure.js";
 export {
   ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS,
-  ENABLE_APARTMENT_BAKED_SHELL_LIGHTING,
   ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS,
   ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS,
   ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS,
@@ -152,6 +151,23 @@ export {
   buildCollisionSpatialIndex,
   type CollisionSpatialIndex,
 } from "./collisionSpatialIndex.js";
+export {
+  aabbIntersectsFrustum,
+  buildAabbSpatialIndex,
+  type Aabb3,
+  type AabbSpatialIndex,
+} from "./aabbSpatialIndex.js";
+export {
+  APARTMENT_DOOR_PVS_INTERIOR_PEEK_OPEN_01,
+  apartmentDecorUnitVisibleViaPvs,
+  apartmentDoorAdmitsCorridorInteriorPeek,
+  buildOpenDoorUnitKeysByLevel,
+  resolveCorridorPvsVisibleUnits,
+  unitInteriorVisibleViaCorridorPvs,
+  type BuildingCorridorPvsDoorEntry,
+  type CorridorPvsVisibleUnits,
+  type ResolveCorridorPvsVisibleUnitsInput,
+} from "./buildingCorridorPvs.js";
 export { MAMMOTH_FP_INTERIOR_PARTITION_SOLID } from "./fpInteriorPartitionSolid.js";
 export { applyOwnedApartmentWallSurfaceMaterial } from "./ownedApartmentWallSurfaceMaterial.js";
 export {

@@ -9,9 +9,6 @@ import {
   bindMammothResidentialShellIndirectEnv,
 } from "./bindMammothApartmentDecorIndirectEnv.js";
 import {
-  getApartmentShellBakedLightingBounceScale,
-} from "./apartmentShellBakedLightingState.js";
-import {
   apartmentInteriorShellWarmEnvFromScene,
   MAMMOTH_APARTMENT_SHELL_WARM_ENV_UD,
 } from "./apartmentInteriorWarmEnv.js";
@@ -132,12 +129,11 @@ export function syncMammothApartmentInteriorSceneLighting(input: {
 
   input.bounce.bounceHemi.color.setHex(bounce.hemiSky);
   input.bounce.bounceHemi.groundColor.setHex(bounce.hemiGround);
-  const bakedBounceScale = getApartmentShellBakedLightingBounceScale();
-  input.bounce.bounceHemi.intensity = bounce.hemiIntensity * t * bakedBounceScale;
+  input.bounce.bounceHemi.intensity = bounce.hemiIntensity * t;
   input.bounce.bounceFill.color.setHex(bounce.fill);
-  input.bounce.bounceFill.intensity = bounce.fillIntensity * t * bakedBounceScale;
+  input.bounce.bounceFill.intensity = bounce.fillIntensity * t;
   input.bounce.bounceDir.color.setHex(bounce.dir);
-  input.bounce.bounceDir.intensity = bounce.dirIntensity * t * bakedBounceScale;
+  input.bounce.bounceDir.intensity = bounce.dirIntensity * t;
 }
 
 /**

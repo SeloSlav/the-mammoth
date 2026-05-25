@@ -165,7 +165,7 @@ function cloneNpcScene(template: THREE.Object3D): THREE.Object3D {
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     mesh.visible = true;
-    mesh.frustumCulled = false;
+    mesh.frustumCulled = true;
     const mat = mesh.material;
     mesh.material = Array.isArray(mat)
       ? mat.map((entry) => prepareNpcMaterial(entry.clone()))
@@ -611,7 +611,6 @@ export class BabushkaNpcPresenter {
     dt: number,
     envTexture: THREE.Texture | null = null,
   ): void {
-    this.root.visible = true;
     bindNpcOutdoorReadableEnv(this.root, envTexture);
 
     const { animationState } = stepNpcVisualSmoothing(this.visualSmoothing, dt);
@@ -648,6 +647,7 @@ export class WorldNpcPresenterPool {
   private readonly retired = new Set<BabushkaNpcPresenter>();
   private envTextureProvider: (() => THREE.Texture | null) | null = null;
   private showHitDebugVolumes = false;
+  private renderPvsGate: ((snap: ReplicatedNpcSnapshot) => boolean) | null = null;
 
   constructor(parent: THREE.Object3D) {
     this.parent = parent;
@@ -663,6 +663,11 @@ export class WorldNpcPresenterPool {
 
   setEnvTextureProvider(provider: (() => THREE.Texture | null) | null): void {
     this.envTextureProvider = provider;
+  }
+
+  /** Optional CPU PVS gate — when set, presenters outside the gate are hidden each tick. */
+  setRenderPvsGate(gate: ((snap: ReplicatedNpcSnapshot) => boolean) | null): void {
+    this.renderPvsGate = gate;
   }
 
   async ensureReady(): Promise<void> {
@@ -712,10 +717,15 @@ export class WorldNpcPresenterPool {
   tickVisual(snapshots: readonly ReplicatedNpcSnapshot[], dt: number): void {
     if (!babushkaTemplate) return;
     const envTexture = this.envTexture();
+    const gate = this.renderPvsGate;
     for (const snap of snapshots) {
       if (snap.archetype !== "babushka") continue;
       const pres = this.byId.get(snap.npcId.toString());
-      pres?.tickVisualSnapshot(snap, dt, envTexture);
+      if (!pres) continue;
+      const allowRender = gate ? gate(snap) : true;
+      pres.root.visible = allowRender;
+      if (!allowRender) continue;
+      pres.tickVisualSnapshot(snap, dt, envTexture);
     }
   }
 

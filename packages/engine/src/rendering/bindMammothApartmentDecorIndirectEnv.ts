@@ -97,6 +97,12 @@ export function bindMammothResidentialShellIndirectEnv(
       ) {
         continue;
       }
+      if (
+        raw.envMap === envTexture &&
+        Math.abs(raw.envMapIntensity - shellIndirect) < 1e-5
+      ) {
+        continue;
+      }
       const prepared = raw.clone();
       prepared.envMap = envTexture;
       prepared.envMapIntensity = shellIndirect;

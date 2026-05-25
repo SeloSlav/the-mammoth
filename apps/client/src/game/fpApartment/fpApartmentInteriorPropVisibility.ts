@@ -174,7 +174,8 @@ function apartmentPropPassesInteriorForwardGate(
 
 export function resolveApartmentInteriorPropGroupVisible(input: {
   allowDemand: boolean;
-  containingUnitKey: string | null;
+  /** Active unit keys eligible for decor (containing + corridor PVS). */
+  visibleUnitKeys: ReadonlySet<string> | null;
   groupUnitKey: string | undefined;
   propWorldBounds: THREE.Box3 | undefined;
   viewFrustum: THREE.Frustum;
@@ -189,22 +190,19 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
   skipInteriorForwardCone?: boolean;
 }): boolean {
   if (!input.allowDemand) return false;
-  /**
-   * Furnished decor GLBs render for the active residential unit key. FP passes the containing
-   * unit while inside, and the retained/last-visited unit while peeking from a hallway doorway.
-   */
-  if (input.containingUnitKey === null) return false;
-  const isContainingUnit = input.groupUnitKey === input.containingUnitKey;
-  if (!isContainingUnit) return false;
+  if (input.visibleUnitKeys === null || input.visibleUnitKeys.size === 0) return false;
+  const isEligibleUnit =
+    input.groupUnitKey !== undefined && input.visibleUnitKeys.has(input.groupUnitKey);
+  if (!isEligibleUnit) return false;
 
   const bounds = input.propWorldBounds;
   if (!(bounds instanceof THREE.Box3)) return true;
 
-  if (isContainingUnit && input.skipInteriorForwardCone === true) {
+  if (isEligibleUnit && input.skipInteriorForwardCone === true) {
     return input.viewFrustum.intersectsBox(bounds);
   }
 
-  if (isContainingUnit) {
+  if (isEligibleUnit) {
     const useHysteresis = input.wasVisible !== undefined;
     const behindCamera = useHysteresis
       ? !apartmentPropPassesInteriorForwardGate(
@@ -227,12 +225,14 @@ export function resolveApartmentInteriorPropGroupVisible(input: {
 /** In-unit decor warm-up: eligible groups become visible regardless of camera cone. */
 export function resolveApartmentInteriorPropWarmUpVisible(input: {
   allowDemand: boolean;
-  containingUnitKey: string | null;
+  visibleUnitKeys: ReadonlySet<string> | null;
   groupUnitKey: string | undefined;
 }): boolean {
   if (!input.allowDemand) return false;
-  if (input.containingUnitKey === null) return false;
-  return input.groupUnitKey === input.containingUnitKey;
+  if (input.visibleUnitKeys === null || input.visibleUnitKeys.size === 0) return false;
+  return (
+    input.groupUnitKey !== undefined && input.visibleUnitKeys.has(input.groupUnitKey)
+  );
 }
 
 export type ApartmentInteriorPropVisibilityApplyItem = {

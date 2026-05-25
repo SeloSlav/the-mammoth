@@ -5,9 +5,9 @@
  *
  * Stairwell graffiti decals (optional, FP-only): toggle `ENABLE_STAIRWELL_GRAFFITI_DECALS` in that file.
  * Runtime lighting flags in `packages/world/src/featureFlags.ts`:
- * - `ENABLE_APARTMENT_BAKED_SHELL_LIGHTING` — programmatic shell lightmaps vs in-unit practical pools
  * - `ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS` — TV/computer screen washes (on)
- * - `ENABLE_RUNTIME_WINDOW_FILL_LIGHTS` — in-unit window fills (on until baked)
+ * - `ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS` — in-unit ceiling/chandelier/standing/grow-op (on)
+ * - `ENABLE_RUNTIME_WINDOW_FILL_LIGHTS` — in-unit window fills (on)
  * - `ENABLE_RUNTIME_SHARED_STATIC_FIXTURE_PRACTICAL_LIGHTS` — corridor/stairwell (off)
  * Stairwell + corridor fixture meshes: `ENABLE_STAIRWELL_AND_CORRIDOR_CEILING_LIGHTS`.
  *

@@ -89,6 +89,7 @@ export type CreateFpNpcSessionOpts = {
   getReadableEnvTexture?: () => THREE.Texture | null;
   /** When set, only replicate rows whose `sessionKey` starts with this prefix. */
   sessionKeyPrefix?: string;
+  getRenderPvsGate?: () => ((snap: ReplicatedNpcSnapshot) => boolean) | null;
 };
 
 export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<FpNpcSession> {
@@ -279,6 +280,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
         pool.ingestAuthoritative(snapshots);
         snapshotsDirty = false;
       }
+      pool.setRenderPvsGate(opts.getRenderPvsGate?.() ?? null);
       pool.tickVisual(snapshots, dt);
     },
     dispose() {

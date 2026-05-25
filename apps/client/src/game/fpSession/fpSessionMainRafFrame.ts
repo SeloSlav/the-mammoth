@@ -276,6 +276,7 @@ export type FpSessionMainRafFrameDeps = {
   isInsideApartmentInteriorLightingZone: () => boolean;
   isInsideStairwellShaft: () => boolean;
   getContainingResidentialUnitKey: () => string | null;
+  getCorridorPvsVisibleUnitKeys: () => ReadonlySet<string>;
   getActiveApartmentDecorUnitKey: (containingResidentialUnitKey: string | null) => string | null;
   getContainingResidentialUnitBounds: () => {
     minX: number;
@@ -745,13 +746,14 @@ export function createFpSessionMainRafFrame(
     deps.syncBuildingFloorPlateVisibility(nowMs);
     publishFpSessionCompassHeadingFromForwardXZ(deps._floorVisCamDir.x, deps._floorVisCamDir.z);
     const containingResidentialUnitKey = deps.getContainingResidentialUnitKey();
-    const activeApartmentDecorUnitKey =
+    const visibleDecorUnitKeys = deps.getCorridorPvsVisibleUnitKeys();
+    const practicalLightsUnitKey =
       deps.getActiveApartmentDecorUnitKey(containingResidentialUnitKey);
     deps.fpApartmentDecorMeshes.syncVisibility(
       deps.camera,
       deps.isApartmentDecorInteriorVisible(),
-      activeApartmentDecorUnitKey,
-      activeApartmentDecorUnitKey,
+      visibleDecorUnitKeys.size > 0 ? visibleDecorUnitKeys : null,
+      practicalLightsUnitKey,
     );
     deps.fpApartmentDecorMeshes.updateFishTankFish(dt);
     deps.fpBalconyGrowSession?.updateFrame(

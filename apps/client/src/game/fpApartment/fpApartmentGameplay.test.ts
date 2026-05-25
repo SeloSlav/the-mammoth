@@ -13,6 +13,7 @@ import {
 import {
   apartmentBuiltinStashInteractRadiusM,
   apartmentDoorMatchesContainingUnit,
+  apartmentUnitContainingFeet,
   apartmentUnitContainingFeetSlack,
   aimedApartmentStashBlocksGrowTrayPrompt,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
@@ -898,6 +899,31 @@ describe("fpApartmentGameplay", () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it("strict feet hull does not treat cross-hall doorway positions as in-unit", () => {
+    const westUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_w_001",
+      unitId: "unit_w_001",
+      boundMinX: -12,
+      boundMaxX: -1,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const eastUnit = apartmentUnit({
+      unitKey: "floor_a|2|unit_e_001",
+      unitId: "unit_e_001",
+      boundMinX: 1,
+      boundMaxX: 12,
+      boundMinZ: -3,
+      boundMaxZ: 3,
+    });
+    const conn = mockConn([westUnit, eastUnit]);
+
+    expect(apartmentUnitContainingFeet(conn, -0.25, 10, 0)).toBeNull();
+    expect(
+      apartmentUnitContainingFeetSlack(conn, -0.25, 10, 0, { slackXZ: 0.85 })?.unitKey,
+    ).toBe(westUnit.unitKey);
   });
 
   it("visual containment slack keeps edge-of-unit feet inside without bridging a cross-hall gap", () => {

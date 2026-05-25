@@ -38,16 +38,13 @@ export const ENABLE_RUNTIME_DYNAMIC_DECOR_LIGHTS = true;
 
 /**
  * Soft window fill spots for the **current apartment unit only** (max 6, no shadows).
- * Emissive alone cannot replace this — keep on until window bounce is baked into shells.
+ * Emissive alone cannot replace this — keep on until window bounce is authored another way.
  */
 export const ENABLE_RUNTIME_WINDOW_FILL_LIGHTS = true;
 
-/** When true, in-unit shell uses programmatically baked lightmaps instead of static practical lights. */
-export const ENABLE_APARTMENT_BAKED_SHELL_LIGHTING = false;
-
 /**
  * Per-fixture practical pools inside the player's apartment unit (ceiling, chandelier,
- * standing, grow-op). Ignored for static fixtures when {@link ENABLE_APARTMENT_BAKED_SHELL_LIGHTING} is on.
+ * standing, grow-op).
  */
 export const ENABLE_RUNTIME_APARTMENT_STATIC_FIXTURE_LIGHTS = true;
 

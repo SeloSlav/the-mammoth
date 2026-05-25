@@ -115,6 +115,7 @@ import {
 import { getLocalFirearmChamberView } from "./fpHotbar/fpFirearmChamber.js";
 import {
   apartmentClaimInteriorsPreferOverUnitDoor,
+  apartmentUnitContainingFeet,
   apartmentUnitContainingFeetSlack,
   clientOwnsClaimedApartmentUnit,
   getApartmentSystemPrompt,
@@ -165,7 +166,9 @@ import { mountWeaponPresentationDevHotReload } from "./fpDev/weaponPresentationD
 import { mountWorldContentDevReload } from "./fpDev/fpWorldContentDevReload.js";
 import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
+import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
+import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
   primeHotbarConsumeAudio,
@@ -1069,25 +1072,6 @@ export async function mountFpSession(
     z >= b.minZ - opts.slackXZ &&
     z <= b.maxZ + opts.slackXZ;
 
-  const activeOwnedApartmentContainingFeet = ():
-    | { unitId: string; unitKey: string; level: number }
-    | null => {
-    if (activeOwnedApartmentDecorUnitKey === null) return null;
-    const summary = apartmentUnitSummaryForKey(activeOwnedApartmentDecorUnitKey);
-    const bounds = apartmentUnitBoundsForKey(activeOwnedApartmentDecorUnitKey);
-    if (!summary || !bounds) return null;
-    if (
-      !pointInsideApartmentUnitBounds(bounds, pos.x, pos.y, pos.z, {
-        slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
-        slackYBelow: 1.25,
-        slackYAbove: 2.85,
-      })
-    ) {
-      return null;
-    }
-    return summary;
-  };
-
   const updateActiveOwnedApartmentFromContainingUnit = (
     unitKey: string | null,
   ): void => {
@@ -1099,6 +1083,14 @@ export async function mountFpSession(
     }
   };
 
+  const corridorPvsContext = createFpSessionCorridorPvsContext({
+    buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+    floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+    maxLevel: maxBuildingLevel,
+    unitIdForKey: apartmentUnitIdForKey,
+    collectDoorEntries: () => fpApartmentDoors.collectCorridorPvsDoorEntries(),
+  });
+
   const {
     syncBuildingFloorPlateVisibility: syncBuildingFloorPlateVisibilityBase,
     isInsideElevatorCabHudForJump,
@@ -1107,6 +1099,9 @@ export async function mountFpSession(
     isInsideStairwellShaft,
     getContainingResidentialUnitKey,
     isApartmentDecorInteriorVisible,
+    getCorridorPvsVisibleUnitKeys,
+    getCorridorPvsVisibleUnitIds,
+    getActiveFloorPlateBand,
   } =
     createFpSessionFloorPlateVisibility({
       camera,
@@ -1126,19 +1121,38 @@ export async function mountFpSession(
       stairShaftSpecs,
       feetPos: pos,
       getContainingResidentialUnit: () => {
-        const unit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
+        /**
+         * Slack hull — decor retention / owned-unit handoff at thresholds only. Must not drive
+         * `insideResidentialUnit`: 0.85 m XZ slack extends unit bounds across the corridor gap
+         * beside closed doors and hides anonymous corridor shell meshes in-unit.
+         */
+        const slackUnit = apartmentUnitContainingFeetSlack(conn, pos.x, pos.y, pos.z, {
           slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
           slackYBelow: 1.25,
           slackYAbove: 2.85,
         });
-        updateActiveOwnedApartmentFromContainingUnit(unit?.unitKey ?? null);
-        if (unit) return { unitId: unit.unitId, unitKey: unit.unitKey, level: unit.level };
-        return activeOwnedApartmentContainingFeet();
+        updateActiveOwnedApartmentFromContainingUnit(slackUnit?.unitKey ?? null);
+
+        const strictUnit = apartmentUnitContainingFeet(conn, pos.x, pos.y, pos.z);
+        if (strictUnit) {
+          return {
+            unitId: strictUnit.unitId,
+            unitKey: strictUnit.unitKey,
+            level: strictUnit.level,
+          };
+        }
+        return null;
       },
       getRetainedResidentialUnitId: () =>
         activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()
           ? apartmentUnitIdForKey(activeOwnedApartmentDecorUnitKey)
           : null,
+      getRetainedResidentialUnitKey: () =>
+        activeOwnedApartmentDecorUnitKey && feetOnBuildingSlabForApartmentVisuals()
+          ? activeOwnedApartmentDecorUnitKey
+          : null,
+      resolveCorridorPvsSnapshot: (input) =>
+        corridorPvsContext.resolveSnapshot(input).visible,
       floorVisCamWorld: _floorVisCamWorld,
       floorVisCamDir: _floorVisCamDir,
     });
@@ -1196,6 +1210,12 @@ export async function mountFpSession(
   const isApartmentDecorInteriorVisibleForFrame = isCombatSim
     ? () => false
     : isApartmentDecorInteriorVisible;
+  const getCorridorPvsVisibleUnitKeysForFrame = isCombatSim
+    ? () => new Set<string>() as ReadonlySet<string>
+    : getCorridorPvsVisibleUnitKeys;
+  const getActiveFloorPlateBandForFrame = isCombatSim
+    ? () => ({ lo: 1, hi: maxBuildingLevel })
+    : getActiveFloorPlateBand;
   const getContainingResidentialUnitBoundsForFrame = isCombatSim
     ? () => null
     : getContainingResidentialUnitBounds;
@@ -1425,6 +1445,24 @@ export async function mountFpSession(
           const tex = scene.userData.mammothFpMetallicReadableEnv;
           return tex instanceof THREE.Texture ? tex : null;
         },
+        getRenderPvsGate: () =>
+          createFpNpcRenderPvsGate(() => ({
+            floorPlateBand: getActiveFloorPlateBandForFrame(),
+            storeyOpts: {
+              buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+              floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+              maxLevel: maxBuildingLevel,
+            },
+            insideResidentialUnit: isInsideResidentialUnitForFrame(),
+            insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame(),
+            corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame(),
+            unitKeyContainingPoint: (x, y, z) =>
+              apartmentUnitContainingFeetSlack(conn, x, y, z, {
+                slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
+                slackYBelow: 1.25,
+                slackYAbove: 2.85,
+              })?.unitKey ?? null,
+          })),
       })
     : null;
   const fpBalconyGrow = isCombatSim
@@ -2258,6 +2296,7 @@ export async function mountFpSession(
     isInsideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame,
     isInsideStairwellShaft: isInsideStairwellShaftForFrame,
     getContainingResidentialUnitKey,
+    getCorridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame,
     getActiveApartmentDecorUnitKey: getActiveApartmentDecorUnitKeyForFrame,
     getContainingResidentialUnitBounds: getContainingResidentialUnitBoundsForFrame,
     isApartmentDecorInteriorVisible: isApartmentDecorInteriorVisibleForFrame,
