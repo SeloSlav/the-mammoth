@@ -46,6 +46,7 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     floor.userData.mammothPlateLevelIndex = 7;
 
     const shellMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    shellMesh.name = "shell_wall_n_solid";
     shellMesh.userData.mammothUnitInterior = true;
     shellMesh.userData.mammothPlacedObjectId = "unit_w_004";
     floor.add(shellMesh);
@@ -66,6 +67,7 @@ describe("collectFpSessionUnitInteriorMeshEntries", () => {
     expect(result[0]?.apartmentUnitKey).toBe(null);
     expect(result[0]?.residentialExteriorGlass).toBe(false);
     expect(result[0]?.apartmentSwingDoor).toBe(false);
+    expect(result[0]?.isResidentialShellPlaster).toBe(true);
     expect(result[1]?.mesh).toBe(propMesh);
     expect(result[1]?.residentialUnitId).toBe(null);
     expect(result[1]?.apartmentUnitKey).toBe("floor-7:unit_w_004");

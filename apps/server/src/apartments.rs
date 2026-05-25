@@ -1182,11 +1182,6 @@ pub fn sync_owned_apartment_stash_decor(ctx: &ReducerContext) {
         ensure_authored_fish_tank_decor_for_unit(ctx, sender, unit.unit_key.as_str());
         ensure_authored_fish_tank_filter_decor_for_unit(ctx, sender, unit.unit_key.as_str());
         try_bind_default_fish_filter_link(ctx, sender, unit.unit_key.as_str());
-        crate::fish_tank_filter::ensure_starter_fish_filter_cartridge_for_unit(
-            ctx,
-            sender,
-            unit.unit_key.as_str(),
-        );
     }
 }
 

@@ -22,6 +22,7 @@ import {
   type WallHoleYZ,
 } from "./wallWithDoorCutout.js";
 import { addExteriorWallCladding } from "./hollowRoomShell.js";
+import { floorPlaceholderMeshMaterials as mat } from "./floorPlaceholderMeshMaterials.js";
 import { HOME_BAND_FIRST_OWNED_APARTMENT_UNIT_ID } from "./ownedApartmentHomeBand.js";
 import { residentialBalconyPartitionFace } from "./residentialUnitBalcony.js";
 import { residentialBalconyHollowShellExtras } from "./residentialUnitBalconyShell.js";
@@ -480,6 +481,7 @@ export function appendOwnedApartmentEditorShellWalls(
       },
       0.05,
       plan.wallSpanX ? { spanX: plan.wallSpanX } : undefined,
+      { n: mat.unitExteriorBrickWall, s: mat.unitExteriorBrickWall },
     );
   }
 }

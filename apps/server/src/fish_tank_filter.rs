@@ -48,6 +48,30 @@ pub struct FishTankEcosystem {
     pub filter_health: u8,
 }
 
+/// One row per filter decor after the tutorial spare cartridge has been granted once.
+#[spacetimedb::table(public, accessor = fish_tank_filter_starter_grant)]
+pub struct FishTankFilterStarterGrant {
+    #[primary_key]
+    pub filter_decor_id: u64,
+}
+
+fn starter_cartridge_already_granted(ctx: &ReducerContext, filter_decor_id: u64) -> bool {
+    ctx.db
+        .fish_tank_filter_starter_grant()
+        .filter_decor_id()
+        .find(filter_decor_id)
+        .is_some()
+}
+
+fn mark_starter_cartridge_granted(ctx: &ReducerContext, filter_decor_id: u64) {
+    if starter_cartridge_already_granted(ctx, filter_decor_id) {
+        return;
+    }
+    let _ = ctx.db.fish_tank_filter_starter_grant().insert(FishTankFilterStarterGrant {
+        filter_decor_id,
+    });
+}
+
 fn is_filter_decor_row(decor: &ApartmentUnitDecor) -> bool {
     apartments::effective_decor_item_kind(decor.item_kind, decor.model_rel_path.as_str())
         == apartments::APARTMENT_DECOR_ITEM_KIND_FISH_TANK_FILTER
@@ -442,6 +466,11 @@ pub(crate) fn ensure_starter_fish_filter_cartridge_for_unit(
         .collect();
 
     for filter in filters {
+        let filter_decor_id = filter.decor_id;
+        if starter_cartridge_already_granted(ctx, filter_decor_id) {
+            continue;
+        }
+
         let stash_key = filter_stash_key(&filter);
         if find_item_in_stash_slot(
             ctx,
@@ -451,8 +480,10 @@ pub(crate) fn ensure_starter_fish_filter_cartridge_for_unit(
         )
         .is_some()
         {
+            mark_starter_cartridge_granted(ctx, filter_decor_id);
             continue;
         }
+
         let _ = ctx.db.inventory_item().insert(InventoryItem {
             instance_id: 0,
             def_id: FISH_TANK_FILTER_PATCH_DEF_ID.to_string(),
@@ -463,6 +494,7 @@ pub(crate) fn ensure_starter_fish_filter_cartridge_for_unit(
                 slot_index: FISH_TANK_FILTER_MAINTENANCE_SLOT,
             }),
         });
+        mark_starter_cartridge_granted(ctx, filter_decor_id);
     }
 }
 

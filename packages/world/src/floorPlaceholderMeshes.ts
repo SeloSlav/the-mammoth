@@ -519,6 +519,7 @@ export function buildFloorMeshes(
           storyLevelIndex: story,
           floorDocId: floor.id,
           facadeSalt: opts?.facadeSalt ?? DEFAULT_EXTERIOR_FACADE_SALT,
+          unitExteriorFaces: roomExteriorFaces,
         });
       }
       /**

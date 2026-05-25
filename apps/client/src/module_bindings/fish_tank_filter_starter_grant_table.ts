@@ -10,12 +10,6 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  ApartmentWaterTankSchedule,
-} from "./types";
-
-export default {
-  get arg() {
-    return ApartmentWaterTankSchedule;
-  },
-};
+export default __t.row({
+  filterDecorId: __t.u64().primaryKey().name("filter_decor_id"),
+});

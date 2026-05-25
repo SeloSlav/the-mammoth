@@ -73,6 +73,10 @@ import {
   waitMegablockStaticWorldMeshReady,
 } from "./fpSession/fpSessionStaticWorldMeshCache.js";
 import { restoreUnitInteriorMeshVisibilityAfterAuthView } from "../ui/mammothAuthBackdropInteriorVisibility.js";
+import {
+  disposeStandardApartmentWindowShuttersRoot,
+  MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
+} from "@the-mammoth/world";
 import { createCombatSimStaticWorld } from "./combatSim/combatSimStaticWorld.js";
 import {
   createInertFpApartmentDecorMeshes,
@@ -368,6 +372,12 @@ export async function mountFpSession(
   if (!isCombatSim) {
     // Auth backdrop may hide unit shells on the shared megablock cache; FP visibility owns them again.
     restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRoot);
+    const authShutterRoot = buildingRoot.getObjectByName(
+      MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
+    );
+    if (authShutterRoot) {
+      disposeStandardApartmentWindowShuttersRoot(authShutterRoot);
+    }
     prepareMammothApartmentInteriorContentRoots({ shellRoot: buildingRoot });
   }
   const fpReadableEnv = scene.userData.mammothFpMetallicReadableEnv;

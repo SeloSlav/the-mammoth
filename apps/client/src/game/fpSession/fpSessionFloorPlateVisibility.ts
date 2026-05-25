@@ -38,6 +38,12 @@ type FpStairShaftVisibilityBounds = {
 const FP_INTERIOR_SHELL_NEAR_MARGIN_M = 4;
 
 /**
+ * Plaster hollow shells stay visible farther out than decor props so exterior brick/concrete cladding
+ * does not read through window lines when tagged interiors are culled for fill-rate.
+ */
+const FP_RESIDENTIAL_SHELL_PLASTER_EXTERIOR_MARGIN_M = 36;
+
+/**
  * Cached applied floor-band (after smoothing). Raw target can jump from full-stack → interior in
  * one frame when leaving the hoistway; stepping the band spreads `.visible` toggles across frames.
  *
@@ -174,9 +180,11 @@ export function fpResolveUnitInteriorMeshVisible(input: {
     | "residentialExteriorGlass"
     | "genericInteriorVisibleInResidentialUnit"
     | "apartmentSwingDoor"
+    | "isResidentialShellPlaster"
   >;
   unitInteriorVisible: boolean;
   apartmentDecorInteriorVisible: boolean;
+  exteriorShellPlasterVisible: boolean;
   insideResidentialUnit: boolean;
   containingResidentialUnitId: string | null;
   containingResidentialUnitKey: string | null;
@@ -206,6 +214,12 @@ export function fpResolveUnitInteriorMeshVisible(input: {
      * Once inside a unit, the branch above hides every other unit's transparent glass.
      */
     if (entry.residentialExteriorGlass) return true;
+    if (
+      entry.isResidentialShellPlaster &&
+      (input.unitInteriorVisible || input.exteriorShellPlasterVisible)
+    ) {
+      return true;
+    }
   }
   if (input.insideResidentialUnit) {
     /**
@@ -316,6 +330,8 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
   let _lastContainingResidentialUnitId: string | null = null;
   let _lastContainingResidentialUnitKey: string | null = null;
   let _lastInsideResidentialUnit = false;
+  let _lastExteriorShellPlasterVisible = false;
+  let _lastTrueExteriorView = false;
 
   const pointInsideStairShaft = (x: number, y: number, z: number): boolean => {
     for (let i = 0; i < stairShaftInteriorLightBounds.length; i++) {
@@ -540,11 +556,15 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       }
     }
 
-    /**
-     * Hide tagged interior shells when camera **and** feet sit outside the footprint expanded by
-     * {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M}. Beyond that band, cladding/tint occludes interiors;
-     * inside it we submit shells and let depth sort.
-     */
+/**
+ * Hide tagged interior shells when camera **and** feet sit outside the footprint expanded by
+ * {@link FP_INTERIOR_SHELL_NEAR_MARGIN_M}. Beyond that band, cladding/tint occludes interiors;
+ * inside it we submit shells and let depth sort.
+ *
+ * Plaster hollow shells (`shell_wall_*`, floors/ceilings) use the wider
+ * {@link FP_RESIDENTIAL_SHELL_PLASTER_EXTERIOR_MARGIN_M} (and true exterior views) so brick/concrete
+ * cladding does not read through window lines when decor props stay culled.
+ */
     const unitInteriorVisible =
       fpElevators.isInsideAnyCabHud(
         feetPos.x,
@@ -564,6 +584,19 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
         boundsMinZ: buildingWorldBounds.min.z,
         boundsMaxZ: buildingWorldBounds.max.z,
         nearMarginM: FP_INTERIOR_SHELL_NEAR_MARGIN_M,
+      });
+    const exteriorShellPlasterVisible =
+      trueExteriorView ||
+      fpCameraOrFeetNearBuildingFootprintXZ({
+        cameraX: floorVisCamWorld.x,
+        cameraZ: floorVisCamWorld.z,
+        feetX: feetPos.x,
+        feetZ: feetPos.z,
+        boundsMinX: buildingWorldBounds.min.x,
+        boundsMaxX: buildingWorldBounds.max.x,
+        boundsMinZ: buildingWorldBounds.min.z,
+        boundsMaxZ: buildingWorldBounds.max.z,
+        nearMarginM: FP_RESIDENTIAL_SHELL_PLASTER_EXTERIOR_MARGIN_M,
       });
     /**
      * Decor GLBs are heavy and visibly wrong through exterior glass. Keep plaster on for nearby
@@ -589,12 +622,16 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
       });
     const unitInteriorVisibilityChanged =
       unitInteriorVisible !== _lastUnitInteriorVisible ||
+      exteriorShellPlasterVisible !== _lastExteriorShellPlasterVisible ||
+      trueExteriorView !== _lastTrueExteriorView ||
       unitInteriorMeshEntries.length !== _lastUnitInteriorMeshCount ||
       apartmentDecorInteriorVisible !== _lastApartmentDecorInteriorVisible ||
       containingResidentialUnitId !== _lastContainingResidentialUnitId ||
       containingResidentialUnitKey !== _lastContainingResidentialUnitKey;
     if (unitInteriorVisibilityChanged || insideResidentialUnit) {
       _lastUnitInteriorVisible = unitInteriorVisible;
+      _lastExteriorShellPlasterVisible = exteriorShellPlasterVisible;
+      _lastTrueExteriorView = trueExteriorView;
       _lastApartmentDecorInteriorVisible = apartmentDecorInteriorVisible;
       _lastUnitInteriorMeshCount = unitInteriorMeshEntries.length;
       _lastContainingResidentialUnitId = containingResidentialUnitId;
@@ -607,6 +644,7 @@ export function createFpSessionFloorPlateVisibility(opts: FpSessionFloorPlateVis
             entry,
             unitInteriorVisible,
             apartmentDecorInteriorVisible,
+            exteriorShellPlasterVisible,
             insideResidentialUnit,
             containingResidentialUnitId,
             containingResidentialUnitKey,

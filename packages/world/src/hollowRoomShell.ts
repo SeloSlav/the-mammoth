@@ -111,6 +111,7 @@ export function addExteriorWallCladding(
   /** Push holed façade slabs outward (m) so they do not coplanar-z-fight unit plaster shells. */
   outwardBiasAlongNormalM = 0,
   claddingOpts?: { spanX?: { min: number; max: number } },
+  exteriorWallMByFace?: Partial<Record<CardinalFace, THREE.MeshStandardMaterial>>,
 ): void {
   if (faces.length === 0) return;
   const cladT = 0.035;
@@ -119,12 +120,13 @@ export function addExteriorWallCladding(
   const zMax = vlenZ * 0.5;
   const xMin = claddingOpts?.spanX?.min ?? -vlenX * 0.5;
   const xMax = claddingOpts?.spanX?.max ?? vlenX * 0.5;
+  const matFor = (face: CardinalFace) => exteriorWallMByFace?.[face] ?? exteriorWallM;
   for (const face of faces) {
     if (face === "e") {
       const startIdx = group.children.length;
       addWallConstantXWithHoles(
         group,
-        exteriorWallM,
+        matFor("e"),
         hx + cladT * 0.5 + b,
         cladT,
         zMin,
@@ -139,7 +141,7 @@ export function addExteriorWallCladding(
       const startIdx = group.children.length;
       addWallConstantXWithHoles(
         group,
-        exteriorWallM,
+        matFor("w"),
         -hx - cladT * 0.5 - b,
         cladT,
         zMin,
@@ -154,7 +156,7 @@ export function addExteriorWallCladding(
       const startIdx = group.children.length;
       addWallConstantZWithHoles(
         group,
-        exteriorWallM,
+        matFor("n"),
         hz + cladT * 0.5 + b,
         cladT,
         xMin,
@@ -169,7 +171,7 @@ export function addExteriorWallCladding(
       const startIdx = group.children.length;
       addWallConstantZWithHoles(
         group,
-        exteriorWallM,
+        matFor("s"),
         -hz - cladT * 0.5 - b,
         cladT,
         xMin,
@@ -182,6 +184,12 @@ export function addExteriorWallCladding(
       markNewChildrenNoCollision(group, startIdx);
     }
   }
+}
+function unitExteriorCladdingMatByFace(
+  kind: PlaceholderKind,
+): Partial<Record<CardinalFace, THREE.MeshStandardMaterial>> | undefined {
+  if (kind !== "unit") return undefined;
+  return { n: mat.unitExteriorBrickWall, s: mat.unitExteriorBrickWall };
 }
 /** @param maxBays upper cap (long E/W bar sides vs short N/S ends of the podium hall). */
 function lobbyDoorCentersAlong(usableSpan: number, maxBays = 4): number[] {
@@ -355,6 +363,7 @@ export function addHollowRoomShell(
           undefined,
           unitCladOutwardBiasM,
           opts.wallSpanX ? { spanX: opts.wallSpanX } : undefined,
+          unitExteriorCladdingMatByFace(kind),
         );
       }
       return;
@@ -439,6 +448,7 @@ export function addHollowRoomShell(
         },
         unitCladOutwardBiasM,
         opts.wallSpanX ? { spanX: opts.wallSpanX } : undefined,
+        unitExteriorCladdingMatByFace(kind),
       );
     }
     addKoncarElevatorSignMeshes(

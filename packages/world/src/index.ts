@@ -162,6 +162,11 @@ export {
   resolveStandardWindowShutterFxForUnit,
 } from "./apartmentStandardWindowShutterPlacement.js";
 export {
+  disposeStandardApartmentWindowShuttersRoot,
+  MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
+  mountStandardApartmentWindowShuttersForBuilding,
+} from "./mountStandardApartmentWindowShuttersOnBuilding.js";
+export {
   APARTMENT_PROCEDURAL_DECOR_MODEL_PATHS,
   buildProceduralApartmentDecorVisual,
   isProceduralApartmentDecorModelPath,

@@ -63,6 +63,13 @@ describe("fpApplyResidentialInteriorPlateBandOverride", () => {
 });
 
 describe("fpResolveUnitInteriorMeshVisible", () => {
+  const exteriorOff = {
+    exteriorShellPlasterVisible: false,
+    insideResidentialUnit: false,
+    containingResidentialUnitId: null as string | null,
+    containingResidentialUnitKey: null as string | null,
+  };
+
   it("keeps exterior unit glass visible outside but hides neighboring glass inside a unit", () => {
     const glassEntry = {
       apartmentUnitKey: null,
@@ -70,6 +77,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
       residentialExteriorGlass: true,
       genericInteriorVisibleInResidentialUnit: false,
       apartmentSwingDoor: false,
+      isResidentialShellPlaster: false,
     };
 
     expect(
@@ -77,9 +85,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         entry: glassEntry,
         unitInteriorVisible: false,
         apartmentDecorInteriorVisible: false,
-        insideResidentialUnit: false,
-        containingResidentialUnitId: null,
-        containingResidentialUnitKey: null,
+        ...exteriorOff,
       }),
     ).toBe(true);
 
@@ -91,6 +97,42 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps plaster shells visible from exterior peeks when decor shells are culled", () => {
+    const plasterEntry = {
+      apartmentUnitKey: null,
+      residentialUnitId: "unit_e_003",
+      residentialExteriorGlass: false,
+      genericInteriorVisibleInResidentialUnit: false,
+      apartmentSwingDoor: false,
+      isResidentialShellPlaster: true,
+    };
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: plasterEntry,
+        unitInteriorVisible: false,
+        apartmentDecorInteriorVisible: false,
+        exteriorShellPlasterVisible: true,
+        insideResidentialUnit: false,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      fpResolveUnitInteriorMeshVisible({
+        entry: plasterEntry,
+        unitInteriorVisible: false,
+        apartmentDecorInteriorVisible: false,
+        exteriorShellPlasterVisible: false,
+        insideResidentialUnit: false,
+        containingResidentialUnitId: null,
+        containingResidentialUnitKey: null,
       }),
     ).toBe(false);
   });
@@ -104,12 +146,14 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(true);
 
@@ -121,12 +165,14 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
+          isResidentialShellPlaster: true,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(false);
   });
@@ -140,12 +186,14 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: false,
           apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(false);
 
@@ -157,12 +205,14 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
           residentialExteriorGlass: false,
           genericInteriorVisibleInResidentialUnit: true,
           apartmentSwingDoor: false,
+          isResidentialShellPlaster: false,
         },
         unitInteriorVisible: true,
         apartmentDecorInteriorVisible: true,
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(false);
   });
@@ -174,6 +224,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
       residentialExteriorGlass: false,
       genericInteriorVisibleInResidentialUnit: false,
       apartmentSwingDoor: true,
+      isResidentialShellPlaster: false,
     };
 
     expect(
@@ -184,6 +235,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(true);
 
@@ -195,6 +247,7 @@ describe("fpResolveUnitInteriorMeshVisible", () => {
         insideResidentialUnit: true,
         containingResidentialUnitId: "unit_e_003",
         containingResidentialUnitKey: "floor|2|unit_e_003",
+        exteriorShellPlasterVisible: false,
       }),
     ).toBe(false);
   });

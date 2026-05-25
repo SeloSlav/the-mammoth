@@ -12,9 +12,12 @@ import {
   residentialUnitHasBalconyBay,
 } from "./residentialUnitBalcony.js";
 import {
+  addResidentialBalconyBayShell,
   residentialBalconyBayFrame,
   residentialBalconyExtensionRectXZ,
 } from "./residentialUnitBalconyShell.js";
+import { unitExteriorBrickWallMaterial } from "./floorPlaceholderMeshMaterials.js";
+import * as THREE from "three";
 
 const box = { minX: 0, maxX: 10, minZ: -3, maxZ: 3 };
 
@@ -124,5 +127,51 @@ describe("residentialUnitBalcony", () => {
     expect(residentialBalconyPartitionFace("unit_w_003")).toBe("w");
     expect(residentialUnitHasBalconyBay("stair_n_1")).toBe(false);
     expect(extendResidentialBoundsXZForBalcony(box, "stair_n_1")).toEqual(box);
+  });
+
+  it("adds brick N/S cheeks on balcony bays when the bar ends are interior", () => {
+    const group = new THREE.Group();
+    addResidentialBalconyBayShell(group, 9, 3.05, 7.1, "unit_e_003", {
+      storyLevelIndex: 20,
+      floorDocId: "test_floor",
+      facadeSalt: 1,
+      unitExteriorFaces: ["e"],
+    });
+    const sideClad: THREE.Mesh[] = [];
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      if (
+        !obj.name.startsWith("shell_exterior_cladding_n") &&
+        !obj.name.startsWith("shell_exterior_cladding_s")
+      ) {
+        return;
+      }
+      sideClad.push(obj);
+    });
+    expect(sideClad).toHaveLength(2);
+    for (const mesh of sideClad) {
+      expect(mesh.material).toBe(unitExteriorBrickWallMaterial);
+    }
+  });
+
+  it("does not duplicate balcony bay N/S brick when unit bar ends are exterior", () => {
+    const group = new THREE.Group();
+    addResidentialBalconyBayShell(group, 9, 3.05, 7.1, "unit_e_003", {
+      storyLevelIndex: 20,
+      floorDocId: "test_floor",
+      facadeSalt: 1,
+      unitExteriorFaces: ["e", "n", "s"],
+    });
+    let sideCladCount = 0;
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      if (
+        obj.name.startsWith("shell_exterior_cladding_n") ||
+        obj.name.startsWith("shell_exterior_cladding_s")
+      ) {
+        sideCladCount += 1;
+      }
+    });
+    expect(sideCladCount).toBe(0);
   });
 });

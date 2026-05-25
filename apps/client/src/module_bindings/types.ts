@@ -257,6 +257,11 @@ export const FishTankFilterLink = __t.object("FishTankFilterLink", {
 });
 export type FishTankFilterLink = __Infer<typeof FishTankFilterLink>;
 
+export const FishTankFilterStarterGrant = __t.object("FishTankFilterStarterGrant", {
+  filterDecorId: __t.u64(),
+});
+export type FishTankFilterStarterGrant = __Infer<typeof FishTankFilterStarterGrant>;
+
 export const FlashlightCharge = __t.object("FlashlightCharge", {
   itemInstanceId: __t.u64(),
   charge: __t.f32(),

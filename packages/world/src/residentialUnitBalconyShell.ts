@@ -9,7 +9,8 @@ import {
 } from "./hollowRoomShell.js";
 import type { RectXZ } from "./shaftPlanformClip.js";
 import type { CardinalFace } from "./wallWithDoorCutout.js";
-import { addWallConstantXWithHoles } from "./wallWithDoorCutout.js";
+import { addWallConstantXWithHoles, addWallConstantZWithHoles } from "./wallWithDoorCutout.js";
+import { unitExteriorBrickWallMaterial } from "./floorPlaceholderMeshMaterials.js";
 import {
   RESIDENTIAL_UNIT_BALCONY_OVERHANG_M,
   residentialBalconyPartitionFace,
@@ -127,6 +128,54 @@ function tagBalconyMesh(mesh: THREE.Mesh, unitId: string): void {
   mesh.frustumCulled = false;
 }
 
+/** N/S brick cheeks on the overhang when the unit bar face is interior (mid-bar balcony). */
+function addBalconyBayBrickSideExteriorCladding(
+  unitGroup: THREE.Group,
+  frame: ResidentialBalconyBayFrame,
+  hz: number,
+  wt: number,
+  yLo: number,
+  yHi: number,
+  unitExteriorFaces: readonly CardinalFace[],
+): void {
+  if (unitExteriorFaces.includes("n") || unitExteriorFaces.includes("s")) return;
+
+  const cladT = BALCONY_BAY_FACADE_CLAD_THICKNESS_M;
+  const b = BALCONY_BAY_FACADE_CLAD_BIAS_M;
+  const xMin = frame.x0;
+  const xMax = frame.x1;
+  const startIdx = unitGroup.children.length;
+
+  addWallConstantZWithHoles(
+    unitGroup,
+    unitExteriorBrickWallMaterial,
+    hz + wt + cladT * 0.5 + b,
+    cladT,
+    xMin,
+    xMax,
+    yLo,
+    yHi,
+    [],
+    "shell_exterior_cladding_n",
+  );
+  addWallConstantZWithHoles(
+    unitGroup,
+    unitExteriorBrickWallMaterial,
+    -hz - wt - cladT * 0.5 - b,
+    cladT,
+    xMin,
+    xMax,
+    yLo,
+    yHi,
+    [],
+    "shell_exterior_cladding_s",
+  );
+
+  for (let i = startIdx; i < unitGroup.children.length; i++) {
+    unitGroup.children[i]!.userData.mammothNoCollision = true;
+  }
+}
+
 /**
  * Editor preview only — game slabs come from widened {@link addHollowRoomShell}.
  */
@@ -197,6 +246,7 @@ export function addResidentialBalconyBayShell(
     storyLevelIndex: number;
     floorDocId: string;
     facadeSalt: number;
+    unitExteriorFaces?: readonly CardinalFace[];
   },
 ): void {
   const frame = residentialBalconyBayFrame(unitId, interiorSx, sz);
@@ -249,6 +299,16 @@ export function addResidentialBalconyBayShell(
   if (facadeMesh instanceof THREE.Mesh) {
     tagBalconyMesh(facadeMesh, unitId);
   }
+
+  addBalconyBayBrickSideExteriorCladding(
+    unitGroup,
+    frame,
+    hz,
+    wt,
+    yLo,
+    yHi,
+    opts.unitExteriorFaces ?? [],
+  );
 
   const cladT = BALCONY_BAY_FACADE_CLAD_THICKNESS_M;
   const xClad = balconyBayFacadeCladOuterLocalX(frame);

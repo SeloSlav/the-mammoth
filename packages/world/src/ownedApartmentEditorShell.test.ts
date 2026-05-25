@@ -109,6 +109,16 @@ describe("owned apartment editor shell (game-derived)", () => {
     expect(
       group.children.some((c) => c.name === "editor_ref_shell_wall_e"),
     ).toBe(false);
+
+    group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      if (o.name.startsWith("shell_exterior_cladding_n") || o.name.startsWith("shell_exterior_cladding_s")) {
+        expect(o.material).toBe(floorPlaceholderMeshMaterials.unitExteriorBrickWall);
+      }
+      if (o.name.startsWith("shell_exterior_cladding_e") || o.name.startsWith("shell_exterior_cladding_w")) {
+        expect(o.material).toBe(floorPlaceholderMeshMaterials.unitExteriorWall);
+      }
+    });
   });
 
   it("lists every residential slab with a corridor door template on the typical plate", () => {

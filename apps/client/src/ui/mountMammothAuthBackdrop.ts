@@ -3,16 +3,24 @@ import {
   assertWebGpuAdapterOrThrow,
   assertWebGpuRendererBackend,
 } from "@the-mammoth/engine";
-import { ensureStairwellCigaretteMeshReady } from "@the-mammoth/world";
+import {
+  disposeStandardApartmentWindowShuttersRoot,
+  ensureStairwellCigaretteMeshReady,
+  mountStandardApartmentWindowShuttersForBuilding,
+  parseFloorDoc,
+} from "@the-mammoth/world";
+import { OwnedApartmentBuiltinsDocSchema } from "@the-mammoth/schemas";
 import {
   attachFpSessionEnvironment,
   FP_SESSION_SKY_CAMERA_FAR,
 } from "../game/fpSession/fpSessionEnvironment.js";
+import { floorPayloadByDocId } from "../game/fpSession/fpSessionContentLoad.js";
 import {
   primeMegablockStaticWorldMeshBuild,
   waitMegablockStaticWorldMeshReady,
   type MegablockBackdropHooks,
 } from "../game/fpSession/fpSessionStaticWorldMeshCache.js";
+import type { FpSessionStaticWorld } from "../game/fpSession/fpSessionWorldMount.js";
 import {
   FP_SESSION_MAX_PIXEL_RATIO,
   FP_SESSION_WEBGPU_ANTIALIAS,
@@ -40,6 +48,34 @@ const AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS = new THREE.Box3(
   new THREE.Vector3(130, 75, 130),
 );
 
+async function loadAuthBackdropShutterReferencePlacedItems() {
+  try {
+    const res = await fetch("/content/apartment/owned_apartment_builtins.json", {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const raw = (await res.json()) as unknown;
+    return OwnedApartmentBuiltinsDocSchema.parse(raw).placedItems;
+  } catch {
+    return [];
+  }
+}
+
+async function attachAuthBackdropStandardWindowShutters(
+  world: FpSessionStaticWorld,
+  assignRoot: (root: THREE.Group | null) => void,
+): Promise<void> {
+  const referencePlacedItems = await loadAuthBackdropShutterReferencePlacedItems();
+  await yieldToMain();
+  const shutterRoot = mountStandardApartmentWindowShuttersForBuilding({
+    building: world.building,
+    getFloorDoc: (id) => parseFloorDoc(floorPayloadByDocId(id)),
+    referencePlacedItems,
+  });
+  world.buildingRoot.add(shutterRoot);
+  assignRoot(shutterRoot);
+}
+
 export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promise<() => void> {
   await assertWebGpuAdapterOrThrow();
   await yieldToMain();
@@ -52,6 +88,7 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
   let raf = 0;
   let worldAttached = false;
   let buildingRootForDispose: THREE.Group | null = null;
+  let authShutterRootForDispose: THREE.Group | null = null;
 
   /** World-space stack bounds for orbit framing — grows each storey during progressive attach. */
   const framingBounds = AUTH_BACKDROP_FALLBACK_BUILDING_BOUNDS.clone();
@@ -125,6 +162,9 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
       framingBounds.copy(world.buildingBodyWorldBounds);
       worldAttached = true;
       buildingRootForDispose = world.buildingRoot;
+      await attachAuthBackdropStandardWindowShutters(world, (root) => {
+        authShutterRootForDispose = root;
+      });
     })
     .catch((err: unknown) => {
       if (disposed) return;
@@ -182,6 +222,10 @@ export async function mountMammothAuthBackdrop(canvas: HTMLCanvasElement): Promi
     fpEnvironment.dispose();
     if (worldAttached && buildingRootForDispose) {
       restoreUnitInteriorMeshVisibilityAfterAuthView(buildingRootForDispose);
+    }
+    if (authShutterRootForDispose) {
+      disposeStandardApartmentWindowShuttersRoot(authShutterRootForDispose);
+      authShutterRootForDispose = null;
     }
     scene.clear();
     renderer.dispose();

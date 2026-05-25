@@ -259,6 +259,41 @@ export const exteriorConcreteWallMaterial = (() => {
   return m;
 })();
 
+/** Weathered red brick PATINA set for unit N/S shell cladding and balcony bay side cheeks. */
+const APARTMENT_UNIT_EXTERIOR_BRICK_AUTHORING: StandardAuthoringSlot = {
+  name: "apartment-unit-exterior-brick",
+  roughness: 1,
+  metalness: 0.02,
+  mapUrl: "/static/materials/apartment-unit-exterior-brick/basecolor.png",
+  normalMapUrl: "/static/materials/apartment-unit-exterior-brick/normal.png",
+  roughnessMapUrl: "/static/materials/apartment-unit-exterior-brick/roughness.png",
+};
+
+export const unitExteriorBrickWallMaterial = (() => {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    metalness: 0,
+  });
+  applyStandardAuthoringSlot(m, APARTMENT_UNIT_EXTERIOR_BRICK_AUTHORING);
+  stripArchitecturalDetailMaps(m, { metalness: 0.02 });
+  /** Brick courses read tighter than slab concrete at the same world-metric wall UV scale. */
+  const rep = 0.52;
+  for (const key of ["map", "normalMap", "roughnessMap"] as const) {
+    const t = m[key];
+    if (t) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(rep, rep);
+    }
+  }
+  applyShellTextureAnisotropy(m);
+  m.normalScale.set(1.05, 1.05);
+  /** Albedo multiply — dusty patina steer on authored PATINA brick (no texture regen). */
+  m.color.setRGB(0.68, 0.54, 0.46);
+  return m;
+})();
+
 /**
  * Authoring for red panel concrete used on **elevator landing swing-door** frames (maps previously on hoistway shells).
  * Clone via {@link elevatorLandingDoorFrameMaterial} in {@link createSwingDoorMaterials}; apartment kits override maps in JSON.
@@ -449,6 +484,7 @@ export const floorPlaceholderMeshMaterials = {
   unitCeil: apartmentUnitInteriorWallCeilingMaterial,
   unitWall: apartmentUnitInteriorWallCeilingMaterial,
   unitExteriorWall: exteriorConcreteWallMaterial,
+  unitExteriorBrickWall: unitExteriorBrickWallMaterial,
   coreFloor: interiorConcreteFloorShellMaterial,
   coreCeil: concreteMaterial(0xe0e4e8, { side: THREE.DoubleSide }),
   coreWall: concreteMaterial(0xd0d6db),

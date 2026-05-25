@@ -13,7 +13,21 @@ export type FpSessionUnitInteriorMeshEntry = {
   genericInteriorVisibleInResidentialUnit: boolean;
   /** Per-floor instanced swing doors (`fpApartmentDoors`) — corridor-facing, not unit-owned shell. */
   apartmentSwingDoor: boolean;
+  /** Hollow plaster shell (`shell_wall_*`, floors/ceilings) — occludes exterior cladding through glass. */
+  isResidentialShellPlaster: boolean;
 };
+
+/** Plaster hollow shell pieces for a `unit_*` placed object (not exterior cladding or glass). */
+export function isResidentialUnitShellPlasterMesh(mesh: THREE.Mesh): boolean {
+  if (mesh.name.startsWith("shell_exterior_cladding")) return false;
+  return (
+    mesh.name.startsWith("shell_wall_") ||
+    mesh.name.startsWith("shell_floor") ||
+    mesh.name.startsWith("shell_ceiling") ||
+    mesh.name.startsWith("balcony_shell_") ||
+    mesh.name.startsWith("balcony_wall_")
+  );
+}
 
 function residentialUnitIdFromPlacedObjectId(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -65,6 +79,7 @@ function resolveUnitInteriorMeshEntry(
     residentialExteriorGlass,
     genericInteriorVisibleInResidentialUnit,
     apartmentSwingDoor,
+    isResidentialShellPlaster: isResidentialUnitShellPlasterMesh(mesh),
   };
 }
 
