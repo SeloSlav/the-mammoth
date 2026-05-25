@@ -1,0 +1,18 @@
+export {
+  BABUSHKA_BODY_HEIGHT_M,
+  BABUSHKA_BODY_RADIUS_M,
+  CAPSULE_PAIR_SURFACE_GAP_M,
+  NPC_STATE_DEAD,
+  PLAYER_BODY_HEIGHT_CROUCH_M,
+  PLAYER_BODY_HEIGHT_STAND_M,
+  PLAYER_BODY_RADIUS_M,
+  babushkaMinPeerCenterDistanceM,
+  babushkaMinPlayerCenterDistanceM,
+  capsuleMinCenterDistanceM,
+  isLivingWorldNpc,
+  npcBodyDimsForArchetype,
+  npcCapsuleCollisionAabb,
+  playerBodyHeightM,
+  verticalCapsuleOverlap,
+  type NpcArchetypeBodyDims,
+} from "./bodyCapsules.js";

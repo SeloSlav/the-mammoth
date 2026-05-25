@@ -20,6 +20,7 @@ import {
   type FpPerfStats,
   type FpPerfTimelineSample,
 } from "../game/fpSession/fpSessionPerfStore";
+import { formatFpPerfSpikeCorrelationReport } from "../game/fpSession/fpSessionPerfSpikeCorrelation";
 import {
   THEME_CARD_BG,
   THEME_CARD_BORDER,
@@ -186,6 +187,24 @@ function FpPerfRecordedTimelines({ samples }: { samples: readonly FpPerfTimeline
         label="Frustum decor floor shadows"
         color="#6b9e7a"
         pick={(s) => s.frustumApartmentDecorFloorShadowMeshes}
+      />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum decor TV lights"
+        color="#7bcf9a"
+        pick={(s) => s.frustumPracticalDecorTvLights}
+      />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum decor ceiling lights"
+        color="#e8c47a"
+        pick={(s) => s.frustumPracticalDecorCeilingLights}
+      />
+      <TimelineSparklineRow
+        samples={samples}
+        label="Frustum decor practical lights"
+        color="#e8c47a"
+        pick={(s) => s.frustumPracticalDecorLights}
       />
       <TimelineSparklineRow samples={samples} label="Draw calls" color="#b89f6b" pick={(s) => s.drawCalls} />
       <TimelineSparklineRow
@@ -463,11 +482,32 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
         </span>
         {!open && (() => {
           const ri = getLastRendererInfo();
-          return ri.drawCalls > 0 ? (
-            <span style={{ ...monoStyle, fontSize: 10, color: THEME_TEXT_FAINT }}>
-              {ri.drawCalls}dc
-            </span>
-          ) : null;
+          return (
+            <>
+              {ri.drawCalls > 0 ? (
+                <span style={{ ...monoStyle, fontSize: 10, color: THEME_TEXT_FAINT }}>
+                  {ri.drawCalls}dc
+                </span>
+              ) : null}
+              {ri.frustumPracticalDecorLights > 0 ? (
+                <span
+                  style={{
+                    ...monoStyle,
+                    fontSize: 10,
+                    color:
+                      ri.frustumPracticalDecorLights > 12
+                        ? THEME_ERROR
+                        : ri.frustumPracticalDecorLights > 6
+                          ? "#e8c47a"
+                          : THEME_TEXT_FAINT,
+                  }}
+                  title={`Active decor lights: ${ri.visiblePracticalDecorLights} visible / ${ri.frustumPracticalDecorLights} in frustum\nvis: ${ri.practicalDecorLightBreakdownVis}\nfr: ${ri.practicalDecorLightBreakdownFr}`}
+                >
+                  {ri.frustumPracticalDecorLights}L
+                </span>
+              ) : null}
+            </>
+          );
         })()}
         <span style={{ color: THEME_TEXT_FAINT, fontSize: 10 }}>
           {open ? "▲" : "▼"}
@@ -647,6 +687,18 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
             <>
               <div style={{ ...sectionHeaderStyle, marginTop: 2 }}>Recorded timeline</div>
               <FpPerfRecordedTimelines samples={capture.samples} />
+              <div style={{ ...sectionHeaderStyle, marginTop: 2 }}>Spike correlation</div>
+              <pre
+                style={{
+                  ...monoStyle,
+                  fontSize: 10,
+                  color: THEME_TEXT_MUTED,
+                  whiteSpace: "pre-wrap",
+                  margin: "0 0 8px",
+                }}
+              >
+                {formatFpPerfSpikeCorrelationReport(capture.samples)}
+              </pre>
             </>
           ) : null}
 
@@ -679,6 +731,16 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
                       interior {ri.visibleUnitInteriorMeshes}/{ri.frustumUnitInteriorMeshes}
                       {"  "}
                       props {ri.visibleApartmentPropMeshes}/{ri.frustumApartmentPropMeshes}
+                      {"  "}
+                      decorLights {ri.visiblePracticalDecorLights}/{ri.frustumPracticalDecorLights}
+                      {"  "}
+                      windowLights {ri.visiblePracticalWindowLights}/{ri.frustumPracticalWindowLights}
+                    </div>
+                    <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
+                      kinds vis {ri.practicalDecorLightBreakdownVis}
+                    </div>
+                    <div style={{ ...monoStyle, ...dimStyle, fontSize: 10, marginBottom: 4 }}>
+                      kinds fr {ri.practicalDecorLightBreakdownFr}
                       {"  "}
                       transparent {ri.visibleTransparentMeshes}/{ri.frustumTransparentMeshes}
                     </div>
@@ -803,6 +865,36 @@ export function MammothFpsHud(props: { conn: DbConnection | null }) {
                     "decorFloorShadows",
                     stats.sceneCounts.visibleApartmentDecorFloorShadowMeshes,
                     stats.sceneCounts.frustumApartmentDecorFloorShadowMeshes,
+                  ],
+                  [
+                    "decorLights",
+                    stats.sceneCounts.visiblePracticalDecorLights,
+                    stats.sceneCounts.frustumPracticalDecorLights,
+                  ],
+                  [
+                    "windowLights",
+                    stats.sceneCounts.visiblePracticalWindowLights,
+                    stats.sceneCounts.frustumPracticalWindowLights,
+                  ],
+                  [
+                    "decorTv",
+                    stats.sceneCounts.visiblePracticalDecorTvLights,
+                    stats.sceneCounts.frustumPracticalDecorTvLights,
+                  ],
+                  [
+                    "decorCeiling",
+                    stats.sceneCounts.visiblePracticalDecorCeilingLights,
+                    stats.sceneCounts.frustumPracticalDecorCeilingLights,
+                  ],
+                  [
+                    "decorStanding",
+                    stats.sceneCounts.visiblePracticalDecorStandingLights,
+                    stats.sceneCounts.frustumPracticalDecorStandingLights,
+                  ],
+                  [
+                    "decorGrowOp",
+                    stats.sceneCounts.visiblePracticalDecorGrowOpLights,
+                    stats.sceneCounts.frustumPracticalDecorGrowOpLights,
                   ],
                   [
                     "transparent",

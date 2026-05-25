@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
+  apartmentInteriorPropWarmupPendingForUnit,
   apartmentPropBehindCameraWhenInterior,
   applyApartmentInteriorPropVisibility,
   applyApartmentInteriorPropVisibilityBudget,
@@ -232,6 +233,26 @@ describe("syncApartmentInteriorPropVisibilityUnit", () => {
 
     syncApartmentInteriorPropVisibilityUnit(state, "unit_a");
     expect(state.warmedKeys.has("decor_a")).toBe(true);
+  });
+});
+
+describe("apartmentInteriorPropWarmupPendingForUnit", () => {
+  it("ignores walls/mirrors and tracks unwarmed decor GLBs", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    const decor = new THREE.Group();
+    decor.userData.mammothApartmentUnitKey = "unit_a";
+    const wall = new THREE.Group();
+    wall.userData.mammothApartmentUnitKey = "unit_a";
+    wall.userData.mammothApartmentWallAuthoring = true;
+    const groups = new Map([
+      ["decor", decor],
+      ["wall", wall],
+    ]);
+
+    expect(apartmentInteriorPropWarmupPendingForUnit(state, "unit_a", groups)).toBe(true);
+
+    state.warmedKeys.add("decor");
+    expect(apartmentInteriorPropWarmupPendingForUnit(state, "unit_a", groups)).toBe(false);
   });
 });
 

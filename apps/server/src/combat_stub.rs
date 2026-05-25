@@ -13,6 +13,7 @@ use crate::player_vitals;
 use crate::pose::player_pose;
 
 pub const PLAYER_BODY_RADIUS_M: f32 = 0.22;
+/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts`.
 pub const PLAYER_BODY_HEIGHT_STAND_M: f32 = 1.78;
 /// Match `movement::PLAYER_HEIGHT_CROUCH_M` / hitscan victim capsule.
 pub const PLAYER_BODY_HEIGHT_CROUCH_M: f32 = 1.2;

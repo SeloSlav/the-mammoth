@@ -65,6 +65,10 @@ export type ApartmentDoorCollisionHost = {
   visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
 };
 
+export type FpNpcCollisionHost = {
+  visitCollisionAabbsInXZ: VisitCollisionAabbsInXZFn;
+};
+
 export type FpSessionLocalPredictionDeps = {
   fpLocomotionConstants: Pick<
     typeof fpLocomotionConstants,
@@ -112,6 +116,8 @@ export type FpSessionLocalPredictionDeps = {
   staticCollisionIndex: CollisionSpatialIndex;
   fpElevators: ElevDoorCollisionHost;
   fpApartmentDoors: ApartmentDoorCollisionHost;
+  /** Living world NPC capsules (combat sim today; live megablock when mounted). */
+  fpNpcCollision?: FpNpcCollisionHost;
   /** Owned-apartment partition slabs + mounted interior authoring boxes (runtime meshes). */
   fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
   elevatorWalkMergeSkipVy: number;
@@ -201,6 +207,7 @@ export function createFpSessionLocalPrediction(deps: FpSessionLocalPredictionDep
           deps.fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           deps.fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
           fpInteriorPartitionSolids?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+          deps.fpNpcCollision?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
         },
       },
       opts.locoState.grounded,

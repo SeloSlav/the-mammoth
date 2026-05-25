@@ -6,6 +6,20 @@
  * intentionally not cached to avoid stale reads.
  */
 
+import { formatFpPerfSpikeCorrelationReport } from "./fpSessionPerfSpikeCorrelation.js";
+import {
+  addFpPracticalDecorLightKindFields,
+  createFpPracticalDecorLightKindRingBuffers,
+  emptyFpPracticalDecorLightKindFields,
+  formatFpPracticalDecorLightKindAverages,
+  fpPracticalDecorLightKindFieldsFromCounter,
+  readFpPracticalDecorLightKindFieldsFromRing,
+  resetFpPracticalDecorLightKindRingBuffers,
+  scaleFpPracticalDecorLightKindFields,
+  writeFpPracticalDecorLightKindFieldsToRing,
+  type FpPracticalDecorLightKindFields,
+} from "./fpSessionPracticalLightPerfKinds.js";
+
 // ---------------------------------------------------------------------------
 // Ring buffer — 30 s at 60 fps = 1 800 slots
 // ---------------------------------------------------------------------------
@@ -78,6 +92,15 @@ const _frustumExteriorGlassMeshes = new Float32Array(RING);
 const _frustumTransparentMeshes = new Float32Array(RING);
 /** Frustum-intersected transparent meshes tagged as residential exterior glass. */
 const _frustumTransparentExteriorGlassMeshes = new Float32Array(RING);
+/** Visible apartment decor practical lights (TV/ceiling/standing/etc — not window fill). */
+const _visiblePracticalDecorLights = new Float32Array(RING);
+/** Frustum-intersected decor practical lights. */
+const _frustumPracticalDecorLights = new Float32Array(RING);
+/** Visible window-fill practical lights. */
+const _visiblePracticalWindowLights = new Float32Array(RING);
+/** Frustum-intersected window-fill practical lights. */
+const _frustumPracticalWindowLights = new Float32Array(RING);
+const _practicalDecorKindRing = createFpPracticalDecorLightKindRingBuffers(RING);
 /** Draw calls after each frame (`renderer.info.render.calls`). */
 const _drawCalls = new Float32Array(RING);
 /** Submitted triangles after each frame (`renderer.info.render.triangles`). */
@@ -153,7 +176,14 @@ export type FpRendererInfo = {
   frustumExteriorGlassMeshes: number;
   frustumTransparentMeshes: number;
   frustumTransparentExteriorGlassMeshes: number;
-};
+  visiblePracticalDecorLights: number;
+  frustumPracticalDecorLights: number;
+  visiblePracticalWindowLights: number;
+  frustumPracticalWindowLights: number;
+  /** Active decor lights by kind — last frame snapshot, e.g. `tv:1 ceiling:4`. */
+  practicalDecorLightBreakdownVis: string;
+  practicalDecorLightBreakdownFr: string;
+} & FpPracticalDecorLightKindFields;
 
 export type FpPerfHeavyMeshRecord = {
   tMs: number;
@@ -195,6 +225,13 @@ let _lastFrustumGenericInteriorMeshes = 0;
 let _lastFrustumExteriorGlassMeshes = 0;
 let _lastFrustumTransparentMeshes = 0;
 let _lastFrustumTransparentExteriorGlassMeshes = 0;
+let _lastVisiblePracticalDecorLights = 0;
+let _lastFrustumPracticalDecorLights = 0;
+let _lastVisiblePracticalWindowLights = 0;
+let _lastFrustumPracticalWindowLights = 0;
+let _lastPracticalDecorLightBreakdownVis = "";
+let _lastPracticalDecorLightBreakdownFr = "";
+let _lastPracticalDecorKindFields = emptyFpPracticalDecorLightKindFields();
 
 const HEAVY_MESH_RECORD_LIMIT = 768;
 const _heavyMeshRecords: FpPerfHeavyMeshRecord[] = [];
@@ -225,6 +262,13 @@ export function getLastRendererInfo(): FpRendererInfo {
     frustumExteriorGlassMeshes: _lastFrustumExteriorGlassMeshes,
     frustumTransparentMeshes: _lastFrustumTransparentMeshes,
     frustumTransparentExteriorGlassMeshes: _lastFrustumTransparentExteriorGlassMeshes,
+    visiblePracticalDecorLights: _lastVisiblePracticalDecorLights,
+    frustumPracticalDecorLights: _lastFrustumPracticalDecorLights,
+    visiblePracticalWindowLights: _lastVisiblePracticalWindowLights,
+    frustumPracticalWindowLights: _lastFrustumPracticalWindowLights,
+    practicalDecorLightBreakdownVis: _lastPracticalDecorLightBreakdownVis,
+    practicalDecorLightBreakdownFr: _lastPracticalDecorLightBreakdownFr,
+    ..._lastPracticalDecorKindFields,
   };
 }
 
@@ -263,6 +307,26 @@ export function pushFpPerfFrame(
     _lastFrustumTransparentMeshes = rendererInfo.frustumTransparentMeshes;
     _lastFrustumTransparentExteriorGlassMeshes =
       rendererInfo.frustumTransparentExteriorGlassMeshes;
+    _lastVisiblePracticalDecorLights = rendererInfo.visiblePracticalDecorLights;
+    _lastFrustumPracticalDecorLights = rendererInfo.frustumPracticalDecorLights;
+    _lastVisiblePracticalWindowLights = rendererInfo.visiblePracticalWindowLights;
+    _lastFrustumPracticalWindowLights = rendererInfo.frustumPracticalWindowLights;
+    _lastPracticalDecorLightBreakdownVis = rendererInfo.practicalDecorLightBreakdownVis;
+    _lastPracticalDecorLightBreakdownFr = rendererInfo.practicalDecorLightBreakdownFr;
+    _lastPracticalDecorKindFields = {
+      visiblePracticalDecorTvLights: rendererInfo.visiblePracticalDecorTvLights,
+      frustumPracticalDecorTvLights: rendererInfo.frustumPracticalDecorTvLights,
+      visiblePracticalDecorComputerLights: rendererInfo.visiblePracticalDecorComputerLights,
+      frustumPracticalDecorComputerLights: rendererInfo.frustumPracticalDecorComputerLights,
+      visiblePracticalDecorCeilingLights: rendererInfo.visiblePracticalDecorCeilingLights,
+      frustumPracticalDecorCeilingLights: rendererInfo.frustumPracticalDecorCeilingLights,
+      visiblePracticalDecorChandelierLights: rendererInfo.visiblePracticalDecorChandelierLights,
+      frustumPracticalDecorChandelierLights: rendererInfo.frustumPracticalDecorChandelierLights,
+      visiblePracticalDecorStandingLights: rendererInfo.visiblePracticalDecorStandingLights,
+      frustumPracticalDecorStandingLights: rendererInfo.frustumPracticalDecorStandingLights,
+      visiblePracticalDecorGrowOpLights: rendererInfo.visiblePracticalDecorGrowOpLights,
+      frustumPracticalDecorGrowOpLights: rendererInfo.frustumPracticalDecorGrowOpLights,
+    };
   }
   const i = _head;
   _ts[i] = nowMs;
@@ -301,6 +365,48 @@ export function pushFpPerfFrame(
   _frustumTransparentMeshes[i] = rendererInfo?.frustumTransparentMeshes ?? 0;
   _frustumTransparentExteriorGlassMeshes[i] =
     rendererInfo?.frustumTransparentExteriorGlassMeshes ?? 0;
+  _visiblePracticalDecorLights[i] = rendererInfo?.visiblePracticalDecorLights ?? 0;
+  _frustumPracticalDecorLights[i] = rendererInfo?.frustumPracticalDecorLights ?? 0;
+  _visiblePracticalWindowLights[i] = rendererInfo?.visiblePracticalWindowLights ?? 0;
+  _frustumPracticalWindowLights[i] = rendererInfo?.frustumPracticalWindowLights ?? 0;
+  if (rendererInfo) {
+    writeFpPracticalDecorLightKindFieldsToRing(
+      i,
+      fpPracticalDecorLightKindFieldsFromCounter({
+        tv: {
+          visible: rendererInfo.visiblePracticalDecorTvLights,
+          frustum: rendererInfo.frustumPracticalDecorTvLights,
+        },
+        computer: {
+          visible: rendererInfo.visiblePracticalDecorComputerLights,
+          frustum: rendererInfo.frustumPracticalDecorComputerLights,
+        },
+        ceiling: {
+          visible: rendererInfo.visiblePracticalDecorCeilingLights,
+          frustum: rendererInfo.frustumPracticalDecorCeilingLights,
+        },
+        chandelier: {
+          visible: rendererInfo.visiblePracticalDecorChandelierLights,
+          frustum: rendererInfo.frustumPracticalDecorChandelierLights,
+        },
+        standing: {
+          visible: rendererInfo.visiblePracticalDecorStandingLights,
+          frustum: rendererInfo.frustumPracticalDecorStandingLights,
+        },
+        growOp: {
+          visible: rendererInfo.visiblePracticalDecorGrowOpLights,
+          frustum: rendererInfo.frustumPracticalDecorGrowOpLights,
+        },
+      }),
+      _practicalDecorKindRing,
+    );
+  } else {
+    writeFpPracticalDecorLightKindFieldsToRing(
+      i,
+      emptyFpPracticalDecorLightKindFields(),
+      _practicalDecorKindRing,
+    );
+  }
   _drawCalls[i] = rendererInfo?.drawCalls ?? 0;
   _triangles[i] = rendererInfo?.triangles ?? 0;
   _sceneGraphVisibleTriangles[i] = rendererInfo?.sceneGraphVisibleTriangles ?? 0;
@@ -370,6 +476,11 @@ export function resetFpPerfStore(): void {
   _frustumExteriorGlassMeshes.fill(0);
   _frustumTransparentMeshes.fill(0);
   _frustumTransparentExteriorGlassMeshes.fill(0);
+  _visiblePracticalDecorLights.fill(0);
+  _frustumPracticalDecorLights.fill(0);
+  _visiblePracticalWindowLights.fill(0);
+  _frustumPracticalWindowLights.fill(0);
+  resetFpPracticalDecorLightKindRingBuffers(_practicalDecorKindRing);
   _drawCalls.fill(0);
   _triangles.fill(0);
   _sceneGraphVisibleTriangles.fill(0);
@@ -400,6 +511,13 @@ export function resetFpPerfStore(): void {
   _lastFrustumExteriorGlassMeshes = 0;
   _lastFrustumTransparentMeshes = 0;
   _lastFrustumTransparentExteriorGlassMeshes = 0;
+  _lastVisiblePracticalDecorLights = 0;
+  _lastFrustumPracticalDecorLights = 0;
+  _lastVisiblePracticalWindowLights = 0;
+  _lastFrustumPracticalWindowLights = 0;
+  _lastPracticalDecorLightBreakdownVis = "";
+  _lastPracticalDecorLightBreakdownFr = "";
+  _lastPracticalDecorKindFields = emptyFpPracticalDecorLightKindFields();
   _heavyMeshRecords.length = 0;
 }
 
@@ -496,7 +614,11 @@ export type FpPerfStats = {
     frustumExteriorGlassMeshes: number;
     frustumTransparentMeshes: number;
     frustumTransparentExteriorGlassMeshes: number;
-  };
+    visiblePracticalDecorLights: number;
+    frustumPracticalDecorLights: number;
+    visiblePracticalWindowLights: number;
+    frustumPracticalWindowLights: number;
+  } & FpPracticalDecorLightKindFields;
   histogram: FpPerfHistBucket[];
 };
 
@@ -567,6 +689,11 @@ export function computeFpPerfStats(
   let sumFrustumExteriorGlassMeshes = 0;
   let sumFrustumTransparentMeshes = 0;
   let sumFrustumTransparentExteriorGlassMeshes = 0;
+  let sumVisiblePracticalDecorLights = 0;
+  let sumFrustumPracticalDecorLights = 0;
+  let sumVisiblePracticalWindowLights = 0;
+  let sumFrustumPracticalWindowLights = 0;
+  const sumPracticalDecorKindFields = emptyFpPracticalDecorLightKindFields();
 
   const hist = new Int32Array(6);
 
@@ -607,6 +734,14 @@ export function computeFpPerfStats(
     sumFrustumExteriorGlassMeshes += _frustumExteriorGlassMeshes[i]!;
     sumFrustumTransparentMeshes += _frustumTransparentMeshes[i]!;
     sumFrustumTransparentExteriorGlassMeshes += _frustumTransparentExteriorGlassMeshes[i]!;
+    sumVisiblePracticalDecorLights += _visiblePracticalDecorLights[i]!;
+    sumFrustumPracticalDecorLights += _frustumPracticalDecorLights[i]!;
+    sumVisiblePracticalWindowLights += _visiblePracticalWindowLights[i]!;
+    sumFrustumPracticalWindowLights += _frustumPracticalWindowLights[i]!;
+    addFpPracticalDecorLightKindFields(
+      sumPracticalDecorKindFields,
+      readFpPracticalDecorLightKindFieldsFromRing(i, _practicalDecorKindRing),
+    );
     const tg = _renderThreeGpu[i]!;
     if (tg >= 0) {
       sumRenderThreeGpu += tg;
@@ -676,6 +811,14 @@ export function computeFpPerfStats(
   const avgFrustumExteriorGlassMeshes = sumFrustumExteriorGlassMeshes / n;
   const avgFrustumTransparentMeshes = sumFrustumTransparentMeshes / n;
   const avgFrustumTransparentExteriorGlassMeshes = sumFrustumTransparentExteriorGlassMeshes / n;
+  const avgVisiblePracticalDecorLights = sumVisiblePracticalDecorLights / n;
+  const avgFrustumPracticalDecorLights = sumFrustumPracticalDecorLights / n;
+  const avgVisiblePracticalWindowLights = sumVisiblePracticalWindowLights / n;
+  const avgFrustumPracticalWindowLights = sumFrustumPracticalWindowLights / n;
+  const avgPracticalDecorKindFields = scaleFpPracticalDecorLightKindFields(
+    sumPracticalDecorKindFields,
+    n,
+  );
   const avgOther = Math.max(0, avgTotal - avgPhysics - avgElev - avgPresent - avgRender);
 
   const histogram: FpPerfHistBucket[] = HIST_LABELS.map((label, b) => ({
@@ -739,6 +882,11 @@ export function computeFpPerfStats(
       frustumTransparentMeshes: Math.round(avgFrustumTransparentMeshes * 10) / 10,
       frustumTransparentExteriorGlassMeshes:
         Math.round(avgFrustumTransparentExteriorGlassMeshes * 10) / 10,
+      visiblePracticalDecorLights: Math.round(avgVisiblePracticalDecorLights * 10) / 10,
+      frustumPracticalDecorLights: Math.round(avgFrustumPracticalDecorLights * 10) / 10,
+      visiblePracticalWindowLights: Math.round(avgVisiblePracticalWindowLights * 10) / 10,
+      frustumPracticalWindowLights: Math.round(avgFrustumPracticalWindowLights * 10) / 10,
+      ...avgPracticalDecorKindFields,
     },
     histogram,
   };
@@ -787,9 +935,13 @@ export type FpPerfTimelineSample = {
   frustumExteriorGlassMeshes: number;
   frustumTransparentMeshes: number;
   frustumTransparentExteriorGlassMeshes: number;
+  visiblePracticalDecorLights: number;
+  frustumPracticalDecorLights: number;
+  visiblePracticalWindowLights: number;
+  frustumPracticalWindowLights: number;
   /** Camera yaw (rad); `null` if not recorded this frame. */
   cameraYawRad: number | null;
-};
+} & FpPracticalDecorLightKindFields;
 
 function collectIndicesOldestFirst(nowMs: number, windowSec: number): number[] {
   const count = Math.min(_wrote, RING);
@@ -846,6 +998,11 @@ function timelineSampleFromRingIndex(i: number): FpPerfTimelineSample {
     frustumExteriorGlassMeshes: _frustumExteriorGlassMeshes[i]!,
     frustumTransparentMeshes: _frustumTransparentMeshes[i]!,
     frustumTransparentExteriorGlassMeshes: _frustumTransparentExteriorGlassMeshes[i]!,
+    visiblePracticalDecorLights: _visiblePracticalDecorLights[i]!,
+    frustumPracticalDecorLights: _frustumPracticalDecorLights[i]!,
+    visiblePracticalWindowLights: _visiblePracticalWindowLights[i]!,
+    frustumPracticalWindowLights: _frustumPracticalWindowLights[i]!,
+    ...readFpPracticalDecorLightKindFieldsFromRing(i, _practicalDecorKindRing),
     cameraYawRad: Number.isFinite(yaw) ? yaw : null,
   };
 }
@@ -907,6 +1064,11 @@ export function computeFpPerfStatsFromTimeline(
   let sumFrustumExteriorGlassMeshes = 0;
   let sumFrustumTransparentMeshes = 0;
   let sumFrustumTransparentExteriorGlassMeshes = 0;
+  let sumVisiblePracticalDecorLights = 0;
+  let sumFrustumPracticalDecorLights = 0;
+  let sumVisiblePracticalWindowLights = 0;
+  let sumFrustumPracticalWindowLights = 0;
+  const sumPracticalDecorKindFields = emptyFpPracticalDecorLightKindFields();
 
   const hist = new Int32Array(6);
 
@@ -947,6 +1109,11 @@ export function computeFpPerfStatsFromTimeline(
     sumFrustumExteriorGlassMeshes += row.frustumExteriorGlassMeshes;
     sumFrustumTransparentMeshes += row.frustumTransparentMeshes;
     sumFrustumTransparentExteriorGlassMeshes += row.frustumTransparentExteriorGlassMeshes;
+    sumVisiblePracticalDecorLights += row.visiblePracticalDecorLights;
+    sumFrustumPracticalDecorLights += row.frustumPracticalDecorLights;
+    sumVisiblePracticalWindowLights += row.visiblePracticalWindowLights;
+    sumFrustumPracticalWindowLights += row.frustumPracticalWindowLights;
+    addFpPracticalDecorLightKindFields(sumPracticalDecorKindFields, row);
     const tg = row.renderThreeGpuMs;
     if (tg != null && tg >= 0) {
       sumRenderThreeGpu += tg;
@@ -1011,6 +1178,14 @@ export function computeFpPerfStatsFromTimeline(
   const avgFrustumExteriorGlassMeshes = sumFrustumExteriorGlassMeshes / n;
   const avgFrustumTransparentMeshes = sumFrustumTransparentMeshes / n;
   const avgFrustumTransparentExteriorGlassMeshes = sumFrustumTransparentExteriorGlassMeshes / n;
+  const avgVisiblePracticalDecorLights = sumVisiblePracticalDecorLights / n;
+  const avgFrustumPracticalDecorLights = sumFrustumPracticalDecorLights / n;
+  const avgVisiblePracticalWindowLights = sumVisiblePracticalWindowLights / n;
+  const avgFrustumPracticalWindowLights = sumFrustumPracticalWindowLights / n;
+  const avgPracticalDecorKindFields = scaleFpPracticalDecorLightKindFields(
+    sumPracticalDecorKindFields,
+    n,
+  );
   const avgOther = Math.max(0, avgTotal - avgPhysics - avgElev - avgPresent - avgRender);
 
   const histogram: FpPerfHistBucket[] = HIST_LABELS.map((label, b) => ({
@@ -1074,6 +1249,11 @@ export function computeFpPerfStatsFromTimeline(
       frustumTransparentMeshes: Math.round(avgFrustumTransparentMeshes * 10) / 10,
       frustumTransparentExteriorGlassMeshes:
         Math.round(avgFrustumTransparentExteriorGlassMeshes * 10) / 10,
+      visiblePracticalDecorLights: Math.round(avgVisiblePracticalDecorLights * 10) / 10,
+      frustumPracticalDecorLights: Math.round(avgFrustumPracticalDecorLights * 10) / 10,
+      visiblePracticalWindowLights: Math.round(avgVisiblePracticalWindowLights * 10) / 10,
+      frustumPracticalWindowLights: Math.round(avgFrustumPracticalWindowLights * 10) / 10,
+      ...avgPracticalDecorKindFields,
     },
     histogram,
   };
@@ -1107,6 +1287,13 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
       frustumExteriorGlassMeshes: 0,
       frustumTransparentMeshes: 0,
       frustumTransparentExteriorGlassMeshes: 0,
+      visiblePracticalDecorLights: 0,
+      frustumPracticalDecorLights: 0,
+      visiblePracticalWindowLights: 0,
+      frustumPracticalWindowLights: 0,
+      practicalDecorLightBreakdownVis: "(none)",
+      practicalDecorLightBreakdownFr: "(none)",
+      ...emptyFpPracticalDecorLightKindFields(),
     };
   }
   let drawCalls = 0;
@@ -1133,6 +1320,11 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
   let frustumExteriorGlassMeshes = 0;
   let frustumTransparentMeshes = 0;
   let frustumTransparentExteriorGlassMeshes = 0;
+  let visiblePracticalDecorLights = 0;
+  let frustumPracticalDecorLights = 0;
+  let visiblePracticalWindowLights = 0;
+  let frustumPracticalWindowLights = 0;
+  const sumPracticalDecorKindFields = emptyFpPracticalDecorLightKindFields();
   for (const s of samples) {
     drawCalls += s.drawCalls;
     triangles += s.triangles;
@@ -1158,8 +1350,14 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumExteriorGlassMeshes += s.frustumExteriorGlassMeshes;
     frustumTransparentMeshes += s.frustumTransparentMeshes;
     frustumTransparentExteriorGlassMeshes += s.frustumTransparentExteriorGlassMeshes;
+    visiblePracticalDecorLights += s.visiblePracticalDecorLights;
+    frustumPracticalDecorLights += s.frustumPracticalDecorLights;
+    visiblePracticalWindowLights += s.visiblePracticalWindowLights;
+    frustumPracticalWindowLights += s.frustumPracticalWindowLights;
+    addFpPracticalDecorLightKindFields(sumPracticalDecorKindFields, s);
   }
   const r1 = (sum: number) => Math.round((sum / n) * 10) / 10;
+  const avgKindFields = scaleFpPracticalDecorLightKindFields(sumPracticalDecorKindFields, n);
   return {
     drawCalls: Math.round(drawCalls / n),
     triangles: Math.round(triangles / n),
@@ -1185,6 +1383,13 @@ function timelineSamplesToAverageRendererInfo(samples: readonly FpPerfTimelineSa
     frustumExteriorGlassMeshes: r1(frustumExteriorGlassMeshes),
     frustumTransparentMeshes: r1(frustumTransparentMeshes),
     frustumTransparentExteriorGlassMeshes: r1(frustumTransparentExteriorGlassMeshes),
+    visiblePracticalDecorLights: r1(visiblePracticalDecorLights),
+    frustumPracticalDecorLights: r1(frustumPracticalDecorLights),
+    visiblePracticalWindowLights: r1(visiblePracticalWindowLights),
+    frustumPracticalWindowLights: r1(frustumPracticalWindowLights),
+    practicalDecorLightBreakdownVis: formatFpPracticalDecorLightKindAverages(avgKindFields, "visible"),
+    practicalDecorLightBreakdownFr: formatFpPracticalDecorLightKindAverages(avgKindFields, "frustum"),
+    ...avgKindFields,
   };
 }
 
@@ -1193,7 +1398,7 @@ export function exportFpPerfTimelineDump(samples: readonly FpPerfTimelineSample[
   if (samples.length === 0) return "(no samples)";
   const t0 = samples[0]!.tMs;
   const header =
-    "tMs\trelMs\ttotalMs\trenderMs\trenderThreeMs\tphysicsMs\tdrawCalls\tkTri\tvisUI\tfrUI\tfrProps\tuiShell\tuiAnon\tuiGlass\ttrGlass\tfrTrans\tyawDeg";
+    "tMs\trelMs\ttotalMs\trenderMs\trenderThreeMs\tphysicsMs\tdrawCalls\tkTri\tvisUI\tfrUI\tfrProps\tfrDecorLights\tfrTv\tfrComputer\tfrCeiling\tfrChandelier\tfrStanding\tfrGrowOp\tfrWindowLights\tuiShell\tuiAnon\tuiGlass\ttrGlass\tfrTrans\tyawDeg";
   const lines = samples.map((s) => {
     const relMs = Math.round((s.tMs - t0) * 10) / 10;
     const yawDeg =
@@ -1210,6 +1415,14 @@ export function exportFpPerfTimelineDump(samples: readonly FpPerfTimelineSample[
       Math.round(s.visibleUnitInteriorMeshes),
       Math.round(s.frustumUnitInteriorMeshes),
       Math.round(s.frustumApartmentPropMeshes),
+      Math.round(s.frustumPracticalDecorLights),
+      Math.round(s.frustumPracticalDecorTvLights),
+      Math.round(s.frustumPracticalDecorComputerLights),
+      Math.round(s.frustumPracticalDecorCeilingLights),
+      Math.round(s.frustumPracticalDecorChandelierLights),
+      Math.round(s.frustumPracticalDecorStandingLights),
+      Math.round(s.frustumPracticalDecorGrowOpLights),
+      Math.round(s.frustumPracticalWindowLights),
       Math.round(s.visibleResidentialShellMeshes),
       Math.round(s.visibleAnonymousInteriorMeshes),
       Math.round(s.visibleExteriorGlassMeshes),
@@ -1301,7 +1514,11 @@ function formatHeavyMeshPeakLines(nowMs: number, windowSec: number): string[] {
 function formatFpPerfReportMarkdown(
   s: FpPerfStats,
   ri: FpRendererInfo,
-  opts?: { headerCountsAreTimelineAverage?: boolean; reportNowMs?: number },
+  opts?: {
+    headerCountsAreTimelineAverage?: boolean;
+    reportNowMs?: number;
+    timelineSamples?: readonly FpPerfTimelineSample[];
+  },
 ): string {
   const { frameMs, sections, sceneCounts, histogram } = s;
   const hdrNote = opts?.headerCountsAreTimelineAverage ? " (avg)" : "";
@@ -1330,8 +1547,10 @@ function formatFpPerfReportMarkdown(
     ...(ri.sceneGraphBreakdown.length > 0
       ? [`Scene graph breakdown${hdrNote}: ${ri.sceneGraphBreakdown}`]
       : []),
-    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  decorShadows=${ri.visibleApartmentDecorFloorShadowMeshes}  transparent=${ri.visibleTransparentMeshes}`,
-    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  decorShadows=${ri.frustumApartmentDecorFloorShadowMeshes}  transparent=${ri.frustumTransparentMeshes}`,
+    `Scene${hdrNote}   vis: plates=${ri.visibleFloorPlates}  unitInterior=${ri.visibleUnitInteriorMeshes}  props=${ri.visibleApartmentPropMeshes}  decorShadows=${ri.visibleApartmentDecorFloorShadowMeshes}  decorLights=${ri.visiblePracticalDecorLights}  windowLights=${ri.visiblePracticalWindowLights}  transparent=${ri.visibleTransparentMeshes}`,
+    `        fr${hdrNote}:  plates=${ri.frustumFloorPlates}  unitInterior=${ri.frustumUnitInteriorMeshes}  props=${ri.frustumApartmentPropMeshes}  decorShadows=${ri.frustumApartmentDecorFloorShadowMeshes}  decorLights=${ri.frustumPracticalDecorLights}  windowLights=${ri.frustumPracticalWindowLights}  transparent=${ri.frustumTransparentMeshes}`,
+    `Decor kinds${hdrNote} vis: ${ri.practicalDecorLightBreakdownVis}  (active only: intensity > 0)`,
+    `Decor kinds${hdrNote} fr:  ${ri.practicalDecorLightBreakdownFr}`,
     "",
     `FPS   ~${s.fps} (from completed frame cadence)  (${frameMs.min}ms best / ${frameMs.max}ms worst)`,
     `CPU   ~${s.cpuFrameThroughputFps} (from avg frame cpu)`,
@@ -1359,6 +1578,14 @@ function formatFpPerfReportMarkdown(
     `  unitInterior   vis ${sceneCounts.visibleUnitInteriorMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumUnitInteriorMeshes.toFixed(1).padStart(6)}`,
     `  apartmentProps vis ${sceneCounts.visibleApartmentPropMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumApartmentPropMeshes.toFixed(1).padStart(6)}`,
     `  decorShadows vis ${sceneCounts.visibleApartmentDecorFloorShadowMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumApartmentDecorFloorShadowMeshes.toFixed(1).padStart(6)}`,
+    `  decorLights  vis ${sceneCounts.visiblePracticalDecorLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorLights.toFixed(1).padStart(6)}`,
+    `  windowLights vis ${sceneCounts.visiblePracticalWindowLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalWindowLights.toFixed(1).padStart(6)}`,
+    `  decorTv       vis ${sceneCounts.visiblePracticalDecorTvLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorTvLights.toFixed(1).padStart(6)}`,
+    `  decorComputer vis ${sceneCounts.visiblePracticalDecorComputerLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorComputerLights.toFixed(1).padStart(6)}`,
+    `  decorCeiling  vis ${sceneCounts.visiblePracticalDecorCeilingLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorCeilingLights.toFixed(1).padStart(6)}`,
+    `  decorChandelier vis ${sceneCounts.visiblePracticalDecorChandelierLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorChandelierLights.toFixed(1).padStart(6)}`,
+    `  decorStanding vis ${sceneCounts.visiblePracticalDecorStandingLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorStandingLights.toFixed(1).padStart(6)}`,
+    `  decorGrowOp   vis ${sceneCounts.visiblePracticalDecorGrowOpLights.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumPracticalDecorGrowOpLights.toFixed(1).padStart(6)}`,
     `  transparent    vis ${sceneCounts.visibleTransparentMeshes.toFixed(1).padStart(6)}  fr ${sceneCounts.frustumTransparentMeshes.toFixed(1).padStart(6)}`,
     "",
     "Leak-debug breakdown (avg / frame):",
@@ -1376,6 +1603,9 @@ function formatFpPerfReportMarkdown(
     "",
     ...formatHeavyMeshPeakLines(opts?.reportNowMs ?? performance.now(), s.windowSec),
     "",
+    ...(opts?.timelineSamples && opts.timelineSamples.length > 0
+      ? [...formatFpPerfSpikeCorrelationReport(opts.timelineSamples).split("\n"), ""]
+      : []),
     `Generated: ${new Date().toISOString()}`,
   ];
   return lines.join("\n");
@@ -1384,7 +1614,11 @@ function formatFpPerfReportMarkdown(
 export function exportFpPerfReport(nowMs: number, windowSec: number): string {
   const s = computeFpPerfStats(nowMs, windowSec);
   if (!s) return "No profiler data available yet.";
-  return formatFpPerfReportMarkdown(s, getLastRendererInfo(), { reportNowMs: nowMs });
+  const timelineSamples = getFpPerfTimeline(nowMs, windowSec);
+  return formatFpPerfReportMarkdown(s, getLastRendererInfo(), {
+    reportNowMs: nowMs,
+    timelineSamples,
+  });
 }
 
 /** Frozen recording: summary derived from samples + tab-separated timeline dump. */
@@ -1398,6 +1632,7 @@ export function exportFpPerfRecordingReport(
   const summary = formatFpPerfReportMarkdown(s, ri, {
     headerCountsAreTimelineAverage: true,
     reportNowMs: samples[samples.length - 1]!.tMs,
+    timelineSamples: samples,
   });
   const dump = exportFpPerfTimelineDump(samples);
   return `${summary}\n\n=== Timeline (${samples.length} samples · ${nominalWindowSec}s window) ===\n${dump}\n`;

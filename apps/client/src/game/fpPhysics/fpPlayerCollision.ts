@@ -4,21 +4,25 @@ import {
   resolveFpCharacterCollisions,
   type DynamicBlockerSource,
 } from "@the-mammoth/world";
+import {
+  PLAYER_BODY_HEIGHT_CROUCH_M,
+  PLAYER_BODY_HEIGHT_STAND_M,
+  PLAYER_BODY_RADIUS_M,
+} from "@the-mammoth/game";
 import type { Vector3 } from "three";
 import { readFpUseCharacterController } from "./fpCollisionPolicy.js";
 
-export const FP_PLAYER_COLLISION_RADIUS_M = 0.22;
-export const FP_PLAYER_COLLISION_HEIGHT_STAND_M = 1.78;
-export const FP_PLAYER_COLLISION_HEIGHT_CROUCH_M = 1.2;
-
-const COLLISION_EPS = 0.0015;
-const STEP_IGNORE_BELOW_FEET_M = 0.2;
-const MAX_HORIZONTAL_COLLISION_SUBSTEP_M = 0.18;
+export {
+  PLAYER_BODY_RADIUS_M as FP_PLAYER_COLLISION_RADIUS_M,
+  PLAYER_BODY_HEIGHT_STAND_M as FP_PLAYER_COLLISION_HEIGHT_STAND_M,
+  PLAYER_BODY_HEIGHT_CROUCH_M as FP_PLAYER_COLLISION_HEIGHT_CROUCH_M,
+};
 
 export type DynamicCollisionQueryPose = {
   bodyX: number;
   bodyFeetY: number;
   bodyZ: number;
+  bodyHeightM?: number;
 };
 
 export type DynamicCollisionAabbSource = {
@@ -32,8 +36,19 @@ export type DynamicCollisionAabbSource = {
   ): void;
 };
 
+const COLLISION_EPS = 0.0015;
+const STEP_IGNORE_BELOW_FEET_M = 0.2;
+const MAX_HORIZONTAL_COLLISION_SUBSTEP_M = 0.18;
+
 function bodyHeight(crouch: boolean): number {
-  return crouch ? FP_PLAYER_COLLISION_HEIGHT_CROUCH_M : FP_PLAYER_COLLISION_HEIGHT_STAND_M;
+  return crouch ? PLAYER_BODY_HEIGHT_CROUCH_M : PLAYER_BODY_HEIGHT_STAND_M;
+}
+
+function collisionQueryPose(
+  pos: { x: number; y: number; z: number },
+  bodyHeightM: number,
+): DynamicCollisionQueryPose {
+  return { bodyX: pos.x, bodyFeetY: pos.y, bodyZ: pos.z, bodyHeightM };
 }
 
 function verticalOverlap(bodyFeetY: number, height: number, b: CollisionAabb): boolean {
@@ -121,7 +136,7 @@ function depenetrateHorizontalOverlaps(
   staticIndex: CollisionSpatialIndex,
   dynamicSource: DynamicCollisionAabbSource | undefined,
 ): void {
-  const radius = FP_PLAYER_COLLISION_RADIUS_M;
+  const radius = PLAYER_BODY_RADIUS_M;
   const maxIterations = 8;
   let overlappedAfterPass = false;
 
@@ -132,11 +147,7 @@ function depenetrateHorizontalOverlaps(
     const x1 = pos.x + radius + COLLISION_EPS;
     const z0 = pos.z - radius - COLLISION_EPS;
     const z1 = pos.z + radius + COLLISION_EPS;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
-      bodyX: pos.x,
-      bodyFeetY: pos.y,
-      bodyZ: pos.z,
-    }, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, collisionQueryPose(pos, height), (b) => {
       if (!verticalOverlap(pos.y, height, b)) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
       const bodyMinX = pos.x - radius;
@@ -175,11 +186,7 @@ function depenetrateHorizontalOverlaps(
   const z0 = pos.z - radius - COLLISION_EPS;
   const z1 = pos.z + radius + COLLISION_EPS;
   let stillOverlapping = false;
-  visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
-    bodyX: pos.x,
-    bodyFeetY: pos.y,
-    bodyZ: pos.z,
-  }, (b) => {
+  visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, collisionQueryPose(pos, height), (b) => {
     if (!verticalOverlap(pos.y, height, b)) return;
     if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
     const bodyMinX = pos.x - radius;
@@ -209,7 +216,7 @@ function resolveHorizontalCollisionStep(
   staticIndex: CollisionSpatialIndex,
   dynamicSource: DynamicCollisionAabbSource | undefined,
 ): void {
-  const radius = FP_PLAYER_COLLISION_RADIUS_M;
+  const radius = PLAYER_BODY_RADIUS_M;
 
   const resolveX = () => {
     const x0 = Math.min(prevX, pos.x) - radius - COLLISION_EPS;
@@ -217,11 +224,10 @@ function resolveHorizontalCollisionStep(
     const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
     const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedX = pos.x;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
-      bodyX: resolvedX,
-      bodyFeetY: pos.y,
-      bodyZ: pos.z,
-    }, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, collisionQueryPose(
+      { x: resolvedX, y: pos.y, z: pos.z },
+      height,
+    ), (b) => {
       if (!sweptVerticalOverlap(prevY, pos.y, height, b)) return;
       if (z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
@@ -248,11 +254,10 @@ function resolveHorizontalCollisionStep(
     const z0 = Math.min(prevZ, pos.z) - radius - COLLISION_EPS;
     const z1 = Math.max(prevZ, pos.z) + radius + COLLISION_EPS;
     let resolvedZ = pos.z;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
-      bodyX: pos.x,
-      bodyFeetY: pos.y,
-      bodyZ: resolvedZ,
-    }, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, collisionQueryPose(
+      { x: pos.x, y: pos.y, z: resolvedZ },
+      height,
+    ), (b) => {
       if (!sweptVerticalOverlap(prevY, pos.y, height, b)) return;
       if (x1 <= b.min[0] || x0 >= b.max[0]) return;
       if (shouldIgnoreHorizontalBlock(pos.y, stepUpMargin, b)) return;
@@ -304,7 +309,7 @@ export function resolvePlayerCollisions(
       prevPos: pv,
       vel: v,
       bodyHeight: height,
-      radius: FP_PLAYER_COLLISION_RADIUS_M,
+      radius: PLAYER_BODY_RADIUS_M,
       stepUpMargin,
       stepUpProbeM: Math.min(0.42, stepUpMargin * 0.5),
       staticIndex,
@@ -358,18 +363,14 @@ export function resolvePlayerCollisions(
   );
 
   const resolveCeiling = () => {
-    const radius = FP_PLAYER_COLLISION_RADIUS_M;
+    const radius = PLAYER_BODY_RADIUS_M;
     const x0 = pos.x - radius - COLLISION_EPS;
     const x1 = pos.x + radius + COLLISION_EPS;
     const z0 = pos.z - radius - COLLISION_EPS;
     const z1 = pos.z + radius + COLLISION_EPS;
     const head = pos.y + height;
     let bestFeet = pos.y;
-    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, {
-      bodyX: pos.x,
-      bodyFeetY: pos.y,
-      bodyZ: pos.z,
-    }, (b) => {
+    visitCandidateAabbs(staticIndex, dynamicSource, x0, x1, z0, z1, collisionQueryPose(pos, height), (b) => {
       if (x1 <= b.min[0] || x0 >= b.max[0] || z1 <= b.min[2] || z0 >= b.max[2]) return;
       if (head <= b.min[1] + COLLISION_EPS) return;
       if (pos.y >= b.min[1]) return;

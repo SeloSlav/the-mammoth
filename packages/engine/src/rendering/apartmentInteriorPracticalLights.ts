@@ -471,7 +471,7 @@ function addApartmentPracticalLightSpecToMount(
   root.add(point);
 }
 
-function createApartmentPracticalLightsMount(
+function createApartmentPracticalLightsMountInternal(
   parent: THREE.Object3D,
 ): ApartmentPracticalLightsMount {
   const root = new THREE.Group();
@@ -484,6 +484,28 @@ function createApartmentPracticalLightsMount(
       root.clear();
     },
   };
+}
+
+export function createApartmentPracticalLightsMount(
+  parent: THREE.Object3D,
+): ApartmentPracticalLightsMount {
+  return createApartmentPracticalLightsMountInternal(parent);
+}
+
+export function appendApartmentPracticalLightSpecsToMount(
+  mount: ApartmentPracticalLightsMount,
+  parent: THREE.Object3D,
+  specs: readonly ApartmentPracticalLightSpec[],
+  startIndex: number,
+  maxSpecs: number,
+): { nextIndex: number; done: boolean } {
+  return appendApartmentPracticalLightSpecs(
+    mount,
+    parent,
+    specs,
+    startIndex,
+    maxSpecs,
+  );
 }
 
 function appendApartmentPracticalLightSpecs(
@@ -505,7 +527,7 @@ export function mountApartmentPracticalLights(
   parent: THREE.Object3D,
   specs: readonly ApartmentPracticalLightSpec[],
 ): ApartmentPracticalLightsMount {
-  const mount = createApartmentPracticalLightsMount(parent);
+  const mount = createApartmentPracticalLightsMountInternal(parent);
   appendApartmentPracticalLightSpecs(mount, parent, specs, 0, specs.length);
   return mount;
 }

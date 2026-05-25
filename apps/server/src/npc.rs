@@ -8,7 +8,7 @@ use crate::combat_stub::{
     melee_headshot_from_aim_ray, ray_aabb_intersect_enter, vertical_overlap,
     victim_hit_trace_max_y, HEADSHOT_DAMAGE_MULTIPLIER, MELEE_ARC_DOT_MIN,
     MELEE_HIT_MAX_Y_OFFSET_M, MELEE_HIT_MIN_Y_OFFSET_M, MELEE_HIT_RADIUS_M, MELEE_REACH_M,
-    RAY_AABB_T_ENTER_EPS,
+    PLAYER_BODY_RADIUS_M, RAY_AABB_T_ENTER_EPS,
 };
 use crate::movement::player_input;
 use crate::movement::BIT_CROUCH;
@@ -25,7 +25,9 @@ pub const NPC_LOCOMOTION_WALK: u8 = 1;
 pub const NPC_LOCOMOTION_RUN: u8 = 2;
 
 pub const BABUSHKA_MAX_HEALTH: f32 = 120.0;
+/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts`.
 pub const BABUSHKA_BODY_RADIUS_M: f32 = 0.28;
+/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts`.
 pub const BABUSHKA_BODY_HEIGHT_M: f32 = 1.55;
 pub const BABUSHKA_AGGRO_RANGE_M: f32 = 6.5;
 pub const BABUSHKA_MELEE_RANGE_M: f32 = 1.35;
@@ -42,6 +44,19 @@ const NPC_HEAD_TRACE_INFLATE_M: f32 = 0.06;
 const BABUSHKA_PEER_SEPARATION_RADIUS_M: f32 = 1.55;
 const BABUSHKA_PEER_SEPARATION_STRENGTH: f32 = 3.4;
 const BABUSHKA_PEER_OVERLAP_RESOLVE_PASSES: usize = 2;
+/// Keep aligned with `packages/game/src/collision/bodyCapsules.ts` `CAPSULE_PAIR_SURFACE_GAP_M`.
+const CAPSULE_PAIR_SURFACE_GAP_M: f32 = 0.10;
+const BABUSHKA_PLAYER_SEPARATION_RADIUS_M: f32 = 1.55;
+const BABUSHKA_PLAYER_SEPARATION_STRENGTH: f32 = 3.4;
+const BABUSHKA_PLAYER_OVERLAP_RESOLVE_PASSES: usize = 2;
+
+#[derive(Clone)]
+struct PlayerBodySnap {
+    x: f32,
+    y: f32,
+    z: f32,
+    body_height: f32,
+}
 
 #[derive(Clone)]
 struct BabushkaPeerSnap {
@@ -426,7 +441,35 @@ pub fn npc_scheduled_tick_dt_sec() -> f32 {
 
 /// Minimum planar center distance between two babushka body capsules (+ small gap).
 pub fn babushka_min_peer_center_distance_m() -> f32 {
-    BABUSHKA_BODY_RADIUS_M * 2.0 + 0.10
+    BABUSHKA_BODY_RADIUS_M * 2.0 + CAPSULE_PAIR_SURFACE_GAP_M
+}
+
+/// Minimum planar center distance between babushka and player capsules (+ small gap).
+pub fn babushka_min_player_center_distance_m() -> f32 {
+    BABUSHKA_BODY_RADIUS_M + PLAYER_BODY_RADIUS_M + CAPSULE_PAIR_SURFACE_GAP_M
+}
+
+fn living_player_body_snapshot(ctx: &ReducerContext) -> Vec<PlayerBodySnap> {
+    let mut out = Vec::new();
+    for pose in ctx.db.player_pose().iter() {
+        if crate::player_vitals::is_player_dead(ctx, pose.identity) {
+            continue;
+        }
+        let body_height = ctx
+            .db
+            .player_input()
+            .identity()
+            .find(&pose.identity)
+            .map(|row| body_height_from_crouch_bit(row.bits))
+            .unwrap_or(crate::combat_stub::PLAYER_BODY_HEIGHT_STAND_M);
+        out.push(PlayerBodySnap {
+            x: pose.x,
+            y: pose.y,
+            z: pose.z,
+            body_height,
+        });
+    }
+    out
 }
 
 /// Authoritative babushka AI step — shared by the schedule and combat-sim locomotion hook.
@@ -434,13 +477,22 @@ pub fn step_all_world_npcs(ctx: &ReducerContext, dt_sec: f32) {
     let now_us = ctx.timestamp.to_micros_since_unix_epoch();
     let mut npcs: Vec<WorldNpc> = ctx.db.world_npc().iter().collect();
     let peer_snapshot: Vec<BabushkaPeerSnap> = npcs.iter().map(babushka_peer_snap).collect();
+    let player_snapshot = living_player_body_snapshot(ctx);
     for npc in npcs.iter_mut() {
         if npc.state == NPC_STATE_DEAD {
             continue;
         }
-        step_one_world_npc(ctx, npc, dt_sec, now_us, &peer_snapshot);
+        step_one_world_npc(
+            ctx,
+            npc,
+            dt_sec,
+            now_us,
+            &peer_snapshot,
+            &player_snapshot,
+        );
     }
     babushka_resolve_peer_overlaps(&mut npcs);
+    babushka_resolve_player_overlaps(&mut npcs, &player_snapshot);
     for npc in npcs.iter_mut() {
         if npc.state != NPC_STATE_DEAD && npc.session_key.starts_with("combat_sim:") {
             clamp_babushka_to_combat_arena(ctx, npc);
@@ -586,12 +638,83 @@ fn babushka_resolve_peer_overlaps(npcs: &mut [WorldNpc]) {
     }
 }
 
+fn babushka_player_separation_steering(npc: &WorldNpc, players: &[PlayerBodySnap]) -> (f32, f32) {
+    if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let mut sep_x = 0.0;
+    let mut sep_z = 0.0;
+    let radius = BABUSHKA_PLAYER_SEPARATION_RADIUS_M;
+    for player in players {
+        if !vertical_overlap(npc.y, BABUSHKA_BODY_HEIGHT_M, player.y, player.body_height) {
+            continue;
+        }
+        let dx = npc.x - player.x;
+        let dz = npc.z - player.z;
+        let dist_sq = dx * dx + dz * dz;
+        if dist_sq < 1e-8 {
+            let angle = (npc.npc_id.wrapping_mul(0x6c07_9624) as f32) * 0.001;
+            sep_x += angle.cos();
+            sep_z += angle.sin();
+            continue;
+        }
+        let dist = dist_sq.sqrt();
+        if dist >= radius {
+            continue;
+        }
+        let push = (radius - dist) / radius;
+        sep_x += (dx / dist) * push;
+        sep_z += (dz / dist) * push;
+    }
+    (
+        sep_x * BABUSHKA_PLAYER_SEPARATION_STRENGTH,
+        sep_z * BABUSHKA_PLAYER_SEPARATION_STRENGTH,
+    )
+}
+
+fn babushka_resolve_player_overlaps(npcs: &mut [WorldNpc], players: &[PlayerBodySnap]) {
+    if players.is_empty() {
+        return;
+    }
+    let min_dist = babushka_min_player_center_distance_m();
+    let min_dist_sq = min_dist * min_dist;
+    for _ in 0..BABUSHKA_PLAYER_OVERLAP_RESOLVE_PASSES {
+        for npc in npcs.iter_mut() {
+            if npc.state == NPC_STATE_DEAD || npc.health <= 0.0 {
+                continue;
+            }
+            for player in players {
+                if !vertical_overlap(npc.y, BABUSHKA_BODY_HEIGHT_M, player.y, player.body_height) {
+                    continue;
+                }
+                let dx = npc.x - player.x;
+                let dz = npc.z - player.z;
+                let dist_sq = dx * dx + dz * dz;
+                if dist_sq >= min_dist_sq {
+                    continue;
+                }
+                let (ux, uz, dist) = if dist_sq < 1e-8 {
+                    let angle = (npc.npc_id.wrapping_mul(0x85eb_ca6b) as f32) * 0.001;
+                    (angle.cos(), angle.sin(), 1e-4_f32)
+                } else {
+                    let dist = dist_sq.sqrt();
+                    (dx / dist, dz / dist, dist)
+                };
+                let push = min_dist - dist;
+                npc.x += ux * push;
+                npc.z += uz * push;
+            }
+        }
+    }
+}
+
 fn step_one_world_npc(
     ctx: &ReducerContext,
     npc: &mut WorldNpc,
     dt_sec: f32,
     now_us: i64,
     peers: &[BabushkaPeerSnap],
+    players: &[PlayerBodySnap],
 ) {
     let combat_sim = npc.session_key.starts_with("combat_sim:");
     let Some((target_x, target_z, target_y, target_identity)) = ai_target_for_npc(ctx, npc) else {
@@ -624,10 +747,11 @@ fn step_one_world_npc(
         if dist > BABUSHKA_MELEE_RANGE_M {
             let run_speed = BABUSHKA_RUN_SPEED_MPS;
             let inv = 1.0 / dist.max(1e-4);
-            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (peer_sep_x, peer_sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (player_sep_x, player_sep_z) = babushka_player_separation_steering(npc, players);
             let (vx, vz) = babushka_cap_planar_speed(
-                planar_dx * inv * run_speed + sep_x,
-                planar_dz * inv * run_speed + sep_z,
+                planar_dx * inv * run_speed + peer_sep_x + player_sep_x,
+                planar_dz * inv * run_speed + peer_sep_z + player_sep_z,
                 run_speed,
             );
             babushka_apply_planar_motion(npc, vx, vz, dt_sec, true);
@@ -636,7 +760,10 @@ fn step_one_world_npc(
             }
             npc.yaw = planar_dx.atan2(planar_dz);
         } else {
-            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (peer_sep_x, peer_sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (player_sep_x, player_sep_z) = babushka_player_separation_steering(npc, players);
+            let sep_x = peer_sep_x + player_sep_x;
+            let sep_z = peer_sep_z + player_sep_z;
             let sep_mag_sq = sep_x * sep_x + sep_z * sep_z;
             if sep_mag_sq > 1e-6 {
                 let sep_mag = sep_mag_sq.sqrt();
@@ -668,10 +795,11 @@ fn step_one_world_npc(
         if wandering {
             let old_x = npc.x;
             let old_z = npc.z;
-            let (sep_x, sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (peer_sep_x, peer_sep_z) = babushka_peer_separation_steering(npc, peers);
+            let (player_sep_x, player_sep_z) = babushka_player_separation_steering(npc, players);
             let (vx, vz) = babushka_cap_planar_speed(
-                dir_x * BABUSHKA_WALK_SPEED_MPS + sep_x,
-                dir_z * BABUSHKA_WALK_SPEED_MPS + sep_z,
+                dir_x * BABUSHKA_WALK_SPEED_MPS + peer_sep_x + player_sep_x,
+                dir_z * BABUSHKA_WALK_SPEED_MPS + peer_sep_z + player_sep_z,
                 BABUSHKA_WALK_SPEED_MPS,
             );
             babushka_apply_planar_motion(npc, vx, vz, dt_sec, false);
@@ -875,6 +1003,25 @@ mod tests {
         let (sep_x, sep_z) = babushka_peer_separation_steering(&self_npc, &peers);
         assert!(sep_x < 0.0, "expected left push, got ({sep_x}, {sep_z})");
         assert!(sep_z.abs() < 0.2);
+    }
+
+    #[test]
+    fn babushka_player_overlap_resolve_pushes_npc_away_from_player() {
+        let mut npc = test_babushka_row(1, "combat_sim:test", 0.0, 0.0);
+        let players = [PlayerBodySnap {
+            x: 0.05,
+            y: 0.0,
+            z: 0.0,
+            body_height: PLAYER_BODY_HEIGHT_STAND_M,
+        }];
+        babushka_resolve_player_overlaps(std::slice::from_mut(&mut npc), &players);
+        let dx = npc.x - players[0].x;
+        let dz = npc.z - players[0].z;
+        let dist = (dx * dx + dz * dz).sqrt();
+        assert!(
+            dist + 1e-4 >= babushka_min_player_center_distance_m(),
+            "resolved dist {dist}"
+        );
     }
 
     #[test]

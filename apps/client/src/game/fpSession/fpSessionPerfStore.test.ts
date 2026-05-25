@@ -53,6 +53,24 @@ const dummyRi = {
   frustumExteriorGlassMeshes: 10,
   frustumTransparentMeshes: 7,
   frustumTransparentExteriorGlassMeshes: 11,
+  visiblePracticalDecorLights: 2,
+  frustumPracticalDecorLights: 1,
+  visiblePracticalWindowLights: 4,
+  frustumPracticalWindowLights: 3,
+  practicalDecorLightBreakdownVis: "tv:1 ceiling:1",
+  practicalDecorLightBreakdownFr: "tv:1",
+  visiblePracticalDecorTvLights: 1,
+  frustumPracticalDecorTvLights: 1,
+  visiblePracticalDecorComputerLights: 0,
+  frustumPracticalDecorComputerLights: 0,
+  visiblePracticalDecorCeilingLights: 1,
+  frustumPracticalDecorCeilingLights: 0,
+  visiblePracticalDecorChandelierLights: 0,
+  frustumPracticalDecorChandelierLights: 0,
+  visiblePracticalDecorStandingLights: 0,
+  frustumPracticalDecorStandingLights: 0,
+  visiblePracticalDecorGrowOpLights: 0,
+  frustumPracticalDecorGrowOpLights: 0,
 } as const;
 
 describe("fpSessionPerfStore", () => {
@@ -97,6 +115,24 @@ describe("fpSessionPerfStore", () => {
         frustumExteriorGlassMeshes: 6,
         frustumTransparentMeshes: 12,
         frustumTransparentExteriorGlassMeshes: 5,
+        visiblePracticalDecorLights: 8,
+        frustumPracticalDecorLights: 3,
+        visiblePracticalWindowLights: 6,
+        frustumPracticalWindowLights: 4,
+        practicalDecorLightBreakdownVis: "ceiling:8",
+        practicalDecorLightBreakdownFr: "ceiling:3",
+        visiblePracticalDecorTvLights: 0,
+        frustumPracticalDecorTvLights: 0,
+        visiblePracticalDecorComputerLights: 0,
+        frustumPracticalDecorComputerLights: 0,
+        visiblePracticalDecorCeilingLights: 8,
+        frustumPracticalDecorCeilingLights: 3,
+        visiblePracticalDecorChandelierLights: 0,
+        frustumPracticalDecorChandelierLights: 0,
+        visiblePracticalDecorStandingLights: 0,
+        frustumPracticalDecorStandingLights: 0,
+        visiblePracticalDecorGrowOpLights: 0,
+        frustumPracticalDecorGrowOpLights: 0,
       },
     );
 
@@ -125,6 +161,8 @@ describe("fpSessionPerfStore", () => {
     expect(stats?.sceneCounts.frustumExteriorGlassMeshes).toBe(6);
     expect(stats?.sceneCounts.frustumTransparentMeshes).toBe(12);
     expect(stats?.sceneCounts.frustumTransparentExteriorGlassMeshes).toBe(5);
+    expect(stats?.sceneCounts.visiblePracticalDecorLights).toBe(8);
+    expect(stats?.sceneCounts.frustumPracticalDecorLights).toBe(3);
 
     const report = exportFpPerfReport(1000, 5);
     expect(report).toContain("sky");
@@ -135,6 +173,9 @@ describe("fpSessionPerfStore", () => {
     expect(report).toContain("unitAnon");
     expect(report).toContain("transGlass");
     expect(report).toContain("transparent");
+    expect(report).toContain("decorLights");
+    expect(report).toContain("Decor kinds");
+    expect(report).toContain("Spike correlation");
     expect(report).toContain("fr");
   });
 
@@ -191,6 +232,8 @@ describe("fpSessionPerfStore", () => {
     const tl = getFpPerfTimeline(4000, 5);
     const dump = exportFpPerfTimelineDump(tl);
     expect(dump.split("\n")[0]).toContain("yawDeg");
+    expect(dump.split("\n")[0]).toContain("frDecorLights");
+    expect(dump.split("\n")[0]).toContain("frCeiling");
     expect(dump.split("\n")[0]).toContain("uiAnon");
     expect(dump.split("\n")[0]).toContain("trGlass");
     expect(dump.split("\n")[1]).toContain("90"); // deg

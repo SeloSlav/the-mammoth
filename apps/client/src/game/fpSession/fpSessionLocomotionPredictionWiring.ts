@@ -16,6 +16,7 @@ import type { FpSessionStaticWorld } from "./fpSessionWorldMount.js";
 import {
   createFpSessionLocalPrediction,
   type ApartmentDoorCollisionHost,
+  type FpNpcCollisionHost,
   type FpSessionMoveIntentQueue,
 } from "./fpSessionLocalPrediction.js";
 import type { FpSessionDoorDebugState } from "./fpSessionDevDebugApis.js";
@@ -47,6 +48,7 @@ export type WireFpSessionLocomotionPredictionArgs = {
   fpElevators: MountFpElevatorWorldResult;
   fpApartmentDoors: MountFpApartmentDoorsResult;
   fpInteriorPartitionSolids?: ApartmentDoorCollisionHost;
+  fpNpcCollision?: FpNpcCollisionHost;
   staticCollisionIndex: FpSessionStaticWorld["staticCollisionIndex"];
   doorDebugState: FpSessionDoorDebugState;
   logDoorDebugFrame: (args: {
@@ -100,6 +102,7 @@ export function wireFpSessionLocomotionPrediction(
     fpElevators,
     fpApartmentDoors,
     fpInteriorPartitionSolids,
+    fpNpcCollision,
     staticCollisionIndex,
     doorDebugState,
     logDoorDebugFrame,

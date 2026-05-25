@@ -67,6 +67,7 @@ import type { BalconyGrowPlant, BalconyGrowTray } from "../../module_bindings/ty
 import {
   apartmentPropBoundsForwardDot,
   applyApartmentInteriorPropVisibility,
+  apartmentInteriorPropWarmupPendingForUnit,
   clearApartmentInteriorPropVisibilityState,
   createApartmentInteriorPropVisibilityState,
   resolveApartmentInteriorPropGroupVisible,
@@ -269,6 +270,16 @@ export function mountFpApartmentDecorMeshes(opts: {
   let practicalLightsDecorEnabled: boolean | null = null;
   let practicalLightsUnitPowerOn: boolean | null = null;
   let practicalLightsIntensityScale: number | null = null;
+  let decorShadowSyncUnitKey: string | null = null;
+  let decorShadowSyncDecorGroupCount = -1;
+  type PracticalLightsPendingMount = {
+    unitKey: string;
+    dynamicRuntimeEnabled: boolean;
+    staticRuntimeEnabled: boolean;
+    windowRuntimeEnabled: boolean;
+    intensityScale: number;
+  };
+  let practicalLightsPendingMount: PracticalLightsPendingMount | null = null;
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -337,12 +348,11 @@ export function mountFpApartmentDecorMeshes(opts: {
   applyApartmentInteriorFloorReceiveShadowUnder(opts.buildingRoot);
 
   const clearPracticalLightsOnly = (): void => {
+    practicalLightsPendingMount = null;
     practicalLightsMount?.dispose();
     practicalLightsMount = null;
     practicalLightsUnitKey = null;
     practicalLightsIntensityScale = null;
-    decorShadowRig?.dispose();
-    decorShadowRig = null;
   };
 
   const clearBakedFloorShadowOnly = (): void => {
@@ -353,6 +363,10 @@ export function mountFpApartmentDecorMeshes(opts: {
   const clearInteriorLighting = (): void => {
     clearPracticalLightsOnly();
     clearBakedFloorShadowOnly();
+    decorShadowRig?.dispose();
+    decorShadowRig = null;
+    decorShadowSyncUnitKey = null;
+    decorShadowSyncDecorGroupCount = -1;
   };
 
   const unitBoundsForKey = (unitKey: string): ApartmentUnitWorldBounds | null => {
@@ -395,8 +409,18 @@ export function mountFpApartmentDecorMeshes(opts: {
     practicalLightsIntensityScale = scale;
   };
 
-  const resyncDecorShadowsForUnit = (containingUnitKey: string | null): void => {
+  const resyncDecorShadowsForUnit = (
+    containingUnitKey: string | null,
+    force = false,
+  ): void => {
     const decorGroups = decorGroupsForUnit(containingUnitKey);
+    if (
+      !force &&
+      containingUnitKey === decorShadowSyncUnitKey &&
+      decorGroups.length === decorShadowSyncDecorGroupCount
+    ) {
+      return;
+    }
     decorShadowRig = syncApartmentDecorShadowRig({
       lightParent: opts.buildingRoot,
       decorGroups,
@@ -434,6 +458,90 @@ export function mountFpApartmentDecorMeshes(opts: {
     if (decorShadowRig) {
       opts.onRequestShadowMapUpdate?.();
     }
+
+    decorShadowSyncUnitKey = containingUnitKey;
+    decorShadowSyncDecorGroupCount = decorGroups.length;
+  };
+
+  const flushPracticalLightsMount = (): void => {
+    const pending = practicalLightsPendingMount;
+    if (pending === null) return;
+
+    const bounds = unitBoundsForKey(pending.unitKey);
+    practicalLightsMount = syncApartmentInteriorPracticalLighting({
+      lightParent: root,
+      windowScanRoot: opts.buildingRoot,
+      maxWindowLights: pending.windowRuntimeEnabled
+        ? APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit
+        : 0,
+      unitBounds: bounds ?? undefined,
+      decorGroups: decorGroupsForUnit(pending.unitKey),
+      includeDynamicDecorPracticalLights: pending.dynamicRuntimeEnabled,
+      includeStaticFixturePracticalLights: pending.staticRuntimeEnabled,
+      previous: practicalLightsMount,
+    });
+    practicalLightsPendingMount = null;
+    practicalLightsIntensityScale = null;
+    setPracticalLightsIntensityScale(pending.intensityScale);
+  };
+
+  const queuePracticalLightsMount = (
+    containingUnitKey: string,
+    dynamicRuntimeEnabled: boolean,
+    staticRuntimeEnabled: boolean,
+    windowRuntimeEnabled: boolean,
+    intensityScale: number,
+  ): void => {
+    practicalLightsPendingMount = {
+      unitKey: containingUnitKey,
+      dynamicRuntimeEnabled,
+      staticRuntimeEnabled,
+      windowRuntimeEnabled,
+      intensityScale,
+    };
+  };
+
+  /**
+   * Bulk-mount queued practical lights once decor GLB warm-up finishes (or immediately when
+   * pre-warming from the hallway). Avoids overlapping prop + punctual-light pipeline compiles.
+   */
+  const tryFlushPracticalLightsMount = (
+    containingUnitKey: string | null,
+    useInUnitVisibility: boolean,
+  ): void => {
+    if (practicalLightsPendingMount !== null) {
+      if (practicalLightsPendingMount.unitKey !== containingUnitKey) return;
+      const deferForPropWarmup =
+        containingUnitKey !== null &&
+        useInUnitVisibility &&
+        apartmentInteriorPropWarmupPendingForUnit(
+          propVisibilityState,
+          containingUnitKey,
+          groupByRenderKey,
+        );
+      if (deferForPropWarmup) return;
+      flushPracticalLightsMount();
+      return;
+    }
+
+    if (
+      containingUnitKey === null ||
+      !useInUnitVisibility ||
+      practicalLightsMount === null ||
+      (practicalLightsIntensityScale ?? 0) > 1 - 1e-6
+    ) {
+      return;
+    }
+    if (
+      apartmentInteriorPropWarmupPendingForUnit(
+        propVisibilityState,
+        containingUnitKey,
+        groupByRenderKey,
+      )
+    ) {
+      return;
+    }
+    setPracticalLightsIntensityScale(1);
   };
 
   const syncPracticalLightsForUnit = (
@@ -473,7 +581,6 @@ export function mountFpApartmentDecorMeshes(opts: {
       practicalLightsDecorEnabled = staticRuntimeEnabled;
       practicalLightsUnitPowerOn = unitPowerOn;
       practicalLightsIntensityScale = null;
-      resyncDecorShadowsForUnit(containingUnitKey);
       return;
     }
 
@@ -484,7 +591,6 @@ export function mountFpApartmentDecorMeshes(opts: {
       staticRuntimeEnabled === practicalLightsDecorEnabled &&
       unitPowerOn === practicalLightsUnitPowerOn
     ) {
-      setPracticalLightsIntensityScale(intensityScale);
       return;
     }
 
@@ -493,22 +599,22 @@ export function mountFpApartmentDecorMeshes(opts: {
     practicalLightsDecorEnabled = staticRuntimeEnabled;
     practicalLightsUnitPowerOn = unitPowerOn;
 
-    const bounds = unitBoundsForKey(containingUnitKey);
-    practicalLightsMount = syncApartmentInteriorPracticalLighting({
-      lightParent: root,
-      windowScanRoot: opts.buildingRoot,
-      maxWindowLights: windowRuntimeEnabled
-        ? APARTMENT_INTERIOR_VISUAL_PROFILE.maxWindowPracticalLightsPerUnit
-        : 0,
-      unitBounds: bounds ?? undefined,
-      decorGroups: decorGroupsForUnit(containingUnitKey),
-      includeDynamicDecorPracticalLights: dynamicRuntimeEnabled,
-      includeStaticFixturePracticalLights: staticRuntimeEnabled,
-      previous: practicalLightsMount,
-    });
-    practicalLightsIntensityScale = null;
-    setPracticalLightsIntensityScale(intensityScale);
-    resyncDecorShadowsForUnit(containingUnitKey);
+    queuePracticalLightsMount(
+      containingUnitKey,
+      dynamicRuntimeEnabled,
+      staticRuntimeEnabled,
+      windowRuntimeEnabled,
+      intensityScale,
+    );
+    if (force) {
+      tryFlushPracticalLightsMount(containingUnitKey, false);
+    }
+  };
+
+  const schedulePracticalLightsAfterDecorRebuild = (containingUnitKey: string | null): void => {
+    if (disposed || containingUnitKey === null) return;
+    syncPracticalLightsForUnit(containingUnitKey, true, 0);
+    tryFlushPracticalLightsMount(containingUnitKey, false);
   };
 
   const _furnitureVisibilityViewProjection = new THREE.Matrix4();
@@ -554,6 +660,8 @@ export function mountFpApartmentDecorMeshes(opts: {
         metallicReadableEnv,
         rebuildStashRayOcclusion,
         syncPracticalLightsForUnit,
+        resyncDecorShadowsForUnit,
+        schedulePracticalLightsAfterDecorRebuild,
         getPracticalLightsContextUnitKey: () => practicalLightsContextUnitKey,
         cabMirrorCollection: opts.cabMirrorCollection,
         onRebuilt: opts.onRebuilt,
@@ -606,7 +714,7 @@ export function mountFpApartmentDecorMeshes(opts: {
 
   const unsubRenderIsolation = subscribeFpDebugRenderIsolation(() => {
     if (disposed) return;
-    resyncDecorShadowsForUnit(practicalLightsContextUnitKey);
+    resyncDecorShadowsForUnit(practicalLightsContextUnitKey, true);
     opts.onRebuilt?.();
   });
 
@@ -693,12 +801,20 @@ export function mountFpApartmentDecorMeshes(opts: {
         /** Keep per-unit decor warm-up cache — hallway hops should not replay GLB pipeline bursts. */
         syncApartmentInteriorPropVisibilityUnit(propVisibilityState, null);
       }
+      const prevPracticalLightsContextUnitKey = practicalLightsContextUnitKey;
       practicalLightsContextUnitKey = retainPracticalLightsUnitKey ?? primaryUnitKey;
+      if (practicalLightsContextUnitKey !== prevPracticalLightsContextUnitKey) {
+        resyncDecorShadowsForUnit(practicalLightsContextUnitKey);
+      }
       if (practicalLightsContextUnitKey !== null) {
         syncPracticalLightsForUnit(practicalLightsContextUnitKey, false, 1);
       } else {
         setPracticalLightsIntensityScale(0);
       }
+      tryFlushPracticalLightsMount(
+        practicalLightsContextUnitKey,
+        useInUnitVisibility,
+      );
     },
     getStashPrompt: (playerPos, camera) => {
       if (!opts.conn.identity || stashPickMeshes.length === 0) return null;

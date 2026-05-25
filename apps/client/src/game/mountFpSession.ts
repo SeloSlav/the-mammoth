@@ -168,6 +168,7 @@ import { getMammothItemDef } from "../inventory/mammothItemCatalog";
 import { LocalGameAudio } from "./audio/localGameAudio.js";
 import { createFpSessionCorridorPvsContext } from "./fpSession/fpSessionCorridorPvs.js";
 import { createFpNpcSession } from "./npc/fpNpcSession.js";
+import { createFpNpcCollisionSource } from "./fpPhysics/fpNpcCollision.js";
 import { createFpNpcRenderPvsGate } from "./npc/fpNpcRenderPvs.js";
 import { setFpCombatSimMode } from "./combatSim/fpCombatSimMode.js";
 import {
@@ -209,6 +210,11 @@ import {
   summarizeFpSessionSceneTriangles,
 } from "./fpSession/fpSessionSceneTriangleCount.js";
 import { deliverFpSessionGpuRenderMs, resetFpPerfStore } from "./fpSession/fpSessionPerfStore.js";
+import { countFpSessionPracticalLights } from "./fpSession/fpSessionPracticalLightCounters.js";
+import {
+  emptyFpPracticalDecorLightKindFields,
+  fpPracticalDecorLightKindFieldsFromCounter,
+} from "./fpSession/fpSessionPracticalLightPerfKinds.js";
 import { FpHotbarConsumableVisual } from "./fpHotbar/fpHotbarConsumableVisual.js";
 import { createFpCollisionDebugOverlay } from "./fpSession/fpSessionCollisionDebug.js";
 import { FpCabMirrorCollection } from "./fpRendering/fpCabMirrorCollection.js";
@@ -479,6 +485,7 @@ export async function mountFpSession(
   }
 
   const fpInteriorPartitionSolids = createFpInteriorPartitionSolidCollision();
+  const fpNpcCollision = isCombatSim ? createFpNpcCollisionSource() : null;
   function rebuildFpInteriorPartitionSolidMeshes(): void {
     fpInteriorPartitionSolids.rebuildFromRoots(
       fpLobbyInteriorAuthoringRoot !== null
@@ -503,6 +510,7 @@ export async function mountFpSession(
       fpElevators.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
       fpApartmentDoors.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
       fpInteriorPartitionSolids.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
+      fpNpcCollision?.visitCollisionAabbsInXZ(x0, x1, z0, z1, visit, queryPose);
     },
   });
   scene.add(fpCollisionDebug.group);
@@ -705,6 +713,13 @@ export async function mountFpSession(
     frustumExteriorGlassMeshes: 0,
     frustumTransparentMeshes: 0,
     frustumTransparentExteriorGlassMeshes: 0,
+    visiblePracticalDecorLights: 0,
+    frustumPracticalDecorLights: 0,
+    visiblePracticalWindowLights: 0,
+    frustumPracticalWindowLights: 0,
+    practicalDecorLightBreakdownVis: "(none)",
+    practicalDecorLightBreakdownFr: "(none)",
+    ...emptyFpPracticalDecorLightKindFields(),
   };
   const objectVisibleInHierarchy = (obj: THREE.Object3D): boolean => {
     if (!obj.layers.test(camera.layers)) return false;
@@ -803,6 +818,15 @@ export async function mountFpSession(
       }
     }
 
+    const practicalLightCounts = countFpSessionPracticalLights({
+      scene,
+      frustum: _perfSceneFrustum,
+      objectVisibleInHierarchy,
+    });
+    const practicalDecorKindFields = fpPracticalDecorLightKindFieldsFromCounter(
+      practicalLightCounts.decorByKind,
+    );
+
     const sceneGraphSummary = summarizeFpSessionSceneTriangles(scene);
     lastPerfSceneCounters = {
       sceneGraphVisibleTriangles: sceneGraphSummary.totalVisibleTriangles,
@@ -827,6 +851,13 @@ export async function mountFpSession(
       frustumExteriorGlassMeshes,
       frustumTransparentMeshes,
       frustumTransparentExteriorGlassMeshes,
+      visiblePracticalDecorLights: practicalLightCounts.visiblePracticalDecorLights,
+      frustumPracticalDecorLights: practicalLightCounts.frustumPracticalDecorLights,
+      visiblePracticalWindowLights: practicalLightCounts.visiblePracticalWindowLights,
+      frustumPracticalWindowLights: practicalLightCounts.frustumPracticalWindowLights,
+      practicalDecorLightBreakdownVis: practicalLightCounts.decorKindBreakdownVis,
+      practicalDecorLightBreakdownFr: practicalLightCounts.decorKindBreakdownFr,
+      ...practicalDecorKindFields,
     };
     return lastPerfSceneCounters;
   };
@@ -1370,6 +1401,41 @@ export async function mountFpSession(
     elevDebugEnabled: getElevDebugEnabled(),
   }));
 
+  /** Footsteps + NPC voice share one Web Audio context — create before locomotion wiring. */
+  const localAudio = new LocalGameAudio();
+  const fpNpcSession = isCombatSim
+    ? await createFpNpcSession({
+        worldParent: scene,
+        fxScene: scene,
+        conn,
+        getAudioContext: () => localAudio.getAudioContext(),
+        getCamera: () => camera,
+        getReadableEnvTexture: () => {
+          const tex = scene.userData.mammothFpMetallicReadableEnv;
+          return tex instanceof THREE.Texture ? tex : null;
+        },
+        npcCollision: fpNpcCollision ?? undefined,
+        getRenderPvsGate: () =>
+          createFpNpcRenderPvsGate(() => ({
+            floorPlateBand: getActiveFloorPlateBandForFrame(),
+            storeyOpts: {
+              buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
+              floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
+              maxLevel: maxBuildingLevel,
+            },
+            insideResidentialUnit: isInsideResidentialUnitForFrame(),
+            insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame(),
+            corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame(),
+            unitKeyContainingPoint: (x, y, z) =>
+              apartmentUnitContainingFeetSlack(conn, x, y, z, {
+                slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
+                slackYBelow: 1.25,
+                slackYAbove: 2.85,
+              })?.unitKey ?? null,
+          })),
+      })
+    : null;
+
   const { _mainStepOpts, _elevSupportEval, _walkOpts, simulatePredictedPlayerStep, reconcileLocalPredictionToServer } =
     wireFpSessionLocomotionPrediction({
       pos,
@@ -1390,6 +1456,7 @@ export async function mountFpSession(
       fpElevators,
       fpApartmentDoors,
       fpInteriorPartitionSolids,
+      fpNpcCollision: fpNpcCollision ?? undefined,
       staticCollisionIndex,
       doorDebugState: __mmDoorDebugState,
       logDoorDebugFrame,
@@ -1432,39 +1499,6 @@ export async function mountFpSession(
 
   registerFpSleepPoseFlush(flushLocalPickupPoseToServer);
 
-  /** Footsteps: Web Audio, up to six `public/audio/ui/footstep*.wav`; see `audio/localGameAudio.ts`. */
-  const localAudio = new LocalGameAudio();
-  const fpNpcSession = isCombatSim
-    ? await createFpNpcSession({
-        worldParent: scene,
-        fxScene: scene,
-        conn,
-        getAudioContext: () => localAudio.getAudioContext(),
-        getCamera: () => camera,
-        getReadableEnvTexture: () => {
-          const tex = scene.userData.mammothFpMetallicReadableEnv;
-          return tex instanceof THREE.Texture ? tex : null;
-        },
-        getRenderPvsGate: () =>
-          createFpNpcRenderPvsGate(() => ({
-            floorPlateBand: getActiveFloorPlateBandForFrame(),
-            storeyOpts: {
-              buildingWorldOriginY: building.worldOrigin?.[1] ?? 0,
-              floorSpacingM: DEFAULT_BUILDING_FLOOR_SPACING_M,
-              maxLevel: maxBuildingLevel,
-            },
-            insideResidentialUnit: isInsideResidentialUnitForFrame(),
-            insideApartmentInteriorLightingZone: isInsideApartmentInteriorLightingZoneForFrame(),
-            corridorPvsVisibleUnitKeys: getCorridorPvsVisibleUnitKeysForFrame(),
-            unitKeyContainingPoint: (x, y, z) =>
-              apartmentUnitContainingFeetSlack(conn, x, y, z, {
-                slackXZ: FP_RESIDENTIAL_VISUAL_CONTAINMENT_SLACK_XZ_M,
-                slackYBelow: 1.25,
-                slackYAbove: 2.85,
-              })?.unitKey ?? null,
-          })),
-      })
-    : null;
   const fpBalconyGrow = isCombatSim
     ? createInertFpBalconyGrowSession()
     : mountFpBalconyGrowSession({

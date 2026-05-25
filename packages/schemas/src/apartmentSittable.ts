@@ -45,7 +45,8 @@ const CHAIR_SPEC: ApartmentSittableSpec = {
   /** Height above mesh floor (bbox min Y); XZ come from bbox center at runtime. */
   localSeatOffset: { x: 0, y: 0.52, z: 0 },
   bodyYawOffsetRad: APARTMENT_SITTABLE_BODY_YAW_OFFSET_RAD,
-  eyeHeightM: 1.05,
+  /** Above seat anchor; 0.52 + 0.50 ≈ 1.02 m absolute eye (matches FP crouch). */
+  eyeHeightM: 0.82,
   interactRadiusM: 1.35,
   promptLabel: "Sit",
   defaultPitchRad: 0,

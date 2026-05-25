@@ -27,6 +27,7 @@ import {
   createFpBabushkaSporeBurstFx,
   type FpBabushkaSporeBurstFx,
 } from "./fpBabushkaSporeBurstFx.js";
+import type { FpNpcCollisionSource } from "../fpPhysics/fpNpcCollision.js";
 
 /** Matches `apps/server/src/npc.rs` `NPC_STATE_IDLE`. */
 const NPC_STATE_IDLE = 0;
@@ -90,6 +91,8 @@ export type CreateFpNpcSessionOpts = {
   /** When set, only replicate rows whose `sessionKey` starts with this prefix. */
   sessionKeyPrefix?: string;
   getRenderPvsGate?: () => ((snap: ReplicatedNpcSnapshot) => boolean) | null;
+  /** Shared authoritative NPC capsule blockers for FP locomotion. */
+  npcCollision?: FpNpcCollisionSource;
 };
 
 export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<FpNpcSession> {
@@ -191,6 +194,15 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     audioTrack.set(key, nextTrack);
     rows.set(key, row);
     snapshotsDirty = true;
+    opts.npcCollision?.syncNpcRow({
+      npcId: row.npcId,
+      archetype: row.archetype,
+      x: row.x,
+      y: row.y,
+      z: row.z,
+      state: row.state,
+      health: row.health,
+    });
   };
 
   const onDelete = (row: WorldNpc) => {
@@ -202,6 +214,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
     idleAudioTrack.delete(key);
     sporeTrailNextAtMs.delete(key);
     snapshotsDirty = true;
+    opts.npcCollision?.removeNpc(row.npcId);
   };
 
   const onInsertCb = (_ctx: unknown, row: WorldNpc) => onRow(row);
@@ -297,6 +310,7 @@ export async function createFpNpcSession(opts: CreateFpNpcSessionOpts): Promise<
       sporeFx.dispose();
       pool.dispose();
       rows.clear();
+      opts.npcCollision?.clear();
       audioTrack.clear();
       idleAudioTrack.clear();
       sporeTrailNextAtMs.clear();

@@ -132,6 +132,21 @@ export function syncApartmentInteriorPropVisibilityUnit(
   restoreWarmedKeysForUnit(state, containingUnitKey);
 }
 
+/** True while any decor GLB for the unit has not finished entry warm-up (excludes walls/mirrors). */
+export function apartmentInteriorPropWarmupPendingForUnit(
+  state: ApartmentInteriorPropVisibilityState,
+  unitKey: string,
+  groupByRenderKey: ReadonlyMap<string, THREE.Object3D>,
+): boolean {
+  for (const [renderKey, group] of groupByRenderKey.entries()) {
+    if (group.userData.mammothApartmentUnitKey !== unitKey) continue;
+    if (group.userData.mammothApartmentWallAuthoring === true) continue;
+    if (group.userData.mammothApartmentMirrorAuthoring === true) continue;
+    if (!state.warmedKeys.has(renderKey)) return true;
+  }
+  return false;
+}
+
 export function apartmentPropBoundsForwardDot(
   propWorldBounds: THREE.Box3,
   cameraWorldPos: THREE.Vector3,

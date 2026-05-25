@@ -462,6 +462,8 @@ export type FpApartmentDecorFullRebuildContext = {
   metallicReadableEnv: () => THREE.Texture | null;
   rebuildStashRayOcclusion: () => void;
   syncPracticalLightsForUnit: (containingUnitKey: string | null, force?: boolean) => void;
+  resyncDecorShadowsForUnit: (containingUnitKey: string | null, force?: boolean) => void;
+  schedulePracticalLightsAfterDecorRebuild: (containingUnitKey: string | null) => void;
   getPracticalLightsContextUnitKey: () => string | null;
   cabMirrorCollection?: FpCabMirrorCollection;
   onRebuilt?: () => void;
@@ -835,9 +837,8 @@ export async function runFpApartmentDecorFullRebuild(
   }
 
   const practicalLightsContextUnitKey = ctx.getPracticalLightsContextUnitKey();
-  if (practicalLightsContextUnitKey) {
-    ctx.syncPracticalLightsForUnit(practicalLightsContextUnitKey, true);
-  }
+  ctx.resyncDecorShadowsForUnit(practicalLightsContextUnitKey, true);
+  ctx.schedulePracticalLightsAfterDecorRebuild(practicalLightsContextUnitKey);
 
   ctx.buildingRoot.updateMatrixWorld(true);
   ctx.rebuildStashRayOcclusion();

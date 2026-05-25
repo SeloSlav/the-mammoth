@@ -183,7 +183,7 @@ export function BalconyGrowInspectHud({ conn }: Props) {
       <div style={{ opacity: 0.9 }}>
         {lightsOn ? "Grow light on" : "No grow light"}
         {fertilizedOvernight ? " · fed overnight" : ""}
-        {fertilizerPresent ? " · compost ready (feeds all slots on sleep)" : ""}
+        {fertilizerPresent ? " · compost ready" : ""}
       </div>
       <div style={{ marginTop: 4, opacity: 0.82 }}>
         Water {trayWaterLiters.toFixed(1)}/{BALCONY_GROW_TRAY_MAX_WATER_L} L ({waterStatusLabel(trayWaterLiters)})
