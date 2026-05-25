@@ -132,6 +132,25 @@ export function syncApartmentInteriorPropVisibilityUnit(
   restoreWarmedKeysForUnit(state, containingUnitKey);
 }
 
+/**
+ * Marks every decor GLB in the unit as warmed (walls/mirrors excluded). Used during the loading
+ * screen so entry warm-up and punctual-light mounts do not hitch the first gameplay frames.
+ */
+export function markAllApartmentInteriorPropsWarmedForUnit(
+  state: ApartmentInteriorPropVisibilityState,
+  unitKey: string,
+  groupByRenderKey: ReadonlyMap<string, THREE.Object3D>,
+): void {
+  syncApartmentInteriorPropVisibilityUnit(state, unitKey);
+  for (const [renderKey, group] of groupByRenderKey.entries()) {
+    if (group.userData.mammothApartmentUnitKey !== unitKey) continue;
+    if (group.userData.mammothApartmentWallAuthoring === true) continue;
+    if (group.userData.mammothApartmentMirrorAuthoring === true) continue;
+    state.warmedKeys.add(renderKey);
+  }
+  persistWarmedKeysForUnit(state, unitKey);
+}
+
 /** True while any decor GLB for the unit has not finished entry warm-up (excludes walls/mirrors). */
 export function apartmentInteriorPropWarmupPendingForUnit(
   state: ApartmentInteriorPropVisibilityState,

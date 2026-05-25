@@ -70,6 +70,7 @@ import {
   apartmentInteriorPropWarmupPendingForUnit,
   clearApartmentInteriorPropVisibilityState,
   createApartmentInteriorPropVisibilityState,
+  markAllApartmentInteriorPropsWarmedForUnit,
   resolveApartmentInteriorPropGroupVisible,
   resolveApartmentInteriorPropWarmUpVisible,
   syncApartmentInteriorPropVisibilityUnit,
@@ -213,6 +214,12 @@ export type MountFpApartmentDecorMeshesResult = {
   rebuildStashRayOcclusion: () => void;
   getStashRayOcclusion: () => FpApartmentStashRayOcclusion;
   updateFishTankFish: (dt: number) => void;
+  /** Blocks until the first decor rebuild finishes and optional owned-unit entry visuals are ready. */
+  waitForGameplayVisualReady: (opts: {
+    unitKey: string | null;
+    camera: THREE.PerspectiveCamera;
+    timeoutMs?: number;
+  }) => Promise<void>;
 };
 
 export function mountFpApartmentDecorMeshes(opts: {
@@ -280,6 +287,18 @@ export function mountFpApartmentDecorMeshes(opts: {
     intensityScale: number;
   };
   let practicalLightsPendingMount: PracticalLightsPendingMount | null = null;
+
+  let initialRebuildSettled = false;
+  let resolveInitialRebuild: (() => void) | null = null;
+  const initialRebuildPromise = new Promise<void>((resolve) => {
+    resolveInitialRebuild = resolve;
+  });
+  const settleInitialRebuild = (): void => {
+    if (initialRebuildSettled || disposed) return;
+    initialRebuildSettled = true;
+    resolveInitialRebuild?.();
+    resolveInitialRebuild = null;
+  };
 
   const metallicReadableEnv = (): THREE.Texture | null => {
     const env = opts.scene.userData.mammothFpMetallicReadableEnv;
@@ -623,6 +642,50 @@ export function mountFpApartmentDecorMeshes(opts: {
   const _furnitureVisibilityCamDir = new THREE.Vector3();
   const propVisibilityState = createApartmentInteriorPropVisibilityState();
 
+  const prepareOwnedUnitEntryVisuals = (unitKey: string): void => {
+    practicalLightsContextUnitKey = unitKey;
+    markAllApartmentInteriorPropsWarmedForUnit(
+      propVisibilityState,
+      unitKey,
+      groupByRenderKey,
+    );
+    for (const g of groupByRenderKey.values()) {
+      if (g.userData.mammothApartmentUnitKey !== unitKey) continue;
+      g.visible = true;
+    }
+    resyncDecorShadowsForUnit(unitKey, true);
+    syncPracticalLightsForUnit(unitKey, true, 1);
+    if (practicalLightsPendingMount !== null) {
+      flushPracticalLightsMount();
+    }
+    setPracticalLightsIntensityScale(1);
+  };
+
+  const waitForGameplayVisualReady = async (opts: {
+    unitKey: string | null;
+    camera: THREE.PerspectiveCamera;
+    timeoutMs?: number;
+  }): Promise<void> => {
+    const timeoutMs = opts.timeoutMs ?? 60_000;
+    await Promise.race([
+      initialRebuildPromise,
+      new Promise<void>((resolve) => {
+        window.setTimeout(() => {
+          console.warn(
+            "[fp] apartment decor initial rebuild timed out during loading screen; continuing",
+          );
+          settleInitialRebuild();
+          resolve();
+        }, timeoutMs);
+      }),
+    ]);
+    if (disposed) return;
+    if (opts.unitKey !== null) {
+      prepareOwnedUnitEntryVisuals(opts.unitKey);
+    }
+    opts.camera.updateMatrixWorld(true);
+  };
+
   const clearAll = () => {
     fishTankBridge.clear();
     stashPickMeshes.length = 0;
@@ -679,9 +742,13 @@ export function mountFpApartmentDecorMeshes(opts: {
     const epoch = buildEpoch;
     buildRaf = requestAnimationFrame(() => {
       buildRaf = 0;
-      void runFullRebuild(epoch).catch((err) => {
-        console.warn("[mountFpApartmentDecorMeshes] rebuild failed", err);
-      });
+      void runFullRebuild(epoch)
+        .catch((err) => {
+          console.warn("[mountFpApartmentDecorMeshes] rebuild failed", err);
+        })
+        .finally(() => {
+          if (epoch === buildEpoch) settleInitialRebuild();
+        });
     });
   };
 
@@ -911,6 +978,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     updateFishTankFish: (dt) => {
       fishTankBridge.tick(dt);
     },
+    waitForGameplayVisualReady,
     getSittableDecorRoots: () => Array.from(groupByRenderKey.values()),
     getSittablePrompt: (
       playerPos,
@@ -952,6 +1020,7 @@ export function mountFpApartmentDecorMeshes(opts: {
     },
     dispose: () => {
       disposed = true;
+      settleInitialRebuild();
       buildEpoch++;
       if (buildRaf !== 0) {
         cancelAnimationFrame(buildRaf);

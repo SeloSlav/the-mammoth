@@ -189,12 +189,14 @@ pub fn apply_damage(ctx: &ReducerContext, owner: Identity, amount: f32) -> bool 
     killed
 }
 
-/// Spill carried hotbar/inventory at the death pose and run apartment claim side effects.
+/// Spill carried hotbar/inventory at the death pose (unless already home) and cancel in-progress claims.
 pub(crate) fn on_player_death(ctx: &ReducerContext, owner: Identity) {
     if crate::combat_sim::player_in_combat_sim(ctx, owner) {
         return;
     }
-    crate::dropped_item::scatter_carrier_inventory_at_death(ctx, owner);
+    if !crate::apartments::player_feet_inside_owned_apartment(ctx, owner) {
+        crate::dropped_item::scatter_carrier_inventory_at_death(ctx, owner);
+    }
     crate::apartments::on_player_killed_cancel_claim(ctx, owner);
 }
 

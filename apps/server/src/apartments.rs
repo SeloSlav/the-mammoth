@@ -642,6 +642,20 @@ pub(crate) fn feet_inside_unit(unit: &ApartmentUnit, x: f32, y: f32, z: f32) -> 
         && y <= unit.bound_max_y + 2.45
 }
 
+/// Feet inside the player's own claimed apartment hull (death/collapse safe-home check).
+pub(crate) fn player_feet_inside_owned_apartment(ctx: &ReducerContext, owner: Identity) -> bool {
+    let Some(pose) = ctx.db.player_pose().identity().find(&owner) else {
+        return false;
+    };
+    let Some(unit_key) = claimed_unit_key_for_owner(ctx, owner) else {
+        return false;
+    };
+    let Some(unit) = ctx.db.apartment_unit().unit_key().find(&unit_key) else {
+        return false;
+    };
+    feet_inside_unit(&unit, pose.x, pose.y, pose.z)
+}
+
 pub(crate) fn unit_key_containing_feet(
     ctx: &ReducerContext,
     x: f32,
@@ -2850,6 +2864,53 @@ mod decor_model_rel_path_ok_tests {
     #[test]
     fn rejects_parent_segments() {
         assert!(!decor_model_rel_path_ok("static/models/../chair.obj"));
+    }
+}
+
+#[cfg(test)]
+mod feet_inside_owned_tests {
+    use super::{feet_inside_unit, ApartmentUnit, UNIT_STATE_CLAIMED};
+
+    fn sample_claimed_unit(owner: spacetimedb::Identity) -> ApartmentUnit {
+        ApartmentUnit {
+            unit_key: "test|2|unit_w".to_string(),
+            floor_doc_id: "test_floor".to_string(),
+            level: 2,
+            unit_id: "unit_w".to_string(),
+            state: UNIT_STATE_CLAIMED,
+            owner: Some(owner),
+            claim_started_by: None,
+            claim_progress_secs: 0.0,
+            last_claim_pulse_micros: 0,
+            reinforce_progress_secs: 0.0,
+            reinforce_by: None,
+            reinforced: 0,
+            bed_x: 9.0,
+            bed_y: 3.16,
+            bed_z: -112.0,
+            bed_yaw: 0.0,
+            foot_x: 8.0,
+            foot_y: 3.16,
+            foot_z: -113.0,
+            wardrobe_x: 3.0,
+            wardrobe_z: -110.0,
+            stove_x: 2.5,
+            stove_z: -117.0,
+            bound_min_x: 2.0,
+            bound_max_x: 14.0,
+            bound_min_z: -117.5,
+            bound_max_z: -106.5,
+            bound_min_y: 3.16,
+            bound_max_y: 6.16,
+        }
+    }
+
+    #[test]
+    fn feet_inside_unit_matches_client_hull_slack() {
+        let owner = spacetimedb::Identity::from_byte_array([7u8; 32]);
+        let unit = sample_claimed_unit(owner);
+        assert!(feet_inside_unit(&unit, 8.0, 3.2, -112.0));
+        assert!(!feet_inside_unit(&unit, 1.0, 3.2, -112.0));
     }
 }
 

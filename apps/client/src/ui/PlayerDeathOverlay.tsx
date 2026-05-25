@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { DbConnection } from "../module_bindings";
-import type { ApartmentUnit, PlayerVitals } from "../module_bindings/types";
-import { UNIT_STATE_CLAIMED } from "../game/fpApartment/fpApartmentGameplay";
+import type { ApartmentUnit, PlayerPose, PlayerVitals } from "../module_bindings/types";
+import {
+  playerFeetInsideOwnedApartment,
+  UNIT_STATE_CLAIMED,
+} from "../game/fpApartment/fpApartmentGameplay";
 import { isFpCombatSimMode } from "../game/combatSim/fpCombatSimMode";
 
 type Props = {
@@ -32,6 +35,9 @@ export function PlayerDeathOverlay({ conn }: Props) {
     conn.db.apartment_unit.onInsert(bump);
     conn.db.apartment_unit.onUpdate(bump);
     conn.db.apartment_unit.onDelete(bump);
+    conn.db.player_pose.onInsert(bump);
+    conn.db.player_pose.onUpdate(bump);
+    conn.db.player_pose.onDelete(bump);
     return () => {
       conn.db.player_vitals.removeOnInsert(bump);
       conn.db.player_vitals.removeOnUpdate(bump);
@@ -39,6 +45,9 @@ export function PlayerDeathOverlay({ conn }: Props) {
       conn.db.apartment_unit.removeOnInsert(bump);
       conn.db.apartment_unit.removeOnUpdate(bump);
       conn.db.apartment_unit.removeOnDelete(bump);
+      conn.db.player_pose.removeOnInsert(bump);
+      conn.db.player_pose.removeOnUpdate(bump);
+      conn.db.player_pose.removeOnDelete(bump);
     };
   }, [conn]);
 
@@ -52,6 +61,15 @@ export function PlayerDeathOverlay({ conn }: Props) {
   const hasClaimedApartment = useMemo(() => {
     void ver;
     return playerHasClaimedApartment(conn);
+  }, [conn, ver]);
+
+  const diedInsideOwnedApartment = useMemo(() => {
+    void ver;
+    const id = conn.identity;
+    if (!id) return false;
+    const pose = (conn.db.player_pose.identity.find(id) as PlayerPose | undefined) ?? null;
+    if (!pose) return false;
+    return playerFeetInsideOwnedApartment(conn, pose.x, pose.y, pose.z);
   }, [conn, ver]);
 
   const dead = (row?.health ?? 1) <= 0;
@@ -122,14 +140,21 @@ export function PlayerDeathOverlay({ conn }: Props) {
             marginBottom: 10,
           }}
         >
-          You Died
+          {diedInsideOwnedApartment && !inCombatSim ? "Out Cold" : "You Died"}
         </div>
-        <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>Respawn Required</div>
+        <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>
+          {diedInsideOwnedApartment && !inCombatSim ? "Wake Up" : "Respawn Required"}
+        </div>
         <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(226,232,240,0.82)", marginBottom: 22 }}>
           {inCombatSim ? (
             <>
               Your gear spilled where you fell. Respawn empty-handed at the arena
               center and run back for it.
+            </>
+          ) : diedInsideOwnedApartment ? (
+            <>
+              You collapsed in your apartment. A night passes — you wake at your bed with basic survival
+              supplies. Everything you were carrying is still on you. Balcony crops advance one day.
             </>
           ) : hasClaimedApartment ? (
             <>

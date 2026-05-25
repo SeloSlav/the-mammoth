@@ -420,9 +420,12 @@ pub(crate) fn force_collapse_sleep(ctx: &ReducerContext, owner: Identity) {
     let at_bed = unit_key.as_ref().is_some_and(|uk| {
         player_near_unit_bed(ctx, owner, uk).is_ok()
     });
+    let inside_home = apartments::player_feet_inside_owned_apartment(ctx, owner);
 
     if !at_bed {
-        dropped_item::scatter_carrier_inventory_at_death(ctx, owner);
+        if !inside_home {
+            dropped_item::scatter_carrier_inventory_at_death(ctx, owner);
+        }
         if let Some(uk) = unit_key.as_ref() {
             if let Some(bed) = apartments::spawn_pose_owned_bed(ctx, owner) {
                 ctx.db.player_pose().identity().update(bed);
@@ -433,13 +436,30 @@ pub(crate) fn force_collapse_sleep(ctx: &ReducerContext, owner: Identity) {
                     bedtime,
                     SleepRolloverKind::Collapse,
                 );
-                emit_hud_notice(
-                    ctx,
-                    owner,
-                    "You blacked out away from home. What you were carrying is scattered nearby.".to_string(),
-                );
+                let notice = if inside_home {
+                    "You passed out in your apartment. You wake at your bed with everything still on you."
+                } else {
+                    "You blacked out away from home. What you were carrying is scattered nearby."
+                };
+                emit_hud_notice(ctx, owner, notice.to_string());
                 return;
             }
+        }
+        if inside_home {
+            let _ = complete_day_rollover(
+                ctx,
+                owner,
+                unit_key.as_deref(),
+                bedtime,
+                SleepRolloverKind::Collapse,
+            );
+            emit_hud_notice(
+                ctx,
+                owner,
+                "You passed out in your apartment. You wake where you fell with everything still on you."
+                    .to_string(),
+            );
+            return;
         }
     }
 

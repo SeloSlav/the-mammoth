@@ -7,6 +7,7 @@ import {
   applyApartmentInteriorPropVisibilityBudget,
   clearApartmentInteriorPropVisibilityState,
   createApartmentInteriorPropVisibilityState,
+  markAllApartmentInteriorPropsWarmedForUnit,
   resolveApartmentInteriorPropGroupVisible,
   resolveApartmentInteriorPropWarmUpVisible,
   syncApartmentInteriorPropVisibilityUnit,
@@ -233,6 +234,33 @@ describe("syncApartmentInteriorPropVisibilityUnit", () => {
 
     syncApartmentInteriorPropVisibilityUnit(state, "unit_a");
     expect(state.warmedKeys.has("decor_a")).toBe(true);
+  });
+});
+
+describe("markAllApartmentInteriorPropsWarmedForUnit", () => {
+  it("marks every decor GLB warmed and persists the cache for the unit", () => {
+    const state = createApartmentInteriorPropVisibilityState();
+    const decorA = new THREE.Group();
+    decorA.userData.mammothApartmentUnitKey = "unit_a";
+    const decorB = new THREE.Group();
+    decorB.userData.mammothApartmentUnitKey = "unit_a";
+    const wall = new THREE.Group();
+    wall.userData.mammothApartmentUnitKey = "unit_a";
+    wall.userData.mammothApartmentWallAuthoring = true;
+    const groups = new Map([
+      ["a", decorA],
+      ["b", decorB],
+      ["wall", wall],
+    ]);
+
+    markAllApartmentInteriorPropsWarmedForUnit(state, "unit_a", groups);
+
+    expect(state.activeUnitKey).toBe("unit_a");
+    expect(state.warmedKeys.has("a")).toBe(true);
+    expect(state.warmedKeys.has("b")).toBe(true);
+    expect(state.warmedKeys.has("wall")).toBe(false);
+    expect(apartmentInteriorPropWarmupPendingForUnit(state, "unit_a", groups)).toBe(false);
+    expect(state.warmedKeysByUnit.get("unit_a")?.has("a")).toBe(true);
   });
 });
 

@@ -89,6 +89,7 @@ import {
   MAMMOTH_AUTH_STANDARD_WINDOW_SHUTTERS_ROOT_NAME,
 } from "@the-mammoth/world";
 import { createCombatSimStaticWorld } from "./combatSim/combatSimStaticWorld.js";
+import { findOwnedApartmentUnitForIdentity } from "./combatSim/combatSimEnter.js";
 import {
   createInertFpApartmentDecorMeshes,
   createInertFpApartmentDoors,
@@ -2367,6 +2368,27 @@ export async function mountFpSession(
   let rafDiagFrames = 0;
 
   if (loadDbg) fpLoadingDbgMark("mount_fp_session:start_main_raf_loop");
+
+  if (!isCombatSim) {
+    const ownedUnit = findOwnedApartmentUnitForIdentity(conn);
+    await fpLoadingDbgTimed("fp_gameplay_visuals_ready", () =>
+      fpApartmentDecorMeshes.waitForGameplayVisualReady({
+        unitKey: ownedUnit?.unitKey ?? null,
+        camera,
+      }),
+    );
+    playerRig.position.copy(pos);
+    playerRig.rotation.y = mainRaf.bodyYaw;
+    playerRig.updateMatrixWorld(true);
+    if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders");
+    for (let warmupFrame = 0; warmupFrame < 2; warmupFrame++) {
+      renderBootstrapFrame();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    }
+    if (loadDbg) fpLoadingDbgMark("mount_fp_session:gpu_entry_warmup_renders_done");
+  }
 
   /**
    * Single RAF driver for the whole FP session. Chrome’s “[Violation] requestAnimationFrame

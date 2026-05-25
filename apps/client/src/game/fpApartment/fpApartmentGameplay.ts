@@ -264,6 +264,24 @@ export function apartmentUnitKeyContainingWorldPoint(
   return apartmentUnitContainingFeet(conn, x, y, z)?.unitKey ?? null;
 }
 
+/** Feet inside the local player's own claimed apartment hull — mirrors server `player_feet_inside_owned_apartment`. */
+export function playerFeetInsideOwnedApartment(
+  conn: DbConnection,
+  x: number,
+  y: number,
+  z: number,
+): boolean {
+  const identity = conn.identity;
+  if (!identity) return false;
+  for (const row of conn.db.apartment_unit) {
+    const u = row as ApartmentUnit;
+    if (u.state !== UNIT_STATE_CLAIMED) continue;
+    if (!sameIdentity(u.owner, identity)) continue;
+    if (feetInsideUnitHull(u, x, y, z)) return true;
+  }
+  return false;
+}
+
 /** Nearest residential unit hull the feet position is inside, if any. */
 export function apartmentUnitContainingFeet(
   conn: DbConnection,

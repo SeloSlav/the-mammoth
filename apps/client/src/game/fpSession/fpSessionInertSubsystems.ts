@@ -116,6 +116,7 @@ export function createInertFpApartmentDecorMeshes(): MountFpApartmentDecorMeshes
     rebuildStashRayOcclusion: noop,
     getStashRayOcclusion: () => EMPTY_STASH_RAY_OCCLUSION,
     updateFishTankFish: noop,
+    waitForGameplayVisualReady: async () => {},
   };
 }
 

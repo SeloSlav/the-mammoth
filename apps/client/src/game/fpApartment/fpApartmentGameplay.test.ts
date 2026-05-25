@@ -15,6 +15,7 @@ import {
   apartmentDoorMatchesContainingUnit,
   apartmentUnitContainingFeet,
   apartmentUnitContainingFeetSlack,
+  playerFeetInsideOwnedApartment,
   aimedApartmentStashBlocksGrowTrayPrompt,
   CLAIM_MIN_DEPTH_FROM_ENTRY_DOOR_M,
   clientMayUseApartmentSittable,
@@ -899,6 +900,33 @@ describe("fpApartmentGameplay", () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it("playerFeetInsideOwnedApartment is true only inside the viewer's claimed unit hull", () => {
+    const owned = apartmentUnit({
+      state: UNIT_STATE_CLAIMED,
+      owner: testIdentity as never,
+      boundMinX: 2,
+      boundMaxX: 12,
+      boundMinZ: -10,
+      boundMaxZ: -4,
+      boundMinY: 3,
+      boundMaxY: 6,
+    });
+    const otherClaimed = apartmentUnit({
+      unitKey: "other",
+      state: UNIT_STATE_CLAIMED,
+      owner: { isEqual: () => false } as never,
+      boundMinX: 20,
+      boundMaxX: 30,
+      boundMinZ: -10,
+      boundMaxZ: -4,
+      boundMinY: 3,
+      boundMaxY: 6,
+    });
+    const conn = mockConn([owned, otherClaimed]);
+    expect(playerFeetInsideOwnedApartment(conn, 8, 3.2, -7)).toBe(true);
+    expect(playerFeetInsideOwnedApartment(conn, 25, 3.2, -7)).toBe(false);
   });
 
   it("strict feet hull does not treat cross-hall doorway positions as in-unit", () => {
